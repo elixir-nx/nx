@@ -1,3 +1,5 @@
+# TODO: Go through these.
+
 # Optimizations used for TF Serving release builds.
 build:release --copt=-mavx
 build:release --copt=-msse4.2

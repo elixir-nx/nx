@@ -2,7 +2,7 @@ ERLANG_PATH = $(shell erl -eval 'io:format("~s", [lists:concat([code:root_dir(),
 
 all:
 	cd src/ && \
-	bazel build //exla:libexla.so && \
+	bazel build //exla:libbuilder.so && \
 	cp -r bazel-bin/ ../priv/
 
 clean:

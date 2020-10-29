@@ -4,7 +4,7 @@ defmodule Exla.MixProject do
   def project do
     [
       app: :exla,
-      version: "0.0.1",
+      version: "0.0.4",
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
       deps: deps(),

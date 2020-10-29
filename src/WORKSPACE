@@ -1,3 +1,5 @@
+# TODO: Go through these.
+
 workspace(name = "exla")
 
 new_local_repository(
