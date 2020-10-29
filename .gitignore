@@ -22,6 +22,9 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 exla-*.tar
 
+# lock
+mix.lock
+
 # Ignore priv
 /priv/
 
