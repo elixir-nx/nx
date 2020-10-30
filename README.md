@@ -4,7 +4,7 @@ Elixir XLA Client.
 
 ## Building
 
-You need [Bazel](https://docs.bazel.build/versions/master/install.html) and `CUDA >= 10.1`.
+You need [Bazel](https://docs.bazel.build/versions/master/install.html) and [CUDA](#) >= 10.1.
 
 Running `iex -S mix` inside the root directory goes through the whole build process. You might see something like:
 
@@ -18,4 +18,4 @@ You'll also see a ton of warnings from compiling XLA from the TensorFlow tree. T
 
 ## Running
 
-Just as proof we can use XLA in a NIF, `Exla.create_builder/0` just creates an `xla::XlaBuilder` object and then returns 0 for success.
+You can build up computations but not compile them yet.

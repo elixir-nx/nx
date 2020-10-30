@@ -8,11 +8,16 @@
 
 ErlNifResourceType* BUILDER_RES_TYPE;
 ErlNifResourceType* OP_RES_TYPE;
+ErlNifResourceType* COMP_RES_TYPE;
 ERL_NIF_TERM ok;
 
 typedef struct {
   xla::XlaBuilder* builder;
 } Builder;
+
+typedef struct {
+  xla::XlaComputation* computation;
+} Computation;
 
 typedef struct {
   xla::XlaOp op;
@@ -22,14 +27,20 @@ void free_builder(ErlNifEnv* env, void* obj){
   // enif_release_resource(obj);
 }
 
+void free_comp(ErlNifEnv* env, void* obj){
+  enif_release_resource(obj);
+}
+
 void free_op(ErlNifEnv* env, void* obj){
   enif_release_resource(obj);
 }
 
 static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   const char* mod = "builder";
+
   const char* name_builder = "Builder";
   const char* name_op = "Op";
+  const char* name_comp = "Computation";
 
   int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
 
@@ -37,7 +48,9 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
 
   BUILDER_RES_TYPE = enif_open_resource_type(env, mod, name_builder, free_builder, (ErlNifResourceFlags) flags, NULL);
   OP_RES_TYPE = enif_open_resource_type(env, mod, name_op, free_op, (ErlNifResourceFlags) flags, NULL);
-  if(BUILDER_RES_TYPE == NULL || OP_RES_TYPE == NULL) return -1;
+  COMP_RES_TYPE = enif_open_resource_type(env, mod, name_comp, free_comp, (ErlNifResourceFlags) flags, NULL);
+
+  if(BUILDER_RES_TYPE == NULL || OP_RES_TYPE == NULL || COMP_RES_TYPE == NULL) return -1;
 
   builder = (Builder*) enif_alloc(sizeof(Builder));
   ok = enif_make_atom(env, "ok");
@@ -58,11 +71,34 @@ ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
   return ret;
 }
 
+ERL_NIF_TERM enif_make_computation(ErlNifEnv* env, xla::XlaComputation* value){
+  Computation* comp = (Computation*) enif_alloc_resource(COMP_RES_TYPE, sizeof(Op*));
+  comp->computation = value;
+  ERL_NIF_TERM ret = enif_make_resource(env, comp);
+  enif_keep_resource(comp);
+
+  return ret;
+}
+
+std::vector<int> enif_get_vector(ErlNifEnv* env, ERL_NIF_TERM list){
+  int i = 0;
+  std::vector<int> data;
+  ERL_NIF_TERM head, tail;
+  while(enif_get_list_cell(env, list, &head, &tail)){
+    int value;
+    enif_get_int(env, head, &value);
+    data.insert(data.begin() + (i++), value);
+    list = tail;
+  }
+  return data;
+}
+
 ERL_NIF_TERM constant_from_array(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
+  std::vector<int> data = enif_get_vector(env, argv[0]);
   Builder* builder = (Builder*) enif_priv_data(env);
 
-  xla::Array<uint> arr = xla::Array<uint>({1, 2, 3});
+  xla::Array<int> arr = xla::Array<int>({1, 2, 3, 4, 5, 6, 7, 8});
   xla::XlaOp op = xla::ConstantFromArray(builder->builder, arr);
 
   return enif_make_op(env, op);
@@ -74,9 +110,7 @@ ERL_NIF_TERM add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs);
   enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs);
 
-  absl::Span<const long long int> broadcast = absl::Span<const long long int>({1});
-
-  xla::XlaOp result = xla::Add(lhs->op, rhs->op, broadcast);
+  xla::XlaOp result = xla::Add(lhs->op, rhs->op);
   return enif_make_op(env, result);
 }
 
@@ -84,14 +118,17 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
   Builder* builder = (Builder*) enif_priv_data(env);
 
-  builder->builder->Build();
+  xla::XlaComputation computation;
 
-  return ok;
+  xla::StatusOr<xla::XlaComputation> result = builder->builder->Build();
+  computation = result.ConsumeValueOrDie();
+
+  return enif_make_computation(env, &computation);
 }
 
 static ErlNifFunc builder_funcs[] = {
   {"add", 2, add},
-  {"constant_from_array", 0, constant_from_array},
+  {"constant_from_array", 1, constant_from_array},
   {"build", 0, build}
 };
 
