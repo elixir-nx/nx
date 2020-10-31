@@ -214,6 +214,8 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return enif_make_string(env, result_str.c_str(), ERL_NIF_LATIN1);
 }
 
+ERL_NIF_TERM something(){return ok;}
+
 ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
   xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();

@@ -24,8 +24,7 @@ defmodule Exla.MixProject do
   defp deps do
     [
       {:elixir_make, "~> 0.6"},
-      {:benchee, "~> 1.0"},
-      {:exprotobuf, "~> 1.2"}
+      {:benchee, "~> 1.0"}
     ]
   end
 end

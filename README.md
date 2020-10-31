@@ -1,21 +1,15 @@
 # Exla
 
-Elixir XLA Client.
+Elixir XLA Client for compiling and running Elixir code on CPU/GPU/TPU.
 
 ## Building
 
-You need [Bazel](https://docs.bazel.build/versions/master/install.html) and [CUDA](#) >= 10.1.
+You need [Bazel](https://docs.bazel.build/versions/master/install.html).
 
-Running `iex -S mix` inside the root directory goes through the whole build process. You might see something like:
+It's currently configured to build with GPU support by default. To disable this option and only target CPU, remove the `--config=cuda` line from `bazel build//exla:libexla.so --config=cuda` in `Makefile`.
 
-```
-ERROR: <builtin>: Couldn't build file stable-status.txt: Failed to determine workspace status: Process exited with status 127
-```
-
-The build will continue and build the libraries successfully, but it will say that the build did not succeed. I think it's a bug with Bazel. Elixir Make is configured to ignore these errors and continue anyway.
-
-You'll also see a ton of warnings from compiling XLA from the TensorFlow tree. The build took ~5 minutes running on 12 threads on my machine.
+Running `iex -S mix` inside the root directory goes through the whole build process. The build process takes a lot of time (~30 mins) and resources.
 
 ## Running
 
-You can build up computations and run them using `Exla.run/0`.
+After running `iex -S mix`, you can build up computations using XLA Operations. Check out: [XLA Operation Semantics](https://www.tensorflow.org/xla/operation_semantics) for a list of supported operations.

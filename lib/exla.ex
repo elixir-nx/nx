@@ -4,7 +4,7 @@ defmodule Exla do
   app = Mix.Project.config()[:app]
   @doc false
   def load_nifs do
-    path = :filename.join(:code.priv_dir(unquote(app)), 'bazel-bin/exla/libexla')
+    path = :filename.join(:code.priv_dir(unquote(app)), 'libexla')
     :erlang.load_nif(path, 0)
   end
 
