@@ -1,6 +1,6 @@
 cc_binary(
-  name = "libbuilder.so",
-  srcs = ["builder.cc"],
+  name = "libexla.so",
+  srcs = ["exla.cc"],
   deps = [
     "@com_google_absl//absl/memory",
     "@org_tensorflow//tensorflow/compiler/xla:literal",

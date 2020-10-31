@@ -47,7 +47,7 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
 
   if(OP_RES_TYPE == NULL) return -1;
 
-  xla_objects = (XLA*) enif_alloc(sizeof(BuilderAndClient));
+  xla_objects = (XLA*) enif_alloc(sizeof(XLA));
 
   ok = enif_make_atom(env, "ok");
   bad = enif_make_atom(env, "error");
@@ -90,7 +90,7 @@ ERL_NIF_TERM constant_r1(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
  * It usually takes config ops, but I haven't handled those yet.
  */
 ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  XLA* builder = (XLA*) enif_priv_data(env);
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
   // StatusOr matches really nicely to Elixir's {:ok, ...}/{:error, ...} pattern, haven't handled it yet
   xla::StatusOr<xla::LocalClient*> client_status = xla::ClientLibrary::GetOrCreateLocalClient();
   // This matches really nicely with the ! pattern
@@ -119,11 +119,11 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return enif_make_string(env, result_str.c_str(), ERL_NIF_LATIN1);
 }
 
-static ErlNifFunc builder_funcs[] = {
+static ErlNifFunc exla_funcs[] = {
   {"get_or_create_local_client", 0, get_or_create_local_client},
   {"add", 2, add},
   {"constant_r1", 2, constant_r1},
   {"run", 0, run}
 };
 
-ERL_NIF_INIT(Elixir.Exla.Builder, builder_funcs, &load, NULL, NULL, NULL);
+ERL_NIF_INIT(Elixir.Exla, exla_funcs, &load, NULL, NULL, NULL);
