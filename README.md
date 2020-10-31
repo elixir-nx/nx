@@ -18,4 +18,4 @@ You'll also see a ton of warnings from compiling XLA from the TensorFlow tree. T
 
 ## Running
 
-You can build up computations but not compile them yet.
+You can build up computations and run them using `Exla.run/0`.
