@@ -4,7 +4,7 @@ defmodule Exla.MixProject do
   def project do
     [
       app: :exla,
-      version: "0.0.5",
+      version: "0.0.6",
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -23,7 +23,9 @@ defmodule Exla.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:elixir_make, "~> 0.6"}
+      {:elixir_make, "~> 0.6"},
+      {:benchee, "~> 1.0"},
+      {:exprotobuf, "~> 1.2"}
     ]
   end
 end
