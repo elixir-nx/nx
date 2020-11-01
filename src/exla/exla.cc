@@ -8,6 +8,7 @@
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/hlo.pb.h"
 #include "tensorflow/compiler/xla/service/hlo_module.h"
+#include "tensorflow/compiler/xla/xla_data.pb.h"
 #include <erl_nif.h>
 
 ErlNifResourceType* OP_RES_TYPE;
@@ -59,6 +60,54 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   return 0;
 }
 
+xla::PrimitiveType enif_get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term){
+  unsigned atom_length;
+  // TODO: Handle bad types
+  enif_get_atom_length(env, term, &atom_length, ERL_NIF_LATIN1);
+  char atom[atom_length];
+  enif_get_atom(env, term, atom, atom_length, ERL_NIF_LATIN1);
+  std::string atom_str(atom);
+  if(atom_str.compare("pred") == 0){
+    return xla::PrimitiveType::PRED;
+  } else if(atom_str.compare("int8") == 0){
+    return xla::PrimitiveType::S8;
+  } else if(atom_str.compare("int16") == 0){
+    return xla::PrimitiveType::S16;
+  } else if(atom_str.compare("int32") == 0){
+    return xla::PrimitiveType::S32;
+  } else if(atom_str.compare("int64") == 0){
+    return xla::PrimitiveType::S64;
+  } else if(atom_str.compare("uint8") == 0){
+    return xla::PrimitiveType::U8;
+  } else if(atom_str.compare("uint16") == 0){
+    return xla::PrimitiveType::U16;
+  } else if(atom_str.compare("uint32") == 0){
+    return xla::PrimitiveType::U32;
+  } else if(atom_str.compare("uint64") == 0){
+    return xla::PrimitiveType::U64;
+  } else if(atom_str.compare("float16") == 0){
+    return xla::PrimitiveType::F16;
+  } else if(atom_str.compare("bfloat16") == 0){
+    return xla::PrimitiveType::BF16;
+  } else if(atom_str.compare("float32") == 0){
+    return xla::PrimitiveType::F32;
+  } else if(atom_str.compare("float64") == 0){
+    return xla::PrimitiveType::F64;
+  } else if(atom_str.compare("complex64") == 0){
+    return xla::PrimitiveType::C64;
+  } else if(atom_str.compare("complex128") == 0){
+    return xla::PrimitiveType::C128;
+  } else if(atom_str.compare("tuple") == 0){
+    return xla::PrimitiveType::TUPLE;
+  } else if(atom_str.compare("opaque") == 0){
+    return xla::PrimitiveType::OPAQUE_TYPE;
+  } else if(atom_str.compare("token") == 0){
+    return xla::PrimitiveType::TOKEN;
+  } else {
+    return xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
+  }
+}
+
 ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
   Op* op = (Op*) enif_alloc_resource(OP_RES_TYPE, sizeof(Op*));
   op->op = value;
@@ -66,7 +115,8 @@ ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
   return ret;
 }
 
-absl::Span<long long int> enif_get_broadcast_dims(ErlNifEnv* env, ERL_NIF_TERM list){
+// TODO: Combine template type this
+absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
   ERL_NIF_TERM head, tail;
   std::vector<long long int> values;
   int i = 0;
@@ -90,7 +140,7 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
   Op* lhs, *rhs;
   enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs);
   enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs);
-  absl::Span<const long long int> broadcast_dims = enif_get_broadcast_dims(env, argv[2]);
+  absl::Span<const long long int> broadcast_dims = enif_get_span(env, argv[2]);
   xla::XlaOp result = lambda(lhs->op, rhs->op, broadcast_dims);
   return enif_make_op(env, result);
 }
@@ -161,7 +211,35 @@ ERL_NIF_TERM neg(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla
 ERL_NIF_TERM conj(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Conj);}
 ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::PopulationCount);}
 
-ERL_NIF_TERM constant_r1(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+// Constant Creation Methods
+ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  int value;
+  enif_get_int(env, argv[0], &value);
+  xla::XlaOp op = xla::ConstantR0(xla_objects->builder, value);
+  return enif_make_op(env, op);
+}
+
+ERL_NIF_TERM constant_r1_from_list(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  absl::Span<const long long int> values = enif_get_span(env, argv[0]);
+  xla::XlaOp op = xla::ConstantR1(xla_objects->builder, values);
+  return enif_make_op(env, op);
+}
+
+ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2){
+    return enif_make_badarg(env);
+  }
+
   XLA* xla_objects = (XLA*) enif_priv_data(env);
   int length, value;
   enif_get_int(env, argv[0], &length);
@@ -214,8 +292,6 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return enif_make_string(env, result_str.c_str(), ERL_NIF_LATIN1);
 }
 
-ERL_NIF_TERM something(){return ok;}
-
 /*********** HLO Methods *************/
 xla::StatusOr<std::unique_ptr<xla::HloModule>> get_hlo_module(const xla::XlaComputation& computation){
   xla::StatusOr<xla::HloModuleConfig> module_config = xla::HloModule::CreateModuleConfigFromProto(computation.proto(), xla::GetDebugOptionsFromFlags());
@@ -253,7 +329,7 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
   {"get_or_create_local_client", 0, get_or_create_local_client},
-  // Binary Ops
+  /****** Binary Ops ******/
   {"add", 3, add},
   {"sub", 3, sub},
   {"mul", 3, mul},
@@ -282,7 +358,7 @@ static ErlNifFunc exla_funcs[] = {
   {"pow", 3, pow},
   {"complex", 3, complex},
   {"atan2", 3, atan2},
-  // Unary Ops
+  /****** Unary Ops ******/
   {"abs", 1, abs},
   {"exp", 1, exp},
   {"expm1", 1, expm1},
@@ -307,10 +383,13 @@ static ErlNifFunc exla_funcs[] = {
   {"neg", 1, neg},
   {"conj", 1, conj},
   {"population_count", 1, population_count},
-
+  /******** Constant Creation Methods *******/
+  {"constant_r0", 1, constant_r0},
+  {"constant_r1", 1, constant_r1_from_list},
+  {"constant_r1", 2, constant_r1_fill},
+  /******** Other XLA Ops *******/
   {"dot", 2, dot},
-  {"constant_r1", 2, constant_r1},
-  /***********************/
+  /******* Compilation, Execution, Etc. ******/
   {"run", 0, run},
   /******** HLO Functions ********/
   {"get_computation_hlo_proto", 0, get_computation_hlo_proto},
