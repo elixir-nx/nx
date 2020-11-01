@@ -10,7 +10,6 @@
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#include "exla/nifpp.h"
 #include <erl_nif.h>
 
 ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE;
@@ -29,11 +28,6 @@ typedef struct {
   xla::XlaBuilder* builder;
   xla::LocalClient* client;
 } XLA;
-
-/* xla::XlaOp resource wrapper */
-typedef struct {
-  xla::XlaOp op;
-} Op;
 
 // Leaving these here for the time being.
 void free_op(ErlNifEnv* env, void* obj){return;}
@@ -65,8 +59,6 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   xla_objects->client = NULL;
 
   *priv = (void*) xla_objects;
-
-  // nifpp::register_resource<xla::Shape>(env, nullptr, "Shape");
 
   return 0;
 }
@@ -158,9 +150,9 @@ int enif_get_std_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
 }
 
 ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
-  Op* op = (Op*) enif_alloc_resource(OP_RES_TYPE, sizeof(Op*));
-  op->op = value;
-  return enif_make_resource(env, op);
+  void* ptr = enif_alloc_resource(OP_RES_TYPE, sizeof(xla::XlaOp));
+  new(ptr) xla::XlaOp(value);
+  return enif_make_resource(env, ptr);
 }
 
 ERL_NIF_TERM enif_make_shape(ErlNifEnv* env, xla::Shape value){
@@ -187,8 +179,6 @@ absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
 ERL_NIF_TERM make_scalar_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::PrimitiveType element_type = enif_get_primitive_type(env, argv[0]);
   xla::Shape shape = xla::ShapeUtil::MakeScalarShape(element_type);
-  // auto ptr = nifpp::construct_resource<xla::Shape>(shape);
-  // return nifpp::make(env, ptr);
   return enif_make_shape(env, shape);
 }
 
@@ -213,13 +203,11 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   std::string name;
 
   enif_get_int64(env, argv[0], &param_num);
+  enif_get_resource(env, argv[1], SHAPE_RES_TYPE, (void **) &shape);
   enif_get_std_string(env, argv[2], name);
 
-  // std::cout << xla::ShapeUtil::HumanString(*(shape->shape)) << std::endl;
-
-  // xla::XlaOp op = xla::Parameter(xla_objects->builder, param_num, shape->shape, name);
-  // return enif_make_op(env, op);
-  return ok;
+  xla::XlaOp op = xla::Parameter(xla_objects->builder, param_num, *shape, name);
+  return enif_make_op(env, op);
 }
 
 /* Stub for element-wise binary functions */
@@ -228,11 +216,11 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
     return enif_make_badarg(env);
   }
 
-  Op* lhs, *rhs;
+  xla::XlaOp *lhs, *rhs;
   enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs);
   enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs);
   absl::Span<const long long int> broadcast_dims = enif_get_span(env, argv[2]);
-  xla::XlaOp result = lambda(lhs->op, rhs->op, broadcast_dims);
+  xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return enif_make_op(env, result);
 }
 
@@ -271,9 +259,9 @@ ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], x
     return enif_make_badarg(env);
   }
 
-  Op* op;
+  xla::XlaOp *op;
   enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &op);
-  xla::XlaOp result = lambda(op->op);
+  xla::XlaOp result = lambda(*op);
   return enif_make_op(env, result);
 }
 
@@ -341,11 +329,11 @@ ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 }
 
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  Op *lhs, *rhs;
+  xla::XlaOp *lhs, *rhs;
   enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs);
   enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs);
   // TODO: Handle Precision Configuration
-  xla::XlaOp result = xla::Dot(lhs->op, rhs->op);
+  xla::XlaOp result = xla::Dot(*lhs, *rhs);
   return enif_make_op(env, result);
 }
 
