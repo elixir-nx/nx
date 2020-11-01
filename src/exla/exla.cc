@@ -205,8 +205,8 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
   xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();
   xla::XlaComputation computation = computation_status.ConsumeValueOrDie();
-
   xla::StatusOr<xla::Literal> result = xla_objects->client->ExecuteAndTransfer(computation, absl::Span<xla::GlobalData* const>());
+  // TODO: Handle this gracefully
   xla::Literal s = result.ConsumeValueOrDie();
 
   std::string result_str = s.ToString();
@@ -215,6 +215,31 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 
 ERL_NIF_TERM something(){return ok;}
+
+/*********** HLO Methods *************/
+xla::StatusOr<std::unique_ptr<xla::HloModule>> get_hlo_module(const xla::XlaComputation& computation){
+  xla::StatusOr<xla::HloModuleConfig> module_config = xla::HloModule::CreateModuleConfigFromProto(computation.proto(), xla::GetDebugOptionsFromFlags());
+  // TODO: Handle this gracefully
+  xla::StatusOr<std::unique_ptr<xla::HloModule>> module = xla::HloModule::CreateFromProto(computation.proto(), module_config.ConsumeValueOrDie());
+  // TODO: Handle this gracefully.
+  return module.ConsumeValueOrDie();
+}
+
+ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();
+  // TODO: Handle this gracefully
+  xla::XlaComputation computation = computation_status.ConsumeValueOrDie();
+  xla::StatusOr<std::unique_ptr<xla::HloModule>> hlo_module_status = get_hlo_module(computation);
+  // TODO: Handle this gracefully
+  std::unique_ptr<xla::HloModule> hlo_module = hlo_module_status.ConsumeValueOrDie();
+
+  xla::HloPrintOptions options;
+  options = xla::HloPrintOptions::ShortParsable();
+  options.set_print_large_constants(false);
+  std::string result = hlo_module->ToString(options);
+  return enif_make_string(env, result.c_str(), ERL_NIF_LATIN1);
+}
 
 ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
@@ -287,7 +312,9 @@ static ErlNifFunc exla_funcs[] = {
   {"constant_r1", 2, constant_r1},
   /***********************/
   {"run", 0, run},
-  {"get_computation_hlo_proto", 0, get_computation_hlo_proto}
+  /******** HLO Functions ********/
+  {"get_computation_hlo_proto", 0, get_computation_hlo_proto},
+  {"get_computation_hlo_text", 0, get_computation_hlo_text}
 };
 
 ERL_NIF_INIT(Elixir.Exla, exla_funcs, &load, NULL, NULL, NULL);

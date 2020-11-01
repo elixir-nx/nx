@@ -12,6 +12,8 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/xla/service:hlo_proto_cc",
     # This was linked in after a suggestion from the compiler, but I'm not quite sure right now why it's needed
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
+    # TODO: Add condition to check if Exla was built with CUDA
+    "@org_tensorflow//tensorflow/stream_executor/cuda:cuda_platform",
     "@erts//:headers",
   ],
   linkopts = ["-shared"],

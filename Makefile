@@ -2,9 +2,10 @@ ERLANG_PATH = $(shell erl -eval 'io:format("~s", [lists:concat([code:root_dir(),
 
 all:
 	cd src/ && \
-	bazel build //exla:libexla.so --ui_event_filters=INFO --config=cuda && \
+	bazel build //exla:libexla.so --config=cuda && \
 	cp bazel-bin/exla/libexla.so ../priv/libexla.so
 
 clean:
 	cd src/ && \
-	bazel clean --expunge
+	bazel clean --expunge && \
+	rm ../priv/libexla.so

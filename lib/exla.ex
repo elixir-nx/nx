@@ -130,5 +130,8 @@ defmodule Exla do
   def get_computation_hlo_proto,
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_proto/0.")
 
+  def get_computation_hlo_text,
+    do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
+
   def run, do: raise("Failed to load implementation of #{__MODULE__}.run/0.")
 end
