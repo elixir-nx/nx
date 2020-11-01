@@ -1,6 +1,6 @@
 cc_binary(
   name = "libexla.so",
-  srcs = ["exla.cc"],
+  srcs = ["exla.cc", "nifpp.h"],
   deps = [
     "@com_google_absl//absl/memory",
     "@org_tensorflow//tensorflow/compiler/xla:literal",
@@ -10,10 +10,13 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/xla:statusor",
     "@org_tensorflow//tensorflow/compiler/xla/service:hlo_proto_cc",
+    "@org_tensorflow//tensorflow/compiler/xla:shape_util",
     # This was linked in after a suggestion from the compiler, but I'm not quite sure right now why it's needed
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
+    # TODO: Choose between CPU/GPU depending on what's enabled
+    # "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
     # TODO: Add condition to check if Exla was built with CUDA
-    "@org_tensorflow//tensorflow/stream_executor/cuda:cuda_platform",
+    # "@org_tensorflow//tensorflow/stream_executor/cuda:cuda_platform",
     "@erts//:headers",
   ],
   linkopts = ["-shared"],

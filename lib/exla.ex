@@ -8,6 +8,12 @@ defmodule Exla do
     :erlang.load_nif(path, 0)
   end
 
+  def make_shape(_type, _dimensions), do: raise("Failed to load implementation of #{__MODULE__}.make_shape/2.")
+  def make_scalar_shape(_type), do: raise("Failed to load implementation of #{__MODULE__}.make_scalar_shape/1.")
+  def shape_to_string(_shape), do: raise("Failed to load implementation of #{__MODULE__}.shape_to_string/1.")
+
+  def parameter(_number, _shape, _name), do: raise("Failed to load implementation of #{__MODULE__}.parameter/3.")
+
   def add(_a, _b, _broadcast_dims \\ []),
     do: raise("Failed to load implementation of #{__MODULE__}.add/3.")
 
@@ -115,6 +121,7 @@ defmodule Exla do
   def logical_not(_a), do: raise("Failed to load implementation of #{__MODULE__}.not/1.")
   def neg(_a), do: raise("Failed to load implementation of #{__MODULE__}.neg/1.")
   def conj(_a), do: raise("Failed to load implementation of #{__MODULE__}.conj/1.")
+  def copy(_a), do: raise("Failed to load implementation of #{__MODULE__}.copy/1.")
 
   def population_count(_a),
     do: raise("Failed to load implementation of #{__MODULE__}.population_count/1.")

@@ -19,4 +19,4 @@ Benchee.run(%{
 },
   time: 10,
   memory_time: 2,
-  before_each: fn _ -> Exla.dot(Exla.constant_r1(1_000_000_000, 1000), Exla.constant_r1(1_000_000_000, 1000)) end)
+  before_each: fn _ -> Exla.dot(Exla.constant_r1(1_000_000, 1000), Exla.constant_r1(1_000_000, 1000)) end)
