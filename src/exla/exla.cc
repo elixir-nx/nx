@@ -117,35 +117,25 @@ xla::PrimitiveType enif_get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term){
 
 int enif_get_std_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
   unsigned len;
-  int ret = enif_get_list_length(env, term, &len); // full list iteration
-  if(!ret)
-  {
-      // not a list, try as binary
-      ErlNifBinary bin;
-      ret = enif_inspect_binary(env, term, &bin);
-      if(!ret)
-      {
-          // not a binary either, so fail.
-          return 0;
-      }
-      var = std::string((const char*)bin.data, bin.size);
-      return ret;
+  int ret = enif_get_list_length(env, term, &len);
+
+  if(!ret){
+    ErlNifBinary bin;
+    ret = enif_inspect_binary(env, term, &bin);
+    if(!ret){
+      return 0;
+    }
+    var = std::string((const char*)bin.data, bin.size);
+    return ret;
   }
-  var.resize(len+1); // +1 for terminating null
-  ret =  enif_get_string(env, term, &*(var.begin()), var.size(), ERL_NIF_LATIN1); // full list iteration
-  if(ret > 0)
-  {
-      var.resize(ret-1); // trim terminating null
-  }
-  else if(ret==0)
-  {
-      var.resize(0);
-  }
-  else
-  {
-      // oops string somehow got truncated
-      // var is correct size so do nothing
-  }
+
+  var.resize(len+1);
+  ret = enif_get_string(env, term, &*(var.begin()), var.size(), ERL_NIF_LATIN1);
+
+  if(ret > 0){var.resize(ret-1);}
+  else if(ret==0){var.resize(0);}
+  else{}
+
   return ret;
 }
 
@@ -161,6 +151,8 @@ ERL_NIF_TERM enif_make_shape(ErlNifEnv* env, xla::Shape value){
   return enif_make_resource(env, ptr);
 }
 
+// TODO: Template this.
+// TODO: This should return an integer status instead of the span.
 absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
   ERL_NIF_TERM head, tail;
   std::vector<long long int> values;
@@ -177,12 +169,20 @@ absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
 /************************ xla::Shape Functions ***************************/
 
 ERL_NIF_TERM make_scalar_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   xla::PrimitiveType element_type = enif_get_primitive_type(env, argv[0]);
   xla::Shape shape = xla::ShapeUtil::MakeScalarShape(element_type);
   return enif_make_shape(env, shape);
 }
 
 ERL_NIF_TERM shape_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   xla::Shape* shape;
   enif_get_resource(env, argv[0], SHAPE_RES_TYPE, (void **) &shape);
   std::string result = xla::ShapeUtil::HumanString(*shape);
