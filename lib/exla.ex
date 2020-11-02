@@ -8,9 +8,8 @@ defmodule Exla do
     :erlang.load_nif(path, 0)
   end
 
-  def make_shape(_type, _dimensions), do: raise("Failed to load implementation of #{__MODULE__}.make_shape/2.")
   def make_scalar_shape(_type), do: raise("Failed to load implementation of #{__MODULE__}.make_scalar_shape/1.")
-  def shape_to_string(_shape), do: raise("Failed to load implementation of #{__MODULE__}.shape_to_string/1.")
+  def human_string(_shape), do: raise("Failed to load implementation of #{__MODULE__}.human_string/1.")
 
   def parameter(_number, _shape, _name), do: raise("Failed to load implementation of #{__MODULE__}.parameter/3.")
 
@@ -136,11 +135,12 @@ defmodule Exla do
   def get_or_create_local_client,
     do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/0.")
 
-  def get_computation_hlo_proto,
+  def get_computation_hlo_proto(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_proto/0.")
 
-  def get_computation_hlo_text,
+  def get_computation_hlo_text(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
 
   def run, do: raise("Failed to load implementation of #{__MODULE__}.run/0.")
+  def build, do: raise("Failed to load implementation of #{__MODULE__}.build/0.")
 end

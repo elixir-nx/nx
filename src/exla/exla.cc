@@ -1,4 +1,3 @@
-#include "absl/memory/memory.h"
 #include "absl/types/span.h"
 #include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/statusor.h"
@@ -12,7 +11,7 @@
 #include "tensorflow/compiler/xla/shape_util.h"
 #include <erl_nif.h>
 
-ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE;
+ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE;
 
 ERL_NIF_TERM ok, bad;
 
@@ -32,18 +31,24 @@ typedef struct {
 // Leaving these here for the time being.
 void free_op(ErlNifEnv* env, void* obj){return;}
 void free_shape(ErlNifEnv* env, void* obj){return;}
+void free_computation(ErlNifEnv* env, void* obj){return;}
+void free_literal(ErlNifEnv* env, void* obj){return;}
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "XLA";
   const char* name_op = "Op";
   const char* name_shape = "Shape";
+  const char* name_computation = "Computation";
+  const char* name_literal = "Literal";
 
   int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
 
   OP_RES_TYPE = enif_open_resource_type(env, mod, name_op, free_op, (ErlNifResourceFlags) flags, NULL);
   SHAPE_RES_TYPE = enif_open_resource_type(env, mod, name_shape, free_shape, (ErlNifResourceFlags) flags, NULL);
+  COMPUTATION_RES_TYPE = enif_open_resource_type(env, mod, name_computation, free_computation, (ErlNifResourceFlags) flags, NULL);
+  LITERAL_RES_TYPE = enif_open_resource_type(env, mod, name_literal, free_literal, (ErlNifResourceFlags) flags, NULL);
 
-  if(OP_RES_TYPE == NULL || SHAPE_RES_TYPE == NULL) return -1;
+  if(OP_RES_TYPE == NULL || SHAPE_RES_TYPE == NULL || COMPUTATION_RES_TYPE == NULL || LITERAL_RES_TYPE == NULL) return -1;
   return 0;
 }
 
@@ -151,8 +156,14 @@ ERL_NIF_TERM enif_make_shape(ErlNifEnv* env, xla::Shape value){
   return enif_make_resource(env, ptr);
 }
 
+ERL_NIF_TERM enif_make_computation(ErlNifEnv* env, xla::XlaComputation value){
+  void* ptr = enif_alloc_resource(COMPUTATION_RES_TYPE, sizeof(xla::XlaComputation));
+  new(ptr) xla::XlaComputation(std::move(value));
+  return enif_make_resource(env, ptr);
+}
+
 // TODO: Template this.
-// TODO: This should return an integer status instead of the span.
+// TODO: This should return an integer status instead of the span and rather accept a reference to the Span.
 absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
   ERL_NIF_TERM head, tail;
   std::vector<long long int> values;
@@ -178,19 +189,18 @@ ERL_NIF_TERM make_scalar_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   return enif_make_shape(env, shape);
 }
 
-ERL_NIF_TERM shape_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+ERL_NIF_TERM human_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
   }
 
   xla::Shape* shape;
-  enif_get_resource(env, argv[0], SHAPE_RES_TYPE, (void **) &shape);
+  if(!enif_get_resource(env, argv[0], SHAPE_RES_TYPE, (void **) &shape)) return enif_make_badarg(env);
   std::string result = xla::ShapeUtil::HumanString(*shape);
   return enif_make_string(env, result.c_str(), ERL_NIF_LATIN1);
 }
 
 /************************ xla::XlaOp Functions ***************************/
-
 ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 3){
     return enif_make_badarg(env);
@@ -202,9 +212,9 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::Shape* shape;
   std::string name;
 
-  enif_get_int64(env, argv[0], &param_num);
-  enif_get_resource(env, argv[1], SHAPE_RES_TYPE, (void **) &shape);
-  enif_get_std_string(env, argv[2], name);
+  if(!enif_get_int64(env, argv[0], &param_num)) return enif_make_badarg(env);
+  if(!enif_get_resource(env, argv[1], SHAPE_RES_TYPE, (void **) &shape)) return enif_make_badarg(env);
+  if(!enif_get_std_string(env, argv[2], name)) return enif_make_badarg(env);
 
   xla::XlaOp op = xla::Parameter(xla_objects->builder, param_num, *shape, name);
   return enif_make_op(env, op);
@@ -217,8 +227,9 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
   }
 
   xla::XlaOp *lhs, *rhs;
-  enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs);
-  enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs);
+  if(!enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs)) return enif_make_badarg(env);
+  if(!enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs)) return enif_make_badarg(env);
+
   absl::Span<const long long int> broadcast_dims = enif_get_span(env, argv[2]);
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return enif_make_op(env, result);
@@ -260,7 +271,8 @@ ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], x
   }
 
   xla::XlaOp *op;
-  enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &op);
+  if(!enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &op)) return enif_make_badarg(env);
+
   xla::XlaOp result = lambda(*op);
   return enif_make_op(env, result);
 }
@@ -372,6 +384,12 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return enif_make_string(env, result_str.c_str(), ERL_NIF_LATIN1);
 }
 
+ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();
+  return enif_make_computation(env, computation_status.ConsumeValueOrDie());
+}
+
 /*********** HLO Methods *************/
 xla::StatusOr<std::unique_ptr<xla::HloModule>> get_hlo_module(const xla::XlaComputation& computation){
   xla::StatusOr<xla::HloModuleConfig> module_config = xla::HloModule::CreateModuleConfigFromProto(computation.proto(), xla::GetDebugOptionsFromFlags());
@@ -382,12 +400,11 @@ xla::StatusOr<std::unique_ptr<xla::HloModule>> get_hlo_module(const xla::XlaComp
 }
 
 ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();
   // TODO: Handle this gracefully
-  xla::XlaComputation computation = computation_status.ConsumeValueOrDie();
-  xla::StatusOr<std::unique_ptr<xla::HloModule>> hlo_module_status = get_hlo_module(computation);
-  // TODO: Handle this gracefully
+  xla::XlaComputation* computation;
+  enif_get_resource(env, argv[0], COMPUTATION_RES_TYPE, (void **) &computation);
+  xla::StatusOr<std::unique_ptr<xla::HloModule>> hlo_module_status = get_hlo_module(*computation);
+  // // TODO: Handle this gracefully
   std::unique_ptr<xla::HloModule> hlo_module = hlo_module_status.ConsumeValueOrDie();
 
   xla::HloPrintOptions options;
@@ -398,11 +415,10 @@ ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TE
 }
 
 ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();
-  xla::XlaComputation computation = computation_status.ConsumeValueOrDie();
+  xla::XlaComputation* computation;
+  enif_get_resource(env, argv[0], COMPUTATION_RES_TYPE, (void **) &computation);
   std::string result;
-  computation.proto().SerializeToString(&result);
+  (*computation).proto().SerializeToString(&result);
   return enif_make_string(env, result.c_str(), ERL_NIF_LATIN1);
 }
 
@@ -410,9 +426,8 @@ static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
   {"get_or_create_local_client", 0, get_or_create_local_client},
   /****** xla::Shape ******/
-  // {"make_shape", 2, make_shape},
+  {"human_string", 1, human_string},
   {"make_scalar_shape", 1, make_scalar_shape},
-  {"shape_to_string", 1, shape_to_string},
   {"parameter", 3, parameter},
   /****** Binary Ops ******/
   {"add", 3, add},
@@ -476,9 +491,10 @@ static ErlNifFunc exla_funcs[] = {
   {"dot", 2, dot},
   /******* Compilation, Execution, Etc. ******/
   {"run", 0, run},
+  {"build", 0, build},
   /******** HLO Functions ********/
-  {"get_computation_hlo_proto", 0, get_computation_hlo_proto},
-  {"get_computation_hlo_text", 0, get_computation_hlo_text}
+  {"get_computation_hlo_proto", 1, get_computation_hlo_proto},
+  {"get_computation_hlo_text", 1, get_computation_hlo_text}
 };
 
 ERL_NIF_INIT(Elixir.Exla, exla_funcs, &load, NULL, NULL, NULL);
