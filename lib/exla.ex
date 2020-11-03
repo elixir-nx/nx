@@ -11,6 +11,9 @@ defmodule Exla do
   def make_scalar_shape(_type), do: raise("Failed to load implementation of #{__MODULE__}.make_scalar_shape/1.")
   def human_string(_shape), do: raise("Failed to load implementation of #{__MODULE__}.human_string/1.")
 
+  def create_r0(_value), do: raise("Failed to load implementation of #{__MODULE__}.create_r0/1.")
+  def literal_to_string(_literal), do: raise("Failed to load implementation of #{__MODULE__}.literal_to_string/1.")
+
   def parameter(_number, _shape, _name), do: raise("Failed to load implementation of #{__MODULE__}.parameter/3.")
 
   def add(_a, _b, _broadcast_dims \\ []),
@@ -134,6 +137,7 @@ defmodule Exla do
 
   def get_or_create_local_client,
     do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/0.")
+  def get_device_count, do: raise("Failed to load implementation of #{__MODULE__}.get_device_count/0.")
 
   def get_computation_hlo_proto(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_proto/0.")
@@ -141,6 +145,9 @@ defmodule Exla do
   def get_computation_hlo_text(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
 
-  def run, do: raise("Failed to load implementation of #{__MODULE__}.run/0.")
   def build, do: raise("Failed to load implementation of #{__MODULE__}.build/0.")
+  def transfer(_data), do: raise("Failed to load implementation of #{__MODULE__}.transfer/1.")
+  def transfer_to_server(_literal), do: raise("Failed to load implementation of #{__MODULE__}.transfer_to_server/1.")
+  def execute_and_transfer(_computation, _arguments), do: raise("Failed to load implementation of #{__MODULE__}.execute_and_transfer/1.")
+  def test, do: raise("BAD")
 end
