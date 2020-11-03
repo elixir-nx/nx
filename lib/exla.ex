@@ -145,7 +145,7 @@ defmodule Exla do
   def get_computation_hlo_text(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
 
-  def build, do: raise("Failed to load implementation of #{__MODULE__}.build/0.")
+  def build(_root), do: raise("Failed to load implementation of #{__MODULE__}.build/1.")
   def compile(_computation, _argument_layouts, _options), do: raise("Failed to load implementation of #{__MODULE__}.compile/3.")
   def run(_executable, _arguments, _run_options), do: raise("Failed to load implementation of #{__MODULE__}.run/3.")
 end

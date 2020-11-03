@@ -460,7 +460,11 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 /************ Build, Compilation, Execution *************/
 ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
-  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();
+
+  xla::XlaOp* root;
+  // TODO: Handle args
+  enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &root);
+  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build(*root);
   // TODO: Handle StatusOr more gracefully.
   return enif_make_computation(env, computation_status.ConsumeValueOrDie());
 }
@@ -604,7 +608,7 @@ static ErlNifFunc exla_funcs[] = {
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   /******* Compilation, Execution, Etc. ******/
-  {"build", 0, build},
+  {"build", 1, build},
   {"compile", 3, compile},
   {"run", 3, run},
   /******** HLO Functions ********/
