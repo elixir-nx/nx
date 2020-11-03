@@ -8,13 +8,19 @@ defmodule Exla do
     :erlang.load_nif(path, 0)
   end
 
-  def make_scalar_shape(_type), do: raise("Failed to load implementation of #{__MODULE__}.make_scalar_shape/1.")
-  def human_string(_shape), do: raise("Failed to load implementation of #{__MODULE__}.human_string/1.")
+  def make_scalar_shape(_type),
+    do: raise("Failed to load implementation of #{__MODULE__}.make_scalar_shape/1.")
+
+  def human_string(_shape),
+    do: raise("Failed to load implementation of #{__MODULE__}.human_string/1.")
 
   def create_r0(_value), do: raise("Failed to load implementation of #{__MODULE__}.create_r0/1.")
-  def literal_to_string(_literal), do: raise("Failed to load implementation of #{__MODULE__}.literal_to_string/1.")
 
-  def parameter(_number, _shape, _name), do: raise("Failed to load implementation of #{__MODULE__}.parameter/3.")
+  def literal_to_string(_literal),
+    do: raise("Failed to load implementation of #{__MODULE__}.literal_to_string/1.")
+
+  def parameter(_number, _shape, _name),
+    do: raise("Failed to load implementation of #{__MODULE__}.parameter/3.")
 
   def add(_a, _b, _broadcast_dims \\ []),
     do: raise("Failed to load implementation of #{__MODULE__}.add/3.")
@@ -130,14 +136,20 @@ defmodule Exla do
 
   def dot(_a, _b), do: raise("Failed to load implementation of #{__MODULE__}.dot/2.")
 
-  def constant_r0(_value), do: raise("Failed to load implementation of #{__MODULE__}.constant_r0.")
-  def constant_r1(_values), do: raise("Failed to load implementation of #{__MODULE__}.constant_r1.")
+  def constant_r0(_value),
+    do: raise("Failed to load implementation of #{__MODULE__}.constant_r0.")
+
+  def constant_r1(_values),
+    do: raise("Failed to load implementation of #{__MODULE__}.constant_r1.")
+
   def constant_r1(_length, _value),
     do: raise("Failed to load implementation of #{__MODULE__}.constant_r1/2.")
 
   def get_or_create_local_client,
     do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/0.")
-  def get_device_count, do: raise("Failed to load implementation of #{__MODULE__}.get_device_count/0.")
+
+  def get_device_count,
+    do: raise("Failed to load implementation of #{__MODULE__}.get_device_count/0.")
 
   def get_computation_hlo_proto(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_proto/0.")
@@ -146,6 +158,13 @@ defmodule Exla do
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
 
   def build(_root), do: raise("Failed to load implementation of #{__MODULE__}.build/1.")
-  def compile(_computation, _argument_layouts, _options), do: raise("Failed to load implementation of #{__MODULE__}.compile/3.")
-  def run(_executable, _arguments, _run_options), do: raise("Failed to load implementation of #{__MODULE__}.run/3.")
+
+  def compile(_computation, _argument_layouts, _options),
+    do: raise("Failed to load implementation of #{__MODULE__}.compile/3.")
+
+  def run(_executable, _arguments, _run_options),
+    do: raise("Failed to load implementation of #{__MODULE__}.run/3.")
+
+  def literal_to_shaped_buffer(_literal, _device_ordinal, _allocator), do: raise("Failed to load implementation of #{__MODULE__}.literal_to_shaped_buffer/3.")
+  def shaped_buffer_to_literal(_shaped_buffer), do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_literal/1.")
 end

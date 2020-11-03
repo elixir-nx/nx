@@ -12,7 +12,7 @@ root = Exla.add(t1, t2)
 comp = Exla.build(root)
 
 # Compile to a local executable, no arguments or options for now
-exec = Exla.compile(comp, {}, %{})
+exec = Exla.compile(comp, {}, %Exla.ExecutableBuildOptions{})
 
 # Run the executable, no arguments or options for now
-Exla.run(hd(exec), {}, %{})
+Exla.run(hd(exec), {}, %Exla.ExecutableRunOptions{})
