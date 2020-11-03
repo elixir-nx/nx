@@ -37,7 +37,7 @@ typedef struct {
 } LocalExecutable;
 
 // Leaving these here for the time being.
-void free_op(ErlNifEnv* env, void* obj){delete obj;}
+void free_op(ErlNifEnv* env, void* obj){return;}
 void free_shape(ErlNifEnv* env, void* obj){return;}
 void free_computation(ErlNifEnv* env, void* obj){return;}
 void free_literal(ErlNifEnv* env, void* obj){return;}
@@ -221,7 +221,16 @@ absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
 }
 // TODO: Template this with above!
 absl::Span<xla::ShapedBuffer*> enif_get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple){
-  return absl::Span<xla::ShapedBuffer*>();
+  const ERL_NIF_TERM* args;
+  int num_args;
+  enif_get_tuple(env, tuple, &num_args, &args);
+  xla::ShapedBuffer* arguments[num_args];
+  for(int i=0;i<num_args;i++){
+    xla::ShapedBuffer* buffer;
+    enif_get_resource(env, args[i], SHAPED_BUFFER_RES_TYPE, (void **) &buffer);
+    arguments[i] = buffer;
+  }
+  return absl::Span<xla::ShapedBuffer*>(arguments, num_args);
 }
 
 // TODO: Template this with above!
@@ -510,7 +519,9 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::ExecutableRunOptions run_options = enif_get_executable_run_options(env, argv[2]);
 
   xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->local_executable->Run(arguments, run_options);
-  return ok;
+  // TODO: Handle this gracefully
+  xla::ScopedShapedBuffer result = run_status.ConsumeValueOrDie();
+  return enif_make_shaped_buffer(env, result);
 }
 
 ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
