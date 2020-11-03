@@ -165,6 +165,9 @@ defmodule Exla do
   def run(_executable, _arguments, _run_options),
     do: raise("Failed to load implementation of #{__MODULE__}.run/3.")
 
-  def literal_to_shaped_buffer(_literal, _device_ordinal, _allocator), do: raise("Failed to load implementation of #{__MODULE__}.literal_to_shaped_buffer/3.")
-  def shaped_buffer_to_literal(_shaped_buffer), do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_literal/1.")
+  def literal_to_shaped_buffer(_literal, _device_ordinal, _allocator),
+    do: raise("Failed to load implementation of #{__MODULE__}.literal_to_shaped_buffer/3.")
+
+  def shaped_buffer_to_literal(_shaped_buffer),
+    do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_literal/1.")
 end
