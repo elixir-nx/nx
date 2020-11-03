@@ -146,8 +146,6 @@ defmodule Exla do
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
 
   def build, do: raise("Failed to load implementation of #{__MODULE__}.build/0.")
-  def transfer(_data), do: raise("Failed to load implementation of #{__MODULE__}.transfer/1.")
-  def transfer_to_server(_literal), do: raise("Failed to load implementation of #{__MODULE__}.transfer_to_server/1.")
-  def execute_and_transfer(_computation, _arguments), do: raise("Failed to load implementation of #{__MODULE__}.execute_and_transfer/1.")
-  def test, do: raise("BAD")
+  def compile(_computation, _argument_layouts, _options), do: raise("Failed to load implementation of #{__MODULE__}.compile/3.")
+  def run(_executable, _arguments, _run_options), do: raise("Failed to load implementation of #{__MODULE__}.run/3.")
 end

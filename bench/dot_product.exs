@@ -15,8 +15,14 @@ elixir_dot =
 
 Benchee.run(%{
   "elixir dot" => fn _ -> elixir_dot.(t1, t1) end,
-  "xla dot" => fn _ -> Exla.run() end
+  "xla dot" => fn exec -> Exla.run(exec, {}, %{}) end
 },
   time: 10,
   memory_time: 2,
-  before_each: fn _ -> Exla.dot(Exla.constant_r1(1_000_000, 1000), Exla.constant_r1(1_000_000, 1000)) end)
+  before_each:
+    fn _ ->
+      Exla.dot(Exla.constant_r1(10_000_000, 1000), Exla.constant_r1(10_000_000, 1000))
+      comp = Exla.build()
+      exec = Exla.compile(comp, {}, %{})
+      hd(exec)
+    end)
