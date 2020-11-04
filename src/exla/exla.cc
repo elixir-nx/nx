@@ -11,7 +11,7 @@
 #include "tensorflow/compiler/xla/shape_util.h"
 #include <erl_nif.h>
 
-ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *GLOBAL_DATA_RES_TYPE;
+ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
 
 ERL_NIF_TERM ok, bad;
 
@@ -29,15 +29,16 @@ typedef struct {
 } XLA;
 
 typedef struct {
-  std::shared_ptr<xla::GlobalData> data;
-} Data;
+  std::shared_ptr<xla::LocalExecutable> local_executable;
+} LocalExecutable;
 
 // Leaving these here for the time being.
 void free_op(ErlNifEnv* env, void* obj){return;}
 void free_shape(ErlNifEnv* env, void* obj){return;}
 void free_computation(ErlNifEnv* env, void* obj){return;}
 void free_literal(ErlNifEnv* env, void* obj){return;}
-void free_global_data(ErlNifEnv* env, void* obj){return;}
+void free_local_executable(ErlNifEnv* env, void* obj){return;}
+void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "XLA";
@@ -45,7 +46,8 @@ static int open_resources(ErlNifEnv* env) {
   const char* name_shape = "Shape";
   const char* name_computation = "Computation";
   const char* name_literal = "Literal";
-  const char* name_global_data = "GlobalData";
+  const char* name_local_executable = "LocalExectuable";
+  const char* name_shaped_buffer = "ShapedBuffer";
 
   int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
 
@@ -53,9 +55,10 @@ static int open_resources(ErlNifEnv* env) {
   SHAPE_RES_TYPE = enif_open_resource_type(env, mod, name_shape, free_shape, (ErlNifResourceFlags) flags, NULL);
   COMPUTATION_RES_TYPE = enif_open_resource_type(env, mod, name_computation, free_computation, (ErlNifResourceFlags) flags, NULL);
   LITERAL_RES_TYPE = enif_open_resource_type(env, mod, name_literal, free_literal, (ErlNifResourceFlags) flags, NULL);
-  GLOBAL_DATA_RES_TYPE = enif_open_resource_type(env, mod, name_global_data, free_global_data, (ErlNifResourceFlags) flags, NULL);
+  LOCAL_EXECUTABLE_RES_TYPE = enif_open_resource_type(env, mod, name_local_executable, free_local_executable, (ErlNifResourceFlags) flags, NULL);
+  SHAPED_BUFFER_RES_TYPE = enif_open_resource_type(env, mod, name_shaped_buffer, free_shaped_buffer, (ErlNifResourceFlags) flags, NULL);
 
-  if(OP_RES_TYPE == NULL || SHAPE_RES_TYPE == NULL || COMPUTATION_RES_TYPE == NULL || LITERAL_RES_TYPE == NULL) return -1;
+  if(OP_RES_TYPE == NULL || SHAPE_RES_TYPE == NULL || COMPUTATION_RES_TYPE == NULL || LITERAL_RES_TYPE == NULL || LOCAL_EXECUTABLE_RES_TYPE == NULL || SHAPED_BUFFER_RES_TYPE == NULL) return -1;
   return 0;
 }
 
@@ -175,10 +178,15 @@ ERL_NIF_TERM enif_make_literal(ErlNifEnv* env, xla::Literal& value){
   return enif_make_resource(env, ptr);
 }
 
-ERL_NIF_TERM enif_make_global_data(ErlNifEnv* env, std::unique_ptr<xla::GlobalData>& value){
-  xla::GlobalData* ptr = (xla::GlobalData*) enif_alloc_resource(GLOBAL_DATA_RES_TYPE, sizeof(xla::GlobalData*));
-  std::shared_ptr<xla::GlobalData> sptr = std::move(value);
-  std::memmove(ptr, sptr.get(), sizeof(xla::GlobalData*));
+ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::LocalExecutable>& value){
+  LocalExecutable* ptr = (LocalExecutable*) enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(LocalExecutable));
+  ptr->local_executable = std::move(value);
+  return enif_make_resource(env, ptr);
+}
+
+ERL_NIF_TERM enif_make_shaped_buffer(ErlNifEnv* env, xla::ShapedBuffer& value){
+  void* ptr = enif_alloc_resource(SHAPED_BUFFER_RES_TYPE, sizeof(xla::ShapedBuffer));
+  new(ptr) xla::ShapedBuffer(std::move(value));
   return enif_make_resource(env, ptr);
 }
 
@@ -197,18 +205,40 @@ absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
   }
   return absl::Span<long long int>(values);
 }
-
-absl::Span<xla::GlobalData*> enif_get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple){
+// TODO: Template this with above!
+absl::Span<xla::ShapedBuffer*> enif_get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple){
   const ERL_NIF_TERM* args;
   int num_args;
   enif_get_tuple(env, tuple, &num_args, &args);
-  xla::GlobalData* arguments[num_args];
+  xla::ShapedBuffer* arguments[num_args];
   for(int i=0;i<num_args;i++){
-    Data* d;
-    enif_get_resource(env, args[i], GLOBAL_DATA_RES_TYPE, (void **) &d);
-    arguments[i] = (d->data).get();
+    xla::ShapedBuffer* buffer;
+    enif_get_resource(env, args[i], SHAPED_BUFFER_RES_TYPE, (void **) &buffer);
+    arguments[i] = buffer;
   }
-  return absl::Span<xla::GlobalData*>(arguments, num_args);
+  return absl::Span<xla::ShapedBuffer*>(arguments, num_args);
+}
+
+// TODO: Template this with above!
+absl::Span<xla::Shape*> enif_get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple){
+  const ERL_NIF_TERM* arg_layouts;
+  int num_arg_layouts;
+  enif_get_tuple(env, tuple, &num_arg_layouts, &arg_layouts);
+  xla::Shape* argument_layouts[num_arg_layouts];
+  for(int i=0;i<num_arg_layouts;i++){
+    xla::Shape* shape;
+    enif_get_resource(env, arg_layouts[i], SHAPE_RES_TYPE, (void **) &shape);
+    argument_layouts[i] = shape;
+  }
+  return absl::Span<xla::Shape*>(argument_layouts, num_arg_layouts);
+}
+
+xla::ExecutableBuildOptions enif_get_executable_build_options(ErlNifEnv* env, ERL_NIF_TERM options){
+  return xla::ExecutableBuildOptions();
+}
+
+xla::ExecutableRunOptions enif_get_executable_run_options(ErlNifEnv* env, ERL_NIF_TERM options){
+  return xla::ExecutableRunOptions();
 }
 
 /************************ xla::Shape Functions ***************************/
@@ -434,71 +464,86 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 /************ Build, Compilation, Execution *************/
 ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
-  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build();
+
+  xla::XlaOp* root;
+  // TODO: Handle args
+  enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &root);
+  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build(*root);
   // TODO: Handle StatusOr more gracefully.
   return enif_make_computation(env, computation_status.ConsumeValueOrDie());
 }
 
-/*
- * In a way, this kind of reminds me of how interpreted languages work in that it accepts an AST, or
- * in this case a computation, runs the computation, and discards it. Under-the-hood, it's still compiling
- * the computation, but this method offers no access to the executable, so we can't run it multiple times
- * with different arguments.
- */
-ERL_NIF_TERM execute_and_transfer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
   if(xla_objects->client == NULL){
-    return enif_make_tuple2(env, bad, enif_make_string(env, "No client available. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
+    return enif_make_tuple2(env, bad, enif_make_string(env, "No client found. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
   }
 
   xla::XlaComputation* computation;
-  // TODO: Handle this gracefully.
+  // TODO: Handle Args
   enif_get_resource(env, argv[0], COMPUTATION_RES_TYPE, (void **) &computation);
-  // TODO: Why does Span only accept initializer lists with non-native types?? What's a more efficient work-around?
-  absl::Span<xla::GlobalData*> arguments = enif_get_arguments(env, argv[1]);
-  // TODO: This should handle execution options.
-  xla::StatusOr<xla::Literal> result_status = xla_objects->client->ExecuteAndTransfer(*computation, arguments);
-  xla::Literal result = result_status.ConsumeValueOrDie();
+  absl::Span<xla::Shape*> argument_layouts = enif_get_argument_layouts(env, argv[1]);
+  xla::ExecutableBuildOptions options = enif_get_executable_build_options(env, argv[2]);
+
+  xla::StatusOr<std::vector<std::unique_ptr<xla::LocalExecutable>>> exec_status = xla_objects->client->Compile(*computation, argument_layouts, options);
   // TODO: Handle this gracefully.
-  return enif_make_literal(env, result);
+  std::vector<std::unique_ptr<xla::LocalExecutable>> executables = exec_status.ConsumeValueOrDie();
+  ERL_NIF_TERM exec_refs[executables.size()];
+  int i = 0;
+  for(auto it=std::begin(executables);it!=std::end(executables);++it){
+    ERL_NIF_TERM exec_term = enif_make_local_executable(env, *it);
+    exec_refs[i++] = exec_term;
+  }
+  return enif_make_list_from_array(env, exec_refs, i);
 }
 
-ERL_NIF_TERM transfer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
+ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  LocalExecutable* local_executable;
+  // TODO: Handle Args
+  enif_get_resource(env, argv[0], LOCAL_EXECUTABLE_RES_TYPE, (void **) &local_executable);
+  absl::Span<xla::ShapedBuffer*> arguments = enif_get_arguments(env, argv[1]);
+  xla::ExecutableRunOptions run_options = enif_get_executable_run_options(env, argv[2]);
 
-  Data* data;
-  enif_get_resource(env, argv[0], GLOBAL_DATA_RES_TYPE, (void **) &data);
-  xla::StatusOr<xla::Literal> literal_status = xla_objects->client->Transfer(*(data->data));
-  xla::Literal literal = literal_status.ConsumeValueOrDie();
-  return enif_make_literal(env, literal);
+  xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->local_executable->Run(arguments, run_options);
+  // TODO: Handle this gracefully
+  xla::ScopedShapedBuffer result = run_status.ConsumeValueOrDie();
+  return enif_make_shaped_buffer(env, result);
 }
-/*
- * This is an abstraction around a direct memory allocation on the targeted device. You can specify
- * a specific device handle to target or use the default. It returns a smart pointer to a GlobalData
- * object. GlobalData objects just provide a wrapper around a globally accessible allocation of data.
- */
-ERL_NIF_TERM transfer_to_server(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+
+ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
   if(xla_objects->client == NULL){
-    return enif_make_tuple2(env, bad, enif_make_string(env, "No client available. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
+    return enif_make_tuple2(env, bad, enif_make_string(env, "No client found. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
   }
 
   xla::Literal* literal;
-  Data* data = (Data*) enif_alloc_resource(GLOBAL_DATA_RES_TYPE, sizeof(Data));
+  int device_ordinal;
+  // TODO: Handle Args
   enif_get_resource(env, argv[0], LITERAL_RES_TYPE, (void **) &literal);
-  xla::StatusOr<std::unique_ptr<xla::GlobalData>> transfer_status = xla_objects->client->TransferToServer(*literal);
-  data->data = std::move(transfer_status.ConsumeValueOrDie());
-  return enif_make_resource(env, data);
+  enif_get_int(env, argv[1], &device_ordinal);
+
+  xla::StatusOr<xla::ScopedShapedBuffer> buffer_status = xla_objects->client->LiteralToShapedBuffer(*literal, device_ordinal);
+  // TODO: Handle this gracefully.
+  xla::ScopedShapedBuffer buffer = buffer_status.ConsumeValueOrDie();
+  return enif_make_shaped_buffer(env, buffer);
 }
 
-ERL_NIF_TERM test(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
-  xla::Literal literal = xla::LiteralUtil::CreateR0(5);
-  xla::StatusOr<std::unique_ptr<xla::GlobalData>> transfer_status = xla_objects->client->TransferToServer(literal);
-  std::unique_ptr<xla::GlobalData> data = transfer_status.ConsumeValueOrDie();
-  xla::StatusOr<xla::Literal> literal_status = xla_objects->client->Transfer(*(data.get()));
-  return ok;
+  if(xla_objects->client == NULL){
+    return enif_make_tuple2(env, bad, enif_make_string(env, "No client found. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
+  }
+
+  xla::ShapedBuffer* buffer;
+  // TODO: Handle Args
+  enif_get_resource(env, argv[0], SHAPED_BUFFER_RES_TYPE, (void **) &buffer);
+
+  xla::StatusOr<xla::Literal> literal_status = xla_objects->client->ShapedBufferToLiteral(*buffer);
+  // TODO: Handle this gracefully.
+  xla::Literal literal = literal_status.ConsumeValueOrDie();
+  return enif_make_literal(env, literal);
 }
+
 /*********** HLO Methods *************/
 xla::StatusOr<std::unique_ptr<xla::HloModule>> get_hlo_module(const xla::XlaComputation& computation){
   xla::StatusOr<xla::HloModuleConfig> module_config = xla::HloModule::CreateModuleConfigFromProto(computation.proto(), xla::GetDebugOptionsFromFlags());
@@ -603,11 +648,11 @@ static ErlNifFunc exla_funcs[] = {
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   /******* Compilation, Execution, Etc. ******/
-  {"build", 0, build},
-  {"transfer", 1, transfer},
-  {"transfer_to_server", 1, transfer_to_server},
-  {"execute_and_transfer", 2, execute_and_transfer},
-  {"test", 0, test},
+  {"build", 1, build},
+  {"compile", 3, compile},
+  {"run", 3, run},
+  {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
+  {"shaped_buffer_to_literal", 1, shaped_buffer_to_literal},
   /******** HLO Functions ********/
   {"get_computation_hlo_proto", 1, get_computation_hlo_proto},
   {"get_computation_hlo_text", 1, get_computation_hlo_text}
