@@ -29,7 +29,7 @@ typedef struct {
 } XLA;
 
 typedef struct {
-  std::shared_ptr<xla::LocalExecutable> local_executable;
+  std::unique_ptr<xla::LocalExecutable> local_executable;
 } LocalExecutable;
 
 // Leaving these here for the time being.
