@@ -11,7 +11,7 @@
 #include "tensorflow/compiler/xla/shape_util.h"
 #include <erl_nif.h>
 
-ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *GLOBAL_DATA_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
+ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
 
 ERL_NIF_TERM ok, bad;
 
@@ -29,10 +29,6 @@ typedef struct {
 } XLA;
 
 typedef struct {
-  std::shared_ptr<xla::GlobalData> data;
-} Data;
-
-typedef struct {
   std::shared_ptr<xla::LocalExecutable> local_executable;
 } LocalExecutable;
 
@@ -41,7 +37,6 @@ void free_op(ErlNifEnv* env, void* obj){return;}
 void free_shape(ErlNifEnv* env, void* obj){return;}
 void free_computation(ErlNifEnv* env, void* obj){return;}
 void free_literal(ErlNifEnv* env, void* obj){return;}
-void free_global_data(ErlNifEnv* env, void* obj){return;}
 void free_local_executable(ErlNifEnv* env, void* obj){return;}
 void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
 
@@ -51,7 +46,6 @@ static int open_resources(ErlNifEnv* env) {
   const char* name_shape = "Shape";
   const char* name_computation = "Computation";
   const char* name_literal = "Literal";
-  const char* name_global_data = "GlobalData";
   const char* name_local_executable = "LocalExectuable";
   const char* name_shaped_buffer = "ShapedBuffer";
 
@@ -61,7 +55,6 @@ static int open_resources(ErlNifEnv* env) {
   SHAPE_RES_TYPE = enif_open_resource_type(env, mod, name_shape, free_shape, (ErlNifResourceFlags) flags, NULL);
   COMPUTATION_RES_TYPE = enif_open_resource_type(env, mod, name_computation, free_computation, (ErlNifResourceFlags) flags, NULL);
   LITERAL_RES_TYPE = enif_open_resource_type(env, mod, name_literal, free_literal, (ErlNifResourceFlags) flags, NULL);
-  GLOBAL_DATA_RES_TYPE = enif_open_resource_type(env, mod, name_global_data, free_global_data, (ErlNifResourceFlags) flags, NULL);
   LOCAL_EXECUTABLE_RES_TYPE = enif_open_resource_type(env, mod, name_local_executable, free_local_executable, (ErlNifResourceFlags) flags, NULL);
   SHAPED_BUFFER_RES_TYPE = enif_open_resource_type(env, mod, name_shaped_buffer, free_shaped_buffer, (ErlNifResourceFlags) flags, NULL);
 
@@ -185,13 +178,6 @@ ERL_NIF_TERM enif_make_literal(ErlNifEnv* env, xla::Literal& value){
   return enif_make_resource(env, ptr);
 }
 
-ERL_NIF_TERM enif_make_global_data(ErlNifEnv* env, std::unique_ptr<xla::GlobalData>& value){
-  xla::GlobalData* ptr = (xla::GlobalData*) enif_alloc_resource(GLOBAL_DATA_RES_TYPE, sizeof(xla::GlobalData*));
-  std::shared_ptr<xla::GlobalData> sptr = std::move(value);
-  std::memmove(ptr, sptr.get(), sizeof(xla::GlobalData*));
-  return enif_make_resource(env, ptr);
-}
-
 ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::LocalExecutable>& value){
   LocalExecutable* ptr = (LocalExecutable*) enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(LocalExecutable));
   ptr->local_executable = std::move(value);
@@ -241,7 +227,7 @@ absl::Span<xla::Shape*> enif_get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM t
   xla::Shape* argument_layouts[num_arg_layouts];
   for(int i=0;i<num_arg_layouts;i++){
     xla::Shape* shape;
-    enif_get_resource(env, arg_layouts[i], GLOBAL_DATA_RES_TYPE, (void **) &shape);
+    enif_get_resource(env, arg_layouts[i], SHAPE_RES_TYPE, (void **) &shape);
     argument_layouts[i] = shape;
   }
   return absl::Span<xla::Shape*>(argument_layouts, num_arg_layouts);
