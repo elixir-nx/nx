@@ -2,3 +2,4 @@
 /deps
 /mix.lock
 /bazel_cache
+/priv
