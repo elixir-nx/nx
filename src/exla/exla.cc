@@ -9,6 +9,7 @@
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/shape_util.h"
+#include "tensorflow/stream_executor/device_memory_allocator.h"
 #include <erl_nif.h>
 
 ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
@@ -186,6 +187,7 @@ ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::Loc
   void* ptr = enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(xla::LocalExecutable));
   xla::LocalExecutable* exec = value.release();
   new(ptr) xla::LocalExecutable(std::move(*exec));
+  enif_release_resource(ptr);
   return enif_make_resource(env, ptr);
 }
 
