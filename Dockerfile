@@ -4,7 +4,7 @@ ARG pip_args=""
 WORKDIR /etc/apt/sources.list.d
 RUN rm cuda.list nvidia-ml.list
 WORKDIR /
-RUN apt-get update && apt-get install -y --no-install-recommends wget curl git locales python3 python3-pip
+RUN apt-get update && apt-get install -y --no-install-recommends wget curl git locales python3 python3-pip ca-certificates
 RUN echo ${bazel_bin_url}
 RUN curl -L ${bazel_bin_url} -o /usr/local/bin/bazel \
     && chmod +x /usr/local/bin/bazel \
@@ -28,4 +28,4 @@ RUN wget https://repo.hex.pm/installs/1.10.0/hex-0.20.6.ez && \
     mix archive.install ./hex-0.20.6.ez --force && \
     rm ./hex-0.20.6.ez
 
-RUN python3 -m install ${pip_args} numpy
+RUN python3 -m pip install ${pip_args} numpy
