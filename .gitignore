@@ -32,3 +32,4 @@ mix.lock
 /src/bazel-*
 
 /bazel_cache
+**/core.*
