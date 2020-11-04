@@ -28,10 +28,6 @@ typedef struct {
   xla::LocalClient* client;
 } XLA;
 
-typedef struct {
-  std::unique_ptr<xla::LocalExecutable> local_executable;
-} LocalExecutable;
-
 // Leaving these here for the time being.
 void free_op(ErlNifEnv* env, void* obj){return;}
 void free_shape(ErlNifEnv* env, void* obj){return;}
@@ -46,7 +42,7 @@ static int open_resources(ErlNifEnv* env) {
   const char* name_shape = "Shape";
   const char* name_computation = "Computation";
   const char* name_literal = "Literal";
-  const char* name_local_executable = "LocalExectuable";
+  const char* name_local_executable = "LocalExecutable";
   const char* name_shaped_buffer = "ShapedBuffer";
 
   int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
@@ -179,8 +175,9 @@ ERL_NIF_TERM enif_make_literal(ErlNifEnv* env, xla::Literal& value){
 }
 
 ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::LocalExecutable>& value){
-  LocalExecutable* ptr = (LocalExecutable*) enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(LocalExecutable));
-  ptr->local_executable = std::move(value);
+  void* ptr = enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(xla::LocalExecutable));
+  xla::LocalExecutable* exec = value.release();
+  new(ptr) xla::LocalExecutable(std::move(*exec));
   return enif_make_resource(env, ptr);
 }
 
@@ -498,13 +495,13 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  LocalExecutable* local_executable;
+  xla::LocalExecutable* local_executable;
   // TODO: Handle Args
   enif_get_resource(env, argv[0], LOCAL_EXECUTABLE_RES_TYPE, (void **) &local_executable);
   absl::Span<xla::ShapedBuffer*> arguments = enif_get_arguments(env, argv[1]);
   xla::ExecutableRunOptions run_options = enif_get_executable_run_options(env, argv[2]);
 
-  xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->local_executable->Run(arguments, run_options);
+  xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->Run(arguments, run_options);
   // TODO: Handle this gracefully
   xla::ScopedShapedBuffer result = run_status.ConsumeValueOrDie();
   return enif_make_shaped_buffer(env, result);
