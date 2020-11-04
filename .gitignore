@@ -30,3 +30,5 @@ mix.lock
 
 # Ignore bazel outputs
 /src/bazel-*
+
+/bazel_cache
