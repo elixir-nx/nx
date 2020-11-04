@@ -29,16 +29,16 @@ typedef struct {
 } XLA;
 
 typedef struct {
-  std::unique_ptr<xla::LocalExecutable> local_executable;
+  xla::LocalExecutable* local_executable;
 } LocalExecutable;
 
-// Leaving these here for the time being.
-void free_op(ErlNifEnv* env, void* obj){return;}
-void free_shape(ErlNifEnv* env, void* obj){return;}
-void free_computation(ErlNifEnv* env, void* obj){return;}
-void free_literal(ErlNifEnv* env, void* obj){return;}
-void free_local_executable(ErlNifEnv* env, void* obj){return;}
-void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
+// Once the resource is garbage collected, this should also deallocate the C++ object.
+void free_op(ErlNifEnv* env, void* obj){delete (xla::XlaOp*) obj;}
+void free_shape(ErlNifEnv* env, void* obj){delete (xla::Shape*) obj;}
+void free_computation(ErlNifEnv* env, void* obj){delete (xla::XlaComputation*) obj;}
+void free_literal(ErlNifEnv* env, void* obj){delete (xla::Literal*) obj;}
+void free_local_executable(ErlNifEnv* env, void* obj){delete (xla::LocalExecutable*) obj;}
+void free_shaped_buffer(ErlNifEnv* env, void* obj){delete (xla::ShapedBuffer*) obj;}
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "XLA";
@@ -46,7 +46,7 @@ static int open_resources(ErlNifEnv* env) {
   const char* name_shape = "Shape";
   const char* name_computation = "Computation";
   const char* name_literal = "Literal";
-  const char* name_local_executable = "LocalExectuable";
+  const char* name_local_executable = "LocalExecutable";
   const char* name_shaped_buffer = "ShapedBuffer";
 
   int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
@@ -156,38 +156,49 @@ int enif_get_std_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
 
 ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
   void* ptr = enif_alloc_resource(OP_RES_TYPE, sizeof(xla::XlaOp));
-  new(ptr) xla::XlaOp(value);
-  return enif_make_resource(env, ptr);
+  new(ptr) xla::XlaOp(std::move(value));
+  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
+  enif_release_resource(ptr);
+  return ret;
 }
 
 ERL_NIF_TERM enif_make_shape(ErlNifEnv* env, xla::Shape value){
   void* ptr = enif_alloc_resource(SHAPE_RES_TYPE, sizeof(xla::Shape));
-  new(ptr) xla::Shape(value);
-  return enif_make_resource(env, ptr);
+  new(ptr) xla::Shape(std::move(value));
+  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
+  enif_release_resource(ptr);
+  return ret;
 }
 
 ERL_NIF_TERM enif_make_computation(ErlNifEnv* env, xla::XlaComputation value){
   void* ptr = enif_alloc_resource(COMPUTATION_RES_TYPE, sizeof(xla::XlaComputation));
   new(ptr) xla::XlaComputation(std::move(value));
-  return enif_make_resource(env, ptr);
+  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
+  enif_release_resource(ptr);
+  return ret;
 }
 
 ERL_NIF_TERM enif_make_literal(ErlNifEnv* env, xla::Literal& value){
   void* ptr = enif_alloc_resource(LITERAL_RES_TYPE, sizeof(xla::Literal));
   new(ptr) xla::Literal(std::move(value));
-  return enif_make_resource(env, ptr);
+  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
+  enif_release_resource(ptr);
+  return ret;
 }
 
 ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::LocalExecutable>& value){
-  LocalExecutable* ptr = (LocalExecutable*) enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(LocalExecutable));
-  ptr->local_executable = std::move(value);
+  void* ptr = enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(xla::LocalExecutable));
+  xla::LocalExecutable* exec = value.release();
+  new(ptr) xla::LocalExecutable(std::move(*exec));
   return enif_make_resource(env, ptr);
 }
 
 ERL_NIF_TERM enif_make_shaped_buffer(ErlNifEnv* env, xla::ShapedBuffer& value){
   void* ptr = enif_alloc_resource(SHAPED_BUFFER_RES_TYPE, sizeof(xla::ShapedBuffer));
   new(ptr) xla::ShapedBuffer(std::move(value));
-  return enif_make_resource(env, ptr);
+  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
+  enif_release_resource(ptr);
+  return ret;
 }
 
 // TODO: Template this.
@@ -491,20 +502,19 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   ERL_NIF_TERM exec_refs[executables.size()];
   int i = 0;
   for(auto it=std::begin(executables);it!=std::end(executables);++it){
-    ERL_NIF_TERM exec_term = enif_make_local_executable(env, executables.at(i));
-    exec_refs[i++] = exec_term;
+    exec_refs[i++] = enif_make_local_executable(env, executables.at(i));
   }
-  return enif_make_list_from_array(env, exec_refs, i);
+  return exec_refs[0];
 }
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  LocalExecutable* local_executable;
+  xla::LocalExecutable* local_executable;
   // TODO: Handle Args
   enif_get_resource(env, argv[0], LOCAL_EXECUTABLE_RES_TYPE, (void **) &local_executable);
   absl::Span<xla::ShapedBuffer*> arguments = enif_get_arguments(env, argv[1]);
   xla::ExecutableRunOptions run_options = enif_get_executable_run_options(env, argv[2]);
 
-  xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->local_executable->Run(arguments, run_options);
+  xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->Run(arguments, run_options);
   // TODO: Handle this gracefully
   xla::ScopedShapedBuffer result = run_status.ConsumeValueOrDie();
   return enif_make_shaped_buffer(env, result);
