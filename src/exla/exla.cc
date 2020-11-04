@@ -180,8 +180,7 @@ ERL_NIF_TERM enif_make_literal(ErlNifEnv* env, xla::Literal& value){
 
 ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::LocalExecutable>& value){
   LocalExecutable* ptr = (LocalExecutable*) enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(LocalExecutable));
-  ptr->local_executable = value.get();
-  value.release();
+  ptr->local_executable = value.release();
   return enif_make_resource(env, ptr);
 }
 
