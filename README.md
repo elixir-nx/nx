@@ -4,16 +4,31 @@ Elixir XLA Client for compiling and running Elixir code on CPU/GPU/TPU.
 
 ## Building
 
-You need [Bazel](https://docs.bazel.build/versions/master/install.html).
+The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). You'll also need [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
 
-It's currently configured to build with GPU support by default. To disable this option and only target CPU, remove the `--config=cuda` line from `bazel build//exla:libexla.so --config=cuda` in `Makefile`.
+To build, clone this repo and run:
 
-Running `iex -S mix` inside the root directory goes through the whole build process. The build process takes a lot of time (~30 mins) and resources.
+```
+$ docker build --rm -t exla:cuda10.1 .
+```
 
-## GPU Support
+Then to run:
 
-You need CUDA 10.1 and GCC-8. Nothing else will work.
+```
+$ docker run -it \
+    -v $PWD:$PWD \
+    -w $PWD \
+    --rm exla:cuda10.1 bash
+```
 
-## Running
+Inside the container you can interact with the API from IEX using:
 
-After running `iex -S mix`, you can build up computations using XLA Operations. Check out: [XLA Operation Semantics](https://www.tensorflow.org/xla/operation_semantics) for a list of supported operations.
+```
+exla/#: iex -S mix
+```
+
+Or you can run an example:
+
+```
+exla/#: mix run examples/basic_addition.exs
+```
