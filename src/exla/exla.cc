@@ -9,7 +9,9 @@
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/stream_executor/device_memory_allocator.h"
+#include "tensorflow/compiler/xla/service/platform_util.h"
+#include "tensorflow/stream_executor/stream_executor.h"
+#include "tensorflow/core/common_runtime/bfc_allocator.h"
 #include <erl_nif.h>
 
 ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
@@ -30,12 +32,12 @@ typedef struct {
 } XLA;
 
 // Once the resource is garbage collected, this should also deallocate the C++ object.
-void free_op(ErlNifEnv* env, void* obj){delete (xla::XlaOp*) obj;}
-void free_shape(ErlNifEnv* env, void* obj){delete (xla::Shape*) obj;}
-void free_computation(ErlNifEnv* env, void* obj){delete (xla::XlaComputation*) obj;}
-void free_literal(ErlNifEnv* env, void* obj){delete (xla::Literal*) obj;}
-void free_local_executable(ErlNifEnv* env, void* obj){delete (xla::LocalExecutable*) obj;}
-void free_shaped_buffer(ErlNifEnv* env, void* obj){delete (xla::ShapedBuffer*) obj;}
+void free_op(ErlNifEnv* env, void* obj){return;}
+void free_shape(ErlNifEnv* env, void* obj){return;}
+void free_computation(ErlNifEnv* env, void* obj){return;}
+void free_literal(ErlNifEnv* env, void* obj){return;}
+void free_local_executable(ErlNifEnv* env, void* obj){return;}
+void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "XLA";
@@ -155,7 +157,6 @@ ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
   void* ptr = enif_alloc_resource(OP_RES_TYPE, sizeof(xla::XlaOp));
   new(ptr) xla::XlaOp(std::move(value));
   ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  enif_release_resource(ptr);
   return ret;
 }
 
@@ -163,7 +164,6 @@ ERL_NIF_TERM enif_make_shape(ErlNifEnv* env, xla::Shape value){
   void* ptr = enif_alloc_resource(SHAPE_RES_TYPE, sizeof(xla::Shape));
   new(ptr) xla::Shape(std::move(value));
   ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  enif_release_resource(ptr);
   return ret;
 }
 
@@ -171,7 +171,6 @@ ERL_NIF_TERM enif_make_computation(ErlNifEnv* env, xla::XlaComputation value){
   void* ptr = enif_alloc_resource(COMPUTATION_RES_TYPE, sizeof(xla::XlaComputation));
   new(ptr) xla::XlaComputation(std::move(value));
   ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  enif_release_resource(ptr);
   return ret;
 }
 
@@ -179,7 +178,6 @@ ERL_NIF_TERM enif_make_literal(ErlNifEnv* env, xla::Literal& value){
   void* ptr = enif_alloc_resource(LITERAL_RES_TYPE, sizeof(xla::Literal));
   new(ptr) xla::Literal(std::move(value));
   ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  enif_release_resource(ptr);
   return ret;
 }
 
@@ -187,7 +185,6 @@ ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::Loc
   void* ptr = enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(xla::LocalExecutable));
   xla::LocalExecutable* exec = value.release();
   new(ptr) xla::LocalExecutable(std::move(*exec));
-  enif_release_resource(ptr);
   return enif_make_resource(env, ptr);
 }
 
@@ -195,7 +192,6 @@ ERL_NIF_TERM enif_make_shaped_buffer(ErlNifEnv* env, xla::ShapedBuffer& value){
   void* ptr = enif_alloc_resource(SHAPED_BUFFER_RES_TYPE, sizeof(xla::ShapedBuffer));
   new(ptr) xla::ShapedBuffer(std::move(value));
   ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  enif_release_resource(ptr);
   return ret;
 }
 
@@ -242,12 +238,13 @@ absl::Span<xla::Shape*> enif_get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM t
   return absl::Span<xla::Shape*>(argument_layouts, num_arg_layouts);
 }
 
-xla::ExecutableBuildOptions enif_get_executable_build_options(ErlNifEnv* env, ERL_NIF_TERM options){
+xla::ExecutableBuildOptions enif_get_executable_build_options(ErlNifEnv* env, ERL_NIF_TERM build_options){
   return xla::ExecutableBuildOptions();
 }
 
-xla::ExecutableRunOptions enif_get_executable_run_options(ErlNifEnv* env, ERL_NIF_TERM options){
-  return xla::ExecutableRunOptions();
+xla::ExecutableRunOptions& enif_get_executable_run_options(ErlNifEnv* env, ERL_NIF_TERM options){
+  xla::ExecutableRunOptions* run_options = new xla::ExecutableRunOptions();
+  return *run_options;
 }
 
 /************************ xla::Shape Functions ***************************/
@@ -453,7 +450,9 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
   // StatusOr matches really nicely to Elixir's {:ok, ...}/{:error, ...} pattern, haven't handled it yet
-  xla::StatusOr<xla::LocalClient*> client_status = xla::ClientLibrary::GetOrCreateLocalClient();
+  xla::StatusOr<stream_executor::Platform*> platform_status = xla::PlatformUtil::GetPlatform("Host");
+  stream_executor::Platform* platform = platform_status.ConsumeValueOrDie();
+  xla::StatusOr<xla::LocalClient*> client_status = xla::ClientLibrary::GetOrCreateLocalClient(platform);
   // This matches really nicely with the ! pattern
   xla::LocalClient* client = client_status.ConsumeValueOrDie();
   xla_objects->client = client;
