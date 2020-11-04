@@ -491,7 +491,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   ERL_NIF_TERM exec_refs[executables.size()];
   int i = 0;
   for(auto it=std::begin(executables);it!=std::end(executables);++it){
-    ERL_NIF_TERM exec_term = enif_make_local_executable(env, *it);
+    ERL_NIF_TERM exec_term = enif_make_local_executable(env, executables.at(i));
     exec_refs[i++] = exec_term;
   }
   return enif_make_list_from_array(env, exec_refs, i);
