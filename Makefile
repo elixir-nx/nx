@@ -8,4 +8,5 @@ all:
 clean:
 	cd src/ && \
 	bazel clean --expunge && \
+	mkdir -p ../priv && \
 	rm ../priv/libexla.so

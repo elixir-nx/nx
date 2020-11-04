@@ -9,7 +9,7 @@ arg2_shape = Exla.make_scalar_shape(:int32)
 
 # Now we declare the parameters and a constant
 x = Exla.parameter(0, arg1_shape, "x")
-y = Exla.parameter(0, arg2_shape, "y")
+y = Exla.parameter(1, arg2_shape, "y")
 c = Exla.constant_r0(1)
 
 # Now we get the result, this is the root op
