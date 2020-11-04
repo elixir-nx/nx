@@ -28,6 +28,7 @@ typedef struct {
   xla::LocalClient* client;
 } XLA;
 
+<<<<<<< HEAD
 typedef struct {
   xla::LocalExecutable* local_executable;
 } LocalExecutable;
@@ -39,6 +40,15 @@ void free_computation(ErlNifEnv* env, void* obj){delete (xla::XlaComputation*) o
 void free_literal(ErlNifEnv* env, void* obj){delete (xla::Literal*) obj;}
 void free_local_executable(ErlNifEnv* env, void* obj){delete (xla::LocalExecutable*) obj;}
 void free_shaped_buffer(ErlNifEnv* env, void* obj){delete (xla::ShapedBuffer*) obj;}
+=======
+// Leaving these here for the time being.
+void free_op(ErlNifEnv* env, void* obj){return;}
+void free_shape(ErlNifEnv* env, void* obj){return;}
+void free_computation(ErlNifEnv* env, void* obj){return;}
+void free_literal(ErlNifEnv* env, void* obj){return;}
+void free_local_executable(ErlNifEnv* env, void* obj){return;}
+void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
+>>>>>>> 3849856ab9577787178bae1520659450aef8ac36
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "XLA";
