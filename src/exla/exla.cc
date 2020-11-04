@@ -46,7 +46,7 @@ static int open_resources(ErlNifEnv* env) {
   const char* name_shape = "Shape";
   const char* name_computation = "Computation";
   const char* name_literal = "Literal";
-  const char* name_local_executable = "LocalExectuable";
+  const char* name_local_executable = "LocalExecutable";
   const char* name_shaped_buffer = "ShapedBuffer";
 
   int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
