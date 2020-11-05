@@ -9,8 +9,10 @@ clean:
 	cd src/ && \
 	bazel clean --expunge && \
 	mkdir -p ../priv && \
-	rm ../priv/libexla.so
+	rm ../priv/libexla.so && \
+	rm ../compile_commands.json
 
 compile-db:
 	cd src/ && \
-	sh ./generate_compilation_db.sh
+	sh ./generate_compilation_db.sh && \
+	mv bazel-bin/exla/compile_commands.json ../compile_commands.json
