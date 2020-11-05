@@ -7,10 +7,20 @@ compilation_database(
     ],
 )
 
+cc_library(
+  name = "exla_allocator",
+  srcs = ["exla_allocator.cc"],
+  hdrs = ["exla_allocator.h"],
+  deps = [
+    "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
+    "@org_tensorflow//tensorflow/compiler/xla:statusor",
+  ],)
+
 cc_binary(
   name = "libexla.so",
   srcs = ["exla.cc"],
   deps = [
+    ":exla_allocator",
     "@org_tensorflow//tensorflow/compiler/xla:literal",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",

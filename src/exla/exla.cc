@@ -10,62 +10,9 @@
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
+#include "tensorflow/compiler/xla/service/shaped_buffer.h"
+#include "exla/exla_allocator.h"
 #include <erl_nif.h>
-
-namespace xla {
-class NaiveAllocator : public se::DeviceMemoryAllocator {
-public:
-  NaiveAllocator()
-      : se::DeviceMemoryAllocator(
-            PlatformUtil::GetDefaultPlatform().ValueOrDie()) {}
-
-  ~NaiveAllocator() override {
-    if (!allocations_.empty()) {
-      LOG(FATAL) << "Some allocations not freed!";
-    }
-  }
-
-  // Pull in two-arg overload of Allocate.
-  using se::DeviceMemoryAllocator::Allocate;
-
-  StatusOr<se::OwningDeviceMemory> Allocate(int device_ordinal, uint64 size,
-                                            bool /*retry_on_failure*/,
-                                            int64 /*memory_space*/) override {
-    // By contract, we must return null if size == 0.
-    if (size == 0) {
-      return se::OwningDeviceMemory();
-    }
-    void *buf = malloc(size);
-    allocations_.insert({device_ordinal, buf});
-    return se::OwningDeviceMemory(se::DeviceMemoryBase(buf, size),
-                                  device_ordinal, this);
-  }
-
-  Status Deallocate(int device_ordinal, se::DeviceMemoryBase mem) override {
-    if (mem.is_null()) {
-      return Status::OK();
-    }
-
-    auto it = allocations_.find({device_ordinal, mem.opaque()});
-    if (it == allocations_.end()) {
-      LOG(FATAL) << "Allocation not found (double free?)";
-    } else {
-      free(mem.opaque());
-      allocations_.erase(it);
-    }
-    return Status::OK();
-  }
-
-  bool AllowsAsynchronousDeallocation() const override { return false; }
-
-  StatusOr<se::Stream *> GetStream(int device_ordinal) override {
-    LOG(FATAL) << "Not implemented";
-  }
-
-private:
-  std::set<std::pair</*device_ordinal*/ int64, void *>> allocations_;
-};
-} // namespace xla
 
 ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
 
@@ -322,8 +269,9 @@ xla::ExecutableBuildOptions enif_get_executable_build_options(ErlNifEnv* env, ER
 }
 
 xla::ExecutableRunOptions& enif_get_executable_run_options(ErlNifEnv* env, ERL_NIF_TERM options){
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
   xla::ExecutableRunOptions* run_options = new xla::ExecutableRunOptions();
-  auto* allocator = new xla::NaiveAllocator();
+  auto* allocator = new xla::ExlaAllocator(xla_objects->client->platform());
   run_options->set_allocator(allocator);
   return *run_options;
 }
