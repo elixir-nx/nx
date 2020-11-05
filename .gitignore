@@ -33,3 +33,5 @@ mix.lock
 
 /bazel_cache
 **/core.*
+
+/compile_commands.*
