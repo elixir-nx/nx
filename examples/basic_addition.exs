@@ -34,7 +34,7 @@ b_buffer = Exla.literal_to_shaped_buffer(b, 0, nil)
 
 # Now we run the computation with our arguments
 # For some reason compile returns a list of executables
-result = Exla.run(hd(exec), {a_buffer, b_buffer}, %Exla.ExecutableRunOptions{})
+result = Exla.run(exec, {a_buffer, b_buffer}, %Exla.ExecutableRunOptions{})
 
 # Transfer this back to a literal
 result_literal = Exla.shaped_buffer_to_literal(result)
