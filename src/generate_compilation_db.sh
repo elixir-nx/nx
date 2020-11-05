@@ -2,7 +2,7 @@
 bazel build exla:exla_compdb
 
 # Location of the compilation database file.
-outfile="../compile_commands.json"
+outfile="$(bazel info bazel-bin)/exla/compile_commands.json"
 
 # Command to replace the marker for exec_root in the file.
 execroot=$(bazel info execution_root)
