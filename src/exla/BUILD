@@ -1,3 +1,12 @@
+load("@com_grail_bazel_compdb//:aspects.bzl", "compilation_database")
+
+compilation_database(
+    name = "exla_compdb",
+    targets = [
+        ":libexla.so",
+    ],
+)
+
 cc_binary(
   name = "libexla.so",
   srcs = ["exla.cc"],
