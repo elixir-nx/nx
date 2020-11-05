@@ -12,4 +12,5 @@ clean:
 	rm ../priv/libexla.so
 
 compile-db:
-	./src/generate_compile_db.sh
+	cd src/ && \
+	sh ./generate_compilation_db.sh
