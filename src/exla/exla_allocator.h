@@ -4,6 +4,9 @@
 #include "tensorflow/compiler/xla/statusor.h"
 #include "tensorflow/stream_executor/device_memory_allocator.h"
 
+// Right now this is just a naive allocator, but we can implement something that's
+// easily configurable from Elixir.
+
 namespace xla {
 
   namespace se = tensorflow::se;
