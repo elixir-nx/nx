@@ -170,6 +170,4 @@ defmodule Exla do
 
   def shaped_buffer_to_literal(_shaped_buffer),
     do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_literal/1.")
-
-  def run_test, do: raise("BAD")
 end
