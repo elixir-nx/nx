@@ -145,8 +145,8 @@ defmodule Exla do
   def constant_r1(_length, _value),
     do: raise("Failed to load implementation of #{__MODULE__}.constant_r1/2.")
 
-  def get_or_create_local_client,
-    do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/0.")
+  def get_or_create_local_client(_platform),
+    do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/1.")
 
   def get_device_count,
     do: raise("Failed to load implementation of #{__MODULE__}.get_device_count/0.")
@@ -170,4 +170,6 @@ defmodule Exla do
 
   def shaped_buffer_to_literal(_shaped_buffer),
     do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_literal/1.")
+
+  def run_test, do: raise("BAD")
 end

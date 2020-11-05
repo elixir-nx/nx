@@ -10,8 +10,6 @@
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
-#include "tensorflow/stream_executor/stream_executor.h"
-#include "tensorflow/core/common_runtime/bfc_allocator.h"
 #include <erl_nif.h>
 
 ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
@@ -70,11 +68,35 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   XLA* xla_objects;
   xla_objects = (XLA*) enif_alloc(sizeof(XLA));
   xla_objects->builder = new xla::XlaBuilder("Elixir");
+  // Client needs to be set.
   xla_objects->client = NULL;
 
   *priv = (void*) xla_objects;
 
   return 0;
+}
+
+// TODO: Standardize the atom interpretation process.
+// TODO: Handle statusor gracefully.
+stream_executor::Platform* enif_get_platform(ErlNifEnv* env, ERL_NIF_TERM term){
+  unsigned atom_length;
+  // Default to Host
+  if(!enif_get_atom_length(env, term, &atom_length, ERL_NIF_LATIN1)) return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
+
+  std::string atom_str;
+  atom_str.resize(atom_length+1);
+
+  if(!enif_get_atom(env, term, &(*(atom_str.begin())), atom_str.size(), ERL_NIF_LATIN1)) return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
+
+  atom_str.resize(atom_length);
+
+  if(atom_str.compare("host") == 0){
+    return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
+  } else if(atom_str.compare("cuda") == 0){
+    return xla::PlatformUtil::GetPlatform("Cuda").ConsumeValueOrDie();
+  } else {
+    return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
+  }
 }
 
 xla::PrimitiveType enif_get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term){
@@ -242,9 +264,8 @@ xla::ExecutableBuildOptions enif_get_executable_build_options(ErlNifEnv* env, ER
   return xla::ExecutableBuildOptions();
 }
 
-xla::ExecutableRunOptions& enif_get_executable_run_options(ErlNifEnv* env, ERL_NIF_TERM options){
-  xla::ExecutableRunOptions* run_options = new xla::ExecutableRunOptions();
-  return *run_options;
+xla::ExecutableRunOptions enif_get_executable_run_options(ErlNifEnv* env, ERL_NIF_TERM options){
+  return xla::ExecutableRunOptions();
 }
 
 /************************ xla::Shape Functions ***************************/
@@ -448,10 +469,13 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
  * It usually takes config ops, but I haven't handled those yet.
  */
 ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   XLA* xla_objects = (XLA*) enif_priv_data(env);
-  // StatusOr matches really nicely to Elixir's {:ok, ...}/{:error, ...} pattern, haven't handled it yet
-  xla::StatusOr<stream_executor::Platform*> platform_status = xla::PlatformUtil::GetPlatform("Host");
-  stream_executor::Platform* platform = platform_status.ConsumeValueOrDie();
+  auto platform = enif_get_platform(env, argv[0]);
+  // Todo: Handle this gracefully
   xla::StatusOr<xla::LocalClient*> client_status = xla::ClientLibrary::GetOrCreateLocalClient(platform);
   // This matches really nicely with the ! pattern
   xla::LocalClient* client = client_status.ConsumeValueOrDie();
@@ -515,6 +539,46 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   // TODO: Handle this gracefully
   xla::ScopedShapedBuffer result = run_status.ConsumeValueOrDie();
   return enif_make_shaped_buffer(env, result);
+}
+
+ERL_NIF_TERM run_test(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
+
+  xla::Shape arg1_shape = xla::ShapeUtil::MakeScalarShape(xla::S32);
+  xla::Shape arg2_shape = xla::ShapeUtil::MakeScalarShape(xla::S32);
+
+  auto x = xla::Parameter(xla_objects->builder, 0, arg1_shape, std::string("x"));
+  auto y = xla::Parameter(xla_objects->builder, 1, arg2_shape, std::string("y"));
+
+  auto z = xla::Add(x, y);
+
+  auto comp_status = xla_objects->builder->Build(z);
+  auto comp = comp_status.ConsumeValueOrDie();
+
+  xla::ExecutableRunOptions options;
+
+  xla::Shape* arg_layouts[2] = {&arg1_shape, &arg2_shape};
+  auto exec_status = xla_objects->client->Compile(comp, absl::Span<xla::Shape*>(arg_layouts, 2), xla::ExecutableBuildOptions());
+  auto exec = exec_status.ConsumeValueOrDie();
+
+  auto a = xla::LiteralUtil::CreateR0(1);
+  auto b = xla::LiteralUtil::CreateR0(2);
+
+  auto a_buffer_status = xla_objects->client->LiteralToShapedBuffer(a, 0);
+  auto a_buffer = a_buffer_status.ConsumeValueOrDie();
+
+  auto b_buffer_status = xla_objects->client->LiteralToShapedBuffer(b, 0);
+  auto b_buffer = b_buffer_status.ConsumeValueOrDie();
+
+  xla::ShapedBuffer* args[2] = {&a_buffer, &b_buffer};
+
+  auto result_status = (exec.at(0))->Run(absl::Span<xla::ShapedBuffer*>(args, 2), options);
+  auto result = result_status.ConsumeValueOrDie();
+
+  auto back_status = xla_objects->client->ShapedBufferToLiteral(result);
+  std::string back = (back_status.ConsumeValueOrDie()).ToString();
+
+  return enif_make_string(env, back.c_str(), ERL_NIF_LATIN1);
 }
 
 ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -585,7 +649,7 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 
 static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
-  {"get_or_create_local_client", 0, get_or_create_local_client},
+  {"get_or_create_local_client", 1, get_or_create_local_client},
   {"get_device_count", 0, get_device_count},
   /****** xla::Shape ******/
   {"human_string", 1, human_string},
@@ -660,6 +724,7 @@ static ErlNifFunc exla_funcs[] = {
   {"run", 3, run},
   {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
   {"shaped_buffer_to_literal", 1, shaped_buffer_to_literal},
+  {"run_test", 0, run_test},
   /******** HLO Functions ********/
   {"get_computation_hlo_proto", 1, get_computation_hlo_proto},
   {"get_computation_hlo_text", 1, get_computation_hlo_text}

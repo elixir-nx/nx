@@ -31,3 +31,4 @@ RUN wget https://repo.hex.pm/installs/1.10.0/hex-0.20.6.ez && \
 RUN python3 -m pip install ${pip_args} numpy
 RUN ln -s /usr/bin/python3 /usr/bin/python
 ENV PATH="/usr/lib/erlang/erts-11.1/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
