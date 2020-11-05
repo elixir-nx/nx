@@ -4,3 +4,4 @@
 /bazel_cache
 /priv
 **/core.*
+/compile_commands.*
