@@ -9,7 +9,6 @@ defmodule Exla do
   end
 
   def binary_to_shaped_buffer(_binary, _shape), do: raise("Failed to load implementation of #{__MODULE__}.binary_to_shaped_buffer/2.")
-  def shaped_buffer_to_binary(_buffer), do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_binary/2.")
 
   def make_shape(_type, _dims), do: raise("Failed to load implementation of #{__MODULE__}.make_shape/2.")
   def make_scalar_shape(_type),
