@@ -14,7 +14,8 @@ cc_library(
   deps = [
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
     "@org_tensorflow//tensorflow/compiler/xla:statusor",
-  ],)
+  ],
+)
 
 cc_binary(
   name = "libexla.so",

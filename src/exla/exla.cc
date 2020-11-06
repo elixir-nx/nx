@@ -297,6 +297,7 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
 
   xla::ShapedBuffer* inp;
+  // TODO: We need to allow user to specify the device
   auto buffer = std::make_unique<xla::ShapedBuffer>(*shape,  *shape, xla_objects->client->platform(), 0);
 
   buffer->set_buffer(memory_base, {});
@@ -657,7 +658,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_or_create_local_client", 1, get_or_create_local_client},
   {"get_device_count", 0, get_device_count},
   /****** xla::ShapedBuffer ******/
-  {"binary_to_shaped_buffer", 2, binary_to_shaped_buffer},
+  {"binary_to_shaped_buffer", 2, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
   /****** xla::Shape ******/
   {"human_string", 1, human_string},
   {"make_shape", 2, make_shape},

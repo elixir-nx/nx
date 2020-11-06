@@ -1,7 +1,6 @@
-# TODO: Go through these.
-
 workspace(name = "exla")
 
+# TODO: This path should not be hardcoded.
 new_local_repository(
   name = "erts",
   path = "/usr/lib/erlang/erts-11.1/include",
@@ -83,7 +82,6 @@ http_archive(
 
 # END: Upstream TensorFlow dependencies
 
-# # Please add all new TensorFlow Serving dependencies in workspace.bzl.
 load("//exla:workspace.bzl", "exla_workspace")
 
 exla_workspace()
