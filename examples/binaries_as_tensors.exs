@@ -3,9 +3,7 @@ Exla.get_or_create_local_client(:host)
 # Under the hood, tensors are just blocks of memory with special indexing schemes
 # Ideally, we can represent tensors as binaries with a shape and dtype
 bin =
-  <<0::float, 1::float, 2::float, 3::float, 4::float, 5::float, 6::float, 7::float, 8::float>>
-  |> :binary.decode_unsigned()
-  |> :binary.encode_unsigned(:little)
+  <<0::float-little, 1::float-little, 2::float-little, 3::float-little, 4::float-little, 5::float-little, 6::float-little, 7::float, 8::float-little>>
 
 dtype = :float64
 shape = {3, 3}
@@ -22,4 +20,3 @@ shaped_buffer = Exla.binary_to_shaped_buffer(bin, shape_reference)
 literal = Exla.shaped_buffer_to_literal(shaped_buffer)
 
 IO.puts Exla.literal_to_string(literal)
-
