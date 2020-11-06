@@ -1,4 +1,4 @@
-Exla.get_or_create_local_client()
+Exla.get_or_create_local_client(:host)
 
 # For small lists, Elixir wins big which is expected because of overhead associated with XLA
 # The BEAM Crashes on my machine at 100_000_000 elements, XLA handles 100_000_000 and even 1_000_000_000 elements
@@ -21,8 +21,8 @@ Benchee.run(%{
   memory_time: 2,
   before_each:
     fn _ ->
-      Exla.dot(Exla.constant_r1(10_000_000, 1000), Exla.constant_r1(10_000_000, 1000))
-      comp = Exla.build()
+      ast = Exla.dot(Exla.constant_r1(10_000_000, 1000), Exla.constant_r1(10_000_000, 1000))
+      comp = Exla.build(ast)
       exec = Exla.compile(comp, {}, %{})
-      hd(exec)
+      exec
     end)

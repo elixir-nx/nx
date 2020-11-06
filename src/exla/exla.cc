@@ -1,3 +1,5 @@
+#include "exla/exla_allocator.h"
+
 #include "absl/types/span.h"
 #include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/statusor.h"
@@ -11,7 +13,6 @@
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/service/shaped_buffer.h"
-#include "exla/exla_allocator.h"
 #include <erl_nif.h>
 
 ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
@@ -222,18 +223,19 @@ ERL_NIF_TERM enif_make_shaped_buffer(ErlNifEnv* env, xla::ShapedBuffer& value){
 // TODO: Template this.
 // TODO: This should return an integer status instead of the span and rather accept a reference to the Span.
 // TODO: We need to exit gracefully on badarg.
-absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM list){
-  ERL_NIF_TERM head, tail;
-  std::vector<long long int> values;
-  int i = 0;
-  while(enif_get_list_cell(env, list, &head, &tail)){
-    long int placeholder;
-    enif_get_int64(env, head, &placeholder);
-    values.insert(values.begin() + (i++), placeholder);
-    list = tail;
+absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM tuple){
+  const ERL_NIF_TERM* dims;
+  int num_dims;
+  enif_get_tuple(env, tuple, &num_dims, &dims);
+  long long int dimensions[num_dims];
+  for(int i=0;i<num_dims;i++){
+    long int dim;
+    enif_get_int64(env, dims[i], &dim);
+    dimensions[i] = dim;
   }
-  return absl::Span<long long int>(values);
+  return absl::Span<long long int>(dimensions, num_dims);
 }
+
 // TODO: Template this with above!
 absl::Span<xla::ShapedBuffer*> enif_get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple){
   const ERL_NIF_TERM* args;
@@ -275,8 +277,44 @@ xla::ExecutableRunOptions& enif_get_executable_run_options(ErlNifEnv* env, ERL_N
   run_options->set_allocator(allocator);
   return *run_options;
 }
+/************************ xla::ShapedBuffer Functions *********************/
+/*
+ * Because of what this function actually does, it makes sense to name it to something more idiomatic like:
+ * `place_on_device` or `to_device`.
+ */
+ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  XLA* xla_objects = (XLA*) enif_priv_data(env);
+
+  ErlNifBinary bin;
+  enif_inspect_binary(env, argv[0], &bin);
+
+  xla::Shape* shape;
+  enif_get_resource(env, argv[1], SHAPE_RES_TYPE, (void **) &shape);
+
+  const char *data_ptr = (char *) bin.data;
+  int64_t data_size = bin.size;
+
+  stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
+
+  xla::ShapedBuffer* inp;
+  // TODO: We need to allow user to specify the device
+  auto buffer = std::make_unique<xla::ShapedBuffer>(*shape,  *shape, xla_objects->client->platform(), 0);
+
+  buffer->set_buffer(memory_base, {});
+
+  inp = buffer.release();
+
+  return enif_make_shaped_buffer(env, *inp);
+}
 
 /************************ xla::Shape Functions ***************************/
+ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  xla::PrimitiveType element_type = enif_get_primitive_type(env, argv[0]);
+  absl::Span<long long int> dims = enif_get_span(env, argv[1]);
+
+  xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
+  return enif_make_shape(env, shape);
+}
 ERL_NIF_TERM make_scalar_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
@@ -619,8 +657,11 @@ static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
   {"get_or_create_local_client", 1, get_or_create_local_client},
   {"get_device_count", 0, get_device_count},
+  /****** xla::ShapedBuffer ******/
+  {"binary_to_shaped_buffer", 2, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
   /****** xla::Shape ******/
   {"human_string", 1, human_string},
+  {"make_shape", 2, make_shape},
   {"make_scalar_shape", 1, make_scalar_shape},
   {"parameter", 3, parameter},
   /****** xla::Literal ******/

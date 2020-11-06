@@ -1,5 +1,6 @@
 ERLANG_PATH = $(shell erl -eval 'io:format("~s", [lists:concat([code:root_dir(), "/erts-", erlang:system_info(version), "/include"])])' -s init stop -noshell)
 
+# TODO: Shouldn't explicitly pass cuda as a config option
 all: compile-db
 	cd src/ && \
 	bazel build //exla:libexla.so --config=cuda && \
