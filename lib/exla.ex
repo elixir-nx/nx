@@ -142,9 +142,6 @@ defmodule Exla do
   def constant_r0(_value),
     do: raise("Failed to load implementation of #{__MODULE__}.constant_r0.")
 
-  def constant_r1(_values),
-    do: raise("Failed to load implementation of #{__MODULE__}.constant_r1.")
-
   def constant_r1(_length, _value),
     do: raise("Failed to load implementation of #{__MODULE__}.constant_r1/2.")
 

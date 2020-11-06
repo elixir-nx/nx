@@ -1,19 +1,16 @@
 #include "exla/exla_allocator.h"
+#include "exla/exla_nif_util.h"
 
 #include "absl/types/span.h"
+
+#include "tensorflow/compiler/xla/service/platform_util.h"
+#include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/literal_util.h"
-#include "tensorflow/compiler/xla/statusor.h"
+
 #include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
-#include "tensorflow/compiler/xla/service/hlo.pb.h"
-#include "tensorflow/compiler/xla/service/hlo_module.h"
-#include "tensorflow/compiler/xla/xla_data.pb.h"
-#include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/service/platform_util.h"
-#include "tensorflow/compiler/xla/service/shaped_buffer.h"
-#include <erl_nif.h>
 
 ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
 
@@ -79,103 +76,75 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   return 0;
 }
 
-// TODO: Standardize the atom interpretation process.
 // TODO: Handle statusor gracefully.
-stream_executor::Platform* enif_get_platform(ErlNifEnv* env, ERL_NIF_TERM term){
-  unsigned atom_length;
-  // Default to Host
-  if(!enif_get_atom_length(env, term, &atom_length, ERL_NIF_LATIN1)) return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
+int enif_get_platform(ErlNifEnv* env, ERL_NIF_TERM term, stream_executor::Platform* platform){
+  std::string platform_str;
 
-  std::string atom_str;
-  atom_str.resize(atom_length+1);
+  if(!ExlaNifUtil::get_atom(env, term, platform_str)){
+    return 0;
+  }
 
-  if(!enif_get_atom(env, term, &(*(atom_str.begin())), atom_str.size(), ERL_NIF_LATIN1)) return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
-
-  atom_str.resize(atom_length);
-
-  if(atom_str.compare("host") == 0){
-    return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
-  } else if(atom_str.compare("cuda") == 0){
-    return xla::PlatformUtil::GetPlatform("Cuda").ConsumeValueOrDie();
+  if(platform_str.compare("host") == 0){
+    platform = xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
+    return 1;
+  } else if(platform_str.compare("cuda") == 0){
+    platform = xla::PlatformUtil::GetPlatform("Cuda").ConsumeValueOrDie();
+    return 1;
   } else {
-    return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
+    return 0;
   }
 }
 
-xla::PrimitiveType enif_get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term){
-  unsigned atom_length;
-  if(!enif_get_atom_length(env, term, &atom_length, ERL_NIF_LATIN1)) return xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
+// TODO: XLA has a function for this, but it accepts the shorter type
+int enif_get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type){
+  std::string type_str;
 
-  std::string atom_str;
-  atom_str.resize(atom_length+1);
+  if(!ExlaNifUtil::get_atom(env, term, type_str)) {
+    std::cout << type_str << std::endl;
+    type = xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
+    return 1;
+  }
 
-  if(!enif_get_atom(env, term, &(*(atom_str.begin())), atom_str.size(), ERL_NIF_LATIN1)) return xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
-
-  atom_str.resize(atom_length);
-
-  if(atom_str.compare("pred") == 0){
-    return xla::PrimitiveType::PRED;
-  } else if(atom_str.compare("int8") == 0){
-    return xla::PrimitiveType::S8;
-  } else if(atom_str.compare("int16") == 0){
-    return xla::PrimitiveType::S16;
-  } else if(atom_str.compare("int32") == 0){
-    return xla::PrimitiveType::S32;
-  } else if(atom_str.compare("int64") == 0){
-    return xla::PrimitiveType::S64;
-  } else if(atom_str.compare("uint8") == 0){
-    return xla::PrimitiveType::U8;
-  } else if(atom_str.compare("uint16") == 0){
-    return xla::PrimitiveType::U16;
-  } else if(atom_str.compare("uint32") == 0){
-    return xla::PrimitiveType::U32;
-  } else if(atom_str.compare("uint64") == 0){
-    return xla::PrimitiveType::U64;
-  } else if(atom_str.compare("float16") == 0){
-    return xla::PrimitiveType::F16;
-  } else if(atom_str.compare("bfloat16") == 0){
-    return xla::PrimitiveType::BF16;
-  } else if(atom_str.compare("float32") == 0){
-    return xla::PrimitiveType::F32;
-  } else if(atom_str.compare("float64") == 0){
-    return xla::PrimitiveType::F64;
-  } else if(atom_str.compare("complex64") == 0){
-    return xla::PrimitiveType::C64;
-  } else if(atom_str.compare("complex128") == 0){
-    return xla::PrimitiveType::C128;
-  } else if(atom_str.compare("tuple") == 0){
-    return xla::PrimitiveType::TUPLE;
-  } else if(atom_str.compare("opaque") == 0){
-    return xla::PrimitiveType::OPAQUE_TYPE;
-  } else if(atom_str.compare("token") == 0){
-    return xla::PrimitiveType::TOKEN;
+  if(type_str.compare("pred") == 0){
+    type = xla::PrimitiveType::PRED;
+  } else if(type_str.compare("int8") == 0){
+    type = xla::PrimitiveType::S8;
+  } else if(type_str.compare("int16") == 0){
+    type = xla::PrimitiveType::S16;
+  } else if(type_str.compare("int32") == 0){
+    type = xla::PrimitiveType::S32;
+  } else if(type_str.compare("int64") == 0){
+    type = xla::PrimitiveType::S64;
+  } else if(type_str.compare("uint8") == 0){
+    type = xla::PrimitiveType::U8;
+  } else if(type_str.compare("uint16") == 0){
+    type = xla::PrimitiveType::U16;
+  } else if(type_str.compare("uint32") == 0){
+    type = xla::PrimitiveType::U32;
+  } else if(type_str.compare("uint64") == 0){
+    type = xla::PrimitiveType::U64;
+  } else if(type_str.compare("float16") == 0){
+    type = xla::PrimitiveType::F16;
+  } else if(type_str.compare("bfloat16") == 0){
+    type = xla::PrimitiveType::BF16;
+  } else if(type_str.compare("float32") == 0){
+    type = xla::PrimitiveType::F32;
+  } else if(type_str.compare("float64") == 0){
+    type = xla::PrimitiveType::F64;
+  } else if(type_str.compare("complex64") == 0){
+    type = xla::PrimitiveType::C64;
+  } else if(type_str.compare("complex128") == 0){
+    type = xla::PrimitiveType::C128;
+  } else if(type_str.compare("tuple") == 0){
+    type = xla::PrimitiveType::TUPLE;
+  } else if(type_str.compare("opaque") == 0){
+    type = xla::PrimitiveType::OPAQUE_TYPE;
+  } else if(type_str.compare("token") == 0){
+    type = xla::PrimitiveType::TOKEN;
   } else {
-    return xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
+    type = xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
   }
-}
-
-int enif_get_std_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
-  unsigned len;
-  int ret = enif_get_list_length(env, term, &len);
-
-  if(!ret){
-    ErlNifBinary bin;
-    ret = enif_inspect_binary(env, term, &bin);
-    if(!ret){
-      return 0;
-    }
-    var = std::string((const char*)bin.data, bin.size);
-    return ret;
-  }
-
-  var.resize(len+1);
-  ret = enif_get_string(env, term, &*(var.begin()), var.size(), ERL_NIF_LATIN1);
-
-  if(ret > 0){var.resize(ret-1);}
-  else if(ret==0){var.resize(0);}
-  else{}
-
-  return ret;
+  return 1;
 }
 
 ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
@@ -223,17 +192,19 @@ ERL_NIF_TERM enif_make_shaped_buffer(ErlNifEnv* env, xla::ShapedBuffer& value){
 // TODO: Template this.
 // TODO: This should return an integer status instead of the span and rather accept a reference to the Span.
 // TODO: We need to exit gracefully on badarg.
-absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM tuple){
-  const ERL_NIF_TERM* dims;
-  int num_dims;
-  enif_get_tuple(env, tuple, &num_dims, &dims);
-  long long int dimensions[num_dims];
-  for(int i=0;i<num_dims;i++){
-    long int dim;
-    enif_get_int64(env, dims[i], &dim);
-    dimensions[i] = dim;
+template <typename T>
+int enif_get_span(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<T> &span){
+  const ERL_NIF_TERM* elems;
+  int num_elems;
+  if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
+  T data[num_elems];
+  for(int i=0;i<num_elems;i++){
+    T elem;
+    if(!ExlaNifUtil::get(env, elems[i], elem)) return 0;
+    data[i] = elem;
   }
-  return absl::Span<long long int>(dimensions, num_dims);
+  span = absl::Span<T>(data, num_elems);
+  return 1;
 }
 
 // TODO: Template this with above!
@@ -309,8 +280,11 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
 /************************ xla::Shape Functions ***************************/
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  xla::PrimitiveType element_type = enif_get_primitive_type(env, argv[0]);
-  absl::Span<long long int> dims = enif_get_span(env, argv[1]);
+  xla::PrimitiveType element_type;
+  absl::Span<long long int> dims;
+
+  if(!enif_get_primitive_type(env, argv[0], element_type)) return enif_make_badarg(env);
+  if(!enif_get_span(env, argv[1], dims)) return enif_make_badarg(env);
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
   return enif_make_shape(env, shape);
@@ -320,7 +294,9 @@ ERL_NIF_TERM make_scalar_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
     return enif_make_badarg(env);
   }
 
-  xla::PrimitiveType element_type = enif_get_primitive_type(env, argv[0]);
+  xla::PrimitiveType element_type;
+  if(!enif_get_primitive_type(env, argv[0], element_type)) return enif_make_badarg(env);
+
   xla::Shape shape = xla::ShapeUtil::MakeScalarShape(element_type);
   return enif_make_shape(env, shape);
 }
@@ -374,7 +350,7 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(!enif_get_int64(env, argv[0], &param_num)) return enif_make_badarg(env);
   if(!enif_get_resource(env, argv[1], SHAPE_RES_TYPE, (void **) &shape)) return enif_make_badarg(env);
-  if(!enif_get_std_string(env, argv[2], name)) return enif_make_badarg(env);
+  if(!ExlaNifUtil::get(env, argv[2], name)) return enif_make_badarg(env);
 
   xla::XlaOp op = xla::Parameter(xla_objects->builder, param_num, *shape, name);
   return enif_make_op(env, op);
@@ -387,10 +363,11 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
   }
 
   xla::XlaOp *lhs, *rhs;
+  absl::Span<long long int> broadcast_dims;
   if(!enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs)) return enif_make_badarg(env);
   if(!enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs)) return enif_make_badarg(env);
+  if(!enif_get_span(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
 
-  absl::Span<const long long int> broadcast_dims = enif_get_span(env, argv[2]);
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return enif_make_op(env, result);
 }
@@ -476,17 +453,6 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return enif_make_op(env, op);
 }
 
-ERL_NIF_TERM constant_r1_from_list(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1){
-    return enif_make_badarg(env);
-  }
-
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-  absl::Span<const long long int> values = enif_get_span(env, argv[0]);
-  xla::XlaOp op = xla::ConstantR1(xla_objects->builder, values);
-  return enif_make_op(env, op);
-}
-
 ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
     return enif_make_badarg(env);
@@ -520,7 +486,10 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
   }
 
   XLA* xla_objects = (XLA*) enif_priv_data(env);
-  auto platform = enif_get_platform(env, argv[0]);
+  stream_executor::Platform* platform;
+
+  if(!enif_get_platform(env, argv[0], platform)) return enif_make_badarg(env);
+
   // Todo: Handle this gracefully
   xla::StatusOr<xla::LocalClient*> client_status = xla::ClientLibrary::GetOrCreateLocalClient(platform);
   // This matches really nicely with the ! pattern
@@ -723,7 +692,6 @@ static ErlNifFunc exla_funcs[] = {
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
   {"constant_r0", 1, constant_r0},
-  {"constant_r1", 1, constant_r1_from_list},
   {"constant_r1", 2, constant_r1_fill},
   /******** Other XLA Ops *******/
   {"dot", 2, dot},

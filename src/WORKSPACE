@@ -4,16 +4,7 @@ workspace(name = "exla")
 new_local_repository(
   name = "erts",
   path = "/usr/lib/erlang/erts-11.1/include",
-  build_file_content = """
-package(default_visibility = ["//visibility:public"])
-cc_library(
-    name = "headers",
-    hdrs = glob(["**/*.h"]),
-    includes = [
-        ".",
-    ]
-)
-"""
+  build_file = __workspace_dir__ + "/erts.BUILD",
 )
 
 load("//exla:repo.bzl", "tensorflow_http_archive")
