@@ -1,6 +1,8 @@
 load("@com_grail_bazel_compdb//:aspects.bzl", "compilation_database")
 load("@org_tensorflow//tensorflow/core/platform/default:cuda_build_defs.bzl", "if_cuda_is_configured",)
 
+package(default_visibility=["//visibility:public"])
+
 compilation_database(
   name = "exla_compdb",
   targets = [
@@ -27,14 +29,15 @@ cc_library(
   deps = [
     "@com_google_absl//absl/types:span",
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
+    "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
-    "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
     "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options",
     "@erts//:headers"
   ],
   linkstatic = 1,
+  alwayslink = 1
 )
 
 # This target links in both GPU/CPU Device
@@ -53,13 +56,13 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
   ],
   linkopts = ["-shared"],
-  linkshared = True,
+  linkshared = 1,
 )
 
 # This target links in just CPU device
 cc_binary(
   name = "libexla_cpu.so",
-  srcs = ["exla.cc", "exla_nif_util.cc", "exla_nif_util.h"],
+  srcs = ["exla.cc"],
   deps = [
     ":exla_allocator",
     ":exla_nif_util",
@@ -70,6 +73,5 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
   ],
   linkopts = ["-shared"],
-  linkshared = True,
-  linkstatic = 1,
+  linkshared = 1,
 )
