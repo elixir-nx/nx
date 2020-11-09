@@ -21,7 +21,7 @@ cc_library(
   ],
 )
 
-# I don't like the NIF dependency
+# TODO: I don't like the NIF dependency, try and work around it
 cc_library(
   name = "exla_macros",
   hdrs = ["exla_macros.h"],
