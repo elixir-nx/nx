@@ -5,9 +5,6 @@
 
 #include "tensorflow/compiler/xla/client/executable_build_options.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
-#include "tensorflow/compiler/xla/client/xla_computation.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
-#include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 
 #include <erl_nif.h>
@@ -27,7 +24,6 @@ namespace exla {
   int get(ErlNifEnv* env, ERL_NIF_TERM term, long int &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, xla::XlaOp *var);
 
   /*
    * Getters for non-standard types. Suffix to be explicit.

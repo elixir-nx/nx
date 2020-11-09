@@ -15,7 +15,9 @@
 
 // Strangely, I can't get templates to work correctly in a separate file.
 // I think I'm linking things wrong, still trying to resolve it, but this is here for now.
-// This is a temporary solution until I can get the linking right.
+// This is a temporary solution until I can get the linking right. Fortunately, everything is
+// namespaced correctly, so the process of removing this will be as simple as a copy-paste
+// once the build process is correct.
 namespace exla {
 
   template <typename T>
