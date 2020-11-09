@@ -17,6 +17,7 @@ cc_library(
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
     "@org_tensorflow//tensorflow/compiler/xla:statusor",
   ],
+  linkstatic = 1,
 )
 
 cc_library(
@@ -24,13 +25,16 @@ cc_library(
   srcs = ["exla_nif_util.cc"],
   hdrs = ["exla_nif_util.h"],
   deps = [
+    "@com_google_absl//absl/types:span",
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
-    "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
+    "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
+    "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options",
     "@erts//:headers"
   ],
+  linkstatic = 1,
 )
 
 # This target links in both GPU/CPU Device
@@ -55,7 +59,7 @@ cc_binary(
 # This target links in just CPU device
 cc_binary(
   name = "libexla_cpu.so",
-  srcs = ["exla.cc"],
+  srcs = ["exla.cc", "exla_nif_util.cc", "exla_nif_util.h"],
   deps = [
     ":exla_allocator",
     ":exla_nif_util",
@@ -67,4 +71,5 @@ cc_binary(
   ],
   linkopts = ["-shared"],
   linkshared = True,
+  linkstatic = 1,
 )

@@ -28,6 +28,7 @@ RUN wget https://repo.hex.pm/installs/1.10.0/hex-0.20.6.ez && \
     mix archive.install ./hex-0.20.6.ez --force && \
     rm ./hex-0.20.6.ez
 
+# I thought we could wipe the Numpy dependency, but I guess not. Still looking into solutions
 RUN python3 -m pip install ${pip_args} numpy
 RUN ln -s /usr/bin/python3 /usr/bin/python
 ENV PATH="/usr/lib/erlang/erts-11.1/bin:${PATH}"

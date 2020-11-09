@@ -5,11 +5,7 @@ ERL_NIF_TERM ExlaNifUtil::error(ErlNifEnv* env, const char* msg){
 }
 
 template <typename T>
-int ExlaNifUtil::open_resource(ErlNifEnv* env,
-                               const char* module,
-                               const char* name,
-                               ErlNifResourceDtor* dtor){
-
+int ExlaNifUtil::open_resource(ErlNifEnv* env, const char* module, const char* name, ErlNifResourceDtor* dtor){
   ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER);
   ErlNifResourceFlags* tried = nullptr;
 

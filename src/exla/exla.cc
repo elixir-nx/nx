@@ -32,8 +32,8 @@ void free_literal(ErlNifEnv* env, void* obj){return;}
 void free_local_executable(ErlNifEnv* env, void* obj){return;}
 void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
 
+// TODO: Error check `open_resource` method.
 static int open_resources(ErlNifEnv* env) {
-
   const char* mod = "EXLA";
 
   ExlaNifUtil::open_resource<xla::XlaOp>(env, mod, "Op", free_op);
@@ -42,6 +42,7 @@ static int open_resources(ErlNifEnv* env) {
   ExlaNifUtil::open_resource<xla::Literal>(env, mod, "Literal", free_literal);
   ExlaNifUtil::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable);
   ExlaNifUtil::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer);
+
   return 1;
 }
 
@@ -90,6 +91,10 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
 /************************ xla::Shape Functions ***************************/
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2){
+    return enif_make_badarg(env);
+  }
+
   xla::PrimitiveType element_type;
   absl::Span<long long int> dims;
 
@@ -457,7 +462,6 @@ ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TE
     return enif_make_badarg(env);
   }
 
-  // TODO: Handle this gracefully
   xla::XlaComputation* computation;
 
   if(!ExlaNifUtil::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);

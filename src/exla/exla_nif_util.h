@@ -2,12 +2,14 @@
 #define EXLA_NIF_UTIL_H_
 
 #include "absl/types/span.h"
+
+#include "tensorflow/compiler/xla/client/executable_build_options.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
-#include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
+#include "tensorflow/compiler/xla/executable_run_options.h"
 
 #include <erl_nif.h>
 #include <string>
@@ -16,6 +18,9 @@
 class ExlaNifUtil {
   public:
 
+    /*
+     * Helper for returning `{:error, msg}` from NIF.
+     */
     static ERL_NIF_TERM error(ErlNifEnv* env, const char* msg);
 
     /*
@@ -39,6 +44,9 @@ class ExlaNifUtil {
     template <typename T>
     static int get(ErlNifEnv* env, ERL_NIF_TERM term, T* var);
 
+    /*
+     * Getters for option structs.
+     */
     static int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableRunOptions& options);
     static int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableBuildOptions& options);
     static int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::LocalClientOptions& options);
@@ -54,6 +62,9 @@ class ExlaNifUtil {
     template <typename T>
     static ERL_NIF_TERM make(ErlNifEnv* env, std::unique_ptr<T> &var);
 
+    /*
+     * For resource opening.
+     */
     template <typename T>
     static int open_resource(ErlNifEnv* env, const char* mod, const char* name, ErlNifResourceDtor* dtor);
 
