@@ -1,5 +1,6 @@
 #include "exla/exla_allocator.h"
 #include "exla/exla_nif_util.h"
+#include "exla/exla_macros.h"
 
 #include "absl/types/span.h"
 
@@ -11,74 +12,6 @@
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
-
-
-// Strangely, I can't get templates to work correctly in a separate file.
-// I think I'm linking things wrong, still trying to resolve it, but this is here for now.
-// This is a temporary solution until I can get the linking right. Fortunately, everything is
-// namespaced correctly, so the process of removing this will be as simple as a copy-paste
-// once the build process is correct.
-namespace exla {
-
-  template <typename T>
-  struct resource_object {
-    static ErlNifResourceType *type;
-  };
-  template<typename T> ErlNifResourceType* resource_object<T>::type=0;
-
-  template <typename T>
-  int open_resource(ErlNifEnv* env, const char* mod, const char* name, ErlNifResourceDtor* dtor){
-    ErlNifResourceType *type;
-    ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER);
-    type = enif_open_resource_type(env, mod, name, dtor, flags, NULL);
-    if(type == NULL){
-      resource_object<T>::type = 0;
-      return -1;
-    } else {
-      resource_object<T>::type = type;
-    }
-    return 1;
-  }
-
-  template <typename T>
-  ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T *var){
-    return enif_get_resource(env, term, resource_object<T>::type, (void **) &var);
-  }
-
-  template <typename T>
-  ERL_NIF_TERM make(ErlNifEnv* env, T &var){
-    void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
-    new(ptr) T(std::move(var));
-    ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-    return ret;
-  }
-
-  template <typename T>
-  ERL_NIF_TERM make(ErlNifEnv* env, std::unique_ptr<T> &var){
-    void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
-    T* value = var.release();
-    new(ptr) T(std::move(*value));
-    return enif_make_resource(env, ptr);
-  }
-
-  template <typename T>
-  int get_span(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<T> &span){
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    T data[num_elems];
-    for(int i=0;i<num_elems;i++){
-      T elem;
-      if(!get(env, elems[i], elem)) return 0;
-      data[i] = elem;
-    }
-    span = absl::Span<T>(data, num_elems);
-    return 1;
-  }
-}
-
-// TODO: Fully replace with NIF util functions `ok` and `error`.
-ERL_NIF_TERM ok, bad;
 
 // TODO: Synchronize access.
 // TODO: Separate client from global object.
@@ -95,26 +28,24 @@ void free_computation(ErlNifEnv* env, void* obj){return;}
 void free_literal(ErlNifEnv* env, void* obj){return;}
 void free_local_executable(ErlNifEnv* env, void* obj){return;}
 void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
+void free_client(ErlNifEnv* env, void* obj){return;}
 
-// TODO: Error check
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
 
-  exla::open_resource<xla::XlaOp>(env, mod, "Op", free_op);
-  exla::open_resource<xla::Shape>(env, mod, "Shape", free_shape);
-  exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_computation);
-  exla::open_resource<xla::Literal>(env, mod, "Literal", free_literal);
-  exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable);
-  exla::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer);
+  if(!exla::open_resource<xla::XlaOp>(env, mod, "Op", free_op)) return -1;
+  if(!exla::open_resource<xla::Shape>(env, mod, "Shape", free_shape)) return -1;
+  if(!exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_computation)) return -1;
+  if(!exla::open_resource<xla::Literal>(env, mod, "Literal", free_literal)) return -1;
+  if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable)) return -1;
+  if(!exla::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer)) return -1;
+  if(!exla::open_resource<xla::LocalClient>(env, mod, "Client", free_client)) return -1;
 
   return 1;
 }
 
 static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   if(open_resources(env) == -1) return -1;
-
-  ok = enif_make_atom(env, "ok");
-  bad = enif_make_atom(env, "error");
 
   XLA* xla_objects;
   xla_objects = (XLA*) enif_alloc(sizeof(XLA));
@@ -379,12 +310,10 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
 
   if(!exla::get_platform(env, argv[0], platform)) return enif_make_badarg(env);
 
-  // TODO: Handle this gracefully
-  xla::StatusOr<xla::LocalClient*> client_status = xla::ClientLibrary::GetOrCreateLocalClient(platform);
-  // This matches really nicely with the ! pattern
-  xla::LocalClient* client = client_status.ConsumeValueOrDie();
+  EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, xla::ClientLibrary::GetOrCreateLocalClient(platform), env);
+
   xla_objects->client = client;
-  return ok;
+  return exla::ok(env);
 }
 
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -414,9 +343,8 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(!exla::get<xla::XlaOp>(env, argv[0], root)) return enif_make_badarg(env);
 
-  xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build(*root);
-  // TODO: Handle StatusOr more gracefully.
-  xla::XlaComputation computation = computation_status.ConsumeValueOrDie();
+  EXLA_ASSIGN_OR_RETURN(xla::XlaComputation computation, xla_objects->builder->Build(*root), env);
+
   return exla::make<xla::XlaComputation>(env, computation);
 }
 
@@ -439,14 +367,15 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get_span(env, argv[1], argument_layouts)) return enif_make_badarg(env);
   if(!exla::get_options(env, argv[2], options)) return enif_make_badarg(env);
 
-  xla::StatusOr<std::vector<std::unique_ptr<xla::LocalExecutable>>> exec_status = xla_objects->client->Compile(*computation, argument_layouts, options);
-  // TODO: Handle this gracefully.
-  std::vector<std::unique_ptr<xla::LocalExecutable>> executables = exec_status.ConsumeValueOrDie();
+  EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
+                        xla_objects->client->Compile(*computation, argument_layouts, options), env);
+
   ERL_NIF_TERM exec_refs[executables.size()];
   int i = 0;
   for(auto it=std::begin(executables);it!=std::end(executables);++it){
     exec_refs[i++] = exla::make<xla::LocalExecutable>(env, executables.at(i));
   }
+  // TODO: This should return the vector. There is an executable for every partition, usually 1.
   return exec_refs[0];
 }
 
@@ -463,9 +392,8 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get_span(env, argv[1], arguments)) return enif_make_badarg(env);
   if(!exla::get_options(env, argv[2], run_options)) return enif_make_badarg(env);
 
-  xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->Run(arguments, run_options);
-  // TODO: Handle this gracefully
-  xla::ScopedShapedBuffer result = run_status.ConsumeValueOrDie();
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
+
   return exla::make<xla::ShapedBuffer>(env, result);
 }
 
@@ -486,9 +414,8 @@ ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TE
   if(!exla::get<xla::Literal>(env, argv[0], literal)) return enif_make_badarg(env);
   if(!exla::get(env, argv[1], device_ordinal)) return enif_make_badarg(env);
 
-  xla::StatusOr<xla::ScopedShapedBuffer> buffer_status = xla_objects->client->LiteralToShapedBuffer(*literal, device_ordinal);
-  // TODO: Handle this gracefully.
-  xla::ScopedShapedBuffer buffer = buffer_status.ConsumeValueOrDie();
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, xla_objects->client->LiteralToShapedBuffer(*literal, device_ordinal), env);
+
   return exla::make<xla::ShapedBuffer>(env, buffer);
 }
 
@@ -507,19 +434,17 @@ ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TE
 
   if(!exla::get<xla::ShapedBuffer>(env, argv[0], buffer)) return enif_make_badarg(env);
 
-  xla::StatusOr<xla::Literal> literal_status = xla_objects->client->ShapedBufferToLiteral(*buffer);
-  // TODO: Handle this gracefully.
-  xla::Literal literal = literal_status.ConsumeValueOrDie();
+  EXLA_ASSIGN_OR_RETURN(xla::Literal literal, xla_objects->client->ShapedBufferToLiteral(*buffer), env);
+
   return exla::make<xla::Literal>(env, literal);
 }
 
 /*********** HLO Methods *************/
-xla::StatusOr<std::unique_ptr<xla::HloModule>> get_hlo_module(const xla::XlaComputation& computation){
-  xla::StatusOr<xla::HloModuleConfig> module_config = xla::HloModule::CreateModuleConfigFromProto(computation.proto(), xla::GetDebugOptionsFromFlags());
-  // TODO: Handle this gracefully
-  xla::StatusOr<std::unique_ptr<xla::HloModule>> module = xla::HloModule::CreateFromProto(computation.proto(), module_config.ConsumeValueOrDie());
-  // TODO: Handle this gracefully.
-  return module.ConsumeValueOrDie();
+std::unique_ptr<xla::HloModule> get_hlo_module(const xla::XlaComputation& computation){
+  xla::HloModuleConfig module_config = xla::HloModule::CreateModuleConfigFromProto(computation.proto(), xla::GetDebugOptionsFromFlags()).ConsumeValueOrDie();
+  std::unique_ptr<xla::HloModule> module = xla::HloModule::CreateFromProto(computation.proto(), module_config).ConsumeValueOrDie();
+
+  return module;
 }
 
 ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -531,9 +456,7 @@ ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TE
 
   if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);
 
-  xla::StatusOr<std::unique_ptr<xla::HloModule>> hlo_module_status = get_hlo_module(*computation);
-  // // TODO: Handle this gracefully
-  std::unique_ptr<xla::HloModule> hlo_module = hlo_module_status.ConsumeValueOrDie();
+  std::unique_ptr<xla::HloModule> hlo_module = get_hlo_module(*computation);
 
   xla::HloPrintOptions options;
   options = xla::HloPrintOptions::ShortParsable();
