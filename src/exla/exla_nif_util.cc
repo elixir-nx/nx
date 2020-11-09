@@ -6,6 +6,14 @@ namespace exla {
     return enif_make_tuple2(env, enif_make_atom(env, "error"), enif_make_string(env, msg, ERL_NIF_LATIN1));
   }
 
+  ERL_NIF_TERM ok(ErlNifEnv* env){
+    return enif_make_atom(env, "ok");
+  }
+
+  ERL_NIF_TERM ok(ErlNifEnv* env, ERL_NIF_TERM term){
+    return enif_make_tuple2(env, ok(env), term);
+  }
+
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var){
     return enif_get_int(env, term, &var);
   }
@@ -78,6 +86,7 @@ namespace exla {
     }
   }
 
+  // TODO: No need for this. Match in Elixir.
   int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type){
     std::string type_str;
 

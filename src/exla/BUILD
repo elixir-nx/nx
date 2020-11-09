@@ -19,7 +19,15 @@ cc_library(
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
     "@org_tensorflow//tensorflow/compiler/xla:statusor",
   ],
-  linkstatic = 1,
+)
+
+# I don't like the NIF dependency
+cc_library(
+  name = "exla_macros",
+  hdrs = ["exla_macros.h"],
+  deps = [
+    ":exla_nif_util"
+  ]
 )
 
 cc_library(
@@ -34,8 +42,6 @@ cc_library(
     "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options",
     "@erts//:headers"
   ],
-  linkstatic = 1,
-  alwayslink = 1
 )
 
 # This target links in both GPU/CPU Device
@@ -47,6 +53,7 @@ cc_binary(
     ]) + [
     ":exla_allocator",
     ":exla_nif_util",
+    ":exla_macros",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
@@ -64,6 +71,7 @@ cc_binary(
   deps = [
     ":exla_allocator",
     ":exla_nif_util",
+    ":exla_macros",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
