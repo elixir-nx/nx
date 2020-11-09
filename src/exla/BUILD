@@ -25,8 +25,10 @@ cc_library(
   hdrs = ["exla_nif_util.h"],
   deps = [
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
+    "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla:xla_data_proto_cc",
+    "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
+    "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@erts//:headers"
   ],
 )

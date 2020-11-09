@@ -1,4 +1,4 @@
-defmodule Exla.ExecutableBuildOptions do
+defmodule Exla.Options.ExecutableBuildOptions do
   defstruct [
     :result_layout,
     device_ordinal: -1,

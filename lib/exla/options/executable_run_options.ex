@@ -1,4 +1,4 @@
-defmodule Exla.ExecutableRunOptions do
+defmodule Exla.Options.ExecutableRunOptions do
   defstruct allocator: nil,
             device_ordinal: -1,
             device_assignment: nil,
