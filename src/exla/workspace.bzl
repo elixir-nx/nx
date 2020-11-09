@@ -1,5 +1,3 @@
-# TODO: Go through these.
-
 load("@org_tensorflow//third_party:repo.bzl", "tf_http_archive")
 load("@org_tensorflow//tensorflow:workspace.bzl", "tf_workspace")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")

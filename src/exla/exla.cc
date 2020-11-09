@@ -1,38 +1,94 @@
 #include "exla/exla_allocator.h"
+#include "exla/exla_nif_util.h"
 
 #include "absl/types/span.h"
+
+#include "tensorflow/compiler/xla/service/platform_util.h"
+#include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/literal_util.h"
-#include "tensorflow/compiler/xla/statusor.h"
+
 #include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
-#include "tensorflow/compiler/xla/service/hlo.pb.h"
-#include "tensorflow/compiler/xla/service/hlo_module.h"
-#include "tensorflow/compiler/xla/xla_data.pb.h"
-#include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/service/platform_util.h"
-#include "tensorflow/compiler/xla/service/shaped_buffer.h"
-#include <erl_nif.h>
 
-ErlNifResourceType *OP_RES_TYPE, *SHAPE_RES_TYPE, *COMPUTATION_RES_TYPE, *LITERAL_RES_TYPE, *LOCAL_EXECUTABLE_RES_TYPE, *SHAPED_BUFFER_RES_TYPE;
 
+// Strangely, I can't get templates to work correctly in a separate file.
+// I think I'm linking things wrong, still trying to resolve it, but this is here for now.
+// This is a temporary solution until I can get the linking right. Fortunately, everything is
+// namespaced correctly, so the process of removing this will be as simple as a copy-paste
+// once the build process is correct.
+namespace exla {
+
+  template <typename T>
+  struct resource_object {
+    static ErlNifResourceType *type;
+  };
+  template<typename T> ErlNifResourceType* resource_object<T>::type=0;
+
+  template <typename T>
+  int open_resource(ErlNifEnv* env, const char* mod, const char* name, ErlNifResourceDtor* dtor){
+    ErlNifResourceType *type;
+    ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER);
+    type = enif_open_resource_type(env, mod, name, dtor, flags, NULL);
+    if(type == NULL){
+      resource_object<T>::type = 0;
+      return -1;
+    } else {
+      resource_object<T>::type = type;
+    }
+    return 1;
+  }
+
+  template <typename T>
+  ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T *var){
+    return enif_get_resource(env, term, resource_object<T>::type, (void **) &var);
+  }
+
+  template <typename T>
+  ERL_NIF_TERM make(ErlNifEnv* env, T &var){
+    void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
+    new(ptr) T(std::move(var));
+    ERL_NIF_TERM ret = enif_make_resource(env, ptr);
+    return ret;
+  }
+
+  template <typename T>
+  ERL_NIF_TERM make(ErlNifEnv* env, std::unique_ptr<T> &var){
+    void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
+    T* value = var.release();
+    new(ptr) T(std::move(*value));
+    return enif_make_resource(env, ptr);
+  }
+
+  template <typename T>
+  int get_span(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<T> &span){
+    const ERL_NIF_TERM* elems;
+    int num_elems;
+    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
+    T data[num_elems];
+    for(int i=0;i<num_elems;i++){
+      T elem;
+      if(!get(env, elems[i], elem)) return 0;
+      data[i] = elem;
+    }
+    span = absl::Span<T>(data, num_elems);
+    return 1;
+  }
+}
+
+// TODO: Fully replace with NIF util functions `ok` and `error`.
 ERL_NIF_TERM ok, bad;
 
-/* These are global instances of the main XLA API. My understanding is that it's correct
- * only to have and maintain one instance of each of these, so I figured it's best to keep them
- * as private data members in the environment. It's convenient not to have to pass references
- * between functions.
- *
- * I think we need to synchronize access to these resources, but I also
- * can't really think of a use case where you'd run in to problems if we didn't.
- */
+// TODO: Synchronize access.
+// TODO: Separate client from global object.
 typedef struct {
   xla::XlaBuilder* builder;
   xla::LocalClient* client;
 } XLA;
 
 // Once the resource is garbage collected, this should also deallocate the C++ object.
+// TODO: address memory leaks
 void free_op(ErlNifEnv* env, void* obj){return;}
 void free_shape(ErlNifEnv* env, void* obj){return;}
 void free_computation(ErlNifEnv* env, void* obj){return;}
@@ -40,26 +96,18 @@ void free_literal(ErlNifEnv* env, void* obj){return;}
 void free_local_executable(ErlNifEnv* env, void* obj){return;}
 void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
 
+// TODO: Error check
 static int open_resources(ErlNifEnv* env) {
-  const char* mod = "XLA";
-  const char* name_op = "Op";
-  const char* name_shape = "Shape";
-  const char* name_computation = "Computation";
-  const char* name_literal = "Literal";
-  const char* name_local_executable = "LocalExecutable";
-  const char* name_shaped_buffer = "ShapedBuffer";
+  const char* mod = "EXLA";
 
-  int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
+  exla::open_resource<xla::XlaOp>(env, mod, "Op", free_op);
+  exla::open_resource<xla::Shape>(env, mod, "Shape", free_shape);
+  exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_computation);
+  exla::open_resource<xla::Literal>(env, mod, "Literal", free_literal);
+  exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable);
+  exla::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer);
 
-  OP_RES_TYPE = enif_open_resource_type(env, mod, name_op, free_op, (ErlNifResourceFlags) flags, NULL);
-  SHAPE_RES_TYPE = enif_open_resource_type(env, mod, name_shape, free_shape, (ErlNifResourceFlags) flags, NULL);
-  COMPUTATION_RES_TYPE = enif_open_resource_type(env, mod, name_computation, free_computation, (ErlNifResourceFlags) flags, NULL);
-  LITERAL_RES_TYPE = enif_open_resource_type(env, mod, name_literal, free_literal, (ErlNifResourceFlags) flags, NULL);
-  LOCAL_EXECUTABLE_RES_TYPE = enif_open_resource_type(env, mod, name_local_executable, free_local_executable, (ErlNifResourceFlags) flags, NULL);
-  SHAPED_BUFFER_RES_TYPE = enif_open_resource_type(env, mod, name_shaped_buffer, free_shaped_buffer, (ErlNifResourceFlags) flags, NULL);
-
-  if(OP_RES_TYPE == NULL || SHAPE_RES_TYPE == NULL || COMPUTATION_RES_TYPE == NULL || LITERAL_RES_TYPE == NULL || LOCAL_EXECUTABLE_RES_TYPE == NULL || SHAPED_BUFFER_RES_TYPE == NULL) return -1;
-  return 0;
+  return 1;
 }
 
 static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
@@ -70,8 +118,8 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
 
   XLA* xla_objects;
   xla_objects = (XLA*) enif_alloc(sizeof(XLA));
+
   xla_objects->builder = new xla::XlaBuilder("Elixir");
-  // Client needs to be set.
   xla_objects->client = NULL;
 
   *priv = (void*) xla_objects;
@@ -79,209 +127,7 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   return 0;
 }
 
-// TODO: Standardize the atom interpretation process.
-// TODO: Handle statusor gracefully.
-stream_executor::Platform* enif_get_platform(ErlNifEnv* env, ERL_NIF_TERM term){
-  unsigned atom_length;
-  // Default to Host
-  if(!enif_get_atom_length(env, term, &atom_length, ERL_NIF_LATIN1)) return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
-
-  std::string atom_str;
-  atom_str.resize(atom_length+1);
-
-  if(!enif_get_atom(env, term, &(*(atom_str.begin())), atom_str.size(), ERL_NIF_LATIN1)) return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
-
-  atom_str.resize(atom_length);
-
-  if(atom_str.compare("host") == 0){
-    return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
-  } else if(atom_str.compare("cuda") == 0){
-    return xla::PlatformUtil::GetPlatform("Cuda").ConsumeValueOrDie();
-  } else {
-    return xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
-  }
-}
-
-xla::PrimitiveType enif_get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term){
-  unsigned atom_length;
-  if(!enif_get_atom_length(env, term, &atom_length, ERL_NIF_LATIN1)) return xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
-
-  std::string atom_str;
-  atom_str.resize(atom_length+1);
-
-  if(!enif_get_atom(env, term, &(*(atom_str.begin())), atom_str.size(), ERL_NIF_LATIN1)) return xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
-
-  atom_str.resize(atom_length);
-
-  if(atom_str.compare("pred") == 0){
-    return xla::PrimitiveType::PRED;
-  } else if(atom_str.compare("int8") == 0){
-    return xla::PrimitiveType::S8;
-  } else if(atom_str.compare("int16") == 0){
-    return xla::PrimitiveType::S16;
-  } else if(atom_str.compare("int32") == 0){
-    return xla::PrimitiveType::S32;
-  } else if(atom_str.compare("int64") == 0){
-    return xla::PrimitiveType::S64;
-  } else if(atom_str.compare("uint8") == 0){
-    return xla::PrimitiveType::U8;
-  } else if(atom_str.compare("uint16") == 0){
-    return xla::PrimitiveType::U16;
-  } else if(atom_str.compare("uint32") == 0){
-    return xla::PrimitiveType::U32;
-  } else if(atom_str.compare("uint64") == 0){
-    return xla::PrimitiveType::U64;
-  } else if(atom_str.compare("float16") == 0){
-    return xla::PrimitiveType::F16;
-  } else if(atom_str.compare("bfloat16") == 0){
-    return xla::PrimitiveType::BF16;
-  } else if(atom_str.compare("float32") == 0){
-    return xla::PrimitiveType::F32;
-  } else if(atom_str.compare("float64") == 0){
-    return xla::PrimitiveType::F64;
-  } else if(atom_str.compare("complex64") == 0){
-    return xla::PrimitiveType::C64;
-  } else if(atom_str.compare("complex128") == 0){
-    return xla::PrimitiveType::C128;
-  } else if(atom_str.compare("tuple") == 0){
-    return xla::PrimitiveType::TUPLE;
-  } else if(atom_str.compare("opaque") == 0){
-    return xla::PrimitiveType::OPAQUE_TYPE;
-  } else if(atom_str.compare("token") == 0){
-    return xla::PrimitiveType::TOKEN;
-  } else {
-    return xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
-  }
-}
-
-int enif_get_std_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
-  unsigned len;
-  int ret = enif_get_list_length(env, term, &len);
-
-  if(!ret){
-    ErlNifBinary bin;
-    ret = enif_inspect_binary(env, term, &bin);
-    if(!ret){
-      return 0;
-    }
-    var = std::string((const char*)bin.data, bin.size);
-    return ret;
-  }
-
-  var.resize(len+1);
-  ret = enif_get_string(env, term, &*(var.begin()), var.size(), ERL_NIF_LATIN1);
-
-  if(ret > 0){var.resize(ret-1);}
-  else if(ret==0){var.resize(0);}
-  else{}
-
-  return ret;
-}
-
-ERL_NIF_TERM enif_make_op(ErlNifEnv* env, xla::XlaOp value){
-  void* ptr = enif_alloc_resource(OP_RES_TYPE, sizeof(xla::XlaOp));
-  new(ptr) xla::XlaOp(std::move(value));
-  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  return ret;
-}
-
-ERL_NIF_TERM enif_make_shape(ErlNifEnv* env, xla::Shape value){
-  void* ptr = enif_alloc_resource(SHAPE_RES_TYPE, sizeof(xla::Shape));
-  new(ptr) xla::Shape(std::move(value));
-  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  return ret;
-}
-
-ERL_NIF_TERM enif_make_computation(ErlNifEnv* env, xla::XlaComputation value){
-  void* ptr = enif_alloc_resource(COMPUTATION_RES_TYPE, sizeof(xla::XlaComputation));
-  new(ptr) xla::XlaComputation(std::move(value));
-  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  return ret;
-}
-
-ERL_NIF_TERM enif_make_literal(ErlNifEnv* env, xla::Literal& value){
-  void* ptr = enif_alloc_resource(LITERAL_RES_TYPE, sizeof(xla::Literal));
-  new(ptr) xla::Literal(std::move(value));
-  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  return ret;
-}
-
-ERL_NIF_TERM enif_make_local_executable(ErlNifEnv* env, std::unique_ptr<xla::LocalExecutable>& value){
-  void* ptr = enif_alloc_resource(LOCAL_EXECUTABLE_RES_TYPE, sizeof(xla::LocalExecutable));
-  xla::LocalExecutable* exec = value.release();
-  new(ptr) xla::LocalExecutable(std::move(*exec));
-  return enif_make_resource(env, ptr);
-}
-
-ERL_NIF_TERM enif_make_shaped_buffer(ErlNifEnv* env, xla::ShapedBuffer& value){
-  void* ptr = enif_alloc_resource(SHAPED_BUFFER_RES_TYPE, sizeof(xla::ShapedBuffer));
-  new(ptr) xla::ShapedBuffer(std::move(value));
-  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  return ret;
-}
-
-// TODO: Template this.
-// TODO: This should return an integer status instead of the span and rather accept a reference to the Span.
-// TODO: We need to exit gracefully on badarg.
-absl::Span<long long int> enif_get_span(ErlNifEnv* env, ERL_NIF_TERM tuple){
-  const ERL_NIF_TERM* dims;
-  int num_dims;
-  enif_get_tuple(env, tuple, &num_dims, &dims);
-  long long int dimensions[num_dims];
-  for(int i=0;i<num_dims;i++){
-    long int dim;
-    enif_get_int64(env, dims[i], &dim);
-    dimensions[i] = dim;
-  }
-  return absl::Span<long long int>(dimensions, num_dims);
-}
-
-// TODO: Template this with above!
-absl::Span<xla::ShapedBuffer*> enif_get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple){
-  const ERL_NIF_TERM* args;
-  int num_args;
-  enif_get_tuple(env, tuple, &num_args, &args);
-  xla::ShapedBuffer* arguments[num_args];
-  for(int i=0;i<num_args;i++){
-    xla::ShapedBuffer* buffer;
-    enif_get_resource(env, args[i], SHAPED_BUFFER_RES_TYPE, (void **) &buffer);
-    LOG(ERROR) << "buffer on_host_shape: " << buffer->on_host_shape().DebugString();
-    LOG(ERROR) << "buffer on_device_shape: " << buffer->on_device_shape().DebugString();
-    arguments[i] = buffer;
-  }
-  return absl::Span<xla::ShapedBuffer*>(arguments, num_args);
-}
-
-// TODO: Template this with above!
-absl::Span<xla::Shape*> enif_get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple){
-  const ERL_NIF_TERM* arg_layouts;
-  int num_arg_layouts;
-  enif_get_tuple(env, tuple, &num_arg_layouts, &arg_layouts);
-  xla::Shape* argument_layouts[num_arg_layouts];
-  for(int i=0;i<num_arg_layouts;i++){
-    xla::Shape* shape;
-    enif_get_resource(env, arg_layouts[i], SHAPE_RES_TYPE, (void **) &shape);
-    argument_layouts[i] = shape;
-  }
-  return absl::Span<xla::Shape*>(argument_layouts, num_arg_layouts);
-}
-
-xla::ExecutableBuildOptions enif_get_executable_build_options(ErlNifEnv* env, ERL_NIF_TERM build_options){
-  return xla::ExecutableBuildOptions();
-}
-
-xla::ExecutableRunOptions& enif_get_executable_run_options(ErlNifEnv* env, ERL_NIF_TERM options){
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-  xla::ExecutableRunOptions* run_options = new xla::ExecutableRunOptions();
-  auto* allocator = new xla::ExlaAllocator(xla_objects->client->platform());
-  run_options->set_allocator(allocator);
-  return *run_options;
-}
 /************************ xla::ShapedBuffer Functions *********************/
-/*
- * Because of what this function actually does, it makes sense to name it to something more idiomatic like:
- * `place_on_device` or `to_device`.
- */
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   XLA* xla_objects = (XLA*) enif_priv_data(env);
 
@@ -289,7 +135,7 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   enif_inspect_binary(env, argv[0], &bin);
 
   xla::Shape* shape;
-  enif_get_resource(env, argv[1], SHAPE_RES_TYPE, (void **) &shape);
+  if(!exla::get<xla::Shape>(env, argv[1], shape)) return enif_make_badarg(env);
 
   const char *data_ptr = (char *) bin.data;
   int64_t data_size = bin.size;
@@ -304,25 +150,34 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
   inp = buffer.release();
 
-  return enif_make_shaped_buffer(env, *inp);
+  return exla::make<xla::ShapedBuffer>(env, *inp);
 }
 
 /************************ xla::Shape Functions ***************************/
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  xla::PrimitiveType element_type = enif_get_primitive_type(env, argv[0]);
-  absl::Span<long long int> dims = enif_get_span(env, argv[1]);
+  if(argc != 2){
+    return enif_make_badarg(env);
+  }
+
+  xla::PrimitiveType element_type;
+  absl::Span<long long int> dims;
+
+  if(!exla::get_type(env, argv[0], element_type)) return enif_make_badarg(env);
+  if(!exla::get_span<long long int>(env, argv[1], dims)) return enif_make_badarg(env);
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
-  return enif_make_shape(env, shape);
+  return exla::make<xla::Shape>(env, shape);
 }
 ERL_NIF_TERM make_scalar_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
   }
 
-  xla::PrimitiveType element_type = enif_get_primitive_type(env, argv[0]);
+  xla::PrimitiveType element_type;
+  if(!exla::get_type(env, argv[0], element_type)) return enif_make_badarg(env);
+
   xla::Shape shape = xla::ShapeUtil::MakeScalarShape(element_type);
-  return enif_make_shape(env, shape);
+  return exla::make<xla::Shape>(env, shape);
 }
 
 ERL_NIF_TERM human_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -331,9 +186,10 @@ ERL_NIF_TERM human_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::Shape* shape;
-  if(!enif_get_resource(env, argv[0], SHAPE_RES_TYPE, (void **) &shape)) return enif_make_badarg(env);
+  if(!exla::get<xla::Shape>(env, argv[0], shape)) return enif_make_badarg(env);
+
   std::string result = xla::ShapeUtil::HumanString(*shape);
-  return enif_make_string(env, result.c_str(), ERL_NIF_LATIN1);
+  return exla::make(env, result);
 }
 
 /*********************** xla::LiteralUtil Functions *************************/
@@ -343,21 +199,23 @@ ERL_NIF_TERM create_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
   // TODO: Handle other types.
   int data;
-  enif_get_int(env, argv[0], &data);
+
+  if(!exla::get(env, argv[0], data)) return enif_make_badarg(env);
+
   xla::Literal literal = xla::LiteralUtil::CreateR0(data);
-  return enif_make_literal(env, literal);
+  return exla::make<xla::Literal>(env, literal);
 }
 
-// This is mainly for testing purposes
 ERL_NIF_TERM literal_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
   }
 
   xla::Literal* literal;
-  enif_get_resource(env, argv[0], LITERAL_RES_TYPE, (void **) &literal);
+
+  if(!exla::get<xla::Literal>(env, argv[0], literal)) return enif_make_badarg(env);
   std::string literal_str = (*literal).ToString();
-  return enif_make_string(env, literal_str.c_str(), ERL_NIF_LATIN1);
+  return exla::make(env, literal_str);
 }
 
 /************************ xla::XlaOp Functions ***************************/
@@ -372,27 +230,28 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::Shape* shape;
   std::string name;
 
-  if(!enif_get_int64(env, argv[0], &param_num)) return enif_make_badarg(env);
-  if(!enif_get_resource(env, argv[1], SHAPE_RES_TYPE, (void **) &shape)) return enif_make_badarg(env);
-  if(!enif_get_std_string(env, argv[2], name)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[0], param_num)) return enif_make_badarg(env);
+  if(!exla::get<xla::Shape>(env, argv[1], shape)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[2], name)) return enif_make_badarg(env);
 
   xla::XlaOp op = xla::Parameter(xla_objects->builder, param_num, *shape, name);
-  return enif_make_op(env, op);
+  return exla::make<xla::XlaOp>(env, op);
 }
 
-/* Stub for element-wise binary functions */
 ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const long long int>)){
   if(argc != 3){
     return enif_make_badarg(env);
   }
 
   xla::XlaOp *lhs, *rhs;
-  if(!enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs)) return enif_make_badarg(env);
-  if(!enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs)) return enif_make_badarg(env);
+  absl::Span<long long int> broadcast_dims;
 
-  absl::Span<const long long int> broadcast_dims = enif_get_span(env, argv[2]);
+  if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
+  if(!exla::get_span(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
+
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
-  return enif_make_op(env, result);
+  return exla::make<xla::XlaOp>(env, result);
 }
 
 ERL_NIF_TERM add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Add);}
@@ -424,17 +283,17 @@ ERL_NIF_TERM pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla
 ERL_NIF_TERM complex(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Complex);}
 ERL_NIF_TERM atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Atan2);}
 
-/* Stub for element-wise unary functions */
 ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp)){
   if(argc != 1){
     return enif_make_badarg(env);
   }
 
   xla::XlaOp *op;
-  if(!enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &op)) return enif_make_badarg(env);
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], op)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*op);
-  return enif_make_op(env, result);
+  return exla::make<xla::XlaOp>(env, result);
 }
 
 ERL_NIF_TERM abs(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Abs);}
@@ -463,28 +322,19 @@ ERL_NIF_TERM conj(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xl
 ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::PopulationCount);}
 ERL_NIF_TERM copy(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Copy);}
 
-// Constant Creation Methods
 ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
   }
 
   XLA* xla_objects = (XLA*) enif_priv_data(env);
+
   int value;
-  enif_get_int(env, argv[0], &value);
+
+  if(!exla::get(env, argv[0], value)) return enif_make_badarg(env);
+
   xla::XlaOp op = xla::ConstantR0(xla_objects->builder, value);
-  return enif_make_op(env, op);
-}
-
-ERL_NIF_TERM constant_r1_from_list(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1){
-    return enif_make_badarg(env);
-  }
-
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-  absl::Span<const long long int> values = enif_get_span(env, argv[0]);
-  xla::XlaOp op = xla::ConstantR1(xla_objects->builder, values);
-  return enif_make_op(env, op);
+  return exla::make<xla::XlaOp>(env, op);
 }
 
 ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -493,35 +343,43 @@ ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   }
 
   XLA* xla_objects = (XLA*) enif_priv_data(env);
+
   int length, value;
-  enif_get_int(env, argv[0], &length);
-  enif_get_int(env, argv[1], &value);
+
+  if(!exla::get(env, argv[0], length)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[1], value)) return enif_make_badarg(env);
+
   xla::XlaOp op = xla::ConstantR1(xla_objects->builder, length, value);
-  return enif_make_op(env, op);
+  return exla::make<xla::XlaOp>(env, op);
 }
 
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2){
+    return enif_make_badarg(env);
+  }
+
   xla::XlaOp *lhs, *rhs;
-  enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &lhs);
-  enif_get_resource(env, argv[1], OP_RES_TYPE, (void **) &rhs);
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
   // TODO: Handle Precision Configuration
   xla::XlaOp result = xla::Dot(*lhs, *rhs);
-  return enif_make_op(env, result);
+  return exla::make<xla::XlaOp>(env, result);
 }
 
 /************************ xla::ClientLibrary Functions ***************************/
-/*
- * This creates the local client which interfaces with the underlying XLA service.
- * It usually takes config ops, but I haven't handled those yet.
- */
 ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
   }
 
   XLA* xla_objects = (XLA*) enif_priv_data(env);
-  auto platform = enif_get_platform(env, argv[0]);
-  // Todo: Handle this gracefully
+
+  stream_executor::Platform* platform;
+
+  if(!exla::get_platform(env, argv[0], platform)) return enif_make_badarg(env);
+
+  // TODO: Handle this gracefully
   xla::StatusOr<xla::LocalClient*> client_status = xla::ClientLibrary::GetOrCreateLocalClient(platform);
   // This matches really nicely with the ! pattern
   xla::LocalClient* client = client_status.ConsumeValueOrDie();
@@ -530,9 +388,14 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
 }
 
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   XLA* xla_objects = (XLA*) enif_priv_data(env);
+
   if(xla_objects->client == NULL){
-    return enif_make_tuple2(env, bad, enif_make_string(env, "No client available. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
+    return exla::error(env, "No client found.");
   }
 
   int device_count = xla_objects->client->device_count();
@@ -541,27 +404,40 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
 /************ Build, Compilation, Execution *************/
 ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   XLA* xla_objects = (XLA*) enif_priv_data(env);
 
   xla::XlaOp* root;
-  // TODO: Handle args
-  enif_get_resource(env, argv[0], OP_RES_TYPE, (void **) &root);
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], root)) return enif_make_badarg(env);
+
   xla::StatusOr<xla::XlaComputation> computation_status = xla_objects->builder->Build(*root);
   // TODO: Handle StatusOr more gracefully.
-  return enif_make_computation(env, computation_status.ConsumeValueOrDie());
+  xla::XlaComputation computation = computation_status.ConsumeValueOrDie();
+  return exla::make<xla::XlaComputation>(env, computation);
 }
 
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3){
+    return enif_make_badarg(env);
+  }
+
   XLA* xla_objects = (XLA*) enif_priv_data(env);
+
   if(xla_objects->client == NULL){
-    return enif_make_tuple2(env, bad, enif_make_string(env, "No client found. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
+    return exla::error(env, "No client found.");
   }
 
   xla::XlaComputation* computation;
-  // TODO: Handle Args
-  enif_get_resource(env, argv[0], COMPUTATION_RES_TYPE, (void **) &computation);
-  absl::Span<xla::Shape*> argument_layouts = enif_get_argument_layouts(env, argv[1]);
-  xla::ExecutableBuildOptions options = enif_get_executable_build_options(env, argv[2]);
+  absl::Span<xla::Shape*> argument_layouts;
+  xla::ExecutableBuildOptions options;
+
+  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);
+  if(!exla::get_span(env, argv[1], argument_layouts)) return enif_make_badarg(env);
+  if(!exla::get_options(env, argv[2], options)) return enif_make_badarg(env);
 
   xla::StatusOr<std::vector<std::unique_ptr<xla::LocalExecutable>>> exec_status = xla_objects->client->Compile(*computation, argument_layouts, options);
   // TODO: Handle this gracefully.
@@ -569,56 +445,72 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   ERL_NIF_TERM exec_refs[executables.size()];
   int i = 0;
   for(auto it=std::begin(executables);it!=std::end(executables);++it){
-    exec_refs[i++] = enif_make_local_executable(env, executables.at(i));
+    exec_refs[i++] = exla::make<xla::LocalExecutable>(env, executables.at(i));
   }
   return exec_refs[0];
 }
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3){
+    return enif_make_badarg(env);
+  }
+
   xla::LocalExecutable* local_executable;
-  // TODO: Handle Args
-  enif_get_resource(env, argv[0], LOCAL_EXECUTABLE_RES_TYPE, (void **) &local_executable);
-  absl::Span<xla::ShapedBuffer*> arguments = enif_get_arguments(env, argv[1]);
-  xla::ExecutableRunOptions run_options = enif_get_executable_run_options(env, argv[2]);
+  absl::Span<xla::ShapedBuffer*> arguments;
+  xla::ExecutableRunOptions run_options;
+
+  if(!exla::get<xla::LocalExecutable>(env, argv[0], local_executable)) return enif_make_badarg(env);
+  if(!exla::get_span(env, argv[1], arguments)) return enif_make_badarg(env);
+  if(!exla::get_options(env, argv[2], run_options)) return enif_make_badarg(env);
 
   xla::StatusOr<xla::ScopedShapedBuffer> run_status = local_executable->Run(arguments, run_options);
   // TODO: Handle this gracefully
   xla::ScopedShapedBuffer result = run_status.ConsumeValueOrDie();
-  return enif_make_shaped_buffer(env, result);
+  return exla::make<xla::ShapedBuffer>(env, result);
 }
 
 ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3){
+    return enif_make_badarg(env);
+  }
+
   XLA* xla_objects = (XLA*) enif_priv_data(env);
+
   if(xla_objects->client == NULL){
-    return enif_make_tuple2(env, bad, enif_make_string(env, "No client found. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
+    return exla::error(env, "No client found.");
   }
 
   xla::Literal* literal;
   int device_ordinal;
-  // TODO: Handle Args
-  enif_get_resource(env, argv[0], LITERAL_RES_TYPE, (void **) &literal);
-  enif_get_int(env, argv[1], &device_ordinal);
+
+  if(!exla::get<xla::Literal>(env, argv[0], literal)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[1], device_ordinal)) return enif_make_badarg(env);
 
   xla::StatusOr<xla::ScopedShapedBuffer> buffer_status = xla_objects->client->LiteralToShapedBuffer(*literal, device_ordinal);
   // TODO: Handle this gracefully.
   xla::ScopedShapedBuffer buffer = buffer_status.ConsumeValueOrDie();
-  return enif_make_shaped_buffer(env, buffer);
+  return exla::make<xla::ShapedBuffer>(env, buffer);
 }
 
 ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   XLA* xla_objects = (XLA*) enif_priv_data(env);
+
   if(xla_objects->client == NULL){
-    return enif_make_tuple2(env, bad, enif_make_string(env, "No client found. Try creating one with get_or_create_local_client/0.", ERL_NIF_LATIN1));
+    return exla::error(env, "No client found.");
   }
 
   xla::ShapedBuffer* buffer;
-  // TODO: Handle Args
-  enif_get_resource(env, argv[0], SHAPED_BUFFER_RES_TYPE, (void **) &buffer);
+
+  if(!exla::get<xla::ShapedBuffer>(env, argv[0], buffer)) return enif_make_badarg(env);
 
   xla::StatusOr<xla::Literal> literal_status = xla_objects->client->ShapedBufferToLiteral(*buffer);
   // TODO: Handle this gracefully.
   xla::Literal literal = literal_status.ConsumeValueOrDie();
-  return enif_make_literal(env, literal);
+  return exla::make<xla::Literal>(env, literal);
 }
 
 /*********** HLO Methods *************/
@@ -631,9 +523,14 @@ xla::StatusOr<std::unique_ptr<xla::HloModule>> get_hlo_module(const xla::XlaComp
 }
 
 ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  // TODO: Handle this gracefully
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   xla::XlaComputation* computation;
-  enif_get_resource(env, argv[0], COMPUTATION_RES_TYPE, (void **) &computation);
+
+  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);
+
   xla::StatusOr<std::unique_ptr<xla::HloModule>> hlo_module_status = get_hlo_module(*computation);
   // // TODO: Handle this gracefully
   std::unique_ptr<xla::HloModule> hlo_module = hlo_module_status.ConsumeValueOrDie();
@@ -642,15 +539,21 @@ ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TE
   options = xla::HloPrintOptions::ShortParsable();
   options.set_print_large_constants(false);
   std::string result = hlo_module->ToString(options);
-  return enif_make_string(env, result.c_str(), ERL_NIF_LATIN1);
+  return exla::make(env, result);
 }
 
 ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
   xla::XlaComputation* computation;
-  enif_get_resource(env, argv[0], COMPUTATION_RES_TYPE, (void **) &computation);
+
+  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);
+
   std::string result;
   (*computation).proto().SerializeToString(&result);
-  return enif_make_string(env, result.c_str(), ERL_NIF_LATIN1);
+  return exla::make(env, result);
 }
 
 static ErlNifFunc exla_funcs[] = {
@@ -723,7 +626,6 @@ static ErlNifFunc exla_funcs[] = {
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
   {"constant_r0", 1, constant_r0},
-  {"constant_r1", 1, constant_r1_from_list},
   {"constant_r1", 2, constant_r1_fill},
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
@@ -738,4 +640,4 @@ static ErlNifFunc exla_funcs[] = {
   {"get_computation_hlo_text", 1, get_computation_hlo_text}
 };
 
-ERL_NIF_INIT(Elixir.Exla, exla_funcs, &load, NULL, NULL, NULL);
+ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);

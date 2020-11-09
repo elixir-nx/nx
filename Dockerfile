@@ -1,6 +1,6 @@
 FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
 ARG bazel_bin_url="https://github.com/bazelbuild/bazel/releases/download/3.4.1/bazel-3.4.1-linux-x86_64"
-ARG pip_args=""
+
 WORKDIR /etc/apt/sources.list.d
 RUN rm cuda.list nvidia-ml.list
 WORKDIR /
@@ -28,7 +28,10 @@ RUN wget https://repo.hex.pm/installs/1.10.0/hex-0.20.6.ez && \
     mix archive.install ./hex-0.20.6.ez --force && \
     rm ./hex-0.20.6.ez
 
+
+# I thought we could wipe the Numpy dependency, but I guess not. Still looking into solutions
 RUN python3 -m pip install ${pip_args} numpy
+
 RUN ln -s /usr/bin/python3 /usr/bin/python
 ENV PATH="/usr/lib/erlang/erts-11.1/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
