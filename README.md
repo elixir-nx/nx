@@ -17,6 +17,7 @@ Then to run:
 ```shell
 docker run -it \
   -v $PWD:$PWD \
+  -e TEST_TMPDIR=$PWD/bazel_cache \
   -w $PWD \
   --gpus=all \
   --rm exla:cuda10.1 bash
