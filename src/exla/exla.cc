@@ -309,13 +309,13 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 // We can either make the logging stricter or we can somehow get the log messages to the Elixir Logger?? I'm
 // not sure what the best solution is...
 ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1){
+  if(argc != 3){
     return enif_make_badarg(env);
   }
 
   xla::LocalClientOptions options;
 
-  if(!exla::get_options(env, argv[0], options)) return enif_make_badarg(env);
+  if(!exla::get_options(env, argv[0], argv[1], argv[2], options)) return enif_make_badarg(env);
 
   EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, xla::ClientLibrary::GetOrCreateLocalClient(options), env);
 
@@ -469,7 +469,7 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 
 static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
-  {"get_or_create_local_client", 1, get_or_create_local_client},
+  {"get_or_create_local_client", 3, get_or_create_local_client},
   {"get_device_count", 1, get_device_count},
   /****** xla::ShapedBuffer ******/
   {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},

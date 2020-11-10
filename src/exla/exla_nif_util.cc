@@ -52,16 +52,7 @@ namespace exla {
 
   int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableRunOptions &options){ return 0; }
   int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableBuildOptions &options){ return 0; }
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::LocalClientOptions &options){
-    size_t map_size;
-
-    if(!enif_get_map_size(env, term, &map_size) || map_size != 4) return 0;
-
-    ERL_NIF_TERM platform_arg, number_of_replicas_arg, intra_op_parallelism_threads_arg
-
-    if(!enif_get_map_value(env, term, exla::make(env, "platform"), &platform_arg)) return 0;
-    if(!enif_get_map_value(env, term, exla::make(env, "number_of_replicas"), &number_of_replicas_arg)) return 0;
-    if(!enif_get_map_value(env, term, exla::make(env, "intra_op_parallelism_threads"), &intra_op_parallelism_threads_arg)) return 0;
+  int get_options(ErlNifEnv* env, ERL_NIF_TERM platform_arg, ERL_NIF_TERM number_of_replicas_arg, ERL_NIF_TERM intra_op_parallelism_threads_arg, xla::LocalClientOptions &options){
 
     stream_executor::Platform* platform;
     int number_of_replicas, intra_op_parallelism_threads;

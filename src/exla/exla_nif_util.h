@@ -47,7 +47,7 @@ namespace exla {
    */
   int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableRunOptions& options);
   int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableBuildOptions& options);
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::LocalClientOptions& options);
+  int get_options(ErlNifEnv* env, ERL_NIF_TERM platform_arg, ERL_NIF_TERM number_of_replicas_arg, ERL_NIF_TERM intra_op_parallelism_arg, xla::LocalClientOptions& options);
 
   /*
    * Makers for standard types.
