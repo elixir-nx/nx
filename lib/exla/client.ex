@@ -5,7 +5,7 @@ defmodule Exla.Client do
   @enforce_keys [:ref]
   defstruct [:ref]
 
-  def create_client(options = %LocalClientOptions{}) do
+  def create_client(options \\ %LocalClientOptions{}) do
     case Exla.NIF.get_or_create_local_client(
            options.platform,
            options.number_of_replicas,
