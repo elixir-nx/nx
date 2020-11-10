@@ -16,9 +16,9 @@
 // TODO: Synchronize access.
 // TODO: Separate client from global object.
 // TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
+// In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
 typedef struct {
   xla::XlaBuilder* builder;
-  xla::LocalClient* client;
 } XLA;
 
 // Once the resource is garbage collected, this should also deallocate the C++ object.
