@@ -14,7 +14,6 @@
 #include "tensorflow/compiler/xla/client/client_library.h"
 
 // TODO: Synchronize access.
-// TODO: Separate client from global object.
 // TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
 // In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
 typedef struct {
@@ -102,8 +101,9 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get_span<long long int>(env, argv[1], dims)) return enif_make_badarg(env);
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
-  return exla::make<xla::Shape>(env, shape);
+  return exla::ok(env, exla::make<xla::Shape>(env, shape));
 }
+
 ERL_NIF_TERM make_scalar_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
@@ -171,7 +171,7 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get(env, argv[2], name)) return enif_make_badarg(env);
 
   xla::XlaOp op = xla::Parameter(xla_objects->builder, param_num, *shape, name);
-  return exla::make<xla::XlaOp>(env, op);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const long long int>)){
