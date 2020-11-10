@@ -1,5 +1,5 @@
 defmodule Exla.Op do
-  alias __MODULE__, Op
+  alias __MODULE__, as: Op
   alias Exla.Shape
 
   @enforce_keys [:ref]
