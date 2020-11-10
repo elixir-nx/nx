@@ -22,14 +22,13 @@ typedef struct {
 } XLA;
 
 // Once the resource is garbage collected, this should also deallocate the C++ object.
-// TODO: address memory leaks
-void free_op(ErlNifEnv* env, void* obj){return;}
-void free_shape(ErlNifEnv* env, void* obj){return;}
-void free_computation(ErlNifEnv* env, void* obj){return;}
-void free_literal(ErlNifEnv* env, void* obj){return;}
-void free_local_executable(ErlNifEnv* env, void* obj){return;}
-void free_shaped_buffer(ErlNifEnv* env, void* obj){return;}
-void free_client(ErlNifEnv* env, void* obj){return;}
+void free_op(ErlNifEnv* env, void* obj){delete (xla::XlaOp*) obj;}
+void free_shape(ErlNifEnv* env, void* obj){delete (xla::Shape*) obj;}
+void free_computation(ErlNifEnv* env, void* obj){delete (xla::XlaComputation*) obj;}
+void free_literal(ErlNifEnv* env, void* obj){delete (xla::Literal*) obj;}
+void free_local_executable(ErlNifEnv* env, void* obj){delete (xla::LocalExecutable*) obj;}
+void free_shaped_buffer(ErlNifEnv* env, void* obj){delete (xla::ShapedBuffer*) obj;}
+void free_client(ErlNifEnv* env, void* obj){delete (xla::LocalClient*) obj;}
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
@@ -361,7 +360,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
   if(!exla::get_span(env, argv[2], argument_layouts)) return enif_make_badarg(env);
-  if(!exla::get_options(env, argv[3], options)) return enif_make_badarg(env);
+  if(!exla::get_options(env, argv, options)) return enif_make_badarg(env);
 
   EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
                         (*client)->Compile(*computation, argument_layouts, options), env);
@@ -386,7 +385,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(!exla::get<xla::LocalExecutable>(env, argv[0], local_executable)) return enif_make_badarg(env);
   if(!exla::get_span(env, argv[1], arguments)) return enif_make_badarg(env);
-  if(!exla::get_options(env, argv[2], run_options)) return enif_make_badarg(env);
+  if(!exla::get_options(env, argv, run_options)) return enif_make_badarg(env);
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
 
