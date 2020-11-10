@@ -45,14 +45,16 @@ namespace exla {
   /*
    * Getters for option structs.
    */
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableRunOptions& options);
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableBuildOptions& options);
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::LocalClientOptions& options);
+  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableRunOptions& options);
+  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions& options);
+  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[] , xla::LocalClientOptions& options);
 
   /*
    * Makers for standard types.
    */
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var);
+
+  ERL_NIF_TERM make(ErlNifEnv* env, const char* string);
 
   /*
    * Templates for resources.

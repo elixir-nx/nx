@@ -8,8 +8,8 @@ defmodule Exla.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  def binary_to_shaped_buffer(_binary, _shape),
-    do: raise("Failed to load implementation of #{__MODULE__}.binary_to_shaped_buffer/2.")
+  def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
+    do: raise("Failed to load implementation of #{__MODULE__}.binary_to_shaped_buffer/4.")
 
   def make_shape(_type, _dims),
     do: raise("Failed to load implementation of #{__MODULE__}.make_shape/2.")
@@ -148,11 +148,11 @@ defmodule Exla.NIF do
   def constant_r1(_length, _value),
     do: raise("Failed to load implementation of #{__MODULE__}.constant_r1/2.")
 
-  def get_or_create_local_client(_platform),
-    do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/1.")
+  def get_or_create_local_client(_platform, _number_of_replicas, _intra_op_parallelism_threads),
+    do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/3.")
 
-  def get_device_count,
-    do: raise("Failed to load implementation of #{__MODULE__}.get_device_count/0.")
+  def get_device_count(_client),
+    do: raise("Failed to load implementation of #{__MODULE__}.get_device_count/1.")
 
   def get_computation_hlo_proto(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_proto/0.")
@@ -162,15 +162,15 @@ defmodule Exla.NIF do
 
   def build(_root), do: raise("Failed to load implementation of #{__MODULE__}.build/1.")
 
-  def compile(_computation, _argument_layouts, _options),
-    do: raise("Failed to load implementation of #{__MODULE__}.compile/3.")
+  def compile(_client, _computation, _argument_layouts, _options),
+    do: raise("Failed to load implementation of #{__MODULE__}.compile/4.")
 
   def run(_executable, _arguments, _run_options),
     do: raise("Failed to load implementation of #{__MODULE__}.run/3.")
 
-  def literal_to_shaped_buffer(_literal, _device_ordinal, _allocator),
-    do: raise("Failed to load implementation of #{__MODULE__}.literal_to_shaped_buffer/3.")
+  def literal_to_shaped_buffer(_client, _literal, _device_ordinal, _allocator),
+    do: raise("Failed to load implementation of #{__MODULE__}.literal_to_shaped_buffer/4.")
 
-  def shaped_buffer_to_literal(_shaped_buffer),
-    do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_literal/1.")
+  def shaped_buffer_to_literal(_client, _shaped_buffer),
+    do: raise("Failed to load implementation of #{__MODULE__}.shaped_buffer_to_literal/2.")
 end
