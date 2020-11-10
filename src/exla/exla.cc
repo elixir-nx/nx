@@ -313,13 +313,11 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  xla::LocalClientOptions options;
 
-  stream_executor::Platform* platform;
+  if(!exla::get_options(env, argv[0], options)) return enif_make_badarg(env);
 
-  if(!exla::get_platform(env, argv[0], platform)) return enif_make_badarg(env);
-
-  EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, xla::ClientLibrary::GetOrCreateLocalClient(platform), env);
+  EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, xla::ClientLibrary::GetOrCreateLocalClient(options), env);
 
   return exla::ok(env, exla::make<xla::LocalClient*>(env, client));
 }

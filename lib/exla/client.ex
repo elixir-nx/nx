@@ -1,5 +1,6 @@
 defmodule Exla.Client do
   alias __MODULE__, as: Client
+  alias Exla.Options.LocalClientOptions
 
   @enforce_keys [:ref]
   defstruct [:ref]
@@ -8,7 +9,7 @@ defmodule Exla.Client do
 
   # TODO: This should match LocalClientOptions when those are handled
   # There's a few scenarios where this could fail, is this the best way to handle failure on startup?
-  def start_link(options) do
+  def start_link(options = %LocalClientOptions{}) do
     case GenServer.start_link(__MODULE__, options) do
       {:ok, pid} -> {:ok, pid}
       {:error, :normal} -> {:error, :init_error}
@@ -21,7 +22,7 @@ defmodule Exla.Client do
 
   # TODO: Store some of the options for reference as well
   @impl true
-  def init(options) do
+  def init(options = %LocalClientOptions{}) do
     case Exla.NIF.get_or_create_local_client(options) do
       {:ok, ref} -> {:ok, %Client{ref: ref}}
       {:error, _msg} -> {:error, :normal}

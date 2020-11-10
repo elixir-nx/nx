@@ -52,7 +52,30 @@ namespace exla {
 
   int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableRunOptions &options){ return 0; }
   int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableBuildOptions &options){ return 0; }
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::LocalClientOptions &options){ return 0; }
+  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::LocalClientOptions &options){
+    size_t map_size;
+
+    if(!enif_get_map_size(env, term, &map_size) || map_size != 4) return 0;
+
+    ERL_NIF_TERM platform_arg, number_of_replicas_arg, intra_op_parallelism_threads_arg
+
+    if(!enif_get_map_value(env, term, exla::make(env, "platform"), &platform_arg)) return 0;
+    if(!enif_get_map_value(env, term, exla::make(env, "number_of_replicas"), &number_of_replicas_arg)) return 0;
+    if(!enif_get_map_value(env, term, exla::make(env, "intra_op_parallelism_threads"), &intra_op_parallelism_threads_arg)) return 0;
+
+    stream_executor::Platform* platform;
+    int number_of_replicas, intra_op_parallelism_threads;
+
+    if(!exla::get_platform(env, platform_arg, platform)) return 0;
+    if(!exla::get(env, number_of_replicas_arg, number_of_replicas)) return 0;
+    if(!exla::get(env, intra_op_parallelism_threads_arg, intra_op_parallelism_threads)) return 0;
+
+    options.set_platform(platform);
+    options.set_number_of_replicas(number_of_replicas);
+    options.set_intra_op_parallelism_threads(intra_op_parallelism_threads);
+
+    return 1;
+  }
 
   int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
     unsigned atom_length;
@@ -139,4 +162,5 @@ namespace exla {
   }
 
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var){ return enif_make_string(env, var.c_str(), ERL_NIF_LATIN1); }
+  ERL_NIF_TERM make(ErlNifEnv* env, const char* string){ return enif_make_string(env, string, ERL_NIF_LATIN1); }
 }

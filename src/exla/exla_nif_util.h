@@ -28,10 +28,6 @@ namespace exla {
   ERL_NIF_TERM ok(ErlNifEnv* env);
 
   /*
-   * Helper for returning `{:ok, term}` from NIF.
-   */
-
-  /*
    * Getters for standard types.
    */
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var);
@@ -57,6 +53,8 @@ namespace exla {
    * Makers for standard types.
    */
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var);
+
+  ERL_NIF_TERM make(ErlNifEnv* env, const char* string);
 
   /*
    * Templates for resources.
