@@ -66,6 +66,7 @@ namespace exla {
     stream_executor::Platform* platform;
     int number_of_replicas, intra_op_parallelism_threads;
 
+    // TODO: Adjust this to accept `int` which is passed from Elixir
     if(!exla::get_platform(env, platform_arg, platform)) return 0;
     if(!exla::get(env, number_of_replicas_arg, number_of_replicas)) return 0;
     if(!exla::get(env, intra_op_parallelism_threads_arg, intra_op_parallelism_threads)) return 0;
