@@ -50,17 +50,17 @@ namespace exla {
     return ret;
   }
 
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableRunOptions &options){ return 0; }
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM term, xla::ExecutableBuildOptions &options){ return 0; }
-  int get_options(ErlNifEnv* env, ERL_NIF_TERM platform_arg, ERL_NIF_TERM number_of_replicas_arg, ERL_NIF_TERM intra_op_parallelism_threads_arg, xla::LocalClientOptions &options){
+  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableRunOptions &options){ return 0; }
+  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions &options){ return 0; }
+  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::LocalClientOptions &options){
 
     stream_executor::Platform* platform;
     int number_of_replicas, intra_op_parallelism_threads;
 
     // TODO: Adjust this to accept `int` which is passed from Elixir
-    if(!exla::get_platform(env, platform_arg, platform)) return 0;
-    if(!exla::get(env, number_of_replicas_arg, number_of_replicas)) return 0;
-    if(!exla::get(env, intra_op_parallelism_threads_arg, intra_op_parallelism_threads)) return 0;
+    if(!exla::get_platform(env, terms[0], platform)) return 0;
+    if(!exla::get(env, terms[1], number_of_replicas)) return 0;
+    if(!exla::get(env, terms[2], intra_op_parallelism_threads)) return 0;
 
     options.set_platform(platform);
     options.set_number_of_replicas(number_of_replicas);

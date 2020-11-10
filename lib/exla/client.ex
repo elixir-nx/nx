@@ -5,7 +5,6 @@ defmodule Exla.Client do
   @enforce_keys [:ref]
   defstruct [:ref]
 
-  # There's a few scenarios where this could fail, is this the best way to handle failure on startup?
   def create_client(options = %LocalClientOptions{}) do
     case Exla.NIF.get_or_create_local_client(
            options.platform,
@@ -15,5 +14,9 @@ defmodule Exla.Client do
       {:ok, ref} -> {:ok, %Client{ref: ref}}
       {:error, msg} -> {:error, msg}
     end
+  end
+
+  def get_device_count(client = %Client{}) do
+    Exla.NIF.get_device_count(client.ref)
   end
 end
