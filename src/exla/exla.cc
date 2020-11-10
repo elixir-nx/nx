@@ -321,7 +321,7 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
 
   EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, xla::ClientLibrary::GetOrCreateLocalClient(platform), env);
 
-  return exla::make<xla::LocalClient*>(env, client);
+  return exla::ok(env, exla::make<xla::LocalClient*>(env, client));
 }
 
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
