@@ -15,6 +15,7 @@
 
 // TODO: Synchronize access.
 // TODO: Separate client from global object.
+// TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
 typedef struct {
   xla::XlaBuilder* builder;
   xla::LocalClient* client;
@@ -39,7 +40,7 @@ static int open_resources(ErlNifEnv* env) {
   if(!exla::open_resource<xla::Literal>(env, mod, "Literal", free_literal)) return -1;
   if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable)) return -1;
   if(!exla::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer)) return -1;
-  if(!exla::open_resource<xla::LocalClient>(env, mod, "Client", free_client)) return -1;
+  if(!exla::open_resource<xla::LocalClient*>(env, mod, "Client", free_client)) return -1;
 
   return 1;
 }
@@ -51,7 +52,6 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   xla_objects = (XLA*) enif_alloc(sizeof(XLA));
 
   xla_objects->builder = new xla::XlaBuilder("Elixir");
-  xla_objects->client = NULL;
 
   *priv = (void*) xla_objects;
 
@@ -60,13 +60,19 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
 
 /************************ xla::ShapedBuffer Functions *********************/
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  if(argc != 3){
+    return enif_make_badarg(env);
+  }
 
   ErlNifBinary bin;
-  enif_inspect_binary(env, argv[0], &bin);
-
   xla::Shape* shape;
-  if(!exla::get<xla::Shape>(env, argv[1], shape)) return enif_make_badarg(env);
+  xla::LocalClient **client;
+  int device_ordinal;
+
+  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!enif_inspect_binary(env, argv[1], &bin)) return enif_make_badarg(env);
+  if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[3], device_ordinal)) return enif_make_badarg(env);
 
   const char *data_ptr = (char *) bin.data;
   int64_t data_size = bin.size;
@@ -74,8 +80,8 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
 
   xla::ShapedBuffer* inp;
-  // TODO: We need to allow user to specify the device
-  auto buffer = std::make_unique<xla::ShapedBuffer>(*shape,  *shape, xla_objects->client->platform(), 0);
+
+  auto buffer = std::make_unique<xla::ShapedBuffer>(*shape,  *shape, (*client)->platform(), device_ordinal);
 
   buffer->set_buffer(memory_base, {});
 
@@ -299,6 +305,9 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 
 /************************ xla::ClientLibrary Functions ***************************/
+// TODO: This function generates mildly annoying and poorly formatted log messages from the TensorFlow side...
+// We can either make the logging stricter or we can somehow get the log messages to the Elixir Logger?? I'm
+// not sure what the best solution is...
 ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
@@ -312,8 +321,7 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
 
   EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, xla::ClientLibrary::GetOrCreateLocalClient(platform), env);
 
-  xla_objects->client = client;
-  return exla::ok(env);
+  return exla::make<xla::LocalClient*>(env, client);
 }
 
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -321,13 +329,10 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  xla::LocalClient **client;
+  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
 
-  if(xla_objects->client == NULL){
-    return exla::error(env, "No client found.");
-  }
-
-  int device_count = xla_objects->client->device_count();
+  int device_count = (*client)->device_count();
   return enif_make_int(env, device_count);
 }
 
@@ -349,26 +354,19 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 3){
-    return enif_make_badarg(env);
-  }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-
-  if(xla_objects->client == NULL){
-    return exla::error(env, "No client found.");
-  }
-
+  xla::LocalClient** client;
   xla::XlaComputation* computation;
   absl::Span<xla::Shape*> argument_layouts;
   xla::ExecutableBuildOptions options;
 
-  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);
-  if(!exla::get_span(env, argv[1], argument_layouts)) return enif_make_badarg(env);
-  if(!exla::get_options(env, argv[2], options)) return enif_make_badarg(env);
+  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
+  if(!exla::get_span(env, argv[2], argument_layouts)) return enif_make_badarg(env);
+  if(!exla::get_options(env, argv[3], options)) return enif_make_badarg(env);
 
   EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
-                        xla_objects->client->Compile(*computation, argument_layouts, options), env);
+                        (*client)->Compile(*computation, argument_layouts, options), env);
 
   ERL_NIF_TERM exec_refs[executables.size()];
   int i = 0;
@@ -402,39 +400,31 @@ ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TE
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-
-  if(xla_objects->client == NULL){
-    return exla::error(env, "No client found.");
-  }
-
+  xla::LocalClient** client;
   xla::Literal* literal;
   int device_ordinal;
 
-  if(!exla::get<xla::Literal>(env, argv[0], literal)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[1], device_ordinal)) return enif_make_badarg(env);
+  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<xla::Literal>(env, argv[1], literal)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[2], device_ordinal)) return enif_make_badarg(env);
 
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, xla_objects->client->LiteralToShapedBuffer(*literal, device_ordinal), env);
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, (*client)->LiteralToShapedBuffer(*literal, device_ordinal), env);
 
   return exla::make<xla::ShapedBuffer>(env, buffer);
 }
 
 ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1){
+  if(argc != 2){
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-
-  if(xla_objects->client == NULL){
-    return exla::error(env, "No client found.");
-  }
-
+  xla::LocalClient** client;
   xla::ShapedBuffer* buffer;
 
-  if(!exla::get<xla::ShapedBuffer>(env, argv[0], buffer)) return enif_make_badarg(env);
+  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<xla::ShapedBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
 
-  EXLA_ASSIGN_OR_RETURN(xla::Literal literal, xla_objects->client->ShapedBufferToLiteral(*buffer), env);
+  EXLA_ASSIGN_OR_RETURN(xla::Literal literal, (*client)->ShapedBufferToLiteral(*buffer), env);
 
   return exla::make<xla::Literal>(env, literal);
 }
@@ -482,9 +472,9 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
   {"get_or_create_local_client", 1, get_or_create_local_client},
-  {"get_device_count", 0, get_device_count},
+  {"get_device_count", 1, get_device_count},
   /****** xla::ShapedBuffer ******/
-  {"binary_to_shaped_buffer", 2, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
   /****** xla::Shape ******/
   {"human_string", 1, human_string},
   {"make_shape", 2, make_shape},
@@ -554,10 +544,10 @@ static ErlNifFunc exla_funcs[] = {
   {"dot", 2, dot},
   /******* Compilation, Execution, Etc. ******/
   {"build", 1, build},
-  {"compile", 3, compile},
+  {"compile", 4, compile},
   {"run", 3, run},
-  {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
-  {"shaped_buffer_to_literal", 1, shaped_buffer_to_literal},
+  {"literal_to_shaped_buffer", 4, literal_to_shaped_buffer},
+  {"shaped_buffer_to_literal", 2, shaped_buffer_to_literal},
   /******** HLO Functions ********/
   {"get_computation_hlo_proto", 1, get_computation_hlo_proto},
   {"get_computation_hlo_text", 1, get_computation_hlo_text}
