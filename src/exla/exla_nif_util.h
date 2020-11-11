@@ -1,6 +1,8 @@
 #ifndef EXLA_NIF_UTIL_H_
 #define EXLA_NIF_UTIL_H_
 
+#include "exla/exla_allocator.h"
+
 #include "absl/types/span.h"
 
 #include "tensorflow/compiler/xla/client/executable_build_options.h"

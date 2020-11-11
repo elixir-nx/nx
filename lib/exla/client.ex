@@ -1,7 +1,9 @@
 defmodule Exla.Client do
   alias __MODULE__, as: Client
   alias Exla.Options.LocalClientOptions
+  alias Exla.Options.ExecutableBuildOptions
   alias Exla.Computation
+  alias Exla.LocalExecutable
   @enforce_keys [:ref]
   defstruct [:ref]
 
@@ -20,7 +22,19 @@ defmodule Exla.Client do
     end
   end
 
-  def get_device_count(client = %Client{}) do
-    Exla.NIF.get_device_count(client.ref)
+  def get_device_count(%Client{ref: client}) do
+    Exla.NIF.get_device_count(client)
+  end
+
+  def compile(
+        %Client{ref: client},
+        %Computation{ref: computation},
+        argument_shapes,
+        options \\ %ExecutableBuildOptions{}
+      ) do
+    case Exla.NIF.compile(client, computation, argument_shapes, options) do
+      {:ok, ref} -> {:ok, %LocalExecutable{ref: ref}}
+      {:error, msg} -> {:error, msg}
+    end
   end
 end

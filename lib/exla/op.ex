@@ -16,23 +16,23 @@ defmodule Exla.Op do
     end
   end
 
-  def parameter(builder = %Builder{}, i, shape = %Shape{}, name)
+  def parameter(%Builder{ref: builder}, i, %Shape{ref: shape}, name)
       when is_integer(i) and i >= 0 and is_binary(name) do
-    case Exla.NIF.parameter(builder.ref, i, shape.ref, name) do
-      {:ok, ref} -> {:ok, %Op{builder: builder.ref, ref: ref}}
+    case Exla.NIF.parameter(builder, i, shape, name) do
+      {:ok, ref} -> {:ok, %Op{builder: builder, ref: ref}}
       {:error, msg} -> {:error, msg}
     end
   end
 
   # TODO: builder is redundant here because it's contained within each op
   def add(
-        builder = %Builder{ref: builder},
-        lhs = %Op{builder: builder, ref: left},
-        rhs = %Op{builder: builder, ref: right},
+        %Builder{ref: builder},
+        %Op{builder: builder, ref: left},
+        %Op{builder: builder, ref: right},
         broadcast_dims \\ {}
       ) do
     case Exla.NIF.add(builder, left, right, broadcast_dims) do
-      {:ok, ref} -> {:ok, %Op{builder.ref}}
+      {:ok, ref} -> {:ok, %Op{builder: builder, ref: ref}}
       {:error, msg} -> {:error, msg}
     end
   end

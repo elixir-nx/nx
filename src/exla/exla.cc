@@ -375,8 +375,8 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
-  if(!exla::get_span(env, argv[2], argument_layouts)) return enif_make_badarg(env);
-  if(!exla::get_options(env, argv, options)) return enif_make_badarg(env);
+  if(!exla::get_span(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
+  if(!exla::get_options(env, argv, options)) return exla::error(env, "Unable to get build options.");
 
   EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
                         (*client)->Compile(*computation, argument_layouts, options), env);
@@ -387,7 +387,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     exec_refs[i++] = exla::make<xla::LocalExecutable>(env, executables.at(i));
   }
   // TODO: This should return the vector. There is an executable for every partition, usually 1.
-  return exec_refs[0];
+  return exla::ok(env, exec_refs[0]);
 }
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -399,13 +399,13 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   absl::Span<xla::ShapedBuffer*> arguments;
   xla::ExecutableRunOptions run_options;
 
-  if(!exla::get<xla::LocalExecutable>(env, argv[0], local_executable)) return enif_make_badarg(env);
-  if(!exla::get_span(env, argv[1], arguments)) return enif_make_badarg(env);
-  if(!exla::get_options(env, argv, run_options)) return enif_make_badarg(env);
+  if(!exla::get<xla::LocalExecutable>(env, argv[0], local_executable)) return exla::error(env, "Unable to get executable.");
+  if(!exla::get_span(env, argv[1], arguments)) return exla::error(env, "Unable to get arguments.");
+  if(!exla::get_options(env, argv, run_options)) return exla::error(env, "Unable to get run options.");
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
 
-  return exla::make<xla::ShapedBuffer>(env, result);
+  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, result));
 }
 
 ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
