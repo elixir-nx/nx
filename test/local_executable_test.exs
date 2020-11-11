@@ -4,15 +4,32 @@ defmodule LocalExecutableTest do
   alias Exla.Client
   alias Exla.LocalExecutable
   alias Exla.Op
+  alias Exla.Shape
+  alias Exla.Tensor
 
-  test "run/3 succeeds with no inputs and default options" do
-    # TODO: This should be in setup
+  setup_all do
+    {:ok, client: Client.create_client()}
+  end
+
+  setup state do
+    {:ok, client: state[:client], builder: Builder.new("test")}
+  end
+
+  test "run/4 succeeds with no inputs and default options", state do
     # TODO: Not sure if this is the most efficient way to test all of this
-    client = Client.create_client()
-    builder = Builder.new("test")
-    op = Op.constant(builder, 1)
+    op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
-    exec = Client.compile(client, comp, {})
-    assert :ok = LocalExecutable.run(exec, {})
+    exec = Client.compile(state[:client], comp, {})
+    assert :ok = LocalExecutable.run(state[:client], exec, {})
+  end
+
+  test "run/3 succeeds with 1 input and default options", state do
+    shape = Shape.make_shape(:int32, {})
+    x = Op.parameter(state[:builder], 0, shape, "x")
+    res = Op.add(x, x)
+    comp = Builder.build(res)
+    exec = Client.compile(state[:client], comp, {shape})
+    inp = Tensor.scalar(1, :int32)
+    assert :ok = LocalExecutable.run(state[:client], exec, {inp})
   end
 end

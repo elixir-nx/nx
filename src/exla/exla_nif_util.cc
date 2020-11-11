@@ -74,9 +74,6 @@ namespace exla {
     return 1;
   }
 
-  // TODO: As is, this function fails when using templates, maybe they're not the best choice
-  // for things like this.
-  // TODO: Declare here, define in `exla_nif_util.cc`
   // TODO: Accept list, not tuple
   int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span){
     const ERL_NIF_TERM* elems;
@@ -89,6 +86,24 @@ namespace exla {
       data[i] = elem;
     }
     span = absl::Span<xla::Shape*>(data, num_elems);
+    return 1;
+  }
+
+  int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::ShapedBuffer*> &span){
+    const ERL_NIF_TERM* elems;
+    int num_elems;
+    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
+    xla::ShapedBuffer* data[num_elems];
+    for(int i=0;i<num_elems;i++){
+      xla::ShapedBuffer* elem;
+      if(!get<xla::ShapedBuffer>(env, elems[i], elem)) return 0;
+      data[i] = elem;
+    }
+    span = absl::Span<xla::ShapedBuffer*>(data, num_elems);
+    // TODO: For some reason, this prevents `run` from SegFaulting...
+    for(auto i=span.begin();i!=span.end();++i){
+      LOG(ERROR) << (**i);
+    }
     return 1;
   }
 

@@ -73,6 +73,8 @@ ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make(env, builder));
 }
 /************************ xla::ShapedBuffer Functions *********************/
+// TODO: Something about specifying a device other than `default_device_ordinal` makes passing
+// tensors created from this device fail on `run`.
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
     return enif_make_badarg(env);
@@ -93,15 +95,11 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
   stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
 
-  xla::ShapedBuffer* inp;
-
-  auto buffer = std::make_unique<xla::ShapedBuffer>(*shape,  *shape, (*client)->platform(), device_ordinal);
+  auto buffer = new xla::ShapedBuffer(*shape,  *shape, (*client)->platform(), (*client)->default_device_ordinal());
 
   buffer->set_buffer(memory_base, {});
 
-  inp = buffer.release();
-
-  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *inp));
+  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer));
 }
 
 /************************ xla::Shape Functions ***************************/
@@ -400,7 +398,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::ExecutableRunOptions run_options;
 
   if(!exla::get<xla::LocalExecutable>(env, argv[0], local_executable)) return exla::error(env, "Unable to get executable.");
-  if(!exla::get_span(env, argv[1], arguments)) return exla::error(env, "Unable to get arguments.");
+  if(!exla::get_arguments(env, argv[1], arguments)) return exla::error(env, "Unable to get arguments.");
   if(!exla::get_options(env, argv, run_options)) return exla::error(env, "Unable to get run options.");
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
