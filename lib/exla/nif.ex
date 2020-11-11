@@ -8,6 +8,9 @@ defmodule Exla.NIF do
     :erlang.load_nif(path, 0)
   end
 
+  def new_builder(_name),
+    do: raise("Failed to load implementation of #{__MODULE__}.new_builder/1")
+
   def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
     do: raise("Failed to load implementation of #{__MODULE__}.binary_to_shaped_buffer/4.")
 
@@ -25,91 +28,91 @@ defmodule Exla.NIF do
   def literal_to_string(_literal),
     do: raise("Failed to load implementation of #{__MODULE__}.literal_to_string/1.")
 
-  def parameter(_number, _shape, _name),
+  def parameter(_builder, _number, _shape, _name),
     do: raise("Failed to load implementation of #{__MODULE__}.parameter/3.")
 
-  def add(_a, _b, _broadcast_dims \\ []),
+  def add(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.add/3.")
 
-  def sub(_a, _b, _broadcast_dims \\ []),
+  def sub(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.sub/3.")
 
-  def mul(_a, _b, _broadcast_dims \\ []),
+  def mul(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.mul/3.")
 
-  def div(_a, _b, _broadcast_dims \\ []),
+  def div(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.div/3.")
 
-  def rem(_a, _b, _broadcast_dims \\ []),
+  def rem(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.rem/3.")
 
-  def min(_a, _b, _broadcast_dims \\ []),
+  def min(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.min/3.")
 
-  def max(_a, _b, _broadcast_dims \\ []),
+  def max(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.max/3.")
 
-  def logical_and(_a, _b, _broadcast_dims \\ []),
+  def logical_and(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.and/3.")
 
-  def logical_or(_a, _b, _broadcast_dims \\ []),
+  def logical_or(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.or/3.")
 
-  def logical_xor(_a, _b, _broadcast_dims \\ []),
+  def logical_xor(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.xor/3.")
 
-  def shift_left(_a, _b, _broadcast_dims \\ []),
+  def shift_left(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.shift_left/3.")
 
-  def shift_right_arithmetic(_a, _b, _broadcast_dims \\ []),
+  def shift_right_arithmetic(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.shift_right_arithmetic/3.")
 
-  def shift_right_logical(_a, _b, _broadcast_dims \\ []),
+  def shift_right_logical(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.shift_right_logical/3.")
 
-  def eq(_a, _b, _broadcast_dims \\ []),
+  def eq(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.eq/3.")
 
-  def eq_total_order(_a, _b, _broadcast_dims \\ []),
+  def eq_total_order(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.eq_total_order/3.")
 
-  def ne(_a, _b, _broadcast_dims \\ []),
+  def ne(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.ne/3.")
 
-  def ne_total_order(_a, _b, _broadcast_dims \\ []),
+  def ne_total_order(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.ne_total_order/3.")
 
-  def ge(_a, _b, _broadcast_dims \\ []),
+  def ge(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.ge/3.")
 
-  def ge_total_order(_a, _b, _broadcast_dims \\ []),
+  def ge_total_order(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.ge_total_order/3.")
 
-  def gt(_a, _b, _broadcast_dims \\ []),
+  def gt(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.gt/3.")
 
-  def gt_total_order(_a, _b, _broadcast_dims \\ []),
+  def gt_total_order(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.gt_total_order/3.")
 
-  def le(_a, _b, _broadcast_dims \\ []),
+  def le(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.le/3.")
 
-  def le_total_order(_a, _b, _broadcast_dims \\ []),
+  def le_total_order(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.le_total_order/3.")
 
-  def lt(_a, _b, _broadcast_dims \\ []),
+  def lt(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.lt/3.")
 
-  def lt_total_order(_a, _b, _broadcast_dims \\ []),
+  def lt_total_order(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.lt/3.")
 
-  def pow(_a, _b, _broadcast_dims \\ []),
+  def pow(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.pow/3.")
 
-  def complex(_a, _b, _broadcast_dims \\ []),
+  def complex(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.complex/3.")
 
-  def atan2(_a, _b, _broadcast_dims \\ []),
+  def atan2(_a, _b, _broadcast_dims),
     do: raise("Failed to load implementation of #{__MODULE__}.atan2/3.")
 
   def abs(_a), do: raise("Failed to load implementation of #{__MODULE__}.abs/1.")
@@ -142,8 +145,8 @@ defmodule Exla.NIF do
 
   def dot(_a, _b), do: raise("Failed to load implementation of #{__MODULE__}.dot/2.")
 
-  def constant_r0(_value),
-    do: raise("Failed to load implementation of #{__MODULE__}.constant_r0.")
+  def constant_r0(_builder, _value),
+    do: raise("Failed to load implementation of #{__MODULE__}.constant_r0/2.")
 
   def constant_r1(_length, _value),
     do: raise("Failed to load implementation of #{__MODULE__}.constant_r1/2.")
@@ -160,7 +163,7 @@ defmodule Exla.NIF do
   def get_computation_hlo_text(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
 
-  def build(_root), do: raise("Failed to load implementation of #{__MODULE__}.build/1.")
+  def build(_builder, _root), do: raise("Failed to load implementation of #{__MODULE__}.build/2.")
 
   def compile(_client, _computation, _argument_layouts, _options),
     do: raise("Failed to load implementation of #{__MODULE__}.compile/4.")

@@ -1,6 +1,8 @@
 #ifndef EXLA_NIF_UTIL_H_
 #define EXLA_NIF_UTIL_H_
 
+#include "exla/exla_allocator.h"
+
 #include "absl/types/span.h"
 
 #include "tensorflow/compiler/xla/client/executable_build_options.h"
@@ -86,10 +88,13 @@ namespace exla {
 
   template <typename T>
   ERL_NIF_TERM make(ErlNifEnv* env, T &var){
+    // TODO: Split this into two different functions: one that uses the copy constructor
+    // and one that uses the move constructor, and then update which resources use which
+    // constructor. This should enable easier handling of memory leaks: http://www.github.com/seanmor5/exla/pull/12
     void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
     new(ptr) T(std::move(var));
     ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-    enif_release_resource(ptr);
+    // enif_release_resource(ptr);
     return ret;
   }
 
@@ -99,7 +104,7 @@ namespace exla {
     T* value = var.release();
     new(ptr) T(std::move(*value));
     ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-    enif_release_resource(ptr);
+    // enif_release_resource(ptr);
     return ret;
   }
 

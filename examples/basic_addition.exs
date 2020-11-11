@@ -1,7 +1,7 @@
 # This program computes z = x + y + C with the parameters x = 1, y = 1
 
-# Initialize the local client, this just runs on CPU
-Exla.NIF.get_or_create_local_client(:host)
+# Initialize the local client, this just runs with default options on CPU
+client = Exla.Client.create_client()
 
 # We'll start by declaring the shapes of our parameters
 arg1_shape = Exla.NIF.make_scalar_shape(:int32)

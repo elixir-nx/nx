@@ -35,6 +35,7 @@ cc_library(
   srcs = ["exla_nif_util.cc"],
   hdrs = ["exla_nif_util.h"],
   deps = [
+    ":exla_allocator",
     "@com_google_absl//absl/types:span",
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
     "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
