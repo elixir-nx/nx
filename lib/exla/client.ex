@@ -43,7 +43,7 @@ defmodule Exla.Client do
         %Computation{ref: computation},
         argument_shapes,
         options \\ %ExecutableBuildOptions{}
-  ) do
+      ) do
     # TODO: I think argument shapes should be a list since we have to traverse it to pull out
     # the refs of each Shape. To simplify the handling of `absl::Span` on the NIF side
     # I only read spans in as Tuples. This is important because things like the dimensions
@@ -53,8 +53,9 @@ defmodule Exla.Client do
     shape_refs =
       argument_shapes
       |> Tuple.to_list()
-      |> Enum.map(&(&1.ref))
+      |> Enum.map(& &1.ref)
       |> List.to_tuple()
+
     {:ok, ref} = Exla.NIF.compile(client, computation, shape_refs, options)
     %LocalExecutable{ref: ref}
   end

@@ -51,6 +51,8 @@ namespace exla {
   int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions& options);
   int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[] , xla::LocalClientOptions& options);
 
+  int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span);
+
   /*
    * Makers for standard types.
    */
@@ -120,24 +122,6 @@ namespace exla {
       data[i] = elem;
     }
     span = absl::Span<T>(data, num_elems);
-    return 1;
-  }
-
-  // TODO: As is, this function fails when using templates, maybe they're not the best choice
-  // for things like this.
-  // TODO: Declare here, define in `exla_nif_util.cc`
-  // TODO: Accept list, not tuple
-  int get_span_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span){
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    xla::Shape* data[num_elems];
-    for(int i=0;i<num_elems;i++){
-      xla::Shape* elem;
-      if(!get<xla::Shape>(env, elems[i], elem)) return 0;
-      data[i] = elem;
-    }
-    span = absl::Span<xla::Shape*>(data, num_elems);
     return 1;
   }
 
