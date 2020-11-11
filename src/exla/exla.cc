@@ -375,7 +375,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
-  if(!exla::get_span(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
+  if(!exla::get_span_layouts(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
   if(!exla::get_options(env, argv, options)) return exla::error(env, "Unable to get build options.");
 
   EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
