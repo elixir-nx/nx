@@ -203,7 +203,7 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
   if(!exla::get_span(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
-  return exla::make<xla::XlaOp>(env, result);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
 ERL_NIF_TERM add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Add);}
