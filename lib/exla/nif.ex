@@ -8,6 +8,9 @@ defmodule Exla.NIF do
     :erlang.load_nif(path, 0)
   end
 
+  def new_builder(_name),
+    do: raise("Failed to load implementation of #{__MODULE__}.new_builder/1")
+
   def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
     do: raise("Failed to load implementation of #{__MODULE__}.binary_to_shaped_buffer/4.")
 

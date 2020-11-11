@@ -28,6 +28,7 @@ void free_literal(ErlNifEnv* env, void* obj){delete (xla::Literal*) obj;}
 void free_local_executable(ErlNifEnv* env, void* obj){delete (xla::LocalExecutable*) obj;}
 void free_shaped_buffer(ErlNifEnv* env, void* obj){delete (xla::ShapedBuffer*) obj;}
 void free_client(ErlNifEnv* env, void* obj){delete (xla::LocalClient*) obj;}
+void free_builder(ErlNifEnv* env, void* obj){delete (xla::XlaBuilder*) obj;}
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
@@ -39,6 +40,7 @@ static int open_resources(ErlNifEnv* env) {
   if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable)) return -1;
   if(!exla::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer)) return -1;
   if(!exla::open_resource<xla::LocalClient*>(env, mod, "Client", free_client)) return -1;
+  if(!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_builder)) return -1;
 
   return 1;
 }
@@ -56,6 +58,20 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   return 0;
 }
 
+/************************* xla::XlaBuilder Functions ***********************/
+ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
+  // TODO: Get this from binary
+  std::string name;
+  if(!exla::get(env, argv[0], name)) return enif_make_badarg(env);
+
+  xla::XlaBuilder* builder = new xla::XlaBuilder(name);
+
+  return exla::ok(env, exla::make(env, builder));
+}
 /************************ xla::ShapedBuffer Functions *********************/
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 3){
@@ -467,6 +483,8 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 }
 
 static ErlNifFunc exla_funcs[] = {
+  /***** xla::XlaBuilder *****/
+  {"new_builder", 1, new_builder},
   /****** xla::Client ******/
   {"get_or_create_local_client", 3, get_or_create_local_client},
   {"get_device_count", 1, get_device_count},

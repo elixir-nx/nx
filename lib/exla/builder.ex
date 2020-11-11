@@ -1,4 +1,5 @@
 defmodule Exla.Builder do
+  alias __MODULE__, as: Builder
   alias Exla.Op
   alias Exla.Computation
   @enforce_keys [:ref]
@@ -11,6 +12,13 @@ defmodule Exla.Builder do
   # stipulation though that operations are owned by whatever builder created them. If I
   # defined a constant/parameter on one builder, every operation that uses those constants/parameters
   # is owned by the builder that created them.
+
+  def new(name) do
+    case Exla.NIF.new_builder(name) do
+      {:ok, ref} -> {:ok, %Builder{ref: ref}}
+      {:error, msg} -> {:error, msg}
+    end
+  end
 
   # TODO: Add builder attribute once we get rid of global builder
   def build(root = %Op{}) do
