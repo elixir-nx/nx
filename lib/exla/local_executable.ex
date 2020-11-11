@@ -6,10 +6,8 @@ defmodule Exla.LocalExecutable do
   defstruct [:ref]
 
   def run(%LocalExecutable{ref: exec}, arguments, options \\ %ExecutableRunOptions{}) do
-    case Exla.NIF.run(exec, arguments, options) do
-      # TODO: Handle return
-      {:ok, _} -> :ok
-      {:error, msg} -> {:error, msg}
-    end
+    {:ok, ref} = Exla.NIF.run(exec, arguments, options)
+    # TODO: Handle return
+    :ok
   end
 end

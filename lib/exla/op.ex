@@ -9,31 +9,24 @@ defmodule Exla.Op do
   # The XLA API is explicit about the rank of the constant being created e.g. ConstantR0, ConstantR1
   # We can be just as explicit, or we can use pattern matching on the inputs, I lean pattern matching
   # as I think it makes the API feel more flexible
-  def constant(builder = %Builder{}, value) when is_number(value) do
-    case Exla.NIF.constant_r0(builder.ref, value) do
-      {:ok, ref} -> {:ok, %Op{builder: builder.ref, ref: ref}}
-      {:error, msg} -> {:error, msg}
-    end
+  def constant(%Builder{ref: builder}, value) when is_number(value) do
+    {:ok, ref} = Exla.NIF.constant_r0(builder, value)
+    %Op{builder: builder, ref: ref}
   end
 
   def parameter(%Builder{ref: builder}, i, %Shape{ref: shape}, name)
       when is_integer(i) and i >= 0 and is_binary(name) do
-    case Exla.NIF.parameter(builder, i, shape, name) do
-      {:ok, ref} -> {:ok, %Op{builder: builder, ref: ref}}
-      {:error, msg} -> {:error, msg}
-    end
+    {:ok, ref} = Exla.NIF.parameter(builder, i, shape, name)
+    %Op{builder: builder, ref: ref}
   end
 
   # TODO: builder is redundant here because it's contained within each op
   def add(
-        %Builder{ref: builder},
         %Op{builder: builder, ref: left},
         %Op{builder: builder, ref: right},
         broadcast_dims \\ {}
       ) do
-    case Exla.NIF.add(builder, left, right, broadcast_dims) do
-      {:ok, ref} -> {:ok, %Op{builder: builder, ref: ref}}
-      {:error, msg} -> {:error, msg}
-    end
+    {:ok, ref} = Exla.NIF.add(left, right, broadcast_dims)
+    %Op{builder: builder, ref: ref}
   end
 end

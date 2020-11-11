@@ -6,16 +6,12 @@ defmodule Exla.Builder do
   defstruct [:ref]
 
   def new(name) do
-    case Exla.NIF.new_builder(name) do
-      {:ok, ref} -> {:ok, %Builder{ref: ref}}
-      {:error, msg} -> {:error, msg}
-    end
+    {:ok, ref} = Exla.NIF.new_builder(name)
+    %Builder{ref: ref}
   end
 
   def build(root = %Op{}) do
-    case Exla.NIF.build(root.builder, root.ref) do
-      {:ok, ref} -> {:ok, %Computation{ref: ref}}
-      {:error, msg} -> {:error, msg}
-    end
+    {:ok, ref} = Exla.NIF.build(root.builder, root.ref)
+    %Computation{ref: ref}
   end
 end
