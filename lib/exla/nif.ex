@@ -14,6 +14,8 @@ defmodule Exla.NIF do
   def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
     do: raise("Failed to load implementation of #{__MODULE__}.binary_to_shaped_buffer/4.")
 
+  def on_host_shape(_buffer), do: raise("Failed to load implementation of #{__MODULE__}.on_host_shape/1")
+
   def make_shape(_type, _dims),
     do: raise("Failed to load implementation of #{__MODULE__}.make_shape/2.")
 

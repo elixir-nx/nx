@@ -102,6 +102,19 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer));
 }
 
+ERL_NIF_TERM on_host_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
+  xla::ShapedBuffer* buffer;
+
+  if(!exla::get<xla::ShapedBuffer>(env, argv[0], buffer)) return exla::error(env, "Unable to get buffer.");
+
+  xla::Shape shape = buffer->on_host_shape();
+
+  return exla::ok(env, exla::make(env, shape));
+}
 /************************ xla::Shape Functions ***************************/
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
@@ -488,6 +501,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   /****** xla::ShapedBuffer ******/
   {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"on_host_shape", 1, on_host_shape},
   /****** xla::Shape ******/
   {"human_string", 1, human_string},
   {"make_shape", 2, make_shape},

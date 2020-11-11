@@ -3,6 +3,7 @@ defmodule Exla.LocalExecutable do
   alias Exla.Options.ExecutableRunOptions
   alias Exla.Tensor
   alias Exla.Client
+  alias Exla.Shape
 
   @enforce_keys[:ref]
   defstruct [:ref]
@@ -19,7 +20,8 @@ defmodule Exla.LocalExecutable do
       |> Enum.map(fn %Tensor{data: {:ref, ref}} -> ref end)
       |> List.to_tuple()
     {:ok, ref} = Exla.NIF.run(exec, argument_refs, options)
-    # TODO: Handle return
-    :ok
+    # TODO: There's definitely a more efficient way to handle this
+    {:ok, shape} = Exla.NIF.on_host_shape(ref)
+    %Tensor{data: {:ref, ref}, shape: %Shape{ref: shape}, device: {:cpu, 0}}
   end
 end

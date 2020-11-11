@@ -1,8 +1,8 @@
 defmodule Exla.Shape do
   alias __MODULE__, as: Shape
 
-  @enforce_keys [:dims, :dtype, :ref]
-  defstruct [:dims, :dtype, :ref]
+  @enforce_keys [:ref]
+  defstruct [:ref, dims: nil, dtype: nil]
 
   # TODO: convert dtype to integer representation to use in NIF
   def make_shape(dtype, dims) when is_atom(dtype) and is_tuple(dims) do
