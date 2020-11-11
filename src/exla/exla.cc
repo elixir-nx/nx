@@ -172,21 +172,21 @@ ERL_NIF_TERM literal_to_string(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
 
 /************************ xla::XlaOp Functions ***************************/
 ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 3){
+  if(argc != 4){
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-
+  xla::XlaBuilder** builder;
   long int param_num;
   xla::Shape* shape;
   std::string name;
 
-  if(!exla::get(env, argv[0], param_num)) return enif_make_badarg(env);
-  if(!exla::get<xla::Shape>(env, argv[1], shape)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[2], name)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[1], param_num)) return enif_make_badarg(env);
+  if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[3], name)) return enif_make_badarg(env);
 
-  xla::XlaOp op = xla::Parameter(xla_objects->builder, param_num, *shape, name);
+  xla::XlaOp op = xla::Parameter((*builder), param_num, *shape, name);
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
@@ -275,17 +275,17 @@ ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 ERL_NIF_TERM copy(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Copy);}
 
 ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1){
+  if(argc != 2){
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-
+  xla::XlaBuilder** builder;
   int value;
 
-  if(!exla::get(env, argv[0], value)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[1], value)) return enif_make_badarg(env);
 
-  xla::XlaOp op = xla::ConstantR0(xla_objects->builder, value);
+  xla::XlaOp op = xla::ConstantR0((*builder), value);
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
@@ -351,17 +351,17 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
 /************ Build, Compilation, Execution *************/
 ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1){
+  if(argc != 2){
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
-
+  xla::XlaBuilder** builder;
   xla::XlaOp* root;
 
-  if(!exla::get<xla::XlaOp>(env, argv[0], root)) return exla::error(env, "Bad argument passed to build.");
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Bad argument passed to build.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], root)) return exla::error(env, "Bad argument passed to build.");
 
-  EXLA_ASSIGN_OR_RETURN(xla::XlaComputation computation, xla_objects->builder->Build(*root), env);
+  EXLA_ASSIGN_OR_RETURN(xla::XlaComputation computation, (*builder)->Build(*root), env);
 
   return exla::ok(env, exla::make<xla::XlaComputation>(env, computation));
 }
@@ -494,7 +494,7 @@ static ErlNifFunc exla_funcs[] = {
   {"human_string", 1, human_string},
   {"make_shape", 2, make_shape},
   {"make_scalar_shape", 1, make_scalar_shape},
-  {"parameter", 3, parameter},
+  {"parameter", 4, parameter},
   /****** xla::Literal ******/
   {"create_r0", 1, create_r0},
   {"literal_to_string", 1, literal_to_string},
@@ -553,12 +553,12 @@ static ErlNifFunc exla_funcs[] = {
   {"conj", 1, conj},
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
-  {"constant_r0", 1, constant_r0},
+  {"constant_r0", 2, constant_r0},
   {"constant_r1", 2, constant_r1_fill},
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   /******* Compilation, Execution, Etc. ******/
-  {"build", 1, build},
+  {"build", 2, build},
   {"compile", 4, compile},
   {"run", 3, run},
   {"literal_to_shaped_buffer", 4, literal_to_shaped_buffer},

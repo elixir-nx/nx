@@ -28,7 +28,7 @@ defmodule Exla.NIF do
   def literal_to_string(_literal),
     do: raise("Failed to load implementation of #{__MODULE__}.literal_to_string/1.")
 
-  def parameter(_number, _shape, _name),
+  def parameter(_builder, _number, _shape, _name),
     do: raise("Failed to load implementation of #{__MODULE__}.parameter/3.")
 
   def add(_a, _b, _broadcast_dims),
@@ -145,8 +145,8 @@ defmodule Exla.NIF do
 
   def dot(_a, _b), do: raise("Failed to load implementation of #{__MODULE__}.dot/2.")
 
-  def constant_r0(_value),
-    do: raise("Failed to load implementation of #{__MODULE__}.constant_r0.")
+  def constant_r0(_builder, _value),
+    do: raise("Failed to load implementation of #{__MODULE__}.constant_r0/2.")
 
   def constant_r1(_length, _value),
     do: raise("Failed to load implementation of #{__MODULE__}.constant_r1/2.")
@@ -163,7 +163,7 @@ defmodule Exla.NIF do
   def get_computation_hlo_text(_computation),
     do: raise("Failed to load implementation of #{__MODULE__}.get_computation_hlo_text/0.")
 
-  def build(_root), do: raise("Failed to load implementation of #{__MODULE__}.build/1.")
+  def build(_builder, _root), do: raise("Failed to load implementation of #{__MODULE__}.build/2.")
 
   def compile(_client, _computation, _argument_layouts, _options),
     do: raise("Failed to load implementation of #{__MODULE__}.compile/4.")
