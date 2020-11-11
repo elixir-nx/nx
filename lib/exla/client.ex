@@ -1,7 +1,7 @@
 defmodule Exla.Client do
   alias __MODULE__, as: Client
   alias Exla.Options.LocalClientOptions
-
+  alias Exla.Computation
   @enforce_keys [:ref]
   defstruct [:ref]
 

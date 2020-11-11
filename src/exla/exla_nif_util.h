@@ -89,7 +89,7 @@ namespace exla {
     void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
     new(ptr) T(std::move(var));
     ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-    enif_release_resource(ptr);
+    // enif_release_resource(ptr);
     return ret;
   }
 
@@ -99,7 +99,7 @@ namespace exla {
     T* value = var.release();
     new(ptr) T(std::move(*value));
     ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-    enif_release_resource(ptr);
+    // enif_release_resource(ptr);
     return ret;
   }
 

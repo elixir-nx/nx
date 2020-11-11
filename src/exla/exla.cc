@@ -13,9 +13,9 @@
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
 
-// TODO: Synchronize access.
 // TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
-// In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
+// TODO: In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
+// TODO: Remove global instance of builder.
 typedef struct {
   xla::XlaBuilder* builder;
 } XLA;
@@ -270,7 +270,7 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get(env, argv[0], value)) return enif_make_badarg(env);
 
   xla::XlaOp op = xla::ConstantR0(xla_objects->builder, value);
-  return exla::make<xla::XlaOp>(env, op);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -343,11 +343,11 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   xla::XlaOp* root;
 
-  if(!exla::get<xla::XlaOp>(env, argv[0], root)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaOp>(env, argv[0], root)) return exla::error(env, "Bad argument passed to build.");
 
   EXLA_ASSIGN_OR_RETURN(xla::XlaComputation computation, xla_objects->builder->Build(*root), env);
 
-  return exla::make<xla::XlaComputation>(env, computation);
+  return exla::ok(env, exla::make<xla::XlaComputation>(env, computation));
 }
 
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
