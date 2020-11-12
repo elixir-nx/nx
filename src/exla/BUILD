@@ -50,7 +50,7 @@ cc_binary(
   name = "libexla_gpu.so",
   srcs = ["exla.cc"],
   deps = if_cuda_is_configured([
-  "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit"
+       "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit"
   ]) + [
     ":exla_allocator",
     ":exla_nif_util",
@@ -60,7 +60,6 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
-    "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
   ],
   linkopts = ["-shared"],
   linkshared = 1,
