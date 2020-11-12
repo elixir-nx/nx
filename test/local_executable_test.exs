@@ -20,7 +20,7 @@ defmodule LocalExecutableTest do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
     exec = Client.compile(state[:client], comp, {})
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(state[:client], exec, {})
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {})
   end
 
   test "run/4 succeeds with 1 input and default options", state do
@@ -29,7 +29,7 @@ defmodule LocalExecutableTest do
     res = Op.add(x, x)
     comp = Builder.build(res)
     exec = Client.compile(state[:client], comp, {t1.shape})
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(state[:client], exec, {t1})
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {t1})
   end
 
   test "run/4 succeeds with 2 inputs and default options", state do
@@ -40,6 +40,6 @@ defmodule LocalExecutableTest do
     res = Op.add(x, y)
     comp = Builder.build(res)
     exec = Client.compile(state[:client], comp, {t1.shape, t2.shape})
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(state[:client], exec, {t1, t2})
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {t1, t2})
   end
 end

@@ -4,8 +4,8 @@ defmodule Exla.Client do
   alias Exla.Options.ExecutableBuildOptions
   alias Exla.Computation
   alias Exla.LocalExecutable
-  @enforce_keys [:ref]
-  defstruct [:ref]
+  @enforce_keys [:ref, :platform]
+  defstruct [:ref, :platform]
 
   # TODO: To go along with some of the discussion in: https://github.com/seanmor5/exla/pull/12
   # The Python XLA API offers 3 additional methods for client creation:
@@ -31,15 +31,22 @@ defmodule Exla.Client do
         options.intra_op_parallelism_threads
       )
 
-    %Client{ref: ref}
+    %Client{ref: ref, platform: options.platform}
+  end
+
+  # TODO: These methods are only called once, so for efficiency we can run them when the client is created
+  def get_default_device_ordinal(%Client{ref: client}) do
+    {:ok, ordinal} = Exla.NIF.get_default_device_ordinal(client)
+    ordinal
   end
 
   def get_device_count(%Client{ref: client}) do
-    Exla.NIF.get_device_count(client)
+    {:ok, count} = Exla.NIF.get_device_count(client)
+    count
   end
 
   def compile(
-        %Client{ref: client},
+        client = %Client{ref: ref},
         %Computation{ref: computation},
         argument_shapes,
         options \\ %ExecutableBuildOptions{}
@@ -56,7 +63,7 @@ defmodule Exla.Client do
       |> Enum.map(& &1.ref)
       |> List.to_tuple()
 
-    {:ok, ref} = Exla.NIF.compile(client, computation, shape_refs, options)
-    %LocalExecutable{ref: ref}
+    {:ok, ref} = Exla.NIF.compile(ref, computation, shape_refs, options)
+    %LocalExecutable{client: client, ref: ref}
   end
 end

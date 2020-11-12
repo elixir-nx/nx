@@ -57,6 +57,7 @@ namespace exla {
   /*
    * Makers for standard types.
    */
+  ERL_NIF_TERM make(ErlNifEnv* env, int &var);
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var);
 
   ERL_NIF_TERM make(ErlNifEnv* env, const char* string);

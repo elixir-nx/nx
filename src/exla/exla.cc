@@ -73,8 +73,6 @@ ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make(env, builder));
 }
 /************************ xla::ShapedBuffer Functions *********************/
-// TODO: Something about specifying a device other than `default_device_ordinal` makes passing
-// tensors created from this device fail on `run`.
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
     return enif_make_badarg(env);
@@ -95,7 +93,7 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
   stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
 
-  auto buffer = new xla::ShapedBuffer(*shape,  *shape, (*client)->platform(), (*client)->default_device_ordinal());
+  auto buffer = new xla::ShapedBuffer(*shape,  *shape, (*client)->platform(), device_ordinal);
 
   buffer->set_buffer(memory_base, {});
 
@@ -348,6 +346,18 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
   return exla::ok(env, exla::make<xla::LocalClient*>(env, client));
 }
 
+ERL_NIF_TERM get_default_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
+  xla::LocalClient **client;
+  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+
+  int device_ordinal = (*client)->default_device_ordinal();
+  return exla::ok(env, exla::make(env, device_ordinal));
+}
+
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
@@ -357,7 +367,8 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
 
   int device_count = (*client)->device_count();
-  return enif_make_int(env, device_count);
+
+  return exla::ok(env, exla::make(env, device_count));
 }
 
 /************ Build, Compilation, Execution *************/
@@ -499,6 +510,7 @@ static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
   {"get_or_create_local_client", 3, get_or_create_local_client},
   {"get_device_count", 1, get_device_count},
+  {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** xla::ShapedBuffer ******/
   {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"on_host_shape", 1, on_host_shape},

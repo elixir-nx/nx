@@ -20,6 +20,18 @@ defmodule ClientTest do
     assert %Client{} = state[:client]
   end
 
+  test "get_default_device_ordinal/1 returns nonnegative integer", state do
+    ordinal = Client.get_default_device_ordinal(state[:client])
+    assert is_integer(ordinal)
+    assert ordinal >= 0
+  end
+
+  test "get_device_count/1 returns nonnegative integer", state do
+    count = Client.get_device_count(state[:client])
+    assert is_integer(count)
+    assert count >= 0
+  end
+
   test "compile/4 succeeds on host device with constant computation and no args", state do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)

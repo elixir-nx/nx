@@ -186,6 +186,7 @@ namespace exla {
     return 1;
   }
 
+  ERL_NIF_TERM make(ErlNifEnv* env, int &var) { return enif_make_int(env, var); }
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var){ return enif_make_string(env, var.c_str(), ERL_NIF_LATIN1); }
   ERL_NIF_TERM make(ErlNifEnv* env, const char* string){ return enif_make_string(env, string, ERL_NIF_LATIN1); }
 }

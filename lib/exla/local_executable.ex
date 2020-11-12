@@ -5,24 +5,73 @@ defmodule Exla.LocalExecutable do
   alias Exla.Client
   alias Exla.Shape
 
-  @enforce_keys[:ref]
-  defstruct [:ref]
+  @enforce_keys [:client, :ref]
+  defstruct [:client, :ref, :device]
 
-  # TODO: Need client for device placement, but maybe we can separate these steps so run only depends on the executable
-  def run(client = %Client{}, %LocalExecutable{ref: exec}, arguments, options \\ %ExecutableRunOptions{}) do
-    # TODO: This should be a list
-    # TODO: For now, we call to_device on every one, but to be more efficient, we should do some checks
-    # rather than just doing this naively.
-    # TODO: If we really want to get efficient we can do the transfers all it once in C++.
-    argument_refs =
-      arguments
-      |> Tuple.to_list()
-      |> Enum.map(&(Tensor.to_device(client, &1)))
-      |> Enum.map(fn %Tensor{data: {:ref, ref}} -> ref end)
-      |> List.to_tuple()
-    {:ok, ref} = Exla.NIF.run(exec, argument_refs, options)
-    # TODO: There's definitely a more efficient way to handle this
-    {:ok, shape} = Exla.NIF.on_host_shape(ref)
-    %Tensor{data: {:ref, ref}, shape: %Shape{ref: shape}, device: {:cpu, 0}}
+  def populate_input_buffers(client, arguments, device) do
+    # We can avoid a lot of this by enforcing constraints: either all tensors are loaded on run
+    # or no tensors are loaded on run. This method presents possibly a pretty significant bottleneck
+    # so it's worth taking a careful look at later on.
+    with {:ok, inputs} <- {:ok, Enum.with_index(Tuple.to_list(arguments))},
+         {:ok, bin_inps, ref_inps} <- _group_by_type(inputs),
+         {:ok, new_ref_inps} <- _place_on_device(client, bin_inps, device) do
+      inputs =
+        new_ref_inps
+        |> Kernel.++(ref_inps)
+        |> Enum.sort_by(&elem(&1, 1))
+        |> Enum.map(fn {%Tensor{data: {:ref, ref}}, idx} -> ref end)
+
+      {:ok, List.to_tuple(inputs)}
+    end
+  end
+
+  defp _group_by_type(inputs) do
+    groups =
+      inputs
+      |> Enum.group_by(fn {%Tensor{data: data}, _} -> elem(data, 0) end)
+
+    bins = if groups[:binary], do: groups[:binary], else: []
+    refs = if groups[:ref], do: groups[:ref], else: []
+    {:ok, bins, refs}
+  end
+
+  defp _place_on_device(client = %Client{}, inputs, device) do
+    new_ref_inps =
+      inputs
+      |> Enum.map(fn {tensor, idx} -> {Tensor.to_device(client, tensor, device), idx} end)
+
+    {:ok, new_ref_inps}
+  end
+
+  # Compatible only if the platforms match and ordinal within client device count
+  def ensure_client_and_device_compatible(
+        client = %Client{platform: platform},
+        {platform, ordinal}
+      ) do
+    cond do
+      ordinal < 0 ->
+        {:ok, {platform, Client.get_default_device_ordinal(client)}}
+
+      ordinal < Client.get_device_count(client) ->
+        {:ok, {platform, ordinal}}
+
+      true ->
+        {:error, "Invalid device ordinal."}
+    end
+  end
+
+  def run(
+        %LocalExecutable{client: client, ref: exec},
+        arguments,
+        options \\ %ExecutableRunOptions{}
+      ) do
+    # This is the same as OneFlow's XLA Executable Context, but we do some work in Elixir
+    with {:ok, device} <- ensure_client_and_device_compatible(client, options.device),
+         {:ok, inputs} <- populate_input_buffers(client, arguments, device),
+         {:ok, ref} <- Exla.NIF.run(exec, inputs, options),
+         # TODO: Replace this with something similar to `populate_output_buffers`
+         {:ok, shape} <- Exla.NIF.on_host_shape(ref) do
+      %Tensor{data: {:ref, ref}, shape: %Shape{ref: shape}, device: device}
+    end
   end
 end
