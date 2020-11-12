@@ -49,7 +49,9 @@ cc_library(
 cc_binary(
   name = "libexla_gpu.so",
   srcs = ["exla.cc"],
-  deps = [
+  deps = if_cuda_is_configured([
+  "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit"
+  ]) + [
     ":exla_allocator",
     ":exla_nif_util",
     ":exla_macros",
