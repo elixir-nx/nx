@@ -14,6 +14,9 @@ defmodule Exla.NIF do
   def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
     do: raise("Failed to load implementation of #{__MODULE__}.binary_to_shaped_buffer/4.")
 
+  def on_host_shape(_buffer),
+    do: raise("Failed to load implementation of #{__MODULE__}.on_host_shape/1")
+
   def make_shape(_type, _dims),
     do: raise("Failed to load implementation of #{__MODULE__}.make_shape/2.")
 
@@ -153,6 +156,9 @@ defmodule Exla.NIF do
 
   def get_or_create_local_client(_platform, _number_of_replicas, _intra_op_parallelism_threads),
     do: raise("Failed to load implementation of #{__MODULE__}.get_or_create_local_client/3.")
+
+  def get_default_device_ordinal(_client),
+    do: raise("Failed to load implementation of #{__MODULE__}.get_default_device_ordinal/1.")
 
   def get_device_count(_client),
     do: raise("Failed to load implementation of #{__MODULE__}.get_device_count/1.")

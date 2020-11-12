@@ -74,7 +74,7 @@ ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 /************************ xla::ShapedBuffer Functions *********************/
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 3){
+  if(argc != 4){
     return enif_make_badarg(env);
   }
 
@@ -93,17 +93,26 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
   stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
 
-  xla::ShapedBuffer* inp;
-
-  auto buffer = std::make_unique<xla::ShapedBuffer>(*shape,  *shape, (*client)->platform(), device_ordinal);
+  auto buffer = new xla::ShapedBuffer(*shape,  *shape, (*client)->platform(), device_ordinal);
 
   buffer->set_buffer(memory_base, {});
 
-  inp = buffer.release();
-
-  return exla::make<xla::ShapedBuffer>(env, *inp);
+  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer));
 }
 
+ERL_NIF_TERM on_host_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
+  xla::ShapedBuffer* buffer;
+
+  if(!exla::get<xla::ShapedBuffer>(env, argv[0], buffer)) return exla::error(env, "Unable to get buffer.");
+
+  xla::Shape shape = buffer->on_host_shape();
+
+  return exla::ok(env, exla::make(env, shape));
+}
 /************************ xla::Shape Functions ***************************/
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
@@ -203,7 +212,7 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
   if(!exla::get_span(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
-  return exla::make<xla::XlaOp>(env, result);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
 ERL_NIF_TERM add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Add);}
@@ -337,6 +346,18 @@ ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_
   return exla::ok(env, exla::make<xla::LocalClient*>(env, client));
 }
 
+ERL_NIF_TERM get_default_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return enif_make_badarg(env);
+  }
+
+  xla::LocalClient **client;
+  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+
+  int device_ordinal = (*client)->default_device_ordinal();
+  return exla::ok(env, exla::make(env, device_ordinal));
+}
+
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
@@ -346,7 +367,8 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
 
   int device_count = (*client)->device_count();
-  return enif_make_int(env, device_count);
+
+  return exla::ok(env, exla::make(env, device_count));
 }
 
 /************ Build, Compilation, Execution *************/
@@ -375,7 +397,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
-  if(!exla::get_span(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
+  if(!exla::get_argument_layouts(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
   if(!exla::get_options(env, argv, options)) return exla::error(env, "Unable to get build options.");
 
   EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
@@ -396,11 +418,11 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::LocalExecutable* local_executable;
-  absl::Span<xla::ShapedBuffer*> arguments;
+  std::vector<xla::ShapedBuffer*> arguments;
   xla::ExecutableRunOptions run_options;
 
   if(!exla::get<xla::LocalExecutable>(env, argv[0], local_executable)) return exla::error(env, "Unable to get executable.");
-  if(!exla::get_span(env, argv[1], arguments)) return exla::error(env, "Unable to get arguments.");
+  if(!exla::get_arguments(env, argv[1], arguments)) return exla::error(env, "Unable to get arguments.");
   if(!exla::get_options(env, argv, run_options)) return exla::error(env, "Unable to get run options.");
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
@@ -488,8 +510,10 @@ static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
   {"get_or_create_local_client", 3, get_or_create_local_client},
   {"get_device_count", 1, get_device_count},
+  {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** xla::ShapedBuffer ******/
   {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"on_host_shape", 1, on_host_shape},
   /****** xla::Shape ******/
   {"human_string", 1, human_string},
   {"make_shape", 2, make_shape},

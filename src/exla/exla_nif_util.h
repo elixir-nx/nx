@@ -49,11 +49,15 @@ namespace exla {
    */
   int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableRunOptions& options);
   int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions& options);
-  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[] , xla::LocalClientOptions& options);
+  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::LocalClientOptions& options);
 
+  int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span);
+
+  int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::ShapedBuffer*> &input);
   /*
    * Makers for standard types.
    */
+  ERL_NIF_TERM make(ErlNifEnv* env, int &var);
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var);
 
   ERL_NIF_TERM make(ErlNifEnv* env, const char* string);

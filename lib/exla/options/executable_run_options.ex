@@ -1,7 +1,6 @@
 defmodule Exla.Options.ExecutableRunOptions do
   defstruct allocator: nil,
-            device_ordinal: -1,
-            device_assignment: nil,
+            device: {:host, -1},
             stream: nil,
             intra_op_thread_pool: nil,
             execution_profile: nil,

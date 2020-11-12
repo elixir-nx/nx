@@ -4,17 +4,45 @@ defmodule ClientTest do
   alias Exla.Op
   alias Exla.LocalExecutable
   alias Exla.Builder
+  alias Exla.Shape
 
-  test "create_client/1 succeeds on host device with default args" do
-    assert %Client{} = Client.create_client()
+  # We need a common client for each test
+  setup_all do
+    {:ok, client: Client.create_client()}
   end
 
-  test "compile/4 succeeds on host device with constant computation and no args" do
-    # TODO: Setup stuff for easier testing
-    client = Client.create_client()
-    builder = Builder.new("test")
-    op = Op.constant(builder, 1)
+  # We'll need a new builder before each test
+  setup state do
+    {:ok, client: state[:client], builder: Builder.new("test")}
+  end
+
+  test "create_client/1 succeeds on host device with default args", state do
+    assert %Client{} = state[:client]
+  end
+
+  test "get_default_device_ordinal/1 returns nonnegative integer", state do
+    ordinal = Client.get_default_device_ordinal(state[:client])
+    assert is_integer(ordinal)
+    assert ordinal >= 0
+  end
+
+  test "get_device_count/1 returns nonnegative integer", state do
+    count = Client.get_device_count(state[:client])
+    assert is_integer(count)
+    assert count >= 0
+  end
+
+  test "compile/4 succeeds on host device with constant computation and no args", state do
+    op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
-    assert %LocalExecutable{} = Client.compile(client, comp, {})
+    assert %LocalExecutable{} = Client.compile(state[:client], comp, {})
+  end
+
+  test "compile/4 succeeds on host device with basic computation and args", state do
+    shape = Shape.make_shape(:int32, {})
+    x = Op.parameter(state[:builder], 0, shape, "x")
+    res = Op.add(x, x)
+    comp = Builder.build(res)
+    assert %LocalExecutable{} = Client.compile(state[:client], comp, {shape})
   end
 end

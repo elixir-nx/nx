@@ -74,6 +74,34 @@ namespace exla {
     return 1;
   }
 
+  // TODO: Accept list, not tuple
+  int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span){
+    const ERL_NIF_TERM* elems;
+    int num_elems;
+    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
+    xla::Shape* data[num_elems];
+    for(int i=0;i<num_elems;i++){
+      xla::Shape* elem;
+      if(!get<xla::Shape>(env, elems[i], elem)) return 0;
+      data[i] = elem;
+    }
+    span = absl::Span<xla::Shape*>(data, num_elems);
+    return 1;
+  }
+
+  int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::ShapedBuffer*> &input){
+    const ERL_NIF_TERM* elems;
+    int num_elems;
+    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
+    input.clear();
+    for(int i=0;i<num_elems;i++){
+      xla::ShapedBuffer* elem;
+      if(!get<xla::ShapedBuffer>(env, elems[i], elem)) return 0;
+      input.push_back(elem);
+    }
+    return 1;
+  }
+
   int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
     unsigned atom_length;
     if(!enif_get_atom_length(env, term, &atom_length, ERL_NIF_LATIN1)) return 0;
@@ -158,6 +186,7 @@ namespace exla {
     return 1;
   }
 
+  ERL_NIF_TERM make(ErlNifEnv* env, int &var) { return enif_make_int(env, var); }
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var){ return enif_make_string(env, var.c_str(), ERL_NIF_LATIN1); }
   ERL_NIF_TERM make(ErlNifEnv* env, const char* string){ return enif_make_string(env, string, ERL_NIF_LATIN1); }
 }
