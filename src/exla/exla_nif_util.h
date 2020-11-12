@@ -53,7 +53,7 @@ namespace exla {
 
   int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span);
 
-  int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::ShapedBuffer*> &span);
+  int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::ShapedBuffer*> &input);
   /*
    * Makers for standard types.
    */

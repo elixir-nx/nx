@@ -407,7 +407,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::LocalExecutable* local_executable;
-  absl::Span<xla::ShapedBuffer*> arguments;
+  std::vector<xla::ShapedBuffer*> arguments;
   xla::ExecutableRunOptions run_options;
 
   if(!exla::get<xla::LocalExecutable>(env, argv[0], local_executable)) return exla::error(env, "Unable to get executable.");

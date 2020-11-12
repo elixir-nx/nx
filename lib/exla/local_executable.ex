@@ -13,6 +13,7 @@ defmodule Exla.LocalExecutable do
     # TODO: This should be a list
     # TODO: For now, we call to_device on every one, but to be more efficient, we should do some checks
     # rather than just doing this naively.
+    # TODO: If we really want to get efficient we can do the transfers all it once in C++.
     argument_refs =
       arguments
       |> Tuple.to_list()
