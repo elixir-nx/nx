@@ -5,13 +5,12 @@ defmodule ClientTest do
   alias Exla.LocalExecutable
   alias Exla.Builder
   alias Exla.Shape
-  alias Exla.Options.LocalClientOptions
 
   # We need a common client for each test
   # TODO: As is, this will crash with the CPU-only build so we just have to handle that
   # and then we can effectively exclude cuda tagged tests
   setup_all do
-    {:ok, cpu: Client.create_client(), gpu: Client.create_client(%LocalClientOptions{platform: :cuda})}
+    {:ok, cpu: Client.create_client(), gpu: Client.create_client(platform: :cuda)}
   end
 
   # We'll need a new builder before each test
