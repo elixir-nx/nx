@@ -116,7 +116,7 @@ namespace exla {
   }
 
   // TODO: Handle statusor gracefully.
-  int get_platform(ErlNifEnv* env, ERL_NIF_TERM term, stream_executor::Platform* platform){
+  int get_platform(ErlNifEnv* env, ERL_NIF_TERM term, stream_executor::Platform* &platform){
     std::string platform_str;
 
     if(!get_atom(env, term, platform_str)){

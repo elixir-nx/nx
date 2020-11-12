@@ -1,4 +1,4 @@
-all: cpu compile-db
+all: cuda
 
 cuda:
 	cd src/ && \
