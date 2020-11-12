@@ -23,13 +23,23 @@ defmodule LocalExecutableTest do
     assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(state[:client], exec, {})
   end
 
-  test "run/3 succeeds with 1 input and default options", state do
-    shape = Shape.make_shape(:int32, {})
-    x = Op.parameter(state[:builder], 0, shape, "x")
+  test "run/4 succeeds with 1 input and default options", state do
+    t1 = Tensor.scalar(1, :int32)
+    x = Op.parameter(state[:builder], 0, t1.shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
-    exec = Client.compile(state[:client], comp, {shape})
-    inp = Tensor.scalar(1, :int32)
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(state[:client], exec, {inp})
+    exec = Client.compile(state[:client], comp, {t1.shape})
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(state[:client], exec, {t1})
+  end
+
+  test "run/4 succeeds with 2 inputs and default options", state do
+    t1 = Tensor.scalar(1, :int32)
+    t2 = Tensor.scalar(1, :int32)
+    x = Op.parameter(state[:builder], 0, t1.shape, "x")
+    y = Op.parameter(state[:builder], 1, t2.shape, "y")
+    res = Op.add(x, y)
+    comp = Builder.build(res)
+    exec = Client.compile(state[:client], comp, {t1.shape, t2.shape})
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(state[:client], exec, {t1, t2})
   end
 end
