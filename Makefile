@@ -37,9 +37,3 @@ $(TENSORFLOW_EXLA_DIR):
 clean:
 	cd $(TENSORFLOW_DIR) && bazel clean --expunge
 	rm -f $(EXLA_SO)
-
-# TODO: Move the generate_compilation_db.sh to makefile
-compile-db:
-	cd src/ && \
-	sh ./generate_compilation_db.sh && \
-	mv bazel-bin/exla/compile_commands.json ../compile_commands.json
