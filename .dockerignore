@@ -7,3 +7,5 @@
 /compile_commands.*
 /.cache
 /.git
+/.vscode
+/.clangd
