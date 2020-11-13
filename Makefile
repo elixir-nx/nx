@@ -21,7 +21,7 @@ cpu: $(TENSORFLOW_EXLA)
 cuda: $(TENSORFLOW_EXLA)
 	ln -sf $(ERTS_INCLUDE_PATH) c_src/exla/erts
 	cd $(TENSORFLOW_SRC) && \
-		bazel build $(BAZEL_FLAGS) //$(TENSORFLOW_NS):libexla_gpu.so
+		bazel build $(BAZEL_FLAGS) --config=cuda //$(TENSORFLOW_NS):libexla_gpu.so
 	mkdir priv
 	cp $(TENSORFLOW_SRC)/bazel-bin/$(TENSORFLOW_NS)/libexla_gpu.so $(EXLA_SO)
 
