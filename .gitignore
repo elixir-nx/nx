@@ -35,3 +35,4 @@ mix.lock
 **/core.*
 
 /compile_commands.*
+/.cache
