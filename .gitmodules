@@ -1,0 +1,5 @@
+[submodule "c_src/tensorflow"]
+	path = c_src/tensorflow
+	url = https://github.com/tensorflow/tensorflow.git
+	shallow = true
+	ignore = dirty

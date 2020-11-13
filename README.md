@@ -2,6 +2,12 @@
 
 Elixir XLA Client for compiling and running Elixir code on CPU/GPU/TPU.
 
+## Environment variables
+
+  * `EXLA_TARGET` - controls to compile with CPU-only (default) or CUDA-enabled, example: `EXLA_TARGET=cuda`
+
+  * `EXLA_MODE` - controls to compile `opt` (default) artifacts or `dbg`, example: `EXLA_MODE=dbg`
+
 ## Building
 
 The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). You'll also need to set up the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
