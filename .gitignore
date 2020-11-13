@@ -16,22 +16,10 @@
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump
 
-# Also ignore archive artifacts (built via "mix archive.build").
-*.ez
-
 # Ignore package tarball (built via "mix hex.build").
 exla-*.tar
 
-# lock
-mix.lock
-
-# Ignore priv
+# Ignore build artifacts
+/c_src/exla/erts
 /priv/
-
-# Ignore bazel outputs
-/src/bazel-*
-
-/bazel_cache
-**/core.*
-
-/compile_commands.*
+/tmp/

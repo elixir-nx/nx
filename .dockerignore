@@ -1,7 +1,5 @@
 /_build
 /deps
 /mix.lock
-/bazel_cache
 /priv
-**/core.*
-/compile_commands.*
+/tmp

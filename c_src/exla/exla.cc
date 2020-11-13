@@ -1,6 +1,6 @@
-#include "exla/exla_allocator.h"
-#include "exla/exla_nif_util.h"
-#include "exla/exla_macros.h"
+#include "tensorflow/compiler/xla/exla/exla_allocator.h"
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "tensorflow/compiler/xla/exla/exla_macros.h"
 
 #include "absl/types/span.h"
 
@@ -93,7 +93,7 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
   stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
 
-  auto buffer = new xla::ShapedBuffer(*shape,  *shape, (*client)->platform(), device_ordinal);
+  auto buffer = new xla::ShapedBuffer(*shape,  *shape, device_ordinal);
 
   buffer->set_buffer(memory_base, {});
 
