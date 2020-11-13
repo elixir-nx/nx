@@ -5,3 +5,5 @@
 /priv
 **/core.*
 /compile_commands.*
+/.cache
+/.git

@@ -1,6 +1,6 @@
 FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
 ARG bazel_bin_url="https://github.com/bazelbuild/bazel/releases/download/3.4.1/bazel-3.4.1-linux-x86_64"
-
+ARG pip_args=""
 WORKDIR /etc/apt/sources.list.d
 RUN rm cuda.list nvidia-ml.list
 WORKDIR /
