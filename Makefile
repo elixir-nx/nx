@@ -4,34 +4,38 @@ EXLA_MODE ?= opt # can also be dbg
 EXLA_SO = priv/libexla.so
 
 # Tensorflow flags and config
-TENSORFLOW_NS = tensorflow/compiler/xla/exla
-TENSORFLOW_SRC = c_src/tensorflow
-TENSORFLOW_EXLA = $(TENSORFLOW_SRC)/$(TENSORFLOW_NS)
+ERTS_SYM_DIR = c_src/exla/erts
+TENSORFLOW_DIR = c_src/tensorflow
+TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
+TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 BAZEL_FLAGS = --define "framework_shared_object=false" -c $(EXLA_MODE)
 
 all: $(EXLA_TARGET)
 
-cpu: $(TENSORFLOW_EXLA)
-	ln -sf $(ERTS_INCLUDE_PATH) c_src/exla/erts
-	cd $(TENSORFLOW_SRC) && \
-		bazel build $(BAZEL_FLAGS) //$(TENSORFLOW_NS):libexla_cpu.so
-	mkdir priv
-	cp $(TENSORFLOW_SRC)/bazel-bin/$(TENSORFLOW_NS)/libexla_cpu.so $(EXLA_SO)
+cpu: $(TENSORFLOW_EXLA_DIR)
+	rm -f $(ERTS_SYM_DIR)
+	ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
+	cd $(TENSORFLOW_DIR) && \
+		bazel build $(BAZEL_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla_cpu.so
+	mkdir -p priv
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_cpu.so $(EXLA_SO)
 
-cuda: $(TENSORFLOW_EXLA)
-	ln -sf $(ERTS_INCLUDE_PATH) c_src/exla/erts
-	cd $(TENSORFLOW_SRC) && \
-		bazel build $(BAZEL_FLAGS) --config=cuda //$(TENSORFLOW_NS):libexla_gpu.so
-	mkdir priv
-	cp $(TENSORFLOW_SRC)/bazel-bin/$(TENSORFLOW_NS)/libexla_gpu.so $(EXLA_SO)
+cuda: $(TENSORFLOW_EXLA_DIR)
+	rm -f $(ERTS_SYM_DIR)
+	ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
+	cd $(TENSORFLOW_DIR) && \
+		bazel build $(BAZEL_FLAGS) --config=cuda //$(TENSORFLOW_EXLA_NS):libexla_gpu.so
+	mkdir -p priv
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_gpu.so $(EXLA_SO)
 
-$(TENSORFLOW_EXLA):
+$(TENSORFLOW_EXLA_DIR):
 	git submodule init
 	git submodule update
-	ln -sf ../../../../exla $(TENSORFLOW_EXLA)
+	rm -f $(TENSORFLOW_EXLA_DIR)
+	ln -s ../../../../exla $(TENSORFLOW_EXLA_DIR)
 
 clean:
-	cd $(TENSORFLOW_SRC) && bazel clean --expunge
+	cd $(TENSORFLOW_DIR) && bazel clean --expunge
 	rm -f $(EXLA_SO)
 
 # TODO: Move the generate_compilation_db.sh to makefile

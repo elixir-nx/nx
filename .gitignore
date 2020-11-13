@@ -20,5 +20,5 @@ erl_crash.dump
 exla-*.tar
 
 # Ignore build artifacts
-/c_src/exla/erts/
+/c_src/exla/erts
 /priv/
