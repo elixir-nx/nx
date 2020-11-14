@@ -4,8 +4,6 @@ TMP ?= $(HOME)/.cache
 
 # mix.exs vars
 # ERTS_INCLUDE_DIR
-# ERTS_VSN
-# EXLA_VSN
 
 # Public configuration
 EXLA_TARGET ?= cpu # can also be cuda
