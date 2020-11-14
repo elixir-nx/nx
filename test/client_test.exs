@@ -10,7 +10,11 @@ defmodule ClientTest do
   # TODO: As is, this will crash with the CPU-only build so we just have to handle that
   # and then we can effectively exclude cuda tagged tests
   setup_all do
-    {:ok, cpu: Client.create_client(), gpu: Client.create_client(platform: :cuda)}
+    # Don't crash on a CPU-only build...still need to exclude cuda tests
+    case System.fetch_env("EXLA_TARGET") do
+      {:ok, "cuda"} -> {:ok, cpu: Client.create_client(), gpu: Client.create_client()}
+      _ -> {:ok, cpu: Client.create_client(), gpu: nil}
+    end
   end
 
   # We'll need a new builder before each test
