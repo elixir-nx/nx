@@ -8,12 +8,6 @@ defmodule Exla.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  defmacrop nif_error({name, arity}) do
-    quote do
-      raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
-    end
-  end
-
   def new_builder(_name),
     do: nif_error(__ENV__.function)
 
@@ -191,4 +185,8 @@ defmodule Exla.NIF do
 
   def shaped_buffer_to_literal(_client, _shaped_buffer),
     do: nif_error(__ENV__.function)
+
+  defp nif_error({name, arity}) do
+    raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
+  end
 end
