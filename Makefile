@@ -9,7 +9,7 @@ TMP ?= $(HOME)/.cache
 EXLA_TARGET ?= cpu # can also be cuda
 EXLA_MODE ?= opt # can also be dbg
 EXLA_CACHE ?= $(TMP)/exla
-EXLA_TENSORFLOW_GIT_REPO ?= git@github.com:tensorflow/tensorflow.git
+EXLA_TENSORFLOW_GIT_REPO ?= https://github.com/tensorflow/tensorflow.git
 EXLA_TENSORFLOW_GIT_REV ?= 8a1bb87da5b8dcec1d7f0bf8baa43565c095830e
 
 # Private configuration
