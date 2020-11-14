@@ -1,15 +1,6 @@
-load("@com_grail_bazel_compdb//:aspects.bzl", "compilation_database")
 load("@org_tensorflow//tensorflow/core/platform/default:cuda_build_defs.bzl", "if_cuda_is_configured",)
 
-package(default_visibility=["//visibility:public"])
-
-compilation_database(
-  name = "exla_compdb",
-  targets = [
-      ":libexla_cpu.so",
-      ":libexla_gpu.so",
-  ],
-)
+package(default_visibility=["//visibility:private"])
 
 cc_library(
   name = "exla_allocator",
@@ -33,15 +24,14 @@ cc_library(
 cc_library(
   name = "exla_nif_util",
   srcs = ["exla_nif_util.cc"],
-  hdrs = ["exla_nif_util.h"],
+  hdrs = ["exla_nif_util.h"] + glob(["erts/**/*.h"]),
   deps = [
     ":exla_allocator",
     "@com_google_absl//absl/types:span",
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
     "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options",
-    "@erts//:headers"
+    "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options"
   ],
 )
 

@@ -1,4 +1,4 @@
-#include "exla/exla_allocator.h"
+#include "tensorflow/compiler/xla/exla/exla_allocator.h"
 
 namespace xla {
 

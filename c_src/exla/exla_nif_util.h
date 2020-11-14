@@ -1,7 +1,8 @@
 #ifndef EXLA_NIF_UTIL_H_
 #define EXLA_NIF_UTIL_H_
 
-#include "exla/exla_allocator.h"
+#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
+#include "tensorflow/compiler/xla/exla/exla_allocator.h"
 
 #include "absl/types/span.h"
 
@@ -9,7 +10,6 @@
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 
-#include <erl_nif.h>
 #include <string>
 #include <algorithm>
 

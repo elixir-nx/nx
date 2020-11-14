@@ -1,4 +1,4 @@
-#include "exla/exla_nif_util.h"
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
 namespace exla {
 

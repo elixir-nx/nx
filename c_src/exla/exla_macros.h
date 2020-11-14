@@ -4,7 +4,7 @@
 #ifndef EXLA_MACROS_H_
 #define EXLA_MACROS_H_
 
-#include "exla/exla_nif_util.h"
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
 #define EXLA_STATUS_MACROS_CONCAT_NAME(x, y) EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y)
 #define EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y) x##y
