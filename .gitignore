@@ -21,6 +21,5 @@ exla-*.tar
 
 # Ignore build artifacts
 /c_src/exla/erts
-/c_src/tf-*
 /priv/
 /tmp/
