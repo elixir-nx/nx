@@ -4,7 +4,7 @@ Elixir XLA Client for compiling and running Elixir code on CPU/GPU/TPU.
 
 ## Usage
 
-List EXLA as a dependency in your project:
+Add EXLA as a dependency in your project:
 
 ```elixir
 def deps do
