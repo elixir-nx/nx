@@ -4,11 +4,10 @@ defmodule Exla.MixProject do
   def project do
     [
       app: :exla,
-      version: "0.0.6",
+      version: "0.0.6-dev",
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      make_args: ["--ignore-errors"],
       compilers: [:elixir_make] ++ Mix.compilers()
     ]
   end
