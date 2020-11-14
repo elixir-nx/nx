@@ -2,18 +2,27 @@
 
 Elixir XLA Client for compiling and running Elixir code on CPU/GPU/TPU.
 
-## Building locally
+## Usage
 
-EXLA is a regular Elixir project, therefore, to run it locally:
+List EXLA as a dependency in your project:
 
-```shell
-mix deps.get
-mix compile
+```elixir
+def deps do
+  {:exla, "~> 0.1"}
+end
 ```
 
-Notice [you will need Bazel installed locally](https://bazel.build/).
+The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. You will need the following installed in your system to compile them:
+
+  * [Git](https://git-scm.com/) for checking out Tensorflow
+  * [Bazel](https://bazel.build/) for compiling Tensorflow
+  * [Python3](https://python.org) with numpy installed (`pip3 install numpy`) for compiling Tensorflow
+
+Subsequent commands should be much faster.
 
 ### Environment variables
+
+You can use the following env vars to customize your build:
 
   * `EXLA_TARGET` - controls to compile with CPU-only (default) or CUDA-enabled, example: `EXLA_TARGET=cuda`
 
@@ -21,7 +30,26 @@ Notice [you will need Bazel installed locally](https://bazel.build/).
 
   * `EXLA_CACHE` - control where to store Tensorflow checkouts and builds
 
-## Building with Docker
+Note those variables can be set directly in the dependency:
+
+```elixir
+def deps do
+  {:exla, "~> 0.1", system_env: %{"EXLA_TARGET" => "CUDA"}}
+end
+```
+
+## Contributing
+
+### Building locally
+
+EXLA is a regular Elixir project, therefore, to run it locally:
+
+```shell
+mix deps.get
+mix test
+```
+
+### Building with Docker
 
 The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). You'll also need to set up the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
 
@@ -65,4 +93,10 @@ Or you can run an example:
 
 ```shell
 mix run examples/basic_addition.exs
+```
+
+To run tests:
+
+```shell
+mix test
 ```
