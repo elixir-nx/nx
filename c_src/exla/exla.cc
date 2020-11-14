@@ -73,6 +73,9 @@ ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make(env, builder));
 }
 /************************ xla::ShapedBuffer Functions *********************/
+// TODO: This function doesn't behave in the way it should. Rather than placing the binary directly on the device,
+// it stages the binary in a ShapedBuffer and does the device transfer when passed as an argument to an `xla::LocalExecutable`
+// We need to investigate `ScopedShapedBuffer` and `ExecutionInput` instead.
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
     return enif_make_badarg(env);

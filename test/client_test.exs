@@ -59,27 +59,11 @@ defmodule ClientTest do
     assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {})
   end
 
-  @tag :cuda
-  test "compile/4 succeeds on cuda device with constant computation and no args", state do
-    op = Op.constant(state[:builder], 1)
-    comp = Builder.build(op)
-    assert %LocalExecutable{} = Client.compile(state[:gpu], comp, {})
-  end
-
   test "compile/4 succeeds on host device with basic computation and args", state do
     shape = Shape.make_shape(:int32, {})
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
     assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {shape})
-  end
-
-  @tag :cuda
-  test "compile/4 succeeds on cuda device with basic computation and args", state do
-    shape = Shape.make_shape(:int32, {})
-    x = Op.parameter(state[:builder], 0, shape, "x")
-    res = Op.add(x, x)
-    comp = Builder.build(res)
-    assert %LocalExecutable{} = Client.compile(state[:gpu], comp, {shape})
   end
 end

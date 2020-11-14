@@ -1,3 +1,4 @@
+// TODO: Combine this file with `exla_nif_util.h`
 /*
  * See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/lib/statusor.h
  */
