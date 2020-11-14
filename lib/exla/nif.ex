@@ -160,7 +160,7 @@ defmodule Exla.NIF do
   def constant_r0(_builder, _value),
     do: nif_error()
 
-  def constant_r1(_length, _value),
+  def constant_r1(_builder, _length, _value),
     do: nif_error()
 
   def get_or_create_local_client(_platform, _number_of_replicas, _intra_op_parallelism_threads),
