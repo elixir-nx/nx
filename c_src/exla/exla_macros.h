@@ -1,3 +1,4 @@
+// TODO: Combine this file with `exla_nif_util.h`
 /*
  * See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/lib/statusor.h
  */
@@ -13,11 +14,11 @@
   EXLA_ASSIGN_OR_RETURN_IMPL(                  \
     EXLA_STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__), lhs, rexpr, env)
 
-#define EXLA_ASSIGN_OR_RETURN_IMPL(statusor, lhs, rexpr, env) \
-  auto statusor = (rexpr);                                    \
-  if(!statusor.ok()){                                         \
-    return exla::error(env, "StatusOr Error.");               \
-  }                                                           \
+#define EXLA_ASSIGN_OR_RETURN_IMPL(statusor, lhs, rexpr, env)           \
+  auto statusor = (rexpr);                                              \
+  if(!statusor.ok()){                                                   \
+    return exla::error(env, statusor.status().error_message().c_str()); \
+  }                                                                     \
   lhs = std::move(statusor.ValueOrDie());
 
 #endif

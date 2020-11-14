@@ -40,7 +40,7 @@ namespace exla {
   /*
    * Getters for non-standard types. Suffix to be explicit.
    */
-  int get_platform(ErlNifEnv* env, ERL_NIF_TERM term, stream_executor::Platform* platform);
+  int get_platform(ErlNifEnv* env, ERL_NIF_TERM term, stream_executor::Platform* &platform);
   int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type);
   int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
 
