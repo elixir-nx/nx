@@ -14,8 +14,11 @@ defmodule ClientTest do
     :os.set_signal(:sigchld, :default)
 
     case System.fetch_env("EXLA_TARGET") do
-      {:ok, "cuda"} -> {:ok, cpu: Client.create_client(), gpu: Client.create_client(platform: :cuda)}
-      _ -> {:ok, cpu: Client.create_client(), gpu: nil}
+      {:ok, "cuda"} ->
+        {:ok, cpu: Client.create_client(), gpu: Client.create_client(platform: :cuda)}
+
+      _ ->
+        {:ok, cpu: Client.create_client(), gpu: nil}
     end
   end
 

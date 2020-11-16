@@ -10,8 +10,11 @@ defmodule LocalExecutableTest do
 
   setup_all do
     case System.fetch_env("EXLA_TARGET") do
-      {:ok, "cuda"} -> {:ok, cpu: Client.create_client(), gpu: Client.create_client(platform: :cuda)}
-      _ -> {:ok, cpu: Client.create_client(), gpu: nil}
+      {:ok, "cuda"} ->
+        {:ok, cpu: Client.create_client(), gpu: Client.create_client(platform: :cuda)}
+
+      _ ->
+        {:ok, cpu: Client.create_client(), gpu: nil}
     end
   end
 
@@ -33,7 +36,9 @@ defmodule LocalExecutableTest do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
     exec = Client.compile(state[:gpu], comp, {})
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {}, %ExecutableRunOptions{device: {:cuda, 0}})
+
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} =
+             LocalExecutable.run(exec, {}, %ExecutableRunOptions{device: {:cuda, 0}})
   end
 
   test "run/4 succeeds with 1 input and default options on host device", state do
@@ -52,7 +57,9 @@ defmodule LocalExecutableTest do
     res = Op.add(x, x)
     comp = Builder.build(res)
     exec = Client.compile(state[:gpu], comp, {t1.shape})
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {t1}, %ExecutableRunOptions{device: {:cuda, 0}})
+
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} =
+             LocalExecutable.run(exec, {t1}, %ExecutableRunOptions{device: {:cuda, 0}})
   end
 
   test "run/4 succeeds with 2 inputs and default options on host device", state do
@@ -75,6 +82,8 @@ defmodule LocalExecutableTest do
     res = Op.add(x, y)
     comp = Builder.build(res)
     exec = Client.compile(state[:gpu], comp, {t1.shape, t2.shape})
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {t1, t2}, %ExecutableRunOptions{device: {:cuda, 0}})
+
+    assert %Tensor{data: {:ref, _}, shape: %Shape{}} =
+             LocalExecutable.run(exec, {t1, t2}, %ExecutableRunOptions{device: {:cuda, 0}})
   end
 end
