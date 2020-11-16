@@ -8,8 +8,13 @@ defmodule ClientTest do
 
   # We need a common client for each test
   setup_all do
+    # TODO: This needs to be moved, but for now it's the only way to get the CUDA tests to pass
+    # because compilation relies on the TF SubProcess class which needs `waitpid` to behave well
+    # to work.
+    :os.set_signal(:sigchld, :default)
+
     case System.fetch_env("EXLA_TARGET") do
-      {:ok, "cuda"} -> {:ok, cpu: Client.create_client(), gpu: Client.create_client()}
+      {:ok, "cuda"} -> {:ok, cpu: Client.create_client(), gpu: Client.create_client(platform: :cuda)}
       _ -> {:ok, cpu: Client.create_client(), gpu: nil}
     end
   end
@@ -60,11 +65,27 @@ defmodule ClientTest do
     assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {})
   end
 
+  @tag :cuda
+  test "compile/4 succeeds on cuda device with constant computation and no args", state do
+    op = Op.constant(state[:builder], 1)
+    comp = Builder.build(op)
+    assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {})
+  end
+
   test "compile/4 succeeds on host device with basic computation and args", state do
     shape = Shape.make_shape(:int32, {})
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
     assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {shape})
+  end
+
+  @tag :cuda
+  test "compile/4 succeeds on cuda device with basic computation and args", state do
+    shape = Shape.make_shape(:int32, {})
+    x = Op.parameter(state[:builder], 0, shape, "x")
+    res = Op.add(x, x)
+    comp = Builder.build(res)
+    assert %LocalExecutable{} = Client.compile(state[:gpu], comp, {shape})
   end
 end

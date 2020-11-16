@@ -49,11 +49,30 @@ defmodule Exla.Client do
     count
   end
 
-  def compile(
+  def compile(client = %Client{platform: platform}, computation = %Computation{}, argument_shapes, options \\ %ExecutableBuildOptions{}) do
+    case platform do
+      :cuda -> _compile_cuda(client, computation, argument_shapes, options)
+      :host -> _compile_host(client, computation, argument_shapes, options)
+    end
+  end
+
+  defp _compile_cuda(client = %Client{platform: :cuda}, computation = %Computation{}, argument_shapes, options) do
+    # TODO: We need this in order for the `Compile` NIF to start `ptxas` using a TF Subprocess. The subprocess relies on `waitpid`
+    # which fails under normal circumstances because ERTS sets SIGCHLD to SIGIGN. We need to determine the implications of setting
+    # this here.
+    :os.set_signal(:sigchld, :default)
+    _compile(client, computation, argument_shapes, options)
+  end
+
+  defp _compile_host(client = %Client{platform: :host}, computation = %Computation{}, argument_shapes, options) do
+    _compile(client, computation, argument_shapes, options)
+  end
+
+  defp _compile(
         client = %Client{ref: ref},
         %Computation{ref: computation},
         argument_shapes,
-        options \\ %ExecutableBuildOptions{}
+        options
       ) do
     # TODO: I think argument shapes should be a list since we have to traverse it to pull out
     # the refs of each Shape. To simplify the handling of `absl::Span` on the NIF side
