@@ -1,10 +1,9 @@
 defmodule Exla.NIF do
-  @on_load :load_nifs
+  @moduledoc false
+  @on_load :__on_load__
 
-  app = Mix.Project.config()[:app]
-  @doc false
-  def load_nifs do
-    path = :filename.join(:code.priv_dir(unquote(app)), 'libexla')
+  def __on_load__ do
+    path = :filename.join(:code.priv_dir(:exla), 'libexla')
     :erlang.load_nif(path, 0)
   end
 
