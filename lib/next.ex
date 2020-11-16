@@ -3,11 +3,9 @@ defmodule NEXT.Kernel do
   The API available inside `defn` blocks.
   """
 
-  def a + b, do: :erlang.+(a, b)
-  def add(a, b), do: :erlang.+(a, b)
-
-  def a - b, do: :erlang.-(a, b)
-  def subtract(a, b), do: :erlang.-(a, b)
+  def a + b, do: add(a, b)
+  def add(a, b) when is_integer(a) and is_integer(b), do: :erlang.+(a, b)
+  def add(a, b) when is_list(a) and is_integer(b), do: Enum.map(a, &:erlang.+(&1, b))
 end
 
 defmodule NEXT.Module do
