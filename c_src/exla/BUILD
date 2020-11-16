@@ -22,6 +22,15 @@ cc_library(
 )
 
 cc_library(
+  name = "exla_client",
+  srcs = ["exla_client.cc"],
+  hdrs = ["exla_client.h"],
+  deps = [
+    "@org_tensorflow//tensorflow/compiler/xla/client:client_library"
+  ]
+)
+
+cc_library(
   name = "exla_nif_util",
   srcs = ["exla_nif_util.cc"],
   hdrs = ["exla_nif_util.h"] + glob(["erts/**/*.h"]),
@@ -45,6 +54,7 @@ cc_binary(
     ":exla_allocator",
     ":exla_nif_util",
     ":exla_macros",
+    ":exla_client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
@@ -63,6 +73,7 @@ cc_binary(
     ":exla_allocator",
     ":exla_nif_util",
     ":exla_macros",
+    ":exla_client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",

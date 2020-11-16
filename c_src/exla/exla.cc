@@ -1,6 +1,7 @@
 #include "tensorflow/compiler/xla/exla/exla_allocator.h"
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/compiler/xla/exla/exla_macros.h"
+#include "tensorflow/compiler/xla/exla/exla_client.h"
 
 #include "absl/types/span.h"
 
@@ -335,16 +336,14 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 // TODO: This function generates mildly annoying and poorly formatted log messages from the TensorFlow side...
 // We can either make the logging stricter or we can somehow get the log messages to the Elixir Logger?? I'm
 // not sure what the best solution is...
-ERL_NIF_TERM get_or_create_local_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 3){
-    return enif_make_badarg(env);
-  }
+ERL_NIF_TERM get_cpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, exla::GetCpuClient(), env);
 
-  xla::LocalClientOptions options;
+  return exla::ok(env, exla::make<xla::LocalClient*>(env, client));
+}
 
-  if(!exla::get_options(env, argv, options)) return enif_make_badarg(env);
-
-  EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, xla::ClientLibrary::GetOrCreateLocalClient(options), env);
+ERL_NIF_TERM get_gpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  EXLA_ASSIGN_OR_RETURN(xla::LocalClient* client, exla::GetGpuClient(), env);
 
   return exla::ok(env, exla::make<xla::LocalClient*>(env, client));
 }
@@ -511,7 +510,8 @@ static ErlNifFunc exla_funcs[] = {
   /***** xla::XlaBuilder *****/
   {"new_builder", 1, new_builder},
   /****** xla::Client ******/
-  {"get_or_create_local_client", 3, get_or_create_local_client},
+  {"get_cpu_client", 0, get_cpu_client},
+  {"get_gpu_client", 0, get_gpu_client},
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** xla::ShapedBuffer ******/

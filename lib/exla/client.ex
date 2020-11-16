@@ -29,11 +29,10 @@ defmodule Exla.Client do
     intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
 
     {:ok, ref} =
-      Exla.NIF.get_or_create_local_client(
-        platform,
-        number_of_replicas,
-        intra_op_parallelism_threads
-      )
+      case platform do
+        :host -> Exla.NIF.get_cpu_client()
+        :cuda -> Exla.NIF.get_gpu_client()
+      end
 
     %Client{ref: ref, platform: platform}
   end

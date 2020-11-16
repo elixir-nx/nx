@@ -49,7 +49,6 @@ namespace exla {
    */
   int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableRunOptions& options);
   int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions& options);
-  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::LocalClientOptions& options);
 
   int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span);
 

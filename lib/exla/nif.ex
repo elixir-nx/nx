@@ -158,6 +158,10 @@ defmodule Exla.NIF do
   def get_or_create_local_client(_platform, _number_of_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 
+  def get_cpu_client, do: nif_error(__ENV__.function)
+
+  def get_gpu_client, do: nif_error(__ENV__.function)
+
   def get_default_device_ordinal(_client),
     do: nif_error(__ENV__.function)
 
