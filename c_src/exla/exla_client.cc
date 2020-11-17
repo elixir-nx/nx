@@ -2,6 +2,8 @@
 #include "tensorflow/core/common_runtime/gpu/gpu_host_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_mem_allocator.h"
 #include "tensorflow/core/common_runtime/bfc_allocator.h"
+#include "tensorflow/core/util/env_var.h"
+#include "tensorflow/stream_executor/tf_allocator_adapter.h"
 #include "absl/memory/memory.h"
 
 namespace exla {
@@ -61,6 +63,63 @@ namespace exla {
   }
 
   // TODO: Move this to `exla_allocator`
+  // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L85
+  // TODO: Consider a different approach, it might not be necessary, but it's worth thinking about later on.
+  std::unique_ptr<tensorflow::BFCAllocator> CreateBFCAllocator(se::Platform* platform, se::StreamExecutor* executor,
+                                                                            double memory_fraction, bool preallocate) {
+    // TODO: This needs to be updated to work in a multi-device setting
+    int device_ordinal = 0;
+    bool enable_unified_memory;
+
+    tensorflow::Status status = tensorflow::ReadBoolFromEnvVar("TF_FORCE_UNIFIED_MEMORY", false, &enable_unified_memory);
+
+    if(!status.ok()) {
+      LOG(ERROR) << "Unable to read TF_FORCE_UNIFIED_MEMORY: " << status.error_message();
+    }
+
+    auto sub_allocator = absl::make_unique<tensorflow::GPUMemAllocator>(executor,
+                                                                        tensorflow::PlatformGpuId(device_ordinal),
+                                                                        enable_unified_memory,
+                                                                        std::vector<tensorflow::SubAllocator::Visitor>(),
+                                                                        std::vector<tensorflow::SubAllocator::Visitor>());
+    tensorflow::int64 free_memory;
+    tensorflow::int64 total_memory;
+
+    if(!executor->DeviceMemoryUsage(&free_memory, &total_memory)) {
+      LOG(WARNING) << "Failed to query available memory from device " << device_ordinal;
+    }
+
+    size_t allocator_memory = enable_unified_memory ? total_memory : free_memory * memory_fraction;
+
+    if(preallocate) {
+      LOG(INFO) << "XLA backend allocating " << allocator_memory
+                << " bytes on device " << device_ordinal
+                << " for BFCAllocator.";
+    } else{
+      LOG(INFO) << "XLA backend will use up to " << allocator_memory
+                << " bytes on device " << device_ordinal
+                << " for BFCAllocator.";
+    }
+
+    auto gpu_bfc_allocator = absl::make_unique<tensorflow::BFCAllocator>(sub_allocator.release(), allocator_memory,
+                                                                         !preallocate, absl::StrCat("GPU_", device_ordinal, "_bfc"));
+
+    return gpu_bfc_allocator;
+  }
+
+  // TODO: Move this to `exla_allocator`
+  // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L140
+  // TODO: Consider a different approach, it might not be necessary, but it's worth thinking about later on.
+  std::unique_ptr<se::DeviceMemoryAllocator> GetGpuDeviceAllocator(se::Platform* platform, se::StreamExecutor* executor,
+                                                                   double memory_fraction, bool preallocate) {
+    // TODO: Handle StatusOr
+    std::unique_ptr<se::Stream> stream = absl::make_unique<se::Stream>(executor);
+    std::unique_ptr<tensorflow::BFCAllocator> sub_allocator = CreateBFCAllocator(platform, executor, memory_fraction, preallocate);
+    std::unique_ptr<stream_executor::TfAllocatorAdapter> allocator = absl::make_unique<stream_executor::TfAllocatorAdapter>(sub_allocator.get(), stream.get());
+    return std::move(allocator);
+  }
+
+  // TODO: Move this to `exla_allocator`
   // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L155
   // TODO: Consider a different approach, it might not be necessary, but it's worth thinking about later on.
   std::unique_ptr<tensorflow::BFCAllocator> GetGpuHostAllocator(se::StreamExecutor* executor) {
@@ -90,6 +149,7 @@ namespace exla {
     // TODO: Handle StatusOr
     auto executor = (platform->GetExecutor(config)).ConsumeValueOrDie();
 
+    auto allocator = GetGpuDeviceAllocator(platform, executor, 0.9, true);
     auto host_memory_allocator = GetGpuHostAllocator(executor);
 
     return new ExlaClient(client, /*host_id*/0, /*allocator*/nullptr, /*host_memory_allcoator*/std::move(host_memory_allocator), /*gpu_run_options*/nullptr);

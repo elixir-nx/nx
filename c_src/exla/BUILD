@@ -32,6 +32,7 @@ cc_library(
     "@org_tensorflow//tensorflow/core/framework:allocator",
     "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
     "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_mem_allocator",
+    "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
     "@com_google_absl//absl/memory",
     ],
 )
