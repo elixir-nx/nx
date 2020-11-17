@@ -70,7 +70,7 @@ defmodule Exla.LocalExecutable do
     # This is the same as OneFlow's XLA Executable Context, but we do some work in Elixir
     with {:ok, device} <- ensure_client_and_device_compatible(client, options.device),
          {:ok, inputs} <- populate_input_buffers(client, arguments, device),
-         {:ok, ref} <- Exla.NIF.run(exec, inputs, options),
+         {:ok, ref} <- Exla.NIF.run(client.ref, exec, inputs, options),
          # TODO: Replace this with something similar to `populate_output_buffers`
          {:ok, shape} <- Exla.NIF.on_host_shape(ref) do
       %Tensor{data: {:ref, ref}, shape: %Shape{ref: shape}, device: device}

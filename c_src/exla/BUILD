@@ -26,8 +26,11 @@ cc_library(
   srcs = ["exla_client.cc"],
   hdrs = ["exla_client.h"],
   deps = [
-    "@org_tensorflow//tensorflow/compiler/xla/client:client_library"
-  ]
+    "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
+    "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
+    "@org_tensorflow//tensorflow/core:lib",
+    "@org_tensorflow//tensorflow/core/framework:allocator",
+    ],
 )
 
 cc_library(

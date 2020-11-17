@@ -177,7 +177,7 @@ defmodule Exla.NIF do
   def compile(_client, _computation, _argument_layouts, _options),
     do: nif_error(__ENV__.function)
 
-  def run(_executable, _arguments, _run_options),
+  def run(_client, _executable, _arguments, _run_options),
     do: nif_error(__ENV__.function)
 
   def literal_to_shaped_buffer(_client, _literal, _device_ordinal, _allocator),
