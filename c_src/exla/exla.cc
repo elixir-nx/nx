@@ -28,7 +28,6 @@ void free_computation(ErlNifEnv* env, void* obj){delete (xla::XlaComputation*) o
 void free_literal(ErlNifEnv* env, void* obj){delete (xla::Literal*) obj;}
 void free_local_executable(ErlNifEnv* env, void* obj){delete (xla::LocalExecutable*) obj;}
 void free_shaped_buffer(ErlNifEnv* env, void* obj){delete (xla::ShapedBuffer*) obj;}
-void free_client(ErlNifEnv* env, void* obj){delete (xla::LocalClient*) obj;}
 void free_builder(ErlNifEnv* env, void* obj){delete (xla::XlaBuilder*) obj;}
 void free_exla_client(ErlNifEnv* env, void* obj){delete (exla::ExlaClient*) obj;}
 
@@ -41,7 +40,6 @@ static int open_resources(ErlNifEnv* env) {
   if(!exla::open_resource<xla::Literal>(env, mod, "Literal", free_literal)) return -1;
   if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable)) return -1;
   if(!exla::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer)) return -1;
-  if(!exla::open_resource<xla::LocalClient*>(env, mod, "Client", free_client)) return -1;
   if(!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_builder)) return -1;
   if(!exla::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_exla_client)) return -1;
 
@@ -443,15 +441,15 @@ ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TE
     return enif_make_badarg(env);
   }
 
-  xla::LocalClient** client;
+  exla::ExlaClient** client;
   xla::Literal* literal;
   int device_ordinal;
 
-  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::Literal>(env, argv[1], literal)) return enif_make_badarg(env);
   if(!exla::get(env, argv[2], device_ordinal)) return enif_make_badarg(env);
 
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, (*client)->LiteralToShapedBuffer(*literal, device_ordinal), env);
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, (*client)->client()->LiteralToShapedBuffer(*literal, device_ordinal), env);
 
   return exla::make<xla::ShapedBuffer>(env, buffer);
 }
@@ -461,13 +459,13 @@ ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TE
     return enif_make_badarg(env);
   }
 
-  xla::LocalClient** client;
+  exla::ExlaClient** client;
   xla::ShapedBuffer* buffer;
 
-  if(!exla::get<xla::LocalClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::ShapedBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
 
-  EXLA_ASSIGN_OR_RETURN(xla::Literal literal, (*client)->ShapedBufferToLiteral(*buffer), env);
+  EXLA_ASSIGN_OR_RETURN(xla::Literal literal, (*client)->client()->ShapedBufferToLiteral(*buffer), env);
 
   return exla::make<xla::Literal>(env, literal);
 }
