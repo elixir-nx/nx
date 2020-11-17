@@ -7,6 +7,7 @@
 #include "tensorflow/stream_executor/device_memory_allocator.h"
 #include "tensorflow/core/platform/mem.h"
 #include "tensorflow/core/framework/allocator.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace exla {
   namespace se = tensorflow::se;
@@ -51,6 +52,7 @@ namespace exla {
     /* tensorflow::thread::ThreadPool h2d_transfer_pool_ = nullptr; */
   };
 
+  // TODO: Separate into different device classes similar to PjRt
   xla::StatusOr<ExlaClient*> GetCpuClient();
   xla::StatusOr<ExlaClient*> GetGpuClient();
 }
