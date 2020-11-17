@@ -1,11 +1,23 @@
+defmodule Nx do
+  @moduledoc """
+  Numerical Elixir.
+
+  A collection of functions and data types to work
+  with Numerical Elixir.
+  """
+
+  def add(a, b) when is_integer(a) and is_integer(b), do: :erlang.+(a, b)
+  def add(a, b) when is_list(a) and is_integer(b), do: Enum.map(a, &:erlang.+(&1, b))
+end
+
 defmodule NEXT.Kernel do
   @moduledoc """
   The API available inside `defn` blocks.
   """
 
-  def a + b, do: add(a, b)
-  def add(a, b) when is_integer(a) and is_integer(b), do: :erlang.+(a, b)
-  def add(a, b) when is_list(a) and is_integer(b), do: Enum.map(a, &:erlang.+(&1, b))
+  defmacro a + b do
+    quote do: Nx.add(unquote(a), unquote(b))
+  end
 end
 
 defmodule NEXT.Module do
@@ -15,12 +27,12 @@ defmodule NEXT.Module do
 
   @doc """
   Returns the definition for the name-arity pair.
-  
+
   It returns a tuple with the `version`, the `kind`,
   the definition `metadata`, and a list with each clause.
   Each clause is a four-element tuple with metadata,
   the arguments, the guards, and the clause AST.
-  
+
   The clauses are returned in the expanded AST format,
   which is a subset of Elixir's AST but already normalized.
   This makes it a useful AST for analyzing code but it
@@ -61,7 +73,7 @@ defmodule NEXT.Module do
     case :elixir_def.take_definition(module, {name, arity}) do
       false ->
         false
-            
+
       _ ->
         :elixir_locals.yank({name, arity}, module)
         true
@@ -86,11 +98,10 @@ defmodule NEXT do
   Numerical EliXir Transforms.
   """
 
-  @defs_key :__next_defs__
+  @exports_key :__next_exports__
 
   # TODO: Support default arguments
   # TODO: Support multiple clauses
-  # TODO: Support private
   # TODO: Support cross module calls
   # TODO: Support pipe
   # TODO: Support guards
@@ -117,6 +128,17 @@ defmodule NEXT do
     define(:def, call, block, __CALLER__)
   end
 
+  @doc """
+  Defines a private numerical function.
+
+  Like any numerical function, it is always inlined
+  by its callers and then removed and made innaccessible
+  at compilation time.
+  """
+  defmacro defnp(call, do: block) do
+    define(:defp, call, block, __CALLER__)
+  end
+
   defp define(kind, call, block, env) do
     assert_no_guards!(kind, call, env)
     {name, args} = decompose_call!(kind, call, env)
@@ -126,7 +148,7 @@ defmodule NEXT do
     quote do
       unquote(__MODULE__).__define__(__MODULE__, unquote(kind), unquote(name), unquote(arity))
 
-      Kernel.unquote(kind)(unquote(name)(unquote_splicing(args))) do
+      unquote(kind)(unquote(name)(unquote_splicing(args))) do
         import Kernel, only: []
         import NEXT.Kernel
         unquote(block)
@@ -166,16 +188,16 @@ defmodule NEXT do
 
   @doc false
   def __define__(module, kind, name, arity) do
-    defs =
-      if defs = Module.get_attribute(module, @defs_key, nil) do
-        defs
+    exports =
+      if exports = Module.get_attribute(module, @exports_key, nil) do
+        exports
       else
         Module.put_attribute(module, :before_compile, __MODULE__)
-        []
+        %{}
       end
 
-    defs = if kind == :def, do: [{name, arity} | defs], else: defs
-    Module.put_attribute(module, @defs_key, defs)
+    exports = Map.put(exports, {name, arity}, kind)
+    Module.put_attribute(module, @exports_key, exports)
     :ok
   end
 
@@ -183,33 +205,66 @@ defmodule NEXT do
 
   @doc false
   defmacro __before_compile__(%Macro.Env{module: module, file: file}) do
-    defs = Module.get_attribute(module, @defs_key)
-    state = %{module: module, file: file}
-    {defs, _state} = Enum.map_reduce(defs, state, &compile/2)
-    {:__block__, [], defs}
+    exports = Module.get_attribute(module, @exports_key)
+    defs = for {def, _value} <- exports, into: %{}, do: {def, false}
+    state = %{module: module, file: file, stack: [], defs: defs}
+
+    public = for {def, :def} <- exports, do: def
+    {quoted, state} = Enum.map_reduce(public, state, &compile/2)
+
+    to_delete =
+      for {def, stored} when stored != false <- state.defs do
+        quote do
+          NEXT.Module.delete_definition(__MODULE__, unquote(def))
+        end
+      end
+
+    {:__block__, [], to_delete ++ quoted}
   end
 
   defp compile({name, _arity} = def, state) do
+    {{_kind, _meta, args, ast}, state} = get_cached_definition(def, [], state)
+    binding = Enum.map(args, &{elem(&1, 0), &1})
+
+    quoted =
+      quote do
+        def unquote(name)(unquote_splicing(args)) do
+          {unquote(Macro.escape(ast)), unquote(binding)}
+        end
+      end
+
+    {quoted, state}
+  end
+
+  defp get_cached_definition({name, arity} = def, meta, state) do
+    case state.defs do
+      %{^def => false} ->
+        get_and_cache_definition(def, state)
+
+      %{^def => stored} ->
+        {stored, state}
+
+      %{} ->
+        compile_error!(
+          meta,
+          state,
+          "cannot invoke #{name}/#{arity} because it was not defined with defn"
+        )
+    end
+  end
+
+  defp get_and_cache_definition(def, state) do
     {:v1, kind, meta, clauses} = NEXT.Module.get_definition(state.module, def)
 
     case clauses do
       [] ->
-        {:ok, state}
+        compile_error!(meta, state, "cannot have #{kind}n without clauses")
 
       [{meta, args, [], ast}] ->
         assert_only_vars!(kind, meta, args, state)
-        binding = Enum.map(args, &{elem(&1, 0), &1})
-
-        quoted =
-          quote do
-            NEXT.Module.delete_definition(__MODULE__, unquote(def))
-
-            def unquote(name)(unquote_splicing(args)) do
-              {unquote(Macro.escape(ast)), unquote(binding)}
-            end
-          end
-
-        {quoted, state}
+        result = {kind, meta, args, ast}
+        state = put_in(state.defs[def], result)
+        {result, state}
 
       [_, _ | _] ->
         compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
