@@ -101,6 +101,7 @@ defmodule Exla.Client do
       |> List.to_tuple()
 
     {:ok, ref} = Exla.NIF.compile(ref, computation, shape_refs, options)
-    %LocalExecutable{client: client, ref: ref}
+    # TODO: Allow user to set device ordinal
+    %LocalExecutable{client: client, ref: ref, device: {client.platform, 0}}
   end
 end

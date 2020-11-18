@@ -88,6 +88,7 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   exla::ExlaClient **client;
   int device_ordinal;
 
+  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!enif_inspect_binary(env, argv[1], &bin)) return enif_make_badarg(env);
   if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
   if(!exla::get(env, argv[3], device_ordinal)) return enif_make_badarg(env);
@@ -95,9 +96,11 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   const char *data_ptr = (char *) bin.data;
   int64_t data_size = bin.size;
 
+  xla::Shape on_device_shape = (*client)->client()->backend().transfer_manager()->HostShapeToDeviceShape(*shape);
+
   stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
 
-  auto buffer = new xla::ShapedBuffer(*shape,  *shape, device_ordinal);
+  auto buffer = new xla::ShapedBuffer(*shape,  on_device_shape, device_ordinal);
 
   buffer->set_buffer(memory_base, {});
 
@@ -429,7 +432,11 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get_arguments(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
   if(!exla::get_options(env, argv, run_options)) return exla::error(env, "Unable to get run options.");
 
+  // TODO: User should be able to choose device.
+  run_options.set_stream((*client)->devices().front()->compute_stream());
+  run_options.set_host_to_device_stream((*client)->devices().front()->host_to_device_stream());
   run_options.set_allocator((*client)->allocator());
+  run_options.set_intra_op_thread_pool((*client)->client()->backend().eigen_intra_op_thread_pool_device());
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
 
@@ -449,7 +456,7 @@ ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TE
   if(!exla::get<xla::Literal>(env, argv[1], literal)) return enif_make_badarg(env);
   if(!exla::get(env, argv[2], device_ordinal)) return enif_make_badarg(env);
 
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, (*client)->client()->LiteralToShapedBuffer(*literal, device_ordinal), env);
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, (*client)->client()->LiteralToShapedBuffer(*literal, device_ordinal, (*client)->allocator()), env);
 
   return exla::make<xla::ShapedBuffer>(env, buffer);
 }
@@ -592,7 +599,7 @@ static ErlNifFunc exla_funcs[] = {
   {"build", 2, build},
   {"compile", 4, compile},
   {"run", 4, run},
-  {"literal_to_shaped_buffer", 4, literal_to_shaped_buffer},
+  {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
   {"shaped_buffer_to_literal", 2, shaped_buffer_to_literal},
   /******** HLO Functions ********/
   {"get_computation_hlo_proto", 1, get_computation_hlo_proto},

@@ -1,6 +1,8 @@
 #ifndef EXLA_CLIENT_H_
 #define EXLA_CLIENT_H_
 
+#include "tensorflow/compiler/xla/exla/exla_device.h"
+
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_executable_run_options.h"
@@ -24,6 +26,7 @@ namespace exla {
 
     explicit ExlaClient(xla::LocalClient* client,
                         int host_id,
+                        std::vector<std::unique_ptr<ExlaDevice>> devices,
                         std::unique_ptr<se::DeviceMemoryAllocator> allocator,
                         std::unique_ptr<tensorflow::Allocator> host_memory_allocator,
                         std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options);
@@ -40,6 +43,10 @@ namespace exla {
 
     xla::GpuExecutableRunOptions* gpu_run_options() { return gpu_run_options_.get(); }
 
+    int device_count() const { return devices_.size(); }
+
+    const std::vector<std::unique_ptr<ExlaDevice>>& devices() const { return devices_; }
+
     /* tensorflow::thread::ThreadPool* h2d_transfer_pool() { return &h2d_transfer_pool_; } */
 
   private:
@@ -49,6 +56,7 @@ namespace exla {
     se::DeviceMemoryAllocator* allocator_;
     std::unique_ptr<se::DeviceMemoryAllocator> owned_allocator_;
     std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options_;
+    std::vector<std::unique_ptr<ExlaDevice>> devices_;
     /* tensorflow::thread::ThreadPool h2d_transfer_pool_ = nullptr; */
   };
 

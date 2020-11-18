@@ -180,7 +180,7 @@ defmodule Exla.NIF do
   def run(_client, _executable, _arguments, _run_options),
     do: nif_error(__ENV__.function)
 
-  def literal_to_shaped_buffer(_client, _literal, _device_ordinal, _allocator),
+  def literal_to_shaped_buffer(_client, _literal, _device_ordinal),
     do: nif_error(__ENV__.function)
 
   def shaped_buffer_to_literal(_client, _shaped_buffer),

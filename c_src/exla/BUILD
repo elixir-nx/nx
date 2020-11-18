@@ -21,20 +21,33 @@ cc_library(
   ]
 )
 
+cc_library (
+  name = "exla_device",
+  srcs = ["exla_device.cc"],
+  hdrs = ["exla_device.h"],
+  deps = [
+    "@org_tensorflow//tensorflow/compiler/xla/client:local_client",
+    "@org_tensorflow//tensorflow/stream_executor:stream_executor",
+    "@com_google_absl//absl/memory",
+  ],
+)
+
 cc_library(
   name = "exla_client",
   srcs = ["exla_client.cc"],
   hdrs = ["exla_client.h"],
   deps = [
+    ":exla_device",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
     "@org_tensorflow//tensorflow/core:lib",
     "@org_tensorflow//tensorflow/core/framework:allocator",
     "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
+    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_bfc_allocator",
     "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_mem_allocator",
     "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
     "@com_google_absl//absl/memory",
-    ],
+  ],
 )
 
 cc_library(
