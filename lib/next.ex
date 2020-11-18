@@ -204,10 +204,10 @@ defmodule NEXT do
   ## Compilation
 
   @doc false
-  defmacro __before_compile__(%Macro.Env{module: module, file: file}) do
+  defmacro __before_compile__(%Macro.Env{module: module, file: file, line: line}) do
     exports = Module.get_attribute(module, @exports_key)
     defs = for {def, _value} <- exports, into: %{}, do: {def, false}
-    state = %{module: module, file: file, stack: [], defs: defs}
+    state = %{module: module, file: file, stack: [], defs: defs, function: nil, line: line}
 
     public = for {def, :def} <- exports, do: def
     {quoted, state} = Enum.map_reduce(public, state, &compile/2)
@@ -223,8 +223,11 @@ defmodule NEXT do
   end
 
   defp compile({name, _arity} = def, state) do
+    state = %{state | function: def}
     {{_kind, _meta, args, ast}, state} = get_cached_definition(def, [], state)
-    binding = Enum.map(args, &{elem(&1, 0), &1})
+
+    binding =
+      Enum.map(args, fn {var, meta, ctx} -> {var, {var, [generated: true] ++ meta, ctx}} end)
 
     quoted =
       quote do
@@ -254,21 +257,88 @@ defmodule NEXT do
   end
 
   defp get_and_cache_definition(def, state) do
-    {:v1, kind, meta, clauses} = NEXT.Module.get_definition(state.module, def)
+    with_function(def, state, fn state ->
+      {:v1, kind, meta, clauses} = NEXT.Module.get_definition(state.module, def)
 
-    case clauses do
-      [] ->
-        compile_error!(meta, state, "cannot have #{kind}n without clauses")
+      case clauses do
+        [] ->
+          compile_error!(meta, state, "cannot have #{kind}n without clauses")
 
-      [{meta, args, [], ast}] ->
-        assert_only_vars!(kind, meta, args, state)
-        result = {kind, meta, args, ast}
-        state = put_in(state.defs[def], result)
-        {result, state}
+        [{meta, args, [], ast}] ->
+          assert_only_vars!(kind, meta, args, state)
+          {ast, %{version: version}} = normalize_block(ast, meta, %{version: 0}, state)
+          result = {kind, [max_version: version] ++ meta, args, ast}
+          state = put_in(state.defs[def], result)
+          {result, state}
 
-      [_, _ | _] ->
-        compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
-    end
+        [_, _ | _] ->
+          compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
+      end
+    end)
+  end
+
+  defp with_function(def, %{function: previous_def} = state, fun) do
+    {result, state} = fun.(%{state | function: def})
+    {result, %{state | function: previous_def}}
+  end
+
+  defp normalize({name, meta, ctx} = var, context, _state) when is_atom(name) and is_atom(ctx) do
+    version = Keyword.fetch!(meta, :version)
+    context = update_in(context.version, &max(&1, version))
+    {var, context}
+  end
+
+  defp normalize({{:., _, [Nx, _]} = call, meta, args}, context, state) do
+    {args, context} = normalize_list(args, context, state)
+    {{call, meta, args}, context}
+  end
+
+  defp normalize({:__block__, meta, _} = block, context, state) do
+    normalize_block(block, meta, context, state)
+  end
+
+  defp normalize(expr, _context, state) do
+    compile_error!(
+      maybe_meta(expr),
+      state,
+      "invalid numerical expression: #{Macro.to_string(expr)}"
+    )
+  end
+
+  defp normalize_list(list, context, state) do
+    Enum.map_reduce(list, context, &normalize(&1, &2, state))
+  end
+
+  ## Block handling
+
+  defp normalize_block({:__block__, meta, exprs}, _meta, context, state) do
+    {exprs, context} = normalize_block(exprs, [], meta, context, state)
+    {{:__block__, meta, exprs}, context}
+  end
+
+  defp normalize_block(expr, meta, context, state) do
+    {[expr], context} = normalize_block([expr], [], meta, context, state)
+    {expr, context}
+  end
+
+  defp normalize_block([nil], acc, meta, context, state) do
+    compile_warn(meta, state, "body has nil return type, -1 will be returned instead")
+    {Enum.reverse([-1 | acc]), context}
+  end
+
+  defp normalize_block([last], acc, _meta, context, state) do
+    {last, context} = normalize(last, context, state)
+    {Enum.reverse([last | acc]), context}
+  end
+
+  # alias, require, import are expanded to atoms, so we ignore those.
+  defp normalize_block([atom | rest], acc, meta, context, state) when is_atom(atom) do
+    normalize_block(rest, acc, meta, context, state)
+  end
+
+  defp normalize_block([head | rest], acc, meta, context, state) do
+    {head, context} = normalize(head, context, state)
+    normalize_block(rest, [head | acc], meta, context, state)
   end
 
   defp assert_only_vars!(kind, meta, args, state) do
@@ -283,8 +353,19 @@ defmodule NEXT do
 
   ## Shared helpers
 
-  defp compile_error!(meta, env_or_state, message) do
+  defp maybe_meta({_, meta, _}), do: meta
+  defp maybe_meta(_), do: []
+
+  defp compile_warn(meta, env_or_state, message) do
+    {name, arity} = env_or_state.function
     line = meta[:line] || env_or_state.line
-    raise CompileError, line: line, file: env_or_state.file, message: message
+    file = String.to_charlist(env_or_state.file)
+    stacktrace = [{env_or_state.module, name, arity, line: line, file: file}]
+    IO.warn(message, stacktrace)
+  end
+
+  defp compile_error!(meta, env_or_state, description) do
+    line = meta[:line] || env_or_state.line
+    raise CompileError, line: line, file: env_or_state.file, description: description
   end
 end
