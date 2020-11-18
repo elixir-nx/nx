@@ -93,18 +93,16 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
   if(!exla::get(env, argv[3], device_ordinal)) return enif_make_badarg(env);
 
+  stream_executor::DeviceMemoryAllocator* allocator = (*client)->allocator();
+
   const char *data_ptr = (char *) bin.data;
   int64_t data_size = bin.size;
 
-  xla::Shape on_device_shape = (*client)->client()->backend().transfer_manager()->HostShapeToDeviceShape(*shape);
+  xla::BorrowingLiteral literal = xla::BorrowingLiteral(const_cast<char *>(data_ptr), *shape);
 
-  stream_executor::DeviceMemoryBase memory_base = stream_executor::DeviceMemoryBase(const_cast<char *>(data_ptr), data_size);
+  EXLA_ASSIGN_OR_RETURN(auto scoped_buffer, (*client)->client()->LiteralToShapedBuffer(literal, device_ordinal, allocator), env);
 
-  auto buffer = new xla::ShapedBuffer(*shape,  on_device_shape, device_ordinal);
-
-  buffer->set_buffer(memory_base, {});
-
-  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer));
+  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, scoped_buffer));
 }
 
 ERL_NIF_TERM on_host_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
