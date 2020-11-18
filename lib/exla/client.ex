@@ -29,11 +29,10 @@ defmodule Exla.Client do
     intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
 
     {:ok, ref} =
-      Exla.NIF.get_or_create_local_client(
-        platform,
-        number_of_replicas,
-        intra_op_parallelism_threads
-      )
+      case platform do
+        :host -> Exla.NIF.get_cpu_client()
+        :cuda -> Exla.NIF.get_gpu_client()
+      end
 
     %Client{ref: ref, platform: platform}
   end
@@ -50,11 +49,45 @@ defmodule Exla.Client do
   end
 
   def compile(
-        client = %Client{ref: ref},
-        %Computation{ref: computation},
+        client = %Client{platform: platform},
+        computation = %Computation{},
         argument_shapes,
         options \\ %ExecutableBuildOptions{}
       ) do
+    case platform do
+      :cuda -> _compile_cuda(client, computation, argument_shapes, options)
+      :host -> _compile_host(client, computation, argument_shapes, options)
+    end
+  end
+
+  defp _compile_cuda(
+         client = %Client{platform: :cuda},
+         computation = %Computation{},
+         argument_shapes,
+         options
+       ) do
+    # TODO: We need this in order for the `Compile` NIF to start `ptxas` using a TF Subprocess. The subprocess relies on `waitpid`
+    # which fails under normal circumstances because ERTS sets SIGCHLD to SIGIGN. We need to determine the implications of setting
+    # this here.
+    :os.set_signal(:sigchld, :default)
+    _compile(client, computation, argument_shapes, options)
+  end
+
+  defp _compile_host(
+         client = %Client{platform: :host},
+         computation = %Computation{},
+         argument_shapes,
+         options
+       ) do
+    _compile(client, computation, argument_shapes, options)
+  end
+
+  defp _compile(
+         client = %Client{ref: ref},
+         %Computation{ref: computation},
+         argument_shapes,
+         options
+       ) do
     # TODO: I think argument shapes should be a list since we have to traverse it to pull out
     # the refs of each Shape. To simplify the handling of `absl::Span` on the NIF side
     # I only read spans in as Tuples. This is important because things like the dimensions
@@ -68,6 +101,7 @@ defmodule Exla.Client do
       |> List.to_tuple()
 
     {:ok, ref} = Exla.NIF.compile(ref, computation, shape_refs, options)
-    %LocalExecutable{client: client, ref: ref}
+    # TODO: Allow user to set device ordinal
+    %LocalExecutable{client: client, ref: ref, device: {client.platform, 0}}
   end
 end

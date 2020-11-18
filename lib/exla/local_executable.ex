@@ -8,6 +8,7 @@ defmodule Exla.LocalExecutable do
   @enforce_keys [:client, :ref]
   defstruct [:client, :ref, :device]
 
+  # TODO: This might be a useful part of the public `Client` API.
   def populate_input_buffers(client, arguments, device) do
     # We can avoid a lot of this by enforcing constraints: either all tensors are loaded on run
     # or no tensors are loaded on run. This method presents possibly a pretty significant bottleneck
@@ -43,6 +44,7 @@ defmodule Exla.LocalExecutable do
     {:ok, new_ref_inps}
   end
 
+  # TODO: This might be a useful part of the public `Client` API.
   # Compatible only if the platforms match and ordinal within client device count
   def ensure_client_and_device_compatible(
         client = %Client{platform: platform},
@@ -68,7 +70,7 @@ defmodule Exla.LocalExecutable do
     # This is the same as OneFlow's XLA Executable Context, but we do some work in Elixir
     with {:ok, device} <- ensure_client_and_device_compatible(client, options.device),
          {:ok, inputs} <- populate_input_buffers(client, arguments, device),
-         {:ok, ref} <- Exla.NIF.run(exec, inputs, options),
+         {:ok, ref} <- Exla.NIF.run(client.ref, exec, inputs, options),
          # TODO: Replace this with something similar to `populate_output_buffers`
          {:ok, shape} <- Exla.NIF.on_host_shape(ref) do
       %Tensor{data: {:ref, ref}, shape: %Shape{ref: shape}, device: device}

@@ -57,22 +57,6 @@ namespace exla {
     return 1;
   }
   int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions &options){ return 1; }
-  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::LocalClientOptions &options){
-
-    stream_executor::Platform* platform;
-    int number_of_replicas, intra_op_parallelism_threads;
-
-    // TODO: Adjust this to accept `int` which is passed from Elixir
-    if(!exla::get_platform(env, terms[0], platform)) return 0;
-    if(!exla::get(env, terms[1], number_of_replicas)) return 0;
-    if(!exla::get(env, terms[2], intra_op_parallelism_threads)) return 0;
-
-    options.set_platform(platform);
-    options.set_number_of_replicas(number_of_replicas);
-    options.set_intra_op_parallelism_threads(intra_op_parallelism_threads);
-
-    return 1;
-  }
 
   // TODO: Accept list, not tuple
   int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span){
@@ -113,25 +97,6 @@ namespace exla {
     var.resize(atom_length);
 
     return 1;
-  }
-
-  // TODO: Handle statusor gracefully.
-  int get_platform(ErlNifEnv* env, ERL_NIF_TERM term, stream_executor::Platform* &platform){
-    std::string platform_str;
-
-    if(!get_atom(env, term, platform_str)){
-      return 0;
-    }
-
-    if(platform_str.compare("host") == 0){
-      platform = xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
-      return 1;
-    } else if(platform_str.compare("cuda") == 0){
-      platform = xla::PlatformUtil::GetPlatform("Cuda").ConsumeValueOrDie();
-      return 1;
-    } else {
-      return 0;
-    }
   }
 
   // TODO: No need for this. Match in Elixir.

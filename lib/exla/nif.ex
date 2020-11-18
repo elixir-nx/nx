@@ -155,8 +155,9 @@ defmodule Exla.NIF do
   def constant_r1(_length, _value),
     do: nif_error(__ENV__.function)
 
-  def get_or_create_local_client(_platform, _number_of_replicas, _intra_op_parallelism_threads),
-    do: nif_error(__ENV__.function)
+  def get_cpu_client, do: nif_error(__ENV__.function)
+
+  def get_gpu_client, do: nif_error(__ENV__.function)
 
   def get_default_device_ordinal(_client),
     do: nif_error(__ENV__.function)
@@ -176,10 +177,10 @@ defmodule Exla.NIF do
   def compile(_client, _computation, _argument_layouts, _options),
     do: nif_error(__ENV__.function)
 
-  def run(_executable, _arguments, _run_options),
+  def run(_client, _executable, _arguments, _run_options),
     do: nif_error(__ENV__.function)
 
-  def literal_to_shaped_buffer(_client, _literal, _device_ordinal, _allocator),
+  def literal_to_shaped_buffer(_client, _literal, _device_ordinal),
     do: nif_error(__ENV__.function)
 
   def shaped_buffer_to_literal(_client, _shaped_buffer),
