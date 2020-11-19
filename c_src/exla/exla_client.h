@@ -47,6 +47,8 @@ namespace exla {
 
     const std::vector<std::unique_ptr<ExlaDevice>>& devices() const { return devices_; }
 
+    exla::ExlaDevice* device(int id) { return devices_.at(id).get(); }
+
     /* tensorflow::thread::ThreadPool* h2d_transfer_pool() { return &h2d_transfer_pool_; } */
 
   private:
@@ -61,8 +63,8 @@ namespace exla {
   };
 
   // TODO: Separate into different device classes similar to PjRt
-  xla::StatusOr<ExlaClient*> GetCpuClient();
-  xla::StatusOr<ExlaClient*> GetGpuClient();
+  xla::StatusOr<ExlaClient*> GetCpuClient(int num_replicas, int intra_op_parallelism_threads);
+  xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_parallelism_threads);
 }
 
 #endif
