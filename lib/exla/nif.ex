@@ -155,9 +155,9 @@ defmodule Exla.NIF do
   def constant_r1(_length, _value),
     do: nif_error(__ENV__.function)
 
-  def get_cpu_client, do: nif_error(__ENV__.function)
+  def get_cpu_client(_num_replicas, _intra_op_parallelism_threads), do: nif_error(__ENV__.function)
 
-  def get_gpu_client, do: nif_error(__ENV__.function)
+  def get_gpu_client(_num_replicas, _intra_op_parallelism_threads), do: nif_error(__ENV__.function)
 
   def get_default_device_ordinal(_client),
     do: nif_error(__ENV__.function)

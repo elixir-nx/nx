@@ -47,7 +47,7 @@ namespace exla {
 
   }
 
-  xla::StatusOr<ExlaClient*> GetCpuClient() {
+  xla::StatusOr<ExlaClient*> GetCpuClient(int num_replicas, int intra_op_parallelism_threads) {
     // TODO: Handle StatusOr
     se::Platform *platform = xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
     if(platform->VisibleDeviceCount() <= 0){
@@ -56,6 +56,8 @@ namespace exla {
 
     xla::LocalClientOptions options;
     options.set_platform(platform);
+    options.set_number_of_replicas(num_replicas);
+    options.set_intra_op_parallelism_threads(intra_op_parallelism_threads);
 
     // TODO: Handle StatusOr
     // TODO: Individual device configuration similar to: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/cpu_device.cc
@@ -150,7 +152,7 @@ namespace exla {
     return absl::make_unique<tensorflow::BFCAllocator>(sub_allocator, kGpuHostMemoryLimitBytes, true, "xla_gpu_host_bfc");
   }
 
-  xla::StatusOr<ExlaClient*> GetGpuClient() {
+  xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_parallelism_threads) {
     // TODO: Handle StatusOr
     stream_executor::Platform *platform = xla::PlatformUtil::GetPlatform("CUDA").ConsumeValueOrDie();
     if(platform->VisibleDeviceCount() <= 0){
@@ -159,6 +161,8 @@ namespace exla {
 
     xla::LocalClientOptions options;
     options.set_platform(platform);
+    options.set_number_of_replicas(num_replicas);
+    options.set_intra_op_parallelism_threads(intra_op_parallelism_threads);
 
     // TODO: Handle StatusOr
     // TODO: Individual device configuration similar to: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc

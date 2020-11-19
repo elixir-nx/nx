@@ -26,10 +26,11 @@ defmodule Exla.Client do
     number_of_replicas = Keyword.get(options, :number_of_replicas, 1)
     intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
 
+    # TODO: Add MapSet of allowed devices to block device use in a multi-device context
     {:ok, ref} =
       case platform do
-        :host -> Exla.NIF.get_cpu_client()
-        :cuda -> Exla.NIF.get_gpu_client()
+        :host -> Exla.NIF.get_cpu_client(number_of_replicas, intra_op_parallelism_threads)
+        :cuda -> Exla.NIF.get_gpu_client(number_of_replicas, intra_op_parallelism_threads)
       end
 
     %Client{ref: ref, platform: platform}
@@ -86,8 +87,7 @@ defmodule Exla.Client do
          argument_shapes,
          options
   ) do
-    # TODO: Option validation
-    device_ordinal = Keyword.get(options, :device_ordinal, Client.get_default_device_ordinal(client))
+    device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
     # TODO: I think argument shapes should be a list since we have to traverse it to pull out
@@ -102,8 +102,27 @@ defmodule Exla.Client do
       |> Enum.map(& &1.ref)
       |> List.to_tuple()
 
-    {:ok, ref} = Exla.NIF.compile(ref, computation, shape_refs, device_ordinal, num_replicas, num_partitions)
-    # TODO: Allow user to set device ordinal
-    %LocalExecutable{client: client, ref: ref, device: {client.platform, 0}}
+    # Executable Build Context
+    # TODO: Validate replicas, partitions, and shapes
+    with {:ok, {_platform, device_ordinal}} <- check_device_compatibility(client, {client.platform, device_ordinal}),
+         {:ok, ref} <- Exla.NIF.compile(ref, computation, shape_refs, device_ordinal, num_replicas, num_partitions) do
+      %LocalExecutable{client: client, ref: ref, device: {client.platform, device_ordinal}}
+    end
+  end
+
+  def check_device_compatibility(
+    client = %Client{platform: platform},
+    {platform, ordinal}
+  ) do
+    cond do
+      ordinal < 0 ->
+        {:ok, {platform, Client.get_default_device_ordinal(client)}}
+
+      ordinal < Client.get_device_count(client) ->
+        {:ok, {platform, ordinal}}
+
+      true ->
+        {:error, "Invalid device ordinal."}
+    end
   end
 end

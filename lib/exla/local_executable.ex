@@ -20,7 +20,7 @@ defmodule Exla.LocalExecutable do
         new_ref_inps
         |> Kernel.++(ref_inps)
         |> Enum.sort_by(&elem(&1, 1))
-        |> Enum.map(fn {%Tensor{data: {:ref, ref}}, idx} -> ref end)
+        |> Enum.map(fn {%Tensor{data: {:ref, ref}}, _idx} -> ref end)
 
       {:ok, List.to_tuple(inputs)}
     end
@@ -44,24 +44,6 @@ defmodule Exla.LocalExecutable do
     {:ok, new_ref_inps}
   end
 
-  # TODO: This might be a useful part of the public `Client` API.
-  # Compatible only if the platforms match and ordinal within client device count
-  def ensure_client_and_device_compatible(
-        client = %Client{platform: platform},
-        {platform, ordinal}
-      ) do
-    cond do
-      ordinal < 0 ->
-        {:ok, {platform, Client.get_default_device_ordinal(client)}}
-
-      ordinal < Client.get_device_count(client) ->
-        {:ok, {platform, ordinal}}
-
-      true ->
-        {:error, "Invalid device ordinal."}
-    end
-  end
-
   def run(
         %LocalExecutable{client: client, ref: exec},
         arguments,
@@ -83,10 +65,11 @@ defmodule Exla.LocalExecutable do
     # See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h#L752-L755
     launch_id = Keyword.get(options, :launch_id, 0)
     # This is the same as OneFlow's XLA Executable Context, but we do some work in Elixir
-    with {:ok, {_platform, ordinal}} <- ensure_client_and_device_compatible(client, device),
+    with {:ok, {_platform, ordinal}} <- Client.check_device_compatibility(client, device),
          {:ok, inputs} <- populate_input_buffers(client, arguments, device),
          {:ok, ref} <- Exla.NIF.run(client.ref, exec, inputs, ordinal, run_id, rng_seed, launch_id),
          # TODO: Replace this with something similar to `populate_output_buffers`
+         # TODO: We can set the result layout during compilation, maybe we can use that here.
          {:ok, shape} <- Exla.NIF.on_host_shape(ref) do
       %Tensor{data: {:ref, ref}, shape: %Shape{ref: shape}, device: device}
     end
