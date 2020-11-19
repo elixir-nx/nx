@@ -44,12 +44,6 @@ namespace exla {
   int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type);
   int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
 
-  /*
-   * Getters for option structs.
-   */
-  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableRunOptions& options);
-  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions& options);
-
   int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span);
 
   int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::ShapedBuffer*> &input);

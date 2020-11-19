@@ -171,13 +171,16 @@ namespace exla {
       devices.push_back(absl::make_unique<ExlaDevice>(device_ordinal, executor, client));
     }
 
+    // TODO: Allocator options should be a configuration option.
     auto allocator = GetGpuDeviceAllocator(devices, 0.9, true);
     auto host_memory_allocator = GetGpuHostAllocator(devices.front()->executor());
+
+    auto gpu_run_options = absl::make_unique<xla::GpuExecutableRunOptions>();
 
     return new ExlaClient(client, /*host_id*/0,
                           /*devices*/std::move(devices),
                           /*allocator*/std::move(allocator),
                           /*host_memory_allcoator*/std::move(host_memory_allocator),
-                          /*gpu_run_options*/nullptr);
+                          /*gpu_run_options*/std::move(gpu_run_options));
   }
 }

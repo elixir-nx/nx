@@ -47,6 +47,8 @@ namespace exla {
 
     const std::vector<std::unique_ptr<ExlaDevice>>& devices() const { return devices_; }
 
+    exla::ExlaDevice* device(int id) { return devices_.at(id).get(); }
+
     /* tensorflow::thread::ThreadPool* h2d_transfer_pool() { return &h2d_transfer_pool_; } */
 
   private:

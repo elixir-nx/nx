@@ -391,20 +391,33 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaComputation>(env, computation));
 }
 
+// TODO: Most of this logic can move to `exla::ExlaClient`
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   exla::ExlaClient** client;
   xla::XlaComputation* computation;
   absl::Span<xla::Shape*> argument_layouts;
-  xla::ExecutableBuildOptions options;
+  xla::ExecutableBuildOptions build_options;
+  int device_ordinal, num_replicas, num_partitions;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
   if(!exla::get_argument_layouts(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
-  if(!exla::get_options(env, argv, options)) return exla::error(env, "Unable to get build options.");
+  if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
+  if(!exla::get(env, argv[4], num_replicas)) return exla::error(env, "Unable to get Number of Replicas.");
+  if(!exla::get(env, argv[5], num_partitions)) return exla::error(env, "Unable to get Number of Partitions.");
+
+  build_options.set_device_allocator((*client)->allocator());
+  build_options.set_num_replicas(num_replicas);
+  build_options.set_num_partitions(num_partitions);
+  // TODO: Used in conjunction with replicas and partitions.
+  // build_options.set_device_assignment(device_assignment);
+  build_options.set_device_ordinal(device_ordinal);
+  // TODO: Single Partition Multi-Device vs. Multi-Partition Multi-Device
+  // build_options.set_use_spmd_partitioning(use_spmd);
 
   EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
-                        (*client)->client()->Compile(*computation, argument_layouts, options), env);
+                        (*client)->client()->Compile(*computation, argument_layouts, build_options), env);
 
   ERL_NIF_TERM exec_refs[executables.size()];
   int i = 0;
@@ -415,8 +428,9 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exec_refs[0]);
 }
 
+// TODO: Most of this logic should be moved to `exla::ExlaClient`
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 4){
+  if(argc != 7){
     return enif_make_badarg(env);
   }
 
@@ -424,17 +438,29 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::LocalExecutable* local_executable;
   std::vector<xla::ShapedBuffer*> arguments;
   xla::ExecutableRunOptions run_options;
+  int run_id, rng_seed, launch_id, device_ordinal;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
   if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
   if(!exla::get_arguments(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
-  if(!exla::get_options(env, argv, run_options)) return exla::error(env, "Unable to get run options.");
+  if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
+  if(!exla::get(env, argv[4], run_id)) return exla::error(env, "Unable to get Run ID.");
+  if(!exla::get(env, argv[5], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
+  if(!exla::get(env, argv[6], launch_id)) return exla::error(env, "Unable to get Launch ID.");
 
-  // TODO: User should be able to choose device.
-  run_options.set_stream((*client)->devices().front()->compute_stream());
-  run_options.set_host_to_device_stream((*client)->devices().front()->host_to_device_stream());
+  xla::RunId run_id_obj(run_id);
+  exla::ExlaDevice* device = (*client)->device(device_ordinal);
+
+  run_options.set_stream(device->compute_stream());
+  run_options.set_host_to_device_stream(device->host_to_device_stream());
   run_options.set_allocator((*client)->allocator());
   run_options.set_intra_op_thread_pool((*client)->client()->backend().eigen_intra_op_thread_pool_device());
+  // TODO: This is for executing multiple computations in parallel across multiple replicas.
+  // run_options.set_device_assignment(device_assignment.get());
+  run_options.set_run_id(run_id_obj);
+  run_options.set_rng_seed(rng_seed);
+  run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
+  run_options.set_launch_id(launch_id);
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
 
@@ -595,8 +621,8 @@ static ErlNifFunc exla_funcs[] = {
   {"dot", 2, dot},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
-  {"compile", 4, compile},
-  {"run", 4, run},
+  {"compile", 6, compile},
+  {"run", 7, run},
   {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
   {"shaped_buffer_to_literal", 2, shaped_buffer_to_literal},
   /******** HLO Functions ********/

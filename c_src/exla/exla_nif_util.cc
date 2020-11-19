@@ -50,14 +50,6 @@ namespace exla {
     return ret;
   }
 
-  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableRunOptions &options){
-    // TODO: Allow better specification of allocator configuration.
-    auto* allocator = new xla::ExlaAllocator(xla::PlatformUtil::GetPlatform("host").ConsumeValueOrDie());
-    options.set_allocator(allocator);
-    return 1;
-  }
-  int get_options(ErlNifEnv* env, const ERL_NIF_TERM terms[], xla::ExecutableBuildOptions &options){ return 1; }
-
   // TODO: Accept list, not tuple
   int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span){
     const ERL_NIF_TERM* elems;

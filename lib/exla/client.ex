@@ -1,7 +1,5 @@
 defmodule Exla.Client do
   alias __MODULE__, as: Client
-  alias Exla.Options.LocalClientOptions
-  alias Exla.Options.ExecutableBuildOptions
   alias Exla.Computation
   alias Exla.LocalExecutable
   @enforce_keys [:ref, :platform]
@@ -52,7 +50,7 @@ defmodule Exla.Client do
         client = %Client{platform: platform},
         computation = %Computation{},
         argument_shapes,
-        options \\ %ExecutableBuildOptions{}
+        options \\ []
       ) do
     case platform do
       :cuda -> _compile_cuda(client, computation, argument_shapes, options)
@@ -87,7 +85,11 @@ defmodule Exla.Client do
          %Computation{ref: computation},
          argument_shapes,
          options
-       ) do
+  ) do
+    # TODO: Option validation
+    device_ordinal = Keyword.get(options, :device_ordinal, Client.get_default_device_ordinal(client))
+    num_replicas = Keyword.get(options, :num_replicas, 1)
+    num_partitions = Keyword.get(options, :num_partitions, 1)
     # TODO: I think argument shapes should be a list since we have to traverse it to pull out
     # the refs of each Shape. To simplify the handling of `absl::Span` on the NIF side
     # I only read spans in as Tuples. This is important because things like the dimensions
@@ -100,7 +102,7 @@ defmodule Exla.Client do
       |> Enum.map(& &1.ref)
       |> List.to_tuple()
 
-    {:ok, ref} = Exla.NIF.compile(ref, computation, shape_refs, options)
+    {:ok, ref} = Exla.NIF.compile(ref, computation, shape_refs, device_ordinal, num_replicas, num_partitions)
     # TODO: Allow user to set device ordinal
     %LocalExecutable{client: client, ref: ref, device: {client.platform, 0}}
   end
