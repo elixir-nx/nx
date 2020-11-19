@@ -16,6 +16,18 @@ defmodule NEXTTest do
       {_, _} = meta = add_two([1, 2, 3], 2)
       assert eval(meta) == [3, 4, 5]
     end
+
+    defn add_two_with_pipe(a, b) do
+      a |> Nx.add(b)
+    end
+
+    test "|>" do
+      {_, _} = meta = add_two_with_pipe(1, 2)
+      assert eval(meta) == 3
+
+      {_, _} = meta = add_two_with_pipe([1, 2, 3], 2)
+      assert eval(meta) == [3, 4, 5]
+    end
   end
 
   describe "macros" do
