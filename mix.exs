@@ -5,7 +5,7 @@ defmodule Exla.MixProject do
     [
       app: :exla,
       version: "0.0.6-dev",
-      elixir: "~> 1.10",
+      elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       compilers: [:elixir_make] ++ Mix.compilers()
