@@ -38,6 +38,10 @@ def deps do
 end
 ```
 
+### GPU Support
+
+To run EXLA on a GPU, you need both CUDA and CUDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1 and CUDNN 7 and 8. You can check the [CUDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible.
+
 ## Contributing
 
 ### Building locally
@@ -51,7 +55,7 @@ mix test
 
 ### Building with Docker
 
-The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). You'll also need to set up the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
+The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). For GPU support, you'll also need to set up the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
 
 To build, clone this repo and run:
 
