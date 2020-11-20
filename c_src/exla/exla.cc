@@ -201,6 +201,27 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get(env, argv[3], name)) return enif_make_badarg(env);
 
   xla::XlaOp op = xla::Parameter((*builder), param_num, *shape, name);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 4) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<long long int> start_indices;
+  std::vector<long long int> limit_indices;
+  std::vector<long long int> strides;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get_vector<long long int>(env, argv[1], start_indices)) return exla::error(env, "Unable to get start indices.");
+  if(!exla::get_vector<long long int>(env, argv[2], limit_indices)) return exla::error(env, "Unable to get limit indices.");
+  if(!exla::get_vector<long long int>(env, argv[3], strides)) return exla::error(env, "Unable to get strides.");
+
+  xla::XlaOp op = xla::Slice(*operand, start_indices, limit_indices, strides);
+
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
@@ -331,25 +352,6 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
   // TODO: Handle Precision Configuration
   xla::XlaOp result = xla::Dot(*lhs, *rhs);
-  return exla::make<xla::XlaOp>(env, result);
-}
-
-ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 4){
-    return enif_make_badarg(env);
-  }
-
-  xla::XlaOp *op;
-  absl::Span<long long int> start_indices;
-  absl::Span<long long int> limit_indices;
-  absl::Span<long long int> strides;
-
-  if(!exla::get<xla::XlaOp>(env, argv[0], op)) return enif_make_badarg(env);
-  if(!exla::get_span<long long int>(env, argv[1], start_indices)) return enif_make_badarg(env);
-  if(!exla::get_span<long long int>(env, argv[2], limit_indices)) return enif_make_badarg(env);
-  if(!exla::get_span<long long int>(env, argv[3], strides)) return enif_make_badarg(env);
-
-  xla::XlaOp result = xla::Slice(*op, start_indices, limit_indices, strides);
   return exla::make<xla::XlaOp>(env, result);
 }
 
