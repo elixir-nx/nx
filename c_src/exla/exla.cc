@@ -167,10 +167,10 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::PrimitiveType element_type;
-  absl::Span<long long int> dims;
+  std::vector<long long int> dims;
 
   if(!exla::get_type(env, argv[0], element_type)) return enif_make_badarg(env);
-  if(!exla::get_span<long long int>(env, argv[1], dims)) return enif_make_badarg(env);
+  if(!exla::get_vector<long long int>(env, argv[1], dims)) return enif_make_badarg(env);
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
@@ -252,11 +252,11 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
   }
 
   xla::XlaOp *lhs, *rhs;
-  absl::Span<long long int> broadcast_dims;
+  std::vector<long long int> broadcast_dims;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
-  if(!exla::get_span(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
+  if(!exla::get_vector<long long int>(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
