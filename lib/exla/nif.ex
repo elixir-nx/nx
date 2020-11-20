@@ -151,6 +151,15 @@ defmodule Exla.NIF do
   def dot(_a, _b),
     do: nif_error(__ENV__.function)
 
+  def slice(_op, _start_indices, _limit_indices, _strides),
+    do: nif_error(__ENV__.function)
+
+  def slice_in_dim(_op, _start_index, _limit_index, _stride, _dimno), do: nif_error(__ENV__.function)
+
+  def dynamic_slice(_op, _start_indices, _sizes), do: nif_error(__ENV__.function)
+
+  def dynamic_update_slice(_op, _update, _start_indices), do: nif_error(__ENV__.function)
+
   def reduce(_operand, _init_value, _computation, _dimensions), do: nif_error(__ENV__.function)
 
   def zero(_builder, _dtype), do: nif_error(__ENV__.function)
@@ -158,7 +167,7 @@ defmodule Exla.NIF do
   def constant_r0(_builder, _value),
     do: nif_error(__ENV__.function)
 
-  def constant_r1(_length, _value),
+  def constant_r1(_builder, _length, _value),
     do: nif_error(__ENV__.function)
 
   def get_cpu_client(_num_replicas, _intra_op_parallelism_threads), do: nif_error(__ENV__.function)

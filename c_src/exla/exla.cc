@@ -243,6 +243,86 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get(env, argv[3], name)) return enif_make_badarg(env);
 
   xla::XlaOp op = xla::Parameter((*builder), param_num, *shape, name);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+/************************ Slicing Ops *****************************/
+ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 4) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<long long int> start_indices;
+  std::vector<long long int> limit_indices;
+  std::vector<long long int> strides;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get_vector<long long int>(env, argv[1], start_indices)) return exla::error(env, "Unable to get start indices.");
+  if(!exla::get_vector<long long int>(env, argv[2], limit_indices)) return exla::error(env, "Unable to get limit indices.");
+  if(!exla::get_vector<long long int>(env, argv[3], strides)) return exla::error(env, "Unable to get strides.");
+
+  xla::XlaOp op = xla::Slice(*operand, start_indices, limit_indices, strides);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM slice_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 5) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  long int start_index;
+  long int end_index;
+  long int stride;
+  long int dimno;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get(env, argv[1], start_index)) return exla::error(env, "Unable to get start index.");
+  if(!exla::get(env, argv[2], end_index)) return exla::error(env, "Unable to get end index.");
+  if(!exla::get(env, argv[3], stride)) return exla::error(env, "Unable to get stride.");
+  if(!exla::get(env, argv[4], dimno)) return exla::error(env, "Unable to get dimension number.");
+
+  xla::XlaOp op = xla::SliceInDim(*operand, start_index, end_index, stride, dimno);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM dynamic_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<xla::XlaOp> start_indices;
+  std::vector<long long int> sizes;
+
+  if(!exla::get(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get_vector_ops(env, argv[1], start_indices)) return exla::error(env, "Unable to get start index ops.");
+  if(!exla::get_vector<long long int>(env, argv[2], sizes)) return exla::error(env, "Unable to get sizes.");
+
+  xla::XlaOp op = xla::DynamicSlice(*operand, start_indices, sizes);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* update;
+  std::vector<xla::XlaOp> start_indices;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], update)) return exla::error(env, "Unable to get update.");
+  if(!exla::get_vector_ops(env, argv[2], start_indices)) return exla::error(env, "Unable to get start indices.");
+
+  xla::XlaOp op = xla::DynamicUpdateSlice(*operand, *update, start_indices);
+
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
@@ -362,19 +442,20 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 
 ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 2){
+  if(argc != 3){
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  xla::XlaBuilder** builder;
+  int value;
+  int length;
 
-  int length, value;
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[1], length)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[2], value)) return enif_make_badarg(env);
 
-  if(!exla::get(env, argv[0], length)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[1], value)) return enif_make_badarg(env);
-
-  xla::XlaOp op = xla::ConstantR1(xla_objects->builder, length, value);
-  return exla::make<xla::XlaOp>(env, op);
+  xla::XlaOp op = xla::ConstantR1((*builder), length, value);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -706,7 +787,12 @@ static ErlNifFunc exla_funcs[] = {
   /******** Constant Creation Methods *******/
   {"zero", 2, zero},
   {"constant_r0", 2, constant_r0},
-  {"constant_r1", 2, constant_r1_fill},
+  {"constant_r1", 3, constant_r1_fill},
+  /******** Slicing Ops ********/
+  {"slice", 4, slice},
+  {"slice_in_dim", 5, slice_in_dim},
+  {"dynamic_slice", 3, dynamic_slice},
+  {"dynamic_update_slice", 3, dynamic_update_slice},
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   {"reduce", 4, reduce},
