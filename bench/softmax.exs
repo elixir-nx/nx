@@ -7,28 +7,8 @@ t1_shape = Exla.Shape.make_shape(:float64, {1_000_000})
 t1_tensor = %Exla.Tensor{data: {:binary, t1_bin}, shape: t1_shape, device: {:beam, 0}}
 t1_cpu_ref = Exla.Tensor.to_device(cpu, t1_tensor, {:cpu, 0})
 
-elixir_softmax =
-fn a ->
-  sum = Enum.reduce(a, 0, &(:math.exp(&1) + &2))
-  exps =
-    a
-    |> Enum.map(&(:math.exp(&1) / sum))
-
-  exps
-end
-
-# My GPU is too small and right now our memory management is inefficient so we have to run the GPU benchmarks
-# separately
-Benchee.run(%{
-  "elixir softmax" => fn _ -> elixir_softmax.(t1) end,
-  "xla cpu softmax" => fn {exec, _} -> Exla.LocalExecutable.run(exec, {t1_tensor}) end,
-  "xla cpu sotfmax ref" => fn {exec, _} -> Exla.LocalExecutable.run(exec, {t1_cpu_ref}) end,
-  # "xla gpu softmax ref" => fn {exec, t1_gpu_ref} -> Exla.LocalExecutable.run(exec, {t1_gpu_ref}) end
-  "xla gpu softmax" => fn {_, exec} -> Exla.LocalExecutable.run(exec, {t1_tensor}) end
-  },
-  time: 10,
-  memory_time: 2,
-  before_each: fn _ ->
+build_execs =
+  fn ->
     # t1_gpu_ref = Exla.Tensor.to_device(cuda, t1_tensor, {:cuda, 0})
     builder = Exla.Builder.new("softmax")
     # We need a sub-builder of builder because we need to create a sub-computation
@@ -60,4 +40,28 @@ Benchee.run(%{
 
     {cpu_exec, gpu_exec}
   end
+
+{cpu_exec, gpu_exec} = build_execs.()
+
+elixir_softmax =
+fn a ->
+  sum = Enum.reduce(a, 0, &(:math.exp(&1) + &2))
+  exps =
+    a
+    |> Enum.map(&(:math.exp(&1) / sum))
+
+  exps
+end
+
+# My GPU is too small and right now our memory management is inefficient so we have to run the GPU benchmarks
+# separately
+Benchee.run(%{
+  "elixir softmax" => fn -> elixir_softmax.(t1) end,
+  "xla cpu softmax" => fn -> Exla.LocalExecutable.run(cpu_exec, {t1_tensor}) end,
+  "xla cpu sotfmax ref" => fn -> Exla.LocalExecutable.run(cpu_exec, {t1_cpu_ref}) end,
+  # "xla gpu softmax ref" => fn {exec, t1_gpu_ref} -> Exla.LocalExecutable.run(exec, {t1_gpu_ref}) end
+  "xla gpu softmax" => fn -> Exla.LocalExecutable.run(gpu_exec, {t1_tensor}) end
+  },
+  time: 10,
+  memory_time: 2
 )
