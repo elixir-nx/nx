@@ -9,6 +9,7 @@
 #include "tensorflow/compiler/xla/client/executable_build_options.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
+#include "tensorflow/compiler/xla/client/xla_builder.h"
 
 #include <string>
 #include <algorithm>
@@ -118,6 +119,9 @@ namespace exla {
     }
     return 1;
   }
+
+  // TODO: Better template
+  int get_vector_ops(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::XlaOp> &var);
 
   template <typename T>
   int get_span(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<T> &span){

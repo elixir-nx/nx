@@ -144,6 +144,19 @@ namespace exla {
     return 1;
   }
 
+  int get_vector_ops(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::XlaOp> &var){
+    const ERL_NIF_TERM* elems;
+    int num_elems;
+    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
+    xla::XlaOp data[num_elems];
+    for(int i=0;i<num_elems;i++){
+      xla::XlaOp* elem;
+      if(!get<xla::XlaOp>(env, elems[i], elem)) return 0;
+      var.insert(var.begin() + i, *elem);
+    }
+    return 1;
+  }
+
   ERL_NIF_TERM make(ErlNifEnv* env, int &var) { return enif_make_int(env, var); }
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var){ return enif_make_string(env, var.c_str(), ERL_NIF_LATIN1); }
   ERL_NIF_TERM make(ErlNifEnv* env, const char* string){ return enif_make_string(env, string, ERL_NIF_LATIN1); }
