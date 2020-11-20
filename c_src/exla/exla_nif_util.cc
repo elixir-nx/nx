@@ -73,6 +73,7 @@ namespace exla {
     for(int i=0;i<num_elems;i++){
       xla::ShapedBuffer* elem;
       if(!get<xla::ShapedBuffer>(env, elems[i], elem)) return 0;
+      // TODO: I think this needs to be insert, it may reverse the order of the arguments, we need to test
       input.push_back(elem);
     }
     return 1;
