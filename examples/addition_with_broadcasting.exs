@@ -5,7 +5,7 @@ t1 = [1, 2, 3, 4]
 t2 = [[5, 6]]
 
 # XLA Handles the Shape so we can just flatten the lists
-t1_bin = for i <- List.flatten(t1), do: <<i::32-little>>, into: <<>>
+t1_bin = for i <- t1, do: <<i::32-little>>, into: <<>>
 t2_bin = for i <- List.flatten(t2), do: <<i::32-little>>, into: <<>>
 
 t1_shape = Exla.Shape.make_shape(:int32, {4})
