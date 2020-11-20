@@ -106,6 +106,20 @@ namespace exla {
   }
 
   template <typename T>
+  ERL_NIF_TERM get_vector(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var){
+    const ERL_NIF_TERM* elems;
+    int num_elems;
+    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
+    T data[num_elems];
+    for(int i=0;i<num_elems;i++){
+      T elem;
+      if(!get(env, elems[i], elem)) return 0;
+      var.insert(var.begin() + i, elem);
+    }
+    return 1;
+  }
+
+  template <typename T>
   int get_span(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<T> &span){
     const ERL_NIF_TERM* elems;
     int num_elems;
