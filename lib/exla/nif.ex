@@ -149,10 +149,13 @@ defmodule Exla.NIF do
   def dot(_a, _b),
     do: nif_error(__ENV__.function)
 
+  def slice(_op, _start_indices, _limit_indices, _strides),
+    do: nif_error(__ENV__.function)
+
   def constant_r0(_builder, _value),
     do: nif_error(__ENV__.function)
 
-  def constant_r1(_length, _value),
+  def constant_r1(_builder, _length, _value),
     do: nif_error(__ENV__.function)
 
   def get_cpu_client(_num_replicas, _intra_op_parallelism_threads), do: nif_error(__ENV__.function)

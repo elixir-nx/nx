@@ -304,19 +304,20 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 
 ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 2){
+  if(argc != 3){
     return enif_make_badarg(env);
   }
 
-  XLA* xla_objects = (XLA*) enif_priv_data(env);
+  xla::XlaBuilder** builder;
+  int value;
+  int length;
 
-  int length, value;
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[1], length)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[2], value)) return enif_make_badarg(env);
 
-  if(!exla::get(env, argv[0], length)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[1], value)) return enif_make_badarg(env);
-
-  xla::XlaOp op = xla::ConstantR1(xla_objects->builder, length, value);
-  return exla::make<xla::XlaOp>(env, op);
+  xla::XlaOp op = xla::ConstantR1((*builder), length, value);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -330,6 +331,25 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
   // TODO: Handle Precision Configuration
   xla::XlaOp result = xla::Dot(*lhs, *rhs);
+  return exla::make<xla::XlaOp>(env, result);
+}
+
+ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 4){
+    return enif_make_badarg(env);
+  }
+
+  xla::XlaOp *op;
+  absl::Span<long long int> start_indices;
+  absl::Span<long long int> limit_indices;
+  absl::Span<long long int> strides;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], op)) return enif_make_badarg(env);
+  if(!exla::get_span<long long int>(env, argv[1], start_indices)) return enif_make_badarg(env);
+  if(!exla::get_span<long long int>(env, argv[2], limit_indices)) return enif_make_badarg(env);
+  if(!exla::get_span<long long int>(env, argv[3], strides)) return enif_make_badarg(env);
+
+  xla::XlaOp result = xla::Slice(*op, start_indices, limit_indices, strides);
   return exla::make<xla::XlaOp>(env, result);
 }
 
@@ -625,9 +645,10 @@ static ErlNifFunc exla_funcs[] = {
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
   {"constant_r0", 2, constant_r0},
-  {"constant_r1", 2, constant_r1_fill},
+  {"constant_r1", 3, constant_r1_fill},
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
+  {"slice", 4, slice},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},

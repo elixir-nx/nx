@@ -72,6 +72,15 @@ defmodule LocalExecutableTest do
     assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {t1, t2})
   end
 
+  test "slice", state do
+    op = Op.constant_r1(state[:builder], 5, 1)
+    op = Op.slice(op, {2}, {4}, {1})
+    comp = Builder.build(op)
+    exec = Client.compile(state[:cpu], comp, {})
+    assert %Tensor{data: {:ref, ref}, shape: %Shape{}} = LocalExecutable.run(exec, {})
+    IO.inspect Exla.NIF.literal_to_string(Exla.NIF.shaped_buffer_to_literal(state[:cpu].ref, ref))
+  end
+
   @tag :cuda
   test "run/4 succeeds with 2 inputs and default options on cuda device", state do
     t1 = Tensor.scalar(1, :int32)
