@@ -71,8 +71,26 @@ ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   xla::XlaBuilder* builder = new xla::XlaBuilder(name);
 
-  return exla::ok(env, exla::make(env, builder));
+  return exla::ok(env, exla::make<xla::XlaBuilder*>(env, builder));
 }
+
+ERL_NIF_TERM create_sub_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  // TODO: Get this from binary
+  std::string name;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get(env, argv[1], name)) return exla::error(env, "Unable to get name.");
+
+  std::unique_ptr<xla::XlaBuilder> uniq_sub_builder = (*builder)->CreateSubBuilder(name);
+  xla::XlaBuilder* sub_builder = uniq_sub_builder.release();
+  return exla::ok(env, exla::make<xla::XlaBuilder*>(env, sub_builder));
+}
+
 /************************ xla::ShapedBuffer Functions *********************/
 // TODO: This function doesn't behave in the way it should. Rather than placing the binary directly on the device,
 // it stages the binary in a ShapedBuffer and does the device transfer when passed as an argument to an `xla::LocalExecutable`
@@ -105,6 +123,30 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::ok(env, exla::make<xla::ShapedBuffer>(env, scoped_buffer));
 }
 
+ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2) {
+    return enif_make_badarg(env);
+  }
+
+  exla::ExlaClient **client;
+  xla::ShapedBuffer *buffer;
+
+  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<xla::ShapedBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
+
+  const stream_executor::DeviceMemoryBase& mem_buffer = buffer->root_buffer();
+
+  int64_t data_size = mem_buffer.size();
+  const void *data_ptr = mem_buffer.opaque();
+
+  ErlNifBinary binary;
+  enif_alloc_binary(data_size, &binary);
+  binary.data = (unsigned char *) malloc(data_size);
+  std::memcpy((void *) binary.data, data_ptr, data_size);
+
+  return exla::ok(env, enif_make_binary(env, &binary));
+}
+
 ERL_NIF_TERM on_host_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
@@ -125,10 +167,10 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::PrimitiveType element_type;
-  absl::Span<long long int> dims;
+  std::vector<long long int> dims;
 
   if(!exla::get_type(env, argv[0], element_type)) return enif_make_badarg(env);
-  if(!exla::get_span<long long int>(env, argv[1], dims)) return enif_make_badarg(env);
+  if(!exla::get_vector<long long int>(env, argv[1], dims)) return enif_make_badarg(env);
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
@@ -231,11 +273,11 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
   }
 
   xla::XlaOp *lhs, *rhs;
-  absl::Span<long long int> broadcast_dims;
+  std::vector<long long int> broadcast_dims;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
-  if(!exla::get_span(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
+  if(!exla::get_vector<long long int>(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
@@ -280,7 +322,7 @@ ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], x
   if(!exla::get<xla::XlaOp>(env, argv[0], op)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*op);
-  return exla::make<xla::XlaOp>(env, result);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
 ERL_NIF_TERM abs(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Abs);}
@@ -308,6 +350,22 @@ ERL_NIF_TERM neg(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla
 ERL_NIF_TERM conj(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Conj);}
 ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::PopulationCount);}
 ERL_NIF_TERM copy(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Copy);}
+
+ERL_NIF_TERM zero(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  xla::PrimitiveType element_type;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get_type(env, argv[1], element_type)) return exla::error(env, "Unable to get element type.");
+
+  xla::XlaOp op = xla::ConstantLiteral(*builder, xla::LiteralUtil::Zero(element_type));
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
 
 ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
@@ -352,7 +410,27 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
   // TODO: Handle Precision Configuration
   xla::XlaOp result = xla::Dot(*lhs, *rhs);
-  return exla::make<xla::XlaOp>(env, result);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+}
+
+ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 4){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* init_value;
+  xla::XlaComputation* computation;
+  std::vector<long long int> dimensions_to_reduce;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], init_value)) return exla::error(env, "Unable to get initial value.");
+  if(!exla::get<xla::XlaComputation>(env, argv[2], computation)) return exla::error(env, "Unable to get computation.");
+  if(!exla::get_vector<long long int>(env, argv[3], dimensions_to_reduce)) return exla::error(env, "Unable to get reduction dimensions.");
+
+  xla::XlaOp result = xla::Reduce(*operand, *init_value, *computation, dimensions_to_reduce);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
 /************************ xla::ClientLibrary Functions ***************************/
@@ -575,6 +653,7 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 static ErlNifFunc exla_funcs[] = {
   /***** xla::XlaBuilder *****/
   {"new_builder", 1, new_builder},
+  {"create_sub_builder", 2, create_sub_builder},
   /****** xla::Client ******/
   {"get_cpu_client", 2, get_cpu_client},
   {"get_gpu_client", 2, get_gpu_client},
@@ -582,6 +661,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** xla::ShapedBuffer ******/
   {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"shaped_buffer_to_binary", 2, shaped_buffer_to_binary},
   {"on_host_shape", 1, on_host_shape},
   /****** xla::Shape ******/
   {"human_string", 1, human_string},
@@ -646,11 +726,13 @@ static ErlNifFunc exla_funcs[] = {
   {"conj", 1, conj},
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
+  {"zero", 2, zero},
   {"constant_r0", 2, constant_r0},
   {"constant_r1", 3, constant_r1_fill},
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   {"slice", 4, slice},
+  {"reduce", 4, reduce},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},

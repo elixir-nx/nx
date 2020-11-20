@@ -10,6 +10,8 @@ defmodule Exla.NIF do
   def new_builder(_name),
     do: nif_error(__ENV__.function)
 
+  def create_sub_builder(_builder, _name), do: nif_error(__ENV__.function)
+
   def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 
@@ -152,6 +154,10 @@ defmodule Exla.NIF do
   def slice(_op, _start_indices, _limit_indices, _strides),
     do: nif_error(__ENV__.function)
 
+  def reduce(_operand, _init_value, _computation, _dimensions), do: nif_error(__ENV__.function)
+
+  def zero(_builder, _dtype), do: nif_error(__ENV__.function)
+
   def constant_r0(_builder, _value),
     do: nif_error(__ENV__.function)
 
@@ -188,6 +194,8 @@ defmodule Exla.NIF do
 
   def shaped_buffer_to_literal(_client, _shaped_buffer),
     do: nif_error(__ENV__.function)
+
+  def shaped_buffer_to_binary(_client, _shaped_buffer), do: nif_error(__ENV__.function)
 
   defp nif_error({name, arity}) do
     raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
