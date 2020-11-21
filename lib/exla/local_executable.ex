@@ -64,10 +64,13 @@ defmodule Exla.LocalExecutable do
     # Launch ID used to coordinate multi-device launches.
     # See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h#L752-L755
     launch_id = Keyword.get(options, :launch_id, 0)
+    # Whether to keep result on device
+    keep_on_device = Keyword.get(options, :keep_on_device, true)
+    keep_on_device_int = if keep_on_device, do: 1, else: 0
     # This is the same as OneFlow's XLA Executable Context, but we do some work in Elixir
     with {:ok, {_platform, ordinal}} <- Client.check_device_compatibility(client, device),
          {:ok, inputs} <- populate_input_buffers(client, arguments, device),
-         {:ok, ref} <- Exla.NIF.run(client.ref, exec, inputs, ordinal, run_id, rng_seed, launch_id) do
+         {:ok, ref} <- Exla.NIF.run(client.ref, exec, inputs, ordinal, run_id, rng_seed, launch_id, keep_on_device_int) do
       %Tensor{data: {:ref, ref}, shape: %Shape{ref: nil}, device: device}
     end
   end

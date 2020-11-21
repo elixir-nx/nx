@@ -592,7 +592,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
 // TODO: Most of this logic should be moved to `exla::ExlaClient`
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 7){
+  if(argc != 8){
     return enif_make_badarg(env);
   }
 
@@ -600,7 +600,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::LocalExecutable* local_executable;
   std::vector<xla::ShapedBuffer*> arguments;
   xla::ExecutableRunOptions run_options;
-  int run_id, rng_seed, launch_id, device_ordinal;
+  int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
   if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
@@ -609,6 +609,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get(env, argv[4], run_id)) return exla::error(env, "Unable to get Run ID.");
   if(!exla::get(env, argv[5], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
   if(!exla::get(env, argv[6], launch_id)) return exla::error(env, "Unable to get Launch ID.");
+  if(!exla::get(env, argv[7], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
 
   xla::RunId run_id_obj(run_id);
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
@@ -626,9 +627,9 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
 
-  // CPU-Only, Read back as binary
+  // Read back as binary
   bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
-  if(is_cpu_platform) {
+  if(is_cpu_platform || !keep_on_device) {
     long long int size = xla::ShapeUtil::ByteSizeOf(result.on_host_shape());
     ErlNifBinary binary;
     enif_alloc_binary(size, &binary);
@@ -637,7 +638,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     void* src_mem = const_cast<void *>(buffer.opaque());
     binary.data = (unsigned char*) src_mem;
 
-    return exla::ok(env, enif_make_binary(env, &binary));
+    return exla::ok(env, exla::make(env, binary));
   }
 
   return exla::ok(env, exla::make<xla::ShapedBuffer>(env, result));
@@ -807,7 +808,7 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},
-  {"run", 7, run},
+  {"run", 8, run},
   {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
   {"shaped_buffer_to_literal", 2, shaped_buffer_to_literal},
   /******** HLO Functions ********/
