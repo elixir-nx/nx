@@ -111,24 +111,10 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
   if(!exla::get(env, argv[3], device_ordinal)) return enif_make_badarg(env);
 
-  // Temporary to test BufferFromErlBin
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
-  if(device->executor()->platform()->id() == stream_executor::host::kHostPlatformId) {
-    EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
-    xla::ScopedShapedBuffer* buffer_ = buffer.release();
-    return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer_));
-  }
-
-  stream_executor::DeviceMemoryAllocator* allocator = (*client)->allocator();
-
-  const char *data_ptr = (char *) bin.data;
-  int64_t data_size = bin.size;
-
-  xla::BorrowingLiteral literal = xla::BorrowingLiteral(const_cast<char *>(data_ptr), *shape);
-
-  EXLA_ASSIGN_OR_RETURN(auto scoped_buffer, (*client)->client()->LiteralToShapedBuffer(literal, device_ordinal, allocator), env);
-
-  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, scoped_buffer));
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
+  xla::ScopedShapedBuffer* buffer_ = buffer.release();
+  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer_));
 }
 
 ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){

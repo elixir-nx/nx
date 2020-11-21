@@ -35,6 +35,15 @@ namespace exla {
 
   }
 
+  xla::StatusOr<xla::ScopedShapedBuffer> AllocateDestinationBuffer(const xla::Shape& on_host_shape,
+                                                                                    ExlaDevice* device,
+                                                                                    ExlaClient* client) {
+    xla::TransferManager* transfer_manager = client->client()->backend().transfer_manager();
+    xla::ScopedShapedBuffer buffer = transfer_manager->AllocateScopedShapedBuffer(on_host_shape, client->allocator(),
+                                                                                  device->id()).ConsumeValueOrDie();
+    return buffer;
+  }
+
   xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
                                                                                        const xla::Shape& shape,
                                                                                        ExlaDevice* device) {
@@ -78,6 +87,13 @@ namespace exla {
         return std::move(device_buffer);
       }
     }
+    // Allocate space on the GPU
+    xla::ScopedShapedBuffer device_buffer = AllocateDestinationBuffer(compact_shape, device, this).ConsumeValueOrDie();
+    // Read directly from binary data into a `BorrowingLiteral`, this is zero-copy again
+    xla::BorrowingLiteral literal(const_cast<char*>((char*) bin.data), shape);
+    // Transfer literal to the device in the allocated buffer
+    transfer_manager->TransferLiteralToDevice(device->host_to_device_stream(), literal, device_buffer);
+    return absl::make_unique<xla::ScopedShapedBuffer>(std::move(device_buffer));
   }
 
   xla::StatusOr<ExlaClient*> GetCpuClient(int num_replicas, int intra_op_parallelism_threads) {
