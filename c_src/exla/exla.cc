@@ -626,6 +626,20 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
 
+  // CPU-Only, Read back as binary
+  bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
+  if(is_cpu_platform) {
+    long long int size = xla::ShapeUtil::ByteSizeOf(result.on_host_shape());
+    ErlNifBinary binary;
+    enif_alloc_binary(size, &binary);
+
+    const stream_executor::DeviceMemoryBase buffer = result.root_buffer();
+    void* src_mem = const_cast<void *>(buffer.opaque());
+    binary.data = (unsigned char*) src_mem;
+
+    return exla::ok(env, enif_make_binary(env, &binary));
+  }
+
   return exla::ok(env, exla::make<xla::ShapedBuffer>(env, result));
 }
 

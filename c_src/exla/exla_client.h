@@ -37,6 +37,7 @@ namespace exla {
     xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> BufferFromErlBin(const ErlNifBinary binary,
                                                                              const xla::Shape& shape,
                                                                              ExlaDevice* device);
+
     xla::LocalClient* client() { return client_; }
 
     tensorflow::Allocator* host_memory_allocator() { return host_memory_allocator_.get(); }
