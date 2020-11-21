@@ -78,7 +78,6 @@ defmodule LocalExecutableTest do
     comp = Builder.build(op)
     exec = Client.compile(state[:cpu], comp, {})
     assert %Tensor{data: {:ref, ref}, shape: %Shape{}} = LocalExecutable.run(exec, {})
-    IO.inspect Exla.NIF.literal_to_string(Exla.NIF.shaped_buffer_to_literal(state[:cpu].ref, ref))
   end
 
   @tag :cuda
