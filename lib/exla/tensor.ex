@@ -15,9 +15,18 @@ defmodule Exla.Tensor do
   # process.
   def scalar(value, dtype, device \\ {:beam, 0}) when is_number(value) and is_atom(dtype) do
     shape = Shape.make_shape(dtype, {})
-    # TODO: This needs to handle `dtype`
-    %Tensor{data: {:binary, <<value::32-little>>}, shape: shape, device: device}
+    %Tensor{data: {:binary, number_to_bin_segment(value, dtype)}, shape: shape, device: device}
   end
+
+  def vector(length, value, dtype, device \\ {:beam, 0}) when is_number(value) and is_atom(dtype) do
+    shape = Shape.make_shape(dtype, {length})
+    %Tensor{data: {:binary, :binary.copy(number_to_bin_segment(value, dtype), length)}, shape: shape, device: device}
+  end
+
+  defp number_to_bin_segment(value, :int32), do: <<value::32-integer-little>>
+  defp number_to_bin_segment(value, :float32), do: <<value::32-float-little>>
+  defp number_to_bin_segment(value, :int64), do: <<value::64-integer-little>>
+  defp number_to_bin_segment(value, :float64), do: <<value::64-float-little>>
 
   # TODO: This doesn't actually match devices, it just places on host but the idea is the same
   # TODO: We can build on this by matching a reference, accepting a device arg, and switching to
