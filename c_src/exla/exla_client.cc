@@ -1,4 +1,5 @@
 #include "tensorflow/compiler/xla/exla/exla_client.h"
+#include "tensorflow/compiler/xla/exla/exla_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_host_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_mem_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.h"
@@ -7,22 +8,6 @@
 #include "absl/memory/memory.h"
 
 namespace exla {
-
-  // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.cc#L171-L183
-  // TODO: Move to `exla_allocator.h` and consider implementation details
-  class CpuAllocator : public tensorflow::Allocator {
-  public:
-    CpuAllocator() = default;
-
-    std::string Name() override { return "cpu"; }
-
-    void* AllocateRaw(size_t alignment, size_t num_bytes) override {
-      return tensorflow::port::AlignedMalloc(num_bytes, alignment);
-    }
-    void DeallocateRaw(void* ptr) override {
-      return tensorflow::port::AlignedFree(ptr);
-    }
-  };
 
   ExlaClient::ExlaClient(xla::LocalClient* client,
                          int host_id,
@@ -42,7 +27,7 @@ namespace exla {
     }
 
     if(!host_memory_allocator) {
-      host_memory_allocator_ = std::make_unique<CpuAllocator>();
+      host_memory_allocator_ = std::make_unique<ExlaErtsAllocator>();
     }
 
   }

@@ -33,6 +33,8 @@ namespace exla {
 
     virtual ~ExlaClient() = default;
 
+    xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> BufferFromBinaryData();
+
     xla::LocalClient* client() { return client_; }
 
     tensorflow::Allocator* host_memory_allocator() { return host_memory_allocator_.get(); }

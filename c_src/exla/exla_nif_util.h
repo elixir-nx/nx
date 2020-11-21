@@ -2,7 +2,6 @@
 #define EXLA_NIF_UTIL_H_
 
 #include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
-#include "tensorflow/compiler/xla/exla/exla_allocator.h"
 
 #include "absl/types/span.h"
 
