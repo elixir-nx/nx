@@ -2,6 +2,7 @@
 #define EXLA_CLIENT_H_
 
 #include "tensorflow/compiler/xla/exla/exla_device.h"
+#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
 
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
@@ -33,8 +34,9 @@ namespace exla {
 
     virtual ~ExlaClient() = default;
 
-    xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> BufferFromBinaryData();
-
+    xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> BufferFromErlBin(const ErlNifBinary binary,
+                                                                             const xla::Shape& shape,
+                                                                             ExlaDevice* device);
     xla::LocalClient* client() { return client_; }
 
     tensorflow::Allocator* host_memory_allocator() { return host_memory_allocator_.get(); }

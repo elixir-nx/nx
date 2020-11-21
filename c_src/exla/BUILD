@@ -5,9 +5,10 @@ package(default_visibility=["//visibility:private"])
 cc_library(
   name = "exla_allocator",
   srcs = ["exla_allocator.cc"],
-  hdrs = ["exla_allocator.h"],
+  hdrs = ["exla_allocator.h"] + glob(["erts/**/*.h"]),
   deps = [
-    "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
+    "@org_tensorflow//tensorflow/core/framework:allocator",
+    "@org_tensorflow//tensorflow/core:lib",
     "@org_tensorflow//tensorflow/compiler/xla:statusor",
   ],
 )
@@ -35,9 +36,11 @@ cc_library (
 cc_library(
   name = "exla_client",
   srcs = ["exla_client.cc"],
-  hdrs = ["exla_client.h"],
+  hdrs = ["exla_client.h"] + glob(["erts/**/*.h"]),
   deps = [
     ":exla_device",
+    ":exla_allocator",
+    "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
     "@org_tensorflow//tensorflow/core:lib",

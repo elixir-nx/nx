@@ -1,4 +1,5 @@
 #include "tensorflow/compiler/xla/exla/exla_client.h"
+#include "tensorflow/compiler/xla/cpu_function_runtime.h"
 #include "tensorflow/compiler/xla/exla/exla_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_host_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_mem_allocator.h"
@@ -8,6 +9,8 @@
 #include "absl/memory/memory.h"
 
 namespace exla {
+
+  using int64 = tensorflow::int64;
 
   ExlaClient::ExlaClient(xla::LocalClient* client,
                          int host_id,
@@ -30,6 +33,51 @@ namespace exla {
       host_memory_allocator_ = std::make_unique<ExlaErtsAllocator>();
     }
 
+  }
+
+  xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
+                                                                                       const xla::Shape& shape,
+                                                                                       ExlaDevice* device) {
+    // Get the expected size of the given shape
+    int64 size = xla::ShapeUtil::ByteSizeOf(shape);
+    // Validate the expected size and actual data size are the same
+    // If they are not, we need to return an error because otherwise we'll be trying to read
+    // from invalid memory
+    if(size != bin.size) {
+      return tensorflow::errors::InvalidArgument("Expected %d bytes from binary but got %d.", size, bin.size);
+    }
+    // Transfer Manager will manager the "transfer" to the device
+    xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
+    // Ask for shape which has a compact layout on the device, in other words the anticipated shape of the data
+    // on the device
+    // TODO: Handle StatusOr
+    xla::Shape compact_shape = transfer_manager->ChooseCompactLayoutForShape(shape).ConsumeValueOrDie();
+    // CPU Platform allows for zero-copy transfers, we can just read directly from the binary
+    bool is_cpu_platform = device->executor()->platform()->id() == se::host::kHostPlatformId;
+
+    if(is_cpu_platform) {
+      // Validates that the data is sufficiently aligned for a zero-copy transfer
+      // XLA enforces a 16-byte alignment
+      bool can_use_zero_copy = (absl::bit_cast<std::uintptr_t>(bin.data) & (xla::cpu_function_runtime::kMinAlign - 1)) == 0;
+      // Ensure the shapes match, I think this avoids illegal memory errors
+      if(shape.layout() == compact_shape.layout()) {
+        se::DeviceMemoryBase buffer;
+
+        if(can_use_zero_copy) {
+          // Point directly to binary data!
+          buffer = se::DeviceMemoryBase(const_cast<unsigned char*>(bin.data), size);
+        } else {
+          // Otherwise we stage on the VM and copy between
+          void* staging_buffer = host_memory_allocator()->AllocateRaw(xla::cpu_function_runtime::kMinAlign, size);
+          buffer = se::DeviceMemoryBase(staging_buffer, size);
+          std::memcpy(staging_buffer, bin.data, size);
+        }
+        auto device_buffer = absl::make_unique<xla::ScopedShapedBuffer>(compact_shape, allocator(), device->id());
+        auto memory = se::OwningDeviceMemory(buffer, device->id(), allocator());
+        device_buffer->set_buffer(std::move(memory), {});
+        return std::move(device_buffer);
+      }
+    }
   }
 
   xla::StatusOr<ExlaClient*> GetCpuClient(int num_replicas, int intra_op_parallelism_threads) {
