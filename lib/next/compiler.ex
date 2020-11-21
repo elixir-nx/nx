@@ -41,7 +41,6 @@ defmodule NEXT.Compiler do
   end
 
   defp compile_each({name, _arity} = def, state) do
-    state = %{state | function: def}
     {{_kind, _meta, args, ast}, state} = get_cached_definition(def, state)
 
     # TODO: make this pluggable as the user compiler
@@ -69,9 +68,9 @@ defmodule NEXT.Compiler do
   end
 
   defp get_and_cache_definition(def, state) do
-    with_local(def, state, fn state ->
-      {:v1, kind, meta, clauses} = NEXT.Module.get_definition(state.module, def)
+    {:v1, kind, meta, clauses} = NEXT.Module.get_definition(state.module, def)
 
+    with_def(meta, def, def, state, fn state ->
       case clauses do
         [] ->
           compile_error!(meta, state, "cannot have #{kind}n without clauses")
@@ -90,9 +89,11 @@ defmodule NEXT.Compiler do
     end)
   end
 
-  defp with_local(def, %{function: previous_def, stack: previous_stack} = state, fun) do
-    {result, state} = fun.(%{state | function: def, stack: [def | previous_stack]})
-    {result, %{state | function: previous_def, stack: previous_stack}}
+  defp with_def(meta, def, call, state, fun) do
+    %{function: previous_def, stack: previous_stack, line: previous_line} = state
+    line = meta[:line] || previous_line
+    {result, state} = fun.(%{state | function: def, stack: [call | previous_stack], line: line})
+    {result, %{state | function: previous_def, stack: previous_stack, line: previous_line}}
   end
 
   ## Normalization

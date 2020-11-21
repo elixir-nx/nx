@@ -4,6 +4,11 @@ defmodule NEXTTest do
   alias NEXTTest.Sample
   import NEXT
 
+  defmacrop location(plus) do
+    file = Path.relative_to_cwd(__CALLER__.file)
+    quote do: "#{unquote(file)}:#{unquote(__CALLER__.line) + unquote(plus)}"
+  end
+
   describe "operators" do
     defn add_two(a, b) do
       a + b
@@ -180,7 +185,7 @@ defmodule NEXTTest do
 
   describe "errors" do
     test "invalid numerical expression" do
-      assert_raise CompileError, ~r"invalid numerical expression", fn ->
+      assert_raise CompileError, ~r"#{location(+4)}: invalid numerical expression", fn ->
         defmodule Sample do
           import NEXT
 
@@ -194,12 +199,14 @@ defmodule NEXTTest do
     end
 
     test "recursive definitions" do
-      assert_raise CompileError, ~r"add/2 is being called recursively by add/2", fn ->
-        defmodule Sample do
-          import NEXT
-          defn add(a, b), do: add(a, b)
-        end
-      end
+      assert_raise CompileError,
+                   ~r"#{location(+3)}: add/2 is being called recursively by add/2",
+                   fn ->
+                     defmodule Sample do
+                       import NEXT
+                       defn add(a, b), do: add(a, b)
+                     end
+                   end
 
       assert_raise CompileError, ~r"add/2 is being called recursively by add1/2", fn ->
         defmodule Sample do
@@ -211,21 +218,25 @@ defmodule NEXTTest do
     end
 
     test "non variables used as arguments" do
-      assert_raise CompileError, ~r"only variables are allowed as arguments in defn", fn ->
-        defmodule Sample do
-          import NEXT
-          defn add(1, 2), do: 3
-        end
-      end
+      assert_raise CompileError,
+                   ~r"#{location(+3)}: only variables are allowed as arguments in defn",
+                   fn ->
+                     defmodule Sample do
+                       import NEXT
+                       defn add(1, 2), do: 3
+                     end
+                   end
     end
 
     test "defaults" do
-      assert_raise CompileError, ~r"default arguments are not supported by defn", fn ->
-        defmodule Sample do
-          import NEXT
-          defn add(a, b \\ 2), do: a + b
-        end
-      end
+      assert_raise CompileError,
+                   ~r"#{location(+3)}: default arguments are not supported by defn",
+                   fn ->
+                     defmodule Sample do
+                       import NEXT
+                       defn add(a, b \\ 2), do: a + b
+                     end
+                   end
     end
   end
 
