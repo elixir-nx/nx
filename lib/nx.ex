@@ -381,7 +381,6 @@ defmodule Nx do
   def add(%Tensor{data: data, type: input_type} = left, right) when is_number(right) do
     output_type = Nx.Type.merge_scalar(input_type, right)
 
-    # match_types is a macro, see its definition at the top of this module.
     data =
       match_types [input_type, output_type] do
         for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
@@ -418,7 +417,6 @@ defmodule Nx do
   def exp(%Tensor{data: data, type: input_type} = t) do
     output_type = Nx.Type.to_float(input_type)
 
-    # match_types is a macro, see its definition at the top of this module.
     data =
       match_types [input_type, output_type] do
         for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(:math.exp(read!(seg, 0)), 1)>>
@@ -426,7 +424,6 @@ defmodule Nx do
 
     %{t | data: data, type: output_type}
   end
-
 
   @doc """
   Returns the sum across all dimensions.
