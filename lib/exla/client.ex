@@ -1,7 +1,7 @@
 defmodule Exla.Client do
   alias __MODULE__, as: Client
   alias Exla.Computation
-  alias Exla.LocalExecutable
+  alias Exla.Executable
   @enforce_keys [:ref, :platform]
   defstruct [:ref, :platform]
 
@@ -106,7 +106,7 @@ defmodule Exla.Client do
     # TODO: Validate replicas, partitions, and shapes
     with {:ok, {_platform, device_ordinal}} <- check_device_compatibility(client, {client.platform, device_ordinal}),
          {:ok, ref} <- Exla.NIF.compile(ref, computation, shape_refs, device_ordinal, num_replicas, num_partitions) do
-      %LocalExecutable{client: client, ref: ref, device: {client.platform, device_ordinal}}
+      %Executable{client: client, ref: ref, device: {client.platform, device_ordinal}}
     end
   end
 

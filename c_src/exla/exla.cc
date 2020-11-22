@@ -128,15 +128,9 @@ ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TER
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::ShapedBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
 
-  const stream_executor::DeviceMemoryBase& mem_buffer = buffer->root_buffer();
+  exla::ExlaDevice* device = (*client)->devices().front().get();
 
-  int64_t data_size = mem_buffer.size();
-  const void *data_ptr = mem_buffer.opaque();
-
-  ErlNifBinary binary;
-  enif_alloc_binary(data_size, &binary);
-  binary.data = (unsigned char *) malloc(data_size);
-  std::memcpy((void *) binary.data, data_ptr, data_size);
+  EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*buffer, device), env);
 
   return exla::ok(env, enif_make_binary(env, &binary));
 }
@@ -686,31 +680,10 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
 
-  // Read back as binary
   bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
-  if(is_cpu_platform) {
-    long long int size = xla::ShapeUtil::ByteSizeOf(result.on_host_shape());
-    ErlNifBinary binary;
-    enif_alloc_binary(size, &binary);
 
-    const stream_executor::DeviceMemoryBase buffer = result.root_buffer();
-    void* src_mem = const_cast<void *>(buffer.opaque());
-    binary.data = (unsigned char*) src_mem;
-
-    return exla::ok(env, exla::make(env, binary));
-  }
-
-  if(!keep_on_device) {
-    xla::TransferManager* transfer_manager = (*client)->client()->backend().transfer_manager();
-    EXLA_ASSIGN_OR_RETURN(xla::Literal literal, transfer_manager->TransferLiteralFromDevice(device->device_to_host_stream(), result, nullptr), env);
-
-    long long int size = literal.size_bytes();
-    ErlNifBinary binary;
-    enif_alloc_binary(size, &binary);
-
-    const void *src_mem = literal.untyped_data();
-    binary.data = (unsigned char*) src_mem;
-
+  if(is_cpu_platform || !keep_on_device) {
+    EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(result, device), env);
     return exla::ok(env, exla::make(env, binary));
   }
 

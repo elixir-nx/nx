@@ -2,7 +2,7 @@ defmodule ClientTest do
   use ExUnit.Case
   alias Exla.Client
   alias Exla.Op
-  alias Exla.LocalExecutable
+  alias Exla.Executable
   alias Exla.Builder
   alias Exla.Shape
 
@@ -65,14 +65,14 @@ defmodule ClientTest do
   test "compile/4 succeeds on host device with constant computation and no args", state do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
-    assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {})
+    assert %Executable{} = Client.compile(state[:cpu], comp, {})
   end
 
   @tag :cuda
   test "compile/4 succeeds on cuda device with constant computation and no args", state do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
-    assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {})
+    assert %Executable{} = Client.compile(state[:cpu], comp, {})
   end
 
   test "compile/4 succeeds on host device with basic computation and args", state do
@@ -80,7 +80,7 @@ defmodule ClientTest do
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
-    assert %LocalExecutable{} = Client.compile(state[:cpu], comp, {shape})
+    assert %Executable{} = Client.compile(state[:cpu], comp, {shape})
   end
 
   @tag :cuda
@@ -89,6 +89,6 @@ defmodule ClientTest do
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
-    assert %LocalExecutable{} = Client.compile(state[:gpu], comp, {shape})
+    assert %Executable{} = Client.compile(state[:gpu], comp, {shape})
   end
 end

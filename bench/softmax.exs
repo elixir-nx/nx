@@ -5,8 +5,7 @@ size = 1_000_000
 t1 = for _ <- 1..size, do: :rand.uniform()
 t1_nx = Nx.tensor(t1)
 t1_shape = Exla.Shape.make_shape(:float64, {size})
-t1_tensor = %Exla.Tensor{data: {:binary, Nx.to_bitstring(t1_nx)}, shape: t1_shape, device: {:beam, 0}}
-t1_cpu_ref = Exla.Tensor.to_device(cpu, t1_tensor, {:cpu, 0})
+t1_buffer = %Exla.Buffer{data: Nx.to_bitstring(t1_nx), shape: t1_shape}
 
 build_execs =
   fn ->
@@ -53,14 +52,14 @@ defmodule Softmax do
   end
 end
 
-# IO.inspect Softmax.elixir(t1_nx)
-# IO.inspect Exla.LocalExecutable.run(cpu_exec, {t1_tensor})
+IO.inspect Softmax.elixir(t1_nx)
+IO.inspect Exla.Executable.run(cpu_exec, {t1_buffer})
 
 # My GPU is too small and right now our memory management is inefficient so we have to run the GPU benchmarks
 # separately
 Benchee.run(%{
   "elixir softmax" => fn -> Softmax.elixir(t1_nx) end,
-  "xla cpu softmax" => fn -> Exla.LocalExecutable.run(cpu_exec, {t1_tensor}) end,
+  "xla cpu softmax" => fn -> Exla.LocalExecutable.run(cpu_exec, {t1_buffer}) end,
   # "xla gpu softmax ref" => fn {exec, t1_gpu_ref} -> Exla.LocalExecutable.run(exec, {t1_gpu_ref}) end
   # "xla gpu softmax" => fn -> Exla.LocalExecutable.run(gpu_exec, {t1_tensor}) end
   },
