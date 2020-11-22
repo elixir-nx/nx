@@ -38,6 +38,24 @@ defmodule Exla.Op do
   def ne(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}, broadcast_dims \\ {}) do
         {:ok, ref} = Exla.NIF.ne(left, right, broadcast_dims)
         %Op{builder: builder, ref: ref}
+      end
+
+  def conditional(%Op{builder: builder, ref: index}, branches, operands) do
+    # TODO: Both branches and operands need to be lists!
+    branches_refs =
+      branches
+      |> Tuple.to_list()
+      |> Enum.map(&(&1.ref))
+      |> List.to_tuple()
+
+    operands_refs =
+      operands
+      |> Tuple.to_list()
+      |> Enum.map(&(&1.ref))
+      |> List.to_tuple()
+
+    {:ok, ref} = Exla.NIF.conditional(index, branches_refs, operands_refs)
+    %Op{builder: builder, ref: ref}
   end
 
   def add(
