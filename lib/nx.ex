@@ -115,32 +115,16 @@ defmodule Nx do
   ## Options
 
     * `:type` - sets the type of the tensor. If one is not given,
-      one is automatically inferred based on the input. Integers
-      are by default signed and of size 64. Floats have size of 64.
-      Booleans are integers of size 1 (also known as predicates).
-      See `type/1` for more information.
+      one is automatically inferred based on the input. See `Nx.Type`
+      and `Nx.Type.infer/1` for information.
 
   """
   def tensor(arg, opts \\ []) do
-    type = opts[:type] || infer_type(arg)
-    validate_type!(type)
+    type = opts[:type] || Nx.Type.infer(arg)
+    Nx.Type.validate!(type)
     {dimensions, data} = flatten(arg, type)
     %Tensor{shape: dimensions, type: type, data: data}
   end
-
-  defp infer_type(arg) do
-    case infer_type(arg, -1) do
-      -1 -> {:f, 64}
-      0 -> {:s, 1}
-      1 -> {:s, 64}
-      2 -> {:f, 64}
-    end
-  end
-
-  defp infer_type(arg, inferred) when is_list(arg), do: Enum.reduce(arg, inferred, &infer_type/2)
-  defp infer_type(arg, inferred) when is_boolean(arg), do: max(inferred, 0)
-  defp infer_type(arg, inferred) when is_integer(arg), do: max(inferred, 1)
-  defp infer_type(arg, inferred) when is_float(arg), do: max(inferred, 2)
 
   defp flatten(list, type) when is_list(list) do
     {dimensions, acc} = flatten_list(list, type, [], [])
@@ -192,21 +176,10 @@ defmodule Nx do
   defp scalar_to_binary(value, {:f, size}) when is_number(value),
     do: <<value::size(size)-float>>
 
-  defp validate_type!({:s, size}) when size > 0, do: :ok
-  defp validate_type!({:u, size}) when size > 0, do: :ok
-  defp validate_type!({:f, size}) when size in [32, 64], do: :ok
-
   @doc """
   Returns the type of the tensor.
 
-  A type is a two-element tuple. The first element is one of:
-
-      * `:s` - signed integer
-      * `:u` - unsigned integer
-      * `:f` - float
-
-  The second elemnet is a size. Integers can have any size.
-  Currently only 32 and 64 bit floats are supported.
+  See `Nx.Type` for more information.
   """
   def type(%Tensor{type: type}), do: type
 
@@ -230,6 +203,32 @@ defmodule Nx do
   def to_binary(%Tensor{data: data}), do: data
 
   # TODO: Properly implement this.
-  def add(a, b) when is_integer(a) and is_integer(b), do: :erlang.+(a, b)
-  def add(a, b) when is_list(a) and is_integer(b), do: Enum.map(a, &:erlang.+(&1, b))
+  def add(left, right)
+
+  def add(left, right) when is_number(left) and is_number(right), do: :erlang.+(left, right)
+
+  def add(%Tensor{data: data, type: input_type} = t, b) when is_number(b) do
+    output_type = Nx.Type.merge(input_type, Nx.Type.infer(b))
+
+    data =
+      case input_type do
+        {:s, size} ->
+          for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
+            case output_type do
+              {:s, size} ->
+                <<seg+b::signed-integer-size(size)>>
+            end
+          end
+
+        {:f, size} ->
+          for <<seg::size(size)-float <- data>>, into: <<>> do
+            case output_type do
+              {:f, size} ->
+                <<seg+b::float-size(size)>>
+            end
+          end
+      end
+
+    %{t | data: data, type: output_type}
+  end
 end
