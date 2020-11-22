@@ -21,7 +21,7 @@ defmodule Nx do
   #
   # Is compiled into:
   #
-  #    for <<seg::float-size(...) <- data>>, into: <<>>, do: <<seg+right::float-size(...)>>
+  #    for <<seg::float-native-size(...) <- data>>, into: <<>>, do: <<seg+right::float-native-size(...)>>
   #
   # for all possible valid types between input and input types.
   #
@@ -42,7 +42,7 @@ defmodule Nx do
   #         {:s, size} ->
   #           <<seg+number::signed-integer-size(size)>>
   #         {:f, size} ->
-  #           <<seg+number::float-size(size)>>
+  #           <<seg+number::float-native-size(size)>>
   #         {:u, size} ->
   #           <<seg+number::unsigned-integer-size(size)>>
   #       end
@@ -98,22 +98,39 @@ defmodule Nx do
   defp match_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
 
-  defp read_bin_modifier(var, :bf, _),
-    do: quote(do: read_bf16(unquote(var)))
+  defp read_bin_modifier(var, :bf, _) do
+    if System.endianness() == :little do
+      quote(do: read_bf16(unquote(var)))
+    else
+      quote(do: read_bf16(unquote(var)))
+    end
+  end
 
   defp read_bin_modifier(var, _, _),
     do: var
 
-  defp write_bin_modifier(var, :bf, _),
-    do: quote(do: binary_part(<<unquote(var)::float-native-32>>, 0, 2) :: binary)
+  defp write_bin_modifier(var, :bf, _) do
+    if System.endianness() == :little do
+      quote(do: binary_part(<<unquote(var)::float-native-32>>, 2, 2) :: binary)
+    else
+      quote(do: binary_part(<<unquote(var)::float-native-32>>, 0, 2) :: binary)
+    end
+  end
 
   defp write_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
 
   @compile {:inline, read_bf16: 1}
-  defp read_bf16(bf16) do
-    <<x::float-native-32>> = <<bf16::binary, 0::16>>
-    x
+  if System.endianness() == :little do
+    defp read_bf16(bf16) do
+      <<x::float-little-32>> = <<0::16, bf16::binary>>
+      x
+    end
+  else
+    defp read_bf16(bf16) do
+      <<x::float-big-32>> = <<bf16::binary, 0::16>>
+      x
+    end
   end
 
   defp shared_bin_modifier(var, :s, size),
@@ -138,7 +155,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor(0)
       iex> Nx.to_bitstring(t)
-      <<0::64>>
+      <<0::64-native>>
       iex> Nx.type(t)
       {:s, 64}
       iex> Nx.shape(t)
@@ -156,7 +173,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([1, 2, 3])
       iex> Nx.to_bitstring(t)
-      <<1::64, 2::64, 3::64>>
+      <<1::64-native, 2::64-native, 3::64-native>>
       iex> Nx.type(t)
       {:s, 64}
       iex> Nx.shape(t)
@@ -164,7 +181,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([1.2, 2.3, 3.4, 4.5])
       iex> Nx.to_bitstring(t)
-      <<1.2::64-float, 2.3::64-float, 3.4::64-float, 4.5::64-float>>
+      <<1.2::float-native-64, 2.3::float-native-64, 3.4::float-native-64, 4.5::float-native-64>>
       iex> Nx.type(t)
       {:f, 64}
       iex> Nx.shape(t)
@@ -181,7 +198,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([1.2, 2.3, 3.4], type: {:f, 32})
       iex> Nx.to_bitstring(t)
-      <<1.2::32-float, 2.3::32-float, 3.4::32-float>>
+      <<1.2::float-native-32, 2.3::float-native-32, 3.4::float-native-32>>
       iex> Nx.type(t)
       {:f, 32}
 
@@ -197,7 +214,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([true, 2, 3.0])
       iex> Nx.to_bitstring(t)
-      <<1.0::float-64, 2.0::float-64, 3::float-64>>
+      <<1.0::float-native-64, 2.0::float-native-64, 3::float-native-64>>
       iex> Nx.type(t)
       {:f, 64}
 
@@ -205,7 +222,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       iex> Nx.to_bitstring(t)
-      <<1::64, 2::64, 3::64, 4::64, 5::64, 6::64>>
+      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native>>
       iex> Nx.type(t)
       {:s, 64}
       iex> Nx.shape(t)
@@ -213,7 +230,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]])
       iex> Nx.to_bitstring(t)
-      <<1::64, 2::64, 3::64, 4::64, 5::64, 6::64>>
+      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native>>
       iex> Nx.type(t)
       {:s, 64}
       iex> Nx.shape(t)
@@ -221,7 +238,8 @@ defmodule Nx do
 
       iex> t = Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[-1, -2], [-3, -4], [-5, -6]]])
       iex> Nx.to_bitstring(t)
-      <<1::64, 2::64, 3::64, 4::64, 5::64, 6::64, -1::64, -2::64, -3::64, -4::64, -5::64, -6::64>>
+      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native,
+        -1::64-native, -2::64-native, -3::64-native, -4::64-native, -5::64-native, -6::64-native>>
       iex> Nx.type(t)
       {:s, 64}
       iex> Nx.shape(t)
@@ -233,7 +251,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([1, 2, 3], type: {:bf, 16})
       iex> Nx.to_bitstring(t)
-      <<63, 128, 64, 0, 64, 64>>
+      <<16256::16-native, 16384::16-native, 16448::16-native>>
       iex> Nx.type(t)
       {:bf, 16}
 
@@ -341,21 +359,21 @@ defmodule Nx do
 
       iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1)
       iex> Nx.to_bitstring(t)
-      <<2::64, 3::64, 4::64>>
+      <<2::64-native, 3::64-native, 4::64-native>>
 
   Given a float scalar converts the tensor to a float:
 
       iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1.0)
       iex> Nx.to_bitstring(t)
-      <<2.0::float-64, 3.0::float-64, 4.0::float-64>>
+      <<2.0::float-native-64, 3.0::float-native-64, 4.0::float-native-64>>
 
       iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0]), 1)
       iex> Nx.to_bitstring(t)
-      <<2.0::float-64, 3.0::float-64, 4.0::float-64>>
+      <<2.0::float-native-64, 3.0::float-native-64, 4.0::float-native-64>>
 
       iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), 1)
       iex> Nx.to_bitstring(t)
-      <<2.0::float-32, 3.0::float-32, 4.0::float-32>>
+      <<2.0::float-native-32, 3.0::float-native-32, 4.0::float-native-32>>
 
   The size of the tensor will grow if the scalar is bigger than
   the tensor size. But, if smaller, it overflows:
@@ -373,7 +391,7 @@ defmodule Nx do
 
       iex> t = Nx.add(Nx.tensor([0, 1, 2], type: {:u, 8}), -1)
       iex> Nx.to_bitstring(t)
-      <<-1::16, 0::16, 1::16>>
+      <<-1::16-native, 0::16-native, 1::16-native>>
 
   """
   # TODO: implement addition between tensors with broadcasting
@@ -423,15 +441,15 @@ defmodule Nx do
 
       iex> t = Nx.exp(Nx.tensor([1, 2, 3]))
       iex> Nx.to_bitstring(t)
-      <<2.718281828459045::float-64, 7.38905609893065::float-64, 20.085536923187668::float-64>>
+      <<2.718281828459045::float-native-64, 7.38905609893065::float-native-64, 20.085536923187668::float-native-64>>
 
       iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
       iex> Nx.to_bitstring(t)
-      <<2.718281828459045::float-32, 7.38905609893065::float-32, 20.085536923187668::float-32>>
+      <<2.718281828459045::float-native-32, 7.38905609893065::float-native-32, 20.085536923187668::float-native-32>>
 
       iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16}))
       iex> Nx.to_bitstring(t)
-      <<64, 45, 64, 236, 65, 160>>
+      <<16429::16-native, 16620::16-native, 16800::16-native>>
 
   """
   def exp(number)
@@ -456,13 +474,13 @@ defmodule Nx do
 
       iex> t = Nx.sum(Nx.tensor([1, 2, 3]))
       iex> Nx.to_bitstring(t)
-      <<6::64>>
+      <<6::64-native>>
       iex> Nx.shape(t)
       {}
 
       iex> t = Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
       iex> Nx.to_bitstring(t)
-      <<10.0::float-64>>
+      <<10.0::float-native-64>>
       iex> Nx.shape(t)
       {}
 
