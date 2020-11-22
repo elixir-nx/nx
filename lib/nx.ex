@@ -366,12 +366,12 @@ defmodule Nx do
   def exp(number) when is_number(number), do: :math.exp(number)
 
   def exp(%Tensor{data: data, type: input_type} = t) do
-    output_type = Nx.Type.to_float(input_type)
+    output_type = {:f, output_size} = Nx.Type.to_float(input_type)
 
     data =
       # match_types is a macro, see its definition at the top of this module.
-      match_types [input_type, output_type] do
-        for <<seg::@0 <- data>>, into: <<>>, do: <<:math.exp(seg)::@1>>
+      match_types [input_type] do
+        for <<seg::@0 <- data>>, into: <<>>, do: <<:math.exp(seg)::float-size(output_size)>>
       end
 
     %{t | data: data, type: output_type}
