@@ -10,6 +10,81 @@ defmodule Nx do
     defstruct [:data, :type, :shape]
   end
 
+  # A macro that allows us to writes all possibles match types
+  # in the most efficient format. This is done by looking at @0,
+  # @1, etc and replacing them by currently matched type at the
+  # given position. In other words, this:
+  #
+  #    combine_types [input_type, output_type] do
+  #      for <<seg::@0 <- data>>, into: <<>>, do: <<seg+right::@1>>
+  #    end
+  #
+  # Is compiled into:
+  #
+  #    for <<seg::float-size(...) <- data>>, into: <<>>, do: <<seg+right::float-size(...)>>
+  #
+  # for all possible valid types between input and input types.
+  # @0 mataches to `input_type`, @1 to `output_type`, and so on.
+  #
+  # In particular, note that a rolled out case such as:
+  #
+  #     for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
+  #       <<seg+number::signed-integer-size(size)>>
+  #     end
+  #
+  # is twice as fast and uses twice less memory than:
+  #
+  #     for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
+  #       case output_type do
+  #         {:s, size} ->
+  #           <<seg+number::signed-integer-size(size)>>
+  #         {:f, size} ->
+  #           <<seg+number::float-size(size)>>
+  #         {:u, size} ->
+  #           <<seg+number::unsigned-integer-size(size)>>
+  #       end
+  #     end
+  #
+  defmacrop match_types([_ | _] = args, do: block) do
+    sizes = Macro.generate_arguments(length(args), __MODULE__)
+    matches = match_types(sizes)
+
+    clauses =
+      Enum.flat_map(matches, fn match ->
+        block =
+          Macro.prewalk(block, fn
+            {:@, _, [pos]} when is_integer(pos) ->
+              {type, size} = Enum.fetch!(match, pos)
+              quote do: size(unquote(size))-unquote(type_to_bin_modifier(type))
+
+            other ->
+              other
+          end)
+
+        quote do
+          {unquote_splicing(match)} -> unquote(block)
+        end
+      end)
+
+    quote do
+      case {unquote_splicing(args)}, do: unquote(clauses)
+    end
+  end
+
+  @all_types [:s, :f, :u]
+
+  defp match_types([h | t]) do
+    for type <- @all_types, t <- match_types(t) do
+      [{type, h} | t]
+    end
+  end
+
+  defp match_types([]), do: [[]]
+
+  defp type_to_bin_modifier(:s), do: quote(do: signed-integer)
+  defp type_to_bin_modifier(:u), do: quote(do: unsigned-integer)
+  defp type_to_bin_modifier(:f), do: quote(do: float)
+
   @doc """
   Builds a tensor.
 
@@ -207,28 +282,14 @@ defmodule Nx do
 
   def add(left, right) when is_number(left) and is_number(right), do: :erlang.+(left, right)
 
-  def add(%Tensor{data: data, type: input_type} = t, b) when is_number(b) do
-    output_type = Nx.Type.merge(input_type, Nx.Type.infer(b))
+  def add(%Tensor{data: data, type: input_type} = left, right) when is_number(right) do
+    output_type = Nx.Type.merge(input_type, Nx.Type.infer(right))
 
     data =
-      case input_type do
-        {:s, size} ->
-          for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
-            case output_type do
-              {:s, size} ->
-                <<seg+b::signed-integer-size(size)>>
-            end
-          end
-
-        {:f, size} ->
-          for <<seg::size(size)-float <- data>>, into: <<>> do
-            case output_type do
-              {:f, size} ->
-                <<seg+b::float-size(size)>>
-            end
-          end
+      match_types [input_type, output_type] do
+        for <<seg::@0 <- data>>, into: <<>>, do: <<seg+right::@1>>
       end
 
-    %{t | data: data, type: output_type}
+    %{left | data: data, type: output_type}
   end
 end
