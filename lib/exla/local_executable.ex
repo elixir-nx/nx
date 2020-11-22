@@ -65,7 +65,7 @@ defmodule Exla.LocalExecutable do
     # See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h#L752-L755
     launch_id = Keyword.get(options, :launch_id, 0)
     # Whether to keep result on device
-    keep_on_device = Keyword.get(options, :keep_on_device, true)
+    keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
     # This is the same as OneFlow's XLA Executable Context, but we do some work in Elixir
     with {:ok, {_platform, ordinal}} <- Client.check_device_compatibility(client, device),
