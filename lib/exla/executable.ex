@@ -18,7 +18,7 @@ defmodule Exla.Executable do
     inputs =
       inputs
       |> Tuple.to_list()
-      |> Enum.map(&(Buffer.to_shaped_buffer(client, &1)))
+      |> Enum.map(&(Buffer.to_shaped_buffer(client, &1, device)))
     {:ok, inputs}
   end
 
