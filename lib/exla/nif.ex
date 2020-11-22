@@ -151,14 +151,16 @@ defmodule Exla.NIF do
   def dot(_a, _b),
     do: nif_error(__ENV__.function)
 
-  def conditional(_pred, _true_op, _true_comp, _false_op, _false_comp), do: nif_error(__ENV__.function)
+  def conditional(_pred, _true_op, _true_comp, _false_op, _false_comp),
+    do: nif_error(__ENV__.function)
 
   def conditional(_index, _branches, _operands), do: nif_error(__ENV__.function)
 
   def slice(_op, _start_indices, _limit_indices, _strides),
     do: nif_error(__ENV__.function)
 
-  def slice_in_dim(_op, _start_index, _limit_index, _stride, _dimno), do: nif_error(__ENV__.function)
+  def slice_in_dim(_op, _start_index, _limit_index, _stride, _dimno),
+    do: nif_error(__ENV__.function)
 
   def dynamic_slice(_op, _start_indices, _sizes), do: nif_error(__ENV__.function)
 
@@ -176,9 +178,11 @@ defmodule Exla.NIF do
   def constant_r1(_builder, _length, _value),
     do: nif_error(__ENV__.function)
 
-  def get_cpu_client(_num_replicas, _intra_op_parallelism_threads), do: nif_error(__ENV__.function)
+  def get_cpu_client(_num_replicas, _intra_op_parallelism_threads),
+    do: nif_error(__ENV__.function)
 
-  def get_gpu_client(_num_replicas, _intra_op_parallelism_threads), do: nif_error(__ENV__.function)
+  def get_gpu_client(_num_replicas, _intra_op_parallelism_threads),
+    do: nif_error(__ENV__.function)
 
   def get_default_device_ordinal(_client),
     do: nif_error(__ENV__.function)
@@ -195,11 +199,27 @@ defmodule Exla.NIF do
   def build(_builder, _root),
     do: nif_error(__ENV__.function)
 
-  def compile(_client, _computation, _argument_layouts, _device_ordinal, _num_replicas, _num_partitions),
-    do: nif_error(__ENV__.function)
+  def compile(
+        _client,
+        _computation,
+        _argument_layouts,
+        _device_ordinal,
+        _num_replicas,
+        _num_partitions
+      ),
+      do: nif_error(__ENV__.function)
 
-  def run(_client, _executable, _arguments, _device_ordinal, _run_id, _rng_seed, _launch_id, _keep_on_device),
-    do: nif_error(__ENV__.function)
+  def run(
+        _client,
+        _executable,
+        _arguments,
+        _device_ordinal,
+        _run_id,
+        _rng_seed,
+        _launch_id,
+        _keep_on_device
+      ),
+      do: nif_error(__ENV__.function)
 
   def literal_to_shaped_buffer(_client, _literal, _device_ordinal),
     do: nif_error(__ENV__.function)

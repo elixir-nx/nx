@@ -86,7 +86,7 @@ defmodule Exla.Client do
          %Computation{ref: computation},
          argument_shapes,
          options
-  ) do
+       ) do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
@@ -104,16 +104,25 @@ defmodule Exla.Client do
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
-    with {:ok, {_platform, device_ordinal}} <- check_device_compatibility(client, {client.platform, device_ordinal}),
-         {:ok, ref} <- Exla.NIF.compile(ref, computation, shape_refs, device_ordinal, num_replicas, num_partitions) do
+    with {:ok, {_platform, device_ordinal}} <-
+           check_device_compatibility(client, {client.platform, device_ordinal}),
+         {:ok, ref} <-
+           Exla.NIF.compile(
+             ref,
+             computation,
+             shape_refs,
+             device_ordinal,
+             num_replicas,
+             num_partitions
+           ) do
       %Executable{client: client, ref: ref, device: {client.platform, device_ordinal}}
     end
   end
 
   def check_device_compatibility(
-    client = %Client{platform: platform},
-    {platform, ordinal}
-  ) do
+        client = %Client{platform: platform},
+        {platform, ordinal}
+      ) do
     cond do
       ordinal < 0 ->
         {:ok, {platform, Client.get_default_device_ordinal(client)}}
