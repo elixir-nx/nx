@@ -1,4 +1,4 @@
-defmodule NEXT.Compiler do
+defmodule Nx.Defn.Compiler do
   @moduledoc false
 
   # The compiler has four passes.
@@ -33,7 +33,7 @@ defmodule NEXT.Compiler do
     to_delete =
       for {def, stored} when stored != false <- state.defs do
         quote do
-          NEXT.Module.delete_definition(__MODULE__, unquote(def))
+          Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
         end
       end
 
@@ -68,7 +68,7 @@ defmodule NEXT.Compiler do
   end
 
   defp get_and_cache_definition(def, state) do
-    {:v1, kind, meta, clauses} = NEXT.Module.get_definition(state.module, def)
+    {:v1, kind, meta, clauses} = Nx.Defn.Module.get_definition(state.module, def)
 
     with_def(meta, def, def, state, fn state ->
       case clauses do

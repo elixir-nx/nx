@@ -1,8 +1,8 @@
-defmodule NEXTTest do
+defmodule Nx.DefnTest do
   use ExUnit.Case, async: true
 
-  alias NEXTTest.Sample
-  import NEXT
+  alias Nx.DefnTest.Sample
+  import Nx.Defn
 
   defmacrop location(plus) do
     file = Path.relative_to_cwd(__CALLER__.file)
@@ -39,7 +39,7 @@ defmodule NEXTTest do
     defmodule Macros do
       defmacro add(a, b) do
         import Kernel, only: []
-        import NEXT.Kernel
+        import Nx.Defn.Kernel
 
         quote do
           unquote(a) + unquote(b)
@@ -62,7 +62,7 @@ defmodule NEXTTest do
 
     defmacrop add_internal(a, b) do
       import Kernel, only: []
-      import NEXT.Kernel
+      import Nx.Defn.Kernel
 
       quote do
         unquote(a) + unquote(b)
@@ -150,7 +150,7 @@ defmodule NEXTTest do
     test "unused private functions" do
       assert capture_io(:stderr, fn ->
                defmodule Sample do
-                 import NEXT
+                 import Nx.Defn
                  defnp lonely(a, b), do: a + b
                end
              end) =~ "function lonely/2 is unused"
@@ -161,7 +161,7 @@ defmodule NEXTTest do
     test "empty blocks" do
       assert capture_io(:stderr, fn ->
                defmodule Sample do
-                 import NEXT
+                 import Nx.Defn
 
                  defn empty(_a, _b) do
                  end
@@ -174,7 +174,7 @@ defmodule NEXTTest do
     test "does not emit used underscore vars" do
       assert capture_io(:stderr, fn ->
                defmodule Sample do
-                 import NEXT
+                 import Nx.Defn
                  defn empty(a, _b), do: a
                end
              end) == ""
@@ -187,7 +187,7 @@ defmodule NEXTTest do
     test "invalid numerical expression" do
       assert_raise CompileError, ~r"#{location(+4)}: invalid numerical expression", fn ->
         defmodule Sample do
-          import NEXT
+          import Nx.Defn
 
           defn add(_a, _b) do
             receive do
@@ -200,17 +200,17 @@ defmodule NEXTTest do
 
     test "recursive definitions" do
       assert_raise CompileError,
-                   ~r"#{location(+3)}: add/2 is being called recursively by add/2",
+                   ~r"#{location(+4)}: add/2 is being called recursively by add/2",
                    fn ->
                      defmodule Sample do
-                       import NEXT
+                       import Nx.Defn
                        defn add(a, b), do: add(a, b)
                      end
                    end
 
       assert_raise CompileError, ~r"add/2 is being called recursively by add1/2", fn ->
         defmodule Sample do
-          import NEXT
+          import Nx.Defn
           defn add(a, b), do: add1(a, b)
           defn add1(a, b), do: add(a, b)
         end
@@ -219,10 +219,10 @@ defmodule NEXTTest do
 
     test "non variables used as arguments" do
       assert_raise CompileError,
-                   ~r"#{location(+3)}: only variables are allowed as arguments in defn",
+                   ~r"#{location(+4)}: only variables are allowed as arguments in defn",
                    fn ->
                      defmodule Sample do
-                       import NEXT
+                       import Nx.Defn
                        defn add(1, 2), do: 3
                      end
                    end
@@ -230,10 +230,10 @@ defmodule NEXTTest do
 
     test "defaults" do
       assert_raise CompileError,
-                   ~r"#{location(+3)}: default arguments are not supported by defn",
+                   ~r"#{location(+4)}: default arguments are not supported by defn",
                    fn ->
                      defmodule Sample do
-                       import NEXT
+                       import Nx.Defn
                        defn add(a, b \\ 2), do: a + b
                      end
                    end

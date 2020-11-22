@@ -1,4 +1,4 @@
-defmodule NEXT.Module do
+defmodule Nx.Defn.Module do
   @moduledoc false
 
   # TODO: send those as pull requests to Elixir.

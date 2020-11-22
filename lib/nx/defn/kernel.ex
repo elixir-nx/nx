@@ -1,4 +1,4 @@
-defmodule NEXT.Kernel do
+defmodule Nx.Defn.Kernel do
   @moduledoc """
   The API available inside `defn` blocks.
 
