@@ -18,8 +18,8 @@ defmodule Nx.DefnTest do
       {_, _} = meta = add_two(1, 2)
       assert eval(meta) == 3
 
-      {_, _} = meta = add_two([1, 2, 3], 2)
-      assert eval(meta) == [3, 4, 5]
+      {_, _} = meta = add_two(Nx.tensor([1, 2, 3]), 2)
+      assert eval(meta) == Nx.tensor([3, 4, 5])
     end
 
     defn add_two_with_pipe(a, b) do
@@ -30,8 +30,8 @@ defmodule Nx.DefnTest do
       {_, _} = meta = add_two_with_pipe(1, 2)
       assert eval(meta) == 3
 
-      {_, _} = meta = add_two_with_pipe([1, 2, 3], 2)
-      assert eval(meta) == [3, 4, 5]
+      {_, _} = meta = add_two_with_pipe(Nx.tensor([1, 2, 3]), 2)
+      assert eval(meta) == Nx.tensor([3, 4, 5])
     end
   end
 
@@ -56,8 +56,8 @@ defmodule Nx.DefnTest do
       {_, _} = meta = add_two_from_external_macro(1, 2)
       assert eval(meta) == 3
 
-      {_, _} = meta = add_two_from_external_macro([1, 2, 3], 2)
-      assert eval(meta) == [3, 4, 5]
+      {_, _} = meta = add_two_from_external_macro(Nx.tensor([1, 2, 3]), 2)
+      assert eval(meta) == Nx.tensor([3, 4, 5])
     end
 
     defmacrop add_internal(a, b) do
@@ -77,8 +77,8 @@ defmodule Nx.DefnTest do
       {_, _} = meta = add_two_from_external_macro(1, 2)
       assert eval(meta) == 3
 
-      {_, _} = meta = add_two_from_external_macro([1, 2, 3], 2)
-      assert eval(meta) == [3, 4, 5]
+      {_, _} = meta = add_two_from_external_macro(Nx.tensor([1, 2, 3]), 2)
+      assert eval(meta) == Nx.tensor([3, 4, 5])
     end
 
     defn add_two_from_alias(a, b) do
@@ -90,8 +90,8 @@ defmodule Nx.DefnTest do
       {_, _} = meta = add_two_from_alias(1, 2)
       assert eval(meta) == 3
 
-      {_, _} = meta = add_two_from_alias([1, 2, 3], 2)
-      assert eval(meta) == [3, 4, 5]
+      {_, _} = meta = add_two_from_alias(Nx.tensor([1, 2, 3]), 2)
+      assert eval(meta) == Nx.tensor([3, 4, 5])
     end
   end
 
@@ -108,8 +108,8 @@ defmodule Nx.DefnTest do
       {_, _} = meta = add_two_from_public(1, 2)
       assert eval(meta) == 3
 
-      {_, _} = meta = add_two_from_public([1, 2, 3], 2)
-      assert eval(meta) == [3, 4, 5]
+      {_, _} = meta = add_two_from_public(Nx.tensor([1, 2, 3]), 2)
+      assert eval(meta) == Nx.tensor([3, 4, 5])
     end
 
     defn add_two_from_private(a, b) do
@@ -124,8 +124,8 @@ defmodule Nx.DefnTest do
       {_, _} = meta = add_two_from_private(1, 2)
       assert eval(meta) == 3
 
-      {_, _} = meta = add_two_from_private([1, 2, 3], 2)
-      assert eval(meta) == [3, 4, 5]
+      {_, _} = meta = add_two_from_private(Nx.tensor([1, 2, 3]), 2)
+      assert eval(meta) == Nx.tensor([3, 4, 5])
     end
 
     defn add_two_var_conflict(a, b) do
