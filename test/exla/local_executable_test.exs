@@ -69,7 +69,8 @@ defmodule LocalExecutableTest do
     res = Op.add(x, y)
     comp = Builder.build(res)
     exec = Client.compile(state[:cpu], comp, {t1.shape, t2.shape})
-    assert %Tensor{data: {:ref, _}, shape: %Shape{}} = LocalExecutable.run(exec, {t1, t2})
+    # TODO: Change the API to be agnostic of endianess
+    assert %Tensor{data: {:ref, <<2, 0, 0, 0>>}, shape: %Shape{}} = LocalExecutable.run(exec, {t1, t2})
   end
 
   test "slice", state do

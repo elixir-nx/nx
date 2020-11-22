@@ -30,6 +30,9 @@ namespace exla {
 
     se::Stream* host_to_device_stream() const { return host_to_device_stream_.get(); }
 
+    // TODO: Make multiple of these
+    se::Stream* device_to_host_stream() const { return device_to_host_stream_.get(); }
+
     se::Stream* callback_stream() const { return callback_stream_.get(); }
 
   private:
@@ -38,6 +41,7 @@ namespace exla {
     xla::LocalClient* const client_;
     std::unique_ptr<se::Stream> compute_stream_;
     std::unique_ptr<se::Stream> host_to_device_stream_;
+    std::unique_ptr<se::Stream> device_to_host_stream_;
     std::unique_ptr<se::Stream> callback_stream_;
   };
 }

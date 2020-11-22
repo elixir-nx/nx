@@ -192,7 +192,7 @@ defmodule Exla.NIF do
   def compile(_client, _computation, _argument_layouts, _device_ordinal, _num_replicas, _num_partitions),
     do: nif_error(__ENV__.function)
 
-  def run(_client, _executable, _arguments, _device_ordinal, _run_id, _rng_seed, _launch_id),
+  def run(_client, _executable, _arguments, _device_ordinal, _run_id, _rng_seed, _launch_id, _keep_on_device),
     do: nif_error(__ENV__.function)
 
   def literal_to_shaped_buffer(_client, _literal, _device_ordinal),

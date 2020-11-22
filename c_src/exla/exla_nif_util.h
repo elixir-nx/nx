@@ -2,7 +2,6 @@
 #define EXLA_NIF_UTIL_H_
 
 #include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
-#include "tensorflow/compiler/xla/exla/exla_allocator.h"
 
 #include "absl/types/span.h"
 
@@ -53,7 +52,7 @@ namespace exla {
    */
   ERL_NIF_TERM make(ErlNifEnv* env, int &var);
   ERL_NIF_TERM make(ErlNifEnv* env, std::string &var);
-
+  ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary &var);
   ERL_NIF_TERM make(ErlNifEnv* env, const char* string);
 
   /*

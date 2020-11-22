@@ -111,16 +111,10 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
   if(!exla::get(env, argv[3], device_ordinal)) return enif_make_badarg(env);
 
-  stream_executor::DeviceMemoryAllocator* allocator = (*client)->allocator();
-
-  const char *data_ptr = (char *) bin.data;
-  int64_t data_size = bin.size;
-
-  xla::BorrowingLiteral literal = xla::BorrowingLiteral(const_cast<char *>(data_ptr), *shape);
-
-  EXLA_ASSIGN_OR_RETURN(auto scoped_buffer, (*client)->client()->LiteralToShapedBuffer(literal, device_ordinal, allocator), env);
-
-  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, scoped_buffer));
+  exla::ExlaDevice* device = (*client)->device(device_ordinal);
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
+  xla::ScopedShapedBuffer* buffer_ = buffer.release();
+  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer_));
 }
 
 ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -598,7 +592,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
 // TODO: Most of this logic should be moved to `exla::ExlaClient`
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 7){
+  if(argc != 8){
     return enif_make_badarg(env);
   }
 
@@ -606,7 +600,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::LocalExecutable* local_executable;
   std::vector<xla::ShapedBuffer*> arguments;
   xla::ExecutableRunOptions run_options;
-  int run_id, rng_seed, launch_id, device_ordinal;
+  int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
   if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
@@ -615,6 +609,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get(env, argv[4], run_id)) return exla::error(env, "Unable to get Run ID.");
   if(!exla::get(env, argv[5], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
   if(!exla::get(env, argv[6], launch_id)) return exla::error(env, "Unable to get Launch ID.");
+  if(!exla::get(env, argv[7], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
 
   xla::RunId run_id_obj(run_id);
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
@@ -631,6 +626,34 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_launch_id(launch_id);
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
+
+  // Read back as binary
+  bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
+  if(is_cpu_platform) {
+    long long int size = xla::ShapeUtil::ByteSizeOf(result.on_host_shape());
+    ErlNifBinary binary;
+    enif_alloc_binary(size, &binary);
+
+    const stream_executor::DeviceMemoryBase buffer = result.root_buffer();
+    void* src_mem = const_cast<void *>(buffer.opaque());
+    binary.data = (unsigned char*) src_mem;
+
+    return exla::ok(env, exla::make(env, binary));
+  }
+
+  if(!keep_on_device) {
+    xla::TransferManager* transfer_manager = (*client)->client()->backend().transfer_manager();
+    EXLA_ASSIGN_OR_RETURN(xla::Literal literal, transfer_manager->TransferLiteralFromDevice(device->device_to_host_stream(), result, nullptr), env);
+
+    long long int size = literal.size_bytes();
+    ErlNifBinary binary;
+    enif_alloc_binary(size, &binary);
+
+    const void *src_mem = literal.untyped_data();
+    binary.data = (unsigned char*) src_mem;
+
+    return exla::ok(env, exla::make(env, binary));
+  }
 
   return exla::ok(env, exla::make<xla::ShapedBuffer>(env, result));
 }
@@ -719,7 +742,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** xla::ShapedBuffer ******/
-  {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"binary_to_shaped_buffer", 4, binary_to_shaped_buffer},
   {"shaped_buffer_to_binary", 2, shaped_buffer_to_binary},
   {"on_host_shape", 1, on_host_shape},
   /****** xla::Shape ******/
@@ -799,7 +822,7 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},
-  {"run", 7, run},
+  {"run", 8, run},
   {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
   {"shaped_buffer_to_literal", 2, shaped_buffer_to_literal},
   /******** HLO Functions ********/
