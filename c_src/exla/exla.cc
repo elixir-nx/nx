@@ -522,9 +522,27 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaComputation>(env, argv[2], computation)) return exla::error(env, "Unable to get computation.");
   if(!exla::get_vector<long long int>(env, argv[3], dimensions_to_reduce)) return exla::error(env, "Unable to get reduction dimensions.");
 
-  xla::XlaOp result = xla::Reduce(*operand, *init_value, *computation, dimensions_to_reduce);
+  xla::XlaOp op = xla::Reduce(*operand, *init_value, *computation, dimensions_to_reduce);
 
-  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM reduce_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* init_value;
+  xla::XlaComputation* computation;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], init_value)) return exla::error(env, "Unable to get initial value.");
+  if(!exla::get<xla::XlaComputation>(env, argv[2], computation)) return exla::error(env, "Unable to get computation.");
+
+  xla::XlaOp op = xla::ReduceAll(*operand, *init_value, *computation);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 /************************ xla::ClientLibrary Functions ***************************/
@@ -863,6 +881,7 @@ static ErlNifFunc exla_funcs[] = {
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   {"reduce", 4, reduce},
+  {"reduce_all", 3, reduce_all},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},
