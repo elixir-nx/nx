@@ -44,6 +44,49 @@ namespace exla {
     return buffer;
   }
 
+  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(const xla::ScopedShapedBuffer& buffer,
+                                                           ExlaDevice* device) {
+    bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
+
+    // Special case where we can just point to memory address
+    if(is_cpu_platform) {
+      // Allocate enough space for the binary
+      long long int size = xla::ShapeUtil::ByteSizeOf(buffer.on_host_shape());
+      ErlNifBinary binary;
+      enif_alloc_binary(size, &binary);
+
+      // Get the result buffer
+      const stream_executor::DeviceMemoryBase mem_buffer = buffer.root_buffer();
+
+      // No need to copy, just point to the underlying bytes in memory
+      void* src_mem = const_cast<void *>(mem_buffer.opaque());
+      binary.data = (unsigned char*) src_mem;
+
+      return binary;
+    }
+
+    // Otherwise we have to do the transfer
+    xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
+    xla::StatusOr<xla::Literal> transfer_status = transfer_manager->TransferLiteralFromDevice(device->device_to_host_stream(), buffer, nullptr);
+
+    // Something went wrong
+    if(!transfer_status.ok()) {
+      return transfer_status.status();
+    }
+
+    xla::Literal literal = transfer_status.ConsumeValueOrDie();
+    // Allocate enough space for the binary
+    long long int size = literal.size_bytes();
+    ErlNifBinary binary;
+    enif_alloc_binary(size, &binary);
+
+    // No need to copy, just point to the underlying bytes in memory
+    void *src_mem = const_cast<void *>(literal.untyped_data());
+    binary.data = (unsigned char*) src_mem;
+
+    return binary;
+  }
+
   xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
                                                                                        const xla::Shape& shape,
                                                                                        ExlaDevice* device) {
