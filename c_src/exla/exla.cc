@@ -241,6 +241,29 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+/************************* Conditionals ***************************/
+ERL_NIF_TERM conditional(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 5) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* pred;
+  xla::XlaOp* true_op;
+  xla::XlaOp* false_op;
+  xla::XlaComputation* true_comp;
+  xla::XlaComputation* false_comp;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], pred)) return exla::error(env, "Unable to get predicate.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], true_op)) return exla::error(env, "Unable to get true operand.");
+  if(!exla::get<xla::XlaComputation>(env, argv[2], true_comp)) return exla::error(env, "Unable to get true computation.");
+  if(!exla::get<xla::XlaOp>(env, argv[3], false_op)) return exla::error(env, "Unable to get false operand.");
+  if(!exla::get<xla::XlaComputation>(env, argv[4], false_comp)) return exla::error(env, "Unable to get false computation.");
+
+  xla::XlaOp op = xla::Conditional(*pred, *true_op, *true_comp, *false_op, *false_comp);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 /************************ Slicing Ops *****************************/
 ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(argc != 4) {
@@ -811,6 +834,7 @@ static ErlNifFunc exla_funcs[] = {
   {"zero", 2, zero},
   {"constant_r0", 2, constant_r0},
   {"constant_r1", 3, constant_r1_fill},
+  {"conditional", 5, conditional},
   /******** Slicing Ops ********/
   {"slice", 4, slice},
   {"slice_in_dim", 5, slice_in_dim},

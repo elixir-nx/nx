@@ -151,6 +151,8 @@ defmodule Exla.NIF do
   def dot(_a, _b),
     do: nif_error(__ENV__.function)
 
+  def conditional(_pred, _true_op, _true_comp, _false_op, _false_comp), do: nif_error(__ENV__.function)
+
   def slice(_op, _start_indices, _limit_indices, _strides),
     do: nif_error(__ENV__.function)
 

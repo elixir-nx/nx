@@ -31,6 +31,15 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+      def conditional(%Op{builder: builder, ref: pred}, %Op{builder: builder, ref: true_op}, %Computation{ref: true_comp}, %Op{builder: builder, ref: false_op}, %Computation{ref: false_comp}) do
+        {:ok, ref} = Exla.NIF.conditional(pred, true_op, true_comp, false_op, false_comp)
+        %Op{builder: builder, ref: ref}
+      end
+  def ne(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}, broadcast_dims \\ {}) do
+        {:ok, ref} = Exla.NIF.ne(left, right, broadcast_dims)
+        %Op{builder: builder, ref: ref}
+  end
+
   def add(
         %Op{builder: builder, ref: left},
         %Op{builder: builder, ref: right},
