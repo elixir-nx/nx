@@ -44,7 +44,7 @@ namespace exla {
     return buffer;
   }
 
-  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(const xla::ScopedShapedBuffer& buffer,
+  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(const xla::ShapedBuffer& buffer,
                                                            ExlaDevice* device) {
     bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
@@ -81,7 +81,7 @@ namespace exla {
     enif_alloc_binary(size, &binary);
 
     // No need to copy, just point to the underlying bytes in memory
-    void *src_mem = const_cast<void *>(literal.untyped_data());
+    const void *src_mem = literal.untyped_data();
     binary.data = (unsigned char*) src_mem;
 
     return binary;
