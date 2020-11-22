@@ -97,7 +97,7 @@ defmodule Nx do
   A number or a boolean returns a tensor of zero dimensions:
 
       iex> t = Nx.tensor(0)
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<0::64>>
       iex> Nx.type(t)
       {:s, 64}
@@ -105,17 +105,17 @@ defmodule Nx do
       {}
 
       iex> t = Nx.tensor(true)
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1::1>>
       iex> Nx.type(t)
-      {:s, 1}
+      {:u, 1}
       iex> Nx.shape(t)
       {}
 
   Giving a list returns a vector (an one-dimensional tensor):
 
       iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1::64, 2::64, 3::64>>
       iex> Nx.type(t)
       {:s, 64}
@@ -123,7 +123,7 @@ defmodule Nx do
       {3}
 
       iex> t = Nx.tensor([1.2, 2.3, 3.4, 4.5])
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1.2::64-float, 2.3::64-float, 3.4::64-float, 4.5::64-float>>
       iex> Nx.type(t)
       {:f, 64}
@@ -134,13 +134,13 @@ defmodule Nx do
   bigger than the given size overlap:
 
       iex> t = Nx.tensor([300, 301, 302], type: {:s, 8})
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<44::8, 45::8, 46::8>>
       iex> Nx.type(t)
       {:s, 8}
 
       iex> t = Nx.tensor([1.2, 2.3, 3.4], type: {:f, 32})
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1.2::32-float, 2.3::32-float, 3.4::32-float>>
       iex> Nx.type(t)
       {:f, 32}
@@ -148,7 +148,7 @@ defmodule Nx do
   An empty list defaults to floats:
 
       iex> t = Nx.tensor([])
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<>>
       iex> Nx.type(t)
       {:f, 64}
@@ -156,7 +156,7 @@ defmodule Nx do
   Mixed types get the highest precision type:
 
       iex> t = Nx.tensor([true, 2, 3.0])
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1.0::float-64, 2.0::float-64, 3::float-64>>
       iex> Nx.type(t)
       {:f, 64}
@@ -164,7 +164,7 @@ defmodule Nx do
   Multi-dimensional tensors are also possible:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1::64, 2::64, 3::64, 4::64, 5::64, 6::64>>
       iex> Nx.type(t)
       {:s, 64}
@@ -172,7 +172,7 @@ defmodule Nx do
       {2, 3}
 
       iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]])
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1::64, 2::64, 3::64, 4::64, 5::64, 6::64>>
       iex> Nx.type(t)
       {:s, 64}
@@ -180,7 +180,7 @@ defmodule Nx do
       {3, 2}
 
       iex> t = Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[-1, -2], [-3, -4], [-5, -6]]])
-      iex> Nx.to_binary(t)
+      iex> Nx.to_bitstring(t)
       <<1::64, 2::64, 3::64, 4::64, 5::64, 6::64, -1::64, -2::64, -3::64, -4::64, -5::64, -6::64>>
       iex> Nx.type(t)
       {:s, 64}
@@ -205,7 +205,7 @@ defmodule Nx do
     {dimensions, acc} = flatten_list(list, type, [], [])
 
     {dimensions |> Enum.reverse() |> List.to_tuple(),
-     acc |> Enum.reverse() |> IO.iodata_to_binary()}
+     acc |> Enum.reverse() |> :erlang.list_to_bitstring()}
   end
 
   defp flatten(other, type), do: {{}, scalar_to_binary(other, type)}
@@ -241,15 +241,7 @@ defmodule Nx do
 
   defp scalar_to_binary(true, type), do: scalar_to_binary(1, type)
   defp scalar_to_binary(false, type), do: scalar_to_binary(0, type)
-
-  defp scalar_to_binary(value, {:s, size}) when is_integer(value),
-    do: <<value::size(size)-signed-integer>>
-
-  defp scalar_to_binary(value, {:u, size}) when is_integer(value),
-    do: <<value::size(size)-unsigned-integer>>
-
-  defp scalar_to_binary(value, {:f, size}) when is_number(value),
-    do: <<value::size(size)-float>>
+  defp scalar_to_binary(value, type), do: match_types([type], do: <<value::@0>>)
 
   @doc """
   Returns the type of the tensor.
@@ -271,21 +263,76 @@ defmodule Nx do
   def rank(%Tensor{shape: shape}), do: tuple_size(shape)
 
   @doc """
-  Returns the underlying tensor as a binary.
+  Returns the underlying tensor as a bitstring.
 
-  The binary is returned as is (which is row-major).
+  The bitstring is returned as is (which is row-major).
   """
-  def to_binary(%Tensor{data: data}), do: data
+  def to_bitstring(%Tensor{data: data}), do: data
 
-  # TODO: Properly implement this.
+  @doc """
+  Adds two tensors together.
+
+  If a scalar is given, they are kept as scalars.
+  If a tensor and a scalar are given, it adds the
+  scalar to all entries in the tensor.
+
+  ## Examples
+
+  ### Adding scalars
+
+      iex> Nx.add(1, 2)
+      3
+      iex> Nx.add(1, 2.2)
+      3.2
+
+  ### Adding a scalar to a tensor
+
+      iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<2::64, 3::64, 4::64>>
+
+  Given a float scalar converts the tensor to a float:
+
+      iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1.0)
+      iex> Nx.to_bitstring(t)
+      <<2.0::float-64, 3.0::float-64, 4.0::float-64>>
+
+      iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0]), 1)
+      iex> Nx.to_bitstring(t)
+      <<2.0::float-64, 3.0::float-64, 4.0::float-64>>
+
+      iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), 1)
+      iex> Nx.to_bitstring(t)
+      <<2.0::float-32, 3.0::float-32, 4.0::float-32>>
+
+  The size of the tensor will grow if the scalar is bigger than
+  the tensor size. But, if smaller, it overflows:
+
+      iex> t = Nx.add(Nx.tensor([true, false, true]), 1)
+      iex> Nx.to_bitstring(t)
+      <<0::1, 1::1, 0::1>>
+
+      iex> t = Nx.add(Nx.tensor([true, false, true]), 10)
+      iex> Nx.to_bitstring(t)
+      <<11::8, 10::8, 11::8>>
+
+  Unsigned tensors become signed and double their size if a
+  negative number is given:
+
+      iex> t = Nx.add(Nx.tensor([0, 1, 2], type: {:u, 8}), -1)
+      iex> Nx.to_bitstring(t)
+      <<-1::16, 0::16, 1::16>>
+
+  """
   def add(left, right)
 
   def add(left, right) when is_number(left) and is_number(right), do: :erlang.+(left, right)
 
   def add(%Tensor{data: data, type: input_type} = left, right) when is_number(right) do
-    output_type = Nx.Type.merge(input_type, Nx.Type.infer(right))
+    output_type = Nx.Type.merge_scalar(input_type, right)
 
     data =
+      # match_types is a macro, see its definition at the top of this module.
       match_types [input_type, output_type] do
         for <<seg::@0 <- data>>, into: <<>>, do: <<seg+right::@1>>
       end
