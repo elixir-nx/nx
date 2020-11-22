@@ -27,7 +27,7 @@ defmodule ExecutableTest do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
     exec = Client.compile(state[:cpu], comp, {})
-    assert %Buffer{data: <<0, 0, 0, 1>>} = Executable.run(exec, {})
+    assert %Buffer{data: <<1, 0, 0, 0>>} = Executable.run(exec, {})
   end
 
   @tag :cuda
@@ -37,38 +37,38 @@ defmodule ExecutableTest do
     comp = Builder.build(op)
     exec = Client.compile(state[:gpu], comp, {})
 
-    assert %Buffer{data: <<0, 0, 0, 1>>} = Executable.run(exec, {}, device: {:cuda, 0})
+    assert %Buffer{data: <<1, 0, 0, 0>>} = Executable.run(exec, {}, device: {:cuda, 0})
   end
 
   test "run/4 succeeds with 1 input and default options on host device", state do
-    t1 = %Buffer{data: <<1::32>>, shape: Shape.make_shape(:int32, {})}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
     exec = Client.compile(state[:cpu], comp, {t1.shape})
-    assert %Buffer{data: <<0, 0, 0, 2>>} = Executable.run(exec, {t1})
+    assert %Buffer{data: <<2, 0, 0, 0>>} = Executable.run(exec, {t1})
   end
 
   @tag :cuda
   test "run/4 succeeds with 1 input and default options on cuda device", state do
-    t1 = %Buffer{data: <<1::32>>, shape: Shape.make_shape(:int32, {})}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
     exec = Client.compile(state[:gpu], comp, {t1.shape})
 
-    assert %Buffer{data: <<0, 0, 0, 1>>} = Executable.run(exec, {t1}, device: {:cuda, 0})
+    assert %Buffer{data: <<2, 0, 0, 0>>} = Executable.run(exec, {t1}, device: {:cuda, 0})
   end
 
   test "run/4 succeeds with 2 inputs and default options on host device", state do
-    t1 = %Buffer{data: <<1::32>>, shape: Shape.make_shape(:int32, {})}
-    t2 = %Buffer{data: <<1::32>>, shape: Shape.make_shape(:int32, {})}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
+    t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     y = Op.parameter(state[:builder], 1, t2.shape, "y")
     res = Op.add(x, y)
     comp = Builder.build(res)
     exec = Client.compile(state[:cpu], comp, {t1.shape, t2.shape})
-    assert %Buffer{data: <<0, 0, 0, 2>>} = Executable.run(exec, {t1, t2})
+    assert %Buffer{data: <<2, 0, 0, 0>>} = Executable.run(exec, {t1, t2})
   end
 
   test "slice", state do
@@ -81,14 +81,14 @@ defmodule ExecutableTest do
 
   @tag :cuda
   test "run/4 succeeds with 2 inputs and default options on cuda device", state do
-    t1 = %Buffer{data: <<1::32>>, shape: Shape.make_shape(:int32, {})}
-    t2 = %Buffer{data: <<1::32>>, shape: Shape.make_shape(:int32, {})}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
+    t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     y = Op.parameter(state[:builder], 1, t2.shape, "y")
     res = Op.add(x, y)
     comp = Builder.build(res)
     exec = Client.compile(state[:gpu], comp, {t1.shape, t2.shape})
 
-    assert %Buffer{data: <<0, 0, 0, 2>>} = Executable.run(exec, {t1, t2}, device: {:cuda, 0})
+    assert %Buffer{data: <<2, 0, 0, 0>>} = Executable.run(exec, {t1, t2}, device: {:cuda, 0})
   end
 end

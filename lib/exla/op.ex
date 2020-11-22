@@ -134,4 +134,9 @@ defmodule Exla.Op do
     {:ok, ref} = Exla.NIF.reduce(operand, init_value, reduction, reduction_dimensions)
     %Op{builder: builder, ref: ref}
   end
+
+  def reduce_all(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: init_value}, %Computation{ref: reduction}) do
+    {:ok, ref} = Exla.NIF.reduce_all(operand, init_value, reduction)
+    %Op{builder: builder, ref: ref}
+  end
 end

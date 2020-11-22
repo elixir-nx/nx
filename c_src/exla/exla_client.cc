@@ -48,7 +48,6 @@ namespace exla {
                                                            ExlaDevice* device) {
     bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
-    // Special case where we can just point to memory address
     if(is_cpu_platform) {
       // Allocate enough space for the binary
       long long int size = xla::ShapeUtil::ByteSizeOf(buffer.on_host_shape());
@@ -58,9 +57,9 @@ namespace exla {
       // Get the result buffer
       const stream_executor::DeviceMemoryBase mem_buffer = buffer.root_buffer();
 
-      // No need to copy, just point to the underlying bytes in memory
+      // No need to copy, just move the underlying bytes in memory
       void* src_mem = const_cast<void *>(mem_buffer.opaque());
-      binary.data = (unsigned char*) src_mem;
+      std::memmove(binary.data, src_mem, size);
 
       return binary;
     }
@@ -80,9 +79,9 @@ namespace exla {
     ErlNifBinary binary;
     enif_alloc_binary(size, &binary);
 
-    // No need to copy, just point to the underlying bytes in memory
-    const void *src_mem = literal.untyped_data();
-    binary.data = (unsigned char*) src_mem;
+    // No need to copy, just move to the underlying bytes in memory
+    void *src_mem = const_cast<void*>(literal.untyped_data());
+    std::memmove(binary.data, src_mem, size);
 
     return binary;
   }

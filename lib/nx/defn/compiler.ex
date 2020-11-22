@@ -43,17 +43,9 @@ defmodule Nx.Defn.Compiler do
   defp compile_each({name, _arity} = def, state) do
     {{_kind, _meta, args, ast}, state} = get_cached_definition(def, state)
 
-    # TODO: make this pluggable as the user compiler
-    binding =
-      Enum.map(args, fn {var, meta, ctx} ->
-        {{var, Keyword.fetch!(meta, :counter)}, {var, [generated: true] ++ meta, ctx}}
-      end)
-
     quoted =
       quote do
-        def unquote(name)(unquote_splicing(args)) do
-          {unquote(Macro.escape(ast)), unquote(binding)}
-        end
+        def unquote(name)(unquote_splicing(args)), do: unquote(ast)
       end
 
     {quoted, state}
@@ -118,7 +110,15 @@ defmodule Nx.Defn.Compiler do
     {{name, [counter: version] ++ meta, ctx}, state}
   end
 
-  defp normalize({{:., _, [Nx, _]} = call, meta, args}, state) do
+  @allowed_nx_functions [add: 2, divide: 2, sum: 1, exp: 1]
+
+  defp normalize({{:., _, [Nx, name]} = call, meta, args}, state) do
+    arity = length(args)
+
+    if {name, arity} not in @allowed_nx_functions do
+      compile_error!(meta, state, "Nx.#{name}/#{arity} is not allowed inside defn")
+    end
+
     {args, state} = normalize_list(args, state)
     {{call, meta, args}, state}
   end

@@ -2,20 +2,8 @@ defmodule Nx.Defn do
   @moduledoc """
   Compile-time numerical definitions.
 
-  This module helps developers define numerical functions
-  with restrictions that allow them to be JIT and/or AOT-compiled,
-  autograded, as well as fully run on the GPU.
-  """
-
-  @exports_key :__next_exports__
-
-  # TODO: Support default arguments
-  # TODO: Support cross module calls
-  @doc """
-  Defines a numerical function.
-
   A numerical function is a subset of Elixir tailored for
-  numerical computations. For example, the following functions:
+  numerical computations. For example, the following function:
 
       defn add_and_mult(a, b, c) do
         a * b + c
@@ -23,11 +11,31 @@ defmodule Nx.Defn do
 
   Can be called with scalars, vectors, matrices or n-dimensional
   tensors. Depending on your backend of choice, the code can even
-  be JIT-compiled or AOT-compiled.
+  be JIT-compiled or AOT-compiled and run either on the CPU or GPU.
 
-  This works by replacing Elixir's `Kernel` by `Nx.Defn.Kernel`. You can
-  see all functionality available inside `defn` by consulting the docs
-  to `Nx.Defn.Kernel`.
+  `defn` is a subset of Elixir since it replaces Elixir's `Kernel`
+  by `Nx.Defn.Kernel`. You can also call most functions from the
+  `Nx` module directly inside `defn`. For example, the above can
+  also be written as:
+
+      defn add_and_mult(a, b, c) do
+        a
+        |> Nx.multipy(b)
+        |> Nx.add(c)
+      end
+
+  The only `Nx` functions not supported in `defn` are conversion
+  functions (such as `Nx.to_bitstring/1`) and device transfer
+  functions as they are meant for interfacing between Elixir and
+  the numerical world.
+  """
+
+  @exports_key :__next_exports__
+
+  # TODO: Support default arguments
+  # TODO: Support cross module calls
+  @doc """
+  Defines a public numerical function.
   """
   defmacro defn(call, do: block) do
     define(:def, call, block, __CALLER__)
@@ -36,9 +44,9 @@ defmodule Nx.Defn do
   @doc """
   Defines a private numerical function.
 
-  Like any numerical function, it is always inlined
-  by its callers and then removed and made innaccessible
-  at compilation time.
+  Private numerical functions are always inlined by
+  their callers at compilation time. This happens to
+  all local function calls within `defn`.
   """
   defmacro defnp(call, do: block) do
     define(:defp, call, block, __CALLER__)
