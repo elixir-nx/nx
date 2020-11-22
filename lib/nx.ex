@@ -16,7 +16,7 @@ defmodule Nx do
   # given position. In other words, this:
   #
   #    combine_types [input_type, output_type] do
-  #      for <<seg::@0 <- data>>, into: <<>>, do: <<seg+right::@1>>
+  #      for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
   #    end
   #
   # Is compiled into:
@@ -24,9 +24,12 @@ defmodule Nx do
   #    for <<seg::float-size(...) <- data>>, into: <<>>, do: <<seg+right::float-size(...)>>
   #
   # for all possible valid types between input and input types.
-  # @0 mataches to `input_type`, @1 to `output_type`, and so on.
   #
-  # In particular, note that a rolled out case such as:
+  # `match!` is used in matches and must be always followed by a `read!`.
+  # `write!` is used to write to the binary.
+  #
+  # The implementation unfolds the loops at the top level. In particular,
+  # note that a rolled out case such as:
   #
   #     for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
   #       <<seg+number::signed-integer-size(size)>>
@@ -53,9 +56,17 @@ defmodule Nx do
       Enum.flat_map(matches, fn match ->
         block =
           Macro.prewalk(block, fn
-            {:@, _, [pos]} when is_integer(pos) ->
+            {:match!, _, [var, pos]} when is_integer(pos) ->
               {type, size} = Enum.fetch!(match, pos)
-              quote do: size(unquote(size))-unquote(type_to_bin_modifier(type))
+              match_bin_modifier(var, type, size)
+
+            {:read!, _, [var, pos]} when is_integer(pos) ->
+              {type, size} = Enum.fetch!(match, pos)
+              read_bin_modifier(var, type, size)
+
+            {:write!, _, [var, pos]} when is_integer(pos) ->
+              {type, size} = Enum.fetch!(match, pos)
+              write_bin_modifier(var, type, size)
 
             other ->
               other
@@ -71,7 +82,7 @@ defmodule Nx do
     end
   end
 
-  @all_types [:s, :f, :u]
+  @all_types [:s, :f, :bf, :u]
 
   defp match_types([h | t]) do
     for type <- @all_types, t <- match_types(t) do
@@ -81,9 +92,38 @@ defmodule Nx do
 
   defp match_types([]), do: [[]]
 
-  defp type_to_bin_modifier(:s), do: quote(do: signed-integer)
-  defp type_to_bin_modifier(:u), do: quote(do: unsigned-integer)
-  defp type_to_bin_modifier(:f), do: quote(do: float)
+  defp match_bin_modifier(var, :bf, _),
+    do: quote(do: unquote(var) :: binary - size(3))
+
+  defp match_bin_modifier(var, type, size),
+    do: shared_bin_modifier(var, type, size)
+
+  defp read_bin_modifier(var, :bf, _),
+    do: quote(do: read_bf16(unquote(var)))
+
+  defp read_bin_modifier(var, _, _),
+    do: var
+
+  defp write_bin_modifier(var, :bf, _),
+    do: quote(do: binary_part(<<unquote(var)::float-32>>, 0, 2) :: binary)
+
+  defp write_bin_modifier(var, type, size),
+    do: shared_bin_modifier(var, type, size)
+
+  @compile {:inline, read_bf16: 1}
+  defp read_bf16(bf16) do
+    <<x::float-32>> = <<bf16::binary, 0::16>>
+    x
+  end
+
+  defp shared_bin_modifier(var, :s, size),
+    do: quote(do: unquote(var) :: signed - integer - size(unquote(size)))
+
+  defp shared_bin_modifier(var, :u, size),
+    do: quote(do: unquote(var) :: unsigned - integer - size(unquote(size)))
+
+  defp shared_bin_modifier(var, :f, size),
+    do: quote(do: unquote(var) :: float - size(unquote(size)))
 
   @doc """
   Builds a tensor.
@@ -187,6 +227,16 @@ defmodule Nx do
       iex> Nx.shape(t)
       {2, 3, 2}
 
+  Brain-floating points are also supported, although they are
+  emulated in Elixir and therefore perform slower without a
+  compilation backend:
+
+      iex> t = Nx.tensor([1, 2, 3], type: {:bf, 16})
+      iex> Nx.to_bitstring(t)
+      <<63, 128, 64, 0, 64, 64>>
+      iex> Nx.type(t)
+      {:bf, 16}
+
   ## Options
 
     * `:type` - sets the type of the tensor. If one is not given,
@@ -241,7 +291,7 @@ defmodule Nx do
 
   defp scalar_to_binary(true, type), do: scalar_to_binary(1, type)
   defp scalar_to_binary(false, type), do: scalar_to_binary(0, type)
-  defp scalar_to_binary(value, type), do: match_types([type], do: <<value::@0>>)
+  defp scalar_to_binary(value, type), do: match_types([type], do: <<write!(value, 0)>>)
 
   @doc """
   Returns the type of the tensor.
@@ -331,10 +381,10 @@ defmodule Nx do
   def add(%Tensor{data: data, type: input_type} = left, right) when is_number(right) do
     output_type = Nx.Type.merge_scalar(input_type, right)
 
+    # match_types is a macro, see its definition at the top of this module.
     data =
-      # match_types is a macro, see its definition at the top of this module.
       match_types [input_type, output_type] do
-        for <<seg::@0 <- data>>, into: <<>>, do: <<seg+right::@1>>
+        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
       end
 
     %{left | data: data, type: output_type}
@@ -366,12 +416,12 @@ defmodule Nx do
   def exp(number) when is_number(number), do: :math.exp(number)
 
   def exp(%Tensor{data: data, type: input_type} = t) do
-    output_type = {:f, output_size} = Nx.Type.to_float(input_type)
+    output_type = Nx.Type.to_float(input_type)
 
+    # match_types is a macro, see its definition at the top of this module.
     data =
-      # match_types is a macro, see its definition at the top of this module.
-      match_types [input_type] do
-        for <<seg::@0 <- data>>, into: <<>>, do: <<:math.exp(seg)::float-size(output_size)>>
+      match_types [input_type, output_type] do
+        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(:math.exp(read!(seg, 0)), 1)>>
       end
 
     %{t | data: data, type: output_type}
