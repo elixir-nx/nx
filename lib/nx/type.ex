@@ -111,10 +111,14 @@ defmodule Nx.Type do
       {:f, 32}
       iex> Nx.Type.to_float({:s, 32})
       {:f, 64}
+      iex> Nx.Type.to_float({:bf, 16})
+      {:bf, 16}
       iex> Nx.Type.to_float({:f, 32})
       {:f, 32}
 
   """
+  def to_float({:bf, size}), do: {:bf, size}
+  def to_float({:f, size}), do: {:f, size}
   def to_float(type), do: merge(type, {:f, 32})
 
   @doc """

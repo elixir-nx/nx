@@ -93,7 +93,7 @@ defmodule Nx do
   defp match_types([]), do: [[]]
 
   defp match_bin_modifier(var, :bf, _),
-    do: quote(do: unquote(var) :: binary - size(3))
+    do: quote(do: unquote(var) :: binary - size(2))
 
   defp match_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
@@ -316,6 +316,8 @@ defmodule Nx do
   Returns the underlying tensor as a bitstring.
 
   The bitstring is returned as is (which is row-major).
+
+  # TODO: What happens if the data is in the device?
   """
   def to_bitstring(%Tensor{data: data}), do: data
 
@@ -374,6 +376,7 @@ defmodule Nx do
       <<-1::16, 0::16, 1::16>>
 
   """
+  # TODO: implement addition between tensors with broadcasting
   def add(left, right)
 
   def add(left, right) when is_number(left) and is_number(right), do: :erlang.+(left, right)
@@ -408,6 +411,10 @@ defmodule Nx do
       iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
       iex> Nx.to_bitstring(t)
       <<2.718281828459045::float-32, 7.38905609893065::float-32, 20.085536923187668::float-32>>
+
+      iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16}))
+      iex> Nx.to_bitstring(t)
+      <<64, 45, 64, 236, 65, 160>>
 
   """
   def exp(number)
