@@ -105,25 +105,25 @@ defmodule Nx do
     do: var
 
   defp write_bin_modifier(var, :bf, _),
-    do: quote(do: binary_part(<<unquote(var)::float-32>>, 0, 2) :: binary)
+    do: quote(do: binary_part(<<unquote(var)::float-native-32>>, 0, 2) :: binary)
 
   defp write_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
 
   @compile {:inline, read_bf16: 1}
   defp read_bf16(bf16) do
-    <<x::float-32>> = <<bf16::binary, 0::16>>
+    <<x::float-native-32>> = <<bf16::binary, 0::16>>
     x
   end
 
   defp shared_bin_modifier(var, :s, size),
-    do: quote(do: unquote(var) :: signed - integer - size(unquote(size)))
+    do: quote(do: unquote(var) :: signed - integer - native - size(unquote(size)))
 
   defp shared_bin_modifier(var, :u, size),
-    do: quote(do: unquote(var) :: unsigned - integer - size(unquote(size)))
+    do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
 
   defp shared_bin_modifier(var, :f, size),
-    do: quote(do: unquote(var) :: float - size(unquote(size)))
+    do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
   @doc """
   Builds a tensor.
@@ -387,6 +387,23 @@ defmodule Nx do
     data =
       match_types [input_type, output_type] do
         for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
+      end
+
+    %{left | data: data, type: output_type}
+  end
+
+  # TODO: Properly implement me
+  def divide(
+        %Tensor{data: left_data, type: left_type} = left,
+        %Tensor{data: right_data, type: right_type, shape: {}}
+      ) do
+    output_type = Nx.Type.merge(left_type, right_type) |> Nx.Type.to_float()
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        <<match!(c, 1)>> = right_data
+        c = read!(c, 1)
+        for <<match!(seg, 0) <- left_data>>, into: <<>>, do: <<write!(read!(seg, 0) / c, 2)>>
       end
 
     %{left | data: data, type: output_type}

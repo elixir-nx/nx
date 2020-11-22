@@ -14,6 +14,13 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  A `/` operator which delegates to `Nx.divide/2`.
+  """
+  defmacro a / b do
+    quote do: Nx.divide(unquote(a), unquote(b))
+  end
+
+  @doc """
   A `|>` operator which delegates to `Kernel.|>/2`.
   """
   defmacro left |> right do
