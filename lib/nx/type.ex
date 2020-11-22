@@ -96,6 +96,21 @@ defmodule Nx.Type do
   end
 
   @doc """
+  Converts the given type to a float with the minimum size necessary.
+
+  ## Examples
+
+      iex> Nx.Type.to_float({:s, 8})
+      {:f, 32}
+      iex> Nx.Type.to_float({:s, 32})
+      {:f, 64}
+      iex> Nx.Type.to_float({:f, 32})
+      {:f, 32}
+
+  """
+  def to_float(type), do: merge(type, {:f, 32})
+
+  @doc """
   Merges the given types finding a suitable representation for both.
 
   Types have the following precedence:

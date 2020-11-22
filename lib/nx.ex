@@ -339,4 +339,41 @@ defmodule Nx do
 
     %{left | data: data, type: output_type}
   end
+
+  @doc """
+  Calculates the exponential of the given tensor.
+
+  If a scalar is given, a scalar is returned.
+  Otherwise, returns an updated tensor. In both
+  cases, the return type is float.
+
+  ## Examples
+
+      iex> Nx.exp(1)
+      2.718281828459045
+
+      iex> t = Nx.exp(Nx.tensor([1, 2, 3]))
+      iex> Nx.to_bitstring(t)
+      <<2.718281828459045::float-64, 7.38905609893065::float-64, 20.085536923187668::float-64>>
+
+      iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<2.718281828459045::float-32, 7.38905609893065::float-32, 20.085536923187668::float-32>>
+
+  """
+  def exp(number)
+
+  def exp(number) when is_number(number), do: :math.exp(number)
+
+  def exp(%Tensor{data: data, type: input_type} = t) do
+    output_type = {:f, output_size} = Nx.Type.to_float(input_type)
+
+    data =
+      # match_types is a macro, see its definition at the top of this module.
+      match_types [input_type] do
+        for <<seg::@0 <- data>>, into: <<>>, do: <<:math.exp(seg)::float-size(output_size)>>
+      end
+
+    %{t | data: data, type: output_type}
+  end
 end
