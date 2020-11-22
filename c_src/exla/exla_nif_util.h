@@ -137,6 +137,9 @@ namespace exla {
     return 1;
   }
 
+  // TODO: TEMPLATE
+  int get_vector_comps(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::XlaComputation*> &var);
+
 } // namespace exla
 
 #endif
