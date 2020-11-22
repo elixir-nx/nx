@@ -426,4 +426,47 @@ defmodule Nx do
 
     %{t | data: data, type: output_type}
   end
+
+
+  @doc """
+  Returns the sum across all dimensions.
+
+  ## Examples
+
+      iex> t = Nx.sum(Nx.tensor([1, 2, 3]))
+      iex> Nx.to_bitstring(t)
+      <<6::64>>
+      iex> Nx.shape(t)
+      {}
+
+      iex> t = Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
+      iex> Nx.to_bitstring(t)
+      <<10.0::float-64>>
+      iex> Nx.shape(t)
+      {}
+
+  """
+  def sum(%Tensor{data: data, type: type} = t) do
+    data =
+      match_types [type] do
+        value =
+          until_empty(data, 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
+            {read!(var, 0) + acc, rest}
+          end)
+
+        <<write!(value, 0)>>
+      end
+
+    %{t | data: data, shape: {}}
+  end
+
+  @compile {:inline, until_empty: 3}
+  defp until_empty(<<>>, acc, _fun) do
+    acc
+  end
+
+  defp until_empty(binary, acc, fun) do
+    {acc, rest} = fun.(binary, acc)
+    until_empty(rest, acc, fun)
+  end
 end
