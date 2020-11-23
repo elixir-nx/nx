@@ -23,8 +23,7 @@ defmodule Exla.Defn do
           result = apply(fun, shapes)
           computation = Exla.Builder.build(result)
           client = Exla.Client.create_client(platform: Keyword.get(options, :platform, :host))
-          # TODO: Make shapes a list
-          executable = Exla.Client.compile(client, computation, List.to_tuple(shapes))
+          executable = Exla.Client.compile(client, computation, shapes)
           :persistent_term.put(cache_key, executable)
           executable
 
@@ -33,9 +32,8 @@ defmodule Exla.Defn do
       end
 
     # TODO: Pass options
-    # TODO: Make buffers a list
     # TODO: Convert this back to a tensor
-    Exla.Executable.run(executable, List.to_tuple(buffers), [])
+    Exla.Executable.run(executable, buffers, [])
   end
 
   def sf_builder(name) do
