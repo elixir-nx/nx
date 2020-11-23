@@ -179,7 +179,7 @@ defmodule Nx.Defn do
       end
 
     compiler =
-      Module.get_attribute(module, @defn_compiler) ||
+      Module.delete_attribute(module, @defn_compiler) ||
         Module.get_attribute(module, @default_defn_compiler) ||
         __MODULE__
 

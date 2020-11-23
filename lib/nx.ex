@@ -18,8 +18,8 @@ defmodule Nx do
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> t = Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
       iex> Nx.to_bitstring(t)
-      <<0.03205860328008499::float-native-64, 0.08714431874203257::float-native-64,
-        0.23688281808991013::float-native-64, 0.6439142598879722::float-native-64>>
+      <<0.03205860328008499::float-64-native, 0.08714431874203257::float-64-native,
+        0.23688281808991013::float-64-native, 0.6439142598879722::float-64-native>>
 
   The `Nx` library also provides the `Nx.Defn` functionality,
   which provides a subset of Elixir tailored for numerical
@@ -221,7 +221,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([1.2, 2.3, 3.4, 4.5])
       iex> Nx.to_bitstring(t)
-      <<1.2::float-native-64, 2.3::float-native-64, 3.4::float-native-64, 4.5::float-native-64>>
+      <<1.2::float-64-native, 2.3::float-64-native, 3.4::float-64-native, 4.5::float-64-native>>
       iex> Nx.type(t)
       {:f, 64}
       iex> Nx.shape(t)
@@ -254,7 +254,7 @@ defmodule Nx do
 
       iex> t = Nx.tensor([true, 2, 3.0])
       iex> Nx.to_bitstring(t)
-      <<1.0::float-native-64, 2.0::float-native-64, 3::float-native-64>>
+      <<1.0::float-64-native, 2.0::float-64-native, 3::float-64-native>>
       iex> Nx.type(t)
       {:f, 64}
 
@@ -381,18 +381,19 @@ defmodule Nx do
   @doc """
   Adds two tensors together.
 
-  If a scalar is given, they are kept as scalars.
-  If a tensor and a scalar are given, it adds the
-  scalar to all entries in the tensor.
+  If a number is given, it is converted to a tensor on the fly.
 
   ## Examples
 
   ### Adding scalars
 
-      iex> Nx.add(1, 2)
-      3
-      iex> Nx.add(1, 2.2)
-      3.2
+      iex> t = Nx.add(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<3::64-native>>
+
+      iex> t = Nx.add(1, 2.2)
+      iex> Nx.to_bitstring(t)
+      <<3.2::float-64-native>>
 
   ### Adding a scalar to a tensor
 
@@ -404,11 +405,11 @@ defmodule Nx do
 
       iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1.0)
       iex> Nx.to_bitstring(t)
-      <<2.0::float-native-64, 3.0::float-native-64, 4.0::float-native-64>>
+      <<2.0::float-64-native, 3.0::float-64-native, 4.0::float-64-native>>
 
       iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0]), 1)
       iex> Nx.to_bitstring(t)
-      <<2.0::float-native-64, 3.0::float-native-64, 4.0::float-native-64>>
+      <<2.0::float-64-native, 3.0::float-64-native, 4.0::float-64-native>>
 
       iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), 1)
       iex> Nx.to_bitstring(t)
@@ -436,7 +437,7 @@ defmodule Nx do
   # TODO: implement addition between tensors with broadcasting
   def add(left, right)
 
-  def add(left, right) when is_number(left) and is_number(right), do: :erlang.+(left, right)
+  def add(left, right) when is_number(left) and is_number(right), do: tensor(:erlang.+(left, right))
 
   def add(%T{data: data, type: input_type} = left, right) when is_number(right) do
     output_type = Nx.Type.merge_scalar(input_type, right)
@@ -475,12 +476,13 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.exp(1)
-      2.718281828459045
+      iex> t = Nx.exp(1)
+      iex> Nx.to_bitstring(t)
+      <<2.718281828459045::float-64-native>>
 
       iex> t = Nx.exp(Nx.tensor([1, 2, 3]))
       iex> Nx.to_bitstring(t)
-      <<2.718281828459045::float-native-64, 7.38905609893065::float-native-64, 20.085536923187668::float-native-64>>
+      <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native, 20.085536923187668::float-64-native>>
 
       iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
       iex> Nx.to_bitstring(t)
@@ -493,7 +495,7 @@ defmodule Nx do
   """
   def exp(number)
 
-  def exp(number) when is_number(number), do: :math.exp(number)
+  def exp(number) when is_number(number), do: tensor(:math.exp(number))
 
   def exp(%T{data: data, type: input_type} = t) do
     output_type = Nx.Type.to_float(input_type)
@@ -519,7 +521,7 @@ defmodule Nx do
 
       iex> t = Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
       iex> Nx.to_bitstring(t)
-      <<10.0::float-native-64>>
+      <<10.0::float-64-native>>
       iex> Nx.shape(t)
       {}
 

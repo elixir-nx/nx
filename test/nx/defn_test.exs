@@ -15,8 +15,16 @@ defmodule Nx.DefnTest do
     end
 
     test "+" do
-      assert add_two(1, 2) == 3
+      assert add_two(1, 2) == Nx.tensor(3)
       assert add_two(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
+    end
+
+    defn divide_two(a, b) do
+      a / b
+    end
+
+    test "/" do
+      assert divide_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([0.5, 1.0, 1.5])
     end
 
     defn add_two_with_pipe(a, b) do
@@ -24,7 +32,7 @@ defmodule Nx.DefnTest do
     end
 
     test "|>" do
-      assert add_two_with_pipe(1, 2) == 3
+      assert add_two_with_pipe(1, 2) == Nx.tensor(3)
       assert add_two_with_pipe(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
   end
@@ -46,7 +54,7 @@ defmodule Nx.DefnTest do
     end
 
     test "external" do
-      assert add_two_from_external_macro(1, 2) == 3
+      assert add_two_from_external_macro(1, 2) == Nx.tensor(3)
       assert add_two_from_external_macro(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
 
@@ -63,7 +71,7 @@ defmodule Nx.DefnTest do
     end
 
     test "internal" do
-      assert add_two_from_external_macro(1, 2) == 3
+      assert add_two_from_external_macro(1, 2) == Nx.tensor(3)
       assert add_two_from_external_macro(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
 
@@ -73,7 +81,7 @@ defmodule Nx.DefnTest do
     end
 
     test "aliases" do
-      assert add_two_from_alias(1, 2) == 3
+      assert add_two_from_alias(1, 2) == Nx.tensor(3)
       assert add_two_from_alias(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
   end
@@ -88,7 +96,7 @@ defmodule Nx.DefnTest do
     end
 
     test "public" do
-      assert add_two_from_public(1, 2) == 3
+      assert add_two_from_public(1, 2) == Nx.tensor(3)
       assert add_two_from_public(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
 
@@ -101,14 +109,14 @@ defmodule Nx.DefnTest do
     end
 
     test "private" do
-      assert add_two_from_private(1, 2) == 3
+      assert add_two_from_private(1, 2) == Nx.tensor(3)
       assert add_two_from_private(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
 
     defn add_two_var_conflict(a, b) do
       c = 1
       b = add_two_var_conflict_impl(a, b)
-      c + b
+      b + c
     end
 
     defn add_two_var_conflict_impl(c, d) do
@@ -116,7 +124,24 @@ defmodule Nx.DefnTest do
     end
 
     test "var conflict" do
-      assert add_two_var_conflict(2, 3) == 6
+      assert add_two_var_conflict(2, 3) == Nx.tensor(6)
+    end
+  end
+
+  describe "module attributes" do
+    test "overrides default compiler with custom" do
+      defmodule Sample do
+        import Nx.Defn
+        @default_defn_compiler "unknown"
+        @defn_compiler Nx.Defn
+        defn add(a, b), do: a + b
+        assert Module.get_attribute(__MODULE__, :defn_compiler) == nil
+        assert @default_defn_compiler == "unknown"
+      end
+
+      assert Sample.add(1, 2) == Nx.tensor(3)
+    after
+      purge(Sample)
     end
   end
 
@@ -127,9 +152,9 @@ defmodule Nx.DefnTest do
       assert capture_io(:stderr, fn ->
                defmodule Sample do
                  import Nx.Defn
-                 defnp lonely(a, b), do: a + b
+                 defnp will_be_unused(a, b), do: a + b
                end
-             end) =~ "function lonely/2 is unused"
+             end) =~ "function will_be_unused/2 is unused"
     after
       purge(Sample)
     end
@@ -211,6 +236,42 @@ defmodule Nx.DefnTest do
                      defmodule Sample do
                        import Nx.Defn
                        defn add(a, b \\ 2), do: a + b
+                     end
+                   end
+    end
+
+    test "unknown defn compiler" do
+      assert_raise UndefinedFunctionError,
+                   ~r"Unknown.__compile__/5",
+                   fn ->
+                     defmodule Sample do
+                       @defn_compiler Unknown
+                       import Nx.Defn
+                       defn add(a, b), do: a + b
+                     end
+                   end
+    end
+
+    test "invalid defn compiler" do
+      assert_raise ArgumentError,
+                   ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
+                   fn ->
+                     defmodule Sample do
+                       @defn_compiler "unknown"
+                       import Nx.Defn
+                       defn add(a, b), do: a + b
+                     end
+                   end
+    end
+
+    test "invalid default defn compiler" do
+      assert_raise ArgumentError,
+                   ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
+                   fn ->
+                     defmodule Sample do
+                       @default_defn_compiler "unknown"
+                       import Nx.Defn
+                       defn add(a, b), do: a + b
                      end
                    end
     end

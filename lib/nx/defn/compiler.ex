@@ -134,6 +134,8 @@ defmodule Nx.Defn.Compiler do
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
 
+  # All of these, except for to_bitstring/1 can be written with EXLA.
+  @forbidden_nx_functions [to_bitstring: 1, rank: 1, shape: 1, tensor: 1, tensor: 2, type: 1]
   @allowed_nx_functions [add: 2, divide: 2, sum: 1, exp: 1]
 
   defp normalize({{:., _, [Nx, name]} = call, meta, args}, state) do
