@@ -10,7 +10,6 @@ defmodule Exla.Defn do
 
   ## Builder and computations
 
-  # TODO: Implement caching
   def sf_cached_def(module, name_arity, args, options, fun) do
     buffers = for arg <- args, do: elixir_to_buffers(arg)
     cache_args = for arg <- args, do: elixir_to_cache_key(arg)
@@ -22,7 +21,6 @@ defmodule Exla.Defn do
           shapes = Enum.map(buffers, & &1.shape)
           result = apply(fun, shapes)
           computation = Exla.Builder.build(result)
-          # TODO: Change all platform: :host to platform: :host and read options
           client = Exla.Client.create_client(platform: Keyword.get(options, :platform, :host))
           # TODO: Make shapes a list
           executable = Exla.Client.compile(client, computation, List.to_tuple(shapes))
@@ -47,7 +45,6 @@ defmodule Exla.Defn do
     Exla.Op.parameter(builder, pos, shape, name)
   end
 
-  # TODO: Tensor type is hardcoded, we need to unify them
   defp elixir_to_buffers(number) when is_integer(number) do
     Exla.Buffer.buffer(<<number::64-native>>, Exla.Shape.make_shape(:int64, {}))
   end
@@ -68,7 +65,6 @@ defmodule Exla.Defn do
   defp elixir_to_cache_key(%Nx.Tensor{} = t), do: {t.type, t.shape}
 
   ## Special forms
-
 
   ## Operators
 
@@ -112,7 +108,7 @@ defmodule Exla.Defn do
     0..tuple_size(shape.dims)
     |> Enum.to_list()
     |> tl()
-    |> Enum.map(& &1 - 1)
+    |> Enum.map(&(&1 - 1))
     |> List.to_tuple()
   end
 
@@ -126,7 +122,6 @@ defmodule Exla.Defn do
 
   def __compile__(_kind, _meta, name, args, ast, options) do
     # TODO: Build lock mechanism
-    # TODO: Should we store the name in the sf_builder?
     state = %{
       computation_counter: 0
     }
@@ -143,10 +138,11 @@ defmodule Exla.Defn do
         unquote(args),
         unquote(options),
         fn unquote_splicing(shapes) ->
-        builder = Exla.Defn.sf_builder(unquote(builder))
-        unquote_splicing(args_to_parameters(args, shapes))
-        unquote(ast)
-      end)
+          builder = Exla.Defn.sf_builder(unquote(builder))
+          unquote_splicing(args_to_parameters(args, shapes))
+          unquote(ast)
+        end
+      )
     end
   end
 
