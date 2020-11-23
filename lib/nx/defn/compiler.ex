@@ -1,37 +1,59 @@
 defmodule Nx.Defn.Compiler do
-  @moduledoc false
+  @moduledoc """
+  The specification and helper functions for custom `defn` compilers.
+  """
+
+  @doc """
+  The callback required to be implemented for each compiler.
+
+  It receives the function `kind`, the function `metadata`,
+  the arguments (where each argument is the variable AST),
+  the AST, and the compiler options. The AST is guaranteed
+  to be valid Elixir code. It must return valid Elixir AST.
+
+  Each variable in the AST has a counter which is guaranteed
+  to uniquely identify each variable.
+  """
+  @callback __compile__(
+              kind :: :def | :defp,
+              metadata :: keyword,
+              args :: [Macro.t()],
+              ast :: Macro.t(),
+              opts :: keyword
+            ) :: Macro.t()
 
   # The compiler has four passes.
   #
   # 1. Normalize and validate the AST written by the user.
   #
-  # 2. Inline all local functions. This is stored in each module
-  #    for cross-module inlining.
+  # 2. Inline all local functions. This is stored the result
+  #    stored in each module for cross-module inlining.
   #
-  # 3. Inline of remote functions.
+  # 3. Inline remote calls.
   #
-  # 4. Invoke the compiler chosen by the user
+  # 4. Invoke the compiler chosen by the user.
   #
   # The user compiler may have multiple passes and it has the ability
   # to run said additional passes either at runtime or compilation time.
+  @doc false
   def compile(%Macro.Env{module: module, file: file, line: line}, exports) do
-    defs = for {def, _value} <- exports, into: %{}, do: {def, false}
+    cache = for {def, _meta} <- exports, into: %{}, do: {def, false}
+    public = for {def, %{kind: :def} = meta} <- exports, do: {def, meta}
 
     state = %{
       module: module,
       file: file,
       stack: [],
-      defs: defs,
+      cache: cache,
       function: nil,
       line: line,
       version: 0
     }
 
-    public = for {def, :def} <- exports, do: def
     {quoted, state} = Enum.map_reduce(public, state, &compile_each/2)
 
     to_delete =
-      for {def, stored} when stored != false <- state.defs do
+      for {def, stored} when stored != false <- state.cache do
         quote do
           Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
         end
@@ -40,19 +62,21 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], to_delete ++ quoted}
   end
 
-  defp compile_each({name, _arity} = def, state) do
-    {{_kind, _meta, args, ast}, state} = get_cached_definition(def, state)
+  defp compile_each({{name, _arity} = def, def_meta}, state) do
+    {{kind, meta, args, ast}, state} = get_cached_definition(def, state)
+    {def_module, def_opts} = def_meta.compiler
+    compiled_ast = def_module.__compile__(kind, meta, args, ast, def_opts)
 
     quoted =
       quote do
-        def unquote(name)(unquote_splicing(args)), do: unquote(ast)
+        def unquote(name)(unquote_splicing(args)), do: unquote(compiled_ast)
       end
 
     {quoted, state}
   end
 
   defp get_cached_definition(def, state) do
-    case state.defs do
+    case state.cache do
       %{^def => false} -> get_and_cache_definition(def, state)
       %{^def => stored} -> {stored, state}
       %{} -> :none
@@ -62,7 +86,7 @@ defmodule Nx.Defn.Compiler do
   defp get_and_cache_definition(def, state) do
     {:v1, kind, meta, clauses} = Nx.Defn.Module.get_definition(state.module, def)
 
-    with_def(meta, def, def, state, fn state ->
+    with_call(meta, def, def, state, fn state ->
       case clauses do
         [] ->
           compile_error!(meta, state, "cannot have #{kind}n without clauses")
@@ -72,7 +96,7 @@ defmodule Nx.Defn.Compiler do
           {ast, state} = normalize_block(ast, meta, state)
           {ast, state} = inline_locals(ast, state)
           result = {kind, meta, args, ast}
-          state = put_in(state.defs[def], result)
+          state = put_in(state.cache[def], result)
           {result, state}
 
         [_, _ | _] ->
@@ -81,7 +105,7 @@ defmodule Nx.Defn.Compiler do
     end)
   end
 
-  defp with_def(meta, def, call, state, fun) do
+  defp with_call(meta, def, call, state, fun) do
     %{function: previous_def, stack: previous_stack, line: previous_line} = state
     line = meta[:line] || previous_line
     {result, state} = fun.(%{state | function: def, stack: [call | previous_stack], line: line})
@@ -107,7 +131,7 @@ defmodule Nx.Defn.Compiler do
   defp normalize({name, meta, ctx}, state) when is_atom(name) and is_atom(ctx) do
     {version, meta} = Keyword.pop!(meta, :version)
     state = update_in(state.version, &max(&1, version))
-    {{name, [counter: version] ++ meta, ctx}, state}
+    {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
 
   @allowed_nx_functions [add: 2, divide: 2, sum: 1, exp: 1]
@@ -149,6 +173,10 @@ defmodule Nx.Defn.Compiler do
   defp normalize_block(expr, meta, state) do
     {[expr], state} = normalize_block([expr], [], meta, state)
     {expr, state}
+  end
+
+  defp normalize_block([{:__block__, _, head} | rest], acc, meta, state) do
+    normalize_block(head ++ rest, acc, meta, state)
   end
 
   defp normalize_block([nil], acc, meta, state) do

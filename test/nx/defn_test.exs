@@ -32,8 +32,7 @@ defmodule Nx.DefnTest do
   describe "macros" do
     defmodule Macros do
       defmacro add(a, b) do
-        import Kernel, only: []
-        import Nx.Defn.Kernel
+        use Nx.Defn.Kernel
 
         quote do
           unquote(a) + unquote(b)
@@ -52,8 +51,7 @@ defmodule Nx.DefnTest do
     end
 
     defmacrop add_internal(a, b) do
-      import Kernel, only: []
-      import Nx.Defn.Kernel
+      use Nx.Defn.Kernel
 
       quote do
         unquote(a) + unquote(b)

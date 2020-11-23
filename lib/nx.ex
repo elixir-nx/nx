@@ -2,13 +2,49 @@ defmodule Nx do
   @moduledoc """
   Numerical Elixir.
 
-  A collection of functions and data types to work
-  with Numerical Elixir.
+  The `Nx` library is collection of functions and data
+  types to work with Numerical Elixir. This module defines
+  the main entry point for building and working with said
+  data-structures. For example, to create a n-dimensional
+  tensor, do:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> Nx.shape(t)
+      {2, 2}
+
+  To implement [the Softmax function](https://en.wikipedia.org/wiki/Softmax_function)
+  using this library:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t = Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
+      iex> Nx.to_bitstring(t)
+      <<0.03205860328008499::float-native-64, 0.08714431874203257::float-native-64,
+        0.23688281808991013::float-native-64, 0.6439142598879722::float-native-64>>
+
+  The `Nx` library also provides the `Nx.Defn` functionality,
+  which provides a subset of Elixir tailored for numerical
+  computations. For example, it overrides Elixir's default
+  operators so they are tensor-aware:
+
+      defn softmax(t) do
+        Nx.exp(t) / Nx.sum(Nx.exp(t))
+      end
+
+  Code inside `defn` functions can also be given to custom compilers,
+  which can compile said functions to use either just-in-time (JIT)
+  or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
+  For example, using the `Exla` library:
+
+      @defn_compiler {Exla, device: :cpu} # or device: :gpu
+      defn softmax(t) do
+        Nx.exp(t) / Nx.sum(Nx.exp(t))
+      end
+
+  This complements Erlang's JIT compiler as it compiles direct to
+  native code with numerical compilation and performance in mind.
   """
 
-  defmodule Tensor do
-    defstruct [:data, :type, :shape]
-  end
+  ## Private macros
 
   # A macro that allows us to writes all possibles match types
   # in the most efficient format. This is done by looking at @0,
@@ -142,6 +178,10 @@ defmodule Nx do
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
+  ## API
+
+  alias Nx.Tensor, as: T
+
   @doc """
   Builds a tensor.
 
@@ -266,7 +306,7 @@ defmodule Nx do
     type = opts[:type] || Nx.Type.infer(arg)
     Nx.Type.validate!(type)
     {dimensions, data} = flatten(arg, type)
-    %Tensor{shape: dimensions, type: type, data: data}
+    %T{shape: dimensions, type: type, data: data}
   end
 
   defp flatten(list, type) when is_list(list) do
@@ -316,28 +356,27 @@ defmodule Nx do
 
   See `Nx.Type` for more information.
   """
-  def type(%Tensor{type: type}), do: type
+  def type(%T{type: type}), do: type
 
   @doc """
   Returns the shape of the tensor as a tuple.
 
   The size of this tuple gives the rank of the tensor.
   """
-  def shape(%Tensor{shape: shape}), do: shape
+  def shape(%T{shape: shape}), do: shape
 
   @doc """
   Returns the rank of a tensor.
   """
-  def rank(%Tensor{shape: shape}), do: tuple_size(shape)
+  def rank(%T{shape: shape}), do: tuple_size(shape)
 
   @doc """
   Returns the underlying tensor as a bitstring.
 
   The bitstring is returned as is (which is row-major).
-
-  # TODO: What happens if the data is in the device?
   """
-  def to_bitstring(%Tensor{data: data}), do: data
+  # TODO: What happens if the data is in the device?
+  def to_bitstring(%T{data: data}), do: data
 
   @doc """
   Adds two tensors together.
@@ -399,7 +438,7 @@ defmodule Nx do
 
   def add(left, right) when is_number(left) and is_number(right), do: :erlang.+(left, right)
 
-  def add(%Tensor{data: data, type: input_type} = left, right) when is_number(right) do
+  def add(%T{data: data, type: input_type} = left, right) when is_number(right) do
     output_type = Nx.Type.merge_scalar(input_type, right)
 
     data =
@@ -412,8 +451,8 @@ defmodule Nx do
 
   # TODO: Properly implement me
   def divide(
-        %Tensor{data: left_data, type: left_type} = left,
-        %Tensor{data: right_data, type: right_type, shape: {}}
+        %T{data: left_data, type: left_type} = left,
+        %T{data: right_data, type: right_type, shape: {}}
       ) do
     output_type = Nx.Type.merge(left_type, right_type) |> Nx.Type.to_float()
 
@@ -456,7 +495,7 @@ defmodule Nx do
 
   def exp(number) when is_number(number), do: :math.exp(number)
 
-  def exp(%Tensor{data: data, type: input_type} = t) do
+  def exp(%T{data: data, type: input_type} = t) do
     output_type = Nx.Type.to_float(input_type)
 
     data =
@@ -485,7 +524,7 @@ defmodule Nx do
       {}
 
   """
-  def sum(%Tensor{data: data, type: type} = t) do
+  def sum(%T{data: data, type: type} = t) do
     data =
       match_types [type] do
         value =
