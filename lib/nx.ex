@@ -35,7 +35,7 @@ defmodule Nx do
   or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
   For example, using the `Exla` library:
 
-      @defn_compiler {Exla, device: :cpu} # or device: :gpu
+      @defn_compiler {Exla, platform: :host} # or platform: :cuda
       defn softmax(t) do
         Nx.exp(t) / Nx.sum(Nx.exp(t))
       end

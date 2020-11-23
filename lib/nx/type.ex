@@ -6,8 +6,8 @@ defmodule Nx.Type do
   The first element must be one of followed by the respective
   sizes:
 
-      * `:s` - signed integer (1..64)
-      * `:u` - unsigned integer (1..64)
+      * `:s` - signed integer (8, 16, 32, 64)
+      * `:u` - unsigned integer (1, 8, 16, 32, 64)
       * `:f` - float (32, 64)
       * `:bf` - a brain floating point (16)
 
@@ -75,11 +75,11 @@ defmodule Nx.Type do
 
   ## Examples
 
-      iex> Nx.Type.validate!({:s, 1})
-      {:s, 1}
+      iex> Nx.Type.validate!({:u, 1})
+      {:u, 1}
 
-      iex> Nx.Type.validate!({:s, 0})
-      ** (ArgumentError) invalid numerical type: {:s, 0} (see Nx.Type docs for all supported types)
+      iex> Nx.Type.validate!({:u, 0})
+      ** (ArgumentError) invalid numerical type: {:u, 0} (see Nx.Type docs for all supported types)
 
       iex> Nx.Type.validate!({:k, 1})
       ** (ArgumentError) invalid numerical type: {:k, 1} (see Nx.Type docs for all supported types)
@@ -96,10 +96,10 @@ defmodule Nx.Type do
     end
   end
 
-  def validate({:s, size} = type) when size in 1..64, do: type
-  def validate({:u, size} = type) when size in 1..64, do: type
+  def validate({:s, size} = type) when size in [8, 16, 32, 64], do: type
+  def validate({:u, size} = type) when size in [1, 8, 16, 32, 64], do: type
   def validate({:f, size} = type) when size in [32, 64], do: type
-  def validate({:bf, 16} = type), do: type
+  def validate({:bf, size} = type) when size in [16], do: type
   def validate(_type), do: :error
 
   @doc """

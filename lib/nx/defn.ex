@@ -46,7 +46,7 @@ defmodule Nx.Defn do
   how a `defn` function will behave. For example, assuming you
   are using the `Exla` compiler:
 
-      @defn_compiler {Exla, device: :cpu}
+      @defn_compiler {Exla, platform: :host}
       defn add_and_mult(a, b, c) do
         a * b + c
       end
@@ -54,7 +54,7 @@ defmodule Nx.Defn do
   To set the compiler for the all definitions, you can set the
   `@default_defn_compiler` attribute:
 
-      @default_defn_compiler {Exla, device: :gpu}
+      @default_defn_compiler {Exla, platform: :cuda}
 
   """
 
@@ -63,7 +63,7 @@ defmodule Nx.Defn do
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __compile__(_kind, _meta, args, ast, []) do
+  def __compile__(_kind, _meta, _name, args, ast, []) do
     quote do
       unquote(__MODULE__).__validate__!(unquote(args))
       unquote(ast)
