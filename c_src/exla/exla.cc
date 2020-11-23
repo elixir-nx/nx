@@ -13,6 +13,7 @@
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
+#include "tensorflow/compiler/xla/primitive_util.h"
 
 // TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
 // TODO: In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
@@ -539,6 +540,40 @@ ERL_NIF_TERM reduce_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 2) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  xla::XlaOp* operand;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], operand)) return exla::error(env, "Unable to get operand.");
+
+  EXLA_ASSIGN_OR_RETURN(xla::Shape shape, (*builder)->GetShape(*operand), env);
+
+  xla::PrimitiveType type = shape.element_type();
+  absl::Span<const long long int> dims = shape.dimensions();
+  long long int rank = shape.rank();
+
+  std::string type_name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+  // TODO: Put this in NIF Util
+  ERL_NIF_TERM dim_arr[(size_t) rank];
+  for(int i=0;i<rank;i++) {
+    int copy;
+    copy = dims.at(i);
+    dim_arr[i] = exla::make(env, copy);
+  }
+
+  ERL_NIF_TERM dims_term = enif_make_list_from_array(env, dim_arr, rank);
+  ERL_NIF_TERM type_term = exla::make(env, type_name);
+  ERL_NIF_TERM shape_term = exla::make(env, shape);
+
+  return exla::ok(env, enif_make_tuple(env, 3, dims_term, type_term, shape_term));
+}
+
 /************************ xla::ClientLibrary Functions ***************************/
 // TODO: This function generates mildly annoying and poorly formatted log messages from the TensorFlow side...
 // We can either make the logging stricter or we can somehow get the log messages to the Elixir Logger?? I'm
@@ -855,6 +890,7 @@ static ErlNifFunc exla_funcs[] = {
   {"dot", 2, dot},
   {"reduce", 4, reduce},
   {"reduce_all", 3, reduce_all},
+  {"get_shape", 2, get_shape_op},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},

@@ -9,4 +9,9 @@ defmodule Exla.Shape do
     {:ok, ref} = Exla.NIF.make_shape(dtype, dims)
     %Shape{ref: ref, dtype: dtype, dims: dims}
   end
+
+  def str_to_dtype(str) do
+    {type, size} = Enum.split(str, 1)
+    {List.to_atom(type), List.to_integer(size)}
+  end
 end
