@@ -53,18 +53,13 @@ defmodule Exla.Op do
   end
 
   def conditional(%Op{builder: builder, ref: index}, branches, operands) do
-    # TODO: Both branches and operands need to be lists!
     branches_refs =
       branches
-      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
-      |> List.to_tuple()
 
     operands_refs =
       operands
-      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
-      |> List.to_tuple()
 
     {:ok, ref} = Exla.NIF.conditional(index, branches_refs, operands_refs)
     %Op{builder: builder, ref: ref}
@@ -110,9 +105,7 @@ defmodule Exla.Op do
       ) do
     indices_refs =
       indices
-      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
-      |> List.to_tuple()
 
     {:ok, ref} = Exla.NIF.dynamic_slice(op, indices_refs, slice_sizes)
     %Op{builder: builder, ref: ref}
@@ -125,9 +118,7 @@ defmodule Exla.Op do
       ) do
     indices_refs =
       indices
-      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
-      |> List.to_tuple()
 
     {:ok, ref} = Exla.NIF.dynamic_update_slice(op, update, indices_refs)
     %Op{builder: builder, ref: ref}

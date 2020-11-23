@@ -65,30 +65,30 @@ defmodule ClientTest do
   test "compile/4 succeeds on host device with constant computation and no args", state do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
-    assert %Executable{} = Client.compile(state[:cpu], comp, {})
+    assert %Executable{} = Client.compile(state[:cpu], comp, [])
   end
 
   @tag :cuda
   test "compile/4 succeeds on cuda device with constant computation and no args", state do
     op = Op.constant(state[:builder], 1)
     comp = Builder.build(op)
-    assert %Executable{} = Client.compile(state[:cpu], comp, {})
+    assert %Executable{} = Client.compile(state[:cpu], comp, [])
   end
 
   test "compile/4 succeeds on host device with basic computation and args", state do
-    shape = Shape.make_shape(:int32, {})
+    shape = Shape.make_shape(:int32, [])
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
-    assert %Executable{} = Client.compile(state[:cpu], comp, {shape})
+    assert %Executable{} = Client.compile(state[:cpu], comp, [shape])
   end
 
   @tag :cuda
   test "compile/4 succeeds on cuda device with basic computation and args", state do
-    shape = Shape.make_shape(:int32, {})
+    shape = Shape.make_shape(:int32, [])
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
-    assert %Executable{} = Client.compile(state[:gpu], comp, {shape})
+    assert %Executable{} = Client.compile(state[:gpu], comp, [shape])
   end
 end

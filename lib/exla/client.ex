@@ -90,17 +90,10 @@ defmodule Exla.Client do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
-    # TODO: I think argument shapes should be a list since we have to traverse it to pull out
-    # the refs of each Shape. To simplify the handling of `absl::Span` on the NIF side
-    # I only read spans in as Tuples. This is important because things like the dimensions
-    # of a shape, broadcast dimensions, etc. naturally fit well with Tuples, but other things
-    # that use spans such as this argument here work better with lists. I suppose I could create
-    # two distinct methods for handling lists and tuples.
+
     shape_refs =
       argument_shapes
-      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
-      |> List.to_tuple()
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
