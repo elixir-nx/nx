@@ -158,7 +158,7 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   std::vector<long long int> dims;
 
   if(!exla::get_type(env, argv[0], element_type)) return enif_make_badarg(env);
-  if(!exla::get_vector(env, argv[1], dims)) return enif_make_badarg(env);
+  if(!exla::get_vector_tuple(env, argv[1], dims)) return enif_make_badarg(env);
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
@@ -514,7 +514,7 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get<xla::XlaOp>(env, argv[1], init_value)) return exla::error(env, "Unable to get initial value.");
   if(!exla::get<xla::XlaComputation>(env, argv[2], computation)) return exla::error(env, "Unable to get computation.");
-  if(!exla::get_vector(env, argv[3], dimensions_to_reduce)) return exla::error(env, "Unable to get reduction dimensions.");
+  if(!exla::get_vector_tuple(env, argv[3], dimensions_to_reduce)) return exla::error(env, "Unable to get reduction dimensions.");
 
   xla::XlaOp op = xla::Reduce(*operand, *init_value, *computation, dimensions_to_reduce);
 

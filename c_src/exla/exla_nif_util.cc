@@ -50,6 +50,18 @@ namespace exla {
     return ret;
   }
 
+  int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<long long int> &var) {
+    const ERL_NIF_TERM *terms;
+    int length;
+    if(!enif_get_tuple(env, tuple, &length, &terms)) return 0;
+    for(int i=0;i<length;i++){
+      int data;
+      if(!get(env, terms[i], data)) return 0;
+      var.push_back(data);
+    }
+    return 1;
+  }
+
   int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var){
     ERL_NIF_TERM head, tail;
     while(enif_get_list_cell(env, list, &head, &tail)){

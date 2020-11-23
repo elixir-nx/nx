@@ -102,6 +102,8 @@ namespace exla {
     return ret;
   }
 
+  int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<long long int> &var);
+
   int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var);
 
   template <typename T>
