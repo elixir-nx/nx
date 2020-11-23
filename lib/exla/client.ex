@@ -86,34 +86,36 @@ defmodule Exla.Client do
          %Computation{ref: computation},
          argument_shapes,
          options
-  ) do
+       ) do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
-    # TODO: I think argument shapes should be a list since we have to traverse it to pull out
-    # the refs of each Shape. To simplify the handling of `absl::Span` on the NIF side
-    # I only read spans in as Tuples. This is important because things like the dimensions
-    # of a shape, broadcast dimensions, etc. naturally fit well with Tuples, but other things
-    # that use spans such as this argument here work better with lists. I suppose I could create
-    # two distinct methods for handling lists and tuples.
+
     shape_refs =
       argument_shapes
-      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
-      |> List.to_tuple()
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
-    with {:ok, {_platform, device_ordinal}} <- check_device_compatibility(client, {client.platform, device_ordinal}),
-         {:ok, ref} <- Exla.NIF.compile(ref, computation, shape_refs, device_ordinal, num_replicas, num_partitions) do
+    with {:ok, {_platform, device_ordinal}} <-
+           check_device_compatibility(client, {client.platform, device_ordinal}),
+         {:ok, ref} <-
+           Exla.NIF.compile(
+             ref,
+             computation,
+             shape_refs,
+             device_ordinal,
+             num_replicas,
+             num_partitions
+           ) do
       %Executable{client: client, ref: ref, device: {client.platform, device_ordinal}}
     end
   end
 
   def check_device_compatibility(
-    client = %Client{platform: platform},
-    {platform, ordinal}
-  ) do
+        client = %Client{platform: platform},
+        {platform, ordinal}
+      ) do
     cond do
       ordinal < 0 ->
         {:ok, {platform, Client.get_default_device_ordinal(client)}}

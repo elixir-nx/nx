@@ -35,8 +35,11 @@ defmodule Exla.Buffer do
   If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
   we retain a copy of the binary to ensure it is not prematurely garbage collected.
   """
-  def buffer(binary, shape = %Shape{}, client = %Client{}, device = {platform, ordinal}) when is_bitstring(binary) do
-    {:ok, buffer = %Buffer{}} = place_on_device(client, %Buffer{data: binary, shape: shape}, device)
+  def buffer(binary, shape = %Shape{}, client = %Client{}, device = {platform, ordinal})
+      when is_bitstring(binary) do
+    {:ok, buffer = %Buffer{}} =
+      place_on_device(client, %Buffer{data: binary, shape: shape}, device)
+
     buffer
   end
 
@@ -65,17 +68,21 @@ defmodule Exla.Buffer do
     {:ok, binary} = Exla.NIF.shaped_buffer_to_binary(client, ref)
     binary
   end
+
   def to_bitstring(_, %Buffer{data: data}), do: data
 
   @doc """
   Returns a reference to the underlying `ShapedBuffer` on `device`.
   """
-  def to_shaped_buffer(client = %Client{}, %Buffer{data: data, ref: nil, shape: shape}, device = {_platform, _ordinal}) do
+  def to_shaped_buffer(
+        client = %Client{},
+        %Buffer{data: data, ref: nil, shape: shape},
+        device = {_platform, _ordinal}
+      ) do
     {:ok, {_platform, ordinal}} = Client.check_device_compatibility(client, device)
     {:ok, buffer} = Exla.NIF.binary_to_shaped_buffer(client.ref, data, shape.ref, ordinal)
     buffer
   end
 
   def to_shaped_buffer(_, %Buffer{ref: ref}, _), do: ref
-
 end

@@ -158,7 +158,7 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   std::vector<long long int> dims;
 
   if(!exla::get_type(env, argv[0], element_type)) return enif_make_badarg(env);
-  if(!exla::get_vector<long long int>(env, argv[1], dims)) return enif_make_badarg(env);
+  if(!exla::get_vector(env, argv[1], dims)) return enif_make_badarg(env);
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
@@ -268,8 +268,8 @@ ERL_NIF_TERM conditional_multi(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   std::vector<xla::XlaOp> operands;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], index)) return exla::error(env, "Unable to get index.");
-  if(!exla::get_vector_comps(env, argv[1], branches)) return exla::error(env, "Unable to get branches.");
-  if(!exla::get_vector_ops(env, argv[2], operands)) return exla::error(env, "Unable to get operands.");
+  if(!exla::get_vector<xla::XlaComputation*>(env, argv[1], branches)) return exla::error(env, "Unable to get branches.");
+  if(!exla::get_vector<xla::XlaOp>(env, argv[2], operands)) return exla::error(env, "Unable to get operands.");
 
   xla::XlaOp op = xla::Conditional(*index, branches, operands);
 
@@ -288,9 +288,9 @@ ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<long long int> strides;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
-  if(!exla::get_vector<long long int>(env, argv[1], start_indices)) return exla::error(env, "Unable to get start indices.");
-  if(!exla::get_vector<long long int>(env, argv[2], limit_indices)) return exla::error(env, "Unable to get limit indices.");
-  if(!exla::get_vector<long long int>(env, argv[3], strides)) return exla::error(env, "Unable to get strides.");
+  if(!exla::get_vector(env, argv[1], start_indices)) return exla::error(env, "Unable to get start indices.");
+  if(!exla::get_vector(env, argv[2], limit_indices)) return exla::error(env, "Unable to get limit indices.");
+  if(!exla::get_vector(env, argv[3], strides)) return exla::error(env, "Unable to get strides.");
 
   xla::XlaOp op = xla::Slice(*operand, start_indices, limit_indices, strides);
 
@@ -329,8 +329,8 @@ ERL_NIF_TERM dynamic_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   std::vector<long long int> sizes;
 
   if(!exla::get(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
-  if(!exla::get_vector_ops(env, argv[1], start_indices)) return exla::error(env, "Unable to get start index ops.");
-  if(!exla::get_vector<long long int>(env, argv[2], sizes)) return exla::error(env, "Unable to get sizes.");
+  if(!exla::get_vector<xla::XlaOp>(env, argv[1], start_indices)) return exla::error(env, "Unable to get start index ops.");
+  if(!exla::get_vector(env, argv[2], sizes)) return exla::error(env, "Unable to get sizes.");
 
   xla::XlaOp op = xla::DynamicSlice(*operand, start_indices, sizes);
 
@@ -348,7 +348,7 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get<xla::XlaOp>(env, argv[1], update)) return exla::error(env, "Unable to get update.");
-  if(!exla::get_vector_ops(env, argv[2], start_indices)) return exla::error(env, "Unable to get start indices.");
+  if(!exla::get_vector<xla::XlaOp>(env, argv[2], start_indices)) return exla::error(env, "Unable to get start indices.");
 
   xla::XlaOp op = xla::DynamicUpdateSlice(*operand, *update, start_indices);
 
@@ -365,7 +365,7 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
 
   if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
-  if(!exla::get_vector<long long int>(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
+  if(!exla::get_vector(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
@@ -514,7 +514,7 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get<xla::XlaOp>(env, argv[1], init_value)) return exla::error(env, "Unable to get initial value.");
   if(!exla::get<xla::XlaComputation>(env, argv[2], computation)) return exla::error(env, "Unable to get computation.");
-  if(!exla::get_vector<long long int>(env, argv[3], dimensions_to_reduce)) return exla::error(env, "Unable to get reduction dimensions.");
+  if(!exla::get_vector(env, argv[3], dimensions_to_reduce)) return exla::error(env, "Unable to get reduction dimensions.");
 
   xla::XlaOp op = xla::Reduce(*operand, *init_value, *computation, dimensions_to_reduce);
 
@@ -611,13 +611,13 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   exla::ExlaClient** client;
   xla::XlaComputation* computation;
-  absl::Span<xla::Shape*> argument_layouts;
+  std::vector<xla::Shape*> argument_layouts;
   xla::ExecutableBuildOptions build_options;
   int device_ordinal, num_replicas, num_partitions;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
-  if(!exla::get_argument_layouts(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
+  if(!exla::get_vector<xla::Shape>(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
   if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
   if(!exla::get(env, argv[4], num_replicas)) return exla::error(env, "Unable to get Number of Replicas.");
   if(!exla::get(env, argv[5], num_partitions)) return exla::error(env, "Unable to get Number of Partitions.");
@@ -657,7 +657,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
   if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
-  if(!exla::get_arguments(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
+  if(!exla::get_vector<xla::ShapedBuffer>(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
   if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
   if(!exla::get(env, argv[4], run_id)) return exla::error(env, "Unable to get Run ID.");
   if(!exla::get(env, argv[5], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");

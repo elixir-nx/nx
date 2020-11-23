@@ -50,31 +50,13 @@ namespace exla {
     return ret;
   }
 
-  // TODO: Accept list, not tuple
-  int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span){
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    xla::Shape* data[num_elems];
-    for(int i=0;i<num_elems;i++){
-      xla::Shape* elem;
-      if(!get<xla::Shape>(env, elems[i], elem)) return 0;
-      data[i] = elem;
-    }
-    span = absl::Span<xla::Shape*>(data, num_elems);
-    return 1;
-  }
-
-  int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::ShapedBuffer*> &input){
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    input.clear();
-    for(int i=0;i<num_elems;i++){
-      xla::ShapedBuffer* elem;
-      if(!get<xla::ShapedBuffer>(env, elems[i], elem)) return 0;
-      // TODO: I think this needs to be insert, it may reverse the order of the arguments, we need to test
-      input.push_back(elem);
+  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var){
+    ERL_NIF_TERM head, tail;
+    while(enif_get_list_cell(env, list, &head, &tail)){
+      long long int elem;
+      if(!get(env, head, elem)) return 0;
+      var.push_back(elem);
+      list = tail;
     }
     return 1;
   }
@@ -140,32 +122,6 @@ namespace exla {
       type = xla::PrimitiveType::TOKEN;
     } else {
       type = xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
-    }
-    return 1;
-  }
-
-  int get_vector_ops(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::XlaOp> &var){
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    xla::XlaOp data[num_elems];
-    for(int i=0;i<num_elems;i++){
-      xla::XlaOp* elem;
-      if(!get<xla::XlaOp>(env, elems[i], elem)) return 0;
-      var.insert(var.begin() + i, *elem);
-    }
-    return 1;
-  }
-
-  int get_vector_comps(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::XlaComputation*> &var) {
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    xla::XlaComputation* data[num_elems];
-    for(int i=0;i<num_elems;i++){
-      xla::XlaComputation* elem;
-      if(!get<xla::XlaComputation>(env, elems[i], elem)) return 0;
-      var.insert(var.begin() + i, elem);
     }
     return 1;
   }

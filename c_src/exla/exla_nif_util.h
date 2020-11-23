@@ -14,6 +14,7 @@
 #include <algorithm>
 
 namespace exla {
+
   /*
    * Helper for returning `{:error, msg}` from NIF.
    */
@@ -40,13 +41,9 @@ namespace exla {
   /*
    * Getters for non-standard types. Suffix to be explicit.
    */
-  int get_platform(ErlNifEnv* env, ERL_NIF_TERM term, stream_executor::Platform* &platform);
   int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type);
   int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
 
-  int get_argument_layouts(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<xla::Shape*> &span);
-
-  int get_arguments(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::ShapedBuffer*> &input);
   /*
    * Makers for standard types.
    */
@@ -105,40 +102,33 @@ namespace exla {
     return ret;
   }
 
+  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var);
+
   template <typename T>
-  ERL_NIF_TERM get_vector(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var){
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    T data[num_elems];
-    for(int i=0;i<num_elems;i++){
-      T elem;
-      if(!get(env, elems[i], elem)) return 0;
-      var.insert(var.begin() + i, elem);
+  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var){
+    ERL_NIF_TERM head, tail;
+    int i = 0;
+    while(enif_get_list_cell(env, list, &head, &tail)){
+      T* elem;
+      if(!get<T>(env, head, elem)) return 0;
+      var.insert(var.begin() + (i++), elem);
+      list = tail;
     }
     return 1;
   }
 
-  // TODO: Better template
-  int get_vector_ops(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::XlaOp> &var);
-
   template <typename T>
-  int get_span(ErlNifEnv* env, ERL_NIF_TERM tuple, absl::Span<T> &span){
-    const ERL_NIF_TERM* elems;
-    int num_elems;
-    if(!enif_get_tuple(env, tuple, &num_elems, &elems)) return 0;
-    T data[num_elems];
-    for(int i=0;i<num_elems;i++){
-      T elem;
-      if(!get(env, elems[i], elem)) return 0;
-      data[i] = elem;
+  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var){
+    ERL_NIF_TERM head, tail;
+    int i = 0;
+    while(enif_get_list_cell(env, list, &head, &tail)){
+      T* elem;
+      if(!get<T>(env, head, elem)) return 0;
+      var.insert(var.begin() + (i++), *elem);
+      list = tail;
     }
-    span = absl::Span<T>(data, num_elems);
     return 1;
   }
-
-  // TODO: TEMPLATE
-  int get_vector_comps(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<xla::XlaComputation*> &var);
 
 } // namespace exla
 
