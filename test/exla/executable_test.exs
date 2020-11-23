@@ -40,7 +40,7 @@ defmodule ExecutableTest do
   end
 
   test "run/4 succeeds with 1 input and default options on host device", state do
-    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, [])}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
@@ -50,7 +50,7 @@ defmodule ExecutableTest do
 
   @tag :cuda
   test "run/4 succeeds with 1 input and default options on cuda device", state do
-    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, [])}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
@@ -60,8 +60,8 @@ defmodule ExecutableTest do
   end
 
   test "run/4 succeeds with 2 inputs and default options on host device", state do
-    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, [])}
-    t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, [])}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
+    t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     y = Op.parameter(state[:builder], 1, t2.shape, "y")
     res = Op.add(x, y)
@@ -80,8 +80,8 @@ defmodule ExecutableTest do
 
   @tag :cuda
   test "run/4 succeeds with 2 inputs and default options on cuda device", state do
-    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, [])}
-    t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, [])}
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
+    t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape(:int32, {})}
     x = Op.parameter(state[:builder], 0, t1.shape, "x")
     y = Op.parameter(state[:builder], 1, t2.shape, "y")
     res = Op.add(x, y)
