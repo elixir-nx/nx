@@ -170,6 +170,8 @@ defmodule Exla.NIF do
 
   def reduce_all(_operand, _init_value, _computation), do: nif_error(__ENV__.function)
 
+  def get_shape(_builder, _operand), do: nif_error(__ENV__.function)
+
   def zero(_builder, _dtype), do: nif_error(__ENV__.function)
 
   def constant_r0(_builder, _value),

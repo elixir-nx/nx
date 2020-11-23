@@ -32,6 +32,11 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def get_shape(%Op{builder: builder, ref: operand}) do
+    {:ok, {dims, type_str, shape_ref}} = Exla.NIF.get_shape(builder, operand)
+    %Shape{ref: shape_ref, dims: dims, dtype: Shape.str_to_dtype(type_str)}
+  end
+
   def conditional(
         %Op{builder: builder, ref: pred},
         %Op{builder: builder, ref: true_op},
