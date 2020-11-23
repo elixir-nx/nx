@@ -10,6 +10,7 @@ defmodule Exla.Defn do
 
   ## Builder and computations
 
+  # TODO: Build lock mechanism to avoid multiple compilations
   def sf_cached_def(module, name_arity, args, options, fun) do
     buffers = for arg <- args, do: elixir_to_buffers(arg)
     cache_args = for arg <- args, do: elixir_to_cache_key(arg)
@@ -121,9 +122,7 @@ defmodule Exla.Defn do
   ## Callback
 
   def __compile__(_kind, _meta, name, args, ast, options) do
-    # TODO: Build lock mechanism
     state = %{
-      computation_counter: 0
     }
 
     {ast, _state} = traverse(ast, state)
