@@ -3,16 +3,16 @@ defmodule Exla.Builder do
   alias Exla.Op
   alias Exla.Computation
   @enforce_keys [:ref]
-  defstruct [:ref, :parent]
+  defstruct [:ref, :parent, :name]
 
-  def new(name) do
+  def new(name) when is_binary(name) do
     {:ok, ref} = Exla.NIF.new_builder(name)
-    %Builder{ref: ref, parent: nil}
+    %Builder{ref: ref, parent: nil, name: name}
   end
 
-  def new(builder = %Builder{ref: ref}, name) do
+  def new(builder = %Builder{ref: ref}, name) when is_binary(name) do
     {:ok, ref} = Exla.NIF.create_sub_builder(ref, name)
-    %Builder{ref: ref, parent: builder}
+    %Builder{ref: ref, parent: builder, name: name}
   end
 
   def build(root = %Op{}) do

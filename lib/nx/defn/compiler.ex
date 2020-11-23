@@ -17,6 +17,7 @@ defmodule Nx.Defn.Compiler do
   @callback __compile__(
               kind :: :def | :defp,
               metadata :: keyword,
+              name :: atom,
               args :: [Macro.t()],
               ast :: Macro.t(),
               opts :: keyword
@@ -65,7 +66,7 @@ defmodule Nx.Defn.Compiler do
   defp compile_each({{name, _arity} = def, def_meta}, state) do
     {{kind, meta, args, ast}, state} = get_cached_definition(def, state)
     {def_module, def_opts} = def_meta.compiler
-    compiled_ast = def_module.__compile__(kind, meta, args, ast, def_opts)
+    compiled_ast = def_module.__compile__(kind, meta, name, args, ast, def_opts)
 
     quoted =
       quote do
@@ -95,7 +96,7 @@ defmodule Nx.Defn.Compiler do
           {args, state} = normalize_list(args, state)
           {ast, state} = normalize_block(ast, meta, state)
           {ast, state} = inline_locals(ast, state)
-          result = {kind, meta, args, ast}
+          result = {kind, [max_counter: state.version] ++ meta, args, ast}
           state = put_in(state.cache[def], result)
           {result, state}
 
@@ -135,7 +136,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   # All of these, except for to_bitstring/1 can be written with EXLA.
-  @forbidden_nx_functions [to_bitstring: 1, rank: 1, shape: 1, tensor: 1, tensor: 2, type: 1]
+  # @forbidden_nx_functions [to_bitstring: 1, rank: 1, shape: 1, tensor: 1, tensor: 2, type: 1]
   @allowed_nx_functions [add: 2, divide: 2, sum: 1, exp: 1]
 
   defp normalize({{:., _, [Nx, name]} = call, meta, args}, state) do

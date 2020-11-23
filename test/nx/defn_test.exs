@@ -242,7 +242,7 @@ defmodule Nx.DefnTest do
 
     test "unknown defn compiler" do
       assert_raise UndefinedFunctionError,
-                   ~r"Unknown.__compile__/5",
+                   ~r"Unknown.__compile__/6",
                    fn ->
                      defmodule Sample do
                        @defn_compiler Unknown

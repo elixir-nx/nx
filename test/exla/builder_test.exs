@@ -5,13 +5,18 @@ defmodule BuilderTest do
   alias Exla.Builder
 
   test "new/1 succeeds in creating a new builder" do
-    assert %Builder{} = Builder.new("builder")
+    assert b = %Builder{} = Builder.new("builder")
+    assert b.name == "builder"
+    assert is_reference(b.ref)
+    assert is_nil(b.parent)
   end
 
   test "new/2 succeeds in creating a new subbuilder" do
     parent = Builder.new("builder")
-    assert %Builder{ref: _, parent: p} = Builder.new(parent, "subbuilder")
-    assert p == parent
+    assert b = Builder.new(parent, "subbuilder")
+    assert b.name == "subbuilder"
+    assert is_reference(b.ref)
+    assert b.parent == parent
   end
 
   test "build/1 succeeds on constant" do
