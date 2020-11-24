@@ -44,7 +44,7 @@ namespace exla {
     return buffer;
   }
 
-  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(const xla::ShapedBuffer& buffer,
+  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(xla::ScopedShapedBuffer& buffer,
                                                            ExlaDevice* device) {
     bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
@@ -217,7 +217,8 @@ namespace exla {
       auto gpu_bfc_allocator = absl::make_unique<tensorflow::BFCAllocator>(sub_allocator.release(),
                                                                          allocator_memory,
                                                                         /*allow_growth=*/!preallocate,
-                                                                        absl::StrCat("GPU_", device_ordinal, "_bfc"));
+                                                                        absl::StrCat("GPU_", device_ordinal, "_bfc"),
+                                                                        false);
 
       allocators.emplace_back(std::move(gpu_bfc_allocator), device->compute_stream());
     }

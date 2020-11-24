@@ -16,6 +16,25 @@ namespace exla {
   namespace se = tensorflow::se;
 
   /*
+   * Wraps a ScopedShapedBuffer in a unique_ptr so the ScopedShapedBuffer is automatically
+   * destructed when this object is destructed. In the future, will provide a place to
+   * implement device transfers, etc.
+   */
+  // TODO: Add device attribute
+  class ExlaBuffer {
+
+  public:
+    ExlaBuffer(std::unique_ptr<xla::ScopedShapedBuffer> buffer) : buffer_(std::move(buffer)) {}
+    ~ExlaBuffer() {}
+
+    xla::ScopedShapedBuffer* buffer() { return buffer_.get(); }
+
+  private:
+    std::unique_ptr<xla::ScopedShapedBuffer> buffer_;
+
+  };
+
+  /*
    * There are a lot of resources that we need to keep track of, and it doesn't make sense
    * to pass references to all of them back and forth between the BEAM and NIFs. To avoid this
    * we implement an `ExlaClient` in the same spirit of: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h
@@ -38,7 +57,7 @@ namespace exla {
                                                                              const xla::Shape& shape,
                                                                              ExlaDevice* device);
 
-    xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(const xla::ShapedBuffer& buffer, ExlaDevice* device);
+    xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(xla::ScopedShapedBuffer& buffer, ExlaDevice* device);
 
     xla::LocalClient* client() { return client_; }
 

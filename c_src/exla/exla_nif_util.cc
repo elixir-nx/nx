@@ -14,6 +14,10 @@ namespace exla {
     return enif_make_tuple2(env, ok(env), term);
   }
 
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var) {
+    return enif_inspect_binary(env, term, &var);
+  }
+
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var){
     return enif_get_int(env, term, &var);
   }
@@ -58,6 +62,17 @@ namespace exla {
       int data;
       if(!get(env, terms[i], data)) return 0;
       var.push_back(data);
+    }
+    return 1;
+  }
+
+  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ErlNifBinary> &var){
+    ERL_NIF_TERM head, tail;
+    while(enif_get_list_cell(env, list, &head, &tail)){
+      ErlNifBinary elem;
+      if(!get(env, head, elem)) return 0;
+      var.push_back(elem);
+      list = tail;
     }
     return 1;
   }

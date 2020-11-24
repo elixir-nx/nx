@@ -7,13 +7,6 @@ defmodule Exla.Executable do
   @enforce_keys [:client, :ref]
   defstruct [:client, :ref, :device]
 
-  def populate_input_buffers(client, arguments, device) do
-    buffers =
-      arguments
-      |> Enum.map(&Buffer.to_shaped_buffer(client, &1, device))
-    {:ok, buffers}
-  end
-
   def run(
         %Executable{client: client, ref: exec},
         arguments,
@@ -31,27 +24,26 @@ defmodule Exla.Executable do
     # See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h#L752-L755
     launch_id = Keyword.get(options, :launch_id, 0)
     # Whether to keep result on device
-    keep_on_device = Keyword.get(options, :keep_on_device, false)
+    keep_on_device = Keyword.get(options, :keep_on_device, true)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
-    # This is the same as OneFlow's XLA Executable Context, but we do some work in Elixir
-    with {:ok, input_buffers} <- populate_input_buffers(client, arguments, {platform, ordinal}),
-         {:ok, data} <-
-           Exla.NIF.run(
-             client.ref,
-             exec,
-             input_buffers,
-             ordinal,
-             run_id,
-             rng_seed,
-             launch_id,
-             keep_on_device_int
-           ) do
-      if keep_on_device do
-        # We can expect a reference back
-        %Buffer{data: nil, ref: data}
-      else
-        %Buffer{data: data, ref: nil}
-      end
-    end
+
+    {inputs, shapes} =
+      arguments
+      |> Enum.map(&({&1.data, &1.shape.ref}))
+      |> Enum.unzip()
+
+    {:ok, data} = Exla.NIF.run(
+                   client.ref,
+                   exec,
+                   inputs,
+                   shapes,
+                   ordinal,
+                   run_id,
+                   rng_seed,
+                   launch_id,
+                   keep_on_device_int
+                 )
+
+      %Buffer{data: data, ref: nil}
   end
 end

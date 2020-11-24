@@ -16,45 +16,34 @@
 
 // TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
 // TODO: In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
-// TODO: Remove global instance of builder.
-typedef struct {
-  xla::XlaBuilder* builder;
-} XLA;
 
-// Once the resource is garbage collected, this should also deallocate the C++ object.
-void free_op(ErlNifEnv* env, void* obj){delete (xla::XlaOp*) obj;}
-void free_shape(ErlNifEnv* env, void* obj){delete (xla::Shape*) obj;}
-void free_computation(ErlNifEnv* env, void* obj){delete (xla::XlaComputation*) obj;}
-void free_literal(ErlNifEnv* env, void* obj){delete (xla::Literal*) obj;}
-void free_local_executable(ErlNifEnv* env, void* obj){delete (xla::LocalExecutable*) obj;}
-void free_shaped_buffer(ErlNifEnv* env, void* obj){delete (xla::ShapedBuffer*) obj;}
-void free_builder(ErlNifEnv* env, void* obj){delete (xla::XlaBuilder*) obj;}
-void free_exla_client(ErlNifEnv* env, void* obj){delete (exla::ExlaClient*) obj;}
+// This is all we need for now, the GC takes care of everything else
+void free_res(ErlNifEnv* env, void* obj){return;}
+
+// Special Case for destructing buffers
+// TODO: Revisit this when we start passing around buffer references
+void free_exla_buffer(ErlNifEnv* env, void* obj) {
+  exla::ExlaBuffer* buffer = (exla::ExlaBuffer*) obj;
+  buffer->~ExlaBuffer();
+}
 
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
 
-  if(!exla::open_resource<xla::XlaOp>(env, mod, "Op", free_op)) return -1;
-  if(!exla::open_resource<xla::Shape>(env, mod, "Shape", free_shape)) return -1;
-  if(!exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_computation)) return -1;
-  if(!exla::open_resource<xla::Literal>(env, mod, "Literal", free_literal)) return -1;
-  if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable)) return -1;
-  if(!exla::open_resource<xla::ShapedBuffer>(env, mod, "ShapedBuffer", free_shaped_buffer)) return -1;
-  if(!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_builder)) return -1;
-  if(!exla::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_exla_client)) return -1;
+  if(!exla::open_resource<xla::XlaOp>(env, mod, "Op", free_res)) return -1;
+  if(!exla::open_resource<xla::Shape>(env, mod, "Shape", free_res)) return -1;
+  if(!exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_res)) return -1;
+  if(!exla::open_resource<xla::Literal>(env, mod, "Literal", free_res)) return -1;
+  if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_res)) return -1;
+  if(!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_res)) return -1;
+  if(!exla::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_res)) return -1;
+  if(!exla::open_resource<exla::ExlaBuffer>(env, mod, "ExlaBuffer", free_exla_buffer)) return -1;
 
   return 1;
 }
 
 static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
   if(open_resources(env) == -1) return -1;
-
-  XLA* xla_objects;
-  xla_objects = (XLA*) enif_alloc(sizeof(XLA));
-
-  xla_objects->builder = new xla::XlaBuilder("Elixir");
-
-  *priv = (void*) xla_objects;
 
   return 0;
 }
@@ -92,10 +81,6 @@ ERL_NIF_TERM create_sub_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
 }
 
 /************************ xla::ShapedBuffer Functions *********************/
-// TODO: This function doesn't behave in the way it should. Rather than placing the binary directly on the device,
-// it stages the binary in a ShapedBuffer and does the device transfer when passed as an argument to an `xla::LocalExecutable`
-// We need to investigate `ScopedShapedBuffer` and `ExecutionInput` instead.
-// TODO: Now that we have `ExlaClient`, we can implement the logic of this function in a function in that.
 ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
     return enif_make_badarg(env);
@@ -111,10 +96,11 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
   if(!exla::get(env, argv[3], device_ordinal)) return enif_make_badarg(env);
 
+
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
-  xla::ScopedShapedBuffer* buffer_ = buffer.release();
-  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, *buffer_));
+
+  return exla::ok(env, exla::make_buffer<exla::ExlaBuffer>(env, std::move(buffer)));
 }
 
 ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -123,14 +109,15 @@ ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TER
   }
 
   exla::ExlaClient **client;
-  xla::ShapedBuffer *buffer;
+  exla::ExlaBuffer *buffer;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
-  if(!exla::get<xla::ShapedBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
+  if(!exla::get<exla::ExlaBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
 
   exla::ExlaDevice* device = (*client)->devices().front().get();
+  bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
-  EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*buffer, device), env);
+  EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*(buffer->buffer()), device), env);
 
   return exla::ok(env, enif_make_binary(env, &binary));
 }
@@ -140,14 +127,15 @@ ERL_NIF_TERM on_host_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     return enif_make_badarg(env);
   }
 
-  xla::ShapedBuffer* buffer;
+  exla::ExlaBuffer* buffer;
 
-  if(!exla::get<xla::ShapedBuffer>(env, argv[0], buffer)) return exla::error(env, "Unable to get buffer.");
+  if(!exla::get<exla::ExlaBuffer>(env, argv[0], buffer)) return exla::error(env, "Unable to get buffer.");
 
-  xla::Shape shape = buffer->on_host_shape();
+  xla::Shape shape = buffer->buffer()->on_host_shape();
 
   return exla::ok(env, exla::make(env, shape));
 }
+
 /************************ xla::Shape Functions ***************************/
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
@@ -645,27 +633,38 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
 // TODO: Most of this logic should be moved to `exla::ExlaClient`
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 8){
-    return enif_make_badarg(env);
+  if(argc != 9){
+    return exla::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   xla::LocalExecutable* local_executable;
-  std::vector<xla::ShapedBuffer*> arguments;
+  std::vector<ErlNifBinary> arguments;
+  std::vector<xla::Shape> argument_shapes;
   xla::ExecutableRunOptions run_options;
   int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
   if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
-  if(!exla::get_vector_list<xla::ShapedBuffer>(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
-  if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
-  if(!exla::get(env, argv[4], run_id)) return exla::error(env, "Unable to get Run ID.");
-  if(!exla::get(env, argv[5], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
-  if(!exla::get(env, argv[6], launch_id)) return exla::error(env, "Unable to get Launch ID.");
-  if(!exla::get(env, argv[7], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
+  if(!exla::get_vector_list(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
+  if(!exla::get_vector_list<xla::Shape>(env, argv[3], argument_shapes)) return exla::error(env, "Unable to get argument shapes.");
+  if(!exla::get(env, argv[4], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
+  if(!exla::get(env, argv[5], run_id)) return exla::error(env, "Unable to get Run ID.");
+  if(!exla::get(env, argv[6], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
+  if(!exla::get(env, argv[7], launch_id)) return exla::error(env, "Unable to get Launch ID.");
+  if(!exla::get(env, argv[8], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
+
+  exla::ExlaDevice* device = (*client)->device(device_ordinal);
+
+  bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
+
+  std::vector<xla::ShapedBuffer*> inp;
+  for(int i=0;i<arguments.size();i++) {
+    EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buf, (*client)->BufferFromErlBin(arguments.at(i), argument_shapes.at(i), device), env);
+    inp.push_back((xla::ShapedBuffer*) buf.release());
+  }
 
   xla::RunId run_id_obj(run_id);
-  exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
   run_options.set_stream(device->compute_stream());
   run_options.set_host_to_device_stream(device->host_to_device_stream());
@@ -678,16 +677,25 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
   run_options.set_launch_id(launch_id);
 
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(arguments, run_options), env);
+  // TODO: Implement a `Run` in client that takes ExlaBuffers and returns binary or reference to buffer
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(inp, run_options), env);
 
-  bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
+  EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(result, device), env);
 
-  if(is_cpu_platform || !keep_on_device) {
-    EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(result, device), env);
-    return exla::ok(env, exla::make(env, binary));
+  // Release the input buffers so they don't deallocate and mess up GC in the CPU case
+  if(is_cpu_platform) {
+    for(auto buf : inp) {
+      ((xla::ScopedShapedBuffer*) buf)->release();
+    }
+  }
+  // Otherwise we released the unique_ptr so we have to explicitly destroy the buffer
+  else {
+    for(auto buf : inp) {
+      delete buf;
+    }
   }
 
-  return exla::ok(env, exla::make<xla::ShapedBuffer>(env, result));
+  return exla::ok(env, exla::make(env, binary));
 }
 
 ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -703,9 +711,11 @@ ERL_NIF_TERM literal_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TE
   if(!exla::get<xla::Literal>(env, argv[1], literal)) return enif_make_badarg(env);
   if(!exla::get(env, argv[2], device_ordinal)) return enif_make_badarg(env);
 
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer, (*client)->client()->LiteralToShapedBuffer(*literal, device_ordinal, (*client)->allocator()), env);
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->client()->LiteralToShapedBuffer(*literal, device_ordinal, (*client)->allocator()), env);
 
-  return exla::make<xla::ShapedBuffer>(env, buffer);
+  std::unique_ptr<xla::ScopedShapedBuffer> buffer = absl::make_unique<xla::ScopedShapedBuffer>(xla::ScopedShapedBuffer(std::move(result)));
+
+  return exla::ok(env, exla::make_buffer<exla::ExlaBuffer>(env, std::move(buffer)));
 }
 
 ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -714,12 +724,12 @@ ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TE
   }
 
   exla::ExlaClient** client;
-  xla::ShapedBuffer* buffer;
+  exla::ExlaBuffer* buffer;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
-  if(!exla::get<xla::ShapedBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
+  if(!exla::get<exla::ExlaBuffer>(env, argv[1], buffer)) return enif_make_badarg(env);
 
-  EXLA_ASSIGN_OR_RETURN(xla::Literal literal, (*client)->client()->ShapedBufferToLiteral(*buffer), env);
+  EXLA_ASSIGN_OR_RETURN(xla::Literal literal, (*client)->client()->ShapedBufferToLiteral(*(buffer->buffer())), env);
 
   return exla::make<xla::Literal>(env, literal);
 }
@@ -858,7 +868,7 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},
-  {"run", 8, run},
+  {"run", 9, run},
   {"literal_to_shaped_buffer", 3, literal_to_shaped_buffer},
   {"shaped_buffer_to_literal", 2, shaped_buffer_to_literal},
   /******** HLO Functions ********/

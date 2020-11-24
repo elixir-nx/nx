@@ -213,6 +213,7 @@ defmodule Exla.NIF do
         _client,
         _executable,
         _arguments,
+        _argument_shapes,
         _device_ordinal,
         _run_id,
         _rng_seed,
