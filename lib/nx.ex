@@ -401,6 +401,10 @@ defmodule Nx do
       iex> Nx.to_bitstring(t)
       <<2::64-native, 3::64-native, 4::64-native>>
 
+      iex> t = Nx.add(1, Nx.tensor([1, 2, 3]))
+      iex> Nx.to_bitstring(t)
+      <<2::64-native, 3::64-native, 4::64-native>>
+
   Given a float scalar converts the tensor to a float:
 
       iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1.0)
@@ -433,21 +437,81 @@ defmodule Nx do
       iex> Nx.to_bitstring(t)
       <<-1::16-native, 0::16-native, 1::16-native>>
 
+  ### Adding tensors of the same shape
+
+      iex> t = Nx.add(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[10, 20], [30, 40]]))
+      iex> Nx.to_bitstring(t)
+      <<11::64-native, 22::64-native, 33::64-native, 44::64-native>>
+
+  ### Adding tensors with broadcasting
+
+      iex> t = Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<11::64-native, 21::64-native, 12::64-native, 22::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.add(Nx.tensor([[10, 20]]), Nx.tensor([[1], [2]]))
+      iex> Nx.to_bitstring(t)
+      <<11::64-native, 21::64-native, 12::64-native, 22::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
+      iex> Nx.to_bitstring(t)
+      <<11::64-native, 21::64-native, 32::64-native, 42::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.add(Nx.tensor([[1, 2]]), Nx.tensor([[10, 20], [30, 40]]))
+      iex> Nx.to_bitstring(t)
+      <<11::64-native, 22::64-native, 31::64-native, 42::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
   """
-  # TODO: implement addition between tensors with broadcasting
   def add(left, right)
 
-  def add(left, right) when is_number(left) and is_number(right), do: tensor(:erlang.+(left, right))
+  def add(left, right) when is_number(left) and is_number(right),
+    do: tensor(left + right)
 
-  def add(%T{data: data, type: input_type} = left, right) when is_number(right) do
-    output_type = Nx.Type.merge_scalar(input_type, right)
+  def add(scalar, %T{data: data, type: input_type} = t) when is_number(scalar) do
+    output_type = Nx.Type.merge_scalar(input_type, scalar)
 
     data =
       match_types [input_type, output_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
+        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
       end
 
-    %{left | data: data, type: output_type}
+    %{t | data: data, type: output_type}
+  end
+
+  def add(%T{data: data, type: input_type} = t, scalar) when is_number(scalar) do
+    output_type = Nx.Type.merge_scalar(input_type, scalar)
+
+    data =
+      match_types [input_type, output_type] do
+        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
+      end
+
+    %{t | data: data, type: output_type}
+  end
+
+  def add(%T{type: left_type} = left, %T{type: right_type} = right) do
+    output_type = Nx.Type.merge(left_type, right_type)
+
+    {data, shape} =
+      match_types [left_type, right_type, output_type] do
+        broadcast(left, right, fn left_dimension, right_dimension ->
+          for <<match!(left_seg, 0) <- left_dimension>>,
+              <<match!(right_seg, 1) <- right_dimension>>,
+              into: <<>> do
+            <<write!(read!(left_seg, 0) + read!(right_seg, 1), 2)>>
+          end
+        end)
+      end
+
+    %T{data: data, type: output_type, shape: shape}
   end
 
   # TODO: Properly implement me
@@ -530,7 +594,7 @@ defmodule Nx do
     data =
       match_types [type] do
         value =
-          until_empty(data, 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
+          bin_reduce_all(data, 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
             {read!(var, 0) + acc, rest}
           end)
 
@@ -540,13 +604,126 @@ defmodule Nx do
     %{t | data: data, shape: {}}
   end
 
-  @compile {:inline, until_empty: 3}
-  defp until_empty(<<>>, acc, _fun) do
+  ## Broadcast helpers
+
+  defp broadcast(
+         %T{data: left_data, type: {_, left_size}, shape: shape},
+         %T{data: right_data, type: {_, right_size}, shape: shape},
+         fun
+       ) do
+    data = bin_zip_map_all(left_data, left_size, right_data, right_size, fun)
+    {IO.iodata_to_binary(data), shape}
+  end
+
+  defp broadcast(
+         %T{data: left_data, type: {_, left_size}, shape: left_shape},
+         %T{data: right_data, type: {_, right_size}, shape: right_shape},
+         fun
+       ) do
+    left_rank = tuple_size(left_shape)
+    right_rank = tuple_size(right_shape)
+    rank = max(left_rank, right_rank)
+    left_ordered = shape_to_ranked_ordered_list(left_shape, left_rank, rank)
+    right_ordered = shape_to_ranked_ordered_list(right_shape, right_rank, rank)
+
+    {chunks, shape} =
+      broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], [])
+
+    {broadcast_recur(left_data, right_data, chunks), shape}
+  end
+
+  defp broadcast_recur(left_data, right_data, [fun]) do
+    fun.(left_data, right_data)
+  end
+
+  defp broadcast_recur(left_data, right_data, [{:cross, left_chunk, right_chunk} | chunks]) do
+    for <<left_part::bitstring-size(left_chunk) <- left_data>>,
+        <<right_part::bitstring-size(right_chunk) <- right_data>>,
+        into: <<>>,
+        do: broadcast_recur(left_part, right_part, chunks)
+  end
+
+  defp broadcast_recur(left_data, right_data, [{:zip, left_chunk, right_chunk} | chunks]) do
+    left_data
+    |> bin_zip_map_all(left_chunk, right_data, right_chunk, &broadcast_recur(&1, &2, chunks))
+    |> IO.iodata_to_binary()
+  end
+
+  defp shape_to_ranked_ordered_list(_tuple, 0, 0),
+    do: []
+
+  defp shape_to_ranked_ordered_list(tuple, 0, rank),
+    do: [1 | shape_to_ranked_ordered_list(tuple, 0, rank - 1)]
+
+  defp shape_to_ranked_ordered_list(tuple, size, rank),
+    do: [:erlang.element(size, tuple) | shape_to_ranked_ordered_list(tuple, size - 1, rank - 1)]
+
+  defp broadcast_chunks([], [], _, _, chunks, shape) do
+    {chunks, List.to_tuple(shape)}
+  end
+
+  defp broadcast_chunks(left_ordered, right_ordered, left_size, right_size, chunks, shape)
+       when hd(left_ordered) == 1 or hd(right_ordered) == 1 do
+    left_ones = count_ones(left_ordered)
+    right_ones = count_ones(right_ordered)
+    {dir, size} = if left_ones <= right_ones, do: {:left, right_ones}, else: {:right, left_ones}
+
+    {left_ordered, right_ordered, left_chunk, right_chunk, shape} =
+      broadcast_split_chunks(left_ordered, right_ordered, left_size, right_size, size, shape)
+
+    chunks = if dir == :left, do: chunks, else: [{:cross, left_size, right_size} | chunks]
+    broadcast_chunks(left_ordered, right_ordered, left_chunk, right_chunk, chunks, shape)
+  end
+
+  defp broadcast_chunks(left_ordered, right_ordered, left_size, right_size, chunks, shape)
+       when hd(left_ordered) == hd(right_ordered) do
+    {left_ordered, right_ordered, left_chunk, right_chunk, shape} =
+      broadcast_shared_chunks(left_ordered, right_ordered, left_size, right_size, shape)
+
+    chunks = [{:zip, left_size, right_size} | chunks]
+    broadcast_chunks(left_ordered, right_ordered, left_chunk, right_chunk, chunks, shape)
+  end
+
+  defp broadcast_chunks(_left_ordered, _right_ordered, _left_size, _right_size, _chunks, _shape),
+    do: :error
+
+  defp count_ones([1 | shape]), do: 1 + count_ones(shape)
+  defp count_ones(_), do: 0
+
+  defp broadcast_split_chunks([lh | lt], [rh | rt], ls, rs, n, shape) when n > 0,
+    do: broadcast_split_chunks(lt, rt, ls * lh, rh * rs, n - 1, [max(lh, rh) | shape])
+
+  defp broadcast_split_chunks(l, r, ls, rs, _n, shape),
+    do: {l, r, ls, rs, shape}
+
+  defp broadcast_shared_chunks([x | left], [x | right], ls, rs, shape),
+    do: broadcast_shared_chunks(left, right, ls * x, rs * x, [x | shape])
+
+  defp broadcast_shared_chunks(left, right, ls, rs, shape),
+    do: {left, right, ls, rs, shape}
+
+  ## Binary helpers
+
+  @compile {:inline, bin_reduce_all: 3}
+
+  defp bin_reduce_all(<<>>, acc, _fun) do
     acc
   end
 
-  defp until_empty(binary, acc, fun) do
+  defp bin_reduce_all(binary, acc, fun) do
     {acc, rest} = fun.(binary, acc)
-    until_empty(rest, acc, fun)
+    bin_reduce_all(rest, acc, fun)
+  end
+
+  defp bin_zip_map_all(<<>>, _left_size, <<>>, _right_size, _fun), do: []
+
+  defp bin_zip_map_all(left_data, left_size, right_data, right_size, fun) do
+    <<left_head::bitstring-size(left_size), left_rest::bitstring>> = left_data
+    <<right_head::bitstring-size(right_size), right_rest::bitstring>> = right_data
+
+    [
+      fun.(left_head, right_head)
+      | bin_zip_map_all(left_rest, left_size, right_rest, right_size, fun)
+    ]
   end
 end
