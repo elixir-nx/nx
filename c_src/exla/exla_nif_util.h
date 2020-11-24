@@ -33,6 +33,7 @@ namespace exla {
   /*
    * Getters for standard types.
    */
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, long int &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var);
@@ -114,6 +115,7 @@ namespace exla {
   int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<long long int> &var);
 
   int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var);
+  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ErlNifBinary> &var);
 
   template <typename T>
   int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var){
