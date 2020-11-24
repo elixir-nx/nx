@@ -44,7 +44,7 @@ namespace exla {
     return buffer;
   }
 
-  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(xla::ShapedBuffer& buffer,
+  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(xla::ScopedShapedBuffer& buffer,
                                                            ExlaDevice* device) {
     bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
