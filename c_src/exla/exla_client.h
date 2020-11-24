@@ -38,7 +38,7 @@ namespace exla {
                                                                              const xla::Shape& shape,
                                                                              ExlaDevice* device);
 
-    xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(const xla::ShapedBuffer& buffer, ExlaDevice* device);
+    xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(xla::ShapedBuffer& buffer, ExlaDevice* device);
 
     xla::LocalClient* client() { return client_; }
 
