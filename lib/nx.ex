@@ -626,10 +626,15 @@ defmodule Nx do
     left_ordered = shape_to_ranked_ordered_list(left_shape, left_rank, rank)
     right_ordered = shape_to_ranked_ordered_list(right_shape, right_rank, rank)
 
-    {chunks, shape} =
-      broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], [])
+    case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
+      {chunks, shape} ->
+        {broadcast_recur(left_data, right_data, chunks), shape}
 
-    {broadcast_recur(left_data, right_data, chunks), shape}
+      :error ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
+                "to #{inspect(right_shape)}"
+    end
   end
 
   defp broadcast_recur(left_data, right_data, [fun]) do

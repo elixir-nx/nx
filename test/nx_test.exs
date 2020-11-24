@@ -35,6 +35,39 @@ defmodule NxTest do
                  14::64-native, 23::64-native, 24::64-native>>
     end
 
+    test "{4, 1, 3} + {1, 3, 1}" do
+      a = Nx.tensor([[[100], [200], [300]]])
+      assert Nx.shape(a) == {1, 3, 1}
+      b = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]])
+      assert Nx.shape(b) == {4, 1, 3}
+
+      t = Nx.add(a, b)
+      assert Nx.shape(t) == {4, 3, 3}
+
+      assert Nx.to_bitstring(t) ==
+               <<101::64-native, 102::64-native, 103::64-native, 201::64-native, 202::64-native,
+                 203::64-native, 301::64-native, 302::64-native, 303::64-native, 104::64-native,
+                 105::64-native, 106::64-native, 204::64-native, 205::64-native, 206::64-native,
+                 304::64-native, 305::64-native, 306::64-native, 107::64-native, 108::64-native,
+                 109::64-native, 207::64-native, 208::64-native, 209::64-native, 307::64-native,
+                 308::64-native, 309::64-native, 110::64-native, 111::64-native, 112::64-native,
+                 210::64-native, 211::64-native, 212::64-native, 310::64-native, 311::64-native,
+                 312::64-native>>
+
+      t = Nx.add(b, a)
+      assert Nx.shape(t) == {4, 3, 3}
+
+      assert Nx.to_bitstring(t) ==
+               <<101::64-native, 102::64-native, 103::64-native, 201::64-native, 202::64-native,
+                 203::64-native, 301::64-native, 302::64-native, 303::64-native, 104::64-native,
+                 105::64-native, 106::64-native, 204::64-native, 205::64-native, 206::64-native,
+                 304::64-native, 305::64-native, 306::64-native, 107::64-native, 108::64-native,
+                 109::64-native, 207::64-native, 208::64-native, 209::64-native, 307::64-native,
+                 308::64-native, 309::64-native, 110::64-native, 111::64-native, 112::64-native,
+                 210::64-native, 211::64-native, 212::64-native, 310::64-native, 311::64-native,
+                 312::64-native>>
+    end
+
     test "{2, 1, 2} + {1, 2, 2, 1}" do
       a = Nx.tensor([[[[10], [20]], [[30], [40]]]])
       assert Nx.shape(a) == {1, 2, 2, 1}
@@ -99,6 +132,12 @@ defmodule NxTest do
                  34::64-native, 43::64-native, 44::64-native>>
 
       assert Nx.shape(t) == {2, 2, 2}
+    end
+
+    test "raises when it cannot broadcast" do
+      a = Nx.tensor([[1, 2], [3, 4]])
+      b = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      assert_raise ArgumentError, ~r"cannot broadcast", fn -> Nx.add(a, b) end
     end
   end
 end
