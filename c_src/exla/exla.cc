@@ -555,7 +555,7 @@ ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     dim_arr[i] = exla::make(env, copy);
   }
 
-  ERL_NIF_TERM dims_term = enif_make_list_from_array(env, dim_arr, rank);
+  ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, dim_arr, rank);
   ERL_NIF_TERM type_term = exla::make(env, type_name);
   ERL_NIF_TERM shape_term = exla::make(env, shape);
 

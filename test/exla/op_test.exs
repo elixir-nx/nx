@@ -72,9 +72,9 @@ defmodule OpTest do
   test "get_shape/1 returns shape of op" do
     builder = Builder.new("test")
 
-    shape = Shape.make_shape(:float64, [5, 5, 5, 5, 5])
+    shape = Shape.make_shape(:float64, {5, 5, 5, 5, 5})
 
     x = Op.parameter(builder, 0, shape, "x")
-    assert %Shape{dims: [5, 5, 5, 5, 5], dtype: {:f, 64}, ref: ref} = Op.get_shape(x)
+    assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}, ref: ref} = Op.get_shape(x)
   end
 end
