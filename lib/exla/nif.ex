@@ -198,6 +198,8 @@ defmodule Exla.NIF do
   def get_computation_hlo_text(_computation),
     do: nif_error(__ENV__.function)
 
+  def get_program_shape(_computation), do: nif_error(__ENV__.function)
+
   def build(_builder, _root),
     do: nif_error(__ENV__.function)
 
