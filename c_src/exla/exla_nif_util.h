@@ -85,6 +85,7 @@ namespace exla {
     void* ptr = (void*) enif_alloc_resource(exla::resource_object<T>::type, sizeof(T));
     new(ptr) T(std::move(buffer));
     ERL_NIF_TERM ret = enif_make_resource(env, ptr);
+    enif_release_resource(ptr);
     return ret;
   }
 

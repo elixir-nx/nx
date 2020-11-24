@@ -105,6 +105,8 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
 
+  // buffer->release();
+
   return exla::ok(env, exla::make_buffer<exla::ExlaBuffer>(env, std::move(buffer)));
 }
 
@@ -123,11 +125,6 @@ ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TER
   bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
   EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*(buffer->buffer()), device), env);
-
-  // Not on CPU, release the buffer so the memory is deallocated from the GPU
-  if(!is_cpu_platform) {
-    enif_release_resource(buffer);
-  }
 
   return exla::ok(env, enif_make_binary(env, &binary));
 }
@@ -688,14 +685,12 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   if(is_cpu_platform || !keep_on_device) {
     EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(result, device), env);
-
-    // We can't release on CPU right now because it points to a binary
-    if(!is_cpu_platform) {
+    // Ensure TF doesn't try to deallocate the buffer, and instead let the GC do it
+    if(is_cpu_platform) {
       for(auto &buf : arguments) {
-        enif_release_resource(buf);
+        buf->buffer()->release();
       }
     }
-
     return exla::ok(env, exla::make(env, binary));
   }
 
