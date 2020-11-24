@@ -17,31 +17,26 @@
 // TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
 // TODO: In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
 
-// Once the resource is garbage collected, this should also deallocate the C++ object.
-void free_op(ErlNifEnv* env, void* obj){return;}
-void free_shape(ErlNifEnv* env, void* obj){return;}
-void free_computation(ErlNifEnv* env, void* obj){return;}
-void free_literal(ErlNifEnv* env, void* obj){return;}
-void free_local_executable(ErlNifEnv* env, void* obj){return;}
+// This is all we need for now, the GC takes care of everything else
+void free_res(ErlNifEnv* env, void* obj){return;}
 
+// Special Case for destructing buffers
+// TODO: Revisit this when we start passing around buffer references
 void free_exla_buffer(ErlNifEnv* env, void* obj) {
   exla::ExlaBuffer* buffer = (exla::ExlaBuffer*) obj;
   buffer->~ExlaBuffer();
 }
 
-void free_builder(ErlNifEnv* env, void* obj){return;}
-void free_exla_client(ErlNifEnv* env, void* obj){return;}
-
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
 
-  if(!exla::open_resource<xla::XlaOp>(env, mod, "Op", free_op)) return -1;
-  if(!exla::open_resource<xla::Shape>(env, mod, "Shape", free_shape)) return -1;
-  if(!exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_computation)) return -1;
-  if(!exla::open_resource<xla::Literal>(env, mod, "Literal", free_literal)) return -1;
-  if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_local_executable)) return -1;
-  if(!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_builder)) return -1;
-  if(!exla::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_exla_client)) return -1;
+  if(!exla::open_resource<xla::XlaOp>(env, mod, "Op", free_res)) return -1;
+  if(!exla::open_resource<xla::Shape>(env, mod, "Shape", free_res)) return -1;
+  if(!exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_res)) return -1;
+  if(!exla::open_resource<xla::Literal>(env, mod, "Literal", free_res)) return -1;
+  if(!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_res)) return -1;
+  if(!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_res)) return -1;
+  if(!exla::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_res)) return -1;
   if(!exla::open_resource<exla::ExlaBuffer>(env, mod, "ExlaBuffer", free_exla_buffer)) return -1;
 
   return 1;
@@ -104,8 +99,6 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
-
-  // buffer->release();
 
   return exla::ok(env, exla::make_buffer<exla::ExlaBuffer>(env, std::move(buffer)));
 }
@@ -694,7 +687,9 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     for(auto buf : inp) {
       ((xla::ScopedShapedBuffer*) buf)->release();
     }
-  } else {
+  }
+  // Otherwise we released the unique_ptr so we have to explicitly destroy the buffer
+  else {
     for(auto buf : inp) {
       delete buf;
     }
@@ -736,7 +731,6 @@ ERL_NIF_TERM shaped_buffer_to_literal(ErlNifEnv* env, int argc, const ERL_NIF_TE
 
   EXLA_ASSIGN_OR_RETURN(xla::Literal literal, (*client)->client()->ShapedBufferToLiteral(*(buffer->buffer())), env);
 
-  // TODO: Release Buffer on completion
   return exla::make<xla::Literal>(env, literal);
 }
 
