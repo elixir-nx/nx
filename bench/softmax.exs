@@ -22,8 +22,10 @@ IO.inspect(Softmax.host(t))
 Benchee.run(
   %{
     "elixir softmax" => fn -> Softmax.softmax(t) end,
-    "xla cpu softmax" => fn -> Softmax.host(t) end
+    "xla cpu softmax" => fn -> Softmax.host(t) end,
+    "xla gpu softmax" => fn -> Softmax.cuda(t) end
   },
   time: 10,
-  memory_time: 2
+  memory_time: 2,
+  after_each: fn -> :erlang.garbage_collect(self()) end
 )

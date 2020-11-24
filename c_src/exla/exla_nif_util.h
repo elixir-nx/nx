@@ -105,10 +105,10 @@ namespace exla {
 
   int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<long long int> &var);
 
-  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var);
+  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var);
 
   template <typename T>
-  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var){
+  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var){
     ERL_NIF_TERM head, tail;
     int i = 0;
     while(enif_get_list_cell(env, list, &head, &tail)){
@@ -121,7 +121,7 @@ namespace exla {
   }
 
   template <typename T>
-  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var){
+  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var){
     ERL_NIF_TERM head, tail;
     int i = 0;
     while(enif_get_list_cell(env, list, &head, &tail)){

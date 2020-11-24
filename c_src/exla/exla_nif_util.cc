@@ -62,7 +62,7 @@ namespace exla {
     return 1;
   }
 
-  int get_vector(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var){
+  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var){
     ERL_NIF_TERM head, tail;
     while(enif_get_list_cell(env, list, &head, &tail)){
       long long int elem;
