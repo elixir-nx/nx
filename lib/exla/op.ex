@@ -21,6 +21,7 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  # TODO: Remove me in favor of constant_r0
   def zero(%Builder{ref: builder}, {type, size}) do
     {:ok, ref} = Exla.NIF.zero(builder, Shape.dtype_to_str({type, size}))
     %Op{builder: builder, ref: ref}

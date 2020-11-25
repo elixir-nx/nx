@@ -12,25 +12,10 @@ defmodule Exla.NIF do
 
   def create_sub_builder(_builder, _name), do: nif_error(__ENV__.function)
 
-  def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
-    do: nif_error(__ENV__.function)
-
   def on_host_shape(_buffer),
     do: nif_error(__ENV__.function)
 
   def make_shape(_type, _dims),
-    do: nif_error(__ENV__.function)
-
-  def make_scalar_shape(_type),
-    do: nif_error(__ENV__.function)
-
-  def human_string(_shape),
-    do: nif_error(__ENV__.function)
-
-  def create_r0(_value),
-    do: nif_error(__ENV__.function)
-
-  def literal_to_string(_literal),
     do: nif_error(__ENV__.function)
 
   def parameter(_builder, _number, _shape, _name),
@@ -198,8 +183,6 @@ defmodule Exla.NIF do
   def get_computation_hlo_text(_computation),
     do: nif_error(__ENV__.function)
 
-  def get_program_shape(_computation), do: nif_error(__ENV__.function)
-
   def build(_builder, _root),
     do: nif_error(__ENV__.function)
 
@@ -226,13 +209,11 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def literal_to_shaped_buffer(_client, _literal, _device_ordinal),
+  def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 
-  def shaped_buffer_to_literal(_client, _shaped_buffer),
+  def shaped_buffer_to_binary(_client, _shaped_buffer),
     do: nif_error(__ENV__.function)
-
-  def shaped_buffer_to_binary(_client, _shaped_buffer), do: nif_error(__ENV__.function)
 
   defp nif_error({name, arity}) do
     raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
