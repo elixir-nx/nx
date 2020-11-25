@@ -13,6 +13,9 @@ defmodule Nx.Defn.Compiler do
 
   Each variable in the AST has a counter which is guaranteed
   to uniquely identify each variable.
+
+  The callback uses double underscores so it can be define
+  at root modules without affecting the module's main API.
   """
   @callback __compile__(
               kind :: :def | :defp,

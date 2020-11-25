@@ -10,27 +10,10 @@ defmodule Exla.NIF do
   def new_builder(_name),
     do: nif_error(__ENV__.function)
 
-  def create_sub_builder(_builder, _name), do: nif_error(__ENV__.function)
-
-  def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
-    do: nif_error(__ENV__.function)
-
-  def on_host_shape(_buffer),
+  def create_sub_builder(_builder, _name),
     do: nif_error(__ENV__.function)
 
   def make_shape(_type, _dims),
-    do: nif_error(__ENV__.function)
-
-  def make_scalar_shape(_type),
-    do: nif_error(__ENV__.function)
-
-  def human_string(_shape),
-    do: nif_error(__ENV__.function)
-
-  def create_r0(_value),
-    do: nif_error(__ENV__.function)
-
-  def literal_to_string(_literal),
     do: nif_error(__ENV__.function)
 
   def parameter(_builder, _number, _shape, _name),
@@ -154,7 +137,8 @@ defmodule Exla.NIF do
   def conditional(_pred, _true_op, _true_comp, _false_op, _false_comp),
     do: nif_error(__ENV__.function)
 
-  def conditional(_index, _branches, _operands), do: nif_error(__ENV__.function)
+  def conditional(_index, _branches, _operands),
+    do: nif_error(__ENV__.function)
 
   def slice(_op, _start_indices, _limit_indices, _strides),
     do: nif_error(__ENV__.function)
@@ -162,15 +146,20 @@ defmodule Exla.NIF do
   def slice_in_dim(_op, _start_index, _limit_index, _stride, _dimno),
     do: nif_error(__ENV__.function)
 
-  def dynamic_slice(_op, _start_indices, _sizes), do: nif_error(__ENV__.function)
+  def dynamic_slice(_op, _start_indices, _sizes),
+    do: nif_error(__ENV__.function)
 
-  def dynamic_update_slice(_op, _update, _start_indices), do: nif_error(__ENV__.function)
+  def dynamic_update_slice(_op, _update, _start_indices),
+    do: nif_error(__ENV__.function)
 
-  def reduce(_operand, _init_value, _computation, _dimensions), do: nif_error(__ENV__.function)
+  def reduce(_operand, _init_value, _computation, _dimensions),
+    do: nif_error(__ENV__.function)
 
-  def reduce_all(_operand, _init_value, _computation), do: nif_error(__ENV__.function)
+  def reduce_all(_operand, _init_value, _computation),
+    do: nif_error(__ENV__.function)
 
-  def get_shape(_builder, _operand), do: nif_error(__ENV__.function)
+  def get_shape(_builder, _operand),
+    do: nif_error(__ENV__.function)
 
   def convert_element_type(_operand, _type), do: nif_error(__ENV__.function)
 
@@ -200,8 +189,6 @@ defmodule Exla.NIF do
   def get_computation_hlo_text(_computation),
     do: nif_error(__ENV__.function)
 
-  def get_program_shape(_computation), do: nif_error(__ENV__.function)
-
   def build(_builder, _root),
     do: nif_error(__ENV__.function)
 
@@ -228,13 +215,11 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def literal_to_shaped_buffer(_client, _literal, _device_ordinal),
+  def binary_to_shaped_buffer(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 
-  def shaped_buffer_to_literal(_client, _shaped_buffer),
+  def shaped_buffer_to_binary(_client, _shaped_buffer),
     do: nif_error(__ENV__.function)
-
-  def shaped_buffer_to_binary(_client, _shaped_buffer), do: nif_error(__ENV__.function)
 
   defp nif_error({name, arity}) do
     raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
