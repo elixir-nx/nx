@@ -9,11 +9,8 @@ defmodule Exla.Shape do
     %Shape{ref: ref, dtype: {type, size}, dims: dims}
   end
 
-  def str_to_dtype('bf16'), do: {:bf, 16}
-  def str_to_dtype(str) do
-    {type, size} = Enum.split(str, 1)
-    {List.to_atom(type), List.to_integer(size)}
-  end
+  def str_to_type('bf16'), do: {:bf, 16}
+  def str_to_type([letter | integer]), do: {List.to_atom([letter]), List.to_integer(integer)}
 
   # TODO: Check valid dtype first
   def dtype_to_str({:i, size}), do: dtype_to_str({:s, size})
