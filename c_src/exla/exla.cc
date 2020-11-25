@@ -13,6 +13,7 @@
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
+#include "tensorflow/compiler/xla/primitive_util.h"
 
 // TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
 // TODO: In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
@@ -527,6 +528,40 @@ ERL_NIF_TERM reduce_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 2) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  xla::XlaOp* operand;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], operand)) return exla::error(env, "Unable to get operand.");
+
+  EXLA_ASSIGN_OR_RETURN(xla::Shape shape, (*builder)->GetShape(*operand), env);
+
+  xla::PrimitiveType type = shape.element_type();
+  absl::Span<const long long int> dims = shape.dimensions();
+  long long int rank = shape.rank();
+
+  std::string type_name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+  // TODO: Put this in NIF Util
+  ERL_NIF_TERM dim_arr[(size_t) rank];
+  for(int i=0;i<rank;i++) {
+    int copy;
+    copy = dims.at(i);
+    dim_arr[i] = exla::make(env, copy);
+  }
+
+  ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, dim_arr, rank);
+  ERL_NIF_TERM type_term = exla::make(env, type_name);
+  ERL_NIF_TERM shape_term = exla::make(env, shape);
+
+  return exla::ok(env, enif_make_tuple(env, 3, dims_term, type_term, shape_term));
+}
+
 /************************ xla::ClientLibrary Functions ***************************/
 // TODO: This function generates mildly annoying and poorly formatted log messages from the TensorFlow side...
 // We can either make the logging stricter or we can somehow get the log messages to the Elixir Logger?? I'm
@@ -760,6 +795,64 @@ ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TE
   return exla::make(env, result);
 }
 
+ERL_NIF_TERM get_program_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 1) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaComputation* computation;
+
+  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return exla::error(env, "Unable to get computation.");
+
+  EXLA_ASSIGN_OR_RETURN(xla::ProgramShape program_shape, computation->GetProgramShape(), env);
+
+  int length = program_shape.parameters_size();
+
+  ERL_NIF_TERM input_shape_refs[length];
+  for(int i=0;i<length;i++) {
+    xla::Shape shape_copy = program_shape.parameters(i);
+    ERL_NIF_TERM shape_ref = exla::make<xla::Shape>(env, shape_copy);
+    // TODO: NIF Util this
+    long long int shape_rank = shape_copy.rank();
+    ERL_NIF_TERM dims[shape_copy.rank()];
+    for(auto dim : shape_copy.dimensions()) {
+      dims[i] = exla::make(env, dim);
+    }
+    xla::PrimitiveType type = shape_copy.element_type();
+    std::string type_name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+    ERL_NIF_TERM type_term = exla::make(env, type_name);
+    ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, dims, shape_rank);
+
+    input_shape_refs[i] = enif_make_tuple(env, 3, dims_term, type_term, shape_ref);
+  }
+
+  ERL_NIF_TERM input_term = enif_make_list_from_array(env, input_shape_refs, length);
+
+  xla::Shape result_shape = program_shape.result();
+  long long int res_rank = result_shape.rank();
+  absl::Span<const long long int> res_dims = result_shape.dimensions();
+
+  ERL_NIF_TERM res_shape_dims[res_rank];
+  for(int i=0;i<res_rank;i++) {
+    int dim;
+    dim = res_dims.at(i);
+    res_shape_dims[i] = exla::make(env, dim);
+  }
+
+  ERL_NIF_TERM res_shape_term = exla::make<xla::Shape>(env, result_shape);
+
+  xla::PrimitiveType res_type = result_shape.element_type();
+  std::string res_type_name = xla::primitive_util::LowercasePrimitiveTypeName(res_type);
+
+  ERL_NIF_TERM res_type_term = exla::make(env, res_type_name);
+  ERL_NIF_TERM res_dims_term = enif_make_tuple_from_array(env, res_shape_dims, res_rank);
+
+  ERL_NIF_TERM result_term = enif_make_tuple(env, 3, res_dims_term, res_type_term, res_shape_term);
+
+  return exla::ok(env, enif_make_tuple(env, 2, input_term, result_term));
+}
+
 ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
     return enif_make_badarg(env);
@@ -865,6 +958,7 @@ static ErlNifFunc exla_funcs[] = {
   {"dot", 2, dot},
   {"reduce", 4, reduce},
   {"reduce_all", 3, reduce_all},
+  {"get_shape", 2, get_shape_op},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},
@@ -873,7 +967,8 @@ static ErlNifFunc exla_funcs[] = {
   {"shaped_buffer_to_literal", 2, shaped_buffer_to_literal},
   /******** HLO Functions ********/
   {"get_computation_hlo_proto", 1, get_computation_hlo_proto},
-  {"get_computation_hlo_text", 1, get_computation_hlo_text}
+  {"get_computation_hlo_text", 1, get_computation_hlo_text},
+  {"get_program_shape", 1, get_program_shape}
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);

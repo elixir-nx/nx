@@ -21,8 +21,8 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def zero(%Builder{ref: builder}, dtype) when is_atom(dtype) do
-    {:ok, ref} = Exla.NIF.zero(builder, dtype)
+  def zero(%Builder{ref: builder}, {type, size}) do
+    {:ok, ref} = Exla.NIF.zero(builder, Shape.dtype_to_str({type, size}))
     %Op{builder: builder, ref: ref}
   end
 
@@ -30,6 +30,11 @@ defmodule Exla.Op do
       when is_integer(i) and i >= 0 and is_binary(name) do
     {:ok, ref} = Exla.NIF.parameter(builder, i, shape, name)
     %Op{builder: builder, ref: ref}
+  end
+
+  def get_shape(%Op{builder: builder, ref: operand}) do
+    {:ok, {dims, type_str, shape_ref}} = Exla.NIF.get_shape(builder, operand)
+    %Shape{ref: shape_ref, dims: dims, dtype: Shape.str_to_dtype(type_str)}
   end
 
   def conditional(

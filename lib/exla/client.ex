@@ -83,7 +83,7 @@ defmodule Exla.Client do
 
   defp _compile(
          client = %Client{ref: ref},
-         %Computation{ref: computation},
+         computation = %Computation{},
          argument_shapes,
          options
        ) do
@@ -95,20 +95,23 @@ defmodule Exla.Client do
       argument_shapes
       |> Enum.map(& &1.ref)
 
+    program_shape = Exla.Computation.get_program_shape(computation)
+
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
+    # TODO: Use device
     with {:ok, {_platform, device_ordinal}} <-
            check_device_compatibility(client, {client.platform, device_ordinal}),
          {:ok, ref} <-
            Exla.NIF.compile(
              ref,
-             computation,
+             computation.ref,
              shape_refs,
              device_ordinal,
              num_replicas,
              num_partitions
            ) do
-      %Executable{client: client, ref: ref, device: {client.platform, device_ordinal}}
+      %Executable{client: client, ref: ref, program_shape: program_shape, device: {client.platform, device_ordinal}}
     end
   end
 

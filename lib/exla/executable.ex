@@ -4,11 +4,11 @@ defmodule Exla.Executable do
   alias Exla.Client
   alias Exla.Shape
 
-  @enforce_keys [:client, :ref]
-  defstruct [:client, :ref, :device]
+  @enforce_keys [:client, :ref, :program_shape]
+  defstruct [:client, :ref, :program_shape, :device]
 
   def run(
-        %Executable{client: client, ref: exec},
+        %Executable{client: client, ref: exec, program_shape: program_shape},
         arguments,
         options \\ []
       ) do
@@ -32,6 +32,8 @@ defmodule Exla.Executable do
       |> Enum.map(&({&1.data, &1.shape.ref}))
       |> Enum.unzip()
 
+    {_, output_shape} = program_shape
+
     {:ok, data} = Exla.NIF.run(
                    client.ref,
                    exec,
@@ -44,6 +46,6 @@ defmodule Exla.Executable do
                    keep_on_device_int
                  )
 
-      %Buffer{data: data, ref: nil}
+      %Buffer{data: data, ref: nil, shape: output_shape}
   end
 end

@@ -101,55 +101,15 @@ namespace exla {
     return 1;
   }
 
-  // TODO: No need for this. Match in Elixir.
   int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type){
     std::string type_str;
+    if(!get(env, term, type_str)) return 0;
 
-    if(!get_atom(env, term, type_str)) {
-      std::cout << type_str << std::endl;
-      type = xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
-      return 1;
+    xla::StatusOr<xla::PrimitiveType> type_status = xla::primitive_util::StringToPrimitiveType(type_str);
+    if(!type_status.ok()) {
+      return 0;
     }
-
-    if(type_str.compare("pred") == 0){
-      type = xla::PrimitiveType::PRED;
-    } else if(type_str.compare("int8") == 0){
-      type = xla::PrimitiveType::S8;
-    } else if(type_str.compare("int16") == 0){
-      type = xla::PrimitiveType::S16;
-    } else if(type_str.compare("int32") == 0){
-      type = xla::PrimitiveType::S32;
-    } else if(type_str.compare("int64") == 0){
-      type = xla::PrimitiveType::S64;
-    } else if(type_str.compare("uint8") == 0){
-      type = xla::PrimitiveType::U8;
-    } else if(type_str.compare("uint16") == 0){
-      type = xla::PrimitiveType::U16;
-    } else if(type_str.compare("uint32") == 0){
-      type = xla::PrimitiveType::U32;
-    } else if(type_str.compare("uint64") == 0){
-      type = xla::PrimitiveType::U64;
-    } else if(type_str.compare("float16") == 0){
-      type = xla::PrimitiveType::F16;
-    } else if(type_str.compare("bfloat16") == 0){
-      type = xla::PrimitiveType::BF16;
-    } else if(type_str.compare("float32") == 0){
-      type = xla::PrimitiveType::F32;
-    } else if(type_str.compare("float64") == 0){
-      type = xla::PrimitiveType::F64;
-    } else if(type_str.compare("complex64") == 0){
-      type = xla::PrimitiveType::C64;
-    } else if(type_str.compare("complex128") == 0){
-      type = xla::PrimitiveType::C128;
-    } else if(type_str.compare("tuple") == 0){
-      type = xla::PrimitiveType::TUPLE;
-    } else if(type_str.compare("opaque") == 0){
-      type = xla::PrimitiveType::OPAQUE_TYPE;
-    } else if(type_str.compare("token") == 0){
-      type = xla::PrimitiveType::TOKEN;
-    } else {
-      type = xla::PrimitiveType::PRIMITIVE_TYPE_INVALID;
-    }
+    type = type_status.ConsumeValueOrDie();
     return 1;
   }
 
