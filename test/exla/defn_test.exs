@@ -6,9 +6,18 @@ defmodule Exla.DefnTest do
 
   defn add_two(a, b), do: a + b
 
-  test "adds two numbers" do
+  test "adds two tensors" do
     buffer = add_two(1.0, 2.0)
     assert buffer.data == <<3.0::float-64-native>>
+
+    buffer = add_two(1, 2)
+    assert buffer.data == <<3::64-native>>
+
+    # buffer = add_two(Nx.tensor([1.0, 2.0]), Nx.tensor([3.0, 4.0]))
+    # assert buffer.data == <<4.0::float-64-native, 6.0::float-64-native>>
+
+    # buffer = add_two(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
+    # assert buffer.data == <<4::64-native, 6::64-native>>
   end
 
   defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))

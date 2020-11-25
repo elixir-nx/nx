@@ -12,8 +12,8 @@ defmodule Exla.Defn do
 
   # TODO: Build lock mechanism to avoid multiple compilations
   def sf_cached_def(module, name_arity, args, options, fun) do
+    cache_args = for arg <- args, do: elixir_to_cache_key!(arg)
     buffers = for arg <- args, do: elixir_to_buffers(arg)
-    cache_args = for arg <- args, do: elixir_to_cache_key(arg)
     cache_key = {module, name_arity, cache_args}
 
     executable =
@@ -52,16 +52,21 @@ defmodule Exla.Defn do
     Exla.Buffer.buffer(<<number::float-64-native>>, Exla.Shape.make_shape({:f, 64}, {}))
   end
 
-  # TODO: Tensor type is hardcoded, we need to unify them
   # TODO: What to do when the tensor data is not a binary?
-  defp elixir_to_buffers(%Nx.Tensor{data: data, type: _type, shape: shape})
+  defp elixir_to_buffers(%Nx.Tensor{data: data, type: type, shape: shape})
        when is_bitstring(data) do
-    Exla.Buffer.buffer(data, Exla.Shape.make_shape({:f, 64}, shape))
+    Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
   end
 
-  defp elixir_to_cache_key(number) when is_integer(number), do: {{:i, 64}, {}}
-  defp elixir_to_cache_key(number) when is_float(number), do: {{:f, 64}, {}}
-  defp elixir_to_cache_key(%Nx.Tensor{} = t), do: {t.type, t.shape}
+  defp elixir_to_cache_key!(number) when is_integer(number), do: {{:i, 64}, {}}
+  defp elixir_to_cache_key!(number) when is_float(number), do: {{:f, 64}, {}}
+  defp elixir_to_cache_key!(%Nx.Tensor{} = t), do: {t.type, t.shape}
+
+  defp elixir_to_cache_key!(other) do
+    raise ArgumentError,
+          "defn functions expects either numbers or %Nx.Tensor{} as arguments, " <>
+            "got: #{inspect(other)}"
+  end
 
   ## Special forms
 
@@ -83,7 +88,6 @@ defmodule Exla.Defn do
     Exla.Op.exp(to_operator(builder, op))
   end
 
-  # TODO: is unique integer the best way to go about this?
   def nx_sum(builder, op) do
     op = to_operator(builder, op)
     op_shape = Exla.Op.get_shape(op)
@@ -103,24 +107,23 @@ defmodule Exla.Defn do
 
   # Converts {3, 255, 255} into {0, 1, 2}
   defp all_dimensions(shape) do
-    0..tuple_size(shape.dims)
-    |> Enum.to_list()
-    |> tl()
-    |> Enum.map(&(&1 - 1))
-    |> List.to_tuple()
+    List.to_tuple(all_dimensions(0, tuple_size(shape.dims)))
   end
+
+  defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
+  defp all_dimensions(_, _), do: []
 
   defp to_operator(_builder, %Exla.Op{} = op), do: op
 
   defp to_operator(_builder, number) when is_number(number) do
+    # TODO: fix me
     raise "not yet support. change constant_r0 to allow both integers and floats and custom shapes"
   end
 
   ## Callback
 
   def __compile__(_kind, _meta, name, args, ast, options) do
-    state = %{
-    }
+    state = %{}
 
     {ast, _state} = traverse(ast, state)
     arity = length(args)
