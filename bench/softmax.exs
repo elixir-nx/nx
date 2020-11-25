@@ -19,12 +19,21 @@ end
 IO.inspect(Softmax.softmax(t))
 IO.inspect(Softmax.host(t))
 
+benches =  %{
+  "elixir" => fn -> Softmax.softmax(t) end,
+  "xla cpu" => fn -> Softmax.host(t) end
+}
+
+benches =
+  if System.get_env("EXLA_TARGET") == "cuda" do
+    IO.inspect(Softmax.cuda(t))
+    Map.put(benches, "xla gpu", Softmax.cuda(t))
+  else
+    benches
+  end
+
 Benchee.run(
-  %{
-    "elixir softmax" => fn -> Softmax.softmax(t) end,
-    "xla cpu softmax" => fn -> Softmax.host(t) end,
-    "xla gpu softmax" => fn -> Softmax.cuda(t) end
-  },
+  benches,
   time: 10,
   memory_time: 2
 )
