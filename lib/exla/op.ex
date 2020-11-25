@@ -21,8 +21,8 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def zero(%Builder{ref: builder}, dtype) when is_atom(dtype) do
-    {:ok, ref} = Exla.NIF.zero(builder, dtype)
+  def zero(%Builder{ref: builder}, {type, size}) do
+    {:ok, ref} = Exla.NIF.zero(builder, Shape.dtype_to_str({type, size}))
     %Op{builder: builder, ref: ref}
   end
 

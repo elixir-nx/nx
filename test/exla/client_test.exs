@@ -76,7 +76,7 @@ defmodule ClientTest do
   end
 
   test "compile/4 succeeds on host device with basic computation and args", state do
-    shape = Shape.make_shape(:int32, {})
+    shape = Shape.make_shape({:i, 32}, {})
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
@@ -85,7 +85,7 @@ defmodule ClientTest do
 
   @tag :cuda
   test "compile/4 succeeds on cuda device with basic computation and args", state do
-    shape = Shape.make_shape(:int32, {})
+    shape = Shape.make_shape({:i, 32}, {})
     x = Op.parameter(state[:builder], 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)

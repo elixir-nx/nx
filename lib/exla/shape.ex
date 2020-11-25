@@ -4,14 +4,17 @@ defmodule Exla.Shape do
   @enforce_keys [:ref]
   defstruct [:ref, dims: nil, dtype: nil]
 
-  # TODO: convert dtype to integer representation to use in NIF
-  def make_shape(dtype, dims) when is_atom(dtype) do
-    {:ok, ref} = Exla.NIF.make_shape(dtype, dims)
-    %Shape{ref: ref, dtype: dtype, dims: dims}
+  def make_shape({type, size}, dims) do
+    {:ok, ref} = Exla.NIF.make_shape(dtype_to_str({type, size}), dims)
+    %Shape{ref: ref, dtype: {type, size}, dims: dims}
   end
 
   def str_to_dtype(str) do
     {type, size} = Enum.split(str, 1)
     {List.to_atom(type), List.to_integer(size)}
   end
+
+  # TODO: Check valid dtype first
+  def dtype_to_str({:i, size}), do: dtype_to_str({:s, size})
+  def dtype_to_str({type, size}), do: Enum.join([Atom.to_string(type), Integer.to_string(size)])
 end
