@@ -161,8 +161,9 @@ defmodule Exla.NIF do
   def get_shape(_builder, _operand),
     do: nif_error(__ENV__.function)
 
-  def zero(_builder, _dtype),
-    do: nif_error(__ENV__.function)
+  def convert_element_type(_operand, _type), do: nif_error(__ENV__.function)
+
+  def zero(_builder, _dtype), do: nif_error(__ENV__.function)
 
   def constant_r0(_builder, _value),
     do: nif_error(__ENV__.function)

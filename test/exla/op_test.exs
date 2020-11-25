@@ -77,4 +77,30 @@ defmodule OpTest do
     x = Op.parameter(builder, 0, shape, "x")
     assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}, ref: ref} = Op.get_shape(x)
   end
+
+  test "convert_element_type/1 changes type of operand" do
+    builder = Builder.new("test")
+
+    shape = Shape.make_shape({:f, 64}, {1, 1})
+
+    x = Op.parameter(builder, 0, shape, "x")
+    y = Op.convert_element_type(x, {:f, 32})
+    z = Op.convert_element_type(y, {:f, 16})
+    a = Op.convert_element_type(z, {:s, 8})
+    b = Op.convert_element_type(a, {:bf, 16})
+    c = Op.convert_element_type(b, {:u, 16})
+    d = Op.convert_element_type(c, {:c, 64})
+    e = Op.convert_element_type(d, {:c, 128})
+
+    assert %Shape{dims: {1, 1}, dtype: {:f, 32}} = Op.get_shape(y)
+    assert %Shape{dims: {1, 1}, dtype: {:f, 16}} = Op.get_shape(z)
+    assert %Shape{dims: {1, 1}, dtype: {:s, 8}} = Op.get_shape(a)
+    assert %Shape{dims: {1, 1}, dtype: {:bf, 16}} = Op.get_shape(b)
+    assert %Shape{dims: {1, 1}, dtype: {:u, 16}} = Op.get_shape(c)
+    assert %Shape{dims: {1, 1}, dtype: {:c, 64}} = Op.get_shape(d)
+    assert %Shape{dims: {1, 1}, dtype: {:c, 128}} = Op.get_shape(e)
+    assert_raise MatchError, "no match of right hand side value: {:error, 'Conversion from complex to real type c128[1,1] => S32 is not implemented.'}", fn ->
+      Op.get_shape(Op.convert_element_type(e, {:s, 32}))
+    end
+  end
 end
