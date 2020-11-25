@@ -166,4 +166,9 @@ defmodule Exla.Op do
     {:ok, ref} = Exla.NIF.reduce_all(operand, init_value, reduction)
     %Op{builder: builder, ref: ref}
   end
+
+  def convert_element_type(%Op{builder: builder, ref: operand}, dtype = {type, size}) do
+    {:ok, ref} = Exla.NIF.convert_element_type(operand, Shape.dtype_to_str(dtype))
+    %Op{builder: builder, ref: ref}
+  end
 end
