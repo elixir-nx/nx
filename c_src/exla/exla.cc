@@ -354,7 +354,7 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], 
 
   if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
-  if(!exla::get_vector_list(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
+  if(!exla::get_vector_tuple(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
 
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
