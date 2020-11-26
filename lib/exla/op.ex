@@ -24,12 +24,6 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def constant_r1(%Builder{ref: builder}, length, value)
-      when is_number(length) and is_number(value) do
-    ref = Exla.NIF.constant_r1(builder, length, value) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
   def parameter(%Builder{ref: builder}, i, %Shape{ref: shape}, name)
       when is_integer(i) and i >= 0 and is_binary(name) do
     ref = Exla.NIF.parameter(builder, i, shape, name) |> unwrap!()
