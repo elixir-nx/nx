@@ -75,8 +75,8 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_add(builder, left, right) do
-    left_shape = Exla.Shape.get_shape(left)
-    right_shape = Exla.Shape.get_shape(right)
+    left_shape = Exla.Op.get_shape(left)
+    right_shape = Exla.Op.get_shape(right)
     dims = broadcast_dimensions(left_shape.dims, right_shape.dims)
 
     left = to_operator(builder, left)
@@ -94,9 +94,10 @@ defmodule Exla.Defn do
     Exla.Op.exp(to_operator(builder, op))
   end
 
+  # TODO: Test that sum works with any type
   def nx_sum(builder, op) do
     op = to_operator(builder, op)
-    op_shape = Exla.Shape.get_shape(op)
+    op_shape = Exla.Op.get_shape(op)
     reduction_shape = Exla.Shape.make_shape(op_shape.dtype, {})
 
     # Build the anonymous function
@@ -107,16 +108,36 @@ defmodule Exla.Defn do
     add = Exla.Op.add(a, b)
     reduction = Exla.Builder.build(add)
 
-    init_value = Exla.Op.constant_r0(builder, 0, reduction_shape.dtype)
+    init_value = to_typed_constant(builder, 0, reduction_shape.dtype)
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 
+  # TODO: to_operator should actually call to_typed_constant
+  # Implement this properly once we use convert_element_type.
   defp to_operator(_builder, %Exla.Op{} = op), do: op
+  defp to_operator(builder, constant), do: to_constant(builder, constant)
 
-  defp to_operator(_builder, number) when is_number(number) do
-    # TODO: fix me
-    raise "not yet support. change constant_r0 to allow both integers and floats and custom shapes"
+  ## Constants
+
+  defp to_typed_constant(builder, constant, type) when is_number(constant) do
+    constant = Nx.Type.cast_scalar!(constant, type)
+    Exla.Op.constant_r0(builder, constant, type)
   end
+
+  defp to_typed_constant(_builder, other, _type) do
+    raise(ArgumentError, "cannot compile constant #{inspect(other)}")
+  end
+
+  defp to_constant(builder, int) when is_integer(int),
+    do: Exla.Op.constant_r0(builder, int, {:s, 64})
+
+  defp to_constant(builder, float) when is_float(float),
+    do: Exla.Op.constant_r0(builder, float, {:f, 64})
+
+  defp to_constant(_builder, other),
+    do: raise(ArgumentError, "cannot compile constant #{inspect(other)}")
+
+  ## Dimensions
 
   # Converts {3, 255, 255} into {0, 1, 2}
   defp all_dimensions(dims), do: List.to_tuple(all_dimensions(0, tuple_size(dims)))

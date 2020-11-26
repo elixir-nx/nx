@@ -122,6 +122,45 @@ defmodule Nx.Type do
   def to_float(type), do: merge(type, {:f, 32})
 
   @doc """
+  Casts scalar the given scalar to type.
+
+  It does not handle overflows/underfows,
+  returning the scalar as is, but cast.
+
+  ## Examples
+
+      iex> Nx.Type.cast_scalar!(10, {:u, 8})
+      10
+      iex> Nx.Type.cast_scalar!(10, {:s, 8})
+      10
+      iex> Nx.Type.cast_scalar!(-10, {:s, 8})
+      -10
+      iex> Nx.Type.cast_scalar!(10, {:f, 32})
+      10.0
+      iex> Nx.Type.cast_scalar!(-10, {:bf, 16})
+      -10.0
+
+      iex> Nx.Type.cast_scalar!(10.0, {:f, 32})
+      10.0
+      iex> Nx.Type.cast_scalar!(-10.0, {:bf, 16})
+      -10.0
+
+      iex> Nx.Type.cast_scalar!(-10, {:u, 8})
+      ** (ArgumentError) cannot cast scalar -10 to {:u, 8}
+
+      iex> Nx.Type.cast_scalar!(10.0, {:s, 8})
+      ** (ArgumentError) cannot cast scalar 10.0 to {:s, 8}
+  """
+  def cast_scalar!(int, {type, _}) when type in [:u] and is_integer(int) and int >= 0, do: int
+  def cast_scalar!(int, {type, _}) when type in [:s] and is_integer(int), do: int
+  def cast_scalar!(int, {type, _}) when type in [:f, :bf] and is_integer(int), do: int * 1.0
+  def cast_scalar!(float, {type, _}) when type in [:f, :bf] and is_float(float), do: float
+
+  def cast_scalar!(other, type) do
+    raise ArgumentError, "cannot cast scalar #{inspect(other)} to #{inspect(type)}"
+  end
+
+  @doc """
   Merges the given types finding a suitable representation for both.
 
   Types have the following precedence:

@@ -373,7 +373,7 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::PrimitiveType type;
 
   if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
-  if(!exla::get_type(env, argv[2], type)) return exla::error(env, "Unable to get type.");
+  if(!exla::get_type(env, argv[2], type)) return exla::error(env, "Unable to cast scalar to type.");
 
   EXLA_ASSIGN_OR_RETURN(xla::XlaOp op, exla::get_constant(env, argv[1], *builder, type), env);
 
@@ -506,8 +506,8 @@ ERL_NIF_TERM convert_element_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   int num_replicas, intra_op_parallelism_threads;
 
-  if(!exla::get(env, argv[0], num_replicas)) return enif_make_badarg(env);;
-  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get num_replicas.");
+  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get intra_op_parallelism_threads.");
   EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::getHostClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));

@@ -14,38 +14,39 @@ defmodule Exla.OpTest do
     assert a = %Op{} = Op.constant_r0(builder, 1.0, {:f, 64})
     assert b = %Op{} = Op.constant_r0(builder, 1.0, {:f, 32})
     assert c = %Op{} = Op.constant_r0(builder, -10000, {:s, 32})
-    assert d = %Op{} = Op.constant_r0(builder, -100000, {:s, 64})
+    assert d = %Op{} = Op.constant_r0(builder, -100_000, {:s, 64})
     assert e = %Op{} = Op.constant_r0(builder, -1000, {:s, 16})
     assert f = %Op{} = Op.constant_r0(builder, -100, {:s, 8})
     assert g = %Op{} = Op.constant_r0(builder, 100, {:u, 8})
     assert h = %Op{} = Op.constant_r0(builder, 1000, {:u, 16})
     assert i = %Op{} = Op.constant_r0(builder, 10000, {:u, 32})
-    assert j = %Op{} = Op.constant_r0(builder, 100000, {:u, 64})
+    assert j = %Op{} = Op.constant_r0(builder, 100_000, {:u, 64})
 
-    assert %Shape{dims: {}, dtype: {:f, 64}} = Shape.get_shape(a)
-    assert %Shape{dims: {}, dtype: {:f, 32}} = Shape.get_shape(b)
-    assert %Shape{dims: {}, dtype: {:s, 32}} = Shape.get_shape(c)
-    assert %Shape{dims: {}, dtype: {:s, 64}} = Shape.get_shape(d)
-    assert %Shape{dims: {}, dtype: {:s, 16}} = Shape.get_shape(e)
-    assert %Shape{dims: {}, dtype: {:s, 8}} = Shape.get_shape(f)
-    assert %Shape{dims: {}, dtype: {:u, 8}} = Shape.get_shape(g)
-    assert %Shape{dims: {}, dtype: {:u, 16}} = Shape.get_shape(h)
-    assert %Shape{dims: {}, dtype: {:u, 32}} = Shape.get_shape(i)
-    assert %Shape{dims: {}, dtype: {:u, 64}} = Shape.get_shape(j)
+    assert %Shape{dims: {}, dtype: {:f, 64}} = Op.get_shape(a)
+    assert %Shape{dims: {}, dtype: {:f, 32}} = Op.get_shape(b)
+    assert %Shape{dims: {}, dtype: {:s, 32}} = Op.get_shape(c)
+    assert %Shape{dims: {}, dtype: {:s, 64}} = Op.get_shape(d)
+    assert %Shape{dims: {}, dtype: {:s, 16}} = Op.get_shape(e)
+    assert %Shape{dims: {}, dtype: {:s, 8}} = Op.get_shape(f)
+    assert %Shape{dims: {}, dtype: {:u, 8}} = Op.get_shape(g)
+    assert %Shape{dims: {}, dtype: {:u, 16}} = Op.get_shape(h)
+    assert %Shape{dims: {}, dtype: {:u, 32}} = Op.get_shape(i)
+    assert %Shape{dims: {}, dtype: {:u, 64}} = Op.get_shape(j)
 
-    assert_raise RuntimeError, "unsupported constant type.", fn ->
-      Shape.get_shape(Op.constant_r0(builder, 1.0, {:f, 16}))
-    end
-        assert_raise RuntimeError, "unsupported constant type.", fn ->
-      Shape.get_shape(Op.constant_r0(builder, 1.0, {:bf, 16}))
+    assert_raise RuntimeError, "Unsupported constant type.", fn ->
+      Op.get_shape(Op.constant_r0(builder, 1.0, {:f, 16}))
     end
 
-    assert_raise RuntimeError, "unsupported constant type.", fn ->
-      Shape.get_shape(Op.constant_r0(builder, 1.0, {:c, 64}))
+    assert_raise RuntimeError, "Unsupported constant type.", fn ->
+      Op.get_shape(Op.constant_r0(builder, 1.0, {:bf, 16}))
     end
 
-    assert_raise RuntimeError, "unsupported constant type.", fn ->
-      Shape.get_shape(Op.constant_r0(builder, 1.0, {:c, 128}))
+    assert_raise RuntimeError, "Unsupported constant type.", fn ->
+      Op.get_shape(Op.constant_r0(builder, 1.0, {:c, 64}))
+    end
+
+    assert_raise RuntimeError, "Unsupported constant type.", fn ->
+      Op.get_shape(Op.constant_r0(builder, 1.0, {:c, 128}))
     end
   end
 
@@ -98,6 +99,15 @@ defmodule Exla.OpTest do
     assert %Op{} = Op.reduce(operand, init_value, reduction, reduction_dimension)
   end
 
+  describe "get_shape/1" do
+    test "returns shape of op" do
+      builder = Builder.new("test")
+      shape = Shape.make_shape({:f, 64}, {5, 5, 5, 5, 5})
+      x = Op.parameter(builder, 0, shape, "x")
+      assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}} = Op.get_shape(x)
+    end
+  end
+
   test "convert_element_type/1 changes type of operand" do
     builder = Builder.new("test")
 
@@ -112,16 +122,16 @@ defmodule Exla.OpTest do
     d = Op.convert_element_type(c, {:c, 64})
     e = Op.convert_element_type(d, {:c, 128})
 
-    assert %Shape{dims: {1, 1}, dtype: {:f, 32}} = Shape.get_shape(y)
-    assert %Shape{dims: {1, 1}, dtype: {:f, 16}} = Shape.get_shape(z)
-    assert %Shape{dims: {1, 1}, dtype: {:s, 8}} = Shape.get_shape(a)
-    assert %Shape{dims: {1, 1}, dtype: {:bf, 16}} = Shape.get_shape(b)
-    assert %Shape{dims: {1, 1}, dtype: {:u, 16}} = Shape.get_shape(c)
-    assert %Shape{dims: {1, 1}, dtype: {:c, 64}} = Shape.get_shape(d)
-    assert %Shape{dims: {1, 1}, dtype: {:c, 128}} = Shape.get_shape(e)
+    assert %Shape{dims: {1, 1}, dtype: {:f, 32}} = Op.get_shape(y)
+    assert %Shape{dims: {1, 1}, dtype: {:f, 16}} = Op.get_shape(z)
+    assert %Shape{dims: {1, 1}, dtype: {:s, 8}} = Op.get_shape(a)
+    assert %Shape{dims: {1, 1}, dtype: {:bf, 16}} = Op.get_shape(b)
+    assert %Shape{dims: {1, 1}, dtype: {:u, 16}} = Op.get_shape(c)
+    assert %Shape{dims: {1, 1}, dtype: {:c, 64}} = Op.get_shape(d)
+    assert %Shape{dims: {1, 1}, dtype: {:c, 128}} = Op.get_shape(e)
 
     assert_raise RuntimeError,
                  "Conversion from complex to real type c128[1,1] => S32 is not implemented.",
-                 fn -> Shape.get_shape(Op.convert_element_type(e, {:s, 32})) end
+                 fn -> Op.get_shape(Op.convert_element_type(e, {:s, 32})) end
   end
 end

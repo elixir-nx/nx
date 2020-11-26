@@ -2,15 +2,6 @@ defmodule Exla.NIF do
   @moduledoc false
   @on_load :__on_load__
 
-  # NIF coding practices:
-  #
-  #   1. errors that are validated on Elixir land (such as argument types),
-  #      the NIF must raise badarg.
-  #
-  #   2. errors that come from within the NIF, it returns
-  #     {:error, reason_charlist}
-  #
-
   def __on_load__ do
     path = :filename.join(:code.priv_dir(:exla), 'libexla')
     :erlang.load_nif(path, 0)

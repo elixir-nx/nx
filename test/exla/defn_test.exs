@@ -4,9 +4,9 @@ defmodule Exla.DefnTest do
   import Nx.Defn
   @default_defn_compiler Exla
 
-  defn add_two(a, b), do: a + b
-
   describe "+/2" do
+    defn add_two(a, b), do: a + b
+
     test "same shape and type" do
       tensor = add_two(1.0, 2.0)
       assert Nx.to_bitstring(tensor) == <<3.0::float-64-native>>
@@ -66,16 +66,39 @@ defmodule Exla.DefnTest do
     end
   end
 
-  defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+  describe "sum" do
+    defn sum(t), do: Nx.sum(t)
 
-  test "computes softmax" do
-    tensor = softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0]))
+    test "compures the sum across types" do
+      assert Nx.tensor([1, 2, 3]) |> sum() |> Nx.to_bitstring() ==
+               <<6::64-native>>
 
-    assert Nx.to_bitstring(tensor) ==
-             <<0.03205860328008499::float-64-native, 0.08714431874203257::float-64-native,
-               0.23688281808991013::float-64-native, 0.6439142598879722::float-64-native>>
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum() |> Nx.to_bitstring() ==
+               <<6::8-native>>
 
-    assert Nx.type(tensor) == {:f, 64}
-    assert Nx.shape(tensor) == {4}
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() |> Nx.to_bitstring() ==
+               <<6::8-native>>
+
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> sum() |> Nx.to_bitstring() ==
+               <<6::64-float-native>>
+
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() |> Nx.to_bitstring() ==
+               <<6::32-float-native>>
+    end
+  end
+
+  describe "softmax" do
+    defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+
+    test "computes softmax" do
+      tensor = softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0]))
+
+      assert Nx.to_bitstring(tensor) ==
+               <<0.03205860328008499::float-64-native, 0.08714431874203257::float-64-native,
+                 0.23688281808991013::float-64-native, 0.6439142598879722::float-64-native>>
+
+      assert Nx.type(tensor) == {:f, 64}
+      assert Nx.shape(tensor) == {4}
+    end
   end
 end

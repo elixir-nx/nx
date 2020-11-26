@@ -7,8 +7,10 @@ defmodule Exla.Op do
   @enforce_keys [:builder, :ref]
   defstruct [:builder, :ref]
 
+  ## Constructors
+
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
-    ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_str(dtype)) |> unwrap!()
+    ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -18,16 +20,20 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  # TODO: Remove me in favor of constant_r0
-  def zero(%Builder{ref: builder}, {type, size}) do
-    ref = Exla.NIF.zero(builder, Shape.dtype_to_str({type, size})) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
   def parameter(%Builder{ref: builder}, i, %Shape{ref: shape}, name)
       when is_integer(i) and i >= 0 and is_binary(name) do
     ref = Exla.NIF.parameter(builder, i, shape, name) |> unwrap!()
     %Op{builder: builder, ref: ref}
+  end
+
+  ## Ops
+
+  @doc """
+  Gets the shape of an operator.
+  """
+  def get_shape(%Op{builder: builder, ref: operand}) do
+    {dims, type_str, shape_ref} = Exla.NIF.get_shape(builder, operand) |> unwrap!()
+    %Shape{ref: shape_ref, dims: dims, dtype: Shape.charlist_to_dtype(type_str)}
   end
 
   def conditional(
@@ -161,7 +167,7 @@ defmodule Exla.Op do
   end
 
   def convert_element_type(%Op{builder: builder, ref: operand}, dtype) do
-    ref = Exla.NIF.convert_element_type(operand, Shape.dtype_to_str(dtype)) |> unwrap!()
+    ref = Exla.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

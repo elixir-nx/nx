@@ -194,23 +194,24 @@ namespace exla {
       case xla::PrimitiveType::S64:
         return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S64>(env, term));
       case xla::PrimitiveType::F16:
-        return tensorflow::errors::InvalidArgument("unsupported constant type.");
+        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
       case xla::PrimitiveType::BF16:
         // TODO
-        return tensorflow::errors::InvalidArgument("unsupported constant type.");
+        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
       case xla::PrimitiveType::F32:
         return xla::ConstantR0(builder, get_value<xla::PrimitiveType::F32>(env, term));
       case xla::PrimitiveType::F64:
         return xla::ConstantR0(builder, get_value<xla::PrimitiveType::F64>(env, term));
       case xla::PrimitiveType::C64:
-        return tensorflow::errors::InvalidArgument("unsupported constant type.");
+        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
       case xla::PrimitiveType::C128:
-        return tensorflow::errors::InvalidArgument("unsupported constant type.");
+        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
       default:
-        return tensorflow::errors::InvalidArgument("invalid type.");
+        return tensorflow::errors::InvalidArgument("Invalid type.");
     }
   }
 
+  // TODO: Remove this so we always handle binaries explicitly
   ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary &var) {
     return enif_make_binary(env, &var);
   }
