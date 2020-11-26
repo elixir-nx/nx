@@ -9,9 +9,44 @@ defmodule Exla.OpTest do
     assert %Op{} = Op.parameter(builder, 0, shape, "x")
   end
 
-  test "constant/2 successfully creates constant op" do
+  test "constant_r0/3 successfully creates constant op" do
     builder = Builder.new("test")
-    assert %Op{} = Op.constant(builder, 1)
+    assert a = %Op{} = Op.constant_r0(builder, 1.0, {:f, 64})
+    assert b = %Op{} = Op.constant_r0(builder, 1.0, {:f, 32})
+    assert c = %Op{} = Op.constant_r0(builder, -10000, {:s, 32})
+    assert d = %Op{} = Op.constant_r0(builder, -100000, {:s, 64})
+    assert e = %Op{} = Op.constant_r0(builder, -1000, {:s, 16})
+    assert f = %Op{} = Op.constant_r0(builder, -100, {:s, 8})
+    assert g = %Op{} = Op.constant_r0(builder, 100, {:u, 8})
+    assert h = %Op{} = Op.constant_r0(builder, 1000, {:u, 16})
+    assert i = %Op{} = Op.constant_r0(builder, 10000, {:u, 32})
+    assert j = %Op{} = Op.constant_r0(builder, 100000, {:u, 64})
+
+    assert %Shape{dims: {}, dtype: {:f, 64}} = Shape.get_shape(a)
+    assert %Shape{dims: {}, dtype: {:f, 32}} = Shape.get_shape(b)
+    assert %Shape{dims: {}, dtype: {:s, 32}} = Shape.get_shape(c)
+    assert %Shape{dims: {}, dtype: {:s, 64}} = Shape.get_shape(d)
+    assert %Shape{dims: {}, dtype: {:s, 16}} = Shape.get_shape(e)
+    assert %Shape{dims: {}, dtype: {:s, 8}} = Shape.get_shape(f)
+    assert %Shape{dims: {}, dtype: {:u, 8}} = Shape.get_shape(g)
+    assert %Shape{dims: {}, dtype: {:u, 16}} = Shape.get_shape(h)
+    assert %Shape{dims: {}, dtype: {:u, 32}} = Shape.get_shape(i)
+    assert %Shape{dims: {}, dtype: {:u, 64}} = Shape.get_shape(j)
+
+    assert_raise RuntimeError, "unsupported constant type.", fn ->
+      Shape.get_shape(Op.constant_r0(builder, 1.0, {:f, 16}))
+    end
+        assert_raise RuntimeError, "unsupported constant type.", fn ->
+      Shape.get_shape(Op.constant_r0(builder, 1.0, {:bf, 16}))
+    end
+
+    assert_raise RuntimeError, "unsupported constant type.", fn ->
+      Shape.get_shape(Op.constant_r0(builder, 1.0, {:c, 64}))
+    end
+
+    assert_raise RuntimeError, "unsupported constant type.", fn ->
+      Shape.get_shape(Op.constant_r0(builder, 1.0, {:c, 128}))
+    end
   end
 
   test "zero/2 successfully creates zero op" do
@@ -56,7 +91,7 @@ defmodule Exla.OpTest do
 
     shape = Shape.make_shape({:f, 64}, {1_000})
     operand = Op.parameter(builder, 0, shape, "x")
-    init_value = Op.constant(builder, 0)
+    init_value = Op.constant_r0(builder, 0.0, {:f, 64})
 
     a = Op.parameter(sub_builder, 0, shape, "a")
     b = Op.parameter(sub_builder, 1, shape, "b")

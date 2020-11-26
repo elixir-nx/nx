@@ -63,7 +63,8 @@ cc_library(
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
     "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options"
+    "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options",
+    "@org_tensorflow//tensorflow/core:lib",
   ],
 )
 

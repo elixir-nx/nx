@@ -10,20 +10,18 @@ defmodule ExecutableTest do
   end
 
   test "run/4 succeeds with no inputs and default options", config do
-    # TODO: Not sure if this is the most efficient way to test all of this
-    op = Op.constant(config.builder, 1)
+    op = Op.constant_r0(config.builder, 1, {:s, 32})
     comp = Builder.build(op)
     exec = Client.compile(client(), comp, [])
     assert %Buffer{data: <<1, 0, 0, 0>>} = Executable.run(exec, [])
   end
 
   test "run/4 succeeds with 1 input and default options", config do
-    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    t1 = %Buffer{data: <<1::8-native>>, shape: Shape.make_shape({:s, 8}, {})}
     x = Op.parameter(config.builder, 0, t1.shape, "x")
-    res = Op.add(x, x)
-    comp = Builder.build(res)
+    comp = Builder.build(x)
     exec = Client.compile(client(), comp, [t1.shape])
-    assert %Buffer{data: <<2, 0, 0, 0>>} = Executable.run(exec, [t1])
+    assert %Buffer{data: <<1>>} = Executable.run(exec, [t1])
   end
 
   test "run/4 succeeds with 2 inputs and default options", config do

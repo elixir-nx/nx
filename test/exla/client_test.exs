@@ -26,7 +26,7 @@ defmodule Exla.ClientTest do
   end
 
   test "compile/4 succeeds with constant computation and no args", config do
-    op = Op.constant(config.builder, 1)
+    op = Op.constant_r0(config.builder, 1, {:s, 32})
     comp = Builder.build(op)
     assert %Executable{} = Client.compile(client(), comp, [])
   end

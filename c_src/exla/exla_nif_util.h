@@ -1,6 +1,8 @@
 #ifndef EXLA_NIF_UTIL_H_
 #define EXLA_NIF_UTIL_H_
 
+#include <complex>
+
 #include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
 
 #include "absl/types/span.h"
@@ -10,6 +12,8 @@
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
+#include "tensorflow/core/platform/errors.h"
+#include "tensorflow/compiler/xla/xla_data.pb.h"
 
 #include <string>
 #include <algorithm>
@@ -35,11 +39,19 @@ namespace exla {
    * Getters for standard types.
    */
   int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, long int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int8_t &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int16_t &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int32_t &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int64_t &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8_t &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint16_t &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32_t &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long unsigned int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, float &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, double &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, bool &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
-
   /*
    * Getters for non-standard types. Suffix to be explicit.
    */
@@ -143,6 +155,17 @@ namespace exla {
     }
     return 1;
   }
+
+  template <
+      xla::PrimitiveType type,
+      typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
+  T get_value(ErlNifEnv* env, ERL_NIF_TERM &term) {
+    T value;
+    exla::get(env, term, value);
+    return value;
+  }
+
+  xla::StatusOr<xla::XlaOp> get_constant(ErlNifEnv* env, ERL_NIF_TERM term, xla::XlaBuilder* builder, xla::PrimitiveType type);
 
 } // namespace exla
 
