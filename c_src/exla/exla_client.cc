@@ -130,7 +130,7 @@ namespace exla {
     return absl::make_unique<xla::ScopedShapedBuffer>(std::move(device_buffer));
   }
 
-  xla::StatusOr<ExlaClient*> GetCpuClient(int num_replicas, int intra_op_parallelism_threads) {
+  xla::StatusOr<ExlaClient*> getHostClient(int num_replicas, int intra_op_parallelism_threads) {
     // TODO: Handle StatusOr
     se::Platform *platform = xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
     if(platform->VisibleDeviceCount() <= 0){
@@ -236,7 +236,7 @@ namespace exla {
     return absl::make_unique<tensorflow::BFCAllocator>(sub_allocator, kGpuHostMemoryLimitBytes, true, "xla_gpu_host_bfc");
   }
 
-  xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_parallelism_threads) {
+  xla::StatusOr<ExlaClient*> getCUDAClient(int num_replicas, int intra_op_parallelism_threads) {
     // TODO: Handle StatusOr
     stream_executor::Platform *platform = xla::PlatformUtil::GetPlatform("CUDA").ConsumeValueOrDie();
     if(platform->VisibleDeviceCount() <= 0){

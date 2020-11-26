@@ -67,9 +67,8 @@ cc_library(
   ],
 )
 
-# This target links in both GPU/CPU Device
 cc_binary(
-  name = "libexla_gpu.so",
+  name = "libexla_cuda.so",
   srcs = ["exla.cc"],
   deps = if_cuda_is_configured([
     "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
@@ -91,7 +90,7 @@ cc_binary(
 
 # This target links in just CPU device
 cc_binary(
-  name = "libexla_cpu.so",
+  name = "libexla_host.so",
   srcs = ["exla.cc"],
   deps = [
     ":exla_allocator",

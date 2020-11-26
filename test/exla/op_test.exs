@@ -75,7 +75,7 @@ defmodule OpTest do
     shape = Shape.make_shape({:f, 64}, {5, 5, 5, 5, 5})
 
     x = Op.parameter(builder, 0, shape, "x")
-    assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}, ref: ref} = Op.get_shape(x)
+    assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}} = Op.get_shape(x)
   end
 
   test "convert_element_type/1 changes type of operand" do

@@ -5,7 +5,7 @@ TEMP ?= $(HOME)/.cache
 # ERTS_INCLUDE_DIR
 
 # Public configuration
-EXLA_TARGET ?= cpu # can also be cuda
+EXLA_TARGET ?= host # can also be cuda
 EXLA_MODE ?= opt # can also be dbg
 EXLA_CACHE ?= $(TEMP)/exla
 EXLA_TENSORFLOW_GIT_REPO ?= https://github.com/tensorflow/tensorflow.git
@@ -24,17 +24,17 @@ TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 
 all: $(EXLA_TARGET)
 
-cpu: symlinks
+host: symlinks
 	cd $(TENSORFLOW_DIR) && \
-		bazel build $(BAZEL_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla_cpu.so
+		bazel build $(BAZEL_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla_host.so
 	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_cpu.so $(EXLA_SO)
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_host.so $(EXLA_SO)
 
 cuda: symlinks
 	cd $(TENSORFLOW_DIR) && \
-		bazel build $(BAZEL_FLAGS) --config=cuda //$(TENSORFLOW_EXLA_NS):libexla_gpu.so
+		bazel build $(BAZEL_FLAGS) --config=cuda //$(TENSORFLOW_EXLA_NS):libexla_cuda.so
 	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_gpu.so $(EXLA_SO)
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_cuda.so $(EXLA_SO)
 
 symlinks: $(TENSORFLOW_DIR)
 	rm -f $(TENSORFLOW_EXLA_DIR)

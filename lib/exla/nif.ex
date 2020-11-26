@@ -2,6 +2,15 @@ defmodule Exla.NIF do
   @moduledoc false
   @on_load :__on_load__
 
+  # NIF coding practices:
+  #
+  #   1. errors that are validated on Elixir land (such as argument types),
+  #      the NIF must raise badarg.
+  #
+  #   2. errors that come from within the NIF, it returns
+  #     {:error, reason_charlist}
+  #
+
   def __on_load__ do
     path = :filename.join(:code.priv_dir(:exla), 'libexla')
     :erlang.load_nif(path, 0)
@@ -171,10 +180,10 @@ defmodule Exla.NIF do
   def constant_r1(_builder, _length, _value),
     do: nif_error(__ENV__.function)
 
-  def get_cpu_client(_num_replicas, _intra_op_parallelism_threads),
+  def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 
-  def get_gpu_client(_num_replicas, _intra_op_parallelism_threads),
+  def get_cuda_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 
   def get_default_device_ordinal(_client),
