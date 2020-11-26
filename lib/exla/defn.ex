@@ -46,7 +46,7 @@ defmodule Exla.Defn do
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
     %Nx.Tensor{data: data, type: shape.dtype, shape: shape.dims}
   end
-  
+
   defp nx_to_buffer(%Nx.Tensor{data: data, type: type, shape: shape})
        when is_bitstring(data) do
     Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
@@ -75,9 +75,13 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_add(builder, left, right) do
+    left_shape = Exla.Shape.get_shape(left)
+    right_shape = Exla.Shape.get_shape(right)
+    dims = broadcast_dimensions(left_shape.dims, right_shape.dims)
+
     left = to_operator(builder, left)
     right = to_operator(builder, right)
-    Exla.Op.add(left, right)
+    Exla.Op.add(left, right, dims)
   end
 
   def nx_divide(builder, left, right) do
@@ -107,20 +111,63 @@ defmodule Exla.Defn do
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape))
   end
 
-  # Converts {3, 255, 255} into {0, 1, 2}
-  defp all_dimensions(shape) do
-    List.to_tuple(all_dimensions(0, tuple_size(shape.dims)))
-  end
-
-  defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
-  defp all_dimensions(_, _), do: []
-
   defp to_operator(_builder, %Exla.Op{} = op), do: op
 
   defp to_operator(_builder, number) when is_number(number) do
     # TODO: fix me
     raise "not yet support. change constant_r0 to allow both integers and floats and custom shapes"
   end
+
+  # Converts {3, 255, 255} into {0, 1, 2}
+  defp all_dimensions(shape), do: List.to_tuple(all_dimensions(0, tuple_size(shape.dims)))
+  defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
+  defp all_dimensions(_, _), do: []
+
+  defp broadcast_dimensions(left_tuple, right_tuple) do
+    left_size = tuple_size(left_tuple)
+    right_size = tuple_size(right_tuple)
+
+    if left_size == right_size do
+      {}
+    else
+      left = shape_to_ranked_ordered_list(left_tuple, left_size)
+      right = shape_to_ranked_ordered_list(right_tuple, right_size)
+
+      {min, max} = if left_size <= right_size, do: {left, right}, else: {right, left}
+
+      case broadcast_dimensions(min, max, 0, []) do
+        :error ->
+          raise ArgumentError,
+                "cannot broadcast tensor of dimensions #{inspect(left_tuple)} " <>
+                  "to #{inspect(right_tuple)}"
+
+        tuple ->
+          tuple
+      end
+    end
+  end
+
+  defp broadcast_dimensions([dim | left], [dim | right], n, acc),
+    do: broadcast_dimensions(left, right, n + 1, acc)
+
+  defp broadcast_dimensions([ldim | left], [rdim | right], n, acc)
+       when ldim == 1 or rdim == 1,
+       do: broadcast_dimensions(left, right, n + 1, [n | acc])
+
+  defp broadcast_dimensions([_ | _], [_ | _], _n, _acc),
+    do: :error
+
+  defp broadcast_dimensions([], [_ | right], n, acc),
+    do: broadcast_dimensions([], right, n + 1, [n | acc])
+
+  defp broadcast_dimensions([], [], _n, acc),
+    do: List.to_tuple(Enum.reverse(acc))
+
+  defp shape_to_ranked_ordered_list(_tuple, 0),
+    do: []
+
+  defp shape_to_ranked_ordered_list(tuple, size),
+    do: [:erlang.element(size, tuple) | shape_to_ranked_ordered_list(tuple, size - 1)]
 
   ## Callback
 
