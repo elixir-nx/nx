@@ -36,26 +36,29 @@ namespace exla {
   }
 
   xla::StatusOr<xla::ScopedShapedBuffer> AllocateDestinationBuffer(const xla::Shape& on_host_shape,
-                                                                                    ExlaDevice* device,
-                                                                                    ExlaClient* client) {
+                                                                   ExlaDevice* device,
+                                                                   ExlaClient* client) {
     xla::TransferManager* transfer_manager = client->client()->backend().transfer_manager();
     xla::ScopedShapedBuffer buffer = transfer_manager->AllocateScopedShapedBuffer(on_host_shape, client->allocator(),
                                                                                   device->id()).ConsumeValueOrDie();
     return buffer;
   }
 
-  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(xla::ScopedShapedBuffer& buffer,
-                                                           ExlaDevice* device) {
-    bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
+  xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffer) {
+    if(buffer->empty()) {
+      return tensorflow::errors::Aborted("Attempt to read from empty buffer.");
+    }
+
+    bool is_cpu_platform = buffer->device()->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
     if(is_cpu_platform) {
       // Allocate enough space for the binary
-      long long int size = xla::ShapeUtil::ByteSizeOf(buffer.on_host_shape());
+      long long int size = xla::ShapeUtil::ByteSizeOf(buffer->on_host_shape());
       ErlNifBinary binary;
       enif_alloc_binary(size, &binary);
 
       // Get the result buffer
-      const stream_executor::DeviceMemoryBase mem_buffer = buffer.root_buffer();
+      const stream_executor::DeviceMemoryBase mem_buffer = buffer->buffer()->root_buffer();
 
       // No need to copy, just move the underlying bytes in memory
       void* src_mem = const_cast<void *>(mem_buffer.opaque());
@@ -66,7 +69,9 @@ namespace exla {
 
     // Otherwise we have to do the transfer
     xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
-    xla::StatusOr<xla::Literal> transfer_status = transfer_manager->TransferLiteralFromDevice(device->device_to_host_stream(), buffer, nullptr);
+    xla::StatusOr<xla::Literal> transfer_status = transfer_manager->TransferLiteralFromDevice(buffer->device()->device_to_host_stream(),
+                                                                                              *(buffer->buffer()),
+                                                                                              nullptr);
 
     // Something went wrong
     if(!transfer_status.ok()) {
@@ -151,10 +156,10 @@ namespace exla {
     bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
     if(can_use_zero_copy) {
       std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
-      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*zero_copy=*/true);
+      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*device=*/device, /*zero_copy=*/true);
     } else {
       std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = TransferBinToBuffer(bin, shape, compact_shape, device, this);
-      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*zero_copy=*/false);
+      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*device=*/device, /*zero_copy=*/false);
     }
   }
 
@@ -172,6 +177,7 @@ namespace exla {
     // Release input buffers
     for(auto buf : buffers) {
       delete buf;
+      buf = nullptr;
     }
 
     return result;

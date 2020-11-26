@@ -18,7 +18,11 @@ defmodule Exla.Buffer do
   alias Exla.Client
   alias Exla.Shape
 
-  defstruct [:data, :ref, :shape]
+  defstruct [:data, :ref, :shape, :device]
+
+  def buffer(binary, dtype = {_type, _size}, dims) when is_bitstring(binary) do
+    buffer(binary, Exla.Shape.make_shape(dtype, dims))
+  end
 
   @doc """
   Create a new buffer from `binary` with given `shape`.
@@ -26,7 +30,7 @@ defmodule Exla.Buffer do
   The buffer will not be placed on a device until passed to `place_on_device`.
   """
   def buffer(binary, shape) when is_bitstring(binary) do
-    %Buffer{data: binary, ref: nil, shape: shape}
+    %Buffer{data: binary, ref: nil, shape: shape, device: nil}
   end
 
   @doc """
@@ -35,7 +39,7 @@ defmodule Exla.Buffer do
   If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
   we retain a copy of the binary to ensure it is not prematurely garbage collected.
   """
-  def buffer(binary, shape = %Shape{}, client = %Client{}, device = {platform, ordinal})
+  def buffer(binary, shape = %Shape{}, client = %Client{}, device = {_platform, _ordinal})
       when is_bitstring(binary) do
     {:ok, buffer = %Buffer{}} =
       place_on_device(client, %Buffer{data: binary, shape: shape}, device)
@@ -49,40 +53,37 @@ defmodule Exla.Buffer do
   If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
   we retain a copy of the binary to ensure it is not prematurely garbage collected.
   """
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:cpu, _ordinal}) do
-    ref = to_shaped_buffer(client, buffer, device)
-    %Buffer{buffer | ref: ref}
+  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:host, _ordinal}) do
+    {:ok, {_, ordinal}} = Client.check_device_compatibility(client, device)
+    ref = Exla.NIF.binary_to_device(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
+    %Buffer{buffer | ref: ref, device: device}
   end
 
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {_platform, _ordinal}) do
-    ref = to_shaped_buffer(client, buffer, device)
-    %Buffer{data: nil, shape: buffer.shape, ref: ref}
+  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:cuda, ordinal}) do
+    {:ok, {_, ordinal}} = Client.check_device_compatibility(client, device)
+    ref = Exla.NIF.binary_to_device(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
+    %Buffer{buffer | data: nil, ref: ref, device: device}
   end
 
   @doc """
-  Returns the buffer's underlying data as a bitstring.
+  Reads the underlying device buffer.
 
-  As is, this is destructive. Using the reference `ref` will lead to undefined behaviour.
+  This copies the underlying device memory into a binary without destroying it.
   """
-  def to_bitstring(%Client{ref: client}, %Buffer{data: nil, ref: ref}) do
-    {:ok, binary} = Exla.NIF.shaped_buffer_to_binary(client, ref)
+  def read(client = %Client{}, buffer = %Buffer{ref: ref, device: {:cuda, _ordinal}}) do
+    {:ok, _} = Client.check_device_compatibility(client, buffer.device)
+    binary = Exla.NIF.read_device_mem(client.ref, ref) |> unwrap!()
     binary
   end
 
-  def to_bitstring(_, %Buffer{data: data}), do: data
+  def read(client = %Client{}, buffer = %Buffer{data: data, device: {:host, _ordinal}}), do: data
 
-  @doc """
-  Returns a reference to the underlying `ShapedBuffer` on `device`.
-  """
-  def to_shaped_buffer(
-        client = %Client{},
-        %Buffer{data: data, ref: nil, shape: shape},
-        device = {_platform, _ordinal}
-      ) do
-    {:ok, {_platform, ordinal}} = Client.check_device_compatibility(client, device)
-    {:ok, buffer} = Exla.NIF.binary_to_shaped_buffer(client.ref, data, shape.ref, ordinal)
-    buffer
+  def deallocate(%Buffer{ref: nil}), do: raise("Attempt to deallocate nothing.");
+  def deallocate(%Buffer{ref: ref}) do
+    Exla.NIF.deallocate_device_mem(ref) |> unwrap!()
   end
 
-  def to_shaped_buffer(_, %Buffer{ref: ref}, _), do: ref
+  defp unwrap!(:ok), do: :ok
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
