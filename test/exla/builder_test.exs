@@ -21,7 +21,7 @@ defmodule Exla.BuilderTest do
   test "build/1 succeeds on constant" do
     # TODO: Add this to setup
     builder = Builder.new("test")
-    op = Op.constant(builder, 1)
+    op = Op.constant_r0(builder, 1, {:s, 32})
     assert %Computation{} = Builder.build(op)
   end
 end

@@ -169,6 +169,44 @@ namespace exla {
     return 1;
   }
 
+  xla::StatusOr<xla::XlaOp> get_constant(ErlNifEnv* env, ERL_NIF_TERM term, xla::XlaBuilder* builder, xla::PrimitiveType type) {
+    switch(type) {
+      case xla::PrimitiveType::PRED:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::PRED>(env, term));
+      case xla::PrimitiveType::U8:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U8>(env, term));
+      case xla::PrimitiveType::U16:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U16>(env, term));
+      case xla::PrimitiveType::U32:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U32>(env, term));
+      case xla::PrimitiveType::U64:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U64>(env, term));
+      case xla::PrimitiveType::S8:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S8>(env, term));
+      case xla::PrimitiveType::S16:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S16>(env, term));
+      case xla::PrimitiveType::S32:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S32>(env, term));
+      case xla::PrimitiveType::S64:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S64>(env, term));
+      case xla::PrimitiveType::F16:
+        return tensorflow::errors::InvalidArgument("unsupported constant type.");
+      case xla::PrimitiveType::BF16:
+        // TODO
+        return tensorflow::errors::InvalidArgument("unsupported constant type.");
+      case xla::PrimitiveType::F32:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::F32>(env, term));
+      case xla::PrimitiveType::F64:
+        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::F64>(env, term));
+      case xla::PrimitiveType::C64:
+        return tensorflow::errors::InvalidArgument("unsupported constant type.");
+      case xla::PrimitiveType::C128:
+        return tensorflow::errors::InvalidArgument("unsuported constant type.");
+      default:
+        return tensorflow::errors::InvalidArgument("invalid type.");
+    }
+  }
+
   ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary &var) {
     return enif_make_binary(env, &var);
   }

@@ -12,6 +12,8 @@
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
+#include "tensorflow/core/platform/errors.h"
+#include "tensorflow/compiler/xla/xla_data.pb.h"
 
 #include <string>
 #include <algorithm>
@@ -153,6 +155,17 @@ namespace exla {
     }
     return 1;
   }
+
+  template <
+      xla::PrimitiveType type,
+      typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
+  T get_value(ErlNifEnv* env, ERL_NIF_TERM &term) {
+    T value;
+    exla::get(env, term, value);
+    return value;
+  }
+
+  xla::StatusOr<xla::XlaOp> get_constant(ErlNifEnv* env, ERL_NIF_TERM term, xla::XlaBuilder* builder, xla::PrimitiveType type);
 
 } // namespace exla
 
