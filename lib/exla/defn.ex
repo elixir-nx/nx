@@ -107,7 +107,7 @@ defmodule Exla.Defn do
     add = Exla.Op.add(a, b)
     reduction = Exla.Builder.build(add)
 
-    init_value = Exla.Op.zero(builder, reduction_shape.dtype)
+    init_value = Exla.Op.constant_r0(builder, 0, reduction_shape.dtype)
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 

@@ -14,6 +14,7 @@
 #include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/core/platform/errors.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
+#include "tensorflow/compiler/xla/types.h"
 
 #include <string>
 #include <algorithm>
@@ -39,18 +40,19 @@ namespace exla {
    * Getters for standard types.
    */
   int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, int8_t &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, int16_t &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, int32_t &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, int64_t &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8_t &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint16_t &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32_t &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long unsigned int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, tensorflow::int8 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, short &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, long int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, tensorflow::uint8 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned short &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned long int &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned long long int &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, float &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, double &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, bool &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
   /*
    * Getters for non-standard types. Suffix to be explicit.

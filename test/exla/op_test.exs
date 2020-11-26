@@ -49,11 +49,6 @@ defmodule Exla.OpTest do
     end
   end
 
-  test "zero/2 successfully creates zero op" do
-    builder = Builder.new("test")
-    assert %Op{} = Op.zero(builder, {:f, 64})
-  end
-
   test "add/3 successfully creates add op without broadcast dimensions" do
     builder = Builder.new("test")
     shape = Shape.make_shape({:s, 32}, {1, 1})
