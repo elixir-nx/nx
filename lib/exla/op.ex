@@ -14,6 +14,16 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def constant_from_binary(builder = %Builder{}, data, dtype = {_, _}, dims) when is_binary(data) do
+    shape = Shape.make_shape(dtype, dims)
+    constant_from_binary(builder, data, shape)
+  end
+
+  def constant_from_binary(%Builder{ref: builder}, data, %Shape{ref: shape}) when is_binary(data) do
+    ref = Exla.NIF.constant_from_binary(builder, data, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def constant_r1(%Builder{ref: builder}, length, value)
       when is_number(length) and is_number(value) do
     ref = Exla.NIF.constant_r1(builder, length, value) |> unwrap!()

@@ -166,6 +166,8 @@ defmodule Exla.NIF do
   def constant_r0(_builder, _value, _type),
     do: nif_error(__ENV__.function)
 
+  def constant_from_binary(_builder, _data, _shape), do: nif_error(__ENV__.function)
+
   def constant_r1(_builder, _length, _value),
     do: nif_error(__ENV__.function)
 
