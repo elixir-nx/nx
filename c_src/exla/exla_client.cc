@@ -120,7 +120,7 @@ namespace exla {
                                                                const xla::Shape& compact_shape,
                                                                ExlaDevice* device,
                                                                ExlaClient* client) {
-    // Allocate space on the GPU
+    // Allocate space on the device
     xla::ScopedShapedBuffer device_buffer = AllocateDestinationBuffer(compact_shape, device, client).ConsumeValueOrDie();
     // Read directly from binary data into a `BorrowingLiteral`, this is zero-copy again
     xla::BorrowingLiteral literal(const_cast<char*>((char*) bin.data), shape);
