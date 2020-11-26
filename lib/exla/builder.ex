@@ -16,7 +16,7 @@ defmodule Exla.Builder do
   end
 
   def build(root = %Op{}) do
-    shape = Exla.Op.get_shape(root)
+    shape = Exla.Shape.get_shape(root)
     {:ok, ref} = Exla.NIF.build(root.builder, root.ref)
     %Computation{ref: ref, output_shape: shape}
   end

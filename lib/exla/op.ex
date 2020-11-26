@@ -17,25 +17,20 @@ defmodule Exla.Op do
 
   def constant_r1(%Builder{ref: builder}, length, value)
       when is_number(length) and is_number(value) do
-    {:ok, ref} = Exla.NIF.constant_r1(builder, length, value)
+    ref = Exla.NIF.constant_r1(builder, length, value) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
   # TODO: Remove me in favor of constant_r0
   def zero(%Builder{ref: builder}, {type, size}) do
-    {:ok, ref} = Exla.NIF.zero(builder, Shape.dtype_to_str({type, size}))
+    ref = Exla.NIF.zero(builder, Shape.dtype_to_str({type, size})) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
   def parameter(%Builder{ref: builder}, i, %Shape{ref: shape}, name)
       when is_integer(i) and i >= 0 and is_binary(name) do
-    {:ok, ref} = Exla.NIF.parameter(builder, i, shape, name)
+    ref = Exla.NIF.parameter(builder, i, shape, name) |> unwrap!()
     %Op{builder: builder, ref: ref}
-  end
-
-  def get_shape(%Op{builder: builder, ref: operand}) do
-    {:ok, {dims, type_str, shape_ref}} = Exla.NIF.get_shape(builder, operand)
-    %Shape{ref: shape_ref, dims: dims, dtype: Shape.str_to_dtype(type_str)}
   end
 
   def conditional(
@@ -45,7 +40,7 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: false_op},
         %Computation{ref: false_comp}
       ) do
-    {:ok, ref} = Exla.NIF.conditional(pred, true_op, true_comp, false_op, false_comp)
+    ref = Exla.NIF.conditional(pred, true_op, true_comp, false_op, false_comp) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -54,7 +49,7 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: right},
         broadcast_dims \\ {}
       ) do
-    {:ok, ref} = Exla.NIF.ne(left, right, broadcast_dims)
+    ref = Exla.NIF.ne(left, right, broadcast_dims) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -67,7 +62,7 @@ defmodule Exla.Op do
       operands
       |> Enum.map(& &1.ref)
 
-    {:ok, ref} = Exla.NIF.conditional(index, branches_refs, operands_refs)
+    ref = Exla.NIF.conditional(index, branches_refs, operands_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -76,7 +71,7 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: right},
         broadcast_dims \\ {}
       ) do
-    {:ok, ref} = Exla.NIF.add(left, right, broadcast_dims)
+    ref = Exla.NIF.add(left, right, broadcast_dims) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -87,7 +82,7 @@ defmodule Exla.Op do
         limit_indices,
         strides \\ {}
       ) do
-    {:ok, ref} = Exla.NIF.slice(op, start_indices, limit_indices, strides)
+    ref = Exla.NIF.slice(op, start_indices, limit_indices, strides) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -99,7 +94,7 @@ defmodule Exla.Op do
         stride,
         dimno
       ) do
-    {:ok, ref} = Exla.NIF.slice_in_dim(op, start_index, end_index, stride, dimno)
+    ref = Exla.NIF.slice_in_dim(op, start_index, end_index, stride, dimno) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -113,7 +108,7 @@ defmodule Exla.Op do
       indices
       |> Enum.map(& &1.ref)
 
-    {:ok, ref} = Exla.NIF.dynamic_slice(op, indices_refs, slice_sizes)
+    ref = Exla.NIF.dynamic_slice(op, indices_refs, slice_sizes) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -126,7 +121,7 @@ defmodule Exla.Op do
       indices
       |> Enum.map(& &1.ref)
 
-    {:ok, ref} = Exla.NIF.dynamic_update_slice(op, update, indices_refs)
+    ref = Exla.NIF.dynamic_update_slice(op, update, indices_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -135,17 +130,17 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: right},
         broadcast_dims \\ {}
       ) do
-    {:ok, ref} = Exla.NIF.div(left, right, broadcast_dims)
+    ref = Exla.NIF.div(left, right, broadcast_dims) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
   def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}) do
-    {:ok, ref} = Exla.NIF.dot(left, right)
+    ref = Exla.NIF.dot(left, right) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
   def exp(%Op{builder: builder, ref: op}) do
-    {:ok, ref} = Exla.NIF.exp(op)
+    ref = Exla.NIF.exp(op) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -155,7 +150,7 @@ defmodule Exla.Op do
         %Computation{ref: reduction},
         reduction_dimensions
       ) do
-    {:ok, ref} = Exla.NIF.reduce(operand, init_value, reduction, reduction_dimensions)
+    ref = Exla.NIF.reduce(operand, init_value, reduction, reduction_dimensions) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -164,12 +159,15 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: init_value},
         %Computation{ref: reduction}
       ) do
-    {:ok, ref} = Exla.NIF.reduce_all(operand, init_value, reduction)
+    ref = Exla.NIF.reduce_all(operand, init_value, reduction) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
-  def convert_element_type(%Op{builder: builder, ref: operand}, dtype = {type, size}) do
-    {:ok, ref} = Exla.NIF.convert_element_type(operand, Shape.dtype_to_str(dtype))
+  def convert_element_type(%Op{builder: builder, ref: operand}, dtype) do
+    ref = Exla.NIF.convert_element_type(operand, Shape.dtype_to_str(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
+
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end

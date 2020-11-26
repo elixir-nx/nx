@@ -1,8 +1,7 @@
-defmodule OpTest do
-  use ExUnit.Case
-  alias Exla.Op
-  alias Exla.Shape
-  alias Exla.Builder
+defmodule Exla.OpTest do
+  use ExUnit.Case, async: true
+
+  alias Exla.{Builder, Shape, Op}
 
   test "parameter/4 successfully creates op" do
     builder = Builder.new("test")
@@ -69,15 +68,6 @@ defmodule OpTest do
     assert %Op{} = Op.reduce(operand, init_value, reduction, reduction_dimension)
   end
 
-  test "get_shape/1 returns shape of op" do
-    builder = Builder.new("test")
-
-    shape = Shape.make_shape({:f, 64}, {5, 5, 5, 5, 5})
-
-    x = Op.parameter(builder, 0, shape, "x")
-    assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}} = Op.get_shape(x)
-  end
-
   test "convert_element_type/1 changes type of operand" do
     builder = Builder.new("test")
 
@@ -92,15 +82,16 @@ defmodule OpTest do
     d = Op.convert_element_type(c, {:c, 64})
     e = Op.convert_element_type(d, {:c, 128})
 
-    assert %Shape{dims: {1, 1}, dtype: {:f, 32}} = Op.get_shape(y)
-    assert %Shape{dims: {1, 1}, dtype: {:f, 16}} = Op.get_shape(z)
-    assert %Shape{dims: {1, 1}, dtype: {:s, 8}} = Op.get_shape(a)
-    assert %Shape{dims: {1, 1}, dtype: {:bf, 16}} = Op.get_shape(b)
-    assert %Shape{dims: {1, 1}, dtype: {:u, 16}} = Op.get_shape(c)
-    assert %Shape{dims: {1, 1}, dtype: {:c, 64}} = Op.get_shape(d)
-    assert %Shape{dims: {1, 1}, dtype: {:c, 128}} = Op.get_shape(e)
-    assert_raise MatchError, "no match of right hand side value: {:error, 'Conversion from complex to real type c128[1,1] => S32 is not implemented.'}", fn ->
-      Op.get_shape(Op.convert_element_type(e, {:s, 32}))
-    end
+    assert %Shape{dims: {1, 1}, dtype: {:f, 32}} = Shape.get_shape(y)
+    assert %Shape{dims: {1, 1}, dtype: {:f, 16}} = Shape.get_shape(z)
+    assert %Shape{dims: {1, 1}, dtype: {:s, 8}} = Shape.get_shape(a)
+    assert %Shape{dims: {1, 1}, dtype: {:bf, 16}} = Shape.get_shape(b)
+    assert %Shape{dims: {1, 1}, dtype: {:u, 16}} = Shape.get_shape(c)
+    assert %Shape{dims: {1, 1}, dtype: {:c, 64}} = Shape.get_shape(d)
+    assert %Shape{dims: {1, 1}, dtype: {:c, 128}} = Shape.get_shape(e)
+
+    assert_raise RuntimeError,
+                 "Conversion from complex to real type c128[1,1] => S32 is not implemented.",
+                 fn -> Shape.get_shape(Op.convert_element_type(e, {:s, 32})) end
   end
 end

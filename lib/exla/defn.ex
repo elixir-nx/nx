@@ -41,7 +41,7 @@ defmodule Exla.Defn do
   end
 
   defp elixir_to_buffers(number) when is_integer(number) do
-    Exla.Buffer.buffer(<<number::64-native>>, Exla.Shape.make_shape({:i, 64}, {}))
+    Exla.Buffer.buffer(<<number::64-native>>, Exla.Shape.make_shape({:s, 64}, {}))
   end
 
   defp elixir_to_buffers(number) when is_float(number) do
@@ -54,7 +54,7 @@ defmodule Exla.Defn do
     Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
   end
 
-  defp elixir_to_cache_key!(number) when is_integer(number), do: {{:i, 64}, {}}
+  defp elixir_to_cache_key!(number) when is_integer(number), do: {{:s, 64}, {}}
   defp elixir_to_cache_key!(number) when is_float(number), do: {{:f, 64}, {}}
   defp elixir_to_cache_key!(%Nx.Tensor{} = t), do: {t.type, t.shape}
 
@@ -86,7 +86,7 @@ defmodule Exla.Defn do
 
   def nx_sum(builder, op) do
     op = to_operator(builder, op)
-    op_shape = Exla.Op.get_shape(op)
+    op_shape = Exla.Shape.get_shape(op)
     reduction_shape = Exla.Shape.make_shape(op_shape.dtype, {})
 
     # Build the anonymous function

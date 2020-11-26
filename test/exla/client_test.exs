@@ -1,4 +1,4 @@
-defmodule ClientTest do
+defmodule Exla.ClientTest do
   use ExUnit.Case, async: true
 
   alias Exla.Client
@@ -32,7 +32,7 @@ defmodule ClientTest do
   end
 
   test "compile/4 succeeds with basic computation and args", config do
-    shape = Shape.make_shape({:i, 32}, {})
+    shape = Shape.make_shape({:s, 32}, {})
     x = Op.parameter(config.builder, 0, shape, "x")
     res = Op.add(x, x)
     comp = Builder.build(res)
