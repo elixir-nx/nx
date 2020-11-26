@@ -16,7 +16,8 @@ defmodule Exla.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Exla.Application, []}
+      mod: {Exla.Application, []},
+      env: [clients: [default: []]]
     ]
   end
 

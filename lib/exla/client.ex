@@ -1,9 +1,28 @@
 defmodule Exla.Client do
+  @moduledoc """
+  Functions for managing Exla.Client.
+
+  See `Exla` module docs for a general introduction.
+  """
+
   alias __MODULE__, as: Client
   alias Exla.Computation
   alias Exla.Executable
   @enforce_keys [:ref, :platform]
   defstruct [:ref, :platform]
+
+  def fetch!(name) do
+    Exla.LockedCache.run({__MODULE__, name}, fn ->
+      clients = Application.fetch_env!(:exla, :clients)
+
+      config =
+        Keyword.get(clients, name) ||
+          raise ArgumentError, "could not find Exla client named #{inspect(name)}, " <>
+            "the clients specified in your config files are: #{inspect(Keyword.keys(clients))}"
+
+      create_client(config)
+    end)
+  end
 
   # TODO: To go along with some of the discussion in: https://github.com/seanmor5/exla/pull/12
   # The Python XLA API offers 3 additional methods for client creation:
@@ -17,6 +36,7 @@ defmodule Exla.Client do
   # function, but also offer the more convenient and safer `get_[device]_client` methods.
   # Alternatively, we can keep this method private, and only expose the 3 client device
   # creation methods, with limited, but safer configuration options.
+  # TODO: Make this function private
   def create_client(options \\ []) do
     # TODO: Rename this function to get_local_client. It is a singleton,
     # non-thread-safe resource in XLA so we need to mimic the same
@@ -48,44 +68,10 @@ defmodule Exla.Client do
   end
 
   def compile(
-        client = %Client{platform: platform},
-        computation = %Computation{},
-        argument_shapes,
-        options \\ []
-      ) do
-    case platform do
-      :cuda -> _compile_cuda(client, computation, argument_shapes, options)
-      :host -> _compile_host(client, computation, argument_shapes, options)
-    end
-  end
-
-  defp _compile_cuda(
-         client = %Client{platform: :cuda},
-         computation = %Computation{},
-         argument_shapes,
-         options
-       ) do
-    # TODO: We need this in order for the `Compile` NIF to start `ptxas` using a TF Subprocess. The subprocess relies on `waitpid`
-    # which fails under normal circumstances because ERTS sets SIGCHLD to SIGIGN. We need to determine the implications of setting
-    # this here.
-    :os.set_signal(:sigchld, :default)
-    _compile(client, computation, argument_shapes, options)
-  end
-
-  defp _compile_host(
-         client = %Client{platform: :host},
-         computation = %Computation{},
-         argument_shapes,
-         options
-       ) do
-    _compile(client, computation, argument_shapes, options)
-  end
-
-  defp _compile(
          client = %Client{ref: ref},
          computation = %Computation{output_shape: output_shape},
          argument_shapes,
-         options
+         options \\ []
        ) do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
@@ -118,7 +104,7 @@ defmodule Exla.Client do
     end
   end
 
-  def check_device_compatibility(
+  defp check_device_compatibility(
         client = %Client{platform: platform},
         {platform, ordinal}
       ) do

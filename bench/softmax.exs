@@ -12,7 +12,7 @@ defmodule Softmax do
   defn host(n), do: softmax(n)
 
   # This is JIT+cuda compiled
-  @defn_compiler {Exla, platform: :cuda}
+  @defn_compiler {Exla, client: :cuda}
   defn cuda(n), do: softmax(n)
 end
 

@@ -21,7 +21,7 @@ defmodule Exla.Defn do
         shapes = Enum.map(buffers, & &1.shape)
         result = apply(fun, shapes)
         computation = Exla.Builder.build(result)
-        client = Exla.Client.create_client(platform: Keyword.get(options, :platform, :host))
+        client = Exla.Client.fetch!(Keyword.get(options, :client, :default))
         executable = Exla.Client.compile(client, computation, shapes)
         :persistent_term.put(cache_key, executable)
         executable
