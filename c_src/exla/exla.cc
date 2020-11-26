@@ -366,7 +366,7 @@ ERL_NIF_TERM copy(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xl
 
 ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 3){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaBuilder** builder;
@@ -376,6 +376,26 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get_type(env, argv[2], type)) return exla::error(env, "Unable to cast scalar to type.");
 
   EXLA_ASSIGN_OR_RETURN(xla::XlaOp op, exla::get_constant(env, argv[1], *builder, type), env);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  ErlNifBinary binary;
+  xla::Shape* shape;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get(env, argv[1], binary)) return exla::error(env, "Unable to get data.");
+  if(!exla::get<xla::Shape>(env, argv[2], shape)) return exla::error(env, "Unable to get shape.");
+
+  xla::BorrowingLiteral literal(const_cast<char*>((char*) binary.data), *shape);
+
+  xla::XlaOp op = xla::ConstantLiteral(*builder, literal);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -769,6 +789,7 @@ static ErlNifFunc exla_funcs[] = {
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
   {"constant_r0", 3, constant_r0},
+  {"constant_from_binary", 3, constant_from_binary},
   {"constant_r1", 3, constant_r1_fill},
   /********* Conditionals *********/
   {"conditional", 5, conditional_if},
