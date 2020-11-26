@@ -62,15 +62,15 @@ defmodule ClientTest do
     assert count >= 0
   end
 
-  test "compile/4 succeeds on host device with constant computation and no args", state do
-    op = Op.constant(state[:builder], 1)
+  test "compile/4 succeeds on host device with constant_r0 computation and no args", state do
+    op = Op.constant_r0(state[:builder], 1, {:s, 32})
     comp = Builder.build(op)
     assert %Executable{} = Client.compile(state[:cpu], comp, [])
   end
 
   @tag :cuda
-  test "compile/4 succeeds on cuda device with constant computation and no args", state do
-    op = Op.constant(state[:builder], 1)
+  test "compile/4 succeeds on cuda device with constant_r0 computation and no args", state do
+    op = Op.constant_r0(state[:builder], 1, {:s, 32})
     comp = Builder.build(op)
     assert %Executable{} = Client.compile(state[:cpu], comp, [])
   end

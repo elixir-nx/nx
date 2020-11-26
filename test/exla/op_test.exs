@@ -12,7 +12,7 @@ defmodule OpTest do
 
   test "constant/2 successfully creates constant op" do
     builder = Builder.new("test")
-    assert %Op{} = Op.constant(builder, 1)
+    assert %Op{} = Op.constant_r0(builder, 1.0, {:f, 64})
   end
 
   test "zero/2 successfully creates zero op" do
@@ -57,7 +57,7 @@ defmodule OpTest do
 
     shape = Shape.make_shape({:f, 64}, {1_000})
     operand = Op.parameter(builder, 0, shape, "x")
-    init_value = Op.constant(builder, 0)
+    init_value = Op.constant_r0(builder, 0.0, {:f, 64})
 
     a = Op.parameter(sub_builder, 0, shape, "a")
     b = Op.parameter(sub_builder, 1, shape, "b")

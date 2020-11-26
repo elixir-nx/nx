@@ -23,20 +23,20 @@ defmodule ExecutableTest do
 
   test "run/4 succeeds with no inputs and default options on host device", state do
     # TODO: Not sure if this is the most efficient way to test all of this
-    op = Op.constant(state[:builder], 1)
+    op = Op.constant_r0(state[:builder], 1, {:s, 8})
     comp = Builder.build(op)
     exec = Client.compile(state[:cpu], comp, [])
-    assert %Buffer{data: <<1, 0, 0, 0>>} = Executable.run(exec, [])
+    assert %Buffer{data: <<1>>} = Executable.run(exec, [])
   end
 
   @tag :cuda
   test "run/4 succeeds with no inputs and default options on cuda device", state do
     # TODO: Not sure if this is the most efficient way to test all of this
-    op = Op.constant(state[:builder], 1)
+    op = Op.constant_r0(state[:builder], 1, {:s, 16})
     comp = Builder.build(op)
     exec = Client.compile(state[:gpu], comp, [])
 
-    assert %Buffer{data: <<1, 0, 0, 0>>} = Executable.run(exec, [], device: {:cuda, 0})
+    assert %Buffer{data: <<1, 0>>} = Executable.run(exec, [], device: {:cuda, 0})
   end
 
   test "run/4 succeeds with 1 input and default options on host device", state do
