@@ -10,10 +10,9 @@ defmodule Exla.Defn do
 
   ## Builder and computations
 
-  # TODO: Build lock mechanism to avoid multiple compilations
   def sf_cached_def(module, name_arity, args, options, fun) do
-    cache_args = for arg <- args, do: elixir_to_cache_key!(arg)
-    buffers = for arg <- args, do: elixir_to_buffers(arg)
+    cache_args = for arg <- args, do: nx_to_cache_key!(arg)
+    buffers = for arg <- args, do: nx_to_buffer(arg)
     cache_key = {module, name_arity, cache_args}
 
     executable =
@@ -28,8 +27,9 @@ defmodule Exla.Defn do
       end)
 
     # TODO: Pass options
-    # TODO: Convert this back to a tensor
-    Exla.Executable.run(executable, buffers, [])
+    executable
+    |> Exla.Executable.run(buffers, [])
+    |> buffer_to_nx()
   end
 
   def sf_builder(name) do
@@ -40,25 +40,31 @@ defmodule Exla.Defn do
     Exla.Op.parameter(builder, pos, shape, name)
   end
 
-  defp elixir_to_buffers(number) when is_integer(number) do
-    Exla.Buffer.buffer(<<number::64-native>>, Exla.Shape.make_shape({:s, 64}, {}))
-  end
-
-  defp elixir_to_buffers(number) when is_float(number) do
-    Exla.Buffer.buffer(<<number::float-64-native>>, Exla.Shape.make_shape({:f, 64}, {}))
-  end
-
+  ## Nx <-> Exla.Buffer
   # TODO: What to do when the tensor data is not a binary?
-  defp elixir_to_buffers(%Nx.Tensor{data: data, type: type, shape: shape})
+
+  defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
+    %Nx.Tensor{data: data, type: shape.dtype, shape: shape.dims}
+  end
+  
+  defp nx_to_buffer(%Nx.Tensor{data: data, type: type, shape: shape})
        when is_bitstring(data) do
     Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
   end
 
-  defp elixir_to_cache_key!(number) when is_integer(number), do: {{:s, 64}, {}}
-  defp elixir_to_cache_key!(number) when is_float(number), do: {{:f, 64}, {}}
-  defp elixir_to_cache_key!(%Nx.Tensor{} = t), do: {t.type, t.shape}
+  defp nx_to_buffer(number) when is_integer(number) do
+    Exla.Buffer.buffer(<<number::64-native>>, Exla.Shape.make_shape({:s, 64}, {}))
+  end
 
-  defp elixir_to_cache_key!(other) do
+  defp nx_to_buffer(number) when is_float(number) do
+    Exla.Buffer.buffer(<<number::float-64-native>>, Exla.Shape.make_shape({:f, 64}, {}))
+  end
+
+  defp nx_to_cache_key!(number) when is_integer(number), do: {{:s, 64}, {}}
+  defp nx_to_cache_key!(number) when is_float(number), do: {{:f, 64}, {}}
+  defp nx_to_cache_key!(%Nx.Tensor{} = t), do: {t.type, t.shape}
+
+  defp nx_to_cache_key!(other) do
     raise ArgumentError,
           "defn functions expects either numbers or %Nx.Tensor{} as arguments, " <>
             "got: #{inspect(other)}"
