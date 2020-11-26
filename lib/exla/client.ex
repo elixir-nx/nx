@@ -101,9 +101,9 @@ defmodule Exla.Client do
   end
 
   def check_device_compatibility(
-         client = %Client{platform: platform},
-         {platform, ordinal}
-       ) do
+        client = %Client{platform: platform},
+        {platform, ordinal}
+      ) do
     cond do
       ordinal < 0 ->
         {:ok, {platform, Client.get_default_device_ordinal(client)}}
