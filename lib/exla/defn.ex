@@ -17,19 +17,15 @@ defmodule Exla.Defn do
     cache_key = {module, name_arity, cache_args}
 
     executable =
-      case :persistent_term.get(cache_key, :undefined) do
-        :undefined ->
-          shapes = Enum.map(buffers, & &1.shape)
-          result = apply(fun, shapes)
-          computation = Exla.Builder.build(result)
-          client = Exla.Client.create_client(platform: Keyword.get(options, :platform, :host))
-          executable = Exla.Client.compile(client, computation, shapes)
-          :persistent_term.put(cache_key, executable)
-          executable
-
-        executable ->
-          executable
-      end
+      Exla.LockedCache.run(cache_key, fn ->
+        shapes = Enum.map(buffers, & &1.shape)
+        result = apply(fun, shapes)
+        computation = Exla.Builder.build(result)
+        client = Exla.Client.create_client(platform: Keyword.get(options, :platform, :host))
+        executable = Exla.Client.compile(client, computation, shapes)
+        :persistent_term.put(cache_key, executable)
+        executable
+      end)
 
     # TODO: Pass options
     # TODO: Convert this back to a tensor
