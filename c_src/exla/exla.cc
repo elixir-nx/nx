@@ -381,18 +381,86 @@ ERL_NIF_TERM zero(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 }
 
 ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 2){
+  if(argc != 3){
     return enif_make_badarg(env);
   }
 
   xla::XlaBuilder** builder;
-  int value;
+  xla::PrimitiveType type;
 
-  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[1], value)) return enif_make_badarg(env);
-
-  xla::XlaOp op = xla::ConstantR0((*builder), value);
-  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get_type(env, argv[2], type)) return exla::error(env, "Unable to get type.");
+  xla::XlaOp op;
+  // TODO: Do this in NIF util
+  switch(type) {
+    case xla::PrimitiveType::PRED:
+      bool bool_var;
+      if(!exla::get(env, argv[1], bool_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), bool_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::U8:
+      uint8_t u8_var;
+      if(!exla::get(env, argv[1], u8_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), u8_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::U16:
+      uint16_t u16_var;
+      if(!exla::get(env, argv[1], u16_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), u16_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::U32:
+      uint32_t u32_var;
+      if(!exla::get(env, argv[1], u32_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), u32_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::U64:
+      long long unsigned int u64_var;
+      if(!exla::get(env, argv[1], u64_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), u64_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::S8:
+      int8_t s8_var;
+      if(!exla::get(env, argv[1], s8_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), s8_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::S16:
+      int16_t s16_var;
+      if(!exla::get(env, argv[1], s16_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), s16_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::S32:
+      int32_t s32_var;
+      if(!exla::get(env, argv[1], s32_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), s32_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::S64:
+      long long int s64_var;
+      if(!exla::get(env, argv[1], s64_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), s64_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::F16:
+      // TODO
+      return exla::error(env, "Unable to get value.");
+    case xla::PrimitiveType::BF16:
+      // TODO
+      return exla::error(env, "Unable to get value.");
+    case xla::PrimitiveType::F32:
+      float f32_var;
+      if(!exla::get(env, argv[1], f32_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), f32_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::F64:
+      double f64_var;
+      if(!exla::get(env, argv[1], f64_var)) return exla::error(env, "Unable to get value.");
+      op = xla::ConstantR0((*builder), f64_var);
+      return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+    case xla::PrimitiveType::C64:
+      return exla::error(env, "Unable to get value.");
+    case xla::PrimitiveType::C128:
+      return exla::error(env, "Unable to get value.");
+    default:
+      return exla::error(env, "Unable to get value.");
+  }
 }
 
 ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -797,7 +865,7 @@ static ErlNifFunc exla_funcs[] = {
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
   {"zero", 2, zero},
-  {"constant_r0", 2, constant_r0},
+  {"constant_r0", 3, constant_r0},
   {"constant_r1", 3, constant_r1_fill},
   /********* Conditionals *********/
   {"conditional", 5, conditional_if},

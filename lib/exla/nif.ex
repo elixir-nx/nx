@@ -174,7 +174,7 @@ defmodule Exla.NIF do
 
   def zero(_builder, _dtype), do: nif_error(__ENV__.function)
 
-  def constant_r0(_builder, _value),
+  def constant_r0(_builder, _value, _type),
     do: nif_error(__ENV__.function)
 
   def constant_r1(_builder, _length, _value),
