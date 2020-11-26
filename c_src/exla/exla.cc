@@ -364,22 +364,6 @@ ERL_NIF_TERM conj(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xl
 ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::PopulationCount);}
 ERL_NIF_TERM copy(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_unary_op(env, argc, argv, xla::Copy);}
 
-ERL_NIF_TERM zero(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 2) {
-    return exla::error(env, "Bad argument count.");
-  }
-
-  xla::XlaBuilder** builder;
-  xla::PrimitiveType element_type;
-
-  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
-  if(!exla::get_type(env, argv[1], element_type)) return exla::error(env, "Unable to get element type.");
-
-  xla::XlaOp op = xla::ConstantLiteral(*builder, xla::LiteralUtil::Zero(element_type));
-
-  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
-}
-
 ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 3){
     return enif_make_badarg(env);
@@ -797,7 +781,6 @@ static ErlNifFunc exla_funcs[] = {
   {"conj", 1, conj},
   {"population_count", 1, population_count},
   /******** Constant Creation Methods *******/
-  {"zero", 2, zero},
   {"constant_r0", 3, constant_r0},
   {"constant_r1", 3, constant_r1_fill},
   /********* Conditionals *********/
