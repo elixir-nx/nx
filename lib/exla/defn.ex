@@ -133,9 +133,7 @@ defmodule Exla.Defn do
       left = shape_to_ranked_ordered_list(left_tuple, left_size)
       right = shape_to_ranked_ordered_list(right_tuple, right_size)
 
-      {min, max} = if left_size <= right_size, do: {left, right}, else: {right, left}
-
-      case broadcast_dimensions(min, max, 0, []) do
+      case broadcast_dimensions(left, right, 0, []) do
         :error ->
           raise ArgumentError,
                 "cannot broadcast tensor of dimensions #{inspect(left_tuple)} " <>
@@ -159,6 +157,9 @@ defmodule Exla.Defn do
 
   defp broadcast_dimensions([], [_ | right], n, acc),
     do: broadcast_dimensions([], right, n + 1, [n | acc])
+
+  defp broadcast_dimensions([_ | left], [], n, acc),
+    do: broadcast_dimensions(left, [], n + 1, [n | acc])
 
   defp broadcast_dimensions([], [], _n, acc),
     do: List.to_tuple(Enum.reverse(acc))

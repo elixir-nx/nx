@@ -47,6 +47,12 @@ defmodule Exla.DefnTest do
         assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
         assert Nx.type(exla) == Nx.type(nx)
         assert Nx.shape(exla) == Nx.shape(nx)
+
+        exla = add_two(right, left)
+        nx = Nx.add(right, left)
+        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
+        assert Nx.type(exla) == Nx.type(nx)
+        assert Nx.shape(exla) == Nx.shape(nx)
       end
     end
 
