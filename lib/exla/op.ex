@@ -7,11 +7,8 @@ defmodule Exla.Op do
   @enforce_keys [:builder, :ref]
   defstruct [:builder, :ref]
 
-  # The XLA API is explicit about the rank of the constant being created e.g. ConstantR0, ConstantR1
-  # We can be just as explicit, or we can use pattern matching on the inputs, I lean pattern matching
-  # as I think it makes the API feel more flexible
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
-    {:ok, ref} = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_str(dtype))
+    ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_str(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -31,11 +28,6 @@ defmodule Exla.Op do
       when is_integer(i) and i >= 0 and is_binary(name) do
     ref = Exla.NIF.parameter(builder, i, shape, name) |> unwrap!()
     %Op{builder: builder, ref: ref}
-  end
-
-  def get_shape(%Op{builder: builder, ref: operand}) do
-    {:ok, {dims, type_str, shape_ref}} = Exla.NIF.get_shape(builder, operand)
-    %Shape{ref: shape_ref, dims: dims, dtype: Shape.str_to_type(type_str)}
   end
 
   def conditional(

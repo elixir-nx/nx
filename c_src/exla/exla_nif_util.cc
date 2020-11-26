@@ -201,7 +201,7 @@ namespace exla {
       case xla::PrimitiveType::C64:
         return tensorflow::errors::InvalidArgument("unsupported constant type.");
       case xla::PrimitiveType::C128:
-        return tensorflow::errors::InvalidArgument("unsuported constant type.");
+        return tensorflow::errors::InvalidArgument("unsupported constant type.");
       default:
         return tensorflow::errors::InvalidArgument("invalid type.");
     }
