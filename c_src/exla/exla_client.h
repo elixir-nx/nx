@@ -24,13 +24,37 @@ namespace exla {
   class ExlaBuffer {
 
   public:
-    ExlaBuffer(std::unique_ptr<xla::ScopedShapedBuffer> buffer) : buffer_(std::move(buffer)) {}
-    ~ExlaBuffer() {}
+    ExlaBuffer(std::unique_ptr<xla::ScopedShapedBuffer> buffer, bool zero_copy) : owned_buffer_(std::move(buffer)),
+                                                                                  zero_copy_(zero_copy) {}
+    ~ExlaBuffer() {
+      if(zero_copy_) {
+        if(donated_) {
+          donated_buffer_->release();
+        } else {
+          owned_buffer_->release();
+        }
+      } else if(!zero_copy_ && donated_) {
+        delete donated_buffer_;
+      } else {}
+    }
 
-    xla::ScopedShapedBuffer* buffer() { return buffer_.get(); }
+    xla::ScopedShapedBuffer* donate() {
+      donated_buffer_ = owned_buffer_.release();
+      donated_ = true;
+      return donated_buffer_;
+    }
+
+    xla::ScopedShapedBuffer* buffer() { return owned_buffer_.get(); }
 
   private:
-    std::unique_ptr<xla::ScopedShapedBuffer> buffer_;
+    // Owned Buffer, guaranteed destructed when this class is destructed
+    std::unique_ptr<xla::ScopedShapedBuffer> owned_buffer_;
+    // Used for donating this buffer to another function, like `Run`
+    xla::ScopedShapedBuffer* donated_buffer_ = nullptr;
+    // Was the bool created with a zero-copy transfer
+    bool zero_copy_;
+    // Has the buffer been donated?
+    bool donated_ = false;
 
   };
 
@@ -53,9 +77,13 @@ namespace exla {
 
     virtual ~ExlaClient() = default;
 
-    xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> BufferFromErlBin(const ErlNifBinary binary,
-                                                                             const xla::Shape& shape,
-                                                                             ExlaDevice* device);
+    xla::StatusOr<xla::ScopedShapedBuffer> Run(xla::LocalExecutable* executable,
+                                               std::vector<ExlaBuffer*>& buffers,
+                                               xla::ExecutableRunOptions& options);
+
+    xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
+                                                const xla::Shape& shape,
+                                                ExlaDevice* device);
 
     xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(xla::ScopedShapedBuffer& buffer, ExlaDevice* device);
 

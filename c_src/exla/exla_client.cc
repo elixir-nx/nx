@@ -86,9 +86,52 @@ namespace exla {
     return binary;
   }
 
-  xla::StatusOr<std::unique_ptr<xla::ScopedShapedBuffer>> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
-                                                                                       const xla::Shape& shape,
-                                                                                       ExlaDevice* device) {
+  bool CanUseZeroCopy(ErlNifBinary bin,
+                      const xla::Shape& shape,
+                      const xla::Shape& compact_shape,
+                      ExlaDevice* device) {
+    // Only possible on CPUs
+    bool is_cpu_platform = device->executor()->platform()->id() == se::host::kHostPlatformId;
+    // With well-aligned data
+    bool is_well_aligned = (absl::bit_cast<std::uintptr_t>(bin.data) & (xla::cpu_function_runtime::kMinAlign - 1)) == 0;
+    // With matching layouts
+    bool has_same_layout = shape.layout() == compact_shape.layout();
+    return is_cpu_platform && is_well_aligned && has_same_layout;
+  }
+
+  std::unique_ptr<xla::ScopedShapedBuffer> ZeroCopyTransferBinToBuffer(const ErlNifBinary bin,
+                                                                       const xla::Shape& shape,
+                                                                       const xla::Shape& compact_shape,
+                                                                       ExlaDevice* device,
+                                                                       ExlaClient* client) {
+    // Initialize a buffer to point to the same data as the binary
+    se::DeviceMemoryBase buffer;
+    buffer = se::DeviceMemoryBase(const_cast<unsigned char*>(bin.data), bin.size);
+    // Make a new ScopedShapedBuffer
+    auto device_buffer = absl::make_unique<xla::ScopedShapedBuffer>(compact_shape, client->allocator(), device->id());
+    // Tell it to point to the buffer we made above
+    auto memory = se::OwningDeviceMemory(buffer, device->id(), client->allocator());
+    device_buffer->set_buffer(std::move(memory), {});
+    return std::move(device_buffer);
+  }
+
+  std::unique_ptr<xla::ScopedShapedBuffer> TransferBinToBuffer(const ErlNifBinary bin,
+                                                               const xla::Shape& shape,
+                                                               const xla::Shape& compact_shape,
+                                                               ExlaDevice* device,
+                                                               ExlaClient* client) {
+    // Allocate space on the GPU
+    xla::ScopedShapedBuffer device_buffer = AllocateDestinationBuffer(compact_shape, device, client).ConsumeValueOrDie();
+    // Read directly from binary data into a `BorrowingLiteral`, this is zero-copy again
+    xla::BorrowingLiteral literal(const_cast<char*>((char*) bin.data), shape);
+    // Transfer literal to the device in the allocated buffer
+    client->client()->backend().transfer_manager()->TransferLiteralToDevice(device->host_to_device_stream(), literal, device_buffer);
+    return absl::make_unique<xla::ScopedShapedBuffer>(std::move(device_buffer));
+  }
+
+  xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
+                                                          const xla::Shape& shape,
+                                                          ExlaDevice* device) {
     // Get the expected size of the given shape
     int64 size = xla::ShapeUtil::ByteSizeOf(shape);
     // Validate the expected size and actual data size are the same
@@ -103,31 +146,35 @@ namespace exla {
     // on the device
     // TODO: Handle StatusOr
     xla::Shape compact_shape = transfer_manager->ChooseCompactLayoutForShape(shape).ConsumeValueOrDie();
-    // CPU Platform allows for zero-copy transfers, we can just read directly from the binary
-    bool is_cpu_platform = device->executor()->platform()->id() == se::host::kHostPlatformId;
-    bool can_use_zero_copy = (absl::bit_cast<std::uintptr_t>(bin.data) & (xla::cpu_function_runtime::kMinAlign - 1)) == 0;
 
-    if(is_cpu_platform && can_use_zero_copy) {
-      // Validates that the data is sufficiently aligned for a zero-copy transfer
-      // XLA enforces a 16-byte alignment
-      // Ensure the shapes match, I think this avoids illegal memory errors
-      if(shape.layout() == compact_shape.layout()) {
-        se::DeviceMemoryBase buffer;
-
-        buffer = se::DeviceMemoryBase(const_cast<unsigned char*>(bin.data), size);
-        auto device_buffer = absl::make_unique<xla::ScopedShapedBuffer>(compact_shape, allocator(), device->id());
-        auto memory = se::OwningDeviceMemory(buffer, device->id(), allocator());
-        device_buffer->set_buffer(std::move(memory), {});
-        return std::move(device_buffer);
-      }
+    // Can we use a zero copy transfer?
+    bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
+    if(can_use_zero_copy) {
+      std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
+      return new ExlaBuffer(std::move(device_buffer), true);
+    } else {
+      std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = TransferBinToBuffer(bin, shape, compact_shape, device, this);
+      return new ExlaBuffer(std::move(device_buffer), false);
     }
-    // Allocate space on the GPU
-    xla::ScopedShapedBuffer device_buffer = AllocateDestinationBuffer(compact_shape, device, this).ConsumeValueOrDie();
-    // Read directly from binary data into a `BorrowingLiteral`, this is zero-copy again
-    xla::BorrowingLiteral literal(const_cast<char*>((char*) bin.data), shape);
-    // Transfer literal to the device in the allocated buffer
-    transfer_manager->TransferLiteralToDevice(device->host_to_device_stream(), literal, device_buffer);
-    return absl::make_unique<xla::ScopedShapedBuffer>(std::move(device_buffer));
+  }
+
+  xla::StatusOr<xla::ScopedShapedBuffer> ExlaClient::Run(xla::LocalExecutable* executable,
+                                                         std::vector<ExlaBuffer*>& buffers,
+                                                         xla::ExecutableRunOptions& options) {
+    // TODO: Get these from ErlNifBinary OR ExlaBuffer
+    std::vector<xla::ShapedBuffer*> inputs;
+    for(auto buf : buffers) {
+      inputs.push_back((xla::ShapedBuffer*) buf->donate());
+    }
+
+    xla::StatusOr<xla::ScopedShapedBuffer> result = executable->Run(inputs, options);
+
+    // Release input buffers
+    for(auto buf : buffers) {
+      delete buf;
+    }
+
+    return result;
   }
 
   xla::StatusOr<ExlaClient*> getHostClient(int num_replicas, int intra_op_parallelism_threads) {

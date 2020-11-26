@@ -99,9 +99,9 @@ ERL_NIF_TERM binary_to_shaped_buffer(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
-  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
+  EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
 
-  return exla::ok(env, exla::make_buffer<exla::ExlaBuffer>(env, std::move(buffer)));
+  return exla::ok(env);
 }
 
 ERL_NIF_TERM shaped_buffer_to_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
@@ -629,10 +629,10 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
-  std::vector<xla::ShapedBuffer*> inp;
+  std::vector<exla::ExlaBuffer*> inp;
   for(int i=0;i<arguments.size();i++) {
-    EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::ScopedShapedBuffer> buf, (*client)->BufferFromErlBin(arguments.at(i), argument_shapes.at(i), device), env);
-    inp.push_back((xla::ShapedBuffer*) buf.release());
+    EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(arguments.at(i), argument_shapes.at(i), device), env);
+    inp.push_back(buf);
   }
 
   xla::RunId run_id_obj(run_id);
@@ -649,22 +649,9 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_launch_id(launch_id);
 
   // TODO: Implement a `Run` in client that takes ExlaBuffers and returns binary or reference to buffer
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, local_executable->Run(inp, run_options), env);
+  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
 
   EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(result, device), env);
-
-  // Release the input buffers so they don't deallocate and mess up GC in the CPU case
-  if(is_cpu_platform) {
-    for(auto buf : inp) {
-      ((xla::ScopedShapedBuffer*) buf)->release();
-    }
-  }
-  // Otherwise we released the unique_ptr so we have to explicitly destroy the buffer
-  else {
-    for(auto buf : inp) {
-      delete buf;
-    }
-  }
 
   return exla::ok(env, exla::make(env, binary));
 }
