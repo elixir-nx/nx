@@ -1,5 +1,7 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
+// TODO: Map all to corresponding TF type
+
 namespace exla {
 
   ERL_NIF_TERM error(ErlNifEnv* env, const char* msg){
@@ -14,20 +16,74 @@ namespace exla {
     return enif_make_tuple2(env, ok(env), term);
   }
 
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, bool &var) {
+    int value;
+    if(!enif_get_int(env, term, &value)) return 0;
+    var = (bool) value;
+    return 1;
+  }
+
   int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var) {
     return enif_inspect_binary(env, term, &var);
   }
 
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var){
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8_t &var) {
+    unsigned int value;
+    if(!enif_get_uint(env, term, &value)) return 0;
+    var = (uint8_t) value;
+    return 1;
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint16_t &var) {
+    unsigned int value;
+    if(!enif_get_uint(env, term, &value)) return 0;
+    var = (uint16_t) value;
+    return 1;
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32_t &var) {
+    return enif_get_uint(env, term, &var);
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long unsigned int &var) {
+    return enif_get_uint64(env, term, (uint64_t *) &var);
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var) {
+    return enif_get_int64(env, term, (long int*) &var);
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int8_t &var) {
+    int value;
+    if(!enif_get_int(env, term, &value)) return 0;
+    var = (int8_t) value;
+    return 1;
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int16_t &var) {
+    int value;
+    if(!enif_get_int(env, term, &value)) return 0;
+    var = (int16_t) value;
+    return 1;
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int32_t &var) {
     return enif_get_int(env, term, &var);
   }
 
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, long int &var){
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int64_t &var) {
     return enif_get_int64(env, term, &var);
   }
 
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var){
-    return enif_get_int64(env, term, (long int*) &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, float &var) {
+    double value;
+    if(!enif_get_double(env, term, &value)) return 0;
+    var = (float) value;
+    return 1;
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, double &var) {
+    return enif_get_double(env, term, &var);
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
