@@ -211,7 +211,6 @@ namespace exla {
     }
   }
 
-  // TODO: Remove this so we always handle binaries explicitly
   ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary &var) {
     return enif_make_binary(env, &var);
   }

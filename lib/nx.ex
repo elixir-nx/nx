@@ -185,13 +185,13 @@ defmodule Nx do
   @doc """
   Builds a tensor.
 
-  The argument is either a number or a boolean, which means the tensor is
-  a scalar (zero-dimentions), a list of those (the tensor is a vector) or
+  The argument is either a number, which means the tensor is a scalar
+  (zero-dimentions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
 
   ## Examples
 
-  A number or a boolean returns a tensor of zero dimensions:
+  A number returns a tensor of zero dimensions:
 
       iex> t = Nx.tensor(0)
       iex> Nx.to_bitstring(t)
@@ -201,11 +201,11 @@ defmodule Nx do
       iex> Nx.shape(t)
       {}
 
-      iex> t = Nx.tensor(true)
+      iex> t = Nx.tensor(1.0)
       iex> Nx.to_bitstring(t)
-      <<1::1>>
+      <<1::float-64-native>>
       iex> Nx.type(t)
-      {:u, 1}
+      {:f, 64}
       iex> Nx.shape(t)
       {}
 
@@ -252,7 +252,7 @@ defmodule Nx do
 
   Mixed types get the highest precision type:
 
-      iex> t = Nx.tensor([true, 2, 3.0])
+      iex> t = Nx.tensor([1, 2, 3.0])
       iex> Nx.to_bitstring(t)
       <<1.0::float-64-native, 2.0::float-64-native, 3::float-64-native>>
       iex> Nx.type(t)
@@ -347,9 +347,9 @@ defmodule Nx do
     {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_binary(&1, type) | &2])}
   end
 
-  defp scalar_to_binary(true, type), do: scalar_to_binary(1, type)
-  defp scalar_to_binary(false, type), do: scalar_to_binary(0, type)
-  defp scalar_to_binary(value, type), do: match_types([type], do: <<write!(value, 0)>>)
+  defp scalar_to_binary(value, type) do
+    match_types([type], do: <<write!(value, 0)>>)
+  end
 
   @doc """
   Returns the type of the tensor.
@@ -418,17 +418,6 @@ defmodule Nx do
       iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), 1)
       iex> Nx.to_bitstring(t)
       <<2.0::float-native-32, 3.0::float-native-32, 4.0::float-native-32>>
-
-  The size of the tensor will grow if the scalar is bigger than
-  the tensor size. But, if smaller, it overflows:
-
-      iex> t = Nx.add(Nx.tensor([true, false, true]), 1)
-      iex> Nx.to_bitstring(t)
-      <<0::1, 1::1, 0::1>>
-
-      iex> t = Nx.add(Nx.tensor([true, false, true]), 10)
-      iex> Nx.to_bitstring(t)
-      <<11::8, 10::8, 11::8>>
 
   Unsigned tensors become signed and double their size if a
   negative number is given:

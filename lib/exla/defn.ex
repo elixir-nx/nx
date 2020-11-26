@@ -94,7 +94,6 @@ defmodule Exla.Defn do
     Exla.Op.exp(to_operator(builder, op))
   end
 
-  # TODO: Test that sum works with any type
   def nx_sum(builder, op) do
     op = to_operator(builder, op)
     op_shape = Exla.Op.get_shape(op)
@@ -111,6 +110,8 @@ defmodule Exla.Defn do
     init_value = to_typed_constant(builder, 0, reduction_shape.dtype)
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
+
+  # TODO: constants should come out as tensors in both Nx and Exla compilers
 
   # TODO: to_operator should actually call to_typed_constant
   # Implement this properly once we use convert_element_type.

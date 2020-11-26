@@ -167,7 +167,7 @@ defmodule Nx.DefnTest do
                  defn empty(_a, _b) do
                  end
                end
-             end) =~ "body has nil return type, -1 will be returned instead"
+             end) =~ "body has nil return type, 0 will be returned instead"
     after
       purge(Sample)
     end

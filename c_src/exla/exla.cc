@@ -132,8 +132,8 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::PrimitiveType element_type;
   std::vector<long long int> dims;
 
-  if(!exla::get_type(env, argv[0], element_type)) return enif_make_badarg(env);
-  if(!exla::get_vector_tuple(env, argv[1], dims)) return enif_make_badarg(env);
+  if(!exla::get_type(env, argv[0], element_type)) return exla::error(env, "Unable to get type.");
+  if(!exla::get_vector_tuple(env, argv[1], dims)) return exla::error(env, "Unable to get dimensions.");
 
   xla::Shape shape = xla::ShapeUtil::MakeShape(element_type, dims);
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
@@ -684,8 +684,6 @@ ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TE
   std::string result = hlo_module->ToString(options);
   return exla::make(env, result);
 }
-
-
 
 ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){

@@ -7,7 +7,7 @@ defmodule Nx.Type do
   sizes:
 
       * `:s` - signed integer (8, 16, 32, 64)
-      * `:u` - unsigned integer (1, 8, 16, 32, 64)
+      * `:u` - unsigned integer (8, 16, 32, 64)
       * `:f` - float (32, 64)
       * `:bf` - a brain floating point (16)
 
@@ -26,11 +26,6 @@ defmodule Nx.Type do
 
   ## Examples
 
-      iex> Nx.Type.infer(true)
-      {:u, 1}
-      iex> Nx.Type.infer(false)
-      {:u, 1}
-
       iex> Nx.Type.infer([1, 2, 3])
       {:s, 64}
       iex> Nx.Type.infer([[1, 2], [3, 4]])
@@ -38,10 +33,7 @@ defmodule Nx.Type do
 
       iex> Nx.Type.infer([1.0, 2.0, 3.0])
       {:f, 64}
-
-      iex> Nx.Type.infer([1, true, 2])
-      {:s, 64}
-      iex> Nx.Type.infer([1, true, 2.0])
+      iex> Nx.Type.infer([1, 2.0])
       {:f, 64}
 
       iex> Nx.Type.infer([])
@@ -54,16 +46,14 @@ defmodule Nx.Type do
   def infer(value) do
     case infer(value, -1) do
       -1 -> {:f, 64}
-      0 -> {:u, 1}
-      1 -> {:s, 64}
-      2 -> {:f, 64}
+      0 -> {:s, 64}
+      1 -> {:f, 64}
     end
   end
 
   defp infer(arg, inferred) when is_list(arg), do: Enum.reduce(arg, inferred, &infer/2)
-  defp infer(arg, inferred) when is_boolean(arg), do: max(inferred, 0)
-  defp infer(arg, inferred) when is_integer(arg), do: max(inferred, 1)
-  defp infer(arg, inferred) when is_float(arg), do: max(inferred, 2)
+  defp infer(arg, inferred) when is_integer(arg), do: max(inferred, 0)
+  defp infer(arg, inferred) when is_float(arg), do: max(inferred, 1)
 
   defp infer(other, _inferred),
     do: raise(ArgumentError, "cannot infer the numerical type of #{inspect(other)}")
@@ -75,14 +65,14 @@ defmodule Nx.Type do
 
   ## Examples
 
-      iex> Nx.Type.validate!({:u, 1})
-      {:u, 1}
+      iex> Nx.Type.validate!({:u, 8})
+      {:u, 8}
 
       iex> Nx.Type.validate!({:u, 0})
       ** (ArgumentError) invalid numerical type: {:u, 0} (see Nx.Type docs for all supported types)
 
-      iex> Nx.Type.validate!({:k, 1})
-      ** (ArgumentError) invalid numerical type: {:k, 1} (see Nx.Type docs for all supported types)
+      iex> Nx.Type.validate!({:k, 8})
+      ** (ArgumentError) invalid numerical type: {:k, 8} (see Nx.Type docs for all supported types)
 
   """
   def validate!(type) do
@@ -97,7 +87,7 @@ defmodule Nx.Type do
   end
 
   def validate({:s, size} = type) when size in [8, 16, 32, 64], do: type
-  def validate({:u, size} = type) when size in [1, 8, 16, 32, 64], do: type
+  def validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
   def validate({:f, size} = type) when size in [32, 64], do: type
   def validate({:bf, size} = type) when size in [16], do: type
   def validate(_type), do: :error
