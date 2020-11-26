@@ -400,23 +400,6 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM constant_r1_fill(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 3){
-    return enif_make_badarg(env);
-  }
-
-  xla::XlaBuilder** builder;
-  int value;
-  int length;
-
-  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[1], length)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[2], value)) return enif_make_badarg(env);
-
-  xla::XlaOp op = xla::ConstantR1((*builder), length, value);
-  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
-}
-
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
     return enif_make_badarg(env);
@@ -790,7 +773,6 @@ static ErlNifFunc exla_funcs[] = {
   /******** Constant Creation Methods *******/
   {"constant_r0", 3, constant_r0},
   {"constant_from_binary", 3, constant_from_binary},
-  {"constant_r1", 3, constant_r1_fill},
   /********* Conditionals *********/
   {"conditional", 5, conditional_if},
   {"conditional", 3, conditional_multi},
