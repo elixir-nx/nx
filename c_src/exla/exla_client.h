@@ -89,8 +89,8 @@ namespace exla {
   };
 
   // TODO: Separate into different device classes similar to PjRt
-  xla::StatusOr<ExlaClient*> GetCpuClient(int num_replicas, int intra_op_parallelism_threads);
-  xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_parallelism_threads);
+  xla::StatusOr<ExlaClient*> getHostClient(int num_replicas, int intra_op_parallelism_threads);
+  xla::StatusOr<ExlaClient*> getCUDAClient(int num_replicas, int intra_op_parallelism_threads);
 }
 
 #endif

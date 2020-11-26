@@ -1,6 +1,6 @@
 defmodule Exla.Client do
   @moduledoc """
-  Functions for managing Exla.Client.
+  Functions for managing `Exla.Client`.
 
   See `Exla` module docs for a general introduction.
   """
@@ -8,6 +8,7 @@ defmodule Exla.Client do
   alias __MODULE__, as: Client
   alias Exla.Computation
   alias Exla.Executable
+
   @enforce_keys [:ref, :platform]
   defstruct [:ref, :platform]
 
@@ -15,18 +16,32 @@ defmodule Exla.Client do
     Exla.LockedCache.run({__MODULE__, name}, fn ->
       clients = Application.fetch_env!(:exla, :clients)
 
-      config =
+      options =
         Keyword.get(clients, name) ||
-          raise ArgumentError, "could not find Exla client named #{inspect(name)}, " <>
-            "the clients specified in your config files are: #{inspect(Keyword.keys(clients))}"
+          raise ArgumentError,
+                "could not find Exla client named #{inspect(name)}, the clients specified " <>
+                  "in your config files are: #{inspect(Keyword.keys(clients))}"
 
-      create_client(config)
+      platform = Keyword.get(options, :platform, :host)
+      number_of_replicas = Keyword.get(options, :number_of_replicas, 1)
+      intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
+
+      ref =
+        case platform do
+          :host -> Exla.NIF.get_host_client(number_of_replicas, intra_op_parallelism_threads)
+          :cuda -> Exla.NIF.get_cuda_client(number_of_replicas, intra_op_parallelism_threads)
+        end
+        |> unwrap!()
+
+      %Client{ref: ref, platform: platform}
     end)
   end
 
-  # TODO: To go along with some of the discussion in: https://github.com/seanmor5/exla/pull/12
-  # The Python XLA API offers 3 additional methods for client creation:
-  # `get_cpu_client`, `get_nvidia_gpu_client`, and `get_tpu_client`. They essentially
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
+
+  # TODO: The Python XLA API offers 3 additional methods for client creation:
+  # `get_host_client`, `get_nvidia_gpu_client`, and `get_tpu_client`. They essentially
   # wrap the method below with preset configurations, allocators, etc. that work out
   # of the box with CPU/GPU/TPU respectively. This has the benefit of giving the user
   # a guaranteed working client without having to mess around with specifying a device,
@@ -36,25 +51,6 @@ defmodule Exla.Client do
   # function, but also offer the more convenient and safer `get_[device]_client` methods.
   # Alternatively, we can keep this method private, and only expose the 3 client device
   # creation methods, with limited, but safer configuration options.
-  # TODO: Make this function private
-  def create_client(options \\ []) do
-    # TODO: Rename this function to get_local_client. It is a singleton,
-    # non-thread-safe resource in XLA so we need to mimic the same
-    # in Elixir. We should also have distinct steps for configuring and for
-    # getting it. See: https://github.com/seanmor5/exla/pull/12
-    platform = Keyword.get(options, :platform, :host)
-    number_of_replicas = Keyword.get(options, :number_of_replicas, 1)
-    intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
-
-    # TODO: Add MapSet of allowed devices to block device use in a multi-device context
-    {:ok, ref} =
-      case platform do
-        :host -> Exla.NIF.get_cpu_client(number_of_replicas, intra_op_parallelism_threads)
-        :cuda -> Exla.NIF.get_gpu_client(number_of_replicas, intra_op_parallelism_threads)
-      end
-
-    %Client{ref: ref, platform: platform}
-  end
 
   # TODO: These methods are only called once, so for efficiency we can run them when the client is created
   def get_default_device_ordinal(%Client{ref: client}) do
@@ -68,11 +64,11 @@ defmodule Exla.Client do
   end
 
   def compile(
-         client = %Client{ref: ref},
-         computation = %Computation{output_shape: output_shape},
-         argument_shapes,
-         options \\ []
-       ) do
+        client = %Client{ref: ref},
+        computation = %Computation{output_shape: output_shape},
+        argument_shapes,
+        options \\ []
+      ) do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
@@ -104,10 +100,10 @@ defmodule Exla.Client do
     end
   end
 
-  defp check_device_compatibility(
-        client = %Client{platform: platform},
-        {platform, ordinal}
-      ) do
+  def check_device_compatibility(
+         client = %Client{platform: platform},
+         {platform, ordinal}
+       ) do
     cond do
       ordinal < 0 ->
         {:ok, {platform, Client.get_default_device_ordinal(client)}}

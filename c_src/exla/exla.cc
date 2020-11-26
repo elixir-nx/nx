@@ -502,23 +502,22 @@ ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 // TODO: This function generates mildly annoying and poorly formatted log messages from the TensorFlow side...
 // We can either make the logging stricter or we can somehow get the log messages to the Elixir Logger?? I'm
 // not sure what the best solution is...
-ERL_NIF_TERM get_cpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   int num_replicas, intra_op_parallelism_threads;
 
-  if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get num_replicas.");
-  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get intra_op_parallelism_threads.");
-  EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::GetCpuClient(num_replicas, intra_op_parallelism_threads), env);
+  if(!exla::get(env, argv[0], num_replicas)) return enif_make_badarg(env);;
+  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return enif_make_badarg(env);
+  EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::getHostClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
 
-ERL_NIF_TERM get_gpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   int num_replicas, intra_op_parallelism_threads;
 
-  if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get num_replicas.");
-  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get intra_op_parallelism_threads.");
-
-  EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::GetGpuClient(num_replicas, intra_op_parallelism_threads), env);
+  if(!exla::get(env, argv[0], num_replicas)) return enif_make_badarg(env);;
+  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return enif_make_badarg(env);;
+  EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::getCUDAClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -713,8 +712,8 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 
 static ErlNifFunc exla_funcs[] = {
   /****** xla::Client ******/
-  {"get_cpu_client", 2, get_cpu_client},
-  {"get_gpu_client", 2, get_gpu_client},
+  {"get_host_client", 2, get_host_client},
+  {"get_cuda_client", 2, get_cuda_client},
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** xla::ShapedBuffer ******/
