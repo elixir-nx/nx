@@ -36,7 +36,10 @@ defmodule Exla.DefnTest do
         {Nx.tensor([[[10], [20]]]), Nx.tensor([[[1, 2]], [[3, 4]]])},
         {Nx.tensor([[[100], [200], [300]]]),
          Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]])},
-        # {Nx.tensor([[[[10], [20]], [[30], [40]]]]), Nx.tensor([[[1, 2]], [[3, 4]]])},
+        {Nx.tensor([[[[1]]]]), Nx.tensor([[1, 2], [3, 4]])},
+        {Nx.tensor([[[[1]]]]), Nx.tensor([1, 2])},
+        {Nx.tensor([[[10], [20]], [[30], [40]]]), Nx.tensor([[1, 2]])},
+        {Nx.tensor([[[[10], [20]], [[30], [40]]]]), Nx.tensor([[[1, 2]], [[3, 4]]])},
         {Nx.tensor([[[[10], [20]], [[30], [40]]]]), Nx.tensor([[[[1, 2]]], [[[3, 4]]]])},
         {Nx.tensor([[[10], [20]], [[30], [40]]]), Nx.tensor([[[1, 2]], [[3, 4]]])}
       ]
@@ -44,15 +47,15 @@ defmodule Exla.DefnTest do
       for {left, right} <- tensors do
         exla = add_two(left, right)
         nx = Nx.add(left, right)
-        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
         assert Nx.type(exla) == Nx.type(nx)
         assert Nx.shape(exla) == Nx.shape(nx)
+        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
 
         exla = add_two(right, left)
         nx = Nx.add(right, left)
-        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
         assert Nx.type(exla) == Nx.type(nx)
         assert Nx.shape(exla) == Nx.shape(nx)
+        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
       end
     end
 

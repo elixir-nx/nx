@@ -108,7 +108,7 @@ defmodule Exla.Defn do
     reduction = Exla.Builder.build(add)
 
     init_value = Exla.Op.zero(builder, reduction_shape.dtype)
-    Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape))
+    Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 
   defp to_operator(_builder, %Exla.Op{} = op), do: op
@@ -119,50 +119,57 @@ defmodule Exla.Defn do
   end
 
   # Converts {3, 255, 255} into {0, 1, 2}
-  defp all_dimensions(shape), do: List.to_tuple(all_dimensions(0, tuple_size(shape.dims)))
+  defp all_dimensions(dims), do: List.to_tuple(all_dimensions(0, tuple_size(dims)))
   defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
   defp all_dimensions(_, _), do: []
 
-  defp broadcast_dimensions(left_tuple, right_tuple) do
-    left_size = tuple_size(left_tuple)
-    right_size = tuple_size(right_tuple)
+  defp broadcast_dimensions(left, right) do
+    {min, max} = if left <= right, do: {left, right}, else: {right, left}
 
-    if left_size == right_size do
-      {}
+    min_size = tuple_size(min)
+    max_size = tuple_size(max)
+
+    if min_size == max_size do
+      all_dimensions(min)
     else
-      left = shape_to_ranked_ordered_list(left_tuple, left_size)
-      right = shape_to_ranked_ordered_list(right_tuple, right_size)
+      min_ordered = shape_to_ranked_ordered_list(min, min_size)
+      max_ordered = shape_to_ranked_ordered_list(max, max_size)
 
-      case broadcast_dimensions(left, right, 0, []) do
+      # The initial pass maps all dimensions of equal size and
+      # all degenerate dimensions on the lower-ranked tuple to
+      # the same dimension on the higher-ranked tuple.
+      case broadcast_dimensions(min_ordered, max_ordered, 0, min_size, []) do
+        {pending, acc} ->
+          # If we still didn't fullfil the broadcast dimensions, it is
+          # because the higher-ranked tuple has generate dimensions.
+          # So we map the pending dimensions to the highest dimensions
+          # on the higher-ranked tuple.
+          List.to_tuple(Enum.reverse(count_down(pending, max_size - pending, acc)))
+
         :error ->
           raise ArgumentError,
-                "cannot broadcast tensor of dimensions #{inspect(left_tuple)} " <>
-                  "to #{inspect(right_tuple)}"
-
-        tuple ->
-          tuple
+                "cannot broadcast tensor of dimensions #{inspect(left)} to #{inspect(right)}"
       end
     end
   end
 
-  defp broadcast_dimensions([dim | left], [dim | right], n, acc),
-    do: broadcast_dimensions(left, right, n + 1, acc)
+  defp count_down(0, _n, acc), do: acc
+  defp count_down(i, n, acc), do: count_down(i - 1, n + 1, [n | acc])
 
-  defp broadcast_dimensions([ldim | left], [rdim | right], n, acc)
-       when ldim == 1 or rdim == 1,
-       do: broadcast_dimensions(left, right, n + 1, [n | acc])
+  defp broadcast_dimensions([dim | left], [dim | right], n, pending, acc),
+    do: broadcast_dimensions(left, right, n + 1, pending - 1, [n | acc])
 
-  defp broadcast_dimensions([_ | _], [_ | _], _n, _acc),
+  defp broadcast_dimensions([1 | left], [_rdim | right], n, pending, acc),
+    do: broadcast_dimensions(left, right, n + 1, pending - 1, [n | acc])
+
+  defp broadcast_dimensions([_ldim | left], [1 | right], n, pending, acc),
+    do: broadcast_dimensions(left, right, n + 1, pending, acc)
+
+  defp broadcast_dimensions([_ | _], [_ | _], _n, _pending, _acc),
     do: :error
 
-  defp broadcast_dimensions([], [_ | right], n, acc),
-    do: broadcast_dimensions([], right, n + 1, [n | acc])
-
-  defp broadcast_dimensions([_ | left], [], n, acc),
-    do: broadcast_dimensions(left, [], n + 1, [n | acc])
-
-  defp broadcast_dimensions([], [], _n, acc),
-    do: List.to_tuple(Enum.reverse(acc))
+  defp broadcast_dimensions([], _right, _n, pending, acc),
+    do: {pending, acc}
 
   defp shape_to_ranked_ordered_list(_tuple, 0),
     do: []
