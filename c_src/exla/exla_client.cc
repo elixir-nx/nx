@@ -151,10 +151,10 @@ namespace exla {
     bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
     if(can_use_zero_copy) {
       std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
-      return new ExlaBuffer(std::move(device_buffer), true);
+      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*zero_copy=*/true);
     } else {
       std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = TransferBinToBuffer(bin, shape, compact_shape, device, this);
-      return new ExlaBuffer(std::move(device_buffer), false);
+      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*zero_copy=*/false);
     }
   }
 
