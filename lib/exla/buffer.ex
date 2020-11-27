@@ -17,7 +17,7 @@ defmodule Exla.Buffer do
   alias __MODULE__
   alias Exla.{Client, Shape}
 
-  defstruct [:data, :ref, :shape, :device]
+  defstruct [:data, :ref, :shape]
 
   def buffer(binary, dtype = {_type, _size}, dims) when is_bitstring(binary) do
     buffer(binary, Exla.Shape.make_shape(dtype, dims))
@@ -29,7 +29,7 @@ defmodule Exla.Buffer do
   The buffer will not be placed on a device until passed to `place_on_device`.
   """
   def buffer(binary, shape) when is_bitstring(binary) do
-    %Buffer{data: binary, ref: nil, shape: shape, device: nil}
+    %Buffer{data: binary, ref: nil, shape: shape}
   end
 
   @doc """
@@ -52,16 +52,16 @@ defmodule Exla.Buffer do
   If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
   we retain a copy of the binary to ensure it is not prematurely garbage collected.
   """
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:host, _ordinal}) do
+  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:host, ordinal}) do
     {:ok, {_, ordinal}} = Client.check_device_compatibility(client, device)
-    ref = Exla.NIF.binary_to_device(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
-    %Buffer{buffer | ref: ref, device: device}
+    ref = Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
+    %Buffer{buffer | ref: {ref, :host, ordinal}}
   end
 
   def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:cuda, ordinal}) do
     {:ok, {_, ordinal}} = Client.check_device_compatibility(client, device)
-    ref = Exla.NIF.binary_to_device(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
-    %Buffer{buffer | data: nil, ref: ref, device: device}
+    ref = Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
+    %Buffer{buffer | data: nil, ref: {ref, :cuda, ordinal}}
   end
 
   @doc """
@@ -69,20 +69,20 @@ defmodule Exla.Buffer do
 
   This copies the underlying device memory into a binary without destroying it.
   """
-  def read(client = %Client{}, buffer = %Buffer{ref: ref, device: {:cuda, _ordinal}}) do
-    {:ok, _} = Client.check_device_compatibility(client, buffer.device)
+  def read(client = %Client{}, buffer = %Buffer{ref: {ref, :cuda, ordinal}}) do
+    {:ok, _} = Client.check_device_compatibility(client, {:cuda, ordinal})
     binary = Exla.NIF.read_device_mem(client.ref, ref) |> unwrap!()
     binary
   end
 
-  def read(client = %Client{}, buffer = %Buffer{data: data, device: {:host, _ordinal}}), do: data
+  def read(client = %Client{}, buffer = %Buffer{data: data, ref: {_, :host, _}}), do: data
 
   def deallocate(%Buffer{ref: nil}), do: raise("Attempt to deallocate nothing.");
-  def deallocate(%Buffer{ref: ref}) do
+  def deallocate(%Buffer{ref: {ref, _, _}}) do
     Exla.NIF.deallocate_device_mem(ref) |> unwrap!()
   end
 
-  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
+  defp unwrap!(status) when is_atom(status), do: status
 end

@@ -8,7 +8,7 @@ defmodule BufferTest do
 
   test "place_on_device/3" do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
-    assert %Buffer{ref: ref} = Buffer.place_on_device(client(), b1, {client().platform, 0})
+    assert %Buffer{ref: {ref, :cuda, 0}} = Buffer.place_on_device(client(), b1, {client().platform, 0})
     assert is_reference(ref)
   end
 
@@ -32,8 +32,6 @@ defmodule BufferTest do
     end
     b1 = Buffer.place_on_device(client(), b1, {client().platform(), 0})
     assert :ok = Buffer.deallocate(b1)
-    assert_raise RuntimeError, "Attempt to deallocate already deallocated buffer.", fn ->
-      Buffer.deallocate(b1)
-    end
+    assert :already_deallocated = Buffer.deallocate(b1)
   end
 end
