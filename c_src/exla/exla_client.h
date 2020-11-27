@@ -87,8 +87,6 @@ namespace exla {
     const xla::Shape on_host_shape() { return donated_ ? donated_buffer_->on_host_shape() : owned_buffer_->on_host_shape(); }
     const xla::Shape on_device_shape() { return donated_ ? donated_buffer_->on_device_shape() : owned_buffer_->on_device_shape(); }
 
-    bool zero_copied() { return zero_copy_; }
-
     xla::ScopedShapedBuffer* donate() {
       donated_buffer_ = owned_buffer_.release();
       donated_ = true;

@@ -83,7 +83,7 @@ ERL_NIF_TERM create_sub_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
 }
 
 /************************ exla::ExlaBuffer Functions *********************/
-ERL_NIF_TERM binary_to_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
     return exla::error(env, "Bad argument count.");
   }
@@ -100,8 +100,6 @@ ERL_NIF_TERM binary_to_device(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
   EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
-
-  LOG(WARNING) << buffer->zero_copied();
 
   return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer));
 }
@@ -134,7 +132,8 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   xla::Status dealloc_status = (*buffer)->deallocate();
 
   if(!dealloc_status.ok()) {
-    return exla::error(env, "Attempt to deallocate already deallocated buffer.");
+    // TODO: Add this to NIF util
+    return enif_make_atom(env, "already_deallocated");
   } else {
     return exla::ok(env);
   }
@@ -621,35 +620,48 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
 // TODO: Most of this logic should be moved to `exla::ExlaClient`
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 9){
+  if(argc != 8){
     return exla::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   xla::LocalExecutable* local_executable;
-  std::vector<ErlNifBinary> arguments;
-  std::vector<xla::Shape> argument_shapes;
   xla::ExecutableRunOptions run_options;
   int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
   if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
-  if(!exla::get_vector_list(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
-  if(!exla::get_vector_list<xla::Shape>(env, argv[3], argument_shapes)) return exla::error(env, "Unable to get argument shapes.");
-  if(!exla::get(env, argv[4], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
-  if(!exla::get(env, argv[5], run_id)) return exla::error(env, "Unable to get Run ID.");
-  if(!exla::get(env, argv[6], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
-  if(!exla::get(env, argv[7], launch_id)) return exla::error(env, "Unable to get Launch ID.");
-  if(!exla::get(env, argv[8], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
+  if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
+  if(!exla::get(env, argv[4], run_id)) return exla::error(env, "Unable to get Run ID.");
+  if(!exla::get(env, argv[5], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
+  if(!exla::get(env, argv[6], launch_id)) return exla::error(env, "Unable to get Launch ID.");
+  if(!exla::get(env, argv[7], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
   bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
   std::vector<exla::ExlaBuffer*> inp;
-  for(int i=0;i<arguments.size();i++) {
-    EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(arguments.at(i), argument_shapes.at(i), device), env);
-    inp.push_back(buf);
+  ERL_NIF_TERM head, tail, list;
+  list = argv[2];
+  while(enif_get_list_cell(env, list, &head, &tail)) {
+    const ERL_NIF_TERM* tuple;
+    int arity;
+    exla::ExlaBuffer** buffer;
+
+    if(enif_get_tuple(env, head, &arity, &tuple)) {
+      ErlNifBinary data;
+      xla::Shape* shape;
+      if(!exla::get(env, tuple[0], data)) return exla::error(env, "Unable to read binary data from input.");
+      if(!exla::get<xla::Shape>(env, tuple[1], shape)) return exla::error(env, "Unable to read shape from input.");
+      EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device), env);
+      inp.push_back(buf);
+    } else if(exla::get<exla::ExlaBuffer*>(env, head, buffer)) {
+      inp.push_back(*buffer);
+    } else {
+      return exla::error(env, "Invalid input passed to run.");
+    }
+    list = tail;
   }
 
   xla::RunId run_id_obj(run_id);
@@ -667,58 +679,6 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   // TODO: Implement a `Run` in client that takes ExlaBuffers and returns binary or reference to buffer
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
-  // TODO: Do this in `Run`
-  std::unique_ptr<xla::ScopedShapedBuffer> buffer_result = absl::make_unique<xla::ScopedShapedBuffer>(std::move(result));
-  exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(std::move(buffer_result), device, false);
-
-  if(keep_on_device) {
-    return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer_ref));
-  }
-
-  EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(buffer_ref), env);
-
-  return exla::ok(env, exla::make(env, binary));
-}
-
-ERL_NIF_TERM run_preloaded(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 8){
-    return exla::error(env, "Bad argument count.");
-  }
-
-  exla::ExlaClient** client;
-  xla::LocalExecutable* local_executable;
-  std::vector<exla::ExlaBuffer*> arguments;
-  xla::ExecutableRunOptions run_options;
-  int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
-
-  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
-  if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
-  if(!exla::get_vector_list<exla::ExlaBuffer*>(env, argv[2], arguments)) return exla::error(env, "Unable to get arguments.");
-  if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
-  if(!exla::get(env, argv[4], run_id)) return exla::error(env, "Unable to get Run ID.");
-  if(!exla::get(env, argv[5], rng_seed)) return exla::error(env, "Unable to get RNG Seed.");
-  if(!exla::get(env, argv[6], launch_id)) return exla::error(env, "Unable to get Launch ID.");
-  if(!exla::get(env, argv[7], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
-
-  exla::ExlaDevice* device = (*client)->device(device_ordinal);
-
-  bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
-
-  xla::RunId run_id_obj(run_id);
-
-  run_options.set_stream(device->compute_stream());
-  run_options.set_host_to_device_stream(device->host_to_device_stream());
-  run_options.set_allocator((*client)->allocator());
-  run_options.set_intra_op_thread_pool((*client)->client()->backend().eigen_intra_op_thread_pool_device());
-  // TODO: This is for executing multiple computations in parallel across multiple replicas.
-  // run_options.set_device_assignment(device_assignment.get());
-  run_options.set_run_id(run_id_obj);
-  run_options.set_rng_seed(rng_seed);
-  run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
-  run_options.set_launch_id(launch_id);
-
-  // TODO: Implement a `Run` in client that takes ExlaBuffers and returns binary or reference to buffer
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, arguments, run_options), env);
   // TODO: Do this in `Run`
   std::unique_ptr<xla::ScopedShapedBuffer> buffer_result = absl::make_unique<xla::ScopedShapedBuffer>(std::move(result));
   exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(std::move(buffer_result), device, false);
@@ -781,7 +741,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** ExlaBuffer ******/
-  {"binary_to_device", 4, binary_to_device},
+  {"binary_to_device_mem", 4, binary_to_device_mem},
   {"read_device_mem", 2, read_device_mem},
   {"deallocate_device_mem", 1, deallocate_device_mem},
   /****** xla::Shape ******/
@@ -864,8 +824,7 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},
-  {"run", 8, run_preloaded},
-  {"run", 9, run},
+  {"run", 8, run},
   /******** HLO Functions ********/
   {"get_computation_hlo_proto", 1, get_computation_hlo_proto},
   {"get_computation_hlo_text", 1, get_computation_hlo_text}

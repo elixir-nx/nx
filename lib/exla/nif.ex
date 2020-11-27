@@ -204,7 +204,6 @@ defmodule Exla.NIF do
         _client,
         _executable,
         _arguments,
-        _argument_shapes,
         _device_ordinal,
         _run_id,
         _rng_seed,
@@ -213,9 +212,8 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def run(_client, _executable, _arguments, _device_ordinal, _run_id, _rng_seed, _launch_id, _keep_on_device), do: nif_error(__ENV__.function)
 
-  def binary_to_device(_client, _binary, _shape, _device_ordinal),
+  def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 
   def read_device_mem(_client, _buffer),

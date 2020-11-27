@@ -29,28 +29,26 @@ defmodule Exla.Executable do
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
-    {:ok, data} =
-      if all_loaded?(arguments) do
-        inputs =  arguments |> Enum.map(& &1.ref)
-        Exla.NIF.run(client.ref, exec, inputs, ordinal, run_id, rng_seed, launch_id, keep_on_device_int)
-      else
-        {inputs, shapes} =
-          arguments
-          |> Enum.map(&{&1.data, &1.shape.ref})
-          |> Enum.unzip()
-
-        Exla.NIF.run(
-          client.ref,
-          exec,
-          inputs,
-          shapes,
-          ordinal,
-          run_id,
-          rng_seed,
-          launch_id,
-          keep_on_device_int
+    inputs =
+      arguments
+      |> Enum.map(
+          fn
+            %Buffer{ref: {ref, _, _}} -> ref
+            %Buffer{data: data, shape: shape} -> {data, shape.ref}
+          end
         )
-      end
+
+    {:ok, data} =
+      Exla.NIF.run(
+        client.ref,
+        exec,
+        inputs,
+        ordinal,
+        run_id,
+        rng_seed,
+        launch_id,
+        keep_on_device_int
+      )
 
     if keep_on_device do
       %Buffer{data: nil, ref: data, shape: output_shape}
@@ -58,14 +56,4 @@ defmodule Exla.Executable do
       %Buffer{data: data, ref: nil, shape: output_shape}
     end
   end
-
-  # Helper to check if all buffers are already on the device
-  defp all_loaded?(arguments) do
-    arguments
-    |> Enum.filter(& &1.ref == nil)
-    |> Enum.count()
-    |> Kernel.==(0)
-  end
-
-
 end
