@@ -16,7 +16,7 @@ defmodule Nx.Defn.Kernel do
   defmacro __using__(_opts) do
     quote do
       import Kernel, only: []
-      import Nx.Defn.Kernel, except: unquote(@special_forms)
+      import Nx.Defn.Kernel, except: unquote(Kernel.@(special_forms))
     end
   end
 
@@ -129,5 +129,20 @@ defmodule Nx.Defn.Kernel do
   """
   defmacro left |> right do
     quote do: Kernel.|>(unquote(left), unquote(right))
+  end
+
+  @doc """
+  A `@` operator which delegates to `Kernel.@/1`.
+
+  It is useful to inject code constants into `defn`.
+
+  ## Examples
+
+      @two_per_two Nx.tensor([[1, 2], [3, 4]])
+      defn add_2x2_attribute(t), do: t + @two_per_two
+
+  """
+  defmacro @expr do
+    quote do: Kernel.@(unquote(expr))
   end
 end

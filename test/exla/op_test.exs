@@ -50,18 +50,37 @@ defmodule Exla.OpTest do
     end
   end
 
-  test "constant_from_binary" do
+  test "constant_from_binary/3" do
     builder = Builder.new("test")
 
-    assert a = %Op{} = Op.constant_from_binary(builder, <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>, {:s, 64}, {2, 2})
-    assert b = %Op{} = Op.constant_from_binary(builder, <<1::float-native, 2::float-native, 3::float-native, 4::float-native>>, {:f, 64}, {4, 1})
-    assert c = %Op{} = Op.constant_from_binary(builder, <<1::8, 2::8, 3::8, 4::8>>, {:s, 8}, {1, 4})
-    assert d = %Op{} = Op.constant_from_binary(builder, <<1::16, 2::16, 3::16, 4::16>>, {:s, 16}, {1, 1, 1, 1})
+    shape = Shape.make_shape({:s, 64}, {0})
+    assert a = %Op{} = Op.constant_from_binary(builder, <<>>, shape)
 
-    assert %Shape{dims: {2, 2}, dtype: {:s, 64}} = Op.get_shape(a)
-    assert %Shape{dims: {4, 1}, dtype: {:f, 64}} = Op.get_shape(b)
+    shape = Shape.make_shape({:s, 64}, {})
+    assert b = %Op{} = Op.constant_from_binary(builder, <<1::64-native>>, shape)
+
+    shape = Shape.make_shape({:s, 8}, {1, 4})
+    assert c = %Op{} = Op.constant_from_binary(builder, <<1, 2, 3, 4>>, shape)
+
+    shape = Shape.make_shape({:s, 16}, {1, 1, 1, 1})
+    assert d = %Op{} = Op.constant_from_binary(builder, <<1::16>>, shape)
+
+    assert e = %Op{} = Op.constant_from_binary(
+               builder,
+               <<1::float-native, 2::float-native, 3::float-native, 4::float-native>>,
+               Shape.make_shape({:f, 64}, {4, 1})
+             )
+
+    assert %Shape{dims: {0}, dtype: {:s, 64}} = Op.get_shape(a)
+    assert %Shape{dims: {}, dtype: {:s, 64}} = Op.get_shape(b)
     assert %Shape{dims: {1, 4}, dtype: {:s, 8}} = Op.get_shape(c)
     assert %Shape{dims: {1, 1, 1, 1}, dtype: {:s, 16}} = Op.get_shape(d)
+    assert %Shape{dims: {4, 1}, dtype: {:f, 64}} = Op.get_shape(e)
+
+    assert_raise ArgumentError, "binary does not match the given type and dimensions", fn ->
+      shape = Shape.make_shape({:s, 64}, {2, 2})
+      Op.constant_from_binary(builder, <<1::64-native>>, shape)
+    end
   end
 
   test "add/3 successfully creates add op without broadcast dimensions" do

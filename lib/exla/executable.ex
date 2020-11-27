@@ -1,8 +1,6 @@
 defmodule Exla.Executable do
-  alias __MODULE__, as: Executable
-  alias Exla.Buffer
-  alias Exla.Client
-  alias Exla.Shape
+  alias __MODULE__
+  alias Exla.{Buffer, Client}
 
   @enforce_keys [:client, :ref, :output_shape]
   defstruct [:client, :ref, :output_shape, :device]
@@ -13,7 +11,7 @@ defmodule Exla.Executable do
         options \\ []
       ) do
     # A tuple of {platform, ordinal} representing a device
-    {platform, ordinal} =
+    {_platform, ordinal} =
       Keyword.get(options, :device, {client.platform, Client.get_default_device_ordinal(client)})
 
     # Run ID of this logical execution

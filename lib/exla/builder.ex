@@ -1,7 +1,7 @@
 defmodule Exla.Builder do
-  alias __MODULE__, as: Builder
-  alias Exla.Op
-  alias Exla.Computation
+  alias __MODULE__
+  alias Exla.{Computation, Op}
+
   @enforce_keys [:ref]
   defstruct [:ref, :parent, :name]
 

@@ -189,6 +189,9 @@ defmodule Nx do
   (zero-dimentions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
 
+  You can also give a tensor as argument, which is just returned as
+  is.
+
   ## Examples
 
   A number returns a tensor of zero dimensions:
@@ -295,14 +298,41 @@ defmodule Nx do
       iex> Nx.type(t)
       {:bf, 16}
 
+  Given a tensor to `tensor/2` returns the tensor itself:
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> Nx.tensor(t) == t
+      true
+
+  However, if a :type is given and they don't match, an error is
+  raised:
+
+      iex> Nx.tensor(Nx.tensor([1, 2, 3]), type: {:f, 64})
+      ** (ArgumentError) got a tensor with type {:f, 64} but tensor has type {:s, 64}
+
   ## Options
 
     * `:type` - sets the type of the tensor. If one is not given,
       one is automatically inferred based on the input. See `Nx.Type`
-      and `Nx.Type.infer/1` for information.
+      and `Nx.Type.infer/1` for more information on types. If a
+      tensor is given alongside this option, then it verifies the
+      tensor matches the given `:type`
 
   """
-  def tensor(arg, opts \\ []) do
+  def tensor(arg, opts \\ [])
+
+  def tensor(%T{} = t, opts) do
+    type = opts[:type]
+
+    if type && type != t.type do
+      raise ArgumentError,
+            "got a tensor with type #{inspect(type)} but tensor has type #{inspect(t.type)}"
+    end
+
+    t
+  end
+
+  def tensor(arg, opts) do
     type = opts[:type] || Nx.Type.infer(arg)
     Nx.Type.validate!(type)
     {dimensions, data} = flatten(arg, type)
@@ -665,7 +695,16 @@ defmodule Nx do
     {left_ordered, right_ordered, left_chunk, right_chunk, shape} =
       broadcast_split_chunks(left_ordered, right_ordered, left_size, right_size, size, shape)
 
-    chunks = if dir == :left, do: chunks, else: [{:cross, left_size, right_size} | chunks]
+    # This is an optimization, we skip cross traversals on the left-side
+    # if we are just before a previous cross traversal. If broadcasting is
+    # failing, remove the if branch and see if succeeds. :)
+    chunks =
+      if dir == :left and match?([{:cross, _, _} | _], chunks) do
+        chunks
+      else
+        [{:cross, left_size, right_size} | chunks]
+      end
+
     broadcast_chunks(left_ordered, right_ordered, left_chunk, right_chunk, chunks, shape)
   end
 

@@ -14,9 +14,8 @@ defmodule Exla.Buffer do
   memory is allocated upon creation of the `xla::ScopedShapedBuffer` and deallocated upon it's destruction.
   """
 
-  alias __MODULE__, as: Buffer
-  alias Exla.Client
-  alias Exla.Shape
+  alias __MODULE__
+  alias Exla.{Client, Shape}
 
   defstruct [:data, :ref, :shape]
 
@@ -35,7 +34,7 @@ defmodule Exla.Buffer do
   If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
   we retain a copy of the binary to ensure it is not prematurely garbage collected.
   """
-  def buffer(binary, shape = %Shape{}, client = %Client{}, device = {platform, ordinal})
+  def buffer(binary, shape = %Shape{}, client = %Client{}, device = {_platform, _ordinal})
       when is_bitstring(binary) do
     {:ok, buffer = %Buffer{}} =
       place_on_device(client, %Buffer{data: binary, shape: shape}, device)

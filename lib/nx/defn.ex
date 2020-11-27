@@ -37,7 +37,26 @@ defmodule Nx.Defn do
 
   Calling other functions is possible, as long as they are implemented
   with `defn`. At the moment, only calling local functions is supported
-  by remote functions are coming next.
+  but remote functions are coming next.
+
+  ## Inputs and outputs types
+
+  `defn` functions can receive either numbers or tensors as inputs
+  (in other words, the same types as `Nx.tensor/2`). It always returns
+  a tensor, even for numerical constants. For example, this function
+
+      defn just_two(), do: 2
+
+  will return the same as `Nx.tensor(2)`.
+
+  ## Tensor constants
+
+  Tensor constants can be injected into `defn` via Elixir's module attributes.
+  For example, imagine you want to introduce a 2x2 matrix as part of a comutation,
+  you can do this:
+
+      @my_tensor Nx.tensor([[1, 2], [3, 4]])
+      defn add_2x2(t), do: t + @my_tensor
 
   ## Compilers
 
@@ -47,7 +66,7 @@ defmodule Nx.Defn do
   how a `defn` function will behave. For example, assuming you
   are using the `Exla` compiler:
 
-      @defn_compiler {Exla, platform: :host}
+      @defn_compiler {Exla, client: :host}
       defn add_and_mult(a, b, c) do
         a * b + c
       end
@@ -55,7 +74,7 @@ defmodule Nx.Defn do
   To set the compiler for the all definitions, you can set the
   `@default_defn_compiler` attribute:
 
-      @default_defn_compiler {Exla, platform: :cuda}
+      @default_defn_compiler {Exla, client: :cuda}
 
   """
 
@@ -67,7 +86,7 @@ defmodule Nx.Defn do
   def __compile__(_kind, _meta, _name, args, ast, []) do
     quote do
       unquote(__MODULE__).__validate__!(unquote(args))
-      unquote(ast)
+      Nx.tensor(unquote(ast))
     end
   end
 
