@@ -44,9 +44,8 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
   # TODO: What to do when the tensor data is not a binary?
 
-  # TODO: Use Nx.from_bitstring(data, type, shape) when added
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    %Nx.Tensor{data: data, type: shape.dtype, shape: shape.dims}
+    Nx.from_bitstring(data, shape.dtype, shape.dims)
   end
 
   defp nx_to_buffer(%Nx.Tensor{data: data, type: type, shape: shape})

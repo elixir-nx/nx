@@ -409,6 +409,45 @@ defmodule Nx do
   def to_bitstring(%T{data: data}), do: data
 
   @doc """
+  Creates a tensor from a `bitstring`, its `type`, and
+  its `shape`.
+
+  If the bitstring size does not match its type and shape,
+  an error is raised.
+
+  ## Examples
+
+      iex> Nx.from_bitstring(<<1, 2, 3, 4>>, {:s, 8}, {4})
+      Nx.tensor([1, 2, 3, 4], type: {:s, 8})
+
+      iex> Nx.from_bitstring(<<1, 2, 3, 4>>, {:s, 8}, {2, 2})
+      Nx.tensor([[1, 2], [3, 4]], type: {:s, 8})
+
+      iex> Nx.from_bitstring(<<>>, {:s, 8}, {0})
+      Nx.tensor([], type: {:s, 8})
+
+      iex> Nx.from_bitstring(<<12.3::float-64-native>>, {:f, 64}, {})
+      Nx.tensor(12.3)
+
+      iex> Nx.from_bitstring(<<1, 2, 3, 4>>, {:f, 64}, {4})
+      ** (ArgumentError) bitstring does not match the given type and dimensions
+
+  """
+  def from_bitstring(bitstring, type, shape) when is_bitstring(bitstring) and is_tuple(shape) do
+    {_, size} = Nx.Type.validate!(type)
+
+    if bit_size(bitstring) != size * tuple_product(shape) do
+      raise ArgumentError, "bitstring does not match the given type and dimensions"
+    end
+
+    %T{data: bitstring, type: type, shape: shape}
+  end
+
+  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
+  @doc """
   Adds two tensors together.
 
   If a number is given, it is converted to a tensor on the fly.
