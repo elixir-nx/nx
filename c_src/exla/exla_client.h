@@ -88,9 +88,11 @@ namespace exla {
     const xla::Shape on_device_shape() { return donated_ ? donated_buffer_->on_device_shape() : owned_buffer_->on_device_shape(); }
 
     xla::ScopedShapedBuffer* donate() {
-      donated_buffer_ = owned_buffer_.release();
-      donated_ = true;
-      owned_buffer_ = nullptr;
+      if(!donated_) {
+        donated_buffer_ = owned_buffer_.release();
+        donated_ = true;
+        owned_buffer_ = nullptr;
+      }
       return donated_buffer_;
     }
 
@@ -132,7 +134,7 @@ namespace exla {
     virtual ~ExlaClient() = default;
 
     xla::StatusOr<xla::ScopedShapedBuffer> Run(xla::LocalExecutable* executable,
-                                               std::vector<ExlaBuffer*>& buffers,
+                                               std::vector<ExlaBuffer**>& buffers,
                                                xla::ExecutableRunOptions& options);
 
     xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
