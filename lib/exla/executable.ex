@@ -12,7 +12,7 @@ defmodule Exla.Executable do
         options \\ []
       ) do
     # A tuple of {platform, ordinal} representing a device
-    {_platform, ordinal} =
+    {platform, ordinal} =
       Keyword.get(options, :device, {client.platform, Client.get_default_device_ordinal(client)})
 
     # Run ID of this logical execution
@@ -51,7 +51,7 @@ defmodule Exla.Executable do
       )
 
     if keep_on_device do
-      %Buffer{data: nil, ref: data, shape: output_shape}
+      %Buffer{data: nil, ref: {data, platform, ordinal}, shape: output_shape}
     else
       %Buffer{data: data, ref: nil, shape: output_shape}
     end

@@ -644,7 +644,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
-  std::vector<exla::ExlaBuffer*> inp;
+  std::vector<exla::ExlaBuffer**> inp;
   ERL_NIF_TERM head, tail, list;
   list = argv[2];
   while(enif_get_list_cell(env, list, &head, &tail)) {
@@ -658,9 +658,9 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
       if(!exla::get(env, tuple[0], data)) return exla::error(env, "Unable to read binary data from input.");
       if(!exla::get<xla::Shape>(env, tuple[1], shape)) return exla::error(env, "Unable to read shape from input.");
       EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device), env);
-      inp.push_back(buf);
+      inp.push_back(&buf);
     } else if(exla::get<exla::ExlaBuffer*>(env, head, buffer)) {
-      inp.push_back(*buffer);
+      inp.push_back(buffer);
     } else {
       return exla::error(env, "Invalid input passed to run.");
     }
