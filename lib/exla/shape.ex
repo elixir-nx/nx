@@ -1,5 +1,5 @@
 defmodule Exla.Shape do
-  alias __MODULE__, as: Shape
+  alias __MODULE__
 
   @enforce_keys [:ref, :dims, :dtype]
   defstruct [:ref, :dims, :dtype]

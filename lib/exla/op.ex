@@ -1,8 +1,6 @@
 defmodule Exla.Op do
-  alias __MODULE__, as: Op
-  alias Exla.Shape
-  alias Exla.Builder
-  alias Exla.Computation
+  alias __MODULE__
+  alias Exla.{Builder, Computation, Shape}
 
   @enforce_keys [:builder, :ref]
   defstruct [:builder, :ref]

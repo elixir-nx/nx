@@ -5,9 +5,8 @@ defmodule Exla.Client do
   See `Exla` module docs for a general introduction.
   """
 
-  alias __MODULE__, as: Client
-  alias Exla.Computation
-  alias Exla.Executable
+  alias __MODULE__
+  alias Exla.{Computation, Executable}
 
   @enforce_keys [:ref, :platform]
   defstruct [:ref, :platform]
