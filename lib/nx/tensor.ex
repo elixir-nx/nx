@@ -6,5 +6,6 @@ defmodule Nx.Tensor do
   metadata via the functions in the Nx module.
   """
   # TODO: implement the inspect protocol.
+  @enforce_keys [:data, :type, :shape]
   defstruct [:data, :type, :shape]
 end

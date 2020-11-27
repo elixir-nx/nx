@@ -20,6 +20,17 @@ defmodule NxTest do
       end)
     end
 
+    test "{2} + {2, 2}" do
+      commute(Nx.tensor([1, 2]), Nx.tensor([[1, 2], [3, 4]]), fn a, b ->
+        t = Nx.add(a, b)
+
+        assert Nx.to_bitstring(t) ==
+                 <<2::64-native, 4::64-native, 4::64-native, 6::64-native>>
+
+        assert Nx.shape(t) == {2, 2}
+      end)
+    end
+
     test "{2, 1, 2} + {1, 2, 1}" do
       a = Nx.tensor([[[10], [20]]])
       assert Nx.shape(a) == {1, 2, 1}

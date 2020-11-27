@@ -4,6 +4,41 @@ defmodule Exla.DefnTest do
   import Nx.Defn
   @default_defn_compiler Exla
 
+  describe "scalar" do
+    defn just_two_int, do: 2
+    defn just_two_float, do: 2.0
+
+    test "returns the tensor for the scalar" do
+      t = just_two_int()
+      assert Nx.to_bitstring(t) == <<2::64-native>>
+      assert Nx.type(t) == {:s, 64}
+      assert Nx.shape(t) == {}
+
+      t = just_two_float()
+      assert Nx.to_bitstring(t) == <<2.0::float-64-native>>
+      assert Nx.type(t) == {:f, 64}
+      assert Nx.shape(t) == {}
+    end
+  end
+
+  describe "tensor constants" do
+    @two 2
+    defn add_two_attribute(t), do: t + @two
+
+    @two_per_two Nx.tensor([[1, 2], [3, 4]])
+    defn add_2x2_attribute(t), do: t + @two_per_two
+
+    test "expands module attributes to scalars" do
+      assert add_two_attribute(1) == Nx.tensor(3)
+      assert add_two_attribute(Nx.tensor([1, 2, 3])) == Nx.tensor([3, 4, 5])
+    end
+
+    test "expands module attributes to tensors" do
+      assert add_2x2_attribute(1) == Nx.tensor([[2, 3], [4, 5]])
+      assert add_2x2_attribute(Nx.tensor([1, 2])) == Nx.tensor([[2, 4], [4, 6]])
+    end
+  end
+
   describe "+/2" do
     defn add_two(a, b), do: a + b
 
@@ -31,6 +66,8 @@ defmodule Exla.DefnTest do
 
     test "broadcast" do
       tensors = [
+        {Nx.tensor([1, 2]), Nx.tensor([[1, 2], [3, 4]])},
+        {Nx.tensor([1, 2]), Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]])},
         {Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]])},
         {Nx.tensor([[10, 20]]), Nx.tensor([[1], [2]])},
         {Nx.tensor([[[10], [20]]]), Nx.tensor([[[1, 2]], [[3, 4]]])},

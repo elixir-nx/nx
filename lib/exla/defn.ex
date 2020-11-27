@@ -10,16 +10,17 @@ defmodule Exla.Defn do
 
   ## Builder and computations
 
-  def sf_cached_def(module, name_arity, args, options, fun) do
+  def sf_cached_def(module, name, arity, args, options, fun) do
     cache_args = for arg <- args, do: nx_to_cache_key!(arg)
     buffers = for arg <- args, do: nx_to_buffer(arg)
-    cache_key = {module, name_arity, cache_args}
+    cache_key = {module, name, arity, cache_args}
 
     executable =
       Exla.LockedCache.run(cache_key, fn ->
         shapes = Enum.map(buffers, & &1.shape)
-        result = apply(fun, shapes)
-        computation = Exla.Builder.build(result)
+        builder = Exla.Builder.new("#{name}/#{arity}")
+        result = fun.(builder, shapes)
+        computation = Exla.Builder.build(to_operator(builder, result))
         client = Exla.Client.fetch!(Keyword.get(options, :client, :default))
         executable = Exla.Client.compile(client, computation, shapes)
         :persistent_term.put(cache_key, executable)
@@ -43,6 +44,7 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
   # TODO: What to do when the tensor data is not a binary?
 
+  # TODO: Use Nx.from_bitstring(data, type, shape) when added
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
     %Nx.Tensor{data: data, type: shape.dtype, shape: shape.dims}
   end
@@ -72,15 +74,19 @@ defmodule Exla.Defn do
 
   ## Special forms
 
+  def sf_nx_tensor(builder, %Nx.Tensor{data: data, type: type, shape: shape}) do
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Op.constant_from_binary(builder, data, shape)
+  end
+
   ## Operators
 
   def nx_add(builder, left, right) do
+    left = to_operator(builder, left)
+    right = to_operator(builder, right)
     left_shape = Exla.Op.get_shape(left)
     right_shape = Exla.Op.get_shape(right)
     dims = broadcast_dimensions(left_shape.dims, right_shape.dims)
-
-    left = to_operator(builder, left)
-    right = to_operator(builder, right)
     Exla.Op.add(left, right, dims)
   end
 
@@ -110,8 +116,6 @@ defmodule Exla.Defn do
     init_value = to_typed_constant(builder, 0, reduction_shape.dtype)
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
-
-  # TODO: constants should come out as tensors in both Nx and Exla compilers
 
   # TODO: to_operator should actually call to_typed_constant
   # Implement this properly once we use convert_element_type.
@@ -147,57 +151,14 @@ defmodule Exla.Defn do
 
   defp broadcast_dimensions(left, right) do
     {min, max} = if left <= right, do: {left, right}, else: {right, left}
-
     min_size = tuple_size(min)
     max_size = tuple_size(max)
-
-    if min_size == max_size do
-      all_dimensions(min)
-    else
-      min_ordered = shape_to_ranked_ordered_list(min, min_size)
-      max_ordered = shape_to_ranked_ordered_list(max, max_size)
-
-      # The initial pass maps all dimensions of equal size and
-      # all degenerate dimensions on the lower-ranked tuple to
-      # the same dimension on the higher-ranked tuple.
-      case broadcast_dimensions(min_ordered, max_ordered, 0, min_size, []) do
-        {pending, acc} ->
-          # If we still didn't fullfil the broadcast dimensions, it is
-          # because the higher-ranked tuple has generate dimensions.
-          # So we map the pending dimensions to the highest dimensions
-          # on the higher-ranked tuple.
-          List.to_tuple(Enum.reverse(count_down(pending, max_size - pending, acc)))
-
-        :error ->
-          raise ArgumentError,
-                "cannot broadcast tensor of dimensions #{inspect(left)} to #{inspect(right)}"
-      end
-    end
+    # To reproduce Nx broadcast, we simply match the lower dimensions to the highest ones.
+    List.to_tuple(Enum.reverse(count_down(min_size, max_size - min_size, [])))
   end
 
   defp count_down(0, _n, acc), do: acc
   defp count_down(i, n, acc), do: count_down(i - 1, n + 1, [n | acc])
-
-  defp broadcast_dimensions([dim | left], [dim | right], n, pending, acc),
-    do: broadcast_dimensions(left, right, n + 1, pending - 1, [n | acc])
-
-  defp broadcast_dimensions([1 | left], [_rdim | right], n, pending, acc),
-    do: broadcast_dimensions(left, right, n + 1, pending - 1, [n | acc])
-
-  defp broadcast_dimensions([_ldim | left], [1 | right], n, pending, acc),
-    do: broadcast_dimensions(left, right, n + 1, pending, acc)
-
-  defp broadcast_dimensions([_ | _], [_ | _], _n, _pending, _acc),
-    do: :error
-
-  defp broadcast_dimensions([], _right, _n, pending, acc),
-    do: {pending, acc}
-
-  defp shape_to_ranked_ordered_list(_tuple, 0),
-    do: []
-
-  defp shape_to_ranked_ordered_list(tuple, size),
-    do: [:erlang.element(size, tuple) | shape_to_ranked_ordered_list(tuple, size - 1)]
 
   ## Callback
 
@@ -206,17 +167,16 @@ defmodule Exla.Defn do
 
     {ast, _state} = traverse(ast, state)
     arity = length(args)
-    builder = "#{name}/#{arity}"
     shapes = Macro.generate_arguments(arity, __MODULE__)
 
     quote do
       Exla.Defn.sf_cached_def(
         __MODULE__,
-        {unquote(name), unquote(arity)},
+        unquote(name),
+        unquote(arity),
         unquote(args),
         unquote(options),
-        fn unquote_splicing(shapes) ->
-          builder = Exla.Defn.sf_builder(unquote(builder))
+        fn builder, unquote(shapes) ->
           unquote_splicing(args_to_parameters(args, shapes))
           unquote(ast)
         end
@@ -226,7 +186,11 @@ defmodule Exla.Defn do
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do
     {args, state} = traverse(args, state)
-    {{{:., dot_meta, [__MODULE__, :"nx_#{name}"]}, meta, [quote(do: builder) | args]}, state}
+    {to_builder_call(dot_meta, meta, :"nx_#{name}", args), state}
+  end
+
+  defp traverse({:%{}, meta, [__struct__: Nx.Tensor] ++ _} = struct, state) do
+    {to_builder_call(meta, :sf_nx_tensor, [struct]), state}
   end
 
   defp traverse({name, meta, args}, state) do
@@ -261,5 +225,11 @@ defmodule Exla.Defn do
 
   defp var_to_parameter_name({var, meta, ctx}) when is_atom(var) and is_atom(ctx) do
     "#{var}@#{Keyword.fetch!(meta, :counter)}"
+  end
+
+  defp to_builder_call(meta, fun, args), do: to_builder_call(meta, meta, fun, args)
+
+  defp to_builder_call(dot_meta, meta, fun, args) do
+    {{:., dot_meta, [__MODULE__, fun]}, meta, [quote(do: builder) | args]}
   end
 end

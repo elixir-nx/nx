@@ -3,6 +3,8 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
+  @forbidden_nx_functions [to_bitstring: 1, rank: 1, shape: 1, tensor: 1, tensor: 2, type: 1]
+
   @doc """
   The callback required to be implemented for each compiler.
 
@@ -16,6 +18,13 @@ defmodule Nx.Defn.Compiler do
 
   The callback uses double underscores so it can be define
   at root modules without affecting the module's main API.
+
+  ## Unsupported Nx functions
+
+  For completeness, here is a list of all `Nx` functions that
+  are not allowed in `defn`:
+
+  #{for {f, a} <- @forbidden_nx_functions, do: "  * `#{Exception.format_mfa(Nx, f, a)}`\n"}
   """
   @callback __compile__(
               kind :: :def | :defp,
@@ -127,6 +136,14 @@ defmodule Nx.Defn.Compiler do
     {{:=, meta, args}, state}
   end
 
+  defp normalize(
+         {:%{}, _, [__struct__: Nx.Tensor, data: data, shape: shape, type: {_, _}]} = tensor,
+         state
+       )
+       when is_binary(data) and is_tuple(shape) do
+    {tensor, state}
+  end
+
   defp normalize({name, meta, args}, state) when is_atom(name) and is_list(args) do
     {args, state} = normalize_list(args, state)
     {{:__local__, meta, [name | args]}, state}
@@ -137,8 +154,6 @@ defmodule Nx.Defn.Compiler do
     state = update_in(state.version, &max(&1, version))
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
-
-  @forbidden_nx_functions [to_bitstring: 1, rank: 1, shape: 1, tensor: 1, tensor: 2, type: 1]
 
   defp normalize({{:., _, [Nx, name]} = call, meta, args}, state) do
     arity = length(args)
@@ -151,8 +166,8 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, args}, state}
   end
 
-  defp normalize(integer, state) when is_integer(integer) do
-    {integer, state}
+  defp normalize(number, state) when is_number(number) do
+    {number, state}
   end
 
   defp normalize(expr, state) do

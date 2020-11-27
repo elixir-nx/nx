@@ -1,13 +1,13 @@
 defmodule Exla.Shape do
   alias __MODULE__, as: Shape
 
-  @enforce_keys [:ref]
-  defstruct [:ref, dims: nil, dtype: nil]
+  @enforce_keys [:ref, :dims, :dtype]
+  defstruct [:ref, :dims, :dtype]
 
   @doc """
   Creates a shape with the given type-size tuple and dimensions.
   """
-  def make_shape({type, size}, dims) do
+  def make_shape({type, size}, dims) when is_tuple(dims) do
     _ = Nx.Type.validate!({type, size})
     ref = Exla.NIF.make_shape(dtype_to_charlist({type, size}), dims) |> unwrap!()
     %Shape{ref: ref, dtype: {type, size}, dims: dims}

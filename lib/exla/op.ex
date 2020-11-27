@@ -14,13 +14,15 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def constant_from_binary(builder = %Builder{}, data, dtype = {_, _}, dims) when is_binary(data) do
-    shape = Shape.make_shape(dtype, dims)
-    constant_from_binary(builder, data, shape)
-  end
+  def constant_from_binary(%Builder{ref: builder}, data, %Shape{} = shape)
+      when is_binary(data) do
+    %{dims: dims, dtype: {_, size}, ref: shape_ref} = shape
 
-  def constant_from_binary(%Builder{ref: builder}, data, %Shape{ref: shape}) when is_binary(data) do
-    ref = Exla.NIF.constant_from_binary(builder, data, shape) |> unwrap!()
+    if bit_size(data) != size * tuple_product(dims) do
+      raise ArgumentError, "binary does not match the given type and dimensions"
+    end
+
+    ref = Exla.NIF.constant_from_binary(builder, data, shape_ref) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -174,6 +176,10 @@ defmodule Exla.Op do
     ref = Exla.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
+
+  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
