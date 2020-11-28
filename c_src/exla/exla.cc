@@ -156,6 +156,23 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
 }
 
+/************************ Tuples *********************************/
+ERL_NIF_TERM tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 2){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  std::vector<xla::XlaOp> elements;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get_vector_list<xla::XlaOp>(env, argv[1], elements)) return exla::error(env, "Unable to get tuple elements.");
+
+  xla::XlaOp op = xla::Tuple(*builder, elements);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 /************************ xla::XlaOp Functions ***************************/
 ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
@@ -481,6 +498,36 @@ ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(!exla::get<xla::XlaOp>(env, argv[1], operand)) return exla::error(env, "Unable to get operand.");
 
   EXLA_ASSIGN_OR_RETURN(xla::Shape shape, (*builder)->GetShape(*operand), env);
+
+  if(shape.IsTuple()) {
+    int element_count = xla::ShapeUtil::TupleElementCount(shape);
+    ERL_NIF_TERM nested_dims_term[element_count], nested_type_term[element_count], nested_shape_term[element_count];
+    for(int i=0;i<element_count;i++) {
+      xla::Shape shape_elem = xla::ShapeUtil::GetTupleElementShape(shape, i);
+      xla::PrimitiveType type = shape_elem.element_type();
+      absl::Span<const long long int> dims = shape_elem.dimensions();
+      long long int rank = shape_elem.rank();
+
+      std::string type_name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+      // TODO: Put this in NIF Util
+      ERL_NIF_TERM dim_arr[(size_t) rank];
+      for(int j=0;j<rank;j++) {
+        int copy;
+        copy = dims.at(j);
+        dim_arr[j] = exla::make(env, copy);
+      }
+
+      nested_dims_term[i] = enif_make_tuple_from_array(env, dim_arr, rank);
+      nested_type_term[i] = exla::make(env, type_name);
+      nested_shape_term[i] = exla::make(env, shape_elem);
+    }
+    ERL_NIF_TERM shape_term = exla::make(env, shape);
+    ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, nested_dims_term, element_count);
+    ERL_NIF_TERM type_term = enif_make_tuple_from_array(env, nested_type_term, element_count);
+    ERL_NIF_TERM child_shape_term = enif_make_tuple_from_array(env, nested_shape_term, element_count);
+    return exla::ok(env, enif_make_tuple(env, 4, dims_term, type_term, child_shape_term, shape_term));
+  }
 
   xla::PrimitiveType type = shape.element_type();
   absl::Span<const long long int> dims = shape.dimensions();
@@ -808,6 +855,7 @@ static ErlNifFunc exla_funcs[] = {
   /******** Constant Creation Methods *******/
   {"constant_r0", 3, constant_r0},
   {"constant_from_binary", 3, constant_from_binary},
+  {"tuple", 2, tuple},
   /********* Conditionals *********/
   {"conditional", 5, conditional_if},
   {"conditional", 3, conditional_multi},

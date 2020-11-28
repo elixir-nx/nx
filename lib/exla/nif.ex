@@ -170,6 +170,8 @@ defmodule Exla.NIF do
   def constant_from_binary(_builder, _data, _shape),
     do: nif_error(__ENV__.function)
 
+  def tuple(_builder, _elements), do: nif_error(__ENV__.function)
+
   def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 
