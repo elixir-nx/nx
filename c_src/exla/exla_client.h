@@ -11,50 +11,72 @@
 #include "tensorflow/core/platform/mem.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/platform/types.h"
+#include "tensorflow/core/platform/status.h"
 
 namespace exla {
   namespace se = tensorflow::se;
 
   /*
-   * Wraps a ScopedShapedBuffer in a unique_ptr so the ScopedShapedBuffer is automatically
-   * destructed when this object is destructed. In the future, will provide a place to
-   * implement device transfers, etc.
+   * Wraps a ScopedShapedBuffer.
    */
-  // TODO: Add device attribute
   class ExlaBuffer {
 
   public:
-    ExlaBuffer(std::unique_ptr<xla::ScopedShapedBuffer> buffer, bool zero_copy) : owned_buffer_(std::move(buffer)),
-                                                                                  zero_copy_(zero_copy) {}
+    ExlaBuffer(xla::ScopedShapedBuffer* buffer,
+               ExlaDevice* device,
+               bool zero_copy) : buffer_(buffer),
+                                 device_(device),
+                                 zero_copy_(zero_copy) {}
     ~ExlaBuffer() {
-      if(zero_copy_) {
-        if(donated_) {
-          donated_buffer_->release();
+      if(this->empty()) {
+        return;
+      } else {
+        if(zero_copy_ && buffer_ != nullptr) {
+          buffer_->release();
+          buffer_ = nullptr;
+        } else if(!zero_copy_ && buffer_ != nullptr) {
+          delete buffer_;
+          buffer_ = nullptr;
         } else {
-          owned_buffer_->release();
+          return;
         }
-      } else if(!zero_copy_ && donated_) {
-        delete donated_buffer_;
-      } else {}
+      }
     }
 
-    xla::ScopedShapedBuffer* donate() {
-      donated_buffer_ = owned_buffer_.release();
-      donated_ = true;
-      return donated_buffer_;
+    bool empty() { return buffer_ == nullptr; }
+
+    xla::Status deallocate() {
+      if(this->empty()) {
+        return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
+      } else {
+        if(zero_copy_ && buffer_ != nullptr) {
+          buffer_->release();
+          buffer_ = nullptr;
+        } else if(!zero_copy_ && buffer_ != nullptr) {
+          delete buffer_;
+          buffer_ = nullptr;
+        } else {
+          return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
+        }
+      }
+
+      return tensorflow::Status::OK();
     }
 
-    xla::ScopedShapedBuffer* buffer() { return owned_buffer_.get(); }
+    const xla::Shape on_host_shape() { return buffer_->on_host_shape(); }
+    const xla::Shape on_device_shape() { return buffer_->on_device_shape(); }
+
+    xla::ScopedShapedBuffer* buffer() { return buffer_; }
+
+    ExlaDevice* device() { return device_; }
 
   private:
-    // Owned Buffer, guaranteed destructed when this class is destructed
-    std::unique_ptr<xla::ScopedShapedBuffer> owned_buffer_;
     // Used for donating this buffer to another function, like `Run`
-    xla::ScopedShapedBuffer* donated_buffer_ = nullptr;
+    xla::ScopedShapedBuffer* buffer_;
     // Was the bool created with a zero-copy transfer
     bool zero_copy_;
-    // Has the buffer been donated?
-    bool donated_ = false;
+    // Buffer's device
+    ExlaDevice* device_;
 
   };
 
@@ -78,14 +100,14 @@ namespace exla {
     virtual ~ExlaClient() = default;
 
     xla::StatusOr<xla::ScopedShapedBuffer> Run(xla::LocalExecutable* executable,
-                                               std::vector<ExlaBuffer*>& buffers,
+                                               std::vector<std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**>>& buffers,
                                                xla::ExecutableRunOptions& options);
 
     xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
                                                 const xla::Shape& shape,
                                                 ExlaDevice* device);
 
-    xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(xla::ScopedShapedBuffer& buffer, ExlaDevice* device);
+    xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
 
     xla::LocalClient* client() { return client_; }
 

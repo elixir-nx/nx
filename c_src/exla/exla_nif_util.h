@@ -37,6 +37,11 @@ namespace exla {
   ERL_NIF_TERM ok(ErlNifEnv* env);
 
   /*
+   * Helper for returning an atom from NIF.
+   */
+  ERL_NIF_TERM atom(ErlNifEnv* env, const char* status);
+
+  /*
    * Getters for standard types.
    */
   int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var);

@@ -16,6 +16,10 @@ namespace exla {
     return enif_make_tuple2(env, ok(env), term);
   }
 
+  ERL_NIF_TERM atom(ErlNifEnv* env, const char* msg){
+    return enif_make_atom(env, msg);
+  }
+
   int get(ErlNifEnv* env, ERL_NIF_TERM term, bool &var) {
     int value;
     if(!enif_get_int(env, term, &value)) return 0;

@@ -1,4 +1,5 @@
 defmodule Exla.Executable do
+
   alias __MODULE__
   alias Exla.{Buffer, Client}
 
@@ -11,7 +12,7 @@ defmodule Exla.Executable do
         options \\ []
       ) do
     # A tuple of {platform, ordinal} representing a device
-    {_platform, ordinal} =
+    {platform, ordinal} =
       Keyword.get(options, :device, {client.platform, Client.get_default_device_ordinal(client)})
 
     # Run ID of this logical execution
@@ -25,20 +26,23 @@ defmodule Exla.Executable do
     # See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h#L752-L755
     launch_id = Keyword.get(options, :launch_id, 0)
     # Whether to keep result on device
-    keep_on_device = Keyword.get(options, :keep_on_device, true)
+    keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
-    {inputs, shapes} =
+    inputs =
       arguments
-      |> Enum.map(&{&1.data, &1.shape.ref})
-      |> Enum.unzip()
+      |> Enum.map(
+          fn
+            %Buffer{ref: {ref, _, _}} -> ref
+            %Buffer{data: data, shape: shape} -> {data, shape.ref}
+          end
+        )
 
     {:ok, data} =
       Exla.NIF.run(
         client.ref,
         exec,
         inputs,
-        shapes,
         ordinal,
         run_id,
         rng_seed,
@@ -46,6 +50,10 @@ defmodule Exla.Executable do
         keep_on_device_int
       )
 
-    %Buffer{data: data, ref: nil, shape: output_shape}
+    if keep_on_device do
+      %Buffer{data: nil, ref: {data, platform, ordinal}, shape: output_shape}
+    else
+      %Buffer{data: data, ref: nil, shape: output_shape}
+    end
   end
 end

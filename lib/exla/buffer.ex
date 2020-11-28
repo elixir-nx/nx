@@ -44,44 +44,34 @@ defmodule Exla.Buffer do
 
   @doc """
   Places the given `buffer` on the given `device` using `client`.
-
-  If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
-  we retain a copy of the binary to ensure it is not prematurely garbage collected.
   """
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:cpu, _ordinal}) do
-    ref = to_shaped_buffer(client, buffer, device)
-    %Buffer{buffer | ref: ref}
-  end
-
   def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {_platform, _ordinal}) do
-    ref = to_shaped_buffer(client, buffer, device)
-    %Buffer{data: nil, shape: buffer.shape, ref: ref}
+    {:ok, {platform, ordinal}} = Client.check_device_compatibility(client, device)
+    ref = Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
+    %Buffer{buffer | data: nil, ref: {ref, platform, ordinal}}
   end
 
   @doc """
-  Returns the buffer's underlying data as a bitstring.
+  Reads the underlying device buffer.
 
-  As is, this is destructive. Using the reference `ref` will lead to undefined behaviour.
+  This copies the underlying device memory into a binary without destroying it.
   """
-  def to_bitstring(%Client{ref: client}, %Buffer{data: nil, ref: ref}) do
-    {:ok, binary} = Exla.NIF.shaped_buffer_to_binary(client, ref)
+  def read(client = %Client{}, buffer = %Buffer{ref: {ref, platform, ordinal}}) do
+    {:ok, _} = Client.check_device_compatibility(client, {platform, ordinal})
+    binary = Exla.NIF.read_device_mem(client.ref, ref) |> unwrap!()
     binary
   end
 
-  def to_bitstring(_, %Buffer{data: data}), do: data
-
   @doc """
-  Returns a reference to the underlying `ShapedBuffer` on `device`.
+  Deallocates underlying device buffer.
+
+  Returns `:ok` | `:already_deallocated`.
   """
-  def to_shaped_buffer(
-        client = %Client{},
-        %Buffer{data: data, ref: nil, shape: shape},
-        device = {_platform, _ordinal}
-      ) do
-    {:ok, {_platform, ordinal}} = Client.check_device_compatibility(client, device)
-    {:ok, buffer} = Exla.NIF.binary_to_shaped_buffer(client.ref, data, shape.ref, ordinal)
-    buffer
+  def deallocate(%Buffer{ref: {ref, _, _}}) do
+    Exla.NIF.deallocate_device_mem(ref) |> unwrap!()
   end
 
-  def to_shaped_buffer(_, %Buffer{ref: ref}, _), do: ref
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
+  defp unwrap!(status) when is_atom(status), do: status
 end
