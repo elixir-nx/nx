@@ -134,6 +134,19 @@ namespace exla {
 
   int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<long long int> &var);
 
+  template <typename T>
+  int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
+    const ERL_NIF_TERM* terms;
+    int length;
+    if(!enif_get_tuple(env, tuple, &length, &terms)) return 0;
+    for(int i=0;i<length;i++){
+      T* elem;
+      if(!get<T>(env, terms[i], elem)) return 0;
+      var.push_back(*elem);
+    }
+    return 1;
+  }
+
   int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var);
   int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ErlNifBinary> &var);
 

@@ -30,14 +30,33 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def tuple(%Builder{ref: builder}, elements) when is_tuple(elements) do
+    element_refs =
+      elements
+      |> Tuple.to_list()
+      |> Enum.map(& &1.ref)
+
+    ref = Exla.NIF.tuple(builder, element_refs) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Ops
 
   @doc """
   Gets the shape of an operator.
   """
   def get_shape(%Op{builder: builder, ref: operand}) do
-    {dims, type_str, shape_ref} = Exla.NIF.get_shape(builder, operand) |> unwrap!()
-    %Shape{ref: shape_ref, dims: dims, dtype: Shape.charlist_to_dtype(type_str)}
+    case Exla.NIF.get_shape(builder, operand) |> unwrap!() do
+      {dims_term, type_str, shape_ref} ->
+        %Shape{ref: shape_ref, dims: dims_term, dtype: Shape.charlist_to_dtype(type_str)}
+      {nested_dims_term, nested_type_str, nested_shape_term, shape_ref} ->
+        nested_type_term =
+          nested_type_str
+          |> Tuple.to_list()
+          |> Enum.map(&Shape.charlist_to_dtype/1)
+          |> List.to_tuple()
+        %Shape{ref: shape_ref, dims: nested_dims_term, dtype: nested_type_term}
+    end
   end
 
   def conditional(
