@@ -9,7 +9,8 @@ defmodule BufferTest do
   test "place_on_device/3" do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
     platform = client().platform
-    assert %Buffer{ref: {ref, platform, 0}} = Buffer.place_on_device(client(), b1, {platform, 0})
+    assert %Buffer{ref: {ref, result_platform, 0}} = Buffer.place_on_device(client(), b1, {platform, 0})
+    assert result_platform == platform
     assert is_reference(ref)
   end
 

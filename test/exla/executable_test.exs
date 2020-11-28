@@ -69,7 +69,8 @@ defmodule ExecutableTest do
     res = Op.add(x, y)
     comp = Builder.build(res)
     exec = Client.compile(client(), comp, [t1.shape, t2.shape])
-    assert t3 = %Buffer{ref: ref} = Executable.run(exec, [t1, t2], keep_on_device: true)
+    assert t3 = %Buffer{ref: {ref, _, _}} = Executable.run(exec, [t1, t2], keep_on_device: true)
+    assert is_reference(ref)
     assert %Buffer{data: <<4::32-native>>} = Executable.run(exec, [t3, t3])
   end
 
