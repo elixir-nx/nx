@@ -16,7 +16,7 @@ namespace exla {
     return enif_make_tuple2(env, ok(env), term);
   }
 
-  ERL_NIF_TERM status(ErlNifEnv* env, const char* msg){
+  ERL_NIF_TERM atom(ErlNifEnv* env, const char* msg){
     return enif_make_atom(env, msg);
   }
 

@@ -134,7 +134,7 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   xla::Status dealloc_status = (*buffer)->deallocate();
 
   if(!dealloc_status.ok()) {
-    return exla::status(env, "already_deallocated");
+    return exla::atom(env, "already_deallocated");
   } else {
     return exla::ok(env);
   }
