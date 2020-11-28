@@ -181,6 +181,37 @@ defmodule Exla.OpTest do
     assert %Shape{dims: {0}, dtype: {:t, []}} = Op.get_shape(g)
   end
 
+  test "get_tuple_element/2" do
+    builder = Builder.new("test")
+
+    shape_a = Shape.make_shape({:s, 64}, {0})
+    a = Op.constant_from_binary(builder, <<>>, shape_a)
+    shape_b = Shape.make_shape({:s, 64}, {})
+    b = Op.constant_from_binary(builder, <<1::64-native>>, shape_b)
+    shape_c = Shape.make_shape({:s, 8}, {1, 4})
+    c = Op.constant_from_binary(builder, <<1, 2, 3, 4>>, shape_c)
+    shape_d = Shape.make_shape({:s, 16}, {1, 1, 1, 1})
+    d = Op.constant_from_binary(builder, <<1::16>>, shape_d)
+
+    e = Op.tuple(builder, {a, b, c, d})
+    f = Op.tuple(builder, {e, c})
+
+    assert g = %Op{} = Op.get_tuple_element(e, 3)
+    assert h = %Op{} = Op.get_tuple_element(f, 0)
+
+    assert %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}} = Op.get_shape(g)
+    assert %Shape{dims: {4}, dtype:
+      {:t,
+        [
+          %Shape{dtype: {:s, 64}, dims: {0}},
+          %Shape{dtype: {:s, 64}, dims: {}},
+          %Shape{dtype: {:s, 8}, dims: {1, 4}},
+          %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+        ]
+      }
+    } = Op.get_shape(h)
+  end
+
   test "add/3 successfully creates add op without broadcast dimensions" do
     builder = Builder.new("test")
     shape = Shape.make_shape({:s, 32}, {1, 1})

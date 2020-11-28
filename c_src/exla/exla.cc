@@ -185,6 +185,22 @@ ERL_NIF_TERM tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 2){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  long long int index;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get(env, argv[1], index)) return exla::error(env, "Unable to get index.");
+
+  xla::XlaOp op = xla::GetTupleElement(*operand, index);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 /************************ xla::XlaOp Functions ***************************/
 ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
@@ -820,7 +836,9 @@ static ErlNifFunc exla_funcs[] = {
   /******** Constant Creation Methods *******/
   {"constant_r0", 3, constant_r0},
   {"constant_from_binary", 3, constant_from_binary},
+  /********* Tuples **************/
   {"tuple", 2, tuple},
+  {"get_tuple_element", 2, get_tuple_element},
   /********* Conditionals *********/
   {"conditional", 5, conditional_if},
   {"conditional", 3, conditional_multi},

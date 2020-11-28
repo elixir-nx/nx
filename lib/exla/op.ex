@@ -50,6 +50,11 @@ defmodule Exla.Op do
     Shape.make_shape(ref)
   end
 
+  def get_tuple_element(%Op{builder: builder, ref: operand}, index) when is_integer(index) do
+    ref = Exla.NIF.get_tuple_element(operand, index) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def conditional(
         %Op{builder: builder, ref: pred},
         %Op{builder: builder, ref: true_op},
