@@ -215,6 +215,37 @@ namespace exla {
     }
   }
 
+  ERL_NIF_TERM make_shape_term(ErlNifEnv* env, xla::Shape shape) {
+    if(shape.IsTuple()) {
+      int element_count = xla::ShapeUtil::TupleElementCount(shape);
+      ERL_NIF_TERM terms[element_count];
+      for(int i=0;i<element_count;i++){
+        xla::Shape shape_elem = xla::ShapeUtil::GetTupleElementShape(shape, i);
+        terms[i] = exla::make<xla::Shape>(env, shape_elem);
+      }
+      return enif_make_list_from_array(env, terms, element_count);
+    }
+
+    xla::PrimitiveType type = shape.element_type();
+    absl::Span<const long long int> dims = shape.dimensions();
+    long long int rank = shape.rank();
+
+    std::string type_name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+    // TODO: Put this in NIF Util
+    ERL_NIF_TERM dim_arr[(size_t) rank];
+    for(int i=0;i<rank;i++) {
+      int copy;
+      copy = dims.at(i);
+      dim_arr[i] = exla::make(env, copy);
+    }
+
+    ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, dim_arr, rank);
+    ERL_NIF_TERM type_term = exla::make(env, type_name);
+
+    return enif_make_tuple(env, 2, dims_term, type_term);
+  }
+
   ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary &var) {
     return enif_make_binary(env, &var);
   }

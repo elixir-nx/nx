@@ -46,17 +46,8 @@ defmodule Exla.Op do
   Gets the shape of an operator.
   """
   def get_shape(%Op{builder: builder, ref: operand}) do
-    case Exla.NIF.get_shape(builder, operand) |> unwrap!() do
-      {dims_term, type_str, shape_ref} ->
-        %Shape{ref: shape_ref, dims: dims_term, dtype: Shape.charlist_to_dtype(type_str)}
-      {nested_dims_term, nested_type_str, nested_shape_term, shape_ref} ->
-        nested_type_term =
-          nested_type_str
-          |> Tuple.to_list()
-          |> Enum.map(&Shape.charlist_to_dtype/1)
-          |> List.to_tuple()
-        %Shape{ref: shape_ref, dims: nested_dims_term, dtype: nested_type_term}
-    end
+    ref = Exla.NIF.get_shape(builder, operand) |> unwrap!()
+    Shape.make_shape(ref)
   end
 
   def conditional(

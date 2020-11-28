@@ -5,6 +5,25 @@ defmodule Exla.Shape do
   defstruct [:ref, :dims, :dtype]
 
   @doc """
+  Creates a shape with the given reference or list of references.
+  """
+  def make_shape(ref) when is_reference(ref) do
+    case Exla.NIF.make_shape(ref) |> unwrap!() do
+      {dims_term, type_str} ->
+        %Shape{dims: dims_term, dtype: charlist_to_dtype(type_str), ref: ref}
+      [shape | terms] ->
+        children = make_children([shape | terms])
+        %Shape{dims: {length(children)}, dtype: {:t, children}, ref: ref}
+      [] ->
+        %Shape{dims: {0}, dtype: {:t, []}, ref: ref}
+    end
+  end
+
+  # Helpers for creating Tuple Shapes
+  defp make_children([ref | []]) when is_reference(ref), do: [make_shape(ref)]
+  defp make_children([ref | refs]) when is_reference(ref), do: [make_shape(ref) | make_children(refs)]
+
+  @doc """
   Creates a shape with the given type-size tuple and dimensions.
   """
   def make_shape({type, size}, dims) when is_tuple(dims) do
@@ -16,7 +35,6 @@ defmodule Exla.Shape do
   @doc """
   Converts a charlist type into Nx' tuple format.
   """
-  def charlist_to_dtype('tuple'), do: :tuple
   def charlist_to_dtype('bf16'), do: {:bf, 16}
   def charlist_to_dtype([letter | integer]), do: {List.to_atom([letter]), List.to_integer(integer)}
 

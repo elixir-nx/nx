@@ -13,6 +13,8 @@ defmodule Exla.NIF do
   def create_sub_builder(_builder, _name),
     do: nif_error(__ENV__.function)
 
+  def make_shape(_ref), do: nif_error(__ENV__.function)
+
   def make_shape(_type, _dims),
     do: nif_error(__ENV__.function)
 

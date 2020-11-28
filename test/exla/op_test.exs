@@ -96,8 +96,89 @@ defmodule Exla.OpTest do
     d = Op.constant_from_binary(builder, <<1::16>>, shape_d)
 
     assert e = %Op{} = Op.tuple(builder, {a, b, c, d})
+    assert f = %Op{} = Op.tuple(builder, {e, a})
+    assert g = %Op{} = Op.tuple(builder, {})
+    assert h = %Op{} = Op.tuple(builder, {Op.tuple(builder, {e, g}), b, c, f, Op.tuple(builder, {d})})
 
-    assert %Shape{dtype: {{:s, 64}, {:s, 64}, {:s, 8}, {:s, 16}}, dims: {{0}, {}, {1, 4}, {1, 1, 1, 1}}} = Op.get_shape(e)
+    assert %Shape{dims: {4}, dtype:
+      {:t,
+        [
+          %Shape{dtype: {:s, 64}, dims: {0}},
+          %Shape{dtype: {:s, 64}, dims: {}},
+          %Shape{dtype: {:s, 8}, dims: {1, 4}},
+          %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+        ]
+      }
+    } = Op.get_shape(e)
+
+    assert %Shape{dims: {2},
+      dtype:
+        {:t,
+          [
+            %Shape{dims: {4}, dtype:
+              {:t,
+                [
+                  %Shape{dtype: {:s, 64}, dims: {0}},
+                  %Shape{dtype: {:s, 64}, dims: {}},
+                  %Shape{dtype: {:s, 8}, dims: {1, 4}},
+                  %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+                ]
+              }
+            },
+            %Shape{dtype: {:s, 64}, dims: {0}}
+          ]
+        }
+      } = Op.get_shape(f)
+
+    assert %Shape{dims: {5},
+      dtype:
+        {:t,
+          [
+            %Shape{dims: {2},
+              dtype:
+                {:t,
+                  [
+                    %Shape{dims: {4},
+                      dtype:
+                      {:t,
+                        [
+                          %Shape{dtype: {:s, 64}, dims: {0}},
+                          %Shape{dtype: {:s, 64}, dims: {}},
+                          %Shape{dtype: {:s, 8}, dims: {1, 4}},
+                          %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+                        ]
+                      }
+                    },
+                    %Shape{dims: {0}, dtype: {:t, []}}
+                  ]
+                }
+            },
+            %Shape{dims: {}, dtype: {:s, 64}},
+            %Shape{dims: {1, 4}, dtype: {:s, 8}},
+            %Shape{dims: {2},
+            dtype:
+              {:t,
+                [
+                  %Shape{dims: {4}, dtype:
+                    {:t,
+                      [
+                        %Shape{dtype: {:s, 64}, dims: {0}},
+                        %Shape{dtype: {:s, 64}, dims: {}},
+                        %Shape{dtype: {:s, 8}, dims: {1, 4}},
+                        %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+                      ]
+                    }
+                  },
+                  %Shape{dtype: {:s, 64}, dims: {0}}
+                ]
+              }
+            },
+            %Shape{dims: {1}, dtype: {:t, [%Shape{dims: {1, 1, 1, 1}, dtype: {:s, 16}}]}}
+          ]
+        }
+      } = Op.get_shape(h)
+
+    assert %Shape{dims: {0}, dtype: {:t, []}} = Op.get_shape(g)
   end
 
   test "add/3 successfully creates add op without broadcast dimensions" do
