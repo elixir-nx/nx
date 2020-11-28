@@ -25,8 +25,10 @@ void free_res(ErlNifEnv* env, void* obj){return;}
 // TODO: Revisit this when we start passing around buffer references
 void free_exla_buffer(ErlNifEnv* env, void* obj) {
   exla::ExlaBuffer** buffer = (exla::ExlaBuffer**) obj;
-  // TODO: When could this leak?
-  return;
+  if(*buffer != NULL) {
+    delete *buffer;
+    *buffer = NULL;
+  }
 }
 
 static int open_resources(ErlNifEnv* env) {
@@ -644,7 +646,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
 
-  std::vector<exla::ExlaBuffer**> inp;
+  std::vector<std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**>> inp;
   ERL_NIF_TERM head, tail, list;
   list = argv[2];
   while(enif_get_list_cell(env, list, &head, &tail)) {
@@ -658,9 +660,11 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
       if(!exla::get(env, tuple[0], data)) return exla::error(env, "Unable to read binary data from input.");
       if(!exla::get<xla::Shape>(env, tuple[1], shape)) return exla::error(env, "Unable to read shape from input.");
       EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device), env);
-      inp.push_back(&buf);
+      std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**> pr(buf, &buf);
+      inp.push_back(pr);
     } else if(exla::get<exla::ExlaBuffer*>(env, head, buffer)) {
-      inp.push_back(buffer);
+      std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**> pr(*buffer, buffer);
+      inp.push_back(pr);
     } else {
       return exla::error(env, "Invalid input passed to run.");
     }
@@ -680,7 +684,6 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
   run_options.set_launch_id(launch_id);
 
-  // TODO: Implement a `Run` in client that takes ExlaBuffers and returns binary or reference to buffer
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
   // TODO: Do this in `Run`
   std::unique_ptr<xla::ScopedShapedBuffer> buffer_result = absl::make_unique<xla::ScopedShapedBuffer>(std::move(result));

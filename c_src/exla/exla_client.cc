@@ -164,21 +164,20 @@ namespace exla {
   }
 
   xla::StatusOr<xla::ScopedShapedBuffer> ExlaClient::Run(xla::LocalExecutable* executable,
-                                                         std::vector<ExlaBuffer**>& buffers,
+                                                         std::vector<std::pair<ExlaBuffer*, ExlaBuffer**>>& buffers,
                                                          xla::ExecutableRunOptions& options) {
-    // TODO: Get these from ErlNifBinary OR ExlaBuffer
     std::vector<xla::ShapedBuffer*> inputs;
     for(auto buf : buffers) {
-      inputs.push_back((xla::ShapedBuffer*) (*buf)->donate());
+      xla::ShapedBuffer* inp = (xla::ShapedBuffer*) (buf.first)->donate();
+      inputs.push_back(inp);
     }
 
     xla::StatusOr<xla::ScopedShapedBuffer> result = executable->Run(inputs, options);
 
-    for (auto buf : buffers) {
-      // Avoid double free
-      if (*buf != NULL) {
-        delete *buf;
-        *buf = NULL;
+    for(auto buf : buffers) {
+      if(*buf.second != NULL) {
+        delete *buf.second;
+        *buf.second = NULL;
       }
     }
 
