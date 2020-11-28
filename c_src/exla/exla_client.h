@@ -41,8 +41,6 @@ namespace exla {
           return;
         }
       }
-
-      return;
     }
 
     bool empty() { return buffer_ == nullptr; }

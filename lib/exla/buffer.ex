@@ -19,10 +19,6 @@ defmodule Exla.Buffer do
 
   defstruct [:data, :ref, :shape]
 
-  def buffer(binary, dtype = {_type, _size}, dims) when is_bitstring(binary) do
-    buffer(binary, Exla.Shape.make_shape(dtype, dims))
-  end
-
   @doc """
   Create a new buffer from `binary` with given `shape`.
 
@@ -48,20 +44,11 @@ defmodule Exla.Buffer do
 
   @doc """
   Places the given `buffer` on the given `device` using `client`.
-
-  If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
-  we retain a copy of the binary to ensure it is not prematurely garbage collected.
   """
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:host, ordinal}) do
-    {:ok, {_, ordinal}} = Client.check_device_compatibility(client, device)
+  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {_platform, _ordinal}) do
+    {:ok, {platform, ordinal}} = Client.check_device_compatibility(client, device)
     ref = Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
-    %Buffer{buffer | ref: {ref, :host, ordinal}}
-  end
-
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {:cuda, ordinal}) do
-    {:ok, {_, ordinal}} = Client.check_device_compatibility(client, device)
-    ref = Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
-    %Buffer{buffer | data: nil, ref: {ref, :cuda, ordinal}}
+    %Buffer{buffer | data: nil, ref: {ref, platform, ordinal}}
   end
 
   @doc """
@@ -69,15 +56,17 @@ defmodule Exla.Buffer do
 
   This copies the underlying device memory into a binary without destroying it.
   """
-  def read(client = %Client{}, buffer = %Buffer{ref: {ref, :cuda, ordinal}}) do
-    {:ok, _} = Client.check_device_compatibility(client, {:cuda, ordinal})
+  def read(client = %Client{}, buffer = %Buffer{ref: {ref, platform, ordinal}}) do
+    {:ok, _} = Client.check_device_compatibility(client, {platform, ordinal})
     binary = Exla.NIF.read_device_mem(client.ref, ref) |> unwrap!()
     binary
   end
 
-  def read(client = %Client{}, buffer = %Buffer{data: data, ref: {_, :host, _}}), do: data
+  @doc """
+  Deallocates underlying device buffer.
 
-  def deallocate(%Buffer{ref: nil}), do: raise("Attempt to deallocate nothing.");
+  Returns `:ok` | `:already_deallocated`.
+  """
   def deallocate(%Buffer{ref: {ref, _, _}}) do
     Exla.NIF.deallocate_device_mem(ref) |> unwrap!()
   end

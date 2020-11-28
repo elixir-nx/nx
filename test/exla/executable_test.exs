@@ -72,4 +72,16 @@ defmodule ExecutableTest do
     assert t3 = %Buffer{ref: ref} = Executable.run(exec, [t1, t2], keep_on_device: true)
     assert %Buffer{data: <<4::32-native>>} = Executable.run(exec, [t3, t3])
   end
+
+  test "run/4 succeeds with mixed data", config do
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    t1 = Buffer.place_on_device(client(), t1, {client().platform, 0})
+    x = Op.parameter(config.builder, 0, t1.shape, "x")
+    y = Op.parameter(config.builder, 1, t2.shape, "y")
+    res = Op.add(x, y)
+    comp = Builder.build(res)
+    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
+    assert %Buffer{data: <<3::32-native>>} = Executable.run(exec, [t1, t2])
+  end
 end
