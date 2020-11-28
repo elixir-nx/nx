@@ -28,6 +28,14 @@ defmodule Exla.Buffer do
     %Buffer{data: binary, ref: nil, shape: shape}
   end
 
+  def buffer(binaries, shape = %Shape{dtype: {:t, shapes}}) when is_list(binaries) and is_list(shapes) do
+    data =
+      binaries
+      |> Enum.zip(shapes)
+      |> Enum.map(fn {binary, shape} -> buffer(binary, shape) end)
+    %Buffer{data: List.to_tuple(data), ref: nil, shape: shape}
+  end
+
   @doc """
   Create a new buffer from `binary` and place on `device` using `client`.
 

@@ -711,10 +711,16 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_launch_id(launch_id);
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
+
   exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
   if(keep_on_device) {
     return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer_ref));
+  }
+
+  if(buffer_ref->is_tuple()) {
+    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM tuple, (*client)->ErlListFromBuffer(env, buffer_ref), env);
+    return exla::ok(env, tuple);
   }
 
   EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(buffer_ref), env);

@@ -44,6 +44,57 @@ namespace exla {
     return buffer;
   }
 
+  ERL_NIF_TERM ErlListFromLiteral(ErlNifEnv* env, xla::Literal& literal) {
+    std::vector<xla::Literal> literals = literal.DecomposeTuple();
+    int elems = literals.size();
+    ERL_NIF_TERM data[elems];
+
+    for(int i=0;i<elems;i++) {
+      xla::Literal lit(std::move(literals.at(i)));
+      if(lit.shape().IsTuple()) {
+        ERL_NIF_TERM term = ErlListFromLiteral(env, lit);
+        data[i] = term;
+      } else {
+        long long int size = lit.size_bytes();
+        ErlNifBinary binary;
+        enif_alloc_binary(size, &binary);
+
+        // No need to copy, just move to the underlying bytes in memory
+        void *src_mem = const_cast<void*>(lit.untyped_data());
+        std::memmove(binary.data, src_mem, size);
+
+        ERL_NIF_TERM term = enif_make_binary(env, &binary);
+        data[i] = term;
+      }
+    }
+    return enif_make_list_from_array(env, data, elems);
+  }
+
+  xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env, exla::ExlaBuffer* buffer) {
+    if(buffer->empty()) {
+      return tensorflow::errors::FailedPrecondition("Attempt to read from empty buffer.");
+    }
+
+    if(!buffer->is_tuple()) {
+      return tensorflow::errors::FailedPrecondition("Attempt to extract tuple from non-tuple buffer.");
+    }
+
+    xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
+    xla::StatusOr<xla::Literal> transfer_status = transfer_manager->TransferLiteralFromDevice(buffer->device()->device_to_host_stream(),
+                                                                                              *(buffer->buffer()),
+                                                                                              nullptr);
+
+    // Something went wrong
+    if(!transfer_status.ok()) {
+      return transfer_status.status();
+    }
+
+    xla::Literal literal = transfer_status.ConsumeValueOrDie();
+    ERL_NIF_TERM list = ErlListFromLiteral(env, literal);
+
+    return list;
+  }
+
   xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffer) {
     if(buffer->empty()) {
       return tensorflow::errors::Aborted("Attempt to read from empty buffer.");
