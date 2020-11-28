@@ -44,7 +44,7 @@ namespace exla {
     return buffer;
   }
 
-  ERL_NIF_TERM ErlListFromLiteral(ErlNifEnv* env, xla::Literal& literal) {
+  ERL_NIF_TERM ErlTupleFromLiteral(ErlNifEnv* env, xla::Literal& literal) {
     std::vector<xla::Literal> literals = literal.DecomposeTuple();
     int elems = literals.size();
     ERL_NIF_TERM data[elems];
@@ -52,7 +52,7 @@ namespace exla {
     for(int i=0;i<elems;i++) {
       xla::Literal lit(std::move(literals.at(i)));
       if(lit.shape().IsTuple()) {
-        ERL_NIF_TERM term = ErlListFromLiteral(env, lit);
+        ERL_NIF_TERM term = ErlTupleFromLiteral(env, lit);
         data[i] = term;
       } else {
         long long int size = lit.size_bytes();
@@ -67,10 +67,10 @@ namespace exla {
         data[i] = term;
       }
     }
-    return enif_make_list_from_array(env, data, elems);
+    return enif_make_tuple_from_array(env, data, elems);
   }
 
-  xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env, exla::ExlaBuffer* buffer) {
+  xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlTupleFromBuffer(ErlNifEnv* env, exla::ExlaBuffer* buffer) {
     if(buffer->empty()) {
       return tensorflow::errors::FailedPrecondition("Attempt to read from empty buffer.");
     }
@@ -90,7 +90,7 @@ namespace exla {
     }
 
     xla::Literal literal = transfer_status.ConsumeValueOrDie();
-    ERL_NIF_TERM list = ErlListFromLiteral(env, literal);
+    ERL_NIF_TERM list = ErlTupleFromLiteral(env, literal);
 
     return list;
   }

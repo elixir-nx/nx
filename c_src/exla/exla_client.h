@@ -111,7 +111,7 @@ namespace exla {
 
     xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
 
-    xla::StatusOr<ERL_NIF_TERM> ErlListFromBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
+    xla::StatusOr<ERL_NIF_TERM> ErlTupleFromBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
 
     xla::LocalClient* client() { return client_; }
 

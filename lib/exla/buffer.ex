@@ -24,16 +24,8 @@ defmodule Exla.Buffer do
 
   The buffer will not be placed on a device until passed to `place_on_device`.
   """
-  def buffer(binary, shape) when is_bitstring(binary) do
+  def buffer(binary, shape = %Shape{}) when is_bitstring(binary) do
     %Buffer{data: binary, ref: nil, shape: shape}
-  end
-
-  def buffer(binaries, shape = %Shape{dtype: {:t, shapes}}) when is_list(binaries) and is_list(shapes) do
-    data =
-      binaries
-      |> Enum.zip(shapes)
-      |> Enum.map(fn {binary, shape} -> buffer(binary, shape) end)
-    %Buffer{data: List.to_tuple(data), ref: nil, shape: shape}
   end
 
   @doc """
