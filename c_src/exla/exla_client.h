@@ -70,7 +70,7 @@ namespace exla {
 
     ExlaDevice* device() { return device_; }
 
-    bool is_tuple() { return buffer_->on_host_shape().IsTuple(); }
+    bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
 
   private:
     // Used for donating this buffer to another function, like `Run`
