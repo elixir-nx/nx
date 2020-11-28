@@ -187,6 +187,11 @@ namespace exla {
 
   xla::StatusOr<xla::XlaOp> get_constant(ErlNifEnv* env, ERL_NIF_TERM term, xla::XlaBuilder* builder, xla::PrimitiveType type);
 
+  /*
+   * Helper for extracting information from `GetShape` and sending it back as a Tuple.
+   */
+  ERL_NIF_TERM make_shape_term(ErlNifEnv* env, xla::Shape shape);
+
 } // namespace exla
 
 #endif
