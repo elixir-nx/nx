@@ -118,7 +118,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   if(!exla::get<exla::ExlaBuffer*>(env, argv[1], buffer)) return exla::error(env, "Unable to get buffer.");
 
   if((*buffer)->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM data, (*client)->ErlListFromBuffer(env, *buffer), env);
+    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM data, (*client)->ErlTupleFromBuffer(env, *buffer), env);
     return exla::ok(env, exla::make(env, data));
   }
 
@@ -724,7 +724,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   if(buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM tuple, (*client)->ErlListFromBuffer(env, buffer_ref), env);
+    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM tuple, (*client)->ErlTupleFromBuffer(env, buffer_ref), env);
     return exla::ok(env, tuple);
   }
 
