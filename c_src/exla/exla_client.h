@@ -70,6 +70,8 @@ namespace exla {
 
     ExlaDevice* device() { return device_; }
 
+    bool is_tuple() { return buffer_->on_host_shape().IsTuple(); }
+
   private:
     // Used for donating this buffer to another function, like `Run`
     xla::ScopedShapedBuffer* buffer_;
@@ -108,6 +110,8 @@ namespace exla {
                                                 ExlaDevice* device);
 
     xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
+
+    xla::StatusOr<ERL_NIF_TERM> ErlListFromBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
 
     xla::LocalClient* client() { return client_; }
 

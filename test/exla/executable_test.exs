@@ -85,4 +85,88 @@ defmodule ExecutableTest do
     exec = Client.compile(client(), comp, [t1.shape, t2.shape])
     assert %Buffer{data: <<3::32-native>>} = Executable.run(exec, [t1, t2])
   end
+
+  test "run/4 returns a tuple", config do
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    x = Op.parameter(config.builder, 0, t1.shape, "x")
+    y = Op.parameter(config.builder, 1, t2.shape, "y")
+    res = Op.tuple(config.builder, {Op.tuple(config.builder, {x, y}),  Op.tuple(config.builder, {}), y})
+    comp = Builder.build(res)
+    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
+    assert %Exla.Buffer{
+      data: {%Exla.Buffer{
+         data: {%Exla.Buffer{
+            data: <<1, 0, 0, 0>>,
+            shape: %Exla.Shape{
+              dims: {},
+              dtype: {:s, 32},
+            }
+          },
+          %Exla.Buffer{
+            data: <<2, 0, 0, 0>>,
+            shape: %Exla.Shape{
+              dims: {},
+              dtype: {:s, 32},
+            }
+          }},
+         shape: %Exla.Shape{
+           dims: {2},
+           dtype: {:t,
+            [
+              %Exla.Shape{
+                dims: {},
+                dtype: {:s, 32},
+              },
+              %Exla.Shape{
+                dims: {},
+                dtype: {:s, 32},
+              }
+            ]},
+         }
+       },
+       %Exla.Buffer{
+         data: {},
+         shape: %Exla.Shape{
+           dims: {0},
+           dtype: {:t, []},
+         }
+       },
+       %Exla.Buffer{
+         data: <<2, 0, 0, 0>>,
+         shape: %Exla.Shape{
+           dims: {},
+           dtype: {:s, 32},
+         }
+       }},
+      shape: %Exla.Shape{
+        dims: {3},
+        dtype: {:t,
+         [
+           %Exla.Shape{
+             dims: {2},
+             dtype: {:t,
+              [
+                %Exla.Shape{
+                  dims: {},
+                  dtype: {:s, 32},
+                },
+                %Exla.Shape{
+                  dims: {},
+                  dtype: {:s, 32},
+                }
+              ]},
+           },
+           %Exla.Shape{
+             dims: {0},
+             dtype: {:t, []},
+           },
+           %Exla.Shape{
+             dims: {},
+             dtype: {:s, 32},
+           }
+         ]},
+      }
+    } = Executable.run(exec, [t1, t2])
+  end
 end

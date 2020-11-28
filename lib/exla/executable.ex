@@ -53,7 +53,11 @@ defmodule Exla.Executable do
     if keep_on_device do
       %Buffer{data: nil, ref: {data, platform, ordinal}, shape: output_shape}
     else
-      %Buffer{data: data, ref: nil, shape: output_shape}
+      if is_list(data) do
+        Buffer.buffer(data, output_shape)
+      else
+        %Buffer{data: data, ref: nil, shape: output_shape}
+      end
     end
   end
 end
