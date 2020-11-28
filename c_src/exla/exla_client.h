@@ -17,98 +17,66 @@ namespace exla {
   namespace se = tensorflow::se;
 
   /*
-   * Wraps a ScopedShapedBuffer in a unique_ptr so the ScopedShapedBuffer is automatically
-   * destructed when this object is destructed. In the future, will provide a place to
-   * implement device transfers, etc.
+   * Wraps a ScopedShapedBuffer.
    */
-  // TODO: Add device attribute
   class ExlaBuffer {
 
   public:
-    ExlaBuffer(std::unique_ptr<xla::ScopedShapedBuffer> buffer,
+    ExlaBuffer(xla::ScopedShapedBuffer* buffer,
                ExlaDevice* device,
-               bool zero_copy) : owned_buffer_(std::move(buffer)),
+               bool zero_copy) : buffer_(buffer),
                                  device_(device),
                                  zero_copy_(zero_copy) {}
     ~ExlaBuffer() {
       if(this->empty()) {
         return;
-      }
-
-      else {
-        if(zero_copy_) {
-          if(donated_ && donated_buffer_ != nullptr) {
-            donated_buffer_->release();
-            donated_buffer_ = nullptr;
-          } else if(!donated_ && owned_buffer_ != nullptr) {
-            owned_buffer_->release();
-            owned_buffer_ = nullptr;
-          }
-        } else if(!zero_copy_ && donated_ && donated_buffer_ != nullptr) {
-          delete donated_buffer_;
-          donated_buffer_ = nullptr;
-        } else if(!zero_copy_ && !donated_ && owned_buffer_ != nullptr) {
-          owned_buffer_.reset(nullptr);
+      } else {
+        if(zero_copy_ && buffer_ != nullptr) {
+          buffer_->release();
+          buffer_ = nullptr;
+        } else if(!zero_copy_ && buffer_ != nullptr) {
+          delete buffer_;
+          buffer_ = nullptr;
         } else {
-         return;
+          return;
         }
       }
+
+      return;
     }
 
-    bool empty() { return owned_buffer_ == nullptr && donated_buffer_ == nullptr; }
+    bool empty() { return buffer_ == nullptr; }
 
     xla::Status deallocate() {
       if(this->empty()) {
         return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
-      }
-
-      else {
-        if(zero_copy_) {
-          if(donated_ && donated_buffer_ != nullptr) {
-            donated_buffer_->release();
-            donated_buffer_ = nullptr;
-          } else if(!donated_ && owned_buffer_ != nullptr) {
-            owned_buffer_->release();
-            owned_buffer_ = nullptr;
-          }
-        } else if(!zero_copy_ && donated_ && donated_buffer_ != nullptr) {
-          delete donated_buffer_;
-          donated_buffer_ = nullptr;
-        } else if(!zero_copy_ && !donated_ && owned_buffer_ != nullptr) {
-          owned_buffer_.reset(nullptr);
+      } else {
+        if(zero_copy_ && buffer_ != nullptr) {
+          buffer_->release();
+          buffer_ = nullptr;
+        } else if(!zero_copy_ && buffer_ != nullptr) {
+          delete buffer_;
+          buffer_ = nullptr;
         } else {
-         return  tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
+          return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
         }
       }
 
       return tensorflow::Status::OK();
     }
 
-    const xla::Shape on_host_shape() { return donated_ ? donated_buffer_->on_host_shape() : owned_buffer_->on_host_shape(); }
-    const xla::Shape on_device_shape() { return donated_ ? donated_buffer_->on_device_shape() : owned_buffer_->on_device_shape(); }
+    const xla::Shape on_host_shape() { return buffer_->on_host_shape(); }
+    const xla::Shape on_device_shape() { return buffer_->on_device_shape(); }
 
-    xla::ScopedShapedBuffer* donate() {
-      if(!donated_) {
-        donated_buffer_ = owned_buffer_.release();
-        donated_ = true;
-        owned_buffer_ = nullptr;
-      }
-      return donated_buffer_;
-    }
-
-    xla::ScopedShapedBuffer* buffer() { return donated_ ? donated_buffer_ : owned_buffer_.get(); }
+    xla::ScopedShapedBuffer* buffer() { return buffer_; }
 
     ExlaDevice* device() { return device_; }
 
   private:
-    // Owned Buffer, guaranteed destructed when this class is destructed
-    std::unique_ptr<xla::ScopedShapedBuffer> owned_buffer_;
     // Used for donating this buffer to another function, like `Run`
-    xla::ScopedShapedBuffer* donated_buffer_ = nullptr;
+    xla::ScopedShapedBuffer* buffer_;
     // Was the bool created with a zero-copy transfer
     bool zero_copy_;
-    // Has the buffer been donated?
-    bool donated_ = false;
     // Buffer's device
     ExlaDevice* device_;
 

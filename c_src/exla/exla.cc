@@ -685,9 +685,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_launch_id(launch_id);
 
   EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
-  // TODO: Do this in `Run`
-  std::unique_ptr<xla::ScopedShapedBuffer> buffer_result = absl::make_unique<xla::ScopedShapedBuffer>(std::move(result));
-  exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(std::move(buffer_result), device, false);
+  exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
   if(keep_on_device) {
     return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer_ref));

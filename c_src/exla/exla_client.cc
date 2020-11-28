@@ -104,34 +104,34 @@ namespace exla {
     return is_cpu_platform && is_well_aligned && has_same_layout;
   }
 
-  std::unique_ptr<xla::ScopedShapedBuffer> ZeroCopyTransferBinToBuffer(const ErlNifBinary bin,
-                                                                       const xla::Shape& shape,
-                                                                       const xla::Shape& compact_shape,
-                                                                       ExlaDevice* device,
-                                                                       ExlaClient* client) {
+  xla::ScopedShapedBuffer* ZeroCopyTransferBinToBuffer(const ErlNifBinary bin,
+                                                       const xla::Shape& shape,
+                                                       const xla::Shape& compact_shape,
+                                                       ExlaDevice* device,
+                                                       ExlaClient* client) {
     // Initialize a buffer to point to the same data as the binary
     se::DeviceMemoryBase buffer;
     buffer = se::DeviceMemoryBase(const_cast<unsigned char*>(bin.data), bin.size);
     // Make a new ScopedShapedBuffer
-    auto device_buffer = absl::make_unique<xla::ScopedShapedBuffer>(compact_shape, client->allocator(), device->id());
+    auto device_buffer = new xla::ScopedShapedBuffer(compact_shape, client->allocator(), device->id());
     // Tell it to point to the buffer we made above
     auto memory = se::OwningDeviceMemory(buffer, device->id(), client->allocator());
     device_buffer->set_buffer(std::move(memory), {});
-    return std::move(device_buffer);
+    return device_buffer;
   }
 
-  std::unique_ptr<xla::ScopedShapedBuffer> TransferBinToBuffer(const ErlNifBinary bin,
-                                                               const xla::Shape& shape,
-                                                               const xla::Shape& compact_shape,
-                                                               ExlaDevice* device,
-                                                               ExlaClient* client) {
+  xla::ScopedShapedBuffer* TransferBinToBuffer(const ErlNifBinary bin,
+                                               const xla::Shape& shape,
+                                               const xla::Shape& compact_shape,
+                                               ExlaDevice* device,
+                                               ExlaClient* client) {
     // Allocate space on the device
     xla::ScopedShapedBuffer device_buffer = AllocateDestinationBuffer(compact_shape, device, client).ConsumeValueOrDie();
     // Read directly from binary data into a `BorrowingLiteral`, this is zero-copy again
     xla::BorrowingLiteral literal(const_cast<char*>((char*) bin.data), shape);
     // Transfer literal to the device in the allocated buffer
     client->client()->backend().transfer_manager()->TransferLiteralToDevice(device->host_to_device_stream(), literal, device_buffer);
-    return absl::make_unique<xla::ScopedShapedBuffer>(std::move(device_buffer));
+    return new xla::ScopedShapedBuffer(std::move(device_buffer));
   }
 
   xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
@@ -155,11 +155,11 @@ namespace exla {
     // Can we use a zero copy transfer?
     bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
     if(can_use_zero_copy) {
-      std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
-      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*device=*/device, /*zero_copy=*/true);
+      xla::ScopedShapedBuffer* device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
+      return new ExlaBuffer(/*buffer=*/device_buffer, /*device=*/device, /*zero_copy=*/true);
     } else {
-      std::unique_ptr<xla::ScopedShapedBuffer> device_buffer = TransferBinToBuffer(bin, shape, compact_shape, device, this);
-      return new ExlaBuffer(/*buffer=*/std::move(device_buffer), /*device=*/device, /*zero_copy=*/false);
+      xla::ScopedShapedBuffer* device_buffer = TransferBinToBuffer(bin, shape, compact_shape, device, this);
+      return new ExlaBuffer(/*buffer=*/device_buffer, /*device=*/device, /*zero_copy=*/false);
     }
   }
 
@@ -168,7 +168,7 @@ namespace exla {
                                                          xla::ExecutableRunOptions& options) {
     std::vector<xla::ShapedBuffer*> inputs;
     for(auto buf : buffers) {
-      xla::ShapedBuffer* inp = (xla::ShapedBuffer*) (buf.first)->donate();
+      xla::ShapedBuffer* inp = (xla::ShapedBuffer*) (buf.first)->buffer();
       inputs.push_back(inp);
     }
 
