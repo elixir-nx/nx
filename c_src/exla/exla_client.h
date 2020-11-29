@@ -7,9 +7,8 @@
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_executable_run_options.h"
-#include "tensorflow/stream_executor/device_memory_allocator.h"
-#include "tensorflow/core/platform/mem.h"
 #include "tensorflow/core/framework/allocator.h"
+
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/platform/status.h"
 

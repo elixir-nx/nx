@@ -1,12 +1,24 @@
 #ifndef EXLA_ALLOCATOR_H_
 #define EXLA_ALLOCATOR_H_
 
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "tensorflow/compiler/xla/exla/exla_device.h"
+
 #include "tensorflow/compiler/xla/statusor.h"
 #include "tensorflow/core/framework/allocator.h"
-#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
 #include "tensorflow/core/platform/mem.h"
+#include "tensorflow/core/common_runtime/gpu/gpu_host_allocator.h"
+#include "tensorflow/core/common_runtime/gpu/gpu_mem_allocator.h"
+#include "tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.h"
+
+#include "tensorflow/stream_executor/device_memory_allocator.h"
+#include "tensorflow/stream_executor/tf_allocator_adapter.h"
 
 namespace exla {
+
+  namespace se = tensorflow::se;
+
+namespace allocator{
 
   /*
    * Allocator which allocates/deallocates directly on ERTS.
@@ -27,6 +39,17 @@ namespace exla {
       }
   };
 
+  xla::StatusOr<std::unique_ptr<se::MultiDeviceAdapter>> CreateBFCAllocator(absl::Span<std::unique_ptr<ExlaDevice> const> devices,
+                                                                            double memory_fraction,
+                                                                            bool preallocate);
+
+  xla::StatusOr<std::unique_ptr<se::DeviceMemoryAllocator>> GetGpuDeviceAllocator(absl::Span<std::unique_ptr<ExlaDevice> const> devices,
+                                                                                  double memory_fraction,
+                                                                                  bool preallocate);
+
+  std::unique_ptr<tensorflow::BFCAllocator> GetGpuHostAllocator(se::StreamExecutor* executor);
+
+} // namespace allocator
 } // namespace exla
 
 #endif
