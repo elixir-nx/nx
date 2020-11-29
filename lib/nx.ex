@@ -336,7 +336,7 @@ defmodule Nx do
     type = opts[:type] || Nx.Type.infer(arg)
     Nx.Type.validate!(type)
     {dimensions, data} = flatten(arg, type)
-    %T{shape: dimensions, type: type, data: data}
+    %T{shape: dimensions, type: type, data: {Nx.BinaryDevice, data}}
   end
 
   defp flatten(list, type) when is_list(list) do
@@ -406,7 +406,7 @@ defmodule Nx do
   The bitstring is returned as is (which is row-major).
   """
   # TODO: What happens if the data is in the device?
-  def to_bitstring(%T{data: data}), do: data
+  def to_bitstring(%T{} = t), do: data!(t)
 
   @doc """
   Creates a tensor from a `bitstring`, its `type`, and
@@ -440,7 +440,7 @@ defmodule Nx do
       raise ArgumentError, "bitstring does not match the given type and dimensions"
     end
 
-    %T{data: bitstring, type: type, shape: shape}
+    %T{data: {Nx.BinaryDevice, bitstring}, type: type, shape: shape}
   end
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
@@ -533,7 +533,8 @@ defmodule Nx do
   def add(left, right) when is_number(left) and is_number(right),
     do: tensor(left + right)
 
-  def add(scalar, %T{data: data, type: input_type} = t) when is_number(scalar) do
+  def add(scalar, %T{type: input_type} = t) when is_number(scalar) do
+    data = data!(t)
     output_type = Nx.Type.merge_scalar(input_type, scalar)
 
     data =
@@ -541,10 +542,11 @@ defmodule Nx do
         for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
       end
 
-    %{t | data: data, type: output_type}
+    %{t | data: {Nx.BinaryDevice, data}, type: output_type}
   end
 
-  def add(%T{data: data, type: input_type} = t, scalar) when is_number(scalar) do
+  def add(%T{type: input_type} = t, scalar) when is_number(scalar) do
+    data = data!(t)
     output_type = Nx.Type.merge_scalar(input_type, scalar)
 
     data =
@@ -552,7 +554,7 @@ defmodule Nx do
         for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
       end
 
-    %{t | data: data, type: output_type}
+    %{t | data: {Nx.BinaryDevice, data}, type: output_type}
   end
 
   def add(%T{type: left_type} = left, %T{type: right_type} = right) do
@@ -569,14 +571,13 @@ defmodule Nx do
         end)
       end
 
-    %T{data: data, type: output_type, shape: shape}
+    %T{data: {Nx.BinaryDevice, data}, type: output_type, shape: shape}
   end
 
   # TODO: Properly implement me
-  def divide(
-        %T{data: left_data, type: left_type} = left,
-        %T{data: right_data, type: right_type, shape: {}}
-      ) do
+  def divide(%T{type: left_type} = left, %T{type: right_type, shape: {}} = right) do
+    left_data = data!(left)
+    right_data = data!(right)
     output_type = Nx.Type.merge(left_type, right_type) |> Nx.Type.to_float()
 
     data =
@@ -586,7 +587,7 @@ defmodule Nx do
         for <<match!(seg, 0) <- left_data>>, into: <<>>, do: <<write!(read!(seg, 0) / c, 2)>>
       end
 
-    %{left | data: data, type: output_type}
+    %{left | data: {Nx.BinaryDevice, data}, type: output_type}
   end
 
   @doc """
@@ -619,7 +620,8 @@ defmodule Nx do
 
   def exp(number) when is_number(number), do: tensor(:math.exp(number))
 
-  def exp(%T{data: data, type: input_type} = t) do
+  def exp(%T{type: input_type} = t) do
+    data = data!(t)
     output_type = Nx.Type.to_float(input_type)
 
     data =
@@ -627,7 +629,7 @@ defmodule Nx do
         for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(:math.exp(read!(seg, 0)), 1)>>
       end
 
-    %{t | data: data, type: output_type}
+    %{t | data: {Nx.BinaryDevice, data}, type: output_type}
   end
 
   @doc """
@@ -648,34 +650,44 @@ defmodule Nx do
       {}
 
   """
-  def sum(%T{data: data, type: type} = t) do
+  def sum(%T{type: type} = t) do
     data =
       match_types [type] do
         value =
-          bin_reduce_all(data, 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
+          bin_reduce_all(data!(t), 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
             {read!(var, 0) + acc, rest}
           end)
 
         <<write!(value, 0)>>
       end
 
-    %{t | data: data, shape: {}}
+    %{t | data: {Nx.BinaryDevice, data}, shape: {}}
+  end
+
+  ## Device helpers
+
+  defp data!(%T{data: {Nx.BinaryDevice, data}}), do: data
+
+  defp data!(%T{data: {device, _data}}) do
+    raise ArgumentError,
+          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
+            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
   end
 
   ## Broadcast helpers
 
   defp broadcast(
-         %T{data: left_data, type: {_, left_size}, shape: shape},
-         %T{data: right_data, type: {_, right_size}, shape: shape},
+         %T{type: {_, left_size}, shape: shape} = left,
+         %T{type: {_, right_size}, shape: shape} = right,
          fun
        ) do
-    data = bin_zip_map_all(left_data, left_size, right_data, right_size, fun)
+    data = bin_zip_map_all(data!(left), left_size, data!(right), right_size, fun)
     {IO.iodata_to_binary(data), shape}
   end
 
   defp broadcast(
-         %T{data: left_data, type: {_, left_size}, shape: left_shape},
-         %T{data: right_data, type: {_, right_size}, shape: right_shape},
+         %T{type: {_, left_size}, shape: left_shape} = left,
+         %T{type: {_, right_size}, shape: right_shape} = right,
          fun
        ) do
     left_rank = tuple_size(left_shape)
@@ -686,7 +698,7 @@ defmodule Nx do
 
     case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
       {chunks, shape} ->
-        {broadcast_recur(left_data, right_data, chunks), shape}
+        {broadcast_recur(data!(left), data!(right), chunks), shape}
 
       :error ->
         raise ArgumentError,
@@ -736,7 +748,7 @@ defmodule Nx do
 
     # This is an optimization, we skip cross traversals on the left-side
     # if we are just before a previous cross traversal. If broadcasting is
-    # failing, remove the if branch and see if succeeds. :)
+    # failing, remove the if branch and see if it succeeds. :)
     chunks =
       if dir == :left and match?([{:cross, _, _} | _], chunks) do
         chunks

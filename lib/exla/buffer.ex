@@ -64,7 +64,7 @@ defmodule Exla.Buffer do
 
   This copies the underlying device memory into a binary without destroying it.
   """
-  def read(client = %Client{}, buffer = %Buffer{ref: {ref, platform, ordinal}}) do
+  def read(client = %Client{}, %Buffer{ref: {ref, platform, ordinal}}) do
     {:ok, _} = Client.check_device_compatibility(client, {platform, ordinal})
     binary = Exla.NIF.read_device_mem(client.ref, ref) |> unwrap!()
     binary

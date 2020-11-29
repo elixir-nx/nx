@@ -138,14 +138,25 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize(
-         {:%{}, _, [__struct__: Nx.Tensor, data: data, shape: shape, type: {_, _}]} = tensor,
+         {:%{}, meta, [__struct__: Nx.Tensor, data: {device, data}, shape: shape, type: {_, _}]} =
+           tensor,
          state
        )
-       when is_binary(data) and is_tuple(shape) do
-    {tensor, state}
+       when is_tuple(shape) do
+    if device == Nx.BinaryDevice and is_bitstring(data) do
+      {tensor, state}
+    else
+      compile_error!(
+        meta,
+        state,
+        "defn expects a tensor allocated on Nx.BinaryDevice as a module attribute"
+      )
+    end
   end
 
-  defp normalize({name, meta, args}, state) when is_atom(name) and is_list(args) do
+  defp normalize({name, meta, args}, state)
+       when is_atom(name) and is_list(args) and
+              name not in [:%, :%{}, :^, :<<>>] do
     {args, state} = normalize_list(args, state)
     {{:__local__, meta, [name | args]}, state}
   end
