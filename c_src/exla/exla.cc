@@ -1,6 +1,4 @@
-#include "tensorflow/compiler/xla/exla/exla_allocator.h"
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include "tensorflow/compiler/xla/exla/exla_macros.h"
 #include "tensorflow/compiler/xla/exla/exla_client.h"
 
 #include "absl/types/span.h"

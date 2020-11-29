@@ -13,15 +13,6 @@ cc_library(
   ],
 )
 
-# TODO: I don't like the NIF dependency, try and work around it
-cc_library(
-  name = "exla_macros",
-  hdrs = ["exla_macros.h"],
-  deps = [
-    ":exla_nif_util"
-  ]
-)
-
 cc_library (
   name = "exla_device",
   srcs = ["exla_device.cc"],
@@ -41,7 +32,6 @@ cc_library(
     ":exla_device",
     ":exla_allocator",
     ":exla_nif_util",
-    ":exla_macros",
     "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
     "@org_tensorflow//tensorflow/compiler/xla:literal_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
@@ -79,7 +69,6 @@ cc_binary(
     ]) + [
     ":exla_allocator",
     ":exla_nif_util",
-    ":exla_macros",
     ":exla_client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
@@ -99,7 +88,6 @@ cc_binary(
   deps = [
     ":exla_allocator",
     ":exla_nif_util",
-    ":exla_macros",
     ":exla_client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
