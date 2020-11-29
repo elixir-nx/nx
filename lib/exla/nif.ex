@@ -221,10 +221,6 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-
-  def tuple_to_device_mem(_client, _tuple, _shape, _device_ordinal),
-    do: nif_error(__ENV__.function)
-
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 

@@ -107,27 +107,6 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer));
 }
 
-ERL_NIF_TERM tuple_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 4){
-    return exla::error(env, "Bad argument count.");
-  }
-
-  ERL_NIF_TERM data = argv[1];
-  xla::Shape* shape;
-  exla::ExlaClient** client;
-  int device_ordinal;
-
-  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
-  if(!exla::get<xla::Shape>(env, argv[2], shape)) return exla::error(env, "Unable to get shape.");
-  if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
-
-  exla::ExlaDevice* device = (*client)->device(device_ordinal);
-
-  EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buffer, (*client)->BufferFromErlTuple(env, data, *shape, device), env);
-
-  return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer));
-}
-
 ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(argc != 2){
     return exla::error(env, "Bad argument count.");
@@ -821,7 +800,6 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** ExlaBuffer ******/
-  {"tuple_to_device_mem", 4, tuple_to_device_mem},
   {"binary_to_device_mem", 4, binary_to_device_mem},
   {"read_device_mem", 2, read_device_mem},
   {"deallocate_device_mem", 1, deallocate_device_mem},

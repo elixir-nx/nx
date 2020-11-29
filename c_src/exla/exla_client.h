@@ -125,12 +125,6 @@ namespace exla {
                                                 const xla::Shape& shape,
                                                 ExlaDevice* device);
 
-    xla::StatusOr<ExlaBuffer*> BufferFromErlTuple(ErlNifEnv* env,
-                                                ERL_NIF_TERM tuple,
-                                                const xla::Shape& shape,
-                                                ExlaDevice* device);
-
-
     ERL_NIF_TERM DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
 
     xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
