@@ -3,6 +3,7 @@
 
 #include "tensorflow/compiler/xla/exla/exla_device.h"
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "tensorflow/compiler/xla/exla/exla_macros.h"
 
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
@@ -125,7 +126,7 @@ namespace exla {
                                                 const xla::Shape& shape,
                                                 ExlaDevice* device);
 
-    ERL_NIF_TERM DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
+    xla::StatusOr<ERL_NIF_TERM> DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
 
     xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
 

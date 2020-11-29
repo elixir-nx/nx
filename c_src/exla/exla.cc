@@ -19,7 +19,6 @@
 void free_res(ErlNifEnv* env, void* obj){return;}
 
 // Special Case for destructing buffers
-// TODO: Revisit this when we start passing around buffer references
 void free_exla_buffer(ErlNifEnv* env, void* obj) {
   exla::ExlaBuffer** buffer = (exla::ExlaBuffer**) obj;
   if(*buffer != NULL) {
@@ -93,13 +92,13 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   int device_ordinal;
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
-  if(!enif_inspect_binary(env, argv[1], &bin)) return exla::error(env, "Unable to get data.");
+  if(!exla::get(env, argv[1], bin)) return exla::error(env, "Unable to get data.");
   if(!exla::get<xla::Shape>(env, argv[2], shape)) return exla::error(env, "Unable to get shape.");
   if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
-  EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
 
   return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer));
 }
@@ -116,11 +115,11 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   if(!exla::get<exla::ExlaBuffer*>(env, argv[1], buffer)) return exla::error(env, "Unable to get buffer.");
 
   if((*buffer)->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM data, (*client)->ErlListFromBuffer(env, *buffer), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM data, (*client)->ErlListFromBuffer(env, *buffer), env);
     return exla::ok(env, data);
   }
 
-  EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*buffer), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*buffer), env);
 
   return exla::ok(env, exla::make(env, binary));
 }
@@ -454,7 +453,7 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
   if(!exla::get_type(env, argv[2], type)) return exla::error(env, "Unable to cast scalar to type.");
 
-  EXLA_ASSIGN_OR_RETURN(xla::XlaOp op, exla::get_constant(env, argv[1], *builder, type), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::XlaOp op, exla::get_constant(env, argv[1], *builder, type), env);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -481,7 +480,7 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
-    return exla:error(env, "Bad argument count.");
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaOp *lhs, *rhs;
@@ -542,7 +541,7 @@ ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
   if(!exla::get<xla::XlaOp>(env, argv[1], operand)) return exla::error(env, "Unable to get operand.");
 
-  EXLA_ASSIGN_OR_RETURN(xla::Shape shape, (*builder)->GetShape(*operand), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape shape, (*builder)->GetShape(*operand), env);
 
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
 }
@@ -572,7 +571,7 @@ ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get num_replicas.");
   if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get intra_op_parallelism_threads.");
-  EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::getHostClient(num_replicas, intra_op_parallelism_threads), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::getHostClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -582,7 +581,7 @@ ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get number of replicas.");
   if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get number of parallelism threads.");
-  EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::getCUDAClient(num_replicas, intra_op_parallelism_threads), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::getCUDAClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -624,7 +623,7 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Bad argument passed to build.");
   if(!exla::get<xla::XlaOp>(env, argv[1], root)) return exla::error(env, "Bad argument passed to build.");
 
-  EXLA_ASSIGN_OR_RETURN(xla::XlaComputation computation, (*builder)->Build(*root), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::XlaComputation computation, (*builder)->Build(*root), env);
 
   return exla::ok(env, exla::make<xla::XlaComputation>(env, computation));
 }
@@ -654,7 +653,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   // TODO: Single Partition Multi-Device vs. Multi-Partition Multi-Device
   // build_options.set_use_spmd_partitioning(use_spmd);
 
-  EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
+  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
                         (*client)->client()->Compile(*computation, argument_layouts, build_options), env);
 
   ERL_NIF_TERM exec_refs[executables.size()];
@@ -702,7 +701,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
       xla::Shape* shape;
       if(!exla::get(env, tuple[0], data)) return exla::error(env, "Unable to read binary data from input.");
       if(!exla::get<xla::Shape>(env, tuple[1], shape)) return exla::error(env, "Unable to read shape from input.");
-      EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device), env);
+      EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device), env);
       std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**> pr(buf, &buf);
       inp.push_back(pr);
     } else if(exla::get<exla::ExlaBuffer*>(env, head, buffer)) {
@@ -727,13 +726,13 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
   run_options.set_launch_id(launch_id);
 
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
 
   exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
   if(keep_on_device) {
     if(buffer_ref->is_tuple()) {
-      ERL_NIF_TERM references = (*client)->DecomposeBuffer(env, buffer_ref);
+      EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references, (*client)->DecomposeBuffer(env, buffer_ref), env);
       return exla::ok(env, references);
     }
 
@@ -741,11 +740,11 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   if(buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM tuple, (*client)->ErlListFromBuffer(env, buffer_ref), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple, (*client)->ErlListFromBuffer(env, buffer_ref), env);
     return exla::ok(env, tuple);
   }
 
-  EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(buffer_ref), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*client)->ErlBinFromBuffer(buffer_ref), env);
 
   return exla::ok(env, exla::make(env, binary));
 }

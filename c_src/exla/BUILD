@@ -41,6 +41,7 @@ cc_library(
     ":exla_device",
     ":exla_allocator",
     ":exla_nif_util",
+    ":exla_macros",
     "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
     "@org_tensorflow//tensorflow/compiler/xla:literal_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
