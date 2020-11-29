@@ -310,6 +310,18 @@ defmodule Nx.DefnTest do
                      end
                    end
     end
+
+    test "invalid tensor constant" do
+      assert_raise CompileError,
+                   ~r"defn expects a tensor allocated on Nx.BitStringDevice as a constant",
+                   fn ->
+                     defmodule Sample do
+                       @nx_tensor Nx.tensor([]) |> Map.replace!(:data, {SomethingBad, :another})
+                       import Nx.Defn
+                       defn default, do: @nx_tensor
+                     end
+                   end
+    end
   end
 
   defp purge(module) do

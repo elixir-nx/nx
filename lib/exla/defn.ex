@@ -48,7 +48,7 @@ defmodule Exla.Defn do
     Nx.from_bitstring(data, shape.dtype, shape.dims)
   end
 
-  defp nx_to_buffer(%Nx.Tensor{data: {Nx.BinaryDevice, data}, type: type, shape: shape})
+  defp nx_to_buffer(%Nx.Tensor{data: {Nx.BitStringDevice, data}, type: type, shape: shape})
        when is_bitstring(data) do
     Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
   end
@@ -73,7 +73,7 @@ defmodule Exla.Defn do
 
   ## Special forms
 
-  def sf_nx_tensor(builder, %Nx.Tensor{data: {Nx.BinaryDevice, data}, type: type, shape: shape}) do
+  def sf_nx_tensor(builder, %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: type, shape: shape}) do
     shape = Exla.Shape.make_shape(type, shape)
     Exla.Op.constant_from_binary(builder, data, shape)
   end

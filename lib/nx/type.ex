@@ -13,6 +13,19 @@ defmodule Nx.Type do
 
   """
 
+  @type t ::
+          {:s, 8}
+          | {:s, 16}
+          | {:s, 32}
+          | {:s, 64}
+          | {:u, 8}
+          | {:u, 16}
+          | {:u, 32}
+          | {:u, 64}
+          | {:f, 32}
+          | {:f, 64}
+          | {:bf, 16}
+
   @doc """
   Infers the type of the given value.
 
