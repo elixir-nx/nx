@@ -44,7 +44,14 @@ defmodule BufferTest do
   test "deallocate/1" do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
     b1 = Buffer.place_on_device(client(), b1, {client().platform(), 0})
+
+    b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
+    b2 = Buffer.place_on_device(client(), b2, {client().platform, 0})
+
     assert :ok = Buffer.deallocate(b1)
     assert :already_deallocated = Buffer.deallocate(b1)
+
+    assert :ok = Buffer.deallocate(b2)
+    assert :already_deallocated = Buffer.deallocate(b2)
   end
 end
