@@ -18,8 +18,23 @@
 
 #include <string>
 #include <algorithm>
+#include <complex>
 
 namespace exla {
+
+  using int8 = tensorflow::int8;
+  using int16 = tensorflow::int16;
+  using int32 = tensorflow::int32;
+  using int64 = tensorflow::int64;
+  using uint8 = tensorflow::uint8;
+  using uint16 = tensorflow::uint16;
+  using uint32 = tensorflow::uint32;
+  using uint64 = tensorflow::uint64;
+  using bfloat16 = tensorflow::bfloat16;
+  using float32 = float;
+  using float64 = double;
+  using complex64 = std::complex<float>;
+  using complex128 = std::complex<double>;
 
   /*
    * Helper for returning `{:error, msg}` from NIF.
@@ -42,23 +57,29 @@ namespace exla {
   ERL_NIF_TERM atom(ErlNifEnv* env, const char* status);
 
   /*
+   * Getters for numeric types.
+   */
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int8 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int16 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int32 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, int64 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint16 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, uint64 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, float32 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, float64 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, complex64 &var);
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, complex128 &var);
+
+  /*
    * Getters for standard types.
    */
   int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, tensorflow::int8 &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, short &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, int &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, long int &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, long long int &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, tensorflow::uint8 &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned short &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned int &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned long int &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, unsigned long long int &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, float &var);
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, double &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, bool &var);
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
+
   /*
    * Getters for non-standard types. Suffix to be explicit.
    */
@@ -123,7 +144,7 @@ namespace exla {
     return ret;
   }
 
-  int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<long long int> &var);
+  int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64> &var);
 
   template <typename T>
   int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
@@ -138,7 +159,7 @@ namespace exla {
     return 1;
   }
 
-  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<long long int> &var);
+  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<int64> &var);
   int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ErlNifBinary> &var);
 
   template <typename T>

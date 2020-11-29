@@ -74,7 +74,7 @@ namespace exla {
         ERL_NIF_TERM term = ErlListFromLiteral(env, lit);
         data[i] = term;
       } else {
-        long long int size = lit.size_bytes();
+        int64 size = lit.size_bytes();
         ErlNifBinary binary;
         enif_alloc_binary(size, &binary);
 
@@ -121,7 +121,7 @@ namespace exla {
 
     if(is_cpu_platform) {
       // Allocate enough space for the binary
-      long long int size = xla::ShapeUtil::ByteSizeOf(buffer->on_host_shape());
+      int64 size = xla::ShapeUtil::ByteSizeOf(buffer->on_host_shape());
       ErlNifBinary binary;
       enif_alloc_binary(size, &binary);
 

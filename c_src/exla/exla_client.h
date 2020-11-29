@@ -49,7 +49,7 @@ namespace exla {
       }
 
       std::vector<ExlaBuffer*> buffers;
-      long long int tuple_elements = xla::ShapeUtil::TupleElementCount(on_device_shape());
+      int64 tuple_elements = xla::ShapeUtil::TupleElementCount(on_device_shape());
       buffers.reserve(tuple_elements);
       for(int i=0;i<tuple_elements;i++) {
         xla::ScopedShapedBuffer* sub_buffer = new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));

@@ -1,8 +1,6 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/compiler/xla/exla/exla_client.h"
 
-#include "absl/types/span.h"
-
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/literal_util.h"
@@ -147,7 +145,7 @@ ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::PrimitiveType element_type;
-  std::vector<long long int> dims;
+  std::vector<exla::int64> dims;
 
   if(!exla::get_type(env, argv[0], element_type)) return exla::error(env, "Unable to get type.");
   if(!exla::get_vector_tuple(env, argv[1], dims)) return exla::error(env, "Unable to get dimensions.");
@@ -205,7 +203,7 @@ ERL_NIF_TERM get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   }
 
   xla::XlaOp* operand;
-  long long int index;
+  exla::int64 index;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get(env, argv[1], index)) return exla::error(env, "Unable to get index.");
@@ -222,7 +220,7 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::XlaBuilder** builder;
-  long int param_num;
+  exla::int64 param_num;
   xla::Shape* shape;
   std::string name;
 
@@ -284,9 +282,9 @@ ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   xla::XlaOp* operand;
-  std::vector<long long int> start_indices;
-  std::vector<long long int> limit_indices;
-  std::vector<long long int> strides;
+  std::vector<exla::int64> start_indices;
+  std::vector<exla::int64> limit_indices;
+  std::vector<exla::int64> strides;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get_vector_list(env, argv[1], start_indices)) return exla::error(env, "Unable to get start indices.");
@@ -304,10 +302,10 @@ ERL_NIF_TERM slice_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   }
 
   xla::XlaOp* operand;
-  long int start_index;
-  long int end_index;
-  long int stride;
-  long int dimno;
+  exla::int64 start_index;
+  exla::int64 end_index;
+  exla::int64 stride;
+  exla::int64 dimno;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get(env, argv[1], start_index)) return exla::error(env, "Unable to get start index.");
@@ -327,7 +325,7 @@ ERL_NIF_TERM dynamic_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   xla::XlaOp* operand;
   std::vector<xla::XlaOp> start_indices;
-  std::vector<long long int> sizes;
+  std::vector<exla::int64> sizes;
 
   if(!exla::get(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get_vector_list<xla::XlaOp>(env, argv[1], start_indices)) return exla::error(env, "Unable to get start index ops.");
@@ -356,13 +354,13 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const long long int>)){
+ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const exla::int64>)){
   if(argc != 3){
     return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaOp *lhs, *rhs;
-  std::vector<long long int> broadcast_dims;
+  std::vector<exla::int64> broadcast_dims;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return exla::error(env, "Unable to get left-hand side.");
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return exla::error(env, "Unable to get right-hand side.");
@@ -498,7 +496,7 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::XlaOp* operand;
   xla::XlaOp* init_value;
   xla::XlaComputation* computation;
-  std::vector<long long int> dimensions_to_reduce;
+  std::vector<exla::int64> dimensions_to_reduce;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
   if(!exla::get<xla::XlaOp>(env, argv[1], init_value)) return exla::error(env, "Unable to get initial value.");
