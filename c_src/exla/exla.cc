@@ -141,7 +141,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   if((*buffer)->is_tuple()) {
     EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM data, (*client)->ErlTupleFromBuffer(env, *buffer), env);
-    return exla::ok(env, exla::make(env, data));
+    return exla::ok(env, data);
   }
 
   EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*buffer), env);
