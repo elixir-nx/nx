@@ -103,8 +103,8 @@ defmodule ExecutableTest do
 
     assert {:tuple,
             [
-              [%Buffer{data: <<1, 0, 0, 0>>}, %Buffer{data: <<2, 0, 0, 0>>}],
-              [],
+              {:tuple, [%Buffer{data: <<1, 0, 0, 0>>}, %Buffer{data: <<2, 0, 0, 0>>}]},
+              {:tuple, []},
               %Buffer{data: <<2, 0, 0, 0>>}
             ]} = Executable.run(exec, [t1, t2])
   end
@@ -148,7 +148,7 @@ defmodule ExecutableTest do
     comp = Builder.build(res)
     exec = Client.compile(client(), comp, [t1.shape, t2.shape])
 
-    assert {:tuple, [[a = %Buffer{}, b = %Buffer{}], [], c = %Buffer{}]} =
+    assert {:tuple, [{:tuple, [a = %Buffer{}, b = %Buffer{}]}, {:tuple, []}, c = %Buffer{}]} =
              Executable.run(exec, [t1, t2], keep_on_device: true)
 
     assert <<1, 0, 0, 0>> == Buffer.read(client(), a)

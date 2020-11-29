@@ -47,16 +47,40 @@ defmodule Exla.Executable do
         keep_on_device_int
       )
 
-    case output_shape do
-      %Shape{dtype: {:t, _}} ->
-        if keep_on_device,
-          do: {:tuple, Buffer.decompose_tuple(data, output_shape, {platform, ordinal})},
-          else: {:tuple, Buffer.decompose_tuple(data, output_shape)}
+    if keep_on_device,
+      do: decompose_output(data, output_shape, {platform, ordinal}),
+      else: decompose_output(data, output_shape)
+  end
+
+  defp decompose_output(data, shape, {platform, ordinal}) do
+    case shape do
+      %Shape{dtype: {:t, shapes}} ->
+        tuple =
+          data
+          |> Enum.zip(shapes)
+          |> Enum.map(fn {buf, subshape} ->
+            decompose_output(buf, subshape, {platform, ordinal})
+          end)
+
+        {:tuple, tuple}
 
       _ ->
-        if keep_on_device,
-          do: Buffer.buffer(data, output_shape, {platform, ordinal}),
-          else: Buffer.buffer(data, output_shape)
+        Buffer.buffer(data, shape, {platform, ordinal})
+    end
+  end
+
+  defp decompose_output(data, shape) do
+    case shape do
+      %Shape{dtype: {:t, shapes}} ->
+        tuple =
+          data
+          |> Enum.zip(shapes)
+          |> Enum.map(fn {buf, subshape} -> decompose_output(buf, subshape) end)
+
+        {:tuple, tuple}
+
+      _ ->
+        Buffer.buffer(data, shape)
     end
   end
 end

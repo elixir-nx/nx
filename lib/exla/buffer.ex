@@ -32,34 +32,6 @@ defmodule Exla.Buffer do
     %Buffer{data: nil, ref: {reference, platform, ordinal}, shape: shape}
   end
 
-  def decompose_tuple(data, shape, {platform, ordinal}) do
-    case shape do
-      %Shape{dtype: {:t, shapes}} ->
-        tuple =
-          data
-          |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} ->
-            decompose_tuple(buf, subshape, {platform, ordinal})
-          end)
-
-      _ ->
-        buffer(data, shape, {platform, ordinal})
-    end
-  end
-
-  def decompose_tuple(data, shape) do
-    case shape do
-      %Shape{dtype: {:t, shapes}} ->
-        tuple =
-          data
-          |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} -> decompose_tuple(buf, subshape) end)
-
-      _ ->
-        buffer(data, shape)
-    end
-  end
-
   @doc """
   Create a new buffer from `binary` and place on `device` using `client`.
 
