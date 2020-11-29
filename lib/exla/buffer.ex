@@ -28,8 +28,8 @@ defmodule Exla.Buffer do
     %Buffer{data: binary, ref: nil, shape: shape}
   end
 
-  def buffer(tuple, shape = %Shape{dtype: {:t, _}}) when is_tuple(tuple) do
-    %Buffer{data: tuple, ref: nil, shape: shape}
+  def buffer(reference, shape = %Shape{}, {platform, ordinal}) when is_reference(reference) do
+    %Buffer{data: nil, ref: {reference, platform, ordinal}, shape: shape}
   end
 
   @doc """

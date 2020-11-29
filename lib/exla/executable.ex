@@ -1,6 +1,6 @@
 defmodule Exla.Executable do
   alias __MODULE__
-  alias Exla.{Buffer, Client}
+  alias Exla.{Buffer, Client, Shape}
 
   @enforce_keys [:client, :ref, :output_shape]
   defstruct [:client, :ref, :output_shape, :device]
@@ -47,10 +47,40 @@ defmodule Exla.Executable do
         keep_on_device_int
       )
 
-    if keep_on_device do
-      %Buffer{data: nil, ref: {data, platform, ordinal}, shape: output_shape}
-    else
-      %Buffer{data: data, ref: nil, shape: output_shape}
+    if keep_on_device,
+      do: decompose_output(data, output_shape, {platform, ordinal}),
+      else: decompose_output(data, output_shape)
+  end
+
+  defp decompose_output(data, shape, {platform, ordinal}) do
+    case shape do
+      %Shape{dtype: {:t, shapes}} ->
+        tuple =
+          data
+          |> Enum.zip(shapes)
+          |> Enum.map(fn {buf, subshape} ->
+            decompose_output(buf, subshape, {platform, ordinal})
+          end)
+
+        {:tuple, tuple}
+
+      _ ->
+        Buffer.buffer(data, shape, {platform, ordinal})
+    end
+  end
+
+  defp decompose_output(data, shape) do
+    case shape do
+      %Shape{dtype: {:t, shapes}} ->
+        tuple =
+          data
+          |> Enum.zip(shapes)
+          |> Enum.map(fn {buf, subshape} -> decompose_output(buf, subshape) end)
+
+        {:tuple, tuple}
+
+      _ ->
+        Buffer.buffer(data, shape)
     end
   end
 end

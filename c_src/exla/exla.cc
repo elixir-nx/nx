@@ -140,7 +140,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   if(!exla::get<exla::ExlaBuffer*>(env, argv[1], buffer)) return exla::error(env, "Unable to get buffer.");
 
   if((*buffer)->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM data, (*client)->ErlTupleFromBuffer(env, *buffer), env);
+    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM data, (*client)->ErlListFromBuffer(env, *buffer), env);
     return exla::ok(env, data);
   }
 
@@ -756,11 +756,16 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
   if(keep_on_device) {
+    if(buffer_ref->is_tuple()) {
+      ERL_NIF_TERM references = (*client)->DecomposeBuffer(env, buffer_ref);
+      return exla::ok(env, references);
+    }
+
     return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer_ref));
   }
 
   if(buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM tuple, (*client)->ErlTupleFromBuffer(env, buffer_ref), env);
+    EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM tuple, (*client)->ErlListFromBuffer(env, buffer_ref), env);
     return exla::ok(env, tuple);
   }
 

@@ -101,8 +101,12 @@ defmodule ExecutableTest do
     comp = Builder.build(res)
     exec = Client.compile(client(), comp, [t1.shape, t2.shape])
 
-    assert %Exla.Buffer{data: {{<<1, 0, 0, 0>>, <<2, 0, 0, 0>>}, {}, <<2, 0, 0, 0>>}} =
-             Executable.run(exec, [t1, t2])
+    assert {:tuple,
+            [
+              {:tuple, [%Buffer{data: <<1, 0, 0, 0>>}, %Buffer{data: <<2, 0, 0, 0>>}]},
+              {:tuple, []},
+              %Buffer{data: <<2, 0, 0, 0>>}
+            ]} = Executable.run(exec, [t1, t2])
   end
 
   test "run/4 returns with mixed data and tuple", config do
@@ -125,7 +129,30 @@ defmodule ExecutableTest do
     comp = Builder.build(res)
     exec = Client.compile(client(), comp, [t1.shape, t2.shape, t3.shape])
 
-    assert %Exla.Buffer{data: {<<4::32-native>>, <<2::32-native>>}} =
+    assert {:tuple, [%Buffer{data: <<4::32-native>>}, %Buffer{data: <<2::32-native>>}]} =
              Executable.run(exec, [t1, t2, t3])
+  end
+
+  test "run/4 returns with tuple and keep_on_device true", config do
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    x = Op.parameter(config.builder, 0, t1.shape, "x")
+    y = Op.parameter(config.builder, 1, t2.shape, "y")
+
+    res =
+      Op.tuple(
+        config.builder,
+        {Op.tuple(config.builder, {x, y}), Op.tuple(config.builder, {}), y}
+      )
+
+    comp = Builder.build(res)
+    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
+
+    assert {:tuple, [{:tuple, [a = %Buffer{}, b = %Buffer{}]}, {:tuple, []}, c = %Buffer{}]} =
+             Executable.run(exec, [t1, t2], keep_on_device: true)
+
+    assert <<1, 0, 0, 0>> == Buffer.read(client(), a)
+    assert <<2, 0, 0, 0>> == Buffer.read(client(), b)
+    assert <<2, 0, 0, 0>> == Buffer.read(client(), c)
   end
 end
