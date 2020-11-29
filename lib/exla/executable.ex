@@ -1,6 +1,6 @@
 defmodule Exla.Executable do
   alias __MODULE__
-  alias Exla.{Buffer, Client}
+  alias Exla.{Buffer, Client, Shape}
 
   @enforce_keys [:client, :ref, :output_shape]
   defstruct [:client, :ref, :output_shape, :device]
@@ -47,10 +47,16 @@ defmodule Exla.Executable do
         keep_on_device_int
       )
 
-    if keep_on_device do
-      %Buffer{data: nil, ref: {data, platform, ordinal}, shape: output_shape}
-    else
-      %Buffer{data: data, ref: nil, shape: output_shape}
+    case output_shape do
+      %Shape{dtype: {:t, _}} ->
+        if keep_on_device,
+          do: {:tuple, Buffer.decompose_tuple(data, output_shape, {platform, ordinal})},
+          else: {:tuple, Buffer.decompose_tuple(data, output_shape)}
+
+      _ ->
+        if keep_on_device,
+          do: Buffer.buffer(data, output_shape, {platform, ordinal}),
+          else: Buffer.buffer(data, output_shape)
     end
   end
 end

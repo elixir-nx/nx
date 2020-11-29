@@ -2,7 +2,7 @@
 #define EXLA_CLIENT_H_
 
 #include "tensorflow/compiler/xla/exla/exla_device.h"
-#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
@@ -41,6 +41,22 @@ namespace exla {
           return;
         }
       }
+    }
+
+    xla::StatusOr<std::vector<ExlaBuffer*>> DecomposeTuple() {
+      if(!is_tuple()) {
+        return tensorflow::errors::FailedPrecondition("Buffer is not a Tuple.");
+      }
+
+      std::vector<ExlaBuffer*> buffers;
+      long long int tuple_elements = xla::ShapeUtil::TupleElementCount(on_device_shape());
+      buffers.reserve(tuple_elements);
+      for(int i=0;i<tuple_elements;i++) {
+        xla::ScopedShapedBuffer* sub_buffer = new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));
+        buffers.push_back(new ExlaBuffer(sub_buffer, device_, false));
+      }
+
+      return buffers;
     }
 
     bool empty() { return buffer_ == nullptr; }
@@ -115,9 +131,11 @@ namespace exla {
                                                 ExlaDevice* device);
 
 
+    ERL_NIF_TERM DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
+
     xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
 
-    xla::StatusOr<ERL_NIF_TERM> ErlTupleFromBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
+    xla::StatusOr<ERL_NIF_TERM> ErlListFromBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
 
     xla::LocalClient* client() { return client_; }
 

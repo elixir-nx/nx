@@ -36,10 +36,11 @@ cc_library (
 cc_library(
   name = "exla_client",
   srcs = ["exla_client.cc"],
-  hdrs = ["exla_client.h"] + glob(["erts/**/*.h"]),
+  hdrs = ["exla_client.h"],
   deps = [
     ":exla_device",
     ":exla_allocator",
+    ":exla_nif_util",
     "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
     "@org_tensorflow//tensorflow/compiler/xla:literal_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",

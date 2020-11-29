@@ -28,8 +28,36 @@ defmodule Exla.Buffer do
     %Buffer{data: binary, ref: nil, shape: shape}
   end
 
-  def buffer(tuple, shape = %Shape{dtype: {:t, _}}) when is_tuple(tuple) do
-    %Buffer{data: tuple, ref: nil, shape: shape}
+  def buffer(reference, shape = %Shape{}, {platform, ordinal}) when is_reference(reference) do
+    %Buffer{data: nil, ref: {reference, platform, ordinal}, shape: shape}
+  end
+
+  def decompose_tuple(data, shape, {platform, ordinal}) do
+    case shape do
+      %Shape{dtype: {:t, shapes}} ->
+        tuple =
+          data
+          |> Enum.zip(shapes)
+          |> Enum.map(fn {buf, subshape} ->
+            decompose_tuple(buf, subshape, {platform, ordinal})
+          end)
+
+      _ ->
+        buffer(data, shape, {platform, ordinal})
+    end
+  end
+
+  def decompose_tuple(data, shape) do
+    case shape do
+      %Shape{dtype: {:t, shapes}} ->
+        tuple =
+          data
+          |> Enum.zip(shapes)
+          |> Enum.map(fn {buf, subshape} -> decompose_tuple(buf, subshape) end)
+
+      _ ->
+        buffer(data, shape)
+    end
   end
 
   @doc """
