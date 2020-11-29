@@ -1,5 +1,6 @@
 #include "tensorflow/compiler/xla/exla/exla_client.h"
 #include "tensorflow/compiler/xla/cpu_function_runtime.h"
+#include "tensorflow/compiler/xla/literal_util.h"
 #include "tensorflow/compiler/xla/exla/exla_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_host_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_mem_allocator.h"
@@ -140,6 +141,52 @@ namespace exla {
     std::memmove(binary.data, src_mem, size);
 
     return binary;
+  }
+
+  xla::Literal LiteralFromErlBinary(ErlNifEnv* env, ERL_NIF_TERM term, const xla::Shape& shape) {
+    ErlNifBinary binary;
+    // TODO: Error check
+    enif_inspect_binary(env, term, &binary);
+    xla::BorrowingLiteral literal(const_cast<char*>((char*) binary.data), shape);
+    return std::move(literal.Clone());
+  }
+
+  xla::Literal LiteralFromErlTuple(ErlNifEnv* env, ERL_NIF_TERM tuple, const xla::Shape& shape) {
+    const ERL_NIF_TERM* elements;
+    int num_elements;
+    // TODO: Error check
+    enif_get_tuple(env, tuple, &num_elements, &elements);
+    std::vector<xla::Literal> data;
+    for(int i=0;i<num_elements;i++){
+      if(enif_is_tuple(env, elements[i])) {
+        xla::Shape tuple_shape = xla::ShapeUtil::GetTupleElementShape(shape, i);
+        xla::Literal lit = LiteralFromErlTuple(env, elements[i], tuple_shape);
+        data.push_back(std::move(lit));
+      } else {
+        xla::Shape bin_shape = xla::ShapeUtil::GetTupleElementShape(shape, i);
+        xla::Literal lit = LiteralFromErlBinary(env, elements[i], bin_shape);
+        data.push_back(std::move(lit));
+      }
+    }
+
+    return xla::LiteralUtil::MakeTupleOwned(std::move(data));
+  }
+
+  xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlTuple(ErlNifEnv* env,
+                                                            ERL_NIF_TERM tuple,
+                                                            const xla::Shape& shape,
+                                                            ExlaDevice* device) {
+
+    xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
+
+    xla::Shape compact_shape = transfer_manager->ChooseCompactLayoutForShape(shape).ConsumeValueOrDie();
+    xla::Literal literal = LiteralFromErlTuple(env, tuple, shape);
+    // Allocate space on the device
+    xla::ScopedShapedBuffer device_buffer = AllocateDestinationBuffer(compact_shape, device, this).ConsumeValueOrDie();
+    // Transfer literal to the device in the allocated buffer
+    transfer_manager->TransferLiteralToDevice(device->host_to_device_stream(), literal, device_buffer);
+    xla::ScopedShapedBuffer* buffer = new xla::ScopedShapedBuffer(std::move(device_buffer));
+    return new ExlaBuffer(buffer, device, false);
   }
 
   bool CanUseZeroCopy(ErlNifBinary bin,

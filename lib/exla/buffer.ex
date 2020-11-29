@@ -28,6 +28,10 @@ defmodule Exla.Buffer do
     %Buffer{data: binary, ref: nil, shape: shape}
   end
 
+  def buffer(tuple, shape = %Shape{dtype: {:t, _}}) when is_tuple(tuple) do
+    %Buffer{data: tuple, ref: nil, shape: shape}
+  end
+
   @doc """
   Create a new buffer from `binary` and place on `device` using `client`.
 
@@ -45,6 +49,13 @@ defmodule Exla.Buffer do
   @doc """
   Places the given `buffer` on the given `device` using `client`.
   """
+  def place_on_device(client = %Client{}, buffer = %Buffer{data: data}, device = {_platform, _ordinal})
+      when is_tuple(data) do
+    {:ok, {platform, ordinal}} = Client.check_device_compatibility(client, device)
+    ref = Exla.NIF.tuple_to_device_mem(client.ref, data, buffer.shape.ref, ordinal) |> unwrap!()
+    %Buffer{buffer | data: nil, ref: {ref, platform, ordinal}}
+  end
+
   def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {_platform, _ordinal}) do
     {:ok, {platform, ordinal}} = Client.check_device_compatibility(client, device)
     ref = Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal) |> unwrap!()
