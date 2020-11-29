@@ -143,30 +143,48 @@ namespace exla {
     return binary;
   }
 
-  xla::Literal LiteralFromErlBinary(ErlNifEnv* env, ERL_NIF_TERM term, const xla::Shape& shape) {
+  xla::StatusOr<xla::Literal> LiteralFromErlBinary(ErlNifEnv* env, ERL_NIF_TERM term, const xla::Shape& shape) {
     ErlNifBinary binary;
-    // TODO: Error check
-    enif_inspect_binary(env, term, &binary);
+
+    if(!enif_inspect_binary(env, term, &binary)) {
+      return tensorflow::errors::InvalidArgument("Invalid argument passed to `LiteralFromErlBinary`.");
+    }
+
     xla::BorrowingLiteral literal(const_cast<char*>((char*) binary.data), shape);
     return std::move(literal.Clone());
   }
 
-  xla::Literal LiteralFromErlTuple(ErlNifEnv* env, ERL_NIF_TERM tuple, const xla::Shape& shape) {
+  xla::StatusOr<xla::Literal> LiteralFromErlTuple(ErlNifEnv* env, ERL_NIF_TERM tuple, const xla::Shape& shape) {
     const ERL_NIF_TERM* elements;
     int num_elements;
-    // TODO: Error check
-    enif_get_tuple(env, tuple, &num_elements, &elements);
+
+    if(!enif_get_tuple(env, tuple, &num_elements, &elements)) {
+      return tensorflow::errors::InvalidArgument("Invalid argument passed to `LiteralFromErlTuple`.");
+    }
+
     std::vector<xla::Literal> data;
     for(int i=0;i<num_elements;i++){
+
       if(enif_is_tuple(env, elements[i])) {
         xla::Shape tuple_shape = xla::ShapeUtil::GetTupleElementShape(shape, i);
-        xla::Literal lit = LiteralFromErlTuple(env, elements[i], tuple_shape);
-        data.push_back(std::move(lit));
+        xla::StatusOr<xla::Literal> status = LiteralFromErlTuple(env, elements[i], tuple_shape);
+
+        if(!status.ok()) {
+          return status.status();
+        }
+
+        data.push_back(std::move(status.ValueOrDie()));
       } else {
         xla::Shape bin_shape = xla::ShapeUtil::GetTupleElementShape(shape, i);
-        xla::Literal lit = LiteralFromErlBinary(env, elements[i], bin_shape);
-        data.push_back(std::move(lit));
+        xla::StatusOr<xla::Literal> status = LiteralFromErlBinary(env, elements[i], bin_shape);
+
+        if(!status.ok()) {
+          return status.status();
+        }
+
+        data.push_back(std::move(status.ValueOrDie()));
       }
+
     }
 
     return xla::LiteralUtil::MakeTupleOwned(std::move(data));
@@ -179,8 +197,17 @@ namespace exla {
 
     xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
 
-    xla::Shape compact_shape = transfer_manager->ChooseCompactLayoutForShape(shape).ConsumeValueOrDie();
-    xla::Literal literal = LiteralFromErlTuple(env, tuple, shape);
+    xla::StatusOr<xla::Shape> compact_shape_status = transfer_manager->ChooseCompactLayoutForShape(shape);
+    if(!compact_shape_status.ok()) {
+      return compact_shape_status.status();
+    }
+    xla::Shape compact_shape = compact_shape_status.ConsumeValueOrDie();
+
+    xla::StatusOr<xla::Literal> literal_status = LiteralFromErlTuple(env, tuple, shape);
+    if(!literal_status.ok()) {
+      return literal_status.status();
+    }
+    xla::Literal literal = literal_status.ConsumeValueOrDie();
     // Allocate space on the device
     xla::ScopedShapedBuffer device_buffer = AllocateDestinationBuffer(compact_shape, device, this).ConsumeValueOrDie();
     // Transfer literal to the device in the allocated buffer
