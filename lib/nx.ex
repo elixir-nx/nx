@@ -502,7 +502,7 @@ defmodule Nx do
 
   Read the device tensor back to an Elixir bitstring:
 
-      tensor = Nx.device_tranfer(tensor)
+      tensor = Nx.device_transfer(tensor)
 
   """
   def device_transfer(tensor, device \\ Nx.BitStringDevice, opts \\ [])
