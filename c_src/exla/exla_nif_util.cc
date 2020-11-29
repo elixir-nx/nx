@@ -232,7 +232,6 @@ namespace exla {
 
     std::string type_name = xla::primitive_util::LowercasePrimitiveTypeName(type);
 
-    // TODO: Put this in NIF Util
     ERL_NIF_TERM dim_arr[(size_t) rank];
     for(int i=0;i<rank;i++) {
       int copy;

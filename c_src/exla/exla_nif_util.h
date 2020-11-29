@@ -102,15 +102,6 @@ namespace exla {
   }
 
   template <typename T>
-  ERL_NIF_TERM make_buffer(ErlNifEnv* env, std::unique_ptr<xla::ScopedShapedBuffer> buffer){
-    void* ptr = (void*) enif_alloc_resource(exla::resource_object<T>::type, sizeof(T));
-    new(ptr) T(std::move(buffer));
-    ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-    enif_release_resource(ptr);
-    return ret;
-  }
-
-  template <typename T>
   ERL_NIF_TERM make(ErlNifEnv* env, T &var){
     // TODO: Split this into two different functions: one that uses the copy constructor
     // and one that uses the move constructor, and then update which resources use which
