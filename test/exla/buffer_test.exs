@@ -10,12 +10,19 @@ defmodule BufferTest do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
     b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
 
+    b3_shape = Shape.make_shape([Shape.make_shape([Shape.make_shape({:s, 32}, {})]), Shape.make_shape({:s, 32}, {})])
+    b3 = Buffer.buffer({{<<1::32>>}, <<2::32>>}, b3_shape)
+
     platform = client().platform
     assert %Buffer{ref: {ref, result_platform, 0}} = Buffer.place_on_device(client(), b1, {platform, 0})
     assert result_platform == platform
     assert is_reference(ref)
 
     assert %Buffer{ref: {ref, result_platform, 0}} = Buffer.place_on_device(client(), b2, {platform, 0})
+    assert result_platform == platform
+    assert is_reference(ref)
+
+    assert %Buffer{ref: {ref, result_platform, 0}} = Buffer.place_on_device(client(), b3, {platform, 0})
     assert result_platform == platform
     assert is_reference(ref)
   end
@@ -27,6 +34,10 @@ defmodule BufferTest do
     b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
     b2 = Buffer.place_on_device(client(), b2, {client().platform, 0})
 
+    b3_shape = Shape.make_shape([Shape.make_shape([Shape.make_shape({:s, 32}, {})]), Shape.make_shape({:s, 32}, {})])
+    b3 = Buffer.buffer({{<<1::32>>}, <<2::32>>}, b3_shape)
+    b3 = Buffer.place_on_device(client(), b3, {client().platform, 0})
+
     assert <<1::32>> == Buffer.read(client(), b1)
     # non-destructive
     assert <<1::32>> == Buffer.read(client(), b1)
@@ -34,6 +45,9 @@ defmodule BufferTest do
     assert {<<1::32>>, <<2::32>>} == Buffer.read(client(), b2)
     # non-destructive
     assert {<<1::32>>, <<2::32>>} == Buffer.read(client(), b2)
+
+    assert {{<<1::32>>}, <<2::32>>} == Buffer.read(client(), b3)
+    assert {{<<1::32>>}, <<2::32>>} == Buffer.read(client(), b3)
 
     :ok = Buffer.deallocate(b1)
     assert_raise RuntimeError, "Attempt to read from empty buffer.", fn ->
