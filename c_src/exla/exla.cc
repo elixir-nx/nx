@@ -15,9 +15,6 @@
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
-// TODO: It might be more informative on the Elixir side to replace `enif_make_badarg` with something like `{:error, reason}`. Thoughts?
-// TODO: In the same respect as above we could wrap essentially each value returning from a NIF with `ok`.
-
 // This is all we need for now, the GC takes care of everything else
 void free_res(ErlNifEnv* env, void* obj){return;}
 
@@ -55,12 +52,12 @@ static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info){
 /************************* xla::XlaBuilder Functions ***********************/
 ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   // TODO: Get this from binary
   std::string name;
-  if(!exla::get(env, argv[0], name)) return enif_make_badarg(env);
+  if(!exla::get(env, argv[0], name)) return exla::error(env, "Unable to get builder name.");
 
   xla::XlaBuilder* builder = new xla::XlaBuilder(name);
 
@@ -149,7 +146,7 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 /************************ xla::Shape Functions ***************************/
 ERL_NIF_TERM make_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::PrimitiveType element_type;
@@ -224,7 +221,7 @@ ERL_NIF_TERM get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
 /************************ xla::XlaOp Functions ***************************/
 ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaBuilder** builder;
@@ -232,10 +229,10 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::Shape* shape;
   std::string name;
 
-  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[1], param_num)) return enif_make_badarg(env);
-  if(!exla::get<xla::Shape>(env, argv[2], shape)) return enif_make_badarg(env);
-  if(!exla::get(env, argv[3], name)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get(env, argv[1], param_num)) return exla::error(env, "Unable to get parameter number.");
+  if(!exla::get<xla::Shape>(env, argv[2], shape)) return exla::error(env, "Unable to get parameter shape.");
+  if(!exla::get(env, argv[3], name)) return exla::error(env, "Unable to get parameter name.");
 
   xla::XlaOp op = xla::Parameter((*builder), param_num, *shape, name);
 
@@ -364,15 +361,15 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
 ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const long long int>)){
   if(argc != 3){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaOp *lhs, *rhs;
   std::vector<long long int> broadcast_dims;
 
-  if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
-  if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
-  if(!exla::get_vector_tuple(env, argv[2], broadcast_dims)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return exla::error(env, "Unable to get left-hand side.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return exla::error(env, "Unable to get right-hand side.");
+  if(!exla::get_vector_tuple(env, argv[2], broadcast_dims)) return exla::error(env, "Unable to get broadcast dimensions.");
 
   xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
@@ -409,12 +406,12 @@ ERL_NIF_TERM atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return x
 
 ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp)){
   if(argc != 1){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaOp *op;
 
-  if(!exla::get<xla::XlaOp>(env, argv[0], op)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaOp>(env, argv[0], op)) return exla::error(env, "Unable to get operand.");
 
   xla::XlaOp result = lambda(*op);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
@@ -484,13 +481,13 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
-    return enif_make_badarg(env);
+    return exla:error(env, "Bad argument count.");
   }
 
   xla::XlaOp *lhs, *rhs;
 
-  if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return enif_make_badarg(env);
-  if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return exla::error(env, "Unable to get left-hand side operand.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return exla::error(env, "Unable to get right-hand side operand.");
   // TODO: Handle Precision Configuration
   xla::XlaOp result = xla::Dot(*lhs, *rhs);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
@@ -583,8 +580,8 @@ ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   int num_replicas, intra_op_parallelism_threads;
 
-  if(!exla::get(env, argv[0], num_replicas)) return enif_make_badarg(env);;
-  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return enif_make_badarg(env);;
+  if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get number of replicas.");
+  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get number of parallelism threads.");
   EXLA_ASSIGN_OR_RETURN(exla::ExlaClient* client, exla::getCUDAClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
@@ -592,11 +589,11 @@ ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
 ERL_NIF_TERM get_default_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient **client;
-  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
 
   int device_ordinal = (*client)->client()->default_device_ordinal();
   return exla::ok(env, exla::make(env, device_ordinal));
@@ -604,11 +601,11 @@ ERL_NIF_TERM get_default_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_
 
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient **client;
-  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
+  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
 
   int device_count = (*client)->client()->device_count();
 
@@ -618,7 +615,7 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 /************ Build, Compilation, Execution *************/
 ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 2){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaBuilder** builder;
@@ -641,8 +638,8 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::ExecutableBuildOptions build_options;
   int device_ordinal, num_replicas, num_partitions;
 
-  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return enif_make_badarg(env);
-  if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return enif_make_badarg(env);
+  if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
+  if(!exla::get<xla::XlaComputation>(env, argv[1], computation)) return exla::error(env, "Unable to get computation.");
   if(!exla::get_vector_list<xla::Shape>(env, argv[2], argument_layouts)) return exla::error(env, "Unable to get argument layouts.");
   if(!exla::get(env, argv[3], device_ordinal)) return exla::error(env, "Unable to get device ordinal.");
   if(!exla::get(env, argv[4], num_replicas)) return exla::error(env, "Unable to get Number of Replicas.");
@@ -763,12 +760,12 @@ std::unique_ptr<xla::HloModule> get_hlo_module(const xla::XlaComputation& comput
 
 ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaComputation* computation;
 
-  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return exla::error(env, "Unable to get computation.");
 
   std::unique_ptr<xla::HloModule> hlo_module = get_hlo_module(*computation);
 
@@ -781,12 +778,12 @@ ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TE
 
 ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1){
-    return enif_make_badarg(env);
+    return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaComputation* computation;
 
-  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return enif_make_badarg(env);
+  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return exla::error(env, "Unable to get computation.");
 
   std::string result;
   (*computation).proto().SerializeToString(&result);
