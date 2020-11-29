@@ -65,7 +65,9 @@ defmodule Exla.OpTest do
     shape = Shape.make_shape({:s, 16}, {1, 1, 1, 1})
     assert d = %Op{} = Op.constant_from_binary(builder, <<1::16>>, shape)
 
-    assert e = %Op{} = Op.constant_from_binary(
+    assert e =
+             %Op{} =
+             Op.constant_from_binary(
                builder,
                <<1::float-native, 2::float-native, 3::float-native, 4::float-native>>,
                Shape.make_shape({:f, 64}, {4, 1})
@@ -98,85 +100,91 @@ defmodule Exla.OpTest do
     assert e = %Op{} = Op.tuple(builder, {a, b, c, d})
     assert f = %Op{} = Op.tuple(builder, {e, a})
     assert g = %Op{} = Op.tuple(builder, {})
-    assert h = %Op{} = Op.tuple(builder, {Op.tuple(builder, {e, g}), b, c, f, Op.tuple(builder, {d})})
 
-    assert %Shape{dims: {4}, dtype:
-      {:t,
-        [
-          %Shape{dtype: {:s, 64}, dims: {0}},
-          %Shape{dtype: {:s, 64}, dims: {}},
-          %Shape{dtype: {:s, 8}, dims: {1, 4}},
-          %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
-        ]
-      }
-    } = Op.get_shape(e)
+    assert h =
+             %Op{} =
+             Op.tuple(builder, {Op.tuple(builder, {e, g}), b, c, f, Op.tuple(builder, {d})})
 
-    assert %Shape{dims: {2},
-      dtype:
-        {:t,
-          [
-            %Shape{dims: {4}, dtype:
-              {:t,
+    assert %Shape{
+             dims: {4},
+             dtype:
+               {:t,
                 [
                   %Shape{dtype: {:s, 64}, dims: {0}},
                   %Shape{dtype: {:s, 64}, dims: {}},
                   %Shape{dtype: {:s, 8}, dims: {1, 4}},
                   %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
-                ]
-              }
-            },
-            %Shape{dtype: {:s, 64}, dims: {0}}
-          ]
-        }
-      } = Op.get_shape(f)
+                ]}
+           } = Op.get_shape(e)
 
-    assert %Shape{dims: {5},
-      dtype:
-        {:t,
-          [
-            %Shape{dims: {2},
-              dtype:
-                {:t,
-                  [
-                    %Shape{dims: {4},
-                      dtype:
-                      {:t,
-                        [
-                          %Shape{dtype: {:s, 64}, dims: {0}},
-                          %Shape{dtype: {:s, 64}, dims: {}},
-                          %Shape{dtype: {:s, 8}, dims: {1, 4}},
-                          %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
-                        ]
-                      }
-                    },
-                    %Shape{dims: {0}, dtype: {:t, []}}
-                  ]
-                }
-            },
-            %Shape{dims: {}, dtype: {:s, 64}},
-            %Shape{dims: {1, 4}, dtype: {:s, 8}},
-            %Shape{dims: {2},
-            dtype:
-              {:t,
+    assert %Shape{
+             dims: {2},
+             dtype:
+               {:t,
                 [
-                  %Shape{dims: {4}, dtype:
-                    {:t,
-                      [
-                        %Shape{dtype: {:s, 64}, dims: {0}},
-                        %Shape{dtype: {:s, 64}, dims: {}},
-                        %Shape{dtype: {:s, 8}, dims: {1, 4}},
-                        %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
-                      ]
-                    }
+                  %Shape{
+                    dims: {4},
+                    dtype:
+                      {:t,
+                       [
+                         %Shape{dtype: {:s, 64}, dims: {0}},
+                         %Shape{dtype: {:s, 64}, dims: {}},
+                         %Shape{dtype: {:s, 8}, dims: {1, 4}},
+                         %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+                       ]}
                   },
                   %Shape{dtype: {:s, 64}, dims: {0}}
-                ]
-              }
-            },
-            %Shape{dims: {1}, dtype: {:t, [%Shape{dims: {1, 1, 1, 1}, dtype: {:s, 16}}]}}
-          ]
-        }
-      } = Op.get_shape(h)
+                ]}
+           } = Op.get_shape(f)
+
+    assert %Shape{
+             dims: {5},
+             dtype:
+               {:t,
+                [
+                  %Shape{
+                    dims: {2},
+                    dtype:
+                      {:t,
+                       [
+                         %Shape{
+                           dims: {4},
+                           dtype:
+                             {:t,
+                              [
+                                %Shape{dtype: {:s, 64}, dims: {0}},
+                                %Shape{dtype: {:s, 64}, dims: {}},
+                                %Shape{dtype: {:s, 8}, dims: {1, 4}},
+                                %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+                              ]}
+                         },
+                         %Shape{dims: {0}, dtype: {:t, []}}
+                       ]}
+                  },
+                  %Shape{dims: {}, dtype: {:s, 64}},
+                  %Shape{dims: {1, 4}, dtype: {:s, 8}},
+                  %Shape{
+                    dims: {2},
+                    dtype:
+                      {:t,
+                       [
+                         %Shape{
+                           dims: {4},
+                           dtype:
+                             {:t,
+                              [
+                                %Shape{dtype: {:s, 64}, dims: {0}},
+                                %Shape{dtype: {:s, 64}, dims: {}},
+                                %Shape{dtype: {:s, 8}, dims: {1, 4}},
+                                %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+                              ]}
+                         },
+                         %Shape{dtype: {:s, 64}, dims: {0}}
+                       ]}
+                  },
+                  %Shape{dims: {1}, dtype: {:t, [%Shape{dims: {1, 1, 1, 1}, dtype: {:s, 16}}]}}
+                ]}
+           } = Op.get_shape(h)
 
     assert %Shape{dims: {0}, dtype: {:t, []}} = Op.get_shape(g)
   end
@@ -200,16 +208,18 @@ defmodule Exla.OpTest do
     assert h = %Op{} = Op.get_tuple_element(f, 0)
 
     assert %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}} = Op.get_shape(g)
-    assert %Shape{dims: {4}, dtype:
-      {:t,
-        [
-          %Shape{dtype: {:s, 64}, dims: {0}},
-          %Shape{dtype: {:s, 64}, dims: {}},
-          %Shape{dtype: {:s, 8}, dims: {1, 4}},
-          %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
-        ]
-      }
-    } = Op.get_shape(h)
+
+    assert %Shape{
+             dims: {4},
+             dtype:
+               {:t,
+                [
+                  %Shape{dtype: {:s, 64}, dims: {0}},
+                  %Shape{dtype: {:s, 64}, dims: {}},
+                  %Shape{dtype: {:s, 8}, dims: {1, 4}},
+                  %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
+                ]}
+           } = Op.get_shape(h)
   end
 
   test "add/3 successfully creates add op without broadcast dimensions" do

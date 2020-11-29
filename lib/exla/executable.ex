@@ -1,5 +1,4 @@
 defmodule Exla.Executable do
-
   alias __MODULE__
   alias Exla.{Buffer, Client}
 
@@ -31,12 +30,10 @@ defmodule Exla.Executable do
 
     inputs =
       arguments
-      |> Enum.map(
-          fn
-            %Buffer{ref: {ref, _, _}} -> ref
-            %Buffer{data: data, shape: shape} -> {data, shape.ref}
-          end
-        )
+      |> Enum.map(fn
+        %Buffer{ref: {ref, _, _}} -> ref
+        %Buffer{data: data, shape: shape} -> {data, shape.ref}
+      end)
 
     {:ok, data} =
       Exla.NIF.run(

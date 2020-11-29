@@ -8,9 +8,9 @@ defmodule BufferTest do
 
   test "place_on_device/3" do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
-    b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
+    b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_tuple_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
 
-    b3_shape = Shape.make_shape([Shape.make_shape([Shape.make_shape({:s, 32}, {})]), Shape.make_shape({:s, 32}, {})])
+    b3_shape = Shape.make_tuple_shape([Shape.make_tuple_shape([Shape.make_shape({:s, 32}, {})]), Shape.make_shape({:s, 32}, {})])
     b3 = Buffer.buffer({{<<1::32>>}, <<2::32>>}, b3_shape)
 
     platform = client().platform
@@ -31,10 +31,10 @@ defmodule BufferTest do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
     b1 = Buffer.place_on_device(client(), b1, {client().platform, 0})
 
-    b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
+    b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_tuple_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
     b2 = Buffer.place_on_device(client(), b2, {client().platform, 0})
 
-    b3_shape = Shape.make_shape([Shape.make_shape([Shape.make_shape({:s, 32}, {})]), Shape.make_shape({:s, 32}, {})])
+    b3_shape = Shape.make_tuple_shape([Shape.make_tuple_shape([Shape.make_shape({:s, 32}, {})]), Shape.make_shape({:s, 32}, {})])
     b3 = Buffer.buffer({{<<1::32>>}, <<2::32>>}, b3_shape)
     b3 = Buffer.place_on_device(client(), b3, {client().platform, 0})
 
@@ -59,7 +59,7 @@ defmodule BufferTest do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
     b1 = Buffer.place_on_device(client(), b1, {client().platform(), 0})
 
-    b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
+    b2 = Buffer.buffer({<<1::32>>, <<2::32>>}, Shape.make_tuple_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})]))
     b2 = Buffer.place_on_device(client(), b2, {client().platform, 0})
 
     assert :ok = Buffer.deallocate(b1)
