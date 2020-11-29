@@ -91,9 +91,41 @@ defmodule ExecutableTest do
     t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     x = Op.parameter(config.builder, 0, t1.shape, "x")
     y = Op.parameter(config.builder, 1, t2.shape, "y")
-    res = Op.tuple(config.builder, {Op.tuple(config.builder, {x, y}),  Op.tuple(config.builder, {}), y})
+
+    res =
+      Op.tuple(
+        config.builder,
+        {Op.tuple(config.builder, {x, y}), Op.tuple(config.builder, {}), y}
+      )
+
     comp = Builder.build(res)
     exec = Client.compile(client(), comp, [t1.shape, t2.shape])
-    assert %Exla.Buffer{data: {{<<1, 0, 0, 0>>, <<2, 0, 0, 0>>}, {}, <<2, 0, 0, 0>>}} = Executable.run(exec, [t1, t2])
+
+    assert %Exla.Buffer{data: {{<<1, 0, 0, 0>>, <<2, 0, 0, 0>>}, {}, <<2, 0, 0, 0>>}} =
+             Executable.run(exec, [t1, t2])
+  end
+
+  test "run/4 returns with mixed data and tuple", config do
+    t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+    t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+
+    t3 = %Buffer{
+      data: {<<3::32-native>>, <<4::32-native>>},
+      shape:
+        Shape.make_tuple_shape([Shape.make_shape({:s, 32}, {}), Shape.make_shape({:s, 32}, {})])
+    }
+
+    t3 = Buffer.place_on_device(client(), t3, {client().platform, 0})
+
+    x = Op.parameter(config.builder, 0, t1.shape, "x")
+    y = Op.parameter(config.builder, 1, t2.shape, "y")
+    z = Op.parameter(config.builder, 2, t3.shape, "z")
+
+    res = Op.tuple(config.builder, {Op.add(x, Op.get_tuple_element(z, 0)), y})
+    comp = Builder.build(res)
+    exec = Client.compile(client(), comp, [t1.shape, t2.shape, t3.shape])
+
+    assert %Exla.Buffer{data: {<<4::32-native>>, <<2::32-native>>}} =
+             Executable.run(exec, [t1, t2, t3])
   end
 end
