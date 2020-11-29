@@ -10,6 +10,42 @@ namespace exla {
 
   using int64 = tensorflow::int64;
 
+  /*
+   * ExlaBuffer Functions
+   */
+  xla::Status ExlaBuffer::Deallocate() {
+    if(!empty()) {
+      if(zero_copy_) {
+        buffer_->release();
+        buffer_ = nullptr;
+      } else {
+        delete buffer_;
+        buffer_ = nullptr;
+      }
+      return tensorflow::Status::OK();
+    }
+    return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
+  }
+
+  xla::StatusOr<std::vector<ExlaBuffer*>> ExlaBuffer::DecomposeTuple() {
+    if(!is_tuple()) {
+      return tensorflow::errors::FailedPrecondition("Buffer is not a Tuple.");
+    }
+
+    std::vector<ExlaBuffer*> buffers;
+    int64 tuple_elements = xla::ShapeUtil::TupleElementCount(on_device_shape());
+    buffers.reserve(tuple_elements);
+    for(int i=0;i<tuple_elements;i++) {
+      xla::ScopedShapedBuffer* sub_buffer = new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));
+      buffers.push_back(new ExlaBuffer(sub_buffer, device_, false));
+    }
+
+    return buffers;
+  }
+
+  /*
+   * ExlaClient Functions
+   */
   ExlaClient::ExlaClient(xla::LocalClient* client,
                          int host_id,
                          std::vector<std::unique_ptr<ExlaDevice>> devices,
@@ -31,17 +67,6 @@ namespace exla {
       host_memory_allocator_ = std::make_unique<allocator::ExlaErtsAllocator>();
     }
 
-  }
-
-  xla::StatusOr<xla::ScopedShapedBuffer> AllocateDestinationBuffer(const xla::Shape& on_host_shape,
-                                                                   ExlaDevice* device,
-                                                                   ExlaClient* client) {
-    xla::TransferManager* transfer_manager = client->client()->backend().transfer_manager();
-
-    EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer,
-      transfer_manager->AllocateScopedShapedBuffer(on_host_shape, client->allocator(), device->id()));
-
-    return buffer;
   }
 
   xla::StatusOr<ERL_NIF_TERM> ExlaClient::DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer) {
@@ -151,6 +176,17 @@ namespace exla {
     std::memmove(binary.data, src_mem, size);
 
     return binary;
+  }
+
+  xla::StatusOr<xla::ScopedShapedBuffer> AllocateDestinationBuffer(const xla::Shape& on_host_shape,
+                                                                   ExlaDevice* device,
+                                                                   ExlaClient* client) {
+    xla::TransferManager* transfer_manager = client->client()->backend().transfer_manager();
+
+    EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer,
+      transfer_manager->AllocateScopedShapedBuffer(on_host_shape, client->allocator(), device->id()));
+
+    return buffer;
   }
 
   bool CanUseZeroCopy(ErlNifBinary bin,

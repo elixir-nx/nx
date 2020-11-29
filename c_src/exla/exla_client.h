@@ -26,57 +26,15 @@ namespace exla {
                bool zero_copy) : buffer_(buffer),
                                  device_(device),
                                  zero_copy_(zero_copy) {}
-    ~ExlaBuffer() {
-      if(this->empty()) {
-        return;
-      } else {
-        if(zero_copy_ && buffer_ != nullptr) {
-          buffer_->release();
-          buffer_ = nullptr;
-        } else if(!zero_copy_ && buffer_ != nullptr) {
-          delete buffer_;
-          buffer_ = nullptr;
-        } else {
-          return;
-        }
-      }
-    }
 
-    xla::StatusOr<std::vector<ExlaBuffer*>> DecomposeTuple() {
-      if(!is_tuple()) {
-        return tensorflow::errors::FailedPrecondition("Buffer is not a Tuple.");
-      }
+    ~ExlaBuffer() { Deallocate(); }
 
-      std::vector<ExlaBuffer*> buffers;
-      int64 tuple_elements = xla::ShapeUtil::TupleElementCount(on_device_shape());
-      buffers.reserve(tuple_elements);
-      for(int i=0;i<tuple_elements;i++) {
-        xla::ScopedShapedBuffer* sub_buffer = new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));
-        buffers.push_back(new ExlaBuffer(sub_buffer, device_, false));
-      }
+    xla::Status Deallocate();
 
-      return buffers;
-    }
+    xla::StatusOr<std::vector<ExlaBuffer*>> DecomposeTuple();
 
     bool empty() { return buffer_ == nullptr; }
 
-    xla::Status deallocate() {
-      if(this->empty()) {
-        return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
-      } else {
-        if(zero_copy_ && buffer_ != nullptr) {
-          buffer_->release();
-          buffer_ = nullptr;
-        } else if(!zero_copy_ && buffer_ != nullptr) {
-          delete buffer_;
-          buffer_ = nullptr;
-        } else {
-          return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
-        }
-      }
-
-      return tensorflow::Status::OK();
-    }
 
     const xla::Shape on_host_shape() { return buffer_->on_host_shape(); }
     const xla::Shape on_device_shape() { return buffer_->on_device_shape(); }

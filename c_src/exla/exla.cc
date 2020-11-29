@@ -129,7 +129,7 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 
   if(!exla::get<exla::ExlaBuffer*>(env, argv[0], buffer)) return exla::error(env, "Unable to get buffer.");
 
-  xla::Status dealloc_status = (*buffer)->deallocate();
+  xla::Status dealloc_status = (*buffer)->Deallocate();
 
   if(!dealloc_status.ok()) {
     return exla::atom(env, "already_deallocated");
