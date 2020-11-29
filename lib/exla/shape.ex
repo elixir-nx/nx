@@ -32,6 +32,14 @@ defmodule Exla.Shape do
     %Shape{ref: ref, dtype: {type, size}, dims: dims}
   end
 
+  def make_shape(shapes) when is_list(shapes) do
+    refs =
+      shapes
+      |> Enum.map(& &1.ref)
+    ref = Exla.NIF.make_tuple_shape(refs) |> unwrap!()
+    %Shape{dims: {length(shapes)}, dtype: {:t, shapes}, ref: ref}
+  end
+
   @doc """
   Converts a charlist type into Nx' tuple format.
   """

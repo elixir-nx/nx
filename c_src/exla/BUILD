@@ -41,6 +41,7 @@ cc_library(
     ":exla_device",
     ":exla_allocator",
     "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
+    "@org_tensorflow//tensorflow/compiler/xla:literal_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
     "@org_tensorflow//tensorflow/core:lib",
