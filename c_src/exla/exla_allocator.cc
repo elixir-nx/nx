@@ -6,7 +6,6 @@ namespace exla {
 namespace allocator {
 
   // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L85
-  // TODO: Consider a different approach, it might not be necessary, but it's worth thinking about later on.
   xla::StatusOr<std::unique_ptr<se::MultiDeviceAdapter>> CreateBFCAllocator(absl::Span<std::unique_ptr<ExlaDevice> const> devices,
                                                                             double memory_fraction, bool preallocate) {
 
@@ -59,7 +58,6 @@ namespace allocator {
   }
 
   // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L140
-  // TODO: Consider a different approach, it might not be necessary, but it's worth thinking about later on.
   xla::StatusOr<std::unique_ptr<se::DeviceMemoryAllocator>> GetGpuDeviceAllocator(absl::Span<std::unique_ptr<ExlaDevice> const> devices,
                                                                                   double memory_fraction,
                                                                                   bool preallocate) {
@@ -70,7 +68,7 @@ namespace allocator {
   }
 
   // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L155
-  // TODO: Consider a different approach, it might not be necessary, but it's worth thinking about later on.
+  // TODO: Rather than pin to Host memory, pin to ERTS memory.
   std::unique_ptr<tensorflow::BFCAllocator> GetGpuHostAllocator(se::StreamExecutor* executor) {
     tensorflow::SubAllocator* sub_allocator = new tensorflow::GpuHostAllocator(executor, 0, {}, {});
     const tensorflow::int64 kGpuHostMemoryLimitBytes = 64 * (1LL << 30);
