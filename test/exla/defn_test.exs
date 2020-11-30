@@ -241,6 +241,14 @@ defmodule Exla.DefnTest do
                <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native,
                  20.085536923187668::float-32-native>>
     end
+
+    defn exp_int(), do: Nx.exp(1)
+    defn exp_float(), do: Nx.exp(1.0)
+
+    test "constants" do
+      assert exp_int() == Nx.tensor(2.718281828459045)
+      assert exp_float() == Nx.tensor(2.718281828459045)
+    end
   end
 
   describe "sum" do
