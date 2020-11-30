@@ -93,7 +93,7 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_add(builder, left, right) do
-    type = arith_type(left, right)
+    type = binary_arith_type(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -101,7 +101,7 @@ defmodule Exla.Defn do
   end
 
   def nx_divide(builder, left, right) do
-    type = arith_type(left, right) |> Nx.Type.to_float()
+    type = binary_arith_type(left, right) |> Nx.Type.to_float()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -109,7 +109,7 @@ defmodule Exla.Defn do
   end
 
   def nx_exp(builder, op) do
-    Exla.Op.exp(to_operator(builder, op))
+    Exla.Op.exp(to_float_operator(builder, op))
   end
 
   def nx_sum(builder, op) do
@@ -132,6 +132,16 @@ defmodule Exla.Defn do
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant), do: to_constant(builder, constant)
 
+  defp to_float_operator(builder, %Exla.Op{} = op) do
+    shape = Exla.Op.get_shape(op)
+    type = Nx.Type.to_float(shape.dtype)
+    if shape.dtype != type, do: Exla.Op.convert_element_type(op, type), else: op
+  end
+
+  defp to_float_operator(builder, constant) do
+    to_typed_constant(builder, constant, {:f, 64})
+  end
+
   defp to_typed_operator(_builder, %Exla.Op{} = op, type) do
     shape = Exla.Op.get_shape(op)
 
@@ -149,16 +159,16 @@ defmodule Exla.Defn do
   ## Types
 
   # Used by add, substract, multiply, div, etc
-  defp arith_type(left, right) when is_number(left) and is_number(right),
+  defp binary_arith_type(left, right) when is_number(left) and is_number(right),
     do: Nx.Type.merge(Nx.Type.infer(left), Nx.Type.infer(right))
 
-  defp arith_type(scalar, op) when is_number(scalar),
+  defp binary_arith_type(scalar, op) when is_number(scalar),
     do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
 
-  defp arith_type(op, scalar) when is_number(scalar),
+  defp binary_arith_type(op, scalar) when is_number(scalar),
     do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
 
-  defp arith_type(left, right),
+  defp binary_arith_type(left, right),
     do: Nx.Type.merge(Exla.Op.get_shape(left).dtype, Exla.Op.get_shape(right).dtype)
 
   ## Constants

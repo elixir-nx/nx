@@ -717,6 +717,12 @@ defmodule Nx do
       iex> Nx.shape(t)
       {2, 2}
 
+      iex> t = Nx.divide(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<0.1::float-32-native, 0.05::float-32-native, 0.2::float-32-native, 0.1::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
       iex> t = Nx.divide(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
       iex> Nx.to_bitstring(t)
       <<0.1::float-32-native, 0.05::float-32-native, 0.2::float-32-native, 0.1::float-32-native>>
@@ -742,6 +748,10 @@ defmodule Nx do
       iex> t = Nx.exp(Nx.tensor([1, 2, 3]))
       iex> Nx.to_bitstring(t)
       <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native, 20.085536923187668::float-64-native>>
+
+      iex> t = Nx.exp(Nx.tensor([1, 2, 3], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native, 20.085536923187668::float-32-native>>
 
       iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
       iex> Nx.to_bitstring(t)

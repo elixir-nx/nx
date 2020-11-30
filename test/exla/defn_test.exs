@@ -131,7 +131,7 @@ defmodule Exla.DefnTest do
         Nx.tensor([1, 2], type: {:s, 8}),
         Nx.tensor([1, 2], type: {:s, 8}),
         Nx.tensor([1, 2], type: {:f, 32}),
-        Nx.tensor([1, 2], type: {:f, 32}),
+        Nx.tensor([1, 2], type: {:f, 32})
       ]
 
       for t <- tensors do
@@ -181,6 +181,7 @@ defmodule Exla.DefnTest do
         {1, Nx.tensor([1.0, 2.0, 3.0])},
         {Nx.tensor([1, 2, 3]), 1},
         {Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]])},
+        {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8})},
         {Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32})}
       ]
 
@@ -206,7 +207,7 @@ defmodule Exla.DefnTest do
         Nx.tensor([1, 2], type: {:s, 8}),
         Nx.tensor([1, 2], type: {:s, 8}),
         Nx.tensor([1, 2], type: {:f, 32}),
-        Nx.tensor([1, 2], type: {:f, 32}),
+        Nx.tensor([1, 2], type: {:f, 32})
       ]
 
       for t <- tensors do
@@ -216,10 +217,36 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "exp" do
+    defn exp(t), do: Nx.exp(t)
+
+    test "computes the exp across types" do
+      assert Nx.tensor([1, 2, 3]) |> exp() |> Nx.to_bitstring() ==
+               <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native,
+                 20.085536923187668::float-64-native>>
+
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp() |> Nx.to_bitstring() ==
+               <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native,
+                 20.085536923187668::float-32-native>>
+
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp() |> Nx.to_bitstring() ==
+               <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native,
+                 20.085536923187668::float-32-native>>
+
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> exp() |> Nx.to_bitstring() ==
+               <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native,
+                 20.085536923187668::float-64-native>>
+
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp() |> Nx.to_bitstring() ==
+               <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native,
+                 20.085536923187668::float-32-native>>
+    end
+  end
+
   describe "sum" do
     defn sum(t), do: Nx.sum(t)
 
-    test "compures the sum across types" do
+    test "computes the sum across types" do
       assert Nx.tensor([1, 2, 3]) |> sum() |> Nx.to_bitstring() ==
                <<6::64-native>>
 
