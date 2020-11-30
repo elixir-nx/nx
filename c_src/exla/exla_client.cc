@@ -289,7 +289,7 @@ namespace exla {
         if(!get_binary(env, tuple[0], data)) return tensorflow::errors::InvalidArgument("Unable to read binary data from input.");
         if(!get<xla::Shape>(env, tuple[1], shape)) return tensorflow::errors::InvalidArgument("Unable to read shape from input.");
 
-        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, BufferFromErlBin(data, *shape, device));
+        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, BufferFromErlBin(data, *shape, device, true));
 
         inputs.push_back((xla::ShapedBuffer*) buf->buffer());
         buffers.push_back(&buf);
