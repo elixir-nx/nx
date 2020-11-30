@@ -89,17 +89,8 @@ defmodule Exla.DefnTest do
       ]
 
       for {left, right} <- tensors do
-        exla = add_two(left, right)
-        nx = add_two_nx(left, right)
-        assert Nx.type(exla) == Nx.type(nx)
-        assert Nx.shape(exla) == Nx.shape(nx)
-        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
-
-        exla = add_two(right, left)
-        nx = add_two_nx(right, left)
-        assert Nx.type(exla) == Nx.type(nx)
-        assert Nx.shape(exla) == Nx.shape(nx)
-        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
+        assert add_two(left, right) == add_two_nx(left, right)
+        assert add_two(right, left) == add_two_nx(right, left)
       end
     end
 
@@ -167,23 +158,60 @@ defmodule Exla.DefnTest do
       ]
 
       for {left, right} <- tensors do
-        exla = add_two(left, right)
-        nx = add_two_nx(left, right)
-        assert Nx.type(exla) == Nx.type(nx)
-        assert Nx.shape(exla) == Nx.shape(nx)
-        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
-
-        exla = add_two(right, left)
-        nx = add_two_nx(right, left)
-        assert Nx.type(exla) == Nx.type(nx)
-        assert Nx.shape(exla) == Nx.shape(nx)
-        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
+        assert add_two(left, right) == add_two_nx(left, right)
+        assert add_two(right, left) == add_two_nx(right, left)
       end
     end
 
     test "broadcast error" do
       assert_raise RuntimeError, ~r"Binary op add with incompatible shapes", fn ->
         add_two(Nx.tensor([1, 2]), Nx.tensor([1, 2, 3]))
+      end
+    end
+  end
+
+  describe "//2" do
+    defn divide_two(a, b), do: a / b
+    @defn_compiler Nx.Defn
+    defn divide_two_nx(a, b), do: a / b
+
+    test "parameters" do
+      tensors = [
+        {1, 2},
+        {1, Nx.tensor([1.0, 2.0, 3.0])},
+        {Nx.tensor([1, 2, 3]), 1},
+        {Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]])},
+        {Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32})}
+      ]
+
+      for {left, right} <- tensors do
+        assert divide_two(left, right) == divide_two_nx(left, right)
+        assert divide_two(right, left) == divide_two_nx(right, left)
+      end
+    end
+
+    defn divide_two_int(t), do: t / 2
+    @defn_compiler Nx.Defn
+    defn divide_two_int_nx(t), do: t / 2
+
+    defn divide_two_float(t), do: t / 2.0
+    @defn_compiler Nx.Defn
+    defn divide_two_float_nx(t), do: t / 2.0
+
+    test "constants" do
+      tensors = [
+        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:s, 8}),
+        Nx.tensor([1, 2], type: {:s, 8}),
+        Nx.tensor([1, 2], type: {:f, 32}),
+        Nx.tensor([1, 2], type: {:f, 32}),
+      ]
+
+      for t <- tensors do
+        assert divide_two_int(t) == divide_two_int_nx(t)
+        assert divide_two_float(t) == divide_two_float_nx(t)
       end
     end
   end
