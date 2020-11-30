@@ -410,6 +410,64 @@ defmodule Nx do
     match_types([type], do: <<write!(value, 0)>>)
   end
 
+  def_arith_op = fn name, op, cast ->
+    cast = cast.(Macro.var(:output_type, nil))
+
+    def unquote(name)(left, right)
+
+    def unquote(name)(left, right) when is_number(left) and is_number(right) do
+      tensor(unquote(op)(left, right))
+    end
+
+    def unquote(name)(scalar, %T{type: input_type} = t) when is_number(scalar) do
+      data = data!(t)
+      output_type = Nx.Type.merge_scalar(input_type, scalar)
+      output_type = unquote(cast)
+
+      data =
+        match_types [input_type, output_type] do
+          for <<match!(seg, 0) <- data>>, into: <<>> do
+            <<write!(unquote(op)(scalar, read!(seg, 0)), 1)>>
+          end
+        end
+
+      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
+    end
+
+    def unquote(name)(%T{type: input_type} = t, scalar) when is_number(scalar) do
+      data = data!(t)
+      output_type = Nx.Type.merge_scalar(input_type, scalar)
+      output_type = unquote(cast)
+
+      data =
+        match_types [input_type, output_type] do
+          for <<match!(seg, 0) <- data>>, into: <<>> do
+            <<write!(unquote(op)(read!(seg, 0), scalar), 1)>>
+          end
+        end
+
+      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
+    end
+
+    def unquote(name)(%T{type: left_type} = left, %T{type: right_type} = right) do
+      output_type = Nx.Type.merge(left_type, right_type)
+      output_type = unquote(cast)
+
+      {data, shape} =
+        match_types [left_type, right_type, output_type] do
+          broadcast(left, right, fn left_dimension, right_dimension ->
+            for <<match!(left_seg, 0) <- left_dimension>>,
+                <<match!(right_seg, 1) <- right_dimension>>,
+                into: <<>> do
+              <<write!(unquote(op)(read!(left_seg, 0), read!(right_seg, 1)), 2)>>
+            end
+          end)
+        end
+
+      %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: shape}
+    end
+  end
+
   @doc """
   Creates a tensor from a `bitstring`, its `type`, and
   its `shape`.
@@ -543,9 +601,9 @@ defmodule Nx do
   ## Ops
 
   @doc """
-  Adds two tensors together.
+  Adds two tensors element-wise.
 
-  If a number is given, it is converted to a tensor on the fly.
+  If a number is given, it is converted to a tensor.
 
   ## Examples
 
@@ -623,67 +681,50 @@ defmodule Nx do
       {2, 2}
 
   """
-  def add(left, right)
+  def_arith_op.(:add, :+, & &1)
 
-  def add(left, right) when is_number(left) and is_number(right),
-    do: tensor(left + right)
+  @doc """
+  Divides two tensors element-wise.
 
-  def add(scalar, %T{type: input_type} = t) when is_number(scalar) do
-    data = data!(t)
-    output_type = Nx.Type.merge_scalar(input_type, scalar)
+  If a number is given, it is converted to a tensor.
 
-    data =
-      match_types [input_type, output_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
-      end
+  It always returns a float tensor. If any of the input
+  tensors are not float, they are converted to f64.
 
-    %{t | data: {Nx.BitStringDevice, data}, type: output_type}
-  end
+  ## Examples
 
-  def add(%T{type: input_type} = t, scalar) when is_number(scalar) do
-    data = data!(t)
-    output_type = Nx.Type.merge_scalar(input_type, scalar)
+  ### Dividing scalars
 
-    data =
-      match_types [input_type, output_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
-      end
+      iex> t = Nx.divide(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<0.5::float-64-native>>
 
-    %{t | data: {Nx.BitStringDevice, data}, type: output_type}
-  end
+  ### Dividing tensors and scalars
 
-  def add(%T{type: left_type} = left, %T{type: right_type} = right) do
-    output_type = Nx.Type.merge(left_type, right_type)
+      iex> t = Nx.divide(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 2.0::float-64-native, 3.0::64-native>>
 
-    {data, shape} =
-      match_types [left_type, right_type, output_type] do
-        broadcast(left, right, fn left_dimension, right_dimension ->
-          for <<match!(left_seg, 0) <- left_dimension>>,
-              <<match!(right_seg, 1) <- right_dimension>>,
-              into: <<>> do
-            <<write!(read!(left_seg, 0) + read!(right_seg, 1), 2)>>
-          end
-        end)
-      end
+      iex> t = Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 0.5::float-64-native, (1/3)::float-64-native>>
 
-    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: shape}
-  end
+  ### Dividing tensors
 
-  # TODO: Properly implement me
-  def divide(%T{type: left_type} = left, %T{type: right_type, shape: {}} = right) do
-    left_data = data!(left)
-    right_data = data!(right)
-    output_type = Nx.Type.merge(left_type, right_type) |> Nx.Type.to_float()
+      iex> t = Nx.divide(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<0.1::float-64-native, 0.05::float-64-native, 0.2::float-64-native, 0.1::float-64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
 
-    data =
-      match_types [left_type, right_type, output_type] do
-        <<match!(c, 1)>> = right_data
-        c = read!(c, 1)
-        for <<match!(seg, 0) <- left_data>>, into: <<>>, do: <<write!(read!(seg, 0) / c, 2)>>
-      end
+      iex> t = Nx.divide(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<0.1::float-32-native, 0.05::float-32-native, 0.2::float-32-native, 0.1::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
 
-    %{left | data: {Nx.BitStringDevice, data}, type: output_type}
-  end
+  """
+  def_arith_op.(:divide, :/, &quote(do: Nx.Type.to_float(unquote(&1))))
 
   @doc """
   Calculates the exponential of the given tensor.
