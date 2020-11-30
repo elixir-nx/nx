@@ -18,7 +18,6 @@ namespace exla {
     return enif_make_atom(env, msg);
   }
 
-
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int8 &var) {
     int value;
     if(!enif_get_int(env, term, &value)) return 0;
@@ -89,10 +88,6 @@ namespace exla {
     return 0;
   }
 
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var) {
-    return enif_inspect_binary(env, term, &var);
-  }
-
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var){
     unsigned len;
     int ret = enif_get_list_length(env, term, &len);
@@ -124,37 +119,19 @@ namespace exla {
     return 1;
   }
 
-  int get_vector_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64> &var) {
-    const ERL_NIF_TERM *terms;
-    int length;
-    if(!enif_get_tuple(env, tuple, &length, &terms)) return 0;
-    for(int i=0;i<length;i++){
-      int data;
-      if(!get(env, terms[i], data)) return 0;
-      var.push_back(data);
-    }
-    return 1;
+  int get_binary(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var) {
+    return enif_inspect_binary(env, term, &var);
   }
 
-  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ErlNifBinary> &var){
-    ERL_NIF_TERM head, tail;
-    while(enif_get_list_cell(env, list, &head, &tail)){
-      ErlNifBinary elem;
-      if(!get(env, head, elem)) return 0;
-      var.push_back(elem);
-      list = tail;
-    }
-    return 1;
-  }
+  int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type){
+    std::string type_str;
+    if(!get(env, term, type_str)) return 0;
 
-  int get_vector_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<int64> &var){
-    ERL_NIF_TERM head, tail;
-    while(enif_get_list_cell(env, list, &head, &tail)){
-      int64 elem;
-      if(!get(env, head, elem)) return 0;
-      var.push_back(elem);
-      list = tail;
+    xla::StatusOr<xla::PrimitiveType> type_status = xla::primitive_util::StringToPrimitiveType(type_str);
+    if(!type_status.ok()) {
+      return 0;
     }
+    type = type_status.ConsumeValueOrDie();
     return 1;
   }
 
@@ -171,55 +148,40 @@ namespace exla {
     return 1;
   }
 
-  int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type){
-    std::string type_str;
-    if(!get(env, term, type_str)) return 0;
-
-    xla::StatusOr<xla::PrimitiveType> type_status = xla::primitive_util::StringToPrimitiveType(type_str);
-    if(!type_status.ok()) {
-      return 0;
+  int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64> &var) {
+    const ERL_NIF_TERM *terms;
+    int length;
+    if(!enif_get_tuple(env, tuple, &length, &terms)) return 0;
+    for(int i=0;i<length;i++){
+      int data;
+      if(!get(env, terms[i], data)) return 0;
+      var.push_back(data);
     }
-    type = type_status.ConsumeValueOrDie();
     return 1;
   }
 
-  xla::StatusOr<xla::XlaOp> get_constant(ErlNifEnv* env, ERL_NIF_TERM term, xla::XlaBuilder* builder, xla::PrimitiveType type) {
-    switch(type) {
-      case xla::PrimitiveType::PRED:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::PRED>(env, term));
-      case xla::PrimitiveType::U8:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U8>(env, term));
-      case xla::PrimitiveType::U16:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U16>(env, term));
-      case xla::PrimitiveType::U32:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U32>(env, term));
-      case xla::PrimitiveType::U64:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::U64>(env, term));
-      case xla::PrimitiveType::S8:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S8>(env, term));
-      case xla::PrimitiveType::S16:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S16>(env, term));
-      case xla::PrimitiveType::S32:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S32>(env, term));
-      case xla::PrimitiveType::S64:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::S64>(env, term));
-      case xla::PrimitiveType::F16:
-        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
-      case xla::PrimitiveType::BF16:
-        // TODO
-        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
-      case xla::PrimitiveType::F32:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::F32>(env, term));
-      case xla::PrimitiveType::F64:
-        return xla::ConstantR0(builder, get_value<xla::PrimitiveType::F64>(env, term));
-      case xla::PrimitiveType::C64:
-        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
-      case xla::PrimitiveType::C128:
-        return tensorflow::errors::InvalidArgument("Unsupported constant type.");
-      default:
-        return tensorflow::errors::InvalidArgument("Invalid type.");
+  int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ErlNifBinary> &var){
+    ERL_NIF_TERM head, tail;
+    while(enif_get_list_cell(env, list, &head, &tail)){
+      ErlNifBinary elem;
+      if(!get_binary(env, head, elem)) return 0;
+      var.push_back(elem);
+      list = tail;
     }
+    return 1;
   }
+
+  int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<int64> &var){
+    ERL_NIF_TERM head, tail;
+    while(enif_get_list_cell(env, list, &head, &tail)){
+      int64 elem;
+      if(!get(env, head, elem)) return 0;
+      var.push_back(elem);
+      list = tail;
+    }
+    return 1;
+  }
+
 
   ERL_NIF_TERM make_shape_term(ErlNifEnv* env, xla::Shape shape) {
     if(shape.IsTuple()) {
