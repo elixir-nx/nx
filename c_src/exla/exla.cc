@@ -11,6 +11,8 @@
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
+// TODO: Implement TFLogSink
+
 // This is all we need for now, the GC takes care of everything else
 void free_res(ErlNifEnv* env, void* obj){return;}
 
@@ -606,9 +608,6 @@ ERL_NIF_TERM convert_element_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 }
 
 /************************ xla::ClientLibrary Functions ***************************/
-// TODO: This function generates mildly annoying and poorly formatted log messages from the TensorFlow side...
-// We can either make the logging stricter or we can somehow get the log messages to the Elixir Logger?? I'm
-// not sure what the best solution is...
 ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   int num_replicas, intra_op_parallelism_threads;
 
