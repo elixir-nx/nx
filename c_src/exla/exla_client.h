@@ -123,7 +123,8 @@ namespace exla {
 
     xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
                                                 const xla::Shape& shape,
-                                                ExlaDevice* device);
+                                                ExlaDevice* device,
+                                                bool transfer_for_run);
 
     ERL_NIF_TERM DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
 

@@ -102,7 +102,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
-  EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
+  EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device, false), env);
 
   return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer));
 }
@@ -705,7 +705,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
       xla::Shape* shape;
       if(!exla::get(env, tuple[0], data)) return exla::error(env, "Unable to read binary data from input.");
       if(!exla::get<xla::Shape>(env, tuple[1], shape)) return exla::error(env, "Unable to read shape from input.");
-      EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device), env);
+      EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device, true), env);
       std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**> pr(buf, &buf);
       inp.push_back(pr);
     } else if(exla::get<exla::ExlaBuffer*>(env, head, buffer)) {
