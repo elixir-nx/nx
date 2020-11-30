@@ -9,8 +9,8 @@ defmodule Nx.Defn do
         a * b + c
       end
 
-  Can be called with scalars, vectors, matrices, or n-dimensional
-  tensors. Depending on your backend of choice, the code can even
+  will work with scalars, vector, matrices, and n-dimensional
+  tensors, Depending on your backend of choice, the code can even
   be JIT-compiled or AOT-compiled and run either on the CPU or GPU.
 
   `defn` is a subset of Elixir since it replaces Elixir's `Kernel`
@@ -29,21 +29,23 @@ defmodule Nx.Defn do
         |> Nx.add(c)
       end
 
-  The only `Nx` functions not supported in `defn` are conversion
-  and reflection functions, such as `Nx.to_bitstring/1` and
-  `Nx.rank/1` and similar, as they are meant for interfacing
-  between Elixir and the numerical world. If you use any of them,
-  you will get an error at compilation time.
+  The only `Nx` functions not supported in `defn` are device
+  and reflection functions, such as `Nx.to_bitstring/1`,
+  `Nx.device_transfer/1`, `Nx.rank/1`, and similar, as they are
+  meant for interfacing between Elixir and the numerical world.
+  But don't worry, if you use any unsupported API, you will get
+  an error at compilation time.
 
-  Calling other functions is possible, as long as they are implemented
-  with `defn`. At the moment, only calling local functions is supported
-  but remote functions are coming next.
+  Calling other functions is possible, as long as they are
+  implemented with `defn`. At the moment, only calling local
+  functions is supported but remote functions are coming next.
 
   ## Inputs and outputs types
 
-  `defn` functions can receive either numbers or tensors as inputs
-  (in other words, the same types as `Nx.tensor/2`). It always returns
-  a tensor, even for numerical constants. For example, this function
+  `defn` functions can receive either numbers or tensors as inputs.
+  If a number is given, it is automatically cast to tensor at
+  invocation. `defn` functions always return tensors too, even for
+  numerical constants. For example, this function:
 
       defn just_two(), do: 2
 
@@ -85,20 +87,26 @@ defmodule Nx.Defn do
   @impl true
   def __compile__(_kind, _meta, _name, args, ast, []) do
     quote do
-      unquote(__MODULE__).__validate__!(unquote(args))
+      unquote(args) = unquote(__MODULE__).__validate__!(unquote(args))
       Nx.tensor(unquote(ast))
     end
   end
 
   @doc false
   def __validate__!(args) do
-    for arg <- args,
-        not is_number(arg),
-        not match?(%Nx.Tensor{}, arg) do
-      raise ArgumentError, "defn functions expects either numbers or %Nx.Tensor{} as arguments"
-    end
+    for arg <- args do
+      cond do
+        is_number(arg) ->
+          Nx.tensor(arg)
 
-    :ok
+        match?(%Nx.Tensor{}, arg) ->
+          arg
+
+        true ->
+          raise ArgumentError,
+                "defn functions expects either numbers or %Nx.Tensor{} as arguments"
+      end
+    end
   end
 
   ## Public API

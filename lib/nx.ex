@@ -33,16 +33,47 @@ defmodule Nx do
   Code inside `defn` functions can also be given to custom compilers,
   which can compile said functions to use either just-in-time (JIT)
   or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
-  For example, using the `Exla` library:
+  For example, using the `Exla` compiler:
 
-      @defn_compiler {Exla, platform: :host} # or platform: :cuda
+      @defn_compiler {Exla, platform: :host}
       defn softmax(t) do
         Nx.exp(t) / Nx.sum(Nx.exp(t))
       end
 
   This complements Erlang's JIT compiler as it compiles direct to
   native code with numerical compilation and performance in mind.
+
+  ## Broadcasting
+
+  TODO
+
+  ## Devices
+
+  The `Nx` library has built-in support for devices. A tensor is
+  always allocated in a device, the default device being the
+  `Nx.BitStringDevice`, which means the tensor is allocated as a
+  bitstring within the Erlang VM.
+
+  Most operations in the `Nx` module require the tensor to be
+  allocated within the VM but, most often, when running `defn`
+  functions that on the GPU, you want to keep the data on the
+  GPU as much as possible. For example:
+
+      @defn_compiler {Exla, platform: :host, keep_on_device: true}
+      defn softmax(t) do
+        Nx.exp(t) / Nx.sum(Nx.exp(t))
+      end
+
+  You can explicitly transfer data to a certain device or transfer
+  it back as a binary by calling `device_transfer/3`. You can also
+  call `device_read/1` to read the data from the binary, without
+  deallocating it, and then explicitly call `device_deallocate/1`
+  to deallocate it.
+
+  To implement your own device, check the `Nx.Device` behaviour.
   """
+
+  alias Nx.Tensor, as: T
 
   ## Private macros
 
@@ -178,9 +209,7 @@ defmodule Nx do
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
-  ## API
-
-  alias Nx.Tensor, as: T
+  ## Creation API
 
   @doc """
   Builds a tensor.
@@ -336,7 +365,7 @@ defmodule Nx do
     type = opts[:type] || Nx.Type.infer(arg)
     Nx.Type.validate!(type)
     {dimensions, data} = flatten(arg, type)
-    %T{shape: dimensions, type: type, data: data}
+    %T{shape: dimensions, type: type, data: {Nx.BitStringDevice, data}}
   end
 
   defp flatten(list, type) when is_list(list) do
@@ -381,32 +410,63 @@ defmodule Nx do
     match_types([type], do: <<write!(value, 0)>>)
   end
 
-  @doc """
-  Returns the type of the tensor.
+  def_arith_op = fn name, op, cast ->
+    cast = cast.(Macro.var(:output_type, nil))
 
-  See `Nx.Type` for more information.
-  """
-  def type(%T{type: type}), do: type
+    def unquote(name)(left, right)
 
-  @doc """
-  Returns the shape of the tensor as a tuple.
+    def unquote(name)(left, right) when is_number(left) and is_number(right) do
+      tensor(unquote(op)(left, right))
+    end
 
-  The size of this tuple gives the rank of the tensor.
-  """
-  def shape(%T{shape: shape}), do: shape
+    def unquote(name)(scalar, %T{type: input_type} = t) when is_number(scalar) do
+      data = data!(t)
+      output_type = Nx.Type.merge_scalar(input_type, scalar)
+      output_type = unquote(cast)
 
-  @doc """
-  Returns the rank of a tensor.
-  """
-  def rank(%T{shape: shape}), do: tuple_size(shape)
+      data =
+        match_types [input_type, output_type] do
+          for <<match!(seg, 0) <- data>>, into: <<>> do
+            <<write!(unquote(op)(scalar, read!(seg, 0)), 1)>>
+          end
+        end
 
-  @doc """
-  Returns the underlying tensor as a bitstring.
+      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
+    end
 
-  The bitstring is returned as is (which is row-major).
-  """
-  # TODO: What happens if the data is in the device?
-  def to_bitstring(%T{data: data}), do: data
+    def unquote(name)(%T{type: input_type} = t, scalar) when is_number(scalar) do
+      data = data!(t)
+      output_type = Nx.Type.merge_scalar(input_type, scalar)
+      output_type = unquote(cast)
+
+      data =
+        match_types [input_type, output_type] do
+          for <<match!(seg, 0) <- data>>, into: <<>> do
+            <<write!(unquote(op)(read!(seg, 0), scalar), 1)>>
+          end
+        end
+
+      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
+    end
+
+    def unquote(name)(%T{type: left_type} = left, %T{type: right_type} = right) do
+      output_type = Nx.Type.merge(left_type, right_type)
+      output_type = unquote(cast)
+
+      {data, shape} =
+        match_types [left_type, right_type, output_type] do
+          broadcast(left, right, fn left_dimension, right_dimension ->
+            for <<match!(left_seg, 0) <- left_dimension>>,
+                <<match!(right_seg, 1) <- right_dimension>>,
+                into: <<>> do
+              <<write!(unquote(op)(read!(left_seg, 0), read!(right_seg, 1)), 2)>>
+            end
+          end)
+        end
+
+      %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: shape}
+    end
+  end
 
   @doc """
   Creates a tensor from a `bitstring`, its `type`, and
@@ -440,17 +500,110 @@ defmodule Nx do
       raise ArgumentError, "bitstring does not match the given type and dimensions"
     end
 
-    %T{data: bitstring, type: type, shape: shape}
+    %T{data: {Nx.BitStringDevice, bitstring}, type: type, shape: shape}
   end
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
-  @doc """
-  Adds two tensors together.
+  ## Reflection
 
-  If a number is given, it is converted to a tensor on the fly.
+  @doc """
+  Returns the type of the tensor.
+
+  See `Nx.Type` for more information.
+  """
+  def type(%T{type: type}), do: type
+
+  @doc """
+  Returns the shape of the tensor as a tuple.
+
+  The size of this tuple gives the rank of the tensor.
+  """
+  def shape(%T{shape: shape}), do: shape
+
+  @doc """
+  Returns the rank of a tensor.
+  """
+  def rank(%T{shape: shape}), do: tuple_size(shape)
+
+  @doc """
+  Returns the underlying tensor as a bitstring.
+
+  The bitstring is returned as is (which is row-major).
+  """
+  def to_bitstring(%T{} = t), do: data!(t)
+
+  ## Device API
+
+  @doc """
+  Transfers data to the given device.
+
+  If a device is not given, `Nx.BitStringDevice` is used, which means
+  the data is read into an Elixir bitstring. If the device is already
+  `Nx.BitStringDevice`, it returns the tensor as is.
+
+  If a separate device is given, the data will be moved to the new
+  device. Once transfer is done, the data is deallocated from the
+  current tensor device. If the device has already been deallocated,
+  it raises.
+
+  At the moment, you can only transfer data from `Nx.BitStringDevice`
+  to other devices and vice-versa but not between ad-hoc devices.
+
+  ## Examples
+
+  Move a tensor to a device:
+
+      device_tensor = Nx.device_transfer(tensor, Exla.NxDevice, client: :cuda)
+
+  Read the device tensor back to an Elixir bitstring:
+
+      tensor = Nx.device_transfer(tensor)
+
+  """
+  def device_transfer(tensor, device \\ Nx.BitStringDevice, opts \\ [])
+
+  def device_transfer(%T{data: {Nx.BitStringDevice, _data}} = t, device, opts) do
+    %{type: type, shape: shape} = t
+    %{t | data: device.allocate(data!(t), type, shape, opts)}
+  end
+
+  def device_transfer(%T{} = t, Nx.BitStringDevice, _opts) do
+    new_t = device_read(t)
+    _ = device_deallocate(t)
+    new_t
+  end
+
+  def device_transfer(%T{data: {data_device, _}}, device, _opts) do
+    raise ArgumentError, "cannot transfer from #{inspect(data_device)} to #{inspect(device)}"
+  end
+
+  @doc """
+  Reads data allocated in a device.
+
+  It returns a tensor where the device is `Nx.BitStringDevice`.
+  The data is not deallocated from the current device. If the
+  device has already been deallocated, it raises.
+  """
+  def device_read(%T{data: {device, state}} = t) do
+    %{t | data: {Nx.BitStringDevice, device.read(state)}}
+  end
+
+  @doc """
+  Deallocates data in a device.
+
+  It returns either `:ok` or `:already_deallocated`.
+  """
+  def device_deallocate(%T{data: {device, state}} = _tensor), do: device.deallocate(state)
+
+  ## Ops
+
+  @doc """
+  Adds two tensors element-wise.
+
+  If a number is given, it is converted to a tensor.
 
   ## Examples
 
@@ -528,66 +681,56 @@ defmodule Nx do
       {2, 2}
 
   """
-  def add(left, right)
+  def_arith_op.(:add, :+, & &1)
 
-  def add(left, right) when is_number(left) and is_number(right),
-    do: tensor(left + right)
+  @doc """
+  Divides two tensors element-wise.
 
-  def add(scalar, %T{data: data, type: input_type} = t) when is_number(scalar) do
-    output_type = Nx.Type.merge_scalar(input_type, scalar)
+  If a number is given, it is converted to a tensor.
 
-    data =
-      match_types [input_type, output_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
-      end
+  It always returns a float tensor. If any of the input
+  tensors are not float, they are converted to f64.
 
-    %{t | data: data, type: output_type}
-  end
+  ## Examples
 
-  def add(%T{data: data, type: input_type} = t, scalar) when is_number(scalar) do
-    output_type = Nx.Type.merge_scalar(input_type, scalar)
+  ### Dividing scalars
 
-    data =
-      match_types [input_type, output_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + scalar, 1)>>
-      end
+      iex> t = Nx.divide(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<0.5::float-64-native>>
 
-    %{t | data: data, type: output_type}
-  end
+  ### Dividing tensors and scalars
 
-  def add(%T{type: left_type} = left, %T{type: right_type} = right) do
-    output_type = Nx.Type.merge(left_type, right_type)
+      iex> t = Nx.divide(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 2.0::float-64-native, 3.0::64-native>>
 
-    {data, shape} =
-      match_types [left_type, right_type, output_type] do
-        broadcast(left, right, fn left_dimension, right_dimension ->
-          for <<match!(left_seg, 0) <- left_dimension>>,
-              <<match!(right_seg, 1) <- right_dimension>>,
-              into: <<>> do
-            <<write!(read!(left_seg, 0) + read!(right_seg, 1), 2)>>
-          end
-        end)
-      end
+      iex> t = Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 0.5::float-64-native, (1/3)::float-64-native>>
 
-    %T{data: data, type: output_type, shape: shape}
-  end
+  ### Dividing tensors
 
-  # TODO: Properly implement me
-  def divide(
-        %T{data: left_data, type: left_type} = left,
-        %T{data: right_data, type: right_type, shape: {}}
-      ) do
-    output_type = Nx.Type.merge(left_type, right_type) |> Nx.Type.to_float()
+      iex> t = Nx.divide(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<0.1::float-64-native, 0.05::float-64-native, 0.2::float-64-native, 0.1::float-64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
 
-    data =
-      match_types [left_type, right_type, output_type] do
-        <<match!(c, 1)>> = right_data
-        c = read!(c, 1)
-        for <<match!(seg, 0) <- left_data>>, into: <<>>, do: <<write!(read!(seg, 0) / c, 2)>>
-      end
+      iex> t = Nx.divide(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<0.1::float-32-native, 0.05::float-32-native, 0.2::float-32-native, 0.1::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
 
-    %{left | data: data, type: output_type}
-  end
+      iex> t = Nx.divide(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<0.1::float-32-native, 0.05::float-32-native, 0.2::float-32-native, 0.1::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def_arith_op.(:divide, :/, &quote(do: Nx.Type.to_float(unquote(&1))))
 
   @doc """
   Calculates the exponential of the given tensor.
@@ -606,6 +749,10 @@ defmodule Nx do
       iex> Nx.to_bitstring(t)
       <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native, 20.085536923187668::float-64-native>>
 
+      iex> t = Nx.exp(Nx.tensor([1, 2, 3], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native, 20.085536923187668::float-32-native>>
+
       iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
       iex> Nx.to_bitstring(t)
       <<2.718281828459045::float-native-32, 7.38905609893065::float-native-32, 20.085536923187668::float-native-32>>
@@ -619,7 +766,8 @@ defmodule Nx do
 
   def exp(number) when is_number(number), do: tensor(:math.exp(number))
 
-  def exp(%T{data: data, type: input_type} = t) do
+  def exp(%T{type: input_type} = t) do
+    data = data!(t)
     output_type = Nx.Type.to_float(input_type)
 
     data =
@@ -627,7 +775,7 @@ defmodule Nx do
         for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(:math.exp(read!(seg, 0)), 1)>>
       end
 
-    %{t | data: data, type: output_type}
+    %{t | data: {Nx.BitStringDevice, data}, type: output_type}
   end
 
   @doc """
@@ -648,34 +796,44 @@ defmodule Nx do
       {}
 
   """
-  def sum(%T{data: data, type: type} = t) do
+  def sum(%T{type: type} = t) do
     data =
       match_types [type] do
         value =
-          bin_reduce_all(data, 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
+          bin_reduce_all(data!(t), 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
             {read!(var, 0) + acc, rest}
           end)
 
         <<write!(value, 0)>>
       end
 
-    %{t | data: data, shape: {}}
+    %{t | data: {Nx.BitStringDevice, data}, shape: {}}
+  end
+
+  ## Device helpers
+
+  defp data!(%T{data: {Nx.BitStringDevice, data}}), do: data
+
+  defp data!(%T{data: {device, _data}}) do
+    raise ArgumentError,
+          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
+            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
   end
 
   ## Broadcast helpers
 
   defp broadcast(
-         %T{data: left_data, type: {_, left_size}, shape: shape},
-         %T{data: right_data, type: {_, right_size}, shape: shape},
+         %T{type: {_, left_size}, shape: shape} = left,
+         %T{type: {_, right_size}, shape: shape} = right,
          fun
        ) do
-    data = bin_zip_map_all(left_data, left_size, right_data, right_size, fun)
+    data = bin_zip_map_all(data!(left), left_size, data!(right), right_size, fun)
     {IO.iodata_to_binary(data), shape}
   end
 
   defp broadcast(
-         %T{data: left_data, type: {_, left_size}, shape: left_shape},
-         %T{data: right_data, type: {_, right_size}, shape: right_shape},
+         %T{type: {_, left_size}, shape: left_shape} = left,
+         %T{type: {_, right_size}, shape: right_shape} = right,
          fun
        ) do
     left_rank = tuple_size(left_shape)
@@ -686,7 +844,7 @@ defmodule Nx do
 
     case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
       {chunks, shape} ->
-        {broadcast_recur(left_data, right_data, chunks), shape}
+        {broadcast_recur(data!(left), data!(right), chunks), shape}
 
       :error ->
         raise ArgumentError,
@@ -736,7 +894,7 @@ defmodule Nx do
 
     # This is an optimization, we skip cross traversals on the left-side
     # if we are just before a previous cross traversal. If broadcasting is
-    # failing, remove the if branch and see if succeeds. :)
+    # failing, remove the if branch and see if it succeeds. :)
     chunks =
       if dir == :left and match?([{:cross, _, _} | _], chunks) do
         chunks

@@ -1,7 +1,7 @@
 defmodule Nx.Defn.Module do
   @moduledoc false
 
-  # TODO: send those as pull requests to Elixir.
+  # TODO: remove this module once Elixir v1.12 is out.
 
   @doc """
   Returns the definition for the name-arity pair.

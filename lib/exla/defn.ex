@@ -13,7 +13,8 @@ defmodule Exla.Defn do
   def sf_cached_def(module, name, arity, args, options, fun) do
     cache_args = for arg <- args, do: nx_to_cache_key!(arg)
     buffers = for arg <- args, do: nx_to_buffer(arg)
-    cache_key = {module, name, arity, cache_args}
+    {client_name, options} = Keyword.pop(options, :client, :default)
+    cache_key = {module, name, arity, cache_args, client_name}
 
     executable =
       Exla.LockedCache.run(cache_key, fn ->
@@ -21,15 +22,14 @@ defmodule Exla.Defn do
         builder = Exla.Builder.new("#{name}/#{arity}")
         result = fun.(builder, shapes)
         computation = Exla.Builder.build(to_operator(builder, result))
-        client = Exla.Client.fetch!(Keyword.get(options, :client, :default))
+        client = Exla.Client.fetch!(client_name)
         executable = Exla.Client.compile(client, computation, shapes)
         :persistent_term.put(cache_key, executable)
         executable
       end)
 
-    # TODO: Pass options
     executable
-    |> Exla.Executable.run(buffers, [])
+    |> Exla.Executable.run(buffers, options)
     |> buffer_to_nx()
   end
 
@@ -45,12 +45,24 @@ defmodule Exla.Defn do
   # TODO: What to do when the tensor data is not a binary?
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    Nx.from_bitstring(data, shape.dtype, shape.dims)
+    %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: shape.dtype, shape: shape.dims}
   end
 
-  defp nx_to_buffer(%Nx.Tensor{data: data, type: type, shape: shape})
-       when is_bitstring(data) do
-    Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+  defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
+    %Nx.Tensor{data: {Exla.NxDevice, ref}, type: shape.dtype, shape: shape.dims}
+  end
+
+  defp nx_to_buffer(%Nx.Tensor{data: {device, data}, type: type, shape: shape}) do
+    case device do
+      Nx.BitStringDevice when is_bitstring(data) ->
+        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+
+      Exla.NxDevice when is_tuple(data) ->
+        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+
+      true ->
+        raise ArgumentError, "unknown device #{inspect(device)} given to defn compiled with Exla"
+    end
   end
 
   defp nx_to_buffer(number) when is_integer(number) do
@@ -73,7 +85,7 @@ defmodule Exla.Defn do
 
   ## Special forms
 
-  def sf_nx_tensor(builder, %Nx.Tensor{data: data, type: type, shape: shape}) do
+  def sf_nx_tensor(builder, %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: type, shape: shape}) do
     shape = Exla.Shape.make_shape(type, shape)
     Exla.Op.constant_from_binary(builder, data, shape)
   end
@@ -81,22 +93,23 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_add(builder, left, right) do
-    left = to_operator(builder, left)
-    right = to_operator(builder, right)
-    left_shape = Exla.Op.get_shape(left)
-    right_shape = Exla.Op.get_shape(right)
-    dims = broadcast_dimensions(left_shape.dims, right_shape.dims)
+    type = binary_arith_type(left, right)
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    dims = broadcast_dimensions(left_dims, right_dims)
     Exla.Op.add(left, right, dims)
   end
 
   def nx_divide(builder, left, right) do
-    left = to_operator(builder, left)
-    right = to_operator(builder, right)
-    Exla.Op.div(left, right)
+    type = binary_arith_type(left, right) |> Nx.Type.to_float()
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    dims = broadcast_dimensions(left_dims, right_dims)
+    Exla.Op.div(left, right, dims)
   end
 
   def nx_exp(builder, op) do
-    Exla.Op.exp(to_operator(builder, op))
+    Exla.Op.exp(to_float_operator(builder, op))
   end
 
   def nx_sum(builder, op) do
@@ -116,10 +129,47 @@ defmodule Exla.Defn do
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 
-  # TODO: to_operator should actually call to_typed_constant
-  # Implement this properly once we use convert_element_type.
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant), do: to_constant(builder, constant)
+
+  defp to_float_operator(builder, %Exla.Op{} = op) do
+    shape = Exla.Op.get_shape(op)
+    type = Nx.Type.to_float(shape.dtype)
+    if shape.dtype != type, do: Exla.Op.convert_element_type(op, type), else: op
+  end
+
+  defp to_float_operator(builder, constant) do
+    to_typed_constant(builder, constant, {:f, 64})
+  end
+
+  defp to_typed_operator(_builder, %Exla.Op{} = op, type) do
+    shape = Exla.Op.get_shape(op)
+
+    if shape.dtype != type do
+      {Exla.Op.convert_element_type(op, type), shape.dims}
+    else
+      {op, shape.dims}
+    end
+  end
+
+  defp to_typed_operator(builder, constant, type) do
+    {to_typed_constant(builder, constant, type), {}}
+  end
+
+  ## Types
+
+  # Used by add, substract, multiply, div, etc
+  defp binary_arith_type(left, right) when is_number(left) and is_number(right),
+    do: Nx.Type.merge(Nx.Type.infer(left), Nx.Type.infer(right))
+
+  defp binary_arith_type(scalar, op) when is_number(scalar),
+    do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
+
+  defp binary_arith_type(op, scalar) when is_number(scalar),
+    do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
+
+  defp binary_arith_type(left, right),
+    do: Nx.Type.merge(Exla.Op.get_shape(left).dtype, Exla.Op.get_shape(right).dtype)
 
   ## Constants
 
@@ -129,7 +179,7 @@ defmodule Exla.Defn do
   end
 
   defp to_typed_constant(_builder, other, _type) do
-    raise(ArgumentError, "cannot compile constant #{inspect(other)}")
+    raise ArgumentError, "cannot compile constant #{inspect(other)}"
   end
 
   defp to_constant(builder, int) when is_integer(int),

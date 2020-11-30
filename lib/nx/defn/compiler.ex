@@ -4,7 +4,9 @@ defmodule Nx.Defn.Compiler do
   """
 
   @forbidden_nx_functions [to_bitstring: 1, from_bitstring: 3, tensor: 1, tensor: 2] ++
-                            [rank: 1, shape: 1, type: 1]
+                            [rank: 1, shape: 1, type: 1] ++
+                            [device_transfer: 1, device_transfer: 2, device_transfer: 3] ++
+                            [device_read: 1, device_deallocate: 1]
 
   @doc """
   The callback required to be implemented for each compiler.
@@ -138,14 +140,26 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize(
-         {:%{}, _, [__struct__: Nx.Tensor, data: data, shape: shape, type: {_, _}]} = tensor,
+         {:%{}, meta, [__struct__: Nx.Tensor, data: {device, data}, shape: shape, type: {_, _}]} =
+           tensor,
          state
        )
-       when is_binary(data) and is_tuple(shape) do
-    {tensor, state}
+       when is_tuple(shape) do
+    if device == Nx.BitStringDevice and is_bitstring(data) do
+      {tensor, state}
+    else
+      compile_error!(
+        meta,
+        state,
+        "defn expects a tensor allocated on Nx.BitStringDevice as a constant/module attribute, got: " <>
+          inspect(device)
+      )
+    end
   end
 
-  defp normalize({name, meta, args}, state) when is_atom(name) and is_list(args) do
+  defp normalize({name, meta, args}, state)
+       when is_atom(name) and is_list(args) and
+              name not in [:%, :%{}, :^, :<<>>] do
     {args, state} = normalize_list(args, state)
     {{:__local__, meta, [name | args]}, state}
   end

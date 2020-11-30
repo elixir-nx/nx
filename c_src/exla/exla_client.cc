@@ -113,7 +113,7 @@ namespace exla {
 
   xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env, exla::ExlaBuffer* buffer) {
     if(buffer->empty()) {
-      return tensorflow::errors::FailedPrecondition("Attempt to read from empty buffer.");
+      return tensorflow::errors::FailedPrecondition("Attempt to read from deallocated buffer.");
     }
 
     if(!buffer->is_tuple()) {
@@ -136,7 +136,7 @@ namespace exla {
 
   xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffer) {
     if(buffer->empty()) {
-      return tensorflow::errors::Aborted("Attempt to read from empty buffer.");
+      return tensorflow::errors::Aborted("Attempt to read from deallocated buffer.");
     }
 
     bool is_cpu_platform = buffer->device()->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
@@ -235,7 +235,8 @@ namespace exla {
 
   xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
                                                           const xla::Shape& shape,
-                                                          ExlaDevice* device) {
+                                                          ExlaDevice* device,
+                                                          bool transfer_for_run) {
     // Get the expected size of the given shape
     int64 size = xla::ShapeUtil::ByteSizeOf(shape);
     // Validate the expected size and actual data size are the same
@@ -253,7 +254,7 @@ namespace exla {
 
     // Can we use a zero copy transfer?
     bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
-    if(can_use_zero_copy) {
+    if(can_use_zero_copy && transfer_for_run) {
       xla::ScopedShapedBuffer* device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
       return new ExlaBuffer(/*buffer=*/device_buffer, /*device=*/device, /*zero_copy=*/true);
     } else {

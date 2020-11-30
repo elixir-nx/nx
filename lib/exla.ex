@@ -31,7 +31,11 @@ defmodule Exla do
   The options accepted by the Exla compiler are:
 
     * `:client` - an atom representing the client to use. Defaults
-      to `:default`.
+      to `:default`. See "Clients" section
+
+    * `:keep_on_device` - if the data should be kept on the device,
+      useful if multiple computations are done in a row. See
+      "Device allocation" section
 
   ## Clients
 
@@ -64,6 +68,37 @@ defmodule Exla do
   per platform, they can race each other and fight for resources,
   such as memory. Therefore, we recommend developers to use the
   `:default` client as much as possible.
+
+  ## Device allocation
+
+  Exla also ships with a `Exla.NxDevice` that allows data to be
+  either be explicitly allocated or kept on the device after a
+  computation. For example:
+
+      @defn_compiler {Exla, keep_on_device: true}
+      defn softmax(tensor) do
+        Nx.exp(n) / Nx.sum(Nx.exp(n))
+      end
+
+  Will keep the computation on the device, either the CPU or GPU.
+  For CPU, this is actually detrimental, as allocating an Elixir
+  binary has the same cost as keeping it on CPU, but this yields
+  important performance benefits on the GPU.
+
+  If data is kept on the device, you can pipe it into other `defn`
+  computations running on the same compiler (in this case, the
+  `Exla` compiler) but you cannot use the regular `Nx` operations,
+  unless you transfer it back:
+
+      Nx.tensor([1, 2, 3, 4])
+      |> softmax()
+      |> Nx.device_transfer() # bring the data back to Elixir
+
+  You can also use `Nx.device_transfer` to put data on a given
+  device before invoking a `defn` function:
+
+      # Explicitly move data to the device, useful for GPU
+      Nx.device_transfer(Nx.tensor([1, 2, 3, 4]), Exla.NxDevice)
 
   ## Docker considerations
 

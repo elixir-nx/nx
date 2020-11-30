@@ -94,7 +94,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device), env);
+  EXLA_ASSIGN_OR_RETURN(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device, false), env);
 
   return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer));
 }

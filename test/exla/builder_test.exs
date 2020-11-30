@@ -18,8 +18,7 @@ defmodule Exla.BuilderTest do
     assert b.parent == parent
   end
 
-  test "build/1 succeeds on constant" do
-    # TODO: Add this to setup
+  test "build/1 returns a computation" do
     builder = Builder.new("test")
     op = Op.constant_r0(builder, 1, {:s, 32})
     assert %Computation{} = Builder.build(op)

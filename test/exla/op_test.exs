@@ -271,13 +271,11 @@ defmodule Exla.OpTest do
     assert %Op{} = Op.reduce(operand, init_value, reduction, reduction_dimension)
   end
 
-  describe "get_shape/1" do
-    test "returns shape of op" do
-      builder = Builder.new("test")
-      shape = Shape.make_shape({:f, 64}, {5, 5, 5, 5, 5})
-      x = Op.parameter(builder, 0, shape, "x")
-      assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}} = Op.get_shape(x)
-    end
+  test "get_shape/1 returns shape of op" do
+    builder = Builder.new("test")
+    shape = Shape.make_shape({:f, 64}, {5, 5, 5, 5, 5})
+    x = Op.parameter(builder, 0, shape, "x")
+    assert %Shape{dims: {5, 5, 5, 5, 5}, dtype: {:f, 64}} = Op.get_shape(x)
   end
 
   test "convert_element_type/1 changes type of operand" do
