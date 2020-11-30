@@ -1,4 +1,4 @@
-defmodule ExecutableTest do
+defmodule Exla.ExecutableTest do
   use ExUnit.Case, async: true
 
   alias Exla.{Buffer, Executable, Op, Shape}
