@@ -93,18 +93,19 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_add(builder, left, right) do
-    left = to_operator(builder, left)
-    right = to_operator(builder, right)
-    left_shape = Exla.Op.get_shape(left)
-    right_shape = Exla.Op.get_shape(right)
-    dims = broadcast_dimensions(left_shape.dims, right_shape.dims)
+    type = arith_type(left, right)
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    dims = broadcast_dimensions(left_dims, right_dims)
     Exla.Op.add(left, right, dims)
   end
 
   def nx_divide(builder, left, right) do
-    left = to_operator(builder, left)
-    right = to_operator(builder, right)
-    Exla.Op.div(left, right)
+    type = arith_type(left, right) |> Nx.Type.to_float()
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    dims = broadcast_dimensions(left_dims, right_dims)
+    Exla.Op.div(left, right, dims)
   end
 
   def nx_exp(builder, op) do
@@ -128,10 +129,37 @@ defmodule Exla.Defn do
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 
-  # TODO: to_operator should actually call to_typed_constant
-  # Implement this properly once we use convert_element_type.
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant), do: to_constant(builder, constant)
+
+  defp to_typed_operator(_builder, %Exla.Op{} = op, type) do
+    shape = Exla.Op.get_shape(op)
+
+    if shape.dtype != type do
+      {Exla.Op.convert_element_type(op, type), shape.dims}
+    else
+      {op, shape.dims}
+    end
+  end
+
+  defp to_typed_operator(builder, constant, type) do
+    {to_typed_constant(builder, constant, type), {}}
+  end
+
+  ## Types
+
+  # Used by add, substract, multiply, div, etc
+  defp arith_type(left, right) when is_number(left) and is_number(right),
+    do: Nx.Type.merge(Nx.Type.infer(left), Nx.Type.infer(right))
+
+  defp arith_type(scalar, op) when is_number(scalar),
+    do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
+
+  defp arith_type(op, scalar) when is_number(scalar),
+    do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
+
+  defp arith_type(left, right),
+    do: Nx.Type.merge(Exla.Op.get_shape(left).dtype, Exla.Op.get_shape(right).dtype)
 
   ## Constants
 
@@ -141,7 +169,7 @@ defmodule Exla.Defn do
   end
 
   defp to_typed_constant(_builder, other, _type) do
-    raise(ArgumentError, "cannot compile constant #{inspect(other)}")
+    raise ArgumentError, "cannot compile constant #{inspect(other)}"
   end
 
   defp to_constant(builder, int) when is_integer(int),

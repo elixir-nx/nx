@@ -41,6 +41,8 @@ defmodule Exla.DefnTest do
 
   describe "+/2" do
     defn add_two(a, b), do: a + b
+    @defn_compiler Nx.Defn
+    defn add_two_nx(a, b), do: a + b
 
     test "same shape and type" do
       tensor = add_two(1.0, 2.0)
@@ -64,6 +66,89 @@ defmodule Exla.DefnTest do
       assert Nx.shape(tensor) == {2}
     end
 
+    test "different types" do
+      tensors = [
+        {1, 2},
+        {1.0, 2},
+        {1.0, 3.0},
+        {Nx.tensor([1, 2], type: {:u, 8}), 3},
+        {Nx.tensor([1, 2], type: {:u, 8}), -3},
+        {Nx.tensor([1, 2], type: {:u, 8}), 3.0},
+        {Nx.tensor([1, 2], type: {:s, 8}), 3},
+        {Nx.tensor([1, 2], type: {:s, 8}), 3.0},
+        {Nx.tensor([1, 2], type: {:f, 32}), 3},
+        {Nx.tensor([1, 2], type: {:f, 32}), 3.0},
+        {Nx.tensor([1, 2], type: {:u, 8}), Nx.tensor(3, type: {:u, 16})},
+        {Nx.tensor([1, 2], type: {:u, 8}), Nx.tensor(-3, type: {:s, 16})},
+        {Nx.tensor([1, 2], type: {:u, 8}), Nx.tensor(3.0, type: {:f, 32})},
+        {Nx.tensor([1, 2], type: {:s, 8}), Nx.tensor(3, type: {:s, 16})},
+        {Nx.tensor([1, 2], type: {:s, 8}), Nx.tensor(3.0, type: {:f, 32})},
+        {Nx.tensor([1, 2], type: {:f, 32}), Nx.tensor(3, type: {:u, 16})},
+        {Nx.tensor([1, 2], type: {:f, 32}), Nx.tensor(3, type: {:s, 16})},
+        {Nx.tensor([1, 2], type: {:f, 32}), Nx.tensor(3.0, type: {:f, 64})}
+      ]
+
+      for {left, right} <- tensors do
+        exla = add_two(left, right)
+        nx = add_two_nx(left, right)
+        assert Nx.type(exla) == Nx.type(nx)
+        assert Nx.shape(exla) == Nx.shape(nx)
+        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
+
+        exla = add_two(right, left)
+        nx = add_two_nx(right, left)
+        assert Nx.type(exla) == Nx.type(nx)
+        assert Nx.shape(exla) == Nx.shape(nx)
+        assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
+      end
+    end
+
+    defn add_two_int_int, do: 1 + 2
+    @defn_compiler Nx.Defn
+    defn add_two_int_int_nx, do: 1 + 2
+
+    defn add_two_int_float, do: 1 + 2.0
+    @defn_compiler Nx.Defn
+    defn add_two_int_float_nx, do: 1 + 2.0
+
+    defn add_two_float_int, do: 1.0 + 2
+    @defn_compiler Nx.Defn
+    defn add_two_float_int_nx, do: 1.0 + 2
+
+    defn add_two_float_float, do: 1.0 + 2
+    @defn_compiler Nx.Defn
+    defn add_two_float_float_nx, do: 1.0 + 2
+
+    defn add_two_int(t), do: t + 2
+    @defn_compiler Nx.Defn
+    defn add_two_int_nx(t), do: t + 2
+
+    defn add_two_float(t), do: t + 2.0
+    @defn_compiler Nx.Defn
+    defn add_two_float_nx(t), do: t + 2.0
+
+    test "constants" do
+      assert add_two_int_int() == add_two_int_int_nx()
+      assert add_two_int_float() == add_two_int_float_nx()
+      assert add_two_float_int() == add_two_float_int_nx()
+      assert add_two_float_float() == add_two_float_float_nx()
+
+      tensors = [
+        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:s, 8}),
+        Nx.tensor([1, 2], type: {:s, 8}),
+        Nx.tensor([1, 2], type: {:f, 32}),
+        Nx.tensor([1, 2], type: {:f, 32}),
+      ]
+
+      for t <- tensors do
+        assert add_two_int(t) == add_two_int_nx(t)
+        assert add_two_float(t) == add_two_float_nx(t)
+      end
+    end
+
     test "broadcast" do
       tensors = [
         {Nx.tensor([1, 2]), Nx.tensor([[1, 2], [3, 4]])},
@@ -83,13 +168,13 @@ defmodule Exla.DefnTest do
 
       for {left, right} <- tensors do
         exla = add_two(left, right)
-        nx = Nx.add(left, right)
+        nx = add_two_nx(left, right)
         assert Nx.type(exla) == Nx.type(nx)
         assert Nx.shape(exla) == Nx.shape(nx)
         assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
 
         exla = add_two(right, left)
-        nx = Nx.add(right, left)
+        nx = add_two_nx(right, left)
         assert Nx.type(exla) == Nx.type(nx)
         assert Nx.shape(exla) == Nx.shape(nx)
         assert Nx.to_bitstring(exla) == Nx.to_bitstring(nx)
@@ -130,12 +215,12 @@ defmodule Exla.DefnTest do
     test "computes softmax" do
       tensor = softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0]))
 
+      assert Nx.type(tensor) == {:f, 64}
+      assert Nx.shape(tensor) == {4}
+
       assert Nx.to_bitstring(tensor) ==
                <<0.03205860328008499::float-64-native, 0.08714431874203257::float-64-native,
                  0.23688281808991013::float-64-native, 0.6439142598879722::float-64-native>>
-
-      assert Nx.type(tensor) == {:f, 64}
-      assert Nx.shape(tensor) == {4}
     end
   end
 
