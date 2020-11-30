@@ -7,9 +7,8 @@
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/service/gpu/gpu_executable_run_options.h"
-#include "tensorflow/stream_executor/device_memory_allocator.h"
-#include "tensorflow/core/platform/mem.h"
 #include "tensorflow/core/framework/allocator.h"
+
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/platform/status.h"
 
@@ -27,57 +26,15 @@ namespace exla {
                bool zero_copy) : buffer_(buffer),
                                  device_(device),
                                  zero_copy_(zero_copy) {}
-    ~ExlaBuffer() {
-      if(this->empty()) {
-        return;
-      } else {
-        if(zero_copy_ && buffer_ != nullptr) {
-          buffer_->release();
-          buffer_ = nullptr;
-        } else if(!zero_copy_ && buffer_ != nullptr) {
-          delete buffer_;
-          buffer_ = nullptr;
-        } else {
-          return;
-        }
-      }
-    }
 
-    xla::StatusOr<std::vector<ExlaBuffer*>> DecomposeTuple() {
-      if(!is_tuple()) {
-        return tensorflow::errors::FailedPrecondition("Buffer is not a Tuple.");
-      }
+    ~ExlaBuffer() { Deallocate(); }
 
-      std::vector<ExlaBuffer*> buffers;
-      long long int tuple_elements = xla::ShapeUtil::TupleElementCount(on_device_shape());
-      buffers.reserve(tuple_elements);
-      for(int i=0;i<tuple_elements;i++) {
-        xla::ScopedShapedBuffer* sub_buffer = new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));
-        buffers.push_back(new ExlaBuffer(sub_buffer, device_, false));
-      }
+    xla::Status Deallocate();
 
-      return buffers;
-    }
+    xla::StatusOr<std::vector<ExlaBuffer*>> DecomposeTuple();
 
     bool empty() { return buffer_ == nullptr; }
 
-    xla::Status deallocate() {
-      if(this->empty()) {
-        return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
-      } else {
-        if(zero_copy_ && buffer_ != nullptr) {
-          buffer_->release();
-          buffer_ = nullptr;
-        } else if(!zero_copy_ && buffer_ != nullptr) {
-          delete buffer_;
-          buffer_ = nullptr;
-        } else {
-          return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
-        }
-      }
-
-      return tensorflow::Status::OK();
-    }
 
     const xla::Shape on_host_shape() { return buffer_->on_host_shape(); }
     const xla::Shape on_device_shape() { return buffer_->on_device_shape(); }
@@ -117,16 +74,19 @@ namespace exla {
 
     virtual ~ExlaClient() = default;
 
-    xla::StatusOr<xla::ScopedShapedBuffer> Run(xla::LocalExecutable* executable,
-                                               std::vector<std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**>>& buffers,
-                                               xla::ExecutableRunOptions& options);
+    xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
+                                    xla::LocalExecutable* executable,
+                                    ERL_NIF_TERM arguments,
+                                    ExlaDevice* device,
+                                    xla::ExecutableRunOptions& options,
+                                    bool keep_on_device);
 
     xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
                                                 const xla::Shape& shape,
                                                 ExlaDevice* device,
                                                 bool transfer_for_run);
 
-    ERL_NIF_TERM DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
+    xla::StatusOr<ERL_NIF_TERM> DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
 
     xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
 

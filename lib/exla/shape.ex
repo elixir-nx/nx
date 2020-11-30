@@ -5,15 +5,15 @@ defmodule Exla.Shape do
   defstruct [:ref, :dims, :dtype]
 
   @doc """
-  Creates a shape with the given reference or list of references.
+  Gets shape information from given shape reference.
   """
-  def make_shape(ref) when is_reference(ref) do
-    case Exla.NIF.make_shape(ref) |> unwrap!() do
+  def get_shape_info(ref) when is_reference(ref) do
+    case Exla.NIF.get_shape_info(ref) |> unwrap!() do
       {dims_term, type_str} ->
         %Shape{dims: dims_term, dtype: charlist_to_dtype(type_str), ref: ref}
 
       children when is_list(children) ->
-        children = Enum.map(children, &make_shape/1)
+        children = Enum.map(children, &get_shape_info/1)
         %Shape{dims: {length(children)}, dtype: {:t, children}, ref: ref}
     end
   end
@@ -25,18 +25,6 @@ defmodule Exla.Shape do
     _ = Nx.Type.validate!({type, size})
     ref = Exla.NIF.make_shape(dtype_to_charlist({type, size}), dims) |> unwrap!()
     %Shape{ref: ref, dtype: {type, size}, dims: dims}
-  end
-
-  @doc """
-  Creates a tuple shape with the given shapes.
-  """
-  def make_tuple_shape(shapes) when is_list(shapes) do
-    refs =
-      shapes
-      |> Enum.map(& &1.ref)
-
-    ref = Exla.NIF.make_tuple_shape(refs) |> unwrap!()
-    %Shape{dims: {length(shapes)}, dtype: {:t, shapes}, ref: ref}
   end
 
   @doc """

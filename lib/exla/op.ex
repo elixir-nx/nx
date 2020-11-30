@@ -47,7 +47,7 @@ defmodule Exla.Op do
   """
   def get_shape(%Op{builder: builder, ref: operand}) do
     ref = Exla.NIF.get_shape(builder, operand) |> unwrap!()
-    Shape.make_shape(ref)
+    Shape.get_shape_info(ref)
   end
 
   def get_tuple_element(%Op{builder: builder, ref: operand}, index) when is_integer(index) do

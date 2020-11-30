@@ -7,19 +7,16 @@ cc_library(
   srcs = ["exla_allocator.cc"],
   hdrs = ["exla_allocator.h"] + glob(["erts/**/*.h"]),
   deps = [
-    "@org_tensorflow//tensorflow/core/framework:allocator",
+    ":exla_nif_util",
+    ":exla_device",
     "@org_tensorflow//tensorflow/core:lib",
+    "@org_tensorflow//tensorflow/core/framework:allocator",
+    "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
+    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_bfc_allocator",
+    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_mem_allocator",
+    "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
     "@org_tensorflow//tensorflow/compiler/xla:statusor",
   ],
-)
-
-# TODO: I don't like the NIF dependency, try and work around it
-cc_library(
-  name = "exla_macros",
-  hdrs = ["exla_macros.h"],
-  deps = [
-    ":exla_nif_util"
-  ]
 )
 
 cc_library (
@@ -41,16 +38,12 @@ cc_library(
     ":exla_device",
     ":exla_allocator",
     ":exla_nif_util",
+    "@org_tensorflow//tensorflow/core/framework:allocator",
     "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
     "@org_tensorflow//tensorflow/compiler/xla:literal_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
     "@org_tensorflow//tensorflow/core:lib",
-    "@org_tensorflow//tensorflow/core/framework:allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_bfc_allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_mem_allocator",
-    "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
     "@com_google_absl//absl/memory",
   ],
 )
@@ -60,8 +53,6 @@ cc_library(
   srcs = ["exla_nif_util.cc"],
   hdrs = ["exla_nif_util.h"] + glob(["erts/**/*.h"]),
   deps = [
-    ":exla_allocator",
-    "@com_google_absl//absl/types:span",
     "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
     "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
@@ -76,9 +67,7 @@ cc_binary(
   deps = if_cuda_is_configured([
     "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
     ]) + [
-    ":exla_allocator",
     ":exla_nif_util",
-    ":exla_macros",
     ":exla_client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
@@ -96,9 +85,7 @@ cc_binary(
   name = "libexla_host.so",
   srcs = ["exla.cc"],
   deps = [
-    ":exla_allocator",
     ":exla_nif_util",
-    ":exla_macros",
     ":exla_client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
