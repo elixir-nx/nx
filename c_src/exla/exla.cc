@@ -671,7 +671,6 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaComputation>(env, computation));
 }
 
-// TODO: Most of this logic can move to `exla::ExlaClient`
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
 
   exla::ExlaClient** client;
@@ -693,22 +692,16 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   // TODO: Used in conjunction with replicas and partitions.
   // build_options.set_device_assignment(device_assignment);
   build_options.set_device_ordinal(device_ordinal);
-  // TODO: Single Partition Multi-Device vs. Multi-Partition Multi-Device
+  // TODO: Single Program Multi-Data (pmap) vs. Multi-Program Multi-Data
   // build_options.set_use_spmd_partitioning(use_spmd);
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
                         (*client)->client()->Compile(*computation, argument_layouts, build_options), env);
 
-  ERL_NIF_TERM exec_refs[executables.size()];
-  int i = 0;
-  for(auto it=std::begin(executables);it!=std::end(executables);++it){
-    exec_refs[i++] = exla::make<xla::LocalExecutable>(env, executables.at(i));
-  }
   // TODO: This should return the vector. There is an executable for every partition, usually 1.
-  return exla::ok(env, exec_refs[0]);
+  return exla::ok(env, exla::make<xla::LocalExecutable>(env, executables.at(0)));
 }
 
-// TODO: Most of this logic should be moved to `exla::ExlaClient`
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 8){
     return exla::error(env, "Bad argument count.");
@@ -718,6 +711,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   xla::LocalExecutable* local_executable;
   xla::ExecutableRunOptions run_options;
   int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
+  ERL_NIF_TERM arguments = argv[2];
 
   if(!exla::get<exla::ExlaClient*>(env, argv[0], client)) return exla::error(env, "Unable to get client.");
   if(!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) return exla::error(env, "Unable to get executable.");
@@ -728,33 +722,6 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get(env, argv[7], keep_on_device)) return exla::error(env, "Unable to get keep_on_device.");
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
-
-  bool is_cpu_platform = device->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
-
-  std::vector<std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**>> inp;
-  ERL_NIF_TERM head, tail, list;
-  list = argv[2];
-  while(enif_get_list_cell(env, list, &head, &tail)) {
-    const ERL_NIF_TERM* tuple;
-    int arity;
-    exla::ExlaBuffer** buffer;
-
-    if(enif_get_tuple(env, head, &arity, &tuple)) {
-      ErlNifBinary data;
-      xla::Shape* shape;
-      if(!exla::get_binary(env, tuple[0], data)) return exla::error(env, "Unable to read binary data from input.");
-      if(!exla::get<xla::Shape>(env, tuple[1], shape)) return exla::error(env, "Unable to read shape from input.");
-      EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buf, (*client)->BufferFromErlBin(data, *shape, device), env);
-      std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**> pr(buf, &buf);
-      inp.push_back(pr);
-    } else if(exla::get<exla::ExlaBuffer*>(env, head, buffer)) {
-      std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**> pr(*buffer, buffer);
-      inp.push_back(pr);
-    } else {
-      return exla::error(env, "Invalid input passed to run.");
-    }
-    list = tail;
-  }
 
   xla::RunId run_id_obj(run_id);
 
@@ -769,27 +736,9 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
   run_options.set_launch_id(launch_id);
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::ScopedShapedBuffer result, (*client)->Run(local_executable, inp, run_options), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*client)->Run(env, local_executable, arguments, device, run_options, keep_on_device), env);
 
-  exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
-
-  if(keep_on_device) {
-    if(buffer_ref->is_tuple()) {
-      EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references, (*client)->DecomposeBuffer(env, buffer_ref), env);
-      return exla::ok(env, references);
-    }
-
-    return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer_ref));
-  }
-
-  if(buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple, (*client)->ErlListFromBuffer(env, buffer_ref), env);
-    return exla::ok(env, tuple);
-  }
-
-  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*client)->ErlBinFromBuffer(buffer_ref), env);
-
-  return exla::ok(env, exla::make(env, binary));
+  return exla::ok(env, result);
 }
 
 /*********** HLO Methods *************/
@@ -833,7 +782,7 @@ ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_T
 }
 
 static ErlNifFunc exla_funcs[] = {
-  /****** xla::Client ******/
+  /****** ExlaClient ******/
   {"get_host_client", 2, get_host_client},
   {"get_cuda_client", 2, get_cuda_client},
   {"get_device_count", 1, get_device_count},

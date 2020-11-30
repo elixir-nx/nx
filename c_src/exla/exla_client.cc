@@ -263,25 +263,72 @@ namespace exla {
     }
   }
 
-  xla::StatusOr<xla::ScopedShapedBuffer> ExlaClient::Run(xla::LocalExecutable* executable,
-                                                         std::vector<std::pair<ExlaBuffer*, ExlaBuffer**>>& buffers,
-                                                         xla::ExecutableRunOptions& options) {
+  xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
+                                              xla::LocalExecutable* executable,
+                                              ERL_NIF_TERM arguments,
+                                              ExlaDevice* device,
+                                              xla::ExecutableRunOptions& options,
+                                              bool keep_on_device) {
+
+    std::vector<ExlaBuffer**> buffers;
     std::vector<xla::ShapedBuffer*> inputs;
-    for(auto buf : buffers) {
-      xla::ShapedBuffer* inp = (xla::ShapedBuffer*) (buf.first)->buffer();
-      inputs.push_back(inp);
+
+    ERL_NIF_TERM head, tail, list;
+    list = arguments;
+
+    while(enif_get_list_cell(env, list, &head, &tail)) {
+      const ERL_NIF_TERM* tuple;
+      int arity;
+      exla::ExlaBuffer** buffer;
+
+      if(enif_get_tuple(env, head, &arity, &tuple)) {
+        ErlNifBinary data;
+        xla::Shape* shape;
+
+        if(!get_binary(env, tuple[0], data)) return tensorflow::errors::InvalidArgument("Unable to read binary data from input.");
+        if(!get<xla::Shape>(env, tuple[1], shape)) return tensorflow::errors::InvalidArgument("Unable to read shape from input.");
+
+        EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, BufferFromErlBin(data, *shape, device));
+
+        inputs.push_back((xla::ShapedBuffer*) buf->buffer());
+        buffers.push_back(&buf);
+
+      } else if(get<ExlaBuffer*>(env, head, buffer)) {
+
+        inputs.push_back((xla::ShapedBuffer*) (*buffer)->buffer());
+        buffers.push_back(buffer);
+
+      } else {
+        return tensorflow::errors::InvalidArgument("Invalid input passed to run.");
+      }
+      list = tail;
     }
 
-    xla::StatusOr<xla::ScopedShapedBuffer> result = executable->Run(inputs, options);
+    EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, executable->Run(inputs, options));
 
     for(auto buf : buffers) {
-      if(*buf.second != NULL) {
-        delete *buf.second;
-        *buf.second = NULL;
+      if(*buf != NULL) {
+        delete *buf;
+        *buf = NULL;
       }
     }
 
-    return result;
+    exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
+
+    if(keep_on_device && buffer_ref->is_tuple()) {
+      EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references, DecomposeBuffer(env, buffer_ref), env);
+      return references;
+    } else if(keep_on_device) {
+      return make<exla::ExlaBuffer*>(env, buffer_ref);
+    } else if(buffer_ref->is_tuple()) {
+      EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple, ErlListFromBuffer(env, buffer_ref), env);
+      delete buffer_ref;
+      return tuple;
+    } else {
+      EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, ErlBinFromBuffer(buffer_ref), env);
+      delete buffer_ref;
+      return make(env, binary);
+    }
   }
 
   xla::StatusOr<ExlaClient*> getHostClient(int num_replicas, int intra_op_parallelism_threads) {

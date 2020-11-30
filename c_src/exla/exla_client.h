@@ -74,9 +74,12 @@ namespace exla {
 
     virtual ~ExlaClient() = default;
 
-    xla::StatusOr<xla::ScopedShapedBuffer> Run(xla::LocalExecutable* executable,
-                                               std::vector<std::pair<exla::ExlaBuffer*, exla::ExlaBuffer**>>& buffers,
-                                               xla::ExecutableRunOptions& options);
+    xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
+                                    xla::LocalExecutable* executable,
+                                    ERL_NIF_TERM arguments,
+                                    ExlaDevice* device,
+                                    xla::ExecutableRunOptions& options,
+                                    bool keep_on_device);
 
     xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
                                                 const xla::Shape& shape,
