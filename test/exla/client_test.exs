@@ -4,38 +4,28 @@ defmodule Exla.ClientTest do
   alias Exla.Client
   alias Exla.Op
   alias Exla.Executable
-  alias Exla.Builder
   alias Exla.Shape
 
   import ExlaHelpers
 
-  setup do
-    {:ok, builder: Builder.new("test")}
-  end
-
-  test "get_default_device_ordinal/1 returns nonnegative integer", _config do
+  test "get_default_device_ordinal/1 returns nonnegative integer" do
     ordinal = Client.get_default_device_ordinal(client())
     assert is_integer(ordinal)
     assert ordinal >= 0
   end
 
-  test "get_device_count/1 returns nonnegative integer", _config do
+  test "get_device_count/1 returns nonnegative integer" do
     count = Client.get_device_count(client())
     assert is_integer(count)
     assert count >= 0
   end
 
-  test "compile/4 succeeds with constant computation and no args", config do
-    op = Op.constant_r0(config.builder, 1, {:s, 32})
-    comp = Builder.build(op)
-    assert %Executable{} = Client.compile(client(), comp, [])
+  test "compile/4 succeeds with constant computation and no args" do
+    assert %Executable{} = compile([], fn builder -> Op.constant_r0(builder, 1, {:s, 32}) end)
   end
 
-  test "compile/4 succeeds with basic computation and args", config do
+  test "compile/4 succeeds with basic computation and args" do
     shape = Shape.make_shape({:s, 32}, {})
-    x = Op.parameter(config.builder, 0, shape, "x")
-    res = Op.add(x, x)
-    comp = Builder.build(res)
-    assert %Executable{} = Client.compile(client(), comp, [shape])
+    assert %Executable{} = compile([shape], fn _builder, x -> Op.add(x, x) end)
   end
 end
