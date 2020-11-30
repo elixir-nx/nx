@@ -202,7 +202,8 @@ namespace exla {
 
   xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
                                                           const xla::Shape& shape,
-                                                          ExlaDevice* device) {
+                                                          ExlaDevice* device,
+                                                          bool transfer_for_run) {
     // Get the expected size of the given shape
     int64 size = xla::ShapeUtil::ByteSizeOf(shape);
     // Validate the expected size and actual data size are the same
@@ -220,7 +221,7 @@ namespace exla {
 
     // Can we use a zero copy transfer?
     bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
-    if(can_use_zero_copy) {
+    if(can_use_zero_copy && transfer_for_run) {
       xla::ScopedShapedBuffer* device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
       return new ExlaBuffer(/*buffer=*/device_buffer, /*device=*/device, /*zero_copy=*/true);
     } else {
