@@ -271,8 +271,9 @@ namespace exla {
                                               xla::ExecutableRunOptions& options,
                                               bool keep_on_device) {
 
+    // Track buffers that need to be released after `Run`
     std::vector<ExlaBuffer**> buffers;
-    std::vector<xla::ShapedBuffer*> inputs;
+    std::vector<xla::ExecutionInput> inputs;
 
     ERL_NIF_TERM head, tail, list;
     list = arguments;
@@ -291,13 +292,33 @@ namespace exla {
 
         EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, BufferFromErlBin(data, *shape, device, true));
 
-        inputs.push_back((xla::ShapedBuffer*) buf->buffer());
+        xla::ExecutionInput inp = xla::ExecutionInput(buf->on_device_shape());
+
+        const xla::ShapeTree<se::DeviceMemoryBase> bufs = buf->buffer()->buffers();
+
+        bufs.ForEachElement(
+          [&](const xla::ShapeIndex& index, const se::DeviceMemoryBase& mem){
+            inp.SetBuffer(index, xla::MaybeOwningDeviceMemory(mem));
+          });
+
+        inputs.push_back(std::move(inp));
         buffers.push_back(&buf);
 
       } else if(get<ExlaBuffer*>(env, head, buffer)) {
 
-        inputs.push_back((xla::ShapedBuffer*) (*buffer)->buffer());
-        buffers.push_back(buffer);
+        if(*buffer == NULL) {
+          return tensorflow::errors::Aborted("Attempt to re-use a previously deallocated device buffer.");
+        }
+        xla::ExecutionInput inp = xla::ExecutionInput((*buffer)->on_device_shape());
+
+        const xla::ShapeTree<se::DeviceMemoryBase> bufs = (*buffer)->buffer()->buffers();
+
+        bufs.ForEachElement(
+          [&](const xla::ShapeIndex& index, const se::DeviceMemoryBase& mem){
+            inp.SetBuffer(index, xla::MaybeOwningDeviceMemory(mem));
+          });
+
+        inputs.push_back(std::move(inp));
 
       } else {
         return tensorflow::errors::InvalidArgument("Invalid input passed to run.");
@@ -305,7 +326,7 @@ namespace exla {
       list = tail;
     }
 
-    EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer result, executable->Run(inputs, options));
+    EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput exec_result, executable->Run(std::move(inputs), options));
 
     for(auto buf : buffers) {
       if(*buf != NULL) {
@@ -313,6 +334,8 @@ namespace exla {
         *buf = NULL;
       }
     }
+
+    xla::ScopedShapedBuffer result = exec_result.ConsumeResult();
 
     exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
