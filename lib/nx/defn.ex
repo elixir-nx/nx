@@ -29,11 +29,13 @@ defmodule Nx.Defn do
         |> Nx.add(c)
       end
 
-  The only `Nx` functions not supported in `defn` are conversion
-  and reflection functions, such as `Nx.to_bitstring/1` and
-  `Nx.rank/1` and similar, as they are meant for interfacing
-  between Elixir and the numerical world. If you use any of them,
-  you will get an error at compilation time.
+  The only `Nx` functions not supported in `defn` are device
+  and reflection functions, such as `Nx.to_bitstring/1`,
+  `Nx.device_transfer/1`, and `Nx.rank/1` and similar, as they are
+  meant for interfacing between Elixir and the numerical world.
+  That's because `defn` always runs inside a particular device.
+  But don't worry, if you use any unsupported API, you will get
+  an error at compilation time.
 
   Calling other functions is possible, as long as they are implemented
   with `defn`. At the moment, only calling local functions is supported

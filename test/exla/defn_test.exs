@@ -138,4 +138,30 @@ defmodule Exla.DefnTest do
       assert Nx.shape(tensor) == {4}
     end
   end
+
+  describe "options" do
+    @defn_compiler {Exla, keep_on_device: true}
+    defn add_two_keep_on_device(a, b), do: a + b
+
+    test "keeps data on device" do
+      tensor = add_two_keep_on_device(1, 2)
+      assert {Exla.NxDevice, {ref, :default}} = tensor.data
+      assert is_reference(ref)
+      assert tensor |> Nx.device_read() |> Nx.to_bitstring() == <<3::64-native>>
+
+      tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
+      assert {Exla.NxDevice, {ref, :default}} = tensor.data
+      assert is_reference(ref)
+
+      assert tensor |> Nx.device_read() |> Nx.to_bitstring() ==
+               <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
+
+      assert tensor |> Nx.device_transfer() |> Nx.to_bitstring() ==
+               <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
+
+      assert_raise RuntimeError,
+                   "Attempt to read from deallocated buffer.",
+                   fn -> Nx.device_read(tensor) end
+    end
+  end
 end
