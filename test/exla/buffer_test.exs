@@ -1,4 +1,4 @@
-defmodule BufferTest do
+defmodule Exla.BufferTest do
   use ExUnit.Case, async: true
 
   alias Exla.Buffer
@@ -13,14 +13,17 @@ defmodule BufferTest do
   end
 
   test "read/2" do
-    b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
+    b1 = Buffer.buffer(<<1::32, 2::32, 3::32, 4::32>>, Shape.make_shape({:s, 32}, {4}))
     b1 = Buffer.place_on_device(b1, client(), 0)
 
-    assert <<1::32>> == Buffer.read(b1.ref)
     # non-destructive
-    assert <<1::32>> == Buffer.read(b1.ref)
+    assert <<1::32, 2::32, 3::32, 4::32>> == Buffer.read(b1.ref)
+    assert <<1::32, 2::32, 3::32, 4::32>> == Buffer.read(b1.ref)
 
+    # doesn't change after deallocation
+    binary = Buffer.read(b1.ref)
     :ok = Buffer.deallocate(b1.ref)
+    assert binary == <<1::32, 2::32, 3::32, 4::32>>
 
     assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn ->
       Buffer.read(b1.ref)
