@@ -138,4 +138,16 @@ defmodule Exla.DefnTest do
       assert Nx.shape(tensor) == {4}
     end
   end
+
+  describe "options" do
+    @defn_compiler {Exla, keep_on_device: true}
+    defn add_two_keep_on_device(a, b), do: a + b
+
+    test "keeps data on device" do
+      tensor = add_two_keep_on_device(1.0, 2.0)
+      assert {Exla.NxDevice, {:default, {ref, ordinal}}} = tensor.data
+      assert is_reference(ref)
+      assert ordinal >= 1
+    end
+  end
 end

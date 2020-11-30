@@ -13,7 +13,8 @@ defmodule Exla.Defn do
   def sf_cached_def(module, name, arity, args, options, fun) do
     cache_args = for arg <- args, do: nx_to_cache_key!(arg)
     buffers = for arg <- args, do: nx_to_buffer(arg)
-    cache_key = {module, name, arity, cache_args}
+    {client_name, options} = Keyword.pop(options, :client, :default)
+    cache_key = {module, name, arity, cache_args, client_name}
 
     executable =
       Exla.LockedCache.run(cache_key, fn ->
@@ -21,16 +22,15 @@ defmodule Exla.Defn do
         builder = Exla.Builder.new("#{name}/#{arity}")
         result = fun.(builder, shapes)
         computation = Exla.Builder.build(to_operator(builder, result))
-        client = Exla.Client.fetch!(Keyword.get(options, :client, :default))
+        client = Exla.Client.fetch!(client_name)
         executable = Exla.Client.compile(client, computation, shapes)
         :persistent_term.put(cache_key, executable)
         executable
       end)
 
-    # TODO: Pass options
     executable
-    |> Exla.Executable.run(buffers, [])
-    |> buffer_to_nx()
+    |> Exla.Executable.run(buffers, options)
+    |> buffer_to_nx(client_name)
   end
 
   def sf_builder(name) do
@@ -44,8 +44,12 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
   # TODO: What to do when the tensor data is not a binary?
 
-  defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    Nx.from_bitstring(data, shape.dtype, shape.dims)
+  defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}, _client_name) do
+    %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: shape.dtype, shape: shape.dims}
+  end
+
+  defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}, client_name) do
+    %Nx.Tensor{data: {Exla.NxDevice, {client_name, ref}}, type: shape.dtype, shape: shape.dims}
   end
 
   defp nx_to_buffer(%Nx.Tensor{data: {Nx.BitStringDevice, data}, type: type, shape: shape})
