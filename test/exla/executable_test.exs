@@ -1,131 +1,96 @@
 defmodule ExecutableTest do
   use ExUnit.Case, async: true
 
-  alias Exla.{Buffer, Builder, Client, Executable, Op, Shape}
+  alias Exla.{Buffer, Executable, Op, Shape}
 
   import ExlaHelpers
 
-  setup do
-    {:ok, builder: Builder.new("test")}
+  test "run/2 succeeds with no inputs and default options" do
+    assert %Buffer{data: <<1, 0, 0, 0>>} =
+             run([], fn builder ->
+               Op.constant_r0(builder, 1, {:s, 32})
+             end)
   end
 
-  test "run/4 succeeds with no inputs and default options", config do
-    op = Op.constant_r0(config.builder, 1, {:s, 32})
-    comp = Builder.build(op)
-    exec = Client.compile(client(), comp, [])
-    assert %Buffer{data: <<1, 0, 0, 0>>} = Executable.run(exec, [])
-  end
-
-  test "run/4 succeeds with 1 input and default options", config do
+  test "run/2 succeeds with 1 input and default options" do
     t1 = %Buffer{data: <<1::8-native>>, shape: Shape.make_shape({:s, 8}, {})}
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    comp = Builder.build(x)
-    exec = Client.compile(client(), comp, [t1.shape])
-    assert %Buffer{data: <<1>>} = Executable.run(exec, [t1])
+    assert %Buffer{data: <<1>>} = run([t1], fn _builder, param -> param end)
   end
 
-  test "run/4 succeeds with 2 inputs and default options", config do
+  test "run/2 succeeds with 2 inputs and default options" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    y = Op.parameter(config.builder, 1, t2.shape, "y")
-    res = Op.add(x, y)
-    comp = Builder.build(res)
-    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
-    assert %Buffer{data: <<2, 0, 0, 0>>} = Executable.run(exec, [t1, t2])
+    assert %Buffer{data: <<2::32-native>>} = run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
   end
 
-  test "run/4 returns a ref when keep_on_device is true", config do
+  test "run/2 returns a ref when keep_on_device is true" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    y = Op.parameter(config.builder, 1, t2.shape, "y")
-    res = Op.add(x, y)
-    comp = Builder.build(res)
-    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
-    assert %Buffer{ref: {ref, _}} = Executable.run(exec, [t1, t2], keep_on_device: true)
+
+    assert %Buffer{ref: {ref, _}} =
+             run([t1, t2], [keep_on_device: true], fn _builder, x, y -> Op.add(x, y) end)
+
     assert is_reference(ref)
   end
 
-  test "run/4 succeeds when data is pre-loaded", config do
+  test "run/2 succeeds when data is pre-loaded" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t1 = Buffer.place_on_device(t1, client(), 0)
     t2 = Buffer.place_on_device(t2, client(), 0)
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    y = Op.parameter(config.builder, 1, t2.shape, "y")
-    res = Op.add(x, y)
-    comp = Builder.build(res)
-    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
-    assert %Buffer{ref: {ref, _}} = Executable.run(exec, [t1, t2], keep_on_device: true)
+
+    assert %Buffer{ref: {ref, _}} =
+             run([t1, t2], [keep_on_device: true], fn _builder, x, y -> Op.add(x, y) end)
+
     assert is_reference(ref)
   end
 
-  test "run/4 succeeds with data from a previous run", config do
+  test "run/2 succeeds with data from a previous run" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    y = Op.parameter(config.builder, 1, t2.shape, "y")
-    res = Op.add(x, y)
-    comp = Builder.build(res)
-    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
+
+    exec = compile([t1.shape, t2.shape], fn _builder, x, y -> Op.add(x, y) end)
     assert t3 = %Buffer{ref: {ref, _}} = Executable.run(exec, [t1, t2], keep_on_device: true)
     assert is_reference(ref)
     assert %Buffer{data: <<4::32-native>>} = Executable.run(exec, [t3, t3])
   end
 
-  test "run/4 succeeds with mixed data", config do
+  test "run/2 succeeds with mixed data" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t1 = Buffer.place_on_device(t1, client(), 0)
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    y = Op.parameter(config.builder, 1, t2.shape, "y")
-    res = Op.add(x, y)
-    comp = Builder.build(res)
-    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
-    assert %Buffer{data: <<3::32-native>>} = Executable.run(exec, [t1, t2])
+    assert %Buffer{data: <<3::32-native>>} = run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
   end
 
-  test "run/4 returns a tuple", config do
+  test "run/2 returns a tuple" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    y = Op.parameter(config.builder, 1, t2.shape, "y")
-
-    res =
-      Op.tuple(
-        config.builder,
-        {Op.tuple(config.builder, {x, y}), Op.tuple(config.builder, {}), y}
-      )
-
-    comp = Builder.build(res)
-    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
 
     assert {:tuple,
             [
               {:tuple, [%Buffer{data: <<1, 0, 0, 0>>}, %Buffer{data: <<2, 0, 0, 0>>}]},
               {:tuple, []},
               %Buffer{data: <<2, 0, 0, 0>>}
-            ]} = Executable.run(exec, [t1, t2])
+            ]} =
+             run([t1, t2], fn builder, x, y ->
+               Op.tuple(
+                 builder,
+                 {Op.tuple(builder, {x, y}), Op.tuple(builder, {}), y}
+               )
+             end)
   end
 
-  test "run/4 returns with tuple and keep_on_device true", config do
+  test "run/2 returns with tuple and keep_on_device true" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-    x = Op.parameter(config.builder, 0, t1.shape, "x")
-    y = Op.parameter(config.builder, 1, t2.shape, "y")
-
-    res =
-      Op.tuple(
-        config.builder,
-        {Op.tuple(config.builder, {x, y}), Op.tuple(config.builder, {}), y}
-      )
-
-    comp = Builder.build(res)
-    exec = Client.compile(client(), comp, [t1.shape, t2.shape])
 
     assert {:tuple, [{:tuple, [a = %Buffer{}, b = %Buffer{}]}, {:tuple, []}, c = %Buffer{}]} =
-             Executable.run(exec, [t1, t2], keep_on_device: true)
+             run([t1, t2], [keep_on_device: true], fn builder, x, y ->
+               Op.tuple(
+                 builder,
+                 {Op.tuple(builder, {x, y}), Op.tuple(builder, {}), y}
+               )
+             end)
 
     assert <<1, 0, 0, 0>> == Buffer.read(a.ref)
     assert <<2, 0, 0, 0>> == Buffer.read(b.ref)
