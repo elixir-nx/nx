@@ -30,7 +30,7 @@ defmodule Exla.Defn do
 
     executable
     |> Exla.Executable.run(buffers, options)
-    |> buffer_to_nx(client_name)
+    |> buffer_to_nx()
   end
 
   def sf_builder(name) do
@@ -44,17 +44,25 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
   # TODO: What to do when the tensor data is not a binary?
 
-  defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}, _client_name) do
+  defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
     %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: shape.dtype, shape: shape.dims}
   end
 
-  defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}, client_name) do
-    %Nx.Tensor{data: {Exla.NxDevice, {client_name, ref}}, type: shape.dtype, shape: shape.dims}
+  defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
+    %Nx.Tensor{data: {Exla.NxDevice, ref}, type: shape.dtype, shape: shape.dims}
   end
 
-  defp nx_to_buffer(%Nx.Tensor{data: {Nx.BitStringDevice, data}, type: type, shape: shape})
-       when is_bitstring(data) do
-    Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+  defp nx_to_buffer(%Nx.Tensor{data: {device, data}, type: type, shape: shape}) do
+    case device do
+      Nx.BitStringDevice when is_bitstring(data) ->
+        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+
+      Exla.NxDevice when is_tuple(data) ->
+        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+
+      true ->
+        raise ArgumentError, "unknown device #{inspect(device)} given to defn compiled with Exla"
+    end
   end
 
   defp nx_to_buffer(number) when is_integer(number) do

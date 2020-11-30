@@ -8,8 +8,8 @@ defmodule Exla.Client do
   alias __MODULE__
   alias Exla.{Computation, Executable}
 
-  @enforce_keys [:ref, :platform]
-  defstruct [:ref, :platform]
+  @enforce_keys [:ref, :platform, :name]
+  defstruct [:ref, :platform, :name]
 
   def fetch!(name) do
     Exla.LockedCache.run({__MODULE__, name}, fn ->
@@ -32,7 +32,7 @@ defmodule Exla.Client do
         end
         |> unwrap!()
 
-      %Client{ref: ref, platform: platform}
+      %Client{ref: ref, platform: platform, name: name}
     end)
   end
 
@@ -63,7 +63,7 @@ defmodule Exla.Client do
   end
 
   def compile(
-        client = %Client{ref: ref},
+        client = %Client{},
         computation = %Computation{output_shape: output_shape},
         argument_shapes,
         options \\ []
@@ -71,47 +71,41 @@ defmodule Exla.Client do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
-
-    shape_refs =
-      argument_shapes
-      |> Enum.map(& &1.ref)
+    shape_refs = Enum.map(argument_shapes, & &1.ref)
+    device_ordinal = check_device_compatibility!(client, device_ordinal)
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
-    # TODO: Use device
-    with {:ok, {_platform, device_ordinal}} <-
-           check_device_compatibility(client, {client.platform, device_ordinal}),
-         {:ok, ref} <-
-           Exla.NIF.compile(
-             ref,
-             computation.ref,
-             shape_refs,
-             device_ordinal,
-             num_replicas,
-             num_partitions
-           ) do
-      %Executable{
-        client: client,
-        ref: ref,
-        output_shape: output_shape,
-        device: {client.platform, device_ordinal}
-      }
-    end
+
+    ref =
+      Exla.NIF.compile(
+        client.ref,
+        computation.ref,
+        shape_refs,
+        device_ordinal,
+        num_replicas,
+        num_partitions
+      )
+      |> unwrap!
+
+    %Executable{
+      client: client,
+      ref: ref,
+      output_shape: output_shape,
+      device_ordinal: device_ordinal
+    }
   end
 
-  def check_device_compatibility(
-        client = %Client{platform: platform},
-        {platform, ordinal}
-      ) do
+  def check_device_compatibility!(client = %Client{}, ordinal) do
     cond do
       ordinal < 0 ->
-        {:ok, {platform, Client.get_default_device_ordinal(client)}}
+        Client.get_default_device_ordinal(client)
 
       ordinal < Client.get_device_count(client) ->
-        {:ok, {platform, ordinal}}
+        ordinal
 
       true ->
-        {:error, "Invalid device ordinal."}
+        raise ArgumentError, "Invalid device ordinal."
     end
   end
 end

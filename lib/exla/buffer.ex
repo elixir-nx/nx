@@ -2,80 +2,74 @@ defmodule Exla.Buffer do
   @moduledoc """
   An EXLA Buffer.
 
-  An EXLA Buffer is the data passed as input and retrieved as output to/from EXLA Executables. An EXLA
-  Buffer consists of two things:
+  An EXLA Buffer is the data passed as input and retrieved as output
+  to/from EXLA Executables. An EXLA buffer is one of:
 
     1) A Binary
     2) A reference to an `xla::ScopedShapedBuffer`
 
-  An `xla::ScopedShapedBuffer` is an "owning" wrapper around an `xla::ShapedBuffer`. Shaped Buffers are just
-  buffers of data with an underlying XLA shape. Scoped Shaped Buffers are said to be an "owning" wrapper because
-  they represent an allocated portion of memory on a specified device (like a GPU) owned by that device. Device
-  memory is allocated upon creation of the `xla::ScopedShapedBuffer` and deallocated upon it's destruction.
+  An `xla::ScopedShapedBuffer` is an "owning" wrapper around an
+  `xla::ShapedBuffer`. Shaped Buffers are just buffers of data
+  with an underlying XLA shape. Scoped Shaped Buffers are said
+  to be an "owning" wrapper because they represent an allocated
+  portion of memory on a specified device (like a GPU) owned by
+  that device. Device memory is allocated upon creation of the
+  `xla::ScopedShapedBuffer` and deallocated upon its destruction.
   """
 
   alias __MODULE__
   alias Exla.{Client, Shape}
 
+  @enforce_keys [:shape]
   defstruct [:data, :ref, :shape]
 
   @doc """
-  Create a new buffer from `binary` with given `shape`.
+  Creates a new buffer.
 
-  The buffer will not be placed on a device until passed to `place_on_device`.
+  The argument is either a `binary`, which won't be placed on the
+  device unless `place_on_device` is called, or a `buffer.ref` from
+  a previous buffer.
   """
+  def buffer(binary_or_reference_pair, shape)
+
+  def buffer({reference, client_name}, shape = %Shape{}) when is_reference(reference) do
+    %Buffer{data: nil, ref: {reference, client_name}, shape: shape}
+  end
+
   def buffer(binary, shape = %Shape{}) when is_bitstring(binary) do
     %Buffer{data: binary, ref: nil, shape: shape}
-  end
-
-  def buffer(reference, shape = %Shape{}, {platform, ordinal}) when is_reference(reference) do
-    %Buffer{data: nil, ref: {reference, platform, ordinal}, shape: shape}
-  end
-
-  @doc """
-  Create a new buffer from `binary` and place on `device` using `client`.
-
-  If the device is a GPU, the entire binary will be consumed and the data field will be `nil`. On CPU,
-  we retain a copy of the binary to ensure it is not prematurely garbage collected.
-  """
-  def buffer(binary, shape = %Shape{}, client = %Client{}, device = {_platform, _ordinal})
-      when is_bitstring(binary) do
-    {:ok, buffer = %Buffer{}} =
-      place_on_device(client, %Buffer{data: binary, shape: shape}, device)
-
-    buffer
   end
 
   @doc """
   Places the given `buffer` on the given `device` using `client`.
   """
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, device = {_platform, _ordinal}) do
-    {:ok, {platform, ordinal}} = Client.check_device_compatibility(client, device)
+  def place_on_device(client = %Client{}, buffer = %Buffer{}, ordinal) when is_integer(ordinal) do
+    ordinal = Client.check_device_compatibility!(client, ordinal)
 
     ref =
       Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal)
       |> unwrap!()
 
-    %Buffer{buffer | data: nil, ref: {ref, platform, ordinal}}
+    %Buffer{buffer | data: nil, ref: {ref, client.name}}
   end
 
   @doc """
-  Reads the underlying device buffer.
+  Reads the underlying buffer ref.
 
   This copies the underlying device memory into a binary without destroying it.
   """
-  def read(client = %Client{}, %Buffer{ref: {ref, platform, ordinal}}) do
-    {:ok, _} = Client.check_device_compatibility(client, {platform, ordinal})
+  def read({ref, client_name}) do
+    client = Exla.Client.fetch!(client_name)
     binary = Exla.NIF.read_device_mem(client.ref, ref) |> unwrap!()
     binary
   end
 
   @doc """
-  Deallocates underlying device buffer.
+  Deallocates underlying buffer ref.
 
   Returns `:ok` | `:already_deallocated`.
   """
-  def deallocate(%Buffer{ref: {ref, _, _}}) do
+  def deallocate({ref, _}) do
     Exla.NIF.deallocate_device_mem(ref) |> unwrap!()
   end
 

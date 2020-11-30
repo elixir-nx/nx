@@ -8,36 +8,30 @@ defmodule BufferTest do
 
   test "place_on_device/3" do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
-
-    platform = client().platform
-
-    assert %Buffer{ref: {ref, result_platform, 0}} =
-             Buffer.place_on_device(client(), b1, {platform, 0})
-
-    assert result_platform == platform
+    assert %Buffer{ref: {ref, :default}} = Buffer.place_on_device(client(), b1, 0)
     assert is_reference(ref)
   end
 
   test "read/2" do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
-    b1 = Buffer.place_on_device(client(), b1, {client().platform, 0})
+    b1 = Buffer.place_on_device(client(), b1, 0)
 
-    assert <<1::32>> == Buffer.read(client(), b1)
+    assert <<1::32>> == Buffer.read(b1.ref)
     # non-destructive
-    assert <<1::32>> == Buffer.read(client(), b1)
+    assert <<1::32>> == Buffer.read(b1.ref)
 
-    :ok = Buffer.deallocate(b1)
+    :ok = Buffer.deallocate(b1.ref)
 
     assert_raise RuntimeError, "Attempt to read from empty buffer.", fn ->
-      Buffer.read(client(), b1)
+      Buffer.read(b1.ref)
     end
   end
 
   test "deallocate/1" do
     b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
-    b1 = Buffer.place_on_device(client(), b1, {client().platform(), 0})
+    b1 = Buffer.place_on_device(client(), b1, 0)
 
-    assert :ok = Buffer.deallocate(b1)
-    assert :already_deallocated = Buffer.deallocate(b1)
+    assert :ok = Buffer.deallocate(b1.ref)
+    assert :already_deallocated = Buffer.deallocate(b1.ref)
   end
 end

@@ -1,18 +1,17 @@
 defmodule Exla.Executable do
   alias __MODULE__
-  alias Exla.{Buffer, Client, Shape}
+  alias Exla.{Buffer, Shape}
 
-  @enforce_keys [:client, :ref, :output_shape]
-  defstruct [:client, :ref, :output_shape, :device]
+  @enforce_keys [:client, :ref, :output_shape, :device_ordinal]
+  defstruct [:client, :ref, :output_shape, :device_ordinal]
 
   def run(
-        %Executable{client: client, ref: exec, output_shape: output_shape},
+        %Executable{} = executable,
         arguments,
         options \\ []
       ) do
-    # A tuple of {platform, ordinal} representing a device
-    {platform, ordinal} =
-      Keyword.get(options, :device, {client.platform, Client.get_default_device_ordinal(client)})
+    %{client: client, ref: exec, output_shape: output_shape, device_ordinal: device_ordinal} =
+      executable
 
     # Run ID of this logical execution
     run_id = Keyword.get(options, :run_id, System.unique_integer([:positive, :monotonic]))
@@ -29,10 +28,9 @@ defmodule Exla.Executable do
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
     inputs =
-      arguments
-      |> Enum.map(fn
-        %Buffer{ref: {ref, _, _}} -> ref
-        %Buffer{data: data, shape: shape} -> {data, shape.ref}
+      Enum.map(arguments, fn
+        %Buffer{ref: {ref, _}, data: nil} -> ref
+        %Buffer{data: data, shape: shape, ref: nil} -> {data, shape.ref}
       end)
 
     {:ok, data} =
@@ -40,7 +38,7 @@ defmodule Exla.Executable do
         client.ref,
         exec,
         inputs,
-        ordinal,
+        device_ordinal,
         run_id,
         rng_seed,
         launch_id,
@@ -48,24 +46,24 @@ defmodule Exla.Executable do
       )
 
     if keep_on_device,
-      do: decompose_output(data, output_shape, {platform, ordinal}),
+      do: decompose_output(data, output_shape, client),
       else: decompose_output(data, output_shape)
   end
 
-  defp decompose_output(data, shape, {platform, ordinal}) do
+  defp decompose_output(data, shape, client) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
           |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, {platform, ordinal})
+            decompose_output(buf, subshape, client)
           end)
 
         {:tuple, tuple}
 
       _ ->
-        Buffer.buffer(data, shape, {platform, ordinal})
+        Buffer.buffer({data, client.name}, shape)
     end
   end
 
