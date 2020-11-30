@@ -43,6 +43,11 @@ defmodule Exla.ExecutableTest do
              run([t1, t2], [keep_on_device: true], fn _builder, x, y -> Op.add(x, y) end)
 
     assert is_reference(ref)
+
+    assert %Buffer{ref: {ref, _}} =
+             run([t1, t2], [keep_on_device: true], fn _builder, x, y -> Op.add(x, y) end)
+
+    assert is_reference(ref)
   end
 
   test "run/2 succeeds with data from a previous run" do
