@@ -43,7 +43,7 @@ defmodule Exla.Buffer do
   @doc """
   Places the given `buffer` on the given `device` using `client`.
   """
-  def place_on_device(client = %Client{}, buffer = %Buffer{}, ordinal) when is_integer(ordinal) do
+  def place_on_device(buffer = %Buffer{}, client = %Client{}, ordinal) when is_integer(ordinal) do
     ordinal = Client.check_device_compatibility!(client, ordinal)
 
     ref =

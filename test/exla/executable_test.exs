@@ -50,8 +50,8 @@ defmodule ExecutableTest do
   test "run/4 succeeds when data is pre-loaded", config do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-    t1 = Buffer.place_on_device(client(), t1, 0)
-    t2 = Buffer.place_on_device(client(), t2, 0)
+    t1 = Buffer.place_on_device(t1, client(), 0)
+    t2 = Buffer.place_on_device(t2, client(), 0)
     x = Op.parameter(config.builder, 0, t1.shape, "x")
     y = Op.parameter(config.builder, 1, t2.shape, "y")
     res = Op.add(x, y)
@@ -77,7 +77,7 @@ defmodule ExecutableTest do
   test "run/4 succeeds with mixed data", config do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-    t1 = Buffer.place_on_device(client(), t1, 0)
+    t1 = Buffer.place_on_device(t1, client(), 0)
     x = Op.parameter(config.builder, 0, t1.shape, "x")
     y = Op.parameter(config.builder, 1, t2.shape, "y")
     res = Op.add(x, y)

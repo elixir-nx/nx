@@ -14,6 +14,10 @@ defmodule Softmax do
   # This is JIT+cuda compiled
   @defn_compiler {Exla, client: :cuda}
   defn cuda(n), do: softmax(n)
+
+  # This is JIT+cuda+keep_on_device compiled
+  @defn_compiler {Exla, client: :cuda, keep_on_device: true}
+  defn cuda_keep(n), do: softmax(n)
 end
 
 IO.inspect(Softmax.softmax(t))
@@ -27,7 +31,11 @@ benches =  %{
 benches =
   if System.get_env("EXLA_TARGET") == "cuda" do
     IO.inspect(Softmax.cuda(t))
-    Map.put(benches, "xla gpu", Softmax.cuda(t))
+    Map.put(benches, "xla gpu", fn -> Softmax.cuda(t) end)
+
+    dt = Nx.device_transfer(t, Exla.NxDevice, client: :cuda)
+    IO.inspect(Softmax.cuda_keep(dt))
+    Map.put(benches, "xla gpu keep", fn -> Softmax.cuda_keep(dt) end)
   else
     benches
   end

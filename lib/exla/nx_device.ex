@@ -11,7 +11,7 @@ defmodule Exla.NxDevice do
     device_ordinal = opts[:device_ordinal] || -1
 
     buffer = Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
-    buffer = Exla.Buffer.place_on_device(Exla.Client.fetch!(client), buffer, device_ordinal)
+    buffer = Exla.Buffer.place_on_device(buffer, Exla.Client.fetch!(client), device_ordinal)
     {__MODULE__, buffer.ref}
   end
 
