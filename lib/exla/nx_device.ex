@@ -7,7 +7,7 @@ defmodule Exla.NxDevice do
 
   @impl true
   def allocate(data, type, shape, opts) do
-    client = opts[:client] || raise "Exla.NxDevice expects :client option when allocating data"
+    client = opts[:client] || :default
     device_ordinal = opts[:device_ordinal] || -1
 
     buffer = Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))

@@ -22,7 +22,7 @@ defmodule BufferTest do
 
     :ok = Buffer.deallocate(b1.ref)
 
-    assert_raise RuntimeError, "Attempt to read from empty buffer.", fn ->
+    assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn ->
       Buffer.read(b1.ref)
     end
   end

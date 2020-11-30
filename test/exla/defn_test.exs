@@ -160,7 +160,7 @@ defmodule Exla.DefnTest do
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
       assert_raise RuntimeError,
-                   "Attempt to read from empty buffer.",
+                   "Attempt to read from deallocated buffer.",
                    fn -> Nx.device_read(tensor) end
     end
   end

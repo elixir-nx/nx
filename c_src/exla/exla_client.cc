@@ -87,7 +87,7 @@ namespace exla {
 
   xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env, exla::ExlaBuffer* buffer) {
     if(buffer->empty()) {
-      return tensorflow::errors::FailedPrecondition("Attempt to read from empty buffer.");
+      return tensorflow::errors::FailedPrecondition("Attempt to read from deallocated buffer.");
     }
 
     if(!buffer->is_tuple()) {
@@ -112,7 +112,7 @@ namespace exla {
 
   xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffer) {
     if(buffer->empty()) {
-      return tensorflow::errors::Aborted("Attempt to read from empty buffer.");
+      return tensorflow::errors::Aborted("Attempt to read from deallocated buffer.");
     }
 
     bool is_cpu_platform = buffer->device()->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
