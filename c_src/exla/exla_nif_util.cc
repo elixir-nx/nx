@@ -183,7 +183,7 @@ namespace exla {
   }
 
 
-  ERL_NIF_TERM make_shape_term(ErlNifEnv* env, xla::Shape shape) {
+  ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if(shape.IsTuple()) {
       int element_count = xla::ShapeUtil::TupleElementCount(shape);
       ERL_NIF_TERM terms[element_count];

@@ -166,7 +166,7 @@ ERL_NIF_TERM make_tuple_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
 }
 
-ERL_NIF_TERM make_shape_ref(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+ERL_NIF_TERM get_shape_info(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 1) {
     return exla::error(env, "Bad argument count.");
   }
@@ -175,7 +175,7 @@ ERL_NIF_TERM make_shape_ref(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
   if(!exla::get<xla::Shape>(env, argv[0], shape)) return exla::error(env, "Unable to get shape.");
 
-  return exla::ok(env, exla::make_shape_term(env, *shape));
+  return exla::ok(env, exla::make_shape_info(env, *shape));
 }
 
 /************************ Tuples *********************************/
@@ -845,7 +845,7 @@ static ErlNifFunc exla_funcs[] = {
   /****** xla::Shape ******/
   {"make_shape", 2, make_shape},
   {"make_tuple_shape", 1, make_tuple_shape},
-  {"make_shape", 1, make_shape_ref},
+  {"get_shape_info", 1, get_shape_info},
   /***** xla::XlaBuilder *****/
   {"new_builder", 1, new_builder},
   {"create_sub_builder", 2, create_sub_builder},

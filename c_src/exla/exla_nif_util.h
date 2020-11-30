@@ -212,7 +212,7 @@ namespace exla {
   /*
    * Helper for extracting information from `GetShape` and sending it back as a Tuple.
    */
-  ERL_NIF_TERM make_shape_term(ErlNifEnv* env, xla::Shape shape);
+  ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 
 } // namespace exla
 
