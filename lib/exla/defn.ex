@@ -132,7 +132,7 @@ defmodule Exla.Defn do
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant), do: to_constant(builder, constant)
 
-  defp to_float_operator(builder, %Exla.Op{} = op) do
+  defp to_float_operator(_builder, %Exla.Op{} = op) do
     shape = Exla.Op.get_shape(op)
     type = Nx.Type.to_float(shape.dtype)
     if shape.dtype != type, do: Exla.Op.convert_element_type(op, type), else: op
