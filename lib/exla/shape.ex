@@ -28,18 +28,6 @@ defmodule Exla.Shape do
   end
 
   @doc """
-  Creates a tuple shape with the given shapes.
-  """
-  def make_tuple_shape(shapes) when is_list(shapes) do
-    refs =
-      shapes
-      |> Enum.map(& &1.ref)
-
-    ref = Exla.NIF.make_tuple_shape(refs) |> unwrap!()
-    %Shape{dims: {length(shapes)}, dtype: {:t, shapes}, ref: ref}
-  end
-
-  @doc """
   Converts a charlist type into Nx' tuple format.
   """
   def charlist_to_dtype('bf16'), do: {:bf, 16}

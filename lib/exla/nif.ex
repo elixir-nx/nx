@@ -18,8 +18,6 @@ defmodule Exla.NIF do
   def make_shape(_type, _dims),
     do: nif_error(__ENV__.function)
 
-  def make_tuple_shape(_shapes), do: nif_error(__ENV__.function)
-
   def parameter(_builder, _number, _shape, _name),
     do: nif_error(__ENV__.function)
 
