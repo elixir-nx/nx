@@ -326,6 +326,8 @@ defmodule Nx.Type do
     {:f, 64}
   end
 
+  def dtype_to_charlist({type, size}), do: Atom.to_charlist(type) ++ Integer.to_charlist(size)
+
   defp unsigned_size(x) when x <= 1, do: 1
   defp unsigned_size(x) when x <= 255, do: 8
   defp unsigned_size(x) when x <= 65535, do: 16
