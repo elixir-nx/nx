@@ -69,7 +69,7 @@ defmodule Exla.Executable do
         {:tuple, tuple}
 
     _ when keep_on_device == false and is_reference(data) ->
-      # This is the cuda case
+      # This is the outside of cpu
       bitstring = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
       Exla.NIF.deallocate_device_mem(data) |> unwrap!()
       Buffer.buffer(bitstring, shape)
