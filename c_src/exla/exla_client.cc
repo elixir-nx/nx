@@ -271,9 +271,6 @@ namespace exla {
                                               xla::ExecutableRunOptions& options,
                                               bool keep_on_device) {
 
-    bool is_cuda_platform = device->executor()->platform()->id() == se::cuda::kCudaPlatformId;
-    bool send_back_reference = keep_on_device || is_cuda_platform;
-
     // Track buffers that need to be released after `Run`
     std::vector<ExlaBuffer**> buffers;
     std::vector<xla::ExecutionInput> inputs;
@@ -342,10 +339,10 @@ namespace exla {
 
     exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
-    if(send_back_reference && buffer_ref->is_tuple()) {
+    if(keep_on_device && buffer_ref->is_tuple()) {
       EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references, DecomposeBuffer(env, buffer_ref), env);
       return references;
-    } else if(send_back_reference) {
+    } else if(keep_on_device) {
       return make<exla::ExlaBuffer*>(env, buffer_ref);
     } else if(buffer_ref->is_tuple()) {
       EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple, ErlListFromBuffer(env, buffer_ref), env);

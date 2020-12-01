@@ -25,7 +25,7 @@ defmodule Exla.Executable do
     launch_id = Keyword.get(options, :launch_id, 0)
     # Whether to keep result on device
     keep_on_device = Keyword.get(options, :keep_on_device, false)
-    keep_on_device_int = if keep_on_device, do: 1, else: 0
+    keep_on_device_int = if keep_on_device || client.platform == :cuda, do: 1, else: 0
 
     inputs =
       Enum.map(arguments, fn
@@ -51,19 +51,17 @@ defmodule Exla.Executable do
         keep_on_device_int
       )
 
-    if keep_on_device,
-      do: decompose_ref_output(data, output_shape, client),
-      else: decompose_data_output(data, output_shape, client)
+    decompose_output(data, output_shape, client, keep_on_device)
   end
 
-  defp decompose_ref_output(data, shape, client) do
+  defp decompose_output(data, shape, client, true) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
           |> Enum.map(fn {buf, subshape} ->
-            decompose_ref_output(buf, subshape, client)
+            decompose_output(buf, subshape, client, true)
           end)
 
         {:tuple, tuple}
@@ -73,13 +71,13 @@ defmodule Exla.Executable do
     end
   end
 
-  defp decompose_data_output(data, shape, client) do
+  defp decompose_output(data, shape, client, false) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} -> decompose_data_output(buf, subshape, client) end)
+          |> Enum.map(fn {buf, subshape} -> decompose_output(buf, subshape, client, false) end)
 
         {:tuple, tuple}
 
