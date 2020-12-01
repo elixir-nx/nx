@@ -39,7 +39,7 @@ defmodule Exla.Executable do
           end
       end)
 
-    {:ok, data} =
+    data =
       Exla.NIF.run(
         client.ref,
         exec,
@@ -49,7 +49,7 @@ defmodule Exla.Executable do
         rng_seed,
         launch_id,
         keep_on_device_int
-      )
+      ) |> unwrap!()
 
     decompose_output(data, output_shape, client, keep_on_device)
   end
@@ -66,14 +66,21 @@ defmodule Exla.Executable do
 
         {:tuple, tuple}
 
-      _ ->
-        case data do
-          data when is_reference(data) ->
-            if keep_on_device,
-              do: Buffer.buffer({data, client.name}, shape),
-              else: Buffer.read({data, client.name}) |> Buffer.buffer(shape)
-          _ -> Buffer.buffer(data, shape)
-        end
+    _ when keep_on_device == false and is_reference(data) ->
+      # This is the cuda case
+      bitstring = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
+      Exla.NIF.deallocate_device_mem(data) |> unwrap!()
+      Buffer.buffer(bitstring, shape)
+
+    _ when is_reference(data) ->
+      Buffer.buffer({data, client.name}, shape)
+
+    _ ->
+      Buffer.buffer(data, shape)
     end
   end
+
+  defp unwrap!(:ok), do: :ok
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
