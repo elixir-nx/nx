@@ -33,11 +33,11 @@ defmodule Exla.Executable do
       Enum.map(arguments, fn
         %Buffer{ref: {ref, _}, data: nil} -> ref
         buffer = %Buffer{data: data, shape: shape, ref: nil} ->
-          case client.platform do
-            :cuda ->
-              %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_ordinal)
-              ref
-            _ -> {data, shape.ref}
+          if outside_cpu do
+            %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_ordinal)
+            ref
+          else
+            {data, shape.ref}
           end
       end)
 
