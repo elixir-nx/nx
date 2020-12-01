@@ -874,7 +874,7 @@ defmodule Nx do
   defp erlang_max(a, b), do: :erlang.max(a, b)
 
   @doc """
-  Computes the element-wise maximum of two tensors.
+  Computes the element-wise minimum of two tensors.
 
   If a number is given, it is converted to a tensor.
 
