@@ -25,7 +25,9 @@ defmodule Exla.Executable do
     launch_id = Keyword.get(options, :launch_id, 0)
     # Whether to keep result on device
     keep_on_device = Keyword.get(options, :keep_on_device, false)
-    keep_on_device_int = if keep_on_device || client.platform == :cuda, do: 1, else: 0
+
+    outside_cpu = client.platform == :cuda
+    keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
 
     inputs =
       Enum.map(arguments, fn
