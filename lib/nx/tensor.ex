@@ -22,25 +22,34 @@ defmodule Nx.Tensor do
 
       case tensor.data do
         {Nx.BitStringDevice, bin} ->
-        data =
-          tensor.shape
-          |> Tuple.to_list()
-          |> Enum.reverse()
-          |> Enum.reduce(bin_to_list(bin, tensor.type),
-              fn x, acc ->
-                Enum.chunk_every(acc, x)
-              end
-            )
-          |> hd()
+          data =
+            tensor.shape
+            |> Tuple.to_list()
+            |> Enum.reverse()
+            |> Enum.reduce(bin_to_list(bin, tensor.type),
+                fn x, acc ->
+                  Enum.chunk_every(acc, x)
+                end
+              )
+            |> hd()
 
-        concat([
-          "#Nx.Tensor<\n",
-          Nx.Type.to_string(tensor.type),
-          shape_to_string(tensor.shape),
-          "\n",
-          inspect(data),
-          "\n>"
-        ])
+          concat([
+            "#Nx.Tensor<\n",
+            Nx.Type.to_string(tensor.type),
+            shape_to_string(tensor.shape),
+            "\n",
+            inspect(data),
+            "\n>"
+          ])
+        {device, _} ->
+          concat([
+            "Nx.Tensor\n",
+            Nx.Type.to_string(tensor.type),
+            shape_to_string(tensor.shape),
+            "\n",
+            inspect(data),
+            "\n>"
+          ])
       end
     end
 
