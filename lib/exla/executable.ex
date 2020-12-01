@@ -25,15 +25,23 @@ defmodule Exla.Executable do
     launch_id = Keyword.get(options, :launch_id, 0)
     # Whether to keep result on device
     keep_on_device = Keyword.get(options, :keep_on_device, false)
-    keep_on_device_int = if keep_on_device, do: 1, else: 0
+
+    outside_cpu = client.platform == :cuda
+    keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
 
     inputs =
       Enum.map(arguments, fn
         %Buffer{ref: {ref, _}, data: nil} -> ref
-        %Buffer{data: data, shape: shape, ref: nil} -> {data, shape.ref}
+        buffer = %Buffer{data: data, shape: shape, ref: nil} ->
+          if outside_cpu do
+            %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_ordinal)
+            ref
+          else
+            {data, shape.ref}
+          end
       end)
 
-    {:ok, data} =
+    data =
       Exla.NIF.run(
         client.ref,
         exec,
@@ -43,42 +51,38 @@ defmodule Exla.Executable do
         rng_seed,
         launch_id,
         keep_on_device_int
-      )
+      ) |> unwrap!()
 
-    if keep_on_device,
-      do: decompose_output(data, output_shape, client),
-      else: decompose_output(data, output_shape)
+    decompose_output(data, output_shape, client, keep_on_device)
   end
 
-  defp decompose_output(data, shape, client) do
+  defp decompose_output(data, shape, client, keep_on_device) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
           |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, client)
+            decompose_output(buf, subshape, client, keep_on_device)
           end)
 
         {:tuple, tuple}
 
-      _ ->
-        Buffer.buffer({data, client.name}, shape)
+    _ when keep_on_device == false and is_reference(data) ->
+      # This is the outside of cpu
+      bitstring = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
+      Exla.NIF.deallocate_device_mem(data) |> unwrap!()
+      Buffer.buffer(bitstring, shape)
+
+    _ when is_reference(data) ->
+      Buffer.buffer({data, client.name}, shape)
+
+    _ ->
+      Buffer.buffer(data, shape)
     end
   end
 
-  defp decompose_output(data, shape) do
-    case shape do
-      %Shape{dtype: {:t, shapes}} ->
-        tuple =
-          data
-          |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} -> decompose_output(buf, subshape) end)
-
-        {:tuple, tuple}
-
-      _ ->
-        Buffer.buffer(data, shape)
-    end
-  end
+  defp unwrap!(:ok), do: :ok
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
