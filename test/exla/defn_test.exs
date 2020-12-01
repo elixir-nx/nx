@@ -217,6 +217,61 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "element-wise operators" do
+    @tensors [
+      {1, 2},
+      {1, Nx.tensor([1.0, 2.0, 3.0])},
+      {Nx.tensor([1, 2, 3]), 1},
+      {Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]])},
+      {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8})},
+      {Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32})}
+    ]
+
+    defn subtract_two(a, b), do: a - b
+    @defn_compiler Nx.Defn
+    defn subtract_two_nx(a, b), do: a - b
+
+    test "-" do
+      for {left, right} <- @tensors do
+        assert subtract_two(left, right) == subtract_two_nx(left, right)
+        assert subtract_two(right, left) == subtract_two_nx(right, left)
+      end
+    end
+
+    defn multiply_two(a, b), do: a * b
+    @defn_compiler Nx.Defn
+    defn multiply_two_nx(a, b), do: a * b
+
+    test "*" do
+      for {left, right} <- @tensors do
+        assert multiply_two(left, right) == multiply_two_nx(left, right)
+        assert multiply_two(right, left) == multiply_two_nx(right, left)
+      end
+    end
+
+    defn max_two(a, b), do: max(a, b)
+    @defn_compiler Nx.Defn
+    defn max_two_nx(a, b), do: max(a, b)
+
+    test "max" do
+      for {left, right} <- @tensors do
+        assert max_two(left, right) == max_two_nx(left, right)
+        assert max_two(right, left) == max_two_nx(right, left)
+      end
+    end
+
+    defn min_two(a, b), do: min(a, b)
+    @defn_compiler Nx.Defn
+    defn min_two_nx(a, b), do: min(a, b)
+
+    test "min" do
+      for {left, right} <- @tensors do
+        assert min_two(left, right) == min_two_nx(left, right)
+        assert min_two(right, left) == min_two_nx(right, left)
+      end
+    end
+  end
+
   describe "exp" do
     defn exp(t), do: Nx.exp(t)
 

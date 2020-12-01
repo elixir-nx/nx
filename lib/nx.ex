@@ -74,6 +74,7 @@ defmodule Nx do
   """
 
   alias Nx.Tensor, as: T
+  import Kernel, except: [max: 2, min: 2]
 
   ## Private macros
 
@@ -684,6 +685,98 @@ defmodule Nx do
   def_arith_op.(:add, :+, & &1)
 
   @doc """
+  Subtracts two tensors element-wise.
+
+  If a number is given, it is converted to a tensor.
+
+  ## Examples
+
+  ### Subtracting scalars
+
+      iex> t = Nx.subtract(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<-1::64-native>>
+
+  ### Subtracting tensors and scalars
+
+      iex> t = Nx.subtract(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 1::64-native, 2::64-native>>
+
+      iex> t = Nx.subtract(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<0.0::float-64-native, -1.0::float-64-native, -2.0::float-64-native>>
+
+  ### Subtracting tensors
+
+      iex> t = Nx.subtract(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<-9::64-native, -19::64-native, -8::64-native, -18::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.subtract(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<-9::8-native, -19::8-native, -8::8-native, -18::8-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.subtract(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<-9.0::float-32-native, -19.0::float-32-native, -8.0::float-32-native, -18.0::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def_arith_op.(:subtract, :-, & &1)
+
+  @doc """
+  Multiplies two tensors element-wise.
+
+  If a number is given, it is converted to a tensor.
+
+  ## Examples
+
+  ### Multiplying scalars
+
+      iex> t = Nx.multiply(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<2::64-native>>
+
+  ### Multiplying tensors and scalars
+
+      iex> t = Nx.multiply(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 2::64-native, 3::64-native>>
+
+      iex> t = Nx.multiply(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 2.0::float-64-native, 3.0::float-64-native>>
+
+  ### Multiplying tensors
+
+      iex> t = Nx.multiply(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<10::64-native, 20::64-native, 20::64-native, 40::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.multiply(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<10::8-native, 20::8-native, 20::8-native, 40::8-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.multiply(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<10.0::float-32-native, 20.0::float-32-native, 20.0::float-32-native, 40.0::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def_arith_op.(:multiply, :*, & &1)
+
+  @doc """
   Divides two tensors element-wise.
 
   If a number is given, it is converted to a tensor.
@@ -731,6 +824,102 @@ defmodule Nx do
 
   """
   def_arith_op.(:divide, :/, &quote(do: Nx.Type.to_float(unquote(&1))))
+
+  @doc """
+  Computes the element-wise maximum of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  ## Examples
+
+  ### Max between scalars
+
+      iex> t = Nx.max(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<2::64-native>>
+
+  ### Max between tensors and scalars
+
+      iex> t = Nx.max(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 2::64-native, 3::64-native>>
+
+      iex> t = Nx.max(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 2.0::float-64-native, 3.0::float-64-native>>
+
+  ### Max between tensors
+
+      iex> t = Nx.max(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<10::64-native, 20::64-native, 10::64-native, 20::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.max(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<10::8-native, 20::8-native, 10::8-native, 20::8-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.max(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<10.0::float-32-native, 20.0::float-32-native, 10.0::float-32-native, 20.0::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def_arith_op.(:max, :erlang_max, & &1)
+  @compile {:inline, erlang_max: 2}
+  defp erlang_max(a, b), do: :erlang.max(a, b)
+
+  @doc """
+  Computes the element-wise maximum of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  ## Examples
+
+  ### Min between scalars
+
+      iex> t = Nx.min(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native>>
+
+  ### Min between tensors and scalars
+
+      iex> t = Nx.min(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 1::64-native, 1::64-native>>
+
+      iex> t = Nx.min(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 1.0::float-64-native, 1.0::float-64-native>>
+
+  ### Min between tensors
+
+      iex> t = Nx.min(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 1::64-native, 2::64-native, 2::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.min(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<1::8-native, 1::8-native, 2::8-native, 2::8-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.min(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-32-native, 1.0::float-32-native, 2.0::float-32-native, 2.0::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def_arith_op.(:min, :erlang_min, & &1)
+  @compile {:inline, erlang_min: 2}
+  defp erlang_min(a, b), do: :erlang.min(a, b)
 
   @doc """
   Calculates the exponential of the given tensor.
@@ -838,7 +1027,7 @@ defmodule Nx do
        ) do
     left_rank = tuple_size(left_shape)
     right_rank = tuple_size(right_shape)
-    rank = max(left_rank, right_rank)
+    rank = :erlang.max(left_rank, right_rank)
     left_ordered = shape_to_ranked_ordered_list(left_shape, left_rank, rank)
     right_ordered = shape_to_ranked_ordered_list(right_shape, right_rank, rank)
 
@@ -921,7 +1110,7 @@ defmodule Nx do
   defp count_ones(_), do: 0
 
   defp broadcast_split_chunks([lh | lt], [rh | rt], ls, rs, n, shape) when n > 0,
-    do: broadcast_split_chunks(lt, rt, ls * lh, rh * rs, n - 1, [max(lh, rh) | shape])
+    do: broadcast_split_chunks(lt, rt, ls * lh, rh * rs, n - 1, [:erlang.max(lh, rh) | shape])
 
   defp broadcast_split_chunks(l, r, ls, rs, _n, shape),
     do: {l, r, ls, rs, shape}

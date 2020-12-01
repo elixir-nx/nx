@@ -7,11 +7,17 @@ defmodule Exla.Op do
 
   ## Constructors
 
+  @doc """
+  Creates a scalar constant.
+  """
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
     ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
+  @doc """
+  Creates a n-dimensional constant from binary `data` with `shape`.
+  """
   def constant_from_binary(%Builder{ref: builder}, data, %Shape{} = shape)
       when is_binary(data) do
     %{dims: dims, dtype: {_, size}, ref: shape_ref} = shape
@@ -24,12 +30,18 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  @doc """
+  Specifies a parameter at position `i` with `shape` and `name`.
+  """
   def parameter(%Builder{ref: builder}, i, %Shape{ref: shape}, name)
       when is_integer(i) and i >= 0 and is_binary(name) do
     ref = Exla.NIF.parameter(builder, i, shape, name) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
+  @doc """
+  Builds a tuple with the given elements.
+  """
   def tuple(%Builder{ref: builder}, elements) when is_tuple(elements) do
     element_refs =
       elements
@@ -40,7 +52,7 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  ## Ops
+  ## Reflection
 
   @doc """
   Gets the shape of an operator.
@@ -49,6 +61,24 @@ defmodule Exla.Op do
     ref = Exla.NIF.get_shape(builder, operand) |> unwrap!()
     Shape.get_shape_info(ref)
   end
+
+  ## Element-wise ops
+
+  for fun <- [:add, :subtract, :multiply, :divide, :max, :min] do
+    @doc """
+    Element-wise #{fun} with broadcasting.
+    """
+    def unquote(fun)(
+          %Op{builder: builder, ref: left},
+          %Op{builder: builder, ref: right},
+          broadcast_dims \\ {}
+        ) do
+      ref = Exla.NIF.unquote(fun)(left, right, broadcast_dims) |> unwrap!()
+      %Op{builder: builder, ref: ref}
+    end
+  end
+
+  ## Ops
 
   def get_tuple_element(%Op{builder: builder, ref: operand}, index) when is_integer(index) do
     ref = Exla.NIF.get_tuple_element(operand, index) |> unwrap!()
@@ -85,15 +115,6 @@ defmodule Exla.Op do
       |> Enum.map(& &1.ref)
 
     ref = Exla.NIF.conditional(index, branches_refs, operands_refs) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def add(
-        %Op{builder: builder, ref: left},
-        %Op{builder: builder, ref: right},
-        broadcast_dims \\ {}
-      ) do
-    ref = Exla.NIF.add(left, right, broadcast_dims) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -147,15 +168,6 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def div(
-        %Op{builder: builder, ref: left},
-        %Op{builder: builder, ref: right},
-        broadcast_dims \\ {}
-      ) do
-    ref = Exla.NIF.div(left, right, broadcast_dims) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
   def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}) do
     ref = Exla.NIF.dot(left, right) |> unwrap!()
     %Op{builder: builder, ref: ref}
@@ -189,6 +201,8 @@ defmodule Exla.Op do
     ref = Exla.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
+
+  ## Helpers
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1

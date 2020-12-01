@@ -24,13 +24,13 @@ defmodule Exla.NIF do
   def add(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def sub(_a, _b, _broadcast_dims),
+  def subtract(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def mul(_a, _b, _broadcast_dims),
+  def multiply(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def div(_a, _b, _broadcast_dims),
+  def divide(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def rem(_a, _b, _broadcast_dims),

@@ -92,12 +92,20 @@ defmodule Exla.Defn do
 
   ## Operators
 
-  def nx_add(builder, left, right) do
+  def nx_element_wise_bin_op(builder, :divide, left, right) do
+    type = binary_arith_type(left, right) |> Nx.Type.to_float()
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    dims = broadcast_dimensions(left_dims, right_dims)
+    Exla.Op.divide(left, right, dims)
+  end
+
+  def nx_element_wise_bin_op(builder, op, left, right) do
     type = binary_arith_type(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
-    Exla.Op.add(left, right, dims)
+    apply(Exla.Op, op, [left, right, dims])
   end
 
   def nx_divide(builder, left, right) do
@@ -105,7 +113,7 @@ defmodule Exla.Defn do
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
-    Exla.Op.div(left, right, dims)
+    Exla.Op.divide(left, right, dims)
   end
 
   def nx_exp(builder, op) do
@@ -231,6 +239,14 @@ defmodule Exla.Defn do
         end
       )
     end
+  end
+
+  @element_wise_bin_op [:add, :subtract, :multiply, :divide, :min, :max]
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @element_wise_bin_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do

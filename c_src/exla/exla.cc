@@ -785,9 +785,9 @@ static ErlNifFunc exla_funcs[] = {
   {"parameter", 4, parameter},
   /****** Binary Ops ******/
   {"add", 3, add},
-  {"sub", 3, sub},
-  {"mul", 3, mul},
-  {"div", 3, div},
+  {"subtract", 3, sub},
+  {"multiply", 3, mul},
+  {"divide", 3, div},
   {"rem", 3, rem},
   {"min", 3, min},
   {"max", 3, max},

@@ -235,7 +235,7 @@ defmodule Exla.OpTest do
     shape = Shape.make_shape({:s, 32}, {1, 1})
     a = Op.parameter(builder, 0, shape, "a")
     b = Op.parameter(builder, 1, shape, "b")
-    assert %Op{} = Op.div(a, b)
+    assert %Op{} = Op.divide(a, b)
   end
 
   test "dot/2 successfully creates dot op" do

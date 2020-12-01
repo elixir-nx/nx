@@ -54,6 +54,22 @@ defmodule Nx.DefnTest do
       assert add_two(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
 
+    defn subtract_two(a, b) do
+      a - b
+    end
+
+    test "-" do
+      assert subtract_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([-1, 0, 1])
+    end
+
+    defn multiply_two(a, b) do
+      a * b
+    end
+
+    test "*" do
+      assert multiply_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([2, 4, 6])
+    end
+
     defn divide_two(a, b) do
       a / b
     end
@@ -69,6 +85,24 @@ defmodule Nx.DefnTest do
     test "|>" do
       assert add_two_with_pipe(1, 2) == Nx.tensor(3)
       assert add_two_with_pipe(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
+    end
+  end
+
+  describe "kernel functions" do
+    defn max_two(a, b) do
+      max(a, b)
+    end
+
+    test "max/2" do
+      assert max_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([2, 2, 3])
+    end
+
+    defn min_two(a, b) do
+      min(a, b)
+    end
+
+    test "min/2" do
+      assert min_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([1, 2, 2])
     end
   end
 

@@ -88,7 +88,9 @@ defmodule Nx.Defn.Kernel do
     do: raise("special forms must not be imported and exist for documentation purposes")
 
   @doc """
-  A `+` operator which delegates to `Nx.add/2`.
+  Element-wise addition operator.
+
+  It delegates to `Nx.add/2`.
 
   ## Examples
 
@@ -102,7 +104,41 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  A `/` operator which delegates to `Nx.divide/2`.
+  Element-wise substraction operator.
+
+  It delegates to `Nx.subtract/2`.
+
+  ## Examples
+
+      defn subtract(a, b) do
+        a - b
+      end
+
+  """
+  defmacro a - b do
+    quote do: Nx.subtract(unquote(a), unquote(b))
+  end
+
+  @doc """
+  Element-wise multiplication operator.
+
+  It delegates to `Nx.multiply/2`.
+
+  ## Examples
+
+      defn subtract(a, b) do
+        a * b
+      end
+
+  """
+  defmacro a * b do
+    quote do: Nx.multiply(unquote(a), unquote(b))
+  end
+
+  @doc """
+  Element-wise division operator.
+
+  It delegates to `Nx.divide/2`.
 
   ## Examples
 
@@ -116,7 +152,41 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  A `|>` operator which delegates to `Kernel.|>/2`.
+  Element-wise maximum operation.
+
+  It delegates to `Nx.max/2`.
+
+  ## Examples
+
+      defn min_max(a, b) do
+        {min(a, b), max(a, b)}
+      end
+
+  """
+  defmacro max(a, b) do
+    quote do: Nx.max(unquote(a), unquote(b))
+  end
+
+  @doc """
+  Element-wise minimum operation.
+
+  It delegates to `Nx.min/2`.
+
+  ## Examples
+
+      defn min_max(a, b) do
+        {min(a, b), max(a, b)}
+      end
+
+  """
+  defmacro min(a, b) do
+    quote do: Nx.min(unquote(a), unquote(b))
+  end
+
+  @doc """
+  Pipes the argument on the left to the function call on the right.
+
+  It delegates to `Kernel.|>/2`.
 
   ## Examples
 
@@ -132,9 +202,10 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  A `@` operator which delegates to `Kernel.@/1`.
+  Reads a module attribute at compilation time.
 
   It is useful to inject code constants into `defn`.
+  It delegates to `Kernel.@/1`.
 
   ## Examples
 
