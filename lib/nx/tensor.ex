@@ -5,7 +5,7 @@ defmodule Nx.Tensor do
   All of its fields are private. You can access tensor
   metadata via the functions in the Nx module.
   """
-  # TODO: implement the inspect protocol.
+  # TODO: Implementation is inefficient as is
 
   @type data :: {module, term}
   @type type :: Nx.Type.t
@@ -18,77 +18,45 @@ defmodule Nx.Tensor do
     import Inspect.Algebra
 
     def inspect(tensor, _opts) do
+      close = "]\n>"
+
       case tensor.data do
         {Nx.BitStringDevice, bin} ->
-          data =
-            case tensor.type do
-              {:s, size} -> decode(bin, div(size, 8), 0, byte_size(bin), &decode_signed/1)
-              {:u, size} -> decode(bin, div(size, 8), 0, byte_size(bin), &decode_unsigned/1)
-              {:f, size} -> decode(bin, div(size, 8), 0, byte_size(bin), &decode_float/1)
-              {_, size} -> decode(bin, div(size, 8), 0, byte_size(bin), &decode_float/1)
-            end
+        data =
+          tensor.shape
+          |> Tuple.to_list()
+          |> Enum.reverse()
+          |> Enum.reduce(bin_to_list(bin, tensor.type),
+              fn x, acc ->
+                Enum.chunk_every(acc, x)
+              end
+            )
+          |> hd()
 
-          concat([
-            "#Nx.Tensor<",
-            break("\n\t"),
-            string(List.to_string(Nx.Type.dtype_to_charlist(tensor.type))),
-            inspect(Tuple.to_list(tensor.shape)),
-            break("\n\t"),
-            inspect(data),
-            break("\n"),
-            ">"
-          ])
-
-        {device, _} ->
-          concat([
-            "Nx.Tensor<",
-            break("\n\t"),
-            string(List.to_string(Nx.Type.dtype_to_charlist(tensor.type))),
-            inspect(Tuple.to_list(tensor.shape)),
-            break("\n\t"),
-            inspect(device),
-            break("\n"),
-            ">"
-          ])
+        concat([
+          "#Nx.Tensor<\n",
+          Nx.Type.to_string(tensor.type),
+          shape_to_string(tensor.shape),
+          "\n",
+          inspect(data),
+          "\n>"
+        ])
       end
     end
 
-    defp decode(binary, bytes, pos, bytes, decode_fn),
-      do: [decode_segment(binary, bytes, pos, decode_fn)]
-
-    defp decode(binary, bytes, pos, left, decode_fn) do
-      [decode_segment(binary, bytes, pos, decode_fn) | decode(binary, bytes, pos+bytes, left-bytes, decode_fn)]
-    end
-
-    defp decode_segment(binary, bytes, pos, decode_fn) do
-      binary
-      |> :binary.part(pos, bytes)
-      |> decode_fn.()
-    end
-
-    defp decode_signed(data) do
-      case data do
-        <<x::8-native>> -> x
-        <<x::16-native>> -> x
-        <<x::32-native>> -> x
-        <<x::64-native>> -> x
+    defp bin_to_list(bin, type) do
+      case type do
+        {:s, size} -> for <<x::size(size)-native <- bin>>, do: x
+        {:u, size} -> for <<x::size(size)-unsigned-native <- bin>>, do: x
+        {:f, size} -> for <<x::size(size)-float-native <- bin>>, do: x
+        {_, size} -> for <<x::size(size)-float-native <- bin>>, do: x
       end
     end
 
-    defp decode_unsigned(data) do
-      case data do
-        <<x::8-unsigned-native>> -> x
-        <<x::16-unsigned-native>> -> x
-        <<x::32-unsigned-native>> -> x
-        <<x::64-unsigned-native>> -> x
-      end
-    end
-
-    defp decode_float(data) do
-      case data do
-        <<x::float-32-native>> -> x
-        <<x::float-64-native>> -> x
-      end
+    defp shape_to_string(shape) do
+      shape
+      |> Tuple.to_list()
+      |> Enum.reduce("", fn x, acc -> "[#{x}]" <> acc end)
     end
   end
 end
