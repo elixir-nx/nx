@@ -54,45 +54,25 @@ defmodule Exla.Executable do
     decompose_output(data, output_shape, client, keep_on_device)
   end
 
-  defp decompose_output(data, shape, client, true) do
+  defp decompose_output(data, shape, client, keep_on_device) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
           |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, client, true)
+            decompose_output(buf, subshape, client, keep_on_device)
           end)
 
         {:tuple, tuple}
 
       _ ->
-        Buffer.buffer({data, client.name}, shape)
-    end
-  end
-
-  defp decompose_output(data, shape, client, false) do
-    case shape do
-      %Shape{dtype: {:t, shapes}} ->
-        tuple =
-          data
-          |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} -> decompose_output(buf, subshape, client, false) end)
-
-        {:tuple, tuple}
-
-      _ ->
-        case client.platform do
-          :cuda ->
-            buffer =
-              {data, client.name}
-              |> Buffer.read()
-              |> Buffer.buffer(shape)
-            Buffer.deallocate({data, client.name})
-            buffer
-          _ ->
-            IO.inspect(data)
-            Buffer.buffer(data, shape)
+        case data do
+          data when is_reference(data) ->
+            if keep_on_device,
+              do: Buffer.buffer({data, client.name}, shape),
+              else: Buffer.read({data, client.name}) |> Buffer.buffer(shape)
+          _ -> Buffer.buffer(data, shape)
         end
     end
   end
