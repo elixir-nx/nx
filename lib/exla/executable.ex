@@ -30,7 +30,13 @@ defmodule Exla.Executable do
     inputs =
       Enum.map(arguments, fn
         %Buffer{ref: {ref, _}, data: nil} -> ref
-        %Buffer{data: data, shape: shape, ref: nil} -> {data, shape.ref}
+        buffer = %Buffer{data: data, shape: shape, ref: nil} ->
+          case client.platform do
+            :cuda ->
+              %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_ordinal)
+              ref
+            _ -> {data, shape.ref}
+          end
       end)
 
     {:ok, data} =
@@ -46,18 +52,18 @@ defmodule Exla.Executable do
       )
 
     if keep_on_device,
-      do: decompose_output(data, output_shape, client),
-      else: decompose_output(data, output_shape)
+      do: decompose_ref_output(data, output_shape, client),
+      else: decompose_data_output(data, output_shape, client)
   end
 
-  defp decompose_output(data, shape, client) do
+  defp decompose_ref_output(data, shape, client) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
           |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, client)
+            decompose_ref_output(buf, subshape, client)
           end)
 
         {:tuple, tuple}
@@ -67,18 +73,29 @@ defmodule Exla.Executable do
     end
   end
 
-  defp decompose_output(data, shape) do
+  defp decompose_data_output(data, shape, client) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} -> decompose_output(buf, subshape) end)
+          |> Enum.map(fn {buf, subshape} -> decompose_data_output(buf, subshape, client) end)
 
         {:tuple, tuple}
 
       _ ->
-        Buffer.buffer(data, shape)
+        case client.platform do
+          :cuda ->
+            buffer =
+              {data, client.name}
+              |> Buffer.read()
+              |> Buffer.buffer(shape)
+            Buffer.deallocate({data, client.name})
+            buffer
+          _ ->
+            IO.inspect(data)
+            Buffer.buffer(data, shape)
+        end
     end
   end
 end
