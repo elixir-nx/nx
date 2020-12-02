@@ -1296,6 +1296,31 @@ defmodule Nx do
     %{t | data: {Nx.BitStringDevice, data}, shape: {}}
   end
 
+  ## Random Ops
+
+  @doc """
+  Returns a uniformly-distributed random tensor with the given shape.
+  """
+  def random_uniform(shape, opts \\ []) when is_tuple(shape) do
+    a = Keyword.get(opts, :a, 0.0)
+    b = Keyword.get(opts, :b, 1.0)
+    type = Keyword.get(opts, :type, {:f, 64})
+    gen = fn -> (b - a) * :rand.uniform() + a end
+    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
+    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
+  end
+
+  @doc """
+  Returns a normally-distributed random tensor with the given shape.
+  """
+  def random_normal(shape, opts \\ []) when is_tuple(shape) do
+    mu = Keyword.get(opts, :mu, 0.0)
+    sigma = Keyword.get(opts, :sigma, 1.0)
+    type = Keyword.get(opts, :type, {:f, 64})
+    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(:rand.normal(mu, sigma), type)
+    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
+  end
+
   ## Device helpers
 
   defp data!(%T{data: {Nx.BitStringDevice, data}}), do: data
