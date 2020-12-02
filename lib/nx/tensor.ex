@@ -42,7 +42,7 @@ defmodule Nx.Tensor do
           ])
         {device, _} ->
           concat([
-            "Nx.Tensor\n",
+            "#Nx.Tensor<\n",
             Nx.Type.to_string(tensor.type),
             shape_to_string(tensor.shape),
             "\n",
