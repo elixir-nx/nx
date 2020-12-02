@@ -372,7 +372,7 @@ ERL_NIF_TERM rng_uniform(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(!exla::get<xla::XlaOp>(env, argv[1], b)) return exla::error(env, "Unable to get sigma.");
   if(!exla::get<xla::Shape>(env, argv[2], shape)) return exla::error(env, "Unable to get shape.");
 
-  xla::XlaOp op = xla::RngNormal(*a, *b, *shape);
+  xla::XlaOp op = xla::RngUniform(*a, *b, *shape);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
