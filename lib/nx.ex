@@ -1301,15 +1301,15 @@ defmodule Nx do
   @doc """
   Returns a uniformly-distributed random tensor with the given shape.
   """
-  def random_uniform(shape, opts \\ []) when is_tuple(shape) do
-    a = Keyword.get(opts, :a, 0.0)
-    b = Keyword.get(opts, :b, 1.0)
-    type = opts[:type] || Nx.Type.infer(b - a)
+  def random_uniform(shape, opts \\ []) when is_tuple(shape), do: random_uniform(shape, 0.0, 1.0, opts)
+
+  def random_uniform(shape, min, max, opts \\ []) when is_tuple(shape) and is_number(min) and is_number(max) do
+    type = opts[:type] || Nx.Type.infer(max - min)
     gen =
       fn
-        {:f, _} -> (b - a) * :rand.uniform() + a
-        {:s, _} -> b - (:rand.uniform(b) + a)
-        {:u, _} -> b - (:rand.uniform(b) + a)
+        {:f, _} -> (max - min) * :rand.uniform() + min
+        {:s, _} -> max - (:rand.uniform(max) + min)
+        {:u, _} -> max - (:rand.uniform(max) + min)
       end
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(type), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
@@ -1318,10 +1318,10 @@ defmodule Nx do
   @doc """
   Returns a normally-distributed random tensor with the given shape.
   """
-  def random_normal(shape, opts \\ []) when is_tuple(shape) do
-    mu = Keyword.get(opts, :mu, 0.0)
-    sigma = Keyword.get(opts, :sigma, 1.0)
-    type = Keyword.get(opts, :type, {:f, 64})
+  def random_normal(shape, opts \\ []), do: random_normal(shape, 0.0, 1.0, opts)
+
+  def random_normal(shape, mu, sigma, opts \\ []) when is_tuple(shape) when is_number(mu) and is_number(sigma) do
+    type = opts[:type] || {:f, 64}
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(:rand.normal(mu, sigma), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
