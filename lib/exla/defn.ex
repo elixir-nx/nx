@@ -149,7 +149,8 @@ defmodule Exla.Defn do
   end
 
   defp to_operator(_builder, %Exla.Op{} = op), do: op
-  defp to_operator(builder, constant), do: to_constant(builder, constant)
+  defp to_operator(builder, constant) when is_number(constant), do: to_constant(builder, constant)
+  defp to_operator(_builder, other), do: raise(ArgumentError, "expected a tensor, got: #{other}")
 
   defp to_float_operator(_builder, %Exla.Op{} = op) do
     shape = Exla.Op.get_shape(op)
@@ -157,8 +158,12 @@ defmodule Exla.Defn do
     if shape.dtype != type, do: Exla.Op.convert_element_type(op, type), else: op
   end
 
-  defp to_float_operator(builder, constant) do
+  defp to_float_operator(builder, constant) when is_number(constant) do
     to_typed_constant(builder, constant, {:f, 64})
+  end
+
+  defp to_float_operator(_builder, other) do
+    raise(ArgumentError, "expected a tensor, got: #{other}")
   end
 
   defp to_typed_operator(_builder, %Exla.Op{} = op, type) do
@@ -171,8 +176,12 @@ defmodule Exla.Defn do
     end
   end
 
-  defp to_typed_operator(builder, constant, type) do
+  defp to_typed_operator(builder, constant, type) when is_number(constant) do
     {to_typed_constant(builder, constant, type), {}}
+  end
+
+  defp to_typed_operator(_builder, other, _type) do
+    raise(ArgumentError, "expected a tensor, got: #{other}")
   end
 
   ## Types
@@ -205,18 +214,11 @@ defmodule Exla.Defn do
     Exla.Op.constant_r0(builder, constant, type)
   end
 
-  defp to_typed_constant(_builder, other, _type) do
-    raise ArgumentError, "cannot compile constant #{inspect(other)}"
-  end
-
   defp to_constant(builder, int) when is_integer(int),
     do: Exla.Op.constant_r0(builder, int, {:s, 64})
 
   defp to_constant(builder, float) when is_float(float),
     do: Exla.Op.constant_r0(builder, float, {:f, 64})
-
-  defp to_constant(_builder, other),
-    do: raise(ArgumentError, "cannot compile constant #{inspect(other)}")
 
   ## Dimensions
 
