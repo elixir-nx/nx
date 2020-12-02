@@ -90,7 +90,7 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise addition operator.
 
-  It delegates to `Nx.add/2`.
+  It delegates to `Nx.add/2` (supports broadcasting).
 
   ## Examples
 
@@ -99,14 +99,14 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro a + b do
-    quote do: Nx.add(unquote(a), unquote(b))
+  defmacro left + right do
+    quote do: Nx.add(unquote(left), unquote(right))
   end
 
   @doc """
   Element-wise substraction operator.
 
-  It delegates to `Nx.subtract/2`.
+  It delegates to `Nx.subtract/2` (supports broadcasting).
 
   ## Examples
 
@@ -115,14 +115,14 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro a - b do
-    quote do: Nx.subtract(unquote(a), unquote(b))
+  defmacro left - right do
+    quote do: Nx.subtract(unquote(left), unquote(right))
   end
 
   @doc """
   Element-wise multiplication operator.
 
-  It delegates to `Nx.multiply/2`.
+  It delegates to `Nx.multiply/2` (supports broadcasting).
 
   ## Examples
 
@@ -131,14 +131,14 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro a * b do
-    quote do: Nx.multiply(unquote(a), unquote(b))
+  defmacro left * right do
+    quote do: Nx.multiply(unquote(left), unquote(right))
   end
 
   @doc """
   Element-wise division operator.
 
-  It delegates to `Nx.divide/2`.
+  It delegates to `Nx.divide/2` (supports broadcasting).
 
   ## Examples
 
@@ -147,14 +147,14 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro a / b do
-    quote do: Nx.divide(unquote(a), unquote(b))
+  defmacro left / right do
+    quote do: Nx.divide(unquote(left), unquote(right))
   end
 
   @doc """
   Element-wise maximum operation.
 
-  It delegates to `Nx.max/2`.
+  It delegates to `Nx.max/2` (supports broadcasting).
 
   ## Examples
 
@@ -163,14 +163,14 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro max(a, b) do
-    quote do: Nx.max(unquote(a), unquote(b))
+  defmacro max(left, right) do
+    quote do: Nx.max(unquote(left), unquote(right))
   end
 
   @doc """
   Element-wise minimum operation.
 
-  It delegates to `Nx.min/2`.
+  It delegates to `Nx.min/2` (supports broadcasting).
 
   ## Examples
 
@@ -179,8 +179,46 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro min(a, b) do
-    quote do: Nx.min(unquote(a), unquote(b))
+  defmacro min(left, right) do
+    quote do: Nx.min(unquote(left), unquote(right))
+  end
+
+  @doc """
+  Element-wise logical `and` operation.
+
+  Only integer tensors are supported. Zero is false,
+  all other numbers are true.
+  
+  It delegates to `Nx.logical_and/2` (supports broadcasting).
+
+  ## Examples
+
+      defn and_or(a, b) do
+        {a and b, a or b}
+      end
+
+  """
+  defmacro left and right do
+    quote do: Nx.logical_and(unquote(left), unquote(right))
+  end
+
+  @doc """
+  Element-wise logical `or` operation.
+
+  Only integer tensors are supported. Zero is false,
+  all other numbers are true.
+  
+  It delegates to `Nx.logical_or/2` (supports broadcasting).
+
+  ## Examples
+
+      defn and_or(a, b) do
+        {a and b, a or b}
+      end
+
+  """
+  defmacro left or right do
+    quote do: Nx.logical_or(unquote(left), unquote(right))
   end
 
   @doc """

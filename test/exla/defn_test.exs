@@ -217,7 +217,7 @@ defmodule Exla.DefnTest do
     end
   end
 
-  describe "element-wise operators" do
+  describe "element-wise arith operators" do
     @tensors [
       {1, 2},
       {1, Nx.tensor([1.0, 2.0, 3.0])},
@@ -269,6 +269,29 @@ defmodule Exla.DefnTest do
         assert min_two(left, right) == min_two_nx(left, right)
         assert min_two(right, left) == min_two_nx(right, left)
       end
+    end
+  end
+
+  describe "element-wise logical operators" do
+    @left Nx.tensor([-1, 0, 1])
+    @right Nx.tensor([[-1], [0], [1]])
+
+    defn logical_and(a, b), do: a and b
+    @defn_compiler Nx.Defn
+    defn logical_and_nx(a, b), do: a and b
+
+    test "logical_and" do
+      assert Nx.shape(logical_and(@left, @right)) == {3, 3}
+      assert logical_and(@left, @right) == logical_and_nx(@left, @right)
+    end
+
+    defn logical_or(a, b), do: a or b
+    @defn_compiler Nx.Defn
+    defn logical_or_nx(a, b), do: a or b
+
+    test "logical_or" do
+      assert Nx.shape(logical_or(@left, @right)) == {3, 3}
+      assert logical_or(@left, @right) == logical_or_nx(@left, @right)
     end
   end
 

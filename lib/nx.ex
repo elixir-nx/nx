@@ -411,64 +411,6 @@ defmodule Nx do
     match_types([type], do: <<write!(value, 0)>>)
   end
 
-  def_arith_op = fn name, op, cast ->
-    cast = cast.(Macro.var(:output_type, nil))
-
-    def unquote(name)(left, right)
-
-    def unquote(name)(left, right) when is_number(left) and is_number(right) do
-      tensor(unquote(op)(left, right))
-    end
-
-    def unquote(name)(scalar, %T{type: input_type} = t) when is_number(scalar) do
-      data = data!(t)
-      output_type = Nx.Type.merge_scalar(input_type, scalar)
-      output_type = unquote(cast)
-
-      data =
-        match_types [input_type, output_type] do
-          for <<match!(seg, 0) <- data>>, into: <<>> do
-            <<write!(unquote(op)(scalar, read!(seg, 0)), 1)>>
-          end
-        end
-
-      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
-    end
-
-    def unquote(name)(%T{type: input_type} = t, scalar) when is_number(scalar) do
-      data = data!(t)
-      output_type = Nx.Type.merge_scalar(input_type, scalar)
-      output_type = unquote(cast)
-
-      data =
-        match_types [input_type, output_type] do
-          for <<match!(seg, 0) <- data>>, into: <<>> do
-            <<write!(unquote(op)(read!(seg, 0), scalar), 1)>>
-          end
-        end
-
-      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
-    end
-
-    def unquote(name)(%T{type: left_type} = left, %T{type: right_type} = right) do
-      output_type = Nx.Type.merge(left_type, right_type)
-      output_type = unquote(cast)
-
-      {data, shape} =
-        match_types [left_type, right_type, output_type] do
-          broadcast(left, right, fn left_dimension, right_dimension ->
-            for <<match!(left_seg, 0) <- left_dimension>>,
-                <<match!(right_seg, 1) <- right_dimension>>,
-                into: <<>> do
-              <<write!(unquote(op)(read!(left_seg, 0), read!(right_seg, 1)), 2)>>
-            end
-          end)
-        end
-
-      %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: shape}
-    end
-  end
-
   @doc """
   Creates a tensor from a `bitstring`, its `type`, and
   its `shape`.
@@ -599,12 +541,73 @@ defmodule Nx do
   """
   def device_deallocate(%T{data: {device, state}} = _tensor), do: device.deallocate(state)
 
-  ## Ops
+  ## Arith binary ops
+
+  def_binary_op = fn name, op, cast ->
+    cast = cast.(Macro.var(:output_type, nil))
+
+    def unquote(name)(left, right)
+
+    def unquote(name)(left, right) when is_number(left) and is_number(right) do
+      tensor(unquote(op)(left, right))
+    end
+
+    def unquote(name)(scalar, %T{type: input_type} = t) when is_number(scalar) do
+      data = data!(t)
+      output_type = Nx.Type.merge_scalar(input_type, scalar)
+      output_type = unquote(cast)
+
+      data =
+        match_types [input_type, output_type] do
+          for <<match!(seg, 0) <- data>>, into: <<>> do
+            <<write!(unquote(op)(scalar, read!(seg, 0)), 1)>>
+          end
+        end
+
+      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
+    end
+
+    def unquote(name)(%T{type: input_type} = t, scalar) when is_number(scalar) do
+      data = data!(t)
+      output_type = Nx.Type.merge_scalar(input_type, scalar)
+      output_type = unquote(cast)
+
+      data =
+        match_types [input_type, output_type] do
+          for <<match!(seg, 0) <- data>>, into: <<>> do
+            <<write!(unquote(op)(read!(seg, 0), scalar), 1)>>
+          end
+        end
+
+      %{t | data: {Nx.BitStringDevice, data}, type: output_type}
+    end
+
+    def unquote(name)(%T{type: left_type} = left, %T{type: right_type} = right) do
+      output_type = Nx.Type.merge(left_type, right_type)
+      output_type = unquote(cast)
+
+      {data, shape} =
+        match_types [left_type, right_type, output_type] do
+          broadcast(left, right, fn left_dimension, right_dimension ->
+            for <<match!(left_seg, 0) <- left_dimension>>,
+                <<match!(right_seg, 1) <- right_dimension>>,
+                into: <<>> do
+              <<write!(unquote(op)(read!(left_seg, 0), read!(right_seg, 1)), 2)>>
+            end
+          end)
+        end
+
+      %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: shape}
+    end
+  end
 
   @doc """
-  Adds two tensors element-wise.
+  Element-wise addition of two tensors.
 
   If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
 
   ## Examples
 
@@ -682,12 +685,15 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_arith_op.(:add, :+, & &1)
+  def_binary_op.(:add, :+, & &1)
 
   @doc """
-  Subtracts two tensors element-wise.
+  Element-wise subtraction of two tensors.
 
   If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
 
   ## Examples
 
@@ -728,12 +734,15 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_arith_op.(:subtract, :-, & &1)
+  def_binary_op.(:subtract, :-, & &1)
 
   @doc """
-  Multiplies two tensors element-wise.
+  Element-wise multiplication of two tensors.
 
   If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
 
   ## Examples
 
@@ -774,15 +783,18 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_arith_op.(:multiply, :*, & &1)
+  def_binary_op.(:multiply, :*, & &1)
 
   @doc """
-  Divides two tensors element-wise.
+  Element-wise division of two tensors.
 
   If a number is given, it is converted to a tensor.
 
   It always returns a float tensor. If any of the input
   tensors are not float, they are converted to f64.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
 
   ## Examples
 
@@ -823,12 +835,15 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_arith_op.(:divide, :/, &quote(do: Nx.Type.to_float(unquote(&1))))
+  def_binary_op.(:divide, :/, &quote(do: Nx.Type.to_floating(unquote(&1))))
 
   @doc """
-  Computes the element-wise maximum of two tensors.
+  Element-wise maximum of two tensors.
 
   If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
 
   ## Examples
 
@@ -869,14 +884,17 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_arith_op.(:max, :erlang_max, & &1)
+  def_binary_op.(:max, :erlang_max, & &1)
   @compile {:inline, erlang_max: 2}
   defp erlang_max(a, b), do: :erlang.max(a, b)
 
   @doc """
-  Computes the element-wise minimum of two tensors.
+  Element-wise minimum of two tensors.
 
   If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
 
   ## Examples
 
@@ -917,9 +935,117 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_arith_op.(:min, :erlang_min, & &1)
+  def_binary_op.(:min, :erlang_min, & &1)
   @compile {:inline, erlang_min: 2}
   defp erlang_min(a, b), do: :erlang.min(a, b)
+
+  ## Logical binary ops
+
+  def_logical_op = fn name, op ->
+    def_binary_op.(name, op, &quote(do: assert_logical_type!(unquote(&1))))
+  end
+
+  defp assert_logical_type!({:s, _} = type), do: type
+  defp assert_logical_type!({:u, _} = type), do: type
+
+  defp assert_logical_type!(type) do
+    raise ArgumentError,
+          "logical operators expect integer tensors as inputs and outputs an integer tensor, " <>
+            "got: #{inspect(type)}"
+  end
+
+  @doc """
+  Element-wise logical AND of two tensors.
+
+  Only integer tensors are supported. Zero is false,
+  all other numbers are true. It returns a tensor 0 (false),
+  1 (true) and -1 (if true but both inputs are negative).
+  If a float or complex tensor is given, an error is raised.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Logical and between scalars
+
+      iex> t = Nx.logical_and(1, 0)
+      iex> Nx.to_bitstring(t)
+      <<0::64-native>>
+
+  ### Logical and between tensors and scalars
+
+      iex> t = Nx.logical_and(Nx.tensor([0, 1, 2]), 1)
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 1::64-native, 1::64-native>>
+
+      iex> t = Nx.logical_and(Nx.tensor([0, -1, -2]), -1)
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, -1::64-native, -1::64-native>>
+
+  ### Logical and between tensors
+
+      iex> t = Nx.logical_and(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 0::64-native, 0::64-native, 1::64-native>>
+
+  ### Error cases
+
+      iex> Nx.logical_and(Nx.tensor([0, 0, 1, 1]), 1.0)
+      ** (ArgumentError) logical operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+  """
+  def_logical_op.(:logical_and, :erlang_logical_and)
+  @compile {:inline, erlang_logical_and: 2}
+  defp erlang_logical_and(0, _), do: 0
+  defp erlang_logical_and(_, 0), do: 0
+  defp erlang_logical_and(a, b) when a < 0 and b < 0, do: -1
+  defp erlang_logical_and(_, _), do: 1
+
+  @doc """
+  Element-wise logical OR of two tensors.
+
+  Only integer tensors are supported. Zero is false,
+  all other numbers are true. It returns a tensor 0 (false),
+  1 (true) and -1 (if true but any input is negative).
+  If a float or complex tensor is given, an error is raised.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Logical and between scalars
+
+      iex> t = Nx.logical_or(1, 0)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native>>
+
+  ### Logical and between tensors and scalars
+
+      iex> t = Nx.logical_or(Nx.tensor([0, 1, 2]), 1)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 1::64-native, 1::64-native>>
+
+      iex> t = Nx.logical_or(Nx.tensor([0, -1, -2]), -1)
+      iex> Nx.to_bitstring(t)
+      <<-1::64-native, -1::64-native, -1::64-native>>
+
+  ### Logical and between tensors
+
+      iex> t = Nx.logical_or(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 1::64-native, 1::64-native, 1::64-native>>
+
+  ### Error cases
+
+      iex> Nx.logical_or(Nx.tensor([0, 0, 1, 1]), 1.0)
+      ** (ArgumentError) logical operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+  """
+  def_logical_op.(:logical_or, :erlang_logical_or)
+  @compile {:inline, erlang_logical_or: 2}
+  defp erlang_logical_or(0, 0), do: 0
+  defp erlang_logical_or(a, b) when a < 0 or b < 0, do: -1
+  defp erlang_logical_or(_, _), do: 1
 
   @doc """
   Calculates the exponential of the given tensor.
@@ -957,7 +1083,7 @@ defmodule Nx do
 
   def exp(%T{type: input_type} = t) do
     data = data!(t)
-    output_type = Nx.Type.to_float(input_type)
+    output_type = Nx.Type.to_floating(input_type)
 
     data =
       match_types [input_type, output_type] do

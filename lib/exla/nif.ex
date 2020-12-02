@@ -48,7 +48,7 @@ defmodule Exla.NIF do
   def logical_or(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def logical_xor(_a, _b, _broadcast_dims),
+  def bitwise_xor(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def shift_left(_a, _b, _broadcast_dims),

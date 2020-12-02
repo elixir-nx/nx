@@ -92,28 +92,28 @@ defmodule Exla.Defn do
 
   ## Operators
 
-  def nx_element_wise_bin_op(builder, :divide, left, right) do
-    type = binary_arith_type(left, right) |> Nx.Type.to_float()
+  def element_wise_bin_arith_op(builder, :divide, left, right) do
+    type = binary_op_type(left, right) |> Nx.Type.to_floating()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
     Exla.Op.divide(left, right, dims)
   end
 
-  def nx_element_wise_bin_op(builder, op, left, right) do
-    type = binary_arith_type(left, right)
+  def element_wise_bin_arith_op(builder, op, left, right) do
+    type = binary_op_type(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
     apply(Exla.Op, op, [left, right, dims])
   end
 
-  def nx_divide(builder, left, right) do
-    type = binary_arith_type(left, right) |> Nx.Type.to_float()
+  def element_wise_bin_logical_op(builder, op, left, right) do
+    type = binary_op_type(left, right) |> assert_logical_type!()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
-    Exla.Op.divide(left, right, dims)
+    apply(Exla.Op, op, [left, right, dims])
   end
 
   def nx_exp(builder, op) do
@@ -142,7 +142,7 @@ defmodule Exla.Defn do
 
   defp to_float_operator(_builder, %Exla.Op{} = op) do
     shape = Exla.Op.get_shape(op)
-    type = Nx.Type.to_float(shape.dtype)
+    type = Nx.Type.to_floating(shape.dtype)
     if shape.dtype != type, do: Exla.Op.convert_element_type(op, type), else: op
   end
 
@@ -166,18 +166,26 @@ defmodule Exla.Defn do
 
   ## Types
 
-  # Used by add, substract, multiply, div, etc
-  defp binary_arith_type(left, right) when is_number(left) and is_number(right),
+  defp binary_op_type(left, right) when is_number(left) and is_number(right),
     do: Nx.Type.merge(Nx.Type.infer(left), Nx.Type.infer(right))
 
-  defp binary_arith_type(scalar, op) when is_number(scalar),
+  defp binary_op_type(scalar, op) when is_number(scalar),
     do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
 
-  defp binary_arith_type(op, scalar) when is_number(scalar),
+  defp binary_op_type(op, scalar) when is_number(scalar),
     do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
 
-  defp binary_arith_type(left, right),
+  defp binary_op_type(left, right),
     do: Nx.Type.merge(Exla.Op.get_shape(left).dtype, Exla.Op.get_shape(right).dtype)
+
+  defp assert_logical_type!({:s, _} = type), do: type
+  defp assert_logical_type!({:u, _} = type), do: type
+
+  defp assert_logical_type!(type) do
+    raise ArgumentError,
+          "logical operators expect integer tensors as inputs and outputs an integer tensor, " <>
+            "got: #{inspect(type)}"
+  end
 
   ## Constants
 
@@ -241,12 +249,19 @@ defmodule Exla.Defn do
     end
   end
 
-  @element_wise_bin_op [:add, :subtract, :multiply, :divide, :min, :max]
+  @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max]
+  @element_wise_bin_logical_op [:logical_and, :logical_or]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @element_wise_bin_op do
+       when name in @element_wise_bin_arith_op do
     {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_op, [name | args]), state}
+    {to_builder_call(dot_meta, meta, :element_wise_bin_arith_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @element_wise_bin_logical_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :element_wise_bin_logical_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do

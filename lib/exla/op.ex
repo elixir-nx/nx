@@ -64,7 +64,10 @@ defmodule Exla.Op do
 
   ## Element-wise ops
 
-  for fun <- [:add, :subtract, :multiply, :divide, :max, :min] do
+  arith = [:add, :subtract, :multiply, :divide, :max, :min]
+  logical = [:logical_and, :logical_or]
+
+  for fun <- arith ++ logical do
     @doc """
     Element-wise #{fun} with broadcasting.
     """
