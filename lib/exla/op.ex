@@ -66,8 +66,9 @@ defmodule Exla.Op do
 
   arith = [:add, :subtract, :multiply, :divide, :max, :min]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
+  shift = [:left_shift, :right_shift_arithmetic, :right_shift_logical]
 
-  for fun <- arith ++ bitwise do
+  for fun <- arith ++ bitwise ++ shift do
     @doc """
     Element-wise #{fun} with broadcasting.
     """

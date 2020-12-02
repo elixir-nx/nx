@@ -45,66 +45,62 @@ defmodule Nx.DefnTest do
   end
 
   describe "operators" do
-    defn add_two(a, b) do
-      a + b
-    end
+    defn add_two(a, b), do: a + b
 
     test "+" do
       assert add_two(1, 2) == Nx.tensor(3)
       assert add_two(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
 
-    defn subtract_two(a, b) do
-      a - b
-    end
+    defn subtract_two(a, b), do: a - b
 
     test "-" do
       assert subtract_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([-1, 0, 1])
     end
 
-    defn multiply_two(a, b) do
-      a * b
-    end
+    defn multiply_two(a, b), do: a * b
 
     test "*" do
       assert multiply_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([2, 4, 6])
     end
 
-    defn divide_two(a, b) do
-      a / b
-    end
+    defn divide_two(a, b), do: a / b
 
     test "/" do
       assert divide_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([0.5, 1.0, 1.5])
     end
 
-    defn band_two(a, b) do
-      a &&& b
-    end
+    defn band_two(a, b), do: a &&& b
 
     test "&&&" do
       assert band_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([1, 0, 1])
     end
 
-    defn bor_two(a, b) do
-      a ||| b
-    end
+    defn bor_two(a, b), do: a ||| b
 
     test "|||" do
       assert bor_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-1, 1, 1])
     end
 
-    defn bxor_two(a, b) do
-      a ^^^ b
-    end
+    defn bxor_two(a, b), do: a ^^^ b
 
     test "^^^" do
       assert bxor_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-2, 1, 0])
     end
 
-    defn add_two_with_pipe(a, b) do
-      a |> Nx.add(b)
+    defn bsl_two(a, b), do: a <<< b
+
+    test "<<<" do
+      assert bsl_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-2, 0, 2])
     end
+
+    defn bsr_two(a, b), do: a >>> b
+
+    test ">>>" do
+      assert bsr_two(Nx.tensor([-2, 1, 2]), Nx.tensor(1)) == Nx.tensor([-1, 0, 1])
+    end
+
+    defn add_two_with_pipe(a, b), do: a |> Nx.add(b)
 
     test "|>" do
       assert add_two_with_pipe(1, 2) == Nx.tensor(3)

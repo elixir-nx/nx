@@ -792,6 +792,8 @@ defmodule Nx do
 
   It always returns a float tensor. If any of the input
   tensors are not float, they are converted to f64.
+  Division by zero raises, but it may trigger undefined
+  behaviour on some compilers.
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
@@ -957,10 +959,8 @@ defmodule Nx do
   @doc """
   Element-wise bitwise AND of two tensors.
 
-  Only integer tensors are supported. Zero is false,
-  all other numbers are true. It returns a tensor 0 (false),
-  1 (true) and -1 (if true but both inputs are negative).
-  If a float or complex tensor is given, an error is raised.
+  Only integer tensors are supported. If a float or
+  complex tensor is given, an error is raised.
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
@@ -1001,10 +1001,8 @@ defmodule Nx do
   @doc """
   Element-wise bitwise OR of two tensors.
 
-  Only integer tensors are supported. Zero is false,
-  all other numbers are true. It returns a tensor 0 (false),
-  1 (true) and -1 (if true but any input is negative).
-  If a float or complex tensor is given, an error is raised.
+  Only integer tensors are supported. If a float or
+  complex tensor is given, an error is raised.
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
@@ -1083,6 +1081,98 @@ defmodule Nx do
   def_binary_bitwise_op.(:bitwise_xor, :erlang_bxor)
   @compile {:inline, erlang_bxor: 2}
   defp erlang_bxor(a, b), do: :erlang.bxor(a, b)
+
+  @doc """
+  Element-wise left shift of two tensors.
+
+  Only integer tensors are supported. If a float or complex
+  tensor is given, an error is raised. If the right side
+  is negative, it will raise, but it may trigger undefined
+  behaviour on some compilers.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Left shift between scalars
+
+      iex> t = Nx.left_shift(1, 0)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native>>
+
+  ### Left shift between tensors and scalars
+
+      iex> t = Nx.left_shift(Nx.tensor([1, 2, 3]), 2)
+      iex> Nx.to_bitstring(t)
+      <<4::64-native, 8::64-native, 12::64-native>>
+
+  ### Left shift between tensors
+
+      iex> t = Nx.left_shift(Nx.tensor([1, 1, -1, -1]), Nx.tensor([1, 2, 3, 4]))
+      iex> Nx.to_bitstring(t)
+      <<2::64-native, 4::64-native, -8::64-native, -16::64-native>>
+
+  ### Error cases
+
+      iex> Nx.left_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
+      ** (ArgumentError) left_shift expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+
+      iex> Nx.left_shift(Nx.tensor(1), -1)
+      ** (ArgumentError) cannot left shift by -1
+  """
+  def_binary_bitwise_op.(:left_shift, :erlang_bsl)
+  @compile {:inline, erlang_bsl: 2}
+  defp erlang_bsl(a, b) when b >= 0, do: :erlang.bsl(a, b)
+  defp erlang_bsl(_, b), do: raise(ArgumentError, "cannot left shift by #{b}")
+
+  @doc """
+  Element-wise right shift of two tensors.
+
+  Only integer tensors are supported. If a float or complex
+  tensor is given, an error is raised. If the right side
+  is negative, it will raise, but it may trigger undefined
+  behaviour on some compilers.
+
+  It performs an arithmetic shift if the tensor is made of
+  signed integers, it performs a logical shift otherwise.
+  In other words, it preserves the sign for signed integers.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Right shift between scalars
+
+      iex> t = Nx.right_shift(1, 0)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native>>
+
+  ### Right shift between tensors and scalars
+
+      iex> t = Nx.right_shift(Nx.tensor([2, 4, 8]), 2)
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 1::64-native, 2::64-native>>
+
+  ### Right shift between tensors
+
+      iex> t = Nx.right_shift(Nx.tensor([16, 32, -64, -128]), Nx.tensor([1, 2, 3, 4]))
+      iex> Nx.to_bitstring(t)
+      <<8::64-native, 8::64-native, -8::64-native, -8::64-native>>
+
+  ### Error cases
+
+      iex> Nx.right_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
+      ** (ArgumentError) right_shift expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+
+      iex> Nx.right_shift(Nx.tensor(1), -1)
+      ** (ArgumentError) cannot right shift by -1
+  """
+  def_binary_bitwise_op.(:right_shift, :erlang_bsr)
+  @compile {:inline, erlang_bsr: 2}
+  defp erlang_bsr(a, b) when b >= 0, do: :erlang.bsr(a, b)
+  defp erlang_bsr(_, b), do: raise(ArgumentError, "cannot right shift by #{b}")
 
   ## Unary ops
 

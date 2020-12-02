@@ -51,13 +51,13 @@ defmodule Exla.NIF do
   def bitwise_xor(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def shift_left(_a, _b, _broadcast_dims),
+  def left_shift(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def shift_right_arithmetic(_a, _b, _broadcast_dims),
+  def right_shift_arithmetic(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def shift_right_logical(_a, _b, _broadcast_dims),
+  def right_shift_logical(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def eq(_a, _b, _broadcast_dims),

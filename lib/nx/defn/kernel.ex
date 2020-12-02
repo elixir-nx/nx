@@ -235,6 +235,40 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Element-wise left shift operation.
+
+  Only integer tensors are supported.
+  It delegates to `Nx.left_shift/2` (supports broadcasting).
+
+  ## Examples
+
+      defn shift_left_and_right(a, b) do
+        {a <<< b, a >>> b}
+      end
+
+  """
+  defmacro left <<< right do
+    quote do: Nx.left_shift(unquote(left), unquote(right))
+  end
+
+  @doc """
+  Element-wise right shift operation.
+
+  Only integer tensors are supported.
+  It delegates to `Nx.right_shift/2` (supports broadcasting).
+
+  ## Examples
+
+      defn shift_left_and_right(a, b) do
+        {a <<< b, a >>> b}
+      end
+
+  """
+  defmacro left >>> right do
+    quote do: Nx.right_shift(unquote(left), unquote(right))
+  end
+
+  @doc """
   Pipes the argument on the left to the function call on the right.
 
   It delegates to `Kernel.|>/2`.

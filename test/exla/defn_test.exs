@@ -302,6 +302,40 @@ defmodule Exla.DefnTest do
       assert Nx.shape(bitwise_xor(@left, @right)) == {5, 5}
       assert bitwise_xor(@left, @right) == bitwise_xor_nx(@left, @right)
     end
+
+    @left Nx.tensor([-2, -1, 0, 1, 2])
+    @right Nx.tensor([[0], [1], [2], [3], [4]])
+
+    defn left_shift(a, b), do: a <<< b
+    @defn_compiler Nx.Defn
+    defn left_shift_nx(a, b), do: a <<< b
+
+    test "left_shift" do
+      assert Nx.shape(left_shift(@left, @right)) == {5, 5}
+      assert left_shift(@left, @right) == left_shift_nx(@left, @right)
+    end
+
+    @left_signed Nx.tensor([-128, -127, -2, -1, 0, 1, 2, 126, 127], type: {:s, 8})
+    @right_signed Nx.tensor([[0], [1], [2], [3], [4], [5], [6], [7], [8]], type: {:s, 8})
+
+    @left_unsigned Nx.tensor([0, 1, 2, 253, 254, 255], type: {:u, 8})
+    @right_unsigned Nx.tensor([[0], [1], [2], [3], [4], [5]], type: {:u, 8})
+
+    defn right_shift(a, b), do: a >>> b
+    @defn_compiler Nx.Defn
+    defn right_shift_nx(a, b), do: a >>> b
+
+    test "right_shift" do
+      assert Nx.shape(right_shift(@left_signed, @right_signed)) == {9, 9}
+
+      assert right_shift(@left_signed, @right_signed) ==
+               right_shift_nx(@left_signed, @right_signed)
+
+      assert Nx.shape(right_shift(@left_unsigned, @right_unsigned)) == {6, 6}
+
+      assert right_shift(@left_unsigned, @right_unsigned) ==
+               right_shift_nx(@left_unsigned, @right_unsigned)
+    end
   end
 
   describe "exp" do

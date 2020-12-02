@@ -108,6 +108,17 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
+  def element_wise_bin_bitwise_op(builder, :right_shift, left, right) do
+    op =
+      # Perform logical operation if the left side is unsigned.
+      # It can only be unsigned if it is an operator (numbers are always floats or signed).
+      if match?(%Exla.Op{}, left) and match?({:u, _}, Exla.Op.get_shape(left).dtype),
+        do: :right_shift_logical,
+        else: :right_shift_arithmetic
+
+    element_wise_bin_bitwise_op(builder, op, left, right)
+  end
+
   def element_wise_bin_bitwise_op(builder, op, left, right) do
     type = binary_op_type(left, right) |> assert_integer_type!(op)
     {left, left_dims} = to_typed_operator(builder, left, type)
@@ -250,7 +261,7 @@ defmodule Exla.Defn do
   end
 
   @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max]
-  @element_wise_bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor]
+  @element_wise_bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
        when name in @element_wise_bin_arith_op do

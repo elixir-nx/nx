@@ -794,9 +794,10 @@ static ErlNifFunc exla_funcs[] = {
   {"bitwise_and", 3, bitwise_and},
   {"bitwise_or", 3, bitwise_or},
   {"bitwise_xor", 3, bitwise_xor},
-  {"shift_left", 3, shift_left},
-  {"shift_right_logical", 3, shift_right_logical},
-  {"shift_right_arithmetic", 3, shift_right_arithmetic},
+  {"left_shift", 3, shift_left},
+  {"right_shift_logical", 3, shift_right_logical},
+  {"right_shift_arithmetic", 3, shift_right_arithmetic},
+  /****** Binary comparison Ops ******/
   {"eq", 3, eq},
   {"eq_total_order", 3, eq_total_order},
   {"ne", 3, ne},
