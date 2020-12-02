@@ -1,4 +1,4 @@
-load("@org_tensorflow//tensorflow/core/platform/default:cuda_build_defs.bzl", "if_cuda_is_configured",)
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_cuda_or_rocm",)
 
 package(default_visibility=["//visibility:private"])
 
@@ -62,9 +62,9 @@ cc_library(
 )
 
 cc_binary(
-  name = "libexla_cuda.so",
+  name = "libexla_gpu.so",
   srcs = ["exla.cc"],
-  deps = if_cuda_is_configured([
+  deps = if_cuda_or_rocm([
     "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
     ]) + [
     ":exla_nif_util",

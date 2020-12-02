@@ -32,9 +32,15 @@ host: symlinks
 
 cuda: symlinks
 	cd $(TENSORFLOW_DIR) && \
-		bazel build $(BAZEL_FLAGS) --config=cuda //$(TENSORFLOW_EXLA_NS):libexla_cuda.so
+		bazel build $(BAZEL_FLAGS) --config=cuda //$(TENSORFLOW_EXLA_NS):libexla_gpu.so
 	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_cuda.so $(EXLA_SO)
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_gpu.so $(EXLA_SO)
+
+rocm: symlinks
+	cd $(TENSORFLOW_DIR) && \
+		bazel build $(BAZEL_FLAGS) --config=rocm --action_env=HIP_PLATFORM=hcc //$(TENSORFLOW_EXLA_NS):libexla_gpu.so
+	mkdir -p priv
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_gpu.so $(EXLA_SO)
 
 symlinks: $(TENSORFLOW_DIR)
 	rm -f $(TENSORFLOW_EXLA_DIR)

@@ -182,6 +182,9 @@ defmodule Exla.NIF do
   def get_cuda_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 
+  def get_rocm_client(_num_replicas, _intra_op_parallelism_threads),
+    do: nif_error(__ENV__.function)
+
   def get_default_device_ordinal(_client),
     do: nif_error(__ENV__.function)
 

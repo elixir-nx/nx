@@ -29,6 +29,7 @@ defmodule Exla.Client do
         case platform do
           :host -> Exla.NIF.get_host_client(number_of_replicas, intra_op_parallelism_threads)
           :cuda -> Exla.NIF.get_cuda_client(number_of_replicas, intra_op_parallelism_threads)
+          :rocm -> Exla.NIF.get_rocm_client(number_of_replicas, intra_op_parallelism_threads)
         end
         |> unwrap!()
 
