@@ -37,7 +37,7 @@ defmodule Nx.Tensor do
             Nx.Type.to_string(tensor.type),
             shape_to_string(tensor.shape),
             "\n",
-            inspect(data),
+            Inspect.Algebra.nest(Inspect.Algebra.to_doc(data, opts), 2),
             "\n>"
           ])
         {device, _} ->
