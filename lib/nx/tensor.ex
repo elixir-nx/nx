@@ -64,7 +64,8 @@ defmodule Nx.Tensor do
     defp shape_to_string(shape) do
       shape
       |> Tuple.to_list()
-      |> Enum.reduce("", fn x, acc -> "[#{x}]" <> acc end)
+      |> Enum.map(&"[#{&1}]")
+      |> IO.iodata_to_binary()
     end
   end
 end
