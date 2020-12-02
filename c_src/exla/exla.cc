@@ -808,6 +808,9 @@ static ErlNifFunc exla_funcs[] = {
   {"left_shift", 3, shift_left},
   {"right_shift_logical", 3, shift_right_logical},
   {"right_shift_arithmetic", 3, shift_right_arithmetic},
+  {"pow", 3, pow},
+  {"complex", 3, complex},
+  {"atan2", 3, atan2},
   /****** Binary comparison Ops ******/
   {"eq", 3, eq},
   {"eq_total_order", 3, eq_total_order},
@@ -821,9 +824,6 @@ static ErlNifFunc exla_funcs[] = {
   {"lt_total_order", 3, lt_total_order},
   {"le", 3, le},
   {"le_total_order", 3, le_total_order},
-  {"pow", 3, pow},
-  {"complex", 3, complex},
-  {"atan2", 3, atan2},
   /****** Unary Ops ******/
   {"abs", 1, abs},
   {"exp", 1, exp},

@@ -799,35 +799,23 @@ defmodule Nx do
 
       iex> t = Nx.remainder(1, 2)
       iex> Nx.to_bitstring(t)
-      <<2::64-native>>
+      <<1::64-native>>
 
   ### Remainder of tensors and scalars
 
-      iex> t = Nx.remainder(Nx.tensor([1, 2, 3]), 1)
+      iex> t = Nx.remainder(Nx.tensor([1, 2, 3]), 2)
       iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 3::64-native>>
+      <<1::64-native, 0::64-native, 1::64-native>>
 
-      iex> t = Nx.remainder(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> t = Nx.remainder(2, Nx.tensor([1.0, 2.0, 3.0]))
       iex> Nx.to_bitstring(t)
-      <<1.0::float-64-native, 2.0::float-64-native, 3.0::float-64-native>>
+      <<0.0::float-64-native, 0.0::float-64-native, 2.0::float-64-native>>
 
   ### Remainder of tensors
 
-      iex> t = Nx.remainder(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> t = Nx.remainder(Nx.tensor([[10], [20]]), Nx.tensor([[3, 4]]))
       iex> Nx.to_bitstring(t)
-      <<10::64-native, 20::64-native, 20::64-native, 40::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
-
-      iex> t = Nx.remainder(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<10::8-native, 20::8-native, 20::8-native, 40::8-native>>
-      iex> Nx.shape(t)
-      {2, 2}
-
-      iex> t = Nx.remainder(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<10.0::float-32-native, 20.0::float-32-native, 20.0::float-32-native, 40.0::float-32-native>>
+      <<1::64-native, 2::64-native, 2::64-native, 0::64-native>>
       iex> Nx.shape(t)
       {2, 2}
 
