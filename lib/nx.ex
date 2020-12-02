@@ -1321,7 +1321,7 @@ defmodule Nx do
   def random_normal(shape, opts \\ []), do: random_normal(shape, 0.0, 1.0, opts)
 
   def random_normal(shape, mu, sigma, opts \\ []) when is_tuple(shape) when is_number(mu) and is_number(sigma) do
-    type = opts[:type] || {:f, 64}
+    type = {:f, _} = opts[:type] || {:f, 64}
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(:rand.normal(mu, sigma), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
