@@ -18,7 +18,6 @@ defmodule Nx.Tensor do
     import Inspect.Algebra
 
     def inspect(tensor, _opts) do
-      close = "]\n>"
 
       case tensor.data do
         {Nx.BitStringDevice, bin} ->
