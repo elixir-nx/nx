@@ -47,7 +47,7 @@ defmodule Nx.Tensor do
             Nx.Type.to_string(tensor.type),
             shape_to_string(tensor.shape),
             "\n",
-            inspect(data),
+            inspect(device),
             "\n>"
           ])
       end
