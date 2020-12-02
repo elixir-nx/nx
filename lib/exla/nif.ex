@@ -154,6 +154,12 @@ defmodule Exla.NIF do
   def dynamic_update_slice(_op, _update, _start_indices),
     do: nif_error(__ENV__.function)
 
+  def rng_normal(_mu, _sigma, _shape),
+    do: nif_error(__ENV__.function)
+
+  def rng_uniform(_a, _b, _shape),
+    do: nif_error(__ENV__.function)
+
   def reduce(_operand, _init_value, _computation, _dimensions),
     do: nif_error(__ENV__.function)
 

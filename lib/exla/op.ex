@@ -172,6 +172,16 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def rng_normal(%Op{builder: builder, ref: mu}, %Op{builder: builder, ref: sigma}, %Shape{ref: shape}) do
+    ref = Exla.NIF.rng_normal(mu, sigma, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def rng_uniform(%Op{builder: builder, ref: a}, %Op{builder: builder, ref: b}, %Shape{ref: shape}) do
+    ref = Exla.NIF.rng_uniform(a, b, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}) do
     ref = Exla.NIF.dot(left, right) |> unwrap!()
     %Op{builder: builder, ref: ref}
