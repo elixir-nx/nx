@@ -33,7 +33,7 @@ defmodule Exla.NIF do
   def divide(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def rem(_a, _b, _broadcast_dims),
+  def remainder(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def min(_a, _b, _broadcast_dims),

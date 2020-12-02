@@ -786,6 +786,58 @@ defmodule Nx do
   def_binary_op.(:multiply, :*, & &1)
 
   @doc """
+  Element-wise remainder of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Remainder of scalars
+
+      iex> t = Nx.remainder(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<2::64-native>>
+
+  ### Remainder of tensors and scalars
+
+      iex> t = Nx.remainder(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 2::64-native, 3::64-native>>
+
+      iex> t = Nx.remainder(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<1.0::float-64-native, 2.0::float-64-native, 3.0::float-64-native>>
+
+  ### Remainder of tensors
+
+      iex> t = Nx.remainder(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.to_bitstring(t)
+      <<10::64-native, 20::64-native, 20::64-native, 40::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.remainder(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<10::8-native, 20::8-native, 20::8-native, 40::8-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.remainder(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<10.0::float-32-native, 20.0::float-32-native, 20.0::float-32-native, 40.0::float-32-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def_binary_op.(:remainder, :erlang_remainder, & &1)
+  @compile {:inline, erlang_remainder: 2}
+  defp erlang_remainder(a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
+  defp erlang_remainder(a, b), do: :math.fmod(a, b)
+
+  @doc """
   Element-wise division of two tensors.
 
   If a number is given, it is converted to a tensor.

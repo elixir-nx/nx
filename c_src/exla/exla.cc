@@ -788,7 +788,7 @@ static ErlNifFunc exla_funcs[] = {
   {"subtract", 3, sub},
   {"multiply", 3, mul},
   {"divide", 3, div},
-  {"rem", 3, rem},
+  {"remainder", 3, rem},
   {"min", 3, min},
   {"max", 3, max},
   {"bitwise_and", 3, bitwise_and},

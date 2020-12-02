@@ -217,6 +217,26 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "remainder" do
+    defn remainder(a, b), do: Nx.remainder(a, b)
+    @defn_compiler Nx.Defn
+    defn remainder_nx(a, b), do: Nx.remainder(a, b)
+
+    test "integers" do
+      left = Nx.tensor([-1023, 1023])
+      right = Nx.tensor([[-4], [4]])
+      assert Nx.shape(remainder(left, right)) == {2, 2}
+      assert remainder(left, right) == remainder_nx(left, right)
+    end
+
+    test "floats" do
+      left = Nx.tensor([-8.3, -8.4, -8.5, 8.3, 8.4, 8.5])
+      right = Nx.tensor([[-4.2], [-4.1], [-4.0], [4.0], [4.1], [4.2]])
+      assert Nx.shape(remainder(left, right)) == {6, 6}
+      assert remainder(left, right) == remainder_nx(left, right)
+    end
+  end
+
   describe "element-wise arith operators" do
     @tensors [
       {1, 2},

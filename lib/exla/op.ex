@@ -64,7 +64,7 @@ defmodule Exla.Op do
 
   ## Element-wise ops
 
-  arith = [:add, :subtract, :multiply, :divide, :max, :min]
+  arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
   shift = [:left_shift, :right_shift_arithmetic, :right_shift_logical]
 
