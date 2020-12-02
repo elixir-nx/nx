@@ -1304,9 +1304,14 @@ defmodule Nx do
   def random_uniform(shape, opts \\ []) when is_tuple(shape) do
     a = Keyword.get(opts, :a, 0.0)
     b = Keyword.get(opts, :b, 1.0)
-    type = Keyword.get(opts, :type, {:f, 64})
-    gen = fn -> (b - a) * :rand.uniform() + a end
-    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
+    type = opts[:type] || Nx.Type.infer(b - a)
+    gen =
+      fn
+        {:f, _} -> (b - a) * :rand.uniform() + a
+        {:s, _} -> b - (:rand.uniform(b) + a)
+        {:u, _} -> b - (:rand.uniform(b) + a)
+      end
+    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(type), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
