@@ -62,7 +62,26 @@ cc_library(
 )
 
 cc_binary(
-  name = "libexla_gpu.so",
+  name = "libexla_cuda.so",
+  srcs = ["exla.cc"],
+  deps = if_cuda_or_rocm([
+    "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
+    ]) + [
+    ":exla_nif_util",
+    ":exla_client",
+    "@org_tensorflow//tensorflow/compiler/xla/client:client",
+    "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
+    "@org_tensorflow//tensorflow/compiler/xla:comparison_util",
+    "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
+    "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
+    "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
+  ],
+  linkopts = ["-shared"],
+  linkshared = 1,
+)
+
+cc_binary(
+  name = "libexla_rocm.so",
   srcs = ["exla.cc"],
   deps = if_cuda_or_rocm([
     "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
