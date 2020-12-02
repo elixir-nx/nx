@@ -36,6 +36,12 @@ cuda: symlinks
 	mkdir -p priv
 	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_cuda.so $(EXLA_SO)
 
+rocm: symlinks
+	cd $(TENSORFLOW_DIR) && \
+		bazel build $(BAZEL_FLAGS) --config=rocm --action_env=HIP_PLATFORM=hcc //$(TENSORFLOW_EXLA_NS):libexla_rocm.so
+	mkdir -p priv
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_rocm.so $(EXLA_SO)
+
 symlinks: $(TENSORFLOW_DIR)
 	rm -f $(TENSORFLOW_EXLA_DIR)
 	ln -s "$(PWD)/$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)

@@ -599,7 +599,7 @@ ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get num_replicas.");
   if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get intra_op_parallelism_threads.");
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::getHostClient(num_replicas, intra_op_parallelism_threads), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetHostClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -609,7 +609,17 @@ ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get number of replicas.");
   if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get number of parallelism threads.");
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::getCUDAClient(num_replicas, intra_op_parallelism_threads), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetGpuClient(num_replicas, intra_op_parallelism_threads, "CUDA"), env);
+
+  return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
+}
+
+ERL_NIF_TERM get_rocm_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  int num_replicas, intra_op_parallelism_threads;
+
+  if(!exla::get(env, argv[0], num_replicas)) return exla::error(env, "Unable to get number of replicas.");
+  if(!exla::get(env, argv[1], intra_op_parallelism_threads)) return exla::error(env, "Unable to get number of parallelism threads.");
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetGpuClient(num_replicas, intra_op_parallelism_threads, "ROCM"), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -770,6 +780,7 @@ static ErlNifFunc exla_funcs[] = {
   /****** ExlaClient ******/
   {"get_host_client", 2, get_host_client},
   {"get_cuda_client", 2, get_cuda_client},
+  {"get_rocm_client", 2, get_rocm_client},
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   /****** ExlaBuffer ******/

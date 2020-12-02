@@ -355,7 +355,7 @@ namespace exla {
     }
   }
 
-  xla::StatusOr<ExlaClient*> getHostClient(int num_replicas, int intra_op_parallelism_threads) {
+  xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas, int intra_op_parallelism_threads) {
     EXLA_ASSIGN_OR_RETURN(se::Platform *platform,
       xla::PlatformUtil::GetPlatform("Host"));
 
@@ -390,12 +390,12 @@ namespace exla {
                           /*gpu_run_options*/nullptr);
   }
 
-  xla::StatusOr<ExlaClient*> getCUDAClient(int num_replicas, int intra_op_parallelism_threads) {
+  xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_parallelism_threads, const char* platform_name) {
     EXLA_ASSIGN_OR_RETURN(stream_executor::Platform *platform,
-      xla::PlatformUtil::GetPlatform("CUDA"));
+      xla::PlatformUtil::GetPlatform(std::string(platform_name)));
 
     if(platform->VisibleDeviceCount() <= 0){
-      return xla::FailedPrecondition("CUDA Platform has no visible devices.");
+      return xla::FailedPrecondition("%s Platform has no visible devices.", platform_name);
     }
 
     xla::LocalClientOptions options;

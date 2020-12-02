@@ -40,7 +40,7 @@ end
 
 ### GPU Support
 
-To run EXLA on a GPU, you need both CUDA and CUDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1 and CUDNN 7 and 8. You can check the [CUDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible.
+To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1 and cuDNN 7 and 8. You can check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
 
 ## Contributing
 
@@ -57,7 +57,7 @@ mix test
 
 The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). For GPU support, you'll also need to set up the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
 
-To build, clone this repo and run:
+To build, clone this repo, select your preferred Dockerfile, and run:
 
 ```shell
 docker build --rm -t exla:cuda10.1 .
@@ -74,7 +74,7 @@ docker run -it \
   --rm exla:cuda10.1 bash
 ```
 
-With Cuda enabled:
+With CUDA enabled:
 
 ```shell
 docker run -it \
@@ -85,6 +85,21 @@ docker run -it \
   -w $PWD \
   --gpus=all \
   --rm exla:cuda10.1 bash
+```
+
+With ROCm enables:
+
+```shell
+docker run -it \
+  -v $PWD:$PWD \
+  -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
+  -e EXLA_CACHE=$PWD/tmp/exla_cache \
+  -e EXLA_TARGET=rocm \
+  -w $PWD \
+  --device=/dev/kfd \
+  --device=/dev/dri \
+  --group-add video \
+  --rm exla:rocm bash
 ```
 
 Inside the container you can interact with the API from IEx using:

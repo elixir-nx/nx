@@ -26,7 +26,7 @@ defmodule Exla.Executable do
     # Whether to keep result on device
     keep_on_device = Keyword.get(options, :keep_on_device, false)
 
-    outside_cpu = client.platform == :cuda
+    outside_cpu = client.platform == :cuda || client.platform == :rocm
     keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
 
     inputs =
