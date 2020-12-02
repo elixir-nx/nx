@@ -939,23 +939,23 @@ defmodule Nx do
   @compile {:inline, erlang_min: 2}
   defp erlang_min(a, b), do: :erlang.min(a, b)
 
-  ## Logical binary ops
+  ## Bitwise ops
 
-  def_logical_op = fn name, op ->
-    def_binary_op.(name, op, &quote(do: assert_logical_type!(unquote(&1))))
+  def_binary_bitwise_op = fn name, op ->
+    def_binary_op.(name, op, &quote(do: assert_integer_type!(unquote(&1), unquote(name))))
   end
 
-  defp assert_logical_type!({:s, _} = type), do: type
-  defp assert_logical_type!({:u, _} = type), do: type
+  defp assert_integer_type!({:s, _} = type, _op), do: type
+  defp assert_integer_type!({:u, _} = type, _op), do: type
 
-  defp assert_logical_type!(type) do
+  defp assert_integer_type!(type, op) do
     raise ArgumentError,
-          "logical operators expect integer tensors as inputs and outputs an integer tensor, " <>
+          "#{op} expects integer tensors as inputs and outputs an integer tensor, " <>
             "got: #{inspect(type)}"
   end
 
   @doc """
-  Element-wise logical AND of two tensors.
+  Element-wise bitwise AND of two tensors.
 
   Only integer tensors are supported. Zero is false,
   all other numbers are true. It returns a tensor 0 (false),
@@ -967,42 +967,39 @@ defmodule Nx do
 
   ## Examples
 
-  ### Logical and between scalars
+  ### bitwise and between scalars
 
-      iex> t = Nx.logical_and(1, 0)
+      iex> t = Nx.bitwise_and(1, 0)
       iex> Nx.to_bitstring(t)
       <<0::64-native>>
 
-  ### Logical and between tensors and scalars
+  ### bitwise and between tensors and scalars
 
-      iex> t = Nx.logical_and(Nx.tensor([0, 1, 2]), 1)
+      iex> t = Nx.bitwise_and(Nx.tensor([0, 1, 2]), 1)
       iex> Nx.to_bitstring(t)
-      <<0::64-native, 1::64-native, 1::64-native>>
+      <<0::64-native, 1::64-native, 0::64-native>>
 
-      iex> t = Nx.logical_and(Nx.tensor([0, -1, -2]), -1)
+      iex> t = Nx.bitwise_and(Nx.tensor([0, -1, -2]), -1)
       iex> Nx.to_bitstring(t)
-      <<0::64-native, -1::64-native, -1::64-native>>
+      <<0::64-native, -1::64-native, -2::64-native>>
 
-  ### Logical and between tensors
+  ### bitwise and between tensors
 
-      iex> t = Nx.logical_and(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> t = Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
       iex> Nx.to_bitstring(t)
       <<0::64-native, 0::64-native, 0::64-native, 1::64-native>>
 
   ### Error cases
 
-      iex> Nx.logical_and(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) logical operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), 1.0)
+      ** (ArgumentError) bitwise_and expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
-  def_logical_op.(:logical_and, :erlang_logical_and)
-  @compile {:inline, erlang_logical_and: 2}
-  defp erlang_logical_and(0, _), do: 0
-  defp erlang_logical_and(_, 0), do: 0
-  defp erlang_logical_and(a, b) when a < 0 and b < 0, do: -1
-  defp erlang_logical_and(_, _), do: 1
+  def_binary_bitwise_op.(:bitwise_and, :erlang_band)
+  @compile {:inline, erlang_band: 2}
+  defp erlang_band(a, b), do: :erlang.band(a, b)
 
   @doc """
-  Element-wise logical OR of two tensors.
+  Element-wise bitwise OR of two tensors.
 
   Only integer tensors are supported. Zero is false,
   all other numbers are true. It returns a tensor 0 (false),
@@ -1014,38 +1011,80 @@ defmodule Nx do
 
   ## Examples
 
-  ### Logical and between scalars
+  ### bitwise or between scalars
 
-      iex> t = Nx.logical_or(1, 0)
+      iex> t = Nx.bitwise_or(1, 0)
       iex> Nx.to_bitstring(t)
       <<1::64-native>>
 
-  ### Logical and between tensors and scalars
+  ### bitwise or between tensors and scalars
 
-      iex> t = Nx.logical_or(Nx.tensor([0, 1, 2]), 1)
+      iex> t = Nx.bitwise_or(Nx.tensor([0, 1, 2]), 1)
       iex> Nx.to_bitstring(t)
-      <<1::64-native, 1::64-native, 1::64-native>>
+      <<1::64-native, 1::64-native, 3::64-native>>
 
-      iex> t = Nx.logical_or(Nx.tensor([0, -1, -2]), -1)
+      iex> t = Nx.bitwise_or(Nx.tensor([0, -1, -2]), -1)
       iex> Nx.to_bitstring(t)
       <<-1::64-native, -1::64-native, -1::64-native>>
 
-  ### Logical and between tensors
+  ### bitwise or between tensors
 
-      iex> t = Nx.logical_or(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> t = Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
       iex> Nx.to_bitstring(t)
       <<0::64-native, 1::64-native, 1::64-native, 1::64-native>>
 
   ### Error cases
 
-      iex> Nx.logical_or(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) logical operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), 1.0)
+      ** (ArgumentError) bitwise_or expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
-  def_logical_op.(:logical_or, :erlang_logical_or)
-  @compile {:inline, erlang_logical_or: 2}
-  defp erlang_logical_or(0, 0), do: 0
-  defp erlang_logical_or(a, b) when a < 0 or b < 0, do: -1
-  defp erlang_logical_or(_, _), do: 1
+  def_binary_bitwise_op.(:bitwise_or, :erlang_bor)
+  @compile {:inline, erlang_bor: 2}
+  defp erlang_bor(a, b), do: :erlang.bor(a, b)
+
+  @doc """
+  Element-wise bitwise XOR of two tensors.
+
+  Only integer tensors are supported. If a float or complex
+  tensor is given, an error is raised.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Bitwise xor between scalars
+
+      iex> t = Nx.bitwise_xor(1, 0)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native>>
+
+  ### Bitwise xor and between tensors and scalars
+
+      iex> t = Nx.bitwise_xor(Nx.tensor([1, 2, 3]), 2)
+      iex> Nx.to_bitstring(t)
+      <<3::64-native, 0::64-native, 1::64-native>>
+
+      iex> t = Nx.bitwise_xor(Nx.tensor([-1, -2, -3]), 2)
+      iex> Nx.to_bitstring(t)
+      <<-3::64-native, -4::64-native, -1::64-native>>
+
+  ### Bitwise xor between tensors
+
+      iex> t = Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 1::64-native, 1::64-native, 0::64-native>>
+
+  ### Error cases
+
+      iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), 1.0)
+      ** (ArgumentError) bitwise_xor expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+  """
+  def_binary_bitwise_op.(:bitwise_xor, :erlang_bxor)
+  @compile {:inline, erlang_bxor: 2}
+  defp erlang_bxor(a, b), do: :erlang.bxor(a, b)
+
+  ## Unary ops
 
   @doc """
   Calculates the exponential of the given tensor.
@@ -1092,6 +1131,8 @@ defmodule Nx do
 
     %{t | data: {Nx.BitStringDevice, data}, type: output_type}
   end
+
+  ## Aggregate ops
 
   @doc """
   Returns the sum across all dimensions.

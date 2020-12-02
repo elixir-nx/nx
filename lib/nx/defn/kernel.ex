@@ -184,41 +184,54 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Element-wise logical `and` operation.
+  Element-wise bitwise AND operation.
 
-  Only integer tensors are supported. Zero is false,
-  all other numbers are true.
-  
-  It delegates to `Nx.logical_and/2` (supports broadcasting).
+  Only integer tensors are supported.
+  It delegates to `Nx.bitwise_and/2` (supports broadcasting).
 
   ## Examples
 
       defn and_or(a, b) do
-        {a and b, a or b}
+        {a &&& b, a ||| b}
       end
 
   """
-  defmacro left and right do
-    quote do: Nx.logical_and(unquote(left), unquote(right))
+  defmacro left &&& right do
+    quote do: Nx.bitwise_and(unquote(left), unquote(right))
   end
 
   @doc """
-  Element-wise logical `or` operation.
+  Element-wise bitwise OR operation.
 
-  Only integer tensors are supported. Zero is false,
-  all other numbers are true.
-  
-  It delegates to `Nx.logical_or/2` (supports broadcasting).
+  Only integer tensors are supported.
+  It delegates to `Nx.bitwise_or/2` (supports broadcasting).
 
   ## Examples
 
       defn and_or(a, b) do
-        {a and b, a or b}
+        {a &&& b, a ||| b}
       end
 
   """
-  defmacro left or right do
-    quote do: Nx.logical_or(unquote(left), unquote(right))
+  defmacro left ||| right do
+    quote do: Nx.bitwise_or(unquote(left), unquote(right))
+  end
+
+  @doc """
+  Element-wise bitwise XOR operation.
+
+  Only integer tensors are supported.
+  It delegates to `Nx.bitwise_xor/2` (supports broadcasting).
+
+  ## Examples
+
+      defn and_or_xor(a, b) do
+        {a &&& b, a ||| b, a ^^^ b}
+      end
+
+  """
+  defmacro left ^^^ right do
+    quote do: Nx.bitwise_xor(unquote(left), unquote(right))
   end
 
   @doc """

@@ -78,20 +78,28 @@ defmodule Nx.DefnTest do
       assert divide_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([0.5, 1.0, 1.5])
     end
 
-    defn and_two(a, b) do
-      a and b
+    defn band_two(a, b) do
+      a &&& b
     end
 
-    test "and" do
-      assert and_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([1, 0, 1])
+    test "&&&" do
+      assert band_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([1, 0, 1])
     end
 
-    defn or_two(a, b) do
-      a or b
+    defn bor_two(a, b) do
+      a ||| b
     end
 
-    test "or" do
-      assert or_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-1, 1, 1])
+    test "|||" do
+      assert bor_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-1, 1, 1])
+    end
+
+    defn bxor_two(a, b) do
+      a ^^^ b
+    end
+
+    test "^^^" do
+      assert bxor_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-2, 1, 0])
     end
 
     defn add_two_with_pipe(a, b) do

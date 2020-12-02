@@ -108,8 +108,8 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
-  def element_wise_bin_logical_op(builder, op, left, right) do
-    type = binary_op_type(left, right) |> assert_logical_type!()
+  def element_wise_bin_bitwise_op(builder, op, left, right) do
+    type = binary_op_type(left, right) |> assert_integer_type!(op)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -178,12 +178,12 @@ defmodule Exla.Defn do
   defp binary_op_type(left, right),
     do: Nx.Type.merge(Exla.Op.get_shape(left).dtype, Exla.Op.get_shape(right).dtype)
 
-  defp assert_logical_type!({:s, _} = type), do: type
-  defp assert_logical_type!({:u, _} = type), do: type
+  defp assert_integer_type!({:s, _} = type, _op), do: type
+  defp assert_integer_type!({:u, _} = type, _op), do: type
 
-  defp assert_logical_type!(type) do
+  defp assert_integer_type!(type, op) do
     raise ArgumentError,
-          "logical operators expect integer tensors as inputs and outputs an integer tensor, " <>
+          "#{op} expects integer tensors as inputs and outputs an integer tensor, " <>
             "got: #{inspect(type)}"
   end
 
@@ -250,7 +250,7 @@ defmodule Exla.Defn do
   end
 
   @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max]
-  @element_wise_bin_logical_op [:logical_and, :logical_or]
+  @element_wise_bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
        when name in @element_wise_bin_arith_op do
@@ -259,9 +259,9 @@ defmodule Exla.Defn do
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @element_wise_bin_logical_op do
+       when name in @element_wise_bin_bitwise_op do
     {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :element_wise_bin_logical_op, [name | args]), state}
+    {to_builder_call(dot_meta, meta, :element_wise_bin_bitwise_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do

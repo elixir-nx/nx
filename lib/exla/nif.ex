@@ -42,10 +42,10 @@ defmodule Exla.NIF do
   def max(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def logical_and(_a, _b, _broadcast_dims),
+  def bitwise_and(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def logical_or(_a, _b, _broadcast_dims),
+  def bitwise_or(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def bitwise_xor(_a, _b, _broadcast_dims),
@@ -125,7 +125,7 @@ defmodule Exla.NIF do
   def rsqrt(_a), do: nif_error(__ENV__.function)
   def cbrt(_a), do: nif_error(__ENV__.function)
   def is_finite(_a), do: nif_error(__ENV__.function)
-  def logical_not(_a), do: nif_error(__ENV__.function)
+  def bitwise_not(_a), do: nif_error(__ENV__.function)
   def neg(_a), do: nif_error(__ENV__.function)
   def conj(_a), do: nif_error(__ENV__.function)
   def copy(_a), do: nif_error(__ENV__.function)

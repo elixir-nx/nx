@@ -272,26 +272,35 @@ defmodule Exla.DefnTest do
     end
   end
 
-  describe "element-wise logical operators" do
-    @left Nx.tensor([-1, 0, 1])
-    @right Nx.tensor([[-1], [0], [1]])
+  describe "element-wise bitwise operators" do
+    @left Nx.tensor([-2, -1, 0, 1, 2])
+    @right Nx.tensor([[-2], [-1], [0], [1], [2]])
 
-    defn logical_and(a, b), do: a and b
+    defn bitwise_and(a, b), do: a &&& b
     @defn_compiler Nx.Defn
-    defn logical_and_nx(a, b), do: a and b
+    defn bitwise_and_nx(a, b), do: a &&& b
 
-    test "logical_and" do
-      assert Nx.shape(logical_and(@left, @right)) == {3, 3}
-      assert logical_and(@left, @right) == logical_and_nx(@left, @right)
+    test "bitwise_and" do
+      assert Nx.shape(bitwise_and(@left, @right)) == {5, 5}
+      assert bitwise_and(@left, @right) == bitwise_and_nx(@left, @right)
     end
 
-    defn logical_or(a, b), do: a or b
+    defn bitwise_or(a, b), do: a ||| b
     @defn_compiler Nx.Defn
-    defn logical_or_nx(a, b), do: a or b
+    defn bitwise_or_nx(a, b), do: a ||| b
 
-    test "logical_or" do
-      assert Nx.shape(logical_or(@left, @right)) == {3, 3}
-      assert logical_or(@left, @right) == logical_or_nx(@left, @right)
+    test "bitwise_or" do
+      assert Nx.shape(bitwise_or(@left, @right)) == {5, 5}
+      assert bitwise_or(@left, @right) == bitwise_or_nx(@left, @right)
+    end
+
+    defn bitwise_xor(a, b), do: a ^^^ b
+    @defn_compiler Nx.Defn
+    defn bitwise_xor_nx(a, b), do: a ^^^ b
+
+    test "bitwise_xor" do
+      assert Nx.shape(bitwise_xor(@left, @right)) == {5, 5}
+      assert bitwise_xor(@left, @right) == bitwise_xor_nx(@left, @right)
     end
   end
 
