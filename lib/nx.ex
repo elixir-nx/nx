@@ -1306,10 +1306,10 @@ defmodule Nx do
   def random_uniform(shape, min, max, opts \\ []) when is_tuple(shape) and is_number(min) and is_number(max) do
     type = opts[:type] || Nx.Type.infer(max - min)
     gen =
-      fn
-        {:f, _} -> (max - min) * :rand.uniform() + min
-        {:s, _} -> max - (:rand.uniform(max) + min)
-        {:u, _} -> max - (:rand.uniform(max) + min)
+      case type do
+        {:f, _} -> fn -> (max - min) * :rand.uniform() + min end
+        {:s, _} -> fn -> max - (:rand.uniform(max) + min) end
+        {:u, _} -> fn -> max - (:rand.uniform(max) + min) end
       end
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(type), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
