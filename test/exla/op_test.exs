@@ -313,13 +313,13 @@ defmodule Exla.OpTest do
     sigma_a = Op.constant_r0(builder, 1, {:f, 64})
     a = Op.rng_normal(mu_a, sigma_a, shape_a)
 
-    shape_b = Shape.make_shape({:s, 32}, {2, 2, 2})
-    mu_b = Op.constant_r0(builder, 0, {:f, 64})
-    sigma_b = Op.constant_r0(builder, 1, {:f, 64})
+    shape_b = Shape.make_shape({:f, 32}, {2, 2, 2})
+    mu_b = Op.constant_r0(builder, 0, {:f, 32})
+    sigma_b = Op.constant_r0(builder, 1, {:f, 32})
     b = Op.rng_normal(mu_b, sigma_b, shape_b)
 
     assert %Shape{dims: {3, 3, 3}, dtype: {:f, 64}} = Op.get_shape(a)
-    assert %Shape{dims: {2, 2, 2}, dtype: {:s, 32}} = Op.get_shape(b)
+    assert %Shape{dims: {2, 2, 2}, dtype: {:f, 32}} = Op.get_shape(b)
   end
 
   test "rng_uniform/3" do
@@ -331,8 +331,8 @@ defmodule Exla.OpTest do
     a = Op.rng_uniform(low_a, high_a, shape_a)
 
     shape_b = Shape.make_shape({:s, 32}, {2, 2, 2})
-    low_b = Op.constant_r0(builder, 0.5, {:f, 64})
-    high_b = Op.constant_r0(builder, -1.5, {:f, 64})
+    low_b = Op.constant_r0(builder, 0, {:s, 32})
+    high_b = Op.constant_r0(builder, 5, {:s, 32})
     b = Op.rng_uniform(low_b, high_b, shape_b)
 
     assert %Shape{dims: {3, 3, 3}, dtype: {:f, 64}} = Op.get_shape(a)
