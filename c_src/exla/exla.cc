@@ -340,6 +340,45 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+/******************* RNG Ops **************************/
+ERL_NIF_TERM rng_normal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* mu;
+  xla::XlaOp* sigma;
+  xla::Shape* shape;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], mu)) return exla::error(env, "Unable to get mu.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], sigma)) return exla::error(env, "Unable to get sigma.");
+  if(!exla::get<xla::Shape>(env, argv[2], shape)) return exla::error(env, "Unable to get shape.");
+
+  xla::XlaOp op = xla::RngNormal(*mu, *sigma, *shape);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM rng_uniform(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* a;
+  xla::XlaOp* b;
+  xla::Shape* shape;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], a)) return exla::error(env, "Unable to get mu.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], b)) return exla::error(env, "Unable to get sigma.");
+  if(!exla::get<xla::Shape>(env, argv[2], shape)) return exla::error(env, "Unable to get shape.");
+
+  xla::XlaOp op = xla::RngNormal(*a, *b, *shape);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+
+/******************** Binary Ops ************************/
 ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const exla::int64>)){
   if(argc != 3){
     return exla::error(env, "Bad argument count.");
@@ -863,6 +902,9 @@ static ErlNifFunc exla_funcs[] = {
   {"slice_in_dim", 5, slice_in_dim},
   {"dynamic_slice", 3, dynamic_slice},
   {"dynamic_update_slice", 3, dynamic_update_slice},
+  /******** RNG Ops ***********/
+  {"rng_normal", 3, rng_normal},
+  {"rng_uniform", 3, rng_uniform},
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   {"reduce", 4, reduce},
