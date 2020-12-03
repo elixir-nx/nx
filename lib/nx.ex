@@ -799,6 +799,58 @@ defmodule Nx do
   defp erlang_multiply(_, a, b), do: a * b
 
   @doc """
+  Element-wise power of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Power of scalars
+
+      iex> t = Nx.power(2, 4)
+      iex> Nx.to_bitstring(t)
+      <<16::64-native>>
+
+  ### Power of tensors and scalars
+
+      iex> t = Nx.power(Nx.tensor([1, 2, 3]), 2)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 4::64-native, 9::64-native>>
+
+      iex> t = Nx.power(2, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<2.0::float-64-native, 4.0::float-64-native, 8.0::float-64-native>>
+
+  ### Power of tensors
+
+      iex> t = Nx.power(Nx.tensor([[2], [3]]), Nx.tensor([[4, 5]]))
+      iex> Nx.to_bitstring(t)
+      <<16::64-native, 32::64-native, 81::64-native, 243::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def power(left, right), do: element_wise_bin_arith(left, right, &erlang_power/3)
+  @compile {:inline, erlang_remainder: 3}
+  defp erlang_power({type, _}, a, b) when type in [:s, :u], do: integer_pow(a, b)
+  defp erlang_power(_, a, b), do: :math.pow(a, b)
+
+  # TODO: Use Integer.pow on Elixir v1.12
+  defp integer_pow(base, exponent) when is_integer(base) and is_integer(exponent) do
+    if exponent < 0, do: :erlang.error(:badarith, [base, exponent])
+    guarded_pow(base, exponent)
+  end
+
+  import Bitwise, only: [>>>: 2, &&&: 2]
+  defp guarded_pow(_, 0), do: 1
+  defp guarded_pow(b, 1), do: b
+  defp guarded_pow(b, e) when (e &&& 1) == 0, do: guarded_pow(b * b, e >>> 1)
+  defp guarded_pow(b, e), do: b * guarded_pow(b * b, e >>> 1)
+
+  @doc """
   Element-wise remainder of two tensors.
 
   If a number is given, it is converted to a tensor.

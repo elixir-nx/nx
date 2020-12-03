@@ -263,7 +263,7 @@ defmodule Exla.Defn do
   end
 
   @element_wise_bin_float_arith_op [:divide, :arctan2]
-  @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder]
+  @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
   @element_wise_bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)

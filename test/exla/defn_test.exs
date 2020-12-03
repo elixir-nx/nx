@@ -291,6 +291,17 @@ defmodule Exla.DefnTest do
       end
     end
 
+    defn power_two(a, b), do: Nx.power(a, b)
+    @defn_compiler Nx.Defn
+    defn power_two_nx(a, b), do: Nx.power(a, b)
+
+    test "power" do
+      for {left, right} <- @tensors do
+        assert power_two(left, right) == power_two_nx(left, right)
+        assert power_two(right, left) == power_two_nx(right, left)
+      end
+    end
+
     defn arctan2_two(a, b), do: Nx.arctan2(a, b)
     @defn_compiler Nx.Defn
     defn arctan2_two_nx(a, b), do: Nx.arctan2(a, b)
