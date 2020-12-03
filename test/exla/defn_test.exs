@@ -89,8 +89,8 @@ defmodule Exla.DefnTest do
       ]
 
       for {left, right} <- tensors do
-        assert add_two(left, right) == add_two_nx(left, right)
-        assert add_two(right, left) == add_two_nx(right, left)
+        compare_tensors!(add_two(left, right), add_two_nx(left, right))
+        compare_tensors!(add_two(right, left), add_two_nx(right, left))
       end
     end
 
@@ -135,8 +135,8 @@ defmodule Exla.DefnTest do
       ]
 
       for t <- tensors do
-        assert add_two_int(t) == add_two_int_nx(t)
-        assert add_two_float(t) == add_two_float_nx(t)
+        compare_tensors!(add_two_int(t), add_two_int_nx(t))
+        compare_tensors!(add_two_float(t), add_two_float_nx(t))
       end
     end
 
@@ -158,8 +158,8 @@ defmodule Exla.DefnTest do
       ]
 
       for {left, right} <- tensors do
-        assert add_two(left, right) == add_two_nx(left, right)
-        assert add_two(right, left) == add_two_nx(right, left)
+        compare_tensors!(add_two(left, right), add_two_nx(left, right))
+        compare_tensors!(add_two(right, left), add_two_nx(right, left))
       end
     end
 
@@ -186,8 +186,8 @@ defmodule Exla.DefnTest do
       ]
 
       for {left, right} <- tensors do
-        assert divide_two(left, right) == divide_two_nx(left, right)
-        assert divide_two(right, left) == divide_two_nx(right, left)
+        compare_tensors!(divide_two(left, right), divide_two_nx(left, right))
+        compare_tensors!(divide_two(right, left), divide_two_nx(right, left))
       end
     end
 
@@ -211,8 +211,8 @@ defmodule Exla.DefnTest do
       ]
 
       for t <- tensors do
-        assert divide_two_int(t) == divide_two_int_nx(t)
-        assert divide_two_float(t) == divide_two_float_nx(t)
+        compare_tensors!(divide_two_int(t), divide_two_int_nx(t))
+        compare_tensors!(divide_two_float(t), divide_two_float_nx(t))
       end
     end
   end
@@ -226,14 +226,14 @@ defmodule Exla.DefnTest do
       left = Nx.tensor([-1023, 1023])
       right = Nx.tensor([[-4], [4]])
       assert Nx.shape(remainder(left, right)) == {2, 2}
-      assert remainder(left, right) == remainder_nx(left, right)
+      compare_tensors!(remainder(left, right), remainder_nx(left, right))
     end
 
     test "floats" do
       left = Nx.tensor([-8.3, -8.4, -8.5, 8.3, 8.4, 8.5])
       right = Nx.tensor([[-4.2], [-4.1], [-4.0], [4.0], [4.1], [4.2]])
       assert Nx.shape(remainder(left, right)) == {6, 6}
-      assert remainder(left, right) == remainder_nx(left, right)
+      compare_tensors!(remainder(left, right), remainder_nx(left, right))
     end
   end
 
@@ -253,8 +253,8 @@ defmodule Exla.DefnTest do
 
     test "-" do
       for {left, right} <- @tensors do
-        assert subtract_two(left, right) == subtract_two_nx(left, right)
-        assert subtract_two(right, left) == subtract_two_nx(right, left)
+        compare_tensors!(subtract_two(left, right), subtract_two_nx(left, right))
+        compare_tensors!(subtract_two(right, left), subtract_two_nx(right, left))
       end
     end
 
@@ -264,8 +264,8 @@ defmodule Exla.DefnTest do
 
     test "*" do
       for {left, right} <- @tensors do
-        assert multiply_two(left, right) == multiply_two_nx(left, right)
-        assert multiply_two(right, left) == multiply_two_nx(right, left)
+        compare_tensors!(multiply_two(left, right), multiply_two_nx(left, right))
+        compare_tensors!(multiply_two(right, left), multiply_two_nx(right, left))
       end
     end
 
@@ -275,8 +275,8 @@ defmodule Exla.DefnTest do
 
     test "max" do
       for {left, right} <- @tensors do
-        assert max_two(left, right) == max_two_nx(left, right)
-        assert max_two(right, left) == max_two_nx(right, left)
+        compare_tensors!(max_two(left, right), max_two_nx(left, right))
+        compare_tensors!(max_two(right, left), max_two_nx(right, left))
       end
     end
 
@@ -286,8 +286,8 @@ defmodule Exla.DefnTest do
 
     test "min" do
       for {left, right} <- @tensors do
-        assert min_two(left, right) == min_two_nx(left, right)
-        assert min_two(right, left) == min_two_nx(right, left)
+        compare_tensors!(min_two(left, right), min_two_nx(left, right))
+        compare_tensors!(min_two(right, left), min_two_nx(right, left))
       end
     end
 
@@ -297,8 +297,8 @@ defmodule Exla.DefnTest do
 
     test "power" do
       for {left, right} <- @tensors do
-        assert power_two(left, right) == power_two_nx(left, right)
-        assert power_two(right, left) == power_two_nx(right, left)
+        compare_tensors!(power_two(left, right), power_two_nx(left, right))
+        compare_tensors!(power_two(right, left), power_two_nx(right, left))
       end
     end
 
@@ -311,8 +311,8 @@ defmodule Exla.DefnTest do
       left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
       right = Nx.tensor([[-1.0], [neg_zero], [0.0], [1.0]])
 
-      assert arctan2_two(left, right) == arctan2_two_nx(left, right)
-      assert arctan2_two(right, left) == arctan2_two_nx(right, left)
+      compare_tensors!(arctan2_two(left, right), arctan2_two_nx(left, right))
+      compare_tensors!(arctan2_two(right, left), arctan2_two_nx(right, left))
     end
   end
 
@@ -428,8 +428,8 @@ defmodule Exla.DefnTest do
       defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
 
       test "#{fun}" do
-        assert unquote(exla_fun)(@float_tensor) == unquote(nx_fun)(@float_tensor)
-        assert unquote(exla_fun)(@int_tensor) == unquote(nx_fun)(@int_tensor)
+        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
+        compare_tensors!(unquote(exla_fun)(@int_tensor), unquote(nx_fun)(@int_tensor))
       end
     end
   end
@@ -494,5 +494,19 @@ defmodule Exla.DefnTest do
                    "Attempt to read from deallocated buffer.",
                    fn -> Nx.device_read(tensor) end
     end
+  end
+
+  # We need to round the floats because of imprecision between platforms
+  defp compare_tensors!(
+         %{type: {:f, size}, data: {dev, left_data}} = left,
+         %{data: {dev, right_data}} = right
+       ) do
+    left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.floor(x, 5)
+    right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.floor(x, 5)
+    assert %{left | data: {dev, left_data}} == %{right | data: {dev, right_data}}
+  end
+
+  defp compare_tensors!(left, right) do
+    assert left == right
   end
 end
