@@ -541,7 +541,7 @@ defmodule Nx do
       iex> Nx.type(t)
       {:bf, 16}
 
-      iex> t = Nx.random_uniform({3, 3, 3}, -1.0, 1.0, type: {:f, 32})
+      iex> t = Nx.random_normal({3, 3, 3}, -1.0, 1.0, type: {:f, 32})
       iex> Nx.shape(t)
       {3, 3, 3}
       iex> Nx.type(t)
