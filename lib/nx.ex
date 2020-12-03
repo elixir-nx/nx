@@ -1308,19 +1308,19 @@ defmodule Nx do
   ## Examples
 
       iex> tensors = for i <- 1..100, do: Nx.random_uniform({i})
-      iex> for t <- tensors, do: for <<x::float-64-native <- Nx.to_bitstring(t)>>, do: true = x >= 0.0 and x <= 1.0
+      iex> for t <- tensors, do: for <<x::float-64-native <- Nx.to_bitstring(t)>>, do: true = x >= 0.0 and x < 1.0
       iex> for t <- tensors, do: Nx.shape(t)
       for i <- 1..100, do: {i}
       iex> for t <- tensors, do: Nx.type(t)
       for _ <- 1..100, do: {:f, 64}
       iex> tensors = for i <- 1..100, do: Nx.random_uniform({i, i}, 10, 20, type: {:s, 32})
-      iex> for t <- tensors, do: for <<x::32-native <- Nx.to_bitstring(t)>>, do: true = x >= 10 and x <= 20
+      iex> for t <- tensors, do: for <<x::32-native <- Nx.to_bitstring(t)>>, do: true = x >= 10 and x < 20
       iex> for t <- tensors, do: Nx.shape(t)
       for i <- 1..100, do: {i, i}
       iex> for t <- tensors, do: Nx.type(t)
       for _ <- 1..100, do: {:s, 32}
       iex> tensors = for _ <- 1..100, do: Nx.random_uniform({}, 0, 5, type: {:u, 64})
-      iex> for t <- tensors, do: for <<x::64-unsigned-native <- Nx.to_bitstring(t)>>, do: true = x >= 0 and x <= 5
+      iex> for t <- tensors, do: for <<x::64-unsigned-native <- Nx.to_bitstring(t)>>, do: true = x >= 0 and x < 5
       iex> for t <- tensors, do: Nx.shape(t)
       for _ <- 1..100, do: {}
       iex> for t <- tensors, do: Nx.type(t)
