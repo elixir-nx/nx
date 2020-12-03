@@ -290,6 +290,19 @@ defmodule Exla.DefnTest do
         assert min_two(right, left) == min_two_nx(right, left)
       end
     end
+
+    defn arctan2_two(a, b), do: Nx.arctan2(a, b)
+    @defn_compiler Nx.Defn
+    defn arctan2_two_nx(a, b), do: Nx.arctan2(a, b)
+
+    test "arctan2" do
+      <<neg_zero::float>> = <<0x8000000000000000::64>>
+      left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
+      right = Nx.tensor([[-1.0], [neg_zero], [0.0], [1.0]])
+
+      assert arctan2_two(left, right) == arctan2_two_nx(left, right)
+      assert arctan2_two(right, left) == arctan2_two_nx(right, left)
+    end
   end
 
   describe "element-wise bitwise operators" do

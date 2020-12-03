@@ -895,6 +895,53 @@ defmodule Nx do
   defp erlang_divide(_, a, b), do: a / b
 
   @doc """
+  Element-wise arc tangent of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It always returns a float tensor. If any of the input
+  tensors are not float, they are converted to f64.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Arc tangent between scalars
+
+      iex> t = Nx.arctan2(1, 2)
+      iex> Nx.to_bitstring(t)
+      <<0.4636476090008061::float-64-native>>
+
+  ### Arc tangent between tensors and scalars
+
+      iex> t = Nx.arctan2(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.to_bitstring(t)
+      <<0.7853981633974483::float-64-native, 1.1071487177940904::float-64-native, 1.2490457723982544::float-64-native>>
+
+      iex> t = Nx.arctan2(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.to_bitstring(t)
+      <<0.7853981633974483::float-64-native, 0.4636476090008061::float-64-native, 0.3217505543966422::float-64-native>>
+
+  ### Arc tangent between tensors
+
+      # Note there is a bug in Erlang/OTP 23.0 and earlier where the compiler
+      # optimizes -0.0 away as 0.0. So we do: -1.0*(Integer.parse("0")|>elem(0))
+      iex> pos_and_neg_zero_x = Nx.multiply(Nx.tensor([[-1.0], [1.0]]), 0.0)
+      iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
+      iex> t = Nx.arctan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
+      iex> Nx.to_bitstring(t)
+      <<-3.141592653589793::float-64-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-64-native,
+        3.141592653589793::float-64-native, 0.0::float-64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+  """
+  def arctan2(left, right), do: element_wise_bin_float_arith(left, right, &erlang_arctan2/3)
+  @compile {:inline, erlang_arctan2: 3}
+  defp erlang_arctan2(_, a, b), do: :math.atan2(a, b)
+
+  @doc """
   Element-wise maximum of two tensors.
 
   If a number is given, it is converted to a tensor.
