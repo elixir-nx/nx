@@ -326,6 +326,36 @@ defmodule Nx.Type do
     {:f, 64}
   end
 
+  @doc """
+  Returns a string representation of the given type.
+
+  ## Examples
+
+      iex> Nx.Type.to_string({:s, 8})
+      "s8"
+      iex> Nx.Type.to_string({:s, 16})
+      "s16"
+      iex> Nx.Type.to_string({:s, 32})
+      "s32"
+      iex> Nx.Type.to_string({:s, 64})
+      "s64"
+      iex> Nx.Type.to_string({:u, 8})
+      "u8"
+      iex> Nx.Type.to_string({:u, 16})
+      "u16"
+      iex> Nx.Type.to_string({:u, 32})
+      "u32"
+      iex> Nx.Type.to_string({:u, 64})
+      "u64"
+      iex> Nx.Type.to_string({:f, 16})
+      "f16"
+      iex> Nx.Type.to_string({:bf, 16})
+      "bf16"
+      iex> Nx.Type.to_string({:f, 32})
+      "f32"
+      iex> Nx.Type.to_string({:f, 64})
+      "f64"
+  """
   def to_string({type, size}), do: Atom.to_string(type) <> Integer.to_string(size)
 
   defp unsigned_size(x) when x <= 1, do: 1
