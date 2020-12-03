@@ -135,6 +135,7 @@ defmodule Nx.Defn do
   # TODO: Support cross module calls
   defp define(kind, call, block, env) do
     assert_no_guards!(kind, call, env)
+    # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
     assert_no_defaults!(kind, args, env)
     assert_only_vars!(kind, args, env)
@@ -143,11 +144,15 @@ defmodule Nx.Defn do
     quote do
       unquote(__MODULE__).__define__(__MODULE__, unquote(kind), unquote(name), unquote(arity))
 
-      unquote(kind)(unquote(name)(unquote_splicing(args))) do
+      unquote(kind)(unquote(call)) do
         use Nx.Defn.Kernel
         unquote(block)
       end
     end
+  end
+
+  defp decompose_call!(_kind, {{:unquote, _, [name]}, _, args}, _env) do
+    {name, args}
   end
 
   defp decompose_call!(kind, call, env) do

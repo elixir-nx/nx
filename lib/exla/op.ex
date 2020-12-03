@@ -62,7 +62,7 @@ defmodule Exla.Op do
     Shape.get_shape_info(ref)
   end
 
-  ## Element-wise ops
+  ## Element-wise binary ops
 
   arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :arctan2, :power]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
@@ -78,6 +78,20 @@ defmodule Exla.Op do
           broadcast_dims \\ {}
         ) do
       ref = Exla.NIF.unquote(fun)(left, right, broadcast_dims) |> unwrap!()
+      %Op{builder: builder, ref: ref}
+    end
+  end
+
+  ## Element-wise unary ops
+
+  returns_float = [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
+
+  for fun <- returns_float do
+    @doc """
+    Unary #{fun}.
+    """
+    def unquote(fun)(%Op{builder: builder, ref: op}) do
+      ref = Exla.NIF.unquote(fun)(op) |> unwrap!()
       %Op{builder: builder, ref: ref}
     end
   end
@@ -184,11 +198,6 @@ defmodule Exla.Op do
 
   def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}) do
     ref = Exla.NIF.dot(left, right) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def exp(%Op{builder: builder, ref: op}) do
-    ref = Exla.NIF.exp(op) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

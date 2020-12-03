@@ -128,10 +128,7 @@ defmodule Exla.NIF do
   def bitwise_not(_a), do: nif_error(__ENV__.function)
   def neg(_a), do: nif_error(__ENV__.function)
   def conj(_a), do: nif_error(__ENV__.function)
-  def copy(_a), do: nif_error(__ENV__.function)
-
-  def population_count(_a),
-    do: nif_error(__ENV__.function)
+  def population_count(_a), do: nif_error(__ENV__.function)
 
   def dot(_a, _b),
     do: nif_error(__ENV__.function)

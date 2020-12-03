@@ -42,7 +42,6 @@ defmodule Exla.Defn do
   end
 
   ## Nx <-> Exla.Buffer
-  # TODO: What to do when the tensor data is not a binary?
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
     %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: shape.dtype, shape: shape.dims}
@@ -127,8 +126,8 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
-  def nx_exp(builder, op) do
-    Exla.Op.exp(to_float_operator(builder, op))
+  def nx_unary_float_op(builder, op, arg) do
+    apply(Exla.Op, op, [to_float_operator(builder, arg)])
   end
 
   def nx_sum(builder, op) do
@@ -265,6 +264,7 @@ defmodule Exla.Defn do
   @element_wise_bin_float_arith_op [:divide, :arctan2]
   @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
   @element_wise_bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
+  @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
        when name in @element_wise_bin_float_arith_op do
@@ -282,6 +282,12 @@ defmodule Exla.Defn do
        when name in @element_wise_bin_bitwise_op do
     {args, state} = traverse(args, state)
     {to_builder_call(dot_meta, meta, :nx_element_wise_bin_bitwise_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @unary_float_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_unary_float_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do

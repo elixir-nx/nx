@@ -53,6 +53,7 @@ defmodule Nx.Defn.Compiler do
   # to run said additional passes either at runtime or compilation time.
   @doc false
   def compile(%Macro.Env{module: module, file: file, line: line}, exports) do
+    {:module, Nx} = Code.ensure_loaded(Nx)
     cache = for {def, _meta} <- exports, into: %{}, do: {def, false}
     public = for {def, %{kind: :def} = meta} <- exports, do: {def, meta}
 
@@ -172,6 +173,10 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize({{:., _, [Nx, name]} = call, meta, args}, state) do
     arity = length(args)
+
+    unless function_exported?(Nx, name, arity) do
+      compile_error!(meta, state, "undefined function Nx.#{name}/#{arity}")
+    end
 
     if {name, arity} in @forbidden_nx_functions do
       compile_error!(meta, state, "Nx.#{name}/#{arity} is not allowed inside defn")

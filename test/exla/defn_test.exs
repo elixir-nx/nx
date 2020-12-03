@@ -416,6 +416,24 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "unary float ops" do
+    @int_tensor Nx.tensor([1, 2, 3])
+    @float_tensor Nx.tensor([1.0, 2.0, 3.0])
+
+    for fun <- [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] do
+      exla_fun = :"unary_#{fun}"
+      nx_fun = :"unary_#{fun}_nx"
+      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      @defn_compiler Nx.Defn
+      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+
+      test "#{fun}" do
+        assert unquote(exla_fun)(@float_tensor) == unquote(nx_fun)(@float_tensor)
+        assert unquote(exla_fun)(@int_tensor) == unquote(nx_fun)(@int_tensor)
+      end
+    end
+  end
+
   describe "sum" do
     defn sum(t), do: Nx.sum(t)
 

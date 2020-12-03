@@ -1341,47 +1341,64 @@ defmodule Nx do
 
   ## Unary ops
 
-  @doc """
-  Calculates the exponential of the given tensor.
+  funs = [
+    exp: {"exponential", &quote(do: :math.exp(unquote(&1)))},
+    expm1: {"exponential minus one", &quote(do: :math.exp(unquote(&1)) - 1)},
+    log: {"natural log (base 2)", &quote(do: :math.log(unquote(&1)))},
+    log1p: {"natural log plus one", &quote(do: :math.log(unquote(&1) + 1))},
+    logistic: {"standard logistic (a sigmoid)", &quote(do: 1 / (1 + :math.exp(-unquote(&1))))},
+    cos: {"cosine", &quote(do: :math.cos(unquote(&1)))},
+    sin: {"sine", &quote(do: :math.sin(unquote(&1)))},
+    tanh: {"hyperbolic tangent", &quote(do: :math.tanh(unquote(&1)))},
+    sqrt: {"square root", &quote(do: :math.sqrt(unquote(&1)))},
+    rsqrt: {"reverse square root", &quote(do: 1 / :math.sqrt(unquote(&1)))},
+    cbrt: {"cube root", &quote(do: :math.pow(unquote(&1), 1/3))}
+  ]
 
-  If a scalar is given, a scalar is returned.
-  Otherwise, returns an updated tensor. In both
-  cases, the return type is float.
+  for {name, {desc, code}} <- funs do
+    applied = code.(Macro.var(:x, nil))
+    formula = Macro.to_string(applied)
 
-  ## Examples
+    {one, _} = Code.eval_quoted(applied, x: 1)
+    {two, _} = Code.eval_quoted(applied, x: 2)
+    {three, _} = Code.eval_quoted(applied, x: 3)
 
-      iex> t = Nx.exp(1)
-      iex> Nx.to_bitstring(t)
-      <<2.718281828459045::float-64-native>>
+    @doc """
+    Calculates the #{desc} of each element in the tensor.
 
-      iex> t = Nx.exp(Nx.tensor([1, 2, 3]))
-      iex> Nx.to_bitstring(t)
-      <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native, 20.085536923187668::float-64-native>>
+    It is equivalent to:
 
-      iex> t = Nx.exp(Nx.tensor([1, 2, 3], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native, 20.085536923187668::float-32-native>>
+        #{formula}
 
-      iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<2.718281828459045::float-native-32, 7.38905609893065::float-native-32, 20.085536923187668::float-native-32>>
+    ## Examples
 
-      iex> t = Nx.exp(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16}))
-      iex> Nx.to_bitstring(t)
-      <<16429::16-native, 16620::16-native, 16800::16-native>>
+        iex> t = Nx.#{name}(1)
+        iex> Nx.to_bitstring(t)
+        <<#{one}::float-64-native>>
 
-  """
-  def exp(number)
+        iex> t = Nx.#{name}(Nx.tensor([1, 2, 3]))
+        iex> Nx.to_bitstring(t)
+        <<#{one}::float-64-native, #{two}::float-64-native, #{three}::float-64-native>>
 
-  def exp(number) when is_number(number), do: tensor(:math.exp(number))
+        iex> t = Nx.#{name}(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
+        iex> Nx.to_bitstring(t)
+        <<#{one}::float-32-native, #{two}::float-32-native, #{three}::float-32-native>>
 
-  def exp(%T{type: input_type} = t) do
+    """
+    def unquote(name)(tensor), do: unary_float(tensor, fn x -> unquote(applied) end)
+  end
+
+  defp unary_float(number, fun) when is_number(number), do: tensor(fun.(number))
+
+  defp unary_float(%T{type: input_type} = t, fun) do
     data = data!(t)
     output_type = Nx.Type.to_floating(input_type)
 
     data =
       match_types [input_type, output_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(:math.exp(read!(seg, 0)), 1)>>
+        for <<match!(seg, 0) <- data>>, into: <<>> do
+          <<write!(fun.(read!(seg, 0)), 1)>>
+        end
       end
 
     %{t | data: {Nx.BitStringDevice, data}, type: output_type}

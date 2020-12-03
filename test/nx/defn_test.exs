@@ -173,6 +173,15 @@ defmodule Nx.DefnTest do
       assert add_two_from_alias(1, 2) == Nx.tensor(3)
       assert add_two_from_alias(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
+
+    dynamic_name = String.to_atom(Enum.join(~w(dynamic name add two), "_"))
+    operator = :add
+    defp unquote(dynamic_name)(left, right), do: Nx.unquote(operator)(left, right)
+
+    test "dynamic name" do
+      assert dynamic_name_add_two(1, 2) == Nx.tensor(3)
+      assert dynamic_name_add_two(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
+    end
   end
 
   describe "local functions" do
