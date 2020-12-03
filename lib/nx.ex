@@ -1309,10 +1309,22 @@ defmodule Nx do
 
       iex> tensors = for i <- 1..100, do: Nx.random_uniform({i})
       iex> for t <- tensors, do: for <<x::float-64-native <- Nx.to_bitstring(t)>>, do: true = x >= 0.0 and x <= 1.0
+      iex> for t <- tensors, do: Nx.shape(t)
+      for i <- 1..100, do: {i}
+      iex> for t <- tensors, do: Nx.type(t)
+      for _ <- 1..100, do: {:f, 64}
       iex> tensors = for i <- 1..100, do: Nx.random_uniform({i, i}, 10, 20, type: {:s, 32})
       iex> for t <- tensors, do: for <<x::32-native <- Nx.to_bitstring(t)>>, do: true = x >= 10 and x <= 20
+      iex> for t <- tensors, do: Nx.shape(t)
+      for i <- 1..100, do: {i, i}
+      iex> for t <- tensors, do: Nx.type(t)
+      for _ <- 1..100, do: {:s, 32}
       iex> tensors = for _ <- 1..100, do: Nx.random_uniform({}, 0, 5, type: {:u, 64})
       iex> for t <- tensors, do: for <<x::64-unsigned-native <- Nx.to_bitstring(t)>>, do: true = x >= 0 and x <= 5
+      iex> for t <- tensors, do: Nx.shape(t)
+      for _ <- 1..100, do: {}
+      iex> for t <- tensors, do: Nx.type(t)
+      for _ <- 1..100, do: {:u, 64}
   """
   def random_uniform(shape, opts \\ []) when is_tuple(shape), do: random_uniform(shape, 0.0, 1.0, opts)
 
@@ -1322,7 +1334,7 @@ defmodule Nx do
       case type do
         {:f, _} -> fn -> (max - min) * :rand.uniform() + min end
         {:s, _} -> fn -> max - (:rand.uniform(max - min)) end
-        {:u, _} -> fn -> max - (:rand.uniform(max) + min) end
+        {:u, _} -> fn -> max - (:rand.uniform(max - min)) end
       end
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
@@ -1334,6 +1346,19 @@ defmodule Nx do
   By default, distribution has mean of `0.0` and
   standard deviation of `1.0`. Return type is one of
   `{:f, 32}` or `{:f, 64}`.
+
+  ## Examples
+
+      iex> tensors = for i <- 1..100, do: Nx.random_normal({i})
+      iex> for t <- tensors, do: Nx.shape(t)
+      for i <- 1..100, do: {i}
+      iex> for t <- tensors, do: Nx.type(t)
+      for _ <- 1..100, do: {:f, 64}
+      iex> tensors = for i <- 1..100, do: Nx.random_normal({i, i}, type: {:f, 32})
+      iex> for t <- tensors, do: Nx.shape(t)
+      for i <- 1..100, do: {i, i}
+      iex> for t <- tensors, do: Nx.type(t)
+      for _ <- 1..100, do: {:f, 32}
   """
   def random_normal(shape, opts \\ []), do: random_normal(shape, 0.0, 1.0, opts)
 
