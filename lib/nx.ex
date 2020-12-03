@@ -1300,6 +1300,19 @@ defmodule Nx do
 
   @doc """
   Returns a uniformly-distributed random tensor with the given shape.
+
+  By default, distribution is bounded between `0.0` and
+  `1.0`. Return type is one of `{:f, size}`, `{:s, size}`
+  or `{:u, size}`.
+
+  ## Examples
+
+      iex> tensors = for i <- 1..100, do: Nx.random_uniform({i})
+      iex> for t <- tensors, do: for <<x::float-64-native <- Nx.to_bitstring(t)>>, do: true = x >= 0.0 and x <= 1.0
+      iex> tensors = for i <- 1..100, do: Nx.random_uniform({i, i}, 10, 20, type: {:s, 32})
+      iex> for t <- tensors, do: for <<x::32-native <- Nx.to_bitstring(t)>>, do: true = x >= 10 and x <= 20
+      iex> tensors = for _ <- 1..100, do: Nx.random_uniform({}, 0, 5, type: {:u, 64})
+      iex> for t <- tensors, do: for <<x::64-unsigned-native <- Nx.to_bitstring(t)>>, do: true = x >= 0 and x <= 5
   """
   def random_uniform(shape, opts \\ []) when is_tuple(shape), do: random_uniform(shape, 0.0, 1.0, opts)
 
@@ -1308,15 +1321,19 @@ defmodule Nx do
     gen =
       case type do
         {:f, _} -> fn -> (max - min) * :rand.uniform() + min end
-        {:s, _} -> fn -> max - (:rand.uniform(max) + min) end
+        {:s, _} -> fn -> max - (:rand.uniform(max - min)) end
         {:u, _} -> fn -> max - (:rand.uniform(max) + min) end
       end
-    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(type), type)
+    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
   @doc """
   Returns a normally-distributed random tensor with the given shape.
+
+  By default, distribution has mean of `0.0` and
+  standard deviation of `1.0`. Return type is one of
+  `{:f, 32}` or `{:f, 64}`.
   """
   def random_normal(shape, opts \\ []), do: random_normal(shape, 0.0, 1.0, opts)
 
