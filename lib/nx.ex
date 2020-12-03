@@ -1299,71 +1299,113 @@ defmodule Nx do
   ## Random Ops
 
   @doc """
-  Returns a uniformly-distributed random tensor with the given shape.
-
-  By default, distribution is bounded between `0.0` and
-  `1.0`. Return type is one of `{:f, size}`, `{:s, size}`
-  or `{:u, size}`.
-
-  ## Examples
-
-      iex> tensors = for i <- 1..100, do: Nx.random_uniform({i})
-      iex> for t <- tensors, do: for <<x::float-64-native <- Nx.to_bitstring(t)>>, do: true = x >= 0.0 and x < 1.0
-      iex> for t <- tensors, do: Nx.shape(t)
-      for i <- 1..100, do: {i}
-      iex> for t <- tensors, do: Nx.type(t)
-      for _ <- 1..100, do: {:f, 64}
-      iex> tensors = for i <- 1..100, do: Nx.random_uniform({i, i}, 10, 20, type: {:s, 32})
-      iex> for t <- tensors, do: for <<x::32-native <- Nx.to_bitstring(t)>>, do: true = x >= 10 and x < 20
-      iex> for t <- tensors, do: Nx.shape(t)
-      for i <- 1..100, do: {i, i}
-      iex> for t <- tensors, do: Nx.type(t)
-      for _ <- 1..100, do: {:s, 32}
-      iex> tensors = for _ <- 1..100, do: Nx.random_uniform({}, 0, 5, type: {:u, 64})
-      iex> for t <- tensors, do: for <<x::64-unsigned-native <- Nx.to_bitstring(t)>>, do: true = x >= 0 and x < 5
-      iex> for t <- tensors, do: Nx.shape(t)
-      for _ <- 1..100, do: {}
-      iex> for t <- tensors, do: Nx.type(t)
-      for _ <- 1..100, do: {:u, 64}
+  Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
   def random_uniform(shape, opts \\ []) when is_tuple(shape), do: random_uniform(shape, 0.0, 1.0, opts)
 
+  @doc """
+  Returns a uniformly-distributed random tensor with the given shape.
+
+  The distribution is bounded on the semi-open interval `[min, max)`.
+  Return type is one of `{:f, size}`, `{:bf, size}`, `{:u, size}`,
+  `{:s, size}`.
+
+  ## Examples
+
+  ### Generating Floats
+
+      iex> t = Nx.random_uniform({10})
+      iex> for <<x::float-64-native <- Nx.to_bitstring(t)>> do
+      ...>   true = x >= 0.0 and x < 1.0
+      ...> end
+      iex> Nx.shape(t)
+      {10}
+      iex> Nx.type(t)
+      {:f, 64}
+
+      iex> t = Nx.random_uniform({5, 5}, type: {:bf, 16})
+      iex> for <<x::float-32-native <- Nx.to_bitstring(t)>> do
+      ...>   true = x >= 0.0 and x < 1.0
+      ...> end
+      iex> Nx.shape(t)
+      {5, 5}
+      iex> Nx.type(t)
+      {:bf, 16}
+
+      iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: {:f, 32})
+      iex> for <<x::float-32-native <- Nx.to_bitstring(t)>> do
+      ...>   true = x >= -1.0 and x < 1.0
+      ...> end
+      iex> Nx.shape(t)
+      {5, 5}
+      iex> Nx.type(t)
+      {:f, 32}
+
+  ### Generating Integers
+
+      iex> t = Nx.random_uniform({10}, 5, 10, type: {:u, 32})
+      iex> for <<x::32-unsigned-native <- Nx.to_bitstring(t)>> do
+      ...>   true = x >= 5 and x < 10
+      ...> end
+      iex> Nx.shape(t)
+      {10}
+      iex> Nx.type(t)
+      {:u, 32}
+
+      iex> t = Nx.random_uniform({5, 5}, -5, 5, type: {:s, 64})
+      iex> for <<x::64-signed-native <- Nx.to_bitstring(t)>> do
+      ...>   true = x >= -5 and x < 5
+      ...> end
+      iex> Nx.shape(t)
+      {5, 5}
+      iex> Nx.type(t)
+      {:s, 64}
+  """
   def random_uniform(shape, min, max, opts \\ []) when is_tuple(shape) and is_number(min) and is_number(max) do
     type = opts[:type] || Nx.Type.infer(max - min)
     gen =
       case type do
-        {:f, _} -> fn -> (max - min) * :rand.uniform() + min end
-        {:s, _} -> fn -> max - (:rand.uniform(max - min)) end
-        {:u, _} -> fn -> max - (:rand.uniform(max - min)) end
+        {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
+        {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
+        {_, _} -> fn -> (max - min) * :rand.uniform() + min end
       end
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
   @doc """
-  Returns a normally-distributed random tensor with the given shape.
-
-  By default, distribution has mean of `0.0` and
-  standard deviation of `1.0`. Return type is one of
-  `{:f, 32}` or `{:f, 64}`.
-
-  ## Examples
-
-      iex> tensors = for i <- 1..100, do: Nx.random_normal({i})
-      iex> for t <- tensors, do: Nx.shape(t)
-      for i <- 1..100, do: {i}
-      iex> for t <- tensors, do: Nx.type(t)
-      for _ <- 1..100, do: {:f, 64}
-      iex> tensors = for i <- 1..100, do: Nx.random_normal({i, i}, type: {:f, 32})
-      iex> for t <- tensors, do: Nx.shape(t)
-      for i <- 1..100, do: {i, i}
-      iex> for t <- tensors, do: Nx.type(t)
-      for _ <- 1..100, do: {:f, 32}
+  Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
   """
   def random_normal(shape, opts \\ []), do: random_normal(shape, 0.0, 1.0, opts)
 
+  @doc """
+  Returns a normally-distributed random tensor with the given shape.
+
+  The distribution has mean of `mu` and standard deviation of
+  `sigma`. Return type is one of `{:bf, 16}`, `{:f, 32}` or `{:f, 64}`.
+
+  ## Examples
+
+      iex> t = Nx.random_normal({10})
+      iex> Nx.shape(t)
+      {10}
+      iex> Nx.type(t)
+      {:f, 64}
+
+      iex> t = Nx.random_normal({5, 5}, 2.0, 1.0, type: {:bf, 16})
+      iex> Nx.shape(t)
+      {5, 5}
+      iex> Nx.type(t)
+      {:bf, 16}
+
+      iex> t = Nx.random_uniform({3, 3, 3}, -1.0, 1.0, type: {:f, 32})
+      iex> Nx.shape(t)
+      {3, 3, 3}
+      iex> Nx.type(t)
+      {:f, 32}
+  """
   def random_normal(shape, mu, sigma, opts \\ []) when is_tuple(shape) when is_number(mu) and is_number(sigma) do
-    type = {:f, _} = opts[:type] || {:f, 64}
+    type = opts[:type] || {:f, 64}
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(:rand.normal(mu, sigma), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
