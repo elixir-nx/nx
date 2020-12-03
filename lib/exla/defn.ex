@@ -92,15 +92,15 @@ defmodule Exla.Defn do
 
   ## Operators
 
-  def element_wise_bin_arith_op(builder, :divide, left, right) do
+  def nx_element_wise_bin_float_arith_op(builder, op, left, right) do
     type = binary_op_type(left, right) |> Nx.Type.to_floating()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
-    Exla.Op.divide(left, right, dims)
+    apply(Exla.Op, op, [left, right, dims])
   end
 
-  def element_wise_bin_arith_op(builder, op, left, right) do
+  def nx_element_wise_bin_arith_op(builder, op, left, right) do
     type = binary_op_type(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
@@ -108,7 +108,7 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
-  def element_wise_bin_bitwise_op(builder, :right_shift, left, right) do
+  def nx_element_wise_bin_bitwise_op(builder, :right_shift, left, right) do
     op =
       # Perform logical operation if the left side is unsigned.
       # It can only be unsigned if it is an operator (numbers are always floats or signed).
@@ -116,10 +116,10 @@ defmodule Exla.Defn do
         do: :right_shift_logical,
         else: :right_shift_arithmetic
 
-    element_wise_bin_bitwise_op(builder, op, left, right)
+    nx_element_wise_bin_bitwise_op(builder, op, left, right)
   end
 
-  def element_wise_bin_bitwise_op(builder, op, left, right) do
+  def nx_element_wise_bin_bitwise_op(builder, op, left, right) do
     type = binary_op_type(left, right) |> assert_integer_type!(op)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
@@ -262,19 +262,26 @@ defmodule Exla.Defn do
     end
   end
 
+  @element_wise_bin_float_arith_op [:divide, :arctan2]
   @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder]
   @element_wise_bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @element_wise_bin_float_arith_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_float_arith_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
        when name in @element_wise_bin_arith_op do
     {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :element_wise_bin_arith_op, [name | args]), state}
+    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_arith_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
        when name in @element_wise_bin_bitwise_op do
     {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :element_wise_bin_bitwise_op, [name | args]), state}
+    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_bitwise_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do

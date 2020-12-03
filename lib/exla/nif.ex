@@ -96,13 +96,13 @@ defmodule Exla.NIF do
   def lt_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def pow(_a, _b, _broadcast_dims),
+  def power(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def complex(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def atan2(_a, _b, _broadcast_dims),
+  def arctan2(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def abs(_a), do: nif_error(__ENV__.function)

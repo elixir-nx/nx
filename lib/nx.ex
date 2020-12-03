@@ -407,10 +407,6 @@ defmodule Nx do
     {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_binary(&1, type) | &2])}
   end
 
-  defp scalar_to_binary(value, type) do
-    match_types([type], do: <<write!(value, 0)>>)
-  end
-
   @doc """
   Creates a tensor from a `bitstring`, its `type`, and
   its `shape`.
@@ -541,18 +537,19 @@ defmodule Nx do
   """
   def device_deallocate(%T{data: {device, state}} = _tensor), do: device.deallocate(state)
 
-  ## Arith binary ops
+  ## Element-wise binary ops
 
-  def_binary_op = fn name, op, cast ->
+  defp_element_wise_bin_op = fn name, cast ->
     cast = cast.(Macro.var(:output_type, nil))
 
-    def unquote(name)(left, right)
-
-    def unquote(name)(left, right) when is_number(left) and is_number(right) do
-      tensor(unquote(op)(left, right))
+    defp unquote(name)(left, right, fun) when is_number(left) and is_number(right) do
+      output_type = if is_float(left) or is_float(right), do: {:f, 64}, else: {:s, 64}
+      output_type = unquote(cast)
+      data = scalar_to_binary(fun.(output_type, left, right), output_type)
+      %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: {}}
     end
 
-    def unquote(name)(scalar, %T{type: input_type} = t) when is_number(scalar) do
+    defp unquote(name)(scalar, %T{type: input_type} = t, fun) when is_number(scalar) do
       data = data!(t)
       output_type = Nx.Type.merge_scalar(input_type, scalar)
       output_type = unquote(cast)
@@ -560,14 +557,14 @@ defmodule Nx do
       data =
         match_types [input_type, output_type] do
           for <<match!(seg, 0) <- data>>, into: <<>> do
-            <<write!(unquote(op)(scalar, read!(seg, 0)), 1)>>
+            <<write!(fun.(output_type, scalar, read!(seg, 0)), 1)>>
           end
         end
 
       %{t | data: {Nx.BitStringDevice, data}, type: output_type}
     end
 
-    def unquote(name)(%T{type: input_type} = t, scalar) when is_number(scalar) do
+    defp unquote(name)(%T{type: input_type} = t, scalar, fun) when is_number(scalar) do
       data = data!(t)
       output_type = Nx.Type.merge_scalar(input_type, scalar)
       output_type = unquote(cast)
@@ -575,14 +572,14 @@ defmodule Nx do
       data =
         match_types [input_type, output_type] do
           for <<match!(seg, 0) <- data>>, into: <<>> do
-            <<write!(unquote(op)(read!(seg, 0), scalar), 1)>>
+            <<write!(fun.(output_type, read!(seg, 0), scalar), 1)>>
           end
         end
 
       %{t | data: {Nx.BitStringDevice, data}, type: output_type}
     end
 
-    def unquote(name)(%T{type: left_type} = left, %T{type: right_type} = right) do
+    defp unquote(name)(%T{type: left_type} = left, %T{type: right_type} = right, fun) do
       output_type = Nx.Type.merge(left_type, right_type)
       output_type = unquote(cast)
 
@@ -592,7 +589,7 @@ defmodule Nx do
             for <<match!(left_seg, 0) <- left_dimension>>,
                 <<match!(right_seg, 1) <- right_dimension>>,
                 into: <<>> do
-              <<write!(unquote(op)(read!(left_seg, 0), read!(right_seg, 1)), 2)>>
+              <<write!(fun.(output_type, read!(left_seg, 0), read!(right_seg, 1)), 2)>>
             end
           end)
         end
@@ -600,6 +597,16 @@ defmodule Nx do
       %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: shape}
     end
   end
+
+  defp_element_wise_bin_op.(
+    :element_wise_bin_arith,
+    & &1
+  )
+
+  defp_element_wise_bin_op.(
+    :element_wise_bin_float_arith,
+    &quote(do: Nx.Type.to_floating(unquote(&1)))
+  )
 
   @doc """
   Element-wise addition of two tensors.
@@ -685,7 +692,9 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_binary_op.(:add, :+, & &1)
+  def add(left, right), do: element_wise_bin_arith(left, right, &erlang_add/3)
+  @compile {:inline, erlang_add: 3}
+  defp erlang_add(_, a, b), do: a + b
 
   @doc """
   Element-wise subtraction of two tensors.
@@ -734,7 +743,9 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_binary_op.(:subtract, :-, & &1)
+  def subtract(left, right), do: element_wise_bin_arith(left, right, &erlang_subtract/3)
+  @compile {:inline, erlang_subtract: 3}
+  defp erlang_subtract(_, a, b), do: a - b
 
   @doc """
   Element-wise multiplication of two tensors.
@@ -783,7 +794,9 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_binary_op.(:multiply, :*, & &1)
+  def multiply(left, right), do: element_wise_bin_arith(left, right, &erlang_multiply/3)
+  @compile {:inline, erlang_multiply: 3}
+  defp erlang_multiply(_, a, b), do: a * b
 
   @doc """
   Element-wise remainder of two tensors.
@@ -820,10 +833,10 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_binary_op.(:remainder, :erlang_remainder, & &1)
-  @compile {:inline, erlang_remainder: 2}
-  defp erlang_remainder(a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
-  defp erlang_remainder(a, b), do: :math.fmod(a, b)
+  def remainder(left, right), do: element_wise_bin_arith(left, right, &erlang_remainder/3)
+  @compile {:inline, erlang_remainder: 3}
+  defp erlang_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
+  defp erlang_remainder(_, a, b), do: :math.fmod(a, b)
 
   @doc """
   Element-wise division of two tensors.
@@ -877,7 +890,9 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_binary_op.(:divide, :/, &quote(do: Nx.Type.to_floating(unquote(&1))))
+  def divide(left, right), do: element_wise_bin_float_arith(left, right, &erlang_divide/3)
+  @compile {:inline, erlang_divide: 3}
+  defp erlang_divide(_, a, b), do: a / b
 
   @doc """
   Element-wise maximum of two tensors.
@@ -926,9 +941,9 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_binary_op.(:max, :erlang_max, & &1)
-  @compile {:inline, erlang_max: 2}
-  defp erlang_max(a, b), do: :erlang.max(a, b)
+  def max(left, right), do: element_wise_bin_arith(left, right, &erlang_max/3)
+  @compile {:inline, erlang_max: 3}
+  defp erlang_max(_, a, b), do: :erlang.max(a, b)
 
   @doc """
   Element-wise minimum of two tensors.
@@ -977,22 +992,23 @@ defmodule Nx do
       {2, 2}
 
   """
-  def_binary_op.(:min, :erlang_min, & &1)
-  @compile {:inline, erlang_min: 2}
-  defp erlang_min(a, b), do: :erlang.min(a, b)
+  def min(left, right), do: element_wise_bin_arith(left, right, &erlang_min/3)
+  @compile {:inline, erlang_min: 3}
+  defp erlang_min(_, a, b), do: :erlang.min(a, b)
 
   ## Bitwise ops
 
-  def_binary_bitwise_op = fn name, op ->
-    def_binary_op.(name, op, &quote(do: assert_integer_type!(unquote(&1), unquote(name))))
-  end
+  defp_element_wise_bin_op.(
+    :element_wise_bin_bitwise_arith,
+    &quote(do: assert_bitwise_type!(unquote(&1)))
+  )
 
-  defp assert_integer_type!({:s, _} = type, _op), do: type
-  defp assert_integer_type!({:u, _} = type, _op), do: type
+  defp assert_bitwise_type!({:s, _} = type), do: type
+  defp assert_bitwise_type!({:u, _} = type), do: type
 
-  defp assert_integer_type!(type, op) do
+  defp assert_bitwise_type!(type) do
     raise ArgumentError,
-          "#{op} expects integer tensors as inputs and outputs an integer tensor, " <>
+          "bitwise operators expect integer tensors as inputs and outputs an integer tensor, " <>
             "got: #{inspect(type)}"
   end
 
@@ -1032,11 +1048,13 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise_and expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
-  def_binary_bitwise_op.(:bitwise_and, :erlang_band)
-  @compile {:inline, erlang_band: 2}
-  defp erlang_band(a, b), do: :erlang.band(a, b)
+  def bitwise_and(left, right),
+    do: element_wise_bin_bitwise_arith(left, right, &erlang_bitwise_and/3)
+
+  @compile {:inline, erlang_bitwise_and: 3}
+  defp erlang_bitwise_and(_, a, b), do: :erlang.band(a, b)
 
   @doc """
   Element-wise bitwise OR of two tensors.
@@ -1074,11 +1092,13 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise_or expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
-  def_binary_bitwise_op.(:bitwise_or, :erlang_bor)
-  @compile {:inline, erlang_bor: 2}
-  defp erlang_bor(a, b), do: :erlang.bor(a, b)
+  def bitwise_or(left, right),
+    do: element_wise_bin_bitwise_arith(left, right, &erlang_bitwise_or/3)
+
+  @compile {:inline, erlang_bitwise_or: 3}
+  defp erlang_bitwise_or(_, a, b), do: :erlang.bor(a, b)
 
   @doc """
   Element-wise bitwise XOR of two tensors.
@@ -1116,11 +1136,13 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise_xor expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
-  def_binary_bitwise_op.(:bitwise_xor, :erlang_bxor)
-  @compile {:inline, erlang_bxor: 2}
-  defp erlang_bxor(a, b), do: :erlang.bxor(a, b)
+  def bitwise_xor(left, right),
+    do: element_wise_bin_bitwise_arith(left, right, &erlang_bitwise_xor/3)
+
+  @compile {:inline, erlang_bitwise_xor: 3}
+  defp erlang_bitwise_xor(_, a, b), do: :erlang.bxor(a, b)
 
   @doc """
   Element-wise left shift of two tensors.
@@ -1156,15 +1178,17 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.left_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) left_shift expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
 
       iex> Nx.left_shift(Nx.tensor(1), -1)
       ** (ArgumentError) cannot left shift by -1
   """
-  def_binary_bitwise_op.(:left_shift, :erlang_bsl)
-  @compile {:inline, erlang_bsl: 2}
-  defp erlang_bsl(a, b) when b >= 0, do: :erlang.bsl(a, b)
-  defp erlang_bsl(_, b), do: raise(ArgumentError, "cannot left shift by #{b}")
+  def left_shift(left, right),
+    do: element_wise_bin_bitwise_arith(left, right, &erlang_left_shift/3)
+
+  @compile {:inline, erlang_left_shift: 3}
+  defp erlang_left_shift(_, a, b) when b >= 0, do: :erlang.bsl(a, b)
+  defp erlang_left_shift(_, _, b), do: raise(ArgumentError, "cannot left shift by #{b}")
 
   @doc """
   Element-wise right shift of two tensors.
@@ -1204,15 +1228,17 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.right_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) right_shift expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
 
       iex> Nx.right_shift(Nx.tensor(1), -1)
       ** (ArgumentError) cannot right shift by -1
   """
-  def_binary_bitwise_op.(:right_shift, :erlang_bsr)
-  @compile {:inline, erlang_bsr: 2}
-  defp erlang_bsr(a, b) when b >= 0, do: :erlang.bsr(a, b)
-  defp erlang_bsr(_, b), do: raise(ArgumentError, "cannot right shift by #{b}")
+  def right_shift(left, right),
+    do: element_wise_bin_bitwise_arith(left, right, &erlang_right_shift/3)
+
+  @compile {:inline, erlang_right_shift: 3}
+  defp erlang_right_shift(_, a, b) when b >= 0, do: :erlang.bsr(a, b)
+  defp erlang_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
 
   ## Unary ops
 
@@ -1419,6 +1445,10 @@ defmodule Nx do
     do: {left, right, ls, rs, shape}
 
   ## Binary helpers
+
+  defp scalar_to_binary(value, type) do
+    match_types([type], do: <<write!(value, 0)>>)
+  end
 
   @compile {:inline, bin_reduce_all: 3}
 
