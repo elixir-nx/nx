@@ -56,6 +56,59 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "pattern matching" do
+    defn complex_pattern_matching(expr) do
+      ({a, b} = c) = ({d, e} = f = expr)
+      {a, b, c, d, e, f}
+    end
+
+    test "normalizes to one pattern per expression" do
+      assert ast_to_string(:complex_pattern_matching, 1) == """
+             (
+               (
+                 c = expr
+                 f = c
+                 {a, b} = c
+                 {d, e} = c
+               )
+               {a, b, c, d, e, f}
+             )\
+             """
+    end
+
+    defn nested_pattern_matching do
+      {{a, b} = c, {d, e} = f} = {{1, 2}, {3, 4}}
+      {a, b, c, d, e, f}
+    end
+
+    test "unnests nested patterns" do
+      assert ast_to_string(:nested_pattern_matching, 0) == """
+             (
+               (
+                 nvar = {{1, 2}, {3, 4}}
+                 {nvar, nvar} = nvar
+                 (
+                   f = nvar
+                   {d, e} = f
+                 )
+                 (
+                   c = nvar
+                   {a, b} = c
+                 )
+               )
+               {a, b, c, d, e, f}
+             )\
+             """
+
+      a = Nx.tensor(1)
+      b = Nx.tensor(2)
+      c = Nx.tensor(3)
+      d = Nx.tensor(4)
+
+      assert nested_pattern_matching() == {a, b, {a, b}, c, d, {c, d}}
+    end
+  end
+
   describe "operators" do
     defn add_two(a, b), do: a + b
 
@@ -253,6 +306,16 @@ defmodule Nx.DefnTest do
     test "var conflict" do
       assert add_two_var_conflict(2, 3) == Nx.tensor(6)
     end
+
+    test "expansion" do
+      assert ast_to_string(:add_two_from_public, 2) == """
+             (
+               a = a
+               b = b
+               Nx.add(a, b)
+             )\
+             """
+    end
   end
 
   describe "module attributes" do
@@ -419,5 +482,10 @@ defmodule Nx.DefnTest do
   defp purge(module) do
     :code.purge(module)
     :code.delete(module)
+  end
+
+  defp ast_to_string(name, arity) do
+    {_, _, ast} = __defn__(name, arity)
+    Macro.to_string(ast)
   end
 end

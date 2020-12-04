@@ -30,8 +30,9 @@ defmodule Nx.Defn.Compiler do
 
     * `{left, right}` and `{:{}, _, [elem]}` - tuples
 
-    * `{:=, meta, [left, right]}` - pattern matching where the left
-      side is either a variable or a (nested) tuple
+    * `{:=, meta, [left, right]}` - pattern matching where the
+      left side has been normalized to be either a variable or
+      a `{:{}, _, [var]}`
 
     * `{:%{}, meta, [{key, value}]}` - a literal `Nx.Tensor`
 
@@ -96,14 +97,16 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], to_delete ++ quoted}
   end
 
-  defp compile_each({{name, _arity} = def, def_meta}, state) do
+  defp compile_each({{name, arity} = def, def_meta}, state) do
     {{kind, meta, args, ast}, state} = get_cached_definition(def, state)
     {def_module, def_opts} = def_meta.compiler
+    defn_ast = Macro.escape({meta, args, ast})
     compiled_ast = def_module.__compile__(kind, meta, name, args, ast, def_opts)
 
     quoted =
       quote do
         def unquote(name)(unquote_splicing(args)), do: unquote(compiled_ast)
+        def __defn__(unquote(name), unquote(arity)), do: unquote(defn_ast)
       end
 
     {quoted, state}
@@ -128,7 +131,7 @@ defmodule Nx.Defn.Compiler do
         [{meta, args, [], ast}] ->
           {args, state} = normalize_list(args, state)
           {ast, state} = normalize_block(ast, meta, state)
-          {ast, state} = expand_locals(ast, state)
+          {ast, state} = expand(ast, state)
           result = {kind, [max_counter: state.version] ++ meta, args, ast}
           state = put_in(state.cache[def], result)
           {result, state}
@@ -157,8 +160,7 @@ defmodule Nx.Defn.Compiler do
     {{:{}, meta, args}, state}
   end
 
-  defp normalize({:=, meta, [left, _] = args}, state) do
-    validate_assign!(left, meta, state)
+  defp normalize({:=, meta, [_, _] = args}, state) do
     {args, state} = normalize_list(args, state)
     {{:=, meta, args}, state}
   end
@@ -231,16 +233,6 @@ defmodule Nx.Defn.Compiler do
     Enum.map_reduce(list, state, &normalize/2)
   end
 
-  defp validate_assign!({var, _, ctx}, _meta, _state) when is_atom(var) and is_atom(ctx), do: :ok
-
-  defp validate_assign!(expr, meta, state) do
-    compile_error!(
-      meta,
-      state,
-      "defn can only pattern match on variables or tuples, got: #{Macro.to_string(expr)}"
-    )
-  end
-
   ## Normalize block handling
 
   defp normalize_block({:__block__, meta, exprs}, _meta, state) do
@@ -279,7 +271,35 @@ defmodule Nx.Defn.Compiler do
 
   ## Expansion and Local inlining
 
-  defp expand_locals({:__local__, meta, [name | args]}, state) do
+  defp expand({:=, meta, [left, right]}, state) do
+    {patterns, vars, right} = expand_assign(meta, left, right, state)
+    {right, state} = expand(right, state)
+
+    {[var | vars], state} =
+      case vars do
+        [] ->
+          {var, state} = new_var(state)
+          {[var], state}
+
+        _ ->
+          {vars, state}
+      end
+
+    {patterns, nested, state} = expand_nested_patterns(patterns, state)
+
+    exprs =
+      [{:=, meta, [var, right]}] ++
+        Enum.map(vars, &{:=, meta, [&1, var]}) ++
+        Enum.map(patterns, &{:=, meta, [&1, var]}) ++
+        nested
+
+    case exprs do
+      [expr] -> {expr, state}
+      _ -> {{:__block__, meta, exprs}, state}
+    end
+  end
+
+  defp expand({:__local__, meta, [name | args]}, state) do
     arity = length(args)
 
     if {name, arity} in state.stack do
@@ -325,26 +345,97 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp expand_locals({name, meta, args}, state) do
-    {args, state} = expand_locals(args, state)
+  defp expand({name, meta, args}, state) do
+    {args, state} = expand(args, state)
     {{name, meta, args}, state}
   end
 
-  defp expand_locals({left, right}, state) do
-    {left, state} = expand_locals(left, state)
-    {right, state} = expand_locals(right, state)
+  defp expand({left, right}, state) do
+    {left, state} = expand(left, state)
+    {right, state} = expand(right, state)
     {{left, right}, state}
   end
 
-  defp expand_locals(list, state) when is_list(list) do
-    Enum.map_reduce(list, state, &expand_locals/2)
+  defp expand(list, state) when is_list(list) do
+    Enum.map_reduce(list, state, &expand/2)
   end
 
-  defp expand_locals(other, state) do
+  defp expand(other, state) do
     {other, state}
   end
 
+  ### Pattern matching
+
+  defp expand_assign(outer_meta, outer_left, {:=, inner_meta, [inner_left, expr]}, state) do
+    {patterns, vars, expr} = expand_assign(inner_meta, inner_left, expr, state)
+    expand_pattern(outer_meta, outer_left, patterns, vars, expr, state)
+  end
+
+  defp expand_assign(meta, left, expr, state) do
+    expand_pattern(meta, left, [], [], expr, state)
+  end
+
+  defp expand_pattern(_, {:=, meta, [left, right]}, patterns, vars, expr, state) do
+    {patterns, vars, expr} = expand_pattern(meta, right, patterns, vars, expr, state)
+    expand_pattern(meta, left, patterns, vars, expr, state)
+  end
+
+  defp expand_pattern(_meta, {name, _, ctx} = var, patterns, vars, expr, _state)
+       when is_atom(name) and is_atom(ctx) do
+    {patterns, [var | vars], expr}
+  end
+
+  defp expand_pattern(meta, pattern, patterns, vars, expr, state) do
+    pattern = validate_pattern!(meta, pattern, state)
+    {[pattern | patterns], vars, expr}
+  end
+
+  defp validate_pattern!(meta, {left, right}, _state), do: {:{}, meta, [left, right]}
+  defp validate_pattern!(_meta, {:{}, _, _} = tuple,  _state), do: tuple
+
+  defp validate_pattern!(_meta, {name, _, ctx} = var, _state)
+       when is_atom(name) and is_atom(ctx),
+       do: var
+
+  defp validate_pattern!(meta, expr, state) do
+    compile_error!(
+      meta,
+      state,
+      "defn can only pattern match on variables or tuples, got: #{Macro.to_string(expr)}"
+    )
+  end
+
+  defp expand_nested_patterns(patterns, state) do
+    {patterns, {nested, state}} =
+      Enum.map_reduce(patterns, {[], state}, fn {:{}, meta, args}, {nested, state} ->
+        {args, nested, state} = expand_nested_patterns(args, meta, [], nested, state)
+        {{:{}, meta, args}, {nested, state}}
+      end)
+
+    {nested, state} = expand(nested, state)
+    {patterns, nested, state}
+  end
+
+  defp expand_nested_patterns([{name, _, ctx} = var | args], meta, acc, nested, state)
+       when is_atom(name) and is_atom(ctx) do
+    expand_nested_patterns(args, meta, [var | acc], nested, state)
+  end
+
+  defp expand_nested_patterns([expr | args], meta, acc, nested, state) do
+    {var, state} = new_var(state)
+    expand_nested_patterns(args, meta, [var | acc], [{:=, meta, [expr, var]} | nested], state)
+  end
+
+  defp expand_nested_patterns([], _meta, acc, nested, state) do
+    {Enum.reverse(acc), nested, state}
+  end
+
   ## Shared helpers
+
+  defp new_var(state) do
+    counter = state.version + 1
+    {{:nvar, [counter: counter], __MODULE__}, %{state | version: counter}}
+  end
 
   defp maybe_meta({_, meta, _}), do: meta
   defp maybe_meta(_), do: []

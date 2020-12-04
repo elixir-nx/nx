@@ -141,8 +141,6 @@ defmodule Nx.Defn do
 
   ## Callbacks
 
-  # TODO: Support default arguments
-  # TODO: Support cross module calls
   defp define(kind, call, block, env) do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support

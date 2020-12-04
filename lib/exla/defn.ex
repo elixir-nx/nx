@@ -21,7 +21,7 @@ defmodule Exla.Defn do
         shapes = Enum.map(buffers, & &1.shape)
         builder = Exla.Builder.new("#{name}/#{arity}")
         result = fun.(builder, shapes)
-        computation = Exla.Builder.build(to_tuple_or_operator(builder, result))
+        computation = Exla.Builder.build(to_block_result(builder, result))
         client = Exla.Client.fetch!(client_name)
         executable = Exla.Client.compile(client, computation, shapes)
         :persistent_term.put(cache_key, executable)
@@ -189,16 +189,16 @@ defmodule Exla.Defn do
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 
-  defp to_tuple_or_operator(builder, tuple) when is_tuple(tuple) do
+  defp to_block_result(builder, tuple) when is_tuple(tuple) do
     elements =
       tuple
       |> Tuple.to_list()
-      |> Enum.map(&to_tuple_or_operator(builder, &1))
+      |> Enum.map(&to_block_result(builder, &1))
 
     Exla.Op.tuple(builder, elements)
   end
 
-  defp to_tuple_or_operator(builder, operator), do: to_operator(builder, operator)
+  defp to_block_result(builder, operator), do: to_operator(builder, operator)
 
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant) when is_number(constant), do: to_constant(builder, constant)
@@ -369,6 +369,7 @@ defmodule Exla.Defn do
     {to_builder_call(meta, :sf_nx_tensor, [struct]), state}
   end
 
+  # TODO: We need to implement pattern matching on tuple once we add conditionals
   defp traverse({name, meta, args}, state) do
     {args, state} = traverse(args, state)
     {{name, meta, args}, state}

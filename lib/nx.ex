@@ -1878,6 +1878,12 @@ defmodule Nx do
 
   ## Examples
 
+      iex> t = Nx.sum(Nx.tensor(42))
+      iex> Nx.to_bitstring(t)
+      <<42::64-native>>
+      iex> Nx.shape(t)
+      {}
+
       iex> t = Nx.sum(Nx.tensor([1, 2, 3]))
       iex> Nx.to_bitstring(t)
       <<6::64-native>>
@@ -1891,6 +1897,10 @@ defmodule Nx do
       {}
 
   """
+  def sum(tensor)
+
+  def sum(number) when is_number(number), do: tensor(number)
+
   def sum(%T{type: type} = t) do
     data =
       match_types [type] do
