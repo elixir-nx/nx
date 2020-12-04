@@ -548,16 +548,29 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 }
 
 ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 2){
+  if(argc != 3){
     return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaOp *lhs, *rhs;
+  exla::int8 config_int;
 
   if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return exla::error(env, "Unable to get left-hand side operand.");
   if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return exla::error(env, "Unable to get right-hand side operand.");
-  // TODO: Handle Precision Configuration
-  xla::XlaOp result = xla::Dot(*lhs, *rhs);
+  if(!exla::get(env, argv[2], config_int)) return exla::error(env, "Unable to get precision configuration.");
+
+  xla::PrecisionConfig config;
+
+  switch(config_int) {
+    case 0:
+      config.mutable_operand_precision()->Add(xla::PrecisionConfig::DEFAULT);
+    case 1:
+      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGH);
+    case 2:
+      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGHEST);
+  }
+
+  xla::XlaOp result = xla::Dot(*lhs, *rhs, &config);
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
@@ -905,7 +918,7 @@ static ErlNifFunc exla_funcs[] = {
   {"rng_normal", 3, rng_normal},
   {"rng_uniform", 3, rng_uniform},
   /******** Other XLA Ops *******/
-  {"dot", 2, dot},
+  {"dot", 3, dot},
   {"reduce", 4, reduce},
   {"reduce_all", 3, reduce_all},
   {"get_shape", 2, get_shape_op},

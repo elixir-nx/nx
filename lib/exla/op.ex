@@ -200,8 +200,16 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}) do
-    ref = Exla.NIF.dot(left, right) |> unwrap!()
+  # Precision Config is accumulation precision: https://github.com/google/jax/issues/4873
+  def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}, precision_config \\ :default) do
+    config =
+      case precision_config do
+        :default -> 0
+        :high -> 1
+        :highest -> 2
+      end
+
+    ref = Exla.NIF.dot(left, right, config) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

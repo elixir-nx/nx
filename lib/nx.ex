@@ -1905,6 +1905,63 @@ defmodule Nx do
     %{t | data: {Nx.BitStringDevice, data}, shape: {}}
   end
 
+  ## Matrix ops
+
+  @doc """
+  Returns the dot product of two tensors.
+
+  ## Examples
+
+  ### Dot Product of Scalars
+
+      iex> Nx.dot(5, 5)
+      25
+      iex> Nx.dot(-2.0, 5.0)
+      -10.0
+
+  ### Dot Product of Vectors
+
+      iex> t = Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      iex> Nx.to_bitstring(t)
+      <<32::64-native>>
+
+      iex> t = Nx.dot(Nx.tensor([2.0, 4.0, 3.0, 5.0]), Nx.tensor([1.0, 2.0, 3.0, 4.0]))
+      iex> Nx.to_bitstring(t)
+      <<39.0::float-64-native>>
+  """
+  def dot(a, b)
+
+  def dot(a, b) when is_number(a) and is_number(b), do: a * b
+
+  def dot(a = %T{}, b) when is_number(b), do: Nx.multiply(a, b)
+
+  def dot(a, b = %T{}) when is_number(a), do: Nx.multiply(a, b)
+
+  def dot(a = %T{type: left_type, shape: {s1}}, b = %T{type: right_type, shape: {s2}}) when s1 == s2 do
+    output_type = Nx.Type.merge(left_type, right_type)
+    {_, left_size} = left_type
+    {_, right_size} = right_type
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        value =
+          bin_reduce_all(
+            bin_zip_map_all(data!(a), left_size, data!(b), right_size,
+              fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
+                <<write!(read!(x, 0) * read!(y, 1), 2)>>
+              end
+            ) |> IO.iodata_to_binary(), 0,
+            fn <<match!(var, 0), rest::bitstring>>, acc ->
+              {read!(var, 0) + acc, rest}
+            end
+          )
+
+        <<write!(value, 0)>>
+      end
+
+    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: {}}
+  end
+
   ## Device helpers
 
   defp data!(%T{data: {Nx.BitStringDevice, data}}), do: data

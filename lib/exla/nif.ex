@@ -130,7 +130,7 @@ defmodule Exla.NIF do
   def count_leading_zeros(_a), do: nif_error(__ENV__.function)
   def population_count(_a), do: nif_error(__ENV__.function)
 
-  def dot(_a, _b),
+  def dot(_a, _b, _precision),
     do: nif_error(__ENV__.function)
 
   def conditional(_pred, _true_op, _true_comp, _false_op, _false_comp),
