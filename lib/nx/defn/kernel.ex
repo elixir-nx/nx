@@ -88,6 +88,38 @@ defmodule Nx.Defn.Kernel do
     do: raise("special forms must not be imported and exist for documentation purposes")
 
   @doc """
+  Element-wise unary plus operator.
+
+  Simply returns the given argument.
+
+  ## Examples
+
+      defn plus_and_minus(a) do
+        {+a, -a}
+      end
+
+  """
+  defmacro +tensor do
+    tensor
+  end
+
+  @doc """
+  Element-wise unary plus operator.
+
+  It delegates to `Nx.negate/2`.
+
+  ## Examples
+
+      defn plus_and_minus(a) do
+        {+a, -a}
+      end
+
+  """
+  defmacro -tensor do
+    quote do: Nx.negate(unquote(tensor))
+  end
+
+  @doc """
   Element-wise addition operator.
 
   It delegates to `Nx.add/2` (supports broadcasting).

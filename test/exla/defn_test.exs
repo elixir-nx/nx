@@ -269,6 +269,20 @@ defmodule Exla.DefnTest do
       end
     end
 
+    defn unary_minus(a), do: -a
+    @defn_compiler Nx.Defn
+    defn unary_minus_nx(a), do: -a
+
+    test "negate" do
+      for t <- [
+            Nx.tensor([-1, 0, 1], type: {:u, 8}),
+            Nx.tensor([-1, 0, 1]),
+            Nx.tensor([-1.0, 1.0])
+          ] do
+        assert unary_minus(t) == unary_minus_nx(t)
+      end
+    end
+
     defn max_two(a, b), do: max(a, b)
     @defn_compiler Nx.Defn
     defn max_two_nx(a, b), do: max(a, b)

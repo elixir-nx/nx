@@ -106,6 +106,17 @@ defmodule Nx.DefnTest do
       assert add_two_with_pipe(1, 2) == Nx.tensor(3)
       assert add_two_with_pipe(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
     end
+
+    defn unary_plus(a), do: +a
+    defn unary_minus(a), do: -a
+
+    test "unary plus and minus" do
+      assert unary_plus(1) == Nx.tensor(1)
+      assert unary_plus(Nx.tensor([-1, 0, 1])) == Nx.tensor([-1, 0, 1])
+
+      assert unary_minus(1) == Nx.tensor(-1)
+      assert unary_minus(Nx.tensor([-1, 0, 1])) == Nx.tensor([1, 0, -1])
+    end
   end
 
   describe "kernel functions" do

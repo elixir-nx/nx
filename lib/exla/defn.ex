@@ -130,6 +130,10 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [to_float_operator(builder, arg)])
   end
 
+  def nx_negate(builder, arg) do
+    Exla.Op.negate(to_operator(builder, arg))
+  end
+
   def nx_sum(builder, op) do
     op = to_operator(builder, op)
     op_shape = Exla.Op.get_shape(op)

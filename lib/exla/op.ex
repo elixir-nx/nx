@@ -85,12 +85,12 @@ defmodule Exla.Op do
   ## Element-wise unary ops
 
   returns_float = [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
-  returns_int = [:count_leading_zeros, :population_count, :bitwise_not]
   returns_any = [:negate]
+  requires_int = [:count_leading_zeros, :population_count, :bitwise_not]
   requires_signed = [:abs, :sign]
   requires_float = [:floor, :ceil, :round]
 
-  for fun <- returns_float ++ returns_int ++ returns_any ++ requires_signed ++ requires_float do
+  for fun <- returns_float ++ returns_any ++ requires_int ++ requires_signed ++ requires_float do
     @doc """
     Unary #{fun}.
     """

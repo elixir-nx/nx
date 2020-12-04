@@ -1516,6 +1516,47 @@ defmodule Nx do
     %{t | data: {Nx.BitStringDevice, data}, type: output_type}
   end
 
+  @doc """
+  Negates each element in the tensor.
+
+  ## Examples
+
+      iex> t = Nx.negate(1)
+      iex> Nx.to_bitstring(t)
+      <<-1::64-native>>
+
+      iex> t = Nx.negate(Nx.tensor([-1, 0, 1]))
+      iex> Nx.to_bitstring(t)
+      <<1::64-native, 0::64-native, -1::64-native>>
+
+      iex> t = Nx.negate(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
+      iex> Nx.to_bitstring(t)
+      <<-1.0::float-32-native, -2.0::float-32-native, -3.0::float-32-native>>
+
+  If an unsigned tensor is given, it works as `bitwise_not`:
+
+      iex> t = Nx.negate(Nx.tensor([0, 1, 2], type: {:u, 8}))
+      iex> Nx.to_bitstring(t)
+      <<0::8-unsigned, 255::8-unsigned, 254::8-unsigned>>
+
+  """
+  def negate(tensor)
+
+  def negate(number) when is_number(number), do: tensor(-number)
+
+  def negate(%T{type: input_type} = t) do
+    data = data!(t)
+
+    data =
+      match_types [input_type] do
+        for <<match!(seg, 0) <- data>>, into: <<>> do
+          <<write!(-(read!(seg, 0)), 0)>>
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}}
+  end
+
   ## Aggregate ops
 
   @doc """
