@@ -1966,6 +1966,11 @@ defmodule Nx do
   ### Dot Product of n-D and m-D tensor
 
       TODO
+
+  ### Error Cases
+
+      iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
+      ** (ArgumentError) dot product expects shapes to be compatible, last dimension of a (3) does not equal last dimension of b (2)
   """
   def dot(a, b)
 
@@ -1981,6 +1986,10 @@ defmodule Nx do
     {_, right_size} = right_type
 
     last_dim = elem(s1, tuple_size(s1) - 1)
+    unless last_dim == n, do: raise ArgumentError, "dot product expects shapes to be compatible," <>
+                                                   " last dimension of a (#{last_dim}) does not equal" <>
+                                                   " last dimension of b (#{n})"
+
     total_elems = div(tuple_product(s1), last_dim)
 
     output_shape =
