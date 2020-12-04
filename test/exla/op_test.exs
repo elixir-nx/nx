@@ -97,13 +97,13 @@ defmodule Exla.OpTest do
     shape_d = Shape.make_shape({:s, 16}, {1, 1, 1, 1})
     d = Op.constant_from_binary(builder, <<1::16>>, shape_d)
 
-    assert e = %Op{} = Op.tuple(builder, {a, b, c, d})
-    assert f = %Op{} = Op.tuple(builder, {e, a})
-    assert g = %Op{} = Op.tuple(builder, {})
+    assert e = %Op{} = Op.tuple(builder, [a, b, c, d])
+    assert f = %Op{} = Op.tuple(builder, [e, a])
+    assert g = %Op{} = Op.tuple(builder, [])
 
     assert h =
              %Op{} =
-             Op.tuple(builder, {Op.tuple(builder, {e, g}), b, c, f, Op.tuple(builder, {d})})
+             Op.tuple(builder, [Op.tuple(builder, [e, g]), b, c, f, Op.tuple(builder, [d])])
 
     assert %Shape{
              dims: {4},
@@ -201,8 +201,8 @@ defmodule Exla.OpTest do
     shape_d = Shape.make_shape({:s, 16}, {1, 1, 1, 1})
     d = Op.constant_from_binary(builder, <<1::16>>, shape_d)
 
-    e = Op.tuple(builder, {a, b, c, d})
-    f = Op.tuple(builder, {e, c})
+    e = Op.tuple(builder, [a, b, c, d])
+    f = Op.tuple(builder, [e, c])
 
     assert g = %Op{} = Op.get_tuple_element(e, 3)
     assert h = %Op{} = Op.get_tuple_element(f, 0)

@@ -16,11 +16,28 @@ defmodule Nx.Defn.Compiler do
   the AST, and the compiler options. The AST is guaranteed
   to be valid Elixir code. It must return valid Elixir AST.
 
-  Each variable in the AST has a counter which is guaranteed
-  to uniquely identify each variable.
+  Each variable in the AST has a :counter metadata which is
+  guaranteed to uniquely identify each variable.
 
-  The callback uses double underscores so it can be define
+  The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
+
+  ## Nodes
+
+    * `{var_atom_name, meta, context_atom}` - variables
+
+    * `{:__block__, meta, [expr]}` - blocks
+
+    * `{left, right}` and `{:{}, _, [elem]}` - tuples
+
+    * `{:=, meta, [left, right]}` - pattern matching where the left
+      side is either a variable or a (nested) tuple
+
+    * `{:%{}, meta, [{key, value}]}` - a literal `Nx.Tensor`
+
+    * `{{:., dot_meta, [Nx, fun]}, meta, [arg]}` - call to the `Nx`
+      module (most functions are allowed unless the ones listed in
+      the "Unsupported Nx functions" section)
 
   ## Unsupported Nx functions
 
@@ -42,8 +59,8 @@ defmodule Nx.Defn.Compiler do
   #
   # 1. Normalize and validate the AST written by the user.
   #
-  # 2. Inline all local functions. This is stored the result
-  #    stored in each module for cross-module inlining.
+  # 2. Expand patterns and inline all local functions. This is
+  #    the result stored in each module for cross-module inlining.
   #
   # 3. Inline remote calls.
   #
@@ -111,7 +128,7 @@ defmodule Nx.Defn.Compiler do
         [{meta, args, [], ast}] ->
           {args, state} = normalize_list(args, state)
           {ast, state} = normalize_block(ast, meta, state)
-          {ast, state} = inline_locals(ast, state)
+          {ast, state} = expand_locals(ast, state)
           result = {kind, [max_counter: state.version] ++ meta, args, ast}
           state = put_in(state.cache[def], result)
           {result, state}
@@ -135,7 +152,13 @@ defmodule Nx.Defn.Compiler do
     normalize_block(block, meta, state)
   end
 
-  defp normalize({:=, meta, [_, _] = args}, state) do
+  defp normalize({:{}, meta, args}, state) do
+    {args, state} = normalize_list(args, state)
+    {{:{}, meta, args}, state}
+  end
+
+  defp normalize({:=, meta, [left, _] = args}, state) do
+    validate_assign!(left, meta, state)
     {args, state} = normalize_list(args, state)
     {{:=, meta, args}, state}
   end
@@ -186,6 +209,12 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, args}, state}
   end
 
+  defp normalize({left, right}, state) do
+    {left, state} = normalize(left, state)
+    {right, state} = normalize(right, state)
+    {{left, right}, state}
+  end
+
   defp normalize(number, state) when is_number(number) do
     {number, state}
   end
@@ -200,6 +229,16 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize_list(list, state) do
     Enum.map_reduce(list, state, &normalize/2)
+  end
+
+  defp validate_assign!({var, _, ctx}, _meta, _state) when is_atom(var) and is_atom(ctx), do: :ok
+
+  defp validate_assign!(expr, meta, state) do
+    compile_error!(
+      meta,
+      state,
+      "defn can only pattern match on variables or tuples, got: #{Macro.to_string(expr)}"
+    )
   end
 
   ## Normalize block handling
@@ -238,9 +277,9 @@ defmodule Nx.Defn.Compiler do
     normalize_block(rest, [head | acc], meta, state)
   end
 
-  ## Local inlining
+  ## Expansion and Local inlining
 
-  defp inline_locals({:__local__, meta, [name | args]}, state) do
+  defp expand_locals({:__local__, meta, [name | args]}, state) do
     arity = length(args)
 
     if {name, arity} in state.stack do
@@ -286,22 +325,22 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp inline_locals({name, meta, args}, state) do
-    {args, state} = inline_locals(args, state)
+  defp expand_locals({name, meta, args}, state) do
+    {args, state} = expand_locals(args, state)
     {{name, meta, args}, state}
   end
 
-  defp inline_locals({left, right}, state) do
-    {left, state} = inline_locals(left, state)
-    {right, state} = inline_locals(right, state)
+  defp expand_locals({left, right}, state) do
+    {left, state} = expand_locals(left, state)
+    {right, state} = expand_locals(right, state)
     {{left, right}, state}
   end
 
-  defp inline_locals(list, state) when is_list(list) do
-    Enum.map_reduce(list, state, &inline_locals/2)
+  defp expand_locals(list, state) when is_list(list) do
+    Enum.map_reduce(list, state, &expand_locals/2)
   end
 
-  defp inline_locals(other, state) do
+  defp expand_locals(other, state) do
     {other, state}
   end
 

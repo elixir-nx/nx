@@ -21,7 +21,7 @@ defmodule Exla.Defn do
         shapes = Enum.map(buffers, & &1.shape)
         builder = Exla.Builder.new("#{name}/#{arity}")
         result = fun.(builder, shapes)
-        computation = Exla.Builder.build(to_operator(builder, result))
+        computation = Exla.Builder.build(to_tuple_or_operator(builder, result))
         client = Exla.Client.fetch!(client_name)
         executable = Exla.Client.compile(client, computation, shapes)
         :persistent_term.put(cache_key, executable)
@@ -49,6 +49,10 @@ defmodule Exla.Defn do
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
     %Nx.Tensor{data: {Exla.NxDevice, ref}, type: shape.dtype, shape: shape.dims}
+  end
+
+  defp buffer_to_nx({:tuple, buffers}) do
+    List.to_tuple(Enum.map(buffers, &buffer_to_nx/1))
   end
 
   defp nx_to_buffer(%Nx.Tensor{data: {device, data}, type: type, shape: shape}) do
@@ -185,9 +189,23 @@ defmodule Exla.Defn do
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 
+  defp to_tuple_or_operator(builder, tuple) when is_tuple(tuple) do
+    elements =
+      tuple
+      |> Tuple.to_list()
+      |> Enum.map(&to_tuple_or_operator(builder, &1))
+
+    Exla.Op.tuple(builder, elements)
+  end
+
+  defp to_tuple_or_operator(builder, operator), do: to_operator(builder, operator)
+
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant) when is_number(constant), do: to_constant(builder, constant)
-  defp to_operator(_builder, other), do: raise(ArgumentError, "expected a tensor, got: #{other}")
+
+  defp to_operator(_builder, other) do
+    raise ArgumentError, "expected a tensor, got: #{inspect(other)}"
+  end
 
   defp to_float_operator(_builder, %Exla.Op{} = op) do
     shape = Exla.Op.get_shape(op)
@@ -200,7 +218,7 @@ defmodule Exla.Defn do
   end
 
   defp to_float_operator(_builder, other) do
-    raise(ArgumentError, "expected a tensor, got: #{other}")
+    raise ArgumentError, "expected a tensor, got: #{other}"
   end
 
   defp to_typed_operator(_builder, %Exla.Op{} = op, type) do
@@ -218,7 +236,7 @@ defmodule Exla.Defn do
   end
 
   defp to_typed_operator(_builder, other, _type) do
-    raise(ArgumentError, "expected a tensor, got: #{other}")
+    raise ArgumentError, "expected a tensor, got: #{other}"
   end
 
   ## Types

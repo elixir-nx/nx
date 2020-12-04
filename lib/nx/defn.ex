@@ -88,7 +88,7 @@ defmodule Nx.Defn do
   def __compile__(_kind, _meta, _name, args, ast, []) do
     quote do
       unquote(args) = unquote(__MODULE__).__validate__!(unquote(args))
-      Nx.tensor(unquote(ast))
+      unquote(__MODULE__).__result__!(unquote(ast))
     end
   end
 
@@ -108,6 +108,16 @@ defmodule Nx.Defn do
       end
     end
   end
+
+  @doc false
+  def __result__!(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&__result__!/1)
+    |> List.to_tuple()
+  end
+
+  def __result__!(tensor), do: Nx.tensor(tensor)
 
   ## Public API
 

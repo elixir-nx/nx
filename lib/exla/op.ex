@@ -42,12 +42,8 @@ defmodule Exla.Op do
   @doc """
   Builds a tuple with the given elements.
   """
-  def tuple(%Builder{ref: builder}, elements) when is_tuple(elements) do
-    element_refs =
-      elements
-      |> Tuple.to_list()
-      |> Enum.map(& &1.ref)
-
+  def tuple(%Builder{ref: builder}, elements) when is_list(elements) do
+    element_refs = Enum.map(elements, & &1.ref)
     ref = Exla.NIF.tuple(builder, element_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end

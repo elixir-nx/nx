@@ -14,15 +14,27 @@ defmodule Nx.DefnTest do
     defn just_two_float, do: 2.0
 
     test "returns the tensor for the scalar" do
-      t = just_two_int()
-      assert Nx.to_bitstring(t) == <<2::64-native>>
-      assert Nx.type(t) == {:s, 64}
-      assert Nx.shape(t) == {}
+      assert just_two_int() == Nx.tensor(2)
+      assert just_two_float() == Nx.tensor(2.0)
+    end
+  end
 
-      t = just_two_float()
-      assert Nx.to_bitstring(t) == <<2.0::float-64-native>>
-      assert Nx.type(t) == {:f, 64}
-      assert Nx.shape(t) == {}
+  describe "tuples" do
+    defn two_constant_tuples, do: {-1, 1.0}
+    defn three_constant_tuples, do: {1, 2.0, 3}
+
+    test "returns tuples with constants" do
+      assert two_constant_tuples() == {Nx.tensor(-1), Nx.tensor(1.0)}
+      assert three_constant_tuples() == {Nx.tensor(1), Nx.tensor(2.0), Nx.tensor(3)}
+    end
+
+    defn add_subtract_tuple(a, b), do: {a + b, a - b}
+
+    test "returns tuples with operation results" do
+      assert add_subtract_tuple(2, 3) == {Nx.tensor(5), Nx.tensor(-1)}
+
+      assert add_subtract_tuple(Nx.tensor([-1, 0, 1]), 10) ==
+               {Nx.tensor([9, 10, 11]), Nx.tensor([-11, -10, -9])}
     end
   end
 

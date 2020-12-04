@@ -85,7 +85,7 @@ defmodule Exla.ExecutableTest do
              run([t1, t2], fn builder, x, y ->
                Op.tuple(
                  builder,
-                 {Op.tuple(builder, {x, y}), Op.tuple(builder, {}), y}
+                 [Op.tuple(builder, [x, y]), Op.tuple(builder, []), y]
                )
              end)
   end
@@ -98,7 +98,7 @@ defmodule Exla.ExecutableTest do
              run([t1, t2], [keep_on_device: true], fn builder, x, y ->
                Op.tuple(
                  builder,
-                 {Op.tuple(builder, {x, y}), Op.tuple(builder, {}), y}
+                 [Op.tuple(builder, [x, y]), Op.tuple(builder, []), y]
                )
              end)
 
