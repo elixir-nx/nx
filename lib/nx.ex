@@ -2153,6 +2153,22 @@ defmodule Nx do
   @doc """
   Returns the dot product of two tensors.
 
+  Given `a` and `b`, computes the dot product according to
+  the following rules:
+
+    * If both `a` and `b` are scalars, it is equivalent to `a * b`.
+    * If `a` is a scalar and `b` is a tensor, it is equivalent to `Nx.multiply(a, b)`.
+    * If `a` is a tensor and `b` is a scalar, it is equivalent to `Nx.multiply(a, b)`.
+    * If both `a` and `b` are 1-D tensors (vectors), it is the sum of the element-wise
+    product between `a` and `b`. The lengths of `a` and `b` must be equal.
+    * If both `a` and `b` are 2-D tensors (matrices), it is equivalent to matrix-multiplication.
+    * If either `a` or `b` is a 1-D tensor, and the other is an n-D tensor, it is the
+    sum of the element-wise product along the last axis of `a` or `b`. The length of the
+    1-D tensor must match the last dimension of the n-D tensor.
+    * If `a` is an n-D tensor and `b` is an m-D tensor, it is the sum of the element-wise
+    product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
+    of `a` must match the second-to-last dimension of `b`.
+
   ## Examples
 
   ### Dot Product of Scalars
@@ -2172,7 +2188,11 @@ defmodule Nx do
       iex> Nx.to_bitstring(t)
       <<39.0::float-64-native>>
 
-  ### Dot Product of Vector and N-d tensor
+  ### Dot Product of Matrices
+
+      TODO
+
+  ### Dot Product of Vector and n-d tensor
 
       iex> t = Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
       iex> Nx.to_bitstring(t)
@@ -2185,6 +2205,10 @@ defmodule Nx do
       <<6.0::float-64-native, 14.0::float-64-native, 22.0::float-64-native, 30.0::float-64-native>>
       iex> Nx.shape(t)
       {1, 1, 2, 2}
+
+  ### Dot Product of n-D and m-D tensor
+
+      TODO
   """
   def dot(a, b)
 
