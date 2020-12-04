@@ -1563,6 +1563,70 @@ defmodule Nx do
   end
 
   @doc """
+  Computes the sign of each element in the tensor.
+
+  If a number is less than zero, it returns -1.
+  If a number is more than zero, it returns 1.
+  Otherwise it returns zero (which may either be
+  positive or negative for floats).
+
+  ## Examples
+
+      iex> t = Nx.sign(Nx.tensor([-2, -1, 0, 1, 2]))
+      iex> Nx.to_bitstring(t)
+      <<-1::64-native, -1::64-native, 0::64-native, 1::64-native, 1::64-native>>
+
+  """
+  def sign(tensor)
+
+  def sign(number) when is_number(number), do: tensor(erlang_sign(number))
+
+  def sign(%T{type: input_type} = t) do
+    data = data!(t)
+
+    data =
+      match_types [input_type] do
+        for <<match!(seg, 0) <- data>>, into: <<>> do
+          <<write!(erlang_sign(read!(seg, 0)), 0)>>
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}}
+  end
+
+  @compile {:inline, erlang_sign: 1}
+  defp erlang_sign(n) when n < 0, do: -1
+  defp erlang_sign(n) when n > 0, do: 1
+  defp erlang_sign(n), do: n
+
+  @doc """
+  Computes the absolute value of each element in the tensor.
+
+  ## Examples
+
+      iex> t = Nx.abs(Nx.tensor([-2, -1, 0, 1, 2]))
+      iex> Nx.to_bitstring(t)
+      <<2::64-native, 1::64-native, 0::64-native, 1::64-native, 2::64-native>>
+
+  """
+  def abs(tensor)
+
+  def abs(number) when is_number(number), do: tensor(:erlang.abs(number))
+
+  def abs(%T{type: input_type} = t) do
+    data = data!(t)
+
+    data =
+      match_types [input_type] do
+        for <<match!(seg, 0) <- data>>, into: <<>> do
+          <<write!(:erlang.abs(read!(seg, 0)), 0)>>
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}}
+  end
+
+  @doc """
   Applies bitwise not to each element in the tensor.
 
   ## Examples
@@ -1765,6 +1829,47 @@ defmodule Nx do
   defp erlang_clz2(0), do: 2
   defp erlang_clz2(1), do: 1
   defp erlang_clz2(_), do: 0
+
+  for {name, desc} <- [floor: "floor", ceil: "ceil", round: "round (away from zero)"] do
+    [res1, res2, res3, res4] = Enum.map([-1.5, -0.5, 0.5, 1.5], &apply(:erlang, name, [&1]))
+
+    @doc """
+    Calculates the #{desc} of each element in the tensor.
+
+    If a non-floating tensor is given, it is returned as is.
+    If a floating tensor is given, then we apply the operation,
+    but keep its type.
+
+    ## Examples
+
+        iex> t = Nx.#{name}(Nx.tensor([-1, 0, 1]))
+        iex> Nx.to_bitstring(t)
+        <<-1::64-native, 0::64-native, 1::64-native>>
+
+        iex> t = Nx.#{name}(Nx.tensor([-1.5, -0.5, 0.5, 1.5]))
+        iex> Nx.to_bitstring(t)
+        <<#{res1}::float-64-native, #{res2}::float-64-native, #{res3}::float-64-native, #{res4}::float-64-native>>
+
+    """
+    def unquote(name)(tensor)
+
+    def unquote(name)(number) when is_number(number), do: tensor(:erlang.unquote(name)(number))
+
+    def unquote(name)(%T{type: {type, _}} = t) when type in [:s, :u], do: t
+
+    def unquote(name)(%T{type: input_type} = t) do
+      data = data!(t)
+
+      data =
+        match_types [input_type] do
+          for <<match!(seg, 0) <- data>>, into: <<>> do
+            <<write!(:erlang.unquote(name)(read!(seg, 0)), 0)>>
+          end
+        end
+
+      %{t | data: {Nx.BitStringDevice, data}}
+    end
+  end
 
   ## Aggregate ops
 

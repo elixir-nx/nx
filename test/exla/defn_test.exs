@@ -475,6 +475,28 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "unary round+sign ops" do
+    @uint_tensor Nx.tensor([0, 1, 2], type: {:u, 8})
+    @sint_tensor Nx.tensor([-2, -1, 0, 1, 2])
+    @float_tensor Nx.tensor([-1.5, 0.5, -0.0, 0.0, 0.5, 1.5])
+
+    funs = [:abs, :sign, :floor, :ceil, :round]
+
+    for fun <- funs do
+      exla_fun = :"unary_#{fun}"
+      nx_fun = :"unary_#{fun}_nx"
+      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      @defn_compiler Nx.Defn
+      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+
+      test "#{fun}" do
+        compare_tensors!(unquote(exla_fun)(@uint_tensor), unquote(nx_fun)(@uint_tensor))
+        compare_tensors!(unquote(exla_fun)(@sint_tensor), unquote(nx_fun)(@sint_tensor))
+        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
+      end
+    end
+  end
+
   describe "sum" do
     defn sum(t), do: Nx.sum(t)
 

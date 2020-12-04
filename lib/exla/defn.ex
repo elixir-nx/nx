@@ -136,6 +136,34 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [arg])
   end
 
+  def nx_unary_noop_integer_op(builder, op, arg) do
+    arg = to_operator(builder, arg)
+
+    case Exla.Op.get_shape(arg).dtype do
+      {:s, _} -> arg
+      {:u, _} -> arg
+      _ -> apply(Exla.Op, op, [arg])
+    end
+  end
+
+  def nx_abs(builder, arg) do
+    arg = to_operator(builder, arg)
+
+    case Exla.Op.get_shape(arg).dtype do
+      {:u, _} -> arg
+      _ -> Exla.Op.abs(arg)
+    end
+  end
+
+  def nx_sign(builder, arg) do
+    arg = to_operator(builder, arg)
+
+    case Exla.Op.get_shape(arg).dtype do
+      {:u, _} = type -> Exla.Op.min(arg, Exla.Op.constant_r0(builder, 1, type))
+      _ -> Exla.Op.sign(arg)
+    end
+  end
+
   def nx_negate(builder, arg) do
     Exla.Op.negate(to_operator(builder, arg))
   end
@@ -276,6 +304,7 @@ defmodule Exla.Defn do
   @bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
   @unary_bitwise_op [:bitwise_not, :count_leading_zeros, :population_count]
+  @unary_noop_integer_op [:floor, :ceil, :round]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
        when name in @bin_float_arith_op do
@@ -305,6 +334,12 @@ defmodule Exla.Defn do
        when name in @unary_bitwise_op do
     {args, state} = traverse(args, state)
     {to_builder_call(dot_meta, meta, :nx_unary_bitwise_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @unary_noop_integer_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_unary_noop_integer_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do
