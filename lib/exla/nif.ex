@@ -115,7 +115,6 @@ defmodule Exla.NIF do
   def log1p(_a), do: nif_error(__ENV__.function)
   def logistic(_a), do: nif_error(__ENV__.function)
   def sign(_a), do: nif_error(__ENV__.function)
-  def clz(_a), do: nif_error(__ENV__.function)
   def cos(_a), do: nif_error(__ENV__.function)
   def sin(_a), do: nif_error(__ENV__.function)
   def tanh(_a), do: nif_error(__ENV__.function)
@@ -125,9 +124,10 @@ defmodule Exla.NIF do
   def rsqrt(_a), do: nif_error(__ENV__.function)
   def cbrt(_a), do: nif_error(__ENV__.function)
   def is_finite(_a), do: nif_error(__ENV__.function)
-  def bitwise_not(_a), do: nif_error(__ENV__.function)
-  def neg(_a), do: nif_error(__ENV__.function)
+  def negate(_a), do: nif_error(__ENV__.function)
   def conj(_a), do: nif_error(__ENV__.function)
+  def bitwise_not(_a), do: nif_error(__ENV__.function)
+  def count_leading_zeros(_a), do: nif_error(__ENV__.function)
   def population_count(_a), do: nif_error(__ENV__.function)
 
   def dot(_a, _b),
