@@ -1,6 +1,5 @@
 defmodule TensorTest do
   use ExUnit.Case, async: true
-  import Inspect.Algebra
 
   test "inspect" do
     t1 = Nx.tensor(5)
