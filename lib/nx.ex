@@ -16,10 +16,11 @@ defmodule Nx do
   using this library:
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> t = Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
-      iex> Nx.to_bitstring(t)
-      <<0.03205860328008499::float-64-native, 0.08714431874203257::float-64-native,
-        0.23688281808991013::float-64-native, 0.6439142598879722::float-64-native>>
+      iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
+      #Nx.Tensor<
+        f64[2][2]
+        [[0.03205860328008499, 0.08714431874203257], [0.23688281808991013, 0.6439142598879722]]
+      >
 
   The `Nx` library also provides the `Nx.Defn` functionality,
   which provides a subset of Elixir tailored for numerical
@@ -227,107 +228,78 @@ defmodule Nx do
 
   A number returns a tensor of zero dimensions:
 
-      iex> t = Nx.tensor(0)
-      iex> Nx.to_bitstring(t)
-      <<0::64-native>>
-      iex> Nx.type(t)
-      {:s, 64}
-      iex> Nx.shape(t)
-      {}
+      iex> Nx.tensor(0)
+      #Nx.Tensor<
+        s64
+        0
+      >
 
-      iex> t = Nx.tensor(1.0)
-      iex> Nx.to_bitstring(t)
-      <<1::float-64-native>>
-      iex> Nx.type(t)
-      {:f, 64}
-      iex> Nx.shape(t)
-      {}
+      iex> Nx.tensor(1.0)
+      #Nx.Tensor<
+        f64
+        1.0
+      >
 
   Giving a list returns a vector (an one-dimensional tensor):
 
-      iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 3::64-native>>
-      iex> Nx.type(t)
-      {:s, 64}
-      iex> Nx.shape(t)
-      {3}
+      iex> Nx.tensor([1, 2, 3])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
 
-      iex> t = Nx.tensor([1.2, 2.3, 3.4, 4.5])
-      iex> Nx.to_bitstring(t)
-      <<1.2::float-64-native, 2.3::float-64-native, 3.4::float-64-native, 4.5::float-64-native>>
-      iex> Nx.type(t)
-      {:f, 64}
-      iex> Nx.shape(t)
-      {4}
+      iex> Nx.tensor([1.2, 2.3, 3.4, 4.5])
+      #Nx.Tensor<
+        f64[4]
+        [1.2, 2.3, 3.4, 4.5]
+      >
 
   The type can be explicitly given. Integers and floats
-  bigger than the given size overlap:
+  bigger than the given size overflow:
 
-      iex> t = Nx.tensor([300, 301, 302], type: {:s, 8})
-      iex> Nx.to_bitstring(t)
-      <<44::8, 45::8, 46::8>>
-      iex> Nx.type(t)
-      {:s, 8}
-
-      iex> t = Nx.tensor([1.2, 2.3, 3.4], type: {:f, 32})
-      iex> Nx.to_bitstring(t)
-      <<1.2::float-native-32, 2.3::float-native-32, 3.4::float-native-32>>
-      iex> Nx.type(t)
-      {:f, 32}
-
-  An empty list defaults to floats:
-
-      iex> t = Nx.tensor([])
-      iex> Nx.to_bitstring(t)
-      <<>>
-      iex> Nx.type(t)
-      {:f, 64}
+      iex> Nx.tensor([300, 301, 302], type: {:s, 8})
+      #Nx.Tensor<
+        s8[3]
+        [44, 45, 46]
+      >
 
   Mixed types get the highest precision type:
 
-      iex> t = Nx.tensor([1, 2, 3.0])
-      iex> Nx.to_bitstring(t)
-      <<1.0::float-64-native, 2.0::float-64-native, 3::float-64-native>>
-      iex> Nx.type(t)
-      {:f, 64}
+      iex> Nx.tensor([1, 2, 3.0])
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 2.0, 3.0]
+      >
 
   Multi-dimensional tensors are also possible:
 
-      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native>>
-      iex> Nx.type(t)
-      {:s, 64}
-      iex> Nx.shape(t)
-      {2, 3}
+      iex> Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      #Nx.Tensor<
+        s64[2][3]
+        [[1, 2, 3], [4, 5, 6]]
+      >
 
-      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]])
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native>>
-      iex> Nx.type(t)
-      {:s, 64}
-      iex> Nx.shape(t)
-      {3, 2}
+      iex> Nx.tensor([[1, 2], [3, 4], [5, 6]])
+      #Nx.Tensor<
+        s64[3][2]
+        [[1, 2], [3, 4], [5, 6]]
+      >
 
-      iex> t = Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[-1, -2], [-3, -4], [-5, -6]]])
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 5::64-native, 6::64-native,
-        -1::64-native, -2::64-native, -3::64-native, -4::64-native, -5::64-native, -6::64-native>>
-      iex> Nx.type(t)
-      {:s, 64}
-      iex> Nx.shape(t)
-      {2, 3, 2}
+      iex> Nx.tensor([[[1, 2], [3, 4], [5, 6]], [[-1, -2], [-3, -4], [-5, -6]]])
+      #Nx.Tensor<
+        s64[2][3][2]
+        [[[1, 2], [3, 4], [5, 6]], [[-1, -2], [-3, -4], [-5, -6]]]
+      >
 
   Brain-floating points are also supported, although they are
   emulated in Elixir and therefore perform slower without a
   compilation backend:
 
-      iex> t = Nx.tensor([1, 2, 3], type: {:bf, 16})
-      iex> Nx.to_bitstring(t)
-      <<16256::16-native, 16384::16-native, 16448::16-native>>
-      iex> Nx.type(t)
-      {:bf, 16}
+      iex> Nx.tensor([1, 2, 3], type: {:bf, 16})
+      #Nx.Tensor<
+        bf16[3]
+        [1.0, 2.0, 3.0]
+      >
 
   Given a tensor to `tensor/2` returns the tensor itself:
 
@@ -367,6 +339,11 @@ defmodule Nx do
     type = opts[:type] || Nx.Type.infer(arg)
     Nx.Type.validate!(type)
     {dimensions, data} = flatten(arg, type)
+
+    if data == "" do
+      raise "cannot build empty tensor"
+    end
+
     %T{shape: dimensions, type: type, data: {Nx.BitStringDevice, data}}
   end
 
@@ -423,9 +400,6 @@ defmodule Nx do
       iex> Nx.from_bitstring(<<1, 2, 3, 4>>, {:s, 8}, {2, 2})
       Nx.tensor([[1, 2], [3, 4]], type: {:s, 8})
 
-      iex> Nx.from_bitstring(<<>>, {:s, 8}, {0})
-      Nx.tensor([], type: {:s, 8})
-
       iex> Nx.from_bitstring(<<12.3::float-64-native>>, {:f, 64}, {})
       Nx.tensor(12.3)
 
@@ -435,6 +409,10 @@ defmodule Nx do
   """
   def from_bitstring(bitstring, type, shape) when is_bitstring(bitstring) and is_tuple(shape) do
     {_, size} = Nx.Type.validate!(type)
+
+    if bitstring == "" do
+      raise ArgumentError, "cannot build an empty tensor"
+    end
 
     if bit_size(bitstring) != size * tuple_product(shape) do
       raise ArgumentError, "bitstring does not match the given type and dimensions"

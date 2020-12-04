@@ -471,7 +471,7 @@ defmodule Nx.DefnTest do
                    ~r"defn expects a tensor allocated on Nx.BitStringDevice as a constant",
                    fn ->
                      defmodule Sample do
-                       @nx_tensor Nx.tensor([]) |> Map.replace!(:data, {SomethingBad, :another})
+                       @nx_tensor Nx.tensor(1) |> Map.replace!(:data, {SomethingBad, :another})
                        import Nx.Defn
                        defn default, do: @nx_tensor
                      end

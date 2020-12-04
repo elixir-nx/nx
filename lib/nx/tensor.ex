@@ -61,7 +61,7 @@ defmodule Nx.Tensor do
 
     defp chunk([_], data, _size, {type, size}) do
       case type do
-        :s -> for <<x::size(size)-native <- data>>, do: Integer.to_string(x)
+        :s -> for <<x::size(size)-signed-native <- data>>, do: Integer.to_string(x)
         :u -> for <<x::size(size)-unsigned-native <- data>>, do: Integer.to_string(x)
         :f -> for <<x::size(size)-bitstring <- data>>, do: read_float(x, size)
         :bf -> for <<x::16-bitstring <- data>>, do: read_bf16(x)
