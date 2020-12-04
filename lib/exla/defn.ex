@@ -185,6 +185,13 @@ defmodule Exla.Defn do
     Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
   end
 
+  def nx_dot(builder, op, left, right) do
+    type = binary_op_type(left, right)
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    Exla.Op.dot(left, right)
+  end
+
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant) when is_number(constant), do: to_constant(builder, constant)
   defp to_operator(_builder, other), do: raise(ArgumentError, "expected a tensor, got: #{other}")
