@@ -2171,6 +2171,20 @@ defmodule Nx do
       iex> t = Nx.dot(Nx.tensor([2.0, 4.0, 3.0, 5.0]), Nx.tensor([1.0, 2.0, 3.0, 4.0]))
       iex> Nx.to_bitstring(t)
       <<39.0::float-64-native>>
+
+  ### Dot Product of Vector and N-d tensor
+
+      iex> t = Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
+      iex> Nx.to_bitstring(t)
+      <<25::64-native, 55::64-native, 85::64-native, 115::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]]), Nx.tensor([2.0, 2.0]))
+      iex> Nx.to_bitstring(t)
+      <<6.0::float-64-native, 14.0::float-64-native, 22.0::float-64-native, 30.0::float-64-native>>
+      iex> Nx.shape(t)
+      {1, 1, 2, 2}
   """
   def dot(a, b)
 
@@ -2180,30 +2194,45 @@ defmodule Nx do
 
   def dot(a, b = %T{}) when is_number(a), do: Nx.multiply(a, b)
 
-  def dot(a = %T{type: left_type, shape: {s1}}, b = %T{type: right_type, shape: {s2}}) when s1 == s2 do
+  def dot(a = %T{type: left_type, shape: s1}, b = %T{type: right_type, shape: {n}}) do
     output_type = Nx.Type.merge(left_type, right_type)
     {_, left_size} = left_type
     {_, right_size} = right_type
 
+    last_dim = elem(s1, tuple_size(s1) - 1)
+    total_elems = div(tuple_product(s1), last_dim)
+
+    output_shape =
+      s1
+      |> Tuple.to_list()
+      |> Enum.take(tuple_size(s1) - 2)
+      |> Kernel.++([last_dim])
+      |> List.to_tuple()
+
     data =
       match_types [left_type, right_type, output_type] do
-        value =
-          bin_reduce_all(
-            bin_zip_map_all(data!(a), left_size, data!(b), right_size,
-              fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
-                <<write!(read!(x, 0) * read!(y, 1), 2)>>
+        for i <- 0..total_elems-1, into: <<>> do
+          row = :binary.part(data!(a), div(i*n*left_size, 8), div(n*left_size, 8))
+          value =
+            bin_reduce_all(
+              bin_zip_map_all(row, left_size, data!(b), right_size,
+                fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
+                  <<write!(read!(x, 0) * read!(y, 1), 2)>>
+                end
+              ) |> IO.iodata_to_binary(), 0,
+              fn <<match!(var, 0), rest::bitstring>>, acc ->
+                {read!(var, 0) + acc, rest}
               end
-            ) |> IO.iodata_to_binary(), 0,
-            fn <<match!(var, 0), rest::bitstring>>, acc ->
-              {read!(var, 0) + acc, rest}
-            end
-          )
+            )
 
-        <<write!(value, 0)>>
+          <<write!(value, 0)>>
+        end
       end
 
-    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: {}}
+    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
   end
+
+  def dot(a = %T{shape: {_}}, b = %T{}), do: Nx.dot(b, a)
 
   ## Device helpers
 
