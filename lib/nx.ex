@@ -75,6 +75,7 @@ defmodule Nx do
 
   alias Nx.Tensor, as: T
   import Kernel, except: [max: 2, min: 2]
+  import Bitwise, only: [>>>: 2, &&&: 2]
 
   ## Private macros
 
@@ -956,7 +957,6 @@ defmodule Nx do
     guarded_pow(base, exponent)
   end
 
-  import Bitwise, only: [>>>: 2, &&&: 2]
   defp guarded_pow(_, 0), do: 1
   defp guarded_pow(b, 1), do: b
   defp guarded_pow(b, e) when (e &&& 1) == 0, do: guarded_pow(b * b, e >>> 1)
@@ -1213,6 +1213,11 @@ defmodule Nx do
     :element_wise_bin_bitwise_arith,
     &quote(do: assert_bitwise_type!(unquote(&1)))
   )
+
+  defp to_unsigned(integer, size) do
+    <<integer::unsigned-size(size)>> = <<integer::signed-size(size)>>
+    integer
+  end
 
   defp assert_bitwise_type!({:s, _} = type), do: type
   defp assert_bitwise_type!({:u, _} = type), do: type
@@ -1597,6 +1602,169 @@ defmodule Nx do
 
     %{t | data: {Nx.BitStringDevice, data}}
   end
+
+  @doc """
+  Computes the bitwise population count of each element in the tensor.
+
+  ## Examples
+
+      iex> t = Nx.population_count(1)
+      iex> Nx.to_bitstring(t)
+      <<1::64-native>>
+
+      iex> t = Nx.population_count(-128)
+      iex> Nx.to_bitstring(t)
+      <<57::64-native>>
+
+      iex> t = Nx.population_count(Nx.tensor([0, 1, 254, 255]))
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 1::64-native, 7::64-native, 8::64-native>>
+
+      iex> t = Nx.population_count(Nx.tensor([0, 1, 126, 127, -1, -127, -128], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<0, 1, 6, 7, 8, 2, 1>>
+
+  ### Error cases
+
+      iex> Nx.population_count(Nx.tensor([0.0, 1.0]))
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+  """
+  def population_count(tensor)
+
+  def population_count(number) when is_integer(number),
+    do: tensor(erlang_popcount(to_unsigned(number, 64), 0))
+
+  def population_count(number) when is_float(number),
+    do: assert_bitwise_type!({:f, 64})
+
+  def population_count(%T{type: {_, size} = input_type} = t) do
+    assert_bitwise_type!(input_type)
+
+    data =
+      for <<seg::unsigned-size(size)-native <- data!(t)>>, into: <<>> do
+        match_types [input_type] do
+          <<write!(erlang_popcount(seg, 0), 0)>>
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}}
+  end
+
+  # https://en.wikipedia.org/wiki/Hamming_weight
+  # There are algorithms with faster worst case but they are size specific.
+  # The implementation below is also the most efficient for low counts. Given
+  # our integers are always 64 bits internally, we will have a lot of zeros
+  # internally, so this should be the fastest.
+  defp erlang_popcount(0, count), do: count
+  defp erlang_popcount(n, count), do: erlang_popcount(n &&& (n - 1), count + 1)
+
+  @doc """
+  Counts the number of leading zeros of each element in the tensor.
+
+  ## Examples
+
+      iex> t = Nx.count_leading_zeros(1)
+      iex> Nx.to_bitstring(t)
+      <<63::64-native>>
+
+      iex> t = Nx.count_leading_zeros(-1)
+      iex> Nx.to_bitstring(t)
+      <<0::64-native>>
+
+      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF]))
+      iex> Nx.to_bitstring(t)
+      <<64::64-native, 60::64-native, 56::64-native, 48::64-native>>
+
+      iex> t = Nx.count_leading_zeros(Nx.tensor([0xF000000000000000, 0x0F00000000000000]))
+      iex> Nx.to_bitstring(t)
+      <<0::64-native, 4::64-native>>
+
+      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 32}))
+      iex> Nx.to_bitstring(t)
+      <<32::32-native, 28::32-native, 24::32-native, 16::32-native>>
+
+      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 16}))
+      iex> Nx.to_bitstring(t)
+      <<16::16-native, 12::16-native, 8::16-native, 0::16-native>>
+
+      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, -1, -128], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<8, 7, 6, 5, 4, 3, 2, 1, 0, 0>>
+
+      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, 128], type: {:u, 8}))
+      iex> Nx.to_bitstring(t)
+      <<8, 7, 6, 5, 4, 3, 2, 1, 0>>
+
+  ### Error cases
+
+      iex> Nx.population_count(Nx.tensor([0.0, 1.0]))
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+  """
+  def count_leading_zeros(tensor)
+
+  def count_leading_zeros(number) when is_integer(number),
+    do: tensor(erlang_clz(to_unsigned(number, 64), 64))
+
+  def count_leading_zeros(number) when is_float(number),
+    do: assert_bitwise_type!({:f, 64})
+
+  def count_leading_zeros(%T{type: {_, size} = input_type} = t) do
+    assert_bitwise_type!(input_type)
+
+    data =
+      for <<seg::unsigned-size(size)-native <- data!(t)>>, into: <<>> do
+        match_types [input_type] do
+          <<write!(erlang_clz(seg, size), 0)>>
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}}
+  end
+
+  defp erlang_clz(0, size), do: size
+  defp erlang_clz(n, 64), do: erlang_clz64(n)
+  defp erlang_clz(n, 32), do: erlang_clz32(n)
+  defp erlang_clz(n, 16), do: erlang_clz16(n)
+  defp erlang_clz(n, 8), do: erlang_clz8(n)
+
+  defp erlang_clz64(num) do
+    case num &&& 0xFFFFFFFF00000000 do
+      0 -> 32 + erlang_clz32(num)
+      _ -> erlang_clz32(num >>> 32)
+    end
+  end
+
+  defp erlang_clz32(num) do
+    case num &&& 0xFFFF0000 do
+      0 -> 16 + erlang_clz16(num)
+      _ -> erlang_clz16(num >>> 16)
+    end
+  end
+
+  defp erlang_clz16(num) do
+    case num &&& 0xFF00 do
+      0 -> 8 + erlang_clz8(num)
+      _ -> erlang_clz8(num >>> 8)
+    end
+  end
+
+  defp erlang_clz8(num) do
+    case num &&& 0xF0 do
+      0 -> 4 + erlang_clz4(num)
+      _ -> erlang_clz4(num >>> 4)
+    end
+  end
+
+  defp erlang_clz4(num) do
+    case num &&& 0xC do
+      0 -> 2 + erlang_clz2(num)
+      _ -> erlang_clz2(num >>> 2)
+    end
+  end
+
+  defp erlang_clz2(0), do: 2
+  defp erlang_clz2(1), do: 1
+  defp erlang_clz2(_), do: 0
 
   ## Aggregate ops
 

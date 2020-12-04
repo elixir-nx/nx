@@ -370,6 +370,24 @@ defmodule Exla.DefnTest do
       assert bitwise_not(@left) == bitwise_not_nx(@left)
     end
 
+    defn bitwise_pc(a), do: Nx.population_count(a)
+    @defn_compiler Nx.Defn
+    defn bitwise_pc_nx(a), do: Nx.population_count(a)
+
+    test "population_count" do
+      assert Nx.shape(bitwise_pc(@left)) == {5}
+      assert bitwise_pc(@left) == bitwise_pc_nx(@left)
+    end
+
+    defn bitwise_clz(a), do: Nx.count_leading_zeros(a)
+    @defn_compiler Nx.Defn
+    defn bitwise_clz_nx(a), do: Nx.count_leading_zeros(a)
+
+    test "count_leading_zeros" do
+      assert Nx.shape(bitwise_clz(@left)) == {5}
+      assert bitwise_clz(@left) == bitwise_clz_nx(@left)
+    end
+
     @left Nx.tensor([-2, -1, 0, 1, 2])
     @right Nx.tensor([[0], [1], [2], [3], [4]])
 
