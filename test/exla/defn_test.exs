@@ -361,6 +361,15 @@ defmodule Exla.DefnTest do
       assert bitwise_xor(@left, @right) == bitwise_xor_nx(@left, @right)
     end
 
+    defn bitwise_not(a), do: ~~~a
+    @defn_compiler Nx.Defn
+    defn bitwise_not_nx(a), do: ~~~a
+
+    test "bitwise_not" do
+      assert Nx.shape(bitwise_not(@left)) == {5}
+      assert bitwise_not(@left) == bitwise_not_nx(@left)
+    end
+
     @left Nx.tensor([-2, -1, 0, 1, 2])
     @right Nx.tensor([[0], [1], [2], [3], [4]])
 

@@ -117,6 +117,12 @@ defmodule Nx.DefnTest do
       assert unary_minus(1) == Nx.tensor(-1)
       assert unary_minus(Nx.tensor([-1, 0, 1])) == Nx.tensor([1, 0, -1])
     end
+
+    defn unary_bnot(a), do: ~~~a
+
+    test "~~~" do
+      assert unary_bnot(Nx.tensor([-1, 0, 1])) == Nx.tensor([0, -1, -2])
+    end
   end
 
   describe "kernel functions" do

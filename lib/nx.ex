@@ -1557,6 +1557,47 @@ defmodule Nx do
     %{t | data: {Nx.BitStringDevice, data}}
   end
 
+  @doc """
+  Applies bitwise not to each element in the tensor.
+
+  ## Examples
+
+      iex> t = Nx.bitwise_not(1)
+      iex> Nx.to_bitstring(t)
+      <<-2::64-native>>
+
+      iex> t = Nx.bitwise_not(Nx.tensor([-1, 0, 1], type: {:s, 8}))
+      iex> Nx.to_bitstring(t)
+      <<0::8, -1::8, -2::8>>
+
+      iex> t = Nx.bitwise_not(Nx.tensor([0, 1, 254, 255], type: {:u, 8}))
+      iex> Nx.to_bitstring(t)
+      <<255::8-unsigned, 254::8-unsigned, 1::8-unsigned, 0::8-unsigned>>
+
+  ### Error cases
+
+      iex> Nx.bitwise_not(Nx.tensor([0.0, 1.0]))
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+  """
+  def bitwise_not(tensor)
+
+  def bitwise_not(number) when is_integer(number), do: tensor(:erlang.bnot(number))
+  def bitwise_not(number) when is_float(number), do: assert_bitwise_type!({:f, 64})
+
+  def bitwise_not(%T{type: input_type} = t) do
+    assert_bitwise_type!(input_type)
+    data = data!(t)
+
+    data =
+      match_types [input_type] do
+        for <<match!(seg, 0) <- data>>, into: <<>> do
+          <<write!(:erlang.bnot(read!(seg, 0)), 0)>>
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}}
+  end
+
   ## Aggregate ops
 
   @doc """

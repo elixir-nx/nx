@@ -267,6 +267,21 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Element-wise bitwise not operation.
+
+  Only integer tensors are supported.
+  It delegates to `Nx.bitwise_not/1`.
+
+  ## Examples
+
+      defn bnot(a), do: ~~~a
+
+  """
+  defmacro ~~~tensor do
+    quote do: Nx.bitwise_not(unquote(tensor))
+  end
+
+  @doc """
   Element-wise left shift operation.
 
   Only integer tensors are supported.

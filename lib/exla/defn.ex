@@ -91,7 +91,7 @@ defmodule Exla.Defn do
 
   ## Operators
 
-  def nx_element_wise_bin_float_arith_op(builder, op, left, right) do
+  def nx_bin_float_arith_op(builder, op, left, right) do
     type = binary_op_type(left, right) |> Nx.Type.to_floating()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
@@ -99,7 +99,7 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
-  def nx_element_wise_bin_arith_op(builder, op, left, right) do
+  def nx_bin_arith_op(builder, op, left, right) do
     type = binary_op_type(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
@@ -107,7 +107,7 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
-  def nx_element_wise_bin_bitwise_op(builder, :right_shift, left, right) do
+  def nx_bin_bitwise_op(builder, :right_shift, left, right) do
     op =
       # Perform logical operation if the left side is unsigned.
       # It can only be unsigned if it is an operator (numbers are always floats or signed).
@@ -115,10 +115,10 @@ defmodule Exla.Defn do
         do: :right_shift_logical,
         else: :right_shift_arithmetic
 
-    nx_element_wise_bin_bitwise_op(builder, op, left, right)
+    nx_bin_bitwise_op(builder, op, left, right)
   end
 
-  def nx_element_wise_bin_bitwise_op(builder, op, left, right) do
+  def nx_bin_bitwise_op(builder, op, left, right) do
     type = binary_op_type(left, right) |> assert_integer_type!(op)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
@@ -128,6 +128,12 @@ defmodule Exla.Defn do
 
   def nx_unary_float_op(builder, op, arg) do
     apply(Exla.Op, op, [to_float_operator(builder, arg)])
+  end
+
+  def nx_unary_bitwise_op(builder, op, arg) do
+    arg = to_operator(builder, arg)
+    assert_integer_type!(Exla.Op.get_shape(arg).dtype, op)
+    apply(Exla.Op, op, [arg])
   end
 
   def nx_negate(builder, arg) do
@@ -265,33 +271,40 @@ defmodule Exla.Defn do
     end
   end
 
-  @element_wise_bin_float_arith_op [:divide, :arctan2]
-  @element_wise_bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
-  @element_wise_bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
+  @bin_float_arith_op [:divide, :arctan2]
+  @bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
+  @bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
+  @unary_bitwise_op [:bitwise_not, :count_leading_zeros, :population_count]
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @element_wise_bin_float_arith_op do
+       when name in @bin_float_arith_op do
     {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_float_arith_op, [name | args]), state}
+    {to_builder_call(dot_meta, meta, :nx_bin_float_arith_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @element_wise_bin_arith_op do
+       when name in @bin_arith_op do
     {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_arith_op, [name | args]), state}
+    {to_builder_call(dot_meta, meta, :nx_bin_arith_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @element_wise_bin_bitwise_op do
+       when name in @bin_bitwise_op do
     {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_element_wise_bin_bitwise_op, [name | args]), state}
+    {to_builder_call(dot_meta, meta, :nx_bin_bitwise_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
        when name in @unary_float_op do
     {args, state} = traverse(args, state)
     {to_builder_call(dot_meta, meta, :nx_unary_float_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @unary_bitwise_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_unary_bitwise_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do
