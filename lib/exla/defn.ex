@@ -248,6 +248,13 @@ defmodule Exla.Defn do
 
   defp to_block_result(builder, operator), do: to_operator(builder, operator)
 
+  def nx_dot(builder, op, left, right) do
+    type = binary_op_type(left, right)
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    Exla.Op.dot(left, right)
+  end
+
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant) when is_number(constant), do: to_constant(builder, constant)
 
