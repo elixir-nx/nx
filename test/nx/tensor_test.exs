@@ -1,22 +1,85 @@
-defmodule TensorTest do
+defmodule Nx.TensorTest do
   use ExUnit.Case, async: true
 
-  test "inspect" do
-    t1 = Nx.tensor(5)
-    t2 = Nx.tensor([1, 2, 3])
-    t3 = Nx.tensor([4.0, 5.0, 6.0])
+  describe "inspect" do
+    test "scalar" do
+      assert inspect(Nx.tensor(123)) == """
+      #Nx.Tensor<
+        s64
+        123
+      >\
+      """
+    end
 
-    <<neg_inf::64-float-native>> = <<0xFF800000::64-float-native>>
-    <<inf::64-float-native>> = <<0x7F800000::64-float-native>>
-    <<nan::64-float-native>> = <<0x7FC00000::64-float-native>>
+    test "n-dimensional" do
+      assert inspect(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == """
+      #Nx.Tensor<
+        s64[2][3]
+        [[1, 2, 3], [4, 5, 6]]
+      >\
+      """
 
-    t4 = Nx.tensor([[nan, neg_inf, 4.0, 5.0], [inf, neg_inf, nan, 2.0]])
-    t5 = Nx.device_transfer(t2, Exla.NxDevice, client: :default)
+      assert inspect(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) == """
+      #Nx.Tensor<
+        f64[2][3]
+        [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+      >\
+      """
+    end
 
-    assert inspect(t1) == "#Nx.Tensor<\ns64\n5\n>"
-    assert inspect(t2) == "#Nx.Tensor<\ns64[3]\n[1, 2, 3]\n>"
-    assert inspect(t3) == "#Nx.Tensor<\nf64[3]\n[4.0, 5.0, 6.0]\n>"
-    assert inspect(t4) == "#Nx.Tensor<\nf64[2][4]\n[[NaN, -Infinity, 4.0, 5.0], [Infinity, -Infinity, NaN, 2.0]]\n>"
-    assert inspect(t5) == "#Nx.Tensor<\ns64[3]\nExla.NxDevice\n>"
+    test "custom device" do
+      t = Nx.tensor([1, 2, 3, 4])
+      t = Nx.device_transfer(t, Nx.ProcessDevice, key: :example)
+
+      assert inspect(t) == """
+      #Nx.Tensor<
+        s64[4]
+        Nx.ProcessDevice
+      >\
+      """
+    end
+
+    test "infinity and nan for bf16" do
+      bin = <<0xFF80::16-native, 0x7F80::16-native, 0xFFC1::16-native, 0xFF81::16-native>>
+
+      assert inspect(Nx.from_bitstring(bin, {:bf, 16}, {4})) == """
+             #Nx.Tensor<
+               bf16[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
+    end
+
+    test "infinity and nan for f32" do
+      bin =
+        <<0xFF800000::32-native, 0x7F800000::32-native, 0xFF800001::32-native,
+          0xFFC00001::32-native>>
+
+      # Assert that none of them are indeed valid
+      assert for(<<x::float-32-native <- bin>>, do: x) == []
+
+      assert inspect(Nx.from_bitstring(bin, {:f, 32}, {4})) == """
+             #Nx.Tensor<
+               f32[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
+    end
+
+    test "infinity and nan for f64" do
+      bin =
+        <<0xFFF0000000000000::64-native, 0x7FF0000000000000::64-native,
+          0x7FF0000000000001::64-native, 0x7FF8000000000001::64-native>>
+
+      # Assert that none of them are indeed valid
+      assert for(<<x::float-64-native <- bin>>, do: x) == []
+
+      assert inspect(Nx.from_bitstring(bin, {:f, 64}, {4})) == """
+             #Nx.Tensor<
+               f64[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
+    end
   end
 end
