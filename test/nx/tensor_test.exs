@@ -11,10 +11,12 @@ defmodule TensorTest do
     <<nan::64-float-native>> = <<0x7FC00000::64-float-native>>
 
     t4 = Nx.tensor([[nan, neg_inf, 4.0, 5.0], [inf, neg_inf, nan, 2.0]])
+    t5 = Nx.device_transfer(t2, Exla.NxDevice, client: :default)
 
     assert inspect(t1) == "#Nx.Tensor<\ns64\n5\n>"
     assert inspect(t2) == "#Nx.Tensor<\ns64[3]\n[1, 2, 3]\n>"
     assert inspect(t3) == "#Nx.Tensor<\nf64[3]\n[4.0, 5.0, 6.0]\n>"
     assert inspect(t4) == "#Nx.Tensor<\nf64[2][4]\n[[NaN, -Infinity, 4.0, 5.0], [Infinity, -Infinity, NaN, 2.0]]\n>"
+    assert inspect(t5) == "#Nx.Tensor<\ns64[3]\nExla.NxDevice\n>"
   end
 end
