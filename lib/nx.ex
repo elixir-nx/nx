@@ -2094,7 +2094,14 @@ defmodule Nx do
   ## Aggregate ops
 
   @doc """
-  Returns the sum across all dimensions.
+  Returns the sum for the tensor.
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axis: 0`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then counts
+  the axis from the back. For example, `axis: -1` will
+  always aggregate all rows.
 
   ## Examples
 
@@ -2116,54 +2123,15 @@ defmodule Nx do
         10.0
       >
 
-  """
-  def sum(tensor)
+  ### Aggregating over an axis
 
-  def sum(number) when is_number(number), do: tensor(number)
-
-  def sum(%T{type: type} = t) do
-    data =
-      match_types [type] do
-        value =
-          bin_reduce_all(data!(t), 0, fn <<match!(var, 0), rest::bitstring>>, acc ->
-            {read!(var, 0) + acc, rest}
-          end)
-
-        <<write!(value, 0)>>
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}, shape: {}}
-  end
-
-  @doc """
-
-  ## Examples
-
-      iex> Nx.sum(Nx.tensor(1))
+      iex> Nx.sum(Nx.tensor([1, 2, 3]), axis: 0)
       #Nx.Tensor<
         s64
-        1
+        6
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), 2)
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [6, 15],
-          [24, 33]
-        ]
-      >
-
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), 1)
-      #Nx.Tensor<
-        s64[2][3]
-        [
-          [5, 7, 9],
-          [17, 19, 21]
-        ]
-      >
-
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), 0)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 0)
       #Nx.Tensor<
         s64[2][3]
         [
@@ -2172,29 +2140,98 @@ defmodule Nx do
         ]
       >
 
-  """
-  def sum(tensor, axis)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [5, 7, 9],
+          [17, 19, 21]
+        ]
+      >
 
-  def sum(%T{type: {_, size} = type, shape: shape} = t, axis) do
-    {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
-    chunk_size = chunk_count * size
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [6, 15],
+          [24, 33]
+        ]
+      >
+
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -1)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [6, 15],
+          [24, 33]
+        ]
+      >
+
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -3)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [8, 10, 12],
+          [14, 16, 18]
+        ]
+      >
+
+  ### Errors
+
+      iex> Nx.sum(Nx.tensor([1, 2, 3]), axis: 1)
+      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+
+  """
+  def sum(tensor, opts \\ []) do
+    reduce(tensor, 0, opts, &+/2)
+  end
+
+  # Reduce
+  def reduce(tensor, acc, opts \\ [], fun)
+
+  def reduce(number, acc, opts, fun) when is_number(number) do
+    reduce(tensor(number), acc, opts, fun)
+  end
+
+  def reduce(%T{type: {_, size} = type, shape: shape} = t, acc, opts, fun)
+      when is_list(opts) and is_function(fun, 2) do
     data = data!(t)
 
-    data =
-      for <<chunk::size(chunk_size)-bitstring <- data>> do
-        match_types [type] do
-          aggregate_gaps(gap_count, size, fn pre, pos ->
+    {data, shape} =
+      if axis = opts[:axis] do
+        {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
+        chunk_size = chunk_count * size
+
+        new_data =
+          for <<chunk::size(chunk_size)-bitstring <- data>> do
+            aggregate_gaps(gap_count, size, fn pre, pos ->
+              match_types [type] do
+                value =
+                  for <<_::size(pre)-bitstring, match!(var, 0), _::size(pos)-bitstring <- chunk>>,
+                    reduce: acc,
+                    do: (acc -> fun.(read!(var, 0), acc))
+
+                <<write!(value, 0)>>
+              end
+            end)
+          end
+
+        {new_data, new_shape}
+      else
+        new_data =
+          match_types [type] do
             value =
-              for <<_::size(pre)-bitstring, match!(var, 0), _::size(pos)-bitstring <- chunk>>,
-                  reduce: 0,
-                  do: (acc -> read!(var, 0) + acc)
+              for <<match!(var, 0) <- data>>,
+                reduce: acc,
+                do: (acc -> fun.(read!(var, 0), acc))
 
             <<write!(value, 0)>>
-          end)
-        end
+          end
+
+        {new_data, {}}
       end
 
-    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: new_shape}
+    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
   end
 
   ## Dimension helpers
@@ -2260,17 +2297,18 @@ defmodule Nx do
   # Computing the aggregate is a matter of mapping the binary over
   # each chunk and then mapping gap times, moving the computation root
   # by size over each gap.
-  defp aggregate_axis({}, 0) do
-    {1, 1, {}}
-  end
-
   defp aggregate_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
     total = tuple_product(shape)
     aggregate_axis(Tuple.to_list(shape), 0, axis, total, total, [])
   end
 
+  defp aggregate_axis(shape, axis) when axis < 0 and axis >= -tuple_size(shape) do
+    total = tuple_product(shape)
+    aggregate_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, total, total, [])
+  end
+
   defp aggregate_axis(shape, axis) do
-    raise "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
+    raise ArgumentError, "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
   end
 
   defp aggregate_axis([dim | dims], axis, chosen, chunk, gap, acc) do
@@ -2422,15 +2460,6 @@ defmodule Nx do
 
   defp scalar_to_binary(value, type) do
     match_types([type], do: <<write!(value, 0)>>)
-  end
-
-  defp bin_reduce_all(<<>>, acc, _fun) do
-    acc
-  end
-
-  defp bin_reduce_all(binary, acc, fun) do
-    {acc, rest} = fun.(binary, acc)
-    bin_reduce_all(rest, acc, fun)
   end
 
   defp bin_zip_map_all(<<>>, _left_size, <<>>, _right_size, _fun), do: []
