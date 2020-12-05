@@ -2175,6 +2175,7 @@ defmodule Nx do
 
       iex> Nx.dot(5, 5)
       25
+
       iex> Nx.dot(-2.0, 5.0)
       -10.0
 
@@ -2190,7 +2191,13 @@ defmodule Nx do
 
   ### Dot Product of Matrices
 
-      TODO
+      iex> t = Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]]))
+      iex> Nx.to_bitstring(t)
+      <<58::64-native, 64::64-native, 139::64-native, 154::64-native>>
+
+      iex> t = Nx.dot(Nx.tensor([[10.0, 13.0, 14.0, 15.0], [59.0, 20.0, 10.0, 30.0]]), Nx.tensor([[2.0, 4.0], [5.0, 1.0], [6.0, 8.0], [9.0, 10.0]]))
+      iex> Nx.to_bitstring(t)
+      <<304::64-float-native, 315::64-float-native, 548::64-float-native, 636::64-float-native>>
 
   ### Dot Product of Vector and n-d tensor
 
@@ -2266,6 +2273,42 @@ defmodule Nx do
   end
 
   def dot(a = %T{shape: {_}}, b = %T{}), do: Nx.dot(b, a)
+
+  def dot(a = %T{type: left_type, shape: {m, n}}, b = %T{type: right_type, shape: {n, k}}) do
+    output_type = Nx.Type.merge(left_type, right_type)
+
+    {_, left_size} = left_type
+    {_, right_size} = right_type
+
+    output_shape = {m, k}
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        for i <- 0..m - 1, into: <<>> do
+          for j <- 0..k - 1, into: <<>> do
+            row = :binary.part(data!(a), div(i * n * left_size, 8), div(n * left_size, 8))
+            col =
+              for z <- 0..n - 1, into: <<>> do
+                :binary.part(data!(b), z * k * div(right_size, 8) + j * div(right_size, 8), div(right_size, 8))
+              end
+            value =
+              bin_reduce_all(
+                bin_zip_map_all(row, left_size, col, right_size,
+                  fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
+                    <<write!(read!(x, 0) * read!(y, 1), 2)>>
+                  end
+                ) |> IO.iodata_to_binary(), 0,
+                fn <<match!(var, 0), rest::bitstring>>, acc ->
+                  {read!(var, 0) + acc, rest}
+                end
+              )
+            <<write!(value, 0)>>
+          end
+        end
+      end
+
+    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+  end
 
   ## Device helpers
 
