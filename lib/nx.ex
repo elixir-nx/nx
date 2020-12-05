@@ -565,10 +565,6 @@ defmodule Nx do
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
-  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
-  defp tuple_product(_tuple, 0), do: 1
-  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
-
   ## Reflection
 
   @doc """
@@ -2139,6 +2135,167 @@ defmodule Nx do
     %{t | data: {Nx.BitStringDevice, data}, shape: {}}
   end
 
+  @doc """
+
+  ## Examples
+
+      iex> Nx.sum(Nx.tensor(1))
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), 2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [6, 15],
+          [24, 33]
+        ]
+      >
+
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [5, 7, 9],
+          [17, 19, 21]
+        ]
+      >
+
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), 0)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [8, 10, 12],
+          [14, 16, 18]
+        ]
+      >
+
+  """
+  def sum(tensor, axis)
+
+  def sum(%T{type: {_, size} = type, shape: shape} = t, axis) do
+    {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
+    chunk_size = chunk_count * size
+    data = data!(t)
+
+    data =
+      for <<chunk::size(chunk_size)-bitstring <- data>> do
+        match_types [type] do
+          aggregate_gaps(gap_count, size, fn pre, pos ->
+            value =
+              for <<_::size(pre)-bitstring, match!(var, 0), _::size(pos)-bitstring <- chunk>>,
+                  reduce: 0,
+                  do: (acc -> read!(var, 0) + acc)
+
+            <<write!(value, 0)>>
+          end)
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: new_shape}
+  end
+
+  ## Dimension helpers
+
+  # The goal of aggregate axis is to find a chunk_count and gap_count
+  # that allows us to traverse the tensor. Consider this input tensor:
+  #
+  #     #Nx.Tensor<
+  #       s64[2][2][3]
+  #       [
+  #         [
+  #           [1, 2, 3],
+  #           [4, 5, 6]
+  #         ],
+  #         [
+  #           [7, 8, 9],
+  #           [10, 11, 12]
+  #         ]
+  #       ]
+  #     >
+  #
+  # When computing the sum on axis 0, we have:
+  #
+  #     #Nx.Tensor<
+  #       s64[2][3]
+  #       [
+  #         [8, 10, 12],
+  #         [14, 16, 18]
+  #       ]
+  #     >
+  #
+  # The first time element is 1 + 7, which means the gap between
+  # them is 6. Given we have to traverse the whole tensor, the
+  # chunk_count is 12 (the size of the tensor).
+  #
+  # For axis 1, we have:
+  #
+  #     #Nx.Tensor<
+  #       s64[2][3]
+  #       [
+  #         [5, 7, 9],
+  #         [17, 19, 21]
+  #       ]
+  #     >
+  #
+  # The first element is 1 + 4 within the "first quadrant". 17 is
+  # is 10 + 17 in the second quadrant. Therefore the gap is 3 and
+  # the chunk_count is 6 elements.
+  #
+  # Finally, for axis 2, we have:
+  #
+  #     #Nx.Tensor<
+  #       s64[2][2]
+  #       [
+  #         [6, 15],
+  #         [24, 33]
+  #       ]
+  #     >
+  #
+  # 6 is the sum of the first row, 15 the sum of the second row, etc.
+  # Therefore the gap is 1 and the chunk size is 3.
+  #
+  # Computing the aggregate is a matter of mapping the binary over
+  # each chunk and then mapping gap times, moving the computation root
+  # by size over each gap.
+  defp aggregate_axis({}, 0) do
+    {1, 1, {}}
+  end
+
+  defp aggregate_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
+    total = tuple_product(shape)
+    aggregate_axis(Tuple.to_list(shape), 0, axis, total, total, [])
+  end
+
+  defp aggregate_axis(shape, axis) do
+    raise "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
+  end
+
+  defp aggregate_axis([dim | dims], axis, chosen, chunk, gap, acc) do
+    gap = div(gap, dim)
+
+    if axis == chosen do
+      {gap, chunk, List.to_tuple(Enum.reverse(acc, dims))}
+    else
+      aggregate_axis(dims, axis + 1, chosen, div(chunk, dim), gap, [dim | acc])
+    end
+  end
+
+  defp aggregate_gaps(gap_count, size, fun),
+    do: aggregate_gaps(0, gap_count * size, size, fun)
+
+  defp aggregate_gaps(_pre, 0, _size, _fun),
+    do: []
+
+  defp aggregate_gaps(pre, pos, size, fun),
+    do: [fun.(pre, pos - size) | aggregate_gaps(pre + size, pos - size, size, fun)]
+
+  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
   ## Device helpers
 
   defp data!(%T{data: {Nx.BitStringDevice, data}}), do: data
@@ -2266,8 +2423,6 @@ defmodule Nx do
   defp scalar_to_binary(value, type) do
     match_types([type], do: <<write!(value, 0)>>)
   end
-
-  @compile {:inline, bin_reduce_all: 3}
 
   defp bin_reduce_all(<<>>, acc, _fun) do
     acc
