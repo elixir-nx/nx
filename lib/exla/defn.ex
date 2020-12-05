@@ -215,20 +215,7 @@ defmodule Exla.Defn do
   ## Aggregators
 
   def nx_sum(builder, op) do
-    op = to_operator(builder, op)
-    op_shape = Exla.Op.get_shape(op)
-    reduction_shape = Exla.Shape.make_shape(op_shape.dtype, {})
-
-    # Build the anonymous function
-    unique = System.unique_integer([:positive])
-    sub_builder = Exla.Builder.new(builder, builder.name <> "-sum-" <> Integer.to_string(unique))
-    a = Exla.Op.parameter(sub_builder, 0, reduction_shape, "a")
-    b = Exla.Op.parameter(sub_builder, 1, reduction_shape, "b")
-    add = Exla.Op.add(a, b)
-    reduction = Exla.Builder.build(add)
-
-    init_value = to_typed_constant(builder, 0, reduction_shape.dtype)
-    Exla.Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
+    Exla.Lib.sum(builder, to_operator(builder, op))
   end
 
   defp to_block_result(builder, tuple) when is_tuple(tuple) do
@@ -256,7 +243,7 @@ defmodule Exla.Defn do
   end
 
   defp to_float_operator(builder, constant) when is_number(constant) do
-    to_typed_constant(builder, constant, {:f, 64})
+    Exla.Op.constant_r0(builder, constant, {:f, 64})
   end
 
   defp to_float_operator(_builder, other) do
@@ -274,7 +261,7 @@ defmodule Exla.Defn do
   end
 
   defp to_typed_operator(builder, constant, type) when is_number(constant) do
-    {to_typed_constant(builder, constant, type), {}}
+    {Exla.Op.constant_r0(builder, constant, type), {}}
   end
 
   defp to_typed_operator(_builder, other, _type) do
@@ -306,11 +293,6 @@ defmodule Exla.Defn do
 
   ## Constants
 
-  defp to_typed_constant(builder, constant, type) when is_number(constant) do
-    constant = Nx.Type.cast_scalar!(constant, type)
-    Exla.Op.constant_r0(builder, constant, type)
-  end
-
   defp to_constant(builder, int) when is_integer(int),
     do: Exla.Op.constant_r0(builder, int, {:s, 64})
 
@@ -318,11 +300,6 @@ defmodule Exla.Defn do
     do: Exla.Op.constant_r0(builder, float, {:f, 64})
 
   ## Dimensions
-
-  # Converts {3, 255, 255} into {0, 1, 2}
-  defp all_dimensions(dims), do: List.to_tuple(all_dimensions(0, tuple_size(dims)))
-  defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
-  defp all_dimensions(_, _), do: []
 
   defp broadcast_dimensions(left, right) do
     {min, max} = if left <= right, do: {left, right}, else: {right, left}
