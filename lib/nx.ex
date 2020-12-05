@@ -711,76 +711,94 @@ defmodule Nx do
 
   ### Adding scalars
 
-      iex> t = Nx.add(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<3::64-native>>
+      iex> Nx.add(1, 2)
+      #Nx.Tensor<
+        s64
+        3
+      >
 
-      iex> t = Nx.add(1, 2.2)
-      iex> Nx.to_bitstring(t)
-      <<3.2::float-64-native>>
+      iex> Nx.add(1, 2.2)
+      #Nx.Tensor<
+        f64
+        3.2
+      >
 
   ### Adding a scalar to a tensor
 
-      iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1)
-      iex> Nx.to_bitstring(t)
-      <<2::64-native, 3::64-native, 4::64-native>>
+      iex> Nx.add(Nx.tensor([1, 2, 3]), 1)
+      #Nx.Tensor<
+        s64[3]
+        [2, 3, 4]
+      >
 
-      iex> t = Nx.add(1, Nx.tensor([1, 2, 3]))
-      iex> Nx.to_bitstring(t)
-      <<2::64-native, 3::64-native, 4::64-native>>
+      iex> Nx.add(1, Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64[3]
+        [2, 3, 4]
+      >
 
   Given a float scalar converts the tensor to a float:
 
-      iex> t = Nx.add(Nx.tensor([1, 2, 3]), 1.0)
-      iex> Nx.to_bitstring(t)
-      <<2.0::float-64-native, 3.0::float-64-native, 4.0::float-64-native>>
+      iex> Nx.add(Nx.tensor([1, 2, 3]), 1.0)
+      #Nx.Tensor<
+        f64[3]
+        [2.0, 3.0, 4.0]
+      >
 
-      iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0]), 1)
-      iex> Nx.to_bitstring(t)
-      <<2.0::float-64-native, 3.0::float-64-native, 4.0::float-64-native>>
+      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0]), 1)
+      #Nx.Tensor<
+        f64[3]
+        [2.0, 3.0, 4.0]
+      >
 
-      iex> t = Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), 1)
-      iex> Nx.to_bitstring(t)
-      <<2.0::float-native-32, 3.0::float-native-32, 4.0::float-native-32>>
+      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), 1)
+      #Nx.Tensor<
+        f32[3]
+        [2.0, 3.0, 4.0]
+      >
 
   Unsigned tensors become signed and double their size if a
   negative number is given:
 
-      iex> t = Nx.add(Nx.tensor([0, 1, 2], type: {:u, 8}), -1)
-      iex> Nx.to_bitstring(t)
-      <<-1::16-native, 0::16-native, 1::16-native>>
+      iex> Nx.add(Nx.tensor([0, 1, 2], type: {:u, 8}), -1)
+      #Nx.Tensor<
+        s16[3]
+        [-1, 0, 1]
+      >
 
   ### Adding tensors of the same shape
 
-      iex> t = Nx.add(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[10, 20], [30, 40]]))
-      iex> Nx.to_bitstring(t)
-      <<11::64-native, 22::64-native, 33::64-native, 44::64-native>>
+      iex> Nx.add(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[10, 20], [30, 40]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[11, 22], [33, 44]]
+      >
 
   ### Adding tensors with broadcasting
 
-      iex> t = Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      iex> Nx.to_bitstring(t)
-      <<11::64-native, 21::64-native, 12::64-native, 22::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[11, 21], [12, 22]]
+      >
 
-      iex> t = Nx.add(Nx.tensor([[10, 20]]), Nx.tensor([[1], [2]]))
-      iex> Nx.to_bitstring(t)
-      <<11::64-native, 21::64-native, 12::64-native, 22::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.add(Nx.tensor([[10, 20]]), Nx.tensor([[1], [2]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[11, 21], [12, 22]]
+      >
 
-      iex> t = Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
-      iex> Nx.to_bitstring(t)
-      <<11::64-native, 21::64-native, 32::64-native, 42::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[11, 21], [32, 42]]
+      >
 
-      iex> t = Nx.add(Nx.tensor([[1, 2]]), Nx.tensor([[10, 20], [30, 40]]))
-      iex> Nx.to_bitstring(t)
-      <<11::64-native, 22::64-native, 31::64-native, 42::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.add(Nx.tensor([[1, 2]]), Nx.tensor([[10, 20], [30, 40]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[11, 22], [31, 42]]
+      >
 
   """
   def add(left, right), do: element_wise_bin_arith(left, right, &erlang_add/3)
@@ -799,39 +817,45 @@ defmodule Nx do
 
   ### Subtracting scalars
 
-      iex> t = Nx.subtract(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<-1::64-native>>
+      iex> Nx.subtract(1, 2)
+      #Nx.Tensor<
+        s64
+        -1
+      >
 
   ### Subtracting tensors and scalars
 
-      iex> t = Nx.subtract(Nx.tensor([1, 2, 3]), 1)
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 1::64-native, 2::64-native>>
+      iex> Nx.subtract(Nx.tensor([1, 2, 3]), 1)
+      #Nx.Tensor<
+        s64[3]
+        [0, 1, 2]
+      >
 
-      iex> t = Nx.subtract(1, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<0.0::float-64-native, -1.0::float-64-native, -2.0::float-64-native>>
+      iex> Nx.subtract(1, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [0.0, -1.0, -2.0]
+      >
 
   ### Subtracting tensors
 
-      iex> t = Nx.subtract(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      iex> Nx.to_bitstring(t)
-      <<-9::64-native, -19::64-native, -8::64-native, -18::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.subtract(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[-9, -19], [-8, -18]]
+      >
 
-      iex> t = Nx.subtract(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<-9::8-native, -19::8-native, -8::8-native, -18::8-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.subtract(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[2][2]
+        [[-9, -19], [-8, -18]]
+      >
 
-      iex> t = Nx.subtract(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<-9.0::float-32-native, -19.0::float-32-native, -8.0::float-32-native, -18.0::float-32-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.subtract(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      #Nx.Tensor<
+        f32[2][2]
+        [[-9.0, -19.0], [-8.0, -18.0]]
+      >
 
   """
   def subtract(left, right), do: element_wise_bin_arith(left, right, &erlang_subtract/3)
@@ -850,39 +874,45 @@ defmodule Nx do
 
   ### Multiplying scalars
 
-      iex> t = Nx.multiply(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<2::64-native>>
+      iex> Nx.multiply(1, 2)
+      #Nx.Tensor<
+        s64
+        2
+      >
 
   ### Multiplying tensors and scalars
 
-      iex> t = Nx.multiply(Nx.tensor([1, 2, 3]), 1)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 3::64-native>>
+      iex> Nx.multiply(Nx.tensor([1, 2, 3]), 1)
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
 
-      iex> t = Nx.multiply(1, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<1.0::float-64-native, 2.0::float-64-native, 3.0::float-64-native>>
+      iex> Nx.multiply(1, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 2.0, 3.0]
+      >
 
   ### Multiplying tensors
 
-      iex> t = Nx.multiply(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      iex> Nx.to_bitstring(t)
-      <<10::64-native, 20::64-native, 20::64-native, 40::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.multiply(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[10, 20], [20, 40]]
+      >
 
-      iex> t = Nx.multiply(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<10::8-native, 20::8-native, 20::8-native, 40::8-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.multiply(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[2][2]
+        [[10, 20], [20, 40]]
+      >
 
-      iex> t = Nx.multiply(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<10.0::float-32-native, 20.0::float-32-native, 20.0::float-32-native, 40.0::float-32-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.multiply(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      #Nx.Tensor<
+        f32[2][2]
+        [[10.0, 20.0], [20.0, 40.0]]
+      >
 
   """
   def multiply(left, right), do: element_wise_bin_arith(left, right, &erlang_multiply/3)
@@ -901,27 +931,33 @@ defmodule Nx do
 
   ### Power of scalars
 
-      iex> t = Nx.power(2, 4)
-      iex> Nx.to_bitstring(t)
-      <<16::64-native>>
+      iex> Nx.power(2, 4)
+      #Nx.Tensor<
+        s64
+        16
+      >
 
   ### Power of tensors and scalars
 
-      iex> t = Nx.power(Nx.tensor([1, 2, 3]), 2)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 4::64-native, 9::64-native>>
+      iex> Nx.power(Nx.tensor([1, 2, 3]), 2)
+      #Nx.Tensor<
+        s64[3]
+        [1, 4, 9]
+      >
 
-      iex> t = Nx.power(2, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<2.0::float-64-native, 4.0::float-64-native, 8.0::float-64-native>>
+      iex> Nx.power(2, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [2.0, 4.0, 8.0]
+      >
 
   ### Power of tensors
 
-      iex> t = Nx.power(Nx.tensor([[2], [3]]), Nx.tensor([[4, 5]]))
-      iex> Nx.to_bitstring(t)
-      <<16::64-native, 32::64-native, 81::64-native, 243::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.power(Nx.tensor([[2], [3]]), Nx.tensor([[4, 5]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[16, 32], [81, 243]]
+      >
 
   """
   def power(left, right), do: element_wise_bin_arith(left, right, &erlang_power/3)
@@ -952,27 +988,33 @@ defmodule Nx do
 
   ### Remainder of scalars
 
-      iex> t = Nx.remainder(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native>>
+      iex> Nx.remainder(1, 2)
+      #Nx.Tensor<
+        s64
+        1
+      >
 
   ### Remainder of tensors and scalars
 
-      iex> t = Nx.remainder(Nx.tensor([1, 2, 3]), 2)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 0::64-native, 1::64-native>>
+      iex> Nx.remainder(Nx.tensor([1, 2, 3]), 2)
+      #Nx.Tensor<
+        s64[3]
+        [1, 0, 1]
+      >
 
-      iex> t = Nx.remainder(2, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<0.0::float-64-native, 0.0::float-64-native, 2.0::float-64-native>>
+      iex> Nx.remainder(2, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [0.0, 0.0, 2.0]
+      >
 
   ### Remainder of tensors
 
-      iex> t = Nx.remainder(Nx.tensor([[10], [20]]), Nx.tensor([[3, 4]]))
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 2::64-native, 0::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.remainder(Nx.tensor([[10], [20]]), Nx.tensor([[3, 4]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[1, 2], [2, 0]]
+      >
 
   """
   def remainder(left, right), do: element_wise_bin_arith(left, right, &erlang_remainder/3)
@@ -997,39 +1039,45 @@ defmodule Nx do
 
   ### Dividing scalars
 
-      iex> t = Nx.divide(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<0.5::float-64-native>>
+      iex> Nx.divide(1, 2)
+      #Nx.Tensor<
+        f64
+        0.5
+      >
 
   ### Dividing tensors and scalars
 
-      iex> t = Nx.divide(Nx.tensor([1, 2, 3]), 1)
-      iex> Nx.to_bitstring(t)
-      <<1.0::float-64-native, 2.0::float-64-native, 3.0::64-native>>
+      iex> Nx.divide(Nx.tensor([1, 2, 3]), 1)
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 2.0, 3.0]
+      >
 
-      iex> t = Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<1.0::float-64-native, 0.5::float-64-native, (1/3)::float-64-native>>
+      iex> Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 0.5, 0.3333333333333333]
+      >
 
   ### Dividing tensors
 
-      iex> t = Nx.divide(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      iex> Nx.to_bitstring(t)
-      <<0.1::float-64-native, 0.05::float-64-native, 0.2::float-64-native, 0.1::float-64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.divide(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      #Nx.Tensor<
+        f64[2][2]
+        [[0.1, 0.05], [0.2, 0.1]]
+      >
 
-      iex> t = Nx.divide(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<0.1::float-32-native, 0.05::float-32-native, 0.2::float-32-native, 0.1::float-32-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.divide(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      #Nx.Tensor<
+        f32[2][2]
+        [[0.10000000149011612, 0.05000000074505806], [0.20000000298023224, 0.10000000149011612]]
+      >
 
-      iex> t = Nx.divide(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<0.1::float-32-native, 0.05::float-32-native, 0.2::float-32-native, 0.1::float-32-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.divide(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      #Nx.Tensor<
+        f32[2][2]
+        [[0.10000000149011612, 0.05000000074505806], [0.20000000298023224, 0.10000000149011612]]
+      >
 
   """
   def divide(left, right), do: element_wise_bin_float_arith(left, right, &erlang_divide/3)
@@ -1051,19 +1099,25 @@ defmodule Nx do
 
   ### Arc tangent between scalars
 
-      iex> t = Nx.arctan2(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<0.4636476090008061::float-64-native>>
+      iex> Nx.arctan2(1, 2)
+      #Nx.Tensor<
+        f64
+        0.4636476090008061
+      >
 
   ### Arc tangent between tensors and scalars
 
-      iex> t = Nx.arctan2(Nx.tensor([1, 2, 3]), 1)
-      iex> Nx.to_bitstring(t)
-      <<0.7853981633974483::float-64-native, 1.1071487177940904::float-64-native, 1.2490457723982544::float-64-native>>
+      iex> Nx.arctan2(Nx.tensor([1, 2, 3]), 1)
+      #Nx.Tensor<
+        f64[3]
+        [0.7853981633974483, 1.1071487177940904, 1.2490457723982544]
+      >
 
-      iex> t = Nx.arctan2(1, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<0.7853981633974483::float-64-native, 0.4636476090008061::float-64-native, 0.3217505543966422::float-64-native>>
+      iex> Nx.arctan2(1, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [0.7853981633974483, 0.4636476090008061, 0.3217505543966422]
+      >
 
   ### Arc tangent between tensors
 
@@ -1095,39 +1149,45 @@ defmodule Nx do
 
   ### Max between scalars
 
-      iex> t = Nx.max(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<2::64-native>>
+      iex> Nx.max(1, 2)
+      #Nx.Tensor<
+        s64
+        2
+      >
 
   ### Max between tensors and scalars
 
-      iex> t = Nx.max(Nx.tensor([1, 2, 3]), 1)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 2::64-native, 3::64-native>>
+      iex> Nx.max(Nx.tensor([1, 2, 3]), 1)
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
 
-      iex> t = Nx.max(1, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<1.0::float-64-native, 2.0::float-64-native, 3.0::float-64-native>>
+      iex> Nx.max(1, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 2.0, 3.0]
+      >
 
   ### Max between tensors
 
-      iex> t = Nx.max(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      iex> Nx.to_bitstring(t)
-      <<10::64-native, 20::64-native, 10::64-native, 20::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.max(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[10, 20], [10, 20]]
+      >
 
-      iex> t = Nx.max(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<10::8-native, 20::8-native, 10::8-native, 20::8-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.max(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[2][2]
+        [[10, 20], [10, 20]]
+      >
 
-      iex> t = Nx.max(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<10.0::float-32-native, 20.0::float-32-native, 10.0::float-32-native, 20.0::float-32-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.max(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      #Nx.Tensor<
+        f32[2][2]
+        [[10.0, 20.0], [10.0, 20.0]]
+      >
 
   """
   def max(left, right), do: element_wise_bin_arith(left, right, &erlang_max/3)
@@ -1146,39 +1206,45 @@ defmodule Nx do
 
   ### Min between scalars
 
-      iex> t = Nx.min(1, 2)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native>>
+      iex> Nx.min(1, 2)
+      #Nx.Tensor<
+        s64
+        1
+      >
 
   ### Min between tensors and scalars
 
-      iex> t = Nx.min(Nx.tensor([1, 2, 3]), 1)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 1::64-native, 1::64-native>>
+      iex> Nx.min(Nx.tensor([1, 2, 3]), 1)
+      #Nx.Tensor<
+        s64[3]
+        [1, 1, 1]
+      >
 
-      iex> t = Nx.min(1, Nx.tensor([1.0, 2.0, 3.0]))
-      iex> Nx.to_bitstring(t)
-      <<1.0::float-64-native, 1.0::float-64-native, 1.0::float-64-native>>
+      iex> Nx.min(1, Nx.tensor([1.0, 2.0, 3.0]))
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, 1.0]
+      >
 
   ### Min between tensors
 
-      iex> t = Nx.min(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 1::64-native, 2::64-native, 2::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.min(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [[1, 1], [2, 2]]
+      >
 
-      iex> t = Nx.min(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<1::8-native, 1::8-native, 2::8-native, 2::8-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.min(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[2][2]
+        [[1, 1], [2, 2]]
+      >
 
-      iex> t = Nx.min(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<1.0::float-32-native, 1.0::float-32-native, 2.0::float-32-native, 2.0::float-32-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.min(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      #Nx.Tensor<
+        f32[2][2]
+        [[1.0, 1.0], [2.0, 2.0]]
+      >
 
   """
   def min(left, right), do: element_wise_bin_arith(left, right, &erlang_min/3)
@@ -1219,25 +1285,33 @@ defmodule Nx do
 
   ### bitwise and between scalars
 
-      iex> t = Nx.bitwise_and(1, 0)
-      iex> Nx.to_bitstring(t)
-      <<0::64-native>>
+      iex> Nx.bitwise_and(1, 0)
+      #Nx.Tensor<
+        s64
+        0
+      >
 
   ### bitwise and between tensors and scalars
 
-      iex> t = Nx.bitwise_and(Nx.tensor([0, 1, 2]), 1)
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 1::64-native, 0::64-native>>
+      iex> Nx.bitwise_and(Nx.tensor([0, 1, 2]), 1)
+      #Nx.Tensor<
+        s64[3]
+        [0, 1, 0]
+      >
 
-      iex> t = Nx.bitwise_and(Nx.tensor([0, -1, -2]), -1)
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, -1::64-native, -2::64-native>>
+      iex> Nx.bitwise_and(Nx.tensor([0, -1, -2]), -1)
+      #Nx.Tensor<
+        s64[3]
+        [0, -1, -2]
+      >
 
   ### bitwise and between tensors
 
-      iex> t = Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 0::64-native, 0::64-native, 1::64-native>>
+      iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      #Nx.Tensor<
+        s64[4]
+        [0, 0, 0, 1]
+      >
 
   ### Error cases
 
@@ -1263,25 +1337,33 @@ defmodule Nx do
 
   ### bitwise or between scalars
 
-      iex> t = Nx.bitwise_or(1, 0)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native>>
+      iex> Nx.bitwise_or(1, 0)
+      #Nx.Tensor<
+        s64
+        1
+      >
 
   ### bitwise or between tensors and scalars
 
-      iex> t = Nx.bitwise_or(Nx.tensor([0, 1, 2]), 1)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 1::64-native, 3::64-native>>
+      iex> Nx.bitwise_or(Nx.tensor([0, 1, 2]), 1)
+      #Nx.Tensor<
+        s64[3]
+        [1, 1, 3]
+      >
 
-      iex> t = Nx.bitwise_or(Nx.tensor([0, -1, -2]), -1)
-      iex> Nx.to_bitstring(t)
-      <<-1::64-native, -1::64-native, -1::64-native>>
+      iex> Nx.bitwise_or(Nx.tensor([0, -1, -2]), -1)
+      #Nx.Tensor<
+        s64[3]
+        [-1, -1, -1]
+      >
 
   ### bitwise or between tensors
 
-      iex> t = Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 1::64-native, 1::64-native, 1::64-native>>
+      iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      #Nx.Tensor<
+        s64[4]
+        [0, 1, 1, 1]
+      >
 
   ### Error cases
 
@@ -1307,25 +1389,33 @@ defmodule Nx do
 
   ### Bitwise xor between scalars
 
-      iex> t = Nx.bitwise_xor(1, 0)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native>>
+      iex> Nx.bitwise_xor(1, 0)
+      #Nx.Tensor<
+        s64
+        1
+      >
 
   ### Bitwise xor and between tensors and scalars
 
-      iex> t = Nx.bitwise_xor(Nx.tensor([1, 2, 3]), 2)
-      iex> Nx.to_bitstring(t)
-      <<3::64-native, 0::64-native, 1::64-native>>
+      iex> Nx.bitwise_xor(Nx.tensor([1, 2, 3]), 2)
+      #Nx.Tensor<
+        s64[3]
+        [3, 0, 1]
+      >
 
-      iex> t = Nx.bitwise_xor(Nx.tensor([-1, -2, -3]), 2)
-      iex> Nx.to_bitstring(t)
-      <<-3::64-native, -4::64-native, -1::64-native>>
+      iex> Nx.bitwise_xor(Nx.tensor([-1, -2, -3]), 2)
+      #Nx.Tensor<
+        s64[3]
+        [-3, -4, -1]
+      >
 
   ### Bitwise xor between tensors
 
-      iex> t = Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 1::64-native, 1::64-native, 0::64-native>>
+      iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      #Nx.Tensor<
+        s64[4]
+        [0, 1, 1, 0]
+      >
 
   ### Error cases
 
@@ -1353,21 +1443,27 @@ defmodule Nx do
 
   ### Left shift between scalars
 
-      iex> t = Nx.left_shift(1, 0)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native>>
+      iex> Nx.left_shift(1, 0)
+      #Nx.Tensor<
+        s64
+        1
+      >
 
   ### Left shift between tensors and scalars
 
-      iex> t = Nx.left_shift(Nx.tensor([1, 2, 3]), 2)
-      iex> Nx.to_bitstring(t)
-      <<4::64-native, 8::64-native, 12::64-native>>
+      iex> Nx.left_shift(Nx.tensor([1, 2, 3]), 2)
+      #Nx.Tensor<
+        s64[3]
+        [4, 8, 12]
+      >
 
   ### Left shift between tensors
 
-      iex> t = Nx.left_shift(Nx.tensor([1, 1, -1, -1]), Nx.tensor([1, 2, 3, 4]))
-      iex> Nx.to_bitstring(t)
-      <<2::64-native, 4::64-native, -8::64-native, -16::64-native>>
+      iex> Nx.left_shift(Nx.tensor([1, 1, -1, -1]), Nx.tensor([1, 2, 3, 4]))
+      #Nx.Tensor<
+        s64[4]
+        [2, 4, -8, -16]
+      >
 
   ### Error cases
 
@@ -1403,21 +1499,27 @@ defmodule Nx do
 
   ### Right shift between scalars
 
-      iex> t = Nx.right_shift(1, 0)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native>>
+      iex> Nx.right_shift(1, 0)
+      #Nx.Tensor<
+        s64
+        1
+      >
 
   ### Right shift between tensors and scalars
 
-      iex> t = Nx.right_shift(Nx.tensor([2, 4, 8]), 2)
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 1::64-native, 2::64-native>>
+      iex> Nx.right_shift(Nx.tensor([2, 4, 8]), 2)
+      #Nx.Tensor<
+        s64[3]
+        [0, 1, 2]
+      >
 
   ### Right shift between tensors
 
-      iex> t = Nx.right_shift(Nx.tensor([16, 32, -64, -128]), Nx.tensor([1, 2, 3, 4]))
-      iex> Nx.to_bitstring(t)
-      <<8::64-native, 8::64-native, -8::64-native, -8::64-native>>
+      iex> Nx.right_shift(Nx.tensor([16, 32, -64, -128]), Nx.tensor([1, 2, 3, 4]))
+      #Nx.Tensor<
+        s64[4]
+        [8, 8, -8, -8]
+      >
 
   ### Error cases
 
@@ -1467,17 +1569,17 @@ defmodule Nx do
 
     ## Examples
 
-        iex> t = Nx.#{name}(1)
-        iex> Nx.to_bitstring(t)
-        <<#{one}::float-64-native>>
+        iex> Nx.#{name}(1)
+        #Nx.Tensor<
+          f64
+          #{one}
+        >
 
-        iex> t = Nx.#{name}(Nx.tensor([1, 2, 3]))
-        iex> Nx.to_bitstring(t)
-        <<#{one}::float-64-native, #{two}::float-64-native, #{three}::float-64-native>>
-
-        iex> t = Nx.#{name}(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
-        iex> Nx.to_bitstring(t)
-        <<#{one}::float-32-native, #{two}::float-32-native, #{three}::float-32-native>>
+        iex> Nx.#{name}(Nx.tensor([1.0, 2.0, 3.0]))
+        #Nx.Tensor<
+          f64[3]
+          [#{one}, #{two}, #{three}]
+        >
 
     """
     def unquote(name)(tensor), do: unary_float(tensor, fn x -> unquote(applied) end)
@@ -1504,23 +1606,31 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.negate(1)
-      iex> Nx.to_bitstring(t)
-      <<-1::64-native>>
+      iex> Nx.negate(1)
+      #Nx.Tensor<
+        s64
+        -1
+      >
 
-      iex> t = Nx.negate(Nx.tensor([-1, 0, 1]))
-      iex> Nx.to_bitstring(t)
-      <<1::64-native, 0::64-native, -1::64-native>>
+      iex> Nx.negate(Nx.tensor([-1, 0, 1]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 0, -1]
+      >
 
-      iex> t = Nx.negate(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
-      iex> Nx.to_bitstring(t)
-      <<-1.0::float-32-native, -2.0::float-32-native, -3.0::float-32-native>>
+      iex> Nx.negate(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}))
+      #Nx.Tensor<
+        f32[3]
+        [-1.0, -2.0, -3.0]
+      >
 
   If an unsigned tensor is given, it works as `bitwise_not`:
 
-      iex> t = Nx.negate(Nx.tensor([0, 1, 2], type: {:u, 8}))
-      iex> Nx.to_bitstring(t)
-      <<0::8-unsigned, 255::8-unsigned, 254::8-unsigned>>
+      iex> Nx.negate(Nx.tensor([0, 1, 2], type: {:u, 8}))
+      #Nx.Tensor<
+        u8[3]
+        [0, 255, 254]
+      >
 
   """
   def negate(tensor)
@@ -1550,9 +1660,11 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.sign(Nx.tensor([-2, -1, 0, 1, 2]))
-      iex> Nx.to_bitstring(t)
-      <<-1::64-native, -1::64-native, 0::64-native, 1::64-native, 1::64-native>>
+      iex> Nx.sign(Nx.tensor([-2, -1, 0, 1, 2]))
+      #Nx.Tensor<
+        s64[5]
+        [-1, -1, 0, 1, 1]
+      >
 
   """
   def sign(tensor)
@@ -1582,9 +1694,11 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.abs(Nx.tensor([-2, -1, 0, 1, 2]))
-      iex> Nx.to_bitstring(t)
-      <<2::64-native, 1::64-native, 0::64-native, 1::64-native, 2::64-native>>
+      iex> Nx.abs(Nx.tensor([-2, -1, 0, 1, 2]))
+      #Nx.Tensor<
+        s64[5]
+        [2, 1, 0, 1, 2]
+      >
 
   """
   def abs(tensor)
@@ -1609,17 +1723,23 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.bitwise_not(1)
-      iex> Nx.to_bitstring(t)
-      <<-2::64-native>>
+      iex> Nx.bitwise_not(1)
+      #Nx.Tensor<
+        s64
+        -2
+      >
 
-      iex> t = Nx.bitwise_not(Nx.tensor([-1, 0, 1], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<0::8, -1::8, -2::8>>
+      iex> Nx.bitwise_not(Nx.tensor([-1, 0, 1], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[3]
+        [0, -1, -2]
+      >
 
-      iex> t = Nx.bitwise_not(Nx.tensor([0, 1, 254, 255], type: {:u, 8}))
-      iex> Nx.to_bitstring(t)
-      <<255::8-unsigned, 254::8-unsigned, 1::8-unsigned, 0::8-unsigned>>
+      iex> Nx.bitwise_not(Nx.tensor([0, 1, 254, 255], type: {:u, 8}))
+      #Nx.Tensor<
+        u8[4]
+        [255, 254, 1, 0]
+      >
 
   ### Error cases
 
@@ -1650,21 +1770,29 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.population_count(1)
-      iex> Nx.to_bitstring(t)
-      <<1::64-native>>
+      iex> Nx.population_count(1)
+      #Nx.Tensor<
+        s64
+        1
+      >
 
-      iex> t = Nx.population_count(-128)
-      iex> Nx.to_bitstring(t)
-      <<57::64-native>>
+      iex> Nx.population_count(-128)
+      #Nx.Tensor<
+        s64
+        57
+      >
 
-      iex> t = Nx.population_count(Nx.tensor([0, 1, 254, 255]))
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 1::64-native, 7::64-native, 8::64-native>>
+      iex> Nx.population_count(Nx.tensor([0, 1, 254, 255]))
+      #Nx.Tensor<
+        s64[4]
+        [0, 1, 7, 8]
+      >
 
-      iex> t = Nx.population_count(Nx.tensor([0, 1, 126, 127, -1, -127, -128], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<0, 1, 6, 7, 8, 2, 1>>
+      iex> Nx.population_count(Nx.tensor([0, 1, 126, 127, -1, -127, -128], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[7]
+        [0, 1, 6, 7, 8, 2, 1]
+      >
 
   ### Error cases
 
@@ -1705,37 +1833,53 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.count_leading_zeros(1)
-      iex> Nx.to_bitstring(t)
-      <<63::64-native>>
+      iex> Nx.count_leading_zeros(1)
+      #Nx.Tensor<
+        s64
+        63
+      >
 
-      iex> t = Nx.count_leading_zeros(-1)
-      iex> Nx.to_bitstring(t)
-      <<0::64-native>>
+      iex> Nx.count_leading_zeros(-1)
+      #Nx.Tensor<
+        s64
+        0
+      >
 
-      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF]))
-      iex> Nx.to_bitstring(t)
-      <<64::64-native, 60::64-native, 56::64-native, 48::64-native>>
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF]))
+      #Nx.Tensor<
+        s64[4]
+        [64, 60, 56, 48]
+      >
 
-      iex> t = Nx.count_leading_zeros(Nx.tensor([0xF000000000000000, 0x0F00000000000000]))
-      iex> Nx.to_bitstring(t)
-      <<0::64-native, 4::64-native>>
+      iex> Nx.count_leading_zeros(Nx.tensor([0xF000000000000000, 0x0F00000000000000]))
+      #Nx.Tensor<
+        s64[2]
+        [0, 4]
+      >
 
-      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 32}))
-      iex> Nx.to_bitstring(t)
-      <<32::32-native, 28::32-native, 24::32-native, 16::32-native>>
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 32}))
+      #Nx.Tensor<
+        s32[4]
+        [32, 28, 24, 16]
+      >
 
-      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 16}))
-      iex> Nx.to_bitstring(t)
-      <<16::16-native, 12::16-native, 8::16-native, 0::16-native>>
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: {:s, 16}))
+      #Nx.Tensor<
+        s16[4]
+        [16, 12, 8, 0]
+      >
 
-      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, -1, -128], type: {:s, 8}))
-      iex> Nx.to_bitstring(t)
-      <<8, 7, 6, 5, 4, 3, 2, 1, 0, 0>>
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, -1, -128], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[10]
+        [8, 7, 6, 5, 4, 3, 2, 1, 0, 0]
+      >
 
-      iex> t = Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, 128], type: {:u, 8}))
-      iex> Nx.to_bitstring(t)
-      <<8, 7, 6, 5, 4, 3, 2, 1, 0>>
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 1, 2, 4, 8, 16, 32, 64, 128], type: {:u, 8}))
+      #Nx.Tensor<
+        u8[9]
+        [8, 7, 6, 5, 4, 3, 2, 1, 0]
+      >
 
   ### Error cases
 
@@ -1820,13 +1964,17 @@ defmodule Nx do
 
     ## Examples
 
-        iex> t = Nx.#{name}(Nx.tensor([-1, 0, 1]))
-        iex> Nx.to_bitstring(t)
-        <<-1::64-native, 0::64-native, 1::64-native>>
+        iex> Nx.#{name}(Nx.tensor([-1, 0, 1]))
+        #Nx.Tensor<
+          s64[3]
+          [-1, 0, 1]
+        >
 
-        iex> t = Nx.#{name}(Nx.tensor([-1.5, -0.5, 0.5, 1.5]))
-        iex> Nx.to_bitstring(t)
-        <<#{res1}::float-64-native, #{res2}::float-64-native, #{res3}::float-64-native, #{res4}::float-64-native>>
+        iex> Nx.#{name}(Nx.tensor([-1.5, -0.5, 0.5, 1.5]))
+        #Nx.Tensor<
+          f64[4]
+          [#{res1}.0, #{res2}.0, #{res3}.0, #{res4}.0]
+        >
 
     """
     def unquote(name)(tensor)
@@ -1856,23 +2004,23 @@ defmodule Nx do
 
   ## Examples
 
-      iex> t = Nx.sum(Nx.tensor(42))
-      iex> Nx.to_bitstring(t)
-      <<42::64-native>>
-      iex> Nx.shape(t)
-      {}
+      iex> Nx.sum(Nx.tensor(42))
+      #Nx.Tensor<
+        s64
+        42
+      >
 
-      iex> t = Nx.sum(Nx.tensor([1, 2, 3]))
-      iex> Nx.to_bitstring(t)
-      <<6::64-native>>
-      iex> Nx.shape(t)
-      {}
+      iex> Nx.sum(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64
+        6
+      >
 
-      iex> t = Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
-      iex> Nx.to_bitstring(t)
-      <<10.0::float-64-native>>
-      iex> Nx.shape(t)
-      {}
+      iex> Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
+      #Nx.Tensor<
+        f64
+        10.0
+      >
 
   """
   def sum(tensor)
