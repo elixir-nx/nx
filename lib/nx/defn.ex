@@ -117,7 +117,14 @@ defmodule Nx.Defn do
     |> List.to_tuple()
   end
 
-  def __result__!(tensor), do: Nx.tensor(tensor)
+  def __result__!(number) when is_number(number), do: Nx.tensor(number)
+
+  def __result__!(%Nx.Tensor{} = t), do: t
+
+  def __result__!(other) do
+    raise "invalid defn return type, make sure defn returns a tuple or a tensor, " <>
+            "got: #{inspect(other)}"
+  end
 
   ## Public API
 

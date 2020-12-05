@@ -23,8 +23,19 @@ defmodule Exla.Shape do
   """
   def make_shape({type, size}, dims) when is_tuple(dims) do
     _ = Nx.Type.validate!({type, size})
+    validate_dims!(dims, tuple_size(dims))
     ref = Exla.NIF.make_shape(dtype_to_charlist({type, size}), dims) |> unwrap!()
     %Shape{ref: ref, dtype: {type, size}, dims: dims}
+  end
+
+  defp validate_dims!(_dims, 0), do: :ok
+
+  defp validate_dims!(dims, i)
+       when is_integer(:erlang.element(i, dims)),
+       do: validate_dims!(dims, i - 1)
+
+  defp validate_dims!(dims, _i) do
+    raise ArgumentError, "dimensions must be a tuple of integers, got: #{inspect(dims)}"
   end
 
   @doc """

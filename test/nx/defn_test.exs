@@ -58,7 +58,7 @@ defmodule Nx.DefnTest do
 
   describe "pattern matching" do
     defn complex_pattern_matching(expr) do
-      ({a, b} = c) = ({d, e} = f = expr)
+      ({a, b} = c) = {d, e} = f = expr
       {a, b, c, d, e, f}
     end
 
@@ -462,6 +462,28 @@ defmodule Nx.DefnTest do
                        @default_defn_compiler "unknown"
                        import Nx.Defn
                        defn add(a, b), do: a + b
+                     end
+                   end
+    end
+
+    test "invalid list" do
+      assert_raise CompileError,
+                   ~r"invalid numerical expression: \[a, b\] \(only keyword lists are allowed\)",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a, b), do: [a, b]
+                     end
+                   end
+    end
+
+    test "invalid keyword list" do
+      assert_raise CompileError,
+                   ~r"invalid numerical expression: \[a: a, b: b\] \(the only allowed keys",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a, b), do: [a: a, b: b]
                      end
                    end
     end

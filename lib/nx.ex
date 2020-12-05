@@ -445,7 +445,9 @@ defmodule Nx do
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
-  def random_uniform(shape, opts \\ []) when is_tuple(shape), do: random_uniform(shape, 0.0, 1.0, opts)
+  def random_uniform(shape, opts \\ []) when is_tuple(shape) do
+    random_uniform(shape, 0.0, 1.0, opts)
+  end
 
   @doc """
   Returns a uniformly-distributed random tensor with the given shape.
@@ -504,14 +506,17 @@ defmodule Nx do
       iex> Nx.type(t)
       {:s, 64}
   """
-  def random_uniform(shape, min, max, opts \\ []) when is_tuple(shape) and is_number(min) and is_number(max) do
+  def random_uniform(shape, min, max, opts \\ [])
+      when is_tuple(shape) and is_number(min) and is_number(max) do
     type = opts[:type] || Nx.Type.infer(max - min)
+
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
         {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
         {_, _} -> fn -> (max - min) * :rand.uniform() + min end
       end
+
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
@@ -547,12 +552,17 @@ defmodule Nx do
       iex> Nx.type(t)
       {:f, 32}
   """
-  def random_normal(shape, mu, sigma, opts \\ []) when is_tuple(shape) when is_number(mu) and is_number(sigma) do
+  def random_normal(shape, mu, sigma, opts \\ [])
+      when is_tuple(shape) and is_number(mu) and is_number(sigma) do
     type = opts[:type] || {:f, 64}
-    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(:rand.normal(mu, sigma), type)
+
+    data =
+      for _ <- 1..tuple_product(shape),
+          into: "",
+          do: scalar_to_binary(:rand.normal(mu, sigma), type)
+
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
-
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
@@ -1636,7 +1646,7 @@ defmodule Nx do
     tanh: {"hyperbolic tangent", &quote(do: :math.tanh(unquote(&1)))},
     sqrt: {"square root", &quote(do: :math.sqrt(unquote(&1)))},
     rsqrt: {"reverse square root", &quote(do: 1 / :math.sqrt(unquote(&1)))},
-    cbrt: {"cube root", &quote(do: :math.pow(unquote(&1), 1/3))}
+    cbrt: {"cube root", &quote(do: :math.pow(unquote(&1), 1 / 3))}
   ]
 
   for {name, {desc, code}} <- funs do
@@ -1730,7 +1740,7 @@ defmodule Nx do
     data =
       match_types [input_type] do
         for <<match!(seg, 0) <- data>>, into: <<>> do
-          <<write!(-(read!(seg, 0)), 0)>>
+          <<write!(-read!(seg, 0), 0)>>
         end
       end
 
@@ -1913,7 +1923,7 @@ defmodule Nx do
   # our integers are always 64 bits internally, we will have a lot of zeros
   # internally, so this should be the fastest.
   defp erlang_popcount(0, count), do: count
-  defp erlang_popcount(n, count), do: erlang_popcount(n &&& (n - 1), count + 1)
+  defp erlang_popcount(n, count), do: erlang_popcount(n &&& n - 1, count + 1)
 
   @doc """
   Counts the number of leading zeros of each element in the tensor.

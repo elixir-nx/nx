@@ -8,6 +8,8 @@ defmodule Nx.Defn.Compiler do
                             [device_transfer: 1, device_transfer: 2, device_transfer: 3] ++
                             [device_read: 1, device_deallocate: 1]
 
+  @known_keywords [:type]
+
   @doc """
   The callback required to be implemented for each compiler.
 
@@ -217,8 +219,30 @@ defmodule Nx.Defn.Compiler do
     {{left, right}, state}
   end
 
-  defp normalize(number, state) when is_number(number) do
-    {number, state}
+  defp normalize(list, state) when is_list(list) do
+    cond do
+      not Keyword.keyword?(list) ->
+        compile_error!(
+          [],
+          state,
+          "invalid numerical expression: #{Macro.to_string(list)} (only keyword lists are allowed)"
+        )
+
+      not Enum.all?(list, fn {k, _} -> k in @known_keywords end) ->
+        compile_error!(
+          [],
+          state,
+          "invalid numerical expression: #{Macro.to_string(list)} (the only allowed keys " <>
+            "in keyword lists are: #{Enum.map_join(@known_keywords, ", ", &inspect/1)})"
+        )
+
+      true ->
+        normalize_list(list, state)
+    end
+  end
+
+  defp normalize(literal, state) when is_number(literal) or is_atom(literal) do
+    {literal, state}
   end
 
   defp normalize(expr, state) do

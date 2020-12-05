@@ -534,14 +534,65 @@ defmodule Exla.DefnTest do
     defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
     test "computes softmax" do
-      tensor = softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0]))
+      assert softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0])) ==
+               Nx.tensor([0.03205860328008499, 0.08714431874203257,
+                 0.23688281808991013, 0.6439142598879722])
+    end
+  end
 
-      assert Nx.type(tensor) == {:f, 64}
-      assert Nx.shape(tensor) == {4}
+  describe "random uniform" do
+    defn random_uniform_fixed, do: Nx.random_uniform({30, 20})
 
-      assert Nx.to_bitstring(tensor) ==
-               <<0.03205860328008499::float-64-native, 0.08714431874203257::float-64-native,
-                 0.23688281808991013::float-64-native, 0.6439142598879722::float-64-native>>
+    test "generates with shape" do
+      t = random_uniform_fixed()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
+
+      for <<x::float-64-native <- Nx.to_bitstring(t)>> do
+        assert x >= 0.0 and x < 1
+      end
+    end
+
+    defn random_uniform_min_max_int, do: Nx.random_uniform({30, 20}, 5, 10)
+    defn random_uniform_min_max_float, do: Nx.random_uniform({30, 20}, 5.0, 10.0)
+
+    test "generates with min/max shape" do
+      t = random_uniform_min_max_int()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:s, 64}
+
+      for <<x::signed-64-native <- Nx.to_bitstring(t)>> do
+        assert x >= 5 and x < 10
+      end
+
+      t = random_uniform_min_max_float()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
+
+      for <<x::float-64-native <- Nx.to_bitstring(t)>> do
+        assert x >= 5.0 and x < 10.0
+      end
+    end
+
+    defn random_uniform_uint, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
+    defn random_uniform_f32, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 32})
+
+    test "generates with type" do
+      t = random_uniform_uint()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:u, 32}
+
+      for <<x::unsigned-32-native <- Nx.to_bitstring(t)>> do
+        assert x >= 5 and x < 10
+      end
+
+      t = random_uniform_f32()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 32}
+
+      for <<x::float-32-native <- Nx.to_bitstring(t)>> do
+        assert x >= 5.0 and x < 10.0
+      end
     end
   end
 

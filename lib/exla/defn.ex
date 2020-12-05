@@ -55,6 +55,11 @@ defmodule Exla.Defn do
     List.to_tuple(Enum.map(buffers, &buffer_to_nx/1))
   end
 
+  defp buffer_to_nx(other) do
+    raise "invalid defn return type, make sure defn returns a tuple or a tensor, " <>
+            "got: #{inspect(other)}"
+  end
+
   defp nx_to_buffer(%Nx.Tensor{data: {device, data}, type: type, shape: shape}) do
     case device do
       Nx.BitStringDevice when is_bitstring(data) ->
@@ -82,7 +87,7 @@ defmodule Exla.Defn do
 
   defp nx_to_cache_key!(other) do
     raise ArgumentError,
-          "defn functions expects either numbers or %Nx.Tensor{} as arguments, " <>
+          "defn functions expects either numbers or Nx.Tensor's as arguments, " <>
             "got: #{inspect(other)}"
   end
 
@@ -171,6 +176,30 @@ defmodule Exla.Defn do
   def nx_negate(builder, arg) do
     Exla.Op.negate(to_operator(builder, arg))
   end
+
+  ## Random
+
+  def nx_random_uniform(builder, shape, opts \\ []) when is_tuple(shape) and is_list(opts) do
+    nx_random_uniform(builder, shape, 0.0, 1.0, opts)
+  end
+
+  def nx_random_uniform(builder, shape, min, max, opts \\ [])
+      when is_number(min) and is_number(max) and is_tuple(shape) do
+    type = opts[:type] || Nx.Type.infer(max - min)
+
+    if match?({int, size} when int in [:s, :u] and size < 32, type) do
+      raise ArgumentError,
+            "Nx.random_uniform/4 for Exla requires signed and unsigned tensors to be " <>
+              "at least of size 32, got: #{elem(type, 1)}"
+    end
+
+    {min, _} = to_typed_operator(builder, min, type)
+    {max, _} = to_typed_operator(builder, max, type)
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Op.rng_uniform(min, max, shape)
+  end
+
+  ## Aggregators
 
   def nx_sum(builder, op) do
     op = to_operator(builder, op)
