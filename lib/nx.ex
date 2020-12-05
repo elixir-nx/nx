@@ -453,8 +453,9 @@ defmodule Nx do
   Returns a uniformly-distributed random tensor with the given shape.
 
   The distribution is bounded on the semi-open interval `[min, max)`.
-  Return type is one of `{:f, size}`, `{:bf, size}`, `{:u, size}`,
-  `{:s, size}`.
+  If `min` and `max` are integers, then the tensor has type `{:s, 64}`.
+  Otherwise, a `{:f, 64}` tensor is returned. You can also pass any
+  valid type via the `:type` option.
 
   ## Examples
 
