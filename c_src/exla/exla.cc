@@ -581,24 +581,6 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM reduce_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if(argc != 3) {
-    return exla::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* operand;
-  xla::XlaOp* init_value;
-  xla::XlaComputation* computation;
-
-  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
-  if(!exla::get<xla::XlaOp>(env, argv[1], init_value)) return exla::error(env, "Unable to get initial value.");
-  if(!exla::get<xla::XlaComputation>(env, argv[2], computation)) return exla::error(env, "Unable to get computation.");
-
-  xla::XlaOp op = xla::ReduceAll(*operand, *init_value, *computation);
-
-  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
-}
-
 ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(argc != 2) {
     return exla::error(env, "Bad argument count.");
@@ -907,7 +889,6 @@ static ErlNifFunc exla_funcs[] = {
   /******** Other XLA Ops *******/
   {"dot", 2, dot},
   {"reduce", 4, reduce},
-  {"reduce_all", 3, reduce_all},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
   /******* Compilation, Execution, Etc. ******/

@@ -135,34 +135,34 @@ defmodule Nx.Type do
 
   ## Examples
 
-      iex> Nx.Type.cast_scalar!(10, {:u, 8})
+      iex> Nx.Type.cast_scalar!({:u, 8}, 10)
       10
-      iex> Nx.Type.cast_scalar!(10, {:s, 8})
+      iex> Nx.Type.cast_scalar!({:s, 8}, 10)
       10
-      iex> Nx.Type.cast_scalar!(-10, {:s, 8})
+      iex> Nx.Type.cast_scalar!({:s, 8}, -10)
       -10
-      iex> Nx.Type.cast_scalar!(10, {:f, 32})
+      iex> Nx.Type.cast_scalar!({:f, 32}, 10)
       10.0
-      iex> Nx.Type.cast_scalar!(-10, {:bf, 16})
+      iex> Nx.Type.cast_scalar!({:bf, 16}, -10)
       -10.0
 
-      iex> Nx.Type.cast_scalar!(10.0, {:f, 32})
+      iex> Nx.Type.cast_scalar!({:f, 32}, 10.0)
       10.0
-      iex> Nx.Type.cast_scalar!(-10.0, {:bf, 16})
+      iex> Nx.Type.cast_scalar!({:bf, 16}, -10.0)
       -10.0
 
-      iex> Nx.Type.cast_scalar!(-10, {:u, 8})
+      iex> Nx.Type.cast_scalar!({:u, 8}, -10)
       ** (ArgumentError) cannot cast scalar -10 to {:u, 8}
 
-      iex> Nx.Type.cast_scalar!(10.0, {:s, 8})
+      iex> Nx.Type.cast_scalar!({:s, 8}, 10.0)
       ** (ArgumentError) cannot cast scalar 10.0 to {:s, 8}
   """
-  def cast_scalar!(int, {type, _}) when type in [:u] and is_integer(int) and int >= 0, do: int
-  def cast_scalar!(int, {type, _}) when type in [:s] and is_integer(int), do: int
-  def cast_scalar!(int, {type, _}) when type in [:f, :bf] and is_integer(int), do: int * 1.0
-  def cast_scalar!(float, {type, _}) when type in [:f, :bf] and is_float(float), do: float
+  def cast_scalar!({type, _}, int) when type in [:u] and is_integer(int) and int >= 0, do: int
+  def cast_scalar!({type, _}, int) when type in [:s] and is_integer(int), do: int
+  def cast_scalar!({type, _}, int) when type in [:f, :bf] and is_integer(int), do: int * 1.0
+  def cast_scalar!({type, _}, float) when type in [:f, :bf] and is_float(float), do: float
 
-  def cast_scalar!(other, type) do
+  def cast_scalar!(type, other) do
     raise ArgumentError, "cannot cast scalar #{inspect(other)} to #{inspect(type)}"
   end
 

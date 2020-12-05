@@ -534,9 +534,15 @@ defmodule Exla.DefnTest do
     defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
     test "computes softmax" do
-      assert softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0])) ==
-               Nx.tensor([0.03205860328008499, 0.08714431874203257,
-                 0.23688281808991013, 0.6439142598879722])
+      assert compare_tensors!(
+               softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0])),
+               Nx.tensor([
+                 0.03205860328008499,
+                 0.08714431874203257,
+                 0.23688281808991013,
+                 0.6439142598879722
+               ])
+             )
     end
   end
 
@@ -653,8 +659,8 @@ defmodule Exla.DefnTest do
          %{type: {:f, size}, data: {dev, left_data}} = left,
          %{data: {dev, right_data}} = right
        ) do
-    left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.floor(x, 5)
-    right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.floor(x, 5)
+    left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.round(x, 5)
+    right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.round(x, 5)
     assert %{left | data: {dev, left_data}} == %{right | data: {dev, right_data}}
   end
 

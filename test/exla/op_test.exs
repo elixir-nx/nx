@@ -32,22 +32,6 @@ defmodule Exla.OpTest do
     assert %Shape{dims: {}, dtype: {:u, 16}} = Op.get_shape(h)
     assert %Shape{dims: {}, dtype: {:u, 32}} = Op.get_shape(i)
     assert %Shape{dims: {}, dtype: {:u, 64}} = Op.get_shape(j)
-
-    assert_raise RuntimeError, "Unsupported constant type.", fn ->
-      Op.get_shape(Op.constant_r0(builder, 1.0, {:f, 16}))
-    end
-
-    assert_raise RuntimeError, "Unsupported constant type.", fn ->
-      Op.get_shape(Op.constant_r0(builder, 1.0, {:bf, 16}))
-    end
-
-    assert_raise RuntimeError, "Unsupported constant type.", fn ->
-      Op.get_shape(Op.constant_r0(builder, 1.0, {:c, 64}))
-    end
-
-    assert_raise RuntimeError, "Unsupported constant type.", fn ->
-      Op.get_shape(Op.constant_r0(builder, 1.0, {:c, 128}))
-    end
   end
 
   test "constant_from_binary/3" do
