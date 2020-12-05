@@ -553,7 +553,7 @@ defmodule Nx do
       {:f, 32}
   """
   def random_normal(shape, mu, sigma, opts \\ [])
-      when is_tuple(shape) and is_number(mu) and is_number(sigma) do
+      when is_tuple(shape) and is_float(mu) and is_float(sigma) do
     type = opts[:type] || {:f, 64}
 
     data =

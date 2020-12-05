@@ -199,6 +199,19 @@ defmodule Exla.Defn do
     Exla.Op.rng_uniform(min, max, shape)
   end
 
+  def nx_random_normal(builder, shape, opts \\ []) when is_tuple(shape) and is_list(opts) do
+    nx_random_normal(builder, shape, 0.0, 1.0, opts)
+  end
+
+  def nx_random_normal(builder, shape, mu, sigma, opts \\ [])
+      when is_float(mu) and is_float(sigma) and is_tuple(shape) do
+    type = opts[:type] || {:f, 64}
+    {mu, _} = to_typed_operator(builder, mu, type)
+    {sigma, _} = to_typed_operator(builder, sigma, type)
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Op.rng_normal(mu, sigma, shape)
+  end
+
   ## Aggregators
 
   def nx_sum(builder, op) do

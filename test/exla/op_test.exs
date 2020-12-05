@@ -333,12 +333,12 @@ defmodule Exla.OpTest do
     shape_b = Shape.make_shape({:f, 32}, {3, 3, 3})
     low_b = Op.constant_r0(builder, 0, {:f, 32})
     high_b = Op.constant_r0(builder, 1, {:f, 32})
-    b = Op.rng_uniform(low_a, high_a, shape_a)
+    b = Op.rng_uniform(low_b, high_b, shape_b)
 
     shape_c = Shape.make_shape({:s, 32}, {2, 2, 2})
     low_c = Op.constant_r0(builder, 0, {:s, 32})
     high_c = Op.constant_r0(builder, 5, {:s, 32})
-    c = Op.rng_uniform(low_b, high_b, shape_b)
+    c = Op.rng_uniform(low_c, high_c, shape_c)
 
     assert %Shape{dims: {3, 3, 3}, dtype: {:f, 64}} = Op.get_shape(a)
     assert %Shape{dims: {3, 3, 3}, dtype: {:f, 32}} = Op.get_shape(b)

@@ -556,7 +556,7 @@ defmodule Exla.DefnTest do
     defn random_uniform_min_max_int, do: Nx.random_uniform({30, 20}, 5, 10)
     defn random_uniform_min_max_float, do: Nx.random_uniform({30, 20}, 5.0, 10.0)
 
-    test "generates with min/max shape" do
+    test "generates with min/max" do
       t = random_uniform_min_max_int()
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:s, 64}
@@ -574,11 +574,11 @@ defmodule Exla.DefnTest do
       end
     end
 
-    defn random_uniform_uint, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
+    defn random_uniform_u32, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
     defn random_uniform_f32, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 32})
 
     test "generates with type" do
-      t = random_uniform_uint()
+      t = random_uniform_u32()
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:u, 32}
 
@@ -593,6 +593,32 @@ defmodule Exla.DefnTest do
       for <<x::float-32-native <- Nx.to_bitstring(t)>> do
         assert x >= 5.0 and x < 10.0
       end
+    end
+  end
+
+  describe "random normal" do
+    defn random_normal_fixed, do: Nx.random_normal({30, 20})
+
+    test "generates with shape" do
+      t = random_uniform_fixed()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
+    end
+
+    defn random_normal_mu_sigma, do: Nx.random_normal({30, 20}, 5.0, 10.0)
+
+    test "generates with mu/sigma" do
+      t = random_normal_mu_sigma()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
+    end
+
+    defn random_normal_f32, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 32})
+
+    test "generates with type" do
+      t = random_normal_f32()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 32}
     end
   end
 
