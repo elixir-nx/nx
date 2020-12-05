@@ -2186,7 +2186,106 @@ defmodule Nx do
     reduce(tensor, 0, opts, &+/2)
   end
 
-  # Reduce
+  @doc """
+  Reduces over a tensor with the given accumulator.
+
+  The tensor may be reduced in parallel. The evaluation
+  order of the reduction function is arbitrary and may
+  be non-deterministic. Therefore, the reduction function
+  should not be overly sensitive to reassociation.
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axis: 0`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then counts
+  the axis from the back. For example, `axis: -1` will
+  always aggregate all rows.
+
+  ## Examples
+
+      iex> Nx.reduce(Nx.tensor(42), 0, &+/2)
+      #Nx.Tensor<
+        s64
+        42
+      >
+
+      iex> Nx.reduce(Nx.tensor([1, 2, 3]), 0, &+/2)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.reduce(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]), 0, &+/2)
+      #Nx.Tensor<
+        f64
+        10.0
+      >
+
+  ### Aggregating over an axis
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> Nx.reduce(t, 0, [axis: 0], &+/2)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axis: 0], &+/2)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [8, 10, 12],
+          [14, 16, 18]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axis: 1], &+/2)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [5, 7, 9],
+          [17, 19, 21]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axis: 2], &+/2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [6, 15],
+          [24, 33]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axis: -1], &+/2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [6, 15],
+          [24, 33]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axis: -3], &+/2)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [8, 10, 12],
+          [14, 16, 18]
+        ]
+      >
+
+  ### Errors
+
+      iex> Nx.reduce(Nx.tensor([1, 2, 3]), 0, [axis: 1], &+/2)
+      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+
+  """
   def reduce(tensor, acc, opts \\ [], fun)
 
   def reduce(number, acc, opts, fun) when is_number(number) do
