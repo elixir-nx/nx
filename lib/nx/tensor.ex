@@ -7,7 +7,7 @@ defmodule Nx.Tensor do
   """
 
   @type data :: {module, term}
-  @type type :: Nx.Type.t
+  @type type :: Nx.Type.t()
   @type shape :: tuple()
 
   @enforce_keys [:data, :type, :shape]
@@ -16,64 +16,103 @@ defmodule Nx.Tensor do
   defimpl Inspect do
     import Inspect.Algebra
 
-    # TODO: Implementation is inefficient as is, we should limit
-    # the amount of data alongside each dimension
-    # TODO: Support inspect data on the device
+    # TODO: To print data on device, we can support reading a slice
+    # from the device which we will compute with:
+    #
+    #     min(opts.limit, tuple_product(shape)) * size
+    #
     def inspect(tensor, opts) do
       dims_list = Tuple.to_list(tensor.shape)
 
-      open = color("#Nx.Tensor<", :map, opts)
-      close = color("\n>", :map, opts)
+      open = color("[", :list, opts)
+      sep = color(",", :list, opts)
+      close = color("]", :list, opts)
       type = color(Nx.Type.to_string(tensor.type), :atom, opts)
-      shape = shape_to_algebra(dims_list, opts)
+      shape = shape_to_algebra(dims_list, open, close)
 
-      data =
+      {data, _limit} =
         case tensor.data do
           {Nx.BitStringDevice, bin} ->
             {_, size} = tensor.type
             total_size = Enum.reduce(dims_list, size, &*/2)
-
-            dims_list
-            |> chunk(bin, total_size, tensor.type)
-            |> format_list_or_numbers(opts)
+            chunk(dims_list, bin, opts.limit, total_size, tensor.type, {open, sep, close})
 
           {device, _} ->
-            to_doc(device, opts)
+            {to_doc(device, opts), opts.limit}
         end
 
       inner = concat([line(), type, shape, line(), data])
-      concat([open, nest(inner, 2), close])
+
+      color("#Nx.Tensor<", :map, opts)
+      |> concat(nest(inner, 2))
+      |> concat(color("\n>", :map, opts))
     end
 
-    defp shape_to_algebra(dims_list, opts) do
-      open = color("[", :list, opts)
-      close = color("]", :list, opts)
-
+    defp shape_to_algebra(dims_list, open, close) do
       dims_list
       |> Enum.map(fn number -> concat([open, Integer.to_string(number), close]) end)
       |> concat()
     end
 
-    defp chunk([], data, size, type) do
-      # Pretend it has a dimension
-      hd(chunk([size], data, size, type))
+    defp chunk([], data, limit, size, {type, size}, _docs) do
+      doc =
+        case type do
+          :s ->
+            <<x::size(size)-signed-native>> = data
+            Integer.to_string(x)
+
+          :u ->
+            <<x::size(size)-unsigned-native>> = data
+            Integer.to_string(x)
+
+          :f ->
+            <<x::size(size)-bitstring>> = data
+            read_float(x, size)
+
+          :bf ->
+            <<x::16-bitstring>> = data
+            read_bf16(x)
+        end
+
+      if limit == :infinity, do: {doc, limit}, else: {doc, limit - 1}
     end
 
-    defp chunk([_], data, _size, {type, size}) do
-      case type do
-        :s -> for <<x::size(size)-signed-native <- data>>, do: Integer.to_string(x)
-        :u -> for <<x::size(size)-unsigned-native <- data>>, do: Integer.to_string(x)
-        :f -> for <<x::size(size)-bitstring <- data>>, do: read_float(x, size)
-        :bf -> for <<x::16-bitstring <- data>>, do: read_bf16(x)
-      end
+    defp chunk([dim | dims], data, limit, total_size, type, {open, sep, close} = docs) do
+      chunk_size = div(total_size, dim)
+
+      {acc, limit} =
+        chunk_each(dim, data, [], limit, chunk_size, fn chunk, limit ->
+          chunk(dims, chunk, limit, chunk_size, type, docs)
+        end)
+
+      {open, sep, close, nest} =
+        if dims == [] do
+          {open, concat(sep, " "), close, 0}
+        else
+          {concat(open, line()), concat(sep, line()), concat(line(), close), 2}
+        end
+
+      doc =
+        open
+        |> concat(concat(Enum.intersperse(acc, sep)))
+        |> nest(nest)
+        |> concat(close)
+
+      {doc, limit}
     end
 
-    defp chunk([size | rest], data, total_size, type) do
-      chunk_size = div(total_size, size)
+    defp chunk_each(0, "", acc, limit, _size, _fun) do
+      {Enum.reverse(acc), limit}
+    end
 
-      for <<chunk::size(chunk_size)-bitstring <- data>> do
-        chunk(rest, chunk, chunk_size, type)
-      end
+    defp chunk_each(_dim, _data, acc, 0, _size, _fun) do
+      {Enum.reverse(["..." | acc]), 0}
+    end
+
+    defp chunk_each(dim, data, acc, limit, size, fun) when dim > 0 do
+      <<chunk::size(size)-bitstring, rest::bitstring>> = data
+      {doc, limit} = fun.(chunk, limit)
+      chunk_each(dim - 1, rest, [doc | acc], limit, size, fun)
     end
 
     defp read_bf16(<<0xFF80::16-native>>), do: "-Inf"
@@ -112,14 +151,5 @@ defmodule Nx.Tensor do
         <<x::float-64-native>> -> Float.to_string(x)
       end
     end
-
-    defp format_list_or_numbers(x, opts) when is_list(x) do
-      open = color("[", :list, opts)
-      sep = color(",", :list, opts)
-      close = color("]", :list, opts)
-      container_doc(open, x, close, opts, &format_list_or_numbers/2, separator: sep)
-    end
-
-    defp format_list_or_numbers(x, _opts), do: Inspect.Algebra.string(x)
   end
 end

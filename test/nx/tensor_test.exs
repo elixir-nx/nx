@@ -15,14 +15,20 @@ defmodule Nx.TensorTest do
       assert inspect(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == """
       #Nx.Tensor<
         s64[2][3]
-        [[1, 2, 3], [4, 5, 6]]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
       >\
       """
 
       assert inspect(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) == """
       #Nx.Tensor<
         f64[2][3]
-        [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+        [
+          [1.0, 2.0, 3.0],
+          [4.0, 5.0, 6.0]
+        ]
       >\
       """
     end
@@ -35,6 +41,36 @@ defmodule Nx.TensorTest do
       #Nx.Tensor<
         s64[4]
         Nx.ProcessDevice
+      >\
+      """
+    end
+
+    test "limit" do
+      assert inspect(Nx.tensor([1, 2]), limit: :infinity) == """
+      #Nx.Tensor<
+        s64[2]
+        [1, 2]
+      >\
+      """
+
+      assert inspect(Nx.tensor([[1, 2], [3, 4]]), limit: 3) == """
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, ...]
+        ]
+      >\
+      """
+
+      assert inspect(Nx.tensor([[1, 2], [3, 4], [5, 6]]), limit: 3) == """
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [1, 2],
+          [3, ...],
+          ...
+        ]
       >\
       """
     end
