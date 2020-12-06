@@ -2147,6 +2147,7 @@ defmodule Nx do
   """
   def sum(tensor, opts \\ []) do
     Nx.Util.reduce(tensor, 0, opts, &+/2)
+  end
 
   ## Matrix ops
 
@@ -2174,44 +2175,74 @@ defmodule Nx do
   ### Dot Product of Scalars
 
       iex> Nx.dot(5, 5)
-      25
+      #Nx.Tensor<
+        s64
+        25
+      >
 
       iex> Nx.dot(-2.0, 5.0)
-      -10.0
+      #Nx.Tensor<
+        f64
+        -10.0
+      >
 
   ### Dot Product of Vectors
 
-      iex> t = Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
-      iex> Nx.to_bitstring(t)
-      <<32::64-native>>
+      iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        s64
+        32
+      >
 
-      iex> t = Nx.dot(Nx.tensor([2.0, 4.0, 3.0, 5.0]), Nx.tensor([1.0, 2.0, 3.0, 4.0]))
-      iex> Nx.to_bitstring(t)
-      <<39.0::float-64-native>>
+      iex> Nx.dot(Nx.tensor([2.0, 4.0, 3.0, 5.0]), Nx.tensor([1.0, 2.0, 3.0, 4.0]))
+      #Nx.Tensor<
+        f64
+        39.0
+      >
 
   ### Dot Product of Matrices
 
-      iex> t = Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]]))
-      iex> Nx.to_bitstring(t)
-      <<58::64-native, 64::64-native, 139::64-native, 154::64-native>>
+      iex> Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [58, 64],
+          [139, 154]
+        ]
+      >
 
-      iex> t = Nx.dot(Nx.tensor([[10.0, 13.0, 14.0, 15.0], [59.0, 20.0, 10.0, 30.0]]), Nx.tensor([[2.0, 4.0], [5.0, 1.0], [6.0, 8.0], [9.0, 10.0]]))
-      iex> Nx.to_bitstring(t)
-      <<304::64-float-native, 315::64-float-native, 548::64-float-native, 636::64-float-native>>
+      iex> Nx.dot(Nx.tensor([[10.0, 13.0, 14.0, 15.0], [59.0, 20.0, 10.0, 30.0]]), Nx.tensor([[2.0, 4.0], [5.0, 1.0], [6.0, 8.0], [9.0, 10.0]]))
+      #Nx.Tensor<
+        f64[2][2]
+        [
+          [304.0, 315.0],
+          [548.0, 636.0]
+        ]
+      >
 
   ### Dot Product of Vector and n-d tensor
 
-      iex> t = Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
-      iex> Nx.to_bitstring(t)
-      <<25::64-native, 55::64-native, 85::64-native, 115::64-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [25, 55],
+          [85, 115]
+        ]
+      >
 
-      iex> t = Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]]), Nx.tensor([2.0, 2.0]))
-      iex> Nx.to_bitstring(t)
-      <<6.0::float-64-native, 14.0::float-64-native, 22.0::float-64-native, 30.0::float-64-native>>
-      iex> Nx.shape(t)
-      {1, 1, 2, 2}
+      iex> Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]]), Nx.tensor([2.0, 2.0]))
+      #Nx.Tensor<
+        f64[1][1][2][2]
+        [
+          [
+            [
+              [6.0, 14.0],
+              [22.0, 30.0]
+            ]
+          ]
+        ]
+      >
 
   ### Dot Product of n-D and m-D tensor
 
@@ -2243,11 +2274,15 @@ defmodule Nx do
     total_elems = div(tuple_product(s1), last_dim)
 
     output_shape =
-      s1
-      |> Tuple.to_list()
-      |> Enum.take(tuple_size(s1) - 2)
-      |> Kernel.++([last_dim])
-      |> List.to_tuple()
+      if tuple_size(s1) == 1 do
+        {}
+      else
+        s1
+        |> Tuple.to_list()
+        |> Enum.take(tuple_size(s1) - 2)
+        |> Kernel.++([last_dim])
+        |> List.to_tuple()
+      end
 
     data =
       match_types [left_type, right_type, output_type] do
@@ -2448,5 +2483,16 @@ defmodule Nx do
       fun.(left_head, right_head)
       | bin_zip_map_all(left_rest, left_size, right_rest, right_size, fun)
     ]
+  end
+
+  @compile {:inline, bin_reduce_all: 3}
+
+  defp bin_reduce_all(<<>>, acc, _fun) do
+    acc
+  end
+
+  defp bin_reduce_all(binary, acc, fun) do
+    {acc, rest} = fun.(binary, acc)
+    bin_reduce_all(rest, acc, fun)
   end
 end
