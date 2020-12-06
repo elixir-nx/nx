@@ -173,9 +173,8 @@ defmodule Exla.Defn do
     end
   end
 
-  def nx_negate(builder, arg) do
-    Exla.Op.negate(to_operator(builder, arg))
-  end
+  def nx_negate(_builder, %Exla.Op{} = op), do: Exla.Op.negate(op)
+  def nx_negate(_builder, number) when is_number(number), do: -number
 
   ## Random
 
@@ -214,9 +213,11 @@ defmodule Exla.Defn do
 
   ## Aggregators
 
-  def nx_sum(builder, op) do
-    Exla.Lib.sum(builder, to_operator(builder, op))
+  def nx_sum(builder, op, opts \\ []) do
+    Exla.Lib.sum(builder, to_operator(builder, op), opts)
   end
+
+  ## Conversion functions
 
   defp to_block_result(builder, tuple) when is_tuple(tuple) do
     elements =

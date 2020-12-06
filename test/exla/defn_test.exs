@@ -170,8 +170,6 @@ defmodule Exla.DefnTest do
 
   describe "//2" do
     defn divide_two(a, b), do: a / b
-    @defn_compiler Nx.Defn
-    defn divide_two_nx(a, b), do: a / b
 
     test "parameters" do
       tensors = [
@@ -184,18 +182,13 @@ defmodule Exla.DefnTest do
       ]
 
       for {left, right} <- tensors do
-        compare_tensors!(divide_two(left, right), divide_two_nx(left, right))
-        compare_tensors!(divide_two(right, left), divide_two_nx(right, left))
+        compare_tensors!(divide_two(left, right), Nx.divide(left, right))
+        compare_tensors!(divide_two(right, left), Nx.divide(right, left))
       end
     end
 
     defn divide_two_int(t), do: t / 2
-    @defn_compiler Nx.Defn
-    defn divide_two_int_nx(t), do: t / 2
-
     defn divide_two_float(t), do: t / 2.0
-    @defn_compiler Nx.Defn
-    defn divide_two_float_nx(t), do: t / 2.0
 
     test "constants" do
       tensors = [
@@ -209,29 +202,27 @@ defmodule Exla.DefnTest do
       ]
 
       for t <- tensors do
-        compare_tensors!(divide_two_int(t), divide_two_int_nx(t))
-        compare_tensors!(divide_two_float(t), divide_two_float_nx(t))
+        compare_tensors!(divide_two_int(t), Nx.divide(t, 2))
+        compare_tensors!(divide_two_float(t), Nx.divide(t, 2.0))
       end
     end
   end
 
   describe "remainder" do
     defn remainder(a, b), do: Nx.remainder(a, b)
-    @defn_compiler Nx.Defn
-    defn remainder_nx(a, b), do: Nx.remainder(a, b)
 
     test "integers" do
       left = Nx.tensor([-1023, 1023])
       right = Nx.tensor([[-4], [4]])
       assert Nx.shape(remainder(left, right)) == {2, 2}
-      compare_tensors!(remainder(left, right), remainder_nx(left, right))
+      compare_tensors!(remainder(left, right), Nx.remainder(left, right))
     end
 
     test "floats" do
       left = Nx.tensor([-8.3, -8.4, -8.5, 8.3, 8.4, 8.5])
       right = Nx.tensor([[-4.2], [-4.1], [-4.0], [4.0], [4.1], [4.2]])
       assert Nx.shape(remainder(left, right)) == {6, 6}
-      compare_tensors!(remainder(left, right), remainder_nx(left, right))
+      compare_tensors!(remainder(left, right), Nx.remainder(left, right))
     end
   end
 
@@ -246,30 +237,24 @@ defmodule Exla.DefnTest do
     ]
 
     defn subtract_two(a, b), do: a - b
-    @defn_compiler Nx.Defn
-    defn subtract_two_nx(a, b), do: a - b
 
     test "-" do
       for {left, right} <- @tensors do
-        compare_tensors!(subtract_two(left, right), subtract_two_nx(left, right))
-        compare_tensors!(subtract_two(right, left), subtract_two_nx(right, left))
+        compare_tensors!(subtract_two(left, right), Nx.subtract(left, right))
+        compare_tensors!(subtract_two(right, left), Nx.subtract(right, left))
       end
     end
 
     defn multiply_two(a, b), do: a * b
-    @defn_compiler Nx.Defn
-    defn multiply_two_nx(a, b), do: a * b
 
     test "*" do
       for {left, right} <- @tensors do
-        compare_tensors!(multiply_two(left, right), multiply_two_nx(left, right))
-        compare_tensors!(multiply_two(right, left), multiply_two_nx(right, left))
+        compare_tensors!(multiply_two(left, right), Nx.multiply(left, right))
+        compare_tensors!(multiply_two(right, left), Nx.multiply(right, left))
       end
     end
 
     defn unary_minus(a), do: -a
-    @defn_compiler Nx.Defn
-    defn unary_minus_nx(a), do: -a
 
     test "negate" do
       for t <- [
@@ -277,54 +262,46 @@ defmodule Exla.DefnTest do
             Nx.tensor([-1, 0, 1]),
             Nx.tensor([-1.0, 1.0])
           ] do
-        assert unary_minus(t) == unary_minus_nx(t)
+        assert unary_minus(t) == Nx.negate(t)
       end
     end
 
     defn max_two(a, b), do: max(a, b)
-    @defn_compiler Nx.Defn
-    defn max_two_nx(a, b), do: max(a, b)
 
     test "max" do
       for {left, right} <- @tensors do
-        compare_tensors!(max_two(left, right), max_two_nx(left, right))
-        compare_tensors!(max_two(right, left), max_two_nx(right, left))
+        compare_tensors!(max_two(left, right), Nx.max(left, right))
+        compare_tensors!(max_two(right, left), Nx.max(right, left))
       end
     end
 
     defn min_two(a, b), do: min(a, b)
-    @defn_compiler Nx.Defn
-    defn min_two_nx(a, b), do: min(a, b)
 
     test "min" do
       for {left, right} <- @tensors do
-        compare_tensors!(min_two(left, right), min_two_nx(left, right))
-        compare_tensors!(min_two(right, left), min_two_nx(right, left))
+        compare_tensors!(min_two(left, right), Nx.min(left, right))
+        compare_tensors!(min_two(right, left), Nx.min(right, left))
       end
     end
 
     defn power_two(a, b), do: Nx.power(a, b)
-    @defn_compiler Nx.Defn
-    defn power_two_nx(a, b), do: Nx.power(a, b)
 
     test "power" do
       for {left, right} <- @tensors do
-        compare_tensors!(power_two(left, right), power_two_nx(left, right))
-        compare_tensors!(power_two(right, left), power_two_nx(right, left))
+        compare_tensors!(power_two(left, right), Nx.power(left, right))
+        compare_tensors!(power_two(right, left), Nx.power(right, left))
       end
     end
 
     defn arctan2_two(a, b), do: Nx.arctan2(a, b)
-    @defn_compiler Nx.Defn
-    defn arctan2_two_nx(a, b), do: Nx.arctan2(a, b)
 
     test "arctan2" do
       <<neg_zero::float>> = <<0x8000000000000000::64>>
       left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
       right = Nx.tensor([[-1.0], [neg_zero], [0.0], [1.0]])
 
-      compare_tensors!(arctan2_two(left, right), arctan2_two_nx(left, right))
-      compare_tensors!(arctan2_two(right, left), arctan2_two_nx(right, left))
+      compare_tensors!(arctan2_two(left, right), Nx.arctan2(left, right))
+      compare_tensors!(arctan2_two(right, left), Nx.arctan2(right, left))
     end
   end
 
@@ -333,69 +310,55 @@ defmodule Exla.DefnTest do
     @right Nx.tensor([[-2], [-1], [0], [1], [2]])
 
     defn bitwise_and(a, b), do: a &&& b
-    @defn_compiler Nx.Defn
-    defn bitwise_and_nx(a, b), do: a &&& b
 
     test "bitwise_and" do
       assert Nx.shape(bitwise_and(@left, @right)) == {5, 5}
-      assert bitwise_and(@left, @right) == bitwise_and_nx(@left, @right)
+      assert bitwise_and(@left, @right) == Nx.bitwise_and(@left, @right)
     end
 
     defn bitwise_or(a, b), do: a ||| b
-    @defn_compiler Nx.Defn
-    defn bitwise_or_nx(a, b), do: a ||| b
 
     test "bitwise_or" do
       assert Nx.shape(bitwise_or(@left, @right)) == {5, 5}
-      assert bitwise_or(@left, @right) == bitwise_or_nx(@left, @right)
+      assert bitwise_or(@left, @right) == Nx.bitwise_or(@left, @right)
     end
 
     defn bitwise_xor(a, b), do: a ^^^ b
-    @defn_compiler Nx.Defn
-    defn bitwise_xor_nx(a, b), do: a ^^^ b
 
     test "bitwise_xor" do
       assert Nx.shape(bitwise_xor(@left, @right)) == {5, 5}
-      assert bitwise_xor(@left, @right) == bitwise_xor_nx(@left, @right)
+      assert bitwise_xor(@left, @right) == Nx.bitwise_xor(@left, @right)
     end
 
     defn bitwise_not(a), do: ~~~a
-    @defn_compiler Nx.Defn
-    defn bitwise_not_nx(a), do: ~~~a
 
     test "bitwise_not" do
       assert Nx.shape(bitwise_not(@left)) == {5}
-      assert bitwise_not(@left) == bitwise_not_nx(@left)
+      assert bitwise_not(@left) == Nx.bitwise_not(@left)
     end
 
     defn bitwise_pc(a), do: Nx.population_count(a)
-    @defn_compiler Nx.Defn
-    defn bitwise_pc_nx(a), do: Nx.population_count(a)
 
     test "population_count" do
       assert Nx.shape(bitwise_pc(@left)) == {5}
-      assert bitwise_pc(@left) == bitwise_pc_nx(@left)
+      assert bitwise_pc(@left) == Nx.population_count(@left)
     end
 
     defn bitwise_clz(a), do: Nx.count_leading_zeros(a)
-    @defn_compiler Nx.Defn
-    defn bitwise_clz_nx(a), do: Nx.count_leading_zeros(a)
 
     test "count_leading_zeros" do
       assert Nx.shape(bitwise_clz(@left)) == {5}
-      assert bitwise_clz(@left) == bitwise_clz_nx(@left)
+      assert bitwise_clz(@left) == Nx.count_leading_zeros(@left)
     end
 
     @left Nx.tensor([-2, -1, 0, 1, 2])
     @right Nx.tensor([[0], [1], [2], [3], [4]])
 
     defn left_shift(a, b), do: a <<< b
-    @defn_compiler Nx.Defn
-    defn left_shift_nx(a, b), do: a <<< b
 
     test "left_shift" do
       assert Nx.shape(left_shift(@left, @right)) == {5, 5}
-      assert left_shift(@left, @right) == left_shift_nx(@left, @right)
+      assert left_shift(@left, @right) == Nx.left_shift(@left, @right)
     end
 
     @left_signed Nx.tensor([-128, -127, -2, -1, 0, 1, 2, 126, 127], type: {:s, 8})
@@ -405,19 +368,17 @@ defmodule Exla.DefnTest do
     @right_unsigned Nx.tensor([[0], [1], [2], [3], [4], [5]], type: {:u, 8})
 
     defn right_shift(a, b), do: a >>> b
-    @defn_compiler Nx.Defn
-    defn right_shift_nx(a, b), do: a >>> b
 
     test "right_shift" do
       assert Nx.shape(right_shift(@left_signed, @right_signed)) == {9, 9}
 
       assert right_shift(@left_signed, @right_signed) ==
-               right_shift_nx(@left_signed, @right_signed)
+               Nx.right_shift(@left_signed, @right_signed)
 
       assert Nx.shape(right_shift(@left_unsigned, @right_unsigned)) == {6, 6}
 
       assert right_shift(@left_unsigned, @right_unsigned) ==
-               right_shift_nx(@left_unsigned, @right_unsigned)
+               Nx.right_shift(@left_unsigned, @right_unsigned)
     end
   end
 
@@ -499,6 +460,15 @@ defmodule Exla.DefnTest do
       assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() == Nx.tensor(6, type: {:u, 8})
       assert Nx.tensor([1.0, 2.0, 3.0]) |> sum() == Nx.tensor(6.0)
       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() == Nx.tensor(6, type: {:f, 32})
+    end
+
+    defn sum_pos_axis(t), do: Nx.sum(t, axis: 1)
+    defn sum_neg_axis(t), do: Nx.sum(t, axis: -3)
+
+    test "computes the sum on a given axis" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      assert sum_pos_axis(t) == Nx.sum(t, axis: 1)
+      assert sum_neg_axis(t) == Nx.sum(t, axis: -3)
     end
   end
 

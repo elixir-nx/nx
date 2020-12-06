@@ -6,9 +6,14 @@ defmodule Exla.Lib do
   alias Exla.{Builder, Op, Shape}
 
   @doc """
-  Computes the sum of the given operation.  
+  Computes the sum of the given operation.
+
+  ## Options
+
+    * `:axis` - the axis to reduce on
+
   """
-  def sum(%Builder{} = builder, %Op{} = op) do
+  def sum(%Builder{} = builder, %Op{} = op, opts \\ []) do
     op_shape = Op.get_shape(op)
     reduction_shape = Shape.make_shape(op_shape.dtype, {})
 
@@ -20,7 +25,17 @@ defmodule Exla.Lib do
     reduction = Builder.build(add)
 
     init_value = Op.constant_r0(builder, 0, reduction_shape.dtype)
-    Op.reduce(op, init_value, reduction, all_dimensions(op_shape.dims))
+    Op.reduce(op, init_value, reduction, reduce_dimensions(op_shape, opts))
+  end
+
+  defp reduce_dimensions(op_shape, opts) do
+    axis = opts[:axis]
+
+    cond do
+      axis == nil -> all_dimensions(op_shape.dims)
+      axis >= 0 -> {axis}
+      axis < 0 -> {tuple_size(op_shape.dims) + axis}
+    end
   end
 
   # Converts {3, 255, 255} into {0, 1, 2}
