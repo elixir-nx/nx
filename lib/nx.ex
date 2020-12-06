@@ -2149,6 +2149,374 @@ defmodule Nx do
     Nx.Util.reduce(tensor, 0, opts, &+/2)
   end
 
+  ## Matrix ops
+
+  @doc """
+  Returns the dot product of two tensors.
+
+  Given `a` and `b`, computes the dot product according to
+  the following rules:
+
+    * If both `a` and `b` are scalars, it is equivalent to `a * b`.
+    * If `a` is a scalar and `b` is a tensor, it is equivalent to `Nx.multiply(a, b)`.
+    * If `a` is a tensor and `b` is a scalar, it is equivalent to `Nx.multiply(a, b)`.
+    * If both `a` and `b` are 1-D tensors (vectors), it is the sum of the element-wise
+    product between `a` and `b`. The lengths of `a` and `b` must be equal.
+    * If both `a` and `b` are 2-D tensors (matrices), it is equivalent to matrix-multiplication.
+    * If either `a` or `b` is a 1-D tensor, and the other is an n-D tensor, it is the
+    sum of the element-wise product along the last axis of `a` or `b`. The length of the
+    1-D tensor must match the last dimension of the n-D tensor.
+    * If `a` is an n-D tensor and `b` is an m-D tensor, it is the sum of the element-wise
+    product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
+    of `a` must match the second-to-last dimension of `b`.
+
+  ## Examples
+
+  ### Dot Product of Scalars
+
+      iex> Nx.dot(5, 5)
+      #Nx.Tensor<
+        s64
+        25
+      >
+
+      iex> Nx.dot(-2.0, 5.0)
+      #Nx.Tensor<
+        f64
+        -10.0
+      >
+
+  ### Dot Product of Vectors
+
+      iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        s64
+        32
+      >
+
+      iex> Nx.dot(Nx.tensor([2.0, 4.0, 3.0, 5.0]), Nx.tensor([1.0, 2.0, 3.0, 4.0]))
+      #Nx.Tensor<
+        f64
+        39.0
+      >
+
+  ### Dot Product of Matrices
+
+      iex> Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [58, 64],
+          [139, 154]
+        ]
+      >
+
+      iex> Nx.dot(Nx.tensor([[10.0, 13.0, 14.0, 15.0], [59.0, 20.0, 10.0, 30.0]]), Nx.tensor([[2.0, 4.0], [5.0, 1.0], [6.0, 8.0], [9.0, 10.0]]))
+      #Nx.Tensor<
+        f64[2][2]
+        [
+          [304.0, 315.0],
+          [548.0, 636.0]
+        ]
+      >
+
+  ### Dot Product of Vector and n-d tensor
+
+      iex> Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [25, 55],
+          [85, 115]
+        ]
+      >
+
+      iex> Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]]), Nx.tensor([2.0, 2.0]))
+      #Nx.Tensor<
+        f64[1][1][2][2]
+        [
+          [
+            [
+              [6.0, 14.0],
+              [22.0, 30.0]
+            ]
+          ]
+        ]
+      >
+
+  ### Dot Product of n-D and m-D tensor
+
+      TODO
+
+  ### Error Cases
+
+      iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
+      ** (ArgumentError) dot product expects shapes to be compatible, last dimension of a (3) does not equal last dimension of b (2)
+  """
+  def dot(a, b)
+
+  def dot(a, b) when is_number(a) and is_number(b), do: Nx.multiply(a, b)
+
+  def dot(a = %T{}, b) when is_number(b), do: Nx.multiply(a, b)
+
+  def dot(a, b = %T{}) when is_number(a), do: Nx.multiply(a, b)
+
+  def dot(a = %T{type: left_type, shape: s1}, b = %T{type: right_type, shape: {n}}) do
+    output_type = Nx.Type.merge(left_type, right_type)
+    {_, left_size} = left_type
+    {_, right_size} = right_type
+
+    last_dim = elem(s1, tuple_size(s1) - 1)
+    unless last_dim == n, do: raise ArgumentError, "dot product expects shapes to be compatible," <>
+                                                   " last dimension of a (#{last_dim}) does not equal" <>
+                                                   " last dimension of b (#{n})"
+
+    total_elems = div(tuple_product(s1), last_dim)
+
+    output_shape =
+      if tuple_size(s1) == 1 do
+        {}
+      else
+        s1
+        |> Tuple.to_list()
+        |> Enum.take(tuple_size(s1) - 2)
+        |> Kernel.++([last_dim])
+        |> List.to_tuple()
+      end
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        for i <- 0..total_elems-1, into: <<>> do
+          row = :binary.part(data!(a), div(i*n*left_size, 8), div(n*left_size, 8))
+          value =
+            bin_reduce_all(
+              bin_zip_map_all(row, left_size, data!(b), right_size,
+                fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
+                  <<write!(read!(x, 0) * read!(y, 1), 2)>>
+                end
+              ) |> IO.iodata_to_binary(), 0,
+              fn <<match!(var, 0), rest::bitstring>>, acc ->
+                {read!(var, 0) + acc, rest}
+              end
+            )
+
+          <<write!(value, 0)>>
+        end
+      end
+
+    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+  end
+
+  def dot(a = %T{shape: {_}}, b = %T{}), do: Nx.dot(b, a)
+
+  def dot(a = %T{type: left_type, shape: {m, n}}, b = %T{type: right_type, shape: {n, k}}) do
+    output_type = Nx.Type.merge(left_type, right_type)
+
+    {_, left_size} = left_type
+    {_, right_size} = right_type
+
+    output_shape = {m, k}
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        for i <- 0..m - 1, into: <<>> do
+          row = :binary.part(data!(a), div(i * n * left_size, 8), div(n * left_size, 8))
+          for j <- 0..k - 1, into: <<>> do
+            col =
+              for z <- 0..n - 1, into: <<>> do
+                :binary.part(data!(b), z * k * div(right_size, 8) + j * div(right_size, 8), div(right_size, 8))
+              end
+            value =
+              bin_reduce_all(
+                bin_zip_map_all(row, left_size, col, right_size,
+                  fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
+                    <<write!(read!(x, 0) * read!(y, 1), 2)>>
+                  end
+                ) |> IO.iodata_to_binary(), 0,
+                fn <<match!(var, 0), rest::bitstring>>, acc ->
+                  {read!(var, 0) + acc, rest}
+                end
+              )
+            <<write!(value, 0)>>
+          end
+        end
+      end
+
+    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+  end
+
+  ## Matrix ops
+
+  @doc """
+  Returns the dot product of two tensors.
+
+  Given `a` and `b`, computes the dot product according to
+  the following rules:
+
+    * If both `a` and `b` are scalars, it is equivalent to `a * b`.
+    * If `a` is a scalar and `b` is a tensor, it is equivalent to `Nx.multiply(a, b)`.
+    * If `a` is a tensor and `b` is a scalar, it is equivalent to `Nx.multiply(a, b)`.
+    * If both `a` and `b` are 1-D tensors (vectors), it is the sum of the element-wise
+    product between `a` and `b`. The lengths of `a` and `b` must be equal.
+    * If both `a` and `b` are 2-D tensors (matrices), it is equivalent to matrix-multiplication.
+    * If either `a` or `b` is a 1-D tensor, and the other is an n-D tensor, it is the
+    sum of the element-wise product along the last axis of `a` or `b`. The length of the
+    1-D tensor must match the last dimension of the n-D tensor.
+    * If `a` is an n-D tensor and `b` is an m-D tensor, it is the sum of the element-wise
+    product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
+    of `a` must match the second-to-last dimension of `b`.
+
+  ## Examples
+
+  ### Dot Product of Scalars
+
+      iex> Nx.dot(5, 5)
+      25
+
+      iex> Nx.dot(-2.0, 5.0)
+      -10.0
+
+  ### Dot Product of Vectors
+
+      iex> t = Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      iex> Nx.to_bitstring(t)
+      <<32::64-native>>
+
+      iex> t = Nx.dot(Nx.tensor([2.0, 4.0, 3.0, 5.0]), Nx.tensor([1.0, 2.0, 3.0, 4.0]))
+      iex> Nx.to_bitstring(t)
+      <<39.0::float-64-native>>
+
+  ### Dot Product of Matrices
+
+      iex> t = Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]]))
+      iex> Nx.to_bitstring(t)
+      <<58::64-native, 64::64-native, 139::64-native, 154::64-native>>
+
+      iex> t = Nx.dot(Nx.tensor([[10.0, 13.0, 14.0, 15.0], [59.0, 20.0, 10.0, 30.0]]), Nx.tensor([[2.0, 4.0], [5.0, 1.0], [6.0, 8.0], [9.0, 10.0]]))
+      iex> Nx.to_bitstring(t)
+      <<304::64-float-native, 315::64-float-native, 548::64-float-native, 636::64-float-native>>
+
+  ### Dot Product of Vector and n-d tensor
+
+      iex> t = Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
+      iex> Nx.to_bitstring(t)
+      <<25::64-native, 55::64-native, 85::64-native, 115::64-native>>
+      iex> Nx.shape(t)
+      {2, 2}
+
+      iex> t = Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]]), Nx.tensor([2.0, 2.0]))
+      iex> Nx.to_bitstring(t)
+      <<6.0::float-64-native, 14.0::float-64-native, 22.0::float-64-native, 30.0::float-64-native>>
+      iex> Nx.shape(t)
+      {1, 1, 2, 2}
+
+  ### Dot Product of n-D and m-D tensor
+
+      TODO
+
+  ### Error Cases
+
+      iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
+      ** (ArgumentError) dot product expects shapes to be compatible, last dimension of a (3) does not equal last dimension of b (2)
+  """
+  def dot(a, b)
+
+  def dot(a, b) when is_number(a) and is_number(b), do: a * b
+
+  def dot(a = %T{}, b) when is_number(b), do: Nx.multiply(a, b)
+
+  def dot(a, b = %T{}) when is_number(a), do: Nx.multiply(a, b)
+
+  def dot(a = %T{type: left_type, shape: s1}, b = %T{type: right_type, shape: {n}}) do
+    output_type = Nx.Type.merge(left_type, right_type)
+    {_, left_size} = left_type
+    {_, right_size} = right_type
+
+    last_dim = elem(s1, tuple_size(s1) - 1)
+    unless last_dim == n, do: raise ArgumentError, "dot product expects shapes to be compatible," <>
+                                                   " last dimension of a (#{last_dim}) does not equal" <>
+                                                   " last dimension of b (#{n})"
+
+    total_elems = div(tuple_product(s1), last_dim)
+
+    output_shape =
+      s1
+      |> Tuple.to_list()
+      |> Enum.take(tuple_size(s1) - 2)
+      |> Kernel.++([last_dim])
+      |> List.to_tuple()
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        for i <- 0..total_elems-1, into: <<>> do
+          row = :binary.part(data!(a), div(i*n*left_size, 8), div(n*left_size, 8))
+          value =
+            bin_reduce_all(
+              bin_zip_map_all(row, left_size, data!(b), right_size,
+                fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
+                  <<write!(read!(x, 0) * read!(y, 1), 2)>>
+                end
+              ) |> IO.iodata_to_binary(), 0,
+              fn <<match!(var, 0), rest::bitstring>>, acc ->
+                {read!(var, 0) + acc, rest}
+              end
+            )
+
+          <<write!(value, 0)>>
+        end
+      end
+
+    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+  end
+
+  def dot(a = %T{shape: {_}}, b = %T{}), do: Nx.dot(b, a)
+
+  def dot(a = %T{type: left_type, shape: {m, n}}, b = %T{type: right_type, shape: {n, k}}) do
+    output_type = Nx.Type.merge(left_type, right_type)
+
+    {_, left_size} = left_type
+    {_, right_size} = right_type
+
+    output_shape = {m, k}
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        for i <- 0..m - 1, into: <<>> do
+          for j <- 0..k - 1, into: <<>> do
+            row = :binary.part(data!(a), div(i * n * left_size, 8), div(n * left_size, 8))
+            col =
+              for z <- 0..n - 1, into: <<>> do
+                :binary.part(data!(b), z * k * div(right_size, 8) + j * div(right_size, 8), div(right_size, 8))
+              end
+            value =
+              bin_reduce_all(
+                bin_zip_map_all(row, left_size, col, right_size,
+                  fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
+                    <<write!(read!(x, 0) * read!(y, 1), 2)>>
+                  end
+                ) |> IO.iodata_to_binary(), 0,
+                fn <<match!(var, 0), rest::bitstring>>, acc ->
+                  {read!(var, 0) + acc, rest}
+                end
+              )
+            <<write!(value, 0)>>
+          end
+        end
+      end
+
+    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+  end
+
+  ## Device helpers
+
+  defp data!(%T{data: {Nx.BitStringDevice, data}}), do: data
+
+  defp data!(%T{data: {device, _data}}) do
+    raise ArgumentError,
+          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
+            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
+  end
+
   ## Broadcast helpers
 
   defp broadcast(
@@ -2277,5 +2645,16 @@ defmodule Nx do
       fun.(left_head, right_head)
       | bin_zip_map_all(left_rest, left_size, right_rest, right_size, fun)
     ]
+  end
+
+  @compile {:inline, bin_reduce_all: 3}
+
+  defp bin_reduce_all(<<>>, acc, _fun) do
+    acc
+  end
+
+  defp bin_reduce_all(binary, acc, fun) do
+    {acc, rest} = fun.(binary, acc)
+    bin_reduce_all(rest, acc, fun)
   end
 end
