@@ -230,6 +230,7 @@ defmodule Nx.Defn.Compiler do
     end
 
     {args, state} = normalize_list(args, state)
+    args = rewrite_nx_args(name, args)
     {{call, meta, args}, state}
   end
 
@@ -276,6 +277,17 @@ defmodule Nx.Defn.Compiler do
   defp normalize_list(list, state) do
     Enum.map_reduce(list, state, &normalize/2)
   end
+
+  ## Normalize nx calls
+
+  defp rewrite_nx_args(:sum, [arg]), do: [arg, []]
+  defp rewrite_nx_args(:random_uniform, [arg]), do: [arg, 0.0, 1.0, []]
+  defp rewrite_nx_args(:random_uniform, [arg, opts]), do: [arg, 0.0, 1.0, opts]
+  defp rewrite_nx_args(:random_uniform, [arg, min, max]), do: [arg, min, max, []]
+  defp rewrite_nx_args(:random_normal, [arg]), do: [arg, 0.0, 1.0, []]
+  defp rewrite_nx_args(:random_normal, [arg, opts]), do: [arg, 0.0, 1.0, opts]
+  defp rewrite_nx_args(:random_normal, [arg, min, max]), do: [arg, min, max, []]
+  defp rewrite_nx_args(_, args), do: args
 
   ## Normalize args
 

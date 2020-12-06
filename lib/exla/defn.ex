@@ -178,11 +178,7 @@ defmodule Exla.Defn do
 
   ## Random
 
-  def nx_random_uniform(builder, shape, opts \\ []) when is_tuple(shape) and is_list(opts) do
-    nx_random_uniform(builder, shape, 0.0, 1.0, opts)
-  end
-
-  def nx_random_uniform(builder, shape, min, max, opts \\ [])
+  def nx_random_uniform(builder, shape, min, max, opts)
       when is_number(min) and is_number(max) and is_tuple(shape) do
     type = opts[:type] || Nx.Type.infer(max - min)
 
@@ -198,11 +194,7 @@ defmodule Exla.Defn do
     Exla.Op.rng_uniform(min, max, shape)
   end
 
-  def nx_random_normal(builder, shape, opts \\ []) when is_tuple(shape) and is_list(opts) do
-    nx_random_normal(builder, shape, 0.0, 1.0, opts)
-  end
-
-  def nx_random_normal(builder, shape, mu, sigma, opts \\ [])
+  def nx_random_normal(builder, shape, mu, sigma, opts)
       when is_float(mu) and is_float(sigma) and is_tuple(shape) do
     type = opts[:type] || {:f, 64}
     {mu, _} = to_typed_operator(builder, mu, type)
@@ -213,7 +205,7 @@ defmodule Exla.Defn do
 
   ## Aggregators
 
-  def nx_sum(builder, op, opts \\ []) do
+  def nx_sum(builder, op, opts) do
     Exla.Lib.sum(builder, to_operator(builder, op), opts)
   end
 

@@ -56,7 +56,6 @@ defmodule Nx.DefnTest do
     end
   end
 
-
   describe "tensor constants" do
     @two 2
     defn add_two_attribute(t), do: t + @two
