@@ -80,140 +80,7 @@ defmodule Nx do
   alias Nx.Tensor, as: T
   import Kernel, except: [max: 2, min: 2]
   import Bitwise, only: [>>>: 2, &&&: 2]
-
-  ## Private macros
-
-  # A macro that allows us to writes all possibles match types
-  # in the most efficient format. This is done by looking at @0,
-  # @1, etc and replacing them by currently matched type at the
-  # given position. In other words, this:
-  #
-  #    combine_types [input_type, output_type] do
-  #      for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
-  #    end
-  #
-  # Is compiled into:
-  #
-  #    for <<seg::float-native-size(...) <- data>>, into: <<>>, do: <<seg+right::float-native-size(...)>>
-  #
-  # for all possible valid types between input and input types.
-  #
-  # `match!` is used in matches and must be always followed by a `read!`.
-  # `write!` is used to write to the binary.
-  #
-  # The implementation unfolds the loops at the top level. In particular,
-  # note that a rolled out case such as:
-  #
-  #     for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
-  #       <<seg+number::signed-integer-size(size)>>
-  #     end
-  #
-  # is twice as fast and uses twice less memory than:
-  #
-  #     for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
-  #       case output_type do
-  #         {:s, size} ->
-  #           <<seg+number::signed-integer-size(size)>>
-  #         {:f, size} ->
-  #           <<seg+number::float-native-size(size)>>
-  #         {:u, size} ->
-  #           <<seg+number::unsigned-integer-size(size)>>
-  #       end
-  #     end
-  #
-  defmacrop match_types([_ | _] = args, do: block) do
-    sizes = Macro.generate_arguments(length(args), __MODULE__)
-    matches = match_types(sizes)
-
-    clauses =
-      Enum.flat_map(matches, fn match ->
-        block =
-          Macro.prewalk(block, fn
-            {:match!, _, [var, pos]} when is_integer(pos) ->
-              {type, size} = Enum.fetch!(match, pos)
-              match_bin_modifier(var, type, size)
-
-            {:read!, _, [var, pos]} when is_integer(pos) ->
-              {type, size} = Enum.fetch!(match, pos)
-              read_bin_modifier(var, type, size)
-
-            {:write!, _, [var, pos]} when is_integer(pos) ->
-              {type, size} = Enum.fetch!(match, pos)
-              write_bin_modifier(var, type, size)
-
-            other ->
-              other
-          end)
-
-        quote do
-          {unquote_splicing(match)} -> unquote(block)
-        end
-      end)
-
-    quote do
-      case {unquote_splicing(args)}, do: unquote(clauses)
-    end
-  end
-
-  @all_types [:s, :f, :bf, :u]
-
-  defp match_types([h | t]) do
-    for type <- @all_types, t <- match_types(t) do
-      [{type, h} | t]
-    end
-  end
-
-  defp match_types([]), do: [[]]
-
-  defp match_bin_modifier(var, :bf, _),
-    do: quote(do: unquote(var) :: binary - size(2))
-
-  defp match_bin_modifier(var, type, size),
-    do: shared_bin_modifier(var, type, size)
-
-  defp read_bin_modifier(var, :bf, _) do
-    if System.endianness() == :little do
-      quote(do: read_bf16(unquote(var)))
-    else
-      quote(do: read_bf16(unquote(var)))
-    end
-  end
-
-  defp read_bin_modifier(var, _, _),
-    do: var
-
-  defp write_bin_modifier(var, :bf, _) do
-    if System.endianness() == :little do
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 2, 2) :: binary)
-    else
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 0, 2) :: binary)
-    end
-  end
-
-  defp write_bin_modifier(var, type, size),
-    do: shared_bin_modifier(var, type, size)
-
-  @compile {:inline, read_bf16: 1}
-  if System.endianness() == :little do
-    defp read_bf16(bf16) do
-      <<x::float-little-32>> = <<0::16, bf16::binary>>
-      x
-    end
-  else
-    defp read_bf16(bf16) do
-      <<x::float-big-32>> = <<bf16::binary, 0::16>>
-      x
-    end
-  end
-
-  defp shared_bin_modifier(var, :s, size),
-    do: quote(do: unquote(var) :: signed - integer - native - size(unquote(size)))
-
-  defp shared_bin_modifier(var, :u, size),
-    do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
-
-  defp shared_bin_modifier(var, :f, size),
-    do: quote(do: unquote(var) :: float - native - size(unquote(size)))
+  import Nx.Shared
 
   ## Creation API
 
@@ -407,42 +274,6 @@ defmodule Nx do
   end
 
   @doc """
-  Creates a tensor from a `bitstring`, its `type`, and
-  its `shape`.
-
-  If the bitstring size does not match its type and shape,
-  an error is raised.
-
-  ## Examples
-
-      iex> Nx.from_bitstring(<<1, 2, 3, 4>>, {:s, 8}, {4})
-      Nx.tensor([1, 2, 3, 4], type: {:s, 8})
-
-      iex> Nx.from_bitstring(<<1, 2, 3, 4>>, {:s, 8}, {2, 2})
-      Nx.tensor([[1, 2], [3, 4]], type: {:s, 8})
-
-      iex> Nx.from_bitstring(<<12.3::float-64-native>>, {:f, 64}, {})
-      Nx.tensor(12.3)
-
-      iex> Nx.from_bitstring(<<1, 2, 3, 4>>, {:f, 64}, {4})
-      ** (ArgumentError) bitstring does not match the given type and dimensions
-
-  """
-  def from_bitstring(bitstring, type, shape) when is_bitstring(bitstring) and is_tuple(shape) do
-    {_, size} = Nx.Type.validate!(type)
-
-    if bitstring == "" do
-      raise ArgumentError, "cannot build an empty tensor"
-    end
-
-    if bit_size(bitstring) != size * tuple_product(shape) do
-      raise ArgumentError, "bitstring does not match the given type and dimensions"
-    end
-
-    %T{data: {Nx.BitStringDevice, bitstring}, type: type, shape: shape}
-  end
-
-  @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
   def random_uniform(shape, opts \\ []) when is_tuple(shape) do
@@ -462,7 +293,7 @@ defmodule Nx do
   ### Generating Floats
 
       iex> t = Nx.random_uniform({10})
-      iex> for <<x::float-64-native <- Nx.to_bitstring(t)>> do
+      iex> for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
       ...>   true = x >= 0.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
@@ -471,7 +302,7 @@ defmodule Nx do
       {:f, 64}
 
       iex> t = Nx.random_uniform({5, 5}, type: {:bf, 16})
-      iex> byte_size(Nx.to_bitstring(t))
+      iex> byte_size(Nx.Util.to_bitstring(t))
       50
       iex> Nx.shape(t)
       {5, 5}
@@ -479,7 +310,7 @@ defmodule Nx do
       {:bf, 16}
 
       iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: {:f, 32})
-      iex> for <<x::float-32-native <- Nx.to_bitstring(t)>> do
+      iex> for <<x::float-32-native <- Nx.Util.to_bitstring(t)>> do
       ...>   true = x >= -1.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
@@ -490,7 +321,7 @@ defmodule Nx do
   ### Generating Integers
 
       iex> t = Nx.random_uniform({10}, 5, 10, type: {:u, 32})
-      iex> for <<x::32-unsigned-native <- Nx.to_bitstring(t)>> do
+      iex> for <<x::32-unsigned-native <- Nx.Util.to_bitstring(t)>> do
       ...>   true = x >= 5 and x < 10
       ...> end
       iex> Nx.shape(t)
@@ -499,7 +330,7 @@ defmodule Nx do
       {:u, 32}
 
       iex> t = Nx.random_uniform({5, 5}, -5, 5, type: {:s, 64})
-      iex> for <<x::64-signed-native <- Nx.to_bitstring(t)>> do
+      iex> for <<x::64-signed-native <- Nx.Util.to_bitstring(t)>> do
       ...>   true = x >= -5 and x < 5
       ...> end
       iex> Nx.shape(t)
@@ -578,20 +409,39 @@ defmodule Nx do
   Returns the shape of the tensor as a tuple.
 
   The size of this tuple gives the rank of the tensor.
+
+  ### Examples
+
+      iex> Nx.shape(Nx.tensor(1))
+      {}
+
+      iex> Nx.shape(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      {2, 3}
   """
   def shape(%T{shape: shape}), do: shape
 
   @doc """
   Returns the rank of a tensor.
+
+  ### Examples
+
+      iex> Nx.rank(Nx.tensor(1))
+      0
+
+      iex> Nx.rank(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      2
   """
   def rank(%T{shape: shape}), do: tuple_size(shape)
 
   @doc """
-  Returns the underlying tensor as a bitstring.
+  Returns how many elements they are in the tensor.
 
-  The bitstring is returned as is (which is row-major).
+  ### Examples
+
+      iex> Nx.size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      6
   """
-  def to_bitstring(%T{} = t), do: data!(t)
+  def size(%T{shape: shape}), do: tuple_product(shape)
 
   ## Device API
 
@@ -625,7 +475,7 @@ defmodule Nx do
 
   def device_transfer(%T{data: {Nx.BitStringDevice, _data}} = t, device, opts) do
     %{type: type, shape: shape} = t
-    %{t | data: device.allocate(data!(t), type, shape, opts)}
+    %{t | data: device.allocate(Nx.Util.to_bitstring(t), type, shape, opts)}
   end
 
   def device_transfer(%T{} = t, Nx.BitStringDevice, _opts) do
@@ -669,7 +519,7 @@ defmodule Nx do
     end
 
     defp unquote(name)(scalar, %T{type: input_type} = t, fun) when is_number(scalar) do
-      data = data!(t)
+      data = Nx.Util.to_bitstring(t)
       output_type = Nx.Type.merge_scalar(input_type, scalar)
       output_type = unquote(cast)
 
@@ -684,7 +534,7 @@ defmodule Nx do
     end
 
     defp unquote(name)(%T{type: input_type} = t, scalar, fun) when is_number(scalar) do
-      data = data!(t)
+      data = Nx.Util.to_bitstring(t)
       output_type = Nx.Type.merge_scalar(input_type, scalar)
       output_type = unquote(cast)
 
@@ -1202,7 +1052,7 @@ defmodule Nx do
       iex> pos_and_neg_zero_x = Nx.multiply(Nx.tensor([[-1.0], [1.0]]), 0.0)
       iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
       iex> t = Nx.arctan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
-      iex> Nx.to_bitstring(t)
+      iex> Nx.Util.to_bitstring(t)
       <<-3.141592653589793::float-64-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-64-native,
         3.141592653589793::float-64-native, 0.0::float-64-native>>
       iex> Nx.shape(t)
@@ -1682,7 +1532,7 @@ defmodule Nx do
   defp unary_float(number, fun) when is_number(number), do: tensor(fun.(number))
 
   defp unary_float(%T{type: input_type} = t, fun) do
-    data = data!(t)
+    data = Nx.Util.to_bitstring(t)
     output_type = Nx.Type.to_floating(input_type)
 
     data =
@@ -1732,7 +1582,7 @@ defmodule Nx do
   def negate(number) when is_number(number), do: tensor(-number)
 
   def negate(%T{type: input_type} = t) do
-    data = data!(t)
+    data = Nx.Util.to_bitstring(t)
 
     data =
       match_types [input_type] do
@@ -1766,7 +1616,7 @@ defmodule Nx do
   def sign(number) when is_number(number), do: tensor(erlang_sign(number))
 
   def sign(%T{type: input_type} = t) do
-    data = data!(t)
+    data = Nx.Util.to_bitstring(t)
 
     data =
       match_types [input_type] do
@@ -1800,7 +1650,7 @@ defmodule Nx do
   def abs(number) when is_number(number), do: tensor(:erlang.abs(number))
 
   def abs(%T{type: input_type} = t) do
-    data = data!(t)
+    data = Nx.Util.to_bitstring(t)
 
     data =
       match_types [input_type] do
@@ -1847,7 +1697,7 @@ defmodule Nx do
 
   def bitwise_not(%T{type: input_type} = t) do
     assert_bitwise_type!(input_type)
-    data = data!(t)
+    data = Nx.Util.to_bitstring(t)
 
     data =
       match_types [input_type] do
@@ -1905,7 +1755,7 @@ defmodule Nx do
     assert_bitwise_type!(input_type)
 
     data =
-      for <<seg::unsigned-size(size)-native <- data!(t)>>, into: <<>> do
+      for <<seg::unsigned-size(size)-native <- Nx.Util.to_bitstring(t)>>, into: <<>> do
         match_types [input_type] do
           <<write!(erlang_popcount(seg, 0), 0)>>
         end
@@ -1992,7 +1842,7 @@ defmodule Nx do
     assert_bitwise_type!(input_type)
 
     data =
-      for <<seg::unsigned-size(size)-native <- data!(t)>>, into: <<>> do
+      for <<seg::unsigned-size(size)-native <- Nx.Util.to_bitstring(t)>>, into: <<>> do
         match_types [input_type] do
           <<write!(erlang_clz(seg, size), 0)>>
         end
@@ -2078,7 +1928,7 @@ defmodule Nx do
     def unquote(name)(%T{type: {type, _}} = t) when type in [:s, :u], do: t
 
     def unquote(name)(%T{type: input_type} = t) do
-      data = data!(t)
+      data = Nx.Util.to_bitstring(t)
 
       data =
         match_types [input_type] do
@@ -2183,264 +2033,7 @@ defmodule Nx do
 
   """
   def sum(tensor, opts \\ []) do
-    reduce(tensor, 0, opts, &+/2)
-  end
-
-  @doc """
-  Reduces over a tensor with the given accumulator.
-
-  The tensor may be reduced in parallel. The evaluation
-  order of the reduction function is arbitrary and may
-  be non-deterministic. Therefore, the reduction function
-  should not be overly sensitive to reassociation.
-
-  If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axis: 0`
-  implies aggregating over the highest order dimension
-  and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axis: -1` will
-  always aggregate all rows.
-
-  ## Examples
-
-      iex> Nx.reduce(Nx.tensor(42), 0, &+/2)
-      #Nx.Tensor<
-        s64
-        42
-      >
-
-      iex> Nx.reduce(Nx.tensor([1, 2, 3]), 0, &+/2)
-      #Nx.Tensor<
-        s64
-        6
-      >
-
-      iex> Nx.reduce(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]), 0, &+/2)
-      #Nx.Tensor<
-        f64
-        10.0
-      >
-
-  ### Aggregating over an axis
-
-      iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.reduce(t, 0, [axis: 0], &+/2)
-      #Nx.Tensor<
-        s64
-        6
-      >
-
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.reduce(t, 0, [axis: 0], &+/2)
-      #Nx.Tensor<
-        s64[2][3]
-        [
-          [8, 10, 12],
-          [14, 16, 18]
-        ]
-      >
-
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.reduce(t, 0, [axis: 1], &+/2)
-      #Nx.Tensor<
-        s64[2][3]
-        [
-          [5, 7, 9],
-          [17, 19, 21]
-        ]
-      >
-
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.reduce(t, 0, [axis: 2], &+/2)
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [6, 15],
-          [24, 33]
-        ]
-      >
-
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.reduce(t, 0, [axis: -1], &+/2)
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [6, 15],
-          [24, 33]
-        ]
-      >
-
-      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.reduce(t, 0, [axis: -3], &+/2)
-      #Nx.Tensor<
-        s64[2][3]
-        [
-          [8, 10, 12],
-          [14, 16, 18]
-        ]
-      >
-
-  ### Errors
-
-      iex> Nx.reduce(Nx.tensor([1, 2, 3]), 0, [axis: 1], &+/2)
-      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
-
-  """
-  def reduce(tensor, acc, opts \\ [], fun)
-
-  def reduce(number, acc, opts, fun) when is_number(number) do
-    reduce(tensor(number), acc, opts, fun)
-  end
-
-  def reduce(%T{type: {_, size} = type, shape: shape} = t, acc, opts, fun)
-      when is_list(opts) and is_function(fun, 2) do
-    data = data!(t)
-
-    {data, shape} =
-      if axis = opts[:axis] do
-        {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
-        chunk_size = chunk_count * size
-
-        new_data =
-          for <<chunk::size(chunk_size)-bitstring <- data>> do
-            aggregate_gaps(gap_count, size, fn pre, pos ->
-              match_types [type] do
-                value =
-                  for <<_::size(pre)-bitstring, match!(var, 0), _::size(pos)-bitstring <- chunk>>,
-                    reduce: acc,
-                    do: (acc -> fun.(read!(var, 0), acc))
-
-                <<write!(value, 0)>>
-              end
-            end)
-          end
-
-        {new_data, new_shape}
-      else
-        new_data =
-          match_types [type] do
-            value =
-              for <<match!(var, 0) <- data>>,
-                reduce: acc,
-                do: (acc -> fun.(read!(var, 0), acc))
-
-            <<write!(value, 0)>>
-          end
-
-        {new_data, {}}
-      end
-
-    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
-  end
-
-  ## Dimension helpers
-
-  # The goal of aggregate axis is to find a chunk_count and gap_count
-  # that allows us to traverse the tensor. Consider this input tensor:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][2][3]
-  #       [
-  #         [
-  #           [1, 2, 3],
-  #           [4, 5, 6]
-  #         ],
-  #         [
-  #           [7, 8, 9],
-  #           [10, 11, 12]
-  #         ]
-  #       ]
-  #     >
-  #
-  # When computing the sum on axis 0, we have:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][3]
-  #       [
-  #         [8, 10, 12],
-  #         [14, 16, 18]
-  #       ]
-  #     >
-  #
-  # The first time element is 1 + 7, which means the gap between
-  # them is 6. Given we have to traverse the whole tensor, the
-  # chunk_count is 12 (the size of the tensor).
-  #
-  # For axis 1, we have:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][3]
-  #       [
-  #         [5, 7, 9],
-  #         [17, 19, 21]
-  #       ]
-  #     >
-  #
-  # The first element is 1 + 4 within the "first quadrant". 17 is
-  # is 10 + 17 in the second quadrant. Therefore the gap is 3 and
-  # the chunk_count is 6 elements.
-  #
-  # Finally, for axis 2, we have:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][2]
-  #       [
-  #         [6, 15],
-  #         [24, 33]
-  #       ]
-  #     >
-  #
-  # 6 is the sum of the first row, 15 the sum of the second row, etc.
-  # Therefore the gap is 1 and the chunk size is 3.
-  #
-  # Computing the aggregate is a matter of mapping the binary over
-  # each chunk and then mapping gap times, moving the computation root
-  # by size over each gap.
-  defp aggregate_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
-    total = tuple_product(shape)
-    aggregate_axis(Tuple.to_list(shape), 0, axis, total, total, [])
-  end
-
-  defp aggregate_axis(shape, axis) when axis < 0 and axis >= -tuple_size(shape) do
-    total = tuple_product(shape)
-    aggregate_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, total, total, [])
-  end
-
-  defp aggregate_axis(shape, axis) do
-    raise ArgumentError, "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
-  end
-
-  defp aggregate_axis([dim | dims], axis, chosen, chunk, gap, acc) do
-    gap = div(gap, dim)
-
-    if axis == chosen do
-      {gap, chunk, List.to_tuple(Enum.reverse(acc, dims))}
-    else
-      aggregate_axis(dims, axis + 1, chosen, div(chunk, dim), gap, [dim | acc])
-    end
-  end
-
-  defp aggregate_gaps(gap_count, size, fun),
-    do: aggregate_gaps(0, gap_count * size, size, fun)
-
-  defp aggregate_gaps(_pre, 0, _size, _fun),
-    do: []
-
-  defp aggregate_gaps(pre, pos, size, fun),
-    do: [fun.(pre, pos - size) | aggregate_gaps(pre + size, pos - size, size, fun)]
-
-  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
-  defp tuple_product(_tuple, 0), do: 1
-  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
-
-  ## Device helpers
-
-  defp data!(%T{data: {Nx.BitStringDevice, data}}), do: data
-
-  defp data!(%T{data: {device, _data}}) do
-    raise ArgumentError,
-          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
-            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
+    Nx.Util.reduce(tensor, 0, opts, &+/2)
   end
 
   ## Broadcast helpers
@@ -2450,7 +2043,7 @@ defmodule Nx do
          %T{type: {_, right_size}, shape: shape} = right,
          fun
        ) do
-    data = bin_zip_map_all(data!(left), left_size, data!(right), right_size, fun)
+    data = bin_zip_map_all(Nx.Util.to_bitstring(left), left_size, Nx.Util.to_bitstring(right), right_size, fun)
     {IO.iodata_to_binary(data), shape}
   end
 
@@ -2467,7 +2060,7 @@ defmodule Nx do
 
     case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
       {chunks, shape} ->
-        {broadcast_recur(data!(left), data!(right), chunks), shape}
+        {broadcast_recur(Nx.Util.to_bitstring(left), Nx.Util.to_bitstring(right), chunks), shape}
 
       :error ->
         raise ArgumentError,

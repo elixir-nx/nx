@@ -10,10 +10,10 @@ defmodule Nx.DeviceTest do
 
     assert_raise ArgumentError,
                  ~r"cannot read Nx.Tensor data because the data is allocated on device Nx.ProcessDevice",
-                 fn -> Nx.to_bitstring(pt) end
+                 fn -> Nx.Util.to_bitstring(pt) end
 
     nt = Nx.device_transfer(pt)
-    assert Nx.to_bitstring(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    assert Nx.Util.to_bitstring(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
     refute Process.get(:tensor)
 
     assert_raise RuntimeError, "deallocated", fn -> Nx.device_transfer(pt) end

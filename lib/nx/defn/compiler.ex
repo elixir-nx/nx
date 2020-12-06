@@ -3,10 +3,8 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
-  @forbidden_nx_functions [to_bitstring: 1, from_bitstring: 3, tensor: 1, tensor: 2] ++
-                            [rank: 1, shape: 1, type: 1] ++
-                            [device_transfer: 1, device_transfer: 2, device_transfer: 3] ++
-                            [device_read: 1, device_deallocate: 1]
+  @forbidden_nx_functions [tensor: 1, tensor: 2, device_read: 1, device_deallocate: 1] ++
+                            [device_transfer: 1, device_transfer: 2, device_transfer: 3]
 
   @known_keywords [:type]
 

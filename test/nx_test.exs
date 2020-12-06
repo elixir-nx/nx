@@ -2,6 +2,7 @@ defmodule NxTest do
   use ExUnit.Case, async: true
 
   doctest Nx
+  doctest Nx.Util
 
   defp commute(a, b, fun) do
     fun.(a, b)
@@ -13,7 +14,7 @@ defmodule NxTest do
       commute(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]), fn a, b ->
         t = Nx.add(a, b)
 
-        assert Nx.to_bitstring(t) ==
+        assert Nx.Util.to_bitstring(t) ==
                  <<11::64-native, 21::64-native, 12::64-native, 22::64-native>>
 
         assert Nx.shape(t) == {2, 2}
@@ -24,7 +25,7 @@ defmodule NxTest do
       commute(Nx.tensor([1, 2]), Nx.tensor([[1, 2], [3, 4]]), fn a, b ->
         t = Nx.add(a, b)
 
-        assert Nx.to_bitstring(t) ==
+        assert Nx.Util.to_bitstring(t) ==
                  <<2::64-native, 4::64-native, 4::64-native, 6::64-native>>
 
         assert Nx.shape(t) == {2, 2}
@@ -41,7 +42,7 @@ defmodule NxTest do
         t = Nx.add(a, b)
         assert Nx.shape(t) == {2, 2, 2}
 
-        assert Nx.to_bitstring(t) ==
+        assert Nx.Util.to_bitstring(t) ==
                  <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 13::64-native,
                    14::64-native, 23::64-native, 24::64-native>>
       end)
@@ -57,7 +58,7 @@ defmodule NxTest do
         t = Nx.add(a, b)
         assert Nx.shape(t) == {4, 3, 3}
 
-        assert Nx.to_bitstring(t) ==
+        assert Nx.Util.to_bitstring(t) ==
                  <<101::64-native, 102::64-native, 103::64-native, 201::64-native, 202::64-native,
                    203::64-native, 301::64-native, 302::64-native, 303::64-native, 104::64-native,
                    105::64-native, 106::64-native, 204::64-native, 205::64-native, 206::64-native,
@@ -79,7 +80,7 @@ defmodule NxTest do
         t = Nx.add(a, b)
         assert Nx.shape(t) == {1, 2, 2, 2}
 
-        assert Nx.to_bitstring(t) ==
+        assert Nx.Util.to_bitstring(t) ==
                  <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 33::64-native,
                    34::64-native, 43::64-native, 44::64-native>>
       end)
@@ -95,7 +96,7 @@ defmodule NxTest do
         t = Nx.add(a, b)
         assert Nx.shape(t) == {2, 2, 2, 2}
 
-        assert Nx.to_bitstring(t) ==
+        assert Nx.Util.to_bitstring(t) ==
                  <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 31::64-native,
                    32::64-native, 41::64-native, 42::64-native, 13::64-native, 14::64-native,
                    23::64-native, 24::64-native, 33::64-native, 34::64-native, 43::64-native,
@@ -110,7 +111,7 @@ defmodule NxTest do
       commute(a, b, fn a, b ->
         t = Nx.add(a, b)
 
-        assert Nx.to_bitstring(t) ==
+        assert Nx.Util.to_bitstring(t) ==
                  <<11::64-native, 12::64-native, 21::64-native, 22::64-native, 33::64-native,
                    34::64-native, 43::64-native, 44::64-native>>
 

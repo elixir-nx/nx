@@ -57,25 +57,11 @@ defmodule Exla.DefnTest do
     defn add_two_nx(a, b), do: a + b
 
     test "same shape and type" do
-      tensor = add_two(1.0, 2.0)
-      assert Nx.to_bitstring(tensor) == <<3.0::float-64-native>>
-      assert Nx.type(tensor) == {:f, 64}
-      assert Nx.shape(tensor) == {}
+      assert add_two(1.0, 2.0) == Nx.tensor(3.0)
+      assert add_two(1, 2) == Nx.tensor(3)
 
-      tensor = add_two(1, 2)
-      assert Nx.to_bitstring(tensor) == <<3::64-native>>
-      assert Nx.type(tensor) == {:s, 64}
-      assert Nx.shape(tensor) == {}
-
-      tensor = add_two(Nx.tensor([1, 2]), Nx.tensor([3, 4]))
-      assert Nx.to_bitstring(tensor) == <<4::64-native, 6::64-native>>
-      assert Nx.type(tensor) == {:s, 64}
-      assert Nx.shape(tensor) == {2}
-
-      tensor = add_two(Nx.tensor([1.0, 2.0]), Nx.tensor([3.0, 4.0]))
-      assert Nx.to_bitstring(tensor) == <<4.0::float-64-native, 6.0::float-64-native>>
-      assert Nx.type(tensor) == {:f, 64}
-      assert Nx.shape(tensor) == {2}
+      assert add_two(Nx.tensor([1, 2]), Nx.tensor([3, 4])) == Nx.tensor([4, 6])
+      assert add_two(Nx.tensor([1.0, 2.0]), Nx.tensor([3.0, 4.0])) == Nx.tensor([4.0, 6.0])
     end
 
     test "different types" do
@@ -439,25 +425,20 @@ defmodule Exla.DefnTest do
     defn exp(t), do: Nx.exp(t)
 
     test "computes the exp across types" do
-      assert Nx.tensor([1, 2, 3]) |> exp() |> Nx.to_bitstring() ==
-               <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native,
-                 20.085536923187668::float-64-native>>
+      assert Nx.tensor([1, 2, 3]) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
 
-      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp() |> Nx.to_bitstring() ==
-               <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native,
-                 20.085536923187668::float-32-native>>
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
 
-      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp() |> Nx.to_bitstring() ==
-               <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native,
-                 20.085536923187668::float-32-native>>
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
 
-      assert Nx.tensor([1.0, 2.0, 3.0]) |> exp() |> Nx.to_bitstring() ==
-               <<2.718281828459045::float-64-native, 7.38905609893065::float-64-native,
-                 20.085536923187668::float-64-native>>
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
 
-      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp() |> Nx.to_bitstring() ==
-               <<2.718281828459045::float-32-native, 7.38905609893065::float-32-native,
-                 20.085536923187668::float-32-native>>
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
     end
 
     defn exp_int(), do: Nx.exp(1)
@@ -513,20 +494,11 @@ defmodule Exla.DefnTest do
     defn sum(t), do: Nx.sum(t)
 
     test "computes the sum across types" do
-      assert Nx.tensor([1, 2, 3]) |> sum() |> Nx.to_bitstring() ==
-               <<6::64-native>>
-
-      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum() |> Nx.to_bitstring() ==
-               <<6::8-native>>
-
-      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() |> Nx.to_bitstring() ==
-               <<6::8-native>>
-
-      assert Nx.tensor([1.0, 2.0, 3.0]) |> sum() |> Nx.to_bitstring() ==
-               <<6::64-float-native>>
-
-      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() |> Nx.to_bitstring() ==
-               <<6::32-float-native>>
+      assert Nx.tensor([1, 2, 3]) |> sum() == Nx.tensor(6)
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum() == Nx.tensor(6, type: {:s, 8})
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() == Nx.tensor(6, type: {:u, 8})
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> sum() == Nx.tensor(6.0)
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() == Nx.tensor(6, type: {:f, 32})
     end
   end
 
@@ -554,7 +526,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 64}
 
-      for <<x::float-64-native <- Nx.to_bitstring(t)>> do
+      for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
         assert x >= 0.0 and x < 1
       end
     end
@@ -567,7 +539,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:s, 64}
 
-      for <<x::signed-64-native <- Nx.to_bitstring(t)>> do
+      for <<x::signed-64-native <- Nx.Util.to_bitstring(t)>> do
         assert x >= 5 and x < 10
       end
 
@@ -575,7 +547,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 64}
 
-      for <<x::float-64-native <- Nx.to_bitstring(t)>> do
+      for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
         assert x >= 5.0 and x < 10.0
       end
     end
@@ -588,7 +560,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:u, 32}
 
-      for <<x::unsigned-32-native <- Nx.to_bitstring(t)>> do
+      for <<x::unsigned-32-native <- Nx.Util.to_bitstring(t)>> do
         assert x >= 5 and x < 10
       end
 
@@ -596,7 +568,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 32}
 
-      for <<x::float-32-native <- Nx.to_bitstring(t)>> do
+      for <<x::float-32-native <- Nx.Util.to_bitstring(t)>> do
         assert x >= 5.0 and x < 10.0
       end
     end
@@ -636,16 +608,16 @@ defmodule Exla.DefnTest do
       tensor = add_two_keep_on_device(1, 2)
       assert {Exla.NxDevice, {ref, :default}} = tensor.data
       assert is_reference(ref)
-      assert tensor |> Nx.device_read() |> Nx.to_bitstring() == <<3::64-native>>
+      assert tensor |> Nx.device_read() |> Nx.Util.to_bitstring() == <<3::64-native>>
 
       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
       assert {Exla.NxDevice, {ref, :default}} = tensor.data
       assert is_reference(ref)
 
-      assert tensor |> Nx.device_read() |> Nx.to_bitstring() ==
+      assert tensor |> Nx.device_read() |> Nx.Util.to_bitstring() ==
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
-      assert tensor |> Nx.device_transfer() |> Nx.to_bitstring() ==
+      assert tensor |> Nx.device_transfer() |> Nx.Util.to_bitstring() ==
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
       assert_raise RuntimeError,
