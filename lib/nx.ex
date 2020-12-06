@@ -2224,7 +2224,7 @@ defmodule Nx do
   """
   def dot(a, b)
 
-  def dot(a, b) when is_number(a) and is_number(b), do: a * b
+  def dot(a, b) when is_number(a) and is_number(b), do: Nx.multiply(a, b)
 
   def dot(a = %T{}, b) when is_number(b), do: Nx.multiply(a, b)
 
@@ -2285,8 +2285,8 @@ defmodule Nx do
     data =
       match_types [left_type, right_type, output_type] do
         for i <- 0..m - 1, into: <<>> do
+          row = :binary.part(data!(a), div(i * n * left_size, 8), div(n * left_size, 8))
           for j <- 0..k - 1, into: <<>> do
-            row = :binary.part(data!(a), div(i * n * left_size, 8), div(n * left_size, 8))
             col =
               for z <- 0..n - 1, into: <<>> do
                 :binary.part(data!(b), z * k * div(right_size, 8) + j * div(right_size, 8), div(right_size, 8))
