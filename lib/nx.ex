@@ -276,8 +276,8 @@ defmodule Nx do
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
-  def random_uniform(shape, opts \\ []) when is_tuple(shape) do
-    random_uniform(shape, 0.0, 1.0, opts)
+  def random_uniform(tensor_or_shape, opts \\ []) do
+    random_uniform(tensor_or_shape, 0.0, 1.0, opts)
   end
 
   @doc """
@@ -287,6 +287,9 @@ defmodule Nx do
   If `min` and `max` are integers, then the tensor has type `{:s, 64}`.
   Otherwise, a `{:f, 64}` tensor is returned. You can also pass any
   valid type via the `:type` option.
+
+  If a tensor or a number are given, the shape and default type are
+  taken from them.
 
   ## Examples
 
@@ -337,8 +340,43 @@ defmodule Nx do
       {5, 5}
       iex> Nx.type(t)
       {:s, 64}
+
+  ### Tensors as shapes
+
+  If given a tensor as a shape, it takes the shape from the tensor:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t = Nx.random_uniform(t)
+      iex> Nx.shape(t)
+      {2, 2}
+      iex> Nx.type(t)
+      {:f, 64}
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t = Nx.random_uniform(t, type: {:f, 32})
+      iex> Nx.shape(t)
+      {2, 2}
+      iex> Nx.type(t)
+      {:f, 32}
+
+  The same applies to numbers:
+
+      iex> t = Nx.random_uniform(10)
+      iex> Nx.shape(t)
+      {}
+      iex> Nx.type(t)
+      {:f, 64}
+
+      iex> t = Nx.random_uniform(10.0)
+      iex> Nx.shape(t)
+      {}
+      iex> Nx.type(t)
+      {:f, 64}
+
   """
-  def random_uniform(shape, min, max, opts \\ [])
+  def random_uniform(tensor_or_shape, min, max, opts \\ [])
+
+  def random_uniform(shape, min, max, opts)
       when is_tuple(shape) and is_number(min) and is_number(max) do
     type = opts[:type] || Nx.Type.infer(max - min)
 
@@ -353,16 +391,26 @@ defmodule Nx do
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
+  def random_uniform(t_or_number, min, max, opts)
+      when is_number(t_or_number)
+      when is_struct(t_or_number, T) do
+    random_uniform(tensor(t_or_number).shape, min, max, opts)
+  end
+
   @doc """
   Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
   """
-  def random_normal(shape, opts \\ []), do: random_normal(shape, 0.0, 1.0, opts)
+  def random_normal(tensor_or_shape, opts \\ []) do
+    random_normal(tensor_or_shape, 0.0, 1.0, opts)
+  end
 
   @doc """
   Returns a normally-distributed random tensor with the given shape.
 
   The distribution has mean of `mu` and standard deviation of
   `sigma`. Return type is one of `{:bf, 16}`, `{:f, 32}` or `{:f, 64}`.
+
+  If a tensor or a number are given, the shape is taken from the tensor.
 
   ## Examples
 
@@ -383,8 +431,36 @@ defmodule Nx do
       {3, 3, 3}
       iex> Nx.type(t)
       {:f, 32}
+
+  If given a tensor as a shape, it takes the shape and default type
+  from the tensor:
+
+      iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+      iex> t = Nx.random_normal(t)
+      iex> Nx.shape(t)
+      {2, 2}
+      iex> Nx.type(t)
+      {:f, 64}
+
+      iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+      iex> t = Nx.random_normal(t, type: {:f, 32})
+      iex> Nx.shape(t)
+      {2, 2}
+      iex> Nx.type(t)
+      {:f, 32}
+
+  The same applies to numbers:
+
+      iex> t = Nx.random_normal(10.0)
+      iex> Nx.shape(t)
+      {}
+      iex> Nx.type(t)
+      {:f, 64}
+
   """
-  def random_normal(shape, mu, sigma, opts \\ [])
+  def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
+
+  def random_normal(shape, mu, sigma, opts)
       when is_tuple(shape) and is_float(mu) and is_float(sigma) do
     type = opts[:type] || {:f, 64}
 
@@ -394,6 +470,12 @@ defmodule Nx do
           do: scalar_to_binary(:rand.normal(mu, sigma), type)
 
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
+  end
+
+  def random_normal(t_or_number, mu, sigma, opts)
+      when is_number(t_or_number)
+      when is_struct(t_or_number, T) do
+    random_uniform(tensor(t_or_number).shape, mu, sigma, opts)
   end
 
   ## Reflection

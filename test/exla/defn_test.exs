@@ -560,6 +560,19 @@ defmodule Exla.DefnTest do
         assert x >= 5.0 and x < 10.0
       end
     end
+
+    defn random_uniform_tensor(t), do: Nx.random_uniform(t)
+    defn random_uniform_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
+
+    test "generates from tensor" do
+      t = random_uniform_tensor(Nx.tensor([[1, 2], [3, 4]]))
+      assert Nx.shape(t) == {2, 2}
+      assert Nx.type(t) == {:f, 64}
+
+      t = random_uniform_tensor_with_type(Nx.tensor([[1, 2, 3], [3, 4, 6]]))
+      assert Nx.shape(t) == {2, 3}
+      assert Nx.type(t) == {:f, 32}
+    end
   end
 
   describe "random normal" do
@@ -584,6 +597,19 @@ defmodule Exla.DefnTest do
     test "generates with type" do
       t = random_normal_f32()
       assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 32}
+    end
+
+    defn random_normal_tensor(t), do: Nx.random_uniform(t)
+    defn random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
+
+    test "generates from tensor" do
+      t = random_normal_tensor(Nx.tensor([[1, 2], [3, 4]]))
+      assert Nx.shape(t) == {2, 2}
+      assert Nx.type(t) == {:f, 64}
+
+      t = random_normal_tensor_with_type(Nx.tensor([[1, 2, 3], [3, 4, 6]]))
+      assert Nx.shape(t) == {2, 3}
       assert Nx.type(t) == {:f, 32}
     end
   end
