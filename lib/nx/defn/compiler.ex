@@ -51,10 +51,13 @@ defmodule Nx.Defn.Compiler do
               kind :: :def | :defp,
               metadata :: keyword,
               name :: atom,
-              args :: [Macro.t()],
+              arity :: non_neg_integer,
+              vars :: [Macro.t()],
               ast :: Macro.t(),
               opts :: keyword
             ) :: Macro.t()
+
+  defguardp is_var(var) when is_atom(elem(var, 0)) and is_atom(elem(var, 2))
 
   # The compiler has four passes.
   #
@@ -99,17 +102,33 @@ defmodule Nx.Defn.Compiler do
 
   defp compile_each({{name, arity} = def, def_meta}, state) do
     {{kind, meta, args, ast}, state} = get_cached_definition(def, state)
-    {def_module, def_opts} = def_meta.compiler
     defn_ast = Macro.escape({meta, args, ast})
-    compiled_ast = def_module.__compile__(kind, meta, name, args, ast, def_opts)
+
+    {def_module, def_opts} = def_meta.compiler
+
+    compiled_body =
+      def_module.__compile__(kind, meta, name, length(args), collect_vars(args), ast, def_opts)
 
     quoted =
       quote do
-        def unquote(name)(unquote_splicing(args)), do: unquote(compiled_ast)
+        def unquote(name)(unquote_splicing(args)), do: unquote(compiled_body)
         def __defn__(unquote(name), unquote(arity)), do: unquote(defn_ast)
       end
 
     {quoted, state}
+  end
+
+  defp collect_vars(args) do
+    {_, vars} =
+      Macro.prewalk(args, [], fn
+        var, acc when is_var(var) ->
+          {var, [var | acc]}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    vars
   end
 
   defp get_cached_definition(def, state) do
@@ -129,7 +148,8 @@ defmodule Nx.Defn.Compiler do
           compile_error!(meta, state, "cannot have #{kind}n without clauses")
 
         [{meta, args, [], ast}] ->
-          {args, state} = normalize_list(args, state)
+          {args, state} = normalize_args(args, meta, state)
+          assert_uniq_vars!(args, state)
           {ast, state} = normalize_block(ast, meta, state)
           {ast, state} = expand(ast, state)
           result = {kind, [max_counter: state.version] ++ meta, args, ast}
@@ -160,9 +180,11 @@ defmodule Nx.Defn.Compiler do
     {{:{}, meta, args}, state}
   end
 
-  defp normalize({:=, meta, [_, _] = args}, state) do
-    {args, state} = normalize_list(args, state)
-    {{:=, meta, args}, state}
+  defp normalize({:=, meta, [left, right]}, state) do
+    {left, state} = normalize(left, state)
+    assert_uniq_vars!(left, state)
+    {right, state} = normalize(right, state)
+    {{:=, meta, [left, right]}, state}
   end
 
   defp normalize(
@@ -190,7 +212,7 @@ defmodule Nx.Defn.Compiler do
     {{:__local__, meta, [name | args]}, state}
   end
 
-  defp normalize({name, meta, ctx}, state) when is_atom(name) and is_atom(ctx) do
+  defp normalize({name, meta, ctx} = var, state) when is_var(var) do
     {version, meta} = Keyword.pop!(meta, :version)
     state = update_in(state.version, &max(&1, version))
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
@@ -255,7 +277,35 @@ defmodule Nx.Defn.Compiler do
     Enum.map_reduce(list, state, &normalize/2)
   end
 
-  ## Normalize block handling
+  ## Normalize args
+
+  defp normalize_args(args, meta, state) when is_list(args) do
+    Enum.map_reduce(args, state, &normalize_args(&1, meta, &2))
+  end
+
+  defp normalize_args(var, _meta, state) when is_var(var) do
+    normalize(var, state)
+  end
+
+  defp normalize_args({:{}, meta, args}, _meta, state) do
+    {args, state} = normalize_args(args, meta, state)
+    {{:{}, meta, args}, state}
+  end
+
+  defp normalize_args({left, right}, meta, state) do
+    {args, state} = normalize_args([left, right], meta, state)
+    {{:{}, meta, args}, state}
+  end
+
+  defp normalize_args(expr, meta, state) do
+    compile_error!(
+      meta,
+      state,
+      "only variables and tuples are allowed as arguments in defn, got: #{Macro.to_string(expr)}"
+    )
+  end
+
+  ## Normalize block
 
   defp normalize_block({:__block__, meta, exprs}, _meta, state) do
     {exprs, state} = normalize_block(exprs, [], meta, state)
@@ -402,8 +452,7 @@ defmodule Nx.Defn.Compiler do
     expand_pattern(meta, left, patterns, vars, expr, state)
   end
 
-  defp expand_pattern(_meta, {name, _, ctx} = var, patterns, vars, expr, _state)
-       when is_atom(name) and is_atom(ctx) do
+  defp expand_pattern(_meta, var, patterns, vars, expr, _state) when is_var(var) do
     {patterns, [var | vars], expr}
   end
 
@@ -413,11 +462,8 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp validate_pattern!(meta, {left, right}, _state), do: {:{}, meta, [left, right]}
-  defp validate_pattern!(_meta, {:{}, _, _} = tuple,  _state), do: tuple
-
-  defp validate_pattern!(_meta, {name, _, ctx} = var, _state)
-       when is_atom(name) and is_atom(ctx),
-       do: var
+  defp validate_pattern!(_meta, {:{}, _, _} = tuple, _state), do: tuple
+  defp validate_pattern!(_meta, var, _state) when is_var(var), do: var
 
   defp validate_pattern!(meta, expr, state) do
     compile_error!(
@@ -438,8 +484,7 @@ defmodule Nx.Defn.Compiler do
     {patterns, nested, state}
   end
 
-  defp expand_nested_patterns([{name, _, ctx} = var | args], meta, acc, nested, state)
-       when is_atom(name) and is_atom(ctx) do
+  defp expand_nested_patterns([var | args], meta, acc, nested, state) when is_var(var) do
     expand_nested_patterns(args, meta, [var | acc], nested, state)
   end
 
@@ -461,6 +506,32 @@ defmodule Nx.Defn.Compiler do
 
   defp maybe_meta({_, meta, _}), do: meta
   defp maybe_meta(_), do: []
+
+  defp assert_uniq_vars!(ast, state) do
+    Macro.prewalk(ast, %{}, fn
+      var, acc when is_var(var) ->
+        meta = elem(var, 1)
+        counter = Keyword.fetch!(meta, :counter)
+
+        case acc do
+          %{^counter => var} ->
+            compile_error!(
+              meta,
+              state,
+              "variable \"#{Macro.to_string(var)}\" appears twice in pattern " <>
+                Macro.to_string(ast)
+            )
+
+          %{} ->
+            {var, Map.put(acc, counter, var)}
+        end
+
+      node, acc ->
+        {node, acc}
+    end)
+
+    :ok
+  end
 
   defp compile_warn(meta, state, message) do
     {name, arity} = state.function

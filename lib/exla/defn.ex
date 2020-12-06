@@ -10,9 +10,9 @@ defmodule Exla.Defn do
 
   ## Builder and computations
 
-  def sf_cached_def(module, name, arity, args, options, fun) do
-    cache_args = for arg <- args, do: nx_to_cache_key!(arg)
-    buffers = for arg <- args, do: nx_to_buffer(arg)
+  def sf_cached_def(module, name, arity, vars, options, fun) do
+    cache_args = for var <- vars, do: nx_to_cache_key!(var)
+    buffers = for var <- vars, do: nx_to_buffer(var)
     {client_name, options} = Keyword.pop(options, :client, :default)
     cache_key = {module, name, arity, cache_args, client_name}
 
@@ -315,22 +315,19 @@ defmodule Exla.Defn do
 
   ## Callback
 
-  def __compile__(_kind, _meta, name, args, ast, options) do
-    state = %{}
-
-    {ast, _state} = traverse(ast, state)
-    arity = length(args)
-    shapes = Macro.generate_arguments(arity, __MODULE__)
+  def __compile__(_kind, _meta, name, arity, vars, ast, options) do
+    {ast, _state} = traverse(ast, %{})
+    shapes = Macro.generate_arguments(length(vars), __MODULE__)
 
     quote do
       Exla.Defn.sf_cached_def(
         __MODULE__,
         unquote(name),
         unquote(arity),
-        unquote(args),
+        unquote(vars),
         unquote(options),
         fn builder, unquote(shapes) ->
-          unquote_splicing(args_to_parameters(args, shapes))
+          unquote_splicing(vars_to_parameters(vars, shapes))
           unquote(ast)
         end
       )
@@ -409,7 +406,7 @@ defmodule Exla.Defn do
     {other, state}
   end
 
-  defp args_to_parameters(args, shapes) do
+  defp vars_to_parameters(args, shapes) do
     for {{var, shape}, index} <- Enum.with_index(Enum.zip(args, shapes)) do
       name = var_to_parameter_name(var)
 

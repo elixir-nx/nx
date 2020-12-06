@@ -31,6 +31,24 @@ defmodule Exla.DefnTest do
       assert add_subtract_tuple(Nx.tensor([-1, 0, 1]), 10) ==
                {Nx.tensor([9, 10, 11]), Nx.tensor([-11, -10, -9])}
     end
+
+    defn pattern_tuple({a, b}), do: a + b
+
+    test "matches on tuples" do
+      assert pattern_tuple({2, 3}) == Nx.tensor(5)
+
+      assert pattern_tuple({Nx.tensor([1, 2]), Nx.tensor([[3], [4]])}) ==
+               Nx.tensor([[4, 5], [5, 6]])
+    end
+
+    defn calls_pattern_tuple(a, b), do: pattern_tuple({a, b})
+
+    test "matches on inlined tuples" do
+      assert calls_pattern_tuple(2, 3) == Nx.tensor(5)
+
+      assert calls_pattern_tuple(Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[4, 5], [5, 6]])
+    end
   end
 
   describe "tensor constants" do

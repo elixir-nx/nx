@@ -36,7 +36,26 @@ defmodule Nx.DefnTest do
       assert add_subtract_tuple(Nx.tensor([-1, 0, 1]), 10) ==
                {Nx.tensor([9, 10, 11]), Nx.tensor([-11, -10, -9])}
     end
+
+    defn pattern_tuple({a, b}), do: a + b
+
+    test "matches on tuples" do
+      assert pattern_tuple({2, 3}) == Nx.tensor(5)
+
+      assert pattern_tuple({Nx.tensor([1, 2]), Nx.tensor([[3], [4]])}) ==
+               Nx.tensor([[4, 5], [5, 6]])
+    end
+
+    defn calls_pattern_tuple(a, b), do: pattern_tuple({a, b})
+
+    test "matches on inlined tuples" do
+      assert calls_pattern_tuple(2, 3) == Nx.tensor(5)
+
+      assert calls_pattern_tuple(Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[4, 5], [5, 6]])
+    end
   end
+
 
   describe "tensor constants" do
     @two 2
@@ -410,11 +429,33 @@ defmodule Nx.DefnTest do
 
     test "non variables used as arguments" do
       assert_raise CompileError,
-                   ~r"#{location(+4)}: only variables are allowed as arguments in defn",
+                   ~r"#{location(+4)}: only variables and tuples are allowed as arguments in defn",
                    fn ->
                      defmodule Sample do
                        import Nx.Defn
                        defn add(1, 2), do: 3
+                     end
+                   end
+    end
+
+    test "dup vars used as arguments" do
+      assert_raise CompileError,
+                   ~r"#{location(+4)}: variable \"a\" appears twice in pattern \[a, a\]",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a, a), do: 3
+                     end
+                   end
+    end
+
+    test "dup vars used as patterns" do
+      assert_raise CompileError,
+                   ~r"#{location(+4)}: variable \"b\" appears twice in pattern \{b, b\}",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a), do: {b, b} = a
                      end
                    end
     end
@@ -432,7 +473,7 @@ defmodule Nx.DefnTest do
 
     test "unknown defn compiler" do
       assert_raise UndefinedFunctionError,
-                   ~r"Unknown.__compile__/6",
+                   ~r"Unknown.__compile__/7",
                    fn ->
                      defmodule Sample do
                        @defn_compiler Unknown

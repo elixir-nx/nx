@@ -41,10 +41,24 @@ defmodule Nx.Defn do
 
   ## Inputs and outputs types
 
-  `defn` functions can receive either numbers or tensors as inputs.
-  If a number is given, it is automatically cast to tensor at
-  invocation. `defn` functions always return tensors too, even for
-  numerical constants. For example, this function:
+  `defn` functions can receive either tuples, numbers, or tensors
+  as inputs.
+
+  Tensors are passed in as is. If a number is given, it is automatically
+  cast to tensor. If a tuple is expected, it must be matched on the
+  function head itself. For example, do this:
+
+      defn add_tuple({a, b}), do: a + b
+
+  Do not do this:
+
+      defn add_tuple(tuple) do
+        {a, b} = tuple
+        a + b
+      end
+
+  `defn` functions can return tensors or tuples of tensors. Note tensors
+  are returned even for numerical constants. For example, this function:
 
       defn just_two(), do: 2
 
@@ -84,9 +98,9 @@ defmodule Nx.Defn do
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __compile__(_kind, _meta, _name, args, ast, []) do
+  def __compile__(_kind, _meta, _name, _arity, vars, ast, []) do
     quote do
-      unquote(args) = unquote(__MODULE__).__validate__!(unquote(args))
+      unquote(vars) = unquote(__MODULE__).__validate__!(unquote(vars))
       unquote(__MODULE__).__result__!(unquote(ast))
     end
   end
@@ -152,7 +166,6 @@ defmodule Nx.Defn do
     # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
     assert_no_defaults!(kind, args, env)
-    assert_only_vars!(kind, args, env)
     arity = length(args)
 
     quote do
@@ -193,15 +206,6 @@ defmodule Nx.Defn do
       compile_error!(
         env,
         "default arguments are not supported by #{kind}n, got: #{Macro.to_string(default)}"
-      )
-    end
-  end
-
-  defp assert_only_vars!(kind, args, state) do
-    if expr = Enum.find(args, &(not match?({var, _, ctx} when is_atom(var) and is_atom(ctx), &1))) do
-      compile_error!(
-        state,
-        "only variables are allowed as arguments in #{kind}n, got: #{Macro.to_string(expr)}"
       )
     end
   end
