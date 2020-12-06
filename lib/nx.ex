@@ -484,8 +484,24 @@ defmodule Nx do
   Returns the type of the tensor.
 
   See `Nx.Type` for more information.
+
+  ## Examples
+
+      iex> Nx.type(Nx.tensor([1, 2, 3]))
+      {:s, 64}
+
+      iex> Nx.type(Nx.tensor([1, 2, 3], type: {:f, 32}))
+      {:f, 32}
+
+      iex> Nx.type(1)
+      {:s, 64}
+
+      iex> Nx.type(1.0)
+      {:f, 64}
   """
   def type(%T{type: type}), do: type
+  def type(int) when is_integer(int), do: {:s, 64}
+  def type(float) when is_float(float), do: {:f, 64}
 
   @doc """
   Returns the shape of the tensor as a tuple.
@@ -499,8 +515,13 @@ defmodule Nx do
 
       iex> Nx.shape(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       {2, 3}
+
+      iex> Nx.shape(1)
+      {}
+
   """
   def shape(%T{shape: shape}), do: shape
+  def shape(number) when is_number(number), do: {}
 
   @doc """
   Returns the rank of a tensor.
@@ -512,8 +533,13 @@ defmodule Nx do
 
       iex> Nx.rank(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       2
+
+      iex> Nx.rank(1)
+      0
+
   """
   def rank(%T{shape: shape}), do: tuple_size(shape)
+  def rank(number) when is_number(number), do: 0
 
   @doc """
   Returns how many elements they are in the tensor.
@@ -522,8 +548,13 @@ defmodule Nx do
 
       iex> Nx.size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       6
+
+      iex> Nx.size(1)
+      1
+
   """
   def size(%T{shape: shape}), do: tuple_product(shape)
+  def size(number) when is_number(number), do: 1
 
   ## Device API
 

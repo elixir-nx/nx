@@ -614,6 +614,27 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "reflection" do
+    defn random_from_type_and_shape(t), do: Nx.random_uniform(Nx.shape(t), 0, 10, type: Nx.type(t))
+
+    test "type and shape" do
+      t = random_from_type_and_shape(Nx.tensor([[1], [2]]))
+      assert Nx.shape(t) == {2, 1}
+      assert Nx.type(t) == {:s, 64}
+
+      t = random_from_type_and_shape(Nx.tensor([[1], [2]], type: {:f, 32}))
+      assert Nx.shape(t) == {2, 1}
+      assert Nx.type(t) == {:f, 32}
+    end
+
+    defn rank_and_size(t), do: {Nx.rank(t), Nx.size(t)}
+
+    test "rank and size" do
+      assert rank_and_size(Nx.tensor([[1, 2], [3, 4]])) == {Nx.tensor(2), Nx.tensor(4)}
+      assert rank_and_size(Nx.tensor([1, 2, 3, 4, 5])) == {Nx.tensor(1), Nx.tensor(5)}
+    end
+  end
+
   describe "options" do
     @defn_compiler {Exla, keep_on_device: true}
     defn add_two_keep_on_device(a, b), do: a + b

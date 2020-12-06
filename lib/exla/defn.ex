@@ -195,9 +195,7 @@ defmodule Exla.Defn do
   end
 
   def nx_random_uniform(builder, tensor, min, max, opts) do
-    op = to_operator(builder, tensor)
-    shape = Exla.Op.get_shape(op)
-    nx_random_uniform(builder, shape.dims, min, max, opts)
+    nx_random_uniform(builder, nx_shape(builder, tensor), min, max, opts)
   end
 
   def nx_random_normal(builder, shape, mu, sigma, opts)
@@ -210,9 +208,25 @@ defmodule Exla.Defn do
   end
 
   def nx_random_normal(builder, tensor, min, max, opts) do
-    op = to_operator(builder, tensor)
-    shape = Exla.Op.get_shape(op)
-    nx_random_normal(builder, shape.dims, min, max, opts)
+    nx_random_normal(builder, nx_shape(builder, tensor), min, max, opts)
+  end
+
+  ## Reflection
+
+  def nx_type(builder, op) do
+    Exla.Op.get_shape(to_operator(builder, op)).dtype
+  end
+
+  def nx_shape(builder, op) do
+    Exla.Op.get_shape(to_operator(builder, op)).dims
+  end
+
+  def nx_rank(builder, op) do
+    tuple_size(nx_shape(builder, op))
+  end
+
+  def nx_size(builder, op) do
+    tuple_product(nx_shape(builder, op))
   end
 
   ## Aggregators
@@ -305,6 +319,10 @@ defmodule Exla.Defn do
     do: Exla.Op.constant_r0(builder, float, {:f, 64})
 
   ## Dimensions
+
+  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   defp broadcast_dimensions(left, right) do
     {min, max} = if left <= right, do: {left, right}, else: {right, left}
