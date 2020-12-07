@@ -52,7 +52,7 @@ defmodule Nx.Defn.Compiler do
   #{for {f, a} <- @forbidden_nx_functions, do: "  * `#{Exception.format_mfa(Nx, f, a)}`\n"}
   """
   @callback __compile__(
-              env :: Macro.Env.t,
+              env :: Macro.Env.t(),
               kind :: :def | :defp,
               metadata :: keyword,
               vars :: [Macro.t()],
@@ -69,7 +69,7 @@ defmodule Nx.Defn.Compiler do
   # 2. Expand patterns and inline all local functions. This is
   #    the result stored in each module for cross-module inlining.
   #
-  # 3. Inline remote calls (and then parse transforms + remote calls recursively).
+  # 3. Inline remote calls (and then transforms + remote calls recursively).
   #
   # 4. Invoke the compiler chosen by the user.
   #
@@ -120,9 +120,10 @@ defmodule Nx.Defn.Compiler do
     {{kind, meta, args, ast}, state} = get_cached_definition(def, state)
     defn_ast = Macro.escape({meta, args, ast})
 
-    # Inline remotes and parse transforms
+    # Inline remotes and transforms
     env = %{env | function: def, line: meta[:line] || env.line}
     {ast, state} = inline_remote(ast, state)
+    {ast, state} = inline_transforms(env, ast, state)
 
     # Now invoke the compiler
     {def_module, def_opts} = def_meta.compiler
@@ -251,6 +252,29 @@ defmodule Nx.Defn.Compiler do
     {args, state} = normalize_list(args, state)
     args = rewrite_nx_args(name, args)
     {{call, meta, args}, state}
+  end
+
+  defp normalize({{:., _, [Nx.Defn.Kernel, :transform]}, meta, [module, ast, opts]}, state) do
+    unless is_atom(module) do
+      compile_error!(
+        meta,
+        state,
+        "expected the first argument of Nx.Defn.Kernel.transform/3 to a module, " <>
+          "got: #{inspect(module)}"
+      )
+    end
+
+    unless Keyword.keyword?(opts) and Enum.all?(opts, fn {_, v} -> is_atom(v) or is_number(v) end) do
+      compile_error!(
+        meta,
+        state,
+        "expected the second argument of Nx.Defn.Kernel.transform/3 to a keyword list with " <>
+          "atoms and numbers as values, got: #{inspect(opts)}"
+      )
+    end
+
+    {ast, state} = normalize(ast, state)
+    {{:__transform__, meta, [module, ast, opts]}, state}
   end
 
   defp normalize({{:., _, [remote, name]}, meta, args}, state)
@@ -576,6 +600,29 @@ defmodule Nx.Defn.Compiler do
         {ast, version} = inline(meta, patterns, ast, args, state.version)
         state = put_in(state.remotes[module], true)
         {ast, %{state | version: version}}
+
+      expr, state ->
+        {expr, state}
+    end)
+  end
+
+  ## Transforms
+
+  # TODO: define proper behaviour
+  defp inline_transforms(env, ast, state) do
+    Macro.prewalk(ast, state, fn
+      {:__transform__, meta, [module, ast, opts]}, state ->
+        if Code.ensure_compiled(module) != {:module, module} do
+          compile_error!(
+            meta,
+            state,
+            "cannot invoke transform #{inspect(module)} because it is not defined"
+          )
+        end
+
+        {version, ast} = module.__transform__(env, state.version, meta, ast, opts)
+        state = put_in(state.remotes[module], true)
+        inline_remote(ast, %{state | version: version})
 
       expr, state ->
         {expr, state}
