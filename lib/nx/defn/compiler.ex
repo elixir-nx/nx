@@ -77,7 +77,7 @@ defmodule Nx.Defn.Compiler do
   # to run said additional passes either at runtime or compilation time.
   @doc false
   def compile(%Macro.Env{module: module, file: file, line: line} = env, exports) do
-    {:module, Nx} = Code.ensure_loaded(Nx)
+    {:module, Nx} = Code.ensure_compiled(Nx)
     cache = for {def, _meta} <- exports, into: %{}, do: {def, false}
     public = for {def, %{kind: :def} = meta} <- exports, do: {def, meta}
 

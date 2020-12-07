@@ -1,7 +1,7 @@
 defmodule Nx.Grad do
   # @behaviour Nx.Defn.Transform
 
-  def __transform__(_env, version, _meta, {var, ast}, _opts) do
+  def __transform__(_env, version, _meta, {_var, ast}, _opts) do
     {version, transform(ast)}
   end
 
