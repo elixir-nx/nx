@@ -214,6 +214,11 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def iota(%Builder{ref: builder}, %Shape{ref: shape}, dim \\ 0) do
+    ref = Exla.NIF.iota(builder, shape, dim) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   # Precision Config is accumulation precision: https://github.com/google/jax/issues/4873
   def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}, precision_config \\ :default) do
     config =

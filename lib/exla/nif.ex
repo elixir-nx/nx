@@ -157,6 +157,9 @@ defmodule Exla.NIF do
   def rng_uniform(_a, _b, _shape),
     do: nif_error(__ENV__.function)
 
+  def iota(_builder, _shape, _dim),
+    do: nif_error(__ENV__.function)
+
   def reduce(_operand, _init_value, _computation, _dimensions),
     do: nif_error(__ENV__.function)
 

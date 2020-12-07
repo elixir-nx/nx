@@ -464,6 +464,118 @@ defmodule Nx do
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
+  @doc """
+  Creates a tensor with the given shape which increments
+  along the provided axis.
+
+  If no axis is provided, defaults to the last axis in the
+  given shape.
+
+  If a tensor or a number are given, the shape is taken from the tensor.
+
+  ## Examples
+
+      iex> Nx.iota({})
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.iota({5})
+      #Nx.Tensor<
+        s64[5]
+        [0, 1, 2, 3, 4]
+      >
+
+      iex> Nx.iota({3, 3}, axis: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [0, 1, 2],
+          [0, 1, 2]
+        ]
+      >
+
+      iex> Nx.iota({3, 4, 3}, axis: 0, type: {:f, 64})
+      #Nx.Tensor<
+        f64[3][4][3]
+        [
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0]
+          ],
+          [
+            [2.0, 2.0, 2.0],
+            [2.0, 2.0, 2.0],
+            [2.0, 2.0, 2.0],
+            [2.0, 2.0, 2.0]
+          ]
+        ]
+      >
+
+      iex> Nx.iota({1, 3, 2}, axis: 2)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [0, 1],
+            [0, 1],
+            [0, 1]
+          ]
+        ]
+      >
+  """
+  def iota(tensor_or_shape, opts \\ [])
+
+  def iota({}, opts), do: tensor(0, opts)
+
+  def iota({n}, opts) do
+    values = for i <- 0..n - 1, do: i
+    tensor(values, opts)
+  end
+
+  def iota(tensor_or_shape, opts) do
+    shape = shape!(tensor_or_shape)
+
+    axis = opts[:axis] || tuple_size(shape) - 1
+    {dims_before, dims_after} =
+      shape
+      |> Tuple.to_list()
+      |> Enum.split(axis)
+
+    # Number of repetitions of an index in memory
+    repeat_blocks =
+      dims_after
+      |> tl()
+      |> Enum.reduce(1, &*/2)
+
+    # Number of cycles of the counting pattern
+    cycles =
+      dims_before
+      |> Enum.reduce(1, &*/2)
+
+    dim = elem(shape, axis)
+
+    value =
+      for _ <- 1..cycles do
+        for i <- 0..dim - 1 do
+          for _ <- 1..repeat_blocks, do: i
+        end
+      end
+
+    t = tensor(value, opts)
+    reshape(t, shape)
+  end
+
   ## Shape
 
   @doc """

@@ -377,6 +377,23 @@ ERL_NIF_TERM rng_uniform(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  xla::Shape* shape;
+  exla::int64 dimension;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get<xla::Shape>(env, argv[1], shape)) return exla::error(env, "Unable to get shape.");
+  if(!exla::get(env, argv[2], dimension)) return exla::error(env, "Unable to get dimension");
+
+  xla::XlaOp op = xla::Iota(*builder, *shape, dimension);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
 
 /******************** Binary Ops ************************/
 ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const exla::int64>)){
@@ -928,9 +945,10 @@ static ErlNifFunc exla_funcs[] = {
   {"slice_in_dim", 5, slice_in_dim},
   {"dynamic_slice", 3, dynamic_slice},
   {"dynamic_update_slice", 3, dynamic_update_slice},
-  /******** RNG Ops ***********/
+  /******** Creation Ops ***********/
   {"rng_normal", 3, rng_normal},
   {"rng_uniform", 3, rng_uniform},
+  {"iota", 3, iota},
   /******** Other XLA Ops *******/
   {"dot", 3, dot},
   {"reduce", 4, reduce},
