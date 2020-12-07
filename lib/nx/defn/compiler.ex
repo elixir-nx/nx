@@ -11,12 +11,16 @@ defmodule Nx.Defn.Compiler do
   @doc """
   The callback required to be implemented for each compiler.
 
-  It receives the function `kind`, the function `metadata`,
-  the arguments (where each argument is the variable AST),
+  It receives the module compilation environment `env`, the
+  function `kind`, the function `metadata`, the variables,
   the AST, and the compiler options. The AST is guaranteed
   to be valid Elixir code. It must return valid Elixir AST.
 
-  Each variable in the AST has a :counter metadata which is
+  Note the number of variables is not the same as the function
+  arity as argument patterns have already been matched. The
+  current name and arity can be found under `env.function`.
+
+  Each variable in the AST has a `:counter` metadata which is
   guaranteed to uniquely identify each variable.
 
   The callback uses double underscores so it can be defined
@@ -48,10 +52,9 @@ defmodule Nx.Defn.Compiler do
   #{for {f, a} <- @forbidden_nx_functions, do: "  * `#{Exception.format_mfa(Nx, f, a)}`\n"}
   """
   @callback __compile__(
+              env :: Macro.Env.t,
               kind :: :def | :defp,
               metadata :: keyword,
-              name :: atom,
-              arity :: non_neg_integer,
               vars :: [Macro.t()],
               ast :: Macro.t(),
               opts :: keyword
@@ -66,14 +69,14 @@ defmodule Nx.Defn.Compiler do
   # 2. Expand patterns and inline all local functions. This is
   #    the result stored in each module for cross-module inlining.
   #
-  # 3. Inline remote calls.
+  # 3. Inline remote calls (and then parse transforms + remote calls recursively).
   #
   # 4. Invoke the compiler chosen by the user.
   #
   # The user compiler may have multiple passes and it has the ability
   # to run said additional passes either at runtime or compilation time.
   @doc false
-  def compile(%Macro.Env{module: module, file: file, line: line}, exports) do
+  def compile(%Macro.Env{module: module, file: file, line: line} = env, exports) do
     {:module, Nx} = Code.ensure_loaded(Nx)
     cache = for {def, _meta} <- exports, into: %{}, do: {def, false}
     public = for {def, %{kind: :def} = meta} <- exports, do: {def, meta}
@@ -85,10 +88,18 @@ defmodule Nx.Defn.Compiler do
       cache: cache,
       function: nil,
       line: line,
-      version: 0
+      version: 0,
+      remotes: %{}
     }
 
-    {quoted, state} = Enum.map_reduce(public, state, &compile_each/2)
+    {quoted, state} = Enum.map_reduce(public, state, &compile_each(env, &1, &2))
+
+    remotes =
+      for {remote, _} <- state.remotes do
+        quote do
+          require unquote(remote)
+        end
+      end
 
     to_delete =
       for {def, stored} when stored != false <- state.cache do
@@ -97,17 +108,26 @@ defmodule Nx.Defn.Compiler do
         end
       end
 
-    {:__block__, [], to_delete ++ quoted}
+    catch_all =
+      quote do
+        def __defn__(_, _), do: nil
+      end
+
+    {:__block__, [], remotes ++ to_delete ++ quoted ++ [catch_all]}
   end
 
-  defp compile_each({{name, arity} = def, def_meta}, state) do
+  defp compile_each(env, {{name, arity} = def, def_meta}, state) do
     {{kind, meta, args, ast}, state} = get_cached_definition(def, state)
     defn_ast = Macro.escape({meta, args, ast})
 
-    {def_module, def_opts} = def_meta.compiler
+    # Inline remotes and parse transforms
+    env = %{env | function: def, line: meta[:line] || env.line}
+    {ast, state} = inline_remote(ast, state)
 
-    compiled_body =
-      def_module.__compile__(kind, meta, name, length(args), collect_vars(args), ast, def_opts)
+    # Now invoke the compiler
+    {def_module, def_opts} = def_meta.compiler
+    meta = Keyword.put(meta, :max_counter, state.version)
+    compiled_body = def_module.__compile__(env, kind, meta, collect_vars(args), ast, def_opts)
 
     quoted =
       quote do
@@ -206,8 +226,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize({name, meta, args}, state)
-       when is_atom(name) and is_list(args) and
-              name not in [:%, :%{}, :^, :<<>>] do
+       when is_atom(name) and is_list(args) and name not in [:%, :%{}, :^, :<<>>] do
     {args, state} = normalize_list(args, state)
     {{:__local__, meta, [name | args]}, state}
   end
@@ -232,6 +251,12 @@ defmodule Nx.Defn.Compiler do
     {args, state} = normalize_list(args, state)
     args = rewrite_nx_args(name, args)
     {{call, meta, args}, state}
+  end
+
+  defp normalize({{:., _, [remote, name]}, meta, args}, state)
+       when is_atom(remote) and is_atom(name) do
+    {args, state} = normalize_list(args, state)
+    {{:__remote__, meta, [remote, name | args]}, state}
   end
 
   defp normalize({left, right}, state) do
@@ -353,7 +378,7 @@ defmodule Nx.Defn.Compiler do
     normalize_block(rest, [head | acc], meta, state)
   end
 
-  ## Expansion and Local inlining
+  ## Expansion and local inlining
 
   defp expand({:=, meta, [left, right]}, state) do
     {patterns, vars, right} = expand_assign(meta, left, right, state)
@@ -384,6 +409,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp expand({:__local__, meta, [name | args]}, state) do
+    {args, state} = expand(args, state)
     arity = length(args)
 
     if {name, arity} in state.stack do
@@ -398,27 +424,9 @@ defmodule Nx.Defn.Compiler do
     end
 
     case get_cached_definition({name, arity}, state) do
-      {{_kind, _meta, vars, ast}, state} ->
-        version = state.version + 1
-
-        {{vars, ast}, max_version} =
-          Macro.prewalk({vars, ast}, version, fn
-            {var, meta, ctx}, max_version when is_atom(var) and is_atom(ctx) ->
-              {var_version, meta} =
-                Keyword.get_and_update!(meta, :counter, &{&1 + version, &1 + version})
-
-              {{var, meta, ctx}, max(max_version, var_version)}
-
-            node, max_version ->
-              {node, max_version}
-          end)
-
-        assigns =
-          vars
-          |> Enum.zip(args)
-          |> Enum.map(fn {var, arg} -> {:=, meta, [var, arg]} end)
-
-        {{:__block__, meta, assigns ++ [ast]}, %{state | version: max_version}}
+      {{_kind, _meta, patterns, ast}, state} ->
+        {ast, version} = inline(meta, patterns, ast, args, state.version)
+        {ast, %{state | version: version}}
 
       :none ->
         compile_error!(
@@ -429,9 +437,10 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp expand({name, meta, args}, state) do
+  defp expand({expr, meta, args}, state) do
+    {expr, state} = expand(expr, state)
     {args, state} = expand(args, state)
-    {{name, meta, args}, state}
+    {{expr, meta, args}, state}
   end
 
   defp expand({left, right}, state) do
@@ -507,6 +516,70 @@ defmodule Nx.Defn.Compiler do
 
   defp expand_nested_patterns([], _meta, acc, nested, state) do
     {Enum.reverse(acc), nested, state}
+  end
+
+  ### Inline
+
+  defp inline(meta, patterns, ast, args, version) do
+    version = version + 1
+
+    {{patterns, ast}, max_version} =
+      Macro.prewalk({patterns, ast}, version, fn
+        {var, meta, ctx}, max_version when is_atom(var) and is_atom(ctx) ->
+          {var_version, meta} =
+            Keyword.get_and_update!(meta, :counter, &{&1 + version, &1 + version})
+
+          {{var, meta, ctx}, max(max_version, var_version)}
+
+        node, max_version ->
+          {node, max_version}
+      end)
+
+    case patterns do
+      [] ->
+        {ast, max_version}
+
+      _ ->
+        assigns =
+          patterns
+          |> Enum.zip(args)
+          |> Enum.map(fn {var, arg} -> {:=, meta, [var, arg]} end)
+
+        {{:__block__, meta, assigns ++ [ast]}, max_version}
+    end
+  end
+
+  defp inline_remote(ast, state) do
+    Macro.prewalk(ast, state, fn
+      {:__remote__, meta, [module, name | args]}, state ->
+        arity = length(args)
+
+        if Code.ensure_compiled(module) != {:module, module} do
+          compile_error!(
+            meta,
+            state,
+            "cannot invoke #{inspect(module)}.#{name}/#{arity} because #{inspect(module)} " <>
+              "does not exist or it is currently unavailable due to a deadlock (defn does " <>
+              "not allow co-recursive definitions)"
+          )
+        end
+
+        unless defn = function_exported?(module, :__defn__, 2) && module.__defn__(name, arity) do
+          compile_error!(
+            meta,
+            state,
+            "undefined numerical function #{inspect(module)}.#{name}/#{arity}"
+          )
+        end
+
+        {_meta, patterns, ast} = defn
+        {ast, version} = inline(meta, patterns, ast, args, state.version)
+        state = put_in(state.remotes[module], true)
+        {ast, %{state | version: version}}
+
+      expr, state ->
+        {expr, state}
+    end)
   end
 
   ## Shared helpers

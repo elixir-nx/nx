@@ -121,7 +121,7 @@ defmodule Exla do
 
       RUN sh -c "path/to/release start"
 
-  If you are Mix inside your Docker containers, instead of this:
+  If you are using Mix inside your Docker containers, instead of this:
 
       RUN mix run
 
@@ -133,5 +133,5 @@ defmodule Exla do
 
   @behaviour Nx.Defn.Compiler
   @impl true
-  defdelegate __compile__(kind, meta, name, arity, vars, ast, opts), to: Exla.Defn
+  defdelegate __compile__(env, kind, meta, vars, ast, opts), to: Exla.Defn
 end

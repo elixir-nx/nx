@@ -379,7 +379,8 @@ defmodule Exla.Defn do
 
   ## Callback
 
-  def __compile__(_kind, _meta, name, arity, vars, ast, options) do
+  def __compile__(env, _kind, _meta, vars, ast, options) do
+    {name, arity} = env.function
     {ast, _state} = traverse(ast, %{})
     shapes = Macro.generate_arguments(length(vars), __MODULE__)
 

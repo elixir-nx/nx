@@ -336,6 +336,33 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "remote functions" do
+    defmodule Remote do
+      defn add_two(c, d), do: c + d
+    end
+
+    defn add_two_remote(a, b), do: Remote.add_two(a, b)
+
+    test "public" do
+      assert add_two_remote(1, 2) == Nx.tensor(3)
+      assert add_two_remote(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
+    end
+
+    defn add_two_remote_var_conflict(a, b) do
+      c = 1
+      b = Remote.add_two(a, b)
+      b + c
+    end
+
+    test "var conflict" do
+      assert add_two_remote_var_conflict(2, 3) == Nx.tensor(6)
+    end
+
+    test "expansion" do
+      assert ast_to_string(:add_two_remote, 2) == "__remote__(Nx.DefnTest.Remote, :add_two, a, b)"
+    end
+  end
+
   describe "module attributes" do
     test "overrides default compiler with custom" do
       defmodule Sample do
@@ -472,12 +499,34 @@ defmodule Nx.DefnTest do
 
     test "unknown defn compiler" do
       assert_raise UndefinedFunctionError,
-                   ~r"Unknown.__compile__/7",
+                   ~r"Unknown.__compile__/6",
                    fn ->
                      defmodule Sample do
                        @defn_compiler Unknown
                        import Nx.Defn
                        defn add(a, b), do: a + b
+                     end
+                   end
+    end
+
+    test "unknown module" do
+      assert_raise CompileError,
+                   ~r"cannot invoke Unknown.foo/2 because Unknown does not exist",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a, b), do: Unknown.foo(a, b)
+                     end
+                   end
+    end
+
+    test "unknown defn" do
+      assert_raise CompileError,
+                   ~r"undefined numerical function Nx.DefnTest.unknown/2",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a, b), do: Nx.DefnTest.unknown(a, b)
                      end
                    end
     end

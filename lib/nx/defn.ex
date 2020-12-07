@@ -98,7 +98,7 @@ defmodule Nx.Defn do
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __compile__(_kind, _meta, _name, _arity, vars, ast, []) do
+  def __compile__(_env, _kind, _meta, vars, ast, []) do
     quote do
       unquote(vars) = unquote(__MODULE__).__validate__!(unquote(vars))
       unquote(__MODULE__).__result__!(unquote(ast))
