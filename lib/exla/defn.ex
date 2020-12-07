@@ -117,10 +117,10 @@ defmodule Exla.Defn do
   end
 
   def nx_bin_bitwise_op(builder, :right_shift, left, right) do
+    # Perform logical operation if the left side is unsigned.
+    # It can only be unsigned if it is an operator (numbers are always floats or signed).
     op =
-      # Perform logical operation if the left side is unsigned.
-      # It can only be unsigned if it is an operator (numbers are always floats or signed).
-      if match?(%Exla.Op{}, left) and match?({:u, _}, Exla.Op.get_shape(left).dtype),
+      if match?(%Exla.Op{}, left) and match?({:u, _}, nx_type(left)),
         do: :right_shift_logical,
         else: :right_shift_arithmetic
 
@@ -141,14 +141,14 @@ defmodule Exla.Defn do
 
   def nx_unary_bitwise_op(builder, op, arg) do
     arg = to_operator(builder, arg)
-    assert_integer_type!(Exla.Op.get_shape(arg).dtype, op)
+    assert_integer_type!(nx_type(arg), op)
     apply(Exla.Op, op, [arg])
   end
 
   def nx_unary_noop_integer_op(builder, op, arg) do
     arg = to_operator(builder, arg)
 
-    case Exla.Op.get_shape(arg).dtype do
+    case nx_type(arg) do
       {:s, _} -> arg
       {:u, _} -> arg
       _ -> apply(Exla.Op, op, [arg])
@@ -158,7 +158,7 @@ defmodule Exla.Defn do
   def nx_abs(builder, arg) do
     arg = to_operator(builder, arg)
 
-    case Exla.Op.get_shape(arg).dtype do
+    case nx_type(arg) do
       {:u, _} -> arg
       _ -> Exla.Op.abs(arg)
     end
@@ -167,7 +167,7 @@ defmodule Exla.Defn do
   def nx_sign(builder, arg) do
     arg = to_operator(builder, arg)
 
-    case Exla.Op.get_shape(arg).dtype do
+    case nx_type(arg) do
       {:u, _} = type -> Exla.Op.min(arg, Exla.Op.constant_r0(builder, 1, type))
       _ -> Exla.Op.sign(arg)
     end
@@ -207,18 +207,55 @@ defmodule Exla.Defn do
 
   ## Reflection
 
-  def nx_shape(_builder, op) when is_number(op), do: {}
-  def nx_shape(_builder, op), do: Exla.Op.get_shape(op).dims
+  def nx_shape(number) when is_number(number), do: {}
+  def nx_shape(op), do: Exla.Op.get_shape(op).dims
 
-  def nx_rank(builder, op), do: tuple_size(nx_shape(builder, op))
-  def nx_size(builder, op), do: tuple_product(nx_shape(builder, op))
-  def nx_type(builder, op), do: Exla.Op.get_shape(to_operator(builder, op)).dtype
+  def nx_type(int) when is_integer(int), do: {:s, 64}
+  def nx_type(float) when is_float(float), do: {:f, 64}
+  def nx_type(op), do: Exla.Op.get_shape(op).dtype
+
+  def nx_type(_builder, op), do: nx_type(op)
+  def nx_rank(_builder, op), do: tuple_size(nx_shape(op))
+  def nx_size(_builder, op), do: tuple_product(nx_shape(op))
+  def nx_shape(_builder, op), do: nx_shape(op)
 
   ## Shape
 
-  def nx_reshape(_builder, tensor, shape) do
-    Exla.Op.reshape(tensor, to_shape(shape))
+  def nx_reshape(builder, tensor, shape) do
+    Exla.Op.reshape(to_operator(builder, tensor), to_shape(shape))
   end
+
+  def nx_broadcast(builder, tensor, shape) do
+    op = to_operator(builder, tensor)
+    old_shape = nx_shape(op)
+    new_shape = to_shape(shape)
+
+    case max_shape(tuple_reverse(old_shape), tuple_reverse(new_shape), []) do
+      {:ok, output_shape} ->
+        Exla.Op.broadcast_in_dim(op, output_shape, broadcast_dimensions(old_shape, output_shape))
+
+      :error ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
+                "to #{inspect(new_shape)}"
+    end
+  end
+
+  defp max_shape([ldim | ldims], [rdim | rdims], shape)
+       when ldim == rdim or ldim == 1 or rdim == 1,
+       do: max_shape(ldims, rdims, [max(ldim, rdim) | shape])
+
+  defp max_shape([], [rdim | rdims], shape),
+    do: max_shape([], rdims, [rdim | shape])
+
+  defp max_shape([ldim | ldims], [], shape),
+    do: max_shape(ldims, [], [ldim | shape])
+
+  defp max_shape([], [], shape),
+    do: {:ok, List.to_tuple(shape)}
+
+  defp max_shape(_, _, _),
+    do: :error
 
   ## Aggregators
 
@@ -299,13 +336,13 @@ defmodule Exla.Defn do
     do: Nx.Type.merge(Nx.Type.infer(left), Nx.Type.infer(right))
 
   defp binary_op_type(scalar, op) when is_number(scalar),
-    do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
+    do: Nx.Type.merge_scalar(nx_type(op), scalar)
 
   defp binary_op_type(op, scalar) when is_number(scalar),
-    do: Nx.Type.merge_scalar(Exla.Op.get_shape(op).dtype, scalar)
+    do: Nx.Type.merge_scalar(nx_type(op), scalar)
 
   defp binary_op_type(left, right),
-    do: Nx.Type.merge(Exla.Op.get_shape(left).dtype, Exla.Op.get_shape(right).dtype)
+    do: Nx.Type.merge(nx_type(left), nx_type(right))
 
   defp assert_integer_type!({:s, _} = type, _op), do: type
   defp assert_integer_type!({:u, _} = type, _op), do: type
@@ -319,22 +356,26 @@ defmodule Exla.Defn do
   ## Dimensions
 
   defp to_shape(tuple) when is_tuple(tuple), do: tuple
-  defp to_shape(tensor), do: nx_shape(:builder, tensor)
+  defp to_shape(tensor), do: nx_shape(tensor)
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
+  defp tuple_reverse(tuple), do: tuple_reverse(tuple, tuple_size(tuple))
+  defp tuple_reverse(_tuple, 0), do: []
+  defp tuple_reverse(tuple, i), do: [:erlang.element(i, tuple) | tuple_reverse(tuple, i - 1)]
 
   defp broadcast_dimensions(left, right) do
     {min, max} = if left <= right, do: {left, right}, else: {right, left}
     min_size = tuple_size(min)
     max_size = tuple_size(max)
     # To reproduce Nx broadcast, we simply match the lower dimensions to the highest ones.
-    List.to_tuple(Enum.reverse(count_down(min_size, max_size - min_size, [])))
+    List.to_tuple(count_down(min_size, max_size - min_size))
   end
 
-  defp count_down(0, _n, acc), do: acc
-  defp count_down(i, n, acc), do: count_down(i - 1, n + 1, [n | acc])
+  defp count_down(0, _n), do: []
+  defp count_down(i, n), do: [n | count_down(i - 1, n + 1)]
 
   ## Callback
 

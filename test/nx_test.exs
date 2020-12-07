@@ -232,4 +232,24 @@ defmodule NxTest do
       assert_raise ArgumentError, ~r"cannot broadcast", fn -> Nx.add(a, b) end
     end
   end
+
+  test "all broadcast" do
+    tensors = [
+      {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([0, 0])},
+      {Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]]), Nx.tensor([0, 0])},
+      {Nx.tensor([[1], [2]]), Nx.tensor([[0, 0]])},
+      {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]]])},
+      {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]), Nx.tensor([[[0], [0], [0]]])},
+      {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[[0]]]])},
+      {Nx.tensor([1, 2]), Nx.tensor([[[[0]]]])},
+      {Nx.tensor([[1, 2]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
+      {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
+      {Nx.tensor([[[[1, 2]]], [[[3, 4]]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
+      {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
+    ]
+
+    for {left, right} <- tensors do
+      assert Nx.add(left, right) == Nx.broadcast(left, right)
+    end
+  end
 end

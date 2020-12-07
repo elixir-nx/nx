@@ -60,10 +60,19 @@ defmodule Exla.Op do
   end
 
   @doc """
-  Reshapes the tensor.
+  Reshapes the tensor to `shape`.
   """
   def reshape(%Op{ref: ref} = op, shape) when is_tuple(shape) do
     ref = Exla.NIF.reshape(ref, shape) |> unwrap!()
+    %{op | ref: ref}
+  end
+
+  @doc """
+  Broadcasts the tensor to `shape`.
+  """
+  def broadcast_in_dim(%Op{ref: ref} = op, shape, broadcast_dims)
+      when is_tuple(shape) and is_tuple(broadcast_dims) do
+    ref = Exla.NIF.broadcast_in_dim(ref, shape, broadcast_dims) |> unwrap!()
     %{op | ref: ref}
   end
 

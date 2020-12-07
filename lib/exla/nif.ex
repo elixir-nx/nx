@@ -163,6 +163,9 @@ defmodule Exla.NIF do
   def reshape(_operand, _dimensions),
     do: nif_error(__ENV__.function)
 
+  def broadcast_in_dim(_operand, _dimensions, _broadcast_dims),
+    do: nif_error(__ENV__.function)
+
   def get_shape(_builder, _operand),
     do: nif_error(__ENV__.function)
 

@@ -49,7 +49,7 @@ defmodule Nx do
 
   ## Broadcasting
 
-  TODO
+  TODO: Write docs.
 
   ## Devices
 
@@ -566,6 +566,15 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.broadcast(Nx.tensor([[1, 2]]), Nx.tensor([[10], [20]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [1, 2]
+        ]
+      >
+
       iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
       #Nx.Tensor<
         s64[2][2]
@@ -599,15 +608,10 @@ defmodule Nx do
   def broadcast(%T{shape: old_shape, type: {_, size}} = t, new_shape) when is_tuple(new_shape) do
     old_rank = tuple_size(old_shape)
     new_rank = tuple_size(new_shape)
-    rank = new_rank
+    rank = :erlang.max(old_rank, new_rank)
 
-    if old_rank > new_rank do
-      raise ArgumentError,
-            "cannot broadcast from #{inspect(old_shape)} to #{inspect(new_shape)} because it has a lower rank"
-    end
-
-    old_lower = old_shape |> shape_to_lower_ranked_list(old_rank, rank)
-    new_lower = new_shape |> shape_to_lower_ranked_list(new_rank, rank)
+    old_lower = shape_to_lower_ranked_list(old_shape, old_rank, rank)
+    new_lower = shape_to_lower_ranked_list(new_shape, new_rank, rank)
 
     case unary_broadcast_shape(old_lower, new_lower, []) do
       {:ok, new_higher} ->

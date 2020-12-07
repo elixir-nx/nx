@@ -609,6 +609,23 @@ ERL_NIF_TERM reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM broadcast_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<exla::int64> new_shape;
+  std::vector<exla::int64> broadcast_dims;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get_tuple(env, argv[1], new_shape)) return exla::error(env, "Unable to get dimensions.");
+  if(!exla::get_tuple(env, argv[2], broadcast_dims)) return exla::error(env, "Unable to get broadcast dimensions.");
+
+  xla::XlaOp op = xla::BroadcastInDim(*operand, new_shape, broadcast_dims);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(argc != 2) {
     return exla::error(env, "Bad argument count.");
@@ -917,6 +934,7 @@ static ErlNifFunc exla_funcs[] = {
   /******** Other XLA Ops *******/
   {"dot", 3, dot},
   {"reduce", 4, reduce},
+  {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},

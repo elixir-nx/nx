@@ -509,18 +509,62 @@ defmodule Exla.DefnTest do
   describe "reshape" do
     defn reshape_with_shape(t), do: Nx.reshape(t, {2, 2})
 
-    test "reshapes with shape" do
+    test "with shape" do
       assert reshape_with_shape(Nx.tensor([1, 2, 3, 4])) == Nx.tensor([[1, 2], [3, 4]])
     end
 
     defn reshape_with_tensor(t, shape), do: Nx.reshape(t, shape)
 
-    test "reshapes with tensor" do
+    test "with tensor" do
       assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0, 0], [0, 0]])) ==
                Nx.tensor([[1, 2], [3, 4]])
 
       assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0], [0], [0], [0]])) ==
                Nx.tensor([[1], [2], [3], [4]])
+    end
+
+    defn reshape_with_constant(shape), do: Nx.reshape(123, shape)
+
+    test "with constant" do
+      assert reshape_with_constant(Nx.tensor([[[1]]])) == Nx.tensor([[[123]]])
+    end
+  end
+
+  describe "broadcast" do
+    defn broadcast_with_shape(t), do: Nx.broadcast(t, {2, 2})
+
+    test "with shape" do
+      assert broadcast_with_shape(Nx.tensor([1, 2])) == Nx.tensor([[1, 2], [1, 2]])
+      assert broadcast_with_shape(Nx.tensor([[1], [2]])) == Nx.tensor([[1, 1], [2, 2]])
+    end
+
+    defn broadcast_with_tensor(t, shape), do: Nx.broadcast(t, shape)
+
+    test "with tensor" do
+      tensors = [
+        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([0, 0])},
+        {Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]]), Nx.tensor([0, 0])},
+        {Nx.tensor([[1], [2]]), Nx.tensor([[0, 0]])},
+        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]]])},
+        {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]), Nx.tensor([[[0], [0], [0]]])},
+        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[[0]]]])},
+        {Nx.tensor([1, 2]), Nx.tensor([[[[0]]]])},
+        {Nx.tensor([[1, 2]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
+        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
+        {Nx.tensor([[[[1, 2]]], [[[3, 4]]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
+        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
+      ]
+
+      for {left, right} <- tensors do
+        assert add_two(left, right) == broadcast_with_tensor(left, right)
+      end
+    end
+
+    defn broadcast_with_constant(shape), do: Nx.broadcast(123, shape)
+
+    test "with constant" do
+      assert broadcast_with_constant(Nx.tensor([[1, 2], [3, 4]])) ==
+                Nx.tensor([[123, 123], [123, 123]])
     end
   end
 
