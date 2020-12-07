@@ -375,9 +375,8 @@ defmodule Nx do
 
   """
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
-
-  def random_uniform(shape, min, max, opts)
-      when is_tuple(shape) and is_number(min) and is_number(max) do
+      when is_number(min) and is_number(max) do
+    shape = shape!(tensor_or_shape)
     type = opts[:type] || Nx.Type.infer(max - min)
 
     gen =
@@ -389,12 +388,6 @@ defmodule Nx do
 
     data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
-  end
-
-  def random_uniform(t_or_number, min, max, opts)
-      when is_number(t_or_number)
-      when is_struct(t_or_number, T) do
-    random_uniform(tensor(t_or_number).shape, min, max, opts)
   end
 
   @doc """
@@ -459,9 +452,8 @@ defmodule Nx do
 
   """
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
-
-  def random_normal(shape, mu, sigma, opts)
-      when is_tuple(shape) and is_float(mu) and is_float(sigma) do
+      when is_float(mu) and is_float(sigma) do
+    shape = shape!(tensor_or_shape)
     type = opts[:type] || {:f, 64}
 
     data =
@@ -472,10 +464,72 @@ defmodule Nx do
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
-  def random_normal(t_or_number, mu, sigma, opts)
-      when is_number(t_or_number)
-      when is_struct(t_or_number, T) do
-    random_uniform(tensor(t_or_number).shape, mu, sigma, opts)
+  ## Shape
+
+  @doc """
+  Changes the shape of a tensor.
+
+  The new shape is either a tuple or a tensor which we will
+  retrieve the current shape from. The shapes must be compatible:
+  the product of each dimension in the shape must be equal.
+
+  Reshaping only changes the tensor metadata, it doesn't copy
+  the underlying structure.
+
+  ## Examples
+
+      iex> t = Nx.tensor([1, 2, 3, 4])
+      iex> Nx.reshape(t, {2, 2})
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
+  The shape can also be an existing tensor:
+
+      iex> shape = Nx.tensor([[0], [0], [0], [0]])
+      iex> Nx.reshape(Nx.tensor([1, 2, 3, 4]), shape)
+      #Nx.Tensor<
+        s64[4][1]
+        [
+          [1],
+          [2],
+          [3],
+          [4]
+        ]
+      >
+
+  Even a scalar can be transformed into a 3-dimensional tensor:
+
+      iex> t = Nx.tensor(1)
+      iex> Nx.reshape(t, {1, 1, 1})
+      #Nx.Tensor<
+        s64[1][1][1]
+        [
+          [
+            [1]
+          ]
+        ]
+      >
+
+  """
+  def reshape(tensor, new_shape)
+
+  def reshape(number, new_shape) when is_number(number), do: reshape(tensor(number), new_shape)
+
+  def reshape(%T{shape: old_shape} = t, new_shape) do
+    new_shape = shape!(new_shape)
+
+    if tuple_product(old_shape) != tuple_product(new_shape) do
+      raise ArgumentError,
+            "cannot reshape tensor. Current shape #{inspect(old_shape)} is not compatible with " <>
+              "new shape #{inspect(new_shape)}"
+    end
+
+    %{t | shape: new_shape}
   end
 
   ## Reflection
@@ -2287,10 +2341,10 @@ defmodule Nx do
     data =
       match_types [left_type, right_type, output_type] do
         for i <- 0..total_elems-1, into: <<>> do
-          row = :binary.part(data!(a), div(i*n*left_size, 8), div(n*left_size, 8))
+          row = :binary.part(Nx.Util.to_bitstring(a), div(i*n*left_size, 8), div(n*left_size, 8))
           value =
             bin_reduce_all(
-              bin_zip_map_all(row, left_size, data!(b), right_size,
+              bin_zip_map_all(row, left_size, Nx.Util.to_bitstring(b), right_size,
                 fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
                   <<write!(read!(x, 0) * read!(y, 1), 2)>>
                 end
@@ -2320,11 +2374,11 @@ defmodule Nx do
     data =
       match_types [left_type, right_type, output_type] do
         for i <- 0..m - 1, into: <<>> do
-          row = :binary.part(data!(a), div(i * n * left_size, 8), div(n * left_size, 8))
+          row = :binary.part(Nx.Util.to_bitstring(a), div(i * n * left_size, 8), div(n * left_size, 8))
           for j <- 0..k - 1, into: <<>> do
             col =
               for z <- 0..n - 1, into: <<>> do
-                :binary.part(data!(b), z * k * div(right_size, 8) + j * div(right_size, 8), div(right_size, 8))
+                :binary.part(Nx.Util.to_bitstring(b), z * k * div(right_size, 8) + j * div(right_size, 8), div(right_size, 8))
               end
             value =
               bin_reduce_all(
@@ -2345,14 +2399,17 @@ defmodule Nx do
     %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
   end
 
-  ## Device helpers
+  ## Shape
 
-  defp data!(%T{data: {Nx.BitStringDevice, data}}), do: data
+  defp shape!(shape) when is_tuple(shape), do: shape
+  defp shape!(%T{shape: shape}), do: shape
+  defp shape!(number) when is_number(number), do: {}
 
-  defp data!(%T{data: {device, _data}}) do
+  defp shape!(other) do
     raise ArgumentError,
-          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
-            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
+          "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
+            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
+            "Got: #{inspect(other)}"
   end
 
   ## Broadcast helpers

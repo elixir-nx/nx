@@ -506,6 +506,24 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "reshape" do
+    defn reshape_with_shape(t), do: Nx.reshape(t, {2, 2})
+
+    test "reshapes with shape" do
+      assert reshape_with_shape(Nx.tensor([1, 2, 3, 4])) == Nx.tensor([[1, 2], [3, 4]])
+    end
+
+    defn reshape_with_tensor(t, shape), do: Nx.reshape(t, shape)
+
+    test "reshapes with tensor" do
+      assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0, 0], [0, 0]])) ==
+               Nx.tensor([[1, 2], [3, 4]])
+
+      assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0], [0], [0], [0]])) ==
+               Nx.tensor([[1], [2], [3], [4]])
+    end
+  end
+
   describe "random uniform" do
     defn random_uniform_fixed, do: Nx.random_uniform({30, 20})
 

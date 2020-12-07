@@ -214,14 +214,6 @@ defmodule Exla.OpTest do
     assert %Op{} = Op.add(a, b)
   end
 
-  test "div/3 successfully creates div op without broadcast dimensions" do
-    builder = Builder.new("test")
-    shape = Shape.make_shape({:s, 32}, {1, 1})
-    a = Op.parameter(builder, 0, shape, "a")
-    b = Op.parameter(builder, 1, shape, "b")
-    assert %Op{} = Op.divide(a, b)
-  end
-
   test "dot/2 successfully creates dot op" do
     builder = Builder.new("test")
     shape = Shape.make_shape({:s, 32}, {1, 1})

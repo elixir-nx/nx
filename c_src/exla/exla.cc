@@ -594,6 +594,21 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<exla::int64> new_shape;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get_tuple(env, argv[1], new_shape)) return exla::error(env, "Unable to get dimensions.");
+
+  xla::XlaOp op = xla::Reshape(*operand, new_shape);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(argc != 2) {
     return exla::error(env, "Bad argument count.");
@@ -902,6 +917,7 @@ static ErlNifFunc exla_funcs[] = {
   /******** Other XLA Ops *******/
   {"dot", 3, dot},
   {"reduce", 4, reduce},
+  {"reshape", 2, reshape},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
   /******* Compilation, Execution, Etc. ******/

@@ -78,7 +78,7 @@ defmodule Nx.TensorTest do
     test "infinity and nan for bf16" do
       bin = <<0xFF80::16-native, 0x7F80::16-native, 0xFFC1::16-native, 0xFF81::16-native>>
 
-      assert inspect(Nx.Util.from_bitstring(bin, {:bf, 16}, {4})) == """
+      assert inspect(Nx.Util.from_bitstring(bin, {:bf, 16})) == """
              #Nx.Tensor<
                bf16[4]
                [-Inf, Inf, NaN, NaN]
@@ -94,7 +94,7 @@ defmodule Nx.TensorTest do
       # Assert that none of them are indeed valid
       assert for(<<x::float-32-native <- bin>>, do: x) == []
 
-      assert inspect(Nx.Util.from_bitstring(bin, {:f, 32}, {4})) == """
+      assert inspect(Nx.Util.from_bitstring(bin, {:f, 32})) == """
              #Nx.Tensor<
                f32[4]
                [-Inf, Inf, NaN, NaN]
@@ -110,7 +110,7 @@ defmodule Nx.TensorTest do
       # Assert that none of them are indeed valid
       assert for(<<x::float-64-native <- bin>>, do: x) == []
 
-      assert inspect(Nx.Util.from_bitstring(bin, {:f, 64}, {4})) == """
+      assert inspect(Nx.Util.from_bitstring(bin, {:f, 64})) == """
              #Nx.Tensor<
                f64[4]
                [-Inf, Inf, NaN, NaN]

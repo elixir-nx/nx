@@ -24,48 +24,41 @@ defmodule Nx.Util do
   end
 
   @doc """
-  Creates a tensor from a `bitstring`, its `type`, and
-  its `shape`.
+  Creates a one-dimensional tensor from a `bitstring` with the given `type`.
 
-  If the bitstring size does not match its type and shape,
-  an error is raised.
+  If the bitstring size does not match its type, an error is raised.
 
   ## Examples
 
-      iex> Nx.Util.from_bitstring(<<1, 2, 3, 4>>, {:s, 8}, {4})
+      iex> Nx.Util.from_bitstring(<<1, 2, 3, 4>>, {:s, 8})
       #Nx.Tensor<
         s8[4]
         [1, 2, 3, 4]
       >
 
-      iex> Nx.Util.from_bitstring(<<1, 2, 3, 4>>, {:s, 8}, {2, 2})
+      iex> Nx.Util.from_bitstring(<<12.3::float-64-native>>, {:f, 64})
       #Nx.Tensor<
-        s8[2][2]
-        [
-          [1, 2],
-          [3, 4]
-        ]
+        f64[1]
+        [12.3]
       >
 
-      iex> Nx.Util.from_bitstring(<<12.3::float-64-native>>, {:f, 64}, {})
-      Nx.tensor(12.3)
-
-      iex> Nx.Util.from_bitstring(<<1, 2, 3, 4>>, {:f, 64}, {4})
-      ** (ArgumentError) bitstring does not match the given type and dimensions
+      iex> Nx.Util.from_bitstring(<<1, 2, 3, 4>>, {:f, 64})
+      ** (ArgumentError) bitstring does not match the given size
 
   """
-  def from_bitstring(bitstring, type, shape) when is_bitstring(bitstring) and is_tuple(shape) do
+  def from_bitstring(bitstring, type) when is_bitstring(bitstring) do
     {_, size} = Nx.Type.validate!(type)
+    dim = div(bit_size(bitstring), size)
 
     if bitstring == "" do
       raise ArgumentError, "cannot build an empty tensor"
     end
 
-    if bit_size(bitstring) != size * tuple_product(shape) do
-      raise ArgumentError, "bitstring does not match the given type and dimensions"
+    if rem(bit_size(bitstring), size) != 0 do
+      raise ArgumentError, "bitstring does not match the given size"
     end
 
-    %T{data: {Nx.BitStringDevice, bitstring}, type: type, shape: shape}
+    %T{data: {Nx.BitStringDevice, bitstring}, type: type, shape: {dim}}
   end
 
   @doc """

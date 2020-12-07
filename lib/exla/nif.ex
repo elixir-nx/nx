@@ -160,6 +160,9 @@ defmodule Exla.NIF do
   def reduce(_operand, _init_value, _computation, _dimensions),
     do: nif_error(__ENV__.function)
 
+  def reshape(_operand, _dimensions),
+    do: nif_error(__ENV__.function)
+
   def get_shape(_builder, _operand),
     do: nif_error(__ENV__.function)
 

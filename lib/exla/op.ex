@@ -49,7 +49,7 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  ## Reflection
+  ## Shape
 
   @doc """
   Gets the shape of an operator.
@@ -57,6 +57,14 @@ defmodule Exla.Op do
   def get_shape(%Op{builder: builder, ref: operand}) do
     ref = Exla.NIF.get_shape(builder, operand) |> unwrap!()
     Shape.get_shape_info(ref)
+  end
+
+  @doc """
+  Reshapes the tensor.
+  """
+  def reshape(%Op{ref: ref} = op, shape) when is_tuple(shape) do
+    ref = Exla.NIF.reshape(ref, shape) |> unwrap!()
+    %{op | ref: ref}
   end
 
   ## Element-wise binary ops
@@ -73,7 +81,7 @@ defmodule Exla.Op do
           %Op{builder: builder, ref: left},
           %Op{builder: builder, ref: right},
           broadcast_dims \\ {}
-        ) do
+        ) when is_tuple(broadcast_dims) do
       ref = Exla.NIF.unquote(fun)(left, right, broadcast_dims) |> unwrap!()
       %Op{builder: builder, ref: ref}
     end
@@ -91,17 +99,17 @@ defmodule Exla.Op do
     @doc """
     Unary #{fun}.
     """
-    def unquote(fun)(%Op{builder: builder, ref: op}) do
-      ref = Exla.NIF.unquote(fun)(op) |> unwrap!()
-      %Op{builder: builder, ref: ref}
+    def unquote(fun)(%Op{ref: ref} = op) do
+      ref = Exla.NIF.unquote(fun)(ref) |> unwrap!()
+      %{op | ref: ref}
     end
   end
 
   ## Ops
 
-  def get_tuple_element(%Op{builder: builder, ref: operand}, index) when is_integer(index) do
+  def get_tuple_element(%Op{ref: operand} = op, index) when is_integer(index) do
     ref = Exla.NIF.get_tuple_element(operand, index) |> unwrap!()
-    %Op{builder: builder, ref: ref}
+    %{op | ref: ref}
   end
 
   def conditional(

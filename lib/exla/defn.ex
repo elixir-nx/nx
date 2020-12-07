@@ -179,7 +179,8 @@ defmodule Exla.Defn do
   ## Random
 
   def nx_random_uniform(builder, shape, min, max, opts)
-      when is_number(min) and is_number(max) and is_tuple(shape) do
+      when is_number(min) and is_number(max) do
+    shape = to_shape(shape)
     type = opts[:type] || Nx.Type.infer(max - min)
 
     if match?({int, size} when int in [:s, :u] and size < 32, type) do
@@ -194,12 +195,9 @@ defmodule Exla.Defn do
     Exla.Op.rng_uniform(min, max, shape)
   end
 
-  def nx_random_uniform(builder, tensor, min, max, opts) do
-    nx_random_uniform(builder, nx_shape(builder, tensor), min, max, opts)
-  end
-
   def nx_random_normal(builder, shape, mu, sigma, opts)
-      when is_float(mu) and is_float(sigma) and is_tuple(shape) do
+      when is_float(mu) and is_float(sigma) do
+    shape = to_shape(shape)
     type = opts[:type] || {:f, 64}
     {mu, _} = to_typed_operator(builder, mu, type)
     {sigma, _} = to_typed_operator(builder, sigma, type)
@@ -207,32 +205,34 @@ defmodule Exla.Defn do
     Exla.Op.rng_normal(mu, sigma, shape)
   end
 
-  def nx_random_normal(builder, tensor, min, max, opts) do
-    nx_random_normal(builder, nx_shape(builder, tensor), min, max, opts)
-  end
-
   ## Reflection
 
-  def nx_type(builder, op) do
-    Exla.Op.get_shape(to_operator(builder, op)).dtype
-  end
+  def nx_shape(_builder, op) when is_number(op), do: {}
+  def nx_shape(_builder, op), do: Exla.Op.get_shape(op).dims
 
-  def nx_shape(builder, op) do
-    Exla.Op.get_shape(to_operator(builder, op)).dims
-  end
+  def nx_rank(builder, op), do: tuple_size(nx_shape(builder, op))
+  def nx_size(builder, op), do: tuple_product(nx_shape(builder, op))
+  def nx_type(builder, op), do: Exla.Op.get_shape(to_operator(builder, op)).dtype
 
-  def nx_rank(builder, op) do
-    tuple_size(nx_shape(builder, op))
-  end
+  ## Shape
 
-  def nx_size(builder, op) do
-    tuple_product(nx_shape(builder, op))
+  def nx_reshape(_builder, tensor, shape) do
+    Exla.Op.reshape(tensor, to_shape(shape))
   end
 
   ## Aggregators
 
   def nx_sum(builder, op, opts) do
     Exla.Lib.sum(builder, to_operator(builder, op), opts)
+  end
+
+  ## Other funs
+
+  def nx_dot(builder, left, right) do
+    type = binary_op_type(left, right)
+    {left, _} = to_typed_operator(builder, left, type)
+    {right, _} = to_typed_operator(builder, right, type)
+    Exla.Op.dot(left, right)
   end
 
   ## Conversion functions
@@ -247,13 +247,6 @@ defmodule Exla.Defn do
   end
 
   defp to_block_result(builder, operator), do: to_operator(builder, operator)
-
-  def nx_dot(builder, left, right) do
-    type = binary_op_type(left, right)
-    {left, _} = to_typed_operator(builder, left, type)
-    {right, _} = to_typed_operator(builder, right, type)
-    Exla.Op.dot(left, right)
-  end
 
   defp to_operator(_builder, %Exla.Op{} = op), do: op
   defp to_operator(builder, constant) when is_number(constant), do: to_constant(builder, constant)
@@ -294,6 +287,12 @@ defmodule Exla.Defn do
     raise ArgumentError, "expected a tensor, got: #{other}"
   end
 
+  defp to_constant(builder, int) when is_integer(int),
+    do: Exla.Op.constant_r0(builder, int, {:s, 64})
+
+  defp to_constant(builder, float) when is_float(float),
+    do: Exla.Op.constant_r0(builder, float, {:f, 64})
+
   ## Types
 
   defp binary_op_type(left, right) when is_number(left) and is_number(right),
@@ -317,15 +316,10 @@ defmodule Exla.Defn do
             "got: #{inspect(type)}"
   end
 
-  ## Constants
-
-  defp to_constant(builder, int) when is_integer(int),
-    do: Exla.Op.constant_r0(builder, int, {:s, 64})
-
-  defp to_constant(builder, float) when is_float(float),
-    do: Exla.Op.constant_r0(builder, float, {:f, 64})
-
   ## Dimensions
+
+  defp to_shape(tuple) when is_tuple(tuple), do: tuple
+  defp to_shape(tensor), do: nx_shape(:builder, tensor)
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
