@@ -9,7 +9,114 @@ defmodule NxTest do
     fun.(b, a)
   end
 
-  describe "broadcast" do
+  describe "unary broadcast" do
+    test "{2, 1} x {1, 2}" do
+      t = Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+
+      assert Nx.Util.to_bitstring(t) ==
+               <<1::64-native, 1::64-native, 2::64-native, 2::64-native>>
+
+      assert Nx.shape(t) == {2, 2}
+    end
+
+    test "{2} + {2, 2}" do
+      t = Nx.broadcast(Nx.tensor([1, 2]), Nx.tensor([[1, 2], [3, 4]]))
+
+      assert Nx.Util.to_bitstring(t) ==
+               <<1::64-native, 2::64-native, 1::64-native, 2::64-native>>
+
+      assert Nx.shape(t) == {2, 2}
+    end
+
+    test "{2, 1, 2} + {1, 2, 1}" do
+      a = Nx.tensor([[[1, 2]], [[3, 4]]])
+      assert Nx.shape(a) == {2, 1, 2}
+
+      b = Nx.tensor([[[10], [20]]])
+      assert Nx.shape(b) == {1, 2, 1}
+
+      t = Nx.broadcast(a, b)
+      assert Nx.shape(t) == {2, 2, 2}
+
+      assert Nx.Util.to_bitstring(t) ==
+               <<1::64-native, 2::64-native, 1::64-native, 2::64-native, 3::64-native,
+                 4::64-native, 3::64-native, 4::64-native>>
+    end
+
+    test "{4, 1, 3} + {1, 3, 1}" do
+      a = Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]])
+      assert Nx.shape(a) == {4, 1, 3}
+
+      b = Nx.tensor([[[100], [200], [300]]])
+      assert Nx.shape(b) == {1, 3, 1}
+
+      t = Nx.broadcast(a, b)
+      assert Nx.shape(t) == {4, 3, 3}
+
+      assert Nx.Util.to_bitstring(t) ==
+               <<01::64-native, 02::64-native, 03::64-native, 01::64-native, 02::64-native,
+                 03::64-native, 01::64-native, 02::64-native, 03::64-native, 04::64-native,
+                 05::64-native, 06::64-native, 04::64-native, 05::64-native, 06::64-native,
+                 04::64-native, 05::64-native, 06::64-native, 07::64-native, 08::64-native,
+                 09::64-native, 07::64-native, 08::64-native, 09::64-native, 07::64-native,
+                 08::64-native, 09::64-native, 10::64-native, 11::64-native, 12::64-native,
+                 10::64-native, 11::64-native, 12::64-native, 10::64-native, 11::64-native,
+                 12::64-native>>
+    end
+
+    test "{2, 1, 2} + {1, 2, 2, 1}" do
+      a = Nx.tensor([[[1, 2]], [[3, 4]]])
+      assert Nx.shape(a) == {2, 1, 2}
+
+      b = Nx.tensor([[[[10], [20]], [[30], [40]]]])
+      assert Nx.shape(b) == {1, 2, 2, 1}
+
+      t = Nx.broadcast(a, b)
+      assert Nx.shape(t) == {1, 2, 2, 2}
+
+      assert Nx.Util.to_bitstring(t) ==
+               <<1::64-native, 2::64-native, 1::64-native, 2::64-native, 3::64-native,
+                 4::64-native, 3::64-native, 4::64-native>>
+    end
+
+    test "{2, 1, 1, 2} + {1, 2, 2, 1}" do
+      a = Nx.tensor([[[[1, 2]]], [[[3, 4]]]])
+      assert Nx.shape(a) == {2, 1, 1, 2}
+
+      b = Nx.tensor([[[[10], [20]], [[30], [40]]]])
+      assert Nx.shape(b) == {1, 2, 2, 1}
+
+      t = Nx.broadcast(a, b)
+      assert Nx.shape(t) == {2, 2, 2, 2}
+
+      assert Nx.Util.to_bitstring(t) ==
+               <<1::64-native, 2::64-native, 1::64-native, 2::64-native, 1::64-native,
+                 2::64-native, 1::64-native, 2::64-native, 3::64-native, 4::64-native,
+                 3::64-native, 4::64-native, 3::64-native, 4::64-native, 3::64-native,
+                 4::64-native>>
+    end
+
+    test "{1, 2, 2} + {2, 1, 2}" do
+      a = Nx.tensor([[[1, 2]], [[3, 4]]])
+      b = Nx.tensor([[[10], [20]], [[30], [40]]])
+
+      t = Nx.broadcast(a, b)
+
+      assert Nx.Util.to_bitstring(t) ==
+               <<1::64-native, 2::64-native, 1::64-native, 2::64-native, 3::64-native,
+                 4::64-native, 3::64-native, 4::64-native>>
+
+      assert Nx.shape(t) == {2, 2, 2}
+    end
+
+    test "raises when it cannot broadcast" do
+      a = Nx.tensor([[1, 2], [3, 4]])
+      b = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      assert_raise ArgumentError, ~r"cannot broadcast", fn -> Nx.broadcast(a, b) end
+    end
+  end
+
+  describe "binary broadcast" do
     test "{2, 1} + {1, 2}" do
       commute(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]), fn a, b ->
         t = Nx.add(a, b)

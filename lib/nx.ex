@@ -242,7 +242,7 @@ defmodule Nx do
      acc |> Enum.reverse() |> :erlang.list_to_bitstring()}
   end
 
-  defp flatten(other, type), do: {{}, scalar_to_binary(other, type)}
+  defp flatten(other, type), do: {{}, scalar_to_bin(other, type)}
 
   defp flatten_list([], _type, dimensions, acc) do
     {[0 | dimensions], acc}
@@ -270,7 +270,7 @@ defmodule Nx do
   end
 
   defp flatten_list(list, type, dimensions, acc) do
-    {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_binary(&1, type) | &2])}
+    {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_bin(&1, type) | &2])}
   end
 
   @doc """
@@ -386,7 +386,7 @@ defmodule Nx do
         {_, _} -> fn -> (max - min) * :rand.uniform() + min end
       end
 
-    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_binary(gen.(), type)
+    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_bin(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
@@ -459,7 +459,7 @@ defmodule Nx do
     data =
       for _ <- 1..tuple_product(shape),
           into: "",
-          do: scalar_to_binary(:rand.normal(mu, sigma), type)
+          do: scalar_to_bin(:rand.normal(mu, sigma), type)
 
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
@@ -531,6 +531,129 @@ defmodule Nx do
 
     %{t | shape: new_shape}
   end
+
+  @doc """
+  Broadcasts the tensor to the given shape.
+
+  The new shape is either a tuple or a tensor which we will
+  retrieve the current shape from. The broadcast shape must
+  be of equal or higher rank than the current shape. The
+  matching dimensions of the broadcast shape must be either
+  one or of the same size as of the current tensor.
+
+  Broadcasting copies the data in memory to match the new
+  dimensions.
+
+  ## Examples
+
+      iex> Nx.broadcast(1, {1, 2, 3})
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [
+            [1, 1, 1],
+            [1, 1, 1]
+          ]
+        ]
+      >
+
+      iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 1],
+          [2, 2]
+        ]
+      >
+
+      iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 1],
+          [2, 2]
+        ]
+      >
+
+      iex> Nx.broadcast(Nx.tensor([[1, 2]]), Nx.tensor([[10, 20], [30, 40]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [1, 2]
+        ]
+      >
+
+  """
+  def broadcast(tensor, new_shape)
+
+  def broadcast(number, new_shape) when is_number(number) do
+    new_shape = shape!(new_shape)
+    t = tensor(number)
+    data = :binary.copy(Nx.Util.to_bitstring(t), tuple_product(new_shape))
+    %{t | data: {Nx.BitStringDevice, data}, shape: new_shape}
+  end
+
+  def broadcast(%T{shape: shape} = t, shape), do: t
+
+  def broadcast(%T{shape: old_shape, type: {_, size}} = t, new_shape) when is_tuple(new_shape) do
+    old_rank = tuple_size(old_shape)
+    new_rank = tuple_size(new_shape)
+    rank = new_rank
+
+    if old_rank > new_rank do
+      raise ArgumentError,
+            "cannot broadcast from #{inspect(old_shape)} to #{inspect(new_shape)} because it has a lower rank"
+    end
+
+    old_lower = old_shape |> shape_to_lower_ranked_list(old_rank, rank)
+    new_lower = new_shape |> shape_to_lower_ranked_list(new_rank, rank)
+
+    case unary_broadcast_shape(old_lower, new_lower, []) do
+      {:ok, new_higher} ->
+        chunk_size = size * tuple_product(old_shape)
+        old_higher = Enum.reverse(old_lower)
+        data = unary_broadcast(old_higher, new_higher, Nx.Util.to_bitstring(t), chunk_size)
+        data = IO.iodata_to_binary(data)
+        %{t | data: {Nx.BitStringDevice, data}, shape: List.to_tuple(new_higher)}
+
+      :error ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
+                "to #{inspect(new_shape)}"
+    end
+  end
+
+  def broadcast(%T{} = t, new_shape), do: broadcast(t, shape!(new_shape))
+
+  defp unary_broadcast_shape([odim | odims], [ndim | ndims], acc)
+       when ndim == 1 or ndim == odim,
+       do: unary_broadcast_shape(odims, ndims, [odim | acc])
+
+  defp unary_broadcast_shape([1 | odims], [ndim | ndims], acc),
+    do: unary_broadcast_shape(odims, ndims, [ndim | acc])
+
+  defp unary_broadcast_shape([], [], acc),
+    do: {:ok, acc}
+
+  defp unary_broadcast_shape(_, _, _),
+    do: :error
+
+  defp unary_broadcast([dim | odims], [dim | ndims], data, chunk_size) do
+    chunk_size = div(chunk_size, dim)
+
+    for <<chunk::size(chunk_size)-bitstring <- data>> do
+      unary_broadcast(odims, ndims, chunk, chunk_size)
+    end
+  end
+
+  defp unary_broadcast([1 | odims], [ndim | ndims], data, chunk_size) do
+    for _ <- 1..ndim do
+      unary_broadcast(odims, ndims, data, chunk_size)
+    end
+  end
+
+  defp unary_broadcast([], [], data, _chunk_size), do: data
 
   ## Reflection
 
@@ -681,7 +804,7 @@ defmodule Nx do
     defp unquote(name)(left, right, fun) when is_number(left) and is_number(right) do
       output_type = if is_float(left) or is_float(right), do: {:f, 64}, else: {:s, 64}
       output_type = unquote(cast)
-      data = scalar_to_binary(fun.(output_type, left, right), output_type)
+      data = scalar_to_bin(fun.(output_type, left, right), output_type)
       %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: {}}
     end
 
@@ -721,7 +844,7 @@ defmodule Nx do
 
       {data, shape} =
         match_types [left_type, right_type, output_type] do
-          broadcast(left, right, fn left_dimension, right_dimension ->
+          binary_broadcast(left, right, fn left_dimension, right_dimension ->
             for <<match!(left_seg, 0) <- left_dimension>>,
                 <<match!(right_seg, 1) <- right_dimension>>,
                 into: <<>> do
@@ -2321,9 +2444,15 @@ defmodule Nx do
     {_, right_size} = right_type
 
     last_dim = elem(s1, tuple_size(s1) - 1)
-    unless last_dim == n, do: raise ArgumentError, "dot product expects shapes to be compatible," <>
-                                                   " last dimension of a (#{last_dim}) does not equal" <>
-                                                   " last dimension of b (#{n})"
+
+    unless last_dim == n,
+      do:
+        raise(
+          ArgumentError,
+          "dot product expects shapes to be compatible," <>
+            " last dimension of a (#{last_dim}) does not equal" <>
+            " last dimension of b (#{n})"
+        )
 
     total_elems = div(tuple_product(s1), last_dim)
 
@@ -2340,15 +2469,24 @@ defmodule Nx do
 
     data =
       match_types [left_type, right_type, output_type] do
-        for i <- 0..total_elems-1, into: <<>> do
-          row = :binary.part(Nx.Util.to_bitstring(a), div(i*n*left_size, 8), div(n*left_size, 8))
+        for i <- 0..(total_elems - 1), into: <<>> do
+          row =
+            :binary.part(
+              Nx.Util.to_bitstring(a),
+              div(i * n * left_size, 8),
+              div(n * left_size, 8)
+            )
+
           value =
-            bin_reduce_all(
-              bin_zip_map_all(row, left_size, Nx.Util.to_bitstring(b), right_size,
-                fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
-                  <<write!(read!(x, 0) * read!(y, 1), 2)>>
-                end
-              ) |> IO.iodata_to_binary(), 0,
+            bin_reduce(
+              bin_zip_map(row, left_size, Nx.Util.to_bitstring(b), right_size, fn <<match!(x, 0),
+                                                                                    _::bitstring>>,
+                                                                                  <<match!(y, 1),
+                                                                                    _::bitstring>> ->
+                <<write!(read!(x, 0) * read!(y, 1), 2)>>
+              end)
+              |> IO.iodata_to_binary(),
+              0,
               fn <<match!(var, 0), rest::bitstring>>, acc ->
                 {read!(var, 0) + acc, rest}
               end
@@ -2373,24 +2511,37 @@ defmodule Nx do
 
     data =
       match_types [left_type, right_type, output_type] do
-        for i <- 0..m - 1, into: <<>> do
-          row = :binary.part(Nx.Util.to_bitstring(a), div(i * n * left_size, 8), div(n * left_size, 8))
-          for j <- 0..k - 1, into: <<>> do
+        for i <- 0..(m - 1), into: <<>> do
+          row =
+            :binary.part(
+              Nx.Util.to_bitstring(a),
+              div(i * n * left_size, 8),
+              div(n * left_size, 8)
+            )
+
+          for j <- 0..(k - 1), into: <<>> do
             col =
-              for z <- 0..n - 1, into: <<>> do
-                :binary.part(Nx.Util.to_bitstring(b), z * k * div(right_size, 8) + j * div(right_size, 8), div(right_size, 8))
+              for z <- 0..(n - 1), into: <<>> do
+                :binary.part(
+                  Nx.Util.to_bitstring(b),
+                  z * k * div(right_size, 8) + j * div(right_size, 8),
+                  div(right_size, 8)
+                )
               end
+
             value =
-              bin_reduce_all(
-                bin_zip_map_all(row, left_size, col, right_size,
-                  fn <<match!(x, 0), _::bitstring>>, <<match!(y, 1), _::bitstring>> ->
-                    <<write!(read!(x, 0) * read!(y, 1), 2)>>
-                  end
-                ) |> IO.iodata_to_binary(), 0,
+              bin_reduce(
+                bin_zip_map(row, left_size, col, right_size, fn <<match!(x, 0), _::bitstring>>,
+                                                                <<match!(y, 1), _::bitstring>> ->
+                  <<write!(read!(x, 0) * read!(y, 1), 2)>>
+                end)
+                |> IO.iodata_to_binary(),
+                0,
                 fn <<match!(var, 0), rest::bitstring>>, acc ->
                   {read!(var, 0) + acc, rest}
                 end
               )
+
             <<write!(value, 0)>>
           end
         end
@@ -2414,16 +2565,33 @@ defmodule Nx do
 
   ## Broadcast helpers
 
-  defp broadcast(
+  defp shape_to_lower_ranked_list(_tuple, 0, 0),
+    do: []
+
+  defp shape_to_lower_ranked_list(tuple, 0, rank),
+    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
+
+  defp shape_to_lower_ranked_list(tuple, size, rank),
+    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
+
+  defp binary_broadcast(
          %T{type: {_, left_size}, shape: shape} = left,
          %T{type: {_, right_size}, shape: shape} = right,
          fun
        ) do
-    data = bin_zip_map_all(Nx.Util.to_bitstring(left), left_size, Nx.Util.to_bitstring(right), right_size, fun)
+    data =
+      bin_zip_map(
+        Nx.Util.to_bitstring(left),
+        left_size,
+        Nx.Util.to_bitstring(right),
+        right_size,
+        fun
+      )
+
     {IO.iodata_to_binary(data), shape}
   end
 
-  defp broadcast(
+  defp binary_broadcast(
          %T{type: {_, left_size}, shape: left_shape} = left,
          %T{type: {_, right_size}, shape: right_shape} = right,
          fun
@@ -2431,8 +2599,8 @@ defmodule Nx do
     left_rank = tuple_size(left_shape)
     right_rank = tuple_size(right_shape)
     rank = :erlang.max(left_rank, right_rank)
-    left_ordered = shape_to_ranked_ordered_list(left_shape, left_rank, rank)
-    right_ordered = shape_to_ranked_ordered_list(right_shape, right_rank, rank)
+    left_ordered = shape_to_lower_ranked_list(left_shape, left_rank, rank)
+    right_ordered = shape_to_lower_ranked_list(right_shape, right_rank, rank)
 
     case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
       {chunks, shape} ->
@@ -2458,18 +2626,9 @@ defmodule Nx do
 
   defp broadcast_recur(left_data, right_data, [{:zip, left_chunk, right_chunk} | chunks]) do
     left_data
-    |> bin_zip_map_all(left_chunk, right_data, right_chunk, &broadcast_recur(&1, &2, chunks))
+    |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur(&1, &2, chunks))
     |> IO.iodata_to_binary()
   end
-
-  defp shape_to_ranked_ordered_list(_tuple, 0, 0),
-    do: []
-
-  defp shape_to_ranked_ordered_list(tuple, 0, rank),
-    do: [1 | shape_to_ranked_ordered_list(tuple, 0, rank - 1)]
-
-  defp shape_to_ranked_ordered_list(tuple, size, rank),
-    do: [:erlang.element(size, tuple) | shape_to_ranked_ordered_list(tuple, size - 1, rank - 1)]
 
   defp broadcast_chunks([], [], _, _, chunks, shape) do
     {chunks, List.to_tuple(shape)}
@@ -2526,30 +2685,30 @@ defmodule Nx do
 
   ## Binary helpers
 
-  defp scalar_to_binary(value, type) do
+  defp scalar_to_bin(value, type) do
     match_types([type], do: <<write!(value, 0)>>)
   end
 
-  defp bin_zip_map_all(<<>>, _left_size, <<>>, _right_size, _fun), do: []
+  defp bin_zip_map(<<>>, _left_size, <<>>, _right_size, _fun), do: []
 
-  defp bin_zip_map_all(left_data, left_size, right_data, right_size, fun) do
+  defp bin_zip_map(left_data, left_size, right_data, right_size, fun) do
     <<left_head::bitstring-size(left_size), left_rest::bitstring>> = left_data
     <<right_head::bitstring-size(right_size), right_rest::bitstring>> = right_data
 
     [
       fun.(left_head, right_head)
-      | bin_zip_map_all(left_rest, left_size, right_rest, right_size, fun)
+      | bin_zip_map(left_rest, left_size, right_rest, right_size, fun)
     ]
   end
 
-  @compile {:inline, bin_reduce_all: 3}
+  @compile {:inline, bin_reduce: 3}
 
-  defp bin_reduce_all(<<>>, acc, _fun) do
+  defp bin_reduce(<<>>, acc, _fun) do
     acc
   end
 
-  defp bin_reduce_all(binary, acc, fun) do
+  defp bin_reduce(binary, acc, fun) do
     {acc, rest} = fun.(binary, acc)
-    bin_reduce_all(rest, acc, fun)
+    bin_reduce(rest, acc, fun)
   end
 end
