@@ -658,6 +658,22 @@ ERL_NIF_TERM convert_element_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM transpose(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 2) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<exla::int64> permutation_dims;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get_list(env, argv[1], permutation_dims)) return exla::error(env, "Unable to get permutation dimensions.");
+
+  xla::XlaOp op = xla::Transpose(*operand, permutation_dims);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 /************************ xla::ClientLibrary Functions ***************************/
 ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   int num_replicas, intra_op_parallelism_threads;
@@ -938,6 +954,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reshape", 2, reshape},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
+  {"transpose", 2, transpose},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 6, compile},

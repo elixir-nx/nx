@@ -242,6 +242,12 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def transpose(%Op{builder: builder, ref: operand}) do
+    permutation = [1, 0]
+    ref = Exla.NIF.transpose(operand, permutation) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))

@@ -2385,6 +2385,26 @@ defmodule Nx do
     Nx.Util.reduce(tensor, 0, opts, &+/2)
   end
 
+  @doc """
+  Returns the indices of the maximum values along a given axis.
+
+  iex> Nx.argmax(Nx.tensor([[1, 2, 3, 4]]), axis: 0)
+  4
+  """
+  def argmax(t = %T{type: type}, opts \\ []) do
+    match_types [type] do
+      <<match!(min_value_binary, 0)>> = Nx.Type.min_value_binary(type)
+      min_value = read!(min_value_binary, 0)
+      Nx.Util.reduce(t, {-1, min_value, 0}, opts,
+        fn x, {cur_max_i, y, cur_i} ->
+          if x > y,
+            do: {cur_i, x, cur_i+1},
+            else: {cur_max_i, y, cur_i+1}
+        end
+      )
+    end
+  end
+
   ## Matrix ops
 
   @doc """
@@ -2610,8 +2630,6 @@ defmodule Nx do
 
     %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
   end
-
-  ## Shape
 
   defp shape!(shape) when is_tuple(shape), do: shape
   defp shape!(%T{shape: shape}), do: shape
