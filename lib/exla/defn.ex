@@ -210,10 +210,19 @@ defmodule Exla.Defn do
     type = opts[:type] || {:s, 64}
 
     shape = Exla.Shape.make_shape(type, shape)
+
     if axis = opts[:axis] do
       Exla.Op.iota(builder, shape, axis)
     else
-      Exla.Op.reshape(Exla.Op.iota(builder, Exla.Shape.flatten(shape), 0), shape.dims)
+      total_elems =
+        shape.dims
+        |> Tuple.to_list()
+        |> Enum.reduce(1, &*/2)
+
+      Exla.Op.reshape(
+        Exla.Op.iota(builder, Exla.Shape.make_shape(type, {total_elems}), 0),
+        shape.dims
+      )
     end
   end
 

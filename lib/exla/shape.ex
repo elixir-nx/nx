@@ -51,15 +51,6 @@ defmodule Exla.Shape do
   """
   def dtype_to_charlist({type, size}), do: Atom.to_charlist(type) ++ Integer.to_charlist(size)
 
-  @doc """
-  Flattens the given shape to a single dimension.
-  """
-  def flatten(%Shape{dtype: type, dims: dims}) do
-    # TODO: Put in an Exla.Shared namespace?
-    new_dims = Nx.Shared.tuple_product(dims)
-    Exla.Shape.make_shape(type, {new_dims})
-  end
-
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end

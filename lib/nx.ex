@@ -557,8 +557,9 @@ defmodule Nx do
   def iota({}, opts), do: tensor(0, opts)
 
   def iota({n}, opts) do
-    values = for i <- 0..(n - 1), do: i
-    tensor(values, opts)
+    output_type = opts[:type] || {:s, 64}
+    data = for i <- 0..(n - 1), do: scalar_to_bin(i, output_type)
+    %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: {n}, type: output_type}
   end
 
   def iota(tensor_or_shape, opts) do
@@ -2513,16 +2514,17 @@ defmodule Nx do
   def argmax(number, opts) when is_number(number), do: tensor(0, opts)
 
   def argmax(t = %T{}, opts) do
-    {_, max_i} =
-      Nx.Util.reduce({t, Nx.iota(t, opts)}, {:first, -1}, opts, fn {x, i}, {max_x, max_i} ->
-        if x > max_x or max_x == :first do
-          {x, i}
+    {max_tensor, _accs} =
+      Nx.Util.zip_map_reduce([t, Nx.iota(t, opts)], {:first, -1}, opts, fn {x, i},
+                                                                           {cur_max_x, cur_max_i} ->
+        if x > cur_max_x or cur_max_x == :first do
+          {i, {x, i}}
         else
-          {max_x, max_i}
+          {cur_max_i, {cur_max_x, cur_max_i}}
         end
       end)
 
-    max_i
+    max_tensor
   end
 
   ## Matrix ops
