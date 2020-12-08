@@ -545,9 +545,10 @@ defmodule Nx do
 
   def iota(tensor_or_shape, opts) do
     shape = shape!(tensor_or_shape)
+    output_type = opts[:type] || {:s, 64}
 
     axis = opts[:axis] || tuple_size(shape) - 1
-    {dims_before, dims_after} =
+    {dims_before, [dims | dims_after]} =
       shape
       |> Tuple.to_list()
       |> Enum.split(axis)
@@ -555,7 +556,6 @@ defmodule Nx do
     # Number of repetitions of an index in memory
     repeat_blocks =
       dims_after
-      |> tl()
       |> Enum.reduce(1, &*/2)
 
     # Number of cycles of the counting pattern
@@ -565,15 +565,14 @@ defmodule Nx do
 
     dim = elem(shape, axis)
 
-    value =
-      for _ <- 1..cycles do
-        for i <- 0..dim - 1 do
-          for _ <- 1..repeat_blocks, do: i
-        end
-      end
+    data =
+      for _ <- 1..cycles,
+          i <- 0..dim - 1,
+          _ <- 1..repeat_blocks,
+          into: "",
+          do: scalar_to_bin(i, output_type)
 
-    t = tensor(value, opts)
-    reshape(t, shape)
+    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
   end
 
   ## Shape
