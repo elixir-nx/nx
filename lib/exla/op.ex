@@ -214,7 +214,7 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def iota(%Builder{ref: builder}, %Shape{ref: shape}, dim \\ 0) do
+  def iota(%Builder{ref: builder}, %Shape{ref: shape}, dim) do
     ref = Exla.NIF.iota(builder, shape, dim) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end

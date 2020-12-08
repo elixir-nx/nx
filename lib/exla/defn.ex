@@ -208,10 +208,13 @@ defmodule Exla.Defn do
   def nx_iota(builder, shape, opts \\ []) do
     shape = to_shape(shape)
     type = opts[:type] || {:s, 64}
-    axis = opts[:axis] || tuple_size(shape) - 1
 
     shape = Exla.Shape.make_shape(type, shape)
-    Exla.Op.iota(builder, shape, axis)
+    if axis = opts[:axis] do
+      Exla.Op.iota(builder, shape, axis)
+    else
+      Exla.Op.reshape(Exla.Op.iota(builder, Exla.Shape.flatten(shape), 0), shape.dims)
+    end
   end
 
   ## Reflection

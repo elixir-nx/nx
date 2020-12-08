@@ -468,8 +468,7 @@ defmodule Nx do
   Creates a tensor with the given shape which increments
   along the provided axis.
 
-  If no axis is provided, defaults to the last axis in the
-  given shape.
+  If no axis is provided, index counts up at each element.
 
   If a tensor or a number are given, the shape is taken from the tensor.
 
@@ -493,15 +492,15 @@ defmodule Nx do
         [
           [
             [0, 1, 2],
-            [0, 1, 2]
+            [3, 4, 5]
           ],
           [
-            [0, 1, 2],
-            [0, 1, 2]
+            [6, 7, 8],
+            [9, 10, 11]
           ],
           [
-            [0, 1, 2],
-            [0, 1, 2]
+            [12, 13, 14],
+            [15, 16, 17]
           ]
         ]
       >
@@ -566,31 +565,34 @@ defmodule Nx do
     shape = shape!(tensor_or_shape)
     output_type = opts[:type] || {:s, 64}
 
-    axis = opts[:axis] || tuple_size(shape) - 1
+    if axis = opts[:axis] do
+      {dims_before, [dim | dims_after]} =
+        shape
+        |> Tuple.to_list()
+        |> Enum.split(axis)
 
-    {dims_before, [dim | dims_after]} =
-      shape
-      |> Tuple.to_list()
-      |> Enum.split(axis)
+      # Number of repetitions of an index in memory
+      repeat_blocks =
+        dims_after
+        |> Enum.reduce(1, &*/2)
 
-    # Number of repetitions of an index in memory
-    repeat_blocks =
-      dims_after
-      |> Enum.reduce(1, &*/2)
+      # Number of cycles of the counting pattern
+      cycles =
+        dims_before
+        |> Enum.reduce(1, &*/2)
 
-    # Number of cycles of the counting pattern
-    cycles =
-      dims_before
-      |> Enum.reduce(1, &*/2)
+      data =
+        for _ <- 1..cycles,
+            i <- 0..(dim - 1),
+            _ <- 1..repeat_blocks,
+            into: "",
+            do: scalar_to_bin(i, output_type)
 
-    data =
-      for _ <- 1..cycles,
-          i <- 0..(dim - 1),
-          _ <- 1..repeat_blocks,
-          into: "",
-          do: scalar_to_bin(i, output_type)
-
-    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
+      %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
+    else
+      t = iota({tuple_product(shape)}, opts)
+      reshape(t, shape)
+    end
   end
 
   ## Shape
@@ -2510,14 +2512,9 @@ defmodule Nx do
 
   def argmax(number, opts) when is_number(number), do: tensor(0, opts)
 
-  def argmax(t = %T{shape: shape}, opts) do
-    indices =
-      if opts[:axis],
-        do: Nx.iota(t, opts),
-        else: reshape(Nx.iota({tuple_product(shape)}, opts), shape)
-
+  def argmax(t = %T{}, opts) do
     {_, max_i} =
-      Nx.Util.reduce({t, indices}, {:first, -1}, opts, fn {x, i}, {max_x, max_i} ->
+      Nx.Util.reduce({t, Nx.iota(t, opts)}, {:first, -1}, opts, fn {x, i}, {max_x, max_i} ->
         if x > max_x or max_x == :first do
           {x, i}
         else
