@@ -541,8 +541,8 @@ defmodule Nx do
   matching dimensions of the broadcast shape must be either
   one or of the same size as of the current tensor.
 
-  Broadcasting copies the data in memory to match the new
-  dimensions.
+  The default broadcasting implementation copies the data in
+  memory to match the new dimensions.
 
   ## Examples
 
@@ -658,6 +658,61 @@ defmodule Nx do
   end
 
   defp unary_broadcast([], [], data, _chunk_size), do: data
+
+  @doc """
+  Asserts the tensor has a given shape.
+
+  The new shape is either a tuple or a tensor which we will
+  retrieve the current shape from.
+
+  ## Examples
+
+      iex> Nx.assert_shape(1, {})
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> t = Nx.tensor([1.0, 2.0])
+      iex> Nx.assert_shape(t, t)
+      #Nx.Tensor<
+        f64[2]
+        [1.0, 2.0]
+      >
+
+      iex> Nx.assert_shape(Nx.tensor([1.0, 2.0]), {})
+      ** (ArgumentError) expected tensor with shape {} but tensor has shape {2}
+
+      iex> Nx.assert_shape(Nx.tensor([1.0, 2.0]), {}, "only scalars are supported by grad")
+      ** (ArgumentError) expected tensor with shape {} but tensor has shape {2} (only scalars are supported by grad)
+
+      iex> Nx.assert_shape(:omg, {})
+      ** (ArgumentError) expected tensor with shape {} but got :omg
+
+  """
+  def assert_shape(tensor, tensor_or_shape, message \\ nil)
+
+  def assert_shape(number, tensor_or_shape, message) when is_number(number) do
+    assert_shape(tensor(number), tensor_or_shape, message)
+  end
+
+  def assert_shape(%T{shape: shape} = t, tensor_or_shape, message) do
+    expected_shape = shape!(tensor_or_shape)
+
+    if expected_shape != shape do
+      raise ArgumentError,
+            "expected tensor with shape #{inspect(expected_shape)} but tensor has shape " <>
+              inspect(shape) <> if(message, do: " (#{message})", else: "")
+    end
+
+    t
+  end
+
+  def assert_shape(other, tensor_or_shape, message) do
+    raise ArgumentError,
+          "expected tensor with shape #{inspect(shape!(tensor_or_shape))} but got " <>
+            inspect(other) <> if(message, do: " (#{message})", else: "")
+  end
 
   ## Reflection
 

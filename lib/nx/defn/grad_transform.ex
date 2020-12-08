@@ -13,8 +13,7 @@ defmodule Nx.Defn.GradTransform do
             when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
                    is_atom(elem(var, 2))
 
-  # TODO: Handle tuples
-  # TODO: Add shape assertions
+  @hint "grad expects the numerical expression to return a scalar tensor"
 
   @impl true
   def __transform__(_env, version, meta, {vars, ast}, _opts) do
@@ -29,7 +28,8 @@ defmodule Nx.Defn.GradTransform do
 
     # Now compute the gradient
     grad = gradient_for(vars, meta, result_var, state)
-    {state.version, append_to_block(ast, [grad])}
+    assertion = nx_call(meta, :assert_shape, [result_var, {:{}, meta, []}, @hint])
+    {state.version, append_to_block(ast, [assertion, grad])}
   end
 
   defp gradient_for({left, right}, meta, result_var, state) do
@@ -157,6 +157,13 @@ defmodule Nx.Defn.GradTransform do
   end
 
   defp unfold_var(_not_a_var, exprs, _state), do: [0.0 | exprs]
+
+  @passthroughs [:reshape, :broadcast, :assert_shape]
+
+  defp unfold_grad({{:., _, [Nx, name]}, _meta, [x | _args]}, _y, exprs, state)
+       when name in @passthroughs do
+    unfold_var(x, exprs, state)
+  end
 
   # Addition rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)

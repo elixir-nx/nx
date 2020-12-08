@@ -325,7 +325,8 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp normalize(literal, state) when is_number(literal) or is_atom(literal) do
+  defp normalize(literal, state)
+       when is_number(literal) or is_atom(literal) or is_binary(literal) do
     {literal, state}
   end
 
@@ -344,6 +345,7 @@ defmodule Nx.Defn.Compiler do
   ## Normalize nx calls
 
   defp rewrite_nx_args(:sum, [arg]), do: [arg, []]
+  defp rewrite_nx_args(:assert_shape, [arg, shape]), do: [arg, shape, nil]
   defp rewrite_nx_args(:random_uniform, [arg]), do: [arg, 0.0, 1.0, []]
   defp rewrite_nx_args(:random_uniform, [arg, opts]), do: [arg, 0.0, 1.0, opts]
   defp rewrite_nx_args(:random_uniform, [arg, min, max]), do: [arg, min, max, []]

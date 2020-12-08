@@ -228,6 +228,26 @@ defmodule Exla.Defn do
 
   ## Shape
 
+  def nx_assert_shape(_builder, tensor, shape, message)
+      when is_number(tensor) or is_struct(tensor, Exla.Op) do
+    actual_shape = to_shape(tensor)
+    expected_shape = to_shape(shape)
+
+    if actual_shape != expected_shape do
+      raise ArgumentError,
+            "expected tensor with shape #{inspect(expected_shape)} but tensor has shape " <>
+              inspect(actual_shape) <> if(message, do: " (#{message})", else: "")
+    end
+
+    tensor
+  end
+
+  def nx_assert_shape(_builder, other, shape, message) do
+    raise ArgumentError,
+          "expected tensor with shape #{inspect(to_shape(shape))} but got " <>
+            inspect(other) <> if(message, do: " (#{message})", else: "")
+  end
+
   def nx_reshape(builder, tensor, shape) do
     Exla.Op.reshape(to_operator(builder, tensor), to_shape(shape))
   end

@@ -3,7 +3,7 @@ defmodule Nx.GradTest do
 
   import Nx.Defn
 
-  describe "simple"  do
+  describe "simple" do
     defn grad_itself(t), do: grad(t, t)
     defn grad_constant(t), do: grad(t, 1.0)
     defn grad_unrelated(t, a), do: grad(t, a)
@@ -87,13 +87,23 @@ defmodule Nx.GradTest do
   end
 
   describe "tensor constant" do
-    @two_per_two Nx.tensor([[1, 2], [3, 4]])
-    defn grad_tensor_constant(t), do: grad(t, @two_per_two)
-    defn grad_tensor_power_plus_constant(t), do: grad(t, Nx.power(t, 2) + @two_per_two)
+    @one_two_three Nx.tensor(123)
+    defn grad_tensor_constant(t), do: grad(t, @one_two_three)
+    defn grad_tensor_power_plus_constant(t), do: grad(t, Nx.power(t, 2) + @one_two_three)
 
     test "computes grad" do
       assert grad_tensor_constant(Nx.tensor(1.0)) == Nx.tensor(0.0)
       assert grad_tensor_power_plus_constant(Nx.tensor(1.0)) == Nx.tensor(2.0)
+    end
+  end
+
+  describe "assert_shape" do
+    defn grad_assert(t), do: grad(t, t)
+
+    test "raises on invalid return" do
+      assert_raise ArgumentError,
+                   ~r"expected tensor with shape \{\} but tensor has shape \{2\}",
+                   fn -> grad_assert(Nx.tensor([1, 2])) end
     end
   end
 end

@@ -530,6 +530,40 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "assert_shape" do
+    defn assert_shape_with_shape(t), do: Nx.assert_shape(t, {2, 2})
+
+    test "with shape" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+      assert assert_shape_with_shape(t) == t
+
+      assert_raise ArgumentError, "expected tensor with shape {2, 2} but tensor has shape {}", fn ->
+        assert_shape_with_shape(Nx.tensor(1))
+      end
+    end
+
+    defn assert_shape_with_tensor(t, shape), do: Nx.assert_shape(t, shape, "oops")
+
+    test "with tensor" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+      assert assert_shape_with_tensor(t, t) == t
+
+      assert_raise ArgumentError, "expected tensor with shape {} but tensor has shape {2, 2} (oops)", fn ->
+        assert_shape_with_tensor(t, Nx.tensor(1))
+      end
+    end
+
+    defn assert_shape_with_constant(shape), do: Nx.assert_shape(123, shape, "oops")
+
+    test "with constant" do
+      assert assert_shape_with_constant(Nx.tensor(1)) == Nx.tensor(123)
+
+      assert_raise ArgumentError, "expected tensor with shape {2} but tensor has shape {} (oops)", fn ->
+        assert_shape_with_constant(Nx.tensor([1, 2]))
+      end
+    end
+  end
+
   describe "broadcast" do
     defn broadcast_with_shape(t), do: Nx.broadcast(t, {2, 2})
 
