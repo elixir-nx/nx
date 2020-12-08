@@ -166,25 +166,31 @@ defmodule Nx.Util do
 
       iex> t1 = Nx.tensor([1, 2, 3])
       iex> t2 = Nx.tensor([4, 5, 6])
-      iex> Nx.Util.reduce({t1, t2}, {0, 0}, fn {x, y}, {acc1, acc2} -> {x + acc1, y + acc2} end)
-      {#Nx.Tensor<
-         s64
-         6
-      >, #Nx.Tensor<
+      iex> {t1, t2} = Nx.Util.reduce({t1, t2}, {0, 0}, fn {x, y}, {acc1, acc2} -> {x + acc1, y + acc2} end)
+      iex> t1
+      #Nx.Tensor<
+        s64
+        6
+      >
+      iex> t2
+      #Nx.Tensor<
         s64
         15
-      >}
+      >
 
       iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       iex> t2 = Nx.tensor([[7, 8, 9], [10, 11, 12]])
-      iex> Nx.Util.reduce({t1, t2}, {0, 0}, [axis: 1], fn {x, y}, {acc1, acc2} -> {x*y + acc1, y - x + acc2} end)
-      {#Nx.Tensor<
-         s64[2]
-         [50, 167]
-      >, #Nx.Tensor<
-         s64[2]
-         [18, 18]
-      >}
+      iex> {t1, t2} = Nx.Util.reduce({t1, t2}, {0, 0}, [axis: 1], fn {x, y}, {acc1, acc2} -> {x*y + acc1, y - x + acc2} end)
+      iex> t1
+      #Nx.Tensor<
+        s64[2]
+        [50, 167]
+      >
+      iex> t2
+      #Nx.Tensor<
+        s64[2]
+        [18, 18]
+      >
 
   ### Errors
 
