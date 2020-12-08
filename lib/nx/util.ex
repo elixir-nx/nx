@@ -239,17 +239,11 @@ defmodule Nx.Util do
 
     zipped_data =
       for {t1, t2} <- zipped_binaries do
+        {val1, val2} = bin_reduce_many(t1, t2, type, accs, fun)
         match_types [type] do
-          {val1, val2} =
-            for <<match!(x, 0) <- t1>>,
-                <<match!(y, 0) <- t2>>,
-                  reduce: accs,
-                  do: (accs -> fun.({read!(x, 0), read!(y, 0)}, accs))
           {<<write!(val1, 0)>>, <<write!(val2, 0)>>}
         end
       end
-
-    IO.inspect zipped_data
 
     zipped_data
     |> Enum.unzip()
@@ -279,6 +273,19 @@ defmodule Nx.Util do
       end)
 
     {List.flatten(data), new_shape}
+  end
+
+  defp bin_reduce_many(<<>>, <<>>, _type, accs, _fun), do: accs
+
+  defp bin_reduce_many(left_data, right_data, type, accs, fun) do
+    {left_head, left_rest, right_head, right_rest} =
+      match_types [type] do
+        <<match!(x, 0), left_rest::bitstring>> = left_data
+        <<match!(y, 0), right_rest::bitstring>> = right_data
+        {read!(x, 0), left_rest, read!(y, 0), right_rest}
+      end
+
+    bin_reduce_many(left_rest, right_rest, type, fun.({left_head, right_head}, accs), fun)
   end
 
   ## Dimension helpers
