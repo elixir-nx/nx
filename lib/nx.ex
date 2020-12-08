@@ -2442,6 +2442,41 @@ defmodule Nx do
     Nx.Util.reduce(tensor, 0, opts, &+/2)
   end
 
+  @doc """
+  Returns the indices of the maximum values along a given axis.
+
+  ## Examples
+
+      iex> Nx.argmax(4)
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.argmax(Nx.tensor([[1, 2, 3], [1, 2, 3], [4, 5, 6]]), axis: 0)
+      #Nx.Tensor<
+        s64[3]
+        [2, 2, 2]
+      >
+  """
+  def argmax(tensor, opts \\ [])
+
+  def argmax(number, opts) when is_number(number), do: tensor(0, opts)
+
+  def argmax(t = %T{}, opts) do
+    {_, max_i} =
+      Nx.Util.zip_reduce({t, Nx.iota(t, opts)}, {:first, -1}, opts,
+        fn {x, i}, {max_x, max_i} ->
+          if x > max_x or max_x == :first do
+            {x, i}
+          else
+            {max_x, max_i}
+          end
+        end
+      )
+    max_i
+  end
+
   ## Matrix ops
 
   @doc """

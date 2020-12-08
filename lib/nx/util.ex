@@ -208,6 +208,76 @@ defmodule Nx.Util do
     %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
   end
 
+  @doc """
+  TODO
+
+  TODO: More than 2 tensors
+  TODO: Optimize
+  """
+  def zip_reduce(tensors, accs, opts, fun) do
+    tensors =
+      tensors
+      |> Tuple.to_list()
+
+    {type, shape, data} =
+      tensors
+      |> Enum.reduce({{:u, 8}, :empty, []},
+          fn t, {type, shape, bins} ->
+            unless shape == :empty or t.shape == shape,
+              do: raise "Attempt to pass mixed shapes to `zip_reduce/4`. All shapes must match."
+            # TODO: Merge all tensors to highest type
+            {Nx.Type.merge(t.type, type), t.shape, [to_bitstring(t) | bins]}
+          end
+        )
+
+    {zipped_binaries, new_shape} = bin_zip(data, type, opts[:axis], shape)
+
+    zipped_data =
+      match_types [type] do
+        zipped_binaries
+        |> Enum.reduce([],
+            fn {t1, t2}, acc  ->
+              {val1, val2} =
+                for <<match!(x, 0) <- t1>>,
+                    <<match!(y, 0) <- t2>>,
+                    reduce: acc,
+                    do: (_ -> fun.({read!(x, 0), read!(y, 0)}, accs))
+              [{<<write!(val1, 0)>>, <<write!(val2, 0)>>} | acc]
+            end
+          )
+      end
+
+    zipped_data
+    |> Enum.unzip()
+    |> Tuple.to_list()
+    |> Enum.map(& %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(&1)}, type: type, shape: new_shape})
+    |> List.to_tuple()
+  end
+
+  defp bin_zip(binaries, type, axis, shape) do
+    {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
+    {_, size} = type
+    chunk_size = chunk_count * size
+
+    zipped =
+      aggregate_gaps(gap_count, size, fn pre, pos ->
+        match_types [type] do
+          binaries
+          |> Enum.reduce([],
+            fn <<chunk::size(chunk_size)-bitstring>>, acc ->
+              value =
+                for <<_::size(pre)-bitstring, match!(var, 0), _::size(pos)-bitstring <- chunk>>, into: <<>> do
+                  <<write!(read!(var, 0), 0)>>
+                end
+              [value | acc]
+            end)
+          |> List.to_tuple()
+        end
+      end)
+
+    {zipped, new_shape}
+  end
+
   ## Dimension helpers
 
   # The goal of aggregate axis is to find a chunk_count and gap_count
