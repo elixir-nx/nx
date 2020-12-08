@@ -112,11 +112,26 @@ defmodule Nx.Defn.Kernel do
     case var do
       {name, _, ctx} when is_atom(name) and is_atom(ctx) ->
         quote do
-          Nx.Defn.Kernel.transform(Nx.Grad, unquote({var, expr}), unquote(options))
+          Nx.Defn.Kernel.transform(Nx.Defn.GradTransform, unquote({var, expr}), unquote(options))
         end
 
       _ ->
         raise ArgumentError, "first argument of grad/3 must be a variable"
+    end
+  end
+
+  @doc """
+  Prints and returns the expanded expression.
+
+  ### Examples
+
+      defn tanh_grad(t) do
+        print_quoted(grad(t, Nx.tanh(t)))
+      end
+  """
+  defmacro print_quoted(expr, options \\ []) do
+    quote do
+      Nx.Defn.Kernel.transform(Nx.Defn.PrintQuotedTransform, unquote(expr), unquote(options))
     end
   end
 

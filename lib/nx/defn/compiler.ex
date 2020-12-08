@@ -65,8 +65,13 @@ defmodule Nx.Defn.Compiler do
               opts :: keyword
             ) :: Macro.t()
 
-  defguardp is_var(var) when is_atom(elem(var, 0)) and is_atom(elem(var, 2))
-  defguardp is_underscore(var) when elem(var, 0) == :_ and is_atom(elem(var, 2))
+  defguardp is_var(var)
+            when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
+                   is_atom(elem(var, 2))
+
+  defguardp is_underscore(var)
+            when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
+                   is_atom(elem(var, 2))
 
   # The compiler has four passes.
   #
@@ -148,7 +153,7 @@ defmodule Nx.Defn.Compiler do
   defp collect_vars(args) do
     {_, vars} =
       Macro.prewalk(args, [], fn
-        var, acc when is_var(var) ->
+        var, acc when is_var(var) and not is_underscore(var) ->
           {var, [var | acc]}
 
         node, acc ->
@@ -264,12 +269,12 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, args}, state}
   end
 
-  defp normalize({{:., _, [Nx.Defn.Kernel, :transform]}, meta, [module, ast, opts]}, state) do
+  defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [module, ast, opts]}, state) do
     unless is_atom(module) do
       compile_error!(
         meta,
         state,
-        "expected the first argument of Nx.Defn.Kernel.transform/3 to a module, " <>
+        "expected the first argument of Nx.Defn.Kernel.transform/3 to be a module, " <>
           "got: #{inspect(module)}"
       )
     end
@@ -284,13 +289,13 @@ defmodule Nx.Defn.Compiler do
     end
 
     {ast, state} = normalize(ast, state)
-    {{:__transform__, meta, [module, ast, opts]}, state}
+    {{call, meta, [module, ast, opts]}, state}
   end
 
-  defp normalize({{:., _, [remote, name]}, meta, args}, state)
+  defp normalize({{:., _, [remote, name]} = call, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
     {args, state} = normalize_list(args, state)
-    {{:__remote__, meta, [remote, name | args]}, state}
+    {{call, meta, args}, state}
   end
 
   defp normalize({left, right}, state) do
@@ -413,10 +418,6 @@ defmodule Nx.Defn.Compiler do
   end
 
   ## Expansion and local inlining
-
-  defp expand({:=, _, [underscore, right]}, state) when is_underscore(underscore) do
-    expand(right, state)
-  end
 
   defp expand({:=, meta, [left, right]}, state) do
     {patterns, vars, right} = expand_assign(meta, left, right, state)
@@ -565,13 +566,38 @@ defmodule Nx.Defn.Compiler do
   defp inline(meta, patterns, ast, args, version) do
     version = version + 1
 
+    # If both patterns and args are variable, don't create assignments.
+    # This makes source inspection cleaner because there is less code pollution.
+    {patterns_and_args, cache} =
+      Enum.flat_map_reduce(Enum.zip(patterns, args), %{}, fn
+        {pattern, _arg}, acc when is_underscore(pattern) ->
+          {[], acc}
+
+        {pattern, arg}, acc when is_var(pattern) and is_var(arg) ->
+          {[], Map.put(acc, var_counter(pattern), arg)}
+
+        {pattern, arg}, acc ->
+          {[{pattern, arg}], acc}
+      end)
+
+    {patterns, args} = Enum.unzip(patterns_and_args)
+
     {{patterns, ast}, max_version} =
       Macro.prewalk({patterns, ast}, version, fn
-        {var, meta, ctx}, max_version when is_atom(var) and is_atom(ctx) ->
-          {var_version, meta} =
-            Keyword.get_and_update!(meta, :counter, &{&1 + version, &1 + version})
+        underscore, max_version when is_underscore(underscore) ->
+          {underscore, max_version}
 
-          {{var, meta, ctx}, max(max_version, var_version)}
+        {name, meta, ctx}, max_version when is_atom(name) and is_atom(ctx) ->
+          counter = Keyword.fetch!(meta, :counter)
+
+          case cache do
+            %{^counter => var} ->
+              {var, max_version}
+
+            %{} ->
+              meta = Keyword.put(meta, :counter, version + counter)
+              {{name, meta, ctx}, max(max_version, version + counter)}
+          end
 
         node, max_version ->
           {node, max_version}
@@ -593,7 +619,8 @@ defmodule Nx.Defn.Compiler do
 
   defp inline_remote(ast, state) do
     Macro.prewalk(ast, state, fn
-      {:__remote__, meta, [module, name | args]}, state ->
+      {{:., _, [module, name]}, meta, args}, state
+      when module != Nx and module != Nx.Defn.Kernel ->
         arity = length(args)
 
         if Code.ensure_compiled(module) != {:module, module} do
@@ -626,10 +653,9 @@ defmodule Nx.Defn.Compiler do
 
   ## Transforms
 
-  # TODO: define proper behaviour
   defp inline_transforms(env, ast, state) do
-    Macro.prewalk(ast, state, fn
-      {:__transform__, meta, [module, ast, opts]}, state ->
+    Macro.postwalk(ast, state, fn
+      {{:., _, [Nx.Defn.Kernel, :transform]}, meta, [module, ast, opts]}, state ->
         if Code.ensure_compiled(module) != {:module, module} do
           compile_error!(
             meta,
@@ -640,7 +666,8 @@ defmodule Nx.Defn.Compiler do
 
         {version, ast} = module.__transform__(env, state.version, meta, ast, opts)
         state = put_in(state.remotes[module], true)
-        inline_remote(ast, %{state | version: version})
+        {ast, state} = inline_remote(ast, %{state | version: version})
+        inline_transforms(env, ast, state)
 
       expr, state ->
         {expr, state}
@@ -648,6 +675,10 @@ defmodule Nx.Defn.Compiler do
   end
 
   ## Shared helpers
+
+  defp var_counter({var, meta, ctx}) when is_atom(var) and is_atom(ctx) do
+    Keyword.fetch!(meta, :counter)
+  end
 
   defp new_var(state) do
     counter = state.version + 1
@@ -659,10 +690,7 @@ defmodule Nx.Defn.Compiler do
 
   defp assert_uniq_vars!(ast, state) do
     Macro.prewalk(ast, %{}, fn
-      underscore, acc when is_underscore(underscore) ->
-        {underscore, acc}
-
-      var, acc when is_var(var) ->
+      var, acc when is_var(var) and not is_underscore(var) ->
         meta = elem(var, 1)
         counter = Keyword.fetch!(meta, :counter)
 
