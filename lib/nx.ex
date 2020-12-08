@@ -2436,13 +2436,13 @@ defmodule Nx do
   """
   def dot(a, b)
 
-  def dot(a, b) when is_number(a) and is_number(b), do: Nx.multiply(a, b)
+  # Scalars
+  def dot(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+  def dot(%T{shape: {}} = a, b), do: Nx.multiply(a, b)
+  def dot(a, %T{shape: {}} = b), do: Nx.multiply(a, b)
 
-  def dot(a = %T{}, b) when is_number(b), do: Nx.multiply(a, b)
-
-  def dot(a, b = %T{}) when is_number(a), do: Nx.multiply(a, b)
-
-  def dot(a = %T{type: left_type, shape: s1}, b = %T{type: right_type, shape: {n}}) do
+  # Vectors
+  def dot(%T{type: left_type, shape: s1} = a, %T{type: right_type, shape: {n}} = b) do
     output_type = Nx.Type.merge(left_type, right_type)
     {_, left_size} = left_type
     {_, right_size} = right_type
@@ -2503,9 +2503,11 @@ defmodule Nx do
     %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
   end
 
-  def dot(a = %T{shape: {_}}, b = %T{}), do: Nx.dot(b, a)
+  def dot(%T{shape: {_}} = a, %T{} = b), do: Nx.dot(b, a)
 
-  def dot(a = %T{type: left_type, shape: {m, n}}, b = %T{type: right_type, shape: {n, k}}) do
+  # Matrices
+
+  def dot(%T{type: left_type, shape: {m, n}} = a, %T{type: right_type, shape: {n, k}} = b) do
     output_type = Nx.Type.merge(left_type, right_type)
 
     {_, left_size} = left_type

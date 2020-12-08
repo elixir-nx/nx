@@ -95,8 +95,8 @@ defmodule Nx.DefnTest do
     end
 
     defn nested_pattern_matching do
-      {{a, b} = c, {d, e} = f} = {{1, 2}, {3, 4}}
-      {a, b, c, d, e, f}
+      {{a, _} = c, {d, e} = f} = _ = {{1, 2}, {3, 4}}
+      _ = {a, c, d, e, f}
     end
 
     test "unnests nested patterns" do
@@ -111,10 +111,10 @@ defmodule Nx.DefnTest do
                  )
                  (
                    c = nvar
-                   {a, b} = c
+                   {a, _} = c
                  )
                )
-               {a, b, c, d, e, f}
+               {a, c, d, e, f}
              )\
              """
 
@@ -123,7 +123,7 @@ defmodule Nx.DefnTest do
       c = Nx.tensor(3)
       d = Nx.tensor(4)
 
-      assert nested_pattern_matching() == {a, b, {a, b}, c, d, {c, d}}
+      assert nested_pattern_matching() == {a, {a, b}, c, d, {c, d}}
     end
   end
 

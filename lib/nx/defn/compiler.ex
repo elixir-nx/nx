@@ -30,13 +30,18 @@ defmodule Nx.Defn.Compiler do
 
     * `{var_atom_name, meta, context_atom}` - variables
 
-    * `{:__block__, meta, [expr]}` - blocks
+    * `{:__block__, meta, [expr]}` - blocks - the block is
+      always non-empty
 
     * `{left, right}` and `{:{}, _, [elem]}` - tuples
 
-    * `{:=, meta, [left, right]}` - pattern matching where the
-      left side has been normalized to be either a variable or
-      a `{:{}, _, [var]}`
+    * `{:=, meta, [var_no_underscore, right]}` - pattern matching
+      where the left side has been normalized to a variable.
+      The left side is guaranteed to not be an underscore pattern
+
+    * `{:=, meta, [{:{}, _, [var]}, var]}` - pattern matching
+      on a tuple. The left side is a tuple of vars and the
+      right-side is always a var. The tuple may have underscores
 
     * `{:%{}, meta, [{key, value}]}` - a literal `Nx.Tensor`
 
@@ -61,6 +66,7 @@ defmodule Nx.Defn.Compiler do
             ) :: Macro.t()
 
   defguardp is_var(var) when is_atom(elem(var, 0)) and is_atom(elem(var, 2))
+  defguardp is_underscore(var) when elem(var, 0) == :_ and is_atom(elem(var, 2))
 
   # The compiler has four passes.
   #
@@ -230,6 +236,10 @@ defmodule Nx.Defn.Compiler do
        when is_atom(name) and is_list(args) and name not in [:%, :%{}, :^, :<<>>] do
     {args, state} = normalize_list(args, state)
     {{:__local__, meta, [name | args]}, state}
+  end
+
+  defp normalize(underscore, state) when is_underscore(underscore) do
+    {underscore, state}
   end
 
   defp normalize({name, meta, ctx} = var, state) when is_var(var) do
@@ -404,6 +414,10 @@ defmodule Nx.Defn.Compiler do
 
   ## Expansion and local inlining
 
+  defp expand({:=, _, [underscore, right]}, state) when is_underscore(underscore) do
+    expand(right, state)
+  end
+
   defp expand({:=, meta, [left, right]}, state) do
     {patterns, vars, right} = expand_assign(meta, left, right, state)
     {right, state} = expand(right, state)
@@ -461,8 +475,8 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
+  # expr is always literals since we don't allow polymorphic calls
   defp expand({expr, meta, args}, state) do
-    {expr, state} = expand(expr, state)
     {args, state} = expand(args, state)
     {{expr, meta, args}, state}
   end
@@ -495,6 +509,10 @@ defmodule Nx.Defn.Compiler do
   defp expand_pattern(_, {:=, meta, [left, right]}, patterns, vars, expr, state) do
     {patterns, vars, expr} = expand_pattern(meta, right, patterns, vars, expr, state)
     expand_pattern(meta, left, patterns, vars, expr, state)
+  end
+
+  defp expand_pattern(_meta, {:_, _, ctx}, patterns, vars, expr, _state) when is_atom(ctx) do
+    {patterns, vars, expr}
   end
 
   defp expand_pattern(_meta, var, patterns, vars, expr, _state) when is_var(var) do
@@ -641,6 +659,9 @@ defmodule Nx.Defn.Compiler do
 
   defp assert_uniq_vars!(ast, state) do
     Macro.prewalk(ast, %{}, fn
+      underscore, acc when is_underscore(underscore) ->
+        {underscore, acc}
+
       var, acc when is_var(var) ->
         meta = elem(var, 1)
         counter = Keyword.fetch!(meta, :counter)
