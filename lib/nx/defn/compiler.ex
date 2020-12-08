@@ -30,8 +30,7 @@ defmodule Nx.Defn.Compiler do
 
     * `{var_atom_name, meta, context_atom}` - variables
 
-    * `{:__block__, meta, [expr]}` - blocks - the block is
-      always non-empty
+    * `{:__block__, meta, [expr]}` - non-empy code blocks
 
     * `{left, right}` and `{:{}, _, [elem]}` - tuples
 

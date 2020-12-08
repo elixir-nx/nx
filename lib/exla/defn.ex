@@ -85,10 +85,17 @@ defmodule Exla.Defn do
   defp nx_to_cache_key!(number) when is_float(number), do: {{:f, 64}, {}}
   defp nx_to_cache_key!(%Nx.Tensor{} = t), do: {t.type, t.shape}
 
-  defp nx_to_cache_key!(other) do
+  defp nx_to_cache_key!(arg) when is_tuple(arg) do
     raise ArgumentError,
-          "defn functions expects either numbers or Nx.Tensor's as arguments, " <>
-            "got: #{inspect(other)}"
+          "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+            "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature. " <>
+            "Got: #{inspect(arg)}"
+  end
+
+  defp nx_to_cache_key!(arg) do
+    raise ArgumentError,
+          "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+            "Got: #{inspect(arg)}"
   end
 
   ## Special forms

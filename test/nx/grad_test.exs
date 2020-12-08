@@ -60,4 +60,40 @@ defmodule Nx.GradTest do
       assert grad_grad_tanh(Nx.tensor(1.0)) == Nx.tensor(-0.6397000084492246)
     end
   end
+
+  describe "tuples" do
+    defnp tuple_pattern({a, b}), do: Nx.power(a, 2) + b
+    defn grad_tuple_pattern(t), do: grad(t, tuple_pattern({t, 2.0}))
+
+    test "as patterns" do
+      assert grad_tuple_pattern(Nx.tensor(1.0)) == Nx.tensor(2.0)
+    end
+
+    defn grad_tuple_input(a, b) do
+      grad({a, b}, Nx.power(a, 2) * Nx.power(b, 3))
+    end
+
+    defn grad_tuple_input(a, b, c) do
+      grad({a, b, c}, Nx.power(a, 2) * Nx.power(b, 3) * Nx.power(c, 4))
+    end
+
+    test "as multiple inputs" do
+      assert grad_tuple_input(Nx.tensor(1.0), Nx.tensor(1.0)) ==
+               {Nx.tensor(2.0), Nx.tensor(3.0)}
+
+      assert grad_tuple_input(Nx.tensor(1.0), Nx.tensor(1.0), Nx.tensor(1.0)) ==
+               {Nx.tensor(2.0), Nx.tensor(3.0), Nx.tensor(4.0)}
+    end
+  end
+
+  describe "tensor constant" do
+    @two_per_two Nx.tensor([[1, 2], [3, 4]])
+    defn grad_tensor_constant(t), do: grad(t, @two_per_two)
+    defn grad_tensor_power_plus_constant(t), do: grad(t, Nx.power(t, 2) + @two_per_two)
+
+    test "computes grad" do
+      assert grad_tensor_constant(Nx.tensor(1.0)) == Nx.tensor(0.0)
+      assert grad_tensor_power_plus_constant(Nx.tensor(1.0)) == Nx.tensor(2.0)
+    end
+  end
 end

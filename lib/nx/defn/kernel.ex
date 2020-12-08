@@ -107,17 +107,38 @@ defmodule Nx.Defn.Kernel do
       defn tanh_grad(t) do
         grad(t, Nx.tanh(t))
       end
-  """
-  defmacro grad(var, expr, options \\ []) do
-    case var do
-      {name, _, ctx} when is_atom(name) and is_atom(ctx) ->
-        quote do
-          Nx.Defn.Kernel.transform(Nx.Defn.GradTransform, unquote({var, expr}), unquote(options))
-        end
 
-      _ ->
-        raise ArgumentError, "first argument of grad/3 must be a variable"
+  To differenciate on multiple vars, pass a tuple as first argument:
+
+      defn tanh_power_grad(t) do
+        grad({a, b}, Nx.tanh(t) + Nx.power(b, 2))
+      end
+
+  When a tuple is given, a tuple will be returned.
+  """
+  defmacro grad(var_or_vars, expr, options \\ []) do
+    var_or_vars =
+      case var_or_vars do
+        {:{}, meta, vars} -> {:{}, meta, Enum.map(vars, &grad_var!/1)}
+        {left, right} -> {grad_var!(left), grad_var!(right)}
+        var -> grad_var!(var)
+      end
+
+    quote do
+      Nx.Defn.Kernel.transform(
+        Nx.Defn.GradTransform,
+        {unquote(var_or_vars), unquote(expr)},
+        unquote(options)
+      )
     end
+  end
+
+  defp grad_var!({name, _, ctx} = var) when is_atom(name) and is_atom(ctx), do: var
+
+  defp grad_var!(expr) do
+    raise ArgumentError,
+          "first argument of grad/3 must be a variable or a tuple of variables, got: " <>
+          Macro.to_string(expr)
   end
 
   @doc """

@@ -13,17 +13,12 @@ defmodule Nx.Defn.GradTransform do
             when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
                    is_atom(elem(var, 2))
 
-  # TODO: Allow to differentiate on multiple vars
   # TODO: Handle tuples
   # TODO: Add shape assertions
 
   @impl true
-  def __transform__(_env, version, meta, {var, ast}, _opts) do
-    state = %{
-      version: version,
-      counters: [var_counter(var)],
-      vars: %{}
-    }
+  def __transform__(_env, version, meta, {vars, ast}, _opts) do
+    state = %{version: version, vars: %{}}
 
     # SSA
     {ast, state} = ssa(ast, state)
@@ -33,8 +28,21 @@ defmodule Nx.Defn.GradTransform do
     {ast, state} = collect_and_flatten({:=, meta, [result_var, ast]}, state)
 
     # Now compute the gradient
-    unfold_grad = unfold_var(result_var, [], state)
-    {state.version, append_to_block(ast, [to_dot(meta, unfold_grad)])}
+    grad = gradient_for(vars, meta, result_var, state)
+    {state.version, append_to_block(ast, [grad])}
+  end
+
+  defp gradient_for({left, right}, meta, result_var, state) do
+    gradient_for({:{}, meta, [left, right]}, meta, result_var, state)
+  end
+
+  defp gradient_for({:{}, meta, args}, _meta, result_var, state) do
+    {:{}, meta, Enum.map(args, &gradient_for(&1, meta, result_var, state))}
+  end
+
+  defp gradient_for(var, meta, result_var, state) when is_var(var) do
+    unfold_grad = unfold_var(result_var, [], Map.put(state, :counter, var_counter(var)))
+    to_dot(meta, unfold_grad)
   end
 
   ## SSA
@@ -94,17 +102,26 @@ defmodule Nx.Defn.GradTransform do
     {{:__block__, block_meta, exprs}, vars}
   end
 
-  defp collect({:=, _, [pattern, expr]} = assign, vars) do
-    {_, vars} =
-      Macro.prewalk(pattern, vars, fn
-        var, vars when is_var(var) and not is_underscore(var) ->
-          {var, Map.put(vars, var_counter(var), expr)}
+  # Normalize tuples on the right...
+  defp collect({:=, meta, [{:{}, _, _} = pattern, {left, right}]}, vars) do
+    collect({:=, meta, [pattern, {:{}, meta, [left, right]}]}, vars)
+  end
 
-        expr, vars ->
-          {expr, vars}
-      end)
+  # If the left side is a tuple, then the right side is either a matching tuple
+  defp collect({:=, _, [{:{}, _, left}, {:{}, _, right}]} = assign, vars)
+       when length(left) == length(right) do
+    vars =
+      for {left, right} <- Enum.zip(left, right),
+          is_var(left) and not is_underscore(left),
+          reduce: vars,
+          do: (vars -> Map.put(vars, var_counter(left), right))
 
     {assign, vars}
+  end
+
+  # Otherwise it has to be a variable and an expression
+  defp collect({:=, _, [var, expr]} = assign, vars) when is_var(var) do
+    {assign, Map.put(vars, var_counter(var), expr)}
   end
 
   defp collect(expr, vars) do
@@ -135,7 +152,7 @@ defmodule Nx.Defn.GradTransform do
         unfold_grad(expr, var, exprs, state)
 
       %{} ->
-        if counter in state.counters, do: [1.0 | exprs], else: [0.0 | exprs]
+        if counter == state.counter, do: [1.0 | exprs], else: [0.0 | exprs]
     end
   end
 
@@ -191,9 +208,9 @@ defmodule Nx.Defn.GradTransform do
     unfold_var(x, exprs, state)
   end
 
-  defp unfold_grad(x, _y, exprs, _state) when is_number(x) or is_atom(x) do
-    [0.0 | exprs]
-  end
+  # Catch-alls. Explicitly list them to help bugs.
+  defp unfold_grad({:%{}, _, _}, _y, exprs, _state), do: [0.0 | exprs]
+  defp unfold_grad(x, _y, exprs, _state) when is_number(x) or is_atom(x), do: [0.0 | exprs]
 
   defp to_dot(meta, exprs) do
     if 0.0 in exprs do

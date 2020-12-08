@@ -115,9 +115,16 @@ defmodule Nx.Defn do
         match?(%Nx.Tensor{}, arg) ->
           arg
 
+        is_tuple(arg) ->
+          raise ArgumentError,
+                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                  "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
+                  "Got: #{inspect(arg)}"
+
         true ->
           raise ArgumentError,
-                "defn functions expects either numbers or %Nx.Tensor{} as arguments"
+                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                  "Got: #{inspect(arg)}"
       end
     end
   end
