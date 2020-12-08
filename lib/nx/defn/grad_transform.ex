@@ -174,6 +174,17 @@ defmodule Nx.Defn.GradTransform do
     [expr | exprs]
   end
 
+  # Power rule
+  defp unfold_grad({{:., _, [Nx, :power]}, meta, [x1, x2 | _args]}, y, exprs, state) do
+    dall1 = unfold_var(x1, [], state)
+    dall2 = unfold_var(x2, [], state)
+
+    cond do
+      0.0 in dall2 -> [grad_call(meta, :power, [x1, x2, y]) | exprs]
+      0.0 in dall1 -> raise "not yet implemented"
+    end
+  end
+
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x]}, y, exprs, state) do
     [grad_call(meta, name, [x, y]) | unfold_var(x, exprs, state)]
   end
@@ -223,4 +234,9 @@ defmodule Nx.Defn.GradTransform do
   The derivative of `Nx.exp/1`.
   """
   defn exp(_x, y), do: y
+
+  @doc """
+  The derivative of `Nx.power/2` (when x is the base).
+  """
+  defn power(base, exponent, _y), do: exponent * (Nx.power(base, exponent - 1))
 end

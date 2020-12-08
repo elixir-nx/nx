@@ -15,6 +15,30 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "addition rule" do
+    defn addition_rule(t), do: grad(t, Nx.tanh(Nx.tanh(Nx.add(Nx.power(t, 2), Nx.power(t, 3)))))
+
+    test "computes gradient" do
+      assert addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.1566267114813547)
+    end
+  end
+
+  describe "product rule" do
+    defn product_rule(t), do: grad(t, Nx.tanh(Nx.tanh(Nx.dot(Nx.power(t, 2), Nx.power(t, 3)))))
+
+    test "computes gradient" do
+      assert product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
+    end
+  end
+
+  describe "power rule" do
+    defn power_rule(t), do: grad(t, Nx.power(t, 3))
+
+    test "computes gradient" do
+      assert power_rule(Nx.tensor(5.0)) == Nx.tensor(75.0)
+    end
+  end
+
   describe "tanh+exp" do
     defn grad_tanh(t), do: grad(t, Nx.tanh(t))
     defn grad_exp_tanh(t), do: grad(t, Nx.exp(Nx.tanh(t)))
