@@ -5,10 +5,14 @@ defmodule Nx.Defn.GradTransform do
 
   @behaviour Nx.Defn.Transform
 
-  defguardp is_var(var) when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and is_atom(elem(var, 2))
-  defguardp is_underscore(var) when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and is_atom(elem(var, 2))
+  defguardp is_var(var)
+            when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
+                   is_atom(elem(var, 2))
 
-  # TODO: test print quoted
+  defguardp is_underscore(var)
+            when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
+                   is_atom(elem(var, 2))
+
   # TODO: Allow to differentiate on multiple vars
   # TODO: Handle tuples
   # TODO: Add shape assertions
@@ -174,7 +178,7 @@ defmodule Nx.Defn.GradTransform do
       # f' (g / f)
       right = nx_call(meta, :dot, [dx1, nx_call(meta, :divide, [x2, x1])])
 
-      # y
+      # y * (left + right)
       [nx_call(meta, :dot, [y, nx_call(meta, :add, [left, right])]) | exprs]
     end
   end
@@ -246,5 +250,5 @@ defmodule Nx.Defn.GradTransform do
   @doc """
   The derivative of `Nx.power/2` (when x is the base).
   """
-  defn power(base, exponent, _y), do: exponent * (Nx.power(base, exponent - 1))
+  defn power(base, exponent, _y), do: exponent * Nx.power(base, exponent - 1)
 end
