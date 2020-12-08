@@ -19,7 +19,7 @@ defmodule Nx.GradTest do
     defn grad_tanh(t), do: grad(t, Nx.tanh(t))
     defn grad_exp_tanh(t), do: grad(t, Nx.exp(Nx.tanh(t)))
     defn grad_tanh_exp(t), do: grad(t, Nx.tanh(Nx.exp(t)))
-    defn grad_grad_tanh(t), do: print_quoted(grad(t, grad(t, Nx.tanh(t))))
+    defn grad_grad_tanh(t), do: grad(t, grad(t, Nx.tanh(t)))
 
     test "computes gradient" do
       assert grad_tanh(Nx.tensor(1.0)) == Nx.tensor(0.41997434161402614)

@@ -30,12 +30,18 @@ defmodule Nx.Defn.GradTransform do
 
     # Now compute the gradient
     unfold_grad = unfold_var(result_var, [], state)
+    unfold_grad = Enum.reject(unfold_grad, & &1 == 1.0)
 
     grad_exprs =
-      if 0.0 in unfold_grad do
-        [0.0]
-      else
-        [Enum.reduce(unfold_grad, &nx_call(meta, :dot, [&2, &1]))]
+      cond do
+        0.0 in unfold_grad ->
+          [0.0]
+
+        unfold_grad == [] ->
+          [1.0]
+
+        true ->
+          [Enum.reduce(unfold_grad, &nx_call(meta, :dot, [&2, &1]))]
       end
 
     {state.version, append_to_block(ast, grad_exprs)}
@@ -182,7 +188,13 @@ defmodule Nx.Defn.GradTransform do
 
   ## Helpers
 
+  defp nx_call(_meta, :add, [0.0, right]), do: right
+  defp nx_call(_meta, :add, [left, 0.0]), do: left
+  defp nx_call(_meta, :subtract, [left, 0.0]), do: left
+  defp nx_call(_meta, :multiply, [0.0, _right]), do: 0.0
+  defp nx_call(_meta, :multiply, [_left, 0.0]), do: 0.0
   defp nx_call(meta, name, args), do: {{:., meta, [Nx, name]}, meta, args}
+
   defp grad_call(meta, name, args), do: {{:., meta, [__MODULE__, name]}, meta, args}
 
   defp maybe_block([expr]), do: expr
