@@ -30,21 +30,7 @@ defmodule Nx.Defn.GradTransform do
 
     # Now compute the gradient
     unfold_grad = unfold_var(result_var, [], state)
-    unfold_grad = Enum.reject(unfold_grad, & &1 == 1.0)
-
-    grad_exprs =
-      cond do
-        0.0 in unfold_grad ->
-          [0.0]
-
-        unfold_grad == [] ->
-          [1.0]
-
-        true ->
-          [Enum.reduce(unfold_grad, &nx_call(meta, :dot, [&2, &1]))]
-      end
-
-    {state.version, append_to_block(ast, grad_exprs)}
+    {state.version, append_to_block(ast, [to_dot(meta, unfold_grad)])}
   end
 
   ## SSA
@@ -154,16 +140,16 @@ defmodule Nx.Defn.GradTransform do
   # Addition rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
        when name in [:add, :subtract] do
-    [dx1 | exprs] = unfold_var(x1, exprs, state)
-    [dx2 | exprs] = unfold_var(x2, exprs, state)
+    dx1 = to_dot(meta, unfold_var(x1, [], state))
+    dx2 = to_dot(meta, unfold_var(x2, [], state))
     [nx_call(meta, name, [dx1, dx2]) | exprs]
   end
 
   # Product rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
        when name in [:dot, :multiply] do
-    [dx1 | exprs] = unfold_var(x1, exprs, state)
-    [dx2 | exprs] = unfold_var(x2, exprs, state)
+    dx1 = to_dot(meta, unfold_var(x1, [], state))
+    dx2 = to_dot(meta, unfold_var(x2, [], state))
 
     expr =
       nx_call(meta, :add, [
@@ -174,14 +160,22 @@ defmodule Nx.Defn.GradTransform do
     [expr | exprs]
   end
 
-  # Power rule
+  # Power/Exponentiation rule
   defp unfold_grad({{:., _, [Nx, :power]}, meta, [x1, x2 | _args]}, y, exprs, state) do
-    dall1 = unfold_var(x1, [], state)
-    dall2 = unfold_var(x2, [], state)
+    dx1 = to_dot(meta, unfold_var(x1, [], state))
+    dx2 = to_dot(meta, unfold_var(x2, [], state))
 
-    cond do
-      0.0 in dall2 -> [grad_call(meta, :power, [x1, x2, y]) | exprs]
-      0.0 in dall1 -> raise "not yet implemented"
+    if dx1 == 1.0 and dx2 == 0.0 do
+      [grad_call(meta, :power, [x1, x2, y]) | exprs]
+    else
+      # g' ln f
+      left = nx_call(meta, :dot, [dx2, nx_call(meta, :log, [x1])])
+
+      # f' (g / f)
+      right = nx_call(meta, :dot, [dx1, nx_call(meta, :divide, [x2, x1])])
+
+      # y
+      [nx_call(meta, :dot, [y, nx_call(meta, :add, [left, right])]) | exprs]
     end
   end
 
@@ -197,6 +191,14 @@ defmodule Nx.Defn.GradTransform do
     [0.0 | exprs]
   end
 
+  defp to_dot(meta, exprs) do
+    if 0.0 in exprs do
+      0.0
+    else
+      Enum.reduce(exprs, &nx_call(meta, :dot, [&2, &1]))
+    end
+  end
+
   ## Helpers
 
   defp nx_call(_meta, :add, [0.0, right]), do: right
@@ -204,6 +206,12 @@ defmodule Nx.Defn.GradTransform do
   defp nx_call(_meta, :subtract, [left, 0.0]), do: left
   defp nx_call(_meta, :multiply, [0.0, _right]), do: 0.0
   defp nx_call(_meta, :multiply, [_left, 0.0]), do: 0.0
+  defp nx_call(_meta, :multiply, [1.0, right]), do: right
+  defp nx_call(_meta, :multiply, [left, 1.0]), do: left
+  defp nx_call(_meta, :dot, [0.0, _right]), do: 0.0
+  defp nx_call(_meta, :dot, [_left, 0.0]), do: 0.0
+  defp nx_call(_meta, :dot, [1.0, right]), do: right
+  defp nx_call(_meta, :dot, [left, 1.0]), do: left
   defp nx_call(meta, name, args), do: {{:., meta, [Nx, name]}, meta, args}
 
   defp grad_call(meta, name, args), do: {{:., meta, [__MODULE__, name]}, meta, args}

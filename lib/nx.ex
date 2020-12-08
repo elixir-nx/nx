@@ -1779,7 +1779,7 @@ defmodule Nx do
   funs = [
     exp: {"exponential", &quote(do: :math.exp(unquote(&1)))},
     expm1: {"exponential minus one", &quote(do: :math.exp(unquote(&1)) - 1)},
-    log: {"natural log (base 2)", &quote(do: :math.log(unquote(&1)))},
+    log: {"natural log", &quote(do: :math.log(unquote(&1)))},
     log1p: {"natural log plus one", &quote(do: :math.log(unquote(&1) + 1))},
     logistic: {"standard logistic (a sigmoid)", &quote(do: 1 / (1 + :math.exp(-unquote(&1))))},
     cos: {"cosine", &quote(do: :math.cos(unquote(&1)))},

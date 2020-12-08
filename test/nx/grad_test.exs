@@ -39,6 +39,14 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "exponential rule" do
+    defn exp_rule(t), do: grad(t, Nx.add(Nx.power(Nx.tanh(t), 2), Nx.power(Nx.tanh(t), 3)))
+
+    test "computes gradient" do
+      assert exp_rule(Nx.tensor(1.0)) == Nx.tensor(1.370487690448899)
+    end
+  end
+
   describe "tanh+exp" do
     defn grad_tanh(t), do: grad(t, Nx.tanh(t))
     defn grad_exp_tanh(t), do: grad(t, Nx.exp(Nx.tanh(t)))
