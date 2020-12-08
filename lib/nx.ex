@@ -2453,10 +2453,30 @@ defmodule Nx do
         0
       >
 
-      iex> Nx.argmax(Nx.tensor([[1, 2, 3], [1, 2, 3], [4, 5, 6]]), axis: 0)
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
       #Nx.Tensor<
-        s64[3]
-        [2, 2, 2]
+        s64[2][3]
+        [
+          [1, 0, 0],
+          [1, 1, 0]
+        ]
+      >
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 0],
+          [0, 1, 0]
+        ]
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [0, 2],
+          [0, 1]
+        ]
       >
   """
   def argmax(tensor, opts \\ [])
