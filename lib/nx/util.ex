@@ -76,6 +76,13 @@ defmodule Nx.Util do
   the axis from the back. For example, `axis: -1` will
   always aggregate all rows.
 
+  If multiple tensors are given, performs the reduction
+  side-by-side and returns a tuple of size `N` which matches
+  the number of tensors given. Reduction function must
+  be an arity-2 function which accepts equal-sized tuples.
+  Number of initial values must match the number of tensors
+  passed.
+
   ## Examples
 
       iex> Nx.Util.reduce(Nx.tensor(42), 0, &+/2)
@@ -155,10 +162,40 @@ defmodule Nx.Util do
         ]
       >
 
+  ### Aggregating multiple tensors
+
+      iex> t1 = Nx.tensor([1, 2, 3])
+      iex> t2 = Nx.tensor([4, 5, 6])
+      iex> Nx.Util.reduce({t1, t2}, {0, 0}, fn {x, y}, {acc1, acc2} -> {x + acc1, y + acc2} end)
+      {#Nx.Tensor<
+         s64
+         6
+      >, #Nx.Tensor<
+        s64
+        15
+      >}
+
+      iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> t2 = Nx.tensor([[7, 8, 9], [10, 11, 12]])
+      iex> Nx.Util.reduce({t1, t2}, {0, 0}, [axis: 1], fn {x, y}, {acc1, acc2} -> {x*y + acc1, y - x + acc2} end)
+      {#Nx.Tensor<
+         s64[2]
+         [50, 167]
+      >, #Nx.Tensor<
+         s64[2]
+         [18, 18]
+      >}
+
   ### Errors
 
       iex> Nx.Util.reduce(Nx.tensor([1, 2, 3]), 0, [axis: 1], &+/2)
       ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+
+      iex> Nx.Util.reduce({Nx.tensor([1, 2, 3]), Nx.tensor([1, 2])}, {0, 0}, [axis: 0], fn {x, y}, {_, _} -> {x, y} end)
+      ** (ArgumentError) attempt to pass mixed shapes to `reduce/4`. All tensor shapes must match.
+
+      iex> Nx.Util.reduce({Nx.tensor([1, 2, 3])}, {0, 0}, [axis: 0], fn {x}, {_, _} -> {x, x+x} end)
+      ** (ArgumentError) number of tensors must match number of initial values passed to `reduce/4`.
 
   """
   def reduce(tensor, acc, opts \\ [], fun)
@@ -210,27 +247,37 @@ defmodule Nx.Util do
     %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
   end
 
-  @doc """
-  TODO
+  def reduce(tensors, accs, opts, fun)
+      when is_tuple(tensors) and is_tuple(accs) and is_list(opts) and is_function(fun, 2) do
+    unless tuple_size(tensors) == tuple_size(accs),
+      do:
+        raise(
+          ArgumentError,
+          "number of tensors must match number of initial values passed to `reduce/4`."
+        )
 
-  TODO: More than 2 tensors
-  TODO: Optimize
-  """
-  def zip_reduce(tensors, accs, opts, fun) do
     tensors =
       tensors
       |> Tuple.to_list()
 
     {type, shape} =
       tensors
-      |> Enum.reduce({{:u, 8}, :empty},
-          fn t, {type, shape} ->
-            unless shape == :empty or t.shape == shape,
-              do: raise "Attempt to pass mixed shapes to `zip_reduce/4`. All shapes must match."
-            {Nx.Type.merge(t.type, type), t.shape}
-          end
-        )
+      |> Enum.reduce(
+        {{:u, 8}, :empty},
+        fn t, {type, shape} ->
+          unless shape == :empty or t.shape == shape,
+            do:
+              raise(
+                ArgumentError,
+                "attempt to pass mixed shapes to `reduce/4`. All tensor shapes must match."
+              )
 
+          {Nx.Type.merge(t.type, type), t.shape}
+        end
+      )
+
+    # TODO: Merge all to highest type when we have a `cast!` that works
+    # over an entire tensor
     data =
       tensors
       |> Enum.map(&to_bitstring/1)
@@ -238,55 +285,82 @@ defmodule Nx.Util do
     {zipped_binaries, new_shape} = bin_zip(data, type, opts[:axis], shape)
 
     zipped_data =
-      for {t1, t2} <- zipped_binaries do
-        {val1, val2} = bin_reduce_many(t1, t2, type, accs, fun)
-        match_types [type] do
-          {<<write!(val1, 0)>>, <<write!(val2, 0)>>}
-        end
+      for bins <- zipped_binaries do
+        res = bin_reduce_many(bins, type, accs, fun)
+
+        res
+        |> Tuple.to_list()
+        |> Enum.map(fn val ->
+          match_types [type] do
+            <<write!(val, 0)>>
+          end
+        end)
+        |> List.to_tuple()
       end
 
     zipped_data
     |> Enum.unzip()
     |> Tuple.to_list()
-    |> Enum.map(& %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(&1)}, type: type, shape: new_shape})
+    |> Enum.map(
+      &%T{data: {Nx.BitStringDevice, IO.iodata_to_binary(&1)}, type: type, shape: new_shape}
+    )
     |> List.to_tuple()
   end
 
+  ## Binary Helpers
+
   defp bin_zip(binaries, type, axis, shape) do
     {_, size} = type
-    {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
 
-    data =
-      aggregate_gaps(chunk_count, chunk_size, fn pre, pos ->
-        axis =
-          for binary <- binaries do
-            <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::size(pos)-bitstring>> =
-              binary
+    {new_data, new_shape} =
+      if axis do
+        {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
 
-            aggregate_gaps(gap_count, size, fn pre, pos ->
-              for <<_::size(pre)-bitstring, var::size(size)-bitstring, _::size(pos)-bitstring <- chunk>>,
-                into: <<>>,
-                do: var
-            end)
-          end
-        Enum.zip(axis)
-      end)
+        data =
+          aggregate_gaps(chunk_count, chunk_size, fn pre, pos ->
+            axis =
+              for binary <- binaries do
+                <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring,
+                  _::size(pos)-bitstring>> = binary
 
-    {List.flatten(data), new_shape}
-  end
+                aggregate_gaps(gap_count, size, fn pre, pos ->
+                  for <<_::size(pre)-bitstring, var::size(size)-bitstring,
+                        _::size(pos)-bitstring <- chunk>>,
+                      into: <<>>,
+                      do: var
+                end)
+              end
 
-  defp bin_reduce_many(<<>>, <<>>, _type, accs, _fun), do: accs
+            Enum.zip(axis)
+          end)
 
-  defp bin_reduce_many(left_data, right_data, type, accs, fun) do
-    {left_head, left_rest, right_head, right_rest} =
-      match_types [type] do
-        <<match!(x, 0), left_rest::bitstring>> = left_data
-        <<match!(y, 0), right_rest::bitstring>> = right_data
-        {read!(x, 0), left_rest, read!(y, 0), right_rest}
+        {List.flatten(data), new_shape}
+      else
+        {[List.to_tuple(binaries)], {}}
       end
 
-    bin_reduce_many(left_rest, right_rest, type, fun.({left_head, right_head}, accs), fun)
+    {new_data, new_shape}
   end
+
+  defp bin_reduce_many(bins, type, accs, fun) do
+    {heads, tails} =
+      bins
+      |> Tuple.to_list()
+      |> Enum.map(fn data ->
+        match_types [type] do
+          <<match!(x, 0), rest::bitstring>> = data
+          {read!(x, 0), rest}
+        end
+      end)
+      |> Enum.unzip()
+
+    if empty?(tails),
+      do: fun.(List.to_tuple(heads), accs),
+      else: bin_reduce_many(List.to_tuple(tails), type, fun.(List.to_tuple(heads), accs), fun)
+  end
+
+  defp empty?([<<>> | _]), do: true
+  defp empty?([_ | _]), do: false
 
   ## Dimension helpers
 

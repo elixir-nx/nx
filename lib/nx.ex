@@ -487,6 +487,25 @@ defmodule Nx do
         [0, 1, 2, 3, 4]
       >
 
+      iex> Nx.iota({3, 2, 3})
+      #Nx.Tensor<
+        s64[3][2][3]
+        [
+          [
+            [0, 1, 2],
+            [0, 1, 2]
+          ],
+          [
+            [0, 1, 2],
+            [0, 1, 2]
+          ],
+          [
+            [0, 1, 2],
+            [0, 1, 2]
+          ]
+        ]
+      >
+
       iex> Nx.iota({3, 3}, axis: 1)
       #Nx.Tensor<
         s64[3][3]
@@ -539,7 +558,7 @@ defmodule Nx do
   def iota({}, opts), do: tensor(0, opts)
 
   def iota({n}, opts) do
-    values = for i <- 0..n - 1, do: i
+    values = for i <- 0..(n - 1), do: i
     tensor(values, opts)
   end
 
@@ -548,7 +567,8 @@ defmodule Nx do
     output_type = opts[:type] || {:s, 64}
 
     axis = opts[:axis] || tuple_size(shape) - 1
-    {dims_before, [dims | dims_after]} =
+
+    {dims_before, [dim | dims_after]} =
       shape
       |> Tuple.to_list()
       |> Enum.split(axis)
@@ -563,11 +583,9 @@ defmodule Nx do
       dims_before
       |> Enum.reduce(1, &*/2)
 
-    dim = elem(shape, axis)
-
     data =
       for _ <- 1..cycles,
-          i <- 0..dim - 1,
+          i <- 0..(dim - 1),
           _ <- 1..repeat_blocks,
           into: "",
           do: scalar_to_bin(i, output_type)
@@ -2444,12 +2462,21 @@ defmodule Nx do
   @doc """
   Returns the indices of the maximum values along a given axis.
 
+  If no axis is given, returns the index of the absolute maximum
+  value in the tensor.
+
   ## Examples
 
       iex> Nx.argmax(4)
       #Nx.Tensor<
         s64
         0
+      >
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]))
+      #Nx.Tensor<
+        s64
+        10
       >
 
       iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
@@ -2483,17 +2510,21 @@ defmodule Nx do
 
   def argmax(number, opts) when is_number(number), do: tensor(0, opts)
 
-  def argmax(t = %T{}, opts) do
+  def argmax(t = %T{shape: shape}, opts) do
+    indices =
+      if opts[:axis],
+        do: Nx.iota(t, opts),
+        else: reshape(Nx.iota({tuple_product(shape)}, opts), shape)
+
     {_, max_i} =
-      Nx.Util.zip_reduce({t, Nx.iota(t, opts)}, {:first, -1}, opts,
-        fn {x, i}, {max_x, max_i} ->
-          if x > max_x or max_x == :first do
-            {x, i}
-          else
-            {max_x, max_i}
-          end
+      Nx.Util.reduce({t, indices}, {:first, -1}, opts, fn {x, i}, {max_x, max_i} ->
+        if x > max_x or max_x == :first do
+          {x, i}
+        else
+          {max_x, max_i}
         end
-      )
+      end)
+
     max_i
   end
 
