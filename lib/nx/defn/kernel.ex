@@ -88,6 +88,54 @@ defmodule Nx.Defn.Kernel do
     do: raise("special forms must not be imported and exist for documentation purposes")
 
   @doc """
+  Defines a transform.
+
+  The options must be a keyword list literal.
+  """
+  def transform(module, expr, options) do
+    _ = module
+    _ = expr
+    _ = options
+    raise("Nx.Kernel.transform/3 must not be invoked directly and instead it is expanded by defn")
+  end
+
+  @doc """
+  Computes the gradient of the given `var` on `expr`.
+
+  ### Examples
+
+      defn tanh_grad(t) do
+        grad(t, Nx.tanh(t))
+      end
+  """
+  defmacro grad(var, expr, options \\ []) do
+    case var do
+      {name, _, ctx} when is_atom(name) and is_atom(ctx) ->
+        quote do
+          Nx.Defn.Kernel.transform(Nx.Defn.GradTransform, unquote({var, expr}), unquote(options))
+        end
+
+      _ ->
+        raise ArgumentError, "first argument of grad/3 must be a variable"
+    end
+  end
+
+  @doc """
+  Prints and returns the expanded expression.
+
+  ### Examples
+
+      defn tanh_grad(t) do
+        print_quoted(grad(t, Nx.tanh(t)))
+      end
+  """
+  defmacro print_quoted(expr, options \\ []) do
+    quote do
+      Nx.Defn.Kernel.transform(Nx.Defn.PrintQuotedTransform, unquote(expr), unquote(options))
+    end
+  end
+
+  @doc """
   Element-wise unary plus operator.
 
   Simply returns the given argument.

@@ -95,8 +95,8 @@ defmodule Nx.DefnTest do
     end
 
     defn nested_pattern_matching do
-      {{a, b} = c, {d, e} = f} = {{1, 2}, {3, 4}}
-      {a, b, c, d, e, f}
+      {{a, _} = c, {d, e} = f} = _ = {{1, 2}, {3, 4}}
+      _ = {a, c, d, e, f}
     end
 
     test "unnests nested patterns" do
@@ -111,10 +111,10 @@ defmodule Nx.DefnTest do
                  )
                  (
                    c = nvar
-                   {a, b} = c
+                   {a, _} = c
                  )
                )
-               {a, b, c, d, e, f}
+               nvar = {a, c, d, e, f}
              )\
              """
 
@@ -123,7 +123,7 @@ defmodule Nx.DefnTest do
       c = Nx.tensor(3)
       d = Nx.tensor(4)
 
-      assert nested_pattern_matching() == {a, b, {a, b}, c, d, {c, d}}
+      assert nested_pattern_matching() == {a, {a, b}, c, d, {c, d}}
     end
   end
 
@@ -326,14 +326,24 @@ defmodule Nx.DefnTest do
     end
 
     test "expansion" do
-      assert ast_to_string(:add_two_from_public, 2) == """
+      assert ast_to_string(:add_two_from_public, 2) == "Nx.add(a, b)"
+    end
+
+    defn add_two_with_underscore(a, b), do: add_two_with_underscore_impl(a, b)
+
+    defn add_two_with_underscore_impl(_, b) do
+      _ = 2
+      b
+    end
+
+    test "handles underscores" do
+      assert ast_to_string(:add_two_with_underscore, 2) == """
              (
-               a = a
-               b = b
-               Nx.add(a, b)
+               nvar = 2
+               b
              )\
              """
-    end
+           end
   end
 
   describe "remote functions" do
@@ -359,7 +369,7 @@ defmodule Nx.DefnTest do
     end
 
     test "expansion" do
-      assert ast_to_string(:add_two_remote, 2) == "__remote__(Nx.DefnTest.Remote, :add_two, a, b)"
+      assert ast_to_string(:add_two_remote, 2) == "Nx.DefnTest.Remote.add_two(a, b)"
     end
   end
 
