@@ -221,33 +221,35 @@ defmodule Nx.Util do
       tensors
       |> Tuple.to_list()
 
-    {type, shape, data} =
+    {type, shape} =
       tensors
-      |> Enum.reduce({{:u, 8}, :empty, []},
-          fn t, {type, shape, bins} ->
+      |> Enum.reduce({{:u, 8}, :empty},
+          fn t, {type, shape} ->
             unless shape == :empty or t.shape == shape,
               do: raise "Attempt to pass mixed shapes to `zip_reduce/4`. All shapes must match."
-            # TODO: Merge all tensors to highest type
-            {Nx.Type.merge(t.type, type), t.shape, [to_bitstring(t) | bins]}
+            {Nx.Type.merge(t.type, type), t.shape}
           end
         )
+
+    data =
+      tensors
+      |> Enum.map(&to_bitstring/1)
 
     {zipped_binaries, new_shape} = bin_zip(data, type, opts[:axis], shape)
 
     zipped_data =
-      match_types [type] do
-        zipped_binaries
-        |> Enum.reduce([],
-            fn {t1, t2}, acc  ->
-              {val1, val2} =
-                for <<match!(x, 0) <- t1>>,
-                    <<match!(y, 0) <- t2>>,
-                    reduce: acc,
-                    do: (_ -> fun.({read!(x, 0), read!(y, 0)}, accs))
-              [{<<write!(val1, 0)>>, <<write!(val2, 0)>>} | acc]
-            end
-          )
+      for {t1, t2} <- zipped_binaries do
+        match_types [type] do
+          {val1, val2} =
+            for <<match!(x, 0) <- t1>>,
+                <<match!(y, 0) <- t2>>,
+                  reduce: accs,
+                  do: (accs -> fun.({read!(x, 0), read!(y, 0)}, accs))
+          {<<write!(val1, 0)>>, <<write!(val2, 0)>>}
+        end
       end
+
+    IO.inspect zipped_data
 
     zipped_data
     |> Enum.unzip()
@@ -257,27 +259,26 @@ defmodule Nx.Util do
   end
 
   defp bin_zip(binaries, type, axis, shape) do
-    {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
     {_, size} = type
-    chunk_size = chunk_count * size
+    {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
 
-    zipped =
-      aggregate_gaps(gap_count, size, fn pre, pos ->
-        match_types [type] do
-          binaries
-          |> Enum.reduce([],
-            fn <<chunk::size(chunk_size)-bitstring>>, acc ->
-              value =
-                for <<_::size(pre)-bitstring, match!(var, 0), _::size(pos)-bitstring <- chunk>>, into: <<>> do
-                  <<write!(read!(var, 0), 0)>>
-                end
-              [value | acc]
+    data =
+      aggregate_gaps(chunk_count, chunk_size, fn pre, pos ->
+        axis =
+          for binary <- binaries do
+            <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::size(pos)-bitstring>> =
+              binary
+
+            aggregate_gaps(gap_count, size, fn pre, pos ->
+              for <<_::size(pre)-bitstring, var::size(size)-bitstring, _::size(pos)-bitstring <- chunk>>,
+                into: <<>>,
+                do: var
             end)
-          |> List.to_tuple()
-        end
+          end
+        Enum.zip(axis)
       end)
 
-    {zipped, new_shape}
+    {List.flatten(data), new_shape}
   end
 
   ## Dimension helpers

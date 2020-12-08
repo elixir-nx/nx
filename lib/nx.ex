@@ -2468,6 +2468,7 @@ defmodule Nx do
           [0, 0, 0],
           [0, 1, 0]
         ]
+      >
 
       iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 2)
       #Nx.Tensor<
