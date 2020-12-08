@@ -173,11 +173,13 @@ defmodule Nx.Util do
 
     {data, shape} =
       if axis = opts[:axis] do
-        {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
-        chunk_size = chunk_count * size
+        {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
 
         new_data =
-          for <<chunk::size(chunk_size)-bitstring <- data>> do
+          aggregate_gaps(chunk_count, chunk_size, fn pre, pos ->
+            <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::size(pos)-bitstring>> =
+              data
+
             aggregate_gaps(gap_count, size, fn pre, pos ->
               match_types [type] do
                 value =
@@ -188,7 +190,7 @@ defmodule Nx.Util do
                 <<write!(value, 0)>>
               end
             end)
-          end
+          end)
 
         {new_data, new_shape}
       else
@@ -239,7 +241,7 @@ defmodule Nx.Util do
   #
   # The first time element is 1 + 7, which means the gap between
   # them is 6. Given we have to traverse the whole tensor, the
-  # chunk_count is 12 (the size of the tensor).
+  # chunk_count is 1.
   #
   # For axis 1, we have:
   #
@@ -253,7 +255,7 @@ defmodule Nx.Util do
   #
   # The first element is 1 + 4 within the "first quadrant". 17 is
   # is 10 + 17 in the second quadrant. Therefore the gap is 3 and
-  # the chunk_count is 6 elements.
+  # the chunk_count is 2.
   #
   # Finally, for axis 2, we have:
   #
@@ -266,22 +268,26 @@ defmodule Nx.Util do
   #     >
   #
   # 6 is the sum of the first row, 15 the sum of the second row, etc.
-  # Therefore the gap is 1 and the chunk size is 3.
+  # Therefore the gap is 1 and the chunk count is 4.
   #
   # Computing the aggregate is a matter of mapping the binary over
   # each chunk and then mapping gap times, moving the computation root
   # by size over each gap.
-  defp aggregate_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
+  defp aggregate_axis(shape, axis, size) do
     total = tuple_product(shape)
-    aggregate_axis(Tuple.to_list(shape), 0, axis, total, total, [])
+    {gap_count, chunk_count, new_shape} = total_aggregate_axis(shape, axis, total)
+    {gap_count, chunk_count, div(size * total, chunk_count), new_shape}
   end
 
-  defp aggregate_axis(shape, axis) when axis < 0 and axis >= -tuple_size(shape) do
-    total = tuple_product(shape)
-    aggregate_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, total, total, [])
+  defp total_aggregate_axis(shape, axis, total) when axis >= 0 and axis < tuple_size(shape) do
+    aggregate_axis(Tuple.to_list(shape), 0, axis, 1, total, [])
   end
 
-  defp aggregate_axis(shape, axis) do
+  defp total_aggregate_axis(shape, axis, total) when axis < 0 and axis >= -tuple_size(shape) do
+    aggregate_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, 1, total, [])
+  end
+
+  defp total_aggregate_axis(shape, axis, _total) do
     raise ArgumentError, "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
   end
 
@@ -291,7 +297,7 @@ defmodule Nx.Util do
     if axis == chosen do
       {gap, chunk, List.to_tuple(Enum.reverse(acc, dims))}
     else
-      aggregate_axis(dims, axis + 1, chosen, div(chunk, dim), gap, [dim | acc])
+      aggregate_axis(dims, axis + 1, chosen, chunk * dim, gap, [dim | acc])
     end
   end
 
