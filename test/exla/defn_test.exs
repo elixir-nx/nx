@@ -562,6 +562,14 @@ defmodule Exla.DefnTest do
         assert_shape_with_constant(Nx.tensor([1, 2]))
       end
     end
+
+    defn assert_shape_with_tuple(), do: Nx.assert_shape({1, 2, 3}, {}, "oops")
+
+    test "with tuple" do
+      assert_raise ArgumentError, "expected tensor with shape {} but got {1, 2, 3} (oops)", fn ->
+        assert_shape_with_tuple()
+      end
+    end
   end
 
   describe "broadcast" do
