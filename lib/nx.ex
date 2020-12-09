@@ -464,6 +464,138 @@ defmodule Nx do
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
+  @doc """
+  Creates a tensor with the given shape which increments
+  along the provided axis.
+
+  If no axis is provided, index counts up at each element.
+
+  If a tensor or a number are given, the shape is taken from the tensor.
+
+  ## Examples
+
+      iex> Nx.iota({})
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.iota({5})
+      #Nx.Tensor<
+        s64[5]
+        [0, 1, 2, 3, 4]
+      >
+
+      iex> Nx.iota({3, 2, 3})
+      #Nx.Tensor<
+        s64[3][2][3]
+        [
+          [
+            [0, 1, 2],
+            [3, 4, 5]
+          ],
+          [
+            [6, 7, 8],
+            [9, 10, 11]
+          ],
+          [
+            [12, 13, 14],
+            [15, 16, 17]
+          ]
+        ]
+      >
+
+      iex> Nx.iota({3, 3}, axis: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [0, 1, 2],
+          [0, 1, 2]
+        ]
+      >
+
+      iex> Nx.iota({3, 4, 3}, axis: 0, type: {:f, 64})
+      #Nx.Tensor<
+        f64[3][4][3]
+        [
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0]
+          ],
+          [
+            [2.0, 2.0, 2.0],
+            [2.0, 2.0, 2.0],
+            [2.0, 2.0, 2.0],
+            [2.0, 2.0, 2.0]
+          ]
+        ]
+      >
+
+      iex> Nx.iota({1, 3, 2}, axis: 2)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [0, 1],
+            [0, 1],
+            [0, 1]
+          ]
+        ]
+      >
+  """
+  def iota(tensor_or_shape, opts \\ [])
+
+  def iota({}, opts), do: tensor(0, opts)
+
+  def iota({n}, opts) do
+    output_type = opts[:type] || {:s, 64}
+    data = for i <- 0..(n - 1), do: scalar_to_bin(i, output_type)
+    %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: {n}, type: output_type}
+  end
+
+  def iota(tensor_or_shape, opts) do
+    shape = shape!(tensor_or_shape)
+    output_type = opts[:type] || {:s, 64}
+
+    if axis = opts[:axis] do
+      {dims_before, [dim | dims_after]} =
+        shape
+        |> Tuple.to_list()
+        |> Enum.split(axis)
+
+      # Number of repetitions of an index in memory
+      repeat_blocks =
+        dims_after
+        |> Enum.reduce(1, &*/2)
+
+      # Number of cycles of the counting pattern
+      cycles =
+        dims_before
+        |> Enum.reduce(1, &*/2)
+
+      data =
+        for _ <- 1..cycles,
+            i <- 0..(dim - 1),
+            _ <- 1..repeat_blocks,
+            into: "",
+            do: scalar_to_bin(i, output_type)
+
+      %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
+    else
+      t = iota({tuple_product(shape)}, opts)
+      reshape(t, shape)
+    end
+  end
+
   ## Shape
 
   @doc """
@@ -2385,6 +2517,175 @@ defmodule Nx do
     Nx.Util.reduce(tensor, 0, opts, &+/2)
   end
 
+  @doc """
+  Returns the indices of the maximum values along a given axis.
+
+  If no axis is given, returns the index of the absolute maximum
+  value in the tensor.
+
+  ## Options
+
+
+    * `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+      default behavior is to always return the lower index.
+
+  ## Examples
+
+      iex> Nx.argmax(4)
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]))
+      #Nx.Tensor<
+        s64
+        10
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 0, 0],
+          [1, 1, 0]
+        ]
+      >
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 0],
+          [0, 1, 0]
+        ]
+      >
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [0, 2],
+          [0, 1]
+        ]
+      >
+
+  ### Tie breaks
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :low, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 0],
+          [0, 1, 0]
+        ]
+      >
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :high, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 1],
+          [0, 1, 1]
+        ]
+      >
+  """
+  def argmax(t, opts \\ []) do
+    comparator =
+      case opts[:tie_break] || :low do
+        :high -> &>=/2
+        :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x > y end
+        :low -> &>/2
+      end
+    argmin_or_max(t, comparator, opts)
+  end
+
+  @doc """
+  Returns the indices of the minimum values along a given axis.
+
+  If no axis is given, returns the index of the absolute minimum
+  value in the tensor.
+
+  ## Options
+
+    * `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+      default behavior is to always return the lower index.
+
+  ## Examples
+
+      iex> Nx.argmin(4)
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]))
+      #Nx.Tensor<
+        s64
+        4
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 0],
+          [0, 0, 0]
+        ]
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 1, 0],
+          [1, 0, 0]
+        ]
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 1],
+          [1, 2]
+        ]
+      >
+
+  ### Tie breaks
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :low, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 1, 0],
+          [1, 0, 0]
+        ]
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :high, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 1, 1],
+          [1, 0, 1]
+        ]
+      >
+  """
+  def argmin(t, opts \\ []) do
+    comparator =
+      case opts[:tie_break] || :low do
+        :high -> &<=/2
+        :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x < y end
+        :low -> &</2
+      end
+    argmin_or_max(t, comparator, opts)
+  end
+
   ## Matrix ops
 
   @doc """
@@ -2609,6 +2910,22 @@ defmodule Nx do
       end
 
     %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+  end
+
+  ## Argmax/argmin helper
+  defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
+  defp argmin_or_max(t = %T{}, comparator, opts) do
+    {tensor, _accs} =
+      Nx.Util.zip_map_reduce([t], {0, :first, -1}, opts, fn {x},
+                                                                           {i, cur_extreme_x, cur_extreme_i} ->
+        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          {i, {i + 1, x, i}}
+        else
+          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+        end
+      end)
+
+    tensor
   end
 
   ## Shape

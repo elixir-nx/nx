@@ -183,7 +183,7 @@ defmodule Exla.Defn do
   def nx_negate(_builder, %Exla.Op{} = op), do: Exla.Op.negate(op)
   def nx_negate(_builder, number) when is_number(number), do: -number
 
-  ## Random
+  ## Creation
 
   def nx_random_uniform(builder, shape, min, max, opts)
       when is_number(min) and is_number(max) do
@@ -210,6 +210,23 @@ defmodule Exla.Defn do
     {sigma, _} = to_typed_operator(builder, sigma, type)
     shape = Exla.Shape.make_shape(type, shape)
     Exla.Op.rng_normal(mu, sigma, shape)
+  end
+
+  def nx_iota(builder, shape, opts \\ []) do
+    shape = to_shape(shape)
+    type = opts[:type] || {:s, 64}
+
+    shape = Exla.Shape.make_shape(type, shape)
+
+    if axis = opts[:axis] do
+      Exla.Op.iota(builder, shape, axis)
+    else
+      total_elems = tuple_product(shape.dims)
+      Exla.Op.reshape(
+        Exla.Op.iota(builder, Exla.Shape.make_shape(type, {total_elems}), 0),
+        shape.dims
+      )
+    end
   end
 
   ## Reflection
