@@ -2468,6 +2468,11 @@ defmodule Nx do
   If no axis is given, returns the index of the absolute maximum
   value in the tensor.
 
+  ## Options
+
+    `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+    default behavior is to always return the lower index.
+
   ## Examples
 
       iex> Nx.argmax(4)
@@ -2509,22 +2514,76 @@ defmodule Nx do
         ]
       >
   """
-  def argmax(tensor, opts \\ [])
+  def argmax(t, opts \\ []) do
+    comparator =
+      case opts[:tie_break] do
+        :high -> &>=/2
+        :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x > y end
+        _ -> &>/2
+      end
+    argmin_or_max(t, comparator, opts)
+  end
 
-  def argmax(number, opts) when is_number(number), do: tensor(0, opts)
+  @doc """
+  Returns the indices of the minimum values along a given axis.
 
-  def argmax(t = %T{}, opts) do
-    {max_tensor, _accs} =
-      Nx.Util.zip_map_reduce([t, Nx.iota(t, opts)], {:first, -1}, opts, fn {x, i},
-                                                                           {cur_max_x, cur_max_i} ->
-        if x > cur_max_x or cur_max_x == :first do
-          {i, {x, i}}
-        else
-          {cur_max_i, {cur_max_x, cur_max_i}}
-        end
-      end)
+  If no axis is given, returns the index of the absolute minimum
+  value in the tensor.
 
-    max_tensor
+  ## Options
+
+    `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+    default behavior is to always return the lower index.
+
+  ## Examples
+
+      iex> Nx.argmin(4)
+      #Nx.Tensor<
+        s64
+        0
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]))
+      #Nx.Tensor<
+        s64
+        4
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 0],
+          [0, 0, 0]
+        ]
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 1, 0],
+          [1, 0, 0]
+        ]
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 1],
+          [1, 2]
+        ]
+      >
+  """
+  def argmin(t, opts \\ []) do
+    comparator =
+      case opts[:tie_break] do
+        :high -> &<=/2
+        :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x < y end
+        _ -> &</2
+      end
+    argmin_or_max(t, comparator, opts)
   end
 
   ## Matrix ops
@@ -2749,6 +2808,22 @@ defmodule Nx do
       end
 
     %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+  end
+
+  ## Argmax/argmin helper
+  defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
+  defp argmin_or_max(t = %T{}, comparator, opts) do
+    {tensor, _accs} =
+      Nx.Util.zip_map_reduce([t, Nx.iota(t, opts)], {:first, -1}, opts, fn {x, i},
+                                                                           {cur_extreme_x, cur_extreme_i} ->
+        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          {i, {x, i}}
+        else
+          {cur_extreme_i, {cur_extreme_x, cur_extreme_i}}
+        end
+      end)
+
+    tensor
   end
 
   ## Shape
