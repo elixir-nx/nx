@@ -274,12 +274,18 @@ defmodule Nx.Util do
   # If the shapes do not match, but they are aligned correctly,
   # "broadcasts" them to match by repeating a view the necessary
   # number of times.
+  defp bin_zip([{folding_tensor, folding_axis} | []]) do
+    {_, folding_size} = folding_tensor.type
+    {folding_view, new_shape} = bin_view_axis(to_bitstring(folding_tensor), folding_axis, folding_tensor.shape, folding_size)
+    {Enum.zip([folding_view]), new_shape}
+  end
+
   defp bin_zip([{folding_tensor, folding_axis} | rest]) do
     {_, folding_size} = folding_tensor.type
     folding_dim = if folding_axis, do: elem(folding_tensor.shape, folding_axis), else: tuple_product(folding_tensor.shape)
-    {folding_view, new_shape} = bin_view_axis(to_bitstring(folding_tensor), folding_axis, folding_tensor.shape, folding_size)
+    {folding_view, folding_shape} = bin_view_axis(to_bitstring(folding_tensor), folding_axis, folding_tensor.shape, folding_size)
 
-    remaining_views =
+    data =
       for {tensor, axis} <- rest do
         dim = if axis, do: elem(tensor.shape, axis), else: tuple_product(tensor.shape)
 
@@ -287,17 +293,32 @@ defmodule Nx.Util do
           do: raise ArgumentError, "expected dimensions to match"
 
         {_, size} = tensor.type
-        {view, _} = bin_view_axis(to_bitstring(tensor), axis, tensor.shape, size)
+        {view, new_shape} = bin_view_axis(to_bitstring(tensor), axis, tensor.shape, size)
 
-        repetitions = div(tuple_product(folding_tensor.shape), tuple_product(tensor.shape))
+        views =
+          for f_axis <- folding_view,
+              axis <- view, do: {axis, f_axis}
 
-        repeated_view = for _ <- 1..repetitions, do: view
-        List.flatten(repeated_view)
+        {views, Tuple.to_list(new_shape)}
       end
 
-    zipped_views = Enum.zip([folding_view | remaining_views])
+    {zipped_views, shapes} = Enum.unzip(data)
 
-    {zipped_views, new_shape}
+    new_shape = combine_shapes([Tuple.to_list(folding_shape) | shapes], {})
+
+    {List.flatten(zipped_views), new_shape}
+  end
+
+  # TODO: This will become unnecessary when we restrict zip_map_reduce to 2 tensors
+  defp combine_shapes([shape | []], acc) do
+    shape
+    |> Enum.reduce(acc, & Tuple.append(&2, &1))
+  end
+  defp combine_shapes([shape | rest], acc) do
+    acc =
+      shape
+      |> Enum.reduce(acc, & Tuple.append(&2, &1))
+    combine_shapes(rest, acc)
   end
 
   # Helper for "viewing" a tensor along a given axis.
