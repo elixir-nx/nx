@@ -223,10 +223,9 @@ defmodule Nx.Util do
   ## Examples
 
     iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-    iex> t2 = Nx.iota(t1, axis: 0)
-    iex> {new_tensor, accs} = Nx.Util.zip_map_reduce([t1, t2], {:first, -1}, [axis: 0],
-    ...> fn {x, y}, {cur_max_i, cur_max} ->
-    ...>  if x > cur_max or cur_max == :first, do: {y, {y, x}}, else: {cur_max_i, {cur_max_i, cur_max}}
+    iex> {new_tensor, accs} = Nx.Util.zip_map_reduce([{t1, 0}], {0, :first, -1},
+    ...> fn {x}, {i, cur_max_i, cur_max} ->
+    ...>  if x > cur_max or cur_max == :first, do: {i, {i+1, i, x}}, else: {cur_max_i, {i + 1, cur_max_i, cur_max}}
     ...> end
     ...> )
     iex> new_tensor
@@ -235,38 +234,21 @@ defmodule Nx.Util do
       [1, 1, 1]
     >
     iex> accs
-    [{1, 4}, {1, 5}, {1, 6}]
+    [{2, 1, 4}, {2, 1, 5}, {2, 1, 6}]
   """
-  def zip_map_reduce(tensors, acc, opts \\ [], fun)
+  def zip_map_reduce(tensors_and_axes, acc, fun)
 
-  def zip_map_reduce([head | tail] = tensors, acc, opts, fun)
-      when is_list(tensors) and is_list(opts) and is_function(fun, 2) do
-    type = Enum.reduce(tail, head.type, &Nx.Type.merge(&1.type, &2))
-    shape = head.shape
+  def zip_map_reduce([{folding_tensor, _} | rest] = tensors_and_axes, acc, fun)
+      when is_list(tensors_and_axes) and is_function(fun, 2) do
 
-    if Enum.any?(tail, & &1.shape != shape) do
-      raise ArgumentError,
-              "attempt to pass mixed shapes to zip_map_reduce/4, all tensor shapes must match"
-    end
+    output_type = Enum.reduce(rest, folding_tensor.type, fn {t, _}, acc -> Nx.Type.merge(t.type, acc) end)
 
-    # TODO: Merge all to highest type when we have a `cast!` that works
-    # over an entire tensor
-    data =
-      tensors
-      |> Enum.map(&to_bitstring/1)
-
-    {zipped_axes, new_shape} = bin_zip(data, type, opts[:axis], shape)
+    {zipped_axes, new_shape} = bin_zip(tensors_and_axes)
 
     data_and_acc =
       for zipped_axis <- zipped_axes do
-        {tensor_data, acc} = bin_reduce(zipped_axis, type, acc, fun)
-
-        tensor_bin =
-          match_types [type] do
-            <<write!(tensor_data, 0)>>
-          end
-
-        {tensor_bin, acc}
+        {tensor_data, acc} = bin_reduce_many(zipped_axis, output_type, acc, fun)
+        {scalar_to_bin(tensor_data, output_type), acc}
       end
 
     {final_data, final_acc} = Enum.unzip(data_and_acc)
@@ -274,45 +256,81 @@ defmodule Nx.Util do
     {%T{
        data: {Nx.BitStringDevice, IO.iodata_to_binary(final_data)},
        shape: new_shape,
-       type: type
+       type: output_type
      }, final_acc}
   end
 
   ## Binary Helpers
 
-  defp bin_zip(binaries, type, axis, shape) do
-    {_, size} = type
+  # Helper for zipping tensors along given axis/axes.
+  # Given we always reduce on the first tensor provided,
+  # the "new_shape" returned is always the "new_shape" of
+  # the first tensor reduced along it's provided axis.
+  #
+  # Validates that subsequent shapes are compatible with the
+  # "folding" shape by determining if the dimension of the given
+  # axis equals the "folding" dimension of the "folding" shape.
+  #
+  # If the shapes do not match, but they are aligned correctly,
+  # "broadcasts" them to match by repeating a view the necessary
+  # number of times.
+  defp bin_zip([{folding_tensor, folding_axis} | rest]) do
+    {_, folding_size} = folding_tensor.type
+    folding_dim = if folding_axis, do: elem(folding_tensor.shape, folding_axis), else: tuple_product(folding_tensor.shape)
+    {folding_view, new_shape} = bin_view_axis(to_bitstring(folding_tensor), folding_axis, folding_tensor.shape, folding_size)
 
-    {new_data, new_shape} =
-      if axis do
-        {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
+    remaining_views =
+      for {tensor, axis} <- rest do
+        dim = if axis, do: elem(tensor.shape, axis), else: tuple_product(tensor.shape)
 
-        data =
-          aggregate_gaps(chunk_count, chunk_size, fn pre, _pos ->
-            axis =
-              for binary <- binaries do
-                <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::bitstring>> = binary
+        unless dim == folding_dim,
+          do: raise ArgumentError, "expected dimensions to match"
 
-                aggregate_gaps(gap_count, size, fn pre, pos ->
-                  for <<_::size(pre)-bitstring, var::size(size)-bitstring,
-                        _::size(pos)-bitstring <- chunk>>,
-                      into: <<>>,
-                      do: var
-                end)
-              end
+        {_, size} = tensor.type
+        {view, _} = bin_view_axis(to_bitstring(tensor), axis, tensor.shape, size)
 
-            Enum.zip(axis)
-          end)
+        repetitions = div(tuple_product(folding_tensor.shape), tuple_product(tensor.shape))
 
-        {List.flatten(data), new_shape}
-      else
-        {[List.to_tuple(binaries)], {}}
+        repeated_view = for _ <- 1..repetitions, do: view
+        List.flatten(repeated_view)
       end
 
-    {new_data, new_shape}
+    zipped_views = Enum.zip([folding_view | remaining_views])
+
+    {zipped_views, new_shape}
   end
 
-  defp bin_reduce(binaries, type, acc, fun) do
+  # Helper for "viewing" a tensor along a given axis.
+  # Returns the view and the expected new shape when
+  # reducing down the axis.
+  #
+  # If the axis isn't provided, the "view" is just the
+  # entire binary as it is layed out in memory and we
+  # expect the entire tensor to be reduced down to a scalar.
+  defp bin_view_axis(binary, axis, shape, size) do
+    if axis do
+      {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
+      view =
+        aggregate_gaps(chunk_count, chunk_size, fn pre, _pos ->
+          <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::bitstring>> = binary
+
+          aggregate_gaps(gap_count, size, fn pre, pos ->
+            for <<_::size(pre)-bitstring, var::size(size)-bitstring,
+                  _::size(pos)-bitstring <- chunk>>,
+                into: <<>>,
+                do: var
+          end)
+        end)
+      {List.flatten(view), new_shape}
+    else
+      {[binary], {}}
+    end
+  end
+
+  # Helper for reducing multiple binaries at once.
+  # Expects `fun` to return an accumulator and data
+  # for building a new tensor.
+  defp bin_reduce_many(binaries, type, acc, fun) do
     {heads, tails} =
       binaries
       |> Tuple.to_list()
@@ -328,7 +346,7 @@ defmodule Nx.Util do
       fun.(List.to_tuple(heads), acc)
     else
       {_cur_tensor_data, acc} = fun.(List.to_tuple(heads), acc)
-      bin_reduce(List.to_tuple(tails), type, acc, fun)
+      bin_reduce_many(List.to_tuple(tails), type, acc, fun)
     end
   end
 

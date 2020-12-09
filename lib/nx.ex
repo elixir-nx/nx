@@ -2814,49 +2814,17 @@ defmodule Nx do
             " last dimension of b (#{n})"
         )
 
-    total_elems = div(tuple_product(s1), last_dim)
+    axis = tuple_size(s1) - 1
 
-    output_shape =
-      if tuple_size(s1) == 1 do
-        {}
-      else
-        s1
-        |> Tuple.to_list()
-        |> Enum.take(tuple_size(s1) - 2)
-        |> Kernel.++([last_dim])
-        |> List.to_tuple()
-      end
-
-    data =
-      match_types [left_type, right_type, output_type] do
-        for i <- 0..(total_elems - 1), into: <<>> do
-          row =
-            :binary.part(
-              Nx.Util.to_bitstring(a),
-              div(i * n * left_size, 8),
-              div(n * left_size, 8)
-            )
-
-          value =
-            bin_reduce(
-              bin_zip_map(row, left_size, Nx.Util.to_bitstring(b), right_size, fn <<match!(x, 0),
-                                                                                    _::bitstring>>,
-                                                                                  <<match!(y, 1),
-                                                                                    _::bitstring>> ->
-                <<write!(read!(x, 0) * read!(y, 1), 2)>>
-              end)
-              |> IO.iodata_to_binary(),
-              0,
-              fn <<match!(var, 0), rest::bitstring>>, acc ->
-                {read!(var, 0) + acc, rest}
-              end
-            )
-
-          <<write!(value, 0)>>
+    {tensor, _} =
+      Nx.Util.zip_map_reduce([{a, axis}, {b, 0}], 0,
+        fn {lhs, rhs}, acc ->
+          res = lhs*rhs+acc
+          {res, res}
         end
-      end
+      )
 
-    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+    tensor
   end
 
   def dot(%T{shape: {_}} = a, %T{} = b), do: Nx.dot(b, a)
@@ -2916,8 +2884,8 @@ defmodule Nx do
   defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
   defp argmin_or_max(t = %T{}, comparator, opts) do
     {tensor, _accs} =
-      Nx.Util.zip_map_reduce([t], {0, :first, -1}, opts, fn {x},
-                                                                           {i, cur_extreme_x, cur_extreme_i} ->
+      Nx.Util.zip_map_reduce([{t, opts[:axis]}], {0, :first, -1}, fn {x},
+                                                                   {i, cur_extreme_x, cur_extreme_i} ->
         if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
           {i, {i + 1, x, i}}
         else
@@ -3062,10 +3030,6 @@ defmodule Nx do
     do: {left, right, ls, rs, shape}
 
   ## Binary helpers
-
-  defp scalar_to_bin(value, type) do
-    match_types([type], do: <<write!(value, 0)>>)
-  end
 
   defp bin_zip_map(<<>>, _left_size, <<>>, _right_size, _fun), do: []
 

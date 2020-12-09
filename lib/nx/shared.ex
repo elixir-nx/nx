@@ -136,4 +136,11 @@ defmodule Nx.Shared do
 
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
+
+  @doc """
+  Converts a scalar to a binary, according to the type.
+  """
+  def scalar_to_bin(value, type) do
+    match_types([type], do: <<write!(value, 0)>>)
+  end
 end
