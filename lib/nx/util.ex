@@ -388,11 +388,10 @@ defmodule Nx.Util do
         {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
 
         data =
-          aggregate_gaps(chunk_count, chunk_size, fn pre, pos ->
+          aggregate_gaps(chunk_count, chunk_size, fn pre, _pos ->
             axis =
               for binary <- binaries do
-                <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring,
-                  _::size(pos)-bitstring>> = binary
+                <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::bitstring>> = binary
 
                 aggregate_gaps(gap_count, size, fn pre, pos ->
                   for <<_::size(pre)-bitstring, var::size(size)-bitstring,
