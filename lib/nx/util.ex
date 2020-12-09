@@ -76,13 +76,6 @@ defmodule Nx.Util do
   the axis from the back. For example, `axis: -1` will
   always aggregate all rows.
 
-  If multiple tensors are given, performs the reduction
-  side-by-side and returns a tuple of size `N` which matches
-  the number of tensors given. Reduction function must
-  be an arity-2 function which accepts equal-sized tuples.
-  Number of initial values must match the number of tensors
-  passed.
-
   ## Examples
 
       iex> Nx.Util.reduce(Nx.tensor(42), 0, &+/2)
@@ -162,47 +155,10 @@ defmodule Nx.Util do
         ]
       >
 
-  ### Aggregating multiple tensors
-
-      iex> t1 = Nx.tensor([1, 2, 3])
-      iex> t2 = Nx.tensor([4, 5, 6])
-      iex> {t1, t2} = Nx.Util.reduce([t1, t2], [0, 0], fn {x, y}, {acc1, acc2} -> {x + acc1, y + acc2} end)
-      iex> t1
-      #Nx.Tensor<
-        s64
-        6
-      >
-      iex> t2
-      #Nx.Tensor<
-        s64
-        15
-      >
-
-      iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> t2 = Nx.tensor([[7, 8, 9], [10, 11, 12]])
-      iex> {t1, t2} = Nx.Util.reduce([t1, t2], [0, 0], [axis: 1], fn {x, y}, {acc1, acc2} -> {x*y + acc1, y - x + acc2} end)
-      iex> t1
-      #Nx.Tensor<
-        s64[2]
-        [50, 167]
-      >
-      iex> t2
-      #Nx.Tensor<
-        s64[2]
-        [18, 18]
-      >
-
   ### Errors
 
       iex> Nx.Util.reduce(Nx.tensor([1, 2, 3]), 0, [axis: 1], &+/2)
       ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
-
-      iex> Nx.Util.reduce([Nx.tensor([1, 2, 3]), Nx.tensor([1, 2])], [0, 0], [axis: 0], fn {x, y}, {_, _} -> {x, y} end)
-      ** (ArgumentError) attempt to pass mixed shapes to reduce/4, all tensor shapes must match
-
-      iex> Nx.Util.reduce([Nx.tensor([1, 2, 3])], [0, 0], [axis: 0], fn {x}, {_, _} -> {x, x+x} end)
-      ** (ArgumentError) number of tensors must match number of initial values passed to reduce/4
-
   """
   def reduce(tensor, acc, opts \\ [], fun)
 
@@ -251,62 +207,6 @@ defmodule Nx.Util do
       end
 
     %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
-  end
-
-  def reduce(tensors, accs, opts, fun)
-      when is_list(tensors) and is_list(accs) and is_list(opts) and is_function(fun, 2) do
-    unless length(tensors) == length(accs),
-      do:
-        raise(
-          ArgumentError,
-          "number of tensors must match number of initial values passed to reduce/4"
-        )
-
-    {type, shape} =
-      tensors
-      |> Enum.reduce(
-        {{:u, 8}, :empty},
-        fn t, {type, shape} ->
-          unless shape == :empty or t.shape == shape,
-            do:
-              raise(
-                ArgumentError,
-                "attempt to pass mixed shapes to reduce/4, all tensor shapes must match"
-              )
-
-          {Nx.Type.merge(t.type, type), t.shape}
-        end
-      )
-
-    # TODO: Merge all to highest type when we have a `cast!` that works
-    # over an entire tensor
-    data =
-      tensors
-      |> Enum.map(&to_bitstring/1)
-
-    {zipped_binaries, new_shape} = bin_zip(data, type, opts[:axis], shape)
-
-    zipped_data =
-      for bins <- zipped_binaries do
-        res = bin_reduce_side_by_side(bins, type, List.to_tuple(accs), fun)
-
-        res
-        |> Tuple.to_list()
-        |> Enum.map(fn val ->
-          match_types [type] do
-            <<write!(val, 0)>>
-          end
-        end)
-        |> List.to_tuple()
-      end
-
-    zipped_data
-    |> Enum.unzip()
-    |> Tuple.to_list()
-    |> Enum.map(
-      &%T{data: {Nx.BitStringDevice, IO.iodata_to_binary(&1)}, type: type, shape: new_shape}
-    )
-    |> List.to_tuple()
   end
 
   @doc """
@@ -410,24 +310,6 @@ defmodule Nx.Util do
       end
 
     {new_data, new_shape}
-  end
-
-  defp bin_reduce_side_by_side(binaries, type, accs, fun) do
-    {heads, tails} =
-      binaries
-      |> Tuple.to_list()
-      |> Enum.map(fn data ->
-        match_types [type] do
-          <<match!(x, 0), rest::bitstring>> = data
-          {read!(x, 0), rest}
-        end
-      end)
-      |> Enum.unzip()
-
-    if empty?(tails),
-      do: fun.(List.to_tuple(heads), accs),
-      else:
-        bin_reduce_side_by_side(List.to_tuple(tails), type, fun.(List.to_tuple(heads), accs), fun)
   end
 
   defp bin_reduce(binaries, type, acc, fun) do
