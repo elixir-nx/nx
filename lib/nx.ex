@@ -2470,8 +2470,9 @@ defmodule Nx do
 
   ## Options
 
-    `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
-    default behavior is to always return the lower index.
+
+    * `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+      default behavior is to always return the lower index.
 
   ## Examples
 
@@ -2486,6 +2487,8 @@ defmodule Nx do
         s64
         10
       >
+
+  ### Aggregating over an axis
 
       iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
       #Nx.Tensor<
@@ -2513,13 +2516,33 @@ defmodule Nx do
           [0, 1]
         ]
       >
+
+  ### Tie breaks
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :low, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 0],
+          [0, 1, 0]
+        ]
+      >
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :high, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 0, 1],
+          [0, 1, 1]
+        ]
+      >
   """
   def argmax(t, opts \\ []) do
     comparator =
-      case opts[:tie_break] do
+      case opts[:tie_break] || :low do
         :high -> &>=/2
         :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x > y end
-        _ -> &>/2
+        :low -> &>/2
       end
     argmin_or_max(t, comparator, opts)
   end
@@ -2532,8 +2555,8 @@ defmodule Nx do
 
   ## Options
 
-    `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
-    default behavior is to always return the lower index.
+    * `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+      default behavior is to always return the lower index.
 
   ## Examples
 
@@ -2548,6 +2571,8 @@ defmodule Nx do
         s64
         4
       >
+
+  ### Aggregating over an axis
 
       iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
       #Nx.Tensor<
@@ -2575,13 +2600,33 @@ defmodule Nx do
           [1, 2]
         ]
       >
+
+  ### Tie breaks
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :low, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 1, 0],
+          [1, 0, 0]
+        ]
+      >
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), tie_break: :high, axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 1, 1],
+          [1, 0, 1]
+        ]
+      >
   """
   def argmin(t, opts \\ []) do
     comparator =
-      case opts[:tie_break] do
+      case opts[:tie_break] || :low do
         :high -> &<=/2
         :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x < y end
-        _ -> &</2
+        :low -> &</2
       end
     argmin_or_max(t, comparator, opts)
   end
@@ -2814,12 +2859,12 @@ defmodule Nx do
   defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
   defp argmin_or_max(t = %T{}, comparator, opts) do
     {tensor, _accs} =
-      Nx.Util.zip_map_reduce([t, Nx.iota(t, opts)], {:first, -1}, opts, fn {x, i},
-                                                                           {cur_extreme_x, cur_extreme_i} ->
+      Nx.Util.zip_map_reduce([t], {0, :first, -1}, opts, fn {x},
+                                                                           {i, cur_extreme_x, cur_extreme_i} ->
         if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-          {i, {x, i}}
+          {i, {i + 1, x, i}}
         else
-          {cur_extreme_i, {cur_extreme_x, cur_extreme_i}}
+          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
         end
       end)
 

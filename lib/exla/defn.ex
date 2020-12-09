@@ -214,11 +214,7 @@ defmodule Exla.Defn do
     if axis = opts[:axis] do
       Exla.Op.iota(builder, shape, axis)
     else
-      total_elems =
-        shape.dims
-        |> Tuple.to_list()
-        |> Enum.reduce(1, &*/2)
-
+      total_elems = tuple_product(shape.dims)
       Exla.Op.reshape(
         Exla.Op.iota(builder, Exla.Shape.make_shape(type, {total_elems}), 0),
         shape.dims
