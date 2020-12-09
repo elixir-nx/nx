@@ -339,26 +339,15 @@ defmodule Nx.Util do
   """
   def zip_map_reduce(tensors, acc, opts \\ [], fun)
 
-  def zip_map_reduce([], _, _, _),
-    do: raise(ArgumentError, "no tensors passed to zip_reduce/4")
-
-  def zip_map_reduce(tensors, acc, opts, fun)
+  def zip_map_reduce([head | tail] = tensors, acc, opts, fun)
       when is_list(tensors) and is_list(opts) and is_function(fun, 2) do
-    {type, shape} =
-      tensors
-      |> Enum.reduce(
-        {{:u, 8}, :empty},
-        fn t, {type, shape} ->
-          unless shape == :empty or t.shape == shape,
-            do:
-              raise(
-                ArgumentError,
-                "attempt to pass mixed shapes to reduce/4, all tensor shapes must match"
-              )
+    type = Enum.reduce(tail, head.type, &Nx.Type.merge(&1.type, &2))
+    shape = head.shape
 
-          {Nx.Type.merge(t.type, type), t.shape}
-        end
-      )
+    if Enum.any?(tail, & &1.shape != shape) do
+      raise ArgumentError,
+              "attempt to pass mixed shapes to zip_map_reduce/4, all tensor shapes must match"
+    end
 
     # TODO: Merge all to highest type when we have a `cast!` that works
     # over an entire tensor
