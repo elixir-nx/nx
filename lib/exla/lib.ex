@@ -103,45 +103,12 @@ defmodule Exla.Lib do
   end
 
   # TODO: F16 and BF16
-  def min_value(builder, type, shape \\ {})
 
-  def min_value(%Builder{} = builder, {:u, _} = type, shape),
-    do: Op.constant_from_binary(builder, <<0>>, Shape.make_shape(type, shape))
-  def min_value(%Builder{} = builder, {:s, 8} = type, shape),
-    do: Op.constant_from_binary(builder, <<128>>, Shape.make_shape(type, shape))
-  def min_value(%Builder{} = builder, {:s, 16} = type, shape),
-    do: Op.constant_from_binary(builder, <<0, 128>>, Shape.make_shape(type, shape))
-  def min_value(%Builder{} = builder, {:s, 32} = type, shape),
-    do: Op.constant_from_binary(builder, <<0, 0, 0, 128>>, Shape.make_shape(type, shape))
-  def min_value(%Builder{} = builder, {:s, 64} = type, shape),
-    do: Op.constant_from_binary(builder, <<0, 0, 0, 0, 0, 0, 0, 128>>, Shape.make_shape(type, shape))
-  def min_value(%Builder{} = builder, {:f, 32} = type, shape),
-    do: Op.constant_from_binary(builder, <<238, 255, 127, 255>>, Shape.make_shape(type, shape))
-  def min_value(%Builder{} = builder, {:f, 64} = type, shape),
-    do: Op.constant_from_binary(builder, <<174, 130, 202, 87, 252, 255, 239, 255>>, Shape.make_shape(type, shape))
+  def min_value(%Builder{} = builder, type, shape \\ {}),
+    do: Op.constant_from_binary(builder, Nx.Type.min_value_binary(type), Shape.make_shape(type, shape))
 
-  def max_value(builder, type, shape \\ {})
-
-  def max_value(%Builder{} = builder, {:u, 8} = type, shape),
-    do: Op.constant_from_binary(builder, <<255>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:u, 16} = type, shape),
-    do: Op.constant_from_binary(builder, <<255, 255>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:u, 32} = type, shape),
-    do: Op.constant_from_binary(builder, <<255, 255, 255, 255>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:u, 64} = type, shape),
-    do: Op.constant_from_binary(builder, <<255, 255, 255, 255, 255, 255, 255, 255>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:s, 8} = type, shape),
-    do: Op.constant_from_binary(builder, <<127>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:s, 16} = type, shape),
-    do: Op.constant_from_binary(builder, <<255, 127>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:s, 32} = type, shape),
-    do: Op.constant_from_binary(builder, <<255, 255, 255, 127>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:s, 64} = type, shape),
-    do: Op.constant_from_binary(builder, <<255, 255, 255, 255, 255, 255, 255, 127>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:f, 32} = type, shape),
-    do: Op.constant_from_binary(builder, <<238, 255, 127, 127>>, Shape.make_shape(type, shape))
-  def max_value(%Builder{} = builder, {:f, 64} = type, shape),
-    do: Op.constant_from_binary(builder, <<174, 130, 202, 87, 252, 255, 239, 127>>, Shape.make_shape(type, shape))
+  def max_value(builder, type, shape \\ {}),
+    do: Op.constant_from_binary(builder, Nx.Type.max_value_binary(type), Shape.make_shape(type, shape))
 
   defp reduce_dimensions(op_shape, opts) do
     axis = opts[:axis]
