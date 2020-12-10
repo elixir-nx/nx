@@ -490,6 +490,48 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "argmax/argmin" do
+    defn argmax(t), do: Nx.argmax(t)
+    defn argmin(t), do: Nx.argmin(t)
+    defn argmax_axis(t), do: Nx.argmax(t, axis: 1)
+    defn argmin_axis(t), do: Nx.argmin(t, axis: 1)
+    defn argmax_high(t), do: Nx.argmax(t, axis: 1, tie_break: :high)
+    defn argmin_high(t), do: Nx.argmin(t, axis: 1, tie_break: :high)
+
+    test "computes the argmax across types" do
+      assert argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
+      assert argmax(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(2, type: {:s, 8})
+      assert argmax(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2, type: {:u, 8})
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(2, type: {:f, 64})
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(2, type: {:f, 32})
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(2, type: {:bf, 16})
+      assert argmax(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(5)
+    end
+
+    test "computes the argmin across types" do
+      assert argmin(Nx.tensor([1, 2, 3])) == Nx.tensor(0)
+      assert argmin(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(0, type: {:s, 8})
+      assert argmin(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(0, type: {:u, 8})
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(0, type: {:f, 64})
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(0, type: {:f, 32})
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(0, type: {:bf, 16})
+      assert argmin(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(0)
+    end
+
+    test "computes the argmax on an axis" do
+      assert argmax_axis(Nx.tensor([[[1, 1, 1], [1, 1, 3]], [[6, 2, 3], [2, 8, 3]]])) == Nx.tensor([[0, 0, 1], [0, 1, 0]])
+    end
+
+    test "computes the argmin on an axis" do
+      assert argmin_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) == Nx.tensor([[1, 1, 0], [1, 0, 0]])
+    end
+
+    test "computes argmax with tie_break: :high" do
+      assert argmax_axis(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([1, 1])
+      assert argmax_high(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([2, 2])
+    end
+  end
+
   describe "dot product" do
     defn dot(a, b), do: Nx.dot(a, b)
 

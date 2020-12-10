@@ -81,8 +81,9 @@ defmodule Exla.Op do
   arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :arctan2, :power]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
   shift = [:left_shift, :right_shift_arithmetic, :right_shift_logical]
+  comparison = [:equal, :not_equal, :greater_than, :less_than, :greater_than_or_equal, :less_than_or_equal]
 
-  for fun <- arith ++ bitwise ++ shift do
+  for fun <- arith ++ bitwise ++ shift ++ comparison do
     @doc """
     Element-wise #{fun} with broadcasting.
     """
@@ -132,15 +133,6 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def ne(
-        %Op{builder: builder, ref: left},
-        %Op{builder: builder, ref: right},
-        broadcast_dims \\ {}
-      ) do
-    ref = Exla.NIF.ne(left, right, broadcast_dims) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
   def conditional(%Op{builder: builder, ref: index}, branches, operands) do
     branches_refs =
       branches
@@ -151,6 +143,11 @@ defmodule Exla.Op do
       |> Enum.map(& &1.ref)
 
     ref = Exla.NIF.conditional(index, branches_refs, operands_refs) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def select(%Op{builder: builder, ref: pred}, %Op{builder: builder, ref: on_true}, %Op{builder: builder, ref: on_false}) do
+    ref = Exla.NIF.select(pred, on_true, on_false) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -251,6 +248,19 @@ defmodule Exla.Op do
         reduction_dimensions
       ) do
     ref = Exla.NIF.reduce(operand, init_value, reduction, reduction_dimensions) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def variadic_reduce(%Builder{ref: builder}, operands, init_values, %Computation{ref: reduction}, reduction_dimensions) do
+    operand_refs =
+      operands
+      |> Enum.map(& &1.ref)
+
+    init_value_refs =
+      init_values
+      |> Enum.map(& &1.ref)
+
+    ref = Exla.NIF.variadic_reduce(builder, operand_refs, init_value_refs, reduction, reduction_dimensions) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

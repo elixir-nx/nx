@@ -307,6 +307,14 @@ defmodule Exla.Defn do
     Exla.Lib.sum(builder, to_operator(builder, op), opts)
   end
 
+  def nx_argmax(builder, op, opts \\ []) do
+    Exla.Lib.argmax(builder, to_operator(builder, op), opts)
+  end
+
+  def nx_argmin(builder, op, opts \\ []) do
+    Exla.Lib.argmin(builder, to_operator(builder, op), opts)
+  end
+
   ## Other funs
 
   def nx_dot(builder, left, right) do

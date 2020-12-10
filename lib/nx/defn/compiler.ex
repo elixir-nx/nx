@@ -6,7 +6,7 @@ defmodule Nx.Defn.Compiler do
   @forbidden_nx_functions [tensor: 1, tensor: 2, device_read: 1, device_deallocate: 1] ++
                             [device_transfer: 1, device_transfer: 2, device_transfer: 3]
 
-  @known_keywords [:type, :axis]
+  @known_keywords [:type, :axis, :tie_break]
 
   @doc """
   The callback required to be implemented for each compiler.
