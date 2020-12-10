@@ -2783,12 +2783,41 @@ defmodule Nx do
 
   ### Dot Product of n-D and m-D tensor
 
-      TODO
+      iex> a = Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]])
+      iex> b = Nx.tensor([[[1, 2, 3], [3, 4, 5], [5, 6, 7]]])
+      iex> Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[2][3][1][3]
+        [
+          [
+            [
+              [22, 28, 34]
+            ],
+            [
+              [49, 64, 79]
+            ],
+            [
+              [76, 100, 124]
+            ]
+          ],
+          [
+            [
+              [22, 28, 34]
+            ],
+            [
+              [49, 64, 79]
+            ],
+            [
+              [76, 100, 124]
+            ]
+          ]
+        ]
+      >
 
   ### Error Cases
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
-      ** (ArgumentError) dot product expects shapes to be compatible, last dimension of a (3) does not equal last dimension of b (2)
+      ** (ArgumentError) dot product expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
   """
   def dot(a, b)
 
@@ -2798,126 +2827,45 @@ defmodule Nx do
   def dot(a, %T{shape: {}} = b), do: Nx.multiply(a, b)
 
   # Vectors
-  def dot(%T{type: left_type, shape: s1} = a, %T{type: right_type, shape: {n}} = b) do
-    output_type = Nx.Type.merge(left_type, right_type)
-    {_, left_size} = left_type
-    {_, right_size} = right_type
+  def dot(%T{shape: s1} = a, %T{shape: {_}} = b), do:
+    dot(a, tuple_size(s1) - 1, b, 0)
 
-    last_dim = elem(s1, tuple_size(s1) - 1)
+  def dot(%T{shape: {_}} = a, %T{} = b), do: Nx.dot(b, a)
 
-    unless last_dim == n,
+  # n-D and m-D Tensors
+  def dot(%T{shape: s1} = a, %T{shape: s2} = b), do:
+    dot(a, tuple_size(s1) - 1, b, tuple_size(s2) - 2)
+
+  # General dot product
+  def dot(%T{shape: s1} = a, axis1, %T{shape: s2} = b, axis2) do
+    dim1 = elem(s1, axis1)
+    dim2 = elem(s2, axis2)
+
+    unless dim1 == dim2,
       do:
         raise(
           ArgumentError,
           "dot product expects shapes to be compatible," <>
-            " last dimension of a (#{last_dim}) does not equal" <>
-            " last dimension of b (#{n})"
+          " dimension #{axis1} of left-side (#{dim1}) does not equal" <>
+          " dimension #{axis2} of right-side (#{dim2})"
         )
 
-    total_elems = div(tuple_product(s1), last_dim)
-
-    output_shape =
-      if tuple_size(s1) == 1 do
-        {}
-      else
-        s1
-        |> Tuple.to_list()
-        |> Enum.take(tuple_size(s1) - 2)
-        |> Kernel.++([last_dim])
-        |> List.to_tuple()
-      end
-
-    data =
-      match_types [left_type, right_type, output_type] do
-        for i <- 0..(total_elems - 1), into: <<>> do
-          row =
-            :binary.part(
-              Nx.Util.to_bitstring(a),
-              div(i * n * left_size, 8),
-              div(n * left_size, 8)
-            )
-
-          value =
-            bin_reduce(
-              bin_zip_map(row, left_size, Nx.Util.to_bitstring(b), right_size, fn <<match!(x, 0),
-                                                                                    _::bitstring>>,
-                                                                                  <<match!(y, 1),
-                                                                                    _::bitstring>> ->
-                <<write!(read!(x, 0) * read!(y, 1), 2)>>
-              end)
-              |> IO.iodata_to_binary(),
-              0,
-              fn <<match!(var, 0), rest::bitstring>>, acc ->
-                {read!(var, 0) + acc, rest}
-              end
-            )
-
-          <<write!(value, 0)>>
+    {tensor, _} =
+      Nx.Util.zip_map_reduce([{a, axis1}, {b, axis2}], 0,
+        fn {lhs, rhs}, acc ->
+          res = lhs*rhs+acc
+          {res, res}
         end
-      end
-
-    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
-  end
-
-  def dot(%T{shape: {_}} = a, %T{} = b), do: Nx.dot(b, a)
-
-  # Matrices
-
-  def dot(%T{type: left_type, shape: {m, n}} = a, %T{type: right_type, shape: {n, k}} = b) do
-    output_type = Nx.Type.merge(left_type, right_type)
-
-    {_, left_size} = left_type
-    {_, right_size} = right_type
-
-    output_shape = {m, k}
-
-    data =
-      match_types [left_type, right_type, output_type] do
-        for i <- 0..(m - 1), into: <<>> do
-          row =
-            :binary.part(
-              Nx.Util.to_bitstring(a),
-              div(i * n * left_size, 8),
-              div(n * left_size, 8)
-            )
-
-          for j <- 0..(k - 1), into: <<>> do
-            col =
-              for z <- 0..(n - 1), into: <<>> do
-                :binary.part(
-                  Nx.Util.to_bitstring(b),
-                  z * k * div(right_size, 8) + j * div(right_size, 8),
-                  div(right_size, 8)
-                )
-              end
-
-            value =
-              bin_reduce(
-                bin_zip_map(row, left_size, col, right_size, fn <<match!(x, 0), _::bitstring>>,
-                                                                <<match!(y, 1), _::bitstring>> ->
-                  <<write!(read!(x, 0) * read!(y, 1), 2)>>
-                end)
-                |> IO.iodata_to_binary(),
-                0,
-                fn <<match!(var, 0), rest::bitstring>>, acc ->
-                  {read!(var, 0) + acc, rest}
-                end
-              )
-
-            <<write!(value, 0)>>
-          end
-        end
-      end
-
-    %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: output_shape}
+      )
+    tensor
   end
 
   ## Argmax/argmin helper
   defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
   defp argmin_or_max(t = %T{}, comparator, opts) do
     {tensor, _accs} =
-      Nx.Util.zip_map_reduce([t], {0, :first, -1}, opts, fn {x},
-                                                                           {i, cur_extreme_x, cur_extreme_i} ->
+      Nx.Util.zip_map_reduce([{t, opts[:axis]}], {0, :first, -1}, fn {x},
+                                                                   {i, cur_extreme_x, cur_extreme_i} ->
         if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
           {i, {i + 1, x, i}}
         else
@@ -3063,10 +3011,6 @@ defmodule Nx do
 
   ## Binary helpers
 
-  defp scalar_to_bin(value, type) do
-    match_types([type], do: <<write!(value, 0)>>)
-  end
-
   defp bin_zip_map(<<>>, _left_size, <<>>, _right_size, _fun), do: []
 
   defp bin_zip_map(left_data, left_size, right_data, right_size, fun) do
@@ -3077,16 +3021,5 @@ defmodule Nx do
       fun.(left_head, right_head)
       | bin_zip_map(left_rest, left_size, right_rest, right_size, fun)
     ]
-  end
-
-  @compile {:inline, bin_reduce: 3}
-
-  defp bin_reduce(<<>>, acc, _fun) do
-    acc
-  end
-
-  defp bin_reduce(binary, acc, fun) do
-    {acc, rest} = fun.(binary, acc)
-    bin_reduce(rest, acc, fun)
   end
 end

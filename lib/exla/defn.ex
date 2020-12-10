@@ -313,7 +313,17 @@ defmodule Exla.Defn do
     type = binary_op_type(left, right)
     {left, _} = to_typed_operator(builder, left, type)
     {right, _} = to_typed_operator(builder, right, type)
-    Exla.Op.dot(left, right)
+
+    %Exla.Shape{dims: s1} = Exla.Op.get_shape(left)
+    %Exla.Shape{dims: s2} = Exla.Op.get_shape(right)
+    # To keep the semantics the same as Numpy, XLA will raise
+    # otherwise
+    case {tuple_size(s1), tuple_size(s2)} do
+      {0, _} -> Exla.Op.multiply(left, right)
+      {_, 0} -> Exla.Op.multiply(left, right)
+      {m, n} when m >= 2 and n > 2 -> Exla.Op.dot_general(left, right, {m - 1, n - 2})
+      _ -> Exla.Op.dot(left, right)
+    end
   end
 
   ## Conversion functions

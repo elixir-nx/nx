@@ -490,6 +490,41 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "dot product" do
+    defn dot(a, b), do: Nx.dot(a, b)
+
+    test "computes the dot product of scalars" do
+      assert dot(Nx.tensor(2), Nx.tensor(2)) == Nx.tensor(4)
+      assert dot(Nx.tensor(2.0), Nx.tensor(2.0)) == Nx.tensor(4.0)
+      assert dot(Nx.tensor(-2.0), Nx.tensor(-2)) == Nx.tensor(4.0)
+    end
+
+    test "computes the dot product of vectors" do
+      assert dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) == Nx.tensor(32)
+      assert dot(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([4.0, 5.0, 6.0])) == Nx.tensor(32.0)
+      assert dot(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), Nx.tensor([4, 5, 6])) == Nx.tensor(32.0)
+    end
+
+    test "computes the dot product of matrices" do
+      assert dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]])) == Nx.tensor([[58, 64], [139, 154]])
+      assert dot(
+        Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+        Nx.tensor([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]])
+      ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
+      assert dot(
+        Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+        Nx.tensor([[7, 8], [9, 10], [11, 12]])
+      ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
+    end
+
+    test "computes the dot product of tensors" do
+      assert dot(
+        Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]]),
+        Nx.tensor([[[1, 2, 3], [3, 4, 5], [5, 6, 7]]])
+      ) == Nx.tensor([[[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]],[[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]]])
+    end
+  end
+
   describe "softmax" do
     defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
