@@ -232,6 +232,18 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def dot_general(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}, dimnos, precision_config \\ :default) do
+    config =
+      case precision_config do
+        :default -> 0
+        :high -> 1
+        :highest -> 2
+      end
+
+    ref = Exla.NIF.dot_general(left, right, dimnos, config) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def reduce(
         %Op{builder: builder, ref: operand},
         %Op{builder: builder, ref: init_value},

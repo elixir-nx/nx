@@ -591,6 +591,45 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
+ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 4){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp *lhs, *rhs;
+  std::vector<exla::int64> contracting_dims;
+  exla::int8 config_int;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], lhs)) return exla::error(env, "Unable to get left-hand side operand.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], rhs)) return exla::error(env, "Unable to get right-hand side operand.");
+  if(!exla::get_tuple(env, argv[2], contracting_dims)) return exla::error(env, "Unable to get contraction dimensions.");
+  if(!exla::get(env, argv[3], config_int)) return exla::error(env, "Unable to get precision configuration.");
+
+  xla::PrecisionConfig config;
+
+  switch(config_int) {
+    case 0:
+      config.mutable_operand_precision()->Add(xla::PrecisionConfig::DEFAULT);
+    case 1:
+      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGH);
+    case 2:
+      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGHEST);
+  }
+
+  // TODO: For now we only match on the contracting dimensions,
+  // mainly to match the semantics of numpy's dot. We'll want
+  // to explore batching dimensions and better configuration overall
+  // of these dot dimension numbers when we look at broader
+  // operations like tensordot.
+  xla::DotDimensionNumbers dnums;
+  dnums.add_lhs_contracting_dimensions(contracting_dims.at(0));
+  dnums.add_rhs_contracting_dimensions(contracting_dims.at(1));
+
+  xla::XlaOp result = xla::DotGeneral(*lhs, *rhs, dnums, &config);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+}
+
 ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
     return exla::error(env, "Bad argument count.");
@@ -949,8 +988,10 @@ static ErlNifFunc exla_funcs[] = {
   {"rng_normal", 3, rng_normal},
   {"rng_uniform", 3, rng_uniform},
   {"iota", 3, iota},
-  /******** Other XLA Ops *******/
+  /******** Matrix Ops ********/
   {"dot", 3, dot},
+  {"dot_general", 4, dot_general},
+  /******** Other XLA Ops *******/
   {"reduce", 4, reduce},
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},

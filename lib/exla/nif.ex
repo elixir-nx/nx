@@ -133,6 +133,9 @@ defmodule Exla.NIF do
   def dot(_a, _b, _precision),
     do: nif_error(__ENV__.function)
 
+  def dot_general(_a, _b, _dims, _precision),
+    do: nif_error(__ENV__.function)
+
   def conditional(_pred, _true_op, _true_comp, _false_op, _false_comp),
     do: nif_error(__ENV__.function)
 
