@@ -504,6 +504,7 @@ defmodule Exla.DefnTest do
       assert argmax(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2, type: {:u, 8})
       assert argmax(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(2, type: {:f, 64})
       assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(2, type: {:f, 32})
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(2, type: {:bf, 16})
       assert argmax(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(5)
     end
 
@@ -513,6 +514,7 @@ defmodule Exla.DefnTest do
       assert argmin(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(0, type: {:u, 8})
       assert argmin(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(0, type: {:f, 64})
       assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(0, type: {:f, 32})
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(0, type: {:bf, 16})
       assert argmin(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(0)
     end
 
@@ -527,11 +529,6 @@ defmodule Exla.DefnTest do
     test "computes argmax with tie_break: :high" do
       assert argmax_axis(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([1, 1])
       assert argmax_high(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([2, 2])
-    end
-
-    test "computes the argmin with tie_break: :high" do
-      assert argmin_axis(Nx.tensor([[1, 1, 2], [1, 1, 2]])) == Nx.tensor([0, 0])
-      assert argmin_high(Nx.tensor([[1, 1, 2], [1, 1, 2]])) == Nx.tensor([1, 1])
     end
   end
 

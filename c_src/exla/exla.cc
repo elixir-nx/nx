@@ -543,8 +543,8 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     case xla::PrimitiveType::F16:
       return exla::error(env, "Unsupported constant type.");
     case xla::PrimitiveType::BF16:
-      // TODO
-      return exla::error(env, "Unsupported constant type.");
+      op = xla::ConstantR0(*builder, exla::get_value<xla::PrimitiveType::BF16>(env, term));
+      break;
     case xla::PrimitiveType::F32:
       op = xla::ConstantR0(*builder, exla::get_value<xla::PrimitiveType::F32>(env, term));
       break;

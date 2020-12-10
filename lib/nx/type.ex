@@ -28,29 +28,6 @@ defmodule Nx.Type do
 
   @doc """
   Returns the minimum possible value for the given type.
-  ## Examples
-      iex> Nx.Type.min_value_binary({:s, 8})
-      <<128>>
-      iex> Nx.Type.min_value_binary({:s, 16})
-      <<90, 128>>
-      iex> Nx.Type.min_value_binary({:s, 32})
-      <<0, 0, 0, 128>>
-      iex> Nx.Type.min_value_binary({:s, 64})
-      <<0, 0, 0, 0, 0, 0, 0, 128>>
-      iex> Nx.Type.min_value_binary({:u, 8})
-      <<0>>
-      iex> Nx.Type.min_value_binary({:u, 16})
-      <<0, 0>>
-      iex> Nx.Type.min_value_binary({:u, 32})
-      <<0, 0, 0, 0>>
-      iex> Nx.Type.min_value_binary({:u, 64})
-      <<0, 0, 0, 0, 0, 0, 0, 0>>
-      iex> Nx.Type.min_value_binary({:bf, 16})
-      <<128, 255>>
-      iex> Nx.Type.min_value_binary({:f, 32})
-      <<0, 0, 128, 255>>
-      iex> Nx.Type.min_value_binary({:f, 64})
-      <<0, 0, 0, 0, 0, 0, 240, 255>>
   """
   def min_value_binary(type)
 
@@ -65,29 +42,6 @@ defmodule Nx.Type do
 
   @doc """
   Returns the minimum possible value for the given type.
-  ## Examples
-      iex> Nx.Type.max_value_binary({:s, 8})
-      <<127>>
-      iex> Nx.Type.max_value_binary({:s, 16})
-      <<165, 127>>
-      iex> Nx.Type.max_value_binary({:s, 32})
-      <<255, 255, 255, 127>>
-      iex> Nx.Type.max_value_binary({:s, 64})
-      <<255, 255, 255, 255, 255, 255, 255, 127>>
-      iex> Nx.Type.max_value_binary({:u, 8})
-      <<255>>
-      iex> Nx.Type.max_value_binary({:u, 16})
-      <<255, 255>>
-      iex> Nx.Type.max_value_binary({:u, 32})
-      <<255, 255, 255, 255>>
-      iex> Nx.Type.max_value_binary({:u, 64})
-      <<255, 255, 255, 255, 255, 255, 255, 255>>
-      iex> Nx.Type.max_value_binary({:bf, 16})
-      <<128, 127>>
-      iex> Nx.Type.max_value_binary({:f, 32})
-      <<0, 0, 128, 127>>
-      iex> Nx.Type.max_value_binary({:f, 64})
-      <<0, 0, 0, 0, 0, 0, 240, 127>>
   """
   def max_value_binary(type)
 

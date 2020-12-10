@@ -2528,7 +2528,7 @@ defmodule Nx do
   ## Options
 
 
-    * `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+    * `:tie_break` - how to break ties. one of `:high`, or `:low``.
       default behavior is to always return the lower index.
 
   ## Examples
@@ -2598,7 +2598,6 @@ defmodule Nx do
     comparator =
       case opts[:tie_break] || :low do
         :high -> &>=/2
-        :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x > y end
         :low -> &>/2
       end
     argmin_or_max(t, comparator, opts)
@@ -2612,7 +2611,7 @@ defmodule Nx do
 
   ## Options
 
-    * `:tie_break` - how to break ties. one of `:high`, `:low`, or `:random`.
+    * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       default behavior is to always return the lower index.
 
   ## Examples
@@ -2682,7 +2681,6 @@ defmodule Nx do
     comparator =
       case opts[:tie_break] || :low do
         :high -> &<=/2
-        :random -> fn x, y -> if x == y, do: 0 == Enum.random(0..1), else: x < y end
         :low -> &</2
       end
     argmin_or_max(t, comparator, opts)

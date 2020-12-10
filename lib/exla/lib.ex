@@ -17,8 +17,7 @@ defmodule Exla.Lib do
     op_shape = Op.get_shape(op)
     reduction_shape = Shape.make_shape(op_shape.dtype, {})
 
-    unique = System.unique_integer([:positive])
-    sub_builder = Builder.new(builder, builder.name <> "-sum-" <> Integer.to_string(unique))
+    sub_builder = Builder.new(builder, unique_builder_name(builder.name, "sum"))
     a = Op.parameter(sub_builder, 0, reduction_shape, "a")
     b = Op.parameter(sub_builder, 1, reduction_shape, "b")
     add = Op.add(a, b)
@@ -72,7 +71,7 @@ defmodule Exla.Lib do
   end
 
   defp create_min_max_computation(builder, type, is_min?, tie_break) do
-    sub_builder = Builder.new(builder, "min_max_sub_builder")
+    sub_builder = Builder.new(builder, unique_builder_name(builder.name, "min_max"))
 
     lhs_value = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "lhs_value")
     lhs_index = Op.parameter(sub_builder, 1, Shape.make_shape(type, {}), "lhs_index")
@@ -84,7 +83,6 @@ defmodule Exla.Lib do
     max = Op.select(cmp, lhs_value, rhs_value)
     arg_max = Op.select(cmp, lhs_index, rhs_index)
 
-    # TODO: Random choice op
     arg_max =
       case tie_break do
         :low ->
@@ -95,20 +93,23 @@ defmodule Exla.Lib do
           eq? = Op.equal(lhs_value, rhs_value)
           id = Op.max(lhs_index, rhs_index)
           Op.select(eq?, id, arg_max)
-      end
+        end
 
     ast = Op.tuple(sub_builder, [max, arg_max])
 
     Builder.build(ast)
   end
 
-  # TODO: F16 and BF16
-
   def min_value(%Builder{} = builder, type, shape \\ {}),
     do: Op.constant_from_binary(builder, Nx.Type.min_value_binary(type), Shape.make_shape(type, shape))
 
   def max_value(builder, type, shape \\ {}),
     do: Op.constant_from_binary(builder, Nx.Type.max_value_binary(type), Shape.make_shape(type, shape))
+
+  defp unique_builder_name(parent_name, desc) do
+    suffix = System.unique_integer([:positive])
+    parent_name <> "-" <> desc <> "-" <> Integer.to_string(suffix)
+  end
 
   defp reduce_dimensions(op_shape, opts) do
     axis = opts[:axis]

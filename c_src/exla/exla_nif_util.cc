@@ -63,8 +63,10 @@ namespace exla {
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16 &var) {
-    // TODO
-    return 0;
+    double value;
+    if(!enif_get_double(env, term, &value)) return 0;
+    var = (bfloat16) value;
+    return 1;
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, float32 &var) {
