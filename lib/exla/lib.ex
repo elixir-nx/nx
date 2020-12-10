@@ -17,7 +17,7 @@ defmodule Exla.Lib do
     op_shape = Op.get_shape(op)
     reduction_shape = Shape.make_shape(op_shape.dtype, {})
 
-    sub_builder = Builder.new(builder, unique_builder_name(builder.name, "sum"))
+    sub_builder = subbuilder(builder, "sum")
     a = Op.parameter(sub_builder, 0, reduction_shape, "a")
     b = Op.parameter(sub_builder, 1, reduction_shape, "b")
     add = Op.add(a, b)
@@ -71,7 +71,7 @@ defmodule Exla.Lib do
   end
 
   defp create_min_max_computation(builder, type, is_min?, tie_break) do
-    sub_builder = Builder.new(builder, unique_builder_name(builder.name, "min_max"))
+    sub_builder = subbuilder(builder, "min-max")
 
     lhs_value = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "lhs_value")
     lhs_index = Op.parameter(sub_builder, 1, Shape.make_shape(type, {}), "lhs_index")
@@ -106,9 +106,9 @@ defmodule Exla.Lib do
   def max_value(builder, type, shape \\ {}),
     do: Op.constant_from_binary(builder, Nx.Type.max_value_binary(type), Shape.make_shape(type, shape))
 
-  defp unique_builder_name(parent_name, desc) do
+  defp subbuilder(%Builder{name: name} = builder, desc) do
     suffix = System.unique_integer([:positive])
-    parent_name <> "-" <> desc <> "-" <> Integer.to_string(suffix)
+    Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
   defp reduce_dimensions(op_shape, opts) do
