@@ -62,7 +62,11 @@ defmodule Nx.Util do
   end
 
   @doc """
-  Reduces over a tensor with the given accumulator.
+  Reduces over a tensor with the given accumulator, returning
+  a new tensor and the final accumulators.
+
+  Expects `fun` to return a tuple of tensor data and
+  the accumulator.
 
   The tensor may be reduced in parallel. The evaluation
   order of the reduction function is arbitrary and may
@@ -78,35 +82,48 @@ defmodule Nx.Util do
 
   ## Examples
 
-      iex> Nx.Util.reduce(Nx.tensor(42), 0, &+/2)
+      iex> {t, accs} = Nx.Util.reduce(Nx.tensor(42), 0, fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64
         42
       >
+      iex> accs
+      [42]
 
-      iex> Nx.Util.reduce(Nx.tensor([1, 2, 3]), 0, &+/2)
+      iex> {t, accs} = Nx.Util.reduce(Nx.tensor([1, 2, 3]), 0, fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64
         6
       >
+      iex> accs
+      [6]
 
-      iex> Nx.Util.reduce(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]), 0, &+/2)
+      iex> {t, accs} = Nx.Util.reduce(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]), 0, fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         f64
         10.0
       >
+      iex> accs
+      [10.0]
 
   ### Aggregating over an axis
 
       iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.Util.reduce(t, 0, [axis: 0], &+/2)
+      iex> {t, accs} = Nx.Util.reduce(t, 0, [axis: 0], fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64
         6
       >
+      iex> accs
+      [6]
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.Util.reduce(t, 0, [axis: 0], &+/2)
+      iex> {t, accs} = Nx.Util.reduce(t, 0, [axis: 0], fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64[2][3]
         [
@@ -114,9 +131,12 @@ defmodule Nx.Util do
           [14, 16, 18]
         ]
       >
+      iex> accs
+      [8, 10, 12, 14, 16, 18]
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.Util.reduce(t, 0, [axis: 1], &+/2)
+      iex> {t, accs} = Nx.Util.reduce(t, 0, [axis: 1], fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64[2][3]
         [
@@ -124,9 +144,12 @@ defmodule Nx.Util do
           [17, 19, 21]
         ]
       >
+      iex> accs
+      [5, 7, 9, 17, 19, 21]
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.Util.reduce(t, 0, [axis: 2], &+/2)
+      iex> {t, accs} = Nx.Util.reduce(t, 0, [axis: 2], fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64[2][2]
         [
@@ -134,9 +157,12 @@ defmodule Nx.Util do
           [24, 33]
         ]
       >
+      iex> accs
+      [6, 15, 24, 33]
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.Util.reduce(t, 0, [axis: -1], &+/2)
+      iex> {t, accs} = Nx.Util.reduce(t, 0, [axis: -1], fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64[2][2]
         [
@@ -144,9 +170,12 @@ defmodule Nx.Util do
           [24, 33]
         ]
       >
+      iex> accs
+      [6, 15, 24, 33]
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      iex> Nx.Util.reduce(t, 0, [axis: -3], &+/2)
+      iex> {t, accs} = Nx.Util.reduce(t, 0, [axis: -3], fn x, acc -> {x+acc, x+acc} end)
+      iex> t
       #Nx.Tensor<
         s64[2][3]
         [
@@ -154,10 +183,12 @@ defmodule Nx.Util do
           [14, 16, 18]
         ]
       >
+      iex> accs
+      [8, 10, 12, 14, 16, 18]
 
   ### Errors
 
-      iex> Nx.Util.reduce(Nx.tensor([1, 2, 3]), 0, [axis: 1], &+/2)
+      iex> Nx.Util.reduce(Nx.tensor([1, 2, 3]), 0, [axis: 1], fn x, acc -> {x+acc, x+acc} end)
       ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
   """
   def reduce(tensor, acc, opts \\ [], fun)
@@ -167,87 +198,94 @@ defmodule Nx.Util do
   end
 
   def reduce(%T{type: {_, size} = type, shape: shape} = t, acc, opts, fun)
-      when is_list(opts) and is_function(fun, 2) do
-    data = to_bitstring(t)
+    when is_list(opts) and is_function(fun, 2) do
 
-    {data, shape} =
-      if axis = opts[:axis] do
-        {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
+    output_type = opts[:type] || t.type
 
-        new_data =
-          aggregate_gaps(chunk_count, chunk_size, fn pre, pos ->
-            <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::size(pos)-bitstring>> =
-              data
+    {view, new_shape} = bin_view_axis(to_bitstring(t), opts[:axis], shape, size)
 
-            aggregate_gaps(gap_count, size, fn pre, pos ->
-              match_types [type] do
-                value =
-                  for <<_::size(pre)-bitstring, match!(var, 0), _::size(pos)-bitstring <- chunk>>,
-                    reduce: acc,
-                    do: (acc -> fun.(read!(var, 0), acc))
-
-                <<write!(value, 0)>>
-              end
-            end)
-          end)
-
-        {new_data, new_shape}
-      else
-        new_data =
-          match_types [type] do
-            value =
-              for <<match!(var, 0) <- data>>,
-                reduce: acc,
-                do: (acc -> fun.(read!(var, 0), acc))
-
-            <<write!(value, 0)>>
-          end
-
-        {new_data, {}}
+    data_and_acc =
+      for axis <- view do
+        {tensor_data, acc} = bin_reduce_axis(axis, type, <<>>, acc, fun)
+        {scalar_to_bin(tensor_data, output_type), acc}
       end
 
-    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
+    {final_tensor, final_accs} = Enum.unzip(data_and_acc)
+
+    {%T{data: {Nx.BitStringDevice, IO.iodata_to_binary(final_tensor)}, shape: new_shape, type: output_type}, final_accs}
   end
 
   @doc """
-  Performs a reduction of multiple tensors, producing a single
-  tensor and the final accumulator.
+  Zips two tensors along the specified axes, and then reduces
+  them, returning a new tensor and the final accumulators.
 
-  If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axis: 0`
-  implies aggregating over the highest order dimension
-  and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axis: -1` will
-  always aggregate all rows.
+  Expects `fun` to be a function with arity 2 that accepts a tuple
+  and an accumulator. `fun` returns a tuple of tensor data
+  used for building a new tensor, and an accumulator.
+
+  The accumulator can be any generic term.
+
+  The size of the dimensions of `t1` and `t2` must match along
+  `axis1` and `axis2`. `axis1` and/or `axis2` may be `nil`, in
+  which case, the entire tensor is reduced to a scalar.
 
   ## Examples
 
-    iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-    iex> {new_tensor, accs} = Nx.Util.zip_map_reduce([{t1, 0}], {0, :first, -1},
-    ...> fn {x}, {i, cur_max_i, cur_max} ->
-    ...>  if x > cur_max or cur_max == :first, do: {i, {i+1, i, x}}, else: {cur_max_i, {i + 1, cur_max_i, cur_max}}
-    ...> end
-    ...> )
-    iex> new_tensor
-    #Nx.Tensor<
-      s64[3]
-      [1, 1, 1]
-    >
-    iex> accs
-    [{2, 1, 4}, {2, 1, 5}, {2, 1, 6}]
+      iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> t2 = Nx.tensor([[1, 2], [3, 4], [5, 6]])
+      iex> {new_tensor, accs} = Nx.Util.zip_reduce(t1, 1, t2, 0, 0, fn {a, b}, acc -> {a*b+acc, a*b+acc} end)
+      iex> new_tensor
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [22, 28],
+          [49, 64]
+        ]
+      >
+      iex> accs
+      [22, 28, 49, 64]
+
+  ### Aggregating over an entire tensor
+
+      iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> t2 = Nx.tensor([[1, 2], [3, 4], [5, 6]])
+      iex> {new_tensor, accs} = Nx.Util.zip_reduce(t1, nil, t2, nil, 0, fn {a, b}, acc -> {a+b+acc, a+b+acc} end)
+      iex> new_tensor
+      #Nx.Tensor<
+        s64
+        42
+      >
+      iex> accs
+      [42]
+
+      iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> t2 = Nx.tensor([[1], [2], [3]])
+      iex> {new_tensor, accs} = Nx.Util.zip_reduce(t1, 1, t2, nil, 0, fn {a, b}, acc -> {a*b+acc, a*b+acc} end)
+      iex> new_tensor
+      #Nx.Tensor<
+        s64[2]
+        [14, 32]
+      >
+      iex> accs
+      [14, 32]
+
+  ### Errors
+
+      iex> t1 = Nx.tensor([1, 2, 3])
+      iex> t2 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.Util.zip_reduce(t1, 0, t2, 0, 0, fn {a, b}, acc -> {a+b+acc, a+b+acc} end)
+      ** (ArgumentError) unable to zip tensors along the given axis or axes dimensions of zipped axes must match, got 3 and 2
   """
-  def zip_map_reduce(tensors_and_axes, acc, fun)
+  def zip_reduce(t1, axis1, t2, axis2, acc, fun)
 
-  def zip_map_reduce([{folding_tensor, _} | rest] = tensors_and_axes, acc, fun)
-      when is_list(tensors_and_axes) and is_function(fun, 2) do
+  def zip_reduce(t1, axis1, t2, axis2, acc, fun) when is_function(fun, 2) do
+    output_type = Nx.Type.merge(t1.type, t2.type)
 
-    output_type = Enum.reduce(rest, folding_tensor.type, fn {t, _}, acc -> Nx.Type.merge(t.type, acc) end)
-
-    {zipped_axes, new_shape} = bin_zip(tensors_and_axes)
+    {zipped_axes, new_shape} = bin_zip(t1, axis1, t2, axis2)
 
     data_and_acc =
       for zipped_axis <- zipped_axes do
-        {tensor_data, acc} = bin_reduce_many(zipped_axis, output_type, acc, fun)
+        {tensor_data, acc} = bin_reduce_axis(zipped_axis, t1.type, t2.type, <<>>, acc, fun)
         {scalar_to_bin(tensor_data, output_type), acc}
       end
 
@@ -262,10 +300,13 @@ defmodule Nx.Util do
 
   ## Binary Helpers
 
-  # Helper for zipping tensors along given axis/axes.
+  # Helper for zipping 2 tensors along given axis/axes.
   # Given we always reduce on the first tensor provided,
   # the "new_shape" returned is always the "new_shape" of
   # the first tensor reduced along it's provided axis.
+  #
+  # The "folded" tensor is "folded" into the "folding" tensor
+  # along it's axis.
   #
   # Validates that subsequent shapes are compatible with the
   # "folding" shape by determining if the dimension of the given
@@ -274,51 +315,27 @@ defmodule Nx.Util do
   # If the shapes do not match, but they are aligned correctly,
   # "broadcasts" them to match by repeating a view the necessary
   # number of times.
-  defp bin_zip([{folding_tensor, folding_axis} | []]) do
-    {_, folding_size} = folding_tensor.type
-    {folding_view, new_shape} = bin_view_axis(to_bitstring(folding_tensor), folding_axis, folding_tensor.shape, folding_size)
-    {Enum.zip([folding_view]), new_shape}
-  end
+  defp bin_zip(t1, axis1, t2, axis2) do
+    {_, folding_size} = t1.type
+    folding_dim = if axis1, do: elem(t1.shape, axis1), else: tuple_product(t1.shape)
+    {folding_view, folding_shape} = bin_view_axis(to_bitstring(t1), axis1, t1.shape, folding_size)
 
-  defp bin_zip([{folding_tensor, folding_axis} | rest]) do
-    {_, folding_size} = folding_tensor.type
-    folding_dim = if folding_axis, do: elem(folding_tensor.shape, folding_axis), else: tuple_product(folding_tensor.shape)
-    {folding_view, folding_shape} = bin_view_axis(to_bitstring(folding_tensor), folding_axis, folding_tensor.shape, folding_size)
+    {_, folded_size} = t2.type
+    folded_dim = if axis2, do: elem(t2.shape, axis2), else: tuple_product(t2.shape)
 
-    data =
-      for {tensor, axis} <- rest do
-        dim = if axis, do: elem(tensor.shape, axis), else: tuple_product(tensor.shape)
+    unless folded_dim == folding_dim,
+      do: raise ArgumentError, "unable to zip tensors along the given axis or axes" <>
+                               " dimensions of zipped axes must match, got #{folding_dim}" <>
+                               " and #{folded_dim}"
 
-        unless dim == folding_dim,
-          do: raise ArgumentError, "expected dimensions to match"
+    {folded_view, folded_shape} = bin_view_axis(to_bitstring(t2), axis2, t2.shape, folded_size)
 
-        {_, size} = tensor.type
-        {view, new_shape} = bin_view_axis(to_bitstring(tensor), axis, tensor.shape, size)
+    zipped_views = for v1 <- folding_view,
+                       v2 <- folded_view, do: {v1, v2}
 
-        views =
-          for f_axis <- folding_view,
-              axis <- view, do: {axis, f_axis}
+    new_shape = Tuple.to_list(folding_shape) ++ Tuple.to_list(folded_shape)
 
-        {views, Tuple.to_list(new_shape)}
-      end
-
-    {zipped_views, shapes} = Enum.unzip(data)
-
-    new_shape = combine_shapes([Tuple.to_list(folding_shape) | shapes], {})
-
-    {List.flatten(zipped_views), new_shape}
-  end
-
-  # TODO: This will become unnecessary when we restrict zip_map_reduce to 2 tensors
-  defp combine_shapes([shape | []], acc) do
-    shape
-    |> Enum.reduce(acc, & Tuple.append(&2, &1))
-  end
-  defp combine_shapes([shape | rest], acc) do
-    acc =
-      shape
-      |> Enum.reduce(acc, & Tuple.append(&2, &1))
-    combine_shapes(rest, acc)
+    {List.flatten(zipped_views), List.to_tuple(new_shape)}
   end
 
   # Helper for "viewing" a tensor along a given axis.
@@ -348,31 +365,34 @@ defmodule Nx.Util do
     end
   end
 
-  # Helper for reducing multiple binaries at once.
-  # Expects `fun` to return an accumulator and data
-  # for building a new tensor.
-  defp bin_reduce_many(binaries, type, acc, fun) do
-    {heads, tails} =
-      binaries
-      |> Tuple.to_list()
-      |> Enum.map(fn data ->
-        match_types [type] do
-          <<match!(x, 0), rest::bitstring>> = data
-          {read!(x, 0), rest}
-        end
-      end)
-      |> Enum.unzip()
+  # Helper for reducing down a single axis, returning tensor
+  # data and a final accumulator.
+  defp bin_reduce_axis(<<>>, _type, tensor_data, acc, _fun), do: {tensor_data, acc}
+  defp bin_reduce_axis(binary, type, _tensor_data, acc, fun) do
+    {head, rest} =
+      match_types [type] do
+        <<match!(var, 0), rest::bitstring>> = binary
+        {read!(var, 0), rest}
+      end
 
-    if empty?(tails) do
-      fun.(List.to_tuple(heads), acc)
-    else
-      {_cur_tensor_data, acc} = fun.(List.to_tuple(heads), acc)
-      bin_reduce_many(List.to_tuple(tails), type, acc, fun)
-    end
+    {tensor_data, acc} = fun.(head, acc)
+    bin_reduce_axis(rest, type, tensor_data, acc, fun)
   end
 
-  defp empty?([<<>> | _]), do: true
-  defp empty?([_ | _]), do: false
+  # Helper for reducing down a single axis over two tensors,
+  # returning tensor data and a final accumulator.
+  defp bin_reduce_axis({<<>>, <<>>}, _left_type, _right_type, tensor_data, acc, _fun), do: {tensor_data, acc}
+  defp bin_reduce_axis({b1, b2}, left_type, right_type, _tensor_data, acc, fun) do
+    {head1, rest1, head2, rest2} =
+      match_types [left_type, right_type] do
+        <<match!(x, 0), rest1::bitstring>> = b1
+        <<match!(y, 1), rest2::bitstring>> = b2
+        {read!(x, 0), rest1, read!(y, 1), rest2}
+      end
+
+    {tensor_data, acc} = fun.({head1, head2}, acc)
+    bin_reduce_axis({rest1, rest2}, left_type, right_type, tensor_data, acc, fun)
+  end
 
   ## Dimension helpers
 

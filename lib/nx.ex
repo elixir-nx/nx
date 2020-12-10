@@ -2514,7 +2514,9 @@ defmodule Nx do
 
   """
   def sum(tensor, opts \\ []) do
-    Nx.Util.reduce(tensor, 0, opts, &+/2)
+    {tensor, _} =
+      Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x+acc, x+acc} end)
+    tensor
   end
 
   @doc """
@@ -2723,6 +2725,12 @@ defmodule Nx do
         -10.0
       >
 
+      iex> Nx.dot(2, 2.0)
+      #Nx.Tensor<
+        f64
+        4.0
+      >
+
   ### Dot Product of Vectors
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
@@ -2735,6 +2743,12 @@ defmodule Nx do
       #Nx.Tensor<
         f64
         39.0
+      >
+
+      iex> Nx.dot(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        f64
+        14.0
       >
 
   ### Dot Product of Matrices
@@ -2754,6 +2768,15 @@ defmodule Nx do
         [
           [304.0, 315.0],
           [548.0, 636.0]
+        ]
+      >
+
+      iex> Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]]))
+      #Nx.Tensor<
+        f64[2][2]
+        [
+          [58.0, 64.0],
+          [139.0, 154.0]
         ]
       >
 
@@ -2823,18 +2846,16 @@ defmodule Nx do
 
   # Scalars
   def dot(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
-  def dot(%T{shape: {}} = a, b), do: Nx.multiply(a, b)
-  def dot(a, %T{shape: {}} = b), do: Nx.multiply(a, b)
 
-  # Vectors
-  def dot(%T{shape: s1} = a, %T{shape: {_}} = b), do:
-    dot(a, tuple_size(s1) - 1, b, 0)
-
-  def dot(%T{shape: {_}} = a, %T{} = b), do: Nx.dot(b, a)
-
-  # n-D and m-D Tensors
-  def dot(%T{shape: s1} = a, %T{shape: s2} = b), do:
-    dot(a, tuple_size(s1) - 1, b, tuple_size(s2) - 2)
+  def dot(%T{shape: s1} = a, %T{shape: s2} = b) do
+    case {tuple_size(s1), tuple_size(s2)} do
+      {0, _} -> Nx.multiply(a, b)
+      {_, 0} -> Nx.multiply(a, b)
+      {1, _} -> Nx.dot(a, 0, b, tuple_size(s2) - 1)
+      {_, 1} -> Nx.dot(a, tuple_size(s1) - 1, b, 0)
+      {n, m} when n >= 2 and m >= 2 -> dot(a, tuple_size(s1) - 1, b, tuple_size(s2) - 2)
+    end
+  end
 
   # General dot product
   def dot(%T{shape: s1} = a, axis1, %T{shape: s2} = b, axis2) do
@@ -2851,7 +2872,7 @@ defmodule Nx do
         )
 
     {tensor, _} =
-      Nx.Util.zip_map_reduce([{a, axis1}, {b, axis2}], 0,
+      Nx.Util.zip_reduce(a, axis1, b, axis2, 0,
         fn {lhs, rhs}, acc ->
           res = lhs*rhs+acc
           {res, res}
@@ -2864,8 +2885,7 @@ defmodule Nx do
   defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
   defp argmin_or_max(t = %T{}, comparator, opts) do
     {tensor, _accs} =
-      Nx.Util.zip_map_reduce([{t, opts[:axis]}], {0, :first, -1}, fn {x},
-                                                                   {i, cur_extreme_x, cur_extreme_i} ->
+      Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
         if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
           {i, {i + 1, x, i}}
         else
