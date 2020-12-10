@@ -261,6 +261,24 @@ ERL_NIF_TERM conditional_multi(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if(argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* pred;
+  xla::XlaOp* on_true;
+  xla::XlaOp* on_false;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], pred)) return exla::error(env, "Unable to get predicate.");
+  if(!exla::get<xla::XlaOp>(env, argv[1], on_true)) return exla::error(env, "Unable to get predicate.");
+  if(!exla::get<xla::XlaOp>(env, argv[2], on_false)) return exla::error(env, "Unable to get predicate.");
+
+  xla::XlaOp op = xla::Select(*pred, *on_true, *on_false);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 /************************ Slicing Ops *****************************/
 ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(argc != 4) {
@@ -425,17 +443,17 @@ ERL_NIF_TERM bitwise_xor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){re
 ERL_NIF_TERM shift_left(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::ShiftLeft);}
 ERL_NIF_TERM shift_right_logical(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::ShiftRightLogical);}
 ERL_NIF_TERM shift_right_arithmetic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::ShiftRightArithmetic);}
-ERL_NIF_TERM eq(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Eq);}
+ERL_NIF_TERM equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Eq);}
 ERL_NIF_TERM eq_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::EqTotalOrder);}
-ERL_NIF_TERM ne(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Ne);}
+ERL_NIF_TERM not_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Ne);}
 ERL_NIF_TERM ne_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::NeTotalOrder);}
-ERL_NIF_TERM ge(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Ge);}
+ERL_NIF_TERM greater_than_or_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Ge);}
 ERL_NIF_TERM ge_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::GeTotalOrder);}
-ERL_NIF_TERM gt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Gt);}
+ERL_NIF_TERM greater_than(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Gt);}
 ERL_NIF_TERM gt_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::GtTotalOrder);}
-ERL_NIF_TERM lt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Lt);}
+ERL_NIF_TERM less_than(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Lt);}
 ERL_NIF_TERM lt_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::LtTotalOrder);}
-ERL_NIF_TERM le(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Le);}
+ERL_NIF_TERM less_than_or_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Le);}
 ERL_NIF_TERM le_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::LeTotalOrder);}
 ERL_NIF_TERM pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Pow);}
 ERL_NIF_TERM complex(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){return xla_binary_op(env, argc, argv, xla::Complex);}
@@ -646,6 +664,28 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(!exla::get_tuple(env, argv[3], dimensions_to_reduce)) return exla::error(env, "Unable to get reduction dimensions.");
 
   xla::XlaOp op = xla::Reduce(*operand, *init_value, *computation, dimensions_to_reduce);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM variadic_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 5){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  std::vector<xla::XlaOp> operands;
+  std::vector<xla::XlaOp> init_values;
+  xla::XlaComputation* computation;
+  std::vector<exla::int64> dimensions_to_reduce;
+
+  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if(!exla::get_list<xla::XlaOp>(env, argv[1], operands)) return exla::error(env, "Unable to get operands.");
+  if(!exla::get_list<xla::XlaOp>(env, argv[2], init_values)) return exla::error(env, "Unable to get initial values.");
+  if(!exla::get<xla::XlaComputation>(env, argv[3], computation)) return exla::error(env, "Unable to get computation.");
+  if(!exla::get_tuple(env, argv[4], dimensions_to_reduce)) return exla::error(env, "Unable to get dimensions.");
+
+  xla::XlaOp op = xla::Reduce(*builder, operands, init_values, *computation, dimensions_to_reduce);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -933,17 +973,17 @@ static ErlNifFunc exla_funcs[] = {
   {"complex", 3, complex},
   {"arctan2", 3, atan2},
   /****** Binary comparison Ops ******/
-  {"eq", 3, eq},
+  {"equal", 3, equal},
   {"eq_total_order", 3, eq_total_order},
-  {"ne", 3, ne},
+  {"not_equal", 3, not_equal},
   {"ne_total_order", 3, ne_total_order},
-  {"gt", 3, gt},
+  {"greater_than", 3, greater_than},
   {"gt_total_order", 3, gt_total_order},
-  {"ge", 3, ge},
+  {"greater_than_or_equal", 3, greater_than_or_equal},
   {"ge_total_order", 3, ge_total_order},
-  {"lt", 3, lt},
+  {"less_than", 3, less_than},
   {"lt_total_order", 3, lt_total_order},
-  {"le", 3, le},
+  {"less_than_or_equal", 3, less_than_or_equal},
   {"le_total_order", 3, le_total_order},
   /****** Unary Ops ******/
   {"abs", 1, abs},
@@ -979,6 +1019,7 @@ static ErlNifFunc exla_funcs[] = {
   /********* Conditionals *********/
   {"conditional", 5, conditional_if},
   {"conditional", 3, conditional_multi},
+  {"select", 3, select},
   /******** Slicing Ops ********/
   {"slice", 4, slice},
   {"slice_in_dim", 5, slice_in_dim},
@@ -993,6 +1034,7 @@ static ErlNifFunc exla_funcs[] = {
   {"dot_general", 4, dot_general},
   /******** Other XLA Ops *******/
   {"reduce", 4, reduce},
+  {"variadic_reduce", 5, variadic_reduce},
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
   {"get_shape", 2, get_shape_op},

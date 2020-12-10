@@ -60,37 +60,37 @@ defmodule Exla.NIF do
   def right_shift_logical(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def eq(_a, _b, _broadcast_dims),
+  def equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def eq_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def ne(_a, _b, _broadcast_dims),
+  def not_equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def ne_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def ge(_a, _b, _broadcast_dims),
+  def greater_than_or_equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def ge_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def gt(_a, _b, _broadcast_dims),
+  def greater_than(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def gt_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def le(_a, _b, _broadcast_dims),
+  def less_than_or_equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def le_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def lt(_a, _b, _broadcast_dims),
+  def less_than(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def lt_total_order(_a, _b, _broadcast_dims),
@@ -142,6 +142,9 @@ defmodule Exla.NIF do
   def conditional(_index, _branches, _operands),
     do: nif_error(__ENV__.function)
 
+  def select(_pred, _on_true, _on_false),
+    do: nif_error(__ENV__.function)
+
   def slice(_op, _start_indices, _limit_indices, _strides),
     do: nif_error(__ENV__.function)
 
@@ -164,6 +167,9 @@ defmodule Exla.NIF do
     do: nif_error(__ENV__.function)
 
   def reduce(_operand, _init_value, _computation, _dimensions),
+    do: nif_error(__ENV__.function)
+
+  def variadic_reduce(_builder, _operands, _init_value, _computation, _dimensions),
     do: nif_error(__ENV__.function)
 
   def reshape(_operand, _dimensions),

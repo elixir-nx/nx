@@ -490,6 +490,19 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "argmax/argmin" do
+    defn argmax(t), do: Nx.argmax(t)
+    defn argmin(t), do: Nx.argmin(t)
+
+    test "computes the argmax across types" do
+      assert Nx.argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
+      assert Nx.argmax(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(2, type: {:s, 8})
+      assert Nx.argmax(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2, type: {:u, 8})
+      assert Nx.argmax(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(2, type: {:f, 64})
+      assert Nx.argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(2, type: {:f, 32})
+    end
+  end
+
   describe "dot product" do
     defn dot(a, b), do: Nx.dot(a, b)
 
