@@ -49,7 +49,6 @@ defmodule Exla.Lib do
   def argmin(%Builder{} = builder, %Op{} = op, opts \\ []), do: argmin_or_max(builder, op, true, opts)
 
   defp argmin_or_max(builder, op, is_min?, opts) do
-    IO.inspect "CALLED"
     tie_break = opts[:tie_break] || :low
 
     op_shape = Op.get_shape(op)
@@ -67,8 +66,7 @@ defmodule Exla.Lib do
 
     reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
 
-    axis = if axis, do: {axis}, else: {}
-    result = Op.reduce(builder, {op, iota}, {init_value, index_init_value}, reduction, axis)
+    result = Op.variadic_reduce(builder, [op, iota], [init_value, index_init_value], reduction, reduce_dimensions(op_shape, opts))
 
     Op.get_tuple_element(result, 1)
   end
@@ -77,21 +75,34 @@ defmodule Exla.Lib do
     sub_builder = Builder.new(builder, "min_max_sub_builder")
 
     lhs_value = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "lhs_value")
-    lhs_index = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "lhs_index")
-    rhs_value = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "rhs_value")
-    rhs_index = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "rhs_index")
+    lhs_index = Op.parameter(sub_builder, 1, Shape.make_shape(type, {}), "lhs_index")
+    rhs_value = Op.parameter(sub_builder, 2, Shape.make_shape(type, {}), "rhs_value")
+    rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape(type, {}), "rhs_index")
 
     cmp = if is_min?, do: Op.less_than_or_equal(lhs_value, rhs_value), else: Op.greater_than_or_equal(lhs_value, rhs_value)
 
     max = Op.select(cmp, lhs_value, rhs_value)
     arg_max = Op.select(cmp, lhs_index, rhs_index)
 
-    ast = Op.tuple(sub_builder, {max, arg_max})
+    # TODO: Random choice op
+    arg_max =
+      case tie_break do
+        :low ->
+          eq? = Op.equal(lhs_value, rhs_value)
+          id = Op.min(lhs_index, rhs_index)
+          Op.select(eq?, id, arg_max)
+        :high ->
+          eq? = Op.equal(lhs_value, rhs_value)
+          id = Op.max(lhs_index, rhs_index)
+          Op.select(eq?, id, arg_max)
+      end
+
+    ast = Op.tuple(sub_builder, [max, arg_max])
 
     Builder.build(ast)
   end
 
-  # TODO: Floats!
+  # TODO: F16 and BF16
   def min_value(builder, type, shape \\ {})
 
   def min_value(%Builder{} = builder, {:u, _} = type, shape),
@@ -104,6 +115,10 @@ defmodule Exla.Lib do
     do: Op.constant_from_binary(builder, <<0, 0, 0, 128>>, Shape.make_shape(type, shape))
   def min_value(%Builder{} = builder, {:s, 64} = type, shape),
     do: Op.constant_from_binary(builder, <<0, 0, 0, 0, 0, 0, 0, 128>>, Shape.make_shape(type, shape))
+  def min_value(%Builder{} = builder, {:f, 32} = type, shape),
+    do: Op.constant_from_binary(builder, <<238, 255, 127, 255>>, Shape.make_shape(type, shape))
+  def min_value(%Builder{} = builder, {:f, 64} = type, shape),
+    do: Op.constant_from_binary(builder, <<174, 130, 202, 87, 252, 255, 239, 255>>, Shape.make_shape(type, shape))
 
   def max_value(builder, type, shape \\ {})
 
@@ -123,6 +138,10 @@ defmodule Exla.Lib do
     do: Op.constant_from_binary(builder, <<255, 255, 255, 127>>, Shape.make_shape(type, shape))
   def max_value(%Builder{} = builder, {:s, 64} = type, shape),
     do: Op.constant_from_binary(builder, <<255, 255, 255, 255, 255, 255, 255, 127>>, Shape.make_shape(type, shape))
+  def max_value(%Builder{} = builder, {:f, 32} = type, shape),
+    do: Op.constant_from_binary(builder, <<238, 255, 127, 127>>, Shape.make_shape(type, shape))
+  def max_value(%Builder{} = builder, {:f, 64} = type, shape),
+    do: Op.constant_from_binary(builder, <<174, 130, 202, 87, 252, 255, 239, 127>>, Shape.make_shape(type, shape))
 
   defp reduce_dimensions(op_shape, opts) do
     axis = opts[:axis]
