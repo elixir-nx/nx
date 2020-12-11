@@ -12,9 +12,10 @@ defmodule Nx.GradTest do
     # variable with a partial application of `func`:
     #
     # check_grads(& my_function(1.0, 1.0, &1, 1.0))
-    def check_grads(func, x, grad_result, eps \\ 1.0e-4) do
+    def check_grads(func, grad_func, x, eps \\ 1.0e-4) do
       est_grad = finite_differences(func, x, eps)
-      approx_equal?(est_grad, grad_result, eps)
+      comp_grad = grad_func.(x)
+      approx_equal?(est_grad, comp_grad, eps)
     end
 
     # Determines if `lhs` approx. equals `rhs` given
@@ -72,9 +73,7 @@ defmodule Nx.GradTest do
     defn grad_my_function(t), do: grad(t, Nx.tanh(t))
 
     test "verifies gradient" do
-      grad_result = grad_my_function(Nx.tensor(1.0))
-
-      assert GradHelpers.check_grads(&my_function/1, Nx.tensor(1.0), grad_result)
+      assert GradHelpers.check_grads(&my_function/1, &grad_my_function/1, Nx.tensor(1.0))
     end
   end
 
