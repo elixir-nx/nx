@@ -8,10 +8,18 @@ defmodule Nx.GradTest do
     defn grad_constant(t), do: grad(t, 1.0)
     defn grad_unrelated(t, a), do: grad(t, a)
 
-    test "computes gradient" do
+    test "computes gradient for scalars" do
       assert grad_itself(Nx.tensor(1.0)) == Nx.tensor(1.0)
       assert grad_constant(Nx.tensor(1.0)) == Nx.tensor(0.0)
       assert grad_unrelated(Nx.tensor(1.0), Nx.tensor(2.0)) == Nx.tensor(0.0)
+    end
+
+    test "computes gradient for tensors" do
+      assert grad_constant(Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([0.0, 0.0, 0.0])
+
+      assert grad_unrelated(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor(2.0)) ==
+               Nx.tensor([0.0, 0.0, 0.0])
     end
   end
 
@@ -91,9 +99,13 @@ defmodule Nx.GradTest do
     defn grad_tensor_constant(t), do: grad(t, @one_two_three)
     defn grad_tensor_power_plus_constant(t), do: grad(t, Nx.power(t, 2) + @one_two_three)
 
-    test "computes grad" do
+    test "computes gradient for scalars" do
       assert grad_tensor_constant(Nx.tensor(1.0)) == Nx.tensor(0.0)
       assert grad_tensor_power_plus_constant(Nx.tensor(1.0)) == Nx.tensor(2.0)
+    end
+
+    test "computes gradient for tensors" do
+      assert grad_tensor_constant(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0.0, 0.0, 0.0])
     end
   end
 

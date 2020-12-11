@@ -17,7 +17,7 @@ defmodule Nx.Defn.GradTransform do
 
   @impl true
   def __transform__(_env, version, meta, {vars, ast}, _opts) do
-    state = %{version: version, vars: %{}}
+    state = %{version: version, vars: %{}, meta: meta}
 
     # SSA
     {ast, state} = ssa(ast, state)
@@ -27,23 +27,29 @@ defmodule Nx.Defn.GradTransform do
     {ast, state} = collect_and_flatten({:=, meta, [result_var, ast]}, state)
 
     # Now compute the gradient
-    grad = gradient_for(vars, meta, result_var, state)
+    grad = gradient_for(vars, result_var, state)
     assertion = nx_call(meta, :assert_shape, [result_var, {:{}, meta, []}, @hint])
     {state.version, append_to_block(ast, [assertion, grad])}
   end
 
-  defp gradient_for({left, right}, meta, result_var, state) do
-    gradient_for({:{}, meta, [left, right]}, meta, result_var, state)
+  defp gradient_for({left, right}, result_var, state) do
+    gradient_for({:{}, [], [left, right]}, result_var, state)
   end
 
-  defp gradient_for({:{}, meta, args}, _meta, result_var, state) do
-    {:{}, meta, Enum.map(args, &gradient_for(&1, meta, result_var, state))}
+  defp gradient_for({:{}, meta, args}, result_var, state) do
+    {:{}, meta, Enum.map(args, &gradient_for(&1, result_var, state))}
   end
 
-  defp gradient_for(var, meta, result_var, state) when is_var(var) do
-    unfold_grad = unfold_var(result_var, [], Map.put(state, :counter, var_counter(var)))
-    to_dot(meta, unfold_grad)
+  defp gradient_for(var, result_var, state) when is_var(var) do
+    state = Map.put(state, :var, {var_counter(var), var})
+
+    result_var
+    |> unfold_var([], state)
+    |> to_dot(state)
+    |> to_shape(state)
   end
+
+  defp to_shape(expr, %{meta: meta, var: {_, var}}), do: nx_call(meta, :reshape, [expr, var])
 
   ## SSA
 
@@ -144,6 +150,15 @@ defmodule Nx.Defn.GradTransform do
 
   ## Unfold the gradient computation into a list
 
+  defp one(%{meta: meta, var: {_, var}}), do: nx_call(meta, :broadcast, [1.0, var])
+  defp zero(%{meta: meta, var: {_, var}}), do: nx_call(meta, :broadcast, [0.0, var])
+
+  defmacrop one_pattern(), do: quote(do: {{:., _, [Nx, :broadcast]}, _, [1.0, _]})
+  defmacrop zero_pattern(), do: quote(do: {{:., _, [Nx, :broadcast]}, _, [0.0, _]})
+
+  defp one?(var), do: match?(one_pattern(), var)
+  defp zero?(var), do: match?(zero_pattern(), var)
+
   defp unfold_var(var, exprs, state) when is_var(var) do
     counter = var_counter(var)
 
@@ -152,32 +167,45 @@ defmodule Nx.Defn.GradTransform do
         unfold_grad(expr, var, exprs, state)
 
       %{} ->
-        if counter == state.counter, do: [1.0 | exprs], else: [0.0 | exprs]
+        case state.var do
+          {^counter, _} -> [one(state) | exprs]
+          {_, _} -> [zero(state) | exprs]
+        end
     end
   end
 
-  defp unfold_var(_not_a_var, exprs, _state), do: [0.0 | exprs]
+  defp unfold_var(_not_a_var, exprs, state), do: [zero(state) | exprs]
 
-  @passthroughs [:reshape, :broadcast, :assert_shape]
+  # Compute the grad based on the first argument but keep the computation.
+  @keepthrough_first_arg [:broadcast, :reshape, :assert_shape]
 
-  defp unfold_grad({{:., _, [Nx, name]}, _meta, [x | _args]}, _y, exprs, state)
-       when name in @passthroughs do
-    unfold_var(x, exprs, state)
+  defp unfold_grad({{:., _, [Nx, name]} = call, meta, [x | args]}, _y, exprs, state)
+       when name in @keepthrough_first_arg do
+    [dx | exprs] = unfold_var(x, exprs, state)
+    [{call, meta, [dx | args]} | exprs]
+  end
+
+  # These operations are always treated as constants.
+  @constants [:size, :rank]
+
+  defp unfold_grad({{:., _, [Nx, name]}, _meta, _args}, _y, exprs, state)
+       when name in @constants do
+    [zero(state) | exprs]
   end
 
   # Addition rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
        when name in [:add, :subtract] do
-    dx1 = to_dot(meta, unfold_var(x1, [], state))
-    dx2 = to_dot(meta, unfold_var(x2, [], state))
+    dx1 = x1 |> unfold_var([], state) |> to_dot(state)
+    dx2 = x2 |> unfold_var([], state) |> to_dot(state)
     [nx_call(meta, name, [dx1, dx2]) | exprs]
   end
 
   # Product rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
        when name in [:dot, :multiply] do
-    dx1 = to_dot(meta, unfold_var(x1, [], state))
-    dx2 = to_dot(meta, unfold_var(x2, [], state))
+    dx1 = x1 |> unfold_var([], state) |> to_dot(state)
+    dx2 = x2 |> unfold_var([], state) |> to_dot(state)
 
     expr =
       nx_call(meta, :add, [
@@ -190,10 +218,10 @@ defmodule Nx.Defn.GradTransform do
 
   # Power/Exponentiation rule
   defp unfold_grad({{:., _, [Nx, :power]}, meta, [x1, x2 | _args]}, y, exprs, state) do
-    dx1 = to_dot(meta, unfold_var(x1, [], state))
-    dx2 = to_dot(meta, unfold_var(x2, [], state))
+    dx1 = x1 |> unfold_var([], state) |> to_dot(state)
+    dx2 = x2 |> unfold_var([], state) |> to_dot(state)
 
-    if dx1 == 1.0 and dx2 == 0.0 do
+    if one?(dx1) and zero?(dx2) do
       [grad_call(meta, :power, [x1, x2, y]) | exprs]
     else
       # g' ln f
@@ -207,6 +235,7 @@ defmodule Nx.Defn.GradTransform do
     end
   end
 
+  # All other Nx calls
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x]}, y, exprs, state) do
     [grad_call(meta, name, [x, y]) | unfold_var(x, exprs, state)]
   end
@@ -216,30 +245,39 @@ defmodule Nx.Defn.GradTransform do
   end
 
   # Catch-alls. Explicitly list them to help bugs.
-  defp unfold_grad({:%{}, _, _}, _y, exprs, _state), do: [0.0 | exprs]
-  defp unfold_grad(x, _y, exprs, _state) when is_number(x) or is_atom(x), do: [0.0 | exprs]
+  defp unfold_grad({:%{}, _, _}, _y, exprs, state) do
+    [zero(state) | exprs]
+  end
 
-  defp to_dot(meta, exprs) do
-    if 0.0 in exprs do
-      0.0
+  defp unfold_grad(x, _y, exprs, state) when is_number(x) or is_atom(x) do
+    [zero(state) | exprs]
+  end
+
+  defp unfold_grad(x, _y, _exprs, _state) do
+    raise "cannot yet grad expression: #{Macro.to_string(x)}"
+  end
+
+  defp to_dot(exprs, state) do
+    if Enum.any?(exprs, &zero?/1) do
+      zero(state)
     else
-      Enum.reduce(exprs, &nx_call(meta, :dot, [&2, &1]))
+      Enum.reduce(exprs, &nx_call(state.meta, :dot, [&2, &1]))
     end
   end
 
   ## Helpers
 
-  defp nx_call(_meta, :add, [0.0, right]), do: right
-  defp nx_call(_meta, :add, [left, 0.0]), do: left
-  defp nx_call(_meta, :subtract, [left, 0.0]), do: left
-  defp nx_call(_meta, :multiply, [0.0, _right]), do: 0.0
-  defp nx_call(_meta, :multiply, [_left, 0.0]), do: 0.0
-  defp nx_call(_meta, :multiply, [1.0, right]), do: right
-  defp nx_call(_meta, :multiply, [left, 1.0]), do: left
-  defp nx_call(_meta, :dot, [0.0, _right]), do: 0.0
-  defp nx_call(_meta, :dot, [_left, 0.0]), do: 0.0
-  defp nx_call(_meta, :dot, [1.0, right]), do: right
-  defp nx_call(_meta, :dot, [left, 1.0]), do: left
+  defp nx_call(_meta, :add, [zero_pattern(), right]), do: right
+  defp nx_call(_meta, :add, [left, zero_pattern()]), do: left
+  defp nx_call(_meta, :subtract, [left, zero_pattern()]), do: left
+  defp nx_call(_meta, :multiply, [zero_pattern() = zero, _right]), do: zero
+  defp nx_call(_meta, :multiply, [_left, zero_pattern() = zero]), do: zero
+  defp nx_call(_meta, :multiply, [one_pattern(), right]), do: right
+  defp nx_call(_meta, :multiply, [left, one_pattern()]), do: left
+  defp nx_call(_meta, :dot, [zero_pattern() = zero, _right]), do: zero
+  defp nx_call(_meta, :dot, [_left, zero_pattern() = zero]), do: zero
+  defp nx_call(_meta, :dot, [one_pattern(), right]), do: right
+  defp nx_call(_meta, :dot, [left, one_pattern()]), do: left
   defp nx_call(meta, name, args), do: {{:., meta, [Nx, name]}, meta, args}
 
   defp grad_call(meta, name, args), do: {{:., meta, [__MODULE__, name]}, meta, args}
