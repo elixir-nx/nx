@@ -894,6 +894,9 @@ defmodule Nx do
   @doc """
   Returns the rank of a tensor.
 
+  If a tuple is given as a shape, it computes the rank
+  of the given tuple.
+
   ### Examples
 
       iex> Nx.rank(Nx.tensor(1))
@@ -905,12 +908,19 @@ defmodule Nx do
       iex> Nx.rank(1)
       0
 
+      iex> Nx.rank({8, 8})
+      2
+
   """
   def rank(%T{shape: shape}), do: tuple_size(shape)
+  def rank(shape) when is_tuple(shape), do: tuple_size(shape)
   def rank(number) when is_number(number), do: 0
 
   @doc """
   Returns how many elements they are in the tensor.
+
+  If a tuple is given as a shape, it computes the size
+  of the given tuple.
 
   ### Examples
 
@@ -920,8 +930,12 @@ defmodule Nx do
       iex> Nx.size(1)
       1
 
+      iex> Nx.size({8, 8})
+      64
+
   """
   def size(%T{shape: shape}), do: tuple_product(shape)
+  def size(shape) when is_tuple(shape), do: tuple_product(shape)
   def size(number) when is_number(number), do: 1
 
   ## Device API

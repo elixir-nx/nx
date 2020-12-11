@@ -881,6 +881,12 @@ defmodule Exla.DefnTest do
       assert rank_and_size(Nx.tensor([[1, 2], [3, 4]])) == {Nx.tensor(2), Nx.tensor(4)}
       assert rank_and_size(Nx.tensor([1, 2, 3, 4, 5])) == {Nx.tensor(1), Nx.tensor(5)}
     end
+
+    defn rank_and_size_for_tuple(), do: {Nx.rank({8, 8}), Nx.size({8, 8})}
+
+    test "rank and size for tuples" do
+      assert rank_and_size_for_tuple() == {Nx.tensor(2), Nx.tensor(64)}
+    end
   end
 
   describe "options" do

@@ -239,8 +239,8 @@ defmodule Exla.Defn do
   def nx_type(op), do: Exla.Op.get_shape(op).dtype
 
   def nx_type(_builder, op), do: nx_type(op)
-  def nx_rank(_builder, op), do: tuple_size(nx_shape(op))
-  def nx_size(_builder, op), do: tuple_product(nx_shape(op))
+  def nx_rank(_builder, op), do: tuple_size(to_shape(op))
+  def nx_size(_builder, op), do: tuple_product(to_shape(op))
   def nx_shape(_builder, op), do: nx_shape(op)
 
   ## Shape

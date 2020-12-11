@@ -4,6 +4,7 @@ defmodule Nx.Defn.GradTransform do
   """
 
   @behaviour Nx.Defn.Transform
+  @root __MODULE__
 
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
@@ -41,15 +42,13 @@ defmodule Nx.Defn.GradTransform do
   end
 
   defp gradient_for(var, result_var, state) when is_var(var) do
-    state = Map.put(state, :var, {var_counter(var), var})
+    state = put_in(state.vars[var_counter(var)], @root)
+    state = Map.put(state, :shape, var)
 
     result_var
     |> unfold_var([], state)
     |> to_dot(state)
-    |> to_shape(state)
   end
-
-  defp to_shape(expr, %{meta: meta, var: {_, var}}), do: nx_call(meta, :reshape, [expr, var])
 
   ## SSA
 
@@ -150,8 +149,8 @@ defmodule Nx.Defn.GradTransform do
 
   ## Unfold the gradient computation into a list
 
-  defp one(%{meta: meta, var: {_, var}}), do: nx_call(meta, :broadcast, [1.0, var])
-  defp zero(%{meta: meta, var: {_, var}}), do: nx_call(meta, :broadcast, [0.0, var])
+  defp one(%{meta: meta, shape: shape}), do: nx_call(meta, :broadcast, [1.0, shape])
+  defp zero(%{meta: meta, shape: shape}), do: nx_call(meta, :broadcast, [0.0, shape])
 
   defmacrop one_pattern(), do: quote(do: {{:., _, [Nx, :broadcast]}, _, [1.0, _]})
   defmacrop zero_pattern(), do: quote(do: {{:., _, [Nx, :broadcast]}, _, [0.0, _]})
@@ -163,34 +162,20 @@ defmodule Nx.Defn.GradTransform do
     counter = var_counter(var)
 
     case state.vars do
-      %{^counter => expr} ->
-        unfold_grad(expr, var, exprs, state)
-
-      %{} ->
-        case state.var do
-          {^counter, _} -> [one(state) | exprs]
-          {_, _} -> [zero(state) | exprs]
-        end
+      %{^counter => @root} -> [one(state) | exprs]
+      %{^counter => expr} -> unfold_grad(expr, var, exprs, state)
+      %{} -> [zero(state) | exprs]
     end
   end
 
   defp unfold_var(_not_a_var, exprs, state), do: [zero(state) | exprs]
 
-  # Compute the grad based on the first argument but keep the computation.
-  @keepthrough_first_arg [:broadcast, :reshape, :assert_shape]
+  ## First we start with the per op rules
 
-  defp unfold_grad({{:., _, [Nx, name]} = call, meta, [x | args]}, _y, exprs, state)
-       when name in @keepthrough_first_arg do
-    [dx | exprs] = unfold_var(x, exprs, state)
-    [{call, meta, [dx | args]} | exprs]
-  end
-
-  # These operations are always treated as constants.
-  @constants [:size, :rank]
-
-  defp unfold_grad({{:., _, [Nx, name]}, _meta, _args}, _y, exprs, state)
-       when name in @constants do
-    [zero(state) | exprs]
+  # Reshape rule (changes the shape upstream and then fixes it)
+  defp unfold_grad({{:., _, [Nx, :reshape]} = call, meta, [x, shape]}, _y, exprs, state) do
+    [dx | exprs] = unfold_var(x, exprs, %{state | shape: shape})
+    [{call, meta, [dx, state.shape]} | exprs]
   end
 
   # Addition rule
@@ -222,7 +207,7 @@ defmodule Nx.Defn.GradTransform do
     dx2 = x2 |> unfold_var([], state) |> to_dot(state)
 
     if one?(dx1) and zero?(dx2) do
-      [grad_call(meta, :power, [x1, x2, y]) | exprs]
+      [grad_call(meta, :power, [state.shape, y, x1, x2]) | exprs]
     else
       # g' ln f
       left = nx_call(meta, :dot, [dx2, nx_call(meta, :log, [x1])])
@@ -235,9 +220,28 @@ defmodule Nx.Defn.GradTransform do
     end
   end
 
-  # All other Nx calls
-  defp unfold_grad({{:., _, [Nx, name]}, meta, [x]}, y, exprs, state) do
-    [grad_call(meta, name, [x, y]) | unfold_var(x, exprs, state)]
+  ## These are generalizations
+
+  # Compute the grad based on the first argument but keep the computation.
+  @keepthrough_first_arg [:assert_shape]
+
+  defp unfold_grad({{:., _, [Nx, name]} = call, meta, [x | args]}, _y, exprs, state)
+       when name in @keepthrough_first_arg do
+    [dx | exprs] = unfold_var(x, exprs, state)
+    [{call, meta, [dx | args]} | exprs]
+  end
+
+  # These operations are always treated as constants
+  @constants [:size, :rank]
+
+  defp unfold_grad({{:., _, [Nx, name]}, _meta, _args}, _y, exprs, state)
+       when name in @constants do
+    [zero(state) | exprs]
+  end
+
+  # Nx calls that depend exclusively on the first arg
+  defp unfold_grad({{:., _, [Nx, name]}, meta, [x | _args]}, y, exprs, state) do
+    [grad_call(meta, name, [state.shape, y, x]) | unfold_var(x, exprs, state)]
   end
 
   defp unfold_grad(x, _y, exprs, state) when is_var(x) do
@@ -300,17 +304,27 @@ defmodule Nx.Defn.GradTransform do
   import Nx.Defn
 
   @doc """
+  The derivative of broadcast.
+  """
+  defn broadcast(shape, y, _x), do: Nx.broadcast(Nx.size(y) / Nx.size(shape), shape)
+
+  @doc """
+  The derivative of sum.
+  """
+  defn sum(_shape, _y, _x), do: 1.0
+
+  @doc """
   The derivative of `Nx.tanh/2`.
   """
-  defn tanh(_x, y), do: 1.0 - y * y
+  defn tanh(_shape, y, _x), do: 1.0 - y * y
 
   @doc """
   The derivative of `Nx.exp/1`.
   """
-  defn exp(_x, y), do: y
+  defn exp(_shape, y, _x), do: y
 
   @doc """
   The derivative of `Nx.power/2` (when x is the base).
   """
-  defn power(base, exponent, _y), do: exponent * Nx.power(base, exponent - 1)
+  defn power(_shape, _y, base, exponent), do: exponent * Nx.power(base, exponent - 1)
 end
