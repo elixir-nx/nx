@@ -47,7 +47,7 @@ defmodule Nx.Defn.GradTransform do
 
     result_var
     |> unfold_var([], state)
-    |> to_dot(state)
+    |> to_multiply(state)
   end
 
   ## SSA
@@ -181,16 +181,16 @@ defmodule Nx.Defn.GradTransform do
   # Addition rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
        when name in [:add, :subtract] do
-    dx1 = x1 |> unfold_var([], state) |> to_dot(state)
-    dx2 = x2 |> unfold_var([], state) |> to_dot(state)
+    dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
+    dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
     [nx_call(meta, name, [dx1, dx2]) | exprs]
   end
 
   # Product rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
        when name in [:dot, :multiply] do
-    dx1 = x1 |> unfold_var([], state) |> to_dot(state)
-    dx2 = x2 |> unfold_var([], state) |> to_dot(state)
+    dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
+    dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
     expr =
       nx_call(meta, :add, [
@@ -203,8 +203,8 @@ defmodule Nx.Defn.GradTransform do
 
   # Power/Exponentiation rule
   defp unfold_grad({{:., _, [Nx, :power]}, meta, [x1, x2 | _args]}, y, exprs, state) do
-    dx1 = x1 |> unfold_var([], state) |> to_dot(state)
-    dx2 = x2 |> unfold_var([], state) |> to_dot(state)
+    dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
+    dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
     if one?(dx1) and zero?(dx2) do
       [grad_call(meta, :power, [state.shape, y, x1, x2]) | exprs]
@@ -261,11 +261,11 @@ defmodule Nx.Defn.GradTransform do
     raise "cannot yet grad expression: #{Macro.to_string(x)}"
   end
 
-  defp to_dot(exprs, state) do
+  defp to_multiply(exprs, state) do
     if Enum.any?(exprs, &zero?/1) do
       zero(state)
     else
-      Enum.reduce(exprs, &nx_call(state.meta, :dot, [&2, &1]))
+      Enum.reduce(exprs, &nx_call(state.meta, :multiply, [&2, &1]))
     end
   end
 
@@ -311,7 +311,7 @@ defmodule Nx.Defn.GradTransform do
   @doc """
   The derivative of sum.
   """
-  defn sum(_shape, _y, _x), do: 1.0
+  defn sum(shape, _y, _x), do: Nx.broadcast(1.0, shape)
 
   @doc """
   The derivative of `Nx.tanh/2`.

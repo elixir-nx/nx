@@ -124,6 +124,16 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "sum" do
+    defn grad_sum(t), do: grad(t, Nx.sum(t))
+
+    test "computes gradient" do
+      assert grad_sum(Nx.tensor([[0.0, 1.0], [2.0, 3.0]])) == Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+      assert grad_sum(Nx.tensor([0.0, 1.0])) == Nx.tensor([1.0, 1.0])
+      assert grad_sum(Nx.tensor(0.0)) == Nx.tensor(1.0)
+    end
+  end
+
   describe "assert_shape" do
     defn grad_assert(t), do: grad(t, t)
 
