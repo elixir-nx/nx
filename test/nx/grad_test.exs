@@ -3,6 +3,50 @@ defmodule Nx.GradTest do
 
   import Nx.Defn
 
+  defmodule GradHelpers do
+    import Nx.Shared
+
+    # Check the gradient of numerical function `func`.
+    #
+    # You must hold the function constant on every other
+    # variable with a partial application of `func`:
+    #
+    # check_grads(& my_function(1.0, 1.0, &1, 1.0))
+    def check_grads(func, x, grad_result, eps \\ 1.0e-4) do
+      est_grad = finite_differences(func, x, eps)
+      approx_equal?(est_grad, grad_result, eps)
+    end
+
+    # Determines if `lhs` approx. equals `rhs` given
+    # `eps`
+    #
+    # TODO: defn/simplify when predicates are worked out
+    def approx_equal?(lhs, rhs, eps) do
+      output_type = Nx.Type.merge(lhs.type, rhs.type)
+      binary = Nx.Util.to_bitstring(Nx.abs(Nx.subtract(lhs, rhs)))
+      value =
+        match_types [output_type] do
+          <<match!(var, 0)>> = binary
+          read!(var, 0)
+        end
+
+      value < eps
+    end
+
+    # Numerical method for estimating the gradient
+    # of `func` with respect to `x` using the finite
+    # difference `eps`
+    def finite_differences(func, x, eps) do
+      Nx.divide(
+        Nx.subtract(
+          func.(Nx.add(x, Nx.divide(eps, 2.0))),
+          func.(Nx.subtract(x, Nx.divide(eps, 2.0)))
+        ),
+        eps
+      )
+    end
+  end
+
   describe "simple" do
     defn grad_itself(t), do: grad(t, t)
     defn grad_constant(t), do: grad(t, 1.0)
@@ -20,6 +64,17 @@ defmodule Nx.GradTest do
 
       assert grad_unrelated(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor(2.0)) ==
                Nx.tensor([0.0, 0.0, 0.0])
+    end
+  end
+
+  describe "check_grad" do
+    defn my_function(t), do: Nx.tanh(t)
+    defn grad_my_function(t), do: grad(t, Nx.tanh(t))
+
+    test "verifies gradient" do
+      grad_result = grad_my_function(Nx.tensor(1.0))
+
+      assert GradHelpers.check_grads(&my_function/1, Nx.tensor(1.0), grad_result)
     end
   end
 
