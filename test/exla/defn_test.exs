@@ -519,11 +519,13 @@ defmodule Exla.DefnTest do
     end
 
     test "computes the argmax on an axis" do
-      assert argmax_axis(Nx.tensor([[[1, 1, 1], [1, 1, 3]], [[6, 2, 3], [2, 8, 3]]])) == Nx.tensor([[0, 0, 1], [0, 1, 0]])
+      assert argmax_axis(Nx.tensor([[[1, 1, 1], [1, 1, 3]], [[6, 2, 3], [2, 8, 3]]])) ==
+               Nx.tensor([[0, 0, 1], [0, 1, 0]])
     end
 
     test "computes the argmin on an axis" do
-      assert argmin_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) == Nx.tensor([[1, 1, 0], [1, 0, 0]])
+      assert argmin_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) ==
+               Nx.tensor([[1, 1, 0], [1, 0, 0]])
     end
 
     test "computes argmax with tie_break: :high" do
@@ -542,28 +544,51 @@ defmodule Exla.DefnTest do
     end
 
     test "computes the dot product of vectors" do
-      assert dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) == Nx.tensor(32)
+      assert dot(Nx.tensor([1, 2, 3], type: {:s, 32}), Nx.tensor([4, 5, 6], type: {:s, 32})) ==
+               Nx.tensor(32, type: {:s, 32})
+
+      assert dot(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), Nx.tensor([4, 5, 6])) ==
+               Nx.tensor(32.0)
+
       assert dot(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([4.0, 5.0, 6.0])) == Nx.tensor(32.0)
-      assert dot(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), Nx.tensor([4, 5, 6])) == Nx.tensor(32.0)
     end
 
     test "computes the dot product of matrices" do
-      assert dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]])) == Nx.tensor([[58, 64], [139, 154]])
       assert dot(
-        Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-        Nx.tensor([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]])
-      ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
+               Nx.tensor([[1, 2, 3], [4, 5, 6]], type: {:s, 32}),
+               Nx.tensor([[7, 8], [9, 10], [11, 12]], type: {:s, 32})
+             ) ==
+               Nx.tensor([[58, 64], [139, 154]], type: {:s, 32})
+
       assert dot(
-        Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-        Nx.tensor([[7, 8], [9, 10], [11, 12]])
-      ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+               Nx.tensor([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]])
+             ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
+
+      assert dot(
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+               Nx.tensor([[7, 8], [9, 10], [11, 12]])
+             ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
     end
 
     test "computes the dot product of tensors" do
       assert dot(
-        Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]]),
-        Nx.tensor([[[1, 2, 3], [3, 4, 5], [5, 6, 7]]])
-      ) == Nx.tensor([[[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]],[[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]]])
+               Nx.tensor(
+                 [[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]],
+                 type: {:s, 32}
+               ),
+               Nx.tensor(
+                 [[[1, 2, 3], [3, 4, 5], [5, 6, 7]]],
+                 type: {:s, 32}
+               )
+             ) ==
+               Nx.tensor(
+                 [
+                   [[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]],
+                   [[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]]
+                 ],
+                 type: {:s, 32}
+               )
     end
   end
 
@@ -614,9 +639,11 @@ defmodule Exla.DefnTest do
       t = Nx.tensor([[1, 2], [3, 4]])
       assert assert_shape_with_shape(t) == t
 
-      assert_raise ArgumentError, "expected tensor with shape {2, 2} but tensor has shape {}", fn ->
-        assert_shape_with_shape(Nx.tensor(1))
-      end
+      assert_raise ArgumentError,
+                   "expected tensor with shape {2, 2} but tensor has shape {}",
+                   fn ->
+                     assert_shape_with_shape(Nx.tensor(1))
+                   end
     end
 
     defn assert_shape_with_tensor(t, shape), do: Nx.assert_shape(t, shape, "oops")
@@ -625,9 +652,11 @@ defmodule Exla.DefnTest do
       t = Nx.tensor([[1, 2], [3, 4]])
       assert assert_shape_with_tensor(t, t) == t
 
-      assert_raise ArgumentError, "expected tensor with shape {} but tensor has shape {2, 2} (oops)", fn ->
-        assert_shape_with_tensor(t, Nx.tensor(1))
-      end
+      assert_raise ArgumentError,
+                   "expected tensor with shape {} but tensor has shape {2, 2} (oops)",
+                   fn ->
+                     assert_shape_with_tensor(t, Nx.tensor(1))
+                   end
     end
 
     defn assert_shape_with_constant(shape), do: Nx.assert_shape(123, shape, "oops")
@@ -635,9 +664,11 @@ defmodule Exla.DefnTest do
     test "with constant" do
       assert assert_shape_with_constant(Nx.tensor(1)) == Nx.tensor(123)
 
-      assert_raise ArgumentError, "expected tensor with shape {2} but tensor has shape {} (oops)", fn ->
-        assert_shape_with_constant(Nx.tensor([1, 2]))
-      end
+      assert_raise ArgumentError,
+                   "expected tensor with shape {2} but tensor has shape {} (oops)",
+                   fn ->
+                     assert_shape_with_constant(Nx.tensor([1, 2]))
+                   end
     end
 
     defn assert_shape_with_tuple(), do: Nx.assert_shape({1, 2, 3}, {}, "oops")
@@ -665,13 +696,14 @@ defmodule Exla.DefnTest do
         {Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]]), Nx.tensor([0, 0])},
         {Nx.tensor([[1], [2]]), Nx.tensor([[0, 0]])},
         {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]]])},
-        {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]), Nx.tensor([[[0], [0], [0]]])},
+        {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]),
+         Nx.tensor([[[0], [0], [0]]])},
         {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[[0]]]])},
         {Nx.tensor([1, 2]), Nx.tensor([[[[0]]]])},
         {Nx.tensor([[1, 2]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
         {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
         {Nx.tensor([[[[1, 2]]], [[[3, 4]]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
-        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
+        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])}
       ]
 
       for {left, right} <- tensors do
@@ -683,7 +715,7 @@ defmodule Exla.DefnTest do
 
     test "with constant" do
       assert broadcast_with_constant(Nx.tensor([[1, 2], [3, 4]])) ==
-                Nx.tensor([[123, 123], [123, 123]])
+               Nx.tensor([[123, 123], [123, 123]])
     end
   end
 
@@ -830,7 +862,8 @@ defmodule Exla.DefnTest do
   end
 
   describe "reflection" do
-    defn random_from_type_and_shape(t), do: Nx.random_uniform(Nx.shape(t), 0, 10, type: Nx.type(t))
+    defn random_from_type_and_shape(t),
+      do: Nx.random_uniform(Nx.shape(t), 0, 10, type: Nx.type(t))
 
     test "type and shape" do
       t = random_from_type_and_shape(Nx.tensor([[1], [2]]))
