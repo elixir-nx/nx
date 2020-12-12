@@ -6,6 +6,45 @@ ExUnit.start(
   assert_receive_timeout: 1000
 )
 
+  defmodule GradHelpers do
+    import Nx.Shared
+
+    @doc """
+    Checks the gradient of numerical function `func`.
+
+    You must hold the function constant on every other
+    variable with a partial application of `func`.
+    """
+    def check_grads(func, grad_func, x, eps \\ 1.0e-4) do
+      est_grad = finite_differences(func, x, eps)
+      comp_grad = grad_func.(x)
+      approx_equal?(est_grad, comp_grad, eps)
+    end
+
+    # TODO: defn/simplify when predicates are worked out
+    defp approx_equal?(lhs, rhs, eps) do
+      output_type = Nx.Type.merge(lhs.type, rhs.type)
+      binary = Nx.Util.to_bitstring(Nx.abs(Nx.subtract(lhs, rhs)))
+      value =
+        match_types [output_type] do
+          <<match!(var, 0)>> = binary
+          read!(var, 0)
+        end
+
+      value < eps
+    end
+
+    defp finite_differences(func, x, eps) do
+      Nx.divide(
+        Nx.subtract(
+          func.(Nx.add(x, Nx.divide(eps, 2.0))),
+          func.(Nx.subtract(x, Nx.divide(eps, 2.0)))
+        ),
+        eps
+      )
+    end
+  end
+
 defmodule ExlaHelpers do
   @doc """
   Returns the default Exla client.
