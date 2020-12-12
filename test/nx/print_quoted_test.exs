@@ -31,7 +31,8 @@ defmodule Nx.PrintQuotedTest do
            (
              a = Nx.reshape(b, {4, 4})
              Nx.assert_shape(a, {}, "grad expects the numerical expression to return a scalar tensor")
-             Nx.reshape(Nx.broadcast(1.0, {4, 4}), b)
+             c = Nx.broadcast(1.0, {4, 4})
+             Nx.reshape(c, b)
            )
            """
   end

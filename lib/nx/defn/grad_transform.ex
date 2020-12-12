@@ -30,7 +30,8 @@ defmodule Nx.Defn.GradTransform do
     # Now compute the gradient
     grad = gradient_for(vars, result_var, state)
     assertion = nx_call(meta, :assert_shape, [result_var, {:{}, meta, []}, @hint])
-    {state.version, append_to_block(ast, [assertion, grad])}
+    {grad, assigns, state} = cache_broadcasts(grad, state)
+    {state.version, append_to_block(ast, [assertion] ++ assigns ++ [grad])}
   end
 
   defp gradient_for({left, right}, result_var, state) do
@@ -48,6 +49,37 @@ defmodule Nx.Defn.GradTransform do
     result_var
     |> unfold_var([], state)
     |> to_multiply(state)
+  end
+
+  defp cache_broadcasts(grad, state) do
+    {grad, {cache, state}} =
+      Macro.prewalk(grad, {%{}, state}, fn
+        {{:., _, [Nx, :broadcast]}, meta, [num, shape]} = call, {cache, state} ->
+          if (num === 0.0 or num === 1.0) and (is_var(shape) or Macro.quoted_literal?(shape)) do
+            key = {num, shape}
+
+            case cache do
+              %{^key => {_meta, var}} ->
+                {var, {cache, state}}
+
+              %{} ->
+                {var, state} = new_var(state)
+                {var, {Map.put(cache, key, {meta, var}), state}}
+            end
+          else
+            {call, {cache, state}}
+          end
+
+        expr, acc ->
+          {expr, acc}
+      end)
+
+    assigns =
+      for {{num, shape}, {meta, var}} <- cache do
+        {:=, meta, [var, nx_call(meta, :broadcast, [num, shape])]}
+      end
+
+    {grad, assigns, state}
   end
 
   ## SSA
