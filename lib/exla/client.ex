@@ -8,8 +8,8 @@ defmodule Exla.Client do
   alias __MODULE__
   alias Exla.{Computation, Executable}
 
-  @enforce_keys [:ref, :platform, :name]
-  defstruct [:ref, :platform, :name]
+  @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
+  defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
 
   def fetch!(name) do
     Exla.LockedCache.run({__MODULE__, name}, fn ->
@@ -34,23 +34,15 @@ defmodule Exla.Client do
         end
         |> unwrap!()
 
-      %Client{ref: ref, platform: platform, name: name}
+      device_count = Exla.NIF.get_device_count(ref) |> unwrap!()
+      default_device_ordinal = Exla.NIF.get_default_device_ordinal(ref) |> unwrap!()
+
+      %Client{ref: ref, platform: platform, name: name, device_count: device_count, default_device_ordinal: default_device_ordinal}
     end)
   end
 
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
-
-  # TODO: These methods are only called once, so for efficiency we can run them when the client is created
-  def get_default_device_ordinal(%Client{ref: client}) do
-    {:ok, ordinal} = Exla.NIF.get_default_device_ordinal(client)
-    ordinal
-  end
-
-  def get_device_count(%Client{ref: client}) do
-    {:ok, count} = Exla.NIF.get_device_count(client)
-    count
-  end
 
   def compile(
         client = %Client{},
@@ -61,6 +53,9 @@ defmodule Exla.Client do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
+    # This needs to be investigated a bit more
+    use_spmd = Keyword.get(options, :use_spmd, false)
+    use_spmd_int = if use_spmd, do: 1, else: 0
     shape_refs = Enum.map(argument_shapes, & &1.ref)
     device_ordinal = check_device_compatibility!(client, device_ordinal)
 
@@ -74,7 +69,8 @@ defmodule Exla.Client do
         shape_refs,
         device_ordinal,
         num_replicas,
-        num_partitions
+        num_partitions,
+        use_spmd_int
       )
       |> unwrap!
 
@@ -86,12 +82,12 @@ defmodule Exla.Client do
     }
   end
 
-  def check_device_compatibility!(client = %Client{}, ordinal) do
+  def check_device_compatibility!(%Client{device_count: device_count, default_device_ordinal: default_device_ordinal}, ordinal) do
     cond do
       ordinal < 0 ->
-        Client.get_default_device_ordinal(client)
+        default_device_ordinal
 
-      ordinal < Client.get_device_count(client) ->
+      ordinal < device_count ->
         ordinal
 
       true ->

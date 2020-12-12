@@ -40,7 +40,7 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::open_resource<xla::Literal>(env, mod, "Literal", free_res)) {
     return -1;
   }
-  if (!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_res)) {
+  if (!exla::open_resource<exla::ExlaExecutable*>(env, mod, "Executable", free_res)) {
     return -1;
   }
   if (!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_res)) {
@@ -1257,7 +1257,7 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 6) {
+  if (argc != 7) {
     return exla::error(env, "Bad argument count.");
   }
 
@@ -1266,6 +1266,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<xla::Shape*> argument_layouts;
   xla::ExecutableBuildOptions build_options;
   int device_ordinal, num_replicas, num_partitions;
+  bool use_spmd;
 
   if (!exla::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::error(env, "Unable to get client.");
@@ -1285,34 +1286,27 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get(env, argv[5], &num_partitions)) {
     return exla::error(env, "Unable to get Number of Partitions.");
   }
+  if (!exla::get(env, argv[6], &use_spmd)) {
+    return exla::error(env, "Unable to get SPMD Partitioning Flag.");
+  }
 
-  build_options.set_device_allocator((*client)->allocator());
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
-  // TODO(seanmor5): Used in conjunction with replicas and partitions.
-  // build_options.set_device_assignment(device_assignment);
-  build_options.set_device_ordinal(device_ordinal);
-  // TODO(seanmor5): Single Program Multi-Data (pmap) vs. Multi-Program Multi-Data
-  // build_options.set_use_spmd_partitioning(use_spmd);
+  build_options.set_use_spmd_partitioning(use_spmd);
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
-                        (*client)->client()->Compile(*computation,
-                                                     argument_layouts,
-                                                     build_options), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable* executable,
+    (*client)->Compile(*computation, argument_layouts, build_options, false), env);
 
-  // TODO(seanmor5): This should return the vector. There is an executable for every partition, usually 1.
-  return exla::ok(env,
-    exla::make<xla::LocalExecutable>(env,
-      std::move(executables.at(0))));
+  return exla::ok(env, exla::make<exla::ExlaExecutable*>(env, executable));
 }
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 8) {
+  if (argc != 10) {
     return exla::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
-  xla::LocalExecutable* local_executable;
+  exla::ExlaExecutable** executable;
   xla::ExecutableRunOptions run_options;
   int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
   ERL_NIF_TERM arguments = argv[2];
@@ -1320,7 +1314,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::error(env, "Unable to get client.");
   }
-  if (!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) {
+  if (!exla::get<exla::Executable*>(env, argv[1], executable)) {
     return exla::error(env, "Unable to get executable.");
   }
   if (!exla::get(env, argv[3], &device_ordinal)) {
@@ -1335,30 +1329,20 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get(env, argv[6], &launch_id)) {
     return exla::error(env, "Unable to get Launch ID.");
   }
-  if (!exla::get(env, argv[7], &keep_on_device)) {
+  if(!exla::get(env, argv[7], &replica)) {
+    return exla::error(env, "Unable to get replica.");
+  }
+  if(!exla::get(env, argv[8], &partition)) {
+    return exla::error(env, "Unable to get partition.");
+  }
+  if (!exla::get(env, argv[9], &keep_on_device)) {
     return exla::error(env, "Unable to get keep_on_device.");
   }
 
-  exla::ExlaDevice* device = (*client)->device(device_ordinal);
-
-  xla::RunId run_id_obj(run_id);
-
-  run_options.set_stream(device->compute_stream());
-  run_options.set_host_to_device_stream(device->host_to_device_stream());
-  run_options.set_allocator((*client)->allocator());
-  run_options.set_intra_op_thread_pool(
-    (*client)->client()->backend().eigen_intra_op_thread_pool_device());
-  // TODO(seanmor5): This is for executing multiple computations in parallel across multiple replicas.
-  // run_options.set_device_assignment(device_assignment.get());
-  run_options.set_run_id(run_id_obj);
-  run_options.set_rng_seed(rng_seed);
-  run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
-  run_options.set_launch_id(launch_id);
+  exla::ExlaDevice* device = nullptr;
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result,
-    (*client)->Run(env, local_executable,
-                    arguments, device,
-                    run_options, keep_on_device), env);
+                           (*executable)->Run(env, arguments, replica, partition, device, keep_on_device), env);
 
   return exla::ok(env, result);
 }
@@ -1464,8 +1448,8 @@ static ErlNifFunc exla_funcs[] = {
   {"convert_element_type", 2, convert_element_type},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
-  {"compile", 6, compile},
-  {"run", 8, run},
+  {"compile", 7, compile},
+  {"run", 10, run},
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);

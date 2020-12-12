@@ -208,7 +208,8 @@ defmodule Exla.NIF do
         _argument_layouts,
         _device_ordinal,
         _num_replicas,
-        _num_partitions
+        _num_partitions,
+        _use_spmd
       ),
       do: nif_error(__ENV__.function)
 
