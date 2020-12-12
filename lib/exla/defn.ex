@@ -13,6 +13,9 @@ defmodule Exla.Defn do
   def sf_cached_def(module, name, arity, vars, options, fun) do
     cache_args = for var <- vars, do: nx_to_cache_key!(var)
     buffers = for var <- vars, do: nx_to_buffer(var)
+    # TODO: We should extract the client and device ordinal from buffers first
+    # TODO: Rename :client to :default_client
+    # TODO: Client_name plus device_ordinal must be part of the cache key
     {client_name, options} = Keyword.pop(options, :client, :default)
     cache_key = {module, name, arity, cache_args, client_name}
 
