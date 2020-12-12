@@ -77,8 +77,8 @@ defmodule Nx.GradTest do
     test "computes gradient" do
       for _ <- 1..100 do
         assert check_grads(&Nx.tanh/1, &grad_tanh/1, Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64}))
-        assert check_grads(& Nx.exp(Nx.tanh(&1)), &grad_exp_tanh/1, Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64}))
-        assert check_grads(& Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64}))
+        assert check_grads(&Nx.exp(Nx.tanh(&1)), &grad_exp_tanh/1, Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64}))
+        assert check_grads(&Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64}))
         assert check_grads(&grad_tanh/1, &grad_grad_tanh/1, Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64}))
       end
     end
