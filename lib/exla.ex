@@ -131,11 +131,6 @@ defmodule Exla do
 
   """
 
-  def get_supported_platforms do
-    {:ok, platforms} = Exla.NIF.get_supported_platforms()
-    platforms
-  end
-
   @behaviour Nx.Defn.Compiler
   @impl true
   defdelegate __compile__(env, kind, vars, fun, opts), to: Exla.Defn

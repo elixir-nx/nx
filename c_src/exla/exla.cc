@@ -1223,18 +1223,13 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
 
   std::vector<std::string> platform_names;
 
+  ERL_NIF_TERM platform_term = enif_make_new_map(env);
   for (auto& platform : platforms) {
-    std::string str = platform->Name();
-    platform_names.push_back(str);
-  }
+    std::string key = platform->Name();
+    exla::int32 device_count = platform->VisibleDeviceCount();
 
-  int num_platforms = platform_names.size();
-  ERL_NIF_TERM names[num_platforms];
-  for(int i=0;i<num_platforms;i++){
-    names[i] = enif_make_string(env, platform_names.at(i).c_str(), ERL_NIF_LATIN1);
+    enif_make_map_put(env, platform_term, exla::make(env, key), exla::make(env, device_count), &platform_term);
   }
-
-  ERL_NIF_TERM platform_term = enif_make_list_from_array(env, names, num_platforms);
 
   return exla::ok(env, platform_term);
 }
