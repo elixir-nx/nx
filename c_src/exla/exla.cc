@@ -1214,6 +1214,31 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return exla::ok(env, exla::make(env, device_count));
 }
 
+ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 0){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<stream_executor::Platform*> platforms, xla::PlatformUtil::GetSupportedPlatforms(), env);
+
+  std::vector<std::string> platform_names;
+
+  for (auto& platform : platforms) {
+    std::string str = platform->Name();
+    platform_names.push_back(str);
+  }
+
+  int num_platforms = platform_names.size();
+  ERL_NIF_TERM names[num_platforms];
+  for(int i=0;i<num_platforms;i++){
+    names[i] = enif_make_string(env, platform_names.at(i).c_str(), ERL_NIF_LATIN1);
+  }
+
+  ERL_NIF_TERM platform_term = enif_make_list_from_array(env, names, num_platforms);
+
+  return exla::ok(env, platform_term);
+}
+
 /************ Build, Compilation, Execution *************/
 ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
@@ -1350,6 +1375,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_rocm_client", 2, get_rocm_client},
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
+  {"get_supported_platforms", 0, get_supported_platforms},
   /****** ExlaBuffer ******/
   {"binary_to_device_mem", 4, binary_to_device_mem},
   {"read_device_mem", 2, read_device_mem},
