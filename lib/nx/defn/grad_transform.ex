@@ -247,6 +247,20 @@ defmodule Nx.Defn.GradTransform do
     [nx_call(meta, :divide, [num, x2]) | exprs]
   end
 
+  # Remainder rule
+  defp unfold_grad({{:., _, [Nx, :remainder]}, meta, [x1, x2 | _args]}, y, exprs, state) do
+    dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
+    dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
+
+    right =
+      nx_call(meta, :multiply, [
+        dx2,
+        nx_call(meta, :floor, [nx_call(meta, :divide, [x1, x2])])
+      ])
+
+    [nx_call(meta, :subtract, [dx1, right]) | exprs]
+  end
+
   # Power/Exponentiation rule
   defp unfold_grad({{:., _, [Nx, :power]}, meta, [x1, x2 | _args]}, y, exprs, state) do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
@@ -454,5 +468,4 @@ defmodule Nx.Defn.GradTransform do
   # abs/1 - requires select
   # max/2 - requires comparison
   # min/2 - requires comparison
-  # remainder/2
 end

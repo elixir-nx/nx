@@ -101,6 +101,49 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "remainder rule" do
+    defn remainder_rule(t), do: Nx.remainder(Nx.tanh(t), t)
+    defn grad_remainder_rule(t), do: grad(t, remainder_rule(t))
+
+    test "computes gradient" do
+      assert grad_remainder_rule(Nx.tensor(1.0)) == Nx.tensor(0.41997434161402614)
+
+      for _ <- 1..100 do
+        check_grads!(
+          &remainder_rule/1,
+          &grad_remainder_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
+      end
+    end
+
+    defn remainder_num_rule(t), do: Nx.remainder(Nx.tanh(t), 2)
+    defn grad_remainder_num_rule(t), do: grad(t, remainder_num_rule(t))
+
+    test "computes gradient for constant denominator" do
+      for _ <- 1..100 do
+        check_grads!(
+          &remainder_num_rule/1,
+          &grad_remainder_num_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
+      end
+    end
+
+    defn remainder_den_rule(t), do: Nx.remainder(2, Nx.exp(t))
+    defn grad_remainder_den_rule(t), do: grad(t, remainder_den_rule(t))
+
+    test "computes gradient for constant numerator" do
+      for _ <- 1..100 do
+        check_grads!(
+          &remainder_den_rule/1,
+          &grad_remainder_den_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
+      end
+    end
+  end
+
   describe "power rule" do
     defn power_rule(t), do: Nx.power(t, 3)
     defn grad_power_rule(t), do: grad(t, power_rule(t))
