@@ -238,24 +238,13 @@ defmodule Nx.Defn.GradTransform do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
     dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
-    cond do
-      zero?(dx1) ->
-        num = nx_call(meta, :negate, [nx_call(meta, :multiply, [y, dx2])])
-        [nx_call(meta, :divide, [num, x2]) | exprs]
+    num =
+      nx_call(meta, :subtract, [
+        dx1,
+        nx_call(meta, :multiply, [y, dx2])
+      ])
 
-      zero?(dx2) ->
-        [nx_call(meta, :divide, [dx1, x2]) | exprs]
-
-      true ->
-        num =
-          nx_call(meta, :subtract, [
-            nx_call(meta, :multiply, [dx1, x2]),
-            nx_call(meta, :multiply, [x1, dx2])
-          ])
-
-        den = nx_call(meta, :power, [x2, 2])
-        [nx_call(meta, :divide, [num, den]) | exprs]
-    end
+    [nx_call(meta, :divide, [num, x2]) | exprs]
   end
 
   # Power/Exponentiation rule
@@ -267,13 +256,13 @@ defmodule Nx.Defn.GradTransform do
       [grad_call(meta, :power, [state.shape, y, x1, x2]) | exprs]
     else
       # g' ln f
-      left = nx_call(meta, :dot, [dx2, nx_call(meta, :log, [x1])])
+      left = nx_call(meta, :multiply, [dx2, nx_call(meta, :log, [x1])])
 
       # f' (g / f)
-      right = nx_call(meta, :dot, [dx1, nx_call(meta, :divide, [x2, x1])])
+      right = nx_call(meta, :multiply, [dx1, nx_call(meta, :divide, [x2, x1])])
 
       # y * (left + right)
-      [nx_call(meta, :dot, [y, nx_call(meta, :add, [left, right])]) | exprs]
+      [nx_call(meta, :multiply, [y, nx_call(meta, :add, [left, right])]) | exprs]
     end
   end
 
@@ -347,6 +336,7 @@ defmodule Nx.Defn.GradTransform do
   defp nx_call(_meta, :add, [zero_pattern(), right]), do: right
   defp nx_call(_meta, :add, [left, zero_pattern()]), do: left
   defp nx_call(_meta, :subtract, [left, zero_pattern()]), do: left
+  defp nx_call(meta, :subtract, [zero_pattern(), right]), do: nx_call(meta, :negate, [right])
   defp nx_call(_meta, :multiply, [zero_pattern() = zero, _right]), do: zero
   defp nx_call(_meta, :multiply, [_left, zero_pattern() = zero]), do: zero
   defp nx_call(_meta, :multiply, [one_pattern(), right]), do: right

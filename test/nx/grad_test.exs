@@ -87,7 +87,7 @@ defmodule Nx.GradTest do
       end
     end
 
-    defn division_den_rule(t), do: Nx.divide(2, Nx.tanh(t))
+    defn division_den_rule(t), do: Nx.divide(2, Nx.exp(t))
     defn grad_division_den_rule(t), do: grad(t, division_den_rule(t))
 
     test "computes gradient for constant numerator" do
