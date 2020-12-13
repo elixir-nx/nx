@@ -124,6 +124,23 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "arctan2 rule" do
+    defn arctan2_rule(t), do: Nx.arctan2(Nx.tanh(t), t)
+    defn grad_arctan2_rule(t), do: grad(t, arctan2_rule(t))
+
+    test "computes gradient" do
+      assert grad_arctan2_rule(Nx.tensor(1.0)) == Nx.tensor(-0.2162115612038287)
+
+      for _ <- 1..100 do
+        check_grads!(
+          &arctan2_rule/1,
+          &grad_arctan2_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
+      end
+    end
+  end
+
   describe "tanh+exp" do
     defn grad_tanh(t), do: grad(t, Nx.tanh(t))
     defn grad_exp_tanh(t), do: grad(t, Nx.exp(Nx.tanh(t)))

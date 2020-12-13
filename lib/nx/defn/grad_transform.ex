@@ -271,12 +271,34 @@ defmodule Nx.Defn.GradTransform do
     end
   end
 
+  # Arctan2 rule
+  defp unfold_grad({{:., _, [Nx, :arctan2]}, meta, [x1, x2 | _args]}, _y, exprs, state) do
+    dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
+    dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
+
+    num =
+      nx_call(meta, :subtract, [
+        nx_call(meta, :multiply, [dx1, x2]),
+        nx_call(meta, :multiply, [x1, dx2])
+      ])
+
+    den =
+      nx_call(meta, :add, [
+        nx_call(meta, :power, [x1, 2]),
+        nx_call(meta, :power, [x2, 2])
+      ])
+
+    [nx_call(meta, :divide, [num, den]) | exprs]
+  end
+
   ## These are generalizations
 
   # These operations are always treated as constants
   @constants [:size, :rank, :type, :shape] ++
                [:iota, :random_uniform, :random_normal] ++
-               [:argmax, :argmin]
+               [:argmax, :argmin] ++
+               [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
+               [:left_shift, :right_shift, :count_leading_zeros, :population_count]
 
   defp unfold_grad({{:., _, [Nx, name]}, _meta, _args}, _y, exprs, state)
        when name in @constants do
@@ -367,6 +389,11 @@ defmodule Nx.Defn.GradTransform do
   defn exp(_shape, y, _x), do: y
 
   @doc """
+  The derivative of `Nx.negate/1`.
+  """
+  defn negate(shape, _y, _x), do: Nx.broadcast(-1.0, shape)
+
+  @doc """
   The derivative of `Nx.power/2` (when x is the base).
   """
   defn power(_shape, _y, base, exponent), do: exponent * Nx.power(base, exponent - 1)
@@ -382,28 +409,18 @@ defmodule Nx.Defn.GradTransform do
   defn tanh(_shape, y, _x), do: 1.0 - y * y
 
   # TODO:
-  # abs/1
-  # arctan2/2
-  # bitwise_and/2
-  # bitwise_not/1
-  # bitwise_or/2
-  # bitwise_xor/2
+  # abs/1 - requires select
   # cbrt/1
   # ceil/1
   # cos/1
-  # count_leading_zeros/1
   # expm1/1
   # floor/1
-  # left_shift/2
   # log/1
   # log1p/1
   # logistic/1
-  # max/2
-  # min/2
-  # negate/1
-  # population_count/1
+  # max/2 - requires comparison
+  # min/2 - requires comparison
   # remainder/2
-  # right_shift/2
   # round/1
   # rsqrt/1
   # sign/1
