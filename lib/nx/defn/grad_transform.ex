@@ -304,7 +304,8 @@ defmodule Nx.Defn.GradTransform do
                [:iota, :random_uniform, :random_normal] ++
                [:argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
-               [:left_shift, :right_shift, :count_leading_zeros, :population_count]
+               [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
+               [:floor, :round, :ceil, :sign]
 
   defp unfold_grad({{:., _, [Nx, name]}, _meta, _args}, _y, exprs, state)
        when name in @constants do
@@ -461,11 +462,7 @@ defmodule Nx.Defn.GradTransform do
 
   # TODO:
   # abs/1 - requires select
-  # ceil/1
-  # floor/1
   # max/2 - requires comparison
   # min/2 - requires comparison
   # remainder/2
-  # round/1
-  # sign/1
 end
