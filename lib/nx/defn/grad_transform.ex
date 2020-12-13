@@ -234,21 +234,27 @@ defmodule Nx.Defn.GradTransform do
   end
 
   # Division rule
-  defp unfold_grad({{:., _, [Nx, :divide]}, meta, [x1, x2 | _args]}, _y, exprs, state) do
+  defp unfold_grad({{:., _, [Nx, :divide]}, meta, [x1, x2 | _args]}, y, exprs, state) do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
     dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
-    if zero?(dx2) do
-      [nx_call(meta, :divide, [dx1, x2]) | exprs]
-    else
-      num =
-        nx_call(meta, :subtract, [
-          nx_call(meta, :multiply, [dx1, x2]),
-          nx_call(meta, :multiply, [x1, dx2])
-        ])
+    cond do
+      zero?(dx1) ->
+        num = nx_call(meta, :negate, [nx_call(meta, :multiply, [y, dx2])])
+        [nx_call(meta, :divide, [num, x2]) | exprs]
 
-      den = nx_call(meta, :power, [x2, 2])
-      [nx_call(meta, :divide, [num, den]) | exprs]
+      zero?(dx2) ->
+        [nx_call(meta, :divide, [dx1, x2]) | exprs]
+
+      true ->
+        num =
+          nx_call(meta, :subtract, [
+            nx_call(meta, :multiply, [dx1, x2]),
+            nx_call(meta, :multiply, [x1, dx2])
+          ])
+
+        den = nx_call(meta, :power, [x2, 2])
+        [nx_call(meta, :divide, [num, den]) | exprs]
     end
   end
 
@@ -384,9 +390,39 @@ defmodule Nx.Defn.GradTransform do
   defn broadcast(shape, y, _x), do: Nx.broadcast(Nx.size(y) / Nx.size(shape), shape)
 
   @doc """
+  The derivative of `Nx.cbrt/1`.
+  """
+  defn cbrt(_shape, y, _x), do: 1 / (3 * y * y)
+
+  @doc """
+  The derivative of `Nx.cos/1`.
+  """
+  defn cos(_shape, _y, x), do: -Nx.sin(x)
+
+  @doc """
   The derivative of `Nx.exp/1`.
   """
   defn exp(_shape, y, _x), do: y
+
+  @doc """
+  The derivative of `Nx.expm1/1`.
+  """
+  defn expm1(_shape, y, _x), do: y + 1
+
+  @doc """
+  The derivative of `Nx.log/1`.
+  """
+  defn log(_shape, _y, x), do: 1 / x
+
+  @doc """
+  The derivative of `Nx.log1p/1`.
+  """
+  defn log1p(_shape, _y, x), do: 1 / (x + 1)
+
+  @doc """
+  The derivative of `Nx.logistic/1`.
+  """
+  defn logistic(_shape, y, x), do: Nx.exp(-x) * y * y
 
   @doc """
   The derivative of `Nx.negate/1`.
@@ -397,6 +433,21 @@ defmodule Nx.Defn.GradTransform do
   The derivative of `Nx.power/2` (when x is the base).
   """
   defn power(_shape, _y, base, exponent), do: exponent * Nx.power(base, exponent - 1)
+
+  @doc """
+  The derivative of `Nx.rsqrt/1`.
+  """
+  defn rsqrt(_shape, _y, x), do: -0.5 * Nx.power(x, -1.5)
+
+  @doc """
+  The derivative of `Nx.sin/1`.
+  """
+  defn sin(_shape, _y, x), do: Nx.cos(x)
+
+  @doc """
+  The derivate of `Nx.sqrt/1`.
+  """
+  defn sqrt(_shape, y, _x), do: 0.5 / y
 
   @doc """
   The derivative of `Nx.sum/2`.
@@ -410,20 +461,11 @@ defmodule Nx.Defn.GradTransform do
 
   # TODO:
   # abs/1 - requires select
-  # cbrt/1
   # ceil/1
-  # cos/1
-  # expm1/1
   # floor/1
-  # log/1
-  # log1p/1
-  # logistic/1
   # max/2 - requires comparison
   # min/2 - requires comparison
   # remainder/2
   # round/1
-  # rsqrt/1
   # sign/1
-  # sin/1
-  # sqrt/1
 end

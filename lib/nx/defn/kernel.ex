@@ -185,7 +185,11 @@ defmodule Nx.Defn.Kernel do
 
   """
   defmacro -tensor do
-    quote do: Nx.negate(unquote(tensor))
+    if is_number(tensor) do
+      Kernel.-(tensor)
+    else
+      quote do: Nx.negate(unquote(tensor))
+    end
   end
 
   @doc """

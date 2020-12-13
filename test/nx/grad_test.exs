@@ -74,16 +74,27 @@ defmodule Nx.GradTest do
       end
     end
 
-    defn division_constant_rule(t), do: Nx.divide(Nx.tanh(t), 2)
-    defn grad_division_constant_rule(t), do: grad(t, division_constant_rule(t))
+    defn division_num_rule(t), do: Nx.divide(Nx.tanh(t), 2)
+    defn grad_division_num_rule(t), do: grad(t, division_num_rule(t))
 
     test "computes gradient for constant denominator" do
-      assert division_constant_rule(Nx.tensor(1.0)) == Nx.tensor(0.3807970779778824)
-
       for _ <- 1..100 do
         check_grads!(
-          &division_constant_rule/1,
-          &grad_division_constant_rule/1,
+          &division_num_rule/1,
+          &grad_division_num_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
+      end
+    end
+
+    defn division_den_rule(t), do: Nx.divide(2, Nx.tanh(t))
+    defn grad_division_den_rule(t), do: grad(t, division_den_rule(t))
+
+    test "computes gradient for constant numerator" do
+      for _ <- 1..100 do
+        check_grads!(
+          &division_den_rule/1,
+          &grad_division_den_rule/1,
           Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
         )
       end
@@ -141,25 +152,29 @@ defmodule Nx.GradTest do
     end
   end
 
-  describe "tanh+exp" do
-    defn grad_tanh(t), do: grad(t, Nx.tanh(t))
-    defn grad_exp_tanh(t), do: grad(t, Nx.exp(Nx.tanh(t)))
+  describe "chain rule" do
     defn grad_tanh_exp(t), do: grad(t, Nx.tanh(Nx.exp(t)))
+
+    test "computes gradient" do
+      assert grad_tanh_exp(Nx.tensor(1.0)) == Nx.tensor(0.04693651986265914)
+
+      for _ <- 1..100 do
+        t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        check_grads!(&Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, t)
+      end
+    end
+  end
+
+  describe "grad grad" do
+    defn grad_tanh_base(t), do: grad(t, Nx.tanh(t))
     defn grad_grad_tanh(t), do: grad(t, grad(t, Nx.tanh(t)))
 
     test "computes gradient" do
-      assert grad_tanh(Nx.tensor(1.0)) == Nx.tensor(0.41997434161402614)
-      assert grad_exp_tanh(Nx.tensor(1.0)) == Nx.tensor(0.8994538753454762)
-      assert grad_tanh_exp(Nx.tensor(1.0)) == Nx.tensor(0.04693651986265914)
       assert grad_grad_tanh(Nx.tensor(1.0)) == Nx.tensor(-0.6397000084492246)
 
       for _ <- 1..100 do
         t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
-
-        check_grads!(&Nx.tanh/1, &grad_tanh/1, t)
-        check_grads!(&Nx.exp(Nx.tanh(&1)), &grad_exp_tanh/1, t)
-        check_grads!(&Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, t)
-        check_grads!(&grad_tanh/1, &grad_grad_tanh/1, t)
+        check_grads!(&grad_tanh_base/1, &grad_grad_tanh/1, t)
       end
     end
   end
@@ -204,6 +219,16 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "assert_shape" do
+    defn grad_assert(t), do: grad(t, t)
+
+    test "raises on invalid return" do
+      assert_raise ArgumentError,
+                   ~r"expected tensor with shape \{\} but tensor has shape \{2\}",
+                   fn -> grad_assert(Nx.tensor([1, 2])) end
+    end
+  end
+
   describe "broadcast" do
     defn grad_sum_broadcast(t), do: grad(t, Nx.sum(Nx.broadcast(t, {2, 2})))
 
@@ -219,23 +244,19 @@ defmodule Nx.GradTest do
     end
   end
 
-  describe "sum" do
-    defn grad_sum(t), do: grad(t, Nx.sum(t))
+  for fun <-
+        [:cbrt, :cos, :exp, :expm1, :log, :log1p, :logistic] ++
+          [:negate, :rsqrt, :sin, :sqrt, :sum, :tanh] do
+    describe "#{fun}" do
+      grad_fun = :"grad_#{fun}"
+      defn unquote(grad_fun)(t), do: grad(t, Nx.unquote(fun)(t))
 
-    test "computes gradient" do
-      assert grad_sum(Nx.tensor([[0.0, 1.0], [2.0, 3.0]])) == Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
-      assert grad_sum(Nx.tensor([0.0, 1.0])) == Nx.tensor([1.0, 1.0])
-      assert grad_sum(Nx.tensor(0.0)) == Nx.tensor(1.0)
-    end
-  end
-
-  describe "assert_shape" do
-    defn grad_assert(t), do: grad(t, t)
-
-    test "raises on invalid return" do
-      assert_raise ArgumentError,
-                   ~r"expected tensor with shape \{\} but tensor has shape \{2\}",
-                   fn -> grad_assert(Nx.tensor([1, 2])) end
+      test "computes gradient" do
+        for _ <- 1..100 do
+          t = Nx.random_uniform({}, 0.1, 10.0, type: {:f, 64})
+          check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
+        end
+      end
     end
   end
 end
