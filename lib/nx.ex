@@ -2614,6 +2614,7 @@ defmodule Nx do
         :high -> &>=/2
         :low -> &>/2
       end
+
     argmin_or_max(t, comparator, opts)
   end
 
@@ -2697,7 +2698,23 @@ defmodule Nx do
         :high -> &<=/2
         :low -> &</2
       end
+
     argmin_or_max(t, comparator, opts)
+  end
+
+  ## Argmax/argmin helper
+  defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
+  defp argmin_or_max(t = %T{}, comparator, opts) do
+    {tensor, _accs} =
+      Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          {i, {i + 1, x, i}}
+        else
+          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+        end
+      end)
+
+    tensor
   end
 
   ## Matrix ops
@@ -2861,16 +2878,15 @@ defmodule Nx do
 
   def dot(%T{shape: s1} = a, %T{shape: s2} = b) do
     case {tuple_size(s1), tuple_size(s2)} do
-      {0, _} -> Nx.multiply(a, b)
-      {_, 0} -> Nx.multiply(a, b)
-      {1, _} -> Nx.dot(a, 0, b, tuple_size(s2) - 1)
-      {_, 1} -> Nx.dot(a, tuple_size(s1) - 1, b, 0)
+      {0, _} -> multiply(a, b)
+      {_, 0} -> multiply(a, b)
+      {1, _} -> dot(a, 0, b, tuple_size(s2) - 1)
+      {_, 1} -> dot(a, tuple_size(s1) - 1, b, 0)
       {n, m} when n >= 2 and m >= 2 -> dot(a, tuple_size(s1) - 1, b, tuple_size(s2) - 2)
     end
   end
 
-  # General dot product
-  def dot(%T{shape: s1} = a, axis1, %T{shape: s2} = b, axis2) do
+  defp dot(%T{shape: s1} = a, axis1, %T{shape: s2} = b, axis2) do
     dim1 = elem(s1, axis1)
     dim2 = elem(s2, axis2)
 
@@ -2890,21 +2906,6 @@ defmodule Nx do
           {res, res}
         end
       )
-    tensor
-  end
-
-  ## Argmax/argmin helper
-  defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
-  defp argmin_or_max(t = %T{}, comparator, opts) do
-    {tensor, _accs} =
-      Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
-        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-          {i, {i + 1, x, i}}
-        else
-          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-        end
-      end)
-
     tensor
   end
 

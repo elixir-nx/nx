@@ -255,16 +255,18 @@ defmodule Nx.Defn.GradTransform do
   ## These are generalizations
 
   # Compute the grad based on the first argument but keep the computation.
-  @keepthrough_first_arg [:assert_shape]
+  @keepthrough [:assert_shape]
 
   defp unfold_grad({{:., _, [Nx, name]} = call, meta, [x | args]}, _y, exprs, state)
-       when name in @keepthrough_first_arg do
+       when name in @keepthrough do
     [dx | exprs] = unfold_var(x, exprs, state)
     [{call, meta, [dx | args]} | exprs]
   end
 
   # These operations are always treated as constants
-  @constants [:size, :rank]
+  @constants [:size, :rank, :type, :shape] ++
+              [:iota, :random_uniform, :random_normal] ++
+              [:argmax, :argmin]
 
   defp unfold_grad({{:., _, [Nx, name]}, _meta, _args}, _y, exprs, state)
        when name in @constants do
@@ -359,4 +361,33 @@ defmodule Nx.Defn.GradTransform do
   The derivative of `Nx.power/2` (when x is the base).
   """
   defn power(_shape, _y, base, exponent), do: exponent * Nx.power(base, exponent - 1)
+
+  # abs/1
+  # arctan2/2
+  # bitwise_and/2
+  # bitwise_not/1
+  # bitwise_or/2
+  # bitwise_xor/2
+  # cbrt/1
+  # ceil/1
+  # cos/1
+  # count_leading_zeros/1
+  # divide/2
+  # expm1/1
+  # floor/1
+  # left_shift/2
+  # log/1
+  # log1p/1
+  # logistic/1
+  # max/2
+  # min/2
+  # negate/1
+  # population_count/1
+  # remainder/2
+  # right_shift/2
+  # round/1
+  # rsqrt/1
+  # sign/1
+  # sin/1
+  # sqrt/1
 end
