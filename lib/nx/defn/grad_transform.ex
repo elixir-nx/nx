@@ -233,6 +233,25 @@ defmodule Nx.Defn.GradTransform do
     [expr | exprs]
   end
 
+  # Division rule
+  defp unfold_grad({{:., _, [Nx, :divide]}, meta, [x1, x2 | _args]}, _y, exprs, state) do
+    dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
+    dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
+
+    if zero?(dx2) do
+      [nx_call(meta, :divide, [dx1, x2]) | exprs]
+    else
+      num =
+        nx_call(meta, :subtract, [
+          nx_call(meta, :multiply, [dx1, x2]),
+          nx_call(meta, :multiply, [x1, dx2])
+        ])
+
+      den = nx_call(meta, :power, [x2, 2])
+      [nx_call(meta, :divide, [num, den]) | exprs]
+    end
+  end
+
   # Power/Exponentiation rule
   defp unfold_grad({{:., _, [Nx, :power]}, meta, [x1, x2 | _args]}, y, exprs, state) do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
@@ -254,19 +273,10 @@ defmodule Nx.Defn.GradTransform do
 
   ## These are generalizations
 
-  # Compute the grad based on the first argument but keep the computation.
-  @keepthrough [:assert_shape]
-
-  defp unfold_grad({{:., _, [Nx, name]} = call, meta, [x | args]}, _y, exprs, state)
-       when name in @keepthrough do
-    [dx | exprs] = unfold_var(x, exprs, state)
-    [{call, meta, [dx | args]} | exprs]
-  end
-
   # These operations are always treated as constants
   @constants [:size, :rank, :type, :shape] ++
-              [:iota, :random_uniform, :random_normal] ++
-              [:argmax, :argmin]
+               [:iota, :random_uniform, :random_normal] ++
+               [:argmax, :argmin]
 
   defp unfold_grad({{:., _, [Nx, name]}, _meta, _args}, _y, exprs, state)
        when name in @constants do
@@ -335,22 +345,21 @@ defmodule Nx.Defn.GradTransform do
     Keyword.fetch!(meta, :counter)
   end
 
+  # The goal is to implement as many derivatives as possible as defn.
+  # Rules that depend on the derivatives of the argument cannot be
+  # implemented as defn and we alsp skip constants for convenience.
+
   import Nx.Defn
 
   @doc """
-  The derivative of broadcast.
+  The derivative of `Nx.assert_shape/2`.
+  """
+  defn assert_shape(shape, _y, _x), do: Nx.broadcast(1.0, shape)
+
+  @doc """
+  The derivative of `Nx.broadcast/2`.
   """
   defn broadcast(shape, y, _x), do: Nx.broadcast(Nx.size(y) / Nx.size(shape), shape)
-
-  @doc """
-  The derivative of sum.
-  """
-  defn sum(shape, _y, _x), do: Nx.broadcast(1.0, shape)
-
-  @doc """
-  The derivative of `Nx.tanh/2`.
-  """
-  defn tanh(_shape, y, _x), do: 1.0 - y * y
 
   @doc """
   The derivative of `Nx.exp/1`.
@@ -362,6 +371,17 @@ defmodule Nx.Defn.GradTransform do
   """
   defn power(_shape, _y, base, exponent), do: exponent * Nx.power(base, exponent - 1)
 
+  @doc """
+  The derivative of `Nx.sum/2`.
+  """
+  defn sum(shape, _y, _x), do: Nx.broadcast(1.0, shape)
+
+  @doc """
+  The derivative of `Nx.tanh/2`.
+  """
+  defn tanh(_shape, y, _x), do: 1.0 - y * y
+
+  # TODO:
   # abs/1
   # arctan2/2
   # bitwise_and/2
@@ -372,7 +392,6 @@ defmodule Nx.Defn.GradTransform do
   # ceil/1
   # cos/1
   # count_leading_zeros/1
-  # divide/2
   # expm1/1
   # floor/1
   # left_shift/2

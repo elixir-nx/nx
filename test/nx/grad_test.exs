@@ -2,7 +2,7 @@ defmodule Nx.GradTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  import GradHelpers
+  import Nx.GradHelpers
 
   describe "simple" do
     defn grad_itself(t), do: grad(t, t)
@@ -32,11 +32,11 @@ defmodule Nx.GradTest do
       assert grad_addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.1566267114813547)
 
       for _ <- 1..100 do
-        assert check_grads(
-                 &addition_rule/1,
-                 &grad_addition_rule/1,
-                 Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
-               )
+        check_grads!(
+          &addition_rule/1,
+          &grad_addition_rule/1,
+          Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+        )
       end
     end
   end
@@ -49,11 +49,43 @@ defmodule Nx.GradTest do
       assert grad_product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
 
       for _ <- 1..100 do
-        assert check_grads(
-                 &product_rule/1,
-                 &grad_product_rule/1,
-                 Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
-               )
+        check_grads!(
+          &product_rule/1,
+          &grad_product_rule/1,
+          Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+        )
+      end
+    end
+  end
+
+  describe "division rule" do
+    defn division_rule(t), do: Nx.divide(Nx.tanh(t), t)
+    defn grad_division_rule(t), do: grad(t, division_rule(t))
+
+    test "computes gradient" do
+      assert grad_division_rule(Nx.tensor(1.0)) == Nx.tensor(-0.3416198143417387)
+
+      for _ <- 1..100 do
+        check_grads!(
+          &division_rule/1,
+          &grad_division_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
+      end
+    end
+
+    defn division_constant_rule(t), do: Nx.divide(Nx.tanh(t), 2)
+    defn grad_division_constant_rule(t), do: grad(t, division_constant_rule(t))
+
+    test "computes gradient for constant denominator" do
+      assert division_constant_rule(Nx.tensor(1.0)) == Nx.tensor(0.3807970779778824)
+
+      for _ <- 1..100 do
+        check_grads!(
+          &division_constant_rule/1,
+          &grad_division_constant_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
       end
     end
   end
@@ -66,11 +98,11 @@ defmodule Nx.GradTest do
       assert grad_power_rule(Nx.tensor(5.0)) == Nx.tensor(75.0)
 
       for _ <- 1..100 do
-        assert check_grads(
-                 &power_rule/1,
-                 &grad_power_rule/1,
-                 Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
-               )
+        check_grads!(
+          &power_rule/1,
+          &grad_power_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
       end
     end
   end
@@ -83,11 +115,11 @@ defmodule Nx.GradTest do
       assert grad_exp_rule(Nx.tensor(1.0)) == Nx.tensor(1.370487690448899)
 
       for _ <- 1..100 do
-        assert check_grads(
-                 &exp_rule/1,
-                 &grad_exp_rule/1,
-                 Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
-               )
+        check_grads!(
+          &exp_rule/1,
+          &grad_exp_rule/1,
+          Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
+        )
       end
     end
   end
@@ -107,10 +139,10 @@ defmodule Nx.GradTest do
       for _ <- 1..100 do
         t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
 
-        assert check_grads(&Nx.tanh/1, &grad_tanh/1, t)
-        assert check_grads(&Nx.exp(Nx.tanh(&1)), &grad_exp_tanh/1, t)
-        assert check_grads(&Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, t)
-        assert check_grads(&grad_tanh/1, &grad_grad_tanh/1, t)
+        check_grads!(&Nx.tanh/1, &grad_tanh/1, t)
+        check_grads!(&Nx.exp(Nx.tanh(&1)), &grad_exp_tanh/1, t)
+        check_grads!(&Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, t)
+        check_grads!(&grad_tanh/1, &grad_grad_tanh/1, t)
       end
     end
   end
