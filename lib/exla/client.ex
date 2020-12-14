@@ -6,7 +6,7 @@ defmodule Exla.Client do
   """
 
   alias __MODULE__
-  alias Exla.{Computation, Executable}
+  alias Exla.{Computation, Executable, Shape}
 
   @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
   defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
@@ -37,7 +37,13 @@ defmodule Exla.Client do
       device_count = Exla.NIF.get_device_count(ref) |> unwrap!()
       default_device_ordinal = Exla.NIF.get_default_device_ordinal(ref) |> unwrap!()
 
-      %Client{ref: ref, platform: platform, name: name, device_count: device_count, default_device_ordinal: default_device_ordinal}
+      %Client{
+        ref: ref,
+        platform: platform,
+        name: name,
+        device_count: device_count,
+        default_device_ordinal: default_device_ordinal
+      }
     end)
   end
 
@@ -56,8 +62,12 @@ defmodule Exla.Client do
     # This needs to be investigated a bit more
     use_spmd = Keyword.get(options, :use_spmd, false)
     use_spmd_int = if use_spmd, do: 1, else: 0
-    shape_refs = Enum.map(argument_shapes, & &1.ref)
     device_ordinal = check_device_compatibility!(client, device_ordinal)
+
+    shape_refs =
+      argument_shapes
+      |> Enum.map(& Shape.shard(&1, num_replicas*num_partitions))
+      |> Enum.map(& &1.ref)
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
@@ -78,11 +88,16 @@ defmodule Exla.Client do
       client: client,
       ref: ref,
       output_shape: output_shape,
-      device_ordinal: device_ordinal
+      device_ordinal: device_ordinal,
+      num_replicas: num_replicas,
+      num_partitions: num_partitions
     }
   end
 
-  def check_device_compatibility!(%Client{device_count: device_count, default_device_ordinal: default_device_ordinal}, ordinal) do
+  def check_device_compatibility!(
+        %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
+        ordinal
+      ) do
     cond do
       ordinal < 0 ->
         default_device_ordinal

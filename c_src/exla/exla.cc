@@ -1308,25 +1308,25 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   exla::ExlaClient** client;
   exla::ExlaExecutable** executable;
   xla::ExecutableRunOptions run_options;
-  int run_id, rng_seed, launch_id, device_ordinal, keep_on_device;
+  exla::int32 run_id, rng_seed, launch_id, device_ordinal, keep_on_device, replica, partition;
   ERL_NIF_TERM arguments = argv[2];
 
   if (!exla::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::error(env, "Unable to get client.");
   }
-  if (!exla::get<exla::Executable*>(env, argv[1], executable)) {
+  if(!exla::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
     return exla::error(env, "Unable to get executable.");
   }
-  if (!exla::get(env, argv[3], &device_ordinal)) {
+  if(!exla::get(env, argv[3], &device_ordinal)) {
     return exla::error(env, "Unable to get device ordinal.");
   }
-  if (!exla::get(env, argv[4], &run_id)) {
+  if(!exla::get(env, argv[4], &run_id)) {
     return exla::error(env, "Unable to get Run ID.");
   }
-  if (!exla::get(env, argv[5], &rng_seed)) {
+  if(!exla::get(env, argv[5], &rng_seed)) {
     return exla::error(env, "Unable to get RNG Seed.");
   }
-  if (!exla::get(env, argv[6], &launch_id)) {
+  if(!exla::get(env, argv[6], &launch_id)) {
     return exla::error(env, "Unable to get Launch ID.");
   }
   if(!exla::get(env, argv[7], &replica)) {
@@ -1335,14 +1335,13 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(!exla::get(env, argv[8], &partition)) {
     return exla::error(env, "Unable to get partition.");
   }
-  if (!exla::get(env, argv[9], &keep_on_device)) {
+  if(!exla::get(env, argv[9], &keep_on_device)) {
     return exla::error(env, "Unable to get keep_on_device.");
   }
 
   exla::ExlaDevice* device = nullptr;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result,
-                           (*executable)->Run(env, arguments, replica, partition, device, keep_on_device), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*client)->Run(env, local_executable, arguments, device, keep_on_device), env);
 
   return exla::ok(env, result);
 }
@@ -1449,7 +1448,7 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},
-  {"run", 10, run},
+  {"run", 10, run}
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);

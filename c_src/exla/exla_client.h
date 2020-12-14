@@ -16,6 +16,7 @@
 #include "tensorflow/core/platform/status.h"
 
 namespace exla {
+
 namespace se = tensorflow::se;
 
 /*

@@ -70,6 +70,10 @@ ExlaClient::ExlaClient(xla::LocalClient* client,
   }
 }
 
+xla::StatusOr<xla::DeviceAssignment> ExlaClient::GetDefaultDeviceAssignment(int num_replicas, int num_partitions) {
+  return client_->backend().computation_placer()->AssignDevices(num_replicas, num_partitions);
+}
+
 xla::StatusOr<ERL_NIF_TERM> ExlaClient::DecomposeBuffer(ErlNifEnv* env,
                                                         ExlaBuffer* buffer) {
   if (!buffer->is_tuple()) {

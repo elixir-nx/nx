@@ -1,9 +1,9 @@
 defmodule Exla.Executable do
   alias __MODULE__
-  alias Exla.{Buffer, Shape}
+  alias Exla.{Buffer, Shape, ShardedBuffer}
 
-  @enforce_keys [:client, :ref, :output_shape, :device_ordinal]
-  defstruct [:client, :ref, :output_shape, :device_ordinal]
+  @enforce_keys [:client, :ref, :output_shape, :device_ordinal, :num_replicas, :num_partitions]
+  defstruct [:client, :ref, :output_shape, :device_ordinal, :num_replicas, :num_partitions]
 
   def run(
         %Executable{} = executable,
@@ -25,6 +25,8 @@ defmodule Exla.Executable do
     launch_id = Keyword.get(options, :launch_id, 0)
     # Whether to keep result on device
     keep_on_device = Keyword.get(options, :keep_on_device, false)
+
+    device_assignment = Keyword.get(options, :device_assignment, {1, 1})
 
     outside_cpu = client.platform == :cuda || client.platform == :rocm
     keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
@@ -52,11 +54,49 @@ defmodule Exla.Executable do
         run_id,
         rng_seed,
         launch_id,
+        device_assignment,
         keep_on_device_int
       )
       |> unwrap!()
 
     decompose_output(data, output_shape, client, keep_on_device)
+  end
+
+  def run_parallel(%Executable{} = executable, arguments, opts \\ []) do
+    %{
+      client: _client,
+      ref: _exec,
+      output_shape: output_shape,
+      device_ordinal: _device_ordinal,
+      num_replicas: num_replicas,
+      num_partitions: num_partitions
+    } = executable
+
+    run_id = opts[:run_id] || System.unique_integer([:positive, :monotonic])
+    launch_id = opts[:launch_id] || System.unique_integer([:positive, :monotonic])
+
+    opts = Keyword.update(opts, :run_id, run_id, & &1)
+    opts = Keyword.update(opts, :launch_id, launch_id, & &1)
+
+    output_shape = %Shape{output_shape | dims: Tuple.insert_at(output_shape.dims, 0, num_replicas*num_partitions)}
+
+    inputs =
+      arguments
+      |> Enum.map(& &1.buffers)
+      |> Enum.zip()
+      |> Enum.map(&Tuple.to_list/1)
+
+    tasks =
+      for i <- 1..num_replicas, j <- 1..num_partitions do
+        device_assignment = {i, j}
+        Task.async(fn -> run(executable, Enum.at(inputs, i + j - 2), opts) end)
+      end
+
+    buffers =
+      tasks
+      |> Enum.map(&Task.await/1)
+
+    %ShardedBuffer{buffers: buffers, shape: output_shape}
   end
 
   defp decompose_output(data, shape, client, keep_on_device) do

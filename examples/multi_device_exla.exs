@@ -36,3 +36,16 @@ try do
 rescue
   e in ArgumentError -> IO.inspect e
 end
+
+sb1 = Exla.ShardedBuffer.sharded_buffer(data, shape)
+sb2 = Exla.ShardedBuffer.sharded_buffer(data, shape)
+
+x = Exla.Op.parameter(builder, 0, Exla.Shape.shard(shape, 2), "x")
+y = Exla.Op.parameter(builder, 1, Exla.Shape.shard(shape, 2), "y")
+ast = Exla.Op.add(x, y)
+comp = Exla.Builder.build(ast)
+
+# This will create 2 replicas for each device
+replicated_exec = Exla.Client.compile(client, comp, [shape, shape], num_replicas: 2)
+
+IO.inspect Exla.Executable.run_parallel(replicated_exec, [sb1, sb2])
