@@ -5,6 +5,7 @@ defmodule Nx.Shared do
   @doc """
   Computes the product of a tuple.
   """
+  # TODO: Replace me by Tuple.product/1 on Elixir v1.12
   def tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)

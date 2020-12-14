@@ -2905,6 +2905,246 @@ defmodule Nx do
     tensor
   end
 
+  @doc """
+  Transposes a tensor by reversing its axes.
+
+  See `transpose/2` for more information.
+
+  ## Examples
+
+      iex> Nx.transpose(Nx.tensor(1))
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> Nx.transpose(Nx.iota({2, 3, 4}))
+      #Nx.Tensor<
+        s64[4][3][2]
+        [
+          [
+            [0, 12],
+            [4, 16],
+            [8, 20]
+          ],
+          [
+            [1, 13],
+            [5, 17],
+            [9, 21]
+          ],
+          [
+            [2, 14],
+            [6, 18],
+            [10, 22]
+          ],
+          [
+            [3, 15],
+            [7, 19],
+            [11, 23]
+          ]
+        ]
+      >
+  """
+  def transpose(t)
+
+  def transpose(t) when is_number(t), do: transpose(tensor(t))
+  def transpose(%{shape: {}} = t), do: t
+  def transpose(%{shape: s} = t), do: transpose(t, List.to_tuple(to_zero(tuple_size(s) - 1)))
+
+  defp to_zero(0), do: [0]
+  defp to_zero(n), do: [n | to_zero(n - 1)]
+
+  @doc """
+  Transposes a tensor to the given `axes`.
+
+  The axes is a tuple of integers containing how the new
+  dimensions must be ordered. The highest dimension is zero.
+
+  ## Examples
+
+      iex> Nx.transpose(Nx.tensor(1), {})
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> Nx.transpose(Nx.iota({2, 3, 4}), {2, 1, 0})
+      #Nx.Tensor<
+        s64[4][3][2]
+        [
+          [
+            [0, 12],
+            [4, 16],
+            [8, 20]
+          ],
+          [
+            [1, 13],
+            [5, 17],
+            [9, 21]
+          ],
+          [
+            [2, 14],
+            [6, 18],
+            [10, 22]
+          ],
+          [
+            [3, 15],
+            [7, 19],
+            [11, 23]
+          ]
+        ]
+      >
+
+      iex> Nx.transpose(Nx.iota({2, 3, 4}), {2, 0, 1})
+      #Nx.Tensor<
+        s64[4][2][3]
+        [
+          [
+            [0, 4, 8],
+            [12, 16, 20]
+          ],
+          [
+            [1, 5, 9],
+            [13, 17, 21]
+          ],
+          [
+            [2, 6, 10],
+            [14, 18, 22]
+          ],
+          [
+            [3, 7, 11],
+            [15, 19, 23]
+          ]
+        ]
+      >
+
+      iex> Nx.transpose(Nx.iota({2, 3, 4}), {0, 2, 1})
+      #Nx.Tensor<
+        s64[2][4][3]
+        [
+          [
+            [0, 4, 8],
+            [1, 5, 9],
+            [2, 6, 10],
+            [3, 7, 11]
+          ],
+          [
+            [12, 16, 20],
+            [13, 17, 21],
+            [14, 18, 22],
+            [15, 19, 23]
+          ]
+        ]
+      >
+
+  ### Errors
+
+      iex> Nx.transpose(1, {0})
+      ** (ArgumentError) axes {0} must be of the same rank as shape {}
+
+      iex> Nx.transpose(Nx.iota({2, 2}), {1, 2})
+      ** (ArgumentError) axes {1, 2} must be unique integers between 0 and 1
+
+  """
+  def transpose(tensor, axes)
+
+  def transpose(t, axes) when is_number(t), do: transpose(tensor(t), axes)
+  def transpose(%T{shape: {}} = t, {}), do: t
+  def transpose(%T{shape: {_}} = t, {0}), do: t
+
+  def transpose(%T{shape: shape, type: {_, size}} = t, axes) do
+    data = Nx.Util.to_bitstring(t)
+    {list, min, max} = transpose_axes(shape, axes)
+    weighted_shape = weighted_shape(shape, size)
+
+    # The chunk size is computed based on all dimensions
+    # before the minimum one being changed. For example,
+    # for {0, 1, 2, 3} and the swap is between 1 and 2,
+    # the chunk_size will be d1 * d2 * d3 * size.
+    chunk_size = size_at(weighted_shape, min, size)
+
+    # All of the major dimensions not being transposed can be
+    # read at once. For example, for {0, 1, 2, 3} and the swap
+    # is between 1 and 2, the read_size will be d3 * size.
+    read_size = size_at(weighted_shape, max + 1, size)
+
+    # And now how we will traverse
+    traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
+
+    data =
+      for <<chunk::size(chunk_size)-bitstring <- data>> do
+        transpose_dims(traverse_list, chunk, read_size)
+      end
+
+    shape = axes |> Tuple.to_list() |> Enum.map(&elem(shape, &1)) |> List.to_tuple()
+    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
+  end
+
+  defp transpose_axes(shape, axes) when tuple_size(shape) != tuple_size(axes) do
+    raise ArgumentError,
+          "axes #{inspect(axes)} must be of the same rank as shape #{inspect(shape)}"
+  end
+
+  defp transpose_axes(_shape, axes) do
+    list = Tuple.to_list(axes)
+    size = tuple_size(axes)
+
+    unless Enum.all?(list, &(&1 >= 0 and &1 < size)) and length(Enum.uniq(list)) == size do
+      raise ArgumentError,
+            "axes #{inspect(axes)} must be unique integers between 0 and #{size - 1}"
+    end
+
+    {list, min} = transpose_min(list, 0)
+    {list, max} = transpose_max(Enum.reverse(list), size - 1)
+    {list, min, max}
+  end
+
+  defp transpose_min([head | tail], head), do: transpose_min(tail, head + 1)
+  defp transpose_min(tail, head), do: {tail, head}
+
+  defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
+  defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
+
+  defp weighted_shape(shape, size) do
+    Enum.reverse(weighted_shape(shape, tuple_size(shape), size))
+  end
+
+  defp weighted_shape(_shape, 0, _weight) do
+    []
+  end
+
+  defp weighted_shape(shape, pos, weight) do
+    element = :erlang.element(pos, shape)
+    [{element, weight} | weighted_shape(shape, pos - 1, weight * element)]
+  end
+
+  defp size_at(list, at, size) do
+    {element, size} = Enum.at(list, at, {1, size})
+    element * size
+  end
+
+  defp transpose_dims([], data, read_size) do
+    <<chunk::size(read_size)-bitstring, _::bitstring>> = data
+    chunk
+  end
+
+  defp transpose_dims([{dim, size} | dims], data, read_size) do
+    transpose_dim(dim, size, dims, data, read_size)
+  end
+
+  defp transpose_dim(dim, dim_size, dims, data, read_size) do
+    head = transpose_dims(dims, data, read_size)
+
+    case dim do
+      1 ->
+        [head]
+
+      _ ->
+        <<_::size(dim_size)-bitstring, data::bitstring>> = data
+        [head | transpose_dim(dim - 1, dim_size, dims, data, read_size)]
+    end
+  end
+
   ## Shape
 
   defp shape!(shape) when is_tuple(shape), do: shape

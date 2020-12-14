@@ -369,12 +369,12 @@ defmodule Nx.Util do
   # expect the entire tensor to be reduced down to a scalar.
   defp bin_view_axis(binary, axis, shape, size) do
     if axis do
-      {gap_count, chunk_size, new_shape} = traverse_axis(shape, axis, size)
+      {gap_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
 
       view =
         for <<chunk::size(chunk_size)-bitstring <- binary>>,
             gap <-
-              traverse_gaps(gap_count, size, fn pre, pos ->
+              aggregate_gaps(gap_count, size, fn pre, pos ->
                 for <<_::size(pre)-bitstring, var::size(size)-bitstring,
                       _::size(pos)-bitstring <- chunk>>,
                     into: <<>>,
@@ -449,39 +449,39 @@ defmodule Nx.Util do
   # Computing the aggregate is a matter of mapping the binary over
   # each chunk and then mapping gap times, moving the computation root
   # by size over each gap.
-  defp traverse_axis(shape, axis, size) do
-    {gap_count, chunk_count, new_shape} = traverse_axis(shape, axis)
+  defp aggregate_axis(shape, axis, size) do
+    {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
     {gap_count, size * chunk_count, new_shape}
   end
 
-  defp traverse_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
-    traverse_axis(Tuple.to_list(shape), 0, axis, tuple_product(shape), [])
+  defp aggregate_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
+    aggregate_axis(Tuple.to_list(shape), 0, axis, tuple_product(shape), [])
   end
 
-  defp traverse_axis(shape, axis) when axis < 0 and axis >= -tuple_size(shape) do
-    traverse_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, tuple_product(shape), [])
+  defp aggregate_axis(shape, axis) when axis < 0 and axis >= -tuple_size(shape) do
+    aggregate_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, tuple_product(shape), [])
   end
 
-  defp traverse_axis(shape, axis) do
+  defp aggregate_axis(shape, axis) do
     raise ArgumentError, "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
   end
 
-  defp traverse_axis([dim | dims], axis, chosen, prev_gap, acc) do
+  defp aggregate_axis([dim | dims], axis, chosen, prev_gap, acc) do
     next_gap = div(prev_gap, dim)
 
     if axis == chosen do
       {next_gap, prev_gap, List.to_tuple(Enum.reverse(acc, dims))}
     else
-      traverse_axis(dims, axis + 1, chosen, next_gap, [dim | acc])
+      aggregate_axis(dims, axis + 1, chosen, next_gap, [dim | acc])
     end
   end
 
-  defp traverse_gaps(gap_count, size, fun),
-    do: traverse_gaps(0, gap_count * size, size, fun)
+  defp aggregate_gaps(gap_count, size, fun),
+    do: aggregate_gaps(0, gap_count * size, size, fun)
 
-  defp traverse_gaps(_pre, 0, _size, _fun),
+  defp aggregate_gaps(_pre, 0, _size, _fun),
     do: []
 
-  defp traverse_gaps(pre, pos, size, fun),
-    do: [fun.(pre, pos - size) | traverse_gaps(pre + size, pos - size, size, fun)]
+  defp aggregate_gaps(pre, pos, size, fun),
+    do: [fun.(pre, pos - size) | aggregate_gaps(pre + size, pos - size, size, fun)]
 end
