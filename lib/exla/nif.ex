@@ -226,6 +226,8 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
+  def device_assignment_to_device_id(_exec, _replica, _partition), do: nif_error(__ENV__.function)
+
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 

@@ -31,6 +31,8 @@ defmodule Exla.Executable do
     outside_cpu = client.platform == :cuda || client.platform == :rocm
     keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
 
+    device_id = device_assignment_to_device_id(executable, device_assignment)
+
     inputs =
       Enum.map(arguments, fn
         %Buffer{ref: {ref, _}, data: nil} ->
@@ -38,7 +40,7 @@ defmodule Exla.Executable do
 
         buffer = %Buffer{data: data, shape: shape, ref: nil} ->
           if outside_cpu do
-            %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_ordinal)
+            %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_id)
             ref
           else
             {data, shape.ref}
@@ -89,6 +91,7 @@ defmodule Exla.Executable do
     tasks =
       for i <- 1..num_replicas, j <- 1..num_partitions do
         device_assignment = {i, j}
+        opts = Keyword.update(opts, :device_assignment, device_assignment, & &1)
         Task.async(fn -> run(executable, Enum.at(inputs, i + j - 2), opts) end)
       end
 
@@ -97,6 +100,10 @@ defmodule Exla.Executable do
       |> Enum.map(&Task.await/1)
 
     %ShardedBuffer{buffers: buffers, shape: output_shape}
+  end
+
+  def device_assignment_to_device_id(%Executable{ref: exec}, {replica, partition}) do
+    Exla.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
   end
 
   defp decompose_output(data, shape, client, keep_on_device) do

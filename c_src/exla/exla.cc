@@ -1234,6 +1234,27 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::ok(env, platform_term);
 }
 
+ERL_NIF_TERM device_assignment_to_device_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 3){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::LocalExecutable* exec;
+  exla::int32 replica, partition;
+
+  if(!exla::get<xla::LocalExecutable>(env, argv[0], exec)) return exla::error(env, "Unable to get executable.");
+  if(!exla::get(env, argv[1], replica)) return exla::error(env, "Unable to get replica.");
+  if(!exla::get(env, argv[2], partition)) return exla::error(env, "Unable to get partition.");
+
+  if(!exec->build_options().has_device_assignment()) {
+    exla::int32 device_id = exec->build_options().device_ordinal();
+    return exla::ok(env, exla::make(env, device_id));
+  } else {
+    exla::int32 device_id = exec->build_options().device_assignment()(replica - 1, partition - 1);
+    return exla::ok(env, exla::make(env, device_id));
+  }
+}
+
 /************ Build, Compilation, Execution *************/
 ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
@@ -1354,6 +1375,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   {"get_supported_platforms", 0, get_supported_platforms},
+  {"device_assignment_to_device_id", 3, device_assignment_to_device_id},
   /****** ExlaBuffer ******/
   {"binary_to_device_mem", 4, binary_to_device_mem},
   {"read_device_mem", 2, read_device_mem},
