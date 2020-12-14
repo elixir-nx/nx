@@ -2282,8 +2282,8 @@ defmodule Nx do
   If `pred` is a boolean, takes either the entire `on_true` tensor
   or the entire `on_false` tensor.
 
-  If the shape of `on_true` does not match the shape of `on_false`,
-  will attempt to broadcast so the shapes match.
+  If the shape of `on_true` or `on_false` do not match the shape of
+  `pred`, attemps to broadcast both so they match the shape of `pred`.
 
   ## Examples
 
@@ -2307,6 +2307,14 @@ defmodule Nx do
         s64[3]
         [1, 4, 6]
       >
+
+      iex> x = Nx.tensor([2, 4, 6, 8, 10])
+      iex> y = Nx.tensor([1, 6, 2, 11, 2])
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor(2), Nx.tensor([1, 3, 5, 7, 9]))
+      #Nx.Tensor<
+        s64[5]
+        [2, 3, 2, 7, 2]
+      >
   """
   def select(pred, on_true, on_false)
 
@@ -2318,29 +2326,38 @@ defmodule Nx do
 
   def select(0, _, on_false), do: on_false
 
-  def select(%T{} = pred,
-             %T{type: left_type} = on_true,
-             %T{type: right_type} = on_false) do
+  def select(%T{shape: shape} = pred,
+             %T{type: {_, left_size} = left_type} = on_true,
+             %T{type: {_, right_size} = right_type} = on_false) do
     output_type = Nx.Type.merge(left_type, right_type)
 
-    pred_data = Nx.Util.to_bitstring(pred)
+    on_true_bcast = broadcast(on_true, shape)
+    on_false_bcast = broadcast(on_false, shape)
 
-    {new_tensor, shape} =
-      binary_broadcast_with_acc(on_true, on_false, 0, fn true_data, false_data, i ->
+    pred_data = Nx.Util.to_bitstring(pred)
+    on_true_data = Nx.Util.to_bitstring(on_true_bcast)
+    on_false_data = Nx.Util.to_bitstring(on_false_bcast)
+
+    pred_size = tuple_product(shape)
+
+    data =
+      for i <- 0..pred_size - 1, into: <<>> do
+        pred_consumed = i * 8
+        <<_::size(pred_consumed), pred::size(8)-unsigned-native, _::bitstring>> = pred_data
         match_types [left_type, right_type, output_type] do
-          pred_consumed = i * 8
-          <<_::size(pred_consumed), pred::8-unsigned-native, _::bitstring>> = pred_data
           if pred == 1 do
-            <<match!(x, 0), _::bitstring>> = true_data
-            {<<write!(read!(x, 0), 2)>>, i+1}
+            consumed = i*left_size
+            <<_::size(consumed), match!(x, 0), _::bitstring>> = on_true_data
+            <<write!(read!(x, 0), 2)>>
           else
-            <<match!(y, 1), _::bitstring>> = false_data
-            {<<write!(read!(y, 1), 2)>>, i+1}
+            consumed = i*right_size
+            <<_::size(consumed), match!(y, 1), _::bitstring>> = on_false_data
+            <<write!(read!(y, 1), 2)>>
           end
         end
-      end)
+      end
 
-    %T{data: {Nx.BitStringDevice, new_tensor}, shape: shape, type: output_type}
+    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
   end
 
   ## Unary ops
@@ -3641,49 +3658,6 @@ defmodule Nx do
     end
   end
 
-  defp binary_broadcast_with_acc(
-         %T{type: {_, left_size}, shape: shape} = left,
-         %T{type: {_, right_size}, shape: shape} = right,
-         acc,
-         fun
-       ) do
-    {data, _acc} =
-      bin_zip_map_reduce(
-        Nx.Util.to_bitstring(left),
-        left_size,
-        Nx.Util.to_bitstring(right),
-        right_size,
-        acc,
-        fun
-      )
-      |> Enum.unzip()
-
-    {IO.iodata_to_binary(data), shape}
-  end
-
-  defp binary_broadcast_with_acc(
-         %T{type: {_, left_size}, shape: left_shape} = left,
-         %T{type: {_, right_size}, shape: right_shape} = right,
-         acc,
-         fun
-       ) do
-    left_rank = tuple_size(left_shape)
-    right_rank = tuple_size(right_shape)
-    rank = :erlang.max(left_rank, right_rank)
-    left_ordered = shape_to_lower_ranked_list(left_shape, left_rank, rank)
-    right_ordered = shape_to_lower_ranked_list(right_shape, right_rank, rank)
-
-    case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
-      {chunks, shape} ->
-        {broadcast_recur_with_acc(Nx.Util.to_bitstring(left), Nx.Util.to_bitstring(right), acc, chunks), shape}
-
-      :error ->
-        raise ArgumentError,
-              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
-                "to #{inspect(right_shape)}"
-    end
-  end
-
   defp broadcast_recur(left_data, right_data, [fun]) do
     fun.(left_data, right_data)
   end
@@ -3698,22 +3672,6 @@ defmodule Nx do
   defp broadcast_recur(left_data, right_data, [{:zip, left_chunk, right_chunk} | chunks]) do
     left_data
     |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur(&1, &2, chunks))
-    |> IO.iodata_to_binary()
-  end
-
-  defp broadcast_recur_with_acc(left_data, right_data, acc, [fun]) do
-    fun.(left_data, right_data, acc)
-  end
-
-  defp broadcast_recur_with_acc(left_data, right_data, acc, [{:cross, left_chunk, right_chunk} | chunks]) do
-    for <<left_part::bitstring-size(left_chunk) <- left_data>>,
-      <<right_part::bitstring-size(right_chunk) <- right_data>>,
-      do: broadcast_recur_with_acc(left_part, right_part, acc, chunks)
-  end
-
-  defp broadcast_recur_with_acc(left_data, right_data, acc, [{:zip, left_chunk, right_chunk} | chunks]) do
-    left_data
-    |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur_with_acc(&1, &2, acc, chunks))
     |> IO.iodata_to_binary()
   end
 
@@ -3781,19 +3739,6 @@ defmodule Nx do
     [
       fun.(left_head, right_head)
       | bin_zip_map(left_rest, left_size, right_rest, right_size, fun)
-    ]
-  end
-
-  defp bin_zip_map_reduce(<<>>, _left_size, <<>>, _right_size, _acc, _fun), do: []
-
-  defp bin_zip_map_reduce(left_data, left_size, right_data, right_size, acc, fun) do
-    <<left_head::bitstring-size(left_size), left_rest::bitstring>> = left_data
-    <<right_head::bitstring-size(right_size), right_rest::bitstring>> = right_data
-
-    {data, acc} = fun.(left_head, right_head, acc)
-    [
-      {data, acc}
-      | bin_zip_map_reduce(left_rest, left_size, right_rest, right_size, acc, fun)
     ]
   end
 end
