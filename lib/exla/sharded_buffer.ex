@@ -19,15 +19,16 @@ defmodule Exla.ShardedBuffer do
     %ShardedBuffer{buffers: buffers, shape: shape}
   end
 
-  def sharded_buffer(binary, shape = %Shape{dtype: type, dims: dims}) when is_bitstring(binary) do
+  def sharded_buffer(binary, shape = %Shape{dtype: {_, size} = type, dims: dims}) when is_bitstring(binary) do
     num_shards = elem(dims, 0)
     sharded_dims = Tuple.delete_at(dims, 0)
     sharded_shape = Shape.make_shape(type, sharded_dims)
-    shard_size = tuple_product(sharded_dims)
+    shard_size = tuple_product(sharded_dims) * size
 
     buffers =
       for i <- 0..num_shards - 1 do
-        <<_::size(i*shard_size)-bitstring, shard::size(shard_size)-bitsring, _::bitstring>> = binary
+        consumed = i * shard_size
+        <<_::size(consumed)-bitstring, shard::size(shard_size)-bitstring, _::bitstring>> = binary
         Buffer.buffer(shard, sharded_shape)
       end
 
@@ -36,7 +37,7 @@ defmodule Exla.ShardedBuffer do
 
   def sharded_buffer(reference_pairs, shape = %Shape{dtype: type, dims: dims}) when is_list(reference_pairs) do
     num_shards = elem(dims, 0)
-    num_buffers = Enum.count(binaries_or_reference_pairs)
+    num_buffers = Enum.count(reference_pairs)
     sharded_shape = Shape.make_shape(type, Tuple.delete_at(dims, 0))
 
     unless num_shards == num_buffers,
@@ -44,7 +45,7 @@ defmodule Exla.ShardedBuffer do
                 <> " got #{num_shards} shards and #{num_buffers} buffers"
 
     buffers =
-      binaries_or_reference_pairs
+      reference_pairs
       |> Enum.map(&Buffer.buffer(&1, sharded_shape))
 
     %ShardedBuffer{buffers: buffers, shape: shape}
@@ -62,7 +63,7 @@ defmodule Exla.ShardedBuffer do
 
     ref_buffers =
       buffers
-      |> Enum.zip_with_index()
+      |> Enum.with_index()
       |> Enum.map(fn {buf, i} -> Buffer.place_on_device(buf, client, i) end)
 
     %ShardedBuffer{sharded | buffers: ref_buffers}
@@ -71,17 +72,24 @@ defmodule Exla.ShardedBuffer do
   @doc """
   Reads the underlying shards.
   """
-  def read({shards, client_name}) do
-    client = Exla.Client.fetch!(client_name)
+  def read(shards) do
     shards
-    |> Enum.reduce(<<>>, &Exla.NIF.read_device_mem(client.ref, &1) |> unwrap!())
+    |> Enum.reduce(<<>>, &<<&2::bitstring, Buffer.read(&1.ref)::bitstring>>)
   end
 
   @doc """
   Deallocates the underlying shards.
   """
-  def deallocate({shards, _}) do
+  def deallocate(shards) do
     shards
-    |> Enum.reduce(:ok, &Exla.NIF.deallocate_device_mem(&1) |> unwrap!())
+    |> Enum.reduce(:ok, fn x, _ -> Buffer.deallocate(x.ref) end)
   end
+
+  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
+  defp unwrap!(status) when is_atom(status), do: status
 end
