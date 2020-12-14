@@ -71,7 +71,6 @@ defmodule Exla.Client do
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
-    IO.inspect device_ordinal
 
     ref =
       Exla.NIF.compile(
@@ -101,7 +100,7 @@ defmodule Exla.Client do
       ) do
     cond do
       ordinal < 0 ->
-        -1
+        default_device_ordinal
 
       ordinal < device_count ->
         ordinal
