@@ -430,6 +430,11 @@ defmodule Nx.Defn.GradTransform do
   defn logistic(_shape, y, x), do: Nx.exp(-x) * y * y
 
   @doc """
+  The derivative of `Nx.mean/2`.
+  """
+  defn mean(shape, y, x), do: Nx.broadcast(Nx.size(y) / Nx.size(x), shape)
+
+  @doc """
   The derivative of `Nx.negate/1`.
   """
   defn negate(shape, _y, _x), do: Nx.broadcast(-1.0, shape)

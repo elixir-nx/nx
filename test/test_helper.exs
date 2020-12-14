@@ -7,8 +7,6 @@ ExUnit.start(
 )
 
   defmodule Nx.GradHelpers do
-    import Nx.Shared
-
     @doc """
     Checks the gradient of numerical function `func`.
 
@@ -22,14 +20,7 @@ ExUnit.start(
     end
 
     defp approx_equal?(lhs, rhs, x, eps) do
-      output_type = Nx.Type.merge(lhs.type, rhs.type)
-      binary = Nx.Util.to_bitstring(Nx.abs(Nx.subtract(lhs, rhs)))
-
-      value =
-        match_types [output_type] do
-          <<match!(var, 0)>> = binary
-          read!(var, 0)
-        end
+      [value] = Nx.Util.to_flat_list(Nx.abs(Nx.subtract(lhs, rhs)))
 
       unless value < eps do
         raise """

@@ -11,9 +11,38 @@ defmodule Nx.Util do
   import Nx.Shared
 
   @doc """
+  Returns the underlying tensor as a float list.
+
+  The list is returned as is (which is row-major).
+
+    ## Examples
+
+      iex> Nx.Util.to_flat_list(1)
+      [1]
+
+      iex> Nx.Util.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]))
+      [1.0, 2.0, 3.0]
+  """
+  def to_flat_list(tensor) do
+    tensor = Nx.tensor(tensor)
+
+    match_types [tensor.type] do
+      for <<match!(var, 0) <- to_bitstring(tensor)>>, do: read!(var, 0)
+    end
+  end
+
+  @doc """
   Returns the underlying tensor as a bitstring.
 
   The bitstring is returned as is (which is row-major).
+
+  ## Examples
+
+      iex> Nx.Util.to_bitstring(1)
+      <<1::64-native>>
+
+      iex> Nx.Util.to_bitstring(Nx.tensor([1.0, 2.0, 3.0]))
+      <<1.0::float-native, 2.0::float-native, 3.0::float-native>>
   """
   def to_bitstring(%T{data: {Nx.BitStringDevice, data}}), do: data
 
@@ -22,6 +51,8 @@ defmodule Nx.Util do
           "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
             "Please use Nx.device_transfer/1 to transfer data back to Elixir"
   end
+
+  def to_bitstring(t), do: to_bitstring(Nx.tensor(t))
 
   @doc """
   Creates a one-dimensional tensor from a `bitstring` with the given `type`.

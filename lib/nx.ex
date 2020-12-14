@@ -2533,6 +2533,71 @@ defmodule Nx do
   end
 
   @doc """
+  Returns the mean for the tensor.
+
+  If the `:axis` option is given, it aggregates over
+  that dimension, effectively removing it. `axis: 0`
+  implies aggregating over the highest order dimension
+  and so forth. If the axis is negative, then counts
+  the axis from the back. For example, `axis: -1` will
+  always aggregate all rows.
+
+  ## Examples
+
+      iex> Nx.mean(Nx.tensor(42))
+      #Nx.Tensor<
+        f64
+        42.0
+      >
+
+      iex> Nx.mean(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        f64
+        2.0
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.mean(Nx.tensor([1, 2, 3]), axis: 0)
+      #Nx.Tensor<
+        f64
+        2.0
+      >
+
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 0)
+      #Nx.Tensor<
+        f64[2][3]
+        [
+          [4.0, 5.0, 6.0],
+          [7.0, 8.0, 9.0]
+        ]
+      >
+
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -1)
+      #Nx.Tensor<
+        f64[2][2]
+        [
+          [2.0, 5.0],
+          [8.0, 11.0]
+        ]
+      >
+
+  ### Errors
+
+      iex> Nx.mean(Nx.tensor([1, 2, 3]), axis: 1)
+      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+
+  """
+  def mean(tensor, opts \\ []) do
+    tensor = tensor(tensor)
+    divide(sum(tensor, opts), mean_den(tensor, opts[:axis]))
+  end
+
+  defp mean_den(tensor, nil), do: Nx.size(tensor)
+  defp mean_den(tensor, axis) when axis >= 0, do: elem(tensor.shape, axis)
+  defp mean_den(tensor, axis), do: elem(tensor.shape, tuple_size(tensor.shape) + axis)
+
+  @doc """
   Returns the indices of the maximum values along a given axis.
 
   If no axis is given, returns the index of the absolute maximum

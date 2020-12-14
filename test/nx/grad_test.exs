@@ -289,7 +289,7 @@ defmodule Nx.GradTest do
 
   for fun <-
         [:cbrt, :cos, :exp, :expm1, :log, :log1p, :logistic] ++
-          [:negate, :rsqrt, :sin, :sqrt, :sum, :tanh] do
+          [:mean, :negate, :rsqrt, :sin, :sqrt, :sum, :tanh] do
     describe "#{fun}" do
       grad_fun = :"grad_#{fun}"
       defn unquote(grad_fun)(t), do: grad(t, Nx.unquote(fun)(t))
@@ -300,6 +300,47 @@ defmodule Nx.GradTest do
           check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
         end
       end
+    end
+  end
+
+  describe "axis" do
+    defn grad_sum_full(t), do: grad(t, Nx.sum(t))
+    defn grad_mean_full(t), do: grad(t, Nx.mean(t))
+
+    test "computes gradient in full" do
+      assert grad_sum_full(Nx.tensor([[1, 2], [3, 4]])) ==
+               Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+
+      assert grad_mean_full(Nx.tensor([[1, 2], [3, 4]])) ==
+               Nx.tensor([[0.25, 0.25], [0.25, 0.25]])
+    end
+
+    defn grad_sum_0_mean(t), do: grad(t, t |> Nx.sum(axis: 0) |> Nx.mean())
+    defn grad_sum_1_mean(t), do: grad(t, t |> Nx.sum(axis: 1) |> Nx.mean())
+
+    test "computes sum(axis) + mean" do
+      assert grad_sum_0_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+               ])
+
+      assert grad_sum_1_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    end
+
+    defn grad_mean_0_sum(t), do: grad(t, t |> Nx.mean(axis: 0) |> Nx.sum())
+    defn grad_mean_1_sum(t), do: grad(t, t |> Nx.mean(axis: 1) |> Nx.sum())
+
+    test "computes mean(axis) + sum" do
+      assert grad_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+
+      assert grad_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+               ])
     end
   end
 end
