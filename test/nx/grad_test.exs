@@ -342,5 +342,50 @@ defmodule Nx.GradTest do
                  [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
                ])
     end
+
+    defn grad_reshape_mean_0_sum(t),
+      do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axis: 0) |> Nx.sum())
+
+    defn grad_reshape_mean_1_sum(t),
+      do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axis: 1) |> Nx.sum())
+
+    test "computes reshape + mean(axis) + sum" do
+      assert grad_reshape_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+               ])
+
+      assert grad_reshape_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    end
+
+    defn grad_reshape_mean_0(t),
+      do: grad(t, t |> Nx.reshape({6}) |> Nx.mean(axis: 0))
+
+    test "computes reshape + mean(axis)" do
+      assert grad_reshape_mean_0(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.16666666666666666, 0.16666666666666666, 0.16666666666666666],
+                 [0.16666666666666666, 0.16666666666666666, 0.16666666666666666]
+               ])
+    end
+
+    defn grad_transpose_mean_0_sum(t),
+      do: grad(t, t |> Nx.transpose() |> Nx.mean(axis: 0) |> Nx.sum())
+
+    defn grad_transpose_mean_1_sum(t),
+      do: grad(t, t |> Nx.transpose() |> Nx.mean(axis: 1) |> Nx.sum())
+
+    test "computes transpose + mean(axis) + sum" do
+      assert grad_transpose_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+               ])
+
+      assert grad_transpose_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    end
   end
 end

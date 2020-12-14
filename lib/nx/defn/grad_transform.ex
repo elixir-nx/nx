@@ -204,12 +204,6 @@ defmodule Nx.Defn.GradTransform do
 
   ## First we start with the per op rules
 
-  # Reshape rule (changes the shape upstream and then fixes it)
-  defp unfold_grad({{:., _, [Nx, :reshape]} = call, meta, [x, shape]}, _y, exprs, state) do
-    [dx | exprs] = unfold_var(x, exprs, %{state | shape: shape})
-    [{call, meta, [dx, state.shape]} | exprs]
-  end
-
   # Addition rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
        when name in [:add, :subtract] do
@@ -445,6 +439,11 @@ defmodule Nx.Defn.GradTransform do
   defn power(_shape, _y, base, exponent), do: exponent * Nx.power(base, exponent - 1)
 
   @doc """
+  The derivative of `Nx.reshape/2`.
+  """
+  defn reshape(shape, _y, _x), do: Nx.broadcast(1.0, shape)
+
+  @doc """
   The derivative of `Nx.rsqrt/1`.
   """
   defn rsqrt(_shape, _y, x), do: -0.5 * Nx.power(x, -1.5)
@@ -468,6 +467,11 @@ defmodule Nx.Defn.GradTransform do
   The derivative of `Nx.tanh/2`.
   """
   defn tanh(_shape, y, _x), do: 1.0 - y * y
+
+  @doc """
+  The derivative of `Nx.transpose/2`.
+  """
+  defn transpose(shape, _y, _x), do: Nx.broadcast(1.0, shape)
 
   # TODO:
   # abs/1 - requires select

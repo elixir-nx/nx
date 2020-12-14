@@ -20,20 +20,4 @@ defmodule Nx.PrintQuotedTest do
            )
            """
   end
-
-  test "prints the reshape expression" do
-    assert capture_io(fn ->
-             defmodule Example2 do
-               import Nx.Defn
-               defn print_grad(t), do: print_quoted(grad(t, Nx.reshape(t, {4, 4})))
-             end
-           end) =~ """
-           (
-             a = Nx.reshape(b, {4, 4})
-             Nx.assert_shape(a, {}, "grad expects the numerical expression to return a scalar tensor")
-             c = Nx.broadcast(1.0, {4, 4})
-             Nx.reshape(c, b)
-           )
-           """
-  end
 end
