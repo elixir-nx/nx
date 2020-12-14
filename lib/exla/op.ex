@@ -81,7 +81,7 @@ defmodule Exla.Op do
   arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :arctan2, :power]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
   shift = [:left_shift, :right_shift_arithmetic, :right_shift_logical]
-  comparison = [:equal, :not_equal, :greater_than, :less_than, :greater_than_or_equal, :less_than_or_equal]
+  comparison = [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
   for fun <- arith ++ bitwise ++ shift ++ comparison do
     @doc """

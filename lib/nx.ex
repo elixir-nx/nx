@@ -1072,6 +1072,11 @@ defmodule Nx do
     &quote(do: Nx.Type.to_floating(unquote(&1)))
   )
 
+  defp_element_wise_bin_op.(
+    :element_wise_bin_bool,
+    &quote(do: Nx.Type.to_predicate(unquote(&1)))
+  )
+
   @doc """
   Element-wise addition of two tensors.
 
@@ -1974,6 +1979,369 @@ defmodule Nx do
   @compile {:inline, erlang_right_shift: 3}
   defp erlang_right_shift(_, a, b) when b >= 0, do: :erlang.bsr(a, b)
   defp erlang_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
+
+  @doc """
+  Element-wise equality comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.equal(1, 2)
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.equal(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 0, 0]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 5]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 0]
+    >
+
+    iex> Nx.equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [1, 1, 1],
+        [0, 0, 0]
+      ]
+    >
+  """
+  def equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_equal/3)
+  @compile {:inline, erlang_equal: 3}
+  defp erlang_equal(_, a, b), do: if a == b, do: 1, else: 0
+
+  @doc """
+  Element-wise not-equal comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.not_equal(1, 2)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  ### Comparison of tensor and scalar
+
+      iex> Nx.not_equal(Nx.tensor([1, 2, 3]), Nx.tensor(1))
+      #Nx.Tensor<
+        u8[3]
+        [0, 1, 1]
+      >
+
+  ### Comparison of tensors
+
+      iex> Nx.not_equal(Nx.tensor([1, 1, 2]), Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        u8[3]
+        [0, 1, 1]
+      >
+
+      iex> Nx.not_equal(Nx.tensor([[1, 4, 2], [4, 5, 6]]), Nx.tensor([[1, 3, 2], [4, 2, 1]]))
+      #Nx.Tensor<
+        u8[2][3]
+        [
+          [0, 1, 0],
+          [0, 1, 1]
+        ]
+      >
+  """
+  def not_equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_not_equal/3)
+  @compile {:inline, erlang_not_equal: 3}
+  defp erlang_not_equal(_, a, b), do: if a != b, do: 1, else: 0
+
+  @doc """
+  Element-wise greater than comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.greater(1, 2)
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.greater(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 0, 0]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.greater(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 0, 1]
+    >
+
+    iex> Nx.greater(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [0, 0, 0],
+        [1, 1, 1]
+      ]
+    >
+  """
+  def greater(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_greater/3)
+  @compile {:inline, erlang_greater: 3}
+  defp erlang_greater(_, a, b), do: if a > b, do: 1, else: 0
+
+  @doc """
+  Element-wise less than comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.less(1, 2)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.less(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 1, 1]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.less(Nx.tensor([1, 2, 1]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 0, 1]
+    >
+
+    iex> Nx.less(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [0, 0, 0],
+        [0, 0, 1]
+      ]
+    >
+  """
+  def less(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_less/3)
+  @compile {:inline, erlang_less: 3}
+  defp erlang_less(_, a, b), do: if a < b, do: 1, else: 0
+
+  @doc """
+  Element-wise greater than or equal comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.greater_equal(1, 2)
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.greater_equal(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 0, 0]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 1]
+    >
+
+    iex> Nx.greater_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [1, 1, 1],
+        [1, 1, 1]
+      ]
+    >
+  """
+  def greater_equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_greater_equal/3)
+  @compile {:inline, erlang_greater_equal: 3}
+  defp erlang_greater_equal(_, a, b), do: if a >= b, do: 1, else: 0
+
+  @doc """
+  Element-wise less than or equal comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.less_equal(1, 2)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.less_equal(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 1]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 0]
+    >
+
+    iex> Nx.less_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [1, 1, 1],
+        [0, 0, 0]
+      ]
+    >
+  """
+  def less_equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_less_equal/3)
+  @compile {:inline, erlang_less_equal: 3}
+  defp erlang_less_equal(_, a, b), do: if a <= b, do: 1, else: 0
+
+  @doc """
+  Constructs a tensor from two tensors, based on a predicate.
+
+  The resulting tensor is built by evaluating each element of
+  `pred` and returning either the corresponding element from
+  `on_true` or `on_false`.
+
+  `pred` must either be a boolean, `1` or `0`, or a tensor
+  of predicates with a shape that matches the largest shape between
+  `s1` or `s2`.
+
+  If `pred` is a boolean, takes either the entire `on_true` tensor
+  or the entire `on_false` tensor.
+
+  If the shape of `on_true` does not match the shape of `on_false`,
+  will attempt to broadcast so the shapes match.
+
+  ## Examples
+
+
+      iex> Nx.select(1 == 1, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.select(0, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        s64[3]
+        [4, 5, 6]
+      >
+
+      iex> x = Nx.tensor([2, 4, 6])
+      iex> y = Nx.tensor([3, 2, 1])
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6]), Nx.tensor([1, 3, 5]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 4, 6]
+      >
+  """
+  def select(pred, on_true, on_false)
+
+  def select(true, on_true, _), do: on_true
+
+  def select(false, _, on_false), do: on_false
+
+  def select(1, on_true, _), do: on_true
+
+  def select(0, _, on_false), do: on_false
+
+  def select(%T{} = pred,
+             %T{type: left_type} = on_true,
+             %T{type: right_type} = on_false) do
+    output_type = Nx.Type.merge(left_type, right_type)
+
+    pred_data = Nx.Util.to_bitstring(pred)
+
+    {new_tensor, shape} =
+      binary_broadcast_with_acc(on_true, on_false, 0, fn true_data, false_data, i ->
+        match_types [left_type, right_type, output_type] do
+          pred_consumed = i * 8
+          <<_::size(pred_consumed), pred::8-unsigned-native, _::bitstring>> = pred_data
+          if pred == 1 do
+            <<match!(x, 0), _::bitstring>> = true_data
+            {<<write!(read!(x, 0), 2)>>, i+1}
+          else
+            <<match!(y, 1), _::bitstring>> = false_data
+            {<<write!(read!(y, 1), 2)>>, i+1}
+          end
+        end
+      end)
+
+    %T{data: {Nx.BitStringDevice, new_tensor}, shape: shape, type: output_type}
+  end
 
   ## Unary ops
 
@@ -3273,6 +3641,49 @@ defmodule Nx do
     end
   end
 
+  defp binary_broadcast_with_acc(
+         %T{type: {_, left_size}, shape: shape} = left,
+         %T{type: {_, right_size}, shape: shape} = right,
+         acc,
+         fun
+       ) do
+    {data, _acc} =
+      bin_zip_map_reduce(
+        Nx.Util.to_bitstring(left),
+        left_size,
+        Nx.Util.to_bitstring(right),
+        right_size,
+        acc,
+        fun
+      )
+      |> Enum.unzip()
+
+    {IO.iodata_to_binary(data), shape}
+  end
+
+  defp binary_broadcast_with_acc(
+         %T{type: {_, left_size}, shape: left_shape} = left,
+         %T{type: {_, right_size}, shape: right_shape} = right,
+         acc,
+         fun
+       ) do
+    left_rank = tuple_size(left_shape)
+    right_rank = tuple_size(right_shape)
+    rank = :erlang.max(left_rank, right_rank)
+    left_ordered = shape_to_lower_ranked_list(left_shape, left_rank, rank)
+    right_ordered = shape_to_lower_ranked_list(right_shape, right_rank, rank)
+
+    case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
+      {chunks, shape} ->
+        {broadcast_recur_with_acc(Nx.Util.to_bitstring(left), Nx.Util.to_bitstring(right), acc, chunks), shape}
+
+      :error ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
+                "to #{inspect(right_shape)}"
+    end
+  end
+
   defp broadcast_recur(left_data, right_data, [fun]) do
     fun.(left_data, right_data)
   end
@@ -3287,6 +3698,22 @@ defmodule Nx do
   defp broadcast_recur(left_data, right_data, [{:zip, left_chunk, right_chunk} | chunks]) do
     left_data
     |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur(&1, &2, chunks))
+    |> IO.iodata_to_binary()
+  end
+
+  defp broadcast_recur_with_acc(left_data, right_data, acc, [fun]) do
+    fun.(left_data, right_data, acc)
+  end
+
+  defp broadcast_recur_with_acc(left_data, right_data, acc, [{:cross, left_chunk, right_chunk} | chunks]) do
+    for <<left_part::bitstring-size(left_chunk) <- left_data>>,
+      <<right_part::bitstring-size(right_chunk) <- right_data>>,
+      do: broadcast_recur_with_acc(left_part, right_part, acc, chunks)
+  end
+
+  defp broadcast_recur_with_acc(left_data, right_data, acc, [{:zip, left_chunk, right_chunk} | chunks]) do
+    left_data
+    |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur_with_acc(&1, &2, acc, chunks))
     |> IO.iodata_to_binary()
   end
 
@@ -3354,6 +3781,19 @@ defmodule Nx do
     [
       fun.(left_head, right_head)
       | bin_zip_map(left_rest, left_size, right_rest, right_size, fun)
+    ]
+  end
+
+  defp bin_zip_map_reduce(<<>>, _left_size, <<>>, _right_size, _acc, _fun), do: []
+
+  defp bin_zip_map_reduce(left_data, left_size, right_data, right_size, acc, fun) do
+    <<left_head::bitstring-size(left_size), left_rest::bitstring>> = left_data
+    <<right_head::bitstring-size(right_size), right_rest::bitstring>> = right_data
+
+    {data, acc} = fun.(left_head, right_head, acc)
+    [
+      {data, acc}
+      | bin_zip_map_reduce(left_rest, left_size, right_rest, right_size, acc, fun)
     ]
   end
 end
