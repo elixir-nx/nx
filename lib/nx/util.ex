@@ -198,21 +198,30 @@ defmodule Nx.Util do
   end
 
   def reduce(%T{type: {_, size} = type, shape: shape} = t, acc, opts, fun)
-    when is_list(opts) and is_function(fun, 2) do
-
+      when is_list(opts) and is_function(fun, 2) do
     output_type = opts[:type] || t.type
 
     {view, new_shape} = bin_view_axis(to_bitstring(t), opts[:axis], shape, size)
 
     data_and_acc =
       for axis <- view do
-        {tensor_data, acc} = bin_reduce_axis(axis, type, <<>>, acc, fun)
-        {scalar_to_bin(tensor_data, output_type), acc}
+        {bin, acc} =
+          match_types [type] do
+            for <<match!(var, 0) <- axis>>, reduce: {<<>>, acc} do
+              {_, acc} -> fun.(read!(var, 0), acc)
+            end
+          end
+
+        {scalar_to_bin(bin, output_type), acc}
       end
 
-    {final_tensor, final_accs} = Enum.unzip(data_and_acc)
+    {final_data, final_accs} = Enum.unzip(data_and_acc)
 
-    {%T{data: {Nx.BitStringDevice, IO.iodata_to_binary(final_tensor)}, shape: new_shape, type: output_type}, final_accs}
+    {%T{
+       data: {Nx.BitStringDevice, IO.iodata_to_binary(final_data)},
+       shape: new_shape,
+       type: output_type
+     }, final_accs}
   end
 
   @doc """
@@ -280,13 +289,12 @@ defmodule Nx.Util do
 
   def zip_reduce(t1, axis1, t2, axis2, acc, fun) when is_function(fun, 2) do
     output_type = Nx.Type.merge(t1.type, t2.type)
-
-    {zipped_axes, new_shape} = bin_zip(t1, axis1, t2, axis2)
+    {v1, v2, new_shape} = bin_zip_axis(t1, axis1, t2, axis2)
 
     data_and_acc =
-      for zipped_axis <- zipped_axes do
-        {tensor_data, acc} = bin_reduce_axis(zipped_axis, t1.type, t2.type, <<>>, acc, fun)
-        {scalar_to_bin(tensor_data, output_type), acc}
+      for b1 <- v1, b2 <- v2 do
+        {bin, acc} = bin_zip_reduce_axis(b1, b2, t1.type, t2.type, <<>>, acc, fun)
+        {scalar_to_bin(bin, output_type), acc}
       end
 
     {final_data, final_acc} = Enum.unzip(data_and_acc)
@@ -297,8 +305,6 @@ defmodule Nx.Util do
        type: output_type
      }, final_acc}
   end
-
-  ## Binary Helpers
 
   # Helper for zipping 2 tensors along given axis/axes.
   # Given we always reduce on the first tensor provided,
@@ -315,28 +321,44 @@ defmodule Nx.Util do
   # If the shapes do not match, but they are aligned correctly,
   # "broadcasts" them to match by repeating a view the necessary
   # number of times.
-  defp bin_zip(t1, axis1, t2, axis2) do
+  defp bin_zip_axis(t1, axis1, t2, axis2) do
     {_, folding_size} = t1.type
     folding_dim = if axis1, do: elem(t1.shape, axis1), else: tuple_product(t1.shape)
     {folding_view, folding_shape} = bin_view_axis(to_bitstring(t1), axis1, t1.shape, folding_size)
 
     {_, folded_size} = t2.type
     folded_dim = if axis2, do: elem(t2.shape, axis2), else: tuple_product(t2.shape)
-
-    unless folded_dim == folding_dim,
-      do: raise ArgumentError, "unable to zip tensors along the given axis or axes" <>
-                               " dimensions of zipped axes must match, got #{folding_dim}" <>
-                               " and #{folded_dim}"
-
     {folded_view, folded_shape} = bin_view_axis(to_bitstring(t2), axis2, t2.shape, folded_size)
 
-    zipped_views = for v1 <- folding_view,
-                       v2 <- folded_view, do: {v1, v2}
+    unless folded_dim == folding_dim do
+      raise ArgumentError,
+            "unable to zip tensors along the given axis or axes" <>
+              " dimensions of zipped axes must match, got #{folding_dim}" <>
+              " and #{folded_dim}"
+    end
 
     new_shape = Tuple.to_list(folding_shape) ++ Tuple.to_list(folded_shape)
-
-    {List.flatten(zipped_views), List.to_tuple(new_shape)}
+    {folding_view, folded_view, List.to_tuple(new_shape)}
   end
+
+  # Helper for reducing down a single axis over two tensors,
+  # returning tensor data and a final accumulator.
+  defp bin_zip_reduce_axis(<<>>, <<>>, _left_type, _right_type, bin, acc, _fun),
+    do: {bin, acc}
+
+  defp bin_zip_reduce_axis(b1, b2, left_type, right_type, _bin, acc, fun) do
+    {head1, rest1, head2, rest2} =
+      match_types [left_type, right_type] do
+        <<match!(x, 0), rest1::bitstring>> = b1
+        <<match!(y, 1), rest2::bitstring>> = b2
+        {read!(x, 0), rest1, read!(y, 1), rest2}
+      end
+
+    {bin, acc} = fun.({head1, head2}, acc)
+    bin_zip_reduce_axis(rest1, rest2, left_type, right_type, bin, acc, fun)
+  end
+
+  ## Axis helpers
 
   # Helper for "viewing" a tensor along a given axis.
   # Returns the view and the expected new shape when
@@ -347,57 +369,27 @@ defmodule Nx.Util do
   # expect the entire tensor to be reduced down to a scalar.
   defp bin_view_axis(binary, axis, shape, size) do
     if axis do
-      {gap_count, chunk_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
-      view =
-        aggregate_gaps(chunk_count, chunk_size, fn pre, _pos ->
-          <<_::size(pre)-bitstring, chunk::size(chunk_size)-bitstring, _::bitstring>> = binary
+      {gap_count, chunk_size, new_shape} = traverse_axis(shape, axis, size)
 
-          aggregate_gaps(gap_count, size, fn pre, pos ->
-            for <<_::size(pre)-bitstring, var::size(size)-bitstring,
-                  _::size(pos)-bitstring <- chunk>>,
-                into: <<>>,
-                do: var
-          end)
-        end)
-      {List.flatten(view), new_shape}
+      view =
+        for <<chunk::size(chunk_size)-bitstring <- binary>>,
+            gap <-
+              traverse_gaps(gap_count, size, fn pre, pos ->
+                for <<_::size(pre)-bitstring, var::size(size)-bitstring,
+                      _::size(pos)-bitstring <- chunk>>,
+                    into: <<>>,
+                    do: var
+              end),
+            do: gap
+
+      {view, new_shape}
     else
       {[binary], {}}
     end
   end
 
-  # Helper for reducing down a single axis, returning tensor
-  # data and a final accumulator.
-  defp bin_reduce_axis(<<>>, _type, tensor_data, acc, _fun), do: {tensor_data, acc}
-  defp bin_reduce_axis(binary, type, _tensor_data, acc, fun) do
-    {head, rest} =
-      match_types [type] do
-        <<match!(var, 0), rest::bitstring>> = binary
-        {read!(var, 0), rest}
-      end
-
-    {tensor_data, acc} = fun.(head, acc)
-    bin_reduce_axis(rest, type, tensor_data, acc, fun)
-  end
-
-  # Helper for reducing down a single axis over two tensors,
-  # returning tensor data and a final accumulator.
-  defp bin_reduce_axis({<<>>, <<>>}, _left_type, _right_type, tensor_data, acc, _fun), do: {tensor_data, acc}
-  defp bin_reduce_axis({b1, b2}, left_type, right_type, _tensor_data, acc, fun) do
-    {head1, rest1, head2, rest2} =
-      match_types [left_type, right_type] do
-        <<match!(x, 0), rest1::bitstring>> = b1
-        <<match!(y, 1), rest2::bitstring>> = b2
-        {read!(x, 0), rest1, read!(y, 1), rest2}
-      end
-
-    {tensor_data, acc} = fun.({head1, head2}, acc)
-    bin_reduce_axis({rest1, rest2}, left_type, right_type, tensor_data, acc, fun)
-  end
-
-  ## Dimension helpers
-
-  # The goal of aggregate axis is to find a chunk_count and gap_count
-  # that allows us to traverse the tensor. Consider this input tensor:
+  # The goal of traverse axis is to find a chunk_count and gap_count
+  # that allows us to traverse a given axis. Consider this input tensor:
   #
   #     #Nx.Tensor<
   #       s64[2][2][3]
@@ -457,40 +449,39 @@ defmodule Nx.Util do
   # Computing the aggregate is a matter of mapping the binary over
   # each chunk and then mapping gap times, moving the computation root
   # by size over each gap.
-  defp aggregate_axis(shape, axis, size) do
-    total = tuple_product(shape)
-    {gap_count, chunk_count, new_shape} = total_aggregate_axis(shape, axis, total)
-    {gap_count, chunk_count, div(size * total, chunk_count), new_shape}
+  defp traverse_axis(shape, axis, size) do
+    {gap_count, chunk_count, new_shape} = traverse_axis(shape, axis)
+    {gap_count, size * chunk_count, new_shape}
   end
 
-  defp total_aggregate_axis(shape, axis, total) when axis >= 0 and axis < tuple_size(shape) do
-    aggregate_axis(Tuple.to_list(shape), 0, axis, 1, total, [])
+  defp traverse_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
+    traverse_axis(Tuple.to_list(shape), 0, axis, tuple_product(shape), [])
   end
 
-  defp total_aggregate_axis(shape, axis, total) when axis < 0 and axis >= -tuple_size(shape) do
-    aggregate_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, 1, total, [])
+  defp traverse_axis(shape, axis) when axis < 0 and axis >= -tuple_size(shape) do
+    traverse_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, tuple_product(shape), [])
   end
 
-  defp total_aggregate_axis(shape, axis, _total) do
+  defp traverse_axis(shape, axis) do
     raise ArgumentError, "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
   end
 
-  defp aggregate_axis([dim | dims], axis, chosen, chunk, gap, acc) do
-    gap = div(gap, dim)
+  defp traverse_axis([dim | dims], axis, chosen, prev_gap, acc) do
+    next_gap = div(prev_gap, dim)
 
     if axis == chosen do
-      {gap, chunk, List.to_tuple(Enum.reverse(acc, dims))}
+      {next_gap, prev_gap, List.to_tuple(Enum.reverse(acc, dims))}
     else
-      aggregate_axis(dims, axis + 1, chosen, chunk * dim, gap, [dim | acc])
+      traverse_axis(dims, axis + 1, chosen, next_gap, [dim | acc])
     end
   end
 
-  defp aggregate_gaps(gap_count, size, fun),
-    do: aggregate_gaps(0, gap_count * size, size, fun)
+  defp traverse_gaps(gap_count, size, fun),
+    do: traverse_gaps(0, gap_count * size, size, fun)
 
-  defp aggregate_gaps(_pre, 0, _size, _fun),
+  defp traverse_gaps(_pre, 0, _size, _fun),
     do: []
 
-  defp aggregate_gaps(pre, pos, size, fun),
-    do: [fun.(pre, pos - size) | aggregate_gaps(pre + size, pos - size, size, fun)]
+  defp traverse_gaps(pre, pos, size, fun),
+    do: [fun.(pre, pos - size) | traverse_gaps(pre + size, pos - size, size, fun)]
 end

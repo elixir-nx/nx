@@ -2528,8 +2528,7 @@ defmodule Nx do
 
   """
   def sum(tensor, opts \\ []) do
-    {tensor, _} =
-      Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x+acc, x+acc} end)
+    {tensor, _} = Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
     tensor
   end
 
@@ -2704,6 +2703,7 @@ defmodule Nx do
 
   ## Argmax/argmin helper
   defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
+
   defp argmin_or_max(t = %T{}, comparator, opts) do
     {tensor, _accs} =
       Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
@@ -2873,7 +2873,6 @@ defmodule Nx do
   """
   def dot(a, b)
 
-  # Scalars
   def dot(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
 
   def dot(%T{shape: s1} = a, %T{shape: s2} = b) do
@@ -2890,22 +2889,19 @@ defmodule Nx do
     dim1 = elem(s1, axis1)
     dim2 = elem(s2, axis2)
 
-    unless dim1 == dim2,
-      do:
-        raise(
-          ArgumentError,
-          "dot product expects shapes to be compatible," <>
-          " dimension #{axis1} of left-side (#{dim1}) does not equal" <>
-          " dimension #{axis2} of right-side (#{dim2})"
-        )
+    unless dim1 == dim2 do
+      raise ArgumentError,
+            "dot product expects shapes to be compatible," <>
+              " dimension #{axis1} of left-side (#{dim1}) does not equal" <>
+              " dimension #{axis2} of right-side (#{dim2})"
+    end
 
     {tensor, _} =
-      Nx.Util.zip_reduce(a, axis1, b, axis2, 0,
-        fn {lhs, rhs}, acc ->
-          res = lhs*rhs+acc
-          {res, res}
-        end
-      )
+      Nx.Util.zip_reduce(a, axis1, b, axis2, 0, fn {lhs, rhs}, acc ->
+        res = lhs * rhs + acc
+        {res, res}
+      end)
+
     tensor
   end
 

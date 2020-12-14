@@ -248,7 +248,7 @@ defmodule Nx.Defn.GradTransform do
   end
 
   # Remainder rule
-  defp unfold_grad({{:., _, [Nx, :remainder]}, meta, [x1, x2 | _args]}, y, exprs, state) do
+  defp unfold_grad({{:., _, [Nx, :remainder]}, meta, [x1, x2 | _args]}, _y, exprs, state) do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
     dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
