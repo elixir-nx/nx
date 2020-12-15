@@ -441,7 +441,8 @@ defmodule Exla.DefnTest do
     end
 
     test "computes equality with mixed types" do
-      assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:u, 8})
+      assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([1, 1, 1], type: {:u, 8})
     end
   end
 
@@ -457,7 +458,8 @@ defmodule Exla.DefnTest do
     end
 
     test "computes equality with mixed types" do
-      assert not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:u, 8})
+      assert not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([0, 0, 0], type: {:u, 8})
     end
   end
 
@@ -473,7 +475,8 @@ defmodule Exla.DefnTest do
     end
 
     test "compares with mixed types" do
-      assert less(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:u, 8})
+      assert less(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([0, 0, 0], type: {:u, 8})
     end
   end
 
@@ -489,7 +492,8 @@ defmodule Exla.DefnTest do
     end
 
     test "compares with mixed types" do
-      assert greater(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:u, 8})
+      assert greater(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([0, 0, 0], type: {:u, 8})
     end
   end
 
@@ -505,7 +509,8 @@ defmodule Exla.DefnTest do
     end
 
     test "compares with mixed types" do
-      assert less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:u, 8})
+      assert less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([1, 1, 1], type: {:u, 8})
     end
   end
 
@@ -517,11 +522,13 @@ defmodule Exla.DefnTest do
     end
 
     test "compares with broadcasting" do
-      assert greater_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 0, 0], type: {:u, 8})
+      assert greater_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) ==
+               Nx.tensor([1, 0, 0], type: {:u, 8})
     end
 
     test "compares with mixed types" do
-      assert greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:u, 8})
+      assert greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([1, 1, 1], type: {:u, 8})
     end
   end
 
@@ -529,11 +536,13 @@ defmodule Exla.DefnTest do
     defn select(pred, x, y), do: Nx.select(pred, x, y)
 
     test "selects one or the other with a scalar" do
-      assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) == Nx.tensor([1, 2, 3])
+      assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
+               Nx.tensor([1, 2, 3])
     end
 
     test "selects with broadcasting" do
-      assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) == Nx.tensor([10, 2, 10, 4, 10])
+      assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) ==
+               Nx.tensor([10, 2, 10, 4, 10])
     end
   end
 
@@ -597,6 +606,43 @@ defmodule Exla.DefnTest do
       assert sum_pos_axis(t) == Nx.sum(t, axes: [1])
       assert sum_neg_axis(t) == Nx.sum(t, axes: [-3])
       assert sum_pos_neg_axis(t) == Nx.sum(t, axes: [1, -3])
+    end
+  end
+
+  describe "mean" do
+    defn mean(t), do: Nx.mean(t)
+
+    test "computes mean without axis" do
+      assert mean(Nx.tensor(42)) == Nx.tensor(42.0)
+      assert mean(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
+    end
+
+    defn mean_over_single_axis(t), do: Nx.mean(t, axes: [0])
+
+    test "computes mean over a single axis" do
+      assert mean_over_single_axis(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
+
+      assert mean_over_single_axis(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])) ==
+               Nx.tensor([
+                 [4.0, 5.0, 6.0],
+                 [7.0, 8.0, 9.0]
+               ])
+    end
+
+    defn mean_over_multiple_axes(t), do: Nx.mean(t, axes: [0, 2])
+
+    test "computes mean over multiple axes" do
+      assert mean_over_multiple_axes(
+               Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+             ) == Nx.tensor([5.0, 8.0])
+    end
+
+    defn mean_over_negative_axis(t), do: Nx.mean(t, axes: [-1])
+
+    test "computes mean over negative axes" do
+      assert mean_over_negative_axis(
+               Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+             ) == Nx.tensor([[2.0, 5.0], [8.0, 11.0]])
     end
   end
 
@@ -711,44 +757,50 @@ defmodule Exla.DefnTest do
 
     test "transposes without permutation dimensions" do
       assert transpose(Nx.tensor(1)) == Nx.tensor(1)
-      assert transpose(Nx.iota({2, 3, 4})) == Nx.tensor(
-        [[[0, 12], [4, 16], [8, 20]],
-        [[1, 13], [5, 17], [9, 21]],
-        [[2, 14], [6, 18], [10, 22]],
-        [[3, 15], [7, 19], [11, 23]]]
-      )
+
+      assert transpose(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [[0, 12], [4, 16], [8, 20]],
+                 [[1, 13], [5, 17], [9, 21]],
+                 [[2, 14], [6, 18], [10, 22]],
+                 [[3, 15], [7, 19], [11, 23]]
+               ])
     end
 
     test "transposes with permutationd imensions" do
       assert transpose_scalar(Nx.tensor(1), {}) == Nx.tensor(1)
-      assert transpose_perm1(Nx.iota({2, 3, 4})) == Nx.tensor(
-        [[[0, 12], [4, 16], [8, 20]],
-        [[1, 13], [5, 17], [9, 21]],
-        [[2, 14], [6, 18], [10, 22]],
-        [[3, 15], [7, 19], [11, 23]]]
-      )
-      assert transpose_perm2(Nx.iota({2, 3, 4})) == Nx.tensor(
-        [[[0, 4, 8], [12, 16, 20]],
-        [[1, 5, 9], [13, 17, 21]],
-        [[2, 6, 10], [14, 18, 22]],
-        [[3, 7, 11], [15, 19, 23]]]
-      )
-      assert transpose_perm3(Nx.iota({2, 3, 4})) == Nx.tensor(
-        [
-          [
-            [0, 4, 8],
-            [1, 5, 9],
-            [2, 6, 10],
-            [3, 7, 11]
-          ],
-          [
-            [12, 16, 20],
-            [13, 17, 21],
-            [14, 18, 22],
-            [15, 19, 23]
-          ]
-        ]
-      )
+
+      assert transpose_perm1(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [[0, 12], [4, 16], [8, 20]],
+                 [[1, 13], [5, 17], [9, 21]],
+                 [[2, 14], [6, 18], [10, 22]],
+                 [[3, 15], [7, 19], [11, 23]]
+               ])
+
+      assert transpose_perm2(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [[0, 4, 8], [12, 16, 20]],
+                 [[1, 5, 9], [13, 17, 21]],
+                 [[2, 6, 10], [14, 18, 22]],
+                 [[3, 7, 11], [15, 19, 23]]
+               ])
+
+      assert transpose_perm3(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [
+                   [0, 4, 8],
+                   [1, 5, 9],
+                   [2, 6, 10],
+                   [3, 7, 11]
+                 ],
+                 [
+                   [12, 16, 20],
+                   [13, 17, 21],
+                   [14, 18, 22],
+                   [15, 19, 23]
+                 ]
+               ])
     end
   end
 

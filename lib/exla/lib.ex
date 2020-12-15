@@ -28,6 +28,23 @@ defmodule Exla.Lib do
   end
 
   @doc """
+  Computes the mean of the given operation.
+
+  ## Options
+
+    * `:axes` - the axes to reduce on
+  """
+  def mean(%Builder{} = builder, %Op{} = op, opts \\ []) do
+    Op.divide(
+      Op.convert_element_type(
+        sum(builder, op, opts),
+        {:f, 64}
+      ),
+      mean_den(builder, op, opts[:axes])
+    )
+  end
+
+  @doc """
   Computes the argmax of the given operation.
 
   ## Options
@@ -49,6 +66,14 @@ defmodule Exla.Lib do
   """
   def argmin(%Builder{} = builder, %Op{} = op, opts \\ []) do
     argmin_or_max(builder, op, true, opts)
+  end
+
+  @doc """
+  Returns the total size of the given operation.
+  """
+  def size(%Builder{} = builder, %Op{} = op) do
+    %Shape{dims: dims_tuple} = Exla.Op.get_shape(op)
+    Op.constant_r0(builder, tuple_product(dims_tuple), {:s, 64})
   end
 
   defp argmin_or_max(builder, op, is_min?, opts) do
@@ -95,7 +120,10 @@ defmodule Exla.Lib do
     rhs_value = Op.parameter(sub_builder, 2, Shape.make_shape(type, {}), "rhs_value")
     rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape(type, {}), "rhs_index")
 
-    cmp = if is_min?, do: Op.less_equal(lhs_value, rhs_value), else: Op.greater_equal(lhs_value, rhs_value)
+    cmp =
+      if is_min?,
+        do: Op.less_equal(lhs_value, rhs_value),
+        else: Op.greater_equal(lhs_value, rhs_value)
 
     max = Op.select(cmp, lhs_value, rhs_value)
     arg_max = Op.select(cmp, lhs_index, rhs_index)
@@ -161,4 +189,32 @@ defmodule Exla.Lib do
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
+  defp mean_den(builder, operand, nil),
+    do: Op.convert_element_type(size(builder, operand), {:f, 64})
+
+  defp mean_den(builder, _operand, []), do: Op.constant_r0(builder, 1, {:f, 64})
+
+  defp mean_den(builder, operand, [axis | axes]) when axis >= 0 do
+    Op.multiply(
+      Op.convert_element_type(
+        Op.get_dimension_size(operand, axis),
+        {:f, 64}
+      ),
+      mean_den(builder, operand, axes)
+    )
+  end
+
+  defp mean_den(builder, operand, [axis | axes]) do
+    %Shape{dims: dims_tuple} = Exla.Op.get_shape(operand)
+    axis = tuple_size(dims_tuple) + axis
+
+    Op.multiply(
+      Op.convert_element_type(
+        Op.get_dimension_size(operand, axis),
+        {:f, 64}
+      ),
+      mean_den(builder, operand, axes)
+    )
+  end
 end

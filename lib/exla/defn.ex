@@ -348,16 +348,10 @@ defmodule Exla.Defn do
 
   ## Aggregators
 
-  def nx_sum(builder, op, opts) do
-    Exla.Lib.sum(builder, to_operator(builder, op), opts)
-  end
+  @reduction_ops [:sum, :mean, :argmax, :argmin]
 
-  def nx_argmax(builder, op, opts \\ []) do
-    Exla.Lib.argmax(builder, to_operator(builder, op), opts)
-  end
-
-  def nx_argmin(builder, op, opts \\ []) do
-    Exla.Lib.argmin(builder, to_operator(builder, op), opts)
+  def nx_reduction_op(builder, reduction, op, opts \\ []) do
+    apply(Exla.Lib, reduction, [builder, op, opts])
   end
 
   ## Other funs
@@ -572,6 +566,12 @@ defmodule Exla.Defn do
        when name in @unary_noop_integer_op do
     {args, state} = traverse(args, state)
     {to_builder_call(dot_meta, meta, :nx_unary_noop_integer_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @reduction_ops do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_reduction_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do
