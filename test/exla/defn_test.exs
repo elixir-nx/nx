@@ -588,13 +588,15 @@ defmodule Exla.DefnTest do
       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() == Nx.tensor(6, type: {:f, 32})
     end
 
-    defn sum_pos_axis(t), do: Nx.sum(t, axis: 1)
-    defn sum_neg_axis(t), do: Nx.sum(t, axis: -3)
+    defn sum_pos_axis(t), do: Nx.sum(t, axes: [1])
+    defn sum_neg_axis(t), do: Nx.sum(t, axes: [-3])
+    defn sum_pos_neg_axis(t), do: Nx.sum(t, axes: [1, -3])
 
     test "computes the sum on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-      assert sum_pos_axis(t) == Nx.sum(t, axis: 1)
-      assert sum_neg_axis(t) == Nx.sum(t, axis: -3)
+      assert sum_pos_axis(t) == Nx.sum(t, axes: [1])
+      assert sum_neg_axis(t) == Nx.sum(t, axes: [-3])
+      assert sum_pos_neg_axis(t) == Nx.sum(t, axes: [1, -3])
     end
   end
 

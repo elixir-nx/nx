@@ -6,7 +6,7 @@ defmodule Nx.Defn.Compiler do
   @forbidden_nx_functions [tensor: 1, tensor: 2, device_read: 1, device_deallocate: 1] ++
                             [device_transfer: 1, device_transfer: 2, device_transfer: 3]
 
-  @known_keywords [:type, :axis, :tie_break]
+  @known_keywords [:type, :axis, :axes, :tie_break]
 
   @doc """
   The callback required to be implemented for each compiler.
@@ -305,23 +305,27 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize(list, state) when is_list(list) do
     cond do
-      not Keyword.keyword?(list) ->
-        compile_error!(
-          [],
-          state,
-          "invalid numerical expression: #{Macro.to_string(list)} (only keyword lists are allowed)"
-        )
+      Keyword.keyword?(list) ->
+        unless Enum.all?(list, fn {k, _} -> k in @known_keywords end) do
+          compile_error!(
+            [],
+            state,
+            "invalid numerical expression: #{Macro.to_string(list)} (the only allowed keys " <>
+              "in keyword lists are: #{Enum.map_join(@known_keywords, ", ", &inspect/1)})"
+          )
+        end
 
-      not Enum.all?(list, fn {k, _} -> k in @known_keywords end) ->
-        compile_error!(
-          [],
-          state,
-          "invalid numerical expression: #{Macro.to_string(list)} (the only allowed keys " <>
-            "in keyword lists are: #{Enum.map_join(@known_keywords, ", ", &inspect/1)})"
-        )
+        normalize_list(list, state)
+
+      Enum.all?(list, &is_integer/1) ->
+        normalize_list(list, state)
 
       true ->
-        normalize_list(list, state)
+        compile_error!(
+          [],
+          state,
+          "invalid numerical expression: #{Macro.to_string(list)} (only keyword lists or lists of integers are allowed)"
+        )
     end
   end
 

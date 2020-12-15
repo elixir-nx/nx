@@ -2827,10 +2827,10 @@ defmodule Nx do
   Returns the sum for the tensor.
 
   If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axis: 0`
+  that dimension, effectively removing it. `axes: [0]`
   implies aggregating over the highest order dimension
   and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axis: -1` will
+  the axis from the back. For example, `axes: [-1]` will
   always aggregate all rows.
 
   ## Examples
@@ -2855,13 +2855,13 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> Nx.sum(Nx.tensor([1, 2, 3]), axis: 0)
+      iex> Nx.sum(Nx.tensor([1, 2, 3]), axes: [0])
       #Nx.Tensor<
         s64
         6
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 0)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0])
       #Nx.Tensor<
         s64[2][3]
         [
@@ -2870,7 +2870,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 1)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [1])
       #Nx.Tensor<
         s64[2][3]
         [
@@ -2879,7 +2879,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 2)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [2])
       #Nx.Tensor<
         s64[2][2]
         [
@@ -2888,7 +2888,13 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -1)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0, 2])
+      #Nx.Tensor<
+        s64[2]
+        [30, 48]
+      >
+
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [-1])
       #Nx.Tensor<
         s64[2][2]
         [
@@ -2897,7 +2903,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -3)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [-3])
       #Nx.Tensor<
         s64[2][3]
         [
@@ -2908,8 +2914,8 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.sum(Nx.tensor([1, 2, 3]), axis: 1)
-      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+      iex> Nx.sum(Nx.tensor([[1, 2]]), axes: [2])
+      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
 
   """
   def sum(tensor, opts \\ []) do
@@ -2921,10 +2927,10 @@ defmodule Nx do
   Returns the mean for the tensor.
 
   If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axis: 0`
+  that dimension, effectively removing it. `axes: [0]`
   implies aggregating over the highest order dimension
   and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axis: -1` will
+  the axis from the back. For example, `axes: [-1]` will
   always aggregate all rows.
 
   ## Examples
@@ -2943,13 +2949,13 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> Nx.mean(Nx.tensor([1, 2, 3]), axis: 0)
+      iex> Nx.mean(Nx.tensor([1, 2, 3]), axes: [0])
       #Nx.Tensor<
         f64
         2.0
       >
 
-      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 0)
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0])
       #Nx.Tensor<
         f64[2][3]
         [
@@ -2958,7 +2964,13 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -1)
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0, 2])
+      #Nx.Tensor<
+        f64[2]
+        [5.0, 8.0]
+      >
+
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [-1])
       #Nx.Tensor<
         f64[2][2]
         [
@@ -2969,27 +2981,31 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.mean(Nx.tensor([1, 2, 3]), axis: 1)
-      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+      iex> Nx.mean(Nx.tensor([[1, 2]]), axes: [2])
+      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
 
   """
   def mean(tensor, opts \\ []) do
     tensor = tensor(tensor)
-    divide(sum(tensor, opts), mean_den(tensor, opts[:axis]))
+    divide(sum(tensor, opts), mean_den(tensor, opts[:axes]))
   end
 
   defp mean_den(tensor, nil), do: Nx.size(tensor)
-  defp mean_den(tensor, axis) when axis >= 0, do: elem(tensor.shape, axis)
-  defp mean_den(tensor, axis), do: elem(tensor.shape, tuple_size(tensor.shape) + axis)
+  defp mean_den(_tensor, []), do: 1
+
+  defp mean_den(tensor, [axis | axes]) when axis >= 0,
+    do: elem(tensor.shape, axis) * mean_den(tensor, axes)
+
+  defp mean_den(tensor, [axis | axes]),
+    do: elem(tensor.shape, tuple_size(tensor.shape) + axis) * mean_den(tensor, axes)
 
   @doc """
-  Returns the indices of the maximum values along a given axis.
-
-  If no axis is given, returns the index of the absolute maximum
-  value in the tensor.
+  Returns the indices of the maximum values.
 
   ## Options
 
+    * `:axis` - the axis to aggregate on. If no axis is given,
+      returns the index of the absolute maximum value in the tensor.
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low``.
       default behavior is to always return the lower index.
@@ -3068,12 +3084,12 @@ defmodule Nx do
   end
 
   @doc """
-  Returns the indices of the minimum values along a given axis.
-
-  If no axis is given, returns the index of the absolute minimum
-  value in the tensor.
+  Returns the indices of the minimum values.
 
   ## Options
+
+    * `:axis` - the axis to aggregate on. If no axis is given,
+      returns the index of the absolute minimum value in the tensor.
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       default behavior is to always return the lower index.
@@ -3151,12 +3167,13 @@ defmodule Nx do
     argmin_or_max(t, comparator, opts)
   end
 
-  ## Argmax/argmin helper
   defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
 
   defp argmin_or_max(t = %T{}, comparator, opts) do
+    axes = if axis = opts[:axis], do: [axis], else: nil
+
     {tensor, _accs} =
-      Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+      Nx.Util.reduce(t, {0, :first, -1}, [axes: axes], fn x, {i, cur_extreme_x, cur_extreme_i} ->
         if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
           {i, {i + 1, x, i}}
         else
@@ -3347,7 +3364,7 @@ defmodule Nx do
     end
 
     {tensor, _} =
-      Nx.Util.zip_reduce(a, axis1, b, axis2, 0, fn {lhs, rhs}, acc ->
+      Nx.Util.zip_reduce(a, [axis1], b, [axis2], 0, fn {lhs, rhs}, acc ->
         res = lhs * rhs + acc
         {res, res}
       end)
@@ -3511,19 +3528,19 @@ defmodule Nx do
     # before the minimum one being changed. For example,
     # for {0, 1, 2, 3} and the swap is between 1 and 2,
     # the chunk_size will be d1 * d2 * d3 * size.
-    chunk_size = size_at(weighted_shape, min, size)
+    chunk_size = weighted_chunk(weighted_shape, min, size)
 
     # All of the major dimensions not being transposed can be
     # read at once. For example, for {0, 1, 2, 3} and the swap
     # is between 1 and 2, the read_size will be d3 * size.
-    read_size = size_at(weighted_shape, max + 1, size)
+    read_size = weighted_chunk(weighted_shape, max + 1, size)
 
     # And now how we will traverse
     traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
 
     data =
       for <<chunk::size(chunk_size)-bitstring <- data>> do
-        transpose_dims(traverse_list, chunk, read_size)
+        weighted_traverse(traverse_list, chunk, read_size)
       end
 
     shape = axes |> Tuple.to_list() |> Enum.map(&elem(shape, &1)) |> List.to_tuple()
@@ -3554,46 +3571,6 @@ defmodule Nx do
 
   defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
   defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
-
-  defp weighted_shape(shape, size) do
-    Enum.reverse(weighted_shape(shape, tuple_size(shape), size))
-  end
-
-  defp weighted_shape(_shape, 0, _weight) do
-    []
-  end
-
-  defp weighted_shape(shape, pos, weight) do
-    element = :erlang.element(pos, shape)
-    [{element, weight} | weighted_shape(shape, pos - 1, weight * element)]
-  end
-
-  defp size_at(list, at, size) do
-    {element, size} = Enum.at(list, at, {1, size})
-    element * size
-  end
-
-  defp transpose_dims([], data, read_size) do
-    <<chunk::size(read_size)-bitstring, _::bitstring>> = data
-    chunk
-  end
-
-  defp transpose_dims([{dim, size} | dims], data, read_size) do
-    transpose_dim(dim, size, dims, data, read_size)
-  end
-
-  defp transpose_dim(dim, dim_size, dims, data, read_size) do
-    head = transpose_dims(dims, data, read_size)
-
-    case dim do
-      1 ->
-        [head]
-
-      _ ->
-        <<_::size(dim_size)-bitstring, data::bitstring>> = data
-        [head | transpose_dim(dim - 1, dim_size, dims, data, read_size)]
-    end
-  end
 
   ## Shape
 
