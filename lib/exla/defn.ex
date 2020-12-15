@@ -111,7 +111,7 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_bin_float_arith_op(builder, op, left, right) do
-    type = binary_op_type(left, right) |> Nx.Type.to_floating()
+    type = binary_op_type(left, right) |> Exla.Type.to_floating()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -233,7 +233,7 @@ defmodule Exla.Defn do
   def nx_random_uniform(builder, shape, min, max, opts)
       when is_number(min) and is_number(max) do
     shape = to_shape(shape)
-    type = opts[:type] || Nx.Type.infer(max - min)
+    type = opts[:type] || Exla.Type.infer(max - min)
 
     if match?({int, size} when int in [:s, :u] and size < 32, type) do
       raise ArgumentError,
@@ -401,7 +401,7 @@ defmodule Exla.Defn do
 
   defp to_float_operator(_builder, %Exla.Op{} = op) do
     shape = Exla.Op.get_shape(op)
-    type = Nx.Type.to_floating(shape.dtype)
+    type = Exla.Type.to_floating(shape.dtype)
     if shape.dtype != type, do: Exla.Op.convert_element_type(op, type), else: op
   end
 
@@ -440,16 +440,16 @@ defmodule Exla.Defn do
   ## Types
 
   defp binary_op_type(left, right) when is_number(left) and is_number(right),
-    do: Nx.Type.merge(Nx.Type.infer(left), Nx.Type.infer(right))
+    do: Exla.Type.merge(Exla.Type.infer(left), Exla.Type.infer(right))
 
   defp binary_op_type(scalar, op) when is_number(scalar),
-    do: Nx.Type.merge_scalar(nx_type(op), scalar)
+    do: Exla.Type.merge_scalar(nx_type(op), scalar)
 
   defp binary_op_type(op, scalar) when is_number(scalar),
-    do: Nx.Type.merge_scalar(nx_type(op), scalar)
+    do: Exla.Type.merge_scalar(nx_type(op), scalar)
 
   defp binary_op_type(left, right),
-    do: Nx.Type.merge(nx_type(left), nx_type(right))
+    do: Exla.Type.merge(nx_type(left), nx_type(right))
 
   defp assert_integer_type!({:s, _} = type, _op), do: type
   defp assert_integer_type!({:u, _} = type, _op), do: type

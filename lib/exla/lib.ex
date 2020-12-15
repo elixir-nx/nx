@@ -120,7 +120,7 @@ defmodule Exla.Lib do
   defp min_value(%Builder{} = builder, type) do
     Op.constant_from_binary(
       builder,
-      Nx.Type.min_value_binary(type),
+      Exla.Type.min_value_binary(type),
       Shape.make_shape(type, {})
     )
   end
@@ -128,7 +128,7 @@ defmodule Exla.Lib do
   defp max_value(builder, type) do
     Op.constant_from_binary(
       builder,
-      Nx.Type.max_value_binary(type),
+      Exla.Type.max_value_binary(type),
       Shape.make_shape(type, {})
     )
   end

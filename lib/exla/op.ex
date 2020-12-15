@@ -11,7 +11,7 @@ defmodule Exla.Op do
   Creates a scalar constant.
   """
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
-    value = Nx.Type.cast_scalar!(dtype, value)
+    value = Exla.Type.cast_scalar!(dtype, value)
     ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
