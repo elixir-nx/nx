@@ -145,6 +145,14 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
+  def nx_bin_comparison_op(builder, op, left, right) do
+    type = binary_op_type(left, right)
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    dims = broadcast_dimensions(left_dims, right_dims)
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
   def nx_unary_float_op(builder, op, arg) do
     apply(Exla.Op, op, [to_float_operator(builder, arg)])
   end
@@ -181,6 +189,40 @@ defmodule Exla.Defn do
       {:u, _} = type -> Exla.Op.min(arg, Exla.Op.constant_r0(builder, 1, type))
       _ -> Exla.Op.sign(arg)
     end
+  end
+
+  def nx_select(builder, pred, on_true, on_false) do
+    pred_op = to_operator(builder, pred)
+    on_true_op = to_operator(builder, on_true)
+    on_false_op = to_operator(builder, on_false)
+
+    pred_shape = nx_shape(pred_op)
+    on_true_shape = nx_shape(on_true_op)
+    on_false_shape = nx_shape(on_false_op)
+
+    new_on_true_op =
+      case max_shape(tuple_reverse(on_true_shape), tuple_reverse(pred_shape), []) do
+        {:ok, output_shape} ->
+          Exla.Op.broadcast_in_dim(on_true_op, output_shape, broadcast_dimensions(on_true_shape, output_shape))
+
+        :error ->
+          raise ArgumentError,
+                "cannot broadcast tensor of dimensions #{inspect(on_true_shape)} " <>
+                  "to #{inspect(pred_shape)}"
+      end
+
+    new_on_false_op =
+      case max_shape(tuple_reverse(on_true_shape), tuple_reverse(pred_shape), []) do
+        {:ok, output_shape} ->
+          Exla.Op.broadcast_in_dim(on_false_op, output_shape, broadcast_dimensions(on_true_shape, output_shape))
+
+        :error ->
+          raise ArgumentError,
+                "cannot broadcast tensor of dimensions #{inspect(on_false_shape)} " <>
+                  "to #{inspect(pred_shape)}"
+      end
+
+    Exla.Op.select(pred_op, new_on_true_op, new_on_false_op)
   end
 
   def nx_negate(_builder, %Exla.Op{} = op), do: Exla.Op.negate(op)
@@ -466,6 +508,7 @@ defmodule Exla.Defn do
 
   @bin_float_arith_op [:divide, :arctan2]
   @bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
+  @bin_comparison_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
   @bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
   @unary_bitwise_op [:bitwise_not, :count_leading_zeros, :population_count]
@@ -487,6 +530,12 @@ defmodule Exla.Defn do
        when name in @bin_bitwise_op do
     {args, state} = traverse(args, state)
     {to_builder_call(dot_meta, meta, :nx_bin_bitwise_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @bin_comparison_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_bin_comparison_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)

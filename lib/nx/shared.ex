@@ -85,7 +85,7 @@ defmodule Nx.Shared do
     end
   end
 
-  @all_types [:s, :f, :bf, :u]
+  @all_types [:s, :f, :bf, :u, :pred]
 
   defp match_types([h | t]) do
     for type <- @all_types, t <- match_types(t) do
@@ -133,6 +133,9 @@ defmodule Nx.Shared do
     do: quote(do: unquote(var) :: signed - integer - native - size(unquote(size)))
 
   defp shared_bin_modifier(var, :u, size),
+    do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
+
+  defp shared_bin_modifier(var, :pred, size),
     do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
 
   defp shared_bin_modifier(var, :f, size),

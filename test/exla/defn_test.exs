@@ -429,6 +429,15 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "equal" do
+    defn equal(a, b), do: Nx.equal(a, b)
+
+    test "computes equality of scalars" do
+      assert equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:pred, 8})
+    end
+
+  end
+
   describe "unary float ops" do
     @int_tensor Nx.tensor([1, 2, 3])
     @float_tensor Nx.tensor([1.0, 2.0, 3.0])

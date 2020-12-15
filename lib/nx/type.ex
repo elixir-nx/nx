@@ -25,12 +25,14 @@ defmodule Nx.Type do
           | {:f, 32}
           | {:f, 64}
           | {:bf, 16}
+          | {:pred, 8}
 
   @doc """
   Returns the minimum possible value for the given type.
   """
   def min_value_binary(type)
 
+  def min_value_binary({:pred, 8}), do: <<0::8-unsigned-native>>
   def min_value_binary({:s, 8}), do: <<-128::8-signed-native>>
   def min_value_binary({:s, 16}), do: <<-32678::16-signed-native>>
   def min_value_binary({:s, 32}), do: <<-2147483648::32-signed-native>>
@@ -45,6 +47,7 @@ defmodule Nx.Type do
   """
   def max_value_binary(type)
 
+  def max_value_binary({:pred, 8}), do: <<1::8-unsigned-native>>
   def max_value_binary({:s, 8}), do: <<127::8-signed-native>>
   def max_value_binary({:s, 16}), do: <<32677::16-signed-native>>
   def max_value_binary({:s, 32}), do: <<2147483647::32-signed-native>>
@@ -134,6 +137,7 @@ defmodule Nx.Type do
   def validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
   def validate({:f, size} = type) when size in [32, 64], do: type
   def validate({:bf, size} = type) when size in [16], do: type
+  def validate({:pred, size} = type) when size in [8], do: type
   def validate(_type), do: :error
 
   @doc """
@@ -161,7 +165,7 @@ defmodule Nx.Type do
   @doc """
   Converts the given type to a predicate representation.
   """
-  def to_predicate(type), do: {:u, 8}
+  def to_predicate(_), do: {:pred, 8}
 
   @doc """
   Casts scalar the given scalar to type.
@@ -370,6 +374,8 @@ defmodule Nx.Type do
 
   ## Examples
 
+      iex> Nx.Type.to_string({:pred, 8})
+      "pred"
       iex> Nx.Type.to_string({:s, 8})
       "s8"
       iex> Nx.Type.to_string({:s, 16})
@@ -395,6 +401,7 @@ defmodule Nx.Type do
       iex> Nx.Type.to_string({:f, 64})
       "f64"
   """
+  def to_string({:pred, _}), do: "pred"
   def to_string({type, size}), do: Atom.to_string(type) <> Integer.to_string(size)
 
   defp unsigned_size(x) when x <= 1, do: 1

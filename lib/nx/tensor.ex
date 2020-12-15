@@ -65,6 +65,10 @@ defmodule Nx.Tensor do
             <<x::size(size)-unsigned-native>> = data
             Integer.to_string(x)
 
+          :pred ->
+            <<x::size(size)-unsigned-native>> = data
+            Integer.to_string(x)
+
           :f ->
             <<x::size(size)-bitstring>> = data
             read_float(x, size)
