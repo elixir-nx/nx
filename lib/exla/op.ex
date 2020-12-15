@@ -241,6 +241,11 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def transpose(%Op{builder: builder, ref: operand}, permutation) when is_tuple(permutation) do
+    ref = Exla.NIF.transpose(operand, permutation) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def reduce(
         %Op{builder: builder, ref: operand},
         %Op{builder: builder, ref: init_value},

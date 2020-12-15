@@ -702,6 +702,56 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "transpose" do
+    defn transpose(t), do: Nx.transpose(t)
+    defn transpose_scalar(t, {}), do: Nx.transpose(t, {})
+    defn transpose_perm1(t), do: Nx.transpose(t, {2, 1, 0})
+    defn transpose_perm2(t), do: Nx.transpose(t, {2, 0, 1})
+    defn transpose_perm3(t), do: Nx.transpose(t, {0, 2, 1})
+
+    test "transposes without permutation dimensions" do
+      assert transpose(Nx.tensor(1)) == Nx.tensor(1)
+      assert transpose(Nx.iota({2, 3, 4})) == Nx.tensor(
+        [[[0, 12], [4, 16], [8, 20]],
+        [[1, 13], [5, 17], [9, 21]],
+        [[2, 14], [6, 18], [10, 22]],
+        [[3, 15], [7, 19], [11, 23]]]
+      )
+    end
+
+    test "transposes with permutationd imensions" do
+      assert transpose_scalar(Nx.tensor(1), {}) == Nx.tensor(1)
+      assert transpose_perm1(Nx.iota({2, 3, 4})) == Nx.tensor(
+        [[[0, 12], [4, 16], [8, 20]],
+        [[1, 13], [5, 17], [9, 21]],
+        [[2, 14], [6, 18], [10, 22]],
+        [[3, 15], [7, 19], [11, 23]]]
+      )
+      assert transpose_perm2(Nx.iota({2, 3, 4})) == Nx.tensor(
+        [[[0, 4, 8], [12, 16, 20]],
+        [[1, 5, 9], [13, 17, 21]],
+        [[2, 6, 10], [14, 18, 22]],
+        [[3, 7, 11], [15, 19, 23]]]
+      )
+      assert transpose_perm3(Nx.iota({2, 3, 4})) == Nx.tensor(
+        [
+          [
+            [0, 4, 8],
+            [1, 5, 9],
+            [2, 6, 10],
+            [3, 7, 11]
+          ],
+          [
+            [12, 16, 20],
+            [13, 17, 21],
+            [14, 18, 22],
+            [15, 19, 23]
+          ]
+        ]
+      )
+    end
+  end
+
   describe "softmax" do
     defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 

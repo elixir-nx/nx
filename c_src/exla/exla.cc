@@ -648,6 +648,22 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
+ERL_NIF_TERM transpose(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 2){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<exla::int64> permutation;
+
+  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
+  if(!exla::get_tuple(env, argv[1], permutation)) return exla::error(env, "Unable to get permutation.");
+
+  xla::XlaOp result = xla::Transpose(*operand, permutation);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+}
+
 ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 4){
     return exla::error(env, "Bad argument count.");
@@ -1032,6 +1048,7 @@ static ErlNifFunc exla_funcs[] = {
   /******** Matrix Ops ********/
   {"dot", 3, dot},
   {"dot_general", 4, dot_general},
+  {"transpose", 2, transpose},
   /******** Other XLA Ops *******/
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},

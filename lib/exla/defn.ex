@@ -379,6 +379,24 @@ defmodule Exla.Defn do
     end
   end
 
+  def nx_transpose(builder, operand) do
+    shape = nx_shape(operand)
+
+    permutation =
+      case shape do
+        {} -> []
+        tup -> for i <- tuple_size(tup) - 1..0, do: i
+      end
+
+    op = to_operator(builder, operand)
+    Exla.Op.transpose(op, List.to_tuple(permutation))
+  end
+
+  def nx_transpose(builder, operand, permutation) do
+    op = to_operator(builder, operand)
+    Exla.Op.transpose(op, permutation)
+  end
+
   ## Conversion functions
 
   defp to_block_result(builder, tuple) when is_tuple(tuple) do

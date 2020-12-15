@@ -3635,49 +3635,6 @@ defmodule Nx do
     end
   end
 
-  defp binary_broadcast_with_acc(
-         %T{type: {_, left_size}, shape: shape} = left,
-         %T{type: {_, right_size}, shape: shape} = right,
-         acc,
-         fun
-       ) do
-    {data, _acc} =
-      bin_zip_map_reduce(
-        Nx.Util.to_bitstring(left),
-        left_size,
-        Nx.Util.to_bitstring(right),
-        right_size,
-        acc,
-        fun
-      )
-      |> Enum.unzip()
-
-    {IO.iodata_to_binary(data), shape}
-  end
-
-  defp binary_broadcast_with_acc(
-         %T{type: {_, left_size}, shape: left_shape} = left,
-         %T{type: {_, right_size}, shape: right_shape} = right,
-         acc,
-         fun
-       ) do
-    left_rank = tuple_size(left_shape)
-    right_rank = tuple_size(right_shape)
-    rank = :erlang.max(left_rank, right_rank)
-    left_ordered = shape_to_lower_ranked_list(left_shape, left_rank, rank)
-    right_ordered = shape_to_lower_ranked_list(right_shape, right_rank, rank)
-
-    case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
-      {chunks, shape} ->
-        {broadcast_recur_with_acc(Nx.Util.to_bitstring(left), Nx.Util.to_bitstring(right), acc, chunks), shape}
-
-      :error ->
-        raise ArgumentError,
-              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
-                "to #{inspect(right_shape)}"
-    end
-  end
-
   defp broadcast_recur(left_data, right_data, [fun]) do
     fun.(left_data, right_data)
   end
@@ -3692,22 +3649,6 @@ defmodule Nx do
   defp broadcast_recur(left_data, right_data, [{:zip, left_chunk, right_chunk} | chunks]) do
     left_data
     |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur(&1, &2, chunks))
-    |> IO.iodata_to_binary()
-  end
-
-  defp broadcast_recur_with_acc(left_data, right_data, acc, [fun]) do
-    fun.(left_data, right_data, acc)
-  end
-
-  defp broadcast_recur_with_acc(left_data, right_data, acc, [{:cross, left_chunk, right_chunk} | chunks]) do
-    for <<left_part::bitstring-size(left_chunk) <- left_data>>,
-      <<right_part::bitstring-size(right_chunk) <- right_data>>,
-      do: broadcast_recur_with_acc(left_part, right_part, acc, chunks)
-  end
-
-  defp broadcast_recur_with_acc(left_data, right_data, acc, [{:zip, left_chunk, right_chunk} | chunks]) do
-    left_data
-    |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur_with_acc(&1, &2, acc, chunks))
     |> IO.iodata_to_binary()
   end
 
@@ -3775,19 +3716,6 @@ defmodule Nx do
     [
       fun.(left_head, right_head)
       | bin_zip_map(left_rest, left_size, right_rest, right_size, fun)
-    ]
-  end
-
-  defp bin_zip_map_reduce(<<>>, _left_size, <<>>, _right_size, _acc, _fun), do: []
-
-  defp bin_zip_map_reduce(left_data, left_size, right_data, right_size, acc, fun) do
-    <<left_head::bitstring-size(left_size), left_rest::bitstring>> = left_data
-    <<right_head::bitstring-size(right_size), right_rest::bitstring>> = right_data
-
-    {data, acc} = fun.(left_head, right_head, acc)
-    [
-      {data, acc}
-      | bin_zip_map_reduce(left_rest, left_size, right_rest, right_size, acc, fun)
     ]
   end
 end
