@@ -596,6 +596,19 @@ defmodule Nx do
     end
   end
 
+  # TODO: doc me
+  def full(tensor_or_shape, constant, opts \\ []) do
+    shape = shape!(tensor_or_shape)
+
+    case tensor(constant, opts) do
+      %{shape: {}, data: {Nx.BitStringDevice, data}} = t ->
+        %{t | data: {Nx.BitStringDevice, :binary.copy(data, tuple_product(shape))}, shape: shape}
+
+      t ->
+        raise "expected constant to be a tensor with shape {}, got: #{inspect(t)}"
+    end
+  end
+
   ## Shape
 
   @doc """
@@ -2808,21 +2821,27 @@ defmodule Nx do
   the following rules:
 
     * If both `a` and `b` are scalars, it is equivalent to `a * b`.
+
     * If `a` is a scalar and `b` is a tensor, it is equivalent to `Nx.multiply(a, b)`.
+
     * If `a` is a tensor and `b` is a scalar, it is equivalent to `Nx.multiply(a, b)`.
+
     * If both `a` and `b` are 1-D tensors (vectors), it is the sum of the element-wise
-    product between `a` and `b`. The lengths of `a` and `b` must be equal.
+      product between `a` and `b`. The lengths of `a` and `b` must be equal.
+
     * If both `a` and `b` are 2-D tensors (matrices), it is equivalent to matrix-multiplication.
+
     * If either `a` or `b` is a 1-D tensor, and the other is an n-D tensor, it is the
-    sum of the element-wise product along the last axis of `a` or `b`. The length of the
-    1-D tensor must match the last dimension of the n-D tensor.
+      sum of the element-wise product along the last axis of `a` or `b`. The length of the
+      1-D tensor must match the last dimension of the n-D tensor.
+
     * If `a` is an n-D tensor and `b` is an m-D tensor, it is the sum of the element-wise
-    product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
-    of `a` must match the second-to-last dimension of `b`.
+      product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
+      of `a` must match the second-to-last dimension of `b`.
 
   ## Examples
 
-  ### Dot Product of Scalars
+  ### Dot product of scalars
 
       iex> Nx.dot(5, 5)
       #Nx.Tensor<
@@ -2842,7 +2861,7 @@ defmodule Nx do
         4.0
       >
 
-  ### Dot Product of Vectors
+  ### Dot product of vectors
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
       #Nx.Tensor<
@@ -2862,7 +2881,7 @@ defmodule Nx do
         14.0
       >
 
-  ### Dot Product of Matrices
+  ### Dot product of matrices
 
       iex> Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]]))
       #Nx.Tensor<
@@ -2891,7 +2910,7 @@ defmodule Nx do
         ]
       >
 
-  ### Dot Product of Vector and n-d tensor
+  ### Dot product of vector and n-d tensor
 
       iex> Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
       #Nx.Tensor<
@@ -2915,7 +2934,7 @@ defmodule Nx do
         ]
       >
 
-  ### Dot Product of n-D and m-D tensor
+  ### Dot product of n-D and m-D tensor
 
       iex> a = Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]])
       iex> b = Nx.tensor([[[1, 2, 3], [3, 4, 5], [5, 6, 7]]])
@@ -2957,35 +2976,129 @@ defmodule Nx do
 
   def dot(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
 
-  def dot(%T{shape: s1} = a, %T{shape: s2} = b) do
+  def dot(%T{shape: s1} = t1, %T{shape: s2} = t2) do
     case {tuple_size(s1), tuple_size(s2)} do
-      {0, _} -> multiply(a, b)
-      {_, 0} -> multiply(a, b)
-      {1, _} -> dot(a, 0, b, tuple_size(s2) - 1)
-      {_, 1} -> dot(a, tuple_size(s1) - 1, b, 0)
-      {n, m} when n >= 2 and m >= 2 -> dot(a, tuple_size(s1) - 1, b, tuple_size(s2) - 2)
+      {0, _} -> multiply(t1, t2)
+      {_, 0} -> multiply(t1, t2)
+      {1, m} -> dot(t1, [0], t2, [m - 1])
+      {n, 1} -> dot(t1, [n - 1], t2, [0])
+      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], t2, [m - 2])
     end
   end
 
-  defp dot(%T{shape: s1} = a, axis1, %T{shape: s2} = b, axis2) do
-    dim1 = elem(s1, axis1)
-    dim2 = elem(s2, axis2)
-
-    unless dim1 == dim2 do
-      raise ArgumentError,
-            "dot product expects shapes to be compatible," <>
-              " dimension #{axis1} of left-side (#{dim1}) does not equal" <>
-              " dimension #{axis2} of right-side (#{dim2})"
-    end
+  defp dot(%T{shape: s1} = t1, axes1, %T{shape: s2} = t2, axes2) do
+    validate_dot_axes!(axes1, s1, axes2, s2)
 
     {tensor, _} =
-      Nx.Util.zip_reduce(a, [axis1], b, [axis2], 0, fn {lhs, rhs}, acc ->
+      Nx.Util.zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
         res = lhs * rhs + acc
         {res, res}
       end)
 
     tensor
   end
+
+  defp validate_dot_axes!([a1 | axes1], s1, [a2 | axes2], s2) do
+    d1 = elem(s1, a1)
+    d2 = elem(s2, a2)
+
+    if d1 == d2 do
+      validate_dot_axes!(axes1, s1, axes2, s2)
+    else
+      raise ArgumentError,
+            "dot product expects shapes to be compatible," <>
+              " dimension #{a1} of left-side (#{d1}) does not equal" <>
+              " dimension #{a2} of right-side (#{d2})"
+    end
+  end
+
+  defp validate_dot_axes!([], _s1, [], _s2) do
+    :ok
+  end
+
+  @doc """
+  The shape reverse of `dot/2`.
+
+  Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
+  This function works so:
+
+      * `Nx.shape(Nx.dot(z, y)) == Nx.shape(x)`
+      * `Nx.shape(Nx.dot(x, z)) == Nx.shape(y)`
+
+  ## Examples
+
+      iex> a = Nx.iota({3, 2})
+      iex> b = Nx.iota({2, 4})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[3][4]
+        [
+          [4, 5, 6, 7],
+          [12, 17, 22, 27],
+          [20, 29, 38, 47]
+        ]
+      >
+      iex> Nx.dot_reverse(Nx.full(a, 1), dot)
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [36, 51, 66, 81],
+          [36, 51, 66, 81]
+        ]
+      >
+      iex> Nx.dot_reverse(dot, Nx.full(b, 1))
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [22, 22],
+          [78, 78],
+          [134, 134]
+        ]
+      >
+
+  """
+  def dot_reverse(a, b)
+
+  def dot_reverse(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+
+  def dot_reverse(%T{shape: s1} = t1, %T{shape: s2} = t2) do
+    case {tuple_size(s1), tuple_size(s2)} do
+      {0, _} ->
+        multiply(t1, t2)
+
+      {_, 0} ->
+        multiply(t1, t2)
+
+      # TODO: We need to add a dimension
+      # {1, m} -> dot(a, [0], b, [m - 1])
+      # {n, 1} -> dot(a, [n - 1], b, [0])
+
+      {n, m} when n >= 2 and m >= 2 ->
+        {a1, a2} = reverse_axes(s1, n, s2, m)
+        dot(t1, a1, t2, a2)
+    end
+  end
+
+  # Example: {3, 2} dot {2, 4} => {3, 4}
+
+  # {3, 4} rdot {2, 4} => {3, 2}
+  defp reverse_axes({_, k}, _, {_, k}, _), do: {[1], [1]}
+
+  # {3, 2} rdot {3, 4} => {2, 4}
+  defp reverse_axes({k, _}, _, {k, _}, _), do: {[0], [0]}
+
+  # Example: {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
+
+  # {2, 3, 2, 4} rdot {2, 2, 4} => {2, 3, 2}
+  defp reverse_axes(_, n, _, m) when n > m,
+    do: {all_dimensions(m - 1, n), all_dimensions(0, m) -- [m - 2]}
+
+  # {2, 3, 2} rdot {2, 3, 2, 4} => {2, 2, 4}
+  defp reverse_axes(_, n, _, m) when n < m,
+    do: {all_dimensions(0, n - 1), all_dimensions(0, n - 1)}
+
+  defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
+  defp all_dimensions(_, _), do: []
 
   @doc """
   Transposes a tensor by reversing its axes.
