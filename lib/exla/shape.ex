@@ -50,7 +50,7 @@ defmodule Exla.Shape do
   @doc """
   Converts Nx's tuple format into charlist.
   """
-  def dtype_to_charlist({:pred, _}), do: 'PRED'
+  def dtype_to_charlist({:pred, _}), do: 'pred'
   def dtype_to_charlist({type, size}), do: Atom.to_charlist(type) ++ Integer.to_charlist(size)
 
   defp unwrap!({:ok, ref}), do: ref
