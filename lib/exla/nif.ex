@@ -72,25 +72,25 @@ defmodule Exla.NIF do
   def ne_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def greater_than_or_equal(_a, _b, _broadcast_dims),
+  def greater_equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def ge_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def greater_than(_a, _b, _broadcast_dims),
+  def greater(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def gt_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def less_than_or_equal(_a, _b, _broadcast_dims),
+  def less_equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def le_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def less_than(_a, _b, _broadcast_dims),
+  def less(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def lt_total_order(_a, _b, _broadcast_dims),

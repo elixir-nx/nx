@@ -1072,6 +1072,11 @@ defmodule Nx do
     &quote(do: Nx.Type.to_floating(unquote(&1)))
   )
 
+  defp_element_wise_bin_op.(
+    :element_wise_bin_bool,
+    &quote(do: Nx.Type.to_predicate(unquote(&1)))
+  )
+
   @doc """
   Element-wise addition of two tensors.
 
@@ -1974,6 +1979,386 @@ defmodule Nx do
   @compile {:inline, erlang_right_shift: 3}
   defp erlang_right_shift(_, a, b) when b >= 0, do: :erlang.bsr(a, b)
   defp erlang_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
+
+  @doc """
+  Element-wise equality comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.equal(1, 2)
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.equal(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 0, 0]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 5]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 0]
+    >
+
+    iex> Nx.equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [1, 1, 1],
+        [0, 0, 0]
+      ]
+    >
+  """
+  def equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_equal/3)
+  @compile {:inline, erlang_equal: 3}
+  defp erlang_equal(_, a, b), do: if a == b, do: 1, else: 0
+
+  @doc """
+  Element-wise not-equal comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.not_equal(1, 2)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  ### Comparison of tensor and scalar
+
+      iex> Nx.not_equal(Nx.tensor([1, 2, 3]), Nx.tensor(1))
+      #Nx.Tensor<
+        u8[3]
+        [0, 1, 1]
+      >
+
+  ### Comparison of tensors
+
+      iex> Nx.not_equal(Nx.tensor([1, 1, 2]), Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        u8[3]
+        [0, 1, 1]
+      >
+
+      iex> Nx.not_equal(Nx.tensor([[1, 4, 2], [4, 5, 6]]), Nx.tensor([[1, 3, 2], [4, 2, 1]]))
+      #Nx.Tensor<
+        u8[2][3]
+        [
+          [0, 1, 0],
+          [0, 1, 1]
+        ]
+      >
+  """
+  def not_equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_not_equal/3)
+  @compile {:inline, erlang_not_equal: 3}
+  defp erlang_not_equal(_, a, b), do: if a != b, do: 1, else: 0
+
+  @doc """
+  Element-wise greater than comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.greater(1, 2)
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.greater(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 0, 0]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.greater(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 0, 1]
+    >
+
+    iex> Nx.greater(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [0, 0, 0],
+        [1, 1, 1]
+      ]
+    >
+  """
+  def greater(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_greater/3)
+  @compile {:inline, erlang_greater: 3}
+  defp erlang_greater(_, a, b), do: if a > b, do: 1, else: 0
+
+  @doc """
+  Element-wise less than comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.less(1, 2)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.less(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 1, 1]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.less(Nx.tensor([1, 2, 1]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [0, 0, 1]
+    >
+
+    iex> Nx.less(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [0, 0, 0],
+        [0, 0, 1]
+      ]
+    >
+  """
+  def less(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_less/3)
+  @compile {:inline, erlang_less: 3}
+  defp erlang_less(_, a, b), do: if a < b, do: 1, else: 0
+
+  @doc """
+  Element-wise greater than or equal comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.greater_equal(1, 2)
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.greater_equal(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 0, 0]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 1]
+    >
+
+    iex> Nx.greater_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [1, 1, 1],
+        [1, 1, 1]
+      ]
+    >
+  """
+  def greater_equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_greater_equal/3)
+  @compile {:inline, erlang_greater_equal: 3}
+  defp erlang_greater_equal(_, a, b), do: if a >= b, do: 1, else: 0
+
+  @doc """
+  Element-wise less than or equal comparison of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+  ### Comparison of scalars
+
+      iex> Nx.less_equal(1, 2)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  ### Comparison of tensors and scalars
+
+    iex> Nx.less_equal(1, Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 1]
+    >
+
+  ### Comparison of tensors
+
+    iex> Nx.less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    #Nx.Tensor<
+      u8[3]
+      [1, 1, 0]
+    >
+
+    iex> Nx.less_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    #Nx.Tensor<
+      u8[2][3]
+      [
+        [1, 1, 1],
+        [0, 0, 0]
+      ]
+    >
+  """
+  def less_equal(left, right),
+    do: element_wise_bin_bool(left, right, &erlang_less_equal/3)
+  @compile {:inline, erlang_less_equal: 3}
+  defp erlang_less_equal(_, a, b), do: if a <= b, do: 1, else: 0
+
+  @doc """
+  Constructs a tensor from two tensors, based on a predicate.
+
+  The resulting tensor is built by evaluating each element of
+  `pred` and returning either the corresponding element from
+  `on_true` or `on_false`.
+
+  `pred` must either be a boolean, `1` or `0`, or a tensor
+  of predicates with a shape that matches the largest shape between
+  `s1` or `s2`.
+
+  If `pred` is a boolean, takes either the entire `on_true` tensor
+  or the entire `on_false` tensor.
+
+  If the shape of `on_true` or `on_false` do not match the shape of
+  `pred`, attemps to broadcast both so they match the shape of `pred`.
+
+  ## Examples
+
+
+      iex> Nx.select(1 == 1, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.select(0, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        s64[3]
+        [4, 5, 6]
+      >
+
+      iex> x = Nx.tensor([2, 4, 6])
+      iex> y = Nx.tensor([3, 2, 1])
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6]), Nx.tensor([1, 3, 5]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 4, 6]
+      >
+
+      iex> x = Nx.tensor([2, 4, 6, 8, 10])
+      iex> y = Nx.tensor([1, 6, 2, 11, 2])
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor(2), Nx.tensor([1, 3, 5, 7, 9]))
+      #Nx.Tensor<
+        s64[5]
+        [2, 3, 2, 7, 2]
+      >
+  """
+  def select(pred, on_true, on_false)
+
+  def select(true, on_true, _), do: on_true
+
+  def select(false, _, on_false), do: on_false
+
+  def select(1, on_true, _), do: on_true
+
+  def select(0, _, on_false), do: on_false
+
+  def select(%T{shape: shape} = pred,
+             %T{type: {_, left_size} = left_type} = on_true,
+             %T{type: {_, right_size} = right_type} = on_false) do
+    output_type = Nx.Type.merge(left_type, right_type)
+
+    on_true_bcast = broadcast(on_true, shape)
+    on_false_bcast = broadcast(on_false, shape)
+
+    pred_data = Nx.Util.to_bitstring(pred)
+    on_true_data = Nx.Util.to_bitstring(on_true_bcast)
+    on_false_data = Nx.Util.to_bitstring(on_false_bcast)
+
+    pred_size = tuple_product(shape)
+
+    data =
+      for i <- 0..pred_size - 1, into: <<>> do
+        pred_consumed = i * 8
+        <<_::size(pred_consumed), pred::size(8)-unsigned-native, _::bitstring>> = pred_data
+        match_types [left_type, right_type, output_type] do
+          if pred == 1 do
+            consumed = i*left_size
+            <<_::size(consumed), match!(x, 0), _::bitstring>> = on_true_data
+            <<write!(read!(x, 0), 2)>>
+          else
+            consumed = i*right_size
+            <<_::size(consumed), match!(y, 1), _::bitstring>> = on_false_data
+            <<write!(read!(y, 1), 2)>>
+          end
+        end
+      end
+
+    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
+  end
 
   ## Unary ops
 

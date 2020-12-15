@@ -11,7 +11,7 @@ defmodule Exla.Op do
   Creates a scalar constant.
   """
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
-    value = Nx.Type.cast_scalar!(dtype, value)
+    value = Exla.Type.cast_scalar!(dtype, value)
     ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -81,7 +81,7 @@ defmodule Exla.Op do
   arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :arctan2, :power]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
   shift = [:left_shift, :right_shift_arithmetic, :right_shift_logical]
-  comparison = [:equal, :not_equal, :greater_than, :less_than, :greater_than_or_equal, :less_than_or_equal]
+  comparison = [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
   for fun <- arith ++ bitwise ++ shift ++ comparison do
     @doc """

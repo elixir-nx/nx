@@ -159,6 +159,11 @@ defmodule Nx.Type do
   def to_floating(type), do: merge(type, {:f, 32})
 
   @doc """
+  Converts the given type to a predicate representation.
+  """
+  def to_predicate(_), do: {:u, 8}
+
+  @doc """
   Casts scalar the given scalar to type.
 
   It does not handle overflows/underfows,

@@ -47,11 +47,11 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: shape.dtype, shape: shape.dims}
+    %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: Exla.Type.to_nx(shape.dtype), shape: shape.dims}
   end
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
-    %Nx.Tensor{data: {Exla.NxDevice, ref}, type: shape.dtype, shape: shape.dims}
+    %Nx.Tensor{data: {Exla.NxDevice, ref}, type: Exla.Type.to_nx(shape.dtype), shape: shape.dims}
   end
 
   defp buffer_to_nx({:tuple, buffers}) do
@@ -111,7 +111,7 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_bin_float_arith_op(builder, op, left, right) do
-    type = binary_op_type(left, right) |> Nx.Type.to_floating()
+    type = binary_op_type(left, right) |> Exla.Type.to_floating()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -139,6 +139,14 @@ defmodule Exla.Defn do
 
   def nx_bin_bitwise_op(builder, op, left, right) do
     type = binary_op_type(left, right) |> assert_integer_type!(op)
+    {left, left_dims} = to_typed_operator(builder, left, type)
+    {right, right_dims} = to_typed_operator(builder, right, type)
+    dims = broadcast_dimensions(left_dims, right_dims)
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
+  def nx_bin_comparison_op(builder, op, left, right) do
+    type = binary_op_type(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -183,6 +191,40 @@ defmodule Exla.Defn do
     end
   end
 
+  def nx_select(builder, pred, on_true, on_false) do
+    {pred_op, _} = to_typed_operator(builder, pred, {:pred, 1})
+    on_true_op = to_operator(builder, on_true)
+    on_false_op = to_operator(builder, on_false)
+
+    pred_shape = nx_shape(pred_op)
+    on_true_shape = nx_shape(on_true_op)
+    on_false_shape = nx_shape(on_false_op)
+
+    new_on_true_op =
+      case max_shape(tuple_reverse(on_true_shape), tuple_reverse(pred_shape), []) do
+        {:ok, output_shape} ->
+          Exla.Op.broadcast_in_dim(on_true_op, output_shape, broadcast_dimensions(on_true_shape, output_shape))
+
+        :error ->
+          raise ArgumentError,
+                "cannot broadcast tensor of dimensions #{inspect(on_true_shape)} " <>
+                  "to #{inspect(pred_shape)}"
+      end
+
+    new_on_false_op =
+      case max_shape(tuple_reverse(on_true_shape), tuple_reverse(pred_shape), []) do
+        {:ok, output_shape} ->
+          Exla.Op.broadcast_in_dim(on_false_op, output_shape, broadcast_dimensions(on_true_shape, output_shape))
+
+        :error ->
+          raise ArgumentError,
+                "cannot broadcast tensor of dimensions #{inspect(on_false_shape)} " <>
+                  "to #{inspect(pred_shape)}"
+      end
+
+    Exla.Op.select(pred_op, new_on_true_op, new_on_false_op)
+  end
+
   def nx_negate(_builder, %Exla.Op{} = op), do: Exla.Op.negate(op)
   def nx_negate(_builder, number) when is_number(number), do: -number
 
@@ -191,7 +233,7 @@ defmodule Exla.Defn do
   def nx_random_uniform(builder, shape, min, max, opts)
       when is_number(min) and is_number(max) do
     shape = to_shape(shape)
-    type = opts[:type] || Nx.Type.infer(max - min)
+    type = opts[:type] || Exla.Type.infer(max - min)
 
     if match?({int, size} when int in [:s, :u] and size < 32, type) do
       raise ArgumentError,
@@ -359,7 +401,7 @@ defmodule Exla.Defn do
 
   defp to_float_operator(_builder, %Exla.Op{} = op) do
     shape = Exla.Op.get_shape(op)
-    type = Nx.Type.to_floating(shape.dtype)
+    type = Exla.Type.to_floating(shape.dtype)
     if shape.dtype != type, do: Exla.Op.convert_element_type(op, type), else: op
   end
 
@@ -398,16 +440,16 @@ defmodule Exla.Defn do
   ## Types
 
   defp binary_op_type(left, right) when is_number(left) and is_number(right),
-    do: Nx.Type.merge(Nx.Type.infer(left), Nx.Type.infer(right))
+    do: Exla.Type.merge(Exla.Type.infer(left), Exla.Type.infer(right))
 
   defp binary_op_type(scalar, op) when is_number(scalar),
-    do: Nx.Type.merge_scalar(nx_type(op), scalar)
+    do: Exla.Type.merge_scalar(nx_type(op), scalar)
 
   defp binary_op_type(op, scalar) when is_number(scalar),
-    do: Nx.Type.merge_scalar(nx_type(op), scalar)
+    do: Exla.Type.merge_scalar(nx_type(op), scalar)
 
   defp binary_op_type(left, right),
-    do: Nx.Type.merge(nx_type(left), nx_type(right))
+    do: Exla.Type.merge(nx_type(left), nx_type(right))
 
   defp assert_integer_type!({:s, _} = type, _op), do: type
   defp assert_integer_type!({:u, _} = type, _op), do: type
@@ -466,6 +508,7 @@ defmodule Exla.Defn do
 
   @bin_float_arith_op [:divide, :arctan2]
   @bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
+  @bin_comparison_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
   @bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
   @unary_bitwise_op [:bitwise_not, :count_leading_zeros, :population_count]
@@ -487,6 +530,12 @@ defmodule Exla.Defn do
        when name in @bin_bitwise_op do
     {args, state} = traverse(args, state)
     {to_builder_call(dot_meta, meta, :nx_bin_bitwise_op, [name | args]), state}
+  end
+
+  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
+       when name in @bin_comparison_op do
+    {args, state} = traverse(args, state)
+    {to_builder_call(dot_meta, meta, :nx_bin_comparison_op, [name | args]), state}
   end
 
   defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)

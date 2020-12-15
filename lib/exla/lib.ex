@@ -95,11 +95,7 @@ defmodule Exla.Lib do
     rhs_value = Op.parameter(sub_builder, 2, Shape.make_shape(type, {}), "rhs_value")
     rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape(type, {}), "rhs_index")
 
-    cmp =
-      if is_min?,
-        do: Op.less_than_or_equal(lhs_value, rhs_value),
-        else: Op.greater_than_or_equal(lhs_value, rhs_value)
-
+    cmp = if is_min?, do: Op.less_equal(lhs_value, rhs_value), else: Op.greater_equal(lhs_value, rhs_value)
     max = Op.select(cmp, lhs_value, rhs_value)
     arg_max = Op.select(cmp, lhs_index, rhs_index)
 
@@ -124,7 +120,7 @@ defmodule Exla.Lib do
   defp min_value(%Builder{} = builder, type) do
     Op.constant_from_binary(
       builder,
-      Nx.Type.min_value_binary(type),
+      Exla.Type.min_value_binary(type),
       Shape.make_shape(type, {})
     )
   end
@@ -132,7 +128,7 @@ defmodule Exla.Lib do
   defp max_value(builder, type) do
     Op.constant_from_binary(
       builder,
-      Nx.Type.max_value_binary(type),
+      Exla.Type.max_value_binary(type),
       Shape.make_shape(type, {})
     )
   end
