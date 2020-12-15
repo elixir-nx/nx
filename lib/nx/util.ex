@@ -219,8 +219,8 @@ defmodule Nx.Util do
 
   ### Errors
 
-      iex> Nx.Util.reduce(Nx.tensor([1, 2, 3]), 0, [axis: 1], fn x, acc -> {x+acc, x+acc} end)
-      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+      iex> Nx.Util.reduce(Nx.tensor([[1, 2, 3]]), 0, [axis: 2], fn x, acc -> {x+acc, x+acc} end)
+      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
   """
   def reduce(tensor, acc, opts \\ [], fun)
 
@@ -400,119 +400,76 @@ defmodule Nx.Util do
   # expect the entire tensor to be reduced down to a scalar.
   defp bin_view_axis(binary, axis, shape, size) do
     if axis do
-      {gap_count, chunk_size, new_shape} = aggregate_axis(shape, axis, size)
+      {chunk_size, read_size, path, shape} = aggregate_axes([axis], shape, size)
 
       view =
-        for <<chunk::size(chunk_size)-bitstring <- binary>>,
-            gap <-
-              aggregate_gaps(gap_count, size, fn pre, pos ->
-                for <<_::size(pre)-bitstring, var::size(size)-bitstring,
-                      _::size(pos)-bitstring <- chunk>>,
-                    into: <<>>,
-                    do: var
-              end),
-            do: gap
+        for <<chunk::size(chunk_size)-bitstring <- binary>> do
+          weighted_traverse(path, chunk, read_size)
+        end
 
-      {view, new_shape}
+      {List.flatten(view), shape}
     else
       {[binary], {}}
     end
   end
 
-  # The goal of traverse axis is to find a chunk_count and gap_count
-  # that allows us to traverse a given axis. Consider this input tensor:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][2][3]
-  #       [
-  #         [
-  #           [1, 2, 3],
-  #           [4, 5, 6]
-  #         ],
-  #         [
-  #           [7, 8, 9],
-  #           [10, 11, 12]
-  #         ]
-  #       ]
-  #     >
-  #
-  # When computing the sum on axis 0, we have:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][3]
-  #       [
-  #         [8, 10, 12],
-  #         [14, 16, 18]
-  #       ]
-  #     >
-  #
-  # The first time element is 1 + 7, which means the gap between
-  # them is 6. Given we have to traverse the whole tensor, the
-  # chunk_count is 1.
-  #
-  # For axis 1, we have:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][3]
-  #       [
-  #         [5, 7, 9],
-  #         [17, 19, 21]
-  #       ]
-  #     >
-  #
-  # The first element is 1 + 4 within the "first quadrant". 17 is
-  # is 10 + 17 in the second quadrant. Therefore the gap is 3 and
-  # the chunk_count is 2.
-  #
-  # Finally, for axis 2, we have:
-  #
-  #     #Nx.Tensor<
-  #       s64[2][2]
-  #       [
-  #         [6, 15],
-  #         [24, 33]
-  #       ]
-  #     >
-  #
-  # 6 is the sum of the first row, 15 the sum of the second row, etc.
-  # Therefore the gap is 1 and the chunk count is 4.
-  #
-  # Computing the aggregate is a matter of mapping the binary over
-  # each chunk and then mapping gap times, moving the computation root
-  # by size over each gap.
-  defp aggregate_axis(shape, axis, size) do
-    {gap_count, chunk_count, new_shape} = aggregate_axis(shape, axis)
-    {gap_count, size * chunk_count, new_shape}
+  defp aggregate_axes([], _shape, _size) do
+    raise ArgumentError, ":axes cannot be an empty list"
   end
 
-  defp aggregate_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape) do
-    aggregate_axis(Tuple.to_list(shape), 0, axis, tuple_product(shape), [])
+  defp aggregate_axes(given_axes, shape, size) do
+    rank = tuple_size(shape)
+    axes = Enum.sort(Enum.map(given_axes, &if(&1 >= 0, do: &1, else: rank + &1)))
+
+    unless Enum.all?(axes, &(&1 >= 0 and &1 < rank)) and
+             length(Enum.uniq(axes)) == length(given_axes) do
+      raise ArgumentError,
+            "axes #{inspect(axes)} must be unique integers between 0 and #{rank - 1}"
+    end
+
+    min = hd(axes)
+    weighted_shape = weighted_shape(shape, size)
+    [{axis_count, axis_weight} | _] = weighted_shape = Enum.drop(weighted_shape, min)
+    chunk_size = axis_count * axis_weight
+
+    # The goal of aggregate path is to split the paths
+    # we are reducing from the ones we are keeping as is.
+    {reverse_pre, reverse_pos} = aggregate_path(weighted_shape, axes, min, [], [])
+
+    # Now if we are reducing on the last dimensions, we
+    # can increase the read size.
+    {reverse_pos, read_size} =
+      aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
+
+    path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
+    {chunk_size, read_size, path, aggregate_shape(shape, axes, rank)}
   end
 
-  defp aggregate_axis(shape, axis) when axis < 0 and axis >= -tuple_size(shape) do
-    aggregate_axis(Tuple.to_list(shape), 0, tuple_size(shape) + axis, tuple_product(shape), [])
+  defp aggregate_path([pair | shape], [i | axes], i, pre, pos),
+    do: aggregate_path(shape, axes, i + 1, pre, [pair | pos])
+
+  defp aggregate_path([pair | shape], axes, i, pre, pos),
+    do: aggregate_path(shape, axes, i + 1, [pair | pre], pos)
+
+  defp aggregate_path([], [], _i, pre, pos), do: {pre, pos}
+
+  defp aggregate_read([{axis, weight} | shape], i, [i | axis], _size),
+    do: aggregate_read(shape, i - 1, axis, axis * weight)
+
+  defp aggregate_read(shape, _i, _axis, size),
+    do: {shape, size}
+
+  defp aggregate_shape(shape, axes, rank) do
+    List.to_tuple(aggregate_shape(shape, axes, 0, rank))
   end
 
-  defp aggregate_axis(shape, axis) do
-    raise ArgumentError, "unknown axis #{axis} for shape #{inspect(shape)} (axis is zero-indexed)"
-  end
+  defp aggregate_shape(_shape, _axes, n, n), do: []
 
-  defp aggregate_axis([dim | dims], axis, chosen, prev_gap, acc) do
-    next_gap = div(prev_gap, dim)
-
-    if axis == chosen do
-      {next_gap, prev_gap, List.to_tuple(Enum.reverse(acc, dims))}
+  defp aggregate_shape(shape, axes, i, n) do
+    if i in axes do
+      aggregate_shape(shape, axes, i + 1, n)
     else
-      aggregate_axis(dims, axis + 1, chosen, next_gap, [dim | acc])
+      [elem(shape, i) | aggregate_shape(shape, axes, i + 1, n)]
     end
   end
-
-  defp aggregate_gaps(gap_count, size, fun),
-    do: aggregate_gaps(0, gap_count * size, size, fun)
-
-  defp aggregate_gaps(_pre, 0, _size, _fun),
-    do: []
-
-  defp aggregate_gaps(pre, pos, size, fun),
-    do: [fun.(pre, pos - size) | aggregate_gaps(pre + size, pos - size, size, fun)]
 end

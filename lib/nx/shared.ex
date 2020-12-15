@@ -17,29 +17,29 @@ defmodule Nx.Shared do
   in the most efficient format. This is done by looking at @0,
   @1, etc and replacing them by currently matched type at the
   given position. In other words, this:
-  
+
      combine_types [input_type, output_type] do
        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
      end
-  
+
   Is compiled into:
-  
+
      for <<seg::float-native-size(...) <- data>>, into: <<>>, do: <<seg+right::float-native-size(...)>>
-  
+
   for all possible valid types between input and input types.
-  
+
   `match!` is used in matches and must be always followed by a `read!`.
   `write!` is used to write to the binary.
-  
+
   The implementation unfolds the loops at the top level. In particular,
   note that a rolled out case such as:
-  
+
       for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
         <<seg+number::signed-integer-size(size)>>
       end
-  
+
   is twice as fast and uses twice less memory than:
-  
+
       for <<seg::size(size)-signed-integer <- data>>, into: <<>> do
         case output_type do
           {:s, size} ->
@@ -143,5 +143,73 @@ defmodule Nx.Shared do
   """
   def scalar_to_bin(value, type) do
     match_types([type], do: <<write!(value, 0)>>)
+  end
+
+  @doc """
+  Converts the shape to a weight shape list.
+
+  A weighted shape is a list of tuples where the first
+  element is the number of elements in the dimension
+  and the second element is the size to be traversed in
+  the binary to fetch the next element.
+
+  This is often given to `weighted_traverse/3` as a general
+  mechanism to traverse binaries.
+  """
+  def weighted_shape(shape, size) do
+    Enum.reverse(weighted_shape(shape, tuple_size(shape), size))
+  end
+
+  defp weighted_shape(_shape, 0, _weight) do
+    []
+  end
+
+  defp weighted_shape(shape, pos, weight) do
+    element = :erlang.element(pos, shape)
+    [{element, weight} | weighted_shape(shape, pos - 1, weight * element)]
+  end
+
+  @doc """
+  Reads the chunk size from a weighted list at the given position.
+  """
+  def weighted_chunk(list, at, size) do
+    {element, size} = Enum.at(list, at, {1, size})
+    element * size
+  end
+
+  @doc """
+  Traverses a binary using the elements and shape given by `weighted_shape`.
+
+  When all dimensions are traversed, we read `read_size`.
+
+  The `weighted_shape` can also contain functions, which are applied to the
+  result of the remaining of the weighted shape.
+  """
+  def weighted_traverse(weighted_shape, binary, read_size)
+
+  def weighted_traverse([], data, read_size) do
+    <<chunk::size(read_size)-bitstring, _::bitstring>> = data
+    chunk
+  end
+
+  def weighted_traverse([{dim, size} | dims], data, read_size) do
+    weighted_traverse(dim, size, dims, data, read_size)
+  end
+
+  def weighted_traverse([fun | dims], data, read_size) do
+    fun.(weighted_traverse(dims, data, read_size))
+  end
+
+  defp weighted_traverse(dim, dim_size, dims, data, read_size) do
+    head = weighted_traverse(dims, data, read_size)
+
+    case dim do
+      1 ->
+        [head]
+
+      _ ->
+        <<_::size(dim_size)-bitstring, data::bitstring>> = data
+        [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size)]
+    end
   end
 end

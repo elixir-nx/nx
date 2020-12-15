@@ -2523,8 +2523,8 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.sum(Nx.tensor([1, 2, 3]), axis: 1)
-      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+      iex> Nx.sum(Nx.tensor([[1, 2]]), axis: 2)
+      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
 
   """
   def sum(tensor, opts \\ []) do
@@ -2584,8 +2584,8 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.mean(Nx.tensor([1, 2, 3]), axis: 1)
-      ** (ArgumentError) unknown axis 1 for shape {3} (axis is zero-indexed)
+      iex> Nx.mean(Nx.tensor([[1, 2]]), axis: 2)
+      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
 
   """
   def mean(tensor, opts \\ []) do
@@ -3126,19 +3126,19 @@ defmodule Nx do
     # before the minimum one being changed. For example,
     # for {0, 1, 2, 3} and the swap is between 1 and 2,
     # the chunk_size will be d1 * d2 * d3 * size.
-    chunk_size = size_at(weighted_shape, min, size)
+    chunk_size = weighted_chunk(weighted_shape, min, size)
 
     # All of the major dimensions not being transposed can be
     # read at once. For example, for {0, 1, 2, 3} and the swap
     # is between 1 and 2, the read_size will be d3 * size.
-    read_size = size_at(weighted_shape, max + 1, size)
+    read_size = weighted_chunk(weighted_shape, max + 1, size)
 
     # And now how we will traverse
     traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
 
     data =
       for <<chunk::size(chunk_size)-bitstring <- data>> do
-        transpose_dims(traverse_list, chunk, read_size)
+        weighted_traverse(traverse_list, chunk, read_size)
       end
 
     shape = axes |> Tuple.to_list() |> Enum.map(&elem(shape, &1)) |> List.to_tuple()
@@ -3169,46 +3169,6 @@ defmodule Nx do
 
   defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
   defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
-
-  defp weighted_shape(shape, size) do
-    Enum.reverse(weighted_shape(shape, tuple_size(shape), size))
-  end
-
-  defp weighted_shape(_shape, 0, _weight) do
-    []
-  end
-
-  defp weighted_shape(shape, pos, weight) do
-    element = :erlang.element(pos, shape)
-    [{element, weight} | weighted_shape(shape, pos - 1, weight * element)]
-  end
-
-  defp size_at(list, at, size) do
-    {element, size} = Enum.at(list, at, {1, size})
-    element * size
-  end
-
-  defp transpose_dims([], data, read_size) do
-    <<chunk::size(read_size)-bitstring, _::bitstring>> = data
-    chunk
-  end
-
-  defp transpose_dims([{dim, size} | dims], data, read_size) do
-    transpose_dim(dim, size, dims, data, read_size)
-  end
-
-  defp transpose_dim(dim, dim_size, dims, data, read_size) do
-    head = transpose_dims(dims, data, read_size)
-
-    case dim do
-      1 ->
-        [head]
-
-      _ ->
-        <<_::size(dim_size)-bitstring, data::bitstring>> = data
-        [head | transpose_dim(dim - 1, dim_size, dims, data, read_size)]
-    end
-  end
 
   ## Shape
 
