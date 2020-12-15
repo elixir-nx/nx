@@ -228,12 +228,12 @@ defmodule Nx.Defn.GradTransform do
 
   # Dot product rule
   defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, y, exprs, state)
-       when name in [:dot, :dot_reverse_lhs, :dot_reverse_rhs] do
+       when name in [:dot, :dot_grad_lhs, :dot_grad_rhs] do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
     dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
-    b1 = nx_call(meta, :dot_reverse_lhs, [nx_call(meta, :broadcast, [1.0, y]), x1])
-    b2 = nx_call(meta, :dot_reverse_rhs, [nx_call(meta, :broadcast, [1.0, y]), x2])
+    b1 = nx_call(meta, :dot_grad_lhs, [nx_call(meta, :broadcast, [1.0, y]), x1])
+    b2 = nx_call(meta, :dot_grad_rhs, [nx_call(meta, :broadcast, [1.0, y]), x2])
 
     cond do
       zero?(dx1) ->

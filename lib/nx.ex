@@ -515,6 +515,16 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.iota({3, 3}, axis: -1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [0, 1, 2],
+          [0, 1, 2]
+        ]
+      >
+
       iex> Nx.iota({3, 4, 3}, axis: 0, type: {:f, 64})
       #Nx.Tensor<
         f64[3][4][3]
@@ -3022,7 +3032,7 @@ defmodule Nx do
   Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
   This function works so:
 
-      Nx.shape(Nx.dot_reverse_lhs(z, x)) == Nx.shape(y)
+      Nx.shape(Nx.dot_grad_lhs(z, x)) == Nx.shape(y)
 
   ## Examples
 
@@ -3037,7 +3047,7 @@ defmodule Nx do
           [20, 29, 38, 47]
         ]
       >
-      iex> Nx.dot_reverse_lhs(dot, Nx.full(a, 1))
+      iex> Nx.dot_grad_lhs(dot, Nx.full(a, 1))
       #Nx.Tensor<
         s64[2][4]
         [
@@ -3047,14 +3057,14 @@ defmodule Nx do
       >
 
   """
-  def dot_reverse_lhs(a, b)
+  def dot_grad_lhs(a, b)
 
-  def dot_reverse_lhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+  def dot_grad_lhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
 
-  def dot_reverse_lhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
+  def dot_grad_lhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
     if rank(s1) < rank(s2) do
       raise ArgumentError,
-            "the first argument of dot_reverse_lhs/1 must be of higher or equal rank to the second, " <>
+            "the first argument of dot_grad_lhs/1 must be of higher or equal rank to the second, " <>
               "got: #{rank(s1)} and #{rank(s2)}"
     end
 
@@ -3088,7 +3098,7 @@ defmodule Nx do
   Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
   This function works so:
 
-      Nx.shape(Nx.dot_reverse_rhs(z, y)) == Nx.shape(x)
+      Nx.shape(Nx.dot_grad_rhs(z, y)) == Nx.shape(x)
 
   ## Examples
 
@@ -3103,7 +3113,7 @@ defmodule Nx do
           [20, 29, 38, 47]
         ]
       >
-      iex> Nx.dot_reverse_rhs(dot, Nx.full(b, 1))
+      iex> Nx.dot_grad_rhs(dot, Nx.full(b, 1))
       #Nx.Tensor<
         s64[3][2]
         [
@@ -3114,14 +3124,14 @@ defmodule Nx do
       >
 
   """
-  def dot_reverse_rhs(a, b)
+  def dot_grad_rhs(a, b)
 
-  def dot_reverse_rhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+  def dot_grad_rhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
 
-  def dot_reverse_rhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
+  def dot_grad_rhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
     if rank(s1) < rank(s2) do
       raise ArgumentError,
-            "the first argument of dot_reverse_rhs/1 must be of higher or equal rank to the second, " <>
+            "the first argument of dot_grad_rhs/1 must be of higher or equal rank to the second, " <>
               "got: #{rank(s1)} and #{rank(s2)}"
     end
 
