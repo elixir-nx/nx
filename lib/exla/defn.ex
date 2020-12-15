@@ -47,11 +47,11 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: shape.dtype, shape: shape.dims}
+    %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: Exla.Type.to_nx(shape.dtype), shape: shape.dims}
   end
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
-    %Nx.Tensor{data: {Exla.NxDevice, ref}, type: shape.dtype, shape: shape.dims}
+    %Nx.Tensor{data: {Exla.NxDevice, ref}, type: Exla.Type.to_nx(shape.dtype), shape: shape.dims}
   end
 
   defp buffer_to_nx({:tuple, buffers}) do
@@ -192,7 +192,7 @@ defmodule Exla.Defn do
   end
 
   def nx_select(builder, pred, on_true, on_false) do
-    pred_op = to_operator(builder, pred)
+    {pred_op, _} = to_typed_operator(builder, pred, {:pred, 1})
     on_true_op = to_operator(builder, on_true)
     on_false_op = to_operator(builder, on_false)
 

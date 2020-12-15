@@ -433,15 +433,15 @@ defmodule Exla.DefnTest do
     defn equal(a, b), do: Nx.equal(a, b)
 
     test "computes equality of scalars" do
-      assert equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:pred, 8})
+      assert equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
     end
 
     test "computes equality with broadcasting" do
-      assert equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 0, 0], type: {:pred, 8})
+      assert equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 0, 0], type: {:u, 8})
     end
 
     test "computes equality with mixed types" do
-      assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:pred, 8})
+      assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:u, 8})
     end
   end
 
@@ -449,15 +449,15 @@ defmodule Exla.DefnTest do
     defn not_equal(a, b), do: Nx.not_equal(a, b)
 
     test "computes equality of scalars" do
-      assert not_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:pred, 8})
+      assert not_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
     end
 
     test "computes equality with broadcasting" do
-      assert not_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:pred, 8})
+      assert not_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:u, 8})
     end
 
     test "computes equality with mixed types" do
-      assert not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:pred, 8})
+      assert not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:u, 8})
     end
   end
 
@@ -465,15 +465,15 @@ defmodule Exla.DefnTest do
     defn less(a, b), do: Nx.less(a, b)
 
     test "compares scalars" do
-      assert less(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:pred, 8})
+      assert less(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
     end
 
     test "compares with broadcasting" do
-      assert less(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:pred, 8})
+      assert less(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:u, 8})
     end
 
     test "compares with mixed types" do
-      assert less(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:pred, 8})
+      assert less(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:u, 8})
     end
   end
 
@@ -481,15 +481,15 @@ defmodule Exla.DefnTest do
     defn greater(a, b), do: Nx.greater(a, b)
 
     test "compares scalars" do
-      assert greater(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:pred, 8})
+      assert greater(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
     end
 
     test "compares with broadcasting" do
-      assert greater(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 0, 0], type: {:pred, 8})
+      assert greater(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 0, 0], type: {:u, 8})
     end
 
     test "compares with mixed types" do
-      assert greater(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:pred, 8})
+      assert greater(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0, 0, 0], type: {:u, 8})
     end
   end
 
@@ -497,15 +497,15 @@ defmodule Exla.DefnTest do
     defn less_equal(a, b), do: Nx.less_equal(a, b)
 
     test "compares scalars" do
-      assert less_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:pred, 8})
+      assert less_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
     end
 
     test "compares with broadcasting" do
-      assert less_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 1, 1], type: {:pred, 8})
+      assert less_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 1, 1], type: {:u, 8})
     end
 
     test "compares with mixed types" do
-      assert less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:pred, 8})
+      assert less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:u, 8})
     end
   end
 
@@ -513,15 +513,15 @@ defmodule Exla.DefnTest do
     defn greater_equal(a, b), do: Nx.greater_equal(a, b)
 
     test "compares scalars" do
-      assert greater_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:pred, 8})
+      assert greater_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
     end
 
     test "compares with broadcasting" do
-      assert greater_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 0, 0], type: {:pred, 8})
+      assert greater_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 0, 0], type: {:u, 8})
     end
 
     test "compares with mixed types" do
-      assert greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:pred, 8})
+      assert greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([1, 1, 1], type: {:u, 8})
     end
   end
 
@@ -529,11 +529,11 @@ defmodule Exla.DefnTest do
     defn select(pred, x, y), do: Nx.select(pred, x, y)
 
     test "selects one or the other with a scalar" do
-      assert select(Nx.tensor(1, type: {:pred, 8}), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) == Nx.tensor([1, 2, 3])
+      assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) == Nx.tensor([1, 2, 3])
     end
 
     test "selects with broadcasting" do
-      assert select(Nx.tensor([1, 0, 1, 0, 1], type: {:pred, 8}), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) == Nx.tensor([10, 2, 10, 4, 10])
+      assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) == Nx.tensor([10, 2, 10, 4, 10])
     end
   end
 

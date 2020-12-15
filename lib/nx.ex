@@ -1994,7 +1994,7 @@ defmodule Nx do
 
       iex> Nx.equal(1, 2)
       #Nx.Tensor<
-        pred
+        u8
         0
       >
 
@@ -2002,7 +2002,7 @@ defmodule Nx do
 
     iex> Nx.equal(1, Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [1, 0, 0]
     >
 
@@ -2010,13 +2010,13 @@ defmodule Nx do
 
     iex> Nx.equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 5]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [1, 1, 0]
     >
 
     iex> Nx.equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[2][3]
+      u8[2][3]
       [
         [1, 1, 1],
         [0, 0, 0]
@@ -2042,7 +2042,7 @@ defmodule Nx do
 
       iex> Nx.not_equal(1, 2)
       #Nx.Tensor<
-        pred
+        u8
         1
       >
 
@@ -2050,7 +2050,7 @@ defmodule Nx do
 
       iex> Nx.not_equal(Nx.tensor([1, 2, 3]), Nx.tensor(1))
       #Nx.Tensor<
-        pred[3]
+        u8[3]
         [0, 1, 1]
       >
 
@@ -2058,13 +2058,13 @@ defmodule Nx do
 
       iex> Nx.not_equal(Nx.tensor([1, 1, 2]), Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        pred[3]
+        u8[3]
         [0, 1, 1]
       >
 
       iex> Nx.not_equal(Nx.tensor([[1, 4, 2], [4, 5, 6]]), Nx.tensor([[1, 3, 2], [4, 2, 1]]))
       #Nx.Tensor<
-        pred[2][3]
+        u8[2][3]
         [
           [0, 1, 0],
           [0, 1, 1]
@@ -2090,7 +2090,7 @@ defmodule Nx do
 
       iex> Nx.greater(1, 2)
       #Nx.Tensor<
-        pred
+        u8
         0
       >
 
@@ -2098,7 +2098,7 @@ defmodule Nx do
 
     iex> Nx.greater(1, Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [0, 0, 0]
     >
 
@@ -2106,13 +2106,13 @@ defmodule Nx do
 
     iex> Nx.greater(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [0, 0, 1]
     >
 
     iex> Nx.greater(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[2][3]
+      u8[2][3]
       [
         [0, 0, 0],
         [1, 1, 1]
@@ -2138,7 +2138,7 @@ defmodule Nx do
 
       iex> Nx.less(1, 2)
       #Nx.Tensor<
-        pred
+        u8
         1
       >
 
@@ -2146,7 +2146,7 @@ defmodule Nx do
 
     iex> Nx.less(1, Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [0, 1, 1]
     >
 
@@ -2154,13 +2154,13 @@ defmodule Nx do
 
     iex> Nx.less(Nx.tensor([1, 2, 1]), Nx.tensor([1, 2, 2]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [0, 0, 1]
     >
 
     iex> Nx.less(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[2][3]
+      u8[2][3]
       [
         [0, 0, 0],
         [0, 0, 1]
@@ -2186,7 +2186,7 @@ defmodule Nx do
 
       iex> Nx.greater_equal(1, 2)
       #Nx.Tensor<
-        pred
+        u8
         0
       >
 
@@ -2194,7 +2194,7 @@ defmodule Nx do
 
     iex> Nx.greater_equal(1, Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [1, 0, 0]
     >
 
@@ -2202,13 +2202,13 @@ defmodule Nx do
 
     iex> Nx.greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [1, 1, 1]
     >
 
     iex> Nx.greater_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[2][3]
+      u8[2][3]
       [
         [1, 1, 1],
         [1, 1, 1]
@@ -2234,7 +2234,7 @@ defmodule Nx do
 
       iex> Nx.less_equal(1, 2)
       #Nx.Tensor<
-        pred
+        u8
         1
       >
 
@@ -2242,7 +2242,7 @@ defmodule Nx do
 
     iex> Nx.less_equal(1, Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [1, 1, 1]
     >
 
@@ -2250,13 +2250,13 @@ defmodule Nx do
 
     iex> Nx.less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
     #Nx.Tensor<
-      pred[3]
+      u8[3]
       [1, 1, 0]
     >
 
     iex> Nx.less_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      pred[2][3]
+      u8[2][3]
       [
         [1, 1, 1],
         [0, 0, 0]
