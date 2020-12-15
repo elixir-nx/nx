@@ -3017,13 +3017,12 @@ defmodule Nx do
   end
 
   @doc """
-  The shape reverse of `dot/2`.
+  The shape reverse of `dot/2` for the left-hand side.
 
   Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
   This function works so:
 
-      * `Nx.shape(Nx.dot(z, y)) == Nx.shape(x)`
-      * `Nx.shape(Nx.dot(x, z)) == Nx.shape(y)`
+      Nx.shape(Nx.dot_reverse_lhs(z, x)) == Nx.shape(y)
 
   ## Examples
 
@@ -3038,7 +3037,7 @@ defmodule Nx do
           [20, 29, 38, 47]
         ]
       >
-      iex> Nx.dot_reverse(Nx.full(a, 1), dot)
+      iex> Nx.dot_reverse_lhs(dot, Nx.full(a, 1))
       #Nx.Tensor<
         s64[2][4]
         [
@@ -3046,7 +3045,65 @@ defmodule Nx do
           [36, 51, 66, 81]
         ]
       >
-      iex> Nx.dot_reverse(dot, Nx.full(b, 1))
+
+  """
+  def dot_reverse_lhs(a, b)
+
+  def dot_reverse_lhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+
+  def dot_reverse_lhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
+    if rank(s1) < rank(s2) do
+      raise ArgumentError,
+            "the first argument of dot_reverse_lhs/1 must be of higher or equal rank to the second, " <>
+              "got: #{rank(s1)} and #{rank(s2)}"
+    end
+
+    case {tuple_size(s1), tuple_size(s2)} do
+      {_, 0} ->
+        multiply(t1, t2)
+
+      # TODO: We need to add a dimension
+      # {n, 1} -> dot(a, [n - 1], b, [0])
+
+      {n, m} when n >= 2 and m >= 2 ->
+        # Example #1:
+        #
+        # {3, 2}  dot {2, 4} => {3, 4}
+        # {3, 4} rdot {3, 2} => {4, 2} (and transpose [1, 0])
+        #
+        # Example #2:
+        #
+        # {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
+        # {2, 3, 2, 4} rdot {2, 3, 2} => {2, 4, 2} (and transpose [0, 2, 1])
+        axes = up_to(0, m - 1)
+        size = n - m + 2
+        trans = List.to_tuple(up_to(0, n - m) ++ down_to(size - 1, n - m - 1))
+        dot(t1, axes, t2, axes) |> transpose(trans)
+    end
+  end
+
+  @doc """
+  The shape reverse of `dot/2` for the right-hand side.
+
+  Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
+  This function works so:
+
+      Nx.shape(Nx.dot_reverse_rhs(z, y)) == Nx.shape(x)
+
+  ## Examples
+
+      iex> a = Nx.iota({3, 2})
+      iex> b = Nx.iota({2, 4})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[3][4]
+        [
+          [4, 5, 6, 7],
+          [12, 17, 22, 27],
+          [20, 29, 38, 47]
+        ]
+      >
+      iex> Nx.dot_reverse_rhs(dot, Nx.full(b, 1))
       #Nx.Tensor<
         s64[3][2]
         [
@@ -3057,48 +3114,45 @@ defmodule Nx do
       >
 
   """
-  def dot_reverse(a, b)
+  def dot_reverse_rhs(a, b)
 
-  def dot_reverse(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+  def dot_reverse_rhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
 
-  def dot_reverse(%T{shape: s1} = t1, %T{shape: s2} = t2) do
+  def dot_reverse_rhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
+    if rank(s1) < rank(s2) do
+      raise ArgumentError,
+            "the first argument of dot_reverse_rhs/1 must be of higher or equal rank to the second, " <>
+              "got: #{rank(s1)} and #{rank(s2)}"
+    end
+
     case {tuple_size(s1), tuple_size(s2)} do
-      {0, _} ->
-        multiply(t1, t2)
-
       {_, 0} ->
         multiply(t1, t2)
 
       # TODO: We need to add a dimension
-      # {1, m} -> dot(a, [0], b, [m - 1])
       # {n, 1} -> dot(a, [n - 1], b, [0])
 
       {n, m} when n >= 2 and m >= 2 ->
-        {a1, a2} = reverse_axes(s1, n, s2, m)
+        # Example #1:
+        #
+        # {3, 2}  dot {2, 4} => {3, 4}
+        # {3, 4} rdot {2, 4} #=> {3, 2}
+        #
+        # Example #2:
+        #
+        # {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
+        # {2, 3, 2, 4} rdot {2, 2, 4} => {2, 3, 2}
+        a1 = up_to(m - 1, n)
+        a2 = up_to(0, m) |> List.delete(m - 2)
         dot(t1, a1, t2, a2)
     end
   end
 
-  # Example: {3, 2} dot {2, 4} => {3, 4}
+  defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
+  defp up_to(_, _), do: []
 
-  # {3, 4} rdot {2, 4} => {3, 2}
-  defp reverse_axes({_, k}, _, {_, k}, _), do: {[1], [1]}
-
-  # {3, 2} rdot {3, 4} => {2, 4}
-  defp reverse_axes({k, _}, _, {k, _}, _), do: {[0], [0]}
-
-  # Example: {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
-
-  # {2, 3, 2, 4} rdot {2, 2, 4} => {2, 3, 2}
-  defp reverse_axes(_, n, _, m) when n > m,
-    do: {all_dimensions(m - 1, n), all_dimensions(0, m) -- [m - 2]}
-
-  # {2, 3, 2} rdot {2, 3, 2, 4} => {2, 2, 4}
-  defp reverse_axes(_, n, _, m) when n < m,
-    do: {all_dimensions(0, n - 1), all_dimensions(0, n - 1)}
-
-  defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
-  defp all_dimensions(_, _), do: []
+  defp down_to(i, n) when i > n, do: [i | down_to(i - 1, n)]
+  defp down_to(_, _), do: []
 
   @doc """
   Transposes a tensor by reversing its axes.

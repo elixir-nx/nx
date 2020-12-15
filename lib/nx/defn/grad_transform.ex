@@ -213,18 +213,44 @@ defmodule Nx.Defn.GradTransform do
   end
 
   # Product rule
-  defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, _y, exprs, state)
-       when name in [:dot, :multiply] do
+  defp unfold_grad({{:., _, [Nx, :multiply]}, meta, [x1, x2 | _args]}, _y, exprs, state) do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
     dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
     expr =
       nx_call(meta, :add, [
-        nx_call(meta, name, [dx1, x2]),
-        nx_call(meta, name, [x1, dx2])
+        nx_call(meta, :multiply, [dx1, x2]),
+        nx_call(meta, :multiply, [dx2, x1])
       ])
 
     [expr | exprs]
+  end
+
+  # Dot product rule
+  defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, y, exprs, state)
+       when name in [:dot, :dot_reverse_lhs, :dot_reverse_rhs] do
+    dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
+    dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
+
+    b1 = nx_call(meta, :dot_reverse_lhs, [nx_call(meta, :broadcast, [1.0, y]), x1])
+    b2 = nx_call(meta, :dot_reverse_rhs, [nx_call(meta, :broadcast, [1.0, y]), x2])
+
+    cond do
+      zero?(dx1) ->
+        [nx_call(meta, :multiply, [dx2, b1]) | exprs]
+
+      zero?(dx2) ->
+        [nx_call(meta, :multiply, [dx1, b2]) | exprs]
+
+      true ->
+        expr =
+          nx_call(meta, :add, [
+            nx_call(meta, :multiply, [dx2, b1]),
+            nx_call(meta, :multiply, [dx1, b2])
+          ])
+
+        [expr | exprs]
+    end
   end
 
   # Division rule
@@ -349,10 +375,6 @@ defmodule Nx.Defn.GradTransform do
   defp nx_call(_meta, :multiply, [_left, zero_pattern() = zero]), do: zero
   defp nx_call(_meta, :multiply, [one_pattern(), right]), do: right
   defp nx_call(_meta, :multiply, [left, one_pattern()]), do: left
-  defp nx_call(_meta, :dot, [zero_pattern() = zero, _right]), do: zero
-  defp nx_call(_meta, :dot, [_left, zero_pattern() = zero]), do: zero
-  defp nx_call(_meta, :dot, [one_pattern(), right]), do: right
-  defp nx_call(_meta, :dot, [left, one_pattern()]), do: left
   defp nx_call(meta, name, args), do: {{:., meta, [Nx, name]}, meta, args}
 
   defp grad_call(meta, name, args), do: {{:., meta, [__MODULE__, name]}, meta, args}
