@@ -2442,10 +2442,10 @@ defmodule Nx do
   Returns the sum for the tensor.
 
   If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axis: 0`
+  that dimension, effectively removing it. `axes: [0]`
   implies aggregating over the highest order dimension
   and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axis: -1` will
+  the axis from the back. For example, `axes: [-1]` will
   always aggregate all rows.
 
   ## Examples
@@ -2470,13 +2470,13 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> Nx.sum(Nx.tensor([1, 2, 3]), axis: 0)
+      iex> Nx.sum(Nx.tensor([1, 2, 3]), axes: [0])
       #Nx.Tensor<
         s64
         6
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 0)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0])
       #Nx.Tensor<
         s64[2][3]
         [
@@ -2485,7 +2485,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 1)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [1])
       #Nx.Tensor<
         s64[2][3]
         [
@@ -2494,7 +2494,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 2)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [2])
       #Nx.Tensor<
         s64[2][2]
         [
@@ -2503,7 +2503,13 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -1)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0, 2])
+      #Nx.Tensor<
+        s64[2]
+        [30, 48]
+      >
+
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [-1])
       #Nx.Tensor<
         s64[2][2]
         [
@@ -2512,7 +2518,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -3)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [-3])
       #Nx.Tensor<
         s64[2][3]
         [
@@ -2523,7 +2529,7 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.sum(Nx.tensor([[1, 2]]), axis: 2)
+      iex> Nx.sum(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) axes [2] must be unique integers between 0 and 1
 
   """
@@ -2536,10 +2542,10 @@ defmodule Nx do
   Returns the mean for the tensor.
 
   If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axis: 0`
+  that dimension, effectively removing it. `axes: [0]`
   implies aggregating over the highest order dimension
   and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axis: -1` will
+  the axis from the back. For example, `axes: [-1]` will
   always aggregate all rows.
 
   ## Examples
@@ -2558,13 +2564,13 @@ defmodule Nx do
 
   ### Aggregating over an axis
 
-      iex> Nx.mean(Nx.tensor([1, 2, 3]), axis: 0)
+      iex> Nx.mean(Nx.tensor([1, 2, 3]), axes: [0])
       #Nx.Tensor<
         f64
         2.0
       >
 
-      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: 0)
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0])
       #Nx.Tensor<
         f64[2][3]
         [
@@ -2573,7 +2579,13 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axis: -1)
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0, 2])
+      #Nx.Tensor<
+        f64[2]
+        [5.0, 8.0]
+      >
+
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [-1])
       #Nx.Tensor<
         f64[2][2]
         [
@@ -2584,27 +2596,31 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.mean(Nx.tensor([[1, 2]]), axis: 2)
+      iex> Nx.mean(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) axes [2] must be unique integers between 0 and 1
 
   """
   def mean(tensor, opts \\ []) do
     tensor = tensor(tensor)
-    divide(sum(tensor, opts), mean_den(tensor, opts[:axis]))
+    divide(sum(tensor, opts), mean_den(tensor, opts[:axes]))
   end
 
   defp mean_den(tensor, nil), do: Nx.size(tensor)
-  defp mean_den(tensor, axis) when axis >= 0, do: elem(tensor.shape, axis)
-  defp mean_den(tensor, axis), do: elem(tensor.shape, tuple_size(tensor.shape) + axis)
+  defp mean_den(_tensor, []), do: 1
+
+  defp mean_den(tensor, [axis | axes]) when axis >= 0,
+    do: elem(tensor.shape, axis) * mean_den(tensor, axes)
+
+  defp mean_den(tensor, [axis | axes]),
+    do: elem(tensor.shape, tuple_size(tensor.shape) + axis) * mean_den(tensor, axes)
 
   @doc """
-  Returns the indices of the maximum values along a given axis.
-
-  If no axis is given, returns the index of the absolute maximum
-  value in the tensor.
+  Returns the indices of the maximum values.
 
   ## Options
 
+    * `:axis` - the axis to aggregate on. If no axis is given,
+      returns the index of the absolute maximum value in the tensor.
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low``.
       default behavior is to always return the lower index.
@@ -2683,12 +2699,12 @@ defmodule Nx do
   end
 
   @doc """
-  Returns the indices of the minimum values along a given axis.
-
-  If no axis is given, returns the index of the absolute minimum
-  value in the tensor.
+  Returns the indices of the minimum values.
 
   ## Options
+
+    * `:axis` - the axis to aggregate on. If no axis is given,
+      returns the index of the absolute minimum value in the tensor.
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       default behavior is to always return the lower index.
@@ -2766,12 +2782,13 @@ defmodule Nx do
     argmin_or_max(t, comparator, opts)
   end
 
-  ## Argmax/argmin helper
   defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
 
   defp argmin_or_max(t = %T{}, comparator, opts) do
+    axes = if axis = opts[:axis], do: [axis], else: nil
+
     {tensor, _accs} =
-      Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+      Nx.Util.reduce(t, {0, :first, -1}, [axes: axes], fn x, {i, cur_extreme_x, cur_extreme_i} ->
         if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
           {i, {i + 1, x, i}}
         else
@@ -2962,7 +2979,7 @@ defmodule Nx do
     end
 
     {tensor, _} =
-      Nx.Util.zip_reduce(a, axis1, b, axis2, 0, fn {lhs, rhs}, acc ->
+      Nx.Util.zip_reduce(a, [axis1], b, [axis2], 0, fn {lhs, rhs}, acc ->
         res = lhs * rhs + acc
         {res, res}
       end)

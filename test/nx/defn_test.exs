@@ -567,7 +567,7 @@ defmodule Nx.DefnTest do
 
     test "invalid list" do
       assert_raise CompileError,
-                   ~r"invalid numerical expression: \[a, b\] \(only keyword lists are allowed\)",
+                   ~r"invalid numerical expression: \[a, b\] \(only keyword lists or lists of integers are allowed\)",
                    fn ->
                      defmodule Sample do
                        import Nx.Defn
