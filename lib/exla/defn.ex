@@ -47,7 +47,11 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: Exla.Type.to_nx(shape.dtype), shape: shape.dims}
+    %Nx.Tensor{
+      data: {Nx.BitStringDevice, data},
+      type: Exla.Type.to_nx(shape.dtype),
+      shape: shape.dims
+    }
   end
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
@@ -111,7 +115,7 @@ defmodule Exla.Defn do
   ## Operators
 
   def nx_bin_float_arith_op(builder, op, left, right) do
-    type = binary_op_type(left, right) |> Exla.Type.to_floating()
+    type = Exla.Type.merge_ops(left, right) |> Exla.Type.to_floating()
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -119,7 +123,7 @@ defmodule Exla.Defn do
   end
 
   def nx_bin_arith_op(builder, op, left, right) do
-    type = binary_op_type(left, right)
+    type = Exla.Type.merge_ops(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -138,7 +142,7 @@ defmodule Exla.Defn do
   end
 
   def nx_bin_bitwise_op(builder, op, left, right) do
-    type = binary_op_type(left, right) |> assert_integer_type!(op)
+    type = Exla.Type.merge_ops(left, right) |> assert_integer_type!(op)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -146,7 +150,7 @@ defmodule Exla.Defn do
   end
 
   def nx_bin_comparison_op(builder, op, left, right) do
-    type = binary_op_type(left, right)
+    type = Exla.Type.merge_ops(left, right)
     {left, left_dims} = to_typed_operator(builder, left, type)
     {right, right_dims} = to_typed_operator(builder, right, type)
     dims = broadcast_dimensions(left_dims, right_dims)
@@ -192,35 +196,31 @@ defmodule Exla.Defn do
   end
 
   def nx_select(builder, pred, on_true, on_false) do
+    output_type = Exla.Type.merge_ops(on_true, on_false)
     {pred_op, _} = to_typed_operator(builder, pred, {:pred, 1})
-    on_true_op = to_operator(builder, on_true)
-    on_false_op = to_operator(builder, on_false)
+    {on_true_op, _} = to_typed_operator(builder, on_true, output_type)
+    {on_false_op, _} = to_typed_operator(builder, on_false, output_type)
 
     pred_shape = nx_shape(pred_op)
     on_true_shape = nx_shape(on_true_op)
     on_false_shape = nx_shape(on_false_op)
 
+    output_shape = max_shape!(on_true_shape, pred_shape)
     new_on_true_op =
-      case max_shape(tuple_reverse(on_true_shape), tuple_reverse(pred_shape), []) do
-        {:ok, output_shape} ->
-          Exla.Op.broadcast_in_dim(on_true_op, output_shape, broadcast_dimensions(on_true_shape, output_shape))
+      Exla.Op.broadcast_in_dim(
+        on_true_op,
+        output_shape,
+        broadcast_dimensions(on_true_shape, output_shape)
+      )
 
-        :error ->
-          raise ArgumentError,
-                "cannot broadcast tensor of dimensions #{inspect(on_true_shape)} " <>
-                  "to #{inspect(pred_shape)}"
-      end
-
+    output_shape = max_shape!(on_false_shape, pred_shape)
     new_on_false_op =
-      case max_shape(tuple_reverse(on_true_shape), tuple_reverse(pred_shape), []) do
-        {:ok, output_shape} ->
-          Exla.Op.broadcast_in_dim(on_false_op, output_shape, broadcast_dimensions(on_true_shape, output_shape))
+          Exla.Op.broadcast_in_dim(
+            on_false_op,
+            output_shape,
+            broadcast_dimensions(on_true_shape, output_shape)
+          )
 
-        :error ->
-          raise ArgumentError,
-                "cannot broadcast tensor of dimensions #{inspect(on_false_shape)} " <>
-                  "to #{inspect(pred_shape)}"
-      end
 
     Exla.Op.select(pred_op, new_on_true_op, new_on_false_op)
   end
@@ -307,10 +307,14 @@ defmodule Exla.Defn do
     op = to_operator(builder, tensor)
     old_shape = nx_shape(op)
     new_shape = to_shape(shape)
+    output_shape = max_shape!(old_shape, new_shape)
+    Exla.Op.broadcast_in_dim(op, output_shape, broadcast_dimensions(old_shape, output_shape))
+  end
 
+  defp max_shape!(old_shape, new_shape) do
     case max_shape(tuple_reverse(old_shape), tuple_reverse(new_shape), []) do
       {:ok, output_shape} ->
-        Exla.Op.broadcast_in_dim(op, output_shape, broadcast_dimensions(old_shape, output_shape))
+        output_shape
 
       :error ->
         raise ArgumentError,
@@ -346,14 +350,14 @@ defmodule Exla.Defn do
   ## Other funs
 
   def nx_dot(builder, left, right) do
-    type = binary_op_type(left, right)
+    type = Exla.Type.merge_ops(left, right)
     {left, _} = to_typed_operator(builder, left, type)
     {right, _} = to_typed_operator(builder, right, type)
 
     %Exla.Shape{dims: s1} = Exla.Op.get_shape(left)
     %Exla.Shape{dims: s2} = Exla.Op.get_shape(right)
-    # To keep the semantics the same as Numpy, XLA will raise
-    # otherwise
+
+    # To keep the semantics the same as Numpy, XLA will raise otherwise
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> Exla.Op.multiply(left, right)
       {_, 0} -> Exla.Op.multiply(left, right)
@@ -439,18 +443,6 @@ defmodule Exla.Defn do
     do: Exla.Op.constant_r0(builder, float, {:f, 64})
 
   ## Types
-
-  defp binary_op_type(left, right) when is_number(left) and is_number(right),
-    do: Exla.Type.merge(Exla.Type.infer(left), Exla.Type.infer(right))
-
-  defp binary_op_type(scalar, op) when is_number(scalar),
-    do: Exla.Type.merge_scalar(nx_type(op), scalar)
-
-  defp binary_op_type(op, scalar) when is_number(scalar),
-    do: Exla.Type.merge_scalar(nx_type(op), scalar)
-
-  defp binary_op_type(left, right),
-    do: Exla.Type.merge(nx_type(left), nx_type(right))
 
   defp assert_integer_type!({:s, _} = type, _op), do: type
   defp assert_integer_type!({:u, _} = type, _op), do: type
