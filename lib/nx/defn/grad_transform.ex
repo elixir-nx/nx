@@ -472,6 +472,9 @@ defmodule Nx.Defn.GradTransform do
       {_, 0} ->
         Nx.multiply(t1, t2)
 
+      {0, _} ->
+        Nx.multiply(t1, t2)
+
       {1, 1} ->
         Nx.Util.dot(t1, [], t2, []) |> Nx.transpose({1, 0})
 
@@ -572,6 +575,9 @@ defmodule Nx.Defn.GradTransform do
   def dot_rhs(%Nx.Tensor{shape: s1} = t1, %Nx.Tensor{shape: s2} = t2) do
     case {tuple_size(s1), tuple_size(s2)} do
       {_, 0} ->
+        Nx.multiply(t1, t2)
+
+      {0, _} ->
         Nx.multiply(t1, t2)
 
       {1, 1} ->
