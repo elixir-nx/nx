@@ -3,6 +3,7 @@ defmodule Nx.GradTest do
 
   import Nx.Defn
   import Nx.GradHelpers
+  doctest Nx.Defn.GradTransform
 
   describe "simple" do
     defn grad_itself(t), do: grad(t, t)
@@ -74,8 +75,9 @@ defmodule Nx.GradTest do
       end
     end
 
-    # TODO: Add tests with vectors and tensors
+    # TODO: Add tests with vectors
     # TODO: Add tests with dot on both sides plus transpose + reshape
+    # TODO: Add grad for outer
 
     defn grad_dot_lhs_rule(x, y), do: grad(x, Nx.sum(Nx.dot(x, y)))
 

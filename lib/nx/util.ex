@@ -98,9 +98,9 @@ defmodule Nx.Util do
 
   @doc """
   Computes the dot product of two tensors over the given axes.
-
-  The axes must be non-empty lists and their dimensions must match.
   """
+  def dot(t1, [], t2, []), do: Nx.outer(t1, t2)
+
   def dot(%T{shape: s1} = t1, axes1, %T{shape: s2} = t2, axes2) do
     validate_dot_axes!(axes1, s1, axes2, s2)
 

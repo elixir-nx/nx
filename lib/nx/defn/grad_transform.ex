@@ -404,7 +404,7 @@ defmodule Nx.Defn.GradTransform do
   Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
   This function works so:
 
-      Nx.shape(Nx.GradTransform.dot_lhs(z, x)) == Nx.shape(y)
+      Nx.shape(Nx.Defn.GradTransform.dot_lhs(z, x)) == Nx.shape(y)
 
   ## Examples
 
@@ -417,7 +417,7 @@ defmodule Nx.Defn.GradTransform do
         s64[2]
         [5, 14]
       >
-      iex> Nx.GradTransform.dot_lhs(Nx.broadcast(1, dot), a)
+      iex> Nx.Defn.GradTransform.dot_lhs(Nx.broadcast(1, dot), a)
       #Nx.Tensor<
         s64[3]
         [3, 5, 7]
@@ -430,7 +430,7 @@ defmodule Nx.Defn.GradTransform do
         s64[2]
         [10, 13]
       >
-      iex> Nx.GradTransform.dot_lhs(Nx.broadcast(1, dot), a)
+      iex> Nx.Defn.GradTransform.dot_lhs(Nx.broadcast(1, dot), a)
       #Nx.Tensor<
         s64[3][2]
         [
@@ -453,7 +453,7 @@ defmodule Nx.Defn.GradTransform do
           [20, 29, 38, 47]
         ]
       >
-      iex> Nx.GradTransform.dot_lhs(dot, Nx.broadcast(1, a))
+      iex> Nx.Defn.GradTransform.dot_lhs(dot, Nx.broadcast(1, a))
       #Nx.Tensor<
         s64[2][4]
         [
@@ -473,7 +473,7 @@ defmodule Nx.Defn.GradTransform do
         Nx.multiply(t1, t2)
 
       {1, 1} ->
-        Nx.outer(t1, t2) |> Nx.transpose({1, 0})
+        Nx.Util.dot(t1, [], t2, []) |> Nx.transpose({1, 0})
 
       {1, 2} ->
         Nx.Util.dot(t1, [0], t2, [0])
@@ -506,7 +506,7 @@ defmodule Nx.Defn.GradTransform do
   Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
   This function works so:
 
-      Nx.shape(Nx.GradTransform.dot_rhs(z, y)) == Nx.shape(x)
+      Nx.shape(Nx.Defn.GradTransform.dot_rhs(z, y)) == Nx.shape(x)
 
   ## Examples
 
@@ -519,7 +519,7 @@ defmodule Nx.Defn.GradTransform do
         s64[2]
         [5, 14]
       >
-      iex> Nx.GradTransform.dot_rhs(Nx.broadcast(1, dot), b)
+      iex> Nx.Defn.GradTransform.dot_rhs(Nx.broadcast(1, dot), b)
       #Nx.Tensor<
         s64[2][3]
         [
@@ -535,7 +535,7 @@ defmodule Nx.Defn.GradTransform do
         s64[2]
         [10, 13]
       >
-      iex> Nx.GradTransform.dot_rhs(Nx.broadcast(1, dot), b)
+      iex> Nx.Defn.GradTransform.dot_rhs(Nx.broadcast(1, dot), b)
       #Nx.Tensor<
         s64[3]
         [1, 5, 9]
@@ -554,7 +554,7 @@ defmodule Nx.Defn.GradTransform do
           [20, 29, 38, 47]
         ]
       >
-      iex> Nx.GradTransform.dot_rhs(dot, Nx.broadcast(1, b))
+      iex> Nx.Defn.GradTransform.dot_rhs(dot, Nx.broadcast(1, b))
       #Nx.Tensor<
         s64[3][2]
         [
@@ -575,7 +575,7 @@ defmodule Nx.Defn.GradTransform do
         Nx.multiply(t1, t2)
 
       {1, 1} ->
-        Nx.outer(t1, t2)
+        Nx.Util.dot(t1, [], t2, [])
 
       {1, 2} ->
         Nx.Util.dot(t1, [0], t2, [1])

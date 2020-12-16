@@ -2999,6 +2999,12 @@ defmodule Nx do
 
   ## Examples
 
+      iex> Nx.outer(Nx.tensor([1, 2, 3]), 100)
+      #Nx.Tensor<
+        s64[3]
+        [100, 200, 300]
+      >
+
       iex> Nx.outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20]))
       #Nx.Tensor<
         s64[3][2]
@@ -3009,13 +3015,25 @@ defmodule Nx do
         ]
       >
 
-  ### Errors
-
-      iex> Nx.outer(1, 2)
-      ** (ArgumentError) outer/2 expects two one-dimensional tensors, got: 1 and 2
+      iex> Nx.outer(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([10, 20, 30]))
+      #Nx.Tensor<
+        s64[2][2][3]
+        [
+          [
+            [10, 20, 30],
+            [20, 40, 60]
+          ],
+          [
+            [30, 60, 90],
+            [40, 80, 120]
+          ]
+        ]
+      >
 
   """
-  def outer(%T{shape: {d1}, type: left_type} = t1, %T{shape: {d2}, type: right_type} = t2) do
+  def outer(t1, t2) when is_number(t1) or is_number(t2), do: multiply(t1, t2)
+
+  def outer(%T{shape: s1, type: left_type} = t1, %T{shape: s2, type: right_type} = t2) do
     output_type = Nx.Type.merge(left_type, right_type)
 
     b1 = Nx.Util.to_bitstring(t1)
@@ -3029,12 +3047,8 @@ defmodule Nx do
             do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
       end
 
-    %T{shape: {d1, d2}, type: output_type, data: {Nx.BitStringDevice, data}}
-  end
-
-  def outer(t1, t2) do
-    raise ArgumentError,
-          "outer/2 expects two one-dimensional tensors, got: #{inspect(t1)} and #{inspect(t2)}"
+    shape = List.to_tuple(Tuple.to_list(s1) ++ Tuple.to_list(s2))
+    %T{shape: shape, type: output_type, data: {Nx.BitStringDevice, data}}
   end
 
   @doc """

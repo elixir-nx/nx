@@ -51,9 +51,20 @@ defmodule Nx.Defn.Compiler do
   ## Unsupported Nx functions
 
   For completeness, here is a list of all `Nx` functions that
-  are not allowed in `defn`:
+  are not allowed in `defn` and therefore do not need to be
+  implemented by custom compilers:
 
   #{for {f, a} <- @forbidden_nx_functions, do: "  * `#{Exception.format_mfa(Nx, f, a)}`\n"}
+
+  ## Grad functions
+
+  The gradient functionality works out of the box for almost
+  all compilers, except for the functions below that need to
+  be manually implemented:
+
+    * `Nx.Defn.GradTransform.dot_lhs/2`
+    * `Nx.Defn.GradTransform.dot_rhs/2`
+
   """
   @callback __compile__(
               env :: Macro.Env.t(),
