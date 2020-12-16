@@ -366,6 +366,14 @@ defmodule Nx.Type do
   end
 
   @doc """
+  Merges the types of two tensors.
+  """
+  def merge_tensors(a, b) when is_number(a) and is_number(b), do: infer(a + b)
+  def merge_tensors(a, b) when is_number(a), do: merge_scalar(b.type, a)
+  def merge_tensors(a, b) when is_number(b), do: merge_scalar(a.type, b)
+  def merge_tensors(a, b), do: merge(a.type, b.type)
+
+  @doc """
   Returns a string representation of the given type.
 
   ## Examples

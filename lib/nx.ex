@@ -217,10 +217,6 @@ defmodule Nx do
   """
   def tensor(arg, opts \\ [])
 
-  def tensor(true, opts), do: tensor(1, opts)
-
-  def tensor(false, opts), do: tensor(0, opts)
-
   def tensor(%T{} = t, []), do: t
 
   def tensor(%T{} = t, opts) do
@@ -1031,22 +1027,12 @@ defmodule Nx do
     cast = cast.(Macro.var(:output_type, nil))
 
     defp unquote(name)(left, right, fun) do
-      %T{type: left_type, shape: s1} = left = tensor(left)
-      %T{type: right_type, shape: s2} = right = right = tensor(right)
+      output_type = Nx.Type.merge_tensors(left, right)
+
+      %T{type: left_type} = left = tensor(left)
+      %T{type: right_type} = right = tensor(right)
 
       # Merging scalars has less aggressive type promotion than a straight merge
-      output_type =
-        match_types [left_type, right_type] do
-          case {s1, s2} do
-            {_, {}} ->
-              <<match!(x, 1)>> = Nx.Util.to_bitstring(right)
-              Nx.Type.merge_scalar(left_type, read!(x, 1))
-            {{}, _} ->
-              <<match!(x, 0)>> = Nx.Util.to_bitstring(left)
-              Nx.Type.merge_scalar(right_type, read!(x, 0))
-            {_, _} -> Nx.Type.merge(left_type, right_type)
-          end
-        end
 
       output_type = unquote(cast)
 
@@ -2286,7 +2272,7 @@ defmodule Nx do
   ## Examples
 
 
-      iex> Nx.select(1 == 1, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      iex> Nx.select(1, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
       #Nx.Tensor<
         s64[3]
         [1, 2, 3]
@@ -2315,13 +2301,13 @@ defmodule Nx do
       >
   """
   def select(pred, on_true, on_false) do
+    output_type = Nx.Type.merge_tensors(on_true, on_false)
+
     case {tensor(pred), tensor(on_true), tensor(on_false)} do
       {%T{shape: {}} = pred, on_true, on_false} ->
         if one?(pred), do: on_true, else: on_false
 
       {%T{shape: shape} = pred, %T{type: {_, left_size} = left_type} = on_true, %T{type: {_, right_size} = right_type} = on_false} ->
-
-        output_type = Nx.Type.merge(left_type, right_type)
 
         on_true_bcast = broadcast(on_true, shape)
         on_false_bcast = broadcast(on_false, shape)
@@ -3382,12 +3368,12 @@ defmodule Nx do
 
   """
   def outer(t1, t2) do
+    output_type = Nx.Type.merge_tensors(t1, t2)
+
     case {tensor(t1), tensor(t2)} do
       {%T{shape: {}} = t1, %T{shape: {}} = t2} -> multiply(t1, t2)
 
       {%T{shape: s1, type: left_type} = t1, %T{shape: s2, type: right_type} = t2} ->
-
-        output_type = Nx.Type.merge(left_type, right_type)
 
         b1 = Nx.Util.to_bitstring(t1)
         b2 = Nx.Util.to_bitstring(t2)
