@@ -51,9 +51,20 @@ defmodule Nx.Defn.Compiler do
   ## Unsupported Nx functions
 
   For completeness, here is a list of all `Nx` functions that
-  are not allowed in `defn`:
+  are not allowed in `defn` and therefore do not need to be
+  implemented by custom compilers:
 
   #{for {f, a} <- @forbidden_nx_functions, do: "  * `#{Exception.format_mfa(Nx, f, a)}`\n"}
+
+  ## Grad functions
+
+  The gradient functionality works out of the box for almost
+  all compilers, except for the functions below that need to
+  be manually implemented:
+
+    * `Nx.Defn.GradTransform.dot_lhs/2`
+    * `Nx.Defn.GradTransform.dot_rhs/2`
+
   """
   @callback __compile__(
               env :: Macro.Env.t(),
@@ -348,14 +359,15 @@ defmodule Nx.Defn.Compiler do
 
   ## Normalize nx calls
 
-  defp rewrite_nx_args(:sum, [arg]), do: [arg, []]
   defp rewrite_nx_args(:assert_shape, [arg, shape]), do: [arg, shape, nil]
+  defp rewrite_nx_args(:iota, [arg]), do: [arg, []]
   defp rewrite_nx_args(:random_uniform, [arg]), do: [arg, 0.0, 1.0, []]
   defp rewrite_nx_args(:random_uniform, [arg, opts]), do: [arg, 0.0, 1.0, opts]
   defp rewrite_nx_args(:random_uniform, [arg, min, max]), do: [arg, min, max, []]
   defp rewrite_nx_args(:random_normal, [arg]), do: [arg, 0.0, 1.0, []]
   defp rewrite_nx_args(:random_normal, [arg, opts]), do: [arg, 0.0, 1.0, opts]
   defp rewrite_nx_args(:random_normal, [arg, min, max]), do: [arg, min, max, []]
+  defp rewrite_nx_args(:sum, [arg]), do: [arg, []]
   defp rewrite_nx_args(_, args), do: args
 
   ## Normalize args
@@ -624,36 +636,56 @@ defmodule Nx.Defn.Compiler do
 
   defp inline_remote(ast, state) do
     Macro.prewalk(ast, state, fn
-      {{:., _, [module, name]}, meta, args}, state
-      when module != Nx and module != Nx.Defn.Kernel ->
+      {{:., _, [module, name]}, meta, args} = call, state ->
         arity = length(args)
 
-        if Code.ensure_compiled(module) != {:module, module} do
-          compile_error!(
-            meta,
-            state,
-            "cannot invoke #{inspect(module)}.#{name}/#{arity} because #{inspect(module)} " <>
-              "does not exist or it is currently unavailable due to a deadlock (defn does " <>
-              "not allow co-recursive definitions)"
-          )
-        end
+        case inlinable_remote(meta, module, name, arity, state) do
+          {:ok, {_meta, patterns, ast}} ->
+            {ast, version} = inline(meta, patterns, ast, args, state.version)
+            state = put_in(state.remotes[module], true)
+            {ast, %{state | version: version}}
 
-        unless defn = function_exported?(module, :__defn__, 2) && module.__defn__(name, arity) do
-          compile_error!(
-            meta,
-            state,
-            "undefined numerical function #{inspect(module)}.#{name}/#{arity}"
-          )
+          :skip ->
+            {call, state}
         end
-
-        {_meta, patterns, ast} = defn
-        {ast, version} = inline(meta, patterns, ast, args, state.version)
-        state = put_in(state.remotes[module], true)
-        {ast, %{state | version: version}}
 
       expr, state ->
         {expr, state}
     end)
+  end
+
+  defp inlinable_remote(_meta, module, _name, _arity, _state)
+       when module in [Nx, Nx.Defn.Kernel],
+       do: :skip
+
+  defp inlinable_remote(_meta, module, name, arity, _state)
+       when module in [Nx.Defn.GradTransform] do
+    case module.__defn__(name, arity) do
+      nil -> :skip
+      defn -> {:ok, defn}
+    end
+  end
+
+  defp inlinable_remote(meta, module, name, arity, state) do
+    if Code.ensure_compiled(module) != {:module, module} do
+      compile_error!(
+        meta,
+        state,
+        "cannot invoke #{inspect(module)}.#{name}/#{arity} because #{inspect(module)} " <>
+          "does not exist or it is currently unavailable due to a deadlock (defn does " <>
+          "not allow co-recursive definitions)"
+      )
+    end
+
+    unless defn = function_exported?(module, :__defn__, 2) && module.__defn__(name, arity) do
+      compile_error!(
+        meta,
+        state,
+        "undefined numerical function #{inspect(module)}.#{name}/#{arity}"
+      )
+    end
+
+    {:ok, defn}
   end
 
   ## Transforms
