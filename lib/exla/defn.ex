@@ -379,7 +379,7 @@ defmodule Exla.Defn do
     permutation =
       case shape do
         {} -> []
-        tup -> for i <- tuple_size(tup) - 1..0, do: i
+        tup -> for i <- (tuple_size(tup)-1)..0, do: i
       end
 
     op = to_operator(builder, operand)
