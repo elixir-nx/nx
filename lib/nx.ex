@@ -47,6 +47,11 @@ defmodule Nx do
   This complements Erlang's JIT compiler as it compiles direct to
   native code with numerical compilation and performance in mind.
 
+  ## Creating tensors
+
+  TODO: Summarize functions for creating tensors: tensor, iota,
+  random_*, broadcast.
+
   ## Broadcasting
 
   TODO: Write docs.
@@ -603,19 +608,6 @@ defmodule Nx do
     else
       t = iota({tuple_product(shape)}, opts)
       reshape(t, shape)
-    end
-  end
-
-  # TODO: doc me
-  def full(tensor_or_shape, constant, opts \\ []) do
-    shape = shape!(tensor_or_shape)
-
-    case tensor(constant, opts) do
-      %{shape: {}, data: {Nx.BitStringDevice, data}} = t ->
-        %{t | data: {Nx.BitStringDevice, :binary.copy(data, tuple_product(shape))}, shape: shape}
-
-      t ->
-        raise "expected constant to be a tensor with shape {}, got: #{inspect(t)}"
     end
   end
 
@@ -2625,17 +2617,17 @@ defmodule Nx do
   """
   def mean(tensor, opts \\ []) do
     tensor = tensor(tensor)
-    divide(sum(tensor, opts), mean_den(tensor, opts[:axes]))
+    divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
   end
 
-  defp mean_den(tensor, nil), do: Nx.size(tensor)
-  defp mean_den(_tensor, []), do: 1
+  defp mean_den(shape, nil), do: Nx.size(shape)
+  defp mean_den(_shape, []), do: 1
 
-  defp mean_den(tensor, [axis | axes]) when axis >= 0,
-    do: elem(tensor.shape, axis) * mean_den(tensor, axes)
+  defp mean_den(shape, [axis | axes]) when axis >= 0,
+    do: elem(shape, axis) * mean_den(shape, axes)
 
-  defp mean_den(tensor, [axis | axes]),
-    do: elem(tensor.shape, tuple_size(tensor.shape) + axis) * mean_den(tensor, axes)
+  defp mean_den(shape, [axis | axes]),
+    do: elem(shape, tuple_size(shape) + axis) * mean_den(shape, axes)
 
   @doc """
   Returns the indices of the maximum values.
@@ -3047,7 +3039,7 @@ defmodule Nx do
           [20, 29, 38, 47]
         ]
       >
-      iex> Nx.dot_grad_lhs(dot, Nx.full(a, 1))
+      iex> Nx.dot_grad_lhs(dot, Nx.broadcast(1, a))
       #Nx.Tensor<
         s64[2][4]
         [
@@ -3113,7 +3105,7 @@ defmodule Nx do
           [20, 29, 38, 47]
         ]
       >
-      iex> Nx.dot_grad_rhs(dot, Nx.full(b, 1))
+      iex> Nx.dot_grad_rhs(dot, Nx.broadcast(1, b))
       #Nx.Tensor<
         s64[3][2]
         [
