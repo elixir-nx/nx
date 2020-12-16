@@ -115,7 +115,8 @@ defmodule Exla.Op do
           %Op{builder: builder, ref: left},
           %Op{builder: builder, ref: right},
           broadcast_dims \\ {}
-        ) when is_tuple(broadcast_dims) do
+        )
+        when is_tuple(broadcast_dims) do
       ref = Exla.NIF.unquote(fun)(left, right, broadcast_dims) |> unwrap!()
       %Op{builder: builder, ref: ref}
     end
@@ -170,7 +171,11 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def select(%Op{builder: builder, ref: pred}, %Op{builder: builder, ref: on_true}, %Op{builder: builder, ref: on_false}) do
+  def select(
+        %Op{builder: builder, ref: pred},
+        %Op{builder: builder, ref: on_true},
+        %Op{builder: builder, ref: on_false}
+      ) do
     ref = Exla.NIF.select(pred, on_true, on_false) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -226,7 +231,11 @@ defmodule Exla.Op do
   end
 
   # Precision Config is accumulation precision: https://github.com/google/jax/issues/4873
-  def dot(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}, precision_config \\ :default) do
+  def dot(
+        %Op{builder: builder, ref: left},
+        %Op{builder: builder, ref: right},
+        precision_config \\ :default
+      ) do
     config =
       case precision_config do
         :default -> 0
@@ -238,7 +247,12 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def dot_general(%Op{builder: builder, ref: left}, %Op{builder: builder, ref: right}, dimnos, precision_config \\ :default) do
+  def dot_general(
+        %Op{builder: builder, ref: left},
+        %Op{builder: builder, ref: right},
+        dimnos,
+        precision_config \\ :default
+      ) do
     config =
       case precision_config do
         :default -> 0
@@ -247,6 +261,11 @@ defmodule Exla.Op do
       end
 
     ref = Exla.NIF.dot_general(left, right, dimnos, config) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def transpose(%Op{builder: builder, ref: operand}, permutation) when is_tuple(permutation) do
+    ref = Exla.NIF.transpose(operand, permutation) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -260,7 +279,13 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def variadic_reduce(%Builder{ref: builder}, operands, init_values, %Computation{ref: reduction}, reduction_dimensions) do
+  def variadic_reduce(
+        %Builder{ref: builder},
+        operands,
+        init_values,
+        %Computation{ref: reduction},
+        reduction_dimensions
+      ) do
     operand_refs =
       operands
       |> Enum.map(& &1.ref)
@@ -269,7 +294,16 @@ defmodule Exla.Op do
       init_values
       |> Enum.map(& &1.ref)
 
-    ref = Exla.NIF.variadic_reduce(builder, operand_refs, init_value_refs, reduction, reduction_dimensions) |> unwrap!()
+    ref =
+      Exla.NIF.variadic_reduce(
+        builder,
+        operand_refs,
+        init_value_refs,
+        reduction,
+        reduction_dimensions
+      )
+      |> unwrap!()
+
     %Op{builder: builder, ref: ref}
   end
 

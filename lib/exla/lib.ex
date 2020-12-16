@@ -44,6 +44,24 @@ defmodule Exla.Lib do
   end
 
   @doc """
+  Computes the mean of the given operation.
+
+  ## Options
+
+    * `:axes` - the axes to reduce on
+  """
+  def mean(%Builder{} = builder, %Op{} = op, opts \\ []) do
+    %Shape{dims: dims} = Op.get_shape(op)
+    Op.divide(
+      Op.convert_element_type(
+        sum(builder, op, opts),
+        {:f, 64}
+      ),
+      Op.constant_r0(builder, mean_den(dims, opts[:axes]), {:f, 64})
+    )
+  end
+
+  @doc """
   Computes the argmax of the given operation.
 
   ## Options
@@ -102,7 +120,11 @@ defmodule Exla.Lib do
     rhs_value = Op.parameter(sub_builder, 2, Shape.make_shape(type, {}), "rhs_value")
     rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape(type, {}), "rhs_index")
 
-    cmp = if is_min?, do: Op.less_equal(lhs_value, rhs_value), else: Op.greater_equal(lhs_value, rhs_value)
+    cmp =
+      if is_min?,
+        do: Op.less_equal(lhs_value, rhs_value),
+        else: Op.greater_equal(lhs_value, rhs_value)
+
     max = Op.select(cmp, lhs_value, rhs_value)
     arg_max = Op.select(cmp, lhs_index, rhs_index)
 
@@ -165,4 +187,13 @@ defmodule Exla.Lib do
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
+  defp mean_den(dims, nil), do: tuple_product(dims)
+  defp mean_den(_dims, []), do: 1
+
+  defp mean_den(dims, [axis | axes]) when axis >= 0,
+    do: elem(dims, axis) * mean_den(dims, axes)
+
+  defp mean_den(dims, [axis | axes]),
+    do: elem(dims, tuple_size(dims) + axis) * mean_den(dims, axes)
 end
