@@ -367,6 +367,20 @@ defmodule Nx.Type do
 
   @doc """
   Merges the types of two tensors.
+
+  ## Examples
+
+      iex> Nx.Type.merge_tensors(Nx.tensor([1, 2, 3], type: {:u, 8}), Nx.tensor([1, 2, 3], type: {:u, 8}))
+      {:u, 8}
+
+      iex> Nx.Type.merge_tensors(1, 2)
+      {:s, 64}
+
+      iex> Nx.Type.merge_tensors(Nx.tensor([1, 2, 3]), 3.0)
+      {:f, 64}
+
+      iex> Nx.Type.merge_tensors(1, Nx.tensor([1.0, 2.0], type: {:f, 32}))
+      {:f, 32}
   """
   def merge_tensors(a, b) when is_number(a) and is_number(b), do: infer(a + b)
   def merge_tensors(a, b) when is_number(a), do: merge_scalar(b.type, a)
