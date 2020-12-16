@@ -262,7 +262,7 @@ defmodule Nx.Util do
   """
   def reduce(tensor, acc, opts \\ [], fun)
       when is_list(opts) and is_function(fun, 2) do
-    %T{type: type, shape: shape} = t = Nx.tensor(tensor)
+    %T{type: {_, size} = type, shape: shape} = t = Nx.tensor(tensor)
 
     output_type = opts[:type] || type
     {view, new_shape} = bin_aggregate_axes(to_bitstring(t), opts[:axes], shape, size)
@@ -352,7 +352,7 @@ defmodule Nx.Util do
       ** (ArgumentError) unable to zip tensors along the given axes. Dimensions of zipped axes must match, got 3 and 2
   """
   def zip_reduce(t1, axes1, t2, axes2, acc, fun)
-      when is_function(fun, 2) and is_list(axes1) and is_list(axes2) do
+      when is_function(fun, 2) do
     %T{type: left_type} = t1 = Nx.tensor(t1)
     %T{type: right_type} = t2 = Nx.tensor(t2)
 
