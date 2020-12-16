@@ -2923,6 +2923,12 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.dot(Nx.tensor([5, 10]), Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      #Nx.Tensor<
+        s64[3]
+        [45, 60, 75]
+      >
+
       iex> Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]]), Nx.tensor([2.0, 2.0]))
       #Nx.Tensor<
         f64[1][1][2][2]
@@ -2976,185 +2982,60 @@ defmodule Nx do
   """
   def dot(a, b)
 
-  def dot(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+  def dot(a, b) when is_number(a) or is_number(b), do: multiply(a, b)
 
   def dot(%T{shape: s1} = t1, %T{shape: s2} = t2) do
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
       {_, 0} -> multiply(t1, t2)
-      {1, m} -> dot(t1, [0], t2, [m - 1])
-      {n, 1} -> dot(t1, [n - 1], t2, [0])
-      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], t2, [m - 2])
-    end
-  end
-
-  defp dot(%T{shape: s1} = t1, axes1, %T{shape: s2} = t2, axes2) do
-    validate_dot_axes!(axes1, s1, axes2, s2)
-
-    {tensor, _} =
-      Nx.Util.zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
-        res = lhs * rhs + acc
-        {res, res}
-      end)
-
-    tensor
-  end
-
-  defp validate_dot_axes!([a1 | axes1], s1, [a2 | axes2], s2) do
-    d1 = elem(s1, a1)
-    d2 = elem(s2, a2)
-
-    if d1 == d2 do
-      validate_dot_axes!(axes1, s1, axes2, s2)
-    else
-      raise ArgumentError,
-            "dot product expects shapes to be compatible," <>
-              " dimension #{a1} of left-side (#{d1}) does not equal" <>
-              " dimension #{a2} of right-side (#{d2})"
-    end
-  end
-
-  defp validate_dot_axes!([], _s1, [], _s2) do
-    :ok
-  end
-
-  @doc """
-  The shape reverse of `dot/2` for the left-hand side.
-
-  Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
-  This function works so:
-
-      Nx.shape(Nx.dot_grad_lhs(z, x)) == Nx.shape(y)
-
-  ## Examples
-
-      iex> a = Nx.iota({3, 2})
-      iex> b = Nx.iota({2, 4})
-      iex> dot = Nx.dot(a, b)
-      #Nx.Tensor<
-        s64[3][4]
-        [
-          [4, 5, 6, 7],
-          [12, 17, 22, 27],
-          [20, 29, 38, 47]
-        ]
-      >
-      iex> Nx.dot_grad_lhs(dot, Nx.broadcast(1, a))
-      #Nx.Tensor<
-        s64[2][4]
-        [
-          [36, 51, 66, 81],
-          [36, 51, 66, 81]
-        ]
-      >
-
-  """
-  def dot_grad_lhs(a, b)
-
-  def dot_grad_lhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
-
-  def dot_grad_lhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
-    if rank(s1) < rank(s2) do
-      raise ArgumentError,
-            "the first argument of dot_grad_lhs/1 must be of higher or equal rank to the second, " <>
-              "got: #{rank(s1)} and #{rank(s2)}"
-    end
-
-    case {tuple_size(s1), tuple_size(s2)} do
-      {_, 0} ->
-        multiply(t1, t2)
-
-      # TODO: We need to add a dimension
-      # {n, 1} -> dot(a, [n - 1], b, [0])
-
-      {n, m} when n >= 2 and m >= 2 ->
-        # Example #1:
-        #
-        # {3, 2}  dot {2, 4} => {3, 4}
-        # {3, 4} rdot {3, 2} => {4, 2} (and transpose [1, 0])
-        #
-        # Example #2:
-        #
-        # {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
-        # {2, 3, 2, 4} rdot {2, 3, 2} => {2, 4, 2} (and transpose [0, 2, 1])
-        axes = up_to(0, m - 1)
-        size = n - m + 2
-        trans = List.to_tuple(up_to(0, n - m) ++ down_to(size - 1, n - m - 1))
-        dot(t1, axes, t2, axes) |> transpose(trans)
+      {n, 1} -> Nx.Util.dot(t1, [n - 1], t2, [0])
+      {1, m} -> Nx.Util.dot(t1, [0], t2, [m - 2])
+      {n, m} when n >= 2 and m >= 2 -> Nx.Util.dot(t1, [n - 1], t2, [m - 2])
     end
   end
 
   @doc """
-  The shape reverse of `dot/2` for the right-hand side.
-
-  Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
-  This function works so:
-
-      Nx.shape(Nx.dot_grad_rhs(z, y)) == Nx.shape(x)
+  Computes the outer product of two one-dimensional tensors.
 
   ## Examples
 
-      iex> a = Nx.iota({3, 2})
-      iex> b = Nx.iota({2, 4})
-      iex> dot = Nx.dot(a, b)
-      #Nx.Tensor<
-        s64[3][4]
-        [
-          [4, 5, 6, 7],
-          [12, 17, 22, 27],
-          [20, 29, 38, 47]
-        ]
-      >
-      iex> Nx.dot_grad_rhs(dot, Nx.broadcast(1, b))
+      iex> Nx.outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20]))
       #Nx.Tensor<
         s64[3][2]
         [
-          [22, 22],
-          [78, 78],
-          [134, 134]
+          [10, 20],
+          [20, 40],
+          [30, 60]
         ]
       >
 
+  ### Errors
+
+      iex> Nx.outer(1, 2)
+      ** (ArgumentError) outer/2 expects two one-dimensional tensors, got: 1 and 2
+
   """
-  def dot_grad_rhs(a, b)
+  def outer(%T{shape: {d1}, type: left_type} = t1, %T{shape: {d2}, type: right_type} = t2) do
+    output_type = Nx.Type.merge(left_type, right_type)
 
-  def dot_grad_rhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+    b1 = Nx.Util.to_bitstring(t1)
+    b2 = Nx.Util.to_bitstring(t2)
 
-  def dot_grad_rhs(%T{shape: s1} = t1, %T{shape: s2} = t2) do
-    if rank(s1) < rank(s2) do
-      raise ArgumentError,
-            "the first argument of dot_grad_rhs/1 must be of higher or equal rank to the second, " <>
-              "got: #{rank(s1)} and #{rank(s2)}"
-    end
+    data =
+      match_types [left_type, right_type, output_type] do
+        for <<match!(left, 0) <- b1>>,
+            <<match!(right, 1) <- b2>>,
+            into: <<>>,
+            do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
+      end
 
-    case {tuple_size(s1), tuple_size(s2)} do
-      {_, 0} ->
-        multiply(t1, t2)
-
-      # TODO: We need to add a dimension
-      # {n, 1} -> dot(a, [n - 1], b, [0])
-
-      {n, m} when n >= 2 and m >= 2 ->
-        # Example #1:
-        #
-        # {3, 2}  dot {2, 4} => {3, 4}
-        # {3, 4} rdot {2, 4} #=> {3, 2}
-        #
-        # Example #2:
-        #
-        # {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
-        # {2, 3, 2, 4} rdot {2, 2, 4} => {2, 3, 2}
-        a1 = up_to(m - 1, n)
-        a2 = up_to(0, m) |> List.delete(m - 2)
-        dot(t1, a1, t2, a2)
-    end
+    %T{shape: {d1, d2}, type: output_type, data: {Nx.BitStringDevice, data}}
   end
 
-  defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
-  defp up_to(_, _), do: []
-
-  defp down_to(i, n) when i > n, do: [i | down_to(i - 1, n)]
-  defp down_to(_, _), do: []
+  def outer(t1, t2) do
+    raise ArgumentError,
+          "outer/2 expects two one-dimensional tensors, got: #{inspect(t1)} and #{inspect(t2)}"
+  end
 
   @doc """
   Transposes a tensor by reversing its axes.

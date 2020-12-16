@@ -227,13 +227,14 @@ defmodule Nx.Defn.GradTransform do
   end
 
   # Dot product rule
-  defp unfold_grad({{:., _, [Nx, name]}, meta, [x1, x2 | _args]}, y, exprs, state)
-       when name in [:dot, :dot_grad_lhs, :dot_grad_rhs] do
+  defp unfold_grad({{:., _, [mod, name]}, meta, [x1, x2 | _args]}, y, exprs, state)
+       when mod == Nx and name == :dot
+       when mod == __MODULE__ and name in [:dot_lhs, :dot_rhs] do
     dx1 = x1 |> unfold_var([], state) |> to_multiply(state)
     dx2 = x2 |> unfold_var([], state) |> to_multiply(state)
 
-    b1 = nx_call(meta, :dot_grad_lhs, [nx_call(meta, :broadcast, [1.0, y]), x1])
-    b2 = nx_call(meta, :dot_grad_rhs, [nx_call(meta, :broadcast, [1.0, y]), x2])
+    b1 = grad_call(meta, :dot_lhs, [nx_call(meta, :broadcast, [1.0, y]), x1])
+    b2 = grad_call(meta, :dot_rhs, [nx_call(meta, :broadcast, [1.0, y]), x2])
 
     cond do
       zero?(dx1) ->
@@ -394,9 +395,221 @@ defmodule Nx.Defn.GradTransform do
     Keyword.fetch!(meta, :counter)
   end
 
+  ## Hand-written grad rules
+  # Those need to be implemented by each compiler explicitly
+
+  @doc """
+  The grad of `dot/2` for the left-hand side.
+
+  Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
+  This function works so:
+
+      Nx.shape(Nx.GradTransform.dot_lhs(z, x)) == Nx.shape(y)
+
+  ## Examples
+
+  ### Dot grad with vectors
+
+      iex> a = Nx.iota({2, 3})
+      iex> b = Nx.iota({3})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[2]
+        [5, 14]
+      >
+      iex> Nx.GradTransform.dot_lhs(Nx.broadcast(1, dot), a)
+      #Nx.Tensor<
+        s64[3]
+        [3, 5, 7]
+      >
+
+      iex> a = Nx.iota({3})
+      iex> b = Nx.iota({3, 2})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[2]
+        [10, 13]
+      >
+      iex> Nx.GradTransform.dot_lhs(Nx.broadcast(1, dot), a)
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [0, 0],
+          [1, 1],
+          [2, 2]
+        ]
+      >
+
+  ### Dot grad with tensors
+
+      iex> a = Nx.iota({3, 2})
+      iex> b = Nx.iota({2, 4})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[3][4]
+        [
+          [4, 5, 6, 7],
+          [12, 17, 22, 27],
+          [20, 29, 38, 47]
+        ]
+      >
+      iex> Nx.GradTransform.dot_lhs(dot, Nx.broadcast(1, a))
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [36, 51, 66, 81],
+          [36, 51, 66, 81]
+        ]
+      >
+
+  """
+  def dot_lhs(a, b)
+
+  def dot_lhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+
+  def dot_lhs(%Nx.Tensor{shape: s1} = t1, %Nx.Tensor{shape: s2} = t2) do
+    case {tuple_size(s1), tuple_size(s2)} do
+      {_, 0} ->
+        Nx.multiply(t1, t2)
+
+      {1, 1} ->
+        Nx.outer(t1, t2) |> Nx.transpose({1, 0})
+
+      {1, 2} ->
+        Nx.Util.dot(t1, [0], t2, [0])
+
+      {n, m} when n >= 2 and n >= m ->
+        # Example #1:
+        #
+        # {3, 2}  dot {2, 4} => {3, 4}
+        # {3, 4} rdot {3, 2} => {4, 2} (and transpose [1, 0])
+        #
+        # Example #2:
+        #
+        # {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
+        # {2, 3, 2, 4} rdot {2, 3, 2} => {2, 4, 2} (and transpose [0, 2, 1])
+        axes = up_to(0, m - 1)
+        size = n - m + 2
+        trans = List.to_tuple(up_to(0, n - m) ++ down_to(size - 1, n - m - 1))
+        Nx.Util.dot(t1, axes, t2, axes) |> Nx.transpose(trans)
+
+      {n, m} ->
+        raise ArgumentError,
+              "the first argument of dot_lhs/1 must be of higher or equal rank to the second, " <>
+                "got: #{n} and #{m}"
+    end
+  end
+
+  @doc """
+  The grad of `dot/2` for the right-hand side.
+
+  Assume `x`, `y` and `z` where `Nx.dot(x, y) == z`.
+  This function works so:
+
+      Nx.shape(Nx.GradTransform.dot_rhs(z, y)) == Nx.shape(x)
+
+  ## Examples
+
+  ### Dot grad with vectors
+
+      iex> a = Nx.iota({2, 3})
+      iex> b = Nx.iota({3})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[2]
+        [5, 14]
+      >
+      iex> Nx.GradTransform.dot_rhs(Nx.broadcast(1, dot), b)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 1, 2],
+          [0, 1, 2]
+        ]
+      >
+
+      iex> a = Nx.iota({3})
+      iex> b = Nx.iota({3, 2})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[2]
+        [10, 13]
+      >
+      iex> Nx.GradTransform.dot_rhs(Nx.broadcast(1, dot), b)
+      #Nx.Tensor<
+        s64[3]
+        [1, 5, 9]
+      >
+
+  ### Dot grad with tensors
+
+      iex> a = Nx.iota({3, 2})
+      iex> b = Nx.iota({2, 4})
+      iex> dot = Nx.dot(a, b)
+      #Nx.Tensor<
+        s64[3][4]
+        [
+          [4, 5, 6, 7],
+          [12, 17, 22, 27],
+          [20, 29, 38, 47]
+        ]
+      >
+      iex> Nx.GradTransform.dot_rhs(dot, Nx.broadcast(1, b))
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [22, 22],
+          [78, 78],
+          [134, 134]
+        ]
+      >
+
+  """
+  def dot_rhs(a, b)
+
+  def dot_rhs(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+
+  def dot_rhs(%Nx.Tensor{shape: s1} = t1, %Nx.Tensor{shape: s2} = t2) do
+    case {tuple_size(s1), tuple_size(s2)} do
+      {_, 0} ->
+        Nx.multiply(t1, t2)
+
+      {1, 1} ->
+        Nx.outer(t1, t2)
+
+      {1, 2} ->
+        Nx.Util.dot(t1, [0], t2, [1])
+
+      {n, m} when n >= 2 and n >= m ->
+        # Example #1:
+        #
+        # {3, 2}  dot {2, 4} => {3, 4}
+        # {3, 4} rdot {2, 4} #=> {3, 2}
+        #
+        # Example #2:
+        #
+        # {2, 3, 2} dot {2, 2, 4} => {2, 3, 2, 4}
+        # {2, 3, 2, 4} rdot {2, 2, 4} => {2, 3, 2}
+        a1 = up_to(m - 1, n)
+        a2 = up_to(0, m) |> List.delete(m - 2)
+        Nx.Util.dot(t1, a1, t2, a2)
+
+      {n, m} ->
+        raise ArgumentError,
+              "the first argument of dot_rhs/1 must be of higher or equal rank to the second, " <>
+                "got: #{n} and #{m}"
+    end
+  end
+
+  defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
+  defp up_to(_, _), do: []
+
+  defp down_to(i, n) when i > n, do: [i | down_to(i - 1, n)]
+  defp down_to(_, _), do: []
+
   # The goal is to implement as many derivatives as possible as defn.
   # Rules that depend on the derivatives of the argument cannot be
-  # implemented as defn and we alsp skip constants for convenience.
+  # implemented as defn and we also skip constants for convenience.
 
   import Nx.Defn
 

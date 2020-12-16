@@ -624,36 +624,56 @@ defmodule Nx.Defn.Compiler do
 
   defp inline_remote(ast, state) do
     Macro.prewalk(ast, state, fn
-      {{:., _, [module, name]}, meta, args}, state
-      when module != Nx and module != Nx.Defn.Kernel ->
+      {{:., _, [module, name]}, meta, args} = call, state ->
         arity = length(args)
 
-        if Code.ensure_compiled(module) != {:module, module} do
-          compile_error!(
-            meta,
-            state,
-            "cannot invoke #{inspect(module)}.#{name}/#{arity} because #{inspect(module)} " <>
-              "does not exist or it is currently unavailable due to a deadlock (defn does " <>
-              "not allow co-recursive definitions)"
-          )
-        end
+        case inlinable_remote(meta, module, name, arity, state) do
+          {:ok, {_meta, patterns, ast}} ->
+            {ast, version} = inline(meta, patterns, ast, args, state.version)
+            state = put_in(state.remotes[module], true)
+            {ast, %{state | version: version}}
 
-        unless defn = function_exported?(module, :__defn__, 2) && module.__defn__(name, arity) do
-          compile_error!(
-            meta,
-            state,
-            "undefined numerical function #{inspect(module)}.#{name}/#{arity}"
-          )
+          :skip ->
+            {call, state}
         end
-
-        {_meta, patterns, ast} = defn
-        {ast, version} = inline(meta, patterns, ast, args, state.version)
-        state = put_in(state.remotes[module], true)
-        {ast, %{state | version: version}}
 
       expr, state ->
         {expr, state}
     end)
+  end
+
+  defp inlinable_remote(_meta, module, _name, _arity, _state)
+       when module in [Nx, Nx.Defn.Kernel],
+       do: :skip
+
+  defp inlinable_remote(_meta, module, name, arity, _state)
+       when module in [Nx.Defn.GradTransform] do
+    case module.__defn__(name, arity) do
+      nil -> :skip
+      defn -> {:ok, defn}
+    end
+  end
+
+  defp inlinable_remote(meta, module, name, arity, state) do
+    if Code.ensure_compiled(module) != {:module, module} do
+      compile_error!(
+        meta,
+        state,
+        "cannot invoke #{inspect(module)}.#{name}/#{arity} because #{inspect(module)} " <>
+          "does not exist or it is currently unavailable due to a deadlock (defn does " <>
+          "not allow co-recursive definitions)"
+      )
+    end
+
+    unless defn = function_exported?(module, :__defn__, 2) && module.__defn__(name, arity) do
+      compile_error!(
+        meta,
+        state,
+        "undefined numerical function #{inspect(module)}.#{name}/#{arity}"
+      )
+    end
+
+    {:ok, defn}
   end
 
   ## Transforms
