@@ -47,6 +47,11 @@ defmodule Nx do
   This complements Erlang's JIT compiler as it compiles direct to
   native code with numerical compilation and performance in mind.
 
+  ## Creating tensors
+
+  TODO: Summarize functions for creating tensors: tensor, iota,
+  random_*, broadcast.
+
   ## Broadcasting
 
   TODO: Write docs.
@@ -506,6 +511,16 @@ defmodule Nx do
       >
 
       iex> Nx.iota({3, 3}, axis: 1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 1, 2],
+          [0, 1, 2],
+          [0, 1, 2]
+        ]
+      >
+
+      iex> Nx.iota({3, 3}, axis: -1)
       #Nx.Tensor<
         s64[3][3]
         [
@@ -2987,17 +3002,17 @@ defmodule Nx do
   """
   def mean(tensor, opts \\ []) do
     tensor = tensor(tensor)
-    divide(sum(tensor, opts), mean_den(tensor, opts[:axes]))
+    divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
   end
 
-  defp mean_den(tensor, nil), do: Nx.size(tensor)
-  defp mean_den(_tensor, []), do: 1
+  defp mean_den(shape, nil), do: Nx.size(shape)
+  defp mean_den(_shape, []), do: 1
 
-  defp mean_den(tensor, [axis | axes]) when axis >= 0,
-    do: elem(tensor.shape, axis) * mean_den(tensor, axes)
+  defp mean_den(shape, [axis | axes]) when axis >= 0,
+    do: elem(shape, axis) * mean_den(shape, axes)
 
-  defp mean_den(tensor, [axis | axes]),
-    do: elem(tensor.shape, tuple_size(tensor.shape) + axis) * mean_den(tensor, axes)
+  defp mean_den(shape, [axis | axes]),
+    do: elem(shape, tuple_size(shape) + axis) * mean_den(shape, axes)
 
   @doc """
   Returns the indices of the maximum values.
@@ -3193,21 +3208,27 @@ defmodule Nx do
   the following rules:
 
     * If both `a` and `b` are scalars, it is equivalent to `a * b`.
+
     * If `a` is a scalar and `b` is a tensor, it is equivalent to `Nx.multiply(a, b)`.
+
     * If `a` is a tensor and `b` is a scalar, it is equivalent to `Nx.multiply(a, b)`.
+
     * If both `a` and `b` are 1-D tensors (vectors), it is the sum of the element-wise
-    product between `a` and `b`. The lengths of `a` and `b` must be equal.
+      product between `a` and `b`. The lengths of `a` and `b` must be equal.
+
     * If both `a` and `b` are 2-D tensors (matrices), it is equivalent to matrix-multiplication.
+
     * If either `a` or `b` is a 1-D tensor, and the other is an n-D tensor, it is the
-    sum of the element-wise product along the last axis of `a` or `b`. The length of the
-    1-D tensor must match the last dimension of the n-D tensor.
+      sum of the element-wise product along the last axis of `a` or `b`. The length of the
+      1-D tensor must match the last dimension of the n-D tensor.
+
     * If `a` is an n-D tensor and `b` is an m-D tensor, it is the sum of the element-wise
-    product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
-    of `a` must match the second-to-last dimension of `b`.
+      product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
+      of `a` must match the second-to-last dimension of `b`.
 
   ## Examples
 
-  ### Dot Product of Scalars
+  ### Dot product of scalars
 
       iex> Nx.dot(5, 5)
       #Nx.Tensor<
@@ -3227,7 +3248,7 @@ defmodule Nx do
         4.0
       >
 
-  ### Dot Product of Vectors
+  ### Dot product of vectors
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
       #Nx.Tensor<
@@ -3247,7 +3268,7 @@ defmodule Nx do
         14.0
       >
 
-  ### Dot Product of Matrices
+  ### Dot product of matrices
 
       iex> Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10], [11, 12]]))
       #Nx.Tensor<
@@ -3276,7 +3297,7 @@ defmodule Nx do
         ]
       >
 
-  ### Dot Product of Vector and n-d tensor
+  ### Dot product of vector and n-d tensor
 
       iex> Nx.dot(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), Nx.tensor([5, 10]))
       #Nx.Tensor<
@@ -3285,6 +3306,12 @@ defmodule Nx do
           [25, 55],
           [85, 115]
         ]
+      >
+
+      iex> Nx.dot(Nx.tensor([5, 10]), Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      #Nx.Tensor<
+        s64[3]
+        [45, 60, 75]
       >
 
       iex> Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]]), Nx.tensor([2.0, 2.0]))
@@ -3300,7 +3327,7 @@ defmodule Nx do
         ]
       >
 
-  ### Dot Product of n-D and m-D tensor
+  ### Dot product of n-D and m-D tensor
 
       iex> a = Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]])
       iex> b = Nx.tensor([[[1, 2, 3], [3, 4, 5], [5, 6, 7]]])
@@ -3340,36 +3367,73 @@ defmodule Nx do
   """
   def dot(a, b)
 
-  def dot(a, b) when is_number(a) or is_number(b), do: Nx.multiply(a, b)
+  def dot(a, b) when is_number(a) or is_number(b), do: multiply(a, b)
 
-  def dot(%T{shape: s1} = a, %T{shape: s2} = b) do
+  def dot(%T{shape: s1} = t1, %T{shape: s2} = t2) do
     case {tuple_size(s1), tuple_size(s2)} do
-      {0, _} -> multiply(a, b)
-      {_, 0} -> multiply(a, b)
-      {1, _} -> dot(a, 0, b, tuple_size(s2) - 1)
-      {_, 1} -> dot(a, tuple_size(s1) - 1, b, 0)
-      {n, m} when n >= 2 and m >= 2 -> dot(a, tuple_size(s1) - 1, b, tuple_size(s2) - 2)
+      {0, _} -> multiply(t1, t2)
+      {_, 0} -> multiply(t1, t2)
+      {n, 1} -> Nx.Util.dot(t1, [n - 1], t2, [0])
+      {1, m} -> Nx.Util.dot(t1, [0], t2, [m - 2])
+      {n, m} when n >= 2 and m >= 2 -> Nx.Util.dot(t1, [n - 1], t2, [m - 2])
     end
   end
 
-  defp dot(%T{shape: s1} = a, axis1, %T{shape: s2} = b, axis2) do
-    dim1 = elem(s1, axis1)
-    dim2 = elem(s2, axis2)
+  @doc """
+  Computes the outer product of two one-dimensional tensors.
 
-    unless dim1 == dim2 do
-      raise ArgumentError,
-            "dot product expects shapes to be compatible," <>
-              " dimension #{axis1} of left-side (#{dim1}) does not equal" <>
-              " dimension #{axis2} of right-side (#{dim2})"
-    end
+  ## Examples
 
-    {tensor, _} =
-      Nx.Util.zip_reduce(a, [axis1], b, [axis2], 0, fn {lhs, rhs}, acc ->
-        res = lhs * rhs + acc
-        {res, res}
-      end)
+      iex> Nx.outer(Nx.tensor([1, 2, 3]), 100)
+      #Nx.Tensor<
+        s64[3]
+        [100, 200, 300]
+      >
 
-    tensor
+      iex> Nx.outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20]))
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [10, 20],
+          [20, 40],
+          [30, 60]
+        ]
+      >
+
+      iex> Nx.outer(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([10, 20, 30]))
+      #Nx.Tensor<
+        s64[2][2][3]
+        [
+          [
+            [10, 20, 30],
+            [20, 40, 60]
+          ],
+          [
+            [30, 60, 90],
+            [40, 80, 120]
+          ]
+        ]
+      >
+
+  """
+  def outer(t1, t2) when is_number(t1) or is_number(t2), do: multiply(t1, t2)
+
+  def outer(%T{shape: s1, type: left_type} = t1, %T{shape: s2, type: right_type} = t2) do
+    output_type = Nx.Type.merge(left_type, right_type)
+
+    b1 = Nx.Util.to_bitstring(t1)
+    b2 = Nx.Util.to_bitstring(t2)
+
+    data =
+      match_types [left_type, right_type, output_type] do
+        for <<match!(left, 0) <- b1>>,
+            <<match!(right, 1) <- b2>>,
+            into: <<>>,
+            do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
+      end
+
+    shape = List.to_tuple(Tuple.to_list(s1) ++ Tuple.to_list(s2))
+    %T{shape: shape, type: output_type, data: {Nx.BitStringDevice, data}}
   end
 
   @doc """

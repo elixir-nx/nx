@@ -2,7 +2,6 @@ defmodule NxTest do
   use ExUnit.Case, async: true
 
   doctest Nx
-  doctest Nx.Util
 
   defp commute(a, b, fun) do
     fun.(a, b)

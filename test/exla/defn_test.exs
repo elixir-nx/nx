@@ -941,33 +941,32 @@ defmodule Exla.DefnTest do
     defn iota_with_shape, do: Nx.iota({3, 4, 2, 3}, axis: 2)
 
     test "generates with shape" do
-      t = iota_with_shape()
-      assert Nx.shape(t) == {3, 4, 2, 3}
-      assert Nx.type(t) == {:s, 64}
+      assert iota_with_shape() == Nx.iota({3, 4, 2, 3}, axis: 2)
     end
 
     defn iota_with_type, do: Nx.iota({1, 2, 3}, axis: 1, type: {:f, 32})
 
     test "generates with type" do
-      t = iota_with_type()
-      assert Nx.shape(t) == {1, 2, 3}
-      assert Nx.type(t) == {:f, 32}
+      assert iota_with_type() == Nx.iota({1, 2, 3}, axis: 1, type: {:f, 32})
     end
 
     defn iota_from_tensor(t), do: Nx.iota(t, axis: 0)
 
     test "generates from tensor" do
-      t = iota_from_tensor(Nx.tensor([1, 2, 3]))
-      assert Nx.shape(t) == {3}
-      assert Nx.type(t) == {:s, 64}
+      t = Nx.tensor([1, 2, 3])
+      assert iota_from_tensor(t) == Nx.iota(t, axis: 0)
     end
 
     defn iota_no_axis, do: Nx.iota({2, 2, 2})
 
     test "generates without axis" do
-      t = iota_no_axis()
-      assert Nx.shape(t) == {2, 2, 2}
-      assert Nx.type(t) == {:s, 64}
+      assert iota_no_axis() == Nx.iota({2, 2, 2})
+    end
+
+    defn iota_neg_axis, do: Nx.iota({2, 2, 2}, axis: -2)
+
+    test "generates with negative axis" do
+      assert iota_neg_axis() == Nx.iota({2, 2, 2}, axis: -2)
     end
   end
 

@@ -49,6 +49,30 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  @doc """
+  Creates tensor with normal distribution.
+  """
+  def rng_normal(%Op{builder: builder, ref: mu}, %Op{builder: builder, ref: sigma}, %Shape{ref: shape}) do
+    ref = Exla.NIF.rng_normal(mu, sigma, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  @doc """
+  Creates tensor with uniform distribution.
+  """
+  def rng_uniform(%Op{builder: builder, ref: a}, %Op{builder: builder, ref: b}, %Shape{ref: shape}) do
+    ref = Exla.NIF.rng_uniform(a, b, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  @doc """
+  Creates iota tensor.
+  """
+  def iota(%Builder{ref: builder}, %Shape{ref: shape}, dim) do
+    ref = Exla.NIF.iota(builder, shape, dim) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Shape
 
   @doc """
@@ -198,21 +222,6 @@ defmodule Exla.Op do
       |> Enum.map(& &1.ref)
 
     ref = Exla.NIF.dynamic_update_slice(op, update, indices_refs) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def rng_normal(%Op{builder: builder, ref: mu}, %Op{builder: builder, ref: sigma}, %Shape{ref: shape}) do
-    ref = Exla.NIF.rng_normal(mu, sigma, shape) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def rng_uniform(%Op{builder: builder, ref: a}, %Op{builder: builder, ref: b}, %Shape{ref: shape}) do
-    ref = Exla.NIF.rng_uniform(a, b, shape) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def iota(%Builder{ref: builder}, %Shape{ref: shape}, dim) do
-    ref = Exla.NIF.iota(builder, shape, dim) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
