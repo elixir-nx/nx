@@ -237,23 +237,6 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def rng_normal(%Op{builder: builder, ref: mu}, %Op{builder: builder, ref: sigma}, %Shape{
-        ref: shape
-      }) do
-    ref = Exla.NIF.rng_normal(mu, sigma, shape) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def rng_uniform(%Op{builder: builder, ref: a}, %Op{builder: builder, ref: b}, %Shape{ref: shape}) do
-    ref = Exla.NIF.rng_uniform(a, b, shape) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  def iota(%Builder{ref: builder}, %Shape{ref: shape}, dim) do
-    ref = Exla.NIF.iota(builder, shape, dim) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
   # Precision Config is accumulation precision: https://github.com/google/jax/issues/4873
   def dot(
         %Op{builder: builder, ref: left},
