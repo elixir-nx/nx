@@ -359,14 +359,15 @@ defmodule Nx.Defn.Compiler do
 
   ## Normalize nx calls
 
-  defp rewrite_nx_args(:sum, [arg]), do: [arg, []]
   defp rewrite_nx_args(:assert_shape, [arg, shape]), do: [arg, shape, nil]
+  defp rewrite_nx_args(:iota, [arg]), do: [arg, []]
   defp rewrite_nx_args(:random_uniform, [arg]), do: [arg, 0.0, 1.0, []]
   defp rewrite_nx_args(:random_uniform, [arg, opts]), do: [arg, 0.0, 1.0, opts]
   defp rewrite_nx_args(:random_uniform, [arg, min, max]), do: [arg, min, max, []]
   defp rewrite_nx_args(:random_normal, [arg]), do: [arg, 0.0, 1.0, []]
   defp rewrite_nx_args(:random_normal, [arg, opts]), do: [arg, 0.0, 1.0, opts]
   defp rewrite_nx_args(:random_normal, [arg, min, max]), do: [arg, min, max, []]
+  defp rewrite_nx_args(:sum, [arg]), do: [arg, []]
   defp rewrite_nx_args(_, args), do: args
 
   ## Normalize args

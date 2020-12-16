@@ -215,21 +215,10 @@ defmodule Exla.Defn do
     Exla.Op.rng_normal(mu, sigma, shape)
   end
 
-  def nx_iota(builder, shape, opts \\ []) do
-    shape = to_shape(shape)
+  def nx_iota(builder, shape, opts) do
     type = opts[:type] || {:s, 64}
-
-    shape = Exla.Shape.make_shape(type, shape)
-
-    if axis = opts[:axis] do
-      Exla.Op.iota(builder, shape, to_axis(shape, axis))
-    else
-      total_elems = tuple_product(shape.dims)
-      Exla.Op.reshape(
-        Exla.Op.iota(builder, Exla.Shape.make_shape(type, {total_elems}), 0),
-        shape.dims
-      )
-    end
+    shape = Exla.Shape.make_shape(type, to_shape(shape))
+    Exla.Lib.iota(builder, shape, opts)
   end
 
   ## Reflection
@@ -422,9 +411,6 @@ defmodule Exla.Defn do
 
   defp to_shape(tuple) when is_tuple(tuple), do: tuple
   defp to_shape(tensor), do: nx_shape(tensor)
-
-  defp to_axis(_shape, axis) when axis >= 0, do: axis
-  defp to_axis(shape, axis), do: tuple_size(shape.dims) + axis
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1

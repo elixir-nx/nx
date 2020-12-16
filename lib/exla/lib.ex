@@ -6,6 +6,22 @@ defmodule Exla.Lib do
   alias Exla.{Builder, Op, Shape}
 
   @doc """
+  Builds iota with optional axis and type.
+  """
+  def iota(builder, shape, opts) do
+    if axis = opts[:axis] do
+      Op.iota(builder, shape, to_axis(shape, axis))
+    else
+      total_elems = tuple_product(shape.dims)
+
+      Op.reshape(
+        Op.iota(builder, Exla.Shape.make_shape(shape.dtype, {total_elems}), 0),
+        shape.dims
+      )
+    end
+  end
+
+  @doc """
   Computes the sum of the given operation.
 
   ## Options
@@ -62,18 +78,9 @@ defmodule Exla.Lib do
         else: min_value(builder, op_shape.dtype)
 
     index_init_value = Op.constant_r0(builder, 0, op_shape.dtype)
-
-    iota =
-      if axis = opts[:axis] do
-        Op.iota(builder, op_shape, axis)
-      else
-        flat =
-          Op.iota(builder, Shape.make_shape(op_shape.dtype, {tuple_product(op_shape.dims)}), 0)
-
-        Op.reshape(flat, op_shape.dims)
-      end
-
+    iota = iota(builder, op_shape, opts)
     reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
+    axis = opts[:axis]
 
     result =
       Op.variadic_reduce(
@@ -81,7 +88,7 @@ defmodule Exla.Lib do
         [op, iota],
         [init_value, index_init_value],
         reduction,
-        reduce_axis(op_shape, axis)
+        reduce_axes(op_shape, axis && [axis])
       )
 
     Op.get_tuple_element(result, 1)
@@ -142,19 +149,17 @@ defmodule Exla.Lib do
     Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
-  defp reduce_axis(op_shape, nil), do: reduce_axes(op_shape, nil)
-  defp reduce_axis(op_shape, axis), do: reduce_axes(op_shape, [axis])
+  defp to_axis(_op_shape, axis) when axis >= 0, do: axis
+  defp to_axis(op_shape, axis) when axis < 0, do: tuple_size(op_shape.dims) + axis
 
   defp reduce_axes(op_shape, axes) do
-    rank = tuple_size(op_shape.dims)
-
     if axes do
       axes
-      |> Enum.map(&if(&1 >= 0, do: &1, else: rank + &1))
+      |> Enum.map(&to_axis(op_shape, &1))
       |> Enum.sort()
       |> List.to_tuple()
     else
-      List.to_tuple(all_dimensions(0, rank))
+      List.to_tuple(all_dimensions(0, tuple_size(op_shape.dims)))
     end
   end
 
