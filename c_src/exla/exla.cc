@@ -754,22 +754,6 @@ ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
 }
 
-ERL_NIF_TERM get_dimension_size(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if(argc != 2) {
-    return exla::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* operand;
-  exla::int64 dimension;
-
-  if(!exla::get<xla::XlaOp>(env, argv[0], operand)) return exla::error(env, "Unable to get operand.");
-  if(!exla::get(env, argv[1], dimension)) return exla::error(env, "Unable to get dimension.");
-
-  xla::XlaOp op = xla::GetDimensionSize(*operand, dimension);
-
-  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
-}
-
 ERL_NIF_TERM convert_element_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(argc != 2) {
     return exla::error(env, "Bad argument count.");
@@ -1070,7 +1054,6 @@ static ErlNifFunc exla_funcs[] = {
   {"variadic_reduce", 5, variadic_reduce},
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
-  {"get_dimension_size", 2, get_dimension_size},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
   /******* Compilation, Execution, Etc. ******/

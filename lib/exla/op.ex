@@ -92,14 +92,6 @@ defmodule Exla.Op do
   end
 
   @doc """
-  Returns the size of the given dimension.
-  """
-  def get_dimension_size(%Op{ref: operand} = op, dimension) when is_integer(dimension) do
-    ref = Exla.NIF.get_dimension_size(operand, dimension) |> unwrap!()
-    %{op | ref: ref}
-  end
-
-  @doc """
   Broadcasts the tensor to `shape`.
   """
   def broadcast_in_dim(%Op{ref: ref} = op, shape, broadcast_dims)
@@ -179,10 +171,11 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def select(%Op{builder: builder, ref: pred}, %Op{builder: builder, ref: on_true}, %Op{
-        builder: builder,
-        ref: on_false
-      }) do
+  def select(
+        %Op{builder: builder, ref: pred},
+        %Op{builder: builder, ref: on_true},
+        %Op{builder: builder, ref: on_false}
+      ) do
     ref = Exla.NIF.select(pred, on_true, on_false) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
