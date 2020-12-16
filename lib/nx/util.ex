@@ -261,14 +261,10 @@ defmodule Nx.Util do
       ** (ArgumentError) axes [2] must be unique integers between 0 and 1
   """
   def reduce(tensor, acc, opts \\ [], fun)
-
-  def reduce(number, acc, opts, fun) when is_number(number) do
-    reduce(Nx.tensor(number), acc, opts, fun)
-  end
-
-  def reduce(%T{type: {_, size} = type, shape: shape} = t, acc, opts, fun)
       when is_list(opts) and is_function(fun, 2) do
-    output_type = opts[:type] || t.type
+    %T{type: {_, size} = type, shape: shape} = t = Nx.tensor(tensor)
+
+    output_type = opts[:type] || type
     {view, new_shape} = bin_aggregate_axes(to_bitstring(t), opts[:axes], shape, size)
 
     data_and_acc =
@@ -356,14 +352,16 @@ defmodule Nx.Util do
       ** (ArgumentError) unable to zip tensors along the given axes. Dimensions of zipped axes must match, got 3 and 2
   """
   def zip_reduce(t1, axes1, t2, axes2, acc, fun)
+      when is_function(fun, 2) do
+    %T{type: left_type} = t1 = Nx.tensor(t1)
+    %T{type: right_type} = t2 = Nx.tensor(t2)
 
-  def zip_reduce(t1, axes1, t2, axes2, acc, fun) when is_function(fun, 2) do
-    output_type = Nx.Type.merge(t1.type, t2.type)
+    output_type = Nx.Type.merge(left_type, right_type)
     {v1, v2, new_shape} = bin_zip_axes(t1, axes1, t2, axes2)
 
     data_and_acc =
       for b1 <- v1, b2 <- v2 do
-        {bin, acc} = bin_zip_reduce(b1, b2, t1.type, t2.type, <<>>, acc, fun)
+        {bin, acc} = bin_zip_reduce(b1, b2, left_type, right_type, <<>>, acc, fun)
         {scalar_to_bin(bin, output_type), acc}
       end
 
