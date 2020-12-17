@@ -146,15 +146,31 @@ defmodule Nx.GradTest do
       assert grad_dot_both_rule(Nx.tensor([1, 2, 3])) == Nx.tensor([5.0, 80.0, 405.0])
     end
 
-    defn grad_dot_sin_rule(x), do: grad(x, Nx.sum(Nx.dot(x, Nx.sin(x))))
+    # defn grad_dot_dot_rule(x, w1, b1, w2, b2) do
+    #   grad(
+    #     x,
+    #     x
+    #     |> Nx.dot(w1)
+    #     |> Nx.add(b1)
+    #     |> Nx.dot(w2)
+    #     |> Nx.add(b2)
+    #     |> Nx.sum()
+    #   ))
+    # end
 
-    test "computes gradient for tensors on both sides with ops" do
-      assert grad_dot_sin_rule(Nx.iota({2, 2})) ==
-               Nx.tensor([
-                 [2.8414709848078967, 2.1310220466218284],
-                 [-0.8231163613806731, -2.909552551516233]
-               ])
-    end
+    # test "computes gradient with dot after dot" do
+    #   assert grad_dot_dot_rule(
+    #            Nx.iota({5, 4}),
+    #            Nx.iota({4, 3}),
+    #            Nx.iota({3}),
+    #            Nx.iota({3, 2}),
+    #            Nx.iota({2})
+    #          ) ==
+    #            Nx.tensor([
+    #              [2.8414709848078967, 2.1310220466218284],
+    #              [-0.8231163613806731, -2.909552551516233]
+    #            ])
+    # end
 
     # TODO: grad for outer, transpose, reshape
     # defn grad_dot_transpose_rule(x), do: grad(x, Nx.sum(Nx.dot(x, Nx.transpose(x))))
