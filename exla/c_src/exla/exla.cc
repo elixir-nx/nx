@@ -3,6 +3,7 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/compiler/xla/exla/exla_client.h"
 #include "tensorflow/compiler/xla/exla/exla_log_sink.h"
+#include "tensorflow/compiler/xla/exla/exla_aot_compilation.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
@@ -1732,6 +1733,20 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env);
 }
 
+ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1){
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaComputation* computation;
+
+  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return exla::error(env, "Unable to get computation.");
+
+  exla::CompileComputation(*computation);
+
+  return exla::ok(env);
+}
+
 static ErlNifFunc exla_funcs[] = {
   // XlaBuilder
   {"new_builder", 1, new_builder},
@@ -1861,6 +1876,9 @@ static ErlNifFunc exla_funcs[] = {
   {"cholesky", 1, cholesky},
   // Log Sink
   {"start_log_sink", 1, start_log_sink}
+  // HLO Functions
+  {"compile_aot", 1, compile_aot}
+
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

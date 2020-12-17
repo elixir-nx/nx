@@ -63,6 +63,22 @@ cc_library(
   ],
 )
 
+cc_library(
+  name = "exla_aot_compilation",
+  srcs = ["exla_aot_compilation.cc"],
+  hdrs = ["exla_aot_compilation.h"],
+  deps = [
+    "@org_tensorflow//tensorflow/compiler/xla/client:compile_only_client",
+    "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
+    "@org_tensorflow//tensorflow/compiler/xla/service/cpu:cpu_compiler",
+    "@org_tensorflow//tensorflow/compiler/aot:tfcompile_main",
+    "@org_tensorflow//tensorflow/compiler/xla:statusor",
+    "@org_tensorflow//tensorflow/compiler/xla:util",
+    "@org_tensorflow//tensorflow/compiler/xla:xla_data_proto_cc",
+    "@org_tensorflow//tensorflow/compiler/tf2xla:tf2xla",
+  ],
+)
+
 cc_binary(
   name = "libexla.so",
   srcs = ["exla.cc"],
@@ -71,8 +87,10 @@ cc_binary(
     ]) + [
     ":exla_nif_util",
     ":exla_client",
-    ":exla_log_sink",
+    ":exla_aot_compilation",
+    "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
+    "@org_tensorflow//tensorflow/compiler/xla:comparison_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
