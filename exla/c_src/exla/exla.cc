@@ -1753,7 +1753,12 @@ ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     return exla::error(env, compile_status.error_message().c_str());
   }
 
-  return exla::ok(env);
+  std::string object_path = aot_path+function_name+".o";
+  std::string header_path = aot_path+function_name+".h";
+  ERL_NIF_TERM object_path_term = exla::make(env, object_path.c_str());
+  ERL_NIF_TERM header_path_term = exla::make(env, header_path.c_str());
+
+  return exla::ok(env, enif_make_tuple2(env, object_path_term, header_path_term));
 }
 
 static ErlNifFunc exla_funcs[] = {
