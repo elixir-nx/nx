@@ -3,29 +3,37 @@ defmodule Exla.Aot.Compile do
 
   alias Exla.Aot.Codegen
 
-  # We need to put everything inside of the TF checkout (this needs to be a function)
-  @tf_checkout_path "/home/sean/projects/exla/tmp/exla_cache/tf-8a1bb87da5b8dcec1d7f0bf8baa43565c095830e"
+  # We need to put everything inside of the TF checkout
+  @tf_checkout_path "/tf-8a1bb87da5b8dcec1d7f0bf8baa43565c095830e"
 
   alias Exla.Computation
 
   def compile(computations, functions) do
-    :ok =
+    # Compile each function to header/object
+    src_paths =
       computations
       |> Enum.zip(functions)
-      |> Enum.reduce(:ok, fn {comp, func}, _acc -> compile_function(comp, func) end)
+      |> Enum.flat_map(fn {comp, func} -> compile_function(comp, func) end)
 
+    # Write out a NIF/BUILD file
     {:ok, nif_path} = write_nif_source_file(functions, "AotTest", "exla_aot_class", "nif")
     {:ok, build_path} = write_bazel_build_file("nif", functions)
-    cwd = File.cwd!()
-    System.cmd("bazel", ["build", "//tensorflow/compiler/xla/exla/aot:libnif.so"], cd: @tf_checkout_path)
-    System.cmd("mv", ["bazel-bin/tensorflow/compiler/xla/exla/aot/libnif.so", cwd], cd: @tf_checkout_path)
 
-    # clean_srcs(nif_path, build_path)
+    # Get cwd for output `.so` path
+    cwd = File.cwd!()
+
+    # Build and move to cwd
+    System.cmd("bazel", ["build", "//tensorflow/compiler/xla/exla/aot:libnif.so"], cd: get_tf_checkout_path())
+    System.cmd("mv", ["bazel-bin/tensorflow/compiler/xla/exla/aot/libnif.so", cwd], cd: get_tf_checkout_path())
+
+    # Clean the sources
+    clean_srcs(nif_path, build_path, src_paths)
   end
 
   defp compile_function(%Computation{ref: comp}, {name, arity, args, _result_size}) do
     {:ok, pbtext_path} = write_graph_config_file({name, arity, args})
-    Exla.NIF.compile_aot(comp, pbtext_path, get_aot_path(), "#{name}_#{arity}", "exla_aot_class")
+    src_paths = Exla.NIF.compile_aot(comp, pbtext_path, get_aot_path(), "#{name}_#{arity}", "exla_aot_class") |> unwrap!()
+    [pbtext_path | Tuple.to_list(src_paths)]
   end
 
   defp write_graph_config_file({name, arity, args}) do
@@ -52,11 +60,17 @@ defmodule Exla.Aot.Compile do
     {File.close(file), build_path}
   end
 
-  defp clean_srcs(nif_path, build_path) do
+  defp clean_srcs(nif_path, build_path, src_paths) do
     File.rm!(nif_path)
     File.rm!(build_path)
+    src_paths
+    |> Enum.reduce(:ok, fn path, _ -> File.rm!(path) end)
   end
 
-  defp get_aot_path, do: @tf_checkout_path <> "/tensorflow/compiler/xla/exla/aot/"
+  defp get_aot_path, do: get_tf_checkout_path() <> "/tensorflow/compiler/xla/exla/aot/"
+  defp get_tf_checkout_path, do: get_exla_cache() <> @tf_checkout_path
+  defp get_exla_cache, do: System.get_env("EXLA_CACHE")
+
+  defp unwrap!({:ok, return}), do: return
 
 end
