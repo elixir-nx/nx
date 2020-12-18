@@ -18,6 +18,10 @@ namespace exla{
                          const xla::cpu::CpuAotCompilationOptions& aot_opts,
                          tensorflow::tfcompile::CompileResult* compile_result);
 
-  xla::Status CompileComputation(const xla::XlaComputation& computation);
+  xla::Status CompileComputation(const xla::XlaComputation& computation,
+                                 std::string pbtext_path,
+                                 std::string aot_path,
+                                 std::string function_name,
+                                 std::string class_name);
 
 }
