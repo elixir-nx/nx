@@ -1,8 +1,6 @@
 defmodule Nx.Defn.Expr do
   @moduledoc false
-  # Represents a value at a point of execution in the Nx.Defn AST
-  # The value of the Expr is equivalent to the main unit
-  # of computation in whatever defn backend you are using
+  # A defn AST which carries with it it's current shape and arguments
   @enforce_keys [:shape, :op, :args]
   defstruct [:shape, :op, :args]
 end
