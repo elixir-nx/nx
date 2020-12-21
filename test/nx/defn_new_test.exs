@@ -105,6 +105,5 @@ defmodule DefnNewTest do
     test "select" do
       assert %Expr{op: :select, args: [_, _, _], shape: {2, 2}} = select(Nx.tensor([[1, 1], [0, 0]]), Nx.tensor(1), Nx.tensor(0))
     end
-
   end
 end

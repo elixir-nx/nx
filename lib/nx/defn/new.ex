@@ -170,6 +170,7 @@ defmodule Nx.Defn.New do
   def make_aggregate_op_expr(op, expr, opts) do
     %Expr{shape: shape} = expr = to_expr(expr)
     axes = opts[:axes] || opts[:axis] || all_dimensions(shape)
+    axes = Nx.Shape.normalize_axis(shape, axes)
     output_shape = Translation.aggregate_op_rule(shape, axes)
     make_expr(output_shape, op, [expr, opts])
   end
@@ -183,6 +184,7 @@ defmodule Nx.Defn.New do
   def make_transpose_op_expr(expr), do: make_transpose_op_expr(expr, [])
   def make_transpose_op_expr(expr, permutation) do
     %Expr{shape: shape} = expr = to_expr(expr)
+    permutation = Nx.Shape.normalize_axis(shape, permutation)
     output_shape = Translation.transpose_op_rule(shape, permutation)
     make_expr(output_shape, :transpose, [expr, permutation])
   end

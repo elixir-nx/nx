@@ -273,4 +273,35 @@ defmodule Nx.Shape do
     new_shape
   end
 
+  @doc """
+  Normalize the axis to the given shape.
+
+  ## Examples
+
+      iex> Nx.Shape.normalize_axis({4, 2, 3}, -1)
+      2
+
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, -2)
+      2
+
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, 1)
+      1
+
+  ### Error cases
+
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, -4)
+      ** (ArgumentError) given axis (-4) invalid for shape with rank 3
+  """
+  def normalize_axis(shape, axis)
+
+  def normalize_axis(shape, axis) when is_list(axis), do: Enum.map(axis, &normalize_axis(shape, &1))
+
+  def normalize_axis(shape, axis) when tuple_size(shape) < abs(axis),
+    do: raise ArgumentError, "given axis (#{axis}) invalid for shape with rank #{tuple_size(shape)}"
+
+  def normalize_axis(shape, axis) when axis < 0,
+    do: tuple_size(shape) + axis
+
+  def normalize_axis(_shape, axis), do: axis
+
 end
