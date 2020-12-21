@@ -3,8 +3,8 @@ defmodule Nx.Defn.Expr do
   # Represents a value at a point of execution in the Nx.Defn AST
   # The value of the Expr is equivalent to the main unit
   # of computation in whatever defn backend you are using
-  @enforce_keys [:shape, :op, :value]
-  defstruct [:shape, :op, :value]
+  @enforce_keys [:shape, :op, :args]
+  defstruct [:shape, :op, :args]
 end
 
 defmodule Nx.Defn.Translation do
@@ -39,21 +39,8 @@ defmodule Nx.Defn.New do
     {ast, _state} = traverse(ast, %{})
 
     quote do
-      Nx.Defn.New.evaluate(unquote(ast), Nx.Defn.Default)
+      unquote(ast)
     end
-  end
-
-  ## AST Evaluation
-
-  # This function evaluates an Expr by traversing the AST
-  # and applying it's op to it's value (either an expr or a literal)
-  # using the given module
-  def evaluate(%Expr{value: %Expr{} = expr, op: op}, module) do
-    apply(module, op, [evaluate(expr, module)])
-  end
-
-  def evaluate(%Expr{value: value, op: op}, module) do
-    apply(module, op, [value])
   end
 
   ## Expr creation
@@ -61,19 +48,23 @@ defmodule Nx.Defn.New do
   defp to_expr(%Expr{} = expr), do: expr
 
   defp to_expr(integer) when is_integer(integer),
-    do: %Expr{value: integer, op: :tensor, shape: {}}
+    do: %Expr{args: integer, op: :tensor, shape: {}}
 
   defp to_expr(number) when is_number(number),
-    do: %Expr{value: number, op: :tensor, shape: {}}
+    do: %Expr{args: number, op: :tensor, shape: {}}
 
-  defp to_expr(%T{shape: shape} = t), do: %Expr{value: t, op: :tensor, shape: shape}
+  defp to_expr(%T{shape: shape} = t), do: %Expr{args: t, op: :tensor, shape: shape}
+
+  defp make_expr(shape, op, args) do
+    %Expr{shape: shape, op: op, args: args}
+  end
 
   ## Operations
 
   def exp(expr) do
     %Expr{shape: shape} = expr = to_expr(expr)
     output_shape = Translation.exp(shape)
-    %Expr{shape: output_shape, op: :exp, value: expr}
+    make_expr(shape, :exp, [expr])
   end
 
   ## Traversal
