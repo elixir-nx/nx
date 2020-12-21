@@ -3,9 +3,26 @@ defmodule DefnNewTest do
 
   import Nx.Defn
   alias Nx.Defn.Expr
-  alias Nx.Defn.Translation
 
   @default_defn_compiler Nx.Defn.New
+
+  describe "rank, shape, size" do
+    defn rank(t), do: Nx.rank(t)
+    defn shape(t), do: Nx.shape(t)
+    defn size(t), do: Nx.size(t)
+
+    test "rank" do
+      assert 2 == rank(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+    end
+
+    test "shape" do
+      assert {2, 3} == shape(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+    end
+
+    test "size" do
+      assert 6 == size(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+    end
+  end
 
   describe "unary ops" do
     defn exp(t), do: Nx.exp(t)
@@ -36,29 +53,58 @@ defmodule DefnNewTest do
     end
   end
 
-  describe "broadcasting semantics" do
+  describe "creation ops" do
+    defn iota(t), do: Nx.iota(t)
+    defn random_uniform(t), do: Nx.random_uniform(t, 0.0, 2.0)
+    defn random_normal(t), do: Nx.random_normal(t, 0.0, 1.0)
 
-    test "broadcasts scalars" do
-      assert Translation.broadcast({}, {}) == {}
-      assert Translation.broadcast({}, {4, 2, 1, 5}) == {4, 2, 1, 5}
-      assert Translation.broadcast({4, 2, 1, 5}, {}) == {4, 2, 1, 5}
+    test "iota" do
+      assert %Expr{op: :iota, args: [{3}, []], shape: {3}} = iota(Nx.tensor([1, 2, 3]))
     end
 
-    test "broadcasts correctly" do
-      assert Translation.broadcast({8, 1, 6, 1}, {7, 1, 5}) == {8, 7, 6, 5}
-      assert Translation.broadcast({7, 1, 5}, {8, 1, 6, 1}) == {8, 7, 6, 5}
-      assert Translation.broadcast({5, 4}, {1}) == {5, 4}
-      assert Translation.broadcast({5, 4}, {4}) == {5, 4}
-      assert Translation.broadcast({15, 3, 5}, {15, 1, 5}) == {15, 3, 5}
-      assert Translation.broadcast({3, 1}, {15, 3, 5}) == {15, 3, 5}
+    test "random uniform" do
+      assert %Expr{op: :random_uniform, args: [{3}, 0.0, 2.0, []], shape: {3}} = random_uniform(Nx.tensor([1, 2, 3]))
     end
 
-    test "raises on bad dims" do
-      assert_raise ArgumentError, "could not broadcast shapes because dimensions are" <>
-                                  " incompatible, expected dimensions to be equal or" <>
-                                  " either dimension to be 1, got: 4 and 3", fn ->
-            Translation.broadcast({4, 2, 5}, {3, 2, 5})
-      end
+    test "random normal" do
+      assert %Expr{op: :random_normal, args: [{3}, 0.0, 1.0, []], shape: {3}} = random_normal(Nx.tensor([1, 2, 3]))
     end
+  end
+
+  describe "tensor ops" do
+    defn dot(t1, t2), do: Nx.dot(t1, t2)
+    defn outer(t1, t2), do: Nx.outer(t1, t2)
+    defn transpose(t), do: Nx.transpose(t)
+    defn reshape(t), do: Nx.reshape(t, {2, 3})
+    defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
+
+    test "dot product" do
+      assert %Expr{op: :dot, args: [_, _], shape: {2, 2}} = dot(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+    end
+
+    test "outer product" do
+      assert %Expr{op: :outer, args: [_, _], shape: {3, 3}} = outer(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 3]))
+    end
+
+    test "transpose" do
+      assert %Expr{op: :transpose, args: [_, _], shape: {3, 2}} = transpose(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+    end
+
+    test "reshape" do
+      assert %Expr{op: :reshape, args: [_, _], shape: {2, 3}} = reshape(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+    end
+
+    test "broadcast" do
+      assert %Expr{op: :broadcast, args: [_, _], shape: {3, 3, 3}} = broadcast(Nx.tensor([1, 2, 3]))
+    end
+  end
+
+  describe "conditional ops" do
+    defn select(t1, t2, t3), do: Nx.select(t1, t2, t3)
+
+    test "select" do
+      assert %Expr{op: :select, args: [_, _, _], shape: {2, 2}} = select(Nx.tensor([[1, 1], [0, 0]]), Nx.tensor(1), Nx.tensor(0))
+    end
+
   end
 end
