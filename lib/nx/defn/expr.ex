@@ -240,7 +240,7 @@ defmodule Nx.Defn.Expr do
   end
 
   defp make_expr(shape, op, args) do
-    id = System.unique_integer([:positive, :monotonic])
+    id = System.unique_integer()
     %Expr{id: id, shape: shape, op: op, args: args}
   end
 
@@ -280,6 +280,10 @@ defmodule Nx.Defn.Expr do
 
     defp flatten_expr_args([head | tail], var_map, counter) do
       case head do
+        %Expr{id: id, op: :parameter, args: [identifier]} ->
+          var_map = Map.update(var_map, id, identifier, fn _ -> identifier end)
+          {var_map, counter}
+
         %Expr{id: id, args: expr_args} ->
           {var_map, counter} = flatten_expr_args(expr_args, var_map, counter)
           {var_map, counter} = flatten_expr_args(tail, var_map, counter)
@@ -303,8 +307,11 @@ defmodule Nx.Defn.Expr do
 
     defp inspect_expr_args([head | tail], var_map) do
       case head do
-        %Expr{id: id, op: :tensor} ->
-          [Map.get(var_map, id)]
+        %Expr{id: id, shape: shape, op: :parameter} ->
+          ["param#{shape_to_string(shape)} " <> Map.get(var_map, id)]
+
+        %Expr{id: id, shape: shape, op: :tensor} ->
+          ["constant#{shape_to_string(shape)} " <> Map.get(var_map, id)]
 
         %Expr{id: id, op: op, args: expr_args} ->
           expr_children = inspect_expr_args(expr_args, var_map)
@@ -328,6 +335,13 @@ defmodule Nx.Defn.Expr do
 
     defp counter_to_var(counter) do
       {String.at(@vars, rem(counter, 26)), counter + 1}
+    end
+
+    defp shape_to_string(shape) do
+      shape
+      |> Tuple.to_list()
+      |> Enum.map(& "[" <> Integer.to_string(&1) <> "]")
+      |> Enum.join("")
     end
   end
 end
