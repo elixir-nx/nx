@@ -6,8 +6,6 @@ defmodule Nx.Defn.Compiler do
   @forbidden_nx_functions [tensor: 1, tensor: 2, device_read: 1, device_deallocate: 1] ++
                             [device_transfer: 1, device_transfer: 2, device_transfer: 3]
 
-  @known_keywords [:type, :axis, :axes, :tie_break]
-
   @doc """
   The callback required to be implemented for each compiler.
 
@@ -105,56 +103,33 @@ defmodule Nx.Defn.Compiler do
     state = %{
       module: module,
       file: file,
-      stack: [],
-      cache: cache,
-      function: nil,
       line: line,
-      version: 0,
-      remotes: %{}
+      function: nil,
+      version: 0
     }
 
     {quoted, state} = Enum.map_reduce(public, state, &compile_each(env, &1, &2))
-
-    remotes =
-      for {remote, _} <- state.remotes do
-        quote do
-          require unquote(remote)
-        end
-      end
-
-    to_delete =
-      for {def, stored} when stored != false <- state.cache do
-        quote do
-          Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
-        end
-      end
 
     catch_all =
       quote do
         def __defn__(_, _), do: nil
       end
 
-    {:__block__, [], remotes ++ to_delete ++ quoted ++ [catch_all]}
+    {:__block__, [], quoted ++ [catch_all]}
   end
 
   defp compile_each(env, {{name, arity} = def, def_meta}, state) do
-    {{kind, meta, args, ast}, state} = get_cached_definition(def, state)
-    defn_ast = Macro.escape({meta, args, ast})
+    {{kind, meta, args, ast}, state} = get_and_normalize_definition(def, state)
 
-    # Inline remotes and transforms
     env = %{env | function: def, line: meta[:line] || env.line}
-    {ast, state} = inline_remote(ast, state)
-    {ast, state} = inline_transforms(env, ast, state)
-
-    # Now invoke the compiler
     {def_module, def_opts} = def_meta.compiler
     meta = Keyword.put(meta, :max_counter, state.version)
     compiled_body = def_module.__compile__(env, kind, meta, collect_vars(args), ast, def_opts)
 
     quoted =
       quote do
+        Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
         def unquote(name)(unquote_splicing(args)), do: unquote(compiled_body)
-        def __defn__(unquote(name), unquote(arity)), do: unquote(defn_ast)
       end
 
     {quoted, state}
@@ -173,48 +148,31 @@ defmodule Nx.Defn.Compiler do
     vars
   end
 
-  defp get_cached_definition(def, state) do
-    case state.cache do
-      %{^def => false} -> get_and_cache_definition(def, state)
-      %{^def => stored} -> {stored, state}
-      %{} -> :none
-    end
-  end
-
-  defp get_and_cache_definition(def, state) do
+  defp get_and_normalize_definition(def, state) do
     {:v1, kind, meta, clauses} = Nx.Defn.Module.get_definition(state.module, def)
+    state = %{state | function: def, line: meta[:line] || state.line, version: 0}
 
-    with_call(meta, def, def, state, fn state ->
-      case clauses do
-        [] ->
-          compile_error!(meta, state, "cannot have #{kind}n without clauses")
+    case clauses do
+      [] ->
+        compile_error!(meta, state, "cannot have #{kind}n without clauses")
 
-        [{meta, args, [], ast}] ->
-          {args, state} = normalize_args(args, meta, state)
-          assert_uniq_vars!(args, state)
-          {ast, state} = normalize_block(ast, meta, state)
-          {ast, state} = expand(ast, state)
-          result = {kind, [max_counter: state.version] ++ meta, args, ast}
-          state = put_in(state.cache[def], result)
-          {result, state}
+      [{meta, args, [], ast}] ->
+        {args, state} = normalize_args(args, meta, state)
+        assert_uniq_vars!(args, state)
+        {ast, state} = normalize(ast, state)
+        result = {kind, [max_counter: state.version] ++ meta, args, ast}
+        {result, state}
 
-        [_, _ | _] ->
-          compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
-      end
-    end)
-  end
-
-  defp with_call(meta, def, call, state, fun) do
-    %{function: previous_def, stack: previous_stack, line: previous_line} = state
-    line = meta[:line] || previous_line
-    {result, state} = fun.(%{state | function: def, stack: [call | previous_stack], line: line})
-    {result, %{state | function: previous_def, stack: previous_stack, line: previous_line}}
+      [_, _ | _] ->
+        compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
+    end
   end
 
   ## Normalization
 
-  defp normalize({:__block__, meta, _} = block, state) do
-    normalize_block(block, meta, state)
+  defp normalize({:__block__, meta, exprs}, state) do
+    {exprs, state} = normalize_list(exprs, state)
+    {{:__block__, meta, exprs}, state}
   end
 
   defp normalize({:{}, meta, args}, state) do
@@ -235,6 +193,7 @@ defmodule Nx.Defn.Compiler do
          state
        )
        when is_tuple(shape) do
+    # to_expr should check the device?
     if device == Nx.BitStringDevice and is_bitstring(data) do
       {tensor, state}
     else
@@ -247,10 +206,14 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp normalize({name, meta, args}, state)
-       when is_atom(name) and is_list(args) and name not in [:%, :%{}, :^, :<<>>] do
+  defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
     {args, state} = normalize_list(args, state)
-    {{:__local__, meta, [name | args]}, state}
+
+    if Macro.special_form?(name, length(args)) do
+      invalid_numerical_expression!(expr, state)
+    end
+
+    {{name, meta, args}, state}
   end
 
   defp normalize(underscore, state) when is_underscore(underscore) do
@@ -263,23 +226,25 @@ defmodule Nx.Defn.Compiler do
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
 
-  defp normalize({{:., _, [Nx, name]} = call, meta, args}, state) do
+  defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
     arity = length(args)
 
+    # TODO: Implement inspect for Nx.Defn.Expr
     unless function_exported?(Nx, name, arity) do
       compile_error!(meta, state, "undefined function Nx.#{name}/#{arity}")
     end
 
+    # TODO: Allow tensor function but with no rewrites
     if {name, arity} in @forbidden_nx_functions do
       compile_error!(meta, state, "Nx.#{name}/#{arity} is not allowed inside defn")
     end
 
     {args, state} = normalize_list(args, state)
-    args = rewrite_nx_args(name, args)
-    {{call, meta, args}, state}
+    {{{:., dot_meta, [Nx.Defn.Expr, name]}, meta, args}, state}
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [module, ast, opts]}, state) do
+    # TODO: Reimplement me
     unless is_atom(module) do
       compile_error!(
         meta,
@@ -304,6 +269,8 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize({{:., _, [remote, name]} = call, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
+    # TODO: validate the remote is a defn
+    # TODO: How to do so without a compile-time dep. after_compile?
     {args, state} = normalize_list(args, state)
     {{call, meta, args}, state}
   end
@@ -315,60 +282,28 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize(list, state) when is_list(list) do
-    cond do
-      Keyword.keyword?(list) ->
-        unless Enum.all?(list, fn {k, _} -> k in @known_keywords end) do
-          compile_error!(
-            [],
-            state,
-            "invalid numerical expression: #{Macro.to_string(list)} (the only allowed keys " <>
-              "in keyword lists are: #{Enum.map_join(@known_keywords, ", ", &inspect/1)})"
-          )
-        end
-
-        normalize_list(list, state)
-
-      Enum.all?(list, &is_integer/1) ->
-        normalize_list(list, state)
-
-      true ->
-        compile_error!(
-          [],
-          state,
-          "invalid numerical expression: #{Macro.to_string(list)} (only keyword lists or lists of integers are allowed)"
-        )
-    end
+    normalize_list(list, state)
   end
 
-  defp normalize(literal, state)
-       when is_number(literal) or is_atom(literal) or is_binary(literal) do
+  defp normalize(literal, state) when is_number(literal) or is_atom(literal) do
     {literal, state}
   end
 
   defp normalize(expr, state) do
-    compile_error!(
-      maybe_meta(expr),
-      state,
-      "invalid numerical expression: #{Macro.to_string(expr)}"
-    )
+    invalid_numerical_expression!(expr, state)
   end
 
   defp normalize_list(list, state) do
     Enum.map_reduce(list, state, &normalize/2)
   end
 
-  ## Normalize nx calls
-
-  defp rewrite_nx_args(:assert_shape, [arg, shape]), do: [arg, shape, nil]
-  defp rewrite_nx_args(:iota, [arg]), do: [arg, []]
-  defp rewrite_nx_args(:random_uniform, [arg]), do: [arg, 0.0, 1.0, []]
-  defp rewrite_nx_args(:random_uniform, [arg, opts]), do: [arg, 0.0, 1.0, opts]
-  defp rewrite_nx_args(:random_uniform, [arg, min, max]), do: [arg, min, max, []]
-  defp rewrite_nx_args(:random_normal, [arg]), do: [arg, 0.0, 1.0, []]
-  defp rewrite_nx_args(:random_normal, [arg, opts]), do: [arg, 0.0, 1.0, opts]
-  defp rewrite_nx_args(:random_normal, [arg, min, max]), do: [arg, min, max, []]
-  defp rewrite_nx_args(:sum, [arg]), do: [arg, []]
-  defp rewrite_nx_args(_, args), do: args
+  defp invalid_numerical_expression!(expr, state) do
+    compile_error!(
+      maybe_meta(expr),
+      state,
+      "invalid numerical expression: #{Macro.to_string(expr)}"
+    )
+  end
 
   ## Normalize args
 
@@ -396,319 +331,6 @@ defmodule Nx.Defn.Compiler do
       state,
       "only variables and tuples are allowed as arguments in defn, got: #{Macro.to_string(expr)}"
     )
-  end
-
-  ## Normalize block
-
-  defp normalize_block({:__block__, meta, exprs}, _meta, state) do
-    {exprs, state} = normalize_block(exprs, [], meta, state)
-    {{:__block__, meta, exprs}, state}
-  end
-
-  defp normalize_block(expr, meta, state) do
-    {[expr], state} = normalize_block([expr], [], meta, state)
-    {expr, state}
-  end
-
-  defp normalize_block([{:__block__, _, head} | rest], acc, meta, state) do
-    normalize_block(head ++ rest, acc, meta, state)
-  end
-
-  defp normalize_block([nil], acc, meta, state) do
-    compile_warn(meta, state, "body has nil return type, 0 will be returned instead")
-    {Enum.reverse([0 | acc]), state}
-  end
-
-  defp normalize_block([last], acc, _meta, state) do
-    {last, state} = normalize(last, state)
-    {Enum.reverse([last | acc]), state}
-  end
-
-  # alias, require, import are expanded to atoms, so we ignore those.
-  defp normalize_block([atom | rest], acc, meta, state) when is_atom(atom) do
-    normalize_block(rest, acc, meta, state)
-  end
-
-  defp normalize_block([head | rest], acc, meta, state) do
-    {head, state} = normalize(head, state)
-    normalize_block(rest, [head | acc], meta, state)
-  end
-
-  ## Expansion and local inlining
-
-  defp expand({:=, meta, [left, right]}, state) do
-    {patterns, vars, right} = expand_assign(meta, left, right, state)
-    {right, state} = expand(right, state)
-
-    {[var | vars], state} =
-      case vars do
-        [] ->
-          {var, state} = new_var(state)
-          {[var], state}
-
-        _ ->
-          {vars, state}
-      end
-
-    {patterns, nested, state} = expand_nested_patterns(patterns, state)
-
-    exprs =
-      [{:=, meta, [var, right]}] ++
-        Enum.map(vars, &{:=, meta, [&1, var]}) ++
-        Enum.map(patterns, &{:=, meta, [&1, var]}) ++
-        nested
-
-    case exprs do
-      [expr] -> {expr, state}
-      _ -> {{:__block__, meta, exprs}, state}
-    end
-  end
-
-  defp expand({:__local__, meta, [name | args]}, state) do
-    {args, state} = expand(args, state)
-    arity = length(args)
-
-    if {name, arity} in state.stack do
-      {caller_name, caller_arity} = state.function
-
-      compile_error!(
-        meta,
-        state,
-        "#{name}/#{arity} is being called recursively by #{caller_name}/#{caller_arity}, " <>
-          "defn does not allow recursive definitions"
-      )
-    end
-
-    case get_cached_definition({name, arity}, state) do
-      {{_kind, _meta, patterns, ast}, state} ->
-        {ast, version} = inline(meta, patterns, ast, args, state.version)
-        {ast, %{state | version: version}}
-
-      :none ->
-        compile_error!(
-          meta,
-          state,
-          "cannot invoke #{name}/#{arity} because it was not defined with defn"
-        )
-    end
-  end
-
-  # expr is always literals since we don't allow polymorphic calls
-  defp expand({expr, meta, args}, state) do
-    {args, state} = expand(args, state)
-    {{expr, meta, args}, state}
-  end
-
-  defp expand({left, right}, state) do
-    {left, state} = expand(left, state)
-    {right, state} = expand(right, state)
-    {{left, right}, state}
-  end
-
-  defp expand(list, state) when is_list(list) do
-    Enum.map_reduce(list, state, &expand/2)
-  end
-
-  defp expand(other, state) do
-    {other, state}
-  end
-
-  ### Pattern matching
-
-  defp expand_assign(outer_meta, outer_left, {:=, inner_meta, [inner_left, expr]}, state) do
-    {patterns, vars, expr} = expand_assign(inner_meta, inner_left, expr, state)
-    expand_pattern(outer_meta, outer_left, patterns, vars, expr, state)
-  end
-
-  defp expand_assign(meta, left, expr, state) do
-    expand_pattern(meta, left, [], [], expr, state)
-  end
-
-  defp expand_pattern(_, {:=, meta, [left, right]}, patterns, vars, expr, state) do
-    {patterns, vars, expr} = expand_pattern(meta, right, patterns, vars, expr, state)
-    expand_pattern(meta, left, patterns, vars, expr, state)
-  end
-
-  defp expand_pattern(_meta, {:_, _, ctx}, patterns, vars, expr, _state) when is_atom(ctx) do
-    {patterns, vars, expr}
-  end
-
-  defp expand_pattern(_meta, var, patterns, vars, expr, _state) when is_var(var) do
-    {patterns, [var | vars], expr}
-  end
-
-  defp expand_pattern(meta, pattern, patterns, vars, expr, state) do
-    pattern = validate_pattern!(meta, pattern, state)
-    {[pattern | patterns], vars, expr}
-  end
-
-  defp validate_pattern!(meta, {left, right}, _state), do: {:{}, meta, [left, right]}
-  defp validate_pattern!(_meta, {:{}, _, _} = tuple, _state), do: tuple
-  defp validate_pattern!(_meta, var, _state) when is_var(var), do: var
-
-  defp validate_pattern!(meta, expr, state) do
-    compile_error!(
-      meta,
-      state,
-      "defn can only pattern match on variables or tuples, got: #{Macro.to_string(expr)}"
-    )
-  end
-
-  defp expand_nested_patterns(patterns, state) do
-    {patterns, {nested, state}} =
-      Enum.map_reduce(patterns, {[], state}, fn {:{}, meta, args}, {nested, state} ->
-        {args, nested, state} = expand_nested_patterns(args, meta, [], nested, state)
-        {{:{}, meta, args}, {nested, state}}
-      end)
-
-    {nested, state} = expand(nested, state)
-    {patterns, nested, state}
-  end
-
-  defp expand_nested_patterns([var | args], meta, acc, nested, state) when is_var(var) do
-    expand_nested_patterns(args, meta, [var | acc], nested, state)
-  end
-
-  defp expand_nested_patterns([expr | args], meta, acc, nested, state) do
-    {var, state} = new_var(state)
-    expand_nested_patterns(args, meta, [var | acc], [{:=, meta, [expr, var]} | nested], state)
-  end
-
-  defp expand_nested_patterns([], _meta, acc, nested, state) do
-    {Enum.reverse(acc), nested, state}
-  end
-
-  ### Inline
-
-  defp inline(meta, patterns, ast, args, version) do
-    version = version + 1
-
-    # If both patterns and args are variable, don't create assignments.
-    # This makes source inspection cleaner because there is less code pollution.
-    {patterns_and_args, cache} =
-      Enum.flat_map_reduce(Enum.zip(patterns, args), %{}, fn
-        {pattern, _arg}, acc when is_underscore(pattern) ->
-          {[], acc}
-
-        {pattern, arg}, acc when is_var(pattern) and is_var(arg) ->
-          {[], Map.put(acc, var_counter(pattern), arg)}
-
-        {pattern, arg}, acc ->
-          {[{pattern, arg}], acc}
-      end)
-
-    {patterns, args} = Enum.unzip(patterns_and_args)
-
-    {{patterns, ast}, max_version} =
-      Macro.prewalk({patterns, ast}, version, fn
-        underscore, max_version when is_underscore(underscore) ->
-          {underscore, max_version}
-
-        {name, meta, ctx}, max_version when is_atom(name) and is_atom(ctx) ->
-          counter = Keyword.fetch!(meta, :counter)
-
-          case cache do
-            %{^counter => var} ->
-              {var, max_version}
-
-            %{} ->
-              meta = Keyword.put(meta, :counter, version + counter)
-              {{name, meta, ctx}, max(max_version, version + counter)}
-          end
-
-        node, max_version ->
-          {node, max_version}
-      end)
-
-    case patterns do
-      [] ->
-        {ast, max_version}
-
-      _ ->
-        assigns =
-          patterns
-          |> Enum.zip(args)
-          |> Enum.map(fn {var, arg} -> {:=, meta, [var, arg]} end)
-
-        {{:__block__, meta, assigns ++ [ast]}, max_version}
-    end
-  end
-
-  defp inline_remote(ast, state) do
-    Macro.prewalk(ast, state, fn
-      {{:., _, [module, name]}, meta, args} = call, state ->
-        arity = length(args)
-
-        case inlinable_remote(meta, module, name, arity, state) do
-          {:ok, {_meta, patterns, ast}} ->
-            {ast, version} = inline(meta, patterns, ast, args, state.version)
-            state = put_in(state.remotes[module], true)
-            {ast, %{state | version: version}}
-
-          :skip ->
-            {call, state}
-        end
-
-      expr, state ->
-        {expr, state}
-    end)
-  end
-
-  defp inlinable_remote(_meta, module, _name, _arity, _state)
-       when module in [Nx, Nx.Defn.Kernel],
-       do: :skip
-
-  defp inlinable_remote(_meta, module, name, arity, _state)
-       when module in [Nx.Defn.GradTransform] do
-    case module.__defn__(name, arity) do
-      nil -> :skip
-      defn -> {:ok, defn}
-    end
-  end
-
-  defp inlinable_remote(meta, module, name, arity, state) do
-    if Code.ensure_compiled(module) != {:module, module} do
-      compile_error!(
-        meta,
-        state,
-        "cannot invoke #{inspect(module)}.#{name}/#{arity} because #{inspect(module)} " <>
-          "does not exist or it is currently unavailable due to a deadlock (defn does " <>
-          "not allow co-recursive definitions)"
-      )
-    end
-
-    unless defn = function_exported?(module, :__defn__, 2) && module.__defn__(name, arity) do
-      compile_error!(
-        meta,
-        state,
-        "undefined numerical function #{inspect(module)}.#{name}/#{arity}"
-      )
-    end
-
-    {:ok, defn}
-  end
-
-  ## Transforms
-
-  defp inline_transforms(env, ast, state) do
-    Macro.postwalk(ast, state, fn
-      {{:., _, [Nx.Defn.Kernel, :transform]}, meta, [module, ast, opts]}, state ->
-        if Code.ensure_compiled(module) != {:module, module} do
-          compile_error!(
-            meta,
-            state,
-            "cannot invoke transform #{inspect(module)} because it is not defined"
-          )
-        end
-
-        {version, ast} = module.__transform__(env, state.version, meta, ast, opts)
-        state = put_in(state.remotes[module], true)
-        {ast, state} = inline_remote(ast, %{state | version: version})
-        inline_transforms(env, ast, state)
-
-      expr, state ->
-        {expr, state}
-    end)
   end
 
   ## Shared helpers

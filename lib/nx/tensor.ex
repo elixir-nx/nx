@@ -19,7 +19,7 @@ defmodule Nx.Tensor do
     # TODO: To print data on device, we can support reading a slice
     # from the device which we will compute with:
     #
-    #     min(opts.limit, tuple_product(shape)) * size
+    #     min(opts.limit, Nx.Shape.size(shape)) * size
     #
     def inspect(tensor, opts) do
       dims_list = Tuple.to_list(tensor.shape)

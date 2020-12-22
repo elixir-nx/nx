@@ -620,11 +620,6 @@ defmodule Nx.Defn.GradTransform do
   import Nx.Defn
 
   @doc """
-  The derivative of `Nx.assert_shape/2`.
-  """
-  defn assert_shape(shape, _y, _x), do: Nx.broadcast(1.0, shape)
-
-  @doc """
   The derivative of `Nx.broadcast/2`.
   """
   defn broadcast(shape, y, _x), do: Nx.broadcast(Nx.size(y) / Nx.size(shape), shape)

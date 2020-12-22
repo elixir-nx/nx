@@ -411,7 +411,7 @@ defmodule Nx.Util do
     {folding_view, folded_view, List.to_tuple(folding_shape ++ folded_shape)}
   end
 
-  defp zip_dims(t, nil), do: tuple_product(t.shape)
+  defp zip_dims(t, nil), do: Nx.Shape.size(t.shape)
   defp zip_dims(_, []), do: 1
   defp zip_dims(t, [axis | axes]), do: elem(t.shape, axis) * zip_dims(t, axes)
 
@@ -442,6 +442,7 @@ defmodule Nx.Util do
   # entire binary as it is layed out in memory and we
   # expect the entire tensor to be reduced down to a scalar.
   defp bin_aggregate_axes(binary, axes, shape, size) do
+    # TODO: if axes is equal to the all dimensions in order, go to the second clause
     if axes do
       {chunk_size, read_size, path, shape} = aggregate_axes(axes, shape, size)
 
