@@ -164,6 +164,20 @@ defmodule Nx.Shared do
     [{element, weight} | weighted_shape(shape, pos - 1, weight * element)]
   end
 
+  def weighted_shape_limits(shape, size, lengths) do
+    Enum.reverse(weighted_shape_limits(shape, tuple_size(shape), size, lengths))
+  end
+
+  defp weighted_shape_limits(_shape, 0, _weight, _lengths) do
+    []
+  end
+
+  defp weighted_shape_limits(shape, pos, weight, lengths) do
+    element = :erlang.element(pos, lengths)
+    shape_elem = :erlang.element(pos, shape)
+    [{element, weight} | weighted_shape_limits(shape, pos - 1, weight * shape_elem, lengths)]
+  end
+
   @doc """
   Reads the chunk size from a weighted list at the given position.
   """
@@ -220,4 +234,34 @@ defmodule Nx.Shared do
 
   def shape_to_lower_ranked_list(tuple, size, rank),
     do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
+
+  @doc """
+  Traverses a binary at the given anchor point using `weighted_shape`.
+  """
+  def anchored_weighted_traverse(weighted_shape, binary, read_size, offset)
+
+  def anchored_weighted_traverse([], data, read_size, offset) do
+    <<_::size(offset), chunk::size(read_size)-bitstring, _::bitstring>> = data
+    chunk
+  end
+
+  def anchored_weighted_traverse([{dim, size} | dims], data, read_size, offset) do
+    anchored_weighted_traverse(dim, size, dims, data, read_size, offset)
+  end
+
+  def anchored_weighted_traverse([fun | dims], data, read_size, offset) do
+    fun.(anchored_weighted_traverse(dims, data, read_size, offset))
+  end
+
+  def anchored_weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
+    head = anchored_weighted_traverse(dims, data, read_size, offset)
+    case dim do
+      1 ->
+        [head]
+
+      _ ->
+        <<_::size(dim_size)-bitstring, data::bitstring>> = data
+        [head | anchored_weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
+    end
+  end
 end

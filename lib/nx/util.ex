@@ -330,6 +330,78 @@ defmodule Nx.Util do
      }, final_acc}
   end
 
+  @doc """
+  Reduces elements in a window.
+
+  ## Examples
+
+      iex> Nx.Util.reduce_window(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
+      ...> :first,
+      ...> fn x, acc -> if acc == :first, do: x, else: max(x, acc) end,
+      ...> {2, 2}, {2, 2}
+      ...> )
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [5, 7],
+          [12, 14]
+        ]
+      >
+  """
+  def reduce_window(tensor, acc, fun, window_dimensions, window_strides, padding \\ :valid) do
+    %T{type: {_, size} = type, shape: shape} = t = Nx.tensor(tensor)
+
+    Nx.Shape.validate_window!(shape, window_dimensions)
+    Nx.Shape.validate_strides!(shape, window_strides)
+    output_shape = Nx.Shape.stride(shape, window_strides)
+
+    data = Nx.Util.to_bitstring(t)
+
+    weighted_shape = weighted_shape_limits(shape, size, window_dimensions)
+    anchors = Enum.sort(make_anchors(shape, window_strides, []))
+
+    data =
+      for anchor <- anchors, into: <<>>  do
+        offset = anchor_offset(weighted_shape, anchor)
+        window = IO.iodata_to_binary(anchored_weighted_traverse(weighted_shape, data, size, offset))
+        match_types [type] do
+          window_val =
+            for <<match!(x, 0) <- window>>,
+              reduce: acc,
+              do: (acc -> fun.(read!(x, 0), acc))
+          <<write!(window_val, 0)>>
+        end
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}, shape: output_shape}
+  end
+
+  defp make_anchors(shape, strides, anchors) when is_tuple(shape) and is_tuple(strides),
+    do: make_anchors(Tuple.to_list(shape), Tuple.to_list(strides), anchors)
+
+  defp make_anchors([], [], anchors), do: anchors
+
+  defp make_anchors([dim | shape], [s | strides], []) do
+    dims = for i <- 0..(dim - 1), rem(i, s) == 0, do: {i}
+    make_anchors(shape, strides, dims)
+  end
+
+  defp make_anchors([dim | shape], [s | strides], anchors) do
+    dims =
+      for i <- 0..(dim - 1), rem(i, s) == 0 do
+        Enum.map(anchors, & Tuple.append(&1, i))
+      end
+    make_anchors(shape, strides, List.flatten(dims))
+  end
+
+  defp anchor_offset(weighted_shape, anchor) when is_tuple(anchor),
+    do: anchor_offset(weighted_shape, Tuple.to_list(anchor))
+
+  defp anchor_offset([], []), do: 0
+
+  defp anchor_offset([{dim, size} | dims], [a | anchor]),
+    do: size*a + anchor_offset(dims, anchor)
+
   # Helper for zipping 2 tensors along given axes.
   # Given we always reduce on the first tensor provided,
   # the "new_shape" returned is always the "new_shape" of
