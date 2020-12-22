@@ -116,7 +116,10 @@ defmodule Nx.Defn.Expr do
   """
   def iota(shape, opts \\ []) do
     shape = to_shape(shape)
-    opts = Keyword.update(opts, :axis, Nx.Shape.rank(shape) - 1, &Nx.Shape.normalize_axis(shape, &1))
+
+    opts =
+      Keyword.update(opts, :axis, Nx.Shape.rank(shape) - 1, &Nx.Shape.normalize_axis(shape, &1))
+
     make_expr(shape, :iota, [shape, opts])
   end
 
@@ -283,7 +286,8 @@ defmodule Nx.Defn.Expr do
     defp inspect_expr_args([head | tail], params, var_map, counter) do
       case head do
         %Expr{id: id, shape: shape, op: :parameter, args: [identifier]} ->
-          {[], params ++ ["param#{shape_to_string(shape)} " <> identifier], Map.update(var_map, id, identifier, fn _ -> identifier end), counter}
+          {[], params ++ ["param#{shape_to_string(shape)} " <> identifier],
+           Map.update(var_map, id, identifier, fn _ -> identifier end), counter}
 
         %Expr{id: id, shape: shape, op: :tensor} ->
           {var, counter} = counter_to_var(counter)
@@ -291,18 +295,28 @@ defmodule Nx.Defn.Expr do
           {["constant#{shape_to_string(shape)} " <> var], [], var_map, counter}
 
         %Expr{id: id, op: op, args: expr_args} ->
-          {expr_children, params, var_map, counter} = inspect_expr_args(expr_args, params, var_map, counter)
-          {expr_siblings, params, var_map, counter} = inspect_expr_args(tail, params, var_map, counter)
+          {expr_children, params, var_map, counter} =
+            inspect_expr_args(expr_args, params, var_map, counter)
+
+          {expr_siblings, params, var_map, counter} =
+            inspect_expr_args(tail, params, var_map, counter)
+
           expr_args_strs = inspect_args(expr_args, var_map)
           {var, counter} = counter_to_var(counter)
-          expr_str =  var <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(expr_args_strs, ", ") <> " ]"
-          {expr_children ++ expr_siblings ++ [expr_str], params, Map.update(var_map, id, var, fn _ -> var end), counter}
 
-        _ -> inspect_expr_args(tail, params, var_map, counter)
+          expr_str =
+            var <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(expr_args_strs, ", ") <> " ]"
+
+          {expr_children ++ expr_siblings ++ [expr_str], params,
+           Map.update(var_map, id, var, fn _ -> var end), counter}
+
+        _ ->
+          inspect_expr_args(tail, params, var_map, counter)
       end
     end
 
     defp inspect_args([], _var_map), do: []
+
     defp inspect_args([arg | args], var_map) do
       case arg do
         %Expr{id: id} ->
@@ -326,7 +340,7 @@ defmodule Nx.Defn.Expr do
     defp shape_to_string(shape) do
       shape
       |> Tuple.to_list()
-      |> Enum.map(& "[" <> Integer.to_string(&1) <> "]")
+      |> Enum.map(&("[" <> Integer.to_string(&1) <> "]"))
       |> Enum.join("")
     end
   end
