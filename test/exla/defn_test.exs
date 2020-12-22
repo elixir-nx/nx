@@ -766,12 +766,12 @@
 
 #   describe "transpose" do
 #     defn transpose(t), do: Nx.transpose(t)
-#     defn transpose_scalar(t, {}), do: Nx.transpose(t, {})
-#     defn transpose_perm1(t), do: Nx.transpose(t, {2, 1, 0})
-#     defn transpose_perm2(t), do: Nx.transpose(t, {2, 0, 1})
-#     defn transpose_perm3(t), do: Nx.transpose(t, {0, 2, 1})
+#     defn transpose_scalar(t), do: Nx.transpose(t, [])
+#     defn transpose_perm1(t), do: Nx.transpose(t, [2, 1, 0])
+#     defn transpose_perm2(t), do: Nx.transpose(t, [2, 0, 1])
+#     defn transpose_perm3(t), do: Nx.transpose(t, [0, 2, 1])
 
-#     test "transposes without permutation dimensions" do
+#     test "transposes without axes" do
 #       assert transpose(Nx.tensor(1)) == Nx.tensor(1)
 
 #       assert transpose(Nx.iota({2, 3, 4})) ==
@@ -783,8 +783,8 @@
 #                ])
 #     end
 
-#     test "transposes with permutationd imensions" do
-#       assert transpose_scalar(Nx.tensor(1), {}) == Nx.tensor(1)
+#     test "transposes with axes" do
+#       assert transpose_scalar(Nx.tensor(1)) == Nx.tensor(1)
 
 #       assert transpose_perm1(Nx.iota({2, 3, 4})) ==
 #                Nx.tensor([
@@ -852,12 +852,6 @@
 #       assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0], [0], [0], [0]])) ==
 #                Nx.tensor([[1], [2], [3], [4]])
 #     end
-
-#     defn reshape_with_constant(shape), do: Nx.reshape(123, shape)
-
-#     test "with constant" do
-#       assert reshape_with_constant(Nx.tensor([[[1]]])) == Nx.tensor([[[123]]])
-#     end
 #   end
 
 #   describe "broadcast" do
@@ -889,13 +883,6 @@
 #       for {left, right} <- tensors do
 #         assert add_two(left, right) == broadcast_with_tensor(left, right)
 #       end
-#     end
-
-#     defn broadcast_with_constant(shape), do: Nx.broadcast(123, shape)
-
-#     test "with constant" do
-#       assert broadcast_with_constant(Nx.tensor([[1, 2], [3, 4]])) ==
-#                Nx.tensor([[123, 123], [123, 123]])
 #     end
 #   end
 
@@ -953,19 +940,6 @@
 #         assert x >= 5.0 and x < 10.0
 #       end
 #     end
-
-#     defn random_uniform_tensor(t), do: Nx.random_uniform(t)
-#     defn random_uniform_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
-
-#     test "generates from tensor" do
-#       t = random_uniform_tensor(Nx.tensor([[1, 2], [3, 4]]))
-#       assert Nx.shape(t) == {2, 2}
-#       assert Nx.type(t) == {:f, 64}
-
-#       t = random_uniform_tensor_with_type(Nx.tensor([[1, 2, 3], [3, 4, 6]]))
-#       assert Nx.shape(t) == {2, 3}
-#       assert Nx.type(t) == {:f, 32}
-#     end
 #   end
 
 #   describe "random normal" do
@@ -995,16 +969,6 @@
 
 #     defn random_normal_tensor(t), do: Nx.random_uniform(t)
 #     defn random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
-
-#     test "generates from tensor" do
-#       t = random_normal_tensor(Nx.tensor([[1, 2], [3, 4]]))
-#       assert Nx.shape(t) == {2, 2}
-#       assert Nx.type(t) == {:f, 64}
-
-#       t = random_normal_tensor_with_type(Nx.tensor([[1, 2, 3], [3, 4, 6]]))
-#       assert Nx.shape(t) == {2, 3}
-#       assert Nx.type(t) == {:f, 32}
-#     end
 #   end
 
 #   describe "iota" do
@@ -1018,13 +982,6 @@
 
 #     test "generates with type" do
 #       assert iota_with_type() == Nx.iota({1, 2, 3}, axis: 1, type: {:f, 32})
-#     end
-
-#     defn iota_from_tensor(t), do: Nx.iota(t, axis: 0)
-
-#     test "generates from tensor" do
-#       t = Nx.tensor([1, 2, 3])
-#       assert iota_from_tensor(t) == Nx.iota(t, axis: 0)
 #     end
 
 #     defn iota_no_axis, do: Nx.iota({2, 2, 2})
@@ -1052,19 +1009,6 @@
 #       t = random_from_type_and_shape(Nx.tensor([[1], [2]], type: {:f, 32}))
 #       assert Nx.shape(t) == {2, 1}
 #       assert Nx.type(t) == {:f, 32}
-#     end
-
-#     defn rank_and_size(t), do: {Nx.rank(t), Nx.size(t)}
-
-#     test "rank and size" do
-#       assert rank_and_size(Nx.tensor([[1, 2], [3, 4]])) == {Nx.tensor(2), Nx.tensor(4)}
-#       assert rank_and_size(Nx.tensor([1, 2, 3, 4, 5])) == {Nx.tensor(1), Nx.tensor(5)}
-#     end
-
-#     defn rank_and_size_for_tuple(), do: {Nx.rank({8, 8}), Nx.size({8, 8})}
-
-#     test "rank and size for tuples" do
-#       assert rank_and_size_for_tuple() == {Nx.tensor(2), Nx.tensor(64)}
 #     end
 #   end
 

@@ -1,12 +1,21 @@
 defmodule Nx.Defn.Expr do
-  # A defn AST which carries with it it's current shape and arguments
-  @moduledoc false
+  @doc """
+  The expression used by `Nx.Defn.Compiler`.
+  """
 
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
   @enforce_keys [:id, :shape, :op, :args]
+  @type t :: %Expr{}
   defstruct [:id, :shape, :op, :args]
+
+  @doc """
+  Builds a parameter must be passed to the evaluation function.
+  """
+  def parameter(shape, identifier) do
+    make_expr(shape, :parameter, [identifier])
+  end
 
   @doc """
   Expression equivalent to `Nx.rank/1`.
@@ -198,6 +207,25 @@ defmodule Nx.Defn.Expr do
     Nx.Shape.broadcast(true_shape, pred_shape)
     Nx.Shape.broadcast(false_shape, pred_shape)
     make_expr(pred_shape, :select, [pred_expr, true_expr, false_expr])
+  end
+
+  ## Results normalization
+
+  @doc false
+  def to_result(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
+
+  def to_result(%Expr{} = expr),
+    do: expr
+
+  def to_result(%T{} = t),
+    do: to_expr(t)
+
+  def to_result(number) when is_number(number),
+    do: to_expr(number)
+
+  def to_result(other) do
+    raise ArgumentError, "defn must return a tensor, a number or a tuple, got: #{inspect(other)}"
   end
 
   ## Expr normalization

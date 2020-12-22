@@ -13,8 +13,18 @@ defmodule Nx.DefnTest do
   defmodule Identity do
     @behaviour Nx.Defn.Compiler
 
-    def __compile__(_env, _kind, _metadata, _vars, ast, _opts) do
-      ast
+    def __compile__(_env, _kind, vars, fun, _opts) do
+      params =
+        for var <- vars do
+          unless is_struct(var, Nx.Tensor) or is_number(var) do
+            raise "invalid argument for Nx.Defn"
+          end
+
+          tensor = Nx.tensor(var)
+          Nx.Defn.Expr.parameter(Nx.shape(tensor), tensor)
+        end
+
+      fun.(params)
     end
   end
 
@@ -83,15 +93,16 @@ defmodule Nx.DefnTest do
     defn size(t), do: Nx.size(t)
 
     test "rank" do
-      assert 2 == rank(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+      assert %Expr{shape: {}, op: :tensor, args: [2]} = rank(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
 
     test "shape" do
-      assert {2, 3} == shape(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+      assert {%Expr{shape: {}, op: :tensor, args: [2]}, %Expr{shape: {}, op: :tensor, args: [3]}} =
+               shape(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
 
     test "size" do
-      assert 6 == size(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+      assert %Expr{shape: {}, op: :tensor, args: [6]} = size(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
   end
 
@@ -161,52 +172,31 @@ defmodule Nx.DefnTest do
     end
   end
 
-  # describe "scalar" do
-  #   defn just_two_int, do: 2
-  #   defn just_two_float, do: 2.0
+  describe "scalar" do
+    defn just_two_int, do: 2
+    defn just_two_float, do: 2.0
 
-  #   test "returns the tensor for the scalar" do
-  #     assert just_two_int() == Nx.tensor(2)
-  #     assert just_two_float() == Nx.tensor(2.0)
-  #   end
-  # end
+    test "returns the tensor for the scalar" do
+      assert %Expr{op: :tensor, args: [2], shape: {}} = just_two_int()
+      assert %Expr{op: :tensor, args: [2.0], shape: {}} = just_two_float()
+    end
+  end
 
-  # describe "tuples" do
-  #   defn two_constant_tuples, do: {-1, 1.0}
-  #   defn three_constant_tuples, do: {1, 2.0, 3}
+  describe "parameter" do
+    defn parameter_var(a, b, c), do: {a, b, c}
 
-  #   test "returns tuples with constants" do
-  #     assert two_constant_tuples() == {Nx.tensor(-1), Nx.tensor(1.0)}
-  #     assert three_constant_tuples() == {Nx.tensor(1), Nx.tensor(2.0), Nx.tensor(3)}
-  #   end
+    test "as vars" do
+      assert {%Expr{op: :parameter}, %Expr{op: :parameter}, %Expr{op: :parameter}} =
+               parameter_var(1, 2, 3)
+    end
 
-  #   defn add_subtract_tuple(a, b), do: {a + b, a - b}
+    defn parameter_tuple({a, b}, c), do: {a, b, c}
 
-  #   test "returns tuples with operation results" do
-  #     assert add_subtract_tuple(2, 3) == {Nx.tensor(5), Nx.tensor(-1)}
-
-  #     assert add_subtract_tuple(Nx.tensor([-1, 0, 1]), 10) ==
-  #              {Nx.tensor([9, 10, 11]), Nx.tensor([-11, -10, -9])}
-  #   end
-
-  #   defn pattern_tuple({a, b}), do: a + b
-
-  #   test "matches on tuples" do
-  #     assert pattern_tuple({2, 3}) == Nx.tensor(5)
-
-  #     assert pattern_tuple({Nx.tensor([1, 2]), Nx.tensor([[3], [4]])}) ==
-  #              Nx.tensor([[4, 5], [5, 6]])
-  #   end
-
-  #   defn calls_pattern_tuple(a, b), do: pattern_tuple({a, b})
-
-  #   test "matches on inlined tuples" do
-  #     assert calls_pattern_tuple(2, 3) == Nx.tensor(5)
-
-  #     assert calls_pattern_tuple(Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
-  #              Nx.tensor([[4, 5], [5, 6]])
-  #   end
-  # end
+    test "as tuples" do
+      assert {%Expr{op: :parameter}, %Expr{op: :parameter}, %Expr{op: :parameter}} =
+               parameter_tuple({1, 2}, 3)
+    end
+  end
 
   # describe "tensor constants" do
   #   @two 2
@@ -223,59 +213,6 @@ defmodule Nx.DefnTest do
   #   test "expands module attributes to tensors" do
   #     assert add_2x2_attribute(1) == Nx.tensor([[2, 3], [4, 5]])
   #     assert add_2x2_attribute(Nx.tensor([1, 2])) == Nx.tensor([[2, 4], [4, 6]])
-  #   end
-  # end
-
-  # describe "pattern matching" do
-  #   defn complex_pattern_matching(expr) do
-  #     ({a, b} = c) = {d, e} = f = expr
-  #     {a, b, c, d, e, f}
-  #   end
-
-  #   test "normalizes to one pattern per expression" do
-  #     assert ast_to_string(:complex_pattern_matching, 1) == """
-  #            (
-  #              (
-  #                c = expr
-  #                f = c
-  #                {a, b} = c
-  #                {d, e} = c
-  #              )
-  #              {a, b, c, d, e, f}
-  #            )\
-  #            """
-  #   end
-
-  #   defn nested_pattern_matching do
-  #     {{a, _} = c, {d, e} = f} = _ = {{1, 2}, {3, 4}}
-  #     _ = {a, c, d, e, f}
-  #   end
-
-  #   test "unnests nested patterns" do
-  #     assert ast_to_string(:nested_pattern_matching, 0) == """
-  #            (
-  #              (
-  #                nvar = {{1, 2}, {3, 4}}
-  #                {nvar, nvar} = nvar
-  #                (
-  #                  f = nvar
-  #                  {d, e} = f
-  #                )
-  #                (
-  #                  c = nvar
-  #                  {a, _} = c
-  #                )
-  #              )
-  #              nvar = {a, c, d, e, f}
-  #            )\
-  #            """
-
-  #     a = Nx.tensor(1)
-  #     b = Nx.tensor(2)
-  #     c = Nx.tensor(3)
-  #     d = Nx.tensor(4)
-
-  #     assert nested_pattern_matching() == {a, {a, b}, c, d, {c, d}}
   #   end
   # end
 
@@ -477,10 +414,6 @@ defmodule Nx.DefnTest do
   #     assert add_two_var_conflict(2, 3) == Nx.tensor(6)
   #   end
 
-  #   test "expansion" do
-  #     assert ast_to_string(:add_two_from_public, 2) == "Nx.add(a, b)"
-  #   end
-
   #   defn add_two_with_underscore(a, b), do: add_two_with_underscore_impl(a, b)
 
   #   defn add_two_with_underscore_impl(_, b) do
@@ -495,7 +428,7 @@ defmodule Nx.DefnTest do
   #              b
   #            )\
   #            """
-  #          end
+  #   end
   # end
 
   # describe "remote functions" do
@@ -755,10 +688,5 @@ defmodule Nx.DefnTest do
   # defp purge(module) do
   #   :code.purge(module)
   #   :code.delete(module)
-  # end
-
-  # defp ast_to_string(name, arity) do
-  #   {_, _, ast} = __defn__(name, arity)
-  #   Macro.to_string(ast)
   # end
 end

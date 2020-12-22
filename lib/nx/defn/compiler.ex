@@ -10,68 +10,24 @@ defmodule Nx.Defn.Compiler do
   The callback required to be implemented for each compiler.
 
   It receives the module compilation environment `env`, the
-  function `kind`, the function `metadata`, the variables,
-  the AST, and the compiler options. The AST is guaranteed
-  to be valid Elixir code. It must return valid Elixir AST.
+  function `kind`, the variables, the expr function, and the
+  compiler options.
 
   Note the number of variables is not the same as the function
   arity as argument patterns have already been matched. The
   current name and arity can be found under `env.function`.
 
-  Each variable in the AST has a `:counter` metadata which is
-  guaranteed to uniquely identify each variable.
-
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
-
-  ## Nodes
-
-    * `{var_atom_name, meta, context_atom}` - variables
-
-    * `{:__block__, meta, [expr]}` - non-empy code blocks
-
-    * `{left, right}` and `{:{}, _, [elem]}` - tuples
-
-    * `{:=, meta, [var_no_underscore, right]}` - pattern matching
-      where the left side has been normalized to a variable.
-      The left side is guaranteed to not be an underscore pattern
-
-    * `{:=, meta, [{:{}, _, [var]}, var]}` - pattern matching
-      on a tuple. The left side is a tuple of vars and the
-      right-side is always a var. The tuple may have underscores
-
-    * `{:%{}, meta, [{key, value}]}` - a literal `Nx.Tensor`
-
-    * `{{:., dot_meta, [Nx, fun]}, meta, [arg]}` - call to the `Nx`
-      module (most functions are allowed unless the ones listed in
-      the "Unsupported Nx functions" section)
-
-  ## Unsupported Nx functions
-
-  For completeness, here is a list of all `Nx` functions that
-  are not allowed in `defn` and therefore do not need to be
-  implemented by custom compilers:
-
-  #{for {f, a} <- @forbidden_nx_functions, do: "  * `#{Exception.format_mfa(Nx, f, a)}`\n"}
-
-  ## Grad functions
-
-  The gradient functionality works out of the box for almost
-  all compilers, except for the functions below that need to
-  be manually implemented:
-
-    * `Nx.Defn.GradTransform.dot_lhs/2`
-    * `Nx.Defn.GradTransform.dot_rhs/2`
 
   """
   @callback __compile__(
               env :: Macro.Env.t(),
               kind :: :def | :defp,
-              metadata :: keyword,
-              vars :: [Macro.t()],
-              ast :: Macro.t(),
+              vars :: [term],
+              fun :: ([Nx.Defn.Expr.t] -> Nx.Defn.Expr.t),
               opts :: keyword
-            ) :: Macro.t()
+            ) :: term
 
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
@@ -97,18 +53,17 @@ defmodule Nx.Defn.Compiler do
   @doc false
   def compile(%Macro.Env{module: module, file: file, line: line} = env, exports) do
     {:module, Nx} = Code.ensure_compiled(Nx)
-    cache = for {def, _meta} <- exports, into: %{}, do: {def, false}
-    public = for {def, %{kind: :def} = meta} <- exports, do: {def, meta}
 
     state = %{
       module: module,
       file: file,
       line: line,
       function: nil,
-      version: 0
+      version: 0,
+      exports: exports
     }
 
-    {quoted, state} = Enum.map_reduce(public, state, &compile_each(env, &1, &2))
+    quoted = Enum.map(exports, &compile_each(&1, state))
 
     catch_all =
       quote do
@@ -118,21 +73,24 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], quoted ++ [catch_all]}
   end
 
-  defp compile_each(env, {{name, arity} = def, def_meta}, state) do
+  defp compile_each({{name, arity} = def, def_meta}, state) do
     {{kind, meta, args, ast}, state} = get_and_normalize_definition(def, state)
-
-    env = %{env | function: def, line: meta[:line] || env.line}
+    vars = collect_vars(args)
     {def_module, def_opts} = def_meta.compiler
-    meta = Keyword.put(meta, :max_counter, state.version)
-    compiled_body = def_module.__compile__(env, kind, meta, collect_vars(args), ast, def_opts)
 
-    quoted =
-      quote do
-        Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
-        def unquote(name)(unquote_splicing(args)), do: unquote(compiled_body)
+    quote line: state.line do
+      Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
+
+      def unquote(name)(unquote_splicing(args)) do
+        unquote(def_module).__compile__(
+          __ENV__,
+          unquote(kind),
+          unquote(vars),
+          fn unquote(vars) -> Nx.Defn.Expr.to_result(unquote(ast)) end,
+          unquote(Macro.escape(def_opts))
+        )
       end
-
-    {quoted, state}
+    end
   end
 
   defp collect_vars(args) do
@@ -158,10 +116,10 @@ defmodule Nx.Defn.Compiler do
 
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
-        assert_uniq_vars!(args, state)
         {ast, state} = normalize(ast, state)
-        result = {kind, [max_counter: state.version] ++ meta, args, ast}
-        {result, state}
+        assert_uniq_vars!(args, state)
+        clause = {kind, [max_counter: state.version] ++ meta, args, ast}
+        {clause, state}
 
       [_, _ | _] ->
         compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
@@ -193,7 +151,6 @@ defmodule Nx.Defn.Compiler do
          state
        )
        when is_tuple(shape) do
-    # to_expr should check the device?
     if device == Nx.BitStringDevice and is_bitstring(data) do
       {tensor, state}
     else
