@@ -13,11 +13,20 @@ cc_library(
     "@org_tensorflow//tensorflow/core/framework:allocator",
     "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
     "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_bfc_allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_mem_allocator",
+    "@org_tensorflow//tensorflow/core/common_runtime/device:device_mem_allocator",
     "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
     "@org_tensorflow//tensorflow/compiler/xla:statusor",
   ],
 )
+
+cc_library(
+  name = "exla_log_sink",
+  hdrs = ["exla_log_sink.h"] + glob(["erts/**/*.h"]),
+  deps = [
+    "@org_tensorflow//tensorflow/core:lib",
+  ],
+)
+
 
 cc_library (
   name = "exla_device",
@@ -69,6 +78,7 @@ cc_binary(
     ]) + [
     ":exla_nif_util",
     ":exla_client",
+    ":exla_log_sink",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla:comparison_util",
@@ -88,6 +98,7 @@ cc_binary(
     ]) + [
     ":exla_nif_util",
     ":exla_client",
+    ":exla_log_sink",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla:comparison_util",
@@ -106,6 +117,7 @@ cc_binary(
   deps = [
     ":exla_nif_util",
     ":exla_client",
+    ":exla_log_sink",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla:comparison_util",

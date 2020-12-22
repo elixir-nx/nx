@@ -10,6 +10,8 @@ defmodule Exla.Application do
     	_ -> :os.set_signal(:sigchld, :default)
     end
 
+    GenServer.start_link(Exla.Logger, :ok)
+
     Supervisor.start_link([Exla.LockedCache], name: __MODULE__, strategy: :one_for_one)
   end
 end

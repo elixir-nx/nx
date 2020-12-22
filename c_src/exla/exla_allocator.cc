@@ -22,8 +22,9 @@ namespace allocator {
     for (auto& device : devices) {
       se::StreamExecutor* executor = device->executor();
       int device_ordinal = executor->device_ordinal();
-      auto sub_allocator = absl::make_unique<tensorflow::GPUMemAllocator>(
-        executor, tensorflow::PlatformGpuId(device_ordinal),
+
+      auto sub_allocator = absl::make_unique<tensorflow::DeviceMemAllocator>(
+        executor, tensorflow::PlatformDeviceId(device_ordinal),
         /*use_unified_memory=*/enable_unified_memory,
         /*alloc_visitors=*/std::vector<tensorflow::SubAllocator::Visitor>(),
         /*free_visitors=*/std::vector<tensorflow::SubAllocator::Visitor>());
@@ -74,7 +75,7 @@ namespace allocator {
   // TODO(seanmor5): Rather than pin to Host memory, pin to ERTS memory.
   std::unique_ptr<tensorflow::BFCAllocator> GetGpuHostAllocator(se::StreamExecutor* executor) {
     tensorflow::SubAllocator* sub_allocator =
-      new tensorflow::GpuHostAllocator(executor, 0, {}, {});
+      new tensorflow::DeviceHostAllocator(executor, 0, {}, {});
     const tensorflow::int64 kHostMemoryLimitBytes = 64 * (1LL << 30);
     return absl::make_unique<tensorflow::BFCAllocator>(sub_allocator,
                                                        kHostMemoryLimitBytes,

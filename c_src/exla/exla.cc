@@ -1,5 +1,6 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/compiler/xla/exla/exla_client.h"
+#include "tensorflow/compiler/xla/exla/exla_log_sink.h"
 
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
@@ -10,8 +11,6 @@
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
-
-// TODO(seanmor5): Implement TFLogSink
 
 // This is all we need for now, the GC takes care of everything else
 void free_res(ErlNifEnv* env, void* obj) {return;}
@@ -1376,6 +1375,28 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, result);
 }
 
+/*************************** Log Sink ******************************/
+ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 1) {
+    return exla::make(env, "Bad argument count.");
+  }
+
+  ErlNifPid logger_pid;
+
+  if(!enif_get_local_pid(env, argv[0], &logger_pid)) return exla::error(env, "Unable to get logger pid");
+
+  exla::ExlaLogSink* sink = new exla::ExlaLogSink(logger_pid);
+
+  // NO_DEFAULT_LOGGER doesn't behave right
+  for(auto *log_sink : tensorflow::TFGetLogSinks()) {
+    tensorflow::TFRemoveLogSink(log_sink);
+  }
+
+  tensorflow::TFAddLogSink(sink);
+
+  return exla::ok(env);
+}
+
 static ErlNifFunc exla_funcs[] = {
   /****** ExlaClient ******/
   {"get_host_client", 2, get_host_client},
@@ -1481,6 +1502,8 @@ static ErlNifFunc exla_funcs[] = {
   {"compile", 7, compile},
   {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND}
+  /********* Logger ***********/
+  {"start_log_sink", 1, start_log_sink}
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);

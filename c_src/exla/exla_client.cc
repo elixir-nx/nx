@@ -220,7 +220,7 @@ ExlaClient::ExlaClient(xla::LocalClient* client,
                        std::vector<std::unique_ptr<ExlaDevice>> devices,
                        std::unique_ptr<se::DeviceMemoryAllocator> allocator,
                        std::unique_ptr<tensorflow::Allocator> host_memory_allocator,
-                       std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options)
+                       std::unique_ptr<xla::gpu::GpuExecutableRunOptions> gpu_run_options)
                         : client_(client),
                           host_id_(host_id),
                           devices_(std::move(devices)),
@@ -597,7 +597,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
   std::unique_ptr<tensorflow::BFCAllocator> host_memory_allocator =
     allocator::GetGpuHostAllocator(devices.front()->executor());
 
-  auto gpu_run_options = absl::make_unique<xla::GpuExecutableRunOptions>();
+  auto gpu_run_options = absl::make_unique<xla::gpu::GpuExecutableRunOptions>();
 
   return new ExlaClient(client, /*host_id*/0,
                         /*devices*/std::move(devices),
