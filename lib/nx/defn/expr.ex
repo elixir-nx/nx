@@ -264,72 +264,58 @@ defmodule Nx.Defn.Expr do
     @vars "abcdefghijklmnopqrstuvwxyz"
 
     def inspect(expr, _opts) do
-      {var_map, _counter} = flatten_expr(expr)
-      str = inspect_expr(expr, var_map)
-      str
+      inspect_expr(expr)
     end
 
-    # This is a postorder traversal
-    defp flatten_expr(%Expr{id: id, args: args}) do
-      {var_map, counter} = flatten_expr_args(args, %{}, 0)
-      {var, counter} = counter_to_var(counter)
-      {Map.update(var_map, id, var, fn _ -> var end), counter}
-    end
-
-    defp flatten_expr_args([], var_map, counter), do: {var_map, counter}
-
-    defp flatten_expr_args([head | tail], var_map, counter) do
-      case head do
-        %Expr{id: id, op: :parameter, args: [identifier]} ->
-          var_map = Map.update(var_map, id, identifier, fn _ -> identifier end)
-          {var_map, counter}
-
-        %Expr{id: id, args: expr_args} ->
-          {var_map, counter} = flatten_expr_args(expr_args, var_map, counter)
-          {var_map, counter} = flatten_expr_args(tail, var_map, counter)
-          {var, counter} = counter_to_var(counter)
-          {Map.update(var_map, id, var, fn _ -> var end), counter}
-
-        _ ->
-          flatten_expr_args(tail, var_map, counter)
-      end
-    end
-
-    defp inspect_expr(%Expr{id: id, op: op, args: args}, var_map) do
-      exprs = inspect_expr_args(args, var_map)
+    defp inspect_expr(%Expr{id: id, op: op, args: args}) do
+      {exprs, params, var_map, counter} = inspect_expr_args(args, [], %{}, 0)
 
       args_strs = inspect_args(args, var_map)
-      expr_str = Map.get(var_map, id) <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(args_strs, ", ") <> " ]"
-      Enum.join(Enum.uniq(exprs ++ [expr_str]), "\n")
+      {var, counter} = counter_to_var(counter)
+
+      expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(args_strs, ", ") <> " ]"
+      Enum.join(Enum.uniq(params ++ exprs ++ [expr_str]), "\n")
     end
 
-    defp inspect_expr_args([], _), do: []
+    # Post-order traversal of the Expr AST, but we pull all parameters to the front
+    defp inspect_expr_args([], params, var_map, counter), do: {[], params, var_map, counter}
 
-    defp inspect_expr_args([head | tail], var_map) do
+    defp inspect_expr_args([head | tail], params, var_map, counter) do
       case head do
-        %Expr{id: id, shape: shape, op: :parameter} ->
-          ["param#{shape_to_string(shape)} " <> Map.get(var_map, id)]
+        %Expr{id: id, shape: shape, op: :parameter, args: [identifier]} ->
+          {[], params ++ ["param#{shape_to_string(shape)} " <> identifier], Map.update(var_map, id, identifier, fn _ -> identifier end), counter}
 
         %Expr{id: id, shape: shape, op: :tensor} ->
-          ["constant#{shape_to_string(shape)} " <> Map.get(var_map, id)]
+          {var, counter} = counter_to_var(counter)
+          var_map = Map.update(var_map, id, var, fn _ -> var end)
+          {["constant#{shape_to_string(shape)} " <> var], [], var_map, counter}
 
         %Expr{id: id, op: op, args: expr_args} ->
-          expr_children = inspect_expr_args(expr_args, var_map)
-          expr_siblings = inspect_expr_args(tail, var_map)
+          {expr_children, params, var_map, counter} = inspect_expr_args(expr_args, params, var_map, counter)
+          {expr_siblings, params, var_map, counter} = inspect_expr_args(tail, params, var_map, counter)
           expr_args_strs = inspect_args(expr_args, var_map)
-          expr_str = Map.get(var_map, id) <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(expr_args_strs, ", ") <> " ]"
-          expr_children ++ expr_siblings ++ [expr_str]
+          {var, counter} = counter_to_var(counter)
+          expr_str =  var <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(expr_args_strs, ", ") <> " ]"
+          {expr_children ++ expr_siblings ++ [expr_str], params, Map.update(var_map, id, var, fn _ -> var end), counter}
 
-        _ -> inspect_expr_args(tail, var_map)
+        _ -> inspect_expr_args(tail, params, var_map, counter)
       end
     end
 
     defp inspect_args([], _var_map), do: []
     defp inspect_args([arg | args], var_map) do
       case arg do
-        %Expr{id: id} -> [Map.get(var_map, id) | inspect_args(args, var_map)]
-        opts when is_list(opts) -> [Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end) | inspect_args(args, var_map)]
-        value -> ["#{inspect(value)}" | inspect_args(args, var_map)]
+        %Expr{id: id} ->
+          [Map.get(var_map, id) | inspect_args(args, var_map)]
+
+        [] ->
+          inspect_args(args, var_map)
+
+        opts when is_list(opts) ->
+          [Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{v}" end) | inspect_args(args, var_map)]
+
+        value ->
+          ["#{inspect(value)}" | inspect_args(args, var_map)]
       end
     end
 
