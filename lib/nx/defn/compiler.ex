@@ -186,7 +186,6 @@ defmodule Nx.Defn.Compiler do
   defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
     arity = length(args)
 
-    # TODO: Implement inspect for Nx.Defn.Expr
     unless function_exported?(Nx, name, arity) do
       compile_error!(meta, state, "undefined function Nx.#{name}/#{arity}")
     end
