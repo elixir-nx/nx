@@ -5,8 +5,8 @@ defmodule Nx.Defn.Expr do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
-  @enforce_keys [:shape, :op, :args]
-  defstruct [:shape, :op, :args]
+  @enforce_keys [:id, :shape, :op, :args]
+  defstruct [:id, :shape, :op, :args]
 
   @doc """
   Expression equivalent to `Nx.rank/1`.
@@ -105,9 +105,9 @@ defmodule Nx.Defn.Expr do
   @doc """
   Expression equivalent to `Nx.iota/2`.
   """
-  # TODO: Normalize axis
   def iota(shape, opts \\ []) do
     shape = to_shape(shape)
+    opts = Keyword.update(opts, :axis, Nx.Shape.rank(shape) - 1, &Nx.Shape.normalize_axis(shape, &1))
     make_expr(shape, :iota, [shape, opts])
   end
 
@@ -203,8 +203,8 @@ defmodule Nx.Defn.Expr do
   ## Expr normalization
 
   defp to_expr(%Expr{} = expr), do: expr
-  defp to_expr(number) when is_number(number), do: %Expr{args: number, op: :tensor, shape: {}}
-  defp to_expr(%T{shape: shape} = t), do: %Expr{args: t, op: :tensor, shape: shape}
+  defp to_expr(number) when is_number(number), do: make_expr({}, :tensor, [number])
+  defp to_expr(%T{shape: shape} = t), do: make_expr(shape, :tensor, [t])
 
   defp to_expr(other) do
     raise ArgumentError,
@@ -212,7 +212,8 @@ defmodule Nx.Defn.Expr do
   end
 
   defp make_expr(shape, op, args) do
-    %Expr{shape: shape, op: op, args: args}
+    id = System.unique_integer([:positive, :monotonic])
+    %Expr{id: id, shape: shape, op: op, args: args}
   end
 
   ## Shape normalization
@@ -227,5 +228,78 @@ defmodule Nx.Defn.Expr do
           "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
             "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
+  end
+
+  defimpl Inspect do
+    import Inspect.Algebra
+
+    @vars "abcdefghijklmnopqrstuvwxyz"
+
+    def inspect(expr, _opts) do
+      {var_map, _counter} = flatten_expr(expr)
+      str = inspect_expr(expr, var_map)
+      str
+    end
+
+    # This is a postorder traversal
+    defp flatten_expr(%Expr{id: id, args: args}) do
+      {var_map, counter} = flatten_expr_args(args, %{}, 0)
+      {var, counter} = counter_to_var(counter)
+      {Map.update(var_map, id, var, fn _ -> var end), counter}
+    end
+
+    defp flatten_expr_args([], var_map, counter), do: {var_map, counter}
+
+    defp flatten_expr_args([head | tail], var_map, counter) do
+      case head do
+        %Expr{id: id, args: expr_args} ->
+          {var_map, counter} = flatten_expr_args(expr_args, var_map, counter)
+          {var_map, counter} = flatten_expr_args(tail, var_map, counter)
+          {var, counter} = counter_to_var(counter)
+          {Map.update(var_map, id, var, fn _ -> var end), counter}
+
+        _ ->
+          flatten_expr_args(tail, var_map, counter)
+      end
+    end
+
+    defp inspect_expr(%Expr{id: id, op: op, args: args}, var_map) do
+      exprs = inspect_expr_args(args, var_map)
+
+      args_strs = inspect_args(args, var_map)
+      expr_str = Map.get(var_map, id) <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(args_strs, ", ") <> " ]"
+      Enum.join(Enum.uniq(exprs ++ [expr_str]), "\n")
+    end
+
+    defp inspect_expr_args([], _), do: []
+
+    defp inspect_expr_args([head | tail], var_map) do
+      case head do
+        %Expr{id: id, op: :tensor} ->
+          [Map.get(var_map, id)]
+
+        %Expr{id: id, op: op, args: expr_args} ->
+          expr_children = inspect_expr_args(expr_args, var_map)
+          expr_siblings = inspect_expr_args(tail, var_map)
+          expr_args_strs = inspect_args(expr_args, var_map)
+          expr_str = Map.get(var_map, id) <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(expr_args_strs, ", ") <> " ]"
+          expr_children ++ expr_siblings ++ [expr_str]
+
+        _ -> inspect_expr_args(tail, var_map)
+      end
+    end
+
+    defp inspect_args([], _var_map), do: []
+    defp inspect_args([arg | args], var_map) do
+      case arg do
+        %Expr{id: id} -> [Map.get(var_map, id) | inspect_args(args, var_map)]
+        opts when is_list(opts) -> [Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end) | inspect_args(args, var_map)]
+        value -> ["#{inspect(value)}" | inspect_args(args, var_map)]
+      end
+    end
+
+    defp counter_to_var(counter) do
+      {String.at(@vars, rem(counter, 26)), counter + 1}
+    end
   end
 end

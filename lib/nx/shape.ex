@@ -11,7 +11,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.rank({1, 2, 3})
       3
 
-  """  
+  """
   def rank(shape), do: tuple_size(shape)
 
   @doc """
@@ -22,7 +22,7 @@ defmodule Nx.Shape do
       iex> Nx.Shape.size({1, 2, 3})
       6
 
-  """  
+  """
   def size(shape), do: tuple_product(shape, tuple_size(shape))
 
   defp tuple_product(_tuple, 0), do: 1
@@ -234,19 +234,87 @@ defmodule Nx.Shape do
 
   @doc """
   Computes the shape of the dot operation.
+
+  The shape is contracted along specific dimensions or
+  broadcasted according to the semantics of the dot product
+  operation described in the `Nx.dot/2` documentation.
+
+  ## Examples
+
+  ### Scalars
+      iex> Nx.Shape.dot({}, {2, 3, 2})
+      {2, 3, 2}
+
+      iex> Nx.Shape.dot({2, 1}, {})
+      {2, 1}
+
+  ### Vectors
+
+      iex> Nx.Shape.dot({5}, {5})
+      {}
+
+  ### Matrices and n-D tensors
+
+      iex> Nx.Shape.dot({2, 2}, {2, 3})
+      {2, 3}
+
+      iex> Nx.Shape.dot({2, 3, 2}, {3, 2, 3})
+      {2, 3, 3, 3}
+
+  ### Error cases
+
+      iex> Nx.Shape.dot({2, 1}, {2, 2})
+      ** (ArgumentError) dot product expects shapes to be compatible, dimension 1 of left-side (1) does not equal dimension 0 of right-side (2)
   """
-  # TODO: Add examples
   def dot(s1, s2) do
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> binary_broadcast(s1, s2)
       {_, 0} -> binary_broadcast(s1, s2)
-      {n, 1} -> dot(s1, [n - 1], s2, [0])
-      {1, m} -> dot(s1, [0], s2, [m - 2])
-      {n, m} when n >= 2 and m >= 2 -> dot(s1, [n - 1], s2, [m - 2])
+      {n, 1} ->
+        validate_dot_axes!([n - 1], s1, [0], s2)
+        dot(s1, [n - 1], s2, [0])
+      {1, m} ->
+        validate_dot_axes!([0], s1, [m - 2], s2)
+        dot(s1, [0], s2, [m - 2])
+      {n, m} when n >= 2 and m >= 2 ->
+        validate_dot_axes!([n - 1], s1, [m - 2], s2)
+        dot(s1, [n - 1], s2, [m - 2])
     end
   end
 
   defp dot(s1, axes1, s2, axes2), do: outer(contract(s1, axes1), contract(s2, axes2))
+
+  @doc """
+  Validates the contraction dimensions of a dot product are correct.
+
+  In order for the dimensions to be correct, the value of each shape
+  at the given axes must match.
+
+  ## Examples
+
+      iex> Nx.Shape.validate_dot_axes!([0, 1], {1, 2, 3}, [1, 2], {3, 1, 2})
+      :ok
+
+      iex> Nx.Shape.validate_dot_axes!([0, 1], {1, 2, 3}, [1, 2], {1, 2, 3})
+      ** (ArgumentError) dot product expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
+  """
+  def validate_dot_axes!([a1 | axes1], s1, [a2 | axes2], s2) do
+    d1 = elem(s1, a1)
+    d2 = elem(s2, a2)
+
+    if d1 == d2 do
+      validate_dot_axes!(axes1, s1, axes2, s2)
+    else
+      raise ArgumentError,
+            "dot product expects shapes to be compatible," <>
+              " dimension #{a1} of left-side (#{d1}) does not equal" <>
+              " dimension #{a2} of right-side (#{d2})"
+    end
+  end
+
+  def validate_dot_axes!([], _s1, [], _s2) do
+    :ok
+  end
 
   @doc """
   Returns the outer product of two shapes.

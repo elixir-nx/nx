@@ -13,7 +13,7 @@ defmodule Nx.Util do
   ## Conversions
 
   @doc """
-  Returns the underlying tensor as a float list.
+  Returns the underlying tensor as a flat list.
 
   The list is returned as is (which is row-major).
 
@@ -102,7 +102,7 @@ defmodule Nx.Util do
   def dot(t1, [], t2, []), do: Nx.outer(t1, t2)
 
   def dot(%T{shape: s1} = t1, axes1, %T{shape: s2} = t2, axes2) do
-    validate_dot_axes!(axes1, s1, axes2, s2)
+    Nx.Shape.validate_dot_axes!(axes1, s1, axes2, s2)
 
     {tensor, _} =
       zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
@@ -111,24 +111,6 @@ defmodule Nx.Util do
       end)
 
     tensor
-  end
-
-  defp validate_dot_axes!([a1 | axes1], s1, [a2 | axes2], s2) do
-    d1 = elem(s1, a1)
-    d2 = elem(s2, a2)
-
-    if d1 == d2 do
-      validate_dot_axes!(axes1, s1, axes2, s2)
-    else
-      raise ArgumentError,
-            "dot product expects shapes to be compatible," <>
-              " dimension #{a1} of left-side (#{d1}) does not equal" <>
-              " dimension #{a2} of right-side (#{d2})"
-    end
-  end
-
-  defp validate_dot_axes!([], _s1, [], _s2) do
-    :ok
   end
 
   ## Reduces

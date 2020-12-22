@@ -101,7 +101,7 @@ defmodule Nx.DefnTest do
     defn random_normal(t), do: Nx.random_normal(t, 0.0, 1.0)
 
     test "iota" do
-      assert %Expr{op: :iota, args: [{3}, []], shape: {3}} = iota(Nx.tensor([1, 2, 3]))
+      assert %Expr{op: :iota, args: [{3}, [axis: 0]], shape: {3}} = iota(Nx.tensor([1, 2, 3]))
     end
 
     test "random uniform" do

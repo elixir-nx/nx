@@ -569,13 +569,15 @@ defmodule Nx do
         ]
       >
   """
-  # TODO: Allow negative axis
   def iota(tensor_or_shape, opts \\ [])
 
   def iota({}, opts), do: tensor(0, opts)
 
   def iota({n}, opts) do
     output_type = opts[:type] || {:s, 64}
+    # Validate axis
+    axis = opts[:axis] || 0
+    Nx.Shape.normalize_axis({n}, axis)
     data = for i <- 0..(n - 1), do: scalar_to_bin(i, output_type)
     %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: {n}, type: output_type}
   end
@@ -585,6 +587,7 @@ defmodule Nx do
     output_type = opts[:type] || {:s, 64}
 
     if axis = opts[:axis] do
+      axis = Nx.Shape.normalize_axis(shape, axis)
       {dims_before, [dim | dims_after]} =
         shape
         |> Tuple.to_list()
@@ -668,16 +671,10 @@ defmodule Nx do
   """
   def reshape(tensor, new_shape) do
     %T{shape: old_shape} = t = tensor(tensor)
-
     new_shape = shape!(new_shape)
-
-    if Nx.Shape.size(old_shape) != Nx.Shape.size(new_shape) do
-      raise ArgumentError,
-            "cannot reshape tensor. Current shape #{inspect(old_shape)} is not compatible with " <>
-              "new shape #{inspect(new_shape)}"
-    end
-
-    %{t | shape: new_shape}
+    # This does the shape validation
+    output_shape = Nx.Shape.reshape(old_shape, new_shape)
+    %{t | shape: output_shape}
   end
 
   @doc """
