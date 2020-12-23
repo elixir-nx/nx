@@ -198,239 +198,217 @@ defmodule Nx.DefnTest do
     end
   end
 
-  # describe "tensor constants" do
-  #   @two 2
-  #   defn add_two_attribute(t), do: t + @two
+  describe "tensor constants" do
+    @two 2
+    defn two_attribute(), do: @two
 
-  #   @two_per_two Nx.tensor([[1, 2], [3, 4]])
-  #   defn add_2x2_attribute(t), do: t + @two_per_two
+    test "expands module attributes to scalars" do
+      assert %Expr{op: :tensor, args: [2], shape: {}} = two_attribute()
+    end
 
-  #   test "expands module attributes to scalars" do
-  #     assert add_two_attribute(1) == Nx.tensor(3)
-  #     assert add_two_attribute(Nx.tensor([1, 2, 3])) == Nx.tensor([3, 4, 5])
+    @two_per_two Nx.tensor([[1, 2], [3, 4]])
+    defn two_per_two_attribute(), do: @two_per_two
+
+    test "expands module attributes to tensors" do
+      assert %Expr{op: :tensor, args: [_], shape: {2, 2}} = two_per_two_attribute()
+    end
+
+    @invalid_tensor Nx.tensor(1) |> Map.replace!(:data, {SomethingBad, :another})
+    defn invalid_tensor, do: @invalid_tensor
+
+    test "raises on invalid tensor" do
+      assert_raise ArgumentError,
+                   "tensors inside defn must be allocated on Nx.BitStringDevice",
+                   fn -> invalid_tensor() end
+    end
+  end
+
+  describe "operators" do
+    defn add_two(a, b), do: a + b
+
+    test "+" do
+      assert %Expr{op: :add, args: [_, _]} = add_two(1, 2)
+    end
+
+    defn subtract_two(a, b), do: a - b
+
+    test "-" do
+      assert %Expr{op: :subtract, args: [_, _]} = subtract_two(1, 2)
+    end
+
+    defn multiply_two(a, b), do: a * b
+
+    test "*" do
+      assert %Expr{op: :multiply, args: [_, _]} = multiply_two(1, 2)
+    end
+
+    defn divide_two(a, b), do: a / b
+
+    test "/" do
+      assert %Expr{op: :divide, args: [_, _]} = divide_two(1, 2)
+    end
+
+    defn band_two(a, b), do: a &&& b
+
+    test "&&&" do
+      assert %Expr{op: :bitwise_and, args: [_, _]} = band_two(1, 2)
+    end
+
+    defn bor_two(a, b), do: a ||| b
+
+    test "|||" do
+      assert %Expr{op: :bitwise_or, args: [_, _]} = bor_two(1, 2)
+    end
+
+    defn bxor_two(a, b), do: a ^^^ b
+
+    test "^^^" do
+      assert %Expr{op: :bitwise_xor, args: [_, _]} = bxor_two(1, 2)
+    end
+
+    defn bsl_two(a, b), do: a <<< b
+
+    test "<<<" do
+      assert %Expr{op: :left_shift, args: [_, _]} = bsl_two(1, 2)
+    end
+
+    defn bsr_two(a, b), do: a >>> b
+
+    test ">>>" do
+      assert %Expr{op: :right_shift, args: [_, _]} = bsr_two(1, 2)
+    end
+
+    defn add_two_with_pipe(a, b), do: a |> Nx.add(b)
+
+    test "|>" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_with_pipe(1, 2)
+    end
+
+    defn unary_plus(a), do: +a
+    defn unary_minus(a), do: -a
+
+    test "unary plus and minus" do
+      assert %Expr{op: :parameter, args: [_]} = unary_plus(1)
+      assert %Expr{op: :negate, args: [_]} = unary_minus(1)
+    end
+
+    defn unary_bnot(a), do: ~~~a
+
+    test "~~~" do
+      assert %Expr{op: :bitwise_not, args: [_]} = unary_bnot(1)
+    end
+  end
+
+  describe "kernel functions" do
+    defn max_two(a, b) do
+      max(a, b)
+    end
+
+    test "max/2" do
+      assert %Expr{op: :max, args: [_, _]} = max_two(1, 2)
+    end
+
+    defn min_two(a, b) do
+      min(a, b)
+    end
+
+    test "min/2" do
+      assert %Expr{op: :min, args: [_, _]} = min_two(1, 2)
+    end
+  end
+
+  describe "macros" do
+    defmodule Macros do
+      defmacro add(a, b) do
+        use Nx.Defn.Kernel
+
+        quote do
+          unquote(a) + unquote(b)
+        end
+      end
+    end
+
+    defn add_two_from_external_macro(a, b) do
+      require Macros
+      Macros.add(a, b)
+    end
+
+    test "external" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_from_external_macro(1, 2)
+    end
+
+    defmacrop add_internal(a, b) do
+      use Nx.Defn.Kernel
+
+      quote do
+        unquote(a) + unquote(b)
+      end
+    end
+
+    defn add_two_from_internal_macro(a, b) do
+      add_internal(a, b)
+    end
+
+    test "internal" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_from_external_macro(1, 2)
+    end
+
+    defn add_two_from_alias(a, b) do
+      alias Nx, as: N
+      N.add(a, b)
+    end
+
+    test "aliases" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_from_alias(1, 2)
+    end
+
+    dynamic_name = String.to_atom(Enum.join(~w(dynamic name add two), "_"))
+    operator = :add
+    defnp unquote(dynamic_name)(left, right), do: Nx.unquote(operator)(left, right)
+
+    test "dynamic name" do
+      assert %Expr{op: :add, args: [_, _]} = dynamic_name_add_two(1, 2)
+    end
+  end
+
+  describe "local functions" do
+    defn add_two_from_public(a, b) do
+      add_two_from_public_impl(a, b)
+    end
+
+    defn add_two_from_public_impl(a, b) do
+      a + b
+    end
+
+    test "public" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_from_public(1, 2)
+    end
+
+    defn add_two_from_private(a, b) do
+      add_two_from_private_impl(a, b)
+    end
+
+    defn add_two_from_private_impl(a, b) do
+      a + b
+    end
+
+    test "private" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_from_private(1, 2)
+    end
+  end
+
+  #   test "invalid remote" do
+  #     assert_raise CompileError,
+  #                  ~r"undefined numerical function Nx.DefnTest.unknown/2",
+  #                  fn ->
+  #                    defmodule Sample do
+  #                      import Nx.Defn
+  #                      defn add(a, b), do: Nx.DefnTest.unknown(a, b)
+  #                    end
+  #                  end
   #   end
 
-  #   test "expands module attributes to tensors" do
-  #     assert add_2x2_attribute(1) == Nx.tensor([[2, 3], [4, 5]])
-  #     assert add_2x2_attribute(Nx.tensor([1, 2])) == Nx.tensor([[2, 4], [4, 6]])
-  #   end
-  # end
-
-  # describe "operators" do
-  #   defn add_two(a, b), do: a + b
-
-  #   test "+" do
-  #     assert add_two(1, 2) == Nx.tensor(3)
-  #     assert add_two(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-
-  #   defn subtract_two(a, b), do: a - b
-
-  #   test "-" do
-  #     assert subtract_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([-1, 0, 1])
-  #   end
-
-  #   defn multiply_two(a, b), do: a * b
-
-  #   test "*" do
-  #     assert multiply_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([2, 4, 6])
-  #   end
-
-  #   defn divide_two(a, b), do: a / b
-
-  #   test "/" do
-  #     assert divide_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([0.5, 1.0, 1.5])
-  #   end
-
-  #   defn band_two(a, b), do: a &&& b
-
-  #   test "&&&" do
-  #     assert band_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([1, 0, 1])
-  #   end
-
-  #   defn bor_two(a, b), do: a ||| b
-
-  #   test "|||" do
-  #     assert bor_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-1, 1, 1])
-  #   end
-
-  #   defn bxor_two(a, b), do: a ^^^ b
-
-  #   test "^^^" do
-  #     assert bxor_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-2, 1, 0])
-  #   end
-
-  #   defn bsl_two(a, b), do: a <<< b
-
-  #   test "<<<" do
-  #     assert bsl_two(Nx.tensor([-1, 0, 1]), Nx.tensor(1)) == Nx.tensor([-2, 0, 2])
-  #   end
-
-  #   defn bsr_two(a, b), do: a >>> b
-
-  #   test ">>>" do
-  #     assert bsr_two(Nx.tensor([-2, 1, 2]), Nx.tensor(1)) == Nx.tensor([-1, 0, 1])
-  #   end
-
-  #   defn add_two_with_pipe(a, b), do: a |> Nx.add(b)
-
-  #   test "|>" do
-  #     assert add_two_with_pipe(1, 2) == Nx.tensor(3)
-  #     assert add_two_with_pipe(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-
-  #   defn unary_plus(a), do: +a
-  #   defn unary_minus(a), do: -a
-
-  #   test "unary plus and minus" do
-  #     assert unary_plus(1) == Nx.tensor(1)
-  #     assert unary_plus(Nx.tensor([-1, 0, 1])) == Nx.tensor([-1, 0, 1])
-
-  #     assert unary_minus(1) == Nx.tensor(-1)
-  #     assert unary_minus(Nx.tensor([-1, 0, 1])) == Nx.tensor([1, 0, -1])
-  #   end
-
-  #   defn unary_bnot(a), do: ~~~a
-
-  #   test "~~~" do
-  #     assert unary_bnot(Nx.tensor([-1, 0, 1])) == Nx.tensor([0, -1, -2])
-  #   end
-  # end
-
-  # describe "kernel functions" do
-  #   defn max_two(a, b) do
-  #     max(a, b)
-  #   end
-
-  #   test "max/2" do
-  #     assert max_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([2, 2, 3])
-  #   end
-
-  #   defn min_two(a, b) do
-  #     min(a, b)
-  #   end
-
-  #   test "min/2" do
-  #     assert min_two(Nx.tensor([1, 2, 3]), Nx.tensor(2)) == Nx.tensor([1, 2, 2])
-  #   end
-  # end
-
-  # describe "macros" do
-  #   defmodule Macros do
-  #     defmacro add(a, b) do
-  #       use Nx.Defn.Kernel
-
-  #       quote do
-  #         unquote(a) + unquote(b)
-  #       end
-  #     end
-  #   end
-
-  #   defn add_two_from_external_macro(a, b) do
-  #     require Macros
-  #     Macros.add(a, b)
-  #   end
-
-  #   test "external" do
-  #     assert add_two_from_external_macro(1, 2) == Nx.tensor(3)
-  #     assert add_two_from_external_macro(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-
-  #   defmacrop add_internal(a, b) do
-  #     use Nx.Defn.Kernel
-
-  #     quote do
-  #       unquote(a) + unquote(b)
-  #     end
-  #   end
-
-  #   defn add_two_from_internal_macro(a, b) do
-  #     add_internal(a, b)
-  #   end
-
-  #   test "internal" do
-  #     assert add_two_from_external_macro(1, 2) == Nx.tensor(3)
-  #     assert add_two_from_external_macro(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-
-  #   defn add_two_from_alias(a, b) do
-  #     alias Nx, as: N
-  #     N.add(a, b)
-  #   end
-
-  #   test "aliases" do
-  #     assert add_two_from_alias(1, 2) == Nx.tensor(3)
-  #     assert add_two_from_alias(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-
-  #   dynamic_name = String.to_atom(Enum.join(~w(dynamic name add two), "_"))
-  #   operator = :add
-  #   defp unquote(dynamic_name)(left, right), do: Nx.unquote(operator)(left, right)
-
-  #   test "dynamic name" do
-  #     assert dynamic_name_add_two(1, 2) == Nx.tensor(3)
-  #     assert dynamic_name_add_two(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-  # end
-
-  # describe "local functions" do
-  #   defn add_two_from_public(a, b) do
-  #     add_two_from_public_impl(a, b)
-  #   end
-
-  #   defn add_two_from_public_impl(a, b) do
-  #     a + b
-  #   end
-
-  #   test "public" do
-  #     assert add_two_from_public(1, 2) == Nx.tensor(3)
-  #     assert add_two_from_public(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-
-  #   defn add_two_from_private(a, b) do
-  #     add_two_from_private_impl(a, b)
-  #   end
-
-  #   defn add_two_from_private_impl(a, b) do
-  #     a + b
-  #   end
-
-  #   test "private" do
-  #     assert add_two_from_private(1, 2) == Nx.tensor(3)
-  #     assert add_two_from_private(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
-
-  #   defn add_two_var_conflict(a, b) do
-  #     c = 1
-  #     b = add_two_var_conflict_impl(a, b)
-  #     b + c
-  #   end
-
-  #   defn add_two_var_conflict_impl(c, d) do
-  #     c + d
-  #   end
-
-  #   test "var conflict" do
-  #     assert add_two_var_conflict(2, 3) == Nx.tensor(6)
-  #   end
-
-  #   defn add_two_with_underscore(a, b), do: add_two_with_underscore_impl(a, b)
-
-  #   defn add_two_with_underscore_impl(_, b) do
-  #     _ = 2
-  #     b
-  #   end
-
-  #   test "handles underscores" do
-  #     assert ast_to_string(:add_two_with_underscore, 2) == """
-  #            (
-  #              nvar = 2
-  #              b
-  #            )\
-  #            """
-  #   end
-  # end
-
+  # TODO
   # describe "remote functions" do
   #   defmodule Remote do
   #     defn add_two(c, d), do: c + d
@@ -458,7 +436,8 @@ defmodule Nx.DefnTest do
   #   end
   # end
 
-  # describe "module attributes" do
+  # TODO
+  # describe "module attributes config" do
   #   test "overrides default compiler with custom" do
   #     defmodule Sample do
   #       import Nx.Defn
@@ -475,218 +454,92 @@ defmodule Nx.DefnTest do
   #   end
   # end
 
-  # describe "warnings" do
-  #   import ExUnit.CaptureIO
+  describe "compilation errors" do
+    test "invalid numerical expression" do
+      assert_raise CompileError, ~r"#{location(+5)}: invalid numerical expression", fn ->
+        defmodule Sample do
+          import Nx.Defn
 
-  #   test "unused private functions" do
-  #     assert capture_io(:stderr, fn ->
-  #              defmodule Sample do
-  #                import Nx.Defn
-  #                defnp will_be_unused(a, b), do: a + b
-  #              end
-  #            end) =~ "function will_be_unused/2 is unused"
-  #   after
-  #     purge(Sample)
-  #   end
+          defn add(_a, _b) do
+            receive do
+              :ok -> :ok
+            end
+          end
+        end
+      end
+    end
 
-  #   test "empty blocks" do
-  #     assert capture_io(:stderr, fn ->
-  #              defmodule Sample do
-  #                import Nx.Defn
+    test "non variables used as arguments" do
+      assert_raise CompileError,
+                   ~r"#{location(+4)}: only variables and tuples are allowed as arguments in defn",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(1, 2), do: 3
+                     end
+                   end
+    end
 
-  #                defn empty(_a, _b) do
-  #                end
-  #              end
-  #            end) =~ "body has nil return type, 0 will be returned instead"
-  #   after
-  #     purge(Sample)
-  #   end
+    test "dup vars used as arguments" do
+      assert_raise CompileError,
+                   ~r"#{location(+4)}: variable \"a\" appears twice in pattern \[a, a\]",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a, a), do: 3
+                     end
+                   end
+    end
 
-  #   test "does not emit used underscore vars" do
-  #     assert capture_io(:stderr, fn ->
-  #              defmodule Sample do
-  #                import Nx.Defn
-  #                defn empty(a, _b), do: a
-  #              end
-  #            end) == ""
-  #   after
-  #     purge(Sample)
-  #   end
-  # end
+    test "dup vars used as patterns" do
+      assert_raise CompileError,
+                   ~r"#{location(+4)}: variable \"b\" appears twice in pattern \{b, b\}",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a), do: {b, b} = a
+                     end
+                   end
+    end
 
-  # describe "errors" do
-  #   test "invalid numerical expression" do
-  #     assert_raise CompileError, ~r"#{location(+4)}: invalid numerical expression", fn ->
-  #       defmodule Sample do
-  #         import Nx.Defn
+    test "defaults" do
+      assert_raise CompileError,
+                   ~r"#{location(+4)}: default arguments are not supported by defn",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add(a, b \\ 2), do: a + b
+                     end
+                   end
+    end
 
-  #         defn add(_a, _b) do
-  #           receive do
-  #             :ok -> :ok
-  #           end
-  #         end
-  #       end
-  #     end
-  #   end
+    test "invalid defn compiler" do
+      assert_raise ArgumentError,
+                   ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
+                   fn ->
+                     defmodule Sample do
+                       @defn_compiler "unknown"
+                       import Nx.Defn
+                       defn add(a, b), do: a + b
+                     end
+                   end
+    end
 
-  #   test "recursive definitions" do
-  #     assert_raise CompileError,
-  #                  ~r"#{location(+4)}: add/2 is being called recursively by add/2",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: add(a, b)
-  #                    end
-  #                  end
+    test "invalid default defn compiler" do
+      assert_raise ArgumentError,
+                   ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
+                   fn ->
+                     defmodule Sample do
+                       @default_defn_compiler "unknown"
+                       import Nx.Defn
+                       defn add(a, b), do: a + b
+                     end
+                   end
+    end
+  end
 
-  #     assert_raise CompileError, ~r"add/2 is being called recursively by add1/2", fn ->
-  #       defmodule Sample do
-  #         import Nx.Defn
-  #         defn add(a, b), do: add1(a, b)
-  #         defn add1(a, b), do: add(a, b)
-  #       end
-  #     end
-  #   end
-
-  #   test "non variables used as arguments" do
-  #     assert_raise CompileError,
-  #                  ~r"#{location(+4)}: only variables and tuples are allowed as arguments in defn",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(1, 2), do: 3
-  #                    end
-  #                  end
-  #   end
-
-  #   test "dup vars used as arguments" do
-  #     assert_raise CompileError,
-  #                  ~r"#{location(+4)}: variable \"a\" appears twice in pattern \[a, a\]",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, a), do: 3
-  #                    end
-  #                  end
-  #   end
-
-  #   test "dup vars used as patterns" do
-  #     assert_raise CompileError,
-  #                  ~r"#{location(+4)}: variable \"b\" appears twice in pattern \{b, b\}",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a), do: {b, b} = a
-  #                    end
-  #                  end
-  #   end
-
-  #   test "defaults" do
-  #     assert_raise CompileError,
-  #                  ~r"#{location(+4)}: default arguments are not supported by defn",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, b \\ 2), do: a + b
-  #                    end
-  #                  end
-  #   end
-
-  #   test "unknown defn compiler" do
-  #     assert_raise UndefinedFunctionError,
-  #                  ~r"Unknown.__compile__/6",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      @defn_compiler Unknown
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: a + b
-  #                    end
-  #                  end
-  #   end
-
-  #   test "unknown module" do
-  #     assert_raise CompileError,
-  #                  ~r"cannot invoke Unknown.foo/2 because Unknown does not exist",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: Unknown.foo(a, b)
-  #                    end
-  #                  end
-  #   end
-
-  #   test "unknown defn" do
-  #     assert_raise CompileError,
-  #                  ~r"undefined numerical function Nx.DefnTest.unknown/2",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: Nx.DefnTest.unknown(a, b)
-  #                    end
-  #                  end
-  #   end
-
-  #   test "invalid defn compiler" do
-  #     assert_raise ArgumentError,
-  #                  ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      @defn_compiler "unknown"
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: a + b
-  #                    end
-  #                  end
-  #   end
-
-  #   test "invalid default defn compiler" do
-  #     assert_raise ArgumentError,
-  #                  ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      @default_defn_compiler "unknown"
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: a + b
-  #                    end
-  #                  end
-  #   end
-
-  #   test "invalid list" do
-  #     assert_raise CompileError,
-  #                  ~r"invalid numerical expression: \[a, b\] \(only keyword lists or lists of integers are allowed\)",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: [a, b]
-  #                    end
-  #                  end
-  #   end
-
-  #   test "invalid keyword list" do
-  #     assert_raise CompileError,
-  #                  ~r"invalid numerical expression: \[a: a, b: b\] \(the only allowed keys",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: [a: a, b: b]
-  #                    end
-  #                  end
-  #   end
-
-  #   test "invalid tensor constant" do
-  #     assert_raise CompileError,
-  #                  ~r"defn expects a tensor allocated on Nx.BitStringDevice as a constant",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      @nx_tensor Nx.tensor(1) |> Map.replace!(:data, {SomethingBad, :another})
-  #                      import Nx.Defn
-  #                      defn default, do: @nx_tensor
-  #                    end
-  #                  end
-  #   end
-  # end
-
-  # defp purge(module) do
-  #   :code.purge(module)
-  #   :code.delete(module)
-  # end
+  defp purge(module) do
+    :code.purge(module)
+    :code.delete(module)
+  end
 end

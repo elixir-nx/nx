@@ -235,7 +235,16 @@ defmodule Nx.Defn.Expr do
 
   defp to_expr(%Expr{} = expr), do: expr
   defp to_expr(number) when is_number(number), do: make_expr({}, :tensor, [number])
-  defp to_expr(%T{shape: shape} = t), do: make_expr(shape, :tensor, [t])
+
+  defp to_expr(%T{shape: shape, data: data} = t) do
+    case data do
+      {Nx.BitStringDevice, bitstring} when is_bitstring(bitstring) ->
+        make_expr(shape, :tensor, [t])
+
+      _ ->
+        raise ArgumentError, "tensors inside defn must be allocated on Nx.BitStringDevice"
+    end
+  end
 
   defp to_expr(other) do
     raise ArgumentError,

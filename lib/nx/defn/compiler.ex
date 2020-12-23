@@ -25,7 +25,7 @@ defmodule Nx.Defn.Compiler do
               env :: Macro.Env.t(),
               kind :: :def | :defp,
               vars :: [term],
-              fun :: ([Nx.Defn.Expr.t] -> Nx.Defn.Expr.t),
+              fun :: ([Nx.Defn.Expr.t()] -> Nx.Defn.Expr.t()),
               opts :: keyword
             ) :: term
 
@@ -51,7 +51,7 @@ defmodule Nx.Defn.Compiler do
   # The user compiler may have multiple passes and it has the ability
   # to run said additional passes either at runtime or compilation time.
   @doc false
-  def compile(%Macro.Env{module: module, file: file, line: line} = env, exports) do
+  def compile(%Macro.Env{module: module, file: file, line: line}, exports) do
     {:module, Nx} = Code.ensure_compiled(Nx)
 
     state = %{
@@ -73,10 +73,11 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], quoted ++ [catch_all]}
   end
 
-  defp compile_each({{name, arity} = def, def_meta}, state) do
+  defp compile_each({{name, _arity} = def, def_meta}, state) do
     {{kind, meta, args, ast}, state} = get_and_normalize_definition(def, state)
     vars = collect_vars(args)
     {def_module, def_opts} = def_meta.compiler
+    impl_name = impl_name(kind, name)
 
     quote line: state.line do
       Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
@@ -86,10 +87,14 @@ defmodule Nx.Defn.Compiler do
           __ENV__,
           unquote(kind),
           unquote(vars),
-          fn unquote(vars) -> Nx.Defn.Expr.to_result(unquote(ast)) end,
+          fn unquote(vars) ->
+            Nx.Defn.Expr.to_result(unquote(impl_name)(unquote_splicing(args)))
+          end,
           unquote(Macro.escape(def_opts))
         )
       end
+
+      Kernel.unquote(kind)(unquote(impl_name)(unquote_splicing(args)), do: unquote(ast))
     end
   end
 
@@ -128,14 +133,10 @@ defmodule Nx.Defn.Compiler do
 
   ## Normalization
 
-  defp normalize({:__block__, meta, exprs}, state) do
-    {exprs, state} = normalize_list(exprs, state)
-    {{:__block__, meta, exprs}, state}
-  end
-
-  defp normalize({:{}, meta, args}, state) do
+  defp normalize({special_form, meta, args}, state)
+       when special_form in [:{}, :%{}, :__block__] do
     {args, state} = normalize_list(args, state)
-    {{:{}, meta, args}, state}
+    {{special_form, meta, args}, state}
   end
 
   defp normalize({:=, meta, [left, right]}, state) do
@@ -145,32 +146,17 @@ defmodule Nx.Defn.Compiler do
     {{:=, meta, [left, right]}, state}
   end
 
-  defp normalize(
-         {:%{}, meta, [__struct__: Nx.Tensor, data: {device, data}, shape: shape, type: {_, _}]} =
-           tensor,
-         state
-       )
-       when is_tuple(shape) do
-    if device == Nx.BitStringDevice and is_bitstring(data) do
-      {tensor, state}
-    else
-      compile_error!(
-        meta,
-        state,
-        "defn expects a tensor allocated on Nx.BitStringDevice as a constant/module attribute, got: " <>
-          inspect(device)
-      )
-    end
-  end
-
   defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
-    {args, state} = normalize_list(args, state)
+    pair = {name, length(args)}
 
-    if Macro.special_form?(name, length(args)) do
-      invalid_numerical_expression!(expr, state)
+    case state.exports do
+      %{^pair => %{kind: kind}} ->
+        {args, state} = normalize_list(args, state)
+        {{impl_name(kind, name), meta, args}, state}
+
+      %{} ->
+        invalid_numerical_expression!(expr, state)
     end
-
-    {{name, meta, args}, state}
   end
 
   defp normalize(underscore, state) when is_underscore(underscore) do
@@ -226,7 +212,6 @@ defmodule Nx.Defn.Compiler do
   defp normalize({{:., _, [remote, name]} = call, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
     # TODO: validate the remote is a defn
-    # TODO: How to do so without a compile-time dep. after_compile?
     {args, state} = normalize_list(args, state)
     {{call, meta, args}, state}
   end
@@ -241,7 +226,8 @@ defmodule Nx.Defn.Compiler do
     normalize_list(list, state)
   end
 
-  defp normalize(literal, state) when is_number(literal) or is_atom(literal) do
+  defp normalize(literal, state)
+       when is_number(literal) or is_atom(literal) or is_bitstring(literal) do
     {literal, state}
   end
 
@@ -291,15 +277,6 @@ defmodule Nx.Defn.Compiler do
 
   ## Shared helpers
 
-  defp var_counter({var, meta, ctx}) when is_atom(var) and is_atom(ctx) do
-    Keyword.fetch!(meta, :counter)
-  end
-
-  defp new_var(state) do
-    counter = state.version + 1
-    {{:nvar, [counter: counter], __MODULE__}, %{state | version: counter}}
-  end
-
   defp maybe_meta({_, meta, _}), do: meta
   defp maybe_meta(_), do: []
 
@@ -329,16 +306,10 @@ defmodule Nx.Defn.Compiler do
     :ok
   end
 
-  defp compile_warn(meta, state, message) do
-    {name, arity} = state.function
-    line = meta[:line] || state.line
-    file = String.to_charlist(state.file)
-    stacktrace = [{state.module, name, arity, line: line, file: file}]
-    IO.warn(message, stacktrace)
-  end
-
   defp compile_error!(meta, state, description) do
     line = meta[:line] || state.line
     raise CompileError, line: line, file: state.file, description: description
   end
+
+  defp impl_name(kind, name), do: :"__#{kind}:#{name}__"
 end
