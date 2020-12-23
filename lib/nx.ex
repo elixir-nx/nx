@@ -673,9 +673,7 @@ defmodule Nx do
   def reshape(tensor, new_shape) do
     %T{shape: old_shape} = t = tensor(tensor)
     new_shape = shape!(new_shape)
-    # This does the shape validation
-    output_shape = Nx.Shape.reshape(old_shape, new_shape)
-    %{t | shape: output_shape}
+    %{t | shape: Nx.Shape.reshape(old_shape, new_shape)}
   end
 
   @doc """
@@ -2797,7 +2795,7 @@ defmodule Nx do
   ### Errors
 
       iex> Nx.sum(Nx.tensor([[1, 2]]), axes: [2])
-      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
+      ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
   """
   def sum(tensor, opts \\ []) do
@@ -2860,11 +2858,6 @@ defmodule Nx do
           [8.0, 11.0]
         ]
       >
-
-  ### Errors
-
-      iex> Nx.mean(Nx.tensor([[1, 2]]), axes: [2])
-      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
 
   """
   def mean(tensor, opts \\ []) do
@@ -3237,7 +3230,7 @@ defmodule Nx do
   ### Error Cases
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
-      ** (ArgumentError) dot product expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
+      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
   """
   def dot(t1, t2) do
     {%T{shape: s1} = t1, %T{shape: s2} = t2} = {tensor(t1), tensor(t2)}
@@ -3290,26 +3283,21 @@ defmodule Nx do
   """
   def outer(t1, t2) do
     output_type = Nx.Type.merge_tensors(t1, t2)
+    %T{shape: s1, type: left_type} = t1 = tensor(t1)
+    %T{shape: s2, type: right_type} = t2 = tensor(t2)
 
-    case {tensor(t1), tensor(t2)} do
-      {%T{shape: {}} = t1, %T{shape: {}} = t2} ->
-        multiply(t1, t2)
+    b1 = Nx.Util.to_bitstring(t1)
+    b2 = Nx.Util.to_bitstring(t2)
 
-      {%T{shape: s1, type: left_type} = t1, %T{shape: s2, type: right_type} = t2} ->
-        b1 = Nx.Util.to_bitstring(t1)
-        b2 = Nx.Util.to_bitstring(t2)
+    data =
+      match_types [left_type, right_type, output_type] do
+        for <<match!(left, 0) <- b1>>,
+            <<match!(right, 1) <- b2>>,
+            into: <<>>,
+            do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
+      end
 
-        data =
-          match_types [left_type, right_type, output_type] do
-            for <<match!(left, 0) <- b1>>,
-                <<match!(right, 1) <- b2>>,
-                into: <<>>,
-                do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
-          end
-
-        shape = List.to_tuple(Tuple.to_list(s1) ++ Tuple.to_list(s2))
-        %T{shape: shape, type: output_type, data: {Nx.BitStringDevice, data}}
-    end
+    %T{shape: Nx.Shape.outer(s1, s2), type: output_type, data: {Nx.BitStringDevice, data}}
   end
 
   @doc """
@@ -3483,7 +3471,7 @@ defmodule Nx do
             weighted_traverse(traverse_list, chunk, read_size)
           end
 
-        shape = Enum.map(axes, &elem(shape, &1)) |> List.to_tuple()
+        shape = Nx.Shape.transpose(shape, axes)
         %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
     end
   end

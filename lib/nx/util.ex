@@ -94,16 +94,13 @@ defmodule Nx.Util do
     %T{data: {Nx.BitStringDevice, bitstring}, type: type, shape: {dim}}
   end
 
-  ## High-level
-
   @doc """
   Computes the dot product of two tensors over the given axes.
   """
+  # TODO: Move this to Nx
   def dot(t1, [], t2, []), do: Nx.outer(t1, t2)
 
-  def dot(%T{shape: s1} = t1, axes1, %T{shape: s2} = t2, axes2) do
-    Nx.Shape.validate_dot_axes!(axes1, s1, axes2, s2)
-
+  def dot(%T{} = t1, axes1, %T{} = t2, axes2) do
     {tensor, _} =
       zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
         res = lhs * rhs + acc
@@ -240,14 +237,21 @@ defmodule Nx.Util do
   ### Errors
 
       iex> Nx.Util.reduce(Nx.tensor([[1, 2, 3]]), 0, [axes: [2]], fn x, acc -> {x+acc, x+acc} end)
-      ** (ArgumentError) axes [2] must be unique integers between 0 and 1
+      ** (ArgumentError) given axis (2) invalid for shape with rank 2
   """
   def reduce(tensor, acc, opts \\ [], fun)
       when is_list(opts) and is_function(fun, 2) do
     %T{type: {_, size} = type, shape: shape} = t = Nx.tensor(tensor)
-
     output_type = opts[:type] || type
-    {view, new_shape} = bin_aggregate_axes(to_bitstring(t), opts[:axes], shape, size)
+
+    {view, new_shape} =
+      if axes = opts[:axes] do
+        axes = Nx.Shape.normalize_axes(shape, axes)
+        view = bin_aggregate_axes(to_bitstring(t), axes, shape, size)
+        {view, Nx.Shape.contract(shape, axes)}
+      else
+        {[to_bitstring(t)], {}}
+      end
 
     data_and_acc =
       for axis <- view do
@@ -265,7 +269,7 @@ defmodule Nx.Util do
 
     {%T{
        data: {Nx.BitStringDevice, IO.iodata_to_binary(final_data)},
-       shape: List.to_tuple(new_shape),
+       shape: new_shape,
        type: output_type
      }, final_accs}
   end
@@ -280,13 +284,10 @@ defmodule Nx.Util do
 
   The accumulator can be any generic term.
 
-  The size of the dimensions of `t1` and `t2` must match along
-  `axes1` and `axes2`. `axes1` and/or `axes2` may be `nil`, in
-  which case, the entire tensor is reduced to a scalar.
+  The size of the dimensions of `t1` and `t2` must match
+  along `axes1` and `axes2`.
 
   ## Examples
-
-  ### Aggregate over axes
 
       iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       iex> t2 = Nx.tensor([[1, 2], [3, 4], [5, 6]])
@@ -302,44 +303,17 @@ defmodule Nx.Util do
       iex> accs
       [22, 28, 49, 64]
 
-  ### Aggregating over an entire tensor
-
-      iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> t2 = Nx.tensor([[1, 2], [3, 4], [5, 6]])
-      iex> {new_tensor, accs} = Nx.Util.zip_reduce(t1, nil, t2, nil, 0, fn {a, b}, acc -> {a+b+acc, a+b+acc} end)
-      iex> new_tensor
-      #Nx.Tensor<
-        s64
-        42
-      >
-      iex> accs
-      [42]
-
-      iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> t2 = Nx.tensor([[1], [2], [3]])
-      iex> {new_tensor, accs} = Nx.Util.zip_reduce(t1, [1], t2, nil, 0, fn {a, b}, acc -> {a*b+acc, a*b+acc} end)
-      iex> new_tensor
-      #Nx.Tensor<
-        s64[2]
-        [14, 32]
-      >
-      iex> accs
-      [14, 32]
-
-  ### Errors
-
-      iex> t1 = Nx.tensor([1, 2, 3])
-      iex> t2 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
-      iex> Nx.Util.zip_reduce(t1, [0], t2, [0], 0, fn {a, b}, acc -> {a+b+acc, a+b+acc} end)
-      ** (ArgumentError) unable to zip tensors along the given axes. Dimensions of zipped axes must match, got 3 and 2
   """
-  def zip_reduce(t1, axes1, t2, axes2, acc, fun)
+  def zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun)
       when is_function(fun, 2) do
     %T{type: left_type} = t1 = Nx.tensor(t1)
     %T{type: right_type} = t2 = Nx.tensor(t2)
-
     output_type = Nx.Type.merge(left_type, right_type)
-    {v1, v2, new_shape} = bin_zip_axes(t1, axes1, t2, axes2)
+
+    axes1 = Nx.Shape.normalize_axes(t1.shape, axes1)
+    axes2 = Nx.Shape.normalize_axes(t2.shape, axes2)
+    new_shape = Nx.Shape.zip_reduce(t1.shape, axes1, t2.shape, axes2)
+    {v1, v2} = bin_zip_axes(t1, axes1, t2, axes2)
 
     data_and_acc =
       for b1 <- v1, b2 <- v2 do
@@ -375,27 +349,10 @@ defmodule Nx.Util do
     {_, folding_size} = t1.type
     {_, folded_size} = t2.type
 
-    {folding_view, folding_shape} =
-      bin_aggregate_axes(to_bitstring(t1), axes1, t1.shape, folding_size)
-
-    {folded_view, folded_shape} =
-      bin_aggregate_axes(to_bitstring(t2), axes2, t2.shape, folded_size)
-
-    folding_dim = zip_dims(t1, axes1)
-    folded_dim = zip_dims(t2, axes2)
-
-    unless folding_dim == folded_dim do
-      raise ArgumentError,
-            "unable to zip tensors along the given axes. " <>
-              "Dimensions of zipped axes must match, got #{folding_dim} and #{folded_dim}"
-    end
-
-    {folding_view, folded_view, List.to_tuple(folding_shape ++ folded_shape)}
+    folding_view = bin_aggregate_axes(to_bitstring(t1), axes1, t1.shape, folding_size)
+    folded_view = bin_aggregate_axes(to_bitstring(t2), axes2, t2.shape, folded_size)
+    {folding_view, folded_view}
   end
-
-  defp zip_dims(t, nil), do: Nx.Shape.size(t.shape)
-  defp zip_dims(_, []), do: 1
-  defp zip_dims(t, [axis | axes]), do: elem(t.shape, axis) * zip_dims(t, axes)
 
   # Helper for reducing down a single axis over two tensors,
   # returning tensor data and a final accumulator.
@@ -424,31 +381,18 @@ defmodule Nx.Util do
   # entire binary as it is layed out in memory and we
   # expect the entire tensor to be reduced down to a scalar.
   defp bin_aggregate_axes(binary, axes, shape, size) do
-    # TODO: if axes is equal to the all dimensions in order, go to the second clause
-    if axes do
-      {chunk_size, read_size, path, shape} = aggregate_axes(axes, shape, size)
+    {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
 
-      view =
-        for <<chunk::size(chunk_size)-bitstring <- binary>> do
-          weighted_traverse(path, chunk, read_size)
-        end
+    view =
+      for <<chunk::size(chunk_size)-bitstring <- binary>> do
+        weighted_traverse(path, chunk, read_size)
+      end
 
-      {List.flatten(view), shape}
-    else
-      {[binary], []}
-    end
+    List.flatten(view)
   end
 
-  defp aggregate_axes([_ | _] = given_axes, shape, size) do
-    rank = tuple_size(shape)
-    axes = Enum.sort(Enum.map(given_axes, &if(&1 >= 0, do: &1, else: rank + &1)))
-
-    unless Enum.all?(axes, &(&1 >= 0 and &1 < rank)) and
-             length(Enum.uniq(axes)) == length(given_axes) do
-      raise ArgumentError,
-            "axes #{inspect(axes)} must be unique integers between 0 and #{rank - 1}"
-    end
-
+  defp aggregate_axes([_ | _] = axes, shape, size) do
+    axes = Enum.sort(axes)
     min = hd(axes)
     weighted_shape = weighted_shape(shape, size)
     [{axis_count, axis_weight} | _] = weighted_shape = Enum.drop(weighted_shape, min)
@@ -464,7 +408,7 @@ defmodule Nx.Util do
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
 
     path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
-    {chunk_size, read_size, path, aggregate_shape(shape, axes, rank)}
+    {chunk_size, read_size, path}
   end
 
   defp aggregate_axes(axes, _shape, _size) do
@@ -484,16 +428,4 @@ defmodule Nx.Util do
 
   defp aggregate_read(shape, _i, _axis, size),
     do: {shape, size}
-
-  defp aggregate_shape(shape, axes, rank), do: aggregate_shape(shape, axes, 0, rank)
-
-  defp aggregate_shape(_shape, _axes, n, n), do: []
-
-  defp aggregate_shape(shape, axes, i, n) do
-    if i in axes do
-      aggregate_shape(shape, axes, i + 1, n)
-    else
-      [elem(shape, i) | aggregate_shape(shape, axes, i + 1, n)]
-    end
-  end
 end

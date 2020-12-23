@@ -1,8 +1,6 @@
 defmodule Nx.Shape do
   @moduledoc false
 
-  # TODO: Change Nx/Nx.Util module to use Nx.Shape whenever possible
-
   @doc """
   Computes the rank of a shape.
 
@@ -252,7 +250,7 @@ defmodule Nx.Shape do
   ### Error cases
 
       iex> Nx.Shape.dot({2, 1}, {2, 2})
-      ** (ArgumentError) dot product expects shapes to be compatible, dimension 1 of left-side (1) does not equal dimension 0 of right-side (2)
+      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 1 of left-side (1) does not equal dimension 0 of right-side (2)
   """
   def dot(s1, s2) do
     case {tuple_size(s1), tuple_size(s2)} do
@@ -263,50 +261,52 @@ defmodule Nx.Shape do
         binary_broadcast(s1, s2)
 
       {n, 1} ->
-        validate_dot_axes!([n - 1], s1, [0], s2)
-        dot(s1, [n - 1], s2, [0])
+        zip_reduce(s1, [n - 1], s2, [0])
 
       {1, m} ->
-        validate_dot_axes!([0], s1, [m - 2], s2)
-        dot(s1, [0], s2, [m - 2])
+        zip_reduce(s1, [0], s2, [m - 2])
 
       {n, m} when n >= 2 and m >= 2 ->
-        validate_dot_axes!([n - 1], s1, [m - 2], s2)
-        dot(s1, [n - 1], s2, [m - 2])
+        zip_reduce(s1, [n - 1], s2, [m - 2])
     end
   end
 
-  defp dot(s1, axes1, s2, axes2), do: outer(contract(s1, axes1), contract(s2, axes2))
-
   @doc """
-  Validates the contraction dimensions of a dot product are correct.
+  Computes the shape for zip_reduce.
 
   In order for the dimensions to be correct, the value of each shape
-  at the given axes must match.
+  at the given axes must match. It expects axes to have already been
+  normalized.
 
   ## Examples
 
-      iex> Nx.Shape.validate_dot_axes!([0, 1], {1, 2, 3}, [1, 2], {3, 1, 2})
-      :ok
+      iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], {3, 1, 2}, [1, 2])
+      {3, 3}
 
-      iex> Nx.Shape.validate_dot_axes!([0, 1], {1, 2, 3}, [1, 2], {1, 2, 3})
-      ** (ArgumentError) dot product expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
+      iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], {1, 2, 3}, [1, 2])
+      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
+
   """
-  def validate_dot_axes!([a1 | axes1], s1, [a2 | axes2], s2) do
+  def zip_reduce(s1, axes1, s2, axes2) do
+    validate_zip_reduce_axes!(s1, axes1, s2, axes2)
+    outer(contract(s1, axes1), contract(s2, axes2))
+  end
+
+  def validate_zip_reduce_axes!(s1, [a1 | axes1], s2, [a2 | axes2]) do
     d1 = elem(s1, a1)
     d2 = elem(s2, a2)
 
     if d1 == d2 do
-      validate_dot_axes!(axes1, s1, axes2, s2)
+      validate_zip_reduce_axes!(s1, axes1, s2, axes2)
     else
       raise ArgumentError,
-            "dot product expects shapes to be compatible," <>
+            "dot/zip expects shapes to be compatible," <>
               " dimension #{a1} of left-side (#{d1}) does not equal" <>
               " dimension #{a2} of right-side (#{d2})"
     end
   end
 
-  def validate_dot_axes!([], _s1, [], _s2) do
+  def validate_zip_reduce_axes!(_, [], _, []) do
     :ok
   end
 
