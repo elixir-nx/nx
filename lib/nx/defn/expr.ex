@@ -140,23 +140,34 @@ defmodule Nx.Defn.Expr do
     make_expr(shape, :iota, [shape, opts])
   end
 
-  random_ops = [:random_normal, :random_uniform]
+  @doc """
+  Expression equivalent to `Nx.random_uniform/2`.
+  """
+  def random_uniform(shape, opts \\ []) do
+    random_uniform(shape, 0.0, 1.0, opts)
+  end
 
-  for op <- random_ops do
-    @doc """
-    Expression equivalent to `Nx.#{op}/2`.
-    """
-    def unquote(op)(shape, opts \\ []) do
-      unquote(op)(shape, 0.0, 1.0, opts)
-    end
+  @doc """
+  Expression equivalent to `Nx.random_uniform/4`.
+  """
+  def random_uniform(shape, min, max, opts \\ []) when is_number(min) and is_number(max) do
+    shape = to_shape(shape)
+    make_expr(shape, :random_uniform, [shape, min, max, opts])
+  end
 
-    @doc """
-    Expression equivalent to `Nx.#{op}/4`.
-    """
-    def unquote(op)(shape, min, max, opts \\ []) do
-      shape = to_shape(shape)
-      make_expr(shape, unquote(op), [shape, min, max, opts])
-    end
+  @doc """
+  Expression equivalent to `Nx.random_normal/2`.
+  """
+  def random_normal(shape, opts \\ []) do
+    random_normal(shape, 0.0, 1.0, opts)
+  end
+
+  @doc """
+  Expression equivalent to `Nx.random_normal/4`.
+  """
+  def random_normal(shape, mu, sigma, opts \\ []) when is_float(mu) and is_float(sigma) do
+    shape = to_shape(shape)
+    make_expr(shape, :random_normal, [shape, mu, sigma, opts])
   end
 
   @doc """
@@ -354,8 +365,8 @@ defmodule Nx.Defn.Expr do
         %Expr{id: id} ->
           [Map.get(var_map, id) | inspect_args(args, var_map)]
 
-        [_ | _] = opts ->
-          [Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{v}" end) | inspect_args(args, var_map)]
+        [_ | _] = opts when args == [] ->
+          [Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end) | inspect_args(args, var_map)]
 
         value ->
           ["#{inspect(value)}" | inspect_args(args, var_map)]

@@ -814,21 +814,21 @@ defmodule Exla.DefnTest do
   #     end
   #   end
 
-  #   describe "softmax" do
-  #     defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+  describe "softmax" do
+    defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
-  #     test "computes softmax" do
-  #       assert compare_tensors!(
-  #                softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0])),
-  #                Nx.tensor([
-  #                  0.03205860328008499,
-  #                  0.08714431874203257,
-  #                  0.23688281808991013,
-  #                  0.6439142598879722
-  #                ])
-  #              )
-  #     end
-  #   end
+    test "computes softmax" do
+      assert compare_tensors!(
+               softmax(Nx.tensor([1.0, 2.0, 3.0, 4.0])),
+               Nx.tensor([
+                 0.03205860328008499,
+                 0.08714431874203257,
+                 0.23688281808991013,
+                 0.6439142598879722
+               ])
+             )
+    end
+  end
 
   #   describe "reshape" do
   #     defn reshape_with_shape(t), do: Nx.reshape(t, {2, 2})
@@ -880,90 +880,90 @@ defmodule Exla.DefnTest do
   #     end
   #   end
 
-  #   describe "random uniform" do
-  #     defn random_uniform_fixed, do: Nx.random_uniform({30, 20})
+  describe "random uniform" do
+    defn random_uniform_fixed, do: Nx.random_uniform({30, 20})
 
-  #     test "generates with shape" do
-  #       t = random_uniform_fixed()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:f, 64}
+    test "generates with shape" do
+      t = random_uniform_fixed()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
 
-  #       for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
-  #         assert x >= 0.0 and x < 1
-  #       end
-  #     end
+      for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
+        assert x >= 0.0 and x < 1
+      end
+    end
 
-  #     defn random_uniform_min_max_int, do: Nx.random_uniform({30, 20}, 5, 10)
-  #     defn random_uniform_min_max_float, do: Nx.random_uniform({30, 20}, 5.0, 10.0)
+    defn random_uniform_min_max_int, do: Nx.random_uniform({30, 20}, 5, 10)
+    defn random_uniform_min_max_float, do: Nx.random_uniform({30, 20}, 5.0, 10.0)
 
-  #     test "generates with min/max" do
-  #       t = random_uniform_min_max_int()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:s, 64}
+    test "generates with min/max" do
+      t = random_uniform_min_max_int()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:s, 64}
 
-  #       for <<x::signed-64-native <- Nx.Util.to_bitstring(t)>> do
-  #         assert x >= 5 and x < 10
-  #       end
+      for <<x::signed-64-native <- Nx.Util.to_bitstring(t)>> do
+        assert x >= 5 and x < 10
+      end
 
-  #       t = random_uniform_min_max_float()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:f, 64}
+      t = random_uniform_min_max_float()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
 
-  #       for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
-  #         assert x >= 5.0 and x < 10.0
-  #       end
-  #     end
+      for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
+        assert x >= 5.0 and x < 10.0
+      end
+    end
 
-  #     defn random_uniform_u32, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
-  #     defn random_uniform_f32, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 32})
+    defn random_uniform_u32, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
+    defn random_uniform_f32, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 32})
 
-  #     test "generates with type" do
-  #       t = random_uniform_u32()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:u, 32}
+    test "generates with type" do
+      t = random_uniform_u32()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:u, 32}
 
-  #       for <<x::unsigned-32-native <- Nx.Util.to_bitstring(t)>> do
-  #         assert x >= 5 and x < 10
-  #       end
+      for <<x::unsigned-32-native <- Nx.Util.to_bitstring(t)>> do
+        assert x >= 5 and x < 10
+      end
 
-  #       t = random_uniform_f32()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:f, 32}
+      t = random_uniform_f32()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 32}
 
-  #       for <<x::float-32-native <- Nx.Util.to_bitstring(t)>> do
-  #         assert x >= 5.0 and x < 10.0
-  #       end
-  #     end
-  #   end
+      for <<x::float-32-native <- Nx.Util.to_bitstring(t)>> do
+        assert x >= 5.0 and x < 10.0
+      end
+    end
+  end
 
-  #   describe "random normal" do
-  #     defn random_normal_fixed, do: Nx.random_normal({30, 20})
+  describe "random normal" do
+    defn random_normal_fixed, do: Nx.random_normal({30, 20})
 
-  #     test "generates with shape" do
-  #       t = random_uniform_fixed()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:f, 64}
-  #     end
+    test "generates with shape" do
+      t = random_uniform_fixed()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
+    end
 
-  #     defn random_normal_mu_sigma, do: Nx.random_normal({30, 20}, 5.0, 10.0)
+    defn random_normal_mu_sigma, do: Nx.random_normal({30, 20}, 5.0, 10.0)
 
-  #     test "generates with mu/sigma" do
-  #       t = random_normal_mu_sigma()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:f, 64}
-  #     end
+    test "generates with mu/sigma" do
+      t = random_normal_mu_sigma()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
+    end
 
-  #     defn random_normal_f32, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 32})
+    defn random_normal_f32, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 32})
 
-  #     test "generates with type" do
-  #       t = random_normal_f32()
-  #       assert Nx.shape(t) == {30, 20}
-  #       assert Nx.type(t) == {:f, 32}
-  #     end
+    test "generates with type" do
+      t = random_normal_f32()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 32}
+    end
 
-  #     defn random_normal_tensor(t), do: Nx.random_uniform(t)
-  #     defn random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
-  #   end
+    defn random_normal_tensor(t), do: Nx.random_uniform(t)
+    defn random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
+  end
 
   #   describe "iota" do
   #     defn iota_with_shape, do: Nx.iota({3, 4, 2, 3}, axis: 2)
@@ -991,46 +991,31 @@ defmodule Exla.DefnTest do
   #     end
   #   end
 
-  #   describe "reflection" do
-  #     defn random_from_type_and_shape(t),
-  #       do: Nx.random_uniform(Nx.shape(t), 0, 10, type: Nx.type(t))
+  describe "options" do
+    @defn_compiler {Exla, keep_on_device: true}
+    defn add_two_keep_on_device(a, b), do: a + b
 
-  #     test "type and shape" do
-  #       t = random_from_type_and_shape(Nx.tensor([[1], [2]]))
-  #       assert Nx.shape(t) == {2, 1}
-  #       assert Nx.type(t) == {:s, 64}
+    test "keeps data on device" do
+      tensor = add_two_keep_on_device(1, 2)
+      assert {Exla.NxDevice, {ref, :default}} = tensor.data
+      assert is_reference(ref)
+      assert tensor |> Nx.device_read() |> Nx.Util.to_bitstring() == <<3::64-native>>
 
-  #       t = random_from_type_and_shape(Nx.tensor([[1], [2]], type: {:f, 32}))
-  #       assert Nx.shape(t) == {2, 1}
-  #       assert Nx.type(t) == {:f, 32}
-  #     end
-  #   end
+      tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
+      assert {Exla.NxDevice, {ref, :default}} = tensor.data
+      assert is_reference(ref)
 
-  #   describe "options" do
-  #     @defn_compiler {Exla, keep_on_device: true}
-  #     defn add_two_keep_on_device(a, b), do: a + b
+      assert tensor |> Nx.device_read() |> Nx.Util.to_bitstring() ==
+               <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
-  #     test "keeps data on device" do
-  #       tensor = add_two_keep_on_device(1, 2)
-  #       assert {Exla.NxDevice, {ref, :default}} = tensor.data
-  #       assert is_reference(ref)
-  #       assert tensor |> Nx.device_read() |> Nx.Util.to_bitstring() == <<3::64-native>>
+      assert tensor |> Nx.device_transfer() |> Nx.Util.to_bitstring() ==
+               <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
-  #       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
-  #       assert {Exla.NxDevice, {ref, :default}} = tensor.data
-  #       assert is_reference(ref)
-
-  #       assert tensor |> Nx.device_read() |> Nx.Util.to_bitstring() ==
-  #                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
-
-  #       assert tensor |> Nx.device_transfer() |> Nx.Util.to_bitstring() ==
-  #                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
-
-  #       assert_raise RuntimeError,
-  #                    "Attempt to read from deallocated buffer.",
-  #                    fn -> Nx.device_read(tensor) end
-  #     end
-  #   end
+      assert_raise RuntimeError,
+                   "Attempt to read from deallocated buffer.",
+                   fn -> Nx.device_read(tensor) end
+    end
+  end
 
   # We need to round the floats because of imprecision between platforms
   defp compare_tensors!(

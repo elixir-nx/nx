@@ -82,12 +82,37 @@ defmodule Exla.Defn do
     end
   end
 
-  ## to_operator
+  ## to_operator creation
 
   defp to_operator(:tensor, [%Nx.Tensor{type: type, data: {_, data}}], shape, builder) do
     shape = Exla.Shape.make_shape(type, shape)
     Exla.Op.constant_from_binary(builder, data, shape)
   end
+
+  defp to_operator(:random_uniform, [shape, min, max, opts], _shape, builder) do
+    type = opts[:type] || Exla.Type.infer(max - min)
+
+    if match?({int, size} when int in [:s, :u] and size < 32, type) do
+      raise ArgumentError,
+            "Nx.random_uniform/4 for Exla requires signed and unsigned tensors to be " <>
+              "at least of size 32, got: #{elem(type, 1)}"
+    end
+
+    min = to_typed_operator(builder, min, type, type)
+    max = to_typed_operator(builder, max, type, type)
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Op.rng_uniform(min, max, shape)
+  end
+
+  defp to_operator(:random_normal, [shape, mu, sigma, opts], _shape, builder) do
+    type = opts[:type] || {:f, 64}
+    mu = to_typed_operator(builder, mu, type, type)
+    sigma = to_typed_operator(builder, sigma, type, type)
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Op.rng_normal(mu, sigma, shape)
+  end
+
+  ## to_operator element-wise
 
   defp to_operator(:negate, [{_, arg}], _shape, _builder) do
     case arg do
@@ -116,7 +141,7 @@ defmodule Exla.Defn do
 
   defp to_operator(:right_shift, [{left_expr, left}, {right_expr, right}], _shape, builder) do
     {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, :right_shift))
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = binary_broadcast(left_expr.shape, right_expr.shape)
 
     op =
       if match?({:u, _}, constant_or_type(left)),
@@ -132,7 +157,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_arith_op do
     {left, right} = binary_op_type(builder, left, right, & &1)
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = binary_broadcast(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -141,7 +166,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_float_arith_op do
     {left, right} = binary_op_type(builder, left, right, &Exla.Type.to_floating/1)
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = binary_broadcast(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -150,7 +175,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_bitwise_op do
     {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, op))
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = binary_broadcast(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -182,6 +207,8 @@ defmodule Exla.Defn do
       _ -> apply(Exla.Op, op, [arg])
     end
   end
+
+  ## to_operator reduction
 
   @reduction_op [:sum, :mean, :argmax, :argmin]
 
@@ -222,7 +249,7 @@ defmodule Exla.Defn do
 
   ## Dimension helpers
 
-  defp broadcast_dimensions(left, right) do
+  defp binary_broadcast(left, right) do
     {min, max} = if left <= right, do: {left, right}, else: {right, left}
     min_size = tuple_size(min)
     max_size = tuple_size(max)

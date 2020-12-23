@@ -4,7 +4,7 @@ defmodule Nx.Defn.Compiler do
   """
 
   @as_is_nx_functions [:tensor]
-  @forbidden_nx_functions [:device_read, :device_deallocate, :device_transfer]
+  @forbidden_nx_functions [:device_read, :device_deallocate, :device_transfer, :type]
 
   @doc """
   The callback required to be implemented for each compiler.
