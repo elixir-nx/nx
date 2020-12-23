@@ -1,6 +1,21 @@
 defmodule Nx.Defn.Expr do
   @doc """
   The expression used by `Nx.Defn.Compiler`.
+
+  It is a struct with the following fields:
+
+    * `:id` - a unique identifier
+    * `:op` - the operation name
+    * `:args` - the operation arguments
+    * `:shape` - the operation resulting shape
+
+  All `:op` nodes translate to `Nx` operations, except for:
+
+    * `:parameter` - holds a parameter constructed by `parameter/2`.
+      `:args` is a one element list with the given arg.
+
+    * `:constant` - holds a numeric constant.
+      `:args` is a one element list with a number.
   """
 
   alias Nx.Defn.Expr
@@ -13,8 +28,8 @@ defmodule Nx.Defn.Expr do
   @doc """
   Builds a parameter must be passed to the evaluation function.
   """
-  def parameter(shape, identifier) do
-    make_expr(shape, :parameter, [identifier])
+  def parameter(shape, arg) do
+    make_expr(shape, :parameter, [arg])
   end
 
   @doc """
@@ -234,7 +249,7 @@ defmodule Nx.Defn.Expr do
   ## Expr normalization
 
   defp to_expr(%Expr{} = expr), do: expr
-  defp to_expr(number) when is_number(number), do: make_expr({}, :tensor, [number])
+  defp to_expr(number) when is_number(number), do: make_expr({}, :constant, [number])
 
   defp to_expr(%T{shape: shape, data: data} = t) do
     case data do
@@ -251,7 +266,7 @@ defmodule Nx.Defn.Expr do
           "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
   end
 
-  defp make_expr(shape, op, args) do
+  defp make_expr(shape, op, args) when is_tuple(shape) and is_atom(op) and is_list(args) do
     id = System.unique_integer()
     %Expr{id: id, shape: shape, op: op, args: args}
   end
@@ -279,11 +294,11 @@ defmodule Nx.Defn.Expr do
       inspect_expr(expr)
     end
 
-    defp inspect_expr(%Expr{id: id, op: op, args: args}) do
+    defp inspect_expr(%Expr{op: op, args: args}) do
       {exprs, params, var_map, counter} = inspect_expr_args(args, [], %{}, 0)
 
       args_strs = inspect_args(args, var_map)
-      {var, counter} = counter_to_var(counter)
+      {var, _counter} = counter_to_var(counter)
 
       expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(args_strs, ", ") <> " ]"
       Enum.join(Enum.uniq(params ++ exprs ++ [expr_str]), "\n")
@@ -294,6 +309,9 @@ defmodule Nx.Defn.Expr do
 
     defp inspect_expr_args([head | tail], params, var_map, counter) do
       case head do
+        %Expr{op: :constant} ->
+          {[], params, var_map, counter}
+
         %Expr{id: id, shape: shape, op: :parameter, args: [identifier]} ->
           {[], params ++ ["param#{shape_to_string(shape)} " <> identifier],
            Map.update(var_map, id, identifier, fn _ -> identifier end), counter}
@@ -301,7 +319,7 @@ defmodule Nx.Defn.Expr do
         %Expr{id: id, shape: shape, op: :tensor} ->
           {var, counter} = counter_to_var(counter)
           var_map = Map.update(var_map, id, var, fn _ -> var end)
-          {["constant#{shape_to_string(shape)} " <> var], [], var_map, counter}
+          {["tensor#{shape_to_string(shape)} " <> var], params, var_map, counter}
 
         %Expr{id: id, op: op, args: expr_args} ->
           {expr_children, params, var_map, counter} =
@@ -328,13 +346,13 @@ defmodule Nx.Defn.Expr do
 
     defp inspect_args([arg | args], var_map) do
       case arg do
+        %Expr{op: :constant, args: [number]} ->
+          [to_string(number) | inspect_args(args, var_map)]
+
         %Expr{id: id} ->
           [Map.get(var_map, id) | inspect_args(args, var_map)]
 
-        [] ->
-          inspect_args(args, var_map)
-
-        opts when is_list(opts) ->
+        [_ | _] = opts ->
           [Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{v}" end) | inspect_args(args, var_map)]
 
         value ->

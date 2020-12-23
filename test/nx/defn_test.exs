@@ -17,7 +17,7 @@ defmodule Nx.DefnTest do
       params =
         for var <- vars do
           unless is_struct(var, Nx.Tensor) or is_number(var) do
-            raise "invalid argument for Nx.Defn"
+            raise "invalid argument"
           end
 
           tensor = Nx.tensor(var)
@@ -93,16 +93,17 @@ defmodule Nx.DefnTest do
     defn size(t), do: Nx.size(t)
 
     test "rank" do
-      assert %Expr{shape: {}, op: :tensor, args: [2]} = rank(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+      assert %Expr{shape: {}, op: :constant, args: [2]} = rank(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
 
     test "shape" do
-      assert {%Expr{shape: {}, op: :tensor, args: [2]}, %Expr{shape: {}, op: :tensor, args: [3]}} =
+      assert {%Expr{shape: {}, op: :constant, args: [2]},
+              %Expr{shape: {}, op: :constant, args: [3]}} =
                shape(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
 
     test "size" do
-      assert %Expr{shape: {}, op: :tensor, args: [6]} = size(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
+      assert %Expr{shape: {}, op: :constant, args: [6]} = size(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
   end
 
@@ -176,9 +177,9 @@ defmodule Nx.DefnTest do
     defn just_two_int, do: 2
     defn just_two_float, do: 2.0
 
-    test "returns the tensor for the scalar" do
-      assert %Expr{op: :tensor, args: [2], shape: {}} = just_two_int()
-      assert %Expr{op: :tensor, args: [2.0], shape: {}} = just_two_float()
+    test "returns a constant for the scalar" do
+      assert %Expr{op: :constant, args: [2], shape: {}} = just_two_int()
+      assert %Expr{op: :constant, args: [2.0], shape: {}} = just_two_float()
     end
   end
 
@@ -203,7 +204,7 @@ defmodule Nx.DefnTest do
     defn two_attribute(), do: @two
 
     test "expands module attributes to scalars" do
-      assert %Expr{op: :tensor, args: [2], shape: {}} = two_attribute()
+      assert %Expr{op: :constant, args: [2], shape: {}} = two_attribute()
     end
 
     @two_per_two Nx.tensor([[1, 2], [3, 4]])
@@ -425,13 +426,13 @@ defmodule Nx.DefnTest do
 
   describe "Nx.Defn" do
     @defn_compiler Nx.Defn
-    defn add_default(a, b), do: {a + b, a - b}
+    defn add_default(a, b), do: {a + b, a - b, 5}
 
     # Check the attribute has been reset
     nil = Module.get_attribute(__MODULE__, :defn_compiler)
 
     test "can be set explicitly set" do
-      assert add_default(1, 2) == {Nx.tensor(3), Nx.tensor(-1)}
+      assert add_default(1, 2) == {Nx.tensor(3), Nx.tensor(-1), Nx.tensor(5)}
     end
 
     test "is the default compiler" do

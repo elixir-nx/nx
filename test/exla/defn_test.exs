@@ -1,73 +1,73 @@
-# defmodule Exla.DefnTest do
-#   use ExUnit.Case, async: true
+defmodule Exla.DefnTest do
+  use ExUnit.Case, async: true
 
-#   import Nx.Defn
-#   @default_defn_compiler Exla
+  import Nx.Defn
+  @default_defn_compiler Exla
 
-#   describe "scalar" do
-#     defn just_two_int, do: 2
-#     defn just_two_float, do: 2.0
+  describe "scalar" do
+    defn just_two_int, do: 2
+    defn just_two_float, do: 2.0
 
-#     test "returns the tensor for the scalar" do
-#       assert just_two_int() == Nx.tensor(2)
-#       assert just_two_float() == Nx.tensor(2.0)
-#     end
-#   end
+    test "returns the tensor for the scalar" do
+      assert just_two_int() == Nx.tensor(2)
+      assert just_two_float() == Nx.tensor(2.0)
+    end
+  end
 
-#   describe "tuples" do
-#     defn two_constant_tuples, do: {-1, 1.0}
-#     defn three_constant_tuples, do: {1, 2.0, 3}
+  describe "tuples" do
+    defn two_constant_tuples, do: {-1, 1.0}
+    defn three_constant_tuples, do: {1, 2.0, 3}
 
-#     test "returns tuples with constants" do
-#       assert two_constant_tuples() == {Nx.tensor(-1), Nx.tensor(1.0)}
-#       assert three_constant_tuples() == {Nx.tensor(1), Nx.tensor(2.0), Nx.tensor(3)}
-#     end
+    test "returns tuples with constants" do
+      assert two_constant_tuples() == {Nx.tensor(-1), Nx.tensor(1.0)}
+      assert three_constant_tuples() == {Nx.tensor(1), Nx.tensor(2.0), Nx.tensor(3)}
+    end
 
-#     defn add_subtract_tuple(a, b), do: {a + b, a - b}
+    defn add_subtract_tuple(a, b), do: {a + b, a - b}
 
-#     test "returns tuples with operation results" do
-#       assert add_subtract_tuple(2, 3) == {Nx.tensor(5), Nx.tensor(-1)}
+    test "returns tuples with operation results" do
+      assert add_subtract_tuple(2, 3) == {Nx.tensor(5), Nx.tensor(-1)}
 
-#       assert add_subtract_tuple(Nx.tensor([-1, 0, 1]), 10) ==
-#                {Nx.tensor([9, 10, 11]), Nx.tensor([-11, -10, -9])}
-#     end
+      assert add_subtract_tuple(Nx.tensor([-1, 0, 1]), 10) ==
+               {Nx.tensor([9, 10, 11]), Nx.tensor([-11, -10, -9])}
+    end
 
-#     defn pattern_tuple({a, b}), do: a + b
+    defn pattern_tuple({a, b}), do: a + b
 
-#     test "matches on tuples" do
-#       assert pattern_tuple({2, 3}) == Nx.tensor(5)
+    test "matches on tuples" do
+      assert pattern_tuple({2, 3}) == Nx.tensor(5)
 
-#       assert pattern_tuple({Nx.tensor([1, 2]), Nx.tensor([[3], [4]])}) ==
-#                Nx.tensor([[4, 5], [5, 6]])
-#     end
+      assert pattern_tuple({Nx.tensor([1, 2]), Nx.tensor([[3], [4]])}) ==
+               Nx.tensor([[4, 5], [5, 6]])
+    end
 
-#     defn calls_pattern_tuple(a, b), do: pattern_tuple({a, b})
+    defn calls_pattern_tuple(a, b), do: pattern_tuple({a, b})
 
-#     test "matches on inlined tuples" do
-#       assert calls_pattern_tuple(2, 3) == Nx.tensor(5)
+    test "matches on inlined tuples" do
+      assert calls_pattern_tuple(2, 3) == Nx.tensor(5)
 
-#       assert calls_pattern_tuple(Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
-#                Nx.tensor([[4, 5], [5, 6]])
-#     end
-#   end
+      assert calls_pattern_tuple(Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[4, 5], [5, 6]])
+    end
+  end
 
-#   describe "tensor constants" do
-#     @two 2
-#     defn add_two_attribute(t), do: t + @two
+  describe "tensor constants" do
+    @two 2
+    defn add_two_attribute(t), do: t + @two
 
-#     @two_per_two Nx.tensor([[1, 2], [3, 4]])
-#     defn add_2x2_attribute(t), do: t + @two_per_two
+    @two_per_two Nx.tensor([[1, 2], [3, 4]])
+    defn add_2x2_attribute(t), do: t + @two_per_two
 
-#     test "expands module attributes to scalars" do
-#       assert add_two_attribute(1) == Nx.tensor(3)
-#       assert add_two_attribute(Nx.tensor([1, 2, 3])) == Nx.tensor([3, 4, 5])
-#     end
+    test "expands module attributes to scalars" do
+      assert add_two_attribute(1) == Nx.tensor(3)
+      assert add_two_attribute(Nx.tensor([1, 2, 3])) == Nx.tensor([3, 4, 5])
+    end
 
-#     test "expands module attributes to tensors" do
-#       assert add_2x2_attribute(1) == Nx.tensor([[2, 3], [4, 5]])
-#       assert add_2x2_attribute(Nx.tensor([1, 2])) == Nx.tensor([[2, 4], [4, 6]])
-#     end
-#   end
+    test "expands module attributes to tensors" do
+      assert add_2x2_attribute(1) == Nx.tensor([[2, 3], [4, 5]])
+      assert add_2x2_attribute(Nx.tensor([1, 2])) == Nx.tensor([[2, 4], [4, 6]])
+    end
+  end
 
 #   describe "+/2" do
 #     defn add_two(a, b), do: a + b
@@ -1051,4 +1051,4 @@
 #   defp compare_tensors!(left, right) do
 #     assert left == right
 #   end
-# end
+end

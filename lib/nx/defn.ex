@@ -124,6 +124,10 @@ defmodule Nx.Defn do
     {t, state}
   end
 
+  defp eval(%Nx.Defn.Expr{op: :constant, args: [t]}, state) do
+    {t, state}
+  end
+
   defp eval(%Nx.Defn.Expr{id: id, op: op, args: args}, state) do
     case state do
       %{^id => res} ->
@@ -136,6 +140,10 @@ defmodule Nx.Defn do
     end
   end
 
+  defp eval(other, state) do
+    {other, state}
+  end
+
   defp to_result(tuple, state) when is_tuple(tuple) do
     {args, state} =
       tuple
@@ -146,7 +154,8 @@ defmodule Nx.Defn do
   end
 
   defp to_result(other, state) do
-    eval(other, state)
+    {expr, state} = eval(other, state)
+    {Nx.tensor(expr), state}
   end
 
   ## Public API
