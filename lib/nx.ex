@@ -871,17 +871,10 @@ defmodule Nx do
       iex> Nx.rank(1)
       0
 
-      iex> Nx.rank({8, 8})
-      2
-
   """
-  def rank(tensor_or_shape) do
-    case tensor_or_shape do
-      shape when is_tuple(shape) -> tuple_size(shape)
-      tensor ->
-        %T{shape: shape} = tensor(tensor)
-        tuple_size(shape)
-    end
+  def rank(tensor) do
+    %T{shape: shape} = tensor(tensor)
+    tuple_size(shape)
   end
 
   @doc """
@@ -898,17 +891,10 @@ defmodule Nx do
       iex> Nx.size(1)
       1
 
-      iex> Nx.size({8, 8})
-      64
-
   """
-  def size(tensor_or_shape) do
-    case tensor_or_shape do
-      shape when is_tuple(shape) -> Nx.Shape.size(shape)
-      tensor ->
-        %T{shape: shape} = tensor(tensor)
-        Nx.Shape.size(shape)
-    end
+  def size(tensor) do
+    %T{shape: shape} = tensor(tensor)
+    Nx.Shape.size(shape)
   end
 
   ## Device API
@@ -2908,7 +2894,7 @@ defmodule Nx do
     divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
   end
 
-  defp mean_den(shape, nil), do: Nx.size(shape)
+  defp mean_den(shape, nil), do: Nx.Shape.size(shape)
   defp mean_den(_shape, []), do: 1
 
   defp mean_den(shape, [axis | axes]) when axis >= 0,

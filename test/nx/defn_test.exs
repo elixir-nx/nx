@@ -397,44 +397,25 @@ defmodule Nx.DefnTest do
     end
   end
 
-  #   test "invalid remote" do
-  #     assert_raise CompileError,
-  #                  ~r"undefined numerical function Nx.DefnTest.unknown/2",
-  #                  fn ->
-  #                    defmodule Sample do
-  #                      import Nx.Defn
-  #                      defn add(a, b), do: Nx.DefnTest.unknown(a, b)
-  #                    end
-  #                  end
-  #   end
+  describe "remote functions" do
+    defmodule Remote do
+      defn add_two(c, d), do: c + d
+    end
 
-  # TODO
-  # describe "remote functions" do
-  #   defmodule Remote do
-  #     defn add_two(c, d), do: c + d
-  #   end
+    defn add_two_remote(a, b), do: Remote.add_two(a, b)
 
-  #   defn add_two_remote(a, b), do: Remote.add_two(a, b)
+    test "public" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_remote(1, 2)
+    end
 
-  #   test "public" do
-  #     assert add_two_remote(1, 2) == Nx.tensor(3)
-  #     assert add_two_remote(Nx.tensor([1, 2, 3]), 2) == Nx.tensor([3, 4, 5])
-  #   end
+    defn add_two_unknown(a, b), do: Nx.DefnTest.unknown(a, b)
 
-  #   defn add_two_remote_var_conflict(a, b) do
-  #     c = 1
-  #     b = Remote.add_two(a, b)
-  #     b + c
-  #   end
-
-  #   test "var conflict" do
-  #     assert add_two_remote_var_conflict(2, 3) == Nx.tensor(6)
-  #   end
-
-  #   test "expansion" do
-  #     assert ast_to_string(:add_two_remote, 2) == "Nx.DefnTest.Remote.add_two(a, b)"
-  #   end
-  # end
+    test "invalid remote" do
+      assert_raise UndefinedFunctionError,
+                   "function Nx.DefnTest.unknown/2 is undefined or private",
+                   fn -> add_two_unknown(1, 2) end
+    end
+  end
 
   # TODO
   # describe "module attributes config" do

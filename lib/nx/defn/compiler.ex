@@ -9,9 +9,12 @@ defmodule Nx.Defn.Compiler do
   @doc """
   The callback required to be implemented for each compiler.
 
-  It receives the module compilation environment `env`, the
+  It receives the function compilation environment `env`, the
   function `kind`, the variables, the expr function, and the
   compiler options.
+
+  It must call `fun` with a list where all vars have been
+  converted to `Nx.Defn.Expr` parameters via `Nx.Defn.Expr.parameter/2`.
 
   Note the number of variables is not the same as the function
   arity as argument patterns have already been matched. The
@@ -19,7 +22,6 @@ defmodule Nx.Defn.Compiler do
 
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
-
   """
   @callback __compile__(
               env :: Macro.Env.t(),
@@ -37,21 +39,29 @@ defmodule Nx.Defn.Compiler do
             when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
                    is_atom(elem(var, 2))
 
-  # The compiler has four passes.
-  #
-  # 1. Normalize and validate the AST written by the user.
-  #
-  # 2. Expand patterns and inline all local functions. This is
-  #    the result stored in each module for cross-module inlining.
-  #
-  # 3. Inline remote calls (and then transforms + remote calls recursively).
-  #
-  # 4. Invoke the compiler chosen by the user.
-  #
-  # The user compiler may have multiple passes and it has the ability
-  # to run said additional passes either at runtime or compilation time.
   @doc false
-  def compile(%Macro.Env{module: module, file: file, line: line}, exports) do
+  def __remote__(module, function, args) do
+    defn = defn_name(function)
+
+    try do
+      apply(module, defn, args)
+    catch
+      :error, :undef ->
+        stack =
+          case __STACKTRACE__ do
+            [{^module, ^defn, args_or_arity, info} | stack] ->
+              [{module, function, args_or_arity, info} | stack]
+
+            stack ->
+              stack
+          end
+
+        :erlang.raise(:error, :undef, stack)
+    end
+  end
+
+  @doc false
+  def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
     {:module, Nx} = Code.ensure_compiled(Nx)
 
     state = %{
@@ -64,20 +74,14 @@ defmodule Nx.Defn.Compiler do
     }
 
     quoted = Enum.map(exports, &compile_each(&1, state))
-
-    catch_all =
-      quote do
-        def __defn__(_, _), do: nil
-      end
-
-    {:__block__, [], quoted ++ [catch_all]}
+    {:__block__, [], quoted}
   end
 
   defp compile_each({{name, _arity} = def, def_meta}, state) do
     {{kind, meta, args, ast}, state} = get_and_normalize_definition(def, state)
     vars = collect_vars(args)
     {def_module, def_opts} = def_meta.compiler
-    impl_name = impl_name(kind, name)
+    defn_name = defn_name(name)
 
     quote line: state.line do
       Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
@@ -88,13 +92,13 @@ defmodule Nx.Defn.Compiler do
           unquote(kind),
           unquote(vars),
           fn unquote(vars) ->
-            Nx.Defn.Expr.to_result(unquote(impl_name)(unquote_splicing(args)))
+            Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
           end,
           unquote(Macro.escape(def_opts))
         )
       end
 
-      Kernel.unquote(kind)(unquote(impl_name)(unquote_splicing(args)), do: unquote(ast))
+      Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(args)), do: unquote(ast))
     end
   end
 
@@ -150,9 +154,9 @@ defmodule Nx.Defn.Compiler do
     pair = {name, length(args)}
 
     case state.exports do
-      %{^pair => %{kind: kind}} ->
+      %{^pair => _} ->
         {args, state} = normalize_list(args, state)
-        {{impl_name(kind, name), meta, args}, state}
+        {{defn_name(name), meta, args}, state}
 
       %{} ->
         invalid_numerical_expression!(expr, state)
@@ -209,11 +213,10 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [module, ast, opts]}, state}
   end
 
-  defp normalize({{:., _, [remote, name]} = call, meta, args}, state)
+  defp normalize({{:., dot_meta, [remote, name]} = call, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
-    # TODO: validate the remote is a defn
     {args, state} = normalize_list(args, state)
-    {{call, meta, args}, state}
+    {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, args]}, state}
   end
 
   defp normalize({left, right}, state) do
@@ -311,5 +314,5 @@ defmodule Nx.Defn.Compiler do
     raise CompileError, line: line, file: state.file, description: description
   end
 
-  defp impl_name(kind, name), do: :"__#{kind}:#{name}__"
+  defp defn_name(name), do: :"__defn:#{name}__"
 end

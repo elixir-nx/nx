@@ -2,7 +2,6 @@ defmodule ExprTest do
   use ExUnit.Case, async: true
 
   alias Nx.Defn.Expr
-  import Inspect.Algebra
 
   test "inspect" do
     a = Expr.parameter({2, 2}, "x")

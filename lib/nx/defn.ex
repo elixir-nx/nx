@@ -264,6 +264,6 @@ defmodule Nx.Defn do
   @doc false
   defmacro __before_compile__(env) do
     exports = Module.get_attribute(env.module, @exports_key)
-    Nx.Defn.Compiler.compile(env, exports)
+    Nx.Defn.Compiler.__compile__(env, exports)
   end
 end
