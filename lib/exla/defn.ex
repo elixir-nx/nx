@@ -129,14 +129,34 @@ defmodule Exla.Defn do
     Exla.Op.broadcast_in_dim(arg, output_shape, broadcast_dimensions(expr.shape, output_shape))
   end
 
+  defp to_operator(:transpose, [{_expr, arg}, dims], _output_shape, builder) do
+    arg = to_operator(builder, arg)
+    Exla.Op.transpose(arg, List.to_tuple(dims))
+  end
+
   ## to_operator others
 
+  defp to_operator(:dot, [{_, left}, {_, right}], _output_shape, builder) do
+    {left, right} = binary_op_type(builder, left, right, & &1)
+
+    %Exla.Shape{dims: s1} = Exla.Op.get_shape(left)
+    %Exla.Shape{dims: s2} = Exla.Op.get_shape(right)
+
+    # To keep the semantics the same as Numpy, XLA will raise otherwise
+    case {tuple_size(s1), tuple_size(s2)} do
+      {0, _} -> Exla.Op.multiply(left, right)
+      {_, 0} -> Exla.Op.multiply(left, right)
+      {m, n} when m >= 2 and n > 2 -> Exla.Op.dot_general(left, right, {m - 1, n - 2})
+      _ -> Exla.Op.dot(left, right)
+    end
+  end
+
   defp to_operator(
-        :select,
-        [{_, pred}, {expr_true, on_true}, {expr_false, on_false}],
-        output_shape,
-        builder
-      ) do
+         :select,
+         [{_, pred}, {expr_true, on_true}, {expr_false, on_false}],
+         output_shape,
+         builder
+       ) do
     pred = to_typed_operator(builder, pred, op_type(pred), {:pred, 1})
     {on_true, on_false} = binary_op_type(builder, on_true, on_false, & &1)
 

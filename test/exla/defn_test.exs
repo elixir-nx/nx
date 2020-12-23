@@ -700,119 +700,119 @@ defmodule Exla.DefnTest do
     end
   end
 
-  #   describe "dot product" do
-  #     defn dot(a, b), do: Nx.dot(a, b)
+  describe "dot product" do
+    defn dot(a, b), do: Nx.dot(a, b)
 
-  #     test "computes the dot product of scalars" do
-  #       assert dot(Nx.tensor(2), Nx.tensor(2)) == Nx.tensor(4)
-  #       assert dot(Nx.tensor(2.0), Nx.tensor(2.0)) == Nx.tensor(4.0)
-  #       assert dot(Nx.tensor(-2.0), Nx.tensor(-2)) == Nx.tensor(4.0)
-  #     end
+    test "computes the dot product of scalars" do
+      assert dot(Nx.tensor(2), Nx.tensor(2)) == Nx.tensor(4)
+      assert dot(Nx.tensor(2.0), Nx.tensor(2.0)) == Nx.tensor(4.0)
+      assert dot(Nx.tensor(-2.0), Nx.tensor(-2)) == Nx.tensor(4.0)
+    end
 
-  #     test "computes the dot product of vectors" do
-  #       assert dot(Nx.tensor([1, 2, 3], type: {:s, 32}), Nx.tensor([4, 5, 6], type: {:s, 32})) ==
-  #                Nx.tensor(32, type: {:s, 32})
+    test "computes the dot product of vectors" do
+      assert dot(Nx.tensor([1, 2, 3], type: {:s, 32}), Nx.tensor([4, 5, 6], type: {:s, 32})) ==
+               Nx.tensor(32, type: {:s, 32})
 
-  #       assert dot(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), Nx.tensor([4, 5, 6])) ==
-  #                Nx.tensor(32.0)
+      assert dot(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), Nx.tensor([4, 5, 6])) ==
+               Nx.tensor(32.0)
 
-  #       assert dot(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([4.0, 5.0, 6.0])) == Nx.tensor(32.0)
-  #     end
+      assert dot(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([4.0, 5.0, 6.0])) == Nx.tensor(32.0)
+    end
 
-  #     test "computes the dot product of matrices" do
-  #       assert dot(
-  #                Nx.tensor([[1, 2, 3], [4, 5, 6]], type: {:s, 32}),
-  #                Nx.tensor([[7, 8], [9, 10], [11, 12]], type: {:s, 32})
-  #              ) ==
-  #                Nx.tensor([[58, 64], [139, 154]], type: {:s, 32})
+    test "computes the dot product of matrices" do
+      assert dot(
+               Nx.tensor([[1, 2, 3], [4, 5, 6]], type: {:s, 32}),
+               Nx.tensor([[7, 8], [9, 10], [11, 12]], type: {:s, 32})
+             ) ==
+               Nx.tensor([[58, 64], [139, 154]], type: {:s, 32})
 
-  #       assert dot(
-  #                Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-  #                Nx.tensor([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]])
-  #              ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
+      assert dot(
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+               Nx.tensor([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]])
+             ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
 
-  #       assert dot(
-  #                Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-  #                Nx.tensor([[7, 8], [9, 10], [11, 12]])
-  #              ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
-  #     end
+      assert dot(
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+               Nx.tensor([[7, 8], [9, 10], [11, 12]])
+             ) == Nx.tensor([[58.0, 64.0], [139.0, 154.0]])
+    end
 
-  #     test "computes the dot product of tensors" do
-  #       assert dot(
-  #                Nx.tensor(
-  #                  [[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]],
-  #                  type: {:s, 32}
-  #                ),
-  #                Nx.tensor(
-  #                  [[[1, 2, 3], [3, 4, 5], [5, 6, 7]]],
-  #                  type: {:s, 32}
-  #                )
-  #              ) ==
-  #                Nx.tensor(
-  #                  [
-  #                    [[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]],
-  #                    [[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]]
-  #                  ],
-  #                  type: {:s, 32}
-  #                )
-  #     end
-  #   end
+    test "computes the dot product of tensors" do
+      assert dot(
+               Nx.tensor(
+                 [[[1, 2, 3], [4, 5, 6], [7, 8, 9]], [[1, 2, 3], [4, 5, 6], [7, 8, 9]]],
+                 type: {:s, 32}
+               ),
+               Nx.tensor(
+                 [[[1, 2, 3], [3, 4, 5], [5, 6, 7]]],
+                 type: {:s, 32}
+               )
+             ) ==
+               Nx.tensor(
+                 [
+                   [[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]],
+                   [[[22, 28, 34]], [[49, 64, 79]], [[76, 100, 124]]]
+                 ],
+                 type: {:s, 32}
+               )
+    end
+  end
 
-  #   describe "transpose" do
-  #     defn transpose(t), do: Nx.transpose(t)
-  #     defn transpose_scalar(t), do: Nx.transpose(t, [])
-  #     defn transpose_perm1(t), do: Nx.transpose(t, [2, 1, 0])
-  #     defn transpose_perm2(t), do: Nx.transpose(t, [2, 0, 1])
-  #     defn transpose_perm3(t), do: Nx.transpose(t, [0, 2, 1])
+  describe "transpose" do
+    defn transpose(t), do: Nx.transpose(t)
+    defn transpose_scalar(t), do: Nx.transpose(t, [])
+    defn transpose_perm1(t), do: Nx.transpose(t, [2, 1, 0])
+    defn transpose_perm2(t), do: Nx.transpose(t, [2, 0, 1])
+    defn transpose_perm3(t), do: Nx.transpose(t, [0, 2, 1])
 
-  #     test "transposes without axes" do
-  #       assert transpose(Nx.tensor(1)) == Nx.tensor(1)
+    test "transposes without axes" do
+      assert transpose(Nx.tensor(1)) == Nx.tensor(1)
 
-  #       assert transpose(Nx.iota({2, 3, 4})) ==
-  #                Nx.tensor([
-  #                  [[0, 12], [4, 16], [8, 20]],
-  #                  [[1, 13], [5, 17], [9, 21]],
-  #                  [[2, 14], [6, 18], [10, 22]],
-  #                  [[3, 15], [7, 19], [11, 23]]
-  #                ])
-  #     end
+      assert transpose(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [[0, 12], [4, 16], [8, 20]],
+                 [[1, 13], [5, 17], [9, 21]],
+                 [[2, 14], [6, 18], [10, 22]],
+                 [[3, 15], [7, 19], [11, 23]]
+               ])
+    end
 
-  #     test "transposes with axes" do
-  #       assert transpose_scalar(Nx.tensor(1)) == Nx.tensor(1)
+    test "transposes with axes" do
+      assert transpose_scalar(Nx.tensor(1)) == Nx.tensor(1)
 
-  #       assert transpose_perm1(Nx.iota({2, 3, 4})) ==
-  #                Nx.tensor([
-  #                  [[0, 12], [4, 16], [8, 20]],
-  #                  [[1, 13], [5, 17], [9, 21]],
-  #                  [[2, 14], [6, 18], [10, 22]],
-  #                  [[3, 15], [7, 19], [11, 23]]
-  #                ])
+      assert transpose_perm1(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [[0, 12], [4, 16], [8, 20]],
+                 [[1, 13], [5, 17], [9, 21]],
+                 [[2, 14], [6, 18], [10, 22]],
+                 [[3, 15], [7, 19], [11, 23]]
+               ])
 
-  #       assert transpose_perm2(Nx.iota({2, 3, 4})) ==
-  #                Nx.tensor([
-  #                  [[0, 4, 8], [12, 16, 20]],
-  #                  [[1, 5, 9], [13, 17, 21]],
-  #                  [[2, 6, 10], [14, 18, 22]],
-  #                  [[3, 7, 11], [15, 19, 23]]
-  #                ])
+      assert transpose_perm2(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [[0, 4, 8], [12, 16, 20]],
+                 [[1, 5, 9], [13, 17, 21]],
+                 [[2, 6, 10], [14, 18, 22]],
+                 [[3, 7, 11], [15, 19, 23]]
+               ])
 
-  #       assert transpose_perm3(Nx.iota({2, 3, 4})) ==
-  #                Nx.tensor([
-  #                  [
-  #                    [0, 4, 8],
-  #                    [1, 5, 9],
-  #                    [2, 6, 10],
-  #                    [3, 7, 11]
-  #                  ],
-  #                  [
-  #                    [12, 16, 20],
-  #                    [13, 17, 21],
-  #                    [14, 18, 22],
-  #                    [15, 19, 23]
-  #                  ]
-  #                ])
-  #     end
-  #   end
+      assert transpose_perm3(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [
+                   [0, 4, 8],
+                   [1, 5, 9],
+                   [2, 6, 10],
+                   [3, 7, 11]
+                 ],
+                 [
+                   [12, 16, 20],
+                   [13, 17, 21],
+                   [14, 18, 22],
+                   [15, 19, 23]
+                 ]
+               ])
+    end
+  end
 
   describe "softmax" do
     defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))

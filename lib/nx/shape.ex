@@ -425,10 +425,13 @@ defmodule Nx.Shape do
 
   ## Examples
 
+      iex> Nx.Shape.transpose_axes({})
+      []
       iex> Nx.Shape.transpose_axes({3, 2, 1})
       [2, 1, 0]
 
   """
+  def transpose_axes({}), do: []
   def transpose_axes(shape), do: to_zero(rank(shape) - 1)
 
   defp to_zero(0), do: [0]
