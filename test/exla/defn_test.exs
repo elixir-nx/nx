@@ -830,55 +830,55 @@ defmodule Exla.DefnTest do
     end
   end
 
-  #   describe "reshape" do
-  #     defn reshape_with_shape(t), do: Nx.reshape(t, {2, 2})
+  describe "reshape" do
+    defn reshape_with_shape(t), do: Nx.reshape(t, {2, 2})
 
-  #     test "with shape" do
-  #       assert reshape_with_shape(Nx.tensor([1, 2, 3, 4])) == Nx.tensor([[1, 2], [3, 4]])
-  #     end
+    test "with shape" do
+      assert reshape_with_shape(Nx.tensor([1, 2, 3, 4])) == Nx.tensor([[1, 2], [3, 4]])
+    end
 
-  #     defn reshape_with_tensor(t, shape), do: Nx.reshape(t, shape)
+    defn reshape_with_tensor(t, shape), do: Nx.reshape(t, shape)
 
-  #     test "with tensor" do
-  #       assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0, 0], [0, 0]])) ==
-  #                Nx.tensor([[1, 2], [3, 4]])
+    test "with tensor" do
+      assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0, 0], [0, 0]])) ==
+               Nx.tensor([[1, 2], [3, 4]])
 
-  #       assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0], [0], [0], [0]])) ==
-  #                Nx.tensor([[1], [2], [3], [4]])
-  #     end
-  #   end
+      assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0], [0], [0], [0]])) ==
+               Nx.tensor([[1], [2], [3], [4]])
+    end
+  end
 
-  #   describe "broadcast" do
-  #     defn broadcast_with_shape(t), do: Nx.broadcast(t, {2, 2})
+  describe "broadcast" do
+    defn broadcast_with_shape(t), do: Nx.broadcast(t, {2, 2})
 
-  #     test "with shape" do
-  #       assert broadcast_with_shape(Nx.tensor([1, 2])) == Nx.tensor([[1, 2], [1, 2]])
-  #       assert broadcast_with_shape(Nx.tensor([[1], [2]])) == Nx.tensor([[1, 1], [2, 2]])
-  #     end
+    test "with shape" do
+      assert broadcast_with_shape(Nx.tensor([1, 2])) == Nx.tensor([[1, 2], [1, 2]])
+      assert broadcast_with_shape(Nx.tensor([[1], [2]])) == Nx.tensor([[1, 1], [2, 2]])
+    end
 
-  #     defn broadcast_with_tensor(t, shape), do: Nx.broadcast(t, shape)
+    defn broadcast_with_tensor(t, shape), do: Nx.broadcast(t, shape)
 
-  #     test "with tensor" do
-  #       tensors = [
-  #         {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([0, 0])},
-  #         {Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]]), Nx.tensor([0, 0])},
-  #         {Nx.tensor([[1], [2]]), Nx.tensor([[0, 0]])},
-  #         {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]]])},
-  #         {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]),
-  #          Nx.tensor([[[0], [0], [0]]])},
-  #         {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[[0]]]])},
-  #         {Nx.tensor([1, 2]), Nx.tensor([[[[0]]]])},
-  #         {Nx.tensor([[1, 2]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
-  #         {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
-  #         {Nx.tensor([[[[1, 2]]], [[[3, 4]]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
-  #         {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])}
-  #       ]
+    test "with tensor" do
+      tensors = [
+        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([0, 0])},
+        {Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]]), Nx.tensor([0, 0])},
+        {Nx.tensor([[1], [2]]), Nx.tensor([[0, 0]])},
+        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]]])},
+        {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]),
+         Nx.tensor([[[0], [0], [0]]])},
+        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[[0]]]])},
+        {Nx.tensor([1, 2]), Nx.tensor([[[[0]]]])},
+        {Nx.tensor([[1, 2]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
+        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
+        {Nx.tensor([[[[1, 2]]], [[[3, 4]]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
+        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])}
+      ]
 
-  #       for {left, right} <- tensors do
-  #         assert add_two(left, right) == broadcast_with_tensor(left, right)
-  #       end
-  #     end
-  #   end
+      for {left, right} <- tensors do
+        assert add_two(left, right) == broadcast_with_tensor(left, right)
+      end
+    end
+  end
 
   describe "random uniform" do
     defn random_uniform_fixed, do: Nx.random_uniform({30, 20})

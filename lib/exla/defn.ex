@@ -118,6 +118,17 @@ defmodule Exla.Defn do
     Exla.Lib.iota(builder, shape, opts)
   end
 
+  ## to_operator shape
+
+  defp to_operator(:reshape, [{_, arg}, shape], _shape, builder) do
+    Exla.Op.reshape(to_operator(builder, arg), shape)
+  end
+
+  defp to_operator(:broadcast, [{expr, arg}, _shape], output_shape, builder) do
+    arg = to_operator(builder, arg)
+    Exla.Op.broadcast_in_dim(arg, output_shape, broadcast_dimensions(expr.shape, output_shape))
+  end
+
   ## to_operator element-wise
 
   defp to_operator(:negate, [{_, arg}], _shape, _builder) do
@@ -147,7 +158,7 @@ defmodule Exla.Defn do
 
   defp to_operator(:right_shift, [{left_expr, left}, {right_expr, right}], _shape, builder) do
     {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, :right_shift))
-    dims = binary_broadcast(left_expr.shape, right_expr.shape)
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
 
     op =
       if match?({:u, _}, constant_or_type(left)),
@@ -163,7 +174,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_arith_op do
     {left, right} = binary_op_type(builder, left, right, & &1)
-    dims = binary_broadcast(left_expr.shape, right_expr.shape)
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -172,7 +183,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_float_arith_op do
     {left, right} = binary_op_type(builder, left, right, &Exla.Type.to_floating/1)
-    dims = binary_broadcast(left_expr.shape, right_expr.shape)
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -181,7 +192,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_bitwise_op do
     {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, op))
-    dims = binary_broadcast(left_expr.shape, right_expr.shape)
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -255,7 +266,7 @@ defmodule Exla.Defn do
 
   ## Dimension helpers
 
-  defp binary_broadcast(left, right) do
+  defp broadcast_dimensions(left, right) do
     {min, max} = if left <= right, do: {left, right}, else: {right, left}
     min_size = tuple_size(min)
     max_size = tuple_size(max)

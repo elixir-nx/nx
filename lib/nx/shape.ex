@@ -60,39 +60,52 @@ defmodule Nx.Shape do
   ### Error cases
 
       iex> Nx.Shape.broadcast({4, 2, 3}, {3, 2, 3})
-      ** (ArgumentError) could not broadcast shape to new shape because dimensions are incompatible, expected dimensions to be equal or shape's dimension to be 1, got: 4 and 3
+      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 3} to {3, 2, 3}
   """
-  def broadcast(shape, new_shape)
+  def broadcast(old_shape, new_shape)
 
   def broadcast(shape, shape), do: shape
 
-  def broadcast(shape, new_shape) when is_tuple(shape) and is_tuple(new_shape),
-    do: List.to_tuple(do_broadcast(Tuple.to_list(shape), Tuple.to_list(new_shape)))
+  def broadcast(old_shape, new_shape) when is_tuple(old_shape) and is_tuple(new_shape) do
+    old_rank = tuple_size(old_shape)
+    new_rank = tuple_size(new_shape)
+    rank = max(old_rank, new_rank)
 
-  defp do_broadcast([], new_shape), do: new_shape
+    old_lower = shape_to_lower_ranked_list(old_shape, old_rank, rank)
+    new_lower = shape_to_lower_ranked_list(new_shape, new_rank, rank)
 
-  # TODO: don't use length here because it may be expensive.
-  # We can compute the rank and order by rank.
-  defp do_broadcast(shape, new_shape) when length(new_shape) > length(shape) do
-    [dim2 | new_shape] = new_shape
-    [dim2 | do_broadcast(shape, new_shape)]
+    case unary_broadcast(old_lower, new_lower, []) do
+      {:ok, new} ->
+        List.to_tuple(new)
+
+      :error ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
+                "to #{inspect(new_shape)}"
+    end
   end
 
-  defp do_broadcast([1 | shape], [dim2 | new_shape]) do
-    [dim2 | do_broadcast(shape, new_shape)]
-  end
+  defp unary_broadcast([odim | odims], [ndim | ndims], acc)
+       when ndim == 1 or ndim == odim,
+       do: unary_broadcast(odims, ndims, [odim | acc])
 
-  defp do_broadcast([dim2 | shape], [dim2 | new_shape]) do
-    [dim2 | do_broadcast(shape, new_shape)]
-  end
+  defp unary_broadcast([1 | odims], [ndim | ndims], acc),
+    do: unary_broadcast(odims, ndims, [ndim | acc])
 
-  defp do_broadcast([dim1 | shape], [dim2 | shape]) do
-    raise ArgumentError,
-          "could not broadcast shape to new shape because" <>
-            " dimensions are incompatible, expected dimensions" <>
-            " to be equal or shape's dimension to be 1, got:" <>
-            " #{dim1} and #{dim2}"
-  end
+  defp unary_broadcast([], [], acc),
+    do: {:ok, acc}
+
+  defp unary_broadcast(_, _, _),
+    do: :error
+
+  defp shape_to_lower_ranked_list(_tuple, 0, 0),
+    do: []
+
+  defp shape_to_lower_ranked_list(tuple, 0, rank),
+    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
+
+  defp shape_to_lower_ranked_list(tuple, size, rank),
+    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
 
   @doc """
   Broadcasts two shapes to a common shape.
@@ -268,14 +281,20 @@ defmodule Nx.Shape do
   """
   def dot(s1, s2) do
     case {tuple_size(s1), tuple_size(s2)} do
-      {0, _} -> binary_broadcast(s1, s2)
-      {_, 0} -> binary_broadcast(s1, s2)
+      {0, _} ->
+        binary_broadcast(s1, s2)
+
+      {_, 0} ->
+        binary_broadcast(s1, s2)
+
       {n, 1} ->
         validate_dot_axes!([n - 1], s1, [0], s2)
         dot(s1, [n - 1], s2, [0])
+
       {1, m} ->
         validate_dot_axes!([0], s1, [m - 2], s2)
         dot(s1, [0], s2, [m - 2])
+
       {n, m} when n >= 2 and m >= 2 ->
         validate_dot_axes!([n - 1], s1, [m - 2], s2)
         dot(s1, [n - 1], s2, [m - 2])
