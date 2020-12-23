@@ -239,15 +239,18 @@ defmodule Nx.Defn.Expr do
     %Expr{shape: pred_shape} = pred_expr = to_expr(pred_expr)
     %Expr{shape: true_shape} = true_expr = to_expr(true_expr)
     %Expr{shape: false_shape} = false_expr = to_expr(false_expr)
+
     output_shape =
       case pred_shape do
         {} ->
           if Nx.Shape.size(true_shape) > Nx.Shape.size(false_shape),
             do: true_shape,
             else: false_shape
+
         _ ->
           pred_shape
       end
+
     Nx.Shape.broadcast(true_shape, output_shape)
     Nx.Shape.broadcast(false_shape, output_shape)
     make_expr(output_shape, :select, [pred_expr, true_expr, false_expr])
@@ -314,97 +317,100 @@ defmodule Nx.Defn.Expr do
   defimpl Inspect do
     import Inspect.Algebra
 
-    @vars "abcdefghijklmnopqrstuvwxyz"
-
     def inspect(expr, opts) do
-      expr_doc = inspect_expr(expr)
+      {exprs, params, _var_map} = inspect_expr_args([expr], [], [], %{})
+
+      doc =
+        params
+        |> Enum.uniq()
+        |> Enum.reverse()
+        |> Kernel.++(Enum.reverse(exprs))
+        |> Enum.reduce(empty(), fn str, acc -> concat(acc, concat(line(), str)) end)
+
       color("#Nx.Defn.Expr<", :map, opts)
-      |> concat(nest(expr_doc, 2))
+      |> concat(nest(doc, 2))
       |> concat(color("\n>", :map, opts))
     end
 
-    defp inspect_expr(%Expr{op: op, shape: shape, args: args}) do
-      {exprs, params, var_map} = inspect_expr_args(args, [], %{})
+    # Post-order traversal of the Expr AST, but we pull all parameters to the front
+    defp inspect_expr_args([], exprs, params, var_map), do: {exprs, params, var_map}
 
-      args_strs = inspect_args(args, var_map)
-      var = counter_to_var(map_size(var_map))
-
-      expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(args_strs, ", ") <> " ] " <> shape_to_string(shape)
-
-      exprs = List.flatten([expr_str | [exprs | params]])
-
-      exprs
-      |> Enum.reverse()
-      |> Enum.uniq()
-      |> Enum.reduce("", fn str, acc -> concat(acc, concat(line(), str)) end)
+    defp inspect_expr_args([%Expr{op: :constant} | tail], exprs, params, var_map) do
+      inspect_expr_args(tail, exprs, params, var_map)
     end
 
-    # Post-order traversal of the Expr AST, but we pull all parameters to the front
-    defp inspect_expr_args([], params, var_map), do: {[], params, var_map}
+    defp inspect_expr_args([%Expr{id: id, op: :parameter} | tail], exprs, params, var_map) do
+      {var, var_map} = var_for_id(var_map, id)
+      inspect_expr_args(tail, exprs, ["parameter " <> var | params], var_map)
+    end
 
-    defp inspect_expr_args([head | tail], params, var_map) do
-      case head do
-        %Expr{op: :constant} ->
-          {[], params, var_map}
+    defp inspect_expr_args([%Expr{} = expr | tail], exprs, params, var_map) do
+      %{id: id, op: op, args: expr_args, shape: shape} = expr
+      {exprs, params, var_map} = inspect_expr_args(expr_args, exprs, params, var_map)
 
-        %Expr{id: id, op: :parameter} ->
-          var = counter_to_var(map_size(var_map))
-          var_map = Map.update(var_map, id, var, fn _ -> var end)
-          {[], ["parameter " <> var | params], var_map}
+      expr_args_strs = inspect_args(expr_args, var_map)
+      {var, var_map} = var_for_id(var_map, id)
 
-        %Expr{id: id, op: :tensor} ->
-          var = counter_to_var(map_size(var_map))
-          var_map = Map.update(var_map, id, var, fn _ -> var end)
-          {["tensor " <> var], params, var_map}
+      expr_str =
+        var <>
+          " = " <>
+          Atom.to_string(op) <>
+          " [ " <> Enum.join(expr_args_strs, ", ") <> " ] " <> shape_to_string(shape)
 
-        %Expr{id: id, op: op, args: expr_args, shape: shape} ->
-          {expr_children, params, var_map} =
-            inspect_expr_args(expr_args, params, var_map)
+      inspect_expr_args(tail, [expr_str | exprs], params, var_map)
+    end
 
-          {expr_siblings, params, var_map} =
-            inspect_expr_args(tail, params, var_map)
-
-          expr_args_strs = inspect_args(expr_args, var_map)
-          var = counter_to_var(map_size(var_map))
-
-          expr_str =
-            var <> " = " <> Atom.to_string(op) <> " [ " <> Enum.join(expr_args_strs, ", ") <> " ] " <> shape_to_string(shape)
-
-          {[expr_str | [expr_siblings | expr_children]], params, Map.update(var_map, id, var, fn _ -> var end)}
-
-        _ ->
-          inspect_expr_args(tail, params, var_map)
-      end
+    defp inspect_expr_args([_ | tail], exprs, params, var_map) do
+      inspect_expr_args(tail, exprs, params, var_map)
     end
 
     defp inspect_args([], _var_map), do: []
 
     defp inspect_args([arg | args], var_map) do
       case arg do
+        %Nx.Tensor{type: type} ->
+          [inspect(type) | inspect_args(args, var_map)]
+
         %Expr{op: :constant, args: [number]} ->
           [to_string(number) | inspect_args(args, var_map)]
 
         %Expr{id: id} ->
-          [Map.get(var_map, id) | inspect_args(args, var_map)]
+          [Map.fetch!(var_map, id) | inspect_args(args, var_map)]
 
         [_ | _] = opts when args == [] ->
-          [Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end) | inspect_args(args, var_map)]
+          [
+            Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
+            | inspect_args(args, var_map)
+          ]
 
         value ->
-          ["#{inspect(value)}" | inspect_args(args, var_map)]
+          [inspect(value) | inspect_args(args, var_map)]
       end
     end
 
-    defp counter_to_var(counter) do
-      String.at(@vars, rem(counter, 26))
+    defp var_for_id(var_map, id) do
+      case var_map do
+        %{^id => var} ->
+          {var, var_map}
+
+        %{} ->
+          var = IO.iodata_to_binary(counter_to_name(map_size(var_map)))
+          {var, Map.put(var_map, id, var)}
+      end
     end
 
-    defp shape_to_string({}), do: "()"
+    defp counter_to_name(counter) when counter >= 26 do
+      [counter_to_name(div(counter, 26)) | counter_to_name(rem(counter, 26))]
+    end
+
+    defp counter_to_name(counter), do: [Enum.at(?a..?z, counter)]
+
     defp shape_to_string(shape) do
       shape_str =
         shape
         |> Tuple.to_list()
         |> Enum.join("x")
+
       "(" <> shape_str <> ")"
     end
   end
