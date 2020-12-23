@@ -501,9 +501,30 @@ defmodule Nx.Shape do
   defp to_zero(n), do: [n | to_zero(n - 1)]
 
   @doc """
-  Output shape after a padding operation.
+  Calculates the padding needed for same padding.
+
+  ## Examples
+
+      iex> Nx.Shape.calculate_padding({4, 4}, {2, 2}, {1, 1})
+      [{0, 1}, {0, 1}]
+
+      iex> Nx.Shape.calculate_padding({3, 3}, {2, 2}, {2, 2})
+      [{0, 1}, {0, 1}]
   """
-  def pad(shape, _window, _stride, :valid), do: shape
+  def calculate_padding(shape, window, strides)
+      when is_tuple(shape) and is_tuple(window) and is_tuple(strides) do
+    calculate_padding(Tuple.to_list(shape), Tuple.to_list(window), Tuple.to_list(strides))
+  end
+
+  def calculate_padding([], [], []), do: []
+
+  def calculate_padding([dim | shape], [w | window], [s | strides]) do
+    output_dim = ceil(dim / s)
+    padding_size = max((output_dim - 1) * s + w - dim, 0)
+    lo = floor(padding_size / 2)
+    hi = ceil(padding_size / 2)
+    [{lo, hi} | calculate_padding(shape, window, strides)]
+  end
 
   @doc """
   Output shape after a strided operation.
@@ -511,13 +532,17 @@ defmodule Nx.Shape do
   Assumes stride and window are validated.
   """
   def stride(shape, stride, window) do
-    List.to_tuple(Enum.reverse(strided_dims(Tuple.to_list(shape), Tuple.to_list(stride), Tuple.to_list(window))))
+    List.to_tuple(
+      Enum.reverse(
+        strided_dims(Tuple.to_list(shape), Tuple.to_list(stride), Tuple.to_list(window))
+      )
+    )
   end
 
   defp strided_dims([], [], []), do: []
 
   defp strided_dims([dim | shape], [s | strides], [w | window]),
-    do: [(div(dim - w, s) + 1) | strided_dims(shape, strides, window)]
+    do: [div(dim - w, s) + 1 | strided_dims(shape, strides, window)]
 
   @doc """
   Validates the window size according to the shape.
@@ -525,8 +550,12 @@ defmodule Nx.Shape do
   def validate_window!(shape, window)
 
   def validate_window!(shape, window) when tuple_size(shape) != tuple_size(window),
-    do: raise ArugmentError, "invalid window dimensions, rank of shape (#{tuple_size(shape)})" <>
-                             " does not match rank of window (#{tuple_size(window)})"
+    do:
+      raise(
+        ArugmentError,
+        "invalid window dimensions, rank of shape (#{tuple_size(shape)})" <>
+          " does not match rank of window (#{tuple_size(window)})"
+      )
 
   def validate_window!(shape, window), do: :ok
 
@@ -536,8 +565,12 @@ defmodule Nx.Shape do
   def validate_strides!(shape, strides)
 
   def validate_strides!(shape, strides) when tuple_size(strides) != tuple_size(shape),
-    do: raise ArgumentError, "invalid stride dimensions, rank of shape (#{tuple_size(shape)})" <>
-                             " does not match rank of strides (#{tuple_size(strides)})"
+    do:
+      raise(
+        ArgumentError,
+        "invalid stride dimensions, rank of shape (#{tuple_size(shape)})" <>
+          " does not match rank of strides (#{tuple_size(strides)})"
+      )
 
   def validate_strides!(shape, strides), do: :ok
 end

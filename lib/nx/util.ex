@@ -351,6 +351,20 @@ defmodule Nx.Util do
           [12, 13, 14]
         ]
       >
+
+      iex> Nx.Util.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+      ...> :first,
+      ...> fn x, acc -> if acc == :first, do: x, else: max(x, acc) end,
+      ...> {2, 2}, {1, 1}, :same
+      ...> )
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [5, 6, 6],
+          [8, 9, 9],
+          [8, 9, 9]
+        ]
+      >
   """
   def reduce_window(tensor, acc, fun, window_dimensions, window_strides, padding \\ :valid) do
     %T{type: {_, size} = type, shape: shape} = t = Nx.tensor(tensor)
@@ -358,7 +372,17 @@ defmodule Nx.Util do
     Nx.Shape.validate_window!(shape, window_dimensions)
     Nx.Shape.validate_strides!(shape, window_strides)
 
-    padded_shape = Nx.Shape.pad(shape, window_dimensions, window_strides, padding)
+    %T{shape: padded_shape} =
+      t =
+      case padding do
+        :valid ->
+          t
+
+        :same ->
+          padding_values = Nx.Shape.calculate_padding(shape, window_dimensions, window_strides)
+          Nx.pad(t, 0, padding_values)
+      end
+
     output_shape = Nx.Shape.stride(padded_shape, window_strides, window_dimensions)
 
     data = Nx.Util.to_bitstring(t)
