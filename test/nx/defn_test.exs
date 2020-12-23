@@ -167,9 +167,13 @@ defmodule Nx.DefnTest do
   describe "conditional ops" do
     defn select(t1, t2, t3), do: Nx.select(t1, t2, t3)
 
-    test "select" do
+    test "select with tensor predicate" do
       assert %Expr{op: :select, args: [_, _, _], shape: {2, 2}} =
                select(Nx.tensor([[1, 1], [0, 0]]), Nx.tensor(1), Nx.tensor(0))
+    end
+
+    test "select with scalar predicate" do
+      assert %Expr{op: :select, args: [_, _, _], shape: {5}} = select(Nx.tensor(1), Nx.tensor([1, 2, 3, 4, 5]), Nx.tensor(0))
     end
   end
 

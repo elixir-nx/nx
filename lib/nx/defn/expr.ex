@@ -239,9 +239,18 @@ defmodule Nx.Defn.Expr do
     %Expr{shape: pred_shape} = pred_expr = to_expr(pred_expr)
     %Expr{shape: true_shape} = true_expr = to_expr(true_expr)
     %Expr{shape: false_shape} = false_expr = to_expr(false_expr)
-    Nx.Shape.broadcast(true_shape, pred_shape)
-    Nx.Shape.broadcast(false_shape, pred_shape)
-    make_expr(pred_shape, :select, [pred_expr, true_expr, false_expr])
+    output_shape =
+      case pred_shape do
+        {} ->
+          if Nx.Shape.size(true_shape) > Nx.Shape.size(false_shape),
+            do: true_shape,
+            else: false_shape
+        _ ->
+          pred_shape
+      end
+    Nx.Shape.broadcast(true_shape, output_shape)
+    Nx.Shape.broadcast(false_shape, output_shape)
+    make_expr(output_shape, :select, [pred_expr, true_expr, false_expr])
   end
 
   ## Results normalization
