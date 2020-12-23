@@ -367,14 +367,18 @@ defmodule Nx.Util do
     anchors = Enum.sort(make_anchors(padded_shape, window_strides, window_dimensions, []))
 
     data =
-      for anchor <- anchors, into: <<>>  do
+      for anchor <- anchors, into: <<>> do
         offset = anchor_offset(weighted_shape, anchor)
-        window = IO.iodata_to_binary(anchored_weighted_traverse(weighted_shape, data, size, offset))
+
+        window =
+          IO.iodata_to_binary(anchored_weighted_traverse(weighted_shape, data, size, offset))
+
         match_types [type] do
           window_val =
             for <<match!(x, 0) <- window>>,
               reduce: acc,
               do: (acc -> fun.(read!(x, 0), acc))
+
           <<write!(window_val, 0)>>
         end
       end
@@ -383,21 +387,28 @@ defmodule Nx.Util do
   end
 
   defp make_anchors(shape, strides, window, anchors)
-      when is_tuple(shape) and is_tuple(strides) and is_tuple(window),
-    do: make_anchors(Tuple.to_list(shape), Tuple.to_list(strides), Tuple.to_list(window), anchors)
+       when is_tuple(shape) and is_tuple(strides) and is_tuple(window),
+       do:
+         make_anchors(
+           Tuple.to_list(shape),
+           Tuple.to_list(strides),
+           Tuple.to_list(window),
+           anchors
+         )
 
   defp make_anchors([], [], _window, anchors), do: anchors
 
   defp make_anchors([dim | shape], [s | strides], [w | window], []) do
-    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and (i + w - 1) < dim, do: {i}
+    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim, do: {i}
     make_anchors(shape, strides, window, dims)
   end
 
   defp make_anchors([dim | shape], [s | strides], [w | window], anchors) do
     dims =
-      for i <- 0..(dim - 1), rem(i, s) == 0 and (i + w - 1) < dim do
-        Enum.map(anchors, & Tuple.append(&1, i))
+      for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim do
+        Enum.map(anchors, &Tuple.append(&1, i))
       end
+
     make_anchors(shape, strides, window, List.flatten(dims))
   end
 
@@ -407,7 +418,7 @@ defmodule Nx.Util do
   defp anchor_offset([], []), do: 0
 
   defp anchor_offset([{dim, size} | dims], [a | anchor]),
-    do: size*a + anchor_offset(dims, anchor)
+    do: size * a + anchor_offset(dims, anchor)
 
   # Helper for zipping 2 tensors along given axes.
   # Given we always reduce on the first tensor provided,
@@ -459,8 +470,9 @@ defmodule Nx.Util do
   # If the axes isn't provided, the "view" is just the
   # entire binary as it is layed out in memory and we
   # expect the entire tensor to be reduced down to a scalar.
-  defp bin_aggregate_axes(binary, axes, shape, size) do
-    {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
+  def bin_aggregate_axes(binary, axes, shape, size) do
+    if axes do
+      {chunk_size, read_size, path, shape} = aggregate_axes(axes, shape, size)
 
     view =
       for <<chunk::size(chunk_size)-bitstring <- binary>> do
