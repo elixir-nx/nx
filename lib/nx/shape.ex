@@ -147,36 +147,34 @@ defmodule Nx.Shape do
   def binary_broadcast(shape, shape), do: shape
 
   def binary_broadcast(s1, s2) when is_tuple(s1) and is_tuple(s2),
-    do: List.to_tuple(do_binary_broadcast(Tuple.to_list(s1), Tuple.to_list(s2)))
+    do: List.to_tuple(do_binary_broadcast(Tuple.to_list(s1), Tuple.to_list(s2), tuple_size(s1), tuple_size(s2)))
 
-  # TODO: don't use length here because it may be expensive.
-  # We can compute the rank and order by rank.
-  defp do_binary_broadcast(s1, s2) when length(s1) > length(s2) do
+  defp do_binary_broadcast(s1, s2, r1, r2) when r1 > r2 do
     [dim | s1] = s1
-    [dim | do_binary_broadcast(s1, s2)]
+    [dim | do_binary_broadcast(s1, s2, r1 - 1, r2)]
   end
 
-  defp do_binary_broadcast(s1, s2) when length(s2) > length(s1) do
+  defp do_binary_broadcast(s1, s2, r1, r2) when r2 > r1 do
     [dim | s2] = s2
-    [dim | do_binary_broadcast(s1, s2)]
+    [dim | do_binary_broadcast(s1, s2, r1, r2 - 1)]
   end
 
-  defp do_binary_broadcast([], s2), do: s2
-  defp do_binary_broadcast(s1, []), do: s1
+  defp do_binary_broadcast([], s2, _r1, _r2), do: s2
+  defp do_binary_broadcast(s1, [], _r1, _r2), do: s1
 
-  defp do_binary_broadcast([1 | s1], [dim2 | s2]) do
-    [dim2 | do_binary_broadcast(s1, s2)]
+  defp do_binary_broadcast([1 | s1], [dim2 | s2], r1, r2) do
+    [dim2 | do_binary_broadcast(s1, s2, r1 - 1, r2 - 1)]
   end
 
-  defp do_binary_broadcast([dim1 | s1], [1 | s2]) do
-    [dim1 | do_binary_broadcast(s1, s2)]
+  defp do_binary_broadcast([dim1 | s1], [1 | s2], r1, r2) do
+    [dim1 | do_binary_broadcast(s1, s2, r1 - 1, r2 - 1)]
   end
 
-  defp do_binary_broadcast([dim | s1], [dim | s2]) do
-    [dim | do_binary_broadcast(s1, s2)]
+  defp do_binary_broadcast([dim | s1], [dim | s2], r1, r2) do
+    [dim | do_binary_broadcast(s1, s2, r1 - 1, r2 - 1)]
   end
 
-  defp do_binary_broadcast([dim1 | _s1], [dim2 | _s2]) do
+  defp do_binary_broadcast([dim1 | _s1], [dim2 | _s2], _r1, _r2) do
     raise ArgumentError,
           "could not broadcast shapes because dimensions are" <>
             " incompatible, expected dimensions to be equal or" <>
