@@ -100,9 +100,10 @@ defmodule Nx.Defn.Expr do
       if axes = opts[:axes] do
         axes = Nx.Shape.normalize_axes(shape, axes)
         output_shape = Nx.Shape.contract(shape, axes)
-        make_expr(output_shape, unquote(op), [expr, [axes: axes]])
+        opts = Keyword.put(opts, :axes, axes)
+        make_expr(output_shape, unquote(op), [expr, opts])
       else
-        make_expr({}, unquote(op), [expr, []])
+        make_expr({}, unquote(op), [expr, opts])
       end
     end
   end
@@ -119,9 +120,10 @@ defmodule Nx.Defn.Expr do
       if axis = opts[:axis] do
         axis = Nx.Shape.normalize_axis(shape, axis)
         output_shape = Nx.Shape.contract(shape, [axis])
-        make_expr(output_shape, unquote(op), [expr, [axis: axis]])
+        opts = Keyword.put(opts, :axis, axis)
+        make_expr(output_shape, unquote(op), [expr, opts])
       else
-        make_expr({}, unquote(op), [expr, []])
+        make_expr({}, unquote(op), [expr, opts])
       end
     end
   end

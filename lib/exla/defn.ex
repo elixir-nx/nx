@@ -183,6 +183,13 @@ defmodule Exla.Defn do
     end
   end
 
+  @reduction_op [:sum, :mean, :argmax, :argmin]
+
+  defp to_operator(op, [{_expr, arg}, opts], _shape, builder)
+       when op in @reduction_op do
+    apply(Exla.Lib, op, [builder, arg, opts])
+  end
+
   ## constant/operator
 
   defp to_operator(_builder, %Exla.Op{} = op),

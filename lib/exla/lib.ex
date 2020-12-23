@@ -10,7 +10,7 @@ defmodule Exla.Lib do
   """
   def iota(builder, shape, opts) do
     if axis = opts[:axis] do
-      Op.iota(builder, shape, to_axis(shape, axis))
+      Op.iota(builder, shape, axis)
     else
       total_elems = tuple_product(shape.dims)
 
@@ -167,13 +167,9 @@ defmodule Exla.Lib do
     Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
-  defp to_axis(_op_shape, axis) when axis >= 0, do: axis
-  defp to_axis(op_shape, axis) when axis < 0, do: tuple_size(op_shape.dims) + axis
-
   defp reduce_axes(op_shape, axes) do
     if axes do
       axes
-      |> Enum.map(&to_axis(op_shape, &1))
       |> Enum.sort()
       |> List.to_tuple()
     else

@@ -596,109 +596,109 @@ defmodule Exla.DefnTest do
     end
   end
 
-  #   describe "sum" do
-  #     defn sum(t), do: Nx.sum(t)
+  describe "sum" do
+    defn sum(t), do: Nx.sum(t)
 
-  #     test "computes the sum across types" do
-  #       assert Nx.tensor([1, 2, 3]) |> sum() == Nx.tensor(6)
-  #       assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum() == Nx.tensor(6, type: {:s, 8})
-  #       assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() == Nx.tensor(6, type: {:u, 8})
-  #       assert Nx.tensor([1.0, 2.0, 3.0]) |> sum() == Nx.tensor(6.0)
-  #       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() == Nx.tensor(6, type: {:f, 32})
-  #     end
+    test "computes the sum across types" do
+      assert Nx.tensor([1, 2, 3]) |> sum() == Nx.tensor(6)
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum() == Nx.tensor(6, type: {:s, 8})
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() == Nx.tensor(6, type: {:u, 8})
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> sum() == Nx.tensor(6.0)
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() == Nx.tensor(6, type: {:f, 32})
+    end
 
-  #     defn sum_pos_axis(t), do: Nx.sum(t, axes: [1])
-  #     defn sum_neg_axis(t), do: Nx.sum(t, axes: [-3])
-  #     defn sum_pos_neg_axis(t), do: Nx.sum(t, axes: [1, -3])
+    defn sum_pos_axis(t), do: Nx.sum(t, axes: [1])
+    defn sum_neg_axis(t), do: Nx.sum(t, axes: [-3])
+    defn sum_pos_neg_axis(t), do: Nx.sum(t, axes: [1, -3])
 
-  #     test "computes the sum on a given axis" do
-  #       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-  #       assert sum_pos_axis(t) == Nx.sum(t, axes: [1])
-  #       assert sum_neg_axis(t) == Nx.sum(t, axes: [-3])
-  #       assert sum_pos_neg_axis(t) == Nx.sum(t, axes: [1, -3])
-  #     end
-  #   end
+    test "computes the sum on a given axis" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      assert sum_pos_axis(t) == Nx.sum(t, axes: [1])
+      assert sum_neg_axis(t) == Nx.sum(t, axes: [-3])
+      assert sum_pos_neg_axis(t) == Nx.sum(t, axes: [1, -3])
+    end
+  end
 
-  #   describe "mean" do
-  #     defn mean(t), do: Nx.mean(t)
+  describe "mean" do
+    defn mean(t), do: Nx.mean(t)
 
-  #     test "computes mean without axis" do
-  #       assert mean(Nx.tensor(42)) == Nx.tensor(42.0)
-  #       assert mean(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
-  #     end
+    test "computes mean without axis" do
+      assert mean(Nx.tensor(42)) == Nx.tensor(42.0)
+      assert mean(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
+    end
 
-  #     defn mean_over_single_axis(t), do: Nx.mean(t, axes: [0])
+    defn mean_over_single_axis(t), do: Nx.mean(t, axes: [0])
 
-  #     test "computes mean over a single axis" do
-  #       assert mean_over_single_axis(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
+    test "computes mean over a single axis" do
+      assert mean_over_single_axis(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
 
-  #       assert mean_over_single_axis(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])) ==
-  #                Nx.tensor([
-  #                  [4.0, 5.0, 6.0],
-  #                  [7.0, 8.0, 9.0]
-  #                ])
-  #     end
+      assert mean_over_single_axis(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])) ==
+               Nx.tensor([
+                 [4.0, 5.0, 6.0],
+                 [7.0, 8.0, 9.0]
+               ])
+    end
 
-  #     defn mean_over_multiple_axes(t), do: Nx.mean(t, axes: [0, 2])
+    defn mean_over_multiple_axes(t), do: Nx.mean(t, axes: [0, 2])
 
-  #     test "computes mean over multiple axes" do
-  #       assert mean_over_multiple_axes(
-  #                Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-  #              ) == Nx.tensor([5.0, 8.0])
-  #     end
+    test "computes mean over multiple axes" do
+      assert mean_over_multiple_axes(
+               Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+             ) == Nx.tensor([5.0, 8.0])
+    end
 
-  #     defn mean_over_negative_axis(t), do: Nx.mean(t, axes: [-1])
+    defn mean_over_negative_axis(t), do: Nx.mean(t, axes: [-1])
 
-  #     test "computes mean over negative axes" do
-  #       assert mean_over_negative_axis(
-  #                Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
-  #              ) == Nx.tensor([[2.0, 5.0], [8.0, 11.0]])
-  #     end
-  #   end
+    test "computes mean over negative axes" do
+      assert mean_over_negative_axis(
+               Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+             ) == Nx.tensor([[2.0, 5.0], [8.0, 11.0]])
+    end
+  end
 
-  #   describe "argmax/argmin" do
-  #     defn argmax(t), do: Nx.argmax(t)
-  #     defn argmin(t), do: Nx.argmin(t)
-  #     defn argmax_axis(t), do: Nx.argmax(t, axis: 1)
-  #     defn argmin_axis(t), do: Nx.argmin(t, axis: 1)
-  #     defn argmax_high(t), do: Nx.argmax(t, axis: 1, tie_break: :high)
-  #     defn argmin_high(t), do: Nx.argmin(t, axis: 1, tie_break: :high)
+  describe "argmax/argmin" do
+    defn argmax(t), do: Nx.argmax(t)
+    defn argmin(t), do: Nx.argmin(t)
+    defn argmax_axis(t), do: Nx.argmax(t, axis: 1)
+    defn argmin_axis(t), do: Nx.argmin(t, axis: 1)
+    defn argmax_high(t), do: Nx.argmax(t, axis: 1, tie_break: :high)
+    defn argmin_high(t), do: Nx.argmin(t, axis: 1, tie_break: :high)
 
-  #     test "computes the argmax across types" do
-  #       assert argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
-  #       assert argmax(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(2, type: {:s, 8})
-  #       assert argmax(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2, type: {:u, 8})
-  #       assert argmax(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(2, type: {:f, 64})
-  #       assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(2, type: {:f, 32})
-  #       assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(2, type: {:bf, 16})
-  #       assert argmax(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(5)
-  #     end
+    test "computes the argmax across types" do
+      assert argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
+      assert argmax(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(2, type: {:s, 8})
+      assert argmax(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2, type: {:u, 8})
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(2, type: {:f, 64})
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(2, type: {:f, 32})
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(2, type: {:bf, 16})
+      assert argmax(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(5)
+    end
 
-  #     test "computes the argmin across types" do
-  #       assert argmin(Nx.tensor([1, 2, 3])) == Nx.tensor(0)
-  #       assert argmin(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(0, type: {:s, 8})
-  #       assert argmin(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(0, type: {:u, 8})
-  #       assert argmin(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(0, type: {:f, 64})
-  #       assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(0, type: {:f, 32})
-  #       assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(0, type: {:bf, 16})
-  #       assert argmin(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(0)
-  #     end
+    test "computes the argmin across types" do
+      assert argmin(Nx.tensor([1, 2, 3])) == Nx.tensor(0)
+      assert argmin(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(0, type: {:s, 8})
+      assert argmin(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(0, type: {:u, 8})
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(0, type: {:f, 64})
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(0, type: {:f, 32})
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(0, type: {:bf, 16})
+      assert argmin(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(0)
+    end
 
-  #     test "computes the argmax on an axis" do
-  #       assert argmax_axis(Nx.tensor([[[1, 1, 1], [1, 1, 3]], [[6, 2, 3], [2, 8, 3]]])) ==
-  #                Nx.tensor([[0, 0, 1], [0, 1, 0]])
-  #     end
+    test "computes the argmax on an axis" do
+      assert argmax_axis(Nx.tensor([[[1, 1, 1], [1, 1, 3]], [[6, 2, 3], [2, 8, 3]]])) ==
+               Nx.tensor([[0, 0, 1], [0, 1, 0]])
+    end
 
-  #     test "computes the argmin on an axis" do
-  #       assert argmin_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) ==
-  #                Nx.tensor([[1, 1, 0], [1, 0, 0]])
-  #     end
+    test "computes the argmin on an axis" do
+      assert argmin_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) ==
+               Nx.tensor([[1, 1, 0], [1, 0, 0]])
+    end
 
-  #     test "computes argmax with tie_break: :high" do
-  #       assert argmax_axis(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([1, 1])
-  #       assert argmax_high(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([2, 2])
-  #     end
-  #   end
+    test "computes argmax with tie_break: :high" do
+      assert argmax_axis(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([1, 1])
+      assert argmax_high(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([2, 2])
+    end
+  end
 
   #   describe "dot product" do
   #     defn dot(a, b), do: Nx.dot(a, b)
