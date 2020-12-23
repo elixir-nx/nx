@@ -64,15 +64,6 @@ defmodule Nx.Defn do
 
   will return the same as `Nx.tensor(2)`.
 
-  ## Tensor constants
-
-  Tensor constants can be injected into `defn` via Elixir's module attributes.
-  For example, imagine you want to introduce a 2x2 matrix as part of a comutation,
-  you can do this:
-
-      @my_tensor Nx.tensor([[1, 2], [3, 4]])
-      defn add_2x2(t), do: t + @my_tensor
-
   ## Compilers
 
   The power of `Nx.Defn` is given by its compilers. The default
@@ -98,52 +89,73 @@ defmodule Nx.Defn do
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __compile__(_env, _kind, _meta, vars, ast, []) do
-    quote do
-      unquote(vars) = unquote(__MODULE__).__validate__!(unquote(vars))
-      unquote(__MODULE__).__result__!(unquote(ast))
-    end
-  end
+  def __compile__(_env, _kind, vars, fun, []) do
+    params =
+      for var <- vars do
+        tensor =
+          cond do
+            is_number(var) ->
+              Nx.tensor(var)
 
-  @doc false
-  def __validate__!(args) do
-    for arg <- args do
-      cond do
-        is_number(arg) ->
-          Nx.tensor(arg)
+            match?(%Nx.Tensor{}, var) ->
+              var
 
-        match?(%Nx.Tensor{}, arg) ->
-          arg
+            is_tuple(var) ->
+              raise ArgumentError,
+                    "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                      "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
+                      "Got: #{inspect(var)}"
 
-        is_tuple(arg) ->
-          raise ArgumentError,
-                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
-                  "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
-                  "Got: #{inspect(arg)}"
+            true ->
+              raise ArgumentError,
+                    "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                      "Got: #{inspect(var)}"
+          end
 
-        true ->
-          raise ArgumentError,
-                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
-                  "Got: #{inspect(arg)}"
+        Nx.Defn.Expr.parameter(tensor.shape, tensor)
       end
+
+    fun.(params)
+    |> to_result(%{})
+    |> elem(0)
+  end
+
+  defp eval(%Nx.Defn.Expr{op: :parameter, args: [t]}, state) do
+    {t, state}
+  end
+
+  defp eval(%Nx.Defn.Expr{op: :constant, args: [t]}, state) do
+    {t, state}
+  end
+
+  defp eval(%Nx.Defn.Expr{id: id, op: op, args: args}, state) do
+    case state do
+      %{^id => res} ->
+        {res, state}
+
+      %{} ->
+        {args, state} = Enum.map_reduce(args, state, &eval/2)
+        res = apply(Nx, op, args)
+        {res, Map.put(state, id, res)}
     end
   end
 
-  @doc false
-  def __result__!(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&__result__!/1)
-    |> List.to_tuple()
+  defp eval(other, state) do
+    {other, state}
   end
 
-  def __result__!(number) when is_number(number), do: Nx.tensor(number)
+  defp to_result(tuple, state) when is_tuple(tuple) do
+    {args, state} =
+      tuple
+      |> Tuple.to_list()
+      |> Enum.map_reduce(state, &to_result/2)
 
-  def __result__!(%Nx.Tensor{} = t), do: t
+    {List.to_tuple(args), state}
+  end
 
-  def __result__!(other) do
-    raise "invalid defn return type, make sure defn returns a tuple or a tensor, " <>
-            "got: #{inspect(other)}"
+  defp to_result(other, state) do
+    {expr, state} = eval(other, state)
+    {Nx.tensor(expr), state}
   end
 
   ## Public API
@@ -264,6 +276,6 @@ defmodule Nx.Defn do
   @doc false
   defmacro __before_compile__(env) do
     exports = Module.get_attribute(env.module, @exports_key)
-    Nx.Defn.Compiler.compile(env, exports)
+    Nx.Defn.Compiler.__compile__(env, exports)
   end
 end

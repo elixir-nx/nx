@@ -1,8 +1,32 @@
 defmodule Nx.Shape do
-  @moduledoc """
-  Primitives for manipulating shapes.
+  @moduledoc false
+
+  # TODO: Change Nx/Nx.Util module to use Nx.Shape whenever possible
+
+  @doc """
+  Computes the rank of a shape.
+
+  ## Examples
+
+      iex> Nx.Shape.rank({1, 2, 3})
+      3
+
   """
-  import Nx.Shared
+  def rank(shape), do: tuple_size(shape)
+
+  @doc """
+  Computes the size of a shape.
+
+  ## Examples
+
+      iex> Nx.Shape.size({1, 2, 3})
+      6
+
+  """
+  def size(shape), do: tuple_product(shape, tuple_size(shape))
+
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   @doc """
   Broadcasts a shape to a new shape.
@@ -30,42 +54,41 @@ defmodule Nx.Shape do
       iex> Nx.Shape.broadcast({4, 2, 3}, {4, 3, 4, 2, 3})
       {4, 3, 4, 2, 3}
 
-      iex> Nx.Shape.broadcast({1, 4, 2, 1}, {8, 4, 2, 10})
-      {8, 4, 2, 10}
-
   ### Error cases
 
-      iex> Nx.Shape.broadcast({4, 2, 3}, {3, 2, 3})
-      ** (ArgumentError) could not broadcast shape to new shape because dimensions are incompatible, expected dimensions to be equal or shape's dimension to be 1, got: 4 and 3
+      iex> Nx.Shape.broadcast({4, 2, 2}, {1, 1})
+      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 2} to {1, 1}
   """
-  def broadcast(shape, new_shape)
+  def broadcast(left_shape, right_shape)
 
   def broadcast(shape, shape), do: shape
 
-  def broadcast(shape, new_shape) when is_tuple(shape) and is_tuple(new_shape),
-    do: List.to_tuple(do_broadcast(Tuple.to_list(shape), Tuple.to_list(new_shape)))
+  def broadcast(left_shape, right_shape) when is_tuple(left_shape) and is_tuple(right_shape) do
+    left_list = tuple_reverse(left_shape)
+    right_list = tuple_reverse(right_shape)
 
-  defp do_broadcast([], new_shape), do: new_shape
+    left_rank = tuple_size(left_shape)
+    right_rank = tuple_size(right_shape)
 
-  defp do_broadcast(shape, new_shape) when length(new_shape) > length(shape) do
-    [dim2 | new_shape] = new_shape
-    [dim2 | do_broadcast(shape, new_shape)]
+    with true <- left_rank <= right_rank,
+         {:ok, new} <- broadcast(left_list, right_list, []) do
+      new
+    else
+      _ ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
+                "to #{inspect(right_shape)}"
+    end
   end
 
-  defp do_broadcast([1 | shape], [dim2 | new_shape]) do
-    [dim2 | do_broadcast(shape, new_shape)]
-  end
+  defp broadcast([1 | ldims], [dim | rdims], acc), do: broadcast(ldims, rdims, [dim | acc])
+  defp broadcast([dim | ldims], [dim | rdims], acc), do: broadcast(ldims, rdims, [dim | acc])
+  defp broadcast([], rdims, acc), do: {:ok, List.to_tuple(Enum.reverse(rdims, acc))}
+  defp broadcast(_, _, _), do: :error
 
-  defp do_broadcast([dim2 | shape], [dim2 | new_shape]) do
-    [dim2 | do_broadcast(shape, new_shape)]
-  end
-
-  defp do_broadcast([dim1 | shape], [dim2 | shape]) do
-    raise ArgumentError, "could not broadcast shape to new shape because" <>
-                         " dimensions are incompatible, expected dimensions" <>
-                         " to be equal or shape's dimension to be 1, got:" <>
-                         " #{dim1} and #{dim2}"
-  end
+  defp tuple_reverse(tuple), do: tuple_reverse(tuple, tuple_size(tuple))
+  defp tuple_reverse(_tuple, 0), do: []
+  defp tuple_reverse(tuple, i), do: [:erlang.element(i, tuple) | tuple_reverse(tuple, i - 1)]
 
   @doc """
   Broadcasts two shapes to a common shape.
@@ -100,44 +123,45 @@ defmodule Nx.Shape do
   ### Error cases
 
       iex> Nx.Shape.binary_broadcast({4, 2, 5}, {3, 2, 5})
-      ** (ArgumentError) could not broadcast shapes because dimensions are incompatible, expected dimensions to be equal or either dimension to be 1, got: 4 and 3
+      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 5} to {3, 2, 5}
   """
-  def binary_broadcast(s1, s2)
+  def binary_broadcast(left_shape, right_shape)
 
   def binary_broadcast(shape, shape), do: shape
 
-  def binary_broadcast(s1, s2) when is_tuple(s1) and is_tuple(s2),
-    do: List.to_tuple(do_binary_broadcast(Tuple.to_list(s1), Tuple.to_list(s2)))
+  def binary_broadcast(left_shape, right_shape) when is_tuple(left_shape) and is_tuple(right_shape) do
+    left_rank = tuple_size(left_shape)
+    right_rank = tuple_size(right_shape)
+    rank = max(left_rank, right_rank)
 
-  defp do_binary_broadcast(s1, s2) when length(s1) > length(s2) do
-    [dim | s1] = s1
-    [dim | do_binary_broadcast(s1, s2)]
+    left_lower = Nx.Shared.shape_to_lower_ranked_list(left_shape, left_rank, rank)
+    right_lower = Nx.Shared.shape_to_lower_ranked_list(right_shape, right_rank, rank)
+
+    case binary_broadcast(left_lower, right_lower, []) do
+      {:ok, new} ->
+        new
+
+      :error ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
+                "to #{inspect(right_shape)}"
+    end
   end
 
-  defp do_binary_broadcast(s1, s2) when length(s2) > length(s1) do
-    [dim | s2] = s2
-    [dim | do_binary_broadcast(s1, s2)]
-  end
+  defp binary_broadcast([ldim | ldims], [rdim | rdims], acc)
+       when rdim == 1 or ldim == 1 or rdim == ldim,
+       do: binary_broadcast(ldims, rdims, [max(rdim, ldim) | acc])
 
-  defp do_binary_broadcast([], s2), do: s2
-  defp do_binary_broadcast(s1, []), do: s1
-  defp do_binary_broadcast([1 | s1], [dim2 | s2]) do
-    [dim2 | do_binary_broadcast(s1, s2)]
-  end
-  defp do_binary_broadcast([dim1 | s1], [1 | s2]) do
-    [dim1 | do_binary_broadcast(s1, s2)]
-  end
-  defp do_binary_broadcast([dim | s1], [dim | s2]) do
-    [dim | do_binary_broadcast(s1, s2)]
-  end
-  defp do_binary_broadcast([dim1 | _s1], [dim2 | _s2]) do
-    raise ArgumentError, "could not broadcast shapes because dimensions are" <>
-                         " incompatible, expected dimensions to be equal or" <>
-                         " either dimension to be 1, got: #{dim1} and #{dim2}"
-  end
+  defp binary_broadcast([], [], acc),
+    do: {:ok, List.to_tuple(acc)}
+
+  defp binary_broadcast(_, _, _),
+    do: :error
 
   @doc """
-  Contracts a shape along the given axis/axes.
+  Contracts a shape along the given axes.
+
+  It expects the axes to have been normalized.
 
   ## Examples
 
@@ -150,47 +174,30 @@ defmodule Nx.Shape do
       iex> Nx.Shape.contract({1, 2, 3}, [])
       {1, 2, 3}
 
-      iex> Nx.Shape.contract({4, 2, 8}, 2)
+      iex> Nx.Shape.contract({4, 2, 8}, [2])
       {4, 2}
 
-  ### Error Cases
-
-      iex> Nx.Shape.contract({2}, [1, 2])
-      ** (ArgumentError) length of axes (2) greater than rank of shape (1)
   """
-  def contract(shape, axes)
-
-  def contract(shape, axes) when tuple_size(shape) < length(axes) do
-    raise ArgumentError, "length of axes (#{length(axes)}) greater" <>
-                         " than rank of shape (#{tuple_size(shape)})"
+  def contract(shape, axes) do
+    List.to_tuple(contract(shape, axes, 0, tuple_size(shape)))
   end
 
-  def contract(shape, []), do: shape
-
-  def contract(shape, [axis | []]), do: Tuple.delete_at(shape, axis)
-
-  def contract(shape, axes) when is_list(axes) do
-    {shape, _} =
-      shape
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.filter(fn {_, i} -> i not in axes end)
-      |> Enum.unzip()
-    List.to_tuple(shape)
+  defp contract(_shape, _axes, n, n) do
+    []
   end
 
-  def contract(shape, axis) when is_integer(axis), do: Tuple.delete_at(shape, axis)
+  defp contract(shape, axes, i, n) do
+    if i in axes do
+      contract(shape, axes, i + 1, n)
+    else
+      [elem(shape, i) | contract(shape, axes, i + 1, n)]
+    end
+  end
 
   @doc """
   Transposes a shape according to the given permutation.
 
-  If no permutation is given, the permutation reverses
-  the order of the axes of the given shape.
-
   ## Examples
-
-    iex> Nx.Shape.transpose({1, 2, 3})
-    {3, 2, 1}
 
     iex> Nx.Shape.transpose({4, 8, 2, 1}, [1, 0, 3, 2])
     {8, 4, 1, 2}
@@ -199,29 +206,108 @@ defmodule Nx.Shape do
 
     iex> Nx.Shape.transpose({4, 8, 2, 1}, [0, 1, 2])
     ** (ArgumentError) expected length of permutation (3) to match rank of shape (4)
-  """
-  def transpose(shape, permutation \\ [])
 
-  def transpose(shape, []) do
-    shape
-    |> Tuple.to_list()
-    |> Enum.reverse()
-    |> List.to_tuple()
-  end
+  """
+  def transpose(shape, permutation)
 
   def transpose(shape, permutation) when tuple_size(shape) == length(permutation) do
-    {shape, _} =
-      shape
-      |> Tuple.to_list()
-      |> Enum.zip(permutation)
-      |> Enum.sort_by(fn {_, i} -> i end)
-      |> Enum.unzip()
-    List.to_tuple(shape)
+    List.to_tuple(Enum.map(permutation, &elem(shape, &1)))
   end
 
   def transpose(shape, permutation) do
-    raise ArgumentError, "expected length of permutation (#{length(permutation)})" <>
-                         " to match rank of shape (#{tuple_size(shape)})"
+    raise ArgumentError,
+          "expected length of permutation (#{length(permutation)})" <>
+            " to match rank of shape (#{tuple_size(shape)})"
+  end
+
+  @doc """
+  Computes the shape of the dot operation.
+
+  The shape is contracted along specific dimensions or
+  broadcasted according to the semantics of the dot product
+  operation described in the `Nx.dot/2` documentation.
+
+  ## Examples
+
+  ### Scalars
+      iex> Nx.Shape.dot({}, {2, 3, 2})
+      {2, 3, 2}
+
+      iex> Nx.Shape.dot({2, 1}, {})
+      {2, 1}
+
+  ### Vectors
+
+      iex> Nx.Shape.dot({5}, {5})
+      {}
+
+  ### Matrices and n-D tensors
+
+      iex> Nx.Shape.dot({2, 2}, {2, 3})
+      {2, 3}
+
+      iex> Nx.Shape.dot({2, 3, 2}, {3, 2, 3})
+      {2, 3, 3, 3}
+
+  ### Error cases
+
+      iex> Nx.Shape.dot({2, 1}, {2, 2})
+      ** (ArgumentError) dot product expects shapes to be compatible, dimension 1 of left-side (1) does not equal dimension 0 of right-side (2)
+  """
+  def dot(s1, s2) do
+    case {tuple_size(s1), tuple_size(s2)} do
+      {0, _} ->
+        binary_broadcast(s1, s2)
+
+      {_, 0} ->
+        binary_broadcast(s1, s2)
+
+      {n, 1} ->
+        validate_dot_axes!([n - 1], s1, [0], s2)
+        dot(s1, [n - 1], s2, [0])
+
+      {1, m} ->
+        validate_dot_axes!([0], s1, [m - 2], s2)
+        dot(s1, [0], s2, [m - 2])
+
+      {n, m} when n >= 2 and m >= 2 ->
+        validate_dot_axes!([n - 1], s1, [m - 2], s2)
+        dot(s1, [n - 1], s2, [m - 2])
+    end
+  end
+
+  defp dot(s1, axes1, s2, axes2), do: outer(contract(s1, axes1), contract(s2, axes2))
+
+  @doc """
+  Validates the contraction dimensions of a dot product are correct.
+
+  In order for the dimensions to be correct, the value of each shape
+  at the given axes must match.
+
+  ## Examples
+
+      iex> Nx.Shape.validate_dot_axes!([0, 1], {1, 2, 3}, [1, 2], {3, 1, 2})
+      :ok
+
+      iex> Nx.Shape.validate_dot_axes!([0, 1], {1, 2, 3}, [1, 2], {1, 2, 3})
+      ** (ArgumentError) dot product expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
+  """
+  def validate_dot_axes!([a1 | axes1], s1, [a2 | axes2], s2) do
+    d1 = elem(s1, a1)
+    d2 = elem(s2, a2)
+
+    if d1 == d2 do
+      validate_dot_axes!(axes1, s1, axes2, s2)
+    else
+      raise ArgumentError,
+            "dot product expects shapes to be compatible," <>
+              " dimension #{a1} of left-side (#{d1}) does not equal" <>
+              " dimension #{a2} of right-side (#{d2})"
+    end
+  end
+
+  def validate_dot_axes!([], _s1, [], _s2) do
+    :ok
   end
 
   @doc """
@@ -238,11 +324,9 @@ defmodule Nx.Shape do
       iex> Nx.Shape.outer({}, {})
       {}
   """
-  def outer(s1, s2), do: combine_tuples(s1, s2)
-
-  defp combine_tuples(tup1, tup2) do
-    l1 = Tuple.to_list(tup1)
-    l2 = Tuple.to_list(tup2)
+  def outer(s1, s2) do
+    l1 = Tuple.to_list(s1)
+    l2 = Tuple.to_list(s2)
     List.to_tuple(l1 ++ l2)
   end
 
@@ -266,10 +350,12 @@ defmodule Nx.Shape do
       ** (ArgumentError) cannot reshape, current shape {4, 2} is not compatible with new shape {2, 3, 2}
   """
   def reshape(shape, new_shape) do
-    unless tuple_product(shape) == tuple_product(new_shape),
-      do: raise ArgumentError,
+    unless size(shape) == size(new_shape) do
+      raise ArgumentError,
             "cannot reshape, current shape #{inspect(shape)} is not compatible with " <>
               "new shape #{inspect(new_shape)}"
+    end
+
     new_shape
   end
 
@@ -291,17 +377,63 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.normalize_axis({4, 2, 5}, -4)
       ** (ArgumentError) given axis (-4) invalid for shape with rank 3
+
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, 3)
+      ** (ArgumentError) given axis (3) invalid for shape with rank 3
   """
   def normalize_axis(shape, axis)
 
-  def normalize_axis(shape, axis) when is_list(axis), do: Enum.map(axis, &normalize_axis(shape, &1))
-
-  def normalize_axis(shape, axis) when tuple_size(shape) < abs(axis),
-    do: raise ArgumentError, "given axis (#{axis}) invalid for shape with rank #{tuple_size(shape)}"
-
-  def normalize_axis(shape, axis) when axis < 0,
+  def normalize_axis(shape, axis) when axis < 0 and abs(axis) <= tuple_size(shape),
     do: tuple_size(shape) + axis
 
-  def normalize_axis(_shape, axis), do: axis
+  def normalize_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape),
+    do: axis
 
+  def normalize_axis(shape, axis) do
+    raise ArgumentError,
+          "given axis (#{axis}) invalid for shape with rank #{tuple_size(shape)}"
+  end
+
+  @doc """
+  Normalize a list of unique axis.
+
+  See `normalize_axis/1`.
+
+  ## Examples
+
+      iex> Nx.Shape.normalize_axes({2, 3, 4}, [-1, 0])
+      [2, 0]
+
+  ### Error Cases
+
+      iex> Nx.Shape.normalize_axes({2, 3, 4}, [1, 1])
+      ** (ArgumentError) axes [1, 1] must be unique integers between 0 and 2
+  """
+  def normalize_axes(shape, axes) when is_list(axes) do
+    normalized = Enum.map(axes, &normalize_axis(shape, &1))
+
+    if length(Enum.uniq(normalized)) != length(axes) do
+      raise ArgumentError,
+            "axes #{inspect(axes)} must be unique integers between 0 and #{tuple_size(shape) - 1}"
+    end
+
+    normalized
+  end
+
+  @doc """
+  Returns the axes for transposition.
+
+  ## Examples
+
+      iex> Nx.Shape.transpose_axes({})
+      []
+      iex> Nx.Shape.transpose_axes({3, 2, 1})
+      [2, 1, 0]
+
+  """
+  def transpose_axes({}), do: []
+  def transpose_axes(shape), do: to_zero(rank(shape) - 1)
+
+  defp to_zero(0), do: [0]
+  defp to_zero(n), do: [n | to_zero(n - 1)]
 end

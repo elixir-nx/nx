@@ -17,11 +17,4 @@ defmodule Exla.Type do
 
   def merge_scalar(type, scalar), do: Nx.Type.merge_scalar(to_nx(type), scalar)
   def cast_scalar!(type, scalar), do: Nx.Type.cast_scalar!(to_nx(type), scalar)
-
-  # Version of merge_tensors
-  def merge_ops(left, right) when is_number(left) and is_number(right), do: infer(left + right)
-  def merge_ops(scalar, op) when is_number(scalar), do: merge_scalar(op_type(op), scalar)
-  def merge_ops(op, scalar) when is_number(scalar), do: merge_scalar(op_type(op), scalar)
-  def merge_ops(left, right), do: merge(op_type(left), op_type(right))
-  defp op_type(op), do: Exla.Op.get_shape(op).dtype
 end

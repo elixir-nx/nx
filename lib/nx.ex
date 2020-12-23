@@ -393,7 +393,7 @@ defmodule Nx do
         {_, _} -> fn -> (max - min) * :rand.uniform() + min end
       end
 
-    data = for _ <- 1..tuple_product(shape), into: "", do: scalar_to_bin(gen.(), type)
+    data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_bin(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
@@ -464,7 +464,7 @@ defmodule Nx do
     type = opts[:type] || {:f, 64}
 
     data =
-      for _ <- 1..tuple_product(shape),
+      for _ <- 1..Nx.Shape.size(shape),
           into: "",
           do: scalar_to_bin(:rand.normal(mu, sigma), type)
 
@@ -575,6 +575,9 @@ defmodule Nx do
 
   def iota({n}, opts) do
     output_type = opts[:type] || {:s, 64}
+    # Validate axis
+    axis = opts[:axis] || 0
+    Nx.Shape.normalize_axis({n}, axis)
     data = for i <- 0..(n - 1), do: scalar_to_bin(i, output_type)
     %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: {n}, type: output_type}
   end
@@ -584,6 +587,8 @@ defmodule Nx do
     output_type = opts[:type] || {:s, 64}
 
     if axis = opts[:axis] do
+      axis = Nx.Shape.normalize_axis(shape, axis)
+
       {dims_before, [dim | dims_after]} =
         shape
         |> Tuple.to_list()
@@ -608,7 +613,7 @@ defmodule Nx do
 
       %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
     else
-      t = iota({tuple_product(shape)}, opts)
+      t = iota({Nx.Shape.size(shape)}, opts)
       reshape(t, shape)
     end
   end
@@ -667,16 +672,10 @@ defmodule Nx do
   """
   def reshape(tensor, new_shape) do
     %T{shape: old_shape} = t = tensor(tensor)
-
     new_shape = shape!(new_shape)
-
-    if tuple_product(old_shape) != tuple_product(new_shape) do
-      raise ArgumentError,
-            "cannot reshape tensor. Current shape #{inspect(old_shape)} is not compatible with " <>
-              "new shape #{inspect(new_shape)}"
-    end
-
-    %{t | shape: new_shape}
+    # This does the shape validation
+    output_shape = Nx.Shape.reshape(old_shape, new_shape)
+    %{t | shape: output_shape}
   end
 
   @doc """
@@ -704,24 +703,6 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 1],
-          [2, 2]
-        ]
-      >
-
-      iex> Nx.broadcast(Nx.tensor([[1, 2]]), Nx.tensor([[10], [20]]))
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 2],
-          [1, 2]
-        ]
-      >
-
       iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
       #Nx.Tensor<
         s64[2][2]
@@ -742,55 +723,30 @@ defmodule Nx do
 
   """
   def broadcast(tensor, new_shape) do
-
     case {tensor(tensor), new_shape} do
-
       {%T{shape: {}} = t, new_shape} ->
         new_shape = shape!(new_shape)
-        data = :binary.copy(Nx.Util.to_bitstring(t), tuple_product(new_shape))
+        data = :binary.copy(Nx.Util.to_bitstring(t), Nx.Shape.size(new_shape))
         %{t | data: {Nx.BitStringDevice, data}, shape: new_shape}
 
-      {%T{shape: new_shape} = t, new_shape} -> t
+      {%T{shape: new_shape} = t, new_shape} ->
+        t
 
       {%T{shape: old_shape, type: {_, size}} = t, new_shape} ->
-        new_shape = shape!(new_shape)
+        new_shape = Nx.Shape.broadcast(old_shape, shape!(new_shape))
+        chunk_size = size * Nx.Shape.size(old_shape)
+        new_higher = Tuple.to_list(new_shape)
 
-        old_rank = tuple_size(old_shape)
-        new_rank = tuple_size(new_shape)
-        rank = :erlang.max(old_rank, new_rank)
+        old_higher =
+          old_shape
+          |> shape_to_lower_ranked_list(Nx.Shape.rank(old_shape), Nx.Shape.rank(new_shape))
+          |> Enum.reverse()
 
-        old_lower = shape_to_lower_ranked_list(old_shape, old_rank, rank)
-        new_lower = shape_to_lower_ranked_list(new_shape, new_rank, rank)
-
-        case unary_broadcast_shape(old_lower, new_lower, []) do
-          {:ok, new_higher} ->
-            chunk_size = size * tuple_product(old_shape)
-            old_higher = Enum.reverse(old_lower)
-            data = unary_broadcast(old_higher, new_higher, Nx.Util.to_bitstring(t), chunk_size)
-            data = IO.iodata_to_binary(data)
-            %{t | data: {Nx.BitStringDevice, data}, shape: List.to_tuple(new_higher)}
-
-          :error ->
-            raise ArgumentError,
-                  "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
-                    "to #{inspect(new_shape)}"
-        end
+        data = unary_broadcast(old_higher, new_higher, Nx.Util.to_bitstring(t), chunk_size)
+        data = IO.iodata_to_binary(data)
+        %{t | data: {Nx.BitStringDevice, data}, shape: new_shape}
     end
-
   end
-
-  defp unary_broadcast_shape([odim | odims], [ndim | ndims], acc)
-       when ndim == 1 or ndim == odim,
-       do: unary_broadcast_shape(odims, ndims, [odim | acc])
-
-  defp unary_broadcast_shape([1 | odims], [ndim | ndims], acc),
-    do: unary_broadcast_shape(odims, ndims, [ndim | acc])
-
-  defp unary_broadcast_shape([], [], acc),
-    do: {:ok, acc}
-
-  defp unary_broadcast_shape(_, _, _),
-    do: :error
 
   defp unary_broadcast([dim | odims], [dim | ndims], data, chunk_size) do
     chunk_size = div(chunk_size, dim)
@@ -807,51 +763,6 @@ defmodule Nx do
   end
 
   defp unary_broadcast([], [], data, _chunk_size), do: data
-
-  @doc """
-  Asserts the tensor has a given shape.
-
-  The new shape is either a tuple or a tensor which we will
-  retrieve the current shape from.
-
-  ## Examples
-
-      iex> Nx.assert_shape(1, {})
-      #Nx.Tensor<
-        s64
-        1
-      >
-
-      iex> t = Nx.tensor([1.0, 2.0])
-      iex> Nx.assert_shape(t, t)
-      #Nx.Tensor<
-        f64[2]
-        [1.0, 2.0]
-      >
-
-      iex> Nx.assert_shape(Nx.tensor([1.0, 2.0]), {})
-      ** (ArgumentError) expected tensor with shape {} but tensor has shape {2}
-
-      iex> Nx.assert_shape(Nx.tensor([1.0, 2.0]), {}, "only scalars are supported by grad")
-      ** (ArgumentError) expected tensor with shape {} but tensor has shape {2} (only scalars are supported by grad)
-
-      iex> Nx.assert_shape(:omg, {})
-      ** (ArgumentError) cannot infer the numerical type of :omg
-
-  """
-  def assert_shape(tensor, tensor_or_shape, message \\ nil) do
-    %T{shape: shape} = t = tensor(tensor)
-
-    expected_shape = shape!(tensor_or_shape)
-
-    if expected_shape != shape do
-      raise ArgumentError,
-            "expected tensor with shape #{inspect(expected_shape)} but tensor has shape " <>
-              inspect(shape) <> if(message, do: " (#{message})", else: "")
-    end
-
-    t
-  end
 
   ## Reflection
 
@@ -918,17 +829,10 @@ defmodule Nx do
       iex> Nx.rank(1)
       0
 
-      iex> Nx.rank({8, 8})
-      2
-
   """
-  def rank(tensor_or_shape) do
-    case tensor_or_shape do
-      shape when is_tuple(shape) -> tuple_size(shape)
-      tensor ->
-        %T{shape: shape} = tensor(tensor)
-        tuple_size(shape)
-    end
+  def rank(tensor) do
+    %T{shape: shape} = tensor(tensor)
+    tuple_size(shape)
   end
 
   @doc """
@@ -945,17 +849,10 @@ defmodule Nx do
       iex> Nx.size(1)
       1
 
-      iex> Nx.size({8, 8})
-      64
-
   """
-  def size(tensor_or_shape) do
-    case tensor_or_shape do
-      shape when is_tuple(shape) -> tuple_product(shape)
-      tensor ->
-        %T{shape: shape} = tensor(tensor)
-        tuple_product(shape)
-    end
+  def size(tensor) do
+    %T{shape: shape} = tensor(tensor)
+    Nx.Shape.size(shape)
   end
 
   ## Device API
@@ -2009,8 +1906,9 @@ defmodule Nx do
   """
   def equal(left, right),
     do: element_wise_bin_bool(left, right, &erlang_equal/3)
+
   @compile {:inline, erlang_equal: 3}
-  defp erlang_equal(_, a, b), do: if a == b, do: 1, else: 0
+  defp erlang_equal(_, a, b), do: if(a == b, do: 1, else: 0)
 
   @doc """
   Element-wise not-equal comparison of two tensors.
@@ -2057,8 +1955,9 @@ defmodule Nx do
   """
   def not_equal(left, right),
     do: element_wise_bin_bool(left, right, &erlang_not_equal/3)
+
   @compile {:inline, erlang_not_equal: 3}
-  defp erlang_not_equal(_, a, b), do: if a != b, do: 1, else: 0
+  defp erlang_not_equal(_, a, b), do: if(a != b, do: 1, else: 0)
 
   @doc """
   Element-wise greater than comparison of two tensors.
@@ -2105,8 +2004,9 @@ defmodule Nx do
   """
   def greater(left, right),
     do: element_wise_bin_bool(left, right, &erlang_greater/3)
+
   @compile {:inline, erlang_greater: 3}
-  defp erlang_greater(_, a, b), do: if a > b, do: 1, else: 0
+  defp erlang_greater(_, a, b), do: if(a > b, do: 1, else: 0)
 
   @doc """
   Element-wise less than comparison of two tensors.
@@ -2153,8 +2053,9 @@ defmodule Nx do
   """
   def less(left, right),
     do: element_wise_bin_bool(left, right, &erlang_less/3)
+
   @compile {:inline, erlang_less: 3}
-  defp erlang_less(_, a, b), do: if a < b, do: 1, else: 0
+  defp erlang_less(_, a, b), do: if(a < b, do: 1, else: 0)
 
   @doc """
   Element-wise greater than or equal comparison of two tensors.
@@ -2201,8 +2102,9 @@ defmodule Nx do
   """
   def greater_equal(left, right),
     do: element_wise_bin_bool(left, right, &erlang_greater_equal/3)
+
   @compile {:inline, erlang_greater_equal: 3}
-  defp erlang_greater_equal(_, a, b), do: if a >= b, do: 1, else: 0
+  defp erlang_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
 
   @doc """
   Element-wise less than or equal comparison of two tensors.
@@ -2249,8 +2151,9 @@ defmodule Nx do
   """
   def less_equal(left, right),
     do: element_wise_bin_bool(left, right, &erlang_less_equal/3)
+
   @compile {:inline, erlang_less_equal: 3}
-  defp erlang_less_equal(_, a, b), do: if a <= b, do: 1, else: 0
+  defp erlang_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
 
   @doc """
   Constructs a tensor from two tensors, based on a predicate.
@@ -2259,12 +2162,8 @@ defmodule Nx do
   `pred` and returning either the corresponding element from
   `on_true` or `on_false`.
 
-  `pred` must either be a boolean, `1` or `0`, or a tensor
-  of predicates with a shape that matches the largest shape between
-  `s1` or `s2`.
-
-  If `pred` is a boolean, takes either the entire `on_true` tensor
-  or the entire `on_false` tensor.
+  `pred` must either be `1` or `0` or a tensor of predicates
+  with a shape that matches the largest shape between `s1` or `s2`.
 
   If the shape of `on_true` or `on_false` do not match the shape of
   `pred`, attemps to broadcast both so they match the shape of `pred`.
@@ -2282,6 +2181,12 @@ defmodule Nx do
       #Nx.Tensor<
         s64[3]
         [4, 5, 6]
+      >
+
+      iex> Nx.select(Nx.tensor([0, 1, 0]), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      #Nx.Tensor<
+        s64[3]
+        [4, 2, 6]
       >
 
       iex> x = Nx.tensor([2, 4, 6])
@@ -2305,33 +2210,43 @@ defmodule Nx do
 
     case {tensor(pred), tensor(on_true), tensor(on_false)} do
       {%T{shape: {}} = pred, on_true, on_false} ->
-        if one?(pred), do: on_true, else: on_false
+        if zero?(pred), do: on_false, else: on_true
 
-      {%T{shape: shape} = pred, %T{type: {_, left_size} = left_type} = on_true, %T{type: {_, right_size} = right_type} = on_false} ->
-
+      {%T{shape: shape, type: {_, pred_size} = pred_type} = pred,
+       %T{type: {_, left_size} = left_type} = on_true,
+       %T{type: {_, right_size} = right_type} = on_false} ->
         on_true_bcast = broadcast(on_true, shape)
         on_false_bcast = broadcast(on_false, shape)
 
         pred_data = Nx.Util.to_bitstring(pred)
         on_true_data = Nx.Util.to_bitstring(on_true_bcast)
         on_false_data = Nx.Util.to_bitstring(on_false_bcast)
-
-        pred_size = tuple_product(shape)
+        pred_count = Nx.Shape.size(shape)
 
         data =
-          for i <- 0..pred_size - 1, into: <<>> do
-            pred_consumed = i * 8
-            <<_::size(pred_consumed), pred::size(8)-unsigned-native, _::bitstring>> = pred_data
-            match_types [left_type, right_type, output_type] do
-              if pred == 1 do
-                consumed = i*left_size
-                <<_::size(consumed), match!(x, 0), _::bitstring>> = on_true_data
-                <<write!(read!(x, 0), 2)>>
-              else
-                consumed = i*right_size
-                <<_::size(consumed), match!(y, 1), _::bitstring>> = on_false_data
-                <<write!(read!(y, 1), 2)>>
+          for i <- 0..(pred_count - 1), into: <<>> do
+            pred =
+              match_types [pred_type] do
+                consumed = i * pred_size
+                <<_::size(consumed)-bitstring, match!(pred, 0), _::bitstring>> = pred_data
+                read!(pred, 0)
               end
+
+            result =
+              match_types [left_type, right_type] do
+                if pred == 0 do
+                  consumed = i * right_size
+                  <<_::size(consumed)-bitstring, match!(y, 1), _::bitstring>> = on_false_data
+                  read!(y, 1)
+                else
+                  consumed = i * left_size
+                  <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
+                  read!(x, 0)
+                end
+              end
+
+            match_types [output_type] do
+              <<write!(result, 0)>>
             end
           end
 
@@ -2339,12 +2254,12 @@ defmodule Nx do
     end
   end
 
-  defp one?(%T{type: type} = t) do
+  defp zero?(%T{type: type} = t) do
     data = Nx.Util.to_bitstring(t)
 
     match_types [type] do
       <<match!(x, 0)>> = data
-      read!(x, 0) == 1
+      read!(x, 0) == 0
     end
   end
 
@@ -2770,7 +2685,9 @@ defmodule Nx do
     """
     def unquote(name)(tensor) do
       case tensor(tensor) do
-        %T{type: {type, _}} = t when type in [:s, :u] -> t
+        %T{type: {type, _}} = t when type in [:s, :u] ->
+          t
+
         %T{type: input_type} = t ->
           data = Nx.Util.to_bitstring(t)
 
@@ -2955,7 +2872,7 @@ defmodule Nx do
     divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
   end
 
-  defp mean_den(shape, nil), do: Nx.size(shape)
+  defp mean_den(shape, nil), do: Nx.Shape.size(shape)
   defp mean_den(_shape, []), do: 1
 
   defp mean_den(shape, [axis | axes]) when axis >= 0,
@@ -3136,12 +3053,15 @@ defmodule Nx do
 
   defp argmin_or_max(t = %T{}, comparator, opts) do
     case tensor(t) do
-      %T{shape: {}} -> tensor(0, opts)
+      %T{shape: {}} ->
+        tensor(0, opts)
+
       %T{} = t ->
         axes = if axis = opts[:axis], do: [axis], else: nil
 
         {tensor, _accs} =
-          Nx.Util.reduce(t, {0, :first, -1}, [axes: axes], fn x, {i, cur_extreme_x, cur_extreme_i} ->
+          Nx.Util.reduce(t, {0, :first, -1}, [axes: axes], fn x,
+                                                              {i, cur_extreme_x, cur_extreme_i} ->
             if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
               {i, {i + 1, x, i}}
             else
@@ -3321,6 +3241,7 @@ defmodule Nx do
   """
   def dot(t1, t2) do
     {%T{shape: s1} = t1, %T{shape: s2} = t2} = {tensor(t1), tensor(t2)}
+
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
       {_, 0} -> multiply(t1, t2)
@@ -3371,10 +3292,10 @@ defmodule Nx do
     output_type = Nx.Type.merge_tensors(t1, t2)
 
     case {tensor(t1), tensor(t2)} do
-      {%T{shape: {}} = t1, %T{shape: {}} = t2} -> multiply(t1, t2)
+      {%T{shape: {}} = t1, %T{shape: {}} = t2} ->
+        multiply(t1, t2)
 
       {%T{shape: s1, type: left_type} = t1, %T{shape: s2, type: right_type} = t2} ->
-
         b1 = Nx.Util.to_bitstring(t1)
         b2 = Nx.Util.to_bitstring(t2)
 
@@ -3434,12 +3355,9 @@ defmodule Nx do
   def transpose(tensor) do
     case tensor(tensor) do
       %T{shape: {}} = t -> t
-      %T{shape: s} = t -> transpose(t, List.to_tuple(to_zero(tuple_size(s) - 1)))
+      %T{shape: s} = t -> transpose(t, Nx.Shape.transpose_axes(s))
     end
   end
-
-  defp to_zero(0), do: [0]
-  defp to_zero(n), do: [n | to_zero(n - 1)]
 
   @doc """
   Transposes a tensor to the given `axes`.
@@ -3449,13 +3367,13 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.transpose(Nx.tensor(1), {})
+      iex> Nx.transpose(Nx.tensor(1), [])
       #Nx.Tensor<
         s64
         1
       >
 
-      iex> Nx.transpose(Nx.iota({2, 3, 4}), {2, 1, 0})
+      iex> Nx.transpose(Nx.iota({2, 3, 4}), [2, 1, 0])
       #Nx.Tensor<
         s64[4][3][2]
         [
@@ -3482,7 +3400,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.transpose(Nx.iota({2, 3, 4}), {2, 0, 1})
+      iex> Nx.transpose(Nx.iota({2, 3, 4}), [2, 0, 1])
       #Nx.Tensor<
         s64[4][2][3]
         [
@@ -3505,7 +3423,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.transpose(Nx.iota({2, 3, 4}), {0, 2, 1})
+      iex> Nx.transpose(Nx.iota({2, 3, 4}), [0, 2, 1])
       #Nx.Tensor<
         s64[2][4][3]
         [
@@ -3526,21 +3444,22 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.transpose(1, {0})
-      ** (ArgumentError) axes {0} must be of the same rank as shape {}
+      iex> Nx.transpose(1, [0])
+      ** (ArgumentError) axes [0] must be of the same rank as shape {}
 
-      iex> Nx.transpose(Nx.iota({2, 2}), {1, 2})
-      ** (ArgumentError) axes {1, 2} must be unique integers between 0 and 1
+      iex> Nx.transpose(Nx.iota({2, 2}), [1, 2])
+      ** (ArgumentError) axes [1, 2] must be unique integers between 0 and 1
 
   """
-  def transpose(tensor, axes) do
+  def transpose(tensor, axes) when is_list(axes) do
     case {tensor(tensor), axes} do
-      {%T{shape: {}} = t, {}} -> t
+      {%T{shape: {}} = t, []} ->
+        t
 
-      {%T{shape: {_}} = t, {0}} -> t
+      {%T{shape: {_}} = t, [0]} ->
+        t
 
       {%T{shape: shape, type: {_, size}} = t, axes} ->
-
         data = Nx.Util.to_bitstring(t)
         {list, min, max} = transpose_axes(shape, axes)
         weighted_shape = weighted_shape(shape, size)
@@ -3564,28 +3483,27 @@ defmodule Nx do
             weighted_traverse(traverse_list, chunk, read_size)
           end
 
-        shape = axes |> Tuple.to_list() |> Enum.map(&elem(shape, &1)) |> List.to_tuple()
+        shape = Enum.map(axes, &elem(shape, &1)) |> List.to_tuple()
         %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
     end
   end
 
-  defp transpose_axes(shape, axes) when tuple_size(shape) != tuple_size(axes) do
+  defp transpose_axes(shape, axes) when tuple_size(shape) != length(axes) do
     raise ArgumentError,
           "axes #{inspect(axes)} must be of the same rank as shape #{inspect(shape)}"
   end
 
-  defp transpose_axes(_shape, axes) do
-    list = Tuple.to_list(axes)
-    size = tuple_size(axes)
+  defp transpose_axes(shape, axes) do
+    size = tuple_size(shape)
 
-    unless Enum.all?(list, &(&1 >= 0 and &1 < size)) and length(Enum.uniq(list)) == size do
+    unless Enum.all?(axes, &(&1 >= 0 and &1 < size)) and length(Enum.uniq(axes)) == size do
       raise ArgumentError,
             "axes #{inspect(axes)} must be unique integers between 0 and #{size - 1}"
     end
 
-    {list, min} = transpose_min(list, 0)
-    {list, max} = transpose_max(Enum.reverse(list), size - 1)
-    {list, min, max}
+    {axes, min} = transpose_min(axes, 0)
+    {axes, max} = transpose_max(Enum.reverse(axes), size - 1)
+    {axes, min, max}
   end
 
   defp transpose_min([head | tail], head), do: transpose_min(tail, head + 1)
@@ -3608,15 +3526,6 @@ defmodule Nx do
   end
 
   ## Broadcast helpers
-
-  defp shape_to_lower_ranked_list(_tuple, 0, 0),
-    do: []
-
-  defp shape_to_lower_ranked_list(tuple, 0, rank),
-    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
-
-  defp shape_to_lower_ranked_list(tuple, size, rank),
-    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
 
   defp binary_broadcast(
          %T{type: {_, left_size}, shape: shape} = left,

@@ -178,12 +178,6 @@ defmodule Exla.DefnTest do
         compare_tensors!(add_two(right, left), add_two_nx(right, left))
       end
     end
-
-    test "broadcast error" do
-      assert_raise RuntimeError, ~r"Binary op add with incompatible shapes", fn ->
-        add_two(Nx.tensor([1, 2]), Nx.tensor([1, 2, 3]))
-      end
-    end
   end
 
   describe "//2" do
@@ -766,12 +760,12 @@ defmodule Exla.DefnTest do
 
   describe "transpose" do
     defn transpose(t), do: Nx.transpose(t)
-    defn transpose_scalar(t, {}), do: Nx.transpose(t, {})
-    defn transpose_perm1(t), do: Nx.transpose(t, {2, 1, 0})
-    defn transpose_perm2(t), do: Nx.transpose(t, {2, 0, 1})
-    defn transpose_perm3(t), do: Nx.transpose(t, {0, 2, 1})
+    defn transpose_scalar(t), do: Nx.transpose(t, [])
+    defn transpose_perm1(t), do: Nx.transpose(t, [2, 1, 0])
+    defn transpose_perm2(t), do: Nx.transpose(t, [2, 0, 1])
+    defn transpose_perm3(t), do: Nx.transpose(t, [0, 2, 1])
 
-    test "transposes without permutation dimensions" do
+    test "transposes without axes" do
       assert transpose(Nx.tensor(1)) == Nx.tensor(1)
 
       assert transpose(Nx.iota({2, 3, 4})) ==
@@ -783,8 +777,8 @@ defmodule Exla.DefnTest do
                ])
     end
 
-    test "transposes with permutationd imensions" do
-      assert transpose_scalar(Nx.tensor(1), {}) == Nx.tensor(1)
+    test "transposes with axes" do
+      assert transpose_scalar(Nx.tensor(1)) == Nx.tensor(1)
 
       assert transpose_perm1(Nx.iota({2, 3, 4})) ==
                Nx.tensor([
@@ -852,60 +846,6 @@ defmodule Exla.DefnTest do
       assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0], [0], [0], [0]])) ==
                Nx.tensor([[1], [2], [3], [4]])
     end
-
-    defn reshape_with_constant(shape), do: Nx.reshape(123, shape)
-
-    test "with constant" do
-      assert reshape_with_constant(Nx.tensor([[[1]]])) == Nx.tensor([[[123]]])
-    end
-  end
-
-  describe "assert_shape" do
-    defn assert_shape_with_shape(t), do: Nx.assert_shape(t, {2, 2})
-
-    test "with shape" do
-      t = Nx.tensor([[1, 2], [3, 4]])
-      assert assert_shape_with_shape(t) == t
-
-      assert_raise ArgumentError,
-                   "expected tensor with shape {2, 2} but tensor has shape {}",
-                   fn ->
-                     assert_shape_with_shape(Nx.tensor(1))
-                   end
-    end
-
-    defn assert_shape_with_tensor(t, shape), do: Nx.assert_shape(t, shape, "oops")
-
-    test "with tensor" do
-      t = Nx.tensor([[1, 2], [3, 4]])
-      assert assert_shape_with_tensor(t, t) == t
-
-      assert_raise ArgumentError,
-                   "expected tensor with shape {} but tensor has shape {2, 2} (oops)",
-                   fn ->
-                     assert_shape_with_tensor(t, Nx.tensor(1))
-                   end
-    end
-
-    defn assert_shape_with_constant(shape), do: Nx.assert_shape(123, shape, "oops")
-
-    test "with constant" do
-      assert assert_shape_with_constant(Nx.tensor(1)) == Nx.tensor(123)
-
-      assert_raise ArgumentError,
-                   "expected tensor with shape {2} but tensor has shape {} (oops)",
-                   fn ->
-                     assert_shape_with_constant(Nx.tensor([1, 2]))
-                   end
-    end
-
-    defn assert_shape_with_tuple(), do: Nx.assert_shape({1, 2, 3}, {}, "oops")
-
-    test "with tuple" do
-      assert_raise ArgumentError, "expected tensor with shape {} but got {1, 2, 3} (oops)", fn ->
-        assert_shape_with_tuple()
-      end
-    end
   end
 
   describe "broadcast" do
@@ -920,30 +860,13 @@ defmodule Exla.DefnTest do
 
     test "with tensor" do
       tensors = [
-        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([0, 0])},
-        {Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]]), Nx.tensor([0, 0])},
-        {Nx.tensor([[1], [2]]), Nx.tensor([[0, 0]])},
-        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]]])},
-        {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]),
-         Nx.tensor([[[0], [0], [0]]])},
-        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[[0]]]])},
-        {Nx.tensor([1, 2]), Nx.tensor([[[[0]]]])},
-        {Nx.tensor([[1, 2]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
-        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
-        {Nx.tensor([[[[1, 2]]], [[[3, 4]]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
-        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])}
+        {Nx.tensor([1, 2]), Nx.tensor([[[[0, 0]]]])},
+        {Nx.tensor([[1, 2]]), Nx.tensor([[[0, 0], [0, 0]], [[0, 0], [0, 0]]])}
       ]
 
       for {left, right} <- tensors do
-        assert add_two(left, right) == broadcast_with_tensor(left, right)
+        assert Nx.broadcast(left, right) == broadcast_with_tensor(left, right)
       end
-    end
-
-    defn broadcast_with_constant(shape), do: Nx.broadcast(123, shape)
-
-    test "with constant" do
-      assert broadcast_with_constant(Nx.tensor([[1, 2], [3, 4]])) ==
-               Nx.tensor([[123, 123], [123, 123]])
     end
   end
 
@@ -1001,19 +924,6 @@ defmodule Exla.DefnTest do
         assert x >= 5.0 and x < 10.0
       end
     end
-
-    defn random_uniform_tensor(t), do: Nx.random_uniform(t)
-    defn random_uniform_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
-
-    test "generates from tensor" do
-      t = random_uniform_tensor(Nx.tensor([[1, 2], [3, 4]]))
-      assert Nx.shape(t) == {2, 2}
-      assert Nx.type(t) == {:f, 64}
-
-      t = random_uniform_tensor_with_type(Nx.tensor([[1, 2, 3], [3, 4, 6]]))
-      assert Nx.shape(t) == {2, 3}
-      assert Nx.type(t) == {:f, 32}
-    end
   end
 
   describe "random normal" do
@@ -1043,16 +953,6 @@ defmodule Exla.DefnTest do
 
     defn random_normal_tensor(t), do: Nx.random_uniform(t)
     defn random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
-
-    test "generates from tensor" do
-      t = random_normal_tensor(Nx.tensor([[1, 2], [3, 4]]))
-      assert Nx.shape(t) == {2, 2}
-      assert Nx.type(t) == {:f, 64}
-
-      t = random_normal_tensor_with_type(Nx.tensor([[1, 2, 3], [3, 4, 6]]))
-      assert Nx.shape(t) == {2, 3}
-      assert Nx.type(t) == {:f, 32}
-    end
   end
 
   describe "iota" do
@@ -1068,13 +968,6 @@ defmodule Exla.DefnTest do
       assert iota_with_type() == Nx.iota({1, 2, 3}, axis: 1, type: {:f, 32})
     end
 
-    defn iota_from_tensor(t), do: Nx.iota(t, axis: 0)
-
-    test "generates from tensor" do
-      t = Nx.tensor([1, 2, 3])
-      assert iota_from_tensor(t) == Nx.iota(t, axis: 0)
-    end
-
     defn iota_no_axis, do: Nx.iota({2, 2, 2})
 
     test "generates without axis" do
@@ -1085,34 +978,6 @@ defmodule Exla.DefnTest do
 
     test "generates with negative axis" do
       assert iota_neg_axis() == Nx.iota({2, 2, 2}, axis: -2)
-    end
-  end
-
-  describe "reflection" do
-    defn random_from_type_and_shape(t),
-      do: Nx.random_uniform(Nx.shape(t), 0, 10, type: Nx.type(t))
-
-    test "type and shape" do
-      t = random_from_type_and_shape(Nx.tensor([[1], [2]]))
-      assert Nx.shape(t) == {2, 1}
-      assert Nx.type(t) == {:s, 64}
-
-      t = random_from_type_and_shape(Nx.tensor([[1], [2]], type: {:f, 32}))
-      assert Nx.shape(t) == {2, 1}
-      assert Nx.type(t) == {:f, 32}
-    end
-
-    defn rank_and_size(t), do: {Nx.rank(t), Nx.size(t)}
-
-    test "rank and size" do
-      assert rank_and_size(Nx.tensor([[1, 2], [3, 4]])) == {Nx.tensor(2), Nx.tensor(4)}
-      assert rank_and_size(Nx.tensor([1, 2, 3, 4, 5])) == {Nx.tensor(1), Nx.tensor(5)}
-    end
-
-    defn rank_and_size_for_tuple(), do: {Nx.rank({8, 8}), Nx.size({8, 8})}
-
-    test "rank and size for tuples" do
-      assert rank_and_size_for_tuple() == {Nx.tensor(2), Nx.tensor(64)}
     end
   end
 
