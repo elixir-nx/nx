@@ -394,207 +394,207 @@ defmodule Exla.DefnTest do
     end
   end
 
-  #   describe "exp" do
-  #     defn exp(t), do: Nx.exp(t)
+  describe "exp" do
+    defn exp(t), do: Nx.exp(t)
 
-  #     test "computes the exp across types" do
-  #       assert Nx.tensor([1, 2, 3]) |> exp() ==
-  #                Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
+    test "computes the exp across types" do
+      assert Nx.tensor([1, 2, 3]) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
 
-  #       assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp() ==
-  #                Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
 
-  #       assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp() ==
-  #                Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
 
-  #       assert Nx.tensor([1.0, 2.0, 3.0]) |> exp() ==
-  #                Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
 
-  #       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp() ==
-  #                Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
-  #     end
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp() ==
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+    end
 
-  #     defn exp_int(), do: Nx.exp(1)
-  #     defn exp_float(), do: Nx.exp(1.0)
+    defn exp_int(), do: Nx.exp(1)
+    defn exp_float(), do: Nx.exp(1.0)
 
-  #     test "constants" do
-  #       assert exp_int() == Nx.tensor(2.718281828459045)
-  #       assert exp_float() == Nx.tensor(2.718281828459045)
-  #     end
+    test "constants" do
+      assert exp_int() == Nx.tensor(2.718281828459045)
+      assert exp_float() == Nx.tensor(2.718281828459045)
+    end
+  end
+
+  describe "equal" do
+    defn equal(a, b), do: Nx.equal(a, b)
+
+    test "computes equality of scalars" do
+      assert equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
+    end
+
+    test "computes equality with broadcasting" do
+      assert equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 0, 0], type: {:u, 8})
+    end
+
+    test "computes equality with mixed types" do
+      assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([1, 1, 1], type: {:u, 8})
+    end
+  end
+
+  describe "not equal" do
+    defn not_equal(a, b), do: Nx.not_equal(a, b)
+
+    test "computes equality of scalars" do
+      assert not_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
+    end
+
+    test "computes equality with broadcasting" do
+      assert not_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:u, 8})
+    end
+
+    test "computes equality with mixed types" do
+      assert not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([0, 0, 0], type: {:u, 8})
+    end
+  end
+
+  describe "less" do
+    defn less(a, b), do: Nx.less(a, b)
+
+    test "compares scalars" do
+      assert less(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
+    end
+
+    test "compares with broadcasting" do
+      assert less(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:u, 8})
+    end
+
+    test "compares with mixed types" do
+      assert less(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([0, 0, 0], type: {:u, 8})
+    end
+  end
+
+  describe "greater" do
+    defn greater(a, b), do: Nx.greater(a, b)
+
+    test "compares scalars" do
+      assert greater(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
+    end
+
+    test "compares with broadcasting" do
+      assert greater(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 0, 0], type: {:u, 8})
+    end
+
+    test "compares with mixed types" do
+      assert greater(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([0, 0, 0], type: {:u, 8})
+    end
+  end
+
+  describe "less equal" do
+    defn less_equal(a, b), do: Nx.less_equal(a, b)
+
+    test "compares scalars" do
+      assert less_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
+    end
+
+    test "compares with broadcasting" do
+      assert less_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 1, 1], type: {:u, 8})
+    end
+
+    test "compares with mixed types" do
+      assert less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([1, 1, 1], type: {:u, 8})
+    end
+  end
+
+  describe "greater equal" do
+    defn greater_equal(a, b), do: Nx.greater_equal(a, b)
+
+    test "compares scalars" do
+      assert greater_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
+    end
+
+    test "compares with broadcasting" do
+      assert greater_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) ==
+               Nx.tensor([1, 0, 0], type: {:u, 8})
+    end
+
+    test "compares with mixed types" do
+      assert greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
+               Nx.tensor([1, 1, 1], type: {:u, 8})
+    end
+  end
+
+  # describe "select" do
+  #   defn select(pred, x, y), do: Nx.select(pred, x, y)
+
+  #   test "selects one or the other with a scalar" do
+  #     assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
+  #              Nx.tensor([1, 2, 3])
   #   end
 
-  #   describe "equal" do
-  #     defn equal(a, b), do: Nx.equal(a, b)
+  #   test "selects with type" do
+  #     assert select(
+  #              Nx.tensor(1),
+  #              Nx.tensor([1, 2, 3], type: {:u, 8}),
+  #              Nx.tensor([4, 5, 6], type: {:u, 8})
+  #            ) ==
+  #              Nx.tensor([1, 2, 3], type: {:u, 8})
 
-  #     test "computes equality of scalars" do
-  #       assert equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
-  #     end
-
-  #     test "computes equality with broadcasting" do
-  #       assert equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 0, 0], type: {:u, 8})
-  #     end
-
-  #     test "computes equality with mixed types" do
-  #       assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
-  #                Nx.tensor([1, 1, 1], type: {:u, 8})
-  #     end
+  #     assert select(
+  #              Nx.tensor(1),
+  #              Nx.tensor([1, 2, 3], type: {:u, 8}),
+  #              Nx.tensor([4, 5, 6], type: {:f, 32})
+  #            ) ==
+  #              Nx.tensor([1, 2, 3], type: {:f, 32})
   #   end
 
-  #   describe "not equal" do
-  #     defn not_equal(a, b), do: Nx.not_equal(a, b)
-
-  #     test "computes equality of scalars" do
-  #       assert not_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
-  #     end
-
-  #     test "computes equality with broadcasting" do
-  #       assert not_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:u, 8})
-  #     end
-
-  #     test "computes equality with mixed types" do
-  #       assert not_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
-  #                Nx.tensor([0, 0, 0], type: {:u, 8})
-  #     end
+  #   test "selects with broadcasting" do
+  #     assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) ==
+  #              Nx.tensor([10, 2, 10, 4, 10])
   #   end
+  # end
 
-  #   describe "less" do
-  #     defn less(a, b), do: Nx.less(a, b)
+  describe "unary float ops" do
+    @int_tensor Nx.tensor([1, 2, 3])
+    @float_tensor Nx.tensor([1.0, 2.0, 3.0])
 
-  #     test "compares scalars" do
-  #       assert less(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
-  #     end
+    for fun <- [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] do
+      exla_fun = :"unary_#{fun}"
+      nx_fun = :"unary_#{fun}_nx"
+      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      @defn_compiler Nx.Defn
+      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
 
-  #     test "compares with broadcasting" do
-  #       assert less(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 1, 1], type: {:u, 8})
-  #     end
+      test "#{fun}" do
+        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
+        compare_tensors!(unquote(exla_fun)(@int_tensor), unquote(nx_fun)(@int_tensor))
+      end
+    end
+  end
 
-  #     test "compares with mixed types" do
-  #       assert less(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
-  #                Nx.tensor([0, 0, 0], type: {:u, 8})
-  #     end
-  #   end
+  describe "unary round+sign ops" do
+    @uint_tensor Nx.tensor([0, 1, 2], type: {:u, 8})
+    @sint_tensor Nx.tensor([-2, -1, 0, 1, 2])
+    @float_tensor Nx.tensor([-1.5, 0.5, -0.0, 0.0, 0.5, 1.5])
 
-  #   describe "greater" do
-  #     defn greater(a, b), do: Nx.greater(a, b)
+    funs = [:abs, :sign, :floor, :ceil, :round]
 
-  #     test "compares scalars" do
-  #       assert greater(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
-  #     end
+    for fun <- funs do
+      exla_fun = :"unary_#{fun}"
+      nx_fun = :"unary_#{fun}_nx"
+      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      @defn_compiler Nx.Defn
+      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
 
-  #     test "compares with broadcasting" do
-  #       assert greater(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([0, 0, 0], type: {:u, 8})
-  #     end
-
-  #     test "compares with mixed types" do
-  #       assert greater(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
-  #                Nx.tensor([0, 0, 0], type: {:u, 8})
-  #     end
-  #   end
-
-  #   describe "less equal" do
-  #     defn less_equal(a, b), do: Nx.less_equal(a, b)
-
-  #     test "compares scalars" do
-  #       assert less_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
-  #     end
-
-  #     test "compares with broadcasting" do
-  #       assert less_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) == Nx.tensor([1, 1, 1], type: {:u, 8})
-  #     end
-
-  #     test "compares with mixed types" do
-  #       assert less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
-  #                Nx.tensor([1, 1, 1], type: {:u, 8})
-  #     end
-  #   end
-
-  #   describe "greater equal" do
-  #     defn greater_equal(a, b), do: Nx.greater_equal(a, b)
-
-  #     test "compares scalars" do
-  #       assert greater_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
-  #     end
-
-  #     test "compares with broadcasting" do
-  #       assert greater_equal(Nx.tensor(1), Nx.tensor([1, 2, 3])) ==
-  #                Nx.tensor([1, 0, 0], type: {:u, 8})
-  #     end
-
-  #     test "compares with mixed types" do
-  #       assert greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
-  #                Nx.tensor([1, 1, 1], type: {:u, 8})
-  #     end
-  #   end
-
-  #   describe "select" do
-  #     defn select(pred, x, y), do: Nx.select(pred, x, y)
-
-  #     test "selects one or the other with a scalar" do
-  #       assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
-  #                Nx.tensor([1, 2, 3])
-  #     end
-
-  #     test "selects with type" do
-  #       assert select(
-  #                Nx.tensor(1),
-  #                Nx.tensor([1, 2, 3], type: {:u, 8}),
-  #                Nx.tensor([4, 5, 6], type: {:u, 8})
-  #              ) ==
-  #                Nx.tensor([1, 2, 3], type: {:u, 8})
-
-  #       assert select(
-  #                Nx.tensor(1),
-  #                Nx.tensor([1, 2, 3], type: {:u, 8}),
-  #                Nx.tensor([4, 5, 6], type: {:f, 32})
-  #              ) ==
-  #                Nx.tensor([1, 2, 3], type: {:f, 32})
-  #     end
-
-  #     test "selects with broadcasting" do
-  #       assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) ==
-  #                Nx.tensor([10, 2, 10, 4, 10])
-  #     end
-  #   end
-
-  #   describe "unary float ops" do
-  #     @int_tensor Nx.tensor([1, 2, 3])
-  #     @float_tensor Nx.tensor([1.0, 2.0, 3.0])
-
-  #     for fun <- [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] do
-  #       exla_fun = :"unary_#{fun}"
-  #       nx_fun = :"unary_#{fun}_nx"
-  #       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
-  #       @defn_compiler Nx.Defn
-  #       defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
-
-  #       test "#{fun}" do
-  #         compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
-  #         compare_tensors!(unquote(exla_fun)(@int_tensor), unquote(nx_fun)(@int_tensor))
-  #       end
-  #     end
-  #   end
-
-  #   describe "unary round+sign ops" do
-  #     @uint_tensor Nx.tensor([0, 1, 2], type: {:u, 8})
-  #     @sint_tensor Nx.tensor([-2, -1, 0, 1, 2])
-  #     @float_tensor Nx.tensor([-1.5, 0.5, -0.0, 0.0, 0.5, 1.5])
-
-  #     funs = [:abs, :sign, :floor, :ceil, :round]
-
-  #     for fun <- funs do
-  #       exla_fun = :"unary_#{fun}"
-  #       nx_fun = :"unary_#{fun}_nx"
-  #       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
-  #       @defn_compiler Nx.Defn
-  #       defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
-
-  #       test "#{fun}" do
-  #         compare_tensors!(unquote(exla_fun)(@uint_tensor), unquote(nx_fun)(@uint_tensor))
-  #         compare_tensors!(unquote(exla_fun)(@sint_tensor), unquote(nx_fun)(@sint_tensor))
-  #         compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
-  #       end
-  #     end
-  #   end
+      test "#{fun}" do
+        compare_tensors!(unquote(exla_fun)(@uint_tensor), unquote(nx_fun)(@uint_tensor))
+        compare_tensors!(unquote(exla_fun)(@sint_tensor), unquote(nx_fun)(@sint_tensor))
+        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
+      end
+    end
+  end
 
   #   describe "sum" do
   #     defn sum(t), do: Nx.sum(t)

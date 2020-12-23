@@ -96,6 +96,24 @@ defmodule Exla.Defn do
     end
   end
 
+  defp to_operator(:abs, [{_, arg}], _shape, builder) do
+    arg = to_operator(builder, arg)
+
+    case op_type(arg) do
+      {:u, _} -> arg
+      _ -> Exla.Op.abs(arg)
+    end
+  end
+
+  defp to_operator(:sign, [{_, arg}], _shape, builder) do
+    arg = to_operator(builder, arg)
+
+    case op_type(arg) do
+      {:u, _} = type -> Exla.Op.min(arg, Exla.Op.constant_r0(builder, 1, type))
+      _ -> Exla.Op.sign(arg)
+    end
+  end
+
   defp to_operator(:right_shift, [{left_expr, left}, {right_expr, right}], _shape, builder) do
     {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, :right_shift))
     dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
@@ -108,7 +126,8 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [left, right, dims])
   end
 
-  @bin_arith_op [:add, :subtract, :multiply, :min, :max, :remainder, :power]
+  @bin_arith_op [:add, :subtract, :multiply, :min, :max, :remainder, :power] ++
+                  [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_arith_op do
@@ -140,8 +159,28 @@ defmodule Exla.Defn do
   defp to_operator(op, [{_expr, arg}], _shape, builder)
        when op in @unary_bitwise_op do
     arg = to_operator(builder, arg)
-    assert_integer_type!(Exla.Op.get_shape(arg).dtype, op)
+    assert_integer_type!(op_type(arg), op)
     apply(Exla.Op, op, [arg])
+  end
+
+  @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
+
+  defp to_operator(op, [{_expr, arg}], _shape, builder)
+       when op in @unary_float_op do
+    apply(Exla.Op, op, [to_float_operator(builder, arg)])
+  end
+
+  @unary_noop_integer_op [:floor, :ceil, :round]
+
+  defp to_operator(op, [{_expr, arg}], _shape, builder)
+       when op in @unary_noop_integer_op do
+    arg = to_operator(builder, arg)
+
+    case op_type(arg) do
+      {:s, _} -> arg
+      {:u, _} -> arg
+      _ -> apply(Exla.Op, op, [arg])
+    end
   end
 
   ## constant/operator
@@ -154,6 +193,16 @@ defmodule Exla.Defn do
 
   defp to_operator(builder, float) when is_float(float),
     do: Exla.Op.constant_r0(builder, float, {:f, 64})
+
+  defp to_float_operator(_builder, %Exla.Op{} = op) do
+    current = op_type(op)
+    type = Exla.Type.to_floating(current)
+    if current != type, do: Exla.Op.convert_element_type(op, type), else: op
+  end
+
+  defp to_float_operator(builder, constant) when is_number(constant) do
+    Exla.Op.constant_r0(builder, constant, {:f, 64})
+  end
 
   defp to_typed_operator(_builder, %Exla.Op{} = op, type, type),
     do: op
@@ -201,7 +250,7 @@ defmodule Exla.Defn do
     do: Exla.Type.merge(left, right)
 
   defp constant_or_type(number) when is_number(number), do: number
-  defp constant_or_type(op), do: Exla.Op.get_shape(op).dtype
+  defp constant_or_type(op), do: op_type(op)
 
   defp assert_integer_type!({:s, _} = type, _op), do: type
   defp assert_integer_type!({:u, _} = type, _op), do: type
@@ -211,6 +260,8 @@ defmodule Exla.Defn do
           "#{op} expects integer tensors as inputs and outputs an integer tensor, " <>
             "got: #{inspect(type)}"
   end
+
+  defp op_type(op), do: Exla.Op.get_shape(op).dtype
 
   ## Nx <-> Exla.Buffer
 

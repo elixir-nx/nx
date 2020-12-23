@@ -57,7 +57,7 @@ defmodule Nx.Defn.Expr do
   end
 
   unary_ops =
-    [:exp, :expm1, :log, :logp1, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
       [:negate, :sign, :abs, :bitwise_not, :population_count, :count_leading_zeros] ++
       [:floor, :ceil, :round]
 
