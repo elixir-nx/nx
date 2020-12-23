@@ -129,6 +129,34 @@ defmodule Exla.Defn do
     Exla.Op.broadcast_in_dim(arg, output_shape, broadcast_dimensions(expr.shape, output_shape))
   end
 
+  ## to_operator others
+
+  defp to_operator(
+        :select,
+        [{_, pred}, {expr_true, on_true}, {expr_false, on_false}],
+        output_shape,
+        builder
+      ) do
+    pred = to_typed_operator(builder, pred, op_type(pred), {:pred, 1})
+    {on_true, on_false} = binary_op_type(builder, on_true, on_false, & &1)
+
+    on_true =
+      Exla.Op.broadcast_in_dim(
+        on_true,
+        output_shape,
+        broadcast_dimensions(expr_true.shape, output_shape)
+      )
+
+    on_false =
+      Exla.Op.broadcast_in_dim(
+        on_false,
+        output_shape,
+        broadcast_dimensions(expr_false.shape, output_shape)
+      )
+
+    Exla.Op.select(pred, on_true, on_false)
+  end
+
   ## to_operator element-wise
 
   defp to_operator(:negate, [{_, arg}], _shape, _builder) do

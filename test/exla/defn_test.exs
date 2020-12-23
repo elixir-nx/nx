@@ -526,35 +526,35 @@ defmodule Exla.DefnTest do
     end
   end
 
-  # describe "select" do
-  #   defn select(pred, x, y), do: Nx.select(pred, x, y)
+  describe "select" do
+    defn select(pred, x, y), do: Nx.select(pred, x, y)
 
-  #   test "selects one or the other with a scalar" do
-  #     assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
-  #              Nx.tensor([1, 2, 3])
-  #   end
+    test "selects one or the other with a scalar" do
+      assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
+               Nx.tensor([1, 2, 3])
+    end
 
-  #   test "selects with type" do
-  #     assert select(
-  #              Nx.tensor(1),
-  #              Nx.tensor([1, 2, 3], type: {:u, 8}),
-  #              Nx.tensor([4, 5, 6], type: {:u, 8})
-  #            ) ==
-  #              Nx.tensor([1, 2, 3], type: {:u, 8})
+    test "selects with type" do
+      assert select(
+               Nx.tensor(1),
+               Nx.tensor([1, 2, 3], type: {:u, 8}),
+               Nx.tensor([4, 5, 6], type: {:u, 8})
+             ) ==
+               Nx.tensor([1, 2, 3], type: {:u, 8})
 
-  #     assert select(
-  #              Nx.tensor(1),
-  #              Nx.tensor([1, 2, 3], type: {:u, 8}),
-  #              Nx.tensor([4, 5, 6], type: {:f, 32})
-  #            ) ==
-  #              Nx.tensor([1, 2, 3], type: {:f, 32})
-  #   end
+      assert select(
+               Nx.tensor(1),
+               Nx.tensor([1, 2, 3], type: {:u, 8}),
+               Nx.tensor([4, 5, 6], type: {:f, 32})
+             ) ==
+               Nx.tensor([1, 2, 3], type: {:f, 32})
+    end
 
-  #   test "selects with broadcasting" do
-  #     assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) ==
-  #              Nx.tensor([10, 2, 10, 4, 10])
-  #   end
-  # end
+    test "selects with broadcasting" do
+      assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) ==
+               Nx.tensor([10, 2, 10, 4, 10])
+    end
+  end
 
   describe "unary float ops" do
     @int_tensor Nx.tensor([1, 2, 3])
