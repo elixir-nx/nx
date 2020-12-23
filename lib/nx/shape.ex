@@ -54,58 +54,41 @@ defmodule Nx.Shape do
       iex> Nx.Shape.broadcast({4, 2, 3}, {4, 3, 4, 2, 3})
       {4, 3, 4, 2, 3}
 
-      iex> Nx.Shape.broadcast({1, 4, 2, 1}, {8, 4, 2, 10})
-      {8, 4, 2, 10}
-
   ### Error cases
 
-      iex> Nx.Shape.broadcast({4, 2, 3}, {3, 2, 3})
-      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 3} to {3, 2, 3}
+      iex> Nx.Shape.broadcast({4, 2, 2}, {1, 1})
+      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 2} to {1, 1}
   """
-  def broadcast(old_shape, new_shape)
+  def broadcast(left_shape, right_shape)
 
   def broadcast(shape, shape), do: shape
 
-  def broadcast(old_shape, new_shape) when is_tuple(old_shape) and is_tuple(new_shape) do
-    old_rank = tuple_size(old_shape)
-    new_rank = tuple_size(new_shape)
-    rank = max(old_rank, new_rank)
+  def broadcast(left_shape, right_shape) when is_tuple(left_shape) and is_tuple(right_shape) do
+    left_list = tuple_reverse(left_shape)
+    right_list = tuple_reverse(right_shape)
 
-    old_lower = shape_to_lower_ranked_list(old_shape, old_rank, rank)
-    new_lower = shape_to_lower_ranked_list(new_shape, new_rank, rank)
+    left_rank = tuple_size(left_shape)
+    right_rank = tuple_size(right_shape)
 
-    case unary_broadcast(old_lower, new_lower, []) do
-      {:ok, new} ->
-        List.to_tuple(new)
-
-      :error ->
+    with true <- left_rank <= right_rank,
+         {:ok, new} <- broadcast(left_list, right_list, []) do
+      new
+    else
+      _ ->
         raise ArgumentError,
-              "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
-                "to #{inspect(new_shape)}"
+              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
+                "to #{inspect(right_shape)}"
     end
   end
 
-  defp unary_broadcast([odim | odims], [ndim | ndims], acc)
-       when ndim == 1 or ndim == odim,
-       do: unary_broadcast(odims, ndims, [odim | acc])
+  defp broadcast([1 | ldims], [dim | rdims], acc), do: broadcast(ldims, rdims, [dim | acc])
+  defp broadcast([dim | ldims], [dim | rdims], acc), do: broadcast(ldims, rdims, [dim | acc])
+  defp broadcast([], rdims, acc), do: {:ok, List.to_tuple(Enum.reverse(rdims, acc))}
+  defp broadcast(_, _, _), do: :error
 
-  defp unary_broadcast([1 | odims], [ndim | ndims], acc),
-    do: unary_broadcast(odims, ndims, [ndim | acc])
-
-  defp unary_broadcast([], [], acc),
-    do: {:ok, acc}
-
-  defp unary_broadcast(_, _, _),
-    do: :error
-
-  defp shape_to_lower_ranked_list(_tuple, 0, 0),
-    do: []
-
-  defp shape_to_lower_ranked_list(tuple, 0, rank),
-    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
-
-  defp shape_to_lower_ranked_list(tuple, size, rank),
-    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
+  defp tuple_reverse(tuple), do: tuple_reverse(tuple, tuple_size(tuple))
+  defp tuple_reverse(_tuple, 0), do: []
+  defp tuple_reverse(tuple, i), do: [:erlang.element(i, tuple) | tuple_reverse(tuple, i - 1)]
 
   @doc """
   Broadcasts two shapes to a common shape.
@@ -140,46 +123,40 @@ defmodule Nx.Shape do
   ### Error cases
 
       iex> Nx.Shape.binary_broadcast({4, 2, 5}, {3, 2, 5})
-      ** (ArgumentError) could not broadcast shapes because dimensions are incompatible, expected dimensions to be equal or either dimension to be 1, got: 4 and 3
+      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 5} to {3, 2, 5}
   """
-  def binary_broadcast(s1, s2)
+  def binary_broadcast(left_shape, right_shape)
 
   def binary_broadcast(shape, shape), do: shape
 
-  def binary_broadcast(s1, s2) when is_tuple(s1) and is_tuple(s2),
-    do: List.to_tuple(do_binary_broadcast(Tuple.to_list(s1), Tuple.to_list(s2), tuple_size(s1), tuple_size(s2)))
+  def binary_broadcast(left_shape, right_shape) when is_tuple(left_shape) and is_tuple(right_shape) do
+    left_rank = tuple_size(left_shape)
+    right_rank = tuple_size(right_shape)
+    rank = max(left_rank, right_rank)
 
-  defp do_binary_broadcast(s1, s2, r1, r2) when r1 > r2 do
-    [dim | s1] = s1
-    [dim | do_binary_broadcast(s1, s2, r1 - 1, r2)]
+    left_lower = Nx.Shared.shape_to_lower_ranked_list(left_shape, left_rank, rank)
+    right_lower = Nx.Shared.shape_to_lower_ranked_list(right_shape, right_rank, rank)
+
+    case binary_broadcast(left_lower, right_lower, []) do
+      {:ok, new} ->
+        new
+
+      :error ->
+        raise ArgumentError,
+              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
+                "to #{inspect(right_shape)}"
+    end
   end
 
-  defp do_binary_broadcast(s1, s2, r1, r2) when r2 > r1 do
-    [dim | s2] = s2
-    [dim | do_binary_broadcast(s1, s2, r1, r2 - 1)]
-  end
+  defp binary_broadcast([ldim | ldims], [rdim | rdims], acc)
+       when rdim == 1 or ldim == 1 or rdim == ldim,
+       do: binary_broadcast(ldims, rdims, [max(rdim, ldim) | acc])
 
-  defp do_binary_broadcast([], s2, _r1, _r2), do: s2
-  defp do_binary_broadcast(s1, [], _r1, _r2), do: s1
+  defp binary_broadcast([], [], acc),
+    do: {:ok, List.to_tuple(acc)}
 
-  defp do_binary_broadcast([1 | s1], [dim2 | s2], r1, r2) do
-    [dim2 | do_binary_broadcast(s1, s2, r1 - 1, r2 - 1)]
-  end
-
-  defp do_binary_broadcast([dim1 | s1], [1 | s2], r1, r2) do
-    [dim1 | do_binary_broadcast(s1, s2, r1 - 1, r2 - 1)]
-  end
-
-  defp do_binary_broadcast([dim | s1], [dim | s2], r1, r2) do
-    [dim | do_binary_broadcast(s1, s2, r1 - 1, r2 - 1)]
-  end
-
-  defp do_binary_broadcast([dim1 | _s1], [dim2 | _s2], _r1, _r2) do
-    raise ArgumentError,
-          "could not broadcast shapes because dimensions are" <>
-            " incompatible, expected dimensions to be equal or" <>
-            " either dimension to be 1, got: #{dim1} and #{dim2}"
-  end
+  defp binary_broadcast(_, _, _),
+    do: :error
 
   @doc """
   Contracts a shape along the given axes.

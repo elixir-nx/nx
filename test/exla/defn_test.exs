@@ -860,22 +860,12 @@ defmodule Exla.DefnTest do
 
     test "with tensor" do
       tensors = [
-        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([0, 0])},
-        {Nx.tensor([[[1, 2], [3, 4]], [[4, 5], [6, 7]]]), Nx.tensor([0, 0])},
-        {Nx.tensor([[1], [2]]), Nx.tensor([[0, 0]])},
-        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]]])},
-        {Nx.tensor([[[1, 2, 3]], [[4, 5, 6]], [[7, 8, 9]], [[10, 11, 12]]]),
-         Nx.tensor([[[0], [0], [0]]])},
-        {Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[[0]]]])},
-        {Nx.tensor([1, 2]), Nx.tensor([[[[0]]]])},
-        {Nx.tensor([[1, 2]]), Nx.tensor([[[0], [0]], [[0], [0]]])},
-        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
-        {Nx.tensor([[[[1, 2]]], [[[3, 4]]]]), Nx.tensor([[[[0], [0]], [[0], [0]]]])},
-        {Nx.tensor([[[1, 2]], [[3, 4]]]), Nx.tensor([[[0], [0]], [[0], [0]]])}
+        {Nx.tensor([1, 2]), Nx.tensor([[[[0, 0]]]])},
+        {Nx.tensor([[1, 2]]), Nx.tensor([[[0, 0], [0, 0]], [[0, 0], [0, 0]]])}
       ]
 
       for {left, right} <- tensors do
-        assert add_two(left, right) == broadcast_with_tensor(left, right)
+        assert Nx.broadcast(left, right) == broadcast_with_tensor(left, right)
       end
     end
   end

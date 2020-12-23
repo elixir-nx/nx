@@ -703,24 +703,6 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 1],
-          [2, 2]
-        ]
-      >
-
-      iex> Nx.broadcast(Nx.tensor([[1, 2]]), Nx.tensor([[10], [20]]))
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 2],
-          [1, 2]
-        ]
-      >
-
       iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
       #Nx.Tensor<
         s64[2][2]
@@ -755,8 +737,10 @@ defmodule Nx do
         chunk_size = size * Nx.Shape.size(old_shape)
         new_higher = Tuple.to_list(new_shape)
 
-        old_lower = shape_to_lower_ranked_list(old_shape, Nx.Shape.rank(old_shape), Nx.Shape.rank(new_shape))
-        old_higher = Enum.reverse(old_lower)
+        old_higher =
+          old_shape
+          |> shape_to_lower_ranked_list(Nx.Shape.rank(old_shape), Nx.Shape.rank(new_shape))
+          |> Enum.reverse()
 
         data = unary_broadcast(old_higher, new_higher, Nx.Util.to_bitstring(t), chunk_size)
         data = IO.iodata_to_binary(data)
@@ -3542,15 +3526,6 @@ defmodule Nx do
   end
 
   ## Broadcast helpers
-
-  defp shape_to_lower_ranked_list(_tuple, 0, 0),
-    do: []
-
-  defp shape_to_lower_ranked_list(tuple, 0, rank),
-    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
-
-  defp shape_to_lower_ranked_list(tuple, size, rank),
-    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
 
   defp binary_broadcast(
          %T{type: {_, left_size}, shape: shape} = left,

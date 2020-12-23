@@ -207,4 +207,17 @@ defmodule Nx.Shared do
         [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size)]
     end
   end
+
+  @doc """
+  Converts a shape to a padded list by rank where the
+  first elements are the lower dimensions.
+  """
+  def shape_to_lower_ranked_list(_tuple, 0, 0),
+    do: []
+
+  def shape_to_lower_ranked_list(tuple, 0, rank),
+    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
+
+  def shape_to_lower_ranked_list(tuple, size, rank),
+    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
 end
