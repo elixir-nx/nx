@@ -112,6 +112,12 @@ defmodule Exla.Defn do
     Exla.Op.rng_normal(mu, sigma, shape)
   end
 
+  defp to_operator(:iota, [shape, opts], _shape, builder) do
+    type = opts[:type] || {:s, 64}
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Lib.iota(builder, shape, opts)
+  end
+
   ## to_operator element-wise
 
   defp to_operator(:negate, [{_, arg}], _shape, _builder) do

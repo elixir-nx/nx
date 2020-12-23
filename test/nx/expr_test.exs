@@ -23,7 +23,7 @@ defmodule Nx.Defn.ExprTest do
            |> inspect() == """
            param[2][2] z
            tensor[2][2] a
-           b = iota [ {2, 2}, axis: 1 ]
+           b = iota [ {2, 2}, [] ]
            c = dot [ b, a ]
            d = tanh [ c ]
            e = add [ d, z ]

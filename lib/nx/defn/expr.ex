@@ -135,7 +135,11 @@ defmodule Nx.Defn.Expr do
     shape = to_shape(shape)
 
     opts =
-      Keyword.update(opts, :axis, Nx.Shape.rank(shape) - 1, &Nx.Shape.normalize_axis(shape, &1))
+      if axis = opts[:axis] do
+        Keyword.put(opts, :axis, Nx.Shape.normalize_axis(shape, axis))
+      else
+        opts
+      end
 
     make_expr(shape, :iota, [shape, opts])
   end
