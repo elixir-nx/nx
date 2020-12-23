@@ -947,7 +947,7 @@ defmodule Nx do
 
       %T{} = t ->
         permutation = for i <- 0..(Nx.rank(t) - 2), do: i
-        permutation = List.to_tuple([Nx.rank(t) - 1 | permutation])
+        permutation = [Nx.rank(t) - 1 | permutation]
 
         for {edge_low, edge_high} <- Enum.reverse(padding_config),
             reduce: t,
@@ -968,7 +968,7 @@ defmodule Nx do
     new_dim = dim_size + edge_high + edge_low
     new_shape = :erlang.setelement(tuple_size(shape) - dim, shape, new_dim)
 
-    {view, _} = Nx.Util.bin_aggregate_axes(data, [tuple_size(shape) - dim - 1], shape, size)
+    view = Nx.Util.bin_aggregate_axes(data, [tuple_size(shape) - dim - 1], shape, size)
 
     {edge_low_padding, edge_high_padding} =
       match_types [type] do
@@ -990,7 +990,7 @@ defmodule Nx do
         <<edge_low_padding::bitstring, bin::bitstring, edge_high_padding::bitstring>>
       end
 
-    %{t | data: {Nx.BitStringDevice, data}, type: output_type, shape: new_shape}
+    %{t | data: {Nx.BitStringDevice, data}, type: type, shape: new_shape}
   end
 
   ## Reflection
@@ -1059,21 +1059,9 @@ defmodule Nx do
       0
 
   """
-<<<<<<< HEAD
   def rank(tensor) do
     %T{shape: shape} = tensor(tensor)
     tuple_size(shape)
-=======
-  def rank(tensor_or_shape) do
-    case tensor_or_shape do
-      shape when is_tuple(shape) ->
-        tuple_size(shape)
-
-      tensor ->
-        %T{shape: shape} = tensor(tensor)
-        tuple_size(shape)
-    end
->>>>>>> Add pad and pad_in_dim
   end
 
   @doc """
@@ -1091,21 +1079,9 @@ defmodule Nx do
       1
 
   """
-<<<<<<< HEAD
   def size(tensor) do
     %T{shape: shape} = tensor(tensor)
     Nx.Shape.size(shape)
-=======
-  def size(tensor_or_shape) do
-    case tensor_or_shape do
-      shape when is_tuple(shape) ->
-        tuple_product(shape)
-
-      tensor ->
-        %T{shape: shape} = tensor(tensor)
-        tuple_product(shape)
-    end
->>>>>>> Add pad and pad_in_dim
   end
 
   ## Device API
@@ -2423,7 +2399,6 @@ defmodule Nx do
 
   ## Examples
 
-
       iex> Nx.select(1, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
       #Nx.Tensor<
         s64[3]
@@ -2463,16 +2438,10 @@ defmodule Nx do
 
     case {tensor(pred), tensor(on_true), tensor(on_false)} do
       {%T{shape: {}} = pred, on_true, on_false} ->
-<<<<<<< HEAD
         if zero?(pred), do: on_false, else: on_true
 
       {%T{shape: shape, type: {_, pred_size} = pred_type} = pred,
        %T{type: {_, left_size} = left_type} = on_true,
-=======
-        if one?(pred), do: on_true, else: on_false
-
-      {%T{shape: shape} = pred, %T{type: {_, left_size} = left_type} = on_true,
->>>>>>> Add pad and pad_in_dim
        %T{type: {_, right_size} = right_type} = on_false} ->
         on_true_bcast = broadcast(on_true, shape)
         on_false_bcast = broadcast(on_false, shape)
@@ -2483,7 +2452,6 @@ defmodule Nx do
         pred_count = Nx.Shape.size(shape)
 
         data =
-<<<<<<< HEAD
           for i <- 0..(pred_count - 1), into: <<>> do
             pred =
               match_types [pred_type] do
@@ -2503,21 +2471,6 @@ defmodule Nx do
                   <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
                   read!(x, 0)
                 end
-=======
-          for i <- 0..(pred_size - 1), into: <<>> do
-            pred_consumed = i * 8
-            <<_::size(pred_consumed), pred::size(8)-unsigned-native, _::bitstring>> = pred_data
-
-            match_types [left_type, right_type, output_type] do
-              if pred == 1 do
-                consumed = i * left_size
-                <<_::size(consumed), match!(x, 0), _::bitstring>> = on_true_data
-                <<write!(read!(x, 0), 2)>>
-              else
-                consumed = i * right_size
-                <<_::size(consumed), match!(y, 1), _::bitstring>> = on_false_data
-                <<write!(read!(y, 1), 2)>>
->>>>>>> Add pad and pad_in_dim
               end
 
             match_types [output_type] do
@@ -2537,6 +2490,7 @@ defmodule Nx do
       read!(x, 0) == 0
     end
   end
+
 
   ## Unary ops
 
@@ -3563,7 +3517,6 @@ defmodule Nx do
     %T{shape: s1, type: left_type} = t1 = tensor(t1)
     %T{shape: s2, type: right_type} = t2 = tensor(t2)
 
-<<<<<<< HEAD
     b1 = Nx.Util.to_bitstring(t1)
     b2 = Nx.Util.to_bitstring(t2)
 
@@ -3574,23 +3527,6 @@ defmodule Nx do
             into: <<>>,
             do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
       end
-=======
-    case {tensor(t1), tensor(t2)} do
-      {%T{shape: {}} = t1, %T{shape: {}} = t2} ->
-        multiply(t1, t2)
-
-      {%T{shape: s1, type: left_type} = t1, %T{shape: s2, type: right_type} = t2} ->
-        b1 = Nx.Util.to_bitstring(t1)
-        b2 = Nx.Util.to_bitstring(t2)
-
-        data =
-          match_types [left_type, right_type, output_type] do
-            for <<match!(left, 0) <- b1>>,
-                <<match!(right, 1) <- b2>>,
-                into: <<>>,
-                do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
-          end
->>>>>>> Add pad and pad_in_dim
 
     %T{shape: Nx.Shape.outer(s1, s2), type: output_type, data: {Nx.BitStringDevice, data}}
   end
@@ -3734,19 +3670,12 @@ defmodule Nx do
       ** (ArgumentError) axes [1, 2] must be unique integers between 0 and 1
 
   """
-  def transpose(tensor, axes) when is_list(axes) do
+ def transpose(tensor, axes) when is_list(axes) do
     case {tensor(tensor), axes} do
-<<<<<<< HEAD
       {%T{shape: {}} = t, []} ->
         t
 
       {%T{shape: {_}} = t, [0]} ->
-=======
-      {%T{shape: {}} = t, {}} ->
-        t
-
-      {%T{shape: {_}} = t, {0}} ->
->>>>>>> Add pad and pad_in_dim
         t
 
       {%T{shape: shape, type: {_, size}} = t, axes} ->

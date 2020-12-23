@@ -471,8 +471,7 @@ defmodule Nx.Util do
   # entire binary as it is layed out in memory and we
   # expect the entire tensor to be reduced down to a scalar.
   def bin_aggregate_axes(binary, axes, shape, size) do
-    if axes do
-      {chunk_size, read_size, path, shape} = aggregate_axes(axes, shape, size)
+    {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
 
     view =
       for <<chunk::size(chunk_size)-bitstring <- binary>> do
