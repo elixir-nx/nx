@@ -956,19 +956,17 @@ defmodule Nx do
     end
   end
 
-  @doc """
-  Pad tensor in the given dimension.
-  """
-  def pad_in_dim(%T{shape: shape, type: {_, size} = type} = t, dim, value, edge_low, edge_high) do
+  # This doesn't quite work like pad_in_dim should, maybe it should be `pad_view`?
+  defp pad_in_dim(%T{shape: shape, type: {_, size} = type} = t, dim, value, edge_low, edge_high) do
     data = Nx.Util.to_bitstring(t)
 
     # TODO: Check for type mismatch between value and tensor?
-    # TODO: Replace with Nx.Shape
+
+    view = Nx.Util.bin_aggregate_axes(data, [tuple_size(shape) - dim - 1], shape, size)
+
     dim_size = elem(shape, tuple_size(shape) - dim - 1)
     new_dim = dim_size + edge_high + edge_low
     new_shape = :erlang.setelement(tuple_size(shape) - dim, shape, new_dim)
-
-    view = Nx.Util.bin_aggregate_axes(data, [tuple_size(shape) - dim - 1], shape, size)
 
     {edge_low_padding, edge_high_padding} =
       match_types [type] do

@@ -395,7 +395,7 @@ defmodule Nx.Util do
         offset = anchor_offset(weighted_shape, anchor)
 
         window =
-          IO.iodata_to_binary(anchored_weighted_traverse(weighted_shape, data, size, offset))
+          IO.iodata_to_binary(offset_weighted_traverse(weighted_shape, data, size, offset))
 
         match_types [type] do
           window_val =

@@ -164,6 +164,10 @@ defmodule Nx.Shared do
     [{element, weight} | weighted_shape(shape, pos - 1, weight * element)]
   end
 
+  @doc """
+  Converts the shape to a weight shape list with the
+  size of each dimension limited by `lengths`.
+  """
   def weighted_shape_limits(shape, size, lengths) do
     Enum.reverse(weighted_shape_limits(shape, tuple_size(shape), size, lengths))
   end
@@ -236,32 +240,33 @@ defmodule Nx.Shared do
     do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
 
   @doc """
-  Traverses a binary at the given anchor point using `weighted_shape`.
+  Traverses a binary from the given offset using the
+  weighted shape list.
   """
-  def anchored_weighted_traverse(weighted_shape, binary, read_size, offset)
+  def offset_weighted_traverse(weighted_shape, binary, read_size, offset)
 
-  def anchored_weighted_traverse([], data, read_size, offset) do
+  def offset_weighted_traverse([], data, read_size, offset) do
     <<_::size(offset), chunk::size(read_size)-bitstring, _::bitstring>> = data
     chunk
   end
 
-  def anchored_weighted_traverse([{dim, size} | dims], data, read_size, offset) do
-    anchored_weighted_traverse(dim, size, dims, data, read_size, offset)
+  def offset_weighted_traverse([{dim, size} | dims], data, read_size, offset) do
+    offset_weighted_traverse(dim, size, dims, data, read_size, offset)
   end
 
-  def anchored_weighted_traverse([fun | dims], data, read_size, offset) do
-    fun.(anchored_weighted_traverse(dims, data, read_size, offset))
+  def offset_weighted_traverse([fun | dims], data, read_size, offset) do
+    fun.(offset_weighted_traverse(dims, data, read_size, offset))
   end
 
-  def anchored_weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
-    head = anchored_weighted_traverse(dims, data, read_size, offset)
+  defp offset_weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
+    head = offset_weighted_traverse(dims, data, read_size, offset)
     case dim do
       1 ->
         [head]
 
       _ ->
         <<_::size(dim_size)-bitstring, data::bitstring>> = data
-        [head | anchored_weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
+        [head | offset_weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
     end
   end
 end

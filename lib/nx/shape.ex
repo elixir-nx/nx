@@ -546,21 +546,37 @@ defmodule Nx.Shape do
 
   @doc """
   Validates the window size according to the shape.
+
+  ## Examples
+
+      iex> Nx.Shape.validate_window!({2, 2}, {1, 1})
+      :ok
+
+      iex> Nx.Shape.validate_window!({2, 2, 2}, {1, 1})
+      ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
   """
   def validate_window!(shape, window)
 
   def validate_window!(shape, window) when tuple_size(shape) != tuple_size(window),
     do:
       raise(
-        ArugmentError,
+        ArgumentError,
         "invalid window dimensions, rank of shape (#{tuple_size(shape)})" <>
           " does not match rank of window (#{tuple_size(window)})"
       )
 
-  def validate_window!(shape, window), do: :ok
+  def validate_window!(_, _), do: :ok
 
   @doc """
   Validates the strides according to the shape.
+
+  ## Examples
+
+      iex> Nx.Shape.validate_strides!({2, 2}, {1, 1})
+      :ok
+
+      iex> Nx.Shape.validate_strides!({2, 2, 2}, {1, 1})
+      ** (ArgumentError) invalid stride dimensions, rank of shape (3) does not match rank of strides (2)
   """
   def validate_strides!(shape, strides)
 
@@ -572,5 +588,5 @@ defmodule Nx.Shape do
           " does not match rank of strides (#{tuple_size(strides)})"
       )
 
-  def validate_strides!(shape, strides), do: :ok
+  def validate_strides!(_, _), do: :ok
 end
