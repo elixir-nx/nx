@@ -3,8 +3,8 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
-  @forbidden_nx_functions [tensor: 1, tensor: 2, device_read: 1, device_deallocate: 1] ++
-                            [device_transfer: 1, device_transfer: 2, device_transfer: 3]
+  @as_is_nx_functions [:tensor]
+  @forbidden_nx_functions [:device_read, :device_deallocate, :device_transfer]
 
   @doc """
   The callback required to be implemented for each compiler.
@@ -78,7 +78,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp compile_each({{name, _arity} = def, def_meta}, state) do
-    {{kind, meta, args, ast}, state} = get_and_normalize_definition(def, state)
+    {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
     vars = collect_vars(args)
     {def_module, def_opts} = def_meta.compiler
     defn_name = defn_name(name)
@@ -173,6 +173,18 @@ defmodule Nx.Defn.Compiler do
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
 
+  defp normalize({{:., _, [Nx, name]} = call, meta, args}, state)
+      when name in @as_is_nx_functions do
+    {args, state} = normalize_list(args, state)
+    {{call, meta, args}, state}
+  end
+
+  defp normalize({{:., _, [Nx, name]}, meta, args}, state)
+      when name in @forbidden_nx_functions do
+    arity = length(args)
+    compile_error!(meta, state, "Nx.#{name}/#{arity} is not allowed inside defn")
+  end
+
   defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
     arity = length(args)
 
@@ -180,17 +192,11 @@ defmodule Nx.Defn.Compiler do
       compile_error!(meta, state, "undefined function Nx.#{name}/#{arity}")
     end
 
-    # TODO: Allow tensor function but with no rewrites
-    if {name, arity} in @forbidden_nx_functions do
-      compile_error!(meta, state, "Nx.#{name}/#{arity} is not allowed inside defn")
-    end
-
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [Nx.Defn.Expr, name]}, meta, args}, state}
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [module, ast, opts]}, state) do
-    # TODO: Reimplement me
     unless is_atom(module) do
       compile_error!(
         meta,
@@ -213,7 +219,7 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [module, ast, opts]}, state}
   end
 
-  defp normalize({{:., dot_meta, [remote, name]} = call, meta, args}, state)
+  defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, args]}, state}

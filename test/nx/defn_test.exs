@@ -213,6 +213,12 @@ defmodule Nx.DefnTest do
       assert %Expr{op: :tensor, args: [_], shape: {2, 2}} = two_per_two_attribute()
     end
 
+    defn two_per_two_nx_tensor(), do: Nx.tensor([[1, 2], [3, 4]])
+
+    test "supports Nx.tensor calls" do
+      assert %Expr{op: :tensor, args: [_], shape: {2, 2}} = two_per_two_attribute()
+    end
+
     @invalid_tensor Nx.tensor(1) |> Map.replace!(:data, {SomethingBad, :another})
     defn invalid_tensor, do: @invalid_tensor
 
@@ -417,23 +423,26 @@ defmodule Nx.DefnTest do
     end
   end
 
-  # TODO
-  # describe "module attributes config" do
-  #   test "overrides default compiler with custom" do
-  #     defmodule Sample do
-  #       import Nx.Defn
-  #       @default_defn_compiler "unknown"
-  #       @defn_compiler Nx.Defn
-  #       defn add(a, b), do: a + b
-  #       assert Module.get_attribute(__MODULE__, :defn_compiler) == nil
-  #       assert @default_defn_compiler == "unknown"
-  #     end
+  describe "Nx.Defn" do
+    @defn_compiler Nx.Defn
+    defn add_default(a, b), do: {a + b, a - b}
 
-  #     assert Sample.add(1, 2) == Nx.tensor(3)
-  #   after
-  #     purge(Sample)
-  #   end
-  # end
+    # Check the attribute has been reset
+    nil = Module.get_attribute(__MODULE__, :defn_compiler)
+
+    test "can be set explicitly set" do
+      assert add_default(1, 2) == {Nx.tensor(3), Nx.tensor(-1)}
+    end
+
+    test "is the default compiler" do
+      defmodule DefaultCompiler do
+        import Nx.Defn
+        defn add(a, b), do: a + b
+      end
+
+      assert DefaultCompiler.add(1, 2) == Nx.tensor(3)
+    end
+  end
 
   describe "compilation errors" do
     test "invalid numerical expression" do
@@ -517,10 +526,5 @@ defmodule Nx.DefnTest do
                      end
                    end
     end
-  end
-
-  defp purge(module) do
-    :code.purge(module)
-    :code.delete(module)
   end
 end
