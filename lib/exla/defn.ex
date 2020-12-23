@@ -89,13 +89,59 @@ defmodule Exla.Defn do
     Exla.Op.constant_from_binary(builder, data, shape)
   end
 
-  @bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
+  defp to_operator(:negate, [{_, arg}], _shape, _builder) do
+    case arg do
+      %Exla.Op{} = op -> Exla.Op.negate(op)
+      number when is_number(number) -> -number
+    end
+  end
+
+  defp to_operator(:right_shift, [{left_expr, left}, {right_expr, right}], _shape, builder) do
+    {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, :right_shift))
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+
+    op =
+      if match?({:u, _}, constant_or_type(left)),
+        do: :right_shift_logical,
+        else: :right_shift_arithmetic
+
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
+  @bin_arith_op [:add, :subtract, :multiply, :min, :max, :remainder, :power]
 
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_arith_op do
-    {left, right} = binary_op_type(builder, left, right)
+    {left, right} = binary_op_type(builder, left, right, & &1)
     dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
+  end
+
+  @bin_float_arith_op [:divide, :arctan2]
+
+  defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
+       when op in @bin_float_arith_op do
+    {left, right} = binary_op_type(builder, left, right, &Exla.Type.to_floating/1)
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
+  @bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
+
+  defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
+       when op in @bin_bitwise_op do
+    {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, op))
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
+  @unary_bitwise_op [:bitwise_not, :count_leading_zeros, :population_count]
+
+  defp to_operator(op, [{_expr, arg}], _shape, builder)
+       when op in @unary_bitwise_op do
+    arg = to_operator(builder, arg)
+    assert_integer_type!(Exla.Op.get_shape(arg).dtype, op)
+    apply(Exla.Op, op, [arg])
   end
 
   ## constant/operator
@@ -133,10 +179,10 @@ defmodule Exla.Defn do
 
   ## Type helpers
 
-  defp binary_op_type(builder, left_op, right_op) do
+  defp binary_op_type(builder, left_op, right_op, fun) do
     left_type = constant_or_type(left_op)
     right_type = constant_or_type(right_op)
-    output_type = binary_op_type(left_type, right_type)
+    output_type = binary_op_type(left_type, right_type) |> fun.()
 
     {to_typed_operator(builder, left_op, left_type, output_type),
      to_typed_operator(builder, right_op, right_type, output_type)}
@@ -156,6 +202,15 @@ defmodule Exla.Defn do
 
   defp constant_or_type(number) when is_number(number), do: number
   defp constant_or_type(op), do: Exla.Op.get_shape(op).dtype
+
+  defp assert_integer_type!({:s, _} = type, _op), do: type
+  defp assert_integer_type!({:u, _} = type, _op), do: type
+
+  defp assert_integer_type!(type, op) do
+    raise ArgumentError,
+          "#{op} expects integer tensors as inputs and outputs an integer tensor, " <>
+            "got: #{inspect(type)}"
+  end
 
   ## Nx <-> Exla.Buffer
 

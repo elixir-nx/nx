@@ -164,7 +164,7 @@ defmodule Nx.Type do
   def to_predicate(_), do: {:u, 8}
 
   @doc """
-  Casts scalar the given scalar to type.
+  Casts the given scalar to type.
 
   It does not handle overflows/underfows,
   returning the scalar as is, but cast.
