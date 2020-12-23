@@ -333,18 +333,22 @@ defmodule Nx.Util do
   @doc """
   Reduces elements in a window.
 
+  The rank of the input tensor, window dimensions, and window
+  strides must match.
+
   ## Examples
 
       iex> Nx.Util.reduce_window(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
       ...> :first,
       ...> fn x, acc -> if acc == :first, do: x, else: max(x, acc) end,
-      ...> {2, 2}, {2, 2}
+      ...> {2, 2}, {1, 1}
       ...> )
       #Nx.Tensor<
-        s64[2][2]
+        s64[3][3]
         [
-          [5, 7],
-          [12, 14]
+          [5, 6, 7],
+          [8, 9, 10],
+          [12, 13, 14]
         ]
       >
   """
@@ -353,12 +357,14 @@ defmodule Nx.Util do
 
     Nx.Shape.validate_window!(shape, window_dimensions)
     Nx.Shape.validate_strides!(shape, window_strides)
-    output_shape = Nx.Shape.stride(shape, window_strides)
+
+    padded_shape = Nx.Shape.pad(shape, window_dimensions, window_strides, padding)
+    output_shape = Nx.Shape.stride(padded_shape, window_strides, window_dimensions)
 
     data = Nx.Util.to_bitstring(t)
 
-    weighted_shape = weighted_shape_limits(shape, size, window_dimensions)
-    anchors = Enum.sort(make_anchors(shape, window_strides, []))
+    weighted_shape = weighted_shape_limits(padded_shape, size, window_dimensions)
+    anchors = Enum.sort(make_anchors(padded_shape, window_strides, window_dimensions, []))
 
     data =
       for anchor <- anchors, into: <<>>  do
@@ -376,22 +382,23 @@ defmodule Nx.Util do
     %{t | data: {Nx.BitStringDevice, data}, shape: output_shape}
   end
 
-  defp make_anchors(shape, strides, anchors) when is_tuple(shape) and is_tuple(strides),
-    do: make_anchors(Tuple.to_list(shape), Tuple.to_list(strides), anchors)
+  defp make_anchors(shape, strides, window, anchors)
+      when is_tuple(shape) and is_tuple(strides) and is_tuple(window),
+    do: make_anchors(Tuple.to_list(shape), Tuple.to_list(strides), Tuple.to_list(window), anchors)
 
-  defp make_anchors([], [], anchors), do: anchors
+  defp make_anchors([], [], _window, anchors), do: anchors
 
-  defp make_anchors([dim | shape], [s | strides], []) do
-    dims = for i <- 0..(dim - 1), rem(i, s) == 0, do: {i}
-    make_anchors(shape, strides, dims)
+  defp make_anchors([dim | shape], [s | strides], [w | window], []) do
+    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and (i + w - 1) < dim, do: {i}
+    make_anchors(shape, strides, window, dims)
   end
 
-  defp make_anchors([dim | shape], [s | strides], anchors) do
+  defp make_anchors([dim | shape], [s | strides], [w | window], anchors) do
     dims =
-      for i <- 0..(dim - 1), rem(i, s) == 0 do
+      for i <- 0..(dim - 1), rem(i, s) == 0 and (i + w - 1) < dim do
         Enum.map(anchors, & Tuple.append(&1, i))
       end
-    make_anchors(shape, strides, List.flatten(dims))
+    make_anchors(shape, strides, window, List.flatten(dims))
   end
 
   defp anchor_offset(weighted_shape, anchor) when is_tuple(anchor),

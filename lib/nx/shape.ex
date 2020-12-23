@@ -501,18 +501,23 @@ defmodule Nx.Shape do
   defp to_zero(n), do: [n | to_zero(n - 1)]
 
   @doc """
+  Output shape after a padding operation.
+  """
+  def pad(shape, _window, _stride, :valid), do: shape
+
+  @doc """
   Output shape after a strided operation.
 
-  Assumes stride is validated.
+  Assumes stride and window are validated.
   """
-  def stride(shape, stride) do
-    List.to_tuple(Enum.reverse(strided_dims(Tuple.to_list(shape), Tuple.to_list(stride))))
+  def stride(shape, stride, window) do
+    List.to_tuple(Enum.reverse(strided_dims(Tuple.to_list(shape), Tuple.to_list(stride), Tuple.to_list(window))))
   end
 
-  defp strided_dims([], []), do: []
+  defp strided_dims([], [], []), do: []
 
-  defp strided_dims([dim | shape], [s | strides]),
-    do: [div(dim, s) | strided_dims(shape, strides)]
+  defp strided_dims([dim | shape], [s | strides], [w | window]),
+    do: [(div(dim - w, s) + 1) | strided_dims(shape, strides, window)]
 
   @doc """
   Validates the window size according to the shape.
@@ -523,18 +528,7 @@ defmodule Nx.Shape do
     do: raise ArugmentError, "invalid window dimensions, rank of shape (#{tuple_size(shape)})" <>
                              " does not match rank of window (#{tuple_size(window)})"
 
-  def validate_window!(shape, window) when is_tuple(shape) and is_tuple(window),
-    do: validate_window!(Tuple.to_list(shape), Tuple.to_list(window))
-
-  def validate_window!([], []), do: :ok
-
-  def validate_window!([d1 | dims], [w1 | window]) when d1 >= w1 and w1 > 0,
-    do: validate_window!(dims, window)
-
-  def validate_window!([d1 | _], [w1 | _]) do
-    raise ArgumentError, "invalid window dimensions, size of window dimension #{w1}" <>
-                         " is invalid for dimension of shape #{d1}"
-  end
+  def validate_window!(shape, window), do: :ok
 
   @doc """
   Validates the strides according to the shape.
@@ -545,17 +539,5 @@ defmodule Nx.Shape do
     do: raise ArgumentError, "invalid stride dimensions, rank of shape (#{tuple_size(shape)})" <>
                              " does not match rank of strides (#{tuple_size(strides)})"
 
-  def validate_strides!(shape, strides) when is_tuple(shape) and is_tuple(strides),
-    do: validate_strides!(Tuple.to_list(shape), Tuple.to_list(strides))
-
-  def validate_strides!([], []), do: :ok
-
-  def validate_strides!([d1 | dims], [s1 | strides]) when d1 >= s1 and s1 > 0,
-    do: validate_strides!(dims, strides)
-
-  def validate_strides!([d1 | _], [s1 | _]) do
-    raise ArgumentError, "invalid stride dimensions, size of stride (#{s1})" <>
-                         " exceeds size of shape (#{d1})" <>
-                         " in dimension"
-  end
+  def validate_strides!(shape, strides), do: :ok
 end
