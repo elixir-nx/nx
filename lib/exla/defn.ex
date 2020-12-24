@@ -151,6 +151,38 @@ defmodule Exla.Defn do
     end
   end
 
+  defp to_operator(:outer, [{lhs_expr, left}, {rhs_expr, right}], output_shape, builder) do
+    {left, right} = binary_op_type(builder, left, right, & &1)
+
+    {lhs_new_shape, rhs_new_shape} =
+      case {lhs_expr.shape, rhs_expr.shape} do
+        {{}, right} -> {{}, right}
+        {left, {}} -> {left, {}}
+        {left, right} ->
+          left =
+            for _ <- tuple_size(left)..(tuple_size(output_shape) - 1),
+                reduce: left,
+                do: (acc -> Tuple.append(acc, 1))
+          right =
+            for _ <- tuple_size(right)..(tuple_size(output_shape) - 1),
+                reduce: right,
+                do: (acc -> Tuple.insert_at(acc, 0, 1))
+          {left, right}
+      end
+
+    left =
+      left
+      |> Exla.Op.reshape(lhs_new_shape)
+      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_dimensions(lhs_new_shape, output_shape))
+
+    right =
+      right
+      |> Exla.Op.reshape(rhs_new_shape)
+      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_dimensions(rhs_new_shape, output_shape))
+
+    Exla.Op.multiply(left, right)
+  end
+
   defp to_operator(
          :select,
          [{_, pred}, {expr_true, on_true}, {expr_false, on_false}],
