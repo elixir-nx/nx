@@ -365,12 +365,22 @@ defmodule Nx.Util do
           [8, 9, 9]
         ]
       >
+
+      iex> Nx.Util.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6]]),
+      ...> 0,
+      ...> fn x, acc -> x + acc end,
+      ...> {1, 2}, {1, 1}, :same
+      ...> )
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [3, 5, 3],
+          [9, 11, 6]
+        ]
+      >
   """
   def reduce_window(tensor, acc, fun, window_dimensions, window_strides, padding \\ :valid) do
     %T{type: {_, size} = type, shape: shape} = t = Nx.tensor(tensor)
-
-    Nx.Shape.validate_window!(shape, window_dimensions)
-    Nx.Shape.validate_strides!(shape, window_strides)
 
     %T{shape: padded_shape} =
       t =
@@ -383,19 +393,18 @@ defmodule Nx.Util do
           Nx.pad(t, 0, padding_values)
       end
 
-    output_shape = Nx.Shape.stride(padded_shape, window_strides, window_dimensions)
+    output_shape = Nx.Shape.window(padded_shape, window_dimensions, window_strides)
 
     data = Nx.Util.to_bitstring(t)
 
-    weighted_shape = weighted_shape_limits(padded_shape, size, window_dimensions)
+    weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
     anchors = Enum.sort(make_anchors(padded_shape, window_strides, window_dimensions, []))
 
     data =
       for anchor <- anchors, into: <<>> do
-        offset = anchor_offset(weighted_shape, anchor)
+        offset = weighted_offset(weighted_shape, anchor)
 
-        window =
-          IO.iodata_to_binary(offset_weighted_traverse(weighted_shape, data, size, offset))
+        window = IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
 
         match_types [type] do
           window_val =
@@ -436,13 +445,37 @@ defmodule Nx.Util do
     make_anchors(shape, strides, window, List.flatten(dims))
   end
 
-  defp anchor_offset(weighted_shape, anchor) when is_tuple(anchor),
-    do: anchor_offset(weighted_shape, Tuple.to_list(anchor))
+  # Helper used in Nx.pad to add padding to the high and low
+  # ends of the last dimension of a tensor
+  def pad_last_dim(%T{shape: shape, type: {_, size} = type} = t, value, edge_low, edge_high) do
+    data = Nx.Util.to_bitstring(t)
 
-  defp anchor_offset([], []), do: 0
+    view = bin_aggregate_axes(data, [tuple_size(shape) - 1], shape, size)
 
-  defp anchor_offset([{dim, size} | dims], [a | anchor]),
-    do: size * a + anchor_offset(dims, anchor)
+    new_shape = Nx.Shape.pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high)
+
+    {edge_low_padding, edge_high_padding} =
+      match_types [type] do
+        edge_high_padding =
+          if edge_high == 0,
+            do: <<>>,
+            else: for(_ <- 1..edge_high, into: <<>>, do: <<write!(value, 0)>>)
+
+        edge_low_padding =
+          if edge_low == 0,
+            do: <<>>,
+            else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
+
+        {edge_low_padding, edge_high_padding}
+      end
+
+    data =
+      for bin <- view, into: <<>> do
+        <<edge_low_padding::bitstring, bin::bitstring, edge_high_padding::bitstring>>
+      end
+
+    %{t | data: {Nx.BitStringDevice, data}, type: type, shape: new_shape}
+  end
 
   # Helper for zipping 2 tensors along given axes.
   # Given we always reduce on the first tensor provided,

@@ -837,9 +837,26 @@ defmodule Nx do
   end
 
   @doc """
-  Pads a tensor with the given values.
+  Pads a tensor with a given value.
+
+  You must specify a padding configuration. A padding
+  configuration is a list of tuples consisting of
+  `{pad_width_low, pad_width_high}` for each dimension
+  in the input tensor.
 
   ## Examples
+
+      iex> Nx.pad(Nx.tensor(1), 0, [])
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> Nx.pad(Nx.tensor([1, 2, 3]), 0, [{1, 1}])
+      #Nx.Tensor<
+        s64[5]
+        [0, 1, 2, 3, 0]
+      >
 
       iex> Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{1, 1}, {1, 1}])
       #Nx.Tensor<
@@ -940,10 +957,14 @@ defmodule Nx do
       ]
     >
   """
-  def pad(tensor, pad_value, padding_config) do
+  def pad(tensor, pad_value, padding_config) when is_number(pad_value) do
     case tensor(tensor) do
       %T{shape: {}} = t ->
         t
+
+      %T{shape: {_}} = t ->
+        [{edge_low, edge_high}] = padding_config
+        Nx.Util.pad_last_dim(t, pad_value, edge_low, edge_high)
 
       %T{} = t ->
         permutation = for i <- 0..(Nx.rank(t) - 2), do: i
@@ -952,43 +973,9 @@ defmodule Nx do
         for {edge_low, edge_high} <- Enum.reverse(padding_config),
             reduce: t,
             do:
-              (acc -> transpose(pad_in_dim(acc, 0, pad_value, edge_low, edge_high), permutation))
+              (acc ->
+                 transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation))
     end
-  end
-
-  # This doesn't quite work like pad_in_dim should, maybe it should be `pad_view`?
-  defp pad_in_dim(%T{shape: shape, type: {_, size} = type} = t, dim, value, edge_low, edge_high) do
-    data = Nx.Util.to_bitstring(t)
-
-    # TODO: Check for type mismatch between value and tensor?
-
-    view = Nx.Util.bin_aggregate_axes(data, [tuple_size(shape) - dim - 1], shape, size)
-
-    dim_size = elem(shape, tuple_size(shape) - dim - 1)
-    new_dim = dim_size + edge_high + edge_low
-    new_shape = :erlang.setelement(tuple_size(shape) - dim, shape, new_dim)
-
-    {edge_low_padding, edge_high_padding} =
-      match_types [type] do
-        edge_high_padding =
-          if edge_high == 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_high, into: <<>>, do: <<write!(value, 0)>>)
-
-        edge_low_padding =
-          if edge_low == 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
-
-        {edge_low_padding, edge_high_padding}
-      end
-
-    data =
-      for bin <- view, into: <<>> do
-        <<edge_low_padding::bitstring, bin::bitstring, edge_high_padding::bitstring>>
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}, type: type, shape: new_shape}
   end
 
   ## Reflection
@@ -2489,7 +2476,6 @@ defmodule Nx do
     end
   end
 
-
   ## Unary ops
 
   funs = [
@@ -3668,7 +3654,7 @@ defmodule Nx do
       ** (ArgumentError) axes [1, 2] must be unique integers between 0 and 1
 
   """
- def transpose(tensor, axes) when is_list(axes) do
+  def transpose(tensor, axes) when is_list(axes) do
     case {tensor(tensor), axes} do
       {%T{shape: {}} = t, []} ->
         t

@@ -513,6 +513,8 @@ defmodule Nx.Shape do
   """
   def calculate_padding(shape, window, strides)
       when is_tuple(shape) and is_tuple(window) and is_tuple(strides) do
+    validate_window!(shape, window)
+    validate_strides!(shape, strides)
     calculate_padding(Tuple.to_list(shape), Tuple.to_list(window), Tuple.to_list(strides))
   end
 
@@ -527,37 +529,30 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Output shape after a strided operation.
-
-  Assumes stride and window are validated.
+  Output shape after a window operation.
   """
-  def stride(shape, stride, window) do
+  def window(shape, window, strides) do
+    validate_window!(shape, window)
+    validate_strides!(shape, strides)
+
     List.to_tuple(
       Enum.reverse(
-        strided_dims(Tuple.to_list(shape), Tuple.to_list(stride), Tuple.to_list(window))
+        window_dims(Tuple.to_list(shape), Tuple.to_list(window), Tuple.to_list(strides), [])
       )
     )
   end
 
-  defp strided_dims([], [], []), do: []
+  defp window_dims([], [], [], acc), do: acc
 
-  defp strided_dims([dim | shape], [s | strides], [w | window]),
-    do: [div(dim - w, s) + 1 | strided_dims(shape, strides, window)]
+  defp window_dims([dim | shape], [w | window], [s | strides], acc),
+    do: window_dims(shape, window, strides, [div(dim - w, s) + 1 | acc])
 
-  @doc """
-  Validates the window size according to the shape.
+  # Ensures the window is valid given the shape.
+  # A window is valid as long as it's rank matches
+  # the rank of the given shape.
+  defp validate_window!(shape, window)
 
-  ## Examples
-
-      iex> Nx.Shape.validate_window!({2, 2}, {1, 1})
-      :ok
-
-      iex> Nx.Shape.validate_window!({2, 2, 2}, {1, 1})
-      ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
-  """
-  def validate_window!(shape, window)
-
-  def validate_window!(shape, window) when tuple_size(shape) != tuple_size(window),
+  defp validate_window!(shape, window) when tuple_size(shape) != tuple_size(window),
     do:
       raise(
         ArgumentError,
@@ -565,22 +560,14 @@ defmodule Nx.Shape do
           " does not match rank of window (#{tuple_size(window)})"
       )
 
-  def validate_window!(_, _), do: :ok
+  defp validate_window!(_, _), do: :ok
 
-  @doc """
-  Validates the strides according to the shape.
+  # Ensures the strides are valid given the shape.
+  # A stride is valid as long as it's rank matches
+  # the rank of the given shape.
+  defp validate_strides!(shape, strides)
 
-  ## Examples
-
-      iex> Nx.Shape.validate_strides!({2, 2}, {1, 1})
-      :ok
-
-      iex> Nx.Shape.validate_strides!({2, 2, 2}, {1, 1})
-      ** (ArgumentError) invalid stride dimensions, rank of shape (3) does not match rank of strides (2)
-  """
-  def validate_strides!(shape, strides)
-
-  def validate_strides!(shape, strides) when tuple_size(strides) != tuple_size(shape),
+  defp validate_strides!(shape, strides) when tuple_size(strides) != tuple_size(shape),
     do:
       raise(
         ArgumentError,
@@ -588,5 +575,55 @@ defmodule Nx.Shape do
           " does not match rank of strides (#{tuple_size(strides)})"
       )
 
-  def validate_strides!(_, _), do: :ok
+  defp validate_strides!(_, _), do: :ok
+
+  @doc """
+  Output shape after a padding operation.
+  """
+  def pad(shape, padding_config) do
+    shape
+    |> Tuple.to_list()
+    |> padded_dims(padding_config, [])
+    |> Enum.reverse()
+    |> List.to_tuple()
+  end
+
+  defp padded_dims([], [], acc), do: acc
+
+  defp padded_dims([_ | _], [], _acc),
+    do:
+      raise(
+        ArgumentError,
+        "invalid padding configuration, rank of padding configuration" <>
+          " and shape must match"
+      )
+
+  defp padded_dims([], [_ | _], _acc),
+    do:
+      raise(
+        ArgumentError,
+        "invalid padding configuration, rank of padding configuration" <>
+          " and shape must match"
+      )
+
+  defp padded_dims([s | shape], [{edge_low, edge_high} | config], acc),
+    do: padded_dims(shape, config, [s + edge_low + edge_high])
+
+  @doc """
+  Output shape after a padding operation in the given
+  dimension with the given low and high edge padding
+  amounts.
+  """
+  def pad_in_dim(shape, dim, edge_low, edge_high) when edge_low >= 0 and edge_high >= 0 do
+    dim = normalize_axis(shape, dim)
+    dim_size = elem(shape, dim)
+    new_dim = dim_size + edge_high + edge_low
+    :erlang.setelement(dim + 1, shape, new_dim)
+  end
+
+  def pad_in_dim(_shape, _dim, edge_low, edge_high) do
+    raise ArgumentError,
+          "invalid edge padding width, expected padding width" <>
+            " to be greater than or equal to 0"
+  end
 end
