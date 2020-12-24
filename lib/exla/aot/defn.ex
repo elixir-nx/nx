@@ -1,208 +1,360 @@
 defmodule Exla.Aot.Defn do
   @moduledoc false
 
-  def sf_computation(module, name, arity, vars, options, fun) do
-    buffers = for var <- vars, do: nx_to_buffer(var)
+  def __compile__(env, _kind, _vars, fun, options) do
+    %{module: module, function: {name, arity}} = env
 
-    shapes = Enum.map(buffers, & &1.shape)
+    shapes = options[:shapes]
+    types = options[:types]
+
     builder = Exla.Builder.new("#{name}/#{arity}")
-    result = fun.(builder, shapes)
-    ast = Exla.Op.tuple(builder, [to_block_result(builder, result)])
 
-    {Exla.Builder.build(ast), name, shapes}
+    params_and_vars =
+      for {{shape, type}, i} <- Enum.with_index(Enum.zip(shapes, types)) do
+        exla_shape = Exla.Shape.make_shape(type, shape)
+        param = Exla.Op.parameter(builder, i, exla_shape, "p#{i}")
+        {Nx.Defn.Expr.parameter(shape, param), %{id: i, name: "p#{i}", dims: shape}}
+      end
+
+    {params, vars} = Enum.unzip(params_and_vars)
+
+    op =
+      fun.(params)
+      |> to_result(builder, %{})
+      |> elem(0)
+
+    op = Exla.Op.tuple(builder, [op])
+    computation = Exla.Builder.build(op)
+
+    output_size =
+      tuple_product(computation.output_shape.dims, tuple_size(computation.output_shape.dims))
+
+    Exla.Aot.Compile.compile([computation], [{name, arity, vars, output_size}], module)
   end
 
-  def sf_builder(name) do
-    Exla.Builder.new(name)
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
+  defp to_result(tuple, builder, cache) when is_tuple(tuple) do
+    {elements, cache} =
+      tuple
+      |> Tuple.to_list()
+      |> Enum.map_reduce(cache, &to_result(&1, builder, &2))
+
+    {Exla.Op.tuple(builder, elements), cache}
   end
 
-  def sf_parameter(builder, pos, shape, name) do
-    Exla.Op.parameter(builder, pos, shape, name)
+  defp to_result(expr, builder, cache) do
+    {expr, cache} = recur_operator(expr, builder, cache)
+    {to_operator(builder, expr), cache}
   end
 
-  defp nx_to_buffer(%Nx.Tensor{data: {device, data}, type: type, shape: shape}) do
-    case device do
-      Nx.BitStringDevice when is_bitstring(data) ->
-        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+  defp recur_operator(%Nx.Defn.Expr{op: :parameter, args: [param]}, _builder, cache) do
+    {param, cache}
+  end
 
-      Exla.NxDevice when is_tuple(data) ->
-        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+  defp recur_operator(%Nx.Defn.Expr{op: :constant, args: [number]}, _builder, cache) do
+    {number, cache}
+  end
 
-      true ->
-        raise ArgumentError, "unknown device #{inspect(device)} given to defn compiled with Exla"
+  defp recur_operator(%Nx.Defn.Expr{id: id, op: op, args: args, shape: shape}, builder, cache) do
+    case cache do
+      %{^id => res} ->
+        res
+
+      %{} ->
+        {shape_ops, cache} =
+          Enum.map_reduce(args, cache, fn
+            %Nx.Defn.Expr{} = arg, cache ->
+              {op, cache} = recur_operator(arg, builder, cache)
+              {{arg, op}, cache}
+
+            arg, cache ->
+              {arg, cache}
+          end)
+
+        op = to_operator(op, shape_ops, shape, builder)
+        {op, Map.put(cache, id, op)}
     end
   end
 
-  defp nx_to_buffer(number) when is_integer(number) do
-    Exla.Buffer.buffer(<<number::64-native>>, Exla.Shape.make_shape({:s, 64}, {}))
-  end
+  ## to_operator creation
 
-  defp nx_to_buffer(number) when is_float(number) do
-    Exla.Buffer.buffer(<<number::float-64-native>>, Exla.Shape.make_shape({:f, 64}, {}))
-  end
-
-  ## Special forms
-
-  def sf_nx_tensor(builder, %Nx.Tensor{data: {Nx.BitStringDevice, data}, type: type, shape: shape}) do
+  defp to_operator(:tensor, [%Nx.Tensor{type: type, data: {_, data}}], shape, builder) do
     shape = Exla.Shape.make_shape(type, shape)
     Exla.Op.constant_from_binary(builder, data, shape)
   end
 
-  ## Aggregators
+  defp to_operator(:random_uniform, [shape, min, max, opts], _shape, builder) do
+    type = opts[:type] || Exla.Type.infer(max - min)
 
-  @reduction_ops [:sum, :mean, :argmax, :argmin]
-
-  ## Conversion functions
-
-  defp to_block_result(builder, tuple) when is_tuple(tuple) do
-    elements =
-      tuple
-      |> Tuple.to_list()
-      |> Enum.map(&to_block_result(builder, &1))
-
-    Exla.Op.tuple(builder, elements)
-  end
-
-  defp to_block_result(builder, operator), do: to_operator(builder, operator)
-
-  defp to_operator(_builder, %Exla.Op{} = op), do: op
-  defp to_operator(builder, constant) when is_number(constant), do: to_constant(builder, constant)
-
-  defp to_operator(_builder, other) do
-    raise ArgumentError, "expected a tensor, got: #{inspect(other)}"
-  end
-
-  defp to_constant(builder, int) when is_integer(int),
-    do: Exla.Op.constant_r0(builder, int, {:s, 64})
-
-  defp to_constant(builder, float) when is_float(float),
-    do: Exla.Op.constant_r0(builder, float, {:f, 64})
-
-  ## Callback
-
-  def __compile__(env, _kind, _meta, vars, ast, options) do
-    {name, arity} = env.function
-    {ast, _state} = traverse(ast, %{})
-    shapes = Macro.generate_arguments(length(vars), __MODULE__)
-
-    quote do
-      Exla.Aot.Defn.sf_computation(
-        __MODULE__,
-        unquote(name),
-        unquote(arity),
-        unquote(vars),
-        unquote(options),
-        fn builder, unquote(shapes) ->
-          unquote_splicing(vars_to_parameters(vars, shapes))
-          unquote(ast)
-        end
-      )
+    if match?({int, size} when int in [:s, :u] and size < 32, type) do
+      raise ArgumentError,
+            "Nx.random_uniform/4 for Exla requires signed and unsigned tensors to be " <>
+              "at least of size 32, got: #{elem(type, 1)}"
     end
+
+    min = to_typed_operator(builder, min, type, type)
+    max = to_typed_operator(builder, max, type, type)
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Op.rng_uniform(min, max, shape)
+  end
+
+  defp to_operator(:random_normal, [shape, mu, sigma, opts], _shape, builder) do
+    type = opts[:type] || {:f, 64}
+    mu = to_typed_operator(builder, mu, type, type)
+    sigma = to_typed_operator(builder, sigma, type, type)
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Op.rng_normal(mu, sigma, shape)
+  end
+
+  defp to_operator(:iota, [shape, opts], _shape, builder) do
+    type = opts[:type] || {:s, 64}
+    shape = Exla.Shape.make_shape(type, shape)
+    Exla.Lib.iota(builder, shape, opts)
+  end
+
+  ## to_operator shape
+
+  defp to_operator(:reshape, [{_, arg}, shape], _shape, builder) do
+    Exla.Op.reshape(to_operator(builder, arg), shape)
+  end
+
+  defp to_operator(:broadcast, [{expr, arg}, _shape], output_shape, builder) do
+    arg = to_operator(builder, arg)
+    Exla.Op.broadcast_in_dim(arg, output_shape, broadcast_dimensions(expr.shape, output_shape))
+  end
+
+  defp to_operator(:transpose, [{_expr, arg}, dims], _output_shape, builder) do
+    arg = to_operator(builder, arg)
+    Exla.Op.transpose(arg, List.to_tuple(dims))
+  end
+
+  ## to_operator others
+
+  defp to_operator(:dot, [{_, left}, {_, right}], _output_shape, builder) do
+    {left, right} = binary_op_type(builder, left, right, & &1)
+
+    %Exla.Shape{dims: s1} = Exla.Op.get_shape(left)
+    %Exla.Shape{dims: s2} = Exla.Op.get_shape(right)
+
+    # To keep the semantics the same as Numpy, XLA will raise otherwise
+    case {tuple_size(s1), tuple_size(s2)} do
+      {0, _} -> Exla.Op.multiply(left, right)
+      {_, 0} -> Exla.Op.multiply(left, right)
+      {m, n} when m >= 2 and n > 2 -> Exla.Op.dot_general(left, right, {m - 1, n - 2})
+      _ -> Exla.Op.dot(left, right)
+    end
+  end
+
+  defp to_operator(
+         :select,
+         [{_, pred}, {expr_true, on_true}, {expr_false, on_false}],
+         output_shape,
+         builder
+       ) do
+    pred = to_typed_operator(builder, pred, op_type(pred), {:pred, 1})
+    {on_true, on_false} = binary_op_type(builder, on_true, on_false, & &1)
+
+    on_true =
+      Exla.Op.broadcast_in_dim(
+        on_true,
+        output_shape,
+        broadcast_dimensions(expr_true.shape, output_shape)
+      )
+
+    on_false =
+      Exla.Op.broadcast_in_dim(
+        on_false,
+        output_shape,
+        broadcast_dimensions(expr_false.shape, output_shape)
+      )
+
+    Exla.Op.select(pred, on_true, on_false)
+  end
+
+  ## to_operator element-wise
+
+  defp to_operator(:negate, [{_, arg}], _shape, _builder) do
+    case arg do
+      %Exla.Op{} = op -> Exla.Op.negate(op)
+      number when is_number(number) -> -number
+    end
+  end
+
+  defp to_operator(:abs, [{_, arg}], _shape, builder) do
+    arg = to_operator(builder, arg)
+
+    case op_type(arg) do
+      {:u, _} -> arg
+      _ -> Exla.Op.abs(arg)
+    end
+  end
+
+  defp to_operator(:sign, [{_, arg}], _shape, builder) do
+    arg = to_operator(builder, arg)
+
+    case op_type(arg) do
+      {:u, _} = type -> Exla.Op.min(arg, Exla.Op.constant_r0(builder, 1, type))
+      _ -> Exla.Op.sign(arg)
+    end
+  end
+
+  defp to_operator(:right_shift, [{left_expr, left}, {right_expr, right}], _shape, builder) do
+    {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, :right_shift))
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+
+    op =
+      if match?({:u, _}, constant_or_type(left)),
+        do: :right_shift_logical,
+        else: :right_shift_arithmetic
+
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
+  @bin_arith_op [:add, :subtract, :multiply, :min, :max, :remainder, :power] ++
+                  [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
+
+  defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
+       when op in @bin_arith_op do
+    {left, right} = binary_op_type(builder, left, right, & &1)
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    apply(Exla.Op, op, [left, right, dims])
   end
 
   @bin_float_arith_op [:divide, :arctan2]
-  @bin_arith_op [:add, :subtract, :multiply, :divide, :min, :max, :remainder, :power]
-  @bin_comparison_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
-  @bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
-  @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
+
+  defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
+       when op in @bin_float_arith_op do
+    {left, right} = binary_op_type(builder, left, right, &Exla.Type.to_floating/1)
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
+  @bin_bitwise_op [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
+
+  defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
+       when op in @bin_bitwise_op do
+    {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, op))
+    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    apply(Exla.Op, op, [left, right, dims])
+  end
+
   @unary_bitwise_op [:bitwise_not, :count_leading_zeros, :population_count]
+
+  defp to_operator(op, [{_expr, arg}], _shape, builder)
+       when op in @unary_bitwise_op do
+    arg = to_operator(builder, arg)
+    assert_integer_type!(op_type(arg), op)
+    apply(Exla.Op, op, [arg])
+  end
+
+  @unary_float_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
+
+  defp to_operator(op, [{_expr, arg}], _shape, builder)
+       when op in @unary_float_op do
+    apply(Exla.Op, op, [to_float_operator(builder, arg)])
+  end
+
   @unary_noop_integer_op [:floor, :ceil, :round]
 
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @bin_float_arith_op do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_bin_float_arith_op, [name | args]), state}
-  end
+  defp to_operator(op, [{_expr, arg}], _shape, builder)
+       when op in @unary_noop_integer_op do
+    arg = to_operator(builder, arg)
 
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @bin_arith_op do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_bin_arith_op, [name | args]), state}
-  end
-
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @bin_bitwise_op do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_bin_bitwise_op, [name | args]), state}
-  end
-
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @bin_comparison_op do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_bin_comparison_op, [name | args]), state}
-  end
-
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @unary_float_op do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_unary_float_op, [name | args]), state}
-  end
-
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @unary_bitwise_op do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_unary_bitwise_op, [name | args]), state}
-  end
-
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @unary_noop_integer_op do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_unary_noop_integer_op, [name | args]), state}
-  end
-
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state)
-       when name in @reduction_ops do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :nx_reduction_op, [name | args]), state}
-  end
-
-  defp traverse({{:., dot_meta, [Nx, name]}, meta, args}, state) do
-    {args, state} = traverse(args, state)
-    {to_builder_call(dot_meta, meta, :"nx_#{name}", args), state}
-  end
-
-  defp traverse({:%{}, meta, [__struct__: Nx.Tensor] ++ _} = struct, state) do
-    {to_builder_call(meta, :sf_nx_tensor, [struct]), state}
-  end
-
-  # TODO: We need to implement pattern matching on tuple once we add conditionals
-  defp traverse({name, meta, args}, state) do
-    {args, state} = traverse(args, state)
-    {{name, meta, args}, state}
-  end
-
-  defp traverse({left, right}, state) do
-    {left, state} = traverse(left, state)
-    {right, state} = traverse(right, state)
-    {{left, right}, state}
-  end
-
-  defp traverse(list, state) when is_list(list) do
-    Enum.map_reduce(list, state, &traverse/2)
-  end
-
-  defp traverse(other, state) do
-    {other, state}
-  end
-
-  defp vars_to_parameters(args, shapes) do
-    for {{var, shape}, index} <- Enum.with_index(Enum.zip(args, shapes)) do
-      name = var_to_parameter_name(var)
-
-      quote do
-        unquote(var) =
-          Exla.Defn.sf_parameter(builder, unquote(index), unquote(shape), unquote(name))
-      end
+    case op_type(arg) do
+      {:s, _} -> arg
+      {:u, _} -> arg
+      _ -> apply(Exla.Op, op, [arg])
     end
   end
 
-  defp var_to_parameter_name({var, meta, ctx}) when is_atom(var) and is_atom(ctx) do
-    "#{var}@#{Keyword.fetch!(meta, :counter)}"
+  ## to_operator reduction
+
+  @reduction_op [:sum, :mean, :argmax, :argmin]
+
+  defp to_operator(op, [{_expr, arg}, opts], _shape, builder)
+       when op in @reduction_op do
+    apply(Exla.Lib, op, [builder, arg, opts])
   end
 
-  defp to_builder_call(meta, fun, args), do: to_builder_call(meta, meta, fun, args)
+  ## constant/operator
 
-  defp to_builder_call(dot_meta, meta, fun, args) do
-    {{:., dot_meta, [Exla.Defn, fun]}, meta, [quote(do: builder) | args]}
+  defp to_operator(_builder, %Exla.Op{} = op),
+    do: op
+
+  defp to_operator(builder, int) when is_integer(int),
+    do: Exla.Op.constant_r0(builder, int, {:s, 64})
+
+  defp to_operator(builder, float) when is_float(float),
+    do: Exla.Op.constant_r0(builder, float, {:f, 64})
+
+  defp to_float_operator(_builder, %Exla.Op{} = op) do
+    current = op_type(op)
+    type = Exla.Type.to_floating(current)
+    if current != type, do: Exla.Op.convert_element_type(op, type), else: op
   end
+
+  defp to_float_operator(builder, constant) when is_number(constant) do
+    Exla.Op.constant_r0(builder, constant, {:f, 64})
+  end
+
+  defp to_typed_operator(_builder, %Exla.Op{} = op, type, type),
+    do: op
+
+  defp to_typed_operator(_builder, %Exla.Op{} = op, _type, type),
+    do: Exla.Op.convert_element_type(op, type)
+
+  defp to_typed_operator(builder, constant, _type, type) when is_number(constant),
+    do: Exla.Op.constant_r0(builder, constant, type)
+
+  ## Dimension helpers
+
+  defp broadcast_dimensions(left, right) do
+    {min, max} = if left <= right, do: {left, right}, else: {right, left}
+    min_size = tuple_size(min)
+    max_size = tuple_size(max)
+    # To reproduce Nx broadcast, we simply match the lower dimensions to the highest ones.
+    List.to_tuple(count_down(min_size, max_size - min_size))
+  end
+
+  defp count_down(0, _n), do: []
+  defp count_down(i, n), do: [n | count_down(i - 1, n + 1)]
+
+  ## Type helpers
+
+  defp binary_op_type(builder, left_op, right_op, fun) do
+    left_type = constant_or_type(left_op)
+    right_type = constant_or_type(right_op)
+    output_type = binary_op_type(left_type, right_type) |> fun.()
+
+    {to_typed_operator(builder, left_op, left_type, output_type),
+     to_typed_operator(builder, right_op, right_type, output_type)}
+  end
+
+  defp binary_op_type(left, right) when is_number(left) and is_number(right),
+    do: Exla.Type.infer(left + right)
+
+  defp binary_op_type(scalar, type) when is_number(scalar),
+    do: Exla.Type.merge_scalar(type, scalar)
+
+  defp binary_op_type(type, scalar) when is_number(scalar),
+    do: Exla.Type.merge_scalar(type, scalar)
+
+  defp binary_op_type(left, right),
+    do: Exla.Type.merge(left, right)
+
+  defp constant_or_type(number) when is_number(number), do: number
+  defp constant_or_type(op), do: op_type(op)
+
+  defp assert_integer_type!({:s, _} = type, _op), do: type
+  defp assert_integer_type!({:u, _} = type, _op), do: type
+
+  defp assert_integer_type!(type, op) do
+    raise ArgumentError,
+          "#{op} expects integer tensors as inputs and outputs an integer tensor, " <>
+            "got: #{inspect(type)}"
+  end
+
+  defp op_type(op), do: Exla.Op.get_shape(op).dtype
 end

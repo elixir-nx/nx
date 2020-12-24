@@ -3,7 +3,12 @@ defmodule Exla.Aot.Codegen do
 
   ## Bazel Attributes
   @bazel_deps_base "@org_tensorflow//tensorflow/compiler/"
-  @bazel_deps ["tf2xla:xla_compiled_cpu_function", "xla:cpu_function_runtime", "xla:executable_run_options", "xla:types"]
+  @bazel_deps [
+    "tf2xla:xla_compiled_cpu_function",
+    "xla:cpu_function_runtime",
+    "xla:executable_run_options",
+    "xla:types"
+  ]
   @bazel_erts_glob "glob([\"erts/**/*.h\"])"
 
   ## Nif Attributes
@@ -25,6 +30,7 @@ defmodule Exla.Aot.Codegen do
 
   defp build_feed_str(%{id: _id, name: name, dims: dims}) do
     shape_str = build_shape_str(dims)
+
     """
     feed {
       id { node_name: #{str(name)} }
@@ -40,6 +46,7 @@ defmodule Exla.Aot.Codegen do
       |> Tuple.to_list()
       |> Enum.map(fn x -> "dim { size: #{Integer.to_string(x)} }" end)
       |> Enum.join("\n")
+
     """
     shape {
       #{dims_str}
@@ -53,6 +60,7 @@ defmodule Exla.Aot.Codegen do
       |> Enum.map(& &1.id)
       |> Enum.join("_")
       |> Kernel.<>("_result")
+
     """
     fetch {
       id { node_name: #{str(result_name)} }
@@ -83,23 +91,28 @@ defmodule Exla.Aot.Codegen do
   end
 
   defp build_bazel_so_str(fname) do
-    str("lib"<>fname<>".so")
+    str("lib" <> fname <> ".so")
   end
 
   defp build_bazel_deps_str do
     deps_str =
       @bazel_deps
-      |> Enum.map(& str(@bazel_deps_base <> &1))
+      |> Enum.map(&str(@bazel_deps_base <> &1))
       |> Enum.join(", ")
+
     "[" <> deps_str <> "]"
   end
 
   defp build_bazel_srcs_str(fname, functions) do
-    cc_name = str(fname<>".cc")
+    cc_name = str(fname <> ".cc")
+
     src_files =
       functions
-      |> Enum.flat_map(fn {name, arity, _, _} -> [str(Atom.to_string(name)<>"_#{arity}.h"), str(Atom.to_string(name)<>"_#{arity}.o")] end)
+      |> Enum.flat_map(fn {name, arity, _, _} ->
+        [str(Atom.to_string(name) <> "_#{arity}.h"), str(Atom.to_string(name) <> "_#{arity}.o")]
+      end)
       |> Enum.join(", ")
+
     "[" <> cc_name <> ", " <> src_files <> "]" <> "+" <> @bazel_erts_glob
   end
 
@@ -116,14 +129,20 @@ defmodule Exla.Aot.Codegen do
     functions_str = build_nif_funcs(functions, class_name)
     nif_func_export_array_str = build_nif_func_export_array(functions)
     init_block_str = build_init_block(target_module)
-    include_block_str <> error_block_str <> load_block_str <> functions_str <> nif_func_export_array_str <> init_block_str
+
+    include_block_str <>
+      error_block_str <>
+      load_block_str <> functions_str <> nif_func_export_array_str <> init_block_str
   end
 
   defp build_include_block(functions) do
     function_includes =
       functions
-      |> Enum.map(fn {name, arity, _, _} -> build_include_str(Atom.to_string(name) <> "_#{arity}") end)
+      |> Enum.map(fn {name, arity, _, _} ->
+        build_include_str(Atom.to_string(name) <> "_#{arity}")
+      end)
       |> Enum.join("\n")
+
     function_includes <> "\n" <> build_include_str(@erl_nif_path)
   end
 
@@ -151,22 +170,25 @@ defmodule Exla.Aot.Codegen do
 
   defp build_nif_funcs(functions, class_name) do
     functions
-    |> Enum.map(& build_nif_func_block(&1, class_name))
+    |> Enum.map(&build_nif_func_block(&1, class_name))
     |> Enum.join("\n")
   end
 
-  defp build_nif_func_block({name, _, args, result_size} = function, class_name) do
+  defp build_nif_func_block({name, arity, args, result_size} = function, class_name) do
     signature_str = build_nif_func_signature(function)
+
     args_str =
       args
-      |> Enum.map(&build_nif_arg_retrieval_block/1)
+      |> Enum.map(&build_nif_arg_retrieval_block({name, arity, args, result_size}, &1))
       |> Enum.join("\n")
-    run_str = build_nif_run_block()
-    result_str = build_nif_results_block(0, result_size)
+
+    run_str = build_nif_run_block({name, arity, args, result_size})
+    result_str = build_nif_results_block({name, arity, args, result_size}, 0, result_size)
+
     """
 
     #{signature_str}{
-      #{class_name} function;
+      #{class_name} #{name}_#{arity};
 
       #{args_str}
 
@@ -181,36 +203,40 @@ defmodule Exla.Aot.Codegen do
   defp build_nif_func_signature({name, arity, _, result_size}) do
     """
 
-    ERL_NIF_TERM #{Atom.to_string(name)}_#{arity}(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+    ERL_NIF_TERM #{Atom.to_string(name)}_#{arity}_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
     """
   end
 
-  defp build_nif_arg_retrieval_block(%{id: id, name: _name, dims: dims}) do
+  defp build_nif_arg_retrieval_block({name, arity, _, _}, %{id: id, name: _name, dims: dims}) do
     arg_size = tuple_product(dims)
     error_msg = str("could not get argument #{id}")
+
     """
 
     ErlNifBinary arg#{id};
     if(!enif_inspect_binary(env, argv[#{id}], &arg#{id})) return error(env, #{error_msg});
-    std::copy(arg#{id}.data + 0, arg#{id}.data + #{arg_size}, function.arg#{id}_data());
+    std::copy(arg#{id}.data + 0, arg#{id}.data + #{arg_size}, #{name}_#{arity}.arg#{id}_data());
 
     """
   end
 
-  defp build_nif_run_block() do
+  defp build_nif_run_block({name, arity, _, _}) do
     """
-    function.Run();
+    #{name}_#{arity}.Run();
     """
   end
 
-  defp build_nif_results_block(result_num, result_size) do
+  defp build_nif_results_block({name, arity, _, _}, result_num, result_size) do
     error_msg = str("could not get result #{result_num}")
+
     """
 
     ErlNifBinary result#{result_num};
     if(!enif_alloc_binary(#{result_size}, &result#{result_num})) return error(env, #{error_msg});
-    std::copy(function.result#{result_num}_data() + 0, function.result#{result_num}_data() + 2000, result#{result_num}.data);
+    std::copy(#{name}_#{arity}.result#{result_num}_data() + 0, #{name}_#{arity}.result#{
+      result_num
+    }_data() + 2000, result#{result_num}.data);
 
     return enif_make_binary(env, &result#{result_num});
 
@@ -222,6 +248,7 @@ defmodule Exla.Aot.Codegen do
       functions
       |> Enum.map(&build_nif_func_export/1)
       |> Enum.join(",\n")
+
     """
 
     static ErlNifFunc nif_funcs[] = {
@@ -232,13 +259,13 @@ defmodule Exla.Aot.Codegen do
   end
 
   defp build_nif_func_export({name, arity, _, _}) do
-    "{#{str(Atom.to_string(name) <> "_" <> Integer.to_string(arity))}, #{arity}, #{Atom.to_string(name)}_#{arity}}"
+    "{#{str(Atom.to_string(name))}, #{arity}, #{name}_#{arity}_nif}"
   end
 
   defp build_init_block(target_module) do
     """
 
-    ERL_NIF_INIT(Elixir.#{target_module}, nif_funcs, &load, NULL, NULL, NULL);
+    ERL_NIF_INIT(#{target_module}, nif_funcs, &load, NULL, NULL, NULL);
 
     """
   end

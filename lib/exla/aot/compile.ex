@@ -8,7 +8,7 @@ defmodule Exla.Aot.Compile do
 
   alias Exla.Computation
 
-  def compile(computations, functions) do
+  def compile(computations, functions, module_name, lib_name \\ "nif") do
     # Compile each function to header/object
     src_paths =
       computations
@@ -16,15 +16,20 @@ defmodule Exla.Aot.Compile do
       |> Enum.flat_map(fn {comp, func} -> compile_function(comp, func) end)
 
     # Write out a NIF/BUILD file
-    {:ok, nif_path} = write_nif_source_file(functions, "AotTest", "exla_aot_class", "nif")
+    {:ok, nif_path} = write_nif_source_file(functions, module_name, "exla_aot_class", lib_name)
     {:ok, build_path} = write_bazel_build_file("nif", functions)
 
     # Get cwd for output `.so` path
     cwd = File.cwd!()
 
     # Build and move to cwd
-    System.cmd("bazel", ["build", "//tensorflow/compiler/xla/exla/aot:libnif.so"], cd: get_tf_checkout_path())
-    System.cmd("mv", ["bazel-bin/tensorflow/compiler/xla/exla/aot/libnif.so", cwd], cd: get_tf_checkout_path())
+    System.cmd("bazel", ["build", "//tensorflow/compiler/xla/exla/aot:libnif.so"],
+      cd: get_tf_checkout_path()
+    )
+
+    System.cmd("mv", ["bazel-bin/tensorflow/compiler/xla/exla/aot/libnif.so", cwd],
+      cd: get_tf_checkout_path()
+    )
 
     # Clean the sources
     clean_srcs(nif_path, build_path, src_paths)
@@ -32,7 +37,17 @@ defmodule Exla.Aot.Compile do
 
   defp compile_function(%Computation{ref: comp}, {name, arity, args, _result_size}) do
     {:ok, pbtext_path} = write_graph_config_file({name, arity, args})
-    src_paths = Exla.NIF.compile_aot(comp, pbtext_path, get_aot_path(), "#{name}_#{arity}", "exla_aot_class") |> unwrap!()
+
+    src_paths =
+      Exla.NIF.compile_aot(
+        comp,
+        pbtext_path,
+        get_aot_path(),
+        "#{name}_#{arity}",
+        "exla_aot_class"
+      )
+      |> unwrap!()
+
     [pbtext_path | Tuple.to_list(src_paths)]
   end
 
@@ -63,6 +78,7 @@ defmodule Exla.Aot.Compile do
   defp clean_srcs(nif_path, build_path, src_paths) do
     File.rm!(nif_path)
     File.rm!(build_path)
+
     src_paths
     |> Enum.reduce(:ok, fn path, _ -> File.rm!(path) end)
   end
@@ -72,5 +88,4 @@ defmodule Exla.Aot.Compile do
   defp get_exla_cache, do: System.get_env("EXLA_CACHE")
 
   defp unwrap!({:ok, return}), do: return
-
 end
