@@ -26,17 +26,34 @@ defmodule Nx.Defn.Expr do
   defstruct [:id, :shape, :op, :args]
 
   @doc """
+  Converts the given `arg` into an expression.
+  """
+  def to_expr(%Expr{} = arg), do: arg
+
+  def to_expr(number) when is_number(number) do
+    make_expr({}, :constant, [number])
+  end
+
+  def to_expr(%T{shape: shape, data: data} = t) do
+    case data do
+      {Nx.BitStringDevice, bitstring} when is_bitstring(bitstring) ->
+        make_expr(shape, :tensor, [t])
+
+      _ ->
+        raise ArgumentError, "tensors inside defn must be allocated on Nx.BitStringDevice"
+    end
+  end
+
+  def to_expr(other) do
+    raise ArgumentError,
+          "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
+  end
+
+  @doc """
   Builds a parameter must be passed to the evaluation function.
   """
   def parameter(shape, arg) when is_tuple(shape) do
     make_expr(shape, :parameter, [arg])
-  end
-
-  @doc """
-  Builds a constant.
-  """
-  def constant(number) when is_number(number) do
-    make_expr({}, :constant, [number])
   end
 
   @doc """
@@ -235,8 +252,13 @@ defmodule Nx.Defn.Expr do
   def broadcast(expr, shape) do
     %Expr{shape: old_shape} = expr = to_expr(expr)
     shape = to_shape(shape)
-    output_shape = Nx.Shape.broadcast(old_shape, shape)
-    make_expr(output_shape, :broadcast, [expr, shape])
+
+    if old_shape == shape do
+      expr
+    else
+      output_shape = Nx.Shape.broadcast(old_shape, shape)
+      make_expr(output_shape, :broadcast, [expr, shape])
+    end
   end
 
   @doc """
@@ -284,24 +306,6 @@ defmodule Nx.Defn.Expr do
 
   ## Expr normalization
 
-  defp to_expr(%Expr{} = expr), do: expr
-  defp to_expr(number) when is_number(number), do: constant(number)
-
-  defp to_expr(%T{shape: shape, data: data} = t) do
-    case data do
-      {Nx.BitStringDevice, bitstring} when is_bitstring(bitstring) ->
-        make_expr(shape, :tensor, [t])
-
-      _ ->
-        raise ArgumentError, "tensors inside defn must be allocated on Nx.BitStringDevice"
-    end
-  end
-
-  defp to_expr(other) do
-    raise ArgumentError,
-          "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
-  end
-
   defp make_expr(shape, op, args) when is_tuple(shape) and is_atom(op) and is_list(args) do
     id = System.unique_integer()
     %Expr{id: id, shape: shape, op: op, args: args}
@@ -329,9 +333,9 @@ defmodule Nx.Defn.Expr do
 
       doc =
         params
-        |> Enum.uniq()
         |> Enum.reverse()
         |> Kernel.++(Enum.reverse(exprs))
+        |> Enum.uniq()
         |> Enum.reduce(empty(), fn str, acc -> concat(acc, concat(line(), str)) end)
 
       color("#Nx.Defn.Expr<", :map, opts)
@@ -347,9 +351,11 @@ defmodule Nx.Defn.Expr do
       inspect_expr_args(tail, exprs, params, var_map)
     end
 
-    defp inspect_expr_args([%Expr{id: id, op: :parameter} | tail], exprs, params, var_map) do
+    defp inspect_expr_args([%Expr{op: :parameter} = expr | tail], exprs, params, var_map) do
+      %{id: id, op: :parameter, shape: shape} = expr
       {var, var_map} = var_for_id(var_map, id)
-      inspect_expr_args(tail, exprs, ["parameter " <> var | params], var_map)
+      param = "parameter " <> var  <> " " <> shape_to_string(shape)
+      inspect_expr_args(tail, exprs, [param | params], var_map)
     end
 
     defp inspect_expr_args([%Expr{} = expr | tail], exprs, params, var_map) do

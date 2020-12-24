@@ -5,11 +5,21 @@ defmodule Nx.Defn.Grad do
 
   def transform({to_grad, expr}) do
     expr = validate_expr!(expr)
+    to_result(to_grad, expr)
+  end
 
+  defp to_result(tuple, expr) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&to_result(&1, expr))
+    |> List.to_tuple()
+  end
+
+  defp to_result(to_grad, expr) do
     {id, shape} = grad_id_and_shape!(to_grad)
     initial = Expr.broadcast(1.0, shape)
-    {expr, _cache} = to_grad(expr, initial, %{id => :stop})
-    expr
+    {graded, _} = to_grad(expr, initial, %{id => :stop})
+    graded
   end
 
   defp grad_id_and_shape!(%Nx.Defn.Expr{id: id, shape: shape}) do
@@ -20,10 +30,6 @@ defmodule Nx.Defn.Grad do
     raise ArgumentError,
           "the first argument of grad must be a variable or a tuple of defn expressions, " <>
             "got: #{inspect(other)}"
-  end
-
-  defp validate_expr!(number) when is_number(number) do
-    Expr.constant(number)
   end
 
   defp validate_expr!(%Nx.Defn.Expr{shape: {}} = expr) do
@@ -37,8 +43,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp validate_expr!(other) do
-    raise ArgumentError,
-          "the second argument of grad must be a defn expression, got: #{inspect(other)}"
+    validate_expr!(Expr.to_expr(other))
   end
 
   ## Recursion
@@ -57,7 +62,7 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  ## Gradient rules
+  ## Rule-based gradients
 
   # Addition rule
   defp grad(op, [x, y], _ans, g, cache) when op in [:add, :subtract] do
@@ -139,25 +144,90 @@ defmodule Nx.Defn.Grad do
     {Expr.multiply(g, Expr.divide(num, den)), cache}
   end
 
+  ## Linear gradients
+
+  defp grad(:broadcast, [x, _], _ans, g, cache) do
+    to_grad(x, g, cache)
+  end
+
+  defp grad(op, [x, _], _ans, g, cache) when op in [:sum, :mean] do
+    {dx, cache} = to_grad(x, Expr.broadcast(g, x), cache)
+
+    case Nx.Shape.rank(dx.shape) - Nx.Shape.rank(g.shape) do
+      0 -> {dx, cache}
+      d -> {apply(Expr, op, [dx, [axes: Enum.to_list(0..(d - 1))]]), cache}
+    end
+  end
+
   ## Other gradients
 
-  defp grad(:broadcast, [arg, _], ans, g, cache) do
-    val = Nx.Shape.size(ans.shape) / Nx.Shape.size(g.shape)
-    to_grad(arg, Expr.multiply(g, val), cache)
+  defp grad(:cbrt, [x], ans, g, cache) do
+    g = Expr.divide(g, 3 |> Expr.multiply(ans) |> Expr.multiply(ans))
+    to_grad(x, g, cache)
   end
 
-  defp grad(:sum, [arg, _], _, g, cache) do
-    to_grad(arg, g, cache)
+  defp grad(:cos, [x], _ans, g, cache) do
+    g = Expr.multiply(g, Expr.negate(Expr.sin(x)))
+    to_grad(x, g, cache)
   end
 
-  defp grad(:tanh, [arg], ans, g, cache) do
-    g = Expr.multiply(g, Expr.subtract(1.0, Expr.multiply(ans, ans)))
-    to_grad(arg, g, cache)
-  end
-
-  defp grad(:exp, [arg], ans, g, cache) do
+  defp grad(:exp, [x], ans, g, cache) do
     g = Expr.multiply(g, ans)
-    to_grad(arg, g, cache)
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:expm1, [x], ans, g, cache) do
+    g = Expr.multiply(g, Expr.add(ans, 1))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:log, [x], _ans, g, cache) do
+    g = Expr.divide(g, x)
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:log1p, [x], _ans, g, cache) do
+    g = Expr.multiply(g, Expr.divide(1, Expr.add(x, 1)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:logistic, [x], ans, g, cache) do
+    g =
+      Expr.multiply(
+        g,
+        x
+        |> Expr.negate()
+        |> Expr.exp()
+        |> Expr.multiply(ans)
+        |> Expr.multiply(ans)
+      )
+
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:negate, [x], _ans, g, cache) do
+    g = Expr.negate(g)
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:rsqrt, [x], _ans, g, cache) do
+    g = Expr.multiply(g, Expr.multiply(-0.5, Expr.power(x, -1.5)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:sin, [x], _ans, g, cache) do
+    g = Expr.multiply(g, Expr.cos(x))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:sqrt, [x], ans, g, cache) do
+    g = Expr.multiply(g, Expr.divide(0.5, ans))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:tanh, [x], ans, g, cache) do
+    g = Expr.multiply(g, Expr.subtract(1.0, Expr.multiply(ans, ans)))
+    to_grad(x, g, cache)
   end
 
   @constants [:tensor, :parameter, :constant, :iota, :random_uniform, :random_normal] ++
@@ -176,6 +246,8 @@ defmodule Nx.Defn.Grad do
   # min/2 - requires comparison
   # outer/2
   # dot_general
+  # reshape - deflinear
+  # transpose - deflinear
 
   ## Helpers
 

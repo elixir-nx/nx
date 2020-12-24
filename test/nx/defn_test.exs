@@ -458,8 +458,8 @@ defmodule Nx.DefnTest do
     test "executes the transformation" do
       assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
              #Nx.Defn.Expr<
-               parameter a
-               parameter c
+               parameter a ()
+               parameter c ()
                b = tanh [ a ] ()
                d = power [ c, 2 ] ()
                e = add [ b, d ] ()

@@ -7,11 +7,13 @@ defmodule Nx.GradTest do
 
   describe "simple" do
     defn grad_itself(t), do: grad(t, t)
+    defn grad_tensor(t), do: grad(t, Nx.tensor(1.0))
     defn grad_constant(t), do: grad(t, 1.0)
     defn grad_unrelated(t, a), do: grad(t, a)
 
     test "computes gradient for scalars" do
       assert grad_itself(Nx.tensor(1.0)) == Nx.tensor(1.0)
+      assert grad_tensor(Nx.tensor(1.0)) == Nx.tensor(0.0)
       assert grad_constant(Nx.tensor(1.0)) == Nx.tensor(0.0)
       assert grad_unrelated(Nx.tensor(1.0), Nx.tensor(2.0)) == Nx.tensor(0.0)
     end
@@ -204,6 +206,120 @@ defmodule Nx.GradTest do
     end
   end
 
+  # describe "dot rule" do
+  #   defn dot_rule(t), do: Nx.tanh(Nx.tanh(Nx.dot(Nx.power(t, 2), Nx.power(t, 3))))
+  #   defn grad_dot_rule(t), do: grad(t, dot_rule(t))
+
+  #   test "computes gradient for scalars" do
+  #     assert grad_product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
+
+  #     for _ <- 1..100 do
+  #       check_grads!(
+  #         &product_rule/1,
+  #         &grad_product_rule/1,
+  #         Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+  #       )
+  #     end
+  #   end
+
+  #   defn grad_dot_lhs_rule(x, y), do: grad(x, Nx.sum(Nx.dot(x, y)))
+
+  #   test "computes gradient for tensors on lhs" do
+  #     assert grad_dot_lhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+  #              Nx.tensor([[15.0], [15.0], [15.0]])
+
+  #     assert grad_dot_lhs_rule(
+  #              Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+  #              Nx.tensor([1.0, 2.0])
+  #            ) ==
+  #              Nx.tensor([[1.0, 2.0], [1.0, 2.0], [1.0, 2.0]])
+
+  #     assert grad_dot_lhs_rule(
+  #              Nx.tensor([1.0, 2.0]),
+  #              Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+  #            ) ==
+  #              Nx.tensor([6.0, 15.0])
+  #   end
+
+  #   defn grad_dot_rhs_rule(x, y), do: grad(y, Nx.sum(Nx.dot(x, y)))
+
+  #   test "computes gradient for tensors on rhs" do
+  #     assert grad_dot_rhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+  #              Nx.tensor([[6.0, 6.0, 6.0, 6.0, 6.0]])
+
+  #     assert grad_dot_rhs_rule(
+  #              Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+  #              Nx.tensor([1.0, 2.0])
+  #            ) ==
+  #              Nx.tensor([9.0, 12.0])
+
+  #     assert grad_dot_rhs_rule(
+  #              Nx.tensor([1.0, 2.0]),
+  #              Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+  #            ) ==
+  #              Nx.tensor([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
+  #   end
+
+  #   defn grad_dot_both_rule(x), do: grad(x, Nx.sum(Nx.dot(Nx.power(x, 2), Nx.power(x, 3))))
+
+  #   test "computes gradient for tensors on both sides" do
+  #     assert grad_dot_both_rule(Nx.iota({3, 3, 3})) ==
+  #              Nx.tensor([
+  #                [
+  #                  [0.0, 83430.0, 263_952.0],
+  #                  [198_207.0, 410_616.0, 759_375.0],
+  #                  [533_952.0, 884_142.0, 1_410_048.0]
+  #                ],
+  #                [
+  #                  [873_828.0, 1_330_020.0, 1_997_028.0],
+  #                  [1_460_592.0, 2_057_913.0, 2_905_308.0],
+  #                  [2.268e6, 3_016_224.0, 4_053_888.0]
+  #                ],
+  #                [
+  #                  [2_639_952.0, 3_468_906.0, 4.6224e6],
+  #                  [3_724_623.0, 4_706_856.0, 6_052_887.0],
+  #                  [5_121_792.0, 6_268_050.0, 7_817_472.0]
+  #                ]
+  #              ])
+
+  #     assert grad_dot_both_rule(Nx.tensor([1, 2, 3])) == Nx.tensor([5.0, 80.0, 405.0])
+  #   end
+
+  #   defn grad_dot_dot_rule(x, w1, b1, w2, b2) do
+  #     grad(
+  #       x,
+  #       x
+  #       |> Nx.dot(w1)
+  #       |> Nx.add(b1)
+  #       |> Nx.dot(w2)
+  #       |> Nx.add(b2)
+  #       |> Nx.sum()
+  #     ))
+  #   end
+
+  #   test "computes gradient with dot after dot" do
+  #     assert grad_dot_dot_rule(
+  #              Nx.iota({5, 4}),
+  #              Nx.iota({4, 3}),
+  #              Nx.iota({3}),
+  #              Nx.iota({3, 2}),
+  #              Nx.iota({2})
+  #            ) ==
+  #              Nx.tensor([
+  #                [2.8414709848078967, 2.1310220466218284],
+  #                [-0.8231163613806731, -2.909552551516233]
+  #              ])
+  #   end
+
+  #   TODO: grad for outer, transpose, reshape
+  #   defn grad_dot_transpose_rule(x), do: grad(x, Nx.sum(Nx.dot(x, Nx.transpose(x))))
+
+  #   test "computes gradient with transpose" do
+  #     assert grad_dot_transpose_rule(Nx.iota({2, 3})) ==
+  #              Nx.tensor([1])
+  #   end
+  # end
+
   describe "chain rule" do
     defn grad_tanh_exp(t), do: grad(t, Nx.tanh(Nx.exp(t)))
 
@@ -230,4 +346,146 @@ defmodule Nx.GradTest do
       end
     end
   end
+
+  describe "tuples" do
+    defnp tuple_pattern({a, b}), do: Nx.power(a, 2) + b
+    defn grad_tuple_pattern(t), do: grad(t, tuple_pattern({t, 2.0}))
+
+    test "as patterns" do
+      assert grad_tuple_pattern(Nx.tensor(1.0)) == Nx.tensor(2.0)
+    end
+
+    defn grad_tuple_input(a, b) do
+      grad({a, b}, Nx.power(a, 2) * Nx.power(b, 3))
+    end
+
+    defn grad_tuple_input(a, b, c) do
+      grad({a, b, c}, Nx.power(a, 2) * Nx.power(b, 3) * Nx.power(c, 4))
+    end
+
+    test "as multiple inputs" do
+      assert grad_tuple_input(Nx.tensor(1.0), Nx.tensor(1.0)) ==
+               {Nx.tensor(2.0), Nx.tensor(3.0)}
+
+      assert grad_tuple_input(Nx.tensor(1.0), Nx.tensor(1.0), Nx.tensor(1.0)) ==
+               {Nx.tensor(2.0), Nx.tensor(3.0), Nx.tensor(4.0)}
+    end
+  end
+
+  for fun <-
+        [:cbrt, :cos, :exp, :expm1, :log, :log1p, :logistic] ++
+          [:mean, :negate, :rsqrt, :sin, :sqrt, :sum, :tanh] do
+    describe "#{fun}" do
+      grad_fun = :"grad_#{fun}"
+      defn unquote(grad_fun)(t), do: grad(t, Nx.unquote(fun)(t))
+
+      test "computes gradient" do
+        for _ <- 1..100 do
+          t = Nx.random_uniform({}, 0.1, 10.0, type: {:f, 64})
+          check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
+        end
+      end
+    end
+  end
+
+  describe "broadcast" do
+    defn grad_sum_broadcast(t), do: grad(t, Nx.sum(Nx.broadcast(t, {2, 2})))
+
+    test "computes gradient" do
+      assert grad_sum_broadcast(Nx.tensor([[0.0, 1.0], [2.0, 3.0]])) ==
+               Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+
+      assert grad_sum_broadcast(Nx.tensor([0.0, 1.0])) ==
+               Nx.tensor([2.0, 2.0])
+
+      assert grad_sum_broadcast(Nx.tensor(0.0)) ==
+               Nx.tensor(4.0)
+    end
+  end
+
+  # describe "axes" do
+  #   defn grad_sum_full(t), do: grad(t, Nx.sum(t))
+  #   defn grad_mean_full(t), do: grad(t, Nx.mean(t))
+
+  #   test "computes gradient in full" do
+  #     assert grad_sum_full(Nx.tensor([[1, 2], [3, 4]])) ==
+  #              Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+
+  #     assert grad_mean_full(Nx.tensor([[1, 2], [3, 4]])) ==
+  #              Nx.tensor([[0.25, 0.25], [0.25, 0.25]])
+  #   end
+
+  #   defn grad_sum_0_mean(t), do: grad(t, t |> Nx.sum(axes: [0]) |> Nx.mean())
+  #   defn grad_sum_1_mean(t), do: grad(t, t |> Nx.sum(axes: [1]) |> Nx.mean())
+
+  #   test "computes sum(axis) + mean" do
+  #     assert grad_sum_0_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+  #              ])
+
+  #     assert grad_sum_1_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+  #   end
+
+  #   defn grad_mean_0_sum(t), do: grad(t, t |> Nx.mean(axes: [0]) |> Nx.sum())
+  #   defn grad_mean_1_sum(t), do: grad(t, t |> Nx.mean(axes: [1]) |> Nx.sum())
+
+  #   test "computes mean(axis) + sum" do
+  #     assert grad_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+
+  #     assert grad_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+  #              ])
+  #   end
+
+  #   defn grad_reshape_mean_0_sum(t),
+  #     do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axes: [0]) |> Nx.sum())
+
+  #   defn grad_reshape_mean_1_sum(t),
+  #     do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axes: [1]) |> Nx.sum())
+
+  #   test "computes reshape + mean(axis) + sum" do
+  #     assert grad_reshape_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+  #              ])
+
+  #     assert grad_reshape_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+  #   end
+
+  #   defn grad_reshape_mean_0(t),
+  #     do: grad(t, t |> Nx.reshape({6}) |> Nx.mean(axes: [0]))
+
+  #   test "computes reshape + mean(axis)" do
+  #     assert grad_reshape_mean_0(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([
+  #                [0.16666666666666666, 0.16666666666666666, 0.16666666666666666],
+  #                [0.16666666666666666, 0.16666666666666666, 0.16666666666666666]
+  #              ])
+  #   end
+
+  #   defn grad_transpose_mean_0_sum(t),
+  #     do: grad(t, t |> Nx.transpose() |> Nx.mean(axes: [0]) |> Nx.sum())
+
+  #   defn grad_transpose_mean_1_sum(t),
+  #     do: grad(t, t |> Nx.transpose() |> Nx.mean(axes: [1]) |> Nx.sum())
+
+  #   test "computes transpose + mean(axis) + sum" do
+  #     assert grad_transpose_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+  #              ])
+
+  #     assert grad_transpose_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+  #   end
+  # end
 end
