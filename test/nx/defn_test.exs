@@ -173,7 +173,8 @@ defmodule Nx.DefnTest do
     end
 
     test "select with scalar predicate" do
-      assert %Expr{op: :select, args: [_, _, _], shape: {5}} = select(Nx.tensor(1), Nx.tensor([1, 2, 3, 4, 5]), Nx.tensor(0))
+      assert %Expr{op: :select, args: [_, _, _], shape: {5}} =
+               select(Nx.tensor(1), Nx.tensor([1, 2, 3, 4, 5]), Nx.tensor(0))
     end
   end
 
@@ -446,6 +447,24 @@ defmodule Nx.DefnTest do
       end
 
       assert DefaultCompiler.add(1, 2) == Nx.tensor(3)
+    end
+  end
+
+  describe "transform" do
+    defn transform_inspect(a, b) do
+      (Nx.tanh(a) + Nx.power(b, 2)) |> transform(&IO.inspect/1)
+    end
+
+    test "executes the transformation" do
+      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
+             #Nx.Defn.Expr<
+               parameter a
+               parameter c
+               b = tanh [ a ] ()
+               d = power [ c, 2 ] ()
+               e = add [ b, d ] ()
+             >
+             """
     end
   end
 

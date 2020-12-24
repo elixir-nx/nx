@@ -88,15 +88,47 @@ defmodule Nx.Defn.Kernel do
     do: raise("special forms must not be imported and exist for documentation purposes")
 
   @doc """
-  Defines a transform.
+  Defines a transform that executes the given `fun` at compilation time
+  with `arg`.
 
-  The options must be a keyword list literal.
+  ## Example
+
+  Take the following defn expression:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2)
+      end
+
+  Now imagine you want to debug it. You can use `transform/2` to invoke
+  `IO.inspect/1` at compilation time:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2) |> transform(&IO.inspect/1)
+      end
+
+  Or:
+
+      defn tanh_power(a, b) do
+        res = Nx.tanh(a) + Nx.power(b, 2)
+        transform(res, &IO.inspect/1)
+        res
+      end
+
+  In both cases, it will print the expression being built by `defn`:
+
+      #Nx.Defn.Expr<
+        parameter a
+        parameter c
+        b = tanh [ a ] ()
+        d = power [ c, 2 ] ()
+        e = add [ b, d ] ()
+      >
+
   """
-  def transform(module, expr, options) do
-    _ = module
-    _ = expr
-    _ = options
-    raise("Nx.Kernel.transform/3 must not be invoked directly and instead it is expanded by defn")
+  def transform(arg, fun) do
+    _ = arg
+    _ = fun
+    raise("Nx.Kernel.transform/1 must only be invoked inside defn")
   end
 
   @doc """
@@ -116,7 +148,7 @@ defmodule Nx.Defn.Kernel do
 
   When a tuple is given, a tuple will be returned.
   """
-  defmacro grad(var_or_vars, expr, options \\ []) do
+  defmacro grad(var_or_vars, expr) do
     var_or_vars =
       case var_or_vars do
         {:{}, meta, vars} -> {:{}, meta, Enum.map(vars, &grad_var!/1)}
@@ -126,9 +158,8 @@ defmodule Nx.Defn.Kernel do
 
     quote do
       Nx.Defn.Kernel.transform(
-        Nx.Defn.GradTransform,
         {unquote(var_or_vars), unquote(expr)},
-        unquote(options)
+        &Nx.Defn.Grad.transform/1
       )
     end
   end
@@ -139,21 +170,6 @@ defmodule Nx.Defn.Kernel do
     raise ArgumentError,
           "first argument of grad/3 must be a variable or a tuple of variables, got: " <>
           Macro.to_string(expr)
-  end
-
-  @doc """
-  Prints and returns the expanded expression.
-
-  ### Examples
-
-      defn tanh_grad(t) do
-        print_quoted(grad(t, Nx.tanh(t)))
-      end
-  """
-  defmacro print_quoted(expr, options \\ []) do
-    quote do
-      Nx.Defn.Kernel.transform(Nx.Defn.PrintQuotedTransform, unquote(expr), unquote(options))
-    end
   end
 
   @doc """

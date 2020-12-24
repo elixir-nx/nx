@@ -29,15 +29,13 @@ defmodule Nx.Defn do
         |> Nx.add(c)
       end
 
-  The only `Nx` functions not supported in `defn` are `Nx.tensor`
-  and device functions, such as `Nx.device_transfer/1`, and similar,
-  as they are meant for interfacing between Elixir and the numerical
-  world. But don't worry, if you use any unsupported API, you will
-  get an error at compilation time.
+  A handful of `Nx` functions are not supported in `defn` but
+  generally speaking you don't have to worry about them. If you
+  use any unsupported API, you will get an error at compilation
+  time.
 
   Calling other functions is possible, as long as they are
-  implemented with `defn`. At the moment, only calling local
-  functions is supported but remote functions are coming next.
+  implemented with `defn`.
 
   ## Inputs and outputs types
 
@@ -82,6 +80,42 @@ defmodule Nx.Defn do
 
       @default_defn_compiler {Exla, client: :cuda}
 
+  ## Debugging
+
+  While the expressions inside `defn` are limited, you can use
+  transforms to invoke function code inside `defn`. For example,
+  you can use `transform` to call `IO.inspect/2` to inspect the
+  `defn` expression being built. Take the following defn expression:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2)
+      end
+
+  Now imagine you want to debug it. You can use
+  `Nx.Defn.Kernel.transform/2` to invoke `IO.inspect/1` at
+  compilation time:
+
+      defn tanh_power(a, b) do
+        Nx.tanh(a) + Nx.power(b, 2) |> transform(&IO.inspect/1)
+      end
+
+  Or:
+
+      defn tanh_power(a, b) do
+        res = Nx.tanh(a) + Nx.power(b, 2)
+        transform(res, &IO.inspect/1)
+        res
+      end
+
+  In both cases, it will print the expression being built by `defn`:
+
+      #Nx.Defn.Expr<
+        parameter a
+        parameter c
+        b = tanh [ a ] ()
+        d = power [ c, 2 ] ()
+        e = add [ b, d ] ()
+      >
   """
 
   ## Default compiler backend

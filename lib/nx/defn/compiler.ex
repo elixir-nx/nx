@@ -196,27 +196,9 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [Nx.Defn.Expr, name]}, meta, args}, state}
   end
 
-  defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [module, ast, opts]}, state) do
-    unless is_atom(module) do
-      compile_error!(
-        meta,
-        state,
-        "expected the first argument of Nx.Defn.Kernel.transform/3 to be a module, " <>
-          "got: #{inspect(module)}"
-      )
-    end
-
-    unless Keyword.keyword?(opts) and Enum.all?(opts, fn {_, v} -> is_atom(v) or is_number(v) end) do
-      compile_error!(
-        meta,
-        state,
-        "expected the second argument of Nx.Defn.Kernel.transform/3 to a keyword list with " <>
-          "atoms and numbers as values, got: #{inspect(opts)}"
-      )
-    end
-
+  defp normalize({{:., dot_meta, [Nx.Defn.Kernel, :transform]}, meta, [ast, fun]}, state) do
     {ast, state} = normalize(ast, state)
-    {{call, meta, [module, ast, opts]}, state}
+    {{{:., dot_meta, [:erlang, :apply]}, meta, [fun, [ast]]}, state}
   end
 
   defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)
