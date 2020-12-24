@@ -88,8 +88,8 @@ defmodule Nx.Defn.Kernel do
     do: raise("special forms must not be imported and exist for documentation purposes")
 
   @doc """
-  Defines a transform that executes the given `fun` at compilation time
-  with `arg`.
+  Defines a transform that executes the given `fun` with `arg`
+  when building `defn` expressions.
 
   ## Example
 

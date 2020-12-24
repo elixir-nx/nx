@@ -28,8 +28,15 @@ defmodule Nx.Defn.Expr do
   @doc """
   Builds a parameter must be passed to the evaluation function.
   """
-  def parameter(shape, arg) do
+  def parameter(shape, arg) when is_tuple(shape) do
     make_expr(shape, :parameter, [arg])
+  end
+
+  @doc """
+  Builds a constant.
+  """
+  def constant(number) when is_number(number) do
+    make_expr({}, :constant, [number])
   end
 
   @doc """
@@ -278,7 +285,7 @@ defmodule Nx.Defn.Expr do
   ## Expr normalization
 
   defp to_expr(%Expr{} = expr), do: expr
-  defp to_expr(number) when is_number(number), do: make_expr({}, :constant, [number])
+  defp to_expr(number) when is_number(number), do: constant(number)
 
   defp to_expr(%T{shape: shape, data: data} = t) do
     case data do
