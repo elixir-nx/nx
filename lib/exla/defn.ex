@@ -156,17 +156,23 @@ defmodule Exla.Defn do
 
     {lhs_new_shape, rhs_new_shape} =
       case {lhs_expr.shape, rhs_expr.shape} do
-        {{}, right} -> {{}, right}
-        {left, {}} -> {left, {}}
+        {{}, right} ->
+          {{}, right}
+
+        {left, {}} ->
+          {left, {}}
+
         {left, right} ->
           left =
             for _ <- tuple_size(left)..(tuple_size(output_shape) - 1),
                 reduce: left,
                 do: (acc -> Tuple.append(acc, 1))
+
           right =
             for _ <- tuple_size(right)..(tuple_size(output_shape) - 1),
                 reduce: right,
                 do: (acc -> Tuple.insert_at(acc, 0, 1))
+
           {left, right}
       end
 

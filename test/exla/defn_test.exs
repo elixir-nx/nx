@@ -768,8 +768,11 @@ defmodule Exla.DefnTest do
     end
 
     test "computes the outer product of tensors" do
-      assert outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20])) == Nx.tensor([[10, 20], [20, 40], [30, 60]])
-      assert outer(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([10, 20, 30])) == Nx.tensor([[[10, 20, 30], [20, 40, 60]], [[30, 60, 90], [40, 80, 120]]])
+      assert outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20])) ==
+               Nx.tensor([[10, 20], [20, 40], [30, 60]])
+
+      assert outer(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([10, 20, 30])) ==
+               Nx.tensor([[[10, 20, 30], [20, 40, 60]], [[30, 60, 90], [40, 80, 120]]])
     end
   end
 
