@@ -89,6 +89,24 @@ defmodule Nx.Defn.Grad do
     {Expr.multiply(g, res), cache}
   end
 
+  # Division rule
+  defp grad(:divide, [x, y], ans, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    num = Expr.subtract(dx, Expr.multiply(ans, dy))
+    {Expr.multiply(g, Expr.divide(num, y)), cache}
+  end
+
+  # Remainder rule
+  defp grad(:remainder, [x, y], _, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    right = Expr.multiply(dy, Expr.floor(Expr.divide(x, y)))
+    {Expr.multiply(g, Expr.subtract(dx, right)), cache}
+  end
+
   # Power/Exponentiation rule
   defp grad(:power, [x, y], ans, g, cache) do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
@@ -111,7 +129,22 @@ defmodule Nx.Defn.Grad do
     {Expr.multiply(g, res), cache}
   end
 
+  # Arctan2 rule
+  defp grad(:arctan2, [x, y], _, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    num = Expr.subtract(Expr.multiply(dx, y), Expr.multiply(x, dy))
+    den = Expr.add(Expr.power(x, 2), Expr.power(y, 2))
+    {Expr.multiply(g, Expr.divide(num, den)), cache}
+  end
+
   ## Other gradients
+
+  defp grad(:broadcast, [arg, _], ans, g, cache) do
+    val = Nx.Shape.size(ans.shape) / Nx.Shape.size(g.shape)
+    to_grad(arg, Expr.multiply(g, val), cache)
+  end
 
   defp grad(:sum, [arg, _], _, g, cache) do
     to_grad(arg, g, cache)
