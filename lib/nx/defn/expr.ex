@@ -336,7 +336,8 @@ defmodule Nx.Defn.Expr do
 
       color("#Nx.Defn.Expr<", :map, opts)
       |> concat(nest(doc, 2))
-      |> concat(color("\n>", :map, opts))
+      |> concat(line())
+      |> concat(color(">", :map, opts))
     end
 
     # Post-order traversal of the Expr AST, but we pull all parameters to the front

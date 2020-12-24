@@ -59,7 +59,63 @@ defmodule Nx.Defn.Grad do
 
   ## Gradient rules
 
+  # Addition rule
+  defp grad(op, [x, y], _ans, g, cache) when op in [:add, :subtract] do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    res =
+      cond do
+        zero?(dy) -> dx
+        zero?(dx) and op == :add -> dy
+        true -> apply(Expr, op, [dx, dy])
+      end
+
+    {Expr.multiply(g, res), cache}
+  end
+
+  # Product rule
+  defp grad(:multiply, [x, y], _ans, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    res =
+      cond do
+        zero?(dx) -> Expr.multiply(dy, x)
+        zero?(dy) -> Expr.multiply(dx, y)
+        true -> Expr.add(Expr.multiply(dx, y), Expr.multiply(dy, x))
+      end
+
+    {Expr.multiply(g, res), cache}
+  end
+
+  # Power/Exponentiation rule
+  defp grad(:power, [x, y], ans, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    res =
+      if one?(dx) and zero?(dy) do
+        Expr.multiply(y, Expr.power(x, Expr.subtract(y, 1)))
+      else
+        # g' * ln f
+        left = Expr.multiply(dy, Expr.log(x))
+
+        # f' * (g / f)
+        right = Expr.multiply(dx, Expr.divide(y, x))
+
+        # ans * (left + right)
+        Expr.multiply(ans, Expr.add(left, right))
+      end
+
+    {Expr.multiply(g, res), cache}
+  end
+
   ## Other gradients
+
+  defp grad(:sum, [arg, _], _, g, cache) do
+    to_grad(arg, g, cache)
+  end
 
   defp grad(:tanh, [arg], ans, g, cache) do
     g = Expr.multiply(g, Expr.subtract(1.0, Expr.multiply(ans, ans)))
@@ -71,7 +127,45 @@ defmodule Nx.Defn.Grad do
     to_grad(arg, g, cache)
   end
 
-  defp grad(ignore, _, _, g, cache) when ignore in [:tensor, :parameter, :constant] do
-    {Nx.broadcast(0.0, g.shape), cache}
+  @constants [:tensor, :parameter, :constant, :iota, :random_uniform, :random_normal] ++
+               [:argmax, :argmin] ++
+               [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
+               [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
+               [:floor, :round, :ceil, :sign]
+
+  defp grad(op, _, _, g, cache) when op in @constants do
+    {Expr.broadcast(0.0, g.shape), cache}
   end
+
+  # TODO:
+  # abs/1 - requires select
+  # max/2 - requires comparison
+  # min/2 - requires comparison
+  # outer/2
+  # dot_general
+
+  ## Helpers
+
+  # Build a broadcast 1.0.
+  #
+  # If the expression or the current result are one
+  # and match the desired shape, we reuse it.
+  defp to_one(expr, g) do
+    cond do
+      one?(expr) ->
+        expr
+
+      one?(g) and expr.shape == g.shape ->
+        g
+
+      true ->
+        Expr.broadcast(1.0, expr.shape)
+    end
+  end
+
+  defp zero?(expr),
+    do: match?(%Expr{op: :broadcast, args: [%Expr{op: :constant, args: [0.0]}, _]}, expr)
+
+  defp one?(expr),
+    do: match?(%Expr{op: :broadcast, args: [%Expr{op: :constant, args: [1.0]}, _]}, expr)
 end
