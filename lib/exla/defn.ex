@@ -124,9 +124,9 @@ defmodule Exla.Defn do
     Exla.Op.reshape(to_operator(builder, arg), shape)
   end
 
-  defp to_operator(:broadcast, [{expr, arg}, _shape], output_shape, builder) do
+  defp to_operator(:broadcast, [{_expr, arg}, _shape, axes], output_shape, builder) do
     arg = to_operator(builder, arg)
-    Exla.Op.broadcast_in_dim(arg, output_shape, broadcast_dimensions(expr.shape, output_shape))
+    Exla.Op.broadcast_in_dim(arg, output_shape, List.to_tuple(axes))
   end
 
   defp to_operator(:transpose, [{_expr, arg}, dims], _output_shape, builder) do
@@ -164,14 +164,14 @@ defmodule Exla.Defn do
       Exla.Op.broadcast_in_dim(
         on_true,
         output_shape,
-        broadcast_dimensions(expr_true.shape, output_shape)
+        broadcast_axes(expr_true.shape, output_shape)
       )
 
     on_false =
       Exla.Op.broadcast_in_dim(
         on_false,
         output_shape,
-        broadcast_dimensions(expr_false.shape, output_shape)
+        broadcast_axes(expr_false.shape, output_shape)
       )
 
     Exla.Op.select(pred, on_true, on_false)
@@ -206,7 +206,7 @@ defmodule Exla.Defn do
 
   defp to_operator(:right_shift, [{left_expr, left}, {right_expr, right}], _shape, builder) do
     {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, :right_shift))
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = broadcast_axes(left_expr.shape, right_expr.shape)
 
     op =
       if match?({:u, _}, constant_or_type(left)),
@@ -222,7 +222,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_arith_op do
     {left, right} = binary_op_type(builder, left, right, & &1)
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = broadcast_axes(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -231,7 +231,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_float_arith_op do
     {left, right} = binary_op_type(builder, left, right, &Exla.Type.to_floating/1)
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = broadcast_axes(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -240,7 +240,7 @@ defmodule Exla.Defn do
   defp to_operator(op, [{left_expr, left}, {right_expr, right}], _shape, builder)
        when op in @bin_bitwise_op do
     {left, right} = binary_op_type(builder, left, right, &assert_integer_type!(&1, op))
-    dims = broadcast_dimensions(left_expr.shape, right_expr.shape)
+    dims = broadcast_axes(left_expr.shape, right_expr.shape)
     apply(Exla.Op, op, [left, right, dims])
   end
 
@@ -312,18 +312,19 @@ defmodule Exla.Defn do
   defp to_typed_operator(builder, constant, _type, type) when is_number(constant),
     do: Exla.Op.constant_r0(builder, constant, type)
 
-  ## Dimension helpers
+  ## Axes helpers
 
-  defp broadcast_dimensions(left, right) do
+  defp broadcast_axes(left, right) do
     {min, max} = if left <= right, do: {left, right}, else: {right, left}
     min_size = tuple_size(min)
     max_size = tuple_size(max)
+
     # To reproduce Nx broadcast, we simply match the lower dimensions to the highest ones.
-    List.to_tuple(count_down(min_size, max_size - min_size))
+    List.to_tuple(count_up(min_size, max_size - min_size))
   end
 
-  defp count_down(0, _n), do: []
-  defp count_down(i, n), do: [n | count_down(i - 1, n + 1)]
+  defp count_up(0, _n), do: []
+  defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
 
   ## Type helpers
 

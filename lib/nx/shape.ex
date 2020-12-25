@@ -29,64 +29,75 @@ defmodule Nx.Shape do
   @doc """
   Broadcasts a shape to a new shape.
 
-  Only the dimensions of `shape` can be expanded to match
-  the dimensions of `new_shape`.
-
-  The semantics of broadcasting match [Numpy's](https://numpy.org/doc/stable/user/basics.broadcasting.html)
+  The dimensions of `shape` is expanded to match the
+  dimensions of `new_shape` according to the axes
+  mapping.
 
   ## Examples
 
   ### Scalars
 
-      iex> Nx.Shape.broadcast({}, {4, 2, 1, 5})
+      iex> Nx.Shape.broadcast({}, {4, 2, 1, 5}, [])
       {4, 2, 1, 5}
 
-      iex> Nx.Shape.broadcast({}, {})
+      iex> Nx.Shape.broadcast({}, {}, [])
       {}
 
   ### n-D shapes
 
-      iex> Nx.Shape.broadcast({1}, {2, 3, 4})
+      iex> Nx.Shape.broadcast({1}, {2, 3, 4}, [2])
       {2, 3, 4}
 
-      iex> Nx.Shape.broadcast({4, 2, 3}, {4, 3, 4, 2, 3})
+      iex> Nx.Shape.broadcast({4, 2, 3}, {4, 3, 4, 2, 3}, [2, 3, 4])
       {4, 3, 4, 2, 3}
+
+  ### Custom axes
+
+      iex> Nx.Shape.broadcast({2}, {2, 3}, [0])
+      {2, 3}
 
   ### Error cases
 
-      iex> Nx.Shape.broadcast({4, 2, 2}, {1, 1})
-      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 2} to {1, 1}
+      iex> Nx.Shape.broadcast({4, 2, 2}, {1, 1}, [0, 1, 2])
+      ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 2} to {1, 1} with axes [0, 1, 2]
+
+      iex> Nx.Shape.broadcast({2, 2}, {2, 2, 2}, [1, 0])
+      ** (ArgumentError) broadcast axes must be ordered, got 0 after 1
   """
-  def broadcast(left_shape, right_shape)
+  def broadcast(old_shape, new_shape, axes)
 
-  def broadcast(shape, shape), do: shape
+  def broadcast(old_shape, new_shape, axes)
+      when is_tuple(old_shape) and is_tuple(new_shape) and is_list(axes) do
+    old_rank = tuple_size(old_shape)
+    new_rank = tuple_size(new_shape)
 
-  def broadcast(left_shape, right_shape) when is_tuple(left_shape) and is_tuple(right_shape) do
-    left_list = tuple_reverse(left_shape)
-    right_list = tuple_reverse(right_shape)
-
-    left_rank = tuple_size(left_shape)
-    right_rank = tuple_size(right_shape)
-
-    with true <- left_rank <= right_rank,
-         {:ok, new} <- broadcast(left_list, right_list, []) do
-      new
-    else
-      _ ->
-        raise ArgumentError,
-              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
-                "to #{inspect(right_shape)}"
+    if length(axes) != old_rank do
+      raise ArgumentError,
+            "expected length of axes (#{length(axes)}) to match rank of shape (#{old_rank})"
     end
+
+    if old_rank > new_rank or not valid_broadcast?(axes, 0, -1, old_shape, new_shape) do
+      raise ArgumentError,
+            "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
+            "to #{inspect(new_shape)} with axes #{inspect(axes)}"
+    end
+
+    new_shape
   end
 
-  defp broadcast([1 | ldims], [dim | rdims], acc), do: broadcast(ldims, rdims, [dim | acc])
-  defp broadcast([dim | ldims], [dim | rdims], acc), do: broadcast(ldims, rdims, [dim | acc])
-  defp broadcast([], rdims, acc), do: {:ok, List.to_tuple(Enum.reverse(rdims, acc))}
-  defp broadcast(_, _, _), do: :error
+  defp valid_broadcast?([head | tail], axis, last, old_shape, new_shape) do
+    if head < last do
+      raise ArgumentError, "broadcast axes must be ordered, got #{head} after #{last}"
+    end
 
-  defp tuple_reverse(tuple), do: tuple_reverse(tuple, tuple_size(tuple))
-  defp tuple_reverse(_tuple, 0), do: []
-  defp tuple_reverse(tuple, i), do: [:erlang.element(i, tuple) | tuple_reverse(tuple, i - 1)]
+    old_dim = elem(old_shape, axis)
+    new_dim = elem(new_shape, head)
+
+    (old_dim == 1 or old_dim == new_dim) and
+      valid_broadcast?(tail, axis + 1, head, old_shape, new_shape)
+  end
+
+  defp valid_broadcast?([], _axis, _head, _old_shape, _new_shape), do: true
 
   @doc """
   Broadcasts two shapes to a common shape.
@@ -127,7 +138,8 @@ defmodule Nx.Shape do
 
   def binary_broadcast(shape, shape), do: shape
 
-  def binary_broadcast(left_shape, right_shape) when is_tuple(left_shape) and is_tuple(right_shape) do
+  def binary_broadcast(left_shape, right_shape)
+      when is_tuple(left_shape) and is_tuple(right_shape) do
     left_rank = tuple_size(left_shape)
     right_rank = tuple_size(right_shape)
     rank = max(left_rank, right_rank)
@@ -431,9 +443,57 @@ defmodule Nx.Shape do
       [2, 1, 0]
 
   """
-  def transpose_axes({}), do: []
-  def transpose_axes(shape), do: to_zero(rank(shape) - 1)
+  def transpose_axes(shape) do
+    rank = rank(shape)
+    count_down(rank, rank - 1)
+  end
 
-  defp to_zero(0), do: [0]
-  defp to_zero(n), do: [n | to_zero(n - 1)]
+  @doc """
+  Compute the broadcast axes based on the shape rank.
+
+  It doesn't validate if the remaining dimensions are
+  actually valid.
+
+  ## Examples
+
+      iex> Nx.Shape.broadcast_axes({2, 2, 2}, {2, 2, 2, 2})
+      [1, 2, 3]
+
+      iex> Nx.Shape.broadcast_axes({2, 2, 2}, {2, 2, 2, 2, 2})
+      [2, 3, 4]
+
+  """
+  def broadcast_axes(shape, new_shape) when tuple_size(shape) > tuple_size(new_shape) do
+    raise ArgumentError,
+          "cannot broadcast tensor of dimensions #{inspect(shape)} " <>
+            "to #{inspect(new_shape)}"
+  end
+
+  def broadcast_axes(shape, new_shape) do
+    min_size = rank(shape)
+    max_size = rank(new_shape)
+    count_up(min_size, max_size - min_size)
+  end
+
+  @doc """
+  Converts a shape to axes.
+
+  ## Examples
+
+      iex> Nx.Shape.to_axes({})
+      []
+
+      iex> Nx.Shape.to_axes({2, 2, 2})
+      [0, 1, 2]
+
+  """
+  def to_axes(shape), do: count_up(rank(shape), 0)
+
+  ## Helpers
+
+  defp count_up(0, _n), do: []
+  defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
+
+  defp count_down(0, _n), do: []
+  defp count_down(i, n), do: [n | count_down(i - 1, n - 1)]
 end

@@ -134,6 +134,7 @@ defmodule Nx.DefnTest do
     defn transpose_2(t), do: Nx.transpose(t, [-1, -2])
     defn reshape(t), do: Nx.reshape(t, {2, 3})
     defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
+    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, [-2])
 
     test "dot product" do
       assert %Expr{op: :dot, args: [_, _], shape: {2, 2}} =
@@ -159,8 +160,11 @@ defmodule Nx.DefnTest do
     end
 
     test "broadcast" do
-      assert %Expr{op: :broadcast, args: [_, _], shape: {3, 3, 3}} =
+      assert %Expr{op: :broadcast, args: [_, _, [2]], shape: {3, 3, 3}} =
                broadcast(Nx.tensor([1, 2, 3]))
+
+      assert %Expr{op: :broadcast, args: [_, _, [0]], shape: {3, 2}} =
+               broadcast_axes(Nx.tensor([1, 2, 3]))
     end
   end
 

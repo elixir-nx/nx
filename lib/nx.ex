@@ -677,13 +677,15 @@ defmodule Nx do
   end
 
   @doc """
-  Broadcasts the tensor to the given shape.
+  Broadcasts `tensor` to the given `broadcast_shape`.
 
   The new shape is either a tuple or a tensor which we will
   retrieve the current shape from. The broadcast shape must
-  be of equal or higher rank than the current shape. The
-  matching dimensions of the broadcast shape must be either
-  one or of the same size as of the current tensor.
+  be of equal or higher rank than the current shape.
+
+  The lower dimensions of the tensor shape must match the
+  equivalent lower dimension of the broadcast shape or be 1.
+  To customize this behaviour, see `broadcast/3`.
 
   The default broadcasting implementation copies the data in
   memory to match the new dimensions.
@@ -720,47 +722,119 @@ defmodule Nx do
       >
 
   """
-  def broadcast(tensor, new_shape) do
-    case {tensor(tensor), new_shape} do
-      {%T{shape: {}} = t, new_shape} ->
-        new_shape = shape!(new_shape)
+  def broadcast(tensor, broadcast_shape) do
+    tensor = tensor(tensor)
+    broadcast_shape = shape!(broadcast_shape)
+    broadcast(tensor, broadcast_shape, Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape))
+  end
+
+  @doc """
+  Broadcasts `tensor` to the given `broadcast_shape` with `axes`.
+
+  The new shape is either a tuple or a tensor which we will
+  retrieve the current shape from. The broadcast shape must
+  be of equal or higher rank than the current shape.
+
+  `axes` must be a list with the same length as the tensor
+  shape. Each `axis` in the list maps to the dimension in the
+  broadcast shape that must match. For example, an axis of
+  `[1, 2]` says the 0 dimension of the tensor matches to the
+  1 dimension of the broadcast shape and the 1 dimension of
+  the tensor matches the 2 dimension of the broadcast shape.
+  Each matching dimension must either be 1, for implicit
+  broadcasting, or match the dimension in the broadcast shape.
+
+  The default broadcasting implementation copies the data in
+  memory to match the new dimensions.
+
+  ## Examples
+
+  Using the default broadcast rules, we cannot broadcast a
+  tensor of shape (3) to the shape (3, 2), because the lower
+  dimensions must match. But with `Nx.broadcast/3` we can
+  configure how the dimensions match:
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> Nx.broadcast(t, {3, 2}, [0])
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [1, 1],
+          [2, 2],
+          [3, 3]
+        ]
+      >
+
+  Or a more complex example:
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> Nx.broadcast(t, {2, 3, 2}, [1])
+      #Nx.Tensor<
+        s64[2][3][2]
+        [
+          [
+            [1, 1],
+            [2, 2],
+            [3, 3]
+          ],
+          [
+            [1, 1],
+            [2, 2],
+            [3, 3]
+          ]
+        ]
+      >
+
+  """
+  def broadcast(tensor, broadcast_shape, axes) do
+    new_shape = shape!(broadcast_shape)
+    axes = Nx.Shape.normalize_axes(new_shape, axes)
+
+    case tensor(tensor) do
+      %T{shape: {}} = t when axes == [] ->
         data = :binary.copy(Nx.Util.to_bitstring(t), Nx.Shape.size(new_shape))
         %{t | data: {Nx.BitStringDevice, data}, shape: new_shape}
 
-      {%T{shape: new_shape} = t, new_shape} ->
-        t
-
-      {%T{shape: old_shape, type: {_, size}} = t, new_shape} ->
-        new_shape = Nx.Shape.broadcast(old_shape, shape!(new_shape))
+      %T{shape: old_shape, type: {_, size}} = t ->
+        new_shape = Nx.Shape.broadcast(old_shape, new_shape, axes)
         chunk_size = size * Nx.Shape.size(old_shape)
-        new_higher = Tuple.to_list(new_shape)
 
-        old_higher =
-          old_shape
-          |> shape_to_lower_ranked_list(Nx.Shape.rank(old_shape), Nx.Shape.rank(new_shape))
-          |> Enum.reverse()
-
-        data = unary_broadcast(old_higher, new_higher, Nx.Util.to_bitstring(t), chunk_size)
-        data = IO.iodata_to_binary(data)
-        %{t | data: {Nx.BitStringDevice, data}, shape: new_shape}
+        data = Nx.Util.to_bitstring(t)
+        data = unary_broadcast(Tuple.to_list(new_shape), 0, old_shape, 0, axes, data, chunk_size)
+        %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: new_shape}
     end
   end
 
-  defp unary_broadcast([dim | odims], [dim | ndims], data, chunk_size) do
+  # Old and new match
+  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, chunk_size)
+       when elem(old_shape, old_pos) == dim do
     chunk_size = div(chunk_size, dim)
 
     for <<chunk::size(chunk_size)-bitstring <- data>> do
-      unary_broadcast(odims, ndims, chunk, chunk_size)
+      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, chunk, chunk_size)
     end
   end
 
-  defp unary_broadcast([1 | odims], [ndim | ndims], data, chunk_size) do
-    for _ <- 1..ndim do
-      unary_broadcast(odims, ndims, data, chunk_size)
+  # Implicit broadcasting
+  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, chunk_size)
+       when elem(old_shape, old_pos) == 1 do
+    chunk_size = div(chunk_size, dim)
+
+    for _ <- 1..dim do
+      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, data, chunk_size)
     end
   end
 
-  defp unary_broadcast([], [], data, _chunk_size), do: data
+  # Explicit broadcasting (unmapped axes)
+  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, axes, data, chunk_size) do
+    for _ <- 1..dim do
+      unary_broadcast(dims, axis + 1, old_shape, old_pos, axes, data, chunk_size)
+    end
+  end
+
+  defp unary_broadcast([], _axis, _old_shape, _old_pos, [], data, _chunk_size) do
+    data
+  end
 
   ## Reflection
 

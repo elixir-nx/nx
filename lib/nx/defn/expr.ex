@@ -252,13 +252,18 @@ defmodule Nx.Defn.Expr do
   def broadcast(expr, shape) do
     %Expr{shape: old_shape} = expr = to_expr(expr)
     shape = to_shape(shape)
+    broadcast(expr, shape, Nx.Shape.broadcast_axes(old_shape, shape))
+  end
 
-    if old_shape == shape do
-      expr
-    else
-      output_shape = Nx.Shape.broadcast(old_shape, shape)
-      make_expr(output_shape, :broadcast, [expr, shape])
-    end
+  @doc """
+  Expression equivalent to `Nx.broadcast/3`.
+  """
+  def broadcast(expr, shape, axes) when is_list(axes) do
+    %Expr{shape: old_shape} = expr = to_expr(expr)
+    shape = to_shape(shape)
+    axes = Nx.Shape.normalize_axes(shape, axes)
+    output_shape = Nx.Shape.broadcast(old_shape, shape, axes)
+    make_expr(output_shape, :broadcast, [expr, shape, axes])
   end
 
   @doc """
@@ -280,8 +285,20 @@ defmodule Nx.Defn.Expr do
           pred_shape
       end
 
-    Nx.Shape.broadcast(true_shape, output_shape)
-    Nx.Shape.broadcast(false_shape, output_shape)
+    _ =
+      Nx.Shape.broadcast(
+        true_shape,
+        output_shape,
+        Nx.Shape.broadcast_axes(true_shape, output_shape)
+      )
+
+    _ =
+      Nx.Shape.broadcast(
+        false_shape,
+        output_shape,
+        Nx.Shape.broadcast_axes(false_shape, output_shape)
+      )
+
     make_expr(output_shape, :select, [pred_expr, true_expr, false_expr])
   end
 
@@ -354,7 +371,7 @@ defmodule Nx.Defn.Expr do
     defp inspect_expr_args([%Expr{op: :parameter} = expr | tail], exprs, params, var_map) do
       %{id: id, op: :parameter, shape: shape} = expr
       {var, var_map} = var_for_id(var_map, id)
-      param = "parameter " <> var  <> " " <> shape_to_string(shape)
+      param = "parameter " <> var <> " " <> shape_to_string(shape)
       inspect_expr_args(tail, exprs, [param | params], var_map)
     end
 

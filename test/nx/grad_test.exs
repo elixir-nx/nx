@@ -395,6 +395,10 @@ defmodule Nx.GradTest do
       assert grad_sum_broadcast(Nx.tensor([[0.0, 1.0], [2.0, 3.0]])) ==
                Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
 
+      # TODO: This needs squeeze
+      # assert grad_sum_broadcast(Nx.tensor([[0.0, 1.0]])) ==
+      #          Nx.tensor([2.0, 2.0])
+
       assert grad_sum_broadcast(Nx.tensor([0.0, 1.0])) ==
                Nx.tensor([2.0, 2.0])
 
@@ -403,89 +407,109 @@ defmodule Nx.GradTest do
     end
   end
 
-  # describe "axes" do
-  #   defn grad_sum_full(t), do: grad(t, Nx.sum(t))
-  #   defn grad_mean_full(t), do: grad(t, Nx.mean(t))
+  describe "axes" do
+    defn grad_sum_full(t), do: grad(t, Nx.sum(t))
+    defn grad_mean_full(t), do: grad(t, Nx.mean(t))
 
-  #   test "computes gradient in full" do
-  #     assert grad_sum_full(Nx.tensor([[1, 2], [3, 4]])) ==
-  #              Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+    test "computes gradient in full" do
+      assert grad_sum_full(Nx.tensor([[1, 2], [3, 4]])) ==
+               Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
 
-  #     assert grad_mean_full(Nx.tensor([[1, 2], [3, 4]])) ==
-  #              Nx.tensor([[0.25, 0.25], [0.25, 0.25]])
-  #   end
+      assert grad_mean_full(Nx.tensor([[1, 2], [3, 4]])) ==
+               Nx.tensor([[0.25, 0.25], [0.25, 0.25]])
+    end
 
-  #   defn grad_sum_0_mean(t), do: grad(t, t |> Nx.sum(axes: [0]) |> Nx.mean())
-  #   defn grad_sum_1_mean(t), do: grad(t, t |> Nx.sum(axes: [1]) |> Nx.mean())
+    defn grad_log_sum_0_sin_sum(t),
+      do: grad(t, t |> Nx.log() |> Nx.sum(axes: [0]) |> Nx.sin() |> Nx.sum())
 
-  #   test "computes sum(axis) + mean" do
-  #     assert grad_sum_0_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
-  #              ])
+    defn grad_log_sum_1_sin_sum(t),
+      do: grad(t, t |> Nx.log() |> Nx.sum(axes: [1]) |> Nx.sin() |> Nx.sum())
 
-  #     assert grad_sum_1_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
-  #   end
+    test "computes log + sum(axis) + sin + sum" do
+      assert grad_log_sum_0_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.18345697474330172, -0.33410075509515635, -0.3228698817445151],
+                 [0.04586424368582543, -0.13364030203806254, -0.16143494087225754]
+               ])
 
-  #   defn grad_mean_0_sum(t), do: grad(t, t |> Nx.mean(axes: [0]) |> Nx.sum())
-  #   defn grad_mean_1_sum(t), do: grad(t, t |> Nx.mean(axes: [1]) |> Nx.sum())
+      assert grad_log_sum_1_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [-0.21916944995978982, -0.10958472497989491, -0.07305648331992994],
+                 [0.01875804509762369, 0.015006436078098954, 0.012505363398415794]
+               ])
+    end
 
-  #   test "computes mean(axis) + sum" do
-  #     assert grad_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    defn grad_sum_0_mean(t), do: grad(t, t |> Nx.sum(axes: [0]) |> Nx.mean())
+    defn grad_sum_1_mean(t), do: grad(t, t |> Nx.sum(axes: [1]) |> Nx.mean())
 
-  #     assert grad_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
-  #              ])
-  #   end
+    test "computes sum(axis) + mean" do
+      assert grad_sum_0_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+               ])
 
-  #   defn grad_reshape_mean_0_sum(t),
-  #     do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axes: [0]) |> Nx.sum())
+      assert grad_sum_1_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    end
 
-  #   defn grad_reshape_mean_1_sum(t),
-  #     do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axes: [1]) |> Nx.sum())
+    defn grad_mean_0_sum(t), do: grad(t, t |> Nx.mean(axes: [0]) |> Nx.sum())
+    defn grad_mean_1_sum(t), do: grad(t, t |> Nx.mean(axes: [1]) |> Nx.sum())
 
-  #   test "computes reshape + mean(axis) + sum" do
-  #     assert grad_reshape_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
-  #              ])
+    test "computes mean(axis) + sum" do
+      assert grad_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
 
-  #     assert grad_reshape_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
-  #   end
+      assert grad_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+                 [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+               ])
+    end
 
-  #   defn grad_reshape_mean_0(t),
-  #     do: grad(t, t |> Nx.reshape({6}) |> Nx.mean(axes: [0]))
+    #   defn grad_reshape_mean_0_sum(t),
+    #     do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axes: [0]) |> Nx.sum())
 
-  #   test "computes reshape + mean(axis)" do
-  #     assert grad_reshape_mean_0(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([
-  #                [0.16666666666666666, 0.16666666666666666, 0.16666666666666666],
-  #                [0.16666666666666666, 0.16666666666666666, 0.16666666666666666]
-  #              ])
-  #   end
+    #   defn grad_reshape_mean_1_sum(t),
+    #     do: grad(t, t |> Nx.reshape({3, 2}) |> Nx.mean(axes: [1]) |> Nx.sum())
 
-  #   defn grad_transpose_mean_0_sum(t),
-  #     do: grad(t, t |> Nx.transpose() |> Nx.mean(axes: [0]) |> Nx.sum())
+    #   test "computes reshape + mean(axis) + sum" do
+    #     assert grad_reshape_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+    #              Nx.tensor([
+    #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+    #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+    #              ])
 
-  #   defn grad_transpose_mean_1_sum(t),
-  #     do: grad(t, t |> Nx.transpose() |> Nx.mean(axes: [1]) |> Nx.sum())
+    #     assert grad_reshape_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+    #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    #   end
 
-  #   test "computes transpose + mean(axis) + sum" do
-  #     assert grad_transpose_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
-  #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
-  #              ])
+    #   defn grad_reshape_mean_0(t),
+    #     do: grad(t, t |> Nx.reshape({6}) |> Nx.mean(axes: [0]))
 
-  #     assert grad_transpose_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-  #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
-  #   end
-  # end
+    #   test "computes reshape + mean(axis)" do
+    #     assert grad_reshape_mean_0(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+    #              Nx.tensor([
+    #                [0.16666666666666666, 0.16666666666666666, 0.16666666666666666],
+    #                [0.16666666666666666, 0.16666666666666666, 0.16666666666666666]
+    #              ])
+    #   end
+
+    #   defn grad_transpose_mean_0_sum(t),
+    #     do: grad(t, t |> Nx.transpose() |> Nx.mean(axes: [0]) |> Nx.sum())
+
+    #   defn grad_transpose_mean_1_sum(t),
+    #     do: grad(t, t |> Nx.transpose() |> Nx.mean(axes: [1]) |> Nx.sum())
+
+    #   test "computes transpose + mean(axis) + sum" do
+    #     assert grad_transpose_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+    #              Nx.tensor([
+    #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333],
+    #                [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
+    #              ])
+
+    #     assert grad_transpose_mean_1_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+    #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    #   end
+  end
 end

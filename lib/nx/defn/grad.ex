@@ -16,17 +16,17 @@ defmodule Nx.Defn.Grad do
   end
 
   defp to_result(to_grad, expr) do
-    {id, shape} = grad_id_and_shape!(to_grad)
-    initial = Expr.broadcast(1.0, shape)
+    id = grad_id!(to_grad)
+    initial = broadcast(1.0, to_grad)
     {graded, _} = to_grad(expr, initial, %{id => :stop})
     graded
   end
 
-  defp grad_id_and_shape!(%Nx.Defn.Expr{id: id, shape: shape}) do
-    {id, shape}
+  defp grad_id!(%Nx.Defn.Expr{id: id}) do
+    id
   end
 
-  defp grad_id_and_shape!(other) do
+  defp grad_id!(other) do
     raise ArgumentError,
           "the first argument of grad must be a variable or a tuple of defn expressions, " <>
             "got: #{inspect(other)}"
@@ -76,7 +76,7 @@ defmodule Nx.Defn.Grad do
         true -> apply(Expr, op, [dx, dy])
       end
 
-    {Expr.multiply(g, res), cache}
+    {multiply(g, res), cache}
   end
 
   # Product rule
@@ -84,14 +84,8 @@ defmodule Nx.Defn.Grad do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
     {dy, cache} = to_grad(y, to_one(y, g), cache)
 
-    res =
-      cond do
-        zero?(dx) -> Expr.multiply(dy, x)
-        zero?(dy) -> Expr.multiply(dx, y)
-        true -> Expr.add(Expr.multiply(dx, y), Expr.multiply(dy, x))
-      end
-
-    {Expr.multiply(g, res), cache}
+    res = Expr.add(multiply(dx, y), multiply(dy, x))
+    {multiply(g, res), cache}
   end
 
   # Division rule
@@ -99,8 +93,8 @@ defmodule Nx.Defn.Grad do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
     {dy, cache} = to_grad(y, to_one(y, g), cache)
 
-    num = Expr.subtract(dx, Expr.multiply(ans, dy))
-    {Expr.multiply(g, Expr.divide(num, y)), cache}
+    num = Expr.subtract(dx, multiply(ans, dy))
+    {multiply(g, Expr.divide(num, y)), cache}
   end
 
   # Remainder rule
@@ -108,8 +102,8 @@ defmodule Nx.Defn.Grad do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
     {dy, cache} = to_grad(y, to_one(y, g), cache)
 
-    right = Expr.multiply(dy, Expr.floor(Expr.divide(x, y)))
-    {Expr.multiply(g, Expr.subtract(dx, right)), cache}
+    right = multiply(dy, Expr.floor(Expr.divide(x, y)))
+    {multiply(g, Expr.subtract(dx, right)), cache}
   end
 
   # Power/Exponentiation rule
@@ -119,19 +113,19 @@ defmodule Nx.Defn.Grad do
 
     res =
       if one?(dx) and zero?(dy) do
-        Expr.multiply(y, Expr.power(x, Expr.subtract(y, 1)))
+        multiply(y, Expr.power(x, Expr.subtract(y, 1)))
       else
         # g' * ln f
-        left = Expr.multiply(dy, Expr.log(x))
+        left = multiply(dy, Expr.log(x))
 
         # f' * (g / f)
-        right = Expr.multiply(dx, Expr.divide(y, x))
+        right = multiply(dx, Expr.divide(y, x))
 
         # ans * (left + right)
-        Expr.multiply(ans, Expr.add(left, right))
+        multiply(ans, Expr.add(left, right))
       end
 
-    {Expr.multiply(g, res), cache}
+    {multiply(g, res), cache}
   end
 
   # Arctan2 rule
@@ -139,45 +133,55 @@ defmodule Nx.Defn.Grad do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
     {dy, cache} = to_grad(y, to_one(y, g), cache)
 
-    num = Expr.subtract(Expr.multiply(dx, y), Expr.multiply(x, dy))
+    num = Expr.subtract(multiply(dx, y), multiply(x, dy))
     den = Expr.add(Expr.power(x, 2), Expr.power(y, 2))
-    {Expr.multiply(g, Expr.divide(num, den)), cache}
+    {multiply(g, Expr.divide(num, den)), cache}
   end
 
   ## Linear gradients
 
-  defp grad(:broadcast, [x, _], _ans, g, cache) do
-    to_grad(x, g, cache)
+  defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+
+    # TODO: implement squeeze for dimensions that are 1
+    g =
+      case Nx.Shape.to_axes(shape) -- axes do
+        [] -> g
+        axes -> Expr.sum(g, axes: axes)
+      end
+
+    {multiply(g, dx), cache}
   end
 
-  defp grad(op, [x, _], _ans, g, cache) when op in [:sum, :mean] do
-    {dx, cache} = to_grad(x, Expr.broadcast(g, x), cache)
+  defp grad(:sum, [x, opts], _ans, g, cache) do
+    grad_aggregate(x, opts, g, cache)
+  end
 
-    case Nx.Shape.rank(dx.shape) - Nx.Shape.rank(g.shape) do
-      0 -> {dx, cache}
-      d -> {apply(Expr, op, [dx, [axes: Enum.to_list(0..(d - 1))]]), cache}
-    end
+  defp grad(:mean, [x, opts], ans, g, cache) do
+    {res, cache} = grad_aggregate(x, opts, g, cache)
+    factor = Expr.to_expr(Nx.Shape.size(ans.shape) / Nx.Shape.size(x.shape))
+    {multiply(factor, res), cache}
   end
 
   ## Other gradients
 
   defp grad(:cbrt, [x], ans, g, cache) do
-    g = Expr.divide(g, 3 |> Expr.multiply(ans) |> Expr.multiply(ans))
+    g = Expr.divide(g, 3 |> multiply(ans) |> multiply(ans))
     to_grad(x, g, cache)
   end
 
   defp grad(:cos, [x], _ans, g, cache) do
-    g = Expr.multiply(g, Expr.negate(Expr.sin(x)))
+    g = multiply(g, Expr.negate(Expr.sin(x)))
     to_grad(x, g, cache)
   end
 
   defp grad(:exp, [x], ans, g, cache) do
-    g = Expr.multiply(g, ans)
+    g = multiply(g, ans)
     to_grad(x, g, cache)
   end
 
   defp grad(:expm1, [x], ans, g, cache) do
-    g = Expr.multiply(g, Expr.add(ans, 1))
+    g = multiply(g, Expr.add(ans, 1))
     to_grad(x, g, cache)
   end
 
@@ -187,19 +191,19 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:log1p, [x], _ans, g, cache) do
-    g = Expr.multiply(g, Expr.divide(1, Expr.add(x, 1)))
+    g = multiply(g, Expr.divide(1, Expr.add(x, 1)))
     to_grad(x, g, cache)
   end
 
   defp grad(:logistic, [x], ans, g, cache) do
     g =
-      Expr.multiply(
+      multiply(
         g,
         x
         |> Expr.negate()
         |> Expr.exp()
-        |> Expr.multiply(ans)
-        |> Expr.multiply(ans)
+        |> multiply(ans)
+        |> multiply(ans)
       )
 
     to_grad(x, g, cache)
@@ -211,22 +215,22 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:rsqrt, [x], _ans, g, cache) do
-    g = Expr.multiply(g, Expr.multiply(-0.5, Expr.power(x, -1.5)))
+    g = multiply(g, multiply(-0.5, Expr.power(x, -1.5)))
     to_grad(x, g, cache)
   end
 
   defp grad(:sin, [x], _ans, g, cache) do
-    g = Expr.multiply(g, Expr.cos(x))
+    g = multiply(g, Expr.cos(x))
     to_grad(x, g, cache)
   end
 
   defp grad(:sqrt, [x], ans, g, cache) do
-    g = Expr.multiply(g, Expr.divide(0.5, ans))
+    g = multiply(g, Expr.divide(0.5, ans))
     to_grad(x, g, cache)
   end
 
   defp grad(:tanh, [x], ans, g, cache) do
-    g = Expr.multiply(g, Expr.subtract(1.0, Expr.multiply(ans, ans)))
+    g = multiply(g, Expr.subtract(1.0, multiply(ans, ans)))
     to_grad(x, g, cache)
   end
 
@@ -237,7 +241,7 @@ defmodule Nx.Defn.Grad do
                [:floor, :round, :ceil, :sign]
 
   defp grad(op, _, _, g, cache) when op in @constants do
-    {Expr.broadcast(0.0, g.shape), cache}
+    {broadcast(0.0, g), cache}
   end
 
   # TODO:
@@ -249,28 +253,64 @@ defmodule Nx.Defn.Grad do
   # reshape - deflinear
   # transpose - deflinear
 
-  ## Helpers
+  ## Grad helpers
 
-  # Build a broadcast 1.0.
-  #
-  # If the expression or the current result are one
-  # and match the desired shape, we reuse it.
-  defp to_one(expr, g) do
-    cond do
-      one?(expr) ->
-        expr
+  defp grad_aggregate(x, opts, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
 
-      one?(g) and expr.shape == g.shape ->
+    g =
+      if axes = opts[:axes] do
+        axes = Nx.Shape.to_axes(x.shape) -- axes
+        Expr.broadcast(g, dx, axes)
+      else
         g
+      end
+
+    {multiply(g, dx), cache}
+  end
+
+  ## Optimizers
+
+  # An optimized version of multiplication to reduce nodes.
+  defp multiply(left, right) do
+    cond do
+      one?(left) and one?(right) and left.shape == right.shape ->
+        left
+
+      one?(left) and constant?(right) ->
+        broadcast(hd(right.args) * 1.0, left)
+
+      one?(right) and constant?(left) ->
+        broadcast(hd(left.args) * 1.0, right)
 
       true ->
-        Expr.broadcast(1.0, expr.shape)
+        Expr.multiply(left, right)
     end
   end
 
-  defp zero?(expr),
-    do: match?(%Expr{op: :broadcast, args: [%Expr{op: :constant, args: [0.0]}, _]}, expr)
+  # And optimized version of constant broadcast to reduce nodes.
+  defp broadcast(constant, expr) when is_number(constant) do
+    if broadcast?(expr, constant), do: expr, else: Expr.broadcast(constant, expr.shape)
+  end
 
-  defp one?(expr),
-    do: match?(%Expr{op: :broadcast, args: [%Expr{op: :constant, args: [1.0]}, _]}, expr)
+  ## Helpers
+
+  # Build a broadcast of ones with the given shape.
+  # Also receives the current g as a possible optimization.
+  defp to_one(expr, g) do
+    if one?(g) and expr.shape == g.shape do
+      g
+    else
+      broadcast(1.0, expr)
+    end
+  end
+
+  defp constant?(expr),
+    do: match?(%Expr{op: :constant, args: [_]}, expr)
+
+  defp broadcast?(expr, constant),
+    do: match?(%Expr{op: :broadcast, args: [%Expr{op: :constant, args: [^constant]}, _]}, expr)
+
+  defp zero?(expr), do: broadcast?(expr, 0.0)
+  defp one?(expr), do: broadcast?(expr, 1.0)
 end
