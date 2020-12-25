@@ -836,6 +836,149 @@ defmodule Nx do
     data
   end
 
+  @doc """
+  Pads a tensor with a given value.
+
+  You must specify a padding configuration. A padding
+  configuration is a list of tuples consisting of
+  `{pad_width_low, pad_width_high}` for each dimension
+  in the input tensor. The padding configuration must
+  be of the same length as the tensor shape.
+
+  ## Examples
+
+      iex> Nx.pad(Nx.tensor(1), 0, [])
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> Nx.pad(Nx.tensor([1, 2, 3]), 0, [{1, 1}])
+      #Nx.Tensor<
+        s64[5]
+        [0, 1, 2, 3, 0]
+      >
+
+      iex> Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{1, 1}, {1, 1}])
+      #Nx.Tensor<
+        s64[4][5]
+        [
+          [0, 0, 0, 0, 0],
+          [0, 1, 2, 3, 0],
+          [0, 4, 5, 6, 0],
+          [0, 0, 0, 0, 0]
+        ]
+      >
+
+      iex> Nx.pad(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), 0, [{0, 2}, {1, 1}, {1, 0}])
+      #Nx.Tensor<
+        s64[4][4][3]
+        [
+          [
+            [0, 0, 0],
+            [0, 1, 2],
+            [0, 3, 4],
+            [0, 0, 0]
+          ],
+          [
+            [0, 0, 0],
+            [0, 5, 6],
+            [0, 7, 8],
+            [0, 0, 0]
+          ],
+          [
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0]
+          ],
+          [
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0]
+          ]
+        ]
+      >
+
+      iex> Nx.pad(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), 0, [{1, 0}, {1, 1}, {0, 1}])
+      #Nx.Tensor<
+        s64[3][4][3]
+        [
+          [
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0]
+          ],
+          [
+            [0, 0, 0],
+            [1, 2, 0],
+            [3, 4, 0],
+            [0, 0, 0]
+          ],
+          [
+            [0, 0, 0],
+            [5, 6, 0],
+            [7, 8, 0],
+            [0, 0, 0]
+          ]
+        ]
+      >
+
+    iex> Nx.pad(Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]), 0.0, [{1, 2}, {1, 0}, {0, 1}])
+    #Nx.Tensor<
+      f64[5][3][3]
+      [
+        [
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0]
+        ],
+        [
+          [0.0, 0.0, 0.0],
+          [1.0, 2.0, 0.0],
+          [3.0, 4.0, 0.0]
+        ],
+        [
+          [0.0, 0.0, 0.0],
+          [5.0, 6.0, 0.0],
+          [7.0, 8.0, 0.0]
+        ],
+        [
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0]
+        ],
+        [
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0]
+        ]
+      ]
+    >
+  """
+  def pad(tensor, pad_value, padding_config) when is_number(pad_value) do
+    case tensor(tensor) do
+      %T{shape: {}} = t ->
+        t
+
+      %T{shape: {_}} = t ->
+        [{edge_low, edge_high}] = padding_config
+        Nx.Util.pad_last_dim(t, pad_value, edge_low, edge_high)
+
+      %T{} = t ->
+        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
+        permutation = [Nx.rank(t) - 1 | permutation]
+
+        for {edge_low, edge_high} <- Enum.reverse(padding_config),
+            reduce: t,
+            do:
+              (acc ->
+                 transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation))
+    end
+  end
+
   ## Reflection
 
   @doc """
@@ -2241,7 +2384,6 @@ defmodule Nx do
   `pred`, attemps to broadcast both so they match the shape of `pred`.
 
   ## Examples
-
 
       iex> Nx.select(1, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
       #Nx.Tensor<

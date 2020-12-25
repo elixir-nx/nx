@@ -151,17 +151,21 @@ defmodule Nx.Shared do
   This is often given to `weighted_traverse/3` as a general
   mechanism to traverse binaries.
   """
-  def weighted_shape(shape, size) do
-    Enum.reverse(weighted_shape(shape, tuple_size(shape), size))
+  def weighted_shape(shape, size, limits \\ :none) do
+    Enum.reverse(weighted_shape(shape, tuple_size(shape), size, limits))
   end
 
-  defp weighted_shape(_shape, 0, _weight) do
+  defp weighted_shape(_shape, 0, _weight, _limits) do
     []
   end
 
-  defp weighted_shape(shape, pos, weight) do
-    element = :erlang.element(pos, shape)
-    [{element, weight} | weighted_shape(shape, pos - 1, weight * element)]
+  defp weighted_shape(shape, pos, weight, limits) do
+    shape_elem = :erlang.element(pos, shape)
+
+    element =
+      if limits == :none, do: shape_elem, else: min(:erlang.element(pos, limits), shape_elem)
+
+    [{element, weight} | weighted_shape(shape, pos - 1, weight * shape_elem, limits)]
   end
 
   @doc """
@@ -180,23 +184,23 @@ defmodule Nx.Shared do
   The `weighted_shape` can also contain functions, which are applied to the
   result of the remaining of the weighted shape.
   """
-  def weighted_traverse(weighted_shape, binary, read_size)
+  def weighted_traverse(weighted_shape, binary, read_size, offset \\ 0)
 
-  def weighted_traverse([], data, read_size) do
-    <<chunk::size(read_size)-bitstring, _::bitstring>> = data
+  def weighted_traverse([], data, read_size, offset) do
+    <<_::size(offset)-bitstring, chunk::size(read_size)-bitstring, _::bitstring>> = data
     chunk
   end
 
-  def weighted_traverse([{dim, size} | dims], data, read_size) do
-    weighted_traverse(dim, size, dims, data, read_size)
+  def weighted_traverse([{dim, size} | dims], data, read_size, offset) do
+    weighted_traverse(dim, size, dims, data, read_size, offset)
   end
 
-  def weighted_traverse([fun | dims], data, read_size) do
-    fun.(weighted_traverse(dims, data, read_size))
+  def weighted_traverse([fun | dims], data, read_size, offset) do
+    fun.(weighted_traverse(dims, data, read_size, offset))
   end
 
-  defp weighted_traverse(dim, dim_size, dims, data, read_size) do
-    head = weighted_traverse(dims, data, read_size)
+  defp weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
+    head = weighted_traverse(dims, data, read_size, offset)
 
     case dim do
       1 ->
@@ -204,9 +208,21 @@ defmodule Nx.Shared do
 
       _ ->
         <<_::size(dim_size)-bitstring, data::bitstring>> = data
-        [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size)]
+        [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
     end
   end
+
+  @doc """
+  Calculates the offset needed to reach a specified position
+  in the binary from a weighted shape list.
+  """
+  def weighted_offset(weighted_shape, pos) when is_tuple(pos),
+    do: weighted_offset(weighted_shape, Tuple.to_list(pos))
+
+  def weighted_offset([], []), do: 0
+
+  def weighted_offset([{_, size} | dims], [x | pos]),
+    do: size * x + weighted_offset(dims, pos)
 
   @doc """
   Converts a shape to a padded list by rank where the
