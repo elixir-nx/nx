@@ -497,9 +497,6 @@ defmodule Nx.Shape do
   defp count_down(0, _n), do: []
   defp count_down(i, n), do: [n | count_down(i - 1, n - 1)]
 
-  defp to_zero(0), do: [0]
-  defp to_zero(n), do: [n | to_zero(n - 1)]
-
   @doc """
   Calculates the padding needed for same padding.
 
@@ -530,6 +527,22 @@ defmodule Nx.Shape do
 
   @doc """
   Output shape after a window operation.
+
+  ## Examples
+
+      iex> Nx.Shape.window({3, 3}, {2, 2}, {1, 1})
+      {2, 2}
+
+      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, {1, 1, 1})
+      {1, 2, 3}
+
+  ### Error cases
+
+      iex> Nx.Shape.window({1, 2, 3}, {2, 1}, {1, 1, 1})
+      ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
+
+      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, {1, 1})
+      ** (ArgumentError) invalid stride dimensions, rank of shape (3) does not match rank of stride (2)
   """
   def window(shape, window, strides) do
     validate_window!(shape, window)
@@ -545,7 +558,7 @@ defmodule Nx.Shape do
   defp window_dims([], [], [], acc), do: acc
 
   defp window_dims([dim | shape], [w | window], [s | strides], acc),
-    do: window_dims(shape, window, strides, [div(dim - w, s) + 1 | acc])
+    do: window_dims(shape, window, strides, [max(div(dim - w, s) + 1, 1) | acc])
 
   # Ensures the window is valid given the shape.
   # A window is valid as long as it's rank matches
@@ -572,13 +585,29 @@ defmodule Nx.Shape do
       raise(
         ArgumentError,
         "invalid stride dimensions, rank of shape (#{tuple_size(shape)})" <>
-          " does not match rank of strides (#{tuple_size(strides)})"
+          " does not match rank of stride (#{tuple_size(strides)})"
       )
 
   defp validate_strides!(_, _), do: :ok
 
   @doc """
   Output shape after a padding operation.
+
+  ## Examples
+
+      iex> Nx.Shape.pad({3, 2, 4}, [{0, 1}, {1, 2}, {1, 1}])
+      {4, 5, 6}
+
+      iex> Nx.Shape.pad({}, [])
+      {}
+
+      iex> Nx.Shape.pad({2, 2}, [{1, 1}, {0, 0}])
+      {4, 2}
+
+  ### Error cases
+
+      iex> Nx.Shape.pad({2, 2, 3}, [{0, 1}, {1, 2}])
+      ** (ArgumentError) invalid padding configuration, rank of padding configuration and shape must match
   """
   def pad(shape, padding_config) do
     shape
@@ -607,23 +636,5 @@ defmodule Nx.Shape do
       )
 
   defp padded_dims([s | shape], [{edge_low, edge_high} | config], acc),
-    do: padded_dims(shape, config, [s + edge_low + edge_high])
-
-  @doc """
-  Output shape after a padding operation in the given
-  dimension with the given low and high edge padding
-  amounts.
-  """
-  def pad_in_dim(shape, dim, edge_low, edge_high) when edge_low >= 0 and edge_high >= 0 do
-    dim = normalize_axis(shape, dim)
-    dim_size = elem(shape, dim)
-    new_dim = dim_size + edge_high + edge_low
-    :erlang.setelement(dim + 1, shape, new_dim)
-  end
-
-  def pad_in_dim(_shape, _dim, edge_low, edge_high) do
-    raise ArgumentError,
-          "invalid edge padding width, expected padding width" <>
-            " to be greater than or equal to 0"
-  end
+    do: padded_dims(shape, config, [s + edge_low + edge_high | acc])
 end

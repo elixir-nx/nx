@@ -842,7 +842,8 @@ defmodule Nx do
   You must specify a padding configuration. A padding
   configuration is a list of tuples consisting of
   `{pad_width_low, pad_width_high}` for each dimension
-  in the input tensor.
+  in the input tensor. The padding configuration must
+  be of the same length as the tensor shape.
 
   ## Examples
 

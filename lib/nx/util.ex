@@ -447,12 +447,13 @@ defmodule Nx.Util do
 
   # Helper used in Nx.pad to add padding to the high and low
   # ends of the last dimension of a tensor
+  @doc false
   def pad_last_dim(%T{shape: shape, type: {_, size} = type} = t, value, edge_low, edge_high) do
     data = Nx.Util.to_bitstring(t)
 
     view = bin_aggregate_axes(data, [tuple_size(shape) - 1], shape, size)
 
-    new_shape = Nx.Shape.pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high)
+    new_shape = pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high)
 
     {edge_low_padding, edge_high_padding} =
       match_types [type] do
@@ -475,6 +476,21 @@ defmodule Nx.Util do
       end
 
     %{t | data: {Nx.BitStringDevice, data}, type: type, shape: new_shape}
+  end
+
+  # Helper for calculating the output shape after
+  # padding a dimension.
+  defp pad_in_dim(shape, dim, edge_low, edge_high) when edge_low >= 0 and edge_high >= 0 do
+    dim = Nx.Shape.normalize_axis(shape, dim)
+    dim_size = elem(shape, dim)
+    new_dim = dim_size + edge_high + edge_low
+    :erlang.setelement(dim + 1, shape, new_dim)
+  end
+
+  defp pad_in_dim(_shape, _dim, _edge_low, _edge_high) do
+    raise ArgumentError,
+          "invalid edge padding width, expected padding width" <>
+            " to be greater than or equal to 0"
   end
 
   # Helper for zipping 2 tensors along given axes.
@@ -527,7 +543,7 @@ defmodule Nx.Util do
   # If the axes isn't provided, the "view" is just the
   # entire binary as it is layed out in memory and we
   # expect the entire tensor to be reduced down to a scalar.
-  def bin_aggregate_axes(binary, axes, shape, size) do
+  defp bin_aggregate_axes(binary, axes, shape, size) do
     {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
 
     view =
