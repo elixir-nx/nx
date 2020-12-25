@@ -163,15 +163,11 @@ defmodule Exla.Defn do
           {left, {}}
 
         {left, right} ->
-          left =
-            for _ <- tuple_size(left)..(tuple_size(output_shape) - 1),
-                reduce: left,
-                do: (acc -> Tuple.append(acc, 1))
+          extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(left))
+          left = List.to_tuple(Tuple.to_list(left) ++ extra)
 
-          right =
-            for _ <- tuple_size(right)..(tuple_size(output_shape) - 1),
-                reduce: right,
-                do: (acc -> Tuple.insert_at(acc, 0, 1))
+          extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(right))
+          right = List.to_tuple(extra ++ Tuple.to_list(right))
 
           {left, right}
       end
@@ -179,12 +175,12 @@ defmodule Exla.Defn do
     left =
       left
       |> Exla.Op.reshape(lhs_new_shape)
-      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_dimensions(lhs_new_shape, output_shape))
+      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(lhs_new_shape, output_shape))
 
     right =
       right
       |> Exla.Op.reshape(rhs_new_shape)
-      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_dimensions(rhs_new_shape, output_shape))
+      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(rhs_new_shape, output_shape))
 
     Exla.Op.multiply(left, right)
   end
