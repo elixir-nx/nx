@@ -152,6 +152,21 @@ defmodule Nx.Defn.Grad do
     {multiply(g, dx), cache}
   end
 
+  defp grad(:pad, [x, _value, padding_config], _ans, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+
+    inverse_padding_config =
+      padding_config
+      |> Enum.map(fn {lo, hi} -> {-lo, -hi} end)
+
+    g =
+      g
+      |> to_one(x)
+      |> Expr.pad(0.0, inverse_padding_config)
+
+    {multiply(g, dx), cache}
+  end
+
   defp grad(:sum, [x, opts], _ans, g, cache) do
     grad_aggregate(x, opts, g, cache)
   end

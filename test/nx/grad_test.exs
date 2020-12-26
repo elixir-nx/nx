@@ -407,6 +407,14 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "pad" do
+    defn grad_sum_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{-1, 1}, {1, 1}])))
+
+    test "computes gradient" do
+      assert grad_sum_pad(Nx.tensor([[1.0, 2.0], [1.0, 2.0]])) == Nx.tensor([[0.0, 0.0], [1.0, 1.0]])
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, Nx.sum(t))
     defn grad_mean_full(t), do: grad(t, Nx.mean(t))
