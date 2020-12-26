@@ -247,6 +247,17 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
+  Expression equivalent to `Nx.pad/2`.
+  """
+  def pad(expr, value_expr, padding_config) do
+    %Expr{shape: old_shape} = expr = to_expr(expr)
+    # Assert that value is a scalar
+    %Expr{shape: {}} = value_expr = to_expr(value_expr)
+    output_shape = Nx.Shape.pad(old_shape, padding_config)
+    make_expr(output_shape, :pad, [expr, value_expr, padding_config])
+  end
+
+  @doc """
   Expression equivalent to `Nx.broadcast/2`.
   """
   def broadcast(expr, shape) do

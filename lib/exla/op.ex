@@ -52,7 +52,9 @@ defmodule Exla.Op do
   @doc """
   Creates tensor with normal distribution.
   """
-  def rng_normal(%Op{builder: builder, ref: mu}, %Op{builder: builder, ref: sigma}, %Shape{ref: shape}) do
+  def rng_normal(%Op{builder: builder, ref: mu}, %Op{builder: builder, ref: sigma}, %Shape{
+        ref: shape
+      }) do
     ref = Exla.NIF.rng_normal(mu, sigma, shape) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -89,6 +91,20 @@ defmodule Exla.Op do
   def reshape(%Op{ref: ref} = op, shape) when is_tuple(shape) do
     ref = Exla.NIF.reshape(ref, shape) |> unwrap!()
     %{op | ref: ref}
+  end
+
+  @doc """
+  Pads the tensor with value and padding config.
+  """
+  def pad(%Op{ref: op, builder: builder}, %Op{ref: value, builder: builder}, padding_config) do
+    # We don't currently support interior padding, but XLA expects it
+    # so we have to insert it into the padding configuration here
+    padding_config =
+      padding_config
+      |> Enum.map(&Tuple.append(&1, 0))
+
+    ref = Exla.NIF.pad(op, value, padding_config) |> unwrap!()
+    %Op{builder: builder, ref: ref}
   end
 
   @doc """
