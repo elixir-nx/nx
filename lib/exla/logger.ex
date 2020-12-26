@@ -1,4 +1,3 @@
-
 defmodule Exla.Logger do
   @moduledoc false
   use GenServer
