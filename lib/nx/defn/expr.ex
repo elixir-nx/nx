@@ -271,14 +271,8 @@ defmodule Nx.Defn.Expr do
   """
   def squeeze(expr) do
     %Expr{shape: old_shape} = expr = to_expr(expr)
-    axes =
-      old_shape
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.filter(fn {s, _} -> s == 1 end)
-      |> Enum.map(fn {_, i} -> i end)
-    output_shape = Nx.Shape.squeeze(old_shape, axes)
-    make_expr(output_shape, :squeeze, [expr, axes])
+    output_shape = Nx.Shape.squeeze(old_shape)
+    make_expr(output_shape, :squeeze, [expr])
   end
 
   @doc """

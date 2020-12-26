@@ -677,7 +677,7 @@ defmodule Nx do
   end
 
   @doc """
-  Squeeze all of the size `1` dimensions out of the tensor.
+  Squeezes all of the size `1` dimensions out of the tensor.
 
   While this is equivalent to a reshape which eliminates
   the size `1` axes, squeeze preserves important information
@@ -710,21 +710,12 @@ defmodule Nx do
   """
   def squeeze(tensor) do
     %T{shape: shape} = t = tensor(tensor)
-    axes =
-      shape
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.filter(fn {s, _} -> s == 1 end)
-      |> Enum.map(fn {_, i} -> i end)
-    output_shape = Nx.Shape.squeeze(shape, axes)
+    output_shape = Nx.Shape.squeeze(shape)
     %{t | shape: output_shape}
   end
 
   @doc """
-  Squeeze the given size `1` dimensions out of the tensor.
-
-  If no axes are given, it will infer the axes from the shape
-  and remove all size `1` dimensions from the tensor.
+  Squeezes the given size `1` dimensions out of the tensor.
 
   While this is equivalent to a reshape which eliminates
   the size `1` axes, squeeze preserves important information
@@ -748,7 +739,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [1])
-      ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1
+      ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 3 for dimension 1
 
       iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), [0, 0])
       ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4

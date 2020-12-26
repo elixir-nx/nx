@@ -134,6 +134,11 @@ defmodule Exla.Defn do
     Exla.Op.transpose(arg, List.to_tuple(dims))
   end
 
+  defp to_operator(:squeeze, [{_expr, arg}], output_shape, builder) do
+    arg = to_operator(builder, arg)
+    Exla.Op.reshape(arg, output_shape)
+  end
+
   defp to_operator(:squeeze, [{_expr, arg}, _axes], output_shape, builder) do
     arg = to_operator(builder, arg)
     Exla.Op.reshape(arg, output_shape)
