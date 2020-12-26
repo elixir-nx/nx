@@ -458,12 +458,12 @@ defmodule Nx.Util do
     {edge_low_padding, edge_high_padding} =
       match_types [type] do
         edge_high_padding =
-          if edge_high == 0,
+          if edge_high <= 0,
             do: <<>>,
             else: for(_ <- 1..edge_high, into: <<>>, do: <<write!(value, 0)>>)
 
         edge_low_padding =
-          if edge_low == 0,
+          if edge_low <= 0,
             do: <<>>,
             else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
 
@@ -472,25 +472,43 @@ defmodule Nx.Util do
 
     data =
       for bin <- view, into: <<>> do
-        <<edge_low_padding::bitstring, bin::bitstring, edge_high_padding::bitstring>>
+        cond do
+          edge_low < 0 and edge_high < 0 ->
+            low_byte = abs(edge_low) * size
+            high_byte = abs(edge_high) * size
+            new_bytes = (byte_size(bin) * div(size, 8)) - high_byte - low_byte
+            <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> = bin
+            new_bin
+
+          edge_low < 0 and edge_high >= 0 ->
+            low_byte = abs(edge_low) * size
+            <<_::size(low_byte)-bitstring, new_bin::bitstring>> = bin
+            <<new_bin::bitstring, edge_high_padding::bitstring>>
+
+          edge_low >= 0 and edge_high < 0 ->
+            high_byte = abs(edge_high) * size
+            new_bytes = (byte_size(bin) * div(size, 8)) - high_byte
+            <<new_bin::size(new_bytes)-bitstring, _::size(high_byte)-bitstring>> = bin
+            <<edge_low_padding::bitstring, new_bin::bitstring>>
+
+          true ->
+            <<edge_low_padding::bitstring, bin::bitstring, edge_high_padding::bitstring>>
+        end
       end
 
     %{t | data: {Nx.BitStringDevice, data}, type: type, shape: new_shape}
   end
 
-  # Helper for calculating the output shape after
-  # padding a dimension.
-  defp pad_in_dim(shape, dim, edge_low, edge_high) when edge_low >= 0 and edge_high >= 0 do
+  defp pad_in_dim(shape, dim, edge_low, edge_high) do
     dim = Nx.Shape.normalize_axis(shape, dim)
     dim_size = elem(shape, dim)
     new_dim = dim_size + edge_high + edge_low
-    :erlang.setelement(dim + 1, shape, new_dim)
-  end
-
-  defp pad_in_dim(_shape, _dim, _edge_low, _edge_high) do
-    raise ArgumentError,
-          "invalid edge padding width, expected padding width" <>
-            " to be greater than or equal to 0"
+    if new_dim <= 0 do
+      raise ArgumentError, "invalid padding widths, edge low and edge high padding" <>
+                           " cannot cause zero or negative dimension size"
+    else
+      :erlang.setelement(dim + 1, shape, new_dim)
+    end
   end
 
   # Helper for zipping 2 tensors along given axes.

@@ -124,6 +124,12 @@ defmodule Exla.Defn do
     Exla.Op.reshape(to_operator(builder, arg), shape)
   end
 
+  defp to_operator(:pad, [{_, arg}, {_, value}, padding_config], _shape, builder) do
+    arg = to_operator(builder, arg)
+    value = to_operator(builder, value)
+    Exla.Op.pad(arg, value, padding_config)
+  end
+
   defp to_operator(:broadcast, [{_expr, arg}, _shape, axes], output_shape, builder) do
     arg = to_operator(builder, arg)
     Exla.Op.broadcast_in_dim(arg, output_shape, List.to_tuple(axes))

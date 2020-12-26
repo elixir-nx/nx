@@ -174,6 +174,11 @@ namespace exla {
   }
 
   /*
+   * Getters for XLA Protobuf Types
+   */
+  int get_padding_config(ErlNifEnv* env, ERL_NIF_TERM list, xla::PaddingConfig& padding_config);
+
+  /*
    * Makers for standard types.
    */
   ERL_NIF_TERM make(ErlNifEnv* env, int &var);
