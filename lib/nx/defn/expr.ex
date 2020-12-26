@@ -252,7 +252,12 @@ defmodule Nx.Defn.Expr do
   def pad(expr, value_expr, padding_config) do
     %Expr{shape: old_shape} = expr = to_expr(expr)
     # Assert that value is a scalar
-    %Expr{shape: {}} = value_expr = to_expr(value_expr)
+    value_expr = to_expr(value_expr)
+
+    if value_expr.shape != {} do
+      raise ArgumentError, "padding value must be a scalar"
+    end
+
     output_shape = Nx.Shape.pad(old_shape, padding_config)
     make_expr(output_shape, :pad, [expr, value_expr, padding_config])
   end
