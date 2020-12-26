@@ -637,4 +637,51 @@ defmodule Nx.Shape do
 
   defp padded_dims([s | shape], [{edge_low, edge_high} | config], acc),
     do: padded_dims(shape, config, [s + edge_low + edge_high | acc])
+
+  @doc """
+  Output shape after a squeeze operation.
+
+  ## Examples
+
+    iex> Nx.Shape.squeeze({2, 1, 1}, [1, 2])
+    {2}
+
+    iex> Nx.Shape.squeeze({1, 2}, [0])
+    {2}
+
+  ### Error cases
+
+    iex> Nx.Shape.squeeze({2, 2, 1}, [1])
+    ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1
+
+    iex> Nx.Shape.squeeze({2, 2, 1}, [2, 2])
+    ** (ArgumentError) axes are not unique
+  """
+  def squeeze(shape, axes) do
+    validate_squeeze_axes!(shape, axes)
+    List.to_tuple(Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, [])))
+  end
+
+  defp squeeze_dims([], _, acc), do: acc
+
+  defp squeeze_dims([{s, i} | shape], axes, acc) do
+    if i in axes,
+      do: squeeze_dims(shape, axes, acc),
+      else: squeeze_dims(shape, axes, [s | acc])
+  end
+
+  defp validate_squeeze_axes!(shape, axes) do
+    unique? = length(axes) == length(Enum.uniq(axes))
+    if unique?, do: :ok, else: raise ArgumentError, "axes are not unique"
+
+    all_one? =
+      axes
+      |> Enum.reduce(:ok, fn x, _ -> if elem(shape, x) == 1, do: :ok, else: :error end)
+
+    case all_one? do
+      :error -> raise ArgumentError, "cannot squeeze dimensions whose sizes are not 1"
+      _ -> :ok
+    end
+
+  end
 end

@@ -267,6 +267,31 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
+  Expression equivalent to `Nx.squeeze/1`.
+  """
+  def squeeze(expr) do
+    %Expr{shape: old_shape} = expr = to_expr(expr)
+    axes =
+      old_shape
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.filter(fn {s, _} -> s == 1 end)
+      |> Enum.map(fn {_, i} -> i end)
+    output_shape = Nx.Shape.squeeze(old_shape, axes)
+    make_expr(output_shape, :squeeze, [expr, axes])
+  end
+
+  @doc """
+  Expression equivalent to `Nx.squeeze/2`.
+  """
+  def squeeze(expr, axes) when is_list(axes) do
+    %Expr{shape: old_shape} = expr = to_expr(expr)
+    axes = Nx.Shape.normalize_axes(old_shape, axes)
+    output_shape = Nx.Shape.squeeze(old_shape, axes)
+    make_expr(output_shape, :squeeze, [expr, axes])
+  end
+
+  @doc """
   Expression equivalent to `Nx.select/3`.
   """
   def select(pred_expr, true_expr, false_expr) do

@@ -898,6 +898,21 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "squeeze" do
+    defn squeeze(t), do: Nx.squeeze(t)
+    defn squeeze2(t), do: Nx.squeeze(t, [0, 1])
+
+    test "with scalar" do
+      assert squeeze(Nx.tensor(1)) == Nx.tensor(1)
+    end
+
+    test "with tensors" do
+      assert squeeze(Nx.tensor([[1, 2, 3]])) == Nx.tensor([1, 2, 3])
+      assert squeeze(Nx.tensor([[[[[1]]]]])) == Nx.tensor(1)
+      assert squeeze2(Nx.tensor([[[[[1]]]]])) == Nx.tensor([[[1]]])
+    end
+  end
+
   describe "random uniform" do
     defn random_uniform_fixed, do: Nx.random_uniform({30, 20})
 
