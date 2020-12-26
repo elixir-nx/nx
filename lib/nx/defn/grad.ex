@@ -141,7 +141,6 @@ defmodule Nx.Defn.Grad do
   ## Linear gradients
 
   defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do
-    x = Expr.squeeze(x)
     {dx, cache} = to_grad(x, to_one(x, g), cache)
 
     g =
