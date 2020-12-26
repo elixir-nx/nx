@@ -27,7 +27,6 @@ cc_library(
   ],
 )
 
-
 cc_library (
   name = "exla_device",
   srcs = ["exla_device.cc"],
