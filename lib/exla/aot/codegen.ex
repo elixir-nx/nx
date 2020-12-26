@@ -143,7 +143,7 @@ defmodule Exla.Aot.Codegen do
       end)
       |> Enum.join("\n")
 
-    function_includes <> "\n" <> build_include_str(@erl_nif_path)
+    function_includes <> "\n" <> build_include_str(@erl_nif_path) <> "\n" <> "#include <iostream>"
   end
 
   defp build_include_str(path) do
@@ -200,7 +200,7 @@ defmodule Exla.Aot.Codegen do
     """
   end
 
-  defp build_nif_func_signature({name, arity, _, result_size}) do
+  defp build_nif_func_signature({name, arity, _, _}) do
     """
 
     ERL_NIF_TERM #{Atom.to_string(name)}_#{arity}_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
@@ -236,7 +236,7 @@ defmodule Exla.Aot.Codegen do
     if(!enif_alloc_binary(#{result_size}, &result#{result_num})) return error(env, #{error_msg});
     std::copy(#{name}_#{arity}.result#{result_num}_data() + 0, #{name}_#{arity}.result#{
       result_num
-    }_data() + 2000, result#{result_num}.data);
+    }_data() + #{result_size}, result#{result_num}.data);
 
     return enif_make_binary(env, &result#{result_num});
 

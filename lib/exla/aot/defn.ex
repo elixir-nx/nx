@@ -26,8 +26,11 @@ defmodule Exla.Aot.Defn do
     op = Exla.Op.tuple(builder, [op])
     computation = Exla.Builder.build(op)
 
-    output_size =
-      tuple_product(computation.output_shape.dims, tuple_size(computation.output_shape.dims))
+    %Exla.Shape{dtype: {:t, [output]}} = computation.output_shape
+
+    output_size = tuple_product(output.dims, tuple_size(output.dims))
+
+    IO.inspect output_size
 
     Exla.Aot.Compile.compile([computation], [{name, arity, vars, output_size}], module)
   end
