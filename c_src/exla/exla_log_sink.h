@@ -3,7 +3,7 @@
 
 #include "tensorflow/core/platform/logging.h"
 #include "absl/base/log_severity.h"
-#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
 namespace exla {
 
@@ -17,40 +17,42 @@ namespace exla {
       env_ = enif_alloc_env();
     }
 
-    ERL_NIF_TERM info(std::string& str) {
-      return enif_make_tuple2(env_, enif_make_atom(env_, "info"), enif_make_string(env_, str.c_str(), ERL_NIF_LATIN1));
+    ERL_NIF_TERM info(std::string& str, std::string& fname, int32 line) {
+      return enif_make_tuple4(env_, atom(env_, "info"), make(env_, str), make(env_, fname), make(env_, line));
     }
 
-    ERL_NIF_TERM warning(std::string& str) {
-      return enif_make_tuple2(env_, enif_make_atom(env_, "warning"), enif_make_string(env_, str.c_str(), ERL_NIF_LATIN1));
+    ERL_NIF_TERM warning(std::string& str, std::string& fname, int32 line) {
+      return enif_make_tuple4(env_, atom(env_, "warning"), make(env_, str), make(env_, fname), make(env_, line));
     }
 
-    ERL_NIF_TERM error(std::string& str) {
-      return enif_make_tuple2(env_, enif_make_atom(env_, "error"), enif_make_string(env_, str.c_str(), ERL_NIF_LATIN1));
+    ERL_NIF_TERM error(std::string& str, std::string& fname, int32 line) {
+      return enif_make_tuple4(env_, atom(env_, "error"), make(env_, str), make(env_, fname), make(env_, line));
     }
 
-    ERL_NIF_TERM fatal(std::string& str) {
-      return enif_make_tuple2(env_, enif_make_atom(env_, "fatal"), enif_make_string(env_, str.c_str(), ERL_NIF_LATIN1));
+    ERL_NIF_TERM fatal(std::string& str, std::string& fname, int32 line) {
+      return enif_make_tuple4(env_, atom(env_, "fatal"), make(env_, str), make(env_, fname), make(env_, line));
     }
 
     void Send(const tensorflow::TFLogEntry& entry) {
       ERL_NIF_TERM msg;
       std::string msg_str = entry.ToString();
+      std::string fname = entry.FName();
+      int32 line = entry.Line();
       switch (entry.log_severity()) {
         case absl::LogSeverity::kInfo:
-          msg = info(msg_str);
+          msg = info(msg_str, fname, line);
           break;
         case absl::LogSeverity::kWarning:
-          msg = warning(msg_str);
+          msg = warning(msg_str, fname, line);
           break;
         case absl::LogSeverity::kError:
-          msg = error(msg_str);
+          msg = error(msg_str, fname, line);
           break;
         case absl::LogSeverity::kFatal:
-          msg = fatal(msg_str);
+          msg = fatal(msg_str, fname, line);
           break;
         default:
-          msg = info(msg_str);
+          msg = info(msg_str, fname, line);
           break;
       }
       enif_send(env_, &sink_pid_, NULL, msg);

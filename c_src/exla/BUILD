@@ -21,8 +21,9 @@ cc_library(
 
 cc_library(
   name = "exla_log_sink",
-  hdrs = ["exla_log_sink.h"] + glob(["erts/**/*.h"]),
+  hdrs = ["exla_log_sink.h"],
   deps = [
+    ":exla_nif_util",
     "@org_tensorflow//tensorflow/core:lib",
   ],
 )
