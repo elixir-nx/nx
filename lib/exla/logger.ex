@@ -4,10 +4,14 @@ defmodule Exla.Logger do
   use GenServer
   require Logger
 
+  def start_link(_opts) do
+    GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
   @impl true
-  def init(_) do
-    Logger.info("Exla Logger started.")
-    {Exla.NIF.start_log_sink(self()), :ok}
+  def init(:ok) do
+    :ok = Exla.NIF.start_log_sink(self())
+    {:ok, :unused_state}
   end
 
   @impl true
