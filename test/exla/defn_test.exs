@@ -871,6 +871,9 @@ defmodule Exla.DefnTest do
     defn pad_vector(t), do: Nx.pad(t, 0, [{1, 1}])
     defn pad_matrix(t), do: Nx.pad(t, 0, [{1, 1}, {1, 1}])
     defn pad_tensor(t), do: Nx.pad(t, 0.0, [{1, 2}, {1, 0}, {0, 1}])
+    defn pad_vector_negative_value(t), do: Nx.pad(t, 0.0, [{-1, -1}])
+    defn pad_matrix_negative_value(t), do: Nx.pad(t, 0, [{0, 0}, {-1, 1}])
+    defn pad_tensor_negative_value(t), do: Nx.pad(t, 0, [{-1, 0}, {-1, -1}, {0, -1}])
 
     test "with scalar" do
       assert pad_scalar(Nx.tensor(1)) == Nx.tensor(1)
@@ -914,6 +917,23 @@ defmodule Exla.DefnTest do
                    [0.0, 0.0, 0.0]
                  ]
                ])
+    end
+
+    test "with negative value" do
+      assert pad_vector_negative_value(Nx.tensor([1.0, 1.0, 2.0, 3.0, 0.0])) ==
+               Nx.tensor([1.0, 2.0, 3.0])
+
+      assert pad_matrix_negative_value(Nx.tensor([[0, 1, 2, 3], [0, 4, 5, 6]])) ==
+               Nx.tensor([[1, 2, 3, 0], [4, 5, 6, 0]])
+
+      assert pad_tensor_negative_value(
+               Nx.tensor([
+                 [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
+                 [[0, 0, 0], [1, 2, 0], [3, 4, 0], [0, 0, 0]],
+                 [[0, 0, 0], [5, 6, 0], [7, 8, 0], [0, 0, 0]]
+               ])
+             ) ==
+               Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
     end
   end
 

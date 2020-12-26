@@ -920,6 +920,10 @@ defmodule Nx do
   in the input tensor. The padding configuration must
   be of the same length as the tensor shape.
 
+  Padding widths can be negative. If they are negative,
+  the tensor is clipped on either end according to the
+  padding width.
+
   ## Examples
 
       iex> Nx.pad(Nx.tensor(1), 0, [])
@@ -1030,6 +1034,39 @@ defmodule Nx do
           [0.0, 0.0, 0.0],
           [0.0, 0.0, 0.0]
         ]
+      ]
+    >
+
+    iex> Nx.pad(Nx.tensor([0, 1, 2, 3, 0]), 0, [{-1, -1}])
+    #Nx.Tensor<
+      s64[3]
+      [1, 2, 3]
+    >
+
+    iex> Nx.pad(Nx.tensor([
+    ...> [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
+    ...> [[0, 0, 0], [1, 2, 0], [3, 4, 0], [0, 0, 0]],
+    ...> [[0, 0, 0], [5, 6, 0], [7, 8, 0], [0, 0, 0]]]), 0, [{-1, 0}, {-1, -1}, {0, -1}])
+    #Nx.Tensor<
+      s64[2][2][2]
+      [
+        [
+          [1, 2],
+          [3, 4]
+        ],
+        [
+          [5, 6],
+          [7, 8]
+        ]
+      ]
+    >
+
+    iex> Nx.pad(Nx.tensor([[0, 1, 2, 3], [0, 4, 5, 6]]), 0, [{0, 0}, {-1, 1}])
+    #Nx.Tensor<
+      s64[2][4]
+      [
+        [1, 2, 3, 0],
+        [4, 5, 6, 0]
       ]
     >
   """
