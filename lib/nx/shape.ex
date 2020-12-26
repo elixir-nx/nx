@@ -79,7 +79,7 @@ defmodule Nx.Shape do
     if old_rank > new_rank or not valid_broadcast?(axes, 0, -1, old_shape, new_shape) do
       raise ArgumentError,
             "cannot broadcast tensor of dimensions #{inspect(old_shape)} " <>
-            "to #{inspect(new_shape)} with axes #{inspect(axes)}"
+              "to #{inspect(new_shape)} with axes #{inspect(axes)}"
     end
 
     new_shape
@@ -637,4 +637,61 @@ defmodule Nx.Shape do
 
   defp padded_dims([s | shape], [{edge_low, edge_high} | config], acc),
     do: padded_dims(shape, config, [s + edge_low + edge_high | acc])
+
+  @doc """
+  Output shape after a squeeze operation.
+
+  ## Examples
+
+      iex> Nx.Shape.squeeze({2, 1, 1})
+      {2}
+
+      iex> Nx.Shape.squeeze({1, 2, 1, 3, 2, 1})
+      {2, 3, 2}
+  """
+  def squeeze(shape) do
+    axes =
+      shape
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.filter(fn {s, _} -> s == 1 end)
+      |> Enum.map(fn {_, i} -> i end)
+
+    squeeze(shape, axes)
+  end
+
+  @doc """
+  Output shape after a squeeze operation.
+
+  ## Examples
+
+      iex> Nx.Shape.squeeze({2, 1, 1}, [1, 2])
+      {2}
+
+      iex> Nx.Shape.squeeze({1, 2}, [0])
+      {2}
+
+  ### Error cases
+
+      iex> Nx.Shape.squeeze({2, 2, 1}, [1])
+      ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 2 for dimension 1
+  """
+  def squeeze(shape, axes) do
+    List.to_tuple(Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, [])))
+  end
+
+  defp squeeze_dims([], _, acc), do: acc
+
+  defp squeeze_dims([{s, i} | shape], axes, acc) do
+    if i in axes do
+      if s == 1 do
+        squeeze_dims(shape, axes, acc)
+      else
+        raise ArgumentError,
+              "cannot squeeze dimensions whose sizes are not 1, got #{s} for dimension #{i}"
+      end
+    else
+      squeeze_dims(shape, axes, [s | acc])
+    end
+  end
 end

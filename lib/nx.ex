@@ -677,6 +677,81 @@ defmodule Nx do
   end
 
   @doc """
+  Squeezes all of the size `1` dimensions out of the tensor.
+
+  While this is equivalent to a reshape which eliminates
+  the size `1` axes, squeeze preserves important information
+  about which axes were squeezed out which can then be used
+  later on in transformations.
+
+  ## Examples
+
+      iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
+      >
+
+      iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]))
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+      iex> Nx.squeeze(Nx.tensor([[[[1]]], [[[2]]]]))
+      #Nx.Tensor<
+        s64[2]
+        [1, 2]
+      >
+
+  """
+  def squeeze(tensor) do
+    %T{shape: shape} = t = tensor(tensor)
+    output_shape = Nx.Shape.squeeze(shape)
+    %{t | shape: output_shape}
+  end
+
+  @doc """
+  Squeezes the given size `1` dimensions out of the tensor.
+
+  While this is equivalent to a reshape which eliminates
+  the size `1` axes, squeeze preserves important information
+  about which axes were squeezed out which can then be used
+  later on in transformations.
+
+  ## Examples
+
+      iex> Nx.squeeze(Nx.tensor([[1, 2, 3]]), [0])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.squeeze(Nx.tensor([[1], [2]]), [1])
+      #Nx.Tensor<
+        s64[2]
+        [1, 2]
+      >
+
+  ### Error cases
+
+      iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [1])
+      ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 3 for dimension 1
+
+      iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), [0, 0])
+      ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4
+  """
+  def squeeze(tensor, axes) do
+    %T{shape: shape} = t = tensor(tensor)
+    axes = Nx.Shape.normalize_axes(shape, axes)
+    output_shape = Nx.Shape.squeeze(shape, axes)
+    %{t | shape: output_shape}
+  end
+
+  @doc """
   Broadcasts `tensor` to the given `broadcast_shape`.
 
   The new shape is either a tuple or a tensor which we will

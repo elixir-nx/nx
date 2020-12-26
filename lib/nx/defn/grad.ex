@@ -143,7 +143,6 @@ defmodule Nx.Defn.Grad do
   defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
 
-    # TODO: implement squeeze for dimensions that are 1
     g =
       case Nx.Shape.to_axes(shape) -- axes do
         [] -> g
