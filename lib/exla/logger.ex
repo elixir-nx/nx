@@ -14,26 +14,26 @@ defmodule Exla.Logger do
   end
 
   @impl true
-  def handle_info({:info, msg}, _state) do
+  def handle_info({:info, msg}, state) do
     Logger.info(msg)
-    {:noreply, :ok}
+    {:noreply, state}
   end
 
   @impl true
-  def handle_info({:warning, msg}, _state) do
+  def handle_info({:warning, msg}, state) do
     Logger.warning(msg)
-    {:noreply, :ok}
+    {:noreply, state}
   end
 
   @impl true
-  def handle_info({:error, msg}, _state) do
+  def handle_info({:error, msg}, state) do
     Logger.error(msg)
-    {:noreply, :ok}
+    {:noreply, state}
   end
 
   @impl true
-  def handle_info({:fatal, msg}, _state) do
+  def handle_info({:fatal, msg}, state) do
     Logger.error(msg)
-    {:noreply, :ok}
+    {:noreply, state}
   end
 end
