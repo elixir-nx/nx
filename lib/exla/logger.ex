@@ -17,7 +17,7 @@ defmodule Exla.Logger do
 
   @impl true
   def handle_info({:warning, msg}, _state) do
-    Logger.warn(msg)
+    Logger.warning(msg)
     {:noreply, :ok}
   end
 
