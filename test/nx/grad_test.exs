@@ -461,6 +461,16 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "reshape" do
+    defn grad_reshape(t), do: grad(t, Nx.sum(Nx.reshape(t, {3})))
+    defn grad_reshape2(t), do: grad(t, Nx.sum(Nx.reshape(t, {3, 2})))
+
+    test "computes gradient with tensors" do
+      assert grad_reshape(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[1.0], [1.0], [1.0]])
+      assert grad_reshape2(Nx.tensor([[[1.0], [2.0], [3.0]], [[2.0], [3.0], [3.0]]])) == Nx.tensor([[[1.0], [1.0], [1.0]], [[1.0], [1.0], [1.0]]])
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, Nx.sum(t))
     defn grad_mean_full(t), do: grad(t, Nx.mean(t))

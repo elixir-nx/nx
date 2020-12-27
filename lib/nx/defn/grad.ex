@@ -283,6 +283,13 @@ defmodule Nx.Defn.Grad do
     {multiply(g, res), cache}
   end
 
+  defp grad(:reshape, [x, _new_shape], _ans, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    # Broadcast to shape before the reshape
+    g = broadcast(1.0, x)
+    {multiply(g, dx), cache}
+  end
+
   # TODO:
   # outer/2
   # dot_general
