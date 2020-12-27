@@ -27,7 +27,7 @@ namespace allocator {
  * Allocator which allocates/deallocates directly on ERTS.
  */
 class ExlaErtsAllocator : public tensorflow::Allocator {
-  public:
+ public:
     ExlaErtsAllocator() = default;
 
     std::string Name() override { return "erts"; }

@@ -193,7 +193,7 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var) {
  */
 int get_padding_config(ErlNifEnv* env,
                        ERL_NIF_TERM list,
-                       xla::PaddingConfig& padding_config);
+                       xla::PaddingConfig* padding_config);
 
 /*
  * Makers for standard types.

@@ -18,7 +18,7 @@ namespace exla {
 namespace se = tensorflow::se;
 
 class ExlaDevice {
-  public:
+ public:
     explicit ExlaDevice(int id,
                         se::StreamExecutor* executor,
                         xla::LocalClient* client);
@@ -54,7 +54,7 @@ class ExlaDevice {
       return callback_stream_.get();
     }
 
-  private:
+ private:
     int id_;
     se::StreamExecutor* const executor_;
     xla::LocalClient* const client_;

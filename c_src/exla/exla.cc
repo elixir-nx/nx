@@ -1083,7 +1083,7 @@ ERL_NIF_TERM pad(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::XlaOp>(env, argv[1], pad_value)) {
     return exla::error(env, "Unable to get value.");
   }
-  if (!exla::get_padding_config(env, argv[2], padding_config)) {
+  if (!exla::get_padding_config(env, argv[2], &padding_config)) {
     return exla::error(env, "Unable to get padding configuration.");
   }
 
@@ -1389,17 +1389,11 @@ static ErlNifFunc exla_funcs[] = {
   {"arctan2", 3, atan2},
   /****** Binary comparison Ops ******/
   {"equal", 3, equal},
-  {"eq_total_order", 3, eq_total_order},
   {"not_equal", 3, not_equal},
-  {"ne_total_order", 3, ne_total_order},
   {"greater", 3, greater},
-  {"gt_total_order", 3, gt_total_order},
   {"greater_equal", 3, greater_equal},
-  {"ge_total_order", 3, ge_total_order},
   {"less", 3, less},
-  {"lt_total_order", 3, lt_total_order},
   {"less_equal", 3, less_equal},
-  {"le_total_order", 3, le_total_order},
   /****** Unary Ops ******/
   {"abs", 1, abs},
   {"exp", 1, exp},

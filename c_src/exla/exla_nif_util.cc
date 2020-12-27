@@ -200,7 +200,7 @@ namespace exla {
 
   int get_padding_config(ErlNifEnv* env,
                          ERL_NIF_TERM list,
-                         xla::PaddingConfig& padding_config) {
+                         xla::PaddingConfig* padding_config) {
     ERL_NIF_TERM head, tail;
     while (enif_get_list_cell(env, list, &head, &tail)) {
       const ERL_NIF_TERM* terms;
@@ -213,7 +213,7 @@ namespace exla {
       if (!get(env, terms[1], &pad_hi)) return 0;
       if (!get(env, terms[2], &interior)) return 0;
 
-      auto dim = padding_config.add_dimensions();
+      auto dim = padding_config->add_dimensions();
       dim->set_edge_padding_low(pad_lo);
       dim->set_edge_padding_high(pad_hi);
       dim->set_interior_padding(interior);
@@ -226,12 +226,14 @@ namespace exla {
   ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if (shape.IsTuple()) {
       int element_count = xla::ShapeUtil::TupleElementCount(shape);
-      ERL_NIF_TERM terms[element_count];
+      std::vector<ERL_NIF_TERM> terms;
+      terms.reserve(element_count);
       for (int i=0; i < element_count; i++) {
         xla::Shape shape_elem = xla::ShapeUtil::GetTupleElementShape(shape, i);
-        terms[i] = exla::make<xla::Shape>(env, shape_elem);
+        ERL_NIF_TERM shape_term = exla::make<xla::Shape>(env, shape_elem);
+        terms.emplace_back(shape_term);
       }
-      return enif_make_list_from_array(env, terms, element_count);
+      return enif_make_list_from_array(env, &terms[0], element_count);
     }
 
     xla::PrimitiveType type = shape.element_type();
@@ -240,14 +242,15 @@ namespace exla {
 
     std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
 
-    ERL_NIF_TERM dim_arr[(size_t) rank];
+    std::vector<ERL_NIF_TERM> dim_arr;
+    dim_arr.reserve(rank);
     for (int i=0; i < rank; i++) {
       int copy;
       copy = dims.at(i);
-      dim_arr[i] = exla::make(env, copy);
+      dim_arr.emplace_back(exla::make(env, copy));
     }
 
-    ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, dim_arr, rank);
+    ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);
     ERL_NIF_TERM type_term = exla::make(env, name);
 
     return enif_make_tuple(env, 2, dims_term, type_term);

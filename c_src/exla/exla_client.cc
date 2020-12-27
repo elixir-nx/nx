@@ -24,19 +24,20 @@ xla::Status ExlaBuffer::Deallocate() {
     }
     return tensorflow::Status::OK();
   }
-  return tensorflow::errors::Aborted("Attempt to deallocate already deallocated buffer.");
+  return xla::FailedPrecondition("Attempt to deallocate already deallocated buffer.");
 }
 
 xla::StatusOr<std::vector<ExlaBuffer*>> ExlaBuffer::DecomposeTuple() {
   if (!is_tuple()) {
-    return tensorflow::errors::FailedPrecondition("Buffer is not a Tuple.");
+    return xla::FailedPrecondition("Buffer is not a Tuple.");
   }
 
   std::vector<ExlaBuffer*> buffers;
   int64 tuple_elements = xla::ShapeUtil::TupleElementCount(on_device_shape());
   buffers.reserve(tuple_elements);
   for (int i=0; i < tuple_elements; i++) {
-    xla::ScopedShapedBuffer* sub_buffer = new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));
+    xla::ScopedShapedBuffer* sub_buffer =
+      new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));
     buffers.push_back(new ExlaBuffer(sub_buffer, device_, false));
   }
 
@@ -51,12 +52,13 @@ ExlaClient::ExlaClient(xla::LocalClient* client,
                        std::vector<std::unique_ptr<ExlaDevice>> devices,
                        std::unique_ptr<se::DeviceMemoryAllocator> allocator,
                        std::unique_ptr<tensorflow::Allocator> host_memory_allocator,
-                       std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options) : client_(client),
-                                                                                        host_id_(host_id),
-                                                                                        devices_(std::move(devices)),
-                                                                                        owned_allocator_(std::move(allocator)),
-                                                                                        host_memory_allocator_(std::move(host_memory_allocator)),
-                                                                                        gpu_run_options_(std::move(gpu_run_options)) {
+                       std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options)
+                        : client_(client),
+                          host_id_(host_id),
+                          devices_(std::move(devices)),
+                          owned_allocator_(std::move(allocator)),
+                          host_memory_allocator_(std::move(host_memory_allocator)),
+                          gpu_run_options_(std::move(gpu_run_options)) {
   if (owned_allocator_ != nullptr) {
     allocator_ = owned_allocator_.get();
   } else {
@@ -68,7 +70,8 @@ ExlaClient::ExlaClient(xla::LocalClient* client,
   }
 }
 
-xla::StatusOr<ERL_NIF_TERM> ExlaClient::DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer) {
+xla::StatusOr<ERL_NIF_TERM> ExlaClient::DecomposeBuffer(ErlNifEnv* env,
+                                                        ExlaBuffer* buffer) {
   if (!buffer->is_tuple()) {
     return make<ExlaBuffer*>(env, buffer);
   } else {
@@ -76,24 +79,27 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::DecomposeBuffer(ErlNifEnv* env, ExlaBuff
       buffer->DecomposeTuple());
 
     int num_elems = sub_buffers.size();
-    ERL_NIF_TERM terms[num_elems];
+    std::vector<ERL_NIF_TERM> terms;
+    terms.reserve(num_elems);
     for (int i=0; i < num_elems; i++) {
-      EXLA_ASSIGN_OR_RETURN(terms[i], DecomposeBuffer(env, sub_buffers.at(i)));
+      EXLA_ASSIGN_OR_RETURN(ERL_NIF_TERM term_at, DecomposeBuffer(env, sub_buffers.at(i)));
+      terms.emplace_back(term_at);
     }
-    return enif_make_list_from_array(env, terms, num_elems);
+    return enif_make_list_from_array(env, &terms[0], num_elems);
   }
 }
 
 ERL_NIF_TERM ErlListFromLiteral(ErlNifEnv* env, xla::Literal& literal) {
   std::vector<xla::Literal> literals = literal.DecomposeTuple();
   int elems = literals.size();
-  ERL_NIF_TERM data[elems];
+  std::vector<ERL_NIF_TERM> data;
+  data.reserve(elems);
 
   for (int i=0; i < elems; i++) {
     xla::Literal lit(std::move(literals.at(i)));
     if (lit.shape().IsTuple()) {
       ERL_NIF_TERM term = ErlListFromLiteral(env, lit);
-      data[i] = term;
+      data.emplace_back(term);
     } else {
       int64 size = lit.size_bytes();
       ErlNifBinary binary;
@@ -104,22 +110,24 @@ ERL_NIF_TERM ErlListFromLiteral(ErlNifEnv* env, xla::Literal& literal) {
       std::memmove(binary.data, src_mem, size);
 
       ERL_NIF_TERM term = enif_make_binary(env, &binary);
-      data[i] = term;
+      data.emplace_back(term);
     }
   }
-  return enif_make_list_from_array(env, data, elems);
+  return enif_make_list_from_array(env, &data[0], elems);
 }
 
-xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env, exla::ExlaBuffer* buffer) {
+xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env,
+                                                          ExlaBuffer* buffer) {
   if (buffer->empty()) {
-    return tensorflow::errors::FailedPrecondition("Attempt to read from deallocated buffer.");
+    return xla::FailedPrecondition("Attempt to read from deallocated buffer.");
   }
 
   if (!buffer->is_tuple()) {
-    return tensorflow::errors::FailedPrecondition("Attempt to extract tuple from non-tuple buffer.");
+    return xla::FailedPrecondition("Attempt to extract tuple from non-tuple buffer.");
   }
 
-  xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
+  xla::TransferManager* transfer_manager =
+    client()->backend().transfer_manager();
 
   EXLA_ASSIGN_OR_RETURN(xla::Literal literal,
     transfer_manager->TransferLiteralFromDevice(
@@ -132,12 +140,14 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env, exla::
   return list;
 }
 
-xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffer) {
+xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(ExlaBuffer* buffer) {
   if (buffer->empty()) {
-    return tensorflow::errors::Aborted("Attempt to read from deallocated buffer.");
+    return xla::FailedPrecondition("Attempt to read from deallocated buffer.");
   }
 
-  bool is_cpu_platform = buffer->device()->executor()->platform()->id() == stream_executor::host::kHostPlatformId;
+  bool is_cpu_platform =
+    (buffer->device()->executor()->platform()->id() ==
+      stream_executor::host::kHostPlatformId);
 
   if (is_cpu_platform) {
     // Allocate enough space for the binary
@@ -146,7 +156,8 @@ xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffe
     enif_alloc_binary(size, &binary);
 
     // Get the result buffer
-    const stream_executor::DeviceMemoryBase mem_buffer = buffer->buffer()->root_buffer();
+    const stream_executor::DeviceMemoryBase mem_buffer =
+      buffer->buffer()->root_buffer();
 
     // No need to copy, just move the underlying bytes in memory
     void* src_mem = const_cast<void *>(mem_buffer.opaque());
@@ -156,7 +167,9 @@ xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffe
   }
 
   // Otherwise we have to do the transfer
-  xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
+  xla::TransferManager* transfer_manager =
+    client()->backend().transfer_manager();
+
   EXLA_ASSIGN_OR_RETURN(xla::Literal literal,
     transfer_manager->TransferLiteralFromDevice(
       buffer->device()->device_to_host_stream(),
@@ -178,10 +191,14 @@ xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(exla::ExlaBuffer* buffe
 xla::StatusOr<xla::ScopedShapedBuffer> AllocateDestinationBuffer(const xla::Shape& on_host_shape,
                                                                  ExlaDevice* device,
                                                                  ExlaClient* client) {
-  xla::TransferManager* transfer_manager = client->client()->backend().transfer_manager();
+  xla::TransferManager* transfer_manager =
+    client->client()->backend().transfer_manager();
 
-  EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer buffer,
-    transfer_manager->AllocateScopedShapedBuffer(on_host_shape, client->allocator(), device->id()));
+  EXLA_ASSIGN_OR_RETURN(
+    xla::ScopedShapedBuffer buffer,
+    transfer_manager->AllocateScopedShapedBuffer(on_host_shape,
+                                                 client->allocator(),
+                                                 device->id()));
 
   return buffer;
 }
@@ -191,9 +208,12 @@ bool CanUseZeroCopy(ErlNifBinary bin,
                     const xla::Shape& compact_shape,
                     ExlaDevice* device) {
   // Only possible on CPUs
-  bool is_cpu_platform = device->executor()->platform()->id() == se::host::kHostPlatformId;
+  bool is_cpu_platform =
+    device->executor()->platform()->id() == se::host::kHostPlatformId;
   // With well-aligned data
-  bool is_well_aligned = (absl::bit_cast<std::uintptr_t>(bin.data) & (xla::cpu_function_runtime::kMinAlign - 1)) == 0;
+  bool is_well_aligned =
+    (absl::bit_cast<std::uintptr_t>(bin.data) &
+      (xla::cpu_function_runtime::kMinAlign - 1)) == 0;
   // With matching layouts
   bool has_same_layout = shape.layout() == compact_shape.layout();
   return is_cpu_platform && is_well_aligned && has_same_layout;
@@ -208,7 +228,8 @@ xla::ScopedShapedBuffer* ZeroCopyTransferBinToBuffer(const ErlNifBinary bin,
   se::DeviceMemoryBase buffer;
   buffer = se::DeviceMemoryBase(const_cast<unsigned char*>(bin.data), bin.size);
   // Make a new ScopedShapedBuffer
-  auto device_buffer = new xla::ScopedShapedBuffer(compact_shape, client->allocator(), device->id());
+  xla::ScopedShapedBuffer* device_buffer =
+    new xla::ScopedShapedBuffer(compact_shape, client->allocator(), device->id());
   // Tell it to point to the buffer we made above
   auto memory = se::OwningDeviceMemory(buffer, device->id(), client->allocator());
   device_buffer->set_buffer(std::move(memory), {});
@@ -240,10 +261,11 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
   // If they are not, we need to return an error because otherwise we'll be trying to read
   // from invalid memory
   if (size != bin.size) {
-    return tensorflow::errors::InvalidArgument("Expected %d bytes from binary but got %d.", size, bin.size);
+    return xla::InvalidArgument("Expected %d bytes from binary but got %d.", size, bin.size);
   }
   // Transfer Manager will manager the "transfer" to the device
-  xla::TransferManager* transfer_manager = client()->backend().transfer_manager();
+  xla::TransferManager* transfer_manager =
+    client()->backend().transfer_manager();
   // Ask for shape which has a compact layout on the device, in other words the anticipated shape of the data
   // on the device
   EXLA_ASSIGN_OR_RETURN(xla::Shape compact_shape,
@@ -252,12 +274,17 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
   // Can we use a zero copy transfer?
   bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
   if (can_use_zero_copy && transfer_for_run) {
-    xla::ScopedShapedBuffer* device_buffer = ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
-    return new ExlaBuffer(/*buffer=*/device_buffer, /*device=*/device, /*zero_copy=*/true);
+    xla::ScopedShapedBuffer* device_buffer =
+      ZeroCopyTransferBinToBuffer(bin, shape, compact_shape, device, this);
+    return new ExlaBuffer(/*buffer=*/device_buffer,
+                          /*device=*/device,
+                          /*zero_copy=*/true);
   } else {
     EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer* device_buffer,
       TransferBinToBuffer(bin, shape, compact_shape, device, this));
-    return new ExlaBuffer(/*buffer=*/device_buffer, /*device=*/device, /*zero_copy=*/false);
+    return new ExlaBuffer(/*buffer=*/device_buffer,
+                          /*device=*/device,
+                          /*zero_copy=*/false);
   }
 }
 
@@ -283,10 +310,15 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
       ErlNifBinary data;
       xla::Shape* shape;
 
-      if (!get_binary(env, tuple[0], &data)) return tensorflow::errors::InvalidArgument("Unable to read binary data from input.");
-      if (!get<xla::Shape>(env, tuple[1], shape)) return tensorflow::errors::InvalidArgument("Unable to read shape from input.");
+      if (!get_binary(env, tuple[0], &data)) {
+        return xla::InvalidArgument("Unable to read data from input.");
+      }
+      if (!get<xla::Shape>(env, tuple[1], shape)) {
+        return xla::InvalidArgument("Unable to read shape from input.");
+      }
 
-      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, BufferFromErlBin(data, *shape, device, true));
+      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf,
+        BufferFromErlBin(data, *shape, device, true));
 
       xla::ExecutionInput inp = xla::ExecutionInput(buf->on_device_shape());
 
@@ -302,11 +334,14 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
 
     } else if (get<ExlaBuffer*>(env, head, buffer)) {
       if (*buffer == NULL) {
-        return tensorflow::errors::Aborted("Attempt to re-use a previously deallocated device buffer.");
+        return xla::FailedPrecondition("Attempt to re-use a previously deallocated device buffer.");
       }
-      xla::ExecutionInput inp = xla::ExecutionInput((*buffer)->on_device_shape());
 
-      const xla::ShapeTree<se::DeviceMemoryBase> bufs = (*buffer)->buffer()->buffers();
+      xla::ExecutionInput inp =
+        xla::ExecutionInput((*buffer)->on_device_shape());
+
+      const xla::ShapeTree<se::DeviceMemoryBase> bufs =
+        (*buffer)->buffer()->buffers();
 
       bufs.ForEachElement(
         [&](const xla::ShapeIndex& index, const se::DeviceMemoryBase& mem){
@@ -316,12 +351,13 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
       inputs.push_back(std::move(inp));
 
     } else {
-      return tensorflow::errors::InvalidArgument("Invalid input passed to run.");
+      return xla::InvalidArgument("Invalid input passed to run.");
     }
     list = tail;
   }
 
-  EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput exec_result, executable->Run(std::move(inputs), options));
+  EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput exec_result,
+    executable->Run(std::move(inputs), options));
 
   for (auto buf : buffers) {
     if (*buf != NULL) {
@@ -332,7 +368,9 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
 
   xla::ScopedShapedBuffer result = exec_result.ConsumeResult();
 
-  exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
+  exla::ExlaBuffer* buffer_ref =
+    new exla::ExlaBuffer(
+      new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
   if (keep_on_device && buffer_ref->is_tuple()) {
     EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references,
@@ -353,7 +391,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
   }
 }
 
-xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas, int intra_op_parallelism_threads) {
+xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
+                                         int intra_op_parallelism_threads) {
   EXLA_ASSIGN_OR_RETURN(se::Platform *platform,
     xla::PlatformUtil::GetPlatform("Host"));
 
@@ -388,12 +427,15 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas, int intra_op_parallel
                         /*gpu_run_options*/nullptr);
 }
 
-xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_parallelism_threads, const char* platform_name) {
+xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
+                                        int intra_op_parallelism_threads,
+                                        const char* platform_name) {
   EXLA_ASSIGN_OR_RETURN(stream_executor::Platform *platform,
     xla::PlatformUtil::GetPlatform(std::string(platform_name)));
 
   if (platform->VisibleDeviceCount() <= 0) {
-    return tensorflow::errors::FailedPrecondition("%s Platform has no visible devices.", platform_name);
+    return xla::FailedPrecondition("%s Platform has no visible devices.",
+                                   platform_name);
   }
 
   xla::LocalClientOptions options;
@@ -419,7 +461,8 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_paralleli
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<se::DeviceMemoryAllocator> allocator,
     allocator::GetGpuDeviceAllocator(devices, 0.9, true));
 
-  std::unique_ptr<tensorflow::BFCAllocator> host_memory_allocator = allocator::GetGpuHostAllocator(devices.front()->executor());
+  std::unique_ptr<tensorflow::BFCAllocator> host_memory_allocator =
+    allocator::GetGpuHostAllocator(devices.front()->executor());
 
   auto gpu_run_options = absl::make_unique<xla::GpuExecutableRunOptions>();
 

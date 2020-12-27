@@ -22,7 +22,7 @@ namespace se = tensorflow::se;
  * Wraps a ScopedShapedBuffer.
  */
 class ExlaBuffer {
-public:
+ public:
   ExlaBuffer(xla::ScopedShapedBuffer* buffer,
              ExlaDevice* device,
              bool zero_copy) : buffer_(buffer),
@@ -47,7 +47,7 @@ public:
 
   bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
 
-private:
+ private:
   // Used for donating this buffer to another function, like `Run`
   xla::ScopedShapedBuffer* buffer_;
   // Was the bool created with a zero-copy transfer
@@ -65,7 +65,7 @@ private:
  * that we can initialize and hold on client creation.
  */
 class ExlaClient {
-public:
+ public:
   explicit ExlaClient(xla::LocalClient* client,
                       int host_id,
                       std::vector<std::unique_ptr<ExlaDevice>> devices,
@@ -117,7 +117,7 @@ public:
 
   exla::ExlaDevice* device(int id) { return devices_.at(id).get(); }
 
-private:
+ private:
   xla::LocalClient* client_;
   std::unique_ptr<tensorflow::Allocator> host_memory_allocator_;
   int host_id_;
