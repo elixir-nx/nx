@@ -258,9 +258,29 @@ defmodule Nx.Defn.Grad do
     {broadcast(0.0, g), cache}
   end
 
-  defp grad(:abs, [x], ans, g, cache) do
+  defp grad(:abs, [x], _ans, g, cache) do
     g = Expr.select(Expr.greater_equal(x, broadcast(0.0, g)), g, Expr.negate(g))
     to_grad(x, g, cache)
+  end
+
+  defp grad(:max, [x, y], ans, g, cache) do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    lhs =
+      Expr.divide(
+        Expr.select(Expr.equal(x, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
+        Expr.select(Expr.equal(y, ans), broadcast(2.0, ans), broadcast(1.0, ans))
+      )
+    rhs =
+      Expr.divide(
+        Expr.select(Expr.equal(y, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
+        Expr.select(Expr.equal(x, ans), broadcast(2.0, ans), broadcast(1.0, ans))
+      )
+
+    res = Expr.add(Expr.multiply(dx, lhs), Expr.multiply(dy, rhs))
+
+    {multiply(g, res), cache}
   end
 
   # TODO:

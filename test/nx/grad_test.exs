@@ -436,6 +436,19 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "max" do
+    defn grad_max(t), do: grad(t, Nx.sum(Nx.max(Nx.power(t, 2), Nx.power(t, 3))))
+
+    test "computes gradient with tensors" do
+      assert grad_max(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.5], [12.0], [27.0]])
+      assert grad_max(Nx.tensor([[1.25, 2.5, 2.75], [1.0, 4.0, 6.0], [2.0, 3.0, 2.0]])) == Nx.tensor(
+            [[4.6875, 18.75, 22.6875],
+             [2.5, 48.0, 108.0],
+             [12.0, 27.0,  12.0]
+             ])
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, Nx.sum(t))
     defn grad_mean_full(t), do: grad(t, Nx.mean(t))
