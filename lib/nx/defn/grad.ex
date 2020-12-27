@@ -258,8 +258,12 @@ defmodule Nx.Defn.Grad do
     {broadcast(0.0, g), cache}
   end
 
+  defp grad(:abs, [x], ans, g, cache) do
+    g = Expr.select(Expr.greater_equal(x, broadcast(0.0, g)), g, Expr.negate(g))
+    to_grad(x, g, cache)
+  end
+
   # TODO:
-  # abs/1 - requires select
   # max/2 - requires comparison
   # min/2 - requires comparison
   # outer/2

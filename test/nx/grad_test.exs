@@ -415,6 +415,27 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "abs" do
+    defn abs_scalar(t), do: Nx.abs(t)
+    defn grad_abs_scalar(t), do: grad(t, Nx.abs(t))
+    defn grad_abs(t), do: grad(t, Nx.sum(Nx.abs(t)))
+
+    test "computes gradient with scalars" do
+      for _ <- 1..100 do
+        check_grads!(
+          &abs_scalar/1,
+          &grad_abs_scalar/1,
+          Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+        )
+      end
+    end
+
+    test "computes gradient with tensors" do
+      assert grad_abs(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) == Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+      assert grad_abs(Nx.tensor([[-1.0, 2.0], [-3.0, 4.0]])) == Nx.tensor([[-1.0, 1.0], [-1.0, 1.0]])
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, Nx.sum(t))
     defn grad_mean_full(t), do: grad(t, Nx.mean(t))
