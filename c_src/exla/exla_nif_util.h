@@ -154,22 +154,27 @@ int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
   const ERL_NIF_TERM* terms;
   int length;
   if (!enif_get_tuple(env, tuple, &length, &terms)) return 0;
+  var.reserve(length);
+
   for (int i=0; i < length; i++) {
     T* elem;
     if (!get<T>(env, terms[i], elem)) return 0;
-    var.push_back(*elem);
+    var.emplace_back(*elem);
   }
   return 1;
 }
 
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var) {
+  uint32 length;
+  if(!enif_get_list_length(env, list, &length)) return 0;
+  var.reserve(length);
   ERL_NIF_TERM head, tail;
-  int i = 0;
+
   while (enif_get_list_cell(env, list, &head, &tail)) {
     T* elem;
     if (!get<T>(env, head, elem)) return 0;
-    var.insert(var.begin() + (i++), elem);
+    var.emplace_back(elem);
     list = tail;
   }
   return 1;
@@ -177,8 +182,11 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var) {
 
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var) {
+  uint32 length;
+  if(!enif_get_list_length(env, list, &length)) return 0;
+  var.reserve(length);
   ERL_NIF_TERM head, tail;
-  int i = 0;
+
   while (enif_get_list_cell(env, list, &head, &tail)) {
     T* elem;
     if (!get<T>(env, head, elem)) return 0;

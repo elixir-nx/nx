@@ -38,7 +38,7 @@ xla::StatusOr<std::vector<ExlaBuffer*>> ExlaBuffer::DecomposeTuple() {
   for (int i=0; i < tuple_elements; i++) {
     xla::ScopedShapedBuffer* sub_buffer =
       new xla::ScopedShapedBuffer(std::move(buffer_->TakeSubTree({i})));
-    buffers.push_back(new ExlaBuffer(sub_buffer, device_, false));
+    buffers.emplace_back(new ExlaBuffer(sub_buffer, device_, false));
   }
 
   return buffers;
@@ -409,7 +409,9 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
     xla::ClientLibrary::GetOrCreateLocalClient(options));
 
   std::vector<std::unique_ptr<ExlaDevice>> devices;
-  for (int i = 0; i < client->device_count(); ++i) {
+  int num_devices = client->device_count();
+  devices.reserve(num_devices);
+  for (int i = 0; i < num_devices; ++i) {
     se::StreamExecutorConfig config;
     config.ordinal = i;
     config.device_options.non_portable_tags["host_thread_stack_size_in_bytes"] = absl::StrCat(8192*1024);
@@ -418,7 +420,7 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
       platform->GetExecutor(config));
 
     auto device = absl::make_unique<ExlaDevice>(i, executor, client);
-    devices.push_back(std::move(device));
+    devices.emplace_back(std::move(device));
   }
   return new ExlaClient(client, /*host_id*/0,
                         /*devices*/std::move(devices),
@@ -447,12 +449,14 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
     xla::ClientLibrary::GetOrCreateLocalClient(options));
 
   std::vector<std::unique_ptr<ExlaDevice>> devices;
-  for (int i = 0; i < client->device_count(); ++i) {
+  int num_devices = client->device_count();
+  devices.reserve(num_devices);
+  for (int i = 0; i < num_devices; ++i) {
     EXLA_ASSIGN_OR_RETURN(se::StreamExecutor* executor,
       client->backend().stream_executor(i));
 
     int device_ordinal = executor->device_ordinal();
-    devices.push_back(absl::make_unique<ExlaDevice>(device_ordinal,
+    devices.emplace_back(absl::make_unique<ExlaDevice>(device_ordinal,
                                                     executor,
                                                     client));
   }
