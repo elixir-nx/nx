@@ -403,7 +403,7 @@ defmodule Nx.Shape do
 
   def normalize_axis(shape, axis) do
     raise ArgumentError,
-          "given axis (#{axis}) invalid for shape with rank #{tuple_size(shape)}"
+          "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
   end
 
   @doc """

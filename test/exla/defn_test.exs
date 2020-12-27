@@ -942,6 +942,7 @@ defmodule Exla.DefnTest do
 
     test "with shape" do
       assert broadcast_with_shape(Nx.tensor([1, 2])) == Nx.tensor([[1, 2], [1, 2]])
+      assert broadcast_with_shape(Nx.tensor([[1, 2]])) == Nx.tensor([[1, 2], [1, 2]])
       assert broadcast_with_shape(Nx.tensor([[1], [2]])) == Nx.tensor([[1, 1], [2, 2]])
     end
 

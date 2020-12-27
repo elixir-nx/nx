@@ -17,7 +17,7 @@ defmodule Nx.Defn.Grad do
 
   defp to_result(to_grad, expr) do
     id = grad_id!(to_grad)
-    initial = broadcast(1.0, to_grad)
+    initial = broadcast_constant(1.0, to_grad)
     {graded, _} = to_grad(expr, initial, %{id => :stop})
     graded
   end
@@ -143,27 +143,44 @@ defmodule Nx.Defn.Grad do
   defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
 
+    implicit_axes =
+      for {a, i} <- Enum.with_index(axes),
+          elem(shape, a) != 1 and elem(x.shape, i) == 1,
+          do: {a, i}
+
+    {implicit_axes, broadcast_axes} = Enum.unzip(implicit_axes)
+    explicit_axes = Nx.Shape.to_axes(shape) -- axes
+
     g =
-      case Nx.Shape.to_axes(shape) -- axes do
+      case explicit_axes ++ implicit_axes do
         [] -> g
-        axes -> Expr.sum(g, axes: axes)
+        sum_axes -> Expr.sum(g, axes: sum_axes)
+      end
+
+    g =
+      case implicit_axes do
+        [] -> g
+        _ -> Expr.broadcast(g, x.shape, Nx.Shape.to_axes(x.shape) -- broadcast_axes)
       end
 
     {multiply(g, dx), cache}
   end
 
+  defp grad(:reshape, [x, _new_shape], _ans, _g, cache) do
+    # Broadcast to shape before the reshape
+    to_grad(x, to_one(x, g), cache)
+  end
+
+  defp grad(:transpose, [x, axes], _ans, g, cache) do
+    # Broadcast to shape after transpose and undo the transpose
+    g = Expr.transpose(to_one(x, g), axes)
+    to_grad(x, g, cache)
+  end
+
   defp grad(:pad, [x, _value, padding_config], _ans, g, cache) do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
-
-    inverse_padding_config =
-      padding_config
-      |> Enum.map(fn {lo, hi} -> {-lo, -hi} end)
-
-    g =
-      g
-      |> to_one(x)
-      |> Expr.pad(0.0, inverse_padding_config)
-
+    inverse_padding_config = Enum.map(padding_config, fn {lo, hi} -> {-lo, -hi} end)
+    g = Expr.pad(g, 0.0, inverse_padding_config)
     {multiply(g, dx), cache}
   end
 
@@ -178,6 +195,32 @@ defmodule Nx.Defn.Grad do
   end
 
   ## Other gradients
+
+  defp grad(:abs, [x], _ans, g, cache) do
+    g = Expr.select(Expr.greater_equal(x, broadcast_constant(0.0, g)), g, Expr.negate(g))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    lhs =
+      Expr.divide(
+        Expr.select(Expr.equal(x, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
+        Expr.select(Expr.equal(y, ans), broadcast(2.0, ans), broadcast(1.0, ans))
+      )
+
+    rhs =
+      Expr.divide(
+        Expr.select(Expr.equal(y, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
+        Expr.select(Expr.equal(x, ans), broadcast(2.0, ans), broadcast(1.0, ans))
+      )
+
+    res = Expr.add(Expr.multiply(dx, lhs), Expr.multiply(dy, rhs))
+
+    {multiply(g, res), cache}
+  end
 
   defp grad(:cbrt, [x], ans, g, cache) do
     g = Expr.divide(g, 3 |> multiply(ans) |> multiply(ans))
@@ -255,49 +298,13 @@ defmodule Nx.Defn.Grad do
                [:floor, :round, :ceil, :sign]
 
   defp grad(op, _, _, g, cache) when op in @constants do
-    {broadcast(0.0, g), cache}
-  end
-
-  defp grad(:abs, [x], _ans, g, cache) do
-    g = Expr.select(Expr.greater_equal(x, broadcast(0.0, g)), g, Expr.negate(g))
-    to_grad(x, g, cache)
-  end
-
-  defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
-    {dx, cache} = to_grad(x, to_one(x, g), cache)
-    {dy, cache} = to_grad(y, to_one(y, g), cache)
-
-    lhs =
-      Expr.divide(
-        Expr.select(Expr.equal(x, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
-        Expr.select(Expr.equal(y, ans), broadcast(2.0, ans), broadcast(1.0, ans))
-      )
-    rhs =
-      Expr.divide(
-        Expr.select(Expr.equal(y, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
-        Expr.select(Expr.equal(x, ans), broadcast(2.0, ans), broadcast(1.0, ans))
-      )
-
-    res = Expr.add(Expr.multiply(dx, lhs), Expr.multiply(dy, rhs))
-
-    {multiply(g, res), cache}
-  end
-
-  defp grad(:reshape, [x, _new_shape], _ans, _g, cache) do
-    # Broadcast to shape before the reshape
-    g = broadcast(1.0, x)
-    to_grad(x, g, cache)
-  end
-
-  defp grad(:transpose, [x, axes], _ans, g, cache) do
-    # Broadcast to shape after transpose and undo the transpose
-    g = Expr.transpose(broadcast(1.0, g), axes)
-    to_grad(x, g, cache)
+    {broadcast_constant(0.0, g), cache}
   end
 
   # TODO:
   # outer/2
   # dot_general
+  # squeeze
 
   ## Grad helpers
 
@@ -324,10 +331,10 @@ defmodule Nx.Defn.Grad do
         left
 
       one?(left) and constant?(right) ->
-        broadcast(hd(right.args) * 1.0, left)
+        broadcast_constant(hd(right.args) * 1.0, left)
 
       one?(right) and constant?(left) ->
-        broadcast(hd(left.args) * 1.0, right)
+        broadcast_constant(hd(left.args) * 1.0, right)
 
       true ->
         Expr.multiply(left, right)
@@ -335,7 +342,7 @@ defmodule Nx.Defn.Grad do
   end
 
   # And optimized version of constant broadcast to reduce nodes.
-  defp broadcast(constant, expr) when is_number(constant) do
+  defp broadcast_constant(constant, expr) when is_number(constant) do
     if broadcast?(expr, constant), do: expr, else: Expr.broadcast(constant, expr.shape)
   end
 
@@ -347,7 +354,7 @@ defmodule Nx.Defn.Grad do
     if one?(g) and expr.shape == g.shape do
       g
     else
-      broadcast(1.0, expr)
+      broadcast_constant(1.0, expr)
     end
   end
 
