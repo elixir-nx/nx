@@ -29,9 +29,9 @@ class ExlaDevice {
       return id_;
     }
 
-    se::StreamExecutor* executor() const {
-      return executor_;
-    }
+    int device_ordinal() const { return executor_->device_ordinal(); }
+
+    se::StreamExecutor* executor() const { return executor_; }
 
     xla::LocalClient* client() const {
       return client_;

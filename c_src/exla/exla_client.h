@@ -57,6 +57,51 @@ class ExlaBuffer {
   ExlaDevice* device_;
 };
 
+class ExlaClient;
+
+/*
+ * Wraps an xla::LocalExecutable
+ */
+class ExlaExecutable {
+  public:
+    ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
+                   std::shared_ptr<xla::DeviceAssignment> device_assignment,
+                   std::vector<std::pair<int, int>> local_logical_device_ids,
+                   std::vector<ExlaDevice*> local_devices,
+                   ExlaClient* client);
+
+    ExlaClient* client() { return client_; }
+
+    int num_replicas() const { return executables_.at(0)->build_options().num_replicas(); }
+
+    int num_partitions() const { return executables_.at(0)->build_options().num_replicas(); }
+
+    const std::vector<std::shared_ptr<xla::LocalExecutable>>& executables() const { return executables_; }
+
+    const xla::DeviceAssignment& device_assignment() const { return *device_assignment_; }
+
+    const std::vector<std::pair<int, int>>& local_logical_device_ids() const { return local_logical_device_ids_; }
+
+    const std::vector<ExlaDevice*> local_devices() { return local_devices_; }
+
+    void Delete() { executables_.clear(); }
+
+    xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
+                                    ERL_NIF_TERM arguments,
+                                    int replica,
+                                    int partition,
+                                    ExlaDevice* device,
+                                    xla::ExecutableRunOptions& options,
+                                    bool keep_on_device);
+
+  private:
+    ExlaClient* client_;
+    std::vector<std::shared_ptr<xla::LocalExecutable>> executables_;
+    std::shared_ptr<xla::DeviceAssignment> device_assignment_;
+    std::vector<std::pair<int, int>> local_logical_device_ids_;
+    std::vector<ExlaDevice*> local_devices_;
+};
+
 /*
  * There are a lot of resources that we need to keep track of,
  * and it doesn't make sense to pass references to all of them back
@@ -74,14 +119,13 @@ class ExlaClient {
                       std::unique_ptr<tensorflow::Allocator> host_memory_allocator,
                       std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options);
 
+
   virtual ~ExlaClient() = default;
 
-  xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
-                                  xla::LocalExecutable* executable,
-                                  ERL_NIF_TERM arguments,
-                                  ExlaDevice* device,
-                                  xla::ExecutableRunOptions& options,
-                                  bool keep_on_device);
+  xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation&,
+                                           std::vector<xla::Shape*> argument_layouts,
+                                           xla::ExecutableBuildOptions& build_options,
+                                           bool compile_portable_executable);
 
   xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
                                               const xla::Shape& shape,

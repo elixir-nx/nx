@@ -221,7 +221,8 @@ defmodule Exla.NIF do
         _run_id,
         _rng_seed,
         _launch_id,
-        _device_assignment,
+        _replica,
+        _partition,
         _keep_on_device
       ),
       do: nif_error(__ENV__.function)

@@ -26,12 +26,12 @@ defmodule Exla.Executable do
     # Whether to keep result on device
     keep_on_device = Keyword.get(options, :keep_on_device, false)
 
-    device_assignment = Keyword.get(options, :device_assignment, {1, 1})
+    {replica, partition} = Keyword.get(options, :device_assignment, {1, 1})
 
     outside_cpu = client.platform == :cuda || client.platform == :rocm
     keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
 
-    device_id = device_assignment_to_device_id(executable, device_assignment)
+    device_id = device_assignment_to_device_id(executable, {replica, partition})
 
     inputs =
       Enum.map(arguments, fn
@@ -56,7 +56,8 @@ defmodule Exla.Executable do
         run_id,
         rng_seed,
         launch_id,
-        device_assignment,
+        replica,
+        partition,
         keep_on_device_int
       )
       |> unwrap!()

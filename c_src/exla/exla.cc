@@ -52,7 +52,6 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
     return -1;
   }
-
   return 1;
 }
 
@@ -1239,18 +1238,18 @@ ERL_NIF_TERM device_assignment_to_device_id(ErlNifEnv* env, int argc, const ERL_
     return exla::error(env, "Bad argument count.");
   }
 
-  xla::LocalExecutable* exec;
+  exla::ExlaExecutable** exec;
   exla::int32 replica, partition;
 
-  if(!exla::get<xla::LocalExecutable>(env, argv[0], exec)) return exla::error(env, "Unable to get executable.");
+  if(!exla::get<exla::ExlaExecutable*>(env, argv[0], exec)) return exla::error(env, "Unable to get executable.");
   if(!exla::get(env, argv[1], replica)) return exla::error(env, "Unable to get replica.");
   if(!exla::get(env, argv[2], partition)) return exla::error(env, "Unable to get partition.");
 
-  if(!exec->build_options().has_device_assignment()) {
-    exla::int32 device_id = exec->build_options().device_ordinal();
+  if(!(*exec)->executables().at(0)->build_options().has_device_assignment()) {
+    exla::int32 device_id = (*exec)->executables().at(0)->build_options().device_ordinal();
     return exla::ok(env, exla::make(env, device_id));
   } else {
-    exla::int32 device_id = exec->build_options().device_assignment()(replica - 1, partition - 1);
+    exla::int32 device_id = (*exec)->executables().at(0)->build_options().device_assignment()(replica - 1, partition - 1);
     return exla::ok(env, exla::make(env, device_id));
   }
 }
@@ -1362,7 +1361,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   exla::ExlaDevice* device = nullptr;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*client)->Run(env, local_executable, arguments, device, keep_on_device), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*client)->Run(env, executable, arguments, device, keep_on_device), env);
 
   return exla::ok(env, result);
 }
