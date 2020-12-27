@@ -1376,19 +1376,21 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 /*************************** Log Sink ******************************/
-ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1) {
+ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
     return exla::make(env, "Bad argument count.");
   }
 
   ErlNifPid logger_pid;
 
-  if(!enif_get_local_pid(env, argv[0], &logger_pid)) return exla::error(env, "Unable to get logger pid");
+  if (!enif_get_local_pid(env, argv[0], &logger_pid)) {
+    return exla::error(env, "Unable to get logger pid");
+  }
 
   exla::ExlaLogSink* sink = new exla::ExlaLogSink(logger_pid);
 
   // NO_DEFAULT_LOGGER doesn't behave right
-  for(auto *log_sink : tensorflow::TFGetLogSinks()) {
+  for (auto *log_sink : tensorflow::TFGetLogSinks()) {
     tensorflow::TFRemoveLogSink(log_sink);
   }
 
