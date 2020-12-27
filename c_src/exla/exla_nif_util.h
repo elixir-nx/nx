@@ -91,7 +91,7 @@ int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string* var);
 template <
   xla::PrimitiveType type,
   typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
-T get_value(ErlNifEnv* env, ERL_NIF_TERM &term) {
+T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
   T value;
   exla::get(env, term, &value);
   return value;
@@ -167,7 +167,7 @@ int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var) {
   uint32 length;
-  if(!enif_get_list_length(env, list, &length)) return 0;
+  if (!enif_get_list_length(env, list, &length)) return 0;
   var.reserve(length);
   ERL_NIF_TERM head, tail;
 
@@ -183,14 +183,14 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var) {
 template <typename T>
 int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var) {
   uint32 length;
-  if(!enif_get_list_length(env, list, &length)) return 0;
+  if (!enif_get_list_length(env, list, &length)) return 0;
   var.reserve(length);
   ERL_NIF_TERM head, tail;
 
   while (enif_get_list_cell(env, list, &head, &tail)) {
     T* elem;
     if (!get<T>(env, head, elem)) return 0;
-    var.insert(var.begin() + (i++), *elem);
+    var.emplace_back(*elem);
     list = tail;
   }
   return 1;

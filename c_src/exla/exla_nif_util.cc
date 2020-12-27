@@ -180,7 +180,7 @@ namespace exla {
                ERL_NIF_TERM list,
                std::vector<ErlNifBinary> &var) {
     uint32 length;
-    if(!enif_get_list_length(env, list, &length)) return 0;
+    if (!enif_get_list_length(env, list, &length)) return 0;
     var.reserve(length);
     ERL_NIF_TERM head, tail;
 
@@ -195,14 +195,14 @@ namespace exla {
 
   int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<int64> &var) {
     uint32 length;
-    if(!enif_get_list_length(env, list, &length)) return 0;
+    if (!enif_get_list_length(env, list, &length)) return 0;
     var.reserve(length);
     ERL_NIF_TERM head, tail;
 
     while (enif_get_list_cell(env, list, &head, &tail)) {
       int64 elem;
       if (!get(env, head, &elem)) return 0;
-      var.push_back(elem);
+      var.emplace_back(elem);
       list = tail;
     }
     return 1;
