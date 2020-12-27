@@ -17,7 +17,7 @@ defmodule Nx.Defn.Grad do
 
   defp to_result(to_grad, expr) do
     id = grad_id!(to_grad)
-    initial = broadcast(1.0, to_grad)
+    initial = broadcast_constant(1.0, to_grad)
     {graded, _} = to_grad(expr, initial, %{id => :stop})
     graded
   end
@@ -143,10 +143,24 @@ defmodule Nx.Defn.Grad do
   defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
 
+    implicit_axes =
+      for {a, i} <- Enum.with_index(axes),
+          elem(shape, a) != 1 and elem(x.shape, i) == 1,
+          do: {a, i}
+
+    {implicit_axes, broadcast_axes} = Enum.unzip(implicit_axes)
+    explicit_axes = Nx.Shape.to_axes(shape) -- axes
+
     g =
-      case Nx.Shape.to_axes(shape) -- axes do
+      case explicit_axes ++ implicit_axes do
         [] -> g
-        axes -> Expr.sum(g, axes: axes)
+        sum_axes -> Expr.sum(g, axes: sum_axes)
+      end
+
+    g =
+      case implicit_axes do
+        [] -> g
+        _ -> Expr.broadcast(g, x.shape, Nx.Shape.to_axes(x.shape) -- broadcast_axes)
       end
 
     {multiply(g, dx), cache}
@@ -255,7 +269,7 @@ defmodule Nx.Defn.Grad do
                [:floor, :round, :ceil, :sign]
 
   defp grad(op, _, _, g, cache) when op in @constants do
-    {broadcast(0.0, g), cache}
+    {broadcast_constant(0.0, g), cache}
   end
 
   # TODO:
@@ -266,6 +280,7 @@ defmodule Nx.Defn.Grad do
   # dot_general
   # reshape - deflinear
   # transpose - deflinear
+  # squeeze
 
   ## Grad helpers
 
@@ -292,10 +307,10 @@ defmodule Nx.Defn.Grad do
         left
 
       one?(left) and constant?(right) ->
-        broadcast(hd(right.args) * 1.0, left)
+        broadcast_constant(hd(right.args) * 1.0, left)
 
       one?(right) and constant?(left) ->
-        broadcast(hd(left.args) * 1.0, right)
+        broadcast_constant(hd(left.args) * 1.0, right)
 
       true ->
         Expr.multiply(left, right)
@@ -303,7 +318,7 @@ defmodule Nx.Defn.Grad do
   end
 
   # And optimized version of constant broadcast to reduce nodes.
-  defp broadcast(constant, expr) when is_number(constant) do
+  defp broadcast_constant(constant, expr) when is_number(constant) do
     if broadcast?(expr, constant), do: expr, else: Expr.broadcast(constant, expr.shape)
   end
 
@@ -315,7 +330,7 @@ defmodule Nx.Defn.Grad do
     if one?(g) and expr.shape == g.shape do
       g
     else
-      broadcast(1.0, expr)
+      broadcast_constant(1.0, expr)
     end
   end
 
