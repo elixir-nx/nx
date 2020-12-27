@@ -63,37 +63,19 @@ defmodule Exla.NIF do
   def equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def eq_total_order(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
   def not_equal(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def ne_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def greater_equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def ge_total_order(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
   def greater(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def gt_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def less_equal(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
-  def le_total_order(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
   def less(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def lt_total_order(_a, _b, _broadcast_dims),
     do: nif_error(__ENV__.function)
 
   def power(_a, _b, _broadcast_dims),
@@ -213,12 +195,6 @@ defmodule Exla.NIF do
     do: nif_error(__ENV__.function)
 
   def get_device_count(_client),
-    do: nif_error(__ENV__.function)
-
-  def get_computation_hlo_proto(_computation),
-    do: nif_error(__ENV__.function)
-
-  def get_computation_hlo_text(_computation),
     do: nif_error(__ENV__.function)
 
   def build(_builder, _root),
