@@ -1122,23 +1122,6 @@ ERL_NIF_TERM convert_element_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
-/************************ Parallel Methods *****************************/
-ERL_NIF_TERM replica_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1) {
-    return exla::error(env, "Bad argument count.");
-  }
-
-  xla::XlaBuilder** builder;
-
-  if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) {
-    return exla::error(env, "Unable to get builder.");
-  }
-
-  xla::XlaOp op = xla::ReplicaId(*builder);
-
-  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
-}
-
 /************************ xla::ClientLibrary Functions ***************************/
 ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
@@ -1235,7 +1218,10 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
     return exla::error(env, "Bad argument count.");
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<stream_executor::Platform*> platforms, xla::PlatformUtil::GetSupportedPlatforms(), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(
+    std::vector<stream_executor::Platform*> platforms,
+    xla::PlatformUtil::GetSupportedPlatforms(),
+    env);
 
   std::vector<std::string> platform_names;
 
@@ -1490,8 +1476,6 @@ static ErlNifFunc exla_funcs[] = {
   {"pad", 3, pad},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
-  /******* Parallel Ops **********/
-  {"replica_id", 1, replica_id},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},

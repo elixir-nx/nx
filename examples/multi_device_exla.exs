@@ -8,7 +8,7 @@ IO.puts "Default Device Ordinal: #{client.default_device_ordinal}"
 
 # Build a simple computation
 builder = Exla.Builder.new("add_2")
-shape = Exla.Shape.make_shape({:s, 32}, {2, 1000})
+shape = Exla.Shape.make_shape({:f, 32}, {2, 1000})
 x = Exla.Op.parameter(builder, 0, shape, "x")
 y = Exla.Op.parameter(builder, 1, shape, "y")
 ast = Exla.Op.add(x, y)
@@ -18,7 +18,7 @@ comp = Exla.Builder.build(ast)
 exec_default = Exla.Client.compile(client, comp, [shape, shape])
 
 # And run it on some buffers:
-data = for i <- 1..2000, into: <<>>, do: <<i::32-native>>
+data = for i <- 1..2000, into: <<>>, do: <<i::32-float-native>>
 
 b1 = Exla.Buffer.buffer(data, shape)
 b2 = Exla.Buffer.buffer(data, shape)
@@ -56,3 +56,21 @@ comp = Exla.Builder.build(ast)
 replicated_exec = Exla.Client.compile(client, comp, [], num_replicas: 2)
 
 IO.inspect Exla.Executable.run_parallel(replicated_exec, [])
+
+sb1 = Exla.ShardedBuffer.sharded_buffer(data, shape)
+
+x = Exla.Op.parameter(builder, 0, Exla.Shape.shard(shape, 2), "x")
+
+sub_builder = Exla.Builder.new(builder, "reduction")
+a = Exla.Op.parameter(sub_builder, 0, Exla.Shape.shard(shape, 2), "a")
+b = Exla.Op.parameter(sub_builder, 1, Exla.Shape.shard(shape, 2), "b")
+red_ast = Exla.Lib.sum(sub_builder, Exla.Op.add(a, b))
+reduction = Exla.Builder.build(red_ast)
+
+ast = Exla.Op.all_reduce(Exla.Op.tuple(builder, [x]), reduction, [])
+comp = Exla.Builder.build(ast)
+
+# This will create 2 replicas for each device
+replicated_exec = Exla.Client.compile(client, comp, [shape], num_replicas: 2)
+
+IO.inspect Exla.Executable.run(replicated_exec, [sb1])

@@ -332,6 +332,12 @@ defmodule Exla.Op do
     ref = Exla.NIF.replica_id(builder) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
+
+  def all_reduce(%Op{builder: builder, ref: operand}, %Computation{ref: reduction}, replica_groups, channel_handle \\ 0) do
+    ref = Exla.NIF.all_reduce(operand, reduction, replica_groups, channel_handle) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
