@@ -3804,6 +3804,18 @@ defmodule Nx do
     end
   end
 
+  @doc """
+  Utility for returning custom gradient of a
+  function.
+
+  In the forward pass the function is the identity
+  function. In the backward pass, the function
+  evaluates to `grad_t`.
+  """
+  def custom_gradient(t, grad_t)
+
+  def custom_gradient(t, _), do: tensor(t)
+
   defp transpose_axes(shape, axes) when tuple_size(shape) != length(axes) do
     raise ArgumentError,
           "axes #{inspect(axes)} must be of the same rank as shape #{inspect(shape)}"

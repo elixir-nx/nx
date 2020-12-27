@@ -258,6 +258,10 @@ defmodule Nx.Defn.Grad do
     {broadcast(0.0, g), cache}
   end
 
+  defp grad(:custom_gradient, [_, dx], _, g, cache) do
+    {multiply(dx, g), cache}
+  end
+
   # TODO:
   # abs/1 - requires select
   # max/2 - requires comparison

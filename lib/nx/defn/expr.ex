@@ -337,6 +337,15 @@ defmodule Nx.Defn.Expr do
     make_expr(output_shape, :select, [pred_expr, true_expr, false_expr])
   end
 
+  @doc """
+  Expression equivalent to `Nx.custom_gradient/2`.
+  """
+  def custom_gradient(expr, grad_expr) do
+    %Expr{shape: output_shape} = expr = to_expr(expr)
+    %Expr{} = grad_expr = to_expr(grad_expr)
+    make_expr(output_shape, :custom_gradient, [expr, grad_expr])
+  end
+
   ## Results normalization
 
   @doc false

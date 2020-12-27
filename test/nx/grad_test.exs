@@ -520,4 +520,14 @@ defmodule Nx.GradTest do
     #              Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
     #   end
   end
+
+  describe "special gradients" do
+    defn relu(t), do: Nx.sum(Nx.max(t, 0.0))
+    defn relu_grad(t), do: Nx.select(Nx.greater(t, 0.0), Nx.broadcast(1.0, t), Nx.broadcast(0.0, t))
+    defn custom_grad(t), do: grad(t, Nx.custom_gradient(relu(t), relu_grad(t)))
+
+    test "custom gradient" do
+      assert custom_grad(Nx.tensor([-1.0, 2.0, 0.0, -4.0, 1.0, 2.0, 3.0])) == Nx.tensor([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+    end
+  end
 end
