@@ -263,7 +263,7 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:max, [x, y], ans, g, cache) do
+  defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
     {dx, cache} = to_grad(x, to_one(x, g), cache)
     {dy, cache} = to_grad(y, to_one(y, g), cache)
 
@@ -284,8 +284,6 @@ defmodule Nx.Defn.Grad do
   end
 
   # TODO:
-  # max/2 - requires comparison
-  # min/2 - requires comparison
   # outer/2
   # dot_general
   # reshape - deflinear
