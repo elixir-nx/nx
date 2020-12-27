@@ -131,6 +131,8 @@ class ExlaClient {
   xla::StatusOr<ERL_NIF_TERM> ErlListFromBuffer(ErlNifEnv* env,
                                                 ExlaBuffer* buffer);
 
+  xla::StatusOr<xla::DeviceAssignment> GetDefaultDeviceAssignment(int num_replicas, int num_partitions);
+
   xla::LocalClient* client() { return client_; }
 
   tensorflow::Allocator* host_memory_allocator() {

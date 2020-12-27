@@ -1123,14 +1123,16 @@ ERL_NIF_TERM convert_element_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 }
 
 /************************ Parallel Methods *****************************/
-ERL_NIF_TERM replica_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 1) {
+ERL_NIF_TERM replica_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
     return exla::error(env, "Bad argument count.");
   }
 
   xla::XlaBuilder** builder;
 
-  if(!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
+  if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+    return exla::error(env, "Unable to get builder.");
+  }
 
   xla::XlaOp op = xla::ReplicaId(*builder);
 
@@ -1228,8 +1230,8 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return exla::ok(env, exla::make(env, device_count));
 }
 
-ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 0){
+ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
     return exla::error(env, "Bad argument count.");
   }
 
@@ -1248,23 +1250,31 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::ok(env, platform_term);
 }
 
-ERL_NIF_TERM device_assignment_to_device_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 3){
+ERL_NIF_TERM device_assignment_to_device_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
     return exla::error(env, "Bad argument count.");
   }
 
   exla::ExlaExecutable** exec;
   exla::int32 replica, partition;
 
-  if(!exla::get<exla::ExlaExecutable*>(env, argv[0], exec)) return exla::error(env, "Unable to get executable.");
-  if(!exla::get(env, argv[1], replica)) return exla::error(env, "Unable to get replica.");
-  if(!exla::get(env, argv[2], partition)) return exla::error(env, "Unable to get partition.");
+  if (!exla::get<exla::ExlaExecutable*>(env, argv[0], exec)) {
+    return exla::error(env, "Unable to get executable.");
+  }
+  if (!exla::get(env, argv[1], &replica)) {
+    return exla::error(env, "Unable to get replica.");
+  }
+  if (!exla::get(env, argv[2], &partition)) {
+    return exla::error(env, "Unable to get partition.");
+  }
 
-  if(!(*exec)->executables().at(0)->build_options().has_device_assignment()) {
-    exla::int32 device_id = (*exec)->executables().at(0)->build_options().device_ordinal();
+  if (!(*exec)->executables().at(0)->build_options().has_device_assignment()) {
+    exla::int32 device_id =
+      (*exec)->executables().at(0)->build_options().device_ordinal();
     return exla::ok(env, exla::make(env, device_id));
   } else {
-    exla::int32 device_id = (*exec)->executables().at(0)->build_options().device_assignment()(replica - 1, partition - 1);
+    exla::int32 device_id =
+      (*exec)->executables().at(0)->build_options().device_assignment()(replica - 1, partition - 1);
     return exla::ok(env, exla::make(env, device_id));
   }
 }
@@ -1348,34 +1358,34 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::error(env, "Unable to get client.");
   }
-  if(!exla::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
+  if (!exla::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
     return exla::error(env, "Unable to get executable.");
   }
-  if(!exla::get(env, argv[3], &device_ordinal)) {
+  if (!exla::get(env, argv[3], &device_ordinal)) {
     return exla::error(env, "Unable to get device ordinal.");
   }
-  if(!exla::get(env, argv[4], &run_id)) {
+  if (!exla::get(env, argv[4], &run_id)) {
     return exla::error(env, "Unable to get Run ID.");
   }
-  if(!exla::get(env, argv[5], &rng_seed)) {
+  if (!exla::get(env, argv[5], &rng_seed)) {
     return exla::error(env, "Unable to get RNG Seed.");
   }
-  if(!exla::get(env, argv[6], &launch_id)) {
+  if (!exla::get(env, argv[6], &launch_id)) {
     return exla::error(env, "Unable to get Launch ID.");
   }
-  if(!exla::get(env, argv[7], &replica)) {
+  if (!exla::get(env, argv[7], &replica)) {
     return exla::error(env, "Unable to get replica.");
   }
-  if(!exla::get(env, argv[8], &partition)) {
+  if (!exla::get(env, argv[8], &partition)) {
     return exla::error(env, "Unable to get partition.");
   }
-  if(!exla::get(env, argv[9], &keep_on_device)) {
+  if (!exla::get(env, argv[9], &keep_on_device)) {
     return exla::error(env, "Unable to get keep_on_device.");
   }
 
   exla::ExlaDevice* device = nullptr;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*executable)->Run(env, executable, arguments, replica, partition, device, keep_on_device), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*executable)->Run(env, arguments, replica, partition, device, keep_on_device), env);
 
   return exla::ok(env, result);
 }

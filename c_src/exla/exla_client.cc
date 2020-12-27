@@ -50,12 +50,13 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
                                std::shared_ptr<xla::DeviceAssignment> device_assignment,
                                std::vector<std::pair<int, int>> local_logical_device_ids,
                                std::vector<ExlaDevice*> local_devices,
-                               ExlaClient* client) : client_(client),
-                                                     device_assignment_(std::move(device_assignment)),
-                                                     local_logical_device_ids_(std::move(local_logical_device_ids)),
-                                                     local_devices_(std::move(local_devices)) {
+                               ExlaClient* client)
+                               : client_(client),
+                                 device_assignment_(std::move(device_assignment)),
+                                 local_logical_device_ids_(std::move(local_logical_device_ids)),
+                                 local_devices_(std::move(local_devices)) {
   executables_.reserve(executables.size());
-  for(auto& executable : executables) {
+  for (auto& executable : executables) {
     executables_.emplace_back(std::move(executable));
   }
 
@@ -67,7 +68,8 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
   } else {
     LOG(INFO) << "Executable device_assignment:\n" << device_assignment_->ToString();
     CHECK_GE(local_devices_.size(), 1) << device_assignment_->ToString();
-    CHECK_LE(local_devices_.size(), client_->device_count()) << "Inconsistent local device count.";
+    CHECK_LE(local_devices_.size(),
+             client_->device_count()) << "Inconsistent local device count.";
     num_partitions = device_assignment_->computation_count();
   }
 
@@ -86,8 +88,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                   ExlaDevice* device,
                                                   bool keep_on_device) {
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
-  if(device == nullptr) {
-    // TODO: Maybe we can check this in Elixir?
+  if (device == nullptr) {
+    // TODO(seanmor5): Maybe we can check this in Elixir?
     CHECK(device_assignment_ != nullptr);
     const int device_id = (*device_assignment_)(replica - 1, partition - 1);
     device = client_->device(device_id);
@@ -121,23 +123,29 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   ERL_NIF_TERM head, tail, list;
   list = arguments;
 
-  while(enif_get_list_cell(env, list, &head, &tail)) {
+  while (enif_get_list_cell(env, list, &head, &tail)) {
     const ERL_NIF_TERM* tuple;
     int arity;
     exla::ExlaBuffer** buffer;
 
-    if(enif_get_tuple(env, head, &arity, &tuple)) {
+    if (enif_get_tuple(env, head, &arity, &tuple)) {
       ErlNifBinary data;
       xla::Shape* shape;
 
-      if(!get_binary(env, tuple[0], data)) return tensorflow::errors::InvalidArgument("Unable to read binary data from input.");
-      if(!get<xla::Shape>(env, tuple[1], shape)) return tensorflow::errors::InvalidArgument("Unable to read shape from input.");
+      if (!get_binary(env, tuple[0], &data)) {
+        return xla::InvalidArgument("Unable to read binary data from input.");
+      }
+      if (!get<xla::Shape>(env, tuple[1], shape)) {
+        return xla::InvalidArgument("Unable to read shape from input.");
+      }
 
-      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client_->BufferFromErlBin(data, *shape, device, true));
+      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf,
+        client_->BufferFromErlBin(data, *shape, device, true));
 
       xla::ExecutionInput inp = xla::ExecutionInput(buf->on_device_shape());
 
-      const xla::ShapeTree<se::DeviceMemoryBase> bufs = buf->buffer()->buffers();
+      const xla::ShapeTree<se::DeviceMemoryBase> bufs =
+        buf->buffer()->buffers();
 
       bufs.ForEachElement(
         [&](const xla::ShapeIndex& index, const se::DeviceMemoryBase& mem){
@@ -147,10 +155,9 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
       inputs.push_back(std::move(inp));
       buffers.push_back(&buf);
 
-    } else if(get<ExlaBuffer*>(env, head, buffer)) {
-
-      if(*buffer == NULL) {
-        return tensorflow::errors::Aborted("Attempt to re-use a previously deallocated device buffer.");
+    } else if (get<ExlaBuffer*>(env, head, buffer)) {
+      if (*buffer == NULL) {
+        return xla::FailedPrecondition("Attempt to re-use a previously deallocated device buffer.");
       }
       xla::ExecutionInput inp = xla::ExecutionInput((*buffer)->on_device_shape());
 
@@ -162,17 +169,17 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
         });
 
       inputs.push_back(std::move(inp));
-
     } else {
       return tensorflow::errors::InvalidArgument("Invalid input passed to run.");
     }
     list = tail;
   }
 
-  EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput exec_result, executable->Run(std::move(inputs), run_options));
+  EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput exec_result,
+    executable->Run(std::move(inputs), run_options));
 
-  for(auto buf : buffers) {
-    if(*buf != NULL) {
+  for (auto buf : buffers) {
+    if (*buf != NULL) {
       delete *buf;
       *buf = NULL;
     }
@@ -180,19 +187,24 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   xla::ScopedShapedBuffer result = exec_result.ConsumeResult();
 
-  exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
+  exla::ExlaBuffer* buffer_ref =
+    new exla::ExlaBuffer(
+      new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
-  if(keep_on_device && buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references, client_->DecomposeBuffer(env, buffer_ref), env);
+  if (keep_on_device && buffer_ref->is_tuple()) {
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references,
+      client_->DecomposeBuffer(env, buffer_ref), env);
     return references;
-  } else if(keep_on_device) {
+  } else if (keep_on_device) {
     return make<exla::ExlaBuffer*>(env, buffer_ref);
-  } else if(buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple, client_->ErlListFromBuffer(env, buffer_ref), env);
+  } else if (buffer_ref->is_tuple()) {
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple,
+      client_->ErlListFromBuffer(env, buffer_ref), env);
     delete buffer_ref;
     return tuple;
   } else {
-    EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, client_->ErlBinFromBuffer(buffer_ref), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
+      client_->ErlBinFromBuffer(buffer_ref), env);
     delete buffer_ref;
     return make(env, binary);
   }
@@ -448,34 +460,35 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromErlBin(const ErlNifBinary bin,
 
 xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,
                                                    std::vector<xla::Shape*> argument_layouts,
-                                                   xla::ExecutableBuildOptions& build_options,
+                                                   xla::ExecutableBuildOptions& options,
                                                    bool compile_portable_executable) {
-  if(!build_options.device_allocator()) {
-    build_options.set_device_allocator(allocator());
+  if (!options.device_allocator()) {
+    options.set_device_allocator(allocator());
   }
 
   int32 num_replicas, num_partitions;
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
-  if(compile_portable_executable) {
-    if(build_options.has_device_assignment()) {
-      return tensorflow::errors::InvalidArgument("Requested portable executable but specified device assignment.");
+  if (compile_portable_executable) {
+    if (options.has_device_assignment()) {
+      return xla::InvalidArgument("Requested portable executable but specified device assignment.");
     }
     num_replicas = 1;
     num_partitions = 1;
   } else {
-    if(!build_options.has_device_assignment()) {
+    if (!options.has_device_assignment()) {
       LOG(INFO) << "Compiling with default device assignment.";
       EXLA_ASSIGN_OR_RETURN(
         xla::DeviceAssignment device_assignment,
-        GetDefaultDeviceAssignment(build_options.num_replicas(), build_options.num_partitions())
-      );
-      build_options.set_device_assignment(device_assignment);
+        GetDefaultDeviceAssignment(options.num_replicas(),
+                                   options.num_partitions()));
+      options.set_device_assignment(device_assignment);
     }
     LOG(INFO) << "Compiled with device assignment:\n"
-              << build_options.device_assignment().ToString();
-    num_replicas = build_options.device_assignment().replica_count();
-    num_partitions = build_options.device_assignment().computation_count();
-    device_assignment = std::make_shared<xla::DeviceAssignment>(build_options.device_assignment());
+              << options.device_assignment().ToString();
+    num_replicas = options.device_assignment().replica_count();
+    num_partitions = options.device_assignment().computation_count();
+    device_assignment =
+      std::make_shared<xla::DeviceAssignment>(options.device_assignment());
   }
 
   std::vector<std::pair<int, int>> local_logical_device_ids;
@@ -497,7 +510,7 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   }
 
   EXLA_ASSIGN_OR_RETURN(std::vector<std::unique_ptr<xla::LocalExecutable>> local_executables,
-                        client()->Compile(computation, argument_layouts, build_options));
+                        client()->Compile(computation, argument_layouts, options));
 
   ExlaExecutable* executable = new ExlaExecutable(std::move(local_executables),
                                                   std::move(device_assignment),
@@ -592,4 +605,5 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
                         /*host_memory_allcoator*/std::move(host_memory_allocator),
                         /*gpu_run_options*/std::move(gpu_run_options));
 }
+
 }  // namespace exla
