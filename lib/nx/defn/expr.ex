@@ -346,6 +346,14 @@ defmodule Nx.Defn.Expr do
     make_expr(output_shape, :custom_gradient, [expr, grad_expr])
   end
 
+  @doc """
+  Expression equivalent to `Nx.stop_gradient/1`.
+  """
+  def stop_gradient(expr) do
+    %Expr{shape: output_shape} = expr = to_expr(expr)
+    make_expr(output_shape, :stop_gradient, [expr])
+  end
+
   ## Results normalization
 
   @doc false

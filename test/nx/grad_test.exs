@@ -526,8 +526,16 @@ defmodule Nx.GradTest do
     defn relu_grad(t), do: Nx.select(Nx.greater(t, 0.0), Nx.broadcast(1.0, t), Nx.broadcast(0.0, t))
     defn custom_grad(t), do: grad(t, Nx.custom_gradient(relu(t), relu_grad(t)))
 
+    defn stop_grad(t), do: grad(t, Nx.stop_gradient(Nx.sum(Nx.tanh(Nx.sin(Nx.cos(Nx.power(t, 2)))))))
+    defn stop_grad2(t), do: grad(t, Nx.add(Nx.sum(Nx.power(t, 2)), Nx.stop_gradient(Nx.sum(Nx.tanh(Nx.sin(Nx.cos(Nx.power(t, 2))))))))
+
     test "custom gradient" do
       assert custom_grad(Nx.tensor([-1.0, 2.0, 0.0, -4.0, 1.0, 2.0, 3.0])) == Nx.tensor([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+    end
+
+    test "stop gradient" do
+      assert stop_grad(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor([0.0, 0.0, 0.0])
+      assert stop_grad2(Nx.tensor([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]])) == Nx.tensor([[2.0, 4.0, 6.0], [2.0, 4.0, 6.0]])
     end
   end
 end

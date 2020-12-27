@@ -252,7 +252,8 @@ defmodule Nx.Defn.Grad do
                [:argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
-               [:floor, :round, :ceil, :sign]
+               [:floor, :round, :ceil, :sign] ++
+               [:stop_gradient]
 
   defp grad(op, _, _, g, cache) when op in @constants do
     {broadcast(0.0, g), cache}

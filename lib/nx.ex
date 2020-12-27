@@ -3816,6 +3816,15 @@ defmodule Nx do
 
   def custom_gradient(t, _), do: tensor(t)
 
+  @doc """
+  Utility for stopping the evaluation of a gradient of
+  a function.
+
+  In the forward pass the function is the identity
+  function. In the backward pass, it evaluates to 0.
+  """
+  def stop_gradient(t), do: tensor(t)
+
   defp transpose_axes(shape, axes) when tuple_size(shape) != length(axes) do
     raise ArgumentError,
           "axes #{inspect(axes)} must be of the same rank as shape #{inspect(shape)}"
