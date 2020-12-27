@@ -17,4 +17,4 @@ namespace exla {
     device_to_host_stream_->Init();
   }
 
-}
+}  // namespace exla

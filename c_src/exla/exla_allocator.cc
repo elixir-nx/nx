@@ -8,7 +8,6 @@ namespace allocator {
   // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L85
   xla::StatusOr<std::unique_ptr<se::MultiDeviceAdapter>> CreateBFCAllocator(absl::Span<std::unique_ptr<ExlaDevice> const> devices,
                                                                             double memory_fraction, bool preallocate) {
-
     const se::Platform* platform = devices.front()->executor()->platform();
     std::vector<se::MultiDeviceAdapter::AllocatorWithStream> allocators;
     bool enable_unified_memory;
@@ -61,19 +60,18 @@ namespace allocator {
   xla::StatusOr<std::unique_ptr<se::DeviceMemoryAllocator>> GetGpuDeviceAllocator(absl::Span<std::unique_ptr<ExlaDevice> const> devices,
                                                                                   double memory_fraction,
                                                                                   bool preallocate) {
-
     EXLA_ASSIGN_OR_RETURN(std::unique_ptr<se::DeviceMemoryAllocator> allocator,
       CreateBFCAllocator(devices, memory_fraction, preallocate));
     return std::move(allocator);
   }
 
   // See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/nvidia_gpu_device.cc#L155
-  // TODO: Rather than pin to Host memory, pin to ERTS memory.
+  // TODO(seanmor5): Rather than pin to Host memory, pin to ERTS memory.
   std::unique_ptr<tensorflow::BFCAllocator> GetGpuHostAllocator(se::StreamExecutor* executor) {
     tensorflow::SubAllocator* sub_allocator = new tensorflow::GpuHostAllocator(executor, 0, {}, {});
     const tensorflow::int64 kGpuHostMemoryLimitBytes = 64 * (1LL << 30);
     return absl::make_unique<tensorflow::BFCAllocator>(sub_allocator, kGpuHostMemoryLimitBytes, true, "xla_gpu_host_bfc");
   }
 
-} // namespace allocator
-} // namespace exla
+}  // namespace allocator
+}  // namespace exla
