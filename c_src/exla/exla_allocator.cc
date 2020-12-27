@@ -69,8 +69,11 @@ namespace allocator {
   // TODO(seanmor5): Rather than pin to Host memory, pin to ERTS memory.
   std::unique_ptr<tensorflow::BFCAllocator> GetGpuHostAllocator(se::StreamExecutor* executor) {
     tensorflow::SubAllocator* sub_allocator = new tensorflow::GpuHostAllocator(executor, 0, {}, {});
-    const tensorflow::int64 kGpuHostMemoryLimitBytes = 64 * (1LL << 30);
-    return absl::make_unique<tensorflow::BFCAllocator>(sub_allocator, kGpuHostMemoryLimitBytes, true, "xla_gpu_host_bfc");
+    const tensorflow::int64 kHostMemoryLimitBytes = 64 * (1LL << 30);
+    return absl::make_unique<tensorflow::BFCAllocator>(sub_allocator,
+                                                       kHostMemoryLimitBytes,
+                                                       true,
+                                                       "xla_gpu_host_bfc");
   }
 
 }  // namespace allocator

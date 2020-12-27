@@ -28,14 +28,30 @@ void free_exla_buffer(ErlNifEnv* env, void* obj) {
 static int open_resources(ErlNifEnv* env) {
   const char* mod = "EXLA";
 
-  if (!exla::open_resource<xla::XlaOp>(env, mod, "Op", free_res)) return -1;
-  if (!exla::open_resource<xla::Shape>(env, mod, "Shape", free_res)) return -1;
-  if (!exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_res)) return -1;
-  if (!exla::open_resource<xla::Literal>(env, mod, "Literal", free_res)) return -1;
-  if (!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_res)) return -1;
-  if (!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_res)) return -1;
-  if (!exla::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_res)) return -1;
-  if (!exla::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) return -1;
+  if (!exla::open_resource<xla::XlaOp>(env, mod, "Op", free_res)) {
+    return -1;
+  }
+  if (!exla::open_resource<xla::Shape>(env, mod, "Shape", free_res)) {
+    return -1;
+  }
+  if (!exla::open_resource<xla::XlaComputation>(env, mod, "Computation", free_res)) {
+    return -1;
+  }
+  if (!exla::open_resource<xla::Literal>(env, mod, "Literal", free_res)) {
+    return -1;
+  }
+  if (!exla::open_resource<xla::LocalExecutable>(env, mod, "LocalExecutable", free_res)) {
+    return -1;
+  }
+  if (!exla::open_resource<xla::XlaBuilder*>(env, mod, "Builder", free_res)) {
+    return -1;
+  }
+  if (!exla::open_resource<exla::ExlaClient*>(env, mod, "ExlaClient", free_res)) {
+    return -1;
+  }
+  if (!exla::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
+    return -1;
+  }
 
   return 1;
 }
@@ -53,7 +69,9 @@ ERL_NIF_TERM new_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   std::string name;
-  if (!exla::get(env, argv[0], name)) return exla::error(env, "Unable to get builder name.");
+  if (!exla::get(env, argv[0], name)) {
+    return exla::error(env, "Unable to get builder name.");
+  }
 
   xla::XlaBuilder* builder = new xla::XlaBuilder(name);
 
@@ -94,19 +112,20 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::error(env, "Unable to get client.");
   }
-  if (!exla::get_binary(env, argv[1], bin)) {
+  if (!exla::get_binary(env, argv[1], &bin)) {
     return exla::error(env, "Unable to get data.");
   }
   if (!exla::get<xla::Shape>(env, argv[2], shape)) {
     return exla::error(env, "Unable to get shape.");
   }
-  if (!exla::get(env, argv[3], device_ordinal)) {
+  if (!exla::get(env, argv[3], &device_ordinal)) {
     return exla::error(env, "Unable to get device ordinal.");
   }
 
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer, (*client)->BufferFromErlBin(bin, *shape, device, false), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer,
+    (*client)->BufferFromErlBin(bin, *shape, device, false), env);
 
   return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer));
 }
@@ -127,11 +146,13 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   }
 
   if ((*buffer)->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM data, (*client)->ErlListFromBuffer(env, *buffer), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM data,
+      (*client)->ErlListFromBuffer(env, *buffer), env);
     return exla::ok(env, data);
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*client)->ErlBinFromBuffer(*buffer), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
+    (*client)->ErlBinFromBuffer(*buffer), env);
 
   return exla::ok(env, exla::make(env, binary));
 }
@@ -220,7 +241,7 @@ ERL_NIF_TERM get_tuple_element(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
   if (!exla::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::error(env, "Unable to get operand.");
   }
-  if (!exla::get(env, argv[1], index)) {
+  if (!exla::get(env, argv[1], &index)) {
     return exla::error(env, "Unable to get index.");
   }
 
@@ -243,7 +264,7 @@ ERL_NIF_TERM parameter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) {
     return exla::error(env, "Unable to get builder.");
   }
-  if (!exla::get(env, argv[1], param_num)) {
+  if (!exla::get(env, argv[1], &param_num)) {
     return exla::error(env, "Unable to get parameter number.");
   }
   if (!exla::get<xla::Shape>(env, argv[2], shape)) {
@@ -382,16 +403,16 @@ ERL_NIF_TERM slice_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::error(env, "Unable to get operand.");
   }
-  if (!exla::get(env, argv[1], start_index)) {
+  if (!exla::get(env, argv[1], &start_index)) {
     return exla::error(env, "Unable to get start index.");
   }
-  if (!exla::get(env, argv[2], end_index)) {
+  if (!exla::get(env, argv[2], &end_index)) {
     return exla::error(env, "Unable to get end index.");
   }
-  if (!exla::get(env, argv[3], stride)) {
+  if (!exla::get(env, argv[3], &stride)) {
     return exla::error(env, "Unable to get stride.");
   }
-  if (!exla::get(env, argv[4], dimno)) {
+  if (!exla::get(env, argv[4], &dimno)) {
     return exla::error(env, "Unable to get dimension number.");
   }
 
@@ -512,7 +533,7 @@ ERL_NIF_TERM iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::Shape>(env, argv[1], shape)) {
     return exla::error(env, "Unable to get shape.");
   }
-  if (!exla::get(env, argv[2], dimension)) {
+  if (!exla::get(env, argv[2], &dimension)) {
     return exla::error(env, "Unable to get dimension");
   }
 
@@ -545,35 +566,103 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[],
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
-ERL_NIF_TERM add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Add);}
-ERL_NIF_TERM sub(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Sub);}
-ERL_NIF_TERM mul(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Mul);}
-ERL_NIF_TERM div(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Div);}
-ERL_NIF_TERM rem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Rem);}
-ERL_NIF_TERM min(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Min);}
-ERL_NIF_TERM max(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Max);}
-ERL_NIF_TERM bitwise_and(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::And);}
-ERL_NIF_TERM bitwise_or(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Or);}
-ERL_NIF_TERM bitwise_xor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Xor);}
-ERL_NIF_TERM shift_left(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::ShiftLeft);}
-ERL_NIF_TERM shift_right_logical(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::ShiftRightLogical);}
-ERL_NIF_TERM shift_right_arithmetic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::ShiftRightArithmetic);}
-ERL_NIF_TERM equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Eq);}
-ERL_NIF_TERM eq_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::EqTotalOrder);}
-ERL_NIF_TERM not_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Ne);}
-ERL_NIF_TERM ne_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::NeTotalOrder);}
-ERL_NIF_TERM greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Ge);}
-ERL_NIF_TERM ge_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::GeTotalOrder);}
-ERL_NIF_TERM greater(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Gt);}
-ERL_NIF_TERM gt_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::GtTotalOrder);}
-ERL_NIF_TERM less(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Lt);}
-ERL_NIF_TERM lt_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::LtTotalOrder);}
-ERL_NIF_TERM less_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Le);}
-ERL_NIF_TERM le_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::LeTotalOrder);}
-ERL_NIF_TERM pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Pow);}
-ERL_NIF_TERM complex(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Complex);}
-ERL_NIF_TERM atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_binary_op(env, argc, argv, xla::Atan2);}
+ERL_NIF_TERM add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Add);
+}
 
+ERL_NIF_TERM sub(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Sub);
+}
+
+ERL_NIF_TERM mul(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Mul);
+}
+
+ERL_NIF_TERM div(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Div);
+}
+
+ERL_NIF_TERM rem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Rem);
+}
+
+ERL_NIF_TERM min(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Min);
+}
+
+ERL_NIF_TERM max(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Max);
+}
+
+ERL_NIF_TERM bitwise_and(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::And);
+}
+
+ERL_NIF_TERM bitwise_or(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Or);
+}
+
+ERL_NIF_TERM bitwise_xor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Xor);
+}
+
+ERL_NIF_TERM shift_left(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::ShiftLeft);
+}
+
+ERL_NIF_TERM shift_right_logical(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::ShiftRightLogical);
+}
+
+ERL_NIF_TERM shift_right_arithmetic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::ShiftRightArithmetic);
+}
+
+ERL_NIF_TERM equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Eq);
+}
+
+ERL_NIF_TERM eq_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::EqTotalOrder);
+}
+
+ERL_NIF_TERM not_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Ne);
+}
+
+ERL_NIF_TERM ne_total_order(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::NeTotalOrder);
+}
+
+ERL_NIF_TERM greater_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Ge);
+}
+
+ERL_NIF_TERM greater(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Gt);
+}
+
+ERL_NIF_TERM less(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Lt);
+}
+
+ERL_NIF_TERM less_equal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Le);
+}
+
+ERL_NIF_TERM pow(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Pow);
+}
+
+ERL_NIF_TERM complex(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Complex);
+}
+
+ERL_NIF_TERM atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_binary_op(env, argc, argv, xla::Atan2);
+}
+
+/************************** Unary Ops ***************************/
 ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp)) {
   if (argc != 1) {
     return exla::error(env, "Bad argument count.");
@@ -589,31 +678,103 @@ ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], x
   return exla::ok(env, exla::make<xla::XlaOp>(env, result));
 }
 
-ERL_NIF_TERM abs(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Abs);}
-ERL_NIF_TERM exp(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Exp);}
-ERL_NIF_TERM expm1(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Expm1);}
-ERL_NIF_TERM floor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Floor);}
-ERL_NIF_TERM ceil(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Ceil);}
-ERL_NIF_TERM round(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Round);}
-ERL_NIF_TERM log(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Log);}
-ERL_NIF_TERM log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Log1p);}
-ERL_NIF_TERM logistic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Logistic);}
-ERL_NIF_TERM sign(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Sign);}
-ERL_NIF_TERM clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Clz);}
-ERL_NIF_TERM cos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Cos);}
-ERL_NIF_TERM sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Sin);}
-ERL_NIF_TERM tanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Tanh);}
-ERL_NIF_TERM real(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Real);}
-ERL_NIF_TERM imag(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Imag);}
-ERL_NIF_TERM sqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Sqrt);}
-ERL_NIF_TERM cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Cbrt);}
-ERL_NIF_TERM rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Rsqrt);}
-ERL_NIF_TERM is_finite(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::IsFinite);}
-ERL_NIF_TERM bitwise_not(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Not);}
-ERL_NIF_TERM neg(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Neg);}
-ERL_NIF_TERM conj(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::Conj);}
-ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {return xla_unary_op(env, argc, argv, xla::PopulationCount);}
+ERL_NIF_TERM abs(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Abs);
+}
 
+ERL_NIF_TERM exp(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Exp);
+}
+
+ERL_NIF_TERM expm1(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Expm1);
+}
+
+ERL_NIF_TERM floor(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Floor);
+}
+
+ERL_NIF_TERM ceil(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Ceil);
+}
+
+ERL_NIF_TERM round(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Round);
+}
+
+ERL_NIF_TERM log(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Log);
+}
+
+ERL_NIF_TERM log1p(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Log1p);
+}
+
+ERL_NIF_TERM logistic(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Logistic);
+}
+
+ERL_NIF_TERM sign(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Sign);
+}
+
+ERL_NIF_TERM clz(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Clz);
+}
+
+ERL_NIF_TERM cos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Cos);
+}
+
+ERL_NIF_TERM sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Sin);
+}
+
+ERL_NIF_TERM tanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Tanh);
+}
+
+ERL_NIF_TERM real(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Real);
+}
+
+ERL_NIF_TERM imag(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Imag);
+}
+
+ERL_NIF_TERM sqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Sqrt);
+}
+
+ERL_NIF_TERM cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Cbrt);
+}
+
+ERL_NIF_TERM rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Rsqrt);
+}
+
+ERL_NIF_TERM is_finite(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::IsFinite);
+}
+
+ERL_NIF_TERM bitwise_not(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Not);
+}
+
+ERL_NIF_TERM neg(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Neg);
+}
+
+ERL_NIF_TERM conj(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Conj);
+}
+
+ERL_NIF_TERM population_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::PopulationCount);
+}
+
+/*********************** Constant Creation ***********************/
 ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::error(env, "Bad argument count.");
@@ -691,7 +852,7 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) {
     return exla::error(env, "Unable to get builder.");
   }
-  if (!exla::get_binary(env, argv[1], binary)) {
+  if (!exla::get_binary(env, argv[1], &binary)) {
     return exla::error(env, "Unable to get data.");
   }
   if (!exla::get<xla::Shape>(env, argv[2], shape)) {
@@ -719,7 +880,7 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::XlaOp>(env, argv[1], rhs)) {
     return exla::error(env, "Unable to get right-hand side operand.");
   }
-  if (!exla::get(env, argv[2], config_int)) {
+  if (!exla::get(env, argv[2], &config_int)) {
     return exla::error(env, "Unable to get precision configuration.");
   }
 
@@ -756,7 +917,7 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get_tuple(env, argv[2], contracting_dims)) {
     return exla::error(env, "Unable to get contraction dimensions.");
   }
-  if (!exla::get(env, argv[3], config_int)) {
+  if (!exla::get(env, argv[3], &config_int)) {
     return exla::error(env, "Unable to get precision configuration.");
   }
 
@@ -945,7 +1106,8 @@ ERL_NIF_TERM get_shape_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::error(env, "Unable to get operand.");
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape shape, (*builder)->GetShape(*operand), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape shape,
+    (*builder)->GetShape(*operand), env);
 
   return exla::ok(env, exla::make<xla::Shape>(env, shape));
 }
@@ -978,13 +1140,14 @@ ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   int num_replicas, intra_op_parallelism_threads;
 
-  if (!exla::get(env, argv[0], num_replicas)) {
+  if (!exla::get(env, argv[0], &num_replicas)) {
     return exla::error(env, "Unable to get num_replicas.");
   }
-  if (!exla::get(env, argv[1], intra_op_parallelism_threads)) {
+  if (!exla::get(env, argv[1], &intra_op_parallelism_threads)) {
     return exla::error(env, "Unable to get intra_op_parallelism_threads.");
   }
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetHostClient(num_replicas, intra_op_parallelism_threads), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
+    exla::GetHostClient(num_replicas, intra_op_parallelism_threads), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -996,13 +1159,16 @@ ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   int num_replicas, intra_op_parallelism_threads;
 
-  if (!exla::get(env, argv[0], num_replicas)) {
+  if (!exla::get(env, argv[0], &num_replicas)) {
     return exla::error(env, "Unable to get number of replicas.");
   }
-  if (!exla::get(env, argv[1], intra_op_parallelism_threads)) {
+  if (!exla::get(env, argv[1], &intra_op_parallelism_threads)) {
     return exla::error(env, "Unable to get number of parallelism threads.");
   }
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetGpuClient(num_replicas, intra_op_parallelism_threads, "CUDA"), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
+    exla::GetGpuClient(num_replicas,
+                      intra_op_parallelism_threads,
+                      "CUDA"), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -1014,13 +1180,16 @@ ERL_NIF_TERM get_rocm_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
   int num_replicas, intra_op_parallelism_threads;
 
-  if (!exla::get(env, argv[0], num_replicas)) {
+  if (!exla::get(env, argv[0], &num_replicas)) {
     return exla::error(env, "Unable to get number of replicas.");
   }
-  if (!exla::get(env, argv[1], intra_op_parallelism_threads)) {
+  if (!exla::get(env, argv[1], &intra_op_parallelism_threads)) {
     return exla::error(env, "Unable to get number of parallelism threads.");
   }
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetGpuClient(num_replicas, intra_op_parallelism_threads, "ROCM"), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
+    exla::GetGpuClient(num_replicas,
+                       intra_op_parallelism_threads,
+                       "ROCM"), env);
 
   return exla::ok(env, exla::make<exla::ExlaClient*>(env, client));
 }
@@ -1070,7 +1239,8 @@ ERL_NIF_TERM build(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::error(env, "Bad argument passed to build.");
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::XlaComputation computation, (*builder)->Build(*root), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::XlaComputation computation,
+    (*builder)->Build(*root), env);
 
   return exla::ok(env, exla::make<xla::XlaComputation>(env, computation));
 }
@@ -1095,13 +1265,13 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get_list<xla::Shape>(env, argv[2], argument_layouts)) {
     return exla::error(env, "Unable to get argument layouts.");
   }
-  if (!exla::get(env, argv[3], device_ordinal)) {
+  if (!exla::get(env, argv[3], &device_ordinal)) {
     return exla::error(env, "Unable to get device ordinal.");
   }
-  if (!exla::get(env, argv[4], num_replicas)) {
+  if (!exla::get(env, argv[4], &num_replicas)) {
     return exla::error(env, "Unable to get Number of Replicas.");
   }
-  if (!exla::get(env, argv[5], num_partitions)) {
+  if (!exla::get(env, argv[5], &num_partitions)) {
     return exla::error(env, "Unable to get Number of Partitions.");
   }
 
@@ -1115,10 +1285,14 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   // build_options.set_use_spmd_partitioning(use_spmd);
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
-                        (*client)->client()->Compile(*computation, argument_layouts, build_options), env);
+                        (*client)->client()->Compile(*computation,
+                                                     argument_layouts,
+                                                     build_options), env);
 
   // TODO(seanmor5): This should return the vector. There is an executable for every partition, usually 1.
-  return exla::ok(env, exla::make<xla::LocalExecutable>(env, executables.at(0)));
+  return exla::ok(env,
+    exla::make<xla::LocalExecutable>(env,
+      std::move(executables.at(0))));
 }
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1138,19 +1312,19 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::LocalExecutable>(env, argv[1], local_executable)) {
     return exla::error(env, "Unable to get executable.");
   }
-  if (!exla::get(env, argv[3], device_ordinal)) {
+  if (!exla::get(env, argv[3], &device_ordinal)) {
     return exla::error(env, "Unable to get device ordinal.");
   }
-  if (!exla::get(env, argv[4], run_id)) {
+  if (!exla::get(env, argv[4], &run_id)) {
     return exla::error(env, "Unable to get Run ID.");
   }
-  if (!exla::get(env, argv[5], rng_seed)) {
+  if (!exla::get(env, argv[5], &rng_seed)) {
     return exla::error(env, "Unable to get RNG Seed.");
   }
-  if (!exla::get(env, argv[6], launch_id)) {
+  if (!exla::get(env, argv[6], &launch_id)) {
     return exla::error(env, "Unable to get Launch ID.");
   }
-  if (!exla::get(env, argv[7], keep_on_device)) {
+  if (!exla::get(env, argv[7], &keep_on_device)) {
     return exla::error(env, "Unable to get keep_on_device.");
   }
 
@@ -1161,7 +1335,8 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   run_options.set_stream(device->compute_stream());
   run_options.set_host_to_device_stream(device->host_to_device_stream());
   run_options.set_allocator((*client)->allocator());
-  run_options.set_intra_op_thread_pool((*client)->client()->backend().eigen_intra_op_thread_pool_device());
+  run_options.set_intra_op_thread_pool(
+    (*client)->client()->backend().eigen_intra_op_thread_pool_device());
   // TODO(seanmor5): This is for executing multiple computations in parallel across multiple replicas.
   // run_options.set_device_assignment(device_assignment.get());
   run_options.set_run_id(run_id_obj);
@@ -1169,53 +1344,12 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   run_options.set_gpu_executable_run_options((*client)->gpu_run_options());
   run_options.set_launch_id(launch_id);
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*client)->Run(env, local_executable, arguments, device, run_options, keep_on_device), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result,
+    (*client)->Run(env, local_executable,
+                    arguments, device,
+                    run_options, keep_on_device), env);
 
   return exla::ok(env, result);
-}
-
-/*********** HLO Methods *************/
-std::unique_ptr<xla::HloModule> get_hlo_module(const xla::XlaComputation& computation) {
-  xla::HloModuleConfig module_config = xla::HloModule::CreateModuleConfigFromProto(computation.proto(), xla::GetDebugOptionsFromFlags()).ConsumeValueOrDie();
-  std::unique_ptr<xla::HloModule> module = xla::HloModule::CreateFromProto(computation.proto(), module_config).ConsumeValueOrDie();
-
-  return module;
-}
-
-ERL_NIF_TERM get_computation_hlo_text(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1) {
-    return exla::error(env, "Bad argument count.");
-  }
-
-  xla::XlaComputation* computation;
-
-  if (!exla::get<xla::XlaComputation>(env, argv[0], computation)) {
-    return exla::error(env, "Unable to get computation.");
-  }
-
-  std::unique_ptr<xla::HloModule> hlo_module = get_hlo_module(*computation);
-
-  xla::HloPrintOptions options;
-  options = xla::HloPrintOptions::ShortParsable();
-  options.set_print_large_constants(false);
-  std::string result = hlo_module->ToString(options);
-  return exla::make(env, result);
-}
-
-ERL_NIF_TERM get_computation_hlo_proto(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1) {
-    return exla::error(env, "Bad argument count.");
-  }
-
-  xla::XlaComputation* computation;
-
-  if (!exla::get<xla::XlaComputation>(env, argv[0], computation)) {
-    return exla::error(env, "Unable to get computation.");
-  }
-
-  std::string result;
-  (*computation).proto().SerializeToString(&result);
-  return exla::make(env, result);
 }
 
 static ErlNifFunc exla_funcs[] = {
@@ -1326,9 +1460,6 @@ static ErlNifFunc exla_funcs[] = {
   {"build", 2, build},
   {"compile", 6, compile},
   {"run", 8, run},
-  /******** HLO Functions ********/
-  {"get_computation_hlo_proto", 1, get_computation_hlo_proto},
-  {"get_computation_hlo_text", 1, get_computation_hlo_text}
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);

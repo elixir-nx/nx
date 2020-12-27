@@ -57,11 +57,12 @@ private:
 };
 
 /*
- * There are a lot of resources that we need to keep track of, and it doesn't make sense
- * to pass references to all of them back and forth between the BEAM and NIFs. To avoid this
- * we implement an `ExlaClient` in the same spirit of: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h
- * which wraps an `xla::LocalClient` and also resources that we can initialize and hold on client
- * creation.
+ * There are a lot of resources that we need to keep track of,
+ * and it doesn't make sense to pass references to all of them back
+ * and forth between the BEAM and NIFs. To avoid this we implement
+ * an `ExlaClient` in the same spirit of the PjRtClient in the XLA
+ * source, which wraps an `xla::LocalClient` and also resources
+ * that we can initialize and hold on client creation.
  */
 class ExlaClient {
 public:
@@ -86,29 +87,35 @@ public:
                                               ExlaDevice* device,
                                               bool transfer_for_run);
 
-  xla::StatusOr<ERL_NIF_TERM> DecomposeBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
+  xla::StatusOr<ERL_NIF_TERM> DecomposeBuffer(ErlNifEnv* env,
+                                              ExlaBuffer* buffer);
 
   xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
 
-  xla::StatusOr<ERL_NIF_TERM> ErlListFromBuffer(ErlNifEnv* env, ExlaBuffer* buffer);
+  xla::StatusOr<ERL_NIF_TERM> ErlListFromBuffer(ErlNifEnv* env,
+                                                ExlaBuffer* buffer);
 
   xla::LocalClient* client() { return client_; }
 
-  tensorflow::Allocator* host_memory_allocator() { return host_memory_allocator_.get(); }
+  tensorflow::Allocator* host_memory_allocator() {
+    return host_memory_allocator_.get();
+  }
 
   int host_id() { return host_id_; }
 
   se::DeviceMemoryAllocator* allocator() { return allocator_; }
 
-  xla::GpuExecutableRunOptions* gpu_run_options() { return gpu_run_options_.get(); }
+  xla::GpuExecutableRunOptions* gpu_run_options() {
+    return gpu_run_options_.get();
+  }
 
   int device_count() const { return devices_.size(); }
 
-  const std::vector<std::unique_ptr<ExlaDevice>>& devices() const { return devices_; }
+  const std::vector<std::unique_ptr<ExlaDevice>>& devices() const {
+    return devices_;
+  }
 
   exla::ExlaDevice* device(int id) { return devices_.at(id).get(); }
-
-  /* tensorflow::thread::ThreadPool* h2d_transfer_pool() { return &h2d_transfer_pool_; } */
 
 private:
   xla::LocalClient* client_;
@@ -122,8 +129,11 @@ private:
 };
 
 // TODO(seanmor5): Separate into different device classes similar to PjRt
-xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas, int intra_op_parallelism_threads);
-xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_parallelism_threads, const char* platform_name);
+xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
+                                         int intra_op_parallelism_threads);
+xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
+                                        int intra_op_parallelism_threads,
+                                        const char* platform_name);
 
 }  // namespace exla
 

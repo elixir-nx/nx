@@ -283,7 +283,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
       ErlNifBinary data;
       xla::Shape* shape;
 
-      if (!get_binary(env, tuple[0], data)) return tensorflow::errors::InvalidArgument("Unable to read binary data from input.");
+      if (!get_binary(env, tuple[0], &data)) return tensorflow::errors::InvalidArgument("Unable to read binary data from input.");
       if (!get<xla::Shape>(env, tuple[1], shape)) return tensorflow::errors::InvalidArgument("Unable to read shape from input.");
 
       EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, BufferFromErlBin(data, *shape, device, true));
@@ -335,16 +335,19 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::Run(ErlNifEnv* env,
   exla::ExlaBuffer* buffer_ref = new exla::ExlaBuffer(new xla::ScopedShapedBuffer(std::move(result)), device, false);
 
   if (keep_on_device && buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references, DecomposeBuffer(env, buffer_ref), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references,
+      DecomposeBuffer(env, buffer_ref), env);
     return references;
   } else if (keep_on_device) {
     return make<exla::ExlaBuffer*>(env, buffer_ref);
   } else if (buffer_ref->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple, ErlListFromBuffer(env, buffer_ref), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple,
+      ErlListFromBuffer(env, buffer_ref), env);
     delete buffer_ref;
     return tuple;
   } else {
-    EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, ErlBinFromBuffer(buffer_ref), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
+      ErlBinFromBuffer(buffer_ref), env);
     delete buffer_ref;
     return make(env, binary);
   }
@@ -390,7 +393,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_paralleli
     xla::PlatformUtil::GetPlatform(std::string(platform_name)));
 
   if (platform->VisibleDeviceCount() <= 0) {
-    return xla::FailedPrecondition("%s Platform has no visible devices.", platform_name);
+    return tensorflow::errors::FailedPrecondition("%s Platform has no visible devices.", platform_name);
   }
 
   xla::LocalClientOptions options;
@@ -407,7 +410,9 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_paralleli
       client->backend().stream_executor(i));
 
     int device_ordinal = executor->device_ordinal();
-    devices.push_back(absl::make_unique<ExlaDevice>(device_ordinal, executor, client));
+    devices.push_back(absl::make_unique<ExlaDevice>(device_ordinal,
+                                                    executor,
+                                                    client));
   }
 
   // TODO(seanmor5): Allocator options should be a configuration option.
@@ -416,7 +421,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas, int intra_op_paralleli
 
   std::unique_ptr<tensorflow::BFCAllocator> host_memory_allocator = allocator::GetGpuHostAllocator(devices.front()->executor());
 
-  std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options = absl::make_unique<xla::GpuExecutableRunOptions>();
+  auto gpu_run_options = absl::make_unique<xla::GpuExecutableRunOptions>();
 
   return new ExlaClient(client, /*host_id*/0,
                         /*devices*/std::move(devices),

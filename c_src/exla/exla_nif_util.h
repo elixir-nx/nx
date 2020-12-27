@@ -58,32 +58,32 @@ ERL_NIF_TERM atom(ErlNifEnv* env, const char* status);
 /*
  * Getters for numeric types.
  */
-int get(ErlNifEnv* env, ERL_NIF_TERM term, int8 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, int16 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, int32 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, int64 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, uint16 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, uint64 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, float32 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, float64 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, complex64 &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, complex128 &var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, int8* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, int16* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, int32* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, int64* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, uint16* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, uint64* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, float32* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, float64* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, complex64* var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, complex128* var);
 
 /*
  * Getters for standard types.
  */
 int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
-int get(ErlNifEnv* env, ERL_NIF_TERM term, bool &var);
+int get(ErlNifEnv* env, ERL_NIF_TERM term, bool* var);
 
 /*
  * Getters for non-standard types. Suffix to be explicit.
  */
-int get_binary(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary &var);
+int get_binary(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary* var);
 int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type);
-int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var);
+int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string* var);
 
 /*
  * Getter for native type from term. Needed to avoid templates in NIF.
@@ -93,7 +93,7 @@ template <
   typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
 T get_value(ErlNifEnv* env, ERL_NIF_TERM &term) {
   T value;
-  exla::get(env, term, value);
+  exla::get(env, term, &value);
   return value;
 }
 
@@ -110,7 +110,10 @@ template<typename T> ErlNifResourceType* resource_object<T>::type = 0;
  * Opens a resource and stores it in a `resource_object`.
  */
 template <typename T>
-int open_resource(ErlNifEnv* env, const char* mod, const char* name, ErlNifResourceDtor* dtor) {
+int open_resource(ErlNifEnv* env,
+                  const char* mod,
+                  const char* name,
+                  ErlNifResourceDtor* dtor) {
   ErlNifResourceType *type;
   ErlNifResourceFlags flags = ErlNifResourceFlags(ERL_NIF_RT_CREATE|ERL_NIF_RT_TAKEOVER);
   type = enif_open_resource_type(env, mod, name, dtor, flags, NULL);
@@ -128,15 +131,23 @@ int open_resource(ErlNifEnv* env, const char* mod, const char* name, ErlNifResou
  */
 template <typename T>
 ERL_NIF_TERM get(ErlNifEnv* env, ERL_NIF_TERM term, T* &var) {
-  return enif_get_resource(env, term, resource_object<T>::type, reinterpret_cast<void**>(&var));
+  return enif_get_resource(env, term,
+                           resource_object<T>::type,
+                           reinterpret_cast<void**>(&var));
 }
 
 /*
  * Getters for containers.
  */
-int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64> &var);
-int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<int64> &var);
-int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<ErlNifBinary> &var);
+int get_tuple(ErlNifEnv* env,
+              ERL_NIF_TERM tuple,
+              std::vector<int64> &var);
+int get_list(ErlNifEnv* env,
+             ERL_NIF_TERM list,
+             std::vector<int64> &var);
+int get_list(ErlNifEnv* env,
+             ERL_NIF_TERM list,
+             std::vector<ErlNifBinary> &var);
 
 template <typename T>
 int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
@@ -180,21 +191,23 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var) {
 /*
  * Getters for XLA Protobuf Types
  */
-int get_padding_config(ErlNifEnv* env, ERL_NIF_TERM list, xla::PaddingConfig& padding_config);
+int get_padding_config(ErlNifEnv* env,
+                       ERL_NIF_TERM list,
+                       xla::PaddingConfig& padding_config);
 
 /*
  * Makers for standard types.
  */
-ERL_NIF_TERM make(ErlNifEnv* env, int &var);
-ERL_NIF_TERM make(ErlNifEnv* env, std::string &var);
-ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary &var);
+ERL_NIF_TERM make(ErlNifEnv* env, int var);
+ERL_NIF_TERM make(ErlNifEnv* env, std::string var);
+ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary var);
 ERL_NIF_TERM make(ErlNifEnv* env, const char* string);
 
 /*
  * Maker for resource from `std::unique_ptr`.
  */
 template <typename T>
-ERL_NIF_TERM make(ErlNifEnv* env, std::unique_ptr<T> &var) {
+ERL_NIF_TERM make(ErlNifEnv* env, std::unique_ptr<T> var) {
   void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
   T* value = var.release();
   new(ptr) T(std::move(*value));
@@ -208,9 +221,6 @@ ERL_NIF_TERM make(ErlNifEnv* env, std::unique_ptr<T> &var) {
  */
 template <typename T>
 ERL_NIF_TERM make(ErlNifEnv* env, T &var) {
-  // TODO: Split this into two different functions: one that uses the copy constructor
-  // and one that uses the move constructor, and then update which resources use which
-  // constructor. This should enable easier handling of memory leaks: http://www.github.com/seanmor5/exla/pull/12
   void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
   new(ptr) T(std::move(var));
   ERL_NIF_TERM ret = enif_make_resource(env, ptr);
@@ -229,11 +239,13 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
  * Helper Macros
  * See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/lib/statusor.h
  */
-#define EXLA_STATUS_MACROS_CONCAT_NAME(x, y) EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y)
+#define EXLA_STATUS_MACROS_CONCAT_NAME(x, y)  \
+  EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y)
+
 #define EXLA_STATUS_MACROS_CONCAT_NAME_IMPL(x, y) x##y
 
-#define EXLA_ASSIGN_OR_RETURN_NIF(lhs, rexpr, env) \
-  EXLA_ASSIGN_OR_RETURN_NIF_IMPL(                  \
+#define EXLA_ASSIGN_OR_RETURN_NIF(lhs, rexpr, env)                      \
+  EXLA_ASSIGN_OR_RETURN_NIF_IMPL(                                       \
     EXLA_STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__),      \
                                     lhs, rexpr, env)
 
@@ -244,9 +256,11 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
   }                                                                     \
   lhs = std::move(statusor.ValueOrDie());
 
-#define EXLA_ASSIGN_OR_RETURN(lhs, rexpr) \
-  EXLA_ASSIGN_OR_RETURN_IMPL(                  \
-    EXLA_STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__), lhs, rexpr)
+#define EXLA_ASSIGN_OR_RETURN(lhs, rexpr)                               \
+  EXLA_ASSIGN_OR_RETURN_IMPL(                                           \
+    EXLA_STATUS_MACROS_CONCAT_NAME(                                     \
+      _status_or_value, __COUNTER__),                                   \
+  lhs, rexpr)
 
 #define EXLA_ASSIGN_OR_RETURN_IMPL(statusor, lhs, rexpr)                \
   auto statusor = (rexpr);                                              \

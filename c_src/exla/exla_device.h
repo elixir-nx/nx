@@ -19,23 +19,40 @@ namespace se = tensorflow::se;
 
 class ExlaDevice {
   public:
-    explicit ExlaDevice(int id, se::StreamExecutor* executor, xla::LocalClient* client);
+    explicit ExlaDevice(int id,
+                        se::StreamExecutor* executor,
+                        xla::LocalClient* client);
+
     virtual ~ExlaDevice() = default;
 
-    int id() const { return id_; }
+    int id() const {
+      return id_;
+    }
 
-    se::StreamExecutor* executor() const { return executor_; }
+    se::StreamExecutor* executor() const {
+      return executor_;
+    }
 
-    xla::LocalClient* client() const { return client_; }
+    xla::LocalClient* client() const {
+      return client_;
+    }
 
-    se::Stream* compute_stream() const { return compute_stream_.get(); }
+    se::Stream* compute_stream() const {
+      return compute_stream_.get();
+    }
 
-    se::Stream* host_to_device_stream() const { return host_to_device_stream_.get(); }
+    se::Stream* host_to_device_stream() const {
+      return host_to_device_stream_.get();
+    }
 
     // TODO(seanmor5): Make multiple of these
-    se::Stream* device_to_host_stream() const { return device_to_host_stream_.get(); }
+    se::Stream* device_to_host_stream() const {
+      return device_to_host_stream_.get();
+    }
 
-    se::Stream* callback_stream() const { return callback_stream_.get(); }
+    se::Stream* callback_stream() const {
+      return callback_stream_.get();
+    }
 
   private:
     int id_;
