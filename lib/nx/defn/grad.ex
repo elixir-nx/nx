@@ -283,18 +283,21 @@ defmodule Nx.Defn.Grad do
     {multiply(g, res), cache}
   end
 
-  defp grad(:reshape, [x, _new_shape], _ans, g, cache) do
-    {dx, cache} = to_grad(x, to_one(x, g), cache)
+  defp grad(:reshape, [x, _new_shape], _ans, _g, cache) do
     # Broadcast to shape before the reshape
     g = broadcast(1.0, x)
-    {multiply(g, dx), cache}
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:transpose, [x, axes], _ans, g, cache) do
+    # Broadcast to shape after transpose and undo the transpose
+    g = Expr.transpose(broadcast(1.0, g), axes)
+    to_grad(x, g, cache)
   end
 
   # TODO:
   # outer/2
   # dot_general
-  # reshape - deflinear
-  # transpose - deflinear
 
   ## Grad helpers
 
