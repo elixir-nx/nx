@@ -26,9 +26,9 @@ b2 = Exla.Buffer.buffer(data, shape)
 IO.inspect Exla.Executable.run(exec_default, [b1, b2])
 
 # This will run on the second device
-exec_second = Exla.Client.compile(client, comp, [shape, shape], device_ordinal: 1)
+# exec_second = Exla.Client.compile(client, comp, [shape, shape], device_ordinal: 1)
 
-IO.inspect Exla.Executable.run(exec_second, [b1, b2])
+# IO.inspect Exla.Executable.run(exec_second, [b1, b2])
 
 # If we try to do it on an ordinal that doesn't exist, it will throw:
 try do
@@ -49,3 +49,10 @@ comp = Exla.Builder.build(ast)
 replicated_exec = Exla.Client.compile(client, comp, [shape, shape], num_replicas: 2)
 
 IO.inspect Exla.Executable.run_parallel(replicated_exec, [sb1, sb2])
+
+ast = Exla.Op.replica_id(builder)
+comp = Exla.Builder.build(ast)
+
+replicated_exec = Exla.Client.compile(client, comp, [], num_replicas: 2)
+
+IO.inspect Exla.Executable.run_parallel(replicated_exec, [])

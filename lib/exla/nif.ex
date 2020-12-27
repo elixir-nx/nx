@@ -182,6 +182,8 @@ defmodule Exla.NIF do
 
   def get_tuple_element(_operand, _indeX), do: nif_error(__ENV__.function)
 
+  def replica_id(_builder), do: nif_error(__ENV__.function)
+
   def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 

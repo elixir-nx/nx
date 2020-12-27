@@ -328,6 +328,10 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def replica_id(%Builder{ref: builder}) do
+    ref = Exla.NIF.replica_id(builder) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
   ## Helpers
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))

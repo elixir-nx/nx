@@ -93,7 +93,12 @@ defmodule Exla.Executable do
       for i <- 1..num_replicas, j <- 1..num_partitions do
         device_assignment = {i, j}
         opts = Keyword.update(opts, :device_assignment, device_assignment, & &1)
-        Task.async(fn -> run(executable, Enum.at(inputs, i + j - 2), opts) end)
+        args =
+          case inputs do
+            [] -> []
+            inputs -> Enum.at(inputs, i + j - 2)
+          end
+        Task.async(fn -> run(executable, args, opts) end)
       end
 
     buffers =
