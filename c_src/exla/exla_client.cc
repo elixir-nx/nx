@@ -80,18 +80,16 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
-                                                ERL_NIF_TERM arguments,
-                                                int replica,
-                                                int partition,
-                                                ExlaDevice* device,
-                                                xla::ExecutableRunOptions& options,
-                                                bool keep_on_device) {
-
+                                                  ERL_NIF_TERM arguments,
+                                                  int replica,
+                                                  int partition,
+                                                  ExlaDevice* device,
+                                                  bool keep_on_device) {
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
   if(device == nullptr) {
     // TODO: Maybe we can check this in Elixir?
     CHECK(device_assignment_ != nullptr);
-    const int device_id = (*device_assignment_)(replica, partition);
+    const int device_id = (*device_assignment_)(replica - 1, partition - 1);
     device = client_->device(device_id);
     device_assignment = device_assignment_;
   } else {
@@ -100,8 +98,19 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   }
 
   int device_ordinal = device->device_ordinal();
-
   int executable_idx = executables_.size() > 1 ? partition : 0;
+
+  // xla::RunId run_id_obj(run_id);
+  xla::ExecutableRunOptions run_options;
+  run_options.set_stream(device->compute_stream());
+  run_options.set_host_to_device_stream(device->host_to_device_stream());
+  run_options.set_allocator(client_->allocator());
+  run_options.set_intra_op_thread_pool(client_->client()->backend().eigen_intra_op_thread_pool_device());
+  run_options.set_device_assignment(device_assignment.get());
+  // run_options.set_run_id(run_id_obj);
+  // run_options.set_rng_seed(rng_seed);
+  run_options.set_gpu_executable_run_options(client_->gpu_run_options());
+  // run_options.set_launch_id(launch_id);
 
   std::shared_ptr<xla::LocalExecutable> executable = executables_.at(executable_idx);
 
@@ -160,7 +169,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     list = tail;
   }
 
-  EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput exec_result, executable->Run(std::move(inputs), options));
+  EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput exec_result, executable->Run(std::move(inputs), run_options));
 
   for(auto buf : buffers) {
     if(*buf != NULL) {
@@ -484,10 +493,6 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
       return tensorflow::errors::InvalidArgument(
           "Device assignment (%s) does not have any local devices.",
           device_assignment->ToString());
-    }
-
-    if (build_options.device_ordinal() < 0) {
-      build_options.set_device_ordinal(local_devices.front()->device_ordinal());
     }
   }
 

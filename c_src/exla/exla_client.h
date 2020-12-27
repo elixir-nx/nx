@@ -63,53 +63,44 @@ class ExlaClient;
  * Wraps an xla::LocalExecutable
  */
 class ExlaExecutable {
-  public:
-    ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
-                   std::shared_ptr<xla::DeviceAssignment> device_assignment,
-                   std::vector<std::pair<int, int>> local_logical_device_ids,
-                   std::vector<ExlaDevice*> local_devices,
-                   ExlaClient* client);
+ public:
+  ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
+                 std::shared_ptr<xla::DeviceAssignment> device_assignment,
+                 std::vector<std::pair<int, int>> local_logical_device_ids,
+                 std::vector<ExlaDevice*> local_devices,
+                 ExlaClient* client);
 
-    ExlaClient* client() { return client_; }
+  ExlaClient* client() { return client_; }
 
-    int num_replicas() const { return executables_.at(0)->build_options().num_replicas(); }
+  int num_replicas() const { return executables_.at(0)->build_options().num_replicas(); }
 
-    int num_partitions() const { return executables_.at(0)->build_options().num_replicas(); }
+  int num_partitions() const { return executables_.at(0)->build_options().num_replicas(); }
 
-    const std::vector<std::shared_ptr<xla::LocalExecutable>>& executables() const { return executables_; }
+  const std::vector<std::shared_ptr<xla::LocalExecutable>>& executables() const { return executables_; }
 
-    const xla::DeviceAssignment& device_assignment() const { return *device_assignment_; }
+  const xla::DeviceAssignment& device_assignment() const { return *device_assignment_; }
 
-    const std::vector<std::pair<int, int>>& local_logical_device_ids() const { return local_logical_device_ids_; }
+  const std::vector<std::pair<int, int>>& local_logical_device_ids() const { return local_logical_device_ids_; }
 
-    const std::vector<ExlaDevice*> local_devices() { return local_devices_; }
+  const std::vector<ExlaDevice*> local_devices() { return local_devices_; }
 
-    void Delete() { executables_.clear(); }
+  void Delete() { executables_.clear(); }
 
-    xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
-                                    ERL_NIF_TERM arguments,
-                                    int replica,
-                                    int partition,
-                                    ExlaDevice* device,
-                                    xla::ExecutableRunOptions& options,
-                                    bool keep_on_device);
+  xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
+                                  ERL_NIF_TERM arguments,
+                                  int replica,
+                                  int partition,
+                                  ExlaDevice* device,
+                                  bool keep_on_device);
 
-  private:
-    ExlaClient* client_;
-    std::vector<std::shared_ptr<xla::LocalExecutable>> executables_;
-    std::shared_ptr<xla::DeviceAssignment> device_assignment_;
-    std::vector<std::pair<int, int>> local_logical_device_ids_;
-    std::vector<ExlaDevice*> local_devices_;
+ private:
+  ExlaClient* client_;
+  std::vector<std::shared_ptr<xla::LocalExecutable>> executables_;
+  std::shared_ptr<xla::DeviceAssignment> device_assignment_;
+  std::vector<std::pair<int, int>> local_logical_device_ids_;
+  std::vector<ExlaDevice*> local_devices_;
 };
 
-/*
- * There are a lot of resources that we need to keep track of,
- * and it doesn't make sense to pass references to all of them back
- * and forth between the BEAM and NIFs. To avoid this we implement
- * an `ExlaClient` in the same spirit of the PjRtClient in the XLA
- * source, which wraps an `xla::LocalClient` and also resources
- * that we can initialize and hold on client creation.
- */
 class ExlaClient {
  public:
   explicit ExlaClient(xla::LocalClient* client,
