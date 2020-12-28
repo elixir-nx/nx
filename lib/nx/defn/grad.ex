@@ -82,54 +82,37 @@ defmodule Nx.Defn.Grad do
     {maybe_subtract(dx, dy), cache}
   end
 
-  defp grad(:multiply, [x, y], _ans, g, cache) do
-    {dx, cache} = to_grad(x, g, cache)
-    {dy, cache} = to_grad(y, g, cache)
-
-    {maybe_add(maybe_multiply(dx, y), maybe_multiply(dy, x)), cache}
-  end
-
   defp grad(:divide, [x, y], ans, g, cache) do
-    {dx, cache} = to_grad(x, g, cache)
-    {dy, cache} = to_grad(y, g, cache)
+    {dx, cache} = to_grad(x, Expr.divide(g, y), cache)
+    {dy, cache} = to_grad(y, Expr.divide(Expr.multiply(g, ans), y), cache)
 
-    num = maybe_subtract(dx, maybe_multiply(ans, dy))
-    {maybe_divide(num, y), cache}
+    {maybe_subtract(dx, dy), cache}
   end
 
   defp grad(:remainder, [x, y], _, g, cache) do
     {dx, cache} = to_grad(x, g, cache)
-    {dy, cache} = to_grad(y, g, cache)
-
-    right = maybe_multiply(dy, Expr.floor(Expr.divide(x, y)))
-    {maybe_subtract(dx, right), cache}
+    {dy, cache} = to_grad(y, Expr.multiply(g, Expr.floor(Expr.divide(x, y))), cache)
+    {maybe_subtract(dx, dy), cache}
   end
 
   defp grad(:power, [x, y], ans, g, cache) do
-    {dx, cache} = to_grad(x, g, cache)
-    {dy, cache} = to_grad(y, g, cache)
-
     exponent = Expr.select(Expr.equal(y, 0.0), 1.0, Expr.subtract(y, 1.0))
-    left = maybe_multiply(dx, Expr.multiply(y, Expr.power(x, exponent)))
-
     base = Expr.select(Expr.equal(x, 0.0), 1.0, x)
-    right = maybe_multiply(dy, Expr.multiply(Expr.log(base), ans))
-    {maybe_add(left, right), cache}
+
+    {dx, cache} = to_grad(x, Expr.multiply(g, Expr.multiply(y, Expr.power(x, exponent))), cache)
+    {dy, cache} = to_grad(y, Expr.multiply(g, Expr.multiply(Expr.log(base), ans)), cache)
+    {maybe_add(dx, dy), cache}
   end
 
   defp grad(:arctan2, [x, y], _, g, cache) do
-    {dx, cache} = to_grad(x, g, cache)
-    {dy, cache} = to_grad(y, g, cache)
-
-    num = maybe_subtract(maybe_multiply(dx, y), maybe_multiply(x, dy))
     den = Expr.add(Expr.power(x, 2), Expr.power(y, 2))
-    {maybe_divide(num, den), cache}
+    {dx, cache} = to_grad(x, Expr.divide(Expr.multiply(g, y), den), cache)
+    {dy, cache} = to_grad(y, Expr.divide(Expr.multiply(g, x), den), cache)
+
+    {maybe_subtract(dx, dy), cache}
   end
 
   defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
-    {dx, cache} = to_grad(x, g, cache)
-    {dy, cache} = to_grad(y, g, cache)
-
     lhs =
       Expr.divide(
         Expr.select(Expr.equal(x, ans), 1.0, 0.0),
@@ -142,7 +125,9 @@ defmodule Nx.Defn.Grad do
         Expr.select(Expr.equal(x, ans), 2.0, 1.0)
       )
 
-    {maybe_add(maybe_multiply(dx, lhs), maybe_multiply(dy, rhs)), cache}
+    {dx, cache} = to_grad(x, Expr.multiply(g, lhs), cache)
+    {dy, cache} = to_grad(y, Expr.multiply(g, rhs), cache)
+    {maybe_add(dx, dy), cache}
   end
 
   ## Linear gradients
@@ -202,6 +187,13 @@ defmodule Nx.Defn.Grad do
   defp grad(:mean, [x, opts], ans, g, cache) do
     factor = Expr.to_expr(Nx.Shape.size(ans.shape) / Nx.Shape.size(x.shape))
     grad_aggregate(x, opts, Expr.multiply(factor, g), cache)
+  end
+
+  defp grad(:multiply, [x, y], _ans, g, cache) do
+    {dx, cache} = to_grad(x, Expr.multiply(g, y), cache)
+    {dy, cache} = to_grad(y, Expr.multiply(g, x), cache)
+
+    {maybe_add(dx, dy), cache}
   end
 
   defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
@@ -349,21 +341,6 @@ defmodule Nx.Defn.Grad do
       zero?(y) -> x
       zero?(x) -> Expr.negate(y)
       true -> Expr.subtract(x, y)
-    end
-  end
-
-  defp maybe_multiply(x, y) do
-    cond do
-      zero?(x) -> x
-      zero?(y) -> y
-      true -> Expr.multiply(x, y)
-    end
-  end
-
-  defp maybe_divide(x, y) do
-    cond do
-      zero?(x) -> x
-      true -> Expr.divide(x, y)
     end
   end
 

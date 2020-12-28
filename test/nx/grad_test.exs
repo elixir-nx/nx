@@ -194,7 +194,7 @@ defmodule Nx.GradTest do
     defn grad_arctan2_rule(t), do: grad(t, arctan2_rule(t))
 
     test "computes gradient" do
-      assert grad_arctan2_rule(Nx.tensor(1.0)) == Nx.tensor(-0.2162115612038287)
+      assert grad_arctan2_rule(Nx.tensor(1.0)) == Nx.tensor(-0.21621156120382867)
 
       for _ <- 1..100 do
         check_grads!(
@@ -270,7 +270,7 @@ defmodule Nx.GradTest do
       assert grad_dot_both_rule(Nx.tensor([1, 2, 3])) == Nx.tensor([5.0, 80.0, 405.0])
     end
 
-    defn grad_dot_dot_rule(x, w1, b1, w2, b2) do
+    defn grad_dot_dot_rule(x, w1, b1, w2, b2, labels) do
       grad(
         x,
         x
@@ -278,6 +278,7 @@ defmodule Nx.GradTest do
         |> Nx.add(b1)
         |> Nx.dot(w2)
         |> Nx.add(b2)
+        |> Nx.multiply(labels)
         |> Nx.sum()
       )
     end
@@ -288,16 +289,36 @@ defmodule Nx.GradTest do
                Nx.iota({4, 3}),
                Nx.iota({3}),
                Nx.iota({3, 2}),
-               Nx.iota({2})
+               Nx.iota({2}),
+               Nx.iota({5, 2})
              ) ==
                Nx.tensor([
-                 [23.0, 68.0, 113.0, 158.0],
-                 [23.0, 68.0, 113.0, 158.0],
-                 [23.0, 68.0, 113.0, 158.0],
-                 [23.0, 68.0, 113.0, 158.0],
-                 [23.0, 68.0, 113.0, 158.0]
+                 [13.0, 40.0, 67.0, 94.0],
+                 [59.0, 176.0, 293.0, 410.0],
+                 [105.0, 312.0, 519.0, 726.0],
+                 [151.0, 448.0, 745.0, 1042.0],
+                 [197.0, 584.0, 971.0, 1358.0]
                ])
     end
+
+    # defn grad_dot_implicit_bcast_rule(b1, w2, labels) do
+    #   grad(
+    #     b1,
+    #     b1
+    #     |> Nx.dot(w2)
+    #     |> Nx.multiply(labels)
+    #     |> Nx.sum()
+    #   )
+    # end
+
+    # test "computes gradient with dot with implicit broadcast" do
+    #   assert grad_dot_implicit_bcast_rule(
+    #            Nx.iota({3}),
+    #            Nx.iota({3, 2}),
+    #            Nx.iota({5, 2})
+    #          ) ==
+    #            Nx.tensor([25.0, 115.0, 205.0])
+    # end
   end
 
   describe "chain rule" do
