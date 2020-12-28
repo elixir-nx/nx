@@ -443,14 +443,15 @@ defmodule Nx.Defn.Expr do
         %Expr{id: id} ->
           [Map.fetch!(var_map, id) | inspect_args(args, var_map)]
 
-        [_ | _] = opts when args == [] ->
-          [
-            Enum.map_join(opts, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
-            | inspect_args(args, var_map)
-          ]
-
         value ->
-          [inspect(value) | inspect_args(args, var_map)]
+          if Keyword.keyword?(value) and value != [] do
+            [
+              Enum.map_join(value, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
+              | inspect_args(args, var_map)
+            ]
+          else
+            [inspect(value) | inspect_args(args, var_map)]
+          end
       end
     end
 
