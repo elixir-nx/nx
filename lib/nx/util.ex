@@ -94,22 +94,6 @@ defmodule Nx.Util do
     %T{data: {Nx.BitStringDevice, bitstring}, type: type, shape: {dim}}
   end
 
-  @doc """
-  Computes the dot product of two tensors over the given axes.
-  """
-  # TODO: Move this to Nx
-  def dot(t1, [], t2, []), do: Nx.outer(t1, t2)
-
-  def dot(%T{} = t1, axes1, %T{} = t2, axes2) do
-    {tensor, _} =
-      zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
-        res = lhs * rhs + acc
-        {res, res}
-      end)
-
-    tensor
-  end
-
   ## Reduces
 
   @doc """

@@ -128,17 +128,33 @@ defmodule Nx.DefnTest do
   end
 
   describe "tensor ops" do
-    defn dot(t1, t2), do: Nx.dot(t1, t2)
+    defn dot2(t1, t2), do: Nx.dot(t1, t2)
+    defn dot4(t1, t2), do: Nx.dot(t1, [-2], t2, [-1])
     defn outer(t1, t2), do: Nx.outer(t1, t2)
     defn transpose_1(t), do: Nx.transpose(t)
     defn transpose_2(t), do: Nx.transpose(t, [-1, -2])
     defn reshape(t), do: Nx.reshape(t, {2, 3})
     defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
     defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, [-2])
+    defn squeeze(t), do: Nx.squeeze(t)
 
     test "dot product" do
-      assert %Expr{op: :dot, args: [_, _], shape: {2, 2}} =
-               dot(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+      assert %Expr{op: :dot, args: [_, [0], _, [0]], shape: {2}} =
+               dot2(Nx.tensor([1, 2, 3]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+
+    assert %Expr{op: :dot, args: [_, [1], _, [0]], shape: {2}} =
+               dot2(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([1, 2, 3]))
+
+      assert %Expr{op: :dot, args: [_, [1], _, [0]], shape: {2, 2}} =
+               dot2(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+
+      assert %Expr{op: :dot, args: [_, [0], _, [1]], shape: {3, 3}} =
+               dot4(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
+    end
+
+    test "squeeze" do
+      assert %Expr{op: :squeeze, args: [_, [0, 2, 4]], shape: {3, 2}} =
+               squeeze(Nx.iota({1, 3, 1, 2, 1}))
     end
 
     test "outer product" do

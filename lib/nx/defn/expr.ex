@@ -230,10 +230,28 @@ defmodule Nx.Defn.Expr do
   Expression equivalent to `Nx.dot/2`.
   """
   def dot(expr1, expr2) do
-    %Expr{shape: s1} = expr1 = to_expr(expr1)
-    %Expr{shape: s2} = expr2 = to_expr(expr2)
-    output_shape = Nx.Shape.dot(s1, s2)
-    make_expr(output_shape, :dot, [expr1, expr2])
+    %Expr{shape: s1} = t1 = to_expr(expr1)
+    %Expr{shape: s2} = t2 = to_expr(expr2)
+
+    case {tuple_size(s1), tuple_size(s2)} do
+      {0, _} -> multiply(t1, t2)
+      {_, 0} -> multiply(t1, t2)
+      {n, 1} -> dot(t1, [n - 1], t2, [0])
+      {1, m} -> dot(t1, [0], t2, [m - 2])
+      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], t2, [m - 2])
+    end
+  end
+
+  @doc """
+  Expression equivalent to `Nx.dot/4`.
+  """
+  def dot(expr1, axes1, expr2, axes2) do
+    %Expr{shape: s1} = t1 = to_expr(expr1)
+    %Expr{shape: s2} = t2 = to_expr(expr2)
+    axes1 = Nx.Shape.normalize_axes(s1, axes1)
+    axes2 = Nx.Shape.normalize_axes(s2, axes2)
+    output_shape = Nx.Shape.zip_reduce(s1, axes1, s2, axes2)
+    make_expr(output_shape, :dot, [t1, axes1, t2, axes2])
   end
 
   @doc """
