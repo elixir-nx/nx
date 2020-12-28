@@ -97,7 +97,6 @@ defmodule Nx.Defn.Grad do
     {maybe_divide(num, y), cache}
   end
 
-  # Remainder rule
   defp grad(:remainder, [x, y], _, g, cache) do
     {dx, cache} = to_grad(x, g, cache)
     {dy, cache} = to_grad(y, g, cache)
@@ -106,7 +105,6 @@ defmodule Nx.Defn.Grad do
     {maybe_subtract(dx, right), cache}
   end
 
-  # Power/Exponentiation rule
   defp grad(:power, [x, y], ans, g, cache) do
     {dx, cache} = to_grad(x, g, cache)
     {dy, cache} = to_grad(y, g, cache)
@@ -119,7 +117,6 @@ defmodule Nx.Defn.Grad do
     {maybe_add(left, right), cache}
   end
 
-  # Arctan2 rule
   defp grad(:arctan2, [x, y], _, g, cache) do
     {dx, cache} = to_grad(x, g, cache)
     {dy, cache} = to_grad(y, g, cache)
@@ -129,7 +126,6 @@ defmodule Nx.Defn.Grad do
     {maybe_divide(num, den), cache}
   end
 
-  # Minmax rules
   defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
     {dx, cache} = to_grad(x, g, cache)
     {dy, cache} = to_grad(y, g, cache)
@@ -323,7 +319,6 @@ defmodule Nx.Defn.Grad do
 
   # TODO:
   # outer/2
-  # dot_general
 
   ## Grad helpers
 

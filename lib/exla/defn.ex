@@ -64,7 +64,7 @@ defmodule Exla.Defn do
   defp recur_operator(%Nx.Defn.Expr{id: id, op: op, args: args, shape: shape}, builder, cache) do
     case cache do
       %{^id => res} ->
-        res
+        {res, cache}
 
       %{} ->
         {shape_ops, cache} =
