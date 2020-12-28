@@ -905,7 +905,7 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   xla::XlaOp *lhs, *rhs;
-  std::vector<exla::int64> contracting_dims;
+  xla::DotDimensionNumbers dnums;
   exla::int8 config_int;
 
   if (!exla::get<xla::XlaOp>(env, argv[0], lhs)) {
@@ -914,7 +914,7 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::XlaOp>(env, argv[1], rhs)) {
     return exla::error(env, "Unable to get right-hand side operand.");
   }
-  if (!exla::get_tuple(env, argv[2], contracting_dims)) {
+  if (!exla::get_dot_dimension_numbers(env, argv[2], &dnums)) {
     return exla::error(env, "Unable to get contraction dimensions.");
   }
   if (!exla::get(env, argv[3], &config_int)) {
@@ -931,15 +931,6 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     case 2:
       config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGHEST);
   }
-
-  // TODO(seanmor5): For now we only match on the contracting dimensions,
-  // mainly to match the semantics of numpy's dot. We'll want
-  // to explore batching dimensions and better configuration overall
-  // of these dot dimension numbers when we look at broader
-  // operations like tensordot.
-  xla::DotDimensionNumbers dnums;
-  dnums.add_lhs_contracting_dimensions(contracting_dims.at(0));
-  dnums.add_rhs_contracting_dimensions(contracting_dims.at(1));
 
   xla::XlaOp result = xla::DotGeneral(*lhs, *rhs, dnums, &config);
 

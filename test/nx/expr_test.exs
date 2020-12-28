@@ -13,7 +13,7 @@ defmodule Nx.Defn.ExprTest do
            #Nx.Defn.Expr<
              parameter a (2x2)
              parameter c (2x2)
-             b = dot [ a, a ] (2x2)
+             b = dot [ a, [1], a, [0] ] (2x2)
              d = tanh [ c ] (2x2)
              e = add [ b, d ] (2x2)
              f = add [ e, 2 ] (2x2)
@@ -27,7 +27,7 @@ defmodule Nx.Defn.ExprTest do
              parameter e (2x2)
              a = iota [ {2, 2}, [] ] (2x2)
              b = tensor [ {:s, 64} ] (2x2)
-             c = dot [ a, b ] (2x2)
+             c = dot [ a, [1], b, [0] ] (2x2)
              d = tanh [ c ] (2x2)
              f = add [ d, e ] (2x2)
              g = argmin [ f, tie_break: :high ] ()

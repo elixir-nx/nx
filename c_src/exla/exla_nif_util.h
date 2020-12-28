@@ -203,6 +203,9 @@ int get_padding_config(ErlNifEnv* env,
                        ERL_NIF_TERM list,
                        xla::PaddingConfig* padding_config);
 
+int get_dot_dimension_numbers(ErlNifEnv* env,
+                                ERL_NIF_TERM tuple,
+                                xla::DotDimensionNumbers* dims);
 /*
  * Makers for standard types.
  */

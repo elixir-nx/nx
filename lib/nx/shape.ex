@@ -231,59 +231,6 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Computes the shape of the dot operation.
-
-  The shape is contracted along specific dimensions or
-  broadcasted according to the semantics of the dot product
-  operation described in the `Nx.dot/2` documentation.
-
-  ## Examples
-
-  ### Scalars
-      iex> Nx.Shape.dot({}, {2, 3, 2})
-      {2, 3, 2}
-
-      iex> Nx.Shape.dot({2, 1}, {})
-      {2, 1}
-
-  ### Vectors
-
-      iex> Nx.Shape.dot({5}, {5})
-      {}
-
-  ### Matrices and n-D tensors
-
-      iex> Nx.Shape.dot({2, 2}, {2, 3})
-      {2, 3}
-
-      iex> Nx.Shape.dot({2, 3, 2}, {3, 2, 3})
-      {2, 3, 3, 3}
-
-  ### Error cases
-
-      iex> Nx.Shape.dot({2, 1}, {2, 2})
-      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 1 of left-side (1) does not equal dimension 0 of right-side (2)
-  """
-  def dot(s1, s2) do
-    case {tuple_size(s1), tuple_size(s2)} do
-      {0, _} ->
-        binary_broadcast(s1, s2)
-
-      {_, 0} ->
-        binary_broadcast(s1, s2)
-
-      {n, 1} ->
-        zip_reduce(s1, [n - 1], s2, [0])
-
-      {1, m} ->
-        zip_reduce(s1, [0], s2, [m - 2])
-
-      {n, m} when n >= 2 and m >= 2 ->
-        zip_reduce(s1, [n - 1], s2, [m - 2])
-    end
-  end
-
-  @doc """
   Computes the shape for zip_reduce.
 
   In order for the dimensions to be correct, the value of each shape

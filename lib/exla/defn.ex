@@ -152,19 +152,9 @@ defmodule Exla.Defn do
 
   ## to_operator others
 
-  defp to_operator(:dot, [{_, left}, {_, right}], _output_shape, builder) do
+  defp to_operator(:dot, [{_, left}, axes1, {_, right}, axes2], _output_shape, builder) do
     {left, right} = binary_op_type(builder, left, right, & &1)
-
-    %Exla.Shape{dims: s1} = Exla.Op.get_shape(left)
-    %Exla.Shape{dims: s2} = Exla.Op.get_shape(right)
-
-    # To keep the semantics the same as Numpy, XLA will raise otherwise
-    case {tuple_size(s1), tuple_size(s2)} do
-      {0, _} -> Exla.Op.multiply(left, right)
-      {_, 0} -> Exla.Op.multiply(left, right)
-      {m, n} when m >= 2 and n > 2 -> Exla.Op.dot_general(left, right, {m - 1, n - 2})
-      _ -> Exla.Op.dot(left, right)
-    end
+    Exla.Op.dot_general(left, right, {axes1, axes2})
   end
 
   defp to_operator(:outer, [{lhs_expr, left}, {rhs_expr, right}], output_shape, builder) do

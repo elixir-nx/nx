@@ -3420,6 +3420,9 @@ defmodule Nx do
       product along the last axis of `a` and the second-to-last axis of `b`. The last dimension
       of `a` must match the second-to-last dimension of `b`.
 
+  For a more general `dot` function where you control which axes contract,
+  see `dot/4`.
+
   ## Examples
 
   ### Dot product of scalars
@@ -3560,15 +3563,114 @@ defmodule Nx do
       ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
   """
   def dot(t1, t2) do
-    {%T{shape: s1} = t1, %T{shape: s2} = t2} = {tensor(t1), tensor(t2)}
+    %T{shape: s1} = t1 = tensor(t1)
+    %T{shape: s2} = t2 = tensor(t2)
 
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
       {_, 0} -> multiply(t1, t2)
-      {n, 1} -> Nx.Util.dot(t1, [n - 1], t2, [0])
-      {1, m} -> Nx.Util.dot(t1, [0], t2, [m - 2])
-      {n, m} when n >= 2 and m >= 2 -> Nx.Util.dot(t1, [n - 1], t2, [m - 2])
+      {n, 1} -> dot(t1, [n - 1], t2, [0])
+      {1, m} -> dot(t1, [0], t2, [m - 2])
+      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], t2, [m - 2])
     end
+  end
+
+  @doc """
+  Computes the dot product of two tensors over the given axes.
+
+  The dot product is computed by multiplying the values from `t1`
+  given by `axes1` against the values from `t2` given by `axes2`.
+  For instance, the first axis in `axes1` will be matched against
+  the first axis in `axes2` and so on. The axes given by `axes1`
+  and `axes2` are effectively removed from the final tensor, which
+  is why they are often called the contraction axes.
+
+  ## Examples
+
+      iex> t1 = Nx.tensor([[1, 2], [3, 4]])
+      iex> t2 = Nx.tensor([[10, 20], [30, 40]])
+      iex> Nx.dot(t1, [0], t2, [0])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [100, 140],
+          [140, 200]
+        ]
+      >
+      iex> Nx.dot(t1, [0], t2, [1])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [70, 150],
+          [100, 220]
+        ]
+      >
+      iex> Nx.dot(t1, [1], t2, [0])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [70, 100],
+          [150, 220]
+        ]
+      >
+      iex> Nx.dot(t1, [1], t2, [1])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [50, 110],
+          [110, 250]
+        ]
+      >
+      iex> Nx.dot(t1, [0, 1], t2, [0, 1])
+      #Nx.Tensor<
+        s64
+        300
+      >
+
+  If no axes are given, it works like `outer/2`:
+
+      iex> t1 = Nx.tensor([[1, 2], [3, 4]])
+      iex> t2 = Nx.tensor([[10, 20], [30, 40]])
+      iex> Nx.dot(t1, [], t2, [])
+      #Nx.Tensor<
+        s64[2][2][2][2]
+        [
+          [
+            [
+              [10, 20],
+              [30, 40]
+            ],
+            [
+              [20, 40],
+              [60, 80]
+            ]
+          ],
+          [
+            [
+              [30, 60],
+              [90, 120]
+            ],
+            [
+              [40, 80],
+              [120, 160]
+            ]
+          ]
+        ]
+      >
+
+  """
+  def dot(t1, axes1, t2, axes2)
+
+  def dot(t1, [], t2, []), do: Nx.outer(t1, t2)
+
+  def dot(%T{} = t1, axes1, %T{} = t2, axes2) do
+    {tensor, _} =
+      Nx.Util.zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
+        res = lhs * rhs + acc
+        {res, res}
+      end)
+
+    tensor
   end
 
   @doc """
