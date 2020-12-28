@@ -154,8 +154,7 @@ defmodule Exla.Defn do
 
   defp to_operator(:dot, [{_, left}, axes1, {_, right}, axes2], _output_shape, builder) do
     {left, right} = binary_op_type(builder, left, right, & &1)
-    raise "handle #{inspect(axes1)} and #{inspect(axes2)}"
-    Exla.Op.dot_general(left, right, Enum.zip(axes1, axes2))
+    Exla.Op.dot_general(left, right, {axes1, axes2})
   end
 
   defp to_operator(:outer, [{lhs_expr, left}, {rhs_expr, right}], output_shape, builder) do

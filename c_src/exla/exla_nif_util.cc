@@ -233,6 +233,37 @@ namespace exla {
     return 1;
   }
 
+  int get_dot_dimension_numbers(ErlNifEnv* env,
+                                ERL_NIF_TERM tuple,
+                                xla::DotDimensionNumbers* dims) {
+    const ERL_NIF_TERM* terms;
+    int32 count;
+    if (!enif_get_tuple(env, tuple, &count, &terms)) return 0;
+    if (count != 2) return 0;
+
+    ERL_NIF_TERM lhs, lhs_tail;
+    ERL_NIF_TERM list = terms[0];
+    while (enif_get_list_cell(env, list, &lhs, &lhs_tail)) {
+      int64 dim;
+      if (!get(env, lhs, &dim)) return 0;
+      dims->add_lhs_contracting_dimensions(dim);
+
+      list = lhs_tail;
+    }
+
+    ERL_NIF_TERM rhs, rhs_tail;
+    list = terms[1];
+    while (enif_get_list_cell(env, list, &rhs, &rhs_tail)) {
+      int64 dim;
+      if (!get(env, rhs, &dim)) return 0;
+      dims->add_rhs_contracting_dimensions(dim);
+
+      list = rhs_tail;
+    }
+
+    return 1;
+  }
+
   ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if (shape.IsTuple()) {
       int element_count = xla::ShapeUtil::TupleElementCount(shape);
