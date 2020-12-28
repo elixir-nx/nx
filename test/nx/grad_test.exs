@@ -415,6 +415,85 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "abs" do
+    defn abs_scalar(t), do: Nx.abs(t)
+    defn grad_abs_scalar(t), do: grad(t, Nx.abs(t))
+    defn grad_abs(t), do: grad(t, Nx.sum(Nx.abs(t)))
+
+    test "computes gradient with scalars" do
+      for _ <- 1..100 do
+        check_grads!(
+          &abs_scalar/1,
+          &grad_abs_scalar/1,
+          Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
+        )
+      end
+    end
+
+    test "computes gradient with tensors" do
+      assert grad_abs(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) == Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+      assert grad_abs(Nx.tensor([[-1.0, 2.0], [-3.0, 4.0]])) == Nx.tensor([[-1.0, 1.0], [-1.0, 1.0]])
+    end
+  end
+
+  describe "max" do
+    defn grad_max(t), do: grad(t, Nx.sum(Nx.max(Nx.power(t, 2), Nx.power(t, 3))))
+
+    test "computes gradient with tensors" do
+      assert grad_max(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.5], [12.0], [27.0]])
+      assert grad_max(Nx.tensor([[1.25, 2.5, 2.75], [1.0, 4.0, 6.0], [2.0, 3.0, 2.0]])) == Nx.tensor(
+            [[4.6875, 18.75, 22.6875],
+             [2.5, 48.0, 108.0],
+             [12.0, 27.0,  12.0]
+             ])
+    end
+  end
+
+  describe "min" do
+    defn grad_min(t), do: grad(t, Nx.sum(Nx.min(Nx.power(t, 2), Nx.power(t, 3))))
+
+    test "computes gradient with tensors" do
+      assert grad_min(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.5], [4.0], [6.0]])
+      assert grad_min(Nx.tensor([[1.25, 2.5, 2.75], [1.0, 4.0, 6.0], [2.0, 3.0, 2.0]])) == Nx.tensor(
+             [[2.5,  5.0,  5.5],
+             [ 2.5,  8.0, 12.0],
+             [ 4.0,  6.0, 4.0]])
+    end
+  end
+
+  describe "reshape" do
+    defn grad_reshape(t), do: grad(t, Nx.sum(Nx.reshape(Nx.power(t, 2), {3})))
+    defn grad_reshape2(t), do: grad(t, Nx.sum(Nx.reshape(Nx.power(t, 2), {3, 2})))
+    defn grad_reshape_reshape(t), do: grad(t, Nx.sum(Nx.reshape(Nx.reshape(Nx.power(t, 2), {3, 2}), {3, 1, 2})))
+
+    test "computes gradient with tensors" do
+      assert grad_reshape(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.0], [4.0], [6.0]])
+      assert grad_reshape2(Nx.tensor([[[1.0], [2.0], [3.0]], [[2.0], [3.0], [3.0]]])) == Nx.tensor([[[2.0], [4.0], [6.0]], [[4.0], [6.0], [6.0]]])
+      assert grad_reshape_reshape(Nx.tensor([[[1.0], [2.0], [3.0]], [[2.0], [3.0], [3.0]]])) == Nx.tensor([[[2.0], [4.0], [6.0]], [[4.0], [6.0], [6.0]]])
+    end
+  end
+
+  describe "transpose" do
+    defn grad_transpose(t), do: grad(t, Nx.sum(Nx.transpose(Nx.power(t, 2), [1, 0, 2])))
+    defn grad_reshape_transpose(t), do: grad(t, Nx.sum(Nx.transpose(Nx.reshape(Nx.power(t, 2), {3, 2}))))
+    defn grad_transpose_reshape(t), do: grad(t, Nx.sum(Nx.reshape(Nx.transpose(Nx.power(t, 2), [1, 0, 2]), {3, 2})))
+    defn grad_transpose_reshape_transpose(t), do: grad(t, Nx.sum(Nx.transpose(Nx.reshape(Nx.transpose(Nx.power(t, 2), [1, 0, 2]), {3, 2}))))
+
+    test "computes gradient with tensors" do
+      assert grad_transpose(Nx.tensor([[[1.0], [2.0], [3.0]], [[2.0], [3.0], [3.0]]])) ==
+        Nx.tensor([[[2.0], [4.0], [6.0]], [[4.0], [6.0], [6.0]]])
+
+      assert grad_reshape_transpose(Nx.tensor([[[1.0], [2.0], [3.0]], [[2.0], [3.0], [3.0]]])) ==
+        Nx.tensor([[[2.0], [4.0], [6.0]], [[4.0], [6.0], [6.0]]])
+
+      assert grad_transpose_reshape(Nx.tensor([[[1.0], [2.0], [3.0]], [[2.0], [3.0], [3.0]]])) ==
+        Nx.tensor([[[2.0], [4.0], [6.0]], [[4.0], [6.0], [6.0]]])
+
+      assert grad_transpose_reshape_transpose(Nx.tensor([[[1.0], [2.0], [3.0]], [[2.0], [3.0], [3.0]]])) ==
+        Nx.tensor([[[2.0], [4.0], [6.0]], [[4.0], [6.0], [6.0]]])
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, Nx.sum(t))
     defn grad_mean_full(t), do: grad(t, Nx.mean(t))

@@ -258,14 +258,46 @@ defmodule Nx.Defn.Grad do
     {broadcast(0.0, g), cache}
   end
 
+  defp grad(:abs, [x], _ans, g, cache) do
+    g = Expr.select(Expr.greater_equal(x, broadcast(0.0, g)), g, Expr.negate(g))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
+    {dx, cache} = to_grad(x, to_one(x, g), cache)
+    {dy, cache} = to_grad(y, to_one(y, g), cache)
+
+    lhs =
+      Expr.divide(
+        Expr.select(Expr.equal(x, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
+        Expr.select(Expr.equal(y, ans), broadcast(2.0, ans), broadcast(1.0, ans))
+      )
+    rhs =
+      Expr.divide(
+        Expr.select(Expr.equal(y, ans), broadcast(1.0, ans), broadcast(0.0, ans)),
+        Expr.select(Expr.equal(x, ans), broadcast(2.0, ans), broadcast(1.0, ans))
+      )
+
+    res = Expr.add(Expr.multiply(dx, lhs), Expr.multiply(dy, rhs))
+
+    {multiply(g, res), cache}
+  end
+
+  defp grad(:reshape, [x, _new_shape], _ans, _g, cache) do
+    # Broadcast to shape before the reshape
+    g = broadcast(1.0, x)
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:transpose, [x, axes], _ans, g, cache) do
+    # Broadcast to shape after transpose and undo the transpose
+    g = Expr.transpose(broadcast(1.0, g), axes)
+    to_grad(x, g, cache)
+  end
+
   # TODO:
-  # abs/1 - requires select
-  # max/2 - requires comparison
-  # min/2 - requires comparison
   # outer/2
   # dot_general
-  # reshape - deflinear
-  # transpose - deflinear
 
   ## Grad helpers
 
