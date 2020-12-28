@@ -160,9 +160,19 @@ defmodule Nx.Defn.Grad do
       end
 
     g =
-      case implicit_axes do
+      case broadcast_axes do
         [] -> g
         _ -> Expr.broadcast(g, x.shape, Nx.Shape.to_axes(x.shape) -- broadcast_axes)
+      end
+
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:squeeze, [x, axes], _ans, g, cache) do
+    g =
+      case axes do
+        [] -> g
+        _ -> Expr.broadcast(g, x.shape, Nx.Shape.to_axes(x.shape) -- axes)
       end
 
     to_grad(x, g, cache)
@@ -317,7 +327,6 @@ defmodule Nx.Defn.Grad do
   # TODO:
   # outer/2
   # dot_general
-  # squeeze
 
   ## Grad helpers
 

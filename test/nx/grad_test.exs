@@ -408,6 +408,26 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "squeeze" do
+    defn grad_sum_squeeze_broadcast(t),
+      do: grad(t, Nx.sum(Nx.squeeze(Nx.broadcast(t, {3, 2, 2}))))
+
+    test "computes gradient" do
+      assert grad_sum_squeeze_broadcast(Nx.iota({3, 2, 2})) == Nx.broadcast(1.0, {3, 2, 2})
+      assert grad_sum_squeeze_broadcast(Nx.iota({1, 2, 2})) == Nx.broadcast(3.0, {1, 2, 2})
+      assert grad_sum_squeeze_broadcast(Nx.iota({1, 1, 2})) == Nx.broadcast(6.0, {1, 1, 2})
+      assert grad_sum_squeeze_broadcast(Nx.iota({1, 1, 1})) == Nx.broadcast(12.0, {1, 1, 1})
+
+      assert grad_sum_squeeze_broadcast(Nx.iota({2, 2})) == Nx.broadcast(3.0, {2, 2})
+      assert grad_sum_squeeze_broadcast(Nx.iota({1, 2})) == Nx.broadcast(6.0, {1, 2})
+      assert grad_sum_squeeze_broadcast(Nx.iota({1, 1})) == Nx.broadcast(12.0, {1, 1})
+
+      assert grad_sum_squeeze_broadcast(Nx.iota({2})) == Nx.broadcast(6.0, {2})
+      assert grad_sum_squeeze_broadcast(Nx.iota({1})) == Nx.broadcast(12.0, {1})
+      assert grad_sum_squeeze_broadcast(Nx.iota({})) == Nx.broadcast(12.0, {})
+    end
+  end
+
   describe "pad" do
     defn grad_sum_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{-1, 1}, {1, 1}])))
 

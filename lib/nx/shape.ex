@@ -372,132 +372,6 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Normalize the axis to the given shape.
-
-  ## Examples
-
-      iex> Nx.Shape.normalize_axis({4, 2, 3}, -1)
-      2
-
-      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, -2)
-      2
-
-      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, 1)
-      1
-
-  ### Error cases
-
-      iex> Nx.Shape.normalize_axis({4, 2, 5}, -4)
-      ** (ArgumentError) given axis (-4) invalid for shape with rank 3
-
-      iex> Nx.Shape.normalize_axis({4, 2, 5}, 3)
-      ** (ArgumentError) given axis (3) invalid for shape with rank 3
-  """
-  def normalize_axis(shape, axis)
-
-  def normalize_axis(shape, axis) when axis < 0 and abs(axis) <= tuple_size(shape),
-    do: tuple_size(shape) + axis
-
-  def normalize_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape),
-    do: axis
-
-  def normalize_axis(shape, axis) do
-    raise ArgumentError,
-          "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
-  end
-
-  @doc """
-  Normalize a list of unique axis.
-
-  See `normalize_axis/1`.
-
-  ## Examples
-
-      iex> Nx.Shape.normalize_axes({2, 3, 4}, [-1, 0])
-      [2, 0]
-
-  ### Error Cases
-
-      iex> Nx.Shape.normalize_axes({2, 3, 4}, [1, 1])
-      ** (ArgumentError) axes [1, 1] must be unique integers between 0 and 2
-  """
-  def normalize_axes(shape, axes) when is_list(axes) do
-    normalized = Enum.map(axes, &normalize_axis(shape, &1))
-
-    if length(Enum.uniq(normalized)) != length(axes) do
-      raise ArgumentError,
-            "axes #{inspect(axes)} must be unique integers between 0 and #{tuple_size(shape) - 1}"
-    end
-
-    normalized
-  end
-
-  @doc """
-  Returns the axes for transposition.
-
-  ## Examples
-
-      iex> Nx.Shape.transpose_axes({})
-      []
-      iex> Nx.Shape.transpose_axes({3, 2, 1})
-      [2, 1, 0]
-
-  """
-  def transpose_axes(shape) do
-    rank = rank(shape)
-    count_down(rank, rank - 1)
-  end
-
-  @doc """
-  Compute the broadcast axes based on the shape rank.
-
-  It doesn't validate if the remaining dimensions are
-  actually valid.
-
-  ## Examples
-
-      iex> Nx.Shape.broadcast_axes({2, 2, 2}, {2, 2, 2, 2})
-      [1, 2, 3]
-
-      iex> Nx.Shape.broadcast_axes({2, 2, 2}, {2, 2, 2, 2, 2})
-      [2, 3, 4]
-
-  """
-  def broadcast_axes(shape, new_shape) when tuple_size(shape) > tuple_size(new_shape) do
-    raise ArgumentError,
-          "cannot broadcast tensor of dimensions #{inspect(shape)} " <>
-            "to #{inspect(new_shape)}"
-  end
-
-  def broadcast_axes(shape, new_shape) do
-    min_size = rank(shape)
-    max_size = rank(new_shape)
-    count_up(min_size, max_size - min_size)
-  end
-
-  @doc """
-  Converts a shape to axes.
-
-  ## Examples
-
-      iex> Nx.Shape.to_axes({})
-      []
-
-      iex> Nx.Shape.to_axes({2, 2, 2})
-      [0, 1, 2]
-
-  """
-  def to_axes(shape), do: count_up(rank(shape), 0)
-
-  ## Helpers
-
-  defp count_up(0, _n), do: []
-  defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
-
-  defp count_down(0, _n), do: []
-  defp count_down(i, n), do: [n | count_down(i - 1, n - 1)]
-
-  @doc """
   Calculates the padding needed for same padding.
 
   ## Examples
@@ -591,6 +465,41 @@ defmodule Nx.Shape do
   defp validate_strides!(_, _), do: :ok
 
   @doc """
+  Output shape after a squeeze operation.
+
+  ## Examples
+
+      iex> Nx.Shape.squeeze({2, 1, 1}, [1, 2])
+      {2}
+
+      iex> Nx.Shape.squeeze({1, 2}, [0])
+      {2}
+
+  ### Error cases
+
+      iex> Nx.Shape.squeeze({2, 2, 1}, [1])
+      ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 2 for dimension 1
+  """
+  def squeeze(shape, axes) do
+    List.to_tuple(Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, [])))
+  end
+
+  defp squeeze_dims([], _, acc), do: acc
+
+  defp squeeze_dims([{s, i} | shape], axes, acc) do
+    if i in axes do
+      if s == 1 do
+        squeeze_dims(shape, axes, acc)
+      else
+        raise ArgumentError,
+              "cannot squeeze dimensions whose sizes are not 1, got #{s} for dimension #{i}"
+      end
+    else
+      squeeze_dims(shape, axes, [s | acc])
+    end
+  end
+
+  @doc """
   Output shape after a padding operation.
 
   ## Examples
@@ -638,60 +547,147 @@ defmodule Nx.Shape do
   defp padded_dims([s | shape], [{edge_low, edge_high} | config], acc),
     do: padded_dims(shape, config, [s + edge_low + edge_high | acc])
 
+  ## Axes helpers
+
   @doc """
-  Output shape after a squeeze operation.
+  Normalize the axis to the given shape.
 
   ## Examples
 
-      iex> Nx.Shape.squeeze({2, 1, 1})
-      {2}
+      iex> Nx.Shape.normalize_axis({4, 2, 3}, -1)
+      2
 
-      iex> Nx.Shape.squeeze({1, 2, 1, 3, 2, 1})
-      {2, 3, 2}
-  """
-  def squeeze(shape) do
-    axes =
-      shape
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.filter(fn {s, _} -> s == 1 end)
-      |> Enum.map(fn {_, i} -> i end)
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, -2)
+      2
 
-    squeeze(shape, axes)
-  end
-
-  @doc """
-  Output shape after a squeeze operation.
-
-  ## Examples
-
-      iex> Nx.Shape.squeeze({2, 1, 1}, [1, 2])
-      {2}
-
-      iex> Nx.Shape.squeeze({1, 2}, [0])
-      {2}
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, 1)
+      1
 
   ### Error cases
 
-      iex> Nx.Shape.squeeze({2, 2, 1}, [1])
-      ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 2 for dimension 1
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, -4)
+      ** (ArgumentError) given axis (-4) invalid for shape with rank 3
+
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, 3)
+      ** (ArgumentError) given axis (3) invalid for shape with rank 3
+
   """
-  def squeeze(shape, axes) do
-    List.to_tuple(Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, [])))
+  def normalize_axis(shape, axis)
+
+  def normalize_axis(shape, axis) when axis < 0 and abs(axis) <= tuple_size(shape),
+    do: tuple_size(shape) + axis
+
+  def normalize_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape),
+    do: axis
+
+  def normalize_axis(shape, axis) do
+    raise ArgumentError,
+          "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
   end
 
-  defp squeeze_dims([], _, acc), do: acc
+  @doc """
+  Normalize a list of unique axis.
 
-  defp squeeze_dims([{s, i} | shape], axes, acc) do
-    if i in axes do
-      if s == 1 do
-        squeeze_dims(shape, axes, acc)
-      else
-        raise ArgumentError,
-              "cannot squeeze dimensions whose sizes are not 1, got #{s} for dimension #{i}"
-      end
-    else
-      squeeze_dims(shape, axes, [s | acc])
+  See `normalize_axis/1`.
+
+  ## Examples
+
+      iex> Nx.Shape.normalize_axes({2, 3, 4}, [-1, 0])
+      [2, 0]
+
+  ### Error Cases
+
+      iex> Nx.Shape.normalize_axes({2, 3, 4}, [1, 1])
+      ** (ArgumentError) axes [1, 1] must be unique integers between 0 and 2
+  """
+  def normalize_axes(shape, axes) when is_list(axes) do
+    normalized = Enum.map(axes, &normalize_axis(shape, &1))
+
+    if length(Enum.uniq(normalized)) != length(axes) do
+      raise ArgumentError,
+            "axes #{inspect(axes)} must be unique integers between 0 and #{tuple_size(shape) - 1}"
     end
+
+    normalized
   end
+
+  @doc """
+  Returns the axes for transposition.
+
+  ## Examples
+
+      iex> Nx.Shape.transpose_axes({})
+      []
+      iex> Nx.Shape.transpose_axes({3, 2, 1})
+      [2, 1, 0]
+
+  """
+  def transpose_axes(shape) do
+    rank = rank(shape)
+    count_down(rank, rank - 1)
+  end
+
+  @doc """
+  Compute the broadcast axes based on the shape rank.
+
+  It doesn't validate if the remaining dimensions are
+  actually valid.
+
+  ## Examples
+
+      iex> Nx.Shape.broadcast_axes({2, 2, 2}, {2, 2, 2, 2})
+      [1, 2, 3]
+
+      iex> Nx.Shape.broadcast_axes({2, 2, 2}, {2, 2, 2, 2, 2})
+      [2, 3, 4]
+
+  """
+  def broadcast_axes(shape, new_shape) when tuple_size(shape) > tuple_size(new_shape) do
+    raise ArgumentError,
+          "cannot broadcast tensor of dimensions #{inspect(shape)} " <>
+            "to #{inspect(new_shape)}"
+  end
+
+  def broadcast_axes(shape, new_shape) do
+    min_size = rank(shape)
+    max_size = rank(new_shape)
+    count_up(min_size, max_size - min_size)
+  end
+
+  @doc """
+  Returns the axes for squeezing.
+
+  ## Examples
+
+      iex> Nx.Shape.squeeze_axes({2, 1, 1})
+      [1, 2]
+
+      iex> Nx.Shape.squeeze_axes({1, 2, 1, 3, 2, 1})
+      [0, 2, 5]
+  """
+  def squeeze_axes(shape) do
+    for {1, i} <- Enum.with_index(Tuple.to_list(shape)), do: i
+  end
+
+  @doc """
+  Converts a shape to axes.
+
+  ## Examples
+
+      iex> Nx.Shape.to_axes({})
+      []
+
+      iex> Nx.Shape.to_axes({2, 2, 2})
+      [0, 1, 2]
+
+  """
+  def to_axes(shape), do: count_up(rank(shape), 0)
+
+  ## Helpers
+
+  defp count_up(0, _n), do: []
+  defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
+
+  defp count_down(0, _n), do: []
+  defp count_down(i, n), do: [n | count_down(i - 1, n - 1)]
 end

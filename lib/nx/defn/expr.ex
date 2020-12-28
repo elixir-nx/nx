@@ -287,8 +287,8 @@ defmodule Nx.Defn.Expr do
   """
   def squeeze(expr) do
     %Expr{shape: old_shape} = expr = to_expr(expr)
-    output_shape = Nx.Shape.squeeze(old_shape)
-    make_expr(output_shape, :squeeze, [expr])
+    axes = Nx.Shape.squeeze_axes(old_shape)
+    squeeze(expr, axes)
   end
 
   @doc """

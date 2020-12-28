@@ -710,8 +710,7 @@ defmodule Nx do
   """
   def squeeze(tensor) do
     %T{shape: shape} = t = tensor(tensor)
-    output_shape = Nx.Shape.squeeze(shape)
-    %{t | shape: output_shape}
+    squeeze(t, Nx.Shape.squeeze_axes(shape))
   end
 
   @doc """
