@@ -3587,7 +3587,77 @@ defmodule Nx do
 
   ## Examples
 
-  TODO.
+      iex> t1 = Nx.tensor([[1, 2], [3, 4]])
+      iex> t2 = Nx.tensor([[10, 20], [30, 40]])
+      iex> Nx.dot(t1, [0], t2, [0])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [100, 140],
+          [140, 200]
+        ]
+      >
+      iex> Nx.dot(t1, [0], t2, [1])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [70, 150],
+          [100, 220]
+        ]
+      >
+      iex> Nx.dot(t1, [1], t2, [0])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [70, 100],
+          [150, 220]
+        ]
+      >
+      iex> Nx.dot(t1, [1], t2, [1])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [50, 110],
+          [110, 250]
+        ]
+      >
+      iex> Nx.dot(t1, [0, 1], t2, [0, 1])
+      #Nx.Tensor<
+        s64
+        300
+      >
+
+  If no axes are given, it works like `outer/2`:
+
+      iex> t1 = Nx.tensor([[1, 2], [3, 4]])
+      iex> t2 = Nx.tensor([[10, 20], [30, 40]])
+      iex> Nx.dot(t1, [], t2, [])
+      #Nx.Tensor<
+        s64[2][2][2][2]
+        [
+          [
+            [
+              [10, 20],
+              [30, 40]
+            ],
+            [
+              [20, 40],
+              [60, 80]
+            ]
+          ],
+          [
+            [
+              [30, 60],
+              [90, 120]
+            ],
+            [
+              [40, 80],
+              [120, 160]
+            ]
+          ]
+        ]
+      >
+
   """
   def dot(t1, axes1, t2, axes2)
 

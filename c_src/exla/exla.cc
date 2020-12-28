@@ -905,11 +905,6 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   xla::XlaOp *lhs, *rhs;
-  // TODO(seanmor5): For now we only match on the contracting dimensions,
-  // mainly to match the semantics of numpy's dot. We'll want
-  // to explore batching dimensions and better configuration overall
-  // of these dot dimension numbers when we look at broader
-  // operations like tensordot.
   xla::DotDimensionNumbers dnums;
   exla::int8 config_int;
 

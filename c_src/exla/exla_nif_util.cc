@@ -86,16 +86,6 @@ namespace exla {
     return enif_get_double(env, term, var);
   }
 
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, complex64* var) {
-    // TODO(seanmor5): Once we support complex types
-    return 0;
-  }
-
-  int get(ErlNifEnv* env, ERL_NIF_TERM term, complex128* var) {
-    // TODO(seanmor5): Once we support complex types
-    return 0;
-  }
-
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var) {
     unsigned len;
     int ret = enif_get_list_length(env, term, &len);
