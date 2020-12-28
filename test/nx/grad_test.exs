@@ -64,7 +64,7 @@ defmodule Nx.GradTest do
     defn grad_sum_product_rule(t), do: grad(t, sum_product_rule(t))
 
     test "computes gradient for tensors" do
-      assert grad_sum_product_rule(Nx.tensor([[1, 2], [3, 4]])) ==
+      assert grad_sum_product_rule(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
                Nx.tensor([[5.0, 80.0], [405.0, 1280.0]])
     end
   end
@@ -177,7 +177,7 @@ defmodule Nx.GradTest do
     defn grad_exp_rule(t), do: grad(t, exp_rule(t))
 
     test "computes gradient" do
-      assert grad_exp_rule(Nx.tensor(1.0)) == Nx.tensor(1.370487690448899)
+      assert grad_exp_rule(Nx.tensor(1.0)) == Nx.tensor(1.3704876904488987)
 
       for _ <- 1..100 do
         check_grads!(
@@ -206,119 +206,99 @@ defmodule Nx.GradTest do
     end
   end
 
-  # describe "dot rule" do
-  #   defn dot_rule(t), do: Nx.tanh(Nx.tanh(Nx.dot(Nx.power(t, 2), Nx.power(t, 3))))
-  #   defn grad_dot_rule(t), do: grad(t, dot_rule(t))
+  describe "dot rule" do
+    defn grad_dot_lhs_rule(x, y), do: grad(x, Nx.sum(Nx.dot(x, y)))
 
-  #   test "computes gradient for scalars" do
-  #     assert grad_product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
+    test "computes gradient for tensors on lhs" do
+      assert grad_dot_lhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+               Nx.tensor([[15.0], [15.0], [15.0]])
 
-  #     for _ <- 1..100 do
-  #       check_grads!(
-  #         &product_rule/1,
-  #         &grad_product_rule/1,
-  #         Nx.random_uniform({}, 0.0, 1000.0, type: {:f, 64})
-  #       )
-  #     end
-  #   end
+      assert grad_dot_lhs_rule(
+               Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+               Nx.tensor([1.0, 2.0])
+             ) ==
+               Nx.tensor([[1.0, 2.0], [1.0, 2.0], [1.0, 2.0]])
 
-  #   defn grad_dot_lhs_rule(x, y), do: grad(x, Nx.sum(Nx.dot(x, y)))
+      assert grad_dot_lhs_rule(
+               Nx.tensor([1.0, 2.0]),
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+             ) ==
+               Nx.tensor([6.0, 15.0])
+    end
 
-  #   test "computes gradient for tensors on lhs" do
-  #     assert grad_dot_lhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
-  #              Nx.tensor([[15.0], [15.0], [15.0]])
+    defn grad_dot_rhs_rule(x, y), do: grad(y, Nx.sum(Nx.dot(x, y)))
 
-  #     assert grad_dot_lhs_rule(
-  #              Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
-  #              Nx.tensor([1.0, 2.0])
-  #            ) ==
-  #              Nx.tensor([[1.0, 2.0], [1.0, 2.0], [1.0, 2.0]])
+    test "computes gradient for tensors on rhs" do
+      assert grad_dot_rhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+               Nx.tensor([[6.0, 6.0, 6.0, 6.0, 6.0]])
 
-  #     assert grad_dot_lhs_rule(
-  #              Nx.tensor([1.0, 2.0]),
-  #              Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-  #            ) ==
-  #              Nx.tensor([6.0, 15.0])
-  #   end
+      assert grad_dot_rhs_rule(
+               Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+               Nx.tensor([1.0, 2.0])
+             ) ==
+               Nx.tensor([9.0, 12.0])
 
-  #   defn grad_dot_rhs_rule(x, y), do: grad(y, Nx.sum(Nx.dot(x, y)))
+      assert grad_dot_rhs_rule(
+               Nx.tensor([1.0, 2.0]),
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+             ) ==
+               Nx.tensor([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
+    end
 
-  #   test "computes gradient for tensors on rhs" do
-  #     assert grad_dot_rhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
-  #              Nx.tensor([[6.0, 6.0, 6.0, 6.0, 6.0]])
+    defn grad_dot_both_rule(x), do: grad(x, Nx.sum(Nx.dot(Nx.power(x, 2), Nx.power(x, 3))))
 
-  #     assert grad_dot_rhs_rule(
-  #              Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
-  #              Nx.tensor([1.0, 2.0])
-  #            ) ==
-  #              Nx.tensor([9.0, 12.0])
+    test "computes gradient for tensors on both sides" do
+      assert grad_dot_both_rule(Nx.iota({3, 3, 3})) ==
+               Nx.tensor([
+                 [
+                   [0.0, 83430.0, 263_952.0],
+                   [198_207.0, 410_616.0, 759_375.0],
+                   [533_952.0, 884_142.0, 1_410_048.0]
+                 ],
+                 [
+                   [873_828.0, 1_330_020.0, 1_997_028.0],
+                   [1_460_592.0, 2_057_913.0, 2_905_308.0],
+                   [2.268e6, 3_016_224.0, 4_053_888.0]
+                 ],
+                 [
+                   [2_639_952.0, 3_468_906.0, 4.6224e6],
+                   [3_724_623.0, 4_706_856.0, 6_052_887.0],
+                   [5_121_792.0, 6_268_050.0, 7_817_472.0]
+                 ]
+               ])
 
-  #     assert grad_dot_rhs_rule(
-  #              Nx.tensor([1.0, 2.0]),
-  #              Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-  #            ) ==
-  #              Nx.tensor([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
-  #   end
+      assert grad_dot_both_rule(Nx.tensor([1, 2, 3])) == Nx.tensor([5.0, 80.0, 405.0])
+    end
 
-  #   defn grad_dot_both_rule(x), do: grad(x, Nx.sum(Nx.dot(Nx.power(x, 2), Nx.power(x, 3))))
+    defn grad_dot_dot_rule(x, w1, b1, w2, b2) do
+      grad(
+        x,
+        x
+        |> Nx.dot(w1)
+        |> Nx.add(b1)
+        |> Nx.dot(w2)
+        |> Nx.add(b2)
+        |> Nx.sum()
+      )
+    end
 
-  #   test "computes gradient for tensors on both sides" do
-  #     assert grad_dot_both_rule(Nx.iota({3, 3, 3})) ==
-  #              Nx.tensor([
-  #                [
-  #                  [0.0, 83430.0, 263_952.0],
-  #                  [198_207.0, 410_616.0, 759_375.0],
-  #                  [533_952.0, 884_142.0, 1_410_048.0]
-  #                ],
-  #                [
-  #                  [873_828.0, 1_330_020.0, 1_997_028.0],
-  #                  [1_460_592.0, 2_057_913.0, 2_905_308.0],
-  #                  [2.268e6, 3_016_224.0, 4_053_888.0]
-  #                ],
-  #                [
-  #                  [2_639_952.0, 3_468_906.0, 4.6224e6],
-  #                  [3_724_623.0, 4_706_856.0, 6_052_887.0],
-  #                  [5_121_792.0, 6_268_050.0, 7_817_472.0]
-  #                ]
-  #              ])
-
-  #     assert grad_dot_both_rule(Nx.tensor([1, 2, 3])) == Nx.tensor([5.0, 80.0, 405.0])
-  #   end
-
-  #   defn grad_dot_dot_rule(x, w1, b1, w2, b2) do
-  #     grad(
-  #       x,
-  #       x
-  #       |> Nx.dot(w1)
-  #       |> Nx.add(b1)
-  #       |> Nx.dot(w2)
-  #       |> Nx.add(b2)
-  #       |> Nx.sum()
-  #     ))
-  #   end
-
-  #   test "computes gradient with dot after dot" do
-  #     assert grad_dot_dot_rule(
-  #              Nx.iota({5, 4}),
-  #              Nx.iota({4, 3}),
-  #              Nx.iota({3}),
-  #              Nx.iota({3, 2}),
-  #              Nx.iota({2})
-  #            ) ==
-  #              Nx.tensor([
-  #                [2.8414709848078967, 2.1310220466218284],
-  #                [-0.8231163613806731, -2.909552551516233]
-  #              ])
-  #   end
-
-  #   TODO: grad for outer, transpose, reshape
-  #   defn grad_dot_transpose_rule(x), do: grad(x, Nx.sum(Nx.dot(x, Nx.transpose(x))))
-
-  #   test "computes gradient with transpose" do
-  #     assert grad_dot_transpose_rule(Nx.iota({2, 3})) ==
-  #              Nx.tensor([1])
-  #   end
-  # end
+    test "computes gradient with dot after dot" do
+      assert grad_dot_dot_rule(
+               Nx.iota({5, 4}),
+               Nx.iota({4, 3}),
+               Nx.iota({3}),
+               Nx.iota({3, 2}),
+               Nx.iota({2})
+             ) ==
+               Nx.tensor([
+                 [23.0, 68.0, 113.0, 158.0],
+                 [23.0, 68.0, 113.0, 158.0],
+                 [23.0, 68.0, 113.0, 158.0],
+                 [23.0, 68.0, 113.0, 158.0],
+                 [23.0, 68.0, 113.0, 158.0]
+               ])
+    end
+  end
 
   describe "chain rule" do
     defn grad_tanh_exp(t), do: grad(t, Nx.tanh(Nx.exp(t)))

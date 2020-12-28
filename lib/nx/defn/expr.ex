@@ -212,8 +212,13 @@ defmodule Nx.Defn.Expr do
   def transpose(expr, axes) do
     %Expr{shape: shape} = expr = to_expr(expr)
     axes = Nx.Shape.normalize_axes(shape, axes)
-    output_shape = Nx.Shape.transpose(shape, axes)
-    make_expr(output_shape, :transpose, [expr, axes])
+
+    if axes == Nx.Shape.to_axes(shape) do
+      expr
+    else
+      output_shape = Nx.Shape.transpose(shape, axes)
+      make_expr(output_shape, :transpose, [expr, axes])
+    end
   end
 
   @doc """
@@ -296,8 +301,13 @@ defmodule Nx.Defn.Expr do
     %Expr{shape: old_shape} = expr = to_expr(expr)
     shape = to_shape(shape)
     axes = Nx.Shape.normalize_axes(shape, axes)
-    output_shape = Nx.Shape.broadcast(old_shape, shape, axes)
-    make_expr(output_shape, :broadcast, [expr, shape, axes])
+
+    if expr.shape == shape and axes == Nx.Shape.to_axes(shape) do
+      expr
+    else
+      output_shape = Nx.Shape.broadcast(old_shape, shape, axes)
+      make_expr(output_shape, :broadcast, [expr, shape, axes])
+    end
   end
 
   @doc """

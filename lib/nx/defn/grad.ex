@@ -68,78 +68,85 @@ defmodule Nx.Defn.Grad do
 
   ## Rule-based gradients
 
-  # Addition rule
-  defp grad(op, [x, y], _ans, g, cache) when op in [:add, :subtract] do
-    {dx, cache} = to_grad(x, to_one(x), cache)
-    {dy, cache} = to_grad(y, to_one(y), cache)
+  defp grad(:add, [x, y], _ans, g, cache) do
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
 
-    res =
-      cond do
-        zero?(dy) -> dx
-        zero?(dx) and op == :add -> dy
-        true -> apply(Expr, op, [dx, dy])
-      end
-
-    {Expr.multiply(g, res), cache}
+    {maybe_add(dx, dy), cache}
   end
 
-  # Product rule
+  defp grad(:subtract, [x, y], _ans, g, cache) do
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
+
+    {maybe_subtract(dx, dy), cache}
+  end
+
   defp grad(:multiply, [x, y], _ans, g, cache) do
-    {dx, cache} = to_grad(x, to_one(x), cache)
-    {dy, cache} = to_grad(y, to_one(y), cache)
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
 
-    res = Expr.add(Expr.multiply(dx, y), Expr.multiply(dy, x))
-    {Expr.multiply(g, res), cache}
+    {maybe_add(maybe_multiply(dx, y), maybe_multiply(dy, x)), cache}
   end
 
-  # Division rule
   defp grad(:divide, [x, y], ans, g, cache) do
-    {dx, cache} = to_grad(x, to_one(x), cache)
-    {dy, cache} = to_grad(y, to_one(y), cache)
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
 
-    num = Expr.subtract(dx, Expr.multiply(ans, dy))
-    {Expr.multiply(g, Expr.divide(num, y)), cache}
+    num = maybe_subtract(dx, maybe_multiply(ans, dy))
+    {maybe_divide(num, y), cache}
   end
 
   # Remainder rule
   defp grad(:remainder, [x, y], _, g, cache) do
-    {dx, cache} = to_grad(x, to_one(x), cache)
-    {dy, cache} = to_grad(y, to_one(y), cache)
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
 
-    right = Expr.multiply(dy, Expr.floor(Expr.divide(x, y)))
-    {Expr.multiply(g, Expr.subtract(dx, right)), cache}
+    right = maybe_multiply(dy, Expr.floor(Expr.divide(x, y)))
+    {maybe_subtract(dx, right), cache}
   end
 
   # Power/Exponentiation rule
   defp grad(:power, [x, y], ans, g, cache) do
-    {dx, cache} = to_grad(x, to_one(x), cache)
-    {dy, cache} = to_grad(y, to_one(y), cache)
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
 
-    res =
-      if one?(dx) and zero?(dy) do
-        Expr.multiply(y, Expr.power(x, Expr.subtract(y, 1)))
-      else
-        # g' * ln f
-        left = Expr.multiply(dy, Expr.log(x))
+    exponent = Expr.select(Expr.equal(y, 0.0), 1.0, Expr.subtract(y, 1.0))
+    left = maybe_multiply(dx, Expr.multiply(y, Expr.power(x, exponent)))
 
-        # f' * (g / f)
-        right = Expr.multiply(dx, Expr.divide(y, x))
-
-        # ans * (left + right)
-        Expr.multiply(ans, Expr.add(left, right))
-      end
-
-    {Expr.multiply(g, res), cache}
+    base = Expr.select(Expr.equal(x, 0.0), 1.0, x)
+    right = maybe_multiply(dy, Expr.multiply(Expr.log(base), ans))
+    {maybe_add(left, right), cache}
   end
 
   # Arctan2 rule
   defp grad(:arctan2, [x, y], _, g, cache) do
-    {dx, cache} = to_grad(x, to_one(x), cache)
-    {dy, cache} = to_grad(y, to_one(y), cache)
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
 
-    num = Expr.subtract(Expr.multiply(dx, y), Expr.multiply(x, dy))
+    num = maybe_subtract(maybe_multiply(dx, y), maybe_multiply(x, dy))
     den = Expr.add(Expr.power(x, 2), Expr.power(y, 2))
-    {Expr.multiply(g, Expr.divide(num, den)), cache}
+    {maybe_divide(num, den), cache}
+  end
+
+  # Minmax rules
+  defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
+    {dx, cache} = to_grad(x, g, cache)
+    {dy, cache} = to_grad(y, g, cache)
+
+    lhs =
+      Expr.divide(
+        Expr.select(Expr.equal(x, ans), 1.0, 0.0),
+        Expr.select(Expr.equal(y, ans), 2.0, 1.0)
+      )
+
+    rhs =
+      Expr.divide(
+        Expr.select(Expr.equal(y, ans), 1.0, 0.0),
+        Expr.select(Expr.equal(x, ans), 2.0, 1.0)
+      )
+
+    {maybe_add(maybe_multiply(dx, lhs), maybe_multiply(dy, rhs)), cache}
   end
 
   ## Linear gradients
@@ -201,48 +208,38 @@ defmodule Nx.Defn.Grad do
     grad_aggregate(x, opts, Expr.multiply(factor, g), cache)
   end
 
+  defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
+    g = Expr.broadcast(g, ans)
+
+    contract_gx = up_to(Nx.Shape.rank(x.shape) - length(axes_x), Nx.Shape.rank(g.shape))
+    contract_gy = up_to(0, Nx.Shape.rank(x.shape) - length(axes_x))
+
+    contract_x = Nx.Shape.to_axes(x.shape) -- axes_x
+    contract_y = Nx.Shape.to_axes(y.shape) -- axes_y
+
+    transpose_x = Enum.map(argsort(axes_y), &Enum.fetch!(axes_x, &1))
+    transpose_y = Enum.map(argsort(axes_x), &Enum.fetch!(axes_y, &1))
+
+    gx =
+      g
+      |> Expr.dot(contract_gx, y, contract_y)
+      |> Expr.transpose(argsort(contract_x ++ transpose_x))
+
+    gy =
+      g
+      |> Expr.dot(contract_gy, x, contract_x)
+      |> Expr.transpose(argsort(contract_y ++ transpose_y))
+
+    {dx, cache} = to_grad(x, gx, cache)
+    {dy, cache} = to_grad(y, gy, cache)
+    {maybe_add(dx, dy), cache}
+  end
+
   ## Other gradients
 
   defp grad(:abs, [x], _ans, g, cache) do
-    g = Expr.select(Expr.greater_equal(x, broadcast_constant(0.0, g)), g, Expr.negate(g))
+    g = Expr.select(Expr.greater_equal(x, 0.0), g, Expr.negate(g))
     to_grad(x, g, cache)
-  end
-
-  defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
-    {dx, cache} = to_grad(x, to_one(x), cache)
-    {dy, cache} = to_grad(y, to_one(y), cache)
-
-    lhs =
-      Expr.divide(
-        Expr.select(
-          Expr.equal(x, ans),
-          broadcast_constant(1.0, ans),
-          broadcast_constant(0.0, ans)
-        ),
-        Expr.select(
-          Expr.equal(y, ans),
-          broadcast_constant(2.0, ans),
-          broadcast_constant(1.0, ans)
-        )
-      )
-
-    rhs =
-      Expr.divide(
-        Expr.select(
-          Expr.equal(y, ans),
-          broadcast_constant(1.0, ans),
-          broadcast_constant(0.0, ans)
-        ),
-        Expr.select(
-          Expr.equal(x, ans),
-          broadcast_constant(2.0, ans),
-          broadcast_constant(1.0, ans)
-        )
-      )
-
-    res = Expr.add(Expr.multiply(dx, lhs), Expr.multiply(dy, rhs))
-
-    {Expr.multiply(g, res), cache}
   end
 
   defp grad(:cbrt, [x], ans, g, cache) do
@@ -320,8 +317,8 @@ defmodule Nx.Defn.Grad do
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
                [:floor, :round, :ceil, :sign]
 
-  defp grad(op, _, _, g, cache) when op in @constants do
-    {broadcast_constant(0.0, g), cache}
+  defp grad(op, _, _, _, cache) when op in @constants do
+    {Expr.to_expr(0.0), cache}
   end
 
   # TODO:
@@ -344,17 +341,40 @@ defmodule Nx.Defn.Grad do
 
   ## Helpers
 
-  defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
-
-  defp to_one(expr), do: broadcast_constant(1.0, expr)
-
-  defp broadcast_constant?(expr, constant),
-    do: match?(%Expr{op: :broadcast, args: [%Expr{op: :constant, args: [^constant]}, _]}, expr)
-
-  defp zero?(expr), do: broadcast_constant?(expr, 0.0)
-  defp one?(expr), do: broadcast_constant?(expr, 1.0)
-
-  defp broadcast_constant(constant, expr) when is_number(constant) do
-    if broadcast_constant?(expr, constant), do: expr, else: Expr.broadcast(constant, expr.shape)
+  defp maybe_add(x, y) do
+    cond do
+      zero?(x) -> y
+      zero?(y) -> x
+      true -> Expr.add(x, y)
+    end
   end
+
+  defp maybe_subtract(x, y) do
+    cond do
+      zero?(y) -> x
+      zero?(x) -> Expr.negate(y)
+      true -> Expr.subtract(x, y)
+    end
+  end
+
+  defp maybe_multiply(x, y) do
+    cond do
+      zero?(x) -> x
+      zero?(y) -> y
+      true -> Expr.multiply(x, y)
+    end
+  end
+
+  defp maybe_divide(x, y) do
+    cond do
+      zero?(x) -> x
+      true -> Expr.divide(x, y)
+    end
+  end
+
+  defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
+  defp up_to(_, _), do: []
+
+  defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+  defp zero?(expr), do: match?(%Expr{op: :constant, args: [0.0]}, expr)
 end
