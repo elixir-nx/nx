@@ -3188,6 +3188,12 @@ defmodule Nx do
         2.0
       >
 
+      iex> Nx.mean(Nx.tensor([1, 2, 3], type: {:u, 8}), axes: [0])
+      #Nx.Tensor<
+        f64
+        2.0
+      >
+
       iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]), axes: [0])
       #Nx.Tensor<
         f64[2][3]
@@ -3215,7 +3221,7 @@ defmodule Nx do
   """
   def mean(tensor, opts \\ []) do
     tensor = tensor(tensor)
-    divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
+    divide(sum(tensor, opts), tensor(mean_den(tensor.shape, opts[:axes])))
   end
 
   defp mean_den(shape, nil), do: Nx.Shape.size(shape)

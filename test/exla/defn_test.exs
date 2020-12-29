@@ -625,6 +625,7 @@ defmodule Exla.DefnTest do
     test "computes mean without axis" do
       assert mean(Nx.tensor(42)) == Nx.tensor(42.0)
       assert mean(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
+      assert mean(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2.0)
     end
 
     defn mean_over_single_axis(t), do: Nx.mean(t, axes: [0])
