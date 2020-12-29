@@ -15,23 +15,18 @@ defmodule MNIST do
     {w1, b1, w2, b2}
   end
 
-  defn logsumexp(logits) do
-    logits
-    |> Nx.exp()
-    |> Nx.sum(axis: 1)
-    |> Nx.log()
+  defn softmax(logits) do
+    Nx.exp(logits) / Nx.sum(Nx.exp(logits), axis: 1)
   end
 
   defn predict({w1, b1, w2, b2}, batch) do
-    logits =
-      batch
-      |> Nx.dot(w1)
-      |> Nx.add(b1)
-      |> Nx.tanh()
-      |> Nx.dot(w2)
-      |> Nx.add(b2)
-
-    logits - logsumexp(logits)
+    batch
+    |> Nx.dot(w1)
+    |> Nx.add(b1)
+    |> Nx.logistic()
+    |> Nx.dot(w2)
+    |> Nx.add(b2)
+    |> softmax()
   end
 
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
@@ -42,7 +37,7 @@ defmodule MNIST do
 
   defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
     preds = predict({w1, b1, w2, b2}, batch_images)
-    -Nx.mean(Nx.sum(preds * batch_labels, axis: 1))
+    -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axis: 1))
   end
 
   defn update({w1, b1, w2, b2}, batch_images, batch_labels, step) do
@@ -116,6 +111,8 @@ defmodule MNIST do
           imgs
           |> Enum.zip(labels)
           |> Enum.reduce(acc, fn {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
+              # IO.inspect predict(cur_params, imgs)
+              # IO.inspect tar
               batch_loss = loss(cur_params, imgs, tar)
               batch_accuracy = accuracy(cur_params, imgs, tar)
               avg_loss = average(avg_loss, batch_loss, total_batches)
