@@ -655,6 +655,14 @@ defmodule Exla.DefnTest do
                Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
              ) == Nx.tensor([[2.0, 5.0], [8.0, 11.0]])
     end
+
+    defn mean_equal(t), do: Nx.mean(Nx.equal(t, 1.0))
+
+    test "mean does not overflow" do
+      assert mean_equal(Nx.tensor(1)) == Nx.tensor(1.0)
+      assert mean_equal(Nx.tensor([1, 1, 1])) == Nx.tensor(1.0)
+      assert mean_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0.3333333333333333)
+    end
   end
 
   describe "argmax/argmin" do
