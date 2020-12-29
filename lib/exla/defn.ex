@@ -157,36 +157,24 @@ defmodule Exla.Defn do
     Exla.Op.dot_general(left, right, {axes1, axes2})
   end
 
-  defp to_operator(:outer, [{lhs_expr, left}, {rhs_expr, right}], output_shape, builder) do
+  defp to_operator(:outer, [{left_expr, left}, {right_expr, right}], output_shape, builder) do
     {left, right} = binary_op_type(builder, left, right, & &1)
 
-    {lhs_new_shape, rhs_new_shape} =
-      case {lhs_expr.shape, rhs_expr.shape} do
-        {{}, right} ->
-          {{}, right}
+    extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(left_expr.shape))
+    left_shape = List.to_tuple(Tuple.to_list(left_expr.shape) ++ extra)
 
-        {left, {}} ->
-          {left, {}}
-
-        {left, right} ->
-          extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(left))
-          left = List.to_tuple(Tuple.to_list(left) ++ extra)
-
-          extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(right))
-          right = List.to_tuple(extra ++ Tuple.to_list(right))
-
-          {left, right}
-      end
+    extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(right_expr.shape))
+    right_shape = List.to_tuple(extra ++ Tuple.to_list(right_expr.shape))
 
     left =
       left
-      |> Exla.Op.reshape(lhs_new_shape)
-      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(lhs_new_shape, output_shape))
+      |> Exla.Op.reshape(left_shape)
+      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(left_shape, output_shape))
 
     right =
       right
-      |> Exla.Op.reshape(rhs_new_shape)
-      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(rhs_new_shape, output_shape))
+      |> Exla.Op.reshape(right_shape)
+      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(right_shape, output_shape))
 
     Exla.Op.multiply(left, right)
   end

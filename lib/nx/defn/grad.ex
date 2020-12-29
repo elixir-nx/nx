@@ -66,36 +66,49 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  ## Rule-based gradients
+  ## Binary broadcast gradients
 
-  defp grad(:add, [x, y], _ans, g, cache) do
+  defp grad(:add, [x, y], ans, g, cache) do
+    {x, y} = binary_broadcast(x, y, ans)
     {dx, cache} = to_grad(x, g, cache)
     {dy, cache} = to_grad(y, g, cache)
 
     {maybe_add(dx, dy), cache}
   end
 
-  defp grad(:subtract, [x, y], _ans, g, cache) do
+  defp grad(:subtract, [x, y], ans, g, cache) do
+    {x, y} = binary_broadcast(x, y, ans)
     {dx, cache} = to_grad(x, g, cache)
     {dy, cache} = to_grad(y, g, cache)
 
     {maybe_subtract(dx, dy), cache}
   end
 
+  defp grad(:multiply, [x, y], ans, g, cache) do
+    {x, y} = binary_broadcast(x, y, ans)
+    {dx, cache} = to_grad(x, Expr.multiply(g, y), cache)
+    {dy, cache} = to_grad(y, Expr.multiply(g, x), cache)
+
+    {maybe_add(dx, dy), cache}
+  end
+
   defp grad(:divide, [x, y], ans, g, cache) do
+    {x, y} = binary_broadcast(x, y, ans)
     {dx, cache} = to_grad(x, Expr.divide(g, y), cache)
     {dy, cache} = to_grad(y, Expr.divide(Expr.multiply(g, ans), y), cache)
 
     {maybe_subtract(dx, dy), cache}
   end
 
-  defp grad(:remainder, [x, y], _, g, cache) do
+  defp grad(:remainder, [x, y], ans, g, cache) do
+    {x, y} = binary_broadcast(x, y, ans)
     {dx, cache} = to_grad(x, g, cache)
     {dy, cache} = to_grad(y, Expr.multiply(g, Expr.floor(Expr.divide(x, y))), cache)
     {maybe_subtract(dx, dy), cache}
   end
 
   defp grad(:power, [x, y], ans, g, cache) do
+    {x, y} = binary_broadcast(x, y, ans)
     exponent = Expr.select(Expr.equal(y, 0.0), 1.0, Expr.subtract(y, 1.0))
     base = Expr.select(Expr.equal(x, 0.0), 1.0, x)
 
@@ -104,7 +117,8 @@ defmodule Nx.Defn.Grad do
     {maybe_add(dx, dy), cache}
   end
 
-  defp grad(:arctan2, [x, y], _, g, cache) do
+  defp grad(:arctan2, [x, y], ans, g, cache) do
+    {x, y} = binary_broadcast(x, y, ans)
     den = Expr.add(Expr.power(x, 2), Expr.power(y, 2))
     {dx, cache} = to_grad(x, Expr.divide(Expr.multiply(g, y), den), cache)
     {dy, cache} = to_grad(y, Expr.divide(Expr.multiply(g, x), den), cache)
@@ -113,6 +127,8 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
+    {x, y} = binary_broadcast(x, y, ans)
+
     lhs =
       Expr.divide(
         Expr.select(Expr.equal(x, ans), 1.0, 0.0),
@@ -187,13 +203,6 @@ defmodule Nx.Defn.Grad do
   defp grad(:mean, [x, opts], ans, g, cache) do
     factor = Expr.to_expr(Nx.Shape.size(ans.shape) / Nx.Shape.size(x.shape))
     grad_aggregate(x, opts, Expr.multiply(factor, g), cache)
-  end
-
-  defp grad(:multiply, [x, y], _ans, g, cache) do
-    {dx, cache} = to_grad(x, Expr.multiply(g, y), cache)
-    {dy, cache} = to_grad(y, Expr.multiply(g, x), cache)
-
-    {maybe_add(dx, dy), cache}
   end
 
   defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
@@ -327,6 +336,10 @@ defmodule Nx.Defn.Grad do
   end
 
   ## Helpers
+
+  defp binary_broadcast(x, y, ans) do
+    {Expr.broadcast(x, ans), Expr.broadcast(y, ans)}
+  end
 
   defp maybe_add(x, y) do
     cond do

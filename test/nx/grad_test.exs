@@ -301,24 +301,24 @@ defmodule Nx.GradTest do
                ])
     end
 
-    # defn grad_dot_implicit_bcast_rule(b1, w2, labels) do
-    #   grad(
-    #     b1,
-    #     b1
-    #     |> Nx.dot(w2)
-    #     |> Nx.multiply(labels)
-    #     |> Nx.sum()
-    #   )
-    # end
+    defn grad_dot_implicit_bcast_rule(b1, w2, labels) do
+      grad(
+        b1,
+        b1
+        |> Nx.dot(w2)
+        |> Nx.multiply(labels)
+        |> Nx.sum()
+      )
+    end
 
-    # test "computes gradient with dot with implicit broadcast" do
-    #   assert grad_dot_implicit_bcast_rule(
-    #            Nx.iota({3}),
-    #            Nx.iota({3, 2}),
-    #            Nx.iota({5, 2})
-    #          ) ==
-    #            Nx.tensor([25.0, 115.0, 205.0])
-    # end
+    test "computes gradient with dot with implicit broadcast" do
+      assert grad_dot_implicit_bcast_rule(
+               Nx.iota({3}),
+               Nx.iota({3, 2}),
+               Nx.iota({5, 2})
+             ) ==
+               Nx.tensor([25.0, 115.0, 205.0])
+    end
   end
 
   describe "chain rule" do

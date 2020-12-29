@@ -799,7 +799,12 @@ defmodule Nx do
   def broadcast(tensor, broadcast_shape) do
     tensor = tensor(tensor)
     broadcast_shape = shape!(broadcast_shape)
-    broadcast(tensor, broadcast_shape, Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape))
+
+    if tensor.shape == broadcast_shape do
+      tensor
+    else
+      broadcast(tensor, broadcast_shape, Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape))
+    end
   end
 
   @doc """
@@ -892,8 +897,6 @@ defmodule Nx do
   # Implicit broadcasting
   defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, chunk_size)
        when elem(old_shape, old_pos) == 1 do
-    chunk_size = div(chunk_size, dim)
-
     for _ <- 1..dim do
       unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, data, chunk_size)
     end
@@ -1069,7 +1072,9 @@ defmodule Nx do
       ]
     >
   """
-  def pad(tensor, pad_value, padding_config) when is_number(pad_value) do
+  def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
+    pad_value = Nx.Util.to_scalar(pad_value)
+
     case tensor(tensor) do
       %T{shape: {}} = t ->
         t
@@ -1082,11 +1087,10 @@ defmodule Nx do
         permutation = for i <- 0..(Nx.rank(t) - 2), do: i
         permutation = [Nx.rank(t) - 1 | permutation]
 
-        for {edge_low, edge_high} <- Enum.reverse(padding_config),
-            reduce: t,
-            do:
-              (acc ->
-                 transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation))
+        for {edge_low, edge_high} <- Enum.reverse(padding_config), reduce: t do
+          acc ->
+            transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation)
+        end
     end
   end
 
@@ -1251,26 +1255,42 @@ defmodule Nx do
 
     defp unquote(name)(left, right, fun) do
       output_type = Nx.Type.merge_tensors(left, right)
-
-      %T{type: left_type} = left = tensor(left)
-      %T{type: right_type} = right = tensor(right)
-
-      # Merging scalars has less aggressive type promotion than a straight merge
-
       output_type = unquote(cast)
 
-      {data, shape} =
-        match_types [left_type, right_type, output_type] do
-          binary_broadcast(left, right, fn left_dimension, right_dimension ->
-            for <<match!(left_seg, 0) <- left_dimension>>,
-                <<match!(right_seg, 1) <- right_dimension>>,
-                into: <<>> do
-              <<write!(fun.(output_type, read!(left_seg, 0), read!(right_seg, 1)), 2)>>
+      %T{type: {_, left_size} = left_type, shape: left_shape} = left = tensor(left)
+      %T{type: {_, right_size} = right_type, shape: right_shape} = right = tensor(right)
+
+      shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
+      count = Nx.Shape.size(shape)
+
+      left = broadcast(left, shape)
+      right = broadcast(right, shape)
+
+      left_data = Nx.Util.to_bitstring(left)
+      right_data = Nx.Util.to_bitstring(right)
+
+      data =
+        for i <- 0..(count - 1), into: <<>> do
+          x =
+            match_types [left_type] do
+              left_consumed = i * left_size
+              <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> = left_data
+              read!(x, 0)
             end
-          end)
+
+          y =
+            match_types [right_type] do
+              right_consumed = i * right_size
+              <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> = right_data
+              read!(y, 0)
+            end
+
+          match_types [output_type] do
+            <<write!(fun.(output_type, x, y), 0)>>
+          end
         end
 
-      %T{data: {Nx.BitStringDevice, data}, type: output_type, shape: shape}
+      %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
     end
   end
 
@@ -2508,6 +2528,15 @@ defmodule Nx do
         [4, 5, 6]
       >
 
+      iex> Nx.select(0, Nx.tensor([[1, 2]]), Nx.tensor([[3], [4]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [3, 3],
+          [4, 4]
+        ]
+      >
+
       iex> Nx.select(Nx.tensor([0, 1, 0]), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
       #Nx.Tensor<
         s64[3]
@@ -2535,7 +2564,11 @@ defmodule Nx do
 
     case {tensor(pred), tensor(on_true), tensor(on_false)} do
       {%T{shape: {}} = pred, on_true, on_false} ->
-        if zero?(pred), do: on_false, else: on_true
+        shape = Nx.Shape.binary_broadcast(on_false.shape, on_true.shape)
+
+        if Nx.Util.to_scalar(pred) == 0,
+          do: broadcast(on_false, shape),
+        else: broadcast(on_true, shape)
 
       {%T{shape: shape, type: {_, pred_size} = pred_type} = pred,
        %T{type: {_, left_size} = left_type} = on_true,
@@ -2558,12 +2591,14 @@ defmodule Nx do
               end
 
             result =
-              match_types [left_type, right_type] do
-                if pred == 0 do
+              if pred == 0 do
+                match_types [right_type] do
                   consumed = i * right_size
-                  <<_::size(consumed)-bitstring, match!(y, 1), _::bitstring>> = on_false_data
-                  read!(y, 1)
-                else
+                  <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_false_data
+                  read!(x, 0)
+                end
+              else
+                match_types [left_type] do
                   consumed = i * left_size
                   <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
                   read!(x, 0)
@@ -2576,15 +2611,6 @@ defmodule Nx do
           end
 
         %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
-    end
-  end
-
-  defp zero?(%T{type: type} = t) do
-    data = Nx.Util.to_bitstring(t)
-
-    match_types [type] do
-      <<match!(x, 0)>> = data
-      read!(x, 0) == 0
     end
   end
 
@@ -3940,130 +3966,5 @@ defmodule Nx do
           "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
             "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
-  end
-
-  ## Broadcast helpers
-
-  defp binary_broadcast(
-         %T{type: {_, left_size}, shape: shape} = left,
-         %T{type: {_, right_size}, shape: shape} = right,
-         fun
-       ) do
-    data =
-      bin_zip_map(
-        Nx.Util.to_bitstring(left),
-        left_size,
-        Nx.Util.to_bitstring(right),
-        right_size,
-        fun
-      )
-
-    {IO.iodata_to_binary(data), shape}
-  end
-
-  defp binary_broadcast(
-         %T{type: {_, left_size}, shape: left_shape} = left,
-         %T{type: {_, right_size}, shape: right_shape} = right,
-         fun
-       ) do
-    left_rank = tuple_size(left_shape)
-    right_rank = tuple_size(right_shape)
-    rank = :erlang.max(left_rank, right_rank)
-    left_ordered = shape_to_lower_ranked_list(left_shape, left_rank, rank)
-    right_ordered = shape_to_lower_ranked_list(right_shape, right_rank, rank)
-
-    case broadcast_chunks(left_ordered, right_ordered, left_size, right_size, [fun], []) do
-      {chunks, shape} ->
-        {broadcast_recur(Nx.Util.to_bitstring(left), Nx.Util.to_bitstring(right), chunks), shape}
-
-      :error ->
-        raise ArgumentError,
-              "cannot broadcast tensor of dimensions #{inspect(left_shape)} " <>
-                "to #{inspect(right_shape)}"
-    end
-  end
-
-  defp broadcast_recur(left_data, right_data, [fun]) do
-    fun.(left_data, right_data)
-  end
-
-  defp broadcast_recur(left_data, right_data, [{:cross, left_chunk, right_chunk} | chunks]) do
-    for <<left_part::bitstring-size(left_chunk) <- left_data>>,
-        <<right_part::bitstring-size(right_chunk) <- right_data>>,
-        into: <<>>,
-        do: broadcast_recur(left_part, right_part, chunks)
-  end
-
-  defp broadcast_recur(left_data, right_data, [{:zip, left_chunk, right_chunk} | chunks]) do
-    left_data
-    |> bin_zip_map(left_chunk, right_data, right_chunk, &broadcast_recur(&1, &2, chunks))
-    |> IO.iodata_to_binary()
-  end
-
-  defp broadcast_chunks([], [], _, _, chunks, shape) do
-    {chunks, List.to_tuple(shape)}
-  end
-
-  defp broadcast_chunks(left_ordered, right_ordered, left_size, right_size, chunks, shape)
-       when hd(left_ordered) == 1 or hd(right_ordered) == 1 do
-    left_ones = count_ones(left_ordered)
-    right_ones = count_ones(right_ordered)
-    {dir, size} = if left_ones <= right_ones, do: {:left, right_ones}, else: {:right, left_ones}
-
-    {left_ordered, right_ordered, left_chunk, right_chunk, shape} =
-      broadcast_split_chunks(left_ordered, right_ordered, left_size, right_size, size, shape)
-
-    # This is an optimization, we skip cross traversals on the left-side
-    # if we are just before a previous cross traversal. If broadcasting is
-    # failing, remove the if branch and see if it succeeds. :)
-    chunks =
-      if dir == :left and match?([{:cross, _, _} | _], chunks) do
-        chunks
-      else
-        [{:cross, left_size, right_size} | chunks]
-      end
-
-    broadcast_chunks(left_ordered, right_ordered, left_chunk, right_chunk, chunks, shape)
-  end
-
-  defp broadcast_chunks(left_ordered, right_ordered, left_size, right_size, chunks, shape)
-       when hd(left_ordered) == hd(right_ordered) do
-    {left_ordered, right_ordered, left_chunk, right_chunk, shape} =
-      broadcast_shared_chunks(left_ordered, right_ordered, left_size, right_size, shape)
-
-    chunks = [{:zip, left_size, right_size} | chunks]
-    broadcast_chunks(left_ordered, right_ordered, left_chunk, right_chunk, chunks, shape)
-  end
-
-  defp broadcast_chunks(_left_ordered, _right_ordered, _left_size, _right_size, _chunks, _shape),
-    do: :error
-
-  defp count_ones([1 | shape]), do: 1 + count_ones(shape)
-  defp count_ones(_), do: 0
-
-  defp broadcast_split_chunks([lh | lt], [rh | rt], ls, rs, n, shape) when n > 0,
-    do: broadcast_split_chunks(lt, rt, ls * lh, rh * rs, n - 1, [:erlang.max(lh, rh) | shape])
-
-  defp broadcast_split_chunks(l, r, ls, rs, _n, shape),
-    do: {l, r, ls, rs, shape}
-
-  defp broadcast_shared_chunks([x | left], [x | right], ls, rs, shape),
-    do: broadcast_shared_chunks(left, right, ls * x, rs * x, [x | shape])
-
-  defp broadcast_shared_chunks(left, right, ls, rs, shape),
-    do: {left, right, ls, rs, shape}
-
-  ## Binary helpers
-
-  defp bin_zip_map(<<>>, _left_size, <<>>, _right_size, _fun), do: []
-
-  defp bin_zip_map(left_data, left_size, right_data, right_size, fun) do
-    <<left_head::bitstring-size(left_size), left_rest::bitstring>> = left_data
-    <<right_head::bitstring-size(right_size), right_rest::bitstring>> = right_data
-
-    [
-      fun.(left_head, right_head)
-      | bin_zip_map(left_rest, left_size, right_rest, right_size, fun)
-    ]
   end
 end

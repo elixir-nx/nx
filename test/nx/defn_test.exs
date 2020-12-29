@@ -195,6 +195,9 @@ defmodule Nx.DefnTest do
     test "select with scalar predicate" do
       assert %Expr{op: :select, args: [_, _, _], shape: {5}} =
                select(Nx.tensor(1), Nx.tensor([1, 2, 3, 4, 5]), Nx.tensor(0))
+
+      assert %Expr{op: :select, args: [_, _, _], shape: {2, 2}} =
+               select(Nx.tensor(1), Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]))
     end
   end
 

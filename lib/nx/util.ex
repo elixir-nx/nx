@@ -34,6 +34,34 @@ defmodule Nx.Util do
   end
 
   @doc """
+  Returns the underlying tensor as a scalar.
+
+  If the tensor has a dimension, it raises.
+
+    ## Examples
+
+      iex> Nx.Util.to_scalar(1)
+      1
+
+      iex> Nx.Util.to_scalar(Nx.tensor([1.0, 2.0, 3.0]))
+      ** (ArgumentError) cannot convert tensor of shape {3} to scalar
+  """
+  def to_scalar(tensor) do
+    tensor = Nx.tensor(tensor)
+
+    if tensor.shape != {} do
+      raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to scalar"
+    end
+
+    data = to_bitstring(tensor)
+
+    match_types [tensor.type] do
+      <<match!(x, 0)>> = data
+      read!(x, 0)
+    end
+  end
+
+  @doc """
   Returns the underlying tensor as a bitstring.
 
   The bitstring is returned as is (which is row-major).

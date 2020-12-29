@@ -144,8 +144,8 @@ defmodule Nx.Shape do
     right_rank = tuple_size(right_shape)
     rank = max(left_rank, right_rank)
 
-    left_lower = Nx.Shared.shape_to_lower_ranked_list(left_shape, left_rank, rank)
-    right_lower = Nx.Shared.shape_to_lower_ranked_list(right_shape, right_rank, rank)
+    left_lower = shape_to_lower_ranked_list(left_shape, left_rank, rank)
+    right_lower = shape_to_lower_ranked_list(right_shape, right_rank, rank)
 
     case binary_broadcast(left_lower, right_lower, []) do
       {:ok, new} ->
@@ -167,6 +167,15 @@ defmodule Nx.Shape do
 
   defp binary_broadcast(_, _, _),
     do: :error
+
+  defp shape_to_lower_ranked_list(_tuple, 0, 0),
+    do: []
+
+  defp shape_to_lower_ranked_list(tuple, 0, rank),
+    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
+
+  defp shape_to_lower_ranked_list(tuple, size, rank),
+    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
 
   @doc """
   Contracts a shape along the given axes.

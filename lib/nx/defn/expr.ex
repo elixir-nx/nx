@@ -15,7 +15,7 @@ defmodule Nx.Defn.Expr do
       `:args` is a one element list with the given arg.
 
     * `:constant` - holds a numeric constant.
-      `:args` is a one element list with a number.
+      `:args` is a one element list with a number and a shape.
   """
 
   alias Nx.Defn.Expr
@@ -274,7 +274,6 @@ defmodule Nx.Defn.Expr do
   """
   def pad(expr, value_expr, padding_config) do
     %Expr{shape: old_shape} = expr = to_expr(expr)
-    # Assert that value is a scalar
     value_expr = to_expr(value_expr)
 
     if value_expr.shape != {} do
@@ -301,11 +300,11 @@ defmodule Nx.Defn.Expr do
     %Expr{shape: old_shape} = expr = to_expr(expr)
     shape = to_shape(shape)
     axes = Nx.Shape.normalize_axes(shape, axes)
+    output_shape = Nx.Shape.broadcast(old_shape, shape, axes)
 
-    if expr.shape == shape and axes == Nx.Shape.to_axes(shape) do
+    if expr.shape == output_shape and axes == Nx.Shape.to_axes(shape) do
       expr
     else
-      output_shape = Nx.Shape.broadcast(old_shape, shape, axes)
       make_expr(output_shape, :broadcast, [expr, shape, axes])
     end
   end
@@ -340,9 +339,7 @@ defmodule Nx.Defn.Expr do
     output_shape =
       case pred_shape do
         {} ->
-          if Nx.Shape.size(true_shape) > Nx.Shape.size(false_shape),
-            do: true_shape,
-            else: false_shape
+          Nx.Shape.binary_broadcast(true_shape, false_shape)
 
         _ ->
           pred_shape
