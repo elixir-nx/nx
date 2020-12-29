@@ -274,7 +274,7 @@ defmodule Nx.Util do
             end
           end
 
-        {scalar_to_bin(bin, output_type), acc}
+        {scalar_to_binary(bin, output_type), acc}
       end
 
     {final_data, final_accs} = Enum.unzip(data_and_acc)
@@ -330,7 +330,7 @@ defmodule Nx.Util do
     data_and_acc =
       for b1 <- v1, b2 <- v2 do
         {bin, acc} = bin_zip_reduce(b1, b2, left_type, right_type, <<>>, acc, fun)
-        {scalar_to_bin(bin, output_type), acc}
+        {scalar_to_binary(bin, output_type), acc}
       end
 
     {final_data, final_acc} = Enum.unzip(data_and_acc)
@@ -488,8 +488,11 @@ defmodule Nx.Util do
           edge_low < 0 and edge_high < 0 ->
             low_byte = abs(edge_low) * size
             high_byte = abs(edge_high) * size
-            new_bytes = (byte_size(bin) * div(size, 8)) - high_byte - low_byte
-            <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> = bin
+            new_bytes = byte_size(bin) * div(size, 8) - high_byte - low_byte
+
+            <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> =
+              bin
+
             new_bin
 
           edge_low < 0 and edge_high >= 0 ->
@@ -499,7 +502,7 @@ defmodule Nx.Util do
 
           edge_low >= 0 and edge_high < 0 ->
             high_byte = abs(edge_high) * size
-            new_bytes = (byte_size(bin) * div(size, 8)) - high_byte
+            new_bytes = byte_size(bin) * div(size, 8) - high_byte
             <<new_bin::size(new_bytes)-bitstring, _::size(high_byte)-bitstring>> = bin
             <<edge_low_padding::bitstring, new_bin::bitstring>>
 
@@ -515,9 +518,11 @@ defmodule Nx.Util do
     dim = Nx.Shape.normalize_axis(shape, dim)
     dim_size = elem(shape, dim)
     new_dim = dim_size + edge_high + edge_low
+
     if new_dim <= 0 do
-      raise ArgumentError, "invalid padding widths, edge low and edge high padding" <>
-                           " cannot cause zero or negative dimension size"
+      raise ArgumentError,
+            "invalid padding widths, edge low and edge high padding" <>
+              " cannot cause zero or negative dimension size"
     else
       :erlang.setelement(dim + 1, shape, new_dim)
     end

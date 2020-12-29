@@ -142,7 +142,7 @@ defmodule Nx.DefnTest do
       assert %Expr{op: :dot, args: [_, [0], _, [0]], shape: {2}} =
                dot2(Nx.tensor([1, 2, 3]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
 
-    assert %Expr{op: :dot, args: [_, [1], _, [0]], shape: {2}} =
+      assert %Expr{op: :dot, args: [_, [1], _, [0]], shape: {2}} =
                dot2(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([1, 2, 3]))
 
       assert %Expr{op: :dot, args: [_, [1], _, [0]], shape: {2, 2}} =

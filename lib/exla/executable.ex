@@ -31,7 +31,9 @@ defmodule Exla.Executable do
 
     inputs =
       Enum.map(arguments, fn
-        %Buffer{ref: {ref, _}, data: nil} -> ref
+        %Buffer{ref: {ref, _}, data: nil} ->
+          ref
+
         buffer = %Buffer{data: data, shape: shape, ref: nil} ->
           if outside_cpu do
             %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_ordinal)
@@ -51,7 +53,8 @@ defmodule Exla.Executable do
         rng_seed,
         launch_id,
         keep_on_device_int
-      ) |> unwrap!()
+      )
+      |> unwrap!()
 
     decompose_output(data, output_shape, client, keep_on_device)
   end
@@ -68,17 +71,17 @@ defmodule Exla.Executable do
 
         {:tuple, tuple}
 
-    _ when keep_on_device == false and is_reference(data) ->
-      # This is the outside of cpu
-      bitstring = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
-      Exla.NIF.deallocate_device_mem(data) |> unwrap!()
-      Buffer.buffer(bitstring, shape)
+      _ when keep_on_device == false and is_reference(data) ->
+        # This is the outside of cpu
+        bitstring = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
+        Exla.NIF.deallocate_device_mem(data) |> unwrap!()
+        Buffer.buffer(bitstring, shape)
 
-    _ when is_reference(data) ->
-      Buffer.buffer({data, client.name}, shape)
+      _ when is_reference(data) ->
+        Buffer.buffer({data, client.name}, shape)
 
-    _ ->
-      Buffer.buffer(data, shape)
+      _ ->
+        Buffer.buffer(data, shape)
     end
   end
 

@@ -249,7 +249,7 @@ defmodule Nx do
      acc |> Enum.reverse() |> :erlang.list_to_bitstring()}
   end
 
-  defp flatten(other, type), do: {{}, scalar_to_bin(other, type)}
+  defp flatten(other, type), do: {{}, scalar_to_binary(other, type)}
 
   defp flatten_list([], _type, dimensions, acc) do
     {[0 | dimensions], acc}
@@ -277,7 +277,7 @@ defmodule Nx do
   end
 
   defp flatten_list(list, type, dimensions, acc) do
-    {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_bin(&1, type) | &2])}
+    {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_binary(&1, type) | &2])}
   end
 
   @doc """
@@ -393,7 +393,7 @@ defmodule Nx do
         {_, _} -> fn -> (max - min) * :rand.uniform() + min end
       end
 
-    data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_bin(gen.(), type)
+    data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_binary(gen.(), type)
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
 
@@ -466,7 +466,7 @@ defmodule Nx do
     data =
       for _ <- 1..Nx.Shape.size(shape),
           into: "",
-          do: scalar_to_bin(:rand.normal(mu, sigma), type)
+          do: scalar_to_binary(:rand.normal(mu, sigma), type)
 
     %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
   end
@@ -578,7 +578,7 @@ defmodule Nx do
     # Validate axis
     axis = opts[:axis] || 0
     Nx.Shape.normalize_axis({n}, axis)
-    data = for i <- 0..(n - 1), do: scalar_to_bin(i, output_type)
+    data = for i <- 0..(n - 1), do: scalar_to_binary(i, output_type)
     %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: {n}, type: output_type}
   end
 
@@ -609,7 +609,7 @@ defmodule Nx do
             i <- 0..(dim - 1),
             _ <- 1..repeat_blocks,
             into: "",
-            do: scalar_to_bin(i, output_type)
+            do: scalar_to_binary(i, output_type)
 
       %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
     else
@@ -2568,7 +2568,7 @@ defmodule Nx do
 
         if Nx.Util.to_scalar(pred) == 0,
           do: broadcast(on_false, shape),
-        else: broadcast(on_true, shape)
+          else: broadcast(on_true, shape)
 
       {%T{shape: shape, type: {_, pred_size} = pred_type} = pred,
        %T{type: {_, left_size} = left_type} = on_true,

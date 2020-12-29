@@ -174,13 +174,13 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize({{:., _, [Nx, name]} = call, meta, args}, state)
-      when name in @as_is_nx_functions do
+       when name in @as_is_nx_functions do
     {args, state} = normalize_list(args, state)
     {{call, meta, args}, state}
   end
 
   defp normalize({{:., _, [Nx, name]}, meta, args}, state)
-      when name in @forbidden_nx_functions do
+       when name in @forbidden_nx_functions do
     arity = length(args)
     compile_error!(meta, state, "Nx.#{name}/#{arity} is not allowed inside defn")
   end

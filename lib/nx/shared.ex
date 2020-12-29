@@ -136,7 +136,7 @@ defmodule Nx.Shared do
   @doc """
   Converts a scalar to a binary, according to the type.
   """
-  def scalar_to_bin(value, type) do
+  def scalar_to_binary(value, type) do
     match_types([type], do: <<write!(value, 0)>>)
   end
 

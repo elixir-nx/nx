@@ -52,6 +52,7 @@ defmodule Exla.Lib do
   """
   def mean(%Builder{} = builder, %Op{} = op, opts \\ []) do
     %Shape{dims: dims} = Op.get_shape(op)
+
     Op.divide(
       Op.convert_element_type(
         sum(builder, op, opts),

@@ -15,7 +15,9 @@ defmodule Exla.NxDeviceTest do
     nt = Nx.device_transfer(et)
     assert Nx.Util.to_bitstring(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
 
-    assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn -> Nx.device_transfer(et) end
+    assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn ->
+      Nx.device_transfer(et)
+    end
   end
 
   test "multiple reads and deallocation" do
@@ -26,7 +28,10 @@ defmodule Exla.NxDeviceTest do
     assert Nx.device_read(et) == t
     assert Nx.device_deallocate(et) == :ok
 
-    assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn -> Nx.device_read(et) end
+    assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn ->
+      Nx.device_read(et)
+    end
+
     assert Nx.device_deallocate(et) == :already_deallocated
   end
 

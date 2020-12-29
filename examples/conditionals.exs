@@ -5,8 +5,7 @@ t1_bin = for i <- t1, do: <<i::32-little>>, into: <<>>
 t1_shape = Exla.Shape.make_shape(:int32, {10})
 t1_tensor = %Exla.Tensor{data: {:binary, t1_bin}, shape: t1_shape, device: {:cpu, 0}}
 
-build_if_conditional_exec =
-fn ->
+build_if_conditional_exec = fn ->
   builder = Exla.Builder.new("if_conditional")
   true_branch = Exla.Builder.new(builder, "true_branch")
   false_branch = Exla.Builder.new(builder, "false_branch")
@@ -38,33 +37,32 @@ end
 
 if_exec = build_if_conditional_exec.()
 
-build_multi_conditiona_exec =
-  fn ->
-    builder = Exla.Builder.new("multi_conditional")
-    branch1 = Exla.Builder.new(builder, "branch1")
-    branch2 = Exla.Builder.new(builder, "branch2")
-    branch3 = Exla.Builder.new(builder, "branch3")
+build_multi_conditiona_exec = fn ->
+  builder = Exla.Builder.new("multi_conditional")
+  branch1 = Exla.Builder.new(builder, "branch1")
+  branch2 = Exla.Builder.new(builder, "branch2")
+  branch3 = Exla.Builder.new(builder, "branch3")
 
-    x = Exla.Op.parameter(builder, 0, t1_shape, "x")
+  x = Exla.Op.parameter(builder, 0, t1_shape, "x")
 
-    index = Exla.Op.constant(builder, 1)
+  index = Exla.Op.constant(builder, 1)
 
-    a = Exla.Op.parameter(branch1, 0, t1_shape, "a")
-    b = Exla.Op.parameter(branch2, 0, t1_shape, "b")
-    c = Exla.Op.parameter(branch3, 0, t1_shape, "c")
+  a = Exla.Op.parameter(branch1, 0, t1_shape, "a")
+  b = Exla.Op.parameter(branch2, 0, t1_shape, "b")
+  c = Exla.Op.parameter(branch3, 0, t1_shape, "c")
 
-    comp1 = Exla.Builder.build(Exla.Op.add(a, a))
-    comp2 = Exla.Builder.build(Exla.Op.div(b, b))
-    comp3 = Exla.Builder.build(c)
+  comp1 = Exla.Builder.build(Exla.Op.add(a, a))
+  comp2 = Exla.Builder.build(Exla.Op.div(b, b))
+  comp3 = Exla.Builder.build(c)
 
-    ast = Exla.Op.conditional(index, {comp1, comp2, comp3}, {x, x, x})
-    comp = Exla.Builder.build(ast)
+  ast = Exla.Op.conditional(index, {comp1, comp2, comp3}, {x, x, x})
+  comp = Exla.Builder.build(ast)
 
-    exec = Exla.Client.compile(client, comp, {t1_shape})
-    exec
-  end
+  exec = Exla.Client.compile(client, comp, {t1_shape})
+  exec
+end
 
 multi_exec = build_multi_conditiona_exec.()
 
-IO.inspect Exla.LocalExecutable.run(if_exec, {t1_tensor})
-IO.inspect Exla.LocalExecutable.run(multi_exec, {t1_tensor})
+IO.inspect(Exla.LocalExecutable.run(if_exec, {t1_tensor}))
+IO.inspect(Exla.LocalExecutable.run(multi_exec, {t1_tensor}))

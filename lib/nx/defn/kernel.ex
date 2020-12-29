@@ -169,7 +169,7 @@ defmodule Nx.Defn.Kernel do
   defp grad_var!(expr) do
     raise ArgumentError,
           "first argument of grad/3 must be a variable or a tuple of variables, got: " <>
-          Macro.to_string(expr)
+            Macro.to_string(expr)
   end
 
   @doc """

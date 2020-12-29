@@ -36,6 +36,7 @@ defmodule Exla.LockedCache do
           :cached ->
             :persistent_term.get(key)
         end
+
       value ->
         value
     end

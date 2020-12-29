@@ -33,8 +33,8 @@ defmodule Nx.Type do
 
   def min_value_binary({:s, 8}), do: <<-128::8-signed-native>>
   def min_value_binary({:s, 16}), do: <<-32678::16-signed-native>>
-  def min_value_binary({:s, 32}), do: <<-2147483648::32-signed-native>>
-  def min_value_binary({:s, 64}), do: <<-9223372036854775808::64-signed-native>>
+  def min_value_binary({:s, 32}), do: <<-2_147_483_648::32-signed-native>>
+  def min_value_binary({:s, 64}), do: <<-9_223_372_036_854_775_808::64-signed-native>>
   def min_value_binary({:u, size}), do: <<0::size(size)-native>>
   def min_value_binary({:bf, 16}), do: <<0xFF80::16-native>>
   def min_value_binary({:f, 32}), do: <<0xFF800000::32-native>>
@@ -47,12 +47,12 @@ defmodule Nx.Type do
 
   def max_value_binary({:s, 8}), do: <<127::8-signed-native>>
   def max_value_binary({:s, 16}), do: <<32677::16-signed-native>>
-  def max_value_binary({:s, 32}), do: <<2147483647::32-signed-native>>
-  def max_value_binary({:s, 64}), do: <<9223372036854775807::64-signed-native>>
+  def max_value_binary({:s, 32}), do: <<2_147_483_647::32-signed-native>>
+  def max_value_binary({:s, 64}), do: <<9_223_372_036_854_775_807::64-signed-native>>
   def max_value_binary({:u, 8}), do: <<255::8-native>>
   def max_value_binary({:u, 16}), do: <<65535::16-native>>
-  def max_value_binary({:u, 32}), do: <<4294967295::32-native>>
-  def max_value_binary({:u, 64}), do: <<18446744073709551615::64-native>>
+  def max_value_binary({:u, 32}), do: <<4_294_967_295::32-native>>
+  def max_value_binary({:u, 64}), do: <<18_446_744_073_709_551_615::64-native>>
   def max_value_binary({:bf, 16}), do: <<0x7F80::16-native>>
   def max_value_binary({:f, 32}), do: <<0x7F800000::32-native>>
   def max_value_binary({:f, 64}), do: <<0x7FF0000000000000::64-native>>
