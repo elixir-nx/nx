@@ -16,7 +16,7 @@ defmodule MNIST do
   end
 
   defn softmax(logits) do
-    Nx.exp(logits) / Nx.sum(Nx.exp(logits), axis: 1)
+    Nx.exp(logits) / Nx.reshape(Nx.sum(Nx.exp(logits), axes: [1]), {32, 1})
   end
 
   defn predict({w1, b1, w2, b2}, batch) do
@@ -30,14 +30,13 @@ defmodule MNIST do
   end
 
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
-    targets = Nx.argmax(batch_labels, axis: 1)
-    preds = Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: 1)
-    Nx.mean(Nx.equal(targets, preds))
+    # Nx.mean(Nx.equal(Nx.argmax(batch_labels, axis: 1), Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: 1)))
+    {Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: 1), Nx.argmax(batch_labels, axis: 1)}
   end
 
   defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
     preds = predict({w1, b1, w2, b2}, batch_images)
-    -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axis: 1))
+    -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axes: [1]))
   end
 
   defn update({w1, b1, w2, b2}, batch_images, batch_labels, step) do
@@ -111,13 +110,14 @@ defmodule MNIST do
           imgs
           |> Enum.zip(labels)
           |> Enum.reduce(acc, fn {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
-              # IO.inspect predict(cur_params, imgs)
-              # IO.inspect tar
               batch_loss = loss(cur_params, imgs, tar)
               batch_accuracy = accuracy(cur_params, imgs, tar)
+              IO.inspect batch_accuracy
+              IO.inspect Nx.argmax(predict(cur_params, imgs), axis: 1)
+              IO.inspect Nx.argmax(tar, axis: 1)
               avg_loss = average(avg_loss, batch_loss, total_batches)
               avg_accuracy = average(avg_accuracy, batch_accuracy, total_batches)
-              {update(cur_params, imgs, tar, 0.1), avg_loss, avg_accuracy}
+              {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
             end
             )
 
@@ -138,6 +138,6 @@ IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
 IO.puts("Training MNIST for 10 epochs...\n\n")
-{final_params, _, _} = MNIST.train(train_images, train_labels, params, epochs: 30)
+{final_params, _, _} = MNIST.train(train_images, train_labels, params, epochs: 10)
 
 IO.inspect final_params
