@@ -54,10 +54,7 @@ defmodule Exla.Lib do
     %Shape{dims: dims} = Op.get_shape(op)
 
     Op.divide(
-      Op.convert_element_type(
-        sum(builder, op, opts),
-        {:f, 64}
-      ),
+      sum(builder, Op.convert_element_type(op, {:f, 64}), opts),
       Op.constant_r0(builder, mean_den(dims, opts[:axes]), {:f, 64})
     )
   end
@@ -187,10 +184,5 @@ defmodule Exla.Lib do
 
   defp mean_den(dims, nil), do: tuple_product(dims)
   defp mean_den(_dims, []), do: 1
-
-  defp mean_den(dims, [axis | axes]) when axis >= 0,
-    do: elem(dims, axis) * mean_den(dims, axes)
-
-  defp mean_den(dims, [axis | axes]),
-    do: elem(dims, tuple_size(dims) + axis) * mean_den(dims, axes)
+  defp mean_den(dims, [axis | axes]), do: elem(dims, axis) * mean_den(dims, axes)
 end
