@@ -27,6 +27,20 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "cache" do
+    defn subexpressions(x, y) do
+      z = x * y
+      Nx.sum(z - (z |> Nx.exp() |> Nx.sum(axis: 0) |> Nx.log()))
+    end
+
+    defn grad_subexpressions(x, y), do: grad(x, subexpressions(x, y))
+
+    test "considers current g" do
+      assert grad_subexpressions(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 3])) ==
+               Nx.tensor([0.9990006807109719, 1.9598562710443452, -5.936786448699433])
+    end
+  end
+
   describe "addition rule" do
     defn addition_rule(t), do: Nx.tanh(Nx.tanh(Nx.add(Nx.power(t, 2), Nx.power(t, 3))))
     defn grad_addition_rule(t), do: grad(t, addition_rule(t))

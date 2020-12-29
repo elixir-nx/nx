@@ -53,16 +53,18 @@ defmodule Nx.Defn.Grad do
   ## Recursion
 
   defp to_grad(%Expr{id: id, op: op, args: args} = expr, res, cache) do
+    key = [id | res.id]
+
     case cache do
       %{^id => :stop} ->
         {res, cache}
 
-      %{^id => res} ->
+      %{^key => res} ->
         {res, cache}
 
       %{} ->
         {res, cache} = grad(op, args, expr, res, cache)
-        {res, Map.put(cache, id, res)}
+        {res, Map.put(cache, key, res)}
     end
   end
 
