@@ -30,8 +30,7 @@ defmodule MNIST do
   end
 
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
-    # Nx.mean(Nx.equal(Nx.argmax(batch_labels, axis: 1), Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: 1)))
-    {Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: 1), Nx.argmax(batch_labels, axis: 1)}
+    Nx.mean(Nx.equal(Nx.argmax(batch_labels, axis: 1), Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: 1)))
   end
 
   defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
@@ -112,9 +111,6 @@ defmodule MNIST do
           |> Enum.reduce(acc, fn {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
               batch_loss = loss(cur_params, imgs, tar)
               batch_accuracy = accuracy(cur_params, imgs, tar)
-              IO.inspect batch_accuracy
-              IO.inspect Nx.argmax(predict(cur_params, imgs), axis: 1)
-              IO.inspect Nx.argmax(tar, axis: 1)
               avg_loss = average(avg_loss, batch_loss, total_batches)
               avg_accuracy = average(avg_accuracy, batch_accuracy, total_batches)
               {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
