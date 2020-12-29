@@ -148,6 +148,19 @@ defmodule Nx.Defn.Grad do
 
   ## Linear gradients
 
+  defp grad(:outer, [x, y], ans, g, cache) do
+    extra = List.duplicate(1, tuple_size(ans.shape) - tuple_size(x.shape))
+    x_shape = List.to_tuple(Tuple.to_list(x.shape) ++ extra)
+
+    extra = List.duplicate(1, tuple_size(ans.shape) - tuple_size(y.shape))
+    y_shape = List.to_tuple(extra ++ Tuple.to_list(y.shape))
+
+    x = Expr.reshape(x, x_shape)
+    y = Expr.reshape(y, y_shape)
+
+    grad(:multiply, [x, y], ans, g, cache)
+  end
+
   defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do
     implicit_axes =
       for {a, i} <- Enum.with_index(axes),
@@ -317,9 +330,6 @@ defmodule Nx.Defn.Grad do
   defp grad(op, _, _, _, cache) when op in @constants do
     {Expr.to_expr(0.0), cache}
   end
-
-  # TODO:
-  # outer/2
 
   ## Grad helpers
 

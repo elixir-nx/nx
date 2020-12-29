@@ -321,6 +321,47 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "outer rule" do
+    defn grad_outer_lhs_rule(x, y), do: grad(x, Nx.sum(Nx.outer(x, y)))
+
+    test "computes gradient for tensors on lhs" do
+      assert grad_outer_lhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+               Nx.tensor([[15.0], [15.0], [15.0]])
+    end
+
+    defn grad_outer_rhs_rule(x, y), do: grad(y, Nx.sum(Nx.outer(x, y)))
+
+    test "computes gradient for tensors on rhs" do
+      assert grad_outer_rhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+               Nx.tensor([[6.0, 6.0, 6.0, 6.0, 6.0]])
+    end
+
+    defn grad_outer_both_rule(x), do: grad(x, Nx.sum(Nx.outer(Nx.power(x, 2), Nx.power(x, 3))))
+
+    test "computes gradient for tensors on both sides" do
+      assert grad_outer_both_rule(Nx.iota({3, 3, 3})) ==
+               Nx.tensor([
+                 [
+                   [0.0, 265_005.0, 567_216.0],
+                   [906_633.0, 1_283_256.0, 1_697_085.0],
+                   [2_148_120.0, 2_636_361.0, 3_161_808.0]
+                 ],
+                 [
+                   [3_724_461.0, 4_324_320.0, 4_961_385.0],
+                   [5_635_656.0, 6_347_133.0, 7_095_816.0],
+                   [7_881_705.0, 8.7048e6, 9_565_101.0]
+                 ],
+                 [
+                   [10_462_608.0, 11_397_321.0, 12_369_240.0],
+                   [13_378_365.0, 14_424_696.0, 15_508_233.0],
+                   [16_628_976.0, 17_786_925.0, 18_982_080.0]
+                 ]
+               ])
+
+      assert grad_outer_both_rule(Nx.tensor([1, 2, 3])) == Nx.tensor([114.0, 312.0, 594.0])
+    end
+  end
+
   describe "chain rule" do
     defn grad_tanh_exp(t), do: grad(t, Nx.tanh(Nx.exp(t)))
 
