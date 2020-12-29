@@ -30,7 +30,6 @@ defmodule MNIST do
       |> Nx.tanh()
       |> Nx.dot(w2)
       |> Nx.add(b2)
-      |> Nx.tanh()
 
     logits - logsumexp(logits)
   end
@@ -46,18 +45,18 @@ defmodule MNIST do
     -Nx.mean(Nx.sum(preds * batch_labels, axis: 1))
   end
 
-  defn update_param(param, grad_val, step) do
-    param - step * grad_val
-  end
-
   defn update({w1, b1, w2, b2}, batch_images, batch_labels, step) do
     {grad_w1, grad_b1, grad_w2, grad_b2} = grad({w1, b1, w2, b2}, loss({w1, b1, w2, b2}, batch_images, batch_labels))
     {
-      update_param(w1, grad_w1, step),
-      update_param(b1, grad_b1, step),
-      update_param(w2, grad_w2, step),
-      update_param(b2, grad_b2, step)
+      w1 - (grad_w1 * step),
+      b1 - (grad_b1 * step),
+      w2 - (grad_w2 * step),
+      b2 - (grad_b2 * step)
     }
+  end
+
+  defn average(cur_avg, batch, total) do
+    cur_avg + (batch / total)
   end
 
   def normalize_images(images) do
@@ -110,26 +109,24 @@ defmodule MNIST do
 
   def train(imgs, labels, params, opts \\ []) do
     epochs = opts[:epochs] || 5
-    for epoch <- 1..epochs do
-      {{w1, b1, w2, b2}, 0} =
-        imgs
-        |> Enum.zip(labels)
-        |> Enum.shuffle()
-        |> Enum.reduce({params, 0}, fn {imgs, tar}, {cur_params, batch} ->
-            IO.puts("Batch: #{batch}\n")
-            IO.puts("Loss: ")
-            IO.inspect loss(cur_params, imgs, tar)
-            IO.puts("Accuracy: ")
-            IO.inspect accuracy(cur_params, imgs, tar)
+    for epoch <- 1..epochs, reduce: {params, Nx.tensor(0.0), Nx.tensor(0.0)} do
+      acc ->
+        total_batches = Enum.count(imgs)
+        {new_params, epoch_avg_loss, epoch_avg_acc} =
+          imgs
+          |> Enum.zip(labels)
+          |> Enum.reduce(acc, fn {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
+              batch_loss = loss(cur_params, imgs, tar)
+              batch_accuracy = accuracy(cur_params, imgs, tar)
+              avg_loss = average(avg_loss, batch_loss, total_batches)
+              avg_accuracy = average(avg_accuracy, batch_accuracy, total_batches)
+              {update(cur_params, imgs, tar, 0.1), avg_loss, avg_accuracy}
+            end
+            )
 
-            {update(cur_params, imgs, tar, 0.001), batch+1}
-          end
-          )
-
-      {val_img, val_lab} = imgs |> Enum.zip(labels) |> Enum.random()
-      val_loss = loss({w1, b1, w2, b2}, val_img, val_lab)
-      IO.puts("Epoch: #{epoch}\tLoss: #{val_loss}\n")
-      val_loss
+        IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")
+        IO.puts("Epoch #{epoch} average accuracy: #{inspect(epoch_avg_acc)}")
+        {new_params, Nx.tensor(0.0), Nx.tensor(0.0)}
     end
   end
 end
@@ -144,4 +141,6 @@ IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
 IO.puts("Training MNIST for 10 epochs...\n\n")
-IO.inspect MNIST.train(train_images, train_labels, params)
+{final_params, _, _} = MNIST.train(train_images, train_labels, params, epochs: 30)
+
+IO.inspect final_params
