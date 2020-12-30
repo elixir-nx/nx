@@ -27,6 +27,18 @@ defmodule Nx.GradTest do
     end
   end
 
+  describe "value and grad" do
+    defn value_and_grad(a, b) do
+      expr = Nx.tanh(a) + Nx.power(b, 2)
+      {expr, grad({a, b}, expr)}
+    end
+
+    test "computes value and grad" do
+      assert value_and_grad(1, 2) ==
+               {Nx.tensor(4.761594155955764), {Nx.tensor(0.41997434161402614), Nx.tensor(4.0)}}
+    end
+  end
+
   describe "cache" do
     defn subexpressions(x, y) do
       z = x * y

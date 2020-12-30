@@ -142,11 +142,21 @@ defmodule Nx.Defn.Kernel do
 
   To differenciate on multiple vars, pass a tuple as first argument:
 
-      defn tanh_power_grad(t) do
-        grad({a, b}, Nx.tanh(t) + Nx.power(b, 2))
+      defn tanh_power_grad(a, b) do
+        grad({a, b}, Nx.tanh(a) + Nx.power(b, 2))
       end
 
   When a tuple is given, a tuple will be returned.
+
+  Note you can also pass an already built expression to grad. For
+  example, if you want to return the result of an expression and its
+  gradient, you can do:
+
+      defn tanh_power_grad(a, b) do
+        expr = Nx.tanh(a) + Nx.power(b, 2)
+        {expr, grad({a, b}, expr)}
+      end
+
   """
   defmacro grad(var_or_vars, expr) do
     var_or_vars =
