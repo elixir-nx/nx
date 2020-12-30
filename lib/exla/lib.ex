@@ -6,7 +6,7 @@ defmodule Exla.Lib do
   alias Exla.{Builder, Op, Shape}
 
   @doc """
-  Builds iota with optional axis and type.
+  Builds iota with optional axis.
   """
   def iota(builder, shape, opts) do
     if axis = opts[:axis] do
@@ -31,7 +31,8 @@ defmodule Exla.Lib do
   """
   def sum(%Builder{} = builder, %Op{} = op, opts \\ []) do
     op_shape = Op.get_shape(op)
-    reduction_shape = Shape.make_shape(op_shape.dtype, {})
+    rtype = Exla.Type.to_aggregate(op_shape.dtype)
+    reduction_shape = Shape.make_shape(rtype, {})
 
     sub_builder = subbuilder(builder, "sum")
     a = Op.parameter(sub_builder, 0, reduction_shape, "a")
@@ -39,7 +40,8 @@ defmodule Exla.Lib do
     add = Op.add(a, b)
     reduction = Builder.build(add)
 
-    init_value = Op.constant_r0(builder, 0, reduction_shape.dtype)
+    init_value = Op.constant_r0(builder, 0, rtype)
+    op = Op.convert_element_type(op, rtype)
     Op.reduce(op, init_value, reduction, reduce_axes(op_shape, opts[:axes]))
   end
 
@@ -49,13 +51,16 @@ defmodule Exla.Lib do
   ## Options
 
     * `:axes` - the axes to reduce on
+
   """
   def mean(%Builder{} = builder, %Op{} = op, opts \\ []) do
-    %Shape{dims: dims} = Op.get_shape(op)
+    dims = Op.get_shape(op).dims
+    sum = sum(builder, op, opts)
+    otype = Exla.Type.to_floating(Op.get_shape(sum).dtype)
 
     Op.divide(
-      sum(builder, Op.convert_element_type(op, {:f, 64}), opts),
-      Op.constant_r0(builder, mean_den(dims, opts[:axes]), {:f, 64})
+      Op.convert_element_type(sum, otype),
+      Op.constant_r0(builder, mean_den(dims, opts[:axes]), otype)
     )
   end
 
@@ -85,7 +90,6 @@ defmodule Exla.Lib do
 
   defp argmin_or_max(builder, op, is_min?, opts) do
     tie_break = opts[:tie_break] || :low
-
     op_shape = Op.get_shape(op)
 
     init_value =
@@ -93,10 +97,10 @@ defmodule Exla.Lib do
         do: max_value(builder, op_shape.dtype),
         else: min_value(builder, op_shape.dtype)
 
-    index_init_value = Op.constant_r0(builder, 0, op_shape.dtype)
-    iota = iota(builder, op_shape, opts)
-    reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
     axis = opts[:axis]
+    index_init_value = Op.constant_r0(builder, 0, {:s, 64})
+    iota = iota(builder, Shape.make_shape({:s, 64}, op_shape.dims), axis: axis)
+    reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
 
     result =
       Op.variadic_reduce(
@@ -114,9 +118,9 @@ defmodule Exla.Lib do
     sub_builder = subbuilder(builder, "min-max")
 
     lhs_value = Op.parameter(sub_builder, 0, Shape.make_shape(type, {}), "lhs_value")
-    lhs_index = Op.parameter(sub_builder, 1, Shape.make_shape(type, {}), "lhs_index")
+    lhs_index = Op.parameter(sub_builder, 1, Shape.make_shape({:s, 64}, {}), "lhs_index")
     rhs_value = Op.parameter(sub_builder, 2, Shape.make_shape(type, {}), "rhs_value")
-    rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape(type, {}), "rhs_index")
+    rhs_index = Op.parameter(sub_builder, 3, Shape.make_shape({:s, 64}, {}), "rhs_index")
 
     cmp =
       if is_min?,

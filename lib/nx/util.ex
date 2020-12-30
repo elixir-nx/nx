@@ -24,6 +24,7 @@ defmodule Nx.Util do
 
       iex> Nx.Util.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]))
       [1.0, 2.0, 3.0]
+
   """
   def to_flat_list(tensor) do
     tensor = Nx.tensor(tensor)
@@ -45,6 +46,7 @@ defmodule Nx.Util do
 
       iex> Nx.Util.to_scalar(Nx.tensor([1.0, 2.0, 3.0]))
       ** (ArgumentError) cannot convert tensor of shape {3} to scalar
+
   """
   def to_scalar(tensor) do
     tensor = Nx.tensor(tensor)
@@ -108,7 +110,7 @@ defmodule Nx.Util do
 
   """
   def from_bitstring(bitstring, type) when is_bitstring(bitstring) do
-    {_, size} = Nx.Type.validate!(type)
+    {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(bitstring), size)
 
     if bitstring == "" do
@@ -142,6 +144,10 @@ defmodule Nx.Util do
   and so forth. If the axis is negative, then counts
   the axis from the back. For example, `axes: [-1]` will
   always aggregate all rows.
+
+  It will return the same type as the tensor unless
+  `:type` is given. Be careful because this may lead to
+  overflow/underflow if a proper type is not given.
 
   ## Examples
 
@@ -253,6 +259,7 @@ defmodule Nx.Util do
   """
   def reduce(tensor, acc, opts \\ [], fun)
       when is_list(opts) and is_function(fun, 2) do
+    assert_keys!(opts, [:type, :axes])
     %T{type: {_, size} = type, shape: shape} = t = Nx.tensor(tensor)
     output_type = opts[:type] || type
 
@@ -298,6 +305,8 @@ defmodule Nx.Util do
 
   The size of the dimensions of `t1` and `t2` must match
   along `axes1` and `axes2`.
+
+  It will return the same type as the merged tensors.
 
   ## Examples
 

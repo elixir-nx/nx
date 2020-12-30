@@ -109,17 +109,17 @@ defmodule Nx.Type do
 
   ## Examples
 
-      iex> Nx.Type.validate!({:u, 8})
+      iex> Nx.Type.normalize!({:u, 8})
       {:u, 8}
 
-      iex> Nx.Type.validate!({:u, 0})
+      iex> Nx.Type.normalize!({:u, 0})
       ** (ArgumentError) invalid numerical type: {:u, 0} (see Nx.Type docs for all supported types)
 
-      iex> Nx.Type.validate!({:k, 8})
+      iex> Nx.Type.normalize!({:k, 8})
       ** (ArgumentError) invalid numerical type: {:k, 8} (see Nx.Type docs for all supported types)
 
   """
-  def validate!(type) do
+  def normalize!(type) do
     case validate(type) do
       :error ->
         raise ArgumentError,
@@ -130,11 +130,11 @@ defmodule Nx.Type do
     end
   end
 
-  def validate({:s, size} = type) when size in [8, 16, 32, 64], do: type
-  def validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
-  def validate({:f, size} = type) when size in [32, 64], do: type
-  def validate({:bf, size} = type) when size in [16], do: type
-  def validate(_type), do: :error
+  defp validate({:s, size} = type) when size in [8, 16, 32, 64], do: type
+  defp validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
+  defp validate({:f, size} = type) when size in [32, 64], do: type
+  defp validate({:bf, size} = type) when size in [16], do: type
+  defp validate(_type), do: :error
 
   @doc """
   Converts the given type to a floating point representation
@@ -157,6 +157,25 @@ defmodule Nx.Type do
   def to_floating({:bf, size}), do: {:bf, size}
   def to_floating({:f, size}), do: {:f, size}
   def to_floating(type), do: merge(type, {:f, 32})
+
+  @doc """
+  Converts the given type to an aggregation precision.
+
+  ## Examples
+
+      iex> Nx.Type.to_aggregate({:s, 8})
+      {:s, 64}
+      iex> Nx.Type.to_aggregate({:u, 32})
+      {:u, 64}
+      iex> Nx.Type.to_aggregate({:bf, 16})
+      {:bf, 16}
+      iex> Nx.Type.to_aggregate({:f, 32})
+      {:f, 32}
+
+  """
+  def to_aggregate({:u, _size}), do: {:u, 64}
+  def to_aggregate({:s, _size}), do: {:s, 64}
+  def to_aggregate(type), do: type
 
   @doc """
   Converts the given type to a predicate representation.

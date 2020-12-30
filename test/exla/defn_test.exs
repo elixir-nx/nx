@@ -601,8 +601,8 @@ defmodule Exla.DefnTest do
 
     test "computes the sum across types" do
       assert Nx.tensor([1, 2, 3]) |> sum() == Nx.tensor(6)
-      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum() == Nx.tensor(6, type: {:s, 8})
-      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() == Nx.tensor(6, type: {:u, 8})
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> sum() == Nx.tensor(6)
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> sum() == Nx.tensor(6, type: {:u, 64})
       assert Nx.tensor([1.0, 2.0, 3.0]) |> sum() == Nx.tensor(6.0)
       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() == Nx.tensor(6, type: {:f, 32})
     end
@@ -617,6 +617,14 @@ defmodule Exla.DefnTest do
       assert sum_neg_axis(t) == Nx.sum(t, axes: [-3])
       assert sum_pos_neg_axis(t) == Nx.sum(t, axes: [1, -3])
     end
+
+    defn sum_equal(t), do: Nx.sum(Nx.equal(t, 1.0))
+
+    test "does not overflow" do
+      assert sum_equal(Nx.tensor(1)) == Nx.tensor(1, type: {:u, 64})
+      assert sum_equal(Nx.tensor([1, 1, 1])) == Nx.tensor(3, type: {:u, 64})
+      assert sum_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(1, type: {:u, 64})
+    end
   end
 
   describe "mean" do
@@ -625,7 +633,7 @@ defmodule Exla.DefnTest do
     test "computes mean without axis" do
       assert mean(Nx.tensor(42)) == Nx.tensor(42.0)
       assert mean(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
-      assert mean(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2.0)
+      assert mean(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2.0, type: {:f, 64})
     end
 
     defn mean_over_single_axis(t), do: Nx.mean(t, axes: [0])
@@ -658,7 +666,7 @@ defmodule Exla.DefnTest do
 
     defn mean_equal(t), do: Nx.mean(Nx.equal(t, 1.0))
 
-    test "mean does not overflow" do
+    test "does not overflow" do
       assert mean_equal(Nx.tensor(1)) == Nx.tensor(1.0)
       assert mean_equal(Nx.tensor([1, 1, 1])) == Nx.tensor(1.0)
       assert mean_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0.3333333333333333)
@@ -675,21 +683,21 @@ defmodule Exla.DefnTest do
 
     test "computes the argmax across types" do
       assert argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
-      assert argmax(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(2, type: {:s, 8})
-      assert argmax(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2, type: {:u, 8})
-      assert argmax(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(2, type: {:f, 64})
-      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(2, type: {:f, 32})
-      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(2, type: {:bf, 16})
+      assert argmax(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(2)
+      assert argmax(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2)
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(2)
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(2)
+      assert argmax(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(2)
       assert argmax(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(5)
     end
 
     test "computes the argmin across types" do
       assert argmin(Nx.tensor([1, 2, 3])) == Nx.tensor(0)
-      assert argmin(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(0, type: {:s, 8})
-      assert argmin(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(0, type: {:u, 8})
-      assert argmin(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(0, type: {:f, 64})
-      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(0, type: {:f, 32})
-      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(0, type: {:bf, 16})
+      assert argmin(Nx.tensor([1, 2, 3], type: {:s, 8})) == Nx.tensor(0)
+      assert argmin(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(0)
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0])) == Nx.tensor(0)
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})) == Nx.tensor(0)
+      assert argmin(Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})) == Nx.tensor(0)
       assert argmin(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor(0)
     end
 

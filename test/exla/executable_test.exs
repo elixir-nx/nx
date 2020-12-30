@@ -72,6 +72,12 @@ defmodule Exla.ExecutableTest do
     assert %Buffer{data: <<3::32-native>>} = run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
   end
 
+  test "run/2 with constants" do
+    assert %Buffer{data: <<6::64-unsigned>>} = run([], fn builder->
+      Op.constant_r0(builder, 0, {:u, 64})
+    end)
+  end
+
   test "run/2 returns a tuple" do
     t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
     t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}

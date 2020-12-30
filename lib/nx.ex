@@ -233,8 +233,7 @@ defmodule Nx do
 
   def tensor(arg, opts) do
     assert_keys!(opts, [:type])
-    type = opts[:type] || Nx.Type.infer(arg)
-    Nx.Type.validate!(type)
+    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
     {dimensions, data} = flatten(arg, type)
 
     if data == "" do
@@ -387,7 +386,7 @@ defmodule Nx do
       when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type])
     shape = shape!(tensor_or_shape)
-    type = opts[:type] || Nx.Type.infer(max - min)
+    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
 
     gen =
       case type do
@@ -465,7 +464,7 @@ defmodule Nx do
       when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type])
     shape = shape!(tensor_or_shape)
-    type = opts[:type] || {:f, 64}
+    type = Nx.Type.normalize!(opts[:type] || {:f, 64})
 
     data =
       for _ <- 1..Nx.Shape.size(shape),
@@ -579,7 +578,7 @@ defmodule Nx do
 
   def iota({n}, opts) do
     assert_keys!(opts, [:type, :axis])
-    output_type = opts[:type] || {:s, 64}
+    output_type = Nx.Type.normalize!(opts[:type] || {:s, 64})
     axis = opts[:axis] || 0
     Nx.Shape.normalize_axis({n}, axis)
     data = for i <- 0..(n - 1), do: scalar_to_binary(i, output_type)
@@ -587,8 +586,9 @@ defmodule Nx do
   end
 
   def iota(tensor_or_shape, opts) do
+    assert_keys!(opts, [:type, :axis])
     shape = shape!(tensor_or_shape)
-    output_type = opts[:type] || {:s, 64}
+    output_type = Nx.Type.normalize!(opts[:type] || {:s, 64})
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis)
@@ -3090,6 +3090,21 @@ defmodule Nx do
         10.0
       >
 
+  Giving a tensor with low precision casts it to a higher
+  precision to make sure the sum does not overflow:
+
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:u, 8}))
+      #Nx.Tensor<
+        u64
+        410
+      >
+
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:s, 8}))
+      #Nx.Tensor<
+        s64
+        410
+      >
+
   ### Aggregating over an axis
 
       iex> Nx.sum(Nx.tensor([1, 2, 3]), axes: [0])
@@ -3157,6 +3172,8 @@ defmodule Nx do
   """
   def sum(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
+    tensor = tensor(tensor)
+    opts = Keyword.put(opts, :type, Nx.Type.to_aggregate(tensor.type))
     {tensor, _} = Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
     tensor
   end
@@ -3227,7 +3244,7 @@ defmodule Nx do
   def mean(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
     tensor = tensor(tensor)
-    divide(sum(tensor, opts), tensor(mean_den(tensor.shape, opts[:axes])))
+    divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
   end
 
   defp mean_den(shape, nil), do: Nx.Shape.size(shape)
@@ -3262,6 +3279,14 @@ defmodule Nx do
       #Nx.Tensor<
         s64
         10
+      >
+
+  If a tensor of floats is given, it still returns integers:
+
+      iex> Nx.argmax(Nx.tensor([2.0, 4.0]))
+      #Nx.Tensor<
+        s64
+        1
       >
 
   ### Aggregating over an axis
@@ -3350,6 +3375,14 @@ defmodule Nx do
         4
       >
 
+  If a tensor of floats is given, it still returns integers:
+
+      iex> Nx.argmin(Nx.tensor([2.0, 4.0]))
+      #Nx.Tensor<
+        s64
+        0
+      >
+
   ### Aggregating over an axis
 
       iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]]), axis: 0)
@@ -3420,15 +3453,15 @@ defmodule Nx do
 
       %T{} = t ->
         axes = if axis = opts[:axis], do: [axis], else: nil
+        opts = [axes: axes, type: {:s, 64}]
 
         {tensor, _accs} =
-          Nx.Util.reduce(t, {0, :first, -1}, [axes: axes], fn x,
-                                                              {i, cur_extreme_x, cur_extreme_i} ->
-            if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-              {i, {i + 1, x, i}}
-            else
-              {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-            end
+          Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+              if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+                {i, {i + 1, x, i}}
+              else
+                {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+              end
           end)
 
         tensor
@@ -3982,11 +4015,5 @@ defmodule Nx do
           "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
             "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
-  end
-
-  defp assert_keys!(keyword, valid) do
-    for {k, _} <- keyword, k not in valid do
-      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
-    end
   end
 end

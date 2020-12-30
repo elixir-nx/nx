@@ -22,7 +22,7 @@ defmodule Exla.Shape do
   Creates a shape with the given type-size tuple and dimensions.
   """
   def make_shape({type, size}, dims) when is_tuple(dims) do
-    _ = Exla.Type.validate!({type, size})
+    _ = Exla.Type.normalize!({type, size})
     validate_dims!(dims, tuple_size(dims))
     ref = Exla.NIF.make_shape(dtype_to_charlist({type, size}), dims) |> unwrap!()
     %Shape{ref: ref, dtype: {type, size}, dims: dims}
