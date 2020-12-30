@@ -1,7 +1,7 @@
 defmodule MNIST do
   import Nx.Defn
 
-  @default_defn_compiler Exla
+  # @default_defn_compiler Exla
 
   defn normalize_batch(batch) do
     batch / 255.0
@@ -100,23 +100,28 @@ defmodule MNIST do
     {train_images, train_labels}
   end
 
+  def train_epoch(cur_params, imgs, labels) do
+    total_batches = Enum.count(imgs)
+
+    imgs
+    |> Enum.zip(labels)
+    |> Enum.reduce({cur_params, Nx.tensor(0.0), Nx.tensor(0.0)}, fn {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
+        batch_loss = loss(cur_params, imgs, tar)
+        batch_accuracy = accuracy(cur_params, imgs, tar)
+        avg_loss = average(avg_loss, batch_loss, total_batches)
+        avg_accuracy = average(avg_accuracy, batch_accuracy, total_batches)
+        {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
+      end
+    )
+  end
+
   def train(imgs, labels, params, opts \\ []) do
     epochs = opts[:epochs] || 5
     for epoch <- 1..epochs, reduce: {params, Nx.tensor(0.0), Nx.tensor(0.0)} do
-      acc ->
-        total_batches = Enum.count(imgs)
-        {new_params, epoch_avg_loss, epoch_avg_acc} =
-          imgs
-          |> Enum.zip(labels)
-          |> Enum.reduce(acc, fn {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
-              batch_loss = loss(cur_params, imgs, tar)
-              batch_accuracy = accuracy(cur_params, imgs, tar)
-              avg_loss = average(avg_loss, batch_loss, total_batches)
-              avg_accuracy = average(avg_accuracy, batch_accuracy, total_batches)
-              {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
-            end
-            )
+      {cur_params, _, _} ->
+        {time, {new_params, epoch_avg_loss, epoch_avg_acc}} = :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
 
+        IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s\n")
         IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")
         IO.puts("Epoch #{epoch} average accuracy: #{inspect(epoch_avg_acc)}")
         {new_params, Nx.tensor(0.0), Nx.tensor(0.0)}
