@@ -220,6 +220,7 @@ defmodule Nx do
   def tensor(%T{} = t, []), do: t
 
   def tensor(%T{} = t, opts) do
+    assert_keys!(opts, [:type])
     type = opts[:type]
 
     if type && type != t.type do
@@ -231,6 +232,7 @@ defmodule Nx do
   end
 
   def tensor(arg, opts) do
+    assert_keys!(opts, [:type])
     type = opts[:type] || Nx.Type.infer(arg)
     Nx.Type.validate!(type)
     {dimensions, data} = flatten(arg, type)
@@ -383,6 +385,7 @@ defmodule Nx do
   """
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
+    assert_keys!(opts, [:type])
     shape = shape!(tensor_or_shape)
     type = opts[:type] || Nx.Type.infer(max - min)
 
@@ -460,6 +463,7 @@ defmodule Nx do
   """
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
+    assert_keys!(opts, [:type])
     shape = shape!(tensor_or_shape)
     type = opts[:type] || {:f, 64}
 
@@ -574,8 +578,8 @@ defmodule Nx do
   def iota({}, opts), do: tensor(0, opts)
 
   def iota({n}, opts) do
+    assert_keys!(opts, [:type, :axis])
     output_type = opts[:type] || {:s, 64}
-    # Validate axis
     axis = opts[:axis] || 0
     Nx.Shape.normalize_axis({n}, axis)
     data = for i <- 0..(n - 1), do: scalar_to_binary(i, output_type)
@@ -3152,6 +3156,7 @@ defmodule Nx do
 
   """
   def sum(tensor, opts \\ []) do
+    assert_keys!(opts, [:axes])
     {tensor, _} = Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
     tensor
   end
@@ -3220,6 +3225,7 @@ defmodule Nx do
 
   """
   def mean(tensor, opts \\ []) do
+    assert_keys!(opts, [:axes])
     tensor = tensor(tensor)
     divide(sum(tensor, opts), tensor(mean_den(tensor.shape, opts[:axes])))
   end
@@ -3308,6 +3314,8 @@ defmodule Nx do
       >
   """
   def argmax(tensor, opts \\ []) do
+    assert_keys!(opts, [:axis, :tie_break])
+
     comparator =
       case opts[:tie_break] || :low do
         :high -> &>=/2
@@ -3392,6 +3400,8 @@ defmodule Nx do
       >
   """
   def argmin(tensor, opts \\ []) do
+    assert_keys!(opts, [:axis, :tie_break])
+
     comparator =
       case opts[:tie_break] || :low do
         :high -> &<=/2
@@ -3972,5 +3982,11 @@ defmodule Nx do
           "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
             "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
+  end
+
+  defp assert_keys!(keyword, valid) do
+    for {k, _} <- keyword, k not in valid do
+      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
+    end
   end
 end

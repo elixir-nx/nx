@@ -119,6 +119,7 @@ defmodule Nx.Defn.Expr do
     Expression equivalent to `Nx.#{op}/2`.
     """
     def unquote(op)(expr, opts \\ []) do
+      assert_keys!(opts, [:axes])
       %Expr{shape: shape} = expr = to_expr(expr)
 
       if axes = opts[:axes] do
@@ -139,6 +140,7 @@ defmodule Nx.Defn.Expr do
     Expression equivalent to `Nx.#{op}/2`.
     """
     def unquote(op)(expr, opts \\ []) do
+      assert_keys!(opts, [:axis, :tie_break])
       %Expr{shape: shape} = expr = to_expr(expr)
 
       if axis = opts[:axis] do
@@ -156,6 +158,7 @@ defmodule Nx.Defn.Expr do
   Expression equivalent to `Nx.iota/2`.
   """
   def iota(shape, opts \\ []) do
+    assert_keys!(opts, [:type, :axis])
     shape = to_shape(shape)
 
     opts =
@@ -179,6 +182,7 @@ defmodule Nx.Defn.Expr do
   Expression equivalent to `Nx.random_uniform/4`.
   """
   def random_uniform(shape, min, max, opts \\ []) when is_number(min) and is_number(max) do
+    assert_keys!(opts, [:type])
     shape = to_shape(shape)
     make_expr(shape, :random_uniform, [shape, min, max, opts])
   end
@@ -194,6 +198,7 @@ defmodule Nx.Defn.Expr do
   Expression equivalent to `Nx.random_normal/4`.
   """
   def random_normal(shape, mu, sigma, opts \\ []) when is_float(mu) and is_float(sigma) do
+    assert_keys!(opts, [:type])
     shape = to_shape(shape)
     make_expr(shape, :random_normal, [shape, mu, sigma, opts])
   end
@@ -400,6 +405,12 @@ defmodule Nx.Defn.Expr do
           "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
             "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
+  end
+
+  defp assert_keys!(keyword, valid) do
+    for {k, _} <- keyword, k not in valid do
+      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
+    end
   end
 
   defimpl Inspect do

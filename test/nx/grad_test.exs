@@ -30,7 +30,7 @@ defmodule Nx.GradTest do
   describe "cache" do
     defn subexpressions(x, y) do
       z = x * y
-      Nx.sum(z - (z |> Nx.exp() |> Nx.sum(axis: 0) |> Nx.log()))
+      Nx.sum(z - (z |> Nx.exp() |> Nx.sum(axes: [0]) |> Nx.log()))
     end
 
     defn grad_subexpressions(x, y), do: grad(x, subexpressions(x, y))
