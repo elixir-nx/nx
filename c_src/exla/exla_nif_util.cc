@@ -1,5 +1,4 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include <cstdint>
 
 namespace exla {
 
