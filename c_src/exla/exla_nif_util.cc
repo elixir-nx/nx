@@ -1,5 +1,5 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include <stdint.h>
+#include <cstdint>
 
 namespace exla {
 
@@ -37,12 +37,12 @@ namespace exla {
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int32* var) {
     return enif_get_int(env, term,
-                        reinterpret_cast<int32_t *>(var));
+                        reinterpret_cast<std::int32_t *>(var));
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int64* var) {
     return enif_get_int64(env, term,
-                          reinterpret_cast<int64_t*>(var));
+                          reinterpret_cast<std::int64_t*>(var));
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8* var) {
@@ -61,12 +61,12 @@ namespace exla {
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, uint32* var) {
     return enif_get_uint(env, term,
-                         reinterpret_cast<uint32_t*>(var));
+                         reinterpret_cast<std::uint32_t*>(var));
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, uint64* var) {
     return enif_get_uint64(env, term,
-                           reinterpret_cast<uint64_t*>(var));
+                           reinterpret_cast<std::uint64_t*>(var));
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16* var) {
