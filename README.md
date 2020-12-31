@@ -18,6 +18,12 @@ The first compilation will take a long time, as it needs to compile parts of Ten
   * [Bazel](https://bazel.build/) for compiling Tensorflow
   * [Python3](https://python.org) with numpy installed (`pip3 install numpy`) for compiling Tensorflow
 
+If running on Windows, you will also need:
+  
+  * [MSYS2](https://www.msys2.org/)
+  * [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
+  * [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
+
 Subsequent commands should be much faster.
 
 ### Environment variables
