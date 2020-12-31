@@ -99,8 +99,10 @@ defmodule Nx.Defn.Kernel do
         Nx.tanh(a) + Nx.power(b, 2)
       end
 
-  Now imagine you want to debug it. You can use `transform/2` to invoke
-  `IO.inspect/1` at compilation time:
+  Let's see a trivial example, which is `print_expr/1`. `print_expr/1`
+  can be used to debug the current expression during compilation.
+  It is implemented by using `transform/2` to invoke `IO.inspect/1` at
+  definition time:
 
       defn tanh_power(a, b) do
         Nx.tanh(a) + Nx.power(b, 2) |> transform(&IO.inspect/1)
@@ -114,7 +116,8 @@ defmodule Nx.Defn.Kernel do
         res
       end
 
-  In both cases, it will print the expression being built by `defn`:
+  When invoked in both cases, it will print the expression being built
+  by `defn`:
 
       #Nx.Defn.Expr<
         parameter a
@@ -129,6 +132,37 @@ defmodule Nx.Defn.Kernel do
     _ = arg
     _ = fun
     raise("Nx.Kernel.transform/1 must only be invoked inside defn")
+  end
+
+  @doc """
+  Prints the given expression to the terminal.
+
+  It returns the given expressions.
+
+  ### Examples
+
+      defn tanh_grad(t) do
+        grad(t, Nx.tanh(t)) |> print_expr()
+      end
+
+  When invoked, it will print the expression being built by `defn`:
+
+      #Nx.Defn.Expr<
+        parameter a
+        parameter c
+        b = tanh [ a ] ()
+        d = power [ c, 2 ] ()
+        e = add [ b, d ] ()
+      >
+
+  """
+  defmacro print_expr(expr) do
+    quote do
+      Nx.Defn.Kernel.transform(
+        unquote(expr),
+        &IO.inspect/1
+      )
+    end
   end
 
   @doc """

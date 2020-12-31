@@ -475,7 +475,7 @@ defmodule Nx.DefnTest do
 
   describe "transform" do
     defn transform_inspect(a, b) do
-      (Nx.tanh(a) + Nx.power(b, 2)) |> transform(&IO.inspect/1)
+      (Nx.tanh(a) + Nx.power(b, 2)) |> print_expr()
     end
 
     test "executes the transformation" do
