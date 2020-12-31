@@ -2,6 +2,32 @@ defmodule Nx.Shape do
   @moduledoc false
 
   @doc """
+  Validates the given shape.
+
+      iex> Nx.Shape.validate!({1, 2, 3})
+      {1, 2, 3}
+
+      iex> Nx.Shape.validate!({1, :ok, 3})
+      ** (ArgumentError) invalid dimension :ok in shape {1, :ok, 3}. Each dimension must be a positive integer
+  """
+  def validate!(shape) do
+    validate!(shape, tuple_size(shape))
+  end
+
+  defp validate!(shape, 0), do: shape
+
+  defp validate!(shape, pos) do
+    dim = :erlang.element(pos, shape)
+
+    if is_integer(dim) and dim > 0 do
+      validate!(shape, pos - 1)
+    else
+      raise ArgumentError,
+            "invalid dimension #{inspect(dim)} in shape #{inspect(shape)}. Each dimension must be a positive integer"
+    end
+  end
+
+  @doc """
   Computes the rank of a shape.
 
   ## Examples

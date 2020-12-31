@@ -395,7 +395,7 @@ defmodule Nx.Defn.Expr do
 
   ## Shape normalization
 
-  defp to_shape(shape) when is_tuple(shape), do: shape
+  defp to_shape(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
   defp to_shape(shape) when is_number(shape), do: {}
   defp to_shape(%T{shape: shape}), do: shape
   defp to_shape(%Expr{shape: shape}), do: shape

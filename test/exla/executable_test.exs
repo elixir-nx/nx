@@ -73,7 +73,7 @@ defmodule Exla.ExecutableTest do
   end
 
   test "run/2 with constants" do
-    assert %Buffer{data: <<6::64-unsigned>>} = run([], fn builder->
+    assert %Buffer{data: <<0::64-unsigned>>} = run([], fn builder->
       Op.constant_r0(builder, 0, {:u, 64})
     end)
   end

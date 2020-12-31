@@ -4006,7 +4006,7 @@ defmodule Nx do
 
   ## Shape
 
-  defp shape!(shape) when is_tuple(shape), do: shape
+  defp shape!(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
   defp shape!(%T{shape: shape}), do: shape
   defp shape!(number) when is_number(number), do: {}
 
