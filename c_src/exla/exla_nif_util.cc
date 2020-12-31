@@ -41,7 +41,7 @@ namespace exla {
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int64* var) {
     return enif_get_int64(env, term,
-                          reinterpret_cast<long int*>(var));
+                          reinterpret_cast<long long int*>(var));
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, uint8* var) {
@@ -65,7 +65,7 @@ namespace exla {
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, uint64* var) {
     return enif_get_uint64(env, term,
-                           reinterpret_cast<unsigned long int*>(var));
+                           reinterpret_cast<unsigned long long int*>(var));
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16* var) {
