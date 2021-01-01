@@ -254,6 +254,32 @@ namespace exla {
     return 1;
   }
 
+  int get_precision_config(ErlNifEnv* env,
+                           ERL_NIF_TERM config_term,
+                           xla::PrecisionConfig config) {
+    int8 config_int;
+    if (!get(env, config_term, &config_int)) return 0;
+
+    switch (config_int) {
+      case 0:
+        config.add_operand_precision(xla::PrecisionConfig::DEFAULT);
+        config.add_operand_precision(xla::PrecisionConfig::DEFAULT);
+        break;
+      case 1:
+        config.add_operand_precision(xla::PrecisionConfig::HIGH);
+        config.add_operand_precision(xla::PrecisionConfig::HIGH);
+        break;
+      case 2:
+        config.add_operand_precision(xla::PrecisionConfig::HIGHEST);
+        config.add_operand_precision(xla::PrecisionConfig::HIGHEST);
+        break;
+      default:
+        return 0;
+    }
+
+    return 1;
+  }
+
   ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if (shape.IsTuple()) {
       int element_count = xla::ShapeUtil::TupleElementCount(shape);
