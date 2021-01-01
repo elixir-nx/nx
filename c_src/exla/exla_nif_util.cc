@@ -36,7 +36,7 @@ namespace exla {
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int32* var) {
     return enif_get_int(env, term,
-                        reinterpret_cast<std::int32_t *>(var));
+                        reinterpret_cast<int *>(var));
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int64* var) {
