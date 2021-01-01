@@ -17,6 +17,7 @@ defmodule Nx.Defn.Kernel do
     quote do
       import Kernel, only: []
       import Nx.Defn.Kernel, except: unquote(Kernel.@(special_forms))
+      alias Nx.Defn.Kernel, as: Kernel
     end
   end
 

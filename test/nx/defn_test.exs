@@ -397,6 +397,14 @@ defmodule Nx.DefnTest do
       assert %Expr{op: :add, args: [_, _]} = add_two_from_alias(1, 2)
     end
 
+    defn add_two_from_kernel_alias(a, b) do
+      a |> Kernel.+(b)
+    end
+
+    test "kernel alias" do
+      assert %Expr{op: :add, args: [_, _]} = add_two_from_kernel_alias(1, 2)
+    end
+
     dynamic_name = String.to_atom(Enum.join(~w(dynamic name add two), "_"))
     operator = :add
     defnp unquote(dynamic_name)(left, right), do: Nx.unquote(operator)(left, right)
