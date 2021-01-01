@@ -151,15 +151,8 @@ defmodule Nx.Defn.Grad do
   ## Linear gradients
 
   defp grad(:outer, [x, y], ans, g, cache) do
-    extra = List.duplicate(1, tuple_size(ans.shape) - tuple_size(x.shape))
-    x_shape = List.to_tuple(Tuple.to_list(x.shape) ++ extra)
-
-    extra = List.duplicate(1, tuple_size(ans.shape) - tuple_size(y.shape))
-    y_shape = List.to_tuple(extra ++ Tuple.to_list(y.shape))
-
-    x = Expr.reshape(x, x_shape)
-    y = Expr.reshape(y, y_shape)
-
+    x = Expr.reshape(x, {Nx.Shape.size(x.shape), 1})
+    y = Expr.reshape(y, {1, Nx.Shape.size(y.shape)})
     grad(:multiply, [x, y], ans, g, cache)
   end
 

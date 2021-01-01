@@ -283,7 +283,9 @@ defmodule Nx.Shape do
   """
   def zip_reduce(s1, axes1, s2, axes2) do
     validate_zip_reduce_axes!(s1, axes1, s2, axes2)
-    outer(contract(s1, axes1), contract(s2, axes2))
+    l1 = contract(s1, axes1, 0, tuple_size(s1))
+    l2 = contract(s2, axes2, 0, tuple_size(s2))
+    List.to_tuple(l1 ++ l2)
   end
 
   def validate_zip_reduce_axes!(s1, [a1 | axes1], s2, [a2 | axes2]) do
@@ -310,19 +312,15 @@ defmodule Nx.Shape do
   ## Examples
 
       iex> Nx.Shape.outer({2, 3}, {1, 2})
-      {2, 3, 1, 2}
+      {6, 2}
 
       iex> Nx.Shape.outer({1}, {3, 2})
-      {1, 3, 2}
+      {1, 6}
 
       iex> Nx.Shape.outer({}, {})
-      {}
+      {1, 1}
   """
-  def outer(s1, s2) do
-    l1 = Tuple.to_list(s1)
-    l2 = Tuple.to_list(s2)
-    List.to_tuple(l1 ++ l2)
-  end
+  def outer(s1, s2), do: {size(s1), size(s2)}
 
   @doc """
   Reshapes a given shape to a new shape.

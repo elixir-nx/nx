@@ -3734,29 +3734,28 @@ defmodule Nx do
       >
 
   """
-  def dot(t1, axes1, t2, axes2)
-
-  def dot(t1, [], t2, []), do: Nx.outer(t1, t2)
-
-  def dot(%T{} = t1, axes1, %T{} = t2, axes2) do
-    {tensor, _} =
-      Nx.Util.zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
-        res = lhs * rhs + acc
-        {res, res}
-      end)
-
-    tensor
+  def dot(t1, axes1, t2, axes2) do
+    Nx.Util.zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
+      res = lhs * rhs + acc
+      {res, res}
+    end)
   end
 
   @doc """
-  Computes the outer product of two one-dimensional tensors.
+  Computes the outer product of two tensors.
+
+  The output is always a two-dimensional tensor.
 
   ## Examples
 
       iex> Nx.outer(Nx.tensor([1, 2, 3]), 100)
       #Nx.Tensor<
-        s64[3]
-        [100, 200, 300]
+        s64[3][1]
+        [
+          [100],
+          [200],
+          [300]
+        ]
       >
 
       iex> Nx.outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20]))
@@ -3771,16 +3770,12 @@ defmodule Nx do
 
       iex> Nx.outer(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([10, 20, 30]))
       #Nx.Tensor<
-        s64[2][2][3]
+        s64[4][3]
         [
-          [
-            [10, 20, 30],
-            [20, 40, 60]
-          ],
-          [
-            [30, 60, 90],
-            [40, 80, 120]
-          ]
+          [10, 20, 30],
+          [20, 40, 60],
+          [30, 60, 90],
+          [40, 80, 120]
         ]
       >
 
@@ -3794,11 +3789,11 @@ defmodule Nx do
     b2 = Nx.Util.to_bitstring(t2)
 
     data =
-      match_types [left_type, right_type, output_type] do
+      match_types [left_type, right_type] do
         for <<match!(left, 0) <- b1>>,
             <<match!(right, 1) <- b2>>,
             into: <<>>,
-            do: <<write!(read!(left, 0) * read!(right, 1), 2)>>
+            do: scalar_to_binary(read!(left, 0) * read!(right, 1), output_type)
       end
 
     %T{shape: Nx.Shape.outer(s1, s2), type: output_type, data: {Nx.BitStringDevice, data}}

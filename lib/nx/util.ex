@@ -274,14 +274,14 @@ defmodule Nx.Util do
 
     data_and_acc =
       for axis <- view do
-        {bin, acc} =
+        {result, acc} =
           match_types [type] do
             for <<match!(var, 0) <- axis>>, reduce: {<<>>, acc} do
               {_, acc} -> fun.(read!(var, 0), acc)
             end
           end
 
-        {scalar_to_binary(bin, output_type), acc}
+        {scalar_to_binary(result, output_type), acc}
       end
 
     {final_data, final_accs} = Enum.unzip(data_and_acc)
@@ -312,8 +312,7 @@ defmodule Nx.Util do
 
       iex> t1 = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       iex> t2 = Nx.tensor([[1, 2], [3, 4], [5, 6]])
-      iex> {new_tensor, accs} = Nx.Util.zip_reduce(t1, [1], t2, [0], 0, fn {a, b}, acc -> {a*b+acc, a*b+acc} end)
-      iex> new_tensor
+      iex> Nx.Util.zip_reduce(t1, [1], t2, [0], 0, fn {a, b}, acc -> {a*b+acc, a*b+acc} end)
       #Nx.Tensor<
         s64[2][2]
         [
@@ -321,10 +320,28 @@ defmodule Nx.Util do
           [49, 64]
         ]
       >
-      iex> accs
-      [22, 28, 49, 64]
 
   """
+  def zip_reduce(t1, [], t2, [], acc, fun) do
+    output_type = Nx.Type.merge_tensors(t1, t2)
+    %T{shape: s1, type: left_type} = t1 = Nx.tensor(t1)
+    %T{shape: s2, type: right_type} = t2 = Nx.tensor(t2)
+
+    b1 = to_bitstring(t1)
+    b2 = to_bitstring(t2)
+
+    data =
+      match_types [left_type, right_type] do
+        for <<match!(left, 0) <- b1>>, <<match!(right, 1) <- b2>>, into: <<>> do
+          {result, _} = fun.({read!(left, 0), read!(right, 1)}, acc)
+          <<scalar_to_binary(result, output_type)::binary>>
+        end
+      end
+
+    shape = Nx.Shape.zip_reduce(s1, [], s2, [])
+    %T{shape: shape, type: output_type, data: {Nx.BitStringDevice, data}}
+  end
+
   def zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun)
       when is_function(fun, 2) do
     %T{type: left_type} = t1 = Nx.tensor(t1)
@@ -336,19 +353,17 @@ defmodule Nx.Util do
     new_shape = Nx.Shape.zip_reduce(t1.shape, axes1, t2.shape, axes2)
     {v1, v2} = bin_zip_axes(t1, axes1, t2, axes2)
 
-    data_and_acc =
+    data =
       for b1 <- v1, b2 <- v2 do
-        {bin, acc} = bin_zip_reduce(b1, b2, left_type, right_type, <<>>, acc, fun)
-        {scalar_to_binary(bin, output_type), acc}
+        {bin, _acc} = bin_zip_reduce(b1, b2, left_type, right_type, <<>>, acc, fun)
+        scalar_to_binary(bin, output_type)
       end
 
-    {final_data, final_acc} = Enum.unzip(data_and_acc)
-
-    {%T{
-       data: {Nx.BitStringDevice, IO.iodata_to_binary(final_data)},
+    %T{
+       data: {Nx.BitStringDevice, IO.iodata_to_binary(data)},
        shape: new_shape,
        type: output_type
-     }, final_acc}
+    }
   end
 
   @doc """

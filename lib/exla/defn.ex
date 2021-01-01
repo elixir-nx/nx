@@ -160,21 +160,15 @@ defmodule Exla.Defn do
   defp to_operator(:outer, [{left_expr, left}, {right_expr, right}], output_shape, builder) do
     {left, right} = binary_op_type(builder, left, right, & &1)
 
-    extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(left_expr.shape))
-    left_shape = List.to_tuple(Tuple.to_list(left_expr.shape) ++ extra)
-
-    extra = List.duplicate(1, tuple_size(output_shape) - tuple_size(right_expr.shape))
-    right_shape = List.to_tuple(extra ++ Tuple.to_list(right_expr.shape))
-
     left =
       left
-      |> Exla.Op.reshape(left_shape)
-      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(left_shape, output_shape))
+      |> Exla.Op.reshape({Nx.Shape.size(left_expr.shape)})
+      |> Exla.Op.broadcast_in_dim(output_shape, {0})
 
     right =
       right
-      |> Exla.Op.reshape(right_shape)
-      |> Exla.Op.broadcast_in_dim(output_shape, broadcast_axes(right_shape, output_shape))
+      |> Exla.Op.reshape({Nx.Shape.size(right_expr.shape)})
+      |> Exla.Op.broadcast_in_dim(output_shape, {1})
 
     Exla.Op.multiply(left, right)
   end
