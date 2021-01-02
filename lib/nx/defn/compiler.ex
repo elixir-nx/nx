@@ -63,6 +63,7 @@ defmodule Nx.Defn.Compiler do
   @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
     {:module, Nx} = Code.ensure_compiled(Nx)
+    {:module, Nx.Defn.Kernel} = Code.ensure_compiled(Nx.Defn.Kernel)
 
     state = %{
       module: module,
@@ -196,9 +197,18 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [Nx.Defn.Expr, name]}, meta, args}, state}
   end
 
-  defp normalize({{:., dot_meta, [Nx.Defn.Kernel, :transform]}, meta, [ast, fun]}, state) do
-    {ast, state} = normalize(ast, state)
-    {{{:., dot_meta, [:erlang, :apply]}, meta, [fun, [ast]]}, state}
+  defp normalize({{:., _, [Nx.Defn.Kernel, name]} = call, meta, args}, state) do
+    {args, state} =
+      case args do
+        [ast, fun] when name == :transform ->
+          {ast, state} = normalize(ast, state)
+          {[ast, fun], state}
+
+        _ ->
+          normalize_list(args, state)
+      end
+
+    {{call, meta, args}, state}
   end
 
   defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)

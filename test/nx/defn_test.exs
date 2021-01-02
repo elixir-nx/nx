@@ -260,9 +260,11 @@ defmodule Nx.DefnTest do
 
   describe "operators" do
     defn add_two(a, b), do: a + b
+    defn add_three(a), do: a + (2 + 3)
 
     test "+" do
       assert %Expr{op: :add, args: [_, _]} = add_two(1, 2)
+      assert %Expr{op: :add, args: [_, %Expr{op: :constant, args: [5]}]} = add_three(1)
     end
 
     defn subtract_two(a, b), do: a - b

@@ -129,10 +129,8 @@ defmodule Nx.Defn.Kernel do
       >
 
   """
-  def transform(arg, fun) do
-    _ = arg
-    _ = fun
-    raise("Nx.Kernel.transform/1 must only be invoked inside defn")
+  def transform(arg, fun) when is_function(fun, 1) do
+    fun.(arg)
   end
 
   @doc """
@@ -265,9 +263,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left + right do
-    quote do: Nx.add(unquote(left), unquote(right))
-  end
+  # TODO: Implement all functions using this style once we merge Nx and Nx.Defn.Expr.
+  def left + right when is_number(left) and is_number(right), do: Kernel.+(left, right)
+  def left + right, do: Nx.Defn.Expr.add(left, right)
 
   @doc """
   Element-wise substraction operator.
