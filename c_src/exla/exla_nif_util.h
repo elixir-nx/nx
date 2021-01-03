@@ -15,6 +15,14 @@
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/core/platform/errors.h"
 
+#if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
+  typedef unsigned __int64 nif_uint64_t;
+  typedef signed __int64 nif_int64_t;
+#else
+  typedef unsigned long nif_uint64_t;
+  typedef signed long nif_int64_t;
+#endif
+
 namespace exla {
 
 /*
