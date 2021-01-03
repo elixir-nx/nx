@@ -172,7 +172,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
       inputs.push_back(std::move(inp));
     } else {
-      return tensorflow::errors::InvalidArgument("Invalid input passed to run.");
+      return xla::InvalidArgument("Invalid input passed to run.");
     }
     list = tail;
   }
@@ -503,7 +503,7 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
       }
     }
     if (local_devices.empty()) {
-      return tensorflow::errors::InvalidArgument(
+      return xla::InvalidArgument(
           "Device assignment (%s) does not have any local devices.",
           device_assignment->ToString());
     }

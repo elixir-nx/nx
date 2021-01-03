@@ -75,11 +75,8 @@ defmodule Exla.Executable do
       num_partitions: num_partitions
     } = executable
 
-    run_id = opts[:run_id] || System.unique_integer([:positive, :monotonic])
-    launch_id = opts[:launch_id] || System.unique_integer([:positive, :monotonic])
-
-    opts = Keyword.update(opts, :run_id, run_id, & &1)
-    opts = Keyword.update(opts, :launch_id, launch_id, & &1)
+    opts = Keyword.put_new(opts, :run_id, System.unique_integer([:positive, :monotonic]))
+    opts = Keyword.put_new(opts, :launch_id, System.unique_integer([:positive, :monotonic]))
 
     output_shape = %Shape{output_shape | dims: Tuple.insert_at(output_shape.dims, 0, num_replicas*num_partitions)}
 
@@ -91,8 +88,7 @@ defmodule Exla.Executable do
 
     tasks =
       for i <- 1..num_replicas, j <- 1..num_partitions do
-        device_assignment = {i, j}
-        opts = Keyword.update(opts, :device_assignment, device_assignment, & &1)
+        opts = Keyword.put(opts, :device_assignment, device_assignment, {i, j})
         args =
           case inputs do
             [] -> []
@@ -101,14 +97,12 @@ defmodule Exla.Executable do
         Task.async(fn -> run(executable, args, opts) end)
       end
 
-    buffers =
-      tasks
-      |> Enum.map(&Task.await/1)
+    buffers = Enum.map(tasks, &Task.await(&1, :infinity))
 
     %ShardedBuffer{buffers: buffers, shape: output_shape}
   end
 
-  def device_assignment_to_device_id(%Executable{ref: exec}, {replica, partition}) do
+  defp device_assignment_to_device_id(%Executable{ref: exec}, {replica, partition}) do
     Exla.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
   end
 

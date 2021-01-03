@@ -35,7 +35,12 @@ defmodule Exla.Client do
         |> unwrap!()
 
       device_count = Exla.NIF.get_device_count(ref) |> unwrap!()
-      default_device_ordinal = Exla.NIF.get_default_device_ordinal(ref) |> unwrap!()
+      default_device_ordinal =
+        if default = options[:default_device_ordinal] do
+          default
+        else
+          Exla.NIF.get_default_device_ordinal(ref) |> unwrap!()
+        end
 
       %Client{
         ref: ref,
@@ -59,7 +64,7 @@ defmodule Exla.Client do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
-    # This needs to be investigated a bit more
+    # TODO: investigated a bit more
     use_spmd = Keyword.get(options, :use_spmd, false)
     use_spmd_int = if use_spmd, do: 1, else: 0
     device_ordinal = check_device_compatibility!(client, device_ordinal)

@@ -19,14 +19,15 @@ defmodule Exla.ShardedBuffer do
     %ShardedBuffer{buffers: buffers, shape: shape}
   end
 
-  def sharded_buffer(binary, shape = %Shape{dtype: {_, size} = type, dims: dims}) when is_bitstring(binary) do
+  def sharded_buffer(binary, shape = %Shape{dtype: {_, size} = type, dims: dims})
+      when is_bitstring(binary) do
     num_shards = elem(dims, 0)
     sharded_dims = Tuple.delete_at(dims, 0)
     sharded_shape = Shape.make_shape(type, sharded_dims)
     shard_size = tuple_product(sharded_dims) * size
 
     buffers =
-      for i <- 0..num_shards - 1 do
+      for i <- 0..(num_shards - 1) do
         consumed = i * shard_size
         <<_::size(consumed)-bitstring, shard::size(shard_size)-bitstring, _::bitstring>> = binary
         Buffer.buffer(shard, sharded_shape)
@@ -35,14 +36,18 @@ defmodule Exla.ShardedBuffer do
     %ShardedBuffer{buffers: buffers, shape: shape}
   end
 
-  def sharded_buffer(reference_pairs, shape = %Shape{dtype: type, dims: dims}) when is_list(reference_pairs) do
+  def sharded_buffer(reference_pairs, shape = %Shape{dtype: type, dims: dims})
+      when is_list(reference_pairs) do
     num_shards = elem(dims, 0)
     num_buffers = Enum.count(reference_pairs)
     sharded_shape = Shape.make_shape(type, Tuple.delete_at(dims, 0))
 
     unless num_shards == num_buffers,
-      do: raise "expected input number of buffers to match number of shards,"
-                <> " got #{num_shards} shards and #{num_buffers} buffers"
+      do:
+        raise(
+          "expected input number of buffers to match number of shards," <>
+            " got #{num_shards} shards and #{num_buffers} buffers"
+        )
 
     buffers =
       reference_pairs
@@ -54,12 +59,19 @@ defmodule Exla.ShardedBuffer do
   @doc """
   Places the sharded buffer on devices.
   """
-  def place_on_device(sharded = %ShardedBuffer{buffers: buffers}, client = %Client{device_count: device_count}) do
+  def place_on_device(
+        sharded = %ShardedBuffer{buffers: buffers},
+        client = %Client{device_count: device_count}
+      ) do
     num_shards = Enum.count(buffers)
+
     unless num_shards <= device_count,
-      do: raise "expected size of sharding axis to be less than or equal to"
-                <> " the number of available devices on client. Axis size is"
-                <> " #{num_shards}, device count is #{device_count}"
+      do:
+        raise(
+          "expected size of sharding axis to be less than or equal to" <>
+            " the number of available devices on client. Axis size is" <>
+            " #{num_shards}, device count is #{device_count}"
+        )
 
     ref_buffers =
       buffers
@@ -73,8 +85,9 @@ defmodule Exla.ShardedBuffer do
   Reads the underlying shards.
   """
   def read(shards) do
-    shards
-    |> Enum.reduce(<<>>, &<<&2::bitstring, Buffer.read(&1.ref)::bitstring>>)
+    for shard <- shards, into: <<>> do
+      Buffer.read(shard.ref)
+    end
   end
 
   @doc """
