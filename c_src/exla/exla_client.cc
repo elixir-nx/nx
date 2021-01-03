@@ -62,11 +62,11 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
 
   int num_partitions;
   if (device_assignment_ == nullptr) {
-    LOG(INFO) << "Executable portable single-core";
+    // Executable portable single-core
     num_partitions = 1;
     CHECK(local_devices_.empty());
   } else {
-    LOG(INFO) << "Executable device_assignment:\n" << device_assignment_->ToString();
+    // Executable with a device_assignment
     CHECK_GE(local_devices_.size(), 1) << device_assignment_->ToString();
     CHECK_LE(local_devices_.size(),
              client_->device_count()) << "Inconsistent local device count.";
@@ -82,14 +82,16 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
-                                                  ERL_NIF_TERM arguments,
-                                                  int replica,
-                                                  int partition,
-                                                  ExlaDevice* device,
-                                                  bool keep_on_device) {
+                                                ERL_NIF_TERM arguments,
+                                                int replica,
+                                                int partition,
+                                                int run_id,
+                                                int rng_seed,
+                                                int launch_id,
+                                                ExlaDevice* device,
+                                                bool keep_on_device) {
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
   if (device == nullptr) {
-    // TODO(seanmor5): Maybe we can check this in Elixir?
     CHECK(device_assignment_ != nullptr);
     const int device_id = (*device_assignment_)(replica - 1, partition - 1);
     device = client_->device(device_id);
@@ -102,17 +104,17 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   int device_ordinal = device->device_ordinal();
   int executable_idx = executables_.size() > 1 ? partition : 0;
 
-  // xla::RunId run_id_obj(run_id);
+  xla::RunId run_id_obj(run_id);
   xla::ExecutableRunOptions run_options;
   run_options.set_stream(device->compute_stream());
   run_options.set_host_to_device_stream(device->host_to_device_stream());
   run_options.set_allocator(client_->allocator());
   run_options.set_intra_op_thread_pool(client_->client()->backend().eigen_intra_op_thread_pool_device());
   run_options.set_device_assignment(device_assignment.get());
-  // run_options.set_run_id(run_id_obj);
-  // run_options.set_rng_seed(rng_seed);
+  run_options.set_run_id(run_id_obj);
+  run_options.set_rng_seed(rng_seed);
   run_options.set_gpu_executable_run_options(client_->gpu_run_options());
-  // run_options.set_launch_id(launch_id);
+  run_options.set_launch_id(launch_id);
 
   std::shared_ptr<xla::LocalExecutable> executable = executables_.at(executable_idx);
 
@@ -476,15 +478,13 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
     num_partitions = 1;
   } else {
     if (!options.has_device_assignment()) {
-      LOG(INFO) << "Compiling with default device assignment.";
+      // Compiling with default device assignment
       EXLA_ASSIGN_OR_RETURN(
         xla::DeviceAssignment device_assignment,
         GetDefaultDeviceAssignment(options.num_replicas(),
                                    options.num_partitions()));
       options.set_device_assignment(device_assignment);
     }
-    LOG(INFO) << "Compiled with device assignment:\n"
-              << options.device_assignment().ToString();
     num_replicas = options.device_assignment().replica_count();
     num_partitions = options.device_assignment().computation_count();
     device_assignment =

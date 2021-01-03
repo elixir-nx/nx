@@ -90,6 +90,9 @@ class ExlaExecutable {
                                   ERL_NIF_TERM arguments,
                                   int replica,
                                   int partition,
+                                  int run_id,
+                                  int rng_seed,
+                                  int launch_id,
                                   ExlaDevice* device,
                                   bool keep_on_device);
 

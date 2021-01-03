@@ -1371,7 +1371,11 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   exla::ExlaDevice* device = nullptr;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result, (*executable)->Run(env, arguments, replica, partition, device, keep_on_device), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result,
+    (*executable)->Run(env, arguments,
+                       replica, partition,
+                       run_id, rng_seed,
+                       launch_id, device, keep_on_device), env);
 
   return exla::ok(env, result);
 }
