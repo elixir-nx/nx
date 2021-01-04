@@ -35,7 +35,7 @@ defmodule Exla.Shape do
 
   def shard(shape = %Shape{dims: {}}, _num_shards), do: shape
 
-  def shard(%Shape{dtype: type, dims: dims}, num_shards) do
+  def shard(%Shape{dtype: type, dims: dims}, _num_shards) do
     sharded_dims = Tuple.delete_at(dims, 0)
     Shape.make_shape(type, sharded_dims)
   end

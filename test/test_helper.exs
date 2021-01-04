@@ -61,17 +61,19 @@ defmodule ExlaHelpers do
 
   It expects a list of shapes which will be given as parameters.
   """
-  def compile(shapes, fun) do
+  def compile(shapes, fun, opts \\ []) do
     builder = Exla.Builder.new("test")
+    replicas = opts[:num_replicas] || 1
 
     {params, _} =
       Enum.map_reduce(shapes, 0, fn shape, pos ->
-        {Exla.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
+        {Exla.Op.parameter(builder, pos, Exla.Shape.shard(shape, replicas), <<?a + pos>>),
+         pos + 1}
       end)
 
     op = apply(fun, [builder | params])
     comp = Exla.Builder.build(op)
-    Exla.Client.compile(client(), comp, shapes)
+    Exla.Client.compile(client(), comp, shapes, opts)
   end
 
   @doc """
@@ -83,6 +85,11 @@ defmodule ExlaHelpers do
   def run(args, opts \\ [], fun) do
     exec = compile(Enum.map(args, & &1.shape), fun)
     Exla.Executable.run(exec, args, opts)
+  end
+
+  def run_parallel(args, replicas, opts \\ [], fun) do
+    exec = compile(Enum.map(args, & &1.shape), fun, num_replicas: replicas)
+    Exla.Executable.run_parallel(exec, args, opts)
   end
 end
 

@@ -101,8 +101,4 @@ defmodule Exla.ShardedBuffer do
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
-
-  defp unwrap!({:ok, ref}), do: ref
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
-  defp unwrap!(status) when is_atom(status), do: status
 end

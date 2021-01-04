@@ -1,7 +1,7 @@
 defmodule Exla.ExecutableTest do
   use ExUnit.Case, async: true
 
-  alias Exla.{Buffer, Executable, Op, Shape}
+  alias Exla.{Buffer, Executable, Op, Shape, ShardedBuffer}
 
   import ExlaHelpers
 
@@ -73,9 +73,10 @@ defmodule Exla.ExecutableTest do
   end
 
   test "run/2 with constants" do
-    assert %Buffer{data: <<0::64-unsigned>>} = run([], fn builder->
-      Op.constant_r0(builder, 0, {:u, 64})
-    end)
+    assert %Buffer{data: <<0::64-unsigned>>} =
+             run([], fn builder ->
+               Op.constant_r0(builder, 0, {:u, 64})
+             end)
   end
 
   test "run/2 returns a tuple" do
@@ -111,5 +112,60 @@ defmodule Exla.ExecutableTest do
     assert <<1, 0, 0, 0>> == Buffer.read(a.ref)
     assert <<2, 0, 0, 0>> == Buffer.read(b.ref)
     assert <<2, 0, 0, 0>> == Buffer.read(c.ref)
+  end
+
+  @tag :multi_device
+  test "run_parallel/2 succeeds with 2 inputs and default options" do
+    d1 = <<1::64-native, 2::64-native>>
+    d2 = <<3::64-native, 4::64-native>>
+    shape = Shape.make_shape({:s, 64}, {2, 1})
+
+    sb1 = ShardedBuffer.sharded_buffer(d1, shape)
+    sb2 = ShardedBuffer.sharded_buffer(d2, shape)
+
+    assert %ShardedBuffer{buffers: [b1, b2]} =
+             run_parallel([sb1, sb2], 2, fn _, x, y ->
+               Op.add(x, y)
+             end)
+
+    assert b1.data == <<4::64-native>>
+    assert b2.data == <<6::64-native>>
+  end
+
+  @tag :multi_device
+  test "run_parallel/2 succeeds with 2 inputs and keep_on_device" do
+    d1 = <<1::64-native, 2::64-native>>
+    d2 = <<3::64-native, 4::64-native>>
+    shape = Shape.make_shape({:s, 64}, {2, 1})
+
+    sb1 = ShardedBuffer.sharded_buffer(d1, shape)
+    sb2 = ShardedBuffer.sharded_buffer(d2, shape)
+
+    assert %ShardedBuffer{buffers: [b1, b2]} =
+             run_parallel([sb1, sb2], 2, [keep_on_device: true], fn _, x, y ->
+               Op.add(x, y)
+             end)
+
+    assert Buffer.read(b1.ref) == <<4::64-native>>
+    assert Buffer.read(b2.ref) == <<6::64-native>>
+  end
+
+  @tag :multi_device
+  test "run_parallel/2 succeeds with mixed data" do
+    d1 = <<1::64-native, 2::64-native>>
+    d2 = <<3::64-native, 4::64-native>>
+    shape = Shape.make_shape({:s, 64}, {2, 1})
+
+    sb1 = ShardedBuffer.sharded_buffer(d1, shape)
+    sb2 = ShardedBuffer.sharded_buffer(d2, shape)
+    sb2 = ShardedBuffer.place_on_device(sb2, client())
+
+    assert %ShardedBuffer{buffers: [b1, b2]} =
+             run_parallel([sb1, sb2], 2, fn _, x, y ->
+               Op.add(x, y)
+             end)
+
+    assert b1.data == <<4::64-native>>
+    assert b2.data == <<6::64-native>>
   end
 end
