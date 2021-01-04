@@ -28,19 +28,27 @@ defmodule Exla.Executable do
 
     {replica, partition} = Keyword.get(options, :device_assignment, {1, 1})
 
-    keep_on_device_int = if keep_on_device, do: 1, else: 0
+    outside_cpu = client.platform == :cuda || client.platform == :rocm
+    keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
+
+    device_id = device_assignment_to_device_id(executable, {replica, partition})
 
     inputs =
       Enum.map(arguments, fn
         %Buffer{ref: {ref, _}, data: nil} ->
           ref
 
-        %Buffer{data: data, shape: shape, ref: nil} ->
-          {data, shape.ref}
+        buffer = %Buffer{data: data, shape: shape, ref: nil} ->
+          if outside_cpu do
+            %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_id)
+            ref
+          else
+            {data, shape.ref}
+          end
       end)
 
-    # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
     data =
+      # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
       case client.platform do
         :host ->
           Exla.NIF.run_cpu(
@@ -56,7 +64,6 @@ defmodule Exla.Executable do
             keep_on_device_int
           )
           |> unwrap!()
-
         _ ->
           Exla.NIF.run_io(
             client.ref,
@@ -116,6 +123,10 @@ defmodule Exla.Executable do
     buffers = Enum.map(tasks, &Task.await(&1, :infinity))
 
     %ShardedBuffer{buffers: buffers, shape: output_shape}
+  end
+
+  defp device_assignment_to_device_id(%Executable{ref: exec}, {replica, partition}) do
+    Exla.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
   end
 
   defp decompose_output(data, shape, client, keep_on_device) do
