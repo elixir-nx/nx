@@ -104,31 +104,12 @@ end
 client = ExlaHelpers.client()
 multi_device = if client.device_count < 2, do: [:multi_device], else: []
 
-case client.platform do
-  :host ->
-    IO.puts("Testing on host platform with #{client.device_count} device(s)")
+if client.platform == :host and client.device_count < 2 do
+  cores = System.schedulers_online()
 
-    if client.device_count < 2 do
-      cores = System.schedulers_online()
-
-      IO.puts(
-        "To run multi-device tests, set XLA_FLAGS=--xla_force_host_platform_device_count=#{cores}"
-      )
-    end
-
-  platform ->
-    IO.puts("Testing on #{Atom.to_string(platform)} platform with #{client.device_count} device(s)")
-
-    if client.device_count < 2 do
-      # Treat hardware threads as XLA devices
-      cores = System.schedulers_online()
-
-      IO.puts(
-        "To run multi-device tests, target host device and set XLA_FLAGS=--xla_force_host_platform_device_count=#{
-          cores
-        }"
-      )
-    end
+  IO.puts(
+    "To run multi-device tests, set XLA_FLAGS=--xla_force_host_platform_device_count=#{cores}"
+  )
 end
 
 ExUnit.start(
