@@ -1,11 +1,5 @@
 target = System.get_env("EXLA_TARGET", "host")
 
-ExUnit.start(
-  exclude: [:platform, :multi_device],
-  include: [platform: String.to_atom(target)],
-  assert_receive_timeout: 1000
-)
-
 defmodule Nx.GradHelpers do
   @doc """
   Checks the gradient of numerical function `func`.
@@ -106,3 +100,12 @@ defmodule Nx.ProcessDevice do
 
   def deallocate(key), do: if(Process.delete(key), do: :ok, else: :already_deallocated)
 end
+
+client = ExlaHelpers.client()
+multi_device = if client.device_count < 2, do: [:multi_device], else: []
+
+ExUnit.start(
+  exclude: [:platform] ++ multi_device,
+  include: [platform: String.to_atom(target)],
+  assert_receive_timeout: 1000
+)
