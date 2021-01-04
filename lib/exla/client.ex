@@ -6,10 +6,10 @@ defmodule Exla.Client do
   """
 
   alias __MODULE__
-  alias Exla.{Computation, Executable}
+  alias Exla.{Computation, Executable, Shape}
 
-  @enforce_keys [:ref, :platform, :name]
-  defstruct [:ref, :platform, :name]
+  @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
+  defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
 
   def fetch!(name) do
     Exla.LockedCache.run({__MODULE__, name}, fn ->
@@ -34,35 +34,26 @@ defmodule Exla.Client do
         end
         |> unwrap!()
 
-      %Client{ref: ref, platform: platform, name: name}
+      device_count = Exla.NIF.get_device_count(ref) |> unwrap!()
+      default_device_ordinal =
+        if default = options[:default_device_ordinal] do
+          default
+        else
+          Exla.NIF.get_default_device_ordinal(ref) |> unwrap!()
+        end
+
+      %Client{
+        ref: ref,
+        platform: platform,
+        name: name,
+        device_count: device_count,
+        default_device_ordinal: default_device_ordinal
+      }
     end)
   end
 
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
-
-  # TODO: The Python XLA API offers 3 additional methods for client creation:
-  # `get_host_client`, `get_nvidia_gpu_client`, and `get_tpu_client`. They essentially
-  # wrap the method below with preset configurations, allocators, etc. that work out
-  # of the box with CPU/GPU/TPU respectively. This has the benefit of giving the user
-  # a guaranteed working client without having to mess around with specifying a device,
-  # allocator, etc. For example, the current Naive Allocator as it's set up and configured
-  # doesn't work with GPU. We would need to set up some special configurations for that
-  # to work. We can give the user the ability to fully customize their setup around this
-  # function, but also offer the more convenient and safer `get_[device]_client` methods.
-  # Alternatively, we can keep this method private, and only expose the 3 client device
-  # creation methods, with limited, but safer configuration options.
-
-  # TODO: These methods are only called once, so for efficiency we can run them when the client is created
-  def get_default_device_ordinal(%Client{ref: client}) do
-    {:ok, ordinal} = Exla.NIF.get_default_device_ordinal(client)
-    ordinal
-  end
-
-  def get_device_count(%Client{ref: client}) do
-    {:ok, count} = Exla.NIF.get_device_count(client)
-    count
-  end
 
   def compile(
         client = %Client{},
@@ -73,8 +64,15 @@ defmodule Exla.Client do
     device_ordinal = Keyword.get(options, :device_ordinal, -1)
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
-    shape_refs = Enum.map(argument_shapes, & &1.ref)
+    # TODO: investigated a bit more
+    use_spmd = Keyword.get(options, :use_spmd, false)
+    use_spmd_int = if use_spmd, do: 1, else: 0
     device_ordinal = check_device_compatibility!(client, device_ordinal)
+
+    shape_refs =
+      argument_shapes
+      |> Enum.map(& Shape.shard(&1, num_replicas*num_partitions))
+      |> Enum.map(& &1.ref)
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
@@ -86,7 +84,8 @@ defmodule Exla.Client do
         shape_refs,
         device_ordinal,
         num_replicas,
-        num_partitions
+        num_partitions,
+        use_spmd_int
       )
       |> unwrap!
 
@@ -94,20 +93,33 @@ defmodule Exla.Client do
       client: client,
       ref: ref,
       output_shape: output_shape,
-      device_ordinal: device_ordinal
+      device_ordinal: device_ordinal,
+      num_replicas: num_replicas,
+      num_partitions: num_partitions
     }
   end
 
-  def check_device_compatibility!(client = %Client{}, ordinal) do
+  def check_device_compatibility!(
+        %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
+        ordinal
+      ) do
     cond do
       ordinal < 0 ->
-        Client.get_default_device_ordinal(client)
+        default_device_ordinal
 
-      ordinal < Client.get_device_count(client) ->
+      ordinal < device_count ->
         ordinal
 
       true ->
         raise ArgumentError, "Invalid device ordinal."
     end
+  end
+
+  @doc """
+  Returns a map of supported platforms with device information.
+  """
+  def get_supported_platforms do
+    {:ok, platforms} = Exla.NIF.get_supported_platforms()
+    platforms
   end
 end

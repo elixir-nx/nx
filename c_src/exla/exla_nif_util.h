@@ -223,19 +223,6 @@ ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary var);
 ERL_NIF_TERM make(ErlNifEnv* env, const char* string);
 
 /*
- * Maker for resource from `std::unique_ptr`.
- */
-template <typename T>
-ERL_NIF_TERM make(ErlNifEnv* env, std::unique_ptr<T> var) {
-  void* ptr = enif_alloc_resource(resource_object<T>::type, sizeof(T));
-  T* value = var.release();
-  new(ptr) T(std::move(*value));
-  ERL_NIF_TERM ret = enif_make_resource(env, ptr);
-  enif_release_resource(ptr);
-  return ret;
-}
-
-/*
  * Maker for resource objects.
  */
 template <typename T>

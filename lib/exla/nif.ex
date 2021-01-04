@@ -191,6 +191,8 @@ defmodule Exla.NIF do
   def get_rocm_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 
+  def get_supported_platforms, do: nif_error(__ENV__.function)
+
   def get_default_device_ordinal(_client),
     do: nif_error(__ENV__.function)
 
@@ -206,7 +208,8 @@ defmodule Exla.NIF do
         _argument_layouts,
         _device_ordinal,
         _num_replicas,
-        _num_partitions
+        _num_partitions,
+        _use_spmd
       ),
       do: nif_error(__ENV__.function)
 
@@ -218,9 +221,13 @@ defmodule Exla.NIF do
         _run_id,
         _rng_seed,
         _launch_id,
+        _replica,
+        _partition,
         _keep_on_device
       ),
       do: nif_error(__ENV__.function)
+
+  def device_assignment_to_device_id(_exec, _replica, _partition), do: nif_error(__ENV__.function)
 
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
