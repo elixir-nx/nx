@@ -1479,7 +1479,8 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},
-  {"run", 10, run}
+  {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND}
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);
