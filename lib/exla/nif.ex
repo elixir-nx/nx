@@ -213,7 +213,21 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def run(
+  def run_cpu(
+        _client,
+        _executable,
+        _arguments,
+        _device_ordinal,
+        _run_id,
+        _rng_seed,
+        _launch_id,
+        _replica,
+        _partition,
+        _keep_on_device
+      ),
+      do: nif_error(__ENV__.function)
+
+  def run_io(
         _client,
         _executable,
         _arguments,

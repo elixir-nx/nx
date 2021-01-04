@@ -92,7 +92,7 @@ ERL_NIF_TERM create_sub_builder(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
     return exla::error(env, "Unable to get name.");
   }
 
-  std::unique_ptr<xla::XlaBuilder> uniq_sub_builder = (*builder)->CreateSubBuilder(name);
+  auto uniq_sub_builder = (*builder)->CreateSubBuilder(name);
   xla::XlaBuilder* sub_builder = uniq_sub_builder.release();
   return exla::ok(env, exla::make<xla::XlaBuilder*>(env, sub_builder));
 }
@@ -163,7 +163,9 @@ ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 
   exla::ExlaBuffer** buffer;
 
-  if (!exla::get<exla::ExlaBuffer*>(env, argv[0], buffer)) return exla::error(env, "Unable to get buffer.");
+  if (!exla::get<exla::ExlaBuffer*>(env, argv[0], buffer)) {
+    return exla::error(env, "Unable to get buffer.");
+  }
 
   xla::Status dealloc_status = (*buffer)->Deallocate();
 
@@ -306,7 +308,9 @@ ERL_NIF_TERM conditional_if(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return exla::error(env, "Unable to get false computation.");
   }
 
-  xla::XlaOp op = xla::Conditional(*pred, *true_op, *true_comp, *false_op, *false_comp);
+  xla::XlaOp op = xla::Conditional(*pred, *true_op,
+                                   *true_comp, *false_op,
+                                   *false_comp);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -415,7 +419,8 @@ ERL_NIF_TERM slice_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::error(env, "Unable to get dimension number.");
   }
 
-  xla::XlaOp op = xla::SliceInDim(*operand, start_index, end_index, stride, dimno);
+  xla::XlaOp op = xla::SliceInDim(*operand, start_index,
+                                  end_index, stride, dimno);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -542,7 +547,9 @@ ERL_NIF_TERM iota(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 /******************** Binary Ops ************************/
-ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[],
+ERL_NIF_TERM xla_binary_op(ErlNifEnv* env,
+                           int argc,
+                           const ERL_NIF_TERM argv[],
                            xla::XlaOp(*lambda)(xla::XlaOp, xla::XlaOp, absl::Span<const exla::int64>)) {
   if (argc != 3) {
     return exla::error(env, "Bad argument count.");
@@ -561,8 +568,8 @@ ERL_NIF_TERM xla_binary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[],
     return exla::error(env, "Unable to get broadcast dimensions.");
   }
 
-  xla::XlaOp result = lambda(*lhs, *rhs, broadcast_dims);
-  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+  xla::XlaOp op = lambda(*lhs, *rhs, broadcast_dims);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -662,19 +669,22 @@ ERL_NIF_TERM atan2(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 /************************** Unary Ops ***************************/
-ERL_NIF_TERM xla_unary_op(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], xla::XlaOp(*lambda)(xla::XlaOp)) {
+ERL_NIF_TERM xla_unary_op(ErlNifEnv* env,
+                          int argc,
+                          const ERL_NIF_TERM argv[],
+                          xla::XlaOp(*lambda)(xla::XlaOp)) {
   if (argc != 1) {
     return exla::error(env, "Bad argument count.");
   }
 
-  xla::XlaOp *op;
+  xla::XlaOp *operand;
 
-  if (!exla::get<xla::XlaOp>(env, argv[0], op)) {
+  if (!exla::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::error(env, "Unable to get operand.");
   }
 
-  xla::XlaOp result = lambda(*op);
-  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+  xla::XlaOp op = lambda(*operand);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM abs(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -784,8 +794,12 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   ERL_NIF_TERM term = argv[1];
 
-  if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) return exla::error(env, "Unable to get builder.");
-  if (!exla::get_type(env, argv[2], type)) return exla::error(env, "Unable to cast scalar to type.");
+  if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+    return exla::error(env, "Unable to get builder.");
+  }
+  if (!exla::get_type(env, argv[2], type)) {
+    return exla::error(env, "Unable to cast scalar to type.");
+  }
 
   xla::XlaOp op;
 
@@ -858,7 +872,8 @@ ERL_NIF_TERM constant_from_binary(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return exla::error(env, "Unable to get shape.");
   }
 
-  xla::BorrowingLiteral literal(const_cast<char*>(reinterpret_cast<char*>(binary.data)), *shape);
+  char * data = const_cast<char*>(reinterpret_cast<char*>(binary.data));
+  xla::BorrowingLiteral literal(data, *shape);
 
   xla::XlaOp op = xla::ConstantLiteral(*builder, literal);
 
@@ -871,7 +886,7 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   xla::XlaOp *lhs, *rhs;
-  exla::int8 config_int;
+  xla::PrecisionConfig config;
 
   if (!exla::get<xla::XlaOp>(env, argv[0], lhs)) {
     return exla::error(env, "Unable to get left-hand side operand.");
@@ -879,23 +894,12 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<xla::XlaOp>(env, argv[1], rhs)) {
     return exla::error(env, "Unable to get right-hand side operand.");
   }
-  if (!exla::get(env, argv[2], &config_int)) {
+  if (!exla::get_precision_config(env, argv[2], config)) {
     return exla::error(env, "Unable to get precision configuration.");
   }
 
-  xla::PrecisionConfig config;
-
-  switch (config_int) {
-    case 0:
-      config.mutable_operand_precision()->Add(xla::PrecisionConfig::DEFAULT);
-    case 1:
-      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGH);
-    case 2:
-      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGHEST);
-  }
-
-  xla::XlaOp result = xla::Dot(*lhs, *rhs, &config);
-  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+  xla::XlaOp op = xla::Dot(*lhs, *rhs, &config);
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -905,7 +909,7 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   xla::XlaOp *lhs, *rhs;
   xla::DotDimensionNumbers dnums;
-  exla::int8 config_int;
+  xla::PrecisionConfig config;
 
   if (!exla::get<xla::XlaOp>(env, argv[0], lhs)) {
     return exla::error(env, "Unable to get left-hand side operand.");
@@ -916,24 +920,13 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get_dot_dimension_numbers(env, argv[2], &dnums)) {
     return exla::error(env, "Unable to get contraction dimensions.");
   }
-  if (!exla::get(env, argv[3], &config_int)) {
+  if (!exla::get_precision_config(env, argv[3], config)) {
     return exla::error(env, "Unable to get precision configuration.");
   }
 
-  xla::PrecisionConfig config;
+  xla::XlaOp op = xla::DotGeneral(*lhs, *rhs, dnums, &config);
 
-  switch (config_int) {
-    case 0:
-      config.mutable_operand_precision()->Add(xla::PrecisionConfig::DEFAULT);
-    case 1:
-      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGH);
-    case 2:
-      config.mutable_operand_precision()->Add(xla::PrecisionConfig::HIGHEST);
-  }
-
-  xla::XlaOp result = xla::DotGeneral(*lhs, *rhs, dnums, &config);
-
-  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM transpose(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -951,9 +944,9 @@ ERL_NIF_TERM transpose(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::error(env, "Unable to get permutation.");
   }
 
-  xla::XlaOp result = xla::Transpose(*operand, permutation);
+  xla::XlaOp op = xla::Transpose(*operand, permutation);
 
-  return exla::ok(env, exla::make<xla::XlaOp>(env, result));
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -979,7 +972,8 @@ ERL_NIF_TERM reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::error(env, "Unable to get reduction dimensions.");
   }
 
-  xla::XlaOp op = xla::Reduce(*operand, *init_value, *computation, dimensions_to_reduce);
+  xla::XlaOp op = xla::Reduce(*operand, *init_value,
+                              *computation, dimensions_to_reduce);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -1011,7 +1005,9 @@ ERL_NIF_TERM variadic_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     return exla::error(env, "Unable to get dimensions.");
   }
 
-  xla::XlaOp op = xla::Reduce(*builder, operands, init_values, *computation, dimensions_to_reduce);
+  xla::XlaOp op = xla::Reduce(*builder, operands,
+                              init_values, *computation,
+                              dimensions_to_reduce);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -1390,9 +1386,9 @@ static ErlNifFunc exla_funcs[] = {
   {"get_supported_platforms", 0, get_supported_platforms},
   {"device_assignment_to_device_id", 3, device_assignment_to_device_id},
   /****** ExlaBuffer ******/
-  {"binary_to_device_mem", 4, binary_to_device_mem},
-  {"read_device_mem", 2, read_device_mem},
-  {"deallocate_device_mem", 1, deallocate_device_mem},
+  {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   /****** xla::Shape ******/
   {"make_shape", 2, make_shape},
   {"get_shape_info", 1, get_shape_info},
@@ -1483,7 +1479,8 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},
-  {"run", 10, run}
+  {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND}
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);
