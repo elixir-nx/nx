@@ -78,7 +78,10 @@ defmodule Exla.Executable do
     opts = Keyword.put_new(opts, :run_id, System.unique_integer([:positive, :monotonic]))
     opts = Keyword.put_new(opts, :launch_id, System.unique_integer([:positive, :monotonic]))
 
-    output_shape = %Shape{output_shape | dims: Tuple.insert_at(output_shape.dims, 0, num_replicas*num_partitions)}
+    output_shape = %Shape{
+      output_shape
+      | dims: Tuple.insert_at(output_shape.dims, 0, num_replicas * num_partitions)
+    }
 
     inputs =
       arguments
@@ -88,12 +91,14 @@ defmodule Exla.Executable do
 
     tasks =
       for i <- 1..num_replicas, j <- 1..num_partitions do
-        opts = Keyword.put(opts, :device_assignment, device_assignment, {i, j})
+        opts = Keyword.put(opts, :device_assignment, {i, j})
+
         args =
           case inputs do
             [] -> []
             inputs -> Enum.at(inputs, i + j - 2)
           end
+
         Task.async(fn -> run(executable, args, opts) end)
       end
 
