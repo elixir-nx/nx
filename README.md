@@ -36,6 +36,8 @@ You can use the following env vars to customize your build:
 
   * `EXLA_CACHE` - control where to store Tensorflow checkouts and builds
 
+  * `XLA_FLAGS` - controls XLA-specific options, see: [tensorflow/compiler/xla/debug_options_flags.cc](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/debug_options_flags.cc) for list of flags
+
 Note those variables can be set directly in the dependency:
 
 ```elixir
