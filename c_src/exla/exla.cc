@@ -1503,7 +1503,7 @@ static ErlNifFunc exla_funcs[] = {
   {"build", 2, build},
   {"compile", 7, compile},
   {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND}
+  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
   /********* Logger ***********/
   {"start_log_sink", 1, start_log_sink}
 };
