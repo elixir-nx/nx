@@ -622,7 +622,7 @@ defmodule Nx do
     end
   end
 
-  ## Shape
+  ## Meta operations (do not invoke the backend)
 
   @doc """
   Changes the shape of a tensor.
@@ -869,52 +869,14 @@ defmodule Nx do
       >
 
   """
-  def broadcast(tensor, broadcast_shape, axes) do
-    new_shape = shape!(broadcast_shape)
-    axes = Nx.Shape.normalize_axes(new_shape, axes)
+  def broadcast(tensor, shape, axes) do
+    tensor = tensor(tensor)
 
-    case tensor(tensor) do
-      %T{shape: {}} = t when axes == [] ->
-        data = :binary.copy(Nx.Util.to_bitstring(t), Nx.Shape.size(new_shape))
-        %{t | data: {Nx.BitStringDevice, data}, shape: new_shape}
+    shape = shape!(shape)
+    axes = Nx.Shape.normalize_axes(shape, axes)
+    shape = Nx.Shape.broadcast(tensor.shape, shape, axes)
 
-      %T{shape: old_shape, type: {_, size}} = t ->
-        new_shape = Nx.Shape.broadcast(old_shape, new_shape, axes)
-        chunk_size = size * Nx.Shape.size(old_shape)
-
-        data = Nx.Util.to_bitstring(t)
-        data = unary_broadcast(Tuple.to_list(new_shape), 0, old_shape, 0, axes, data, chunk_size)
-        %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: new_shape}
-    end
-  end
-
-  # Old and new match
-  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, chunk_size)
-       when elem(old_shape, old_pos) == dim do
-    chunk_size = div(chunk_size, dim)
-
-    for <<chunk::size(chunk_size)-bitstring <- data>> do
-      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, chunk, chunk_size)
-    end
-  end
-
-  # Implicit broadcasting
-  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, chunk_size)
-       when elem(old_shape, old_pos) == 1 do
-    for _ <- 1..dim do
-      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, data, chunk_size)
-    end
-  end
-
-  # Explicit broadcasting (unmapped axes)
-  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, axes, data, chunk_size) do
-    for _ <- 1..dim do
-      unary_broadcast(dims, axis + 1, old_shape, old_pos, axes, data, chunk_size)
-    end
-  end
-
-  defp unary_broadcast([], _axis, _old_shape, _old_pos, [], data, _chunk_size) do
-    data
+    impl(tensor).broadcast(tensor, %{tensor | shape: shape}, axes)
   end
 
   @doc """
@@ -955,7 +917,8 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.pad(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), 0, [{0, 2}, {1, 1}, {1, 0}])
+      iex> tensor = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+      iex> Nx.pad(tensor, 0, [{0, 2}, {1, 1}, {1, 0}])
       #Nx.Tensor<
         s64[4][4][3]
         [
@@ -986,7 +949,8 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.pad(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), 0, [{1, 0}, {1, 1}, {0, 1}])
+      iex> tensor = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+      iex> Nx.pad(tensor, 0, [{1, 0}, {1, 1}, {0, 1}])
       #Nx.Tensor<
         s64[3][4][3]
         [
@@ -1011,7 +975,8 @@ defmodule Nx do
         ]
       >
 
-    iex> Nx.pad(Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]), 0.0, [{1, 2}, {1, 0}, {0, 1}])
+    iex> tensor = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+    iex> Nx.pad(tensor, 0.0, [{1, 2}, {1, 0}, {0, 1}])
     #Nx.Tensor<
       f64[5][3][3]
       [
@@ -1049,10 +1014,12 @@ defmodule Nx do
       [1, 2, 3]
     >
 
-    iex> Nx.pad(Nx.tensor([
-    ...> [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
-    ...> [[0, 0, 0], [1, 2, 0], [3, 4, 0], [0, 0, 0]],
-    ...> [[0, 0, 0], [5, 6, 0], [7, 8, 0], [0, 0, 0]]]), 0, [{-1, 0}, {-1, -1}, {0, -1}])
+    iex> tensor = Nx.tensor([
+    ...>   [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
+    ...>   [[0, 0, 0], [1, 2, 0], [3, 4, 0], [0, 0, 0]],
+    ...>   [[0, 0, 0], [5, 6, 0], [7, 8, 0], [0, 0, 0]]
+    ...> ])
+    iex> Nx.pad(tensor, 0, [{-1, 0}, {-1, -1}, {0, -1}])
     #Nx.Tensor<
       s64[2][2][2]
       [
@@ -1077,25 +1044,15 @@ defmodule Nx do
     >
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
-    pad_value = Nx.Util.to_scalar(pad_value)
+    tensor = tensor(tensor)
+    pad_value = tensor(pad_value)
 
-    case tensor(tensor) do
-      %T{shape: {}} = t ->
-        t
-
-      %T{shape: {_}} = t ->
-        [{edge_low, edge_high}] = padding_config
-        Nx.Util.pad_last_dim(t, pad_value, edge_low, edge_high)
-
-      %T{} = t ->
-        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
-        permutation = [Nx.rank(t) - 1 | permutation]
-
-        for {edge_low, edge_high} <- Enum.reverse(padding_config), reduce: t do
-          acc ->
-            transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation)
-        end
+    if pad_value.shape != {} do
+      raise ArgumentError, "padding value must be a scalar"
     end
+
+    shape = Nx.Shape.pad(tensor.shape, padding_config)
+    impl(tensor).pad(tensor, %{tensor | shape: shape}, pad_value, padding_config)
   end
 
   ## Reflection
@@ -3840,10 +3797,8 @@ defmodule Nx do
       >
   """
   def transpose(tensor) do
-    case tensor(tensor) do
-      %T{shape: {}} = t -> t
-      %T{shape: s} = t -> transpose(t, Nx.Shape.transpose_axes(s))
-    end
+    tensor = tensor(tensor)
+    transpose(tensor, Nx.Shape.transpose_axes(tensor.shape))
   end
 
   @doc """
@@ -3931,73 +3886,24 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.transpose(1, [0])
-      ** (ArgumentError) axes [0] must be of the same rank as shape {}
+      iex> Nx.transpose(Nx.iota({2, 2}), [0])
+      ** (ArgumentError) expected length of permutation (1) to match rank of shape (2)
 
       iex> Nx.transpose(Nx.iota({2, 2}), [1, 2])
-      ** (ArgumentError) axes [1, 2] must be unique integers between 0 and 1
+      ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
   """
   def transpose(tensor, axes) when is_list(axes) do
-    case {tensor(tensor), axes} do
-      {%T{shape: {}} = t, []} ->
-        t
+    %{shape: shape} = tensor = tensor(tensor)
+    axes = Nx.Shape.normalize_axes(shape, axes)
 
-      {%T{shape: {_}} = t, [0]} ->
-        t
-
-      {%T{shape: shape, type: {_, size}} = t, axes} ->
-        data = Nx.Util.to_bitstring(t)
-        {list, min, max} = transpose_axes(shape, axes)
-        weighted_shape = weighted_shape(shape, size)
-
-        # The chunk size is computed based on all dimensions
-        # before the minimum one being changed. For example,
-        # for {0, 1, 2, 3} and the swap is between 1 and 2,
-        # the chunk_size will be d1 * d2 * d3 * size.
-        chunk_size = weighted_chunk(weighted_shape, min, size)
-
-        # All of the major dimensions not being transposed can be
-        # read at once. For example, for {0, 1, 2, 3} and the swap
-        # is between 1 and 2, the read_size will be d3 * size.
-        read_size = weighted_chunk(weighted_shape, max + 1, size)
-
-        # And now how we will traverse
-        traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
-
-        data =
-          for <<chunk::size(chunk_size)-bitstring <- data>> do
-            weighted_traverse(traverse_list, chunk, read_size)
-          end
-
-        shape = Nx.Shape.transpose(shape, axes)
-        %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: shape}
+    if axes == Nx.Shape.to_axes(shape) do
+      tensor
+    else
+      shape = Nx.Shape.transpose(shape, axes)
+      impl(tensor).transpose(tensor, %{tensor | shape: shape}, axes)
     end
   end
-
-  defp transpose_axes(shape, axes) when tuple_size(shape) != length(axes) do
-    raise ArgumentError,
-          "axes #{inspect(axes)} must be of the same rank as shape #{inspect(shape)}"
-  end
-
-  defp transpose_axes(shape, axes) do
-    size = tuple_size(shape)
-
-    unless Enum.all?(axes, &(&1 >= 0 and &1 < size)) and length(Enum.uniq(axes)) == size do
-      raise ArgumentError,
-            "axes #{inspect(axes)} must be unique integers between 0 and #{size - 1}"
-    end
-
-    {axes, min} = transpose_min(axes, 0)
-    {axes, max} = transpose_max(Enum.reverse(axes), size - 1)
-    {axes, min, max}
-  end
-
-  defp transpose_min([head | tail], head), do: transpose_min(tail, head + 1)
-  defp transpose_min(tail, head), do: {tail, head}
-
-  defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
-  defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
 
   ## Shape
 
@@ -4011,4 +3917,8 @@ defmodule Nx do
             "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
   end
+
+  ## Helpers
+
+  defp impl(_), do: Nx.BinaryTensor
 end

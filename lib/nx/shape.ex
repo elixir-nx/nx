@@ -1,6 +1,8 @@
 defmodule Nx.Shape do
   @moduledoc false
 
+  # TODO: Keep here only the shared shape functions
+
   @doc """
   Validates the given shape.
 
