@@ -104,9 +104,9 @@ end
 client = ExlaHelpers.client()
 multi_device = if client.device_count < 2, do: [:multi_device], else: []
 
-case client.name do
+case client.platform do
   :host ->
-    IO.puts("Testing on host platform with #{client.device_count}")
+    IO.puts("Testing on host platform with #{client.device_count} device(s)")
 
     if client.device_count < 2 do
       cores = System.schedulers_online()
@@ -117,7 +117,7 @@ case client.name do
     end
 
   platform ->
-    IO.puts("Testing on #{Atom.to_string(platform)} platform with #{client.device_count}")
+    IO.puts("Testing on #{Atom.to_string(platform)} platform with #{client.device_count} device(s)")
 
     if client.device_count < 2 do
       # Treat hardware threads as XLA devices
