@@ -48,7 +48,8 @@ defmodule Exla.NxDeviceTest do
   end
 
   describe "sharded nx device" do
-    @tag :multi_device
+    @describetag :multi_device
+
     test "transfers data from nx<->device" do
       t = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4]])
 
@@ -74,7 +75,6 @@ defmodule Exla.NxDeviceTest do
       end
     end
 
-    @tag :multi_device
     test "multiple reads and deallocation" do
       t = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4]])
 
@@ -94,7 +94,7 @@ defmodule Exla.NxDeviceTest do
       assert_raise ArgumentError,
                    ~r"could not find Exla client named :unknown",
                    fn ->
-                     Nx.device_transfer(Nx.tensor([1, 2]), Exla.NxDevice, client: :unknown)
+                     Nx.device_transfer(Nx.tensor([1, 2]), Exla.ShardedNxDevice, client: :unknown)
                    end
     end
   end

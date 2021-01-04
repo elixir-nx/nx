@@ -40,7 +40,8 @@ defmodule Exla.BufferTest do
   end
 
   describe "sharded buffer" do
-    @tag :multi_device
+    @describetag :multi_device
+
     test "sharded_buffer/2" do
       data = for i <- 1..2000, into: <<>>, do: <<i::64-native>>
       shape = Shape.make_shape({:s, 64}, {2, 1000})
@@ -49,7 +50,6 @@ defmodule Exla.BufferTest do
       assert is_list(buffers)
     end
 
-    @tag :multi_device
     test "place_on_device/3" do
       data = for i <- 1..2000, into: <<>>, do: <<i::64-native>>
       shape = Shape.make_shape({:s, 64}, {2, 1000})
@@ -63,7 +63,6 @@ defmodule Exla.BufferTest do
       end
     end
 
-    @tag :multi_device
     test "read/2" do
       data = for i <- 1..4, into: <<>>, do: <<i::64>>
       shape = Shape.make_shape({:s, 64}, {2, 2})
@@ -84,7 +83,6 @@ defmodule Exla.BufferTest do
       end
     end
 
-    @tag :multi_device
     test "deallocate/1" do
       data = for i <- 1..4, into: <<>>, do: <<i::64>>
       shape = Shape.make_shape({:s, 64}, {2, 2})
