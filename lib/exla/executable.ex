@@ -28,7 +28,7 @@ defmodule Exla.Executable do
 
     {replica, partition} = Keyword.get(options, :device_assignment, {1, 1})
 
-    keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
+    keep_on_device_int = if keep_on_device, do: 1, else: 0
 
     inputs =
       Enum.map(arguments, fn
