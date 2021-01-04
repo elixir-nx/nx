@@ -1139,6 +1139,16 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "bfloat16" do
+    defn add(t1, t2), do: t1 + t2
+
+    test "accepts bfloat16 input" do
+      lhs = Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})
+      rhs = Nx.tensor([4.0, 5.0, 6.0], type: {:bf, 16})
+      assert add(lhs, rhs) == Nx.tensor([5.0, 7.0, 9.0], type: {:bf, 16})
+    end
+  end
+
   # We need to round the floats because of imprecision between platforms
   defp compare_tensors!(
          %{type: {:f, size}, data: {dev, left_data}} = left,
