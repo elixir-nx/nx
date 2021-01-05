@@ -47,40 +47,43 @@ defmodule Exla.Executable do
           end
       end)
 
-    data =
-      # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
-      case client.platform do
-        :host ->
-          Exla.NIF.run_cpu(
-            client.ref,
-            exec,
-            inputs,
-            device_ordinal,
-            run_id,
-            rng_seed,
-            launch_id,
-            replica,
-            partition,
-            keep_on_device_int
-          )
-          |> unwrap!()
-        _ ->
-          Exla.NIF.run_io(
-            client.ref,
-            exec,
-            inputs,
-            device_ordinal,
-            run_id,
-            rng_seed,
-            launch_id,
-            replica,
-            partition,
-            keep_on_device_int
-          )
-          |> unwrap!()
-      end
+    {execution_status, buffers} =
+      Exla.NIF.run(
+        client.ref,
+        exec,
+        inputs,
+        device_ordinal,
+        run_id,
+        rng_seed,
+        launch_id,
+        replica,
+        partition,
+        keep_on_device_int
+      )
+      |> unwrap!()
 
+    data = block_until_done(client, execution_status, buffers, device_id, keep_on_device_int)
     decompose_output(data, output_shape, client, keep_on_device)
+  end
+
+  def block_until_done(
+        client,
+        execution_reference,
+        input_buffers,
+        device_id,
+        keep_on_device_int
+      ) do
+    result =
+      Exla.NIF.block_until_done(
+        client.ref,
+        execution_reference,
+        input_buffers,
+        device_id,
+        keep_on_device_int
+      )
+      |> unwrap!()
+
+    result
   end
 
   def run_parallel(%Executable{} = executable, arguments, opts \\ []) do

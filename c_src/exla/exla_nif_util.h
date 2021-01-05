@@ -238,6 +238,19 @@ ERL_NIF_TERM make(ErlNifEnv* env, T &var) {
   return ret;
 }
 
+template <typename T>
+ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T*> &var) {
+  const uint32 list_size = var.size();
+  ERL_NIF_TERM terms[list_size];
+  int i = 0;
+  for(auto val : var) {
+    ERL_NIF_TERM term = make<T>(env, *val);
+    terms[i++] = term;
+  }
+
+  return enif_make_list_from_array(env, terms, list_size);
+}
+
 /*
  * Helper for extracting information from `GetShape` and sending it back as a Tuple.
  */

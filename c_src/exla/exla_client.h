@@ -86,15 +86,16 @@ class ExlaExecutable {
 
   void Delete() { executables_.clear(); }
 
-  xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
-                                  ERL_NIF_TERM arguments,
-                                  int replica,
-                                  int partition,
-                                  int run_id,
-                                  int rng_seed,
-                                  int launch_id,
-                                  ExlaDevice* device,
-                                  bool keep_on_device);
+  xla::StatusOr<xla::ExecutionOutput> Run(ErlNifEnv* env,
+                                          ERL_NIF_TERM arguments,
+                                          std::vector<ExlaBuffer**>& buffers,
+                                          int replica,
+                                          int partition,
+                                          int run_id,
+                                          int rng_seed,
+                                          int launch_id,
+                                          ExlaDevice* device,
+                                          bool keep_on_device);
 
  private:
   ExlaClient* client_;

@@ -219,7 +219,7 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def run_cpu(
+  def run(
         _client,
         _executable,
         _arguments,
@@ -233,19 +233,8 @@ defmodule Exla.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def run_io(
-        _client,
-        _executable,
-        _arguments,
-        _device_ordinal,
-        _run_id,
-        _rng_seed,
-        _launch_id,
-        _replica,
-        _partition,
-        _keep_on_device
-      ),
-      do: nif_error(__ENV__.function)
+  def block_until_done(_client, _execution_status, _buffers, _device_id, _keep_on_device),
+    do: nif_error(__ENV__.function)
 
   def device_assignment_to_device_id(_exec, _replica, _partition), do: nif_error(__ENV__.function)
 

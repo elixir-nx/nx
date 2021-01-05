@@ -52,6 +52,9 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
     return -1;
   }
+  if (!exla::open_resource<xla::StatusOr<xla::ExecutionOutput>>(env, mod, "ExecutionStatus", free_res)) {
+    return -1;
+  }
   return 1;
 }
 
@@ -1485,15 +1488,93 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::error(env, "Unable to get keep_on_device.");
   }
 
+  exla::uint32 num_args;
+  std::vector<exla::ExlaBuffer**> buffers;
+  if (!enif_get_list_length(env, argv[2], &num_args)) {
+    buffers.reserve(num_args);
+  }
+
   exla::ExlaDevice* device = nullptr;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result,
-    (*executable)->Run(env, arguments,
-                       replica, partition,
-                       run_id, rng_seed,
-                       launch_id, device, keep_on_device), env);
+  xla::StatusOr<xla::ExecutionOutput> result = (*executable)->Run(env, arguments, buffers,
+                                                                  replica, partition,
+                                                                  run_id, rng_seed,
+                                                                  launch_id, device,
+                                                                  keep_on_device);
 
-  return exla::ok(env, result);
+  ERL_NIF_TERM buffer_terms = exla::make_list<exla::ExlaBuffer*>(env, buffers);
+  ERL_NIF_TERM run_status = exla::make<xla::StatusOr<xla::ExecutionOutput>>(env, result);
+  ERL_NIF_TERM tuple = enif_make_tuple2(env, run_status, buffer_terms);
+  return exla::ok(env, tuple);
+}
+
+ERL_NIF_TERM block_until_done(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  xla::StatusOr<xla::ExecutionOutput>* execution_status;
+  std::vector<exla::ExlaBuffer**> buffers;
+  exla::int32 device_id;
+  exla::int8 keep_on_device;
+
+  if (!exla::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::error(env, "Unable to get client.");
+  }
+  if (!exla::get<xla::StatusOr<xla::ExecutionOutput>>(env, argv[1], execution_status)) {
+    return exla::error(env, "Unable to get execution status.");
+  }
+  if (!exla::get_list<exla::ExlaBuffer**>(env, argv[2], buffers)) {
+    return exla::error(env, "Unable to get buffers.");
+  }
+  if (!exla::get(env, argv[3], &device_id)) {
+    return exla::error(env, "Unable to get device id.");
+  }
+  if (!exla::get(env, argv[4], &keep_on_device)) {
+    return exla::error(env, "Unable to get keep on device.");
+  }
+
+  exla::ExlaDevice* device = (*client)->device(device_id);
+
+  xla::Status status = device->compute_stream()->BlockHostUntilDone();
+
+  if(!status.ok()) {
+    return exla::error(env, "Error occurred during execution.");
+  }
+
+  xla::ExecutionOutput exec_result = (*execution_status).ConsumeValueOrDie();
+
+  for (auto buf : buffers) {
+    if (*buf != NULL) {
+      delete *buf;
+      *buf = NULL;
+    }
+  }
+
+  xla::ScopedShapedBuffer result = exec_result.ConsumeResult();
+
+  exla::ExlaBuffer* buffer_ref =
+    new exla::ExlaBuffer(
+      new xla::ScopedShapedBuffer(std::move(result)), device, false);
+
+  if (keep_on_device && buffer_ref->is_tuple()) {
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM references,
+      (*client)->DecomposeBuffer(env, buffer_ref), env);
+    return exla::ok(env, references);
+  } else if (keep_on_device) {
+    return exla::ok(env, exla::make<exla::ExlaBuffer*>(env, buffer_ref));
+  } else if (buffer_ref->is_tuple()) {
+    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple,
+      (*client)->ErlListFromBuffer(env, buffer_ref), env);
+    delete buffer_ref;
+    return tuple;
+  } else {
+    EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
+      (*client)->ErlBinFromBuffer(buffer_ref), env);
+    delete buffer_ref;
+    return exla::ok(env, exla::make(env, binary));
+  }
 }
 
 static ErlNifFunc exla_funcs[] = {
@@ -1606,8 +1687,8 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},
-  {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND}
+  {"run", 10, run},
+  {"block_until_done", 5, block_until_done}
 };
 
 ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);
