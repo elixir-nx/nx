@@ -180,7 +180,13 @@ defmodule Exla.NIF do
 
   def tuple(_builder, _elements), do: nif_error(__ENV__.function)
 
-  def get_tuple_element(_operand, _indeX), do: nif_error(__ENV__.function)
+  def get_tuple_element(_operand, _index), do: nif_error(__ENV__.function)
+
+  def create_token(_builder), do: nif_error(__ENV__.function)
+
+  def infeed(_token, _shape), do: nif_error(__ENV__.function)
+
+  def outfeed(_operand, _token, _shape), do: nif_error(__ENV__.function)
 
   def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
@@ -250,6 +256,12 @@ defmodule Exla.NIF do
     do: nif_error(__ENV__.function)
 
   def deallocate_device_mem(_buffer),
+    do: nif_error(__ENV__.function)
+
+  def binary_to_device_infeed(_client, _binary, _shape, _device_id),
+    do: nif_error(__ENV__.function)
+
+  def binary_from_device_outfeed(_client, _shape, _device_id),
     do: nif_error(__ENV__.function)
 
   defp nif_error({name, arity}) do

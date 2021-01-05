@@ -24,6 +24,7 @@ cc_library (
   srcs = ["exla_device.cc"],
   hdrs = ["exla_device.h"],
   deps = [
+    ":exla_nif_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:local_client",
     "@org_tensorflow//tensorflow/stream_executor:stream_executor",
     "@com_google_absl//absl/memory",

@@ -5,6 +5,7 @@
 
 #include "tensorflow/compiler/xla/client/local_client.h"
 #include "tensorflow/stream_executor/stream_executor.h"
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
 namespace exla {
 
@@ -53,6 +54,10 @@ class ExlaDevice {
     se::Stream* callback_stream() const {
       return callback_stream_.get();
     }
+
+    xla::Status TransferBinaryToInfeed(const ErlNifBinary binary, const xla::Shape& shape) const;
+
+    xla::StatusOr<ErlNifBinary> TransferBinaryFromOutfeed(const xla::Shape& shape) const;
 
  private:
     int id_;

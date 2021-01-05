@@ -328,6 +328,25 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def create_token(%Builder{ref: builder}) do
+    ref = Exla.NIF.create_token(builder) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def infeed(%Op{builder: builder, ref: token}, %Shape{ref: shape}) do
+    ref = Exla.NIF.infeed(token, shape) |> unwrap!()
+    tuple = %Op{builder: builder, ref: ref}
+    # InfeedWithToken returns {x, token}
+    {get_tuple_element(tuple, 0), get_tuple_element(tuple, 1)}
+  end
+
+  def outfeed(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: token}, %Shape{
+        ref: shape
+      }) do
+    ref = Exla.NIF.outfeed(operand, token, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))

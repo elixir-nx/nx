@@ -73,6 +73,26 @@ defmodule Exla.Buffer do
     Exla.NIF.deallocate_device_mem(ref) |> unwrap!()
   end
 
+  @doc """
+  Attempts to transfer the buffer to the given device infeed.
+
+  Returns `:ok` | `{:error, reason}`
+  """
+  def to_infeed(buffer = %Buffer{}, client = %Client{}, device_id) when is_integer(device_id) do
+    device_id = Client.check_device_compatibility!(client, device_id)
+    Exla.NIF.binary_to_device_infeed(client.ref, buffer.data, buffer.shape.ref, device_id)
+  end
+
+  @doc """
+  Attempts to transfer a buffer from the device outfeed.
+  """
+  def from_outfeed(client = %Client{}, %Shape{ref: shape_ref} = shape, device_id)
+      when is_integer(device_id) do
+    device_id = Client.check_device_compatibility!(client, device_id)
+    data = Exla.NIF.binary_from_device_outfeed(client.ref, shape_ref, device_id) |> unwrap!()
+    %Buffer{data: data, shape: shape}
+  end
+
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
   defp unwrap!(status) when is_atom(status), do: status
