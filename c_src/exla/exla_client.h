@@ -48,6 +48,8 @@ class ExlaBuffer {
 
   bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
 
+  bool zero_copy() { return zero_copy_; }
+
  private:
   // Used for donating this buffer to another function, like `Run`
   xla::ScopedShapedBuffer* buffer_;
@@ -88,7 +90,7 @@ class ExlaExecutable {
 
   xla::StatusOr<xla::ExecutionOutput> Run(ErlNifEnv* env,
                                           ERL_NIF_TERM arguments,
-                                          std::vector<ExlaBuffer**>& buffers,
+                                          std::vector<ExlaBuffer*>& buffers,
                                           int replica,
                                           int partition,
                                           int run_id,

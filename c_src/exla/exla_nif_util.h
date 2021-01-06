@@ -239,16 +239,16 @@ ERL_NIF_TERM make(ErlNifEnv* env, T &var) {
 }
 
 template <typename T>
-ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T*> &var) {
+ERL_NIF_TERM make_list(ErlNifEnv* env, std::vector<T> &var) {
   const uint32 list_size = var.size();
-  ERL_NIF_TERM terms[list_size];
-  int i = 0;
+  std::vector<ERL_NIF_TERM> terms;
+  terms.reserve(list_size);
   for(auto val : var) {
-    ERL_NIF_TERM term = make<T>(env, *val);
-    terms[i++] = term;
+    ERL_NIF_TERM term = make<T>(env, val);
+    terms.emplace_back(term);
   }
 
-  return enif_make_list_from_array(env, terms, list_size);
+  return enif_make_list_from_array(env, &terms[0], list_size);
 }
 
 /*

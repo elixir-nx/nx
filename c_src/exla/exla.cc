@@ -1489,7 +1489,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   exla::uint32 num_args;
-  std::vector<exla::ExlaBuffer**> buffers;
+  std::vector<exla::ExlaBuffer*> buffers;
   if (!enif_get_list_length(env, argv[2], &num_args)) {
     buffers.reserve(num_args);
   }
@@ -1525,7 +1525,7 @@ ERL_NIF_TERM block_until_done(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   if (!exla::get<xla::StatusOr<xla::ExecutionOutput>>(env, argv[1], execution_status)) {
     return exla::error(env, "Unable to get execution status.");
   }
-  if (!exla::get_list<exla::ExlaBuffer**>(env, argv[2], buffers)) {
+  if (!exla::get_list<exla::ExlaBuffer*>(env, argv[2], buffers)) {
     return exla::error(env, "Unable to get buffers.");
   }
   if (!exla::get(env, argv[3], &device_id)) {
@@ -1568,7 +1568,7 @@ ERL_NIF_TERM block_until_done(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
     EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple,
       (*client)->ErlListFromBuffer(env, buffer_ref), env);
     delete buffer_ref;
-    return tuple;
+    return exla::ok(env, tuple);
   } else {
     EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
       (*client)->ErlBinFromBuffer(buffer_ref), env);

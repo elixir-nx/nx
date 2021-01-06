@@ -83,7 +83,7 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
 
 xla::StatusOr<xla::ExecutionOutput> ExlaExecutable::Run(ErlNifEnv* env,
                                                         ERL_NIF_TERM arguments,
-                                                        std::vector<ExlaBuffer**>& buffers,
+                                                        std::vector<ExlaBuffer*>& buffers,
                                                         int replica,
                                                         int partition,
                                                         int run_id,
@@ -155,7 +155,7 @@ xla::StatusOr<xla::ExecutionOutput> ExlaExecutable::Run(ErlNifEnv* env,
         });
 
       inputs.push_back(std::move(inp));
-      buffers.push_back(&buf);
+      buffers.emplace_back(buf);
 
     } else if (get<ExlaBuffer*>(env, head, buffer)) {
       if (*buffer == NULL) {
