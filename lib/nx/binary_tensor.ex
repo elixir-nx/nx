@@ -128,7 +128,10 @@ defmodule Nx.BinaryTensor do
   defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
   defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
 
-  # TODO: Use out
+  ## Pad
+
+  # We ignore the out because we need to recur over the shape
+  # as we transpose and build the rest.
   def pad(t, _out, pad_value, padding_config) do
     pad_value = to_scalar(pad_value)
 
@@ -138,17 +141,75 @@ defmodule Nx.BinaryTensor do
 
       {_} ->
         [{edge_low, edge_high}] = padding_config
-        Nx.Util.pad_last_dim(t, pad_value, edge_low, edge_high)
+        pad_last_dim(t, pad_value, edge_low, edge_high)
 
       _ ->
         permutation = for i <- 0..(Nx.rank(t) - 2), do: i
         permutation = [Nx.rank(t) - 1 | permutation]
 
         for {edge_low, edge_high} <- Enum.reverse(padding_config), reduce: t do
-          acc ->
-            Nx.transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation)
+          acc -> Nx.transpose(pad_last_dim(acc, pad_value, edge_low, edge_high), permutation)
         end
     end
+  end
+
+  # Add padding to the high and low ends of the last dimension of a tensor
+  defp pad_last_dim(%T{shape: shape, type: {_, size} = type} = t, value, edge_low, edge_high) do
+    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
+    new_shape = pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high)
+
+    {edge_low_padding, edge_high_padding} =
+      match_types [type] do
+        edge_high_padding =
+          if edge_high <= 0,
+            do: <<>>,
+            else: for(_ <- 1..edge_high, into: <<>>, do: <<write!(value, 0)>>)
+
+        edge_low_padding =
+          if edge_low <= 0,
+            do: <<>>,
+            else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
+
+        {edge_low_padding, edge_high_padding}
+      end
+
+    data =
+      for bin <- view, into: <<>> do
+        cond do
+          edge_low < 0 and edge_high < 0 ->
+            low_byte = abs(edge_low) * size
+            high_byte = abs(edge_high) * size
+            new_bytes = byte_size(bin) * div(size, 8) - high_byte - low_byte
+
+            <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> =
+              bin
+
+            new_bin
+
+          edge_low < 0 and edge_high >= 0 ->
+            low_byte = abs(edge_low) * size
+            <<_::size(low_byte)-bitstring, new_bin::bitstring>> = bin
+            <<new_bin::bitstring, edge_high_padding::bitstring>>
+
+          edge_low >= 0 and edge_high < 0 ->
+            high_byte = abs(edge_high) * size
+            new_bytes = byte_size(bin) * div(size, 8) - high_byte
+            <<new_bin::size(new_bytes)-bitstring, _::size(high_byte)-bitstring>> = bin
+            <<edge_low_padding::bitstring, new_bin::bitstring>>
+
+          true ->
+            <<edge_low_padding::bitstring, bin::bitstring, edge_high_padding::bitstring>>
+        end
+      end
+
+    data(data, %{t | type: type, shape: new_shape})
+  end
+
+  defp pad_in_dim(shape, dim, edge_low, edge_high) do
+    dim = Nx.Shape.normalize_axis(shape, dim)
+    dim_size = elem(shape, dim)
+    new_dim = dim_size + edge_high + edge_low
+    put_elem(shape, dim, new_dim)
   end
 
   ## Two-element
@@ -168,9 +229,8 @@ defmodule Nx.BinaryTensor do
     data(data, out)
   end
 
-  # TODO: Use out
-  def dot(t1, axes1, t2, axes2, _out) do
-    Nx.Util.zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
+  def dot(t1, axes1, t2, axes2, out) do
+    zip_reduce(t1, axes1, t2, axes2, out, 0, fn {lhs, rhs}, acc ->
       res = lhs * rhs + acc
       {res, res}
     end)
@@ -418,11 +478,8 @@ defmodule Nx.BinaryTensor do
 
   ## Aggregation
 
-  # TODO: Use out
   def sum(tensor, out, opts) do
-    opts = [type: out.type] ++ opts
-    {tensor, _} = Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
-    tensor
+    reduce(tensor, out, 0, opts, fn x, acc -> {x + acc, x + acc} end)
   end
 
   def argmin(tensor, out, opts) do
@@ -445,25 +502,154 @@ defmodule Nx.BinaryTensor do
     argmin_or_max(tensor, out, comparator, opts[:axis])
   end
 
-  # TODO: out
   defp argmin_or_max(tensor, out, comparator, axis) do
-    axes = if axis, do: [axis], else: nil
-    opts = [axes: axes, type: out.type]
+    opts = if axis, do: [axes: [axis]], else: []
 
-    {tensor, _accs} =
-      Nx.Util.reduce(tensor, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
-        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-          {i, {i + 1, x, i}}
-        else
-          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+    reduce(tensor, out, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+      if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+        {i, {i + 1, x, i}}
+      else
+        {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+      end
+    end)
+  end
+
+  ## Reduce
+
+  def reduce(tensor, out, acc, opts, fun) when is_list(opts) and is_function(fun, 2) do
+    %T{type: {_, size} = type, shape: shape} = tensor
+
+    view =
+      if axes = opts[:axes] do
+        aggregate_axes(to_binary(tensor), axes, shape, size)
+      else
+        [to_binary(tensor)]
+      end
+
+    data =
+      for axis <- view do
+        {result, _} =
+          match_types [type] do
+            for <<match!(var, 0) <- axis>>, reduce: {<<>>, acc} do
+              {_, acc} -> fun.(read!(var, 0), acc)
+            end
+          end
+
+        scalar_to_binary(result, out.type)
+      end
+
+    data(data, out)
+  end
+
+  ## Zip reduce
+
+  def zip_reduce(t1, [], t2, [], %{type: type} = out, acc, fun) do
+    b1 = to_binary(t1)
+    b2 = to_binary(t2)
+
+    data =
+      match_types [t1.type, t2.type] do
+        for <<match!(left, 0) <- b1>>, <<match!(right, 1) <- b2>>, into: <<>> do
+          {result, _} = fun.({read!(left, 0), read!(right, 1)}, acc)
+          scalar_to_binary(result, type)
         end
-      end)
+      end
 
-    tensor
+    data(data, out)
+  end
+
+  def zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, %{type: type} = out, acc, fun)
+      when is_function(fun, 2) do
+    {_, s1} = left_type = t1.type
+    {_, s2} = right_type = t2.type
+
+    v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
+    v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
+
+    data =
+      for b1 <- v1, b2 <- v2, into: <<>> do
+        {bin, _acc} = bin_zip_reduce(b1, b2, left_type, right_type, <<>>, acc, fun)
+        scalar_to_binary(bin, type)
+      end
+
+    data(data, out)
+  end
+
+  # Helper for reducing down a single axis over two tensors,
+  # returning tensor data and a final accumulator.
+  defp bin_zip_reduce(<<>>, <<>>, _left_type, _right_type, bin, acc, _fun),
+    do: {bin, acc}
+
+  defp bin_zip_reduce(b1, b2, left_type, right_type, _bin, acc, fun) do
+    {head1, rest1} =
+      match_types [left_type] do
+        <<match!(x, 0), rest1::binary>> = b1
+        {read!(x, 0), rest1}
+      end
+
+    {head2, rest2} =
+      match_types [right_type] do
+        <<match!(y, 0), rest2::binary>> = b2
+        {read!(y, 0), rest2}
+      end
+
+    {bin, acc} = fun.({head1, head2}, acc)
+    bin_zip_reduce(rest1, rest2, left_type, right_type, bin, acc, fun)
   end
 
   ## Helpers
 
   defp data(binary, t) when is_binary(binary), do: %{t | data: {Nx.BitStringDevice, binary}}
   defp data(other, t), do: %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(other)}}
+
+  ## Aggregation helpers
+
+  defp aggregate_axes(binary, axes, shape, size) do
+    {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
+
+    view =
+      for <<chunk::size(chunk_size)-bitstring <- binary>> do
+        weighted_traverse(path, chunk, read_size)
+      end
+
+    List.flatten(view)
+  end
+
+  defp aggregate_axes([_ | _] = axes, shape, size) do
+    axes = Enum.sort(axes)
+    min = hd(axes)
+    weighted_shape = weighted_shape(shape, size)
+    [{axis_count, axis_weight} | _] = weighted_shape = Enum.drop(weighted_shape, min)
+    chunk_size = axis_count * axis_weight
+
+    # The goal of aggregate path is to split the paths
+    # we are reducing from the ones we are keeping as is.
+    {reverse_pre, reverse_pos} = aggregate_path(weighted_shape, axes, min, [], [])
+
+    # Now if we are reducing on the last dimensions, we
+    # can increase the read size.
+    {reverse_pos, read_size} =
+      aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
+
+    path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
+    {chunk_size, read_size, path}
+  end
+
+  defp aggregate_axes(axes, _shape, _size) do
+    raise ArgumentError, ":axes must be a non empty list, got: #{inspect(axes)}"
+  end
+
+  defp aggregate_path([pair | shape], [i | axes], i, pre, pos),
+    do: aggregate_path(shape, axes, i + 1, pre, [pair | pos])
+
+  defp aggregate_path([pair | shape], axes, i, pre, pos),
+    do: aggregate_path(shape, axes, i + 1, [pair | pre], pos)
+
+  defp aggregate_path([], [], _i, pre, pos), do: {pre, pos}
+
+  defp aggregate_read([{axis, weight} | shape], i, [i | axis], _size),
+    do: aggregate_read(shape, i - 1, axis, axis * weight)
+
+  defp aggregate_read(shape, _i, _axis, size),
+    do: {shape, size}
 end

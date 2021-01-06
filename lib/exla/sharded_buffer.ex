@@ -29,7 +29,7 @@ defmodule Exla.ShardedBuffer do
     buffers =
       for i <- 0..(num_shards - 1) do
         consumed = i * shard_size
-        <<_::size(consumed)-binary, shard::size(shard_size)-binary, _::binary>> = binary
+        <<_::size(consumed)-bitstring, shard::size(shard_size)-bitstring, _::bitstring>> = binary
         Buffer.buffer(shard, sharded_shape)
       end
 
