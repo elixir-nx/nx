@@ -288,6 +288,7 @@ defmodule Exla.Defn do
        when op in @unary_noop_integer_op do
     arg = to_operator(builder, arg)
 
+    # TODO: First two branches can be removed now
     case op_type(arg) do
       {:s, _} -> arg
       {:u, _} -> arg

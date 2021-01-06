@@ -2433,27 +2433,12 @@ defmodule Nx do
 
   ## Unary ops
 
-  funs = [
-    exp: {"exponential", &quote(do: :math.exp(unquote(&1)))},
-    expm1: {"exponential minus one", &quote(do: :math.exp(unquote(&1)) - 1)},
-    log: {"natural log", &quote(do: :math.log(unquote(&1)))},
-    log1p: {"natural log plus one", &quote(do: :math.log(unquote(&1) + 1))},
-    logistic: {"standard logistic (a sigmoid)", &quote(do: 1 / (1 + :math.exp(-unquote(&1))))},
-    cos: {"cosine", &quote(do: :math.cos(unquote(&1)))},
-    sin: {"sine", &quote(do: :math.sin(unquote(&1)))},
-    tanh: {"hyperbolic tangent", &quote(do: :math.tanh(unquote(&1)))},
-    sqrt: {"square root", &quote(do: :math.sqrt(unquote(&1)))},
-    rsqrt: {"reverse square root", &quote(do: 1 / :math.sqrt(unquote(&1)))},
-    cbrt: {"cube root", &quote(do: :math.pow(unquote(&1), 1 / 3))}
-  ]
+  for {name, {desc, code}} <- Nx.BinaryTensor.unary_funs() do
+    formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
-  for {name, {desc, code}} <- funs do
-    applied = code.(Macro.var(:x, nil))
-    formula = Macro.to_string(applied)
-
-    {one, _} = Code.eval_quoted(applied, x: 1)
-    {two, _} = Code.eval_quoted(applied, x: 2)
-    {three, _} = Code.eval_quoted(applied, x: 3)
+    {one, _} = Code.eval_quoted(code, x: 1)
+    {two, _} = Code.eval_quoted(code, x: 2)
+    {three, _} = Code.eval_quoted(code, x: 3)
 
     @doc """
     Calculates the #{desc} of each element in the tensor.
@@ -2477,23 +2462,11 @@ defmodule Nx do
         >
 
     """
-    def unquote(name)(tensor), do: unary_float(tensor, fn x -> unquote(applied) end)
-  end
-
-  defp unary_float(tensor, fun) do
-    %T{type: input_type} = t = tensor(tensor)
-
-    data = Nx.Util.to_bitstring(t)
-    output_type = Nx.Type.to_floating(input_type)
-
-    data =
-      match_types [input_type, output_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>> do
-          <<write!(fun.(read!(seg, 0)), 1)>>
-        end
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}, type: output_type}
+    def unquote(name)(tensor) do
+      tensor = tensor(tensor)
+      type = Nx.Type.to_floating(tensor.type)
+      impl(tensor).unquote(name)(tensor, %{tensor | type: type})
+    end
   end
 
   @doc """
@@ -2529,18 +2502,8 @@ defmodule Nx do
 
   """
   def negate(tensor) do
-    %T{type: input_type} = t = tensor(tensor)
-
-    data = Nx.Util.to_bitstring(t)
-
-    data =
-      match_types [input_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>> do
-          <<write!(-read!(seg, 0), 0)>>
-        end
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}}
+    tensor = tensor(tensor)
+    impl(tensor).negate(tensor, tensor)
   end
 
   @doc """
@@ -2561,24 +2524,9 @@ defmodule Nx do
 
   """
   def sign(tensor) do
-    %T{type: input_type} = t = tensor(tensor)
-
-    data = Nx.Util.to_bitstring(t)
-
-    data =
-      match_types [input_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>> do
-          <<write!(erlang_sign(read!(seg, 0)), 0)>>
-        end
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}}
+    tensor = tensor(tensor)
+    impl(tensor).sign(tensor, tensor)
   end
-
-  @compile {:inline, erlang_sign: 1}
-  defp erlang_sign(n) when n < 0, do: -1
-  defp erlang_sign(n) when n > 0, do: 1
-  defp erlang_sign(n), do: n
 
   @doc """
   Computes the absolute value of each element in the tensor.
@@ -2593,18 +2541,8 @@ defmodule Nx do
 
   """
   def abs(tensor) do
-    %T{type: input_type} = t = tensor(tensor)
-
-    data = Nx.Util.to_bitstring(t)
-
-    data =
-      match_types [input_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>> do
-          <<write!(:erlang.abs(read!(seg, 0)), 0)>>
-        end
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}}
+    tensor = tensor(tensor)
+    impl(tensor).sign(tensor, tensor)
   end
 
   @doc """
@@ -2636,19 +2574,9 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def bitwise_not(tensor) do
-    %T{type: input_type} = t = tensor(tensor)
-
-    assert_bitwise_type!(input_type)
-    data = Nx.Util.to_bitstring(t)
-
-    data =
-      match_types [input_type] do
-        for <<match!(seg, 0) <- data>>, into: <<>> do
-          <<write!(:erlang.bnot(read!(seg, 0)), 0)>>
-        end
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}}
+    tensor = tensor(tensor)
+    assert_bitwise_type!(tensor.type)
+    impl(tensor).bitwise_not(tensor, tensor)
   end
 
   @doc """
@@ -2686,27 +2614,10 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def population_count(tensor) do
-    %T{type: {_, size} = input_type} = t = tensor(tensor)
-
-    assert_bitwise_type!(input_type)
-
-    data =
-      for <<seg::unsigned-size(size)-native <- Nx.Util.to_bitstring(t)>>, into: <<>> do
-        match_types [input_type] do
-          <<write!(erlang_popcount(seg, 0), 0)>>
-        end
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}}
+    tensor = tensor(tensor)
+    assert_bitwise_type!(tensor.type)
+    impl(tensor).population_count(tensor, tensor)
   end
-
-  # https://en.wikipedia.org/wiki/Hamming_weight
-  # There are algorithms with faster worst case but they are size specific.
-  # The implementation below is also the most efficient for low counts. Given
-  # our integers are always 64 bits internally, we will have a lot of zeros
-  # internally, so this should be the fastest.
-  defp erlang_popcount(0, count), do: count
-  defp erlang_popcount(n, count), do: erlang_popcount(n &&& n - 1, count + 1)
 
   @doc """
   Counts the number of leading zeros of each element in the tensor.
@@ -2767,64 +2678,11 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def count_leading_zeros(tensor) do
-    %T{type: {_, size} = input_type} = t = tensor(tensor)
-
-    assert_bitwise_type!(input_type)
-
-    data =
-      for <<seg::unsigned-size(size)-native <- Nx.Util.to_bitstring(t)>>, into: <<>> do
-        match_types [input_type] do
-          <<write!(erlang_clz(seg, size), 0)>>
-        end
-      end
-
-    %{t | data: {Nx.BitStringDevice, data}}
+    tensor = tensor(tensor)
+    assert_bitwise_type!(tensor.type)
+    impl(tensor).count_leading_zeros(tensor, tensor)
   end
 
-  defp erlang_clz(0, size), do: size
-  defp erlang_clz(n, 64), do: erlang_clz64(n)
-  defp erlang_clz(n, 32), do: erlang_clz32(n)
-  defp erlang_clz(n, 16), do: erlang_clz16(n)
-  defp erlang_clz(n, 8), do: erlang_clz8(n)
-
-  defp erlang_clz64(num) do
-    case num &&& 0xFFFFFFFF00000000 do
-      0 -> 32 + erlang_clz32(num)
-      _ -> erlang_clz32(num >>> 32)
-    end
-  end
-
-  defp erlang_clz32(num) do
-    case num &&& 0xFFFF0000 do
-      0 -> 16 + erlang_clz16(num)
-      _ -> erlang_clz16(num >>> 16)
-    end
-  end
-
-  defp erlang_clz16(num) do
-    case num &&& 0xFF00 do
-      0 -> 8 + erlang_clz8(num)
-      _ -> erlang_clz8(num >>> 8)
-    end
-  end
-
-  defp erlang_clz8(num) do
-    case num &&& 0xF0 do
-      0 -> 4 + erlang_clz4(num)
-      _ -> erlang_clz4(num >>> 4)
-    end
-  end
-
-  defp erlang_clz4(num) do
-    case num &&& 0xC do
-      0 -> 2 + erlang_clz2(num)
-      _ -> erlang_clz2(num >>> 2)
-    end
-  end
-
-  defp erlang_clz2(0), do: 2
-  defp erlang_clz2(1), do: 1
-  defp erlang_clz2(_), do: 0
 
   for {name, desc} <- [floor: "floor", ceil: "ceil", round: "round (away from zero)"] do
     [res1, res2, res3, res4] = Enum.map([-1.5, -0.5, 0.5, 1.5], &apply(:erlang, name, [&1]))
@@ -2853,20 +2711,8 @@ defmodule Nx do
     """
     def unquote(name)(tensor) do
       case tensor(tensor) do
-        %T{type: {type, _}} = t when type in [:s, :u] ->
-          t
-
-        %T{type: input_type} = t ->
-          data = Nx.Util.to_bitstring(t)
-
-          data =
-            match_types [input_type] do
-              for <<match!(seg, 0) <- data>>, into: <<>> do
-                <<write!(:erlang.unquote(name)(read!(seg, 0)), 0)>>
-              end
-            end
-
-          %{t | data: {Nx.BitStringDevice, data}}
+        %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
+        %T{} = tensor -> impl(tensor).unquote(name)(tensor, tensor)
       end
     end
   end
@@ -3054,6 +2900,7 @@ defmodule Nx do
       >
 
   """
+  # TODO: remove mean from Exla.Lib
   def mean(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
     tensor = tensor(tensor)

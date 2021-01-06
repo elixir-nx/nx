@@ -7,6 +7,25 @@ defmodule Nx.BinaryTensor do
   alias Nx.Tensor, as: T
   import Bitwise, only: [>>>: 2, &&&: 2]
 
+  ## Reflection
+
+  @unary_funs [
+    exp: {"exponential", quote(do: :math.exp(var!(x)))},
+    expm1: {"exponential minus one", quote(do: :math.exp(var!(x)) - 1)},
+    log: {"natural log", quote(do: :math.log(var!(x)))},
+    log1p: {"natural log plus one", quote(do: :math.log(var!(x) + 1))},
+    logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x))))},
+    cos: {"cosine", quote(do: :math.cos(var!(x)))},
+    sin: {"sine", quote(do: :math.sin(var!(x)))},
+    tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
+    sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
+    rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
+    cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))},
+  ]
+
+  @doc false
+  def unary_funs, do: @unary_funs
+
   ## Broadcast
 
   @doc false
@@ -289,6 +308,92 @@ defmodule Nx.BinaryTensor do
   defp element_less(_, a, b), do: if(a < b, do: 1, else: 0)
   defp element_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
   defp element_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
+
+  ## Element wiwse unary ops
+
+  for {name, {_desc, code}} <- @unary_funs do
+    def unquote(name)(tensor, out) do
+      element_wise_unary_op(tensor, out, fn x -> unquote(code) end)
+    end
+  end
+
+  def abs(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.abs/1)
+  def bitwise_not(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.bnot/1)
+  def ceil(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.ceil/1)
+  def count_leading_zeros(tensor, out), do: element_wise_unary_op(tensor, out, &element_clz/1)
+  def floor(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.floor/1)
+  def negate(tensor, out), do: element_wise_unary_op(tensor, out, &-/1)
+  def population_count(tensor, out), do: element_wise_unary_op(tensor, out, &element_popcount/1)
+  def round(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.round/1)
+  def sign(tensor, out), do: element_wise_unary_op(tensor, out, &element_sign/1)
+
+  defp element_sign(n) when n < 0, do: -1
+  defp element_sign(n) when n > 0, do: 1
+  defp element_sign(n), do: n
+
+  # https://en.wikipedia.org/wiki/Hamming_weight
+  # There are algorithms with faster worst case but they are size specific.
+  # The implementation below is also the most efficient for low counts. Given
+  # our integers are always 64 bits internally, we will have a lot of zeros
+  # internally, so this should be the fastest.
+  defp element_popcount(0, count), do: count
+  defp element_popcount(n, count), do: element_popcount(n &&& n - 1, count + 1)
+
+  defp element_wise_unary_op(tensor, out, fun) do
+    data =
+      match_types [tensor.type, out.type] do
+        for <<match!(seg, 0) <- to_binary(tensor)>>, into: <<>> do
+          <<write!(fun.(read!(seg, 0)), 1)>>
+        end
+      end
+
+    data(data, out)
+  end
+
+  defp element_clz(0, size), do: size
+  defp element_clz(n, 64), do: element_clz64(n)
+  defp element_clz(n, 32), do: element_clz32(n)
+  defp element_clz(n, 16), do: element_clz16(n)
+  defp element_clz(n, 8), do: element_clz8(n)
+
+  defp element_clz64(num) do
+    case num &&& 0xFFFFFFFF00000000 do
+      0 -> 32 + element_clz32(num)
+      _ -> element_clz32(num >>> 32)
+    end
+  end
+
+  defp element_clz32(num) do
+    case num &&& 0xFFFF0000 do
+      0 -> 16 + element_clz16(num)
+      _ -> element_clz16(num >>> 16)
+    end
+  end
+
+  defp element_clz16(num) do
+    case num &&& 0xFF00 do
+      0 -> 8 + element_clz8(num)
+      _ -> element_clz8(num >>> 8)
+    end
+  end
+
+  defp element_clz8(num) do
+    case num &&& 0xF0 do
+      0 -> 4 + element_clz4(num)
+      _ -> element_clz4(num >>> 4)
+    end
+  end
+
+  defp element_clz4(num) do
+    case num &&& 0xC do
+      0 -> 2 + element_clz2(num)
+      _ -> element_clz2(num >>> 2)
+    end
+  end
+
+  defp element_clz2(0), do: 2
+  defp element_clz2(1), do: 1
+  defp element_clz2(_), do: 0
 
   ## Conversions
 
