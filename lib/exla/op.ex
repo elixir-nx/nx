@@ -251,19 +251,12 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  # Precision Config is accumulation precision: https://github.com/google/jax/issues/4873
   def dot(
         %Op{builder: builder, ref: left},
         %Op{builder: builder, ref: right},
-        precision_config \\ :default
+        precision_config \\ nil
       ) do
-    config =
-      case precision_config do
-        :default -> 0
-        :high -> 1
-        :highest -> 2
-      end
-
+    config = get_precision_config_int(precision_config)
     ref = Exla.NIF.dot(left, right, config) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -272,15 +265,9 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: left},
         %Op{builder: builder, ref: right},
         dimnos,
-        precision_config \\ :default
+        precision_config \\ nil
       ) do
-    config =
-      case precision_config do
-        :default -> 0
-        :high -> 1
-        :highest -> 2
-      end
-
+    config = get_precision_config_int(precision_config)
     ref = Exla.NIF.dot_general(left, right, dimnos, config) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -367,6 +354,22 @@ defmodule Exla.Op do
   end
 
   ## Helpers
+
+  defp get_precision_config_int(precision_config) do
+    if precision_config do
+      case precision_config do
+        :default -> 0
+        :high -> 1
+        :highest -> 2
+      end
+    else
+      case Application.fetch_env!(:exla, :precision) do
+        :default -> 0
+        :high -> 1
+        :highest -> 2
+      end
+    end
+  end
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
