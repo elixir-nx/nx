@@ -277,9 +277,8 @@ ERL_NIF_TERM ErlListFromLiteral(ErlNifEnv* env, xla::Literal& literal) {
       ErlNifBinary binary;
       enif_alloc_binary(size, &binary);
 
-      // No need to copy, just move to the underlying bytes in memory
       void *src_mem = const_cast<void*>(lit.untyped_data());
-      std::memmove(binary.data, src_mem, size);
+      std::memcpy(binary.data, src_mem, size);
 
       ERL_NIF_TERM term = enif_make_binary(env, &binary);
       data.emplace_back(term);
@@ -331,9 +330,8 @@ xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(ExlaBuffer* buffer) {
     const stream_executor::DeviceMemoryBase mem_buffer =
       buffer->buffer()->root_buffer();
 
-    // No need to copy, just move the underlying bytes in memory
     void* src_mem = const_cast<void *>(mem_buffer.opaque());
-    std::memmove(binary.data, src_mem, size);
+    std::memcpy(binary.data, src_mem, size);
 
     return binary;
   }
@@ -353,9 +351,8 @@ xla::StatusOr<ErlNifBinary> ExlaClient::ErlBinFromBuffer(ExlaBuffer* buffer) {
   ErlNifBinary binary;
   enif_alloc_binary(size, &binary);
 
-  // No need to copy, just move to the underlying bytes in memory
   void *src_mem = const_cast<void*>(literal.untyped_data());
-  std::memmove(binary.data, src_mem, size);
+  std::memcpy(binary.data, src_mem, size);
 
   return binary;
 }
