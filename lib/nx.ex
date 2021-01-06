@@ -84,7 +84,6 @@ defmodule Nx do
 
   alias Nx.Tensor, as: T
   import Kernel, except: [max: 2, min: 2]
-  import Bitwise, only: [>>>: 2, &&&: 2]
   import Nx.Shared
 
   ## Creation API
@@ -2542,7 +2541,7 @@ defmodule Nx do
   """
   def abs(tensor) do
     tensor = tensor(tensor)
-    impl(tensor).sign(tensor, tensor)
+    impl(tensor).abs(tensor, tensor)
   end
 
   @doc """
@@ -2831,10 +2830,18 @@ defmodule Nx do
   """
   def sum(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
-    tensor = tensor(tensor)
-    opts = Keyword.put(opts, :type, Nx.Type.to_aggregate(tensor.type))
-    {tensor, _} = Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
-    tensor
+    %{shape: shape, type: type} = tensor = tensor(tensor)
+
+    {shape, axes} =
+      if axes = opts[:axes] do
+        axes = Nx.Shape.normalize_axes(shape, axes)
+        {Nx.Shape.contract(shape, axes), axes}
+      else
+        {{}, nil}
+      end
+
+    type = Nx.Type.to_aggregate(type)
+    impl(tensor).sum(tensor, %{tensor | type: type, shape: shape}, axes: axes)
   end
 
   @doc """
@@ -2902,7 +2909,6 @@ defmodule Nx do
   """
   # TODO: remove mean from Exla.Lib
   def mean(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes])
     tensor = tensor(tensor)
     divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
   end
@@ -2999,15 +3005,7 @@ defmodule Nx do
       >
   """
   def argmax(tensor, opts \\ []) do
-    assert_keys!(opts, [:axis, :tie_break])
-
-    comparator =
-      case opts[:tie_break] || :low do
-        :high -> &>=/2
-        :low -> &>/2
-      end
-
-    argmin_or_max(tensor, comparator, opts)
+    argmin_or_max(tensor, :argmax, opts)
   end
 
   @doc """
@@ -3093,39 +3091,33 @@ defmodule Nx do
       >
   """
   def argmin(tensor, opts \\ []) do
-    assert_keys!(opts, [:axis, :tie_break])
-
-    comparator =
-      case opts[:tie_break] || :low do
-        :high -> &<=/2
-        :low -> &</2
-      end
-
-    argmin_or_max(tensor, comparator, opts)
+    argmin_or_max(tensor, :argmin, opts)
   end
 
-  defp argmin_or_max(number, _comparator, opts) when is_number(number), do: tensor(0, opts)
+  defp argmin_or_max(tensor, op, opts) do
+    assert_keys!(opts, [:axis, :tie_break])
 
-  defp argmin_or_max(t = %T{}, comparator, opts) do
-    case tensor(t) do
-      %T{shape: {}} ->
-        tensor(0, opts)
+    tie_break =
+      case opts[:tie_break] || :low do
+        :high -> :high
+        :low -> :low
+        other ->
+          raise ArgumentError,
+              "unknown value for :tie_break, expected :high or :low, got: #{inspect other}"
+      end
 
-      %T{} = t ->
-        axes = if axis = opts[:axis], do: [axis], else: nil
-        opts = [axes: axes, type: {:s, 64}]
+    %{shape: shape} = tensor = tensor(tensor)
 
-        {tensor, _accs} =
-          Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
-            if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-              {i, {i + 1, x, i}}
-            else
-              {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-            end
-          end)
+    {shape, axis} =
+      if axis = opts[:axis] do
+        axis = Nx.Shape.normalize_axis(shape, axis)
+        {Nx.Shape.contract(shape, [axis]), axis}
+      else
+        {{}, nil}
+      end
 
-        tensor
-    end
+    opts = [tie_break: tie_break, axis: axis]
+    apply(impl(tensor), op, [tensor, %{tensor | type: {:s, 64}, shape: shape}, opts])
   end
 
   ## Matrix ops

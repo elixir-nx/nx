@@ -317,13 +317,33 @@ defmodule Nx.BinaryTensor do
     end
   end
 
+  def count_leading_zeros(%{type: {_, size} = type} = tensor, out) do
+    data =
+      for <<seg::unsigned-size(size)-native <- to_binary(tensor)>>, into: <<>> do
+        match_types [type] do
+          <<write!(element_clz(seg, size), 0)>>
+        end
+      end
+
+    data(data, out)
+  end
+
+  def population_count(%{type: {_, size} = type} = tensor, out) do
+    data =
+      for <<seg::unsigned-size(size)-native <- to_binary(tensor)>>, into: <<>> do
+        match_types [type] do
+          <<write!(element_popcount(seg, 0), 0)>>
+        end
+      end
+
+    data(data, out)
+  end
+
   def abs(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.abs/1)
   def bitwise_not(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.bnot/1)
   def ceil(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.ceil/1)
-  def count_leading_zeros(tensor, out), do: element_wise_unary_op(tensor, out, &element_clz/1)
   def floor(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.floor/1)
   def negate(tensor, out), do: element_wise_unary_op(tensor, out, &-/1)
-  def population_count(tensor, out), do: element_wise_unary_op(tensor, out, &element_popcount/1)
   def round(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.round/1)
   def sign(tensor, out), do: element_wise_unary_op(tensor, out, &element_sign/1)
 
@@ -394,6 +414,52 @@ defmodule Nx.BinaryTensor do
   defp element_clz2(0), do: 2
   defp element_clz2(1), do: 1
   defp element_clz2(_), do: 0
+
+  ## Aggregation
+
+  # TODO: Use out
+  def sum(tensor, out, opts) do
+    opts = [type: out.type] ++ opts
+    {tensor, _} = Nx.Util.reduce(tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
+    tensor
+  end
+
+  def argmin(tensor, out, opts) do
+    comparator =
+      case opts[:tie_break] do
+        :high -> &<=/2
+        :low -> &</2
+      end
+
+    argmin_or_max(tensor, out, comparator, opts[:axis])
+  end
+
+  def argmax(tensor, out, opts) do
+    comparator =
+      case opts[:tie_break] do
+        :high -> &>=/2
+        :low -> &>/2
+      end
+
+    argmin_or_max(tensor, out, comparator, opts[:axis])
+  end
+
+  # TODO: out
+  defp argmin_or_max(tensor, out, comparator, axis) do
+    axes = if axis, do: [axis], else: nil
+    opts = [axes: axes, type: out.type]
+
+    {tensor, _accs} =
+      Nx.Util.reduce(tensor, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          {i, {i + 1, x, i}}
+        else
+          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+        end
+      end)
+
+    tensor
+  end
 
   ## Conversions
 
