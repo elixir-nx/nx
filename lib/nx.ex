@@ -1218,8 +1218,8 @@ defmodule Nx do
       output_type = Nx.Type.merge_tensors(left, right)
       output_type = unquote(cast)
 
-      %T{type: {_, left_size} = left_type, shape: left_shape} = left = tensor(left)
-      %T{type: {_, right_size} = right_type, shape: right_shape} = right = tensor(right)
+      %T{shape: left_shape} = left = tensor(left)
+      %T{shape: right_shape} = right = tensor(right)
 
       shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
       count = Nx.Shape.size(shape)
@@ -1253,6 +1253,16 @@ defmodule Nx do
 
       %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
     end
+  end
+
+  defp element_wise_bin_op(left, right, op, fun) do
+    output_type = Nx.Type.merge_tensors(left, right) |> fun.()
+
+    %T{type: {_, left_size} = left_type, shape: left_shape} = left = tensor(left)
+    %T{type: {_, right_size} = right_type, shape: right_shape} = right = tensor(right)
+
+    shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
+    apply(impl(left, right), op, [left, right, %{left | type: output_type, shape: shape}])
   end
 
   defp_element_wise_bin_op.(
@@ -1387,9 +1397,7 @@ defmodule Nx do
       >
 
   """
-  def add(left, right), do: element_wise_bin_arith(left, right, &erlang_add/3)
-  @compile {:inline, erlang_add: 3}
-  defp erlang_add(_, a, b), do: a + b
+  def add(left, right), do: element_wise_bin_op(left, right, :add, & &1)
 
   @doc """
   Element-wise subtraction of two tensors.
@@ -1453,9 +1461,7 @@ defmodule Nx do
       >
 
   """
-  def subtract(left, right), do: element_wise_bin_arith(left, right, &erlang_subtract/3)
-  @compile {:inline, erlang_subtract: 3}
-  defp erlang_subtract(_, a, b), do: a - b
+  def subtract(left, right), do: element_wise_bin_op(left, right, :subtract, & &1)
 
   @doc """
   Element-wise multiplication of two tensors.
@@ -1519,9 +1525,7 @@ defmodule Nx do
       >
 
   """
-  def multiply(left, right), do: element_wise_bin_arith(left, right, &erlang_multiply/3)
-  @compile {:inline, erlang_multiply: 3}
-  defp erlang_multiply(_, a, b), do: a * b
+  def multiply(left, right), do: element_wise_bin_op(left, right, :multiply, & &1)
 
   @doc """
   Element-wise power of two tensors.
@@ -1567,21 +1571,7 @@ defmodule Nx do
       >
 
   """
-  def power(left, right), do: element_wise_bin_arith(left, right, &erlang_power/3)
-  @compile {:inline, erlang_remainder: 3}
-  defp erlang_power({type, _}, a, b) when type in [:s, :u], do: integer_pow(a, b)
-  defp erlang_power(_, a, b), do: :math.pow(a, b)
-
-  # TODO: Use Integer.pow on Elixir v1.12
-  defp integer_pow(base, exponent) when is_integer(base) and is_integer(exponent) do
-    if exponent < 0, do: :erlang.error(:badarith, [base, exponent])
-    guarded_pow(base, exponent)
-  end
-
-  defp guarded_pow(_, 0), do: 1
-  defp guarded_pow(b, 1), do: b
-  defp guarded_pow(b, e) when (e &&& 1) == 0, do: guarded_pow(b * b, e >>> 1)
-  defp guarded_pow(b, e), do: b * guarded_pow(b * b, e >>> 1)
+  def power(left, right), do: element_wise_bin_op(left, right, :power, & &1)
 
   @doc """
   Element-wise remainder of two tensors.
@@ -1627,10 +1617,7 @@ defmodule Nx do
       >
 
   """
-  def remainder(left, right), do: element_wise_bin_arith(left, right, &erlang_remainder/3)
-  @compile {:inline, erlang_remainder: 3}
-  defp erlang_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
-  defp erlang_remainder(_, a, b), do: :math.fmod(a, b)
+  def remainder(left, right), do: element_wise_bin_op(left, right, :remainder, & &1)
 
   @doc """
   Element-wise division of two tensors.
@@ -1699,9 +1686,7 @@ defmodule Nx do
       >
 
   """
-  def divide(left, right), do: element_wise_bin_float_arith(left, right, &erlang_divide/3)
-  @compile {:inline, erlang_divide: 3}
-  defp erlang_divide(_, a, b), do: a / b
+  def divide(left, right), do: element_wise_bin_op(left, right, :divide, &Nx.Type.to_floating/1)
 
   @doc """
   Element-wise arc tangent of two tensors.
@@ -1752,9 +1737,7 @@ defmodule Nx do
       {2, 2}
 
   """
-  def arctan2(left, right), do: element_wise_bin_float_arith(left, right, &erlang_arctan2/3)
-  @compile {:inline, erlang_arctan2: 3}
-  defp erlang_arctan2(_, a, b), do: :math.atan2(a, b)
+  def arctan2(left, right), do: element_wise_bin_op(left, right, :arctan2, &Nx.Type.to_floating/1)
 
   @doc """
   Element-wise maximum of two tensors.
@@ -3692,10 +3675,13 @@ defmodule Nx do
 
   """
   def dot(t1, axes1, t2, axes2) do
-    Nx.Util.zip_reduce(t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
-      res = lhs * rhs + acc
-      {res, res}
-    end)
+    output_type = Nx.Type.merge_tensors(t1, t2)
+    %T{shape: s1} = t1 = tensor(t1)
+    %T{shape: s2} = t2 = tensor(t2)
+    axes1 = Nx.Shape.normalize_axes(s1, axes1)
+    axes2 = Nx.Shape.normalize_axes(s2, axes2)
+    output_shape = Nx.Shape.zip_reduce(s1, axes1, s2, axes2)
+    impl(t1, t2).dot(t1, axes1, t2, axes2, %{t1 | type: output_type, shape: output_shape})
   end
 
   @doc """
@@ -3739,21 +3725,9 @@ defmodule Nx do
   """
   def outer(t1, t2) do
     output_type = Nx.Type.merge_tensors(t1, t2)
-    %T{shape: s1, type: left_type} = t1 = tensor(t1)
-    %T{shape: s2, type: right_type} = t2 = tensor(t2)
-
-    b1 = Nx.Util.to_bitstring(t1)
-    b2 = Nx.Util.to_bitstring(t2)
-
-    data =
-      match_types [left_type, right_type] do
-        for <<match!(left, 0) <- b1>>,
-            <<match!(right, 1) <- b2>>,
-            into: <<>>,
-            do: scalar_to_binary(read!(left, 0) * read!(right, 1), output_type)
-      end
-
-    %T{shape: Nx.Shape.outer(s1, s2), type: output_type, data: {Nx.BitStringDevice, data}}
+    %T{shape: s1} = t1 = tensor(t1)
+    %T{shape: s2} = t2 = tensor(t2)
+    impl(t1, t2).outer(t1, t2, %{t1 | type: output_type, shape: Nx.Shape.outer(s1, s2)})
   end
 
   @doc """
@@ -3921,4 +3895,5 @@ defmodule Nx do
   ## Helpers
 
   defp impl(_), do: Nx.BinaryTensor
+  defp impl(_, _), do: Nx.BinaryTensor
 end
