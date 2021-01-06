@@ -232,7 +232,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize(literal, state)
-       when is_number(literal) or is_atom(literal) or is_bitstring(literal) do
+       when is_number(literal) or is_atom(literal) or is_binary(literal) do
     {literal, state}
   end
 

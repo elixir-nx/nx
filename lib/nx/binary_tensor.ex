@@ -6,6 +6,7 @@ defmodule Nx.BinaryTensor do
 
   alias Nx.Tensor, as: T
   import Bitwise, only: [>>>: 2, &&&: 2]
+  import Nx.Util, only: [to_binary: 1, to_scalar: 1]
 
   ## Reflection
 
@@ -129,7 +130,7 @@ defmodule Nx.BinaryTensor do
 
   # TODO: Use out
   def pad(t, _out, pad_value, padding_config) do
-    pad_value = Nx.Util.to_scalar(pad_value)
+    pad_value = to_scalar(pad_value)
 
     case t.shape do
       {} ->
@@ -178,7 +179,7 @@ defmodule Nx.BinaryTensor do
   ## Element wise ternary ops
 
   def select(%{shape: {}} = pred, on_true, on_false, out) do
-    if Nx.Util.to_scalar(pred) == 0,
+    if to_scalar(pred) == 0,
       do: broadcast_data(on_false, out.shape) |> data(out),
       else: broadcast_data(on_true, out.shape) |> data(out)
   end
@@ -459,16 +460,6 @@ defmodule Nx.BinaryTensor do
       end)
 
     tensor
-  end
-
-  ## Conversions
-
-  def to_binary(%T{data: {Nx.BitStringDevice, data}}), do: data
-
-  def to_binary(%T{data: {device, _data}}) do
-    raise ArgumentError,
-          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
-            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
   end
 
   ## Helpers

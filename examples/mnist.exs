@@ -76,7 +76,7 @@ defmodule MNIST do
     # Download train images
     {:ok, {_status, _response, train_image_data}} = :httpc.request(:get, {base_url++images, []}, [], [])
 
-    <<_::32, n_images::32, n_rows::32, n_cols::32, images::bitstring>> = train_image_data |> :zlib.gunzip()
+    <<_::32, n_images::32, n_rows::32, n_cols::32, images::binary>> = train_image_data |> :zlib.gunzip()
     IO.puts("Downloaded #{n_images} #{n_rows}x#{n_cols} images\n")
 
     train_images =
@@ -88,7 +88,7 @@ defmodule MNIST do
     # Download train labels
     {:ok, {_status, _response, train_label_data}} = :httpc.request(:get, {base_url++labels, []}, [], [])
 
-    <<_::32, n_labels::32, labels::bitstring>> = train_label_data |> :zlib.gunzip()
+    <<_::32, n_labels::32, labels::binary>> = train_label_data |> :zlib.gunzip()
     IO.puts("Downloaded #{n_labels} labels")
 
     train_labels =

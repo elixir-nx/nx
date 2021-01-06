@@ -36,7 +36,7 @@ defmodule Nx.Defn.Expr do
 
   def to_expr(%T{shape: shape, data: data} = t) do
     case data do
-      {Nx.BitStringDevice, bitstring} when is_bitstring(bitstring) ->
+      {Nx.BitStringDevice, binary} when is_binary(binary) ->
         make_expr(shape, :tensor, [t])
 
       _ ->

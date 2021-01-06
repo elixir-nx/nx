@@ -1,10 +1,10 @@
 defmodule Nx.BitStringDevice do
   @moduledoc """
-  The default implementation of `Nx.Device` that uses the VM bitstrings.
+  The default implementation of `Nx.Device` that uses the VM binarys.
   """
 
   # TODO: Rename to binary device
-  # TODO: Rename to_bitstring to to_binary
+  # TODO: Rename to_binary to to_binary
 
   @behaviour Nx.Device
 

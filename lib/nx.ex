@@ -61,7 +61,7 @@ defmodule Nx do
   The `Nx` library has built-in support for devices. A tensor is
   always allocated in a device, the default device being the
   `Nx.BitStringDevice`, which means the tensor is allocated as a
-  bitstring within the Erlang VM.
+  binary within the Erlang VM.
 
   Most operations in the `Nx` module require the tensor to be
   allocated within the VM but, most often, when running `defn`
@@ -246,7 +246,7 @@ defmodule Nx do
     {dimensions, acc} = flatten_list(list, type, [], [])
 
     {dimensions |> Enum.reverse() |> List.to_tuple(),
-     acc |> Enum.reverse() |> :erlang.list_to_bitstring()}
+     acc |> Enum.reverse() |> :erlang.list_to_binary()}
   end
 
   defp flatten(other, type), do: {{}, scalar_to_binary(other, type)}
@@ -303,7 +303,7 @@ defmodule Nx do
   ### Generating Floats
 
       iex> t = Nx.random_uniform({10})
-      iex> for <<x::float-64-native <- Nx.Util.to_bitstring(t)>> do
+      iex> for <<x::float-64-native <- Nx.Util.to_binary(t)>> do
       ...>   true = x >= 0.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
@@ -312,7 +312,7 @@ defmodule Nx do
       {:f, 64}
 
       iex> t = Nx.random_uniform({5, 5}, type: {:bf, 16})
-      iex> byte_size(Nx.Util.to_bitstring(t))
+      iex> byte_size(Nx.Util.to_binary(t))
       50
       iex> Nx.shape(t)
       {5, 5}
@@ -320,7 +320,7 @@ defmodule Nx do
       {:bf, 16}
 
       iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: {:f, 32})
-      iex> for <<x::float-32-native <- Nx.Util.to_bitstring(t)>> do
+      iex> for <<x::float-32-native <- Nx.Util.to_binary(t)>> do
       ...>   true = x >= -1.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
@@ -331,7 +331,7 @@ defmodule Nx do
   ### Generating Integers
 
       iex> t = Nx.random_uniform({10}, 5, 10, type: {:u, 32})
-      iex> for <<x::32-unsigned-native <- Nx.Util.to_bitstring(t)>> do
+      iex> for <<x::32-unsigned-native <- Nx.Util.to_binary(t)>> do
       ...>   true = x >= 5 and x < 10
       ...> end
       iex> Nx.shape(t)
@@ -340,7 +340,7 @@ defmodule Nx do
       {:u, 32}
 
       iex> t = Nx.random_uniform({5, 5}, -5, 5, type: {:s, 64})
-      iex> for <<x::64-signed-native <- Nx.Util.to_bitstring(t)>> do
+      iex> for <<x::64-signed-native <- Nx.Util.to_binary(t)>> do
       ...>   true = x >= -5 and x < 5
       ...> end
       iex> Nx.shape(t)
@@ -1151,7 +1151,7 @@ defmodule Nx do
   Transfers data to the given device.
 
   If a device is not given, `Nx.BitStringDevice` is used, which means
-  the data is read into an Elixir bitstring. If the device is already
+  the data is read into an Elixir binary. If the device is already
   `Nx.BitStringDevice`, it returns the tensor as is.
 
   If a separate device is given, the data will be moved to the new
@@ -1168,7 +1168,7 @@ defmodule Nx do
 
       device_tensor = Nx.device_transfer(tensor, Exla.NxDevice, client: :cuda)
 
-  Read the device tensor back to an Elixir bitstring:
+  Read the device tensor back to an Elixir binary:
 
       tensor = Nx.device_transfer(tensor)
 
@@ -1177,7 +1177,7 @@ defmodule Nx do
 
   def device_transfer(%T{data: {Nx.BitStringDevice, _data}} = t, device, opts) do
     %{type: type, shape: shape} = t
-    %{t | data: device.allocate(Nx.Util.to_bitstring(t), type, shape, opts)}
+    %{t | data: device.allocate(Nx.Util.to_binary(t), type, shape, opts)}
   end
 
   def device_transfer(%T{} = t, Nx.BitStringDevice, _opts) do
@@ -1670,7 +1670,7 @@ defmodule Nx do
       iex> pos_and_neg_zero_x = Nx.multiply(Nx.tensor([[-1.0], [1.0]]), 0.0)
       iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
       iex> t = Nx.arctan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
-      iex> Nx.Util.to_bitstring(t)
+      iex> Nx.Util.to_binary(t)
       <<-3.141592653589793::float-64-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-64-native,
         3.141592653589793::float-64-native, 0.0::float-64-native>>
       iex> Nx.shape(t)

@@ -30,7 +30,7 @@ defmodule Nx.Util do
     tensor = Nx.tensor(tensor)
 
     match_types [tensor.type] do
-      for <<match!(var, 0) <- to_bitstring(tensor)>>, do: read!(var, 0)
+      for <<match!(var, 0) <- to_binary(tensor)>>, do: read!(var, 0)
     end
   end
 
@@ -55,7 +55,7 @@ defmodule Nx.Util do
       raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to scalar"
     end
 
-    data = to_bitstring(tensor)
+    data = to_binary(tensor)
 
     match_types [tensor.type] do
       <<match!(x, 0)>> = data
@@ -64,64 +64,64 @@ defmodule Nx.Util do
   end
 
   @doc """
-  Returns the underlying tensor as a bitstring.
+  Returns the underlying tensor as a binary.
 
-  The bitstring is returned as is (which is row-major).
+  The binary is returned as is (which is row-major).
 
   ## Examples
 
-      iex> Nx.Util.to_bitstring(1)
+      iex> Nx.Util.to_binary(1)
       <<1::64-native>>
 
-      iex> Nx.Util.to_bitstring(Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.Util.to_binary(Nx.tensor([1.0, 2.0, 3.0]))
       <<1.0::float-native, 2.0::float-native, 3.0::float-native>>
   """
-  def to_bitstring(%T{data: {Nx.BitStringDevice, data}}), do: data
+  def to_binary(%T{data: {Nx.BitStringDevice, data}}), do: data
 
-  def to_bitstring(%T{data: {device, _data}}) do
+  def to_binary(%T{data: {device, _data}}) do
     raise ArgumentError,
           "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
             "Please use Nx.device_transfer/1 to transfer data back to Elixir"
   end
 
-  def to_bitstring(t), do: to_bitstring(Nx.tensor(t))
+  def to_binary(t), do: to_binary(Nx.tensor(t))
 
   @doc """
-  Creates a one-dimensional tensor from a `bitstring` with the given `type`.
+  Creates a one-dimensional tensor from a `binary` with the given `type`.
 
-  If the bitstring size does not match its type, an error is raised.
+  If the binary size does not match its type, an error is raised.
 
   ## Examples
 
-      iex> Nx.Util.from_bitstring(<<1, 2, 3, 4>>, {:s, 8})
+      iex> Nx.Util.from_binary(<<1, 2, 3, 4>>, {:s, 8})
       #Nx.Tensor<
         s8[4]
         [1, 2, 3, 4]
       >
 
-      iex> Nx.Util.from_bitstring(<<12.3::float-64-native>>, {:f, 64})
+      iex> Nx.Util.from_binary(<<12.3::float-64-native>>, {:f, 64})
       #Nx.Tensor<
         f64[1]
         [12.3]
       >
 
-      iex> Nx.Util.from_bitstring(<<1, 2, 3, 4>>, {:f, 64})
-      ** (ArgumentError) bitstring does not match the given size
+      iex> Nx.Util.from_binary(<<1, 2, 3, 4>>, {:f, 64})
+      ** (ArgumentError) binary does not match the given size
 
   """
-  def from_bitstring(bitstring, type) when is_bitstring(bitstring) do
+  def from_binary(binary, type) when is_binary(binary) do
     {_, size} = Nx.Type.normalize!(type)
-    dim = div(bit_size(bitstring), size)
+    dim = div(bit_size(binary), size)
 
-    if bitstring == "" do
+    if binary == "" do
       raise ArgumentError, "cannot build an empty tensor"
     end
 
-    if rem(bit_size(bitstring), size) != 0 do
-      raise ArgumentError, "bitstring does not match the given size"
+    if rem(bit_size(binary), size) != 0 do
+      raise ArgumentError, "binary does not match the given size"
     end
 
-    %T{data: {Nx.BitStringDevice, bitstring}, type: type, shape: {dim}}
+    %T{data: {Nx.BitStringDevice, binary}, type: type, shape: {dim}}
   end
 
   ## Reduces
@@ -266,10 +266,11 @@ defmodule Nx.Util do
     {view, new_shape} =
       if axes = opts[:axes] do
         axes = Nx.Shape.normalize_axes(shape, axes)
-        view = bin_aggregate_axes(to_bitstring(t), axes, shape, size)
+        view = bin_aggregate_axes(to_binary(t), axes, shape, size)
+        axes = Nx.Shape.normalize_axes(shape, axes)
         {view, Nx.Shape.contract(shape, axes)}
       else
-        {[to_bitstring(t)], {}}
+        {[to_binary(t)], {}}
       end
 
     data_and_acc =
@@ -327,8 +328,8 @@ defmodule Nx.Util do
     %T{shape: s1, type: left_type} = t1 = Nx.tensor(t1)
     %T{shape: s2, type: right_type} = t2 = Nx.tensor(t2)
 
-    b1 = to_bitstring(t1)
-    b2 = to_bitstring(t2)
+    b1 = to_binary(t1)
+    b2 = to_binary(t2)
 
     data =
       match_types [left_type, right_type] do
@@ -431,7 +432,7 @@ defmodule Nx.Util do
 
     output_shape = Nx.Shape.window(padded_shape, window_dimensions, window_strides)
 
-    data = Nx.Util.to_bitstring(t)
+    data = Nx.Util.to_binary(t)
 
     weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
     anchors = Enum.sort(make_anchors(padded_shape, window_strides, window_dimensions, []))
@@ -485,7 +486,7 @@ defmodule Nx.Util do
   # ends of the last dimension of a tensor
   @doc false
   def pad_last_dim(%T{shape: shape, type: {_, size} = type} = t, value, edge_low, edge_high) do
-    data = Nx.Util.to_bitstring(t)
+    data = Nx.Util.to_binary(t)
 
     view = bin_aggregate_axes(data, [tuple_size(shape) - 1], shape, size)
 
@@ -571,8 +572,8 @@ defmodule Nx.Util do
     {_, folding_size} = t1.type
     {_, folded_size} = t2.type
 
-    folding_view = bin_aggregate_axes(to_bitstring(t1), axes1, t1.shape, folding_size)
-    folded_view = bin_aggregate_axes(to_bitstring(t2), axes2, t2.shape, folded_size)
+    folding_view = bin_aggregate_axes(to_binary(t1), axes1, t1.shape, folding_size)
+    folded_view = bin_aggregate_axes(to_binary(t2), axes2, t2.shape, folded_size)
     {folding_view, folded_view}
   end
 
@@ -584,8 +585,8 @@ defmodule Nx.Util do
   defp bin_zip_reduce(b1, b2, left_type, right_type, _bin, acc, fun) do
     {head1, rest1, head2, rest2} =
       match_types [left_type, right_type] do
-        <<match!(x, 0), rest1::bitstring>> = b1
-        <<match!(y, 1), rest2::bitstring>> = b2
+        <<match!(x, 0), rest1::binary>> = b1
+        <<match!(y, 1), rest2::binary>> = b2
         {read!(x, 0), rest1, read!(y, 1), rest2}
       end
 

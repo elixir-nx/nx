@@ -411,7 +411,7 @@ defmodule Exla.Defn do
 
   defp nx_to_buffer(%Nx.Tensor{data: {device, data}, type: type, shape: shape}) do
     case device do
-      Nx.BitStringDevice when is_bitstring(data) ->
+      Nx.BitStringDevice when is_binary(data) ->
         Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
 
       Exla.NxDevice when is_tuple(data) ->
