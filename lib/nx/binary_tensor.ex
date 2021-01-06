@@ -5,7 +5,6 @@ defmodule Nx.BinaryTensor do
   import Nx.Shared
 
   alias Nx.Tensor, as: T
-  import Kernel, except: [max: 2, min: 2]
   import Bitwise, only: [>>>: 2, &&&: 2]
 
   ## Broadcast
@@ -109,6 +108,29 @@ defmodule Nx.BinaryTensor do
   defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
   defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
 
+  # TODO: Use out
+  def pad(t, _out, pad_value, padding_config) do
+    pad_value = Nx.Util.to_scalar(pad_value)
+
+    case t.shape do
+      {} ->
+        t
+
+      {_} ->
+        [{edge_low, edge_high}] = padding_config
+        Nx.Util.pad_last_dim(t, pad_value, edge_low, edge_high)
+
+      _ ->
+        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
+        permutation = [Nx.rank(t) - 1 | permutation]
+
+        for {edge_low, edge_high} <- Enum.reverse(padding_config), reduce: t do
+          acc ->
+            Nx.transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation)
+        end
+    end
+  end
+
   ## Two-element
 
   def outer(%{type: left_type} = t1, %{type: right_type} = t2, out) do
@@ -134,11 +156,63 @@ defmodule Nx.BinaryTensor do
     end)
   end
 
-  for fun <- [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2] do
+  ## Element wise ternary ops
+
+  def select(%{shape: {}} = pred, on_true, on_false, out) do
+    if Nx.Util.to_scalar(pred) == 0,
+      do: broadcast_data(on_false, out.shape) |> data(out),
+      else: broadcast_data(on_true, out.shape) |> data(out)
+  end
+
+  def select(pred, on_true, on_false, %{shape: shape, type: type} = out) do
+    %T{type: {_, pred_size} = pred_type} = pred
+    %T{type: {_, left_size} = left_type} = on_true
+    %T{type: {_, right_size} = right_type} = on_false
+
+    pred_data = to_binary(pred)
+    on_true_data = broadcast_data(on_true, shape)
+    on_false_data = broadcast_data(on_false, shape)
+
+    data =
+      for i <- 0..(Nx.Shape.size(shape) - 1), into: <<>> do
+        pred =
+          match_types [pred_type] do
+            consumed = i * pred_size
+            <<_::size(consumed)-bitstring, match!(pred, 0), _::bitstring>> = pred_data
+            read!(pred, 0)
+          end
+
+        result =
+          if pred == 0 do
+            match_types [right_type] do
+              consumed = i * right_size
+              <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_false_data
+              read!(x, 0)
+            end
+          else
+            match_types [left_type] do
+              consumed = i * left_size
+              <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
+              read!(x, 0)
+            end
+          end
+
+        scalar_to_binary(result, type)
+      end
+
+    data(data, out)
+  end
+
+  ## Element wise bin ops
+
+  for fun <-
+        [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2, :min, :max] ++
+          [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
+          [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] do
     capture = Macro.var(:"element_#{fun}", __MODULE__)
 
     def unquote(fun)(left, right, out) do
-      element_wise_bin_op(left, right, out, &unquote(capture)/3)
+      element_wise_bin_op(left, right, out, &(unquote(capture) / 3))
     end
   end
 
@@ -174,12 +248,13 @@ defmodule Nx.BinaryTensor do
     data(data, out)
   end
 
-
   defp element_add(_, a, b), do: a + b
   defp element_subtract(_, a, b), do: a - b
   defp element_multiply(_, a, b), do: a * b
   defp element_divide(_, a, b), do: a / b
   defp element_arctan2(_, a, b), do: :math.atan2(a, b)
+  defp element_max(_, a, b), do: :erlang.max(a, b)
+  defp element_min(_, a, b), do: :erlang.min(a, b)
 
   defp element_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
   defp element_remainder(_, a, b), do: :math.fmod(a, b)
@@ -198,30 +273,22 @@ defmodule Nx.BinaryTensor do
   defp guarded_pow(b, e) when (e &&& 1) == 0, do: guarded_pow(b * b, e >>> 1)
   defp guarded_pow(b, e), do: b * guarded_pow(b * b, e >>> 1)
 
-  ## Pad
+  defp element_bitwise_and(_, a, b), do: :erlang.band(a, b)
+  defp element_bitwise_or(_, a, b), do: :erlang.bor(a, b)
+  defp element_bitwise_xor(_, a, b), do: :erlang.bxor(a, b)
 
-  # TODO: Use out
-  def pad(t, _out, pad_value, padding_config) do
-    pad_value = Nx.Util.to_scalar(pad_value)
+  defp element_left_shift(_, a, b) when b >= 0, do: :erlang.bsl(a, b)
+  defp element_left_shift(_, _, b), do: raise(ArgumentError, "cannot left shift by #{b}")
 
-    case t.shape do
-      {} ->
-        t
+  defp element_right_shift(_, a, b) when b >= 0, do: :erlang.bsr(a, b)
+  defp element_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
 
-      {_} ->
-        [{edge_low, edge_high}] = padding_config
-        Nx.Util.pad_last_dim(t, pad_value, edge_low, edge_high)
-
-      _ ->
-        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
-        permutation = [Nx.rank(t) - 1 | permutation]
-
-        for {edge_low, edge_high} <- Enum.reverse(padding_config), reduce: t do
-          acc ->
-            Nx.transpose(Nx.Util.pad_last_dim(acc, pad_value, edge_low, edge_high), permutation)
-        end
-    end
-  end
+  defp element_equal(_, a, b), do: if(a == b, do: 1, else: 0)
+  defp element_not_equal(_, a, b), do: if(a != b, do: 1, else: 0)
+  defp element_greater(_, a, b), do: if(a > b, do: 1, else: 0)
+  defp element_less(_, a, b), do: if(a < b, do: 1, else: 0)
+  defp element_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
+  defp element_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
 
   ## Conversions
 

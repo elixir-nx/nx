@@ -1211,74 +1211,15 @@ defmodule Nx do
 
   ## Element-wise binary ops
 
-  defp_element_wise_bin_op = fn name, cast ->
-    cast = cast.(Macro.var(:output_type, nil))
-
-    defp unquote(name)(left, right, fun) do
-      output_type = Nx.Type.merge_tensors(left, right)
-      output_type = unquote(cast)
-
-      %T{shape: left_shape} = left = tensor(left)
-      %T{shape: right_shape} = right = tensor(right)
-
-      shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
-      count = Nx.Shape.size(shape)
-
-      left = broadcast(left, shape)
-      right = broadcast(right, shape)
-
-      left_data = Nx.Util.to_bitstring(left)
-      right_data = Nx.Util.to_bitstring(right)
-
-      data =
-        for i <- 0..(count - 1), into: <<>> do
-          x =
-            match_types [left_type] do
-              left_consumed = i * left_size
-              <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> = left_data
-              read!(x, 0)
-            end
-
-          y =
-            match_types [right_type] do
-              right_consumed = i * right_size
-              <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> = right_data
-              read!(y, 0)
-            end
-
-          match_types [output_type] do
-            <<write!(fun.(output_type, x, y), 0)>>
-          end
-        end
-
-      %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
-    end
-  end
-
   defp element_wise_bin_op(left, right, op, fun) do
     output_type = Nx.Type.merge_tensors(left, right) |> fun.()
 
-    %T{type: {_, left_size} = left_type, shape: left_shape} = left = tensor(left)
-    %T{type: {_, right_size} = right_type, shape: right_shape} = right = tensor(right)
+    %T{shape: left_shape} = left = tensor(left)
+    %T{shape: right_shape} = right = tensor(right)
 
     shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
     apply(impl(left, right), op, [left, right, %{left | type: output_type, shape: shape}])
   end
-
-  defp_element_wise_bin_op.(
-    :element_wise_bin_arith,
-    & &1
-  )
-
-  defp_element_wise_bin_op.(
-    :element_wise_bin_float_arith,
-    &quote(do: Nx.Type.to_floating(unquote(&1)))
-  )
-
-  defp_element_wise_bin_op.(
-    :element_wise_bin_bool,
-    &quote(do: Nx.Type.to_predicate(unquote(&1)))
-  )
 
   @doc """
   Element-wise addition of two tensors.
@@ -1801,9 +1742,7 @@ defmodule Nx do
       >
 
   """
-  def max(left, right), do: element_wise_bin_arith(left, right, &erlang_max/3)
-  @compile {:inline, erlang_max: 3}
-  defp erlang_max(_, a, b), do: :erlang.max(a, b)
+  def max(left, right), do: element_wise_bin_op(left, right, :max, & &1)
 
   @doc """
   Element-wise minimum of two tensors.
@@ -1867,16 +1806,9 @@ defmodule Nx do
       >
 
   """
-  def min(left, right), do: element_wise_bin_arith(left, right, &erlang_min/3)
-  @compile {:inline, erlang_min: 3}
-  defp erlang_min(_, a, b), do: :erlang.min(a, b)
+  def min(left, right), do: element_wise_bin_op(left, right, :min, & &1)
 
   ## Bitwise ops
-
-  defp_element_wise_bin_op.(
-    :element_wise_bin_bitwise_arith,
-    &quote(do: assert_bitwise_type!(unquote(&1)))
-  )
 
   defp assert_bitwise_type!({:s, _} = type), do: type
   defp assert_bitwise_type!({:u, _} = type), do: type
@@ -1934,10 +1866,7 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def bitwise_and(left, right),
-    do: element_wise_bin_bitwise_arith(left, right, &erlang_bitwise_and/3)
-
-  @compile {:inline, erlang_bitwise_and: 3}
-  defp erlang_bitwise_and(_, a, b), do: :erlang.band(a, b)
+    do: element_wise_bin_op(left, right, :bitwise_and, &assert_bitwise_type!/1)
 
   @doc """
   Element-wise bitwise OR of two tensors.
@@ -1986,10 +1915,7 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def bitwise_or(left, right),
-    do: element_wise_bin_bitwise_arith(left, right, &erlang_bitwise_or/3)
-
-  @compile {:inline, erlang_bitwise_or: 3}
-  defp erlang_bitwise_or(_, a, b), do: :erlang.bor(a, b)
+    do: element_wise_bin_op(left, right, :bitwise_or, &assert_bitwise_type!/1)
 
   @doc """
   Element-wise bitwise XOR of two tensors.
@@ -2038,10 +1964,7 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def bitwise_xor(left, right),
-    do: element_wise_bin_bitwise_arith(left, right, &erlang_bitwise_xor/3)
-
-  @compile {:inline, erlang_bitwise_xor: 3}
-  defp erlang_bitwise_xor(_, a, b), do: :erlang.bxor(a, b)
+    do: element_wise_bin_op(left, right, :bitwise_xor, &assert_bitwise_type!/1)
 
   @doc """
   Element-wise left shift of two tensors.
@@ -2089,11 +2012,7 @@ defmodule Nx do
       ** (ArgumentError) cannot left shift by -1
   """
   def left_shift(left, right),
-    do: element_wise_bin_bitwise_arith(left, right, &erlang_left_shift/3)
-
-  @compile {:inline, erlang_left_shift: 3}
-  defp erlang_left_shift(_, a, b) when b >= 0, do: :erlang.bsl(a, b)
-  defp erlang_left_shift(_, _, b), do: raise(ArgumentError, "cannot left shift by #{b}")
+    do: element_wise_bin_op(left, right, :left_shift, &assert_bitwise_type!/1)
 
   @doc """
   Element-wise right shift of two tensors.
@@ -2145,11 +2064,7 @@ defmodule Nx do
       ** (ArgumentError) cannot right shift by -1
   """
   def right_shift(left, right),
-    do: element_wise_bin_bitwise_arith(left, right, &erlang_right_shift/3)
-
-  @compile {:inline, erlang_right_shift: 3}
-  defp erlang_right_shift(_, a, b) when b >= 0, do: :erlang.bsr(a, b)
-  defp erlang_right_shift(_, _, b), do: raise(ArgumentError, "cannot right shift by #{b}")
+    do: element_wise_bin_op(left, right, :right_shift, &assert_bitwise_type!/1)
 
   @doc """
   Element-wise equality comparison of two tensors.
@@ -2194,11 +2109,7 @@ defmodule Nx do
       ]
     >
   """
-  def equal(left, right),
-    do: element_wise_bin_bool(left, right, &erlang_equal/3)
-
-  @compile {:inline, erlang_equal: 3}
-  defp erlang_equal(_, a, b), do: if(a == b, do: 1, else: 0)
+  def equal(left, right), do: element_wise_bin_op(left, right, :equal, &Nx.Type.to_predicate/1)
 
   @doc """
   Element-wise not-equal comparison of two tensors.
@@ -2244,10 +2155,7 @@ defmodule Nx do
       >
   """
   def not_equal(left, right),
-    do: element_wise_bin_bool(left, right, &erlang_not_equal/3)
-
-  @compile {:inline, erlang_not_equal: 3}
-  defp erlang_not_equal(_, a, b), do: if(a != b, do: 1, else: 0)
+    do: element_wise_bin_op(left, right, :not_equal, &Nx.Type.to_predicate/1)
 
   @doc """
   Element-wise greater than comparison of two tensors.
@@ -2293,10 +2201,7 @@ defmodule Nx do
     >
   """
   def greater(left, right),
-    do: element_wise_bin_bool(left, right, &erlang_greater/3)
-
-  @compile {:inline, erlang_greater: 3}
-  defp erlang_greater(_, a, b), do: if(a > b, do: 1, else: 0)
+    do: element_wise_bin_op(left, right, :greater, &Nx.Type.to_predicate/1)
 
   @doc """
   Element-wise less than comparison of two tensors.
@@ -2341,11 +2246,7 @@ defmodule Nx do
       ]
     >
   """
-  def less(left, right),
-    do: element_wise_bin_bool(left, right, &erlang_less/3)
-
-  @compile {:inline, erlang_less: 3}
-  defp erlang_less(_, a, b), do: if(a < b, do: 1, else: 0)
+  def less(left, right), do: element_wise_bin_op(left, right, :less, &Nx.Type.to_predicate/1)
 
   @doc """
   Element-wise greater than or equal comparison of two tensors.
@@ -2391,10 +2292,7 @@ defmodule Nx do
     >
   """
   def greater_equal(left, right),
-    do: element_wise_bin_bool(left, right, &erlang_greater_equal/3)
-
-  @compile {:inline, erlang_greater_equal: 3}
-  defp erlang_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
+    do: element_wise_bin_op(left, right, :greater_equal, &Nx.Type.to_predicate/1)
 
   @doc """
   Element-wise less than or equal comparison of two tensors.
@@ -2440,10 +2338,7 @@ defmodule Nx do
     >
   """
   def less_equal(left, right),
-    do: element_wise_bin_bool(left, right, &erlang_less_equal/3)
-
-  @compile {:inline, erlang_less_equal: 3}
-  defp erlang_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
+    do: element_wise_bin_op(left, right, :less_equal, &Nx.Type.to_predicate/1)
 
   @doc """
   Constructs a tensor from two tensors, based on a predicate.
@@ -2506,56 +2401,34 @@ defmodule Nx do
   def select(pred, on_true, on_false) do
     output_type = Nx.Type.merge_tensors(on_true, on_false)
 
-    case {tensor(pred), tensor(on_true), tensor(on_false)} do
-      {%T{shape: {}} = pred, on_true, on_false} ->
-        shape = Nx.Shape.binary_broadcast(on_false.shape, on_true.shape)
+    %T{shape: pred_shape} = pred = tensor(pred)
+    %T{shape: true_shape} = on_true = tensor(on_true)
+    %T{shape: false_shape} = on_false = tensor(on_false)
 
-        if Nx.Util.to_scalar(pred) == 0,
-          do: broadcast(on_false, shape),
-          else: broadcast(on_true, shape)
+    output_shape =
+      case pred_shape do
+        {} ->
+          Nx.Shape.binary_broadcast(true_shape, false_shape)
 
-      {%T{shape: shape, type: {_, pred_size} = pred_type} = pred,
-       %T{type: {_, left_size} = left_type} = on_true,
-       %T{type: {_, right_size} = right_type} = on_false} ->
-        on_true_bcast = broadcast(on_true, shape)
-        on_false_bcast = broadcast(on_false, shape)
+        _ ->
+          pred_shape
+      end
 
-        pred_data = Nx.Util.to_bitstring(pred)
-        on_true_data = Nx.Util.to_bitstring(on_true_bcast)
-        on_false_data = Nx.Util.to_bitstring(on_false_bcast)
-        pred_count = Nx.Shape.size(shape)
+    _ =
+      Nx.Shape.broadcast(
+        true_shape,
+        output_shape,
+        Nx.Shape.broadcast_axes(true_shape, output_shape)
+      )
 
-        data =
-          for i <- 0..(pred_count - 1), into: <<>> do
-            pred =
-              match_types [pred_type] do
-                consumed = i * pred_size
-                <<_::size(consumed)-bitstring, match!(pred, 0), _::bitstring>> = pred_data
-                read!(pred, 0)
-              end
+    _ =
+      Nx.Shape.broadcast(
+        false_shape,
+        output_shape,
+        Nx.Shape.broadcast_axes(false_shape, output_shape)
+      )
 
-            result =
-              if pred == 0 do
-                match_types [right_type] do
-                  consumed = i * right_size
-                  <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_false_data
-                  read!(x, 0)
-                end
-              else
-                match_types [left_type] do
-                  consumed = i * left_size
-                  <<_::size(consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
-                  read!(x, 0)
-                end
-              end
-
-            match_types [output_type] do
-              <<write!(result, 0)>>
-            end
-          end
-
-        %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
-    end
+    impl(pred).select(pred, on_true, on_false, %{pred | shape: output_shape, type: output_type})
   end
 
   ## Unary ops
@@ -3397,11 +3270,11 @@ defmodule Nx do
 
         {tensor, _accs} =
           Nx.Util.reduce(t, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
-              if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-                {i, {i + 1, x, i}}
-              else
-                {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-              end
+            if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+              {i, {i + 1, x, i}}
+            else
+              {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+            end
           end)
 
         tensor
