@@ -3728,13 +3728,15 @@ defmodule Nx do
     # the binary in reduce_window, but the window is equal to the filter
     # size of the kernel plus the channel size of the input tensor
     window_shape = Tuple.insert_at(filter_shape, 0, num_input_channels)
-    IO.inspect window_shape
 
     input_data = Nx.Util.to_bitstring(t)
     kernel_data = Nx.Util.to_bitstring(t)
 
     weighted_shape = weighted_shape(padded_shape, input_size, window_shape)
 
+    # We calculate our "anchors" using just the spatial dimensions
+    # but they also need to consider the depth or channels of the input
+    # tensor, so we always anchor on the `0th` channel
     anchors = Enum.sort(make_anchors(spatial_dims, strides, filter_shape, []))
     anchors = Enum.map(anchors, &Tuple.insert_at(&1, 0, 0))
 
@@ -3748,9 +3750,9 @@ defmodule Nx do
         # The receptive field size of each binary in bytes
         input_field_size = Nx.Shape.size(filter_shape) * input_size
         filter_field_size = Nx.Shape.size(filter_shape) * kernel_size
-        # For each filter...
+        # For each filter in the kernel...
         for <<filter::size(filter_size)-bitstring <- kernel_data>>, into: <<>> do
-          # For each channel...
+          # For each channel in both filter and input...
           field_calcs =
             for i <- (0..num_input_channels - 1) do
               current_input_pos = i * input_field_size
@@ -3777,6 +3779,21 @@ defmodule Nx do
               end
             end
 
+          # We now have a list of `n` lists where `n` is the number of
+          # input channels
+          #
+          # We need to sum across the "depth" or channels so we `zip`
+          # the lists, and then sum each tuple in the resulting list
+          # before converting the whole list to a binary
+          #
+          # At the end of each iteration, we are left with a tensor of
+          # shape
+          #
+          # {new_spatial_dim0, new_spatial_dim1, ...}
+          #
+          # Calculated according to the formula referenced above
+          #
+          # This is repeated `num_filters` number of times for final tensor
           match_types [output_type] do
             field_calcs
             |> Enum.zip()
