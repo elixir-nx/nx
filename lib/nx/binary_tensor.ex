@@ -1,4 +1,5 @@
 defmodule Nx.BinaryTensor do
+  # TODO: Document me and @doc false everything.
   @moduledoc false
 
   defstruct [:device, :state]
@@ -6,7 +7,6 @@ defmodule Nx.BinaryTensor do
   alias Nx.Tensor, as: T
   alias Nx.BinaryTensor, as: BT
 
-  # TODO: Remove me
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
 
@@ -112,17 +112,21 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
+  defp scalar_to_binary(value, type) do
+    match_types([type], do: <<write!(value, 0)>>)
+  end
+
   ## Device API
 
   def from_binary(t, binary) when is_binary(binary) do
-    %{t | data: %BT{device: Nx.BitStringDevice, state: binary}}
+    %{t | data: %BT{device: Nx.BinaryDevice, state: binary}}
   end
 
   def from_binary(t, other) do
-    %{t | data: %BT{device: Nx.BitStringDevice, state: IO.iodata_to_binary(other)}}
+    %{t | data: %BT{device: Nx.BinaryDevice, state: IO.iodata_to_binary(other)}}
   end
 
-  def to_binary(%T{data: %{device: Nx.BitStringDevice, state: data}}), do: data
+  def to_binary(%T{data: %{device: Nx.BinaryDevice, state: data}}), do: data
 
   def to_binary(%T{data: %{device: device}}) do
     raise ArgumentError,
@@ -138,13 +142,13 @@ defmodule Nx.BinaryTensor do
     device.deallocate(state)
   end
 
-  def device_transfer(%T{data: %{device: Nx.BitStringDevice}} = tensor, device, opts) do
+  def device_transfer(%T{data: %{device: Nx.BinaryDevice}} = tensor, device, opts) do
     %{type: type, shape: shape} = tensor
     {device, state} = device.allocate(to_binary(tensor), type, shape, opts)
     %{tensor | data: %BT{device: device, state: state}}
   end
 
-  def device_transfer(%T{} = tensor, Nx.BitStringDevice, _opts) do
+  def device_transfer(%T{} = tensor, Nx.BinaryDevice, _opts) do
     new = device_read(tensor)
     _ = device_deallocate(tensor)
     new
@@ -154,29 +158,10 @@ defmodule Nx.BinaryTensor do
     raise ArgumentError, "cannot transfer from #{inspect(data_device)} to #{inspect(device)}"
   end
 
-  ## Reflection
-
-  @unary_funs [
-    exp: {"exponential", quote(do: :math.exp(var!(x)))},
-    expm1: {"exponential minus one", quote(do: :math.exp(var!(x)) - 1)},
-    log: {"natural log", quote(do: :math.log(var!(x)))},
-    log1p: {"natural log plus one", quote(do: :math.log(var!(x) + 1))},
-    logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x))))},
-    cos: {"cosine", quote(do: :math.cos(var!(x)))},
-    sin: {"sine", quote(do: :math.sin(var!(x)))},
-    tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
-    sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
-    rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
-    cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))}
-  ]
-
-  @doc false
-  def unary_funs, do: @unary_funs
-
   ## Shape
 
-  def reshape(out, _tensor, _shape), do: out
-  def squeeze(out, _tensor, _axes), do: out
+  def reshape(out, tensor, _shape), do: from_binary(out, to_binary(tensor)) 
+  def squeeze(out, tensor, _axes), do: from_binary(out, to_binary(tensor))
 
   ## Broadcast
 
@@ -521,7 +506,7 @@ defmodule Nx.BinaryTensor do
 
   ## Element wiwse unary ops
 
-  for {name, {_desc, code}} <- @unary_funs do
+  for {name, {_desc, code}} <- Nx.Shared.unary_math_funs() do
     def unquote(name)(out, tensor) do
       element_wise_unary_op(out, tensor, fn x -> unquote(code) end)
     end
@@ -640,7 +625,7 @@ defmodule Nx.BinaryTensor do
 
     {data, _limit} =
       case tensor.data do
-        %Nx.BinaryTensor{device: Nx.BitStringDevice, state: bin} ->
+        %Nx.BinaryTensor{device: Nx.BinaryDevice, state: bin} ->
           {_, size} = tensor.type
           total_size = Enum.reduce(dims, size, &*/2)
           chunk(dims, bin, opts.limit, total_size, tensor.type, {open, sep, close})
@@ -932,4 +917,73 @@ defmodule Nx.BinaryTensor do
 
   defp aggregate_read(shape, _i, _axis, size),
     do: {shape, size}
+
+  ## Weighted shapes
+
+
+  # Converts the shape to a weight shape list.
+  #
+  # A weighted shape is a list of tuples where the first
+  # element is the number of elements in the dimension
+  # and the second element is the size to be traversed in
+  # the binary to fetch the next element.
+  #
+  # This is often given to `weighted_traverse/3` as a general
+  # mechanism to traverse binaries.
+  def weighted_shape(shape, size, limits \\ :none) do
+    Enum.reverse(weighted_shape(shape, tuple_size(shape), size, limits))
+  end
+
+  defp weighted_shape(_shape, 0, _weight, _limits) do
+    []
+  end
+
+  defp weighted_shape(shape, pos, weight, limits) do
+    shape_elem = :erlang.element(pos, shape)
+
+    element =
+      if limits == :none, do: shape_elem, else: min(:erlang.element(pos, limits), shape_elem)
+
+    [{element, weight} | weighted_shape(shape, pos - 1, weight * shape_elem, limits)]
+  end
+
+  # Reads the chunk size from a weighted list at the given position.
+  defp weighted_chunk(list, at, size) do
+    {element, size} = Enum.at(list, at, {1, size})
+    element * size
+  end
+
+  # Traverses a binary using the elements and shape given by `weighted_shape`.
+  #
+  # When all dimensions are traversed, we read `read_size`.
+  #
+  # The `weighted_shape` can also contain functions, which are applied to the
+  # result of the remaining of the weighted shape.
+  defp weighted_traverse(weighted_shape, binary, read_size, offset \\ 0)
+
+  defp weighted_traverse([], data, read_size, offset) do
+    <<_::size(offset)-bitstring, chunk::size(read_size)-bitstring, _::bitstring>> = data
+    chunk
+  end
+
+  defp weighted_traverse([{dim, size} | dims], data, read_size, offset) do
+    weighted_traverse(dim, size, dims, data, read_size, offset)
+  end
+
+  defp weighted_traverse([fun | dims], data, read_size, offset) do
+    fun.(weighted_traverse(dims, data, read_size, offset))
+  end
+
+  defp weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
+    head = weighted_traverse(dims, data, read_size, offset)
+
+    case dim do
+      1 ->
+        [head]
+
+      _ ->
+        <<_::size(dim_size)-bitstring, data::bitstring>> = data
+        [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
+    end
+  end
 end

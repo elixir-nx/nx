@@ -22,10 +22,11 @@ defmodule Nx.Defn.Expr do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
+  import Nx.Shared
+
   @enforce_keys [:id, :op, :args]
   @type t :: %Expr{}
-  # TODO: Remove shape
-  defstruct [:id, :op, :args, :shape]
+  defstruct [:id, :op, :args]
 
   @doc """
   Converts the given `arg` into an expression tensor.
@@ -168,23 +169,6 @@ defmodule Nx.Defn.Expr do
 
   defp expr(tensor, op, args) do
     %{tensor | data: %Expr{id: System.unique_integer(), op: op, args: args}}
-  end
-
-  defp shape!(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
-  defp shape!(%T{shape: shape}), do: shape
-  defp shape!(number) when is_number(number), do: {}
-
-  defp shape!(other) do
-    raise ArgumentError,
-          "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
-            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
-            "Got: #{inspect(other)}"
-  end
-
-  def assert_keys!(keyword, valid) do
-    for {k, _} <- keyword, k not in valid do
-      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
-    end
   end
 
   ## Inspect

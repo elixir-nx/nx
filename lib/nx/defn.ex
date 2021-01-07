@@ -85,6 +85,7 @@ defmodule Nx.Defn do
   ## Default compiler backend
 
   @behaviour Nx.Defn.Compiler
+  @creation_funs Nx.Shared.creation_funs()
 
   @impl true
   def __compile__(_env, _kind, vars, fun, []) do
@@ -126,14 +127,21 @@ defmodule Nx.Defn do
     {t, state}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}}, state) do
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}} = ans, state) do
     case state do
       %{^id => res} ->
         {res, state}
 
       %{} ->
         {args, state} = Enum.map_reduce(args, state, &eval/2)
-        res = apply(Nx, op, args)
+
+        res = 
+          if op in @creation_funs do
+            apply(Nx, op, args)
+          else
+            apply(Nx.Shared.find_impl!(args), op, [ans | args])
+          end
+
         {res, Map.put(state, id, res)}
     end
   end

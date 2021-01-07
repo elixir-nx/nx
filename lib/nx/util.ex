@@ -7,7 +7,6 @@ defmodule Nx.Util do
   higher-level features around them.
   """
 
-  alias Nx.Tensor, as: T
   import Nx.Shared
 
   ## Conversions
@@ -312,7 +311,7 @@ defmodule Nx.Util do
  #        end
  #      end
 
- #    %{t | data: {Nx.BitStringDevice, data}, shape: output_shape}
+ #    %{t | data: {Nx.BinaryDevice, data}, shape: output_shape}
  #  end
 
  #  defp make_anchors(shape, strides, window, anchors)
@@ -340,4 +339,14 @@ defmodule Nx.Util do
 
  #    make_anchors(shape, strides, window, List.flatten(dims))
  #  end
+
+  # # Calculates the offset needed to reach a specified position
+  # # in the binary from a weighted shape list.
+  # defp weighted_offset(weighted_shape, pos) when is_tuple(pos),
+  #   do: weighted_offset(weighted_shape, Tuple.to_list(pos))
+
+  # defp weighted_offset([], []), do: 0
+
+  # defp weighted_offset([{_, size} | dims], [x | pos]),
+  #   do: size * x + weighted_offset(dims, pos)
 end

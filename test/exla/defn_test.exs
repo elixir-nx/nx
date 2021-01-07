@@ -110,49 +110,23 @@ defmodule Exla.DefnTest do
       end
     end
 
-    defn add_two_int_int, do: 1 + 2
-    @defn_compiler Nx.Defn
-    defn add_two_int_int_nx, do: 1 + 2
-
-    defn add_two_int_float, do: 1 + 2.0
-    @defn_compiler Nx.Defn
-    defn add_two_int_float_nx, do: 1 + 2.0
-
-    defn add_two_float_int, do: 1.0 + 2
-    @defn_compiler Nx.Defn
-    defn add_two_float_int_nx, do: 1.0 + 2
-
-    defn add_two_float_float, do: 1.0 + 2
-    @defn_compiler Nx.Defn
-    defn add_two_float_float_nx, do: 1.0 + 2
-
     defn add_two_int(t), do: t + 2
-    @defn_compiler Nx.Defn
-    defn add_two_int_nx(t), do: t + 2
-
     defn add_two_float(t), do: t + 2.0
-    @defn_compiler Nx.Defn
-    defn add_two_float_nx(t), do: t + 2.0
 
     test "constants" do
-      assert add_two_int_int() == add_two_int_int_nx()
-      assert add_two_int_float() == add_two_int_float_nx()
-      assert add_two_float_int() == add_two_float_int_nx()
-      assert add_two_float_float() == add_two_float_float_nx()
-
       tensors = [
         Nx.tensor([1, 2], type: {:u, 8}),
-        Nx.tensor([1, 2], type: {:u, 8}),
-        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:u, 16}),
+        Nx.tensor([1, 2], type: {:u, 32}),
         Nx.tensor([1, 2], type: {:s, 8}),
-        Nx.tensor([1, 2], type: {:s, 8}),
+        Nx.tensor([1, 2], type: {:s, 32}),
         Nx.tensor([1, 2], type: {:f, 32}),
-        Nx.tensor([1, 2], type: {:f, 32})
+        Nx.tensor([1, 2], type: {:f, 64})
       ]
 
       for t <- tensors do
-        compare_tensors!(add_two_int(t), add_two_int_nx(t))
-        compare_tensors!(add_two_float(t), add_two_float_nx(t))
+        assert add_two_int(t) == Nx.add(t, 2)
+        assert add_two_float(t) == Nx.add(t, 2.0)
       end
     end
 
@@ -205,12 +179,12 @@ defmodule Exla.DefnTest do
     test "constants" do
       tensors = [
         Nx.tensor([1, 2], type: {:u, 8}),
-        Nx.tensor([1, 2], type: {:u, 8}),
-        Nx.tensor([1, 2], type: {:u, 8}),
+        Nx.tensor([1, 2], type: {:u, 16}),
+        Nx.tensor([1, 2], type: {:u, 32}),
         Nx.tensor([1, 2], type: {:s, 8}),
-        Nx.tensor([1, 2], type: {:s, 8}),
+        Nx.tensor([1, 2], type: {:s, 32}),
         Nx.tensor([1, 2], type: {:f, 32}),
-        Nx.tensor([1, 2], type: {:f, 32})
+        Nx.tensor([1, 2], type: {:f, 64})
       ]
 
       for t <- tensors do

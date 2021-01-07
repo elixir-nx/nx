@@ -48,6 +48,8 @@ defmodule Nx.DefnTest do
 
   describe "binary ops" do
     defn add(t1, t2), do: Nx.add(t1, t2)
+    defn add_two_int(t), do: Nx.add(t, 2)
+    defn add_two_float(t), do: Nx.add(t, 2)
 
     test "to expr" do
       assert %T{shape: {3}, type: {:s, 64}, data: %Expr{op: :add, args: [_, _]}} =
@@ -61,6 +63,14 @@ defmodule Nx.DefnTest do
 
       assert %T{shape: {2, 2}, type: {:f, 64}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]], type: {:f, 32}), Nx.tensor([1, 2], type: {:s, 32}))
+    end
+
+    test "constant" do
+      assert %T{shape: {3}, type: {:u, 8}, data: %Expr{op: :add, args: [_, _]}} =
+               add_two_int(Nx.tensor([1, 2, 3], type: {:u, 8}))
+
+      assert %T{shape: {3}, type: {:bf, 16}, data: %Expr{op: :add, args: [_, _]}} =
+               add_two_float(Nx.tensor([1, 2, 3], type: {:bf, 16}))
     end
   end
 
@@ -431,6 +441,34 @@ defmodule Nx.DefnTest do
       end
 
       assert DefaultCompiler.add(1, 2) == Nx.tensor(3)
+    end
+
+    @defn_compiler Nx.Defn
+    defn default_add_two_int(t), do: Nx.add(t, 2)
+
+    @defn_compiler Nx.Defn
+    defn default_add_two_float(t), do: Nx.add(t, 2)
+
+    test "constant" do
+      assert %T{shape: {3}, type: {:u, 8}} =
+               default_add_two_int(Nx.tensor([1, 2, 3], type: {:u, 8}))
+
+      assert %T{shape: {3}, type: {:bf, 16}} =
+               default_add_two_float(Nx.tensor([1, 2, 3], type: {:bf, 16}))
+    end
+
+    @defn_compiler Nx.Defn
+    defn default_iota(), do: Nx.iota({2, 2})
+
+    test "iota" do
+      assert %T{shape: {2, 2}, type: {:s, 64}} = default_iota()
+    end
+
+    @defn_compiler Nx.Defn
+    defn default_reshape(t), do: Nx.reshape(t, {3, 2})
+
+    test "reshape" do
+      assert %T{shape: {3, 2}, type: {:s, 64}} = default_reshape(Nx.iota({2, 3}))
     end
   end
 

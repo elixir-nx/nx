@@ -60,7 +60,7 @@ defmodule Nx do
 
   The `Nx` library has built-in support for devices. A tensor is
   always allocated in a device, the default device being the
-  `Nx.BitStringDevice`, which means the tensor is allocated as a
+  `Nx.BinaryDevice`, which means the tensor is allocated as a
   binary within the Erlang VM.
 
   Most operations in the `Nx` module require the tensor to be
@@ -82,6 +82,7 @@ defmodule Nx do
   To implement your own device, check the `Nx.Device` behaviour.
   """
 
+  import Nx.Shared
   alias Nx.Tensor, as: T
 
   ## Creation API
@@ -544,7 +545,7 @@ defmodule Nx do
   """
   def to_binary(tensor) do
     tensor = tensor(tensor)
-    impl(tensor).to_binary(tensor)
+    impl!(tensor).to_binary(tensor)
   end
 
   @doc """
@@ -650,7 +651,7 @@ defmodule Nx do
     if old_shape == new_shape do
       tensor
     else
-      impl(tensor).reshape(%{tensor | shape: new_shape}, tensor, new_shape)
+      impl!(tensor).reshape(%{tensor | shape: new_shape}, tensor, new_shape)
     end
   end
 
@@ -729,7 +730,7 @@ defmodule Nx do
     if old_shape == new_shape do
       tensor
     else
-      impl(tensor).squeeze(%{tensor | shape: new_shape}, tensor, axes)
+      impl!(tensor).squeeze(%{tensor | shape: new_shape}, tensor, axes)
     end
   end
 
@@ -855,7 +856,7 @@ defmodule Nx do
     axes = Nx.Shape.normalize_axes(shape, axes)
     _ = Nx.Shape.broadcast(tensor.shape, shape, axes)
 
-    impl(tensor).broadcast(%{tensor | shape: shape}, tensor, shape, axes)
+    impl!(tensor).broadcast(%{tensor | shape: shape}, tensor, shape, axes)
   end
 
   @doc """
@@ -1031,7 +1032,7 @@ defmodule Nx do
     end
 
     shape = Nx.Shape.pad(tensor.shape, padding_config)
-    impl(tensor).pad(%{tensor | shape: shape}, tensor, pad_value, padding_config)
+    impl!(tensor).pad(%{tensor | shape: shape}, tensor, pad_value, padding_config)
   end
 
   ## Reflection
@@ -1130,16 +1131,16 @@ defmodule Nx do
   @doc """
   Transfers data to the given device.
 
-  If a device is not given, `Nx.BitStringDevice` is used, which means
+  If a device is not given, `Nx.BinaryDevice` is used, which means
   the data is read into an Elixir binary. If the device is already
-  `Nx.BitStringDevice`, it returns the tensor as is.
+  `Nx.BinaryDevice`, it returns the tensor as is.
 
   If a separate device is given, the data will be moved to the new
   device. Once transfer is done, the data is deallocated from the
   current tensor device. If the device has already been deallocated,
   it raises.
 
-  At the moment, you can only transfer data from `Nx.BitStringDevice`
+  At the moment, you can only transfer data from `Nx.BinaryDevice`
   to other devices and vice-versa but not between ad-hoc devices.
 
   ## Examples
@@ -1153,21 +1154,21 @@ defmodule Nx do
       tensor = Nx.device_transfer(tensor)
 
   """
-  def device_transfer(tensor, device \\ Nx.BitStringDevice, opts \\ []) do
+  def device_transfer(tensor, device \\ Nx.BinaryDevice, opts \\ []) do
     tensor = tensor(tensor)
-    impl(tensor).device_transfer(tensor, device, opts)
+    impl!(tensor).device_transfer(tensor, device, opts)
   end
 
   @doc """
   Reads data allocated in a device.
 
-  It returns a tensor where the device is `Nx.BitStringDevice`.
+  It returns a tensor where the device is `Nx.BinaryDevice`.
   The data is not deallocated from the current device. If the
   device has already been deallocated, it raises.
   """
   def device_read(tensor) do
     tensor = tensor(tensor)
-    impl(tensor).device_read(tensor)
+    impl!(tensor).device_read(tensor)
   end
 
   @doc """
@@ -1177,7 +1178,7 @@ defmodule Nx do
   """
   def device_deallocate(tensor) do
     tensor = tensor(tensor)
-    impl(tensor).device_deallocate(tensor)
+    impl!(tensor).device_deallocate(tensor)
   end
 
   ## Element-wise binary ops
@@ -1188,7 +1189,7 @@ defmodule Nx do
     %T{shape: right_shape} = right = tensor(right)
 
     shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
-    apply(impl(left, right), op, [%{left | type: type, shape: shape}, left, right])
+    apply(impl!(left, right), op, [%{left | type: type, shape: shape}, left, right])
   end
 
   @doc """
@@ -2399,12 +2400,12 @@ defmodule Nx do
       )
 
     out = %{pred | shape: output_shape, type: output_type}
-    impl(pred, on_true, on_false).select(out, pred, on_true, on_false)
+    impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
   end
 
   ## Unary ops
 
-  for {name, {desc, code}} <- Nx.BinaryTensor.unary_funs() do
+  for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
     {one, _} = Code.eval_quoted(code, x: 1)
@@ -2436,7 +2437,7 @@ defmodule Nx do
     def unquote(name)(tensor) do
       tensor = tensor(tensor)
       type = Nx.Type.to_floating(tensor.type)
-      impl(tensor).unquote(name)(%{tensor | type: type}, tensor)
+      impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
     end
   end
 
@@ -2474,7 +2475,7 @@ defmodule Nx do
   """
   def negate(tensor) do
     tensor = tensor(tensor)
-    impl(tensor).negate(tensor, tensor)
+    impl!(tensor).negate(tensor, tensor)
   end
 
   @doc """
@@ -2496,7 +2497,7 @@ defmodule Nx do
   """
   def sign(tensor) do
     tensor = tensor(tensor)
-    impl(tensor).sign(tensor, tensor)
+    impl!(tensor).sign(tensor, tensor)
   end
 
   @doc """
@@ -2513,7 +2514,11 @@ defmodule Nx do
   """
   def abs(tensor) do
     tensor = tensor(tensor)
-    impl(tensor).abs(tensor, tensor)
+
+    case tensor.type do
+      {:u, _} -> tensor
+      _ -> impl!(tensor).abs(tensor, tensor)
+    end
   end
 
   @doc """
@@ -2547,7 +2552,7 @@ defmodule Nx do
   def bitwise_not(tensor) do
     tensor = tensor(tensor)
     assert_bitwise_type!(tensor.type)
-    impl(tensor).bitwise_not(tensor, tensor)
+    impl!(tensor).bitwise_not(tensor, tensor)
   end
 
   @doc """
@@ -2587,7 +2592,7 @@ defmodule Nx do
   def population_count(tensor) do
     tensor = tensor(tensor)
     assert_bitwise_type!(tensor.type)
-    impl(tensor).population_count(tensor, tensor)
+    impl!(tensor).population_count(tensor, tensor)
   end
 
   @doc """
@@ -2651,7 +2656,7 @@ defmodule Nx do
   def count_leading_zeros(tensor) do
     tensor = tensor(tensor)
     assert_bitwise_type!(tensor.type)
-    impl(tensor).count_leading_zeros(tensor, tensor)
+    impl!(tensor).count_leading_zeros(tensor, tensor)
   end
 
   for {name, desc} <- [floor: "floor", ceil: "ceil", round: "round (away from zero)"] do
@@ -2682,7 +2687,7 @@ defmodule Nx do
     def unquote(name)(tensor) do
       case tensor(tensor) do
         %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
-        %T{} = tensor -> impl(tensor).unquote(name)(tensor, tensor)
+        %T{} = tensor -> impl!(tensor).unquote(name)(tensor, tensor)
       end
     end
   end
@@ -2812,7 +2817,7 @@ defmodule Nx do
       end
 
     type = Nx.Type.to_aggregate(type)
-    impl(tensor).sum(%{tensor | type: type, shape: shape}, tensor, axes: axes)
+    impl!(tensor).sum(%{tensor | type: type, shape: shape}, tensor, axes: axes)
   end
 
   @doc """
@@ -2878,7 +2883,6 @@ defmodule Nx do
       >
 
   """
-  # TODO: remove mean from Exla.Lib
   def mean(tensor, opts \\ []) do
     tensor = tensor(tensor)
     divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
@@ -3092,7 +3096,7 @@ defmodule Nx do
       end
 
     opts = [tie_break: tie_break, axis: axis]
-    apply(impl(tensor), op, [%{tensor | type: {:s, 64}, shape: shape}, tensor, opts])
+    apply(impl!(tensor), op, [%{tensor | type: {:s, 64}, shape: shape}, tensor, opts])
   end
 
   ## Matrix ops
@@ -3368,7 +3372,7 @@ defmodule Nx do
     axes1 = Nx.Shape.normalize_axes(s1, axes1)
     axes2 = Nx.Shape.normalize_axes(s2, axes2)
     output_shape = Nx.Shape.zip_reduce(s1, axes1, s2, axes2)
-    impl(t1, t2).dot(%{t1 | type: output_type, shape: output_shape}, t1, axes1, t2, axes2)
+    impl!(t1, t2).dot(%{t1 | type: output_type, shape: output_shape}, t1, axes1, t2, axes2)
   end
 
   @doc """
@@ -3414,7 +3418,7 @@ defmodule Nx do
     type = Nx.Type.merge_tensors(t1, t2)
     %T{shape: s1} = t1 = tensor(t1)
     %T{shape: s2} = t2 = tensor(t2)
-    impl(t1, t2).outer(%{t1 | type: type, shape: Nx.Shape.outer(s1, s2)}, t1, t2)
+    impl!(t1, t2).outer(%{t1 | type: type, shape: Nx.Shape.outer(s1, s2)}, t1, t2)
   end
 
   @doc """
@@ -3562,43 +3566,7 @@ defmodule Nx do
       tensor
     else
       shape = Nx.Shape.transpose(shape, axes)
-      impl(tensor).transpose(%{tensor | shape: shape}, tensor, axes)
+      impl!(tensor).transpose(%{tensor | shape: shape}, tensor, axes)
     end
-  end
-
-  ## Helpers
-
-  defp shape!(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
-  defp shape!(%T{shape: shape}), do: shape
-  defp shape!(number) when is_number(number), do: {}
-
-  defp shape!(other) do
-    raise ArgumentError,
-          "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
-            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
-            "Got: #{inspect(other)}"
-  end
-
-  def assert_keys!(keyword, valid) do
-    for {k, _} <- keyword, k not in valid do
-      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
-    end
-  end
-
-  defp impl(%T{data: %struct{}}), do: struct
-
-  defp impl(%T{data: %struct1{}}, %T{data: %struct2{}}),
-    do: impl_struct(struct1, struct2)
-
-  defp impl(%T{data: %struct1{}}, %T{data: %struct2{}}, %T{data: %struct3{}}),
-    do: struct1 |> impl_struct(struct2) |> impl_struct(struct3)
-
-  defp impl_struct(Nx.BinaryTensor, struct), do: struct
-  defp impl_struct(struct, Nx.BinaryTensor), do: struct
-  defp impl_struct(struct, struct), do: struct
-
-  defp impl_struct(struct1, struct2) do
-    raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
-            "#{inspect(struct1)} and #{inspect(struct2)}"
   end
 end
