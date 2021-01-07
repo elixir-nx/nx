@@ -756,6 +756,7 @@ defmodule Exla.DefnTest do
     defn conv_same_stride(inp, kernel), do: Nx.conv(inp, kernel, {3, 3}, :same)
     defn conv_general_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, [{-1, 2}, {3, -1}])
     defn conv_general_stride(inp, kernel), do: Nx.conv(inp, kernel, {2, 1}, [{2, 2}, {-2, 4}])
+    defn conv_3d(inp, kernel), do: Nx.conv(inp, kernel, {1, 2, 1}, :same)
 
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
@@ -809,6 +810,16 @@ defmodule Exla.DefnTest do
 
       lhs = conv_general_stride(img, kernel)
       rhs = Nx.conv(img, kernel, {2, 1}, [{2, 2}, {-2, 4}])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a 3d convolution" do
+      img = Nx.iota({3, 3, 5, 5, 5}, type: {:f, 64})
+      kernel = Nx.iota({6, 3, 2, 2, 2}, type: {:f, 64})
+
+      lhs = conv_3d(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 2, 1}, :same)
 
       compare_tensors!(lhs, rhs)
     end

@@ -819,7 +819,9 @@ defmodule Nx.BinaryTensor do
     num_input_channels = elem(input_shape, 1)
 
     filter_spatial_dims = Tuple.delete_at(kernel_shape, 0)
-    filter_size = tuple_product(filter_spatial_dims, tuple_size(filter_spatial_dims)) * kernel_size
+
+    filter_size =
+      tuple_product(filter_spatial_dims, tuple_size(filter_spatial_dims)) * kernel_size
 
     # We first pad the input tensor with the following semantics
     #   :valid - no padding
@@ -867,59 +869,56 @@ defmodule Nx.BinaryTensor do
           <<filter::size(filter_size)-bitstring <- kernel_data>>,
           # Then we traverse the spatial dimension, applying
           # the filter at each step
-          anchor <- anchors, into: <<>> do
-            offset = weighted_offset(batch_weighted_shape, anchor)
-            # The shape of the window is {channels} + filter_shape
-            # The shape of the kernel is {num_filters, channels} + filter_shape
-            window =
-              IO.iodata_to_binary(
-                weighted_traverse(batch_weighted_shape, batch, input_size, offset)
-              )
+          anchor <- anchors,
+          into: <<>> do
+        offset = weighted_offset(batch_weighted_shape, anchor)
+        # The shape of the window is {channels} + filter_shape
+        # The shape of the kernel is {num_filters, channels} + filter_shape
+        window =
+          IO.iodata_to_binary(weighted_traverse(batch_weighted_shape, batch, input_size, offset))
 
-            # The receptive field size of each binary in bytes
-            input_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * input_size
-            filter_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * kernel_size
-            # For each channel in both filter and input...
-            # The output from a single filter being applied over a window
-            # of the input tensor is the sum of the element-wise products
-            values =
-              for i <- 0..(num_input_channels - 1) do
-                current_input_pos = i * input_field_size
-                current_filter_pos = i * filter_field_size
-                <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
+        # The receptive field size of each binary in bytes
+        input_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * input_size
+        filter_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * kernel_size
+        # For each channel in both filter and input...
+        # The output from a single filter being applied over a window
+        # of the input tensor is the sum of the element-wise products
+        values =
+          for i <- 0..(num_input_channels - 1) do
+            current_input_pos = i * input_field_size
+            current_filter_pos = i * filter_field_size
+            <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
+            <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> = filter
 
-                <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
-                  filter
+            for j <- 0..(tuple_product(filter_shape, tuple_size(filter_shape)) - 1) do
+              x =
+                match_types [input_type] do
+                  left_consumed = j * input_size
 
-                for j <- 0..(tuple_product(filter_shape, tuple_size(filter_shape)) - 1) do
-                  x =
-                    match_types [input_type] do
-                      left_consumed = j * input_size
+                  <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
+                    input_receptive_field
 
-                      <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
-                        input_receptive_field
-
-                      read!(x, 0)
-                    end
-
-                  y =
-                    match_types [kernel_type] do
-                      right_consumed = j * kernel_size
-
-                      <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
-                        filter_receptive_field
-
-                      read!(y, 0)
-                    end
-
-                  x * y
+                  read!(x, 0)
                 end
-              end
 
-            match_types [output_type] do
-              sum = Enum.sum(List.flatten(values))
-              <<write!(sum, 0)>>
+              y =
+                match_types [kernel_type] do
+                  right_consumed = j * kernel_size
+
+                  <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
+                    filter_receptive_field
+
+                  read!(y, 0)
+                end
+
+              x * y
             end
+          end
+
+        match_types [output_type] do
+          sum = Enum.sum(List.flatten(values))
+          <<write!(sum, 0)>>
+        end
       end
 
     from_binary(out, output_data)
@@ -1011,7 +1010,7 @@ defmodule Nx.BinaryTensor do
   end
 
   defp zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun)
-      when is_function(fun, 2) do
+       when is_function(fun, 2) do
     {_, s1} = left_type = t1.type
     {_, s2} = right_type = t2.type
 
