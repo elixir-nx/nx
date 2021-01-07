@@ -256,7 +256,52 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Calculates the padding needed for same padding.
+  Returns the outer product of two shapes.
+
+  ## Examples
+
+      iex> Nx.Shape.outer({2, 3}, {1, 2})
+      {6, 2}
+
+      iex> Nx.Shape.outer({1}, {3, 2})
+      {1, 6}
+
+      iex> Nx.Shape.outer({}, {})
+      {1, 1}
+  """
+  def outer(s1, s2), do: {size(s1), size(s2)}
+
+  @doc """
+  Reshapes a given shape to a new shape.
+
+  ## Examples
+
+      iex> Nx.Shape.reshape({2, 4}, {2, 2, 2})
+      {2, 2, 2}
+
+      iex> Nx.Shape.reshape({1, 2, 3}, {6})
+      {6}
+
+      iex> Nx.Shape.reshape({2, 1}, {1, 1, 1, 2})
+      {1, 1, 1, 2}
+
+  ### Error cases
+
+      iex> Nx.Shape.reshape({4, 2}, {2, 3, 2})
+      ** (ArgumentError) cannot reshape, current shape {4, 2} is not compatible with new shape {2, 3, 2}
+  """
+  def reshape(shape, new_shape) do
+    unless size(shape) == size(new_shape) do
+      raise ArgumentError,
+            "cannot reshape, current shape #{inspect(shape)} is not compatible with " <>
+              "new shape #{inspect(new_shape)}"
+    end
+
+    new_shape
+  end
+
+  @doc """
+  Calculates the padding needed for same padding accounting for stride.
 
   ## Examples
 
@@ -282,6 +327,40 @@ defmodule Nx.Shape do
     hi = ceil(padding_size / 2)
     [{lo, hi} | calculate_padding(shape, window, strides)]
   end
+
+  @doc """
+  Calculates the padding needed for same padding not accounting for stride.
+  """
+  def calculate_padding(shape, window) when is_tuple(window) and is_tuple(shape) do
+    validate_window!(shape, window)
+    calculate_padding(Tuple.to_list(shape), Tuple.to_list(window))
+  end
+
+  def calculate_padding([], []), do: []
+
+  def calculate_padding([dim | shape], [w | window]) do
+    padding_size = max((dim - 1) + w - dim, 0)
+    lo = floor(padding_size / 2)
+    hi = ceil(padding_size / 2)
+    [{lo, hi} | calculate_padding(shape, window)]
+  end
+
+  @doc """
+  Output shape after a convolution, already padded.
+  """
+  def conv(padded_shape, filter_shape, stride, num_filters) do
+    old_spatial_dims =
+      padded_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.to_list()
+    spatial_dims = Enum.reverse(do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(stride)))
+    List.to_tuple([num_filters | spatial_dims])
+  end
+
+  defp do_spatial_dims([], [], []), do: []
+
+  defp do_spatial_dims([cur | spatial], [f | filters], [s | strides]),
+    do: [floor((cur - f) / s) + 1 | do_spatial_dims(spatial, filters, strides)]
 
   @doc """
   Output shape after a window operation.

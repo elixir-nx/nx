@@ -774,6 +774,149 @@ defmodule Nx.BinaryTensor do
     end
   end
 
+  ## Conv
+
+  def conv(tensor, kernel, strides, padding \\ :valid) do
+    # Consider an image representation, the input shape should be:
+    # {batch, channels, height, width}
+    %T{type: {_, input_size} = input_type, shape: input_shape} = t = Nx.tensor(tensor)
+    # The kernel then has the following shape:
+    # {num_filters, channels, height, width}
+    %T{type: {_, kernel_size} = kernel_type, shape: kernel_shape} = k = Nx.tensor(kernel)
+
+    # The size of the "window" or the size of each filter
+    # removes the first two dimensions of the kernel
+    #
+    # This "window" is applied `num_filters` times across
+    # the input tensors spatial dimensions
+    filter_shape =
+      kernel_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    spatial_dims =
+      input_shape
+      |> Tuple.delete_at(0)
+
+    num_filters = elem(kernel_shape, 0)
+
+    num_input_channels = elem(input_shape, 0)
+
+    filter_size = Nx.Shape.size(Tuple.delete_at(kernel_shape, 0)) * kernel_size
+
+    # We first pad the input tensor with the following semantics
+    #   :valid - no padding
+    #   :same - pad with 0 such that the input's spatial dims
+    #           remain unchanged WITHOUT considering strides
+    #   general - pad with the given padding configuration
+    %T{shape: padded_shape} =
+      t =
+      case padding do
+        :valid ->
+          t
+
+        :same ->
+          padding_values = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
+          # We don't pad the channels or depth or z or whatever you want to
+          # call it, JUST the spatial dims
+          padding_values = [{0, 0}, padding_values]
+          Nx.pad(t, 0, padding_values)
+
+        padding_config when is_list(padding_config) ->
+          Nx.pad(t, 0, padding_config)
+      end
+
+    # The output type is merged between the input tensor
+    # and the input kernel
+    output_type = Nx.Type.merge_tensors(t, k)
+
+    # The output shape is a product of the batch size,
+    # number of filters in the input kernel, and the transformation
+    # on the spatial dimensions.
+    #
+    # The shape of each spatial dimension is calculated as:
+    #
+    # (spatial_dim - filter_size + 2 * padding_size) / stride + 1
+    #
+    # where spatial dim is the current spatial dimension size, filter size is
+    # the size of the corresponding spatial dimension in the kernel,
+    # padding size is the amount of padding applied to either side of the
+    # spatial dimension, and stride is the input stride
+    #
+    # The final shape is then given as:
+    # {batch, num_filters, spatial_dim0, spatial_dim1, ...}
+    output_shape = Nx.Shape.conv(padded_shape, filter_shape, strides, num_filters)
+
+    # We will traverse the input tensor exactly the same as we traversed
+    # the binary in reduce_window, but the window is equal to the filter
+    # size of the kernel plus the channel size of the input tensor
+    window_shape = Tuple.insert_at(filter_shape, 0, num_input_channels)
+    IO.inspect window_shape
+
+    input_data = Nx.Util.to_bitstring(t)
+    kernel_data = Nx.Util.to_bitstring(t)
+
+    weighted_shape = weighted_shape(padded_shape, input_size, window_shape)
+
+    anchors = Enum.sort(make_anchors(spatial_dims, strides, filter_shape, []))
+    anchors = Enum.map(anchors, &Tuple.insert_at(&1, 0, 0))
+
+    output_data =
+      # Traverse the spatial dimensions first
+      for anchor <- anchors, into: <<>> do
+        offset = weighted_offset(weighted_shape, anchor)
+        # The shape of the window is {channels} + filter_shape
+        # The shape of the kernel is {num_filters, channels} + filter_shape
+        window = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, input_size, offset))
+        # The receptive field size of each binary in bytes
+        input_field_size = Nx.Shape.size(filter_shape) * input_size
+        filter_field_size = Nx.Shape.size(filter_shape) * kernel_size
+        # For each filter...
+        for <<filter::size(filter_size)-bitstring <- kernel_data>>, into: <<>> do
+          # For each channel...
+          field_calcs =
+            for i <- (0..num_input_channels - 1) do
+              current_input_pos = i * input_field_size
+              current_filter_pos = i * filter_field_size
+              <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
+              <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> = filter
+              # Perform an element-wise multiplication across both
+              # receptive fields
+              for j <- (0..Nx.Shape.size(filter_shape) - 1) do
+                x =
+                  match_types [input_type] do
+                    left_consumed = j * input_size
+                    <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> = input_receptive_field
+                    read!(x, 0)
+                  end
+
+                y =
+                  match_types [kernel_type] do
+                    right_consumed = j * kernel_size
+                    <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> = filter_receptive_field
+                    read!(y, 0)
+                  end
+                x * y
+              end
+            end
+
+          match_types [output_type] do
+            field_calcs
+            |> Enum.zip()
+            |> Enum.map(
+              fn tuple ->
+                sum = Enum.sum(Tuple.to_list(tuple))
+                <<write!(sum, 0)>>
+              end
+            )
+            |> IO.iodata_to_binary()
+          end
+        end
+      end
+
+    %{t | shape: output_shape, data: {Nx.BitStringDevice, output_data}, type: output_type}
+  end
+
   ## Aggregation
 
   @doc false

@@ -3630,6 +3630,29 @@ defmodule Nx do
       shape = Nx.Shape.transpose(shape, axes)
       impl!(tensor).transpose(%{tensor | shape: shape}, tensor, axes)
     end
+
+    {axes, min} = transpose_min(axes, 0)
+    {axes, max} = transpose_max(Enum.reverse(axes), size - 1)
+    {axes, min, max}
+  end
+
+  defp transpose_min([head | tail], head), do: transpose_min(tail, head + 1)
+  defp transpose_min(tail, head), do: {tail, head}
+
+  defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
+  defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
+
+  ## Shape
+
+  defp shape!(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
+  defp shape!(%T{shape: shape}), do: shape
+  defp shape!(number) when is_number(number), do: {}
+
+  defp shape!(other) do
+    raise ArgumentError,
+          "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
+            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
+            "Got: #{inspect(other)}"
   end
 
   ## Type
