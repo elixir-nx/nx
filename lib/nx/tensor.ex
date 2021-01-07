@@ -31,13 +31,14 @@ defmodule Nx.Tensor do
       shape = shape_to_algebra(dims_list, open, close)
 
       {data, _limit} =
+        # TODO: Move inspection to Nx.BinaryTensor
         case tensor.data do
-          {Nx.BitStringDevice, bin} ->
+          %Nx.BinaryTensor{device: Nx.BitStringDevice, state: bin} ->
             {_, size} = tensor.type
             total_size = Enum.reduce(dims_list, size, &*/2)
             chunk(dims_list, bin, opts.limit, total_size, tensor.type, {open, sep, close})
 
-          {device, _} ->
+          %Nx.BinaryTensor{device: device} ->
             {to_doc(device, opts), opts.limit}
         end
 

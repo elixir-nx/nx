@@ -6,7 +6,7 @@ defmodule Exla.NxDeviceTest do
       t = Nx.tensor([1, 2, 3, 4])
 
       et = Nx.device_transfer(t, Exla.NxDevice)
-      assert {Exla.NxDevice, {ref, :default}} = et.data
+      assert %Nx.BinaryTensor{device: Exla.NxDevice, state: {ref, :default}} = et.data
       assert is_reference(ref)
 
       assert_raise ArgumentError,
@@ -54,7 +54,7 @@ defmodule Exla.NxDeviceTest do
       t = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4]])
 
       et = Nx.device_transfer(t, Exla.ShardedNxDevice)
-      assert {Exla.ShardedNxDevice, [buffer1, buffer2]} = et.data
+      assert %Nx.BinaryTensor{device: Exla.ShardedNxDevice, state: [buffer1, buffer2]} = et.data
       assert {ref1, :default} = buffer1.ref
       assert {ref2, :default} = buffer2.ref
       assert is_reference(ref1)

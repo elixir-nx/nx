@@ -247,15 +247,6 @@ defmodule Nx.DefnTest do
     test "supports Nx.tensor calls" do
       assert %Expr{op: :tensor, args: [_], shape: {2, 2}} = two_per_two_attribute()
     end
-
-    @invalid_tensor Nx.tensor(1) |> Map.replace!(:data, {SomethingBad, :another})
-    defn invalid_tensor, do: @invalid_tensor
-
-    test "raises on invalid tensor" do
-      assert_raise ArgumentError,
-                   "tensors inside defn must be allocated on Nx.BitStringDevice",
-                   fn -> invalid_tensor() end
-    end
   end
 
   describe "operators" do

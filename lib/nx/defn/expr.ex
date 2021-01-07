@@ -35,13 +35,7 @@ defmodule Nx.Defn.Expr do
   end
 
   def to_expr(%T{shape: shape, data: data} = t) do
-    case data do
-      {Nx.BitStringDevice, binary} when is_binary(binary) ->
-        make_expr(shape, :tensor, [t])
-
-      _ ->
-        raise ArgumentError, "tensors inside defn must be allocated on Nx.BitStringDevice"
-    end
+    make_expr(shape, :tensor, [t])
   end
 
   def to_expr(other) do

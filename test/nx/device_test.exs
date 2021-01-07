@@ -5,7 +5,7 @@ defmodule Nx.DeviceTest do
     t = Nx.tensor([1, 2, 3, 4])
 
     pt = Nx.device_transfer(t, Nx.ProcessDevice, key: :tensor)
-    assert pt.data == {Nx.ProcessDevice, :tensor}
+    assert pt.data == %Nx.BinaryTensor{device: Nx.ProcessDevice, state: :tensor}
     assert Process.get(:tensor)
 
     assert_raise ArgumentError,

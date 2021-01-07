@@ -1,10 +1,13 @@
 defmodule Nx.BinaryTensor do
   @moduledoc false
 
-  # TODO: Remove me
-  import Nx.Shared
+  defstruct [:device, :state]
 
   alias Nx.Tensor, as: T
+  alias Nx.BinaryTensor, as: BT
+
+  # TODO: Remove me
+  import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
 
   ## Creation
@@ -112,32 +115,33 @@ defmodule Nx.BinaryTensor do
   ## Device API
 
   def from_binary(binary, t) when is_binary(binary) do
-    %{t | data: {Nx.BitStringDevice, binary}}
+    %{t | data: %BT{device: Nx.BitStringDevice, state: binary}}
   end
 
   def from_binary(other, t) do
-    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(other)}}
+    %{t | data: %BT{device: Nx.BitStringDevice, state: IO.iodata_to_binary(other)}}
   end
 
-  def to_binary(%T{data: {Nx.BitStringDevice, data}}), do: data
+  def to_binary(%T{data: %{device: Nx.BitStringDevice, state: data}}), do: data
 
-  def to_binary(%T{data: {device, _data}}) do
+  def to_binary(%T{data: %{device: device}}) do
     raise ArgumentError,
           "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
             "Please use Nx.device_transfer/1 to transfer data back to Elixir"
   end
 
-  def device_read(%T{data: {device, state}} = tensor) do
-    %{tensor | data: {Nx.BitStringDevice, device.read(state)}}
+  def device_read(%T{data: %{device: device, state: state}} = tensor) do
+    from_binary(device.read(state), tensor)
   end
 
-  def device_deallocate(%T{data: {device, state}} = _tensor) do
+  def device_deallocate(%T{data: %{device: device, state: state}}) do
     device.deallocate(state)
   end
 
-  def device_transfer(%T{data: {Nx.BitStringDevice, _data}} = tensor, device, opts) do
+  def device_transfer(%T{data: %{device: Nx.BitStringDevice}} = tensor, device, opts) do
     %{type: type, shape: shape} = tensor
-    %{tensor | data: device.allocate(to_binary(tensor), type, shape, opts)}
+    {device, state} = device.allocate(to_binary(tensor), type, shape, opts)
+    %{tensor | data: %BT{device: device, state: state}}
   end
 
   def device_transfer(%T{} = tensor, Nx.BitStringDevice, _opts) do
@@ -146,7 +150,7 @@ defmodule Nx.BinaryTensor do
     new
   end
 
-  def device_transfer(%T{data: {data_device, _}}, device, _opts) do
+  def device_transfer(%T{data: %{device: data_device}}, device, _opts) do
     raise ArgumentError, "cannot transfer from #{inspect(data_device)} to #{inspect(device)}"
   end
 

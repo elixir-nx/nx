@@ -84,9 +84,9 @@ defmodule Exla.Defn do
 
   ## to_operator creation
 
-  defp to_operator(:tensor, [%Nx.Tensor{type: type, data: {_, data}}], shape, builder) do
+  defp to_operator(:tensor, [%Nx.Tensor{type: type} = tensor], shape, builder) do
     shape = Exla.Shape.make_shape(type, shape)
-    Exla.Op.constant_from_binary(builder, data, shape)
+    Exla.Op.constant_from_binary(builder, Nx.to_binary(tensor), shape)
   end
 
   defp to_operator(:random_uniform, [shape, min, max, opts], _shape, builder) do
@@ -389,15 +389,17 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    %Nx.Tensor{
-      data: {Nx.BitStringDevice, data},
-      type: Exla.Type.to_nx(shape.dtype),
-      shape: shape.dims
-    }
+    data
+    |> Nx.from_binary(Exla.Type.to_nx(shape.dtype))
+    |> Map.replace!(:shape, shape.dims)
   end
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
-    %Nx.Tensor{data: {Exla.NxDevice, ref}, type: Exla.Type.to_nx(shape.dtype), shape: shape.dims}
+    %Nx.Tensor{
+      data: %Nx.BinaryTensor{device: Exla.NxDevice, state: ref},
+      type: Exla.Type.to_nx(shape.dtype),
+      shape: shape.dims
+    }
   end
 
   defp buffer_to_nx({:tuple, buffers}) do
@@ -409,16 +411,13 @@ defmodule Exla.Defn do
             "got: #{inspect(other)}"
   end
 
-  defp nx_to_buffer(%Nx.Tensor{data: {device, data}, type: type, shape: shape}) do
-    case device do
-      Nx.BitStringDevice when is_binary(data) ->
-        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
+  defp nx_to_buffer(%Nx.Tensor{data: data, type: type, shape: shape} = tensor) do
+    case data do
+      %Nx.BinaryTensor{device: Exla.NxDevice, state: state} ->
+        Exla.Buffer.buffer(state, Exla.Shape.make_shape(type, shape))
 
-      Exla.NxDevice when is_tuple(data) ->
-        Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
-
-      true ->
-        raise ArgumentError, "unknown device #{inspect(device)} given to defn compiled with Exla"
+      _ ->
+        Exla.Buffer.buffer(Nx.to_binary(tensor), Exla.Shape.make_shape(type, shape))
     end
   end
 
