@@ -46,25 +46,6 @@ defmodule Exla.Lib do
   end
 
   @doc """
-  Computes the mean of the given operation.
-
-  ## Options
-
-    * `:axes` - the axes to reduce on
-
-  """
-  def mean(%Builder{} = builder, %Op{} = op, opts \\ []) do
-    dims = Op.get_shape(op).dims
-    sum = sum(builder, op, opts)
-    otype = Exla.Type.to_floating(Op.get_shape(sum).dtype)
-
-    Op.divide(
-      Op.convert_element_type(sum, otype),
-      Op.constant_r0(builder, mean_den(dims, opts[:axes]), otype)
-    )
-  end
-
-  @doc """
   Computes the argmax of the given operation.
 
   ## Options
@@ -185,8 +166,4 @@ defmodule Exla.Lib do
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
-
-  defp mean_den(dims, nil), do: tuple_product(dims)
-  defp mean_den(_dims, []), do: 1
-  defp mean_den(dims, [axis | axes]), do: elem(dims, axis) * mean_den(dims, axes)
 end

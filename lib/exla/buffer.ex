@@ -36,7 +36,7 @@ defmodule Exla.Buffer do
     %Buffer{data: nil, ref: {reference, client_name}, shape: shape}
   end
 
-  def buffer(binary, shape = %Shape{}) when is_bitstring(binary) do
+  def buffer(binary, shape = %Shape{}) when is_binary(binary) do
     %Buffer{data: binary, ref: nil, shape: shape}
   end
 

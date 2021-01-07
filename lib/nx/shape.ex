@@ -1,6 +1,8 @@
 defmodule Nx.Shape do
   @moduledoc false
 
+  # TODO: Keep here only the shared shape functions
+
   @doc """
   Validates the given shape.
 
@@ -321,35 +323,6 @@ defmodule Nx.Shape do
       {1, 1}
   """
   def outer(s1, s2), do: {size(s1), size(s2)}
-
-  @doc """
-  Reshapes a given shape to a new shape.
-
-  ## Examples
-
-      iex> Nx.Shape.reshape({2, 4}, {2, 2, 2})
-      {2, 2, 2}
-
-      iex> Nx.Shape.reshape({1, 2, 3}, {6})
-      {6}
-
-      iex> Nx.Shape.reshape({2, 1}, {1, 1, 1, 2})
-      {1, 1, 1, 2}
-
-  ### Error cases
-
-      iex> Nx.Shape.reshape({4, 2}, {2, 3, 2})
-      ** (ArgumentError) cannot reshape, current shape {4, 2} is not compatible with new shape {2, 3, 2}
-  """
-  def reshape(shape, new_shape) do
-    unless size(shape) == size(new_shape) do
-      raise ArgumentError,
-            "cannot reshape, current shape #{inspect(shape)} is not compatible with " <>
-              "new shape #{inspect(new_shape)}"
-    end
-
-    new_shape
-  end
 
   @doc """
   Calculates the padding needed for same padding.

@@ -143,9 +143,9 @@ defmodule Exla.Executable do
 
       _ when keep_on_device == false and is_reference(data) ->
         # This is the outside of cpu
-        bitstring = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
+        binary = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
         Exla.NIF.deallocate_device_mem(data) |> unwrap!()
-        Buffer.buffer(bitstring, shape)
+        Buffer.buffer(binary, shape)
 
       _ when is_reference(data) ->
         Buffer.buffer({data, client.name}, shape)

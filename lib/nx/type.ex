@@ -13,6 +13,8 @@ defmodule Nx.Type do
 
   """
 
+  # TODO: move most of these functions to Nx (or make private)
+
   @type t ::
           {:s, 8}
           | {:s, 16}

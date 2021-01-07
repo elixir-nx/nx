@@ -1,6 +1,8 @@
 defmodule Nx.Shared do
-  # A collection of **private** helpers and macros shared between Nx and Nx.Util.
+  # A collection of **private** helpers and macros shared in Nx.
   @moduledoc false
+
+  alias Nx.Tensor, as: T
 
   @doc """
   Match the cartesian product of all given types.
@@ -134,102 +136,78 @@ defmodule Nx.Shared do
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
   @doc """
-  Converts a scalar to a binary, according to the type.
+  Returns the definition of mathemtical unary funs.
   """
-  def scalar_to_binary(value, type) do
-    match_types([type], do: <<write!(value, 0)>>)
+  def unary_math_funs,
+    do: [
+      exp: {"exponential", quote(do: :math.exp(var!(x)))},
+      expm1: {"exponential minus one", quote(do: :math.exp(var!(x)) - 1)},
+      log: {"natural log", quote(do: :math.log(var!(x)))},
+      log1p: {"natural log plus one", quote(do: :math.log(var!(x) + 1))},
+      logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x))))},
+      cos: {"cosine", quote(do: :math.cos(var!(x)))},
+      sin: {"sine", quote(do: :math.sin(var!(x)))},
+      tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
+      sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
+      rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
+      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))}
+    ]
+
+  @doc """
+  Returns the name of creation funs.  
+  """
+  def creation_funs, do: [:iota, :random_normal, :random_uniform]
+
+  @doc """
+  Converts the given tensor or shape to a shape.
+  """
+  def shape!(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
+  def shape!(%Nx.Tensor{shape: shape}), do: shape
+  def shape!(number) when is_number(number), do: {}
+
+  def shape!(other) do
+    raise ArgumentError,
+          "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
+            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
+            "Got: #{inspect(other)}"
   end
 
   @doc """
-  Converts the shape to a weight shape list.
-
-  A weighted shape is a list of tuples where the first
-  element is the number of elements in the dimension
-  and the second element is the size to be traversed in
-  the binary to fetch the next element.
-
-  This is often given to `weighted_traverse/3` as a general
-  mechanism to traverse binaries.
-  """
-  def weighted_shape(shape, size, limits \\ :none) do
-    Enum.reverse(weighted_shape(shape, tuple_size(shape), size, limits))
-  end
-
-  defp weighted_shape(_shape, 0, _weight, _limits) do
-    []
-  end
-
-  defp weighted_shape(shape, pos, weight, limits) do
-    shape_elem = :erlang.element(pos, shape)
-
-    element =
-      if limits == :none, do: shape_elem, else: min(:erlang.element(pos, limits), shape_elem)
-
-    [{element, weight} | weighted_shape(shape, pos - 1, weight * shape_elem, limits)]
-  end
-
-  @doc """
-  Reads the chunk size from a weighted list at the given position.
-  """
-  def weighted_chunk(list, at, size) do
-    {element, size} = Enum.at(list, at, {1, size})
-    element * size
-  end
-
-  @doc """
-  Traverses a binary using the elements and shape given by `weighted_shape`.
-
-  When all dimensions are traversed, we read `read_size`.
-
-  The `weighted_shape` can also contain functions, which are applied to the
-  result of the remaining of the weighted shape.
-  """
-  def weighted_traverse(weighted_shape, binary, read_size, offset \\ 0)
-
-  def weighted_traverse([], data, read_size, offset) do
-    <<_::size(offset)-bitstring, chunk::size(read_size)-bitstring, _::bitstring>> = data
-    chunk
-  end
-
-  def weighted_traverse([{dim, size} | dims], data, read_size, offset) do
-    weighted_traverse(dim, size, dims, data, read_size, offset)
-  end
-
-  def weighted_traverse([fun | dims], data, read_size, offset) do
-    fun.(weighted_traverse(dims, data, read_size, offset))
-  end
-
-  defp weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
-    head = weighted_traverse(dims, data, read_size, offset)
-
-    case dim do
-      1 ->
-        [head]
-
-      _ ->
-        <<_::size(dim_size)-bitstring, data::bitstring>> = data
-        [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
-    end
-  end
-
-  @doc """
-  Calculates the offset needed to reach a specified position
-  in the binary from a weighted shape list.
-  """
-  def weighted_offset(weighted_shape, pos) when is_tuple(pos),
-    do: weighted_offset(weighted_shape, Tuple.to_list(pos))
-
-  def weighted_offset([], []), do: 0
-
-  def weighted_offset([{_, size} | dims], [x | pos]),
-    do: size * x + weighted_offset(dims, pos)
-
-  @doc """
-  Asserts the keyword has the given keys.
+  Asserts the given keys.
   """
   def assert_keys!(keyword, valid) do
     for {k, _} <- keyword, k not in valid do
       raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
     end
+  end
+
+  @doc """
+  Gets the implementation of a tensor.
+  """
+  def impl!(%T{data: %struct{}}), do: struct
+
+  def impl!(%T{data: %struct1{}}, %T{data: %struct2{}}),
+    do: pick_struct(struct1, struct2)
+
+  def impl!(%T{data: %struct1{}}, %T{data: %struct2{}}, %T{data: %struct3{}}),
+    do: struct1 |> pick_struct(struct2) |> pick_struct(struct3)
+
+  @doc """
+  Gets the implementation of a list of maybe tensors.
+  """
+  def find_impl!(list) do
+    Enum.reduce(list, Nx.BinaryTensor, fn
+      %T{data: %struct{}}, acc -> pick_struct(struct, acc)
+      _, acc -> acc
+    end)
+  end
+
+  defp pick_struct(Nx.BinaryTensor, struct), do: struct
+  defp pick_struct(struct, Nx.BinaryTensor), do: struct
+  defp pick_struct(struct, struct), do: struct
+
+  defp pick_struct(struct1, struct2) do
+    raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
+            "#{inspect(struct1)} and #{inspect(struct2)}"
   end
 end

@@ -6,16 +6,16 @@ defmodule Exla.NxDeviceTest do
       t = Nx.tensor([1, 2, 3, 4])
 
       et = Nx.device_transfer(t, Exla.NxDevice)
-      assert {Exla.NxDevice, {ref, :default}} = et.data
+      assert %Nx.BinaryTensor{device: Exla.NxDevice, state: {ref, :default}} = et.data
       assert is_reference(ref)
 
       assert_raise ArgumentError,
                    ~r"cannot read Nx.Tensor data because the data is allocated on device Exla.NxDevice",
-                   fn -> Nx.Util.to_bitstring(et) end
+                   fn -> Nx.to_binary(et) end
 
       nt = Nx.device_transfer(et)
 
-      assert Nx.Util.to_bitstring(nt) ==
+      assert Nx.to_binary(nt) ==
                <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
 
       assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn ->
@@ -54,7 +54,7 @@ defmodule Exla.NxDeviceTest do
       t = Nx.tensor([[1, 2, 3, 4], [1, 2, 3, 4]])
 
       et = Nx.device_transfer(t, Exla.ShardedNxDevice)
-      assert {Exla.ShardedNxDevice, [buffer1, buffer2]} = et.data
+      assert %Nx.BinaryTensor{device: Exla.ShardedNxDevice, state: [buffer1, buffer2]} = et.data
       assert {ref1, :default} = buffer1.ref
       assert {ref2, :default} = buffer2.ref
       assert is_reference(ref1)
@@ -62,11 +62,11 @@ defmodule Exla.NxDeviceTest do
 
       assert_raise ArgumentError,
                    ~r"cannot read Nx.Tensor data because the data is allocated on device Exla.ShardedNxDevice",
-                   fn -> Nx.Util.to_bitstring(et) end
+                   fn -> Nx.to_binary(et) end
 
       nt = Nx.device_transfer(et)
 
-      assert Nx.Util.to_bitstring(nt) ==
+      assert Nx.to_binary(nt) ==
                <<1::64-native, 2::64-native, 3::64-native, 4::64-native, 1::64-native,
                  2::64-native, 3::64-native, 4::64-native>>
 

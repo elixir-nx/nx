@@ -3,8 +3,11 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
-  @as_is_nx_functions [:tensor]
-  @forbidden_nx_functions [:device_read, :device_deallocate, :device_transfer, :type]
+  # These operations need to be rewritten to Expr as they don't dispatch to data
+  @expr_ops Nx.Shared.creation_funs()
+
+  # These operations do not have valid meaning for Nx.Defn.Expr
+  @forbidden_ops [:device_read, :device_deallocate, :device_transfer, :to_binary]
 
   @doc """
   The callback required to be implemented for each compiler.
@@ -14,7 +17,7 @@ defmodule Nx.Defn.Compiler do
   compiler options.
 
   It must call `fun` with a list where all vars have been
-  converted to `Nx.Defn.Expr` parameters via `Nx.Defn.Expr.parameter/2`.
+  converted to `Nx.Defn.Expr` parameters via `Nx.Defn.Expr.parameter/3`.
 
   Note the number of variables is not the same as the function
   arity as argument patterns have already been matched. The
@@ -62,9 +65,6 @@ defmodule Nx.Defn.Compiler do
 
   @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
-    {:module, Nx} = Code.ensure_compiled(Nx)
-    {:module, Nx.Defn.Kernel} = Code.ensure_compiled(Nx.Defn.Kernel)
-
     state = %{
       module: module,
       file: file,
@@ -174,27 +174,21 @@ defmodule Nx.Defn.Compiler do
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
 
-  defp normalize({{:., _, [Nx, name]} = call, meta, args}, state)
-       when name in @as_is_nx_functions do
-    {args, state} = normalize_list(args, state)
-    {{call, meta, args}, state}
-  end
-
-  defp normalize({{:., _, [Nx, name]}, meta, args}, state)
-       when name in @forbidden_nx_functions do
-    arity = length(args)
-    compile_error!(meta, state, "Nx.#{name}/#{arity} is not allowed inside defn")
-  end
-
   defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
-    arity = length(args)
+    mod =
+      cond do
+        name in @forbidden_ops ->
+          compile_error!(meta, state, "Nx.#{name}/#{length(args)} is not allowed inside defn")
 
-    unless function_exported?(Nx, name, arity) do
-      compile_error!(meta, state, "undefined function Nx.#{name}/#{arity}")
-    end
+        name in @expr_ops ->
+          Nx.Defn.Expr
+
+        true ->
+          Nx
+      end
 
     {args, state} = normalize_list(args, state)
-    {{{:., dot_meta, [Nx.Defn.Expr, name]}, meta, args}, state}
+    {{{:., dot_meta, [mod, name]}, meta, args}, state}
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, name]} = call, meta, args}, state) do
@@ -228,7 +222,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize(literal, state)
-       when is_number(literal) or is_atom(literal) or is_bitstring(literal) do
+       when is_number(literal) or is_atom(literal) or is_binary(literal) do
     {literal, state}
   end
 

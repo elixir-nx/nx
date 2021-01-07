@@ -1,6 +1,6 @@
-defmodule Nx.BitStringDevice do
+defmodule Nx.BinaryDevice do
   @moduledoc """
-  The default implementation of `Nx.Device` that uses the VM bitstrings.
+  The default implementation of `Nx.Device` that uses the VM binarys.
   """
 
   @behaviour Nx.Device

@@ -20,7 +20,7 @@ defmodule Exla.ShardedBuffer do
   end
 
   def sharded_buffer(binary, shape = %Shape{dtype: {_, size} = type, dims: dims})
-      when is_bitstring(binary) do
+      when is_binary(binary) do
     num_shards = elem(dims, 0)
     sharded_dims = Tuple.delete_at(dims, 0)
     sharded_shape = Shape.make_shape(type, sharded_dims)
