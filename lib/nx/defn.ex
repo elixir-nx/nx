@@ -110,7 +110,7 @@ defmodule Nx.Defn do
                       "Got: #{inspect(var)}"
           end
 
-        Nx.Defn.Expr.parameter(tensor.shape, tensor)
+        Nx.Defn.Expr.parameter(tensor.shape, tensor.type, tensor)
       end
 
     fun.(params)
@@ -118,15 +118,15 @@ defmodule Nx.Defn do
     |> elem(0)
   end
 
-  defp eval(%Nx.Defn.Expr{op: :parameter, args: [t]}, state) do
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [t]}}, state) do
     {t, state}
   end
 
-  defp eval(%Nx.Defn.Expr{op: :constant, args: [t]}, state) do
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :tensor, args: [t]}}, state) do
     {t, state}
   end
 
-  defp eval(%Nx.Defn.Expr{id: id, op: op, args: args}, state) do
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}}, state) do
     case state do
       %{^id => res} ->
         {res, state}

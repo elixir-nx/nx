@@ -146,12 +146,13 @@ defmodule Nx.Defn.Kernel do
 
   When invoked, it will print the expression being built by `defn`:
 
-      #Nx.Defn.Expr<
-        parameter a
-        parameter c
-        b = tanh [ a ] ()
-        d = power [ c, 2 ] ()
-        e = add [ b, d ] ()
+      #Nx.Tensor<
+        Nx.Defn.Expr
+        parameter a s64
+        parameter c s64
+        b = tanh [ a ] f64
+        d = power [ c, 2 ] s64
+        e = add [ b, d ] f64
       >
 
   """
@@ -263,9 +264,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  # TODO: Implement all functions using this style once we merge Nx and Nx.Defn.Expr.
+  # TODO: Implement all functions using this style to avoid loss of type information
   def left + right when is_number(left) and is_number(right), do: Kernel.+(left, right)
-  def left + right, do: Nx.Defn.Expr.add(left, right)
+  def left + right, do: Nx.add(left, right)
 
   @doc """
   Element-wise substraction operator.

@@ -19,7 +19,7 @@ defmodule Nx.BinaryTensor do
       raise "cannot build empty tensor"
     end
 
-    from_binary(data, %T{shape: shape, type: type})
+    from_binary(%T{shape: shape, type: type}, data)
   end
 
   defp flatten(list, type) when is_list(list) do
@@ -69,7 +69,7 @@ defmodule Nx.BinaryTensor do
       end
 
     data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_binary(gen.(), type)
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
@@ -78,12 +78,12 @@ defmodule Nx.BinaryTensor do
           into: "",
           do: scalar_to_binary(:rand.normal(mu, sigma), type)
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   def iota(%{shape: {n}, type: type} = out, 0) do
     data = for i <- 0..(n - 1), do: scalar_to_binary(i, type)
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   def iota(%{shape: shape, type: type} = out, axis) do
@@ -109,16 +109,16 @@ defmodule Nx.BinaryTensor do
           into: "",
           do: scalar_to_binary(i, type)
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   ## Device API
 
-  def from_binary(binary, t) when is_binary(binary) do
+  def from_binary(t, binary) when is_binary(binary) do
     %{t | data: %BT{device: Nx.BitStringDevice, state: binary}}
   end
 
-  def from_binary(other, t) do
+  def from_binary(t, other) do
     %{t | data: %BT{device: Nx.BitStringDevice, state: IO.iodata_to_binary(other)}}
   end
 
@@ -131,7 +131,7 @@ defmodule Nx.BinaryTensor do
   end
 
   def device_read(%T{data: %{device: device, state: state}} = tensor) do
-    from_binary(device.read(state), tensor)
+    from_binary(tensor, device.read(state))
   end
 
   def device_deallocate(%T{data: %{device: device, state: state}}) do
@@ -167,7 +167,7 @@ defmodule Nx.BinaryTensor do
     tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
     sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
     rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
-    cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))},
+    cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))}
   ]
 
   @doc false
@@ -175,16 +175,14 @@ defmodule Nx.BinaryTensor do
 
   ## Shape
 
-  def reshape(_tensor, out), do: out
-  def squeeze(_tensor, out, _axes), do: out
+  def reshape(out, _tensor, _shape), do: out
+  def squeeze(out, _tensor, _axes), do: out
 
   ## Broadcast
 
   @doc false
-  def broadcast(t, %{shape: shape} = out, axes) do
-    t
-    |> broadcast_data(shape, axes)
-    |> from_binary(out)
+  def broadcast(out, t, shape, axes) do
+    from_binary(out, broadcast_data(t, shape, axes))
   end
 
   defp broadcast_data(%{shape: shape} = t, shape),
@@ -239,7 +237,7 @@ defmodule Nx.BinaryTensor do
 
   ## Shape
 
-  def transpose(%T{shape: shape, type: {_, size}} = t, out, axes) do
+  def transpose(out, %T{shape: shape, type: {_, size}} = t, axes) do
     data = to_binary(t)
     {list, min, max} = transpose_axes(shape, axes)
     weighted_shape = weighted_shape(shape, size)
@@ -263,7 +261,7 @@ defmodule Nx.BinaryTensor do
         weighted_traverse(traverse_list, chunk, read_size)
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   defp transpose_axes(shape, axes) do
@@ -283,7 +281,7 @@ defmodule Nx.BinaryTensor do
 
   # We ignore the out because we need to recur over the shape
   # as we transpose and build the rest.
-  def pad(t, _out, pad_value, padding_config) do
+  def pad(_out, t, pad_value, padding_config) do
     pad_value = Nx.Util.to_scalar(pad_value)
 
     case t.shape do
@@ -353,7 +351,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    from_binary(data, %{t | type: type, shape: new_shape})
+    from_binary(%{t | type: type, shape: new_shape}, data)
   end
 
   defp pad_in_dim(shape, dim, edge_low, edge_high) do
@@ -365,7 +363,7 @@ defmodule Nx.BinaryTensor do
 
   ## Two-element
 
-  def outer(%{type: left_type} = t1, %{type: right_type} = t2, out) do
+  def outer(out, %{type: left_type} = t1, %{type: right_type} = t2) do
     b1 = to_binary(t1)
     b2 = to_binary(t2)
 
@@ -377,11 +375,11 @@ defmodule Nx.BinaryTensor do
             do: scalar_to_binary(read!(left, 0) * read!(right, 1), out.type)
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
-  def dot(t1, axes1, t2, axes2, out) do
-    zip_reduce(t1, axes1, t2, axes2, out, 0, fn {lhs, rhs}, acc ->
+  def dot(out, t1, axes1, t2, axes2) do
+    zip_reduce(out, t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
       res = lhs * rhs + acc
       {res, res}
     end)
@@ -389,13 +387,13 @@ defmodule Nx.BinaryTensor do
 
   ## Element wise ternary ops
 
-  def select(%{shape: {}} = pred, on_true, on_false, out) do
+  def select(out, %{shape: {}} = pred, on_true, on_false) do
     if Nx.Util.to_scalar(pred) == 0,
-      do: broadcast_data(on_false, out.shape) |> from_binary(out),
-      else: broadcast_data(on_true, out.shape) |> from_binary(out)
+      do: from_binary(out, broadcast_data(on_false, out.shape)),
+      else: from_binary(out, broadcast_data(on_true, out.shape))
   end
 
-  def select(pred, on_true, on_false, %{shape: shape, type: type} = out) do
+  def select(%{shape: shape, type: type} = out, pred, on_true, on_false) do
     %T{type: {_, pred_size} = pred_type} = pred
     %T{type: {_, left_size} = left_type} = on_true
     %T{type: {_, right_size} = right_type} = on_false
@@ -431,7 +429,7 @@ defmodule Nx.BinaryTensor do
         scalar_to_binary(result, type)
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   ## Element wise bin ops
@@ -442,12 +440,12 @@ defmodule Nx.BinaryTensor do
           [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] do
     capture = Macro.var(:"element_#{fun}", __MODULE__)
 
-    def unquote(fun)(left, right, out) do
-      element_wise_bin_op(left, right, out, &(unquote(capture) / 3))
+    def unquote(fun)(out, left, right) do
+      element_wise_bin_op(out, left, right, &(unquote(capture) / 3))
     end
   end
 
-  defp element_wise_bin_op(left, right, %{shape: shape, type: type} = out, fun) do
+  defp element_wise_bin_op(%{shape: shape, type: type} = out, left, right, fun) do
     %T{type: {_, left_size} = left_type} = left
     %T{type: {_, right_size} = right_type} = right
 
@@ -476,7 +474,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   defp element_add(_, a, b), do: a + b
@@ -524,12 +522,12 @@ defmodule Nx.BinaryTensor do
   ## Element wiwse unary ops
 
   for {name, {_desc, code}} <- @unary_funs do
-    def unquote(name)(tensor, out) do
-      element_wise_unary_op(tensor, out, fn x -> unquote(code) end)
+    def unquote(name)(out, tensor) do
+      element_wise_unary_op(out, tensor, fn x -> unquote(code) end)
     end
   end
 
-  def count_leading_zeros(%{type: {_, size} = type} = tensor, out) do
+  def count_leading_zeros(out, %{type: {_, size} = type} = tensor) do
     data =
       for <<seg::unsigned-size(size)-native <- to_binary(tensor)>>, into: <<>> do
         match_types [type] do
@@ -537,10 +535,10 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
-  def population_count(%{type: {_, size} = type} = tensor, out) do
+  def population_count(out, %{type: {_, size} = type} = tensor) do
     data =
       for <<seg::unsigned-size(size)-native <- to_binary(tensor)>>, into: <<>> do
         match_types [type] do
@@ -548,16 +546,16 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
-  def abs(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.abs/1)
-  def bitwise_not(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.bnot/1)
-  def ceil(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.ceil/1)
-  def floor(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.floor/1)
-  def negate(tensor, out), do: element_wise_unary_op(tensor, out, &-/1)
-  def round(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.round/1)
-  def sign(tensor, out), do: element_wise_unary_op(tensor, out, &element_sign/1)
+  def abs(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.abs/1)
+  def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
+  def ceil(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.ceil/1)
+  def floor(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.floor/1)
+  def negate(out, tensor), do: element_wise_unary_op(out, tensor, &-/1)
+  def round(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.round/1)
+  def sign(out, tensor), do: element_wise_unary_op(out, tensor, &element_sign/1)
 
   defp element_sign(n) when n < 0, do: -1
   defp element_sign(n) when n > 0, do: 1
@@ -571,7 +569,7 @@ defmodule Nx.BinaryTensor do
   defp element_popcount(0, count), do: count
   defp element_popcount(n, count), do: element_popcount(n &&& n - 1, count + 1)
 
-  defp element_wise_unary_op(tensor, out, fun) do
+  defp element_wise_unary_op(out, tensor, fun) do
     data =
       match_types [tensor.type, out.type] do
         for <<match!(seg, 0) <- to_binary(tensor)>>, into: <<>> do
@@ -579,7 +577,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   defp element_clz(0, size), do: size
@@ -627,36 +625,172 @@ defmodule Nx.BinaryTensor do
   defp element_clz2(1), do: 1
   defp element_clz2(_), do: 0
 
-  ## Aggregation
+  ## Inspect
 
-  def sum(tensor, out, opts) do
-    reduce(tensor, out, 0, opts, fn x, acc -> {x + acc, x + acc} end)
+  alias Inspect.Algebra, as: IA
+
+  def inspect(tensor, opts) do
+    dims = Tuple.to_list(tensor.shape)
+
+    open = IA.color("[", :list, opts)
+    sep = IA.color(",", :list, opts)
+    close = IA.color("]", :list, opts)
+    type = IA.color(Nx.Type.to_string(tensor.type), :atom, opts)
+    shape = shape_to_algebra(dims, open, close)
+
+    {data, _limit} =
+      case tensor.data do
+        %Nx.BinaryTensor{device: Nx.BitStringDevice, state: bin} ->
+          {_, size} = tensor.type
+          total_size = Enum.reduce(dims, size, &*/2)
+          chunk(dims, bin, opts.limit, total_size, tensor.type, {open, sep, close})
+
+        # TODO: To print data on device, we can support reading a slice
+        # from the device which we will compute with:
+        #
+        #     min(opts.limit, Nx.Shape.size(shape)) * size
+        #
+        %Nx.BinaryTensor{device: device} ->
+          {IA.to_doc(device, opts), opts.limit}
+      end
+
+    IA.concat([type, shape, IA.line(), data])
   end
 
-  def argmin(tensor, out, opts) do
+  defp shape_to_algebra(dims, open, close) do
+    dims
+    |> Enum.map(fn number -> IA.concat([open, Integer.to_string(number), close]) end)
+    |> IA.concat()
+  end
+
+  defp chunk([], data, limit, size, {type, size}, _docs) do
+    doc =
+      case type do
+        :s ->
+          <<x::size(size)-signed-native>> = data
+          Integer.to_string(x)
+
+        :u ->
+          <<x::size(size)-unsigned-native>> = data
+          Integer.to_string(x)
+
+        :f ->
+          <<x::size(size)-bitstring>> = data
+          read_float(x, size)
+
+        :bf ->
+          <<x::16-bitstring>> = data
+          read_bf16(x)
+      end
+
+    if limit == :infinity, do: {doc, limit}, else: {doc, limit - 1}
+  end
+
+  defp chunk([dim | dims], data, limit, total_size, type, {open, sep, close} = docs) do
+    chunk_size = div(total_size, dim)
+
+    {acc, limit} =
+      chunk_each(dim, data, [], limit, chunk_size, fn chunk, limit ->
+        chunk(dims, chunk, limit, chunk_size, type, docs)
+      end)
+
+    {open, sep, close, nest} =
+      if dims == [] do
+        {open, IA.concat(sep, " "), close, 0}
+      else
+        {IA.concat(open, IA.line()), IA.concat(sep, IA.line()), IA.concat(IA.line(), close), 2}
+      end
+
+    doc =
+      open
+      |> IA.concat(IA.concat(Enum.intersperse(acc, sep)))
+      |> IA.nest(nest)
+      |> IA.concat(close)
+
+    {doc, limit}
+  end
+
+  defp chunk_each(0, "", acc, limit, _size, _fun) do
+    {Enum.reverse(acc), limit}
+  end
+
+  defp chunk_each(_dim, _data, acc, 0, _size, _fun) do
+    {Enum.reverse(["..." | acc]), 0}
+  end
+
+  defp chunk_each(dim, data, acc, limit, size, fun) when dim > 0 do
+    <<chunk::size(size)-bitstring, rest::bitstring>> = data
+    {doc, limit} = fun.(chunk, limit)
+    chunk_each(dim - 1, rest, [doc | acc], limit, size, fun)
+  end
+
+  defp read_bf16(<<0xFF80::16-native>>), do: "-Inf"
+  defp read_bf16(<<0x7F80::16-native>>), do: "Inf"
+  defp read_bf16(<<0xFFC1::16-native>>), do: "NaN"
+  defp read_bf16(<<0xFF81::16-native>>), do: "NaN"
+
+  if System.endianness() == :little do
+    defp read_bf16(bf16) do
+      <<x::float-little-32>> = <<0::16, bf16::binary>>
+      Float.to_string(x)
+    end
+  else
+    defp read_bf16(bf16) do
+      <<x::float-big-32>> = <<bf16::binary, 0::16>>
+      Float.to_string(x)
+    end
+  end
+
+  defp read_float(data, 32) do
+    case data do
+      <<0xFF800000::32-native>> -> "-Inf"
+      <<0x7F800000::32-native>> -> "Inf"
+      <<0xFF800001::32-native>> -> "NaN"
+      <<0xFFC00001::32-native>> -> "NaN"
+      <<x::float-32-native>> -> Float.to_string(x)
+    end
+  end
+
+  defp read_float(data, 64) do
+    case data do
+      <<0xFFF0000000000000::64-native>> -> "-Inf"
+      <<0x7FF0000000000000::64-native>> -> "Inf"
+      <<0x7FF0000000000001::64-native>> -> "NaN"
+      <<0x7FF8000000000001::64-native>> -> "NaN"
+      <<x::float-64-native>> -> Float.to_string(x)
+    end
+  end
+
+  ## Aggregation
+
+  def sum(out, tensor, opts) do
+    reduce(out, tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
+  end
+
+  def argmin(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
         :high -> &<=/2
         :low -> &</2
       end
 
-    argmin_or_max(tensor, out, comparator, opts[:axis])
+    argmin_or_max(out, tensor, comparator, opts[:axis])
   end
 
-  def argmax(tensor, out, opts) do
+  def argmax(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
         :high -> &>=/2
         :low -> &>/2
       end
 
-    argmin_or_max(tensor, out, comparator, opts[:axis])
+    argmin_or_max(out, tensor, comparator, opts[:axis])
   end
 
-  defp argmin_or_max(tensor, out, comparator, axis) do
+  defp argmin_or_max(out, tensor, comparator, axis) do
     opts = if axis, do: [axes: [axis]], else: []
 
-    reduce(tensor, out, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+    reduce(out, tensor, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
       if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
         {i, {i + 1, x, i}}
       else
@@ -667,7 +801,7 @@ defmodule Nx.BinaryTensor do
 
   ## Reduce
 
-  def reduce(tensor, out, acc, opts, fun) when is_list(opts) and is_function(fun, 2) do
+  def reduce(out, tensor, acc, opts, fun) when is_list(opts) and is_function(fun, 2) do
     %T{type: {_, size} = type, shape: shape} = tensor
 
     view =
@@ -689,12 +823,12 @@ defmodule Nx.BinaryTensor do
         scalar_to_binary(result, out.type)
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   ## Zip reduce
 
-  def zip_reduce(t1, [], t2, [], %{type: type} = out, acc, fun) do
+  def zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
     b1 = to_binary(t1)
     b2 = to_binary(t2)
 
@@ -706,10 +840,10 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
-  def zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, %{type: type} = out, acc, fun)
+  def zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun)
       when is_function(fun, 2) do
     {_, s1} = left_type = t1.type
     {_, s2} = right_type = t2.type
@@ -723,7 +857,7 @@ defmodule Nx.BinaryTensor do
         scalar_to_binary(bin, type)
       end
 
-    from_binary(data, out)
+    from_binary(out, data)
   end
 
   # Helper for reducing down a single axis over two tensors,

@@ -529,7 +529,7 @@ defmodule Nx do
     end
   end
 
-@doc """
+  @doc """
   Returns the underlying tensor as a binary.
 
   The binary is returned as is (which is row-major).
@@ -582,7 +582,7 @@ defmodule Nx do
       raise ArgumentError, "binary does not match the given size"
     end
 
-    Nx.BinaryTensor.from_binary(binary, %T{type: type, shape: {dim}})
+    Nx.BinaryTensor.from_binary(%T{type: type, shape: {dim}}, binary)
   end
 
   ## Meta operations (do not invoke the backend)
@@ -641,10 +641,16 @@ defmodule Nx do
     %T{shape: old_shape} = tensor = tensor(tensor)
     new_shape = shape!(new_shape)
 
+    if Nx.Shape.size(old_shape) != Nx.Shape.size(new_shape) do
+      raise ArgumentError,
+            "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
+              "new shape #{inspect(new_shape)}"
+    end
+
     if old_shape == new_shape do
       tensor
     else
-      impl(tensor).reshape(tensor, %{tensor | shape: Nx.Shape.reshape(old_shape, new_shape)})
+      impl(tensor).reshape(%{tensor | shape: new_shape}, tensor, new_shape)
     end
   end
 
@@ -723,7 +729,7 @@ defmodule Nx do
     if old_shape == new_shape do
       tensor
     else
-      impl(tensor).squeeze(tensor, %{tensor | shape: new_shape}, axes)
+      impl(tensor).squeeze(%{tensor | shape: new_shape}, tensor, axes)
     end
   end
 
@@ -847,9 +853,9 @@ defmodule Nx do
 
     shape = shape!(shape)
     axes = Nx.Shape.normalize_axes(shape, axes)
-    shape = Nx.Shape.broadcast(tensor.shape, shape, axes)
+    _ = Nx.Shape.broadcast(tensor.shape, shape, axes)
 
-    impl(tensor).broadcast(tensor, %{tensor | shape: shape}, axes)
+    impl(tensor).broadcast(%{tensor | shape: shape}, tensor, shape, axes)
   end
 
   @doc """
@@ -1025,7 +1031,7 @@ defmodule Nx do
     end
 
     shape = Nx.Shape.pad(tensor.shape, padding_config)
-    impl(tensor).pad(tensor, %{tensor | shape: shape}, pad_value, padding_config)
+    impl(tensor).pad(%{tensor | shape: shape}, tensor, pad_value, padding_config)
   end
 
   ## Reflection
@@ -1177,13 +1183,12 @@ defmodule Nx do
   ## Element-wise binary ops
 
   defp element_wise_bin_op(left, right, op, fun) do
-    output_type = Nx.Type.merge_tensors(left, right) |> fun.()
-
+    type = Nx.Type.merge_tensors(left, right) |> fun.()
     %T{shape: left_shape} = left = tensor(left)
     %T{shape: right_shape} = right = tensor(right)
 
     shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
-    apply(impl(left, right), op, [left, right, %{left | type: output_type, shape: shape}])
+    apply(impl(left, right), op, [%{left | type: type, shape: shape}, left, right])
   end
 
   @doc """
@@ -2393,7 +2398,8 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(false_shape, output_shape)
       )
 
-    impl(pred).select(pred, on_true, on_false, %{pred | shape: output_shape, type: output_type})
+    out = %{pred | shape: output_shape, type: output_type}
+    impl(pred, on_true, on_false).select(out, pred, on_true, on_false)
   end
 
   ## Unary ops
@@ -2430,7 +2436,7 @@ defmodule Nx do
     def unquote(name)(tensor) do
       tensor = tensor(tensor)
       type = Nx.Type.to_floating(tensor.type)
-      impl(tensor).unquote(name)(tensor, %{tensor | type: type})
+      impl(tensor).unquote(name)(%{tensor | type: type}, tensor)
     end
   end
 
@@ -2806,7 +2812,7 @@ defmodule Nx do
       end
 
     type = Nx.Type.to_aggregate(type)
-    impl(tensor).sum(tensor, %{tensor | type: type, shape: shape}, axes: axes)
+    impl(tensor).sum(%{tensor | type: type, shape: shape}, tensor, axes: axes)
   end
 
   @doc """
@@ -3086,7 +3092,7 @@ defmodule Nx do
       end
 
     opts = [tie_break: tie_break, axis: axis]
-    apply(impl(tensor), op, [tensor, %{tensor | type: {:s, 64}, shape: shape}, opts])
+    apply(impl(tensor), op, [%{tensor | type: {:s, 64}, shape: shape}, tensor, opts])
   end
 
   ## Matrix ops
@@ -3362,7 +3368,7 @@ defmodule Nx do
     axes1 = Nx.Shape.normalize_axes(s1, axes1)
     axes2 = Nx.Shape.normalize_axes(s2, axes2)
     output_shape = Nx.Shape.zip_reduce(s1, axes1, s2, axes2)
-    impl(t1, t2).dot(t1, axes1, t2, axes2, %{t1 | type: output_type, shape: output_shape})
+    impl(t1, t2).dot(%{t1 | type: output_type, shape: output_shape}, t1, axes1, t2, axes2)
   end
 
   @doc """
@@ -3405,10 +3411,10 @@ defmodule Nx do
 
   """
   def outer(t1, t2) do
-    output_type = Nx.Type.merge_tensors(t1, t2)
+    type = Nx.Type.merge_tensors(t1, t2)
     %T{shape: s1} = t1 = tensor(t1)
     %T{shape: s2} = t2 = tensor(t2)
-    impl(t1, t2).outer(t1, t2, %{t1 | type: output_type, shape: Nx.Shape.outer(s1, s2)})
+    impl(t1, t2).outer(%{t1 | type: type, shape: Nx.Shape.outer(s1, s2)}, t1, t2)
   end
 
   @doc """
@@ -3556,11 +3562,11 @@ defmodule Nx do
       tensor
     else
       shape = Nx.Shape.transpose(shape, axes)
-      impl(tensor).transpose(tensor, %{tensor | shape: shape}, axes)
+      impl(tensor).transpose(%{tensor | shape: shape}, tensor, axes)
     end
   end
 
-  ## Shape
+  ## Helpers
 
   defp shape!(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
   defp shape!(%T{shape: shape}), do: shape
@@ -3579,8 +3585,20 @@ defmodule Nx do
     end
   end
 
-  ## Helpers
+  defp impl(%T{data: %struct{}}), do: struct
 
-  defp impl(_), do: Nx.BinaryTensor
-  defp impl(_, _), do: Nx.BinaryTensor
+  defp impl(%T{data: %struct1{}}, %T{data: %struct2{}}),
+    do: impl_struct(struct1, struct2)
+
+  defp impl(%T{data: %struct1{}}, %T{data: %struct2{}}, %T{data: %struct3{}}),
+    do: struct1 |> impl_struct(struct2) |> impl_struct(struct3)
+
+  defp impl_struct(Nx.BinaryTensor, struct), do: struct
+  defp impl_struct(struct, Nx.BinaryTensor), do: struct
+  defp impl_struct(struct, struct), do: struct
+
+  defp impl_struct(struct1, struct2) do
+    raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
+            "#{inspect(struct1)} and #{inspect(struct2)}"
+  end
 end

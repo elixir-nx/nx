@@ -17,9 +17,9 @@ defmodule Exla.Defn do
         builder = Exla.Builder.new("#{name}/#{arity}")
 
         params =
-          for {buffer, i} <- Enum.with_index(buffers) do
-            param = Exla.Op.parameter(builder, i, buffer.shape, "p#{i}")
-            Nx.Defn.Expr.parameter(buffer.shape.dims, param)
+          for {%{shape: shape} = buffer, i} <- Enum.with_index(buffers) do
+            param = Exla.Op.parameter(builder, i, shape, "p#{i}")
+            Nx.Defn.Expr.parameter(shape.dims, shape.dtype, param)
           end
 
         computation =
