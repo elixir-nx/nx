@@ -223,13 +223,4 @@ defmodule Nx.Shared do
 
   def weighted_offset([{_, size} | dims], [x | pos]),
     do: size * x + weighted_offset(dims, pos)
-
-  @doc """
-  Asserts the keyword has the given keys.
-  """
-  def assert_keys!(keyword, valid) do
-    for {k, _} <- keyword, k not in valid do
-      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
-    end
-  end
 end

@@ -1010,7 +1010,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 64}
 
-      for <<x::float-64-native <- Nx.Util.to_binary(t)>> do
+      for <<x::float-64-native <- Nx.to_binary(t)>> do
         assert x >= 0.0 and x < 1
       end
     end
@@ -1023,7 +1023,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:s, 64}
 
-      for <<x::signed-64-native <- Nx.Util.to_binary(t)>> do
+      for <<x::signed-64-native <- Nx.to_binary(t)>> do
         assert x >= 5 and x < 10
       end
 
@@ -1031,7 +1031,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 64}
 
-      for <<x::float-64-native <- Nx.Util.to_binary(t)>> do
+      for <<x::float-64-native <- Nx.to_binary(t)>> do
         assert x >= 5.0 and x < 10.0
       end
     end
@@ -1044,7 +1044,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:u, 32}
 
-      for <<x::unsigned-32-native <- Nx.Util.to_binary(t)>> do
+      for <<x::unsigned-32-native <- Nx.to_binary(t)>> do
         assert x >= 5 and x < 10
       end
 
@@ -1052,7 +1052,7 @@ defmodule Exla.DefnTest do
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 32}
 
-      for <<x::float-32-native <- Nx.Util.to_binary(t)>> do
+      for <<x::float-32-native <- Nx.to_binary(t)>> do
         assert x >= 5.0 and x < 10.0
       end
     end
@@ -1121,16 +1121,16 @@ defmodule Exla.DefnTest do
       tensor = add_two_keep_on_device(1, 2)
       assert {Exla.NxDevice, {ref, :default}} = tensor.data
       assert is_reference(ref)
-      assert tensor |> Nx.device_read() |> Nx.Util.to_binary() == <<3::64-native>>
+      assert tensor |> Nx.device_read() |> Nx.to_binary() == <<3::64-native>>
 
       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
       assert {Exla.NxDevice, {ref, :default}} = tensor.data
       assert is_reference(ref)
 
-      assert tensor |> Nx.device_read() |> Nx.Util.to_binary() ==
+      assert tensor |> Nx.device_read() |> Nx.to_binary() ==
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
-      assert tensor |> Nx.device_transfer() |> Nx.Util.to_binary() ==
+      assert tensor |> Nx.device_transfer() |> Nx.to_binary() ==
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
       assert_raise RuntimeError,

@@ -6,7 +6,6 @@ defmodule Nx.BinaryTensor do
 
   alias Nx.Tensor, as: T
   import Bitwise, only: [>>>: 2, &&&: 2]
-  import Nx.Util, only: [to_binary: 1, to_scalar: 1]
 
   ## Creation
 
@@ -17,7 +16,7 @@ defmodule Nx.BinaryTensor do
       raise "cannot build empty tensor"
     end
 
-    data(data, %T{shape: shape, type: type})
+    from_binary(data, %T{shape: shape, type: type})
   end
 
   defp flatten(list, type) when is_list(list) do
@@ -67,7 +66,7 @@ defmodule Nx.BinaryTensor do
       end
 
     data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_binary(gen.(), type)
-    data(data, out)
+    from_binary(data, out)
   end
 
   def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
@@ -76,12 +75,12 @@ defmodule Nx.BinaryTensor do
           into: "",
           do: scalar_to_binary(:rand.normal(mu, sigma), type)
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   def iota(%{shape: {n}, type: type} = out, 0) do
     data = for i <- 0..(n - 1), do: scalar_to_binary(i, type)
-    data(data, out)
+    from_binary(data, out)
   end
 
   def iota(%{shape: shape, type: type} = out, axis) do
@@ -107,10 +106,26 @@ defmodule Nx.BinaryTensor do
           into: "",
           do: scalar_to_binary(i, type)
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   ## Device API
+
+  def from_binary(binary, t) when is_binary(binary) do
+    %{t | data: {Nx.BitStringDevice, binary}}
+  end
+
+  def from_binary(other, t) do
+    %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(other)}}
+  end
+
+  def to_binary(%T{data: {Nx.BitStringDevice, data}}), do: data
+
+  def to_binary(%T{data: {device, _data}}) do
+    raise ArgumentError,
+          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
+            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
+  end
 
   def device_read(%T{data: {device, state}} = tensor) do
     %{tensor | data: {Nx.BitStringDevice, device.read(state)}}
@@ -165,7 +180,7 @@ defmodule Nx.BinaryTensor do
   def broadcast(t, %{shape: shape} = out, axes) do
     t
     |> broadcast_data(shape, axes)
-    |> data(out)
+    |> from_binary(out)
   end
 
   defp broadcast_data(%{shape: shape} = t, shape),
@@ -244,7 +259,7 @@ defmodule Nx.BinaryTensor do
         weighted_traverse(traverse_list, chunk, read_size)
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   defp transpose_axes(shape, axes) do
@@ -265,7 +280,7 @@ defmodule Nx.BinaryTensor do
   # We ignore the out because we need to recur over the shape
   # as we transpose and build the rest.
   def pad(t, _out, pad_value, padding_config) do
-    pad_value = to_scalar(pad_value)
+    pad_value = Nx.Util.to_scalar(pad_value)
 
     case t.shape do
       {} ->
@@ -334,7 +349,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    data(data, %{t | type: type, shape: new_shape})
+    from_binary(data, %{t | type: type, shape: new_shape})
   end
 
   defp pad_in_dim(shape, dim, edge_low, edge_high) do
@@ -358,7 +373,7 @@ defmodule Nx.BinaryTensor do
             do: scalar_to_binary(read!(left, 0) * read!(right, 1), out.type)
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   def dot(t1, axes1, t2, axes2, out) do
@@ -371,9 +386,9 @@ defmodule Nx.BinaryTensor do
   ## Element wise ternary ops
 
   def select(%{shape: {}} = pred, on_true, on_false, out) do
-    if to_scalar(pred) == 0,
-      do: broadcast_data(on_false, out.shape) |> data(out),
-      else: broadcast_data(on_true, out.shape) |> data(out)
+    if Nx.Util.to_scalar(pred) == 0,
+      do: broadcast_data(on_false, out.shape) |> from_binary(out),
+      else: broadcast_data(on_true, out.shape) |> from_binary(out)
   end
 
   def select(pred, on_true, on_false, %{shape: shape, type: type} = out) do
@@ -412,7 +427,7 @@ defmodule Nx.BinaryTensor do
         scalar_to_binary(result, type)
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   ## Element wise bin ops
@@ -457,7 +472,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   defp element_add(_, a, b), do: a + b
@@ -518,7 +533,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   def population_count(%{type: {_, size} = type} = tensor, out) do
@@ -529,7 +544,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   def abs(tensor, out), do: element_wise_unary_op(tensor, out, &:erlang.abs/1)
@@ -560,7 +575,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   defp element_clz(0, size), do: size
@@ -670,7 +685,7 @@ defmodule Nx.BinaryTensor do
         scalar_to_binary(result, out.type)
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   ## Zip reduce
@@ -687,7 +702,7 @@ defmodule Nx.BinaryTensor do
         end
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   def zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, %{type: type} = out, acc, fun)
@@ -704,7 +719,7 @@ defmodule Nx.BinaryTensor do
         scalar_to_binary(bin, type)
       end
 
-    data(data, out)
+    from_binary(data, out)
   end
 
   # Helper for reducing down a single axis over two tensors,
@@ -728,11 +743,6 @@ defmodule Nx.BinaryTensor do
     {bin, acc} = fun.({head1, head2}, acc)
     bin_zip_reduce(rest1, rest2, left_type, right_type, bin, acc, fun)
   end
-
-  ## Helpers
-
-  defp data(binary, t) when is_binary(binary), do: %{t | data: {Nx.BitStringDevice, binary}}
-  defp data(other, t), do: %{t | data: {Nx.BitStringDevice, IO.iodata_to_binary(other)}}
 
   ## Aggregation helpers
 

@@ -83,8 +83,6 @@ defmodule Nx do
   """
 
   alias Nx.Tensor, as: T
-  import Kernel, except: [max: 2, min: 2]
-  import Nx.Shared
 
   ## Creation API
 
@@ -234,9 +232,7 @@ defmodule Nx do
     assert_keys!(opts, [:type])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
     Nx.BinaryTensor.tensor(arg, type)
-
   end
-
 
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
@@ -261,7 +257,7 @@ defmodule Nx do
   ### Generating Floats
 
       iex> t = Nx.random_uniform({10})
-      iex> for <<x::float-64-native <- Nx.Util.to_binary(t)>> do
+      iex> for <<x::float-64-native <- Nx.to_binary(t)>> do
       ...>   true = x >= 0.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
@@ -270,7 +266,7 @@ defmodule Nx do
       {:f, 64}
 
       iex> t = Nx.random_uniform({5, 5}, type: {:bf, 16})
-      iex> byte_size(Nx.Util.to_binary(t))
+      iex> byte_size(Nx.to_binary(t))
       50
       iex> Nx.shape(t)
       {5, 5}
@@ -278,7 +274,7 @@ defmodule Nx do
       {:bf, 16}
 
       iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: {:f, 32})
-      iex> for <<x::float-32-native <- Nx.Util.to_binary(t)>> do
+      iex> for <<x::float-32-native <- Nx.to_binary(t)>> do
       ...>   true = x >= -1.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
@@ -289,7 +285,7 @@ defmodule Nx do
   ### Generating Integers
 
       iex> t = Nx.random_uniform({10}, 5, 10, type: {:u, 32})
-      iex> for <<x::32-unsigned-native <- Nx.Util.to_binary(t)>> do
+      iex> for <<x::32-unsigned-native <- Nx.to_binary(t)>> do
       ...>   true = x >= 5 and x < 10
       ...> end
       iex> Nx.shape(t)
@@ -298,7 +294,7 @@ defmodule Nx do
       {:u, 32}
 
       iex> t = Nx.random_uniform({5, 5}, -5, 5, type: {:s, 64})
-      iex> for <<x::64-signed-native <- Nx.Util.to_binary(t)>> do
+      iex> for <<x::64-signed-native <- Nx.to_binary(t)>> do
       ...>   true = x >= -5 and x < 5
       ...> end
       iex> Nx.shape(t)
@@ -531,6 +527,62 @@ defmodule Nx do
       |> Nx.BinaryTensor.iota(0)
       |> Map.replace!(:shape, shape)
     end
+  end
+
+@doc """
+  Returns the underlying tensor as a binary.
+
+  The binary is returned as is (which is row-major).
+
+  ## Examples
+
+      iex> Nx.to_binary(1)
+      <<1::64-native>>
+
+      iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]))
+      <<1.0::float-native, 2.0::float-native, 3.0::float-native>>
+  """
+  def to_binary(tensor) do
+    tensor = tensor(tensor)
+    impl(tensor).to_binary(tensor)
+  end
+
+  @doc """
+  Creates a one-dimensional tensor from a `binary` with the given `type`.
+
+  If the binary size does not match its type, an error is raised.
+
+  ## Examples
+
+      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:s, 8})
+      #Nx.Tensor<
+        s8[4]
+        [1, 2, 3, 4]
+      >
+
+      iex> Nx.from_binary(<<12.3::float-64-native>>, {:f, 64})
+      #Nx.Tensor<
+        f64[1]
+        [12.3]
+      >
+
+      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:f, 64})
+      ** (ArgumentError) binary does not match the given size
+
+  """
+  def from_binary(binary, type) when is_binary(binary) do
+    {_, size} = Nx.Type.normalize!(type)
+    dim = div(bit_size(binary), size)
+
+    if binary == "" do
+      raise ArgumentError, "cannot build an empty tensor"
+    end
+
+    if rem(bit_size(binary), size) != 0 do
+      raise ArgumentError, "binary does not match the given size"
+    end
+
+    Nx.BinaryTensor.from_binary(binary, %T{type: type, shape: {dim}})
   end
 
   ## Meta operations (do not invoke the backend)
@@ -1584,7 +1636,7 @@ defmodule Nx do
       iex> pos_and_neg_zero_x = Nx.multiply(Nx.tensor([[-1.0], [1.0]]), 0.0)
       iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
       iex> t = Nx.arctan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
-      iex> Nx.Util.to_binary(t)
+      iex> Nx.to_binary(t)
       <<-3.141592653589793::float-64-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-64-native,
         3.141592653589793::float-64-native, 0.0::float-64-native>>
       iex> Nx.shape(t)
@@ -2596,7 +2648,6 @@ defmodule Nx do
     impl(tensor).count_leading_zeros(tensor, tensor)
   end
 
-
   for {name, desc} <- [floor: "floor", ceil: "ceil", round: "round (away from zero)"] do
     [res1, res2, res3, res4] = Enum.map([-1.5, -0.5, 0.5, 1.5], &apply(:erlang, name, [&1]))
 
@@ -3013,11 +3064,15 @@ defmodule Nx do
 
     tie_break =
       case opts[:tie_break] || :low do
-        :high -> :high
-        :low -> :low
+        :high ->
+          :high
+
+        :low ->
+          :low
+
         other ->
           raise ArgumentError,
-              "unknown value for :tie_break, expected :high or :low, got: #{inspect other}"
+                "unknown value for :tie_break, expected :high or :low, got: #{inspect(other)}"
       end
 
     %{shape: shape} = tensor = tensor(tensor)
@@ -3516,6 +3571,12 @@ defmodule Nx do
           "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
             "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
+  end
+
+  def assert_keys!(keyword, valid) do
+    for {k, _} <- keyword, k not in valid do
+      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
+    end
   end
 
   ## Helpers

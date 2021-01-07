@@ -30,7 +30,7 @@ defmodule Nx.Util do
     tensor = Nx.tensor(tensor)
 
     match_types [tensor.type] do
-      for <<match!(var, 0) <- to_binary(tensor)>>, do: read!(var, 0)
+      for <<match!(var, 0) <- Nx.to_binary(tensor)>>, do: read!(var, 0)
     end
   end
 
@@ -55,73 +55,10 @@ defmodule Nx.Util do
       raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to scalar"
     end
 
-    data = to_binary(tensor)
-
     match_types [tensor.type] do
-      <<match!(x, 0)>> = data
+      <<match!(x, 0)>> = Nx.to_binary(tensor)
       read!(x, 0)
     end
-  end
-
-  @doc """
-  Returns the underlying tensor as a binary.
-
-  The binary is returned as is (which is row-major).
-
-  ## Examples
-
-      iex> Nx.Util.to_binary(1)
-      <<1::64-native>>
-
-      iex> Nx.Util.to_binary(Nx.tensor([1.0, 2.0, 3.0]))
-      <<1.0::float-native, 2.0::float-native, 3.0::float-native>>
-  """
-  def to_binary(%T{data: {Nx.BitStringDevice, data}}), do: data
-
-  def to_binary(%T{data: {device, _data}}) do
-    raise ArgumentError,
-          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
-            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
-  end
-
-  def to_binary(t), do: to_binary(Nx.tensor(t))
-
-  @doc """
-  Creates a one-dimensional tensor from a `binary` with the given `type`.
-
-  If the binary size does not match its type, an error is raised.
-
-  ## Examples
-
-      iex> Nx.Util.from_binary(<<1, 2, 3, 4>>, {:s, 8})
-      #Nx.Tensor<
-        s8[4]
-        [1, 2, 3, 4]
-      >
-
-      iex> Nx.Util.from_binary(<<12.3::float-64-native>>, {:f, 64})
-      #Nx.Tensor<
-        f64[1]
-        [12.3]
-      >
-
-      iex> Nx.Util.from_binary(<<1, 2, 3, 4>>, {:f, 64})
-      ** (ArgumentError) binary does not match the given size
-
-  """
-  def from_binary(binary, type) when is_binary(binary) do
-    {_, size} = Nx.Type.normalize!(type)
-    dim = div(bit_size(binary), size)
-
-    if binary == "" do
-      raise ArgumentError, "cannot build an empty tensor"
-    end
-
-    if rem(bit_size(binary), size) != 0 do
-      raise ArgumentError, "binary does not match the given size"
-    end
-
-    %T{data: {Nx.BitStringDevice, binary}, type: type, shape: {dim}}
   end
 
   # TODO: Move these to Nx: reduce, zip_reduce, reduce_window
@@ -354,7 +291,7 @@ defmodule Nx.Util do
 
  #    output_shape = Nx.Shape.window(padded_shape, window_dimensions, window_strides)
 
- #    data = Nx.Util.to_binary(t)
+ #    data = Nx.to_binary(t)
 
  #    weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
  #    anchors = Enum.sort(make_anchors(padded_shape, window_strides, window_dimensions, []))
