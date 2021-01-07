@@ -97,6 +97,8 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  # TODO: Find a way to share the creation logic with Nx.BinaryTensor
+
   @doc false
   def iota(shape, opts \\ []) do
     assert_keys!(opts, [:type, :axis])

@@ -1174,6 +1174,7 @@ defmodule Nx do
   defp count_up(0, _n), do: []
   defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
 
+  # TODO: Use Tuple.product on Elixir v1.12
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
