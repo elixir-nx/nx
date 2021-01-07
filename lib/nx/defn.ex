@@ -135,7 +135,7 @@ defmodule Nx.Defn do
       %{} ->
         {args, state} = Enum.map_reduce(args, state, &eval/2)
 
-        res = 
+        res =
           if op in @creation_funs do
             apply(Nx, op, args)
           else

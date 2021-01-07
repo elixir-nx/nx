@@ -929,6 +929,58 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 9) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* kernel;
+  std::vector<exla::int64> strides;
+  std::vector<std::pair<exla::int64, exla::int64>> padding;
+  std::vector<exla::int64> lhs_dilation;
+  std::vector<exla::int64> rhs_dilation;
+  xla::ConvolutionDimensionNumbers dimension_numbers;
+  // TODO(seanmor5): When Nx supports these
+  exla::int64 feature_group_count;
+  // exla::int64 batch_group_count;
+  xla::PrecisionConfig config;
+
+  if (!exla::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::error(env, "Unable to get operand.");
+  }
+  if (!exla::get<xla::XlaOp>(env, argv[1], kernel)) {
+    return exla::error(env, "Unable to get kernel.");
+  }
+  if (!exla::get_tuple(env, argv[2], strides)) {
+    return exla::error(env, "Unable to get strides.");
+  }
+  if (!exla::get_conv_padding(env, argv[3], padding)) {
+    return exla::error(env, "Unable to get padding.");
+  }
+  if (!exla::get_tuple(env, argv[4], lhs_dilation)) {
+    return exla::error(env, "Unable to get operand dilation.");
+  }
+  if (!exla::get_tuple(env, argv[5], rhs_dilation)) {
+    return exla::error(env, "Unable to get kernel dilation.");
+  }
+  if (!exla::get_conv_dimension_numbers(env, argv[6], &dimension_numbers)) {
+    return exla::error(env, "Unable to get conv dimension numbers.");
+  }
+  if (!exla::get(env, argv[7], &feature_group_count)) {
+    return exla::error(env, "Unable to get feature group count.");
+  }
+  if (!exla::get_precision_config(env, argv[8], config)) {
+    return exla::error(env, "Unable to get precision config");
+  }
+
+  xla::XlaOp op = xla::ConvGeneralDilated(*operand, *kernel, strides,
+                                          padding, lhs_dilation, rhs_dilation,
+                                          dimension_numbers, feature_group_count, 1, &config);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM transpose(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::error(env, "Bad argument count.");
@@ -1468,6 +1520,7 @@ static ErlNifFunc exla_funcs[] = {
   {"dot", 3, dot},
   {"dot_general", 4, dot_general},
   {"transpose", 2, transpose},
+  {"conv_general_dilated", 9, conv_general_dilated},
   /******** Other XLA Ops *******/
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},

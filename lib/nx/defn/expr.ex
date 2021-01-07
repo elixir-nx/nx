@@ -157,6 +157,11 @@ defmodule Nx.Defn.Expr do
   def dot(out, t1, a1, t2, a2), do: expr(out, :dot, [to_expr(t1), a1, to_expr(t2), a2])
 
   @doc false
+  def conv(out, inp, kernel, stride, padding) do
+    expr(out, :conv, [to_expr(inp), to_expr(kernel), stride, padding, 1])
+  end
+
+  @doc false
   def pad(out, expr, value, config), do: expr(out, :pad, [to_expr(expr), to_expr(value), config])
 
   @doc false

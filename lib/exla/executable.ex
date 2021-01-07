@@ -47,8 +47,8 @@ defmodule Exla.Executable do
           end
       end)
 
+    # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
     data =
-      # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
       case client.platform do
         :host ->
           Exla.NIF.run_cpu(
@@ -64,6 +64,7 @@ defmodule Exla.Executable do
             keep_on_device_int
           )
           |> unwrap!()
+
         _ ->
           Exla.NIF.run_io(
             client.ref,

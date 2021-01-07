@@ -749,6 +749,19 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "convolution" do
+    defn conv(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :valid)
+
+    test "computes the convolution of an image" do
+      img = Nx.random_uniform({32, 1, 28, 28}, type: {:f, 64})
+      kernel = Nx.random_uniform({32, 1, 3, 3}, type: {:f, 64})
+
+      lhs = conv(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, :valid)
+      assert lhs == rhs
+    end
+  end
+
   describe "outer product" do
     defn outer(t1, t2), do: Nx.outer(t1, t2)
 

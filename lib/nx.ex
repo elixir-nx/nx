@@ -3640,35 +3640,37 @@ defmodule Nx do
   ### Examples
 
       iex> lhs = Nx.iota({9})
-      iex> lhs = Nx.reshape(lhs, {1, 3, 3})
+      iex> lhs = Nx.reshape(lhs, {2, 1, 3, 3})
       iex> rhs = Nx.iota({4})
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
       iex> t = Nx.conv(lhs, rhs, {1, 1}, :valid)
       iex> Nx.shape(t)
-      {4, 3, 3}
+      {1, 4, 3, 3}
       iex> t
       #Nx.Tensor<
-        s64[4][3][3]
+        s64[1][4][3][3]
         [
           [
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0]
-          ],
-          [
-            [0, 1, 2],
-            [3, 4, 5],
-            [6, 7, 8]
-          ],
-          [
-            [0, 2, 4],
-            [6, 8, 10],
-            [12, 14, 16]
-          ],
-          [
-            [0, 3, 6],
-            [9, 12, 15],
-            [18, 21, 24]
+            [
+              [0, 0, 0],
+              [0, 0, 0],
+              [0, 0, 0]
+            ],
+            [
+              [0, 1, 2],
+              [3, 4, 5],
+              [6, 7, 8]
+            ],
+            [
+              [0, 2, 4],
+              [6, 8, 10],
+              [12, 14, 16]
+            ],
+            [
+              [0, 3, 6],
+              [9, 12, 15],
+              [18, 21, 24]
+            ]
           ]
         ]
       >
@@ -3677,36 +3679,16 @@ defmodule Nx do
     %{shape: input_shape} = tensor = tensor(tensor)
     %{shape: kernel_shape} = kernel = tensor(kernel)
 
-    filter_shape =
-      kernel_shape
-      |> Tuple.delete_at(0)
-      |> Tuple.delete_at(0)
-
-    spatial_dims =
-      input_shape
-      |> Tuple.delete_at(0)
-
-    num_filters = elem(kernel_shape, 0)
-
-    padded_shape =
-      case padding do
-        :valid ->
-          input_shape
-
-        :same ->
-          padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
-          padding_config = [{0, 0} | padding_config]
-          Nx.Shape.pad(input_shape, padding_config)
-
-        padding_config when is_list(padding_config) ->
-          padding_config = [{0, 0} | padding_config]
-          Nx.Shape.pad(input_shape, padding_config)
-      end
-
-    output_shape = Nx.Shape.conv(padded_shape, filter_shape, strides, num_filters)
+    output_shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding)
     output_type = Nx.Type.merge_tensors(tensor, kernel)
 
-    impl!(tensor).conv(%{tensor | type: output_type, shape: output_shape}, tensor, kernel, strides, padding)
+    impl!(tensor).conv(
+      %{tensor | type: output_type, shape: output_shape},
+      tensor,
+      kernel,
+      strides,
+      padding
+    )
   end
 
   ## Type

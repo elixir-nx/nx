@@ -201,23 +201,20 @@ defmodule Nx.DefnTest do
     defn two_attribute(), do: @two
 
     test "expands module attributes to scalars" do
-      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {}} =
-      two_attribute()
+      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {}} = two_attribute()
     end
 
     @two_per_two Nx.tensor([[1, 2], [3, 4]])
     defn two_per_two_attribute(), do: @two_per_two
 
     test "expands module attributes to tensors" do
-      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {2, 2}} =
-        two_per_two_attribute()
+      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {2, 2}} = two_per_two_attribute()
     end
 
     defn two_per_two_nx_tensor(), do: Nx.tensor([[1, 2], [3, 4]])
 
     test "supports Nx.tensor calls" do
-      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {2, 2}} =
-        two_per_two_attribute()
+      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {2, 2}} = two_per_two_attribute()
     end
   end
 

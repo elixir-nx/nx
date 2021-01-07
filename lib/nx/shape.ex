@@ -339,7 +339,7 @@ defmodule Nx.Shape do
   def calculate_padding([], []), do: []
 
   def calculate_padding([dim | shape], [w | window]) do
-    padding_size = max((dim - 1) + w - dim, 0)
+    padding_size = max(dim - 1 + w - dim, 0)
     lo = floor(padding_size / 2)
     hi = ceil(padding_size / 2)
     [{lo, hi} | calculate_padding(shape, window)]
@@ -348,13 +348,47 @@ defmodule Nx.Shape do
   @doc """
   Output shape after a convolution, already padded.
   """
-  def conv(padded_shape, filter_shape, stride, num_filters) do
+  def conv(input_shape, kernel_shape, strides, padding) do
+    filter_shape =
+      kernel_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    spatial_dims =
+      input_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    num_filters = elem(kernel_shape, 0)
+    batch_size = elem(input_shape, 0)
+
+    padded_shape =
+      case padding do
+        :valid ->
+          input_shape
+
+        :same ->
+          padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
+          padding_config = [{0, 0} | padding_config]
+          Nx.Shape.pad(input_shape, padding_config)
+
+        padding_config when is_list(padding_config) ->
+          padding_config = [{0, 0} | padding_config]
+          Nx.Shape.pad(input_shape, padding_config)
+      end
+
     old_spatial_dims =
       padded_shape
       |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
       |> Tuple.to_list()
-    spatial_dims = Enum.reverse(do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(stride)))
-    List.to_tuple([num_filters | spatial_dims])
+
+    spatial_dims =
+      Enum.reverse(
+        do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(strides))
+      )
+
+    List.to_tuple([batch_size, num_filters | spatial_dims])
   end
 
   defp do_spatial_dims([], [], []), do: []

@@ -285,6 +285,41 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def conv_general_dilated(
+        %Op{builder: builder, ref: operand},
+        %Op{builder: builder, ref: kernel},
+        strides,
+        padding,
+        lhs_dilation,
+        rhs_dilation,
+        dim_nums,
+        feature_group_count,
+        precision_config \\ :default
+      ) do
+    config =
+      case precision_config do
+        :default -> 0
+        :high -> 1
+        :highest -> 2
+      end
+
+    ref =
+      Exla.NIF.conv_general_dilated(
+        operand,
+        kernel,
+        strides,
+        padding,
+        lhs_dilation,
+        rhs_dilation,
+        dim_nums,
+        feature_group_count,
+        config
+      )
+      |> unwrap!()
+
+    %Op{builder: builder, ref: ref}
+  end
+
   def transpose(%Op{builder: builder, ref: operand}, permutation) when is_tuple(permutation) do
     ref = Exla.NIF.transpose(operand, permutation) |> unwrap!()
     %Op{builder: builder, ref: ref}
