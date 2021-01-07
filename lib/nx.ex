@@ -1022,17 +1022,29 @@ defmodule Nx do
         [4, 5, 6, 0]
       ]
     >
+
+    iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], type: {:f, 32}), 0, [{-1, 2}, {1, -1}])
+    #Nx.Tensor<
+      f32[3][3]
+      [
+        [0.0, 3.0, 4.0],
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0]
+      ]
+    >
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
     tensor = tensor(tensor)
     pad_value = tensor(pad_value)
+
+    output_type = binary_type(tensor, pad_value)
 
     if pad_value.shape != {} do
       raise ArgumentError, "padding value must be a scalar"
     end
 
     shape = Nx.Shape.pad(tensor.shape, padding_config)
-    impl!(tensor).pad(%{tensor | shape: shape}, tensor, pad_value, padding_config)
+    impl!(tensor).pad(%{tensor | type: output_type, shape: shape}, tensor, pad_value, padding_config)
   end
 
   ## Reflection
@@ -3630,6 +3642,92 @@ defmodule Nx do
       shape = Nx.Shape.transpose(shape, axes)
       impl!(tensor).transpose(%{tensor | shape: shape}, tensor, axes)
     end
+  end
+
+  ## Conv
+
+  @doc """
+  Convolution operation
+
+  ### Examples
+
+      iex> lhs = Nx.iota({9})
+      iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
+      iex> rhs = Nx.iota({4})
+      iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
+      iex> t = Nx.conv(lhs, rhs, {1, 1}, :valid)
+      iex> Nx.shape(t)
+      {1, 4, 3, 3}
+      iex> t
+      #Nx.Tensor<
+        s64[1][4][3][3]
+        [
+          [
+            [
+              [0, 0, 0],
+              [0, 0, 0],
+              [0, 0, 0]
+            ],
+            [
+              [0, 1, 2],
+              [3, 4, 5],
+              [6, 7, 8]
+            ],
+            [
+              [0, 2, 4],
+              [6, 8, 10],
+              [12, 14, 16]
+            ],
+            [
+              [0, 3, 6],
+              [9, 12, 15],
+              [18, 21, 24]
+            ]
+          ]
+        ]
+      >
+  """
+  def conv(tensor, kernel, strides, padding \\ :valid) do
+    %{shape: input_shape} = tensor = tensor(tensor)
+    %{shape: kernel_shape} = kernel = tensor(kernel)
+
+    filter_shape =
+      kernel_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    spatial_dims =
+      input_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    # Always send the padding as an actual padding configuration
+    # so backends don't deal with atoms themselves
+    #
+    # We assume padding is specified only for spatial dims
+    padding_config =
+      case padding do
+        :valid ->
+          for _ <- (0..tuple_size(input_shape) - 3), do: {0, 0}
+
+        :same ->
+          padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
+          padding_config
+
+        config when is_list(config) ->
+          config
+      end
+
+    output_shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding_config)
+    output_type = binary_type(tensor, kernel)
+
+    impl!(tensor).conv(
+      %{tensor | type: output_type, shape: output_shape},
+      tensor,
+      kernel,
+      strides,
+      padding_config
+    )
   end
 
   ## Type

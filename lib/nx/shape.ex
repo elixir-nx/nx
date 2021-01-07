@@ -256,7 +256,7 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Calculates the padding needed for same padding.
+  Calculates the padding needed for same padding accounting for stride.
 
   ## Examples
 
@@ -282,6 +282,56 @@ defmodule Nx.Shape do
     hi = ceil(padding_size / 2)
     [{lo, hi} | calculate_padding(shape, window, strides)]
   end
+
+  @doc """
+  Calculates the padding needed for same padding not accounting for stride.
+  """
+  def calculate_padding(shape, window) when is_tuple(window) and is_tuple(shape) do
+    validate_window!(shape, window)
+    calculate_padding(Tuple.to_list(shape), Tuple.to_list(window))
+  end
+
+  def calculate_padding([], []), do: []
+
+  def calculate_padding([dim | shape], [w | window]) do
+    padding_size = max(dim - 1 + w - dim, 0)
+    lo = floor(padding_size / 2)
+    hi = ceil(padding_size / 2)
+    [{lo, hi} | calculate_padding(shape, window)]
+  end
+
+  @doc """
+  Output shape after a convolution, already padded.
+  """
+  def conv(input_shape, kernel_shape, strides, padding) do
+    filter_shape =
+      kernel_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    num_filters = elem(kernel_shape, 0)
+    batch_size = elem(input_shape, 0)
+
+    # Assume padding only pads spatial dims
+    padding_config = [{0, 0}, {0, 0} | padding]
+    padded_shape = Nx.Shape.pad(input_shape, padding_config)
+
+    old_spatial_dims =
+      padded_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+      |> Tuple.to_list()
+
+    spatial_dims =
+      do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(strides))
+
+    List.to_tuple([batch_size, num_filters | spatial_dims])
+  end
+
+  defp do_spatial_dims([], [], []), do: []
+
+  defp do_spatial_dims([cur | spatial], [f | filters], [s | strides]),
+    do: [floor((cur - f) / s) + 1 | do_spatial_dims(spatial, filters, strides)]
 
   @doc """
   Output shape after a window operation.

@@ -23,7 +23,7 @@ defmodule LinReg do
 
   defn update({m, b}, inp, tar, step) do
     {grad_m, grad_b} = grad({m, b}, loss({m, b}, inp, tar))
-    {m - (grad_m * step), b - (grad_b * step)}
+    {m - grad_m * step, b - grad_b * step}
   end
 
   def train(params, epochs, lin_fn) do
@@ -35,7 +35,8 @@ defmodule LinReg do
       acc ->
         data
         |> Enum.take(200)
-        |> Enum.reduce(acc,
+        |> Enum.reduce(
+          acc,
           fn batch, cur_params ->
             {inp, tar} = Enum.unzip(batch)
             x = Nx.reshape(Nx.tensor(inp), {32, 1})
@@ -50,10 +51,10 @@ end
 params = LinReg.init_random_params()
 m = :rand.normal(0.0, 10.0)
 b = :rand.normal(0.0, 5.0)
-IO.puts "Target m: #{m} Target b: #{b}\n"
+IO.puts("Target m: #{m} Target b: #{b}\n")
 
 lin_fn = fn x -> m * x + b end
 epochs = 100
 
 # These will be very close to the above coefficients
-IO.inspect LinReg.train(params, epochs, lin_fn)
+IO.inspect(LinReg.train(params, epochs, lin_fn))

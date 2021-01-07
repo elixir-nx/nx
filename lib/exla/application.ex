@@ -6,8 +6,8 @@ defmodule Exla.Application do
     # The subprocess relies on `waitpid` which fails under normal circumstances because
     # ERTS sets SIGCHLD to SIGIGN.
     case :os.type() do
-    	{:win32, _} -> :ok
-    	_ -> :os.set_signal(:sigchld, :default)
+      {:win32, _} -> :ok
+      _ -> :os.set_signal(:sigchld, :default)
     end
 
     Supervisor.start_link([Exla.LockedCache], name: __MODULE__, strategy: :one_for_one)

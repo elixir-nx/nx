@@ -154,7 +154,7 @@ defmodule Nx.Shared do
     ]
 
   @doc """
-  Returns the name of creation funs.  
+  Returns the name of creation funs.
   """
   def creation_funs, do: [:iota, :random_normal, :random_uniform]
 

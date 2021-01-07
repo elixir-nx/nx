@@ -145,6 +145,38 @@ defmodule Exla.Defn do
     Exla.Op.dot_general(to_type(left, type), to_type(right, type), {axes1, axes2})
   end
 
+  defp to_operator(
+         :conv,
+         [operand, kernel, strides, padding],
+         %{shape: shape},
+         _builder
+       ) do
+    rank = tuple_size(shape)
+    # Build general conv dims
+    input_dims = List.to_tuple(for i <- 0..(rank - 1), do: i)
+    [out_features, in_features | kernel_spatial] = for i <- 0..(rank - 1), do: i
+    kernel_dims = List.to_tuple([in_features, out_features | kernel_spatial])
+    output_dims = input_dims
+
+    conv_dim_nos = {input_dims, kernel_dims, output_dims}
+
+    # No dilation for now
+    lhs_dilation = List.to_tuple(for _ <- 0..(rank - 3), do: 1)
+    rhs_dilation = lhs_dilation
+
+    padding_config = padding
+
+    Exla.Op.conv_general_dilated(
+      operand,
+      kernel,
+      strides,
+      padding_config,
+      lhs_dilation,
+      rhs_dilation,
+      conv_dim_nos
+    )
+  end
+
   defp to_operator(:outer, [left, right], %{type: type, shape: shape}, _builder) do
     left =
       left

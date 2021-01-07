@@ -35,6 +35,7 @@ defmodule Exla.Client do
         |> unwrap!()
 
       device_count = Exla.NIF.get_device_count(ref) |> unwrap!()
+
       default_device_ordinal =
         if default = options[:default_device_ordinal] do
           default
@@ -71,7 +72,7 @@ defmodule Exla.Client do
 
     shape_refs =
       argument_shapes
-      |> Enum.map(& Shape.shard(&1, num_replicas*num_partitions))
+      |> Enum.map(&Shape.shard(&1, num_replicas * num_partitions))
       |> Enum.map(& &1.ref)
 
     # Executable Build Context

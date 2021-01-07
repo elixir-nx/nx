@@ -327,7 +327,7 @@ defmodule Nx.BinaryTensor do
           edge_low < 0 and edge_high < 0 ->
             low_byte = abs(edge_low) * size
             high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * div(size, 8) - high_byte - low_byte
+            new_bytes = byte_size(bin) * 8 - high_byte - low_byte
 
             <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> =
               bin
@@ -341,8 +341,8 @@ defmodule Nx.BinaryTensor do
 
           edge_low >= 0 and edge_high < 0 ->
             high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * div(size, 8) - high_byte
-            <<new_bin::size(new_bytes)-bitstring, _::size(high_byte)-bitstring>> = bin
+            new_bytes = byte_size(bin) * 8 - high_byte
+            <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = bin
             <<edge_low_padding::bitstring, new_bin::bitstring>>
 
           true ->
@@ -774,6 +774,156 @@ defmodule Nx.BinaryTensor do
     end
   end
 
+  ## Conv
+
+  def conv(out, t, k, strides, padding \\ :valid) do
+    # Consider an image representation, the input shape should be:
+    # {batch, channels, height, width}
+    #
+    # The kernel then has the following shape:
+    # {num_filters, channels, filter_height, filter_width}
+    #
+    # The output type is merged between the input tensor
+    # and the input kernel, both inputs must be floating types
+    #
+    # The output shape is a product of the batch size,
+    # number of filters in the input kernel, and the transformation
+    # on the spatial dimensions.
+    #
+    # The shape of each spatial dimension is calculated as:
+    #
+    # (spatial_dim - filter_size + 2 * padding_size) / stride + 1
+    #
+    # where spatial dim is the current spatial dimension size, filter size is
+    # the size of the corresponding spatial dimension in the kernel,
+    # padding size is the amount of padding applied to either side of the
+    # spatial dimension, and stride is the input stride
+    #
+    # The final shape is then given as:
+    # {batch, num_filters, spatial_dim0, spatial_dim1, ...}
+    %T{type: {_, input_size} = input_type, shape: input_shape} = t
+    %T{type: {_, kernel_size} = kernel_type, shape: kernel_shape} = k
+
+    %{type: output_type} = out
+
+    # The size of the "window" or the size of each filter
+    # removes the first two dimensions of the kernel
+    #
+    # This "window" is applied `num_filters` times across
+    # the input tensors spatial dimensions
+    filter_shape =
+      kernel_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    num_input_channels = elem(input_shape, 1)
+
+    filter_spatial_dims = Tuple.delete_at(kernel_shape, 0)
+
+    filter_size =
+      tuple_product(filter_spatial_dims, tuple_size(filter_spatial_dims)) * kernel_size
+
+    # We first pad the input tensor with the following semantics
+    #   :valid - no padding
+    #   :same - pad with 0 such that the input's spatial dims
+    #           remain unchanged WITHOUT considering strides
+    #   general - pad with the given padding configuration
+    #
+    # Padding configuration is guaranteed to always be provided
+    # as a list because it is handled in the Nx module before
+    # lowering to the implementation; however, the padding
+    # configuration only accounts for spatial dims
+    padding_config = [{0, 0}, {0, 0} | padding]
+    %T{shape: padded_shape} = padded_t = Nx.pad(t, 0, padding_config)
+
+    single_data_dims = Tuple.delete_at(padded_shape, 0)
+    batch_size = tuple_product(single_data_dims, tuple_size(single_data_dims)) * input_size
+
+    # We will traverse the input tensor exactly the same as we traversed
+    # the binary in reduce_window, but the window is equal to the filter
+    # size of the kernel plus the channel size of the input tensor
+    window_shape = Tuple.insert_at(filter_shape, 0, num_input_channels)
+
+    input_data = to_binary(padded_t)
+    kernel_data = to_binary(k)
+
+    batch_weighted_shape =
+      weighted_shape(Tuple.delete_at(padded_shape, 0), input_size, window_shape)
+
+    # We calculate our "anchors" using just the spatial dimensions
+    # but they also need to consider the depth or channels of the input
+    # tensor, so we always anchor on the `0th` channel
+    padded_spatial_dims =
+      padded_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    anchors = Enum.sort(make_anchors(padded_spatial_dims, strides, filter_shape, []))
+    anchors = Enum.map(anchors, &Tuple.insert_at(&1, 0, 0))
+
+    # Traverse the batch dim first
+    output_data =
+      for <<batch::size(batch_size)-bitstring <- input_data>>,
+          # Traverse the filters next, this allows us to rebuild
+          # the resulting binary correctly
+          <<filter::size(filter_size)-bitstring <- kernel_data>>,
+          # Then we traverse the spatial dimension, applying
+          # the filter at each step
+          anchor <- anchors,
+          into: <<>> do
+        offset = weighted_offset(batch_weighted_shape, anchor)
+        # The shape of the window is {channels} + filter_shape
+        # The shape of the kernel is {num_filters, channels} + filter_shape
+        window =
+          IO.iodata_to_binary(weighted_traverse(batch_weighted_shape, batch, input_size, offset))
+
+        # The receptive field size of each binary in bytes
+        input_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * input_size
+        filter_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * kernel_size
+        # For each channel in both filter and input...
+        # The output from a single filter being applied over a window
+        # of the input tensor is the sum of the element-wise products
+        values =
+          for i <- 0..(num_input_channels - 1) do
+            current_input_pos = i * input_field_size
+            current_filter_pos = i * filter_field_size
+            <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
+            <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> = filter
+
+            for j <- 0..(tuple_product(filter_shape, tuple_size(filter_shape)) - 1) do
+              x =
+                match_types [input_type] do
+                  left_consumed = j * input_size
+
+                  <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
+                    input_receptive_field
+
+                  read!(x, 0)
+                end
+
+              y =
+                match_types [kernel_type] do
+                  right_consumed = j * kernel_size
+
+                  <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
+                    filter_receptive_field
+
+                  read!(y, 0)
+                end
+
+              x * y
+            end
+          end
+
+        match_types [output_type] do
+          sum = Enum.sum(List.flatten(values))
+          <<write!(sum, 0)>>
+        end
+      end
+
+    from_binary(out, output_data)
+  end
+
   ## Aggregation
 
   @doc false
@@ -860,7 +1010,7 @@ defmodule Nx.BinaryTensor do
   end
 
   defp zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun)
-      when is_function(fun, 2) do
+       when is_function(fun, 2) do
     {_, s1} = left_type = t1.type
     {_, s2} = right_type = t2.type
 
@@ -1016,4 +1166,44 @@ defmodule Nx.BinaryTensor do
         [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
     end
   end
+
+  # Makes anchors for traversing a binary with a window.
+  defp make_anchors(shape, strides, window, anchors)
+       when is_tuple(shape) and is_tuple(strides) and is_tuple(window),
+       do:
+         make_anchors(
+           Tuple.to_list(shape),
+           Tuple.to_list(strides),
+           Tuple.to_list(window),
+           anchors
+         )
+
+  defp make_anchors([], [], _window, anchors), do: anchors
+
+  defp make_anchors([dim | shape], [s | strides], [w | window], []) do
+    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim, do: {i}
+    make_anchors(shape, strides, window, dims)
+  end
+
+  defp make_anchors([dim | shape], [s | strides], [w | window], anchors) do
+    dims =
+      for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim do
+        Enum.map(anchors, &Tuple.append(&1, i))
+      end
+
+    make_anchors(shape, strides, window, List.flatten(dims))
+  end
+
+  # Calculates the offset needed to reach a specified position
+  # in the binary from a weighted shape list.
+  defp weighted_offset(weighted_shape, pos) when is_tuple(pos),
+    do: weighted_offset(weighted_shape, Tuple.to_list(pos))
+
+  defp weighted_offset([], []), do: 0
+
+  defp weighted_offset([{_, size} | dims], [x | pos]),
+    do: size * x + weighted_offset(dims, pos)
+
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 end

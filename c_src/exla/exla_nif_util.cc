@@ -280,6 +280,100 @@ namespace exla {
     return 1;
   }
 
+  int get_conv_dimension_numbers(ErlNifEnv* env,
+                                 ERL_NIF_TERM tuple,
+                                 xla::ConvolutionDimensionNumbers* dimension_numbers) {
+    const ERL_NIF_TERM* terms;
+    int32 count;
+
+    if (!enif_get_tuple(env, tuple, &count, &terms)) return 0;
+    if (count != 3) return 0;
+
+    const ERL_NIF_TERM* input_dims;
+    int32 input_count;
+    if (!enif_get_tuple(env, terms[0], &input_count, &input_dims)) return 0;
+    if (count < 3) return 0;
+
+    int64 input_batch_dimension;
+    int64 input_feature_dimension;
+    if (!get(env, input_dims[0], &input_batch_dimension)) return 0;
+    if (!get(env, input_dims[1], &input_feature_dimension)) return 0;
+
+    dimension_numbers->set_input_batch_dimension(input_batch_dimension);
+    dimension_numbers->set_input_feature_dimension(input_feature_dimension);
+    for (int i = 2;i < input_count;i++) {
+      int64 value;
+      if (!get(env, input_dims[i], &value)) return 0;
+      dimension_numbers->add_input_spatial_dimensions(value);
+    }
+
+    const ERL_NIF_TERM* kernel_dims;
+    int32 kernel_count;
+    if (!enif_get_tuple(env, terms[1], &kernel_count, &kernel_dims)) return 0;
+    if (kernel_count < 3) return 0;
+
+    int64 kernel_input_feature_dimension;
+    int64 kernel_output_feature_dimension;
+    if (!get(env, kernel_dims[0], &kernel_input_feature_dimension)) return 0;
+    if (!get(env, kernel_dims[1], &kernel_output_feature_dimension)) return 0;
+
+    dimension_numbers->set_kernel_output_feature_dimension(kernel_output_feature_dimension);
+    dimension_numbers->set_kernel_input_feature_dimension(kernel_input_feature_dimension);
+    for (int i = 2;i < kernel_count;i++) {
+      int64 value;
+      if (!get(env, kernel_dims[i], &value)) return 0;
+      dimension_numbers->add_kernel_spatial_dimensions(value);
+    }
+
+    const ERL_NIF_TERM* output_dims;
+    int32 output_count;
+    if (!enif_get_tuple(env, terms[2], &output_count, &output_dims)) return 0;
+    if (output_count < 3) return 0;
+
+    int64 output_batch_dimension;
+    int64 output_feature_dimension;
+    if (!get(env, output_dims[0], &output_batch_dimension)) return 0;
+    if (!get(env, output_dims[1], &output_feature_dimension)) return 0;
+
+    dimension_numbers->set_output_batch_dimension(output_batch_dimension);
+    dimension_numbers->set_output_feature_dimension(output_feature_dimension);
+    for (int i = 2;i < output_count;i++) {
+      int64 value;
+      if (!get(env, output_dims[i], &value)) return 0;
+      dimension_numbers->add_output_spatial_dimensions(value);
+    }
+
+    return 1;
+  }
+
+  int get_conv_padding(ErlNifEnv* env,
+                       ERL_NIF_TERM padding_term,
+                       std::vector<std::pair<int64, int64>>& padding) {
+    uint32 length;
+    if (!enif_get_list_length(env, padding_term, &length)) return 0;
+
+    padding.reserve(length);
+    ERL_NIF_TERM head, tail;
+
+    while (enif_get_list_cell(env, padding_term, &head, &tail)) {
+      const ERL_NIF_TERM* terms;
+      int32 count;
+
+      if (!enif_get_tuple(env, head, &count, &terms)) return 0;
+      if (count != 2) return 0;
+
+      int64 lo, hi;
+      if (!get(env, terms[0], &lo)) return 0;
+      if (!get(env, terms[1], &hi)) return 0;
+
+      padding.emplace_back(std::pair<int64, int64>(lo, hi));
+
+      padding_term = tail;
+    }
+
+    return 1;
+  }
+
   ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if (shape.IsTuple()) {
       int element_count = xla::ShapeUtil::TupleElementCount(shape);

@@ -118,6 +118,18 @@ defmodule Exla.NIF do
   def dot_general(_a, _b, _dims, _precision),
     do: nif_error(__ENV__.function)
 
+  def conv_general_dilated(
+        _operand,
+        _kernel,
+        _strides,
+        _padding_config,
+        _lhs_dilation,
+        _rhs_dilation,
+        _dimension_numbers,
+        _precision_config
+      ),
+      do: nif_error(__ENV__.function)
+
   def transpose(_a, _permutation),
     do: nif_error(__ENV__.function)
 
