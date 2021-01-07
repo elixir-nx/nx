@@ -5,7 +5,6 @@ defmodule Nx.Defn.Compiler do
 
   # These operations need to be rewritten to Expr as they have special semantics.
   @creation_operations [:random_uniform, :random_normal, :iota]
-  @meta_operations [:reshape, :squeeze]
 
   @as_is_nx_functions [:tensor]
   @forbidden_nx_functions [:device_read, :device_deallocate, :device_transfer, :type]

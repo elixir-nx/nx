@@ -10,7 +10,7 @@ defmodule Nx.Tensor do
   @type type :: Nx.Type.t()
   @type shape :: tuple()
 
-  @enforce_keys [:data, :type, :shape]
+  @enforce_keys [:type, :shape]
   defstruct [:data, :type, :shape]
 
   defimpl Inspect do

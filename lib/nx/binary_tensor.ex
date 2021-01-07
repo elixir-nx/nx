@@ -8,6 +8,133 @@ defmodule Nx.BinaryTensor do
   import Bitwise, only: [>>>: 2, &&&: 2]
   import Nx.Util, only: [to_binary: 1, to_scalar: 1]
 
+  ## Creation
+
+  def tensor(arg, type) do
+    {shape, data} = flatten(arg, type)
+
+    if data == "" do
+      raise "cannot build empty tensor"
+    end
+
+    data(data, %T{shape: shape, type: type})
+  end
+
+  defp flatten(list, type) when is_list(list) do
+    {dimensions, acc} = flatten_list(list, type, [], [])
+
+    {dimensions |> Enum.reverse() |> List.to_tuple(),
+     acc |> Enum.reverse() |> :erlang.list_to_binary()}
+  end
+
+  defp flatten(other, type), do: {{}, scalar_to_binary(other, type)}
+
+  defp flatten_list([], _type, dimensions, acc) do
+    {[0 | dimensions], acc}
+  end
+
+  defp flatten_list([head | rest], type, parent_dimensions, acc) when is_list(head) do
+    {child_dimensions, acc} = flatten_list(head, type, [], acc)
+
+    {n, acc} =
+      Enum.reduce(rest, {1, acc}, fn list, {count, acc} ->
+        case flatten_list(list, type, [], acc) do
+          {^child_dimensions, acc} ->
+            {count + 1, acc}
+
+          {other_dimensions, _acc} ->
+            raise ArgumentError,
+                  "cannot build tensor because lists have different shapes, got " <>
+                    inspect(List.to_tuple(child_dimensions)) <>
+                    " at position 0 and " <>
+                    inspect(List.to_tuple(other_dimensions)) <> " at position #{count + 1}"
+        end
+      end)
+
+    {child_dimensions ++ [n | parent_dimensions], acc}
+  end
+
+  defp flatten_list(list, type, dimensions, acc) do
+    {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_binary(&1, type) | &2])}
+  end
+
+  def random_uniform(%{type: type, shape: shape} = out, min, max) do
+    gen =
+      case type do
+        {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
+        {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
+        {_, _} -> fn -> (max - min) * :rand.uniform() + min end
+      end
+
+    data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_binary(gen.(), type)
+    data(data, out)
+  end
+
+  def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
+    data =
+      for _ <- 1..Nx.Shape.size(shape),
+          into: "",
+          do: scalar_to_binary(:rand.normal(mu, sigma), type)
+
+    data(data, out)
+  end
+
+  def iota(%{shape: {n}, type: type} = out, 0) do
+    data = for i <- 0..(n - 1), do: scalar_to_binary(i, type)
+    data(data, out)
+  end
+
+  def iota(%{shape: shape, type: type} = out, axis) do
+    {dims_before, [dim | dims_after]} =
+      shape
+      |> Tuple.to_list()
+      |> Enum.split(axis)
+
+    # Number of repetitions of an index in memory
+    repeat_blocks =
+      dims_after
+      |> Enum.reduce(1, &*/2)
+
+    # Number of cycles of the counting pattern
+    cycles =
+      dims_before
+      |> Enum.reduce(1, &*/2)
+
+    data =
+      for _ <- 1..cycles,
+          i <- 0..(dim - 1),
+          _ <- 1..repeat_blocks,
+          into: "",
+          do: scalar_to_binary(i, type)
+
+    data(data, out)
+  end
+
+  ## Device API
+
+  def device_read(%T{data: {device, state}} = tensor) do
+    %{tensor | data: {Nx.BitStringDevice, device.read(state)}}
+  end
+
+  def device_deallocate(%T{data: {device, state}} = _tensor) do
+    device.deallocate(state)
+  end
+
+  def device_transfer(%T{data: {Nx.BitStringDevice, _data}} = tensor, device, opts) do
+    %{type: type, shape: shape} = tensor
+    %{tensor | data: device.allocate(to_binary(tensor), type, shape, opts)}
+  end
+
+  def device_transfer(%T{} = tensor, Nx.BitStringDevice, _opts) do
+    new = device_read(tensor)
+    _ = device_deallocate(tensor)
+    new
+  end
+
+  def device_transfer(%T{data: {data_device, _}}, device, _opts) do
+    raise ArgumentError, "cannot transfer from #{inspect(data_device)} to #{inspect(device)}"
+  end
+
   ## Reflection
 
   @unary_funs [
@@ -26,6 +153,11 @@ defmodule Nx.BinaryTensor do
 
   @doc false
   def unary_funs, do: @unary_funs
+
+  ## Shape
+
+  def reshape(_tensor, out), do: out
+  def squeeze(_tensor, out, _axes), do: out
 
   ## Broadcast
 

@@ -233,52 +233,10 @@ defmodule Nx do
   def tensor(arg, opts) do
     assert_keys!(opts, [:type])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
-    {dimensions, data} = flatten(arg, type)
+    Nx.BinaryTensor.tensor(arg, type)
 
-    if data == "" do
-      raise "cannot build empty tensor"
-    end
-
-    %T{shape: dimensions, type: type, data: {Nx.BitStringDevice, data}}
   end
 
-  defp flatten(list, type) when is_list(list) do
-    {dimensions, acc} = flatten_list(list, type, [], [])
-
-    {dimensions |> Enum.reverse() |> List.to_tuple(),
-     acc |> Enum.reverse() |> :erlang.list_to_binary()}
-  end
-
-  defp flatten(other, type), do: {{}, scalar_to_binary(other, type)}
-
-  defp flatten_list([], _type, dimensions, acc) do
-    {[0 | dimensions], acc}
-  end
-
-  defp flatten_list([head | rest], type, parent_dimensions, acc) when is_list(head) do
-    {child_dimensions, acc} = flatten_list(head, type, [], acc)
-
-    {n, acc} =
-      Enum.reduce(rest, {1, acc}, fn list, {count, acc} ->
-        case flatten_list(list, type, [], acc) do
-          {^child_dimensions, acc} ->
-            {count + 1, acc}
-
-          {other_dimensions, _acc} ->
-            raise ArgumentError,
-                  "cannot build tensor because lists have different shapes, got " <>
-                    inspect(List.to_tuple(child_dimensions)) <>
-                    " at position 0 and " <>
-                    inspect(List.to_tuple(other_dimensions)) <> " at position #{count + 1}"
-        end
-      end)
-
-    {child_dimensions ++ [n | parent_dimensions], acc}
-  end
-
-  defp flatten_list(list, type, dimensions, acc) do
-    {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_binary(&1, type) | &2])}
-  end
 
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
@@ -386,16 +344,7 @@ defmodule Nx do
     assert_keys!(opts, [:type])
     shape = shape!(tensor_or_shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
-
-    gen =
-      case type do
-        {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {_, _} -> fn -> (max - min) * :rand.uniform() + min end
-      end
-
-    data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_binary(gen.(), type)
-    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
+    Nx.BinaryTensor.random_uniform(%T{shape: shape, type: type}, min, max)
   end
 
   @doc """
@@ -464,13 +413,7 @@ defmodule Nx do
     assert_keys!(opts, [:type])
     shape = shape!(tensor_or_shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
-
-    data =
-      for _ <- 1..Nx.Shape.size(shape),
-          into: "",
-          do: scalar_to_binary(:rand.normal(mu, sigma), type)
-
-    %T{data: {Nx.BitStringDevice, data}, shape: shape, type: type}
+    Nx.BinaryTensor.random_normal(%T{shape: shape, type: type}, mu, sigma)
   end
 
   @doc """
@@ -575,49 +518,18 @@ defmodule Nx do
 
   def iota({}, opts), do: tensor(0, opts)
 
-  def iota({n}, opts) do
-    assert_keys!(opts, [:type, :axis])
-    output_type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    axis = opts[:axis] || 0
-    Nx.Shape.normalize_axis({n}, axis)
-    data = for i <- 0..(n - 1), do: scalar_to_binary(i, output_type)
-    %T{data: {Nx.BitStringDevice, IO.iodata_to_binary(data)}, shape: {n}, type: output_type}
-  end
-
   def iota(tensor_or_shape, opts) do
     assert_keys!(opts, [:type, :axis])
     shape = shape!(tensor_or_shape)
-    output_type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis)
-
-      {dims_before, [dim | dims_after]} =
-        shape
-        |> Tuple.to_list()
-        |> Enum.split(axis)
-
-      # Number of repetitions of an index in memory
-      repeat_blocks =
-        dims_after
-        |> Enum.reduce(1, &*/2)
-
-      # Number of cycles of the counting pattern
-      cycles =
-        dims_before
-        |> Enum.reduce(1, &*/2)
-
-      data =
-        for _ <- 1..cycles,
-            i <- 0..(dim - 1),
-            _ <- 1..repeat_blocks,
-            into: "",
-            do: scalar_to_binary(i, output_type)
-
-      %T{data: {Nx.BitStringDevice, data}, shape: shape, type: output_type}
+      Nx.BinaryTensor.iota(%T{type: type, shape: shape}, axis)
     else
-      t = iota({Nx.Shape.size(shape)}, opts)
-      reshape(t, shape)
+      %T{type: type, shape: {Nx.Shape.size(shape)}}
+      |> Nx.BinaryTensor.iota(0)
+      |> Map.replace!(:shape, shape)
     end
   end
 
@@ -674,9 +586,14 @@ defmodule Nx do
 
   """
   def reshape(tensor, new_shape) do
-    %T{shape: old_shape} = t = tensor(tensor)
+    %T{shape: old_shape} = tensor = tensor(tensor)
     new_shape = shape!(new_shape)
-    %{t | shape: Nx.Shape.reshape(old_shape, new_shape)}
+
+    if old_shape == new_shape do
+      tensor
+    else
+      impl(tensor).reshape(tensor, %{tensor | shape: Nx.Shape.reshape(old_shape, new_shape)})
+    end
   end
 
   @doc """
@@ -712,8 +629,8 @@ defmodule Nx do
 
   """
   def squeeze(tensor) do
-    %T{shape: shape} = t = tensor(tensor)
-    squeeze(t, Nx.Shape.squeeze_axes(shape))
+    %T{shape: shape} = tensor = tensor(tensor)
+    squeeze(tensor, Nx.Shape.squeeze_axes(shape))
   end
 
   @doc """
@@ -747,10 +664,15 @@ defmodule Nx do
       ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4
   """
   def squeeze(tensor, axes) do
-    %T{shape: shape} = t = tensor(tensor)
-    axes = Nx.Shape.normalize_axes(shape, axes)
-    output_shape = Nx.Shape.squeeze(shape, axes)
-    %{t | shape: output_shape}
+    %T{shape: old_shape} = tensor = tensor(tensor)
+    axes = Nx.Shape.normalize_axes(old_shape, axes)
+    new_shape = Nx.Shape.squeeze(old_shape, axes)
+
+    if old_shape == new_shape do
+      tensor
+    else
+      impl(tensor).squeeze(tensor, %{tensor | shape: new_shape}, axes)
+    end
   end
 
   @doc """
@@ -1173,21 +1095,9 @@ defmodule Nx do
       tensor = Nx.device_transfer(tensor)
 
   """
-  def device_transfer(tensor, device \\ Nx.BitStringDevice, opts \\ [])
-
-  def device_transfer(%T{data: {Nx.BitStringDevice, _data}} = t, device, opts) do
-    %{type: type, shape: shape} = t
-    %{t | data: device.allocate(Nx.Util.to_binary(t), type, shape, opts)}
-  end
-
-  def device_transfer(%T{} = t, Nx.BitStringDevice, _opts) do
-    new_t = device_read(t)
-    _ = device_deallocate(t)
-    new_t
-  end
-
-  def device_transfer(%T{data: {data_device, _}}, device, _opts) do
-    raise ArgumentError, "cannot transfer from #{inspect(data_device)} to #{inspect(device)}"
+  def device_transfer(tensor, device \\ Nx.BitStringDevice, opts \\ []) do
+    tensor = tensor(tensor)
+    impl(tensor).device_transfer(tensor, device, opts)
   end
 
   @doc """
@@ -1197,8 +1107,9 @@ defmodule Nx do
   The data is not deallocated from the current device. If the
   device has already been deallocated, it raises.
   """
-  def device_read(%T{data: {device, state}} = t) do
-    %{t | data: {Nx.BitStringDevice, device.read(state)}}
+  def device_read(tensor) do
+    tensor = tensor(tensor)
+    impl(tensor).device_read(tensor)
   end
 
   @doc """
@@ -1206,7 +1117,10 @@ defmodule Nx do
 
   It returns either `:ok` or `:already_deallocated`.
   """
-  def device_deallocate(%T{data: {device, state}} = _tensor), do: device.deallocate(state)
+  def device_deallocate(tensor) do
+    tensor = tensor(tensor)
+    impl(tensor).device_deallocate(tensor)
+  end
 
   ## Element-wise binary ops
 
