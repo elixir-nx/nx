@@ -870,13 +870,13 @@ defmodule Nx.BinaryTensor do
 
     # Traverse the batch dim first
     output_data =
-      for <<batch::size(batch_size)-bitstring <- input_data>>, into: <<>> do
-        # Traverse the filters next, this allows us to rebuild
-        # the resulting binary correctly
-        for <<filter::size(filter_size)-bitstring <- kernel_data>>, into: <<>> do
+      for <<batch::size(batch_size)-bitstring <- input_data>>,
+          # Traverse the filters next, this allows us to rebuild
+          # the resulting binary correctly
+          <<filter::size(filter_size)-bitstring <- kernel_data>>,
           # Then we traverse the spatial dimension, applying
           # the filter at each step
-          for anchor <- anchors, into: <<>> do
+          anchor <- anchors, into: <<>> do
             offset = weighted_offset(batch_weighted_shape, anchor)
             # The shape of the window is {channels} + filter_shape
             # The shape of the kernel is {num_filters, channels} + filter_shape
@@ -927,8 +927,6 @@ defmodule Nx.BinaryTensor do
                 <<write!(sum, 0)>>
               end
             end
-          end
-        end
       end
 
     from_binary(out, output_data)
