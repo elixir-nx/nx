@@ -750,15 +750,67 @@ defmodule Exla.DefnTest do
   end
 
   describe "convolution" do
-    defn conv(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :valid)
+    defn conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :valid)
+    defn conv_valid_stride(inp, kernel), do: Nx.conv(inp, kernel, {2, 2}, :valid)
+    defn conv_same_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :same)
+    defn conv_same_stride(inp, kernel), do: Nx.conv(inp, kernel, {3, 3}, :same)
+    defn conv_general_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, [{-1, 2}, {3, -1}])
+    defn conv_general_stride(inp, kernel), do: Nx.conv(inp, kernel, {2, 1}, [{2, 2}, {-2, 4}])
 
-    test "computes the convolution of an image" do
-      img = Nx.random_uniform({32, 1, 28, 28}, type: {:f, 32})
-      kernel = Nx.random_uniform({32, 1, 3, 3}, type: {:f, 32})
+    test "computes the convolution with valid padding, no stride" do
+      img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
+      kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
 
-      lhs = conv(img, kernel)
+      lhs = conv_valid_no_stride(img, kernel)
       rhs = Nx.conv(img, kernel, {1, 1}, :valid)
-      assert lhs == rhs
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes the convolution with valid padding, {2, 2} stride" do
+      img = Nx.iota({25, 1, 11, 8}, type: {:f, 64})
+      kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
+
+      lhs = conv_valid_stride(img, kernel)
+      rhs = Nx.conv(img, kernel, {2, 2}, :valid)
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes the convolution with same padding, no stride" do
+      img = Nx.iota({13, 3, 10, 6}, type: {:f, 64})
+      kernel = Nx.iota({32, 3, 3, 3}, type: {:f, 64})
+
+      lhs = conv_same_no_stride(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, :same)
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes the convolution with same padding, stride" do
+      img = Nx.iota({32, 1, 9, 9}, type: {:f, 64})
+      kernel = Nx.iota({32, 1, 7, 7}, type: {:f, 64})
+
+      lhs = conv_same_stride(img, kernel)
+      rhs = Nx.conv(img, kernel, {3, 3}, :same)
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes the convolution with general padding, no stride" do
+      img = Nx.iota({1, 1, 14, 14}, type: {:f, 64})
+      kernel = Nx.iota({10, 1, 5, 5}, type: {:f, 64})
+
+      lhs = conv_general_no_stride(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, [{-1, 2}, {3, -1}])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes the convolution with general padding, stride" do
+      img = Nx.iota({2, 1, 12, 24}, type: {:f, 64})
+      kernel = Nx.iota({2, 1, 6, 6}, type: {:f, 64})
+
+      lhs = conv_general_stride(img, kernel)
+      rhs = Nx.conv(img, kernel, {2, 1}, [{2, 2}, {-2, 4}])
+
+      compare_tensors!(lhs, rhs)
     end
   end
 

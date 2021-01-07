@@ -327,7 +327,7 @@ defmodule Nx.BinaryTensor do
           edge_low < 0 and edge_high < 0 ->
             low_byte = abs(edge_low) * size
             high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * div(size, 8) - high_byte - low_byte
+            new_bytes = byte_size(bin) * 8 - high_byte - low_byte
 
             <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> =
               bin
@@ -341,8 +341,8 @@ defmodule Nx.BinaryTensor do
 
           edge_low >= 0 and edge_high < 0 ->
             high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * div(size, 8) - high_byte
-            <<new_bin::size(new_bytes)-bitstring, _::size(high_byte)-bitstring>> = bin
+            new_bytes = byte_size(bin) * 8 - high_byte
+            <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = bin
             <<edge_low_padding::bitstring, new_bin::bitstring>>
 
           true ->
@@ -816,47 +816,33 @@ defmodule Nx.BinaryTensor do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    spatial_dims =
-      input_shape
-      |> Tuple.delete_at(0)
-      |> Tuple.delete_at(0)
-
     num_input_channels = elem(input_shape, 1)
 
     filter_spatial_dims = Tuple.delete_at(kernel_shape, 0)
     filter_size = tuple_product(filter_spatial_dims, tuple_size(filter_spatial_dims)) * kernel_size
-    single_data_dims = Tuple.delete_at(input_shape, 0)
-    batch_size = tuple_product(single_data_dims, tuple_size(single_data_dims)) * input_size
 
     # We first pad the input tensor with the following semantics
     #   :valid - no padding
     #   :same - pad with 0 such that the input's spatial dims
     #           remain unchanged WITHOUT considering strides
     #   general - pad with the given padding configuration
-    %T{shape: padded_shape} =
-      t =
-      case padding do
-        :valid ->
-          t
+    #
+    # Padding configuration is guaranteed to always be provided
+    # as a list because it is handled in the Nx module before
+    # lowering to the implementation; however, the padding
+    # configuration only accounts for spatial dims
+    padding_config = [{0, 0}, {0, 0} | padding]
+    %T{shape: padded_shape} = padded_t = Nx.pad(t, 0, padding_config)
 
-        :same ->
-          padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
-          # We don't pad the channels or depth or z or whatever you want to
-          # call it, JUST the spatial dims
-          padding_config = [{0, 0}, {0, 0} | padding_config]
-          Nx.pad(t, 0, padding_config)
-
-        padding_config when is_list(padding_config) ->
-          padding_config = [{0, 0}, {0, 0} | padding_config]
-          Nx.pad(t, 0, padding_config)
-      end
+    single_data_dims = Tuple.delete_at(padded_shape, 0)
+    batch_size = tuple_product(single_data_dims, tuple_size(single_data_dims)) * input_size
 
     # We will traverse the input tensor exactly the same as we traversed
     # the binary in reduce_window, but the window is equal to the filter
     # size of the kernel plus the channel size of the input tensor
     window_shape = Tuple.insert_at(filter_shape, 0, num_input_channels)
 
-    input_data = to_binary(t)
+    input_data = to_binary(padded_t)
     kernel_data = to_binary(k)
 
     batch_weighted_shape =
@@ -865,7 +851,12 @@ defmodule Nx.BinaryTensor do
     # We calculate our "anchors" using just the spatial dimensions
     # but they also need to consider the depth or channels of the input
     # tensor, so we always anchor on the `0th` channel
-    anchors = Enum.sort(make_anchors(spatial_dims, strides, filter_shape, []))
+    padded_spatial_dims =
+      padded_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    anchors = Enum.sort(make_anchors(padded_spatial_dims, strides, filter_shape, []))
     anchors = Enum.map(anchors, &Tuple.insert_at(&1, 0, 0))
 
     # Traverse the batch dim first
@@ -889,15 +880,17 @@ defmodule Nx.BinaryTensor do
             input_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * input_size
             filter_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * kernel_size
             # For each channel in both filter and input...
-            for i <- 0..(num_input_channels - 1), into: <<>> do
-              current_input_pos = i * input_field_size
-              current_filter_pos = i * filter_field_size
-              <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
+            # The output from a single filter being applied over a window
+            # of the input tensor is the sum of the element-wise products
+            values =
+              for i <- 0..(num_input_channels - 1) do
+                current_input_pos = i * input_field_size
+                current_filter_pos = i * filter_field_size
+                <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
 
-              <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
-                filter
+                <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
+                  filter
 
-              values =
                 for j <- 0..(tuple_product(filter_shape, tuple_size(filter_shape)) - 1) do
                   x =
                     match_types [input_type] do
@@ -921,11 +914,11 @@ defmodule Nx.BinaryTensor do
 
                   x * y
                 end
-
-              match_types [output_type] do
-                sum = Enum.sum(values)
-                <<write!(sum, 0)>>
               end
+
+            match_types [output_type] do
+              sum = Enum.sum(List.flatten(values))
+              <<write!(sum, 0)>>
             end
       end
 

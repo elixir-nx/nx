@@ -1022,17 +1022,29 @@ defmodule Nx do
         [4, 5, 6, 0]
       ]
     >
+
+    iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], type: {:f, 32}), 0, [{-1, 2}, {1, -1}])
+    #Nx.Tensor<
+      f32[3][3]
+      [
+        [0.0, 3.0, 4.0],
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0]
+      ]
+    >
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
     tensor = tensor(tensor)
     pad_value = tensor(pad_value)
+
+    output_type = binary_type(tensor, pad_value)
 
     if pad_value.shape != {} do
       raise ArgumentError, "padding value must be a scalar"
     end
 
     shape = Nx.Shape.pad(tensor.shape, padding_config)
-    impl!(tensor).pad(%{tensor | shape: shape}, tensor, pad_value, padding_config)
+    impl!(tensor).pad(%{tensor | type: output_type, shape: shape}, tensor, pad_value, padding_config)
   end
 
   ## Reflection
@@ -3679,7 +3691,34 @@ defmodule Nx do
     %{shape: input_shape} = tensor = tensor(tensor)
     %{shape: kernel_shape} = kernel = tensor(kernel)
 
-    output_shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding)
+    filter_shape =
+      kernel_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    spatial_dims =
+      input_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
+
+    # Always send the padding as an actual padding configuration
+    # so backends don't deal with atoms themselves
+    #
+    # We assume padding is specified only for spatial dims
+    padding_config =
+      case padding do
+        :valid ->
+          for _ <- (0..tuple_size(input_shape) - 3), do: {0, 0}
+
+        :same ->
+          padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
+          padding_config
+
+        config when is_list(config) ->
+          config
+      end
+
+    output_shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding_config)
     output_type = binary_type(tensor, kernel)
 
     impl!(tensor).conv(
@@ -3687,7 +3726,7 @@ defmodule Nx do
       tensor,
       kernel,
       strides,
-      padding
+      padding_config
     )
   end
 

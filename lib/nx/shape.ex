@@ -309,28 +309,12 @@ defmodule Nx.Shape do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    spatial_dims =
-      input_shape
-      |> Tuple.delete_at(0)
-      |> Tuple.delete_at(0)
-
     num_filters = elem(kernel_shape, 0)
     batch_size = elem(input_shape, 0)
 
-    padded_shape =
-      case padding do
-        :valid ->
-          input_shape
-
-        :same ->
-          padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
-          padding_config = [{0, 0} | padding_config]
-          Nx.Shape.pad(input_shape, padding_config)
-
-        padding_config when is_list(padding_config) ->
-          padding_config = [{0, 0} | padding_config]
-          Nx.Shape.pad(input_shape, padding_config)
-      end
+    # Assume padding only pads spatial dims
+    padding_config = [{0, 0}, {0, 0} | padding]
+    padded_shape = Nx.Shape.pad(input_shape, padding_config)
 
     old_spatial_dims =
       padded_shape
@@ -339,9 +323,7 @@ defmodule Nx.Shape do
       |> Tuple.to_list()
 
     spatial_dims =
-      Enum.reverse(
-        do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(strides))
-      )
+      do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(strides))
 
     List.to_tuple([batch_size, num_filters | spatial_dims])
   end

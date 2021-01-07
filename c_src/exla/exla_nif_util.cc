@@ -327,7 +327,7 @@ namespace exla {
 
     const ERL_NIF_TERM* output_dims;
     int32 output_count;
-    if (!enif_get_tuple(env, terms[1], &output_count, &output_dims)) return 0;
+    if (!enif_get_tuple(env, terms[2], &output_count, &output_dims)) return 0;
     if (output_count < 3) return 0;
 
     int64 output_batch_dimension;

@@ -164,17 +164,7 @@ defmodule Exla.Defn do
     lhs_dilation = List.to_tuple(for _ <- 0..(rank - 3), do: 1)
     rhs_dilation = lhs_dilation
 
-    padding_config =
-      case padding do
-        :valid ->
-          for _ <- 0..(rank - 3), do: {0, 0}
-
-        :same ->
-          :ok
-
-        padding when is_list(padding) ->
-          padding
-      end
+    padding_config = padding
 
     Exla.Op.conv_general_dilated(
       operand,
