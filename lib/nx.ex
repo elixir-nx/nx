@@ -854,7 +854,7 @@ defmodule Nx do
 
     shape = shape!(shape)
     axes = Nx.Shape.normalize_axes(shape, axes)
-    _ = Nx.Shape.broadcast(tensor.shape, shape, axes)
+    _ = Nx.Shape.broadcast!(tensor.shape, shape, axes)
 
     impl!(tensor).broadcast(%{tensor | shape: shape}, tensor, shape, axes)
   end
@@ -1184,12 +1184,20 @@ defmodule Nx do
   ## Element-wise binary ops
 
   defp element_wise_bin_op(left, right, op, fun) do
-    type = Nx.Type.merge_tensors(left, right) |> fun.()
+    type = binary_type(left, right) |> fun.()
     %T{shape: left_shape} = left = tensor(left)
     %T{shape: right_shape} = right = tensor(right)
 
     shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
     apply(impl!(left, right), op, [%{left | type: type, shape: shape}, left, right])
+  end
+
+  defp element_wise_comp_op(left, right, op) do
+    %T{shape: left_shape} = left = tensor(left)
+    %T{shape: right_shape} = right = tensor(right)
+
+    shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
+    apply(impl!(left, right), op, [%{left | type: {:u, 8}, shape: shape}, left, right])
   end
 
   @doc """
@@ -2080,7 +2088,7 @@ defmodule Nx do
       ]
     >
   """
-  def equal(left, right), do: element_wise_bin_op(left, right, :equal, &Nx.Type.to_predicate/1)
+  def equal(left, right), do: element_wise_comp_op(left, right, :equal)
 
   @doc """
   Element-wise not-equal comparison of two tensors.
@@ -2125,8 +2133,7 @@ defmodule Nx do
         ]
       >
   """
-  def not_equal(left, right),
-    do: element_wise_bin_op(left, right, :not_equal, &Nx.Type.to_predicate/1)
+  def not_equal(left, right), do: element_wise_comp_op(left, right, :not_equal)
 
   @doc """
   Element-wise greater than comparison of two tensors.
@@ -2171,8 +2178,7 @@ defmodule Nx do
       ]
     >
   """
-  def greater(left, right),
-    do: element_wise_bin_op(left, right, :greater, &Nx.Type.to_predicate/1)
+  def greater(left, right), do: element_wise_comp_op(left, right, :greater)
 
   @doc """
   Element-wise less than comparison of two tensors.
@@ -2217,7 +2223,7 @@ defmodule Nx do
       ]
     >
   """
-  def less(left, right), do: element_wise_bin_op(left, right, :less, &Nx.Type.to_predicate/1)
+  def less(left, right), do: element_wise_comp_op(left, right, :less)
 
   @doc """
   Element-wise greater than or equal comparison of two tensors.
@@ -2262,8 +2268,7 @@ defmodule Nx do
       ]
     >
   """
-  def greater_equal(left, right),
-    do: element_wise_bin_op(left, right, :greater_equal, &Nx.Type.to_predicate/1)
+  def greater_equal(left, right), do: element_wise_comp_op(left, right, :greater_equal)
 
   @doc """
   Element-wise less than or equal comparison of two tensors.
@@ -2308,8 +2313,7 @@ defmodule Nx do
       ]
     >
   """
-  def less_equal(left, right),
-    do: element_wise_bin_op(left, right, :less_equal, &Nx.Type.to_predicate/1)
+  def less_equal(left, right), do: element_wise_comp_op(left, right, :less_equal)
 
   @doc """
   Constructs a tensor from two tensors, based on a predicate.
@@ -2370,7 +2374,7 @@ defmodule Nx do
       >
   """
   def select(pred, on_true, on_false) do
-    output_type = Nx.Type.merge_tensors(on_true, on_false)
+    output_type = binary_type(on_true, on_false)
 
     %T{shape: pred_shape} = pred = tensor(pred)
     %T{shape: true_shape} = on_true = tensor(on_true)
@@ -2386,14 +2390,14 @@ defmodule Nx do
       end
 
     _ =
-      Nx.Shape.broadcast(
+      Nx.Shape.broadcast!(
         true_shape,
         output_shape,
         Nx.Shape.broadcast_axes(true_shape, output_shape)
       )
 
     _ =
-      Nx.Shape.broadcast(
+      Nx.Shape.broadcast!(
         false_shape,
         output_shape,
         Nx.Shape.broadcast_axes(false_shape, output_shape)
@@ -2816,7 +2820,13 @@ defmodule Nx do
         {{}, nil}
       end
 
-    type = Nx.Type.to_aggregate(type)
+    type =
+      case type do
+        {:u, _} -> {:u, 64}
+        {:s, _} -> {:s, 64}
+        type -> type
+      end
+
     impl!(tensor).sum(%{tensor | type: type, shape: shape}, tensor, axes: axes)
   end
 
@@ -3366,7 +3376,7 @@ defmodule Nx do
 
   """
   def dot(t1, axes1, t2, axes2) do
-    output_type = Nx.Type.merge_tensors(t1, t2)
+    output_type = binary_type(t1, t2)
     %T{shape: s1} = t1 = tensor(t1)
     %T{shape: s2} = t2 = tensor(t2)
     axes1 = Nx.Shape.normalize_axes(s1, axes1)
@@ -3415,7 +3425,7 @@ defmodule Nx do
 
   """
   def outer(t1, t2) do
-    type = Nx.Type.merge_tensors(t1, t2)
+    type = binary_type(t1, t2)
     %T{shape: s1} = t1 = tensor(t1)
     %T{shape: s2} = t2 = tensor(t2)
     impl!(t1, t2).outer(%{t1 | type: type, shape: Nx.Shape.outer(s1, s2)}, t1, t2)
@@ -3569,4 +3579,11 @@ defmodule Nx do
       impl!(tensor).transpose(%{tensor | shape: shape}, tensor, axes)
     end
   end
+
+  ## Type
+
+  defp binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)
+  defp binary_type(a, b) when is_number(a), do: Nx.Type.merge_scalar(b.type, a)
+  defp binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(a.type, b)
+  defp binary_type(a, b), do: Nx.Type.merge(a.type, b.type)
 end

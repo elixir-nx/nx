@@ -31,7 +31,7 @@ defmodule Exla.Lib do
   """
   def sum(%Builder{} = builder, %Op{} = op, opts \\ []) do
     op_shape = Op.get_shape(op)
-    rtype = Exla.Type.to_aggregate(op_shape.dtype)
+    rtype = opts[:type] || op_shape.dtype
     reduction_shape = Shape.make_shape(rtype, {})
 
     sub_builder = subbuilder(builder, "sum")
@@ -72,6 +72,7 @@ defmodule Exla.Lib do
   defp argmin_or_max(builder, op, is_min?, opts) do
     tie_break = opts[:tie_break] || :low
     op_shape = Op.get_shape(op)
+    type = opts[:type] || op_shape.dtype
 
     init_value =
       if is_min?,
@@ -79,8 +80,8 @@ defmodule Exla.Lib do
         else: min_value(builder, op_shape.dtype)
 
     axis = opts[:axis]
-    index_init_value = Op.constant_r0(builder, 0, {:s, 64})
-    iota = iota(builder, Shape.make_shape({:s, 64}, op_shape.dims), axis: axis)
+    index_init_value = Op.constant_r0(builder, 0, type)
+    iota = iota(builder, Shape.make_shape(type, op_shape.dims), axis: axis)
     reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
 
     result =
@@ -130,19 +131,11 @@ defmodule Exla.Lib do
   end
 
   defp min_value(%Builder{} = builder, type) do
-    Op.constant_from_binary(
-      builder,
-      Exla.Type.min_value_binary(type),
-      Shape.make_shape(type, {})
-    )
+    Op.constant_from_binary(builder, min_value_binary(type), Shape.make_shape(type, {}))
   end
 
   defp max_value(builder, type) do
-    Op.constant_from_binary(
-      builder,
-      Exla.Type.max_value_binary(type),
-      Shape.make_shape(type, {})
-    )
+    Op.constant_from_binary(builder, max_value_binary(type), Shape.make_shape(type, {}))
   end
 
   defp subbuilder(%Builder{name: name} = builder, desc) do
@@ -166,4 +159,10 @@ defmodule Exla.Lib do
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
+
+  defp min_value_binary({:pred, 8}), do: <<0>>
+  defp min_value_binary(type), do: Nx.Type.min_value_binary(type)
+
+  defp max_value_binary({:pred, 8}), do: <<1>>
+  defp max_value_binary(type), do: Nx.Type.max_value_binary(type)
 end

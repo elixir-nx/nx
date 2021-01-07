@@ -340,7 +340,6 @@ defmodule Nx.BinaryTensor do
   end
 
   defp pad_in_dim(shape, dim, edge_low, edge_high) do
-    dim = Nx.Shape.normalize_axis(shape, dim)
     dim_size = elem(shape, dim)
     new_dim = dim_size + edge_high + edge_low
     put_elem(shape, dim, new_dim)

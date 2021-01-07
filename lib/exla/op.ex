@@ -11,10 +11,15 @@ defmodule Exla.Op do
   Creates a scalar constant.
   """
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
-    value = Exla.Type.cast_scalar!(dtype, value)
+    value = cast_scalar!(dtype, value)
     ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
+
+  defp cast_scalar!({:pred, 8}, 0), do: 0
+  defp cast_scalar!({:pred, 8}, 1), do: 1
+  defp cast_scalar!({:pred, 8}, n), do: raise "cannot cast #{inspect(n)} to {:pred, 8}"
+  defp cast_scalar!(type, scalar), do: Nx.Type.cast_scalar!(type, scalar)
 
   @doc """
   Creates a n-dimensional constant from binary `data` with `shape`.

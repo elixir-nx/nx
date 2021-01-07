@@ -13,8 +13,6 @@ defmodule Nx.Type do
 
   """
 
-  # TODO: move most of these functions to Nx (or make private)
-
   @type t ::
           {:s, 8}
           | {:s, 16}
@@ -179,10 +177,6 @@ defmodule Nx.Type do
   def to_aggregate({:s, _size}), do: {:s, 64}
   def to_aggregate(type), do: type
 
-  @doc """
-  Converts the given type to a predicate representation.
-  """
-  def to_predicate(_), do: {:u, 8}
 
   @doc """
   Casts the given scalar to type.
@@ -385,28 +379,6 @@ defmodule Nx.Type do
   def merge_scalar(_, number) when is_number(number) do
     {:f, 64}
   end
-
-  @doc """
-  Merges the types of two tensors.
-
-  ## Examples
-
-      iex> Nx.Type.merge_tensors(Nx.tensor([1, 2, 3], type: {:u, 8}), Nx.tensor([1, 2, 3], type: {:u, 8}))
-      {:u, 8}
-
-      iex> Nx.Type.merge_tensors(1, 2)
-      {:s, 64}
-
-      iex> Nx.Type.merge_tensors(Nx.tensor([1, 2, 3]), 3.0)
-      {:f, 64}
-
-      iex> Nx.Type.merge_tensors(1, Nx.tensor([1.0, 2.0], type: {:f, 32}))
-      {:f, 32}
-  """
-  def merge_tensors(a, b) when is_number(a) and is_number(b), do: infer(a + b)
-  def merge_tensors(a, b) when is_number(a), do: merge_scalar(b.type, a)
-  def merge_tensors(a, b) when is_number(b), do: merge_scalar(a.type, b)
-  def merge_tensors(a, b), do: merge(a.type, b.type)
 
   @doc """
   Returns a string representation of the given type.

@@ -22,7 +22,6 @@ defmodule Exla.Shape do
   Creates a shape with the given type-size tuple and dimensions.
   """
   def make_shape({type, size}, dims) when is_tuple(dims) do
-    _ = Exla.Type.normalize!({type, size})
     validate_dims!(dims, tuple_size(dims))
     ref = Exla.NIF.make_shape(dtype_to_charlist({type, size}), dims) |> unwrap!()
     %Shape{ref: ref, dtype: {type, size}, dims: dims}
@@ -54,7 +53,7 @@ defmodule Exla.Shape do
   Converts a charlist type into Nx' tuple format.
   """
   def charlist_to_dtype('bf16'), do: {:bf, 16}
-  def charlist_to_dtype('pred'), do: {:pred, 1}
+  def charlist_to_dtype('pred'), do: {:pred, 8}
 
   def charlist_to_dtype([letter | integer]),
     do: {List.to_atom([letter]), List.to_integer(integer)}

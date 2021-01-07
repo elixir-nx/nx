@@ -162,7 +162,7 @@ defmodule Exla.Defn do
   end
 
   defp to_operator(:select, [pred, on_true, on_false], %{type: type, shape: shape}, _builder) do
-    pred = to_type(pred, {:pred, 1})
+    pred = to_type(pred, {:pred, 8})
 
     on_true =
       on_true
@@ -201,8 +201,8 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
-  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power] ++
-                  [:divide, :arctan2, :left_shift]
+  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power, :divide, :arctan2] ++
+            [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
   defp to_operator(op, [left, right], %{type: type}, _builder) when op in @bin_op do
     dims = broadcast_axes(op_shape(left), op_shape(right))
@@ -219,30 +219,8 @@ defmodule Exla.Defn do
     apply(Exla.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
-  @bin_pred_op [:bitwise_and, :bitwise_or, :bitwise_xor]
-
-  defp to_operator(op, [left, right], %{type: type}, _builder) when op in @bin_pred_op do
-    left_shape = Exla.Op.get_shape(left)
-    right_shape = Exla.Op.get_shape(right)
-
-    {left, right} =
-      if left_shape.dtype == {:pred, 1} and right_shape.dtype == {:pred, 1} and type == {:u, 8} do
-        {left, right}
-      else
-        {to_type(left, type), to_type(right, type)}
-      end
-
-    dims = broadcast_axes(left_shape.dims, right_shape.dims)
-    apply(Exla.Op, op, [left, right, dims])
-  end
-
-  defp to_operator(:bitwise_not, [op], %{type: type}, _builder) do
-    op = if op_type(op) == {:pred, 1} and type == {:u, 8}, do: op, else: to_type(op, type)
-    Exla.Op.bitwise_not(op)
-  end
-
   @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-              [:count_leading_zeros, :population_count] ++
+              [:bitwise_not, :count_leading_zeros, :population_count] ++
               [:floor, :ceil, :round]
 
   defp to_operator(op, [arg], %{type: type}, _builder) when op in @unary_op do
@@ -253,9 +231,9 @@ defmodule Exla.Defn do
 
   @reduction_op [:sum, :argmax, :argmin]
 
-  defp to_operator(op, [arg, opts], _ans, builder)
+  defp to_operator(op, [arg, opts], ans, builder)
        when op in @reduction_op do
-    apply(Exla.Lib, op, [builder, arg, opts])
+    apply(Exla.Lib, op, [builder, arg, [type: ans.type] ++ opts])
   end
 
   ## Axes helpers
@@ -289,14 +267,14 @@ defmodule Exla.Defn do
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
     data
-    |> Nx.from_binary(Exla.Type.to_nx(shape.dtype))
+    |> Nx.from_binary(to_nx_type(shape.dtype))
     |> Map.replace!(:shape, shape.dims)
   end
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
     %Nx.Tensor{
       data: %Nx.BinaryTensor{device: Exla.NxDevice, state: ref},
-      type: Exla.Type.to_nx(shape.dtype),
+      type: to_nx_type(shape.dtype),
       shape: shape.dims
     }
   end
@@ -309,6 +287,9 @@ defmodule Exla.Defn do
     raise "invalid defn return type, make sure defn returns a tuple or a tensor, " <>
             "got: #{inspect(other)}"
   end
+
+  defp to_nx_type({:pred, 8}), do: {:u, 8}
+  defp to_nx_type(type), do: type
 
   defp nx_to_buffer(%Nx.Tensor{data: data, type: type, shape: shape} = tensor) do
     case data do

@@ -1,8 +1,6 @@
 defmodule Nx.Shape do
   @moduledoc false
 
-  # TODO: Keep here only the shared shape functions
-
   @doc """
   Validates the given shape.
 
@@ -65,36 +63,36 @@ defmodule Nx.Shape do
 
   ### Scalars
 
-      iex> Nx.Shape.broadcast({}, {4, 2, 1, 5}, [])
-      {4, 2, 1, 5}
+      iex> Nx.Shape.broadcast!({}, {4, 2, 1, 5}, [])
+      :ok
 
-      iex> Nx.Shape.broadcast({}, {}, [])
-      {}
+      iex> Nx.Shape.broadcast!({}, {}, [])
+      :ok
 
   ### n-D shapes
 
-      iex> Nx.Shape.broadcast({1}, {2, 3, 4}, [2])
-      {2, 3, 4}
+      iex> Nx.Shape.broadcast!({1}, {2, 3, 4}, [2])
+      :ok
 
-      iex> Nx.Shape.broadcast({4, 2, 3}, {4, 3, 4, 2, 3}, [2, 3, 4])
-      {4, 3, 4, 2, 3}
+      iex> Nx.Shape.broadcast!({4, 2, 3}, {4, 3, 4, 2, 3}, [2, 3, 4])
+      :ok
 
   ### Custom axes
 
-      iex> Nx.Shape.broadcast({2}, {2, 3}, [0])
-      {2, 3}
+      iex> Nx.Shape.broadcast!({2}, {2, 3}, [0])
+      :ok
 
   ### Error cases
 
-      iex> Nx.Shape.broadcast({4, 2, 2}, {1, 1}, [0, 1, 2])
+      iex> Nx.Shape.broadcast!({4, 2, 2}, {1, 1}, [0, 1, 2])
       ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 2} to {1, 1} with axes [0, 1, 2]
 
-      iex> Nx.Shape.broadcast({2, 2}, {2, 2, 2}, [1, 0])
+      iex> Nx.Shape.broadcast!({2, 2}, {2, 2, 2}, [1, 0])
       ** (ArgumentError) broadcast axes must be ordered, got 0 after 1
   """
-  def broadcast(old_shape, new_shape, axes)
+  def broadcast!(old_shape, new_shape, axes)
 
-  def broadcast(old_shape, new_shape, axes)
+  def broadcast!(old_shape, new_shape, axes)
       when is_tuple(old_shape) and is_tuple(new_shape) and is_list(axes) do
     old_rank = tuple_size(old_shape)
     new_rank = tuple_size(new_shape)
@@ -110,7 +108,7 @@ defmodule Nx.Shape do
               "to #{inspect(new_shape)} with axes #{inspect(axes)}"
     end
 
-    new_shape
+    :ok
   end
 
   defp valid_broadcast?([head | tail], axis, last, old_shape, new_shape) do
