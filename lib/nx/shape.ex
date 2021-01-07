@@ -2,57 +2,6 @@ defmodule Nx.Shape do
   @moduledoc false
 
   @doc """
-  Validates the given shape.
-
-      iex> Nx.Shape.validate!({1, 2, 3})
-      {1, 2, 3}
-
-      iex> Nx.Shape.validate!({1, :ok, 3})
-      ** (ArgumentError) invalid dimension :ok in shape {1, :ok, 3}. Each dimension must be a positive integer
-  """
-  def validate!(shape) do
-    validate!(shape, tuple_size(shape))
-  end
-
-  defp validate!(shape, 0), do: shape
-
-  defp validate!(shape, pos) do
-    dim = :erlang.element(pos, shape)
-
-    if is_integer(dim) and dim > 0 do
-      validate!(shape, pos - 1)
-    else
-      raise ArgumentError,
-            "invalid dimension #{inspect(dim)} in shape #{inspect(shape)}. Each dimension must be a positive integer"
-    end
-  end
-
-  @doc """
-  Computes the rank of a shape.
-
-  ## Examples
-
-      iex> Nx.rank({1, 2, 3})
-      3
-
-  """
-  def rank(shape), do: tuple_size(shape)
-
-  @doc """
-  Computes the size of a shape.
-
-  ## Examples
-
-      iex> Nx.size({1, 2, 3})
-      6
-
-  """
-  def size(shape), do: tuple_product(shape, tuple_size(shape))
-
-  defp tuple_product(_tuple, 0), do: 1
-  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
-
-  @doc """
   Broadcasts a shape to a new shape.
 
   The dimensions of `shape` is expanded to match the
@@ -307,22 +256,6 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Returns the outer product of two shapes.
-
-  ## Examples
-
-      iex> Nx.Shape.outer({2, 3}, {1, 2})
-      {6, 2}
-
-      iex> Nx.Shape.outer({1}, {3, 2})
-      {1, 6}
-
-      iex> Nx.Shape.outer({}, {})
-      {1, 1}
-  """
-  def outer(s1, s2), do: {size(s1), size(s2)}
-
-  @doc """
   Calculates the padding needed for same padding.
 
   ## Examples
@@ -574,7 +507,7 @@ defmodule Nx.Shape do
 
   """
   def transpose_axes(shape) do
-    rank = rank(shape)
+    rank = tuple_size(shape)
     count_down(rank, rank - 1)
   end
 
@@ -600,8 +533,8 @@ defmodule Nx.Shape do
   end
 
   def broadcast_axes(shape, new_shape) do
-    min_size = rank(shape)
-    max_size = rank(new_shape)
+    min_size = tuple_size(shape)
+    max_size = tuple_size(new_shape)
     count_up(min_size, max_size - min_size)
   end
 
@@ -619,20 +552,6 @@ defmodule Nx.Shape do
   def squeeze_axes(shape) do
     for {1, i} <- Enum.with_index(Tuple.to_list(shape)), do: i
   end
-
-  @doc """
-  Converts a shape to axes.
-
-  ## Examples
-
-      iex> Nx.axes({})
-      []
-
-      iex> Nx.axes({2, 2, 2})
-      [0, 1, 2]
-
-  """
-  def to_axes(shape), do: count_up(rank(shape), 0)
 
   ## Helpers
 

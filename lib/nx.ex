@@ -3479,7 +3479,7 @@ defmodule Nx do
     type = binary_type(t1, t2)
     %T{shape: s1} = t1 = tensor(t1)
     %T{shape: s2} = t2 = tensor(t2)
-    impl!(t1, t2).outer(%{t1 | type: type, shape: Nx.Shape.outer(s1, s2)}, t1, t2)
+    impl!(t1, t2).outer(%{t1 | type: type, shape: {size(s1), size(s2)}}, t1, t2)
   end
 
   @doc """
