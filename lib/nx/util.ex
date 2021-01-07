@@ -313,40 +313,4 @@ defmodule Nx.Util do
 
  #    %{t | data: {Nx.BinaryDevice, data}, shape: output_shape}
  #  end
-
- #  defp make_anchors(shape, strides, window, anchors)
- #       when is_tuple(shape) and is_tuple(strides) and is_tuple(window) do
- #   make_anchors(
- #     Tuple.to_list(shape),
- #     Tuple.to_list(strides),
- #     Tuple.to_list(window),
- #     anchors
- #   )
- # end
-
- #  defp make_anchors([], [], _window, anchors), do: anchors
-
- #  defp make_anchors([dim | shape], [s | strides], [w | window], []) do
- #    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim, do: {i}
- #    make_anchors(shape, strides, window, dims)
- #  end
-
- #  defp make_anchors([dim | shape], [s | strides], [w | window], anchors) do
- #    dims =
- #      for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim do
- #        Enum.map(anchors, &Tuple.append(&1, i))
- #      end
-
- #    make_anchors(shape, strides, window, List.flatten(dims))
- #  end
-
-  # # Calculates the offset needed to reach a specified position
-  # # in the binary from a weighted shape list.
-  # defp weighted_offset(weighted_shape, pos) when is_tuple(pos),
-  #   do: weighted_offset(weighted_shape, Tuple.to_list(pos))
-
-  # defp weighted_offset([], []), do: 0
-
-  # defp weighted_offset([{_, size} | dims], [x | pos]),
-  #   do: size * x + weighted_offset(dims, pos)
 end

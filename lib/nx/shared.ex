@@ -179,35 +179,6 @@ defmodule Nx.Shared do
     do: struct1 |> pick_struct(struct2) |> pick_struct(struct3)
 
   @doc """
-  Makes anchors for traversing a binary with a window.
-  """
-  def make_anchors(shape, strides, window, anchors)
-       when is_tuple(shape) and is_tuple(strides) and is_tuple(window),
-       do:
-         make_anchors(
-           Tuple.to_list(shape),
-           Tuple.to_list(strides),
-           Tuple.to_list(window),
-           anchors
-         )
-
-  def make_anchors([], [], _window, anchors), do: anchors
-
-  def make_anchors([dim | shape], [s | strides], [w | window], []) do
-    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim, do: {i}
-    make_anchors(shape, strides, window, dims)
-  end
-
-  def make_anchors([dim | shape], [s | strides], [w | window], anchors) do
-    dims =
-      for i <- 0..(dim - 1), rem(i, s) == 0 and i + w - 1 < dim do
-        Enum.map(anchors, &Tuple.append(&1, i))
-      end
-
-    make_anchors(shape, strides, window, List.flatten(dims))
-  end
-
-  @doc """
   Gets the implementation of a list of maybe tensors.
   """
   def find_impl!(list) do
