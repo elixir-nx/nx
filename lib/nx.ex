@@ -3640,7 +3640,7 @@ defmodule Nx do
   ### Examples
 
       iex> lhs = Nx.iota({9})
-      iex> lhs = Nx.reshape(lhs, {2, 1, 3, 3})
+      iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
       iex> rhs = Nx.iota({4})
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
       iex> t = Nx.conv(lhs, rhs, {1, 1}, :valid)

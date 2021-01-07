@@ -147,8 +147,8 @@ defmodule Exla.Defn do
 
   defp to_operator(
          :conv,
-         [operand, kernel, strides, padding, feature_group_count],
-         %{shape: shape, type: type},
+         [operand, kernel, strides, padding],
+         %{shape: shape},
          _builder
        ) do
     rank = tuple_size(shape)
@@ -183,8 +183,7 @@ defmodule Exla.Defn do
       padding_config,
       lhs_dilation,
       rhs_dilation,
-      conv_dim_nos,
-      feature_group_count
+      conv_dim_nos
     )
   end
 

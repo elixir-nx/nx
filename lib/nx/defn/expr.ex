@@ -158,7 +158,7 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def conv(out, inp, kernel, stride, padding) do
-    expr(out, :conv, [to_expr(inp), to_expr(kernel), stride, padding, 1])
+    expr(out, :conv, [to_expr(inp), to_expr(kernel), stride, padding])
   end
 
   @doc false

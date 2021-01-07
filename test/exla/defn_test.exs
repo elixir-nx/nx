@@ -753,8 +753,8 @@ defmodule Exla.DefnTest do
     defn conv(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :valid)
 
     test "computes the convolution of an image" do
-      img = Nx.random_uniform({32, 1, 28, 28}, type: {:f, 64})
-      kernel = Nx.random_uniform({32, 1, 3, 3}, type: {:f, 64})
+      img = Nx.random_uniform({32, 1, 28, 28}, type: {:f, 32})
+      kernel = Nx.random_uniform({32, 1, 3, 3}, type: {:f, 32})
 
       lhs = conv(img, kernel)
       rhs = Nx.conv(img, kernel, {1, 1}, :valid)

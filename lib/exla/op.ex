@@ -293,7 +293,6 @@ defmodule Exla.Op do
         lhs_dilation,
         rhs_dilation,
         dim_nums,
-        feature_group_count,
         precision_config \\ :default
       ) do
     config =
@@ -312,7 +311,6 @@ defmodule Exla.Op do
         lhs_dilation,
         rhs_dilation,
         dim_nums,
-        feature_group_count,
         config
       )
       |> unwrap!()
