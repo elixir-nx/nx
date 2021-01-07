@@ -159,20 +159,6 @@ defmodule Nx.Shared do
   def creation_funs, do: [:iota, :random_normal, :random_uniform]
 
   @doc """
-  Converts the given tensor or shape to a shape.
-  """
-  def shape!(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape)
-  def shape!(%Nx.Tensor{shape: shape}), do: shape
-  def shape!(number) when is_number(number), do: {}
-
-  def shape!(other) do
-    raise ArgumentError,
-          "expected a shape as argument. A shape is a n-element tuple with the size of each dimension. " <>
-            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
-            "Got: #{inspect(other)}"
-  end
-
-  @doc """
   Asserts the given keys.
   """
   def assert_keys!(keyword, valid) do

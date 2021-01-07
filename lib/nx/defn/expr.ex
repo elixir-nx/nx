@@ -102,7 +102,7 @@ defmodule Nx.Defn.Expr do
     assert_keys!(opts, [:type, :axis])
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
     opts = Keyword.put(opts, :type, type)
-    shape = shape!(shape)
+    shape = Nx.shape(shape)
 
     opts =
       if axis = opts[:axis] do
@@ -122,7 +122,7 @@ defmodule Nx.Defn.Expr do
   @doc false
   def random_uniform(shape, min, max, opts \\ []) when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type])
-    shape = shape!(shape)
+    shape = Nx.shape(shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
     opts = Keyword.put(opts, :type, type)
     %T{shape: shape, type: type} |> expr(:random_uniform, [shape, min, max, opts])
@@ -136,7 +136,7 @@ defmodule Nx.Defn.Expr do
   @doc false
   def random_normal(shape, mu, sigma, opts \\ []) when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type])
-    shape = shape!(shape)
+    shape = Nx.shape(shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
     opts = Keyword.put(opts, :type, type)
     %T{shape: shape, type: type} |> expr(:random_normal, [shape, mu, sigma, opts])

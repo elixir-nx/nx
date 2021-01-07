@@ -32,7 +32,7 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.rank({1, 2, 3})
+      iex> Nx.rank({1, 2, 3})
       3
 
   """
@@ -43,7 +43,7 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.size({1, 2, 3})
+      iex> Nx.size({1, 2, 3})
       6
 
   """
@@ -625,10 +625,10 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.to_axes({})
+      iex> Nx.axes({})
       []
 
-      iex> Nx.Shape.to_axes({2, 2, 2})
+      iex> Nx.axes({2, 2, 2})
       [0, 1, 2]
 
   """

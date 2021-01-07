@@ -339,7 +339,7 @@ defmodule Nx do
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type])
-    shape = shape!(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
     Nx.BinaryTensor.random_uniform(%T{shape: shape, type: type}, min, max)
   end
@@ -408,7 +408,7 @@ defmodule Nx do
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type])
-    shape = shape!(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
     Nx.BinaryTensor.random_normal(%T{shape: shape, type: type}, mu, sigma)
   end
@@ -517,14 +517,14 @@ defmodule Nx do
 
   def iota(tensor_or_shape, opts) do
     assert_keys!(opts, [:type, :axis])
-    shape = shape!(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis)
       Nx.BinaryTensor.iota(%T{type: type, shape: shape}, axis)
     else
-      %T{type: type, shape: {Nx.Shape.size(shape)}}
+      %T{type: type, shape: {Nx.size(shape)}}
       |> Nx.BinaryTensor.iota(0)
       |> Map.replace!(:shape, shape)
     end
@@ -640,9 +640,9 @@ defmodule Nx do
   """
   def reshape(tensor, new_shape) do
     %T{shape: old_shape} = tensor = tensor(tensor)
-    new_shape = shape!(new_shape)
+    new_shape = shape(new_shape)
 
-    if Nx.Shape.size(old_shape) != Nx.Shape.size(new_shape) do
+    if Nx.size(old_shape) != Nx.size(new_shape) do
       raise ArgumentError,
             "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
               "new shape #{inspect(new_shape)}"
@@ -782,7 +782,7 @@ defmodule Nx do
   """
   def broadcast(tensor, broadcast_shape) do
     tensor = tensor(tensor)
-    broadcast_shape = shape!(broadcast_shape)
+    broadcast_shape = shape(broadcast_shape)
 
     if tensor.shape == broadcast_shape do
       tensor
@@ -852,7 +852,7 @@ defmodule Nx do
   def broadcast(tensor, shape, axes) do
     tensor = tensor(tensor)
 
-    shape = shape!(shape)
+    shape = shape(shape)
     axes = Nx.Shape.normalize_axes(shape, axes)
     _ = Nx.Shape.broadcast!(tensor.shape, shape, axes)
 
@@ -1066,6 +1066,8 @@ defmodule Nx do
 
   The size of this tuple gives the rank of the tensor.
 
+  If a shape as a tuple is given, it returns the shape itself.
+
   ### Examples
 
       iex> Nx.shape(Nx.tensor(1))
@@ -1077,10 +1079,32 @@ defmodule Nx do
       iex> Nx.shape(1)
       {}
 
+      iex> Nx.shape({1, 2, 3})
+      {1, 2, 3}
+
   """
-  def shape(tensor) do
-    %T{shape: shape} = tensor(tensor)
-    shape
+  def shape(shape) when is_tuple(shape), do: validate_shape(shape, tuple_size(shape))
+  def shape(%T{shape: shape}), do: shape
+  def shape(number) when is_number(number), do: {}
+
+  def shape(other) do
+    raise ArgumentError,
+          "expected a shape. A shape is a n-element tuple with the size of each dimension. " <>
+            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
+            "Got: #{inspect(other)}"
+  end
+
+  defp validate_shape(shape, 0), do: shape
+
+  defp validate_shape(shape, pos) do
+    dim = :erlang.element(pos, shape)
+
+    if is_integer(dim) and dim > 0 do
+      validate_shape(shape, pos - 1)
+    else
+      raise ArgumentError,
+            "invalid dimension #{inspect(dim)} in shape #{inspect(shape)}. Each dimension must be a positive integer"
+    end
   end
 
   @doc """
@@ -1100,11 +1124,12 @@ defmodule Nx do
       iex> Nx.rank(1)
       0
 
+      iex> Nx.rank({1, 2, 3})
+      3
+
   """
-  def rank(tensor) do
-    %T{shape: shape} = tensor(tensor)
-    tuple_size(shape)
-  end
+  def rank(shape) when is_tuple(shape), do: tuple_size(shape)
+  def rank(tensor), do: tuple_size(shape(tensor))
 
   @doc """
   Returns how many elements they are in the tensor.
@@ -1120,11 +1145,37 @@ defmodule Nx do
       iex> Nx.size(1)
       1
 
+      iex> Nx.size({1, 2, 3})
+      6
+
   """
-  def size(tensor) do
-    %T{shape: shape} = tensor(tensor)
-    Nx.Shape.size(shape)
-  end
+  def size(shape) when is_tuple(shape), do: tuple_product(shape, tuple_size(shape))
+  def size(tensor), do: size(shape(tensor))
+
+  @doc """
+  Returns all of the axes in a tensor.
+
+  If a shape is given, it returns the axes for the given shape.
+
+  ### Examples
+
+      iex> Nx.axes(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      [0, 1]
+
+      iex> Nx.axes(1)
+      []
+
+      iex> Nx.axes({1, 2, 3})
+      [0, 1, 2]
+
+  """
+  def axes(shape), do: count_up(rank(shape), 0)
+
+  defp count_up(0, _n), do: []
+  defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
+
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   ## Device API
 
@@ -1192,7 +1243,7 @@ defmodule Nx do
     apply(impl!(left, right), op, [%{left | type: type, shape: shape}, left, right])
   end
 
-  defp element_wise_comp_op(left, right, op) do
+  defp element_wise_pred_op(left, right, op) do
     %T{shape: left_shape} = left = tensor(left)
     %T{shape: right_shape} = right = tensor(right)
 
@@ -2088,7 +2139,7 @@ defmodule Nx do
       ]
     >
   """
-  def equal(left, right), do: element_wise_comp_op(left, right, :equal)
+  def equal(left, right), do: element_wise_pred_op(left, right, :equal)
 
   @doc """
   Element-wise not-equal comparison of two tensors.
@@ -2133,7 +2184,7 @@ defmodule Nx do
         ]
       >
   """
-  def not_equal(left, right), do: element_wise_comp_op(left, right, :not_equal)
+  def not_equal(left, right), do: element_wise_pred_op(left, right, :not_equal)
 
   @doc """
   Element-wise greater than comparison of two tensors.
@@ -2178,7 +2229,7 @@ defmodule Nx do
       ]
     >
   """
-  def greater(left, right), do: element_wise_comp_op(left, right, :greater)
+  def greater(left, right), do: element_wise_pred_op(left, right, :greater)
 
   @doc """
   Element-wise less than comparison of two tensors.
@@ -2223,7 +2274,7 @@ defmodule Nx do
       ]
     >
   """
-  def less(left, right), do: element_wise_comp_op(left, right, :less)
+  def less(left, right), do: element_wise_pred_op(left, right, :less)
 
   @doc """
   Element-wise greater than or equal comparison of two tensors.
@@ -2268,7 +2319,7 @@ defmodule Nx do
       ]
     >
   """
-  def greater_equal(left, right), do: element_wise_comp_op(left, right, :greater_equal)
+  def greater_equal(left, right), do: element_wise_pred_op(left, right, :greater_equal)
 
   @doc """
   Element-wise less than or equal comparison of two tensors.
@@ -2313,7 +2364,7 @@ defmodule Nx do
       ]
     >
   """
-  def less_equal(left, right), do: element_wise_comp_op(left, right, :less_equal)
+  def less_equal(left, right), do: element_wise_pred_op(left, right, :less_equal)
 
   @doc """
   Constructs a tensor from two tensors, based on a predicate.
@@ -2898,7 +2949,7 @@ defmodule Nx do
     divide(sum(tensor, opts), mean_den(tensor.shape, opts[:axes]))
   end
 
-  defp mean_den(shape, nil), do: Nx.Shape.size(shape)
+  defp mean_den(shape, nil), do: Nx.size(shape)
   defp mean_den(_shape, []), do: 1
 
   defp mean_den(shape, [axis | axes]) when axis >= 0,
@@ -3572,7 +3623,7 @@ defmodule Nx do
     %{shape: shape} = tensor = tensor(tensor)
     axes = Nx.Shape.normalize_axes(shape, axes)
 
-    if axes == Nx.Shape.to_axes(shape) do
+    if axes == Nx.axes(shape) do
       tensor
     else
       shape = Nx.Shape.transpose(shape, axes)

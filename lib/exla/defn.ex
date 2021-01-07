@@ -149,13 +149,13 @@ defmodule Exla.Defn do
     left =
       left
       |> to_type(type)
-      |> Exla.Op.reshape({Nx.Shape.size(op_shape(left))})
+      |> Exla.Op.reshape({Nx.size(op_shape(left))})
       |> Exla.Op.broadcast_in_dim(shape, {0})
 
     right =
       right
       |> to_type(type)
-      |> Exla.Op.reshape({Nx.Shape.size(op_shape(right))})
+      |> Exla.Op.reshape({Nx.size(op_shape(right))})
       |> Exla.Op.broadcast_in_dim(shape, {1})
 
     Exla.Op.multiply(left, right)

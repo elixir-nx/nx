@@ -68,13 +68,13 @@ defmodule Nx.BinaryTensor do
         {_, _} -> fn -> (max - min) * :rand.uniform() + min end
       end
 
-    data = for _ <- 1..Nx.Shape.size(shape), into: "", do: scalar_to_binary(gen.(), type)
+    data = for _ <- 1..Nx.size(shape), into: "", do: scalar_to_binary(gen.(), type)
     from_binary(out, data)
   end
 
   def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
     data =
-      for _ <- 1..Nx.Shape.size(shape),
+      for _ <- 1..Nx.size(shape),
           into: "",
           do: scalar_to_binary(:rand.normal(mu, sigma), type)
 
@@ -179,11 +179,11 @@ defmodule Nx.BinaryTensor do
   defp broadcast_data(%T{shape: {}} = t, shape, []) do
     t
     |> to_binary()
-    |> :binary.copy(Nx.Shape.size(shape))
+    |> :binary.copy(Nx.size(shape))
   end
 
   defp broadcast_data(%T{shape: old_shape, type: {_, size}} = t, new_shape, axes) do
-    chunk_size = size * Nx.Shape.size(old_shape)
+    chunk_size = size * Nx.size(old_shape)
 
     new_shape
     |> Tuple.to_list()
@@ -387,7 +387,7 @@ defmodule Nx.BinaryTensor do
     on_false_data = broadcast_data(on_false, shape)
 
     data =
-      for i <- 0..(Nx.Shape.size(shape) - 1), into: <<>> do
+      for i <- 0..(Nx.size(shape) - 1), into: <<>> do
         pred =
           match_types [pred_type] do
             consumed = i * pred_size
@@ -433,7 +433,7 @@ defmodule Nx.BinaryTensor do
     %T{type: {_, left_size} = left_type} = left
     %T{type: {_, right_size} = right_type} = right
 
-    count = Nx.Shape.size(shape)
+    count = Nx.size(shape)
     left_data = broadcast_data(left, shape)
     right_data = broadcast_data(right, shape)
 
@@ -632,7 +632,7 @@ defmodule Nx.BinaryTensor do
         # TODO: To print data on device, we can support reading a slice
         # from the device which we will compute with:
         #
-        #     min(opts.limit, Nx.Shape.size(shape)) * size
+        #     min(opts.limit, Nx.size(shape)) * size
         #
         %Nx.BinaryTensor{device: device} ->
           {IA.to_doc(device, opts), opts.limit}

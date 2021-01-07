@@ -152,8 +152,8 @@ defmodule Nx.Defn.Grad do
   ## Linear gradients
 
   defp grad(:outer, [x, y], ans, g, cache) do
-    x = Nx.reshape(x, {Nx.Shape.size(x.shape), 1})
-    y = Nx.reshape(y, {1, Nx.Shape.size(y.shape)})
+    x = Nx.reshape(x, {Nx.size(x.shape), 1})
+    y = Nx.reshape(y, {1, Nx.size(y.shape)})
     grad(:multiply, [x, y], ans, g, cache)
   end
 
@@ -164,7 +164,7 @@ defmodule Nx.Defn.Grad do
           do: {a, i}
 
     {implicit_axes, broadcast_axes} = Enum.unzip(implicit_axes)
-    explicit_axes = Nx.Shape.to_axes(shape) -- axes
+    explicit_axes = Nx.axes(shape) -- axes
 
     g =
       case explicit_axes ++ implicit_axes do
@@ -175,7 +175,7 @@ defmodule Nx.Defn.Grad do
     g =
       case broadcast_axes do
         [] -> g
-        _ -> Nx.broadcast(g, x.shape, Nx.Shape.to_axes(x.shape) -- broadcast_axes)
+        _ -> Nx.broadcast(g, x.shape, Nx.axes(x.shape) -- broadcast_axes)
       end
 
     to_grad(x, g, cache)
@@ -185,7 +185,7 @@ defmodule Nx.Defn.Grad do
     g =
       case axes do
         [] -> g
-        _ -> Nx.broadcast(g, x.shape, Nx.Shape.to_axes(x.shape) -- axes)
+        _ -> Nx.broadcast(g, x.shape, Nx.axes(x.shape) -- axes)
       end
 
     to_grad(x, g, cache)
@@ -212,11 +212,11 @@ defmodule Nx.Defn.Grad do
   defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
     g = Nx.broadcast(g, ans)
 
-    contract_gx = up_to(Nx.Shape.rank(x.shape) - length(axes_x), Nx.Shape.rank(g.shape))
-    contract_gy = up_to(0, Nx.Shape.rank(x.shape) - length(axes_x))
+    contract_gx = up_to(Nx.rank(x.shape) - length(axes_x), Nx.rank(g.shape))
+    contract_gy = up_to(0, Nx.rank(x.shape) - length(axes_x))
 
-    contract_x = Nx.Shape.to_axes(x.shape) -- axes_x
-    contract_y = Nx.Shape.to_axes(y.shape) -- axes_y
+    contract_x = Nx.axes(x.shape) -- axes_x
+    contract_y = Nx.axes(y.shape) -- axes_y
 
     transpose_x = Enum.map(argsort(axes_y), &Enum.fetch!(axes_x, &1))
     transpose_y = Enum.map(argsort(axes_x), &Enum.fetch!(axes_y, &1))
@@ -327,7 +327,7 @@ defmodule Nx.Defn.Grad do
   defp grad_aggregate(x, opts, g, cache) do
     g =
       if axes = opts[:axes] do
-        axes = Nx.Shape.to_axes(x.shape) -- axes
+        axes = Nx.axes(x.shape) -- axes
         Nx.broadcast(g, x, axes)
       else
         Nx.broadcast(g, x)
