@@ -823,8 +823,10 @@ defmodule Nx.BinaryTensor do
 
     num_input_channels = elem(input_shape, 1)
 
-    filter_size = Nx.Shape.size(Tuple.delete_at(kernel_shape, 0)) * kernel_size
-    batch_size = Nx.Shape.size(Tuple.delete_at(input_shape, 0)) * input_size
+    filter_spatial_dims = Tuple.delete_at(kernel_shape, 0)
+    filter_size = tuple_product(filter_spatial_dims, tuple_size(filter_spatial_dims)) * kernel_size
+    single_data_dims = Tuple.delete_at(input_shape, 0)
+    batch_size = tuple_product(single_data_dims, tuple_size(single_data_dims)) * input_size
 
     # We first pad the input tensor with the following semantics
     #   :valid - no padding
@@ -884,8 +886,8 @@ defmodule Nx.BinaryTensor do
               )
 
             # The receptive field size of each binary in bytes
-            input_field_size = Nx.Shape.size(filter_shape) * input_size
-            filter_field_size = Nx.Shape.size(filter_shape) * kernel_size
+            input_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * input_size
+            filter_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * kernel_size
             # For each channel in both filter and input...
             for i <- 0..(num_input_channels - 1), into: <<>> do
               current_input_pos = i * input_field_size
@@ -896,7 +898,7 @@ defmodule Nx.BinaryTensor do
                 filter
 
               values =
-                for j <- 0..(Nx.Shape.size(filter_shape) - 1) do
+                for j <- 0..(tuple_product(filter_shape, tuple_size(filter_shape)) - 1) do
                   x =
                     match_types [input_type] do
                       left_consumed = j * input_size
@@ -1211,4 +1213,7 @@ defmodule Nx.BinaryTensor do
 
   defp weighted_offset([{_, size} | dims], [x | pos]),
     do: size * x + weighted_offset(dims, pos)
+
+  defp tuple_product(_tuple, 0), do: 1
+  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 end

@@ -3680,7 +3680,7 @@ defmodule Nx do
     %{shape: kernel_shape} = kernel = tensor(kernel)
 
     output_shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding)
-    output_type = Nx.Type.merge_tensors(tensor, kernel)
+    output_type = binary_type(tensor, kernel)
 
     impl!(tensor).conv(
       %{tensor | type: output_type, shape: output_shape},
