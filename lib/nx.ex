@@ -3735,7 +3735,7 @@ defmodule Nx do
 
     # The output type is merged between the input tensor
     # and the input kernel
-    {_, output_size} = output_type = Nx.Type.merge_tensors(t, k)
+    output_type = Nx.Type.merge_tensors(t, k)
 
     # The output shape is a product of the batch size,
     # number of filters in the input kernel, and the transformation
@@ -3840,23 +3840,6 @@ defmodule Nx do
 
             filtered_window |> IO.iodata_to_binary
           end
-
-        # The output of applying the filter across the tensor is incorrect
-        # because we are looking at "windows" across dimensions, so what
-        # we have is a number of flattened windows, we need to reconstruct
-        # the spatial dimensions correctly from these flattened windows
-        #
-        # We can do this with a windowed weighted traverse
-        # similar to what we did above where the "stride" is equal
-        # to the input filter sizes
-        anchors = Enum.sort(make_anchors(spatial_dims, filter_shape, filter_shape, []))
-
-        window_weighted_shape = weighted_shape(spatial_dims, output_size, filter_shape)
-
-        for anchor <- anchors, into: <<>> do
-          offset = weighted_offset(window_weighted_shape, anchor)
-          IO.iodata_to_binary(weighted_traverse(window_weighted_shape, filtered_windows, output_size, offset))
-        end
       end
 
     %{t | shape: output_shape, data: {Nx.BitStringDevice, output_data}, type: output_type}
