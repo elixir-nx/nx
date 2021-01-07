@@ -3741,17 +3741,19 @@ defmodule Nx do
     anchors = Enum.map(anchors, &Tuple.insert_at(&1, 0, 0))
 
     output_data =
-      # Traverse the spatial dimensions first
-      for anchor <- anchors, into: <<>> do
-        offset = weighted_offset(weighted_shape, anchor)
-        # The shape of the window is {channels} + filter_shape
-        # The shape of the kernel is {num_filters, channels} + filter_shape
-        window = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, input_size, offset))
-        # The receptive field size of each binary in bytes
-        input_field_size = Nx.Shape.size(filter_shape) * input_size
-        filter_field_size = Nx.Shape.size(filter_shape) * kernel_size
-        # For each filter in the kernel...
-        for <<filter::size(filter_size)-bitstring <- kernel_data>>, into: <<>> do
+      # Traverse the filters first, this allows us to rebuild
+      # the resulting binary correctly
+      for <<filter::size(filter_size)-bitstring <- kernel_data>>, into: <<>> do
+        # Then we traverse the spatial dimension, applying
+        # the filter at each step
+        for anchor <- anchors, into: <<>> do
+          offset = weighted_offset(weighted_shape, anchor)
+          # The shape of the window is {channels} + filter_shape
+          # The shape of the kernel is {num_filters, channels} + filter_shape
+          window = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, input_size, offset))
+          # The receptive field size of each binary in bytes
+          input_field_size = Nx.Shape.size(filter_shape) * input_size
+          filter_field_size = Nx.Shape.size(filter_shape) * kernel_size
           # For each channel in both filter and input...
           field_calcs =
             for i <- (0..num_input_channels - 1) do
@@ -3794,17 +3796,24 @@ defmodule Nx do
           # Calculated according to the formula referenced above
           #
           # This is repeated `num_filters` number of times for final tensor
-          match_types [output_type] do
-            field_calcs
-            |> Enum.zip()
-            |> Enum.map(
-              fn tuple ->
-                sum = Enum.sum(Tuple.to_list(tuple))
-                <<write!(sum, 0)>>
-              end
-            )
-            |> IO.iodata_to_binary()
-          end
+          filtered_windows =
+            match_types [output_type] do
+              field_calcs
+              |> Enum.zip()
+              |> Enum.map(
+                fn tuple ->
+                  sum = Enum.sum(Tuple.to_list(tuple))
+                  <<write!(sum, 0)>>
+                end
+              )
+              |> IO.iodata_to_binary()
+            end
+
+          # The output of applying the filter across the tensor is incorrect
+          # because we are looking at "windows" across dimensions, so what
+          # we have is a number of flattened windows, we need to reconstruct
+          # the spatial dimensions correctly from these flattened windows
+          filtered_windows
         end
       end
 
