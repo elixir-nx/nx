@@ -97,6 +97,13 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  @doc false
+  def reduce(out, tensor, acc, opts, fun) do
+    expr(out, :reduce, [to_expr(tensor), to_expr(acc), opts, fun])
+  end
+
+  ## Creation ops
+
   # TODO: Find a way to share the creation logic with Nx.BinaryTensor
 
   @doc false
