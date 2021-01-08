@@ -3774,7 +3774,7 @@ defmodule Nx do
                   " the spatial dimensions of the input tensor"
       end
 
-    shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding_config)
+    shape = Nx.Shape.conv(dilated_input_shape, dilated_kernel_shape, strides, padding_config)
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
 
     out = %{tensor | type: type, shape: shape}
