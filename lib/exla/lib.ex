@@ -12,37 +12,13 @@ defmodule Exla.Lib do
     if axis = opts[:axis] do
       Op.iota(builder, shape, axis)
     else
-      total_elems = tuple_product(shape.dims)
+      total_elems = Nx.size(shape.dims)
 
       Op.reshape(
         Op.iota(builder, Exla.Shape.make_shape(shape.dtype, {total_elems}), 0),
         shape.dims
       )
     end
-  end
-
-  @doc """
-  Computes the sum of the given operation.
-
-  ## Options
-
-    * `:axes` - the axes to reduce on
-
-  """
-  def sum(%Builder{} = builder, %Op{} = op, opts \\ []) do
-    op_shape = Op.get_shape(op)
-    rtype = opts[:type] || op_shape.dtype
-    reduction_shape = Shape.make_shape(rtype, {})
-
-    sub_builder = subbuilder(builder, "sum")
-    a = Op.parameter(sub_builder, 0, reduction_shape, "a")
-    b = Op.parameter(sub_builder, 1, reduction_shape, "b")
-    add = Op.add(a, b)
-    reduction = Builder.build(add)
-
-    init_value = Op.constant_r0(builder, 0, rtype)
-    op = Op.convert_element_type(op, rtype)
-    Op.reduce(op, init_value, reduction, reduce_axes(op_shape, opts[:axes]))
   end
 
   @doc """
@@ -90,7 +66,7 @@ defmodule Exla.Lib do
         [op, iota],
         [init_value, index_init_value],
         reduction,
-        reduce_axes(op_shape, axis && [axis])
+        if(axis, do: {axis}, else: List.to_tuple(Nx.axes(op_shape.dims)))
       )
 
     Op.get_tuple_element(result, 1)
@@ -126,7 +102,6 @@ defmodule Exla.Lib do
       end
 
     ast = Op.tuple(sub_builder, [max, arg_max])
-
     Builder.build(ast)
   end
 
@@ -142,23 +117,6 @@ defmodule Exla.Lib do
     suffix = System.unique_integer([:positive])
     Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
-
-  defp reduce_axes(op_shape, axes) do
-    if axes do
-      axes
-      |> Enum.sort()
-      |> List.to_tuple()
-    else
-      List.to_tuple(all_dimensions(0, tuple_size(op_shape.dims)))
-    end
-  end
-
-  defp all_dimensions(i, n) when i < n, do: [i | all_dimensions(i + 1, n)]
-  defp all_dimensions(_, _), do: []
-
-  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
-  defp tuple_product(_tuple, 0), do: 1
-  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   defp min_value_binary({:pred, 8}), do: <<0>>
   defp min_value_binary(type), do: Nx.Type.min_value_binary(type)
