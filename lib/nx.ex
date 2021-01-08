@@ -3647,7 +3647,7 @@ defmodule Nx do
   ## Conv
 
   @doc """
-  Convolution operation
+  Convolution operation.
 
   ### Examples
 
@@ -3655,10 +3655,7 @@ defmodule Nx do
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
       iex> rhs = Nx.iota({4})
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
-      iex> t = Nx.conv(lhs, rhs, {1, 1}, :valid)
-      iex> Nx.shape(t)
-      {1, 4, 3, 3}
-      iex> t
+      iex> Nx.conv(lhs, rhs, {1, 1}, :valid)
       #Nx.Tensor<
         s64[1][4][3][3]
         [
@@ -3691,6 +3688,14 @@ defmodule Nx do
     %{shape: input_shape} = tensor = tensor(tensor)
     %{shape: kernel_shape} = kernel = tensor(kernel)
 
+    if rank(input_shape) < 2 do
+      raise ArgumentError, "input shape in conv requires at least rank 2"
+    end
+
+    if rank(kernel_shape) < 2 do
+      raise ArgumentError, "kernel shape in conv requires at least rank 2"
+    end
+
     filter_shape =
       kernel_shape
       |> Tuple.delete_at(0)
@@ -3718,16 +3723,11 @@ defmodule Nx do
           config
       end
 
-    output_shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding_config)
-    output_type = binary_type(tensor, kernel)
+    shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding_config)
+    type = binary_type(tensor, kernel)
 
-    impl!(tensor).conv(
-      %{tensor | type: output_type, shape: output_shape},
-      tensor,
-      kernel,
-      strides,
-      padding_config
-    )
+    out = %{tensor | type: type, shape: shape}
+    impl!(tensor).conv(out, tensor, kernel, strides, padding_config)
   end
 
   ## Type
