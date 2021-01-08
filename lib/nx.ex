@@ -3653,13 +3653,13 @@ defmodule Nx do
 
   ### Examples
 
-      iex> lhs = Nx.iota({9}, type: {:f, 32})
+      iex> lhs = Nx.iota({9})
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
-      iex> rhs = Nx.iota({4}, type: {:f, 32})
+      iex> rhs = Nx.iota({4})
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
       iex> Nx.conv(lhs, rhs, {1, 1}, :valid)
       #Nx.Tensor<
-        f32[1][4][3][3]
+        f64[1][4][3][3]
         [
           [
             [
@@ -3687,27 +3687,14 @@ defmodule Nx do
       >
   """
   def conv(tensor, kernel, strides, padding \\ :valid) do
-    %{shape: input_shape, type: input_type} = tensor = tensor(tensor)
-    %{shape: kernel_shape, type: kernel_type} = kernel = tensor(kernel)
+    %{shape: input_shape} = tensor = tensor(tensor)
+    %{shape: kernel_shape} = kernel = tensor(kernel)
 
-    case {input_type, kernel_type} do
-      {{:f, _}, {:f, _}} ->
-        :ok
-
-      {{:c, _}, {:c, _}} ->
-        :ok
-
-      _ ->
-        raise ArgumentError,
-              "conv only supported for inputs and kernels" <>
-                " of float or complex types"
-    end
-
-    if rank(input_shape) <= 2 do
+    if rank(input_shape) < 3 do
       raise ArgumentError, "input shape in conv requires at least rank 3"
     end
 
-    if rank(kernel_shape) <= 2 do
+    if rank(kernel_shape) < 3 do
       raise ArgumentError, "kernel shape in conv requires at least rank 3"
     end
 
@@ -3758,7 +3745,7 @@ defmodule Nx do
       end
 
     shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding_config)
-    type = binary_type(tensor, kernel)
+    type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
 
     out = %{tensor | type: type, shape: shape}
     impl!(tensor).conv(out, tensor, kernel, strides, padding_config)

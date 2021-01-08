@@ -823,6 +823,16 @@ defmodule Exla.DefnTest do
 
       compare_tensors!(lhs, rhs)
     end
+
+    test "computes a convolution with mixed types" do
+      img = Nx.iota({3, 2, 10, 10})
+      kernel = Nx.iota({6, 2, 4, 4}, type: {:f, 32})
+
+      lhs = conv_valid_no_stride(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, :valid)
+
+      compare_tensors!(lhs, rhs)
+    end
   end
 
   describe "outer product" do
