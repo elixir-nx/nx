@@ -1045,7 +1045,7 @@ defmodule Nx do
 
     shape = Nx.Shape.pad(tensor.shape, padding_config)
 
-    out = %{tensor | type: output_type, shape: shape},
+    out = %{tensor | type: output_type, shape: shape}
     impl!(tensor).pad(out, tensor, pad_value, padding_config)
   end
 
