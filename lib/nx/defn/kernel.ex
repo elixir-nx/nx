@@ -228,9 +228,7 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro +tensor do
-    tensor
-  end
+  def +tensor, do: tensor
 
   @doc """
   Element-wise unary plus operator.
@@ -244,13 +242,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro -tensor do
-    if is_number(tensor) do
-      Kernel.-(tensor)
-    else
-      quote do: Nx.negate(unquote(tensor))
-    end
-  end
+  def -tensor when is_number(tensor), do: Kernel.-(tensor)
+  def -tensor, do: Nx.negate(tensor)
 
   @doc """
   Element-wise addition operator.
@@ -264,7 +257,6 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  # TODO: Implement all functions using this style to avoid loss of type information
   def left + right when is_number(left) and is_number(right), do: Kernel.+(left, right)
   def left + right, do: Nx.add(left, right)
 
@@ -280,9 +272,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left - right do
-    quote do: Nx.subtract(unquote(left), unquote(right))
-  end
+  def left - right when is_number(left) and is_number(right), do: Kernel.-(left, right)
+  def left - right, do: Nx.subtract(left, right)
 
   @doc """
   Element-wise multiplication operator.
@@ -291,14 +282,13 @@ defmodule Nx.Defn.Kernel do
 
   ## Examples
 
-      defn subtract(a, b) do
+      defn multiply(a, b) do
         a * b
       end
 
   """
-  defmacro left * right do
-    quote do: Nx.multiply(unquote(left), unquote(right))
-  end
+  def left * right when is_number(left) and is_number(right), do: Kernel.*(left, right)
+  def left * right, do: Nx.multiply(left, right)
 
   @doc """
   Element-wise division operator.
@@ -312,9 +302,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left / right do
-    quote do: Nx.divide(unquote(left), unquote(right))
-  end
+  def left / right when is_number(left) and is_number(right), do: Kernel./(left, right)
+  def left / right, do: Nx.divide(left, right)
 
   @doc """
   Element-wise maximum operation.
@@ -328,9 +317,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro max(left, right) do
-    quote do: Nx.max(unquote(left), unquote(right))
-  end
+  def max(left, right) when is_number(left) and is_number(right), do: Kernel.max(left, right)
+  def max(left, right), do: Nx.max(left, right)
 
   @doc """
   Element-wise minimum operation.
@@ -344,9 +332,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro min(left, right) do
-    quote do: Nx.min(unquote(left), unquote(right))
-  end
+  def min(left, right) when is_number(left) and is_number(right), do: Kernel.min(left, right)
+  def min(left, right), do: Nx.min(left, right)
 
   @doc """
   Element-wise bitwise AND operation.
@@ -361,9 +348,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left &&& right do
-    quote do: Nx.bitwise_and(unquote(left), unquote(right))
-  end
+  def left &&& right when is_number(left) and is_number(right), do: Bitwise.&&&(left, right)
+  def left &&& right, do: Nx.bitwise_and(left, right)
 
   @doc """
   Element-wise bitwise OR operation.
@@ -378,9 +364,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left ||| right do
-    quote do: Nx.bitwise_or(unquote(left), unquote(right))
-  end
+  def left ||| right when is_number(left) and is_number(right), do: Bitwise.|||(left, right)
+  def left ||| right, do: Nx.bitwise_or(left, right)
 
   @doc """
   Element-wise bitwise XOR operation.
@@ -395,9 +380,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left ^^^ right do
-    quote do: Nx.bitwise_xor(unquote(left), unquote(right))
-  end
+  def left ^^^ right when is_number(left) and is_number(right), do: Bitwise.^^^(left, right)
+  def left ^^^ right, do: Nx.bitwise_xor(left, right)
 
   @doc """
   Element-wise bitwise not operation.
@@ -410,9 +394,8 @@ defmodule Nx.Defn.Kernel do
       defn bnot(a), do: ~~~a
 
   """
-  defmacro ~~~tensor do
-    quote do: Nx.bitwise_not(unquote(tensor))
-  end
+  def ~~~tensor when is_number(tensor), do: Bitwise.~~~(tensor)
+  def ~~~tensor, do: Nx.bitwise_not(tensor)
 
   @doc """
   Element-wise left shift operation.
@@ -427,9 +410,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left <<< right do
-    quote do: Nx.left_shift(unquote(left), unquote(right))
-  end
+  def left <<< right when is_number(left) and is_number(right), do: Bitwise.<<<(left, right)
+  def left <<< right, do: Nx.left_shift(left, right)
 
   @doc """
   Element-wise right shift operation.
@@ -444,9 +426,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro left >>> right do
-    quote do: Nx.right_shift(unquote(left), unquote(right))
-  end
+  def left >>> right when is_number(left) and is_number(right), do: Bitwise.>>>(left, right)
+  def left >>> right, do: Nx.right_shift(left, right)
 
   @doc """
   Pipes the argument on the left to the function call on the right.

@@ -220,57 +220,75 @@ defmodule Nx.DefnTest do
 
   describe "operators" do
     defn add_two(a, b), do: a + b
+    defn add_two_constant(), do: 1 + 2
 
     test "+" do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = add_two_constant()
     end
 
     defn subtract_two(a, b), do: a - b
+    defn subtract_two_constant(), do: 1 - 2
 
     test "-" do
       assert %T{data: %Expr{op: :subtract, args: [_, _]}} = subtract_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = subtract_two_constant()
     end
 
     defn multiply_two(a, b), do: a * b
+    defn multiply_two_constant(), do: 1 * 2
 
     test "*" do
       assert %T{data: %Expr{op: :multiply, args: [_, _]}} = multiply_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = multiply_two_constant()
     end
 
     defn divide_two(a, b), do: a / b
+    defn divide_two_constant(), do: 1 / 2
 
     test "/" do
       assert %T{data: %Expr{op: :divide, args: [_, _]}} = divide_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = divide_two_constant()
     end
 
     defn band_two(a, b), do: a &&& b
+    defn band_two_constant(), do: 1 &&& 2
 
     test "&&&" do
       assert %T{data: %Expr{op: :bitwise_and, args: [_, _]}} = band_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = band_two_constant()
     end
 
     defn bor_two(a, b), do: a ||| b
+    defn bor_two_constant(), do: 1 ||| 2
 
     test "|||" do
       assert %T{data: %Expr{op: :bitwise_or, args: [_, _]}} = bor_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = bor_two_constant()
     end
 
     defn bxor_two(a, b), do: a ^^^ b
+    defn bxor_two_constant(), do: 1 ^^^ 2
 
     test "^^^" do
       assert %T{data: %Expr{op: :bitwise_xor, args: [_, _]}} = bxor_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = bxor_two_constant()
     end
 
     defn bsl_two(a, b), do: a <<< b
+    defn bsl_two_constant(), do: 1 <<< 2
 
     test "<<<" do
       assert %T{data: %Expr{op: :left_shift, args: [_, _]}} = bsl_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = bsl_two_constant()
     end
 
     defn bsr_two(a, b), do: a >>> b
+    defn bsr_two_constant(), do: 1 >>> 2
 
     test ">>>" do
       assert %T{data: %Expr{op: :right_shift, args: [_, _]}} = bsr_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = bsr_two_constant()
     end
 
     defn add_two_with_pipe(a, b), do: a |> Nx.add(b)
@@ -280,17 +298,24 @@ defmodule Nx.DefnTest do
     end
 
     defn unary_plus(a), do: +a
+    defn unary_plus_constant(), do: +1
     defn unary_minus(a), do: -a
+    defn unary_minus_constant(), do: -1
 
     test "unary plus and minus" do
       assert %T{data: %Expr{op: :parameter, args: [_]}} = unary_plus(1)
       assert %T{data: %Expr{op: :negate, args: [_]}} = unary_minus(1)
+
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = unary_plus_constant()
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = unary_minus_constant()
     end
 
     defn unary_bnot(a), do: ~~~a
+    defn unary_bnot_constant(), do: ~~~1
 
     test "~~~" do
       assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = unary_bnot_constant()
     end
   end
 
