@@ -315,7 +315,7 @@ defmodule Nx.Shape do
     batch_size = elem(input_shape, 0)
 
     # Assume padding only pads spatial dims
-    padding_config = [{0, 0}, {0, 0} | padding]
+    padding_config = [{0, 0, 0}, {0, 0, 0} | Enum.map(padding, &Tuple.append(&1, 0))]
     padded_shape = Nx.Shape.pad(input_shape, padding_config)
 
     old_spatial_dims =
@@ -440,18 +440,21 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.pad({3, 2, 4}, [{0, 1}, {1, 2}, {1, 1}])
+      iex> Nx.Shape.pad({3, 2, 4}, [{0, 1, 0}, {1, 2, 0}, {1, 1, 0}])
       {4, 5, 6}
 
       iex> Nx.Shape.pad({}, [])
       {}
 
-      iex> Nx.Shape.pad({2, 2}, [{1, 1}, {0, 0}])
+      iex> Nx.Shape.pad({2, 2}, [{1, 1, 0}, {0, 0, 0}])
       {4, 2}
+
+      iex> Nx.Shape.pad({2, 3}, [{0, 0, 1}, {0, 0, 1}])
+      {3, 5}
 
   ### Error cases
 
-      iex> Nx.Shape.pad({2, 2, 3}, [{0, 1}, {1, 2}])
+      iex> Nx.Shape.pad({2, 2, 3}, [{0, 1, 0}, {1, 2, 0}])
       ** (ArgumentError) invalid padding configuration, rank of padding configuration and shape must match
   """
   def pad(shape, padding_config) do
@@ -480,8 +483,14 @@ defmodule Nx.Shape do
           " and shape must match"
       )
 
-  defp padded_dims([s | shape], [{edge_low, edge_high} | config], acc),
-    do: padded_dims(shape, config, [s + edge_low + edge_high | acc])
+  defp padded_dims([s | shape], [{edge_low, edge_high, interior} | config], acc) do
+    interior_padding_factor =
+      if interior == 0,
+        do: 0,
+        else: s * interior - 1
+
+    padded_dims(shape, config, [s + interior_padding_factor + edge_low + edge_high | acc])
+  end
 
   ## Axes helpers
 

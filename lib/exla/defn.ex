@@ -150,7 +150,7 @@ defmodule Exla.Defn do
 
   defp to_operator(
          :conv,
-         [operand, kernel, strides, padding],
+         [operand, kernel, strides, padding, input_dilation, kernel_dilation],
          ans,
          state
        ) do
@@ -165,10 +165,6 @@ defmodule Exla.Defn do
 
     conv_dim_nos = {input_dims, kernel_dims, output_dims}
 
-    # No dilation for now
-    lhs_dilation = List.to_tuple(for _ <- 0..(rank - 3), do: 1)
-    rhs_dilation = lhs_dilation
-
     # Ensure both types are floating
     operand = to_type(operand, output_type)
     kernel = to_type(kernel, output_type)
@@ -178,8 +174,8 @@ defmodule Exla.Defn do
       kernel,
       strides,
       padding,
-      lhs_dilation,
-      rhs_dilation,
+      input_dilation,
+      kernel_dilation,
       conv_dim_nos,
       state.precision
     )

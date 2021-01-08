@@ -132,7 +132,7 @@ defmodule NxTest do
       k2 = Nx.iota({8, 2, 4, 4}, type: {:f, 32})
       k3 = Nx.iota({2, 2, 3, 3}, type: {:f, 32})
 
-      assert Nx.conv(t1, k1, {1, 1}, :valid) ==
+      assert Nx.conv(t1, k1, {1, 1}, padding: :valid) ==
                Nx.tensor(
                  [
                    [
@@ -153,7 +153,7 @@ defmodule NxTest do
                  type: {:f, 32}
                )
 
-      assert Nx.conv(t1, k2, {1, 1}, :valid) ==
+      assert Nx.conv(t1, k2, {1, 1}, padding: :valid) ==
                Nx.tensor(
                  [
                    [
@@ -180,7 +180,7 @@ defmodule NxTest do
                  type: {:f, 32}
                )
 
-      assert Nx.conv(t1, k3, {1, 1}, :valid) ==
+      assert Nx.conv(t1, k3, {1, 1}, padding: :valid) ==
                Nx.tensor(
                  [
                    [
@@ -212,7 +212,7 @@ defmodule NxTest do
       t1 = Nx.iota({2, 2, 4, 4}, type: {:f, 32})
       k1 = Nx.iota({1, 2, 2, 2}, type: {:f, 32})
 
-      assert Nx.conv(t1, k1, {2, 1}, :valid) ==
+      assert Nx.conv(t1, k1, {2, 1}, padding: :valid) ==
                Nx.tensor(
                  [
                    [
@@ -236,7 +236,7 @@ defmodule NxTest do
       t1 = Nx.iota({2, 2, 4, 4}, type: {:f, 32})
       k1 = Nx.iota({1, 2, 3, 3}, type: {:f, 32})
 
-      assert Nx.conv(t1, k1, {1, 1}, :same) ==
+      assert Nx.conv(t1, k1, {1, 1}, padding: :same) ==
                Nx.tensor(
                  [
                    [
@@ -264,7 +264,7 @@ defmodule NxTest do
       t1 = Nx.iota({1, 3, 2, 2, 2}, type: {:f, 32})
       k1 = Nx.iota({3, 3, 2, 2, 2}, type: {:f, 32})
 
-      assert Nx.conv(t1, k1, {1, 1, 1}, :same) ==
+      assert Nx.conv(t1, k1, {1, 1, 1}, padding: :same) ==
                Nx.tensor(
                  [
                    [
@@ -303,5 +303,10 @@ defmodule NxTest do
                  type: {:f, 32}
                )
     end
+  end
+
+  test "interior padding" do
+    assert Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{0, 0, 1}, {0, 0, 1}]) ==
+             Nx.tensor([[1, 0, 2, 0, 3], [0, 0, 0, 0, 0], [4, 0, 5, 0, 6]])
   end
 end

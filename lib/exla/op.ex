@@ -102,12 +102,6 @@ defmodule Exla.Op do
   Pads the tensor with value and padding config.
   """
   def pad(%Op{ref: op, builder: builder}, %Op{ref: value, builder: builder}, padding_config) do
-    # We don't currently support interior padding, but XLA expects it
-    # so we have to insert it into the padding configuration here
-    padding_config =
-      padding_config
-      |> Enum.map(&Tuple.append(&1, 0))
-
     ref = Exla.NIF.pad(op, value, padding_config) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end

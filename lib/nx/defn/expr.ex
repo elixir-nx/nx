@@ -164,8 +164,15 @@ defmodule Nx.Defn.Expr do
   def dot(out, t1, a1, t2, a2), do: expr(out, :dot, [to_expr(t1), a1, to_expr(t2), a2])
 
   @doc false
-  def conv(out, inp, kernel, stride, padding) do
-    expr(out, :conv, [to_expr(inp), to_expr(kernel), stride, padding])
+  def conv(out, inp, kernel, stride, padding, input_dilation, kernel_dilation) do
+    expr(out, :conv, [
+      to_expr(inp),
+      to_expr(kernel),
+      stride,
+      padding,
+      input_dilation,
+      kernel_dilation
+    ])
   end
 
   @doc false

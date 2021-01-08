@@ -763,20 +763,31 @@ defmodule Exla.DefnTest do
   end
 
   describe "convolution" do
-    defn conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :valid)
-    defn conv_valid_stride(inp, kernel), do: Nx.conv(inp, kernel, {2, 2}, :valid)
-    defn conv_same_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :same)
-    defn conv_same_stride(inp, kernel), do: Nx.conv(inp, kernel, {3, 3}, :same)
-    defn conv_general_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, [{-1, 2}, {3, -1}])
-    defn conv_general_stride(inp, kernel), do: Nx.conv(inp, kernel, {2, 1}, [{2, 2}, {-2, 4}])
-    defn conv_3d(inp, kernel), do: Nx.conv(inp, kernel, {1, 2, 1}, :same)
+    defn conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1})
+    defn conv_valid_stride(inp, kernel), do: Nx.conv(inp, kernel, {2, 2}, padding: :valid)
+    defn conv_same_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, padding: :same)
+    defn conv_same_stride(inp, kernel), do: Nx.conv(inp, kernel, {3, 3}, padding: :same)
+
+    defn conv_general_no_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, {1, 1}, padding: [{-1, 2}, {3, -1}])
+
+    defn conv_general_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, {2, 1}, padding: [{2, 2}, {-2, 4}])
+
+    defn conv_3d(inp, kernel), do: Nx.conv(inp, kernel, {1, 2, 1}, padding: :same)
+
+    defn dilated_conv(inp, kernel),
+      do: Nx.conv(inp, kernel, {1, 1}, padding: :same, kernel_dilation: {1, 2})
+
+    defn dilated_input_conv(inp, kernel),
+      do: Nx.conv(inp, kernel, {1, 1}, padding: :same, input_dilation: {2, 1})
 
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
 
       lhs = conv_valid_no_stride(img, kernel)
-      rhs = Nx.conv(img, kernel, {1, 1}, :valid)
+      rhs = Nx.conv(img, kernel, {1, 1})
       compare_tensors!(lhs, rhs)
     end
 
@@ -785,7 +796,7 @@ defmodule Exla.DefnTest do
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
 
       lhs = conv_valid_stride(img, kernel)
-      rhs = Nx.conv(img, kernel, {2, 2}, :valid)
+      rhs = Nx.conv(img, kernel, {2, 2}, padding: :valid)
       compare_tensors!(lhs, rhs)
     end
 
@@ -794,7 +805,7 @@ defmodule Exla.DefnTest do
       kernel = Nx.iota({32, 3, 3, 3}, type: {:f, 64})
 
       lhs = conv_same_no_stride(img, kernel)
-      rhs = Nx.conv(img, kernel, {1, 1}, :same)
+      rhs = Nx.conv(img, kernel, {1, 1}, padding: :same)
       compare_tensors!(lhs, rhs)
     end
 
@@ -803,7 +814,7 @@ defmodule Exla.DefnTest do
       kernel = Nx.iota({32, 1, 7, 7}, type: {:f, 64})
 
       lhs = conv_same_stride(img, kernel)
-      rhs = Nx.conv(img, kernel, {3, 3}, :same)
+      rhs = Nx.conv(img, kernel, {3, 3}, padding: :same)
       compare_tensors!(lhs, rhs)
     end
 
@@ -812,7 +823,7 @@ defmodule Exla.DefnTest do
       kernel = Nx.iota({10, 1, 5, 5}, type: {:f, 64})
 
       lhs = conv_general_no_stride(img, kernel)
-      rhs = Nx.conv(img, kernel, {1, 1}, [{-1, 2}, {3, -1}])
+      rhs = Nx.conv(img, kernel, {1, 1}, padding: [{-1, 2}, {3, -1}])
 
       compare_tensors!(lhs, rhs)
     end
@@ -822,7 +833,7 @@ defmodule Exla.DefnTest do
       kernel = Nx.iota({2, 1, 6, 6}, type: {:f, 64})
 
       lhs = conv_general_stride(img, kernel)
-      rhs = Nx.conv(img, kernel, {2, 1}, [{2, 2}, {-2, 4}])
+      rhs = Nx.conv(img, kernel, {2, 1}, padding: [{2, 2}, {-2, 4}])
 
       compare_tensors!(lhs, rhs)
     end
@@ -832,7 +843,7 @@ defmodule Exla.DefnTest do
       kernel = Nx.iota({6, 3, 2, 2, 2}, type: {:f, 64})
 
       lhs = conv_3d(img, kernel)
-      rhs = Nx.conv(img, kernel, {1, 2, 1}, :same)
+      rhs = Nx.conv(img, kernel, {1, 2, 1}, padding: :same)
 
       compare_tensors!(lhs, rhs)
     end
@@ -842,7 +853,27 @@ defmodule Exla.DefnTest do
       kernel = Nx.iota({6, 2, 4, 4}, type: {:f, 32})
 
       lhs = conv_valid_no_stride(img, kernel)
-      rhs = Nx.conv(img, kernel, {1, 1}, :valid)
+      rhs = Nx.conv(img, kernel, {1, 1}, padding: :valid)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a dilated convolution" do
+      img = Nx.iota({4, 3, 10, 10}, type: {:f, 64})
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 64})
+
+      lhs = dilated_conv(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, padding: :same, kernel_dilation: {1, 2})
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes an input dilated convolution" do
+      img = Nx.iota({4, 3, 10, 10}, type: {:f, 32})
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = dilated_input_conv(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, padding: :same, input_dilation: {2, 1})
 
       compare_tensors!(lhs, rhs)
     end
@@ -958,12 +989,12 @@ defmodule Exla.DefnTest do
 
   describe "pad" do
     defn pad_scalar(t), do: Nx.pad(t, 0, [])
-    defn pad_vector(t), do: Nx.pad(t, 0, [{1, 1}])
-    defn pad_matrix(t), do: Nx.pad(t, 0, [{1, 1}, {1, 1}])
-    defn pad_tensor(t), do: Nx.pad(t, 0.0, [{1, 2}, {1, 0}, {0, 1}])
-    defn pad_vector_negative_value(t), do: Nx.pad(t, 0.0, [{-1, -1}])
-    defn pad_matrix_negative_value(t), do: Nx.pad(t, 0, [{0, 0}, {-1, 1}])
-    defn pad_tensor_negative_value(t), do: Nx.pad(t, 0, [{-1, 0}, {-1, -1}, {0, -1}])
+    defn pad_vector(t), do: Nx.pad(t, 0, [{1, 1, 0}])
+    defn pad_matrix(t), do: Nx.pad(t, 0, [{1, 1, 0}, {1, 1, 0}])
+    defn pad_tensor(t), do: Nx.pad(t, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}])
+    defn pad_vector_negative_value(t), do: Nx.pad(t, 0.0, [{-1, -1, 0}])
+    defn pad_matrix_negative_value(t), do: Nx.pad(t, 0, [{0, 0, 0}, {-1, 1, 0}])
+    defn pad_tensor_negative_value(t), do: Nx.pad(t, 0, [{-1, 0, 0}, {-1, -1, 0}, {0, -1, 0}])
 
     test "with scalar" do
       assert pad_scalar(Nx.tensor(1)) == Nx.tensor(1)
