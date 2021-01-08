@@ -27,7 +27,7 @@ defmodule Exla.Defn do
 
         computation =
           fun.(params)
-          |> to_result(builder, %{})
+          |> to_result(builder, %{}, options)
           |> elem(0)
           |> Exla.Builder.build()
 
@@ -42,24 +42,24 @@ defmodule Exla.Defn do
     |> buffer_to_nx()
   end
 
-  defp to_result(tuple, builder, cache) when is_tuple(tuple) do
+  defp to_result(tuple, builder, cache, opts) when is_tuple(tuple) do
     {elements, cache} =
       tuple
       |> Tuple.to_list()
-      |> Enum.map_reduce(cache, &to_result(&1, builder, &2))
+      |> Enum.map_reduce(cache, &to_result(&1, builder, &2, opts))
 
     {Exla.Op.tuple(builder, elements), cache}
   end
 
-  defp to_result(expr, builder, cache) do
-    recur_operator(expr, builder, cache)
+  defp to_result(expr, builder, cache, opts) do
+    recur_operator(expr, builder, cache, opts)
   end
 
-  defp recur_operator(%T{data: %Expr{op: :parameter, args: [param]}}, _builder, cache) do
+  defp recur_operator(%T{data: %Expr{op: :parameter, args: [param]}}, _builder, cache, _opts) do
     {param, cache}
   end
 
-  defp recur_operator(%T{data: %Expr{id: id, op: op, args: args}} = ans, builder, cache) do
+  defp recur_operator(%T{data: %Expr{id: id, op: op, args: args}} = ans, builder, cache, opts) do
     case cache do
       %{^id => res} ->
         {res, cache}
@@ -67,18 +67,18 @@ defmodule Exla.Defn do
       %{} ->
         {ops, cache} =
           Enum.map_reduce(args, cache, fn
-            %T{data: %Expr{}} = arg, cache -> recur_operator(arg, builder, cache)
+            %T{data: %Expr{}} = arg, cache -> recur_operator(arg, builder, cache, opts)
             arg, cache -> {arg, cache}
           end)
 
-        op = to_operator(op, ops, ans, builder)
+        op = to_operator(op, ops, ans, builder, opts)
         {op, Map.put(cache, id, op)}
     end
   end
 
   ## to_operator creation
 
-  defp to_operator(:tensor, [tensor], _ans, builder) do
+  defp to_operator(:tensor, [tensor], _ans, builder, _opts) do
     case tensor.shape do
       {} ->
         to_constant(builder, Nx.Util.to_scalar(tensor), tensor.type)
@@ -89,7 +89,7 @@ defmodule Exla.Defn do
     end
   end
 
-  defp to_operator(:random_uniform, [shape, min, max, _opts], ans, builder) do
+  defp to_operator(:random_uniform, [shape, min, max, _opts], ans, builder, _options) do
     type = ans.type
 
     if match?({int, size} when int in [:s, :u] and size < 32, type) do
@@ -104,7 +104,7 @@ defmodule Exla.Defn do
     Exla.Op.rng_uniform(min, max, shape)
   end
 
-  defp to_operator(:random_normal, [shape, mu, sigma, _opts], ans, builder) do
+  defp to_operator(:random_normal, [shape, mu, sigma, _opts], ans, builder, _options) do
     type = ans.type
     mu = to_constant(builder, mu, type)
     sigma = to_constant(builder, sigma, type)
@@ -112,44 +112,46 @@ defmodule Exla.Defn do
     Exla.Op.rng_normal(mu, sigma, shape)
   end
 
-  defp to_operator(:iota, [shape, opts], ans, builder) do
+  defp to_operator(:iota, [shape, opts], ans, builder, _opts) do
     shape = Exla.Shape.make_shape(ans.type, shape)
     Exla.Lib.iota(builder, shape, opts)
   end
 
   ## to_operator shape
 
-  defp to_operator(:reshape, [op, shape], _ans, _builder) do
+  defp to_operator(:reshape, [op, shape], _ans, _builder, _opts) do
     Exla.Op.reshape(op, shape)
   end
 
-  defp to_operator(:pad, [op, value, padding_config], _ans, _builder) do
+  defp to_operator(:pad, [op, value, padding_config], _ans, _builder, _opts) do
     Exla.Op.pad(op, value, padding_config)
   end
 
-  defp to_operator(:broadcast, [op, _shape, axes], ans, _builder) do
+  defp to_operator(:broadcast, [op, _shape, axes], ans, _builder, _opts) do
     Exla.Op.broadcast_in_dim(op, ans.shape, List.to_tuple(axes))
   end
 
-  defp to_operator(:transpose, [op, dims], _ans, _builder) do
+  defp to_operator(:transpose, [op, dims], _ans, _builder, _opts) do
     Exla.Op.transpose(op, List.to_tuple(dims))
   end
 
-  defp to_operator(:squeeze, [op, _axes], ans, _builder) do
+  defp to_operator(:squeeze, [op, _axes], ans, _builder, _opts) do
     Exla.Op.reshape(op, ans.shape)
   end
 
   ## to_operator others
 
-  defp to_operator(:dot, [left, axes1, right, axes2], %{type: type}, _builder) do
-    Exla.Op.dot_general(to_type(left, type), to_type(right, type), {axes1, axes2})
+  defp to_operator(:dot, [left, axes1, right, axes2], %{type: type}, _builder, opts) do
+    precision = Keyword.get(opts, :precision, :default)
+    Exla.Op.dot_general(to_type(left, type), to_type(right, type), {axes1, axes2}, precision)
   end
 
   defp to_operator(
          :conv,
          [operand, kernel, strides, padding],
          %{shape: shape},
-         _builder
+         _builder,
+         opts
        ) do
     rank = tuple_size(shape)
     # Build general conv dims
@@ -164,20 +166,21 @@ defmodule Exla.Defn do
     lhs_dilation = List.to_tuple(for _ <- 0..(rank - 3), do: 1)
     rhs_dilation = lhs_dilation
 
-    padding_config = padding
+    precision = Keyword.get(opts, :precision, :default)
 
     Exla.Op.conv_general_dilated(
       operand,
       kernel,
       strides,
-      padding_config,
+      padding,
       lhs_dilation,
       rhs_dilation,
-      conv_dim_nos
+      conv_dim_nos,
+      precision
     )
   end
 
-  defp to_operator(:outer, [left, right], %{type: type, shape: shape}, _builder) do
+  defp to_operator(:outer, [left, right], %{type: type, shape: shape}, _builder, _opts) do
     left =
       left
       |> to_type(type)
@@ -193,7 +196,13 @@ defmodule Exla.Defn do
     Exla.Op.multiply(left, right)
   end
 
-  defp to_operator(:select, [pred, on_true, on_false], %{type: type, shape: shape}, _builder) do
+  defp to_operator(
+         :select,
+         [pred, on_true, on_false],
+         %{type: type, shape: shape},
+         _builder,
+         _opts
+       ) do
     pred = to_type(pred, {:pred, 8})
 
     on_true =
@@ -211,18 +220,18 @@ defmodule Exla.Defn do
 
   ## to_operator element-wise
 
-  defp to_operator(:negate, [op], _ans, _builder), do: Exla.Op.negate(op)
+  defp to_operator(:negate, [op], _ans, _builder, _opts), do: Exla.Op.negate(op)
 
-  defp to_operator(:abs, [op], _ans, _builder), do: Exla.Op.abs(op)
+  defp to_operator(:abs, [op], _ans, _builder, _opts), do: Exla.Op.abs(op)
 
-  defp to_operator(:sign, [op], %{type: type}, builder) do
+  defp to_operator(:sign, [op], %{type: type}, builder, _opts) do
     case type do
       {:u, _} -> Exla.Op.min(op, Exla.Op.constant_r0(builder, 1, type))
       _ -> Exla.Op.sign(op)
     end
   end
 
-  defp to_operator(:right_shift, [left, right], %{type: type}, _builder) do
+  defp to_operator(:right_shift, [left, right], %{type: type}, _builder, _opts) do
     dims = broadcast_axes(op_shape(left), op_shape(right))
 
     op =
@@ -236,14 +245,14 @@ defmodule Exla.Defn do
   @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power, :divide, :arctan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
-  defp to_operator(op, [left, right], %{type: type}, _builder) when op in @bin_op do
+  defp to_operator(op, [left, right], %{type: type}, _builder, _opts) when op in @bin_op do
     dims = broadcast_axes(op_shape(left), op_shape(right))
     apply(Exla.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
-  defp to_operator(op, [left, right], _ans, _builder) when op in @bin_comp_op do
+  defp to_operator(op, [left, right], _ans, _builder, _opts) when op in @bin_comp_op do
     left_shape = Exla.Op.get_shape(left)
     right_shape = Exla.Op.get_shape(right)
     type = Nx.Type.merge(left_shape.dtype, right_shape.dtype)
@@ -255,7 +264,7 @@ defmodule Exla.Defn do
               [:bitwise_not, :count_leading_zeros, :population_count] ++
               [:floor, :ceil, :round]
 
-  defp to_operator(op, [arg], %{type: type}, _builder) when op in @unary_op do
+  defp to_operator(op, [arg], %{type: type}, _builder, _opts) when op in @unary_op do
     apply(Exla.Op, op, [to_type(arg, type)])
   end
 
@@ -263,7 +272,7 @@ defmodule Exla.Defn do
 
   @reduction_op [:sum, :argmax, :argmin]
 
-  defp to_operator(op, [arg, opts], ans, builder)
+  defp to_operator(op, [arg, opts], ans, builder, _opts)
        when op in @reduction_op do
     apply(Exla.Lib, op, [builder, arg, [type: ans.type] ++ opts])
   end
