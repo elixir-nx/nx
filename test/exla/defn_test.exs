@@ -1199,6 +1199,33 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "precision" do
+    @defn_compiler {Exla, precision: :bad}
+    defn bad_precision(t1, t2), do: Nx.dot(t1, t2)
+
+    @defn_compiler {Exla, precision: :high}
+    defn good_precision(t1, t2), do: Nx.dot(t1, t2)
+
+    test "raises on bad precision" do
+      assert_raise ArgumentError,
+                   "expected precision configuration to be one of" <>
+                     " :default, :high, or :highest, got: :bad",
+                   fn ->
+                     bad_precision(
+                       Nx.tensor([1, 2, 3], type: {:bf, 16}),
+                       Nx.tensor([1, 2, 3], type: {:bf, 16})
+                     )
+                   end
+    end
+
+    test "succeeds on good precision" do
+      assert good_precision(
+               Nx.tensor([1, 2, 3], type: {:bf, 16}),
+               Nx.tensor([1, 2, 3], type: {:bf, 16})
+             ) == Nx.tensor(14, type: {:bf, 16})
+    end
+  end
+
   # We need to round the floats because of imprecision between platforms
   defp compare_tensors!(
          %{type: {:f, size}, data: {dev, left_data}} = left,

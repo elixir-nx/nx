@@ -18,7 +18,7 @@ defmodule Exla.Op do
 
   defp cast_scalar!({:pred, 8}, 0), do: 0
   defp cast_scalar!({:pred, 8}, 1), do: 1
-  defp cast_scalar!({:pred, 8}, n), do: raise "cannot cast #{inspect(n)} to {:pred, 8}"
+  defp cast_scalar!({:pred, 8}, n), do: raise("cannot cast #{inspect(n)} to {:pred, 8}")
   defp cast_scalar!(type, scalar), do: Nx.Type.cast_scalar!(type, scalar)
 
   @doc """
@@ -254,7 +254,7 @@ defmodule Exla.Op do
   def dot(
         %Op{builder: builder, ref: left},
         %Op{builder: builder, ref: right},
-        precision_config \\ nil
+        precision_config
       ) do
     config = get_precision_config_int(precision_config)
     ref = Exla.NIF.dot(left, right, config) |> unwrap!()
@@ -265,7 +265,7 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: left},
         %Op{builder: builder, ref: right},
         dimnos,
-        precision_config \\ nil
+        precision_config
       ) do
     config = get_precision_config_int(precision_config)
     ref = Exla.NIF.dot_general(left, right, dimnos, config) |> unwrap!()
@@ -280,14 +280,9 @@ defmodule Exla.Op do
         lhs_dilation,
         rhs_dilation,
         dim_nums,
-        precision_config \\ :default
+        precision_config
       ) do
-    config =
-      case precision_config do
-        :default -> 0
-        :high -> 1
-        :highest -> 2
-      end
+    config = get_precision_config_int(precision_config)
 
     ref =
       Exla.NIF.conv_general_dilated(
@@ -356,18 +351,20 @@ defmodule Exla.Op do
   ## Helpers
 
   defp get_precision_config_int(precision_config) do
-    if precision_config do
-      case precision_config do
-        :default -> 0
-        :high -> 1
-        :highest -> 2
-      end
-    else
-      case Application.fetch_env!(:exla, :precision) do
-        :default -> 0
-        :high -> 1
-        :highest -> 2
-      end
+    case precision_config do
+      :default ->
+        0
+
+      :high ->
+        1
+
+      :highest ->
+        2
+
+      _ ->
+        raise ArgumentError,
+              "expected precision configuration to be one of" <>
+                " :default, :high, or :highest, got: #{inspect(precision_config)}"
     end
   end
 
