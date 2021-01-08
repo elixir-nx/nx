@@ -1044,7 +1044,9 @@ defmodule Nx do
     end
 
     shape = Nx.Shape.pad(tensor.shape, padding_config)
-    impl!(tensor).pad(%{tensor | type: output_type, shape: shape}, tensor, pad_value, padding_config)
+
+    out = %{tensor | type: output_type, shape: shape}
+    impl!(tensor).pad(out, tensor, pad_value, padding_config)
   end
 
   ## Reflection
@@ -3657,28 +3659,28 @@ defmodule Nx do
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
       iex> Nx.conv(lhs, rhs, {1, 1}, :valid)
       #Nx.Tensor<
-        s64[1][4][3][3]
+        f64[1][4][3][3]
         [
           [
             [
-              [0, 0, 0],
-              [0, 0, 0],
-              [0, 0, 0]
+              [0.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0]
             ],
             [
-              [0, 1, 2],
-              [3, 4, 5],
-              [6, 7, 8]
+              [0.0, 1.0, 2.0],
+              [3.0, 4.0, 5.0],
+              [6.0, 7.0, 8.0]
             ],
             [
-              [0, 2, 4],
-              [6, 8, 10],
-              [12, 14, 16]
+              [0.0, 2.0, 4.0],
+              [6.0, 8.0, 10.0],
+              [12.0, 14.0, 16.0]
             ],
             [
-              [0, 3, 6],
-              [9, 12, 15],
-              [18, 21, 24]
+              [0.0, 3.0, 6.0],
+              [9.0, 12.0, 15.0],
+              [18.0, 21.0, 24.0]
             ]
           ]
         ]
@@ -3688,12 +3690,21 @@ defmodule Nx do
     %{shape: input_shape} = tensor = tensor(tensor)
     %{shape: kernel_shape} = kernel = tensor(kernel)
 
-    if rank(input_shape) < 2 do
-      raise ArgumentError, "input shape in conv requires at least rank 2"
+    if rank(input_shape) < 3 do
+      raise ArgumentError, "input shape in conv requires at least rank 3"
     end
 
-    if rank(kernel_shape) < 2 do
-      raise ArgumentError, "kernel shape in conv requires at least rank 2"
+    if rank(kernel_shape) < 3 do
+      raise ArgumentError, "kernel shape in conv requires at least rank 3"
+    end
+
+    tensor_input_channels = elem(input_shape, 1)
+    kernel_input_channels = elem(kernel_shape, 1)
+
+    if tensor_input_channels != kernel_input_channels do
+      raise ArgumentError,
+            "size of input dimension 1 must match size of kernel dimension 1," <>
+              " got #{tensor_input_channels} != #{kernel_input_channels}"
     end
 
     filter_shape =
@@ -3706,6 +3717,10 @@ defmodule Nx do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
+    if rank(strides) != rank(spatial_dims) do
+      raise ArgumentError, "must specify stride for each spatial dimension"
+    end
+
     # Always send the padding as an actual padding configuration
     # so backends don't deal with atoms themselves
     #
@@ -3713,7 +3728,7 @@ defmodule Nx do
     padding_config =
       case padding do
         :valid ->
-          for _ <- (0..tuple_size(input_shape) - 3), do: {0, 0}
+          for _ <- 0..(tuple_size(input_shape) - 3), do: {0, 0}
 
         :same ->
           padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
@@ -3721,10 +3736,16 @@ defmodule Nx do
 
         config when is_list(config) ->
           config
+
+        _ ->
+          raise ArgumentError,
+                "invalid padding configuration, padding must be" <>
+                  " :valid or :same, or a padding configuration for" <>
+                  " the spatial dimensions of the input tensor"
       end
 
     shape = Nx.Shape.conv(input_shape, kernel_shape, strides, padding_config)
-    type = binary_type(tensor, kernel)
+    type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
 
     out = %{tensor | type: type, shape: shape}
     impl!(tensor).conv(out, tensor, kernel, strides, padding_config)

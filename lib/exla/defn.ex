@@ -149,11 +149,12 @@ defmodule Exla.Defn do
   defp to_operator(
          :conv,
          [operand, kernel, strides, padding],
-         %{shape: shape},
+         %{type: output_type, shape: shape},
          _builder,
          opts
        ) do
     rank = tuple_size(shape)
+
     # Build general conv dims
     input_dims = List.to_tuple(for i <- 0..(rank - 1), do: i)
     [out_features, in_features | kernel_spatial] = for i <- 0..(rank - 1), do: i
@@ -167,6 +168,10 @@ defmodule Exla.Defn do
     rhs_dilation = lhs_dilation
 
     precision = Keyword.get(opts, :precision, :default)
+
+    # Ensure both types are floating
+    operand = to_type(operand, output_type)
+    kernel = to_type(kernel, output_type)
 
     Exla.Op.conv_general_dilated(
       operand,
