@@ -148,7 +148,12 @@ defmodule Exla.Defn do
     Exla.Op.dot_general(to_type(left, type), to_type(right, type), {axes1, axes2}, precision)
   end
 
-  defp to_operator(:conv, [operand, kernel, strides, padding], ans, state) do
+  defp to_operator(
+         :conv,
+         [operand, kernel, strides, padding],
+         ans,
+         state
+       ) do
     %{type: output_type, shape: shape} = ans
     rank = tuple_size(shape)
 
