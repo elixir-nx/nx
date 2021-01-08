@@ -204,6 +204,50 @@ defmodule Nx do
       iex> Nx.tensor(Nx.tensor([1, 2, 3]), type: {:f, 64})
       ** (ArgumentError) got a tensor with type {:f, 64} but tensor has type {:s, 64}
 
+  You can also provide names for tensor dimensions. Names are either atoms or `nil`:
+
+      iex> Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
+      >
+
+  Names make your code more expressive:
+
+      iex> Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, :height, :width])
+      #Nx.Tensor<
+        s64[batch: 1][height: 3][width: 3]
+        [
+          [
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9]
+          ]
+        ]
+      >
+
+  You can also leave dimension names as `nil`:
+
+      iex> Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, nil, nil])
+      #Nx.Tensor<
+        s64[batch: 1][3][3]
+        [
+          [
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9]
+          ]
+        ]
+      >
+
+  However, you must provide a name for every dimension in the tensor:
+
+      iex> Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch])
+      ** (ArgumentError) invalid names for tensor of rank 3, when specifying names every dimension must have a name or be nil
+
   ## Options
 
     * `:type` - sets the type of the tensor. If one is not given,
@@ -212,13 +256,17 @@ defmodule Nx do
       tensor is given alongside this option, then it verifies the
       tensor matches the given `:type`
 
+    * `:names` - dimension names. If you wish to specify dimension
+      names you must specify a name for every dimension in the tensor.
+      Only `nil` and atoms are supported as dimension names.
+
   """
   def tensor(arg, opts \\ [])
 
   def tensor(%T{} = t, []), do: t
 
   def tensor(%T{} = t, opts) do
-    assert_keys!(opts, [:type])
+    assert_keys!(opts, [:type, :names])
     type = opts[:type]
 
     if type && type != t.type do
@@ -230,9 +278,10 @@ defmodule Nx do
   end
 
   def tensor(arg, opts) do
-    assert_keys!(opts, [:type])
+    assert_keys!(opts, [:type, :names])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
-    Nx.BinaryTensor.tensor(arg, type)
+    names = opts[:names]
+    Nx.BinaryTensor.tensor(arg, type, names)
   end
 
   @doc """
@@ -305,14 +354,16 @@ defmodule Nx do
 
   ### Tensors as shapes
 
-  If given a tensor as a shape, it takes the shape from the tensor:
+  If given a tensor as a shape, it takes the shape and names from the tensor:
 
-      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:batch, :data])
       iex> t = Nx.random_uniform(t)
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
       {:f, 64}
+      iex> Nx.names(t)
+      [:batch, :data]
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> t = Nx.random_uniform(t, type: {:f, 32})
@@ -320,6 +371,8 @@ defmodule Nx do
       {2, 2}
       iex> Nx.type(t)
       {:f, 32}
+      iex> Nx.names(t)
+      [nil, nil]
 
   The same applies to numbers:
 
@@ -335,13 +388,24 @@ defmodule Nx do
       iex> Nx.type(t)
       {:f, 64}
 
+  If you pass `:names` as an option, the resulting tensor will take on the newly specified names:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:batch, :data])
+      iex> t = Nx.random_uniform(t, names: [:batch, nil])
+      iex> Nx.shape(t)
+      {2, 2}
+      iex> Nx.type(t)
+      {:f, 64}
+      iex> Nx.names(t)
+      [:batch, nil]
   """
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
-    assert_keys!(opts, [:type])
+    assert_keys!(opts, [:type, :names])
     shape = shape(tensor_or_shape)
+    names = opts[:names] || Nx.Names.validate!(names(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
-    Nx.BinaryTensor.random_uniform(%T{shape: shape, type: type}, min, max)
+    Nx.BinaryTensor.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
   end
 
   @doc """
@@ -379,15 +443,17 @@ defmodule Nx do
       iex> Nx.type(t)
       {:f, 32}
 
-  If given a tensor as a shape, it takes the shape and default type
+  If given a tensor as a shape, it takes the shape, names, and default type
   from the tensor:
 
-      iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+      iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:batch, :data])
       iex> t = Nx.random_normal(t)
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
       {:f, 64}
+      iex> Nx.names(t)
+      [:batch, :data]
 
       iex> t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
       iex> t = Nx.random_normal(t, type: {:f, 32})
@@ -395,6 +461,8 @@ defmodule Nx do
       {2, 2}
       iex> Nx.type(t)
       {:f, 32}
+      iex> Nx.names(t)
+      [nil, nil]
 
   The same applies to numbers:
 
@@ -404,22 +472,34 @@ defmodule Nx do
       iex> Nx.type(t)
       {:f, 64}
 
+  If you pass the `:names` option, the resulting tensor will take on those names:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:batch, :data])
+      iex> t = Nx.random_normal(t, names: [:batch, nil])
+      iex> Nx.shape(t)
+      {2, 2}
+      iex> Nx.type(t)
+      {:f, 64}
+      iex> Nx.names(t)
+      [:batch, nil]
   """
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
-    assert_keys!(opts, [:type])
+    assert_keys!(opts, [:type, :names])
     shape = shape(tensor_or_shape)
+    names = opts[:names] || Nx.Names.validate!(names(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
-    Nx.BinaryTensor.random_normal(%T{shape: shape, type: type}, mu, sigma)
+    Nx.BinaryTensor.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
   end
 
   @doc """
   Creates a tensor with the given shape which increments
-  along the provided axis.
+  along the provided axis. You may optionally provide dimension
+  names.
 
   If no axis is provided, index counts up at each element.
 
-  If a tensor or a number are given, the shape is taken from the tensor.
+  If a tensor or a number are given, the shape and names are taken from the tensor.
 
   ## Examples
 
@@ -435,9 +515,9 @@ defmodule Nx do
         [0, 1, 2, 3, 4]
       >
 
-      iex> Nx.iota({3, 2, 3})
+      iex> Nx.iota({3, 2, 3}, names: [:batch, :height, :width])
       #Nx.Tensor<
-        s64[3][2][3]
+        s64[batch: 3][height: 2][width: 3]
         [
           [
             [0, 1, 2],
@@ -454,9 +534,9 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.iota({3, 3}, axis: 1)
+      iex> Nx.iota({3, 3}, axis: 1, names: [:batch, nil])
       #Nx.Tensor<
-        s64[3][3]
+        s64[batch: 3][3]
         [
           [0, 1, 2],
           [0, 1, 2],
@@ -516,15 +596,16 @@ defmodule Nx do
   def iota({}, opts), do: tensor(0, opts)
 
   def iota(tensor_or_shape, opts) do
-    assert_keys!(opts, [:type, :axis])
+    assert_keys!(opts, [:type, :axis, :names])
     shape = shape(tensor_or_shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+    names = opts[:names] || Nx.Names.validate!(names(tensor_or_shape), shape)
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis)
-      Nx.BinaryTensor.iota(%T{type: type, shape: shape}, axis)
+      Nx.BinaryTensor.iota(%T{type: type, shape: shape, names: names}, axis)
     else
-      %T{type: type, shape: {Nx.size(shape)}}
+      %T{type: type, shape: {Nx.size(shape)}, names: names}
       |> Nx.BinaryTensor.iota(0)
       |> Map.replace!(:shape, shape)
     end
@@ -571,9 +652,11 @@ defmodule Nx do
       ** (ArgumentError) binary does not match the given size
 
   """
-  def from_binary(binary, type) when is_binary(binary) do
+  def from_binary(binary, type, names \\ nil) when is_binary(binary) do
     {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
+
+    names = Nx.Names.validate!(names, {dim})
 
     if binary == "" do
       raise ArgumentError, "cannot build an empty tensor"
@@ -583,7 +666,7 @@ defmodule Nx do
       raise ArgumentError, "binary does not match the given size"
     end
 
-    Nx.BinaryTensor.from_binary(%T{type: type, shape: {dim}}, binary)
+    Nx.BinaryTensor.from_binary(%T{type: type, shape: {dim}, names: names}, binary)
   end
 
   ## Meta operations (do not invoke the backend)
@@ -642,6 +725,9 @@ defmodule Nx do
     %T{shape: old_shape} = tensor = tensor(tensor)
     new_shape = shape(new_shape)
 
+    # TODO: reshape name rule
+    names = Nx.Names.validate!(nil, new_shape)
+
     if Nx.size(old_shape) != Nx.size(new_shape) do
       raise ArgumentError,
             "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
@@ -651,7 +737,7 @@ defmodule Nx do
     if old_shape == new_shape do
       tensor
     else
-      impl!(tensor).reshape(%{tensor | shape: new_shape}, tensor, new_shape)
+      impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor, new_shape)
     end
   end
 
@@ -727,10 +813,13 @@ defmodule Nx do
     axes = Nx.Shape.normalize_axes(old_shape, axes)
     new_shape = Nx.Shape.squeeze(old_shape, axes)
 
+    # TODO: squeeze name rule
+    names = Nx.Names.validate!(nil, new_shape)
+
     if old_shape == new_shape do
       tensor
     else
-      impl!(tensor).squeeze(%{tensor | shape: new_shape}, tensor, axes)
+      impl!(tensor).squeeze(%{tensor | shape: new_shape, names: names}, tensor, axes)
     end
   end
 
@@ -856,7 +945,10 @@ defmodule Nx do
     axes = Nx.Shape.normalize_axes(shape, axes)
     _ = Nx.Shape.broadcast!(tensor.shape, shape, axes)
 
-    impl!(tensor).broadcast(%{tensor | shape: shape}, tensor, shape, axes)
+    # TODO: broadcast name rule
+    names = Nx.Names.validate!(nil, shape)
+
+    impl!(tensor).broadcast(%{tensor | names: names, shape: shape}, tensor, shape, axes)
   end
 
   @doc """
@@ -1195,6 +1287,23 @@ defmodule Nx do
   """
   def axes(shape), do: count_up(rank(shape), 0)
 
+  @doc """
+  Returns all of the names in a tensor.
+
+  ### Examples
+
+      iex> Nx.names(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:batch, :data]))
+      [:batch, :data]
+
+      iex> Nx.names(Nx.tensor([1, 2, 3]))
+      [nil]
+
+      iex> Nx.names(5)
+      nil
+  """
+  def names(%T{names: names}), do: names
+  def names(_), do: nil
+
   defp count_up(0, _n), do: []
   defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
 
@@ -1265,7 +1374,11 @@ defmodule Nx do
     %T{shape: right_shape} = right = tensor(right)
 
     shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
-    apply(impl!(left, right), op, [%{left | type: type, shape: shape}, left, right])
+
+    # TODO: binary broadcast name rule
+    names = Nx.Names.validate!(nil, shape)
+
+    apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
   end
 
   defp element_wise_pred_op(left, right, op) do
@@ -1273,7 +1386,15 @@ defmodule Nx do
     %T{shape: right_shape} = right = tensor(right)
 
     shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
-    apply(impl!(left, right), op, [%{left | type: {:u, 8}, shape: shape}, left, right])
+
+    # TODO: binary broadcast name rule
+    names = Nx.Names.validate!(nil, shape)
+
+    apply(impl!(left, right), op, [
+      %{left | type: {:u, 8}, shape: shape, names: names},
+      left,
+      right
+    ])
   end
 
   @doc """
@@ -2479,7 +2600,10 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(false_shape, output_shape)
       )
 
-    out = %{pred | shape: output_shape, type: output_type}
+    # TODO: select names rule
+    names = Nx.Names.validate!(nil, output_shape)
+
+    out = %{pred | shape: output_shape, type: output_type, names: names}
     impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
   end
 
@@ -2903,7 +3027,10 @@ defmodule Nx do
         type -> type
       end
 
-    impl!(tensor).sum(%{tensor | type: type, shape: shape}, tensor, axes: axes)
+    # TODO: sum names rule
+    names = Nx.Names.validate!(nil, shape)
+
+    impl!(tensor).sum(%{tensor | type: type, shape: shape, names: names}, tensor, axes: axes)
   end
 
   @doc """
@@ -3181,8 +3308,16 @@ defmodule Nx do
         {{}, nil}
       end
 
+    # TODO: argmin/argmax names rule
+    names = Nx.Names.validate!(nil, shape)
+
     opts = [tie_break: tie_break, axis: axis]
-    apply(impl!(tensor), op, [%{tensor | type: {:s, 64}, shape: shape}, tensor, opts])
+
+    apply(impl!(tensor), op, [
+      %{tensor | type: {:s, 64}, shape: shape, names: names},
+      tensor,
+      opts
+    ])
   end
 
   @doc """
@@ -3304,7 +3439,16 @@ defmodule Nx do
         {{}, nil}
       end
 
-    impl!(tensor).reduce(%{tensor | type: type, shape: shape}, tensor, acc, [axes: axes], fun)
+    # TODO: reduce names rule
+    names = Nx.Names.validate!(nil, shape)
+
+    impl!(tensor).reduce(
+      %{tensor | type: type, shape: shape, names: names},
+      tensor,
+      acc,
+      [axes: axes],
+      fun
+    )
   end
 
   ## Matrix ops
@@ -3580,7 +3724,17 @@ defmodule Nx do
     axes1 = Nx.Shape.normalize_axes(s1, axes1)
     axes2 = Nx.Shape.normalize_axes(s2, axes2)
     output_shape = Nx.Shape.zip_reduce(s1, axes1, s2, axes2)
-    impl!(t1, t2).dot(%{t1 | type: output_type, shape: output_shape}, t1, axes1, t2, axes2)
+
+    # TODO: dot names rule
+    names = Nx.Names.validate!(nil, output_shape)
+
+    impl!(t1, t2).dot(
+      %{t1 | type: output_type, names: names, shape: output_shape},
+      t1,
+      axes1,
+      t2,
+      axes2
+    )
   end
 
   @doc """
@@ -3626,7 +3780,10 @@ defmodule Nx do
     type = binary_type(t1, t2)
     %T{shape: s1} = t1 = tensor(t1)
     %T{shape: s2} = t2 = tensor(t2)
-    impl!(t1, t2).outer(%{t1 | type: type, shape: {size(s1), size(s2)}}, t1, t2)
+    new_shape = {size(s1), size(s2)}
+    # TODO: outer names rule
+    names = Nx.Names.validate!(nil, new_shape)
+    impl!(t1, t2).outer(%{t1 | type: type, shape: new_shape, names: names}, t1, t2)
   end
 
   @doc """
@@ -3774,7 +3931,9 @@ defmodule Nx do
       tensor
     else
       shape = Nx.Shape.transpose(shape, axes)
-      impl!(tensor).transpose(%{tensor | shape: shape}, tensor, axes)
+      # TODO: transpose names rule
+      names = Nx.Names.validate!(nil, shape)
+      impl!(tensor).transpose(%{tensor | names: names, shape: shape}, tensor, axes)
     end
   end
 
@@ -3939,7 +4098,10 @@ defmodule Nx do
     shape = Nx.Shape.conv(dilated_input_shape, dilated_kernel_shape, strides, padding_config)
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
 
-    out = %{tensor | type: type, shape: shape}
+    # TODO: convolution name rule
+    names = Nx.Names.validate!(nil, shape)
+
+    out = %{tensor | type: type, shape: shape, names: names}
 
     impl!(tensor).conv(
       out,

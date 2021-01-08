@@ -338,9 +338,13 @@ defmodule Exla.Defn do
   ## Nx <-> Exla.Buffer
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
+    # TODO: propagate expected output names from Nx to EXLA
+    names = Nx.Names.validate!(nil, shape.dims)
+
     data
     |> Nx.from_binary(to_nx_type(shape.dtype))
     |> Map.replace!(:shape, shape.dims)
+    |> Map.replace!(:names, names)
   end
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do

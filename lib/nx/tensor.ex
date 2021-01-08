@@ -8,7 +8,7 @@ defmodule Nx.Tensor do
   @type shape :: tuple()
 
   @enforce_keys [:type, :shape]
-  defstruct [:data, :type, :shape]
+  defstruct [:data, :type, :shape, :names]
 
   defimpl Inspect do
     import Inspect.Algebra
