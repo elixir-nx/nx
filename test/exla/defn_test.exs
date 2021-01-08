@@ -757,6 +757,8 @@ defmodule Exla.DefnTest do
     defn conv_general_no_stride(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, [{-1, 2}, {3, -1}])
     defn conv_general_stride(inp, kernel), do: Nx.conv(inp, kernel, {2, 1}, [{2, 2}, {-2, 4}])
     defn conv_3d(inp, kernel), do: Nx.conv(inp, kernel, {1, 2, 1}, :same)
+    defn dilated_conv(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :same, 1, 2)
+    defn dilated_input_conv(inp, kernel), do: Nx.conv(inp, kernel, {1, 1}, :same, 2, 1)
 
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
@@ -830,6 +832,26 @@ defmodule Exla.DefnTest do
 
       lhs = conv_valid_no_stride(img, kernel)
       rhs = Nx.conv(img, kernel, {1, 1}, :valid)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a dilated convolution" do
+      img = Nx.iota({4, 3, 10, 10}, type: {:f, 64})
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 64})
+
+      lhs = dilated_conv(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, :same, 1, 2)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes an input dilated convolution" do
+      img = Nx.iota({4, 3, 10, 10}, type: {:f, 32})
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = dilated_input_conv(img, kernel)
+      rhs = Nx.conv(img, kernel, {1, 1}, :same, 2, 1)
 
       compare_tensors!(lhs, rhs)
     end
@@ -945,12 +967,12 @@ defmodule Exla.DefnTest do
 
   describe "pad" do
     defn pad_scalar(t), do: Nx.pad(t, 0, [])
-    defn pad_vector(t), do: Nx.pad(t, 0, [{1, 1}])
-    defn pad_matrix(t), do: Nx.pad(t, 0, [{1, 1}, {1, 1}])
-    defn pad_tensor(t), do: Nx.pad(t, 0.0, [{1, 2}, {1, 0}, {0, 1}])
-    defn pad_vector_negative_value(t), do: Nx.pad(t, 0.0, [{-1, -1}])
-    defn pad_matrix_negative_value(t), do: Nx.pad(t, 0, [{0, 0}, {-1, 1}])
-    defn pad_tensor_negative_value(t), do: Nx.pad(t, 0, [{-1, 0}, {-1, -1}, {0, -1}])
+    defn pad_vector(t), do: Nx.pad(t, 0, [{1, 1, 0}])
+    defn pad_matrix(t), do: Nx.pad(t, 0, [{1, 1, 0}, {1, 1, 0}])
+    defn pad_tensor(t), do: Nx.pad(t, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}])
+    defn pad_vector_negative_value(t), do: Nx.pad(t, 0.0, [{-1, -1, 0}])
+    defn pad_matrix_negative_value(t), do: Nx.pad(t, 0, [{0, 0, 0}, {-1, 1, 0}])
+    defn pad_tensor_negative_value(t), do: Nx.pad(t, 0, [{-1, 0, 0}, {-1, -1, 0}, {0, -1, 0}])
 
     test "with scalar" do
       assert pad_scalar(Nx.tensor(1)) == Nx.tensor(1)

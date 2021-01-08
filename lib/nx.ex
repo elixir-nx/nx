@@ -880,13 +880,23 @@ defmodule Nx do
         1
       >
 
-      iex> Nx.pad(Nx.tensor([1, 2, 3]), 0, [{1, 1}])
+      iex> Nx.pad(Nx.tensor([1, 2, 3]), 0, [{1, 1, 0}])
       #Nx.Tensor<
         s64[5]
         [0, 1, 2, 3, 0]
       >
 
-      iex> Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{1, 1}, {1, 1}])
+      iex> Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{0, 0, 1}, {0, 0, 1}])
+      #Nx.Tensor<
+        s64[3][5]
+        [
+          [1, 0, 2, 0, 3],
+          [0, 0, 0, 0, 0],
+          [4, 0, 5, 0, 6]
+        ]
+      >
+
+      iex> Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{1, 1, 0}, {1, 1, 0}])
       #Nx.Tensor<
         s64[4][5]
         [
@@ -898,7 +908,7 @@ defmodule Nx do
       >
 
       iex> tensor = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
-      iex> Nx.pad(tensor, 0, [{0, 2}, {1, 1}, {1, 0}])
+      iex> Nx.pad(tensor, 0, [{0, 2, 0}, {1, 1, 0}, {1, 0, 0}])
       #Nx.Tensor<
         s64[4][4][3]
         [
@@ -930,7 +940,7 @@ defmodule Nx do
       >
 
       iex> tensor = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
-      iex> Nx.pad(tensor, 0, [{1, 0}, {1, 1}, {0, 1}])
+      iex> Nx.pad(tensor, 0, [{1, 0, 0}, {1, 1, 0}, {0, 1, 0}])
       #Nx.Tensor<
         s64[3][4][3]
         [
@@ -956,7 +966,7 @@ defmodule Nx do
       >
 
     iex> tensor = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
-    iex> Nx.pad(tensor, 0.0, [{1, 2}, {1, 0}, {0, 1}])
+    iex> Nx.pad(tensor, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}])
     #Nx.Tensor<
       f64[5][3][3]
       [
@@ -988,7 +998,7 @@ defmodule Nx do
       ]
     >
 
-    iex> Nx.pad(Nx.tensor([0, 1, 2, 3, 0]), 0, [{-1, -1}])
+    iex> Nx.pad(Nx.tensor([0, 1, 2, 3, 0]), 0, [{-1, -1, 0}])
     #Nx.Tensor<
       s64[3]
       [1, 2, 3]
@@ -999,7 +1009,7 @@ defmodule Nx do
     ...>   [[0, 0, 0], [1, 2, 0], [3, 4, 0], [0, 0, 0]],
     ...>   [[0, 0, 0], [5, 6, 0], [7, 8, 0], [0, 0, 0]]
     ...> ])
-    iex> Nx.pad(tensor, 0, [{-1, 0}, {-1, -1}, {0, -1}])
+    iex> Nx.pad(tensor, 0, [{-1, 0, 0}, {-1, -1, 0}, {0, -1, 0}])
     #Nx.Tensor<
       s64[2][2][2]
       [
@@ -1014,7 +1024,7 @@ defmodule Nx do
       ]
     >
 
-    iex> Nx.pad(Nx.tensor([[0, 1, 2, 3], [0, 4, 5, 6]]), 0, [{0, 0}, {-1, 1}])
+    iex> Nx.pad(Nx.tensor([[0, 1, 2, 3], [0, 4, 5, 6]]), 0, [{0, 0, 0}, {-1, 1, 0}])
     #Nx.Tensor<
       s64[2][4]
       [
@@ -1023,7 +1033,7 @@ defmodule Nx do
       ]
     >
 
-    iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], type: {:f, 32}), 0, [{-1, 2}, {1, -1}])
+    iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], type: {:f, 32}), 0, [{-1, 2, 0}, {1, -1, 0}])
     #Nx.Tensor<
       f32[3][3]
       [
@@ -3686,7 +3696,7 @@ defmodule Nx do
         ]
       >
   """
-  def conv(tensor, kernel, strides, padding \\ :valid) do
+  def conv(tensor, kernel, strides, padding \\ :valid, input_dilation \\ 1, kernel_dilation \\ 1) do
     %{shape: input_shape} = tensor = tensor(tensor)
     %{shape: kernel_shape} = kernel = tensor(kernel)
 
@@ -3721,10 +3731,30 @@ defmodule Nx do
       raise ArgumentError, "must specify stride for each spatial dimension"
     end
 
+    kernel_dilation = List.to_tuple(for _ <- 1..tuple_size(filter_shape), do: kernel_dilation)
+
+    kernel_dilation_padding_config = [
+      {0, 0, 0},
+      {0, 0, 0} | Enum.map(Tuple.to_list(kernel_dilation), &{0, 0, &1 - 1})
+    ]
+
+    dilated_kernel_shape = Nx.Shape.pad(kernel_shape, kernel_dilation_padding_config)
+
+    input_dilation = List.to_tuple(for _ <- 1..tuple_size(spatial_dims), do: input_dilation)
+
+    input_dilation_padding_config = [
+      {0, 0, 0},
+      {0, 0, 0} | Enum.map(Tuple.to_list(input_dilation), &{0, 0, &1 - 1})
+    ]
+
+    dilated_input_shape = Nx.Shape.pad(input_shape, input_dilation_padding_config)
+
     # Always send the padding as an actual padding configuration
     # so backends don't deal with atoms themselves
     #
-    # We assume padding is specified only for spatial dims
+    # We assume padding is specified only for spatial dims and only
+    # as {edge_high, edge_low} tuples, this conceptually simplfies
+    # things a bit
     padding_config =
       case padding do
         :valid ->
@@ -3748,7 +3778,16 @@ defmodule Nx do
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
 
     out = %{tensor | type: type, shape: shape}
-    impl!(tensor).conv(out, tensor, kernel, strides, padding_config)
+
+    impl!(tensor).conv(
+      out,
+      tensor,
+      kernel,
+      strides,
+      padding_config,
+      input_dilation,
+      kernel_dilation
+    )
   end
 
   ## Type

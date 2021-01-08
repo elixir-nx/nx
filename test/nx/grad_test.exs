@@ -497,12 +497,18 @@ defmodule Nx.GradTest do
   end
 
   describe "pad" do
-    defn grad_sum_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{-1, 1}, {1, 1}])))
+    defn grad_sum_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{-1, 1, 0}, {1, 1, 0}])))
+    # defn grad_interior_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{0, 0, 1}, {0, 0, 1}])))
 
     test "computes gradient" do
       assert grad_sum_pad(Nx.tensor([[1.0, 2.0], [1.0, 2.0]])) ==
                Nx.tensor([[0.0, 0.0], [1.0, 1.0]])
     end
+
+    # test "computes gradient with interior pad" do
+    #   assert grad_interior_pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+    #            Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]])
+    # end
   end
 
   describe "abs" do

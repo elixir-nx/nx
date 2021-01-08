@@ -200,7 +200,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:pad, [x, _value, padding_config], _ans, g, cache) do
-    inverse_padding_config = Enum.map(padding_config, fn {lo, hi} -> {-lo, -hi} end)
+    inverse_padding_config = Enum.map(padding_config, fn {lo, hi, _} -> {-lo, -hi, 0} end)
     g = Nx.pad(g, 0.0, inverse_padding_config)
     to_grad(x, g, cache)
   end

@@ -288,25 +288,32 @@ defmodule Nx.BinaryTensor do
         t
 
       {_} ->
-        [{edge_low, edge_high}] = padding_config
-        pad_last_dim(t, pad_value, edge_low, edge_high)
+        [{edge_low, edge_high, interior}] = padding_config
+        pad_last_dim(t, pad_value, edge_low, edge_high, interior)
 
       _ ->
         permutation = for i <- 0..(Nx.rank(t) - 2), do: i
         permutation = [Nx.rank(t) - 1 | permutation]
 
-        for {edge_low, edge_high} <- Enum.reverse(padding_config), reduce: t do
-          acc -> Nx.transpose(pad_last_dim(acc, pad_value, edge_low, edge_high), permutation)
+        for {edge_low, edge_high, interior} <- Enum.reverse(padding_config), reduce: t do
+          acc ->
+            Nx.transpose(pad_last_dim(acc, pad_value, edge_low, edge_high, interior), permutation)
         end
     end
   end
 
   # Add padding to the high and low ends of the last dimension of a tensor
-  defp pad_last_dim(%T{shape: shape, type: {_, size} = type} = t, value, edge_low, edge_high) do
+  defp pad_last_dim(
+         %T{shape: shape, type: {_, size} = type} = t,
+         value,
+         edge_low,
+         edge_high,
+         interior
+       ) do
     view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
-    new_shape = pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high)
+    new_shape = pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high, interior)
 
-    {edge_low_padding, edge_high_padding} =
+    {edge_low_padding, edge_high_padding, interior_padding} =
       match_types [type] do
         edge_high_padding =
           if edge_high <= 0,
@@ -318,11 +325,32 @@ defmodule Nx.BinaryTensor do
             do: <<>>,
             else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
 
-        {edge_low_padding, edge_high_padding}
+        interior_padding =
+          if interior == 0,
+            do: <<>>,
+            else: for(_ <- 1..interior, into: <<>>, do: <<write!(value, 0)>>)
+
+        {edge_low_padding, edge_high_padding, interior_padding}
+      end
+
+    interior_padding_size = interior * size
+
+    interior_padded =
+      for bin <- view do
+        match_types [type] do
+          padded =
+            for <<match!(dim, 0) <- bin>>, into: <<>> do
+              <<write!(dim, 0), interior_padding::bitstring>>
+            end
+
+          new_bytes = byte_size(padded) * 8 - interior_padding_size
+          <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = padded
+          new_bin
+        end
       end
 
     data =
-      for bin <- view, into: <<>> do
+      for bin <- interior_padded, into: <<>> do
         cond do
           edge_low < 0 and edge_high < 0 ->
             low_byte = abs(edge_low) * size
@@ -353,9 +381,10 @@ defmodule Nx.BinaryTensor do
     from_binary(%{t | type: type, shape: new_shape}, data)
   end
 
-  defp pad_in_dim(shape, dim, edge_low, edge_high) do
+  defp pad_in_dim(shape, dim, edge_low, edge_high, interior) do
     dim_size = elem(shape, dim)
-    new_dim = dim_size + edge_high + edge_low
+    interior_padding_factor = if interior == 0, do: 0, else: dim_size * interior - 1
+    new_dim = dim_size + interior_padding_factor + edge_high + edge_low
     put_elem(shape, dim, new_dim)
   end
 
@@ -776,7 +805,7 @@ defmodule Nx.BinaryTensor do
 
   ## Conv
 
-  def conv(out, t, k, strides, padding \\ :valid) do
+  def conv(out, t, k, strides, padding, input_dilation, kernel_dilation) do
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
     #
@@ -802,9 +831,17 @@ defmodule Nx.BinaryTensor do
     # The final shape is then given as:
     # {batch, num_filters, spatial_dim0, spatial_dim1, ...}
     %T{type: {_, input_size} = input_type, shape: input_shape} = t
-    %T{type: {_, kernel_size} = kernel_type, shape: kernel_shape} = k
+    %T{type: {_, kernel_size} = kernel_type} = k
 
     %{type: output_type} = out
+
+    # We need to dilate the spatial dimensions of the kernel first...
+    dilation_padding = [
+      {0, 0, 0},
+      {0, 0, 0} | Enum.map(Tuple.to_list(kernel_dilation), &{0, 0, &1 - 1})
+    ]
+
+    %T{shape: kernel_shape} = k = Nx.pad(k, 0, dilation_padding)
 
     # The size of the "window" or the size of each filter
     # removes the first two dimensions of the kernel
@@ -833,7 +870,11 @@ defmodule Nx.BinaryTensor do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
-    padding_config = [{0, 0}, {0, 0} | padding]
+    padding_config = [
+      {0, 0, 0},
+      {0, 0, 0} | Enum.map(padding, &Tuple.append(&1, elem(input_dilation, 0) - 1))
+    ]
+
     %T{shape: padded_shape} = padded_t = Nx.pad(t, 0, padding_config)
 
     single_data_dims = Tuple.delete_at(padded_shape, 0)
