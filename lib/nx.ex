@@ -3667,7 +3667,7 @@ defmodule Nx do
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
       iex> rhs = Nx.iota({4})
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
-      iex> Nx.conv(lhs, rhs, {1, 1}, :valid)
+      iex> Nx.conv(lhs, rhs, {1, 1})
       #Nx.Tensor<
         f64[1][4][3][3]
         [
@@ -3696,7 +3696,11 @@ defmodule Nx do
         ]
       >
   """
-  def conv(tensor, kernel, strides, padding \\ :valid, input_dilation \\ 1, kernel_dilation \\ 1) do
+  def conv(tensor, kernel, strides, opts \\ []) when is_list(opts) do
+    padding = opts[:padding] || :valid
+    input_dilation = opts[:input_dilation] || 1
+    kernel_dilation = opts[:kernel_dilation] || 1
+
     %{shape: input_shape} = tensor = tensor(tensor)
     %{shape: kernel_shape} = kernel = tensor(kernel)
 
@@ -3731,7 +3735,40 @@ defmodule Nx do
       raise ArgumentError, "must specify stride for each spatial dimension"
     end
 
-    kernel_dilation = List.to_tuple(for _ <- 1..tuple_size(filter_shape), do: kernel_dilation)
+    cond do
+      is_integer(input_dilation) and input_dilation < 1 ->
+        raise ArgumentError,
+              "input dilation must be greater than or equal to 1, got #{input_dilation}"
+
+      is_tuple(input_dilation) and rank(input_dilation) != rank(spatial_dims) ->
+        raise ArgumentError,
+              "must specify dilation for each spatial dimension of the input" <>
+                " or specify an integer dilation factor"
+
+      is_tuple(input_dilation) and Enum.any?(Tuple.to_list(input_dilation), &(&1 < 1)) ->
+        raise ArgumentError, "input dilation of each dimension must be greater than or equal to 1"
+
+      is_integer(kernel_dilation) and kernel_dilation < 1 ->
+        raise ArgumentError,
+              "kernel dilation must be greater than or equal to 1, got #{kernel_dilation}"
+
+      is_tuple(kernel_dilation) and rank(kernel_dilation) != rank(filter_shape) ->
+        raise ArgumentError,
+              "must specify dilation for each spatial dimension of the kernel" <>
+                " or specify an integer dilation factor"
+
+      is_tuple(kernel_dilation) and Enum.any?(Tuple.to_list(kernel_dilation), &(&1 < 1)) ->
+        raise ArgumentError,
+              "kernel dilation of each dimension must be greater than or equal to 1"
+
+      true ->
+        :ok
+    end
+
+    kernel_dilation =
+      if is_tuple(kernel_dilation),
+        do: kernel_dilation,
+        else: List.to_tuple(for _ <- 1..tuple_size(filter_shape), do: kernel_dilation)
 
     kernel_dilation_padding_config = [
       {0, 0, 0},
@@ -3740,7 +3777,10 @@ defmodule Nx do
 
     dilated_kernel_shape = Nx.Shape.pad(kernel_shape, kernel_dilation_padding_config)
 
-    input_dilation = List.to_tuple(for _ <- 1..tuple_size(spatial_dims), do: input_dilation)
+    input_dilation =
+      if is_tuple(input_dilation),
+        do: input_dilation,
+        else: List.to_tuple(for _ <- 1..tuple_size(spatial_dims), do: input_dilation)
 
     input_dilation_padding_config = [
       {0, 0, 0},

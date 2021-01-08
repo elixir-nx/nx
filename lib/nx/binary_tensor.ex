@@ -870,9 +870,14 @@ defmodule Nx.BinaryTensor do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
+    spatial_padding_config =
+      padding
+      |> Enum.zip(Tuple.to_list(input_dilation))
+      |> Enum.map(fn {{lo, hi}, dilation} -> {lo, hi, dilation - 1} end)
+
     padding_config = [
       {0, 0, 0},
-      {0, 0, 0} | Enum.map(padding, &Tuple.append(&1, elem(input_dilation, 0) - 1))
+      {0, 0, 0} | spatial_padding_config
     ]
 
     %T{shape: padded_shape} = padded_t = Nx.pad(t, 0, padding_config)
