@@ -570,6 +570,19 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "reduce" do
+    defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
+
+    test "computes the reduce" do
+      assert Nx.tensor([1, 2, 3]) |> reduce() == Nx.tensor(6)
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce() == Nx.tensor(6.0)
+
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce() == Nx.tensor(6, type: {:u, 8})
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce() == Nx.tensor(6, type: {:s, 8})
+      assert Nx.tensor([1, 2, 3], type: {:f, 32}) |> reduce() == Nx.tensor(6, type: {:f, 32})
+    end
+  end
+
   describe "sum" do
     defn sum(t), do: Nx.sum(t)
 

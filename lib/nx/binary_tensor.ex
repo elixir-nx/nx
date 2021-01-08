@@ -30,7 +30,7 @@ defmodule Nx.BinaryTensor do
      acc |> Enum.reverse() |> :erlang.list_to_binary()}
   end
 
-  defp flatten(other, type), do: {{}, scalar_to_binary(other, type)}
+  defp flatten(other, type), do: {{}, number_to_binary(other, type)}
 
   defp flatten_list([], _type, dimensions, acc) do
     {[0 | dimensions], acc}
@@ -58,7 +58,7 @@ defmodule Nx.BinaryTensor do
   end
 
   defp flatten_list(list, type, dimensions, acc) do
-    {[length(list) | dimensions], Enum.reduce(list, acc, &[scalar_to_binary(&1, type) | &2])}
+    {[length(list) | dimensions], Enum.reduce(list, acc, &[number_to_binary(&1, type) | &2])}
   end
 
   @doc false
@@ -70,7 +70,7 @@ defmodule Nx.BinaryTensor do
         {_, _} -> fn -> (max - min) * :rand.uniform() + min end
       end
 
-    data = for _ <- 1..Nx.size(shape), into: "", do: scalar_to_binary(gen.(), type)
+    data = for _ <- 1..Nx.size(shape), into: "", do: number_to_binary(gen.(), type)
     from_binary(out, data)
   end
 
@@ -79,14 +79,14 @@ defmodule Nx.BinaryTensor do
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
-          do: scalar_to_binary(:rand.normal(mu, sigma), type)
+          do: number_to_binary(:rand.normal(mu, sigma), type)
 
     from_binary(out, data)
   end
 
   @doc false
   def iota(%{shape: {n}, type: type} = out, 0) do
-    data = for i <- 0..(n - 1), do: scalar_to_binary(i, type)
+    data = for i <- 0..(n - 1), do: number_to_binary(i, type)
     from_binary(out, data)
   end
 
@@ -111,13 +111,9 @@ defmodule Nx.BinaryTensor do
           i <- 0..(dim - 1),
           _ <- 1..repeat_blocks,
           into: "",
-          do: scalar_to_binary(i, type)
+          do: number_to_binary(i, type)
 
     from_binary(out, data)
-  end
-
-  defp scalar_to_binary(value, type) do
-    match_types([type], do: <<write!(value, 0)>>)
   end
 
   ## Device API
@@ -371,16 +367,16 @@ defmodule Nx.BinaryTensor do
         for <<match!(left, 0) <- b1>>,
             <<match!(right, 1) <- b2>>,
             into: <<>>,
-            do: scalar_to_binary(read!(left, 0) * read!(right, 1), out.type)
+            do: number_to_binary(read!(left, 0) * read!(right, 1), out.type)
       end
 
     from_binary(out, data)
   end
 
   @doc false
-  def dot(out, t1, axes1, t2, axes2) do
-    zip_reduce(out, t1, axes1, t2, axes2, 0, fn {lhs, rhs}, acc ->
-      res = lhs * rhs + acc
+  def dot(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
+    bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
+      res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
     end)
   end
@@ -427,7 +423,7 @@ defmodule Nx.BinaryTensor do
             end
           end
 
-        scalar_to_binary(result, type)
+        number_to_binary(result, type)
       end
 
     from_binary(out, data)
@@ -927,8 +923,11 @@ defmodule Nx.BinaryTensor do
   ## Aggregation
 
   @doc false
-  def sum(out, tensor, opts) do
-    reduce(out, tensor, 0, opts, fn x, acc -> {x + acc, x + acc} end)
+  def sum(out, %{type: type} = tensor, opts) do
+    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
+      res = binary_to_number(bin, type) + acc
+      {res, res}
+    end)
   end
 
   @doc false
@@ -953,10 +952,12 @@ defmodule Nx.BinaryTensor do
     argmin_or_max(out, tensor, comparator, opts[:axis])
   end
 
-  defp argmin_or_max(out, tensor, comparator, axis) do
+  defp argmin_or_max(out, %{type: type} = tensor, comparator, axis) do
     opts = if axis, do: [axes: [axis]], else: []
 
-    reduce(out, tensor, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
+    bin_reduce(out, tensor, {0, :first, -1}, opts, fn bin, {i, cur_extreme_x, cur_extreme_i} ->
+      x = binary_to_number(bin, type)
+
       if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
         {i, {i + 1, x, i}}
       else
@@ -965,10 +966,20 @@ defmodule Nx.BinaryTensor do
     end)
   end
 
-  ## Reduce
+  @doc false
+  def reduce(out, tensor, acc, opts, fun) do
+    each = %{tensor | shape: {}}
 
-  defp reduce(out, tensor, acc, opts, fun) when is_list(opts) and is_function(fun, 2) do
-    %T{type: {_, size} = type, shape: shape} = tensor
+    bin_reduce(out, tensor, acc, opts, fn bin, acc ->
+      res = fun.(from_binary(each, bin), acc)
+      {res, res}
+    end)
+  end
+
+  ## Binary reducers
+
+  defp bin_reduce(out, tensor, acc, opts, fun) do
+    %T{type: {_, size}, shape: shape} = tensor
 
     view =
       if axes = opts[:axes] do
@@ -980,10 +991,8 @@ defmodule Nx.BinaryTensor do
     data =
       for axis <- view do
         {result, _} =
-          match_types [type] do
-            for <<match!(var, 0) <- axis>>, reduce: {<<>>, acc} do
-              {_, acc} -> fun.(read!(var, 0), acc)
-            end
+          for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
+            {_, acc} -> fun.(bin, acc)
           end
 
         scalar_to_binary(result, out.type)
@@ -992,16 +1001,16 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  ## Zip reduce
-
-  defp zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
+  defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
+    %{type: {_, s1}} = t1
+    %{type: {_, s2}} = t2
     b1 = to_binary(t1)
     b2 = to_binary(t2)
 
     data =
       match_types [t1.type, t2.type] do
-        for <<match!(left, 0) <- b1>>, <<match!(right, 1) <- b2>>, into: <<>> do
-          {result, _} = fun.({read!(left, 0), read!(right, 1)}, acc)
+        for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
+          {result, _} = fun.(d1, d2, acc)
           scalar_to_binary(result, type)
         end
       end
@@ -1009,17 +1018,16 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  defp zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun)
-       when is_function(fun, 2) do
-    {_, s1} = left_type = t1.type
-    {_, s2} = right_type = t2.type
+  defp bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
+    {_, s1} = t1.type
+    {_, s2} = t2.type
 
     v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
     data =
-      for b1 <- v1, b2 <- v2, into: <<>> do
-        {bin, _acc} = bin_zip_reduce(b1, b2, left_type, right_type, <<>>, acc, fun)
+      for b1 <- v1, b2 <- v2 do
+        {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
         scalar_to_binary(bin, type)
       end
 
@@ -1028,24 +1036,39 @@ defmodule Nx.BinaryTensor do
 
   # Helper for reducing down a single axis over two tensors,
   # returning tensor data and a final accumulator.
-  defp bin_zip_reduce(<<>>, <<>>, _left_type, _right_type, bin, acc, _fun),
+  defp bin_zip_reduce_axis(<<>>, <<>>, _s1, _s2, bin, acc, _fun),
     do: {bin, acc}
 
-  defp bin_zip_reduce(b1, b2, left_type, right_type, _bin, acc, fun) do
-    {head1, rest1} =
-      match_types [left_type] do
-        <<match!(x, 0), rest1::binary>> = b1
-        {read!(x, 0), rest1}
-      end
+  defp bin_zip_reduce_axis(b1, b2, s1, s2, _bin, acc, fun) do
+    <<x::size(s1)-bitstring, rest1::bitstring>> = b1
+    <<y::size(s2)-bitstring, rest2::bitstring>> = b2
+    {bin, acc} = fun.(x, y, acc)
+    bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
+  end
 
-    {head2, rest2} =
-      match_types [right_type] do
-        <<match!(y, 0), rest2::binary>> = b2
-        {read!(y, 0), rest2}
-      end
+  ## Scalar helpers
 
-    {bin, acc} = fun.({head1, head2}, acc)
-    bin_zip_reduce(rest1, rest2, left_type, right_type, bin, acc, fun)
+  @compile {:inline, number_to_binary: 2, binary_to_number: 2}
+
+  defp scalar_to_binary(value, type) when is_number(value),
+    do: number_to_binary(value, type)
+
+  defp scalar_to_binary(%T{shape: {}, type: type} = t, type),
+    do: to_binary(t)
+
+  defp scalar_to_binary(t, type) do
+    raise ArgumentError,
+          "expected a number or a scalar tensor of type #{inspect(type)}, got: #{inspect(t)}"
+  end
+
+  defp number_to_binary(number, type),
+    do: match_types([type], do: <<write!(number, 0)>>)
+
+  defp binary_to_number(bin, type) do
+    match_types [type] do
+      <<match!(value, 0)>> = bin
+      read!(value, 0)
+    end
   end
 
   ## Aggregation helpers

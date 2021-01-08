@@ -3175,6 +3175,128 @@ defmodule Nx do
     apply(impl!(tensor), op, [%{tensor | type: {:s, 64}, shape: shape}, tensor, opts])
   end
 
+  @doc """
+  Reduces over a tensor with the given accumulator.
+
+  The given `fun` will receive two tensors and it must
+  return the reduced value.
+
+  The tensor may be reduced in parallel and the reducer
+  function can be called with arguments in any order, the
+  initial accumulator may be given multiples, and it may
+  be non-deterministic. Therefore, the reduction function
+  should be associative (or as close as possible to
+  associativity considered floats themselves are not
+  strictly associative).
+
+  By default, it reduces all dimensions of the tensor and
+  return a scalar. If the `:axes` option is given, it
+  aggregates over multiple dimensions, effectively removing
+  them. `axes: [0]` implies aggregating over the highest
+  order dimension and so forth. If the axis is negative,
+  then counts the axis from the back. For example,
+  `axes: [-1]` will always aggregate all rows.
+
+  The type of the returned tensor will be computed based on
+  the given tensor and the initial value. For example,
+  a tensor of integers with a float accumulator will be
+  cast integer, as done by most binary operator. You can
+  also pass a `:type` option to change this behaviour.
+
+  ## Examples
+
+      iex> Nx.reduce(Nx.tensor(42), 0, fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64
+        42
+      >
+
+      iex> Nx.reduce(Nx.tensor([1, 2, 3]), 0, fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.reduce(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]), 0, fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        f64
+        10.0
+      >
+
+  ### Aggregating over axes
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> Nx.reduce(t, 0, [axes: [0]], fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axes: [0]], fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [8, 10, 12],
+          [14, 16, 18]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axes: [1]], fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [5, 7, 9],
+          [17, 19, 21]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axes: [0, 2]], fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64[2]
+        [30, 48]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axes: [-1]], fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [6, 15],
+          [24, 33]
+        ]
+      >
+
+      iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      iex> Nx.reduce(t, 0, [axes: [-3]], fn x, y -> Nx.add(x, y) end)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [8, 10, 12],
+          [14, 16, 18]
+        ]
+      >
+
+  """
+  def reduce(tensor, acc, opts \\ [], fun) when is_function(fun, 2) do
+    assert_keys!(opts, [:axes, :type])
+    type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, acc))
+    %{shape: shape} = tensor = tensor(tensor)
+    acc = tensor(acc)
+
+    {shape, axes} =
+      if axes = opts[:axes] do
+        axes = Nx.Shape.normalize_axes(shape, axes)
+        {Nx.Shape.contract(shape, axes), axes}
+      else
+        {{}, nil}
+      end
+
+    impl!(tensor).reduce(%{tensor | type: type, shape: shape}, tensor, acc, [axes: axes], fun)
+  end
+
   ## Matrix ops
 
   @doc """

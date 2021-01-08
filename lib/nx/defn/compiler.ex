@@ -151,6 +151,22 @@ defmodule Nx.Defn.Compiler do
     {{:=, meta, [left, right]}, state}
   end
 
+  defp normalize({:fn, meta, clauses}, state) do
+    unless match?([_], clauses) do
+      compile_error!(meta, state, "only a single clause is allowed inside fn")
+    end
+
+    {clauses, state} =
+      Enum.map_reduce(clauses, state, fn {:->, clause_meta, [args, body]}, state ->
+        {args, state} = normalize_args(args, meta, state)
+        assert_uniq_vars!(args, state)
+        {body, state} = normalize(body, state)
+        {{:->, clause_meta, [args, body]}, state}
+      end)
+
+    {{:fn, meta, clauses}, state}
+  end
+
   defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
     pair = {name, length(args)}
 

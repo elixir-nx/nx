@@ -196,6 +196,31 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "reduce ops" do
+    defn reduce(t1, acc), do: Nx.reduce(t1, acc, fn x, y -> x + y end)
+
+    defn reduce_with_opts(t1, acc),
+      do: Nx.reduce(t1, acc, [type: {:f, 64}, axes: [-1]], fn x, y -> x + y end)
+
+    test "reduces with function" do
+      assert %{
+               data: %Expr{op: :reduce, args: [_, _, [axes: nil], fun]},
+               type: {:s, 64},
+               shape: {}
+             } = reduce(Nx.tensor([1, 2, 3]), 0)
+
+      assert is_function(fun, 2)
+
+      assert %{
+               data: %Expr{op: :reduce, args: [_, _, [axes: [1]], fun]},
+               type: {:f, 64},
+               shape: {3}
+             } = reduce_with_opts(Nx.tensor([[1], [2], [3]]), 0)
+
+      assert is_function(fun, 2)
+    end
+  end
+
   describe "tensor constants" do
     @two 2
     defn two_attribute(), do: @two
