@@ -3720,13 +3720,8 @@ defmodule Nx do
     # TODO: dot names rule
     names = Nx.Shape.check_names!(nil, output_shape)
 
-    impl!(t1, t2).dot(
-      %{t1 | type: output_type, names: names, shape: output_shape},
-      t1,
-      axes1,
-      t2,
-      axes2
-    )
+    out = %{t1 | type: output_type, names: names, shape: output_shape}
+    impl!(t1, t2).dot(out, t1, axes1, t2, axes2)
   end
 
   @doc """
