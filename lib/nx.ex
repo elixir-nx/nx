@@ -1389,11 +1389,8 @@ defmodule Nx do
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
-    apply(impl!(left, right), op, [
-      %{left | type: {:u, 8}, shape: shape, names: names},
-      left,
-      right
-    ])
+    out = %{left | type: {:u, 8}, shape: shape, names: names}
+    apply(impl!(left, right), op, [out, left, right])
   end
 
   @doc """
