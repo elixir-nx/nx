@@ -117,5 +117,37 @@ defmodule Nx.TensorTest do
              >\
              """
     end
+
+    test "all dimensions named" do
+      assert inspect(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, :x, :y])) ==
+               """
+               #Nx.Tensor<
+                 s64[batch: 1][x: 3][y: 3]
+                 [
+                   [
+                     [1, 2, 3],
+                     [4, 5, 6],
+                     [7, 8, 9]
+                   ]
+                 ]
+               >\
+               """
+    end
+
+    test "some dimensions named" do
+      assert inspect(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, nil, nil])) ==
+               """
+               #Nx.Tensor<
+                 s64[batch: 1][3][3]
+                 [
+                   [
+                     [1, 2, 3],
+                     [4, 5, 6],
+                     [7, 8, 9]
+                   ]
+                 ]
+               >\
+               """
+    end
   end
 end

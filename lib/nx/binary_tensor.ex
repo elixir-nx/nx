@@ -13,14 +13,16 @@ defmodule Nx.BinaryTensor do
   ## Creation
 
   @doc false
-  def tensor(arg, type) do
+  def tensor(arg, type, names) do
     {shape, data} = flatten(arg, type)
+
+    names = Nx.Shape.check_names!(names, shape)
 
     if data == "" do
       raise "cannot build empty tensor"
     end
 
-    from_binary(%T{shape: shape, type: type}, data)
+    from_binary(%T{shape: shape, type: type, names: names}, data)
   end
 
   defp flatten(list, type) when is_list(list) do
@@ -669,12 +671,13 @@ defmodule Nx.BinaryTensor do
   @doc false
   def inspect(tensor, opts) do
     dims = Tuple.to_list(tensor.shape)
+    names = tensor.names
 
     open = IA.color("[", :list, opts)
     sep = IA.color(",", :list, opts)
     close = IA.color("]", :list, opts)
     type = IA.color(Nx.Type.to_string(tensor.type), :atom, opts)
-    shape = shape_to_algebra(dims, open, close)
+    shape = shape_to_algebra(dims, names, open, close)
 
     {data, _limit} =
       case tensor.data do
@@ -695,9 +698,16 @@ defmodule Nx.BinaryTensor do
     IA.concat([type, shape, IA.line(), data])
   end
 
-  defp shape_to_algebra(dims, open, close) do
+  defp shape_to_algebra(dims, names, open, close) do
     dims
-    |> Enum.map(fn number -> IA.concat([open, Integer.to_string(number), close]) end)
+    |> Enum.zip(names)
+    |> Enum.map(fn
+      {number, nil} ->
+        IA.concat([open, Integer.to_string(number), close])
+
+      {number, name} ->
+        IA.concat([open, Atom.to_string(name), ": ", Integer.to_string(number), close])
+    end)
     |> IA.concat()
   end
 

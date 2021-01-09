@@ -44,7 +44,9 @@ defmodule Nx.Defn.Expr do
   Builds a parameter must be passed to the evaluation function.
   """
   def parameter(shape, type, arg) when is_tuple(shape) do
-    %T{shape: shape, type: type} |> expr(:parameter, [arg])
+    # TODO: propagate names?
+    names = Nx.Shape.check_names!(nil, shape)
+    %T{shape: shape, type: type, names: names} |> expr(:parameter, [arg])
   end
 
   @doc false
