@@ -21,7 +21,10 @@ defmodule Nx.Shape do
         names
       end
     else
-      names = for _ <- 1..n_dims, do: nil
+      names =
+        if n_dims == 0,
+          do: [],
+          else: for i <- 0..n_dims - 1, do: nil
     end
   end
 

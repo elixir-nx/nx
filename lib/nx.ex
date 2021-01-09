@@ -387,8 +387,10 @@ defmodule Nx do
       {}
       iex> Nx.type(t)
       {:f, 64}
+      iex> Nx.names(t)
+      []
 
-  If you pass `:names` as an option, the resulting tensor will take on the newly specified names:
+  If you pass `:names` as an option, the resulting tensor will take on those names:
 
       iex> t = Nx.tensor([[1, 2], [3, 4]], names: [:batch, :data])
       iex> t = Nx.random_uniform(t, names: [:batch, nil])
@@ -471,6 +473,8 @@ defmodule Nx do
       {}
       iex> Nx.type(t)
       {:f, 64}
+      iex> Nx.names(t)
+      []
 
   If you pass the `:names` option, the resulting tensor will take on those names:
 
@@ -1299,9 +1303,10 @@ defmodule Nx do
       [nil]
 
       iex> Nx.names(5)
-      nil
+      []
   """
   def names(%T{names: names}), do: names
+  def names(a) when is_number(a), do: []
   def names(_), do: nil
 
   defp count_up(0, _n), do: []
