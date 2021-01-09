@@ -45,7 +45,7 @@ defmodule Nx.Defn.Expr do
   """
   def parameter(shape, type, arg) when is_tuple(shape) do
     # TODO: propagate names?
-    names = Nx.Names.validate!(nil, shape)
+    names = Nx.Shape.check_names!(nil, shape)
     %T{shape: shape, type: type, names: names} |> expr(:parameter, [arg])
   end
 

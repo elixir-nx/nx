@@ -1,7 +1,29 @@
 defmodule Nx.Shape do
   # Conveniences for manipulating shapes.
-  # Typicalled called from `Nx`.
+  # Typically called from `Nx`.
   @moduledoc false
+
+  @doc """
+  Validates the name of each dimension.
+  """
+  def check_names!(names, shape) do
+    n_dims = tuple_size(shape)
+
+    if names do
+      n_names = length(names)
+
+      if n_names != n_dims do
+        raise ArgumentError,
+              "invalid names for tensor of rank #{n_dims}," <>
+                " when specifying names every dimension must" <>
+                " have a name or be nil"
+      else
+        names
+      end
+    else
+      names = for _ <- 1..n_dims, do: nil
+    end
+  end
 
   @doc """
   Broadcasts a shape to a new shape.

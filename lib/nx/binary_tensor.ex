@@ -16,7 +16,7 @@ defmodule Nx.BinaryTensor do
   def tensor(arg, type, names) do
     {shape, data} = flatten(arg, type)
 
-    names = Nx.Names.validate!(names, shape)
+    names = Nx.Shape.check_names!(names, shape)
 
     if data == "" do
       raise "cannot build empty tensor"

@@ -339,7 +339,7 @@ defmodule Exla.Defn do
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
     # TODO: propagate expected output names from Nx to EXLA
-    names = Nx.Names.validate!(nil, shape.dims)
+    names = Nx.Shape.check_names!(nil, shape.dims)
 
     data
     |> Nx.from_binary(to_nx_type(shape.dtype))
