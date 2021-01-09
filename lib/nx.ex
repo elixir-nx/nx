@@ -405,7 +405,7 @@ defmodule Nx do
       when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type, :names])
     shape = shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.check_names!(names(tensor_or_shape), shape)
+    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
     Nx.BinaryTensor.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
   end
@@ -491,7 +491,7 @@ defmodule Nx do
       when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type, :names])
     shape = shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.check_names!(names(tensor_or_shape), shape)
+    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
     Nx.BinaryTensor.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
   end
@@ -603,7 +603,7 @@ defmodule Nx do
     assert_keys!(opts, [:type, :axis, :names])
     shape = shape(tensor_or_shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    names = opts[:names] || Nx.Shape.check_names!(names(tensor_or_shape), shape)
+    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis)
@@ -1307,7 +1307,6 @@ defmodule Nx do
   """
   def names(%T{names: names}), do: names
   def names(a) when is_number(a), do: []
-  def names(_), do: nil
 
   defp count_up(0, _n), do: []
   defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
@@ -4107,4 +4106,9 @@ defmodule Nx do
   defp binary_type(a, b) when is_number(a), do: Nx.Type.merge_scalar(b.type, a)
   defp binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(a.type, b)
   defp binary_type(a, b), do: Nx.Type.merge(a.type, b.type)
+
+  ## Names
+
+  defp names!(%T{names: names}), do: names
+  defp names!(_), do: nil
 end
