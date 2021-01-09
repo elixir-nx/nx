@@ -24,7 +24,8 @@ defmodule Nx.Shape do
       names =
         if n_dims == 0,
           do: [],
-          else: for i <- 0..n_dims - 1, do: nil
+          else: for _ <- 0..n_dims - 1, do: nil
+      names
     end
   end
 
@@ -115,43 +116,49 @@ defmodule Nx.Shape do
 
   ### Scalar Shapes
 
-      iex> Nx.Shape.binary_broadcast({}, {})
-      {}
-      iex> Nx.Shape.binary_broadcast({}, {4, 2, 1, 5})
-      {4, 2, 1, 5}
+      iex> Nx.Shape.binary_broadcast({}, [], {}, [])
+      {{}, []}
+      iex> Nx.Shape.binary_broadcast({}, [], {4, 2, 1, 5}, [:batch, nil, :data, nil])
+      {{4, 2, 1, 5}, [:batch, nil, :data, nil]}
 
   ### n-D Shapes
 
-      iex> Nx.Shape.binary_broadcast({8, 1, 6, 1}, {7, 1, 5})
-      {8, 7, 6, 5}
-      iex> Nx.Shape.binary_broadcast({7, 1, 5}, {8, 1, 6, 1})
-      {8, 7, 6, 5}
-      iex> Nx.Shape.binary_broadcast({5, 4}, {1})
-      {5, 4}
-      iex> Nx.Shape.binary_broadcast({3, 1}, {15, 3, 5})
-      {15, 3, 5}
+      iex> Nx.Shape.binary_broadcast({8, 1, 6, 1}, [:batch, nil, :data, nil], {7, 1, 5}, [:time, :data, nil])
+      {{8, 7, 6, 5}, [:batch, :time, :data, nil]}
+      iex> Nx.Shape.binary_broadcast({7, 1, 5}, [:time, :data, nil], {8, 1, 6, 1},  [:batch, nil, :data, nil])
+      {{8, 7, 6, 5}, [:batch, :time, :data, nil]}
+      iex> Nx.Shape.binary_broadcast({5, 4}, [nil, nil], {1}, [:data])
+      {{5, 4}, [nil, :data]}
+      iex> Nx.Shape.binary_broadcast({3, 1}, [:x, :y], {15, 3, 5}, [:batch, :x, nil])
+      {{15, 3, 5}, [:batch, :x, :y]}
 
   ### Error cases
 
-      iex> Nx.Shape.binary_broadcast({4, 2, 5}, {3, 2, 5})
+      iex> Nx.Shape.binary_broadcast({4, 2, 5}, [nil, nil, nil], {3, 2, 5}, [:batch, :x, :y])
       ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 5} to {3, 2, 5}
+
+      iex> Nx.Shape.binary_broadcast({1, 2, 5}, [:batch, :x, :y], {3, 2, 5}, [:time, :x, :y])
+      ** (ArgumentError) cannot merge names :batch, :time
   """
-  def binary_broadcast(left_shape, right_shape)
+  def binary_broadcast(left_shape, left_names, right_shape, right_names)
 
-  def binary_broadcast(shape, shape), do: shape
+  def binary_broadcast(shape, names, shape, names), do: {shape, names}
 
-  def binary_broadcast(left_shape, right_shape)
+  def binary_broadcast(left_shape, left_names, right_shape, right_names)
       when is_tuple(left_shape) and is_tuple(right_shape) do
     left_rank = tuple_size(left_shape)
     right_rank = tuple_size(right_shape)
     rank = max(left_rank, right_rank)
 
-    left_lower = shape_to_lower_ranked_list(left_shape, left_rank, rank)
-    right_lower = shape_to_lower_ranked_list(right_shape, right_rank, rank)
+    left_lower_and_names = shape_and_names_to_lower_ranked_list(left_shape, Enum.reverse(left_names), left_rank, rank)
+    right_lower_and_names = shape_and_names_to_lower_ranked_list(right_shape, Enum.reverse(right_names), right_rank, rank)
 
-    case binary_broadcast(left_lower, right_lower, []) do
-      {:ok, new} ->
-        new
+    {left_lower, left_names} = Enum.unzip(left_lower_and_names)
+    {right_lower, right_names} = Enum.unzip(right_lower_and_names)
+
+    case binary_broadcast(left_lower, left_names, right_lower, right_names, [], []) do
+      {:ok, new_shape, new_names} ->
+        {new_shape, new_names}
 
       :error ->
         raise ArgumentError,
@@ -160,24 +167,24 @@ defmodule Nx.Shape do
     end
   end
 
-  defp binary_broadcast([ldim | ldims], [rdim | rdims], acc)
+  defp binary_broadcast([ldim | ldims], [lname | lnames], [rdim | rdims], [rname | rnames], shape_acc, names_acc)
        when rdim == 1 or ldim == 1 or rdim == ldim,
-       do: binary_broadcast(ldims, rdims, [max(rdim, ldim) | acc])
+       do: binary_broadcast(ldims, lnames, rdims, rnames, [max(rdim, ldim) | shape_acc], [merge_names!(lname, rname) | names_acc])
 
-  defp binary_broadcast([], [], acc),
-    do: {:ok, List.to_tuple(acc)}
+  defp binary_broadcast([], [], [], [], shape_acc, names_acc),
+    do: {:ok, List.to_tuple(shape_acc), names_acc}
 
-  defp binary_broadcast(_, _, _),
+  defp binary_broadcast(_, _, _, _, _, _),
     do: :error
 
-  defp shape_to_lower_ranked_list(_tuple, 0, 0),
+  defp shape_and_names_to_lower_ranked_list(_tuple, _names, 0, 0),
     do: []
 
-  defp shape_to_lower_ranked_list(tuple, 0, rank),
-    do: [1 | shape_to_lower_ranked_list(tuple, 0, rank - 1)]
+  defp shape_and_names_to_lower_ranked_list(tuple, [], 0, rank),
+    do: [{1, nil} | shape_and_names_to_lower_ranked_list(tuple, [], 0, rank - 1)]
 
-  defp shape_to_lower_ranked_list(tuple, size, rank),
-    do: [:erlang.element(size, tuple) | shape_to_lower_ranked_list(tuple, size - 1, rank - 1)]
+  defp shape_and_names_to_lower_ranked_list(tuple, [n | names], size, rank),
+    do: [{:erlang.element(size, tuple), n} | shape_and_names_to_lower_ranked_list(tuple, names, size - 1, rank - 1)]
 
   @doc """
   Contracts a shape along the given axes.
@@ -646,4 +653,10 @@ defmodule Nx.Shape do
 
   defp count_down(0, _n), do: []
   defp count_down(i, n), do: [n | count_down(i - 1, n - 1)]
+
+  defp merge_names!(nil, nil), do: nil
+  defp merge_names!(nil, name) when is_atom(name), do: name
+  defp merge_names!(name, nil) when is_atom(name), do: name
+  defp merge_names!(name, name) when is_atom(name), do: name
+  defp merge_names!(lhs, rhs), do: raise ArgumentError, "cannot merge names #{inspect(lhs)}, #{inspect(rhs)}"
 end

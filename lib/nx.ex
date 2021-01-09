@@ -976,9 +976,9 @@ defmodule Nx do
         1
       >
 
-      iex> Nx.pad(Nx.tensor([1, 2, 3]), 0, [{1, 1, 0}])
+      iex> Nx.pad(Nx.tensor([1, 2, 3], names: [:data]), 0, [{1, 1, 0}])
       #Nx.Tensor<
-        s64[5]
+        s64[data: 5]
         [0, 1, 2, 3, 0]
       >
 
@@ -1375,25 +1375,19 @@ defmodule Nx do
 
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
-    %T{shape: left_shape} = left = tensor(left)
-    %T{shape: right_shape} = right = tensor(right)
+    %T{shape: left_shape, names: left_names} = left = tensor(left)
+    %T{shape: right_shape, names: right_names} = right = tensor(right)
 
-    shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
-
-    # TODO: binary broadcast name rule
-    names = Nx.Shape.check_names!(nil, shape)
+    {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
     apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
   end
 
   defp element_wise_pred_op(left, right, op) do
-    %T{shape: left_shape} = left = tensor(left)
-    %T{shape: right_shape} = right = tensor(right)
+    %T{shape: left_shape, names: left_names} = left = tensor(left)
+    %T{shape: right_shape, names: right_names} = right = tensor(right)
 
-    shape = Nx.Shape.binary_broadcast(left_shape, right_shape)
-
-    # TODO: binary broadcast name rule
-    names = Nx.Shape.check_names!(nil, shape)
+    {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
     apply(impl!(left, right), op, [
       %{left | type: {:u, 8}, shape: shape, names: names},
@@ -1428,52 +1422,52 @@ defmodule Nx do
 
   ### Adding a scalar to a tensor
 
-      iex> Nx.add(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.add(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [2, 3, 4]
       >
 
-      iex> Nx.add(1, Nx.tensor([1, 2, 3]))
+      iex> Nx.add(1, Nx.tensor([1, 2, 3], names: [:data]))
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [2, 3, 4]
       >
 
   Given a float scalar converts the tensor to a float:
 
-      iex> Nx.add(Nx.tensor([1, 2, 3]), 1.0)
+      iex> Nx.add(Nx.tensor([1, 2, 3], names: [:data]), 1.0)
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [2.0, 3.0, 4.0]
       >
 
-      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0]), 1)
+      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0], names: [:data]), 1)
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [2.0, 3.0, 4.0]
       >
 
-      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}), 1)
+      iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}, names: [:data]), 1)
       #Nx.Tensor<
-        f32[3]
+        f32[data: 3]
         [2.0, 3.0, 4.0]
       >
 
   Unsigned tensors become signed and double their size if a
   negative number is given:
 
-      iex> Nx.add(Nx.tensor([0, 1, 2], type: {:u, 8}), -1)
+      iex> Nx.add(Nx.tensor([0, 1, 2], type: {:u, 8}, names: [:data]), -1)
       #Nx.Tensor<
-        s16[3]
+        s16[data: 3]
         [-1, 0, 1]
       >
 
   ### Adding tensors of the same shape
 
-      iex> Nx.add(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[10, 20], [30, 40]]))
+      iex> Nx.add(Nx.tensor([[1, 2], [3, 4]], names: [:x, :y]), Nx.tensor([[10, 20], [30, 40]], names: [nil, :y]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [11, 22],
           [33, 44]
@@ -1482,27 +1476,27 @@ defmodule Nx do
 
   ### Adding tensors with broadcasting
 
-      iex> Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.add(Nx.tensor([[1], [2]], names: [nil, :y]), Nx.tensor([[10, 20]], names: [:x, nil]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [11, 21],
           [12, 22]
         ]
       >
 
-      iex> Nx.add(Nx.tensor([[10, 20]]), Nx.tensor([[1], [2]]))
+      iex> Nx.add(Nx.tensor([[10, 20]], names: [:x, nil]), Nx.tensor([[1], [2]], names: [nil, :y]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [11, 21],
           [12, 22]
         ]
       >
 
-      iex> Nx.add(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
+      iex> Nx.add(Nx.tensor([[1], [2]], names: [:x, nil]), Nx.tensor([[10, 20], [30, 40]]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][2]
         [
           [11, 21],
           [32, 42]
@@ -1541,41 +1535,41 @@ defmodule Nx do
 
   ### Subtracting tensors and scalars
 
-      iex> Nx.subtract(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.subtract(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [0, 1, 2]
       >
 
-      iex> Nx.subtract(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.subtract(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [0.0, -1.0, -2.0]
       >
 
   ### Subtracting tensors
 
-      iex> Nx.subtract(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.subtract(Nx.tensor([[1], [2]], names: [:x, :y]), Nx.tensor([[10, 20]], names: [:x, :y]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [-9, -19],
           [-8, -18]
         ]
       >
 
-      iex> Nx.subtract(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.subtract(Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, nil]), Nx.tensor([[10, 20]], type: {:s, 8}, names: [nil, :y]))
       #Nx.Tensor<
-        s8[2][2]
+        s8[x: 2][y: 2]
         [
           [-9, -19],
           [-8, -18]
         ]
       >
 
-      iex> Nx.subtract(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.subtract(Nx.tensor([[1], [2]], type: {:f, 32}, names: [nil, :y]), Nx.tensor([[10, 20]], type: {:f, 32}, names: [:x, nil]))
       #Nx.Tensor<
-        f32[2][2]
+        f32[x: 2][y: 2]
         [
           [-9.0, -19.0],
           [-8.0, -18.0]
@@ -1605,41 +1599,41 @@ defmodule Nx do
 
   ### Multiplying tensors and scalars
 
-      iex> Nx.multiply(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.multiply(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [1, 2, 3]
       >
 
-      iex> Nx.multiply(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.multiply(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [1.0, 2.0, 3.0]
       >
 
   ### Multiplying tensors
 
-      iex> Nx.multiply(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.multiply(Nx.tensor([[1], [2]], names: [:x, :y]), Nx.tensor([[10, 20]], names: [:x, :y]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [10, 20],
           [20, 40]
         ]
       >
 
-      iex> Nx.multiply(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.multiply(Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, nil]), Nx.tensor([[10, 20]], type: {:s, 8}, names: [nil, :y]))
       #Nx.Tensor<
-        s8[2][2]
+        s8[x: 2][y: 2]
         [
           [10, 20],
           [20, 40]
         ]
       >
 
-      iex> Nx.multiply(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.multiply(Nx.tensor([[1], [2]], type: {:f, 32}, names: [nil, :y]), Nx.tensor([[10, 20]], type: {:f, 32}, names: [:x, nil]))
       #Nx.Tensor<
-        f32[2][2]
+        f32[x: 2][y: 2]
         [
           [10.0, 20.0],
           [20.0, 40.0]
@@ -1669,23 +1663,23 @@ defmodule Nx do
 
   ### Power of tensors and scalars
 
-      iex> Nx.power(Nx.tensor([1, 2, 3]), 2)
+      iex> Nx.power(Nx.tensor([1, 2, 3], names: [:data]), 2)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [1, 4, 9]
       >
 
-      iex> Nx.power(2, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.power(2, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [2.0, 4.0, 8.0]
       >
 
   ### Power of tensors
 
-      iex> Nx.power(Nx.tensor([[2], [3]]), Nx.tensor([[4, 5]]))
+      iex> Nx.power(Nx.tensor([[2], [3]], names: [:x, nil]), Nx.tensor([[4, 5]], names: [nil, :y]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [16, 32],
           [81, 243]
@@ -1715,23 +1709,23 @@ defmodule Nx do
 
   ### Remainder of tensors and scalars
 
-      iex> Nx.remainder(Nx.tensor([1, 2, 3]), 2)
+      iex> Nx.remainder(Nx.tensor([1, 2, 3], names: [:data]), 2)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [1, 0, 1]
       >
 
-      iex> Nx.remainder(2, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.remainder(2, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [0.0, 0.0, 2.0]
       >
 
   ### Remainder of tensors
 
-      iex> Nx.remainder(Nx.tensor([[10], [20]]), Nx.tensor([[3, 4]]))
+      iex> Nx.remainder(Nx.tensor([[10], [20]], names: [:x, :y]), Nx.tensor([[3, 4]], names: [nil, :y]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [1, 2],
           [2, 0]
@@ -1766,41 +1760,41 @@ defmodule Nx do
 
   ### Dividing tensors and scalars
 
-      iex> Nx.divide(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.divide(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [1.0, 2.0, 3.0]
       >
 
-      iex> Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [1.0, 0.5, 0.3333333333333333]
       >
 
   ### Dividing tensors
 
-      iex> Nx.divide(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.divide(Nx.tensor([[1], [2]], names: [:x, nil]), Nx.tensor([[10, 20]], names: [nil, :y]))
       #Nx.Tensor<
-        f64[2][2]
+        f64[x: 2][y: 2]
         [
           [0.1, 0.05],
           [0.2, 0.1]
         ]
       >
 
-      iex> Nx.divide(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.divide(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}, names: [:x, :y]))
       #Nx.Tensor<
-        f32[2][2]
+        f32[x: 2][y: 2]
         [
           [0.10000000149011612, 0.05000000074505806],
           [0.20000000298023224, 0.10000000149011612]
         ]
       >
 
-      iex> Nx.divide(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.divide(Nx.tensor([[1], [2]], type: {:f, 32}, names: [:x, nil]), Nx.tensor([[10, 20]], type: {:f, 32}, names: [nil, :y]))
       #Nx.Tensor<
-        f32[2][2]
+        f32[x: 2][y: 2]
         [
           [0.10000000149011612, 0.05000000074505806],
           [0.20000000298023224, 0.10000000149011612]
@@ -1833,15 +1827,15 @@ defmodule Nx do
 
   ### Arc tangent between tensors and scalars
 
-      iex> Nx.arctan2(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.arctan2(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [0.7853981633974483, 1.1071487177940904, 1.2490457723982544]
       >
 
-      iex> Nx.arctan2(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.arctan2(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [0.7853981633974483, 0.4636476090008061, 0.3217505543966422]
       >
 
@@ -1881,41 +1875,41 @@ defmodule Nx do
 
   ### Max between tensors and scalars
 
-      iex> Nx.max(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.max(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [1, 2, 3]
       >
 
-      iex> Nx.max(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.max(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [1.0, 2.0, 3.0]
       >
 
   ### Max between tensors
 
-      iex> Nx.max(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.max(Nx.tensor([[1], [2]], names: [:x, :y]), Nx.tensor([[10, 20]]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [10, 20],
           [10, 20]
         ]
       >
 
-      iex> Nx.max(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.max(Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, nil]), Nx.tensor([[10, 20]], type: {:s, 8}))
       #Nx.Tensor<
-        s8[2][2]
+        s8[x: 2][2]
         [
           [10, 20],
           [10, 20]
         ]
       >
 
-      iex> Nx.max(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.max(Nx.tensor([[1], [2]], type: {:f, 32}, names: [:x, nil]), Nx.tensor([[10, 20]], type: {:f, 32}, names: [nil, :y]))
       #Nx.Tensor<
-        f32[2][2]
+        f32[x: 2][y: 2]
         [
           [10.0, 20.0],
           [10.0, 20.0]
@@ -1945,41 +1939,41 @@ defmodule Nx do
 
   ### Min between tensors and scalars
 
-      iex> Nx.min(Nx.tensor([1, 2, 3]), 1)
+      iex> Nx.min(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [1, 1, 1]
       >
 
-      iex> Nx.min(1, Nx.tensor([1.0, 2.0, 3.0]))
+      iex> Nx.min(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[3]
+        f64[data: 3]
         [1.0, 1.0, 1.0]
       >
 
   ### Min between tensors
 
-      iex> Nx.min(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]]))
+      iex> Nx.min(Nx.tensor([[1], [2]], names: [:x, nil]), Nx.tensor([[10, 20]]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][2]
         [
           [1, 1],
           [2, 2]
         ]
       >
 
-      iex> Nx.min(Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8}))
+      iex> Nx.min(Nx.tensor([[1], [2]], type: {:s, 8}, names: [:x, :y]), Nx.tensor([[10, 20]], type: {:s, 8}))
       #Nx.Tensor<
-        s8[2][2]
+        s8[x: 2][y: 2]
         [
           [1, 1],
           [2, 2]
         ]
       >
 
-      iex> Nx.min(Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32}))
+      iex> Nx.min(Nx.tensor([[1], [2]], type: {:f, 32}, names: [:x, nil]), Nx.tensor([[10, 20]], type: {:f, 32}, names: [nil, :y]))
       #Nx.Tensor<
-        f32[2][2]
+        f32[x: 2][y: 2]
         [
           [1.0, 1.0],
           [2.0, 2.0]
@@ -2021,23 +2015,23 @@ defmodule Nx do
 
   ### bitwise and between tensors and scalars
 
-      iex> Nx.bitwise_and(Nx.tensor([0, 1, 2]), 1)
+      iex> Nx.bitwise_and(Nx.tensor([0, 1, 2], names: [:data]), 1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [0, 1, 0]
       >
 
-      iex> Nx.bitwise_and(Nx.tensor([0, -1, -2]), -1)
+      iex> Nx.bitwise_and(Nx.tensor([0, -1, -2], names: [:data]), -1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [0, -1, -2]
       >
 
   ### bitwise and between tensors
 
-      iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1], names: [:data]), Nx.tensor([0, 1, 0, 1]))
       #Nx.Tensor<
-        s64[4]
+        s64[data: 4]
         [0, 0, 0, 1]
       >
 
@@ -2070,23 +2064,23 @@ defmodule Nx do
 
   ### bitwise or between tensors and scalars
 
-      iex> Nx.bitwise_or(Nx.tensor([0, 1, 2]), 1)
+      iex> Nx.bitwise_or(Nx.tensor([0, 1, 2], names: [:data]), 1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [1, 1, 3]
       >
 
-      iex> Nx.bitwise_or(Nx.tensor([0, -1, -2]), -1)
+      iex> Nx.bitwise_or(Nx.tensor([0, -1, -2], names: [:data]), -1)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [-1, -1, -1]
       >
 
   ### bitwise or between tensors
 
-      iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1], names: [:data]), Nx.tensor([0, 1, 0, 1], names: [:data]))
       #Nx.Tensor<
-        s64[4]
+        s64[data: 4]
         [0, 1, 1, 1]
       >
 
@@ -2119,23 +2113,23 @@ defmodule Nx do
 
   ### Bitwise xor and between tensors and scalars
 
-      iex> Nx.bitwise_xor(Nx.tensor([1, 2, 3]), 2)
+      iex> Nx.bitwise_xor(Nx.tensor([1, 2, 3], names: [:data]), 2)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [3, 0, 1]
       >
 
-      iex> Nx.bitwise_xor(Nx.tensor([-1, -2, -3]), 2)
+      iex> Nx.bitwise_xor(Nx.tensor([-1, -2, -3], names: [:data]), 2)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [-3, -4, -1]
       >
 
   ### Bitwise xor between tensors
 
-      iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1]))
+      iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), Nx.tensor([0, 1, 0, 1], names: [:data]))
       #Nx.Tensor<
-        s64[4]
+        s64[data: 4]
         [0, 1, 1, 0]
       >
 
@@ -2170,17 +2164,17 @@ defmodule Nx do
 
   ### Left shift between tensors and scalars
 
-      iex> Nx.left_shift(Nx.tensor([1, 2, 3]), 2)
+      iex> Nx.left_shift(Nx.tensor([1, 2, 3], names: [:data]), 2)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [4, 8, 12]
       >
 
   ### Left shift between tensors
 
-      iex> Nx.left_shift(Nx.tensor([1, 1, -1, -1]), Nx.tensor([1, 2, 3, 4]))
+      iex> Nx.left_shift(Nx.tensor([1, 1, -1, -1], names: [:data]), Nx.tensor([1, 2, 3, 4], names: [:data]))
       #Nx.Tensor<
-        s64[4]
+        s64[data: 4]
         [2, 4, -8, -16]
       >
 
@@ -2222,17 +2216,17 @@ defmodule Nx do
 
   ### Right shift between tensors and scalars
 
-      iex> Nx.right_shift(Nx.tensor([2, 4, 8]), 2)
+      iex> Nx.right_shift(Nx.tensor([2, 4, 8], names: [:data]), 2)
       #Nx.Tensor<
-        s64[3]
+        s64[data: 3]
         [0, 1, 2]
       >
 
   ### Right shift between tensors
 
-      iex> Nx.right_shift(Nx.tensor([16, 32, -64, -128]), Nx.tensor([1, 2, 3, 4]))
+      iex> Nx.right_shift(Nx.tensor([16, 32, -64, -128], names: [:data]), Nx.tensor([1, 2, 3, 4]))
       #Nx.Tensor<
-        s64[4]
+        s64[data: 4]
         [8, 8, -8, -8]
       >
 
@@ -2267,23 +2261,23 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.equal(1, Nx.tensor([1, 2, 3]))
+    iex> Nx.equal(1, Nx.tensor([1, 2, 3], names: [:data]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [1, 0, 0]
     >
 
   ### Comparison of tensors
 
-    iex> Nx.equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 5]))
+    iex> Nx.equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 5]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [1, 1, 0]
     >
 
-    iex> Nx.equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    iex> Nx.equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, nil]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      u8[2][3]
+      u8[x: 2][3]
       [
         [1, 1, 1],
         [0, 0, 0]
@@ -2312,23 +2306,23 @@ defmodule Nx do
 
   ### Comparison of tensor and scalar
 
-      iex> Nx.not_equal(Nx.tensor([1, 2, 3]), Nx.tensor(1))
+      iex> Nx.not_equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor(1))
       #Nx.Tensor<
-        u8[3]
+        u8[data: 3]
         [0, 1, 1]
       >
 
   ### Comparison of tensors
 
-      iex> Nx.not_equal(Nx.tensor([1, 1, 2]), Nx.tensor([1, 2, 3]))
+      iex> Nx.not_equal(Nx.tensor([1, 1, 2]), Nx.tensor([1, 2, 3], names: [:data]))
       #Nx.Tensor<
-        u8[3]
+        u8[data: 3]
         [0, 1, 1]
       >
 
-      iex> Nx.not_equal(Nx.tensor([[1, 4, 2], [4, 5, 6]]), Nx.tensor([[1, 3, 2], [4, 2, 1]]))
+      iex> Nx.not_equal(Nx.tensor([[1, 4, 2], [4, 5, 6]], names: [:x, :y]), Nx.tensor([[1, 3, 2], [4, 2, 1]], names: [:x, :y]))
       #Nx.Tensor<
-        u8[2][3]
+        u8[x: 2][y: 3]
         [
           [0, 1, 0],
           [0, 1, 1]
@@ -2357,23 +2351,23 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.greater(1, Nx.tensor([1, 2, 3]))
+    iex> Nx.greater(1, Nx.tensor([1, 2, 3], names: [:data]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [0, 0, 0]
     >
 
   ### Comparison of tensors
 
-    iex> Nx.greater(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    iex> Nx.greater(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [0, 0, 1]
     >
 
-    iex> Nx.greater(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    iex> Nx.greater(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      u8[2][3]
+      u8[x: 2][y: 3]
       [
         [0, 0, 0],
         [1, 1, 1]
@@ -2402,23 +2396,23 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.less(1, Nx.tensor([1, 2, 3]))
+    iex> Nx.less(1, Nx.tensor([1, 2, 3], names: [:data]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [0, 1, 1]
     >
 
   ### Comparison of tensors
 
-    iex> Nx.less(Nx.tensor([1, 2, 1]), Nx.tensor([1, 2, 2]))
+    iex> Nx.less(Nx.tensor([1, 2, 1]), Nx.tensor([1, 2, 2], names: [:data]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [0, 0, 1]
     >
 
-    iex> Nx.less(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]]), Nx.tensor([1, 2, 3]))
+    iex> Nx.less(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      u8[2][3]
+      u8[x: 2][y: 3]
       [
         [0, 0, 0],
         [0, 0, 1]
@@ -2447,23 +2441,23 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.greater_equal(1, Nx.tensor([1, 2, 3]))
+    iex> Nx.greater_equal(1, Nx.tensor([1, 2, 3], names: [:data]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [1, 0, 0]
     >
 
   ### Comparison of tensors
 
-    iex> Nx.greater_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    iex> Nx.greater_equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [1, 1, 1]
     >
 
-    iex> Nx.greater_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    iex> Nx.greater_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
     #Nx.Tensor<
-      u8[2][3]
+      u8[x: 2][y: 3]
       [
         [1, 1, 1],
         [1, 1, 1]
@@ -2492,23 +2486,23 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.less_equal(1, Nx.tensor([1, 2, 3]))
+    iex> Nx.less_equal(1, Nx.tensor([1, 2, 3], names: [:data]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [1, 1, 1]
     >
 
   ### Comparison of tensors
 
-    iex> Nx.less_equal(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 2]))
+    iex> Nx.less_equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
     #Nx.Tensor<
-      u8[3]
+      u8[data: 3]
       [1, 1, 0]
     >
 
-    iex> Nx.less_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3]))
+    iex> Nx.less_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3], names: [:y]))
     #Nx.Tensor<
-      u8[2][3]
+      u8[2][y: 3]
       [
         [1, 1, 1],
         [0, 0, 0]
@@ -2579,14 +2573,14 @@ defmodule Nx do
     output_type = binary_type(on_true, on_false)
 
     %T{shape: pred_shape} = pred = tensor(pred)
-    %T{shape: true_shape} = on_true = tensor(on_true)
-    %T{shape: false_shape} = on_false = tensor(on_false)
+    %T{shape: true_shape, names: true_names} = on_true = tensor(on_true)
+    %T{shape: false_shape, names: false_names} = on_false = tensor(on_false)
 
     output_shape =
       case pred_shape do
         {} ->
-          Nx.Shape.binary_broadcast(true_shape, false_shape)
-
+          {shape, _} = Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+          shape
         _ ->
           pred_shape
       end
