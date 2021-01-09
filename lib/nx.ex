@@ -2581,6 +2581,7 @@ defmodule Nx do
         {} ->
           {shape, _} = Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
           shape
+
         _ ->
           pred_shape
       end

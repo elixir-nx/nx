@@ -24,7 +24,8 @@ defmodule Nx.Shape do
       names =
         if n_dims == 0,
           do: [],
-          else: for _ <- 0..n_dims - 1, do: nil
+          else: for(_ <- 0..(n_dims - 1), do: nil)
+
       names
     end
   end
@@ -150,8 +151,16 @@ defmodule Nx.Shape do
     right_rank = tuple_size(right_shape)
     rank = max(left_rank, right_rank)
 
-    left_lower_and_names = shape_and_names_to_lower_ranked_list(left_shape, Enum.reverse(left_names), left_rank, rank)
-    right_lower_and_names = shape_and_names_to_lower_ranked_list(right_shape, Enum.reverse(right_names), right_rank, rank)
+    left_lower_and_names =
+      shape_and_names_to_lower_ranked_list(left_shape, Enum.reverse(left_names), left_rank, rank)
+
+    right_lower_and_names =
+      shape_and_names_to_lower_ranked_list(
+        right_shape,
+        Enum.reverse(right_names),
+        right_rank,
+        rank
+      )
 
     {left_lower, left_names} = Enum.unzip(left_lower_and_names)
     {right_lower, right_names} = Enum.unzip(right_lower_and_names)
@@ -167,9 +176,19 @@ defmodule Nx.Shape do
     end
   end
 
-  defp binary_broadcast([ldim | ldims], [lname | lnames], [rdim | rdims], [rname | rnames], shape_acc, names_acc)
+  defp binary_broadcast(
+         [ldim | ldims],
+         [lname | lnames],
+         [rdim | rdims],
+         [rname | rnames],
+         shape_acc,
+         names_acc
+       )
        when rdim == 1 or ldim == 1 or rdim == ldim,
-       do: binary_broadcast(ldims, lnames, rdims, rnames, [max(rdim, ldim) | shape_acc], [merge_names!(lname, rname) | names_acc])
+       do:
+         binary_broadcast(ldims, lnames, rdims, rnames, [max(rdim, ldim) | shape_acc], [
+           merge_names!(lname, rname) | names_acc
+         ])
 
   defp binary_broadcast([], [], [], [], shape_acc, names_acc),
     do: {:ok, List.to_tuple(shape_acc), names_acc}
@@ -184,7 +203,10 @@ defmodule Nx.Shape do
     do: [{1, nil} | shape_and_names_to_lower_ranked_list(tuple, [], 0, rank - 1)]
 
   defp shape_and_names_to_lower_ranked_list(tuple, [n | names], size, rank),
-    do: [{:erlang.element(size, tuple), n} | shape_and_names_to_lower_ranked_list(tuple, names, size - 1, rank - 1)]
+    do: [
+      {:erlang.element(size, tuple), n}
+      | shape_and_names_to_lower_ranked_list(tuple, names, size - 1, rank - 1)
+    ]
 
   @doc """
   Contracts a shape along the given axes.
@@ -658,5 +680,7 @@ defmodule Nx.Shape do
   defp merge_names!(nil, name) when is_atom(name), do: name
   defp merge_names!(name, nil) when is_atom(name), do: name
   defp merge_names!(name, name) when is_atom(name), do: name
-  defp merge_names!(lhs, rhs), do: raise ArgumentError, "cannot merge names #{inspect(lhs)}, #{inspect(rhs)}"
+
+  defp merge_names!(lhs, rhs),
+    do: raise(ArgumentError, "cannot merge names #{inspect(lhs)}, #{inspect(rhs)}")
 end
