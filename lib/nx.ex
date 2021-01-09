@@ -3439,13 +3439,8 @@ defmodule Nx do
     # TODO: reduce names rule
     names = Nx.Shape.check_names!(nil, shape)
 
-    impl!(tensor).reduce(
-      %{tensor | type: type, shape: shape, names: names},
-      tensor,
-      acc,
-      [axes: axes],
-      fun
-    )
+    out = %{tensor | type: type, shape: shape, names: names}
+    impl!(tensor).reduce(out, tensor, acc, [axes: axes], fun)
   end
 
   ## Matrix ops
