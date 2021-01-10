@@ -1274,6 +1274,33 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "slicing" do
+    defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 7, 5])
+    defn slice2(t), do: Nx.slice(t, [1, 4, 10], [2, 5, 20], [1, 2, 3])
+    defn slice3(t), do: Nx.slice(t, [0, 4, 11], [2, 7, 20], [2, 1, 3])
+
+    test "works without stride" do
+      t = Nx.iota({900})
+      t = Nx.reshape(t, {2, 15, 30})
+      assert slice1(t) == Nx.tensor([[[182, 183, 184]], [[632, 633, 634]]])
+    end
+
+    test "works with stride" do
+      t = Nx.iota({900})
+      t = Nx.reshape(t, {2, 15, 30})
+      assert slice2(t) == Nx.tensor([[[580, 583, 586, 589]]])
+      assert slice3(t) ==
+        Nx.tensor(
+          [
+            [
+              [131, 134, 137],
+              [161, 164, 167],
+              [191, 194, 197]
+            ]
+          ])
+    end
+  end
+
   describe "bfloat16" do
     defn add(t1, t2), do: t1 + t2
 

@@ -710,6 +710,22 @@ defmodule Nx.Shape do
     for {1, i} <- Enum.with_index(Tuple.to_list(shape)), do: i
   end
 
+  @doc """
+  Returns the shape after a slice.
+
+  ## Examples
+
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [2, 5, 20], [1, 2, 3])
+      {1, 1, 4}
+  """
+  def slice(_, start_indices, limit_indices, strides) do
+    limit_indices
+    |> Enum.zip(start_indices)
+    |> Enum.zip(strides)
+    |> Enum.map(fn {{hi, lo}, s} -> Kernel.ceil((hi - lo) / s) end)
+    |> List.to_tuple()
+  end
+
   ## Helpers
 
   defp count_up(0, _n), do: []

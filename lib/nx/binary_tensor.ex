@@ -1065,6 +1065,32 @@ defmodule Nx.BinaryTensor do
     from_binary(out, out_data)
   end
 
+  @doc false
+  def slice(out, tensor, start_indices, _limit_indices, strides) do
+    # If you think of a slice as drawing a bounding box in the dimensions
+    # of the tensor, then it's clear we can simply use a weighted
+    # traversal to construct the new tensor
+    %T{type: {_, size}, shape: shape} = tensor
+    %{shape: output_shape} = out
+
+    # Anchored around the start indices
+    anchor = List.to_tuple(start_indices)
+    weighted_shape = weighted_shape(shape, size, output_shape)
+    offset = weighted_offset(weighted_shape, anchor)
+
+    # The weighted shape is altered such that we traverse
+    # with respect to the stride for each dimension
+    weighted_shape =
+      weighted_shape
+      |> Enum.zip(strides)
+      |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + ((s - 1) * size)} end)
+
+    input_data = to_binary(tensor)
+    output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
+
+    from_binary(out, output_data)
+  end
+
   ## Binary reducers
 
   defp bin_reduce(out, tensor, acc, opts, fun) do
