@@ -4170,7 +4170,12 @@ defmodule Nx do
   end
 
   @doc """
-  Slice tensor.
+  Slices a tensor from `start_indices` to `limit_indices`.
+  You can optionally provide a `stride` to specify the amount
+  of stride in each dimension.
+
+  Both start indices and limit indices must match the rank
+  of the input tensor shape.
 
   ### Examples
 
