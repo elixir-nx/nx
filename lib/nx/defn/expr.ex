@@ -222,8 +222,8 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def clamp(out, operand, min, max) do
-    expr(out, :clamp, [to_expr(operand), to_expr(min), to_expr(max)])
+  def clip(out, operand, min, max) do
+    expr(out, :clip, [to_expr(operand), to_expr(min), to_expr(max)])
   end
 
   ## Helpers

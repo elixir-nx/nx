@@ -1042,7 +1042,7 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def clamp(out, tensor, min, max) do
+  def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor
     %T{type: min_type} = min

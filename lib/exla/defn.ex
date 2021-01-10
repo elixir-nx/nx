@@ -296,7 +296,7 @@ defmodule Exla.Defn do
     apply(Exla.Lib, op, [state.builder, arg, [type: ans.type] ++ opts])
   end
 
-  defp to_operator(:clamp, [operand, min, max], ans, _state) do
+  defp to_operator(:clip, [operand, min, max], ans, _state) do
     min = to_type(min, ans.type)
     max = to_type(max, ans.type)
     operand = to_type(operand, ans.type)

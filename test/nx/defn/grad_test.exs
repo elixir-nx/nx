@@ -661,11 +661,11 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  describe "clamp" do
-    defn grad_sum_clamp(t), do: grad(t, Nx.sum(Nx.clamp(t, min: Nx.tensor(1.0), max: Nx.tensor(4.0))))
+  describe "clip" do
+    defn grad_sum_clip(t), do: grad(t, Nx.sum(Nx.clip(t, Nx.tensor(1.0), Nx.tensor(4.0))))
 
     test "computes gradient with sum" do
-      assert grad_sum_clamp(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+      assert grad_sum_clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
           Nx.tensor([[0.0, 1.0, 1.0], [0.0, 0.0, 0.0]])
     end
   end

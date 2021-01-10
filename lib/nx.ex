@@ -4100,34 +4100,15 @@ defmodule Nx do
   end
 
   @doc """
-  Clamps the values of the tensor on the closed
-  interval `[min, max]` from the options `:min`
-  and `:max`.
+  Clips the values of the tensor on the closed
+  interval `[min, max]`.
 
-  You can pass a tensor to `:min` or `:max` as long
+  You can pass a tensor to `min` or `max` as long
   as the tensor has a scalar shape.
 
   ### Examples
 
-      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: 2)
-      #Nx.Tensor<
-        s64[x: 2][y: 3]
-        [
-          [2, 2, 3],
-          [4, 5, 6]
-        ]
-      >
-
-      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), max: 4)
-      #Nx.Tensor<
-        s64[x: 2][y: 3]
-        [
-          [1, 2, 3],
-          [4, 4, 4]
-        ]
-      >
-
-      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: 2, max: 4)
+      iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), 2, 4)
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -4136,7 +4117,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: 2.0, max: 3)
+      iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), 2.0, 3)
       #Nx.Tensor<
         f64[x: 2][y: 3]
         [
@@ -4145,7 +4126,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: Nx.tensor(2.0), max: Nx.max(1.0, 3.0))
+      iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), Nx.tensor(2.0), Nx.max(1.0, 3.0))
       #Nx.Tensor<
         f64[x: 2][y: 3]
         [
@@ -4154,7 +4135,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.clamp(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), min: 2)
+      iex> Nx.clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), 2, 6.0)
       #Nx.Tensor<
         f64[x: 2][y: 3]
         [
@@ -4163,7 +4144,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.clamp(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32}, names: [:x, :y]), max: 4)
+      iex> Nx.clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32}, names: [:x, :y]), 1, 4)
       #Nx.Tensor<
         f64[x: 2][y: 3]
         [
@@ -4172,31 +4153,21 @@ defmodule Nx do
         ]
       >
   """
-  def clamp(tensor, opts \\ []) do
-    assert_keys!(opts, [:min, :max])
-
+  def clip(tensor, min, max) do
     %T{type: type} = tensor = tensor(tensor)
+    %T{type: min_type} = min = tensor(min)
+    %T{type: max_type} = max = tensor(max)
 
-    {min_value, max_value} =
-      match_types [type] do
-        <<match!(min_value, 0)>> = Nx.Type.min_value_binary(type)
-        <<match!(max_value, 0)>> = Nx.Type.max_value_binary(type)
-        {opts[:min] || read!(min_value, 0), opts[:max] || read!(max_value, 0)}
-      end
-
-    min_value_tensor = tensor(min_value)
-    max_value_tensor = tensor(max_value)
-
-    if min_value_tensor.shape != {} do
-      raise ArgumentError, "min value must be a scalar shape, got: #{min_value_tensor.shape}"
+    if min.shape != {} do
+      raise ArgumentError, "min value must be a scalar shape, got: #{min.shape}"
     end
 
-    if max_value_tensor.shape != {} do
-      raise ArgumentError, "max value must be a scalar shape, got: #{max_value_tensor.shape}"
+    if max.shape != {} do
+      raise ArgumentError, "max value must be a scalar shape, got: #{max.shape}"
     end
 
-    output_type = Nx.Type.merge(tensor.type, binary_type(min_value, max_value))
-    impl!(tensor).clamp(%{tensor | type: output_type}, tensor, min_value_tensor, max_value_tensor)
+    output_type = Nx.Type.merge(type, Nx.Type.merge(min_type, max_type))
+    impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
   end
 
   ## Type

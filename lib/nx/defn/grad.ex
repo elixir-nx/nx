@@ -149,7 +149,7 @@ defmodule Nx.Defn.Grad do
     {maybe_add(dx, dy), cache}
   end
 
-  defp grad(:clamp, [operand, min, max], _ans, g, cache) do
+  defp grad(:clip, [operand, min, max], _ans, g, cache) do
     
     # w.r.t min
     w_min =

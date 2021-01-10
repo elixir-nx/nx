@@ -1223,49 +1223,28 @@ defmodule Exla.DefnTest do
     end
   end
 
-  describe "clamp" do
-    defn clamp_only_min(value), do: Nx.clamp(value, min: 2)
-    defn clamp_only_max(value), do: Nx.clamp(value, max: 4)
-    defn clamp_both(value), do: Nx.clamp(value, min: 2, max: 4)
-    defn clamp_mixed_types(value), do: Nx.clamp(value, min: 2.0, max: 3)
-    defn clamp_with_tensor(value), do: Nx.clamp(value, min: Nx.tensor(2.0), max: Nx.max(1.0, 3.0))
-
-    test "works with only min set" do
-      assert clamp_only_min(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-               Nx.tensor([[2, 2, 3], [4, 5, 6]])
-    end
-
-    test "works with only max set" do
-      assert clamp_only_max(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-               Nx.tensor([[1, 2, 3], [4, 4, 4]])
-    end
+  describe "clip" do
+    defn clip_both(value), do: Nx.clip(value, 2, 4)
+    defn clip_mixed_types(value), do: Nx.clip(value, 2.0, 3)
+    defn clip_with_tensor(value), do: Nx.clip(value, Nx.tensor(2.0), Nx.max(1.0, 3.0))
 
     test "works with both set" do
-      assert clamp_both(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 2, 3], [4, 4, 4]])
+      assert clip_both(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 2, 3], [4, 4, 4]])
     end
 
     test "works with mxied types" do
-      assert clamp_mixed_types(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+      assert clip_mixed_types(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
                Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
     end
 
     test "works with tensor min/max" do
-      assert clamp_with_tensor(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+      assert clip_with_tensor(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
                Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
     end
 
     test "works with floating point" do
-      assert clamp_only_min(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
-               Nx.tensor([[2.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-
-      assert clamp_only_max(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
-               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
-
-      assert clamp_only_min(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32})) ==
-               Nx.tensor([[2.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-
-      assert clamp_only_max(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32})) ==
-               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
+      assert clip_both(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
     end
   end
 
