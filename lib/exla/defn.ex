@@ -15,7 +15,7 @@ defmodule Exla.Defn do
     {client_name, options} = Keyword.pop(options, :client, :default)
     cache_key = {module, name, arity, cache_args, client_name}
 
-    executable =
+    {executable, holes} =
       Exla.LockedCache.run(cache_key, fn ->
         builder = Exla.Builder.new("#{name}/#{arity}")
 
@@ -30,9 +30,10 @@ defmodule Exla.Defn do
           params: params
         }
 
+        expr = apply(fun, vars)
+
         computation =
-          fun
-          |> apply(vars)
+          expr
           |> to_result(state, %{})
           |> elem(0)
           |> Exla.Builder.build()
@@ -40,13 +41,19 @@ defmodule Exla.Defn do
         client = Exla.Client.fetch!(client_name)
         executable = Exla.Client.compile(client, computation, Enum.map(buffers, & &1.shape))
         :persistent_term.put(cache_key, executable)
-        executable
+        {executable, holes(expr)}
       end)
 
     executable
     |> Exla.Executable.run(buffers, options)
-    |> buffer_to_nx()
+    |> buffer_to_nx(holes)
   end
+
+  defp holes(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.map(&holes/1)
+
+  defp holes(%T{} = t),
+    do: %{t | data: nil}
 
   defp to_result(tuple, state, cache) when is_tuple(tuple) do
     {elements, cache} =
@@ -351,36 +358,41 @@ defmodule Exla.Defn do
 
   ## Nx <-> Exla.Buffer
 
-  defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
-    # TODO: propagate expected output names from Nx to EXLA
-    data
-    |> Nx.from_binary(to_nx_type(shape.dtype))
-    |> Map.replace!(:shape, shape.dims)
-    |> Map.replace!(:names, List.duplicate(nil, tuple_size(shape.dims)))
+  defp buffer_to_nx(%Exla.Buffer{shape: shape} = buffer, hole) do
+    nx_type = to_nx_type(shape.dtype)
+    nx_shape = shape.dims
+
+    if hole.type != nx_type do
+      raise "internal bug! Nx.Defn expected a tensor with type #{hole.type} " <>
+              "but got #{inspect(nx_type)}"
+    end
+
+    if hole.shape != nx_shape do
+      raise "internal bug! Nx.Defn expected a tensor with shape #{hole.shape} " <>
+              "but got #{inspect(nx_shape)}"
+    end
+
+    %{hole | data: buffer_to_data(buffer)}
   end
 
-  defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
-    %Nx.Tensor{
-      data: %Nx.BinaryTensor{device: Exla.NxDevice, state: ref},
-      type: to_nx_type(shape.dtype),
-      shape: shape.dims,
-      names: List.duplicate(nil, tuple_size(shape.dims))
-    }
+  defp buffer_to_nx({:tuple, buffers}, holes) do
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    buffers
+    |> Enum.zip(holes)
+    |> Enum.map(fn {buffer, hole} -> buffer_to_nx(buffer, hole) end)
+    |> List.to_tuple()
   end
 
-  defp buffer_to_nx({:tuple, buffers}) do
-    List.to_tuple(Enum.map(buffers, &buffer_to_nx/1))
-  end
+  defp buffer_to_data(%Exla.Buffer{ref: ref, data: nil}),
+    do: %Nx.BinaryTensor{device: Exla.NxDevice, state: ref}
 
-  defp buffer_to_nx(other) do
-    raise "invalid defn return type, make sure defn returns a tuple or a tensor, " <>
-            "got: #{inspect(other)}"
-  end
+  defp buffer_to_data(%Exla.Buffer{ref: nil, data: data}),
+    do: %Nx.BinaryTensor{device: Nx.BinaryDevice, state: data}
 
   defp to_nx_type({:pred, 8}), do: {:u, 8}
   defp to_nx_type(type), do: type
 
-  defp nx_to_buffer(%Nx.Tensor{data: data, type: type, shape: shape} = tensor) do
+  defp nx_to_buffer(%T{data: data, type: type, shape: shape} = tensor) do
     case data do
       %Nx.BinaryTensor{device: Exla.NxDevice, state: state} ->
         Exla.Buffer.buffer(state, Exla.Shape.make_shape(type, shape))
@@ -390,5 +402,5 @@ defmodule Exla.Defn do
     end
   end
 
-  defp nx_to_cache_key!(%Nx.Tensor{} = t), do: {t.type, t.shape}
+  defp nx_to_cache_key!(%T{type: type, shape: shape, names: names}), do: {type, shape, names}
 end

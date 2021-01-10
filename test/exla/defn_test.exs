@@ -152,6 +152,12 @@ defmodule Exla.DefnTest do
         compare_tensors!(add_two(right, left), add_two_nx(right, left))
       end
     end
+
+    test "names" do
+      left = Nx.tensor([[10, 20]], names: [nil, :tens])
+      right = Nx.tensor([[1], [2]], names: [:ones, nil])
+      assert add_two(left, right).names == [:ones, :tens]
+    end
   end
 
   describe "//2" do

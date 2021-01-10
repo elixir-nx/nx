@@ -708,6 +708,7 @@ defmodule Nx.BinaryTensor do
   end
 
   defp shape_to_algebra(dims, names, open, close) do
+    # TODO: Use Enum.zip_with on Elixir v1.12
     dims
     |> Enum.zip(names)
     |> Enum.map(fn
@@ -885,6 +886,7 @@ defmodule Nx.BinaryTensor do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
+    # TODO: Use Elixir Enum.zip_with on Elixir v1.12
     spatial_padding_config =
       padding
       |> Enum.zip(Tuple.to_list(input_dilation))

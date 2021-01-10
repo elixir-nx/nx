@@ -102,6 +102,7 @@ defmodule Exla.Executable do
       | dims: Tuple.insert_at(output_shape.dims, 0, num_replicas * num_partitions)
     }
 
+    # TODO: Use Enum.zip_with on Elixir v1.12
     inputs =
       arguments
       |> Enum.map(& &1.buffers)
