@@ -184,6 +184,9 @@ defmodule Exla.NIF do
   def convert_element_type(_operand, _type),
     do: nif_error(__ENV__.function)
 
+  def clamp(_operand, _min, _max),
+    do: nif_error(__ENV__.function)
+
   def constant_r0(_builder, _value, _type),
     do: nif_error(__ENV__.function)
 

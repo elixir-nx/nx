@@ -4086,6 +4086,87 @@ defmodule Nx do
     )
   end
 
+  @doc """
+  Clamps the values of the tensor on the closed
+  interval `[min, max]` from the options `:min`
+  and `:max`.
+
+  You can pass a tensor to `:min` or `:max` as long
+  as the tensor has a scalar shape.
+
+  ### Examples
+
+      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: 2)
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [2, 2, 3],
+          [4, 5, 6]
+        ]
+      >
+
+      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), max: 4)
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [1, 2, 3],
+          [4, 4, 4]
+        ]
+      >
+
+      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: 2, max: 4)
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [2, 2, 3],
+          [4, 4, 4]
+        ]
+      >
+
+      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: 2.0, max: 3)
+      #Nx.Tensor<
+        f64[x: 2][y: 3]
+        [
+          [2.0, 2.0, 3.0],
+          [3.0, 3.0, 3.0]
+        ]
+      >
+
+      iex> Nx.clamp(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), min: Nx.tensor(2.0), max: Nx.max(1.0, 3.0))
+      #Nx.Tensor<
+        f64[x: 2][y: 3]
+        [
+          [2.0, 2.0, 3.0],
+          [3.0, 3.0, 3.0]
+        ]
+      >
+  """
+  def clamp(tensor, opts \\ []) do
+    assert_keys!(opts, [:min, :max])
+
+    %T{type: type} = tensor = tensor(tensor)
+    {min_value, max_value} =
+      match_types [type] do
+        <<match!(min_value, 0)>> = Nx.Type.min_value_binary(type)
+        <<match!(max_value, 0)>> = Nx.Type.max_value_binary(type)
+        {opts[:min] || read!(min_value, 0), opts[:max] || read!(max_value, 0)}
+      end
+
+    min_value_tensor = tensor(min_value)
+    max_value_tensor = tensor(max_value)
+
+    if min_value_tensor.shape != {} do
+      raise ArgumentError, "min value must be a scalar shape, got: #{min_value_tensor.shape}"
+    end
+
+    if max_value_tensor.shape != {} do
+      raise ArgumentError, "max value must be a scalar shape, got: #{max_value_tensor.shape}"
+    end
+
+    output_type = Nx.Type.merge(tensor.type, binary_type(min_value, max_value))
+    impl!(tensor).clamp(%{tensor | type: output_type}, tensor, min_value_tensor, max_value_tensor)
+  end
+
   ## Type
 
   defp binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)

@@ -363,6 +363,30 @@ ERL_NIF_TERM select(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM clamp(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* min;
+  xla::XlaOp* max;
+
+  if (!exla::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::error(env, "Unable to get operand.");
+  }
+  if (!exla::get<xla::XlaOp>(env, argv[1], min)) {
+    return exla::error(env, "Unable to get min value.");
+  }
+  if (!exla::get<xla::XlaOp>(env, argv[2], max)) {
+    return exla::error(env, "Unable to get max value");
+  }
+
+  xla::XlaOp op = xla::Clamp(*min, *operand, *max);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 /************************ Slicing Ops *****************************/
 ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
@@ -1526,6 +1550,7 @@ static ErlNifFunc exla_funcs[] = {
   {"pad", 3, pad},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
+  {"clamp", 3, clamp},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},

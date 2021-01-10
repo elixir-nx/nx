@@ -296,6 +296,14 @@ defmodule Exla.Defn do
     apply(Exla.Lib, op, [state.builder, arg, [type: ans.type] ++ opts])
   end
 
+  defp to_operator(:clamp, [operand, min, max], ans, _state) do
+    min = to_type(min, ans.type)
+    max = to_type(max, ans.type)
+    operand = to_type(operand, ans.type)
+
+    Exla.Op.clamp(operand, min, max)
+  end
+
   ## Computation helpers
 
   defp to_computation(%T{data: %Expr{op: :fun, args: [name, args, expr, _]}} = ans, state) do
