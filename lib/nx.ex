@@ -823,6 +823,11 @@ defmodule Nx do
   The default broadcasting implementation copies the data in
   memory to match the new dimensions.
 
+  Broadcasting is destructive with respect to names. Broadcasting
+  without specifying axes will set each dimension to `nil`, unless
+  you specify a tensor to broadcast to. In that case, the resulting
+  tensor will take names from the tensor it is broadcasting to.
+
   ## Examples
 
       iex> Nx.broadcast(1, {1, 2, 3})
@@ -836,18 +841,18 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.broadcast(Nx.tensor([[1], [2]]), Nx.tensor([[10, 20], [30, 40]]))
+      iex> Nx.broadcast(Nx.tensor([[1], [2]], names: [:x, :y]), Nx.tensor([[10, 20], [30, 40]], names: [:i, :j]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[i: 2][j: 2]
         [
           [1, 1],
           [2, 2]
         ]
       >
 
-      iex> Nx.broadcast(Nx.tensor([[1, 2]]), Nx.tensor([[10, 20], [30, 40]]))
+      iex> Nx.broadcast(Nx.tensor([[1, 2]], names: [:x, :y]), Nx.tensor([[10, 20], [30, 40]], names: [:i, :j]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[i: 2][j: 2]
         [
           [1, 2],
           [1, 2]
@@ -857,12 +862,13 @@ defmodule Nx do
   """
   def broadcast(tensor, broadcast_shape) do
     tensor = tensor(tensor)
+    names = names!(broadcast_shape)
     broadcast_shape = shape(broadcast_shape)
 
     if tensor.shape == broadcast_shape do
       tensor
     else
-      broadcast(tensor, broadcast_shape, Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape))
+      broadcast(tensor, broadcast_shape, Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape), names: names)
     end
   end
 
@@ -885,6 +891,11 @@ defmodule Nx do
   The default broadcasting implementation copies the data in
   memory to match the new dimensions.
 
+  Broadcasting is destructive with respect to names. You can
+  optionally provide new `:names` for the new tensor. If you
+  pass a tensor with named dimensions, the new tensor will
+  inherit names from that tensor.
+
   ## Examples
 
   Using the default broadcast rules, we cannot broadcast a
@@ -893,9 +904,9 @@ defmodule Nx do
   configure how the dimensions match:
 
       iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.broadcast(t, {3, 2}, [0])
+      iex> Nx.broadcast(t, {3, 2}, [0], names: [:x, :y])
       #Nx.Tensor<
-        s64[3][2]
+        s64[x: 3][y: 2]
         [
           [1, 1],
           [2, 2],
@@ -906,9 +917,9 @@ defmodule Nx do
   Or a more complex example:
 
       iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.broadcast(t, {2, 3, 2}, [1])
+      iex> Nx.broadcast(t, {2, 3, 2}, [1], names: [:x, :y, :z])
       #Nx.Tensor<
-        s64[2][3][2]
+        s64[x: 2][y: 3][z: 2]
         [
           [
             [1, 1],
@@ -924,17 +935,17 @@ defmodule Nx do
       >
 
   """
-  def broadcast(tensor, shape, axes) do
+  def broadcast(tensor, shape, axes, opts \\ []) do
     %T{names: names} = tensor = tensor(tensor)
 
+    broadcast_names = opts[:names] || names!(shape)
     shape = shape(shape)
     axes = Nx.Shape.normalize_axes(shape, axes, names)
     _ = Nx.Shape.broadcast!(tensor.shape, shape, axes)
 
-    # TODO: Same name rule as reshape?
-    names = Nx.Shape.check_names!(nil, shape)
+    broadcast_names = Nx.Shape.check_names!(broadcast_names, shape)
 
-    impl!(tensor).broadcast(%{tensor | names: names, shape: shape}, tensor, shape, axes)
+    impl!(tensor).broadcast(%{tensor | names: broadcast_names, shape: shape}, tensor, shape, axes)
   end
 
   @doc """
