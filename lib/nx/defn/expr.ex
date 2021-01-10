@@ -106,23 +106,10 @@ defmodule Nx.Defn.Expr do
 
   ## Creation ops
 
-  # TODO: Find a way to share the creation logic with Nx.BinaryTensor
-
   @doc false
   def iota(shape, opts \\ []) do
-    assert_keys!(opts, [:type, :axis])
-    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    opts = Keyword.put(opts, :type, type)
-    shape = Nx.shape(shape)
-
-    opts =
-      if axis = opts[:axis] do
-        Keyword.put(opts, :axis, Nx.Shape.normalize_axis(shape, axis))
-      else
-        opts
-      end
-
-    %T{type: type, shape: shape} |> expr(:iota, [shape, opts])
+    {out, axis} = iota_out(shape, opts)
+    expr(out, :iota, [axis])
   end
 
   @doc false
@@ -131,12 +118,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def random_uniform(shape, min, max, opts \\ []) when is_number(min) and is_number(max) do
-    assert_keys!(opts, [:type])
-    shape = Nx.shape(shape)
-    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
-    opts = Keyword.put(opts, :type, type)
-    %T{shape: shape, type: type} |> expr(:random_uniform, [shape, min, max, opts])
+  def random_uniform(tensor_or_shape, min, max, opts \\ [])
+      when is_number(min) and is_number(max) do
+    out = random_uniform_out(tensor_or_shape, min, max, opts)
+    expr(out, :random_uniform, [min, max])
   end
 
   @doc false
@@ -145,12 +130,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def random_normal(shape, mu, sigma, opts \\ []) when is_float(mu) and is_float(sigma) do
-    assert_keys!(opts, [:type])
-    shape = Nx.shape(shape)
-    type = Nx.Type.normalize!(opts[:type] || {:f, 64})
-    opts = Keyword.put(opts, :type, type)
-    %T{shape: shape, type: type} |> expr(:random_normal, [shape, mu, sigma, opts])
+  def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
+      when is_float(mu) and is_float(sigma) do
+    out = random_normal_out(tensor_or_shape, opts)
+    expr(out, :random_normal, [mu, sigma])
   end
 
   @doc false

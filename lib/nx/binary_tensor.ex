@@ -87,6 +87,15 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
+  def iota(%{shape: {}, type: type} = out, nil) do
+    from_binary(out, number_to_binary(0, type))
+  end
+
+  def iota(%{shape: shape, type: type} = out, nil) do
+    t = iota(%T{type: type, shape: {Nx.size(shape)}}, 0)
+    %{out | data: t.data}
+  end
+
   def iota(%{shape: {n}, type: type} = out, 0) do
     data = for i <- 0..(n - 1), do: number_to_binary(i, type)
     from_binary(out, data)

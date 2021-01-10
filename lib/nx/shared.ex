@@ -4,6 +4,8 @@ defmodule Nx.Shared do
 
   alias Nx.Tensor, as: T
 
+  ## Macros
+
   @doc """
   Match the cartesian product of all given types.
 
@@ -132,6 +134,8 @@ defmodule Nx.Shared do
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
+  ## Reflection
+
   @doc """
   Returns the definition of mathemtical unary funs.
   """
@@ -150,10 +154,45 @@ defmodule Nx.Shared do
       cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))}
     ]
 
+  ## Creation ops
+
+  def iota_out(tensor_or_shape, opts) do
+    assert_keys!(opts, [:type, :axis, :names])
+    shape = Nx.shape(tensor_or_shape)
+    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
+    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+
+    if axis = opts[:axis] do
+      axis = Nx.Shape.normalize_axis(shape, axis)
+      {%T{type: type, shape: shape, names: names}, axis}
+    else
+      {%T{type: type, shape: shape, names: names}, nil}
+    end
+  end
+
+  def random_uniform_out(tensor_or_shape, min, max, opts) do
+    assert_keys!(opts, [:type, :names])
+    shape = Nx.shape(tensor_or_shape)
+    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
+    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
+    %T{shape: shape, type: type, names: names}
+  end
+
+  def random_normal_out(tensor_or_shape, opts \\ []) do
+    assert_keys!(opts, [:type, :names])
+    shape = Nx.shape(tensor_or_shape)
+    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
+    type = Nx.Type.normalize!(opts[:type] || {:f, 64})
+    %T{shape: shape, type: type, names: names}
+  end
+
+  ## Helpers
+
   @doc """
-  Returns the name of creation funs.
+  Returns the names of a tensor, if any.
   """
-  def creation_funs, do: [:iota, :random_normal, :random_uniform]
+  def names!(%T{names: names}), do: names
+  def names!(_), do: nil
 
   @doc """
   Asserts the given keys.

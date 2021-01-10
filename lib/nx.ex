@@ -403,11 +403,8 @@ defmodule Nx do
   """
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
-    assert_keys!(opts, [:type, :names])
-    shape = shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
-    Nx.BinaryTensor.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
+    out = random_uniform_out(tensor_or_shape, min, max, opts)
+    Nx.BinaryTensor.random_uniform(out, min, max)
   end
 
   @doc """
@@ -489,11 +486,8 @@ defmodule Nx do
   """
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
-    assert_keys!(opts, [:type, :names])
-    shape = shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || {:f, 64})
-    Nx.BinaryTensor.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
+    out = random_normal_out(tensor_or_shape, opts)
+    Nx.BinaryTensor.random_normal(out, mu, sigma)
   end
 
   @doc """
@@ -595,24 +589,9 @@ defmodule Nx do
         ]
       >
   """
-  def iota(tensor_or_shape, opts \\ [])
-
-  def iota({}, opts), do: tensor(0, opts)
-
-  def iota(tensor_or_shape, opts) do
-    assert_keys!(opts, [:type, :axis, :names])
-    shape = shape(tensor_or_shape)
-    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
-
-    if axis = opts[:axis] do
-      axis = Nx.Shape.normalize_axis(shape, axis)
-      Nx.BinaryTensor.iota(%T{type: type, shape: shape, names: names}, axis)
-    else
-      %T{type: type, shape: {Nx.size(shape)}, names: names}
-      |> Nx.BinaryTensor.iota(0)
-      |> Map.replace!(:shape, shape)
-    end
+  def iota(tensor_or_shape, opts \\ []) do
+    {out, axis} = iota_out(tensor_or_shape, opts)
+    Nx.BinaryTensor.iota(out, axis)
   end
 
   @doc """
@@ -4106,9 +4085,4 @@ defmodule Nx do
   defp binary_type(a, b) when is_number(a), do: Nx.Type.merge_scalar(b.type, a)
   defp binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(a.type, b)
   defp binary_type(a, b), do: Nx.Type.merge(a.type, b.type)
-
-  ## Names
-
-  defp names!(%T{names: names}), do: names
-  defp names!(_), do: nil
 end

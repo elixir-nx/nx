@@ -6,19 +6,19 @@ defmodule Exla.Lib do
   alias Exla.{Builder, Op, Shape}
 
   @doc """
-  Builds iota with optional axis.
+  Builds iota along axis.
   """
-  def iota(builder, shape, opts) do
-    if axis = opts[:axis] do
-      Op.iota(builder, shape, axis)
-    else
-      total_elems = Nx.size(shape.dims)
+  def iota(builder, shape, nil) do
+    total_elems = Nx.size(shape.dims)
 
-      Op.reshape(
-        Op.iota(builder, Exla.Shape.make_shape(shape.dtype, {total_elems}), 0),
-        shape.dims
-      )
-    end
+    Op.reshape(
+      Op.iota(builder, Exla.Shape.make_shape(shape.dtype, {total_elems}), 0),
+      shape.dims
+    )
+  end
+
+  def iota(builder, shape, axis) do
+    Op.iota(builder, shape, axis)
   end
 
   @doc """
@@ -57,7 +57,7 @@ defmodule Exla.Lib do
 
     axis = opts[:axis]
     index_init_value = Op.constant_r0(builder, 0, type)
-    iota = iota(builder, Shape.make_shape(type, op_shape.dims), axis: axis)
+    iota = iota(builder, Shape.make_shape(type, op_shape.dims), axis)
     reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
 
     result =

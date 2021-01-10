@@ -4,7 +4,7 @@ defmodule Nx.Defn.Compiler do
   """
 
   # These operations need to be rewritten to Expr as they don't dispatch to data
-  @expr_ops Nx.Shared.creation_funs()
+  @expr_ops [:iota, :random_normal, :random_uniform]
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:device_read, :device_deallocate, :device_transfer, :to_binary]

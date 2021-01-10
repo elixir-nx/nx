@@ -85,7 +85,6 @@ defmodule Nx.Defn do
   ## Default compiler backend
 
   @behaviour Nx.Defn.Compiler
-  @creation_funs Nx.Shared.creation_funs()
 
   @impl true
   def __compile__(_env, _kind, vars, fun, []) do
@@ -134,14 +133,7 @@ defmodule Nx.Defn do
 
       %{} ->
         {args, state} = Enum.map_reduce(args, state, &eval/2)
-
-        res =
-          if op in @creation_funs do
-            apply(Nx, op, args)
-          else
-            apply(Nx.Shared.find_impl!(args), op, [ans | args])
-          end
-
+        res = apply(Nx.Shared.find_impl!(args), op, [ans | args])
         {res, Map.put(state, id, res)}
     end
   end

@@ -29,7 +29,7 @@ defmodule Nx.Defn.ExprTest do
              Nx.Defn.Expr
              tensor b                                       s64[2][2]
              parameter e                                    s64[2][2]
-             a = iota [ {2, 2}, type: {:s, 64} ]            s64[2][2]
+             a = iota [ nil ]                               s64[2][2]
              c = dot [ a, [1], b, [0] ]                     s64[2][2]
              d = tanh [ c ]                                 f64[2][2]
              f = add [ d, e ]                               f64[2][2]
