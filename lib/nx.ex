@@ -868,9 +868,8 @@ defmodule Nx do
     if tensor.shape == broadcast_shape do
       tensor
     else
-      broadcast(tensor, broadcast_shape, Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape),
-        names: names
-      )
+      axes = Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
+      broadcast(tensor, broadcast_shape, axes, names: names)
     end
   end
 
