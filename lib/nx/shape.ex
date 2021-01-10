@@ -281,15 +281,20 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], [nil, nil, nil], {1, 2, 3}, [1, 2], [nil, nil, nil])
       ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
-
+      
+      iex> Nx.Shape.zip_reduce({2, 2}, [1], [:x, :y], {2, 2}, [0], [:y, :x])
+      ** (ArgumentError) operation would result in duplicate names [:x, :x], please rename your tensors to avoid duplicates
   """
   def zip_reduce(s1, axes1, names1, s2, axes2, names2) do
-    # TODO: Should we check that zipped names are the same?
-    # TODO: How do we handle a case where a zip_reduce leaves us
-    # with duplicate dimension names?
     validate_zip_reduce_axes!(s1, axes1, s2, axes2)
     {l1, n1} = Enum.unzip(contract(s1, axes1, names1, 0, tuple_size(s1)))
     {l2, n2} = Enum.unzip(contract(s2, axes2, names2, 0, tuple_size(s2)))
+    new_names = n1 ++ n2
+
+    non_nil_names = Enum.filter(new_names, & &1 != nil)
+    if length(non_nil_names) != length(Enum.uniq(non_nil_names)),
+      do: raise ArgumentError, "operation would result in duplicate names #{inspect(new_names)}," <>
+                               " please rename your tensors to avoid duplicates"
     {List.to_tuple(l1 ++ l2), n1 ++ n2}
   end
 
