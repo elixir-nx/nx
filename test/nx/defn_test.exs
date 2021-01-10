@@ -15,17 +15,7 @@ defmodule Nx.DefnTest do
     @behaviour Nx.Defn.Compiler
 
     def __compile__(_env, _kind, vars, fun, _opts) do
-      params =
-        for var <- vars do
-          unless is_struct(var, Nx.Tensor) or is_number(var) do
-            raise "invalid argument"
-          end
-
-          tensor = Nx.tensor(var)
-          Nx.Defn.Expr.parameter(tensor.shape, tensor.type, tensor)
-        end
-
-      fun.(params)
+      apply(fun, vars)
     end
   end
 
@@ -204,7 +194,7 @@ defmodule Nx.DefnTest do
                shape: {}
              } = reduce(Nx.tensor([1, 2, 3]), 0)
 
-      assert is_function(fun, 2)
+      assert %T{data: %Expr{op: :fun}} = fun
 
       assert %{
                data: %Expr{op: :reduce, args: [_, _, [axes: [1]], fun]},
@@ -212,7 +202,7 @@ defmodule Nx.DefnTest do
                shape: {3}
              } = reduce_with_opts(Nx.tensor([[1], [2], [3]]), 0)
 
-      assert is_function(fun, 2)
+      assert %T{data: %Expr{op: :fun}} = fun
     end
   end
 

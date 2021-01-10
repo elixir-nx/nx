@@ -21,12 +21,7 @@ defmodule Nx.Shape do
         names
       end
     else
-      names =
-        if n_dims == 0,
-          do: [],
-          else: for(_ <- 0..(n_dims - 1), do: nil)
-
-      names
+      List.duplicate(nil, n_dims)
     end
   end
 

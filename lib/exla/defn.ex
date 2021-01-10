@@ -21,17 +21,18 @@ defmodule Exla.Defn do
 
         params =
           for {%{shape: shape}, i} <- Enum.with_index(buffers) do
-            param = Exla.Op.parameter(builder, i, shape, "p#{i}")
-            Expr.parameter(shape.dims, shape.dtype, param)
+            Exla.Op.parameter(builder, i, shape, "p#{i}")
           end
 
         state = %{
           precision: Keyword.get(options, :precision, :default),
-          builder: builder
+          builder: builder,
+          params: params
         }
 
         computation =
-          fun.(params)
+          fun
+          |> apply(vars)
           |> to_result(state, %{})
           |> elem(0)
           |> Exla.Builder.build()
@@ -60,8 +61,12 @@ defmodule Exla.Defn do
     recur_operator(expr, state, cache)
   end
 
-  defp recur_operator(%T{data: %Expr{op: :parameter, args: [param]}}, _state, cache) do
-    {param, cache}
+  defp recur_operator(%T{data: %Expr{op: :parameter, args: [i]}}, state, cache) do
+    {Enum.fetch!(state.params, i), cache}
+  end
+
+  defp recur_operator(%T{data: %Expr{op: :fun}} = t, _state, cache) do
+    {t, cache}
   end
 
   defp recur_operator(%T{data: %Expr{id: id, op: op, args: args}} = ans, state, cache) do
@@ -265,25 +270,16 @@ defmodule Exla.Defn do
 
   ## to_operator reduction
 
-  defp to_operator(:sum, [arg, opts], ans, state) do
-    acc = Exla.Op.constant_r0(state.builder, 0, ans.type)
-    to_operator(:reduce, [arg, acc, opts, &Nx.add/2], ans, state)
+  defp to_operator(:sum, [arg, opts], %{type: type} = ans, state) do
+    acc = Exla.Op.constant_r0(state.builder, 0, type)
+    args = [Expr.parameter(type, {}, 0), Expr.parameter(type, {}, 1)]
+    to_operator(:reduce, [arg, acc, opts, Expr.fun(:sum, args, &Nx.add/2)], ans, state)
   end
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type}, state) do
-    fun_shape = Exla.Shape.make_shape(type, {})
-    sub_builder = subbuilder(state.builder, "reduce")
-    a = Exla.Op.parameter(sub_builder, 0, fun_shape, "a")
-    b = Exla.Op.parameter(sub_builder, 1, fun_shape, "b")
-
-    fun =
-      fun.(Expr.parameter({}, type, a), Expr.parameter({}, type, b))
-      |> to_result(%{state | builder: sub_builder}, %{})
-      |> elem(0)
-      |> to_type(type)
-      |> Exla.Builder.build()
-
-    Exla.Op.reduce(to_type(arg, type), to_type(acc, type), fun, reduce_axes(arg, opts[:axes]))
+    arg = to_type(arg, type)
+    comp = to_computation(fun, state)
+    Exla.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
   end
 
   @reduction_op [:argmax, :argmin]
@@ -291,6 +287,29 @@ defmodule Exla.Defn do
   defp to_operator(op, [arg, opts], ans, state)
        when op in @reduction_op do
     apply(Exla.Lib, op, [state.builder, arg, [type: ans.type] ++ opts])
+  end
+
+  ## Computation helpers
+
+  defp to_computation(%T{data: %Expr{op: :fun, args: [name, args, expr, _]}} = ans, state) do
+    subbuilder = subbuilder(state.builder, "#{name}")
+
+    params =
+      for {%{type: type, shape: shape}, i} <- Enum.with_index(args) do
+        fun_shape = Exla.Shape.make_shape(type, shape)
+        Exla.Op.parameter(subbuilder, i, fun_shape, "p#{i}")
+      end
+
+    expr
+    |> to_result(%{state | builder: subbuilder, params: params}, %{})
+    |> elem(0)
+    |> to_type(ans.type)
+    |> Exla.Builder.build()
+  end
+
+  defp subbuilder(%Exla.Builder{name: name} = builder, desc) do
+    suffix = System.unique_integer([:positive])
+    Exla.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
   ## Axes helpers
@@ -330,28 +349,22 @@ defmodule Exla.Defn do
     Exla.Op.constant_r0(builder, constant, type)
   end
 
-  defp subbuilder(%Exla.Builder{name: name} = builder, desc) do
-    suffix = System.unique_integer([:positive])
-    Exla.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
-  end
-
   ## Nx <-> Exla.Buffer
 
   defp buffer_to_nx(%Exla.Buffer{ref: nil, data: data, shape: shape}) do
     # TODO: propagate expected output names from Nx to EXLA
-    names = Nx.Shape.check_names!(nil, shape.dims)
-
     data
     |> Nx.from_binary(to_nx_type(shape.dtype))
     |> Map.replace!(:shape, shape.dims)
-    |> Map.replace!(:names, names)
+    |> Map.replace!(:names, List.duplicate(nil, tuple_size(shape.dims)))
   end
 
   defp buffer_to_nx(%Exla.Buffer{ref: ref, data: nil, shape: shape}) do
     %Nx.Tensor{
       data: %Nx.BinaryTensor{device: Exla.NxDevice, state: ref},
       type: to_nx_type(shape.dtype),
-      shape: shape.dims
+      shape: shape.dims,
+      names: List.duplicate(nil, tuple_size(shape.dims))
     }
   end
 
@@ -377,28 +390,5 @@ defmodule Exla.Defn do
     end
   end
 
-  defp nx_to_buffer(number) when is_integer(number) do
-    Exla.Buffer.buffer(<<number::64-native>>, Exla.Shape.make_shape({:s, 64}, {}))
-  end
-
-  defp nx_to_buffer(number) when is_float(number) do
-    Exla.Buffer.buffer(<<number::float-64-native>>, Exla.Shape.make_shape({:f, 64}, {}))
-  end
-
-  defp nx_to_cache_key!(number) when is_integer(number), do: {{:s, 64}, {}}
-  defp nx_to_cache_key!(number) when is_float(number), do: {{:f, 64}, {}}
   defp nx_to_cache_key!(%Nx.Tensor{} = t), do: {t.type, t.shape}
-
-  defp nx_to_cache_key!(arg) when is_tuple(arg) do
-    raise ArgumentError,
-          "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
-            "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature. " <>
-            "Got: #{inspect(arg)}"
-  end
-
-  defp nx_to_cache_key!(arg) do
-    raise ArgumentError,
-          "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
-            "Got: #{inspect(arg)}"
-  end
 end

@@ -92,7 +92,7 @@ defmodule Nx.BinaryTensor do
   end
 
   def iota(%{shape: shape, type: type} = out, nil) do
-    t = iota(%T{type: type, shape: {Nx.size(shape)}}, 0)
+    t = iota(%T{type: type, shape: {Nx.size(shape)}, names: [nil]}, 0)
     %{out | data: t.data}
   end
 

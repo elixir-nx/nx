@@ -1,4 +1,4 @@
-defmodule Nx.GradTest do
+defmodule Nx.Defn.GradTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn

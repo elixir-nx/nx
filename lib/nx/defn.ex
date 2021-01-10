@@ -88,72 +88,52 @@ defmodule Nx.Defn do
 
   @impl true
   def __compile__(_env, _kind, vars, fun, []) do
-    params =
-      for var <- vars do
-        tensor =
-          cond do
-            is_number(var) ->
-              Nx.tensor(var)
-
-            match?(%Nx.Tensor{}, var) ->
-              var
-
-            is_tuple(var) ->
-              raise ArgumentError,
-                    "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
-                      "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
-                      "Got: #{inspect(var)}"
-
-            true ->
-              raise ArgumentError,
-                    "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
-                      "Got: #{inspect(var)}"
-          end
-
-        Nx.Defn.Expr.parameter(tensor.shape, tensor.type, tensor)
-      end
-
-    fun.(params)
-    |> to_result(%{})
+    fun
+    |> apply(vars)
+    |> to_result(vars, %{})
     |> elem(0)
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [t]}}, state) do
-    {t, state}
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :fun, args: [_, _, _, fun]}}, _vars, cache) do
+    {fun, cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :tensor, args: [t]}}, state) do
-    {t, state}
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [i]}}, vars, cache) do
+    {Enum.fetch!(vars, i), cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}} = ans, state) do
-    case state do
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :tensor, args: [t]}}, _vars, cache) do
+    {t, cache}
+  end
+
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}} = ans, vars, cache) do
+    case cache do
       %{^id => res} ->
-        {res, state}
+        {res, cache}
 
       %{} ->
-        {args, state} = Enum.map_reduce(args, state, &eval/2)
+        {args, cache} = Enum.map_reduce(args, cache, &eval(&1, vars, &2))
         res = apply(Nx.Shared.find_impl!(args), op, [ans | args])
-        {res, Map.put(state, id, res)}
+        {res, Map.put(cache, id, res)}
     end
   end
 
-  defp eval(other, state) do
-    {other, state}
+  defp eval(other, _vars, cache) do
+    {other, cache}
   end
 
-  defp to_result(tuple, state) when is_tuple(tuple) do
-    {args, state} =
+  defp to_result(tuple, vars, cache) when is_tuple(tuple) do
+    {args, cache} =
       tuple
       |> Tuple.to_list()
-      |> Enum.map_reduce(state, &to_result/2)
+      |> Enum.map_reduce(cache, &to_result(&1, vars, &2))
 
-    {List.to_tuple(args), state}
+    {List.to_tuple(args), cache}
   end
 
-  defp to_result(other, state) do
-    {expr, state} = eval(other, state)
-    {Nx.tensor(expr), state}
+  defp to_result(other, vars, cache) do
+    {expr, cache} = eval(other, vars, cache)
+    {Nx.tensor(expr), cache}
   end
 
   ## Public API

@@ -10,13 +10,19 @@ defmodule Nx.Defn.Expr do
     * `:op` - the operation name
     * `:args` - the operation arguments
 
-  All `:op` nodes translate to `Nx` operations, except for:
+  All `:op` nodes translate to `Nx.Tensor` operations, except for:
 
-    * `:parameter` - holds a parameter constructed by `parameter/3`.
-      `:args` is a one element list with the given arg.
+    * `:parameter` - holds a parameter.
+      `:args` is a one element index to the actual parameter.
 
     * `:tensor` - holds a tensor.
       `:args` is a one element list with the tensor.
+
+    * `:fun` - holds a function.
+      `:args` is a four element list with the function name,
+      the parameters of the function, the function output,
+      and the anonymous function itself. The shape of the
+      tensor holding the function is the shape of the output.
   """
 
   alias Nx.Defn.Expr
@@ -41,13 +47,56 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Builds a parameter must be passed to the evaluation function.
+  Creates parameters for defn anonymous functions.
   """
-  def parameter(shape, type, arg) when is_tuple(shape) do
-    # TODO: propagate names?
-    names = Nx.Shape.check_names!(nil, shape)
-    %T{shape: shape, type: type, names: names} |> expr(:parameter, [arg])
+  def parameter(type, shape, pos) when is_integer(pos) and pos >= 0 do
+    names = List.duplicate(nil, tuple_size(shape))
+    expr(%T{type: type, shape: shape, names: names}, :parameter, [pos])
   end
+
+  @doc """
+  Creates a function expression.
+
+  The `args` are used to precompute the expression of the fun.
+  A handler of funs can choose to either work with the expressions
+  directly or by invoking the underlying fun.
+  """
+  def fun(name, args, fun) when is_atom(name) and is_function(fun, length(args)) do
+    out = apply(fun, args)
+    expr(out, :fun, [name, args, out, fun])
+  end
+
+  ## Nx.Defn callbacks
+
+  @doc false
+  def to_vars(vars) do
+    for var <- vars do
+      case var do
+        %T{} = head ->
+          head
+
+        number when is_number(number) ->
+          Nx.tensor(number)
+
+        tuple when is_tuple(tuple) ->
+          raise ArgumentError,
+                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                  "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
+                  "Got: #{inspect(tuple)}"
+
+        other ->
+          raise ArgumentError,
+                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                  "Got: #{inspect(other)}"
+      end
+    end
+  end
+
+  @doc false
+  def to_params(vars), do: to_params(vars, 0)
+
+  defp to_params([head | tail], i), do: [expr(head, :parameter, [i]) | to_params(tail, i + 1)]
+  defp to_params([], _i), do: []
 
   @doc false
   def to_result(tuple) when is_tuple(tuple),
@@ -63,7 +112,7 @@ defmodule Nx.Defn.Expr do
     raise ArgumentError, "defn must return a tensor, a number or a tuple, got: #{inspect(other)}"
   end
 
-  ## Callbacks
+  ## Nx.Tensor Callbacks
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
@@ -100,8 +149,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def reduce(out, tensor, acc, opts, fun) do
-    expr(out, :reduce, [to_expr(tensor), to_expr(acc), opts, fun])
+  def reduce(%{type: type} = out, tensor, acc, opts, fun) do
+    args = [parameter(type, {}, 0), parameter(type, {}, 1)]
+    expr(out, :reduce, [to_expr(tensor), to_expr(acc), opts, fun(:reduce, args, fun)])
   end
 
   ## Creation ops
@@ -207,6 +257,10 @@ defmodule Nx.Defn.Expr do
     inspect_expr_args(tail, exprs, params, var_map)
   end
 
+  defp inspect_expr_args([%T{data: %Expr{op: :fun}} | tail], exprs, params, var_map) do
+    inspect_expr_args(tail, exprs, params, var_map)
+  end
+
   defp inspect_expr_args(
          [%T{data: %Expr{op: op, id: id}} = tensor | tail],
          exprs,
@@ -243,6 +297,9 @@ defmodule Nx.Defn.Expr do
 
   defp inspect_args([arg | args], var_map) do
     case arg do
+      %T{data: %Expr{op: :fun, args: [name, fun_args, _, _]}} ->
+        ["&#{name}/#{length(fun_args)}" | inspect_args(args, var_map)]
+
       %T{data: %Expr{op: :tensor, args: [t]}, shape: {}} ->
         [t |> Nx.Util.to_scalar() |> to_string() | inspect_args(args, var_map)]
 

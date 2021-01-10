@@ -6,8 +6,10 @@ defmodule Nx.Tensor do
   @type data :: {module, term}
   @type type :: Nx.Type.t()
   @type shape :: tuple()
+  @type names :: [atom]
+  @type t :: %Nx.Tensor{data: data, type: type, shape: shape, names: names}
 
-  @enforce_keys [:type, :shape]
+  @enforce_keys [:type, :shape, :names]
   defstruct [:data, :type, :shape, :names]
 
   defimpl Inspect do

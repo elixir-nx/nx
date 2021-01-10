@@ -177,7 +177,6 @@ defmodule Nx.Type do
   def to_aggregate({:s, _size}), do: {:s, 64}
   def to_aggregate(type), do: type
 
-
   @doc """
   Casts the given scalar to type.
 

@@ -16,8 +16,8 @@ defmodule Nx.Defn.Compiler do
   function `kind`, the variables, the expr function, and the
   compiler options.
 
-  It must call `fun` with a list where all vars have been
-  converted to `Nx.Defn.Expr` parameters via `Nx.Defn.Expr.parameter/3`.
+  It must call `fun` with all vars as arguments using Elixir's
+  `Kernel.apply/2`.
 
   Note the number of variables is not the same as the function
   arity as argument patterns have already been matched. The
@@ -29,10 +29,11 @@ defmodule Nx.Defn.Compiler do
   @callback __compile__(
               env :: Macro.Env.t(),
               kind :: :def | :defp,
-              vars :: [term],
-              fun :: ([Nx.Defn.Expr.t()] -> Nx.Defn.Expr.t()),
+              vars :: [var],
+              fun :: (var -> Nx.Defn.Expr.t() | tuple()),
               opts :: keyword
             ) :: term
+            when var: Nx.Tensor.t() | number
 
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
@@ -91,8 +92,9 @@ defmodule Nx.Defn.Compiler do
         unquote(def_module).__compile__(
           __ENV__,
           unquote(kind),
-          unquote(vars),
-          fn unquote(vars) ->
+          Nx.Defn.Expr.to_vars(unquote(vars)),
+          fn unquote_splicing(vars) ->
+            unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
             Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
           end,
           unquote(Macro.escape(def_opts))
@@ -113,7 +115,7 @@ defmodule Nx.Defn.Compiler do
           {node, acc}
       end)
 
-    vars
+    Enum.reverse(vars)
   end
 
   defp get_and_normalize_definition(def, state) do
