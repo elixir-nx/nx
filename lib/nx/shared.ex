@@ -163,7 +163,7 @@ defmodule Nx.Shared do
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
 
     if axis = opts[:axis] do
-      axis = Nx.Shape.normalize_axis(shape, axis)
+      axis = Nx.Shape.normalize_axis(shape, axis, names)
       {%T{type: type, shape: shape, names: names}, axis}
     else
       {%T{type: type, shape: shape, names: names}, nil}
