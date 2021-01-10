@@ -210,32 +210,33 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.contract({4, 1, 2}, [1])
-      {4, 2}
+      iex> Nx.Shape.contract({4, 1, 2}, [1], [:batch, :x, :y])
+      {{4, 2}, [:batch, :y]}
 
-      iex> Nx.Shape.contract({2, 4, 6, 5}, [1, 3])
-      {2, 6}
+      iex> Nx.Shape.contract({2, 4, 6, 5}, [1, 3], [:batch, :x, :y, :z])
+      {{2, 6}, [:batch, :y]}
 
-      iex> Nx.Shape.contract({1, 2, 3}, [])
-      {1, 2, 3}
+      iex> Nx.Shape.contract({1, 2, 3}, [], [:batch, :x, :y])
+      {{1, 2, 3}, [:batch, :x, :y]}
 
-      iex> Nx.Shape.contract({4, 2, 8}, [2])
-      {4, 2}
+      iex> Nx.Shape.contract({4, 2, 8}, [2], [:x, :y, :z])
+      {{4, 2}, [:x, :y]}
 
   """
-  def contract(shape, axes) do
-    List.to_tuple(contract(shape, axes, 0, tuple_size(shape)))
+  def contract(shape, axes, names) do
+    {new_shape, new_names} = Enum.unzip(contract(shape, axes, names, 0, tuple_size(shape)))
+    {List.to_tuple(new_shape), new_names}
   end
 
-  defp contract(_shape, _axes, n, n) do
+  defp contract(_shape, _axes, _names, n, n) do
     []
   end
 
-  defp contract(shape, axes, i, n) do
+  defp contract(shape, axes, [name | names], i, n) do
     if i in axes do
-      contract(shape, axes, i + 1, n)
+      contract(shape, axes, names, i + 1, n)
     else
-      [elem(shape, i) | contract(shape, axes, i + 1, n)]
+      [{elem(shape, i), name} | contract(shape, axes, names, i + 1, n)]
     end
   end
 
@@ -244,22 +245,23 @@ defmodule Nx.Shape do
 
   ## Examples
 
-    iex> Nx.Shape.transpose({4, 8, 2, 1}, [1, 0, 3, 2])
-    {8, 4, 1, 2}
+    iex> Nx.Shape.transpose({4, 8, 2, 1}, [1, 0, 3, 2], [:batch, :channels, :height, :width])
+    {{8, 4, 1, 2}, [:channels, :batch, :width, :height]}
 
   ### Error cases
 
-    iex> Nx.Shape.transpose({4, 8, 2, 1}, [0, 1, 2])
+    iex> Nx.Shape.transpose({4, 8, 2, 1}, [0, 1, 2], [:batch, nil, nil, nil])
     ** (ArgumentError) expected length of permutation (3) to match rank of shape (4)
 
   """
-  def transpose(shape, permutation)
+  def transpose(shape, permutation, names)
 
-  def transpose(shape, permutation) when tuple_size(shape) == length(permutation) do
-    List.to_tuple(Enum.map(permutation, &elem(shape, &1)))
+  def transpose(shape, permutation, names) when tuple_size(shape) == length(permutation) do
+    {new_shape, new_names} = Enum.unzip(Enum.map(permutation, &{elem(shape, &1), Enum.at(names, &1)}))
+    {List.to_tuple(new_shape), new_names}
   end
 
-  def transpose(shape, permutation) do
+  def transpose(shape, permutation, _names) do
     raise ArgumentError,
           "expected length of permutation (#{length(permutation)})" <>
             " to match rank of shape (#{tuple_size(shape)})"
@@ -274,18 +276,21 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], {3, 1, 2}, [1, 2])
-      {3, 3}
+      iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], [:batch, :x, :y], {3, 1, 2}, [1, 2], [:batch, :x, :y])
+      {{3, 3}, [:y, :batch]}
 
-      iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], {1, 2, 3}, [1, 2])
+      iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], [nil, nil, nil], {1, 2, 3}, [1, 2], [nil, nil, nil])
       ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
 
   """
-  def zip_reduce(s1, axes1, s2, axes2) do
+  def zip_reduce(s1, axes1, names1, s2, axes2, names2) do
+    # TODO: Should we check that zipped names are the same?
+    # TODO: How do we handle a case where a zip_reduce leaves us
+    # with duplicate dimension names?
     validate_zip_reduce_axes!(s1, axes1, s2, axes2)
-    l1 = contract(s1, axes1, 0, tuple_size(s1))
-    l2 = contract(s2, axes2, 0, tuple_size(s2))
-    List.to_tuple(l1 ++ l2)
+    {l1, n1} = Enum.unzip(contract(s1, axes1, names1, 0, tuple_size(s1)))
+    {l2, n2} = Enum.unzip(contract(s2, axes2, names2, 0, tuple_size(s2)))
+    {List.to_tuple(l1 ++ l2), n1 ++ n2}
   end
 
   def validate_zip_reduce_axes!(s1, [a1 | axes1], s2, [a2 | axes2]) do
@@ -354,7 +359,7 @@ defmodule Nx.Shape do
   @doc """
   Output shape after a convolution, already padded.
   """
-  def conv(input_shape, kernel_shape, strides, padding) do
+  def conv(input_shape, input_names, kernel_shape, _kernel_names, strides, padding) do
     filter_shape =
       kernel_shape
       |> Tuple.delete_at(0)
@@ -376,7 +381,8 @@ defmodule Nx.Shape do
     spatial_dims =
       do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(strides))
 
-    List.to_tuple([batch_size, num_filters | spatial_dims])
+    # TODO: Is it always the case that it's best to return the input names?
+    {List.to_tuple([batch_size, num_filters | spatial_dims]), input_names}
   end
 
   defp do_spatial_dims([], [], []), do: []
@@ -454,33 +460,34 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.squeeze({2, 1, 1}, [1, 2])
-      {2}
+      iex> Nx.Shape.squeeze({2, 1, 1}, [1, 2], [:batch, :x, :y])
+      {{2}, [:batch]}
 
-      iex> Nx.Shape.squeeze({1, 2}, [0])
-      {2}
+      iex> Nx.Shape.squeeze({1, 2}, [0], [:batch, :x])
+      {{2}, [:x]}
 
   ### Error cases
 
-      iex> Nx.Shape.squeeze({2, 2, 1}, [1])
+      iex> Nx.Shape.squeeze({2, 2, 1}, [1], [:batch, :x, :y])
       ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 2 for dimension 1
   """
-  def squeeze(shape, axes) do
-    List.to_tuple(Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, [])))
+  def squeeze(shape, axes, names) do
+    {new_shape, new_names} = Enum.unzip(Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, names, [])))
+    {List.to_tuple(new_shape), new_names}
   end
 
-  defp squeeze_dims([], _, acc), do: acc
+  defp squeeze_dims([], _, _, acc), do: acc
 
-  defp squeeze_dims([{s, i} | shape], axes, acc) do
+  defp squeeze_dims([{s, i} | shape], axes, [n | names], acc) do
     if i in axes do
       if s == 1 do
-        squeeze_dims(shape, axes, acc)
+        squeeze_dims(shape, axes, names, acc)
       else
         raise ArgumentError,
               "cannot squeeze dimensions whose sizes are not 1, got #{s} for dimension #{i}"
       end
     else
-      squeeze_dims(shape, axes, [s | acc])
+      squeeze_dims(shape, axes, names, [{s, n} | acc])
     end
   end
 
@@ -548,33 +555,53 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.normalize_axis({4, 2, 3}, -1)
+      iex> Nx.Shape.normalize_axis({4, 2, 3}, -1, [:batch, :x, :y])
       2
 
-      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, -2)
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, -2, [:batch, :x, :y, :z])
       2
 
-      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, 1)
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, 1, [:batch, :x, :y, :z])
       1
+
+      iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, :z, [:batch, :x, :y, :z])
+      3
 
   ### Error cases
 
-      iex> Nx.Shape.normalize_axis({4, 2, 5}, -4)
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, -4, [:batch, :x, :y])
       ** (ArgumentError) given axis (-4) invalid for shape with rank 3
 
-      iex> Nx.Shape.normalize_axis({4, 2, 5}, 3)
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, 3, [:batch, :x, :y])
       ** (ArgumentError) given axis (3) invalid for shape with rank 3
 
-  """
-  def normalize_axis(shape, axis)
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, :z, [:batch, :x, :y])
+      ** (ArgumentError) key :z not found in tensor with names [:batch, :x, :y]
 
-  def normalize_axis(shape, axis) when axis < 0 and abs(axis) <= tuple_size(shape),
+      iex> Nx.Shape.normalize_axis({4, 2, 5}, nil, [:batch, nil, nil])
+      ** (ArgumentError) axis name cannot be nil
+
+  """
+  def normalize_axis(shape, axis, names)
+
+  def normalize_axis(shape, axis, _names) when axis < 0 and abs(axis) <= tuple_size(shape),
     do: tuple_size(shape) + axis
 
-  def normalize_axis(shape, axis) when axis >= 0 and axis < tuple_size(shape),
+  def normalize_axis(shape, axis, _names) when axis >= 0 and axis < tuple_size(shape),
     do: axis
 
-  def normalize_axis(shape, axis) do
+  def normalize_axis(_shape, nil, _names),
+    do: raise ArgumentError, "axis name cannot be nil"
+
+  def normalize_axis(_shape, axis, names) when is_atom(axis) do
+    if axis in names do
+      Enum.with_index(names)[axis]
+    else
+      raise ArgumentError, "key #{inspect(axis)} not found in tensor with names #{inspect(names)}"
+    end    
+  end
+
+  def normalize_axis(shape, axis, _names) do
     raise ArgumentError,
           "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
   end
@@ -586,16 +613,19 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.normalize_axes({2, 3, 4}, [-1, 0])
+      iex> Nx.Shape.normalize_axes({2, 3, 4}, [-1, 0], [:batch, nil])
       [2, 0]
+
+      iex> Nx.Shape.normalize_axes({2, 3, 4}, [:batch, 1], [:batch, :x])
+      [0, 1]
 
   ### Error Cases
 
-      iex> Nx.Shape.normalize_axes({2, 3, 4}, [1, 1])
+      iex> Nx.Shape.normalize_axes({2, 3, 4}, [1, 1], [nil, nil, nil])
       ** (ArgumentError) axes [1, 1] must be unique integers between 0 and 2
   """
-  def normalize_axes(shape, axes) when is_list(axes) do
-    normalized = Enum.map(axes, &normalize_axis(shape, &1))
+  def normalize_axes(shape, axes, names) when is_list(axes) do
+    normalized = Enum.map(axes, &normalize_axis(shape, &1, names))
 
     if length(Enum.uniq(normalized)) != length(axes) do
       raise ArgumentError,
