@@ -342,7 +342,10 @@ defmodule Exla.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def clamp(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: min}, %Op{builder: builder, ref: max}) do
+  def clamp(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: min}, %Op{
+        builder: builder,
+        ref: max
+      }) do
     ref = Exla.NIF.clamp(operand, min, max) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end

@@ -257,7 +257,9 @@ defmodule Nx.Shape do
   def transpose(shape, permutation, names)
 
   def transpose(shape, permutation, names) when tuple_size(shape) == length(permutation) do
-    {new_shape, new_names} = Enum.unzip(Enum.map(permutation, &{elem(shape, &1), Enum.at(names, &1)}))
+    {new_shape, new_names} =
+      Enum.unzip(Enum.map(permutation, &{elem(shape, &1), Enum.at(names, &1)}))
+
     {List.to_tuple(new_shape), new_names}
   end
 
@@ -291,10 +293,16 @@ defmodule Nx.Shape do
     {l2, n2} = Enum.unzip(contract(s2, axes2, names2, 0, tuple_size(s2)))
     new_names = n1 ++ n2
 
-    non_nil_names = Enum.filter(new_names, & &1 != nil)
+    non_nil_names = Enum.filter(new_names, &(&1 != nil))
+
     if length(non_nil_names) != length(Enum.uniq(non_nil_names)),
-      do: raise ArgumentError, "operation would result in duplicate names #{inspect(new_names)}," <>
-                               " please rename your tensors to avoid duplicates"
+      do:
+        raise(
+          ArgumentError,
+          "operation would result in duplicate names #{inspect(new_names)}," <>
+            " please rename your tensors to avoid duplicates"
+        )
+
     {List.to_tuple(l1 ++ l2), n1 ++ n2}
   end
 
@@ -477,7 +485,11 @@ defmodule Nx.Shape do
       ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 2 for dimension 1
   """
   def squeeze(shape, axes, names) do
-    {new_shape, new_names} = Enum.unzip(Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, names, [])))
+    {new_shape, new_names} =
+      Enum.unzip(
+        Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, names, []))
+      )
+
     {List.to_tuple(new_shape), new_names}
   end
 
@@ -596,14 +608,14 @@ defmodule Nx.Shape do
     do: axis
 
   def normalize_axis(_shape, nil, _names),
-    do: raise ArgumentError, "axis name cannot be nil"
+    do: raise(ArgumentError, "axis name cannot be nil")
 
   def normalize_axis(_shape, axis, names) when is_atom(axis) do
     if axis in names do
       Enum.with_index(names)[axis]
     else
       raise ArgumentError, "key #{inspect(axis)} not found in tensor with names #{inspect(names)}"
-    end    
+    end
   end
 
   def normalize_axis(shape, axis, _names) do

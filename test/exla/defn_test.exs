@@ -1231,11 +1231,13 @@ defmodule Exla.DefnTest do
     defn clamp_with_tensor(value), do: Nx.clamp(value, min: Nx.tensor(2.0), max: Nx.max(1.0, 3.0))
 
     test "works with only min set" do
-      assert clamp_only_min(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 2, 3], [4, 5, 6]])
+      assert clamp_only_min(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[2, 2, 3], [4, 5, 6]])
     end
 
     test "works with only max set" do
-      assert clamp_only_max(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[1, 2, 3], [4, 4, 4]])
+      assert clamp_only_max(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[1, 2, 3], [4, 4, 4]])
     end
 
     test "works with both set" do
@@ -1243,11 +1245,27 @@ defmodule Exla.DefnTest do
     end
 
     test "works with mxied types" do
-      assert clamp_mixed_types(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
+      assert clamp_mixed_types(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
     end
 
     test "works with tensor min/max" do
-      assert clamp_with_tensor(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
+      assert clamp_with_tensor(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
+    end
+
+    test "works with floating point" do
+      assert clamp_only_min(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+      assert clamp_only_max(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
+
+      assert clamp_only_min(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32})) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+      assert clamp_only_max(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32})) ==
+               Nx.tensor([[1.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
     end
   end
 

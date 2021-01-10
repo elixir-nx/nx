@@ -1061,6 +1061,7 @@ defmodule Nx.BinaryTensor do
           <<write!(value, 3)>>
         end
       end
+
     from_binary(out, out_data)
   end
 

@@ -37,8 +37,8 @@ defmodule Nx.Type do
   def min_value_binary({:s, 64}), do: <<-9_223_372_036_854_775_808::64-signed-native>>
   def min_value_binary({:u, size}), do: <<0::size(size)-native>>
   def min_value_binary({:bf, 16}), do: <<0xFF80::16-native>>
-  def min_value_binary({:f, 32}), do: <<0xFF800000::32-native>>
-  def min_value_binary({:f, 64}), do: <<0xFFF0000000000000::64-native>>
+  def min_value_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
+  def min_value_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>> 
 
   @doc """
   Returns the minimum possible value for the given type.
@@ -54,8 +54,8 @@ defmodule Nx.Type do
   def max_value_binary({:u, 32}), do: <<4_294_967_295::32-native>>
   def max_value_binary({:u, 64}), do: <<18_446_744_073_709_551_615::64-native>>
   def max_value_binary({:bf, 16}), do: <<0x7F80::16-native>>
-  def max_value_binary({:f, 32}), do: <<0x7F800000::32-native>>
-  def max_value_binary({:f, 64}), do: <<0x7FF0000000000000::64-native>>
+  def max_value_binary({:f, 32}), do: <<0x7F7FFFFF::32-native>>
+  def max_value_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
 
   @doc """
   Infers the type of the given value.
