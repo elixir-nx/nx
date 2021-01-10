@@ -344,16 +344,14 @@ defmodule Nx.BinaryTensor do
 
     interior_padded =
       for bin <- view do
-        match_types [type] do
-          padded =
-            for <<match!(dim, 0) <- bin>>, into: <<>> do
-              <<write!(dim, 0), interior_padding::bitstring>>
-            end
+        padded =
+          for <<dim::size(size)-bitstring <- bin>>, into: <<>> do
+            <<dim::size(size)-bitstring, interior_padding::bitstring>>
+          end
 
-          new_bytes = byte_size(padded) * 8 - interior_padding_size
-          <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = padded
-          new_bin
-        end
+        new_bytes = byte_size(padded) * 8 - interior_padding_size
+        <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = padded
+        new_bin
       end
 
     data =

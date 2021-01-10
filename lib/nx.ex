@@ -3076,7 +3076,7 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = tensor(tensor)
     mean_den =
       if axes = opts[:axes] do
-        mean_den(shape, Nx.Shape.normalize_axes(shape, opts[:axes], names))
+        mean_den(shape, Nx.Shape.normalize_axes(shape, axes, names))
       else
         mean_den(shape, nil)
       end
