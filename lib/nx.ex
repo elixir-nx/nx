@@ -2504,64 +2504,63 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.select(1, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      iex> Nx.select(1, Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6], names: [:x]))
       #Nx.Tensor<
-        s64[3]
+        s64[x: 3]
         [1, 2, 3]
       >
 
-      iex> Nx.select(0, Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      iex> Nx.select(0, Nx.tensor([1, 2, 3], names: [:y]), Nx.tensor([4, 5, 6], names: [:y]))
       #Nx.Tensor<
-        s64[3]
+        s64[y: 3]
         [4, 5, 6]
       >
 
-      iex> Nx.select(0, Nx.tensor([[1, 2]]), Nx.tensor([[3], [4]]))
+      iex> Nx.select(0, Nx.tensor([[1, 2]], names: [:x, :y]), Nx.tensor([[3], [4]], names: [:x, :y]))
       #Nx.Tensor<
-        s64[2][2]
+        s64[x: 2][y: 2]
         [
           [3, 3],
           [4, 4]
         ]
       >
 
-      iex> Nx.select(Nx.tensor([0, 1, 0]), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6]))
+      iex> Nx.select(Nx.tensor([0, 1, 0], names: [:x]), Nx.tensor([1, 2, 3], names: [:y]), Nx.tensor([4, 5, 6], names: [:z]))
       #Nx.Tensor<
-        s64[3]
+        s64[x: 3]
         [4, 2, 6]
       >
 
-      iex> x = Nx.tensor([2, 4, 6])
+      iex> x = Nx.tensor([2, 4, 6], names: [:x])
       iex> y = Nx.tensor([3, 2, 1])
-      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6]), Nx.tensor([1, 3, 5]))
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6], names: [:i]), Nx.tensor([1, 3, 5], names: [:j]))
       #Nx.Tensor<
-        s64[3]
+        s64[x: 3]
         [1, 4, 6]
       >
 
-      iex> x = Nx.tensor([2, 4, 6, 8, 10])
-      iex> y = Nx.tensor([1, 6, 2, 11, 2])
-      iex> Nx.select(Nx.greater(x, y), Nx.tensor(2), Nx.tensor([1, 3, 5, 7, 9]))
+      iex> x = Nx.tensor([2, 4, 6, 8, 10], names: [:x])
+      iex> y = Nx.tensor([1, 6, 2, 11, 2], names: [:x])
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor(2), Nx.tensor([1, 3, 5, 7, 9], names: [:x]))
       #Nx.Tensor<
-        s64[5]
+        s64[x: 5]
         [2, 3, 2, 7, 2]
       >
   """
   def select(pred, on_true, on_false) do
     output_type = binary_type(on_true, on_false)
 
-    %T{shape: pred_shape} = pred = tensor(pred)
+    %T{shape: pred_shape, names: pred_names} = pred = tensor(pred)
     %T{shape: true_shape, names: true_names} = on_true = tensor(on_true)
     %T{shape: false_shape, names: false_names} = on_false = tensor(on_false)
 
-    output_shape =
+    {output_shape, output_names} =
       case pred_shape do
         {} ->
-          {shape, _} = Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-          shape
-
+          Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+          
         _ ->
-          pred_shape
+          {pred_shape, pred_names}
       end
 
     _ =
@@ -2578,10 +2577,7 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(false_shape, output_shape)
       )
 
-    # TODO: select names rule
-    names = Nx.Shape.check_names!(nil, output_shape)
-
-    out = %{pred | shape: output_shape, type: output_type, names: names}
+    out = %{pred | shape: output_shape, type: output_type, names: output_names}
     impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
   end
 
@@ -3708,9 +3704,9 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.outer(Nx.tensor([1, 2, 3]), 100)
+      iex> Nx.outer(Nx.tensor([1, 2, 3], names: [:x]), 100)
       #Nx.Tensor<
-        s64[3][1]
+        s64[x: 3][1]
         [
           [100],
           [200],
@@ -3718,9 +3714,9 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20]))
+      iex> Nx.outer(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([10, 20], names: [:y]))
       #Nx.Tensor<
-        s64[3][2]
+        s64[x: 3][y: 2]
         [
           [10, 20],
           [20, 40],
@@ -3728,9 +3724,9 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.outer(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([10, 20, 30]))
+      iex> Nx.outer(Nx.tensor([[1, 2], [3, 4]], names: [:x, :y]), Nx.tensor([10, 20, 30], names: [:z]))
       #Nx.Tensor<
-        s64[4][3]
+        s64[x: 4][z: 3]
         [
           [10, 20, 30],
           [20, 40, 60],
@@ -3742,11 +3738,16 @@ defmodule Nx do
   """
   def outer(t1, t2) do
     type = binary_type(t1, t2)
-    %T{shape: s1} = t1 = tensor(t1)
-    %T{shape: s2} = t2 = tensor(t2)
+    %T{shape: s1, names: n1} = t1 = tensor(t1)
+    %T{shape: s2, names: n2} = t2 = tensor(t2)
     new_shape = {size(s1), size(s2)}
-    # TODO: outer names rule
-    names = Nx.Shape.check_names!(nil, new_shape)
+
+    names =
+      case {n1, n2} do
+        {[], rhs} -> [nil, List.last(rhs)]
+        {lhs, rhs}  -> [hd(lhs), List.last(rhs)]
+      end
+
     impl!(t1, t2).outer(%{t1 | type: type, shape: new_shape, names: names}, t1, t2)
   end
 
