@@ -111,7 +111,7 @@ class ExlaClient {
                       std::vector<std::unique_ptr<ExlaDevice>> devices,
                       std::unique_ptr<se::DeviceMemoryAllocator> allocator,
                       std::unique_ptr<tensorflow::Allocator> host_memory_allocator,
-                      std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options);
+                      std::unique_ptr<xla::gpu::GpuExecutableRunOptions> gpu_run_options);
 
 
   virtual ~ExlaClient() = default;
@@ -138,15 +138,13 @@ class ExlaClient {
 
   xla::LocalClient* client() { return client_; }
 
-  tensorflow::Allocator* host_memory_allocator() {
-    return host_memory_allocator_.get();
-  }
+  tensorflow::Allocator* host_memory_allocator() { return host_memory_allocator_.get(); }
 
   int host_id() { return host_id_; }
 
   se::DeviceMemoryAllocator* allocator() { return allocator_; }
 
-  xla::GpuExecutableRunOptions* gpu_run_options() {
+  xla::gpu::GpuExecutableRunOptions* gpu_run_options() {
     return gpu_run_options_.get();
   }
 
@@ -164,9 +162,8 @@ class ExlaClient {
   int host_id_;
   se::DeviceMemoryAllocator* allocator_;
   std::unique_ptr<se::DeviceMemoryAllocator> owned_allocator_;
-  std::unique_ptr<xla::GpuExecutableRunOptions> gpu_run_options_;
+  std::unique_ptr<xla::gpu::GpuExecutableRunOptions> gpu_run_options_;
   std::vector<std::unique_ptr<ExlaDevice>> devices_;
-  /* tensorflow::thread::ThreadPool h2d_transfer_pool_ = nullptr; */
 };
 
 // TODO(seanmor5): Separate into different device classes similar to PjRt
@@ -175,7 +172,6 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
 xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
                                         int intra_op_parallelism_threads,
                                         const char* platform_name);
-
 }  // namespace exla
 
 #endif

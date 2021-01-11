@@ -267,6 +267,9 @@ defmodule Exla.NIF do
   def deallocate_device_mem(_buffer),
     do: nif_error(__ENV__.function)
 
+  def start_log_sink(_sink_pid),
+    do: nif_error(__ENV__.function)
+
   defp nif_error({name, arity}) do
     raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
   end
