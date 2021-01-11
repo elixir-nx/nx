@@ -1223,6 +1223,31 @@ defmodule Exla.DefnTest do
     end
   end
 
+  describe "clip" do
+    defn clip_both(value), do: Nx.clip(value, 2, 4)
+    defn clip_mixed_types(value), do: Nx.clip(value, 2.0, 3)
+    defn clip_with_tensor(value), do: Nx.clip(value, Nx.tensor(2.0), Nx.max(1.0, 3.0))
+
+    test "works with both set" do
+      assert clip_both(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 2, 3], [4, 4, 4]])
+    end
+
+    test "works with mxied types" do
+      assert clip_mixed_types(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
+    end
+
+    test "works with tensor min/max" do
+      assert clip_with_tensor(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [3.0, 3.0, 3.0]])
+    end
+
+    test "works with floating point" do
+      assert clip_both(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[2.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
+    end
+  end
+
   describe "options" do
     @defn_compiler {Exla, keep_on_device: true}
     defn add_two_keep_on_device(a, b), do: a + b

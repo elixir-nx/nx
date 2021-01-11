@@ -868,7 +868,8 @@ defmodule Nx do
     if tensor.shape == broadcast_shape do
       tensor
     else
-      broadcast(tensor, broadcast_shape, Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape), names: names)
+      axes = Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
+      broadcast(tensor, broadcast_shape, axes, names: names)
     end
   end
 
@@ -2569,7 +2570,7 @@ defmodule Nx do
       case pred_shape do
         {} ->
           Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-          
+
         _ ->
           {pred_shape, pred_names}
       end
@@ -3081,12 +3082,14 @@ defmodule Nx do
   """
   def mean(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = tensor(tensor)
+
     mean_den =
       if axes = opts[:axes] do
         mean_den(shape, Nx.Shape.normalize_axes(shape, axes, names))
       else
         mean_den(shape, nil)
       end
+
     divide(sum(tensor, opts), mean_den)
   end
 
@@ -3756,7 +3759,7 @@ defmodule Nx do
     names =
       case {n1, n2} do
         {[], rhs} -> [nil, List.last(rhs)]
-        {lhs, rhs}  -> [hd(lhs), List.last(rhs)]
+        {lhs, rhs} -> [hd(lhs), List.last(rhs)]
       end
 
     impl!(t1, t2).outer(%{t1 | type: type, shape: new_shape, names: names}, t1, t2)
@@ -4070,7 +4073,16 @@ defmodule Nx do
                   " the spatial dimensions of the input tensor"
       end
 
-    {shape, names} = Nx.Shape.conv(dilated_input_shape, input_names, dilated_kernel_shape, kernel_names, strides, padding_config)
+    {shape, names} =
+      Nx.Shape.conv(
+        dilated_input_shape,
+        input_names,
+        dilated_kernel_shape,
+        kernel_names,
+        strides,
+        padding_config
+      )
+
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
 
     out = %{tensor | type: type, shape: shape, names: names}
@@ -4084,6 +4096,77 @@ defmodule Nx do
       input_dilation,
       kernel_dilation
     )
+  end
+
+  @doc """
+  Clips the values of the tensor on the closed
+  interval `[min, max]`.
+
+  You can pass a tensor to `min` or `max` as long
+  as the tensor has a scalar shape.
+
+  ### Examples
+
+      iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), 2, 4)
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [2, 2, 3],
+          [4, 4, 4]
+        ]
+      >
+
+      iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), 2.0, 3)
+      #Nx.Tensor<
+        f64[x: 2][y: 3]
+        [
+          [2.0, 2.0, 3.0],
+          [3.0, 3.0, 3.0]
+        ]
+      >
+
+      iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), Nx.tensor(2.0), Nx.max(1.0, 3.0))
+      #Nx.Tensor<
+        f64[x: 2][y: 3]
+        [
+          [2.0, 2.0, 3.0],
+          [3.0, 3.0, 3.0]
+        ]
+      >
+
+      iex> Nx.clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), 2, 6.0)
+      #Nx.Tensor<
+        f64[x: 2][y: 3]
+        [
+          [2.0, 2.0, 3.0],
+          [4.0, 5.0, 6.0]
+        ]
+      >
+
+      iex> Nx.clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32}, names: [:x, :y]), 1, 4)
+      #Nx.Tensor<
+        f64[x: 2][y: 3]
+        [
+          [1.0, 2.0, 3.0],
+          [4.0, 4.0, 4.0]
+        ]
+      >
+  """
+  def clip(tensor, min, max) do
+    %T{type: type} = tensor = tensor(tensor)
+    %T{type: min_type} = min = tensor(min)
+    %T{type: max_type} = max = tensor(max)
+
+    if min.shape != {} do
+      raise ArgumentError, "min value must be a scalar shape, got: #{min.shape}"
+    end
+
+    if max.shape != {} do
+      raise ArgumentError, "max value must be a scalar shape, got: #{max.shape}"
+    end
+
+    output_type = Nx.Type.merge(type, Nx.Type.merge(min_type, max_type))
+    impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
   end
 
   ## Type

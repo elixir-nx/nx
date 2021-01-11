@@ -1041,6 +1041,30 @@ defmodule Nx.BinaryTensor do
     end)
   end
 
+  @doc false
+  def clip(out, tensor, min, max) do
+    %{type: out_type} = out
+    %T{type: in_type} = tensor
+    %T{type: min_type} = min
+    %T{type: max_type} = max
+
+    data = to_binary(tensor)
+    min = to_binary(min)
+    max = to_binary(max)
+
+    out_data =
+      match_types [in_type, min_type, max_type, out_type] do
+        for <<match!(x, 0) <- data>>, into: <<>> do
+          <<match!(min_binary, 1)>> = min
+          <<match!(max_binary, 2)>> = max
+          value = min(max(read!(x, 0), read!(min_binary, 1)), read!(max_binary, 2))
+          <<write!(value, 3)>>
+        end
+      end
+
+    from_binary(out, out_data)
+  end
+
   ## Binary reducers
 
   defp bin_reduce(out, tensor, acc, opts, fun) do

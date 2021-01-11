@@ -221,6 +221,11 @@ defmodule Nx.Defn.Expr do
     expr(out, :select, [to_expr(pred), to_expr(on_true), to_expr(on_false)])
   end
 
+  @doc false
+  def clip(out, operand, min, max) do
+    expr(out, :clip, [to_expr(operand), to_expr(min), to_expr(max)])
+  end
+
   ## Helpers
 
   defp expr(tensor, op, args) do

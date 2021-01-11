@@ -149,6 +149,34 @@ defmodule Nx.Defn.Grad do
     {maybe_add(dx, dy), cache}
   end
 
+  defp grad(:clip, [operand, min, max], _ans, g, cache) do
+    
+    # w.r.t min
+    w_min =
+      Nx.select(
+        Nx.bitwise_and(Nx.greater(min, operand), Nx.less(min, max)),
+        Nx.broadcast(g, operand),
+        0.0
+      )
+
+    # w.r.t operand
+    w_operand =
+      Nx.select(
+        Nx.bitwise_and(Nx.greater(operand, min), Nx.less(operand, max)),
+        g,
+        0.0
+      )
+
+    # w.r.t max
+    w_max = Nx.select(Nx.less(max, operand), Nx.broadcast(g, operand), 0.0)
+
+    {d_operand, cache} = to_grad(operand, Nx.multiply(g, w_operand), cache)
+    {d_min, cache} = to_grad(min, Nx.multiply(g, w_min), cache)
+    {d_max, cache} = to_grad(max, Nx.multiply(g, w_max), cache)
+
+    {maybe_add(maybe_add(d_operand, d_min), d_max), cache}
+  end
+
   ## Linear gradients
 
   defp grad(:outer, [x, y], ans, g, cache) do
