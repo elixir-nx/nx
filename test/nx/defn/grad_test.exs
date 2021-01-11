@@ -498,17 +498,54 @@ defmodule Nx.Defn.GradTest do
 
   describe "pad" do
     defn grad_sum_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{-1, 1, 0}, {1, 1, 0}])))
-    # defn grad_interior_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{0, 0, 1}, {0, 0, 1}])))
+    defn grad_interior_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{0, 0, 1}, {0, 0, 1}])))
+    defn grad_lots_of_pad(t), do: grad(t, Nx.sum(Nx.pad(t, 2.0, [{-2, 1, 4}, {1, 3, 2}])))
+    defn grad_pad_fun(t), do: grad(t, Nx.mean(Nx.pad(t, Nx.mean(Nx.cos(t)), [{-2, 1, 4}, {1, 3, 2}])))
 
     test "computes gradient" do
       assert grad_sum_pad(Nx.tensor([[1.0, 2.0], [1.0, 2.0]])) ==
                Nx.tensor([[0.0, 0.0], [1.0, 1.0]])
     end
 
-    # test "computes gradient with interior pad" do
-    #   assert grad_interior_pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
-    #            Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]])
-    # end
+    test "computes gradient with interior pad" do
+      assert grad_interior_pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]])
+    end
+
+    test "computes gradient with diverse pad" do
+      assert grad_lots_of_pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+    end
+
+    test "computes with pad value from tensor" do
+      assert grad_pad_fun(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor(
+                [
+                 [-0.13259542790912313, -0.1432832308937438, -0.022237092179130596],
+                 [0.1374355447151887, 0.1692850372196461, 0.06221092698892166]
+                ])
+    end
+  end
+
+  describe "slice" do
+    defn grad_mean_slice(t), do: grad(t, Nx.mean(Nx.slice(t, [0, 1], [1, 3], [1, 2])))
+    defn grad_sum_slice(t), do: grad(t, Nx.sum(Nx.slice(t, [1, 0], [2, 2], [1, 1])))
+    defn grad_sum_pad_slice(t) do
+      grad(t, Nx.sum(Nx.pad(Nx.slice(t, [1, 0], [2, 2], [1, 1]), Nx.mean(Nx.sin(t)), [{2, 1, 2}, {-1, 2, 0}])))
+    end
+
+    test "computes gradient" do
+      assert grad_mean_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+                Nx.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
+      assert grad_sum_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+                Nx.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
+      assert grad_sum_pad_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+                Nx.tensor(
+                  [
+                    [0.9905542274249228, -0.7629358670030943, -1.8149862437674833],
+                    [-1.1983466382499552, 1.520047340015915, 1.7603121921923375]
+                  ])
+    end
   end
 
   describe "abs" do
