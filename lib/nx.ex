@@ -4233,6 +4233,14 @@ defmodule Nx do
       raise ArgumentError, "invalid strides for shape of rank #{rank(shape)}"
     end
 
+    if length(start_indices) != rank(shape) do
+      raise ArgumentError, "invalid start indices for shape of rank #{rank(shape)}"
+    end
+
+    if length(limit_indices) != rank(shape) do
+      raise ArgumentError, "invalid limit indices for shape of rank #{rank(shape)}"
+    end
+
     output_shape = Nx.Shape.slice(shape, start_indices, limit_indices, strides)
 
     impl!(tensor).slice(%{tensor | shape: output_shape}, tensor, start_indices, limit_indices, strides)
