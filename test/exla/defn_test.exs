@@ -1,8 +1,8 @@
-defmodule Exla.DefnTest do
+defmodule EXLA.DefnTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  @default_defn_compiler Exla
+  @default_defn_compiler EXLA
 
   describe "scalar" do
     defn just_two_int, do: 2
@@ -1249,17 +1249,17 @@ defmodule Exla.DefnTest do
   end
 
   describe "options" do
-    @defn_compiler {Exla, keep_on_device: true}
+    @defn_compiler {EXLA, keep_on_device: true}
     defn add_two_keep_on_device(a, b), do: a + b
 
     test "keeps data on device" do
       tensor = add_two_keep_on_device(1, 2)
-      assert %Nx.BinaryTensor{device: Exla.NxDevice, state: {ref, :default}} = tensor.data
+      assert %Nx.BinaryTensor{device: EXLA.NxDevice, state: {ref, :default}} = tensor.data
       assert is_reference(ref)
       assert tensor |> Nx.device_read() |> Nx.to_binary() == <<3::64-native>>
 
       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
-      assert %Nx.BinaryTensor{device: Exla.NxDevice, state: {ref, :default}} = tensor.data
+      assert %Nx.BinaryTensor{device: EXLA.NxDevice, state: {ref, :default}} = tensor.data
       assert is_reference(ref)
 
       assert tensor |> Nx.device_read() |> Nx.to_binary() ==
@@ -1312,10 +1312,10 @@ defmodule Exla.DefnTest do
   end
 
   describe "precision" do
-    @defn_compiler {Exla, precision: :bad}
+    @defn_compiler {EXLA, precision: :bad}
     defn bad_precision(t1, t2), do: Nx.dot(t1, t2)
 
-    @defn_compiler {Exla, precision: :high}
+    @defn_compiler {EXLA, precision: :high}
     defn good_precision(t1, t2), do: Nx.dot(t1, t2)
 
     test "raises on bad precision" do

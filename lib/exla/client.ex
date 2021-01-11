@@ -1,4 +1,4 @@
-defmodule Exla.Client do
+defmodule EXLA.Client do
   @moduledoc """
   Functions for managing `Exla.Client`.
 
@@ -6,19 +6,19 @@ defmodule Exla.Client do
   """
 
   alias __MODULE__
-  alias Exla.{Computation, Executable, Shape}
+  alias EXLA.{Computation, Executable, Shape}
 
   @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
   defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
 
   def fetch!(name) do
-    Exla.LockedCache.run({__MODULE__, name}, fn ->
+    EXLA.LockedCache.run({__MODULE__, name}, fn ->
       clients = Application.fetch_env!(:exla, :clients)
 
       options =
         Keyword.get(clients, name) ||
           raise ArgumentError,
-                "could not find Exla client named #{inspect(name)}, the clients specified " <>
+                "could not find EXLA client named #{inspect(name)}, the clients specified " <>
                   "in your config files are: #{inspect(Keyword.keys(clients))}"
 
       platform = Keyword.get(options, :platform, :host)
@@ -27,20 +27,20 @@ defmodule Exla.Client do
 
       ref =
         case platform do
-          :host -> Exla.NIF.get_host_client(number_of_replicas, intra_op_parallelism_threads)
-          :cuda -> Exla.NIF.get_cuda_client(number_of_replicas, intra_op_parallelism_threads)
-          :rocm -> Exla.NIF.get_rocm_client(number_of_replicas, intra_op_parallelism_threads)
+          :host -> EXLA.NIF.get_host_client(number_of_replicas, intra_op_parallelism_threads)
+          :cuda -> EXLA.NIF.get_cuda_client(number_of_replicas, intra_op_parallelism_threads)
+          :rocm -> EXLA.NIF.get_rocm_client(number_of_replicas, intra_op_parallelism_threads)
           _ -> raise ArgumentError, "unknown Exla platform: #{inspect(platform)}"
         end
         |> unwrap!()
 
-      device_count = Exla.NIF.get_device_count(ref) |> unwrap!()
+      device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
 
       default_device_ordinal =
         if default = options[:default_device_ordinal] do
           default
         else
-          Exla.NIF.get_default_device_ordinal(ref) |> unwrap!()
+          EXLA.NIF.get_default_device_ordinal(ref) |> unwrap!()
         end
 
       %Client{
@@ -79,7 +79,7 @@ defmodule Exla.Client do
     # TODO: Validate replicas, partitions, and shapes
 
     ref =
-      Exla.NIF.compile(
+      EXLA.NIF.compile(
         client.ref,
         computation.ref,
         shape_refs,
@@ -120,7 +120,7 @@ defmodule Exla.Client do
   Returns a map of supported platforms with device information.
   """
   def get_supported_platforms do
-    {:ok, platforms} = Exla.NIF.get_supported_platforms()
+    {:ok, platforms} = EXLA.NIF.get_supported_platforms()
     platforms
   end
 end

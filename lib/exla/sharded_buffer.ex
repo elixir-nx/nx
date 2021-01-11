@@ -1,10 +1,10 @@
-defmodule Exla.ShardedBuffer do
+defmodule EXLA.ShardedBuffer do
   @moduledoc """
   A sharded buffer.
   """
 
   alias __MODULE__
-  alias Exla.{Buffer, Client, Shape}
+  alias EXLA.{Buffer, Client, Shape}
 
   @enforce_keys [:shape]
   defstruct [:buffers, :shape]

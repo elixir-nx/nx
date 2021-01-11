@@ -68,9 +68,9 @@ defmodule Nx.Defn do
   compiler is the `Nx.Defn` module itself, which executes the code
   in pure Elixir. However, you can use module attributes to specify
   how a `defn` function will behave. For example, assuming you
-  are using the `Exla` compiler:
+  are using the `EXLA` compiler:
 
-      @defn_compiler {Exla, client: :host}
+      @defn_compiler {EXLA, client: :host}
       defn add_and_mult(a, b, c) do
         a * b + c
       end
@@ -78,7 +78,7 @@ defmodule Nx.Defn do
   To set the compiler for the all definitions, you can set the
   `@default_defn_compiler` attribute:
 
-      @default_defn_compiler {Exla, client: :cuda}
+      @default_defn_compiler {EXLA, client: :cuda}
 
   """
 

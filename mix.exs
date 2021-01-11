@@ -1,4 +1,4 @@
-defmodule Exla.MixProject do
+defmodule EXLA.MixProject do
   use Mix.Project
 
   def project do
@@ -16,7 +16,7 @@ defmodule Exla.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Exla.Application, []},
+      mod: {EXLA.Application, []},
       env: [clients: [default: []]]
     ]
   end

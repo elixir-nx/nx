@@ -1,6 +1,6 @@
-defmodule Exla.Executable do
+defmodule EXLA.Executable do
   alias __MODULE__
-  alias Exla.{Buffer, Shape, ShardedBuffer}
+  alias EXLA.{Buffer, Shape, ShardedBuffer}
 
   @enforce_keys [:client, :ref, :output_shape, :device_ordinal, :num_replicas, :num_partitions]
   defstruct [:client, :ref, :output_shape, :device_ordinal, :num_replicas, :num_partitions]
@@ -51,7 +51,7 @@ defmodule Exla.Executable do
     data =
       case client.platform do
         :host ->
-          Exla.NIF.run_cpu(
+          EXLA.NIF.run_cpu(
             client.ref,
             exec,
             inputs,
@@ -66,7 +66,7 @@ defmodule Exla.Executable do
           |> unwrap!()
 
         _ ->
-          Exla.NIF.run_io(
+          EXLA.NIF.run_io(
             client.ref,
             exec,
             inputs,
@@ -128,7 +128,7 @@ defmodule Exla.Executable do
   end
 
   defp device_assignment_to_device_id(%Executable{ref: exec}, {replica, partition}) do
-    Exla.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
+    EXLA.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
   end
 
   defp decompose_output(data, shape, client, keep_on_device) do
@@ -145,8 +145,8 @@ defmodule Exla.Executable do
 
       _ when keep_on_device == false and is_reference(data) ->
         # This is the outside of cpu
-        binary = Exla.NIF.read_device_mem(client.ref, data) |> unwrap!()
-        Exla.NIF.deallocate_device_mem(data) |> unwrap!()
+        binary = EXLA.NIF.read_device_mem(client.ref, data) |> unwrap!()
+        EXLA.NIF.deallocate_device_mem(data) |> unwrap!()
         Buffer.buffer(binary, shape)
 
       _ when is_reference(data) ->

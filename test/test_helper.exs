@@ -44,11 +44,11 @@ defmodule Nx.GradHelpers do
   end
 end
 
-defmodule ExlaHelpers do
+defmodule EXLAHelpers do
   @doc """
-  Returns the default Exla client.
+  Returns the default EXLA client.
   """
-  def client(), do: Exla.Client.fetch!(:default)
+  def client(), do: EXLA.Client.fetch!(:default)
 
   @doc """
   Compiles the given function.
@@ -56,18 +56,18 @@ defmodule ExlaHelpers do
   It expects a list of shapes which will be given as parameters.
   """
   def compile(shapes, fun, opts \\ []) do
-    builder = Exla.Builder.new("test")
+    builder = EXLA.Builder.new("test")
     replicas = opts[:num_replicas] || 1
 
     {params, _} =
       Enum.map_reduce(shapes, 0, fn shape, pos ->
-        {Exla.Op.parameter(builder, pos, Exla.Shape.shard(shape, replicas), <<?a + pos>>),
+        {EXLA.Op.parameter(builder, pos, EXLA.Shape.shard(shape, replicas), <<?a + pos>>),
          pos + 1}
       end)
 
     op = apply(fun, [builder | params])
-    comp = Exla.Builder.build(op)
-    Exla.Client.compile(client(), comp, shapes, opts)
+    comp = EXLA.Builder.build(op)
+    EXLA.Client.compile(client(), comp, shapes, opts)
   end
 
   @doc """
@@ -78,12 +78,12 @@ defmodule ExlaHelpers do
   """
   def run(args, opts \\ [], fun) do
     exec = compile(Enum.map(args, & &1.shape), fun)
-    Exla.Executable.run(exec, args, opts)
+    EXLA.Executable.run(exec, args, opts)
   end
 
   def run_parallel(args, replicas, opts \\ [], fun) do
     exec = compile(Enum.map(args, & &1.shape), fun, num_replicas: replicas)
-    Exla.Executable.run_parallel(exec, args, opts)
+    EXLA.Executable.run_parallel(exec, args, opts)
   end
 end
 
@@ -101,7 +101,7 @@ defmodule Nx.ProcessDevice do
   def deallocate(key), do: if(Process.delete(key), do: :ok, else: :already_deallocated)
 end
 
-client = ExlaHelpers.client()
+client = EXLAHelpers.client()
 multi_device = if client.device_count < 2, do: [:multi_device], else: []
 
 if client.platform == :host and client.device_count < 2 do
