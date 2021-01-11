@@ -227,10 +227,39 @@ defmodule Nx.Defn.Grad do
     to_grad(x, Nx.transpose(g, argsort(axes)), cache)
   end
 
-  defp grad(:pad, [x, _value, padding_config], _ans, g, cache) do
+  defp grad(:pad, [x, value, padding_config], _ans, g, cache) do
     inverse_padding_config = Enum.map(padding_config, fn {lo, hi, _} -> {-lo, -hi, 0} end)
-    g = Nx.pad(g, 0.0, inverse_padding_config)
-    to_grad(x, g, cache)
+    unpadded = Nx.pad(g, 0.0, inverse_padding_config)
+
+    static_start_indices = List.duplicate(0, Nx.rank(unpadded))
+    static_limit_indices = Tuple.to_list(unpadded.shape)
+    strides =
+      padding_config
+      |> Enum.map(fn {_, _, interior} -> interior + 1 end)
+
+    t_operand = Nx.slice(unpadded, static_start_indices, static_limit_indices, strides)
+    t_value = Nx.subtract(Nx.sum(g), Nx.sum(t_operand))
+
+    {dx, cache} = to_grad(x, t_operand, cache)
+    {dv, cache} = to_grad(value, t_value, cache)
+
+    {maybe_add(dx, dv), cache}
+  end
+
+  defp grad(:slice, [x, start_indices, _limit_indices, strides], _ans, g, cache) do
+    lo_pads = start_indices
+    hi_pads =
+      Enum.zip([Tuple.to_list(g.shape), start_indices, strides])
+      |> Enum.map(fn {shape, start, stride} -> start + (1 + (stride * (shape - 1))) end)
+      |> Enum.zip(Tuple.to_list(x.shape))
+      |> Enum.map(fn {x, y} -> y - x end)
+    interior_pads = Enum.map(strides, & &1 - 1)
+
+    padding_config = Enum.zip([lo_pads, hi_pads, interior_pads])
+    pad_value = 0.0
+
+    t_op = Nx.pad(g, pad_value, padding_config)
+    to_grad(x, t_op, cache)
   end
 
   defp grad(:sum, [x, opts], _ans, g, cache) do

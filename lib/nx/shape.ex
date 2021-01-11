@@ -557,11 +557,7 @@ defmodule Nx.Shape do
       )
 
   defp padded_dims([s | shape], [{edge_low, edge_high, interior} | config], acc) do
-    interior_padding_factor =
-      if interior == 0,
-        do: 0,
-        else: s * interior - 1
-
+    interior_padding_factor = (s - 1) * interior
     padded_dims(shape, config, [s + interior_padding_factor + edge_low + edge_high | acc])
   end
 
