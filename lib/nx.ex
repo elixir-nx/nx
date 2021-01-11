@@ -4175,7 +4175,11 @@ defmodule Nx do
   of stride in each dimension.
 
   Both start indices and limit indices must match the rank
-  of the input tensor shape.
+  of the input tensor shape. You cannot slice in reverse.
+  All of the limit indices must be strictly greater than
+  their corresponding start index. The resulting shape
+  cannot have any zero-sized dimensions or negative
+  sized dimensions.
 
   ### Examples
 
@@ -4223,15 +4227,12 @@ defmodule Nx do
   def slice(tensor, start_indices, limit_indices, strides \\ nil) do
     %T{shape: shape} = tensor = tensor(tensor)
 
-    strides = if strides, do: strides, else: for _ <- 1..rank(shape), do: 1
+    strides = if strides, do: strides, else: List.duplicate(1, rank(shape))
 
-    # TODO: XLA's DynamicSlice supports passing tensors as start and limit
-    # however it doesn't support strides like their normal Slice. We can
-    # either emulate this in XLA by combining Slice and DynamicSlice to
-    # match this API.
-    # TODO: If any dim is 0, JAX returns an empty tensor, should we raise?
-    # or do the same thing?
-    # TODO: We can't slice in reverse, should we enforce this or normalize?
+    if length(strides) != rank(shape) do
+      raise ArgumentError, "invalid strides for shape of rank #{rank(shape)}"
+    end
+
     output_shape = Nx.Shape.slice(shape, start_indices, limit_indices, strides)
 
     impl!(tensor).slice(%{tensor | shape: output_shape}, tensor, start_indices, limit_indices, strides)
