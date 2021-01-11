@@ -4169,6 +4169,83 @@ defmodule Nx do
     impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
   end
 
+  @doc """
+  Slices a tensor from `start_indices` to `limit_indices`.
+  You can optionally provide a `stride` to specify the amount
+  of stride in each dimension.
+
+  Both start indices and limit indices must match the rank
+  of the input tensor shape. You cannot slice in reverse.
+  All of the limit indices must be strictly greater than
+  their corresponding start index. The resulting shape
+  cannot have any zero-sized dimensions or negative
+  sized dimensions.
+
+  ### Examples
+
+      iex> t = Nx.iota({900})
+      iex> t = Nx.reshape(t, {2, 15, 30})
+      iex> Nx.slice(t, [1, 4, 10], [2, 5, 20], [1, 2, 3])
+      #Nx.Tensor<
+        s64[1][1][4]
+        [
+          [
+            [580, 583, 586, 589]
+          ]
+        ]
+      >
+
+      iex> t = Nx.iota({900})
+      iex> t = Nx.reshape(t, {2, 15, 30})
+      iex> Nx.slice(t, [0, 6, 2], [2, 7, 5])
+      #Nx.Tensor<
+        s64[2][1][3]
+        [
+          [
+            [182, 183, 184]
+          ],
+          [
+            [632, 633, 634]
+          ]
+        ]
+      >
+
+      iex> t = Nx.iota({900})
+      iex> t = Nx.reshape(t, {2, 15, 30})
+      iex> Nx.slice(t, [0, 4, 11], [2, 7, 20], [2, 1, 3])
+      #Nx.Tensor<
+        s64[1][3][3]
+        [
+          [
+            [131, 134, 137],
+            [161, 164, 167],
+            [191, 194, 197]
+          ]
+        ]
+      >
+  """
+  def slice(tensor, start_indices, limit_indices, strides \\ nil) do
+    %T{shape: shape} = tensor = tensor(tensor)
+
+    strides = if strides, do: strides, else: List.duplicate(1, rank(shape))
+
+    if length(strides) != rank(shape) do
+      raise ArgumentError, "invalid strides for shape of rank #{rank(shape)}"
+    end
+
+    if length(start_indices) != rank(shape) do
+      raise ArgumentError, "invalid start indices for shape of rank #{rank(shape)}"
+    end
+
+    if length(limit_indices) != rank(shape) do
+      raise ArgumentError, "invalid limit indices for shape of rank #{rank(shape)}"
+    end
+
+    output_shape = Nx.Shape.slice(shape, start_indices, limit_indices, strides)
+
+    impl!(tensor).slice(%{tensor | shape: output_shape}, tensor, start_indices, limit_indices, strides)
+  end
+
   ## Type
 
   defp binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)

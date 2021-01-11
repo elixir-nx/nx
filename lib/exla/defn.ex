@@ -304,6 +304,10 @@ defmodule Exla.Defn do
     Exla.Op.clamp(operand, min, max)
   end
 
+  defp to_operator(:slice, [tensor, start_indices, limit_indices, strides], _ans, _state) do
+    Exla.Op.slice(tensor, start_indices, limit_indices, strides)
+  end
+
   ## Computation helpers
 
   defp to_computation(%T{data: %Expr{op: :fun, args: [name, args, expr, _]}} = ans, state) do

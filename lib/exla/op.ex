@@ -200,7 +200,7 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: op},
         start_indices,
         limit_indices,
-        strides \\ {}
+        strides \\ []
       ) do
     ref = Exla.NIF.slice(op, start_indices, limit_indices, strides) |> unwrap!()
     %Op{builder: builder, ref: ref}

@@ -226,6 +226,10 @@ defmodule Nx.Defn.Expr do
     expr(out, :clip, [to_expr(operand), to_expr(min), to_expr(max)])
   end
 
+  def slice(out, tensor, start_indices, limit_indices, strides) do
+    expr(out, :slice, [to_expr(tensor), start_indices, limit_indices, strides])
+  end
+
   ## Helpers
 
   defp expr(tensor, op, args) do

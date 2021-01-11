@@ -710,6 +710,35 @@ defmodule Nx.Shape do
     for {1, i} <- Enum.with_index(Tuple.to_list(shape)), do: i
   end
 
+  @doc """
+  Returns the shape after a slice.
+
+  ## Examples
+
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [2, 5, 20], [1, 2, 3])
+      {1, 1, 4}
+
+  ### Error cases
+
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [0, 5, 11], [1, 2, 3])
+      ** (ArgumentError) start and limit indices would result in 0 or negative dimension size, limit indices must be greater than start indices
+  """
+  def slice(_, start_indices, limit_indices, strides) do
+    output_shape =
+      limit_indices
+      |> Enum.zip(start_indices)
+      |> Enum.zip(strides)
+      |> Enum.map(fn {{hi, lo}, s} -> Kernel.ceil((hi - lo) / s) end)
+
+    if Enum.any?(output_shape, & &1 <= 0) do
+      raise ArgumentError, "start and limit indices would result in 0 or negative"
+                           <> " dimension size, limit indices must be greater than"
+                           <> " start indices"
+    end
+
+    List.to_tuple(output_shape)
+  end
+
   ## Helpers
 
   defp count_up(0, _n), do: []
