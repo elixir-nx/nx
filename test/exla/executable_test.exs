@@ -1,9 +1,9 @@
-defmodule Exla.ExecutableTest do
+defmodule EXLA.ExecutableTest do
   use ExUnit.Case, async: true
 
-  alias Exla.{Buffer, Executable, Op, Shape, ShardedBuffer}
+  alias EXLA.{Buffer, Executable, Op, Shape, ShardedBuffer}
 
-  import ExlaHelpers
+  import EXLAHelpers
 
   test "run/2 succeeds with no inputs and default options" do
     assert %Buffer{data: <<1, 0, 0, 0>>} =

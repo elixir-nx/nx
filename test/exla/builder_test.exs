@@ -1,7 +1,7 @@
-defmodule Exla.BuilderTest do
+defmodule EXLA.BuilderTest do
   use ExUnit.Case, async: true
 
-  alias Exla.{Builder, Computation, Op}
+  alias EXLA.{Builder, Computation, Op}
 
   test "new/1 succeeds in creating a new builder" do
     assert b = %Builder{} = Builder.new("builder")

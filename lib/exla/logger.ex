@@ -1,4 +1,4 @@
-defmodule Exla.Logger do
+defmodule EXLA.Logger do
   @moduledoc false
   use GenServer
   require Logger
@@ -9,7 +9,7 @@ defmodule Exla.Logger do
 
   @impl true
   def init(:ok) do
-    :ok = Exla.NIF.start_log_sink(self())
+    :ok = EXLA.NIF.start_log_sink(self())
     {:ok, :unused_state}
   end
 

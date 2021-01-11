@@ -1,9 +1,9 @@
-defmodule Exla.Lib do
+defmodule EXLA.Lib do
   @moduledoc """
   High-level operations.
   """
 
-  alias Exla.{Builder, Op, Shape}
+  alias EXLA.{Builder, Op, Shape}
 
   @doc """
   Builds iota along axis.
@@ -12,7 +12,7 @@ defmodule Exla.Lib do
     total_elems = Nx.size(shape.dims)
 
     Op.reshape(
-      Op.iota(builder, Exla.Shape.make_shape(shape.dtype, {total_elems}), 0),
+      Op.iota(builder, EXLA.Shape.make_shape(shape.dtype, {total_elems}), 0),
       shape.dims
     )
   end

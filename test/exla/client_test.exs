@@ -1,11 +1,11 @@
-defmodule Exla.ClientTest do
+defmodule EXLA.ClientTest do
   use ExUnit.Case, async: true
 
-  alias Exla.Op
-  alias Exla.Executable
-  alias Exla.Shape
+  alias EXLA.Op
+  alias EXLA.Executable
+  alias EXLA.Shape
 
-  import ExlaHelpers
+  import EXLAHelpers
 
   test "compile/4 succeeds with constant computation and no args" do
     assert %Executable{} = compile([], fn builder -> Op.constant_r0(builder, 1, {:s, 32}) end)
