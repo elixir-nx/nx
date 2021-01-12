@@ -4,8 +4,8 @@ defmodule Nx.Defn.ExprTest do
   alias Nx.Defn.Expr
 
   test "with parameters" do
-    a = Expr.parameter({:s, 64}, {2, 2}, 0)
-    b = Expr.parameter({:s, 64}, {2, 2}, 1)
+    a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
+    b = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
 
     assert Nx.sum(Nx.add(Nx.add(Nx.dot(a, a), Nx.tanh(b)), 2))
            |> inspect() == """
@@ -23,7 +23,7 @@ defmodule Nx.Defn.ExprTest do
   end
 
   test "with tensors" do
-    a = Expr.parameter({:s, 64}, {2, 2}, 2)
+    a = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
     b = Nx.tensor([[1, 2], [1, 2]])
 
     assert Nx.argmin(Nx.add(Nx.tanh(Nx.dot(Expr.iota({2, 2}, []), b)), a), tie_break: :high)
@@ -42,13 +42,13 @@ defmodule Nx.Defn.ExprTest do
   end
 
   test "with fun" do
-    a = Expr.parameter({:s, 64}, {2, 2}, 2)
+    a = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
 
     assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect() == """
            #Nx.Tensor<
              Nx.Defn.Expr
              parameter a                                s64[2][2]
-             b = reduce [ a, 0, axes: nil, &reduce/2 ]  s64
+             b = reduce [ a, 0, axes: nil, &Nx.add/2 ]  s64
            >\
            """
   end

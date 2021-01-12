@@ -184,6 +184,8 @@ defmodule Nx.DefnTest do
   describe "reduce ops" do
     defn reduce(t1, acc), do: Nx.reduce(t1, acc, fn x, y -> x + y end)
 
+    defn reduce_invalid(t1, amplifier), do: Nx.reduce(t1, 0, fn x, y -> x * amplifier + y end)
+
     defn reduce_with_opts(t1, acc),
       do: Nx.reduce(t1, acc, [type: {:f, 64}, axes: [-1]], fn x, y -> x + y end)
 
@@ -203,6 +205,12 @@ defmodule Nx.DefnTest do
              } = reduce_with_opts(Nx.tensor([[1], [2], [3]]), 0)
 
       assert %T{data: %Expr{op: :fun}} = fun
+    end
+
+    test "reduces raises on invalid expression" do
+      assert_raise RuntimeError,
+                   ~r"cannot build defn because expressions come from different contexts",
+                   fn -> reduce_invalid(Nx.tensor([1, 2, 3]), 0) end
     end
   end
 
