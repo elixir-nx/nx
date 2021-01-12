@@ -252,7 +252,8 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def reverse(out, tensor, axes) do
-    expr(out, :reverse, [to_expr(tensor), axes])
+    tensor = to_expr(tensor)
+    expr(out, tensor.data.context, :reverse, [tensor, axes])
   end
 
   ## Helpers

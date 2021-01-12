@@ -4341,7 +4341,7 @@ defmodule Nx do
 
     output_shape = Nx.Shape.slice(shape, start_indices, limit_indices, strides)
 
-    out = %{tensor | shape: output_shape},
+    out = %{tensor | shape: output_shape}
     impl!(tensor).slice(out, tensor, start_indices, limit_indices, strides)
   end
 
