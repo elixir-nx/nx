@@ -1,4 +1,4 @@
-defmodule Exla.Buffer do
+defmodule EXLA.Buffer do
   @moduledoc """
   An EXLA Buffer.
 
@@ -18,7 +18,7 @@ defmodule Exla.Buffer do
   """
 
   alias __MODULE__
-  alias Exla.{Client, Shape}
+  alias EXLA.{Client, Shape}
 
   @enforce_keys [:shape]
   defstruct [:data, :ref, :shape]
@@ -47,7 +47,7 @@ defmodule Exla.Buffer do
     ordinal = Client.check_device_compatibility!(client, ordinal)
 
     ref =
-      Exla.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal)
+      EXLA.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal)
       |> unwrap!()
 
     %Buffer{buffer | data: nil, ref: {ref, client.name}}
@@ -59,8 +59,8 @@ defmodule Exla.Buffer do
   This copies the underlying device memory into a binary without destroying it.
   """
   def read({ref, client_name}) do
-    client = Exla.Client.fetch!(client_name)
-    binary = Exla.NIF.read_device_mem(client.ref, ref) |> unwrap!()
+    client = EXLA.Client.fetch!(client_name)
+    binary = EXLA.NIF.read_device_mem(client.ref, ref) |> unwrap!()
     binary
   end
 
@@ -70,7 +70,7 @@ defmodule Exla.Buffer do
   Returns `:ok` | `:already_deallocated`.
   """
   def deallocate({ref, _}) do
-    Exla.NIF.deallocate_device_mem(ref) |> unwrap!()
+    EXLA.NIF.deallocate_device_mem(ref) |> unwrap!()
   end
 
   defp unwrap!({:ok, ref}), do: ref

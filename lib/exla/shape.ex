@@ -1,4 +1,4 @@
-defmodule Exla.Shape do
+defmodule EXLA.Shape do
   alias __MODULE__
 
   @enforce_keys [:ref, :dims, :dtype]
@@ -8,7 +8,7 @@ defmodule Exla.Shape do
   Gets shape information from given shape reference.
   """
   def get_shape_info(ref) when is_reference(ref) do
-    case Exla.NIF.get_shape_info(ref) |> unwrap!() do
+    case EXLA.NIF.get_shape_info(ref) |> unwrap!() do
       {dims_term, type_str} ->
         %Shape{dims: dims_term, dtype: charlist_to_dtype(type_str), ref: ref}
 
@@ -23,7 +23,7 @@ defmodule Exla.Shape do
   """
   def make_shape({type, size}, dims) when is_tuple(dims) do
     validate_dims!(dims, tuple_size(dims))
-    ref = Exla.NIF.make_shape(dtype_to_charlist({type, size}), dims) |> unwrap!()
+    ref = EXLA.NIF.make_shape(dtype_to_charlist({type, size}), dims) |> unwrap!()
     %Shape{ref: ref, dtype: {type, size}, dims: dims}
   end
 

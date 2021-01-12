@@ -1,7 +1,7 @@
-defmodule Exla.LockedCache do
+defmodule EXLA.LockedCache do
   @moduledoc false
 
-  # Exla has many singleton resources like clients
+  # EXLA has many singleton resources like clients
   # and expensive resources like executable that we
   # want to compute just once, this module provides
   # a cache functionality so that those are done only

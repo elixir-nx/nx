@@ -1,6 +1,6 @@
-defmodule Exla.Op do
+defmodule EXLA.Op do
   alias __MODULE__
-  alias Exla.{Builder, Computation, Shape}
+  alias EXLA.{Builder, Computation, Shape}
 
   @enforce_keys [:builder, :ref]
   defstruct [:builder, :ref]
@@ -12,7 +12,7 @@ defmodule Exla.Op do
   """
   def constant_r0(%Builder{ref: builder}, value, dtype = {_, _}) when is_number(value) do
     value = cast_scalar!(dtype, value)
-    ref = Exla.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
+    ref = EXLA.NIF.constant_r0(builder, value, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -32,7 +32,7 @@ defmodule Exla.Op do
       raise ArgumentError, "binary does not match the given type and dimensions"
     end
 
-    ref = Exla.NIF.constant_from_binary(builder, data, shape_ref) |> unwrap!()
+    ref = EXLA.NIF.constant_from_binary(builder, data, shape_ref) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -41,7 +41,7 @@ defmodule Exla.Op do
   """
   def parameter(%Builder{ref: builder}, i, %Shape{ref: shape}, name)
       when is_integer(i) and i >= 0 and is_binary(name) do
-    ref = Exla.NIF.parameter(builder, i, shape, name) |> unwrap!()
+    ref = EXLA.NIF.parameter(builder, i, shape, name) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -50,7 +50,7 @@ defmodule Exla.Op do
   """
   def tuple(%Builder{ref: builder}, elements) when is_list(elements) do
     element_refs = Enum.map(elements, & &1.ref)
-    ref = Exla.NIF.tuple(builder, element_refs) |> unwrap!()
+    ref = EXLA.NIF.tuple(builder, element_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -60,7 +60,7 @@ defmodule Exla.Op do
   def rng_normal(%Op{builder: builder, ref: mu}, %Op{builder: builder, ref: sigma}, %Shape{
         ref: shape
       }) do
-    ref = Exla.NIF.rng_normal(mu, sigma, shape) |> unwrap!()
+    ref = EXLA.NIF.rng_normal(mu, sigma, shape) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -68,7 +68,7 @@ defmodule Exla.Op do
   Creates tensor with uniform distribution.
   """
   def rng_uniform(%Op{builder: builder, ref: a}, %Op{builder: builder, ref: b}, %Shape{ref: shape}) do
-    ref = Exla.NIF.rng_uniform(a, b, shape) |> unwrap!()
+    ref = EXLA.NIF.rng_uniform(a, b, shape) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -76,7 +76,7 @@ defmodule Exla.Op do
   Creates iota tensor.
   """
   def iota(%Builder{ref: builder}, %Shape{ref: shape}, dim) do
-    ref = Exla.NIF.iota(builder, shape, dim) |> unwrap!()
+    ref = EXLA.NIF.iota(builder, shape, dim) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -86,7 +86,7 @@ defmodule Exla.Op do
   Gets the shape of an operator.
   """
   def get_shape(%Op{builder: builder, ref: operand}) do
-    ref = Exla.NIF.get_shape(builder, operand) |> unwrap!()
+    ref = EXLA.NIF.get_shape(builder, operand) |> unwrap!()
     Shape.get_shape_info(ref)
   end
 
@@ -94,7 +94,7 @@ defmodule Exla.Op do
   Reshapes the tensor to `shape`.
   """
   def reshape(%Op{ref: ref} = op, shape) when is_tuple(shape) do
-    ref = Exla.NIF.reshape(ref, shape) |> unwrap!()
+    ref = EXLA.NIF.reshape(ref, shape) |> unwrap!()
     %{op | ref: ref}
   end
 
@@ -102,7 +102,7 @@ defmodule Exla.Op do
   Pads the tensor with value and padding config.
   """
   def pad(%Op{ref: op, builder: builder}, %Op{ref: value, builder: builder}, padding_config) do
-    ref = Exla.NIF.pad(op, value, padding_config) |> unwrap!()
+    ref = EXLA.NIF.pad(op, value, padding_config) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -111,7 +111,7 @@ defmodule Exla.Op do
   """
   def broadcast_in_dim(%Op{ref: ref} = op, shape, broadcast_dims)
       when is_tuple(shape) and is_tuple(broadcast_dims) do
-    ref = Exla.NIF.broadcast_in_dim(ref, shape, broadcast_dims) |> unwrap!()
+    ref = EXLA.NIF.broadcast_in_dim(ref, shape, broadcast_dims) |> unwrap!()
     %{op | ref: ref}
   end
 
@@ -132,7 +132,7 @@ defmodule Exla.Op do
           broadcast_dims \\ {}
         )
         when is_tuple(broadcast_dims) do
-      ref = Exla.NIF.unquote(fun)(left, right, broadcast_dims) |> unwrap!()
+      ref = EXLA.NIF.unquote(fun)(left, right, broadcast_dims) |> unwrap!()
       %Op{builder: builder, ref: ref}
     end
   end
@@ -150,7 +150,7 @@ defmodule Exla.Op do
     Unary #{fun}.
     """
     def unquote(fun)(%Op{ref: ref} = op) do
-      ref = Exla.NIF.unquote(fun)(ref) |> unwrap!()
+      ref = EXLA.NIF.unquote(fun)(ref) |> unwrap!()
       %{op | ref: ref}
     end
   end
@@ -158,7 +158,7 @@ defmodule Exla.Op do
   ## Ops
 
   def get_tuple_element(%Op{ref: operand} = op, index) when is_integer(index) do
-    ref = Exla.NIF.get_tuple_element(operand, index) |> unwrap!()
+    ref = EXLA.NIF.get_tuple_element(operand, index) |> unwrap!()
     %{op | ref: ref}
   end
 
@@ -169,7 +169,7 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: false_op},
         %Computation{ref: false_comp}
       ) do
-    ref = Exla.NIF.conditional(pred, true_op, true_comp, false_op, false_comp) |> unwrap!()
+    ref = EXLA.NIF.conditional(pred, true_op, true_comp, false_op, false_comp) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -182,7 +182,7 @@ defmodule Exla.Op do
       operands
       |> Enum.map(& &1.ref)
 
-    ref = Exla.NIF.conditional(index, branches_refs, operands_refs) |> unwrap!()
+    ref = EXLA.NIF.conditional(index, branches_refs, operands_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -191,7 +191,7 @@ defmodule Exla.Op do
         %Op{builder: builder, ref: on_true},
         %Op{builder: builder, ref: on_false}
       ) do
-    ref = Exla.NIF.select(pred, on_true, on_false) |> unwrap!()
+    ref = EXLA.NIF.select(pred, on_true, on_false) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -202,7 +202,7 @@ defmodule Exla.Op do
         limit_indices,
         strides \\ []
       ) do
-    ref = Exla.NIF.slice(op, start_indices, limit_indices, strides) |> unwrap!()
+    ref = EXLA.NIF.slice(op, start_indices, limit_indices, strides) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -214,7 +214,7 @@ defmodule Exla.Op do
         stride,
         dimno
       ) do
-    ref = Exla.NIF.slice_in_dim(op, start_index, end_index, stride, dimno) |> unwrap!()
+    ref = EXLA.NIF.slice_in_dim(op, start_index, end_index, stride, dimno) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -228,7 +228,7 @@ defmodule Exla.Op do
       indices
       |> Enum.map(& &1.ref)
 
-    ref = Exla.NIF.dynamic_slice(op, indices_refs, slice_sizes) |> unwrap!()
+    ref = EXLA.NIF.dynamic_slice(op, indices_refs, slice_sizes) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -241,7 +241,7 @@ defmodule Exla.Op do
       indices
       |> Enum.map(& &1.ref)
 
-    ref = Exla.NIF.dynamic_update_slice(op, update, indices_refs) |> unwrap!()
+    ref = EXLA.NIF.dynamic_update_slice(op, update, indices_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -251,7 +251,7 @@ defmodule Exla.Op do
         precision_config
       ) do
     config = get_precision_config_int(precision_config)
-    ref = Exla.NIF.dot(left, right, config) |> unwrap!()
+    ref = EXLA.NIF.dot(left, right, config) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -262,7 +262,7 @@ defmodule Exla.Op do
         precision_config
       ) do
     config = get_precision_config_int(precision_config)
-    ref = Exla.NIF.dot_general(left, right, dimnos, config) |> unwrap!()
+    ref = EXLA.NIF.dot_general(left, right, dimnos, config) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -279,7 +279,7 @@ defmodule Exla.Op do
     config = get_precision_config_int(precision_config)
 
     ref =
-      Exla.NIF.conv_general_dilated(
+      EXLA.NIF.conv_general_dilated(
         operand,
         kernel,
         strides,
@@ -295,7 +295,7 @@ defmodule Exla.Op do
   end
 
   def transpose(%Op{builder: builder, ref: operand}, permutation) when is_tuple(permutation) do
-    ref = Exla.NIF.transpose(operand, permutation) |> unwrap!()
+    ref = EXLA.NIF.transpose(operand, permutation) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -305,7 +305,7 @@ defmodule Exla.Op do
         %Computation{ref: reduction},
         reduction_dimensions
       ) do
-    ref = Exla.NIF.reduce(operand, init_value, reduction, reduction_dimensions) |> unwrap!()
+    ref = EXLA.NIF.reduce(operand, init_value, reduction, reduction_dimensions) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -325,7 +325,7 @@ defmodule Exla.Op do
       |> Enum.map(& &1.ref)
 
     ref =
-      Exla.NIF.variadic_reduce(
+      EXLA.NIF.variadic_reduce(
         builder,
         operand_refs,
         init_value_refs,
@@ -338,7 +338,7 @@ defmodule Exla.Op do
   end
 
   def convert_element_type(%Op{builder: builder, ref: operand}, dtype) do
-    ref = Exla.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
+    ref = EXLA.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
@@ -346,7 +346,7 @@ defmodule Exla.Op do
         builder: builder,
         ref: max
       }) do
-    ref = Exla.NIF.clamp(operand, min, max) |> unwrap!()
+    ref = EXLA.NIF.clamp(operand, min, max) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 

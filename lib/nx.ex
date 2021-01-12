@@ -37,9 +37,9 @@ defmodule Nx do
   Code inside `defn` functions can also be given to custom compilers,
   which can compile said functions to use either just-in-time (JIT)
   or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
-  For example, using the `Exla` compiler:
+  For example, using the `EXLA` compiler:
 
-      @defn_compiler {Exla, platform: :host}
+      @defn_compiler {EXLA, platform: :host}
       defn softmax(t) do
         Nx.exp(t) / Nx.sum(Nx.exp(t))
       end
@@ -68,7 +68,7 @@ defmodule Nx do
   functions that on the GPU, you want to keep the data on the
   GPU as much as possible. For example:
 
-      @defn_compiler {Exla, platform: :host, keep_on_device: true}
+      @defn_compiler {EXLA, platform: :host, keep_on_device: true}
       defn softmax(t) do
         Nx.exp(t) / Nx.sum(Nx.exp(t))
       end
@@ -1330,7 +1330,7 @@ defmodule Nx do
 
   Move a tensor to a device:
 
-      device_tensor = Nx.device_transfer(tensor, Exla.NxDevice, client: :cuda)
+      device_tensor = Nx.device_transfer(tensor, EXLA.NxDevice, client: :cuda)
 
   Read the device tensor back to an Elixir binary:
 
@@ -4221,6 +4221,23 @@ defmodule Nx do
             [161, 164, 167],
             [191, 194, 197]
           ]
+        ]
+      >
+
+      iex> t = Nx.tensor([
+      ...>   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      ...>   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+      ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+      ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+      ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      ...> ])
+      iex> Nx.slice(t, [0, 0], [6, 7], [5, 3])
+      #Nx.Tensor<
+        f64[2][3]
+        [
+          [0.0, 0.0, 0.0],
+          [1.0, 1.0, 1.0]
         ]
       >
   """

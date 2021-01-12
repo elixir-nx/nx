@@ -1,4 +1,4 @@
-defmodule Exla.ShardedNxDevice do
+defmodule EXLA.ShardedNxDevice do
   @moduledoc """
   Implementation of a sharded buffer for pmap.
   """
@@ -9,14 +9,14 @@ defmodule Exla.ShardedNxDevice do
   def allocate(data, type, shape, opts) do
     client = opts[:client] || :default
 
-    buffer = Exla.ShardedBuffer.sharded_buffer(data, Exla.Shape.make_shape(type, shape))
-    buffer = Exla.ShardedBuffer.place_on_device(buffer, Exla.Client.fetch!(client))
+    buffer = EXLA.ShardedBuffer.sharded_buffer(data, EXLA.Shape.make_shape(type, shape))
+    buffer = EXLA.ShardedBuffer.place_on_device(buffer, EXLA.Client.fetch!(client))
     {__MODULE__, buffer.buffers}
   end
 
   @impl true
-  defdelegate read(data), to: Exla.ShardedBuffer
+  defdelegate read(data), to: EXLA.ShardedBuffer
 
   @impl true
-  defdelegate deallocate(data), to: Exla.ShardedBuffer
+  defdelegate deallocate(data), to: EXLA.ShardedBuffer
 end

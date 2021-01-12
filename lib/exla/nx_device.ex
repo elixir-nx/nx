@@ -1,6 +1,6 @@
-defmodule Exla.NxDevice do
+defmodule EXLA.NxDevice do
   @moduledoc """
-  The Exla implementation of `Nx.Device`.
+  The EXLA implementation of `Nx.Device`.
   """
 
   @behaviour Nx.Device
@@ -10,14 +10,14 @@ defmodule Exla.NxDevice do
     client = opts[:client] || :default
     device_ordinal = opts[:device_ordinal] || -1
 
-    buffer = Exla.Buffer.buffer(data, Exla.Shape.make_shape(type, shape))
-    buffer = Exla.Buffer.place_on_device(buffer, Exla.Client.fetch!(client), device_ordinal)
+    buffer = EXLA.Buffer.buffer(data, EXLA.Shape.make_shape(type, shape))
+    buffer = EXLA.Buffer.place_on_device(buffer, EXLA.Client.fetch!(client), device_ordinal)
     {__MODULE__, buffer.ref}
   end
 
   @impl true
-  defdelegate read(data), to: Exla.Buffer
+  defdelegate read(data), to: EXLA.Buffer
 
   @impl true
-  defdelegate deallocate(data), to: Exla.Buffer
+  defdelegate deallocate(data), to: EXLA.Buffer
 end

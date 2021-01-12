@@ -1583,4 +1583,4 @@ static ErlNifFunc exla_funcs[] = {
   {"start_log_sink", 1, start_log_sink}
 };
 
-ERL_NIF_INIT(Elixir.Exla.NIF, exla_funcs, &load, NULL, NULL, NULL);
+ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

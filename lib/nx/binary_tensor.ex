@@ -388,7 +388,7 @@ defmodule Nx.BinaryTensor do
 
   defp pad_in_dim(shape, dim, edge_low, edge_high, interior) do
     dim_size = elem(shape, dim)
-    interior_padding_factor = if interior == 0, do: 0, else: dim_size * interior - 1
+    interior_padding_factor = (dim_size - 1) * interior
     new_dim = dim_size + interior_padding_factor + edge_high + edge_low
     put_elem(shape, dim, new_dim)
   end
@@ -1083,7 +1083,7 @@ defmodule Nx.BinaryTensor do
     weighted_shape =
       weighted_shape
       |> Enum.zip(strides)
-      |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + ((s - 1) * size)} end)
+      |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + ((s - 1) * dim_size)} end)
 
     input_data = to_binary(tensor)
     output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))

@@ -1,7 +1,7 @@
-defmodule Exla.ShapeTest do
+defmodule EXLA.ShapeTest do
   use ExUnit.Case, async: true
 
-  alias Exla.Shape
+  alias EXLA.Shape
 
   describe "make_shape/2" do
     test "creates shape" do

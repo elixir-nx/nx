@@ -1,4 +1,4 @@
-defmodule Exla.NIF do
+defmodule EXLA.NIF do
   @moduledoc false
   @on_load :__on_load__
 

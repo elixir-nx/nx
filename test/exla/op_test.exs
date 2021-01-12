@@ -1,7 +1,7 @@
-defmodule Exla.OpTest do
+defmodule EXLA.OpTest do
   use ExUnit.Case, async: true
 
-  alias Exla.{Builder, Shape, Op}
+  alias EXLA.{Builder, Shape, Op}
 
   test "parameter/4 successfully creates op" do
     builder = Builder.new("test")

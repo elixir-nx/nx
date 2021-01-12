@@ -1,9 +1,9 @@
-defmodule Exla.BufferTest do
+defmodule EXLA.BufferTest do
   use ExUnit.Case, async: true
 
-  alias Exla.{Buffer, Shape, ShardedBuffer}
+  alias EXLA.{Buffer, Shape, ShardedBuffer}
 
-  import ExlaHelpers
+  import EXLAHelpers
 
   describe "buffer" do
     test "place_on_device/3" do
