@@ -350,6 +350,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def reverse(%Op{builder: builder, ref: operand}, dimensions) do
+    ref = EXLA.NIF.reverse(operand, dimensions) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp get_precision_config_int(precision_config) do

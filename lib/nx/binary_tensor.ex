@@ -393,6 +393,45 @@ defmodule Nx.BinaryTensor do
     put_elem(shape, dim, new_dim)
   end
 
+  @doc false
+  def reverse(_out, t, axes) do
+    case t.shape do
+      {} ->
+        t
+
+      {_} ->
+        if 0 in axes, do: rev_last_dim(t), else: t
+
+      _ ->
+        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
+        permutation = [Nx.rank(t) - 1 | permutation]
+
+        for axis <- Enum.reverse(Nx.axes(t.shape)), reduce: t do
+          acc ->
+            new_t = if axis in axes, do: rev_last_dim(acc), else: acc
+            Nx.transpose(new_t, permutation)
+        end
+    end
+  end
+
+  defp rev_last_dim(%T{shape: shape, type: {_, size}} = t) do
+    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
+
+    new_data =
+      for bin <- view, into: <<>> do
+        reverse_binary(bin, div(size, 8), [])
+      end
+
+    from_binary(t, new_data)
+  end
+
+  defp reverse_binary(<<>>, _size, acc), do: IO.iodata_to_binary(acc)
+
+  defp reverse_binary(data, size, acc) do
+    <<chunk::size(size)-binary, rest::binary>> = data
+    reverse_binary(rest, size, [chunk | acc])
+  end
+
   ## Two-element
 
   @doc false
@@ -1083,7 +1122,7 @@ defmodule Nx.BinaryTensor do
     weighted_shape =
       weighted_shape
       |> Enum.zip(strides)
-      |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + ((s - 1) * dim_size)} end)
+      |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
 
     input_data = to_binary(tensor)
     output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))

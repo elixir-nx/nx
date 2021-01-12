@@ -38,7 +38,7 @@ defmodule Nx.Type do
   def min_value_binary({:u, size}), do: <<0::size(size)-native>>
   def min_value_binary({:bf, 16}), do: <<0xFF80::16-native>>
   def min_value_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
-  def min_value_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>> 
+  def min_value_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
 
   @doc """
   Returns the minimum possible value for the given type.

@@ -1289,15 +1289,98 @@ defmodule EXLA.DefnTest do
       t = Nx.iota({900})
       t = Nx.reshape(t, {2, 15, 30})
       assert slice2(t) == Nx.tensor([[[580, 583, 586, 589]]])
+
       assert slice3(t) ==
-        Nx.tensor(
-          [
-            [
-              [131, 134, 137],
-              [161, 164, 167],
-              [191, 194, 197]
-            ]
-          ])
+               Nx.tensor([
+                 [
+                   [131, 134, 137],
+                   [161, 164, 167],
+                   [191, 194, 197]
+                 ]
+               ])
+    end
+  end
+
+  describe "reverse" do
+    defn reverse(t), do: Nx.reverse(t)
+    defn reverse1(t), do: Nx.reverse(t, [1])
+    defn reverse2(t), do: Nx.reverse(t, [0, 2])
+    defn reverse3(t), do: Nx.reverse(t, [1, 2, 4])
+
+    test "works on all dims" do
+      assert reverse(Nx.iota({10})) == Nx.tensor([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+      assert reverse(Nx.iota({2, 4})) == Nx.tensor([[7, 6, 5, 4], [3, 2, 1, 0]])
+
+      assert reverse(Nx.iota({3, 3, 3})) ==
+               Nx.tensor([
+                 [[26, 25, 24], [23, 22, 21], [20, 19, 18]],
+                 [[17, 16, 15], [14, 13, 12], [11, 10, 9]],
+                 [[8, 7, 6], [5, 4, 3], [2, 1, 0]]
+               ])
+
+      assert reverse(Nx.iota({2, 1, 4, 2})) ==
+               Nx.tensor([
+                 [[[15, 14], [13, 12], [11, 10], [9, 8]]],
+                 [[[7, 6], [5, 4], [3, 2], [1, 0]]]
+               ])
+    end
+
+    test "works with 1 dim" do
+      assert reverse1(Nx.iota({2, 3})) == Nx.tensor([[2, 1, 0], [5, 4, 3]])
+    end
+
+    test "works with 2 dims" do
+      assert reverse2(Nx.iota({2, 3, 4})) ==
+               Nx.tensor([
+                 [
+                   [15, 14, 13, 12],
+                   [19, 18, 17, 16],
+                   [23, 22, 21, 20]
+                 ],
+                 [
+                   [3, 2, 1, 0],
+                   [7, 6, 5, 4],
+                   [11, 10, 9, 8]
+                 ]
+               ])
+    end
+
+    test "works with 3 dims" do
+      assert reverse3(Nx.iota({2, 2, 1, 3, 4})) ==
+               Nx.tensor([
+                 [
+                   [
+                     [
+                       [15, 14, 13, 12],
+                       [19, 18, 17, 16],
+                       [23, 22, 21, 20]
+                     ]
+                   ],
+                   [
+                     [
+                       [3, 2, 1, 0],
+                       [7, 6, 5, 4],
+                       [11, 10, 9, 8]
+                     ]
+                   ]
+                 ],
+                 [
+                   [
+                     [
+                       [39, 38, 37, 36],
+                       [43, 42, 41, 40],
+                       [47, 46, 45, 44]
+                     ]
+                   ],
+                   [
+                     [
+                       [27, 26, 25, 24],
+                       [31, 30, 29, 28],
+                       [35, 34, 33, 32]
+                     ]
+                   ]
+                 ]
+               ])
     end
   end
 

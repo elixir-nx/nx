@@ -308,6 +308,10 @@ defmodule EXLA.Defn do
     EXLA.Op.slice(tensor, start_indices, limit_indices, strides)
   end
 
+  defp to_operator(:reverse, [tensor, dimensions], _ans, _state) do
+    EXLA.Op.reverse(tensor, dimensions)
+  end
+
   ## Computation helpers
 
   defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}} = ans, state) do

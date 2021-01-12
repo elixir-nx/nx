@@ -386,6 +386,26 @@ ERL_NIF_TERM clamp(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM reverse(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  std::vector<exla::int64> dimensions;
+
+  if (!exla::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::error(env, "Unable to get operand.");
+  }
+  if (!exla::get_list(env, argv[1], dimensions)) {
+    return exla::error(env, "Unable to get dimensions.");
+  }
+
+  xla::XlaOp op = xla::Rev(*operand, dimensions);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 /************************ Slicing Ops *****************************/
 ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
@@ -1574,6 +1594,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
   {"clamp", 3, clamp},
+  {"reverse", 2, reverse},
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},

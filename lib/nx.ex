@@ -3915,6 +3915,87 @@ defmodule Nx do
     end
   end
 
+  @doc """
+  Reverses the tensor in every dimension.
+
+  See also `reverse/2`.
+
+  ### Examples
+
+      iex> Nx.reverse(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64[3]
+        [3, 2, 1]
+      >
+
+      iex> Nx.reverse(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [6, 5, 4],
+          [3, 2, 1]
+        ]
+      >
+  """
+  def reverse(tensor) do
+    %{shape: shape} = tensor = tensor(tensor)
+    reverse(tensor, axes(shape))
+  end
+
+  @doc """
+  Reverses the tensor in the given dimensions.
+
+  You can pass either names or numbers for the reverse
+  dimensions. Dimensions must be unique, but they do not
+  have to be successive.
+
+  ### Examples
+
+      iex> Nx.reverse(Nx.tensor([1, 2, 3], names: [:x]), [:x])
+      #Nx.Tensor<
+        s64[x: 3]
+        [3, 2, 1]
+      >
+
+      iex> Nx.reverse(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), [:x])
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [4, 5, 6],
+          [1, 2, 3]
+        ]
+      >
+
+      iex> Nx.reverse(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), [:y])
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [3, 2, 1],
+          [6, 5, 4]
+        ]
+      >
+
+      iex> Nx.reverse(Nx.iota({2, 2, 2}, type: {:f, 32}, names: [:x, :y, :z]), [:x, :z])
+      #Nx.Tensor<
+        f32[x: 2][y: 2][z: 2]
+        [
+          [
+            [5.0, 4.0],
+            [7.0, 6.0]
+          ],
+          [
+            [1.0, 0.0],
+            [3.0, 2.0]
+          ]
+        ]
+      >
+  """
+  def reverse(tensor, axes) when is_list(axes) do
+    %{shape: shape, names: names} = tensor = tensor(tensor)
+    axes = Nx.Shape.normalize_axes(shape, axes, names)
+    impl!(tensor).reverse(tensor, tensor, axes)
+  end
+
   ## Conv
 
   @doc """
@@ -4260,7 +4341,8 @@ defmodule Nx do
 
     output_shape = Nx.Shape.slice(shape, start_indices, limit_indices, strides)
 
-    impl!(tensor).slice(%{tensor | shape: output_shape}, tensor, start_indices, limit_indices, strides)
+    out = %{tensor | shape: output_shape}
+    impl!(tensor).slice(out, tensor, start_indices, limit_indices, strides)
   end
 
   ## Type

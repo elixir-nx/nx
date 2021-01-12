@@ -244,9 +244,16 @@ defmodule Nx.Defn.Expr do
     expr(out, context, :clip, [operand, min, max])
   end
 
+  @doc false
   def slice(out, tensor, start_indices, limit_indices, strides) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :slice, [tensor, start_indices, limit_indices, strides])
+  end
+
+  @doc false
+  def reverse(out, tensor, axes) do
+    tensor = to_expr(tensor)
+    expr(out, tensor.data.context, :reverse, [tensor, axes])
   end
 
   ## Helpers
