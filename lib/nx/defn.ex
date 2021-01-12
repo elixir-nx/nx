@@ -94,7 +94,7 @@ defmodule Nx.Defn do
     |> elem(0)
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :fun, args: [_, _, _, fun]}}, _vars, cache) do
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :fun, args: [_, _, fun]}}, _vars, cache) do
     {fun, cache}
   end
 

@@ -279,8 +279,8 @@ defmodule Exla.Defn do
 
   defp to_operator(:sum, [arg, opts], %{type: type} = ans, state) do
     acc = Exla.Op.constant_r0(state.builder, 0, type)
-    args = [Expr.parameter(type, {}, 0), Expr.parameter(type, {}, 1)]
-    to_operator(:reduce, [arg, acc, opts, Expr.fun(:sum, args, &Nx.add/2)], ans, state)
+    args = [Expr.parameter(:sum, type, {}, 0), Expr.parameter(:sum, type, {}, 1)]
+    to_operator(:reduce, [arg, acc, opts, Expr.fun(args, &Nx.add/2)], ans, state)
   end
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type}, state) do
@@ -310,8 +310,9 @@ defmodule Exla.Defn do
 
   ## Computation helpers
 
-  defp to_computation(%T{data: %Expr{op: :fun, args: [name, args, expr, _]}} = ans, state) do
-    subbuilder = subbuilder(state.builder, "#{name}")
+  defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}} = ans, state) do
+    {:name, name} = Function.info(fun, :name)
+    subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
     params =
       for {%{type: type, shape: shape}, i} <- Enum.with_index(args) do
