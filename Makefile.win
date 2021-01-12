@@ -9,7 +9,7 @@ EXLA_TARGET=host # can also be cuda
 EXLA_MODE=opt # can also be dbg
 EXLA_CACHE=$(TEMP)\exla
 EXLA_TENSORFLOW_GIT_REPO=https://github.com/tensorflow/tensorflow.git
-EXLA_TENSORFLOW_GIT_REV=8a1bb87da5b8dcec1d7f0bf8baa43565c095830e
+EXLA_TENSORFLOW_GIT_REV=6af836f407f546cf2f9ab3b5fcb7a8285bda5c96
 
 # Private configuration
 EXLA_SO=priv/libexla.dll
