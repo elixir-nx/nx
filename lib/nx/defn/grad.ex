@@ -150,7 +150,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:clip, [operand, min, max], _ans, g, cache) do
-    
+
     # w.r.t min
     w_min =
       Nx.select(
