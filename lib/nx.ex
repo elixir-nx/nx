@@ -3939,8 +3939,7 @@ defmodule Nx do
   """
   def reverse(tensor) do
     %{shape: shape} = tensor = tensor(tensor)
-    axes = Nx.axes(shape)
-    reverse(tensor, axes)
+    reverse(tensor, axes(shape))
   end
 
   @doc """
