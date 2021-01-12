@@ -150,7 +150,6 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:clip, [operand, min, max], _ans, g, cache) do
-
     # w.r.t min
     w_min =
       Nx.select(
@@ -233,6 +232,7 @@ defmodule Nx.Defn.Grad do
 
     static_start_indices = List.duplicate(0, Nx.rank(unpadded))
     static_limit_indices = Tuple.to_list(unpadded.shape)
+
     strides =
       padding_config
       |> Enum.map(fn {_, _, interior} -> interior + 1 end)
@@ -248,18 +248,25 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:slice, [x, start_indices, _limit_indices, strides], _ans, g, cache) do
     lo_pads = start_indices
+
     hi_pads =
       Enum.zip([Tuple.to_list(g.shape), start_indices, strides])
-      |> Enum.map(fn {shape, start, stride} -> start + (1 + (stride * (shape - 1))) end)
+      |> Enum.map(fn {shape, start, stride} -> start + (1 + stride * (shape - 1)) end)
       |> Enum.zip(Tuple.to_list(x.shape))
       |> Enum.map(fn {x, y} -> y - x end)
-    interior_pads = Enum.map(strides, & &1 - 1)
+
+    interior_pads = Enum.map(strides, &(&1 - 1))
 
     padding_config = Enum.zip([lo_pads, hi_pads, interior_pads])
     pad_value = 0.0
 
     t_op = Nx.pad(g, pad_value, padding_config)
     to_grad(x, t_op, cache)
+  end
+
+  defp grad(:reverse, [x, dimensions], _ans, g, cache) do
+    reversed = Nx.reverse(g, dimensions)
+    to_grad(x, reversed, cache)
   end
 
   defp grad(:sum, [x, opts], _ans, g, cache) do

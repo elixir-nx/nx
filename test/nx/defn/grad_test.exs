@@ -556,6 +556,25 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "reverse" do
+    defn grad_sum_reverse_exp(t), do: grad(t, Nx.sum(Nx.reverse(Nx.exp(t))))
+    defn grad_sum_exp_reverse(t), do: grad(t, Nx.sum(Nx.exp(Nx.reverse(t))))
+
+    test "computes gradient" do
+      assert grad_sum_exp_reverse(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([
+                 [2.718281828459045, 7.38905609893065, 20.085536923187668],
+                 [54.598150033144236, 148.4131591025766, 403.4287934927351]
+               ])
+
+      assert grad_sum_reverse_exp(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([
+                 [2.718281828459045, 7.38905609893065, 20.085536923187668],
+                 [54.598150033144236, 148.4131591025766, 403.4287934927351]
+               ])
+    end
+  end
+
   describe "abs" do
     defn abs_scalar(t), do: Nx.abs(t)
     defn grad_abs_scalar(t), do: grad(t, Nx.abs(t))

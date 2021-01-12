@@ -726,10 +726,11 @@ defmodule Nx.Shape do
       |> Enum.zip(strides)
       |> Enum.map(fn {{hi, lo}, s} -> Kernel.ceil((hi - lo) / s) end)
 
-    if Enum.any?(output_shape, & &1 <= 0) do
-      raise ArgumentError, "start and limit indices would result in 0 or negative"
-                           <> " dimension size, limit indices must be greater than"
-                           <> " start indices"
+    if Enum.any?(output_shape, &(&1 <= 0)) do
+      raise ArgumentError,
+            "start and limit indices would result in 0 or negative" <>
+              " dimension size, limit indices must be greater than" <>
+              " start indices"
     end
 
     List.to_tuple(output_shape)
