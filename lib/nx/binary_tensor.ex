@@ -16,7 +16,7 @@ defmodule Nx.BinaryTensor do
   def tensor(arg, type, names) do
     {shape, data} = flatten(arg, type)
 
-    names = Nx.Shape.check_names!(names, shape)
+    names = Nx.Shape.named_axes!(names, shape)
 
     if data == "" do
       raise "cannot build empty tensor"
@@ -594,7 +594,7 @@ defmodule Nx.BinaryTensor do
   defp element_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
   defp element_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
 
-  ## Element wiwse unary ops
+  ## Element wise unary ops
 
   for {name, {_desc, code}} <- Nx.Shared.unary_math_funs() do
     @doc false

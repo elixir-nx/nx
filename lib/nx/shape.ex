@@ -4,9 +4,9 @@ defmodule Nx.Shape do
   @moduledoc false
 
   @doc """
-  Validates the name of each dimension.
+  Validates the names of axes.
   """
-  def check_names!(names, shape) do
+  def named_axes!(names, shape) do
     n_dims = tuple_size(shape)
 
     if names do
@@ -106,8 +106,6 @@ defmodule Nx.Shape do
   broadcast, where one shapes dimensions remain fixed,
   while the other's are expanded to match.
 
-  The semantics of broadcasting match [Numpy's](https://numpy.org/doc/stable/user/basics.broadcasting.html).
-
   ## Examples
 
   ### Scalar Shapes
@@ -147,7 +145,12 @@ defmodule Nx.Shape do
     rank = max(left_rank, right_rank)
 
     left_lower_and_names =
-      shape_and_names_to_lower_ranked_list(left_shape, Enum.reverse(left_names), left_rank, rank)
+      shape_and_names_to_lower_ranked_list(
+        left_shape,
+        Enum.reverse(left_names),
+        left_rank,
+        rank
+      )
 
     right_lower_and_names =
       shape_and_names_to_lower_ranked_list(
@@ -179,11 +182,10 @@ defmodule Nx.Shape do
          shape_acc,
          names_acc
        )
-       when rdim == 1 or ldim == 1 or rdim == ldim,
-       do:
-         binary_broadcast(ldims, lnames, rdims, rnames, [max(rdim, ldim) | shape_acc], [
-           merge_names!(lname, rname) | names_acc
-         ])
+       when rdim == 1 or ldim == 1 or rdim == ldim do
+    names_acc = [merge_names!(lname, rname) | names_acc]
+    binary_broadcast(ldims, lnames, rdims, rnames, [max(rdim, ldim) | shape_acc], names_acc)
+  end
 
   defp binary_broadcast([], [], [], [], shape_acc, names_acc),
     do: {:ok, List.to_tuple(shape_acc), names_acc}
@@ -425,18 +427,13 @@ defmodule Nx.Shape do
   def window(shape, window, strides) do
     validate_window!(shape, window)
     validate_strides!(shape, strides)
-
-    List.to_tuple(
-      Enum.reverse(
-        window_dims(Tuple.to_list(shape), Tuple.to_list(window), Tuple.to_list(strides), [])
-      )
-    )
+    window(Tuple.to_list(shape), Tuple.to_list(window), Tuple.to_list(strides), [])
   end
 
-  defp window_dims([], [], [], acc), do: acc
+  defp window([], [], [], acc), do: acc |> Enum.reverse() |> List.to_tuple()
 
-  defp window_dims([dim | shape], [w | window], [s | strides], acc),
-    do: window_dims(shape, window, strides, [max(div(dim - w, s) + 1, 1) | acc])
+  defp window([dim | shape], [w | window], [s | strides], acc),
+    do: window(shape, window, strides, [max(div(dim - w, s) + 1, 1) | acc])
 
   # Ensures the window is valid given the shape.
   # A window is valid as long as it's rank matches
@@ -483,28 +480,26 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.squeeze({2, 2, 1}, [1], [:batch, :x, :y])
       ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 2 for dimension 1
+
   """
   def squeeze(shape, axes, names) do
-    {new_shape, new_names} =
-      Enum.unzip(
-        Enum.reverse(squeeze_dims(Enum.with_index(Tuple.to_list(shape)), axes, names, []))
-      )
-
-    {List.to_tuple(new_shape), new_names}
+    squeeze(Enum.with_index(Tuple.to_list(shape)), axes, names, [], [])
   end
 
-  defp squeeze_dims([], _, _, acc), do: acc
+  defp squeeze([], _, _, sacc, nacc) do
+    {List.to_tuple(Enum.reverse(sacc)), Enum.reverse(nacc)}
+  end
 
-  defp squeeze_dims([{s, i} | shape], axes, [n | names], acc) do
+  defp squeeze([{s, i} | shape], axes, [n | names], sacc, nacc) do
     if i in axes do
       if s == 1 do
-        squeeze_dims(shape, axes, names, acc)
+        squeeze(shape, axes, names, sacc, nacc)
       else
         raise ArgumentError,
               "cannot squeeze dimensions whose sizes are not 1, got #{s} for dimension #{i}"
       end
     else
-      squeeze_dims(shape, axes, names, [{s, n} | acc])
+      squeeze(shape, axes, names, [s | sacc], [n | nacc])
     end
   end
 

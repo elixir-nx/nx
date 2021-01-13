@@ -95,7 +95,9 @@ defmodule Nx.Defn.Expr do
   @doc false
   def to_params(vars), do: to_params(vars, 0)
 
-  defp to_params([head | tail], i), do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
+  defp to_params([head | tail], i),
+    do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
+
   defp to_params([], _i), do: []
 
   @doc false

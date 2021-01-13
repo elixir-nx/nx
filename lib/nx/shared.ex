@@ -159,7 +159,7 @@ defmodule Nx.Shared do
   def iota_out(tensor_or_shape, opts) do
     assert_keys!(opts, [:type, :axis, :names])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
+    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
 
     if axis = opts[:axis] do
@@ -173,7 +173,7 @@ defmodule Nx.Shared do
   def random_uniform_out(tensor_or_shape, min, max, opts) do
     assert_keys!(opts, [:type, :names])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
+    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
     %T{shape: shape, type: type, names: names}
   end
@@ -181,7 +181,7 @@ defmodule Nx.Shared do
   def random_normal_out(tensor_or_shape, opts \\ []) do
     assert_keys!(opts, [:type, :names])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.check_names!(names!(tensor_or_shape), shape)
+    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
     %T{shape: shape, type: type, names: names}
   end
