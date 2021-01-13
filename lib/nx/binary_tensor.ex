@@ -1131,14 +1131,55 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def concatenate(out, tensors, _axis) do
-    %{shape: output_shape, type: {_, size}} = out
-    weighted_shape = weighted_shape(output_shape, size)
+  def concatenate(out, tensors, axis) do
+    %{shape: output_shape, type: {_, size} = output_type} = out
 
-    input_data = Enum.map(tensors, &to_binary/1) |> IO.iodata_to_binary()
-    output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size))
+    tensors =
+      tensors
+      |> Enum.map(fn t -> convert_element_type(%{t | type: output_type}, t, output_type) end)
+
+    output_data =
+      if axis == tuple_size(output_shape) - 1 do
+        aggregate_axes =
+          tensors
+          |> Enum.map(fn %T{shape: shape} = t ->
+            aggregate_axes(to_binary(t), [axis], shape, size)
+          end)
+          |> Enum.zip()
+
+        for axis <- aggregate_axes, into: <<>> do
+          IO.iodata_to_binary(Tuple.to_list(axis))
+        end
+      else
+        input_data = Enum.map(tensors, &to_binary/1) |> IO.iodata_to_binary()
+        output_weighted_shape = weighted_shape(output_shape, size)
+        IO.iodata_to_binary(weighted_traverse(output_weighted_shape, input_data, size))
+      end
 
     from_binary(out, output_data)
+  end
+
+  @doc false
+  def convert_element_type(out, tensor, _type) do
+    %{type: output_type} = out
+
+    case tensor do
+      %T{type: type} = t when type == output_type ->
+        t
+
+      %T{type: input_type} = t ->
+        data = to_binary(t)
+
+        output_data =
+          match_types [input_type, output_type] do
+            for <<match!(x, 0) <- data>>, into: <<>> do
+              value = read!(x, 0)
+              <<write!(value, 1)>>
+            end
+          end
+
+        from_binary(out, output_data)
+    end
   end
 
   ## Binary reducers

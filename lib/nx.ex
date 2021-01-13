@@ -4348,7 +4348,14 @@ defmodule Nx do
   @doc """
   Concatenates tensors in the given dimension.
 
-  All dimensions but the concatenated dimension must match.
+  All tensors must have the same rank and all of their
+  dimension sizes but the concatenated dimension must match.
+
+  If tensors are named, the names must be able to be merged.
+
+  If tensors with mixed types are given, the types will
+  be merged to a higher type and all of the tensors will
+  be cast to the higher type before concatenating.
 
   ### Examples
 
@@ -4358,63 +4365,107 @@ defmodule Nx do
         [1, 2, 3, 4, 5, 6]
       >
 
-      iex> t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z])
-      iex> t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z])
-      iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z])
+      iex> t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: {:f, 32})
+      iex> t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:u, 8})
+      iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:s, 64})
       iex> Nx.concatenate([t1, t2, t3], :x)
       #Nx.Tensor<
-        s64[x: 4][y: 2][z: 2]
+        f64[x: 4][y: 2][z: 2]
+        [
+          [
+            [0.0, 1.0],
+            [2.0, 3.0]
+          ],
+          [
+            [4.0, 5.0],
+            [6.0, 7.0]
+          ],
+          [
+            [0.0, 1.0],
+            [2.0, 3.0]
+          ],
+          [
+            [0.0, 1.0],
+            [2.0, 3.0]
+          ]
+        ]
+      >
+
+      iex> t1 = Nx.iota({1, 3, 2}, names: [:x, :y, :z])
+      iex> t2 = Nx.iota({1, 1, 2}, names: [:x, :y, :z])
+      iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z])
+      iex> Nx.concatenate([t1, t2, t3], :y)
+      #Nx.Tensor<
+        s64[x: 1][y: 6][z: 2]
         [
           [
             [0, 1],
-            [2, 3]
-          ],
-          [
+            [2, 3],
             [4, 5],
-            [6, 7]
-          ],
-          [
             [0, 1],
-            [2, 3]
-          ],
-          [
             [0, 1],
             [2, 3]
           ]
         ]
       >
+
+      iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
+      iex> t2 = Nx.iota({2, 1, 1}, names: [:x, :y, :z])
+      iex> t3 = Nx.iota({2, 1, 3}, names: [:x, :y, :z])
+      iex> Nx.concatenate([t1, t2, t3], :z)
+      #Nx.Tensor<
+        s64[x: 2][y: 1][z: 8]
+        [
+          [
+            [0, 1, 2, 3, 0, 0, 1, 2]
+          ],
+          [
+            [4, 5, 6, 7, 1, 3, 4, 5]
+          ]
+        ]
+      >
+
+      iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
+      iex> Nx.concatenate([t1], :z)
+      #Nx.Tensor<
+        s64[x: 2][y: 1][z: 4]
+        [
+          [
+            [0, 1, 2, 3]
+          ],
+          [
+            [4, 5, 6, 7]
+          ]
+        ]
+      >
   """
   def concatenate([t1 | _] = tensors, axis) do
-    {tensors, types, shapes, names} =
+    {tensors, [type1 | rest], shapes, names} =
       tensors
-      |> Enum.map(
-          fn t ->
-            %T{type: type, shape: shape, names: names} = t = tensor(t)
-            {t, type, shape, names}
-          end
-        )
+      |> Enum.map(fn t ->
+        %T{type: type, shape: shape, names: names} = t = tensor(t)
+        {t, type, shape, names}
+      end)
       |> unzip4()
 
-    {output_shape, output_names} = Nx.Shape.concatenate(shapes, names, axis)
+    {output_shape, output_names, normalized_axis} = Nx.Shape.concatenate(shapes, names, axis)
 
-    # All types must be same
     output_type =
-      case Enum.uniq(types) do
-        [type] -> type
-        _ -> raise ArgumentError, "inputs must have same types"
-      end
+      rest
+      |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
     out = %{t1 | type: output_type, shape: output_shape, names: output_names}
-    impl!(t1).concatenate(out, tensors, axis)
+    impl!(t1).concatenate(out, tensors, normalized_axis)
   end
 
   defp unzip4(enumerable) do
     {list1, list2, list3, list4} =
-      Enum.reduce(enumerable, {[], [], [], []}, fn {el1, el2, el3, el4}, {list1, list2, list3, list4} ->
+      Enum.reduce(enumerable, {[], [], [], []}, fn {el1, el2, el3, el4},
+                                                   {list1, list2, list3, list4} ->
         {[el1 | list1], [el2 | list2], [el3 | list3], [el4 | list4]}
       end)
 
-    {:lists.reverse(list1), :lists.reverse(list2), :lists.reverse(list3), :lists.reverse(list4)}
+    {Enum.reverse(list1), Enum.reverse(list2), Enum.reverse(list3), Enum.reverse(list4)}
   end
 
   ## Type

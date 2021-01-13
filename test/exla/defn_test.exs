@@ -1385,32 +1385,110 @@ defmodule EXLA.DefnTest do
   end
 
   describe "concatenate" do
-    defn concatenate(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 0)
+    defn concatenate0(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 0)
+    defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 1)
+    defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 2)
+    defn concatenate1_inp(t1), do: Nx.concatenate([t1], 2)
 
-    test "works with 3 tensors" do
+    test "works 0th axis" do
       t1 = Nx.iota({2, 2, 2})
       t2 = Nx.iota({1, 2, 2})
       t3 = Nx.iota({1, 2, 2})
-      assert concatenate(t1, t2, t3) == Nx.tensor(
-        [
-          [
-            [0, 1],
-            [2, 3]
-          ],
-          [
-            [4, 5],
-            [6, 7]
-          ],
-          [
-            [0, 1],
-            [2, 3]
-          ],
-          [
-            [0, 1],
-            [2, 3]
-          ]
-        ]
-      )
+
+      assert concatenate0(t1, t2, t3) ==
+               Nx.tensor([
+                 [
+                   [0, 1],
+                   [2, 3]
+                 ],
+                 [
+                   [4, 5],
+                   [6, 7]
+                 ],
+                 [
+                   [0, 1],
+                   [2, 3]
+                 ],
+                 [
+                   [0, 1],
+                   [2, 3]
+                 ]
+               ])
+    end
+
+    test "works on 1st axis" do
+      t1 = Nx.iota({1, 3, 2})
+      t2 = Nx.iota({1, 1, 2})
+      t3 = Nx.iota({1, 2, 2})
+
+      assert concatenate1(t1, t2, t3) ==
+               Nx.tensor([
+                 [
+                   [0, 1],
+                   [2, 3],
+                   [4, 5],
+                   [0, 1],
+                   [0, 1],
+                   [2, 3]
+                 ]
+               ])
+    end
+
+    test "works on 2nd axis" do
+      t1 = Nx.iota({2, 1, 4})
+      t2 = Nx.iota({2, 1, 1})
+      t3 = Nx.iota({2, 1, 3})
+
+      assert concatenate2(t1, t2, t3) ==
+               Nx.tensor([
+                 [
+                   [0, 1, 2, 3, 0, 0, 1, 2]
+                 ],
+                 [
+                   [4, 5, 6, 7, 1, 3, 4, 5]
+                 ]
+               ])
+    end
+
+    test "works with 1 input" do
+      assert concatenate1_inp(Nx.iota({2, 1, 4})) ==
+               Nx.tensor([
+                 [
+                   [0, 1, 2, 3]
+                 ],
+                 [
+                   [4, 5, 6, 7]
+                 ]
+               ])
+    end
+
+    test "works with mixed types" do
+      t1 = Nx.iota({2, 2, 2}, type: {:f, 32})
+      t2 = Nx.iota({1, 2, 2}, type: {:u, 8})
+      t3 = Nx.iota({1, 2, 2}, type: {:bf, 16})
+
+      assert concatenate0(t1, t2, t3) ==
+               Nx.tensor(
+                 [
+                   [
+                     [0.0, 1.0],
+                     [2.0, 3.0]
+                   ],
+                   [
+                     [4.0, 5.0],
+                     [6.0, 7.0]
+                   ],
+                   [
+                     [0.0, 1.0],
+                     [2.0, 3.0]
+                   ],
+                   [
+                     [0.0, 1.0],
+                     [2.0, 3.0]
+                   ]
+                 ],
+                 type: {:f, 32}
+               )
     end
   end
 

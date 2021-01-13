@@ -742,16 +742,17 @@ defmodule Nx.Shape do
   ## Examples
 
       iex> Nx.Shape.concatenate([{2, 3, 2}, {1, 3, 2}, {4, 3, 2}], [[:x, :y, :z], [:x, :y, :z], [:x, :y, :z]], :x)
-      {{7, 3, 2}, [:x, :y, :z]}
+      {{7, 3, 2}, [:x, :y, :z], 0}
   """
   def concatenate(shapes, names, axis) do
     names = validate_concat_names!(names)
     axis = normalize_axis(hd(shapes), axis, names)
-    {concat_dims(shapes, axis), names}
+    {concat_dims(shapes, axis), names, axis}
   end
 
   defp concat_dims([s1 | shapes], axis) do
     s1 = Tuple.to_list(s1)
+
     shapes
     |> Enum.reduce(s1, &concat_shapes(Tuple.to_list(&1), &2, axis))
     |> List.to_tuple()
@@ -761,25 +762,24 @@ defmodule Nx.Shape do
     shape1
     |> Enum.zip(shape2)
     |> Enum.with_index()
-    |> Enum.map(
-        fn {{s1, s2}, i} ->
-          cond do
-            i == axis -> s1 + s2
-            s1 == s2 -> s1
-            true -> raise ArgumentError, "non-concat dims must be equal"
-          end
-        end)
+    |> Enum.map(fn {{s1, s2}, i} ->
+      cond do
+        i == axis -> s1 + s2
+        s1 == s2 -> s1
+        true -> raise ArgumentError, "non-concat dims must be equal"
+      end
+    end)
   end
 
   defp validate_concat_names!(names) do
-    :ok = names
-    |> Enum.zip()
-    |> Enum.each(
-        fn tuple ->
-          if length(Enum.uniq(Tuple.to_list(tuple))) != 1 do
-            raise ArgumentError, "all names must match"
-          end
-        end)
+    :ok =
+      names
+      |> Enum.zip()
+      |> Enum.each(fn tuple ->
+        [n1 | rest] = Tuple.to_list(tuple)
+        Enum.reduce(rest, n1, &merge_names!(&1, &2))
+      end)
+
     hd(names)
   end
 
