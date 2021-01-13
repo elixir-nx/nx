@@ -312,6 +312,10 @@ defmodule EXLA.Defn do
     EXLA.Op.reverse(tensor, dimensions)
   end
 
+  defp to_operator(:concatenate, [tensors, dimension], _ans, _state) do
+    EXLA.Op.concatenate(tensors, dimension)
+  end
+
   ## Computation helpers
 
   defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}} = ans, state) do

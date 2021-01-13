@@ -196,6 +196,9 @@ defmodule EXLA.NIF do
   def reverse(_operand, _dimensions),
     do: nif_error(__ENV__.function)
 
+  def concatenate(_builder, _operands, _dimension),
+    do: nif_error(__ENV__.function)
+
   def tuple(_builder, _elements), do: nif_error(__ENV__.function)
 
   def get_tuple_element(_operand, _indeX), do: nif_error(__ENV__.function)

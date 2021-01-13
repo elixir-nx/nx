@@ -1130,6 +1130,17 @@ defmodule Nx.BinaryTensor do
     from_binary(out, output_data)
   end
 
+  @doc false
+  def concatenate(out, tensors, _axis) do
+    %{shape: output_shape, type: {_, size}} = out
+    weighted_shape = weighted_shape(output_shape, size)
+
+    input_data = Enum.map(tensors, &to_binary/1) |> IO.iodata_to_binary()
+    output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size))
+
+    from_binary(out, output_data)
+  end
+
   ## Binary reducers
 
   defp bin_reduce(out, tensor, acc, opts, fun) do

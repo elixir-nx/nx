@@ -256,6 +256,12 @@ defmodule Nx.Defn.Expr do
     expr(out, tensor.data.context, :reverse, [tensor, axes])
   end
 
+  @doc false
+  def concatenate(out, tensors, axis) do
+    {tensors, context} = to_exprs(tensors)
+    expr(out, context, :concatenate, [tensors, axis])
+  end
+
   ## Helpers
 
   defp expr(tensor, context, op, args) do

@@ -1384,6 +1384,36 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "concatenate" do
+    defn concatenate(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 0)
+
+    test "works with 3 tensors" do
+      t1 = Nx.iota({2, 2, 2})
+      t2 = Nx.iota({1, 2, 2})
+      t3 = Nx.iota({1, 2, 2})
+      assert concatenate(t1, t2, t3) == Nx.tensor(
+        [
+          [
+            [0, 1],
+            [2, 3]
+          ],
+          [
+            [4, 5],
+            [6, 7]
+          ],
+          [
+            [0, 1],
+            [2, 3]
+          ],
+          [
+            [0, 1],
+            [2, 3]
+          ]
+        ]
+      )
+    end
+  end
+
   describe "bfloat16" do
     defn add(t1, t2), do: t1 + t2
 
