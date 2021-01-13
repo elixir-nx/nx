@@ -19,6 +19,8 @@ namespace exla {
 
 namespace se = tensorflow::se;
 
+class ExlaClient;
+
 /*
  * Wraps a ScopedShapedBuffer.
  */
@@ -48,6 +50,8 @@ class ExlaBuffer {
 
   bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
 
+  xla::Status PopulateBuffer(xla::ScopedShapedBuffer& donated_buffer, ExlaClient* client);
+
  private:
   // Used for donating this buffer to another function, like `Run`
   xla::ScopedShapedBuffer* buffer_;
@@ -56,8 +60,6 @@ class ExlaBuffer {
   // Buffer's device
   ExlaDevice* device_;
 };
-
-class ExlaClient;
 
 /*
  * Wraps an xla::LocalExecutable
@@ -88,6 +90,7 @@ class ExlaExecutable {
 
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
+                                  xla::Shape& output_shape,
                                   int replica,
                                   int partition,
                                   int run_id,
