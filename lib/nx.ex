@@ -639,7 +639,7 @@ defmodule Nx do
     {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
 
-    names = Nx.Shape.check_names!(names, {dim})
+    names = Nx.Shape.named_axes!(names, {dim})
 
     if binary == "" do
       raise ArgumentError, "cannot build an empty tensor"
@@ -715,9 +715,9 @@ defmodule Nx do
     new_names = opts[:names] || names!(new_shape)
     new_shape = shape(new_shape)
 
-    names = Nx.Shape.check_names!(new_names, new_shape)
+    names = Nx.Shape.named_axes!(new_names, new_shape)
 
-    if Nx.size(old_shape) != Nx.size(new_shape) do
+    if size(old_shape) != size(new_shape) do
       raise ArgumentError,
             "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
               "new shape #{inspect(new_shape)}"
@@ -944,7 +944,7 @@ defmodule Nx do
     axes = Nx.Shape.normalize_axes(shape, axes, names)
     _ = Nx.Shape.broadcast!(tensor.shape, shape, axes)
 
-    broadcast_names = Nx.Shape.check_names!(broadcast_names, shape)
+    broadcast_names = Nx.Shape.named_axes!(broadcast_names, shape)
 
     impl!(tensor).broadcast(%{tensor | names: broadcast_names, shape: shape}, tensor, shape, axes)
   end
@@ -3093,7 +3093,7 @@ defmodule Nx do
     divide(sum(tensor, opts), mean_den)
   end
 
-  defp mean_den(shape, nil), do: Nx.size(shape)
+  defp mean_den(shape, nil), do: size(shape)
   defp mean_den(_shape, []), do: 1
 
   defp mean_den(shape, [axis | axes]) when axis >= 0,
