@@ -593,7 +593,8 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
     auto device = absl::make_unique<ExlaDevice>(i, executor, client);
     devices.emplace_back(std::move(device));
   }
-  return new ExlaClient(client, /*host_id*/0,
+  return new ExlaClient(client,
+                        /*host_id*/0,
                         /*devices*/std::move(devices),
                         /*allocator*/nullptr,
                         /*host_memory_allocator*/nullptr,
@@ -641,7 +642,8 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
 
   auto gpu_run_options = absl::make_unique<xla::gpu::GpuExecutableRunOptions>();
 
-  return new ExlaClient(client, /*host_id*/0,
+  return new ExlaClient(client,
+                        /*host_id*/0,
                         /*devices*/std::move(devices),
                         /*allocator*/std::move(allocator),
                         /*host_memory_allcoator*/std::move(host_memory_allocator),
