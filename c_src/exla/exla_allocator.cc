@@ -23,7 +23,7 @@ namespace allocator {
       se::StreamExecutor* executor = device->executor();
       int device_ordinal = executor->device_ordinal();
 
-      auto sub_allocator = absl::make_unique<tensorflow::DeviceMemAllocator>(
+      auto sub_allocator = std::make_unique<tensorflow::DeviceMemAllocator>(
         executor, tensorflow::PlatformDeviceId(device_ordinal),
         /*use_unified_memory=*/enable_unified_memory,
         /*alloc_visitors=*/std::vector<tensorflow::SubAllocator::Visitor>(),
@@ -48,7 +48,7 @@ namespace allocator {
                   << " bytes on device " << device_ordinal
                   << " for BFCAllocator.";
       }
-      auto gpu_bfc_allocator = absl::make_unique<tensorflow::BFCAllocator>(
+      auto gpu_bfc_allocator = std::make_unique<tensorflow::BFCAllocator>(
         sub_allocator.release(),
         allocator_memory,
         /*allow_growth=*/!preallocate,
@@ -58,7 +58,7 @@ namespace allocator {
       allocators.emplace_back(std::move(gpu_bfc_allocator),
                               device->compute_stream());
     }
-    return absl::make_unique<se::MultiDeviceAdapter>(platform,
+    return std::make_unique<se::MultiDeviceAdapter>(platform,
                                                      std::move(allocators));
   }
 
@@ -77,7 +77,7 @@ namespace allocator {
     tensorflow::SubAllocator* sub_allocator =
       new tensorflow::DeviceHostAllocator(executor, 0, {}, {});
     const tensorflow::int64 kHostMemoryLimitBytes = 64 * (1LL << 30);
-    return absl::make_unique<tensorflow::BFCAllocator>(sub_allocator,
+    return std::make_unique<tensorflow::BFCAllocator>(sub_allocator,
                                                        kHostMemoryLimitBytes,
                                                        true,
                                                        "xla_gpu_host_bfc");

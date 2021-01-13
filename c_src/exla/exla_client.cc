@@ -590,7 +590,7 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
     EXLA_ASSIGN_OR_RETURN(se::StreamExecutor* executor,
       platform->GetExecutor(config));
 
-    auto device = absl::make_unique<ExlaDevice>(i, executor, client);
+    auto device = std::make_unique<ExlaDevice>(i, executor, client);
     devices.emplace_back(std::move(device));
   }
   return new ExlaClient(client,
@@ -628,7 +628,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
       client->backend().stream_executor(i));
 
     int device_ordinal = executor->device_ordinal();
-    devices.emplace_back(absl::make_unique<ExlaDevice>(device_ordinal,
+    devices.emplace_back(std::make_unique<ExlaDevice>(device_ordinal,
                                                     executor,
                                                     client));
   }
@@ -640,7 +640,7 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
   std::unique_ptr<tensorflow::BFCAllocator> host_memory_allocator =
     allocator::GetGpuHostAllocator(devices.front()->executor());
 
-  auto gpu_run_options = absl::make_unique<xla::gpu::GpuExecutableRunOptions>();
+  auto gpu_run_options = std::make_unique<xla::gpu::GpuExecutableRunOptions>();
 
   return new ExlaClient(client,
                         /*host_id*/0,
