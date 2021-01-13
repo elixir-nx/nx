@@ -149,8 +149,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     return exla::ok(env, data);
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
-    (*client)->ErlBinFromBuffer(*buffer), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*buffer)->ToBinary(), env);
 
   return exla::ok(env, exla::make(env, binary));
 }

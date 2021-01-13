@@ -38,13 +38,8 @@ defmodule EXLA.Executable do
         %Buffer{ref: {ref, _}, data: nil} ->
           ref
 
-        buffer = %Buffer{data: data, shape: shape, ref: nil} ->
-          if outside_cpu do
-            %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_id)
-            ref
-          else
-            {data, shape.ref}
-          end
+        %Buffer{data: data, shape: shape, ref: nil} ->
+          {data, shape.ref}
       end)
 
     # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
