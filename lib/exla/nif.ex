@@ -179,6 +179,9 @@ defmodule EXLA.NIF do
       ),
       do: nif_error(__ENV__.function)
 
+  def map(_builder, _operand, _computation, _dimensions),
+    do: nif_error(__ENV__.function)
+
   def reshape(_operand, _dimensions),
     do: nif_error(__ENV__.function)
 

@@ -1131,6 +1131,20 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
+  def map(%{type: output_type} = out, %{type: type} = tensor, fun) do
+    data = to_binary(tensor)
+
+    output_data =
+      match_types [type, output_type] do
+        for <<match!(x, 0) <- data>>, into: <<>> do
+          <<write!(fun.(read!(x, 0)), 1)>>
+        end
+      end
+
+    from_binary(out, output_data)
+  end
+
+  @doc false
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor
