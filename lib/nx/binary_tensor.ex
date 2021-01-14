@@ -909,9 +909,7 @@ defmodule Nx.BinaryTensor do
     num_input_channels = elem(input_shape, 1)
 
     filter_spatial_dims = Tuple.delete_at(kernel_shape, 0)
-
-    filter_size =
-      tuple_product(filter_spatial_dims, tuple_size(filter_spatial_dims)) * kernel_size
+    filter_size = Nx.size(filter_spatial_dims) * kernel_size
 
     # We first pad the input tensor with the following semantics
     #   :valid - no padding
@@ -937,7 +935,7 @@ defmodule Nx.BinaryTensor do
     %T{shape: padded_shape} = padded_t = Nx.pad(t, 0, padding_config)
 
     single_data_dims = Tuple.delete_at(padded_shape, 0)
-    batch_size = tuple_product(single_data_dims, tuple_size(single_data_dims)) * input_size
+    batch_size = Nx.size(single_data_dims) * input_size
 
     # We will traverse the input tensor exactly the same as we traversed
     # the binary in reduce_window, but the window is equal to the filter
@@ -978,8 +976,8 @@ defmodule Nx.BinaryTensor do
           IO.iodata_to_binary(weighted_traverse(batch_weighted_shape, batch, input_size, offset))
 
         # The receptive field size of each binary in bytes
-        input_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * input_size
-        filter_field_size = tuple_product(filter_shape, tuple_size(filter_shape)) * kernel_size
+        input_field_size = Nx.size(filter_shape) * input_size
+        filter_field_size = Nx.size(filter_shape) * kernel_size
         # For each channel in both filter and input...
         # The output from a single filter being applied over a window
         # of the input tensor is the sum of the element-wise products
@@ -990,7 +988,7 @@ defmodule Nx.BinaryTensor do
             <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
             <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> = filter
 
-            for j <- 0..(tuple_product(filter_shape, tuple_size(filter_shape)) - 1) do
+            for j <- 0..(Nx.size(filter_shape) - 1) do
               x =
                 match_types [input_type] do
                   left_consumed = j * input_size
@@ -1432,7 +1430,4 @@ defmodule Nx.BinaryTensor do
 
   defp weighted_offset([{_, size} | dims], [x | pos]),
     do: size * x + weighted_offset(dims, pos)
-
-  defp tuple_product(_tuple, 0), do: 1
-  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 end
