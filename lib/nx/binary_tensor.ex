@@ -858,7 +858,12 @@ defmodule Nx.BinaryTensor do
 
   ## Conv
 
-  def conv(out, t, k, strides, padding, input_dilation, kernel_dilation) do
+  def conv(out, t, k, opts) do
+    padding = opts[:padding]
+    strides = opts[:strides]
+    input_dilation = opts[:input_dilation]
+    kernel_dilation = opts[:kernel_dilation]
+
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
     #
@@ -1081,7 +1086,10 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def reduce_window(out, tensor, acc, fun, window_dimensions, window_strides, padding_config) do
+  def reduce_window(out, tensor, acc, window_dimensions, opts, fun) do
+    padding_config = opts[:padding]
+    window_strides = opts[:strides]
+
     %T{type: {_, size} = type} = tensor
 
     # TODO: This should change with dilations

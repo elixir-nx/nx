@@ -3437,18 +3437,19 @@ defmodule Nx do
   @doc """
   Reduces elements in a window.
 
-  The rank of the input tensor, window dimensions, and window
-  strides must match.
+  The rank of the input tensor and window dimensions must match.
 
   Padding can either be `:valid`, `:same`, or a general padding
   configuration of edge-high and edge-low paddings.
 
+  If specifying stride, the rank of the stride must match the
+  rank of the input tensor.
+
   ### Examples
 
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
-      ...> :first,
-      ...> fn x, acc -> if acc == :first, do: x, else: max(x, acc) end,
-      ...>  {2, 2}, {1, 1}
+      ...>  :first, {2, 2},
+      ...>  fn x, acc -> if acc == :first, do: x, else: max(x, acc) end
       ...> )
       #Nx.Tensor<
         s64[3][3]
@@ -3460,9 +3461,9 @@ defmodule Nx do
       >
 
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
-      ...> :first,
-      ...> fn x, acc -> if acc == :first, do: x, else: max(x, acc) end,
-      ...>  {2, 2}, {1, 1}, :same
+      ...>  :first, {2, 2},
+      ...>  [padding: :same, strides: {1, 1}],
+      ...>  fn x, acc -> if acc == :first, do: x, else: max(x, acc) end
       ...> )
       #Nx.Tensor<
         s64[3][3]
@@ -3474,9 +3475,9 @@ defmodule Nx do
       >
 
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6]]),
-      ...> 0,
-      ...> fn x, acc -> x + acc end,
-      ...>   {1, 2}, {1, 1}, :same
+      ...>  0, {1, 2},
+      ...>  [padding: :same, strides: {1, 1}],
+      ...>  fn x, acc -> x + acc end
       ...> )
       #Nx.Tensor<
         s64[2][3]
@@ -3486,8 +3487,12 @@ defmodule Nx do
         ]
       >
   """
-  def reduce_window(tensor, acc, fun, window_dimensions, window_strides, padding \\ :valid) do
+  def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun) do
+    assert_keys!(opts, [:padding, :strides])
     %T{shape: shape} = tensor = tensor(tensor)
+
+    window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
+    padding = opts[:padding] || :valid
 
     padding_config =
       case padding do
@@ -3517,10 +3522,9 @@ defmodule Nx do
       out,
       tensor,
       acc,
-      fun,
       window_dimensions,
-      window_strides,
-      padding_config
+      [padding: padding_config, strides: window_strides],
+      fun
     )
   end
 
@@ -4097,7 +4101,7 @@ defmodule Nx do
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
       iex> rhs = Nx.iota({4})
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
-      iex> Nx.conv(lhs, rhs, {1, 1})
+      iex> Nx.conv(lhs, rhs, strides: {1, 1})
       #Nx.Tensor<
         f64[1][4][3][3]
         [
@@ -4126,7 +4130,9 @@ defmodule Nx do
         ]
       >
   """
-  def conv(tensor, kernel, strides, opts \\ []) when is_list(opts) do
+  def conv(tensor, kernel, opts \\ []) when is_list(opts) do
+    assert_keys!(opts, [:padding, :strides, :input_dilation, :kernel_dilation])
+
     padding = opts[:padding] || :valid
     input_dilation = opts[:input_dilation] || 1
     kernel_dilation = opts[:kernel_dilation] || 1
@@ -4160,6 +4166,8 @@ defmodule Nx do
       input_shape
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
+
+    strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(spatial_dims)))
 
     if rank(strides) != rank(spatial_dims) do
       raise ArgumentError, "must specify stride for each spatial dimension"
@@ -4262,10 +4270,10 @@ defmodule Nx do
       out,
       tensor,
       kernel,
-      strides,
-      padding_config,
-      input_dilation,
-      kernel_dilation
+      strides: strides,
+      padding: padding_config,
+      input_dilation: input_dilation,
+      kernel_dilation: kernel_dilation
     )
   end
 

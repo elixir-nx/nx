@@ -162,10 +162,15 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :conv,
-         [operand, kernel, strides, padding, input_dilation, kernel_dilation],
+         [operand, kernel, opts],
          ans,
          state
        ) do
+    padding = opts[:padding]
+    strides = opts[:strides]
+    input_dilation = opts[:input_dilation]
+    kernel_dilation = opts[:kernel_dilation]
+
     %{type: output_type, shape: shape} = ans
     rank = tuple_size(shape)
 
@@ -291,10 +296,13 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :reduce_window,
-         [arg, acc, fun, window_dimensions, window_strides, padding_config],
+         [arg, acc, window_dimensions, opts, fun],
          %{type: type},
          state
        ) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
     arg = to_type(arg, type)
     comp = to_computation(fun, state)
 
@@ -303,7 +311,7 @@ defmodule EXLA.Defn do
       to_type(acc, type),
       comp,
       window_dimensions,
-      window_strides,
+      strides,
       padding_config
     )
   end
