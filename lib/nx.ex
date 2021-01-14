@@ -731,7 +731,10 @@ defmodule Nx do
   end
 
   @doc """
-  Squeezes all of the size `1` dimensions out of the tensor.
+  Squeezes the given size `1` dimensions out of the tensor.
+
+  If no axes are given, squeezes all size `1` dimensions
+  from the tensor.
 
   While this is equivalent to a reshape which eliminates
   the size `1` axes, squeeze preserves important information
@@ -739,15 +742,6 @@ defmodule Nx do
   later on in transformations.
 
   ## Examples
-
-      iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]))
-      #Nx.Tensor<
-        s64[x: 2][y: 3]
-        [
-          [1, 2, 3],
-          [4, 5, 6]
-        ]
-      >
 
       iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]))
       #Nx.Tensor<
@@ -761,29 +755,13 @@ defmodule Nx do
         [1, 2]
       >
 
-  """
-  def squeeze(tensor) do
-    %T{shape: shape} = tensor = tensor(tensor)
-    squeeze(tensor, Nx.Shape.squeeze_axes(shape))
-  end
-
-  @doc """
-  Squeezes the given size `1` dimensions out of the tensor.
-
-  While this is equivalent to a reshape which eliminates
-  the size `1` axes, squeeze preserves important information
-  about which axes were squeezed out which can then be used
-  later on in transformations.
-
-  ## Examples
-
-      iex> Nx.squeeze(Nx.tensor([[1, 2, 3]], names: [:x, :y]), [:x])
+      iex> Nx.squeeze(Nx.tensor([[1, 2, 3]], names: [:x, :y]), axes: [:x])
       #Nx.Tensor<
         s64[y: 3]
         [1, 2, 3]
       >
 
-      iex> Nx.squeeze(Nx.tensor([[1], [2]], names: [:x, :y]), [:y])
+      iex> Nx.squeeze(Nx.tensor([[1], [2]], names: [:x, :y]), axes: [:y])
       #Nx.Tensor<
         s64[x: 2]
         [1, 2]
@@ -791,21 +769,23 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [1])
+      iex> Nx.squeeze(Nx.tensor([[1, 2, 3], [4, 5, 6]]), axes: [1])
       ** (ArgumentError) cannot squeeze dimensions whose sizes are not 1, got 3 for dimension 1
 
-      iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), [0, 0])
+      iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), axes: [0, 0])
       ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4
   """
-  def squeeze(tensor, axes) do
+  def squeeze(tensor, opts \\ []) do
+    assert_keys!(opts, [:axes])
     %T{shape: old_shape, names: names} = tensor = tensor(tensor)
+    axes = opts[:axes] || Nx.Shape.squeeze_axes(old_shape)
     axes = Nx.Shape.normalize_axes(old_shape, axes, names)
     {new_shape, new_names} = Nx.Shape.squeeze(old_shape, axes, names)
 
     if old_shape == new_shape do
       tensor
     else
-      impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes)
+      impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes: axes)
     end
   end
 
@@ -3766,9 +3746,14 @@ defmodule Nx do
   end
 
   @doc """
-  Transposes a tensor by reversing its axes.
+  Transposes a tensor to the given `axes`.
 
-  See `transpose/2` for more information.
+  If no axes are given, the default behavior is to
+  reverse the order of the original tensor's axes.
+
+  The axes is a list of integers or dimension names
+  containing how the new dimensions must be ordered.
+  The highest dimension is zero.
 
   ## Examples
 
@@ -3804,28 +3789,14 @@ defmodule Nx do
           ]
         ]
       >
-  """
-  def transpose(tensor) do
-    tensor = tensor(tensor)
-    transpose(tensor, Nx.Shape.transpose_axes(tensor.shape))
-  end
 
-  @doc """
-  Transposes a tensor to the given `axes`.
-
-  The axes is a list of integers or dimension names
-  containing how the new dimensions must be ordered.
-  The highest dimension is zero.
-
-  ## Examples
-
-      iex> Nx.transpose(Nx.tensor(1), [])
+      iex> Nx.transpose(Nx.tensor(1), axes: [])
       #Nx.Tensor<
         s64
         1
       >
 
-      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), [2, 1, :batch])
+      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), axes: [2, 1, :batch])
       #Nx.Tensor<
         s64[y: 4][x: 3][batch: 2]
         [
@@ -3852,7 +3823,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), [:y, :batch, :x])
+      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), axes: [:y, :batch, :x])
       #Nx.Tensor<
         s64[y: 4][batch: 2][x: 3]
         [
@@ -3875,7 +3846,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), [:batch, :y, :x])
+      iex> Nx.transpose(Nx.iota({2, 3, 4}, names: [:batch, :x, :y]), axes: [:batch, :y, :x])
       #Nx.Tensor<
         s64[batch: 2][y: 4][x: 3]
         [
@@ -3896,29 +3867,34 @@ defmodule Nx do
 
   ### Errors
 
-      iex> Nx.transpose(Nx.iota({2, 2}, names: [:batch, :x]), [:batch])
+      iex> Nx.transpose(Nx.iota({2, 2}, names: [:batch, :x]), axes: [:batch])
       ** (ArgumentError) expected length of permutation (1) to match rank of shape (2)
 
-      iex> Nx.transpose(Nx.iota({2, 2}), [1, 2])
+      iex> Nx.transpose(Nx.iota({2, 2}), axes: [1, 2])
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
   """
-  def transpose(tensor, axes) when is_list(axes) do
+  def transpose(tensor, opts \\ []) do
     %{shape: shape, names: names} = tensor = tensor(tensor)
+    axes = opts[:axes] || Nx.Shape.transpose_axes(shape)
     axes = Nx.Shape.normalize_axes(shape, axes, names)
 
     if axes == Nx.axes(shape) do
       tensor
     else
       {shape, names} = Nx.Shape.transpose(shape, axes, names)
-      impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes)
+      impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes: axes)
     end
   end
 
   @doc """
-  Reverses the tensor in every dimension.
+  Reverses the tensor in the given dimensions.
 
-  See also `reverse/2`.
+  If no axes are provided, reverses every axis.
+
+  You can pass either names or numbers for the reverse
+  dimensions. Dimensions must be unique, but they do not
+  have to be successive.
 
   ### Examples
 
@@ -3936,28 +3912,14 @@ defmodule Nx do
           [3, 2, 1]
         ]
       >
-  """
-  def reverse(tensor) do
-    %{shape: shape} = tensor = tensor(tensor)
-    reverse(tensor, axes(shape))
-  end
 
-  @doc """
-  Reverses the tensor in the given dimensions.
-
-  You can pass either names or numbers for the reverse
-  dimensions. Dimensions must be unique, but they do not
-  have to be successive.
-
-  ### Examples
-
-      iex> Nx.reverse(Nx.tensor([1, 2, 3], names: [:x]), [:x])
+      iex> Nx.reverse(Nx.tensor([1, 2, 3], names: [:x]), axes: [:x])
       #Nx.Tensor<
         s64[x: 3]
         [3, 2, 1]
       >
 
-      iex> Nx.reverse(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), [:x])
+      iex> Nx.reverse(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), axes: [:x])
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -3966,7 +3928,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.reverse(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), [:y])
+      iex> Nx.reverse(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), axes: [:y])
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -3975,7 +3937,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.reverse(Nx.iota({2, 2, 2}, type: {:f, 32}, names: [:x, :y, :z]), [:x, :z])
+      iex> Nx.reverse(Nx.iota({2, 2, 2}, type: {:f, 32}, names: [:x, :y, :z]), axes: [:x, :z])
       #Nx.Tensor<
         f32[x: 2][y: 2][z: 2]
         [
@@ -3990,12 +3952,14 @@ defmodule Nx do
         ]
       >
   """
-  def reverse(tensor, axes) when is_list(axes) do
+  def reverse(tensor, opts \\ []) do
+    assert_keys!(opts, [:axes])
     %{shape: shape, names: names} = tensor = tensor(tensor)
+    axes = opts[:axes] || axes(shape)
 
     case Nx.Shape.normalize_axes(shape, axes, names) do
       [] -> tensor
-      axes -> impl!(tensor).reverse(tensor, tensor, Enum.sort(axes))
+      axes -> impl!(tensor).reverse(tensor, tensor, axes: Enum.sort(axes))
     end
   end
 

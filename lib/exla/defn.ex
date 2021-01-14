@@ -154,7 +154,8 @@ defmodule EXLA.Defn do
     EXLA.Op.broadcast_in_dim(op, ans.shape, List.to_tuple(axes))
   end
 
-  defp to_operator(:transpose, [op, dims], _ans, _state) do
+  defp to_operator(:transpose, [op, opts], _ans, _state) do
+    dims = opts[:axes]
     EXLA.Op.transpose(op, List.to_tuple(dims))
   end
 
@@ -317,7 +318,8 @@ defmodule EXLA.Defn do
     EXLA.Op.slice(tensor, start_indices, limit_indices, strides)
   end
 
-  defp to_operator(:reverse, [tensor, dimensions], _ans, _state) do
+  defp to_operator(:reverse, [tensor, opts], _ans, _state) do
+    dimensions = opts[:axes]
     EXLA.Op.reverse(tensor, dimensions)
   end
 

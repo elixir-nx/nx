@@ -242,7 +242,9 @@ defmodule Nx.BinaryTensor do
   ## Shape
 
   @doc false
-  def transpose(out, %T{shape: shape, type: {_, size}} = t, axes) do
+  def transpose(out, %T{shape: shape, type: {_, size}} = t, opts) do
+    axes = opts[:axes]
+
     data = to_binary(t)
     {list, min, max} = transpose_axes(shape, axes)
     weighted_shape = weighted_shape(shape, size)
@@ -304,7 +306,9 @@ defmodule Nx.BinaryTensor do
 
         for {edge_low, edge_high, interior} <- Enum.reverse(padding_config), reduce: t do
           acc ->
-            Nx.transpose(pad_last_dim(acc, pad_value, edge_low, edge_high, interior), permutation)
+            Nx.transpose(pad_last_dim(acc, pad_value, edge_low, edge_high, interior),
+              axes: permutation
+            )
         end
     end
   end
@@ -394,7 +398,9 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def reverse(out, %{type: {_, size}, shape: shape} = t, axes) do
+  def reverse(out, %{type: {_, size}, shape: shape} = t, opts) do
+    axes = opts[:axes]
+
     data = to_binary(t)
     weighted_shape = weighted_shape(shape, size)
 
