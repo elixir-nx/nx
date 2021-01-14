@@ -24,7 +24,6 @@
 #endif
 
 namespace exla {
-
 /*
  * We standardize numeric types to guarantee everything is platform-independent and
  * compatible with what the TF/XLA API wants.
@@ -42,6 +41,8 @@ using float32 = float;
 using float64 = double;
 using complex64 = std::complex<float>;
 using complex128 = std::complex<double>;
+
+namespace nif {
 
 /*
  * Helper for returning `{:error, msg}` from NIF.
@@ -101,7 +102,7 @@ template <
   typename T = typename xla::primitive_util::PrimitiveTypeToNative<type>::type>
 T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
   T value;
-  exla::get(env, term, &value);
+  get(env, term, &value);
   return value;
 }
 
@@ -251,6 +252,7 @@ ERL_NIF_TERM make(ErlNifEnv* env, T &var) {
  */
 ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 
+}  // namespace nif
 }  // namespace exla
 
 /*
@@ -270,7 +272,7 @@ ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 #define EXLA_ASSIGN_OR_RETURN_NIF_IMPL(statusor, lhs, rexpr, env)       \
   auto statusor = (rexpr);                                              \
   if (!statusor.ok()) {                                                 \
-    return exla::error(env, statusor.status().error_message().c_str()); \
+    return exla::nif::error(env, statusor.status().error_message().c_str()); \
   }                                                                     \
   lhs = std::move(statusor.ValueOrDie());
 

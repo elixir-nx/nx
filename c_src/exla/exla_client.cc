@@ -248,10 +248,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
       ErlNifBinary data;
       xla::Shape* shape;
 
-      if (!get_binary(env, tuple[0], &data)) {
+      if (!nif::get_binary(env, tuple[0], &data)) {
         return xla::InvalidArgument("Unable to read binary data from input.");
       }
-      if (!get<xla::Shape>(env, tuple[1], shape)) {
+      if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
         return xla::InvalidArgument("Unable to read shape from input.");
       }
 
@@ -264,7 +264,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
       inputs.push_back(std::move(inp));
 
-    } else if (get<ExlaBuffer*>(env, head, buffer)) {
+    } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
       if (*buffer == NULL) {
         return xla::FailedPrecondition("Attempt to re-use a previously deallocated device buffer.");
       }
@@ -295,7 +295,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
       client_->DecomposeBuffer(env, buffer_ref), env);
     return references;
   } else if (keep_on_device) {
-    return make<exla::ExlaBuffer*>(env, buffer_ref);
+    return nif::make<ExlaBuffer*>(env, buffer_ref);
   } else if (buffer_ref->is_tuple()) {
     EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM tuple,
       client_->ErlListFromBuffer(env, buffer_ref), env);
@@ -305,7 +305,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
       buffer_ref->ToBinary(), env);
     delete buffer_ref;
-    return make(env, binary);
+    return nif::make(env, binary);
   }
 }
 
@@ -342,7 +342,7 @@ xla::StatusOr<xla::DeviceAssignment> ExlaClient::GetDefaultDeviceAssignment(int 
 xla::StatusOr<ERL_NIF_TERM> ExlaClient::DecomposeBuffer(ErlNifEnv* env,
                                                         ExlaBuffer* buffer) {
   if (!buffer->is_tuple()) {
-    return make<ExlaBuffer*>(env, buffer);
+    return nif::make<ExlaBuffer*>(env, buffer);
   } else {
     EXLA_ASSIGN_OR_RETURN(std::vector<ExlaBuffer*> sub_buffers,
       buffer->DecomposeTuple());

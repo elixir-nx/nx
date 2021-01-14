@@ -1,6 +1,7 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
 namespace exla {
+namespace nif {
 
   ERL_NIF_TERM error(ErlNifEnv* env, const char* msg) {
     ERL_NIF_TERM atom = enif_make_atom(env, "error");
@@ -381,7 +382,7 @@ namespace exla {
       terms.reserve(element_count);
       for (int i=0; i < element_count; i++) {
         xla::Shape shape_elem = xla::ShapeUtil::GetTupleElementShape(shape, i);
-        ERL_NIF_TERM shape_term = exla::make<xla::Shape>(env, shape_elem);
+        ERL_NIF_TERM shape_term = make<xla::Shape>(env, shape_elem);
         terms.emplace_back(shape_term);
       }
       return enif_make_list_from_array(env, &terms[0], element_count);
@@ -398,11 +399,11 @@ namespace exla {
     for (int i=0; i < rank; i++) {
       int copy;
       copy = dims.at(i);
-      dim_arr.emplace_back(exla::make(env, copy));
+      dim_arr.emplace_back(make(env, copy));
     }
 
     ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);
-    ERL_NIF_TERM type_term = exla::make(env, name);
+    ERL_NIF_TERM type_term = make(env, name);
 
     return enif_make_tuple(env, 2, dims_term, type_term);
   }
@@ -423,4 +424,5 @@ namespace exla {
     return enif_make_string(env, string, ERL_NIF_LATIN1);
   }
 
+}  // namespace nif
 }  // namespace exla
