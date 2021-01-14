@@ -270,7 +270,15 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:sum, [x, opts], _ans, g, cache) do
-    grad_aggregate(x, opts, g, cache)
+    g =
+      if axes = opts[:axes] do
+        axes = Nx.axes(x.shape) -- axes
+        Nx.broadcast(g, x, axes)
+      else
+        Nx.broadcast(g, x)
+      end
+
+    to_grad(x, g, cache)
   end
 
   defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
@@ -376,6 +384,30 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:reduce, _, _, _, _) do
+    raise ArgumentError, """
+    cannot compute gradient for Nx.reduce/4.
+
+    If you are computing the sum, product, or similar, use the \
+    appropriate Nx functions instead. If you have a custom usage \
+    of reduce, consider using stop_grad/1 (making it equivalent \
+    to the identify function) or using custom_grad/2 (giving it \
+    a proper gradient implementation.
+    """
+  end
+
+  defp grad(:reduce_window, _, _, _, _) do
+    raise ArgumentError, """
+    cannot compute gradient for Nx.reduce_window/5.
+
+    If you are computing the sum, max, or similar of a window, use \
+    the appropriate Nx functions instead. If you have a custom usage \
+    of reduce_window, consider using stop_grad/1 (making it equivalent \
+    to the identify function) or using custom_grad/2 (giving it \
+    a proper gradient implementation.
+    """
+  end
+
   @constants [:tensor, :parameter, :iota, :random_uniform, :random_normal] ++
                [:argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
@@ -384,20 +416,6 @@ defmodule Nx.Defn.Grad do
 
   defp grad(op, _, _, _, cache) when op in @constants do
     {Expr.to_expr(0.0), cache}
-  end
-
-  ## Grad helpers
-
-  defp grad_aggregate(x, opts, g, cache) do
-    g =
-      if axes = opts[:axes] do
-        axes = Nx.axes(x.shape) -- axes
-        Nx.broadcast(g, x, axes)
-      else
-        Nx.broadcast(g, x)
-      end
-
-    to_grad(x, g, cache)
   end
 
   ## Helpers
