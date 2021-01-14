@@ -339,11 +339,11 @@ defmodule NxTest do
     end
 
     test "works with 1 dim" do
-      assert Nx.reverse(Nx.iota({2, 3}), [1]) == Nx.tensor([[2, 1, 0], [5, 4, 3]])
+      assert Nx.reverse(Nx.iota({2, 3}), axes: [1]) == Nx.tensor([[2, 1, 0], [5, 4, 3]])
     end
 
     test "works with 2 dims" do
-      assert Nx.reverse(Nx.iota({2, 3, 4}), [0, 2]) ==
+      assert Nx.reverse(Nx.iota({2, 3, 4}), axes: [0, 2]) ==
                Nx.tensor([
                  [
                    [15, 14, 13, 12],
@@ -359,7 +359,7 @@ defmodule NxTest do
     end
 
     test "works with 3 dims" do
-      assert Nx.reverse(Nx.iota({2, 2, 1, 3, 4}), [1, 2, 4]) ==
+      assert Nx.reverse(Nx.iota({2, 2, 1, 3, 4}), axes: [1, 2, 4]) ==
                Nx.tensor([
                  [
                    [
@@ -397,7 +397,7 @@ defmodule NxTest do
     end
 
     test "works across types" do
-      assert Nx.reverse(Nx.iota({2, 2, 3, 1, 2}, type: {:f, 32}), [1, 2, 4]) ==
+      assert Nx.reverse(Nx.iota({2, 2, 3, 1, 2}, type: {:f, 32}), axes: [1, 2, 4]) ==
                Nx.tensor(
                  [
                    [

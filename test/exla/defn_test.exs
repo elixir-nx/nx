@@ -905,10 +905,10 @@ defmodule EXLA.DefnTest do
 
   describe "transpose" do
     defn transpose(t), do: Nx.transpose(t)
-    defn transpose_scalar(t), do: Nx.transpose(t, [])
-    defn transpose_perm1(t), do: Nx.transpose(t, [2, 1, 0])
-    defn transpose_perm2(t), do: Nx.transpose(t, [2, 0, 1])
-    defn transpose_perm3(t), do: Nx.transpose(t, [0, 2, 1])
+    defn transpose_scalar(t), do: Nx.transpose(t, axes: [])
+    defn transpose_perm1(t), do: Nx.transpose(t, axes: [2, 1, 0])
+    defn transpose_perm2(t), do: Nx.transpose(t, axes: [2, 0, 1])
+    defn transpose_perm3(t), do: Nx.transpose(t, axes: [0, 2, 1])
 
     test "transposes without axes" do
       assert transpose(Nx.tensor(1)) == Nx.tensor(1)
@@ -1099,7 +1099,7 @@ defmodule EXLA.DefnTest do
 
   describe "squeeze" do
     defn squeeze(t), do: Nx.squeeze(t)
-    defn squeeze2(t), do: Nx.squeeze(t, [0, 1])
+    defn squeeze2(t), do: Nx.squeeze(t, axes: [0, 1])
 
     test "with scalar" do
       assert squeeze(Nx.tensor(1)) == Nx.tensor(1)
@@ -1303,9 +1303,9 @@ defmodule EXLA.DefnTest do
 
   describe "reverse" do
     defn reverse(t), do: Nx.reverse(t)
-    defn reverse1(t), do: Nx.reverse(t, [1])
-    defn reverse2(t), do: Nx.reverse(t, [0, 2])
-    defn reverse3(t), do: Nx.reverse(t, [1, 2, 4])
+    defn reverse1(t), do: Nx.reverse(t, axes: [1])
+    defn reverse2(t), do: Nx.reverse(t, axes: [0, 2])
+    defn reverse3(t), do: Nx.reverse(t, axes: [1, 2, 4])
 
     test "works on all dims" do
       assert reverse(Nx.iota({10})) == Nx.tensor([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])

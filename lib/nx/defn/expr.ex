@@ -199,15 +199,15 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def squeeze(out, tensor, axes) do
+  def squeeze(out, tensor, opts) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :squeeze, [tensor, axes])
+    expr(out, tensor.data.context, :squeeze, [tensor, opts])
   end
 
   @doc false
-  def transpose(out, tensor, axes) do
+  def transpose(out, tensor, opts) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :transpose, [tensor, axes])
+    expr(out, tensor.data.context, :transpose, [tensor, opts])
   end
 
   @doc false
@@ -253,9 +253,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def reverse(out, tensor, axes) do
+  def reverse(out, tensor, opts) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :reverse, [tensor, axes])
+    expr(out, tensor.data.context, :reverse, [tensor, opts])
   end
 
   @doc false

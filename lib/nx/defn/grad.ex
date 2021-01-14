@@ -222,8 +222,9 @@ defmodule Nx.Defn.Grad do
     to_grad(x, Nx.reshape(g, x), cache)
   end
 
-  defp grad(:transpose, [x, axes], _ans, g, cache) do
-    to_grad(x, Nx.transpose(g, argsort(axes)), cache)
+  defp grad(:transpose, [x, opts], _ans, g, cache) do
+    axes = opts[:axes]
+    to_grad(x, Nx.transpose(g, axes: argsort(axes)), cache)
   end
 
   defp grad(:pad, [x, value, padding_config], _ans, g, cache) do
@@ -264,8 +265,8 @@ defmodule Nx.Defn.Grad do
     to_grad(x, t_op, cache)
   end
 
-  defp grad(:reverse, [x, dimensions], _ans, g, cache) do
-    reversed = Nx.reverse(g, dimensions)
+  defp grad(:reverse, [x, opts], _ans, g, cache) do
+    reversed = Nx.reverse(g, opts)
     to_grad(x, reversed, cache)
   end
 
@@ -296,12 +297,12 @@ defmodule Nx.Defn.Grad do
     gx =
       g
       |> Nx.dot(contract_gx, y, contract_y)
-      |> Nx.transpose(argsort(contract_x ++ transpose_x))
+      |> Nx.transpose(axes: argsort(contract_x ++ transpose_x))
 
     gy =
       g
       |> Nx.dot(contract_gy, x, contract_x)
-      |> Nx.transpose(argsort(contract_y ++ transpose_y))
+      |> Nx.transpose(axes: argsort(contract_y ++ transpose_y))
 
     {dx, cache} = to_grad(x, gx, cache)
     {dy, cache} = to_grad(y, gy, cache)

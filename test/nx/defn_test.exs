@@ -112,7 +112,7 @@ defmodule Nx.DefnTest do
     defn dot4(t1, t2), do: Nx.dot(t1, [-2], t2, [-1])
     defn outer(t1, t2), do: Nx.outer(t1, t2)
     defn transpose_1(t), do: Nx.transpose(t)
-    defn transpose_2(t), do: Nx.transpose(t, [-1, -2])
+    defn transpose_2(t), do: Nx.transpose(t, axes: [-1, -2])
     defn reshape(t), do: Nx.reshape(t, {2, 3})
     defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
     defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, [-2])
@@ -133,7 +133,7 @@ defmodule Nx.DefnTest do
     end
 
     test "squeeze" do
-      assert %T{data: %Expr{op: :squeeze, args: [_, [0, 2, 4]]}, shape: {3, 2}} =
+      assert %T{data: %Expr{op: :squeeze, args: [_, [axes: [0, 2, 4]]]}, shape: {3, 2}} =
                squeeze(Nx.iota({1, 3, 1, 2, 1}))
     end
 
@@ -143,10 +143,10 @@ defmodule Nx.DefnTest do
     end
 
     test "transpose" do
-      assert %T{data: %Expr{op: :transpose, args: [_, [1, 0]]}, shape: {3, 2}} =
+      assert %T{data: %Expr{op: :transpose, args: [_, [axes: [1, 0]]]}, shape: {3, 2}} =
                transpose_1(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
 
-      assert %T{data: %Expr{op: :transpose, args: [_, [1, 0]]}, shape: {3, 2}} =
+      assert %T{data: %Expr{op: :transpose, args: [_, [axes: [1, 0]]]}, shape: {3, 2}} =
                transpose_2(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
 
