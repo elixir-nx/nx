@@ -355,6 +355,17 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def concatenate([o1 | _] = operands, dimension) do
+    %Op{builder: builder} = o1
+
+    operand_refs =
+      operands
+      |> Enum.map(& &1.ref)
+
+    ref = EXLA.NIF.concatenate(builder, operand_refs, dimension) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp get_precision_config_int(precision_config) do

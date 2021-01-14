@@ -4348,6 +4348,150 @@ defmodule Nx do
     impl!(tensor).slice(out, tensor, start_indices, limit_indices, strides)
   end
 
+  @doc """
+  Concatenates tensors along the given axis.
+
+  If no axis is provided, defaults to 0.
+
+  All tensors must have the same rank and all of their
+  dimension sizes but the concatenated dimension must match.
+
+  If tensors are named, the names must be able to be merged.
+
+  If tensors with mixed types are given, the types will
+  be merged to a higher type and all of the tensors will
+  be cast to the higher type before concatenating.
+
+  ### Examples
+
+      iex> Nx.concatenate([Nx.tensor([1, 2, 3])])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.concatenate([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+      #Nx.Tensor<
+        s64[6]
+        [1, 2, 3, 4, 5, 6]
+      >
+
+      iex> t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: {:f, 32})
+      iex> t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:u, 8})
+      iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:s, 64})
+      iex> Nx.concatenate([t1, t2, t3], axis: :x)
+      #Nx.Tensor<
+        f64[x: 4][y: 2][z: 2]
+        [
+          [
+            [0.0, 1.0],
+            [2.0, 3.0]
+          ],
+          [
+            [4.0, 5.0],
+            [6.0, 7.0]
+          ],
+          [
+            [0.0, 1.0],
+            [2.0, 3.0]
+          ],
+          [
+            [0.0, 1.0],
+            [2.0, 3.0]
+          ]
+        ]
+      >
+
+      iex> t1 = Nx.iota({1, 3, 2}, names: [:x, :y, :z])
+      iex> t2 = Nx.iota({1, 1, 2}, names: [:x, :y, :z])
+      iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z])
+      iex> Nx.concatenate([t1, t2, t3], axis: :y)
+      #Nx.Tensor<
+        s64[x: 1][y: 6][z: 2]
+        [
+          [
+            [0, 1],
+            [2, 3],
+            [4, 5],
+            [0, 1],
+            [0, 1],
+            [2, 3]
+          ]
+        ]
+      >
+
+      iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
+      iex> t2 = Nx.iota({2, 1, 1}, names: [:x, :y, :z])
+      iex> t3 = Nx.iota({2, 1, 3}, names: [:x, :y, :z])
+      iex> Nx.concatenate([t1, t2, t3], axis: :z)
+      #Nx.Tensor<
+        s64[x: 2][y: 1][z: 8]
+        [
+          [
+            [0, 1, 2, 3, 0, 0, 1, 2]
+          ],
+          [
+            [4, 5, 6, 7, 1, 3, 4, 5]
+          ]
+        ]
+      >
+
+      iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
+      iex> Nx.concatenate([t1], axis: :z)
+      #Nx.Tensor<
+        s64[x: 2][y: 1][z: 4]
+        [
+          [
+            [0, 1, 2, 3]
+          ],
+          [
+            [4, 5, 6, 7]
+          ]
+        ]
+      >
+  """
+  def concatenate(tensors, opts \\ []) when is_list(tensors) do
+    assert_keys!(opts, [:axis])
+    axis = opts[:axis] || 0
+
+    case tensors do
+      [] ->
+        raise ArgumentError, "empty list passed to concatenate"
+
+      [t | []] ->
+        t
+
+      [t1 | _] = tensors ->
+        {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
+          tensors
+          |> Enum.map(fn t ->
+            %T{type: type, shape: shape, names: names} = t = tensor(t)
+            {t, type, shape, names}
+          end)
+          |> unzip4()
+
+        axis = Nx.Shape.normalize_axis(s1, axis, n1)
+        {output_shape, output_names} = Nx.Shape.concatenate(shapes, names, axis)
+
+        output_type =
+          rest
+          |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
+
+        out = %{t1 | type: output_type, shape: output_shape, names: output_names}
+        impl!(t1).concatenate(out, tensors, axis: axis)
+    end
+  end
+
+  defp unzip4(enumerable) do
+    {list1, list2, list3, list4} =
+      Enum.reduce(enumerable, {[], [], [], []}, fn {el1, el2, el3, el4},
+                                                   {list1, list2, list3, list4} ->
+        {[el1 | list1], [el2 | list2], [el3 | list3], [el4 | list4]}
+      end)
+
+    {Enum.reverse(list1), Enum.reverse(list2), Enum.reverse(list3), Enum.reverse(list4)}
+  end
+
   ## Type
 
   defp binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)

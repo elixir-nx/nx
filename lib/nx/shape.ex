@@ -731,6 +731,60 @@ defmodule Nx.Shape do
     List.to_tuple(output_shape)
   end
 
+  @doc """
+  Returns the shape and names after a concat.
+
+  ## Examples
+
+      iex> Nx.Shape.concatenate([{2, 3, 2}, {1, 3, 2}, {4, 3, 2}], [[:x, :y, :z], [:x, :y, :z], [:x, :y, :z]], 0)
+      {{7, 3, 2}, [:x, :y, :z]}
+  """
+  def concatenate(shapes, names, axis) do
+    names = validate_concat_names!(names)
+    {concat_dims(shapes, axis), names}
+  end
+
+  defp concat_dims([s1 | shapes], axis) do
+    s1 = Tuple.to_list(s1)
+
+    shapes
+    |> Enum.reduce(s1, &concat_shapes(Tuple.to_list(&1), &2, axis))
+    |> List.to_tuple()
+  end
+
+  defp concat_shapes(shape1, shape2, axis) do
+    shape1
+    |> Enum.zip(shape2)
+    |> Enum.with_index()
+    |> Enum.map(fn {{s1, s2}, i} ->
+      cond do
+        i == axis ->
+          s1 + s2
+
+        s1 == s2 ->
+          s1
+
+        true ->
+          raise ArgumentError,
+                "non-concat dims must be equal got" <>
+                  " #{inspect(s1)} and #{inspect(s2)}" <>
+                  " while concatenating on axis #{axis}"
+      end
+    end)
+  end
+
+  defp validate_concat_names!(names) do
+    :ok =
+      names
+      |> Enum.zip()
+      |> Enum.each(fn tuple ->
+        [n1 | rest] = Tuple.to_list(tuple)
+        Enum.reduce(rest, n1, &merge_names!(&1, &2))
+      end)
+
+    hd(names)
+  end
+
   ## Helpers
 
   defp count_up(0, _n), do: []

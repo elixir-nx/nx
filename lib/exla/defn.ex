@@ -84,8 +84,17 @@ defmodule EXLA.Defn do
       %{} ->
         {ops, cache} =
           Enum.map_reduce(args, cache, fn
-            %T{data: %Expr{}} = arg, cache -> recur_operator(arg, state, cache)
-            arg, cache -> {arg, cache}
+            %T{data: %Expr{}} = arg, cache ->
+              recur_operator(arg, state, cache)
+
+            [%T{data: %Expr{}} | _] = arg, cache ->
+              Enum.reduce(Enum.reverse(arg), {[], cache}, fn arg, {args, cache} ->
+                {arg, cache} = recur_operator(arg, state, cache)
+                {[arg | args], cache}
+              end)
+
+            arg, cache ->
+              {arg, cache}
           end)
 
         op = to_operator(op, ops, ans, state)
@@ -310,6 +319,16 @@ defmodule EXLA.Defn do
 
   defp to_operator(:reverse, [tensor, dimensions], _ans, _state) do
     EXLA.Op.reverse(tensor, dimensions)
+  end
+
+  defp to_operator(:concatenate, [tensors, opts], ans, _state) do
+    axis = opts[:axis]
+
+    tensors =
+      tensors
+      |> Enum.map(&to_type(&1, ans.type))
+
+    EXLA.Op.concatenate(tensors, axis)
   end
 
   ## Computation helpers
