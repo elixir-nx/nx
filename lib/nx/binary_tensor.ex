@@ -1135,7 +1135,8 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def concatenate(out, tensors, axis) do
+  def concatenate(out, tensors, opts) do
+    axis = opts[:axis]
     %{shape: output_shape, type: {_, size} = output_type} = out
 
     tensors =

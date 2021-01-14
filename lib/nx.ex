@@ -4478,7 +4478,7 @@ defmodule Nx do
           |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
         out = %{t1 | type: output_type, shape: output_shape, names: output_names}
-        impl!(t1).concatenate(out, tensors, axis)
+        impl!(t1).concatenate(out, tensors, axis: axis)
     end
   end
 

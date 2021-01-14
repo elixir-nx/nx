@@ -321,12 +321,14 @@ defmodule EXLA.Defn do
     EXLA.Op.reverse(tensor, dimensions)
   end
 
-  defp to_operator(:concatenate, [tensors, dimension], ans, _state) do
+  defp to_operator(:concatenate, [tensors, opts], ans, _state) do
+    axis = opts[:axis]
+
     tensors =
       tensors
       |> Enum.map(&to_type(&1, ans.type))
 
-    EXLA.Op.concatenate(tensors, dimension)
+    EXLA.Op.concatenate(tensors, axis)
   end
 
   ## Computation helpers
