@@ -36,9 +36,6 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<xla::XlaComputation>(env, mod, "Computation", free_res)) {
     return -1;
   }
-  if (!exla::nif::open_resource<xla::Literal>(env, mod, "Literal", free_res)) {
-    return -1;
-  }
   if (!exla::nif::open_resource<exla::ExlaExecutable*>(env, mod, "Executable", free_res)) {
     return -1;
   }
