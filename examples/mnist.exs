@@ -1,7 +1,7 @@
 defmodule MNIST do
   import Nx.Defn
 
-  @default_defn_compiler Exla
+  @default_defn_compiler EXLA
 
   defn normalize_batch(batch) do
     batch / 255.0

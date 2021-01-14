@@ -19,16 +19,49 @@ namespace exla {
 
 namespace se = tensorflow::se;
 
+class ExlaClient;
+
 /*
  * Wraps a ScopedShapedBuffer.
  */
 class ExlaBuffer {
  public:
-  ExlaBuffer(xla::ScopedShapedBuffer* buffer,
+
+  // Similar to PjRt, we attach semantics to each type of buffer so we know
+  // how to handle the buffer during different operations. The differences
+  // between each are mainly in how the buffer was constructed.
+  enum class BufferType {
+    // The buffer was created using a zero-copy transfer from the
+    // VM. Internally, the buffer points to a binary owned by
+    // the VM. This is only possible in certain circumstances
+    // on a CPU device. Because the VM will eventually garbage
+    // collect the underlying binary, we need to release ownership
+    // back to the VM without modifying the underlying buffer
+    kZeroCopy,
+
+    // The buffer was created using an explicit device transfer
+    // and therefore the VM holds a reference to the underlying
+    // buffer. Usage of this buffer needs to be immutable because
+    // the reference can be used multiple times. The difference
+    // between a kZeroCopy and kImmutable is that kImmutable buffers
+    // are allowed to deallocate their underyling device buffers.
+    kReference,
+
+    // The buffer was created during a call to run or another
+    // operation and therefore the VM does not need to know of
+    // it's existence. We can "donate" the underlying buffer
+    // to XLA and allow it to destruct when it goes out of
+    // scope.
+    kTemporary
+  };
+
+  ExlaBuffer(std::unique_ptr<xla::ScopedShapedBuffer> buffer,
              ExlaDevice* device,
-             bool zero_copy) : buffer_(buffer),
-                               device_(device),
-                               zero_copy_(zero_copy) {}
+             ExlaClient* client,
+             BufferType type) : buffer_(std::move(buffer)),
+                                        device_(device),
+                                        client_(client),
+                                        type_(type) {}
 
   ~ExlaBuffer() { Deallocate(); }
 
@@ -38,26 +71,33 @@ class ExlaBuffer {
 
   bool empty() { return buffer_ == nullptr; }
 
-
   const xla::Shape on_host_shape() { return buffer_->on_host_shape(); }
+
   const xla::Shape on_device_shape() { return buffer_->on_device_shape(); }
 
-  xla::ScopedShapedBuffer* buffer() { return buffer_; }
+  xla::ScopedShapedBuffer* buffer() { return buffer_.get(); }
 
   ExlaDevice* device() { return device_; }
 
   bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
 
+  xla::Status AddToInput(xla::ExecutionInput* input);
+
+  xla::StatusOr<ErlNifBinary> ToBinary();
+
  private:
   // Used for donating this buffer to another function, like `Run`
-  xla::ScopedShapedBuffer* buffer_;
-  // Was the bool created with a zero-copy transfer
-  bool zero_copy_;
-  // Buffer's device
+  std::unique_ptr<xla::ScopedShapedBuffer> buffer_;
+  // Buffer semantics, see discussion above
+  BufferType type_;
+  // Buffer's device and client
+  ExlaClient* client_;
   ExlaDevice* device_;
-};
 
-class ExlaClient;
+  // Used in AddToInput, depending on the buffer type
+  void AddToInputAsImmutable(xla::ExecutionInput* input);
+  void AddToInputAsDonated(xla::ExecutionInput* input);
+};
 
 /*
  * Wraps an xla::LocalExecutable
@@ -88,6 +128,7 @@ class ExlaExecutable {
 
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
+                                  xla::Shape& output_shape,
                                   int replica,
                                   int partition,
                                   int run_id,

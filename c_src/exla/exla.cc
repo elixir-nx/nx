@@ -149,8 +149,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     return exla::ok(env, data);
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary,
-    (*client)->ErlBinFromBuffer(*buffer), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*buffer)->ToBinary(), env);
 
   return exla::ok(env, exla::make(env, binary));
 }
@@ -1444,12 +1443,13 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 10) {
+  if (argc != 11) {
     return exla::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   exla::ExlaExecutable** executable;
+  xla::Shape* output_shape;
   exla::int32 run_id, rng_seed, launch_id, device_ordinal, keep_on_device, replica, partition;
   ERL_NIF_TERM arguments = argv[2];
 
@@ -1459,32 +1459,35 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
     return exla::error(env, "Unable to get executable.");
   }
-  if (!exla::get(env, argv[3], &device_ordinal)) {
+  if (!exla::get<xla::Shape>(env, argv[3], output_shape)) {
+    return exla::error(env, "Unable to get output shape.");
+  }
+  if (!exla::get(env, argv[4], &device_ordinal)) {
     return exla::error(env, "Unable to get device ordinal.");
   }
-  if (!exla::get(env, argv[4], &run_id)) {
+  if (!exla::get(env, argv[5], &run_id)) {
     return exla::error(env, "Unable to get Run ID.");
   }
-  if (!exla::get(env, argv[5], &rng_seed)) {
+  if (!exla::get(env, argv[6], &rng_seed)) {
     return exla::error(env, "Unable to get RNG Seed.");
   }
-  if (!exla::get(env, argv[6], &launch_id)) {
+  if (!exla::get(env, argv[7], &launch_id)) {
     return exla::error(env, "Unable to get Launch ID.");
   }
-  if (!exla::get(env, argv[7], &replica)) {
+  if (!exla::get(env, argv[8], &replica)) {
     return exla::error(env, "Unable to get replica.");
   }
-  if (!exla::get(env, argv[8], &partition)) {
+  if (!exla::get(env, argv[9], &partition)) {
     return exla::error(env, "Unable to get partition.");
   }
-  if (!exla::get(env, argv[9], &keep_on_device)) {
+  if (!exla::get(env, argv[10], &keep_on_device)) {
     return exla::error(env, "Unable to get keep_on_device.");
   }
 
   exla::ExlaDevice* device = nullptr;
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result,
-    (*executable)->Run(env, arguments,
+    (*executable)->Run(env, arguments, *output_shape,
                        replica, partition,
                        run_id, rng_seed,
                        launch_id, device, keep_on_device), env);
@@ -1623,8 +1626,8 @@ static ErlNifFunc exla_funcs[] = {
   /******* Compilation, Execution, Etc. ******/
   {"build", 2, build},
   {"compile", 7, compile},
-  {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 11, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 11, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
   /********* Logger ***********/
   {"start_log_sink", 1, start_log_sink}
 };

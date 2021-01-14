@@ -28,23 +28,15 @@ defmodule EXLA.Executable do
 
     {replica, partition} = Keyword.get(options, :device_assignment, {1, 1})
 
-    outside_cpu = client.platform == :cuda || client.platform == :rocm
-    keep_on_device_int = if keep_on_device || outside_cpu, do: 1, else: 0
-
-    device_id = device_assignment_to_device_id(executable, {replica, partition})
+    keep_on_device_int = if keep_on_device, do: 1, else: 0
 
     inputs =
       Enum.map(arguments, fn
         %Buffer{ref: {ref, _}, data: nil} ->
           ref
 
-        buffer = %Buffer{data: data, shape: shape, ref: nil} ->
-          if outside_cpu do
-            %Buffer{ref: {ref, _}} = Buffer.place_on_device(buffer, client, device_id)
-            ref
-          else
-            {data, shape.ref}
-          end
+        %Buffer{data: data, shape: shape, ref: nil} ->
+          {data, shape.ref}
       end)
 
     # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
@@ -55,6 +47,7 @@ defmodule EXLA.Executable do
             client.ref,
             exec,
             inputs,
+            output_shape.ref,
             device_ordinal,
             run_id,
             rng_seed,
@@ -70,6 +63,7 @@ defmodule EXLA.Executable do
             client.ref,
             exec,
             inputs,
+            output_shape.ref,
             device_ordinal,
             run_id,
             rng_seed,
@@ -127,10 +121,6 @@ defmodule EXLA.Executable do
     %ShardedBuffer{buffers: buffers, shape: output_shape}
   end
 
-  defp device_assignment_to_device_id(%Executable{ref: exec}, {replica, partition}) do
-    EXLA.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
-  end
-
   defp decompose_output(data, shape, client, keep_on_device) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
@@ -142,12 +132,6 @@ defmodule EXLA.Executable do
           end)
 
         {:tuple, tuple}
-
-      _ when keep_on_device == false and is_reference(data) ->
-        # This is the outside of cpu
-        binary = EXLA.NIF.read_device_mem(client.ref, data) |> unwrap!()
-        EXLA.NIF.deallocate_device_mem(data) |> unwrap!()
-        Buffer.buffer(binary, shape)
 
       _ when is_reference(data) ->
         Buffer.buffer({data, client.name}, shape)
