@@ -394,43 +394,49 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def reverse(_out, t, axes) do
-    case t.shape do
-      {} ->
-        t
+  def reverse(out, %{type: {_, size}, shape: shape} = t, axes) do
+    data = to_binary(t)
+    weighted_shape = weighted_shape(shape, size)
 
-      {_} ->
-        if 0 in axes, do: rev_last_dim(t), else: t
+    # Nx guaranteex axes is sorted and non-empty.
+    min = List.first(axes)
+    max = List.last(axes) + 1
 
-      _ ->
-        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
-        permutation = [Nx.rank(t) - 1 | permutation]
+    # The chunk size is computed based on all dimensions
+    # before the minimum one being changed. For example,
+    # for {0, 1, 2, 3} and the reverse is between 1 and 2,
+    # the chunk_size will be d1 * d2 * d3 * size.
+    chunk_size = weighted_chunk(weighted_shape, min, size)
 
-        for axis <- Enum.reverse(Nx.axes(t.shape)), reduce: t do
-          acc ->
-            new_t = if axis in axes, do: rev_last_dim(acc), else: acc
-            Nx.transpose(new_t, permutation)
-        end
+    # All of the major dimensions not being reverse can be
+    # read at once. For example, for {0, 1, 2, 3} and the reverse
+    # is between 1 and 2, the read_size will be d3 * size.
+    read_size = weighted_chunk(weighted_shape, max, size)
+
+    # And now how we will traverse
+    traverse =
+      weighted_shape
+      |> Enum.take(max)
+      |> Enum.drop(min)
+      |> reverse_traverse(min, axes)
+
+    data =
+      for <<chunk::size(chunk_size)-bitstring <- data>> do
+        weighted_traverse(traverse, chunk, read_size)
+      end
+
+    from_binary(out, data)
+  end
+
+  defp reverse_traverse([head | tail], axis, axes) do
+    if axis in axes do
+      [&Enum.reverse/1, head | reverse_traverse(tail, axis + 1, axes)]
+    else
+      [head | reverse_traverse(tail, axis + 1, axes)]
     end
   end
 
-  defp rev_last_dim(%T{shape: shape, type: {_, size}} = t) do
-    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
-
-    new_data =
-      for bin <- view, into: <<>> do
-        reverse_binary(bin, div(size, 8), [])
-      end
-
-    from_binary(t, new_data)
-  end
-
-  defp reverse_binary(<<>>, _size, acc), do: IO.iodata_to_binary(acc)
-
-  defp reverse_binary(data, size, acc) do
-    <<chunk::size(size)-binary, rest::binary>> = data
-    reverse_binary(rest, size, [chunk | acc])
-  end
+  defp reverse_traverse([], _axis, _axes), do: []
 
   ## Two-element
 

@@ -3992,8 +3992,11 @@ defmodule Nx do
   """
   def reverse(tensor, axes) when is_list(axes) do
     %{shape: shape, names: names} = tensor = tensor(tensor)
-    axes = Nx.Shape.normalize_axes(shape, axes, names)
-    impl!(tensor).reverse(tensor, tensor, axes)
+
+    case Nx.Shape.normalize_axes(shape, axes, names) do
+      [] -> tensor
+      axes -> impl!(tensor).reverse(tensor, tensor, Enum.sort(axes))
+    end
   end
 
   ## Conv
