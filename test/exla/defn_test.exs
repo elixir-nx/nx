@@ -1667,6 +1667,7 @@ defmodule EXLA.DefnTest do
                  ],
                  type: {:f, 32}
                )
+    end
   end
 
   describe "sort" do

@@ -1357,7 +1357,7 @@ defmodule Nx.BinaryTensor do
         for i <- Enum.reverse(Nx.axes(t.shape)), reduce: t do
           acc ->
             new_t = if i == axis, do: sort_last_dim(acc, comparator), else: acc
-            Nx.transpose(new_t, permutation)
+            Nx.transpose(new_t, axes: permutation)
         end
     end
   end

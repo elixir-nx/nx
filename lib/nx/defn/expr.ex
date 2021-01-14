@@ -353,12 +353,12 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   @impl true
-  def sort(out, tensor, dimension, comparator) do
+  def sort(out, tensor, opts, comparator) do
     %{type: type} = out
     tensor = to_expr(tensor)
     # TODO: Check output of comparator is pred
     args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
-    expr(out, tensor.data.context, :sort, [tensor, dimension, fun(args, comparator)])
+    expr(out, tensor.data.context, :sort, [tensor, opts, fun(args, comparator)])
   end
 
   ## Helpers

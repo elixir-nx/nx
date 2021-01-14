@@ -210,7 +210,7 @@ defmodule EXLA.NIF do
     do: nif_error(__ENV__.function)
 
   def concatenate(_builder, _operands, _dimension),
-    do: nif_error(_builder, _operands, _dimension)
+    do: nif_error(__ENV__.function)
 
   def sort(_operand, _comparator, _dimension),
     do: nif_error(__ENV__.function)

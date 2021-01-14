@@ -4800,6 +4800,7 @@ defmodule Nx do
             [4, 5, 6, 7, 1, 3, 4, 5]
           ]
         ]
+      >
 
       iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
       iex> Nx.concatenate([t1], axis: :z)
@@ -4813,6 +4814,7 @@ defmodule Nx do
             [4, 5, 6, 7]
           ]
         ]
+      >
   """
   def concatenate(tensors, opts \\ []) when is_list(tensors) do
     assert_keys!(opts, [:axis])
@@ -4901,11 +4903,14 @@ defmodule Nx do
   end
 
   @doc """
-  Sorts the tensor with the given comparator
+  Sorts the tensor along the given axis with the
+  given comparator.
+
+  If no axis is given, defaults to `0`.
 
   ### Examples
 
-      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), :x)
+      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x)
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -4914,7 +4919,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), :y)
+      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y)
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -4923,7 +4928,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), :y, &>/2)
+      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), [axis: :y], &>/2)
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -4932,7 +4937,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), :x)
+      iex> Nx.sort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :x)
       #Nx.Tensor<
         s64[x: 2][y: 3][z: 3]
         [
@@ -4949,7 +4954,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), :y)
+      iex> Nx.sort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :y)
       #Nx.Tensor<
         s64[x: 2][y: 3][z: 3]
         [
@@ -4966,7 +4971,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), :z)
+      iex> Nx.sort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :z)
       #Nx.Tensor<
         s64[x: 2][y: 3][z: 3]
         [
@@ -4983,12 +4988,13 @@ defmodule Nx do
         ]
       >
   """
-  def sort(tensor, axis, comparator \\ &</2) do
+  def sort(tensor, opts \\ [], comparator \\ &</2) do
     %T{shape: shape, names: names} = tensor = tensor(tensor)
 
+    axis = opts[:axis] || 0
     axis = Nx.Shape.normalize_axis(shape, axis, names)
 
-    impl!(tensor).sort(tensor, tensor, axis, comparator)
+    impl!(tensor).sort(tensor, tensor, [axis: axis], comparator)
   end
 
   ## Type

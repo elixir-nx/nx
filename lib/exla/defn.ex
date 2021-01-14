@@ -402,7 +402,9 @@ defmodule EXLA.Defn do
     EXLA.Op.select(EXLA.Op.equal(cholesky, tensor), zeros, cholesky)
   end
 
-  defp to_operator(:sort, [tensor, dimension, comparator], _ans, state) do
+  defp to_operator(:sort, [tensor, opts, comparator], _ans, state) do
+    dimension = opts[:axis]
+
     comp = to_computation(comparator, state)
     EXLA.Op.sort(tensor, comparator, dimension)
   end
