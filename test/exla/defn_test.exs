@@ -606,10 +606,20 @@ defmodule EXLA.DefnTest do
       do: Nx.reduce_window(t, 0, {2, 2}, [padding: [{2, 1}, {1, 2}]], fn a, b -> a + b end)
 
     defn reduce_window_general_stride(t),
-      do: Nx.reduce_window(t, 0, {2, 2}, [padding: [{1, 2}, {2, 1}], strides: {2, 1}], fn a, b -> a + b end)
+      do:
+        Nx.reduce_window(t, 0, {2, 2}, [padding: [{1, 2}, {2, 1}], strides: {2, 1}], fn a, b ->
+          a + b
+        end)
 
     defn reduce_window_nd(t),
-      do: Nx.reduce_window(t, 0, {1, 2, 1, 2, 1, 2}, [padding: :same, strides: {2, 1, 1, 1, 1, 2}], fn a, b -> a + b end)
+      do:
+        Nx.reduce_window(
+          t,
+          0,
+          {1, 2, 1, 2, 1, 2},
+          [padding: :same, strides: {2, 1, 1, 1, 1, 2}],
+          fn a, b -> a + b end
+        )
 
     test "valid padding, no stride" do
       t = Nx.iota({6, 7})
@@ -636,7 +646,9 @@ defmodule EXLA.DefnTest do
       t = Nx.iota({8, 8})
 
       assert reduce_window_same_stride(t) ==
-               Nx.reduce_window(t, 0, {2, 2}, [padding: :same, strides: {2, 1}], fn a, b -> a + b end)
+               Nx.reduce_window(t, 0, {2, 2}, [padding: :same, strides: {2, 1}], fn a, b ->
+                 a + b
+               end)
     end
 
     test "general padding, no stride" do
@@ -650,14 +662,23 @@ defmodule EXLA.DefnTest do
       t = Nx.iota({7, 7})
 
       assert reduce_window_general_stride(t) ==
-               Nx.reduce_window(t, 0, {2, 2}, [padding: [{1, 2}, {2, 1}], strides: {2, 1}], fn a, b -> a + b end)
+               Nx.reduce_window(t, 0, {2, 2}, [padding: [{1, 2}, {2, 1}], strides: {2, 1}], fn a,
+                                                                                               b ->
+                 a + b
+               end)
     end
 
     test "n-d reduce window" do
       t = Nx.iota({4, 2, 4, 3, 1, 3})
 
       assert reduce_window_nd(t) ==
-                Nx.reduce_window(t, 0, {1, 2, 1, 2, 1, 2}, [padding: :same, strides: {2, 1, 1, 1, 1, 2}], fn a, b -> a + b end)
+               Nx.reduce_window(
+                 t,
+                 0,
+                 {1, 2, 1, 2, 1, 2},
+                 [padding: :same, strides: {2, 1, 1, 1, 1, 2}],
+                 fn a, b -> a + b end
+               )
     end
   end
 
@@ -842,8 +863,13 @@ defmodule EXLA.DefnTest do
 
   describe "convolution" do
     defn conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel)
-    defn conv_valid_stride(inp, kernel), do: Nx.conv(inp, kernel, strides: {2, 2}, padding: :valid)
-    defn conv_same_no_stride(inp, kernel), do: Nx.conv(inp, kernel, strides: {1, 1}, padding: :same)
+
+    defn conv_valid_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, strides: {2, 2}, padding: :valid)
+
+    defn conv_same_no_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, strides: {1, 1}, padding: :same)
+
     defn conv_same_stride(inp, kernel), do: Nx.conv(inp, kernel, strides: {3, 3}, padding: :same)
 
     defn conv_general_no_stride(inp, kernel),
