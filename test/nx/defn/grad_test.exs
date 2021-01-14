@@ -733,4 +733,14 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[0.0, 1.0, 1.0], [0.0, 0.0, 0.0]])
     end
   end
+
+  describe "not implemented" do
+    defn grad_reduce(t), do: grad(t, Nx.reduce(t, 0, fn x, y -> x + y end))
+
+    test "raises on reduce" do
+      assert_raise ArgumentError, ~r"cannot compute gradient for Nx.reduce/4", fn ->
+        grad_reduce(3)
+      end
+    end
+  end
 end
