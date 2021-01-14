@@ -1081,6 +1081,38 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
+  def reduce_window(out, tensor, acc, fun, window_dimensions, window_strides, padding_config) do
+    %T{type: {_, size} = type} = tensor
+
+    # TODO: This should change with dilations
+    %T{shape: padded_shape} =
+      tensor = Nx.pad(tensor, 0, Enum.map(padding_config, &Tuple.append(&1, 0)))
+
+    data = Nx.to_binary(tensor)
+
+    weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
+    anchors = Enum.sort(make_anchors(padded_shape, window_strides, window_dimensions, []))
+
+    data =
+      for anchor <- anchors, into: <<>> do
+        offset = weighted_offset(weighted_shape, anchor)
+
+        window = IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
+
+        match_types [type] do
+          window_val =
+            for <<match!(x, 0) <- window>>,
+              reduce: acc,
+              do: (acc -> fun.(read!(x, 0), acc))
+
+          <<write!(window_val, 0)>>
+        end
+      end
+
+    from_binary(out, data)
+  end
+
+  @doc false
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor

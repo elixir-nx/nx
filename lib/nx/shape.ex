@@ -327,6 +327,8 @@ defmodule Nx.Shape do
   @doc """
   Calculates the padding needed for same padding accounting for stride.
 
+  Only calculates padding on the edges, not dilations.
+
   ## Examples
 
       iex> Nx.Shape.calculate_padding({4, 4}, {2, 2}, {1, 1})

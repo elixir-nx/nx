@@ -95,7 +95,9 @@ defmodule Nx.Defn.Expr do
   @doc false
   def to_params(vars), do: to_params(vars, 0)
 
-  defp to_params([head | tail], i), do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
+  defp to_params([head | tail], i),
+    do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
+
   defp to_params([], _i), do: []
 
   @doc false
@@ -156,6 +158,29 @@ defmodule Nx.Defn.Expr do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
     expr(out, context, :reduce, [tensor, acc, opts, fun(args, fun)])
+  end
+
+  @doc false
+  def reduce_window(
+        %{type: type} = out,
+        tensor,
+        acc,
+        fun,
+        window_dims,
+        window_strides,
+        padding_config
+      ) do
+    args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
+    {[tensor, acc], context} = to_exprs([tensor, acc])
+
+    expr(out, context, :reduce_window, [
+      tensor,
+      acc,
+      fun(args, fun),
+      window_dims,
+      window_strides,
+      padding_config
+    ])
   end
 
   ## Creation ops

@@ -3434,6 +3434,96 @@ defmodule Nx do
     impl!(tensor).reduce(out, tensor, acc, [axes: axes], fun)
   end
 
+  @doc """
+  Reduces elements in a window.
+
+  The rank of the input tensor, window dimensions, and window
+  strides must match.
+
+  Padding can either be `:valid`, `:same`, or a general padding
+  configuration of edge-high and edge-low paddings.
+
+  ### Examples
+
+      iex> Nx.reduce_window(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
+      ...> :first,
+      ...> fn x, acc -> if acc == :first, do: x, else: max(x, acc) end,
+      ...>  {2, 2}, {1, 1}
+      ...> )
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [5, 6, 7],
+          [8, 9, 10],
+          [12, 13, 14]
+        ]
+      >
+
+      iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+      ...> :first,
+      ...> fn x, acc -> if acc == :first, do: x, else: max(x, acc) end,
+      ...>  {2, 2}, {1, 1}, :same
+      ...> )
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [5, 6, 6],
+          [8, 9, 9],
+          [8, 9, 9]
+        ]
+      >
+
+      iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6]]),
+      ...> 0,
+      ...> fn x, acc -> x + acc end,
+      ...>   {1, 2}, {1, 1}, :same
+      ...> )
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [3, 5, 3],
+          [9, 11, 6]
+        ]
+      >
+  """
+  def reduce_window(tensor, acc, fun, window_dimensions, window_strides, padding \\ :valid) do
+    %T{shape: shape} = tensor = tensor(tensor)
+
+    padding_config =
+      case padding do
+        :valid ->
+          for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
+
+        :same ->
+          padding_config = Nx.Shape.calculate_padding(shape, window_dimensions, window_strides)
+          padding_config
+
+        config when is_list(config) ->
+          config
+
+        _ ->
+          raise ArgumentError,
+                "invalid padding configuration, padding must be" <>
+                  " :valid or :same, or a padding configuration for" <>
+                  " the spatial dimensions of the input tensor"
+      end
+
+    padded_shape = Nx.Shape.pad(shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
+    output_shape = Nx.Shape.window(padded_shape, window_dimensions, window_strides)
+
+    out = %{tensor | shape: output_shape}
+
+    impl!(tensor).reduce_window(
+      out,
+      tensor,
+      acc,
+      fun,
+      window_dimensions,
+      window_strides,
+      padding_config
+    )
+  end
+
   ## Matrix ops
 
   @doc """

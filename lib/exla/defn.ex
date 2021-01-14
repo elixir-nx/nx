@@ -289,6 +289,25 @@ defmodule EXLA.Defn do
     EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
   end
 
+  defp to_operator(
+         :reduce_window,
+         [arg, acc, fun, window_dimensions, window_strides, padding_config],
+         %{type: type},
+         state
+       ) do
+    arg = to_type(arg, type)
+    comp = to_computation(fun, state)
+
+    EXLA.Op.reduce_window(
+      arg,
+      to_type(acc, type),
+      comp,
+      window_dimensions,
+      window_strides,
+      padding_config
+    )
+  end
+
   @reduction_op [:argmax, :argmin]
 
   defp to_operator(op, [arg, opts], ans, state)

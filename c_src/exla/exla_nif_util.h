@@ -223,9 +223,9 @@ int get_conv_dimension_numbers(ErlNifEnv* env,
                                ERL_NIF_TERM tuple,
                                xla::ConvolutionDimensionNumbers* dimension_numbers);
 
-int get_conv_padding(ErlNifEnv* env,
-                     ERL_NIF_TERM padding_term,
-                     std::vector<std::pair<int64, int64>>& padding);
+int get_general_padding(ErlNifEnv* env,
+                        ERL_NIF_TERM padding_term,
+                        std::vector<std::pair<int64, int64>>& padding);
 /*
  * Makers for standard types.
  */

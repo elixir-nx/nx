@@ -589,6 +589,68 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "reduce window" do
+    defn reduce_window_valid_no_stride(t),
+      do: Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {1, 1}, :valid)
+
+    defn reduce_window_valid_stride(t),
+      do: Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {2, 2}, :valid)
+
+    defn reduce_window_same_no_stride(t),
+      do: Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {1, 1}, :same)
+
+    defn reduce_window_same_stride(t),
+      do: Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {2, 1}, :same)
+
+    defn reduce_window_general_no_stride(t),
+      do: Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {1, 1}, [{2, 1}, {1, 2}])
+
+    defn reduce_window_general_stride(t),
+      do: Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {2, 1}, [{1, 2}, {2, 1}])
+
+    test "valid padding, no stride" do
+      t = Nx.iota({6, 7})
+
+      assert reduce_window_valid_no_stride(t) ==
+               Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {1, 1}, :valid)
+    end
+
+    test "valid padding, stride" do
+      t = Nx.iota({11, 10})
+
+      assert reduce_window_valid_stride(t) ==
+               Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {2, 2}, :valid)
+    end
+
+    test "same padding, no stride" do
+      t = Nx.iota({3, 3})
+
+      assert reduce_window_same_no_stride(t) ==
+               Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {1, 1}, :same)
+    end
+
+    test "same padding, stride" do
+      t = Nx.iota({8, 8})
+
+      assert reduce_window_same_stride(t) ==
+               Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {2, 1}, :same)
+    end
+
+    test "general padding, no stride" do
+      t = Nx.iota({3, 3})
+
+      assert reduce_window_general_no_stride(t) ==
+               Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {1, 1}, [{2, 1}, {1, 2}])
+    end
+
+    test "general padding, stride" do
+      t = Nx.iota({7, 7})
+
+      assert reduce_window_general_stride(t) ==
+               Nx.reduce_window(t, 0, fn a, b -> a + b end, {2, 2}, {2, 1}, [{1, 2}, {2, 1}])
+    end
+  end
+
   describe "sum" do
     defn sum(t), do: Nx.sum(t)
 
