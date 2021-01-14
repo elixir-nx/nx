@@ -1140,7 +1140,7 @@ defmodule Nx.BinaryTensor do
 
     tensors =
       tensors
-      |> Enum.map(fn t -> convert_element_type(%{t | type: output_type}, t, output_type) end)
+      |> Enum.map(fn t -> convert_element_type(%{t | type: output_type}, t) end)
 
     output_data =
       if axis == tuple_size(output_shape) - 1 do
@@ -1164,7 +1164,7 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def convert_element_type(out, tensor, _type) do
+  def convert_element_type(out, tensor) do
     %{type: output_type} = out
 
     case tensor do

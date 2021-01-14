@@ -736,13 +736,12 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.concatenate([{2, 3, 2}, {1, 3, 2}, {4, 3, 2}], [[:x, :y, :z], [:x, :y, :z], [:x, :y, :z]], :x)
-      {{7, 3, 2}, [:x, :y, :z], 0}
+      iex> Nx.Shape.concatenate([{2, 3, 2}, {1, 3, 2}, {4, 3, 2}], [[:x, :y, :z], [:x, :y, :z], [:x, :y, :z]], 0)
+      {{7, 3, 2}, [:x, :y, :z]}
   """
   def concatenate(shapes, names, axis) do
     names = validate_concat_names!(names)
-    axis = normalize_axis(hd(shapes), axis, names)
-    {concat_dims(shapes, axis), names, axis}
+    {concat_dims(shapes, axis), names}
   end
 
   defp concat_dims([s1 | shapes], axis) do
@@ -759,9 +758,17 @@ defmodule Nx.Shape do
     |> Enum.with_index()
     |> Enum.map(fn {{s1, s2}, i} ->
       cond do
-        i == axis -> s1 + s2
-        s1 == s2 -> s1
-        true -> raise ArgumentError, "non-concat dims must be equal"
+        i == axis ->
+          s1 + s2
+
+        s1 == s2 ->
+          s1
+
+        true ->
+          raise ArgumentError,
+                "non-concat dims must be equal got" <>
+                  " #{inspect(s1)} and #{inspect(s2)}" <>
+                  " while concatenating on axis #{axis}"
       end
     end)
   end

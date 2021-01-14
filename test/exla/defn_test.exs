@@ -1385,10 +1385,10 @@ defmodule EXLA.DefnTest do
   end
 
   describe "concatenate" do
-    defn concatenate0(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 0)
-    defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 1)
-    defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], 2)
-    defn concatenate1_inp(t1), do: Nx.concatenate([t1], 2)
+    defn concatenate0(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 0)
+    defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 1)
+    defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2)
+    defn concatenate1_inp(t1), do: Nx.concatenate([t1], axis: 2)
 
     test "works 0th axis" do
       t1 = Nx.iota({2, 2, 2})

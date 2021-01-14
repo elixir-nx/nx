@@ -4349,7 +4349,9 @@ defmodule Nx do
   end
 
   @doc """
-  Concatenates tensors in the given dimension.
+  Concatenates tensors along the given axis.
+
+  If no axis is provided, defaults to 0.
 
   All tensors must have the same rank and all of their
   dimension sizes but the concatenated dimension must match.
@@ -4362,7 +4364,13 @@ defmodule Nx do
 
   ### Examples
 
-      iex> Nx.concatenate([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])], 0)
+      iex> Nx.concatenate([Nx.tensor([1, 2, 3])])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.concatenate([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
       #Nx.Tensor<
         s64[6]
         [1, 2, 3, 4, 5, 6]
@@ -4371,7 +4379,7 @@ defmodule Nx do
       iex> t1 = Nx.iota({2, 2, 2}, names: [:x, :y, :z], type: {:f, 32})
       iex> t2 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:u, 8})
       iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:s, 64})
-      iex> Nx.concatenate([t1, t2, t3], :x)
+      iex> Nx.concatenate([t1, t2, t3], axis: :x)
       #Nx.Tensor<
         f64[x: 4][y: 2][z: 2]
         [
@@ -4397,7 +4405,7 @@ defmodule Nx do
       iex> t1 = Nx.iota({1, 3, 2}, names: [:x, :y, :z])
       iex> t2 = Nx.iota({1, 1, 2}, names: [:x, :y, :z])
       iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z])
-      iex> Nx.concatenate([t1, t2, t3], :y)
+      iex> Nx.concatenate([t1, t2, t3], axis: :y)
       #Nx.Tensor<
         s64[x: 1][y: 6][z: 2]
         [
@@ -4415,7 +4423,7 @@ defmodule Nx do
       iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
       iex> t2 = Nx.iota({2, 1, 1}, names: [:x, :y, :z])
       iex> t3 = Nx.iota({2, 1, 3}, names: [:x, :y, :z])
-      iex> Nx.concatenate([t1, t2, t3], :z)
+      iex> Nx.concatenate([t1, t2, t3], axis: :z)
       #Nx.Tensor<
         s64[x: 2][y: 1][z: 8]
         [
@@ -4429,7 +4437,7 @@ defmodule Nx do
       >
 
       iex> t1 = Nx.iota({2, 1, 4}, names: [:x, :y, :z])
-      iex> Nx.concatenate([t1], :z)
+      iex> Nx.concatenate([t1], axis: :z)
       #Nx.Tensor<
         s64[x: 2][y: 1][z: 4]
         [
@@ -4442,23 +4450,36 @@ defmodule Nx do
         ]
       >
   """
-  def concatenate([t1 | _] = tensors, axis) do
-    {tensors, [type1 | rest], shapes, names} =
-      tensors
-      |> Enum.map(fn t ->
-        %T{type: type, shape: shape, names: names} = t = tensor(t)
-        {t, type, shape, names}
-      end)
-      |> unzip4()
+  def concatenate(tensors, opts \\ []) when is_list(tensors) do
+    assert_keys!(opts, [:axis])
+    axis = opts[:axis] || 0
 
-    {output_shape, output_names, normalized_axis} = Nx.Shape.concatenate(shapes, names, axis)
+    case tensors do
+      [] ->
+        raise ArgumentError, "empty list passed to concatenate"
 
-    output_type =
-      rest
-      |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
+      [t | []] ->
+        t
 
-    out = %{t1 | type: output_type, shape: output_shape, names: output_names}
-    impl!(t1).concatenate(out, tensors, normalized_axis)
+      [t1 | _] = tensors ->
+        {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
+          tensors
+          |> Enum.map(fn t ->
+            %T{type: type, shape: shape, names: names} = t = tensor(t)
+            {t, type, shape, names}
+          end)
+          |> unzip4()
+
+        axis = Nx.Shape.normalize_axis(s1, axis, n1)
+        {output_shape, output_names} = Nx.Shape.concatenate(shapes, names, axis)
+
+        output_type =
+          rest
+          |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
+
+        out = %{t1 | type: output_type, shape: output_shape, names: output_names}
+        impl!(t1).concatenate(out, tensors, axis)
+    end
   end
 
   defp unzip4(enumerable) do
