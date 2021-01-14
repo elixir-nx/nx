@@ -398,6 +398,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def sort(%Op{builder: builder, ref: operand}, %Computation{ref: comparator}, dimension) do
+    ref = EXLA.NIF.sort(operand, comparator, dimension) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp get_precision_config_int(precision_config) do

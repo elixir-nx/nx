@@ -1341,6 +1341,44 @@ defmodule Nx.BinaryTensor do
     end
   end
 
+  @doc false
+  def sort(_out, t, axis, comparator) do
+    case t.shape do
+      {} ->
+        t
+
+      {_} ->
+        if axis == 0, do: sort_last_dim(t, comparator), else: t
+
+      _ ->
+        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
+        permutation = [Nx.rank(t) - 1 | permutation]
+
+        for i <- Enum.reverse(Nx.axes(t.shape)), reduce: t do
+          acc ->
+            new_t = if i == axis, do: sort_last_dim(acc, comparator), else: acc
+            Nx.transpose(new_t, permutation)
+        end
+    end
+  end
+
+  defp sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator) do
+    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
+
+    new_data =
+      for bin <- view, into: <<>> do
+        data =
+          match_types [type] do
+            for <<x::size(size)-bitstring <- bin>> do
+              x
+            end
+          end
+        IO.iodata_to_binary(Enum.sort(data, comparator))
+      end
+
+    from_binary(t, new_data)
+  end
+
   ## Binary reducers
 
   defp bin_reduce(out, tensor, acc, opts, fun) do

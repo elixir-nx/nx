@@ -1667,6 +1667,13 @@ defmodule EXLA.DefnTest do
                  ],
                  type: {:f, 32}
                )
+  end
+
+  describe "sort" do
+    defn sort0_1d(t), do: Nx.sort(t, 0)
+
+    test "sorts a 1d tensor" do
+      assert sort0_1d(Nx.tensor([0, 5, 2, 1, 3, 4])) == Nx.tensor([0, 1, 2, 3, 4, 5])
     end
   end
 
