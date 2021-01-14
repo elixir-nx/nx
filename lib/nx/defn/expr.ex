@@ -160,6 +160,27 @@ defmodule Nx.Defn.Expr do
     expr(out, context, :reduce, [tensor, acc, opts, fun(args, fun)])
   end
 
+  @doc false
+  def reduce_window(
+        %{type: type} = out,
+        tensor,
+        acc,
+        window_dims,
+        opts,
+        fun
+      ) do
+    args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
+    {[tensor, acc], context} = to_exprs([tensor, acc])
+
+    expr(out, context, :reduce_window, [
+      tensor,
+      acc,
+      window_dims,
+      opts,
+      fun(args, fun)
+    ])
+  end
+
   ## Creation ops
 
   @doc false
@@ -223,9 +244,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def conv(out, inp, kernel, stride, padding, input_dilation, kernel_dilation) do
+  def conv(out, inp, kernel, opts) do
     {[inp, kernel], context} = to_exprs([inp, kernel])
-    expr(out, context, :conv, [inp, kernel, stride, padding, input_dilation, kernel_dilation])
+    expr(out, context, :conv, [inp, kernel, opts])
   end
 
   @doc false

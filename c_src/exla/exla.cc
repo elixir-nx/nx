@@ -1021,7 +1021,7 @@ ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::get_tuple(env, argv[2], strides)) {
     return exla::error(env, "Unable to get strides.");
   }
-  if (!exla::get_conv_padding(env, argv[3], padding)) {
+  if (!exla::get_general_padding(env, argv[3], padding)) {
     return exla::error(env, "Unable to get padding.");
   }
   if (!exla::get_tuple(env, argv[4], lhs_dilation)) {
@@ -1123,6 +1123,52 @@ ERL_NIF_TERM variadic_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   xla::XlaOp op = xla::Reduce(*builder, operands,
                               init_values, *computation,
                               dimensions_to_reduce);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* initial_value;
+  xla::XlaComputation* computation;
+  std::vector<exla::int64> window_dimensions;
+  std::vector<exla::int64> window_strides;
+  // TODO(seanmor5): Not yet supported in Nx
+  // std::vector<exla::int64> base_dilations;
+  // std::vector<exla::int64> window_dilations;
+  std::vector<std::pair<exla::int64, exla::int64>> padding_config;
+
+  if (!exla::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::error(env, "Unable to get operand.");
+  }
+  if (!exla::get<xla::XlaOp>(env, argv[1], initial_value)) {
+    return exla::error(env, "Unable to get initial value.");
+  }
+  if (!exla::get<xla::XlaComputation>(env, argv[2], computation)) {
+    return exla::error(env, "Unable to get computation.");
+  }
+  if (!exla::get_tuple(env, argv[3], window_dimensions)) {
+    return exla::error(env, "Unable to get window dimensions.");
+  }
+  if (!exla::get_tuple(env, argv[4], window_strides)) {
+    return exla::error(env, "Unable to get window strides.");
+  }
+  if (!exla::get_general_padding(env, argv[5], padding_config)) {
+    return exla::error(env, "Unable to get padding configuration.");
+  }
+
+  xla::XlaOp op = xla::ReduceWindowWithGeneralPadding(*operand,
+                                                      *initial_value,
+                                                      *computation,
+                                                      window_dimensions,
+                                                      window_strides,
+                                                      {},
+                                                      {},
+                                                      padding_config);
 
   return exla::ok(env, exla::make<xla::XlaOp>(env, op));
 }
@@ -1615,6 +1661,7 @@ static ErlNifFunc exla_funcs[] = {
   /******** Other XLA Ops *******/
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},
+  {"reduce_window", 6, reduce_window},
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
   {"pad", 3, pad},

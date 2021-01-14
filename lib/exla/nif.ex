@@ -169,6 +169,16 @@ defmodule EXLA.NIF do
   def variadic_reduce(_builder, _operands, _init_value, _computation, _dimensions),
     do: nif_error(__ENV__.function)
 
+  def reduce_window(
+        _operand,
+        _init_value,
+        _computation,
+        _window_dimensions,
+        _window_strides,
+        _padding_config
+      ),
+      do: nif_error(__ENV__.function)
+
   def reshape(_operand, _dimensions),
     do: nif_error(__ENV__.function)
 

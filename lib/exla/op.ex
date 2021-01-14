@@ -337,6 +337,28 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def reduce_window(
+        %Op{builder: builder, ref: operand},
+        %Op{builder: builder, ref: init_value},
+        %Computation{ref: reduction},
+        window_dimensions,
+        window_strides,
+        padding_config
+      ) do
+    ref =
+      EXLA.NIF.reduce_window(
+        operand,
+        init_value,
+        reduction,
+        window_dimensions,
+        window_strides,
+        padding_config
+      )
+      |> unwrap!()
+
+    %Op{builder: builder, ref: ref}
+  end
+
   def convert_element_type(%Op{builder: builder, ref: operand}, dtype) do
     ref = EXLA.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}
