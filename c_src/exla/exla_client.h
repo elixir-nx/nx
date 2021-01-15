@@ -63,6 +63,18 @@ class ExlaBuffer {
                                         client_(client),
                                         type_(type) {}
 
+  ExlaBuffer(se::Stream* creation_stream,
+             std::unique_ptr<se::Event> definition_event,
+             std::unique_ptr<xla::ScopedShapedBuffer> buffer,
+             ExlaDevice* device,
+             ExlaClient* client,
+             BufferType type) : creation_stream_(creation_stream),
+                                definition_event_(std::move(definition_event)),
+                                buffer_(std::move(buffer)),
+                                device_(device),
+                                client_(client),
+                                type_(type) {}
+
   ~ExlaBuffer() { Deallocate(); }
 
   xla::Status Deallocate();
@@ -79,20 +91,37 @@ class ExlaBuffer {
 
   ExlaDevice* device() { return device_; }
 
+  se::Event* definition_event() const { return definition_event_.get(); }
+
+  se::Stream* creation_stream() const { return creation_stream_; }
+
   bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
 
   xla::Status AddToInput(xla::ExecutionInput* input);
 
   xla::StatusOr<ErlNifBinary> ToBinary();
 
+  xla::Status BlockHostUntilReady();
+
  private:
   // Used for donating this buffer to another function, like `Run`
   std::unique_ptr<xla::ScopedShapedBuffer> buffer_;
+
   // Buffer semantics, see discussion above
   BufferType type_;
+
   // Buffer's device and client
   ExlaClient* client_;
   ExlaDevice* device_;
+
+  // TODO(seanmor5): PjRt uses an event pool, internally a stack
+  // of events. Research more
+  // Buffer's definition event, we use events to immediately
+  // return to the VM on executions and device transfers.
+  std::unique_ptr<se::Event> definition_event_;
+
+  // The buffer's usage stream
+  se::Stream* creation_stream_;
 
   // Used in AddToInput, depending on the buffer type
   void AddToInputAsImmutable(xla::ExecutionInput* input);

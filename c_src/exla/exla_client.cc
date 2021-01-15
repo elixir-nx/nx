@@ -35,7 +35,7 @@ xla::Status ExlaBuffer::Deallocate() {
         return xla::FailedPrecondition("Internal error.");
     }
 
-    return tensorflow::Status::OK();
+    return xla::Status::OK();
   }
 
   return xla::FailedPrecondition("Attempt to deallocate already deallocated buffer.");
@@ -141,6 +141,12 @@ xla::StatusOr<ErlNifBinary> ExlaBuffer::ToBinary() {
   std::memcpy(binary.data, src_mem, size);
 
   return binary;
+}
+
+xla::Status ExlaBuffer::BlockHostUntilReady() {
+  // TODO(seanmor5): Error check?
+  creation_stream_->ThenWaitFor(definition_event_.get());
+  return xla::Status::OK();
 }
 
 xla::StatusOr<xla::ScopedShapedBuffer> AllocateDestinationBuffer(const xla::Shape& on_host_shape,
@@ -279,13 +285,23 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     list = tail;
   }
 
+  std::unique_ptr<se::Event> creation_event = std::make_unique<se::Event>(device->compute_stream()->parent());
+  creation_event->Init();
+
   xla::StatusOr<xla::ExecutionOutput> exec_status =
     executable->RunAsync(std::move(inputs), run_options);
 
+  device->compute_stream()->ThenRecordEvent(creation_event.get());
+
+  xla::ExecutionOutput results = exec_status.ConsumeValueOrDie();
+
   device->compute_stream()->BlockHostUntilDone();
 
-  xla::ScopedShapedBuffer result = exec_status.ConsumeValueOrDie().ConsumeResult();
-  exla::ExlaBuffer* buffer_ref = new ExlaBuffer(std::make_unique<xla::ScopedShapedBuffer>(std::move(result)),
+  xla::ScopedShapedBuffer result_buffer = results.ConsumeResult();
+
+  exla::ExlaBuffer* buffer_ref = new ExlaBuffer(device->compute_stream(),
+                                                std::move(creation_event),
+                                                std::make_unique<xla::ScopedShapedBuffer>(std::move(result_buffer)),
                                                 device,
                                                 client_,
                                                 ExlaBuffer::BufferType::kReference);
