@@ -3508,6 +3508,47 @@ defmodule Nx do
     )
   end
 
+  @doc """
+  Maps the given scalar function over the entire
+  tensor.
+
+  Generally, you should prefer other using more idiomatic
+  tensor operators to this function.
+
+  ### Examples
+
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> x + 1 end)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [2, 3, 4],
+          [5, 6, 7]
+        ]
+      >
+
+      iex> Nx.map(Nx.tensor(1), fn x -> x + 1 end)
+      #Nx.Tensor<
+        s64
+        2
+      >
+
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 64}], fn x -> x + 1 end)
+      #Nx.Tensor<
+        f64[2][3]
+        [
+          [2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0]
+        ]
+      >
+  """
+  def map(tensor, opts \\ [], fun) do
+    assert_keys!(opts, [:type])
+    %T{type: type} = tensor = tensor(tensor)
+    output_type = opts[:type] || type
+    out = %{tensor | type: output_type}
+    impl!(tensor).map(out, tensor, fun)
+  end
+
   ## Matrix ops
 
   @doc """

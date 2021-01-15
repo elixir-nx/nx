@@ -359,6 +359,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def map(%Op{builder: builder, ref: operand}, %Computation{ref: function}, dimensions) do
+    ref = EXLA.NIF.map(builder, operand, function, dimensions) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def convert_element_type(%Op{builder: builder, ref: operand}, dtype) do
     ref = EXLA.NIF.convert_element_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
     %Op{builder: builder, ref: ref}

@@ -576,6 +576,23 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "map" do
+    defn plus1(t), do: Nx.map(t, fn x -> x + 1 end)
+    defn exp1(t), do: Nx.map(t, [type: {:f, 64}], fn x -> exp(x) end)
+
+    test "maps a function over the tensor" do
+      assert plus1(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 3, 4], [5, 6, 7]])
+    end
+
+    test "maps a function with an output type" do
+      assert exp1(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([
+                 [2.718281828459045, 7.38905609893065, 20.085536923187668],
+                 [54.598150033144236, 148.4131591025766, 403.4287934927351]
+               ])
+    end
+  end
+
   describe "reduce" do
     defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
 

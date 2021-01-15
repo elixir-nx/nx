@@ -1170,6 +1170,34 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  xla::XlaOp* operand;
+  xla::XlaComputation* computation;
+  std::vector<exla::int64> dimensions;
+
+  if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+    return exla::error(env, "Unable to get builder.");
+  }
+  if (!exla::get<xla::XlaOp>(env, argv[1], operand)) {
+    return exla::error(env, "Unable to get operand.");
+  }
+  if (!exla::get<xla::XlaComputation>(env, argv[2], computation)) {
+    return exla::error(env, "Unable to get computation.");
+  }
+  if (!exla::get_list(env, argv[3], dimensions)) {
+    return exla::error(env, "Unable to get map dimensions.");
+  }
+
+  xla::XlaOp op = xla::Map(*builder, {*operand}, *computation, dimensions);
+
+  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1659,6 +1687,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},
   {"reduce_window", 6, reduce_window},
+  {"map", 4, map},
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
   {"pad", 3, pad},

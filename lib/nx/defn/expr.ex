@@ -181,6 +181,13 @@ defmodule Nx.Defn.Expr do
     ])
   end
 
+  @doc false
+  def map(%{type: type} = out, tensor, fun) do
+    args = [parameter(:map, type, {}, 0)]
+    tensor = to_expr(tensor)
+    expr(out, tensor.data.context, :map, [tensor, fun(args, fun)])
+  end
+
   ## Creation ops
 
   @doc false
