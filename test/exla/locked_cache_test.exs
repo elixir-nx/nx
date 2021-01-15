@@ -4,12 +4,12 @@ defmodule EXLA.LockedCacheTest do
   alias EXLA.LockedCache, as: LC
 
   test "caches keys", config do
-    assert LC.run(config.test, fn -> :this_is_cached end) == :this_is_cached
-    assert LC.run(config.test, fn -> flunk() end) == :this_is_cached
+    assert LC.run(config.test, fn -> {:inner, :this_is_cached} end) == {:inner, :this_is_cached}
+    assert LC.run(config.test, fn -> flunk() end) == {nil, :this_is_cached}
   end
 
   test "locks cache keys", config do
-    %Task{pid: first_pid, ref: first_ref} = task_run(config.test, fn -> :this_is_cached end)
+    %Task{pid: first_pid, ref: first_ref} = task_run(config.test, fn -> {:inner, :this_is_cached} end)
     assert_receive {:running, ^first_pid}
 
     %Task{pid: second_pid, ref: second_ref} = task_run(config.test, fn -> flunk() end)
@@ -21,8 +21,8 @@ defmodule EXLA.LockedCacheTest do
     assert Process.info(self(), :messages) ==
              {:messages,
               [
-                {first_ref, :this_is_cached},
-                {second_ref, :this_is_cached}
+                {first_ref, {:inner, :this_is_cached}},
+                {second_ref, {nil, :this_is_cached}}
               ]}
 
     refute_received {:running, ^second_pid}
@@ -30,7 +30,7 @@ defmodule EXLA.LockedCacheTest do
 
   test "allows cache to be recomputed if cache fails", config do
     assert catch_error(LC.run(config.test, fn -> raise "oops" end))
-    assert LC.run(config.test, fn -> :this_is_cached end) == :this_is_cached
+    assert LC.run(config.test, fn -> {:inner, :this_is_cached} end) == {:inner, :this_is_cached}
   end
 
   @tag :capture_log
@@ -39,7 +39,7 @@ defmodule EXLA.LockedCacheTest do
     %Task{pid: error_pid, ref: error_ref} = task_run(config.test, fn -> raise "oops" end)
     assert_receive {:running, ^error_pid}
 
-    %Task{pid: ok_pid} = ok_task = task_run(config.test, fn -> :this_is_cached end)
+    %Task{pid: ok_pid} = ok_task = task_run(config.test, fn -> {:inner, :this_is_cached} end)
     refute_received {:running, ^ok_pid}
 
     send(error_pid, :run)
@@ -47,8 +47,8 @@ defmodule EXLA.LockedCacheTest do
     assert_receive {:running, ^ok_pid}
 
     send(ok_pid, :run)
-    assert Task.await(ok_task) == :this_is_cached
-    assert LC.run(config.test, fn -> flunk() end) == :this_is_cached
+    assert Task.await(ok_task) == {:inner, :this_is_cached}
+    assert LC.run(config.test, fn -> flunk() end) == {nil, :this_is_cached}
   end
 
   @tag :capture_log
@@ -59,7 +59,7 @@ defmodule EXLA.LockedCacheTest do
     Process.exit(error_pid, :kill)
     assert_receive {:DOWN, ^error_ref, _, _, :killed}
 
-    assert LC.run(config.test, fn -> :this_is_cached end) == :this_is_cached
+    assert LC.run(config.test, fn -> {:inner, :this_is_cached} end) == {:inner, :this_is_cached}
   end
 
   @tag :capture_log
@@ -68,7 +68,7 @@ defmodule EXLA.LockedCacheTest do
     %Task{pid: error_pid, ref: error_ref} = task_run(config.test, fn -> raise "oops" end)
     assert_receive {:running, ^error_pid}
 
-    %Task{pid: ok_pid} = ok_task = task_run(config.test, fn -> :this_is_cached end)
+    %Task{pid: ok_pid} = ok_task = task_run(config.test, fn -> {:inner, :this_is_cached} end)
     refute_received {:running, ^ok_pid}
 
     Process.exit(error_pid, :kill)
@@ -76,8 +76,8 @@ defmodule EXLA.LockedCacheTest do
     assert_receive {:running, ^ok_pid}
 
     send(ok_pid, :run)
-    assert Task.await(ok_task) == :this_is_cached
-    assert LC.run(config.test, fn -> flunk() end) == :this_is_cached
+    assert Task.await(ok_task) == {:inner, :this_is_cached}
+    assert LC.run(config.test, fn -> flunk() end) == {nil, :this_is_cached}
   end
 
   defp task_run(key, fun) do

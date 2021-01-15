@@ -27,18 +27,18 @@ defmodule EXLA.LockedCache do
                 GenServer.cast(@name, {:uncached, ref})
                 :erlang.raise(kind, reason, __STACKTRACE__)
             else
-              result ->
+              {return, result} ->
                 :persistent_term.put(key, result)
                 GenServer.cast(@name, {:cached, ref})
-                result
+                {return, result}
             end
 
           :cached ->
-            :persistent_term.get(key)
+            {nil, :persistent_term.get(key)}
         end
 
       value ->
-        value
+        {nil, value}
     end
   end
 

@@ -12,6 +12,11 @@ defmodule EXLA.Client do
   defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
 
   def fetch!(name) do
+    {_, client} = fetch_client!(name)
+    client
+  end
+
+  defp fetch_client!(name) do
     EXLA.LockedCache.run({__MODULE__, name}, fn ->
       clients = Application.fetch_env!(:exla, :clients)
 
@@ -43,13 +48,15 @@ defmodule EXLA.Client do
           EXLA.NIF.get_default_device_ordinal(ref) |> unwrap!()
         end
 
-      %Client{
+      client = %Client{
         ref: ref,
         platform: platform,
         name: name,
         device_count: device_count,
         default_device_ordinal: default_device_ordinal
       }
+
+      {nil, client}
     end)
   end
 

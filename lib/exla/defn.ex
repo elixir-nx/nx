@@ -6,16 +6,24 @@ defmodule EXLA.Defn do
 
   def __compile__(env, _kind, vars, fun, options) do
     %{module: module, function: {name, arity}} = env
-    cache_args = for var <- vars, do: nx_to_cache_key!(var)
-    buffers = for var <- vars, do: nx_to_buffer(var)
+    expr_args = for var <- vars, do: nx_to_expr_key!(var)
+    expr_key = {module, name, arity, expr_args}
+
+    {expr, holes} =
+      EXLA.LockedCache.run(expr_key, fn ->
+        expr = apply(fun, vars)
+        {expr, holes(expr)}
+      end)
 
     # TODO: We should extract the client and device ordinal from buffers first
     # TODO: Rename :client to :default_client
     # TODO: Client_name plus device_ordinal must be part of the cache key
     {client_name, options} = Keyword.pop(options, :client, :default)
+    buffers = for var <- vars, do: nx_to_buffer(var)
+    cache_args = for var <- vars, do: nx_to_cache_key!(var)
     cache_key = {module, name, arity, cache_args, client_name}
 
-    {executable, holes} =
+    {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->
         builder = EXLA.Builder.new("#{name}/#{arity}")
 
@@ -30,7 +38,7 @@ defmodule EXLA.Defn do
           params: params
         }
 
-        expr = apply(fun, vars)
+        expr = expr || apply(fun, vars)
 
         computation =
           expr
@@ -41,7 +49,7 @@ defmodule EXLA.Defn do
         client = EXLA.Client.fetch!(client_name)
         executable = EXLA.Client.compile(client, computation, Enum.map(buffers, & &1.shape))
         :persistent_term.put(cache_key, executable)
-        {executable, holes(expr)}
+        {nil, executable}
       end)
 
     executable
@@ -474,5 +482,6 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp nx_to_cache_key!(%T{type: type, shape: shape, names: names}), do: {type, shape, names}
+  defp nx_to_cache_key!(%T{type: type, shape: shape}), do: {type, shape}
+  defp nx_to_expr_key!(%T{type: type, shape: shape, names: names}), do: {type, shape, names}
 end
