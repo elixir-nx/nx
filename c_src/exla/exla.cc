@@ -1172,7 +1172,7 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
 
 ERL_NIF_TERM map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
-    return exla::error(env, "Bad argument count.");
+    return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaBuilder** builder;
@@ -1180,22 +1180,22 @@ ERL_NIF_TERM map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   xla::XlaComputation* computation;
   std::vector<exla::int64> dimensions;
 
-  if (!exla::get<xla::XlaBuilder*>(env, argv[0], builder)) {
-    return exla::error(env, "Unable to get builder.");
+  if (!exla::nif::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+    return exla::nif::error(env, "Unable to get builder.");
   }
-  if (!exla::get<xla::XlaOp>(env, argv[1], operand)) {
-    return exla::error(env, "Unable to get operand.");
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
   }
-  if (!exla::get<xla::XlaComputation>(env, argv[2], computation)) {
-    return exla::error(env, "Unable to get computation.");
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[2], computation)) {
+    return exla::nif::error(env, "Unable to get computation.");
   }
-  if (!exla::get_list(env, argv[3], dimensions)) {
-    return exla::error(env, "Unable to get map dimensions.");
+  if (!exla::nif::get_list(env, argv[3], dimensions)) {
+    return exla::nif::error(env, "Unable to get map dimensions.");
   }
 
   xla::XlaOp op = xla::Map(*builder, {*operand}, *computation, dimensions);
 
-  return exla::ok(env, exla::make<xla::XlaOp>(env, op));
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
 ERL_NIF_TERM reshape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
