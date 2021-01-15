@@ -3540,6 +3540,15 @@ defmodule Nx do
           [5.0, 6.0, 7.0]
         ]
       >
+
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 64}], fn x -> Nx.add(x, 1) end)
+      #Nx.Tensor<
+        f64[2][3]
+        [
+          [2.0, 3.0, 4.0],
+          [5.0, 6.0, 7.0]
+        ]
+      >
   """
   def map(tensor, opts \\ [], fun) do
     assert_keys!(opts, [:type])

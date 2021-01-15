@@ -47,6 +47,10 @@ defmodule Nx.Util do
       ** (ArgumentError) cannot convert tensor of shape {3} to scalar
 
   """
+  def to_scalar(tensor)
+
+  def to_scalar(number) when is_number(number), do: number
+
   def to_scalar(tensor) do
     tensor = Nx.tensor(tensor)
 

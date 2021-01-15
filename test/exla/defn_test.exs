@@ -577,15 +577,19 @@ defmodule EXLA.DefnTest do
   end
 
   describe "map" do
-    defn plus1(t), do: Nx.map(t, fn x -> x + 1 end)
-    defn exp1(t), do: Nx.map(t, [type: {:f, 64}], fn x -> exp(x) end)
+    defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
+    defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
+    defn map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end)
 
     test "maps a function over the tensor" do
-      assert plus1(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 3, 4], [5, 6, 7]])
+      assert map_plus(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 3, 4], [5, 6, 7]])
     end
 
     test "maps a function with an output type" do
-      assert exp1(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+      assert map_equal(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
+               Nx.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+
+      assert map_exp(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
                Nx.tensor([
                  [2.718281828459045, 7.38905609893065, 20.085536923187668],
                  [54.598150033144236, 148.4131591025766, 403.4287934927351]

@@ -300,7 +300,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type}, state) do
     arg = to_type(arg, type)
-    comp = to_computation(fun, state)
+    comp = to_computation(fun, type, state)
     EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
   end
 
@@ -314,7 +314,7 @@ defmodule EXLA.Defn do
     strides = opts[:strides]
 
     arg = to_type(arg, type)
-    comp = to_computation(fun, state)
+    comp = to_computation(fun, type, state)
 
     EXLA.Op.reduce_window(
       arg,
@@ -329,7 +329,7 @@ defmodule EXLA.Defn do
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
     dims = for i <- 0..(tuple_size(shape) - 1), do: i
     arg = to_type(arg, type)
-    comp = to_computation(fun, state)
+    comp = to_computation(fun, type, state)
     EXLA.Op.map(arg, comp, dims)
   end
 
@@ -369,7 +369,7 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}} = ans, state) do
+  defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}}, type, state) do
     {:name, name} = Function.info(fun, :name)
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
@@ -382,7 +382,7 @@ defmodule EXLA.Defn do
     expr
     |> to_result(%{state | builder: subbuilder, params: params}, %{})
     |> elem(0)
-    |> to_type(ans.type)
+    |> to_type(type)
     |> EXLA.Builder.build()
   end
 
@@ -435,12 +435,12 @@ defmodule EXLA.Defn do
     nx_shape = shape.dims
 
     if hole.type != nx_type do
-      raise "internal bug! Nx.Defn expected a tensor with type #{hole.type} " <>
+      raise "internal bug! Nx.Defn expected a tensor with type #{inspect(hole.type)} " <>
               "but got #{inspect(nx_type)}"
     end
 
     if hole.shape != nx_shape do
-      raise "internal bug! Nx.Defn expected a tensor with shape #{hole.shape} " <>
+      raise "internal bug! Nx.Defn expected a tensor with shape #{inspect(hole.shape)} " <>
               "but got #{inspect(nx_shape)}"
     end
 

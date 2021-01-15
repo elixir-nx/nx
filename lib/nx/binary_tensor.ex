@@ -1137,7 +1137,7 @@ defmodule Nx.BinaryTensor do
     output_data =
       match_types [type, output_type] do
         for <<match!(x, 0) <- data>>, into: <<>> do
-          <<write!(fun.(read!(x, 0)), 1)>>
+          <<write!(Nx.Util.to_scalar(fun.(read!(x, 0))), 1)>>
         end
       end
 
