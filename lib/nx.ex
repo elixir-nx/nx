@@ -3512,6 +3512,26 @@ defmodule Nx do
   Maps the given scalar function over the entire
   tensor.
 
+  The type of the returned tensor will be the same type
+  as the given tensor, unless the `:type` option is given.
+  Therefore, keep in mind explicit casting may be necessary.
+  For example, if you have an integer tensor and you convert
+  it to a float, it will fail:
+
+      iex> Nx.map([[1, 2, 3], [4, 5, 6]], fn x -> x * 1.0 end)
+      ** (ArgumentError) argument error
+
+  You need to explicitly pass the output type in such cases:
+
+      iex> Nx.map([[1, 2, 3], [4, 5, 6]], [type: {:f, 32}], fn x -> x * 1.0 end)
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [1.0, 2.0, 3.0],
+          [4.0, 5.0, 6.0]
+        ]
+      >
+
   Generally, you should prefer other using more idiomatic
   tensor operators to this function.
 

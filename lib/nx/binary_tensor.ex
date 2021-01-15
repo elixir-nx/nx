@@ -1236,10 +1236,9 @@ defmodule Nx.BinaryTensor do
         data = to_binary(t)
 
         output_data =
-          match_types [input_type, output_type] do
+          match_types [input_type] do
             for <<match!(x, 0) <- data>>, into: <<>> do
-              value = read!(x, 0)
-              <<write!(value, 1)>>
+              scalar_to_binary(read!(x, 0), output_type)
             end
           end
 
