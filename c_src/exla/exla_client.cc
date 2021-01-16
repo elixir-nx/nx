@@ -4,35 +4,25 @@
 #include "tensorflow/compiler/xla/cpu_function_runtime.h"
 #include "tensorflow/compiler/xla/literal_util.h"
 
-#include "absl/memory/memory.h"
-
 namespace exla {
 
-using int64 = tensorflow::int64;
-
-/*
- * ExlaBuffer Functions
- */
 xla::Status ExlaBuffer::Deallocate() {
   if (!empty()) {
     switch (type_) {
       case BufferType::kZeroCopy:
-        {
-          // Do not touch the underlying device memory
-          buffer_->release();
-          buffer_ = nullptr;
-          break;
-        }
+        ReleaseMemoryOwnership();
       case BufferType::kReference:
       case BufferType::kTemporary:
-        {
-          buffer_.reset();
-          buffer_ = nullptr;
-          break;
+      {
+        int device_ordinal = device_->device_ordinal();
+        for (const se::DeviceMemoryBase& buffer : device_memory_) {
+          xla::Status status = client_->allocator()->Deallocate(device_ordinal, buffer);
+          if (!status.ok()) {
+            LOG(WARNING) << "Buffer deallocation failed: " << status;
+            return status;
+          }
         }
-      default:
-        // This should never happen
-        return xla::FailedPrecondition("Internal error.");
+      }
     }
 
     return xla::Status::OK();
@@ -59,42 +49,43 @@ xla::StatusOr<std::vector<ExlaBuffer*>> ExlaBuffer::DecomposeTuple() {
   return buffers;
 }
 
-void ExlaBuffer::AddToInputAsImmutable(xla::ExecutionInput* input) {
-  const xla::ShapeTree<se::DeviceMemoryBase> bufs =
-    buffer_->buffers();
-
-  bufs.ForEachElement(
-    [&](const xla::ShapeIndex& index, const se::DeviceMemoryBase& mem){
-      input->SetBuffer(index, xla::MaybeOwningDeviceMemory(mem));
-    });
+void ExlaBuffer::AddToInputAsImmutable(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                                       xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end) {
+  for (const se::DeviceMemoryBase& buf : device_memory_) {
+    CHECK(*iterator != end);
+    (*iterator)->second = xla::MaybeOwningDeviceMemory(buf);
+    ++(*iterator);
+  }
 }
 
-void ExlaBuffer::AddToInputAsDonated(xla::ExecutionInput* input) {
-  xla::ShapeTree<se::DeviceMemoryBase> bufs =
-    buffer_->buffers();
-
+void ExlaBuffer::AddToInputAsDonated(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                                     xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                                     xla::ExecutionInput* input) {
+  se::DeviceMemoryAllocator* allocator = client_->allocator();
   int device_ordinal = device_->device_ordinal();
-  bufs.ForEachElement(
-    [&](const xla::ShapeIndex& index, const se::DeviceMemoryBase& mem){
-      input->SetBuffer(index, xla::MaybeOwningDeviceMemory(se::OwningDeviceMemory(mem, device_ordinal, client_->allocator())));
-    });
+
+  for (const se::DeviceMemoryBase& buf : device_memory_) {
+    CHECK(*iterator != end);
+
+    (*iterator)->second = xla::MaybeOwningDeviceMemory(
+      se::OwningDeviceMemory(buf, device_ordinal, allocator));
+    input->SetUnownedIndex((*iterator)->first);
+    ++(*iterator);
+  }
 }
 
-xla::Status ExlaBuffer::AddToInput(xla::ExecutionInput* input) {
+void ExlaBuffer::AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                            xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator&,
+                            xla::ExecutionInput* input) {
   switch (type_) {
     case BufferType::kZeroCopy:
     case BufferType::kReference:
-      AddToInputAsImmutable(input);
-      break;
+      AddToInputAsImmutable(iterator, end);
+      return;
     case BufferType::kTemporary:
-      AddToInputAsDonated(input);
-      break;
-    default:
-      // This should never happen
-      return xla::FailedPrecondition("Internal Error.");
+      AddToInputAsDonated(iterator, end, input);
+      return;
   }
-
-  return xla::Status::OK();
 }
 
 xla::StatusOr<ErlNifBinary> ExlaBuffer::ToBinary() {
@@ -202,8 +193,30 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
   }
 }
 
+xla::StatusOr<std::vector<xla::ExecutionInput>> PopulateInputBuffers(absl::Span<ExlaBuffer* const> argument_handles) {
+  std::vector<xla::ExecutionInput> execution_inputs;
+  execution_inputs.reserve(argument_handles.size());
+
+  for (int i = 0; i < argument_handles.size(); ++i) {
+    ExlaBuffer* handle = argument_handles[i];
+    execution_inputs.emplace_back(handle->on_host_shape(),
+                                  handle->on_device_shape());
+
+    xla::ExecutionInput& execution_input = execution_inputs.back();
+    xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator input_iterator =
+      execution_input.MutableBuffers()->begin();
+    xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator iterator_end =
+      execution_input.MutableBuffers()->end();
+
+    handle->AddToInput(&input_iterator, iterator_end, &execution_input);
+    CHECK(input_iterator == iterator_end);
+  }
+
+  return execution_inputs;
+}
+
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
-                                                ERL_NIF_TERM arguments,
+                                                std::vector<ExlaBuffer*> arguments,
                                                 xla::Shape& output_shape,
                                                 int replica,
                                                 int partition,
@@ -240,50 +253,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   std::shared_ptr<xla::LocalExecutable> executable = executables_.at(executable_idx);
 
-  std::vector<xla::ExecutionInput> inputs;
-
-  ERL_NIF_TERM head, tail, list;
-  list = arguments;
-
-  while (enif_get_list_cell(env, list, &head, &tail)) {
-    const ERL_NIF_TERM* tuple;
-    int arity;
-    exla::ExlaBuffer** buffer;
-
-    if (enif_get_tuple(env, head, &arity, &tuple)) {
-      ErlNifBinary data;
-      xla::Shape* shape;
-
-      if (!nif::get_binary(env, tuple[0], &data)) {
-        return xla::InvalidArgument("Unable to read binary data from input.");
-      }
-      if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
-        return xla::InvalidArgument("Unable to read shape from input.");
-      }
-
-      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf,
-        client_->BufferFromErlBin(data, *shape, device, true));
-
-      xla::ExecutionInput inp = xla::ExecutionInput(buf->on_device_shape());
-
-      buf->AddToInput(&inp);
-
-      inputs.push_back(std::move(inp));
-
-    } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
-      if (*buffer == NULL) {
-        return xla::FailedPrecondition("Attempt to re-use a previously deallocated device buffer.");
-      }
-      xla::ExecutionInput inp = xla::ExecutionInput((*buffer)->on_device_shape());
-
-      (*buffer)->AddToInput(&inp);
-
-      inputs.push_back(std::move(inp));
-    } else {
-      return xla::InvalidArgument("Invalid input passed to run.");
-    }
-    list = tail;
-  }
+  EXLA_ASSIGN_OR_RETURN(std::vector<xla::ExecutionInput> inputs,
+                        PopulateInputBuffers(arguments));
 
   std::unique_ptr<se::Event> creation_event = std::make_unique<se::Event>(device->compute_stream()->parent());
   creation_event->Init();

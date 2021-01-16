@@ -227,6 +227,14 @@ int get_conv_dimension_numbers(ErlNifEnv* env,
 int get_general_padding(ErlNifEnv* env,
                         ERL_NIF_TERM padding_term,
                         std::vector<std::pair<int64, int64>>& padding);
+
+/*
+ * Special case for execution inputs.
+ */
+int get_run_arguments(ErlNifEnv* env,
+                      ERL_NIF_TERM argument_term,
+                      std::vector<ExlaBuffer*>& arguments,
+                      ExlaClient* client);
 /*
  * Makers for standard types.
  */

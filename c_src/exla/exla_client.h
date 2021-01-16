@@ -22,7 +22,7 @@ namespace se = tensorflow::se;
 class ExlaClient;
 
 /*
- * Wraps a ScopedShapedBuffer.
+ * Representation of an on-device buffer used during computations.
  */
 class ExlaBuffer {
  public:
@@ -55,13 +55,29 @@ class ExlaBuffer {
     kTemporary
   };
 
-  ExlaBuffer(std::unique_ptr<xla::ScopedShapedBuffer> buffer,
+  // The current state of this buffer
+  enum class BufferState {
+    // The buffer is in a valid and useable state
+    kValid,
+
+    // The buffer has already been deallocated
+    kDeallocated,
+
+    // The buffer is waiting on it's definition event
+    kWaiting,
+
+    // The buffer is in an error state
+    kError
+  };
+
+  ExlaBuffer(absl::Span<se::DeviceMemoryBase const> device_memory,
              ExlaDevice* device,
              ExlaClient* client,
-             BufferType type) : buffer_(std::move(buffer)),
-                                        device_(device),
-                                        client_(client),
-                                        type_(type) {}
+             BufferType type) : device_memory_(device_memory.begin(), device_memory.end()),
+                                device_(device),
+                                client_(client),
+                                type_(type),
+                                state_(BufferState::kValid) {}
 
   ExlaBuffer(se::Stream* creation_stream,
              std::unique_ptr<se::Event> definition_event,
@@ -81,13 +97,11 @@ class ExlaBuffer {
 
   xla::StatusOr<std::vector<ExlaBuffer*>> DecomposeTuple();
 
-  bool empty() { return buffer_ == nullptr; }
+  bool empty() { return state_ == BufferState::kDeallocated; }
 
-  const xla::Shape on_host_shape() { return buffer_->on_host_shape(); }
+  const xla::Shape on_host_shape() { return on_host_shape_; }
 
-  const xla::Shape on_device_shape() { return buffer_->on_device_shape(); }
-
-  xla::ScopedShapedBuffer* buffer() { return buffer_.get(); }
+  const xla::Shape on_device_shape() { return on_device_shape_; }
 
   ExlaDevice* device() { return device_; }
 
@@ -97,15 +111,24 @@ class ExlaBuffer {
 
   bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
 
-  xla::Status AddToInput(xla::ExecutionInput* input);
+  void AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                  xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                  xla::ExecutionInput* input);
 
   xla::StatusOr<ErlNifBinary> ToBinary();
 
   xla::Status BlockHostUntilReady();
 
  private:
-  // Used for donating this buffer to another function, like `Run`
-  std::unique_ptr<xla::ScopedShapedBuffer> buffer_;
+  // The buffer's underlying device memory, we follow PjRt
+  // and use an inlined vector. Inlined vectors behave exactly
+  // the same as std::vector, but small sequences are stored
+  // inline.
+  absl::InlinedVector<se::DeviceMemoryBase, 1> device_memory_;
+
+  // Buffer's underlying host/device shapes
+  xla::Shape on_host_shape_;
+  xla::Shape on_device_shape_;
 
   // Buffer semantics, see discussion above
   BufferType type_;
@@ -120,12 +143,18 @@ class ExlaBuffer {
   // return to the VM on executions and device transfers.
   std::unique_ptr<se::Event> definition_event_;
 
-  // The buffer's usage stream
+  // Buffer's creation stream
   se::Stream* creation_stream_;
 
+  // Buffer's current state
+  BufferState state_;
+
   // Used in AddToInput, depending on the buffer type
-  void AddToInputAsImmutable(xla::ExecutionInput* input);
-  void AddToInputAsDonated(xla::ExecutionInput* input);
+  void AddToInputAsDonated(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                           xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                           xla::ExecutionInput* input);
+  void AddToInputAsImmutable(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                             xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end);
 };
 
 /*
@@ -154,6 +183,8 @@ class ExlaExecutable {
   const std::vector<ExlaDevice*> local_devices() { return local_devices_; }
 
   void Delete() { executables_.clear(); }
+
+  xla::StatusOr<std::vector<xla::ExecutionInput>> PopulateInputBuffers(absl::Span<ExlaBuffer* const> argument_handles);
 
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
