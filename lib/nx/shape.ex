@@ -1,6 +1,5 @@
 defmodule Nx.Shape do
-  # Conveniences for manipulating shapes.
-  # Typically called from `Nx`.
+  # Conveniences for manipulating shapes, typically called from `Nx`.
   @moduledoc false
 
   @doc """

@@ -1,7 +1,13 @@
 defmodule Nx.BinaryTensor do
-  # TODO: Document me and define a behaviour for tensor backends
-  @moduledoc false
+  @moduledoc """
+  An implementation of `Nx.Tensor` on top of binaries.
 
+  It supports multiple devices via `Nx.Device`, where
+  `Nx.BinaryDevice` is the default implementation which
+  uses Erlang VM immutable binaries to store the data.
+  """
+
+  @behaviour Nx.Tensor
   defstruct [:device, :state]
 
   alias Nx.Tensor, as: T
@@ -129,7 +135,7 @@ defmodule Nx.BinaryTensor do
 
   ## Device API
 
-  @doc false
+  @impl true
   def from_binary(t, binary) when is_binary(binary) do
     %{t | data: %BT{device: Nx.BinaryDevice, state: binary}}
   end
@@ -138,7 +144,7 @@ defmodule Nx.BinaryTensor do
     %{t | data: %BT{device: Nx.BinaryDevice, state: IO.iodata_to_binary(other)}}
   end
 
-  @doc false
+  @impl true
   def to_binary(%T{data: %{device: Nx.BinaryDevice, state: data}}), do: data
 
   def to_binary(%T{data: %{device: device}}) do
@@ -147,17 +153,20 @@ defmodule Nx.BinaryTensor do
             "Please use Nx.device_transfer/1 to transfer data back to Elixir"
   end
 
-  @doc false
+  @impl true
   def device_read(%T{data: %{device: device, state: state}} = tensor) do
-    from_binary(tensor, device.read(state))
+    case device.read(state) do
+      binary when is_binary(binary) -> from_binary(tensor, binary)
+      _ -> raise "expected #{inspect(device)}.read/1 to return a binary"
+    end
   end
 
-  @doc false
+  @impl true
   def device_deallocate(%T{data: %{device: device, state: state}}) do
     device.deallocate(state)
   end
 
-  @doc false
+  @impl true
   def device_transfer(%T{data: %{device: Nx.BinaryDevice}} = tensor, device, opts) do
     %{type: type, shape: shape} = tensor
     {device, state} = device.allocate(to_binary(tensor), type, shape, opts)
@@ -176,15 +185,15 @@ defmodule Nx.BinaryTensor do
 
   ## Shape
 
-  @doc false
+  @impl true
   def reshape(out, tensor, _shape), do: from_binary(out, to_binary(tensor))
 
-  @doc false
+  @impl true
   def squeeze(out, tensor, _axes), do: from_binary(out, to_binary(tensor))
 
   ## Broadcast
 
-  @doc false
+  @impl true
   def broadcast(out, t, shape, axes) do
     from_binary(out, broadcast_data(t, shape, axes))
   end
@@ -241,7 +250,7 @@ defmodule Nx.BinaryTensor do
 
   ## Shape
 
-  @doc false
+  @impl true
   def transpose(out, %T{shape: shape, type: {_, size}} = t, opts) do
     axes = opts[:axes]
 
@@ -288,7 +297,7 @@ defmodule Nx.BinaryTensor do
 
   # We ignore the out because we need to recur over the shape
   # as we transpose and build the rest.
-  @doc false
+  @impl true
   def pad(_out, t, pad_value, padding_config) do
     pad_value = Nx.Util.to_scalar(pad_value)
 
@@ -397,7 +406,7 @@ defmodule Nx.BinaryTensor do
     put_elem(shape, dim, new_dim)
   end
 
-  @doc false
+  @impl true
   def reverse(out, %{type: {_, size}, shape: shape} = t, opts) do
     axes = opts[:axes]
 
@@ -446,7 +455,7 @@ defmodule Nx.BinaryTensor do
 
   ## Two-element
 
-  @doc false
+  @impl true
   def outer(out, %{type: left_type} = t1, %{type: right_type} = t2) do
     b1 = to_binary(t1)
     b2 = to_binary(t2)
@@ -462,7 +471,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  @doc false
+  @impl true
   def dot(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
     bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
@@ -472,7 +481,7 @@ defmodule Nx.BinaryTensor do
 
   ## Element wise ternary ops
 
-  @doc false
+  @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
     if Nx.Util.to_scalar(pred) == 0,
       do: from_binary(out, broadcast_data(on_false, out.shape)),
@@ -527,7 +536,7 @@ defmodule Nx.BinaryTensor do
           [:logical_and, :logical_or, :logical_xor] do
     capture = Macro.var(:"element_#{fun}", __MODULE__)
 
-    @doc false
+    @impl true
     def unquote(fun)(out, left, right) do
       element_wise_bin_op(out, left, right, &(unquote(capture) / 3))
     end
@@ -622,13 +631,13 @@ defmodule Nx.BinaryTensor do
   ## Element wise unary ops
 
   for {name, {_desc, code}} <- Nx.Shared.unary_math_funs() do
-    @doc false
+    @impl true
     def unquote(name)(out, tensor) do
       element_wise_unary_op(out, tensor, fn x -> unquote(code) end)
     end
   end
 
-  @doc false
+  @impl true
   def count_leading_zeros(out, %{type: {_, size} = type} = tensor) do
     data =
       for <<seg::unsigned-size(size)-native <- to_binary(tensor)>>, into: <<>> do
@@ -640,7 +649,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  @doc false
+  @impl true
   def population_count(out, %{type: {_, size} = type} = tensor) do
     data =
       for <<seg::unsigned-size(size)-native <- to_binary(tensor)>>, into: <<>> do
@@ -652,19 +661,25 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  @doc false
+  @impl true
   def abs(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.abs/1)
-  @doc false
+
+  @impl true
   def bitwise_not(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.bnot/1)
-  @doc false
+
+  @impl true
   def ceil(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.ceil/1)
-  @doc false
+
+  @impl true
   def floor(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.floor/1)
-  @doc false
+
+  @impl true
   def negate(out, tensor), do: element_wise_unary_op(out, tensor, &-/1)
-  @doc false
+
+  @impl true
   def round(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.round/1)
-  @doc false
+
+  @impl true
   def sign(out, tensor), do: element_wise_unary_op(out, tensor, &element_sign/1)
 
   defp element_sign(n) when n < 0, do: -1
@@ -739,7 +754,7 @@ defmodule Nx.BinaryTensor do
 
   alias Inspect.Algebra, as: IA
 
-  @doc false
+  @impl true
   def inspect(tensor, opts) do
     dims = Tuple.to_list(tensor.shape)
     names = tensor.names
@@ -883,6 +898,7 @@ defmodule Nx.BinaryTensor do
 
   ## Conv
 
+  @impl true
   def conv(out, t, k, opts) do
     padding = opts[:padding]
     strides = opts[:strides]
@@ -1054,7 +1070,7 @@ defmodule Nx.BinaryTensor do
 
   ## Aggregation
 
-  @doc false
+  @impl true
   def sum(out, %{type: type} = tensor, opts) do
     bin_reduce(out, tensor, 0, opts, fn bin, acc ->
       res = binary_to_number(bin, type) + acc
@@ -1062,7 +1078,7 @@ defmodule Nx.BinaryTensor do
     end)
   end
 
-  @doc false
+  @impl true
   def argmin(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
@@ -1073,7 +1089,7 @@ defmodule Nx.BinaryTensor do
     argmin_or_max(out, tensor, comparator, opts[:axis])
   end
 
-  @doc false
+  @impl true
   def argmax(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
@@ -1098,7 +1114,7 @@ defmodule Nx.BinaryTensor do
     end)
   end
 
-  @doc false
+  @impl true
   def reduce(out, tensor, acc, opts, fun) do
     each = %{tensor | shape: {}}
 
@@ -1108,7 +1124,7 @@ defmodule Nx.BinaryTensor do
     end)
   end
 
-  @doc false
+  @impl true
   def reduce_window(out, tensor, acc, window_dimensions, opts, fun) do
     padding_config = opts[:padding]
     window_strides = opts[:strides]
@@ -1143,7 +1159,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  @doc false
+  @impl true
   def map(%{type: output_type} = out, %{type: type} = tensor, fun) do
     data = to_binary(tensor)
 
@@ -1157,7 +1173,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, output_data)
   end
 
-  @doc false
+  @impl true
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor
@@ -1181,7 +1197,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, out_data)
   end
 
-  @doc false
+  @impl true
   def slice(out, tensor, start_indices, _limit_indices, strides) do
     # If you think of a slice as drawing a bounding box in the dimensions
     # of the tensor, then it's clear we can simply use a weighted
@@ -1207,14 +1223,11 @@ defmodule Nx.BinaryTensor do
     from_binary(out, output_data)
   end
 
-  @doc false
+  @impl true
   def concatenate(out, tensors, opts) do
     axis = opts[:axis]
     %{shape: output_shape, type: {_, size} = output_type} = out
-
-    tensors =
-      tensors
-      |> Enum.map(fn t -> convert_element_type(%{t | type: output_type}, t) end)
+    tensors = Enum.map(tensors, fn t -> convert_element_type(%{t | type: output_type}, t) end)
 
     output_data =
       if axis == tuple_size(output_shape) - 1 do
@@ -1237,8 +1250,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, output_data)
   end
 
-  @doc false
-  def convert_element_type(out, tensor) do
+  defp convert_element_type(out, tensor) do
     %{type: output_type} = out
 
     case tensor do

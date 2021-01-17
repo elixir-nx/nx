@@ -1,6 +1,6 @@
 defmodule Nx.BinaryDevice do
   @moduledoc """
-  The default implementation of `Nx.Device` that uses the VM binarys.
+  The default implementation of `Nx.Device` that uses VM binaries.
   """
 
   @behaviour Nx.Device

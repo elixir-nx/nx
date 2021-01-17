@@ -85,6 +85,11 @@ defmodule Nx do
   import Nx.Shared
   alias Nx.Tensor, as: T
 
+  @type t :: number | Nx.Tensor.t()
+  @type shape :: Nx.Tensor.shape()
+  @type axis :: Nx.Tensor.axis()
+  @type axes :: NX.Tensor.axes()
+
   ## Creation API
 
   @doc """

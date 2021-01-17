@@ -1,6 +1,6 @@
 defmodule Nx.Device do
   @moduledoc """
-  Defines a device where the tensor is allocated.
+  Defines a device to allocate tensor data.
   """
 
   @type state :: term
@@ -16,7 +16,7 @@ defmodule Nx.Device do
 
   If reading a deallocated device, you must raise.
   """
-  @callback read(state) :: binary
+  @callback read(state) :: term
 
   @doc """
   Deallocates the data on the device.
