@@ -263,8 +263,6 @@ defmodule Nx do
   """
   def tensor(arg, opts \\ [])
 
-  def tensor(%T{} = t, []), do: t
-
   def tensor(%T{} = t, opts) do
     assert_keys!(opts, [:type, :names])
     type = opts[:type]
@@ -608,7 +606,7 @@ defmodule Nx do
       <<1.0::float-native, 2.0::float-native, 3.0::float-native>>
   """
   def to_binary(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     impl!(tensor).to_binary(tensor)
   end
 
@@ -711,7 +709,7 @@ defmodule Nx do
 
   """
   def reshape(tensor, new_shape, opts \\ []) do
-    %T{shape: old_shape} = tensor = tensor(tensor)
+    %T{shape: old_shape} = tensor = tensor!(tensor)
     new_names = opts[:names] || names!(new_shape)
     new_shape = shape(new_shape)
 
@@ -777,7 +775,7 @@ defmodule Nx do
   """
   def squeeze(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
-    %T{shape: old_shape, names: names} = tensor = tensor(tensor)
+    %T{shape: old_shape, names: names} = tensor = tensor!(tensor)
     axes = opts[:axes] || Nx.Shape.squeeze_axes(old_shape)
     axes = Nx.Shape.normalize_axes(old_shape, axes, names)
     {new_shape, new_names} = Nx.Shape.squeeze(old_shape, axes, names)
@@ -841,7 +839,7 @@ defmodule Nx do
 
   """
   def broadcast(tensor, broadcast_shape) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     names = names!(broadcast_shape)
     broadcast_shape = shape(broadcast_shape)
 
@@ -917,7 +915,7 @@ defmodule Nx do
 
   """
   def broadcast(tensor, shape, axes, opts \\ []) do
-    %T{names: names} = tensor = tensor(tensor)
+    %T{names: names} = tensor = tensor!(tensor)
 
     broadcast_names = opts[:names] || names!(shape)
     shape = shape(shape)
@@ -1115,8 +1113,8 @@ defmodule Nx do
 
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
-    tensor = tensor(tensor)
-    pad_value = tensor(pad_value)
+    tensor = tensor!(tensor)
+    pad_value = tensor!(pad_value)
 
     output_type = binary_type(tensor, pad_value)
 
@@ -1152,7 +1150,7 @@ defmodule Nx do
       {:f, 64}
   """
   def type(tensor) do
-    %T{type: type} = tensor(tensor)
+    %T{type: type} = tensor!(tensor)
     type
   end
 
@@ -1319,7 +1317,7 @@ defmodule Nx do
 
   """
   def device_transfer(tensor, device \\ Nx.BinaryDevice, opts \\ []) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     impl!(tensor).device_transfer(tensor, device, opts)
   end
 
@@ -1331,7 +1329,7 @@ defmodule Nx do
   device has already been deallocated, it raises.
   """
   def device_read(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     impl!(tensor).device_read(tensor)
   end
 
@@ -1341,7 +1339,7 @@ defmodule Nx do
   It returns either `:ok` or `:already_deallocated`.
   """
   def device_deallocate(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     impl!(tensor).device_deallocate(tensor)
   end
 
@@ -1349,8 +1347,8 @@ defmodule Nx do
 
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
-    %T{shape: left_shape, names: left_names} = left = tensor(left)
-    %T{shape: right_shape, names: right_names} = right = tensor(right)
+    %T{shape: left_shape, names: left_names} = left = tensor!(left)
+    %T{shape: right_shape, names: right_names} = right = tensor!(right)
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
@@ -1358,8 +1356,8 @@ defmodule Nx do
   end
 
   defp element_wise_pred_op(left, right, op) do
-    %T{shape: left_shape, names: left_names} = left = tensor(left)
-    %T{shape: right_shape, names: right_names} = right = tensor(right)
+    %T{shape: left_shape, names: left_names} = left = tensor!(left)
+    %T{shape: right_shape, names: right_names} = right = tensor!(right)
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
@@ -2363,8 +2361,9 @@ defmodule Nx do
 
   """
   def logical_not(tensor) do
-    tensor = tensor(tensor)
-    element_wise_pred_op(tensor, tensor(0, type: tensor.type), :equal)
+    tensor = tensor!(tensor)
+    zero = Nx.BinaryTensor.tensor(0, tensor.type, nil)
+    element_wise_pred_op(tensor, zero, :equal)
   end
 
   @doc """
@@ -2653,9 +2652,9 @@ defmodule Nx do
   def select(pred, on_true, on_false) do
     output_type = binary_type(on_true, on_false)
 
-    %T{shape: pred_shape, names: pred_names} = pred = tensor(pred)
-    %T{shape: true_shape, names: true_names} = on_true = tensor(on_true)
-    %T{shape: false_shape, names: false_names} = on_false = tensor(on_false)
+    %T{shape: pred_shape, names: pred_names} = pred = tensor!(pred)
+    %T{shape: true_shape, names: true_names} = on_true = tensor!(on_true)
+    %T{shape: false_shape, names: false_names} = on_false = tensor!(on_false)
 
     {output_shape, output_names} =
       case pred_shape do
@@ -2716,7 +2715,7 @@ defmodule Nx do
 
     """
     def unquote(name)(tensor) do
-      tensor = tensor(tensor)
+      tensor = tensor!(tensor)
       type = Nx.Type.to_floating(tensor.type)
       impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
     end
@@ -2755,7 +2754,7 @@ defmodule Nx do
 
   """
   def negate(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     impl!(tensor).negate(tensor, tensor)
   end
 
@@ -2777,7 +2776,7 @@ defmodule Nx do
 
   """
   def sign(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     impl!(tensor).sign(tensor, tensor)
   end
 
@@ -2794,7 +2793,7 @@ defmodule Nx do
 
   """
   def abs(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
 
     case tensor.type do
       {:u, _} -> tensor
@@ -2831,7 +2830,7 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def bitwise_not(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).bitwise_not(tensor, tensor)
   end
@@ -2871,7 +2870,7 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def population_count(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).population_count(tensor, tensor)
   end
@@ -2935,7 +2934,7 @@ defmodule Nx do
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def count_leading_zeros(tensor) do
-    tensor = tensor(tensor)
+    tensor = tensor!(tensor)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).count_leading_zeros(tensor, tensor)
   end
@@ -2966,7 +2965,7 @@ defmodule Nx do
 
     """
     def unquote(name)(tensor) do
-      case tensor(tensor) do
+      case tensor!(tensor) do
         %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
         %T{} = tensor -> impl!(tensor).unquote(name)(tensor, tensor)
       end
@@ -3087,7 +3086,7 @@ defmodule Nx do
   """
   def sum(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
-    %{shape: shape, type: type, names: names} = tensor = tensor(tensor)
+    %{shape: shape, type: type, names: names} = tensor = tensor!(tensor)
 
     {shape, names, axes} =
       if axes = opts[:axes] do
@@ -3172,7 +3171,7 @@ defmodule Nx do
 
   """
   def mean(tensor, opts \\ []) do
-    %T{shape: shape, names: names} = tensor = tensor(tensor)
+    %T{shape: shape, names: names} = tensor = tensor!(tensor)
 
     mean_den =
       if axes = opts[:axes] do
@@ -3381,7 +3380,7 @@ defmodule Nx do
                 "unknown value for :tie_break, expected :high or :low, got: #{inspect(other)}"
       end
 
-    %{shape: shape, names: names} = tensor = tensor(tensor)
+    %{shape: shape, names: names} = tensor = tensor!(tensor)
 
     {shape, names, axis} =
       if axis = opts[:axis] do
@@ -3509,8 +3508,8 @@ defmodule Nx do
   def reduce(tensor, acc, opts \\ [], fun) when is_function(fun, 2) do
     assert_keys!(opts, [:axes, :type])
     type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, acc))
-    %{shape: shape, names: names} = tensor = tensor(tensor)
-    acc = tensor(acc)
+    %{shape: shape, names: names} = tensor = tensor!(tensor)
+    acc = tensor!(acc)
 
     {shape, names, axes} =
       if axes = opts[:axes] do
@@ -3580,7 +3579,7 @@ defmodule Nx do
   """
   def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun) do
     assert_keys!(opts, [:padding, :strides])
-    %T{shape: shape} = tensor = tensor(tensor)
+    %T{shape: shape} = tensor = tensor!(tensor)
 
     window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
     padding = opts[:padding] || :valid
@@ -3629,12 +3628,12 @@ defmodule Nx do
   For example, if you have an integer tensor and you convert
   it to a float, it will fail:
 
-      iex> Nx.map([[1, 2, 3], [4, 5, 6]], fn x -> x * 1.0 end)
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> x * 1.0 end)
       ** (ArgumentError) argument error
 
   You need to explicitly pass the output type in such cases:
 
-      iex> Nx.map([[1, 2, 3], [4, 5, 6]], [type: {:f, 32}], fn x -> x * 1.0 end)
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 32}], fn x -> x * 1.0 end)
       #Nx.Tensor<
         f32[2][3]
         [
@@ -3683,7 +3682,7 @@ defmodule Nx do
   """
   def map(tensor, opts \\ [], fun) do
     assert_keys!(opts, [:type])
-    %T{type: type} = tensor = tensor(tensor)
+    %T{type: type} = tensor = tensor!(tensor)
     output_type = opts[:type] || type
     out = %{tensor | type: output_type}
     impl!(tensor).map(out, tensor, fun)
@@ -3859,8 +3858,8 @@ defmodule Nx do
       ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
   """
   def dot(t1, t2) do
-    %T{shape: s1} = t1 = tensor(t1)
-    %T{shape: s2} = t2 = tensor(t2)
+    %T{shape: s1} = t1 = tensor!(t1)
+    %T{shape: s2} = t2 = tensor!(t2)
 
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
@@ -3957,8 +3956,8 @@ defmodule Nx do
   """
   def dot(t1, axes1, t2, axes2) do
     output_type = binary_type(t1, t2)
-    %T{shape: s1, names: names1} = t1 = tensor(t1)
-    %T{shape: s2, names: names2} = t2 = tensor(t2)
+    %T{shape: s1, names: names1} = t1 = tensor!(t1)
+    %T{shape: s2, names: names2} = t2 = tensor!(t2)
     axes1 = Nx.Shape.normalize_axes(s1, axes1, names1)
     axes2 = Nx.Shape.normalize_axes(s2, axes2, names2)
     {output_shape, output_names} = Nx.Shape.zip_reduce(s1, axes1, names1, s2, axes2, names2)
@@ -4007,8 +4006,8 @@ defmodule Nx do
   """
   def outer(t1, t2) do
     type = binary_type(t1, t2)
-    %T{shape: s1, names: n1} = t1 = tensor(t1)
-    %T{shape: s2, names: n2} = t2 = tensor(t2)
+    %T{shape: s1, names: n1} = t1 = tensor!(t1)
+    %T{shape: s2, names: n2} = t2 = tensor!(t2)
     new_shape = {size(s1), size(s2)}
 
     names =
@@ -4150,7 +4149,7 @@ defmodule Nx do
 
   """
   def transpose(tensor, opts \\ []) do
-    %{shape: shape, names: names} = tensor = tensor(tensor)
+    %{shape: shape, names: names} = tensor = tensor!(tensor)
     axes = opts[:axes] || Nx.Shape.transpose_axes(shape)
     axes = Nx.Shape.normalize_axes(shape, axes, names)
 
@@ -4229,7 +4228,7 @@ defmodule Nx do
   """
   def reverse(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
-    %{shape: shape, names: names} = tensor = tensor(tensor)
+    %{shape: shape, names: names} = tensor = tensor!(tensor)
     axes = opts[:axes] || axes(shape)
 
     case Nx.Shape.normalize_axes(shape, axes, names) do
@@ -4285,8 +4284,8 @@ defmodule Nx do
     input_dilation = opts[:input_dilation] || 1
     kernel_dilation = opts[:kernel_dilation] || 1
 
-    %{shape: input_shape, names: input_names} = tensor = tensor(tensor)
-    %{shape: kernel_shape, names: kernel_names} = kernel = tensor(kernel)
+    %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
+    %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
 
     if rank(input_shape) < 3 do
       raise ArgumentError, "input shape in conv requires at least rank 3"
@@ -4480,9 +4479,9 @@ defmodule Nx do
       >
   """
   def clip(tensor, min, max) do
-    %T{type: type} = tensor = tensor(tensor)
-    %T{type: min_type} = min = tensor(min)
-    %T{type: max_type} = max = tensor(max)
+    %T{type: type} = tensor = tensor!(tensor)
+    %T{type: min_type} = min = tensor!(min)
+    %T{type: max_type} = max = tensor!(max)
 
     if min.shape != {} do
       raise ArgumentError, "min value must be a scalar shape, got: #{min.shape}"
@@ -4569,7 +4568,7 @@ defmodule Nx do
       >
   """
   def slice(tensor, start_indices, limit_indices, strides \\ nil) do
-    %T{shape: shape} = tensor = tensor(tensor)
+    %T{shape: shape} = tensor = tensor!(tensor)
 
     strides = if strides, do: strides, else: List.duplicate(1, rank(shape))
 
@@ -4708,7 +4707,7 @@ defmodule Nx do
         {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
           tensors
           |> Enum.map(fn t ->
-            %T{type: type, shape: shape, names: names} = t = tensor(t)
+            %T{type: type, shape: shape, names: names} = t = tensor!(t)
             {t, type, shape, names}
           end)
           |> unzip4()
@@ -4736,6 +4735,12 @@ defmodule Nx do
   end
 
   ## Type
+
+  defp tensor!(%T{} = t),
+    do: t
+
+  defp tensor!(number) when is_number(number),
+    do: Nx.BinaryTensor.tensor(number, Nx.Type.infer(number), nil)
 
   defp binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)
   defp binary_type(a, b) when is_number(a), do: Nx.Type.merge_scalar(b.type, a)
