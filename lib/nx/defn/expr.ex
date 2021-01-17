@@ -114,81 +114,6 @@ defmodule Nx.Defn.Expr do
     raise ArgumentError, "defn must return a tensor, a number or a tuple, got: #{inspect(other)}"
   end
 
-  ## Nx.Tensor Callbacks
-
-  unary_ops =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-      [:negate, :sign, :abs, :bitwise_not, :population_count, :count_leading_zeros] ++
-      [:floor, :ceil, :round]
-
-  for op <- unary_ops do
-    @doc false
-    def unquote(op)(out, tensor) do
-      tensor = to_expr(tensor)
-      expr(out, tensor.data.context, unquote(op), [tensor])
-    end
-  end
-
-  binary_ops =
-    [:add, :subtract, :multiply, :divide, :power, :remainder, :arctan2, :max, :min] ++
-      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
-      [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
-
-  for op <- binary_ops do
-    @doc false
-    def unquote(op)(out, t1, t2) do
-      {[t1, t2], context} = to_exprs([t1, t2])
-      expr(out, context, unquote(op), [t1, t2])
-    end
-  end
-
-  aggregate_ops = [:sum, :argmax, :argmin]
-
-  for op <- aggregate_ops do
-    @doc false
-    def unquote(op)(out, tensor, opts) do
-      tensor = to_expr(tensor)
-      expr(out, tensor.data.context, unquote(op), [tensor, opts])
-    end
-  end
-
-  @doc false
-  def reduce(%{type: type} = out, tensor, acc, opts, fun) do
-    args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
-    {[tensor, acc], context} = to_exprs([tensor, acc])
-    expr(out, context, :reduce, [tensor, acc, opts, fun(args, fun)])
-  end
-
-  @doc false
-  def reduce_window(
-        %{type: type} = out,
-        tensor,
-        acc,
-        window_dims,
-        opts,
-        fun
-      ) do
-    args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
-    {[tensor, acc], context} = to_exprs([tensor, acc])
-
-    expr(out, context, :reduce_window, [
-      tensor,
-      acc,
-      window_dims,
-      opts,
-      fun(args, fun)
-    ])
-  end
-
-  @doc false
-  def map(%{type: type} = out, tensor, fun) do
-    args = [parameter(:map, type, {}, 0)]
-    tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :map, [tensor, fun(args, fun)])
-  end
-
   ## Creation ops
 
   @doc false
@@ -221,73 +146,150 @@ defmodule Nx.Defn.Expr do
     expr(out, nil, :random_normal, [mu, sigma])
   end
 
-  @doc false
+  ## Nx.Tensor Callbacks
+
+  @behaviour Nx.Tensor
+
+  unary_ops =
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+      [:negate, :sign, :abs, :bitwise_not, :population_count, :count_leading_zeros] ++
+      [:floor, :ceil, :round]
+
+  for op <- unary_ops do
+    @impl true
+    def unquote(op)(out, tensor) do
+      tensor = to_expr(tensor)
+      expr(out, tensor.data.context, unquote(op), [tensor])
+    end
+  end
+
+  binary_ops =
+    [:add, :subtract, :multiply, :divide, :power, :remainder, :arctan2, :max, :min] ++
+      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
+      [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
+      [:logical_and, :logical_or, :logical_xor] ++
+      [:outer]
+
+  for op <- binary_ops do
+    @impl true
+    def unquote(op)(out, t1, t2) do
+      {[t1, t2], context} = to_exprs([t1, t2])
+      expr(out, context, unquote(op), [t1, t2])
+    end
+  end
+
+  aggregate_ops = [:sum, :argmax, :argmin]
+
+  for op <- aggregate_ops do
+    @impl true
+    def unquote(op)(out, tensor, opts) do
+      tensor = to_expr(tensor)
+      expr(out, tensor.data.context, unquote(op), [tensor, opts])
+    end
+  end
+
+  @impl true
+  def reduce(%{type: type} = out, tensor, acc, opts, fun) do
+    args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
+    {[tensor, acc], context} = to_exprs([tensor, acc])
+    expr(out, context, :reduce, [tensor, acc, opts, fun(args, fun)])
+  end
+
+  @impl true
+  def reduce_window(
+        %{type: type} = out,
+        tensor,
+        acc,
+        window_dims,
+        opts,
+        fun
+      ) do
+    args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
+    {[tensor, acc], context} = to_exprs([tensor, acc])
+
+    expr(out, context, :reduce_window, [
+      tensor,
+      acc,
+      window_dims,
+      opts,
+      fun(args, fun)
+    ])
+  end
+
+  @impl true
+  def map(%{type: type} = out, tensor, fun) do
+    args = [parameter(:map, type, {}, 0)]
+    tensor = to_expr(tensor)
+    expr(out, tensor.data.context, :map, [tensor, fun(args, fun)])
+  end
+
+  @impl true
   def reshape(out, tensor, shape) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :reshape, [tensor, shape])
   end
 
-  @doc false
+  @impl true
   def squeeze(out, tensor, opts) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :squeeze, [tensor, opts])
   end
 
-  @doc false
+  @impl true
   def transpose(out, tensor, opts) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :transpose, [tensor, opts])
   end
 
-  @doc false
+  @impl true
   def broadcast(out, tensor, shape, axes) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
   end
 
-  @doc false
+  @impl true
   def dot(out, t1, a1, t2, a2) do
     {[t1, t2], context} = to_exprs([t1, t2])
     expr(out, context, :dot, [t1, a1, t2, a2])
   end
 
-  @doc false
+  @impl true
   def conv(out, inp, kernel, opts) do
     {[inp, kernel], context} = to_exprs([inp, kernel])
     expr(out, context, :conv, [inp, kernel, opts])
   end
 
-  @doc false
+  @impl true
   def pad(out, expr, value, config) do
     {[expr, value], context} = to_exprs([expr, value])
     expr(out, context, :pad, [expr, value, config])
   end
 
-  @doc false
+  @impl true
   def select(out, pred, on_true, on_false) do
     {[pred, on_true, on_false], context} = to_exprs([pred, on_true, on_false])
     expr(out, context, :select, [pred, on_true, on_false])
   end
 
-  @doc false
+  @impl true
   def clip(out, operand, min, max) do
     {[operand, min, max], context} = to_exprs([operand, min, max])
     expr(out, context, :clip, [operand, min, max])
   end
 
-  @doc false
+  @impl true
   def slice(out, tensor, start_indices, limit_indices, strides) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :slice, [tensor, start_indices, limit_indices, strides])
   end
 
-  @doc false
+  @impl true
   def reverse(out, tensor, opts) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :reverse, [tensor, opts])
   end
 
-  @doc false
+  @impl true
   def concatenate(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
     expr(out, context, :concatenate, [tensors, axis])
@@ -326,11 +328,29 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
+  ## Undefined
+
+  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, from_binary: 2, to_binary: 1]
+
+  for {op, arity} <- ops do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    @impl true
+    def unquote(op)(unquote_splicing(args)) do
+      raise ArgumentError, """
+      cannot invoke #{unquote(op)}/#{unquote(arity)} on Nx.Defn.Expr.
+
+      This typically means you are invoking an unsupported Nx function
+      by code inside `defn` or JIT/AOT compiled code
+      """
+    end
+  end
+
   ## Inspect
 
   import Inspect.Algebra
 
-  @doc false
+  @impl true
   def inspect(tensor, opts) do
     {exprs, params, _var_map} = inspect_expr_args([tensor], [], [], %{})
 
