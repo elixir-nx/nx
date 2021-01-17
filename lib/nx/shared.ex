@@ -14,7 +14,7 @@ defmodule Nx.Shared do
   @1, etc and replacing them by currently matched type at the
   given position. In other words, this:
 
-     combine_types [input_type, output_type] do
+     match_types [input_type, output_type] do
        for <<match!(seg, 0) <- data>>, into: <<>>, do: <<write!(read!(seg, 0) + right, 1)>>
      end
 

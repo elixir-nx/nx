@@ -1035,83 +1035,84 @@ defmodule Nx do
         ]
       >
 
-    iex> tensor = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
-    iex> Nx.pad(tensor, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}])
-    #Nx.Tensor<
-      f64[5][3][3]
-      [
+      iex> tensor = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+      iex> Nx.pad(tensor, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}])
+      #Nx.Tensor<
+        f64[5][3][3]
         [
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0]
-        ],
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [1.0, 2.0, 0.0],
+            [3.0, 4.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [5.0, 6.0, 0.0],
+            [7.0, 8.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ]
+        ]
+      >
+
+      iex> Nx.pad(Nx.tensor([0, 1, 2, 3, 0]), 0, [{-1, -1, 0}])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> tensor = Nx.tensor([
+      ...>   [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
+      ...>   [[0, 0, 0], [1, 2, 0], [3, 4, 0], [0, 0, 0]],
+      ...>   [[0, 0, 0], [5, 6, 0], [7, 8, 0], [0, 0, 0]]
+      ...> ])
+      iex> Nx.pad(tensor, 0, [{-1, 0, 0}, {-1, -1, 0}, {0, -1, 0}])
+      #Nx.Tensor<
+        s64[2][2][2]
         [
-          [0.0, 0.0, 0.0],
-          [1.0, 2.0, 0.0],
-          [3.0, 4.0, 0.0]
-        ],
+          [
+            [1, 2],
+            [3, 4]
+          ],
+          [
+            [5, 6],
+            [7, 8]
+          ]
+        ]
+      >
+
+      iex> Nx.pad(Nx.tensor([[0, 1, 2, 3], [0, 4, 5, 6]]), 0, [{0, 0, 0}, {-1, 1, 0}])
+      #Nx.Tensor<
+        s64[2][4]
         [
-          [0.0, 0.0, 0.0],
-          [5.0, 6.0, 0.0],
-          [7.0, 8.0, 0.0]
-        ],
+          [1, 2, 3, 0],
+          [4, 5, 6, 0]
+        ]
+      >
+
+      iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], type: {:f, 32}), 0, [{-1, 2, 0}, {1, -1, 0}])
+      #Nx.Tensor<
+        f32[3][3]
         [
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0],
-          [0.0, 0.0, 0.0]
-        ],
-        [
-          [0.0, 0.0, 0.0],
+          [0.0, 3.0, 4.0],
           [0.0, 0.0, 0.0],
           [0.0, 0.0, 0.0]
         ]
-      ]
-    >
+      >
 
-    iex> Nx.pad(Nx.tensor([0, 1, 2, 3, 0]), 0, [{-1, -1, 0}])
-    #Nx.Tensor<
-      s64[3]
-      [1, 2, 3]
-    >
-
-    iex> tensor = Nx.tensor([
-    ...>   [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
-    ...>   [[0, 0, 0], [1, 2, 0], [3, 4, 0], [0, 0, 0]],
-    ...>   [[0, 0, 0], [5, 6, 0], [7, 8, 0], [0, 0, 0]]
-    ...> ])
-    iex> Nx.pad(tensor, 0, [{-1, 0, 0}, {-1, -1, 0}, {0, -1, 0}])
-    #Nx.Tensor<
-      s64[2][2][2]
-      [
-        [
-          [1, 2],
-          [3, 4]
-        ],
-        [
-          [5, 6],
-          [7, 8]
-        ]
-      ]
-    >
-
-    iex> Nx.pad(Nx.tensor([[0, 1, 2, 3], [0, 4, 5, 6]]), 0, [{0, 0, 0}, {-1, 1, 0}])
-    #Nx.Tensor<
-      s64[2][4]
-      [
-        [1, 2, 3, 0],
-        [4, 5, 6, 0]
-      ]
-    >
-
-    iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], type: {:f, 32}), 0, [{-1, 2, 0}, {1, -1, 0}])
-    #Nx.Tensor<
-      f32[3][3]
-      [
-        [0.0, 3.0, 4.0],
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0]
-      ]
-    >
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
     tensor = tensor(tensor)
@@ -2231,30 +2232,140 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.equal(1, Nx.tensor([1, 2, 3], names: [:data]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [1, 0, 0]
-    >
+      iex> Nx.equal(1, Nx.tensor([1, 2, 3], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 0, 0]
+      >
 
   ### Comparison of tensors
 
-    iex> Nx.equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 5]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [1, 1, 0]
-    >
+      iex> Nx.equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 5]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 1, 0]
+      >
 
-    iex> Nx.equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, nil]), Nx.tensor([1, 2, 3]))
-    #Nx.Tensor<
-      u8[x: 2][3]
-      [
-        [1, 1, 1],
-        [0, 0, 0]
-      ]
-    >
+      iex> Nx.equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, nil]), Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        u8[x: 2][3]
+        [
+          [1, 1, 1],
+          [0, 0, 0]
+        ]
+      >
   """
   def equal(left, right), do: element_wise_pred_op(left, right, :equal)
+
+  @doc """
+  Element-wise logical and of two tensors.
+
+  Zero is considered false, any other number is considered
+  true.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+      iex> Nx.logical_and(1, Nx.tensor([-1, 0, 1], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 0, 1]
+      >
+
+      iex> Nx.logical_and(Nx.tensor([-1, 0, 1], names: [:data]), Nx.tensor([[-1], [0], [1]]))
+      #Nx.Tensor<
+        u8[3][data: 3]
+        [
+          [1, 0, 1],
+          [0, 0, 0],
+          [1, 0, 1]
+        ]
+      >
+
+  """
+  def logical_and(left, right), do: element_wise_pred_op(left, right, :logical_and)
+
+  @doc """
+  Element-wise logical or of two tensors.
+
+  Zero is considered false, any other number is considered
+  true.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+      iex> Nx.logical_or(0, Nx.tensor([-1, 0, 1], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 0, 1]
+      >
+
+      iex> Nx.logical_or(Nx.tensor([-1, 0, 1], names: [:data]), Nx.tensor([[-1], [0], [1]]))
+      #Nx.Tensor<
+        u8[3][data: 3]
+        [
+          [1, 1, 1],
+          [1, 0, 1],
+          [1, 1, 1]
+        ]
+      >
+
+  """
+  def logical_or(left, right), do: element_wise_pred_op(left, right, :logical_or)
+
+  @doc """
+  Element-wise logical xor of two tensors.
+
+  Zero is considered false, any other number is considered
+  true.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Examples
+
+      iex> Nx.logical_xor(0, Nx.tensor([-1, 0, 1], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 0, 1]
+      >
+
+      iex> Nx.logical_xor(Nx.tensor([-1, 0, 1], names: [:data]), Nx.tensor([[-1], [0], [1]]))
+      #Nx.Tensor<
+        u8[3][data: 3]
+        [
+          [0, 1, 0],
+          [1, 0, 1],
+          [0, 1, 0]
+        ]
+      >
+
+  """
+  def logical_xor(left, right), do: element_wise_pred_op(left, right, :logical_xor)
+
+  @doc """
+  Element-wise logical not a tensor.
+
+  Zero is considered false, any other number is considered
+  true.
+
+  ## Examples
+
+      iex> Nx.logical_not(Nx.tensor([-1, 0, 1], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [0, 1, 0]
+      >
+
+  """
+  def logical_not(tensor) do
+    tensor = tensor(tensor)
+    element_wise_pred_op(tensor, tensor(0, type: tensor.type), :equal)
+  end
 
   @doc """
   Element-wise not-equal comparison of two tensors.
@@ -2321,28 +2432,28 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.greater(1, Nx.tensor([1, 2, 3], names: [:data]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [0, 0, 0]
-    >
+      iex> Nx.greater(1, Nx.tensor([1, 2, 3], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [0, 0, 0]
+      >
 
   ### Comparison of tensors
 
-    iex> Nx.greater(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [0, 0, 1]
-    >
+      iex> Nx.greater(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [0, 0, 1]
+      >
 
-    iex> Nx.greater(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
-    #Nx.Tensor<
-      u8[x: 2][y: 3]
-      [
-        [0, 0, 0],
-        [1, 1, 1]
-      ]
-    >
+      iex> Nx.greater(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        u8[x: 2][y: 3]
+        [
+          [0, 0, 0],
+          [1, 1, 1]
+        ]
+      >
   """
   def greater(left, right), do: element_wise_pred_op(left, right, :greater)
 
@@ -2366,28 +2477,28 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.less(1, Nx.tensor([1, 2, 3], names: [:data]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [0, 1, 1]
-    >
+      iex> Nx.less(1, Nx.tensor([1, 2, 3], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [0, 1, 1]
+      >
 
   ### Comparison of tensors
 
-    iex> Nx.less(Nx.tensor([1, 2, 1]), Nx.tensor([1, 2, 2], names: [:data]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [0, 0, 1]
-    >
-
-    iex> Nx.less(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
-    #Nx.Tensor<
-      u8[x: 2][y: 3]
-      [
-        [0, 0, 0],
+      iex> Nx.less(Nx.tensor([1, 2, 1]), Nx.tensor([1, 2, 2], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
         [0, 0, 1]
-      ]
-    >
+      >
+
+      iex> Nx.less(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 2.0, 1.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        u8[x: 2][y: 3]
+        [
+          [0, 0, 0],
+          [0, 0, 1]
+        ]
+      >
   """
   def less(left, right), do: element_wise_pred_op(left, right, :less)
 
@@ -2411,28 +2522,28 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.greater_equal(1, Nx.tensor([1, 2, 3], names: [:data]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [1, 0, 0]
-    >
+      iex> Nx.greater_equal(1, Nx.tensor([1, 2, 3], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 0, 0]
+      >
 
   ### Comparison of tensors
 
-    iex> Nx.greater_equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [1, 1, 1]
-    >
-
-    iex> Nx.greater_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
-    #Nx.Tensor<
-      u8[x: 2][y: 3]
-      [
-        [1, 1, 1],
+      iex> Nx.greater_equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
+      #Nx.Tensor<
+        u8[data: 3]
         [1, 1, 1]
-      ]
-    >
+      >
+
+      iex> Nx.greater_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        u8[x: 2][y: 3]
+        [
+          [1, 1, 1],
+          [1, 1, 1]
+        ]
+      >
   """
   def greater_equal(left, right), do: element_wise_pred_op(left, right, :greater_equal)
 
@@ -2456,28 +2567,28 @@ defmodule Nx do
 
   ### Comparison of tensors and scalars
 
-    iex> Nx.less_equal(1, Nx.tensor([1, 2, 3], names: [:data]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [1, 1, 1]
-    >
+      iex> Nx.less_equal(1, Nx.tensor([1, 2, 3], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 1, 1]
+      >
 
   ### Comparison of tensors
 
-    iex> Nx.less_equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
-    #Nx.Tensor<
-      u8[data: 3]
-      [1, 1, 0]
-    >
+      iex> Nx.less_equal(Nx.tensor([1, 2, 3], names: [:data]), Nx.tensor([1, 2, 2]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [1, 1, 0]
+      >
 
-    iex> Nx.less_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3], names: [:y]))
-    #Nx.Tensor<
-      u8[2][y: 3]
-      [
-        [1, 1, 1],
-        [0, 0, 0]
-      ]
-    >
+      iex> Nx.less_equal(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([1, 2, 3], names: [:y]))
+      #Nx.Tensor<
+        u8[2][y: 3]
+        [
+          [1, 1, 1],
+          [0, 0, 0]
+        ]
+      >
   """
   def less_equal(left, right), do: element_wise_pred_op(left, right, :less_equal)
 

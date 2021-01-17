@@ -506,6 +506,50 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "logical" do
+    defn logical_and(a, b), do: Nx.logical_and(a, b)
+
+    test "and" do
+      assert logical_and(Nx.tensor([-1, 0, 1]), Nx.tensor([[-1], [0], [1]])) ==
+               Nx.tensor(
+                 [
+                   [1, 0, 1],
+                   [0, 0, 0],
+                   [1, 0, 1]
+                 ],
+                 type: {:u, 8}
+               )
+    end
+
+    defn logical_or(a, b), do: Nx.logical_or(a, b)
+
+    test "or" do
+      assert logical_or(Nx.tensor([-1, 0, 1]), Nx.tensor([[-1], [0], [1]])) ==
+               Nx.tensor(
+                 [
+                   [1, 1, 1],
+                   [1, 0, 1],
+                   [1, 1, 1]
+                 ],
+                 type: {:u, 8}
+               )
+    end
+
+    defn logical_xor(a, b), do: Nx.logical_xor(a, b)
+
+    test "xor" do
+      assert logical_xor(Nx.tensor([-1, 0, 1]), Nx.tensor([[-1], [0], [1]])) ==
+               Nx.tensor(
+                 [
+                   [0, 1, 0],
+                   [1, 0, 1],
+                   [0, 1, 0]
+                 ],
+                 type: {:u, 8}
+               )
+    end
+  end
+
   describe "select" do
     defn select(pred, x, y), do: Nx.select(pred, x, y)
 
@@ -533,6 +577,9 @@ defmodule EXLA.DefnTest do
     test "selects with broadcasting" do
       assert select(Nx.tensor([1, 0, 1, 0, 1]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) ==
                Nx.tensor([10, 2, 10, 4, 10])
+
+      assert select(Nx.tensor([-2, -1, 0, 1, 2]), Nx.tensor([10]), Nx.tensor([1, 2, 3, 4, 5])) ==
+               Nx.tensor([10, 10, 3, 10, 10])
     end
   end
 

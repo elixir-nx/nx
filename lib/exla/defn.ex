@@ -283,11 +283,23 @@ defmodule EXLA.Defn do
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
   defp to_operator(op, [left, right], _ans, _state) when op in @bin_comp_op do
+    # The answer type is always {:u, 8} but we need cast the inputs
+    # to the same type which is not necessarily the answer type.
     left_shape = EXLA.Op.get_shape(left)
     right_shape = EXLA.Op.get_shape(right)
     type = Nx.Type.merge(left_shape.dtype, right_shape.dtype)
     dims = broadcast_axes(left_shape.dims, right_shape.dims)
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
+  end
+
+  @bin_pred_op [logical_and: :bitwise_and, logical_or: :bitwise_or, logical_xor: :bitwise_xor]
+
+  for {logical, bitwise} <- @bin_pred_op do
+    defp to_operator(unquote(logical), [left, right], _ans, _state) do
+      type = {:pred, 8}
+      dims = broadcast_axes(op_shape(left), op_shape(right))
+      apply(EXLA.Op, unquote(bitwise), [to_type(left, type), to_type(right, type), dims])
+    end
   end
 
   @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++

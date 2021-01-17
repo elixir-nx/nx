@@ -523,7 +523,8 @@ defmodule Nx.BinaryTensor do
   for fun <-
         [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2, :min, :max] ++
           [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
-          [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] do
+          [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
+          [:logical_and, :logical_or, :logical_xor] do
     capture = Macro.var(:"element_#{fun}", __MODULE__)
 
     @doc false
@@ -605,6 +606,18 @@ defmodule Nx.BinaryTensor do
   defp element_less(_, a, b), do: if(a < b, do: 1, else: 0)
   defp element_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
   defp element_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
+
+  defp element_logical_and(_, 0, _), do: 0
+  defp element_logical_and(_, _, 0), do: 0
+  defp element_logical_and(_, _, _), do: 1
+
+  defp element_logical_or(_, 0, 0), do: 0
+  defp element_logical_or(_, _, _), do: 1
+
+  defp element_logical_xor(_, 0, 0), do: 0
+  defp element_logical_xor(_, 0, _), do: 1
+  defp element_logical_xor(_, _, 0), do: 1
+  defp element_logical_xor(_, _, _), do: 0
 
   ## Element wise unary ops
 

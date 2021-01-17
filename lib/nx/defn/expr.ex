@@ -133,6 +133,7 @@ defmodule Nx.Defn.Expr do
     [:add, :subtract, :multiply, :divide, :power, :remainder, :arctan2, :max, :min] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
+      [:logical_and, :logical_or, :logical_xor] ++
       [:outer]
 
   for op <- binary_ops do

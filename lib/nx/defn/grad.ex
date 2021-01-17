@@ -412,6 +412,7 @@ defmodule Nx.Defn.Grad do
   @constants [:tensor, :parameter, :iota, :random_uniform, :random_normal] ++
                [:argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
+               [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
                [:floor, :round, :ceil, :sign]
 
