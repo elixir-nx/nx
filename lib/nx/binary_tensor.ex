@@ -607,16 +607,16 @@ defmodule Nx.BinaryTensor do
   defp element_greater_equal(_, a, b), do: if(a >= b, do: 1, else: 0)
   defp element_less_equal(_, a, b), do: if(a <= b, do: 1, else: 0)
 
-  defp element_logical_and(_, 0, _), do: 0
-  defp element_logical_and(_, _, 0), do: 0
+  defp element_logical_and(_, l, _) when l == 0, do: 0
+  defp element_logical_and(_, _, r) when r == 0, do: 0
   defp element_logical_and(_, _, _), do: 1
 
-  defp element_logical_or(_, 0, 0), do: 0
+  defp element_logical_or(_, l, r) when l == 0 and r == 0, do: 0
   defp element_logical_or(_, _, _), do: 1
 
-  defp element_logical_xor(_, 0, 0), do: 0
-  defp element_logical_xor(_, 0, _), do: 1
-  defp element_logical_xor(_, _, 0), do: 1
+  defp element_logical_xor(_, l, r) when l == 0 and r == 0, do: 0
+  defp element_logical_xor(_, l, _) when l == 0, do: 1
+  defp element_logical_xor(_, _, r) when r == 0, do: 1
   defp element_logical_xor(_, _, _), do: 0
 
   ## Element wise unary ops

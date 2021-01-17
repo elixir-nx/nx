@@ -10,7 +10,7 @@ defmodule Nx.Defn do
       end
 
   will work with scalars, vector, matrices, and n-dimensional
-  tensors, Depending on your backend of choice, the code can even
+  tensors. Depending on your backend of choice, the code can even
   be JIT-compiled or AOT-compiled and run either on the CPU or GPU.
 
   `defn` is a subset of Elixir since it replaces Elixir's `Kernel`
@@ -18,10 +18,12 @@ defmodule Nx.Defn do
   operators, such as `+`, `-`, etc, while also preserving many
   high-level constructs known to Elixir developers, such as pipe
   operator, aliases, conditionals, pattern-matching, and more.
-  Please consult its documentation for a complete reference.
+  Please consult `Nx.Defn.Kernel` for a complete reference.
 
-  You can also call functions from the `Nx` module directly inside
-  `defn`. For example, the code above can also be written as:
+  You can generally call functions from any module inside `defn`.
+  Most often, you call functions from the `Nx` module and
+  supporting libraries. For example, the code above can also
+  be written as:
 
       defn add_and_mult(a, b, c) do
         a
@@ -29,31 +31,25 @@ defmodule Nx.Defn do
         |> Nx.add(c)
       end
 
-  A handful of `Nx` functions are not supported in `defn` but
-  generally speaking you don't have to worry about them. If you
-  use any unsupported API, you will get an error at compilation
-  time.
+  ## Logical operators
 
-  Calling other functions is possible, as long as they are
-  implemented with `defn`.
+  `defn` supports mathematical operators (`+`, `-`, etc), bitwise
+  operators (`&&&`, `<<<`, etc) but also the logical operators `and`,
+  `or`, and `not`. While the numerical operators map directly to
+  their tensor equivalents (as they all work on numbers), the logical
+  operators in Elixir work with `true` and `false`. Therefore, when
+  working with logical operators inside `defn`, `0` is considered
+  `false` and all other numbers are considered `true`, which is
+  represented as the number 1. For example, in `defn`, `0 and 1`
+  as well as `0 and 2` return `0`, while `1 and 1` or `1 and -1`
+  will return `1`.
+
+  The same semantics apply to conditional expressions inside `defn`.
 
   ## Inputs and outputs types
 
   `defn` functions can receive either tuples, numbers, or tensors
   as inputs.
-
-  Tensors are passed in as is. If a number is given, it is automatically
-  cast to tensor. If a tuple is expected, it must be matched on the
-  function head itself. For example, do this:
-
-      defn add_tuple({a, b}), do: a + b
-
-  Do not do this:
-
-      defn add_tuple(tuple) do
-        {a, b} = tuple
-        a + b
-      end
 
   `defn` functions can return tensors or tuples of tensors. Note tensors
   are returned even for numerical constants. For example, this function:

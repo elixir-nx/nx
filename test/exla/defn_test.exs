@@ -519,6 +519,16 @@ defmodule EXLA.DefnTest do
                  ],
                  type: {:u, 8}
                )
+
+      assert logical_and(Nx.tensor([-1.0, 0.0, 1.0]), Nx.tensor([[-1], [0], [1]])) ==
+               Nx.tensor(
+                 [
+                   [1, 0, 1],
+                   [0, 0, 0],
+                   [1, 0, 1]
+                 ],
+                 type: {:u, 8}
+               )
     end
 
     defn logical_or(a, b), do: Nx.logical_or(a, b)
@@ -533,12 +543,32 @@ defmodule EXLA.DefnTest do
                  ],
                  type: {:u, 8}
                )
+
+      assert logical_or(Nx.tensor([-1.0, 0.0, 1.0]), Nx.tensor([[-1], [0], [1]])) ==
+               Nx.tensor(
+                 [
+                   [1, 1, 1],
+                   [1, 0, 1],
+                   [1, 1, 1]
+                 ],
+                 type: {:u, 8}
+               )
     end
 
     defn logical_xor(a, b), do: Nx.logical_xor(a, b)
 
     test "xor" do
       assert logical_xor(Nx.tensor([-1, 0, 1]), Nx.tensor([[-1], [0], [1]])) ==
+               Nx.tensor(
+                 [
+                   [0, 1, 0],
+                   [1, 0, 1],
+                   [0, 1, 0]
+                 ],
+                 type: {:u, 8}
+               )
+
+      assert logical_xor(Nx.tensor([-1.0, 0.0, 1.0]), Nx.tensor([[-1], [0], [1]])) ==
                Nx.tensor(
                  [
                    [0, 1, 0],

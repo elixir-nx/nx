@@ -2282,6 +2282,15 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.logical_and(Nx.tensor([-1.0, 0.0, 1.0], names: [:data]), Nx.tensor([[-1], [0], [1]]))
+      #Nx.Tensor<
+        u8[3][data: 3]
+        [
+          [1, 0, 1],
+          [0, 0, 0],
+          [1, 0, 1]
+        ]
+      >
   """
   def logical_and(left, right), do: element_wise_pred_op(left, right, :logical_and)
 
@@ -2312,6 +2321,15 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.logical_or(Nx.tensor([-1.0, 0.0, 1.0], names: [:data]), Nx.tensor([[-1], [0], [1]]))
+      #Nx.Tensor<
+        u8[3][data: 3]
+        [
+          [1, 1, 1],
+          [1, 0, 1],
+          [1, 1, 1]
+        ]
+      >
   """
   def logical_or(left, right), do: element_wise_pred_op(left, right, :logical_or)
 
@@ -2342,6 +2360,16 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.logical_xor(Nx.tensor([-1.0, 0.0, 1.0], names: [:data]), Nx.tensor([[-1], [0], [1]]))
+      #Nx.Tensor<
+        u8[3][data: 3]
+        [
+          [0, 1, 0],
+          [1, 0, 1],
+          [0, 1, 0]
+        ]
+      >
+
   """
   def logical_xor(left, right), do: element_wise_pred_op(left, right, :logical_xor)
 
@@ -2354,6 +2382,12 @@ defmodule Nx do
   ## Examples
 
       iex> Nx.logical_not(Nx.tensor([-1, 0, 1], names: [:data]))
+      #Nx.Tensor<
+        u8[data: 3]
+        [0, 1, 0]
+      >
+
+      iex> Nx.logical_not(Nx.tensor([-1.0, 0.0, 1.0], names: [:data]))
       #Nx.Tensor<
         u8[data: 3]
         [0, 1, 0]

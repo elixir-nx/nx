@@ -269,6 +269,58 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :tensor, args: [_]}} = divide_two_constant()
     end
 
+    defn land_two(a, b), do: a and b
+    defn land_two_constant(), do: 1 and 2
+
+    test "and" do
+      assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = land_two_constant()
+
+      assert Nx.Defn.Kernel.and(0, 0) == 0
+      assert Nx.Defn.Kernel.and(1, 0) == 0
+      assert Nx.Defn.Kernel.and(0, 2) == 0
+      assert Nx.Defn.Kernel.and(1, 1) == 1
+
+      assert Nx.Defn.Kernel.and(0, 0.0) == 0.0
+      assert Nx.Defn.Kernel.and(1, 0.0) == 0.0
+      assert Nx.Defn.Kernel.and(0, 2.0) == 0.0
+      assert Nx.Defn.Kernel.and(1, 1.0) == 1.0
+    end
+
+    defn lor_two(a, b), do: a or b
+    defn lor_two_constant(), do: 1 or 2
+
+    test "or" do
+      assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = lor_two_constant()
+
+      assert Nx.Defn.Kernel.or(0, 0) == 0
+      assert Nx.Defn.Kernel.or(1, 0) == 1
+      assert Nx.Defn.Kernel.or(0, 2) == 1
+      assert Nx.Defn.Kernel.or(1, 1) == 1
+
+      assert Nx.Defn.Kernel.or(0, 0.0) == 0.0
+      assert Nx.Defn.Kernel.or(1, 0.0) == 1.0
+      assert Nx.Defn.Kernel.or(0, 2.0) == 1.0
+      assert Nx.Defn.Kernel.or(1, 1.0) == 1.0
+    end
+
+    defn lnot(a), do: not a
+    defn lnot_constant(), do: not 1
+
+    test "not" do
+      assert %T{data: %Expr{op: :equal, args: [_, _]}} = lnot(1)
+      assert %T{data: %Expr{op: :tensor, args: [_]}} = lnot_constant()
+
+      assert Nx.Defn.Kernel.not(0) == 1
+      assert Nx.Defn.Kernel.not(1) == 0
+      assert Nx.Defn.Kernel.not(2) == 0
+
+      assert Nx.Defn.Kernel.not(0.0) == 1.0
+      assert Nx.Defn.Kernel.not(1.0) == 0.0
+      assert Nx.Defn.Kernel.not(2.0) == 0.0
+    end
+
     defn band_two(a, b), do: a &&& b
     defn band_two_constant(), do: 1 &&& 2
 
