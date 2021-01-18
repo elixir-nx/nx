@@ -193,7 +193,8 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
   }
 }
 
-xla::StatusOr<std::vector<xla::ExecutionInput>> PopulateInputBuffers(absl::Span<ExlaBuffer* const> argument_handles) {
+xla::StatusOr<std::vector<xla::ExecutionInput>>
+ExlaExecutable::PopulateInputBuffers(absl::Span<ExlaBuffer* const> argument_handles) {
   std::vector<xla::ExecutionInput> execution_inputs;
   execution_inputs.reserve(argument_handles.size());
 
@@ -322,7 +323,9 @@ ExlaClient::ExlaClient(xla::LocalClient* client,
   }
 }
 
-xla::StatusOr<xla::DeviceAssignment> ExlaClient::GetDefaultDeviceAssignment(int num_replicas, int num_partitions) {
+xla::StatusOr<xla::DeviceAssignment>
+ExlaClient::GetDefaultDeviceAssignment(int num_replicas,
+                                       int num_partitions) {
   return client_->backend().computation_placer()->AssignDevices(num_replicas, num_partitions);
 }
 
@@ -343,6 +346,47 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::DecomposeBuffer(ErlNifEnv* env,
     }
     return enif_make_list_from_array(env, &terms[0], num_elems);
   }
+}
+
+bool CanUseZeroCopy(const ErlNifBinary& bin,
+                    const xla::Shape& shape,
+                    const xla::Shape& compact_shape,
+                    ExlaDevice* device) {
+  // Only possible on CPUs
+  bool is_cpu_platform =
+    device->executor()->platform()->id() == se::host::kHostPlatformId;
+  // With well-aligned data
+  bool is_well_aligned =
+    (absl::bit_cast<std::uintptr_t>(bin.data) &
+      (xla::cpu_function_runtime::kMinAlign - 1)) == 0;
+  // With matching layouts
+  bool has_same_layout = shape.layout() == compact_shape.layout();
+  return is_cpu_platform && is_well_aligned && has_same_layout;
+}
+
+xla::StatusOr<ExlaBuffer*>
+ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
+                             const xla::Shape& shape,
+                             ExlaDevice* device,
+                             bool transfer_for_run) {
+  // Get the expected size of the given shape
+  int64 size = xla::ShapeUtil::ByteSizeOf(shape);
+  // Validate the expected size and actual data size are the same
+  // If they are not, we need to return an error because otherwise we'll be trying to read
+  // from invalid memory
+  if (size != bin.size) {
+    return xla::InvalidArgument("Expected %d bytes from binary but got %d.", size, bin.size);
+  }
+  // Transfer Manager will manager the "transfer" to the device
+  xla::TransferManager* transfer_manager =
+    client()->backend().transfer_manager();
+  // Ask for shape which has a compact layout on the device, in other words the anticipated shape of the data
+  // on the device
+  EXLA_ASSIGN_OR_RETURN(xla::Shape compact_shape,
+    transfer_manager->ChooseCompactLayoutForShape(shape));
+
+  // Can we use a zero copy transfer?
+  bool can_use_zero_copy = CanUseZeroCopy(bin, shape, compact_shape, device);
 }
 
 ERL_NIF_TERM ErlListFromLiteral(ErlNifEnv* env, xla::Literal& literal) {
@@ -393,22 +437,6 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::ErlListFromBuffer(ErlNifEnv* env,
   ERL_NIF_TERM list = ErlListFromLiteral(env, literal);
 
   return list;
-}
-
-bool CanUseZeroCopy(ErlNifBinary bin,
-                    const xla::Shape& shape,
-                    const xla::Shape& compact_shape,
-                    ExlaDevice* device) {
-  // Only possible on CPUs
-  bool is_cpu_platform =
-    device->executor()->platform()->id() == se::host::kHostPlatformId;
-  // With well-aligned data
-  bool is_well_aligned =
-    (absl::bit_cast<std::uintptr_t>(bin.data) &
-      (xla::cpu_function_runtime::kMinAlign - 1)) == 0;
-  // With matching layouts
-  bool has_same_layout = shape.layout() == compact_shape.layout();
-  return is_cpu_platform && is_well_aligned && has_same_layout;
 }
 
 std::unique_ptr<xla::ScopedShapedBuffer> ZeroCopyTransferBinToBuffer(const ErlNifBinary bin,
