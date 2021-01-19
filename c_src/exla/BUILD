@@ -15,7 +15,6 @@ cc_library(
     "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_bfc_allocator",
     "@org_tensorflow//tensorflow/core/common_runtime/device:device_mem_allocator",
     "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
-    "@org_tensorflow//tensorflow/compiler/xla:statusor",
   ],
 )
 
@@ -35,7 +34,6 @@ cc_library (
   deps = [
     "@org_tensorflow//tensorflow/compiler/xla/client:local_client",
     "@org_tensorflow//tensorflow/stream_executor:stream_executor",
-    "@com_google_absl//absl/memory",
   ],
 )
 
@@ -49,11 +47,9 @@ cc_library(
     ":exla_nif_util",
     "@org_tensorflow//tensorflow/core/framework:allocator",
     "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
-    "@org_tensorflow//tensorflow/compiler/xla:literal_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
     "@org_tensorflow//tensorflow/core:lib",
-    "@com_google_absl//absl/memory",
   ],
 )
 
@@ -62,10 +58,7 @@ cc_library(
   srcs = ["exla_nif_util.cc"],
   hdrs = ["exla_nif_util.h"] + glob(["erts/**/*.h"]),
   deps = [
-    "@org_tensorflow//tensorflow/stream_executor:stream_executor_headers",
-    "@org_tensorflow//tensorflow/compiler/xla:executable_run_options",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla/client:executable_build_options",
     "@org_tensorflow//tensorflow/core:lib",
   ],
 )
@@ -79,9 +72,7 @@ cc_binary(
     ":exla_nif_util",
     ":exla_client",
     ":exla_log_sink",
-    "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla:comparison_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
@@ -99,9 +90,7 @@ cc_binary(
     ":exla_nif_util",
     ":exla_client",
     ":exla_log_sink",
-    "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla:comparison_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
@@ -118,9 +107,7 @@ cc_binary(
     ":exla_nif_util",
     ":exla_client",
     ":exla_log_sink",
-    "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla:comparison_util",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",

@@ -78,9 +78,9 @@ namespace allocator {
       new tensorflow::DeviceHostAllocator(executor, 0, {}, {});
     const tensorflow::int64 kHostMemoryLimitBytes = 64 * (1LL << 30);
     return std::make_unique<tensorflow::BFCAllocator>(sub_allocator,
-                                                       kHostMemoryLimitBytes,
-                                                       true,
-                                                       "xla_gpu_host_bfc");
+                                                      kHostMemoryLimitBytes,
+                                                      true,
+                                                      "xla_gpu_host_bfc");
   }
 
 }  // namespace allocator
