@@ -218,6 +218,33 @@ ERL_NIF_TERM LiteralToList(ErlNifEnv* env, xla::Literal& literal) {
   return enif_make_list_from_array(env, &data[0], elems);
 }
 
+// TODO(seanmor5): This really should not be recursive
+ERL_NIF_TERM BufferToReferenceList(ErlNifEnv* env,
+                                   ExlaBuffer* buffer) {
+  xla::ShapedBuffer shaped_buffer = buffer->AsShapedBuffer();
+
+  xla::ScopedShapedBuffer scoped_shaped_buffer(std::move(shaped_buffer), buffer->client()->allocator());
+  std::vector<ERL_NIF_TERM> buffer_terms;
+  int64 tuple_elements = xla::ShapeUtil::TupleElementCount(buffer->on_device_shape());
+  buffer_terms.reserve(tuple_elements);
+  for (int i=0; i < tuple_elements; i++) {
+    xla::ScopedShapedBuffer sub_shaped_buffer = scoped_shaped_buffer.TakeSubTree({i});
+    ExlaBuffer* sub_buffer = ExlaBuffer::FromScopedShapedBuffer(&sub_shaped_buffer,
+                                                                buffer->device(),
+                                                                buffer->client(),
+                                                                ExlaBuffer::BufferType::kReference);
+    ERL_NIF_TERM term;
+    if (sub_buffer->is_tuple()) {
+      term = BufferToReferenceList(env, sub_buffer);
+    } else {
+      term = nif::make<ExlaBuffer*>(env, sub_buffer);
+    }
+    buffer_terms.push_back(term);
+  }
+
+  return enif_make_list_from_array(env, &buffer_terms[0], tuple_elements);
+}
+
 /*static*/ xla::StatusOr<ERL_NIF_TERM>
 ExlaBuffer::DecomposeBufferToTerm(ErlNifEnv* env,
                                   ExlaBuffer* buffer,
@@ -231,18 +258,23 @@ ExlaBuffer::DecomposeBufferToTerm(ErlNifEnv* env,
     }
   }
 
-  xla::ShapedBuffer shaped_buffer = buffer->AsShapedBuffer();
+  ERL_NIF_TERM term;
+  if (!keep_on_device) {
+    xla::ShapedBuffer shaped_buffer = buffer->AsShapedBuffer();
 
-  xla::TransferManager* transfer_manager =
-    buffer->client()->client()->backend().transfer_manager();
+    xla::TransferManager* transfer_manager =
+      buffer->client()->client()->backend().transfer_manager();
 
-  EXLA_ASSIGN_OR_RETURN(xla::Literal literal,
-    transfer_manager->TransferLiteralFromDevice(
-      buffer->device()->device_to_host_stream(),
-      shaped_buffer,
-      nullptr));
+    EXLA_ASSIGN_OR_RETURN(xla::Literal literal,
+      transfer_manager->TransferLiteralFromDevice(
+        buffer->device()->device_to_host_stream(),
+        shaped_buffer,
+        nullptr));
 
-  ERL_NIF_TERM term = LiteralToList(env, literal);
+    term = LiteralToList(env, literal);
+  } else {
+    term = BufferToReferenceList(env, buffer);
+  }
 
   return term;
 }
