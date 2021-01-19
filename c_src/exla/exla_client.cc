@@ -184,42 +184,43 @@ xla::StatusOr<xla::ScopedShapedBuffer> AllocateDestinationBuffer(const xla::Shap
   return buffer;
 }
 
-// TODO: Move!
-int get_run_arguments(ErlNifEnv* env,
-                      ERL_NIF_TERM list,
-                      std::vector<exla::ExlaBuffer*>& arguments,
-                      exla::ExlaDevice* device,
-                      exla::ExlaClient* client) {
+xla::StatusOr<std::vector<ExlaBuffer*>> UnpackRunArguments(ErlNifEnv* env,
+                                                           ERL_NIF_TERM list,
+                                                           ExlaDevice* device,
+                                                           ExlaClient* client) {
   uint32 length;
-  if (!enif_get_list_length(env, list, &length)) return 0;
+  if (!enif_get_list_length(env, list, &length)) {
+    return xla::InvalidArgument("Argument is not a list.");
+  }
 
+  std::vector<ExlaBuffer*> arguments;
   arguments.reserve(length);
 
   ERL_NIF_TERM head, tail;
   while (enif_get_list_cell(env, list, &head, &tail)) {
     const ERL_NIF_TERM* tuple;
     int arity;
-    exla::ExlaBuffer** buffer;
+    ExlaBuffer** buffer;
     if (enif_get_tuple(env, head, &arity, &tuple)) {
       ErlNifBinary data;
       xla::Shape* shape;
-      if (!exla::nif::get_binary(env, tuple[0], &data)) {
-        return 0;
+      if (!nif::get_binary(env, tuple[0], &data)) {
+        return xla::InvalidArgument("Arguments must either be buffer or tuple of shape, binary.");
       }
-      if (!exla::nif::get<xla::Shape>(env, tuple[1], shape)) {
-        return 0;
+      if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
+        return xla::InvalidArgument("Arguments must either be buffer or tuple of shape, binary.");
       }
-      EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buf,
-        client->BufferFromBinary(data, *shape, device, true), env);
+      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf,
+        client->BufferFromBinary(data, *shape, device, true));
       arguments.push_back(buf);
-    } else if (exla::nif::get<exla::ExlaBuffer*>(env, head, buffer)) {
+    } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
       arguments.push_back(*buffer);
     } else {
-      return 0;
+      return xla::InvalidArgument("Arguments must either be buffer or tuple of shape, binary.");
     }
     list = tail;
   }
-  return 1;
+  return arguments;
 }
 
 // ExlaExecutable Functions
@@ -319,11 +320,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   std::shared_ptr<xla::LocalExecutable> executable = executables_.at(executable_idx);
 
-  std::vector<ExlaBuffer*> arguments;
-
-  if (!get_run_arguments(env, argument_terms, arguments, device, client_)) {
-    return xla::InvalidArgument("Failed to get arguments.");
-  }
+  EXLA_ASSIGN_OR_RETURN(std::vector<ExlaBuffer*> arguments,
+                        UnpackRunArguments(env, argument_terms, device, client_));
 
   EXLA_ASSIGN_OR_RETURN(std::vector<xla::ExecutionInput> inputs,
                         PopulateInputBuffers(arguments));
