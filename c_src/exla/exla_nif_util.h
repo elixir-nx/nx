@@ -229,13 +229,6 @@ int get_general_padding(ErlNifEnv* env,
                         std::vector<std::pair<int64, int64>>& padding);
 
 /*
- * Special case for execution inputs.
- */
-int get_run_arguments(ErlNifEnv* env,
-                      ERL_NIF_TERM argument_term,
-                      std::vector<ExlaBuffer*>& arguments,
-                      ExlaClient* client);
-/*
  * Makers for standard types.
  */
 ERL_NIF_TERM make(ErlNifEnv* env, int var);

@@ -375,42 +375,6 @@ namespace nif {
     return 1;
   }
 
-  ERL_NIF_TERM get_run_arguments(ErlNifEnv* env,
-                                 ERL_NIF_TERM argument_term,
-                                 std::vector<ExlaBuffer*>& arguments,
-                                 ExlaClient* client) {
-    uint32 length;
-    if (!enif_get_list_length(env, argument_term, &length)) return 0;
-
-    arguments.reserve(length);
-
-    ERL_NIF_TERM head, tail;
-    while (enif_get_list_cell(env, argument_term, &head, &tail)) {
-      const ERL_NIF_TERM* tuple;
-      int arity;
-      exla::ExlaBuffer** buffer;
-      if (enif_get_tuple(env, head, &arity, &tuple)) {
-        ErlNifBinary data;
-        xla::Shape* shape;
-        if (!get_binary(env, tuple[0], &data)) {
-          return 0;
-        }
-        if (!get<xla::Shape>(env, tuple[1], shape)) {
-          return 0;
-        }
-        EXLA_ASSIGN_OR_RETURN_NIF(ExlaBuffer* buf,
-          client_->BufferFromErlBin(data, *shape, device, true), env);
-        arguments.push_back(buf);
-      } else if (get<ExlaBuffer*>(env, head, buffer)) {
-        arguments.push_back(*buffer);
-      } else {
-        return 0;
-      }
-      list = tail;
-    }
-    return 1;
-  }
-
   ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if (shape.IsTuple()) {
       int element_count = xla::ShapeUtil::TupleElementCount(shape);

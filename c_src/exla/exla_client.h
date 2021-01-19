@@ -71,31 +71,21 @@ class ExlaBuffer {
   };
 
   ExlaBuffer(absl::Span<se::DeviceMemoryBase const> device_memory,
+             xla::Shape& on_host_shape,
+             xla::Shape& on_device_shape,
              ExlaDevice* device,
              ExlaClient* client,
              BufferType type) : device_memory_(device_memory.begin(), device_memory.end()),
+                                on_host_shape_(std::move(on_host_shape)),
+                                on_device_shape_(std::move(on_device_shape)),
                                 device_(device),
                                 client_(client),
                                 type_(type),
                                 state_(BufferState::kValid) {}
 
-  ExlaBuffer(se::Stream* creation_stream,
-             std::unique_ptr<se::Event> definition_event,
-             std::unique_ptr<xla::ScopedShapedBuffer> buffer,
-             ExlaDevice* device,
-             ExlaClient* client,
-             BufferType type) : creation_stream_(creation_stream),
-                                definition_event_(std::move(definition_event)),
-                                buffer_(std::move(buffer)),
-                                device_(device),
-                                client_(client),
-                                type_(type) {}
-
   ~ExlaBuffer() { Deallocate(); }
 
   xla::Status Deallocate();
-
-  xla::StatusOr<std::vector<ExlaBuffer*>> DecomposeTuple();
 
   bool empty() { return state_ == BufferState::kDeallocated; }
 
@@ -109,7 +99,7 @@ class ExlaBuffer {
 
   se::Stream* creation_stream() const { return creation_stream_; }
 
-  bool is_tuple() { return !empty() && buffer_->on_host_shape().IsTuple(); }
+  bool is_tuple() { return on_host_shape_.IsTuple(); }
 
   void AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
                   xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
@@ -118,6 +108,8 @@ class ExlaBuffer {
   xla::StatusOr<ErlNifBinary> ToBinary();
 
   xla::Status BlockHostUntilReady();
+
+  void ReleaseMemoryOwnership();
 
  private:
   // The buffer's underlying device memory, we follow PjRt
@@ -141,10 +133,10 @@ class ExlaBuffer {
   // of events. Research more
   // Buffer's definition event, we use events to immediately
   // return to the VM on executions and device transfers.
-  std::unique_ptr<se::Event> definition_event_;
+  std::unique_ptr<se::Event> definition_event_ = nullptr;
 
   // Buffer's creation stream
-  se::Stream* creation_stream_;
+  se::Stream* creation_stream_ = nullptr;
 
   // Buffer's current state
   BufferState state_;
@@ -222,18 +214,10 @@ class ExlaClient {
                                            xla::ExecutableBuildOptions& build_options,
                                            bool compile_portable_executable);
 
-  xla::StatusOr<ExlaBuffer*> BufferFromErlBin(const ErlNifBinary binary,
-                                              const xla::Shape& shape,
+  xla::StatusOr<ExlaBuffer*> BufferFromBinary(const ErlNifBinary& binary,
+                                              xla::Shape& shape,
                                               ExlaDevice* device,
                                               bool transfer_for_run);
-
-  xla::StatusOr<ERL_NIF_TERM> DecomposeBuffer(ErlNifEnv* env,
-                                              ExlaBuffer* buffer);
-
-  xla::StatusOr<ErlNifBinary> ErlBinFromBuffer(ExlaBuffer* buffer);
-
-  xla::StatusOr<ERL_NIF_TERM> ErlListFromBuffer(ErlNifEnv* env,
-                                                ExlaBuffer* buffer);
 
   xla::StatusOr<xla::DeviceAssignment> GetDefaultDeviceAssignment(int num_replicas, int num_partitions);
 

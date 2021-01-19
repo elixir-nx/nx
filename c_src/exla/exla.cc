@@ -120,7 +120,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer,
-    (*client)->BufferFromErlBin(bin, *shape, device, false), env);
+    (*client)->BufferFromBinary(bin, *shape, device, false), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buffer));
 }
@@ -141,9 +141,7 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   }
 
   if ((*buffer)->is_tuple()) {
-    EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM data,
-      (*client)->ErlListFromBuffer(env, *buffer), env);
-    return exla::nif::ok(env, data);
+    return exla::nif::ok(env);
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*buffer)->ToBinary(), env);
@@ -1520,18 +1518,16 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   exla::ExlaClient** client;
   exla::ExlaExecutable** executable;
-  std::vector<ExlaBuffer*> arguments;
   xla::Shape* output_shape;
   exla::int32 run_id, rng_seed, launch_id, device_ordinal, keep_on_device, replica, partition;
+
+  ERL_NIF_TERM arguments = argv[2];
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
   }
   if (!exla::nif::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
     return exla::nif::error(env, "Unable to get executable.");
-  }
-  if (!exla::nif::get_run_arguments(env, argv[2], arguments, *client)) {
-    return exla::nif::error(env, "Unable to get execution arguments.");
   }
   if (!exla::nif::get<xla::Shape>(env, argv[3], output_shape)) {
     return exla::nif::error(env, "Unable to get output shape.");
