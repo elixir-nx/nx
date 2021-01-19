@@ -420,7 +420,7 @@ defmodule Nx.Defn.Expr do
         [inspect(fun) | inspect_args(args, var_map)]
 
       %T{data: %Expr{op: :tensor, args: [t]}, shape: {}} ->
-        [t |> Nx.Util.to_scalar() |> to_string() | inspect_args(args, var_map)]
+        [t |> Nx.to_scalar() |> to_string() | inspect_args(args, var_map)]
 
       %T{data: %Expr{id: id}} ->
         [Map.fetch!(var_map, id) | inspect_args(args, var_map)]

@@ -615,6 +615,61 @@ defmodule Nx do
     impl!(tensor).to_binary(tensor)
   end
 
+  ## Conversions
+
+  @doc """
+  Returns the underlying tensor as a flat list.
+
+  The list is returned as is (which is row-major).
+
+    ## Examples
+
+      iex> Nx.to_flat_list(1)
+      [1]
+
+      iex> Nx.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]))
+      [1.0, 2.0, 3.0]
+
+  """
+  def to_flat_list(tensor) do
+    tensor = Nx.tensor(tensor)
+
+    match_types [tensor.type] do
+      for <<match!(var, 0) <- Nx.to_binary(tensor)>>, do: read!(var, 0)
+    end
+  end
+
+  @doc """
+  Returns the underlying tensor as a scalar.
+
+  If the tensor has a dimension, it raises.
+
+    ## Examples
+
+      iex> Nx.to_scalar(1)
+      1
+
+      iex> Nx.to_scalar(Nx.tensor([1.0, 2.0, 3.0]))
+      ** (ArgumentError) cannot convert tensor of shape {3} to scalar
+
+  """
+  def to_scalar(tensor)
+
+  def to_scalar(number) when is_number(number), do: number
+
+  def to_scalar(tensor) do
+    tensor = Nx.tensor(tensor)
+
+    if tensor.shape != {} do
+      raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to scalar"
+    end
+
+    match_types [tensor.type] do
+      <<match!(x, 0)>> = Nx.to_binary(tensor)
+      read!(x, 0)
+    end
+  end
+
   @doc """
   Creates a one-dimensional tensor from a `binary` with the given `type`.
 

@@ -299,7 +299,7 @@ defmodule Nx.BinaryTensor do
   # as we transpose and build the rest.
   @impl true
   def pad(_out, t, pad_value, padding_config) do
-    pad_value = Nx.Util.to_scalar(pad_value)
+    pad_value = Nx.to_scalar(pad_value)
 
     case t.shape do
       {} ->
@@ -483,7 +483,7 @@ defmodule Nx.BinaryTensor do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
-    if Nx.Util.to_scalar(pred) == 0,
+    if Nx.to_scalar(pred) == 0,
       do: from_binary(out, broadcast_data(on_false, out.shape)),
       else: from_binary(out, broadcast_data(on_true, out.shape))
   end
@@ -1166,7 +1166,7 @@ defmodule Nx.BinaryTensor do
     output_data =
       match_types [type, output_type] do
         for <<match!(x, 0) <- data>>, into: <<>> do
-          <<write!(Nx.Util.to_scalar(fun.(read!(x, 0))), 1)>>
+          <<write!(Nx.to_scalar(fun.(read!(x, 0))), 1)>>
         end
       end
 

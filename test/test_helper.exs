@@ -14,7 +14,7 @@ defmodule Nx.GradHelpers do
   end
 
   defp approx_equal?(lhs, rhs, x, eps) do
-    [value] = Nx.Util.to_flat_list(Nx.abs(Nx.subtract(lhs, rhs)))
+    [value] = Nx.to_flat_list(Nx.abs(Nx.subtract(lhs, rhs)))
 
     unless value < eps do
       raise """

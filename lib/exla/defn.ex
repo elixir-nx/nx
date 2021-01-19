@@ -115,7 +115,7 @@ defmodule EXLA.Defn do
   defp to_operator(:tensor, [tensor], _ans, state) do
     case tensor.shape do
       {} ->
-        to_constant(state.builder, Nx.Util.to_scalar(tensor), tensor.type)
+        to_constant(state.builder, Nx.to_scalar(tensor), tensor.type)
 
       shape ->
         shape = EXLA.Shape.make_shape(tensor.type, shape)
