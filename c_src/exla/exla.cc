@@ -1,15 +1,11 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/compiler/xla/exla/exla_client.h"
 #include "tensorflow/compiler/xla/exla/exla_log_sink.h"
-
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/literal_util.h"
-
 #include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
-#include "tensorflow/compiler/xla/client/client_library.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
 // This is all we need for now, the GC takes care of everything else

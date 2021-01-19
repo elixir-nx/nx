@@ -8,12 +8,9 @@
 #include <utility>
 
 #include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
-
-#include "tensorflow/compiler/xla/primitive_util.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/types.h"
-#include "tensorflow/core/platform/errors.h"
+#include "tensorflow/compiler/xla/shape.h"
 
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
   typedef unsigned __int64 nif_uint64_t;
@@ -168,7 +165,7 @@ int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<T> &var) {
   for (int i=0; i < length; i++) {
     T* elem;
     if (!get<T>(env, terms[i], elem)) return 0;
-    var.emplace_back(*elem);
+    var.push_back(*elem);
   }
   return 1;
 }
@@ -183,7 +180,7 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T*> &var) {
   while (enif_get_list_cell(env, list, &head, &tail)) {
     T* elem;
     if (!get<T>(env, head, elem)) return 0;
-    var.emplace_back(elem);
+    var.push_back(elem);
     list = tail;
   }
   return 1;
@@ -199,7 +196,7 @@ int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<T> &var) {
   while (enif_get_list_cell(env, list, &head, &tail)) {
     T* elem;
     if (!get<T>(env, head, elem)) return 0;
-    var.emplace_back(*elem);
+    var.push_back(*elem);
     list = tail;
   }
   return 1;

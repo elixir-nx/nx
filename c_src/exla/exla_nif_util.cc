@@ -1,4 +1,6 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "tensorflow/compiler/xla/shape_util.h"
+#include "tensorflow/compiler/xla/primitive_util.h"
 
 namespace exla {
 namespace nif {
@@ -159,10 +161,10 @@ namespace nif {
     if (!enif_get_tuple(env, tuple, &length, &terms)) return 0;
     var.reserve(length);
 
-    for (int i=0; i < length; i++) {
+    for (int i = 0; i < length; i++) {
       int data;
       if (!get(env, terms[i], &data)) return 0;
-      var.emplace_back(data);
+      var.push_back(data);
     }
     return 1;
   }
@@ -178,7 +180,7 @@ namespace nif {
     while (enif_get_list_cell(env, list, &head, &tail)) {
       ErlNifBinary elem;
       if (!get_binary(env, head, &elem)) return 0;
-      var.emplace_back(elem);
+      var.push_back(elem);
       list = tail;
     }
     return 1;
@@ -193,7 +195,7 @@ namespace nif {
     while (enif_get_list_cell(env, list, &head, &tail)) {
       int64 elem;
       if (!get(env, head, &elem)) return 0;
-      var.emplace_back(elem);
+      var.push_back(elem);
       list = tail;
     }
     return 1;
@@ -302,7 +304,7 @@ namespace nif {
 
     dimension_numbers->set_input_batch_dimension(input_batch_dimension);
     dimension_numbers->set_input_feature_dimension(input_feature_dimension);
-    for (int i = 2;i < input_count;i++) {
+    for (int i = 2; i < input_count; i++) {
       int64 value;
       if (!get(env, input_dims[i], &value)) return 0;
       dimension_numbers->add_input_spatial_dimensions(value);
@@ -320,7 +322,7 @@ namespace nif {
 
     dimension_numbers->set_kernel_output_feature_dimension(kernel_output_feature_dimension);
     dimension_numbers->set_kernel_input_feature_dimension(kernel_input_feature_dimension);
-    for (int i = 2;i < kernel_count;i++) {
+    for (int i = 2; i < kernel_count; i++) {
       int64 value;
       if (!get(env, kernel_dims[i], &value)) return 0;
       dimension_numbers->add_kernel_spatial_dimensions(value);
@@ -338,7 +340,7 @@ namespace nif {
 
     dimension_numbers->set_output_batch_dimension(output_batch_dimension);
     dimension_numbers->set_output_feature_dimension(output_feature_dimension);
-    for (int i = 2;i < output_count;i++) {
+    for (int i = 2; i < output_count; i++) {
       int64 value;
       if (!get(env, output_dims[i], &value)) return 0;
       dimension_numbers->add_output_spatial_dimensions(value);
@@ -367,7 +369,7 @@ namespace nif {
       if (!get(env, terms[0], &lo)) return 0;
       if (!get(env, terms[1], &hi)) return 0;
 
-      padding.emplace_back(std::pair<int64, int64>(lo, hi));
+      padding.push_back(std::pair<int64, int64>(lo, hi));
 
       padding_term = tail;
     }
@@ -380,10 +382,10 @@ namespace nif {
       int element_count = xla::ShapeUtil::TupleElementCount(shape);
       std::vector<ERL_NIF_TERM> terms;
       terms.reserve(element_count);
-      for (int i=0; i < element_count; i++) {
+      for (int i = 0; i < element_count; i++) {
         xla::Shape shape_elem = xla::ShapeUtil::GetTupleElementShape(shape, i);
         ERL_NIF_TERM shape_term = make<xla::Shape>(env, shape_elem);
-        terms.emplace_back(shape_term);
+        terms.push_back(shape_term);
       }
       return enif_make_list_from_array(env, &terms[0], element_count);
     }
@@ -396,10 +398,10 @@ namespace nif {
 
     std::vector<ERL_NIF_TERM> dim_arr;
     dim_arr.reserve(rank);
-    for (int i=0; i < rank; i++) {
+    for (int i = 0; i < rank; i++) {
       int copy;
       copy = dims.at(i);
-      dim_arr.emplace_back(make(env, copy));
+      dim_arr.push_back(make(env, copy));
     }
 
     ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);

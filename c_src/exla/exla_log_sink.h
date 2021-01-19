@@ -3,9 +3,9 @@
 
 #include <string>
 
+#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/core/platform/logging.h"
 #include "absl/base/log_severity.h"
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 
 namespace exla {
 
@@ -18,6 +18,8 @@ class ExlaLogSink : public tensorflow::TFLogSink {
     // Logger Env
     env_ = enif_alloc_env();
   }
+
+  ~ExlaLogSink() { enif_free_env(env_); }
 
   ERL_NIF_TERM info(std::string str, std::string fname, int32 line) {
     ERL_NIF_TERM status = nif::atom(env_, "info");

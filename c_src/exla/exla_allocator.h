@@ -6,14 +6,11 @@
 
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/compiler/xla/exla/exla_device.h"
-
-#include "tensorflow/compiler/xla/statusor.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/platform/mem.h"
 #include "tensorflow/core/common_runtime/device/device_host_allocator.h"
 #include "tensorflow/core/common_runtime/device/device_mem_allocator.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.h"
-
 #include "tensorflow/stream_executor/device_memory_allocator.h"
 #include "tensorflow/stream_executor/tf_allocator_adapter.h"
 
