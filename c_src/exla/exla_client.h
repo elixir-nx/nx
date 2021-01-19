@@ -55,7 +55,9 @@ class ExlaBuffer {
     kTemporary
   };
 
-  // The current state of this buffer
+  // The current state of this buffer, used to check if this
+  // buffer can be written to, deallocated, or used in another
+  // computation.
   enum class BufferState {
     // The buffer is in a valid and useable state
     kValid,
@@ -65,6 +67,9 @@ class ExlaBuffer {
 
     // The buffer is waiting on it's definition event
     kWaiting,
+
+    // The buffer has been donated
+    kDonated,
 
     // The buffer is in an error state
     kError
@@ -83,48 +88,101 @@ class ExlaBuffer {
                                 type_(type),
                                 state_(BufferState::kValid) {}
 
-  ~ExlaBuffer() { Deallocate(); }
+  ~ExlaBuffer() {
+    Deallocate();
+  }
 
-  xla::Status Deallocate();
+  // Returns true if the underlying buffer is empty. The buffer is considered
+  // empty if (1) it no longer has ownership of it's underlying device memory,
+  // or (2) the underlying device memory has not yet been written to. This is
+  // the case if the buffer is in a deallocated or donated (case 1), or it is
+  // in a waiting state (case 2).
+  bool empty() { return state_ == BufferState::kDeallocated || state_ == BufferState::kWaiting || state_ == BufferState::kDonated; }
 
-  bool empty() { return state_ == BufferState::kDeallocated; }
-
+  // Returns the underlying host shape of the buffer.
   const xla::Shape on_host_shape() { return on_host_shape_; }
 
+  // Returns the underlying device shape of the buffer.
   const xla::Shape on_device_shape() { return on_device_shape_; }
 
+  // Returns this buffer's device.
   ExlaDevice* device() { return device_; }
 
+  // Returns this buffer's client.
+  ExlaClient* client() { return client_; }
+
+  // Returns the buffer's type.
+  BufferType type() { return type_; }
+
+  // Returns the underlying vector of device memory.
   const absl::InlinedVector<se::DeviceMemoryBase, 1> device_memory() const { return device_memory_; }
 
-  se::Event* definition_event() const { return definition_event_.get(); }
-
-  se::Stream* creation_stream() const { return creation_stream_; }
-
-  void ReleaseMemoryOwnership() { device_memory_.clear(); }
-
+  // Returns true if the underlying memory has a tuple shape.
   bool is_tuple() { return on_host_shape_.IsTuple(); }
 
+  // Adds this buffer as an input to a computation. Inputs can
+  // either be donated or immutable. In the case of an immutable input,
+  // the caller is responsible for deallocating the buffer at the appropriate
+  // time. Donated inputs are deallocated when the computation finishes.
   void AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
                   xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
                   xla::ExecutionInput* input);
 
+  // Converts the underlying buffer to a VM binary to be returned back
+  // to the VM. This is a non-destructive operation. The buffer either
+  // has to be explicitly deallocated, or deallocated when the object
+  // goes out of scope.
   xla::StatusOr<ErlNifBinary> ToBinary();
 
-  xla::Status BlockHostUntilReady();
+  // Deallocates the underlying device memory and returns a success
+  // status or an error status. Only temporary and reference tensors
+  // can be explicitly deallocated. Zero-copy deallocation releases
+  // the underlying device memory to the VM to garbage collect. If the
+  // tensor is already deallocated, or waiting for it's buffers to be
+  // populated, returns an error.
+  xla::Status Deallocate();
 
+  // Releases ownership of the underlying device memory. The underlying
+  // memory is considered "deallocated" becasue it is no longer assumed
+  // as safe to use. It is the responsibility of the caller to deallocate
+  // the underlying memory. This is used mostly when creating buffers
+  // from zero-copy transfers to allow the VM to garbage collect the
+  // underlying device memory.
+  void ReleaseMemoryOwnership();
+
+  // Returns a view of the buffer as a shaped buffer. This is a convenience
+  // for performing transfers between device and host. Underlying device
+  // memory is still owned by this buffer, and must be deallocated either
+  // explicitly or when the buffer is destructed.
   xla::ShapedBuffer AsShapedBuffer();
 
+  // Transfers ownership of the underlying device memory from the scoped
+  // shaped buffer to this buffer.
+  void WriteToBuffer(xla::ScopedShapedBuffer* shaped_buffer);
+
+  // Creates a new ExlaBuffer from the scoped shaped buffer with the given
+  // device, client, and type. The ExlaBuffer takes ownership of the
+  // underlying device memory and is responsible for deallocating the memory
+  // upon destruction or with an explicit deallocation.
   static ExlaBuffer* FromScopedShapedBuffer(xla::ScopedShapedBuffer* shaped_buffer,
                                             ExlaDevice* device,
                                             ExlaClient* client,
                                             BufferType type);
 
+  // Decomposes the given buffer to an Erlang VM term. The term is either
+  // a binary if the buffer has an array-like shape or a list of the
+  // buffer has a tuple shape. If `keep_on_device` is true, the term
+  // will be a reference or a list of references to the underlying buffer(s).
+  static xla::StatusOr<ERL_NIF_TERM> DecomposeBufferToTerm(ErlNifEnv* env,
+                                                           ExlaBuffer* buffer,
+                                                           bool keep_on_device);
  private:
-  // The buffer's underlying device memory, we follow PjRt
+  // Buffer's underlying device memory, we follow PjRt
   // and use an inlined vector. Inlined vectors behave exactly
   // the same as std::vector, but small sequences are stored
-  // inline.
+  // inline without heap allocation. We decompose tuples
+  // into multiple buffers, so we can assume a default capacity
+  // of 1.
   absl::InlinedVector<se::DeviceMemoryBase, 1> device_memory_;
 
   // Buffer's underlying host/device shapes
@@ -138,19 +196,13 @@ class ExlaBuffer {
   ExlaClient* client_;
   ExlaDevice* device_;
 
-  // TODO(seanmor5): PjRt uses an event pool, internally a stack
-  // of events. Research more
-  // Buffer's definition event, we use events to immediately
-  // return to the VM on executions and device transfers.
-  std::unique_ptr<se::Event> definition_event_ = nullptr;
-
-  // Buffer's creation stream
-  se::Stream* creation_stream_ = nullptr;
-
   // Buffer's current state
   BufferState state_;
 
-  // Used in AddToInput, depending on the buffer type
+  // Donates this buffer to the given xla::ExecutionInput. The input takes
+  // ownership of the underlying buffer, and is responsible for deallocating
+  // the underlying device memory. Because of that, this buffer is no longer
+  // considered valid.
   void AddToInputAsDonated(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
                            xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
                            xla::ExecutionInput* input);
