@@ -95,9 +95,13 @@ class ExlaBuffer {
 
   ExlaDevice* device() { return device_; }
 
+  const absl::InlinedVector<se::DeviceMemoryBase, 1> device_memory() const { return device_memory_; }
+
   se::Event* definition_event() const { return definition_event_.get(); }
 
   se::Stream* creation_stream() const { return creation_stream_; }
+
+  void ReleaseMemoryOwnership() { device_memory_.clear(); }
 
   bool is_tuple() { return on_host_shape_.IsTuple(); }
 
@@ -109,7 +113,12 @@ class ExlaBuffer {
 
   xla::Status BlockHostUntilReady();
 
-  void ReleaseMemoryOwnership();
+  xla::ShapedBuffer AsShapedBuffer();
+
+  static ExlaBuffer* FromScopedShapedBuffer(xla::ScopedShapedBuffer* shaped_buffer,
+                                            ExlaDevice* device,
+                                            ExlaClient* client,
+                                            BufferType type);
 
  private:
   // The buffer's underlying device memory, we follow PjRt
