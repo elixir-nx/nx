@@ -23,6 +23,7 @@ defmodule Nx.Defn.Expr do
       the function, the function expression, and the anonymous
       function used to build the expression. The shape of the
       tensor holding the function is the shape of the output.
+
   """
 
   alias Nx.Defn.Expr

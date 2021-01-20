@@ -10,20 +10,17 @@ defmodule Nx.Defn do
       end
 
   will work with scalars, vector, matrices, and n-dimensional
-  tensors. Depending on your backend of choice, the code can even
+  tensors. Depending on your compiler of choice, the code can even
   be JIT-compiled or AOT-compiled and run either on the CPU or GPU.
 
-  `defn` is a subset of Elixir since it replaces Elixir's `Kernel`
-  by `Nx.Defn.Kernel`. `Nx.Defn.Kernel` provides tensor-aware
-  operators, such as `+`, `-`, etc, while also preserving many
-  high-level constructs known to Elixir developers, such as pipe
-  operator, aliases, conditionals, pattern-matching, and more.
-  Please consult `Nx.Defn.Kernel` for a complete reference.
+  To support these features, `defn` is a subset of Elixir. It
+  replaces Elixir's `Kernel` by `Nx.Defn.Kernel`. `Nx.Defn.Kernel`
+  provides tensor-aware operators, such as `+`, `-`, etc, while
+  also preserving many high-level constructs known to Elixir
+  developers, such as pipe operator, aliases, conditionals,
+  pattern-matching, and more:
 
-  You can generally call functions from any module inside `defn`.
-  Most often, you call functions from the `Nx` module and
-  supporting libraries. For example, the code above can also
-  be written as:
+  For example, the code above can also be written as:
 
       defn add_and_mult(a, b, c) do
         a
@@ -31,18 +28,26 @@ defmodule Nx.Defn do
         |> Nx.add(c)
       end
 
+  Please consult `Nx.Defn.Kernel` for a complete reference.
+
   ## Logical operators
 
-  `defn` supports mathematical operators (`+`, `-`, etc), bitwise
-  operators (`&&&`, `<<<`, etc) but also the logical operators `and`,
-  `or`, and `not`. While the numerical operators map directly to
-  their tensor equivalents (as they all work on numbers), the logical
-  operators in Elixir work with `true` and `false`. Therefore, when
-  working with logical operators inside `defn`, `0` is considered
-  `false` and all other numbers are considered `true`, which is
-  represented as the number 1. For example, in `defn`, `0 and 1`
-  as well as `0 and 2` return `0`, while `1 and 1` or `1 and -1`
-  will return `1`.
+  `defn` attempts to keep as close to the Elixir semantics as
+  possible but that's not achievable. For example, mathematical
+  and bitwise operators (`+`, `-`, `&&&`, `<<<`, etc) in Elixir
+  work on numbers, which means mapping them to tensors is
+  straight-forward and they largely preserve the same semantics,
+  except they are now multi-dimensional.
+
+  On the other hand, the logical operators `and`, `or`, and `not`
+  work with booleans in Elixir (`true` and `false`), which map
+  to `0` and `1` in `defn`.
+
+  Therefore, when working with logical operators inside `defn`,
+  `0` is considered `false` and all other numbers are considered
+  `true`, which is represented as the number `1`. For example, in
+  `defn`, `0 and 1` as well as `0 and 2` return `0`, while
+  `1 and 1` or `1 and -1` will return `1`.
 
   The same semantics apply to conditional expressions inside `defn`.
 
@@ -57,6 +62,25 @@ defmodule Nx.Defn do
       defn just_two(), do: 2
 
   will return the same as `Nx.tensor(2)`.
+
+  ## Invoking custom Elixir code
+
+  Inside `defn` you can only call other `defn` functions and
+  the functions in the `Nx` module. However, inside `defn`,
+  it is possible to use transforms to invoke any Elixir code:
+
+      defn add_and_mult(a, b, c) do
+        res = a * b + c
+        transform(res, &IO.inspect/1)
+      end
+
+  For example, the code above invokes `&IO.inspect/1`, which is
+  not a `defn` function, with the value of `res`. This is useful
+  as it allows developers to transform `defn` code at runtime,
+  in order to optimize, add new properties, and so on. For example,
+  the `Nx.Defn.Kernel.grad/2` function, which automatically
+  computes gradients from `Nx` expressions, is implemented as
+  a transform.
 
   ## Compilers
 
@@ -76,6 +100,7 @@ defmodule Nx.Defn do
 
       @default_defn_compiler {EXLA, client: :cuda}
 
+  To write your own compiler, see `Nx.Defn.Compiler`.
   """
 
   ## Default compiler backend
@@ -83,9 +108,8 @@ defmodule Nx.Defn do
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __compile__(_env, _kind, vars, fun, []) do
-    fun
-    |> apply(vars)
+  def __compile__(_key, vars, fun, []) do
+    fun.(vars)
     |> to_result(vars, %{})
     |> elem(0)
   end

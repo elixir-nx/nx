@@ -133,5 +133,5 @@ defmodule EXLA do
 
   @behaviour Nx.Defn.Compiler
   @impl true
-  defdelegate __compile__(env, kind, vars, fun, opts), to: EXLA.Defn
+  defdelegate __compile__(key, vars, fun, opts), to: EXLA.Defn
 end

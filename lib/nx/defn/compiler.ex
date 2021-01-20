@@ -3,37 +3,27 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
-  # These operations need to be rewritten to Expr as they don't dispatch to data
-  @expr_ops [:iota, :random_normal, :random_uniform]
-
-  # These operations do not have valid meaning for Nx.Defn.Expr
-  @forbidden_ops [:device_read, :device_deallocate, :device_transfer, :to_binary]
-
   @doc """
   The callback required to be implemented for each compiler.
 
-  It receives the function compilation environment `env`, the
-  function `kind`, the variables, the expr function, and the
-  compiler options.
+  It receives the function an opaque `key`, often used for caching,
+  the function arguments, the function which builds an expression,
+  and the compiler options.
 
-  It must call `fun` with all vars as arguments using Elixir's
-  `Kernel.apply/2`.
-
-  Note the number of variables is not the same as the function
-  arity as argument patterns have already been matched. The
-  current name and arity can be found under `env.function`.
+  It must call `fun` with the vars as a list of arguments.
 
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
   """
-  @callback __compile__(
-              env :: Macro.Env.t(),
-              kind :: :def | :defp,
-              vars :: [var],
-              fun :: (var -> Nx.Defn.Expr.t() | tuple()),
-              opts :: keyword
-            ) :: term
-            when var: Nx.Tensor.t() | number
+  @callback __compile__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> result), keyword) :: result
+            when result: Nx.t() | tuple()
+
+  # These operations need to be rewritten to Expr as they don't dispatch to data
+  @expr_ops [:iota, :random_normal, :random_uniform]
+
+  # These operations do not have valid meaning for Nx.Defn.Expr
+  @forbidden_ops [:device_read, :device_deallocate, :device_transfer] ++
+                   [:to_binary, :to_scalar, :to_flat_list]
 
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
@@ -44,9 +34,7 @@ defmodule Nx.Defn.Compiler do
                    is_atom(elem(var, 2))
 
   @doc false
-  def __remote__(module, function, args) do
-    defn = defn_name(function)
-
+  def __remote__(module, function, defn, args) do
     try do
       apply(module, defn, args)
     catch
@@ -79,7 +67,7 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], quoted}
   end
 
-  defp compile_each({{name, _arity} = def, def_meta}, state) do
+  defp compile_each({{name, arity} = def, def_meta}, state) do
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
     vars = collect_vars(args)
     {def_module, def_opts} = def_meta.compiler
@@ -89,16 +77,25 @@ defmodule Nx.Defn.Compiler do
       Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
 
       def unquote(name)(unquote_splicing(args)) do
-        unquote(def_module).__compile__(
-          __ENV__,
-          unquote(kind),
-          Nx.Defn.Expr.to_vars(unquote(vars)),
-          fn unquote_splicing(vars) ->
-            unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
-            Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
-          end,
-          unquote(Macro.escape(def_opts))
-        )
+        if Process.get(Nx.Defn.Compiler) do
+          unquote(defn_name)(unquote_splicing(args))
+        else
+          Process.get(Nx.Defn.Compiler, true)
+
+          try do
+            unquote(def_module).__compile__(
+              &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity)),
+              Nx.Defn.Expr.to_vars(unquote(vars)),
+              fn unquote(vars) ->
+                unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
+                Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
+              end,
+              unquote(Macro.escape(def_opts))
+            )
+          after
+            Process.delete(Nx.Defn.Compiler)
+          end
+        end
       end
 
       Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(args)), do: unquote(ast))
@@ -226,7 +223,7 @@ defmodule Nx.Defn.Compiler do
   defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
     {args, state} = normalize_list(args, state)
-    {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, args]}, state}
+    {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, defn_name(name), args]}, state}
   end
 
   defp normalize({left, right}, state) do

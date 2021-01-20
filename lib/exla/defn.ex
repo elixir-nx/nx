@@ -4,14 +4,13 @@ defmodule EXLA.Defn do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
-  def __compile__(env, _kind, vars, fun, options) do
-    %{module: module, function: {name, arity}} = env
+  def __compile__(key, vars, fun, options) do
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
-    expr_key = {module, name, arity, expr_args}
+    expr_key = {key, expr_args}
 
     {expr, holes} =
       EXLA.LockedCache.run(expr_key, fn ->
-        expr = apply(fun, vars)
+        expr = fun.(vars)
         {expr, holes(expr)}
       end)
 
@@ -21,11 +20,11 @@ defmodule EXLA.Defn do
     {client_name, options} = Keyword.pop(options, :client, :default)
     buffers = for var <- vars, do: nx_to_buffer(var)
     cache_args = for var <- vars, do: nx_to_cache_key!(var)
-    cache_key = {module, name, arity, cache_args, client_name}
+    cache_key = {key, cache_args, client_name}
 
     {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->
-        builder = EXLA.Builder.new("#{name}/#{arity}")
+        builder = EXLA.Builder.new(inspect(key))
 
         params =
           for {%{shape: shape}, i} <- Enum.with_index(buffers) do
@@ -38,7 +37,7 @@ defmodule EXLA.Defn do
           params: params
         }
 
-        expr = expr || apply(fun, vars)
+        expr = expr || fun.(vars)
 
         computation =
           expr

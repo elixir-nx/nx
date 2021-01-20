@@ -14,8 +14,8 @@ defmodule Nx.DefnTest do
   defmodule Identity do
     @behaviour Nx.Defn.Compiler
 
-    def __compile__(_env, _kind, vars, fun, _opts) do
-      apply(fun, vars)
+    def __compile__(_key, vars, fun, _opts) do
+      fun.(vars)
     end
   end
 
@@ -580,6 +580,18 @@ defmodule Nx.DefnTest do
                e = add [ b, d ]    f64
              >
              """
+    end
+
+    @defn_compiler Nx.Defn
+    defn transform_back_and_forth(a) do
+      Nx.exp(transform(Nx.negate(a), &private_back_and_forth/1))
+    end
+
+    defp private_back_and_forth(a), do: final_back_and_forth(a)
+    defnp final_back_and_forth(a), do: Nx.tanh(a)
+
+    test "back and forth between Elixir and defn" do
+      assert transform_back_and_forth(Nx.tensor(1)) == Nx.tensor(2.14168768474935)
     end
   end
 
