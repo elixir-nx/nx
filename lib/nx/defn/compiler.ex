@@ -53,6 +53,44 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
+  def __jit__(fun, compiler, opts) do
+    {:arity, arity} = Function.info(fun, :arity)
+
+    if arity not in 0..15 do
+      raise ArgumentError, "can only JIT compile functions up to 15 arguments"
+    end
+
+    wrap(arity, fn args ->
+      Process.put(Nx.Defn.Compiler, true)
+
+      try do
+        compiler.__compile__(
+          fun,
+          Nx.Defn.Expr.from_args(args),
+          fn vars ->
+            params = Nx.Defn.Expr.to_params(vars)
+            args = Nx.Defn.Expr.to_args(args, params)
+
+            fun
+            |> apply(args)
+            |> Nx.Defn.Expr.to_result()
+          end,
+          opts
+        )
+      after
+        Process.delete(Nx.Defn.Compiler)
+      end
+    end)
+  end
+
+  for arity <- 0..15 do
+    args = Macro.generate_arguments(arity, __MODULE__)
+    defp wrap(unquote(arity), applier) do
+      fn unquote_splicing(args) -> applier.(unquote(args)) end
+    end
+  end
+
+  @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
     state = %{
       module: module,
@@ -80,7 +118,7 @@ defmodule Nx.Defn.Compiler do
         if Process.get(Nx.Defn.Compiler) do
           unquote(defn_name)(unquote_splicing(args))
         else
-          Process.get(Nx.Defn.Compiler, true)
+          Process.put(Nx.Defn.Compiler, true)
 
           try do
             unquote(def_module).__compile__(

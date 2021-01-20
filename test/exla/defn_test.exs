@@ -4,28 +4,10 @@ defmodule EXLA.DefnTest do
   import Nx.Defn
   @default_defn_compiler EXLA
 
-  describe "scalar" do
-    defn just_two_int, do: 2
-    defn just_two_float, do: 2.0
-
-    test "returns the tensor for the scalar" do
-      assert just_two_int() == Nx.tensor(2)
-      assert just_two_float() == Nx.tensor(2.0)
-    end
-  end
-
   describe "tuples" do
-    defn two_constant_tuples, do: {-1, 1.0}
-    defn three_constant_tuples, do: {1, 2.0, 3}
-
-    test "returns tuples with constants" do
-      assert two_constant_tuples() == {Nx.tensor(-1), Nx.tensor(1.0)}
-      assert three_constant_tuples() == {Nx.tensor(1), Nx.tensor(2.0), Nx.tensor(3)}
-    end
-
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
 
-    test "returns tuples with operation results" do
+    test "on results" do
       assert add_subtract_tuple(2, 3) == {Nx.tensor(5), Nx.tensor(-1)}
 
       assert add_subtract_tuple(Nx.tensor([-1, 0, 1]), 10) ==
@@ -34,7 +16,7 @@ defmodule EXLA.DefnTest do
 
     defn pattern_tuple({a, b}), do: a + b
 
-    test "matches on tuples" do
+    test "on patterns" do
       assert pattern_tuple({2, 3}) == Nx.tensor(5)
 
       assert pattern_tuple({Nx.tensor([1, 2]), Nx.tensor([[3], [4]])}) ==
@@ -43,7 +25,7 @@ defmodule EXLA.DefnTest do
 
     defn calls_pattern_tuple(a, b), do: pattern_tuple({a, b})
 
-    test "matches on inlined tuples" do
+    test "on inlined tuples" do
       assert calls_pattern_tuple(2, 3) == Nx.tensor(5)
 
       assert calls_pattern_tuple(Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
@@ -392,14 +374,6 @@ defmodule EXLA.DefnTest do
 
       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp() ==
                Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
-    end
-
-    defn exp_int(), do: Nx.exp(1)
-    defn exp_float(), do: Nx.exp(1.0)
-
-    test "constants" do
-      assert exp_int() == Nx.tensor(2.718281828459045)
-      assert exp_float() == Nx.tensor(2.718281828459045)
     end
   end
 

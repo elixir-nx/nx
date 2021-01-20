@@ -214,67 +214,39 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "tensor constants" do
-    @two 2
-    defn two_attribute(), do: @two
-
-    test "expands module attributes to scalars" do
-      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {}} = two_attribute()
-    end
-
-    @two_per_two Nx.tensor([[1, 2], [3, 4]])
-    defn two_per_two_attribute(), do: @two_per_two
-
-    test "expands module attributes to tensors" do
-      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {2, 2}} = two_per_two_attribute()
-    end
-
-    defn two_per_two_nx_tensor(), do: Nx.tensor([[1, 2], [3, 4]])
-
-    test "supports Nx.tensor calls" do
-      assert %T{data: %Expr{op: :tensor, args: [_]}, shape: {2, 2}} = two_per_two_attribute()
-    end
-  end
-
   describe "operators" do
     defn add_two(a, b), do: a + b
-    defn add_two_constant(), do: 1 + 2
 
     test "+" do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = add_two_constant()
+      assert Nx.Defn.Kernel.+(1, 2) == 3
     end
 
     defn subtract_two(a, b), do: a - b
-    defn subtract_two_constant(), do: 1 - 2
 
     test "-" do
       assert %T{data: %Expr{op: :subtract, args: [_, _]}} = subtract_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = subtract_two_constant()
+      assert Nx.Defn.Kernel.-(1, 2) == -1
     end
 
     defn multiply_two(a, b), do: a * b
-    defn multiply_two_constant(), do: 1 * 2
 
     test "*" do
       assert %T{data: %Expr{op: :multiply, args: [_, _]}} = multiply_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = multiply_two_constant()
+      assert Nx.Defn.Kernel.*(1, 2) == 2
     end
 
     defn divide_two(a, b), do: a / b
-    defn divide_two_constant(), do: 1 / 2
 
     test "/" do
       assert %T{data: %Expr{op: :divide, args: [_, _]}} = divide_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = divide_two_constant()
+      assert Nx.Defn.Kernel./(1, 2) == 0.5
     end
 
     defn land_two(a, b), do: a and b
-    defn land_two_constant(), do: 1 and 2
 
     test "and" do
       assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = land_two_constant()
 
       assert Nx.Defn.Kernel.and(0, 0) == 0
       assert Nx.Defn.Kernel.and(1, 0) == 0
@@ -288,11 +260,9 @@ defmodule Nx.DefnTest do
     end
 
     defn lor_two(a, b), do: a or b
-    defn lor_two_constant(), do: 1 or 2
 
     test "or" do
       assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = lor_two_constant()
 
       assert Nx.Defn.Kernel.or(0, 0) == 0
       assert Nx.Defn.Kernel.or(1, 0) == 1
@@ -306,11 +276,9 @@ defmodule Nx.DefnTest do
     end
 
     defn lnot(a), do: not a
-    defn lnot_constant(), do: not 1
 
     test "not" do
       assert %T{data: %Expr{op: :equal, args: [_, _]}} = lnot(1)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = lnot_constant()
 
       assert Nx.Defn.Kernel.not(0) == 1
       assert Nx.Defn.Kernel.not(1) == 0
@@ -322,43 +290,38 @@ defmodule Nx.DefnTest do
     end
 
     defn band_two(a, b), do: a &&& b
-    defn band_two_constant(), do: 1 &&& 2
 
     test "&&&" do
       assert %T{data: %Expr{op: :bitwise_and, args: [_, _]}} = band_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = band_two_constant()
+      assert Nx.Defn.Kernel.&&&(1, 2) == 0
     end
 
     defn bor_two(a, b), do: a ||| b
-    defn bor_two_constant(), do: 1 ||| 2
 
     test "|||" do
       assert %T{data: %Expr{op: :bitwise_or, args: [_, _]}} = bor_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = bor_two_constant()
+      assert Nx.Defn.Kernel.|||(1, 2) == 3
     end
 
     defn bxor_two(a, b), do: a ^^^ b
-    defn bxor_two_constant(), do: 1 ^^^ 2
 
     test "^^^" do
       assert %T{data: %Expr{op: :bitwise_xor, args: [_, _]}} = bxor_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = bxor_two_constant()
+      assert Nx.Defn.Kernel.^^^(1, 2) == 3
     end
 
     defn bsl_two(a, b), do: a <<< b
-    defn bsl_two_constant(), do: 1 <<< 2
 
     test "<<<" do
       assert %T{data: %Expr{op: :left_shift, args: [_, _]}} = bsl_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = bsl_two_constant()
+      assert Nx.Defn.Kernel.<<<(1, 2) == 4
     end
 
     defn bsr_two(a, b), do: a >>> b
-    defn bsr_two_constant(), do: 1 >>> 2
 
     test ">>>" do
       assert %T{data: %Expr{op: :right_shift, args: [_, _]}} = bsr_two(1, 2)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = bsr_two_constant()
+      assert Nx.Defn.Kernel.>>>(1, 2) == 0
     end
 
     defn add_two_with_pipe(a, b), do: a |> Nx.add(b)
@@ -368,24 +331,21 @@ defmodule Nx.DefnTest do
     end
 
     defn unary_plus(a), do: +a
-    defn unary_plus_constant(), do: +1
     defn unary_minus(a), do: -a
-    defn unary_minus_constant(), do: -1
 
     test "unary plus and minus" do
       assert %T{data: %Expr{op: :parameter, args: [_]}} = unary_plus(1)
       assert %T{data: %Expr{op: :negate, args: [_]}} = unary_minus(1)
 
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = unary_plus_constant()
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = unary_minus_constant()
+      assert Nx.Defn.Kernel.+(1) == 1
+      assert Nx.Defn.Kernel.-(1) == -1
     end
 
     defn unary_bnot(a), do: ~~~a
-    defn unary_bnot_constant(), do: ~~~1
 
     test "~~~" do
       assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
-      assert %T{data: %Expr{op: :tensor, args: [_]}} = unary_bnot_constant()
+      assert Nx.Defn.Kernel.~~~(1) == -2
     end
   end
 
@@ -517,13 +477,13 @@ defmodule Nx.DefnTest do
 
   describe "Nx.Defn" do
     @defn_compiler Nx.Defn
-    defn add_default(a, b), do: {a + b, a - b, 5}
+    defn add_default(a, b), do: {a + b, a - b}
 
     # Check the attribute has been reset
     nil = Module.get_attribute(__MODULE__, :defn_compiler)
 
     test "can be set explicitly set" do
-      assert add_default(1, 2) == {Nx.tensor(3), Nx.tensor(-1), Nx.tensor(5)}
+      assert add_default(1, 2) == {Nx.tensor(3), Nx.tensor(-1)}
     end
 
     test "is the default compiler" do
@@ -591,7 +551,35 @@ defmodule Nx.DefnTest do
     defnp final_back_and_forth(a), do: Nx.tanh(a)
 
     test "back and forth between Elixir and defn" do
-      assert transform_back_and_forth(Nx.tensor(1)) == Nx.tensor(2.14168768474935)
+      assert transform_back_and_forth(Nx.tensor(1)) ==
+              Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
+    end
+  end
+
+  describe "jit" do
+    defn defn_jit({a, b}, c), do: a + b - c
+    def elixir_jit({a, b}, c), do: a |> Nx.add(b) |> Nx.subtract(c)
+
+    test "compiles defn function" do
+      assert Nx.Defn.jit(&defn_jit/2, Nx.Defn).({4, 5}, 3) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit/2, Nx.Defn).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit(&1, 3), Nx.Defn).({4, 5}) == Nx.tensor(6)
+
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, Identity).({1, 2}, 3)
+    end
+
+    test "compiles elixir function" do
+      assert Nx.Defn.jit(&elixir_jit/2, Nx.Defn).({4, 5}, 3) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit/2, Nx.Defn).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit(&1, 3), Nx.Defn).({4, 5}) == Nx.tensor(6)
+
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, Identity).({4, 5}, 3)
+    end
+
+    test "raises if it doesn't return an expression" do
+      assert_raise ArgumentError, "defn must return an expression tensor or a tuple, got: :ok", fn ->
+        Nx.Defn.jit(fn -> :ok end, Nx.Defn).()
+      end
     end
   end
 

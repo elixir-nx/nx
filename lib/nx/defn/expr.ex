@@ -67,7 +67,51 @@ defmodule Nx.Defn.Expr do
     expr(out, out.data.context, :fun, [args, out, fun])
   end
 
-  ## Nx.Defn callbacks
+  ## Nx.Defn dynamic callbacks
+
+  @doc false
+  def from_args(args) do
+    args
+    |> Enum.reduce([], &from_args/2)
+    |> Enum.reverse()
+  end
+
+  defp from_args(%T{} = t, acc),
+    do: [t | acc]
+
+  defp from_args(number, acc) when is_number(number),
+    do: [Nx.tensor(number) | acc]
+
+  defp from_args(tuple, acc) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_args/2)
+
+  defp from_args(other, _acc) do
+    raise(
+      ArgumentError,
+      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
+    )
+  end
+
+  @doc false
+  def to_args(args, params) when is_list(args) do
+    {args, []} = Enum.map_reduce(args, params, &to_args_each/2)
+    args
+  end
+
+  defp to_args_each(arg, params) when is_tuple(arg) do
+    {list, params} =
+      arg
+      |> Tuple.to_list()
+      |> Enum.map_reduce(params, &to_args_each/2)
+
+    {List.to_tuple(list), params}
+  end
+
+  defp to_args_each(_arg, [param | params]) do
+    {param, params}
+  end
+
+  ## Nx.Defn static callbacks
 
   @doc false
   def to_vars(vars) do
@@ -81,38 +125,38 @@ defmodule Nx.Defn.Expr do
 
         tuple when is_tuple(tuple) ->
           raise ArgumentError,
-                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                "defn functions expects either numbers or tensors as arguments. " <>
                   "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
                   "Got: #{inspect(tuple)}"
 
         other ->
           raise ArgumentError,
-                "defn functions expects either numbers or %Nx.Tensor{} as arguments. " <>
+                "defn functions expects either numbers or tensors as arguments. " <>
                   "Got: #{inspect(other)}"
       end
     end
   end
 
   @doc false
-  def to_params(vars), do: to_params(vars, 0)
+  def to_params(vars),
+    do: to_params(vars, 0)
 
   defp to_params([head | tail], i),
     do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
 
-  defp to_params([], _i), do: []
+  defp to_params([], _i),
+    do: []
 
   @doc false
   def to_result(tuple) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
 
-  def to_result(%T{} = t),
-    do: to_expr(t)
-
-  def to_result(number) when is_number(number),
-    do: to_expr(number)
+  def to_result(%T{data: %Expr{}} = t),
+    do: t
 
   def to_result(other) do
-    raise ArgumentError, "defn must return a tensor, a number or a tuple, got: #{inspect(other)}"
+    raise ArgumentError,
+          "defn must return an expression tensor or a tuple, got: #{inspect(other)}"
   end
 
   ## Creation ops

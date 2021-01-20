@@ -1,6 +1,6 @@
 defmodule Nx.Defn do
   @moduledoc """
-  Compile-time numerical definitions.
+  Numerical functions.
 
   A numerical function is a subset of Elixir tailored for
   numerical computations. For example, the following function:
@@ -30,7 +30,7 @@ defmodule Nx.Defn do
 
   Please consult `Nx.Defn.Kernel` for a complete reference.
 
-  ## Logical operators
+  ## Operators
 
   `defn` attempts to keep as close to the Elixir semantics as
   possible but that's not achievable. For example, mathematical
@@ -56,12 +56,7 @@ defmodule Nx.Defn do
   `defn` functions can receive either tuples, numbers, or tensors
   as inputs.
 
-  `defn` functions can return tensors or tuples of tensors. Note tensors
-  are returned even for numerical constants. For example, this function:
-
-      defn just_two(), do: 2
-
-  will return the same as `Nx.tensor(2)`.
+  `defn` functions can return tensors or tuples of tensors.
 
   ## Invoking custom Elixir code
 
@@ -82,7 +77,7 @@ defmodule Nx.Defn do
   computes gradients from `Nx` expressions, is implemented as
   a transform.
 
-  ## Compilers
+  ## JIT compilers
 
   The power of `Nx.Defn` is given by its compilers. The default
   compiler is the `Nx.Defn` module itself, which executes the code
@@ -100,7 +95,9 @@ defmodule Nx.Defn do
 
       @default_defn_compiler {EXLA, client: :cuda}
 
-  To write your own compiler, see `Nx.Defn.Compiler`.
+  `defn` functions are compiled when they are invoked, based on
+  the type and shapes of the tensors given as arguments. To write
+  your own compiler, see `Nx.Defn.Compiler`.
   """
 
   ## Default compiler backend
@@ -157,6 +154,21 @@ defmodule Nx.Defn do
   end
 
   ## Public API
+
+  @doc """
+  Converts the anonymous function to a `defn`
+  that is compiled on invocation.
+
+  This is often used to compile existing code
+  without a need to modify it. It can be used either
+  with regular Elixir code or `defn` functions.
+  It returns a wrapped anonymous function that will
+  compile just-in-time to given compiler on execution.
+  """
+  def jit(fun, compiler, opts \\ [])
+      when is_function(fun) and is_atom(compiler) and is_list(opts) do
+    Nx.Defn.Compiler.__jit__(fun, compiler, opts)
+  end
 
   @doc """
   Defines a public numerical function.
