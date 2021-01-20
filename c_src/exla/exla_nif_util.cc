@@ -5,23 +5,23 @@
 namespace exla {
 namespace nif {
 
+  // Status helpers
+
   ERL_NIF_TERM error(ErlNifEnv* env, const char* msg) {
     ERL_NIF_TERM atom = enif_make_atom(env, "error");
     ERL_NIF_TERM msg_term = enif_make_string(env, msg, ERL_NIF_LATIN1);
     return enif_make_tuple2(env, atom, msg_term);
   }
 
-  ERL_NIF_TERM ok(ErlNifEnv* env) {
-    return enif_make_atom(env, "ok");
-  }
-
   ERL_NIF_TERM ok(ErlNifEnv* env, ERL_NIF_TERM term) {
     return enif_make_tuple2(env, ok(env), term);
   }
 
-  ERL_NIF_TERM atom(ErlNifEnv* env, const char* msg) {
-    return enif_make_atom(env, msg);
+  ERL_NIF_TERM ok(ErlNifEnv* env) {
+    return enif_make_atom(env, "ok");
   }
+
+  // Numeric types
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, int8* var) {
     int value;
@@ -89,6 +89,22 @@ namespace nif {
     return enif_get_double(env, term, var);
   }
 
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, complex64* var) {
+    // TODO(seanmor5): unsupported
+    return 0;
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, complex128* var) {
+    // TODO(seanmor5): unsupported
+    return 0;
+  }
+
+  ERL_NIF_TERM make(ErlNifEnv* env, int32 var) {
+    return enif_make_int(env, var);
+  }
+
+  // Standard types
+
   int get(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var) {
     unsigned len;
     int ret = enif_get_list_length(env, term, &len);
@@ -122,23 +138,19 @@ namespace nif {
     return 1;
   }
 
-  int get_binary(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary* var) {
-    return enif_inspect_binary(env, term, var);
+  ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary var) {
+    return enif_make_binary(env, &var);
   }
 
-  int get_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType &type) {
-    std::string type_str;
-    if (!get(env, term, type_str)) return 0;
-
-    xla::StatusOr<xla::PrimitiveType> type_status =
-      xla::primitive_util::StringToPrimitiveType(type_str);
-
-    if (!type_status.ok()) {
-      return 0;
-    }
-    type = type_status.ConsumeValueOrDie();
-    return 1;
+  ERL_NIF_TERM make(ErlNifEnv* env, std::string var) {
+    return enif_make_string(env, var.c_str(), ERL_NIF_LATIN1);
   }
+
+  ERL_NIF_TERM make(ErlNifEnv* env, const char* string) {
+    return enif_make_string(env, string, ERL_NIF_LATIN1);
+  }
+
+  // Atoms
 
   int get_atom(ErlNifEnv* env, ERL_NIF_TERM term, std::string &var) {
     unsigned atom_length;
@@ -154,6 +166,12 @@ namespace nif {
 
     return 1;
   }
+
+  ERL_NIF_TERM atom(ErlNifEnv* env, const char* msg) {
+    return enif_make_atom(env, msg);
+  }
+
+  // Containers
 
   int get_tuple(ErlNifEnv* env, ERL_NIF_TERM tuple, std::vector<int64> &var) {
     const ERL_NIF_TERM *terms;
@@ -172,7 +190,7 @@ namespace nif {
   int get_list(ErlNifEnv* env,
                ERL_NIF_TERM list,
                std::vector<ErlNifBinary> &var) {
-    uint32 length;
+    unsigned int length;
     if (!enif_get_list_length(env, list, &length)) return 0;
     var.reserve(length);
     ERL_NIF_TERM head, tail;
@@ -187,7 +205,7 @@ namespace nif {
   }
 
   int get_list(ErlNifEnv* env, ERL_NIF_TERM list, std::vector<int64> &var) {
-    uint32 length;
+    unsigned int length;
     if (!enif_get_list_length(env, list, &length)) return 0;
     var.reserve(length);
     ERL_NIF_TERM head, tail;
@@ -200,6 +218,23 @@ namespace nif {
     }
     return 1;
   }
+
+  int get_binary(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifBinary* var) {
+    return enif_inspect_binary(env, term, var);
+  }
+
+  ERL_NIF_TERM make_map(ErlNifEnv* env, std::map<std::string, int>& map) {
+    ERL_NIF_TERM term = enif_make_new_map(env);
+    std::map<std::string, int>::iterator itr;
+    for (itr = map.begin(); itr != map.end(); ++itr) {
+      ERL_NIF_TERM key = make(env, itr->first);
+      ERL_NIF_TERM value = make(env, itr->second);
+      enif_make_map_put(env, term, key, value, &term);
+    }
+    return term;
+  }
+
+  // Protobuf types
 
   int get_padding_config(ErlNifEnv* env,
                          ERL_NIF_TERM list,
@@ -230,7 +265,7 @@ namespace nif {
                                 ERL_NIF_TERM tuple,
                                 xla::DotDimensionNumbers* dims) {
     const ERL_NIF_TERM* terms;
-    int32 count;
+    int count;
     if (!enif_get_tuple(env, tuple, &count, &terms)) return 0;
     if (count != 2) return 0;
 
@@ -259,22 +294,22 @@ namespace nif {
 
   int get_precision_config(ErlNifEnv* env,
                            ERL_NIF_TERM config_term,
-                           xla::PrecisionConfig config) {
-    int8 config_int;
+                           xla::PrecisionConfig* config) {
+    int config_int;
     if (!get(env, config_term, &config_int)) return 0;
 
     switch (config_int) {
       case 0:
-        config.add_operand_precision(xla::PrecisionConfig::DEFAULT);
-        config.add_operand_precision(xla::PrecisionConfig::DEFAULT);
+        config->add_operand_precision(xla::PrecisionConfig::DEFAULT);
+        config->add_operand_precision(xla::PrecisionConfig::DEFAULT);
         break;
       case 1:
-        config.add_operand_precision(xla::PrecisionConfig::HIGH);
-        config.add_operand_precision(xla::PrecisionConfig::HIGH);
+        config->add_operand_precision(xla::PrecisionConfig::HIGH);
+        config->add_operand_precision(xla::PrecisionConfig::HIGH);
         break;
       case 2:
-        config.add_operand_precision(xla::PrecisionConfig::HIGHEST);
-        config.add_operand_precision(xla::PrecisionConfig::HIGHEST);
+        config->add_operand_precision(xla::PrecisionConfig::HIGHEST);
+        config->add_operand_precision(xla::PrecisionConfig::HIGHEST);
         break;
       default:
         return 0;
@@ -287,13 +322,13 @@ namespace nif {
                                  ERL_NIF_TERM tuple,
                                  xla::ConvolutionDimensionNumbers* dimension_numbers) {
     const ERL_NIF_TERM* terms;
-    int32 count;
+    int count;
 
     if (!enif_get_tuple(env, tuple, &count, &terms)) return 0;
     if (count != 3) return 0;
 
     const ERL_NIF_TERM* input_dims;
-    int32 input_count;
+    int input_count;
     if (!enif_get_tuple(env, terms[0], &input_count, &input_dims)) return 0;
     if (count < 3) return 0;
 
@@ -311,7 +346,7 @@ namespace nif {
     }
 
     const ERL_NIF_TERM* kernel_dims;
-    int32 kernel_count;
+    int kernel_count;
     if (!enif_get_tuple(env, terms[1], &kernel_count, &kernel_dims)) return 0;
     if (kernel_count < 3) return 0;
 
@@ -329,7 +364,7 @@ namespace nif {
     }
 
     const ERL_NIF_TERM* output_dims;
-    int32 output_count;
+    int output_count;
     if (!enif_get_tuple(env, terms[2], &output_count, &output_dims)) return 0;
     if (output_count < 3) return 0;
 
@@ -352,7 +387,7 @@ namespace nif {
   int get_general_padding(ErlNifEnv* env,
                           ERL_NIF_TERM padding_term,
                           std::vector<std::pair<int64, int64>>& padding) {
-    uint32 length;
+    unsigned int length;
     if (!enif_get_list_length(env, padding_term, &length)) return 0;
 
     padding.reserve(length);
@@ -360,7 +395,7 @@ namespace nif {
 
     while (enif_get_list_cell(env, padding_term, &head, &tail)) {
       const ERL_NIF_TERM* terms;
-      int32 count;
+      int count;
 
       if (!enif_get_tuple(env, head, &count, &terms)) return 0;
       if (count != 2) return 0;
@@ -376,6 +411,21 @@ namespace nif {
 
     return 1;
   }
+
+  int get_primitive_type(ErlNifEnv* env, ERL_NIF_TERM term, xla::PrimitiveType* type) {
+    std::string type_str;
+    if (!get(env, term, type_str)) return 0;
+
+    xla::StatusOr<xla::PrimitiveType> type_status =
+      xla::primitive_util::StringToPrimitiveType(type_str);
+
+    if (!type_status.ok()) {
+      return 0;
+    }
+    *type = type_status.ConsumeValueOrDie();
+    return 1;
+  }
+
 
   ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if (shape.IsTuple()) {
@@ -408,22 +458,6 @@ namespace nif {
     ERL_NIF_TERM type_term = make(env, name);
 
     return enif_make_tuple(env, 2, dims_term, type_term);
-  }
-
-  ERL_NIF_TERM make(ErlNifEnv* env, ErlNifBinary var) {
-    return enif_make_binary(env, &var);
-  }
-
-  ERL_NIF_TERM make(ErlNifEnv* env, int var) {
-    return enif_make_int(env, var);
-  }
-
-  ERL_NIF_TERM make(ErlNifEnv* env, std::string var) {
-    return enif_make_string(env, var.c_str(), ERL_NIF_LATIN1);
-  }
-
-  ERL_NIF_TERM make(ErlNifEnv* env, const char* string) {
-    return enif_make_string(env, string, ERL_NIF_LATIN1);
   }
 
 }  // namespace nif

@@ -30,10 +30,4 @@ defmodule EXLA.Logger do
     Logger.error(msg, domain: [:xla], file: file, line: line)
     {:noreply, state}
   end
-
-  @impl true
-  def handle_info({:fatal, msg, file, line}, state) do
-    Logger.error(msg, domain: [:xla], file: file, line: line)
-    {:noreply, state}
-  end
 end
