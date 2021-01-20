@@ -78,13 +78,14 @@ class ExlaBuffer {
              const xla::Shape& on_device_shape,
              ExlaDevice* device,
              ExlaClient* client,
-             BufferType type) : device_memory_(device_memory.begin(), device_memory.end()),
-                                on_host_shape_(on_host_shape),
-                                on_device_shape_(on_device_shape),
-                                device_(device),
-                                client_(client),
-                                type_(type),
-                                state_(BufferState::kValid) {}
+             BufferType type)
+            : device_memory_(device_memory.begin(), device_memory.end()),
+              on_host_shape_(on_host_shape),
+              on_device_shape_(on_device_shape),
+              device_(device),
+              client_(client),
+              type_(type),
+              state_(BufferState::kValid) {}
 
   ~ExlaBuffer() {
     Deallocate();
@@ -95,7 +96,11 @@ class ExlaBuffer {
   // or (2) the underlying device memory has not yet been written to. This is
   // the case if the buffer is in a deallocated or donated (case 1), or it is
   // in a waiting state (case 2).
-  bool empty() { return state_ == BufferState::kDeallocated || state_ == BufferState::kWaiting || state_ == BufferState::kDonated; }
+  bool empty() {
+    return state_ == BufferState::kDeallocated ||
+           state_ == BufferState::kWaiting ||
+           state_ == BufferState::kDonated;
+  }
 
   // Returns the underlying host shape of the buffer.
   const xla::Shape on_host_shape() { return on_host_shape_; }
@@ -113,7 +118,9 @@ class ExlaBuffer {
   BufferType type() { return type_; }
 
   // Returns the underlying vector of device memory.
-  const absl::InlinedVector<se::DeviceMemoryBase, 1> device_memory() const { return device_memory_; }
+  const absl::InlinedVector<se::DeviceMemoryBase, 1> device_memory() const {
+    return device_memory_;
+  }
 
   // Returns true if the underlying memory has a tuple shape.
   bool is_tuple() { return on_host_shape_.IsTuple(); }
@@ -123,7 +130,7 @@ class ExlaBuffer {
   // the caller is responsible for deallocating the buffer at the appropriate
   // time. Donated inputs are deallocated when the computation finishes.
   void AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                  xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                  const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
                   xla::ExecutionInput* input);
 
   // Converts the underlying buffer to a VM binary to be returned back
@@ -162,18 +169,20 @@ class ExlaBuffer {
   // device, client, and type. The ExlaBuffer takes ownership of the
   // underlying device memory and is responsible for deallocating the memory
   // upon destruction or with an explicit deallocation.
-  static ExlaBuffer* FromScopedShapedBuffer(xla::ScopedShapedBuffer* shaped_buffer,
-                                            ExlaDevice* device,
-                                            ExlaClient* client,
-                                            BufferType type);
+  static ExlaBuffer*
+  FromScopedShapedBuffer(xla::ScopedShapedBuffer* shaped_buffer,
+                         ExlaDevice* device,
+                         ExlaClient* client,
+                         BufferType type);
 
   // Decomposes the given buffer to an Erlang VM term. The term is either
   // a binary if the buffer has an array-like shape or a list of the
   // buffer has a tuple shape. If `keep_on_device` is true, the term
   // will be a reference or a list of references to the underlying buffer(s).
-  static xla::StatusOr<ERL_NIF_TERM> DecomposeBufferToTerm(ErlNifEnv* env,
-                                                           ExlaBuffer* buffer,
-                                                           bool keep_on_device);
+  static xla::StatusOr<ERL_NIF_TERM>
+  DecomposeBufferToTerm(ErlNifEnv* env,
+                        ExlaBuffer* buffer,
+                        bool keep_on_device);
 
  private:
   // Buffer's underlying device memory, we follow PjRt
@@ -203,13 +212,13 @@ class ExlaBuffer {
   // the underlying device memory. Because of that, this buffer is no longer
   // considered valid.
   void AddToInputAsDonated(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                           xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                           const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
                            xla::ExecutionInput* input);
 
   // Adds this buffer to an input's buffers without transferring ownership
   // of the underlying memory to the input buffer.
   void AddToInputAsImmutable(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                             xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end);
+                             const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end);
 };
 
 
@@ -229,19 +238,29 @@ class ExlaExecutable {
   ExlaClient* client() { return client_; }
 
   // Returns number of replicas specified in the executable.
-  int num_replicas() const { return executables_.at(0)->build_options().num_replicas(); }
+  int num_replicas() const {
+    return executables_.at(0)->build_options().num_replicas();
+  }
 
   // Returns number of partition specified in the executable.
-  int num_partitions() const { return executables_.at(0)->build_options().num_replicas(); }
+  int num_partitions() const {
+    return executables_.at(0)->build_options().num_replicas();
+  }
 
   // Returns a vector of underlying XLA executables.
-  const std::vector<std::shared_ptr<xla::LocalExecutable>>& executables() const { return executables_; }
+  const std::vector<std::shared_ptr<xla::LocalExecutable>>& executables() const {
+    return executables_;
+  }
 
   // Returns the executable device assignment, if there is one
-  const xla::DeviceAssignment& device_assignment() const { return *device_assignment_; }
+  const xla::DeviceAssignment& device_assignment() const {
+    return *device_assignment_;
+  }
 
   // Returns the local device IDs available to this executable
-  const std::vector<std::pair<int, int>>& local_logical_device_ids() const { return local_logical_device_ids_; }
+  const std::vector<std::pair<int, int>>& local_logical_device_ids() const {
+    return local_logical_device_ids_;
+  }
 
   // Returns a vector of devices available to this executable
   const std::vector<ExlaDevice*> local_devices() { return local_devices_; }
@@ -252,12 +271,14 @@ class ExlaExecutable {
   // Populates input buffers from the given ExlaBuffers. See the note in
   // the ExlaBuffer class for a discussion of how ownership is transferred
   // from the given argument handles to input buffers.
-  xla::StatusOr<std::vector<xla::ExecutionInput>> PopulateInputBuffers(absl::Span<ExlaBuffer* const> argument_handles);
+  xla::StatusOr<std::vector<xla::ExecutionInput>>
+  PopulateInputBuffers(absl::Span<ExlaBuffer* const> argument_handles);
 
-  // Runs the executable with the given configuration options. If `keep_on_device`
-  // is true, the resulting term will be a reference of a list of references
-  // to the underlying buffer(s). Otherwise, the resulting buffer is decomposed
-  // to an Erlang term and the device memory is deallocated.
+  // Runs the executable with the given configuration options. If
+  // `keep_on_device` is true, the resulting term will be a reference
+  // of a list of references to the underlying buffer(s). Otherwise,
+  // the resulting buffer is decomposed to an Erlang term and the device
+  // memory is deallocated.
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
                                   xla::Shape& output_shape,
@@ -295,10 +316,11 @@ class ExlaClient {
   // and build options. If `compile_portable_executable` is set to
   // true, the resulting executable can be executed on any of the
   // local devices compatible with this client.
-  xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation&,
-                                         std::vector<xla::Shape*> argument_layouts,
-                                         xla::ExecutableBuildOptions& build_options,
-                                         bool compile_portable_executable);
+  xla::StatusOr<ExlaExecutable*>
+  Compile(const xla::XlaComputation&,
+          std::vector<xla::Shape*> argument_layouts,
+          xla::ExecutableBuildOptions& build_options,
+          bool compile_portable_executable);
 
   // Copies the underlying binary to the given device. `transfer_for_run`
   // is a flag used to indicate whether or not the resulting buffer should
@@ -313,7 +335,9 @@ class ExlaClient {
   // Returns the client's default device assignment from the
   // given replica and partition account. This is used when
   // no device assignment is specified for compiling an executable.
-  xla::StatusOr<xla::DeviceAssignment> GetDefaultDeviceAssignment(int num_replicas, int num_partitions);
+  xla::StatusOr<xla::DeviceAssignment>
+  GetDefaultDeviceAssignment(int num_replicas,
+                             int num_partitions);
 
   // Returns a pointer to the underlying local client.
   xla::LocalClient* client() { return client_; }
@@ -323,7 +347,9 @@ class ExlaClient {
   // allocator is the ExlaErtsAllocator which allocates directly in the VM.
   // On GPU we use the TF Device Host Allocator, with a plan to integrate
   // one that works well the VM.
-  tensorflow::Allocator* host_memory_allocator() { return host_memory_allocator_.get(); }
+  tensorflow::Allocator* host_memory_allocator() {
+    return host_memory_allocator_.get();
+  }
 
   // Returns the underlying platform ID.
   int host_id() { return host_id_; }

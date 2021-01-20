@@ -20,7 +20,8 @@ xla::Status ExlaBuffer::Deallocate() {
       {
         int device_ordinal = device_->device_ordinal();
         for (const se::DeviceMemoryBase& buffer : device_memory_) {
-          xla::Status status = client_->allocator()->Deallocate(device_ordinal, buffer);
+          xla::Status status =
+            client_->allocator()->Deallocate(device_ordinal, buffer);
           if (!status.ok()) {
             LOG(WARNING) << "Buffer deallocation failed: " << status;
             state_ = BufferState::kError;
@@ -31,14 +32,15 @@ xla::Status ExlaBuffer::Deallocate() {
         return xla::Status::OK();
       }
     }
-    LOG(ERROR) << "Internal error.";
+    // Something went really wrong
+    LOG(FATAL) << "Unexpected type for buffer given to Deallocate.";
   }
 
   return xla::FailedPrecondition("Attempt to deallocate empty buffer.");
 }
 
 void ExlaBuffer::AddToInputAsImmutable(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                                       xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end) {
+                                       const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end) {
   for (const se::DeviceMemoryBase& buf : device_memory_) {
     CHECK(*iterator != end);
     (*iterator)->second = xla::MaybeOwningDeviceMemory(buf);
@@ -47,7 +49,7 @@ void ExlaBuffer::AddToInputAsImmutable(xla::ShapeTree<xla::MaybeOwningDeviceMemo
 }
 
 void ExlaBuffer::AddToInputAsDonated(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                                     xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                                     const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
                                      xla::ExecutionInput* input) {
   se::DeviceMemoryAllocator* allocator = client_->allocator();
   int device_ordinal = device_->device_ordinal();
@@ -65,7 +67,7 @@ void ExlaBuffer::AddToInputAsDonated(xla::ShapeTree<xla::MaybeOwningDeviceMemory
 }
 
 void ExlaBuffer::AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                            xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                            const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
                             xla::ExecutionInput* input) {
   switch (type_) {
     case BufferType::kZeroCopy:
@@ -76,11 +78,12 @@ void ExlaBuffer::AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterat
       AddToInputAsDonated(iterator, end, input);
       return;
   }
-  LOG(ERROR) << "Internal error.";
+  // Something went really wrong
+  LOG(FATAL) << "Unexpected type for buffer given to AddToInput.";
 }
 
 xla::ShapedBuffer ExlaBuffer::AsShapedBuffer() {
-  int32 device_ordinal = device_->device_ordinal();
+  int device_ordinal = device_->device_ordinal();
   xla::ShapedBuffer shaped_buffer(on_host_shape_, on_device_shape_, device_ordinal);
   xla::ShapeTree<se::DeviceMemoryBase>::iterator iterator =
     shaped_buffer.buffers().begin();
@@ -99,7 +102,8 @@ void ExlaBuffer::WriteToBuffer(xla::ScopedShapedBuffer* shaped_buffer) {
     shaped_buffer->buffers().begin();
 
   xla::ShapeUtil::ForEachSubshape(
-    shaped_buffer->on_device_shape(), [&](const xla::Shape&, const xla::ShapeIndex&) {
+    shaped_buffer->on_device_shape(),
+    [&](const xla::Shape&, const xla::ShapeIndex&) {
       CHECK(iterator != shaped_buffer->buffers().end());
       device_memory_.push_back(iterator->second);
       iterator->second = se::DeviceMemoryBase();
@@ -136,12 +140,13 @@ ExlaBuffer::FromScopedShapedBuffer(xla::ScopedShapedBuffer* shaped_buffer,
   xla::Shape on_host_shape = shaped_buffer->on_host_shape();
   xla::Shape on_device_shape = shaped_buffer->on_device_shape();
 
-  return new ExlaBuffer(/*device_memory=*/absl::Span<se::DeviceMemoryBase const>(buffers),
-                        /*on_host_shape=*/on_host_shape,
-                        /*on_device_shape=*/on_device_shape,
-                        /*device=*/device,
-                        /*client=*/client,
-                        /*type=*/type);
+  return new ExlaBuffer(
+    /*device_memory=*/absl::Span<se::DeviceMemoryBase const>(buffers),
+    /*on_host_shape=*/on_host_shape,
+    /*on_device_shape=*/on_device_shape,
+    /*device=*/device,
+    /*client=*/client,
+    /*type=*/type);
 }
 
 xla::StatusOr<ErlNifBinary> ExlaBuffer::ToBinary() {
@@ -223,16 +228,22 @@ ERL_NIF_TERM BufferToReferenceList(ErlNifEnv* env,
                                    ExlaBuffer* buffer) {
   xla::ShapedBuffer shaped_buffer = buffer->AsShapedBuffer();
 
-  xla::ScopedShapedBuffer scoped_shaped_buffer(std::move(shaped_buffer), buffer->client()->allocator());
+  xla::ScopedShapedBuffer scoped_shaped_buffer(std::move(shaped_buffer),
+                                               buffer->client()->allocator());
   std::vector<ERL_NIF_TERM> buffer_terms;
-  int64 tuple_elements = xla::ShapeUtil::TupleElementCount(buffer->on_device_shape());
+  int64 tuple_elements =
+    xla::ShapeUtil::TupleElementCount(buffer->on_device_shape());
+
   buffer_terms.reserve(tuple_elements);
   for (int i=0; i < tuple_elements; i++) {
-    xla::ScopedShapedBuffer sub_shaped_buffer = scoped_shaped_buffer.TakeSubTree({i});
-    ExlaBuffer* sub_buffer = ExlaBuffer::FromScopedShapedBuffer(&sub_shaped_buffer,
-                                                                buffer->device(),
-                                                                buffer->client(),
-                                                                ExlaBuffer::BufferType::kReference);
+    xla::ScopedShapedBuffer sub_shaped_buffer =
+      scoped_shaped_buffer.TakeSubTree({i});
+
+    ExlaBuffer* sub_buffer =
+      ExlaBuffer::FromScopedShapedBuffer(&sub_shaped_buffer,
+                                         buffer->device(),
+                                         buffer->client(),
+                                         ExlaBuffer::BufferType::kReference);
     ERL_NIF_TERM term;
     if (sub_buffer->is_tuple()) {
       term = BufferToReferenceList(env, sub_buffer);
@@ -305,7 +316,7 @@ UnpackRunArguments(ErlNifEnv* env,
                    ERL_NIF_TERM list,
                    ExlaDevice* device,
                    ExlaClient* client) {
-  uint32 length;
+  unsigned int length;
   if (!enif_get_list_length(env, list, &length)) {
     return xla::InvalidArgument("Argument is not a list.");
   }
@@ -322,10 +333,10 @@ UnpackRunArguments(ErlNifEnv* env,
       ErlNifBinary data;
       xla::Shape* shape;
       if (!nif::get_binary(env, tuple[0], &data)) {
-        return xla::InvalidArgument("Arguments must either be buffer or tuple of shape, binary.");
+        return xla::InvalidArgument("Expected argument to be binary.");
       }
       if (!nif::get<xla::Shape>(env, tuple[1], shape)) {
-        return xla::InvalidArgument("Arguments must either be buffer or tuple of shape, binary.");
+        return xla::InvalidArgument("Expected argument to be shape reference.");
       }
       EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf,
         client->BufferFromBinary(data, *shape, device, true));
@@ -333,7 +344,7 @@ UnpackRunArguments(ErlNifEnv* env,
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
       arguments.push_back(*buffer);
     } else {
-      return xla::InvalidArgument("Arguments must either be buffer or tuple of shape, binary.");
+      return xla::InvalidArgument("Expected argument to be buffer reference.");
     }
     list = tail;
   }
@@ -439,7 +450,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   run_options.set_gpu_executable_run_options(client_->gpu_run_options());
   run_options.set_launch_id(launch_id);
 
-  std::shared_ptr<xla::LocalExecutable> executable = executables_.at(executable_idx);
+  std::shared_ptr<xla::LocalExecutable> executable =
+    executables_.at(executable_idx);
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<ExlaBuffer*> arguments,
     UnpackRunArguments(env, argument_terms, device, client_), env);
@@ -454,18 +466,19 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   xla::ScopedShapedBuffer result_buffer = results.ConsumeResult();
 
-  ExlaBuffer* buffer_ref = ExlaBuffer::FromScopedShapedBuffer(&result_buffer,
-                                                              device,
-                                                              client_,
-                                                              ExlaBuffer::BufferType::kReference);
+  ExlaBuffer* buffer_ref =
+    ExlaBuffer::FromScopedShapedBuffer(&result_buffer,
+                                       device,
+                                       client_,
+                                       ExlaBuffer::BufferType::kReference);
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
     ExlaBuffer::DecomposeBufferToTerm(env, buffer_ref, keep_on_device), env);
 
   if (!keep_on_device) {
     // TODO(seanmor5): Deallocation (especially GPU deallocation), seems
-    // to have a significant impact in hurting the performance of running/training
-    // on the GPU. It may not be best to do this deallocation explicitly upfront
+    // to have a significant impact in hurting the performance of running
+    // on the GPU. It may not be best to do this deallocation explicitly
     // but instead schedule the deallocation on a separate thread using
     // something like enif_schedule_nif or enif_thread_create and return
     // control to the host immediately.
@@ -525,7 +538,9 @@ ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
                              bool transfer_for_run) {
   int64 size = xla::ShapeUtil::ByteSizeOf(on_host_shape);
   if (size != binary.size) {
-    return xla::InvalidArgument("Expected %d bytes from binary but got %d.", size, binary.size);
+    return xla::InvalidArgument("Expected %d bytes from binary but got %d.",
+                                size,
+                                binary.size);
   }
   xla::TransferManager* transfer_manager =
     client_->backend().transfer_manager();
@@ -533,18 +548,23 @@ ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
   EXLA_ASSIGN_OR_RETURN(xla::Shape on_device_shape,
     transfer_manager->ChooseCompactLayoutForShape(on_host_shape));
 
-  bool can_use_zero_copy = CanUseZeroCopy(binary, on_host_shape, on_device_shape, device);
+  bool can_use_zero_copy = CanUseZeroCopy(binary,
+                                          on_host_shape,
+                                          on_device_shape,
+                                          device);
 
   if (can_use_zero_copy && transfer_for_run) {
-    se::DeviceMemoryBase buffer;
-    buffer = se::DeviceMemoryBase(const_cast<unsigned char*>(binary.data), binary.size);
+    se::DeviceMemoryBase buffer =
+      se::DeviceMemoryBase(const_cast<unsigned char*>(binary.data),
+                           binary.size);
 
-    return new ExlaBuffer(/*device_memory=*/absl::Span<se::DeviceMemoryBase const>({buffer}),
-                          /*on_host_shape=*/on_host_shape,
-                          /*on_device_shape=*/on_device_shape,
-                          /*device=*/device,
-                          /*client=*/this,
-                          /*type=*/ExlaBuffer::BufferType::kZeroCopy);
+    return new ExlaBuffer(
+      /*device_memory=*/absl::Span<se::DeviceMemoryBase const>({buffer}),
+      /*on_host_shape=*/on_host_shape,
+      /*on_device_shape=*/on_device_shape,
+      /*device=*/device,
+      /*client=*/this,
+      /*type=*/ExlaBuffer::BufferType::kZeroCopy);
   } else  {
     ExlaBuffer::BufferType type = transfer_for_run ? ExlaBuffer::BufferType::kTemporary : ExlaBuffer::BufferType::kReference;
 
@@ -555,25 +575,29 @@ ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
 
     client_->backend().transfer_manager()->TransferLiteralToDevice(device->host_to_device_stream(), literal, device_buffer);
 
-    ExlaBuffer* buffer = ExlaBuffer::FromScopedShapedBuffer(&device_buffer, device, this, type);
+    ExlaBuffer* buffer = ExlaBuffer::FromScopedShapedBuffer(&device_buffer,
+                                                            device,
+                                                            this,
+                                                            type);
 
     return buffer;
   }
 }
 
-xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,
-                                                   std::vector<xla::Shape*> argument_layouts,
-                                                   xla::ExecutableBuildOptions& options,
-                                                   bool compile_portable_executable) {
+xla::StatusOr<ExlaExecutable*>
+ExlaClient::Compile(const xla::XlaComputation& computation,
+                    std::vector<xla::Shape*> argument_layouts,
+                    xla::ExecutableBuildOptions& options,
+                    bool compile_portable_executable) {
   if (!options.device_allocator()) {
     options.set_device_allocator(allocator());
   }
 
-  int32 num_replicas, num_partitions;
+  int num_replicas, num_partitions;
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
   if (compile_portable_executable) {
     if (options.has_device_assignment()) {
-      return xla::InvalidArgument("Requested portable executable but specified device assignment.");
+      return xla::InvalidArgument("Portable executable cannot have a device.");
     }
     num_replicas = 1;
     num_partitions = 1;
@@ -614,11 +638,12 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
     std::vector<std::unique_ptr<xla::LocalExecutable>> local_executables,
     client()->Compile(computation, argument_layouts, options));
 
-  ExlaExecutable* executable = new ExlaExecutable(std::move(local_executables),
-                                                  std::move(device_assignment),
-                                                  std::move(local_logical_device_ids),
-                                                  std::move(local_devices),
-                                                  this);
+  ExlaExecutable* executable =
+    new ExlaExecutable(std::move(local_executables),
+                       std::move(device_assignment),
+                       std::move(local_logical_device_ids),
+                       std::move(local_devices),
+                       this);
   return executable;
 }
 
@@ -653,12 +678,13 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
     auto device = std::make_unique<ExlaDevice>(i, executor, client);
     devices.push_back(std::move(device));
   }
-  return new ExlaClient(client,
-                        /*host_id=*/0,
-                        /*devices=*/std::move(devices),
-                        /*allocator=*/nullptr,
-                        /*host_memory_allocator=*/nullptr,
-                        /*gpu_run_options=*/nullptr);
+  return new ExlaClient(
+    /*local_client=*/client,
+    /*host_id=*/0,
+    /*devices=*/std::move(devices),
+    /*allocator=*/nullptr,
+    /*host_memory_allocator=*/nullptr,
+    /*gpu_run_options=*/nullptr);
 }
 
 xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
@@ -702,12 +728,13 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
 
   auto gpu_run_options = std::make_unique<xla::gpu::GpuExecutableRunOptions>();
 
-  return new ExlaClient(client,
-                        /*host_id=*/0,
-                        /*devices=*/std::move(devices),
-                        /*allocator=*/std::move(allocator),
-                        /*host_memory_allcoator=*/std::move(host_memory_allocator),
-                        /*gpu_run_options=*/std::move(gpu_run_options));
+  return new ExlaClient(
+    /*local_client=*/client,
+    /*host_id=*/0,
+    /*devices=*/std::move(devices),
+    /*allocator=*/std::move(allocator),
+    /*host_memory_allcoator=*/std::move(host_memory_allocator),
+    /*gpu_run_options=*/std::move(gpu_run_options));
 }
 
 }  // namespace exla

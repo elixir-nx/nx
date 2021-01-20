@@ -9,9 +9,9 @@
 
 namespace exla {
 
-/*
- * Redirect TF Logs to Elixir Logger.
- */
+// Redirects calls to logging to the Elixir Logger. `sink_pid`
+// is the PID for a GenServer in Elixir which receives messages
+// with logging information on every call to `LOG(severity)`.
 class ExlaLogSink : public tensorflow::TFLogSink {
  public:
   explicit ExlaLogSink(ErlNifPid sink_pid) : sink_pid_(sink_pid) {
@@ -45,14 +45,6 @@ class ExlaLogSink : public tensorflow::TFLogSink {
     return enif_make_tuple4(env_, status, msg, file, line_term);
   }
 
-  ERL_NIF_TERM fatal(std::string str, std::string fname, int32 line) {
-    ERL_NIF_TERM status = nif::atom(env_, "fatal");
-    ERL_NIF_TERM msg = nif::make(env_, str);
-    ERL_NIF_TERM file = nif::make(env_, fname);
-    ERL_NIF_TERM line_term = nif::make(env_, line);
-    return enif_make_tuple4(env_, status, msg, file, line_term);
-  }
-
   void Send(const tensorflow::TFLogEntry& entry) {
     ERL_NIF_TERM msg;
     std::string msg_str = entry.ToString();
@@ -69,8 +61,12 @@ class ExlaLogSink : public tensorflow::TFLogSink {
         msg = error(msg_str, fname, line);
         break;
       case absl::LogSeverity::kFatal:
-        msg = fatal(msg_str, fname, line);
-        break;
+        // LOG(FATAL) aborts the program before we are able
+        // to send and log the information from Elixir, so we
+        // need to get it out there for debugging before everything
+        // crashes
+        std::cerr << "[FATAL] " << fname << ":"
+                  << line << " " << msg_str << "\n";
       default:
         msg = info(msg_str, fname, line);
         break;
