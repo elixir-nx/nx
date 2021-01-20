@@ -1342,7 +1342,9 @@ defmodule Nx.BinaryTensor do
   end
 
   @doc false
-  def sort(_out, t, axis, comparator) do
+  def sort(_out, t, opts, comparator) do
+    axis = opts[:axis]
+
     case t.shape do
       {} ->
         t

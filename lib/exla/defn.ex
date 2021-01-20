@@ -406,6 +406,11 @@ defmodule EXLA.Defn do
     dimension = opts[:axis]
 
     comp = to_computation(comparator, state)
+
+  defp to_operator(:sort, [tensor, opts, comparator], [type: type], state) do
+    dimension = opts[:axis]
+    comp = to_computation(comparator, type, state)
+
     EXLA.Op.sort(tensor, comparator, dimension)
   end
 
