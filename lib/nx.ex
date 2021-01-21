@@ -4858,6 +4858,29 @@ defmodule Nx do
     {Enum.reverse(list1), Enum.reverse(list2), Enum.reverse(list3), Enum.reverse(list4)}
   end
 
+  @doc """
+  Performs a cholesky decomposition.
+
+  ### Examples
+
+    iex> Nx.cholesky(Nx.tensor([[6.0, 3.0, 4.0, 8.0], [3.0, 6.0, 5.0, 1.0], [4.0, 5.0, 10.0, 7.0], [8.0, 1.0, 7.0, 25.0]]))
+    #Nx.Tensor<
+      f64[4][4]
+      [
+        [2.449489742783178, 0.0, 0.0, 0.0],
+        [1.2247448713915892, 2.1213203435596424, 0.0, 0.0],
+        [1.6329931618554523, 1.414213562373095, 2.309401076758503, 0.0],
+        [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
+      ]
+    >
+  """
+  def cholesky(tensor) do
+    # TODO: Shape assertions?
+    # TODO: Symmetrize input?
+    # TODO: Complex, NaN
+    impl!(tensor).cholesky(tensor, tensor)
+  end
+
   ## Type
 
   defp tensor!(%T{} = t),
