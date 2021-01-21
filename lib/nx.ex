@@ -4885,11 +4885,13 @@ defmodule Nx do
         [3.93547964039963, 0.7155417527999305]
       ]
     >
+
+  ### Error cases
+
+      iex> Nx.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
+      ** (ArgumentError) matrix must be symmetric, a matrix is symmetric iff X = X.T
   """
-  def cholesky(tensor, symmetrize \\ true) do
-    # TODO: if the symmetrize fails, we need to create a lower triangular
-    # matrix of all NaN, without trying the cholesky decomposition
-    tensor = if symmetrize, do: symmetrize(tensor), else: tensor
+  def cholesky(tensor) do
     %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
 
     output_type = Nx.Type.to_floating(type)
@@ -4898,12 +4900,6 @@ defmodule Nx do
 
     out = %{tensor | type: output_type, shape: output_shape, names: output_names}
     impl!(tensor).cholesky(out, tensor)
-  end
-
-  defp symmetrize(matrix) do
-    # TODO: This should be transpose(conj(matrix)), but requires
-    # complex numbers
-    Nx.multiply(0.5, Nx.add(matrix, Nx.transpose(matrix)))
   end
 
   ## Type

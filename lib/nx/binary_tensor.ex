@@ -1082,6 +1082,7 @@ defmodule Nx.BinaryTensor do
             for j <- 1..(i + 1), reduce: cur_binary do
               acc ->
                 current_element_offset = i * row_chunk_size + (j - 1) * size
+                current_element_opp_offset = (j - 1) * row_chunk_size + i * size
                 diagonal_element_offset = (j - 1) * row_chunk_size + (j - 1) * size
 
                 lhs_dot_offset = i * row_chunk_size
@@ -1100,6 +1101,12 @@ defmodule Nx.BinaryTensor do
                   match_types [input_type] do
                     <<_::size(current_element_offset)-bitstring, match!(x, 0), _::bitstring>> =
                       data
+                    <<_::size(current_element_opp_offset)-bitstring, match!(y, 0), _::bitstring>> =
+                      data
+
+                    if x != y do
+                      raise ArgumentError, "matrix must be symmetric, a matrix is symmetric iff X = X.T"
+                    end
 
                     fun = fn <<match!(left, 0)>>, <<match!(right, 0)>>, acc ->
                       {<<>>, read!(left, 0) * read!(right, 0) + acc}
