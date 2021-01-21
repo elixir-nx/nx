@@ -1375,7 +1375,6 @@ ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  // TODO(seanmor5): Sort a list of operands?
   xla::XlaOp* operand;
   xla::XlaComputation* comparator;
   exla::int64 dimension;

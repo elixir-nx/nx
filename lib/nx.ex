@@ -4928,7 +4928,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), [axis: :y], :asc)
+      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y, comparator: :asc)
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -4987,14 +4987,26 @@ defmodule Nx do
           ]
         ]
       >
+
+      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x, comparator: &Nx.less/2)
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [2, 1, 4],
+          [3, 5, 7]
+        ]
+      >
   """
-  def sort(tensor, opts \\ [], comparator \\ :desc) do
+  def sort(tensor, opts \\ []) do
+    assert_keys!(opts, [:axis, :comparator])
+    comparator = opts[:comparator] || :desc
+
     %T{shape: shape, names: names} = tensor = tensor!(tensor)
 
     axis = opts[:axis] || 0
     axis = Nx.Shape.normalize_axis(shape, axis, names)
 
-    impl!(tensor).sort(tensor, tensor, [axis: axis], comparator)
+    impl!(tensor).sort(tensor, tensor, [axis: axis, comparator: comparator])
   end
 
   ## Type

@@ -1673,7 +1673,7 @@ defmodule EXLA.DefnTest do
   describe "sort" do
     defn sort0(t), do: Nx.sort(t, axis: 0)
     defn sort1(t), do: Nx.sort(t, axis: 1)
-    defn sort1_asc(t), do: Nx.sort(t, [axis: 1], :asc)
+    defn sort1_asc(t), do: Nx.sort(t, axis: 1, comparator: :asc)
     defn sort2(t), do: Nx.sort(t, axis: 2)
 
     test "sorts a 1d tensor" do

@@ -352,7 +352,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def sort(out, tensor, opts, comparator) do
+  def sort(out, tensor, opts) do
+    comparator = opts[:comparator]
+
     %{type: type} = out
     tensor = to_expr(tensor)
 

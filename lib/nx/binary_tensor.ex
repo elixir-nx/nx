@@ -1342,32 +1342,46 @@ defmodule Nx.BinaryTensor do
   end
 
   @impl true
-  def sort(_out, t, opts, comparator) do
+  def sort(_out, t, opts) do
+    %T{shape: shape, type: type} = t
+
     comparator =
-      case comparator do
+      case opts[:comparator] do
         :desc -> &</2
         :asc -> &>/2
-        fun -> fun
+        fun -> fn a, b ->
+          a = binary_to_number(a, type)
+          b = binary_to_number(b, type)
+          Nx.to_scalar(fun.(a, b)) != 0
+        end
       end
 
     axis = opts[:axis]
 
-    case t.shape do
+    case shape do
       {} ->
         t
 
       {_} ->
-        if axis == 0, do: sort_last_dim(t, comparator), else: t
+        sort_last_dim(t, comparator)
 
       _ ->
-        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
-        permutation = [Nx.rank(t) - 1 | permutation]
+        permutation = for i <- 0..(Nx.rank(t) - 1), do: i
+        permutation =
+          permutation
+          |> List.delete(axis)
+          |> List.insert_at(Nx.rank(t) - 1, axis)
 
-        for i <- Enum.reverse(Nx.axes(t.shape)), reduce: t do
-          acc ->
-            new_t = if i == axis, do: sort_last_dim(acc, comparator), else: acc
-            Nx.transpose(new_t, axes: permutation)
-        end
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        t
+        |> Nx.transpose(axes: permutation)
+        |> sort_last_dim(comparator)
+        |> Nx.transpose(axes: inverse_permutation)
     end
   end
 
