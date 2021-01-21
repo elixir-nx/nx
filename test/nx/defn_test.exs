@@ -560,7 +560,7 @@ defmodule Nx.DefnTest do
 
     test "back and forth between Elixir and defn" do
       assert transform_back_and_forth(Nx.tensor(1)) ==
-              Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
+               Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
     end
   end
 
@@ -585,9 +585,11 @@ defmodule Nx.DefnTest do
     end
 
     test "raises if it doesn't return an expression" do
-      assert_raise ArgumentError, "defn must return an expression tensor or a tuple, got: :ok", fn ->
-        Nx.Defn.jit(fn -> :ok end, Nx.Defn).()
-      end
+      assert_raise ArgumentError,
+                   "defn must return an expression tensor or a tuple, got: :ok",
+                   fn ->
+                     Nx.Defn.jit(fn -> :ok end, Nx.Defn).()
+                   end
     end
   end
 

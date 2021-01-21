@@ -85,6 +85,7 @@ defmodule Nx.Defn.Compiler do
 
   for arity <- 0..15 do
     args = Macro.generate_arguments(arity, __MODULE__)
+
     defp wrap(unquote(arity), applier) do
       fn unquote_splicing(args) -> applier.(unquote(args)) end
     end
@@ -261,7 +262,9 @@ defmodule Nx.Defn.Compiler do
   defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
     {args, state} = normalize_list(args, state)
-    {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, defn_name(name), args]}, state}
+
+    {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, defn_name(name), args]},
+     state}
   end
 
   defp normalize({left, right}, state) do

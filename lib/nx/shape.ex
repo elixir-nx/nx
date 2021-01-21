@@ -774,6 +774,34 @@ defmodule Nx.Shape do
     end)
   end
 
+  @doc """
+  Returns the shape and names after a cholesky decomposition.
+
+  ## Examples
+
+      iex> Nx.Shape.cholesky({4, 4}, [:x, :y])
+      {{4, 4}, [:x, :y]}
+
+  ## Error Cases
+
+      iex> Nx.Shape.cholesky({3, 2}, [:x, :y])
+      ** (ArgumentError) tensor must be a square matrix, got shape: {3, 2}
+
+      iex> Nx.Shape.cholesky({3, 3, 3}, [:x, :y, :z])
+      ** (ArgumentError) tensor must have rank 2, got rank 3 with shape {3, 3, 3}
+  """
+  def cholesky({n, n}, names), do: {{n, n}, names}
+
+  def cholesky({m, n}, _names),
+    do: raise(ArgumentError, "tensor must be a square matrix, got shape: #{inspect({m, n})}")
+
+  def cholesky(shape, _names),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+      )
+
   defp validate_concat_names!(names) do
     :ok =
       names

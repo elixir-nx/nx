@@ -393,6 +393,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def cholesky(%Op{builder: builder, ref: operand}) do
+    ref = EXLA.NIF.cholesky(operand) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp get_precision_config_int(precision_config) do

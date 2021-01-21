@@ -548,11 +548,15 @@ defmodule Nx.Defn.GradTest do
       assert grad_sum_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
 
-      assert grad_sum_pad_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
-               Nx.tensor([
-                 [0.9905542274249228, -0.7629358670030943, -1.8149862437674833],
-                 [-1.1983466382499552, 1.520047340015915, 1.7603121921923377]
-               ])
+      lhs = grad_sum_pad_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
+
+      rhs =
+        Nx.tensor([
+          [0.9905542274249228, -0.7629358670030943, -1.8149862437674833],
+          [-1.1983466382499552, 1.520047340015915, 1.7603121921923377]
+        ])
+
+      compare_tensors!(lhs, rhs)
     end
   end
 
@@ -647,17 +651,25 @@ defmodule Nx.Defn.GradTest do
       do: grad(t, t |> Nx.log() |> Nx.sum(axes: [1]) |> Nx.sin() |> Nx.sum())
 
     test "computes log + sum(axis) + sin + sum" do
-      assert grad_log_sum_0_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-               Nx.tensor([
-                 [0.18345697474330172, -0.33410075509515635, -0.3228698817445151],
-                 [0.04586424368582543, -0.13364030203806254, -0.16143494087225754]
-               ])
+      lhs = grad_log_sum_0_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
 
-      assert grad_log_sum_1_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-               Nx.tensor([
-                 [-0.21916944995978982, -0.10958472497989491, -0.07305648331992994],
-                 [0.01875804509762369, 0.015006436078098952, 0.012505363398415794]
-               ])
+      rhs =
+        Nx.tensor([
+          [0.18345697474330172, -0.33410075509515635, -0.3228698817445151],
+          [0.04586424368582543, -0.13364030203806254, -0.16143494087225754]
+        ])
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_log_sum_1_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+
+      rhs =
+        Nx.tensor([
+          [-0.21916944995978982, -0.10958472497989491, -0.07305648331992994],
+          [0.01875804509762369, 0.015006436078098952, 0.012505363398415794]
+        ])
+
+      compare_tensors!(lhs, rhs)
     end
 
     defn grad_sum_0_mean(t), do: grad(t, t |> Nx.sum(axes: [0]) |> Nx.mean())
@@ -750,5 +762,23 @@ defmodule Nx.Defn.GradTest do
         grad_reduce(3)
       end
     end
+  end
+
+  # We need to round the floats because of imprecision between platforms
+  defp compare_tensors!(
+         %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
+         %{data: %{state: right_data} = rhs} = right
+       ) do
+    left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.round(x, 5)
+    right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.round(x, 5)
+
+    assert %{left | data: %{lhs | state: left_data}} == %{
+             right
+             | data: %{rhs | state: right_data}
+           }
+  end
+
+  defp compare_tensors!(left, right) do
+    assert left == right
   end
 end

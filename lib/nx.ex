@@ -4859,7 +4859,10 @@ defmodule Nx do
   end
 
   @doc """
-  Performs a cholesky decomposition.
+  Performs a cholesky decomposition of a square matrix.
+
+  The matrix must be positive-definite and either Hermitian
+  if complex or symmetric if real.
 
   ### Examples
 
@@ -4873,12 +4876,34 @@ defmodule Nx do
         [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
       ]
     >
+
+    iex> Nx.cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
+    #Nx.Tensor<
+      f64[2][2]
+      [
+        [4.47213595499958, 0.0],
+        [3.93547964039963, 0.7155417527999305]
+      ]
+    >
   """
-  def cholesky(tensor) do
-    # TODO: Shape assertions?
-    # TODO: Symmetrize input?
-    # TODO: Complex, NaN
-    impl!(tensor).cholesky(tensor, tensor)
+  def cholesky(tensor, symmetrize \\ true) do
+    # TODO: if the symmetrize fails, we need to create a lower triangular
+    # matrix of all NaN, without trying the cholesky decomposition
+    tensor = if symmetrize, do: symmetrize(tensor), else: tensor
+    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+
+    {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
+
+    out = %{tensor | type: output_type, shape: output_shape, names: output_names}
+    impl!(tensor).cholesky(out, tensor)
+  end
+
+  defp symmetrize(matrix) do
+    # TODO: This should be transpose(conj(matrix)), but requires
+    # complex numbers
+    Nx.multiply(0.5, Nx.add(matrix, Nx.transpose(matrix)))
   end
 
   ## Type

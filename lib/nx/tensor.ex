@@ -60,6 +60,8 @@ defmodule Nx.Tensor do
   @callback reduce_window(out :: t, t, acc :: t, list, keyword, fun) :: t
   @callback map(out :: t, t, fun) :: t
 
+  @callback cholesky(out :: t, t) :: t
+
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2, :min, :max] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++

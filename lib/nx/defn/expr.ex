@@ -345,6 +345,12 @@ defmodule Nx.Defn.Expr do
     expr(out, context, :concatenate, [tensors, axis])
   end
 
+  @impl true
+  def cholesky(out, tensor) do
+    tensor = to_expr(tensor)
+    expr(out, tensor.data.context, :cholesky, [tensor])
+  end
+
   ## Helpers
 
   defp expr(tensor, context, op, args) do

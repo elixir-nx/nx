@@ -1370,6 +1370,24 @@ ERL_NIF_TERM concatenate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+// LinAlg Functions
+
+ERL_NIF_TERM cholesky(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+
+  xla::XlaOp op = xla::Cholesky(*operand, true);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 // ExlaClient Functions
 
 ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1765,6 +1783,8 @@ static ErlNifFunc exla_funcs[] = {
   {"clamp", 3, clamp},
   {"reverse", 2, reverse},
   {"concatenate", 3, concatenate},
+  // LinAlg
+  {"cholesky", 1, cholesky},
   // Log Sink
   {"start_log_sink", 1, start_log_sink}
 };
