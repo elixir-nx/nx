@@ -620,6 +620,14 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "as_type" do
+    defn grad_as_type(t), do: grad(t, Nx.sum(Nx.as_type(t, {:f, 32})))
+
+    test "passes through" do
+      assert grad_as_type(Nx.tensor([1, 2, 3])) == Nx.tensor([1.0, 1.0, 1.0])
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, Nx.sum(t))
     defn grad_mean_full(t), do: grad(t, Nx.mean(t))

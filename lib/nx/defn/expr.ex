@@ -198,7 +198,7 @@ defmodule Nx.Defn.Expr do
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
       [:negate, :sign, :abs, :bitwise_not, :population_count, :count_leading_zeros] ++
-      [:floor, :ceil, :round]
+      [:floor, :ceil, :round, :as_type]
 
   for op <- unary_ops do
     @impl true
@@ -237,7 +237,13 @@ defmodule Nx.Defn.Expr do
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    expr(out, context, :reduce, [tensor, acc, opts, fun(args, fun)])
+    fun = fun(args, fun)
+
+    if fun.shape != {} do
+      raise "reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
+    end
+
+    expr(out, context, :reduce, [tensor, acc, opts, fun])
   end
 
   @impl true
@@ -251,14 +257,13 @@ defmodule Nx.Defn.Expr do
       ) do
     args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
+    fun = fun(args, fun)
 
-    expr(out, context, :reduce_window, [
-      tensor,
-      acc,
-      window_dims,
-      opts,
-      fun(args, fun)
-    ])
+    if fun.shape != {} do
+      raise "reduce_window function must return a scalar tensor, got: #{inspect(fun.shape)}"
+    end
+
+    expr(out, context, :reduce_window, [tensor, acc, window_dims, opts, fun])
   end
 
   @impl true

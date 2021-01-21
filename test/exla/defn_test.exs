@@ -627,6 +627,14 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "as_type" do
+    defn to_float(t), do: Nx.as_type(t, {:f, 32})
+
+    test "converts tensor type" do
+      assert to_float(Nx.tensor([1, 2, 3])) == Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})
+    end
+  end
+
   describe "map" do
     defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
     defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)

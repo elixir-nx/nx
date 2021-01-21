@@ -309,6 +309,10 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(arg, type)])
   end
 
+  defp to_operator(:as_type, [arg], %{type: type}, _state) do
+    to_type(arg, type)
+  end
+
   ## to_operator reduction
 
   defp to_operator(:sum, [arg, opts], %{type: type} = ans, state) do

@@ -186,6 +186,8 @@ defmodule Nx.DefnTest do
 
     defn reduce_invalid(t1, amplifier), do: Nx.reduce(t1, 0, fn x, y -> x * amplifier + y end)
 
+    defn reduce_non_scalar(t1), do: Nx.reduce(t1, 0, fn x, y -> Nx.broadcast(x * y, {1, 1}) end)
+
     defn reduce_with_opts(t1, acc),
       do: Nx.reduce(t1, acc, [type: {:f, 64}, axes: [-1]], fn x, y -> x + y end)
 
@@ -211,6 +213,12 @@ defmodule Nx.DefnTest do
       assert_raise RuntimeError,
                    ~r"cannot build defn because expressions come from different contexts",
                    fn -> reduce_invalid(Nx.tensor([1, 2, 3]), 0) end
+    end
+
+    test "reduces raises on non scalar functions" do
+      assert_raise RuntimeError,
+                   "reduce function must return a scalar tensor, got: {1, 1}",
+                   fn -> reduce_non_scalar(Nx.tensor([1, 2, 3])) end
     end
   end
 

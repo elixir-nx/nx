@@ -38,6 +38,7 @@ defmodule Nx.Tensor do
 
   @callback inspect(t, Inspect.Opts.t()) :: t
   @callback from_binary(out :: t, binary) :: t
+  @callback as_type(out :: t, t) :: t
   @callback reshape(out :: t, t, shape) :: t
   @callback squeeze(out :: t, t, axes) :: t
   @callback broadcast(out :: t, t, shape, axes) :: t

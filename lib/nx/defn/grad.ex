@@ -270,6 +270,10 @@ defmodule Nx.Defn.Grad do
     to_grad(x, reversed, cache)
   end
 
+  defp grad(:as_type, [x], _ans, g, cache) do
+    to_grad(x, g, cache)
+  end
+
   defp grad(:sum, [x, opts], _ans, g, cache) do
     g =
       if axes = opts[:axes] do

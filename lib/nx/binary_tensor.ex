@@ -1227,7 +1227,7 @@ defmodule Nx.BinaryTensor do
   def concatenate(out, tensors, opts) do
     axis = opts[:axis]
     %{shape: output_shape, type: {_, size} = output_type} = out
-    tensors = Enum.map(tensors, fn t -> convert_element_type(%{t | type: output_type}, t) end)
+    tensors = Enum.map(tensors, fn t -> as_type(%{t | type: output_type}, t) end)
 
     output_data =
       if axis == tuple_size(output_shape) - 1 do
@@ -1250,7 +1250,8 @@ defmodule Nx.BinaryTensor do
     from_binary(out, output_data)
   end
 
-  defp convert_element_type(out, tensor) do
+  @impl true
+  def as_type(out, tensor) do
     %{type: output_type} = out
 
     case tensor do

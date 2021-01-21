@@ -713,6 +713,36 @@ defmodule Nx do
   ## Meta operations (do not invoke the backend)
 
   @doc """
+  Changes the type of a tensor.
+
+  Note it is not possible to cast from floats to integers.
+  Use `round/1`, `floor/1`, and `ceil/1` instead.
+
+  Casting from a higher precision may lead to overflows
+  and underflows, which is platform and compiler dependent
+  behaviour.
+
+  ## Examples
+
+      iex> Nx.as_type(Nx.tensor([0, 1, 2], names: [:data]), {:f, 32})
+      #Nx.Tensor<
+        f32[data: 3]
+        [0.0, 1.0, 2.0]
+      >
+
+      iex> Nx.as_type(Nx.tensor([0.0, 1.0, 2.0], names: [:data]), {:bf, 16})
+      #Nx.Tensor<
+        bf16[data: 3]
+        [0.0, 1.0, 2.0]
+      >
+
+  """
+  def as_type(tensor, type) do
+    tensor = tensor!(tensor)
+    impl!(tensor).as_type(%{tensor | type: Nx.Type.normalize!(type)}, tensor)
+  end
+
+  @doc """
   Changes the shape of a tensor.
 
   The new shape is either a tuple or a tensor which we will
