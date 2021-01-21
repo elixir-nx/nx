@@ -14,7 +14,7 @@ defmodule Nx.DefnTest do
   defmodule Identity do
     @behaviour Nx.Defn.Compiler
 
-    def __compile__(_key, vars, fun, _opts) do
+    def __jit__(_key, vars, fun, _opts) do
       fun.(vars)
     end
   end
@@ -555,7 +555,11 @@ defmodule Nx.DefnTest do
       Nx.exp(transform(Nx.negate(a), &private_back_and_forth/1))
     end
 
-    defp private_back_and_forth(a), do: final_back_and_forth(a)
+    defp private_back_and_forth(a) do
+      Nx.Defn = Process.get(Nx.Defn.Compiler)
+      final_back_and_forth(a)
+    end
+
     defnp final_back_and_forth(a), do: Nx.tanh(a)
 
     test "back and forth between Elixir and defn" do
@@ -566,7 +570,11 @@ defmodule Nx.DefnTest do
 
   describe "jit" do
     defn defn_jit({a, b}, c), do: a + b - c
-    def elixir_jit({a, b}, c), do: a |> Nx.add(b) |> Nx.subtract(c)
+
+    def elixir_jit({a, b}, c) do
+      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn, Identity]
+      a |> Nx.add(b) |> Nx.subtract(c)
+    end
 
     test "compiles defn function" do
       assert Nx.Defn.jit(&defn_jit/2, Nx.Defn).({4, 5}, 3) == Nx.tensor(6)

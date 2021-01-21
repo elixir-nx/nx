@@ -15,7 +15,7 @@ defmodule Nx.Defn.Compiler do
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
   """
-  @callback __compile__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> result), keyword) :: result
+  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> result), keyword) :: result
             when result: Nx.t() | tuple()
 
   # These operations need to be rewritten to Expr as they don't dispatch to data
@@ -61,10 +61,10 @@ defmodule Nx.Defn.Compiler do
     end
 
     wrap(arity, fn args ->
-      Process.put(Nx.Defn.Compiler, true)
+      Process.put(Nx.Defn.Compiler, compiler)
 
       try do
-        compiler.__compile__(
+        compiler.__jit__(
           fun,
           Nx.Defn.Expr.from_args(args),
           fn vars ->
@@ -118,10 +118,10 @@ defmodule Nx.Defn.Compiler do
         if Process.get(Nx.Defn.Compiler) do
           unquote(defn_name)(unquote_splicing(args))
         else
-          Process.put(Nx.Defn.Compiler, true)
+          Process.put(Nx.Defn.Compiler, unquote(def_module))
 
           try do
-            unquote(def_module).__compile__(
+            unquote(def_module).__jit__(
               &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity)),
               Nx.Defn.Expr.to_vars(unquote(vars)),
               fn unquote(vars) ->

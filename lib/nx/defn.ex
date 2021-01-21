@@ -105,7 +105,7 @@ defmodule Nx.Defn do
   @behaviour Nx.Defn.Compiler
 
   @impl true
-  def __compile__(_key, vars, fun, []) do
+  def __jit__(_key, vars, fun, []) do
     fun.(vars)
     |> to_result(vars, %{})
     |> elem(0)

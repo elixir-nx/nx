@@ -4,7 +4,7 @@ defmodule EXLA.Defn do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
-  def __compile__(key, vars, fun, options) do
+  def __jit__(key, vars, fun, options) do
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args}
 
