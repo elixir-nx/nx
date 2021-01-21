@@ -1343,6 +1343,13 @@ defmodule Nx.BinaryTensor do
 
   @doc false
   def sort(_out, t, opts, comparator) do
+    comparator =
+      case comparator do
+        :desc -> &</2
+        :asc -> &>/2
+        fun -> fun
+      end
+
     axis = opts[:axis]
 
     case t.shape do

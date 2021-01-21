@@ -1671,10 +1671,40 @@ defmodule EXLA.DefnTest do
   end
 
   describe "sort" do
-    defn sort0_1d(t), do: Nx.sort(t, 0)
+    defn sort0(t), do: Nx.sort(t, axis: 0)
+    defn sort1(t), do: Nx.sort(t, axis: 1)
+    defn sort1_asc(t), do: Nx.sort(t, [axis: 1], :asc)
+    defn sort2(t), do: Nx.sort(t, axis: 2)
 
     test "sorts a 1d tensor" do
-      assert sort0_1d(Nx.tensor([0, 5, 2, 1, 3, 4])) == Nx.tensor([0, 1, 2, 3, 4, 5])
+      assert sort0(Nx.tensor([0, 5, 2, 1, 3, 4])) == Nx.tensor([0, 1, 2, 3, 4, 5])
+    end
+
+    test "sorts a 2d tensor along the 0th axis" do
+      assert sort0(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[2, 1, 4], [3, 5, 7]])
+    end
+
+    test "sorts a 2d tensor along the 1st axis" do
+      assert sort1(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[1, 3, 7], [2, 4, 5]])
+    end
+
+    test "sorts a 2d tensor along the 1st axis ascending" do
+      assert sort1_asc(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[7, 3, 1], [5, 4, 2]])
+    end
+
+    test "sorts a 3d tensor along the 2nd axis" do
+      assert sort2(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]])) ==
+        Nx.tensor([[
+            [2, 4, 5],
+            [2, 3, 5],
+            [0, 2, 5]
+          ],
+          [
+            [1, 8, 9],
+            [1, 2, 3],
+            [1, 2, 4]
+          ]
+        ])
     end
   end
 
