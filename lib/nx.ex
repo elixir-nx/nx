@@ -4858,6 +4858,50 @@ defmodule Nx do
     {Enum.reverse(list1), Enum.reverse(list2), Enum.reverse(list3), Enum.reverse(list4)}
   end
 
+  @doc """
+  Performs a cholesky decomposition of a square matrix.
+
+  The matrix must be positive-definite and either Hermitian
+  if complex or symmetric if real.
+
+  ### Examples
+
+    iex> Nx.cholesky(Nx.tensor([[6.0, 3.0, 4.0, 8.0], [3.0, 6.0, 5.0, 1.0], [4.0, 5.0, 10.0, 7.0], [8.0, 1.0, 7.0, 25.0]]))
+    #Nx.Tensor<
+      f64[4][4]
+      [
+        [2.449489742783178, 0.0, 0.0, 0.0],
+        [1.2247448713915892, 2.1213203435596424, 0.0, 0.0],
+        [1.6329931618554523, 1.414213562373095, 2.309401076758503, 0.0],
+        [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
+      ]
+    >
+
+    iex> Nx.cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
+    #Nx.Tensor<
+      f64[2][2]
+      [
+        [4.47213595499958, 0.0],
+        [3.93547964039963, 0.7155417527999305]
+      ]
+    >
+
+  ### Error cases
+
+      iex> Nx.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
+      ** (ArgumentError) matrix must be symmetric, a matrix is symmetric iff X = X.T
+  """
+  def cholesky(tensor) do
+    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+
+    {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
+
+    out = %{tensor | type: output_type, shape: output_shape, names: output_names}
+    impl!(tensor).cholesky(out, tensor)
+  end
+
   ## Type
 
   defp tensor!(%T{} = t),

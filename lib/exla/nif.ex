@@ -216,6 +216,8 @@ defmodule EXLA.NIF do
 
   def get_tuple_element(_operand, _index), do: nif_error(__ENV__.function)
 
+  def cholesky(_operand), do: nif_error(__ENV__.function)
+
   def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 

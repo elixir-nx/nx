@@ -390,6 +390,18 @@ defmodule EXLA.Defn do
     EXLA.Op.concatenate(tensors, axis)
   end
 
+  defp to_operator(:cholesky, [tensor], ans, state) do
+    tensor = to_type(tensor, ans.type)
+    cholesky = EXLA.Op.cholesky(tensor)
+
+    zeros =
+      state.builder
+      |> to_constant(0.0, ans.type)
+      |> EXLA.Op.broadcast_in_dim(ans.shape, broadcast_axes({}, ans.shape))
+
+    EXLA.Op.select(EXLA.Op.equal(cholesky, tensor), zeros, cholesky)
+  end
+
   ## Computation helpers
 
   defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}}, type, state) do

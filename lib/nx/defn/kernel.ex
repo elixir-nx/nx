@@ -317,7 +317,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def max(left, right) when Kernel.and(is_number(left), is_number(right)), do: Kernel.max(left, right)
+  def max(left, right) when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.max(left, right)
+
   def max(left, right), do: Nx.max(left, right)
 
   @doc """
@@ -332,7 +334,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def min(left, right) when Kernel.and(is_number(left), is_number(right)), do: Kernel.min(left, right)
+  def min(left, right) when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.min(left, right)
+
   def min(left, right), do: Nx.min(left, right)
 
   @doc """
@@ -350,7 +354,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left and right when Kernel.and(is_number(left), is_number(right)), do: logical_and(left, right)
+  def left and right when Kernel.and(is_number(left), is_number(right)),
+    do: logical_and(left, right)
+
   def left and right, do: Nx.logical_and(left, right)
 
   @doc """
@@ -368,7 +374,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left or right when Kernel.and(is_number(left), is_number(right)), do: logical_or(left, right)
+  def left or right when Kernel.and(is_number(left), is_number(right)),
+    do: logical_or(left, right)
+
   def left or right, do: Nx.logical_or(left, right)
 
   @doc """
@@ -418,7 +426,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left &&& right when Kernel.and(is_number(left), is_number(right)), do: Bitwise.&&&(left, right)
+  def left &&& right when Kernel.and(is_number(left), is_number(right)),
+    do: Bitwise.&&&(left, right)
+
   def left &&& right, do: Nx.bitwise_and(left, right)
 
   @doc """
@@ -434,7 +444,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left ||| right when Kernel.and(is_number(left), is_number(right)), do: Bitwise.|||(left, right)
+  def left ||| right when Kernel.and(is_number(left), is_number(right)),
+    do: Bitwise.|||(left, right)
+
   def left ||| right, do: Nx.bitwise_or(left, right)
 
   @doc """
@@ -450,7 +462,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left ^^^ right when Kernel.and(is_number(left), is_number(right)), do: Bitwise.^^^(left, right)
+  def left ^^^ right when Kernel.and(is_number(left), is_number(right)),
+    do: Bitwise.^^^(left, right)
+
   def left ^^^ right, do: Nx.bitwise_xor(left, right)
 
   @doc """
@@ -480,7 +494,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left <<< right when Kernel.and(is_number(left), is_number(right)), do: Bitwise.<<<(left, right)
+  def left <<< right when Kernel.and(is_number(left), is_number(right)),
+    do: Bitwise.<<<(left, right)
+
   def left <<< right, do: Nx.left_shift(left, right)
 
   @doc """
@@ -496,7 +512,9 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def left >>> right when Kernel.and(is_number(left), is_number(right)), do: Bitwise.>>>(left, right)
+  def left >>> right when Kernel.and(is_number(left), is_number(right)),
+    do: Bitwise.>>>(left, right)
+
   def left >>> right, do: Nx.right_shift(left, right)
 
   @doc """

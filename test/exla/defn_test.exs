@@ -1670,6 +1670,46 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "cholesky" do
+    defn cholesky(t), do: Nx.cholesky(t)
+
+    test "works on 2x2 matrix" do
+      lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
+      rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "works on a 4x4 matrix" do
+      lhs =
+        cholesky(
+          Nx.tensor([
+            [6.0, 3.0, 4.0, 8.0],
+            [3.0, 6.0, 5.0, 1.0],
+            [4.0, 5.0, 10.0, 7.0],
+            [8.0, 1.0, 7.0, 25.0]
+          ])
+        )
+
+      rhs =
+        Nx.tensor([
+          [2.449489742783178, 0.0, 0.0, 0.0],
+          [1.2247448713915892, 2.1213203435596424, 0.0, 0.0],
+          [1.6329931618554523, 1.414213562373095, 2.309401076758503, 0.0],
+          [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "works on a 200x200 matrix" do
+      tensor = Nx.random_normal({200, 200})
+      tensor = Nx.dot(tensor, Nx.transpose(tensor))
+      lhs = cholesky(tensor)
+      rhs = Nx.cholesky(tensor)
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "bfloat16" do
     defn add(t1, t2), do: t1 + t2
 
@@ -1709,12 +1749,16 @@ defmodule EXLA.DefnTest do
 
   # We need to round the floats because of imprecision between platforms
   defp compare_tensors!(
-         %{type: {:f, size}, data: {dev, left_data}} = left,
-         %{data: {dev, right_data}} = right
+         %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
+         %{data: %{state: right_data} = rhs} = right
        ) do
     left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.round(x, 5)
     right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.round(x, 5)
-    assert %{left | data: {dev, left_data}} == %{right | data: {dev, right_data}}
+
+    assert %{left | data: %{lhs | state: left_data}} == %{
+             right
+             | data: %{rhs | state: right_data}
+           }
   end
 
   defp compare_tensors!(left, right) do

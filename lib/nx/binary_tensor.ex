@@ -1068,6 +1068,75 @@ defmodule Nx.BinaryTensor do
     from_binary(out, output_data)
   end
 
+  @impl true
+  def cholesky(%{type: output_type, shape: {rows, cols}} = out, tensor) do
+    %T{type: {_, size} = input_type} = tensor
+
+    row_chunk_size = size * cols
+    data = to_binary(tensor)
+
+    output_data =
+      for i <- 0..(rows - 1), reduce: <<>> do
+        cur_binary ->
+          lower_triangle_part =
+            for j <- 1..(i + 1), reduce: cur_binary do
+              acc ->
+                current_element_offset = i * row_chunk_size + (j - 1) * size
+                current_element_opp_offset = (j - 1) * row_chunk_size + i * size
+                diagonal_element_offset = (j - 1) * row_chunk_size + (j - 1) * size
+
+                lhs_dot_offset = i * row_chunk_size
+                lhs_dot_size = (j - 1) * size
+
+                <<_::size(lhs_dot_offset)-bitstring, lhs::size(lhs_dot_size)-bitstring,
+                  _::bitstring>> = acc
+
+                rhs_dot_offset = (j - 1) * row_chunk_size
+                rhs_dot_size = (j - 1) * size
+
+                <<_::size(rhs_dot_offset)-bitstring, rhs::size(rhs_dot_size)-bitstring,
+                  _::bitstring>> = acc
+
+                elem =
+                  match_types [input_type] do
+                    <<_::size(current_element_offset)-bitstring, match!(x, 0), _::bitstring>> =
+                      data
+                    <<_::size(current_element_opp_offset)-bitstring, match!(y, 0), _::bitstring>> =
+                      data
+
+                    if x != y do
+                      raise ArgumentError, "matrix must be symmetric, a matrix is symmetric iff X = X.T"
+                    end
+
+                    fun = fn <<match!(left, 0)>>, <<match!(right, 0)>>, acc ->
+                      {<<>>, read!(left, 0) * read!(right, 0) + acc}
+                    end
+
+                    {_, tmp_sum} = bin_zip_reduce_axis(lhs, rhs, size, size, <<>>, 0, fun)
+
+                    if i == j - 1 do
+                      value = :math.sqrt(Kernel.max(read!(x, 0) - tmp_sum, 0))
+                      scalar_to_binary(value, output_type)
+                    else
+                      <<_::size(diagonal_element_offset)-bitstring, match!(diag, 0),
+                        _::bitstring>> = acc
+
+                      value = 1.0 / read!(diag, 0) * (read!(x, 0) - tmp_sum)
+                      scalar_to_binary(value, output_type)
+                    end
+                  end
+
+                <<acc::bitstring, elem::bitstring>>
+            end
+
+          col_zeros = IO.iodata_to_binary(List.duplicate(<<0::size(size)>>, cols - i - 1))
+
+          <<lower_triangle_part::bitstring, col_zeros::bitstring>>
+      end
+
+    from_binary(out, output_data)
+  end
+
   ## Aggregation
 
   @impl true
