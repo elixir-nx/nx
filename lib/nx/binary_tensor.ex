@@ -1341,7 +1341,7 @@ defmodule Nx.BinaryTensor do
     end
   end
 
-  @doc false
+  @impl true
   def sort(_out, t, opts, comparator) do
     comparator =
       case comparator do

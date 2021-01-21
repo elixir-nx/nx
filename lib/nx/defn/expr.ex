@@ -351,7 +351,6 @@ defmodule Nx.Defn.Expr do
     expr(out, tensor.data.context, :cholesky, [tensor])
   end
 
-  @doc false
   @impl true
   def sort(out, tensor, opts, comparator) do
     %{type: type} = out
