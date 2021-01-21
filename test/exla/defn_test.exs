@@ -1708,13 +1708,6 @@ defmodule EXLA.DefnTest do
       rhs = Nx.cholesky(tensor)
       compare_tensors!(lhs, rhs)
     end
-
-    test "fails on asymmetric tensor" do
-      assert_raise ArgumentError, "matrix must be symmetric, a matrix is symmetric iff X == X.T",
-        fn ->
-          cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
-        end
-    end
   end
 
   describe "bfloat16" do
