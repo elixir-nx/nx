@@ -45,6 +45,7 @@ defmodule Nx.Tensor do
   @callback transpose(out :: t, t, keyword) :: t
   @callback pad(out :: t, t, pad_value :: t, padding_config :: list()) :: t
   @callback reverse(out :: t, t, keyword) :: t
+  @callback sort(out :: t, t, keyword) :: t
 
   @callback dot(out :: t, t, axes, t, axes) :: t
   @callback conv(out :: t, t, kernel :: t, keyword) :: t

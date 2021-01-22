@@ -1370,6 +1370,30 @@ ERL_NIF_TERM concatenate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaComputation* comparator;
+  exla::int64 dimension;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], comparator)) {
+    return exla::nif::error(env, "Unable to get comparator.");
+  }
+  if (!exla::nif::get(env, argv[2], &dimension)) {
+    return exla::nif::error(env, "Unable to get dimension.");
+  }
+
+  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 // LinAlg Functions
 
 ERL_NIF_TERM cholesky(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1783,6 +1807,7 @@ static ErlNifFunc exla_funcs[] = {
   {"clamp", 3, clamp},
   {"reverse", 2, reverse},
   {"concatenate", 3, concatenate},
+  {"sort", 3, sort},
   // LinAlg
   {"cholesky", 1, cholesky},
   // Log Sink

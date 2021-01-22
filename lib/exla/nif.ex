@@ -212,6 +212,9 @@ defmodule EXLA.NIF do
   def concatenate(_builder, _operands, _dimension),
     do: nif_error(__ENV__.function)
 
+  def sort(_operand, _comparator, _dimension),
+    do: nif_error(__ENV__.function)
+
   def tuple(_builder, _elements), do: nif_error(__ENV__.function)
 
   def get_tuple_element(_operand, _index), do: nif_error(__ENV__.function)

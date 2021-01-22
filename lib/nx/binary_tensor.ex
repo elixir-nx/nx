@@ -1357,6 +1357,68 @@ defmodule Nx.BinaryTensor do
     end
   end
 
+  @impl true
+  def sort(_out, t, opts) do
+    %T{shape: shape, type: type} = t
+    last_axis = Nx.rank(t) - 1
+
+    comparator =
+      case opts[:comparator] do
+        :desc -> &</2
+        :asc -> &>/2
+        fun -> fn a, b ->
+          a = binary_to_number(a, type)
+          b = binary_to_number(b, type)
+          Nx.to_scalar(fun.(a, b)) != 0
+        end
+      end
+
+    axis = opts[:axis]
+
+    case shape do
+      {} ->
+        t
+
+      _ when axis == last_axis ->
+        sort_last_dim(t, comparator)
+
+      _ ->
+        permutation = Nx.axes(t)
+        permutation =
+          permutation
+          |> List.delete(axis)
+          |> List.insert_at(Nx.rank(t) - 1, axis)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        t
+        |> Nx.transpose(axes: permutation)
+        |> sort_last_dim(comparator)
+        |> Nx.transpose(axes: inverse_permutation)
+    end
+  end
+
+  defp sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator) do
+    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
+
+    new_data =
+      for bin <- view, into: <<>> do
+        data =
+          match_types [type] do
+            for <<x::size(size)-bitstring <- bin>> do
+              x
+            end
+          end
+        IO.iodata_to_binary(Enum.sort(data, comparator))
+      end
+
+    from_binary(t, new_data)
+  end
+
   ## Binary reducers
 
   defp bin_reduce(out, tensor, acc, opts, fun) do

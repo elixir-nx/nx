@@ -351,6 +351,34 @@ defmodule Nx.Defn.Expr do
     expr(out, tensor.data.context, :cholesky, [tensor])
   end
 
+  @impl true
+  def sort(out, tensor, opts) do
+    comparator = opts[:comparator]
+
+    %{type: type} = out
+    tensor = to_expr(tensor)
+
+    args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
+    comparator = to_nx_comparator(comparator)
+    fun = fun(args, comparator)
+
+    if fun.shape != {} do
+      raise "sort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
+    end
+
+    if fun.type != {:u, 8} do
+      raise "sort comparator must return a predicate type, got: #{inspect(fun.type)}"
+    end
+
+    expr(out, tensor.data.context, :sort, [tensor, opts, fun])
+  end
+
+  defp to_nx_comparator(:desc), do: &Nx.less/2
+  defp to_nx_comparator(:asc), do: &Nx.greater/2
+  defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
+  defp to_nx_comparator(_),
+    do: "comparator must be either :desc or :asc or a function with arity 2"
+
   ## Helpers
 
   defp expr(tensor, context, op, args) do
