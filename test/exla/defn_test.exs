@@ -1773,8 +1773,8 @@ defmodule EXLA.DefnTest do
       compare_tensors!(lhs, rhs)
     end
 
-    test "works on a 200x200 matrix" do
-      tensor = Nx.random_normal({200, 200})
+    test "works on a 50x50 matrix" do
+      tensor = Nx.random_normal({50, 50})
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
       lhs = cholesky(tensor)
       rhs = Nx.cholesky(tensor)
