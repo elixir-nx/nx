@@ -1344,6 +1344,7 @@ defmodule Nx.BinaryTensor do
   @impl true
   def sort(_out, t, opts) do
     %T{shape: shape, type: type} = t
+    last_axis = Nx.rank(t) - 1
 
     comparator =
       case opts[:comparator] do
@@ -1362,7 +1363,7 @@ defmodule Nx.BinaryTensor do
       {} ->
         t
 
-      _ when axis == 0 ->
+      _ when axis == last_axis ->
         sort_last_dim(t, comparator)
 
       _ ->
