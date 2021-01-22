@@ -397,7 +397,7 @@ defmodule Nx.Defn.Grad do
     appropriate Nx functions instead. If you have a custom usage \
     of reduce, consider using stop_grad/1 (making it equivalent \
     to the identify function) or using custom_grad/2 (giving it \
-    a proper gradient implementation.
+    a proper gradient implementation).
     """
   end
 
@@ -409,7 +409,19 @@ defmodule Nx.Defn.Grad do
     the appropriate Nx functions instead. If you have a custom usage \
     of reduce_window, consider using stop_grad/1 (making it equivalent \
     to the identify function) or using custom_grad/2 (giving it \
-    a proper gradient implementation.
+    a proper gradient implementation).
+    """
+  end
+
+  @error [:map]
+
+  defp grad(op, _, _, _, _) when op in @error do
+    raise ArgumentError, """
+    cannot compute gradient for Nx.#{op}.
+
+    Consider using stop_grad/1 to make the gradient equivalent to \
+    the identify function or use custom_grad/2 to define a proper \
+    gradient implementation
     """
   end
 
@@ -418,7 +430,8 @@ defmodule Nx.Defn.Grad do
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
-               [:floor, :round, :ceil, :sign]
+               [:floor, :round, :ceil, :sign] ++
+               [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal]
 
   defp grad(op, _, _, _, cache) when op in @constants do
     {Expr.to_expr(0.0), cache}
