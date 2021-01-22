@@ -1366,7 +1366,7 @@ defmodule Nx.BinaryTensor do
         sort_last_dim(t, comparator)
 
       _ ->
-        permutation = for i <- 0..(Nx.rank(t) - 1), do: i
+        permutation = Nx.axes(t)
         permutation =
           permutation
           |> List.delete(axis)
