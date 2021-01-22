@@ -1362,7 +1362,7 @@ defmodule Nx.BinaryTensor do
       {} ->
         t
 
-      {_} ->
+      _ when axis == 0 ->
         sort_last_dim(t, comparator)
 
       _ ->
