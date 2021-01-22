@@ -3054,7 +3054,7 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.population_count(Nx.tensor([0.0, 1.0]))
+      iex> Nx.count_leading_zeros(Nx.tensor([0.0, 1.0]))
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
   def count_leading_zeros(tensor) do
@@ -3099,14 +3099,110 @@ defmodule Nx do
   ## Aggregate ops
 
   @doc """
+  Returns a scalar tensor of value 1 if all of the
+  tensor values are not zero. Otherwise the value is 0.
+
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
+
+  ## Examples
+
+      iex> Nx.all?(Nx.tensor([0, 1, 2]))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all?(Nx.tensor([[-1, 0, 1], [2, 3, 4]], names: [:x, :y]), axes: [:x])
+      #Nx.Tensor<
+        u8[y: 3]
+        [1, 0, 1]
+      >
+
+      iex> Nx.all?(Nx.tensor([[-1, 0, 1], [2, 3, 4]], names: [:x, :y]), axes: [:y])
+      #Nx.Tensor<
+        u8[x: 2]
+        [0, 1]
+      >
+  """
+  def all?(tensor, opts \\ []) do
+    assert_keys!(opts, [:axes])
+    %{shape: shape, names: names} = tensor = tensor!(tensor)
+
+    {shape, names, axes} =
+      if axes = opts[:axes] do
+        axes = Nx.Shape.normalize_axes(shape, axes, names)
+        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names)
+        {new_shape, new_names, axes}
+      else
+        {{}, [], nil}
+      end
+
+    out = %{tensor | type: {:u, 8}, shape: shape, names: names}
+    impl!(tensor).all?(out, tensor, axes: axes)
+  end
+
+  @doc """
+  Returns a scalar tensor of value 1 if any of the
+  tensor values are not zero. Otherwise the value is 0.
+
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
+
+  ## Examples
+
+      iex> Nx.any?(Nx.tensor([0, 1, 2]))
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+      iex> Nx.any?(Nx.tensor([[0, 1, 0], [0, 1, 2]], names: [:x, :y]), axes: [:x])
+      #Nx.Tensor<
+        u8[y: 3]
+        [0, 1, 1]
+      >
+
+      iex> Nx.any?(Nx.tensor([[0, 1, 0], [0, 1, 2]], names: [:x, :y]), axes: [:y])
+      #Nx.Tensor<
+        u8[x: 2]
+        [1, 1]
+      >
+  """
+  def any?(tensor, opts \\ []) do
+    assert_keys!(opts, [:axes])
+    %{shape: shape, names: names} = tensor = tensor!(tensor)
+
+    {shape, names, axes} =
+      if axes = opts[:axes] do
+        axes = Nx.Shape.normalize_axes(shape, axes, names)
+        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names)
+        {new_shape, new_names, axes}
+      else
+        {{}, [], nil}
+      end
+
+    out = %{tensor | type: {:u, 8}, shape: shape, names: names}
+    impl!(tensor).any?(out, tensor, axes: axes)
+  end
+
+  @doc """
   Returns the sum for the tensor.
 
-  If the `:axis` option is given, it aggregates over
-  that dimension, effectively removing it. `axes: [0]`
-  implies aggregating over the highest order dimension
-  and so forth. If the axis is negative, then counts
-  the axis from the back. For example, `axes: [-1]` will
-  always aggregate all rows.
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
 
   ## Examples
 

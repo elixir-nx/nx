@@ -1140,6 +1140,22 @@ defmodule Nx.BinaryTensor do
   ## Aggregation
 
   @impl true
+  def all?(out, %{type: type} = tensor, opts) do
+    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
+      res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+      {res, res}
+    end)
+  end
+
+  @impl true
+  def any?(out, %{type: type} = tensor, opts) do
+    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
+      res = if binary_to_number(bin, type) != 0, do: 1, else: acc
+      {res, res}
+    end)
+  end
+
+  @impl true
   def sum(out, %{type: type} = tensor, opts) do
     bin_reduce(out, tensor, 0, opts, fn bin, acc ->
       res = binary_to_number(bin, type) + acc

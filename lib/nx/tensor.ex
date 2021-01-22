@@ -53,6 +53,8 @@ defmodule Nx.Tensor do
   @callback concatenate(out :: t, t, keyword) :: t
   @callback select(out :: t, t, t, t) :: t
 
+  @callback all?(out :: t, t, keyword) :: t
+  @callback any?(out :: t, t, keyword) :: t
   @callback sum(out :: t, t, keyword) :: t
   @callback argmax(out :: t, t, keyword) :: t
   @callback argmin(out :: t, t, keyword) :: t

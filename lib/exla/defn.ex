@@ -315,10 +315,16 @@ defmodule EXLA.Defn do
 
   ## to_operator reduction
 
-  defp to_operator(:sum, [arg, opts], %{type: type} = ans, state) do
-    acc = EXLA.Op.constant_r0(state.builder, 0, type)
-    args = [Expr.parameter(:sum, type, {}, 0), Expr.parameter(:sum, type, {}, 1)]
-    to_operator(:reduce, [arg, acc, opts, Expr.fun(args, &Nx.add/2)], ans, state)
+  defp to_operator(:all?, [arg, opts], _ans, state) do
+    to_aggregate(:all?, {:pred, 8}, arg, 1, opts, state, &apply(EXLA.Op, :bitwise_and, &1.params))
+  end
+
+  defp to_operator(:any?, [arg, opts], _ans, state) do
+    to_aggregate(:any?, {:pred, 8}, arg, 0, opts, state, &apply(EXLA.Op, :bitwise_or, &1.params))
+  end
+
+  defp to_operator(:sum, [arg, opts], %{type: type}, state) do
+    to_aggregate(:sum, type, arg, 0, opts, state, &apply(EXLA.Op, :add, &1.params))
   end
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type}, state) do
@@ -406,6 +412,16 @@ defmodule EXLA.Defn do
 
   defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}}, type, state) do
     {:name, name} = Function.info(fun, :name)
+
+    to_computation(name, args, state, fn state ->
+      expr
+      |> to_result(state, %{})
+      |> elem(0)
+      |> to_type(type)
+    end)
+  end
+
+  defp to_computation(name, args, state, fun) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
     params =
@@ -414,11 +430,16 @@ defmodule EXLA.Defn do
         EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")
       end
 
-    expr
-    |> to_result(%{state | builder: subbuilder, params: params}, %{})
-    |> elem(0)
-    |> to_type(type)
-    |> EXLA.Builder.build()
+    state = %{state | builder: subbuilder, params: params}
+    EXLA.Builder.build(fun.(state))
+  end
+
+  defp to_aggregate(name, type, arg, initial, opts, state, fun) do
+    arg = to_type(arg, type)
+    acc = EXLA.Op.constant_r0(state.builder, initial, type)
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    comp = to_computation(name, args, state, fun)
+    EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
