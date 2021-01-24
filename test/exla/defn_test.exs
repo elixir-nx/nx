@@ -661,6 +661,16 @@ defmodule EXLA.DefnTest do
       assert if_params(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(-1)
       assert if_params(Nx.tensor(1), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(3)
     end
+
+    defn if_shared(a, b, c) do
+      d = b + c
+      if a, do: 2 * d * a, else: -1
+    end
+
+    test "shared params between pred+branch and no params" do
+      assert if_shared(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(-1)
+      assert if_shared(Nx.tensor(2), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(12)
+    end
   end
 
   describe "map" do
