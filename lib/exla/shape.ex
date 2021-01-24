@@ -28,6 +28,18 @@ defmodule EXLA.Shape do
   end
 
   @doc """
+  Creates a tuple shape with the given shapes.
+  """
+  def make_tuple_shape(shapes) when is_list(shapes) do
+    refs =
+      shapes
+      |> Enum.map(& &1.ref)
+
+    ref = EXLA.NIF.make_tuple_shape(refs) |> unwrap!()
+    %Shape{dims: {length(shapes)}, dtype: {:t, shapes}, ref: ref}
+  end
+
+  @doc """
   Shards the given shape along the first axis.
   """
   def shard(shape = %Shape{}, num_shards) when num_shards == 1, do: shape
