@@ -638,7 +638,7 @@ defmodule EXLA.DefnTest do
   describe "if" do
     defn if3(a, b, c), do: if(a, do: b, else: c)
 
-    test "if" do
+    test "one param per branch" do
       assert if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
                Nx.tensor(2, type: {:f, 32})
 
@@ -653,6 +653,13 @@ defmodule EXLA.DefnTest do
 
       assert if3(Nx.tensor(1), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
                Nx.tensor([[1, 2], [1, 2]])
+    end
+
+    defn if_params(a, b, c), do: if(a, do: b + c, else: b - c)
+
+    test "two params per branch" do
+      assert if_params(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(-1)
+      assert if_params(Nx.tensor(1), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(3)
     end
   end
 

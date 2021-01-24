@@ -19,8 +19,10 @@ defmodule EXLA.ShapeTest do
       s2 = Shape.make_shape({:bf, 16}, {})
       s3 = Shape.make_shape({:f, 32}, {1, 1})
 
-      assert %Shape{dtype: {:t, [_, _, _]}, dims: {3}, ref: ref} = Shape.make_tuple_shape([s1, s2, s3])
-      assert %Shape{dtype: {:t, [_, _, _]}, dims: {3}, ref: ref} = Shape.get_shape_info(ref)
+      assert %Shape{dtype: {:t, [_, _, _]}, dims: {3}, ref: ref} =
+               Shape.make_tuple_shape([s1, s2, s3])
+
+      assert %Shape{dtype: {:t, [_, _, _]}, dims: {3}, ref: ^ref} = Shape.get_shape_info(ref)
     end
 
     test "creates nested tuples" do
@@ -30,8 +32,11 @@ defmodule EXLA.ShapeTest do
       s4 = Shape.make_shape({:s, 32}, {1})
       t1 = Shape.make_tuple_shape([s1, s2, s3])
 
-      assert %Shape{dtype: {:t, [_, %Shape{dtype: {:t, [_, _, _]}}]}, dims: {2}, ref: ref} = Shape.make_tuple_shape([s4, t1])
-      assert %Shape{dtype: {:t, [_, %Shape{dtype: {:t, [_, _, _]}}]}, dims: {2}, ref: ref} = Shape.get_shape_info(ref)
+      assert %Shape{dtype: {:t, [_, %Shape{dtype: {:t, [_, _, _]}}]}, dims: {2}, ref: ref} =
+               Shape.make_tuple_shape([s4, t1])
+
+      assert %Shape{dtype: {:t, [_, %Shape{dtype: {:t, [_, _, _]}}]}, dims: {2}, ref: ^ref} =
+               Shape.get_shape_info(ref)
     end
   end
 end

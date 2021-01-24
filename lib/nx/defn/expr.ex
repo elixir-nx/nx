@@ -402,7 +402,7 @@ defmodule Nx.Defn.Expr do
 
     args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
     comparator = to_nx_comparator(comparator)
-    fun = fun(args, comparator)
+    fun = to_fun(args, comparator)
 
     if fun.shape != {} do
       raise "sort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -418,6 +418,7 @@ defmodule Nx.Defn.Expr do
   defp to_nx_comparator(:desc), do: &Nx.less/2
   defp to_nx_comparator(:asc), do: &Nx.greater/2
   defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
+
   defp to_nx_comparator(_),
     do: "comparator must be either :desc or :asc or a function with arity 2"
 
