@@ -75,38 +75,34 @@ defmodule EXLA.Defn do
     recur_operator(expr, state, cache)
   end
 
-  defp recur_operator(%T{data: %Expr{op: :parameter, args: [i]}}, state, cache) do
-    {Enum.fetch!(state.params, i), cache}
-  end
-
-  defp recur_operator(%T{data: %Expr{op: :fun}} = t, _state, cache) do
-    {t, cache}
-  end
-
-  defp recur_operator(%T{data: %Expr{id: id, op: op, args: args}} = ans, state, cache) do
+  defp recur_operator(%T{data: %Expr{id: id, op: op}} = expr, state, cache) do
     case cache do
       %{^id => res} ->
         {res, cache}
 
       %{} ->
-        {ops, cache} =
-          Enum.map_reduce(args, cache, fn
-            %T{data: %Expr{}} = arg, cache ->
-              recur_operator(arg, state, cache)
-
-            [%T{data: %Expr{}} | _] = arg, cache ->
-              Enum.reduce(Enum.reverse(arg), {[], cache}, fn arg, {args, cache} ->
-                {arg, cache} = recur_operator(arg, state, cache)
-                {[arg | args], cache}
-              end)
-
-            arg, cache ->
-              {arg, cache}
-          end)
-
-        op = to_operator(op, ops, ans, state)
-        {op, Map.put(cache, id, op)}
+        {res, cache} = cached_recur_operator(op, expr, state, cache)
+        {res, Map.put(cache, id, res)}
     end
+  end
+
+  ## Handle special exprs
+
+  defp cached_recur_operator(:if, t, state, cache) do
+    to_if(t, state, cache)
+  end
+
+  defp cached_recur_operator(:parameter, %T{data: %Expr{args: [i]}}, state, cache) do
+    {Enum.fetch!(state.params, i), cache}
+  end
+
+  defp cached_recur_operator(:fun, expr, _state, cache) do
+    {expr, cache}
+  end
+
+  defp cached_recur_operator(op, expr, state, cache) do
+    {args, cache} = Expr.traverse_args(expr, cache, &recur_operator(&1, state, &2))
+    {to_operator(op, args, expr, state), cache}
   end
 
   ## to_operator creation
@@ -451,6 +447,63 @@ defmodule EXLA.Defn do
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
     suffix = System.unique_integer([:positive])
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
+  end
+
+  ## If
+
+  defp to_if(t, state, cache) do
+    [pred, on_true, on_false] = t.data.args
+    {_, pred_ids} = collect_ids(pred, %{})
+
+    {pred_op, cache} = recur_operator(pred, state, cache)
+    pred_op = to_type(pred_op, {:pred, 8})
+
+    {true_args, true_comp} = to_if_branch(:if_do, on_true, t, pred_ids, state, cache)
+    {false_args, false_comp} = to_if_branch(:if_else, on_false, t, pred_ids, state, cache)
+    {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
+  end
+
+  defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
+    Expr.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
+  end
+
+  defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, ids, pred_ids) do
+    if Map.has_key?(pred_ids, id) or op == :parameter do
+      case ids do
+        %{^id => {_, param}} ->
+          {param, ids}
+
+        %{} ->
+          i = map_size(ids)
+          {Expr.parameter(expr, i), Map.put(ids, id, {i, expr})}
+      end
+    else
+      {args, ids} = Expr.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
+      {put_in(expr.data.args, args), ids}
+    end
+  end
+
+  defp to_if_branch(key, expr, %{type: type, shape: shape}, ids, state, cache) do
+    {expr, ids_args} = collect_args(expr, %{}, ids)
+    sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _expr}} -> i end)
+    exprs = Enum.map(sorted_ids_args, fn {_, {_, expr}} -> expr end)
+
+    comp =
+      to_computation(key, exprs, state, fn state ->
+        expr
+        |> to_result(state, %{})
+        |> elem(0)
+        |> to_type(type)
+        |> EXLA.Op.broadcast_in_dim(shape, broadcast_axes(expr.shape, shape))
+      end)
+
+    [arg] =
+      Enum.map(sorted_ids_args, fn
+        {_, {_, %T{data: %Expr{op: :parameter, args: [i]}}}} -> Enum.fetch!(state.params, i)
+        {id, {_, _}} -> Map.fetch!(cache, id)
+      end)
+
+    {arg, comp}
   end
 
   ## Axes helpers

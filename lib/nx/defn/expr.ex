@@ -48,6 +48,42 @@ defmodule Nx.Defn.Expr do
           "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
   end
 
+  @doc """
+  Creates a parameter based on the given tensor expression.
+  """
+  def parameter(tensor, pos) when is_integer(pos) and pos >= 0 do
+    expr(tensor, tensor.data.context, :parameter, [pos])
+  end
+
+  @doc """
+  Helper to traverse the expression arguments of an expression.
+
+  It handles special cases such as concatenate, fun, if, and
+  others.
+  """
+  def traverse_args(expr, acc, fun)
+
+  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
+    {args, acc}
+  end
+
+  def traverse_args(%T{data: %Expr{op: :if, args: [pred | args]}}, acc, fun) do
+    {pred, acc} = fun.(pred, acc)
+    {[pred | args], acc}
+  end
+
+  def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
+    {list, acc} = Enum.map_reduce(list, acc, fun)
+    {[list | args], acc}
+  end
+
+  def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do
+    Enum.map_reduce(args, acc, fn
+      %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
+      arg, acc -> {arg, acc}
+    end)
+  end
+
   ## Nx.Defn dynamic callbacks
 
   @doc false
@@ -162,7 +198,7 @@ defmodule Nx.Defn.Expr do
   ## Creation ops
 
   @doc false
-  def parameter(context, type, shape, pos) when is_integer(pos) and pos >= 0 do
+  def parameter(context, type, shape, pos) do
     names = List.duplicate(nil, tuple_size(shape))
     expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
   end
