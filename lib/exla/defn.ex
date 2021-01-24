@@ -458,8 +458,8 @@ defmodule EXLA.Defn do
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
-    {true_args, true_comp} = to_if_branch(true, on_true, t, pred_ids, state, cache)
-    {false_args, false_comp} = to_if_branch(false, on_false, t, pred_ids, state, cache)
+    {true_args, true_comp} = to_if_branch(true, on_true, pred_ids, state, cache)
+    {false_args, false_comp} = to_if_branch(false, on_false, pred_ids, state, cache)
     {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
   end
 
@@ -483,7 +483,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_if_branch(bool, expr, %{type: type, shape: shape}, ids, state, cache) do
+  defp to_if_branch(bool, expr, ids, state, cache) do
     {expr, ids_args} = collect_args(expr, %{}, ids)
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _expr}} -> i end)
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
@@ -505,8 +505,6 @@ defmodule EXLA.Defn do
       expr
       |> to_result(%{state | builder: subbuilder, params: params}, %{})
       |> elem(0)
-      |> to_type(type)
-      |> EXLA.Op.broadcast_in_dim(shape, broadcast_axes(expr.shape, shape))
       |> EXLA.Builder.build()
 
     args =

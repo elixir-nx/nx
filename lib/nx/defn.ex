@@ -123,12 +123,11 @@ defmodule Nx.Defn do
     {t, cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :if, args: args}} = t, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :if, args: args}}, vars, cache) do
     [pred, on_true, on_false] = args
     {pred, cache} = eval(pred, vars, cache)
     res = if Nx.to_scalar(pred) != 0, do: on_true, else: on_false
-    {res, cache} = eval(res, vars, cache)
-    {res |> Nx.as_type(t.type) |> Nx.broadcast(t.shape), cache}
+    eval(res, vars, cache)
   end
 
   defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}} = ans, vars, cache) do

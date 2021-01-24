@@ -10,20 +10,31 @@ defmodule Nx.Defn.Expr do
     * `:op` - the operation name
     * `:args` - the operation arguments
 
-  All `:op` nodes translate to `Nx.Tensor` operations, except for
-  parameter and anonymous function handling:
+  ## Nodes
 
-    * `:parameter` - holds a parameter.
-      `:args` is a one element index to the actual parameter.
+  Most `:op` nodes translate to `Nx.Tensor` callback, although
+  some special nodes exist:
 
-    * `:tensor` - holds a tensor.
-      `:args` is a one element list with the tensor.
+  ### Basic nodes
 
-    * `:fun` - holds a function.
-      `:args` is a three element list with the parameters of
-      the function, the function expression, and the anonymous
-      function used to build the expression. The shape of the
-      tensor holding the function is the shape of the output.
+  Those nodes represents parameters, tensors, and functions
+  which exist within Expr:
+
+    * `parameter(integer)`
+    * `tensor(Nx.Tensor.t)`
+    * `fun(parameters, t, fun)`
+
+  ### Control-flow nodes
+
+    * `if(pred, on_true, on_false)`
+
+  ### Tensor creation nodes
+
+  Nodes that create tensors, mirroring the `Nx` API:
+
+    * `iota(shape, axis)`
+    * `random_uniform(shape, min, max, opts)`
+    * `random_normal(shape, mu, sigma, opts)`
 
   """
 
@@ -189,9 +200,20 @@ defmodule Nx.Defn.Expr do
 
     %T{shape: true_shape, names: true_names} = true_expr
     %T{shape: false_shape, names: false_names} = false_expr
-    {shape, names} = Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
 
+    {shape, names} = Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
     out = %{pred | type: type, shape: shape, names: names}
+
+    true_expr =
+      true_expr
+      |> Nx.broadcast(out)
+      |> Nx.as_type(type)
+
+    false_expr =
+      false_expr
+      |> Nx.broadcast(out)
+      |> Nx.as_type(type)
+
     expr(out, context, :if, [pred, true_expr, false_expr])
   end
 
