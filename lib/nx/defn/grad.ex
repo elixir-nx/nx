@@ -211,7 +211,7 @@ defmodule Nx.Defn.Grad do
     g =
       case broadcast_axes do
         [] -> g
-        _ -> Nx.broadcast(g, x.shape, Nx.axes(x.shape) -- broadcast_axes)
+        _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- broadcast_axes)
       end
 
     to_grad(x, g, cache)
@@ -221,7 +221,7 @@ defmodule Nx.Defn.Grad do
     g =
       case axes do
         [] -> g
-        _ -> Nx.broadcast(g, x.shape, Nx.axes(x.shape) -- axes)
+        _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- axes)
       end
 
     to_grad(x, g, cache)
@@ -287,7 +287,7 @@ defmodule Nx.Defn.Grad do
     g =
       if axes = opts[:axes] do
         axes = Nx.axes(x.shape) -- axes
-        Nx.broadcast(g, x, axes)
+        Nx.broadcast(g, x, axes: axes)
       else
         Nx.broadcast(g, x)
       end

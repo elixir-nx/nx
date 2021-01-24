@@ -890,17 +890,24 @@ defmodule Nx do
   retrieve the current shape from. The broadcast shape must
   be of equal or higher rank than the current shape.
 
-  The lower dimensions of the tensor shape must match the
-  equivalent lower dimension of the broadcast shape or be 1.
-  To customize this behaviour, see `broadcast/3`.
+  An optional `:axes` can be given to customize how broadcasting
+  happens. `axes` must be a list with the same length as the
+  tensor shape. Each `axis` in the list maps to the dimension
+  in the broadcast shape that must match. For example, an axis
+  of `[1, 2]` says the 0 dimension of the tensor matches to
+  the 1 dimension of the broadcast shape and the 1 dimension
+  of the tensor matches the 2 dimension of the broadcast shape.
+  Each matching dimension must either be 1, for implicit
+  broadcasting, or match the dimension in the broadcast shape.
 
-  The default broadcasting implementation copies the data in
-  memory to match the new dimensions.
+  Broadcasting is destructive with respect to names. You can
+  optionally provide new `:names` for the new tensor. If you
+  pass a tensor with named dimensions, the new tensor will
+  inherit names from that tensor.
 
-  Broadcasting is destructive with respect to names. Broadcasting
-  without specifying axes will set each dimension to `nil`, unless
-  you specify a tensor to broadcast to. In that case, the resulting
-  tensor will take names from the tensor it is broadcasting to.
+  ## Examples
+
+  ### Without axes
 
   ## Examples
 
@@ -933,45 +940,7 @@ defmodule Nx do
         ]
       >
 
-  """
-  def broadcast(tensor, broadcast_shape) do
-    tensor = tensor!(tensor)
-    names = names!(broadcast_shape)
-    broadcast_shape = shape(broadcast_shape)
-
-    if tensor.shape == broadcast_shape do
-      tensor
-    else
-      axes = Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
-      broadcast(tensor, broadcast_shape, axes, names: names)
-    end
-  end
-
-  @doc """
-  Broadcasts `tensor` to the given `broadcast_shape` with `axes`.
-
-  The new shape is either a tuple or a tensor which we will
-  retrieve the current shape from. The broadcast shape must
-  be of equal or higher rank than the current shape.
-
-  `axes` must be a list with the same length as the tensor
-  shape. Each `axis` in the list maps to the dimension in the
-  broadcast shape that must match. For example, an axis of
-  `[1, 2]` says the 0 dimension of the tensor matches to the
-  1 dimension of the broadcast shape and the 1 dimension of
-  the tensor matches the 2 dimension of the broadcast shape.
-  Each matching dimension must either be 1, for implicit
-  broadcasting, or match the dimension in the broadcast shape.
-
-  The default broadcasting implementation copies the data in
-  memory to match the new dimensions.
-
-  Broadcasting is destructive with respect to names. You can
-  optionally provide new `:names` for the new tensor. If you
-  pass a tensor with named dimensions, the new tensor will
-  inherit names from that tensor.
-
-  ## Examples
+  ### With axes
 
   Using the default broadcast rules, we cannot broadcast a
   tensor of shape (3) to the shape (3, 2), because the lower
@@ -979,7 +948,7 @@ defmodule Nx do
   configure how the dimensions match:
 
       iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.broadcast(t, {3, 2}, [0], names: [:x, :y])
+      iex> Nx.broadcast(t, {3, 2}, axes: [0], names: [:x, :y])
       #Nx.Tensor<
         s64[x: 3][y: 2]
         [
@@ -992,7 +961,7 @@ defmodule Nx do
   Or a more complex example:
 
       iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.broadcast(t, {2, 3, 2}, [1], names: [:x, :y, :z])
+      iex> Nx.broadcast(t, {2, 3, 2}, axes: [1], names: [:x, :y, :z])
       #Nx.Tensor<
         s64[x: 2][y: 3][z: 2]
         [
@@ -1010,17 +979,29 @@ defmodule Nx do
       >
 
   """
-  def broadcast(tensor, shape, axes, opts \\ []) do
-    %T{names: names} = tensor = tensor!(tensor)
+  def broadcast(tensor, shape, opts \\ []) do
+    assert_keys!(opts, [:axes, :names])
 
+    tensor = tensor!(tensor)
     broadcast_names = opts[:names] || names!(shape)
-    shape = shape(shape)
-    axes = Nx.Shape.normalize_axes(shape, axes, names)
-    _ = Nx.Shape.broadcast!(tensor.shape, shape, axes)
+    broadcast_shape = shape(shape)
+    opts_axes = opts[:axes]
 
-    broadcast_names = Nx.Shape.named_axes!(broadcast_names, shape)
+    axes =
+      if opts_axes do
+        Nx.Shape.normalize_axes(broadcast_shape, opts_axes, tensor.names)
+      else
+        Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
+      end
 
-    impl!(tensor).broadcast(%{tensor | names: broadcast_names, shape: shape}, tensor, shape, axes)
+    if tensor.shape == broadcast_shape and is_nil(opts_axes) do
+      tensor
+    else
+      _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes)
+      broadcast_names = Nx.Shape.named_axes!(broadcast_names, broadcast_shape)
+      out = %{tensor | names: broadcast_names, shape: broadcast_shape}
+      impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
+    end
   end
 
   @doc """

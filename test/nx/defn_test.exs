@@ -115,7 +115,7 @@ defmodule Nx.DefnTest do
     defn transpose_2(t), do: Nx.transpose(t, axes: [-1, -2])
     defn reshape(t), do: Nx.reshape(t, {2, 3})
     defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
-    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, [-2])
+    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2])
     defn squeeze(t), do: Nx.squeeze(t)
 
     test "dot product" do

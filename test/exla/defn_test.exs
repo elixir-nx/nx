@@ -1336,8 +1336,8 @@ defmodule EXLA.DefnTest do
       end
     end
 
-    defn broadcast_with_axes_2(t), do: Nx.broadcast(t, {3, 2}, [0])
-    defn broadcast_with_axes_3(t), do: Nx.broadcast(t, {2, 3, 2}, [1])
+    defn broadcast_with_axes_2(t), do: Nx.broadcast(t, {3, 2}, axes: [0])
+    defn broadcast_with_axes_3(t), do: Nx.broadcast(t, {2, 3, 2}, axes: [1])
 
     test "with axes" do
       assert broadcast_with_axes_2(Nx.tensor([1, 2, 3])) == Nx.tensor([[1, 1], [2, 2], [3, 3]])
