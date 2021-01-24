@@ -69,6 +69,15 @@ defmodule Nx.Defn.Grad do
     end
   end
 
+  ## Control flow
+
+  defp grad(:if, [pred, on_true, on_false], ans, g, cache) do
+    {on_true, on_false} = binary_broadcast(on_true, on_false, ans)
+    {on_true, cache} = to_grad(on_true, g, cache)
+    {on_false, cache} = to_grad(on_false, g, cache)
+    {Expr.if(pred, on_true, on_false), cache}
+  end
+
   ## Binary broadcast gradients
 
   defp grad(:add, [x, y], ans, g, cache) do

@@ -739,7 +739,13 @@ defmodule Nx do
   """
   def as_type(tensor, type) do
     tensor = tensor!(tensor)
-    impl!(tensor).as_type(%{tensor | type: Nx.Type.normalize!(type)}, tensor)
+    new_type = Nx.Type.normalize!(type)
+
+    if tensor.type == new_type do
+      tensor
+    else
+      impl!(tensor).as_type(%{tensor | type: new_type}, tensor)
+    end
   end
 
   @doc """
@@ -5112,9 +5118,4 @@ defmodule Nx do
 
   defp tensor!(number) when is_number(number),
     do: Nx.BinaryTensor.tensor(number, Nx.Type.infer(number), nil)
-
-  defp binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)
-  defp binary_type(a, b) when is_number(a), do: Nx.Type.merge_scalar(b.type, a)
-  defp binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(a.type, b)
-  defp binary_type(a, b), do: Nx.Type.merge(a.type, b.type)
 end

@@ -483,6 +483,34 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "if" do
+    defn if3(a, b, c), do: if(a, do: b, else: c)
+    defn if2(a, b), do: if(a, do: b)
+
+    test "converges types" do
+      assert %T{data: %Expr{op: :if}, shape: {}, type: {:f, 32}} =
+               if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 16}), Nx.tensor(0, type: {:f, 32}))
+
+      assert %T{data: %Expr{op: :if}, shape: {}, type: {:f, 64}} =
+               if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 32}), Nx.tensor(0, type: {:f, 32}))
+
+      assert %T{data: %Expr{op: :if}, shape: {}, type: {:u, 16}} =
+               if2(Nx.tensor(0), Nx.tensor(0, type: {:u, 16}))
+
+      assert %T{data: %Expr{op: :if}, shape: {}, type: {:f, 32}} =
+               if2(Nx.tensor(0), Nx.tensor(0, type: {:f, 32}))
+    end
+
+    test "converges shapes and names" do
+      assert %T{data: %Expr{op: :if}, shape: {2, 2}, names: [:x, :y]} =
+               if3(
+                 Nx.tensor(0),
+                 Nx.tensor([1, 2], names: [:y]),
+                 Nx.tensor([[3], [4]], names: [:x, nil])
+               )
+    end
+  end
+
   describe "Nx.Defn" do
     @defn_compiler Nx.Defn
     defn add_default(a, b), do: {a + b, a - b}
@@ -529,6 +557,26 @@ defmodule Nx.DefnTest do
 
     test "reshape" do
       assert %T{shape: {3, 2}, type: {:s, 64}} = default_reshape(Nx.iota({2, 3}))
+    end
+
+    @defn_compiler Nx.Defn
+    defn default_if3(a, b, c), do: if(a, do: b, else: c)
+
+    test "if" do
+      assert default_if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(2, type: {:f, 32})
+
+      assert default_if3(Nx.tensor(1), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(1, type: {:f, 32})
+
+      assert default_if3(Nx.tensor(2), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(1, type: {:f, 32})
+
+      assert default_if3(Nx.tensor(0), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[3, 3], [4, 4]])
+
+      assert default_if3(Nx.tensor(1), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[1, 2], [1, 2]])
     end
   end
 
