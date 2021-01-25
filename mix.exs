@@ -8,7 +8,8 @@ defmodule EXLA.MixProject do
       elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      compilers: [:elixir_make] ++ Mix.compilers()
+      compilers: [:elixir_make] ++ Mix.compilers(),
+      make_env: %{"MIX_CURRENT_PATH" => File.cwd!()}
     ]
   end
 
