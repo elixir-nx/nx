@@ -217,33 +217,18 @@ defmodule Nx.Defn.Expr do
     expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
   end
 
-  @doc false
-  def iota(shape, opts \\ []) do
-    {out, axis} = iota_out(shape, opts)
+  @impl true
+  def iota(out, axis) do
     expr(out, nil, :iota, [axis])
   end
 
-  @doc false
-  def random_uniform(shape, opts \\ []) do
-    random_uniform(shape, 0.0, 1.0, opts)
-  end
-
-  @doc false
-  def random_uniform(tensor_or_shape, min, max, opts \\ [])
-      when is_number(min) and is_number(max) do
-    out = random_uniform_out(tensor_or_shape, min, max, opts)
+  @impl true
+  def random_uniform(out, min, max) do
     expr(out, nil, :random_uniform, [min, max])
   end
 
-  @doc false
-  def random_normal(shape, opts \\ []) do
-    random_normal(shape, 0.0, 1.0, opts)
-  end
-
-  @doc false
-  def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
-      when is_float(mu) and is_float(sigma) do
-    out = random_normal_out(tensor_or_shape, opts)
+  @impl true
+  def random_normal(out, mu, sigma) do
     expr(out, nil, :random_normal, [mu, sigma])
   end
 

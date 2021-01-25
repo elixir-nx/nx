@@ -459,8 +459,12 @@ defmodule Nx do
   """
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
-    out = random_uniform_out(tensor_or_shape, min, max, opts)
-    Nx.BinaryTensor.random_uniform(out, min, max)
+    assert_keys!(opts, [:type, :names, :backend])
+    shape = Nx.shape(tensor_or_shape)
+    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
+    backend = opts[:backend] || Nx.BinaryTensor
+    backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
   end
 
   @doc """
@@ -542,8 +546,12 @@ defmodule Nx do
   """
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
-    out = random_normal_out(tensor_or_shape, opts)
-    Nx.BinaryTensor.random_normal(out, mu, sigma)
+    assert_keys!(opts, [:type, :names, :backend])
+    shape = Nx.shape(tensor_or_shape)
+    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    type = Nx.Type.normalize!(opts[:type] || {:f, 64})
+    backend = opts[:backend] || Nx.BinaryTensor
+    backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
   end
 
   @doc """
@@ -646,8 +654,18 @@ defmodule Nx do
       >
   """
   def iota(tensor_or_shape, opts \\ []) do
-    {out, axis} = iota_out(tensor_or_shape, opts)
-    Nx.BinaryTensor.iota(out, axis)
+    assert_keys!(opts, [:type, :axis, :names, :backend])
+    shape = Nx.shape(tensor_or_shape)
+    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+    backend = opts[:backend] || Nx.BinaryTensor
+
+    if axis = opts[:axis] do
+      axis = Nx.Shape.normalize_axis(shape, axis, names)
+      backend.iota(%T{type: type, shape: shape, names: names}, axis)
+    else
+      backend.iota(%T{type: type, shape: shape, names: names}, nil)
+    end
   end
 
   @doc """
@@ -5145,11 +5163,20 @@ defmodule Nx do
     impl!(tensor).sort(tensor, tensor, [axis: axis, comparator: comparator])
   end
 
-  ## Type
+  ## Helpers
 
   defp tensor!(%T{} = t),
     do: t
 
   defp tensor!(number) when is_number(number),
     do: Nx.BinaryTensor.tensor(number, Nx.Type.infer(number), nil)
+
+  defp names!(%T{names: names}), do: names
+  defp names!(_), do: nil
+
+  defp assert_keys!(keyword, valid) do
+    for {k, _} <- keyword, k not in valid do
+      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
+    end
+  end
 end

@@ -46,8 +46,9 @@ defmodule Nx.Defn.ExprTest do
     test "with tensors" do
       a = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
       b = Nx.tensor([[1, 2], [1, 2]])
+      c = Nx.iota({2, 2}, backend: Expr)
 
-      assert Nx.argmin(Nx.add(Nx.tanh(Nx.dot(Expr.iota({2, 2}, []), b)), a), tie_break: :high)
+      assert Nx.argmin(Nx.add(Nx.tanh(Nx.dot(c, b)), a), tie_break: :high)
              |> inspect() == """
              #Nx.Tensor<
                Nx.Defn.Expr

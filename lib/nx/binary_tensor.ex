@@ -542,7 +542,7 @@ defmodule Nx.BinaryTensor do
     end
   end
 
-  defp element_wise_bin_op(%{shape: shape, type: type} = out, %{shape: {}} = left, right, fun) do
+  defp element_wise_bin_op(%{type: type} = out, %{shape: {}} = left, right, fun) do
     scalar = Nx.to_scalar(left)
 
     data =
@@ -555,7 +555,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  defp element_wise_bin_op(%{shape: shape, type: type} = out, left, %{shape: {}} = right, fun) do
+  defp element_wise_bin_op(%{type: type} = out, left, %{shape: {}} = right, fun) do
     scalar = Nx.to_scalar(right)
 
     data =

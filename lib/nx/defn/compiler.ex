@@ -18,9 +18,6 @@ defmodule Nx.Defn.Compiler do
   @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> result), keyword) :: result
             when result: Nx.t() | tuple()
 
-  # These operations need to be rewritten to Expr as they don't dispatch to data
-  @expr_ops [:iota, :random_normal, :random_uniform]
-
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:device_read, :device_deallocate, :device_transfer] ++
                    [:to_binary, :to_scalar, :to_flat_list]
@@ -229,20 +226,13 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
-    mod =
-      cond do
-        name in @forbidden_ops ->
-          compile_error!(meta, state, "Nx.#{name}/#{length(args)} is not allowed inside defn")
+    if name in @forbidden_ops do
+      compile_error!(meta, state, "Nx.#{name}/#{length(args)} is not allowed inside defn")
+    end
 
-        name in @expr_ops ->
-          Nx.Defn.Expr
-
-        true ->
-          Nx
-      end
-
+    args = rewrite_nx_args(name, args)
     {args, state} = normalize_list(args, state)
-    {{{:., dot_meta, [mod, name]}, meta, args}, state}
+    {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, name]} = call, meta, args}, state) do
@@ -297,6 +287,26 @@ defmodule Nx.Defn.Compiler do
       "invalid numerical expression: #{Macro.to_string(expr)}"
     )
   end
+
+  ## Rewrite args
+
+  defp rewrite_nx_args(:iota, [t]), do: [t, add_backend([])]
+  defp rewrite_nx_args(:iota, [t, opts]), do: [t, add_backend(opts)]
+
+  defp rewrite_nx_args(:random_uniform, [t]), do: [t, add_backend([])]
+  defp rewrite_nx_args(:random_uniform, [t, opts]), do: [t, add_backend(opts)]
+  defp rewrite_nx_args(:random_uniform, [t, min, max]), do: [t, min, max, add_backend([])]
+  defp rewrite_nx_args(:random_uniform, [t, min, max, opts]), do: [t, min, max, add_backend(opts)]
+  
+  defp rewrite_nx_args(:random_normal, [t]), do: [t, add_backend([])]
+  defp rewrite_nx_args(:random_normal, [t, opts]), do: [t, add_backend(opts)]
+  defp rewrite_nx_args(:random_normal, [t, mu, sigma]), do: [t, mu, sigma, add_backend([])]
+  defp rewrite_nx_args(:random_normal, [t, mu, sigma, opts]), do: [t, mu, sigma, add_backend(opts)]
+
+  defp rewrite_nx_args(_name, args), do: args
+
+  defp add_backend(list) when is_list(list) , do: [backend: Nx.Defn.Expr] ++ list
+  defp add_backend(expr), do: quote(do: Keyword.put(unquote(expr), :backend, Nx.Defn.Expr))
 
   ## Normalize args
 

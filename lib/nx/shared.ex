@@ -154,47 +154,6 @@ defmodule Nx.Shared do
       cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))}
     ]
 
-  ## Creation ops
-
-  @doc """
-  Out tensor for iota.
-  """
-  def iota_out(tensor_or_shape, opts) do
-    assert_keys!(opts, [:type, :axis, :names])
-    shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-
-    if axis = opts[:axis] do
-      axis = Nx.Shape.normalize_axis(shape, axis, names)
-      {%T{type: type, shape: shape, names: names}, axis}
-    else
-      {%T{type: type, shape: shape, names: names}, nil}
-    end
-  end
-
-  @doc """
-  Out tensor for random uniform.
-  """
-  def random_uniform_out(tensor_or_shape, min, max, opts) do
-    assert_keys!(opts, [:type, :names])
-    shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
-    %T{shape: shape, type: type, names: names}
-  end
-
-  @doc """
-  Out tensor for random normal.
-  """
-  def random_normal_out(tensor_or_shape, opts \\ []) do
-    assert_keys!(opts, [:type, :names])
-    shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || {:f, 64})
-    %T{shape: shape, type: type, names: names}
-  end
-
   ## Types
 
   @doc """
@@ -206,21 +165,6 @@ defmodule Nx.Shared do
   def binary_type(a, b), do: Nx.Type.merge(a.type, b.type)
 
   ## Helpers
-
-  @doc """
-  Returns the names of a tensor, if any.
-  """
-  def names!(%T{names: names}), do: names
-  def names!(_), do: nil
-
-  @doc """
-  Asserts the given keys.
-  """
-  def assert_keys!(keyword, valid) do
-    for {k, _} <- keyword, k not in valid do
-      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
-    end
-  end
 
   @doc """
   Gets the implementation of a tensor.
