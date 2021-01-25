@@ -27,6 +27,12 @@ all: symlinks
 	mkdir -p priv
 	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_host.so $(EXLA_SO)
 
+symlinks: $(TENSORFLOW_DIR)
+  rm -rf $(TENSORFLOW_EXLA_DIR)
+  ln -s $(EXLA_DIR) $(TENSORFLOW_EXLA_DIR)
+  rm -rf $(ERTS_SYM_DIR)
+  ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
+
 # Print Tensorflow Dir
 PTD:
 	@ echo $(TENSORFLOW_DIR)
