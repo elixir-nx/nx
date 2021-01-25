@@ -5,7 +5,6 @@ TEMP ?= $(HOME)/.cache
 # ERTS_INCLUDE_DIR
 
 # Public configuration
-EXLA_TARGET ?= host # can also be cuda
 EXLA_MODE ?= opt # can also be dbg
 EXLA_CACHE ?= $(TEMP)/exla
 EXLA_TENSORFLOW_GIT_REPO ?= https://github.com/tensorflow/tensorflow.git

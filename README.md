@@ -108,28 +108,17 @@ Subsequent commands should be much faster.
 
 You can use the following env vars to customize your build:
 
-  * `EXLA_TARGET` - controls to compile with CPU-only (default) or CUDA-enabled, example: `EXLA_TARGET=cuda`
+  * `EXLA_FLAGS` - controls compilation with GPU support, see next section
 
   * `EXLA_MODE` - controls to compile `opt` (default) artifacts or `dbg`, example: `EXLA_MODE=dbg`
 
-  * `EXLA_CACHE` - control where to store Tensorflow checkouts and builds
+  * `EXLA_CACHE` - controls where to store Tensorflow checkouts and builds
 
   * `XLA_FLAGS` - controls XLA-specific options, see: [tensorflow/compiler/xla/debug_options_flags.cc](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/debug_options_flags.cc) for list of flags
 
 ### GPU Support
 
 To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1 and cuDNN 7 and 8. You can check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
-
-## Contributing
-
-### Building locally
-
-EXLA is a regular Elixir project, therefore, to run it locally:
-
-```shell
-mix deps.get
-mix test
-```
 
 In order to link-in the appropriate dependencies for your platform's accelerator, you need to set the appropriate configuration flags in the `EXLA_FLAGS` environment variable.
 
@@ -146,6 +135,19 @@ export EXLA_FLAGS=--config=rocm --action_env=HIP_PLATFORM=hcc
 ```
 
 When building EXLA locally, it's recommended you set these flags in `.bash_profile` or a similar configuration file so you don't need to export them every time you need to build EXLA.
+
+## Contributing
+
+### Building locally
+
+EXLA is a regular Elixir project, therefore, to run it locally:
+
+```shell
+mix deps.get
+mix test
+```
+
+In order to run tests on a specific device, use the `EXLA_TARGET` environment variable, which is a dev-only variable for this project (it has no effect when using EXLA as a dependency). For example, `EXLA_TARGET=cuda` or `EXLA_TARGET=rocm`.
 
 ### Building with Docker
 
@@ -207,7 +209,7 @@ iex -S mix
 Or you can run an example:
 
 ```shell
-mix run examples/basic_addition.exs
+mix run examples/regression.exs
 ```
 
 To run tests:
