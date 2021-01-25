@@ -202,6 +202,40 @@ defmodule Nx.Defn.Compiler do
     {{:fn, meta, clauses}, state}
   end
 
+  defp normalize({:cond, _meta, [[do: clauses]]}, state) do
+    {clauses, state} =
+      Enum.map_reduce(clauses, state, fn {:->, meta, [[condition], expr]}, state ->
+        {condition, state} = normalize(condition, state)
+        {expr, state} = normalize(expr, state)
+        {{meta, condition, expr}, state}
+      end)
+
+    [last | rest] = Enum.reverse(clauses)
+
+    acc =
+      case last do
+        {_meta, atom, expr} when is_atom(atom) and atom != nil and atom != false ->
+          expr
+
+        {meta, other, _} ->
+          compile_error!(
+            meta,
+            state,
+            "expected the last clause of cond to match on an atom, " <>
+              "such as true or :otherwise, got: #{Macro.to_string(other)}"
+          )
+      end
+
+    ifs =
+      Enum.reduce(rest, acc, fn {_meta, condition, expr}, acc ->
+        quote do
+          Nx.Defn.Expr.if(unquote(condition), unquote(expr), unquote(acc))
+        end
+      end)
+
+    {ifs, state}
+  end
+
   defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
     pair = {name, length(args)}
 
@@ -230,7 +264,7 @@ defmodule Nx.Defn.Compiler do
       compile_error!(meta, state, "Nx.#{name}/#{length(args)} is not allowed inside defn")
     end
 
-    args = rewrite_nx_args(name, args)
+    args = rewrite_args(name, args)
     {args, state} = normalize_list(args, state)
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
@@ -281,31 +315,33 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp invalid_numerical_expression!(expr, state) do
+    string = expr |> Macro.to_string() |> String.replace("\n", "\n    ")
+
     compile_error!(
       maybe_meta(expr),
       state,
-      "invalid numerical expression: #{Macro.to_string(expr)}"
+      "invalid numerical expression:\n\n    #{string}\n"
     )
   end
 
   ## Rewrite args
 
-  defp rewrite_nx_args(:iota, [t]), do: [t, add_backend([])]
-  defp rewrite_nx_args(:iota, [t, opts]), do: [t, add_backend(opts)]
+  defp rewrite_args(:iota, [t]), do: [t, add_backend([])]
+  defp rewrite_args(:iota, [t, opts]), do: [t, add_backend(opts)]
 
-  defp rewrite_nx_args(:random_uniform, [t]), do: [t, add_backend([])]
-  defp rewrite_nx_args(:random_uniform, [t, opts]), do: [t, add_backend(opts)]
-  defp rewrite_nx_args(:random_uniform, [t, min, max]), do: [t, min, max, add_backend([])]
-  defp rewrite_nx_args(:random_uniform, [t, min, max, opts]), do: [t, min, max, add_backend(opts)]
-  
-  defp rewrite_nx_args(:random_normal, [t]), do: [t, add_backend([])]
-  defp rewrite_nx_args(:random_normal, [t, opts]), do: [t, add_backend(opts)]
-  defp rewrite_nx_args(:random_normal, [t, mu, sigma]), do: [t, mu, sigma, add_backend([])]
-  defp rewrite_nx_args(:random_normal, [t, mu, sigma, opts]), do: [t, mu, sigma, add_backend(opts)]
+  defp rewrite_args(:random_uniform, [t]), do: [t, add_backend([])]
+  defp rewrite_args(:random_uniform, [t, opts]), do: [t, add_backend(opts)]
+  defp rewrite_args(:random_uniform, [t, min, max]), do: [t, min, max, add_backend([])]
+  defp rewrite_args(:random_uniform, [t, min, max, opts]), do: [t, min, max, add_backend(opts)]
 
-  defp rewrite_nx_args(_name, args), do: args
+  defp rewrite_args(:random_normal, [t]), do: [t, add_backend([])]
+  defp rewrite_args(:random_normal, [t, opts]), do: [t, add_backend(opts)]
+  defp rewrite_args(:random_normal, [t, mu, sigma]), do: [t, mu, sigma, add_backend([])]
+  defp rewrite_args(:random_normal, [t, mu, sigma, opts]), do: [t, mu, sigma, add_backend(opts)]
 
-  defp add_backend(list) when is_list(list) , do: [backend: Nx.Defn.Expr] ++ list
+  defp rewrite_args(_name, args), do: args
+
+  defp add_backend(list) when is_list(list), do: [backend: Nx.Defn.Expr] ++ list
   defp add_backend(expr), do: quote(do: Keyword.put(unquote(expr), :backend, Nx.Defn.Expr))
 
   ## Normalize args

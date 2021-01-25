@@ -1127,11 +1127,13 @@ defmodule Nx.BinaryTensor do
                   match_types [input_type] do
                     <<_::size(current_element_offset)-bitstring, match!(x, 0), _::bitstring>> =
                       data
+
                     <<_::size(current_element_opp_offset)-bitstring, match!(y, 0), _::bitstring>> =
                       data
 
                     if x != y do
-                      raise ArgumentError, "matrix must be symmetric, a matrix is symmetric iff X = X.T"
+                      raise ArgumentError,
+                            "matrix must be symmetric, a matrix is symmetric iff X = X.T"
                     end
 
                     fun = fn <<match!(left, 0)>>, <<match!(right, 0)>>, acc ->
@@ -1390,13 +1392,18 @@ defmodule Nx.BinaryTensor do
 
     comparator =
       case opts[:comparator] do
-        :desc -> &</2
-        :asc -> &>/2
-        fun -> fn a, b ->
-          a = binary_to_number(a, type)
-          b = binary_to_number(b, type)
-          Nx.to_scalar(fun.(a, b)) != 0
-        end
+        :desc ->
+          &</2
+
+        :asc ->
+          &>/2
+
+        fun ->
+          fn a, b ->
+            a = binary_to_number(a, type)
+            b = binary_to_number(b, type)
+            Nx.to_scalar(fun.(a, b)) != 0
+          end
       end
 
     axis = opts[:axis]
@@ -1410,6 +1417,7 @@ defmodule Nx.BinaryTensor do
 
       _ ->
         permutation = Nx.axes(t)
+
         permutation =
           permutation
           |> List.delete(axis)
@@ -1439,6 +1447,7 @@ defmodule Nx.BinaryTensor do
               x
             end
           end
+
         IO.iodata_to_binary(Enum.sort(data, comparator))
       end
 

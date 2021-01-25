@@ -3,7 +3,7 @@ defmodule Nx.Defn.Kernel do
   All imported functionality available inside `defn` blocks.
   """
 
-  @special_forms [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2]
+  @special_forms [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
 
   @doc """
   Bring in `Nx.Defn.Kernel` functionality.
@@ -84,6 +84,41 @@ defmodule Nx.Defn.Kernel do
 
   """
   defmacro require(module, opts \\ []), do: special_form!([module, opts])
+
+  @doc """
+  Evaluates the expression corresponding to the first
+  clause that evaluates to a truthy value.
+
+  It has the format of:
+
+      cond do
+        condition1 ->
+          expr1
+
+        condition2 ->
+          expr2
+
+        :otherwise ->
+          expr3
+      end
+
+  The conditions must be a scalar. Zero is considered false,
+  any other number is considered true.
+
+  All clauses are normalized to the same type and are broadcast
+  to the same shape. The last condition must always evaluate to
+  an atom, typically `:otherwise`.
+
+  ## Examples
+
+      cond do
+        Nx.all?(Nx.greater(a, 0)) -> b *
+        Nx.all?(Nx.less(a, 0)) -> b + c
+        true -> b - c
+      end
+
+  """
+  defmacro cond(opts), do: special_form!([opts])
 
   defp special_form!(_args),
     do: raise("special forms must not be imported and exist for documentation purposes")
@@ -536,7 +571,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Provides an if/2 macro.
+  Provides conditional expressions.
 
   The first argument must be a scalar. Zero is considered false,
   any other number is considered true.
@@ -554,7 +589,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   In case else is not given, it is assumed to be 0 with the
-  same as the do clause.
+  same as the do clause. If you want to nest multiple conditionals,
+  see `cond/1` instead.
   """
   def if(pred, do_else)
 

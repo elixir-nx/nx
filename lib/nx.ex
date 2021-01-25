@@ -5016,7 +5016,9 @@ defmodule Nx do
   Performs a cholesky decomposition of a square matrix.
 
   The matrix must be positive-definite and either Hermitian
-  if complex or symmetric if real.
+  if complex or symmetric if real. An error is raised by the
+  default backend if those conditions are not met. Other
+  backends may emit undefined behaviour.
 
   ### Examples
 
@@ -5160,7 +5162,7 @@ defmodule Nx do
     axis = opts[:axis] || 0
     axis = Nx.Shape.normalize_axis(shape, axis, names)
 
-    impl!(tensor).sort(tensor, tensor, [axis: axis, comparator: comparator])
+    impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
   ## Helpers

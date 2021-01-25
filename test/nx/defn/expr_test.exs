@@ -15,12 +15,6 @@ defmodule Nx.Defn.ExprTest do
       {[[arg1, arg2], 0], acc} = Expr.traverse_args(expr, [], &{&1, [&1.data.id | &2]})
       assert acc == [arg2.data.id, arg1.data.id]
     end
-
-    test "handles if" do
-      expr = Expr.if(Nx.tensor(1), Nx.tensor(2), Nx.tensor(3))
-      {[arg1, _arg2, _arg3], acc} = Expr.traverse_args(expr, [], &{&1, [&1.data.id | &2]})
-      assert acc == [arg1.data.id]
-    end
   end
 
   describe "inspect" do

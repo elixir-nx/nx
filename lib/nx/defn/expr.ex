@@ -61,18 +61,13 @@ defmodule Nx.Defn.Expr do
   @doc """
   Helper to traverse the expression arguments of an expression.
 
-  It handles special cases such as concatenate, fun, if, and
-  others.
+  Note function expressions are never traversed, as they shouldn't
+  be modified as that would ultimately change the function itself.
   """
   def traverse_args(expr, acc, fun)
 
   def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
     {args, acc}
-  end
-
-  def traverse_args(%T{data: %Expr{op: :if, args: [pred | args]}}, acc, fun) do
-    {pred, acc} = fun.(pred, acc)
-    {[pred | args], acc}
   end
 
   def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do

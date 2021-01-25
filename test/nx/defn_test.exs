@@ -511,6 +511,61 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "cond" do
+    defn cond4(a, b, c, d) do
+      cond do
+        Nx.greater(a, 0) -> b
+        Nx.less(a, 0) -> c
+        true -> d
+      end
+    end
+
+    test "compiles to ifs" do
+      assert %T{data: %Expr{op: :if, args: [pred, on_true, on_false]}, shape: {}, type: {:s, 64}} =
+               cond4(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2), Nx.tensor(3))
+
+      assert %T{data: %Expr{op: :greater}} = pred
+      assert %T{data: %Expr{op: :parameter}} = on_true
+      assert %T{data: %Expr{op: :if, args: [pred, on_true, on_false]}} = on_false
+      assert %T{data: %Expr{op: :less}} = pred
+      assert %T{data: %Expr{op: :parameter}} = on_true
+      assert %T{data: %Expr{op: :parameter}} = on_false
+    end
+
+    test "converges types" do
+      assert %T{data: %Expr{op: :if}, shape: {}, type: {:s, 32}} =
+               cond4(
+                 Nx.tensor(0),
+                 Nx.tensor(1, type: {:s, 8}),
+                 Nx.tensor(2, type: {:s, 16}),
+                 Nx.tensor(3, type: {:s, 32})
+               )
+    end
+
+    test "converges shapes and names" do
+      assert %T{data: %Expr{op: :if}, shape: {2, 2}, names: [:x, :y]} =
+               cond4(
+                 Nx.tensor(0),
+                 Nx.tensor([1, 2], names: [:y]),
+                 Nx.tensor([[3], [4]], names: [:x, nil]),
+                 Nx.tensor(5)
+               )
+    end
+
+    test "raises if cond is missing last atom clause" do
+      assert_raise CompileError, ~r"expected the last clause of cond to match on an atom", fn ->
+        defmodule InvalidCond do
+          defn badcond(a) do
+            cond do
+              Nx.any?(a) -> +a
+              Nx.all?(a) -> -a
+            end
+          end
+        end
+      end
+    end
+  end
+
   describe "Nx.Defn" do
     @defn_compiler Nx.Defn
     defn add_default(a, b), do: {a + b, a - b}

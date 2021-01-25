@@ -673,6 +673,24 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "cond" do
+    defn cond3(a, b, c) do
+      d = Nx.sum(a)
+
+      cond do
+        Nx.all?(Nx.greater(a, 0)) -> b * c * d
+        Nx.all?(Nx.less(a, 0)) -> b + c + d
+        true -> -b - c - d
+      end
+    end
+
+    test "computes cond" do
+      assert cond3(Nx.tensor([-1, 0, 1]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(-5.0)
+      assert cond3(Nx.tensor([1, 2, 3]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(36.0)
+      assert cond3(Nx.tensor([-1, -2, -3]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(-1.0)
+    end
+  end
+
   describe "map" do
     defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
     defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
@@ -812,7 +830,9 @@ defmodule EXLA.DefnTest do
     end
 
     test "computes the bitwise and on given axes" do
-      assert all_axis_0?(Nx.tensor([[-1, 0, 1], [2, 3, 4]])) == Nx.tensor([1, 0, 1], type: {:u, 8})
+      assert all_axis_0?(Nx.tensor([[-1, 0, 1], [2, 3, 4]])) ==
+               Nx.tensor([1, 0, 1], type: {:u, 8})
+
       assert all_axis_1?(Nx.tensor([[-1, 0, 1], [2, 3, 4]])) == Nx.tensor([0, 1], type: {:u, 8})
     end
   end
@@ -1765,18 +1785,21 @@ defmodule EXLA.DefnTest do
     end
 
     test "sorts a 3d tensor along the 2nd axis" do
-      assert sort2(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]])) ==
-        Nx.tensor([[
-            [2, 4, 5],
-            [2, 3, 5],
-            [0, 2, 5]
-          ],
-          [
-            [1, 8, 9],
-            [1, 2, 3],
-            [1, 2, 4]
-          ]
-        ])
+      assert sort2(
+               Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]])
+             ) ==
+               Nx.tensor([
+                 [
+                   [2, 4, 5],
+                   [2, 3, 5],
+                   [0, 2, 5]
+                 ],
+                 [
+                   [1, 8, 9],
+                   [1, 2, 3],
+                   [1, 2, 4]
+                 ]
+               ])
     end
   end
 
