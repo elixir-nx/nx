@@ -69,7 +69,7 @@ defmodule Nx.BinaryTensor do
     {[length(list) | dimensions], Enum.reduce(list, acc, &[number_to_binary(&1, type) | &2])}
   end
 
-  @doc false
+  @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max) do
     gen =
       case type do
@@ -82,7 +82,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  @doc false
+  @impl true
   def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
     data =
       for _ <- 1..Nx.size(shape),
@@ -92,7 +92,7 @@ defmodule Nx.BinaryTensor do
     from_binary(out, data)
   end
 
-  @doc false
+  @impl true
   def iota(%{shape: {}, type: type} = out, nil) do
     from_binary(out, number_to_binary(0, type))
   end
@@ -540,6 +540,32 @@ defmodule Nx.BinaryTensor do
     def unquote(fun)(out, left, right) do
       element_wise_bin_op(out, left, right, &(unquote(capture) / 3))
     end
+  end
+
+  defp element_wise_bin_op(%{shape: shape, type: type} = out, %{shape: {}} = left, right, fun) do
+    scalar = Nx.to_scalar(left)
+
+    data =
+      match_types [right.type, type] do
+        for <<match!(x, 0) <- Nx.to_binary(right)>>, into: <<>> do
+          <<write!(fun.(type, scalar, read!(x, 0)), 1)>>
+        end
+      end
+
+    from_binary(out, data)
+  end
+
+  defp element_wise_bin_op(%{shape: shape, type: type} = out, left, %{shape: {}} = right, fun) do
+    scalar = Nx.to_scalar(right)
+
+    data =
+      match_types [left.type, type] do
+        for <<match!(x, 0) <- Nx.to_binary(left)>>, into: <<>> do
+          <<write!(fun.(type, read!(x, 0), scalar), 1)>>
+        end
+      end
+
+    from_binary(out, data)
   end
 
   defp element_wise_bin_op(%{shape: shape, type: type} = out, left, right, fun) do

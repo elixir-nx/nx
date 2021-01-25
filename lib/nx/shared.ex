@@ -156,6 +156,9 @@ defmodule Nx.Shared do
 
   ## Creation ops
 
+  @doc """
+  Out tensor for iota.
+  """
   def iota_out(tensor_or_shape, opts) do
     assert_keys!(opts, [:type, :axis, :names])
     shape = Nx.shape(tensor_or_shape)
@@ -170,6 +173,9 @@ defmodule Nx.Shared do
     end
   end
 
+  @doc """
+  Out tensor for random uniform.
+  """
   def random_uniform_out(tensor_or_shape, min, max, opts) do
     assert_keys!(opts, [:type, :names])
     shape = Nx.shape(tensor_or_shape)
@@ -178,6 +184,9 @@ defmodule Nx.Shared do
     %T{shape: shape, type: type, names: names}
   end
 
+  @doc """
+  Out tensor for random normal.
+  """
   def random_normal_out(tensor_or_shape, opts \\ []) do
     assert_keys!(opts, [:type, :names])
     shape = Nx.shape(tensor_or_shape)

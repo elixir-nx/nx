@@ -49,12 +49,65 @@ defmodule Nx do
 
   ## Creating tensors
 
-  TODO: Summarize functions for creating tensors: tensor, iota,
-  random_*, broadcast.
+  The main APIs for creating tensors are `tensor/2`, `from_binary/2`,
+  `iota/2`, `random_uniform/2`, `random_normal/2`, and `broadcast/3`.
 
   ## Broadcasting
 
-  TODO: Write docs.
+  Broadcasting allows operations on two tensors of different shapes
+  to match. For example, most often operations between tensors have
+  the same shape:
+
+      iex> a = Nx.tensor([1, 2, 3])
+      iex> b = Nx.tensor([10, 20, 30])
+      iex> Nx.add(a, b)
+      #Nx.Tensor<
+        s64[3]
+        [11, 22, 33]
+      >
+
+  Now let's imagine you want to multiply a large tensor, dimensions
+  1000x1000x1000, by 2. If you had to create a similarly large tensor
+  only to perform this operation, it would be inneficient. Therefore,
+  you can simply multiply this large tensor by the scalar 2, and Nx
+  will propagate its dimensions at the time the operation happens,
+  without allocating a large intermediate tensor:
+
+      iex> Nx.multiply(Nx.tensor([1, 2, 3]), 2)
+      #Nx.Tensor<
+        s64[3]
+        [2, 4, 6]
+      >
+
+  In practice, brodcasting is not restricted only to scalars, it
+  is a general algorithm that applies to all dimensions of a tensor.
+  When broadcasting, `Nx` compares the shapes of the two tensors,
+  starting with the trailing ones, such that:
+
+    * If the dimensions have equal size, then they are compatible
+
+    * If one of the dimensions have size of 1, it is "broadcast"
+      to match the dimension of the other
+
+  In case on tensor has more dimensions than the other, the missing
+  dimensions are considered to be of size one. Here are some examples
+  of how broadcast would work when multiplying two tensors with the
+  following shapes:
+
+      s64[3] * s64
+      #=> s64[3]
+
+      s64[255][255][3] * s64[3]
+      #=> s64[255][255][3]
+
+      s64[2][1] * s[1][2]
+      #=> s64[2][2]
+
+      s64[5][1][4][1] * s64[3][4][5]
+      #=> s64[5][3][4][5]
+
+  If any of the dimensions do not match or are not 1, an error is
+  raised.
 
   ## Devices
 

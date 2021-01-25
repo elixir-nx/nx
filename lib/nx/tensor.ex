@@ -31,6 +31,10 @@ defmodule Nx.Tensor do
   @enforce_keys [:type, :shape, :names]
   defstruct [:data, :type, :shape, :names]
 
+  @callback iota(t, axis | nil) :: t
+  @callback random_uniform(t, number, number) :: t
+  @callback random_normal(t, mu :: float, sigma :: float) :: t
+
   @callback to_binary(t) :: binary
   @callback device_read(t) :: t
   @callback device_deallocate(t) :: t

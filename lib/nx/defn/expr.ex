@@ -28,14 +28,6 @@ defmodule Nx.Defn.Expr do
 
     * `if(pred, on_true, on_false)`
 
-  ### Tensor creation nodes
-
-  Nodes that create tensors, mirroring the `Nx` API:
-
-    * `iota(shape, axis)`
-    * `random_uniform(shape, min, max, opts)`
-    * `random_normal(shape, mu, sigma, opts)`
-
   """
 
   alias Nx.Defn.Expr
