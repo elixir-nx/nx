@@ -131,6 +131,22 @@ mix deps.get
 mix test
 ```
 
+In order to link-in the appropriate dependencies for your platform's accelerator, you need to set the appropriate configuration flags in the `EXLA_FLAGS` environment variable.
+
+To link in CUDA dependencies:
+
+```
+export EXLA_FLAGS=--config=cuda
+```
+
+To link in ROCm dependencies:
+
+```
+export EXLA_FLAGS=--config=rocm --action_env=HIP_PLATFORM=hcc
+```
+
+When building EXLA locally, it's recommended you set these flags in `.bash_profile` or a similar configuration file so you don't need to export them every time you need to build EXLA.
+
 ### Building with Docker
 
 The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). For GPU support, you'll also need to set up the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker).
@@ -159,20 +175,22 @@ docker run -it \
   -v $PWD:$PWD \
   -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
   -e EXLA_CACHE=$PWD/tmp/exla_cache \
+  -e EXLA_FLAGS=--config=cuda
   -e EXLA_TARGET=cuda \
   -w $PWD \
   --gpus=all \
   --rm exla:cuda10.1 bash
 ```
 
-With ROCm enables:
+With ROCm enabled:
 
 ```shell
 docker run -it \
   -v $PWD:$PWD \
   -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
   -e EXLA_CACHE=$PWD/tmp/exla_cache \
-  -e EXLA_TARGET=rocm \
+  -e EXLA_FLAGS="--config=rocm --action_env=HIP_PLATFORM=hcc" \
+  -e EXLA_TARGET=rocm
   -w $PWD \
   --device=/dev/kfd \
   --device=/dev/dri \
