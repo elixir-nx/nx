@@ -536,6 +536,42 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Provides an if/2 macro.
+
+  The first argument must be a scalar. Zero is considered false,
+  any other number is considered true.
+
+  The second argument is a keyword list with `do` and `else`
+  blocks. The sides are broadcast to return the same shape
+  and normalized to return the same type.
+
+  ## Examples
+
+      if Nx.any?(Nx.equal(t, 0)) do
+        0.0
+      else
+        1 / t
+      end
+
+  In case else is not given, it is assumed to be 0 with the
+  same as the do clause.
+  """
+  def if(pred, do_else)
+
+  def if(pred, do: on_true) do
+    Nx.Defn.Expr.if(pred, on_true, 0)
+  end
+
+  def if(pred, do: on_true, else: on_false) do
+    Nx.Defn.Expr.if(pred, on_true, on_false)
+  end
+
+  def if(_pred, other) do
+    raise ArgumentError,
+          "expected second argument to \"if\" to be a do/else block, got: #{inspect(other)}"
+  end
+
+  @doc """
   Reads a module attribute at compilation time.
 
   It is useful to inject code constants into `defn`.

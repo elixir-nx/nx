@@ -632,6 +632,29 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "if" do
+    defn grad_if(t), do: grad(t, if(t + 1, do: Nx.power(t, 2), else: Nx.power(t, 3)))
+
+    defn grad_sum_if(t),
+      do: grad(t, Nx.sum(if(Nx.all?(t), do: Nx.power(t, 2), else: Nx.power(t, 3))))
+
+    defn grad_if_sum(t),
+      do: grad(t, if(Nx.all?(t), do: Nx.sum(Nx.power(t, 2)), else: Nx.sum(Nx.power(t, 3))))
+
+    test "computes gradient" do
+      assert grad_if(Nx.tensor(1)) == Nx.tensor(2.0)
+      assert grad_if(Nx.tensor(-1)) == Nx.tensor(3.0)
+    end
+
+    test "computes gradient with sum" do
+      assert grad_sum_if(Nx.tensor([1, 2, 3])) == Nx.tensor([2.0, 4.0, 6.0])
+      assert grad_sum_if(Nx.tensor([-1, 0, 1])) == Nx.tensor([3.0, 0.0, 3.0])
+
+      assert grad_if_sum(Nx.tensor([1, 2, 3])) == Nx.tensor([2.0, 4.0, 6.0])
+      assert grad_if_sum(Nx.tensor([-1, 0, 1])) == Nx.tensor([3.0, 0.0, 3.0])
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, Nx.sum(t))
     defn grad_mean_full(t), do: grad(t, Nx.mean(t))

@@ -69,6 +69,14 @@ defmodule Nx.Defn.Grad do
     end
   end
 
+  ## Control flow
+
+  defp grad(:if, [pred, on_true, on_false], _ans, g, cache) do
+    {on_true, cache} = to_grad(on_true, g, cache)
+    {on_false, cache} = to_grad(on_false, g, cache)
+    {Expr.if(pred, on_true, on_false), cache}
+  end
+
   ## Binary broadcast gradients
 
   defp grad(:add, [x, y], ans, g, cache) do
@@ -202,7 +210,7 @@ defmodule Nx.Defn.Grad do
     g =
       case broadcast_axes do
         [] -> g
-        _ -> Nx.broadcast(g, x.shape, Nx.axes(x.shape) -- broadcast_axes)
+        _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- broadcast_axes)
       end
 
     to_grad(x, g, cache)
@@ -212,7 +220,7 @@ defmodule Nx.Defn.Grad do
     g =
       case axes do
         [] -> g
-        _ -> Nx.broadcast(g, x.shape, Nx.axes(x.shape) -- axes)
+        _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- axes)
       end
 
     to_grad(x, g, cache)
@@ -278,7 +286,7 @@ defmodule Nx.Defn.Grad do
     g =
       if axes = opts[:axes] do
         axes = Nx.axes(x.shape) -- axes
-        Nx.broadcast(g, x, axes)
+        Nx.broadcast(g, x, axes: axes)
       else
         Nx.broadcast(g, x)
       end

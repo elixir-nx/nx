@@ -10,19 +10,31 @@ defmodule Nx.Defn.Expr do
     * `:op` - the operation name
     * `:args` - the operation arguments
 
-  All `:op` nodes translate to `Nx.Tensor` operations, except for:
+  ## Nodes
 
-    * `:parameter` - holds a parameter.
-      `:args` is a one element index to the actual parameter.
+  Most `:op` nodes translate to `Nx.Tensor` callback, although
+  some special nodes exist:
 
-    * `:tensor` - holds a tensor.
-      `:args` is a one element list with the tensor.
+  ### Basic nodes
 
-    * `:fun` - holds a function.
-      `:args` is a three element list with the parameters of
-      the function, the function expression, and the anonymous
-      function used to build the expression. The shape of the
-      tensor holding the function is the shape of the output.
+  Those nodes represents parameters, tensors, and functions
+  which exist within Expr:
+
+    * `parameter(integer)`
+    * `tensor(Nx.Tensor.t)`
+    * `fun(parameters, t, fun)`
+
+  ### Control-flow nodes
+
+    * `if(pred, on_true, on_false)`
+
+  ### Tensor creation nodes
+
+  Nodes that create tensors, mirroring the `Nx` API:
+
+    * `iota(shape, axis)`
+    * `random_uniform(shape, min, max, opts)`
+    * `random_normal(shape, mu, sigma, opts)`
 
   """
 
@@ -48,23 +60,39 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates parameters for defn anonymous functions.
+  Creates a parameter based on the given tensor expression.
   """
-  def parameter(context, type, shape, pos) when is_integer(pos) and pos >= 0 do
-    names = List.duplicate(nil, tuple_size(shape))
-    expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
+  def parameter(tensor, pos) when is_integer(pos) and pos >= 0 do
+    expr(tensor, tensor.data.context, :parameter, [pos])
   end
 
   @doc """
-  Creates a function expression.
+  Helper to traverse the expression arguments of an expression.
 
-  The `args` are used to precompute the expression of the fun.
-  A handler of funs can choose to either work with the expressions
-  directly or by invoking the underlying fun.
+  It handles special cases such as concatenate, fun, if, and
+  others.
   """
-  def fun(args, fun) when is_function(fun, length(args)) do
-    out = to_expr(apply(fun, args))
-    expr(out, out.data.context, :fun, [args, out, fun])
+  def traverse_args(expr, acc, fun)
+
+  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
+    {args, acc}
+  end
+
+  def traverse_args(%T{data: %Expr{op: :if, args: [pred | args]}}, acc, fun) do
+    {pred, acc} = fun.(pred, acc)
+    {[pred | args], acc}
+  end
+
+  def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
+    {list, acc} = Enum.map_reduce(list, acc, fun)
+    {[list | args], acc}
+  end
+
+  def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do
+    Enum.map_reduce(args, acc, fn
+      %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
+      arg, acc -> {arg, acc}
+    end)
   end
 
   ## Nx.Defn dynamic callbacks
@@ -159,7 +187,43 @@ defmodule Nx.Defn.Expr do
           "defn must return an expression tensor or a tuple, got: #{inspect(other)}"
   end
 
+  ## Control flow ops
+
+  @doc false
+  def if(pred, true_expr, false_expr) do
+    type = binary_type(true_expr, false_expr)
+    {[pred, true_expr, false_expr], context} = to_exprs([pred, true_expr, false_expr])
+
+    if pred.shape != {} do
+      raise "pred must be a scalar tensor, got: #{inspect(pred.shape)}"
+    end
+
+    %T{shape: true_shape, names: true_names} = true_expr
+    %T{shape: false_shape, names: false_names} = false_expr
+
+    {shape, names} = Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
+    out = %{pred | type: type, shape: shape, names: names}
+
+    true_expr =
+      true_expr
+      |> Nx.broadcast(out)
+      |> Nx.as_type(type)
+
+    false_expr =
+      false_expr
+      |> Nx.broadcast(out)
+      |> Nx.as_type(type)
+
+    expr(out, context, :if, [pred, true_expr, false_expr])
+  end
+
   ## Creation ops
+
+  @doc false
+  def parameter(context, type, shape, pos) do
+    names = List.duplicate(nil, tuple_size(shape))
+    expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
+  end
 
   @doc false
   def iota(shape, opts \\ []) do
@@ -237,7 +301,7 @@ defmodule Nx.Defn.Expr do
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, fun)
+    fun = to_fun(args, fun)
 
     if fun.shape != {} do
       raise "reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -257,7 +321,7 @@ defmodule Nx.Defn.Expr do
       ) do
     args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, fun)
+    fun = to_fun(args, fun)
 
     if fun.shape != {} do
       raise "reduce_window function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -270,7 +334,7 @@ defmodule Nx.Defn.Expr do
   def map(%{type: type} = out, tensor, fun) do
     args = [parameter(:map, type, {}, 0)]
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :map, [tensor, fun(args, fun)])
+    expr(out, tensor.data.context, :map, [tensor, to_fun(args, fun)])
   end
 
   @impl true
@@ -360,7 +424,7 @@ defmodule Nx.Defn.Expr do
 
     args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
     comparator = to_nx_comparator(comparator)
-    fun = fun(args, comparator)
+    fun = to_fun(args, comparator)
 
     if fun.shape != {} do
       raise "sort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -376,6 +440,7 @@ defmodule Nx.Defn.Expr do
   defp to_nx_comparator(:desc), do: &Nx.less/2
   defp to_nx_comparator(:asc), do: &Nx.greater/2
   defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
+
   defp to_nx_comparator(_),
     do: "comparator must be either :desc or :asc or a function with arity 2"
 
@@ -410,6 +475,11 @@ defmodule Nx.Defn.Expr do
 
       {expr, context || acc}
     end)
+  end
+
+  defp to_fun(args, fun) when is_function(fun, length(args)) do
+    out = to_expr(apply(fun, args))
+    expr(out, out.data.context, :fun, [args, out, fun])
   end
 
   ## Undefined

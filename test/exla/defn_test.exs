@@ -635,6 +635,44 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "if" do
+    defn if3(a, b, c), do: if(a, do: b, else: c)
+
+    test "one param per branch" do
+      assert if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(2, type: {:f, 32})
+
+      assert if3(Nx.tensor(1), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(1, type: {:f, 32})
+
+      assert if3(Nx.tensor(2), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(1, type: {:f, 32})
+
+      assert if3(Nx.tensor(0), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[3, 3], [4, 4]])
+
+      assert if3(Nx.tensor(1), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[1, 2], [1, 2]])
+    end
+
+    defn if_params(a, b, c), do: if(a, do: b + c, else: b - c)
+
+    test "two params per branch" do
+      assert if_params(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(-1)
+      assert if_params(Nx.tensor(1), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(3)
+    end
+
+    defn if_shared(a, b, c) do
+      d = b + c
+      if a, do: 2 * d * a, else: -1
+    end
+
+    test "shared params between pred+branch and no params" do
+      assert if_shared(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(-1)
+      assert if_shared(Nx.tensor(2), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(12)
+    end
+  end
+
   describe "map" do
     defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
     defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
@@ -1298,8 +1336,8 @@ defmodule EXLA.DefnTest do
       end
     end
 
-    defn broadcast_with_axes_2(t), do: Nx.broadcast(t, {3, 2}, [0])
-    defn broadcast_with_axes_3(t), do: Nx.broadcast(t, {2, 3, 2}, [1])
+    defn broadcast_with_axes_2(t), do: Nx.broadcast(t, {3, 2}, axes: [0])
+    defn broadcast_with_axes_3(t), do: Nx.broadcast(t, {2, 3, 2}, axes: [1])
 
     test "with axes" do
       assert broadcast_with_axes_2(Nx.tensor([1, 2, 3])) == Nx.tensor([[1, 1], [2, 2], [3, 3]])

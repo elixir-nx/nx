@@ -1340,11 +1340,11 @@ defmodule Nx.BinaryTensor do
     %{type: output_type} = out
 
     case tensor do
-      %T{type: type} = t when type == output_type ->
-        t
+      %T{type: ^output_type} ->
+        tensor
 
-      %T{type: input_type} = t ->
-        data = to_binary(t)
+      %T{type: input_type} ->
+        data = to_binary(tensor)
 
         output_data =
           match_types [input_type] do
