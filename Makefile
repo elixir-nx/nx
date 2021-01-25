@@ -29,7 +29,7 @@ all: symlinks
 
 symlinks: $(TENSORFLOW_DIR)
 	rm -f $(TENSORFLOW_EXLA_DIR)
-	ln -s "$(PWD)/$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)
+	ln -s "$(MIX_CURRENT_PATH)/$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)
 	rm -f $(ERTS_SYM_DIR)
 	ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
 

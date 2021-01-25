@@ -12,7 +12,7 @@ EXLA_TENSORFLOW_GIT_REV=6af836f407f546cf2f9ab3b5fcb7a8285bda5c96
 
 # Private configuration
 EXLA_SO=priv/libexla.dll
-EXLA_DIR="%cd%\c_src\exla"
+EXLA_DIR=c_src\exla
 ERTS_SYM_DIR=$(EXLA_DIR)\erts
 BAZEL_FLAGS=--define "framework_shared_object=false" -c $(EXLA_MODE)
 
@@ -29,7 +29,7 @@ all: symlinks
 
 symlinks: $(TENSORFLOW_DIR)
   rm -rf $(TENSORFLOW_EXLA_DIR)
-  ln -s $(EXLA_DIR) $(TENSORFLOW_EXLA_DIR)
+  ln -s "$(MIX_CURRENT_PATH)\$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)
   rm -rf $(ERTS_SYM_DIR)
   ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
 
