@@ -6,13 +6,13 @@ Nx is a multi-dimensional tensors library for Elixir. Its main features are:
 
   * Typed multi-dimensional tensors, where the tensors can be unsigned integers (sizes 8, 16, 32, 64), signed integers (sizes 8, 16, 32, 64), floats (sizes 32, 64) and brain floats (sizes 16);
 
-  * Named tensors, allowing developers to give names to each dimension of the tensors, leading to more readable code and less error prone codebases;
+  * Named tensors, allowing developers to give names to each dimension, leading to more readable and less error prone codebases;
 
-  * Automatic differentiation, also known as autograd. The `grad` function which provides reverse-mode differentiation, extremely useful for linear regression, machine learning algorithms, and more;
+  * Automatic differentiation, also known as autograd. The `grad` function provides reverse-mode differentiation, useful for simulations, training probabilistic models, etc;
 
-  * Tensors backends, which allow the main `Nx` API to be used to manipulate binary tensors, SIMD tensors, sparse matrices, and more;
+  * Tensors backends, which allow the main `Nx` API to be used to manipulate binary tensors, column-based tensors, sparse matrices, and more;
 
-  * Compiled definitions, known as `defn`, provides multi-stage programming and allow tensor operations to be compiled to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT);
+  * Compiled definitions, known as `defn`, provide multi-stage programming and allow tensor operations to be compiled to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT);
 
 Other features include broadcasting, multi-device support, etc. You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know.
 
