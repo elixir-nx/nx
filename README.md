@@ -1,8 +1,8 @@
-*Note: Currently this repository holds two projects, `Nx` and `EXLA`, which are described below. The main project, `Nx`, will be extracted to its own repository before the first release.*
+*Note: This repository currently holds two projects, `Nx` and `EXLA`, which are described below. The main project, `Nx`, will be extracted to its own repository before the first release.*
 
-# Nx
+<img src="https://github.com/elixir-nx/exla/raw/main/nx.png" alt="Nx" width="400">
 
-Nx is a library for multi-dimensional tensors in Elixir. Its main features are:
+Nx is a multi-dimensional tensors library for Elixir. Its main features are:
 
   * Typed multi-dimensional tensors, where the tensors can be unsigned integers (sizes 8, 16, 32, 64), signed integers (sizes 8, 16, 32, 64), floats (sizes 32, 64) and brain floats (sizes 16);
 
