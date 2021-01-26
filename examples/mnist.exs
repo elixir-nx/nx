@@ -1,17 +1,17 @@
 defmodule MNIST do
   import Nx.Defn
 
-  @default_defn_compiler EXLA
+  @default_defn_compiler {EXLA, keep_on_device: true}
 
   defn normalize_batch(batch) do
-    batch / 255.0
+    batch / Nx.tensor(255.0, type: {:f, 32})
   end
 
   defn init_random_params do
-    w1 = Nx.random_normal({784, 128}, 0.0, 0.1)
-    b1 = Nx.random_normal({128}, 0.0, 0.1)
-    w2 = Nx.random_normal({128, 10}, 0.0, 0.1)
-    b2 = Nx.random_normal({10}, 0.0, 0.1)
+    w1 = Nx.random_normal({784, 128}, 0.0, 0.1, type: {:f, 32})
+    b1 = Nx.random_normal({128}, 0.0, 0.1, type: {:f, 32})
+    w2 = Nx.random_normal({128, 10}, 0.0, 0.1, type: {:f, 32})
+    b2 = Nx.random_normal({10}, 0.0, 0.1, type: {:f, 32})
     {w1, b1, w2, b2}
   end
 
@@ -87,26 +87,27 @@ defmodule MNIST do
     <<_::32, n_images::32, n_rows::32, n_cols::32, images::binary>> =
       train_image_data |> :zlib.gunzip()
 
-    IO.puts("Downloaded #{n_images} #{n_rows}x#{n_cols} images\n")
-
     train_images =
       images
       |> :binary.bin_to_list()
       |> Enum.chunk_every(784)
       |> Enum.chunk_every(32)
 
+    IO.puts("Downloaded #{n_images} #{n_rows}x#{n_cols} images\n")
+
     # Download train labels
     {:ok, {_status, _response, train_label_data}} =
       :httpc.request(:get, {base_url ++ labels, []}, [], [])
 
     <<_::32, n_labels::32, labels::binary>> = train_label_data |> :zlib.gunzip()
-    IO.puts("Downloaded #{n_labels} labels")
 
     train_labels =
       labels
       |> :binary.bin_to_list()
       |> Enum.map(&to_one_hot/1)
       |> Enum.chunk_every(32)
+
+    IO.puts("Downloaded #{n_labels} labels\n")
 
     {train_images, train_labels}
   end
@@ -135,9 +136,20 @@ defmodule MNIST do
         {time, {new_params, epoch_avg_loss, epoch_avg_acc}} =
           :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
 
-        IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s\n")
+          epoch_avg_loss =
+            epoch_avg_loss
+            |> Nx.device_transfer()
+            |> Nx.to_scalar()
+
+          epoch_avg_acc =
+            epoch_avg_acc
+            |> Nx.device_transfer()
+            |> Nx.to_scalar()
+
+        IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s")
         IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")
         IO.puts("Epoch #{epoch} average accuracy: #{inspect(epoch_avg_acc)}")
+        IO.puts("\n")
         {new_params, Nx.tensor(0.0), Nx.tensor(0.0)}
     end
   end
@@ -159,4 +171,4 @@ params = MNIST.init_random_params()
 IO.puts("Training MNIST for 10 epochs...\n\n")
 {final_params, _, _} = MNIST.train(train_images, train_labels, params, epochs: 10)
 
-IO.inspect(final_params)
+IO.inspect(Enum.map(Tuple.to_list(final_params), &Nx.device_transfer/1))
