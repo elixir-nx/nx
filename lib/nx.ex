@@ -1011,6 +1011,27 @@ defmodule Nx do
         ]
       >
 
+  Note that, even if there is no broadcasting because the
+  shape is the name, names are discarded if none are given:
+
+      iex> Nx.broadcast(Nx.iota({2, 2}, names: [:x, :y]), {2, 2})
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [0, 1],
+          [2, 3]
+        ]
+      >
+
+      iex> Nx.broadcast(Nx.iota({2, 2}, names: [:x, :y]), {2, 2}, names: [:i, :j])
+      #Nx.Tensor<
+        s64[i: 2][j: 2]
+        [
+          [0, 1],
+          [2, 3]
+        ]
+      >
+
   ### With axes
 
   Using the default broadcast rules, we cannot broadcast a
@@ -1065,12 +1086,13 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(tensor.shape, broadcast_shape)
       end
 
+    broadcast_names = Nx.Shape.named_axes!(broadcast_names, broadcast_shape)
+    out = %{tensor | names: broadcast_names, shape: broadcast_shape}
+
     if tensor.shape == broadcast_shape and is_nil(opts_axes) do
-      tensor
+      out
     else
       _ = Nx.Shape.broadcast!(tensor.shape, broadcast_shape, axes)
-      broadcast_names = Nx.Shape.named_axes!(broadcast_names, broadcast_shape)
-      out = %{tensor | names: broadcast_names, shape: broadcast_shape}
       impl!(tensor).broadcast(out, tensor, broadcast_shape, axes)
     end
   end

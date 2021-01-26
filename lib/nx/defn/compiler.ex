@@ -95,7 +95,6 @@ defmodule Nx.Defn.Compiler do
       file: file,
       line: line,
       function: nil,
-      version: 0,
       exports: exports
     }
 
@@ -153,7 +152,7 @@ defmodule Nx.Defn.Compiler do
 
   defp get_and_normalize_definition(def, state) do
     {:v1, kind, meta, clauses} = Nx.Defn.Module.get_definition(state.module, def)
-    state = %{state | function: def, line: meta[:line] || state.line, version: 0}
+    state = %{state | function: def, line: meta[:line] || state.line}
 
     case clauses do
       [] ->
@@ -163,8 +162,7 @@ defmodule Nx.Defn.Compiler do
         {args, state} = normalize_args(args, meta, state)
         {ast, state} = normalize(ast, state)
         assert_uniq_vars!(args, state)
-        clause = {kind, [max_counter: state.version] ++ meta, args, ast}
-        {clause, state}
+        {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
         compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
@@ -202,38 +200,33 @@ defmodule Nx.Defn.Compiler do
     {{:fn, meta, clauses}, state}
   end
 
-  defp normalize({:cond, _meta, [[do: clauses]]}, state) do
-    {clauses, state} =
-      Enum.map_reduce(clauses, state, fn {:->, meta, [[condition], expr]}, state ->
+  defp normalize({:cond, meta, [[do: clauses]]}, state) do
+    {[{last_meta, {last_condition, last_expr}} | rest], state} =
+      Enum.reduce(clauses, {[], state}, fn {:->, meta, [[condition], expr]}, {acc, state} ->
         {condition, state} = normalize(condition, state)
         {expr, state} = normalize(expr, state)
-        {{meta, condition, expr}, state}
+        {[{meta, {condition, expr}} | acc], state}
       end)
 
-    [last | rest] = Enum.reverse(clauses)
+    if rest == [] do
+      compile_error!(meta, state, "cond must have at least 2 clauses, got 1")
+    end
 
-    acc =
-      case last do
-        {_meta, atom, expr} when is_atom(atom) and atom != nil and atom != false ->
-          expr
+    if not is_atom(last_condition) or last_condition == nil or last_condition == false do
+      compile_error!(
+        last_meta,
+        state,
+        "expected the last clause of cond to match on an atom, " <>
+          "such as true or :otherwise, got: #{Macro.to_string(last_condition)}"
+      )
+    end
 
-        {meta, other, _} ->
-          compile_error!(
-            meta,
-            state,
-            "expected the last clause of cond to match on an atom, " <>
-              "such as true or :otherwise, got: #{Macro.to_string(other)}"
-          )
+    ast =
+      quote do
+        Nx.Defn.Expr.cond(unquote(state.file), unquote(Enum.reverse(rest)), unquote(last_expr))
       end
 
-    ifs =
-      Enum.reduce(rest, acc, fn {_meta, condition, expr}, acc ->
-        quote do
-          Nx.Defn.Expr.if(unquote(condition), unquote(expr), unquote(acc))
-        end
-      end)
-
-    {ifs, state}
+    {ast, state}
   end
 
   defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
@@ -255,7 +248,6 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize({name, meta, ctx} = var, state) when is_var(var) do
     {version, meta} = Keyword.pop!(meta, :version)
-    state = update_in(state.version, &max(&1, version))
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
 
@@ -372,7 +364,7 @@ defmodule Nx.Defn.Compiler do
     )
   end
 
-  ## Shared helpers
+  ## Helpers
 
   defp maybe_meta({_, meta, _}), do: meta
   defp maybe_meta(_), do: []

@@ -10,23 +10,22 @@ defmodule Nx.Defn.Expr do
     * `:op` - the operation name
     * `:args` - the operation arguments
 
-  ## Nodes
+  ## Syntax nodes
 
   Most `:op` nodes translate to `Nx.Tensor` callback, although
-  some special nodes exist:
-
-  ### Basic nodes
-
-  Those nodes represents parameters, tensors, and functions
-  which exist within Expr:
+  some syntax nodes exist:
 
     * `parameter(integer)`
+
     * `tensor(Nx.Tensor.t)`
+
     * `fun(parameters, t, fun)`
 
-  ### Control-flow nodes
-
-    * `if(pred, on_true, on_false)`
+    * `cond(clauses, otherwise)` - opposite to other nodes,
+      the type, shape, and names of the node does not reflect
+      the actual return type as cond support tuples. The actual
+      type can be retrieved from `otherwise`, which may be a
+      tuple
 
   """
 
@@ -68,6 +67,18 @@ defmodule Nx.Defn.Expr do
 
   def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
     {args, acc}
+  end
+
+  def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
+    {clauses, acc} =
+      Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
+        {condition, acc} = fun.(condition, acc)
+        {expr, acc} = fun.(expr, acc)
+        {{condition, expr}, acc}
+      end)
+
+    {last, acc} = fun.(last, acc)
+    {[clauses, last], acc}
   end
 
   def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
@@ -177,31 +188,62 @@ defmodule Nx.Defn.Expr do
   ## Control flow ops
 
   @doc false
-  def if(pred, true_expr, false_expr) do
-    type = binary_type(true_expr, false_expr)
-    {[pred, true_expr, false_expr], context} = to_exprs([pred, true_expr, false_expr])
+  def cond(file, clauses, last) do
+    clauses =
+      for {meta, {pred, expr}} <- clauses do
+        pred = to_expr(pred)
 
-    if pred.shape != {} do
-      raise "pred must be a scalar tensor, got: #{inspect(pred.shape)}"
-    end
+        if pred.shape != {} do
+          compile_error!(
+            file,
+            meta,
+            "condition must be a scalar tensor, got: #{inspect(pred.shape)}"
+          )
+        end
 
-    %T{shape: true_shape, names: true_names} = true_expr
-    %T{shape: false_shape, names: false_names} = false_expr
+        {pred, expr}
+      end
 
-    {shape, names} = Nx.Shape.binary_broadcast(true_shape, true_names, false_shape, false_names)
-    out = %{pred | type: type, shape: shape, names: names}
+    cond(clauses, last)
+  end
 
-    true_expr =
-      true_expr
-      |> Nx.broadcast(out)
+  @doc false
+  def cond(clauses, last) do
+    {preds, exprs} = Enum.unzip(clauses)
+    {preds, context} = to_exprs(preds)
+
+    type = last
+    %{shape: shape, names: names} = last = to_expr(last)
+
+    {exprs, {type, shape, names}} =
+      Enum.map_reduce(exprs, {type, shape, names}, fn expr, {type, shape, names} ->
+        type = binary_type(type, expr)
+        expr = to_expr(expr)
+        {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
+        {expr, {type, shape, names}}
+      end)
+
+    last =
+      last
       |> Nx.as_type(type)
+      |> Nx.broadcast(shape, names: names)
 
-    false_expr =
-      false_expr
-      |> Nx.broadcast(out)
-      |> Nx.as_type(type)
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    clauses =
+      preds
+      |> Enum.zip(exprs)
+      |> Enum.map(fn {pred, expr} ->
+        {pred,
+         expr
+         |> Nx.as_type(type)
+         |> Nx.broadcast(shape, names: names)}
+      end)
 
-    expr(out, context, :if, [pred, true_expr, false_expr])
+    expr(last, context, :cond, [clauses, last])
+  end
+
+  defp compile_error!(meta, file, description) do
+    raise CompileError, line: meta[:line], file: file, description: description
   end
 
   ## Creation ops

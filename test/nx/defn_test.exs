@@ -488,21 +488,21 @@ defmodule Nx.DefnTest do
     defn if2(a, b), do: if(a, do: b)
 
     test "converges types" do
-      assert %T{data: %Expr{op: :if}, shape: {}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 32}} =
                if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 16}), Nx.tensor(0, type: {:f, 32}))
 
-      assert %T{data: %Expr{op: :if}, shape: {}, type: {:f, 64}} =
+      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 64}} =
                if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 32}), Nx.tensor(0, type: {:f, 32}))
 
-      assert %T{data: %Expr{op: :if}, shape: {}, type: {:u, 16}} =
+      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:u, 16}} =
                if2(Nx.tensor(0), Nx.tensor(0, type: {:u, 16}))
 
-      assert %T{data: %Expr{op: :if}, shape: {}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 32}} =
                if2(Nx.tensor(0), Nx.tensor(0, type: {:f, 32}))
     end
 
     test "converges shapes and names" do
-      assert %T{data: %Expr{op: :if}, shape: {2, 2}, names: [:x, :y]} =
+      assert %T{data: %Expr{op: :cond}, shape: {2, 2}, names: [:x, :y]} =
                if3(
                  Nx.tensor(0),
                  Nx.tensor([1, 2], names: [:y]),
@@ -514,26 +514,26 @@ defmodule Nx.DefnTest do
   describe "cond" do
     defn cond4(a, b, c, d) do
       cond do
-        Nx.greater(a, 0) -> b
-        Nx.less(a, 0) -> c
-        true -> d
+        Nx.greater(a, 0) -> b + 1
+        Nx.less(a, 0) -> c - 1
+        true -> d * 1
       end
     end
 
-    test "compiles to ifs" do
-      assert %T{data: %Expr{op: :if, args: [pred, on_true, on_false]}, shape: {}, type: {:s, 64}} =
+    test "supports multiple clauses" do
+      assert %T{data: %Expr{op: :cond, args: [clauses, last]}, shape: {}, type: {:s, 64}} =
                cond4(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2), Nx.tensor(3))
 
-      assert %T{data: %Expr{op: :greater}} = pred
-      assert %T{data: %Expr{op: :parameter}} = on_true
-      assert %T{data: %Expr{op: :if, args: [pred, on_true, on_false]}} = on_false
-      assert %T{data: %Expr{op: :less}} = pred
-      assert %T{data: %Expr{op: :parameter}} = on_true
-      assert %T{data: %Expr{op: :parameter}} = on_false
+      [{first_head, first_body}, {second_head, second_body}] = clauses
+      assert %T{data: %Expr{op: :greater}} = first_head
+      assert %T{data: %Expr{op: :add}} = first_body
+      assert %T{data: %Expr{op: :less}} = second_head
+      assert %T{data: %Expr{op: :subtract}} = second_body
+      assert %T{data: %Expr{op: :multiply}} = last
     end
 
     test "converges types" do
-      assert %T{data: %Expr{op: :if}, shape: {}, type: {:s, 32}} =
+      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:s, 32}} =
                cond4(
                  Nx.tensor(0),
                  Nx.tensor(1, type: {:s, 8}),
@@ -543,7 +543,7 @@ defmodule Nx.DefnTest do
     end
 
     test "converges shapes and names" do
-      assert %T{data: %Expr{op: :if}, shape: {2, 2}, names: [:x, :y]} =
+      assert %T{data: %Expr{op: :cond}, shape: {2, 2}, names: [:x, :y]} =
                cond4(
                  Nx.tensor(0),
                  Nx.tensor([1, 2], names: [:y]),
@@ -632,6 +632,14 @@ defmodule Nx.DefnTest do
 
       assert default_if3(Nx.tensor(1), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
                Nx.tensor([[1, 2], [1, 2]])
+    end
+
+    @defn_compiler Nx.Defn
+    defn default_if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
+
+    test "if with tuples" do
+      assert default_if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
+               {{Nx.tensor(20), Nx.tensor(10)}, Nx.tensor(0)}
     end
   end
 

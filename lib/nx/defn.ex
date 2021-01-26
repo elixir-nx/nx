@@ -123,10 +123,8 @@ defmodule Nx.Defn do
     {t, cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :if, args: args}}, vars, cache) do
-    [pred, on_true, on_false] = args
-    {pred, cache} = eval(pred, vars, cache)
-    res = if Nx.to_scalar(pred) != 0, do: on_true, else: on_false
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
+    {res, cache} = find_clause(clauses, last, vars, cache)
     eval(res, vars, cache)
   end
 
@@ -158,6 +156,15 @@ defmodule Nx.Defn do
   defp to_result(other, vars, cache) do
     {expr, cache} = eval(other, vars, cache)
     {Nx.tensor(expr), cache}
+  end
+
+  defp find_clause([{pred, clause} | clauses], last, vars, cache) do
+    {pred, cache} = eval(pred, vars, cache)
+    if Nx.to_scalar(pred) != 0, do: {clause, cache}, else: find_clause(clauses, last, vars, cache)
+  end
+
+  defp find_clause([], last, _vars, cache) do
+    {last, cache}
   end
 
   ## Public API

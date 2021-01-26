@@ -69,12 +69,17 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  ## Control flow
+  ## Syntax nodes
 
-  defp grad(:if, [pred, on_true, on_false], _ans, g, cache) do
-    {on_true, cache} = to_grad(on_true, g, cache)
-    {on_false, cache} = to_grad(on_false, g, cache)
-    {Expr.if(pred, on_true, on_false), cache}
+  defp grad(:cond, [clauses, last], _ans, g, cache) do
+    {clauses, cache} =
+      Enum.map_reduce(clauses, cache, fn {head, body}, cache ->
+        {body, cache} = to_grad(body, g, cache)
+        {{head, body}, cache}
+      end)
+
+    {last, cache} = to_grad(last, g, cache)
+    {Expr.cond(clauses, last), cache}
   end
 
   ## Binary broadcast gradients

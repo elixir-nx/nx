@@ -88,8 +88,22 @@ defmodule EXLA.Defn do
 
   ## Handle special exprs
 
-  defp cached_recur_operator(:if, t, state, cache) do
-    to_if(t, state, cache)
+  defp cached_recur_operator(:cond, %T{data: %Expr{args: [clauses, last]}} = t, state, cache) do
+    case clauses do
+      [{pred, on_true}] ->
+        to_if(pred, on_true, last, state, cache)
+
+      _ ->
+        # We convert cond into a nested tree of conds in order to compile it to ifs
+        %T{data: %Expr{args: [[{pred, on_true}], on_false]}} =
+          clauses
+          |> Enum.reverse()
+          |> Enum.reduce(last, fn {pred, on_true}, on_false ->
+            put_in(t.data.args, [[{pred, on_true}], on_false])
+          end)
+
+        to_if(pred, on_true, on_false, state, cache)
+    end
   end
 
   defp cached_recur_operator(:parameter, %T{data: %Expr{args: [i]}}, state, cache) do
@@ -449,10 +463,9 @@ defmodule EXLA.Defn do
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
-  ## If
+  ## Cond
 
-  defp to_if(t, state, cache) do
-    [pred, on_true, on_false] = t.data.args
+  defp to_if(pred, on_true, on_false, state, cache) do
     {_, pred_ids} = collect_ids(pred, %{})
 
     {pred_op, cache} = recur_operator(pred, state, cache)
