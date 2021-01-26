@@ -1,14 +1,12 @@
 defmodule MNIST do
   import Nx.Defn
 
-  @default_defn_compiler EXLA
+  @default_defn_compiler {EXLA, keep_on_device: true}
 
-  @defn_compiler {EXLA, keep_on_device: true}
   defn normalize_batch(batch) do
     batch / Nx.tensor(255.0, type: {:f, 32})
   end
 
-  @defn_compiler {EXLA, keep_on_device: true}
   defn init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1, type: {:f, 32})
     b1 = Nx.random_normal({128}, 0.0, 0.1, type: {:f, 32})
@@ -17,12 +15,10 @@ defmodule MNIST do
     {w1, b1, w2, b2}
   end
 
-  @defn_compiler {EXLA, keep_on_device: true}
   defn softmax(logits) do
     Nx.exp(logits) / Nx.reshape(Nx.sum(Nx.exp(logits), axes: [1]), {32, 1})
   end
 
-  @defn_compiler {EXLA, keep_on_device: true}
   defn predict({w1, b1, w2, b2}, batch) do
     batch
     |> Nx.dot(w1)
@@ -33,7 +29,6 @@ defmodule MNIST do
     |> softmax()
   end
 
-  @defn_compiler {EXLA, keep_on_device: true}
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
     Nx.mean(
       Nx.equal(
@@ -43,13 +38,11 @@ defmodule MNIST do
     )
   end
 
-  @defn_compiler {EXLA, keep_on_device: true}
   defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
     preds = predict({w1, b1, w2, b2}, batch_images)
     -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axes: [1]))
   end
 
-  @defn_compiler {EXLA, keep_on_device: true}
   defn update({w1, b1, w2, b2}, batch_images, batch_labels, step) do
     {grad_w1, grad_b1, grad_w2, grad_b2} =
       grad({w1, b1, w2, b2}, loss({w1, b1, w2, b2}, batch_images, batch_labels))
@@ -94,26 +87,27 @@ defmodule MNIST do
     <<_::32, n_images::32, n_rows::32, n_cols::32, images::binary>> =
       train_image_data |> :zlib.gunzip()
 
-    IO.puts("Downloaded #{n_images} #{n_rows}x#{n_cols} images\n")
-
     train_images =
       images
       |> :binary.bin_to_list()
       |> Enum.chunk_every(784)
       |> Enum.chunk_every(32)
 
+    IO.puts("Downloaded #{n_images} #{n_rows}x#{n_cols} images\n")
+
     # Download train labels
     {:ok, {_status, _response, train_label_data}} =
       :httpc.request(:get, {base_url ++ labels, []}, [], [])
 
     <<_::32, n_labels::32, labels::binary>> = train_label_data |> :zlib.gunzip()
-    IO.puts("Downloaded #{n_labels} labels")
 
     train_labels =
       labels
       |> :binary.bin_to_list()
       |> Enum.map(&to_one_hot/1)
       |> Enum.chunk_every(32)
+
+    IO.puts("Downloaded #{n_labels} labels\n")
 
     {train_images, train_labels}
   end
@@ -142,9 +136,20 @@ defmodule MNIST do
         {time, {new_params, epoch_avg_loss, epoch_avg_acc}} =
           :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
 
-        IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s\n")
+          epoch_avg_loss =
+            epoch_avg_loss
+            |> Nx.device_transfer()
+            |> Nx.to_scalar()
+
+          epoch_avg_acc =
+            epoch_avg_acc
+            |> Nx.device_transfer()
+            |> Nx.to_scalar()
+
+        IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s")
         IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")
         IO.puts("Epoch #{epoch} average accuracy: #{inspect(epoch_avg_acc)}")
+        IO.puts("\n")
         {new_params, Nx.tensor(0.0), Nx.tensor(0.0)}
     end
   end
