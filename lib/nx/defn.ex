@@ -125,7 +125,13 @@ defmodule Nx.Defn do
 
   defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
     {res, cache} = find_clause(clauses, last, vars, cache)
-    eval(res, vars, cache)
+    eval_maybe_tuple(res, vars, cache)
+  end
+
+  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :elem, args: args}}, vars, cache) do
+    [tuple, i, _size] = args
+    {tuple, cache} = eval_maybe_tuple(tuple, vars, cache)
+    {elem(tuple, i), cache}
   end
 
   defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}} = ans, vars, cache) do
@@ -143,6 +149,15 @@ defmodule Nx.Defn do
   defp eval(other, _vars, cache) do
     {other, cache}
   end
+
+  defp eval_maybe_tuple(tuple, vars, cache) when is_tuple(tuple) do
+    {list, cache} =
+      tuple |> Tuple.to_list() |> Enum.map_reduce(cache, &eval_maybe_tuple(&1, vars, &2))
+
+    {List.to_tuple(list), cache}
+  end
+
+  defp eval_maybe_tuple(other, vars, cache), do: eval(other, vars, cache)
 
   defp to_result(tuple, vars, cache) when is_tuple(tuple) do
     {args, cache} =

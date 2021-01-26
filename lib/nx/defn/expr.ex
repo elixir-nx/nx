@@ -21,11 +21,11 @@ defmodule Nx.Defn.Expr do
 
     * `fun(parameters, t, fun)`
 
-    * `cond(clauses, otherwise)` - opposite to other nodes,
-      the type, shape, and names of the node does not reflect
-      the actual return type as cond support tuples. The actual
-      type can be retrieved from `otherwise`, which may be a
-      tuple
+    * `cond(clauses, otherwise)` - opposite to most nodes,
+      this expression may have a special return type of tuple
+
+    * `elem(tuple, pos, size)` - opposite to most nodes,
+      this expression may have a special return type of tuple
 
   """
 
@@ -73,11 +73,11 @@ defmodule Nx.Defn.Expr do
     {clauses, acc} =
       Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
         {condition, acc} = fun.(condition, acc)
-        {expr, acc} = fun.(expr, acc)
+        {expr, acc} = traverse_tuple_or_expr(expr, acc, fun)
         {{condition, expr}, acc}
       end)
 
-    {last, acc} = fun.(last, acc)
+    {last, acc} = traverse_tuple_or_expr(last, acc, fun)
     {[clauses, last], acc}
   end
 
@@ -91,6 +91,15 @@ defmodule Nx.Defn.Expr do
       %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
       arg, acc -> {arg, acc}
     end)
+  end
+
+  defp traverse_tuple_or_expr(tuple, acc, fun) when is_tuple(tuple) do
+    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse_tuple_or_expr(&1, &2, fun))
+    {List.to_tuple(list), acc}
+  end
+
+  defp traverse_tuple_or_expr(expr, acc, fun) do
+    fun.(expr, acc)
   end
 
   ## Nx.Defn dynamic callbacks
@@ -194,11 +203,10 @@ defmodule Nx.Defn.Expr do
         pred = to_expr(pred)
 
         if pred.shape != {} do
-          compile_error!(
-            file,
-            meta,
-            "condition must be a scalar tensor, got: #{inspect(pred.shape)}"
-          )
+          raise CompileError,
+            line: meta[:line],
+            file: file,
+            description: "condition must be a scalar tensor, got: #{inspect(pred.shape)}"
         end
 
         {pred, expr}
@@ -211,39 +219,82 @@ defmodule Nx.Defn.Expr do
   def cond(clauses, last) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
+    [last | exprs] = cond_clauses(last, exprs)
+    clauses = Enum.zip(preds, exprs)
+    cond_result(last, context, &expr(&1, context, :cond, [clauses, last]))
+  end
 
-    type = last
+  defp cond_result(tuple, context, fun) when is_tuple(tuple) do
+    size = tuple_size(tuple)
+    expr = fun.(%T{shape: {}, names: [], type: {:tuple, size}})
+
+    # TODO: Use Enum.with_index on Elixir v1.12
+    tuple
+    |> Tuple.to_list()
+    |> Enum.with_index()
+    |> Enum.map(fn {tensor, i} ->
+      fun = &expr(&1, context, :elem, [expr, i, size])
+      cond_result(tensor, context, fun)
+    end)
+    |> List.to_tuple()
+  end
+
+  defp cond_result(tensor, _context, fun), do: fun.(tensor)
+
+  defp cond_clauses(last, exprs) when is_tuple(last) do
+    size = tuple_size(last)
+
+    for expr <- exprs,
+        not is_tuple(expr) or tuple_size(expr) != size,
+        do: branch_mismatch!(expr, last)
+
+    # TODO: Use Enum.with_index on Elixir v1.12
+    list_of_lists =
+      last
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.map(fn {last, index} ->
+        exprs = Enum.map(exprs, &elem(&1, index))
+        cond_clauses(last, exprs)
+      end)
+
+    {last_and_exprs, _} =
+      Enum.map_reduce([last | exprs], list_of_lists, fn _, list_of_lists ->
+        unzip_cons(list_of_lists, [], [])
+      end)
+
+    last_and_exprs
+  end
+
+  defp cond_clauses(type = last, exprs) do
     %{shape: shape, names: names} = last = to_expr(last)
 
     {exprs, {type, shape, names}} =
       Enum.map_reduce(exprs, {type, shape, names}, fn expr, {type, shape, names} ->
+        if is_tuple(expr), do: branch_mismatch!(expr, last)
         type = binary_type(type, expr)
         expr = to_expr(expr)
         {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
         {expr, {type, shape, names}}
       end)
 
-    last =
-      last
+    for expr <- [last | exprs] do
+      expr
       |> Nx.as_type(type)
       |> Nx.broadcast(shape, names: names)
-
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    clauses =
-      preds
-      |> Enum.zip(exprs)
-      |> Enum.map(fn {pred, expr} ->
-        {pred,
-         expr
-         |> Nx.as_type(type)
-         |> Nx.broadcast(shape, names: names)}
-      end)
-
-    expr(last, context, :cond, [clauses, last])
+    end
   end
 
-  defp compile_error!(meta, file, description) do
-    raise CompileError, line: meta[:line], file: file, description: description
+  defp unzip_cons([[head | tail] | rest], heads, tails),
+    do: unzip_cons(rest, [head | heads], [tail | tails])
+
+  defp unzip_cons([], heads, tails),
+    do: {heads |> Enum.reverse() |> List.to_tuple(), Enum.reverse(tails)}
+
+  defp branch_mismatch!(left, right) do
+    raise ArgumentError,
+          "cond/if expects all branches to return tensors or tuples of the same size, " <>
+            "got #{inspect(left)} and #{inspect(right)}"
   end
 
   ## Creation ops
@@ -520,7 +571,8 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def inspect(tensor, opts) do
-    {exprs, params, _var_map} = inspect_expr_args([tensor], [], [], %{})
+    {_, acc} = inspect_expr(tensor, {[], [], %{}})
+    {_, {exprs, params, _var_map}} = traverse_args(tensor, acc, &inspect_expr/2)
 
     all =
       params
@@ -537,70 +589,65 @@ defmodule Nx.Defn.Expr do
     |> Enum.reduce(color("Nx.Defn.Expr", :map, opts), &concat(&2, concat(line(), &1)))
   end
 
-  # Post-order traversal of the Expr AST, but we pull all parameters to the front
-  defp inspect_expr_args([], exprs, params, var_map), do: {exprs, params, var_map}
+  # Scalars and funs are shown as is
+  defp inspect_expr(%T{data: %Expr{op: :tensor}, shape: {}} = t, acc), do: {t, acc}
+  defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
 
-  defp inspect_expr_args([%T{data: %Expr{op: :tensor}, shape: {}} | tail], exprs, params, var_map) do
-    inspect_expr_args(tail, exprs, params, var_map)
-  end
-
-  defp inspect_expr_args([%T{data: %Expr{op: :fun}} | tail], exprs, params, var_map) do
-    inspect_expr_args(tail, exprs, params, var_map)
-  end
-
-  defp inspect_expr_args(
-         [%T{data: %Expr{op: op, id: id}} = tensor | tail],
-         exprs,
-         params,
-         var_map
-       )
+  defp inspect_expr(%T{data: %Expr{op: op, id: id}} = t, {exprs, params, var_map})
        when op in [:tensor, :parameter] do
     {var, var_map} = var_for_id(var_map, id)
     param = Atom.to_string(op) <> " " <> var
-    inspect_expr_args(tail, exprs, [{param, tensor} | params], var_map)
+    {t, {exprs, [{param, t} | params], var_map}}
   end
 
-  defp inspect_expr_args([%T{} = tensor | tail], exprs, params, var_map) do
-    %{data: %Expr{id: id, op: op, args: expr_args}} = tensor
-    {exprs, params, var_map} = inspect_expr_args(expr_args, exprs, params, var_map)
-
-    expr_args_strs = inspect_args(expr_args, var_map)
+  defp inspect_expr(%T{} = t, acc) do
+    %{data: %Expr{id: id, op: op, args: args}} = t
+    {_, {exprs, params, var_map}} = traverse_args(t, acc, &inspect_expr/2)
     {var, var_map} = var_for_id(var_map, id)
-
-    expr_str =
-      var <>
-        " = " <>
-        Atom.to_string(op) <>
-        " [ " <> Enum.join(expr_args_strs, ", ") <> " ]"
-
-    inspect_expr_args(tail, [{expr_str, tensor} | exprs], params, var_map)
+    args_str = inspect_args(op, args, var_map)
+    expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> args_str <> " ]"
+    {t, {[{expr_str, t} | exprs], params, var_map}}
   end
 
-  defp inspect_expr_args([_ | tail], exprs, params, var_map) do
-    inspect_expr_args(tail, exprs, params, var_map)
+  defp inspect_args(:cond, [clauses, last], var_map) do
+    clauses =
+      Enum.map(clauses, fn {pred, expr} ->
+        [inspect_arg(pred, var_map), " -> ", inspect_arg(expr, var_map), ", "]
+      end)
+
+    IO.iodata_to_binary([clauses, ":otherwise -> ", inspect_arg(last, var_map)])
   end
 
-  defp inspect_args([], _var_map), do: []
+  defp inspect_args(_op, args, var_map), do: inspect_args(args, var_map)
 
-  defp inspect_args([arg | args], var_map) do
+  defp inspect_args(args, var_map) do
+    Enum.map_join(args, ", ", &inspect_arg(&1, var_map))
+  end
+
+  defp inspect_arg(arg, var_map) do
     case arg do
       %T{data: %Expr{op: :fun, args: [_, _, fun]}} ->
-        [inspect(fun) | inspect_args(args, var_map)]
+        inspect(fun)
 
       %T{data: %Expr{op: :tensor, args: [t]}, shape: {}} ->
-        [t |> Nx.to_scalar() |> to_string() | inspect_args(args, var_map)]
+        t |> Nx.to_scalar() |> to_string()
 
       %T{data: %Expr{id: id}} ->
-        [Map.fetch!(var_map, id) | inspect_args(args, var_map)]
+        Map.fetch!(var_map, id)
 
-      value ->
-        if Keyword.keyword?(value) and value != [] do
-          [
-            Enum.map_join(value, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
-            | inspect_args(args, var_map)
-          ]
-        else
-          [inspect(value) | inspect_args(args, var_map)]
+      _ ->
+        cond do
+          Keyword.keyword?(arg) and arg != [] ->
+            Enum.map_join(arg, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
+
+          is_list(arg) ->
+            [?[, inspect_args(arg, var_map), ?]]
+
+          is_tuple(arg) ->
+            [?{, inspect_args(Tuple.to_list(arg), var_map), ?}]
+
+          true ->
+            inspect(arg)
         end
     end
   end
@@ -622,12 +669,12 @@ defmodule Nx.Defn.Expr do
 
   defp counter_to_name(counter), do: [Enum.at(?a..?z, counter)]
 
-  defp to_type_shape(%{type: {kind, size}, shape: shape}) do
+  defp to_type_shape(%{type: type, shape: shape}) do
     brackets =
       shape
       |> Tuple.to_list()
       |> Enum.map(&[?[, Integer.to_string(&1), ?]])
 
-    IO.iodata_to_binary([Atom.to_string(kind), Integer.to_string(size) | brackets])
+    IO.iodata_to_binary([Nx.Type.to_string(type) | brackets])
   end
 end

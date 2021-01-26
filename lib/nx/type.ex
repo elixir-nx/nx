@@ -11,6 +11,10 @@ defmodule Nx.Type do
       * `:f` - float (32, 64)
       * `:bf` - a brain floating point (16)
 
+  Note: there is a special type used by the `defn` compiler
+  which is `{:tuple, size}`, that represents a tuple. Said types
+  do not appear on user code, only on compiler implementations,
+  and therefore are not handled by the functions in this module.
   """
 
   @type t ::
@@ -25,6 +29,7 @@ defmodule Nx.Type do
           | {:f, 32}
           | {:f, 64}
           | {:bf, 16}
+          | {:tuple, non_neg_integer}
 
   @doc """
   Returns the minimum possible value for the given type.

@@ -73,6 +73,7 @@ defmodule EXLA.ShardedBuffer do
             " #{num_shards}, device count is #{device_count}"
         )
 
+    # TODO: Use Enum.with_index on Elixir v1.12
     ref_buffers =
       buffers
       |> Enum.with_index()

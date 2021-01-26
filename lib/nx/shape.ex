@@ -754,6 +754,7 @@ defmodule Nx.Shape do
   end
 
   defp concat_shapes(shape1, shape2, axis) do
+    # TODO: Use Enum.with_index on Elixir v1.12
     shape1
     |> Enum.zip(shape2)
     |> Enum.with_index()

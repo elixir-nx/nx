@@ -26,6 +26,7 @@ defmodule EXLA.Defn do
       EXLA.LockedCache.run(cache_key, fn ->
         builder = EXLA.Builder.new(inspect(key))
 
+        # TODO: Use Enum.with_index on Elixir v1.12
         params =
           for {%{shape: shape}, i} <- Enum.with_index(buffers) do
             EXLA.Op.parameter(builder, i, shape, "p#{i}")
@@ -440,6 +441,7 @@ defmodule EXLA.Defn do
   defp to_computation(name, args, state, fun) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
+    # TODO: Use Enum.with_index on Elixir v1.12
     params =
       for {%{type: type, shape: shape}, i} <- Enum.with_index(args) do
         fun_shape = EXLA.Shape.make_shape(type, shape)
@@ -477,7 +479,10 @@ defmodule EXLA.Defn do
   end
 
   defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
-    Expr.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
+    case ids do
+      %{^id => true} -> {t, ids}
+      %{} -> Expr.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
+    end
   end
 
   defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, ids, pred_ids) do

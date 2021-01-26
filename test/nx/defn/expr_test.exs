@@ -23,7 +23,7 @@ defmodule Nx.Defn.ExprTest do
       b = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
 
       assert Nx.sum(Nx.add(Nx.add(Nx.dot(a, a), Nx.tanh(b)), 2))
-             |> inspect() == """
+             |> inspect(safe: false) == """
              #Nx.Tensor<
                Nx.Defn.Expr
                parameter a                 s64[2][2]
@@ -43,7 +43,7 @@ defmodule Nx.Defn.ExprTest do
       c = Nx.iota({2, 2}, backend: Expr)
 
       assert Nx.argmin(Nx.add(Nx.tanh(Nx.dot(c, b)), a), tie_break: :high)
-             |> inspect() == """
+             |> inspect(safe: false) == """
              #Nx.Tensor<
                Nx.Defn.Expr
                tensor b                                       s64[2][2]
@@ -58,13 +58,41 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "with fun" do
-      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
 
-      assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect() == """
+      assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect(safe: false) == """
              #Nx.Tensor<
                Nx.Defn.Expr
                parameter a                                s64[2][2]
                b = reduce [ a, 0, axes: nil, &Nx.add/2 ]  s64
+             >\
+             """
+    end
+
+    test "with tuple and cond" do
+      a = Expr.parameter(nil, {:s, 64}, {}, 0)
+      b = Expr.parameter(nil, {:s, 64}, {}, 1)
+      {left, right} = Expr.cond([{Nx.any?(a), {a, b}}], {b, a})
+
+      assert inspect(left, safe: false) == """
+             #Nx.Tensor<
+               Nx.Defn.Expr
+               parameter a                                     s64
+               parameter c                                     s64
+               b = any? [ a, axes: nil ]                       u8
+               d = cond [ b -> {a, c}, :otherwise -> {c, a} ]  tuple2
+               e = elem [ d, 0, 2 ]                            s64
+             >\
+             """
+
+      assert inspect(right, safe: false) == """
+             #Nx.Tensor<
+               Nx.Defn.Expr
+               parameter a                                     s64
+               parameter c                                     s64
+               b = any? [ a, axes: nil ]                       u8
+               d = cond [ b -> {a, c}, :otherwise -> {c, a} ]  tuple2
+               e = elem [ d, 1, 2 ]                            s64
              >\
              """
     end

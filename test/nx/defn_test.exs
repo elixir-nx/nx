@@ -640,6 +640,40 @@ defmodule Nx.DefnTest do
     test "if with tuples" do
       assert default_if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
                {{Nx.tensor(20), Nx.tensor(10)}, Nx.tensor(0)}
+
+      assert default_if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
+               {{Nx.tensor(1), Nx.tensor(10)}, Nx.tensor(20)}
+
+      assert default_if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {{Nx.tensor([20, 30]), Nx.tensor(10)}, Nx.tensor([0, 0])}
+
+      assert default_if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {{Nx.tensor([1, 1]), Nx.tensor(10)}, Nx.tensor([20, 30])}
+    end
+
+    @defn_compiler Nx.Defn
+    defn default_if_tuple_match(a, b, c) do
+      {{x, y}, z} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
+      x * y - z
+    end
+
+    test "if with matched tuples" do
+      assert default_if_tuple_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(200)
+      assert default_if_tuple_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(-10)
+    end
+
+    @defn_compiler Nx.Defn
+    defn default_if_tuple_return(a, b, c) do
+      {xy, _} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
+      xy
+    end
+
+    test "if with return tuple" do
+      assert default_if_tuple_return(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
+               {Nx.tensor(20), Nx.tensor(10)}
+
+      assert default_if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
+               {Nx.tensor(1), Nx.tensor(10)}
     end
   end
 
