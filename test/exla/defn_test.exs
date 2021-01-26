@@ -671,6 +671,45 @@ defmodule EXLA.DefnTest do
       assert if_shared(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(-1)
       assert if_shared(Nx.tensor(2), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(12)
     end
+
+    defn if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
+
+    test "with tuples" do
+      assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
+               {{Nx.tensor(20), Nx.tensor(10)}, Nx.tensor(0)}
+
+      assert if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
+               {{Nx.tensor(1), Nx.tensor(10)}, Nx.tensor(20)}
+
+      assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {{Nx.tensor([20, 30]), Nx.tensor(10)}, Nx.tensor([0, 0])}
+
+      assert if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {{Nx.tensor([1, 1]), Nx.tensor(10)}, Nx.tensor([20, 30])}
+    end
+
+    defn if_tuple_match(a, b, c) do
+      {{x, y}, z} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
+      x * y - z
+    end
+
+    test "with matched tuples" do
+      assert if_tuple_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(200)
+      assert if_tuple_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(-10)
+    end
+
+    defn if_tuple_return(a, b, c) do
+      {xy, _} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
+      xy
+    end
+
+    test "with return tuple" do
+      assert if_tuple_return(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
+               {Nx.tensor(20), Nx.tensor(10)}
+
+      assert if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
+               {Nx.tensor(1), Nx.tensor(10)}
+    end
   end
 
   describe "cond" do

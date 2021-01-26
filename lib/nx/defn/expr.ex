@@ -21,11 +21,9 @@ defmodule Nx.Defn.Expr do
 
     * `fun(parameters, t, fun)`
 
-    * `cond(clauses, otherwise)` - opposite to most nodes,
-      this expression may have a special return type of tuple
+    * `cond(clauses, otherwise)` - may return tuples
 
-    * `elem(tuple, pos, size)` - opposite to most nodes,
-      this expression may have a special return type of tuple
+    * `elem(tuple, pos, size)` - may return tuples
 
   """
 
@@ -194,7 +192,13 @@ defmodule Nx.Defn.Expr do
           "defn must return an expression tensor or a tuple, got: #{inspect(other)}"
   end
 
-  ## Control flow ops
+  ## Syntax nodes
+
+  @doc false
+  def parameter(context, type, shape, pos) do
+    names = List.duplicate(nil, tuple_size(shape))
+    expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
+  end
 
   @doc false
   def cond(file, clauses, last) do
@@ -298,12 +302,6 @@ defmodule Nx.Defn.Expr do
   end
 
   ## Creation ops
-
-  @doc false
-  def parameter(context, type, shape, pos) do
-    names = List.duplicate(nil, tuple_size(shape))
-    expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
-  end
 
   @impl true
   def iota(out, axis) do

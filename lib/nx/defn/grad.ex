@@ -53,6 +53,11 @@ defmodule Nx.Defn.Grad do
 
   ## Recursion
 
+  defp to_grad(tuple, res, cache) when is_tuple(tuple) do
+    {res, cache} = tuple |> Tuple.to_list() |> Enum.map_reduce(cache, &to_grad(&1, res, &2))
+    {List.to_tuple(res), cache}
+  end
+
   defp to_grad(%T{data: %Expr{id: id, op: op, args: args}} = ans, res, cache) do
     key = [id | res.data.id]
 
@@ -80,6 +85,11 @@ defmodule Nx.Defn.Grad do
 
     {last, cache} = to_grad(last, g, cache)
     {Expr.cond(clauses, last), cache}
+  end
+
+  defp grad(:elem, [tuple, index, _size], _ans, g, cache) do
+    {tuple, cache} = to_grad(tuple, g, cache)
+    {elem(tuple, index), cache}
   end
 
   ## Binary broadcast gradients

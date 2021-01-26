@@ -438,6 +438,14 @@ defmodule Nx.Defn.GradTest do
       assert grad_tuple_input(Nx.tensor(1.0), Nx.tensor(1.0), Nx.tensor(1.0)) ==
                {Nx.tensor(2.0), Nx.tensor(3.0), Nx.tensor(4.0)}
     end
+
+    defn grad_tuple_output(a), do: grad(a, {a + 1, a - 1})
+
+    test "raises on tuple output" do
+      assert_raise ArgumentError, ~r"expected a tensor or a numbe", fn ->
+        grad_tuple_output(Nx.tensor(1.0))
+      end
+    end
   end
 
   for fun <-
@@ -641,6 +649,17 @@ defmodule Nx.Defn.GradTest do
     defn grad_if_sum(t),
       do: grad(t, if(Nx.all?(t), do: Nx.sum(Nx.power(t, 2)), else: Nx.sum(Nx.power(t, 3))))
 
+    defn grad_if_tuple(t) do
+      {{a, b}, c} =
+        if t + 1 do
+          {{Nx.power(t, 2), Nx.power(t, 3)}, Nx.power(t, 4)}
+        else
+          {{Nx.power(t, 4), Nx.power(t, 3)}, Nx.power(t, 2)}
+        end
+
+      grad(t, a * b + c)
+    end
+
     test "computes gradient" do
       assert grad_if(Nx.tensor(1)) == Nx.tensor(2.0)
       assert grad_if(Nx.tensor(-1)) == Nx.tensor(3.0)
@@ -652,6 +671,11 @@ defmodule Nx.Defn.GradTest do
 
       assert grad_if_sum(Nx.tensor([1, 2, 3])) == Nx.tensor([2.0, 4.0, 6.0])
       assert grad_if_sum(Nx.tensor([-1, 0, 1])) == Nx.tensor([3.0, 0.0, 3.0])
+    end
+
+    test "computes gradient with tuple" do
+      assert grad_if_tuple(Nx.tensor(1)) == Nx.tensor(9.0)
+      assert grad_if_tuple(Nx.tensor(-1)) == Nx.tensor(5.0)
     end
   end
 

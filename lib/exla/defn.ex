@@ -64,16 +64,34 @@ defmodule EXLA.Defn do
     do: %{t | data: nil}
 
   defp to_result(tuple, state, cache) when is_tuple(tuple) do
-    {elements, cache} =
-      tuple
-      |> Tuple.to_list()
-      |> Enum.map_reduce(cache, &to_result(&1, state, &2))
+    list = Tuple.to_list(tuple)
 
-    {EXLA.Op.tuple(state.builder, elements), cache}
+    if expr = full_tuple(list, tuple_size(tuple)) do
+      to_result(expr, state, cache)
+    else
+      {elements, cache} = Enum.map_reduce(list, cache, &to_result(&1, state, &2))
+      {EXLA.Op.tuple(state.builder, elements), cache}
+    end
   end
 
   defp to_result(expr, state, cache) do
     recur_operator(expr, state, cache)
+  end
+
+  # If each element of the tuple is just a reference to the a parent expression,
+  # discard the tuple elements and return the parent expression.
+  defp full_tuple(list, size) do
+    with [%T{data: %Expr{op: :elem, args: args}} | rest] <- list,
+         [%T{data: %Expr{id: id}} = expr, 0, ^size] <- args,
+         true <- rest |> Enum.with_index(1) |> Enum.all?(&full_tuple?(&1, id, size)) do
+      expr
+    else
+      _ -> nil
+    end
+  end
+
+  defp full_tuple?({arg, index}, id, size) do
+    match?(%T{data: %Expr{op: :elem, args: [%T{data: %Expr{id: ^id}}, ^index, ^size]}}, arg)
   end
 
   defp recur_operator(%T{data: %Expr{id: id, op: op}} = expr, state, cache) do
@@ -182,6 +200,10 @@ defmodule EXLA.Defn do
   end
 
   ## to_operator others
+
+  defp to_operator(:elem, [tensor, index, _size], _ans, _state) do
+    EXLA.Op.get_tuple_element(tensor, index)
+  end
 
   defp to_operator(:dot, [left, axes1, right, axes2], %{type: type}, state) do
     precision = state.precision
@@ -483,6 +505,13 @@ defmodule EXLA.Defn do
       %{^id => true} -> {t, ids}
       %{} -> Expr.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
     end
+  end
+
+  defp collect_args(tuple, ids, pred_ids) when is_tuple(tuple) do
+    {list, ids} =
+      tuple |> Tuple.to_list() |> Enum.map_reduce(ids, &collect_args(&1, &2, pred_ids))
+
+    {List.to_tuple(list), ids}
   end
 
   defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, ids, pred_ids) do
