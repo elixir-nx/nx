@@ -592,19 +592,30 @@ defmodule Nx.Defn.Kernel do
   same as the do clause. If you want to nest multiple conditionals,
   see `cond/1` instead.
   """
-  def if(pred, do_else)
+  defmacro if(pred, do_else)
 
-  def if(pred, do: on_true) do
-    Nx.Defn.Expr.if(pred, on_true, 0)
+  defmacro if(pred, do: on_true) do
+    quote do
+      cond do
+        unquote(pred) -> unquote(on_true)
+        :otherwise -> 0
+      end
+    end
   end
 
-  def if(pred, do: on_true, else: on_false) do
-    Nx.Defn.Expr.if(pred, on_true, on_false)
+  defmacro if(pred, do: on_true, else: on_false) do
+    quote do
+      cond do
+        unquote(pred) -> unquote(on_true)
+        :otherwise -> unquote(on_false)
+      end
+    end
   end
 
-  def if(_pred, other) do
+  defmacro if(_pred, other) do
     raise ArgumentError,
-          "expected second argument to \"if\" to be a do/else block, got: #{inspect(other)}"
+          "expected second argument to \"if\" to be a do/else block, " <>
+            "got: #{inspect(Macro.to_string(other))}"
   end
 
   @doc """
