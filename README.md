@@ -80,7 +80,7 @@ Many of Elixir features are supported inside `defn`, such as the pipe operator, 
 
 Elixir XLA Client for compiling and running Elixir code on CPU/GPU/TPU. It also provides compilers for the `Nx` library.
 
-## Usage
+## Installation
 
 Add EXLA as a dependency in your project:
 
@@ -89,8 +89,7 @@ def deps do
   {:exla, "~> 0.1"}
 end
 ```
-
-The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. You will need the following installed in your system to compile them:
+You will need the following installed in your system to compile EXLA:
 
   * [Git](https://git-scm.com/) for checking out Tensorflow
   * [Bazel](https://bazel.build/) for compiling Tensorflow
@@ -102,19 +101,7 @@ If running on Windows, you will also need:
   * [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
   * [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
 
-Subsequent commands should be much faster.
-
-### Environment variables
-
-You can use the following env vars to customize your build:
-
-  * `EXLA_FLAGS` - controls compilation with GPU support, see next section
-
-  * `EXLA_MODE` - controls to compile `opt` (default) artifacts or `dbg`, example: `EXLA_MODE=dbg`
-
-  * `EXLA_CACHE` - controls where to store Tensorflow checkouts and builds
-
-  * `XLA_FLAGS` - controls XLA-specific options, see: [tensorflow/compiler/xla/debug_options_flags.cc](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/debug_options_flags.cc) for list of flags
+The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. Subsequent commands should be much faster.
 
 ### GPU Support
 
@@ -135,6 +122,18 @@ export EXLA_FLAGS=--config=rocm --action_env=HIP_PLATFORM=hcc
 ```
 
 When building EXLA locally, it's recommended you set these flags in `.bash_profile` or a similar configuration file so you don't need to export them every time you need to build EXLA.
+
+### Environment variables
+
+You can use the following env vars to customize your build:
+
+  * `EXLA_FLAGS` - controls compilation with GPU support
+
+  * `EXLA_MODE` - controls to compile `opt` (default) artifacts or `dbg`, example: `EXLA_MODE=dbg`
+
+  * `EXLA_CACHE` - controls where to store Tensorflow checkouts and builds
+
+  * `XLA_FLAGS` - controls XLA-specific options, see: [tensorflow/compiler/xla/debug_options_flags.cc](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/debug_options_flags.cc) for list of flags
 
 ## Contributing
 
