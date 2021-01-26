@@ -1,5 +1,6 @@
 size = 1_000_000
-t = Nx.tensor(for _ <- 1..size, do: :rand.uniform())
+t64 = Nx.tensor(for _ <- 1..size, do: :rand.uniform())
+t32 = Nx.tensor((for _ <- 1..size, do: :rand.uniform()), type: {:f, 32})
 
 defmodule Softmax do
   import Nx.Defn
@@ -8,33 +9,38 @@ defmodule Softmax do
   defn softmax(n), do: Nx.exp(n) / Nx.sum(Nx.exp(n))
 
   # This is JIT+host compiled
-  @defn_compiler Exla
+  @defn_compiler EXLA
   defn host(n), do: softmax(n)
 
   # This is JIT+cuda compiled
-  @defn_compiler {Exla, client: :cuda}
+  @defn_compiler {EXLA, client: :cuda}
   defn cuda(n), do: softmax(n)
 
   # This is JIT+cuda+keep_on_device compiled
-  @defn_compiler {Exla, client: :cuda, keep_on_device: true}
+  @defn_compiler {EXLA, client: :cuda, keep_on_device: true}
   defn cuda_keep(n), do: softmax(n)
 end
 
-IO.inspect(Softmax.softmax(t))
-IO.inspect(Softmax.host(t))
+IO.inspect(Softmax.softmax(t32))
+IO.inspect(Softmax.host(t32))
 
 benches = %{
-  "elixir" => fn -> Softmax.softmax(t) end,
-  "xla cpu" => fn -> Softmax.host(t) end
+  "elixir f32" => fn -> Softmax.softmax(t32) end,
+  "elixir f64" => fn -> Softmax.softmax(t64) end,
+  "xla cpu f32" => fn -> Softmax.host(t32) end,
+  "xla cpu f64" => fn -> Softmax.host(t64) end
 }
 
 benches =
   if System.get_env("EXLA_TARGET") == "cuda" do
-    dt = Nx.device_transfer(t, Exla.NxDevice, client: :cuda)
+    dt32 = Nx.device_transfer(t32, EXLA.NxDevice, client: :cuda)
+    dt64 = Nx.device_transfer(t64, EXLA.NxDevice, client: :cuda)
 
     Map.merge(benches, %{
-      "xla gpu" => fn -> Softmax.cuda(t) end,
-      "xla gpu keep" => {fn -> Softmax.cuda_keep(dt) end, after_each: &Nx.device_deallocate/1}
+      "xla gpu f32" => fn -> Softmax.cuda(t32) end,
+      "xla gpu f64" => fn -> Softmax.cuda(t64) end,
+      "xla gpu f32 keep" => {fn -> Softmax.cuda_keep(dt32) end, after_each: &Nx.device_deallocate/1},
+      "xla gpu f64 keep" => {fn -> Softmax.cuda_keep(dt64) end, after_each: &Nx.device_deallocate/1}
     })
   else
     benches

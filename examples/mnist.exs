@@ -3,22 +3,26 @@ defmodule MNIST do
 
   @default_defn_compiler EXLA
 
+  @defn_compiler {EXLA, keep_on_device: true}
   defn normalize_batch(batch) do
-    batch / 255.0
+    batch / Nx.tensor(255.0, type: {:f, 32})
   end
 
+  @defn_compiler {EXLA, keep_on_device: true}
   defn init_random_params do
-    w1 = Nx.random_normal({784, 128}, 0.0, 0.1)
-    b1 = Nx.random_normal({128}, 0.0, 0.1)
-    w2 = Nx.random_normal({128, 10}, 0.0, 0.1)
-    b2 = Nx.random_normal({10}, 0.0, 0.1)
+    w1 = Nx.random_normal({784, 128}, 0.0, 0.1, type: {:f, 32})
+    b1 = Nx.random_normal({128}, 0.0, 0.1, type: {:f, 32})
+    w2 = Nx.random_normal({128, 10}, 0.0, 0.1, type: {:f, 32})
+    b2 = Nx.random_normal({10}, 0.0, 0.1, type: {:f, 32})
     {w1, b1, w2, b2}
   end
 
+  @defn_compiler {EXLA, keep_on_device: true}
   defn softmax(logits) do
     Nx.exp(logits) / Nx.reshape(Nx.sum(Nx.exp(logits), axes: [1]), {32, 1})
   end
 
+  @defn_compiler {EXLA, keep_on_device: true}
   defn predict({w1, b1, w2, b2}, batch) do
     batch
     |> Nx.dot(w1)
@@ -29,6 +33,7 @@ defmodule MNIST do
     |> softmax()
   end
 
+  @defn_compiler {EXLA, keep_on_device: true}
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
     Nx.mean(
       Nx.equal(
@@ -38,11 +43,13 @@ defmodule MNIST do
     )
   end
 
+  @defn_compiler {EXLA, keep_on_device: true}
   defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
     preds = predict({w1, b1, w2, b2}, batch_images)
     -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axes: [1]))
   end
 
+  @defn_compiler {EXLA, keep_on_device: true}
   defn update({w1, b1, w2, b2}, batch_images, batch_labels, step) do
     {grad_w1, grad_b1, grad_w2, grad_b2} =
       grad({w1, b1, w2, b2}, loss({w1, b1, w2, b2}, batch_images, batch_labels))
@@ -159,4 +166,4 @@ params = MNIST.init_random_params()
 IO.puts("Training MNIST for 10 epochs...\n\n")
 {final_params, _, _} = MNIST.train(train_images, train_labels, params, epochs: 10)
 
-IO.inspect(final_params)
+IO.inspect(Enum.map(Tuple.to_list(final_params), &Nx.device_transfer/1))
