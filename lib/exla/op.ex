@@ -1,4 +1,8 @@
 defmodule EXLA.Op do
+  @moduledoc """
+  Wrapper around XLA's ops.
+  """
+
   alias __MODULE__
   alias EXLA.{Builder, Computation, Shape}
 

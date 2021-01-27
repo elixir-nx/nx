@@ -5,7 +5,7 @@ defmodule EXLA.Buffer do
   An EXLA Buffer is the data passed as input and retrieved as output
   to/from EXLA Executables. An EXLA buffer is one of:
 
-    1) A Binary
+    1) A binary
     2) A reference to an `xla::ScopedShapedBuffer`
 
   An `xla::ScopedShapedBuffer` is an "owning" wrapper around an

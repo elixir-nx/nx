@@ -11,6 +11,9 @@ defmodule EXLA.Client do
   @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
   defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
 
+  @doc """
+  Fetches a client with the given `name` from configuration.
+  """
   def fetch!(name) do
     {_, client} = fetch_client!(name)
     client
@@ -107,6 +110,7 @@ defmodule EXLA.Client do
     }
   end
 
+  @doc false
   def check_device_compatibility!(
         %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
         ordinal

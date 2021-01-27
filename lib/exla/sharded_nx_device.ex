@@ -1,8 +1,5 @@
 defmodule EXLA.ShardedNxDevice do
-  @moduledoc """
-  Implementation of a sharded buffer for pmap.
-  """
-
+  @moduledoc false
   @behaviour Nx.Device
 
   @impl true

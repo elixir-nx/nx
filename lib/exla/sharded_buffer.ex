@@ -1,8 +1,5 @@
 defmodule EXLA.ShardedBuffer do
-  @moduledoc """
-  A sharded buffer.
-  """
-
+  @moduledoc false
   alias __MODULE__
   alias EXLA.{Buffer, Client, Shape}
 

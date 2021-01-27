@@ -1,4 +1,8 @@
 defmodule EXLA.Shape do
+  @moduledoc """
+  Wrapper around XLA's shape.
+  """
+
   alias __MODULE__
 
   @enforce_keys [:ref, :dims, :dtype]

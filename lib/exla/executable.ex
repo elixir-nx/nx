@@ -1,4 +1,8 @@
 defmodule EXLA.Executable do
+  @moduledoc """
+  Wrapper around XLA's executable.
+  """
+
   alias __MODULE__
   alias EXLA.{Buffer, Shape, ShardedBuffer}
 

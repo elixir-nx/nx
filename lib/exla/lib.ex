@@ -1,6 +1,6 @@
 defmodule EXLA.Lib do
   @moduledoc """
-  High-level operations.
+  High-level operations built on top of `EXLA.Op`.
   """
 
   alias EXLA.{Builder, Op, Shape}
