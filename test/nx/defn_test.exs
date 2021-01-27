@@ -19,6 +19,25 @@ defmodule Nx.DefnTest do
     end
   end
 
+  @default_defn_compiler Nx.Defn
+
+  describe "private definitions" do
+    defnp private(a, b), do: a + b
+    defn calls_private(a, b), do: private(a, b)
+
+    test "work" do
+      assert private(1, 2) == Nx.tensor(3)
+    end
+
+    test "are not exported" do
+      refute function_exported?(__MODULE__, :private, 2)
+    end
+
+    test "are callable from defn" do
+      assert calls_private(1, 2) == Nx.tensor(3)
+    end
+  end
+
   @default_defn_compiler Identity
 
   describe "unary ops" do
@@ -430,7 +449,7 @@ defmodule Nx.DefnTest do
 
     dynamic_name = String.to_atom(Enum.join(~w(dynamic name add two), "_"))
     operator = :add
-    defnp unquote(dynamic_name)(left, right), do: Nx.unquote(operator)(left, right)
+    defn unquote(dynamic_name)(left, right), do: Nx.unquote(operator)(left, right)
 
     test "dynamic name" do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = dynamic_name_add_two(1, 2)
@@ -705,7 +724,7 @@ defmodule Nx.DefnTest do
       final_back_and_forth(a)
     end
 
-    defnp final_back_and_forth(a), do: Nx.tanh(a)
+    defn final_back_and_forth(a), do: Nx.tanh(a)
 
     test "back and forth between Elixir and defn" do
       assert transform_back_and_forth(Nx.tensor(1)) ==

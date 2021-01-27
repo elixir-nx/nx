@@ -111,7 +111,7 @@ defmodule Nx.Defn.Compiler do
     quote line: state.line do
       Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
 
-      def unquote(name)(unquote_splicing(args)) do
+      Kernel.unquote(kind)(unquote(name)(unquote_splicing(args))) do
         if Process.get(Nx.Defn.Compiler) do
           unquote(defn_name)(unquote_splicing(args))
         else
