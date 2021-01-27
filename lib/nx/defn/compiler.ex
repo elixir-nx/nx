@@ -113,7 +113,7 @@ defmodule Nx.Defn.Compiler do
       if args == [] do
         quote do: fn -> unquote(defn_name)() end
       else
-        quote do: &(unquote(defn_name)(unquote_splicing(cache_args)))
+        quote do: &unquote(defn_name)(unquote_splicing(cache_args))
       end
 
     quote line: state.line do
@@ -290,6 +290,11 @@ defmodule Nx.Defn.Compiler do
           normalize_list(args, state)
       end
 
+    {{call, meta, args}, state}
+  end
+
+  defp normalize({{:., _, [Access, :get]} = call, meta, args}, state) do
+    {args, state} = normalize_list(args, state)
     {{call, meta, args}, state}
   end
 

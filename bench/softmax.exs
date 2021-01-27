@@ -1,6 +1,6 @@
 size = 1_000_000
 t64 = Nx.tensor(for _ <- 1..size, do: :rand.uniform())
-t32 = Nx.tensor((for _ <- 1..size, do: :rand.uniform()), type: {:f, 32})
+t32 = Nx.tensor(for(_ <- 1..size, do: :rand.uniform()), type: {:f, 32})
 
 defmodule Softmax do
   import Nx.Defn
@@ -39,8 +39,10 @@ benches =
     Map.merge(benches, %{
       "xla gpu f32" => fn -> Softmax.cuda(t32) end,
       "xla gpu f64" => fn -> Softmax.cuda(t64) end,
-      "xla gpu f32 keep" => {fn -> Softmax.cuda_keep(dt32) end, after_each: &Nx.device_deallocate/1},
-      "xla gpu f64 keep" => {fn -> Softmax.cuda_keep(dt64) end, after_each: &Nx.device_deallocate/1}
+      "xla gpu f32 keep" =>
+        {fn -> Softmax.cuda_keep(dt32) end, after_each: &Nx.device_deallocate/1},
+      "xla gpu f64 keep" =>
+        {fn -> Softmax.cuda_keep(dt64) end, after_each: &Nx.device_deallocate/1}
     })
   else
     benches

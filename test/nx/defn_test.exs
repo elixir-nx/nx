@@ -20,6 +20,11 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "kernel doctests" do
+    use Nx.Defn.Kernel
+    doctest Nx.Defn.Kernel
+  end
+
   @default_defn_compiler Identity
 
   describe "unary ops" do
@@ -355,6 +360,13 @@ defmodule Nx.DefnTest do
     test "~~~" do
       assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
       assert Nx.Defn.Kernel.~~~(1) == -2
+    end
+
+    defn access_sum(a, opts \\ []), do: Nx.sum(a, axes: opts[:axes])
+
+    test "access" do
+      assert %T{data: %Expr{op: :sum, args: [_, [axes: [1]]]}} =
+               access_sum(Nx.iota({2, 2}), axes: [1])
     end
   end
 

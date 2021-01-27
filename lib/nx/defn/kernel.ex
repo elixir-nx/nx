@@ -553,6 +553,100 @@ defmodule Nx.Defn.Kernel do
   def left >>> right, do: Nx.right_shift(left, right)
 
   @doc """
+  Ensures the first argument is a `keyword` with the given
+  keys and default values.
+
+  The second argument must be a list of atoms, specifying
+  a given key, or tuples specifying a key and a default value.
+  If any of the keys in the `keyword` is not defined on
+  `values`, it raises an error.
+
+  ## Examples
+
+      iex> keyword!([], [one: 1, two: 2]) |> Enum.sort()
+      [one: 1, two: 2]
+
+      iex> keyword!([two: 3], [one: 1, two: 2]) |> Enum.sort()
+      [one: 1, two: 3]
+
+  If atoms are given, they are supported as keys but do not
+  provide a default value:
+
+      iex> keyword!([], [:one, two: 2]) |> Enum.sort()
+      [two: 2]
+
+      iex> keyword!([one: 1], [:one, two: 2]) |> Enum.sort()
+      [one: 1, two: 2]
+
+  Passing an unknown key raises:
+
+      iex> keyword!([three: 3], [one: 1, two: 2])
+      ** (ArgumentError) unknown key :three in [three: 3], expected to be one of [one: 1, two: 2]
+
+  """
+  def keyword!(keyword, values) when Kernel.and(is_list(keyword), is_list(values)) do
+    # We use two lists to avoid reversing/concatenating
+    # lists in the middle of traversals.
+    case keyword!(keyword, values, [], []) do
+      {:ok, keyword} ->
+        keyword
+
+      {:badkey, key} ->
+        raise ArgumentError,
+              "unknown key #{inspect(key)} in #{inspect(keyword)}, " <>
+                "expected to be one of #{inspect(values)}"
+
+      :badkey ->
+        raise ArgumentError,
+              "keyword!/2 expects the first argument to be a list, got: #{inspect(keyword)}"
+    end
+  end
+
+  defp keyword!([{key, _} = pair | keyword], values1, values2, acc) when is_atom(key) do
+    case find_key!(key, values1, values2) do
+      {values1, values2} ->
+        keyword!(keyword, values1, values2, [pair | acc])
+
+      :error ->
+        case find_key!(key, values2, values1) do
+          {values1, values2} ->
+            keyword!(keyword, values1, values2, [pair | acc])
+
+          :error ->
+            {:badkey, key}
+        end
+    end
+  end
+
+  defp keyword!([], values1, values2, acc) do
+    {:ok, move_pairs!(values1, move_pairs!(values2, acc))}
+  end
+
+  defp keyword!(_keyword, _values1, _values2, _acc) do
+    :badkey
+  end
+
+  defp find_key!(key, [key | rest], acc), do: {rest, acc}
+  defp find_key!(key, [{key, _} | rest], acc), do: {rest, acc}
+  defp find_key!(key, [head | tail], acc), do: find_key!(key, tail, [head | acc])
+  defp find_key!(_key, [], _acc), do: :error
+
+  defp move_pairs!([key | rest], acc) when is_atom(key),
+    do: move_pairs!(rest, acc)
+
+  defp move_pairs!([{key, _} = pair | rest], acc) when is_atom(key),
+    do: move_pairs!(rest, [pair | acc])
+
+  defp move_pairs!([], acc),
+    do: acc
+
+  defp move_pairs!([other | _], _) do
+    raise ArgumentError,
+          "keyword!/2 expects the second argument to be a list of atoms or tuples, " <>
+            "got: #{inspect(other)}"
+  end
+
+  @doc """
   Pipes the argument on the left to the function call on the right.
 
   It delegates to `Kernel.|>/2`.
@@ -571,7 +665,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Provides conditional expressions.
+  Provides if/else expressions.
 
   The first argument must be a scalar. Zero is considered false,
   any other number is considered true.

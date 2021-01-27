@@ -136,15 +136,15 @@ defmodule MNIST do
         {time, {new_params, epoch_avg_loss, epoch_avg_acc}} =
           :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
 
-          epoch_avg_loss =
-            epoch_avg_loss
-            |> Nx.device_transfer()
-            |> Nx.to_scalar()
+        epoch_avg_loss =
+          epoch_avg_loss
+          |> Nx.device_transfer()
+          |> Nx.to_scalar()
 
-          epoch_avg_acc =
-            epoch_avg_acc
-            |> Nx.device_transfer()
-            |> Nx.to_scalar()
+        epoch_avg_acc =
+          epoch_avg_acc
+          |> Nx.device_transfer()
+          |> Nx.to_scalar()
 
         IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s")
         IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")

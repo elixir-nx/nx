@@ -98,6 +98,14 @@ defmodule Nx.Defn do
         Nx.broadcast(Nx.tensor(0, type: opts[:type]), opts[:shape])
       end
 
+  The function above accepts `opts` which are then validated and given
+  default values via the `keyword!/2` function. Note that while it is
+  possible to access options via the `Access` syntax, such as `opts[:shape]`,
+  it is not possible to directly call functions in the `Keyword` module
+  inside `defn`. To freely manipulate any Elixir value inside `defn`,
+  you have to use transforms, as described in the "Invoking custom Elixir
+  code" section.
+
   When it comes to JIT compilation, it is important to notice that each
   different set of options will lead to a different compilation of the
   numerical function. Also note that, if tensors are given as default
@@ -125,8 +133,8 @@ defmodule Nx.Defn do
   ## Invoking custom Elixir code
 
   Inside `defn` you can only call other `defn` functions and
-  the functions in the `Nx` module. However, inside `defn`,
-  it is possible to use transforms to invoke any Elixir code:
+  the functions in the `Nx` module. However, it is possible
+  to use transforms to invoke any Elixir code:
 
       defn add_and_mult(a, b, c) do
         res = a * b + c

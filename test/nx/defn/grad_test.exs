@@ -3,7 +3,6 @@ defmodule Nx.Defn.GradTest do
 
   import Nx.Defn
   import Nx.GradHelpers
-  doctest Nx.Defn.Grad
 
   describe "simple" do
     defn grad_itself(t), do: grad(t, t)
