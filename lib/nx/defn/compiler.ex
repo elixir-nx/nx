@@ -63,7 +63,7 @@ defmodule Nx.Defn.Compiler do
       try do
         compiler.__jit__(
           fun,
-          Nx.Defn.Expr.from_args(args),
+          Nx.Defn.Expr.validate_args(args),
           fn vars ->
             params = Nx.Defn.Expr.to_params(vars)
             args = Nx.Defn.Expr.to_args(args, params)
@@ -128,7 +128,7 @@ defmodule Nx.Defn.Compiler do
           try do
             unquote(def_module).__jit__(
               unquote(cache),
-              Nx.Defn.Expr.to_vars(unquote(vars)),
+              Nx.Defn.Expr.validate_vars(unquote(vars)),
               fn unquote(vars) ->
                 unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
                 Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))

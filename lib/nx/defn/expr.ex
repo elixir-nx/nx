@@ -12,8 +12,9 @@ defmodule Nx.Defn.Expr do
 
   ## Syntax nodes
 
-  Most `:op` nodes translate to `Nx.Tensor` callback, although
-  some syntax nodes exist:
+  Most nodes are created directly via the `Nx` module and
+  therefore map directly to `Nx.Tensor` callbacks. However
+  the following syntax nodes exist:
 
     * `parameter(integer)`
 
@@ -21,9 +22,12 @@ defmodule Nx.Defn.Expr do
 
     * `fun(parameters, t, fun)`
 
-    * `cond(clauses, otherwise)` - may return tuples
+    * `cond(clauses, otherwise)` - note it may return tuples.
 
-    * `elem(tuple, pos, size)` - may return tuples
+    * `elem(tuple, pos, size)` - created automatically from
+      `cond`, `fun` and `loop` when they return tuples.
+      Note it may return tuples too in case the expressions
+      above return nested tuples.
 
   """
 
@@ -35,6 +39,8 @@ defmodule Nx.Defn.Expr do
   @enforce_keys [:id, :op, :args, :context]
   @type t :: %Expr{}
   defstruct [:id, :op, :args, :context]
+
+  ## Public API
 
   @doc """
   Converts the given `arg` into an expression tensor.
@@ -56,170 +62,24 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Helper to traverse the expression arguments of an expression.
-
-  Note function expressions are never traversed, as they shouldn't
-  be modified as that would ultimately change the function itself.
+  Creates a parameter with the given `context`, `type`, `shape`, and `pos`.
   """
-  def traverse_args(expr, acc, fun)
-
-  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
-    {args, acc}
-  end
-
-  def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
-    {clauses, acc} =
-      Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
-        {condition, acc} = fun.(condition, acc)
-        {expr, acc} = traverse_tuple_or_expr(expr, acc, fun)
-        {{condition, expr}, acc}
-      end)
-
-    {last, acc} = traverse_tuple_or_expr(last, acc, fun)
-    {[clauses, last], acc}
-  end
-
-  def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
-    {list, acc} = Enum.map_reduce(list, acc, fun)
-    {[list | args], acc}
-  end
-
-  def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do
-    Enum.map_reduce(args, acc, fn
-      %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
-      arg, acc -> {arg, acc}
-    end)
-  end
-
-  defp traverse_tuple_or_expr(tuple, acc, fun) when is_tuple(tuple) do
-    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse_tuple_or_expr(&1, &2, fun))
-    {List.to_tuple(list), acc}
-  end
-
-  defp traverse_tuple_or_expr(expr, acc, fun) do
-    fun.(expr, acc)
-  end
-
-  ## Nx.Defn dynamic callbacks
-
-  @doc false
-  def from_args(args) do
-    args
-    |> Enum.reduce([], &from_args/2)
-    |> Enum.reverse()
-  end
-
-  defp from_args(%T{} = t, acc),
-    do: [t | acc]
-
-  defp from_args(number, acc) when is_number(number),
-    do: [Nx.tensor(number) | acc]
-
-  defp from_args(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_args/2)
-
-  defp from_args(other, _acc) do
-    raise(
-      ArgumentError,
-      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
-    )
-  end
-
-  @doc false
-  def to_args(args, params) when is_list(args) do
-    {args, []} = Enum.map_reduce(args, params, &to_args_each/2)
-    args
-  end
-
-  defp to_args_each(arg, params) when is_tuple(arg) do
-    {list, params} =
-      arg
-      |> Tuple.to_list()
-      |> Enum.map_reduce(params, &to_args_each/2)
-
-    {List.to_tuple(list), params}
-  end
-
-  defp to_args_each(_arg, [param | params]) do
-    {param, params}
-  end
-
-  ## Nx.Defn static callbacks
-
-  @doc false
-  def to_vars(vars) do
-    for var <- vars do
-      case var do
-        %T{} = head ->
-          head
-
-        number when is_number(number) ->
-          Nx.tensor(number)
-
-        tuple when is_tuple(tuple) ->
-          raise ArgumentError,
-                "defn functions expects either numbers or tensors as arguments. " <>
-                  "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
-                  "Got: #{inspect(tuple)}"
-
-        other ->
-          raise ArgumentError,
-                "defn functions expects either numbers or tensors as arguments. " <>
-                  "Got: #{inspect(other)}"
-      end
-    end
-  end
-
-  @doc false
-  def to_params(vars),
-    do: to_params(vars, 0)
-
-  defp to_params([head | tail], i),
-    do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
-
-  defp to_params([], _i),
-    do: []
-
-  @doc false
-  def to_result(tuple) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
-
-  def to_result(%T{data: %Expr{}} = t),
-    do: t
-
-  def to_result(other) do
-    raise ArgumentError,
-          "defn must return an expression tensor or a tuple, got: #{inspect(other)}"
-  end
-
-  ## Syntax nodes
-
-  @doc false
   def parameter(context, type, shape, pos) do
     names = List.duplicate(nil, tuple_size(shape))
     expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
   end
 
-  @doc false
-  def cond(file, clauses, last) do
-    clauses =
-      for {meta, {pred, expr}} <- clauses do
-        pred = to_expr(pred)
-
-        if pred.shape != {} do
-          raise CompileError,
-            line: meta[:line],
-            file: file,
-            description: "condition must be a scalar tensor, got: #{inspect(pred.shape)}"
-        end
-
-        {pred, expr}
-      end
-
-    cond(clauses, last)
+  @doc """
+  Creates a function node with the given args and anonuymous function.
+  """
+  def fun(args, fun) when is_function(fun, length(args)) do
+    out = to_expr(apply(fun, args))
+    expr(out, out.data.context, :fun, [args, out, fun])
   end
 
-  @doc false
+  @doc """
+  Creates a `cond` expression.
+  """
   def cond(clauses, last) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
@@ -301,7 +161,167 @@ defmodule Nx.Defn.Expr do
             "got #{inspect(left)} and #{inspect(right)}"
   end
 
-  ## Creation ops
+  ## Traversal helpers
+
+  @doc """
+  Helper to traverse the expression arguments of an expression.
+
+  Note function expressions are never traversed, as they shouldn't
+  be modified as that would ultimately change the function itself.
+  """
+  def traverse_args(expr, acc, fun)
+
+  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
+    {args, acc}
+  end
+
+  def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
+    {clauses, acc} =
+      Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
+        {condition, acc} = fun.(condition, acc)
+        {expr, acc} = traverse_tuple_or_expr(expr, acc, fun)
+        {{condition, expr}, acc}
+      end)
+
+    {last, acc} = traverse_tuple_or_expr(last, acc, fun)
+    {[clauses, last], acc}
+  end
+
+  def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
+    {list, acc} = Enum.map_reduce(list, acc, fun)
+    {[list | args], acc}
+  end
+
+  def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do
+    Enum.map_reduce(args, acc, fn
+      %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
+      arg, acc -> {arg, acc}
+    end)
+  end
+
+  defp traverse_tuple_or_expr(tuple, acc, fun) when is_tuple(tuple) do
+    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse_tuple_or_expr(&1, &2, fun))
+    {List.to_tuple(list), acc}
+  end
+
+  defp traverse_tuple_or_expr(expr, acc, fun) do
+    fun.(expr, acc)
+  end
+
+  ## Nx.Defn callbacks
+
+  @doc false
+  def validate_args(args) do
+    args
+    |> Enum.reduce([], &validate_args/2)
+    |> Enum.reverse()
+  end
+
+  defp validate_args(%T{} = t, acc),
+    do: [t | acc]
+
+  defp validate_args(number, acc) when is_number(number),
+    do: [Nx.tensor(number) | acc]
+
+  defp validate_args(tuple, acc) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &validate_args/2)
+
+  defp validate_args(other, _acc) do
+    raise(
+      ArgumentError,
+      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
+    )
+  end
+
+  @doc false
+  def validate_vars(vars) do
+    for var <- vars do
+      case var do
+        %T{} = head ->
+          head
+
+        number when is_number(number) ->
+          Nx.tensor(number)
+
+        tuple when is_tuple(tuple) ->
+          raise ArgumentError,
+                "defn functions expects either numbers or tensors as arguments. " <>
+                  "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
+                  "Got: #{inspect(tuple)}"
+
+        other ->
+          raise ArgumentError,
+                "defn functions expects either numbers or tensors as arguments. " <>
+                  "Got: #{inspect(other)}"
+      end
+    end
+  end
+
+  @doc false
+  def to_args(args, params) when is_list(args) do
+    {args, []} = Enum.map_reduce(args, params, &to_args_each/2)
+    args
+  end
+
+  defp to_args_each(arg, params) when is_tuple(arg) do
+    {list, params} =
+      arg
+      |> Tuple.to_list()
+      |> Enum.map_reduce(params, &to_args_each/2)
+
+    {List.to_tuple(list), params}
+  end
+
+  defp to_args_each(_arg, [param | params]) do
+    {param, params}
+  end
+
+  @doc false
+  def to_params(vars),
+    do: to_params(vars, 0)
+
+  defp to_params([head | tail], i),
+    do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
+
+  defp to_params([], _i),
+    do: []
+
+  @doc false
+  def to_result(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
+
+  def to_result(%T{data: %Expr{}} = t),
+    do: t
+
+  def to_result(other) do
+    raise ArgumentError,
+          "defn must return an expression tensor or a tuple, got: #{inspect(other)}"
+  end
+
+  ## Nx.Defn AST callbacks
+
+  @doc false
+  def cond(file, clauses, last) do
+    clauses =
+      for {meta, {pred, expr}} <- clauses do
+        pred = to_expr(pred)
+
+        if pred.shape != {} do
+          raise CompileError,
+            line: meta[:line],
+            file: file,
+            description: "condition must be a scalar tensor, got: #{inspect(pred.shape)}"
+        end
+
+        {pred, expr}
+      end
+
+    cond(clauses, last)
+  end
+
+  ## Nx.Tensor Callbacks
+
+  @behaviour Nx.Tensor
 
   @impl true
   def iota(out, axis) do
@@ -317,10 +337,6 @@ defmodule Nx.Defn.Expr do
   def random_normal(out, mu, sigma) do
     expr(out, nil, :random_normal, [mu, sigma])
   end
-
-  ## Nx.Tensor Callbacks
-
-  @behaviour Nx.Tensor
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
@@ -364,7 +380,7 @@ defmodule Nx.Defn.Expr do
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = to_fun(args, fun)
+    fun = fun(args, fun)
 
     if fun.shape != {} do
       raise "reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -384,7 +400,7 @@ defmodule Nx.Defn.Expr do
       ) do
     args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = to_fun(args, fun)
+    fun = fun(args, fun)
 
     if fun.shape != {} do
       raise "reduce_window function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -397,7 +413,7 @@ defmodule Nx.Defn.Expr do
   def map(%{type: type} = out, tensor, fun) do
     args = [parameter(:map, type, {}, 0)]
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :map, [tensor, to_fun(args, fun)])
+    expr(out, tensor.data.context, :map, [tensor, fun(args, fun)])
   end
 
   @impl true
@@ -487,7 +503,7 @@ defmodule Nx.Defn.Expr do
 
     args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
     comparator = to_nx_comparator(comparator)
-    fun = to_fun(args, comparator)
+    fun = fun(args, comparator)
 
     if fun.shape != {} do
       raise "sort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -506,6 +522,24 @@ defmodule Nx.Defn.Expr do
 
   defp to_nx_comparator(_),
     do: "comparator must be either :desc or :asc or a function with arity 2"
+
+  ## Undefined
+
+  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, from_binary: 2, to_binary: 1]
+
+  for {op, arity} <- ops do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    @impl true
+    def unquote(op)(unquote_splicing(args)) do
+      raise ArgumentError, """
+      cannot invoke #{unquote(op)}/#{unquote(arity)} on Nx.Defn.Expr.
+
+      This typically means you are invoking an unsupported Nx function
+      by code inside `defn` or JIT/AOT compiled code
+      """
+    end
+  end
 
   ## Helpers
 
@@ -538,29 +572,6 @@ defmodule Nx.Defn.Expr do
 
       {expr, context || acc}
     end)
-  end
-
-  defp to_fun(args, fun) when is_function(fun, length(args)) do
-    out = to_expr(apply(fun, args))
-    expr(out, out.data.context, :fun, [args, out, fun])
-  end
-
-  ## Undefined
-
-  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, from_binary: 2, to_binary: 1]
-
-  for {op, arity} <- ops do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    @impl true
-    def unquote(op)(unquote_splicing(args)) do
-      raise ArgumentError, """
-      cannot invoke #{unquote(op)}/#{unquote(arity)} on Nx.Defn.Expr.
-
-      This typically means you are invoking an unsupported Nx function
-      by code inside `defn` or JIT/AOT compiled code
-      """
-    end
   end
 
   ## Inspect
