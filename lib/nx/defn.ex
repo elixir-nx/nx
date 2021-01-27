@@ -1,5 +1,5 @@
 defmodule Nx.Defn do
-  @moduledoc """
+  @moduledoc ~S"""
   Numerical functions.
 
   A numerical function is a subset of Elixir tailored for
@@ -51,6 +51,53 @@ defmodule Nx.Defn do
 
   The same semantics apply to conditional expressions inside `defn`.
 
+  ## JIT compilers
+
+  The power of `Nx.Defn` is given by its compilers. The default
+  compiler is the `Nx.Defn` module itself, which executes the code
+  in pure Elixir. However, you can use module attributes to specify
+  how a `defn` function will behave. For example, assuming you
+  are using the `EXLA` compiler:
+
+      @defn_compiler {EXLA, client: :host}
+      defn add_and_mult(a, b, c) do
+        a * b + c
+      end
+
+  To set the compiler for the all definitions, you can set the
+  `@default_defn_compiler` attribute:
+
+      @default_defn_compiler {EXLA, client: :cuda}
+
+  `defn` functions are compiled when they are invoked, based on
+  the type and shapes of the tensors given as arguments. Once
+  invoked for the first time, the compilation is cached based
+  on the tensors shapes and types. Calling the same function with
+  a tensor of different values but same shape and type means no
+  further compilation is performed.
+
+  For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
+
+  ## Default arguments
+
+  `defn` functions also support default arguments. They are typically
+  used as options. For example, imagine you want to create a function
+  named zeros, which returns a tensor of zeroes with a given type and
+  shape. It could be implemented like this:
+
+      defn zeros(opts \\ []) do
+        opts = keyword!(opts, type: {:f, 32}, shape: {})
+        Nx.broadcast(Nx.tensor(0, type: opts[:type]), opts[:shape])
+      end
+
+  When it comes to JIT compilation, it is important to notice that each
+  different set of options will lead to a different compilation of the
+  numerical function. Also note that, if tensors are given as default
+  arguments, the whole tensor will be used as the compilation key. So
+  even if you pass different tensors with the same type and shape, it
+  will lead to different compilation artifacts. For this reason, it
+  is **extremely discouraged to pass tensors through default arguments**.
+
   ## Inputs and outputs types
 
   `defn` functions can receive either tuples, numbers, or tensors
@@ -76,28 +123,6 @@ defmodule Nx.Defn do
   the `Nx.Defn.Kernel.grad/2` function, which automatically
   computes gradients from `Nx` expressions, is implemented as
   a transform.
-
-  ## JIT compilers
-
-  The power of `Nx.Defn` is given by its compilers. The default
-  compiler is the `Nx.Defn` module itself, which executes the code
-  in pure Elixir. However, you can use module attributes to specify
-  how a `defn` function will behave. For example, assuming you
-  are using the `EXLA` compiler:
-
-      @defn_compiler {EXLA, client: :host}
-      defn add_and_mult(a, b, c) do
-        a * b + c
-      end
-
-  To set the compiler for the all definitions, you can set the
-  `@default_defn_compiler` attribute:
-
-      @default_defn_compiler {EXLA, client: :cuda}
-
-  `defn` functions are compiled when they are invoked, based on
-  the type and shapes of the tensors given as arguments. To write
-  your own compiler, see `Nx.Defn.Compiler`.
   """
 
   ## Default compiler backend
@@ -223,11 +248,17 @@ defmodule Nx.Defn do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
-    assert_no_defaults!(kind, args, env)
+    defaults = for {{:\\, _, [_, _]}, i} <- Enum.with_index(args), do: i
     arity = length(args)
 
     quote do
-      unquote(__MODULE__).__define__(__MODULE__, unquote(kind), unquote(name), unquote(arity))
+      unquote(__MODULE__).__define__(
+        __MODULE__,
+        unquote(kind),
+        unquote(name),
+        unquote(arity),
+        unquote(defaults)
+      )
 
       unquote(kind)(unquote(call)) do
         use Nx.Defn.Kernel
@@ -259,17 +290,8 @@ defmodule Nx.Defn do
 
   defp assert_no_guards!(_kind, _call, _env), do: :ok
 
-  defp assert_no_defaults!(kind, call, env) do
-    if default = Enum.find(call, &match?({:\\, _, _}, &1)) do
-      compile_error!(
-        env,
-        "default arguments are not supported by #{kind}n, got: #{Macro.to_string(default)}"
-      )
-    end
-  end
-
   # Internal attributes
-  @exports_key :__next_exports__
+  @exports_key :__defn_exports__
 
   # Per-defn attributes
   @defn_compiler :defn_compiler
@@ -278,7 +300,7 @@ defmodule Nx.Defn do
   @default_defn_compiler :default_defn_compiler
 
   @doc false
-  def __define__(module, kind, name, arity) do
+  def __define__(module, kind, name, arity, defaults) do
     exports =
       if exports = Module.get_attribute(module, @exports_key) do
         exports
@@ -292,9 +314,13 @@ defmodule Nx.Defn do
         Module.get_attribute(module, @default_defn_compiler) ||
         __MODULE__
 
-    compiler = normalize_compiler!(compiler)
+    exports =
+      Map.put(exports, {name, arity}, %{
+        kind: kind,
+        compiler: normalize_compiler!(compiler),
+        defaults: defaults
+      })
 
-    exports = Map.put(exports, {name, arity}, %{kind: kind, compiler: compiler})
     Module.put_attribute(module, @exports_key, exports)
     :ok
   end

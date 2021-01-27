@@ -102,11 +102,19 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], quoted}
   end
 
-  defp compile_each({{name, arity} = def, def_meta}, state) do
+  defp compile_each({{name, _arity} = def, def_meta}, state) do
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
-    vars = collect_vars(args)
+    {nx_args, cache_args} = split_args(args, 0, def_meta.defaults, [], [])
+    vars = collect_vars(nx_args)
     {def_module, def_opts} = def_meta.compiler
     defn_name = defn_name(name)
+
+    cache =
+      if args == [] do
+        quote do: fn -> unquote(defn_name)() end
+      else
+        quote do: &(unquote(defn_name)(unquote_splicing(cache_args)))
+      end
 
     quote line: state.line do
       Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
@@ -119,7 +127,7 @@ defmodule Nx.Defn.Compiler do
 
           try do
             unquote(def_module).__jit__(
-              &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity)),
+              unquote(cache),
               Nx.Defn.Expr.to_vars(unquote(vars)),
               fn unquote(vars) ->
                 unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
@@ -136,6 +144,16 @@ defmodule Nx.Defn.Compiler do
       Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(args)), do: unquote(ast))
     end
   end
+
+  defp split_args([arg | args], i, defaults, nx, cache) do
+    if i in defaults do
+      split_args(args, i + 1, defaults, nx, [arg | cache])
+    else
+      split_args(args, i + 1, defaults, [arg | nx], [{:&, [], [length(nx) + 1]} | cache])
+    end
+  end
+
+  defp split_args([], _, _, nx, cache), do: {Enum.reverse(nx), Enum.reverse(cache)}
 
   defp collect_vars(args) do
     {_, vars} =

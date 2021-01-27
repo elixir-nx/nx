@@ -14,27 +14,9 @@ defmodule Nx.DefnTest do
   defmodule Identity do
     @behaviour Nx.Defn.Compiler
 
-    def __jit__(_key, vars, fun, _opts) do
+    def __jit__(key, vars, fun, _opts) do
+      Process.put(__MODULE__, key)
       fun.(vars)
-    end
-  end
-
-  @default_defn_compiler Nx.Defn
-
-  describe "private definitions" do
-    defnp private(a, b), do: a + b
-    defn calls_private(a, b), do: private(a, b)
-
-    test "work" do
-      assert private(1, 2) == Nx.tensor(3)
-    end
-
-    test "are not exported" do
-      refute function_exported?(__MODULE__, :private, 2)
-    end
-
-    test "are callable from defn" do
-      assert calls_private(1, 2) == Nx.tensor(3)
     end
   end
 
@@ -813,17 +795,6 @@ defmodule Nx.DefnTest do
                    end
     end
 
-    test "defaults" do
-      assert_raise CompileError,
-                   ~r"#{location(+4)}: default arguments are not supported by defn",
-                   fn ->
-                     defmodule Sample do
-                       import Nx.Defn
-                       defn add(a, b \\ 2), do: a + b
-                     end
-                   end
-    end
-
     test "invalid defn compiler" do
       assert_raise ArgumentError,
                    ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
@@ -846,6 +817,51 @@ defmodule Nx.DefnTest do
                        defn add(a, b), do: a + b
                      end
                    end
+    end
+  end
+
+  @default_defn_compiler Nx.Defn
+
+  describe "default arguments" do
+    defn sum_axis_opts(a, opts \\ []), do: Nx.sum(a, opts)
+
+    test "are supported" do
+      assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
+      assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [0]) == Nx.tensor([4, 6])
+      assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [1]) == Nx.tensor([3, 7])
+    end
+
+    @defn_compiler Identity
+    defn sum_axis_expr(a, opts \\ []), do: Nx.sum(a, opts)
+
+    test "have their own cache key" do
+      sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
+      key0 = Process.get(Identity)
+      assert is_function(key0, 1)
+
+      sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
+      key1 = Process.get(Identity)
+      assert is_function(key1, 1)
+
+      sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
+      assert Process.get(Identity) == key0
+    end
+  end
+
+  describe "private definitions" do
+    defnp private(a, b), do: a + b
+    defn calls_private(a, b), do: private(a, b)
+
+    test "work" do
+      assert private(1, 2) == Nx.tensor(3)
+    end
+
+    test "are not exported" do
+      refute function_exported?(__MODULE__, :private, 2)
+    end
+
+    test "are callable from defn" do
+      assert calls_private(1, 2) == Nx.tensor(3)
     end
   end
 end
