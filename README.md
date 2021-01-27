@@ -176,7 +176,7 @@ docker run -it \
   -v $PWD:$PWD \
   -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
   -e EXLA_CACHE=$PWD/tmp/exla_cache \
-  -e EXLA_FLAGS=--config=cuda
+  -e EXLA_FLAGS=--config=cuda \
   -e EXLA_TARGET=cuda \
   -w $PWD \
   --gpus=all \
@@ -191,7 +191,7 @@ docker run -it \
   -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
   -e EXLA_CACHE=$PWD/tmp/exla_cache \
   -e EXLA_FLAGS="--config=rocm --action_env=HIP_PLATFORM=hcc" \
-  -e EXLA_TARGET=rocm
+  -e EXLA_TARGET=rocm \
   -w $PWD \
   --device=/dev/kfd \
   --device=/dev/dri \
