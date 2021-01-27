@@ -78,7 +78,15 @@ defmodule Nx.Defn do
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
-  ## Default arguments
+  ## Inputs and outputs types
+
+  The inputs to `defn` functions must be either tuples, numbers,
+  or tensors. To pass non-numerical values to numerical definitions,
+  they must be declared as default arguments (see next subsection).
+
+  `defn` functions can only return tensors or tuples of tensors.
+
+  ### Default arguments
 
   `defn` functions also support default arguments. They are typically
   used as options. For example, imagine you want to create a function
@@ -98,12 +106,21 @@ defmodule Nx.Defn do
   will lead to different compilation artifacts. For this reason, it
   is **extremely discouraged to pass tensors through default arguments**.
 
-  ## Inputs and outputs types
+  ### Tuples and pattern matching
 
-  `defn` functions can receive either tuples, numbers, or tensors
-  as inputs.
+  When passing tuples as inputs to `defn` functions, the tuples
+  must be matched on the function head. For example, this is valid:
 
-  `defn` functions can return tensors or tuples of tensors.
+      defn my_example({a, b}, c), do: a * b + c
+
+  This is not:
+
+      defn my_example(ab, c) do
+        {a, b} = ab
+        a * b + c
+      end
+
+  If you write the latter format, `defn` will raise.
 
   ## Invoking custom Elixir code
 
