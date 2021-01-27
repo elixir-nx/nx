@@ -144,10 +144,19 @@ defmodule Nx.Defn do
   For example, the code above invokes `&IO.inspect/1`, which is
   not a `defn` function, with the value of `res`. This is useful
   as it allows developers to transform `defn` code at runtime,
-  in order to optimize, add new properties, and so on. For example,
-  the `Nx.Defn.Kernel.grad/2` function, which automatically
-  computes gradients from `Nx` expressions, is implemented as
-  a transform.
+  in order to optimize, add new properties, and so on.
+
+  Transforms can also be used to manipulate Elixir data structures,
+  such as options. For example, imagine you want to support options
+  where the :axis key is required. While you can't invoke `Keyword`
+  directly, you can do it via a transform:
+
+      defn sum_axis(t, opts \\ []) do
+        opts = keyword!(opts, [:axis])
+        axis = transform(opts, &Keyword.fetch!(opts, :axis))
+        Nx.sum(t, axes: [axis])
+      end
+
   """
 
   ## Default compiler backend
