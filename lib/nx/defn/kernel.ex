@@ -209,7 +209,7 @@ defmodule Nx.Defn.Kernel do
         grad(t, Nx.tanh(t))
       end
 
-  To differenciate on multiple vars, pass a tuple as first argument:
+  To differentiate on multiple vars, pass a tuple as first argument:
 
       defn tanh_power_grad(a, b) do
         grad({a, b}, Nx.tanh(a) + Nx.power(b, 2))

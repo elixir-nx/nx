@@ -1,8 +1,8 @@
 *Note: This repository currently holds two projects, `Nx` and `EXLA`, which are described below. The main project, `Nx`, will be extracted to its own repository before the first release.*
 
-<img src="https://github.com/elixir-nx/exla/raw/main/nx.png" alt="Nx" width="400">
+<h1><img src="https://github.com/elixir-nx/exla/raw/main/nx.png" alt="Nx" width="400"></h1>
 
-Nx is a multi-dimensional tensors library for Elixir. Its main features are:
+Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its main features are:
 
   * Typed multi-dimensional tensors, where the tensors can be unsigned integers (sizes 8, 16, 32, 64), signed integers (sizes 8, 16, 32, 64), floats (sizes 32, 64) and brain floats (sizes 16);
 
@@ -10,9 +10,9 @@ Nx is a multi-dimensional tensors library for Elixir. Its main features are:
 
   * Automatic differentiation, also known as autograd. The `grad` function provides reverse-mode differentiation, useful for simulations, training probabilistic models, etc;
 
-  * Tensors backends, which allow the main `Nx` API to be used to manipulate binary tensors, column-based tensors, sparse matrices, and more;
+  * Tensors backends, which enables the main `Nx` API to be used to manipulate binary tensors, column-based tensors, sparse matrices, and more;
 
-  * Compiled definitions, known as `defn`, provide multi-stage programming and allow tensor operations to be compiled to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT);
+  * Numerical definitions, known as `defn`, provide multi-stage compilation of tensor operations to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT);
 
 Other features include broadcasting, multi-device support, etc. You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know.
 
@@ -76,9 +76,9 @@ Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time an
 
 Many of Elixir features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. Other features such as loops, updates, and access (generally known as slicing) are on the roadmap. `defn` also support `transforms`, which allows numerical definitions to be transformed at runtime. Automatic differentiations, via the `grad` function, is one example of transforms.
 
-# EXLA
+<h1><img src="https://github.com/elixir-nx/exla/raw/main/exla.png" alt="EXLA" width="350"></h1>
 
-Elixir XLA Client for compiling and running Elixir code on CPU/GPU/TPU. It also provides compilers for the `Nx` library.
+Elixir client for Google's XLA (Accelerated Linear Algebra). It includes integration with the `Nx` library to compile numerical definitions (`defn`) to the CPU/GPU.
 
 ## Installation
 
