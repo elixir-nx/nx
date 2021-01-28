@@ -27,6 +27,22 @@ defmodule Nx.DefnTest do
 
   @default_defn_compiler Identity
 
+  describe "constants" do
+    @tensor Nx.tensor([1, 2, 3])
+    defn tensor_constant, do: Nx.tensor(@tensor)
+
+    test "from tensor" do
+      assert %T{data: %Expr{op: :tensor}} = tensor_constant()
+    end
+
+    @tensor [1, 2, 3]
+    defn list_constant, do: Nx.tensor(@tensor)
+
+    test "from list" do
+      assert %T{data: %Expr{op: :tensor}} = list_constant()
+    end
+  end
+
   describe "unary ops" do
     defn exp(t), do: Nx.exp(t)
 

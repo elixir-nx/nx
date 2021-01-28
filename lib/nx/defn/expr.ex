@@ -43,16 +43,13 @@ defmodule Nx.Defn.Expr do
   ## Public API
 
   @doc """
-  Converts the given `arg` into an expression tensor.
-  """
-  def to_expr(%T{data: %Expr{}} = t), do: t
-  def to_expr(%T{} = t), do: expr(t, nil, :tensor, [t])
-  def to_expr(number) when is_number(number), do: to_expr(Nx.tensor(number))
+  Builds an expression from a tensor.
 
-  def to_expr(other) do
-    raise ArgumentError,
-          "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
-  end
+  This implements a superset of `c:Nx.Tensor.tensor/1` as
+  it also handles numbers for convenience.
+  """
+  @impl true
+  def tensor(t), do: to_expr(t)
 
   @doc """
   Creates a parameter based on the given tensor expression.
@@ -252,7 +249,8 @@ defmodule Nx.Defn.Expr do
         other ->
           raise ArgumentError,
                 "defn functions expects either numbers or tensors as arguments. " <>
-                  "Got: #{inspect(other)}"
+                  "If you want to pass Elixir values, they need to be sent as options and " <>
+                  "tagged as default arguments. Got: #{inspect(other)}"
       end
     end
   end
@@ -322,6 +320,11 @@ defmodule Nx.Defn.Expr do
   ## Nx.Tensor Callbacks
 
   @behaviour Nx.Tensor
+
+  @impl true
+  def from_binary(out, binary) do
+    to_expr(Nx.BinaryTensor.from_binary(out, binary))
+  end
 
   @impl true
   def iota(out, axis) do
@@ -525,7 +528,7 @@ defmodule Nx.Defn.Expr do
 
   ## Undefined
 
-  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, from_binary: 2, to_binary: 1]
+  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, to_binary: 1]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)
@@ -545,6 +548,15 @@ defmodule Nx.Defn.Expr do
 
   defp expr(tensor, context, op, args) do
     %{tensor | data: %Expr{id: System.unique_integer(), op: op, args: args, context: context}}
+  end
+
+  defp to_expr(%T{data: %Expr{}} = t), do: t
+  defp to_expr(%T{} = t), do: expr(t, nil, :tensor, [t])
+  defp to_expr(number) when is_number(number), do: to_expr(Nx.tensor(number))
+
+  defp to_expr(other) do
+    raise ArgumentError,
+          "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
   end
 
   defp to_exprs(list) do

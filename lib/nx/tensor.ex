@@ -40,6 +40,7 @@ defmodule Nx.Tensor do
   @callback device_deallocate(t) :: t
   @callback device_transfer(t, module, keyword) :: t
 
+  @callback tensor(t) :: t
   @callback inspect(t, Inspect.Opts.t()) :: t
   @callback from_binary(out :: t, binary) :: t
   @callback as_type(out :: t, t) :: t

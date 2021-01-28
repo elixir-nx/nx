@@ -18,55 +18,9 @@ defmodule Nx.BinaryTensor do
 
   ## Creation
 
-  @doc false
-  def tensor(arg, type, names) do
-    {shape, data} = flatten(arg, type)
-
-    names = Nx.Shape.named_axes!(names, shape)
-
-    if data == "" do
-      raise "cannot build empty tensor"
-    end
-
-    from_binary(%T{shape: shape, type: type, names: names}, data)
-  end
-
-  defp flatten(list, type) when is_list(list) do
-    {dimensions, acc} = flatten_list(list, type, [], [])
-
-    {dimensions |> Enum.reverse() |> List.to_tuple(),
-     acc |> Enum.reverse() |> :erlang.list_to_binary()}
-  end
-
-  defp flatten(other, type), do: {{}, number_to_binary(other, type)}
-
-  defp flatten_list([], _type, dimensions, acc) do
-    {[0 | dimensions], acc}
-  end
-
-  defp flatten_list([head | rest], type, parent_dimensions, acc) when is_list(head) do
-    {child_dimensions, acc} = flatten_list(head, type, [], acc)
-
-    {n, acc} =
-      Enum.reduce(rest, {1, acc}, fn list, {count, acc} ->
-        case flatten_list(list, type, [], acc) do
-          {^child_dimensions, acc} ->
-            {count + 1, acc}
-
-          {other_dimensions, _acc} ->
-            raise ArgumentError,
-                  "cannot build tensor because lists have different shapes, got " <>
-                    inspect(List.to_tuple(child_dimensions)) <>
-                    " at position 0 and " <>
-                    inspect(List.to_tuple(other_dimensions)) <> " at position #{count + 1}"
-        end
-      end)
-
-    {child_dimensions ++ [n | parent_dimensions], acc}
-  end
-
-  defp flatten_list(list, type, dimensions, acc) do
-    {[length(list) | dimensions], Enum.reduce(list, acc, &[number_to_binary(&1, type) | &2])}
+  @impl true
+  def tensor(tensor) do
+    tensor
   end
 
   @impl true

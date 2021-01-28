@@ -18,7 +18,7 @@ defmodule Nx.Defn.Grad do
 
   defp to_result(to_grad, expr) do
     id = grad_id!(to_grad)
-    {graded, _} = to_grad(expr, Expr.to_expr(1.0), %{id => :stop})
+    {graded, _} = to_grad(expr, Expr.tensor(1.0), %{id => :stop})
 
     if graded.shape == to_grad.shape do
       graded
@@ -48,7 +48,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp validate_expr!(other) do
-    validate_expr!(Expr.to_expr(other))
+    validate_expr!(Expr.tensor(other))
   end
 
   ## Recursion
@@ -457,7 +457,7 @@ defmodule Nx.Defn.Grad do
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal]
 
   defp grad(op, _, _, _, cache) when op in @constants do
-    {Expr.to_expr(0.0), cache}
+    {Expr.tensor(0.0), cache}
   end
 
   ## Helpers

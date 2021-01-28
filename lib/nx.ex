@@ -322,7 +322,7 @@ defmodule Nx do
   def tensor(arg, opts \\ [])
 
   def tensor(%T{} = t, opts) do
-    assert_keys!(opts, [:type, :names])
+    assert_keys!(opts, [:type, :names, :backend])
     type = opts[:type]
 
     if type && type != t.type do
@@ -330,14 +330,60 @@ defmodule Nx do
             "got a tensor with type #{inspect(type)} but tensor has type #{inspect(t.type)}"
     end
 
-    t
+    backend = opts[:backend] || Nx.BinaryTensor
+    backend.tensor(t)
   end
 
   def tensor(arg, opts) do
-    assert_keys!(opts, [:type, :names])
+    assert_keys!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
-    names = opts[:names]
-    Nx.BinaryTensor.tensor(arg, type, names)
+    {shape, data} = flatten(arg, type)
+
+    if data == "" do
+      raise "cannot build empty tensor"
+    end
+
+    names = Nx.Shape.named_axes!(opts[:names], shape)
+    backend = opts[:backend] || Nx.BinaryTensor
+    backend.from_binary(%T{shape: shape, type: type, names: names}, data)
+  end
+
+  defp flatten(list, type) when is_list(list) do
+    {dimensions, acc} = flatten_list(list, type, [], [])
+
+    {dimensions |> Enum.reverse() |> List.to_tuple(),
+     acc |> Enum.reverse() |> :erlang.list_to_binary()}
+  end
+
+  defp flatten(other, type), do: {{}, number_to_binary(other, type)}
+
+  defp flatten_list([], _type, dimensions, acc) do
+    {[0 | dimensions], acc}
+  end
+
+  defp flatten_list([head | rest], type, parent_dimensions, acc) when is_list(head) do
+    {child_dimensions, acc} = flatten_list(head, type, [], acc)
+
+    {n, acc} =
+      Enum.reduce(rest, {1, acc}, fn list, {count, acc} ->
+        case flatten_list(list, type, [], acc) do
+          {^child_dimensions, acc} ->
+            {count + 1, acc}
+
+          {other_dimensions, _acc} ->
+            raise ArgumentError,
+                  "cannot build tensor because lists have different shapes, got " <>
+                    inspect(List.to_tuple(child_dimensions)) <>
+                    " at position 0 and " <>
+                    inspect(List.to_tuple(other_dimensions)) <> " at position #{count + 1}"
+        end
+      end)
+
+    {child_dimensions ++ [n | parent_dimensions], acc}
+  end
+
+  defp flatten_list(list, type, dimensions, acc) do
+    {[length(list) | dimensions], Enum.reduce(list, acc, &[number_to_binary(&1, type) | &2])}
   end
 
   @doc """
@@ -2566,7 +2612,9 @@ defmodule Nx do
   """
   def logical_not(tensor) do
     tensor = tensor!(tensor)
-    zero = Nx.BinaryTensor.tensor(0, tensor.type, nil)
+    type = tensor.type
+    out = %T{shape: {}, type: type, names: []}
+    zero = Nx.BinaryTensor.from_binary(out, number_to_binary(0, type))
     element_wise_pred_op(tensor, zero, :equal)
   end
 
@@ -5192,8 +5240,14 @@ defmodule Nx do
   defp tensor!(%T{} = t),
     do: t
 
-  defp tensor!(number) when is_number(number),
-    do: Nx.BinaryTensor.tensor(number, Nx.Type.infer(number), nil)
+  defp tensor!(number) when is_number(number) do
+    type = Nx.Type.infer(number)
+    out = %T{shape: {}, type: type, names: []}
+    Nx.BinaryTensor.from_binary(out, number_to_binary(number, type))
+  end
+
+  defp number_to_binary(number, type),
+    do: match_types([type], do: <<write!(number, 0)>>)
 
   defp names!(%T{names: names}), do: names
   defp names!(_), do: nil
