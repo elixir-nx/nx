@@ -843,6 +843,13 @@ defmodule Nx.DefnTest do
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [1]) == Nx.tensor([3, 7])
     end
 
+    defn random_opts(opts \\ []), do: Nx.random_uniform({}, 0, 1, opts)
+
+    test "exclusively" do
+      assert random_opts([]).type == {:s, 64}
+      assert random_opts([type: {:f, 64}]).type == {:f, 64}
+    end
+
     @defn_compiler Identity
     defn sum_axis_expr(a, opts \\ []), do: Nx.sum(a, opts)
 

@@ -104,16 +104,14 @@ defmodule Nx.Defn.Compiler do
 
   defp compile_each({{name, _arity} = def, def_meta}, state) do
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
-    {nx_args, cache_args} = split_args(args, 0, def_meta.defaults, [], [])
+    {nx_args, cache_args, cache_vars} = split_args(args, 0, def_meta.defaults, [], [], [])
     vars = collect_vars(nx_args)
     {def_module, def_opts} = def_meta.compiler
     defn_name = defn_name(name)
 
     cache =
-      if args == [] do
-        quote do: fn -> unquote(defn_name)() end
-      else
-        quote do: &unquote(defn_name)(unquote_splicing(cache_args))
+      quote do
+        fn unquote_splicing(cache_vars) -> unquote(defn_name)(unquote_splicing(cache_args)) end
       end
 
     quote line: state.line do
@@ -145,15 +143,17 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp split_args([arg | args], i, defaults, nx, cache) do
+  defp split_args([arg | args], i, defaults, nx, cache, vars) do
     if i in defaults do
-      split_args(args, i + 1, defaults, nx, [arg | cache])
+      split_args(args, i + 1, defaults, nx, [arg | cache], vars)
     else
-      split_args(args, i + 1, defaults, [arg | nx], [{:&, [], [length(nx) + 1]} | cache])
+      var = Macro.var(:"arg#{i}", __MODULE__)
+      split_args(args, i + 1, defaults, [arg | nx], [var | cache], [var | vars])
     end
   end
 
-  defp split_args([], _, _, nx, cache), do: {Enum.reverse(nx), Enum.reverse(cache)}
+  defp split_args([], _, _, nx, cache, vars),
+    do: {Enum.reverse(nx), Enum.reverse(cache), Enum.reverse(vars)}
 
   defp collect_vars(args) do
     {_, vars} =
@@ -274,8 +274,8 @@ defmodule Nx.Defn.Compiler do
       compile_error!(meta, state, "Nx.#{name}/#{length(args)} is not allowed inside defn")
     end
 
-    args = rewrite_args(name, args)
     {args, state} = normalize_list(args, state)
+    args = rewrite_args(name, args)
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
 
