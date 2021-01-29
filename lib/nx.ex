@@ -737,9 +737,15 @@ defmodule Nx do
   @doc """
   Returns the underlying tensor as a flat list.
 
-  The list is returned as is (which is row-major).
+  ## Options
 
-    ## Examples
+    * `:limit` - convert at most limit elements to a list
+
+    * `:non_numbers` - control the behaviour when "Inf"
+      and "NaN" are present in the tensor. Defaults to
+      `:raise` but can be set to `:as_strings`
+
+  ## Examples
 
       iex> Nx.to_flat_list(1)
       [1]
@@ -747,12 +753,81 @@ defmodule Nx do
       iex> Nx.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]))
       [1.0, 2.0, 3.0]
 
-  """
-  def to_flat_list(tensor) do
-    tensor = Nx.tensor(tensor)
+      iex> Nx.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
+      [1.0, 2.0]
 
-    match_types [tensor.type] do
-      for <<match!(var, 0) <- Nx.to_binary(tensor)>>, do: read!(var, 0)
+      iex> bin = <<0xFFF0000000000000::64-native, 0x7FF0000000000000::64-native,
+      ...>         0x7FF0000000000001::64-native, 0x7FF8000000000001::64-native>>
+      iex> Nx.to_flat_list(Nx.from_binary(bin, {:f, 64}), non_numbers: :as_strings)
+      ["-Inf", "Inf", "NaN", "NaN"]
+
+  """
+  def to_flat_list(tensor, opts \\ []) do
+    assert_keys!(opts, [:limit, :non_numbers])
+    tensor = Nx.tensor(tensor)
+    binary = Nx.to_binary(tensor)
+    {kind, size} = type = tensor.type
+
+    binary =
+      if limit = opts[:limit] do
+        binary_part(binary, 0, Kernel.min(byte_size(binary), limit * div(size, 8)))
+      else
+        binary
+      end
+
+    case Keyword.get(opts, :non_numbers, :raise) do
+      :raise ->
+        for <<part::size(size)-bitstring <- binary>> do
+          match_types [type] do
+            <<match!(var, 0)>> = part
+            read!(var, 0)
+          end
+        end
+
+      :as_strings ->
+        case kind do
+          :s -> for <<x::size(size)-signed-native <- binary>>, do: x
+          :u -> for <<x::size(size)-unsigned-native <- binary>>, do: x
+          :f -> for <<x::size(size)-bitstring <- binary>>, do: read_float(x, size)
+          :bf -> for <<x::16-bitstring <- binary>>, do: read_bf16(x)
+        end
+    end
+  end
+
+  defp read_bf16(<<0xFF80::16-native>>), do: "-Inf"
+  defp read_bf16(<<0x7F80::16-native>>), do: "Inf"
+  defp read_bf16(<<0xFFC1::16-native>>), do: "NaN"
+  defp read_bf16(<<0xFF81::16-native>>), do: "NaN"
+
+  if System.endianness() == :little do
+    defp read_bf16(bf16) do
+      <<x::float-little-32>> = <<0::16, bf16::binary>>
+      x
+    end
+  else
+    defp read_bf16(bf16) do
+      <<x::float-big-32>> = <<bf16::binary, 0::16>>
+      x
+    end
+  end
+
+  defp read_float(data, 32) do
+    case data do
+      <<0xFF800000::32-native>> -> "-Inf"
+      <<0x7F800000::32-native>> -> "Inf"
+      <<0xFF800001::32-native>> -> "NaN"
+      <<0xFFC00001::32-native>> -> "NaN"
+      <<x::float-32-native>> -> x
+    end
+  end
+
+  defp read_float(data, 64) do
+    case data do
+      <<0xFFF0000000000000::64-native>> -> "-Inf"
+      <<0x7FF0000000000000::64-native>> -> "Inf"
+      <<0x7FF0000000000001::64-native>> -> "NaN"
+      <<0x7FF8000000000001::64-native>> -> "NaN"
+      <<x::float-64-native>> -> x
     end
   end
 

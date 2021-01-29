@@ -735,22 +735,20 @@ defmodule Nx.BinaryTensor do
   alias Inspect.Algebra, as: IA
 
   @impl true
-  def inspect(tensor, opts) do
-    dims = Tuple.to_list(tensor.shape)
-    names = tensor.names
-
+  def inspect(%{shape: shape, names: names, type: type} = tensor, opts) do
     open = IA.color("[", :list, opts)
     sep = IA.color(",", :list, opts)
     close = IA.color("]", :list, opts)
-    type = IA.color(Nx.Type.to_string(tensor.type), :atom, opts)
-    shape = shape_to_algebra(dims, names, open, close)
 
-    {data, _limit} =
+    data =
       case tensor.data do
-        %Nx.BinaryTensor{device: Nx.BinaryDevice, state: bin} ->
-          {_, size} = tensor.type
-          total_size = Enum.reduce(dims, size, &*/2)
-          chunk(dims, bin, opts.limit, total_size, tensor.type, {open, sep, close})
+        %Nx.BinaryTensor{device: Nx.BinaryDevice} ->
+          dims = Tuple.to_list(shape)
+          limit = opts.limit
+          list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
+          data = Nx.to_flat_list(tensor, [non_numbers: :as_strings] ++ list_opts)
+          {data, _rest, _limit} = chunk(dims, data, limit, {open, sep, close})
+          data
 
         # TODO: To print data on device, we can support reading a slice
         # from the device which we will compute with:
@@ -758,55 +756,29 @@ defmodule Nx.BinaryTensor do
         #     min(opts.limit, Nx.size(shape)) * size
         #
         %Nx.BinaryTensor{device: device} ->
-          {IA.to_doc(device, opts), opts.limit}
+          IA.to_doc(device, opts)
       end
 
+    type = IA.color(Nx.Type.to_string(type), :atom, opts)
+    shape = Nx.Shape.to_algebra(shape, names, open, close)
     IA.concat([type, shape, IA.line(), data])
   end
 
-  defp shape_to_algebra(dims, names, open, close) do
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    dims
-    |> Enum.zip(names)
-    |> Enum.map(fn
-      {number, nil} ->
-        IA.concat([open, Integer.to_string(number), close])
-
-      {number, name} ->
-        IA.concat([open, Atom.to_string(name), ": ", Integer.to_string(number), close])
-    end)
-    |> IA.concat()
-  end
-
-  defp chunk([], data, limit, size, {type, size}, _docs) do
+  defp chunk([], [head | tail], limit, _docs) do
     doc =
-      case type do
-        :s ->
-          <<x::size(size)-signed-native>> = data
-          Integer.to_string(x)
-
-        :u ->
-          <<x::size(size)-unsigned-native>> = data
-          Integer.to_string(x)
-
-        :f ->
-          <<x::size(size)-bitstring>> = data
-          read_float(x, size)
-
-        :bf ->
-          <<x::16-bitstring>> = data
-          read_bf16(x)
+      cond do
+        is_integer(head) -> Integer.to_string(head)
+        is_float(head) -> Float.to_string(head)
+        is_binary(head) -> head
       end
 
-    if limit == :infinity, do: {doc, limit}, else: {doc, limit - 1}
+    if limit == :infinity, do: {doc, tail, limit}, else: {doc, tail, limit - 1}
   end
 
-  defp chunk([dim | dims], data, limit, total_size, type, {open, sep, close} = docs) do
-    chunk_size = div(total_size, dim)
-
-    {acc, limit} =
-      chunk_each(dim, data, [], limit, chunk_size, fn chunk, limit ->
-        chunk(dims, chunk, limit, chunk_size, type, docs)
+  defp chunk([dim | dims], data, limit, {open, sep, close} = docs) do
+    {acc, rest, limit} =
+      chunk_each(dim, data, [], limit, fn chunk, limit ->
+        chunk(dims, chunk, limit, docs)
       end)
 
     {open, sep, close, nest} =
@@ -822,58 +794,20 @@ defmodule Nx.BinaryTensor do
       |> IA.nest(nest)
       |> IA.concat(close)
 
-    {doc, limit}
+    {doc, rest, limit}
   end
 
-  defp chunk_each(0, "", acc, limit, _size, _fun) do
-    {Enum.reverse(acc), limit}
+  defp chunk_each(0, data, acc, limit, _fun) do
+    {Enum.reverse(acc), data, limit}
   end
 
-  defp chunk_each(_dim, _data, acc, 0, _size, _fun) do
-    {Enum.reverse(["..." | acc]), 0}
+  defp chunk_each(_dim, data, acc, 0, _fun) do
+    {Enum.reverse(["..." | acc]), data, 0}
   end
 
-  defp chunk_each(dim, data, acc, limit, size, fun) when dim > 0 do
-    <<chunk::size(size)-bitstring, rest::bitstring>> = data
-    {doc, limit} = fun.(chunk, limit)
-    chunk_each(dim - 1, rest, [doc | acc], limit, size, fun)
-  end
-
-  defp read_bf16(<<0xFF80::16-native>>), do: "-Inf"
-  defp read_bf16(<<0x7F80::16-native>>), do: "Inf"
-  defp read_bf16(<<0xFFC1::16-native>>), do: "NaN"
-  defp read_bf16(<<0xFF81::16-native>>), do: "NaN"
-
-  if System.endianness() == :little do
-    defp read_bf16(bf16) do
-      <<x::float-little-32>> = <<0::16, bf16::binary>>
-      Float.to_string(x)
-    end
-  else
-    defp read_bf16(bf16) do
-      <<x::float-big-32>> = <<bf16::binary, 0::16>>
-      Float.to_string(x)
-    end
-  end
-
-  defp read_float(data, 32) do
-    case data do
-      <<0xFF800000::32-native>> -> "-Inf"
-      <<0x7F800000::32-native>> -> "Inf"
-      <<0xFF800001::32-native>> -> "NaN"
-      <<0xFFC00001::32-native>> -> "NaN"
-      <<x::float-32-native>> -> Float.to_string(x)
-    end
-  end
-
-  defp read_float(data, 64) do
-    case data do
-      <<0xFFF0000000000000::64-native>> -> "-Inf"
-      <<0x7FF0000000000000::64-native>> -> "Inf"
-      <<0x7FF0000000000001::64-native>> -> "NaN"
-      <<0x7FF8000000000001::64-native>> -> "NaN"
-      <<x::float-64-native>> -> Float.to_string(x)
-    end
+  defp chunk_each(dim, data, acc, limit, fun) do
+    {doc, rest, limit} = fun.(data, limit)
+    chunk_each(dim - 1, rest, [doc | acc], limit, fun)
   end
 
   ## Conv

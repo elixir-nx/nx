@@ -1,6 +1,30 @@
 defmodule Nx.Shape do
-  # Conveniences for manipulating shapes, typically called from `Nx`.
+  # Conveniences for manipulating shapes internal to Nx.
   @moduledoc false
+
+  @doc """
+  Converts a shape to an algebra document for inspection.
+  """
+  def to_algebra(shape, names, open, close) do
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    shape
+    |> Tuple.to_list()
+    |> Enum.zip(names)
+    |> Enum.map(fn
+      {number, nil} ->
+        Inspect.Algebra.concat([open, Integer.to_string(number), close])
+
+      {number, name} ->
+        Inspect.Algebra.concat([
+          open,
+          Atom.to_string(name),
+          ": ",
+          Integer.to_string(number),
+          close
+        ])
+    end)
+    |> Inspect.Algebra.concat()
+  end
 
   @doc """
   Validates the names of axes.

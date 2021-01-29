@@ -863,7 +863,7 @@ defmodule Nx.DefnTest do
 
     test "exclusively" do
       assert random_opts([]).type == {:s, 64}
-      assert random_opts([type: {:f, 64}]).type == {:f, 64}
+      assert random_opts(type: {:f, 64}).type == {:f, 64}
     end
 
     @defn_compiler Identity
