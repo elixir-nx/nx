@@ -18,7 +18,7 @@ Other features include broadcasting, multi-device support, etc. You can find pla
 
 For Python developers, `Nx` takes its main inspirations from [`Numpy`](https://numpy.org/) and [`Jax`](https://github.com/google/jax) but packaged into a single unified library. There are also plans to [support labelled coordinates](https://github.com/elixir-nx/exla/issues/167).
 
-*Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/).*
+*Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/) and [Australian Wildlife Conservancy](https://www.australianwildlife.org).*
 
 ## Examples
 
