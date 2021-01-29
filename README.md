@@ -70,7 +70,29 @@ defn softmax(t) do
 end
 ```
 
-Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the tensor type and shape. By passing `platform: :cuda` or `platform: :rocm`, the code can be compiled for the GPU.
+Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the tensor type and shape. By passing `platform: :cuda` or `platform: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
+
+```
+Name                       ips        average  deviation         median         99th %
+xla gpu f32 keep      15308.14      0.0653 ms    ±29.01%      0.0638 ms      0.0758 ms
+xla gpu f64 keep       4550.59        0.22 ms     ±7.54%        0.22 ms        0.33 ms
+xla cpu f32             434.21        2.30 ms     ±7.04%        2.26 ms        2.69 ms
+xla gpu f32             398.45        2.51 ms     ±2.28%        2.50 ms        2.69 ms
+xla gpu f64             190.27        5.26 ms     ±2.16%        5.23 ms        5.56 ms
+xla cpu f64             168.25        5.94 ms     ±5.64%        5.88 ms        7.35 ms
+elixir f32                3.22      311.01 ms     ±1.88%      309.69 ms      340.27 ms
+elixir f64                3.11      321.70 ms     ±1.44%      322.10 ms      328.98 ms
+
+Comparison:
+xla gpu f32 keep      15308.14
+xla gpu f64 keep       4550.59 - 3.36x slower +0.154 ms
+xla cpu f32             434.21 - 35.26x slower +2.24 ms
+xla gpu f32             398.45 - 38.42x slower +2.44 ms
+xla gpu f64             190.27 - 80.46x slower +5.19 ms
+xla cpu f64             168.25 - 90.98x slower +5.88 ms
+elixir f32                3.22 - 4760.93x slower +310.94 ms
+elixir f64                3.11 - 4924.56x slower +321.63 ms
+```
 
 `defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-prgramming capabilities: we transform Elixir code to emit an AST that is then transformed to run on the CPU/GPU.
 
