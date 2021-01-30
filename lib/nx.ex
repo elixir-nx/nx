@@ -3398,18 +3398,18 @@ defmodule Nx do
   end
 
   defp aggregate_axes_op(tensor, opts, op) do
-    assert_keys!(opts, [:axes, :keep_dims])
-    keep_dims = opts[:keep_dims] || false
+    assert_keys!(opts, [:axes, :keep_axes])
+    keep_axes = opts[:keep_axes] || false
 
     %{shape: shape, type: type, names: names} = tensor = tensor!(tensor)
 
     {shape, names, axes} =
       if axes = opts[:axes] do
         axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_dims)
+        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
         {new_shape, new_names, axes}
       else
-        if keep_dims do
+        if keep_axes do
           shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
           {shape, names, nil}
         else
@@ -3427,7 +3427,7 @@ defmodule Nx do
     apply(impl!(tensor), op, [
       %{tensor | type: type, shape: shape, names: names},
       tensor,
-      [axes: axes, keep_dims: keep_dims]
+      [axes: axes, keep_axes: keep_axes]
     ])
   end
 
@@ -3680,7 +3680,7 @@ defmodule Nx do
   counts the axis from the back. For example, `axes: [-1]`
   will always aggregate all rows.
 
-  You may optionally set `:keep_dims` to true, which will
+  You may optionally set `:keep_axes` to true, which will
   retain the rank of the input tensor by setting the multiplied
   axes to size 1.
 
@@ -3771,7 +3771,7 @@ defmodule Nx do
 
   ### Keeping dimensions
 
-      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_dims: true)
+      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_axes: true)
       #Nx.Tensor<
         s64[x: 2][y: 2][z: 1]
         [
@@ -3803,7 +3803,7 @@ defmodule Nx do
   counts the axis from the back. For example, `axes: [-1]`
   will always aggregate all rows.
 
-  You may optionally set `:keep_dims` to true, which will
+  You may optionally set `:keep_axes` to true, which will
   retain the rank of the input tensor by setting the reduced
   axes to size 1.
 
@@ -3849,7 +3849,7 @@ defmodule Nx do
 
   ### Keeping dimensions
 
-      iex> Nx.reduce_max(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_dims: true)
+      iex> Nx.reduce_max(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_axes: true)
       #Nx.Tensor<
         s64[x: 1][y: 2][z: 1]
         [
@@ -3873,7 +3873,7 @@ defmodule Nx do
   counts the axis from the back. For example, `axes: [-1]`
   will always aggregate all rows.
 
-  You may optionally set `:keep_dims` to true, which will
+  You may optionally set `:keep_axes` to true, which will
   retain the rank of the input tensor by setting the reduced
   axes to size 1.
 
@@ -3919,7 +3919,7 @@ defmodule Nx do
 
   ### Keeping dimensions
 
-      iex> Nx.reduce_min(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_dims: true)
+      iex> Nx.reduce_min(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_axes: true)
       #Nx.Tensor<
         s64[x: 1][y: 2][z: 1]
         [

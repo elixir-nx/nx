@@ -754,6 +754,7 @@ defmodule EXLA.DefnTest do
   describe "reduce" do
     defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
     defn reduce_keep(t), do: Nx.reduce(t, 1, [keep_axes: true], fn a, b -> a * b end)
+
     defn reduce_keep_2(t),
       do: Nx.reduce(t, 1, [keep_axes: true, axes: [0, 2]], fn a, b -> a * b end)
 
@@ -978,10 +979,10 @@ defmodule EXLA.DefnTest do
       assert product_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0, type: {:u, 64})
     end
 
-    defn product_keep(t), do: Nx.product(t, keep_dims: true)
-    defn product_keep_2(t), do: Nx.product(t, axes: [0, 2], keep_dims: true)
+    defn product_keep(t), do: Nx.product(t, keep_axes: true)
+    defn product_keep_2(t), do: Nx.product(t, axes: [0, 2], keep_axes: true)
 
-    test "keeps dimensions if keep_dims" do
+    test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> product_keep() == Nx.tensor([6])
       assert Nx.tensor([1.0, 2.0, 3.0]) |> product_keep() == Nx.tensor([6.0])
 
@@ -1071,10 +1072,10 @@ defmodule EXLA.DefnTest do
       assert reduce_max_pos_neg_axis(t) == Nx.reduce_max(t, axes: [1, -3])
     end
 
-    defn reduce_max_keep(t), do: Nx.reduce_max(t, keep_dims: true)
-    defn reduce_max_keep_2(t), do: Nx.reduce_max(t, axes: [0, 2], keep_dims: true)
+    defn reduce_max_keep(t), do: Nx.reduce_max(t, keep_axes: true)
+    defn reduce_max_keep_2(t), do: Nx.reduce_max(t, axes: [0, 2], keep_axes: true)
 
-    test "keeps dimensions if keep_dims" do
+    test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> reduce_max_keep() == Nx.tensor([3])
       assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_max_keep() == Nx.tensor([3.0])
 
@@ -1107,10 +1108,10 @@ defmodule EXLA.DefnTest do
       assert reduce_min_pos_neg_axis(t) == Nx.reduce_min(t, axes: [1, -3])
     end
 
-    defn reduce_min_keep(t), do: Nx.reduce_min(t, keep_dims: true)
-    defn reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_dims: true)
+    defn reduce_min_keep(t), do: Nx.reduce_min(t, keep_axes: true)
+    defn reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_axes: true)
 
-    test "keeps dimensions if keep_dims" do
+    test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> reduce_min_keep() == Nx.tensor([1])
       assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_min_keep() == Nx.tensor([1.0])
 
