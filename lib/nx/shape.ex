@@ -264,14 +264,14 @@ defmodule Nx.Shape do
 
   defp contract(shape, axes, [name | names], i, n, keep_axes) do
     cond do
-      i in axes and not keep_axes ->
-        contract(shape, axes, names, i + 1, n, keep_axes)
+      i not in axes ->
+        [{elem(shape, i), name} | contract(shape, axes, names, i + 1, n, keep_axes)]
 
-      i in axes and keep_axes ->
+      keep_axes ->
         [{1, name} | contract(shape, axes, names, i + 1, n, keep_axes)]
 
       true ->
-        [{elem(shape, i), name} | contract(shape, axes, names, i + 1, n, keep_axes)]
+        contract(shape, axes, names, i + 1, n, keep_axes)
     end
   end
 

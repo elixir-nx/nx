@@ -392,10 +392,6 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:reduce_max, [arg, opts], %{type: type, shape: shape}, state) do
-    op = fn x, acc ->
-      EXLA.Op.select(EXLA.Op.greater(x, acc), x, acc)
-    end
-
     to_aggregate(
       :reduce_max,
       type,
@@ -404,15 +400,11 @@ defmodule EXLA.Defn do
       EXLA.Lib.min_value(state.builder, type),
       opts,
       state,
-      &apply(op, &1.params)
+      &apply(EXLA.Op, :max, &1.params)
     )
   end
 
   defp to_operator(:reduce_min, [arg, opts], %{type: type, shape: shape}, state) do
-    op = fn x, acc ->
-      EXLA.Op.select(EXLA.Op.less(x, acc), x, acc)
-    end
-
     to_aggregate(
       :reduce_max,
       type,
@@ -421,7 +413,7 @@ defmodule EXLA.Defn do
       EXLA.Lib.max_value(state.builder, type),
       opts,
       state,
-      &apply(op, &1.params)
+      &apply(EXLA.Op, :min, &1.params)
     )
   end
 

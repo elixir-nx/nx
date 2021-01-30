@@ -1091,7 +1091,7 @@ defmodule Nx.BinaryTensor do
   def reduce_max(out, %{type: type} = tensor, opts) do
     bin_reduce(out, tensor, :first, opts, fn bin, acc ->
       val = binary_to_number(bin, type)
-      res = if acc == :first or val > acc, do: val, else: acc
+      res = if acc == :first, do: val, else: Kernel.max(acc, val)
       {res, res}
     end)
   end
@@ -1100,7 +1100,7 @@ defmodule Nx.BinaryTensor do
   def reduce_min(out, %{type: type} = tensor, opts) do
     bin_reduce(out, tensor, :first, opts, fn bin, acc ->
       val = binary_to_number(bin, type)
-      res = if acc == :first or val < acc, do: val, else: acc
+      res = if acc == :first, do: val, else: Kernel.min(acc, val)
       {res, res}
     end)
   end

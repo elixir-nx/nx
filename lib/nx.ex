@@ -3404,17 +3404,16 @@ defmodule Nx do
     %{shape: shape, type: type, names: names} = tensor = tensor!(tensor)
 
     {shape, names, axes} =
-      if axes = opts[:axes] do
-        axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
-        {new_shape, new_names, axes}
-      else
-        if keep_axes do
+      cond do
+        axes = opts[:axes] ->
+          axes = Nx.Shape.normalize_axes(shape, axes, names)
+          {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
+          {new_shape, new_names, axes}
+        keep_axes ->
           shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
           {shape, names, nil}
-        else
+        true ->
           {{}, [], nil}
-        end
       end
 
     type =
@@ -3539,7 +3538,7 @@ defmodule Nx do
         ]
       >
 
-  ### Keeping dimensions
+  ### Keeping axes
 
       iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_axes: true)
       #Nx.Tensor<
@@ -3630,7 +3629,7 @@ defmodule Nx do
         ]
       >
 
-  ### Keeping dimensions
+  ### Keeping axes
 
       iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [-1], keep_axes: true)
       #Nx.Tensor<
@@ -3769,7 +3768,7 @@ defmodule Nx do
         ]
       >
 
-  ### Keeping dimensions
+  ### Keeping axes
 
       iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_axes: true)
       #Nx.Tensor<
@@ -3847,7 +3846,7 @@ defmodule Nx do
         [4, 8]
       >
 
-  ### Keeping dimensions
+  ### Keeping axes
 
       iex> Nx.reduce_max(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_axes: true)
       #Nx.Tensor<
@@ -3917,7 +3916,7 @@ defmodule Nx do
         [1, 3]
       >
 
-  ### Keeping dimensions
+  ### Keeping axes
 
       iex> Nx.reduce_min(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_axes: true)
       #Nx.Tensor<

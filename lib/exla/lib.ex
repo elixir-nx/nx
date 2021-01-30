@@ -105,10 +105,20 @@ defmodule EXLA.Lib do
     Builder.build(ast)
   end
 
+  @doc """
+  Returns a minimum value scalar operator for the given type.
+
+  Minimum values are defined in `Nx.Type.min_value_binary/1`.
+  """
   def min_value(%Builder{} = builder, type) do
     Op.constant_from_binary(builder, min_value_binary(type), Shape.make_shape(type, {}))
   end
 
+  @doc """
+  Returns a maximum value scalar operator for the given type.
+
+  Maximum values are defined in `Nx.Type.max_value_binary/1`.
+  """
   def max_value(builder, type) do
     Op.constant_from_binary(builder, max_value_binary(type), Shape.make_shape(type, {}))
   end
