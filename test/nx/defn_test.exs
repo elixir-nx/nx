@@ -90,22 +90,44 @@ defmodule Nx.DefnTest do
     defn sum_all(t), do: Nx.sum(t)
     defn sum_pos(t), do: Nx.sum(t, axes: [0, 1])
     defn sum_neg(t), do: Nx.sum(t, axes: [-1, -2])
+    defn sum_keep(t), do: Nx.sum(t, axes: [0, 1], keep_axes: true)
 
     test "to expr" do
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :sum, args: [_, [axes: nil]]}} =
-               sum_all(Nx.tensor([1, 2, 3]))
+      assert %T{
+               shape: {},
+               type: {:s, 64},
+               data: %Expr{op: :sum, args: [_, [axes: nil, keep_axes: false]]}
+             } = sum_all(Nx.tensor([1, 2, 3]))
 
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :sum, args: [_, [axes: [0, 1]]]}} =
-               sum_pos(Nx.tensor([[1, 2, 3], [1, 2, 3]], type: {:s, 8}))
+      assert %T{
+               shape: {},
+               type: {:s, 64},
+               data: %Expr{op: :sum, args: [_, [axes: [0, 1], keep_axes: false]]}
+             } = sum_pos(Nx.tensor([[1, 2, 3], [1, 2, 3]], type: {:s, 8}))
 
-      assert %T{shape: {3}, type: {:f, 32}, data: %Expr{op: :sum, args: [_, [axes: [0, 1]]]}} =
-               sum_pos(Nx.tensor([[[1, 2, 3], [1, 2, 3]]], type: {:f, 32}))
+      assert %T{
+               shape: {3},
+               type: {:f, 32},
+               data: %Expr{op: :sum, args: [_, [axes: [0, 1], keep_axes: false]]}
+             } = sum_pos(Nx.tensor([[[1, 2, 3], [1, 2, 3]]], type: {:f, 32}))
 
-      assert %T{shape: {}, type: {:u, 64}, data: %Expr{op: :sum, args: [_, [axes: [1, 0]]]}} =
-               sum_neg(Nx.tensor([[1, 2, 3], [1, 2, 3]], type: {:u, 8}))
+      assert %T{
+               shape: {},
+               type: {:u, 64},
+               data: %Expr{op: :sum, args: [_, [axes: [1, 0], keep_axes: false]]}
+             } = sum_neg(Nx.tensor([[1, 2, 3], [1, 2, 3]], type: {:u, 8}))
 
-      assert %T{shape: {1}, type: {:bf, 16}, data: %Expr{op: :sum, args: [_, [axes: [2, 1]]]}} =
-               sum_neg(Nx.tensor([[[1, 2, 3], [1, 2, 3]]], type: {:bf, 16}))
+      assert %T{
+               shape: {1},
+               type: {:bf, 16},
+               data: %Expr{op: :sum, args: [_, [axes: [2, 1], keep_axes: false]]}
+             } = sum_neg(Nx.tensor([[[1, 2, 3], [1, 2, 3]]], type: {:bf, 16}))
+
+      assert %T{
+               shape: {1, 1, 3},
+               type: {:f, 32},
+               data: %Expr{op: :sum, args: [_, [axes: [0, 1], keep_axes: true]]}
+             } = sum_keep(Nx.tensor([[[1, 2, 3], [1, 2, 3]]], type: {:f, 32}))
     end
   end
 
@@ -215,7 +237,7 @@ defmodule Nx.DefnTest do
 
     test "reduces with function" do
       assert %{
-               data: %Expr{op: :reduce, args: [_, _, [axes: nil], fun]},
+               data: %Expr{op: :reduce, args: [_, _, [axes: nil, keep_axes: false], fun]},
                type: {:s, 64},
                shape: {}
              } = reduce(Nx.tensor([1, 2, 3]), 0)
@@ -223,7 +245,7 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :fun}} = fun
 
       assert %{
-               data: %Expr{op: :reduce, args: [_, _, [axes: [1]], fun]},
+               data: %Expr{op: :reduce, args: [_, _, [axes: [1], keep_axes: false], fun]},
                type: {:f, 64},
                shape: {3}
              } = reduce_with_opts(Nx.tensor([[1], [2], [3]]), 0)
@@ -381,7 +403,7 @@ defmodule Nx.DefnTest do
     defn access_sum(a, opts \\ []), do: Nx.sum(a, axes: opts[:axes])
 
     test "access" do
-      assert %T{data: %Expr{op: :sum, args: [_, [axes: [1]]]}} =
+      assert %T{data: %Expr{op: :sum, args: [_, [axes: [1], keep_axes: false]]}} =
                access_sum(Nx.iota({2, 2}), axes: [1])
     end
   end

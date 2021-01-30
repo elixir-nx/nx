@@ -349,21 +349,46 @@ defmodule EXLA.Defn do
   ## to_operator reduction
 
   defp to_operator(:all?, [arg, opts], _ans, state) do
-    to_aggregate(:all?, {:pred, 8}, arg, 1, opts, state, &apply(EXLA.Op, :bitwise_and, &1.params))
+    to_aggregate(
+      :all?,
+      {:pred, 8},
+      {},
+      arg,
+      1,
+      opts,
+      state,
+      &apply(EXLA.Op, :bitwise_and, &1.params)
+    )
   end
 
   defp to_operator(:any?, [arg, opts], _ans, state) do
-    to_aggregate(:any?, {:pred, 8}, arg, 0, opts, state, &apply(EXLA.Op, :bitwise_or, &1.params))
+    to_aggregate(
+      :any?,
+      {:pred, 8},
+      {},
+      arg,
+      0,
+      opts,
+      state,
+      &apply(EXLA.Op, :bitwise_or, &1.params)
+    )
   end
 
-  defp to_operator(:sum, [arg, opts], %{type: type}, state) do
-    to_aggregate(:sum, type, arg, 0, opts, state, &apply(EXLA.Op, :add, &1.params))
+  defp to_operator(:sum, [arg, opts], %{type: type, shape: shape}, state) do
+    to_aggregate(:sum, type, shape, arg, 0, opts, state, &apply(EXLA.Op, :add, &1.params))
   end
 
-  defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type}, state) do
+  defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, state) do
     arg = to_type(arg, type)
     comp = to_computation(fun, type, state)
-    EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
+    keep_axes = opts[:keep_axes]
+    result = EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
+
+    if keep_axes do
+      EXLA.Op.reshape(result, shape)
+    else
+      result
+    end
   end
 
   defp to_operator(
@@ -474,12 +499,19 @@ defmodule EXLA.Defn do
     EXLA.Builder.build(fun.(state))
   end
 
-  defp to_aggregate(name, type, arg, initial, opts, state, fun) do
+  defp to_aggregate(name, type, shape, arg, initial, opts, state, fun) do
     arg = to_type(arg, type)
     acc = EXLA.Op.constant_r0(state.builder, initial, type)
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
     comp = to_computation(name, args, state, fun)
-    EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
+    keep_axes = opts[:keep_axes]
+    result = EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
+
+    if keep_axes do
+      EXLA.Op.reshape(result, shape)
+    else
+      result
+    end
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
