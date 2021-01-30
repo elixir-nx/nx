@@ -105,11 +105,11 @@ defmodule EXLA.Lib do
     Builder.build(ast)
   end
 
-  defp min_value(%Builder{} = builder, type) do
+  def min_value(%Builder{} = builder, type) do
     Op.constant_from_binary(builder, min_value_binary(type), Shape.make_shape(type, {}))
   end
 
-  defp max_value(builder, type) do
+  def max_value(builder, type) do
     Op.constant_from_binary(builder, max_value_binary(type), Shape.make_shape(type, {}))
   end
 

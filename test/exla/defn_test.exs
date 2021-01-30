@@ -946,6 +946,50 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "product" do
+    defn product(t), do: Nx.product(t)
+
+    test "computes the product across types" do
+      assert Nx.tensor([1, 2, 3]) |> product() == Nx.tensor(6)
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> product() == Nx.tensor(6)
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> product() == Nx.tensor(6, type: {:u, 64})
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> product() == Nx.tensor(6.0)
+
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> product() ==
+               Nx.tensor(6, type: {:f, 32})
+    end
+
+    defn product_pos_axis(t), do: Nx.product(t, axes: [1])
+    defn product_neg_axis(t), do: Nx.product(t, axes: [-3])
+    defn product_pos_neg_axis(t), do: Nx.product(t, axes: [1, -3])
+
+    test "computes the sum on a given axis" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      assert product_pos_axis(t) == Nx.product(t, axes: [1])
+      assert product_neg_axis(t) == Nx.product(t, axes: [-3])
+      assert product_pos_neg_axis(t) == Nx.product(t, axes: [1, -3])
+    end
+
+    defn product_equal(t), do: Nx.product(Nx.equal(t, 1.0))
+
+    test "does not overflow" do
+      assert product_equal(Nx.tensor(1)) == Nx.tensor(1, type: {:u, 64})
+      assert product_equal(Nx.tensor([1, 1, 1])) == Nx.tensor(1, type: {:u, 64})
+      assert product_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0, type: {:u, 64})
+    end
+
+    defn product_keep(t), do: Nx.product(t, keep_dims: true)
+    defn product_keep_2(t), do: Nx.product(t, axes: [0, 2], keep_dims: true)
+
+    test "keeps dimensions if keep_dims" do
+      assert Nx.tensor([1, 2, 3]) |> product_keep() == Nx.tensor([6])
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> product_keep() == Nx.tensor([6.0])
+
+      assert Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]) |> product_keep_2() ==
+               Nx.tensor([[[36], [14400]]])
+    end
+  end
+
   describe "mean" do
     defn mean(t), do: Nx.mean(t)
 
@@ -1000,6 +1044,78 @@ defmodule EXLA.DefnTest do
 
       assert Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]) |> mean_keep_2() ==
                Nx.tensor([[[2.0], [5.0]]])
+    end
+  end
+
+  describe "reduce_max" do
+    defn reduce_max(t), do: Nx.reduce_max(t)
+
+    test "computes the maximum across types" do
+      assert Nx.tensor([1, 2, 3]) |> reduce_max() == Nx.tensor(3)
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce_max() == Nx.tensor(3)
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce_max() == Nx.tensor(3, type: {:u, 64})
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_max() == Nx.tensor(3.0)
+
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> reduce_max() ==
+               Nx.tensor(3, type: {:f, 32})
+    end
+
+    defn reduce_max_pos_axis(t), do: Nx.reduce_max(t, axes: [1])
+    defn reduce_max_neg_axis(t), do: Nx.reduce_max(t, axes: [-3])
+    defn reduce_max_pos_neg_axis(t), do: Nx.reduce_max(t, axes: [1, -3])
+
+    test "computes the max on a given axis" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      assert reduce_max_pos_axis(t) == Nx.reduce_max(t, axes: [1])
+      assert reduce_max_neg_axis(t) == Nx.reduce_max(t, axes: [-3])
+      assert reduce_max_pos_neg_axis(t) == Nx.reduce_max(t, axes: [1, -3])
+    end
+
+    defn reduce_max_keep(t), do: Nx.reduce_max(t, keep_dims: true)
+    defn reduce_max_keep_2(t), do: Nx.reduce_max(t, axes: [0, 2], keep_dims: true)
+
+    test "keeps dimensions if keep_dims" do
+      assert Nx.tensor([1, 2, 3]) |> reduce_max_keep() == Nx.tensor([3])
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_max_keep() == Nx.tensor([3.0])
+
+      assert Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]) |> reduce_max_keep_2() ==
+               Nx.tensor([[[3], [6]]])
+    end
+  end
+
+  describe "reduce_min" do
+    defn reduce_min(t), do: Nx.reduce_min(t)
+
+    test "computes the minimum across types" do
+      assert Nx.tensor([1, 2, 3]) |> reduce_min() == Nx.tensor(1)
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce_min() == Nx.tensor(1)
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce_min() == Nx.tensor(1, type: {:u, 64})
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_min() == Nx.tensor(1.0)
+
+      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> reduce_min() ==
+               Nx.tensor(1, type: {:f, 32})
+    end
+
+    defn reduce_min_pos_axis(t), do: Nx.reduce_min(t, axes: [1])
+    defn reduce_min_neg_axis(t), do: Nx.reduce_min(t, axes: [-3])
+    defn reduce_min_pos_neg_axis(t), do: Nx.reduce_min(t, axes: [1, -3])
+
+    test "computes the min on a given axis" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+      assert reduce_min_pos_axis(t) == Nx.reduce_min(t, axes: [1])
+      assert reduce_min_neg_axis(t) == Nx.reduce_min(t, axes: [-3])
+      assert reduce_min_pos_neg_axis(t) == Nx.reduce_min(t, axes: [1, -3])
+    end
+
+    defn reduce_min_keep(t), do: Nx.reduce_min(t, keep_dims: true)
+    defn reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_dims: true)
+
+    test "keeps dimensions if keep_dims" do
+      assert Nx.tensor([1, 2, 3]) |> reduce_min_keep() == Nx.tensor([1])
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_min_keep() == Nx.tensor([1.0])
+
+      assert Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]) |> reduce_min_keep_2() ==
+               Nx.tensor([[[1], [4]]])
     end
   end
 

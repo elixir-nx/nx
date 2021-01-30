@@ -62,6 +62,9 @@ defmodule Nx.Tensor do
   @callback all?(out :: t, t, keyword) :: t
   @callback any?(out :: t, t, keyword) :: t
   @callback sum(out :: t, t, keyword) :: t
+  @callback product(out :: t, t, keyword) :: t
+  @callback reduce_max(out :: t, t, keyword) :: t
+  @callback reduce_min(out :: t, t, keyword) :: t
   @callback argmax(out :: t, t, keyword) :: t
   @callback argmin(out :: t, t, keyword) :: t
   @callback reduce(out :: t, t, acc :: t, keyword, fun) :: t

@@ -378,6 +378,53 @@ defmodule EXLA.Defn do
     to_aggregate(:sum, type, shape, arg, 0, opts, state, &apply(EXLA.Op, :add, &1.params))
   end
 
+  defp to_operator(:product, [arg, opts], %{type: type, shape: shape}, state) do
+    to_aggregate(
+      :product,
+      type,
+      shape,
+      arg,
+      1,
+      opts,
+      state,
+      &apply(EXLA.Op, :multiply, &1.params)
+    )
+  end
+
+  defp to_operator(:reduce_max, [arg, opts], %{type: type, shape: shape}, state) do
+    op = fn x, acc ->
+      EXLA.Op.select(EXLA.Op.greater(x, acc), x, acc)
+    end
+
+    to_aggregate(
+      :reduce_max,
+      type,
+      shape,
+      arg,
+      EXLA.Lib.min_value(state.builder, type),
+      opts,
+      state,
+      &apply(op, &1.params)
+    )
+  end
+
+  defp to_operator(:reduce_min, [arg, opts], %{type: type, shape: shape}, state) do
+    op = fn x, acc ->
+      EXLA.Op.select(EXLA.Op.less(x, acc), x, acc)
+    end
+
+    to_aggregate(
+      :reduce_max,
+      type,
+      shape,
+      arg,
+      EXLA.Lib.max_value(state.builder, type),
+      opts,
+      state,
+      &apply(op, &1.params)
+    )
+  end
+
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, state) do
     arg = to_type(arg, type)
     comp = to_computation(fun, type, state)
@@ -420,7 +467,7 @@ defmodule EXLA.Defn do
     EXLA.Op.map(arg, comp, dims)
   end
 
-  @reduction_op [:argmax, :argmin]
+  @reduction_op [:argmax, :argmin, :reduce_max, :reduce_min]
 
   defp to_operator(op, [arg, opts], ans, state)
        when op in @reduction_op do
@@ -501,7 +548,16 @@ defmodule EXLA.Defn do
 
   defp to_aggregate(name, type, shape, arg, initial, opts, state, fun) do
     arg = to_type(arg, type)
-    acc = EXLA.Op.constant_r0(state.builder, initial, type)
+
+    acc =
+      case initial do
+        %EXLA.Op{} = initial ->
+          initial
+
+        initial when is_number(initial) ->
+          EXLA.Op.constant_r0(state.builder, initial, type)
+      end
+
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
     comp = to_computation(name, args, state, fun)
     keep_axes = opts[:keep_axes]
