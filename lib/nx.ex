@@ -3541,6 +3541,8 @@ defmodule Nx do
         {new_shape, new_names, axes}
       else
         if keep_axes do
+        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_dims)
+        {new_shape, new_names, axes}
           shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
           {shape, names, nil}
         else

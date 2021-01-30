@@ -754,7 +754,6 @@ defmodule EXLA.DefnTest do
   describe "reduce" do
     defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
     defn reduce_keep(t), do: Nx.reduce(t, 1, [keep_axes: true], fn a, b -> a * b end)
-
     defn reduce_keep_2(t),
       do: Nx.reduce(t, 1, [keep_axes: true, axes: [0, 2]], fn a, b -> a * b end)
 

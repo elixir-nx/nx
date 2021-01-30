@@ -254,7 +254,6 @@ defmodule Nx.Shape do
   def contract(shape, axes, names, keep_axes) do
     {new_shape, new_names} =
       Enum.unzip(contract(shape, axes, names, 0, tuple_size(shape), keep_axes))
-
     {List.to_tuple(new_shape), new_names}
   end
 
