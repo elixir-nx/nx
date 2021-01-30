@@ -26,13 +26,13 @@ defmodule Nx.Defn.ExprTest do
              |> inspect(safe: false) == """
              #Nx.Tensor<
                Nx.Defn.Expr
-               parameter a                 s64[2][2]
-               parameter c                 s64[2][2]
-               b = dot [ a, [1], a, [0] ]  s64[2][2]
-               d = tanh [ c ]              f64[2][2]
-               e = add [ b, d ]            f64[2][2]
-               f = add [ e, 2 ]            f64[2][2]
-               g = sum [ f, axes: nil ]    f64
+               parameter a                                 s64[2][2]
+               parameter c                                 s64[2][2]
+               b = dot [ a, [1], a, [0] ]                  s64[2][2]
+               d = tanh [ c ]                              f64[2][2]
+               e = add [ b, d ]                            f64[2][2]
+               f = add [ e, 2 ]                            f64[2][2]
+               g = sum [ f, axes: nil, keep_dims: false ]  f64
              >\
              """
     end
@@ -63,8 +63,8 @@ defmodule Nx.Defn.ExprTest do
       assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect(safe: false) == """
              #Nx.Tensor<
                Nx.Defn.Expr
-               parameter a                                s64[2][2]
-               b = reduce [ a, 0, axes: nil, &Nx.add/2 ]  s64
+               parameter a                                                  s64[2][2]
+               b = reduce [ a, 0, axes: nil, keep_dims: false, &Nx.add/2 ]  s64
              >\
              """
     end

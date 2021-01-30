@@ -235,33 +235,43 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.contract({4, 1, 2}, [1], [:batch, :x, :y])
+      iex> Nx.Shape.contract({4, 1, 2}, [1], [:batch, :x, :y], false)
       {{4, 2}, [:batch, :y]}
 
-      iex> Nx.Shape.contract({2, 4, 6, 5}, [1, 3], [:batch, :x, :y, :z])
+      iex> Nx.Shape.contract({2, 4, 6, 5}, [1, 3], [:batch, :x, :y, :z], false)
       {{2, 6}, [:batch, :y]}
 
-      iex> Nx.Shape.contract({1, 2, 3}, [], [:batch, :x, :y])
+      iex> Nx.Shape.contract({1, 2, 3}, [], [:batch, :x, :y], false)
       {{1, 2, 3}, [:batch, :x, :y]}
 
-      iex> Nx.Shape.contract({4, 2, 8}, [2], [:x, :y, :z])
+      iex> Nx.Shape.contract({4, 2, 8}, [2], [:x, :y, :z], false)
       {{4, 2}, [:x, :y]}
 
+      iex> Nx.Shape.contract({4, 2, 8}, [2], [:x, :y, :z], true)
+      {{4, 2, 1}, [:x, :y, :z]}
+
   """
-  def contract(shape, axes, names) do
-    {new_shape, new_names} = Enum.unzip(contract(shape, axes, names, 0, tuple_size(shape)))
+  def contract(shape, axes, names, keep_dims) do
+    {new_shape, new_names} =
+      Enum.unzip(contract(shape, axes, names, 0, tuple_size(shape), keep_dims))
+
     {List.to_tuple(new_shape), new_names}
   end
 
-  defp contract(_shape, _axes, _names, n, n) do
+  defp contract(_shape, _axes, _names, n, n, _keep_dims) do
     []
   end
 
-  defp contract(shape, axes, [name | names], i, n) do
-    if i in axes do
-      contract(shape, axes, names, i + 1, n)
-    else
-      [{elem(shape, i), name} | contract(shape, axes, names, i + 1, n)]
+  defp contract(shape, axes, [name | names], i, n, keep_dims) do
+    cond do
+      i in axes and not keep_dims ->
+        contract(shape, axes, names, i + 1, n, keep_dims)
+
+      i in axes and keep_dims ->
+        [{1, name} | contract(shape, axes, names, i + 1, n, keep_dims)]
+
+      true ->
+        [{elem(shape, i), name} | contract(shape, axes, names, i + 1, n, keep_dims)]
     end
   end
 
@@ -308,14 +318,14 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], [nil, nil, nil], {1, 2, 3}, [1, 2], [nil, nil, nil])
       ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
-      
+
       iex> Nx.Shape.zip_reduce({2, 2}, [1], [:x, :y], {2, 2}, [0], [:y, :x])
       ** (ArgumentError) operation would result in duplicate names [:x, :x], please rename your tensors to avoid duplicates
   """
   def zip_reduce(s1, axes1, names1, s2, axes2, names2) do
     validate_zip_reduce_axes!(s1, axes1, s2, axes2)
-    {l1, n1} = Enum.unzip(contract(s1, axes1, names1, 0, tuple_size(s1)))
-    {l2, n2} = Enum.unzip(contract(s2, axes2, names2, 0, tuple_size(s2)))
+    {l1, n1} = Enum.unzip(contract(s1, axes1, names1, 0, tuple_size(s1), false))
+    {l2, n2} = Enum.unzip(contract(s2, axes2, names2, 0, tuple_size(s2), false))
     new_names = n1 ++ n2
 
     non_nil_names = Enum.filter(new_names, &(&1 != nil))

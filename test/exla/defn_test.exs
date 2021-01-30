@@ -753,6 +753,10 @@ defmodule EXLA.DefnTest do
 
   describe "reduce" do
     defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
+    defn reduce_keep(t), do: Nx.reduce(t, 1, [keep_dims: true], fn a, b -> a * b end)
+
+    defn reduce_keep_2(t),
+      do: Nx.reduce(t, 1, [keep_dims: true, axes: [0, 2]], fn a, b -> a * b end)
 
     test "computes the reduce" do
       assert Nx.tensor([1, 2, 3]) |> reduce() == Nx.tensor(6)
@@ -761,6 +765,14 @@ defmodule EXLA.DefnTest do
       assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce() == Nx.tensor(6, type: {:u, 8})
       assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce() == Nx.tensor(6, type: {:s, 8})
       assert Nx.tensor([1, 2, 3], type: {:f, 32}) |> reduce() == Nx.tensor(6, type: {:f, 32})
+    end
+
+    test "computes the reduce, keeping dimensions" do
+      assert Nx.tensor([1, 2, 3]) |> reduce_keep() == Nx.tensor([6])
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_keep() == Nx.tensor([6.0])
+
+      assert Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]) |> reduce_keep_2() ==
+               Nx.tensor([[[36], [14400]]])
     end
   end
 
@@ -922,6 +934,17 @@ defmodule EXLA.DefnTest do
       assert sum_equal(Nx.tensor([1, 1, 1])) == Nx.tensor(3, type: {:u, 64})
       assert sum_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(1, type: {:u, 64})
     end
+
+    defn sum_keep(t), do: Nx.sum(t, keep_dims: true)
+    defn sum_keep_2(t), do: Nx.sum(t, axes: [0, 2], keep_dims: true)
+
+    test "keeps dimensions if keep_dims" do
+      assert Nx.tensor([1, 2, 3]) |> sum_keep() == Nx.tensor([6])
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> sum_keep() == Nx.tensor([6.0])
+
+      assert Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]) |> sum_keep_2() ==
+               Nx.tensor([[[12], [30]]])
+    end
   end
 
   describe "mean" do
@@ -967,6 +990,17 @@ defmodule EXLA.DefnTest do
       assert mean_equal(Nx.tensor(1)) == Nx.tensor(1.0)
       assert mean_equal(Nx.tensor([1, 1, 1])) == Nx.tensor(1.0)
       assert mean_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0.3333333333333333)
+    end
+
+    defn mean_keep(t), do: Nx.mean(t, keep_dims: true)
+    defn mean_keep_2(t), do: Nx.mean(t, axes: [0, 2], keep_dims: true)
+
+    test "keeps dimensions if keep_dims" do
+      assert Nx.tensor([1, 2, 3]) |> mean_keep() == Nx.tensor([2.0])
+      assert Nx.tensor([1.0, 2.0, 3.0]) |> mean_keep() == Nx.tensor([2.0])
+
+      assert Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]) |> mean_keep_2() ==
+               Nx.tensor([[[2.0], [5.0]]])
     end
   end
 
