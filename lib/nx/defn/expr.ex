@@ -369,7 +369,7 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  aggregate_ops = [:all?, :any?, :argmax, :argmin, :sum]
+  aggregate_ops = [:all?, :any?, :argmax, :argmin, :sum, :product, :reduce_min, :reduce_max]
 
   for op <- aggregate_ops do
     @impl true

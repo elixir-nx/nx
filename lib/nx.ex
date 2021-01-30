@@ -3397,6 +3397,39 @@ defmodule Nx do
     impl!(tensor).any?(out, tensor, axes: axes)
   end
 
+  defp aggregate_axes_op(tensor, opts, op) do
+    assert_keys!(opts, [:axes, :keep_axes])
+    keep_axes = opts[:keep_axes] || false
+
+    %{shape: shape, type: type, names: names} = tensor = tensor!(tensor)
+
+    {shape, names, axes} =
+      cond do
+        axes = opts[:axes] ->
+          axes = Nx.Shape.normalize_axes(shape, axes, names)
+          {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
+          {new_shape, new_names, axes}
+        keep_axes ->
+          shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
+          {shape, names, nil}
+        true ->
+          {{}, [], nil}
+      end
+
+    type =
+      case type do
+        {:u, _} -> {:u, 64}
+        {:s, _} -> {:s, 64}
+        type -> type
+      end
+
+    apply(impl!(tensor), op, [
+      %{tensor | type: type, shape: shape, names: names},
+      tensor,
+      [axes: axes, keep_axes: keep_axes]
+    ])
+  end
+
   @doc """
   Returns the sum for the tensor.
 
@@ -3505,7 +3538,7 @@ defmodule Nx do
         ]
       >
 
-  ### Keeping dimensions
+  ### Keeping axes
 
       iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_axes: true)
       #Nx.Tensor<
@@ -3528,38 +3561,7 @@ defmodule Nx do
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
   """
-  def sum(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes, :keep_axes])
-    keep_axes = opts[:keep_axes] || false
-
-    %{shape: shape, type: type, names: names} = tensor = tensor!(tensor)
-
-    {shape, names, axes} =
-      if axes = opts[:axes] do
-        axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
-        {new_shape, new_names, axes}
-      else
-        if keep_axes do
-          shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
-          {shape, names, nil}
-        else
-          {{}, [], nil}
-        end
-      end
-
-    type =
-      case type do
-        {:u, _} -> {:u, 64}
-        {:s, _} -> {:s, 64}
-        type -> type
-      end
-
-    impl!(tensor).sum(%{tensor | type: type, shape: shape, names: names}, tensor,
-      axes: axes,
-      keep_axes: keep_axes
-    )
-  end
+  def sum(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :sum)
 
   @doc """
   Returns the mean for the tensor.
@@ -3627,7 +3629,7 @@ defmodule Nx do
         ]
       >
 
-  ### Keeping dimensions
+  ### Keeping axes
 
       iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [-1], keep_axes: true)
       #Nx.Tensor<
@@ -3666,6 +3668,269 @@ defmodule Nx do
 
   defp mean_den(shape, [axis | axes]),
     do: elem(shape, tuple_size(shape) + axis) * mean_den(shape, axes)
+
+  @doc """
+  Returns the product for the tensor.
+
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
+
+  You may optionally set `:keep_axes` to true, which will
+  retain the rank of the input tensor by setting the multiplied
+  axes to size 1.
+
+  ## Examples
+
+      iex> Nx.product(Nx.tensor(42))
+      #Nx.Tensor<
+        s64
+        42
+      >
+
+      iex> Nx.product(Nx.tensor([1, 2, 3], names: [:x]))
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.product(Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:x, :y]))
+      #Nx.Tensor<
+        f64
+        24.0
+      >
+
+  Giving a tensor with low precision casts it to a higher
+  precision to make sure the sum does not overflow:
+
+      iex> Nx.product(Nx.tensor([[10, 20], [30, 40]], type: {:u, 8}, names: [:x, :y]))
+      #Nx.Tensor<
+        u64
+        240000
+      >
+
+      iex> Nx.product(Nx.tensor([[10, 20], [30, 40]], type: {:s, 8}, names: [:x, :y]))
+      #Nx.Tensor<
+        s64
+        240000
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.product(Nx.tensor([1, 2, 3], names: [:x]), axes: [0])
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:x])
+      #Nx.Tensor<
+        s64[y: 2][z: 3]
+        [
+          [7, 16, 27],
+          [40, 55, 72]
+        ]
+      >
+
+      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:y])
+      #Nx.Tensor<
+        s64[x: 2][z: 3]
+        [
+          [4, 10, 18],
+          [70, 88, 108]
+        ]
+      >
+
+      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:x, :z])
+      #Nx.Tensor<
+        s64[y: 2]
+        [3024, 158400]
+      >
+
+      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z])
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [6, 120],
+          [504, 1320]
+        ]
+      >
+
+      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [-3])
+      #Nx.Tensor<
+        s64[y: 2][z: 3]
+        [
+          [7, 16, 27],
+          [40, 55, 72]
+        ]
+      >
+
+  ### Keeping axes
+
+      iex> Nx.product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_axes: true)
+      #Nx.Tensor<
+        s64[x: 2][y: 2][z: 1]
+        [
+          [
+            [6],
+            [120]
+          ],
+          [
+            [504],
+            [1320]
+          ]
+        ]
+      >
+
+  ### Errors
+
+      iex> Nx.product(Nx.tensor([[1, 2]]), axes: [2])
+      ** (ArgumentError) given axis (2) invalid for shape with rank 2
+  """
+  def product(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :product)
+
+  @doc """
+  Returns the maximum values of the tensor.
+
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
+
+  You may optionally set `:keep_axes` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axes to size 1.
+
+  ## Examples
+
+      iex> Nx.reduce_max(Nx.tensor(42))
+      #Nx.Tensor<
+        s64
+        42
+      >
+
+      iex> Nx.reduce_max(Nx.tensor(42.0))
+      #Nx.Tensor<
+        f64
+        42.0
+      >
+
+      iex> Nx.reduce_max(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64
+        3
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.reduce_max(Nx.tensor([[3, 1, 4], [2, 1, 1]], names: [:x, :y]), axes: [:x])
+      #Nx.Tensor<
+        s64[y: 3]
+        [3, 1, 4]
+      >
+
+      iex> Nx.reduce_max(Nx.tensor([[3, 1, 4], [2, 1, 1]], names: [:x, :y]), axes: [:y])
+      #Nx.Tensor<
+        s64[x: 2]
+        [4, 2]
+      >
+
+      iex> Nx.reduce_max(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z])
+      #Nx.Tensor<
+        s64[y: 2]
+        [4, 8]
+      >
+
+  ### Keeping axes
+
+      iex> Nx.reduce_max(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_axes: true)
+      #Nx.Tensor<
+        s64[x: 1][y: 2][z: 1]
+        [
+          [
+            [4],
+            [8]
+          ]
+        ]
+      >
+
+  """
+  def reduce_max(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :reduce_max)
+
+  @doc """
+  Returns the minimum values of the tensor.
+
+  If the `:axes` option is given, it aggregates over
+  the given dimensions, effectively removing them.
+  `axes: [0]` implies aggregating over the highest order
+  dimension and so forth. If the axis is negative, then
+  counts the axis from the back. For example, `axes: [-1]`
+  will always aggregate all rows.
+
+  You may optionally set `:keep_axes` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axes to size 1.
+
+  ## Examples
+
+      iex> Nx.reduce_min(Nx.tensor(42))
+      #Nx.Tensor<
+        s64
+        42
+      >
+
+      iex> Nx.reduce_min(Nx.tensor(42.0))
+      #Nx.Tensor<
+        f64
+        42.0
+      >
+
+      iex> Nx.reduce_min(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        s64
+        1
+      >
+
+  ### Aggregating over an axis
+
+      iex> Nx.reduce_min(Nx.tensor([[3, 1, 4], [2, 1, 1]], names: [:x, :y]), axes: [:x])
+      #Nx.Tensor<
+        s64[y: 3]
+        [2, 1, 1]
+      >
+
+      iex> Nx.reduce_min(Nx.tensor([[3, 1, 4], [2, 1, 1]], names: [:x, :y]), axes: [:y])
+      #Nx.Tensor<
+        s64[x: 2]
+        [1, 1]
+      >
+
+      iex> Nx.reduce_min(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z])
+      #Nx.Tensor<
+        s64[y: 2]
+        [1, 3]
+      >
+
+  ### Keeping axes
+
+      iex> Nx.reduce_min(Nx.tensor([[[1, 2], [4, 5]], [[2, 4], [3, 8]]], names: [:x, :y, :z]), axes: [:x, :z], keep_axes: true)
+      #Nx.Tensor<
+        s64[x: 1][y: 2][z: 1]
+        [
+          [
+            [1],
+            [3]
+          ]
+        ]
+      >
+
+  """
+  def reduce_min(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :reduce_min)
 
   @doc """
   Returns the indices of the maximum values.

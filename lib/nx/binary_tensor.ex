@@ -1080,6 +1080,32 @@ defmodule Nx.BinaryTensor do
   end
 
   @impl true
+  def product(out, %{type: type} = tensor, opts) do
+    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
+      res = binary_to_number(bin, type) * acc
+      {res, res}
+    end)
+  end
+
+  @impl true
+  def reduce_max(out, %{type: type} = tensor, opts) do
+    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
+      val = binary_to_number(bin, type)
+      res = if acc == :first, do: val, else: Kernel.max(acc, val)
+      {res, res}
+    end)
+  end
+
+  @impl true
+  def reduce_min(out, %{type: type} = tensor, opts) do
+    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
+      val = binary_to_number(bin, type)
+      res = if acc == :first, do: val, else: Kernel.min(acc, val)
+      {res, res}
+    end)
+  end
+
+  @impl true
   def argmin(out, tensor, opts) do
     comparator =
       case opts[:tie_break] do
