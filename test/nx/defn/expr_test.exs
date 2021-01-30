@@ -32,7 +32,7 @@ defmodule Nx.Defn.ExprTest do
                d = tanh [ c ]                              f64[2][2]
                e = add [ b, d ]                            f64[2][2]
                f = add [ e, 2 ]                            f64[2][2]
-               g = sum [ f, axes: nil, keep_dims: false ]  f64
+               g = sum [ f, axes: nil, keep_axes: false ]  f64
              >\
              """
     end
@@ -64,7 +64,7 @@ defmodule Nx.Defn.ExprTest do
              #Nx.Tensor<
                Nx.Defn.Expr
                parameter a                                                  s64[2][2]
-               b = reduce [ a, 0, axes: nil, keep_dims: false, &Nx.add/2 ]  s64
+               b = reduce [ a, 0, axes: nil, keep_axes: false, &Nx.add/2 ]  s64
              >\
              """
     end

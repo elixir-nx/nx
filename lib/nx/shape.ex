@@ -251,27 +251,27 @@ defmodule Nx.Shape do
       {{4, 2, 1}, [:x, :y, :z]}
 
   """
-  def contract(shape, axes, names, keep_dims) do
+  def contract(shape, axes, names, keep_axes) do
     {new_shape, new_names} =
-      Enum.unzip(contract(shape, axes, names, 0, tuple_size(shape), keep_dims))
+      Enum.unzip(contract(shape, axes, names, 0, tuple_size(shape), keep_axes))
 
     {List.to_tuple(new_shape), new_names}
   end
 
-  defp contract(_shape, _axes, _names, n, n, _keep_dims) do
+  defp contract(_shape, _axes, _names, n, n, _keep_axes) do
     []
   end
 
-  defp contract(shape, axes, [name | names], i, n, keep_dims) do
+  defp contract(shape, axes, [name | names], i, n, keep_axes) do
     cond do
-      i in axes and not keep_dims ->
-        contract(shape, axes, names, i + 1, n, keep_dims)
+      i in axes and not keep_axes ->
+        contract(shape, axes, names, i + 1, n, keep_axes)
 
-      i in axes and keep_dims ->
-        [{1, name} | contract(shape, axes, names, i + 1, n, keep_dims)]
+      i in axes and keep_axes ->
+        [{1, name} | contract(shape, axes, names, i + 1, n, keep_axes)]
 
       true ->
-        [{elem(shape, i), name} | contract(shape, axes, names, i + 1, n, keep_dims)]
+        [{elem(shape, i), name} | contract(shape, axes, names, i + 1, n, keep_axes)]
     end
   end
 

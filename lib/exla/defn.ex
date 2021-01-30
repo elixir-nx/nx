@@ -381,10 +381,10 @@ defmodule EXLA.Defn do
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, state) do
     arg = to_type(arg, type)
     comp = to_computation(fun, type, state)
-    keep_dims = opts[:keep_dims]
+    keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
 
-    if keep_dims do
+    if keep_axes do
       EXLA.Op.reshape(result, shape)
     else
       result
@@ -504,10 +504,10 @@ defmodule EXLA.Defn do
     acc = EXLA.Op.constant_r0(state.builder, initial, type)
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
     comp = to_computation(name, args, state, fun)
-    keep_dims = opts[:keep_dims]
+    keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
 
-    if keep_dims do
+    if keep_axes do
       EXLA.Op.reshape(result, shape)
     else
       result

@@ -3407,7 +3407,7 @@ defmodule Nx do
   counts the axis from the back. For example, `axes: [-1]`
   will always aggregate all rows.
 
-  You may optionally set `:keep_dims` to true, which will
+  You may optionally set `:keep_axes` to true, which will
   retain the rank of the input tensor by setting the summed
   axes to size 1.
 
@@ -3507,7 +3507,7 @@ defmodule Nx do
 
   ### Keeping dimensions
 
-      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_dims: true)
+      iex> Nx.sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:z], keep_axes: true)
       #Nx.Tensor<
         s64[x: 2][y: 2][z: 1]
         [
@@ -3529,18 +3529,18 @@ defmodule Nx do
 
   """
   def sum(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes, :keep_dims])
-    keep_dims = opts[:keep_dims] || false
+    assert_keys!(opts, [:axes, :keep_axes])
+    keep_axes = opts[:keep_axes] || false
 
     %{shape: shape, type: type, names: names} = tensor = tensor!(tensor)
 
     {shape, names, axes} =
       if axes = opts[:axes] do
         axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_dims)
+        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
         {new_shape, new_names, axes}
       else
-        if keep_dims do
+        if keep_axes do
           shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
           {shape, names, nil}
         else
@@ -3557,7 +3557,7 @@ defmodule Nx do
 
     impl!(tensor).sum(%{tensor | type: type, shape: shape, names: names}, tensor,
       axes: axes,
-      keep_dims: keep_dims
+      keep_axes: keep_axes
     )
   end
 
@@ -3571,7 +3571,7 @@ defmodule Nx do
   the axis from the back. For example, `axes: [-1]` will
   always aggregate all rows.
 
-  You may optionally set `:keep_dims` to true, which will
+  You may optionally set `:keep_axes` to true, which will
   retain the rank of the input tensor by setting the averaged
   axes to size 1.
 
@@ -3629,7 +3629,7 @@ defmodule Nx do
 
   ### Keeping dimensions
 
-      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [-1], keep_dims: true)
+      iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [-1], keep_axes: true)
       #Nx.Tensor<
         f64[x: 2][y: 2][z: 1]
         [
@@ -3903,7 +3903,7 @@ defmodule Nx do
   cast integer, as done by most binary operator. You can
   also pass a `:type` option to change this behaviour.
 
-  You may optionally set `:keep_dims` to true, which will
+  You may optionally set `:keep_axes` to true, which will
   retain the rank of the input tensor by setting the reduced
   axes to size 1.
 
@@ -3984,7 +3984,7 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
-      iex> Nx.reduce(t, 0, [axes: [:x], keep_dims: true], fn x, y -> Nx.add(x, y) end)
+      iex> Nx.reduce(t, 0, [axes: [:x], keep_axes: true], fn x, y -> Nx.add(x, y) end)
       #Nx.Tensor<
         s64[x: 1][y: 2][z: 3]
         [
@@ -3997,8 +3997,8 @@ defmodule Nx do
 
   """
   def reduce(tensor, acc, opts \\ [], fun) when is_function(fun, 2) do
-    assert_keys!(opts, [:axes, :type, :keep_dims])
-    keep_dims = opts[:keep_dims] || false
+    assert_keys!(opts, [:axes, :type, :keep_axes])
+    keep_axes = opts[:keep_axes] || false
     type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, acc))
     %{shape: shape, names: names} = tensor = tensor!(tensor)
     acc = tensor!(acc)
@@ -4006,10 +4006,10 @@ defmodule Nx do
     {shape, names, axes} =
       if axes = opts[:axes] do
         axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_dims)
+        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
         {new_shape, new_names, axes}
       else
-        if keep_dims do
+        if keep_axes do
           shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
           {shape, names, nil}
         else
@@ -4018,7 +4018,7 @@ defmodule Nx do
       end
 
     out = %{tensor | type: type, shape: shape, names: names}
-    impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_dims: keep_dims], fun)
+    impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
   end
 
   @doc """

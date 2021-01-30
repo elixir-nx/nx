@@ -753,10 +753,10 @@ defmodule EXLA.DefnTest do
 
   describe "reduce" do
     defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
-    defn reduce_keep(t), do: Nx.reduce(t, 1, [keep_dims: true], fn a, b -> a * b end)
+    defn reduce_keep(t), do: Nx.reduce(t, 1, [keep_axes: true], fn a, b -> a * b end)
 
     defn reduce_keep_2(t),
-      do: Nx.reduce(t, 1, [keep_dims: true, axes: [0, 2]], fn a, b -> a * b end)
+      do: Nx.reduce(t, 1, [keep_axes: true, axes: [0, 2]], fn a, b -> a * b end)
 
     test "computes the reduce" do
       assert Nx.tensor([1, 2, 3]) |> reduce() == Nx.tensor(6)
@@ -935,10 +935,10 @@ defmodule EXLA.DefnTest do
       assert sum_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(1, type: {:u, 64})
     end
 
-    defn sum_keep(t), do: Nx.sum(t, keep_dims: true)
-    defn sum_keep_2(t), do: Nx.sum(t, axes: [0, 2], keep_dims: true)
+    defn sum_keep(t), do: Nx.sum(t, keep_axes: true)
+    defn sum_keep_2(t), do: Nx.sum(t, axes: [0, 2], keep_axes: true)
 
-    test "keeps dimensions if keep_dims" do
+    test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> sum_keep() == Nx.tensor([6])
       assert Nx.tensor([1.0, 2.0, 3.0]) |> sum_keep() == Nx.tensor([6.0])
 
@@ -992,10 +992,10 @@ defmodule EXLA.DefnTest do
       assert mean_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0.3333333333333333)
     end
 
-    defn mean_keep(t), do: Nx.mean(t, keep_dims: true)
-    defn mean_keep_2(t), do: Nx.mean(t, axes: [0, 2], keep_dims: true)
+    defn mean_keep(t), do: Nx.mean(t, keep_axes: true)
+    defn mean_keep_2(t), do: Nx.mean(t, axes: [0, 2], keep_axes: true)
 
-    test "keeps dimensions if keep_dims" do
+    test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> mean_keep() == Nx.tensor([2.0])
       assert Nx.tensor([1.0, 2.0, 3.0]) |> mean_keep() == Nx.tensor([2.0])
 
