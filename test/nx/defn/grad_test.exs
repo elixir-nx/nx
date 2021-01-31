@@ -804,6 +804,11 @@ defmodule Nx.Defn.GradTest do
     defn grad_reduce_max(t), do: grad(t, Nx.reduce_max(Nx.cos(Nx.exp(t))))
     defn grad_sum_reduce_max(t), do: grad(t, Nx.sum(Nx.reduce_max(t, axes: [1])))
     defn grad_sum_reduce_max_cos(t), do: grad(t, Nx.sum(Nx.reduce_max(Nx.cos(t), axes: [1])))
+    defn grad_reduce_max_sum(t), do: grad(t, Nx.reduce_max(Nx.sum(t, axes: [1])))
+    defn grad_reduce_max_min(t), do: grad(t, Nx.reduce_max(Nx.reduce_min(t, axes: [0])))
+
+    defn grad_reduce_max_min_sum(t),
+      do: grad(t, Nx.reduce_max(Nx.reduce_min(Nx.sum(t, axes: [1]), axes: [0])))
 
     test "computes gradient" do
       lhs = grad_reduce_max(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
@@ -819,7 +824,38 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient with sum+cos" do
       lhs = grad_sum_reduce_max_cos(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
-      rhs = Nx.tensor([[-0.8414709848078965, 0.0, 0.0, 0.0], [0.0, -0.42073549240394825, 0.0, -0.42073549240394825]])
+
+      rhs =
+        Nx.tensor([
+          [-0.8414709848078965, 0.0, 0.0, 0.0],
+          [0.0, -0.42073549240394825, 0.0, -0.42073549240394825]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes gradient with max+sum" do
+      assert grad_reduce_max_sum(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]])) ==
+               Nx.tensor([[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0]])
+    end
+
+    test "computes gradient with max+min" do
+      assert grad_reduce_max_min(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]])) ==
+               Nx.tensor([[0.0, 0.0, 0.5, 0.0], [0.0, 0.0, 0.5, 0.0]])
+    end
+
+    test "computes the gradient with max+min+sum" do
+      lhs =
+        grad_reduce_max_min_sum(
+          Nx.tensor([[[1.0, 0.0, 2.0], [3.0, 4.0, 2.0]], [[5.0, 2.0, 3.0], [4.0, 2.0, 1.0]]])
+        )
+
+      rhs =
+        Nx.tensor([
+          [[0.33333334, 0.16666667, 0.16666667], [0.33333334, 0.16666667, 0.16666667]],
+          [[0.0, 0.16666667, 0.16666667], [0.0, 0.16666667, 0.16666667]]
+        ])
+
       compare_tensors!(lhs, rhs)
     end
   end
@@ -828,10 +864,21 @@ defmodule Nx.Defn.GradTest do
     defn grad_reduce_min(t), do: grad(t, Nx.reduce_min(Nx.cos(Nx.exp(t))))
     defn grad_sum_reduce_min(t), do: grad(t, Nx.sum(Nx.reduce_min(t, axes: [1])))
     defn grad_sum_reduce_min_cos(t), do: grad(t, Nx.sum(Nx.reduce_min(Nx.cos(t), axes: [1])))
+    defn grad_reduce_min_sum(t), do: grad(t, Nx.reduce_min(Nx.sum(t, axes: [1])))
+    defn grad_reduce_min_max(t), do: grad(t, Nx.reduce_min(Nx.reduce_max(t, axes: [0])))
+
+    defn grad_reduce_min_max_sum(t),
+      do: grad(t, Nx.reduce_min(Nx.reduce_max(Nx.sum(t, axes: [1]), axes: [0])))
 
     test "computes gradient" do
       lhs = grad_reduce_min(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
-      rhs = Nx.tensor([[-0.37220643914833773, 0.0, 0.0, 0.0], [0.0, -0.37220643914833773, 0.0, -0.37220643914833773]])
+
+      rhs =
+        Nx.tensor([
+          [-0.37220643914833773, 0.0, 0.0, 0.0],
+          [0.0, -0.37220643914833773, 0.0, -0.37220643914833773]
+        ])
+
       compare_tensors!(lhs, rhs)
     end
 
@@ -843,8 +890,31 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient with sum+cos" do
       lhs = grad_sum_reduce_min_cos(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
-      rhs = Nx.tensor([[0.0, 0.0, -0.1411200080598672, 0.0], [0.0, 0.0, -0.1411200080598672, 0.0]])
+
+      rhs =
+        Nx.tensor([[0.0, 0.0, -0.1411200080598672, 0.0], [0.0, 0.0, -0.1411200080598672, 0.0]])
+
       compare_tensors!(lhs, rhs)
+    end
+
+    test "computes gradient with min+sum" do
+      assert grad_reduce_min_sum(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]])) ==
+               Nx.tensor([[0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0]])
+    end
+
+    test "computes gradient with min+max" do
+      assert grad_reduce_min_max(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]])) ==
+               Nx.tensor([[0.0, 0.5, 0.0, 0.0], [0.5, 0.0, 0.0, 0.0]])
+    end
+
+    test "computes the gradient with min+max+sum" do
+      assert grad_reduce_min_max_sum(
+               Nx.tensor([[[1.0, 0.0, 2.0], [3.0, 4.0, 2.0]], [[5.0, 2.0, 3.0], [4.0, 2.0, 1.0]]])
+             ) ==
+               Nx.tensor([
+                 [[0.0, 0.25, 0.25], [0.0, 0.25, 0.25]],
+                 [[0.0, 0.25, 0.25], [0.0, 0.25, 0.25]]
+               ])
     end
   end
 
