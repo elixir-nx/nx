@@ -309,22 +309,28 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  @reduce_chooser_ops [:reduce_max, :reduce_min]
+  @reduce_min_max_ops [:reduce_max, :reduce_min]
 
-  defp grad(op, [x, opts], ans, g, cache) when op in @reduce_chooser_ops do
-    axes = opts[:axes] || Nx.axes(x)
-    shape =
-      for {s, i} <- Enum.with_index(Tuple.to_list(x.shape)) do
-        if i in axes, do: 1, else: s
+  defp grad(op, [x, opts], ans, g, cache) when op in @reduce_min_max_ops do
+    g =
+      if axes = opts[:axes] do
+        axes = Nx.axes(x.shape) -- axes
+        Nx.broadcast(g, x.shape, axes: axes)
+      else
+        Nx.broadcast(g, x.shape)
       end
 
-    locs = Nx.as_type(Nx.equal(x, Nx.reshape(ans, List.to_tuple(shape))), g.type)
-    counts = Nx.sum(locs, axes: axes, keep_axes: true)
-    {g, cache} = to_grad(x, locs, cache)
+    axes = opts[:axes] || Nx.axes(x)
 
-    dx = Nx.divide(g, counts)
+    shape =
+      for {d, i} <- Enum.with_index(Tuple.to_list(x.shape)) do
+        if i in axes, do: 1, else: d
+      end
 
-    {dx, cache}
+    locs = Nx.equal(x, Nx.reshape(ans, List.to_tuple(shape)))
+    num = Nx.multiply(g, locs)
+    den = Nx.sum(locs, axes: axes, keep_axes: true)
+    to_grad(x, Nx.divide(num, den), cache)
   end
 
   defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
