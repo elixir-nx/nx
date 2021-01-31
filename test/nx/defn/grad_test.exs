@@ -800,6 +800,54 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "reduce_max rule" do
+    defn grad_reduce_max(t), do: grad(t, Nx.reduce_max(Nx.cos(Nx.exp(t))))
+    defn grad_sum_reduce_max(t), do: grad(t, Nx.sum(Nx.reduce_max(t, axes: [1])))
+    defn grad_sum_reduce_max_cos(t), do: grad(t, Nx.sum(Nx.reduce_max(Nx.cos(t), axes: [1])))
+
+    test "computes gradient" do
+      lhs = grad_reduce_max(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
+      rhs = Nx.tensor([[0.0, -3.302372203078941, 0.0, 0.0], [-3.302372203078941, 0.0, 0.0, 0.0]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes gradient with sum" do
+      lhs = grad_sum_reduce_max(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
+      rhs = Nx.tensor([[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 0.0]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes gradient with sum+cos" do
+      lhs = grad_sum_reduce_max_cos(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
+      rhs = Nx.tensor([[-0.8414709848078965, 0.0, 0.0, 0.0], [0.0, -0.42073549240394825, 0.0, -0.42073549240394825]])
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
+  describe "reduce_min rule" do
+    defn grad_reduce_min(t), do: grad(t, Nx.reduce_min(Nx.cos(Nx.exp(t))))
+    defn grad_sum_reduce_min(t), do: grad(t, Nx.sum(Nx.reduce_min(t, axes: [1])))
+    defn grad_sum_reduce_min_cos(t), do: grad(t, Nx.sum(Nx.reduce_min(Nx.cos(t), axes: [1])))
+
+    test "computes gradient" do
+      lhs = grad_reduce_min(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
+      rhs = Nx.tensor([[-0.37220643914833773, 0.0, 0.0, 0.0], [0.0, -0.37220643914833773, 0.0, -0.37220643914833773]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes gradient with sum" do
+      lhs = grad_sum_reduce_min(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
+      rhs = Nx.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 0.5, 0.0, 0.5]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes gradient with sum+cos" do
+      lhs = grad_sum_reduce_min_cos(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
+      rhs = Nx.tensor([[0.0, 0.0, -0.1411200080598672, 0.0], [0.0, 0.0, -0.1411200080598672, 0.0]])
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "not implemented" do
     defn grad_reduce(t), do: grad(t, Nx.reduce(t, 0, fn x, y -> x + y end))
 
