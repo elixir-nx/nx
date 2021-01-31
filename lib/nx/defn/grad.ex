@@ -298,15 +298,25 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:sum, [x, opts], _ans, g, cache) do
-    g =
-      if axes = opts[:axes] do
-        axes = Nx.axes(x.shape) -- axes
-        Nx.broadcast(g, x, axes: axes)
-      else
-        Nx.broadcast(g, x)
-      end
+    grad_reduce(x, opts, g, cache, & &1)
+  end
 
-    to_grad(x, g, cache)
+  @reduce_min_max_ops [:reduce_max, :reduce_min]
+
+  defp grad(op, [x, opts], ans, g, cache) when op in @reduce_min_max_ops do
+    grad_reduce(x, opts, g, cache, fn g ->
+      axes = opts[:axes] || Nx.axes(x)
+
+      shape =
+        for {d, i} <- Enum.with_index(Tuple.to_list(x.shape)) do
+          if i in axes, do: 1, else: d
+        end
+
+      locs = Nx.equal(x, Nx.reshape(ans, List.to_tuple(shape)))
+      num = Nx.multiply(g, locs)
+      den = Nx.sum(locs, axes: axes, keep_axes: true)
+      Nx.divide(num, den)
+    end)
   end
 
   defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
@@ -461,6 +471,18 @@ defmodule Nx.Defn.Grad do
   end
 
   ## Helpers
+
+  defp grad_reduce(x, opts, g, cache, fun) do
+    g =
+      if axes = opts[:axes] do
+        axes = Nx.axes(x.shape) -- axes
+        Nx.broadcast(g, x, axes: axes)
+      else
+        Nx.broadcast(g, x)
+      end
+
+    to_grad(x, fun.(g), cache)
+  end
 
   defp binary_broadcast(x, y, ans) do
     {Nx.broadcast(x, ans), Nx.broadcast(y, ans)}
