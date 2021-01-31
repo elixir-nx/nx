@@ -129,7 +129,7 @@ The first compilation will take a long time, as it needs to compile parts of Ten
 
 ### GPU Support
 
-To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1 and cuDNN 7 and 8. You can check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
+To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1. You need either cuDNN 7 or 8 installed. [See the installation instructions](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html) and check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
 
 In order to link-in the appropriate dependencies for your platform's accelerator, you need to set the appropriate configuration flags in the `EXLA_FLAGS` environment variable.
 
