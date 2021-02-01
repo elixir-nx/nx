@@ -631,6 +631,33 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "select rule" do
+    defn grad_sum_select(t),
+      do: grad(t, Nx.sum(Nx.select(Nx.greater(t, 0.0), Nx.exp(t), Nx.cos(t))))
+
+    defn grad_max_select(t),
+      do: grad(t, Nx.reduce_max(Nx.select(Nx.greater(t, 0.0), Nx.exp(t), Nx.cos(t))))
+
+    test "computes gradient with sum+select" do
+      assert grad_sum_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]])) ==
+               Nx.tensor([
+                 [
+                   0.9092974268256817,
+                   2.718281828459045,
+                   0.0,
+                   20.085536923187668,
+                   0.1411200080598672
+                 ],
+                 [2.718281828459045, 7.38905609893065, 0.0, 148.4131591025766, 0.8414709848078965]
+               ])
+    end
+
+    test "computes the gradient with max+select" do
+      assert grad_max_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]])) ==
+               Nx.tensor([[0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 148.4131591025766, 0.0]])
+    end
+  end
+
   describe "as_type" do
     defn grad_as_type(t), do: grad(t, Nx.sum(Nx.as_type(t, {:f, 32})))
 
