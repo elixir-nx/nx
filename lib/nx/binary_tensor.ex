@@ -1187,6 +1187,30 @@ defmodule Nx.BinaryTensor do
   end
 
   @impl true
+  def window_sum(out, tensor, window_dimensions, opts) do
+    fun = fn a, b -> a + b end
+    reduce_window(out, tensor, 0, window_dimensions, opts, fun)
+  end
+
+  @impl true
+  def window_max(out, tensor, window_dimensions, opts) do
+    fun = fn a, b -> if b == :first, do: a, else: max(a, b) end
+    reduce_window(out, tensor, :first, window_dimensions, opts, fun)
+  end
+
+  @impl true
+  def window_min(out, tensor, window_dimensions, opts) do
+    fun = fn a, b -> if b == :first, do: a, else: min(a, b) end
+    reduce_window(out, tensor, :first, window_dimensions, opts, fun)
+  end
+
+  @impl true
+  def window_product(out, tensor, window_dimensions, opts) do
+    fun = fn a, b -> a * b end
+    reduce_window(out, tensor, 1, window_dimensions, opts, fun)
+  end
+
+  @impl true
   def map(%{type: output_type} = out, %{type: type} = tensor, fun) do
     data = to_binary(tensor)
 

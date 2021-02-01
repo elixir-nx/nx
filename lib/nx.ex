@@ -3409,9 +3409,11 @@ defmodule Nx do
           axes = Nx.Shape.normalize_axes(shape, axes, names)
           {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
           {new_shape, new_names, axes}
+
         keep_axes ->
           shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
           {shape, names, nil}
+
         true ->
           {{}, [], nil}
       end
@@ -4140,6 +4142,376 @@ defmodule Nx do
     ])
   end
 
+  defp aggregate_window_op(tensor, window_dimensions, opts, op) do
+    assert_keys!(opts, [:padding, :strides])
+    %T{shape: shape} = tensor = tensor!(tensor)
+
+    window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
+    padding = opts[:padding] || :valid
+
+    padding_config =
+      case padding do
+        :valid ->
+          for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
+
+        :same ->
+          padding_config = Nx.Shape.calculate_padding(shape, window_dimensions, window_strides)
+          padding_config
+
+        config when is_list(config) ->
+          config
+
+        _ ->
+          raise ArgumentError,
+                "invalid padding configuration, padding must be" <>
+                  " :valid or :same, or a padding configuration for" <>
+                  " the spatial dimensions of the input tensor"
+      end
+
+    padded_shape = Nx.Shape.pad(shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
+    output_shape = Nx.Shape.window(padded_shape, window_dimensions, window_strides)
+
+    out = %{tensor | shape: output_shape}
+
+    apply(impl!(tensor), op, [
+      out,
+      tensor,
+      window_dimensions,
+      [padding: padding_config, strides: window_strides]
+    ])
+  end
+
+  @doc """
+  Sums over each window of size `window_dimensions` in the
+  given tensor, producing a tensor that contains the same
+  number of elements as valid positions of the window.
+
+  You may optionally specify `:strides` which is a tuple
+  of non-zero steps to take along each axis between
+  each window.
+
+  You may also optionally specify `:padding` which is either
+  one of `:valid` (no padding) or `:same` (pad so output shape
+  is the same as input shape) or a general padding configuration
+  for each dimension in the input tensor. Your padding configuration
+  cannot include any negative pad values. You may only specify
+  padding for the high and low edges of the given dimension.
+
+  ## Examples
+
+      iex> Nx.window_sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1})
+      #Nx.Tensor<
+        s64[2][1][3]
+        [
+          [
+            [5, 7, 9]
+          ],
+          [
+            [5, 7, 9]
+          ]
+        ]
+      >
+
+      iex> Nx.window_sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
+      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      #Nx.Tensor<
+        s64[2][2][2]
+        [
+          [
+            [0, 0],
+            [0, 18]
+          ],
+          [
+            [0, 0],
+            [0, 9]
+          ]
+        ]
+      >
+
+      iex> Nx.window_sum(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
+      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      #Nx.Tensor<
+        f64[2][2][5]
+        [
+          [
+            [0.0, 4.0, 2.0, 3.0, 0.0],
+            [0.0, 2.0, 5.0, 6.5, 0.0]
+          ],
+          [
+            [0.0, 1.2, 2.2, 3.2, 0.0],
+            [0.0, 4.0, 5.0, 6.2, 0.0]
+          ]
+        ]
+      >
+  """
+  def window_sum(tensor, window_dimensions, opts \\ []),
+    do: aggregate_window_op(tensor, window_dimensions, opts, :window_sum)
+
+  @doc """
+  Averages over each window of size `window_dimensions` in the
+  given tensor, producing a tensor that contains the same
+  number of elements as valid positions of the window.
+
+  You may optionally specify `:strides` which is a tuple
+  of non-zero steps to take along each axis between
+  each window.
+
+  You may also optionally specify `:padding` which is either
+  one of `:valid` (no padding) or `:same` (pad so output shape
+  is the same as input shape) or a general padding configuration
+  for each dimension in the input tensor. Your padding configuration
+  cannot include any negative pad values. You may only specify
+  padding for the high and low edges of the given dimension.
+
+  ## Examples
+
+      iex> Nx.window_mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1})
+      #Nx.Tensor<
+        f64[2][1][3]
+        [
+          [
+            [2.5, 3.5, 4.5]
+          ],
+          [
+            [2.5, 3.5, 4.5]
+          ]
+        ]
+      >
+
+      iex> Nx.window_mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
+      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      #Nx.Tensor<
+        f64[2][2][2]
+        [
+          [
+            [0.0, 0.0],
+            [0.0, 4.5]
+          ],
+          [
+            [0.0, 0.0],
+            [0.0, 2.25]
+          ]
+        ]
+      >
+
+      iex> Nx.window_mean(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
+      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      #Nx.Tensor<
+        f64[2][2][5]
+        [
+          [
+            [0.0, 2.0, 1.0, 1.5, 0.0],
+            [0.0, 1.0, 2.5, 3.25, 0.0]
+          ],
+          [
+            [0.0, 0.6, 1.1, 1.6, 0.0],
+            [0.0, 2.0, 2.5, 3.1, 0.0]
+          ]
+        ]
+      >
+  """
+  def window_mean(tensor, window_dimensions, opts \\ []) do
+    divide(window_sum(tensor, window_dimensions, opts), size(window_dimensions))
+  end
+
+  @doc """
+  Returns the maximum over each window of size `window_dimensions`
+  in the given tensor, producing a tensor that contains the same
+  number of elements as valid positions of the window.
+
+  You may optionally specify `:strides` which is a tuple
+  of non-zero steps to take along each axis between
+  each window.
+
+  You may also optionally specify `:padding` which is either
+  one of `:valid` (no padding) or `:same` (pad so output shape
+  is the same as input shape) or a general padding configuration
+  for each dimension in the input tensor. Your padding configuration
+  cannot include any negative pad values. You may only specify
+  padding for the high and low edges of the given dimension.
+
+  ## Examples
+
+      iex> Nx.window_max(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1})
+      #Nx.Tensor<
+        s64[2][1][3]
+        [
+          [
+            [4, 5, 6]
+          ],
+          [
+            [4, 5, 6]
+          ]
+        ]
+      >
+
+      iex> Nx.window_max(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
+      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      #Nx.Tensor<
+        s64[2][2][2]
+        [
+          [
+            [0, 0],
+            [0, 6]
+          ],
+          [
+            [0, 0],
+            [0, 6]
+          ]
+        ]
+      >
+
+      iex> Nx.window_max(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
+      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      #Nx.Tensor<
+        f64[2][2][5]
+        [
+          [
+            [0.0, 4.0, 2.0, 3.0, 0.0],
+            [0.0, 2.0, 5.0, 6.5, 0.0]
+          ],
+          [
+            [0.0, 1.2, 2.2, 3.2, 0.0],
+            [0.0, 4.0, 5.0, 6.2, 0.0]
+          ]
+        ]
+      >
+  """
+  def window_max(tensor, window_dimensions, opts \\ []),
+    do: aggregate_window_op(tensor, window_dimensions, opts, :window_max)
+
+  @doc """
+  Returns the minimum over each window of size `window_dimensions`
+  in the given tensor, producing a tensor that contains the same
+  number of elements as valid positions of the window.
+
+  You may optionally specify `:strides` which is a tuple
+  of non-zero steps to take along each axis between
+  each window.
+
+  You may also optionally specify `:padding` which is either
+  one of `:valid` (no padding) or `:same` (pad so output shape
+  is the same as input shape) or a general padding configuration
+  for each dimension in the input tensor. Your padding configuration
+  cannot include any negative pad values. You may only specify
+  padding for the high and low edges of the given dimension.
+
+  ## Examples
+
+      iex> Nx.window_min(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1})
+      #Nx.Tensor<
+        s64[2][1][3]
+        [
+          [
+            [1, 2, 3]
+          ],
+          [
+            [1, 2, 3]
+          ]
+        ]
+      >
+
+      iex> Nx.window_min(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
+      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      #Nx.Tensor<
+        s64[2][2][2]
+        [
+          [
+            [0, 0],
+            [0, 3]
+          ],
+          [
+            [0, 0],
+            [0, 0]
+          ]
+        ]
+      >
+
+      iex> Nx.window_min(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
+      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      #Nx.Tensor<
+        f64[2][2][5]
+        [
+          [
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0]
+          ]
+        ]
+      >
+  """
+  def window_min(tensor, window_dimensions, opts \\ []),
+    do: aggregate_window_op(tensor, window_dimensions, opts, :window_min)
+
+  @doc """
+  Returns the product over each window of size `window_dimensions`
+  in the given tensor, producing a tensor that contains the same
+  number of elements as valid positions of the window.
+
+  You may optionally specify `:strides` which is a tuple
+  of non-zero steps to take along each axis between
+  each window.
+
+  You may also optionally specify `:padding` which is either
+  one of `:valid` (no padding) or `:same` (pad so output shape
+  is the same as input shape) or a general padding configuration
+  for each dimension in the input tensor. Your padding configuration
+  cannot include any negative pad values. You may only specify
+  padding for the high and low edges of the given dimension.
+
+  ## Examples
+
+      iex> Nx.window_product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1})
+      #Nx.Tensor<
+        s64[2][1][3]
+        [
+          [
+            [4, 10, 18]
+          ],
+          [
+            [4, 10, 18]
+          ]
+        ]
+      >
+
+      iex> Nx.window_product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
+      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      #Nx.Tensor<
+        s64[2][2][2]
+        [
+          [
+            [0, 0],
+            [0, 324]
+          ],
+          [
+            [0, 0],
+            [0, 0]
+          ]
+        ]
+      >
+
+      iex> Nx.window_product(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
+      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      #Nx.Tensor<
+        f64[2][2][5]
+        [
+          [
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0]
+          ]
+        ]
+      >
+  """
+  def window_product(tensor, window_dimensions, opts \\ []),
+    do: aggregate_window_op(tensor, window_dimensions, opts, :window_product)
+
   @doc """
   Reduces over a tensor with the given accumulator.
 
@@ -4295,7 +4667,7 @@ defmodule Nx do
   configuration of edge-high and edge-low paddings.
 
   If specifying stride, the rank of the stride must match the
-  rank of the input tensor.
+  rank of the input tensor, or be a scalar.
 
   ### Examples
 
@@ -4345,6 +4717,11 @@ defmodule Nx do
 
     window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
     padding = opts[:padding] || :valid
+
+    window_strides =
+      if is_integer(window_strides),
+        do: List.to_tuple(List.duplicate(window_strides, rank(tensor.shape))),
+        else: window_strides
 
     padding_config =
       case padding do
@@ -5050,11 +5427,15 @@ defmodule Nx do
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
 
     if rank(input_shape) < 3 do
-      raise ArgumentError, "input shape in conv requires at least rank 3"
+      raise ArgumentError,
+            "input shape in conv requires at least rank 3," <>
+              " shape #{inspect(input_shape)} has rank #{rank(input_shape)}"
     end
 
     if rank(kernel_shape) < 3 do
-      raise ArgumentError, "kernel shape in conv requires at least rank 3"
+      raise ArgumentError,
+            "kernel shape in conv requires at least rank 3," <>
+              " shape #{inspect(kernel_shape)} has rank #{rank(kernel_shape)}"
     end
 
     tensor_input_channels = elem(input_shape, 1)
@@ -5063,7 +5444,8 @@ defmodule Nx do
     if tensor_input_channels != kernel_input_channels do
       raise ArgumentError,
             "size of input dimension 1 must match size of kernel dimension 1," <>
-              " got #{tensor_input_channels} != #{kernel_input_channels}"
+              " got #{tensor_input_channels} != #{kernel_input_channels} for shapes" <>
+              " #{inspect(input_shape)} and #{inspect(kernel_shape)}"
     end
 
     filter_shape =
@@ -5078,8 +5460,17 @@ defmodule Nx do
 
     strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(spatial_dims)))
 
+    strides =
+      if is_integer(strides),
+        do: List.to_tuple(List.duplicate(strides, rank(spatial_dims))),
+        else: strides
+
     if rank(strides) != rank(spatial_dims) do
-      raise ArgumentError, "must specify stride for each spatial dimension"
+      raise ArgumentError,
+            "rank of strides much match rank of spatial dimension" <>
+              " got #{inspect(strides)} with rank #{rank(strides)}" <>
+              " for dimensions #{inspect(spatial_dims)} of rank" <>
+              " #{rank(spatial_dims)}"
     end
 
     cond do

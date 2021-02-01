@@ -379,6 +379,16 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  window_aggregate_ops = [:window_sum, :window_product, :window_max, :window_min]
+
+  for op <- window_aggregate_ops do
+    @impl true
+    def unquote(op)(out, tensor, window_dimensions, opts) do
+      tensor = to_expr(tensor)
+      expr(out, tensor.data.context, unquote(op), [tensor, window_dimensions, opts])
+    end
+  end
+
   @impl true
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]

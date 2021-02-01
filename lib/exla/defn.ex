@@ -430,6 +430,58 @@ defmodule EXLA.Defn do
     end
   end
 
+  defp to_operator(:window_sum, [arg, window_dimensions, opts], %{type: type}, state) do
+    to_window_aggregate(
+      :window_sum,
+      type,
+      arg,
+      0,
+      window_dimensions,
+      opts,
+      state,
+      &apply(EXLA.Op, :add, &1.params)
+    )
+  end
+
+  defp to_operator(:window_max, [arg, window_dimensions, opts], %{type: type}, state) do
+    to_window_aggregate(
+      :window_max,
+      type,
+      arg,
+      EXLA.Lib.min_value(state.builder, type),
+      window_dimensions,
+      opts,
+      state,
+      &apply(EXLA.Op, :max, &1.params)
+    )
+  end
+
+  defp to_operator(:window_min, [arg, window_dimensions, opts], %{type: type}, state) do
+    to_window_aggregate(
+      :window_min,
+      type,
+      arg,
+      EXLA.Lib.max_value(state.builder, type),
+      window_dimensions,
+      opts,
+      state,
+      &apply(EXLA.Op, :min, &1.params)
+    )
+  end
+
+  defp to_operator(:window_product, [arg, window_dimensions, opts], %{type: type}, state) do
+    to_window_aggregate(
+      :window_product,
+      type,
+      arg,
+      1,
+      window_dimensions,
+      opts,
+      state,
+      &apply(EXLA.Op, :multiply, &1.params)
+    )
+  end
+
   defp to_operator(
          :reduce_window,
          [arg, acc, window_dimensions, opts, fun],
@@ -560,6 +612,27 @@ defmodule EXLA.Defn do
     else
       result
     end
+  end
+
+  defp to_window_aggregate(name, type, arg, initial, window_dimensions, opts, state, fun) do
+    arg = to_type(arg, type)
+
+    acc =
+      case initial do
+        %EXLA.Op{} = initial ->
+          initial
+
+        initial when is_number(initial) ->
+          EXLA.Op.constant_r0(state.builder, initial, type)
+      end
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    comp = to_computation(name, args, state, fun)
+
+    strides = opts[:strides]
+    padding = opts[:padding]
+
+    EXLA.Op.reduce_window(arg, acc, comp, window_dimensions, strides, padding)
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
