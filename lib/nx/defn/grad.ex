@@ -199,6 +199,13 @@ defmodule Nx.Defn.Grad do
     {maybe_add(maybe_add(d_operand, d_min), d_max), cache}
   end
 
+  defp grad(:select, [pred, on_true, on_false], _ans, g, cache) do
+    {d_on_true, cache} = to_grad(on_true, g, cache)
+    {d_on_false, cache} = to_grad(on_false, g, cache)
+    result = Nx.select(pred, d_on_true, d_on_false)
+    {result, cache}
+  end
+
   ## Linear gradients
 
   defp grad(:outer, [x, y], ans, g, cache) do
