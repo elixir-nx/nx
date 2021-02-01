@@ -862,6 +862,45 @@ defmodule Nx do
     end
   end
 
+  @doc ~S"""
+  Returns a heatmap struct with the tensor data.
+
+  On terminals, coloring is done via ANSI colors. If ANSI
+  is not enabled, the tensor is normalized to show numbers
+  between 0 and 9.
+
+  ## Terminal coloring
+
+  Coloring is enabled by default on most Unix terminals.
+  They are also available on Windows consoles from Windows
+  10, although it must be explicitly enabled for the current
+  user in the registry by running the following command:
+
+      reg add HKCU\Console /v VirtualTerminalLevel /t REG_DWORD /d 1
+
+  After running the command above, you must restart your current
+  console.
+
+  ## Options
+
+    * `:ansi_enabled` - forces ansi to be enabled or disabled.
+      Defaults to `IO.ANSI.enabled?/0`
+
+    * `:ansi_whitespace` - which whitespace character to use when
+      printing. By default it uses `"\u3000"`, which is a full-width
+      whitespace which often prints more precise shapes
+
+  """
+  def to_heatmap(tensor, opts \\ []) when is_list(opts) do
+    tensor = tensor!(tensor)
+
+    if tensor.shape == {} do
+      raise ArgumentError, "cannot show heatmap for scalar tensors, got: #{inspect(tensor)}"
+    end
+
+    %Nx.Heatmap{tensor: tensor!(tensor), opts: opts}
+  end
+
   @doc """
   Creates a one-dimensional tensor from a `binary` with the given `type`.
 
