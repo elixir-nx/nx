@@ -253,7 +253,7 @@ defmodule Nx.Defn do
   It returns a wrapped anonymous function that will
   compile just-in-time to given compiler on execution.
   """
-  def jit(fun, compiler, opts \\ [])
+  def jit(fun, compiler \\ Nx.Defn, opts \\ [])
       when is_function(fun) and is_atom(compiler) and is_list(opts) do
     Nx.Defn.Compiler.__jit__(fun, compiler, opts)
   end

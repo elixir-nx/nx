@@ -773,17 +773,17 @@ defmodule Nx.DefnTest do
     end
 
     test "compiles defn function" do
-      assert Nx.Defn.jit(&defn_jit/2, Nx.Defn).({4, 5}, 3) == Nx.tensor(6)
-      assert Nx.Defn.jit(&defn_jit/2, Nx.Defn).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
-      assert Nx.Defn.jit(&defn_jit(&1, 3), Nx.Defn).({4, 5}) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit/2).({4, 5}, 3) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit/2).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
 
       assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, Identity).({1, 2}, 3)
     end
 
     test "compiles elixir function" do
-      assert Nx.Defn.jit(&elixir_jit/2, Nx.Defn).({4, 5}, 3) == Nx.tensor(6)
-      assert Nx.Defn.jit(&elixir_jit/2, Nx.Defn).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
-      assert Nx.Defn.jit(&elixir_jit(&1, 3), Nx.Defn).({4, 5}) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, 3) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
 
       assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, Identity).({4, 5}, 3)
     end
