@@ -1013,7 +1013,7 @@ ERL_NIF_TERM variadic_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 }
 
 ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 6) {
+  if (argc != 7) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1024,7 +1024,7 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   std::vector<exla::int64> window_strides;
   // TODO(seanmor5): Not yet supported in Nx
   // std::vector<exla::int64> base_dilations;
-  // std::vector<exla::int64> window_dilations;
+  std::vector<exla::int64> window_dilations;
   std::vector<std::pair<exla::int64, exla::int64>> padding_config;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
@@ -1042,7 +1042,10 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   if (!exla::nif::get_tuple(env, argv[4], window_strides)) {
     return exla::nif::error(env, "Unable to get window strides.");
   }
-  if (!exla::nif::get_general_padding(env, argv[5], padding_config)) {
+  if (!exla::nif::get_tuple(env, argv[5], window_dilations)) {
+    return exla::nif::error(env, "Unable to get window dilations.");
+  }
+  if (!exla::nif::get_general_padding(env, argv[6], padding_config)) {
     return exla::nif::error(env, "Unable to get padding configuration.");
   }
 
@@ -1052,7 +1055,7 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
                                                       window_dimensions,
                                                       window_strides,
                                                       {},
-                                                      {},
+                                                      window_dilations,
                                                       padding_config);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
@@ -1808,7 +1811,7 @@ static ErlNifFunc exla_funcs[] = {
   // Functional Ops
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},
-  {"reduce_window", 6, reduce_window},
+  {"reduce_window", 7, reduce_window},
   {"map", 4, map},
   // Shape/Type Manipulation
   {"broadcast_in_dim", 3, broadcast_in_dim},

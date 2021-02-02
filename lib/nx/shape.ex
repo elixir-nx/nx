@@ -448,10 +448,10 @@ defmodule Nx.Shape do
       iex> Nx.Shape.window({3, 3}, {2, 2}, {1, 1})
       {2, 2}
 
-      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, {1, 1, 1})
-      {1, 2, 3}
-
   ### Error cases
+
+      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, {1, 1, 1})
+      ** (ArgumentError) window dimensions would result in empty tensor which is not currently supported in Nx, please open an issue if you'd like this behavior to change
 
       iex> Nx.Shape.window({1, 2, 3}, {2, 1}, {1, 1, 1})
       ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
@@ -467,8 +467,20 @@ defmodule Nx.Shape do
 
   defp window([], [], [], acc), do: acc |> Enum.reverse() |> List.to_tuple()
 
-  defp window([dim | shape], [w | window], [s | strides], acc),
-    do: window(shape, window, strides, [max(div(dim - w, s) + 1, 1) | acc])
+  defp window([dim | shape], [w | window], [s | strides], acc) do
+    new_dim = div(dim - w, s) + 1
+
+    if new_dim <= 0,
+      do:
+        raise(
+          ArgumentError,
+          "window dimensions would result in empty tensor" <>
+            " which is not currently supported in Nx, please" <>
+            " open an issue if you'd like this behavior to change"
+        )
+
+    window(shape, window, strides, [new_dim | acc])
+  end
 
   # Ensures the window is valid given the shape.
   # A window is valid as long as it's rank matches

@@ -35,12 +35,11 @@ defmodule Nx.Heatmap do
         if Keyword.get_lazy(heatmap_opts, :ansi_enabled, &IO.ANSI.enabled?/0) do
           scale = length(@mono265) - 1
 
-          entry_fun =
-            fn range ->
-              index = range |> Kernel.*(scale) |> round()
-              color = Enum.fetch!(@mono265, index)
-              [IO.ANSI.color_background(color), whitespace]
-            end
+          entry_fun = fn range ->
+            index = range |> Kernel.*(scale) |> round()
+            color = Enum.fetch!(@mono265, index)
+            [IO.ANSI.color_background(color), whitespace]
+          end
 
           {entry_fun, &IO.iodata_to_binary([&1 | IO.ANSI.reset()])}
         else
@@ -105,7 +104,7 @@ defmodule Nx.Heatmap do
         end)
 
       doc =
-        (if dims == [], do: open, else: concat(open, line()))
+        if(dims == [], do: open, else: concat(open, line()))
         |> concat(concat(Enum.intersperse(acc, concat(sep, line()))))
         |> nest(2)
         |> concat(line())

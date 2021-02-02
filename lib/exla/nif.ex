@@ -178,6 +178,7 @@ defmodule EXLA.NIF do
         _computation,
         _window_dimensions,
         _window_strides,
+        _window_dilations,
         _padding_config
       ),
       do: nif_error(__ENV__.function)
