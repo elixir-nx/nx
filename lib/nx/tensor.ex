@@ -69,6 +69,10 @@ defmodule Nx.Tensor do
   @callback argmin(out :: t, t, keyword) :: t
   @callback reduce(out :: t, t, acc :: t, keyword, fun) :: t
   @callback reduce_window(out :: t, t, acc :: t, list, keyword, fun) :: t
+  @callback window_sum(out :: t, t, list, keyword) :: t
+  @callback window_product(out :: t, t, list, keyword) :: t
+  @callback window_max(out :: t, t, list, keyword) :: t
+  @callback window_min(out :: t, t, list, keyword) :: t
   @callback map(out :: t, t, fun) :: t
 
   @callback cholesky(out :: t, t) :: t

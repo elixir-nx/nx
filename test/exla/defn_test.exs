@@ -1164,6 +1164,136 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "window sum" do
+    defn window_sum1(t), do: Nx.window_sum(t, {1, 2, 1})
+
+    defn window_sum2(t),
+      do: Nx.window_sum(t, {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+
+    defn window_sum3(t),
+      do: Nx.window_sum(t, {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+
+    test "computes the sum of a window" do
+      assert window_sum1(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[5, 7, 9]], [[5, 7, 9]]])
+
+      assert window_sum2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[0, 0], [0, 18]], [[0, 0], [0, 9]]])
+
+      assert window_sum3(
+               Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]])
+             ) ==
+               Nx.tensor([
+                 [[0.0, 4.0, 2.0, 3.0, 0.0], [0.0, 2.0, 5.0, 6.5, 0.0]],
+                 [[0.0, 1.2, 2.2, 3.2, 0.0], [0.0, 4.0, 5.0, 6.2, 0.0]]
+               ])
+    end
+  end
+
+  describe "window mean" do
+    defn window_mean1(t), do: Nx.window_mean(t, {1, 2, 1})
+
+    defn window_mean2(t),
+      do: Nx.window_mean(t, {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+
+    defn window_mean3(t),
+      do: Nx.window_mean(t, {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+
+    test "computes the mean of a window" do
+      assert window_mean1(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[2.5, 3.5, 4.5]], [[2.5, 3.5, 4.5]]])
+
+      assert window_mean2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[0, 0], [0, 4.5]], [[0, 0], [0, 2.25]]])
+
+      assert window_mean3(
+               Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]])
+             ) ==
+               Nx.tensor([
+                 [[0.0, 2.0, 1.0, 1.5, 0.0], [0.0, 1.0, 2.5, 3.25, 0.0]],
+                 [[0.0, 0.6, 1.1, 1.6, 0.0], [0.0, 2.0, 2.5, 3.1, 0.0]]
+               ])
+    end
+  end
+
+  describe "window max" do
+    defn window_max1(t), do: Nx.window_max(t, {1, 2, 1})
+
+    defn window_max2(t),
+      do: Nx.window_max(t, {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+
+    defn window_max3(t),
+      do: Nx.window_max(t, {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+
+    test "computes the max of a window" do
+      assert window_max1(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[4, 5, 6]], [[4, 5, 6]]])
+
+      assert window_max2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[-9223372036854775808, -9223372036854775808], [-9223372036854775808, 6]], [[-9223372036854775808, -9223372036854775808], [-9223372036854775808, 6]]])
+
+      assert window_max3(
+               Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]])
+             ) ==
+               Nx.tensor([
+                 [[-1.7976931348623157e308, 4.0, 2.0, 3.0, -1.7976931348623157e308], [-1.7976931348623157e308, 2.0, 5.0, 6.5, -1.7976931348623157e308]],
+                 [[-1.7976931348623157e308, 1.2, 2.2, 3.2, -1.7976931348623157e308], [-1.7976931348623157e308, 4.0, 5.0, 6.2, -1.7976931348623157e308]]
+               ])
+    end
+  end
+
+  describe "window min" do
+    defn window_min1(t), do: Nx.window_min(t, {1, 2, 1})
+
+    defn window_min2(t),
+      do: Nx.window_min(t, {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+
+    defn window_min3(t),
+      do: Nx.window_min(t, {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+
+    test "computes the min of a window" do
+      assert window_min1(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[1, 2, 3]], [[1, 2, 3]]])
+
+      assert window_min2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[9223372036854775807, 9223372036854775807], [9223372036854775807, 3]], [[9223372036854775807, 9223372036854775807], [9223372036854775807, 3]]])
+
+      assert window_min3(
+               Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]])
+             ) ==
+               Nx.tensor([
+                [[1.7976931348623157e308, 4.0, 2.0, 3.0, 1.7976931348623157e308], [1.7976931348623157e308, 2.0, 5.0, 6.5, 1.7976931348623157e308]],
+                [[1.7976931348623157e308, 1.2, 2.2, 3.2, 1.7976931348623157e308],[1.7976931348623157e308, 4.0, 5.0, 6.2, 1.7976931348623157e308]]
+              ])
+    end
+  end
+
+  describe "window product" do
+    defn window_product1(t), do: Nx.window_product(t, {1, 2, 1})
+
+    defn window_product2(t),
+      do: Nx.window_product(t, {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+
+    defn window_product3(t),
+      do: Nx.window_product(t, {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+
+    test "computes the product of a window" do
+      assert window_product1(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[4, 10, 18]], [[4, 10, 18]]])
+
+      assert window_product2(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]])) ==
+               Nx.tensor([[[1, 1], [1, 324]], [[1, 1], [1, 18]]])
+
+      assert window_product3(
+               Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]])
+             ) ==
+               Nx.tensor([
+                 [[1.0, 4.0, 2.0, 3.0, 1.0], [1.0, 2.0, 5.0, 6.5, 1.0]],
+                 [[1.0, 1.2, 2.2, 3.2, 1.0], [1.0, 4.0, 5.0, 6.2, 1.0]]
+               ])
+    end
+  end
+
   describe "dot product" do
     defn dot(a, b), do: Nx.dot(a, b)
 
