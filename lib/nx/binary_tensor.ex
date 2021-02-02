@@ -1155,12 +1155,13 @@ defmodule Nx.BinaryTensor do
   def reduce_window(out, tensor, acc, window_dimensions, opts, fun) do
     padding_config = opts[:padding]
     window_strides = opts[:strides]
+    acc = Nx.to_scalar(acc)
 
     %T{type: {_, size} = type} = tensor
 
     # TODO: This should change with dilations
     %T{shape: padded_shape} =
-      tensor = Nx.pad(tensor, 0, Enum.map(padding_config, &Tuple.append(&1, 0)))
+      tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
 
     data = Nx.to_binary(tensor)
 
@@ -1194,14 +1195,28 @@ defmodule Nx.BinaryTensor do
 
   @impl true
   def window_max(out, tensor, window_dimensions, opts) do
-    fun = fn a, b -> if b == :first, do: a, else: max(a, b) end
-    reduce_window(out, tensor, :first, window_dimensions, opts, fun)
+    %{type: type} = out
+    init_value =
+      match_types [type] do
+        <<match!(x, 0)>> = Nx.Type.min_value_binary(type)
+        read!(x, 0)
+      end
+
+    fun = fn a, b -> max(a, b) end
+    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
   def window_min(out, tensor, window_dimensions, opts) do
-    fun = fn a, b -> if b == :first, do: a, else: min(a, b) end
-    reduce_window(out, tensor, :first, window_dimensions, opts, fun)
+    %{type: type} = out
+    init_value =
+      match_types [type] do
+        <<match!(x, 0)>> = Nx.Type.max_value_binary(type)
+        read!(x, 0)
+      end
+
+    fun = fn a, b -> min(a, b) end
+    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true

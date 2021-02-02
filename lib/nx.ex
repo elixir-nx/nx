@@ -4195,7 +4195,8 @@ defmodule Nx do
   is the same as input shape) or a general padding configuration
   for each dimension in the input tensor. Your padding configuration
   cannot include any negative pad values. You may only specify
-  padding for the high and low edges of the given dimension.
+  padding for the high and low edges of the given dimension. Pads
+  with `0`.
 
   ## Examples
 
@@ -4261,7 +4262,8 @@ defmodule Nx do
   is the same as input shape) or a general padding configuration
   for each dimension in the input tensor. Your padding configuration
   cannot include any negative pad values. You may only specify
-  padding for the high and low edges of the given dimension.
+  padding for the high and low edges of the given dimension. Pads
+  with `0`.
 
   ## Examples
 
@@ -4328,7 +4330,8 @@ defmodule Nx do
   is the same as input shape) or a general padding configuration
   for each dimension in the input tensor. Your padding configuration
   cannot include any negative pad values. You may only specify
-  padding for the high and low edges of the given dimension.
+  padding for the high and low edges of the given dimension. Pads
+  with the minimum value for the type of the given tensor.
 
   ## Examples
 
@@ -4351,12 +4354,12 @@ defmodule Nx do
         s64[2][2][2]
         [
           [
-            [0, 0],
-            [0, 6]
+            [-9223372036854775808, -9223372036854775808],
+            [-9223372036854775808, 6]
           ],
           [
-            [0, 0],
-            [0, 6]
+            [-9223372036854775808, -9223372036854775808],
+            [-9223372036854775808, 6]
           ]
         ]
       >
@@ -4367,12 +4370,12 @@ defmodule Nx do
         f64[2][2][5]
         [
           [
-            [0.0, 4.0, 2.0, 3.0, 0.0],
-            [0.0, 2.0, 5.0, 6.5, 0.0]
+            [-1.7976931348623157e308, 4.0, 2.0, 3.0, -1.7976931348623157e308],
+            [-1.7976931348623157e308, 2.0, 5.0, 6.5, -1.7976931348623157e308]
           ],
           [
-            [0.0, 1.2, 2.2, 3.2, 0.0],
-            [0.0, 4.0, 5.0, 6.2, 0.0]
+            [-1.7976931348623157e308, 1.2, 2.2, 3.2, -1.7976931348623157e308],
+            [-1.7976931348623157e308, 4.0, 5.0, 6.2, -1.7976931348623157e308]
           ]
         ]
       >
@@ -4394,7 +4397,8 @@ defmodule Nx do
   is the same as input shape) or a general padding configuration
   for each dimension in the input tensor. Your padding configuration
   cannot include any negative pad values. You may only specify
-  padding for the high and low edges of the given dimension.
+  padding for the high and low edges of the given dimension. Pads
+  with the maximum value for the type of the given tensor.
 
   ## Examples
 
@@ -4417,12 +4421,12 @@ defmodule Nx do
         s64[2][2][2]
         [
           [
-            [0, 0],
-            [0, 3]
+            [9223372036854775807, 9223372036854775807],
+            [9223372036854775807, 3]
           ],
           [
-            [0, 0],
-            [0, 0]
+            [9223372036854775807, 9223372036854775807],
+            [9223372036854775807, 3]
           ]
         ]
       >
@@ -4433,12 +4437,12 @@ defmodule Nx do
         f64[2][2][5]
         [
           [
-            [0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0]
+            [1.7976931348623157e308, 4.0, 2.0, 3.0, 1.7976931348623157e308],
+            [1.7976931348623157e308, 2.0, 5.0, 6.5, 1.7976931348623157e308]
           ],
           [
-            [0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0]
+            [1.7976931348623157e308, 1.2, 2.2, 3.2, 1.7976931348623157e308],
+            [1.7976931348623157e308, 4.0, 5.0, 6.2, 1.7976931348623157e308]
           ]
         ]
       >
@@ -4451,6 +4455,9 @@ defmodule Nx do
   in the given tensor, producing a tensor that contains the same
   number of elements as valid positions of the window.
 
+  The rank of the input tensor and the window dimensions must
+  match.
+
   You may optionally specify `:strides` which is a tuple
   of non-zero steps to take along each axis between
   each window.
@@ -4460,7 +4467,8 @@ defmodule Nx do
   is the same as input shape) or a general padding configuration
   for each dimension in the input tensor. Your padding configuration
   cannot include any negative pad values. You may only specify
-  padding for the high and low edges of the given dimension.
+  padding for the high and low edges of the given dimension. Pads
+  with 1.
 
   ## Examples
 
@@ -4483,12 +4491,12 @@ defmodule Nx do
         s64[2][2][2]
         [
           [
-            [0, 0],
-            [0, 324]
+            [1, 1],
+            [1, 324]
           ],
           [
-            [0, 0],
-            [0, 0]
+            [1, 1],
+            [1, 18]
           ]
         ]
       >
@@ -4499,12 +4507,12 @@ defmodule Nx do
         f64[2][2][5]
         [
           [
-            [0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0]
+            [1.0, 4.0, 2.0, 3.0, 1.0],
+            [1.0, 2.0, 5.0, 6.5, 1.0]
           ],
           [
-            [0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0]
+            [1.0, 1.2, 2.2, 3.2, 1.0],
+            [1.0, 4.0, 5.0, 6.2, 1.0]
           ]
         ]
       >
@@ -4659,21 +4667,33 @@ defmodule Nx do
   end
 
   @doc """
-  Reduces elements in a window.
+  Reduces over each window of size `window_dimensions`
+  in the given tensor, producing a tensor that contains the same
+  number of elements as valid positions of the window.
 
-  The rank of the input tensor and window dimensions must match.
+  The rank of the input tensor and the window dimensions must
+  match.
 
-  Padding can either be `:valid`, `:same`, or a general padding
-  configuration of edge-high and edge-low paddings.
+  You may optionally specify `:strides` which is a tuple
+  of non-zero steps to take along each axis between
+  each window.
 
-  If specifying stride, the rank of the stride must match the
-  rank of the input tensor, or be a scalar.
+  You may also optionally specify `:padding` which is either
+  one of `:valid` (no padding) or `:same` (pad so output shape
+  is the same as input shape) or a general padding configuration
+  for each dimension in the input tensor. Your padding configuration
+  cannot include any negative pad values. You may only specify
+  padding for the high and low edges of the given dimension. The
+  padding value is equal to the initial value passed to `acc`.
+
+  The initial value must be a number or a scalar shaped tensor.
 
   ### Examples
 
+      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
-      ...>  :first, {2, 2},
-      ...>  fn x, acc -> if acc == :first, do: x, else: max(x, acc) end
+      ...>  init_value, {2, 2},
+      ...>  fn x, acc -> max(x, acc) end
       ...> )
       #Nx.Tensor<
         s64[3][3]
@@ -4684,10 +4704,11 @@ defmodule Nx do
         ]
       >
 
+      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
-      ...>  :first, {2, 2},
+      ...>  init_value, {2, 2},
       ...>  [padding: :same, strides: {1, 1}],
-      ...>  fn x, acc -> if acc == :first, do: x, else: max(x, acc) end
+      ...>  fn x, acc -> max(x, acc) end
       ...> )
       #Nx.Tensor<
         s64[3][3]
@@ -4714,6 +4735,7 @@ defmodule Nx do
   def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun) do
     assert_keys!(opts, [:padding, :strides])
     %T{shape: shape} = tensor = tensor!(tensor)
+    acc = tensor!(acc)
 
     window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
     padding = opts[:padding] || :valid
