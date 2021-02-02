@@ -347,6 +347,7 @@ defmodule EXLA.Op do
         %Computation{ref: reduction},
         window_dimensions,
         window_strides,
+        window_dilations,
         padding_config
       ) do
     ref =
@@ -356,6 +357,7 @@ defmodule EXLA.Op do
         reduction,
         window_dimensions,
         window_strides,
+        window_dilations,
         padding_config
       )
       |> unwrap!()

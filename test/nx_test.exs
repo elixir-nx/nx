@@ -579,4 +579,34 @@ defmodule NxTest do
                """
     end
   end
+
+  describe "window aggregates" do
+    test "computes a window sum" do
+      assert Nx.window_sum(
+               Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
+               {2, 1, 2},
+               strides: {2, 1, 1},
+               padding: [{2, 1}, {3, 1}, {1, 0}],
+               window_dilations: {1, 2, 2}
+             ) ==
+               Nx.tensor([
+                 [
+                   [0, 0, 0],
+                   [0, 0, 0],
+                   [0, 0, 0],
+                   [0, 0, 0],
+                   [0, 0, 0],
+                   [0, 0, 0]
+                 ],
+                 [
+                   [0, 0, 0],
+                   [0, 0, 0],
+                   [0, 0, 0],
+                   [4, 11, 14],
+                   [10, 15, 19],
+                   [0, 0, 0]
+                 ]
+               ])
+    end
+  end
 end

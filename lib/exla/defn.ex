@@ -490,6 +490,7 @@ defmodule EXLA.Defn do
        ) do
     padding_config = opts[:padding]
     strides = opts[:strides]
+    window_dilations = opts[:window_dilations]
 
     arg = to_type(arg, type)
     comp = to_computation(fun, type, state)
@@ -500,6 +501,7 @@ defmodule EXLA.Defn do
       comp,
       window_dimensions,
       strides,
+      window_dilations,
       padding_config
     )
   end
@@ -631,8 +633,9 @@ defmodule EXLA.Defn do
 
     strides = opts[:strides]
     padding = opts[:padding]
+    window_dilations = opts[:window_dilations]
 
-    EXLA.Op.reduce_window(arg, acc, comp, window_dimensions, strides, padding)
+    EXLA.Op.reduce_window(arg, acc, comp, window_dimensions, strides, window_dilations, padding)
   end
 
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
