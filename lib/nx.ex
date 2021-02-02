@@ -4770,14 +4770,40 @@ defmodule Nx do
           [9, 11, 6]
         ]
       >
+
+      iex> Nx.reduce_window(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
+      ...>  0, {1, 1, 2}, [padding: :valid, strides: {2, 1, 1}, window_dilations: {1, 1, 2}],
+      ...>  fn x, acc -> x + acc end)
+      #Nx.Tensor<
+        s64[1][2][2]
+        [
+          [
+            [5, 5],
+            [6, 9]
+          ]
+        ]
+      >
+
   """
   def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun) do
-    assert_keys!(opts, [:padding, :strides])
+    assert_keys!(opts, [:padding, :strides, :window_dilations])
     %T{shape: shape} = tensor = tensor!(tensor)
     acc = tensor!(acc)
 
     window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
     padding = opts[:padding] || :valid
+    window_dilations = opts[:window_dilations] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
+
+    window_dilations =
+      if is_integer(window_dilations),
+        do: List.to_tuple(List.duplicate(window_dilations, rank(tensor.shape))),
+        else: window_dilations
+
+    # Cheat to calculate the output shape with dilations
+    window_padding_config =
+      for d <- Tuple.to_list(window_dilations) do
+        {0, 0, d - 1}
+      end
 
     window_strides =
       if is_integer(window_strides),
@@ -4804,7 +4830,8 @@ defmodule Nx do
       end
 
     padded_shape = Nx.Shape.pad(shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
-    output_shape = Nx.Shape.window(padded_shape, window_dimensions, window_strides)
+    window_dilated_shape = Nx.Shape.pad(window_dimensions, window_padding_config)
+    output_shape = Nx.Shape.window(padded_shape, window_dilated_shape, window_strides)
 
     out = %{tensor | shape: output_shape}
 
@@ -4813,7 +4840,7 @@ defmodule Nx do
       tensor,
       acc,
       window_dimensions,
-      [padding: padding_config, strides: window_strides],
+      [padding: padding_config, strides: window_strides, window_dilations: window_dilations],
       fun
     )
   end
