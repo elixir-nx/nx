@@ -617,6 +617,13 @@ defmodule Nx.BinaryTensor do
     end
   end
 
+  for {name, {_desc, code}} <- Nx.Shared.unary_inverse_trig_funs() do
+    @impl true
+    def unquote(name)(out, tensor) do
+      element_wise_unary_op(out, tensor, fn x -> unquote(code) end)
+    end
+  end
+
   @impl true
   def count_leading_zeros(out, %{type: {_, size} = type} = tensor) do
     data =

@@ -3087,6 +3087,42 @@ defmodule Nx do
     end
   end
 
+  for {name, {desc, code}} <- Nx.Shared.unary_inverse_trig_funs() do
+    formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
+
+    {neg_one, _} = Code.eval_quoted(code, x: -1)
+    {zero, _} = Code.eval_quoted(code, x: 0)
+    {one, _} = Code.eval_quoted(code, x: 1)
+
+    @doc """
+    Calculates the #{desc} of each element in the tensor.
+
+    It is equivalent to:
+
+        #{formula}
+
+    ## Examples
+
+        iex> Nx.#{name}(1)
+        #Nx.Tensor<
+          f64
+          #{one}
+        >
+
+        iex> Nx.#{name}(Nx.tensor([-1.0, 0.0, 1.0], names: [:x]))
+        #Nx.Tensor<
+          f64[x: 3]
+          [#{neg_one}, #{zero}, #{one}]
+        >
+
+    """
+    def unquote(name)(tensor) do
+      tensor = tensor!(tensor)
+      type = Nx.Type.to_floating(tensor.type)
+      impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
+    end
+  end
+
   @doc """
   Negates each element in the tensor.
 
