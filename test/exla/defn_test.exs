@@ -1494,6 +1494,9 @@ defmodule EXLA.DefnTest do
     defn dilated_input_conv(inp, kernel),
       do: Nx.conv(inp, kernel, strides: {1, 1}, padding: :same, input_dilation: {2, 1})
 
+    defn dilated_input_kernel_conv(inp, kernel),
+      do: Nx.conv(inp, kernel, strides: {2, 1}, padding: :same, kernel_dilation: {2, 1}, input_dilation: {1, 2})
+
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
@@ -1586,6 +1589,16 @@ defmodule EXLA.DefnTest do
 
       lhs = dilated_input_conv(img, kernel)
       rhs = Nx.conv(img, kernel, strides: {1, 1}, padding: :same, input_dilation: {2, 1})
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a conv with both dilations" do
+      img = Nx.iota({4, 3, 15, 15}, type: {:f, 32})
+      kernel = Nx.iota({6, 3, 3, 2}, type: {:f, 32})
+
+      lhs = dilated_input_kernel_conv(img, kernel)
+      rhs = Nx.conv(img, kernel, strides: {2, 1}, padding: :same, input_dilation: {1, 2}, kernel_dilation: {2, 1})
 
       compare_tensors!(lhs, rhs)
     end

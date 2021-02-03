@@ -5591,7 +5591,54 @@ defmodule Nx do
   ## Conv
 
   @doc """
-  Convolution operation.
+  Computes an n-D convolution as used in neural
+  networks.
+
+  This function can be thought of as sliding an n-D
+  kernel across the input, producing a new tensor that
+  has the same number of elements as the number of valid
+  windows in the input tensor. Each element is the result
+  of summing the element-wise products in the window across
+  each input channel.
+
+  The ranks of both `input` and `kernel` must match. Both
+  `input` and `kernel` must have shapes of the following
+  form:
+
+    * `input` - `{batch_size, input_channels, input_d0, ..., input_dn}`
+    * `kernel` - `{output_channels, input_channels, kernel_d0, ..., kernel_dn}`
+
+  Where `input_d0...input_dn` and `kernel_d0...kernel_dn` represent
+  an arbitrary number of spatial dimensions.
+
+  To configure how the window slides along the input tensor, you
+  can specify `:strides`. `:strides` must be a positive integer
+  or tuple of positive integers for each spatial dimension
+  in the input and kernel. For each spatial dimension, the
+  window will slide by the configuration specified in `:strides`.
+  As an example, for a 2-D convolution with `strides: {2, 1},
+  the window will slide 2 positions along the first spatial
+  dimension until it reaches the end of the dimension and then
+  1 position along the second spatial dimension.
+
+  You may specify a padding configuration using `:padding`,
+  which will zero-pad the input tensor. Acceptable padding
+  configurations are:
+
+    * `:valid` - no padding
+    * `:same` - pad input spatial dimensions such that they
+    will remain unchanged in the output tensor
+    * `[{d0_hi, d0_lo}, ..., {dn_hi, dn_lo}]` - a general padding
+    configuration of edge high and edge low padding values. You
+    may only specify padding for the edges of spatial dimensions
+    of the input tensor. Padding values may be negative.
+
+  You can dilate convolutions by setting `:input_dilation` or
+  `:kernel_dilation`. Both `:input_dilation` and `:kernel_dilation`
+  must either be positive integers or tuples of positive integers
+  for each spatial dimension in the input and kernel tensors. Dilations
+  can be thought of as applying `dilation - 1` interior padding to the
+  input or kernel tensor.
 
   ### Examples
 
@@ -5623,6 +5670,35 @@ defmodule Nx do
               [0.0, 3.0, 6.0],
               [9.0, 12.0, 15.0],
               [18.0, 21.0, 24.0]
+            ]
+          ]
+        ]
+      >
+
+      iex> lhs = Nx.iota({9})
+      iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
+      iex> rhs = Nx.iota({8})
+      iex> rhs = Nx.reshape(rhs, {4, 1, 2, 1})
+      iex> Nx.conv(lhs, rhs, strides: 2, padding: :same, kernel_dilation: {2, 1})
+      #Nx.Tensor<
+        f64[1][4][2][2]
+        [
+          [
+            [
+              [3.0, 5.0],
+              [0.0, 0.0]
+            ],
+            [
+              [9.0, 15.0],
+              [6.0, 10.0]
+            ],
+            [
+              [15.0, 25.0],
+              [12.0, 20.0]
+            ],
+            [
+              [21.0, 35.0],
+              [18.0, 30.0]
             ]
           ]
         ]
@@ -5726,6 +5802,10 @@ defmodule Nx do
     ]
 
     dilated_kernel_shape = Nx.Shape.pad(kernel_shape, kernel_dilation_padding_config)
+    dilated_filter_shape =
+      dilated_kernel_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
 
     input_dilation =
       if is_tuple(input_dilation),
@@ -5738,6 +5818,10 @@ defmodule Nx do
     ]
 
     dilated_input_shape = Nx.Shape.pad(input_shape, input_dilation_padding_config)
+    dilated_spatial_dims =
+      dilated_input_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
 
     # Always send the padding as an actual padding configuration
     # so backends don't deal with atoms themselves
@@ -5751,7 +5835,7 @@ defmodule Nx do
           for _ <- 0..(tuple_size(input_shape) - 3), do: {0, 0}
 
         :same ->
-          padding_config = Nx.Shape.calculate_padding(spatial_dims, filter_shape)
+          padding_config = Nx.Shape.calculate_padding(dilated_spatial_dims, dilated_filter_shape)
           padding_config
 
         config when is_list(config) ->
