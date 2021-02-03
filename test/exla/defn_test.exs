@@ -1235,7 +1235,13 @@ defmodule EXLA.DefnTest do
 
     test "computes the sum of a dilated window" do
       t = Nx.iota({8, 10, 12})
-      assert dilated_window_sum(t) == Nx.window_sum(t, {3, 2, 1}, strides: {1, 1, 1}, padding: :same, window_dilations: {1, 2, 2})
+
+      assert dilated_window_sum(t) ==
+               Nx.window_sum(t, {3, 2, 1},
+                 strides: {1, 1, 1},
+                 padding: :same,
+                 window_dilations: {1, 2, 2}
+               )
     end
   end
 
@@ -1271,7 +1277,14 @@ defmodule EXLA.DefnTest do
     test "computes the mean of a dilated window" do
       t = Nx.iota({8, 10, 12})
       lhs = dilated_window_mean(t)
-      rhs = Nx.window_mean(t, {3, 2, 1}, strides: {1, 1, 1}, padding: :same, window_dilations: {1, 2, 2})
+
+      rhs =
+        Nx.window_mean(t, {3, 2, 1},
+          strides: {1, 1, 1},
+          padding: :same,
+          window_dilations: {1, 2, 2}
+        )
+
       compare_tensors!(lhs, rhs)
     end
   end
@@ -1322,7 +1335,13 @@ defmodule EXLA.DefnTest do
 
     test "computes the max of a dilated window" do
       t = Nx.iota({8, 10, 12})
-      assert dilated_window_max(t) == Nx.window_max(t, {3, 2, 1}, strides: {1, 1, 1}, padding: :same, window_dilations: {1, 2, 2})
+
+      assert dilated_window_max(t) ==
+               Nx.window_max(t, {3, 2, 1},
+                 strides: {1, 1, 1},
+                 padding: :same,
+                 window_dilations: {1, 2, 2}
+               )
     end
   end
 
@@ -1372,7 +1391,13 @@ defmodule EXLA.DefnTest do
 
     test "computes the min of a dilated window" do
       t = Nx.iota({8, 10, 12})
-      assert dilated_window_min(t) == Nx.window_min(t, {3, 2, 1}, strides: {1, 1, 1}, padding: :same, window_dilations: {1, 2, 2})
+
+      assert dilated_window_min(t) ==
+               Nx.window_min(t, {3, 2, 1},
+                 strides: {1, 1, 1},
+                 padding: :same,
+                 window_dilations: {1, 2, 2}
+               )
     end
   end
 
@@ -1386,7 +1411,11 @@ defmodule EXLA.DefnTest do
       do: Nx.window_product(t, {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
 
     defn dilated_window_product(t) do
-      Nx.window_product(t, {3, 2, 1}, strides: {1, 1, 1}, padding: :same, window_dilations: {1, 2, 2})
+      Nx.window_product(t, {3, 2, 1},
+        strides: {1, 1, 1},
+        padding: :same,
+        window_dilations: {1, 2, 2}
+      )
     end
 
     test "computes the product of a window" do
@@ -1407,7 +1436,13 @@ defmodule EXLA.DefnTest do
 
     test "computes the product of a dilated window" do
       t = Nx.iota({8, 10, 12})
-      assert dilated_window_product(t) == Nx.window_product(t, {3, 2, 1}, strides: {1, 1, 1}, padding: :same, window_dilations: {1, 2, 2})
+
+      assert dilated_window_product(t) ==
+               Nx.window_product(t, {3, 2, 1},
+                 strides: {1, 1, 1},
+                 padding: :same,
+                 window_dilations: {1, 2, 2}
+               )
     end
   end
 
@@ -1495,7 +1530,13 @@ defmodule EXLA.DefnTest do
       do: Nx.conv(inp, kernel, strides: {1, 1}, padding: :same, input_dilation: {2, 1})
 
     defn dilated_input_kernel_conv(inp, kernel),
-      do: Nx.conv(inp, kernel, strides: {2, 1}, padding: :same, kernel_dilation: {2, 1}, input_dilation: {1, 2})
+      do:
+        Nx.conv(inp, kernel,
+          strides: {2, 1},
+          padding: :same,
+          kernel_dilation: {2, 1},
+          input_dilation: {1, 2}
+        )
 
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
@@ -1598,7 +1639,14 @@ defmodule EXLA.DefnTest do
       kernel = Nx.iota({6, 3, 3, 2}, type: {:f, 32})
 
       lhs = dilated_input_kernel_conv(img, kernel)
-      rhs = Nx.conv(img, kernel, strides: {2, 1}, padding: :same, input_dilation: {1, 2}, kernel_dilation: {2, 1})
+
+      rhs =
+        Nx.conv(img, kernel,
+          strides: {2, 1},
+          padding: :same,
+          input_dilation: {1, 2},
+          kernel_dilation: {2, 1}
+        )
 
       compare_tensors!(lhs, rhs)
     end
@@ -2334,13 +2382,18 @@ defmodule EXLA.DefnTest do
          %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
          %{data: %{state: right_data} = rhs} = right
        ) do
-    left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.round(x, 5)
-    right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.round(x, 5)
+    left_data =
+      for <<x::float-size(size)-native <- left_data>>,
+        into: <<>>,
+        do: <<Float.round(x, 5)::float-size(size)-native>>
 
-    assert %{left | data: %{lhs | state: left_data}} == %{
-             right
-             | data: %{rhs | state: right_data}
-           }
+    right_data =
+      for <<x::float-size(size)-native <- right_data>>,
+        into: <<>>,
+        do: <<Float.round(x, 5)::float-size(size)-native>>
+
+    assert %{left | data: %{lhs | state: left_data}} ==
+             %{right | data: %{rhs | state: right_data}}
   end
 
   defp compare_tensors!(left, right) do
