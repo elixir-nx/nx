@@ -4,14 +4,14 @@ defmodule MNIST do
   @default_defn_compiler {EXLA, keep_on_device: true}
 
   defn normalize_batch(batch) do
-    batch / Nx.tensor(255.0, type: {:f, 32})
+    batch / 255.0
   end
 
   defn init_random_params do
-    w1 = Nx.random_normal({784, 128}, 0.0, 0.1, type: {:f, 32})
-    b1 = Nx.random_normal({128}, 0.0, 0.1, type: {:f, 32})
-    w2 = Nx.random_normal({128, 10}, 0.0, 0.1, type: {:f, 32})
-    b2 = Nx.random_normal({10}, 0.0, 0.1, type: {:f, 32})
+    w1 = Nx.random_normal({784, 128}, 0.0, 0.1)
+    b1 = Nx.random_normal({128}, 0.0, 0.1)
+    w2 = Nx.random_normal({128, 10}, 0.0, 0.1)
+    b2 = Nx.random_normal({10}, 0.0, 0.1)
     {w1, b1, w2, b2}
   end
 

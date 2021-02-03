@@ -9,15 +9,16 @@ defmodule Softmax do
   defn softmax(n), do: Nx.exp(n) / Nx.sum(Nx.exp(n))
 
   # This is JIT+host compiled
-  @defn_compiler EXLA
+  # Note we pass max_float_type to keep the same semantics
+  @defn_compiler {EXLA, max_float_type: {:f, 64}}
   defn host(n), do: softmax(n)
 
   # This is JIT+cuda compiled
-  @defn_compiler {EXLA, client: :cuda}
+  @defn_compiler {EXLA, client: :cuda, max_float_type: {:f, 64}}
   defn cuda(n), do: softmax(n)
 
   # This is JIT+cuda+keep_on_device compiled
-  @defn_compiler {EXLA, client: :cuda, keep_on_device: true}
+  @defn_compiler {EXLA, client: :cuda, keep_on_device: true, max_float_type: {:f, 64}}
   defn cuda_keep(n), do: softmax(n)
 end
 

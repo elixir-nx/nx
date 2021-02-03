@@ -5,6 +5,7 @@ defmodule EXLA.Defn do
   alias Nx.Tensor, as: T
 
   def __jit__(key, vars, fun, options) do
+    options = Keyword.put_new(options, :max_float_type, {:f, 32})
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args}
 

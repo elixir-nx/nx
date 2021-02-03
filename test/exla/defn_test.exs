@@ -2,7 +2,7 @@ defmodule EXLA.DefnTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  @default_defn_compiler EXLA
+  @default_defn_compiler {EXLA, max_float_type: {:f, 64}}
 
   describe "tuples" do
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
@@ -58,7 +58,7 @@ defmodule EXLA.DefnTest do
     @defn_compiler {EXLA, max_signed_type: {:s, 32}}
     defn maxs(a), do: a
 
-    @defn_compiler {EXLA, max_float_type: {:f, 32}}
+    @defn_compiler EXLA
     defn maxf(a), do: a
 
     test "converts params" do
