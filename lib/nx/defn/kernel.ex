@@ -713,6 +713,21 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Gets the element at the zero-based index in tuple.
+
+  It raises ArgumentError when index is negative or it
+  is out of range of the tuple elements.
+
+  ## Examples
+
+      iex> tuple = {1, 2, 3}
+      iex> elem(tuple, 0)
+      1
+
+  """
+  def elem(tuple, index), do: :erlang.element(Kernel.+(index, 1), tuple)
+
+  @doc """
   Reads a module attribute at compilation time.
 
   It is useful to inject code constants into `defn`.

@@ -163,8 +163,9 @@ defmodule Nx.Defn.Expr do
   @doc """
   Helper to traverse the expression arguments of an expression.
 
-  Note function expressions are never traversed, as they shouldn't
-  be modified as that would ultimately change the function itself.
+  Note function expressions are never traversed, as they generally
+  shouldn't be implicitly modified as that would ultimately change
+  the function itself.
   """
   def traverse_args(expr, acc, fun)
 

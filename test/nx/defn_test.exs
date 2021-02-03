@@ -20,11 +20,6 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "kernel doctests" do
-    use Nx.Defn.Kernel
-    doctest Nx.Defn.Kernel
-  end
-
   @default_defn_compiler Identity
 
   describe "constants" do
@@ -271,109 +266,72 @@ defmodule Nx.DefnTest do
 
     test "+" do
       assert %T{data: %Expr{op: :add, args: [_, _]}} = add_two(1, 2)
-      assert Nx.Defn.Kernel.+(1, 2) == 3
     end
 
     defn subtract_two(a, b), do: a - b
 
     test "-" do
       assert %T{data: %Expr{op: :subtract, args: [_, _]}} = subtract_two(1, 2)
-      assert Nx.Defn.Kernel.-(1, 2) == -1
     end
 
     defn multiply_two(a, b), do: a * b
 
     test "*" do
       assert %T{data: %Expr{op: :multiply, args: [_, _]}} = multiply_two(1, 2)
-      assert Nx.Defn.Kernel.*(1, 2) == 2
     end
 
     defn divide_two(a, b), do: a / b
 
     test "/" do
       assert %T{data: %Expr{op: :divide, args: [_, _]}} = divide_two(1, 2)
-      assert Nx.Defn.Kernel./(1, 2) == 0.5
     end
 
     defn land_two(a, b), do: a and b
 
     test "and" do
       assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
-
-      assert Nx.Defn.Kernel.and(0, 0) == 0
-      assert Nx.Defn.Kernel.and(1, 0) == 0
-      assert Nx.Defn.Kernel.and(0, 2) == 0
-      assert Nx.Defn.Kernel.and(1, 1) == 1
-
-      assert Nx.Defn.Kernel.and(0, 0.0) == 0.0
-      assert Nx.Defn.Kernel.and(1, 0.0) == 0.0
-      assert Nx.Defn.Kernel.and(0, 2.0) == 0.0
-      assert Nx.Defn.Kernel.and(1, 1.0) == 1.0
     end
 
     defn lor_two(a, b), do: a or b
 
     test "or" do
       assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
-
-      assert Nx.Defn.Kernel.or(0, 0) == 0
-      assert Nx.Defn.Kernel.or(1, 0) == 1
-      assert Nx.Defn.Kernel.or(0, 2) == 1
-      assert Nx.Defn.Kernel.or(1, 1) == 1
-
-      assert Nx.Defn.Kernel.or(0, 0.0) == 0.0
-      assert Nx.Defn.Kernel.or(1, 0.0) == 1.0
-      assert Nx.Defn.Kernel.or(0, 2.0) == 1.0
-      assert Nx.Defn.Kernel.or(1, 1.0) == 1.0
     end
 
     defn lnot(a), do: not a
 
     test "not" do
       assert %T{data: %Expr{op: :equal, args: [_, _]}} = lnot(1)
-
-      assert Nx.Defn.Kernel.not(0) == 1
-      assert Nx.Defn.Kernel.not(1) == 0
-      assert Nx.Defn.Kernel.not(2) == 0
-
-      assert Nx.Defn.Kernel.not(0.0) == 1.0
-      assert Nx.Defn.Kernel.not(1.0) == 0.0
-      assert Nx.Defn.Kernel.not(2.0) == 0.0
     end
 
     defn band_two(a, b), do: a &&& b
 
     test "&&&" do
       assert %T{data: %Expr{op: :bitwise_and, args: [_, _]}} = band_two(1, 2)
-      assert Nx.Defn.Kernel.&&&(1, 2) == 0
     end
 
     defn bor_two(a, b), do: a ||| b
 
     test "|||" do
       assert %T{data: %Expr{op: :bitwise_or, args: [_, _]}} = bor_two(1, 2)
-      assert Nx.Defn.Kernel.|||(1, 2) == 3
     end
 
     defn bxor_two(a, b), do: a ^^^ b
 
     test "^^^" do
       assert %T{data: %Expr{op: :bitwise_xor, args: [_, _]}} = bxor_two(1, 2)
-      assert Nx.Defn.Kernel.^^^(1, 2) == 3
     end
 
     defn bsl_two(a, b), do: a <<< b
 
     test "<<<" do
       assert %T{data: %Expr{op: :left_shift, args: [_, _]}} = bsl_two(1, 2)
-      assert Nx.Defn.Kernel.<<<(1, 2) == 4
     end
 
     defn bsr_two(a, b), do: a >>> b
 
     test ">>>" do
       assert %T{data: %Expr{op: :right_shift, args: [_, _]}} = bsr_two(1, 2)
-      assert Nx.Defn.Kernel.>>>(1, 2) == 0
     end
 
     defn add_two_with_pipe(a, b), do: a |> Nx.add(b)
@@ -388,16 +346,12 @@ defmodule Nx.DefnTest do
     test "unary plus and minus" do
       assert %T{data: %Expr{op: :parameter, args: [_]}} = unary_plus(1)
       assert %T{data: %Expr{op: :negate, args: [_]}} = unary_minus(1)
-
-      assert Nx.Defn.Kernel.+(1) == 1
-      assert Nx.Defn.Kernel.-(1) == -1
     end
 
     defn unary_bnot(a), do: ~~~a
 
     test "~~~" do
       assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
-      assert Nx.Defn.Kernel.~~~(1) == -2
     end
 
     defn access_sum(a, opts \\ []), do: Nx.sum(a, axes: opts[:axes])
