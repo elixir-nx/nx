@@ -212,13 +212,11 @@ defmodule Nx.Defn.Expr do
   Rewrites the types of the given expression according to the given options.
   """
   def rewrite_types(tensor_expr, opts \\ []) when is_list(opts) do
-    keys = [:max_float_type, :max_signed_type, :max_unsigned_type]
+    {_, max_float_size} = max_float_type = opts[:max_float_type] || {:f, 64}
+    {_, max_signed_size} = max_signed_type = opts[:max_signed_type] || {:s, 64}
+    {_, max_unsigned_size} = max_unsigned_type = opts[:max_unsigned_type] || {:u, 64}
 
-    if Enum.any?(keys, &Keyword.has_key?(opts, &1)) do
-      {_, max_float_size} = max_float_type = opts[:max_float_type] || {:f, 128}
-      {_, max_signed_size} = max_signed_type = opts[:max_signed_type] || {:s, 128}
-      {_, max_unsigned_size} = max_unsigned_type = opts[:max_unsigned_type] || {:u, 128}
-
+    if max_float_type != {:f, 64} or max_signed_type != {:s, 64} or max_unsigned_type != {:u, 64} do
       rewrite_type(tensor_expr, fn
         {:u, size} when size >= max_unsigned_size -> max_unsigned_type
         {:s, size} when size >= max_signed_size -> max_signed_type

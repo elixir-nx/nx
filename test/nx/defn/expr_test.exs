@@ -83,6 +83,12 @@ defmodule Nx.Defn.ExprTest do
       assert %T{data: %Expr{op: :add, args: [arg, arg]}, type: {:f, 32}} =
                Expr.rewrite_types(Nx.add(@f64_param, @f64_param), max_float_type: {:f, 32})
     end
+
+    test "is no-op with max types" do
+      expr = Nx.exp(@f64_param)
+      assert Expr.rewrite_types(expr, []) == expr
+      assert Expr.rewrite_types(expr, max_float_type: {:f, 64}) == expr
+    end
   end
 
   describe "traverse_args" do
