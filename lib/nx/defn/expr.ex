@@ -67,7 +67,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a function node with the given args and anonuymous function.
+  Creates a function node with the given args and anonymous function.
   """
   def fun(args, fun) when is_function(fun, length(args)) do
     out = to_expr(apply(fun, args))
@@ -204,6 +204,86 @@ defmodule Nx.Defn.Expr do
 
   defp traverse_tuple_or_expr(expr, acc, fun) do
     fun.(expr, acc)
+  end
+
+  ## Type helpers
+
+  @doc """
+  Rewrites the types of the given expression according to the given options.
+  """
+  def rewrite_types(tensor_expr, opts \\ []) when is_list(opts) do
+    keys = [:max_float_type, :max_signed_type, :max_unsigned_type]
+
+    if Enum.any?(keys, &Keyword.has_key?(opts, &1)) do
+      {_, max_float_size} = max_float_type = opts[:max_float_type] || {:f, 128}
+      {_, max_signed_size} = max_signed_type = opts[:max_signed_type] || {:s, 128}
+      {_, max_unsigned_size} = max_unsigned_type = opts[:max_unsigned_type] || {:u, 128}
+
+      rewrite_type(tensor_expr, fn
+        {:u, size} when size >= max_unsigned_size -> max_unsigned_type
+        {:s, size} when size >= max_signed_size -> max_signed_type
+        {:f, size} when size >= max_float_size -> max_float_type
+        {:bf, size} when size >= max_float_size -> max_float_type
+        type -> type
+      end)
+    else
+      tensor_expr
+    end
+  end
+
+  defp rewrite_type(expr, fun) do
+    {res, _} = cached_rewrite_type(expr, %{}, fun)
+    res
+  end
+
+  defp cached_rewrite_type(tuple, cache, fun) when is_tuple(tuple) do
+    {list, cache} =
+      tuple |> Tuple.to_list() |> Enum.map_reduce(cache, &cached_rewrite_type(&1, &2, fun))
+
+    {List.to_tuple(list), cache}
+  end
+
+  defp cached_rewrite_type(%T{data: %Expr{id: id, op: op}} = t, cache, fun) do
+    case cache do
+      %{^id => res} ->
+        {res, cache}
+
+      %{} ->
+        {args, cache} = traverse_args(t, cache, &cached_rewrite_type(&1, &2, fun))
+        res = rewrite_type(op, args, t, fun)
+        {res, Map.put(cache, id, res)}
+    end
+  end
+
+  defp rewrite_type(:parameter, _args, t, type_fun) do
+    Nx.as_type(t, type_fun.(t.type))
+  end
+
+  defp rewrite_type(:fun, [params, _expr, fun], _t, type_fun) do
+    {:arity, arity} = Function.info(fun, :arity)
+    params = Enum.map(params, &%{&1 | type: type_fun.(&1.type)})
+    fun(params, rewrite_type_fun(arity, fun, type_fun))
+  end
+
+  defp rewrite_type(:tensor, [arg], t, type_fun) do
+    type = type_fun.(t.type)
+    rewrite_type_args(t, type, [Nx.as_type(arg, type)])
+  end
+
+  defp rewrite_type(_op, args, t, type_fun) do
+    rewrite_type_args(t, type_fun.(t.type), args)
+  end
+
+  for arity <- 0..15 do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    defp rewrite_type_fun(unquote(arity), op_fun, type_fun) do
+      fn unquote_splicing(args) -> rewrite_type(op_fun.(unquote_splicing(args)), type_fun) end
+    end
+  end
+
+  defp rewrite_type_args(%{data: data} = t, type, args) do
+    %{t | data: %{data | id: id(), args: args}, type: type}
   end
 
   ## Nx.Defn callbacks
@@ -557,8 +637,10 @@ defmodule Nx.Defn.Expr do
 
   ## Helpers
 
+  defp id(), do: System.unique_integer()
+
   defp expr(tensor, context, op, args) do
-    %{tensor | data: %Expr{id: System.unique_integer(), op: op, args: args, context: context}}
+    %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}}
   end
 
   defp to_expr(%T{data: %Expr{}} = t), do: t

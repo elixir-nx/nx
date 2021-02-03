@@ -51,6 +51,23 @@ defmodule EXLA.DefnTest do
     end
   end
 
+  describe "max_*_type/2" do
+    @defn_compiler {EXLA, max_unsigned_type: {:u, 32}}
+    defn maxu(a), do: a
+
+    @defn_compiler {EXLA, max_signed_type: {:s, 32}}
+    defn maxs(a), do: a
+
+    @defn_compiler {EXLA, max_float_type: {:f, 32}}
+    defn maxf(a), do: a
+
+    test "converts params" do
+      assert maxu(Nx.tensor(1, type: {:u, 64})) == Nx.tensor(1, type: {:u, 32})
+      assert maxs(Nx.tensor(1, type: {:s, 64})) == Nx.tensor(1, type: {:s, 32})
+      assert maxf(Nx.tensor(1, type: {:f, 64})) == Nx.tensor(1, type: {:f, 32})
+    end
+  end
+
   describe "+/2" do
     defn add_two(a, b), do: a + b
     @defn_compiler Nx.Defn

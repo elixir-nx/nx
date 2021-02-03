@@ -362,7 +362,7 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "kernel functions" do
+  describe "kernel functions/macros" do
     defn max_two(a, b) do
       max(a, b)
     end
@@ -377,6 +377,16 @@ defmodule Nx.DefnTest do
 
     test "min/2" do
       assert %T{data: %Expr{op: :min, args: [_, _]}} = min_two(1, 2)
+    end
+
+    defn maxu(a), do: max_unsigned_type(a, {:u, 32})
+    defn maxs(a), do: max_signed_type(a, {:s, 32})
+    defn maxf(a), do: max_float_type(a, {:f, 32})
+
+    test "max_*_type/2" do
+      assert %T{data: %Expr{op: :as_type, args: [_]}} = maxu(Nx.tensor(1, type: {:u, 64}))
+      assert %T{data: %Expr{op: :as_type, args: [_]}} = maxs(Nx.tensor(1, type: {:s, 64}))
+      assert %T{data: %Expr{op: :as_type, args: [_]}} = maxf(Nx.tensor(1, type: {:f, 64}))
     end
   end
 
@@ -687,6 +697,21 @@ defmodule Nx.DefnTest do
 
       assert default_if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
                {Nx.tensor(1), Nx.tensor(10)}
+    end
+
+    @defn_compiler {Nx.Defn, max_unsigned_type: {:u, 32}}
+    defn default_maxu(a), do: a
+
+    @defn_compiler {Nx.Defn, max_signed_type: {:s, 32}}
+    defn default_maxs(a), do: a
+
+    @defn_compiler {Nx.Defn, max_float_type: {:f, 32}}
+    defn default_maxf(a), do: a
+
+    test "max_*_type/2" do
+      assert default_maxu(Nx.tensor(1, type: {:u, 64})) == Nx.tensor(1, type: {:u, 32})
+      assert default_maxs(Nx.tensor(1, type: {:s, 64})) == Nx.tensor(1, type: {:s, 32})
+      assert default_maxf(Nx.tensor(1, type: {:f, 64})) == Nx.tensor(1, type: {:f, 32})
     end
   end
 
