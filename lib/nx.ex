@@ -4707,7 +4707,7 @@ defmodule Nx do
   The type of the returned tensor will be computed based on
   the given tensor and the initial value. For example,
   a tensor of integers with a float accumulator will be
-  cast integer, as done by most binary operator. You can
+  cast to float, as done by most binary operators. You can
   also pass a `:type` option to change this behaviour.
 
   You may optionally set `:keep_axes` to true, which will

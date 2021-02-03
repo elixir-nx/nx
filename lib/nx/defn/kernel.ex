@@ -201,6 +201,66 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Sets the `max_float_type` of the given tensor expression.
+
+  It will traverse the expression and rewrite all types
+  with equal or higher precision to the given type.
+
+  ## Examples
+
+      max_float_type(expr, {:f, 32})
+
+  """
+  defmacro max_float_type(expr, type) do
+    quote do
+      Nx.Defn.Kernel.transform(
+        unquote(expr),
+        &Nx.Defn.Expr.rewrite_types(&1, max_float_type: unquote(type))
+      )
+    end
+  end
+
+  @doc """
+  Sets the `max_signed_type` of the given tensor expression.
+
+  It will traverse the expression and rewrite all types
+  with equal or higher precision to the given type.
+
+  ## Examples
+
+      max_signed_type(expr, {:f, 32})
+
+  """
+  defmacro max_signed_type(expr, type) do
+    quote do
+      Nx.Defn.Kernel.transform(
+        unquote(expr),
+        &Nx.Defn.Expr.rewrite_types(&1, max_signed_type: unquote(type))
+      )
+    end
+  end
+
+  @doc """
+  Set the `max_unsigned_type` of the given tensor expression.
+
+  It will traverse the expression and rewrite all types
+  with equal or higher precision to the given type.
+
+  ## Examples
+
+      max_unsigned_type(expr, {:f, 32})
+
+  """
+  defmacro max_unsigned_type(expr, type) do
+    quote do
+      Nx.Defn.Kernel.transform(
+        unquote(expr),
+        &Nx.Defn.Expr.rewrite_types(&1, max_unsigned_type: unquote(type))
+      )
+    end
+  end
+
+  @doc """
   Computes the gradient of the given `var` on `expr`.
 
   ### Examples

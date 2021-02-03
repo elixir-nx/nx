@@ -10,7 +10,7 @@ defmodule EXLA.Defn do
 
     {expr, holes} =
       EXLA.LockedCache.run(expr_key, fn ->
-        expr = fun.(vars)
+        expr = fun.(vars) |> Expr.rewrite_types(options)
         {expr, holes(expr)}
       end)
 
@@ -20,7 +20,7 @@ defmodule EXLA.Defn do
     {client_name, options} = Keyword.pop(options, :client, :default)
     buffers = for var <- vars, do: nx_to_buffer(var)
     cache_args = for var <- vars, do: nx_to_cache_key!(var)
-    cache_key = {key, cache_args, client_name}
+    cache_key = {key, cache_args, client_name, options}
 
     {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->

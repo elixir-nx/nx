@@ -78,6 +78,14 @@ defmodule Nx.Defn do
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
+  ### Options
+
+  The `Nx.Defn` compiler supports the following options:
+
+    * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.max_unsigned_type/2`
+    * `max_signed_type: type` - the same as `Nx.Defn.Kernel.max_signed_type/2`
+    * `max_float_type: type` - the same as `Nx.Defn.Kernel.max_float_type/2`
+
   ## Inputs and outputs types
 
   The inputs to `defn` functions must be either tuples, numbers,
@@ -165,8 +173,9 @@ defmodule Nx.Defn do
   alias Nx.Defn.Expr
 
   @impl true
-  def __jit__(_key, vars, fun, []) do
+  def __jit__(_key, vars, fun, opts) do
     fun.(vars)
+    |> Expr.rewrite_types(opts)
     |> to_result(vars, %{})
     |> elem(0)
   end
