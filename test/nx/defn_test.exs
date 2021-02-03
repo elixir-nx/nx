@@ -613,6 +613,14 @@ defmodule Nx.DefnTest do
     end
 
     @defn_compiler Nx.Defn
+    defn default_concatenate(a, b), do: Nx.concatenate([a, b])
+
+    test "concatenate" do
+      assert default_concatenate(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
+               Nx.tensor([1, 2, 3, 4, 5, 6])
+    end
+
+    @defn_compiler Nx.Defn
     defn default_reshape(t), do: Nx.reshape(t, {3, 2})
 
     test "reshape" do

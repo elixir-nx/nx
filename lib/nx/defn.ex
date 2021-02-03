@@ -162,6 +162,7 @@ defmodule Nx.Defn do
   ## Default compiler backend
 
   @behaviour Nx.Defn.Compiler
+  alias Nx.Defn.Expr
 
   @impl true
   def __jit__(_key, vars, fun, []) do
@@ -170,36 +171,36 @@ defmodule Nx.Defn do
     |> elem(0)
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :fun, args: [_, _, fun]}}, _vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: :fun, args: [_, _, fun]}}, _vars, cache) do
     {fun, cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [i]}}, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: :parameter, args: [i]}}, vars, cache) do
     {Enum.fetch!(vars, i), cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :tensor, args: [t]}}, _vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _vars, cache) do
     {t, cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
     {res, cache} = find_clause(clauses, last, vars, cache)
     eval_maybe_tuple(res, vars, cache)
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{op: :elem, args: args}}, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, vars, cache) do
     [tuple, i, _size] = args
     {tuple, cache} = eval_maybe_tuple(tuple, vars, cache)
     {elem(tuple, i), cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Nx.Defn.Expr{id: id, op: op, args: args}} = ans, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, vars, cache) do
     case cache do
       %{^id => res} ->
         {res, cache}
 
       %{} ->
-        {args, cache} = Enum.map_reduce(args, cache, &eval(&1, vars, &2))
+        {args, cache} = Expr.traverse_args(ans, cache, &eval(&1, vars, &2))
         res = apply(Nx.Shared.find_impl!(args), op, [ans | args])
         {res, Map.put(cache, id, res)}
     end
