@@ -76,6 +76,21 @@ defmodule Nx.Defn do
   a tensor of different values but same shape and type means no
   further compilation is performed.
 
+  Also note that the defn compiler only applies to the first
+  call to `defn`. All other calls that happen within that `defn`
+  will use the same compiler. For example, imagine this code:
+
+      @defn_compiler Nx.Defn # the default
+      defn add(a, b), do: do_add(a, b)
+
+      @defn_compiler EXLA
+      defnp do_add(a, b), do: a + b
+
+  When calling `add/2` directly, even though it calls `do_add/2`
+  which uses EXLA, the call to `add/2` will be compiled with
+  `Nx.Defn` and `Nx.Defn` exclusively. In other words, only the
+  entry-point compiler matters.
+
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
   ### Options
