@@ -4191,6 +4191,11 @@ defmodule Nx do
     window_dilations =
       opts[:window_dilations] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
 
+    window_strides =
+      if is_integer(window_strides),
+        do: List.to_tuple(List.duplicate(window_strides, rank(tensor.shape))),
+        else: window_strides
+
     window_dilations =
       if is_integer(window_dilations),
         do: List.to_tuple(List.duplicate(window_dilations, rank(tensor.shape))),
