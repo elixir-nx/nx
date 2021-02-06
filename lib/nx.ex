@@ -101,13 +101,12 @@ defmodule Nx do
   If any of the dimensions do not match or are not 1, an error is
   raised.
 
-  ## Access syntax
+  ## Access syntax (slicing)
 
-  Tensors implement, at the moment, a subset of Elixir's access
-  syntax. This allows developers to slice tensors up and easily
-  access sub-dimensions and values.
+  Nx tensors implement Elixir's access syntax. This allows developers
+  to slice tensors up and easily access sub-dimensions and values.
 
-  Indexes can be integers:
+  Access accepts integers:
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> t[0]
@@ -126,7 +125,7 @@ defmodule Nx do
         4
       >
 
-  If a negative index is given, it accesses the last element:
+  If a negative index is given, it accesses the element from the back:
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> t[-1][-1]
@@ -142,6 +141,94 @@ defmodule Nx do
 
       iex> Nx.tensor([1, 2])[-3]
       ** (ArgumentError) index -3 is out of bounds for axis 0 in shape {2}
+
+  Access also accepts ranges. Ranges in Elixir are inclusive:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+      iex> t[0..1]
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
+  Negative positions in ranges read from the back. The right-side of
+  the range must be equal or greater than the left-side:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
+      iex> t[1..-2]
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [3, 4],
+          [5, 6]
+        ]
+      >
+
+  As you can see, accessing with a range does not eliminate the
+  accessed axis, therefore, when wanting to slice across multiple
+  axes with ranges, it is often desired to use a list:
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
+      iex> t[[1..-2, 1..2]]
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [5, 6],
+          [8, 9]
+        ]
+      >
+
+  You can mix both ranges and integers in the list too:
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
+      iex> t[[1..-2, 2]]
+      #Nx.Tensor<
+        s64[2]
+        [6, 9]
+      >
+
+  If the list has less elements than axes, the remaining dimensions
+  are returned in full (equivalent to 0..-1):
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
+      iex> t[[1..2]]
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [4, 5, 6],
+          [7, 8, 9]
+        ]
+      >
+
+  The access syntax also pairs nicely with named tensors. By
+  using named tensors, you can pass only the axis you want to
+  slice, leaving the other axis intact:
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], names: [:x, :y])
+      iex> t[x: 1..2]
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [4, 5, 6],
+          [7, 8, 9]
+        ]
+      >
+      iex> t[x: 1..2, y: 0..1]
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [4, 5],
+          [7, 8]
+        ]
+      >
+      iex> t[x: 1, y: 0..1]
+      #Nx.Tensor<
+        s64[y: 2]
+        [4, 5]
+      >
 
   ## Devices
 

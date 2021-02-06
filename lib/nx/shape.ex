@@ -49,6 +49,17 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Finds the axis for the given name.
+  """
+  def find_name!(names, name) do
+    Enum.find_index(names, & &1 == name) ||
+      raise(
+        ArgumentError,
+        "tensor does not have name #{inspect(name)}. The tensor names are: #{inspect(names)}"
+      )
+  end
+
+  @doc """
   Broadcasts a shape to a new shape.
 
   The dimensions of `shape` is expanded to match the

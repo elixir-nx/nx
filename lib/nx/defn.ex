@@ -18,7 +18,7 @@ defmodule Nx.Defn do
   provides tensor-aware operators, such as `+`, `-`, etc, while
   also preserving many high-level constructs known to Elixir
   developers, such as pipe operator, aliases, conditionals,
-  pattern-matching, and more:
+  pattern-matching, the access syntax, and more:
 
   For example, the code above can also be written as:
 

@@ -609,4 +609,27 @@ defmodule NxTest do
                ])
     end
   end
+
+  describe "access" do
+    test "supports an empty list" do
+      tensor = Nx.tensor([1, 2, 3])
+      assert tensor[[]] == tensor
+    end
+
+    test "raises on duplicated axis" do
+      tensor = Nx.tensor([[1, 2, 3]], names: [:x, :y])
+
+      assert_raise ArgumentError,
+                   ~r"unknown or duplicate axis 1 found when slicing shape {1, 3}",
+                   fn -> tensor[[y: 1, y: 2]] end
+    end
+
+    test "raises on invalid ranges" do
+      tensor = Nx.tensor([[1, 2, 3]], names: [:x, :y])
+
+      assert_raise ArgumentError,
+                   ~r"slicing a tensor requires an increasing range, got: 2..1",
+                   fn -> tensor[[y: 2..1]] end
+    end
+  end
 end

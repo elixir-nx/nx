@@ -107,30 +107,99 @@ defmodule Nx.Tensor do
           "cannot use the tensor[index] syntax on scalar tensor #{inspect(tensor)}"
   end
 
-  def fetch(%Nx.Tensor{shape: shape, names: names} = tensor, index) when is_integer(index) do
-    [high | rest] = Tuple.to_list(shape)
-    norm = if index < 0, do: high + index, else: index
+  def fetch(tensor, index) when is_integer(index),
+    do: {:ok, fetch_axes(tensor, [{0, index}])}
 
-    if norm < 0 or norm >= high do
-      raise ArgumentError,
-            "index #{index} is out of bounds for axis 0 in shape #{inspect(tensor.shape)}"
-    end
+  def fetch(tensor, _.._ = range),
+    do: {:ok, fetch_axes(tensor, [{0, range}])}
 
-    rank = Nx.rank(shape)
-    impl = Nx.Shared.impl!(tensor)
-    start_indices = [norm | List.duplicate(0, rank - 1)]
-    lengths = [1 | rest]
-    strides = List.duplicate(1, rank)
+  def fetch(tensor, []),
+    do: {:ok, tensor}
 
-    out = %{tensor | shape: List.to_tuple([1 | rest])}
-    tensor = impl.slice(out, tensor, start_indices, lengths, strides)
+  def fetch(%{names: names} = tensor, [{_, _} | _] = keyword),
+    do: {:ok, fetch_axes(tensor, with_names(keyword, names, []))}
 
-    out = %{tensor | shape: List.to_tuple(rest), names: tl(names)}
-    {:ok, impl.squeeze(out, tensor, [0])}
-  end
+  def fetch(tensor, [_ | _] = list),
+    do: {:ok, fetch_axes(tensor, with_index(list, 0, []))}
 
   def fetch(_tensor, value) do
-    raise "tensor[index] expects index to be an integer, got: #{inspect(value)}"
+    raise """
+    tensor[slice] expects slice to be one of:
+
+      * an integer representing a zero-based index
+      * a first..last range representing inclusive start-stop indexes
+      * a list of integers and ranges
+      * a keyword list of integers and ranges
+
+    Got #{inspect(value)}
+    """
+  end
+
+  defp with_index([h | t], i, acc), do: with_index(t, i + 1, [{i, h} | acc])
+  defp with_index([], _i, acc), do: acc
+
+  defp with_names([{k, v} | t], names, acc),
+    do: with_names(t, names, [{Nx.Shape.find_name!(names, k), v} | acc])
+
+  defp with_names([], _names, acc),
+    do: acc
+
+  defp fetch_axes(%Nx.Tensor{shape: shape} = tensor, axes) do
+    rank = Nx.rank(shape)
+    impl = Nx.Shared.impl!(tensor)
+    {start, lengths, squeeze} = fetch_axes(rank - 1, axes, shape, [], [], [])
+
+    %{tensor | shape: List.to_tuple(lengths)}
+    |> impl.slice(tensor, start, lengths, List.duplicate(1, rank))
+    |> Nx.squeeze(axes: squeeze)
+  end
+
+  defp fetch_axes(axis, axes, shape, start, lengths, squeeze) when axis >= 0 do
+    case List.keytake(axes, axis, 0) do
+      {{^axis, index}, axes} when is_integer(index) ->
+        index = normalize_index(index, axis, shape)
+        fetch_axes(axis - 1, axes, shape, [index | start], [1 | lengths], [axis | squeeze])
+
+      {{^axis, first..last}, axes} ->
+        first = normalize_index(first, axis, shape)
+        last = normalize_index(last, axis, shape)
+
+        if last < first do
+          raise ArgumentError,
+                "slicing a tensor requires an increasing range, got: #{inspect(first..last)}"
+        end
+
+        len = last - first + 1
+        fetch_axes(axis - 1, axes, shape, [first | start], [len | lengths], squeeze)
+
+      {{^axis, value}, _} ->
+        raise ArgumentError,
+              "slicing a tensor on an axis requires an integer or a range, got: #{inspect(value)}"
+
+      nil ->
+        fetch_axes(axis - 1, axes, shape, [0 | start], [elem(shape, axis) | lengths], squeeze)
+    end
+  end
+
+  defp fetch_axes(_axis, [{axis, _} | _], shape, _start, _lengths, _squeeze) do
+    raise ArgumentError,
+          "unknown or duplicate axis #{axis} found when slicing shape #{inspect(shape)}"
+  end
+
+  defp fetch_axes(_axis, [], _shape, start, lengths, squeeze) do
+    {start, lengths, squeeze}
+  end
+
+  defp normalize_index(index, axis, shape) do
+    dim = elem(shape, axis)
+    norm = if index < 0, do: dim + index, else: index
+
+    if norm < 0 or norm >= dim do
+      raise ArgumentError,
+            "index #{index} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+    end
+
+    norm
   end
 
   @impl true
