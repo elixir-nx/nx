@@ -191,9 +191,8 @@ defmodule EXLA.Defn do
     EXLA.Op.broadcast_in_dim(op, ans.shape, List.to_tuple(axes))
   end
 
-  defp to_operator(:transpose, [op, opts], _ans, _state) do
-    dims = opts[:axes]
-    EXLA.Op.transpose(op, List.to_tuple(dims))
+  defp to_operator(:transpose, [op, axes], _ans, _state) do
+    EXLA.Op.transpose(op, List.to_tuple(axes))
   end
 
   defp to_operator(:squeeze, [op, _axes], ans, _state) do
@@ -535,14 +534,11 @@ defmodule EXLA.Defn do
     EXLA.Op.slice(tensor, start_indices, limit_indices, strides)
   end
 
-  defp to_operator(:reverse, [tensor, opts], _ans, _state) do
-    dimensions = opts[:axes]
-    EXLA.Op.reverse(tensor, dimensions)
+  defp to_operator(:reverse, [tensor, axes], _ans, _state) do
+    EXLA.Op.reverse(tensor, axes)
   end
 
-  defp to_operator(:concatenate, [tensors, opts], ans, _state) do
-    axis = opts[:axis]
-
+  defp to_operator(:concatenate, [tensors, axis], ans, _state) do
     tensors =
       tensors
       |> Enum.map(&to_type(&1, ans.type))

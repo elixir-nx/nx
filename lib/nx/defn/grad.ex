@@ -239,12 +239,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:squeeze, [x, axes], _ans, g, cache) do
-    g =
-      case axes do
-        [] -> g
-        _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- axes)
-      end
-
+    g = Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- axes)
     to_grad(x, g, cache)
   end
 
@@ -252,8 +247,7 @@ defmodule Nx.Defn.Grad do
     to_grad(x, Nx.reshape(g, x), cache)
   end
 
-  defp grad(:transpose, [x, opts], _ans, g, cache) do
-    axes = opts[:axes]
+  defp grad(:transpose, [x, axes], _ans, g, cache) do
     to_grad(x, Nx.transpose(g, axes: argsort(axes)), cache)
   end
 
@@ -299,8 +293,8 @@ defmodule Nx.Defn.Grad do
     to_grad(x, t_op, cache)
   end
 
-  defp grad(:reverse, [x, opts], _ans, g, cache) do
-    reversed = Nx.reverse(g, opts)
+  defp grad(:reverse, [x, axes], _ans, g, cache) do
+    reversed = Nx.reverse(g, axes: axes)
     to_grad(x, reversed, cache)
   end
 

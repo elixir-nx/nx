@@ -155,7 +155,6 @@ defmodule Nx.DefnTest do
     defn reshape(t), do: Nx.reshape(t, {2, 3})
     defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
     defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2])
-    defn squeeze(t), do: Nx.squeeze(t)
 
     test "dot product" do
       assert %T{data: %Expr{op: :dot, args: [_, [0], _, [0]]}, shape: {2}} =
@@ -171,21 +170,16 @@ defmodule Nx.DefnTest do
                dot4(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
     end
 
-    test "squeeze" do
-      assert %T{data: %Expr{op: :squeeze, args: [_, [axes: [0, 2, 4]]]}, shape: {3, 2}} =
-               squeeze(Nx.iota({1, 3, 1, 2, 1}))
-    end
-
     test "outer product" do
       assert %T{data: %Expr{op: :outer, args: [_, _]}, shape: {3, 3}} =
                outer(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 3]))
     end
 
     test "transpose" do
-      assert %T{data: %Expr{op: :transpose, args: [_, [axes: [1, 0]]]}, shape: {3, 2}} =
+      assert %T{data: %Expr{op: :transpose, args: [_, [1, 0]]}, shape: {3, 2}} =
                transpose_1(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
 
-      assert %T{data: %Expr{op: :transpose, args: [_, [axes: [1, 0]]]}, shape: {3, 2}} =
+      assert %T{data: %Expr{op: :transpose, args: [_, [1, 0]]}, shape: {3, 2}} =
                transpose_2(Nx.tensor([[1, 2, 3], [1, 2, 3]]))
     end
 
@@ -200,6 +194,30 @@ defmodule Nx.DefnTest do
 
       assert %T{data: %Expr{op: :broadcast, args: [_, _, [0]]}, shape: {3, 2}} =
                broadcast_axes(Nx.tensor([1, 2, 3]))
+    end
+  end
+
+  describe "squeeze" do
+    defn squeeze(t), do: Nx.squeeze(t)
+
+    test "sized one dimensions" do
+      assert %T{data: %Expr{op: :squeeze, args: [_, [0, 2, 4]]}, shape: {3, 2}} =
+               squeeze(Nx.iota({1, 3, 1, 2, 1}))
+    end
+
+    defn squeeze_collapse1(t), do: t |> Nx.squeeze(axes: [0, 2]) |> Nx.squeeze(axes: [0, 2])
+    defn squeeze_collapse2(t), do: t |> Nx.squeeze(axes: [3, 1]) |> Nx.squeeze(axes: [2])
+    defn squeeze_collapse3(t), do: t |> Nx.squeeze(axes: [2]) |> Nx.squeeze(axes: [3, 1])
+
+    test "with explicit dimensions are collapsed" do
+      assert %T{data: %Expr{op: :squeeze, args: [_, [0, 1, 2, 4]]}, shape: {1}, names: [:d]} =
+               squeeze_collapse1(Nx.iota({1, 1, 1, 1, 1}, names: [:a, :b, :c, :d, :e]))
+
+      assert %T{data: %Expr{op: :squeeze, args: [_, [1, 3, 4]]}, shape: {1, 1}, names: [:a, :c]} =
+               squeeze_collapse2(Nx.iota({1, 1, 1, 1, 1}, names: [:a, :b, :c, :d, :e]))
+
+      assert %T{data: %Expr{op: :squeeze, args: [_, [1, 2, 4]]}, shape: {1, 1}, names: [:a, :d]} =
+               squeeze_collapse3(Nx.iota({1, 1, 1, 1, 1}, names: [:a, :b, :c, :d, :e]))
     end
   end
 
@@ -387,6 +405,48 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :as_type, args: [_]}} = maxu(Nx.tensor(1, type: {:u, 64}))
       assert %T{data: %Expr{op: :as_type, args: [_]}} = maxs(Nx.tensor(1, type: {:s, 64}))
       assert %T{data: %Expr{op: :as_type, args: [_]}} = maxf(Nx.tensor(1, type: {:f, 64}))
+    end
+  end
+
+  describe "access" do
+    defn single_access(t), do: {t[0], t[-1]}
+
+    test "single dimensional single access" do
+      {zero, minus_one} = single_access(Nx.tensor([1, 2, 3, 4, 5]))
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {}} = zero
+      assert %T{data: %Expr{op: :slice, args: [_, [0], [1], [1]]}, shape: {1}} = slice
+
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {}} = minus_one
+      assert %T{data: %Expr{op: :slice, args: [_, [4], [1], [1]]}, shape: {1}} = slice
+    end
+
+    test "multi dimensional single access" do
+      {zero, minus_one} = single_access(Nx.iota({3, 4, 5}))
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {4, 5}} = zero
+
+      assert %T{
+               data: %Expr{op: :slice, args: [_, [0, 0, 0], [1, 4, 5], [1, 1, 1]]},
+               shape: {1, 4, 5}
+             } = slice
+
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {4, 5}} = minus_one
+
+      assert %T{
+               data: %Expr{op: :slice, args: [_, [2, 0, 0], [1, 4, 5], [1, 1, 1]]},
+               shape: {1, 4, 5}
+             } = slice
+    end
+
+    defn multi_access(t), do: t[1][2][3]
+
+    test "multi dimensional multi-access is collapsed" do
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [0, 1, 2]]}, shape: {}} =
+                multi_access(Nx.iota({3, 4, 5}))
+
+      assert %T{
+               data: %Expr{op: :slice, args: [_, [1, 2, 3], [1, 1, 1], [1, 1, 1]]},
+               shape: {1, 1, 1}
+             } = slice
     end
   end
 

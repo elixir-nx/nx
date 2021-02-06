@@ -37,15 +37,7 @@ defmodule Nx do
   Code inside `defn` functions can also be given to custom compilers,
   which can compile said functions to use either just-in-time (JIT)
   or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
-  For example, using the `EXLA` compiler:
-
-      @defn_compiler {EXLA, platform: :host}
-      defn softmax(t) do
-        Nx.exp(t) / Nx.sum(Nx.exp(t))
-      end
-
-  This complements Erlang's JIT compiler as it compiles direct to
-  native code with numerical compilation and performance in mind.
+  See `Nx.Defn` for more information.
 
   ## Creating tensors
 
@@ -108,6 +100,48 @@ defmodule Nx do
 
   If any of the dimensions do not match or are not 1, an error is
   raised.
+
+  ## Access syntax
+
+  Tensors implement, at the moment, a subset of Elixir's access
+  syntax. This allows developers to slice tensors up and easily
+  access sub-dimensions and values.
+
+  Indexes can be integers:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t[0]
+      #Nx.Tensor<
+        s64[2]
+        [1, 2]
+      >
+      iex> t[1]
+      #Nx.Tensor<
+        s64[2]
+        [3, 4]
+      >
+      iex> t[1][1]
+      #Nx.Tensor<
+        s64
+        4
+      >
+
+  If a negative index is given, it accesses the last element:
+
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t[-1][-1]
+      #Nx.Tensor<
+        s64
+        4
+      >
+
+  Out of bound access will raise:
+
+      iex> Nx.tensor([1, 2])[2]
+      ** (ArgumentError) index 2 is out of bounds for axis 0 in shape {2}
+
+      iex> Nx.tensor([1, 2])[-3]
+      ** (ArgumentError) index -3 is out of bounds for axis 0 in shape {2}
 
   ## Devices
 
@@ -1110,7 +1144,7 @@ defmodule Nx do
     if old_shape == new_shape do
       tensor
     else
-      impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes: axes)
+      impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes)
     end
   end
 
@@ -5513,7 +5547,7 @@ defmodule Nx do
       tensor
     else
       {shape, names} = Nx.Shape.transpose(shape, axes, names)
-      impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes: axes)
+      impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes)
     end
   end
 
@@ -5589,7 +5623,7 @@ defmodule Nx do
 
     case Nx.Shape.normalize_axes(shape, axes, names) do
       [] -> tensor
-      axes -> impl!(tensor).reverse(tensor, tensor, axes: Enum.sort(axes))
+      axes -> impl!(tensor).reverse(tensor, tensor, Enum.sort(axes))
     end
   end
 
@@ -5807,6 +5841,7 @@ defmodule Nx do
     ]
 
     dilated_kernel_shape = Nx.Shape.pad(kernel_shape, kernel_dilation_padding_config)
+
     dilated_filter_shape =
       dilated_kernel_shape
       |> Tuple.delete_at(0)
@@ -5823,6 +5858,7 @@ defmodule Nx do
     ]
 
     dilated_input_shape = Nx.Shape.pad(input_shape, input_dilation_padding_config)
+
     dilated_spatial_dims =
       dilated_input_shape
       |> Tuple.delete_at(0)
@@ -6178,7 +6214,7 @@ defmodule Nx do
           |> Enum.reduce(type1, fn t1, t2 -> Nx.Type.merge(t1, t2) end)
 
         out = %{t1 | type: output_type, shape: output_shape, names: output_names}
-        impl!(t1).concatenate(out, tensors, axis: axis)
+        impl!(t1).concatenate(out, tensors, axis)
     end
   end
 
@@ -6363,8 +6399,17 @@ defmodule Nx do
   defp names!(_), do: nil
 
   defp assert_keys!(keyword, valid) do
-    for {k, _} <- keyword, k not in valid do
-      raise "unknown key #{inspect(k)} in #{inspect(keyword)}, expected one of #{inspect(valid)}"
+    for kv <- keyword do
+      case kv do
+        {k, _} ->
+          if k not in valid do
+            raise "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
+                  "expected one of #{inspect(valid)}"
+          end
+
+        _ ->
+          raise "expected a keyword list with keys #{inspect(valid)}, got: #{inspect(keyword)}"
+      end
     end
   end
 end

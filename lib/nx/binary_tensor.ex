@@ -205,9 +205,7 @@ defmodule Nx.BinaryTensor do
   ## Shape
 
   @impl true
-  def transpose(out, %T{shape: shape, type: {_, size}} = t, opts) do
-    axes = opts[:axes]
-
+  def transpose(out, %T{shape: shape, type: {_, size}} = t, axes) do
     data = to_binary(t)
     {list, min, max} = transpose_axes(shape, axes)
     weighted_shape = weighted_shape(shape, size)
@@ -361,9 +359,7 @@ defmodule Nx.BinaryTensor do
   end
 
   @impl true
-  def reverse(out, %{type: {_, size}, shape: shape} = t, opts) do
-    axes = opts[:axes]
-
+  def reverse(out, %{type: {_, size}, shape: shape} = t, axes) do
     data = to_binary(t)
     weighted_shape = weighted_shape(shape, size)
 
@@ -1297,8 +1293,7 @@ defmodule Nx.BinaryTensor do
   end
 
   @impl true
-  def concatenate(out, tensors, opts) do
-    axis = opts[:axis]
+  def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
     tensors = Enum.map(tensors, fn t -> as_type(%{t | type: output_type}, t) end)
 

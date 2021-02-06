@@ -515,15 +515,33 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def squeeze(out, tensor, opts) do
+  def squeeze(out, tensor, axes) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :squeeze, [tensor, opts])
+
+    # If we are in a sequence of squeezes, we collapse them.
+    # This helps us fuse the access syntax.
+    with %T{data: %Expr{op: :squeeze, args: [tensor, inner_axes]}} <- tensor do
+      axes = merge_squeeze(Enum.sort(inner_axes), Enum.sort(axes), 0)
+      expr(out, tensor.data.context, :squeeze, [tensor, axes])
+    else
+      _ -> expr(out, tensor.data.context, :squeeze, [tensor, axes])
+    end
   end
 
+  defp merge_squeeze([inner_axis | inner_axes], [axis | axes], extra)
+       when inner_axis <= axis + extra,
+       do: [inner_axis | merge_squeeze(inner_axes, [axis | axes], extra + 1)]
+
+  defp merge_squeeze(inner_axes, [axis | axes], extra),
+    do: [axis + extra | merge_squeeze(inner_axes, axes, extra)]
+
+  defp merge_squeeze([], [], _extra),
+    do: []
+
   @impl true
-  def transpose(out, tensor, opts) do
+  def transpose(out, tensor, axes) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :transpose, [tensor, opts])
+    expr(out, tensor.data.context, :transpose, [tensor, axes])
   end
 
   @impl true
@@ -563,15 +581,49 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def slice(out, tensor, start_indices, limit_indices, strides) do
+  def slice(out, tensor, start, lengths, strides) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :slice, [tensor, start_indices, limit_indices, strides])
+
+    # If we are in a sequence of slices, it is the access syntax,
+    # so we compact them into a single slice.
+    with true <- Enum.all?(strides, &(&1 == 1)),
+         {slice, axes} <- maybe_squeeze(tensor),
+         %T{data: %Expr{op: :slice, args: [tensor, inner_start, inner_lengths, strides]}} <-
+           slice,
+         true <- Enum.all?(strides, &(&1 == 1)) do
+      {start, lengths} =
+        0
+        |> merge_slice(axes, inner_start, start, inner_lengths, lengths)
+        |> Enum.unzip()
+
+      tensor
+      |> Nx.slice(start, lengths)
+      |> Nx.squeeze(axes: axes)
+    else
+      _ -> expr(out, tensor.data.context, :slice, [tensor, start, lengths, strides])
+    end
+  end
+
+  defp maybe_squeeze(%T{data: %Expr{op: :squeeze, args: [slice, axes]}}), do: {slice, axes}
+  defp maybe_squeeze(slice), do: {slice, []}
+
+  defp merge_slice(_axis, _axes, [], [], [], []), do: []
+
+  defp merge_slice(axis, axes, [is | inner_start], start, [il | inner_lengths], lengths) do
+    # This is one of the erased axes, so we need to get coordinates from inner
+    if axis in axes do
+      [{is, il} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
+    else
+      [s | start] = start
+      [l | lengths] = lengths
+      [{is + s, l} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
+    end
   end
 
   @impl true
-  def reverse(out, tensor, opts) do
+  def reverse(out, tensor, axes) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :reverse, [tensor, opts])
+    expr(out, tensor.data.context, :reverse, [tensor, axes])
   end
 
   @impl true

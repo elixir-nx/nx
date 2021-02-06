@@ -47,18 +47,17 @@ defmodule Nx.Tensor do
   @callback reshape(out :: t, t, shape) :: t
   @callback squeeze(out :: t, t, axes) :: t
   @callback broadcast(out :: t, t, shape, axes) :: t
-  @callback transpose(out :: t, t, keyword) :: t
+  @callback transpose(out :: t, t, axes) :: t
   @callback pad(out :: t, t, pad_value :: t, padding_config :: list()) :: t
-  @callback reverse(out :: t, t, keyword) :: t
-  @callback sort(out :: t, t, keyword) :: t
+  @callback reverse(out :: t, t, axes) :: t
 
   @callback dot(out :: t, t, axes, t, axes) :: t
-  @callback conv(out :: t, t, kernel :: t, keyword) :: t
   @callback clip(out :: t, t, min :: t, max :: t) :: t
   @callback slice(out :: t, t, list, list, list) :: t
-  @callback concatenate(out :: t, t, keyword) :: t
+  @callback concatenate(out :: t, t, axis) :: t
   @callback select(out :: t, t, t, t) :: t
 
+  @callback conv(out :: t, t, kernel :: t, keyword) :: t
   @callback all?(out :: t, t, keyword) :: t
   @callback any?(out :: t, t, keyword) :: t
   @callback sum(out :: t, t, keyword) :: t
@@ -74,6 +73,7 @@ defmodule Nx.Tensor do
   @callback window_max(out :: t, t, list, keyword) :: t
   @callback window_min(out :: t, t, list, keyword) :: t
   @callback map(out :: t, t, fun) :: t
+  @callback sort(out :: t, t, keyword) :: t
 
   @callback cholesky(out :: t, t) :: t
 
@@ -95,6 +95,52 @@ defmodule Nx.Tensor do
 
   for unary_op <- unary_ops do
     @callback unquote(unary_op)(out :: t, t) :: t
+  end
+
+  ## Access
+
+  @behaviour Access
+
+  @impl true
+  def fetch(%Nx.Tensor{shape: {}} = tensor, _index) do
+    raise ArgumentError,
+          "cannot use the tensor[index] syntax on scalar tensor #{inspect(tensor)}"
+  end
+
+  def fetch(%Nx.Tensor{shape: shape, names: names} = tensor, index) when is_integer(index) do
+    [high | rest] = Tuple.to_list(shape)
+    norm = if index < 0, do: high + index, else: index
+
+    if norm < 0 or norm >= high do
+      raise ArgumentError,
+            "index #{index} is out of bounds for axis 0 in shape #{inspect(tensor.shape)}"
+    end
+
+    rank = Nx.rank(shape)
+    impl = Nx.Shared.impl!(tensor)
+    start_indices = [norm | List.duplicate(0, rank - 1)]
+    lengths = [1 | rest]
+    strides = List.duplicate(1, rank)
+
+    out = %{tensor | shape: List.to_tuple([1 | rest])}
+    tensor = impl.slice(out, tensor, start_indices, lengths, strides)
+
+    out = %{tensor | shape: List.to_tuple(rest), names: tl(names)}
+    {:ok, impl.squeeze(out, tensor, [0])}
+  end
+
+  def fetch(_tensor, value) do
+    raise "tensor[index] expects index to be an integer, got: #{inspect(value)}"
+  end
+
+  @impl true
+  def get_and_update(_tensor, _index, _update) do
+    raise "Access.get_and_update/3 is not yet supported by Nx.Tensor"
+  end
+
+  @impl true
+  def pop(_tensor, _index) do
+    raise "Access.pop/2 is not yet supported by Nx.Tensor"
   end
 
   defimpl Inspect do
