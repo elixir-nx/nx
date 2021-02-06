@@ -5950,22 +5950,25 @@ defmodule Nx do
   end
 
   @doc """
-  Slices a tensor from `start_indices` to `limit_indices`.
+  Slices a tensor from `start_indices` with `lengths`.
+
   You can optionally provide a `stride` to specify the amount
   of stride in each dimension.
 
-  Both start indices and limit indices must match the rank
-  of the input tensor shape. You cannot slice in reverse.
-  All of the limit indices must be strictly greater than
-  their corresponding start index. The resulting shape
-  cannot have any zero-sized dimensions or negative
-  sized dimensions.
+  Both start indices and lengths must match the rank of the
+  input tensor shape. All start indexes must be greater than
+  or equal to zero. All lengths must be strictly greater than
+  zero. `start_index + length` must not exceed the respective
+  tensor dimension.
+
+  `strides`, if given, must be stricty greater than zero. It is
+  not possible to slice in reverse.
 
   ### Examples
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [1, 4, 10], [2, 5, 20], [1, 2, 3])
+      iex> Nx.slice(t, [1, 4, 10], [1, 1, 10], [1, 2, 3])
       #Nx.Tensor<
         s64[1][1][4]
         [
@@ -5977,7 +5980,7 @@ defmodule Nx do
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [0, 6, 2], [2, 7, 5])
+      iex> Nx.slice(t, [0, 6, 2], [2, 1, 3])
       #Nx.Tensor<
         s64[2][1][3]
         [
@@ -5992,7 +5995,7 @@ defmodule Nx do
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [0, 4, 11], [2, 7, 20], [2, 1, 3])
+      iex> Nx.slice(t, [0, 4, 11], [2, 3, 9], [2, 1, 3])
       #Nx.Tensor<
         s64[1][3][3]
         [
@@ -6021,27 +6024,28 @@ defmodule Nx do
         ]
       >
   """
-  def slice(tensor, start_indices, limit_indices, strides \\ nil) do
+  def slice(tensor, start_indices, lengths, strides \\ nil) do
     %T{shape: shape} = tensor = tensor!(tensor)
+    rank = rank(shape)
 
     strides = if strides, do: strides, else: List.duplicate(1, rank(shape))
 
-    if length(strides) != rank(shape) do
-      raise ArgumentError, "invalid strides for shape of rank #{rank(shape)}"
+    if length(strides) != rank do
+      raise ArgumentError, "invalid strides for shape of rank #{rank}"
     end
 
-    if length(start_indices) != rank(shape) do
-      raise ArgumentError, "invalid start indices for shape of rank #{rank(shape)}"
+    if length(start_indices) != rank do
+      raise ArgumentError, "invalid start indices for shape of rank #{rank}"
     end
 
-    if length(limit_indices) != rank(shape) do
-      raise ArgumentError, "invalid limit indices for shape of rank #{rank(shape)}"
+    if length(lengths) != rank do
+      raise ArgumentError, "invalid limit indices for shape of rank #{rank}"
     end
 
-    output_shape = Nx.Shape.slice(shape, start_indices, limit_indices, strides)
+    output_shape = Nx.Shape.slice(shape, start_indices, lengths, strides)
 
     out = %{tensor | shape: output_shape}
-    impl!(tensor).slice(out, tensor, start_indices, limit_indices, strides)
+    impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
   end
 
   @doc """

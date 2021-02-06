@@ -753,30 +753,54 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [2, 5, 20], [1, 2, 3])
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [1, 1, 10], [1, 2, 3])
       {1, 1, 4}
 
   ### Error cases
 
-      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [0, 5, 11], [1, 2, 3])
-      ** (ArgumentError) start and limit indices would result in 0 or negative dimension size, limit indices must be greater than start indices
-  """
-  def slice(_, start_indices, limit_indices, strides) do
-    output_shape =
-      limit_indices
-      |> Enum.zip(start_indices)
-      |> Enum.zip(strides)
-      |> Enum.map(fn {{hi, lo}, s} -> Kernel.ceil((hi - lo) / s) end)
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [2, 1, 1], [1, 1, 1])
+      ** (ArgumentError) start index + length at axis 0 must be less than axis size of 2, got: 3
 
-    if Enum.any?(output_shape, &(&1 <= 0)) do
+  """
+  def slice(shape, start_indices, lengths, strides) do
+    shape
+    |> slice(0, start_indices, lengths, strides)
+    |> List.to_tuple()
+  end
+
+  defp slice(shape, pos, [i | start_indices], [len | lengths], [s | strides]) do
+    dim = elem(shape, pos)
+
+    if not is_integer(i) or i < 0 do
       raise ArgumentError,
-            "start and limit indices would result in 0 or negative" <>
-              " dimension size, limit indices must be greater than" <>
-              " start indices"
+            "start index at axis #{pos} must be greater than or equal to 0, got: #{inspect(i)}"
     end
 
-    List.to_tuple(output_shape)
+    if not is_integer(len) or len < 1 do
+      raise ArgumentError,
+            "length at axis #{pos} must be greater than or equal to 1, got: #{inspect(len)}"
+    end
+
+    if not is_integer(s) or s < 1 do
+      raise ArgumentError,
+            "stride at axis #{pos} must be greater than or equal to 1, got: #{inspect(s)}"
+    end
+
+    if i >= dim do
+      raise ArgumentError,
+            "start index at axis #{pos} must be less than axis size of #{dim}, got: #{i}"
+    end
+
+    if i + len > dim do
+      raise ArgumentError,
+            "start index + length at axis #{pos} must be less than axis size of #{dim}, " <>
+              "got: #{i + len}"
+    end
+
+    [Kernel.ceil(len / s) | slice(shape, pos + 1, start_indices, lengths, strides)]
   end
+
+  defp slice(_shape, _pos, [], [], []), do: []
 
   @doc """
   Returns the shape and names after a concat.
