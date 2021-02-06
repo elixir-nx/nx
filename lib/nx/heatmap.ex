@@ -7,6 +7,29 @@ defmodule Nx.Heatmap do
   @doc false
   defstruct [:tensor, opts: []]
 
+  @behaviour Access
+
+  @impl true
+  def fetch(%Nx.Heatmap{tensor: tensor} = hm, value) do
+    case Access.fetch(tensor, value) do
+      {:ok, %Nx.Tensor{shape: {}} = tensor} -> {:ok, tensor}
+      {:ok, tensor} -> {:ok, put_in(hm.tensor, tensor)}
+      :error -> :error
+    end
+  end
+
+  @impl true
+  def get_and_update(hm, key, fun) do
+    {get, tensor} = Access.get_and_update(hm.tensor, key, fun)
+    {get, put_in(hm.tensor, tensor)}
+  end
+
+  @impl true
+  def pop(hm, key) do
+    {pop, tensor} = Access.pop(hm.tensor, key)
+    {pop, put_in(hm.tensor, tensor)}
+  end
+
   defimpl Inspect do
     import Inspect.Algebra
 

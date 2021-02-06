@@ -89,4 +89,23 @@ defmodule Nx.HeatmapTest do
              """
     end
   end
+
+  describe "access" do
+    test "scalar" do
+      assert Nx.to_heatmap(Nx.tensor([[1, 2], [3, 4]]))[[0, 0]] == Nx.tensor(1)
+    end
+
+    test "non-scalar" do
+      assert Nx.to_heatmap(Nx.tensor([[1, 2], [3, 4]]))[0] ==
+               Nx.to_heatmap(Nx.tensor([1, 2]))
+
+      assert Nx.to_heatmap(Nx.tensor([[1, 2], [3, 4]]))[0..0] ==
+               Nx.to_heatmap(Nx.tensor([[1, 2]]))
+    end
+
+    test "preserves options" do
+assert Nx.to_heatmap(Nx.tensor([[1, 2], [3, 4]]), ansi_whitespace: "\s")[0] ==
+               Nx.to_heatmap(Nx.tensor([1, 2]), ansi_whitespace: "\s")
+    end
+  end
 end
