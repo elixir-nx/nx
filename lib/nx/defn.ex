@@ -272,11 +272,21 @@ defmodule Nx.Defn do
   Converts the anonymous function to a `defn`
   that is compiled on invocation.
 
-  This is often used to compile existing code
-  without a need to modify it. It can be used either
-  with regular Elixir code or `defn` functions.
   It returns a wrapped anonymous function that will
-  compile just-in-time to given compiler on execution.
+  convert all of its inputs into tensor expressions
+  which are compiled just-in-time to given compiler
+  when the anonymous function is invoked.
+
+  For example, take the following definition:
+
+      defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+
+  By default, invoking `softmax` will use the default
+  `Nx.Defn` compiler. But with `jit/2`, we can change
+  the compiler on the fly:
+
+      Nx.Defn.jit(&Mod.softmax/1, EXLA).(my_tensor)
+
   """
   def jit(fun, compiler \\ Nx.Defn, opts \\ [])
       when is_function(fun) and is_atom(compiler) and is_list(opts) do
