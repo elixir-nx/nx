@@ -1271,7 +1271,7 @@ defmodule Nx.BinaryTensor do
   end
 
   @impl true
-  def slice(out, tensor, start_indices, _limit_indices, strides) do
+  def slice(out, tensor, start_indices, _lengths, strides) do
     # If you think of a slice as drawing a bounding box in the dimensions
     # of the tensor, then it's clear we can simply use a weighted
     # traversal to construct the new tensor
