@@ -341,6 +341,23 @@ defmodule Nx.Defn.Kernel do
   def -tensor, do: Nx.negate(tensor)
 
   @doc """
+  Builds a range.
+
+  Ranges are inclusive and both sides must be integers.
+
+  ## Examples
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> t[1..2]
+      #Nx.Tensor<
+        s64[2]
+        [2, 3]
+      >
+
+  """
+  def first .. last, do: Range.new(first, last)
+
+  @doc """
   Element-wise addition operator.
 
   It delegates to `Nx.add/2` (supports broadcasting).

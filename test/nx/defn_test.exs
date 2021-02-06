@@ -371,13 +371,6 @@ defmodule Nx.DefnTest do
     test "~~~" do
       assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
     end
-
-    defn access_sum(a, opts \\ []), do: Nx.sum(a, axes: opts[:axes])
-
-    test "access" do
-      assert %T{data: %Expr{op: :sum, args: [_, [axes: [1], keep_axes: false]]}} =
-               access_sum(Nx.iota({2, 2}), axes: [1])
-    end
   end
 
   describe "kernel functions/macros" do
@@ -439,7 +432,7 @@ defmodule Nx.DefnTest do
 
     defn multi_access(t), do: t[1][2][3]
 
-    test "multi dimensional multi-access is collapsed" do
+    test "multi dimensional multi-access with integers is collapsed" do
       assert %T{data: %Expr{op: :squeeze, args: [slice, [0, 1, 2]]}, shape: {}} =
                 multi_access(Nx.iota({3, 4, 5}))
 
@@ -447,6 +440,34 @@ defmodule Nx.DefnTest do
                data: %Expr{op: :slice, args: [_, [1, 2, 3], [1, 1, 1], [1, 1, 1]]},
                shape: {1, 1, 1}
              } = slice
+    end
+
+    defn range_access(t), do: t[1][1..2]
+
+    test "multi dimensional multi-access with ranges is collapsed" do
+      assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {2, 5}} =
+                range_access(Nx.iota({3, 4, 5}))
+
+      assert %T{
+               data: %Expr{op: :slice, args: [_, [1, 1, 0], [1, 2, 5], [1, 1, 1]]},
+               shape: {1, 2, 5}
+             } = slice
+    end
+
+    defn keyword_access(t), do: t[z: 1..-2][y: 1..2]
+
+    test "multi dimensional multi-access with keywords is collapsed" do
+      assert %T{
+               data: %Expr{op: :slice, args: [_, [0, 1, 1], [3, 2, 3], [1, 1, 1]]},
+               shape: {3, 2, 3}
+             } = keyword_access(Nx.iota({3, 4, 5}, names: [:x, :y, :z]))
+    end
+
+    defn elixir_access(a, opts \\ []), do: Nx.sum(a, axes: opts[:axes])
+
+    test "also works for other Elixir data structures" do
+      assert %T{data: %Expr{op: :sum, args: [_, [axes: [1], keep_axes: false]]}} =
+               elixir_access(Nx.iota({2, 2}), axes: [1])
     end
   end
 

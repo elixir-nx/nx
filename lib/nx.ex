@@ -230,6 +230,9 @@ defmodule Nx do
         [4, 5]
       >
 
+  For a more complex slicing rules, including strides, you
+  can always fallback to `Nx.slice/4`.
+
   ## Devices
 
   The `Nx` library has built-in support for devices. A tensor is
