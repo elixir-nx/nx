@@ -1274,23 +1274,37 @@ defmodule Nx.BinaryTensor do
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
 
-    # Anchored around the start indices
-    anchor = List.to_tuple(start_indices)
-    weighted_shape = weighted_shape(shape, size, output_shape)
-    offset = weighted_offset(weighted_shape, anchor)
+    if top_dimension_slice?(Nx.rank(shape), shape, output_shape) do
+      length = Nx.size(output_shape) * div(size, 8)
+      offset = div(length, elem(output_shape, 0)) * hd(start_indices)
+      from_binary(out, binary_part(to_binary(tensor), offset, length))
+    else
+      # Anchored around the start indices
+      anchor = List.to_tuple(start_indices)
+      weighted_shape = weighted_shape(shape, size, output_shape)
+      offset = weighted_offset(weighted_shape, anchor)
 
-    # The weighted shape is altered such that we traverse
-    # with respect to the stride for each dimension
-    weighted_shape =
-      weighted_shape
-      |> Enum.zip(strides)
-      |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
+      # The weighted shape is altered such that we traverse
+      # with respect to the stride for each dimension
+      # TODO: Use Enum.zip_with on Elixir v1.12
+      weighted_shape =
+        weighted_shape
+        |> Enum.zip(strides)
+        |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
 
-    input_data = to_binary(tensor)
-    output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
-
-    from_binary(out, output_data)
+      input_data = to_binary(tensor)
+      output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
+      from_binary(out, output_data)
+    end
   end
+
+  defp top_dimension_slice?(1, _, _), do: true
+
+  defp top_dimension_slice?(i, is, os)
+       when :erlang.element(i, is) == :erlang.element(i, os),
+       do: top_dimension_slice?(i - 1, is, os)
+
+  defp top_dimension_slice?(_, _, _), do: false
 
   @impl true
   def concatenate(out, tensors, axis) do
