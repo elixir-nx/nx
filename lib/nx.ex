@@ -956,6 +956,87 @@ defmodule Nx do
   end
 
   @doc """
+  Converts the underlying tensor to a list of tensors.
+
+  The first dimension (axis 0) is divided by `batch_size`.
+  In case the dimension cannot be evenly divided by
+  `batch_size`, it raises an `ArgumentError`.
+
+  ## Examples
+
+      iex> [first, second] = Nx.to_batch(Nx.iota({2, 2, 2}), 1)
+      iex> first
+      #Nx.Tensor<
+        s64[1][2][2]
+        [
+          [
+            [0, 1],
+            [2, 3]
+          ]
+        ]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[1][2][2]
+        [
+          [
+            [4, 5],
+            [6, 7]
+          ]
+        ]
+      >
+
+      iex> [first, second, third] = Nx.to_batch(Nx.iota({6, 2}, names: [:x, :y]), 2)
+      iex> first
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [0, 1],
+          [2, 3]
+        ]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [4, 5],
+          [6, 7]
+        ]
+      >
+      iex> third
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [8, 9],
+          [10, 11]
+        ]
+      >
+
+  In case the dimension cannot be evenly divided by `batch_size`,
+  it raises an `ArgumentError`:
+
+      iex> Nx.to_batch(Nx.iota({3, 2}), 2)
+      ** (ArgumentError) cannot batch because axis 0 of size 3 is not divisible by batch_size 2
+  """
+  def to_batch(tensor, batch_size) when is_integer(batch_size) and batch_size >= 1 do
+    %{shape: shape} = tensor!(tensor)
+
+    if shape == {} do
+      raise ArgumentError, "cannot batch scalar tensor #{inspect(tensor)}"
+    end
+
+    higher = elem(shape, 0)
+
+    if rem(higher, batch_size) != 0 do
+      raise ArgumentError,
+            "cannot batch because axis 0 of size #{higher} " <>
+              "is not divisible by batch_size #{batch_size}"
+    end
+
+    impl!(tensor).to_batch(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor)
+  end
+
+  @doc """
   Returns the underlying tensor as a scalar.
 
   If the tensor has a dimension, it raises.
@@ -1048,11 +1129,9 @@ defmodule Nx do
       ** (ArgumentError) binary does not match the given size
 
   """
-  def from_binary(binary, type, names \\ nil) when is_binary(binary) do
+  def from_binary(binary, type) when is_binary(binary) do
     {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
-
-    names = Nx.Shape.named_axes!(names, {dim})
 
     if binary == "" do
       raise ArgumentError, "cannot build an empty tensor"
@@ -1062,7 +1141,7 @@ defmodule Nx do
       raise ArgumentError, "binary does not match the given size"
     end
 
-    Nx.BinaryTensor.from_binary(%T{type: type, shape: {dim}, names: names}, binary)
+    Nx.BinaryTensor.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary)
   end
 
   ## Meta operations (do not invoke the backend)
@@ -6494,7 +6573,7 @@ defmodule Nx do
         {k, _} ->
           if k not in valid do
             raise "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
-                  "expected one of #{inspect(valid)}"
+                    "expected one of #{inspect(valid)}"
           end
 
         _ ->

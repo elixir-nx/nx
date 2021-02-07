@@ -137,6 +137,15 @@ defmodule Nx.BinaryTensor do
     raise ArgumentError, "cannot transfer from #{inspect(data_device)} to #{inspect(device)}"
   end
 
+  @impl true
+  def to_batch(out, %{type: {_, size}} = tensor) do
+    bitsize = Nx.size(out) * size
+
+    for <<data::bitstring-size(bitsize) <- to_binary(tensor)>> do
+      from_binary(out, data)
+    end
+  end
+
   ## Shape
 
   @impl true

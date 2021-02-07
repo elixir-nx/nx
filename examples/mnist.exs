@@ -3,10 +3,6 @@ defmodule MNIST do
 
   @default_defn_compiler {EXLA, keep_on_device: true}
 
-  defn normalize_batch(batch) do
-    batch / 255.0
-  end
-
   defn init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1)
     b1 = Nx.random_normal({128}, 0.0, 0.1)
@@ -60,46 +56,57 @@ defmodule MNIST do
   end
 
   def normalize_images(images) do
-    images
-    |> Enum.map(&Nx.tensor(&1, type: {:u, 8}))
-    |> Enum.map(&normalize_batch/1)
+    Enum.map(images, &normalize_batch/1)
+  end
+
+  defn normalize_batch(batch) do
+    batch / 255.0
   end
 
   def normalize_labels(labels) do
-    labels
-    |> Enum.map(&Nx.tensor(&1, type: {:u, 8}))
+    Enum.map(labels, &Nx.tensor(&1, type: {:u, 8}))
   end
 
   def to_one_hot(x) do
     for i <- 0..9, do: if(x == i, do: 1, else: 0)
   end
 
-  def download(images, labels) do
+  defp unzip_cache_or_download(zip) do
     base_url = 'https://storage.googleapis.com/cvdf-datasets/mnist/'
+    path = Path.join("tmp", zip)
 
-    :inets.start()
-    :ssl.start()
+    data =
+      if File.exists?(path) do
+        IO.puts("Using #{zip} from tmp/\n")
+        File.read!(path)
+      else
+        IO.puts("Fetching #{zip} from https://storage.googleapis.com/cvdf-datasets/mnist/\n")
+        :inets.start()
+        :ssl.start()
 
-    # Download train images
-    {:ok, {_status, _response, train_image_data}} =
-      :httpc.request(:get, {base_url ++ images, []}, [], [])
+        {:ok, {_status, _response, data}} = :httpc.request(:get, {base_url ++ zip, []}, [], [])
+        File.mkdir_p!("tmp")
+        File.write!(path, data)
 
+        data
+      end
+
+    :zlib.gunzip(data)
+  end
+
+  def download(images, labels) do
     <<_::32, n_images::32, n_rows::32, n_cols::32, images::binary>> =
-      train_image_data |> :zlib.gunzip()
+      unzip_cache_or_download(images)
 
     train_images =
       images
-      |> :binary.bin_to_list()
-      |> Enum.chunk_every(784)
-      |> Enum.chunk_every(32)
+      |> Nx.from_binary({:u, 8})
+      |> Nx.reshape({n_images, n_rows * n_cols})
+      |> Nx.to_batch(32)
 
-    IO.puts("Downloaded #{n_images} #{n_rows}x#{n_cols} images\n")
+    IO.puts("#{n_images} #{n_rows}x#{n_cols} images\n")
 
-    # Download train labels
-    {:ok, {_status, _response, train_label_data}} =
-      :httpc.request(:get, {base_url ++ labels, []}, [], [])
-
-    <<_::32, n_labels::32, labels::binary>> = train_label_data |> :zlib.gunzip()
+    <<_::32, n_labels::32, labels::binary>> = unzip_cache_or_download(labels)
 
     train_labels =
       labels
@@ -107,7 +114,7 @@ defmodule MNIST do
       |> Enum.map(&to_one_hot/1)
       |> Enum.chunk_every(32)
 
-    IO.puts("Downloaded #{n_labels} labels\n")
+    IO.puts("#{n_labels} labels\n")
 
     {train_images, train_labels}
   end
@@ -154,8 +161,6 @@ defmodule MNIST do
     end
   end
 end
-
-IO.puts("Downloading dataset...\n")
 
 {train_images, train_labels} =
   MNIST.download('train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz')
