@@ -285,6 +285,9 @@ defmodule EXLA.NIF do
 
   def device_assignment_to_device_id(_exec, _replica, _partition), do: nif_error(__ENV__.function)
 
+  def await_streams(_client, _device_ordinal),
+    do: nif_error(__ENV__.function)
+
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 

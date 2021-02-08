@@ -114,7 +114,7 @@ defmodule EXLA.Client do
   def check_device_compatibility!(
         %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
         ordinal
-      ) do
+      ) when is_integer(ordinal) do
     cond do
       ordinal < 0 ->
         default_device_ordinal
@@ -125,6 +125,14 @@ defmodule EXLA.Client do
       true ->
         raise ArgumentError, "Invalid device ordinal."
     end
+  end
+
+  @doc """
+  Awaits for all running streams on the given device.
+  """
+  def await_streams(%Client{ref: ref} = client, device_id) do
+    device_id = check_device_compatibility!(client, device_id)
+    EXLA.NIF.await_streams(ref, device_id)
   end
 
   @doc """

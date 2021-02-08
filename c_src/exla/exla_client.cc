@@ -462,8 +462,6 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   EXLA_ASSIGN_OR_RETURN_NIF(xla::ExecutionOutput results,
     executable->RunAsync(std::move(inputs), run_options), env);
 
-  device->compute_stream()->BlockHostUntilDone();
-
   xla::ScopedShapedBuffer result_buffer = results.ConsumeResult();
 
   ExlaBuffer* buffer_ref =
@@ -473,17 +471,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                        ExlaBuffer::BufferType::kReference);
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-    ExlaBuffer::DecomposeBufferToTerm(env, buffer_ref, keep_on_device), env);
-
-  if (!keep_on_device) {
-    // TODO(seanmor5): Deallocation (especially GPU deallocation), seems
-    // to have a significant impact in hurting the performance of running
-    // on the GPU. It may not be best to do this deallocation explicitly
-    // but instead schedule the deallocation on a separate thread using
-    // something like enif_schedule_nif or enif_thread_create and return
-    // control to the host immediately.
-    delete buffer_ref;
-  }
+    ExlaBuffer::DecomposeBufferToTerm(env, buffer_ref, true), env);
 
   return term;
 }

@@ -1594,6 +1594,32 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
 
+ERL_NIF_TERM await_streams(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  int device_ordinal;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get(env, argv[1], &device_ordinal)) {
+    return exla::nif::error(env, "Unable to get device ordinal.");
+  }
+
+  exla::ExlaDevice* device = (*client)->device(device_ordinal);
+
+  xla::Status status = device->SynchronizeAllActivity();
+
+  if (!status.ok()) {
+    return exla::nif::error(env, status.error_message().c_str());
+  }
+
+  return exla::nif::ok(env);
+}
+
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1696,6 +1722,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_supported_platforms", 0, get_supported_platforms},
   {"device_assignment_to_device_id", 3, device_assignment_to_device_id},
   {"compile", 7, compile},
+  {"await_streams", 2, await_streams},
   // ExlaBuffer
   {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},

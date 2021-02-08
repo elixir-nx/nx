@@ -79,7 +79,13 @@ defmodule EXLA.Executable do
           |> unwrap!()
       end
 
-    decompose_output(data, output_shape, client, keep_on_device)
+    device_id = device_assignment_to_device_id(executable, replica, partition)
+    case EXLA.Client.await_streams(client, device_id) do
+      :ok ->
+        decompose_output(data, output_shape, client, keep_on_device)
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   def run_parallel(%Executable{} = executable, arguments, opts \\ []) do
@@ -125,6 +131,10 @@ defmodule EXLA.Executable do
     %ShardedBuffer{buffers: buffers, shape: output_shape}
   end
 
+  def device_assignment_to_device_id(%Executable{ref: exec}, replica, partition) do
+    EXLA.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
+  end
+
   defp decompose_output(data, shape, client, keep_on_device) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
@@ -138,7 +148,16 @@ defmodule EXLA.Executable do
         {:tuple, tuple}
 
       _ when is_reference(data) ->
-        Buffer.buffer({data, client.name}, shape)
+        if keep_on_device do
+          Buffer.buffer({data, client.name}, shape)
+        else
+          result =
+            {data, client.name}
+            |> Buffer.read()
+
+          Buffer.deallocate({data, client.name})
+          Buffer.buffer(result, shape)
+        end
 
       _ ->
         Buffer.buffer(data, shape)
