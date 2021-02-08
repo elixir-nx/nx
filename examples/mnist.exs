@@ -12,7 +12,7 @@ defmodule MNIST do
   end
 
   defn softmax(logits) do
-    Nx.exp(logits) / Nx.reshape(Nx.sum(Nx.exp(logits), axes: [1]), {30, 1})
+    Nx.exp(logits) / Nx.sum(Nx.exp(logits), axes: [1], keep_axes: true)
   end
 
   defn predict({w1, b1, w2, b2}, batch) do

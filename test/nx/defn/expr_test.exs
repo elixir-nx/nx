@@ -167,7 +167,7 @@ defmodule Nx.Defn.ExprTest do
                Nx.Defn.Expr
                parameter a                                     s64
                parameter c                                     s64
-               b = any? [ a, axes: nil ]                       u8
+               b = any? [ a, axes: nil, keep_axes: false ]     u8
                d = cond [ b -> {a, c}, :otherwise -> {c, a} ]  tuple2
                e = elem [ d, 0, 2 ]                            s64
              >\
@@ -178,7 +178,7 @@ defmodule Nx.Defn.ExprTest do
                Nx.Defn.Expr
                parameter a                                     s64
                parameter c                                     s64
-               b = any? [ a, axes: nil ]                       u8
+               b = any? [ a, axes: nil, keep_axes: false ]     u8
                d = cond [ b -> {a, c}, :otherwise -> {c, a} ]  tuple2
                e = elem [ d, 1, 2 ]                            s64
              >\

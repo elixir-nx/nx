@@ -1093,8 +1093,8 @@ defmodule EXLA.DefnTest do
 
     test "computes the maximum across types" do
       assert Nx.tensor([1, 2, 3]) |> reduce_max() == Nx.tensor(3)
-      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce_max() == Nx.tensor(3)
-      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce_max() == Nx.tensor(3, type: {:u, 64})
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce_max() == Nx.tensor(3, type: {:s, 8})
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce_max() == Nx.tensor(3, type: {:u, 8})
       assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_max() == Nx.tensor(3.0)
 
       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> reduce_max() ==
@@ -1129,8 +1129,8 @@ defmodule EXLA.DefnTest do
 
     test "computes the minimum across types" do
       assert Nx.tensor([1, 2, 3]) |> reduce_min() == Nx.tensor(1)
-      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce_min() == Nx.tensor(1)
-      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce_min() == Nx.tensor(1, type: {:u, 64})
+      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> reduce_min() == Nx.tensor(1, type: {:s, 8})
+      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> reduce_min() == Nx.tensor(1, type: {:u, 8})
       assert Nx.tensor([1.0, 2.0, 3.0]) |> reduce_min() == Nx.tensor(1.0)
 
       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> reduce_min() ==

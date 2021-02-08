@@ -3636,6 +3636,10 @@ defmodule Nx do
   counts the axis from the back. For example, `axes: [-1]`
   will always aggregate all rows.
 
+  You may optionally set `:keep_axes` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axes to size 1.
+
   ## Examples
 
       iex> Nx.all?(Nx.tensor([0, 1, 2]))
@@ -3657,20 +3661,7 @@ defmodule Nx do
       >
   """
   def all?(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes])
-    %{shape: shape, names: names} = tensor = tensor!(tensor)
-
-    {shape, names, axes} =
-      if axes = opts[:axes] do
-        axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, false)
-        {new_shape, new_names, axes}
-      else
-        {{}, [], nil}
-      end
-
-    out = %{tensor | type: {:u, 8}, shape: shape, names: names}
-    impl!(tensor).all?(out, tensor, axes: axes)
+    aggregate_axes_op(tensor!(tensor), :all?, {:u, 8}, opts)
   end
 
   @doc """
@@ -3683,6 +3674,10 @@ defmodule Nx do
   dimension and so forth. If the axis is negative, then
   counts the axis from the back. For example, `axes: [-1]`
   will always aggregate all rows.
+
+  You may optionally set `:keep_axes` to true, which will
+  retain the rank of the input tensor by setting the reduced
+  axes to size 1.
 
   ## Examples
 
@@ -3705,55 +3700,7 @@ defmodule Nx do
       >
   """
   def any?(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes])
-    %{shape: shape, names: names} = tensor = tensor!(tensor)
-
-    {shape, names, axes} =
-      if axes = opts[:axes] do
-        axes = Nx.Shape.normalize_axes(shape, axes, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, false)
-        {new_shape, new_names, axes}
-      else
-        {{}, [], nil}
-      end
-
-    out = %{tensor | type: {:u, 8}, shape: shape, names: names}
-    impl!(tensor).any?(out, tensor, axes: axes)
-  end
-
-  defp aggregate_axes_op(tensor, opts, op) do
-    assert_keys!(opts, [:axes, :keep_axes])
-    keep_axes = opts[:keep_axes] || false
-
-    %{shape: shape, type: type, names: names} = tensor = tensor!(tensor)
-
-    {shape, names, axes} =
-      cond do
-        axes = opts[:axes] ->
-          axes = Nx.Shape.normalize_axes(shape, axes, names)
-          {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
-          {new_shape, new_names, axes}
-
-        keep_axes ->
-          shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
-          {shape, names, nil}
-
-        true ->
-          {{}, [], nil}
-      end
-
-    type =
-      case type do
-        {:u, _} -> {:u, 64}
-        {:s, _} -> {:s, 64}
-        type -> type
-      end
-
-    apply(impl!(tensor), op, [
-      %{tensor | type: type, shape: shape, names: names},
-      tensor,
-      [axes: axes, keep_axes: keep_axes]
-    ])
+    aggregate_axes_op(tensor!(tensor), :any?, {:u, 8}, opts)
   end
 
   @doc """
@@ -3887,7 +3834,18 @@ defmodule Nx do
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
   """
-  def sum(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :sum)
+  def sum(tensor, opts \\ []) do
+    tensor = tensor!(tensor)
+
+    type =
+      case tensor.type do
+        {:u, _} -> {:u, 64}
+        {:s, _} -> {:s, 64}
+        type -> type
+      end
+
+    aggregate_axes_op(tensor, :sum, type, opts)
+  end
 
   @doc """
   Returns the mean for the tensor.
@@ -4116,7 +4074,18 @@ defmodule Nx do
       iex> Nx.product(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
   """
-  def product(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :product)
+  def product(tensor, opts \\ []) do
+    tensor = tensor!(tensor)
+
+    type =
+      case tensor.type do
+        {:u, _} -> {:u, 64}
+        {:s, _} -> {:s, 64}
+        type -> type
+      end
+
+    aggregate_axes_op(tensor, :product, type, opts)
+  end
 
   @doc """
   Returns the maximum values of the tensor.
@@ -4186,7 +4155,10 @@ defmodule Nx do
       >
 
   """
-  def reduce_max(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :reduce_max)
+  def reduce_max(tensor, opts \\ []) do
+    tensor = tensor!(tensor)
+    aggregate_axes_op(tensor, :reduce_max, tensor.type, opts)
+  end
 
   @doc """
   Returns the minimum values of the tensor.
@@ -4256,7 +4228,36 @@ defmodule Nx do
       >
 
   """
-  def reduce_min(tensor, opts \\ []), do: aggregate_axes_op(tensor, opts, :reduce_min)
+  def reduce_min(tensor, opts \\ []) do
+    tensor = tensor!(tensor)
+    aggregate_axes_op(tensor, :reduce_min, tensor.type, opts)
+  end
+
+  defp aggregate_axes_op(%T{shape: shape, names: names} = tensor, op, type, opts) do
+    assert_keys!(opts, [:axes, :keep_axes])
+    keep_axes = opts[:keep_axes] || false
+
+    {shape, names, axes} =
+      cond do
+        axes = opts[:axes] ->
+          axes = Nx.Shape.normalize_axes(shape, axes, names)
+          {new_shape, new_names} = Nx.Shape.contract(shape, axes, names, keep_axes)
+          {new_shape, new_names, axes}
+
+        keep_axes ->
+          shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
+          {shape, names, nil}
+
+        true ->
+          {{}, [], nil}
+      end
+
+    apply(impl!(tensor), op, [
+      %{tensor | type: type, shape: shape, names: names},
+      tensor,
+      [axes: axes, keep_axes: keep_axes]
+    ])
+  end
 
   @doc """
   Returns the indices of the maximum values.

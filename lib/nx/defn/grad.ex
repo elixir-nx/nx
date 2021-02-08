@@ -478,12 +478,15 @@ defmodule Nx.Defn.Grad do
   ## Helpers
 
   defp grad_reduce(x, opts, g, cache, fun) do
+    axes = opts[:axes]
+    keep_axes = opts[:keep_axes]
+
     g =
-      if axes = opts[:axes] do
+      if keep_axes || !axes do
+        Nx.broadcast(g, x)
+      else
         axes = Nx.axes(x.shape) -- axes
         Nx.broadcast(g, x, axes: axes)
-      else
-        Nx.broadcast(g, x)
       end
 
     to_grad(x, fun.(g), cache)

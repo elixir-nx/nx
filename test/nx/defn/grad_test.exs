@@ -745,6 +745,21 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
+    defn grad_log_sum_keep_sin_sum(t),
+      do: grad(t, t |> Nx.log() |> Nx.sum(axes: [1], keep_axes: true) |> Nx.sin() |> Nx.sum())
+
+    test "computes log + sum(keep_axes) + sin + sum" do
+      lhs = grad_log_sum_keep_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+
+      rhs =
+        Nx.tensor([
+          [-0.21916944995978982, -0.10958472497989491, -0.07305648331992994],
+          [0.01875804509762369, 0.015006436078098952, 0.012505363398415794]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
     defn grad_sum_0_mean(t), do: grad(t, t |> Nx.sum(axes: [0]) |> Nx.mean())
     defn grad_sum_1_mean(t), do: grad(t, t |> Nx.sum(axes: [1]) |> Nx.mean())
 
