@@ -51,12 +51,12 @@ defmodule MNIST do
     }
   end
 
-  defn average(cur_avg, batch, total) do
-    cur_avg + batch / total
-  end
-
-  defn normalize_batch(batch) do
-    batch / 255.0
+  defn update_with_averages({_, _, _, _} = cur_params, imgs, tar, avg_loss, avg_accuracy, total) do
+    batch_loss = loss(cur_params, imgs, tar)
+    batch_accuracy = accuracy(cur_params, imgs, tar)
+    avg_loss = avg_loss + batch_loss / total
+    avg_accuracy = avg_accuracy + batch_accuracy / total
+    {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
   end
 
   defp unzip_cache_or_download(zip) do
@@ -114,22 +114,17 @@ defmodule MNIST do
 
     imgs
     |> Enum.zip(labels)
-    |> Enum.reduce({cur_params, Nx.tensor(0.0), Nx.tensor(0.0)}, fn {imgs, tar},
-                                                                    {cur_params, avg_loss,
-                                                                     avg_accuracy} ->
-      batch_loss = loss(cur_params, imgs, tar)
-      batch_accuracy = accuracy(cur_params, imgs, tar)
-      avg_loss = average(avg_loss, batch_loss, total_batches)
-      avg_accuracy = average(avg_accuracy, batch_accuracy, total_batches)
-      {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
+    |> Enum.reduce({cur_params, Nx.tensor(0.0), Nx.tensor(0.0)}, fn
+      {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
+        update_with_averages(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)
     end)
   end
 
   def train(imgs, labels, params, opts \\ []) do
     epochs = opts[:epochs] || 5
 
-    for epoch <- 1..epochs, reduce: {params, Nx.tensor(0.0), Nx.tensor(0.0)} do
-      {cur_params, _, _} ->
+    for epoch <- 1..epochs, reduce: params do
+      cur_params ->
         {time, {new_params, epoch_avg_loss, epoch_avg_acc}} =
           :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
 
@@ -147,7 +142,7 @@ defmodule MNIST do
         IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")
         IO.puts("Epoch #{epoch} average accuracy: #{inspect(epoch_avg_acc)}")
         IO.puts("\n")
-        {new_params, Nx.tensor(0.0), Nx.tensor(0.0)}
+        new_params
     end
   end
 end
@@ -159,6 +154,6 @@ IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
 IO.puts("Training MNIST for 10 epochs...\n\n")
-{final_params, _, _} = MNIST.train(train_images, train_labels, params, epochs: 10)
+final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
 IO.inspect(Enum.map(Tuple.to_list(final_params), &Nx.device_transfer/1))

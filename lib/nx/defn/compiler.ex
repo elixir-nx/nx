@@ -95,7 +95,8 @@ defmodule Nx.Defn.Compiler do
       file: file,
       line: line,
       function: nil,
-      exports: exports
+      exports: exports,
+      rewrite_underscore?: false
     }
 
     quoted = Enum.map(exports, &compile_each(&1, state))
@@ -170,7 +171,7 @@ defmodule Nx.Defn.Compiler do
 
   defp get_and_normalize_definition(def, state) do
     {:v1, kind, meta, clauses} = Nx.Defn.Module.get_definition(state.module, def)
-    state = %{state | function: def, line: meta[:line] || state.line}
+    state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
     case clauses do
       [] ->
@@ -178,9 +179,15 @@ defmodule Nx.Defn.Compiler do
 
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
-        {ast, state} = normalize(ast, state)
-        assert_uniq_vars!(args, state)
-        {{kind, meta, args, ast}, state}
+        {ast, state} = normalize(ast, %{state | rewrite_underscore?: false})
+
+        case extract_assigns(args, state) do
+          {_, []} ->
+            {{kind, meta, args, ast}, state}
+
+          {args, assigns} ->
+            {{kind, meta, args, {:__block__, meta, assigns ++ [ast]}}, state}
+        end
 
       [_, _ | _] ->
         compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
@@ -210,7 +217,6 @@ defmodule Nx.Defn.Compiler do
     {clauses, state} =
       Enum.map_reduce(clauses, state, fn {:->, clause_meta, [args, body]}, state ->
         {args, state} = normalize_args(args, meta, state)
-        assert_uniq_vars!(args, state)
         {body, state} = normalize(body, state)
         {{:->, clause_meta, [args, body]}, state}
       end)
@@ -365,35 +371,38 @@ defmodule Nx.Defn.Compiler do
   ## Normalize args
 
   defp normalize_args(args, meta, state) when is_list(args) do
-    Enum.map_reduce(args, state, &normalize_args(&1, meta, &2))
+    {args, state} = Enum.map_reduce(args, state, &normalize_arg(&1, meta, &2))
+    assert_uniq_vars!(args, state)
+    {args, state}
   end
 
-  defp normalize_args(var, _meta, state) when is_var(var) do
-    normalize(var, state)
+  defp normalize_arg(var, _meta, state) when is_var(var) do
+    if state.rewrite_underscore? and is_underscore(var) do
+      # TODO: Use Macro.unique_var on Elixir v1.12
+      {{:arg, [counter: :elixir_module.next_counter(state.module)], state.module}, state}
+    else
+      normalize(var, state)
+    end
   end
 
-  defp normalize_args({:{}, meta, args}, _meta, state) do
-    {args, state} = normalize_args(args, meta, state)
-    {{:{}, meta, args}, state}
+  defp normalize_arg({op, meta, args}, _meta, state) when op in [:{}, :=] do
+    {args, state} = Enum.map_reduce(args, state, &normalize_arg(&1, meta, &2))
+    {{op, meta, args}, state}
   end
 
-  defp normalize_args({left, right}, meta, state) do
-    {args, state} = normalize_args([left, right], meta, state)
-    {{:{}, meta, args}, state}
+  defp normalize_arg({left, right}, meta, state) do
+    {left, state} = normalize_arg(left, meta, state)
+    {right, state} = normalize_arg(right, meta, state)
+    {{:{}, meta, [left, right]}, state}
   end
 
-  defp normalize_args(expr, meta, state) do
+  defp normalize_arg(expr, meta, state) do
     compile_error!(
       meta,
       state,
       "only variables and tuples are allowed as arguments in defn, got: #{Macro.to_string(expr)}"
     )
   end
-
-  ## Helpers
-
-  defp maybe_meta({_, meta, _}), do: meta
-  defp maybe_meta(_), do: []
 
   defp assert_uniq_vars!(ast, state) do
     Macro.prewalk(ast, %{}, fn
@@ -420,6 +429,35 @@ defmodule Nx.Defn.Compiler do
 
     :ok
   end
+
+  defp extract_assigns(args, state) do
+    Macro.prewalk(args, [], fn
+      {:=, meta, [left, right]} = expr, acc ->
+        cond do
+          is_var(left) ->
+            {right, [{:=, meta, [left, right]} | acc]}
+
+          is_var(right) ->
+            {left, [{:=, meta, [right, left]} | acc]}
+
+          true ->
+            compile_error!(
+              meta,
+              state,
+              "using = in arguments expects at least one of the sides to be a variable, " <>
+                "got: #{Macro.to_string(expr)}"
+            )
+        end
+
+      node, acc ->
+        {node, acc}
+    end)
+  end
+
+  ## Helpers
+
+  defp maybe_meta({_, meta, _}), do: meta
+  defp maybe_meta(_), do: []
 
   defp compile_error!(meta, state, description) do
     line = meta[:line] || state.line

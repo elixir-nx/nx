@@ -38,6 +38,21 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "tuple" do
+    defn tuple_shape_match({_, _} = var) do
+      {a, b} = var
+      a + b
+    end
+
+    test "allows pattern matching on the tuple shape with underscores" do
+      assert %T{shape: {}, type: {:f, 64}, data: %Expr{op: :add, args: [left, right]}} =
+          tuple_shape_match({1, 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 64}} = right
+    end
+  end
+
   describe "unary ops" do
     defn exp(t), do: Nx.exp(t)
 
@@ -434,7 +449,7 @@ defmodule Nx.DefnTest do
 
     test "multi dimensional multi-access with integers is collapsed" do
       assert %T{data: %Expr{op: :squeeze, args: [slice, [0, 1, 2]]}, shape: {}} =
-                multi_access(Nx.iota({3, 4, 5}))
+               multi_access(Nx.iota({3, 4, 5}))
 
       assert %T{
                data: %Expr{op: :slice, args: [_, [1, 2, 3], [1, 1, 1], [1, 1, 1]]},
@@ -446,7 +461,7 @@ defmodule Nx.DefnTest do
 
     test "multi dimensional multi-access with ranges is collapsed" do
       assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {2, 5}} =
-                range_access(Nx.iota({3, 4, 5}))
+               range_access(Nx.iota({3, 4, 5}))
 
       assert %T{
                data: %Expr{op: :slice, args: [_, [1, 1, 0], [1, 2, 5], [1, 1, 1]]},
@@ -454,7 +469,7 @@ defmodule Nx.DefnTest do
              } = slice
     end
 
-    defn keyword_access(t), do: t[z: 1..-2][y: 1..2]
+    defn keyword_access(t), do: t[[z: 1..-2]][[y: 1..2]]
 
     test "multi dimensional multi-access with keywords is collapsed" do
       assert %T{
@@ -880,13 +895,24 @@ defmodule Nx.DefnTest do
       end
     end
 
-    test "non variables used as arguments" do
+    test "non-variables used as arguments" do
       assert_raise CompileError,
                    ~r"#{location(+4)}: only variables and tuples are allowed as arguments in defn",
                    fn ->
                      defmodule Sample do
                        import Nx.Defn
                        defn add(1, 2), do: 3
+                     end
+                   end
+    end
+
+    test "non-variables matching as arguments" do
+      assert_raise CompileError,
+                   ~r"#{location(+4)}: using = in arguments expects at least one of the sides to be a variable, got: {arg, arg} = {arg, arg}",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+                       defn add({_, _} = {_, _}, x), do: x
                      end
                    end
     end

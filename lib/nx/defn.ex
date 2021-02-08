@@ -151,7 +151,16 @@ defmodule Nx.Defn do
         a * b + c
       end
 
-  If you write the latter format, `defn` will raise.
+  This, however, works:
+
+      defn my_example({_, _} = ab, c) do
+        {a, b} = ab
+        a * b + c
+      end
+
+  In other words, it is important for `defn` to the see the shapes
+  of the input. If you write the latter format and call `defn` from
+  Elixir, `defn` will raise.
 
   ## Invoking custom Elixir code
 
