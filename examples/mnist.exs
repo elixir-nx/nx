@@ -12,7 +12,7 @@ defmodule MNIST do
   end
 
   defn softmax(logits) do
-    Nx.exp(logits) / Nx.reshape(Nx.sum(Nx.exp(logits), axes: [1]), {32, 1})
+    Nx.exp(logits) / Nx.reshape(Nx.sum(Nx.exp(logits), axes: [1]), {30, 1})
   end
 
   defn predict({w1, b1, w2, b2}, batch) do
@@ -55,20 +55,8 @@ defmodule MNIST do
     cur_avg + batch / total
   end
 
-  def normalize_images(images) do
-    Enum.map(images, &normalize_batch/1)
-  end
-
   defn normalize_batch(batch) do
     batch / 255.0
-  end
-
-  def normalize_labels(labels) do
-    Enum.map(labels, &Nx.tensor(&1, type: {:u, 8}))
-  end
-
-  def to_one_hot(x) do
-    for i <- 0..9, do: if(x == i, do: 1, else: 0)
   end
 
   defp unzip_cache_or_download(zip) do
@@ -102,7 +90,8 @@ defmodule MNIST do
       images
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_images, n_rows * n_cols})
-      |> Nx.to_batch(32)
+      |> Nx.divide(255)
+      |> Nx.to_batch(30)
 
     IO.puts("#{n_images} #{n_rows}x#{n_cols} images\n")
 
@@ -110,9 +99,10 @@ defmodule MNIST do
 
     train_labels =
       labels
-      |> :binary.bin_to_list()
-      |> Enum.map(&to_one_hot/1)
-      |> Enum.chunk_every(32)
+      |> Nx.from_binary({:u, 8})
+      |> Nx.new_axis(-1)
+      |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
+      |> Nx.to_batch(30)
 
     IO.puts("#{n_labels} labels\n")
 
@@ -164,11 +154,6 @@ end
 
 {train_images, train_labels} =
   MNIST.download('train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz')
-
-IO.puts("Normalizing images and labels...\n")
-
-{train_images, train_labels} =
-  {MNIST.normalize_images(train_images), MNIST.normalize_labels(train_labels)}
 
 IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()

@@ -1259,6 +1259,88 @@ defmodule Nx do
   end
 
   @doc """
+  Adds a new `axis` of size 1 with optional `name`.
+
+  ## Examples
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.new_axis(t, 0, :new)
+      #Nx.Tensor<
+        s64[new: 1][2][3]
+        [
+          [
+            [1, 2, 3],
+            [4, 5, 6]
+          ]
+        ]
+      >
+      iex> Nx.new_axis(t, 1, :new)
+      #Nx.Tensor<
+        s64[2][new: 1][3]
+        [
+          [
+            [1, 2, 3]
+          ],
+          [
+            [4, 5, 6]
+          ]
+        ]
+      >
+      iex> Nx.new_axis(t, 2, :new)
+      #Nx.Tensor<
+        s64[2][3][new: 1]
+        [
+          [
+            [1],
+            [2],
+            [3]
+          ],
+          [
+            [4],
+            [5],
+            [6]
+          ]
+        ]
+      >
+
+  Axis can also be negative, which will start from the back:
+
+      iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.new_axis(t, -1, :new)
+      #Nx.Tensor<
+        s64[2][3][new: 1]
+        [
+          [
+            [1],
+            [2],
+            [3]
+          ],
+          [
+            [4],
+            [5],
+            [6]
+          ]
+        ]
+      >
+
+  """
+  def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
+    %{shape: shape, names: names} = tensor = tensor!(tensor)
+    rank = tuple_size(shape)
+    norm = if axis < 0, do: axis + rank + 1, else: axis
+
+    if norm not in 0..tuple_size(shape) do
+      raise ArgumentError,
+            "new axis position for shape #{inspect(shape)} must be " <>
+            "a number between #{-rank-1} and #{rank}, got: #{axis}"
+    end
+
+    new_shape = Tuple.insert_at(shape, norm, 1)
+    new_names = List.insert_at(names, norm, name)
+    impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor, new_shape)
+  end
+
+  @doc """
   Squeezes the given size `1` dimensions out of the tensor.
 
   If no axes are given, squeezes all size `1` dimensions
