@@ -78,7 +78,7 @@ defmodule EXLA do
 
   ## Device allocation
 
-  EXLA also ships with a `EXLA.NxDevice` that allows data to be
+  EXLA also ships with a `EXLA.Device` that allows data to be
   either be explicitly allocated or kept on the device after a
   computation. For example:
 
@@ -105,7 +105,7 @@ defmodule EXLA do
   device before invoking a `defn` function:
 
       # Explicitly move data to the device, useful for GPU
-      Nx.device_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.NxDevice)
+      Nx.device_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.Device)
 
   ## Docker considerations
 

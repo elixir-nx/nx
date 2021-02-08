@@ -1,16 +1,16 @@
-defmodule EXLA.NxDeviceTest do
+defmodule EXLA.DeviceTest do
   use ExUnit.Case, async: true
 
   describe "nx device" do
     test "transfers data from nx<->device" do
       t = Nx.tensor([1, 2, 3, 4])
 
-      et = Nx.device_transfer(t, EXLA.NxDevice)
-      assert %Nx.BinaryTensor{device: EXLA.NxDevice, state: {ref, :default}} = et.data
+      et = Nx.device_transfer(t, EXLA.Device)
+      assert %Nx.BinaryTensor{device: EXLA.Device, state: {ref, :default}} = et.data
       assert is_reference(ref)
 
       assert_raise ArgumentError,
-                   ~r"cannot read Nx.Tensor data because the data is allocated on device EXLA.NxDevice",
+                   ~r"cannot read Nx.Tensor data because the data is allocated on device EXLA.Device",
                    fn -> Nx.to_binary(et) end
 
       nt = Nx.device_transfer(et)
@@ -26,7 +26,7 @@ defmodule EXLA.NxDeviceTest do
     test "multiple reads and deallocation" do
       t = Nx.tensor([1, 2, 3, 4])
 
-      et = Nx.device_transfer(t, EXLA.NxDevice, key: :tensor)
+      et = Nx.device_transfer(t, EXLA.Device, key: :tensor)
       assert Nx.device_read(et) == t
       assert Nx.device_read(et) == t
       assert Nx.device_deallocate(et) == :ok
@@ -42,7 +42,7 @@ defmodule EXLA.NxDeviceTest do
       assert_raise ArgumentError,
                    ~r"could not find EXLA client named :unknown",
                    fn ->
-                     Nx.device_transfer(Nx.tensor([1, 2]), EXLA.NxDevice, client: :unknown)
+                     Nx.device_transfer(Nx.tensor([1, 2]), EXLA.Device, client: :unknown)
                    end
     end
   end

@@ -156,4 +156,4 @@ params = MNIST.init_random_params()
 IO.puts("Training MNIST for 10 epochs...\n\n")
 final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
-IO.inspect(Enum.map(Tuple.to_list(final_params), &Nx.device_transfer/1))
+IO.inspect(Nx.device_transfer(final_params))

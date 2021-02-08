@@ -1,4 +1,4 @@
-defmodule EXLA.NxDevice do
+defmodule EXLA.Device do
   @moduledoc """
   The EXLA implementation of `Nx.Device`.
   """

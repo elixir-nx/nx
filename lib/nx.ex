@@ -1908,30 +1908,42 @@ defmodule Nx do
   @doc """
   Transfers data to the given device.
 
-  If a device is not given, `Nx.BinaryDevice` is used, which means
-  the data is read into an Elixir binary. If the device is already
-  `Nx.BinaryDevice`, it returns the tensor as is.
+  If a device is not given, `Nx.Device` is used, which means the
+  tensor implementation will pick the most appropriate device.
+  For Elixir's builtin tensor, that's `Nx.BinaryDevice`.
 
-  If a separate device is given, the data will be moved to the new
-  device. Once transfer is done, the data is deallocated from the
-  current tensor device. If the device has already been deallocated,
-  it raises.
+  If the tensor is already using `Nx.BinaryDevice`, the tensor is
+  returned as is. If a different device is given, the data will be
+  moved to the new device. Once transfer is done, the data is
+  deallocated from the current tensor device. If the device has
+  already been deallocated, it raises.
 
-  At the moment, you can only transfer data from `Nx.BinaryDevice`
-  to other devices and vice-versa but not between ad-hoc devices.
+  For convenience, this function accepts a tuple as argument
+  and transfers all tensors in the tuple. This behaviour exists
+  as it is common to transfer data from tuples before and after
+  `defn` functions.
 
   ## Examples
 
   Move a tensor to a device:
 
-      device_tensor = Nx.device_transfer(tensor, EXLA.NxDevice, client: :cuda)
+      device_tensor = Nx.device_transfer(tensor, EXLA.Device, client: :cuda)
 
   Read the device tensor back to an Elixir binary:
 
-      tensor = Nx.device_transfer(tensor)
+      tensor = Nx.device_transfer(device_tensor)
 
   """
-  def device_transfer(tensor, device \\ Nx.BinaryDevice, opts \\ []) do
+  def device_transfer(tuple_or_tensor, device \\ Nx.Device, opts \\ [])
+
+  def device_transfer(tuple, device, opts) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&device_transfer(&1, device, opts))
+    |> List.to_tuple()
+  end
+
+  def device_transfer(tensor, device, opts) do
     tensor = tensor!(tensor)
     impl!(tensor).device_transfer(tensor, device, opts)
   end
@@ -1939,10 +1951,25 @@ defmodule Nx do
   @doc """
   Reads data allocated in a device.
 
-  It returns a tensor where the device is `Nx.BinaryDevice`.
-  The data is not deallocated from the current device. If the
-  device has already been deallocated, it raises.
+  For Nx's built tensor, it returns a tensor where the device
+  is a `Nx.BinaryDevice`. The data is not deallocated from the
+  current device. If the device has already been deallocated,
+  it raises.
+
+  For convenience, this function accepts a tuple as argument
+  and reads all tensors in the tuple. This behaviour exists
+  as it is common to read data from tuples after `defn`
+  functions.
   """
+  def device_read(tuple_or_tensor)
+
+  def device_read(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&device_read/1)
+    |> List.to_tuple()
+  end
+
   def device_read(tensor) do
     tensor = tensor!(tensor)
     impl!(tensor).device_read(tensor)
@@ -1952,7 +1979,21 @@ defmodule Nx do
   Deallocates data in a device.
 
   It returns either `:ok` or `:already_deallocated`.
+
+  For convenience, this function accepts a tuple as argument
+  and deallocates all devices in the tuple. This behaviour
+  exists as it is common to deallocaate data from tuples after
+  `defn` functions.
   """
+  def device_deallocate(tuple_or_tensor)
+
+  def device_deallocate(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&device_deallocate/1)
+    |> List.to_tuple()
+  end
+
   def device_deallocate(tensor) do
     tensor = tensor!(tensor)
     impl!(tensor).device_deallocate(tensor)

@@ -4,11 +4,12 @@ defmodule Nx.Device do
   """
 
   @type state :: term
+  @type data :: term
 
   @doc """
   Allocates the given data on the device.
   """
-  @callback allocate(binary, Nx.Tensor.type(), Nx.Tensor.shape(), opts :: keyword) ::
+  @callback allocate(data, Nx.Tensor.type(), Nx.Tensor.shape(), opts :: keyword) ::
               {module, state}
 
   @doc """
@@ -16,7 +17,7 @@ defmodule Nx.Device do
 
   If reading a deallocated device, you must raise.
   """
-  @callback read(state) :: term
+  @callback read(state) :: data
 
   @doc """
   Deallocates the data on the device.

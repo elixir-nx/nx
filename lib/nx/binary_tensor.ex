@@ -104,7 +104,8 @@ defmodule Nx.BinaryTensor do
   def to_binary(%T{data: %{device: device}}) do
     raise ArgumentError,
           "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
-            "Please use Nx.device_transfer/1 to transfer data back to Elixir"
+            "Cross-transfer between devices is not currently support. Please use Nx.device_transfer/1 " <>
+            "to transfer data back to Elixir first"
   end
 
   @impl true
@@ -121,6 +122,14 @@ defmodule Nx.BinaryTensor do
   end
 
   @impl true
+  def device_transfer(tensor, Nx.Device, opts) do
+    device_transfer(tensor, Nx.BinaryDevice, opts)
+  end
+
+  def device_transfer(%T{data: %{device: Nx.BinaryDevice}} = tensor, Nx.BinaryDevice, _opts) do
+    tensor
+  end
+
   def device_transfer(%T{data: %{device: Nx.BinaryDevice}} = tensor, device, opts) do
     %{type: type, shape: shape} = tensor
     {device, state} = device.allocate(to_binary(tensor), type, shape, opts)
@@ -1302,7 +1311,10 @@ defmodule Nx.BinaryTensor do
         |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
 
       input_data = to_binary(tensor)
-      output_data = IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
+
+      output_data =
+        IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
+
       from_binary(out, output_data)
     end
   end

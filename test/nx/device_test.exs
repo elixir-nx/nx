@@ -1,7 +1,7 @@
 defmodule Nx.DeviceTest do
   use ExUnit.Case, async: true
 
-  test "transfers data from nx<->device" do
+  test "transfers data from nx<->defaultdevice" do
     t = Nx.tensor([1, 2, 3, 4])
 
     pt = Nx.device_transfer(t, Nx.ProcessDevice, key: :tensor)
@@ -17,6 +17,18 @@ defmodule Nx.DeviceTest do
     refute Process.get(:tensor)
 
     assert_raise RuntimeError, "deallocated", fn -> Nx.device_transfer(pt) end
+  end
+
+  test "transfers data from nx<->binarydevice" do
+    t = Nx.tensor([1, 2, 3, 4])
+
+    pt = Nx.device_transfer(t, Nx.ProcessDevice, key: :tensor)
+    assert pt.data == %Nx.BinaryTensor{device: Nx.ProcessDevice, state: :tensor}
+    assert Process.get(:tensor)
+
+    nt = Nx.device_transfer(pt, Nx.BinaryDevice)
+    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    refute Process.get(:tensor)
   end
 
   test "multiple reads and deallocation" do
@@ -43,5 +55,12 @@ defmodule Nx.DeviceTest do
     assert_raise ArgumentError,
                  ~r"cannot transfer from Nx.ProcessDevice to UnknownDevice",
                  fn -> Nx.device_transfer(pt, UnknownDevice, :whatever) end
+  end
+
+  test "tuples" do
+    tuple = {Nx.tensor(1), Nx.tensor(2)}
+    assert Nx.device_transfer(tuple) == tuple
+    assert Nx.device_read(tuple) == tuple
+    assert Nx.device_deallocate(tuple) == {:ok, :ok}
   end
 end
