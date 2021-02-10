@@ -88,6 +88,7 @@ cc_binary(
     ":exla_nif_util",
     ":exla_client",
     ":exla_aot_compilation",
+    ":exla_log_sink",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla:comparison_util",

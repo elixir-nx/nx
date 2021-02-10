@@ -1735,30 +1735,45 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if(argc != 5){
-    return exla::error(env, "Bad argument count.");
+    return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaComputation* computation;
   std::string aot_path, function_name, pbtext_path, class_name;
 
-  if(!exla::get<xla::XlaComputation>(env, argv[0], computation)) return exla::error(env, "Unable to get computation.");
-  if(!exla::get(env, argv[1], pbtext_path)) return exla::error(env, "Unable to get Graph Config Path.");
-  if(!exla::get(env, argv[2], aot_path)) return exla::error(env, "Unable to get TF Path.");
-  if(!exla::get(env, argv[3], function_name)) return exla::error(env, "Unable to get function name.");
-  if(!exla::get(env, argv[4], class_name)) return exla::error(env, "Unable to get class name.");
-
-  xla::Status compile_status = exla::CompileComputation(*computation, pbtext_path, aot_path, function_name, class_name);
-
-  if(!compile_status.ok()) {
-    return exla::error(env, compile_status.error_message().c_str());
+  if(!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
+    return exla::nif::error(env, "Unable to get computation.");
+  }
+  if(!exla::nif::get(env, argv[1], pbtext_path)) {
+    return exla::nif::error(env, "Unable to get Graph Config Path.");
+  }
+  if(!exla::nif::get(env, argv[2], aot_path)) {
+    return exla::nif::error(env, "Unable to get TF Path.");
+  }
+  if(!exla::nif::get(env, argv[3], function_name)) {
+    return exla::nif::error(env, "Unable to get function name.");
+  }
+  if(!exla::nif::get(env, argv[4], class_name)) {
+    return exla::nif::error(env, "Unable to get class name.");
   }
 
-  std::string object_path = aot_path+function_name+".o";
-  std::string header_path = aot_path+function_name+".h";
-  ERL_NIF_TERM object_path_term = exla::make(env, object_path.c_str());
-  ERL_NIF_TERM header_path_term = exla::make(env, header_path.c_str());
+  xla::Status compile_status =
+    exla::CompileComputation(*computation,
+                             pbtext_path,
+                             aot_path,
+                             function_name,
+                             class_name);
 
-  return exla::ok(env, enif_make_tuple2(env, object_path_term, header_path_term));
+  if(!compile_status.ok()) {
+    return exla::nif::error(env, compile_status.error_message().c_str());
+  }
+
+  std::string object_path = absl::StrCat(aot_path, function_name, ".o");
+  std::string header_path = absl::StrCat(aot_path, function_name, ".h");
+  ERL_NIF_TERM object_path_term = exla::nif::make(env, object_path.c_str());
+  ERL_NIF_TERM header_path_term = exla::nif::make(env, header_path.c_str());
+
+  return exla::nif::ok(env, enif_make_tuple2(env, object_path_term, header_path_term));
 }
 
 static ErlNifFunc exla_funcs[] = {
@@ -1889,7 +1904,7 @@ static ErlNifFunc exla_funcs[] = {
   // LinAlg
   {"cholesky", 1, cholesky},
   // Log Sink
-  {"start_log_sink", 1, start_log_sink}
+  {"start_log_sink", 1, start_log_sink},
   // HLO Functions
   {"compile_aot", 5, compile_aot}
 };
