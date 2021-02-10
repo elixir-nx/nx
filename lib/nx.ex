@@ -2276,6 +2276,10 @@ defmodule Nx do
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.
 
+  If both tensors are integers and the exponent is
+  negative, it will raise, but it may trigger undefined
+  behaviour on some compilers.
+
   ## Examples
 
   ### Power of scalars
