@@ -97,24 +97,6 @@ xla::ShapedBuffer ExlaBuffer::AsShapedBuffer() {
   return shaped_buffer;
 }
 
-void ExlaBuffer::WriteToBuffer(xla::ScopedShapedBuffer* shaped_buffer) {
-  xla::ShapeTree<se::DeviceMemoryBase>::iterator iterator =
-    shaped_buffer->buffers().begin();
-
-  xla::ShapeUtil::ForEachSubshape(
-    shaped_buffer->on_device_shape(),
-    [&](const xla::Shape&, const xla::ShapeIndex&) {
-      CHECK(iterator != shaped_buffer->buffers().end());
-      device_memory_.push_back(iterator->second);
-      iterator->second = se::DeviceMemoryBase();
-      ++iterator;
-    });
-
-  CHECK(iterator == shaped_buffer->buffers().end());
-
-  state_ = BufferState::kValid;
-}
-
 /*static*/ ExlaBuffer*
 ExlaBuffer::FromScopedShapedBuffer(xla::ScopedShapedBuffer* shaped_buffer,
                                    ExlaDevice* device,
@@ -315,7 +297,8 @@ xla::StatusOr<std::vector<ExlaBuffer*>>
 UnpackRunArguments(ErlNifEnv* env,
                    ERL_NIF_TERM list,
                    ExlaDevice* device,
-                   ExlaClient* client) {
+                   ExlaClient* client,
+                   bool async_run) {
   unsigned int length;
   if (!enif_get_list_length(env, list, &length)) {
     return xla::InvalidArgument("Argument is not a list.");
@@ -339,7 +322,7 @@ UnpackRunArguments(ErlNifEnv* env,
         return xla::InvalidArgument("Expected argument to be shape reference.");
       }
       EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf,
-        client->BufferFromBinary(data, *shape, device, true));
+        client->BufferFromBinary(data, *shape, device, true, async_run));
       arguments.push_back(buf);
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
       arguments.push_back(*buffer);
@@ -414,7 +397,7 @@ void deallocate(ExlaBuffer* buffer) {
   delete buffer;
 }
 
-xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
+xla::StatusOr<ExlaBuffer*> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM argument_terms,
                                                 xla::Shape& output_shape,
                                                 int replica,
@@ -423,7 +406,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 int rng_seed,
                                                 int launch_id,
                                                 ExlaDevice* device,
-                                                bool keep_on_device) {
+                                                bool async_run) {
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
   if (device == nullptr) {
     CHECK(device_assignment_ != nullptr);
@@ -453,14 +436,14 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   std::shared_ptr<xla::LocalExecutable> executable =
     executables_.at(executable_idx);
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<ExlaBuffer*> arguments,
-    UnpackRunArguments(env, argument_terms, device, client_), env);
+  EXLA_ASSIGN_OR_RETURN(std::vector<ExlaBuffer*> arguments,
+    UnpackRunArguments(env, argument_terms, device, client_, async_run));
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<xla::ExecutionInput> inputs,
-    PopulateInputBuffers(arguments), env);
+  EXLA_ASSIGN_OR_RETURN(std::vector<xla::ExecutionInput> inputs,
+    PopulateInputBuffers(arguments));
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::ExecutionOutput results,
-    executable->RunAsync(std::move(inputs), run_options), env);
+  EXLA_ASSIGN_OR_RETURN(xla::ExecutionOutput results,
+    executable->RunAsync(std::move(inputs), run_options));
 
   xla::ScopedShapedBuffer result_buffer = results.ConsumeResult();
 
@@ -470,10 +453,11 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                        client_,
                                        ExlaBuffer::BufferType::kReference);
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-    ExlaBuffer::DecomposeBufferToTerm(env, buffer_ref, true), env);
+  if (!async_run) {
+    device->compute_stream()->BlockHostUntilDone();
+  }
 
-  return term;
+  return buffer_ref;
 }
 
 // ExlaClient Functions
@@ -523,7 +507,8 @@ xla::StatusOr<ExlaBuffer*>
 ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
                              xla::Shape& on_host_shape,
                              ExlaDevice* device,
-                             bool transfer_for_run) {
+                             bool transfer_for_run,
+                             bool async_run) {
   int64 size = xla::ShapeUtil::ByteSizeOf(on_host_shape);
   if (size != binary.size) {
     return xla::InvalidArgument("Expected %d bytes from binary but got %d.",
@@ -541,7 +526,10 @@ ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
                                           on_device_shape,
                                           device);
 
-  if (can_use_zero_copy && transfer_for_run) {
+  bool is_cpu_platform =
+    device->executor()->platform()->id() == se::host::kHostPlatformId;
+
+  if (can_use_zero_copy && transfer_for_run && !async_run) {
     se::DeviceMemoryBase buffer =
       se::DeviceMemoryBase(const_cast<unsigned char*>(binary.data),
                            binary.size);
@@ -554,7 +542,7 @@ ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
       /*client=*/this,
       /*type=*/ExlaBuffer::BufferType::kZeroCopy);
   } else  {
-    ExlaBuffer::BufferType type = transfer_for_run ? ExlaBuffer::BufferType::kTemporary : ExlaBuffer::BufferType::kReference;
+    ExlaBuffer::BufferType type = transfer_for_run && !async_run ? ExlaBuffer::BufferType::kTemporary : ExlaBuffer::BufferType::kReference;
 
     EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer device_buffer,
       AllocateDestinationBuffer(on_device_shape, device, this));

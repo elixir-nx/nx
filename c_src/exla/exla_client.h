@@ -279,7 +279,7 @@ class ExlaExecutable {
   // of a list of references to the underlying buffer(s). Otherwise,
   // the resulting buffer is decomposed to an Erlang term and the device
   // memory is deallocated.
-  xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
+  xla::StatusOr<ExlaBuffer*> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
                                   xla::Shape& output_shape,
                                   int replica,
@@ -288,7 +288,7 @@ class ExlaExecutable {
                                   int rng_seed,
                                   int launch_id,
                                   ExlaDevice* device,
-                                  bool keep_on_device);
+                                  bool async_run);
 
  private:
   ExlaClient* client_;
@@ -330,7 +330,8 @@ class ExlaClient {
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(const ErlNifBinary& binary,
                                               xla::Shape& shape,
                                               ExlaDevice* device,
-                                              bool transfer_for_run);
+                                              bool transfer_for_run,
+                                              bool async_run);
 
   // Returns the client's default device assignment from the
   // given replica and partition account. This is used when

@@ -130,9 +130,14 @@ defmodule EXLA.Client do
   @doc """
   Awaits for all running streams on the given device.
   """
-  def await_streams(%Client{ref: ref} = client, device_id) do
-    device_id = check_device_compatibility!(client, device_id)
-    EXLA.NIF.await_streams(ref, device_id)
+  def await_streams(%Client{ref: ref, platform: platform} = client, buffer, keep_on_device) do
+    # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
+    case platform do
+      :host ->
+        EXLA.NIF.await_streams_cpu(ref, buffer, keep_on_device)
+      _ ->
+        EXLA.NIF.await_streams_io(ref, buffer, keep_on_device)
+    end
   end
 
   @doc """

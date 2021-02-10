@@ -43,46 +43,26 @@ defmodule EXLA.Executable do
           {data, shape.ref}
       end)
 
-    # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
     data =
-      case client.platform do
-        :host ->
-          EXLA.NIF.run_cpu(
-            client.ref,
-            exec,
-            inputs,
-            output_shape.ref,
-            device_ordinal,
-            run_id,
-            rng_seed,
-            launch_id,
-            replica,
-            partition,
-            keep_on_device_int
-          )
-          |> unwrap!()
+      EXLA.NIF.run(
+        client.ref,
+        exec,
+        inputs,
+        output_shape.ref,
+        device_ordinal,
+        run_id,
+        rng_seed,
+        launch_id,
+        replica,
+        partition
+      )
+      |> unwrap!()
 
-        _ ->
-          EXLA.NIF.run_io(
-            client.ref,
-            exec,
-            inputs,
-            output_shape.ref,
-            device_ordinal,
-            run_id,
-            rng_seed,
-            launch_id,
-            replica,
-            partition,
-            keep_on_device_int
-          )
-          |> unwrap!()
-      end
+    result = EXLA.Client.await_streams(client, data, keep_on_device_int)
 
-    device_id = device_assignment_to_device_id(executable, replica, partition)
-    case EXLA.Client.await_streams(client, device_id) do
-      :ok ->
-        decompose_output(data, output_shape, client, keep_on_device)
+    case result do
+      {:ok, output} ->
+        decompose_output(output, output_shape, client)
       {:error, reason} ->
         {:error, reason}
     end
@@ -135,29 +115,20 @@ defmodule EXLA.Executable do
     EXLA.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
   end
 
-  defp decompose_output(data, shape, client, keep_on_device) do
+  defp decompose_output(data, shape, client) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
           |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, client, keep_on_device)
+            decompose_output(buf, subshape, client)
           end)
 
         {:tuple, tuple}
 
       _ when is_reference(data) ->
-        if keep_on_device do
-          Buffer.buffer({data, client.name}, shape)
-        else
-          result =
-            {data, client.name}
-            |> Buffer.read()
-
-          Buffer.deallocate({data, client.name})
-          Buffer.buffer(result, shape)
-        end
+        Buffer.buffer({data, client.name}, shape)
 
       _ ->
         Buffer.buffer(data, shape)

@@ -253,7 +253,7 @@ defmodule EXLA.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def run_cpu(
+  def run(
         _client,
         _executable,
         _arguments,
@@ -263,29 +263,16 @@ defmodule EXLA.NIF do
         _rng_seed,
         _launch_id,
         _replica,
-        _partition,
-        _keep_on_device
-      ),
-      do: nif_error(__ENV__.function)
-
-  def run_io(
-        _client,
-        _executable,
-        _arguments,
-        _output_shape,
-        _device_ordinal,
-        _run_id,
-        _rng_seed,
-        _launch_id,
-        _replica,
-        _partition,
-        _keep_on_device
+        _partition
       ),
       do: nif_error(__ENV__.function)
 
   def device_assignment_to_device_id(_exec, _replica, _partition), do: nif_error(__ENV__.function)
 
-  def await_streams(_client, _device_ordinal),
+  def await_streams_cpu(_client, _buffer, _keep_on_device),
+    do: nif_error(__ENV__.function)
+
+  def await_streams_io(_client, _buffer, _keep_on_device),
     do: nif_error(__ENV__.function)
 
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
