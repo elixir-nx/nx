@@ -93,49 +93,6 @@ defmodule EXLA.Executable do
     end
   end
 
-  def run_parallel(%Executable{} = executable, arguments, opts \\ []) do
-    %{
-      client: _client,
-      ref: _exec,
-      output_shape: output_shape,
-      device_ordinal: _device_ordinal,
-      num_replicas: num_replicas,
-      num_partitions: num_partitions
-    } = executable
-
-    opts = Keyword.put_new(opts, :run_id, System.unique_integer([:positive, :monotonic]))
-    opts = Keyword.put_new(opts, :launch_id, System.unique_integer([:positive, :monotonic]))
-
-    output_shape = %Shape{
-      output_shape
-      | dims: Tuple.insert_at(output_shape.dims, 0, num_replicas * num_partitions)
-    }
-
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    inputs =
-      arguments
-      |> Enum.map(& &1.buffers)
-      |> Enum.zip()
-      |> Enum.map(&Tuple.to_list/1)
-
-    tasks =
-      for i <- 1..num_replicas, j <- 1..num_partitions do
-        opts = Keyword.put(opts, :device_assignment, {i, j})
-
-        args =
-          case inputs do
-            [] -> []
-            inputs -> Enum.at(inputs, i + j - 2)
-          end
-
-        Task.async(fn -> run(executable, args, opts) end)
-      end
-
-    buffers = Enum.map(tasks, &Task.await(&1, :infinity))
-
-    %ShardedBuffer{buffers: buffers, shape: output_shape}
-  end
-
   def device_assignment_to_device_id(%Executable{ref: exec}, replica, partition) do
     EXLA.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
   end
