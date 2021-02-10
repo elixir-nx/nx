@@ -50,41 +50,29 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def __jit__(fun, compiler, opts) do
-    {:arity, arity} = Function.info(fun, :arity)
-
-    if arity not in 0..15 do
-      raise ArgumentError, "can only JIT compile functions up to 15 arguments"
+  def __jit__(fun, args, compiler, opts) do
+    if Process.get(Nx.Defn.Compiler) do
+      raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
     end
 
-    wrap(arity, fn args ->
-      Process.put(Nx.Defn.Compiler, compiler)
+    Process.put(Nx.Defn.Compiler, compiler)
 
-      try do
-        compiler.__jit__(
-          fun,
-          Nx.Defn.Expr.validate_args(args),
-          fn vars ->
-            params = Nx.Defn.Expr.to_params(vars)
-            args = Nx.Defn.Expr.to_args(args, params)
+    try do
+      compiler.__jit__(
+        fun,
+        Nx.Defn.Expr.validate_args(args),
+        fn vars ->
+          params = Nx.Defn.Expr.to_params(vars)
+          args = Nx.Defn.Expr.to_args(args, params)
 
-            fun
-            |> apply(args)
-            |> Nx.Defn.Expr.to_result()
-          end,
-          opts
-        )
-      after
-        Process.delete(Nx.Defn.Compiler)
-      end
-    end)
-  end
-
-  for arity <- 0..15 do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    defp wrap(unquote(arity), applier) do
-      fn unquote_splicing(args) -> applier.(unquote(args)) end
+          fun
+          |> apply(args)
+          |> Nx.Defn.Expr.to_result()
+        end,
+        opts
+      )
+    after
+      Process.delete(Nx.Defn.Compiler)
     end
   end
 

@@ -278,28 +278,26 @@ defmodule Nx.Defn do
   ## Public API
 
   @doc """
-  Converts the anonymous function to a `defn`
-  that is compiled on invocation.
+  Invokes the anonymous function with just-in-time compilation.
 
-  It returns a wrapped anonymous function that will
-  convert all of its inputs into tensor expressions
-  which are compiled just-in-time to given compiler
-  when the anonymous function is invoked.
+  The anonymous function will be invoked with a
+  tensor expression which is JIT compiled and then
+  invoked.
 
   For example, take the following definition:
 
       defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
   By default, invoking `softmax` will use the default
-  `Nx.Defn` compiler. But with `jit/2`, we can change
+  `Nx.Defn` compiler. But with `jit/4`, we can change
   the compiler on the fly:
 
-      Nx.Defn.jit(&Mod.softmax/1, EXLA).(my_tensor)
+      Nx.Defn.jit(&Mod.softmax/1, [my_tensor], EXLA)
 
   """
-  def jit(fun, compiler \\ Nx.Defn, opts \\ [])
-      when is_function(fun) and is_atom(compiler) and is_list(opts) do
-    Nx.Defn.Compiler.__jit__(fun, compiler, opts)
+  def jit(fun, args, compiler \\ Nx.Defn, opts \\ [])
+      when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
+    Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
   end
 
   @doc """

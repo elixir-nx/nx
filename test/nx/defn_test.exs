@@ -856,26 +856,26 @@ defmodule Nx.DefnTest do
     end
 
     test "compiles defn function" do
-      assert Nx.Defn.jit(&defn_jit/2).({4, 5}, 3) == Nx.tensor(6)
-      assert Nx.Defn.jit(&defn_jit/2).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
-      assert Nx.Defn.jit(&defn_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
+      assert Nx.Defn.jit(&defn_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, Identity).({1, 2}, 3)
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], Identity)
     end
 
     test "compiles elixir function" do
-      assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, 3) == Nx.tensor(6)
-      assert Nx.Defn.jit(&elixir_jit/2).({4, 5}, Nx.tensor(3)) == Nx.tensor(6)
-      assert Nx.Defn.jit(&elixir_jit(&1, 3)).({4, 5}) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
+      assert Nx.Defn.jit(&elixir_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, Identity).({4, 5}, 3)
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], Identity)
     end
 
     test "raises if it doesn't return an expression" do
       assert_raise ArgumentError,
                    "defn must return an expression tensor or a tuple, got: :ok",
                    fn ->
-                     Nx.Defn.jit(fn -> :ok end, Nx.Defn).()
+                     Nx.Defn.jit(fn -> :ok end, [], Nx.Defn).()
                    end
     end
   end
