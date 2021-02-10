@@ -216,11 +216,16 @@ defmodule Nx.Tensor do
   defimpl Inspect do
     import Inspect.Algebra
 
-    def inspect(tensor, opts) do
-      inner = tensor.data.__struct__.inspect(tensor, opts)
+    def inspect(%{shape: shape, names: names, type: type} = tensor, opts) do
+      open = color("[", :list, opts)
+      close = color("]", :list, opts)
+      type = color(Nx.Type.to_string(type), :atom, opts)
+      shape = Nx.Shape.to_algebra(shape, names, open, close)
+      data = tensor.data.__struct__.inspect(tensor, opts)
+      inner = concat([line(), type, shape, line(), data])
 
       color("#Nx.Tensor<", :map, opts)
-      |> concat(nest(concat(line(), inner), 2))
+      |> concat(nest(inner, 2))
       |> concat(color("\n>", :map, opts))
     end
   end

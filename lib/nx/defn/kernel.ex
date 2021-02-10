@@ -135,7 +135,7 @@ defmodule Nx.Defn.Kernel do
         Nx.tanh(a) + Nx.power(b, 2)
       end
 
-  Let's see a trivial example, which is `print_expr/1`. `print_expr/1`
+  Let's see a trivial example, which is `inspect_expr/1`. `inspect_expr/1`
   can be used to debug the current expression during compilation.
   It is implemented by using `transform/2` to invoke `IO.inspect/1` at
   definition time:
@@ -169,14 +169,14 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Prints the given expression to the terminal.
+  Inspects the given expression to the terminal.
 
   It returns the given expressions.
 
   ### Examples
 
       defn tanh_grad(t) do
-        grad(t, Nx.tanh(t)) |> print_expr()
+        grad(t, Nx.tanh(t)) |> inspect_expr()
       end
 
   When invoked, it will print the expression being built by `defn`:
@@ -191,7 +191,7 @@ defmodule Nx.Defn.Kernel do
       >
 
   """
-  defmacro print_expr(expr) do
+  defmacro inspect_expr(expr) do
     quote do
       Nx.Defn.Kernel.transform(
         unquote(expr),

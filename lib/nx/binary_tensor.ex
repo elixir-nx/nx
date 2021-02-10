@@ -752,33 +752,28 @@ defmodule Nx.BinaryTensor do
   alias Inspect.Algebra, as: IA
 
   @impl true
-  def inspect(%{shape: shape, names: names, type: type} = tensor, opts) do
+  def inspect(%{shape: shape} = tensor, opts) do
     open = IA.color("[", :list, opts)
     sep = IA.color(",", :list, opts)
     close = IA.color("]", :list, opts)
 
-    data =
-      case tensor.data do
-        %Nx.BinaryTensor{device: Nx.BinaryDevice} ->
-          dims = Tuple.to_list(shape)
-          limit = opts.limit
-          list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
-          data = Nx.to_flat_list(tensor, [non_numbers: :as_strings] ++ list_opts)
-          {data, _rest, _limit} = chunk(dims, data, limit, {open, sep, close})
-          data
+    case tensor.data do
+      %Nx.BinaryTensor{device: Nx.BinaryDevice} ->
+        dims = Tuple.to_list(shape)
+        limit = opts.limit
+        list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
+        data = Nx.to_flat_list(tensor, [non_numbers: :as_strings] ++ list_opts)
+        {data, _rest, _limit} = chunk(dims, data, limit, {open, sep, close})
+        data
 
-        # TODO: To print data on device, we can support reading a slice
-        # from the device which we will compute with:
-        #
-        #     min(opts.limit, Nx.size(shape)) * size
-        #
-        %Nx.BinaryTensor{device: device} ->
-          IA.to_doc(device, opts)
-      end
-
-    type = IA.color(Nx.Type.to_string(type), :atom, opts)
-    shape = Nx.Shape.to_algebra(shape, names, open, close)
-    IA.concat([type, shape, IA.line(), data])
+      # TODO: To print data on device, we can support reading a slice
+      # from the device which we will compute with:
+      #
+      #     min(opts.limit, Nx.size(shape)) * size
+      #
+      %Nx.BinaryTensor{device: device} ->
+        IA.to_doc(device, opts)
+    end
   end
 
   defp chunk([], [head | tail], limit, _docs) do

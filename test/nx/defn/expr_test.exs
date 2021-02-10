@@ -106,6 +106,16 @@ defmodule Nx.Defn.ExprTest do
   end
 
   describe "inspect" do
+    test "with scalar" do
+      assert inspect(Expr.tensor(Nx.tensor(0)), safe: false) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+             >\
+             """
+    end
+
     test "with parameters" do
       a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
       b = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
@@ -113,6 +123,8 @@ defmodule Nx.Defn.ExprTest do
       assert Nx.sum(Nx.add(Nx.add(Nx.dot(a, a), Nx.tanh(b)), 2))
              |> inspect(safe: false) == """
              #Nx.Tensor<
+               f64
+             \s\s
                Nx.Defn.Expr
                parameter a                                 s64[2][2]
                parameter c                                 s64[2][2]
@@ -133,6 +145,8 @@ defmodule Nx.Defn.ExprTest do
       assert Nx.argmin(Nx.add(Nx.tanh(Nx.dot(c, b)), a), tie_break: :high)
              |> inspect(safe: false) == """
              #Nx.Tensor<
+               s64
+             \s\s
                Nx.Defn.Expr
                tensor b                                       s64[2][2]
                parameter e                                    s64[2][2]
@@ -150,6 +164,8 @@ defmodule Nx.Defn.ExprTest do
 
       assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect(safe: false) == """
              #Nx.Tensor<
+               s64
+             \s\s
                Nx.Defn.Expr
                parameter a                                                  s64[2][2]
                b = reduce [ a, 0, axes: nil, keep_axes: false, &Nx.add/2 ]  s64
@@ -164,6 +180,8 @@ defmodule Nx.Defn.ExprTest do
 
       assert inspect(left, safe: false) == """
              #Nx.Tensor<
+               s64
+             \s\s
                Nx.Defn.Expr
                parameter a                                     s64
                parameter c                                     s64
@@ -175,6 +193,8 @@ defmodule Nx.Defn.ExprTest do
 
       assert inspect(right, safe: false) == """
              #Nx.Tensor<
+               s64
+             \s\s
                Nx.Defn.Expr
                parameter a                                     s64
                parameter c                                     s64

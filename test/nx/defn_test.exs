@@ -813,12 +813,14 @@ defmodule Nx.DefnTest do
 
   describe "transform" do
     defn transform_inspect(a, b) do
-      (Nx.tanh(a) + Nx.power(b, 2)) |> print_expr()
+      (Nx.tanh(a) + Nx.power(b, 2)) |> inspect_expr()
     end
 
     test "executes the transformation" do
       assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
              #Nx.Tensor<
+               f64
+             \s\s
                Nx.Defn.Expr
                parameter a         s64
                parameter c         s64

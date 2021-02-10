@@ -743,6 +743,7 @@ defmodule Nx.Defn.Expr do
       |> Enum.reverse()
       |> Kernel.++(Enum.reverse(exprs))
 
+    header = concat(line(), color("Nx.Defn.Expr", :map, opts))
     length = Enum.reduce(all, 0, fn {str, _tensor}, acc -> max(byte_size(str), acc) end)
 
     all
@@ -750,7 +751,7 @@ defmodule Nx.Defn.Expr do
       String.pad_trailing(str, length, " ") <> "  " <> to_type_shape(tensor)
     end)
     |> Enum.uniq()
-    |> Enum.reduce(color("Nx.Defn.Expr", :map, opts), &concat(&2, concat(line(), &1)))
+    |> Enum.reduce(header, &concat(&2, concat(line(), &1)))
   end
 
   # Scalars and funs are shown as is
