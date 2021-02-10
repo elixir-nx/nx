@@ -1629,7 +1629,9 @@ ERL_NIF_TERM await_streams(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   // but we're creating one again in the above, so
   // we need to ensure this buffer doesn't get double
   // freed. This is probably bad design
-  *buffer = nullptr;
+  if (keep_on_device) {
+    *buffer = nullptr;
+  }
 
   return exla::nif::ok(env, term);
 }
@@ -1739,7 +1741,8 @@ static ErlNifFunc exla_funcs[] = {
   {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
-  {"run", 10, run},
+  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_tuple_shape", 1, make_tuple_shape},

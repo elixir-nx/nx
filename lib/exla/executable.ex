@@ -44,19 +44,36 @@ defmodule EXLA.Executable do
       end)
 
     data =
-      EXLA.NIF.run(
-        client.ref,
-        exec,
-        inputs,
-        output_shape.ref,
-        device_ordinal,
-        run_id,
-        rng_seed,
-        launch_id,
-        replica,
-        partition
-      )
-      |> unwrap!()
+      case client.platform do
+        :host ->
+          EXLA.NIF.run_cpu(
+            client.ref,
+            exec,
+            inputs,
+            output_shape.ref,
+            device_ordinal,
+            run_id,
+            rng_seed,
+            launch_id,
+            replica,
+            partition
+          )
+          |> unwrap!()
+        _ ->
+          EXLA.NIF.run_io(
+            client.ref,
+            exec,
+            inputs,
+            output_shape.ref,
+            device_ordinal,
+            run_id,
+            rng_seed,
+            launch_id,
+            replica,
+            partition
+          )
+          |> unwrap!()
+      end
 
     result = EXLA.Client.await_streams(client, data, keep_on_device_int)
 

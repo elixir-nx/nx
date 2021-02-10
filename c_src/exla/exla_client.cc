@@ -542,7 +542,7 @@ ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
       /*client=*/this,
       /*type=*/ExlaBuffer::BufferType::kZeroCopy);
   } else  {
-    ExlaBuffer::BufferType type = transfer_for_run && !async_run ? ExlaBuffer::BufferType::kTemporary : ExlaBuffer::BufferType::kReference;
+    ExlaBuffer::BufferType type = transfer_for_run && !is_cpu_platform ? ExlaBuffer::BufferType::kTemporary : ExlaBuffer::BufferType::kReference;
 
     EXLA_ASSIGN_OR_RETURN(xla::ScopedShapedBuffer device_buffer,
       AllocateDestinationBuffer(on_device_shape, device, this));
