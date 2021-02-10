@@ -255,17 +255,13 @@ defmodule Nx.Defn.Grad do
     inverse_padding_config = Enum.map(padding_config, fn {lo, hi, _} -> {-lo, -hi, 0} end)
     unpadded = Nx.pad(g, 0.0, inverse_padding_config)
 
-    start_indices = List.duplicate(0, Nx.rank(unpadded))
-    strides = Enum.map(padding_config, fn {_, _, interior} -> interior + 1 end)
+    start_indices = Tuple.duplicate(0, Nx.rank(unpadded))
+    lengths = unpadded.shape
 
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    lengths =
-      unpadded.shape
-      |> Tuple.to_list()
-      |> Enum.zip(start_indices)
-      |> Enum.map(fn {hi, lo} -> hi - lo end)
+    strides =
+      padding_config |> Enum.map(fn {_, _, interior} -> interior + 1 end) |> List.to_tuple()
 
-    t_operand = Nx.slice(unpadded, start_indices, lengths, strides)
+    t_operand = Nx.slice(unpadded, start_indices, lengths, strides: strides)
     t_value = Nx.subtract(Nx.sum(g), Nx.sum(t_operand))
 
     {dx, cache} = to_grad(x, t_operand, cache)
@@ -275,6 +271,9 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:slice, [x, start_indices, _lengths, strides], _ans, g, cache) do
+    # TODO: Clean me up
+    start_indices = Tuple.to_list(start_indices)
+    strides = Tuple.to_list(strides)
     lo_pads = start_indices
 
     # TODO: Use Enum.zip_with on Elixir v1.12

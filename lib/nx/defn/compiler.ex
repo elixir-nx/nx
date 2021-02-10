@@ -338,6 +338,9 @@ defmodule Nx.Defn.Compiler do
   defp rewrite_args(:tensor, [t]), do: [t, add_backend([])]
   defp rewrite_args(:tensor, [t, opts]), do: [t, add_backend(opts)]
 
+  defp rewrite_args(:from_binary, [t, type]), do: [t, type, add_backend([])]
+  defp rewrite_args(:from_binary, [t, type, opts]), do: [t, type, add_backend(opts)]
+
   defp rewrite_args(:iota, [t]), do: [t, add_backend([])]
   defp rewrite_args(:iota, [t, opts]), do: [t, add_backend(opts)]
 

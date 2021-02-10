@@ -437,50 +437,17 @@ ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
   }
-  if (!exla::nif::get_list(env, argv[1], start_indices)) {
+  if (!exla::nif::get_tuple(env, argv[1], start_indices)) {
     return exla::nif::error(env, "Unable to get start indices.");
   }
-  if (!exla::nif::get_list(env, argv[2], limit_indices)) {
+  if (!exla::nif::get_tuple(env, argv[2], limit_indices)) {
     return exla::nif::error(env, "Unable to get limit indices.");
   }
-  if (!exla::nif::get_list(env, argv[3], strides)) {
+  if (!exla::nif::get_tuple(env, argv[3], strides)) {
     return exla::nif::error(env, "Unable to get strides.");
   }
 
   xla::XlaOp op = xla::Slice(*operand, start_indices, limit_indices, strides);
-
-  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
-}
-
-ERL_NIF_TERM slice_in_dim(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 5) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaOp* operand;
-  exla::int64 start_index;
-  exla::int64 end_index;
-  exla::int64 stride;
-  exla::int64 dimno;
-
-  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
-    return exla::nif::error(env, "Unable to get operand.");
-  }
-  if (!exla::nif::get(env, argv[1], &start_index)) {
-    return exla::nif::error(env, "Unable to get start index.");
-  }
-  if (!exla::nif::get(env, argv[2], &end_index)) {
-    return exla::nif::error(env, "Unable to get end index.");
-  }
-  if (!exla::nif::get(env, argv[3], &stride)) {
-    return exla::nif::error(env, "Unable to get stride.");
-  }
-  if (!exla::nif::get(env, argv[4], &dimno)) {
-    return exla::nif::error(env, "Unable to get dimension number.");
-  }
-
-  xla::XlaOp op = xla::SliceInDim(*operand, start_index,
-                                  end_index, stride, dimno);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -497,10 +464,10 @@ ERL_NIF_TERM dynamic_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   if (!exla::nif::get(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
   }
-  if (!exla::nif::get_list<xla::XlaOp>(env, argv[1], start_indices)) {
+  if (!exla::nif::get_tuple<xla::XlaOp>(env, argv[1], start_indices)) {
     return exla::nif::error(env, "Unable to get start index ops.");
   }
-  if (!exla::nif::get_list(env, argv[2], sizes)) {
+  if (!exla::nif::get_tuple(env, argv[2], sizes)) {
     return exla::nif::error(env, "Unable to get sizes.");
   }
 
@@ -524,7 +491,7 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get<xla::XlaOp>(env, argv[1], update)) {
     return exla::nif::error(env, "Unable to get update.");
   }
-  if (!exla::nif::get_list<xla::XlaOp>(env, argv[2], start_indices)) {
+  if (!exla::nif::get_tuple<xla::XlaOp>(env, argv[2], start_indices)) {
     return exla::nif::error(env, "Unable to get start indices.");
   }
 
@@ -1801,7 +1768,6 @@ static ErlNifFunc exla_funcs[] = {
   {"select", 3, select},
   // Slicing
   {"slice", 4, slice},
-  {"slice_in_dim", 5, slice_in_dim},
   {"dynamic_slice", 3, dynamic_slice},
   {"dynamic_update_slice", 3, dynamic_update_slice},
   // Tensor Creation

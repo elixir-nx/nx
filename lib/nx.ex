@@ -442,6 +442,9 @@ defmodule Nx do
       names you must specify a name for every dimension in the tensor.
       Only `nil` and atoms are supported as dimension names.
 
+
+    * `:backend` - the backend to allocate the tensor on
+
   """
   def tensor(arg, opts \\ [])
 
@@ -631,6 +634,12 @@ defmodule Nx do
       {:f, 64}
       iex> Nx.names(t)
       [:batch, nil]
+
+  ## Options
+
+    * `:type` - the type of the tensor
+    * `:names` - the names of the tensor dimensions
+    * `:backend` - the backend to allocate the tensor on
   """
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
@@ -718,6 +727,12 @@ defmodule Nx do
       {:f, 64}
       iex> Nx.names(t)
       [:batch, nil]
+
+  ## Options
+
+    * `:type` - the type of the tensor
+    * `:names` - the names of the tensor dimensions
+    * `:backend` - the backend to allocate the tensor on
   """
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
@@ -827,6 +842,13 @@ defmodule Nx do
           ]
         ]
       >
+
+  ## Options
+
+    * `:type` - the type of the tensor
+    * `:axis` - an axis to repeat the iota over
+    * `:names` - the names of the tensor dimensions
+    * `:backend` - the backend to allocate the tensor on
   """
   def iota(tensor_or_shape, opts \\ []) do
     assert_keys!(opts, [:type, :axis, :names, :backend])
@@ -1133,8 +1155,12 @@ defmodule Nx do
       iex> Nx.from_binary(<<1, 2, 3, 4>>, {:f, 64})
       ** (ArgumentError) binary does not match the given size
 
+  ## Options
+
+    * `:backend` - the backend to allocate the tensor on
   """
-  def from_binary(binary, type) when is_binary(binary) do
+  def from_binary(binary, type, opts \\ []) when is_binary(binary) do
+    assert_keys!(opts, [:backend])
     {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
 
@@ -1146,7 +1172,8 @@ defmodule Nx do
       raise ArgumentError, "binary does not match the given size"
     end
 
-    Nx.BinaryTensor.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary)
+    backend = opts[:backend] || Nx.BinaryTensor
+    backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary)
   end
 
   ## Meta operations (do not invoke the backend)
@@ -4295,7 +4322,7 @@ defmodule Nx do
           {new_shape, new_names, axes}
 
         keep_axes ->
-          shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
+          shape = Tuple.duplicate(1, Nx.rank(shape))
           {shape, names, nil}
 
         true ->
@@ -4521,20 +4548,20 @@ defmodule Nx do
     assert_keys!(opts, [:padding, :strides, :window_dilations])
     %T{shape: shape} = tensor = tensor!(tensor)
 
-    window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
+    window_strides = opts[:strides] || 1
     padding = opts[:padding] || :valid
 
     window_dilations =
-      opts[:window_dilations] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
+      opts[:window_dilations] || Tuple.duplicate(1, rank(tensor.shape))
 
     window_strides =
       if is_integer(window_strides),
-        do: List.to_tuple(List.duplicate(window_strides, rank(tensor.shape))),
+        do: Tuple.duplicate(window_strides, rank(tensor.shape)),
         else: window_strides
 
     window_dilations =
       if is_integer(window_dilations),
-        do: List.to_tuple(List.duplicate(window_dilations, rank(tensor.shape))),
+        do: Tuple.duplicate(window_dilations, rank(tensor.shape)),
         else: window_dilations
 
     # Cheat to calculate shape for dilated window
@@ -5158,7 +5185,7 @@ defmodule Nx do
         {new_shape, new_names, axes}
       else
         if keep_axes do
-          shape = List.to_tuple(List.duplicate(1, Nx.rank(shape)))
+          shape = Tuple.duplicate(1, Nx.rank(shape))
           {shape, names, nil}
         else
           {{}, [], nil}
@@ -5253,15 +5280,15 @@ defmodule Nx do
     %T{shape: shape} = tensor = tensor!(tensor)
     acc = tensor!(acc)
 
-    window_strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
+    window_strides = opts[:strides] || Tuple.duplicate(1, rank(tensor.shape))
     padding = opts[:padding] || :valid
 
     window_dilations =
-      opts[:window_dilations] || List.to_tuple(List.duplicate(1, rank(tensor.shape)))
+      opts[:window_dilations] || Tuple.duplicate(1, rank(tensor.shape))
 
     window_dilations =
       if is_integer(window_dilations),
-        do: List.to_tuple(List.duplicate(window_dilations, rank(tensor.shape))),
+        do: Tuple.duplicate(window_dilations, rank(tensor.shape)),
         else: window_dilations
 
     # Cheat to calculate the output shape with dilations
@@ -5272,7 +5299,7 @@ defmodule Nx do
 
     window_strides =
       if is_integer(window_strides),
-        do: List.to_tuple(List.duplicate(window_strides, rank(tensor.shape))),
+        do: Tuple.duplicate(window_strides, rank(tensor.shape)),
         else: window_strides
 
     padding_config =
@@ -6087,11 +6114,11 @@ defmodule Nx do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    strides = opts[:strides] || List.to_tuple(List.duplicate(1, rank(spatial_dims)))
+    strides = opts[:strides] || Tuple.duplicate(1, rank(spatial_dims))
 
     strides =
       if is_integer(strides),
-        do: List.to_tuple(List.duplicate(strides, rank(spatial_dims))),
+        do: Tuple.duplicate(strides, rank(spatial_dims)),
         else: strides
 
     if rank(strides) != rank(spatial_dims) do
@@ -6299,26 +6326,17 @@ defmodule Nx do
   zero. `start_index + length` must not exceed the respective
   tensor dimension.
 
-  `strides`, if given, must be stricty greater than zero. It is
-  not possible to slice in reverse.
+  If the `:strides` is given, it must be stricty greater than zero.
+  The resulting tensor will have the shape of `length` unless
+  `:strides` are given.
+
+  It is not possible to slice in reverse.
 
   ### Examples
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [1, 4, 10], [1, 1, 10], [1, 2, 3])
-      #Nx.Tensor<
-        s64[1][1][4]
-        [
-          [
-            [580, 583, 586, 589]
-          ]
-        ]
-      >
-
-      iex> t = Nx.iota({900})
-      iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [0, 6, 2], [2, 1, 3])
+      iex> Nx.slice(t, {0, 6, 2}, {2, 1, 3})
       #Nx.Tensor<
         s64[2][1][3]
         [
@@ -6333,7 +6351,31 @@ defmodule Nx do
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [0, 4, 11], [2, 3, 9], [2, 1, 3])
+      iex> Nx.slice(t, {1, 4, 10}, {1, 1, 10}, strides: 2)
+      #Nx.Tensor<
+        s64[1][1][5]
+        [
+          [
+            [580, 582, 584, 586, 588]
+          ]
+        ]
+      >
+
+      iex> t = Nx.iota({900})
+      iex> t = Nx.reshape(t, {2, 15, 30})
+      iex> Nx.slice(t, {1, 4, 10}, {1, 1, 10}, strides: {1, 2, 3})
+      #Nx.Tensor<
+        s64[1][1][4]
+        [
+          [
+            [580, 583, 586, 589]
+          ]
+        ]
+      >
+
+      iex> t = Nx.iota({900})
+      iex> t = Nx.reshape(t, {2, 15, 30})
+      iex> Nx.slice(t, {0, 4, 11}, {2, 3, 9}, strides: {2, 1, 3})
       #Nx.Tensor<
         s64[1][3][3]
         [
@@ -6353,7 +6395,7 @@ defmodule Nx do
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
       ...> ])
-      iex> Nx.slice(t, [0, 0], [6, 7], [5, 3])
+      iex> Nx.slice(t, {0, 0}, {6, 7}, strides: {5, 3})
       #Nx.Tensor<
         f64[2][3]
         [
@@ -6362,26 +6404,17 @@ defmodule Nx do
         ]
       >
   """
-  def slice(tensor, start_indices, lengths, strides \\ nil) do
+  def slice(tensor, start_indices, lengths, opts \\ []) when is_tuple(start_indices) and is_tuple(lengths) and is_list(opts) do
+    assert_keys!(opts, [:strides])
     %T{shape: shape} = tensor = tensor!(tensor)
-    rank = rank(shape)
+    strides = opts[:strides] || 1
 
-    strides = if strides, do: strides, else: List.duplicate(1, rank(shape))
-
-    if length(strides) != rank do
-      raise ArgumentError, "invalid strides for shape of rank #{rank}"
-    end
-
-    if length(start_indices) != rank do
-      raise ArgumentError, "invalid start indices for shape of rank #{rank}"
-    end
-
-    if length(lengths) != rank do
-      raise ArgumentError, "invalid limit indices for shape of rank #{rank}"
-    end
+    strides =
+      if is_integer(strides),
+        do: Tuple.duplicate(strides, rank(shape)),
+        else: strides
 
     output_shape = Nx.Shape.slice(shape, start_indices, lengths, strides)
-
     out = %{tensor | shape: output_shape}
     impl!(tensor).slice(out, tensor, start_indices, lengths, strides)
   end

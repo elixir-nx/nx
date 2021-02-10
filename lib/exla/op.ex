@@ -199,38 +199,26 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  # TODO: Bounds checks!
   def slice(
         %Op{builder: builder, ref: op},
         start_indices,
         limit_indices,
-        strides \\ []
-      ) do
+        strides
+      ) when is_tuple(start_indices) and is_tuple(limit_indices) and is_tuple(strides) do
     ref = EXLA.NIF.slice(op, start_indices, limit_indices, strides) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
-  # TODO: Needs dim, index checks, will SegFault without error messages on bad dims/index!
-  def slice_in_dim(
-        %Op{builder: builder, ref: op},
-        start_index,
-        end_index,
-        stride,
-        dimno
-      ) do
-    ref = EXLA.NIF.slice_in_dim(op, start_index, end_index, stride, dimno) |> unwrap!()
-    %Op{builder: builder, ref: ref}
-  end
-
-  # TODO: Indices as tuple.
   def dynamic_slice(
         %Op{builder: builder, ref: op},
         indices,
         slice_sizes
-      ) do
+      ) when is_tuple(indices) and is_tuple(slice_sizes) do
     indices_refs =
       indices
+      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
+      |> List.to_tuple()
 
     ref = EXLA.NIF.dynamic_slice(op, indices_refs, slice_sizes) |> unwrap!()
     %Op{builder: builder, ref: ref}
@@ -240,10 +228,12 @@ defmodule EXLA.Op do
         %Op{builder: builder, ref: op},
         %Op{builder: builder, ref: update},
         indices
-      ) do
+      ) when is_tuple(indices) do
     indices_refs =
       indices
+      |> Tuple.to_list()
       |> Enum.map(& &1.ref)
+      |> List.to_tuple()
 
     ref = EXLA.NIF.dynamic_update_slice(op, update, indices_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}

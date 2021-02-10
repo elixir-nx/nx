@@ -2042,9 +2042,9 @@ defmodule EXLA.DefnTest do
   end
 
   describe "slicing" do
-    defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3])
-    defn slice2(t), do: Nx.slice(t, [1, 4, 10], [1, 1, 10], [1, 2, 3])
-    defn slice3(t), do: Nx.slice(t, [0, 4, 11], [2, 3, 9], [2, 1, 3])
+    defn slice1(t), do: Nx.slice(t, {0, 6, 2}, {2, 1, 3})
+    defn slice2(t), do: Nx.slice(t, {1, 4, 10}, {1, 1, 10}, strides: {1, 2, 3})
+    defn slice3(t), do: Nx.slice(t, {0, 4, 11}, {2, 3, 9}, strides: {2, 1, 3})
 
     test "works without stride" do
       t = Nx.iota({900})

@@ -36,6 +36,13 @@ defmodule Nx.DefnTest do
     test "from list" do
       assert %T{data: %Expr{op: :tensor}} = list_constant()
     end
+
+    @tensor Nx.to_binary(Nx.tensor([1, 2, 3]))
+    defn binary_constant, do: Nx.from_binary(@tensor, {:s, 64})
+
+    test "from binary" do
+      assert %T{data: %Expr{op: :tensor}} = binary_constant()
+    end
   end
 
   describe "tuple" do
@@ -422,10 +429,10 @@ defmodule Nx.DefnTest do
     test "single dimensional single access" do
       {zero, minus_one} = single_access(Nx.tensor([1, 2, 3, 4, 5]))
       assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {}} = zero
-      assert %T{data: %Expr{op: :slice, args: [_, [0], [1], [1]]}, shape: {1}} = slice
+      assert %T{data: %Expr{op: :slice, args: [_, {0}, {1}, {1}]}, shape: {1}} = slice
 
       assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {}} = minus_one
-      assert %T{data: %Expr{op: :slice, args: [_, [4], [1], [1]]}, shape: {1}} = slice
+      assert %T{data: %Expr{op: :slice, args: [_, {4}, {1}, {1}]}, shape: {1}} = slice
     end
 
     test "multi dimensional single access" do
@@ -433,14 +440,14 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {4, 5}} = zero
 
       assert %T{
-               data: %Expr{op: :slice, args: [_, [0, 0, 0], [1, 4, 5], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, {0, 0, 0}, {1, 4, 5}, {1, 1, 1}]},
                shape: {1, 4, 5}
              } = slice
 
       assert %T{data: %Expr{op: :squeeze, args: [slice, [0]]}, shape: {4, 5}} = minus_one
 
       assert %T{
-               data: %Expr{op: :slice, args: [_, [2, 0, 0], [1, 4, 5], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, {2, 0, 0}, {1, 4, 5}, {1, 1, 1}]},
                shape: {1, 4, 5}
              } = slice
     end
@@ -452,7 +459,7 @@ defmodule Nx.DefnTest do
                multi_access(Nx.iota({3, 4, 5}))
 
       assert %T{
-               data: %Expr{op: :slice, args: [_, [1, 2, 3], [1, 1, 1], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, {1, 2, 3}, {1, 1, 1}, {1, 1, 1}]},
                shape: {1, 1, 1}
              } = slice
     end
@@ -464,7 +471,7 @@ defmodule Nx.DefnTest do
                range_access(Nx.iota({3, 4, 5}))
 
       assert %T{
-               data: %Expr{op: :slice, args: [_, [1, 1, 0], [1, 2, 5], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, {1, 1, 0}, {1, 2, 5}, {1, 1, 1}]},
                shape: {1, 2, 5}
              } = slice
     end
@@ -473,7 +480,7 @@ defmodule Nx.DefnTest do
 
     test "multi dimensional multi-access with keywords is collapsed" do
       assert %T{
-               data: %Expr{op: :slice, args: [_, [0, 1, 1], [3, 2, 3], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, {0, 1, 1}, {3, 2, 3}, {1, 1, 1}]},
                shape: {3, 2, 3}
              } = keyword_access(Nx.iota({3, 4, 5}, names: [:x, :y, :z]))
     end

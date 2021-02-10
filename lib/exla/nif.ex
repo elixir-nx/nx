@@ -148,9 +148,6 @@ defmodule EXLA.NIF do
   def slice(_op, _start_indices, _limit_indices, _strides),
     do: nif_error(__ENV__.function)
 
-  def slice_in_dim(_op, _start_index, _limit_index, _stride, _dimno),
-    do: nif_error(__ENV__.function)
-
   def dynamic_slice(_op, _start_indices, _sizes),
     do: nif_error(__ENV__.function)
 

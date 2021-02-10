@@ -1292,20 +1292,19 @@ defmodule Nx.BinaryTensor do
 
     if top_dimension_slice?(Nx.rank(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
-      offset = div(length, elem(output_shape, 0)) * hd(start_indices)
+      offset = div(length, elem(output_shape, 0)) * elem(start_indices, 0)
       from_binary(out, binary_part(to_binary(tensor), offset, length))
     else
       # Anchored around the start indices
-      anchor = List.to_tuple(start_indices)
       weighted_shape = weighted_shape(shape, size, output_shape)
-      offset = weighted_offset(weighted_shape, anchor)
+      offset = weighted_offset(weighted_shape, start_indices)
 
       # The weighted shape is altered such that we traverse
       # with respect to the stride for each dimension
       # TODO: Use Enum.zip_with on Elixir v1.12
       weighted_shape =
         weighted_shape
-        |> Enum.zip(strides)
+        |> Enum.zip(Tuple.to_list(strides))
         |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
 
       input_data = to_binary(tensor)
@@ -1676,7 +1675,7 @@ defmodule Nx.BinaryTensor do
        when is_tuple(shape) and is_tuple(strides) and is_tuple(window) do
     dilations =
       if is_integer(dilations),
-        do: List.to_tuple(List.duplicate(dilations, tuple_size(shape))),
+        do: Tuple.duplicate(dilations, tuple_size(shape)),
         else: dilations
 
     make_anchors(
