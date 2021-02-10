@@ -155,6 +155,9 @@ defmodule Nx.BinaryTensor do
     end
   end
 
+  defp to_scalar(n) when is_number(n), do: n
+  defp to_scalar(t), do: binary_to_number(to_binary(t), t.type)
+
   ## Shape
 
   @impl true
@@ -269,7 +272,7 @@ defmodule Nx.BinaryTensor do
   # as we transpose and build the rest.
   @impl true
   def pad(_out, t, pad_value, padding_config) do
-    pad_value = Nx.to_scalar(pad_value)
+    pad_value = to_scalar(pad_value)
 
     case t.shape do
       {} ->
@@ -451,7 +454,7 @@ defmodule Nx.BinaryTensor do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
-    if Nx.to_scalar(pred) == 0,
+    if to_scalar(pred) == 0,
       do: from_binary(out, broadcast_data(on_false, out.shape)),
       else: from_binary(out, broadcast_data(on_true, out.shape))
   end
@@ -511,11 +514,11 @@ defmodule Nx.BinaryTensor do
   end
 
   defp element_wise_bin_op(%{type: type} = out, %{shape: {}} = left, right, fun) do
-    scalar = Nx.to_scalar(left)
+    scalar = to_scalar(left)
 
     data =
       match_types [right.type, type] do
-        for <<match!(x, 0) <- Nx.to_binary(right)>>, into: <<>> do
+        for <<match!(x, 0) <- to_binary(right)>>, into: <<>> do
           <<write!(fun.(type, scalar, read!(x, 0)), 1)>>
         end
       end
@@ -524,11 +527,11 @@ defmodule Nx.BinaryTensor do
   end
 
   defp element_wise_bin_op(%{type: type} = out, left, %{shape: {}} = right, fun) do
-    scalar = Nx.to_scalar(right)
+    scalar = to_scalar(right)
 
     data =
       match_types [left.type, type] do
-        for <<match!(x, 0) <- Nx.to_binary(left)>>, into: <<>> do
+        for <<match!(x, 0) <- to_binary(left)>>, into: <<>> do
           <<write!(fun.(type, read!(x, 0), scalar), 1)>>
         end
       end
@@ -1171,14 +1174,14 @@ defmodule Nx.BinaryTensor do
     window_strides = opts[:strides]
     window_dilations = opts[:window_dilations]
 
-    acc = Nx.to_scalar(acc)
+    acc = to_scalar(acc)
 
     %T{type: {_, size} = type} = tensor
 
     %T{shape: padded_shape} =
       tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
 
-    data = Nx.to_binary(tensor)
+    data = to_binary(tensor)
 
     weighted_shape = weighted_shape(padded_shape, size, window_dimensions, window_dilations)
 
@@ -1253,7 +1256,7 @@ defmodule Nx.BinaryTensor do
     output_data =
       match_types [type, output_type] do
         for <<match!(x, 0) <- data>>, into: <<>> do
-          <<write!(Nx.to_scalar(fun.(read!(x, 0))), 1)>>
+          <<write!(to_scalar(fun.(read!(x, 0))), 1)>>
         end
       end
 
@@ -1392,7 +1395,7 @@ defmodule Nx.BinaryTensor do
           fn a, b ->
             a = binary_to_number(a, type)
             b = binary_to_number(b, type)
-            Nx.to_scalar(fun.(a, b)) != 0
+            to_scalar(fun.(a, b)) != 0
           end
       end
 
