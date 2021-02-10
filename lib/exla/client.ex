@@ -114,7 +114,7 @@ defmodule EXLA.Client do
   def check_device_compatibility!(
         %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
         ordinal
-      ) do
+      ) when is_integer(ordinal) do
     cond do
       ordinal < 0 ->
         default_device_ordinal
@@ -124,6 +124,19 @@ defmodule EXLA.Client do
 
       true ->
         raise ArgumentError, "Invalid device ordinal."
+    end
+  end
+
+  @doc """
+  Awaits for all running streams on the given device.
+  """
+  def await_streams(%Client{ref: ref, platform: platform} = client, buffer, keep_on_device) do
+    # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
+    case platform do
+      :host ->
+        EXLA.NIF.await_streams_cpu(ref, buffer, keep_on_device)
+      _ ->
+        EXLA.NIF.await_streams_io(ref, buffer, keep_on_device)
     end
   end
 

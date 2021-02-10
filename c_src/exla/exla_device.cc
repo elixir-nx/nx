@@ -17,4 +17,15 @@ namespace exla {
     device_to_host_stream_->Init();
   }
 
+  xla::Status ExlaDevice::SynchronizeAllActivity() {
+    xla::Status status;
+    status.Update(compute_stream_->BlockHostUntilDone());
+    status.Update(callback_stream_->BlockHostUntilDone());
+    bool ok = compute_stream_->parent()->SynchronizeAllActivity();
+    if (!ok) {
+      status.Update(xla::Unknown("SynchronizeAllActivity failed."));
+    }
+    return status;
+  }
+
 }  // namespace exla

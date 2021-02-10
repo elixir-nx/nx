@@ -288,6 +288,7 @@ class ExlaExecutable {
                                   int rng_seed,
                                   int launch_id,
                                   ExlaDevice* device,
+                                  bool async_run,
                                   bool keep_on_device);
 
  private:
@@ -330,7 +331,8 @@ class ExlaClient {
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(const ErlNifBinary& binary,
                                               xla::Shape& shape,
                                               ExlaDevice* device,
-                                              bool transfer_for_run);
+                                              bool transfer_for_run,
+                                              bool async_run);
 
   // Returns the client's default device assignment from the
   // given replica and partition account. This is used when

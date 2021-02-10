@@ -32,6 +32,9 @@ defmodule EXLA.Executable do
 
     {replica, partition} = Keyword.get(options, :device_assignment, {1, 1})
 
+    async_run = Keyword.get(options, :async_run, false)
+    async_run_int = if async_run, do: 1, else: 0
+
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
     inputs =
@@ -43,7 +46,6 @@ defmodule EXLA.Executable do
           {data, shape.ref}
       end)
 
-    # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
     data =
       case client.platform do
         :host ->
@@ -58,10 +60,9 @@ defmodule EXLA.Executable do
             launch_id,
             replica,
             partition,
+            async_run_int,
             keep_on_device_int
           )
-          |> unwrap!()
-
         _ ->
           EXLA.NIF.run_io(
             client.ref,
@@ -74,12 +75,22 @@ defmodule EXLA.Executable do
             launch_id,
             replica,
             partition,
+            async_run_int,
             keep_on_device_int
           )
-          |> unwrap!()
       end
 
-    decompose_output(data, output_shape, client, keep_on_device)
+    result =
+      if async_run,
+        do: EXLA.Client.await_streams(client, unwrap!(data), keep_on_device_int),
+        else: data
+
+    case result do
+      {:ok, output} ->
+        decompose_output(output, output_shape, client)
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   def run_parallel(%Executable{} = executable, arguments, opts \\ []) do
@@ -125,14 +136,18 @@ defmodule EXLA.Executable do
     %ShardedBuffer{buffers: buffers, shape: output_shape}
   end
 
-  defp decompose_output(data, shape, client, keep_on_device) do
+  def device_assignment_to_device_id(%Executable{ref: exec}, replica, partition) do
+    EXLA.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
+  end
+
+  defp decompose_output(data, shape, client) do
     case shape do
       %Shape{dtype: {:t, shapes}} ->
         tuple =
           data
           |> Enum.zip(shapes)
           |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, client, keep_on_device)
+            decompose_output(buf, subshape, client)
           end)
 
         {:tuple, tuple}

@@ -193,7 +193,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer,
-    (*client)->BufferFromBinary(bin, *shape, device, false), env);
+    (*client)->BufferFromBinary(bin, *shape, device, false, false), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buffer));
 }
@@ -1594,10 +1594,52 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
 
+ERL_NIF_TERM await_streams(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  exla::ExlaBuffer** buffer;
+  bool keep_on_device;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get(env, argv[1], buffer)) {
+    return exla::nif::error(env, "Unable to get buffer.");
+  }
+  if (!exla::nif::get(env, argv[2], &keep_on_device)) {
+    return exla::nif::error(env, "Unable to get keep on device flag.");
+  }
+
+  exla::ExlaDevice* device = (*buffer)->device();
+
+  xla::Status status = device->SynchronizeAllActivity();
+
+  if (!status.ok()) {
+    return exla::nif::error(env, status.error_message().c_str());
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
+                            exla::ExlaBuffer::DecomposeBufferToTerm(env, *buffer, keep_on_device),
+                            env);
+
+  // We've already created a reference to this buffer
+  // but we're creating one again in the above, so
+  // we need to ensure this buffer doesn't get double
+  // freed. This is probably bad design
+  if (keep_on_device) {
+    *buffer = nullptr;
+  }
+
+  return exla::nif::ok(env, term);
+}
+
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 11) {
+  if (argc != 12) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1608,9 +1650,10 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   int rng_seed;
   int launch_id;
   int device_ordinal;
-  int keep_on_device;
   int replica;
   int partition;
+  bool async_run;
+  bool keep_on_device;
 
   ERL_NIF_TERM arguments = argv[2];
 
@@ -1641,19 +1684,22 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[9], &partition)) {
     return exla::nif::error(env, "Unable to get partition.");
   }
-  if (!exla::nif::get(env, argv[10], &keep_on_device)) {
-    return exla::nif::error(env, "Unable to get keep_on_device.");
+  if (!exla::nif::get(env, argv[10], &async_run)) {
+    return exla::nif::error(env, "Unable to get async run flag.");
+  }
+  if (!exla::nif::get(env, argv[11], &keep_on_device)) {
+    return exla::nif::error(env, "Unable to get keep on device flag.");
   }
 
   exla::ExlaDevice* device = nullptr;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM result,
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
     (*executable)->Run(env, arguments, *output_shape,
                        replica, partition,
                        run_id, rng_seed,
-                       launch_id, device, keep_on_device), env);
+                       launch_id, device, async_run, keep_on_device), env);
 
-  return exla::nif::ok(env, result);
+  return exla::nif::ok(env, term);
 }
 
 // Logging Functions
@@ -1696,13 +1742,15 @@ static ErlNifFunc exla_funcs[] = {
   {"get_supported_platforms", 0, get_supported_platforms},
   {"device_assignment_to_device_id", 3, device_assignment_to_device_id},
   {"compile", 7, compile},
+  {"await_streams_cpu", 3, await_streams, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"await_streams_io", 3, await_streams, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaBuffer
   {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
-  {"run_cpu", 11, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  {"run_io", 11, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_io", 12, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 12, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_tuple_shape", 1, make_tuple_shape},

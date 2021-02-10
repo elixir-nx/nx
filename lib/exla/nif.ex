@@ -264,6 +264,7 @@ defmodule EXLA.NIF do
         _launch_id,
         _replica,
         _partition,
+        _async_run,
         _keep_on_device
       ),
       do: nif_error(__ENV__.function)
@@ -279,11 +280,18 @@ defmodule EXLA.NIF do
         _launch_id,
         _replica,
         _partition,
+        _async_run,
         _keep_on_device
       ),
       do: nif_error(__ENV__.function)
 
   def device_assignment_to_device_id(_exec, _replica, _partition), do: nif_error(__ENV__.function)
+
+  def await_streams_cpu(_client, _buffer, _keep_on_device),
+    do: nif_error(__ENV__.function)
+
+  def await_streams_io(_client, _buffer, _keep_on_device),
+    do: nif_error(__ENV__.function)
 
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)

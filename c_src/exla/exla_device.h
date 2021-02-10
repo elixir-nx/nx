@@ -59,6 +59,10 @@ class ExlaDevice {
       return callback_stream_.get();
     }
 
+    // See PjRt implementation: tensorflow/compiler/xla/pjrt/local_device_state.cc
+    // This function synchronizes streams on this device
+    xla::Status SynchronizeAllActivity();
+
  private:
     int id_;
     se::StreamExecutor* const executor_;
