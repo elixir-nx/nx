@@ -85,6 +85,39 @@ defmodule EXLA.Defn do
     {buffers, holes, executable}
   end
 
+  def __aot__(env, _kind, _vars, fun, options) do
+    %{module: module, function: {name, arity}} = env
+
+    shapes = options[:shapes]
+    types = options[:types]
+
+    builder = EXLA.Builder.new("#{name}/#{arity}")
+
+    params_and_vars =
+      for {{shape, type}, i} <- Enum.with_index(Enum.zip(shapes, types)) do
+        exla_shape = EXLA.Shape.make_shape(type, shape)
+        param = EXLA.Op.parameter(builder, i, exla_shape, "p#{i}")
+        {Nx.Defn.Expr.parameter(shape, param), %{id: i, name: "p#{i}", dims: shape}}
+      end
+
+    {params, vars} = Enum.unzip(params_and_vars)
+
+    op =
+      fun.(params)
+      |> to_result(builder, %{})
+      |> elem(0)
+
+    op = EXLA.Op.tuple(builder, [op])
+    computation = EXLA.Builder.build(op)
+
+    %EXLA.Shape{dtype: {:t, [output]}} = computation.output_shape
+
+    output_size = Nx.size(output.dims)
+
+    EXLA.AOT.Compile.compile([computation], [{name, arity, vars, output_size}], module)
+  end
+
+
   defp holes(tuple) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> Enum.map(&holes/1)
 

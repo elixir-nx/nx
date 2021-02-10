@@ -1,4 +1,4 @@
-defmodule Exla.Aot.Codegen do
+defmodule EXLA.AOT.Codegen do
   @moduledoc false
 
   ## Bazel Attributes

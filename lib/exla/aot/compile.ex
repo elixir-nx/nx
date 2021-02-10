@@ -1,12 +1,12 @@
-defmodule Exla.Aot.Compile do
+defmodule EXLA.AOT.Compile do
   @moduledoc false
 
-  alias Exla.Aot.Codegen
+  alias EXLA.AOT.Codegen
 
   # We need to put everything inside of the TF checkout
-  @tf_checkout_path "/tf-8a1bb87da5b8dcec1d7f0bf8baa43565c095830e"
+  @tf_checkout_path "/tf-6af836f407f546cf2f9ab3b5fcb7a8285bda5c96"
 
-  alias Exla.Computation
+  alias EXLA.Computation
 
   def compile(computations, functions, module_name, lib_name \\ "nif") do
     # Compile each function to header/object
@@ -39,7 +39,7 @@ defmodule Exla.Aot.Compile do
     {:ok, pbtext_path} = write_graph_config_file({name, arity, args})
 
     src_paths =
-      Exla.NIF.compile_aot(
+      EXLA.NIF.compile_aot(
         comp,
         pbtext_path,
         get_aot_path(),
