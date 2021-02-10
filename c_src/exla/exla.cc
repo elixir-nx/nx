@@ -1683,13 +1683,11 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get keep on device flag.");
   }
 
-  exla::ExlaDevice* device = nullptr;
-
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
     (*executable)->Run(env, arguments, *output_shape,
                        replica, partition,
                        run_id, rng_seed,
-                       launch_id, device, async_run, keep_on_device), env);
+                       launch_id, async_run, keep_on_device), env);
 
   return exla::nif::ok(env, term);
 }
