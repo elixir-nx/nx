@@ -454,8 +454,13 @@ defmodule Nx do
             "got a tensor with type #{inspect(type)} but tensor has type #{inspect(t.type)}"
     end
 
-    backend = opts[:backend] || Nx.BinaryTensor
-    backend.tensor(t)
+    if backend = opts[:backend] do
+      # TODO: Invoke backend_transfer instead once #202 is in
+      # TODO: Add a test once we have another type of public tensor
+      backend.tensor(t)
+    else
+      t
+    end
   end
 
   def tensor(arg, opts) do
