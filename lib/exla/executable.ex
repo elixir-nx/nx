@@ -4,18 +4,17 @@ defmodule EXLA.Executable do
   """
 
   alias __MODULE__
-  alias EXLA.{Buffer, Shape, ShardedBuffer}
+  alias EXLA.{Buffer, Shape}
 
-  @enforce_keys [:client, :ref, :output_shape, :device_ordinal, :num_replicas, :num_partitions]
-  defstruct [:client, :ref, :output_shape, :device_ordinal, :num_replicas, :num_partitions]
+  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions]
+  defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions]
 
   def run(
         %Executable{} = executable,
         arguments,
         options \\ []
       ) do
-    %{client: client, ref: exec, output_shape: output_shape, device_ordinal: device_ordinal} =
-      executable
+    %{client: client, ref: exec, output_shape: output_shape} = executable
 
     # Run ID of this logical execution
     run_id = Keyword.get(options, :run_id, System.unique_integer([:positive, :monotonic]))
@@ -54,7 +53,6 @@ defmodule EXLA.Executable do
             exec,
             inputs,
             output_shape.ref,
-            device_ordinal,
             run_id,
             rng_seed,
             launch_id,
@@ -69,7 +67,6 @@ defmodule EXLA.Executable do
             exec,
             inputs,
             output_shape.ref,
-            device_ordinal,
             run_id,
             rng_seed,
             launch_id,
@@ -93,8 +90,8 @@ defmodule EXLA.Executable do
     end
   end
 
-  def device_assignment_to_device_id(%Executable{ref: exec}, replica, partition) do
-    EXLA.NIF.device_assignment_to_device_id(exec, replica, partition) |> unwrap!()
+  def device_assignment_to_device_ordinal(%Executable{ref: exec}, replica, partition) do
+    EXLA.NIF.device_assignment_to_device_ordinal(exec, replica, partition) |> unwrap!()
   end
 
   defp decompose_output(data, shape, client) do
