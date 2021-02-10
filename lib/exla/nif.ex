@@ -263,7 +263,9 @@ defmodule EXLA.NIF do
         _rng_seed,
         _launch_id,
         _replica,
-        _partition
+        _partition,
+        _async_run,
+        _keep_on_device
       ),
       do: nif_error(__ENV__.function)
 
@@ -277,7 +279,9 @@ defmodule EXLA.NIF do
         _rng_seed,
         _launch_id,
         _replica,
-        _partition
+        _partition,
+        _async_run,
+        _keep_on_device
       ),
       do: nif_error(__ENV__.function)
 

@@ -32,6 +32,9 @@ defmodule EXLA.Executable do
 
     {replica, partition} = Keyword.get(options, :device_assignment, {1, 1})
 
+    async_run = Keyword.get(options, :async_run, false)
+    async_run_int = if async_run, do: 1, else: 0
+
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
     inputs =
@@ -56,9 +59,10 @@ defmodule EXLA.Executable do
             rng_seed,
             launch_id,
             replica,
-            partition
+            partition,
+            async_run_int,
+            keep_on_device_int
           )
-          |> unwrap!()
         _ ->
           EXLA.NIF.run_io(
             client.ref,
@@ -70,12 +74,16 @@ defmodule EXLA.Executable do
             rng_seed,
             launch_id,
             replica,
-            partition
+            partition,
+            async_run_int,
+            keep_on_device_int
           )
-          |> unwrap!()
       end
 
-    result = EXLA.Client.await_streams(client, data, keep_on_device_int)
+    result =
+      if async_run,
+        do: EXLA.Client.await_streams(client, unwrap!(data), keep_on_device_int),
+        else: data
 
     case result do
       {:ok, output} ->

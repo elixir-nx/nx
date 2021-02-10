@@ -1639,7 +1639,7 @@ ERL_NIF_TERM await_streams(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 10) {
+  if (argc != 12) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1652,6 +1652,8 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   int device_ordinal;
   int replica;
   int partition;
+  bool async_run;
+  bool keep_on_device;
 
   ERL_NIF_TERM arguments = argv[2];
 
@@ -1682,16 +1684,22 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[9], &partition)) {
     return exla::nif::error(env, "Unable to get partition.");
   }
+  if (!exla::nif::get(env, argv[10], &async_run)) {
+    return exla::nif::error(env, "Unable to get async run flag.");
+  }
+  if (!exla::nif::get(env, argv[11], &keep_on_device)) {
+    return exla::nif::error(env, "Unable to get keep on device flag.");
+  }
 
   exla::ExlaDevice* device = nullptr;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* result,
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
     (*executable)->Run(env, arguments, *output_shape,
                        replica, partition,
                        run_id, rng_seed,
-                       launch_id, device, true), env);
+                       launch_id, device, async_run, keep_on_device), env);
 
-  return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, result));
+  return exla::nif::ok(env, term);
 }
 
 // Logging Functions
@@ -1741,8 +1749,8 @@ static ErlNifFunc exla_funcs[] = {
   {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
-  {"run_io", 10, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"run_cpu", 10, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 12, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 12, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_tuple_shape", 1, make_tuple_shape},
