@@ -43,18 +43,6 @@ defmodule EXLA.Shape do
     %Shape{dims: {length(shapes)}, dtype: {:t, shapes}, ref: ref}
   end
 
-  @doc """
-  Shards the given shape along the first axis.
-  """
-  def shard(shape = %Shape{}, num_shards) when num_shards == 1, do: shape
-
-  def shard(shape = %Shape{dims: {}}, _num_shards), do: shape
-
-  def shard(%Shape{dtype: type, dims: dims}, _num_shards) do
-    sharded_dims = Tuple.delete_at(dims, 0)
-    Shape.make_shape(type, sharded_dims)
-  end
-
   defp validate_dims!(_dims, 0), do: :ok
 
   defp validate_dims!(dims, i)

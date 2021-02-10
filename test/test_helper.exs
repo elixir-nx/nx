@@ -57,11 +57,10 @@ defmodule EXLAHelpers do
   """
   def compile(shapes, fun, opts \\ []) do
     builder = EXLA.Builder.new("test")
-    replicas = opts[:num_replicas] || 1
 
     {params, _} =
       Enum.map_reduce(shapes, 0, fn shape, pos ->
-        {EXLA.Op.parameter(builder, pos, EXLA.Shape.shard(shape, replicas), <<?a + pos>>),
+        {EXLA.Op.parameter(builder, pos,shape, <<?a + pos>>),
          pos + 1}
       end)
 
@@ -81,10 +80,6 @@ defmodule EXLAHelpers do
     EXLA.Executable.run(exec, args, opts)
   end
 
-  def run_parallel(args, replicas, opts \\ [], fun) do
-    exec = compile(Enum.map(args, & &1.shape), fun, num_replicas: replicas)
-    EXLA.Executable.run_parallel(exec, args, opts)
-  end
 end
 
 defmodule Nx.ProcessDevice do
@@ -101,19 +96,8 @@ defmodule Nx.ProcessDevice do
   def deallocate(key), do: if(Process.delete(key), do: :ok, else: :already_deallocated)
 end
 
-client = EXLAHelpers.client()
-multi_device = if client.device_count < 2 or client.platform != :host, do: [:multi_device], else: []
-
-if client.platform == :host and client.device_count < 2 do
-  cores = System.schedulers_online()
-
-  IO.puts(
-    "To run multi-device tests, set XLA_FLAGS=--xla_force_host_platform_device_count=#{cores}"
-  )
-end
-
 ExUnit.start(
-  exclude: [:platform] ++ multi_device,
+  exclude: [:platform],
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )
