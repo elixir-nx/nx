@@ -102,7 +102,7 @@ defmodule Nx.ProcessDevice do
 end
 
 client = EXLAHelpers.client()
-multi_device = if client.device_count < 2, do: [:multi_device], else: []
+multi_device = if client.device_count < 2 or client.platform != :host, do: [:multi_device], else: []
 
 if client.platform == :host and client.device_count < 2 do
   cores = System.schedulers_online()
