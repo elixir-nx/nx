@@ -118,6 +118,16 @@ defmodule Nx.Defn.Grad do
     {maybe_subtract(dx, dy), cache}
   end
 
+  defp grad(:quotient, _, _, _, _) do
+    raise ArgumentError, """
+    cannot compute gradient for Nx.quotient/2.
+
+    If a floating point computation is acceptable, consider \
+    using an implementation of floor division. See the \
+    documentation of `Nx.quotient` for more details.
+    """
+  end
+
   defp grad(:remainder, [x, y], ans, g, cache) do
     {x, y} = binary_broadcast(x, y, ans)
     {dx, cache} = to_grad(x, g, cache)

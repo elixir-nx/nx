@@ -164,6 +164,26 @@ defmodule Nx.Type do
   def to_floating(type), do: merge(type, {:f, 32})
 
   @doc """
+  Raises if the type is not signed or unsigned.
+
+  If the type is `:s` or `:u` the given type is returned.
+
+  ## Examples
+
+      iex> Nx.Type.requires_int({:s, 8})
+      {:s, 8}
+      iex> Nx.Type.requires_int({:u, 32})
+      {:u, 32}
+
+  """
+  def requires_int({:u, size}), do: {:u, size}
+  def requires_int({:s, size}), do: {:s, size}
+
+  def requires_int(got) do
+    raise ArgumentError, "an integer type is required, but got #{inspect(got)}"
+  end
+
+  @doc """
   Converts the given type to an aggregation precision.
 
   ## Examples

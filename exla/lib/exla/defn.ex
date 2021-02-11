@@ -313,6 +313,13 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
+  defp to_operator(:quotient, [left, right], %{type: type}, _state) do
+    # quotient defers to normal divide op.
+    # NOTE: integer type checking is done on the Nx frontend.
+    dims = broadcast_axes(op_shape(left), op_shape(right))
+    apply(EXLA.Op, :divide, [to_type(left, type), to_type(right, type), dims])
+  end
+
   @bin_comp_op [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
 
   defp to_operator(op, [left, right], _ans, _state) when op in @bin_comp_op do

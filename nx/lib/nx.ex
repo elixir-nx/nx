@@ -2466,6 +2466,90 @@ defmodule Nx do
   def divide(left, right), do: element_wise_bin_op(left, right, :divide, &Nx.Type.to_floating/1)
 
   @doc """
+  Element-wise integer division of two tensors.
+
+  If a number is given, it is converted to a tensor.
+
+  It always returns an integer tensor. Input tensors and
+  numbers must be integer types. Division by zero raises,
+  but it may trigger undefined behaviour on some compilers.
+
+  It will broadcast tensors whenever the dimensions do
+  not match and broadcasting is possible.
+
+  ## Caveat for `grad`
+
+  For `Nx.quotient/2` the grad operation is not supported.
+
+  Since integer division is, by definition, a closed operation
+  for the set of integers and grad involves floating points
+  `grad` is undefined.
+
+  However, an equivalent operation that supports grad using
+  floats is floor division:
+
+  ```
+  a |> Nx.divide(b) |> Nx.floor()
+  ```
+
+  ## Examples
+
+  ### Integer dividing scalars
+
+      iex> Nx.quotient(11, 2)
+      #Nx.Tensor<
+        s64
+        5
+      >
+
+  ### Integer dividing tensors and scalars
+
+      iex> Nx.quotient(Nx.tensor([2, 4, 5], names: [:data]), 2)
+      #Nx.Tensor<
+        s64[data: 3]
+        [1, 2, 2]
+      >
+
+      iex> Nx.quotient(10, Nx.tensor([1, 2, 3], names: [:data]))
+      #Nx.Tensor<
+        s64[data: 3]
+        [10, 5, 3]
+      >
+
+  ### Dividing tensors
+
+      iex> Nx.quotient(Nx.tensor([[10, 20]], names: [nil, :y]), Nx.tensor([[1], [2]], names: [:x, nil]))
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [10, 20],
+          [5, 10]
+        ]
+      >
+
+      iex> Nx.quotient(Nx.tensor([[10, 20]], type: {:s, 8}, names: [:x, :y]), Nx.tensor([[1], [2]], type: {:s, 8}))
+      #Nx.Tensor<
+        s8[x: 2][y: 2]
+        [
+          [10, 20],
+          [5, 10]
+        ]
+      >
+
+      iex> Nx.quotient(Nx.tensor([[10, 20]], type: {:u, 8}, names: [:x, :y]), Nx.tensor([[1], [2]], type: {:u, 32}))
+      #Nx.Tensor<
+        u32[x: 2][y: 2]
+        [
+          [10, 20],
+          [5, 10]
+        ]
+      >
+
+  """
+  def quotient(left, right),
+    do: element_wise_bin_op(left, right, :quotient, &Nx.Type.requires_int/1)
+
+  @doc """
   Element-wise arc tangent of two tensors.
 
   If a number is given, it is converted to a tensor.
