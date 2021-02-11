@@ -8,15 +8,15 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Automatic differentiation, also known as autograd. The `grad` function provides reverse-mode differentiation, useful for simulations, training probabilistic models, etc;
 
-  * Tensors backends, which enables the main `Nx` API to be used to manipulate binary tensors, column-based tensors, sparse matrices, and more;
+  * Tensors backends, which enables the main `Nx` API to be used to manipulate binary tensors, GPU-backed tensors, sparse matrices, and more;
 
   * Numerical definitions, known as `defn`, provide multi-stage compilation of tensor operations to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT);
 
 Other features include broadcasting, multi-device support, etc. You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know.
 
-For Python developers, `Nx` takes its main inspirations from [`Numpy`](https://numpy.org/) and [`Jax`](https://github.com/google/jax) but packaged into a single unified library. There are also plans to [support labelled coordinates](https://github.com/elixir-nx/exla/issues/167).
-
 *Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/) and [Australian Wildlife Conservancy](https://www.australianwildlife.org).*
+
+For Python developers, `Nx` takes its main inspirations from [`Numpy`](https://numpy.org/) and [`Jax`](https://github.com/google/jax) but packaged into a single unified library.
 
 ## Installation
 
