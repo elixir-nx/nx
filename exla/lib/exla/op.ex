@@ -204,7 +204,8 @@ defmodule EXLA.Op do
         start_indices,
         limit_indices,
         strides
-      ) when is_list(start_indices) and is_list(limit_indices) and is_list(strides) do
+      )
+      when is_list(start_indices) and is_list(limit_indices) and is_list(strides) do
     ref = EXLA.NIF.slice(op, start_indices, limit_indices, strides) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -213,7 +214,8 @@ defmodule EXLA.Op do
         %Op{builder: builder, ref: op},
         indices,
         slice_sizes
-      ) when is_list(indices) and is_list(slice_sizes) do
+      )
+      when is_list(indices) and is_list(slice_sizes) do
     indices_refs = Enum.map(indices, & &1.ref)
     ref = EXLA.NIF.dynamic_slice(op, indices_refs, slice_sizes) |> unwrap!()
     %Op{builder: builder, ref: ref}
@@ -223,7 +225,8 @@ defmodule EXLA.Op do
         %Op{builder: builder, ref: op},
         %Op{builder: builder, ref: update},
         indices
-      ) when is_list(indices) do
+      )
+      when is_list(indices) do
     indices_refs = Enum.map(indices, & &1.ref)
     ref = EXLA.NIF.dynamic_update_slice(op, update, indices_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
@@ -259,7 +262,8 @@ defmodule EXLA.Op do
         rhs_dilation,
         dim_nums,
         precision_config
-      ) do
+      )
+      when is_list(strides) and is_list(lhs_dilation) and is_list(rhs_dilation) do
     config = get_precision_config_int(precision_config)
 
     ref =
@@ -300,13 +304,8 @@ defmodule EXLA.Op do
         %Computation{ref: reduction},
         reduction_dimensions
       ) do
-    operand_refs =
-      operands
-      |> Enum.map(& &1.ref)
-
-    init_value_refs =
-      init_values
-      |> Enum.map(& &1.ref)
+    operand_refs = Enum.map(operands, & &1.ref)
+    init_value_refs = Enum.map(init_values, & &1.ref)
 
     ref =
       EXLA.NIF.variadic_reduce(
@@ -329,7 +328,8 @@ defmodule EXLA.Op do
         window_strides,
         window_dilations,
         padding_config
-      ) do
+      )
+      when is_tuple(window_dimensions) and is_list(window_strides) and is_list(window_dilations) do
     ref =
       EXLA.NIF.reduce_window(
         operand,

@@ -863,7 +863,7 @@ defmodule Nx.BinaryTensor do
     # We need to dilate the spatial dimensions of the kernel first...
     dilation_padding = [
       {0, 0, 0},
-      {0, 0, 0} | Enum.map(Tuple.to_list(kernel_dilation), &{0, 0, &1 - 1})
+      {0, 0, 0} | Enum.map(kernel_dilation, &{0, 0, &1 - 1})
     ]
 
     %T{shape: kernel_shape} = k = Nx.pad(k, 0, dilation_padding)
@@ -896,7 +896,7 @@ defmodule Nx.BinaryTensor do
     # TODO: Use Elixir Enum.zip_with on Elixir v1.12
     spatial_padding_config =
       padding
-      |> Enum.zip(Tuple.to_list(input_dilation))
+      |> Enum.zip(input_dilation)
       |> Enum.map(fn {{lo, hi}, dilation} -> {lo, hi, dilation - 1} end)
 
     padding_config = [
@@ -928,8 +928,7 @@ defmodule Nx.BinaryTensor do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    anchors = Enum.sort(make_anchors(padded_spatial_dims, strides, filter_shape, []))
-    anchors = Enum.map(anchors, &Tuple.insert_at(&1, 0, 0))
+    anchors = Enum.sort(make_anchors(padded_spatial_dims, strides, filter_shape))
 
     # Traverse the batch dim first
     output_data =
@@ -941,7 +940,7 @@ defmodule Nx.BinaryTensor do
           # the filter at each step
           anchor <- anchors,
           into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, Tuple.to_list(anchor))
+        offset = weighted_offset(batch_weighted_shape, [0 | anchor])
         # The shape of the window is {channels} + filter_shape
         # The shape of the kernel is {num_filters, channels} + filter_shape
         window =
@@ -1166,29 +1165,20 @@ defmodule Nx.BinaryTensor do
   @impl true
   def reduce_window(out, tensor, acc, window_dimensions, opts, fun) do
     padding_config = opts[:padding]
-    window_strides = opts[:strides]
-    window_dilations = opts[:window_dilations]
-
+    strides = opts[:strides]
+    dilations = opts[:window_dilations]
     acc = to_scalar(acc)
 
-    %T{type: {_, size} = type} = tensor
-
-    %T{shape: padded_shape} =
+    %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
 
     data = to_binary(tensor)
-
-    weighted_shape = weighted_shape(padded_shape, size, window_dimensions, window_dilations)
-
-    anchors =
-      Enum.sort(
-        make_anchors(padded_shape, window_strides, window_dimensions, window_dilations, [])
-      )
+    weighted_shape = weighted_shape(padded_shape, size, window_dimensions, dilations)
+    anchors = Enum.sort(make_anchors(padded_shape, strides, window_dimensions, dilations))
 
     data =
       for anchor <- anchors, into: <<>> do
-        offset = weighted_offset(weighted_shape, Tuple.to_list(anchor), Tuple.to_list(window_dilations))
-
+        offset = weighted_offset(weighted_shape, anchor, dilations)
         window = IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
 
         match_types [type] do
@@ -1596,23 +1586,23 @@ defmodule Nx.BinaryTensor do
   # and the second element is the size to be traversed in
   # the binary to fetch the next element.
   #
-  # This is often given to `weighted_traverse/3` as a general
+  # This is often given to `weighted_traverse/4` as a general
   # mechanism to traverse binaries.
-  def weighted_shape(shape, size, limits \\ :none, dilations \\ 1) do
-    Enum.reverse(weighted_shape(shape, tuple_size(shape), size, limits, dilations))
+  defp weighted_shape(shape, size, limits \\ :none, dilations \\ 1) do
+    rank = tuple_size(shape)
+
+    dilations =
+      if is_list(dilations),
+        do: Enum.reverse(dilations),
+        else: List.duplicate(dilations, rank)
+
+    weighted_shape(shape, rank, size, limits, dilations, [])
   end
 
-  defp weighted_shape(_shape, 0, _weight, _limits, _dilations) do
-    []
-  end
+  defp weighted_shape(_shape, 0, _weight, _limits, [], acc), do: acc
 
-  defp weighted_shape(shape, pos, weight, limits, dilations) do
+  defp weighted_shape(shape, pos, weight, limits, [dilation | dilations], acc) do
     shape_elem = :erlang.element(pos, shape)
-
-    cur_dilation =
-      if is_tuple(dilations),
-        do: :erlang.element(pos, dilations),
-        else: dilations
 
     element =
       if limits == :none, do: shape_elem, else: min(:erlang.element(pos, limits), shape_elem)
@@ -1620,12 +1610,10 @@ defmodule Nx.BinaryTensor do
     dilation_factor =
       if element == 1,
         do: 1,
-        else: cur_dilation
+        else: dilation
 
-    [
-      {element, dilation_factor * weight}
-      | weighted_shape(shape, pos - 1, weight * shape_elem, limits, dilations)
-    ]
+    acc = [{element, dilation_factor * weight} | acc]
+    weighted_shape(shape, pos - 1, weight * shape_elem, limits, dilations, acc)
   end
 
   # Reads the chunk size from a weighted list at the given position.
@@ -1669,38 +1657,33 @@ defmodule Nx.BinaryTensor do
   end
 
   # Makes anchors for traversing a binary with a window.
-  defp make_anchors(shape, strides, window, dilations \\ 1, anchors)
+  defp make_anchors(shape, strides, window, dilations \\ 1)
 
-  defp make_anchors(shape, strides, window, dilations, anchors)
-       when is_tuple(shape) and is_tuple(strides) and is_tuple(window) do
+  defp make_anchors(shape, strides, window, dilations)
+       when is_tuple(shape) and is_tuple(window) and is_list(strides) do
     dilations =
       if is_integer(dilations),
-        do: Tuple.duplicate(dilations, tuple_size(shape)),
+        do: List.duplicate(dilations, tuple_size(shape)),
         else: dilations
 
-    make_anchors(
-      Tuple.to_list(shape),
-      Tuple.to_list(strides),
-      Tuple.to_list(window),
-      Tuple.to_list(dilations),
-      anchors
-    )
+    make_anchors(Tuple.to_list(shape), strides, Tuple.to_list(window), dilations, :init)
   end
 
   defp make_anchors([], [], _window, _dilations, anchors), do: anchors
 
-  defp make_anchors([dim | shape], [s | strides], [w | window], [dil | dilation], []) do
-    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and i + (w - 1) * dil < dim, do: {i}
+  defp make_anchors([dim | shape], [s | strides], [w | window], [dil | dilation], :init) do
+    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and i + (w - 1) * dil < dim, do: [i]
     make_anchors(shape, strides, window, dilation, dims)
   end
 
   defp make_anchors([dim | shape], [s | strides], [w | window], [dil | dilation], anchors) do
-    dims =
-      for i <- 0..(dim - 1), rem(i, s) == 0 and i + (w - 1) * dil < dim do
-        Enum.map(anchors, &Tuple.append(&1, i))
-      end
+    anchors =
+      for i <- 0..(dim - 1),
+          rem(i, s) == 0 and i + (w - 1) * dil < dim,
+          anchor <- anchors,
+          do: anchor ++ [i]
 
-    make_anchors(shape, strides, window, dilation, List.flatten(dims))
+    make_anchors(shape, strides, window, dilation, anchors)
   end
 
   # Calculates the offset needed to reach a specified position

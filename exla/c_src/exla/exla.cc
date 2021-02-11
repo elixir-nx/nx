@@ -1006,10 +1006,10 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   if (!exla::nif::get_tuple(env, argv[3], window_dimensions)) {
     return exla::nif::error(env, "Unable to get window dimensions.");
   }
-  if (!exla::nif::get_tuple(env, argv[4], window_strides)) {
+  if (!exla::nif::get_list(env, argv[4], window_strides)) {
     return exla::nif::error(env, "Unable to get window strides.");
   }
-  if (!exla::nif::get_tuple(env, argv[5], window_dilations)) {
+  if (!exla::nif::get_list(env, argv[5], window_dilations)) {
     return exla::nif::error(env, "Unable to get window dilations.");
   }
   if (!exla::nif::get_general_padding(env, argv[6], padding_config)) {
@@ -1238,16 +1238,16 @@ ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get<xla::XlaOp>(env, argv[1], kernel)) {
     return exla::nif::error(env, "Unable to get kernel.");
   }
-  if (!exla::nif::get_tuple(env, argv[2], strides)) {
+  if (!exla::nif::get_list(env, argv[2], strides)) {
     return exla::nif::error(env, "Unable to get strides.");
   }
   if (!exla::nif::get_general_padding(env, argv[3], padding)) {
     return exla::nif::error(env, "Unable to get padding.");
   }
-  if (!exla::nif::get_tuple(env, argv[4], lhs_dilation)) {
+  if (!exla::nif::get_list(env, argv[4], lhs_dilation)) {
     return exla::nif::error(env, "Unable to get operand dilation.");
   }
-  if (!exla::nif::get_tuple(env, argv[5], rhs_dilation)) {
+  if (!exla::nif::get_list(env, argv[5], rhs_dilation)) {
     return exla::nif::error(env, "Unable to get kernel dilation.");
   }
   if (!exla::nif::get_conv_dimension_numbers(env, argv[6], &dimension_numbers)) {

@@ -52,7 +52,7 @@ defmodule Nx.Shape do
   Finds the axis for the given name.
   """
   def find_name!(names, name) do
-    Enum.find_index(names, & &1 == name) ||
+    Enum.find_index(names, &(&1 == name)) ||
       raise(
         ArgumentError,
         "tensor does not have name #{inspect(name)}. The tensor names are: #{inspect(names)}"
@@ -377,44 +377,37 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.calculate_padding({4, 4}, {2, 2}, {1, 1})
+      iex> Nx.Shape.calculate_padding({4, 4}, {2, 2}, [1, 1])
       [{0, 1}, {0, 1}]
 
-      iex> Nx.Shape.calculate_padding({3, 3}, {2, 2}, {2, 2})
+      iex> Nx.Shape.calculate_padding({3, 3}, {2, 2}, [2, 2])
       [{0, 1}, {0, 1}]
   """
   def calculate_padding(shape, window, strides)
-      when is_tuple(shape) and is_tuple(window) and is_tuple(strides) do
+      when is_tuple(shape) and is_tuple(window) and is_list(strides) do
     validate_window!(shape, window)
     validate_strides!(shape, strides)
-    calculate_padding(Tuple.to_list(shape), Tuple.to_list(window), Tuple.to_list(strides))
+    calculate_padding(strides, shape, window, 0)
   end
 
-  def calculate_padding([], [], []), do: []
+  def calculate_padding([], _shape, _window, _pos), do: []
 
-  def calculate_padding([dim | shape], [w | window], [s | strides]) do
+  def calculate_padding([s | strides], shape, window, pos) do
+    dim = elem(shape, pos)
+    w = elem(window, pos)
     output_dim = ceil(dim / s)
     padding_size = max((output_dim - 1) * s + w - dim, 0)
     lo = floor(padding_size / 2)
     hi = ceil(padding_size / 2)
-    [{lo, hi} | calculate_padding(shape, window, strides)]
+    [{lo, hi} | calculate_padding(strides, shape, window, pos + 1)]
   end
 
   @doc """
   Calculates the padding needed for same padding not accounting for stride.
   """
-  def calculate_padding(shape, window) when is_tuple(window) and is_tuple(shape) do
+  def calculate_padding(shape, window) when is_tuple(shape) and is_tuple(window) do
     validate_window!(shape, window)
-    calculate_padding(Tuple.to_list(shape), Tuple.to_list(window))
-  end
-
-  def calculate_padding([], []), do: []
-
-  def calculate_padding([dim | shape], [w | window]) do
-    padding_size = max(dim - 1 + w - dim, 0)
-    lo = floor(padding_size / 2)
-    hi = ceil(padding_size / 2)
-    [{lo, hi} | calculate_padding(shape, window)]
+    calculate_padding(List.duplicate(1, tuple_size(shape)), shape, window, 0)
   end
 
   @doc """
@@ -439,8 +432,7 @@ defmodule Nx.Shape do
       |> Tuple.delete_at(0)
       |> Tuple.to_list()
 
-    spatial_dims =
-      do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), Tuple.to_list(strides))
+    spatial_dims = do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), strides)
 
     # TODO: Is it always the case that it's best to return the input names?
     {List.to_tuple([batch_size, num_filters | spatial_dims]), input_names}
@@ -456,41 +448,42 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.window({3, 3}, {2, 2}, {1, 1})
+      iex> Nx.Shape.window({3, 3}, {2, 2}, [1, 1])
       {2, 2}
 
   ### Error cases
 
-      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, {1, 1, 1})
+      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, [1, 1, 1])
       ** (ArgumentError) window dimensions would result in empty tensor which is not currently supported in Nx, please open an issue if you'd like this behavior to change
 
-      iex> Nx.Shape.window({1, 2, 3}, {2, 1}, {1, 1, 1})
+      iex> Nx.Shape.window({1, 2, 3}, {2, 1}, [1, 1, 1])
       ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
 
-      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, {1, 1})
+      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, [1, 1])
       ** (ArgumentError) invalid stride dimensions, rank of shape (3) does not match rank of stride (2)
   """
-  def window(shape, window, strides) do
+  def window(shape, window, strides)
+      when is_tuple(shape) and is_tuple(window) and is_list(strides) do
     validate_window!(shape, window)
     validate_strides!(shape, strides)
-    window(Tuple.to_list(shape), Tuple.to_list(window), Tuple.to_list(strides), [])
+    List.to_tuple(window(strides, shape, window, 0))
   end
 
-  defp window([], [], [], acc), do: acc |> Enum.reverse() |> List.to_tuple()
+  defp window([], _shape, _window, _pos), do: []
 
-  defp window([dim | shape], [w | window], [s | strides], acc) do
+  defp window([s | strides], shape, window, pos) do
+    dim = elem(shape, pos)
+    w = elem(window, pos)
     new_dim = div(dim - w, s) + 1
 
-    if new_dim <= 0,
-      do:
-        raise(
-          ArgumentError,
-          "window dimensions would result in empty tensor" <>
-            " which is not currently supported in Nx, please" <>
-            " open an issue if you'd like this behavior to change"
-        )
+    if new_dim <= 0 do
+      raise ArgumentError,
+            "window dimensions would result in empty tensor" <>
+              " which is not currently supported in Nx, please" <>
+              " open an issue if you'd like this behavior to change"
+    end
 
-    window(shape, window, strides, [new_dim | acc])
+    [new_dim | window(strides, shape, window, pos + 1)]
   end
 
   # Ensures the window is valid given the shape.
@@ -513,12 +506,12 @@ defmodule Nx.Shape do
   # the rank of the given shape.
   defp validate_strides!(shape, strides)
 
-  defp validate_strides!(shape, strides) when tuple_size(strides) != tuple_size(shape),
+  defp validate_strides!(shape, strides) when tuple_size(shape) != length(strides),
     do:
       raise(
         ArgumentError,
         "invalid stride dimensions, rank of shape (#{tuple_size(shape)})" <>
-          " does not match rank of stride (#{tuple_size(strides)})"
+          " does not match rank of stride (#{length(strides)})"
       )
 
   defp validate_strides!(_, _), do: :ok

@@ -68,11 +68,11 @@ defmodule Nx.Tensor do
   @callback argmax(out :: t, t, keyword) :: t
   @callback argmin(out :: t, t, keyword) :: t
   @callback reduce(out :: t, t, acc :: t, keyword, fun) :: t
-  @callback reduce_window(out :: t, t, acc :: t, list, keyword, fun) :: t
-  @callback window_sum(out :: t, t, list, keyword) :: t
-  @callback window_product(out :: t, t, list, keyword) :: t
-  @callback window_max(out :: t, t, list, keyword) :: t
-  @callback window_min(out :: t, t, list, keyword) :: t
+  @callback reduce_window(out :: t, t, acc :: t, shape, keyword, fun) :: t
+  @callback window_sum(out :: t, t, shape, keyword) :: t
+  @callback window_product(out :: t, t, shape, keyword) :: t
+  @callback window_max(out :: t, t, shape, keyword) :: t
+  @callback window_min(out :: t, t, shape, keyword) :: t
   @callback map(out :: t, t, fun) :: t
   @callback sort(out :: t, t, keyword) :: t
 

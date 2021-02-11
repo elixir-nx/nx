@@ -1364,7 +1364,7 @@ defmodule Nx do
     if norm not in 0..tuple_size(shape) do
       raise ArgumentError,
             "new axis position for shape #{inspect(shape)} must be " <>
-            "a number between #{-rank-1} and #{rank}, got: #{axis}"
+              "a number between #{-rank - 1} and #{rank}, got: #{axis}"
     end
 
     new_shape = Tuple.insert_at(shape, norm, 1)
@@ -4535,38 +4535,33 @@ defmodule Nx do
         {{}, [], nil}
       end
 
+    out = %{tensor | type: {:s, 64}, shape: shape, names: names}
     opts = [tie_break: tie_break, axis: axis]
-
-    apply(impl!(tensor), op, [
-      %{tensor | type: {:s, 64}, shape: shape, names: names},
-      tensor,
-      opts
-    ])
+    apply(impl!(tensor), op, [out, tensor, opts])
   end
 
-  defp aggregate_window_op(tensor, window_dimensions, opts, op) do
+  defp aggregate_window_op(tensor, window_dimensions, opts, op)
+       when is_tuple(window_dimensions) and is_list(opts) do
     assert_keys!(opts, [:padding, :strides, :window_dilations])
     %T{shape: shape} = tensor = tensor!(tensor)
 
-    window_strides = opts[:strides] || 1
+    strides = opts[:strides] || 1
     padding = opts[:padding] || :valid
+    dilations = opts[:window_dilations] || List.duplicate(1, rank(tensor.shape))
 
-    window_dilations =
-      opts[:window_dilations] || Tuple.duplicate(1, rank(tensor.shape))
+    strides =
+      if is_integer(strides),
+        do: List.duplicate(strides, rank(tensor.shape)),
+        else: strides
 
-    window_strides =
-      if is_integer(window_strides),
-        do: Tuple.duplicate(window_strides, rank(tensor.shape)),
-        else: window_strides
-
-    window_dilations =
-      if is_integer(window_dilations),
-        do: Tuple.duplicate(window_dilations, rank(tensor.shape)),
-        else: window_dilations
+    dilations =
+      if is_integer(dilations),
+        do: List.duplicate(dilations, rank(tensor.shape)),
+        else: dilations
 
     # Cheat to calculate shape for dilated window
     window_padding_config =
-      for d <- Tuple.to_list(window_dilations) do
+      for d <- dilations do
         {0, 0, d - 1}
       end
 
@@ -4576,8 +4571,7 @@ defmodule Nx do
           for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
 
         :same ->
-          padding_config = Nx.Shape.calculate_padding(shape, window_dimensions, window_strides)
-          padding_config
+          Nx.Shape.calculate_padding(shape, window_dimensions, strides)
 
         config when is_list(config) ->
           config
@@ -4590,17 +4584,12 @@ defmodule Nx do
       end
 
     padded_shape = Nx.Shape.pad(shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
-    window_dilated_shape = Nx.Shape.pad(window_dimensions, window_padding_config)
-    output_shape = Nx.Shape.window(padded_shape, window_dilated_shape, window_strides)
+    dilated_shape = Nx.Shape.pad(window_dimensions, window_padding_config)
+    output_shape = Nx.Shape.window(padded_shape, dilated_shape, strides)
 
     out = %{tensor | shape: output_shape}
-
-    apply(impl!(tensor), op, [
-      out,
-      tensor,
-      window_dimensions,
-      [padding: padding_config, strides: window_strides, window_dilations: window_dilations]
-    ])
+    opts = [padding: padding_config, strides: strides, window_dilations: dilations]
+    apply(impl!(tensor), op, [out, tensor, window_dimensions, opts])
   end
 
   @doc """
@@ -4636,7 +4625,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_sum(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
-      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      ...>  {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
       #Nx.Tensor<
         s64[2][2][2]
         [
@@ -4652,7 +4641,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_sum(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
-      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
         f64[2][2][5]
         [
@@ -4668,7 +4657,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_sum(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {1, 1, 2}, [strides: {2, 1, 1}, padding: :valid, window_dilations: {1, 2, 1}])
+      ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 1]])
       #Nx.Tensor<
         s64[1][2][3]
         [
@@ -4680,7 +4669,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_sum(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {1, 1, 2}, [strides: {2, 1, 1}, padding: :valid, window_dilations: {1, 2, 2}])
+      ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]])
       #Nx.Tensor<
         s64[1][2][2]
         [
@@ -4692,7 +4681,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_sum(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {2, 1, 2}, [strides: {2, 1, 1}, padding: [{2, 1}, {3, 1}, {1, 0}], window_dilations: {1, 2, 2}])
+      ...>  {2, 1, 2}, [strides: [2, 1, 1], padding: [{2, 1}, {3, 1}, {1, 0}], window_dilations: [1, 2, 2]])
       #Nx.Tensor<
         s64[2][6][3]
         [
@@ -4751,7 +4740,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
-      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      ...>  {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
       #Nx.Tensor<
         f64[2][2][2]
         [
@@ -4767,7 +4756,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_mean(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
-      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
         f64[2][2][5]
         [
@@ -4783,7 +4772,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_mean(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {1, 1, 2}, [strides: {2, 1, 1}, padding: :valid, window_dilations: {1, 2, 1}])
+      ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 1]])
       #Nx.Tensor<
         f64[1][2][3]
         [
@@ -4795,7 +4784,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_mean(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {1, 1, 2}, [strides: {2, 1, 1}, padding: :valid, window_dilations: {1, 2, 2}])
+      ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]])
       #Nx.Tensor<
         f64[1][2][2]
         [
@@ -4843,7 +4832,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_max(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
-      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      ...>  {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
       #Nx.Tensor<
         s64[2][2][2]
         [
@@ -4859,7 +4848,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_max(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
-      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
         f64[2][2][5]
         [
@@ -4875,7 +4864,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_max(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {1, 1, 2}, [strides: {2, 1, 1}, padding: :valid, window_dilations: {1, 2, 2}])
+      ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]])
       #Nx.Tensor<
         s64[1][2][2]
         [
@@ -4922,7 +4911,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_min(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
-      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      ...>  {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
       #Nx.Tensor<
         s64[2][2][2]
         [
@@ -4938,7 +4927,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_min(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
-      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
         f64[2][2][5]
         [
@@ -4954,7 +4943,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_min(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {1, 1, 2}, [strides: {2, 1, 1}, padding: :valid, window_dilations: {1, 2, 2}])
+      ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]])
       #Nx.Tensor<
         s64[1][2][2]
         [
@@ -5004,7 +4993,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_product(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
-      ...>  {2, 2, 1}, strides: {1, 2, 3}, padding: [{0, 1}, {2, 0}, {1, 1}])
+      ...>  {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
       #Nx.Tensor<
         s64[2][2][2]
         [
@@ -5020,7 +5009,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_product(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
-      ...>  {2, 1, 1}, strides: {2, 1, 1}, padding: [{1, 1}, {0, 0}, {1, 1}])
+      ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
         f64[2][2][5]
         [
@@ -5036,7 +5025,7 @@ defmodule Nx do
       >
 
       iex> Nx.window_product(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  {1, 1, 2}, [strides: {2, 1, 1}, padding: :valid, window_dilations: {1, 2, 2}])
+      ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]])
       #Nx.Tensor<
         s64[1][2][2]
         [
@@ -5197,7 +5186,7 @@ defmodule Nx do
   end
 
   @doc """
-  Reduces over each window of size `window_dimensions`
+  Reduces over each window of size `dimensions`
   in the given tensor, producing a tensor that contains the same
   number of elements as valid positions of the window.
 
@@ -5237,7 +5226,7 @@ defmodule Nx do
       iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
       ...>  init_value, {2, 2},
-      ...>  [padding: :same, strides: {1, 1}],
+      ...>  [padding: :same, strides: [1, 1]],
       ...>  fn x, acc -> max(x, acc) end
       ...> )
       #Nx.Tensor<
@@ -5251,7 +5240,7 @@ defmodule Nx do
 
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6]]),
       ...>  0, {1, 2},
-      ...>  [padding: :same, strides: {1, 1}],
+      ...>  [padding: :same, strides: [1, 1]],
       ...>  fn x, acc -> x + acc end
       ...> )
       #Nx.Tensor<
@@ -5263,7 +5252,7 @@ defmodule Nx do
       >
 
       iex> Nx.reduce_window(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
-      ...>  0, {1, 1, 2}, [padding: :valid, strides: {2, 1, 1}, window_dilations: {1, 1, 2}],
+      ...>  0, {1, 1, 2}, [padding: :valid, strides: [2, 1, 1], window_dilations: [1, 1, 2]],
       ...>  fn x, acc -> x + acc end)
       #Nx.Tensor<
         s64[1][2][2]
@@ -5275,32 +5264,31 @@ defmodule Nx do
         ]
       >
   """
-  def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun) do
+  def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun)
+      when is_tuple(window_dimensions) do
     assert_keys!(opts, [:padding, :strides, :window_dilations])
     %T{shape: shape} = tensor = tensor!(tensor)
     acc = tensor!(acc)
 
-    window_strides = opts[:strides] || Tuple.duplicate(1, rank(tensor.shape))
+    strides = opts[:strides] || List.duplicate(1, rank(tensor.shape))
     padding = opts[:padding] || :valid
+    dilations = opts[:window_dilations] || List.duplicate(1, rank(tensor.shape))
 
-    window_dilations =
-      opts[:window_dilations] || Tuple.duplicate(1, rank(tensor.shape))
-
-    window_dilations =
-      if is_integer(window_dilations),
-        do: Tuple.duplicate(window_dilations, rank(tensor.shape)),
-        else: window_dilations
+    dilations =
+      if is_integer(dilations),
+        do: List.duplicate(dilations, rank(tensor.shape)),
+        else: dilations
 
     # Cheat to calculate the output shape with dilations
     window_padding_config =
-      for d <- Tuple.to_list(window_dilations) do
+      for d <- dilations do
         {0, 0, d - 1}
       end
 
-    window_strides =
-      if is_integer(window_strides),
-        do: Tuple.duplicate(window_strides, rank(tensor.shape)),
-        else: window_strides
+    strides =
+      if is_integer(strides),
+        do: List.duplicate(strides, rank(tensor.shape)),
+        else: strides
 
     padding_config =
       case padding do
@@ -5308,8 +5296,7 @@ defmodule Nx do
           for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
 
         :same ->
-          padding_config = Nx.Shape.calculate_padding(shape, window_dimensions, window_strides)
-          padding_config
+          Nx.Shape.calculate_padding(shape, window_dimensions, strides)
 
         config when is_list(config) ->
           config
@@ -5322,19 +5309,12 @@ defmodule Nx do
       end
 
     padded_shape = Nx.Shape.pad(shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
-    window_dilated_shape = Nx.Shape.pad(window_dimensions, window_padding_config)
-    output_shape = Nx.Shape.window(padded_shape, window_dilated_shape, window_strides)
+    dilated_shape = Nx.Shape.pad(window_dimensions, window_padding_config)
+    output_shape = Nx.Shape.window(padded_shape, dilated_shape, strides)
 
     out = %{tensor | shape: output_shape}
-
-    impl!(tensor).reduce_window(
-      out,
-      tensor,
-      acc,
-      window_dimensions,
-      [padding: padding_config, strides: window_strides, window_dilations: window_dilations],
-      fun
-    )
+    opts = [padding: padding_config, strides: strides, window_dilations: dilations]
+    impl!(tensor).reduce_window(out, tensor, acc, window_dimensions, opts, fun)
   end
 
   @doc """
@@ -5984,7 +5964,7 @@ defmodule Nx do
   or tuple of positive integers for each spatial dimension
   in the input and kernel. For each spatial dimension, the
   window will slide by the configuration specified in `:strides`.
-  As an example, for a 2-D convolution with `strides: {2, 1},
+  As an example, for a 2-D convolution with `strides: [2, 1],
   the window will slide 2 positions along the first spatial
   dimension until it reaches the end of the dimension and then
   1 position along the second spatial dimension.
@@ -6014,7 +5994,7 @@ defmodule Nx do
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
       iex> rhs = Nx.iota({4})
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
-      iex> Nx.conv(lhs, rhs, strides: {1, 1})
+      iex> Nx.conv(lhs, rhs, strides: [1, 1])
       #Nx.Tensor<
         f64[1][4][3][3]
         [
@@ -6047,7 +6027,7 @@ defmodule Nx do
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
       iex> rhs = Nx.iota({8})
       iex> rhs = Nx.reshape(rhs, {4, 1, 2, 1})
-      iex> Nx.conv(lhs, rhs, strides: 2, padding: :same, kernel_dilation: {2, 1})
+      iex> Nx.conv(lhs, rhs, strides: 2, padding: :same, kernel_dilation: [2, 1])
       #Nx.Tensor<
         f64[1][4][2][2]
         [
@@ -6114,14 +6094,14 @@ defmodule Nx do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    strides = opts[:strides] || Tuple.duplicate(1, rank(spatial_dims))
+    strides = opts[:strides] || 1
 
     strides =
       if is_integer(strides),
-        do: Tuple.duplicate(strides, rank(spatial_dims)),
+        do: List.duplicate(strides, rank(spatial_dims)),
         else: strides
 
-    if rank(strides) != rank(spatial_dims) do
+    if length(strides) != rank(spatial_dims) do
       raise ArgumentError,
             "rank of strides much match rank of spatial dimension" <>
               " got #{inspect(strides)} with rank #{rank(strides)}" <>
@@ -6134,24 +6114,24 @@ defmodule Nx do
         raise ArgumentError,
               "input dilation must be greater than or equal to 1, got #{input_dilation}"
 
-      is_tuple(input_dilation) and rank(input_dilation) != rank(spatial_dims) ->
+      is_list(input_dilation) and length(input_dilation) != rank(spatial_dims) ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the input" <>
                 " or specify an integer dilation factor"
 
-      is_tuple(input_dilation) and Enum.any?(Tuple.to_list(input_dilation), &(&1 < 1)) ->
+      is_list(input_dilation) and Enum.any?(input_dilation, &(&1 < 1)) ->
         raise ArgumentError, "input dilation of each dimension must be greater than or equal to 1"
 
       is_integer(kernel_dilation) and kernel_dilation < 1 ->
         raise ArgumentError,
               "kernel dilation must be greater than or equal to 1, got #{kernel_dilation}"
 
-      is_tuple(kernel_dilation) and rank(kernel_dilation) != rank(filter_shape) ->
+      is_list(kernel_dilation) and length(kernel_dilation) != rank(filter_shape) ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the kernel" <>
                 " or specify an integer dilation factor"
 
-      is_tuple(kernel_dilation) and Enum.any?(Tuple.to_list(kernel_dilation), &(&1 < 1)) ->
+      is_list(kernel_dilation) and Enum.any?(kernel_dilation, &(&1 < 1)) ->
         raise ArgumentError,
               "kernel dilation of each dimension must be greater than or equal to 1"
 
@@ -6160,13 +6140,13 @@ defmodule Nx do
     end
 
     kernel_dilation =
-      if is_tuple(kernel_dilation),
+      if is_list(kernel_dilation),
         do: kernel_dilation,
-        else: List.to_tuple(for _ <- 1..tuple_size(filter_shape), do: kernel_dilation)
+        else: for(_ <- 1..tuple_size(filter_shape), do: kernel_dilation)
 
     kernel_dilation_padding_config = [
       {0, 0, 0},
-      {0, 0, 0} | Enum.map(Tuple.to_list(kernel_dilation), &{0, 0, &1 - 1})
+      {0, 0, 0} | Enum.map(kernel_dilation, &{0, 0, &1 - 1})
     ]
 
     dilated_kernel_shape = Nx.Shape.pad(kernel_shape, kernel_dilation_padding_config)
@@ -6177,13 +6157,13 @@ defmodule Nx do
       |> Tuple.delete_at(0)
 
     input_dilation =
-      if is_tuple(input_dilation),
+      if is_list(input_dilation),
         do: input_dilation,
-        else: List.to_tuple(for _ <- 1..tuple_size(spatial_dims), do: input_dilation)
+        else: for(_ <- 1..tuple_size(spatial_dims), do: input_dilation)
 
     input_dilation_padding_config = [
       {0, 0, 0},
-      {0, 0, 0} | Enum.map(Tuple.to_list(input_dilation), &{0, 0, &1 - 1})
+      {0, 0, 0} | Enum.map(input_dilation, &{0, 0, &1 - 1})
     ]
 
     dilated_input_shape = Nx.Shape.pad(input_shape, input_dilation_padding_config)
@@ -6205,8 +6185,7 @@ defmodule Nx do
           for _ <- 0..(tuple_size(input_shape) - 3), do: {0, 0}
 
         :same ->
-          padding_config = Nx.Shape.calculate_padding(dilated_spatial_dims, dilated_filter_shape)
-          padding_config
+          Nx.Shape.calculate_padding(dilated_spatial_dims, dilated_filter_shape)
 
         config when is_list(config) ->
           config
@@ -6229,7 +6208,6 @@ defmodule Nx do
       )
 
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
-
     out = %{tensor | type: type, shape: shape, names: names}
 
     impl!(tensor).conv(
