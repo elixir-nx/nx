@@ -60,8 +60,7 @@ defmodule EXLAHelpers do
 
     {params, _} =
       Enum.map_reduce(shapes, 0, fn shape, pos ->
-        {EXLA.Op.parameter(builder, pos,shape, <<?a + pos>>),
-         pos + 1}
+        {EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
       end)
 
     op = apply(fun, [builder | params])
@@ -79,7 +78,6 @@ defmodule EXLAHelpers do
     exec = compile(Enum.map(args, & &1.shape), fun)
     EXLA.Executable.run(exec, args, opts)
   end
-
 end
 
 defmodule Nx.ProcessDevice do

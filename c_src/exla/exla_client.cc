@@ -337,13 +337,9 @@ UnpackRunArguments(ErlNifEnv* env,
 // ExlaExecutable Functions
 ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
                                std::shared_ptr<xla::DeviceAssignment> device_assignment,
-                               std::vector<std::pair<int, int>> local_logical_device_ids,
-                               std::vector<ExlaDevice*> local_devices,
                                ExlaClient* client)
                                : client_(client),
-                                 device_assignment_(std::move(device_assignment)),
-                                 local_logical_device_ids_(std::move(local_logical_device_ids)),
-                                 local_devices_(std::move(local_devices)) {
+                                 device_assignment_(std::move(device_assignment)) {
   executables_.reserve(executables.size());
   for (auto& executable : executables) {
     executables_.emplace_back(std::move(executable));
@@ -353,12 +349,7 @@ ExlaExecutable::ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>
   if (device_assignment_ == nullptr) {
     // Executable portable single-core
     num_partitions = 1;
-    CHECK(local_devices_.empty());
   } else {
-    // Executable with a device_assignment
-    CHECK_GE(local_devices_.size(), 1) << device_assignment_->ToString();
-    CHECK_LE(local_devices_.size(),
-             client_->device_count()) << "Inconsistent local device count.";
     num_partitions = device_assignment_->computation_count();
   }
 
@@ -405,21 +396,15 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 int run_id,
                                                 int rng_seed,
                                                 int launch_id,
-                                                ExlaDevice* device,
                                                 bool async_run,
                                                 bool keep_on_device) {
+  ExlaDevice* device;
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
-  if (device == nullptr) {
-    CHECK(device_assignment_ != nullptr);
-    const int device_id = (*device_assignment_)(replica - 1, partition - 1);
-    device = client_->device(device_id);
-    device_assignment = device_assignment_;
-  } else {
-    device_assignment = std::make_shared<xla::DeviceAssignment>(1, 1);
-    (*device_assignment)(0, 0) = device->id();
-  }
 
-  int device_ordinal = device->device_ordinal();
+  CHECK(device_assignment_ != nullptr);
+  const int device_id = (*device_assignment_)(replica - 1, partition - 1);
+  device = client_->device(device_id);
+  device_assignment = device_assignment_;
   int executable_idx = executables_.size() > 1 ? partition : 0;
 
   xla::RunId run_id_obj(run_id);
@@ -585,14 +570,17 @@ ExlaClient::Compile(const xla::XlaComputation& computation,
     options.set_device_allocator(allocator());
   }
 
+  if (options.has_device_assignment()) {
+    return xla::InvalidArgument("Expected options without device assignment.");
+  }
+
   int num_replicas, num_partitions;
   std::shared_ptr<xla::DeviceAssignment> device_assignment;
+
   if (compile_portable_executable) {
     if (options.has_device_assignment()) {
       return xla::InvalidArgument("Portable executable cannot have a device.");
     }
-    num_replicas = 1;
-    num_partitions = 1;
   } else {
     if (!options.has_device_assignment()) {
       // Compiling with default device assignment
@@ -602,29 +590,20 @@ ExlaClient::Compile(const xla::XlaComputation& computation,
                                    options.num_partitions()));
       options.set_device_assignment(device_assignment);
     }
+
     num_replicas = options.device_assignment().replica_count();
     num_partitions = options.device_assignment().computation_count();
+
+    CHECK_GE(num_partitions * num_replicas, 1) << device_assignment->ToString();
+    CHECK_LE(num_partitions * num_replicas,
+             this->device_count()) << "Inconsistent local device count.";
+
     device_assignment =
       std::make_shared<xla::DeviceAssignment>(options.device_assignment());
   }
 
   std::vector<std::pair<int, int>> local_logical_device_ids;
   std::vector<ExlaDevice*> local_devices;
-  if (device_assignment != nullptr) {
-    for (int replica = 0; replica < num_replicas; ++replica) {
-      for (int partition = 0; partition < num_partitions; ++partition) {
-        int device_id = (*device_assignment)(replica, partition);
-        ExlaDevice* device = this->device(device_id);
-        local_logical_device_ids.emplace_back(replica, partition);
-        local_devices.push_back(device);
-      }
-    }
-    if (local_devices.empty()) {
-      return xla::InvalidArgument(
-          "Device assignment (%s) does not have any local devices.",
-          device_assignment->ToString());
-    }
-  }
 
   EXLA_ASSIGN_OR_RETURN(
     std::vector<std::unique_ptr<xla::LocalExecutable>> local_executables,
@@ -633,8 +612,6 @@ ExlaClient::Compile(const xla::XlaComputation& computation,
   ExlaExecutable* executable =
     new ExlaExecutable(std::move(local_executables),
                        std::move(device_assignment),
-                       std::move(local_logical_device_ids),
-                       std::move(local_devices),
                        this);
   return executable;
 }

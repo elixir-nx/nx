@@ -15,6 +15,7 @@ defmodule EXLA.Defn do
         {expr, holes(expr)}
       end)
 
+    # TODO: Options given to run must be given in its own key as they don't affect compilation
     # TODO: We should extract the client and device ordinal from buffers first
     # TODO: Rename :client to :default_client
     # TODO: Client_name plus device_ordinal must be part of the cache key

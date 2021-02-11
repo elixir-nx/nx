@@ -1518,7 +1518,7 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::nif::ok(env, exla::nif::make_map(env, platform_info));
 }
 
-ERL_NIF_TERM device_assignment_to_device_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM device_assignment_to_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -1549,7 +1549,7 @@ ERL_NIF_TERM device_assignment_to_device_id(ErlNifEnv* env, int argc, const ERL_
 }
 
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 7) {
+  if (argc != 6) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1557,7 +1557,6 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   xla::XlaComputation* computation;
   std::vector<xla::Shape*> argument_layouts;
   xla::ExecutableBuildOptions build_options;
-  int device_ordinal;
   int num_replicas;
   int num_partitions;
   bool use_spmd;
@@ -1571,16 +1570,13 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get_list<xla::Shape>(env, argv[2], argument_layouts)) {
     return exla::nif::error(env, "Unable to get argument layouts.");
   }
-  if (!exla::nif::get(env, argv[3], &device_ordinal)) {
-    return exla::nif::error(env, "Unable to get device ordinal.");
-  }
-  if (!exla::nif::get(env, argv[4], &num_replicas)) {
+  if (!exla::nif::get(env, argv[3], &num_replicas)) {
     return exla::nif::error(env, "Unable to get Number of Replicas.");
   }
-  if (!exla::nif::get(env, argv[5], &num_partitions)) {
+  if (!exla::nif::get(env, argv[4], &num_partitions)) {
     return exla::nif::error(env, "Unable to get Number of Partitions.");
   }
-  if (!exla::nif::get(env, argv[6], &use_spmd)) {
+  if (!exla::nif::get(env, argv[5], &use_spmd)) {
     return exla::nif::error(env, "Unable to get SPMD Partitioning Flag.");
   }
 
@@ -1639,7 +1635,7 @@ ERL_NIF_TERM await_streams(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 12) {
+  if (argc != 11) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1649,7 +1645,6 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   int run_id;
   int rng_seed;
   int launch_id;
-  int device_ordinal;
   int replica;
   int partition;
   bool async_run;
@@ -1666,38 +1661,33 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<xla::Shape>(env, argv[3], output_shape)) {
     return exla::nif::error(env, "Unable to get output shape.");
   }
-  if (!exla::nif::get(env, argv[4], &device_ordinal)) {
-    return exla::nif::error(env, "Unable to get device ordinal.");
-  }
-  if (!exla::nif::get(env, argv[5], &run_id)) {
+  if (!exla::nif::get(env, argv[4], &run_id)) {
     return exla::nif::error(env, "Unable to get Run ID.");
   }
-  if (!exla::nif::get(env, argv[6], &rng_seed)) {
+  if (!exla::nif::get(env, argv[5], &rng_seed)) {
     return exla::nif::error(env, "Unable to get RNG Seed.");
   }
-  if (!exla::nif::get(env, argv[7], &launch_id)) {
+  if (!exla::nif::get(env, argv[6], &launch_id)) {
     return exla::nif::error(env, "Unable to get Launch ID.");
   }
-  if (!exla::nif::get(env, argv[8], &replica)) {
+  if (!exla::nif::get(env, argv[7], &replica)) {
     return exla::nif::error(env, "Unable to get replica.");
   }
-  if (!exla::nif::get(env, argv[9], &partition)) {
+  if (!exla::nif::get(env, argv[8], &partition)) {
     return exla::nif::error(env, "Unable to get partition.");
   }
-  if (!exla::nif::get(env, argv[10], &async_run)) {
+  if (!exla::nif::get(env, argv[9], &async_run)) {
     return exla::nif::error(env, "Unable to get async run flag.");
   }
-  if (!exla::nif::get(env, argv[11], &keep_on_device)) {
+  if (!exla::nif::get(env, argv[10], &keep_on_device)) {
     return exla::nif::error(env, "Unable to get keep on device flag.");
   }
-
-  exla::ExlaDevice* device = nullptr;
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
     (*executable)->Run(env, arguments, *output_shape,
                        replica, partition,
                        run_id, rng_seed,
-                       launch_id, device, async_run, keep_on_device), env);
+                       launch_id, async_run, keep_on_device), env);
 
   return exla::nif::ok(env, term);
 }
@@ -1740,8 +1730,8 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   {"get_supported_platforms", 0, get_supported_platforms},
-  {"device_assignment_to_device_id", 3, device_assignment_to_device_id},
-  {"compile", 7, compile},
+  {"device_assignment_to_device_ordinal", 3, device_assignment_to_device_ordinal},
+  {"compile", 6, compile},
   {"await_streams_cpu", 3, await_streams, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   {"await_streams_io", 3, await_streams, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaBuffer
@@ -1749,8 +1739,8 @@ static ErlNifFunc exla_funcs[] = {
   {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
-  {"run_io", 12, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"run_cpu", 12, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 11, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 11, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_tuple_shape", 1, make_tuple_shape},

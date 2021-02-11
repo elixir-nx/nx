@@ -6,7 +6,7 @@ defmodule EXLA.Client do
   """
 
   alias __MODULE__
-  alias EXLA.{Computation, Executable, Shape}
+  alias EXLA.{Computation, Executable}
 
   @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
   defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
@@ -30,7 +30,9 @@ defmodule EXLA.Client do
                   "in your config files are: #{inspect(Keyword.keys(clients))}"
 
       platform = Keyword.get(options, :platform, :host)
+      # This is the default num_replicas used on compile, so we should probably rename it
       number_of_replicas = Keyword.get(options, :number_of_replicas, 1)
+      # The number of threads that will get used during a computation
       intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
 
       ref =
@@ -72,17 +74,14 @@ defmodule EXLA.Client do
         argument_shapes,
         options \\ []
       ) do
-    device_ordinal = Keyword.get(options, :device_ordinal, -1)
+    # This is the number of replicas coordinating on it
     num_replicas = Keyword.get(options, :num_replicas, 1)
+    # This is TPU only
     num_partitions = Keyword.get(options, :num_partitions, 1)
     # TODO: investigated a bit more
     use_spmd = Keyword.get(options, :use_spmd, false)
     use_spmd_int = if use_spmd, do: 1, else: 0
-    device_ordinal = check_device_compatibility!(client, device_ordinal)
-
-    shape_refs =
-      argument_shapes
-      |> Enum.map(& &1.ref)
+    shape_refs = Enum.map(argument_shapes, & &1.ref)
 
     # Executable Build Context
     # TODO: Validate replicas, partitions, and shapes
@@ -92,7 +91,6 @@ defmodule EXLA.Client do
         client.ref,
         computation.ref,
         shape_refs,
-        device_ordinal,
         num_replicas,
         num_partitions,
         use_spmd_int
@@ -103,7 +101,6 @@ defmodule EXLA.Client do
       client: client,
       ref: ref,
       output_shape: output_shape,
-      device_ordinal: device_ordinal,
       num_replicas: num_replicas,
       num_partitions: num_partitions
     }
@@ -129,7 +126,7 @@ defmodule EXLA.Client do
   @doc """
   Awaits for all running streams on the given device.
   """
-  def await_streams(%Client{ref: ref, platform: platform} = client, buffer, keep_on_device) do
+  def await_streams(%Client{ref: ref, platform: platform}, buffer, keep_on_device) do
     # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
     case platform do
       :host ->

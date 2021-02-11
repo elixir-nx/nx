@@ -246,7 +246,6 @@ defmodule EXLA.NIF do
         _client,
         _computation,
         _argument_layouts,
-        _device_ordinal,
         _num_replicas,
         _num_partitions,
         _use_spmd
@@ -258,7 +257,6 @@ defmodule EXLA.NIF do
         _executable,
         _arguments,
         _output_shape,
-        _device_ordinal,
         _run_id,
         _rng_seed,
         _launch_id,
@@ -274,7 +272,6 @@ defmodule EXLA.NIF do
         _executable,
         _arguments,
         _output_shape,
-        _device_ordinal,
         _run_id,
         _rng_seed,
         _launch_id,
@@ -285,7 +282,7 @@ defmodule EXLA.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def device_assignment_to_device_id(_exec, _replica, _partition), do: nif_error(__ENV__.function)
+  def device_assignment_to_device_ordinal(_exec, _replica, _partition), do: nif_error(__ENV__.function)
 
   def await_streams_cpu(_client, _buffer, _keep_on_device),
     do: nif_error(__ENV__.function)

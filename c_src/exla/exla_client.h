@@ -230,8 +230,6 @@ class ExlaExecutable {
  public:
   ExlaExecutable(std::vector<std::unique_ptr<xla::LocalExecutable>> executables,
                  std::shared_ptr<xla::DeviceAssignment> device_assignment,
-                 std::vector<std::pair<int, int>> local_logical_device_ids,
-                 std::vector<ExlaDevice*> local_devices,
                  ExlaClient* client);
 
   // Returns executable's compiling client.
@@ -257,14 +255,6 @@ class ExlaExecutable {
     return *device_assignment_;
   }
 
-  // Returns the local device IDs available to this executable
-  const std::vector<std::pair<int, int>>& local_logical_device_ids() const {
-    return local_logical_device_ids_;
-  }
-
-  // Returns a vector of devices available to this executable
-  const std::vector<ExlaDevice*> local_devices() { return local_devices_; }
-
   // Deletes the underlying executables
   void Delete() { executables_.clear(); }
 
@@ -287,7 +277,6 @@ class ExlaExecutable {
                                   int run_id,
                                   int rng_seed,
                                   int launch_id,
-                                  ExlaDevice* device,
                                   bool async_run,
                                   bool keep_on_device);
 
@@ -295,8 +284,6 @@ class ExlaExecutable {
   ExlaClient* client_;
   std::vector<std::shared_ptr<xla::LocalExecutable>> executables_;
   std::shared_ptr<xla::DeviceAssignment> device_assignment_;
-  std::vector<std::pair<int, int>> local_logical_device_ids_;
-  std::vector<ExlaDevice*> local_devices_;
 };
 
 // Encapsulates an xla::LocalClient, which provides an interface for
