@@ -536,13 +536,13 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "slice" do
-    defn grad_mean_slice(t), do: grad(t, Nx.mean(Nx.slice(t, {0, 1}, {1, 2}, strides: {1, 2})))
-    defn grad_sum_slice(t), do: grad(t, Nx.sum(Nx.slice(t, {1, 0}, {1, 2}, strides: {1, 1})))
+    defn grad_mean_slice(t), do: grad(t, Nx.mean(Nx.slice(t, [0, 1], [1, 2], strides: [1, 2])))
+    defn grad_sum_slice(t), do: grad(t, Nx.sum(Nx.slice(t, [1, 0], [1, 2], strides: [1, 1])))
 
     defn grad_sum_pad_slice(t) do
       grad(
         t,
-        Nx.slice(t, {1, 0}, {1, 2}, strides: {1, 1})
+        Nx.slice(t, [1, 0], [1, 2], strides: [1, 1])
         |> Nx.pad(Nx.mean(Nx.sin(t)), [{2, 1, 2}, {-1, 2, 0}])
         |> Nx.sum()
       )

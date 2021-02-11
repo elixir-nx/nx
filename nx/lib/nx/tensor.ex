@@ -150,11 +150,8 @@ defmodule Nx.Tensor do
     impl = Nx.Shared.impl!(tensor)
     {start, lengths, squeeze} = fetch_axes(rank - 1, axes, shape, [], [], [])
 
-    start = List.to_tuple(start)
-    lengths = List.to_tuple(lengths)
-
-    %{tensor | shape: lengths}
-    |> impl.slice(tensor, start, lengths, Tuple.duplicate(1, rank))
+    %{tensor | shape: List.to_tuple(lengths)}
+    |> impl.slice(tensor, start, lengths, List.duplicate(1, rank))
     |> Nx.squeeze(axes: squeeze)
   end
 

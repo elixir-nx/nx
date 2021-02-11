@@ -764,71 +764,68 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.slice({2, 15, 30}, {1, 4, 10}, {1, 1, 10}, {1, 1, 3})
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [1, 1, 10], [1, 1, 3])
       {1, 1, 4}
 
   ### Error cases
 
-      iex> Nx.Shape.slice({2, 15, 30}, {1, 4, 10}, {2, 1, 1}, {1, 1, 1})
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [2, 1, 1], [1, 1, 1])
       ** (ArgumentError) start index + length at axis 0 must be less than axis size of 2, got: 3
 
   """
   def slice(shape, start_indices, lengths, strides) do
     rank = tuple_size(shape)
 
-    if tuple_size(strides) != rank do
+    if length(strides) != rank do
       raise ArgumentError, "invalid strides rank for shape of rank #{rank}"
     end
 
-    if tuple_size(start_indices) != rank do
+    if length(start_indices) != rank do
       raise ArgumentError, "invalid start indices rank for shape of rank #{rank}"
     end
 
-    if tuple_size(lengths) != rank do
+    if length(lengths) != rank do
       raise ArgumentError, "invalid limit indices rank for shape of rank #{rank}"
     end
 
-    slice(rank, shape, start_indices, lengths, strides, [])
+    shape
+    |> slice(0, start_indices, lengths, strides)
+    |> List.to_tuple()
   end
 
-  defp slice(0, _shape, _start_indices, _lengths, _strides, acc) do
-    List.to_tuple(acc)
-  end
-
-  defp slice(pos, shape, start_indices, lengths, strides, acc) do
-    dim = :erlang.element(pos, shape)
-    i = :erlang.element(pos, start_indices)
-    len = :erlang.element(pos, lengths)
-    s = :erlang.element(pos, strides)
+  defp slice(shape, pos, [i | start_indices], [len | lengths], [s | strides]) do
+    dim = elem(shape, pos)
 
     if not is_integer(i) or i < 0 do
       raise ArgumentError,
-            "start index at axis #{pos-1} must be greater than or equal to 0, got: #{inspect(i)}"
+            "start index at axis #{pos} must be greater than or equal to 0, got: #{inspect(i)}"
     end
 
     if not is_integer(len) or len < 1 do
       raise ArgumentError,
-            "length at axis #{pos-1} must be greater than or equal to 1, got: #{inspect(len)}"
+            "length at axis #{pos} must be greater than or equal to 1, got: #{inspect(len)}"
     end
 
     if not is_integer(s) or s < 1 do
       raise ArgumentError,
-            "stride at axis #{pos-1} must be greater than or equal to 1, got: #{inspect(s)}"
+            "stride at axis #{pos} must be greater than or equal to 1, got: #{inspect(s)}"
     end
 
     if i >= dim do
       raise ArgumentError,
-            "start index at axis #{pos-1} must be less than axis size of #{dim}, got: #{i}"
+            "start index at axis #{pos} must be less than axis size of #{dim}, got: #{i}"
     end
 
     if i + len > dim do
       raise ArgumentError,
-            "start index + length at axis #{pos-1} must be less than axis size of #{dim}, " <>
+            "start index + length at axis #{pos} must be less than axis size of #{dim}, " <>
               "got: #{i + len}"
     end
 
-    slice(pos - 1, shape, start_indices, lengths, strides, [Kernel.ceil(len / s) | acc])
+    [Kernel.ceil(len / s) | slice(shape, pos + 1, start_indices, lengths, strides)]
   end
+
+  defp slice(_shape, _pos, [], [], []), do: []
 
   @doc """
   Returns the shape and names after a concat.

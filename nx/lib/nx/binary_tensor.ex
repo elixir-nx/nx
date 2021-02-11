@@ -941,7 +941,7 @@ defmodule Nx.BinaryTensor do
           # the filter at each step
           anchor <- anchors,
           into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, anchor)
+        offset = weighted_offset(batch_weighted_shape, Tuple.to_list(anchor))
         # The shape of the window is {channels} + filter_shape
         # The shape of the kernel is {num_filters, channels} + filter_shape
         window =
@@ -1187,7 +1187,7 @@ defmodule Nx.BinaryTensor do
 
     data =
       for anchor <- anchors, into: <<>> do
-        offset = weighted_offset(weighted_shape, anchor, window_dilations)
+        offset = weighted_offset(weighted_shape, Tuple.to_list(anchor), Tuple.to_list(window_dilations))
 
         window = IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
 
@@ -1292,7 +1292,7 @@ defmodule Nx.BinaryTensor do
 
     if top_dimension_slice?(Nx.rank(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
-      offset = div(length, elem(output_shape, 0)) * elem(start_indices, 0)
+      offset = div(length, elem(output_shape, 0)) * hd(start_indices)
       from_binary(out, binary_part(to_binary(tensor), offset, length))
     else
       # Anchored around the start indices
@@ -1304,7 +1304,7 @@ defmodule Nx.BinaryTensor do
       # TODO: Use Enum.zip_with on Elixir v1.12
       weighted_shape =
         weighted_shape
-        |> Enum.zip(Tuple.to_list(strides))
+        |> Enum.zip(strides)
         |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
 
       input_data = to_binary(tensor)
@@ -1707,18 +1707,18 @@ defmodule Nx.BinaryTensor do
   # in the binary from a weighted shape list.
   defp weighted_offset(weighted_shape, pos, dilations \\ 1)
 
-  defp weighted_offset(weighted_shape, pos, dilations) when is_tuple(pos) do
+  defp weighted_offset(weighted_shape, pos, dilations) when is_list(pos) do
     dilations =
-      if is_tuple(dilations),
-        do: Tuple.to_list(dilations),
+      if is_list(dilations),
+        do: dilations,
         else: List.duplicate(dilations, length(weighted_shape))
 
-    weighted_offset(weighted_shape, Tuple.to_list(pos), dilations)
+    sum_weighted_offset(weighted_shape, pos, dilations)
   end
 
-  defp weighted_offset([], [], []), do: 0
+  defp sum_weighted_offset([], [], []), do: 0
 
-  defp weighted_offset([{s, size} | dims], [x | pos], [d | dilation]) do
+  defp sum_weighted_offset([{s, size} | dims], [x | pos], [d | dilation]) do
     # Account for the dilation
     dilation_factor =
       if s == 1,

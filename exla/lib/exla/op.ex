@@ -204,7 +204,7 @@ defmodule EXLA.Op do
         start_indices,
         limit_indices,
         strides
-      ) when is_tuple(start_indices) and is_tuple(limit_indices) and is_tuple(strides) do
+      ) when is_list(start_indices) and is_list(limit_indices) and is_list(strides) do
     ref = EXLA.NIF.slice(op, start_indices, limit_indices, strides) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -213,13 +213,8 @@ defmodule EXLA.Op do
         %Op{builder: builder, ref: op},
         indices,
         slice_sizes
-      ) when is_tuple(indices) and is_tuple(slice_sizes) do
-    indices_refs =
-      indices
-      |> Tuple.to_list()
-      |> Enum.map(& &1.ref)
-      |> List.to_tuple()
-
+      ) when is_list(indices) and is_list(slice_sizes) do
+    indices_refs = Enum.map(indices, & &1.ref)
     ref = EXLA.NIF.dynamic_slice(op, indices_refs, slice_sizes) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -228,13 +223,8 @@ defmodule EXLA.Op do
         %Op{builder: builder, ref: op},
         %Op{builder: builder, ref: update},
         indices
-      ) when is_tuple(indices) do
-    indices_refs =
-      indices
-      |> Tuple.to_list()
-      |> Enum.map(& &1.ref)
-      |> List.to_tuple()
-
+      ) when is_list(indices) do
+    indices_refs = Enum.map(indices, & &1.ref)
     ref = EXLA.NIF.dynamic_update_slice(op, update, indices_refs) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end

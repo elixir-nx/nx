@@ -6336,7 +6336,7 @@ defmodule Nx do
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, {0, 6, 2}, {2, 1, 3})
+      iex> Nx.slice(t, [0, 6, 2], [2, 1, 3])
       #Nx.Tensor<
         s64[2][1][3]
         [
@@ -6351,7 +6351,7 @@ defmodule Nx do
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, {1, 4, 10}, {1, 1, 10}, strides: 2)
+      iex> Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: 2)
       #Nx.Tensor<
         s64[1][1][5]
         [
@@ -6363,7 +6363,7 @@ defmodule Nx do
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, {1, 4, 10}, {1, 1, 10}, strides: {1, 2, 3})
+      iex> Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: [1, 2, 3])
       #Nx.Tensor<
         s64[1][1][4]
         [
@@ -6375,7 +6375,7 @@ defmodule Nx do
 
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, {0, 4, 11}, {2, 3, 9}, strides: {2, 1, 3})
+      iex> Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
       #Nx.Tensor<
         s64[1][3][3]
         [
@@ -6395,7 +6395,7 @@ defmodule Nx do
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
       ...> ])
-      iex> Nx.slice(t, {0, 0}, {6, 7}, strides: {5, 3})
+      iex> Nx.slice(t, [0, 0], [6, 7], strides: [5, 3])
       #Nx.Tensor<
         f64[2][3]
         [
@@ -6404,14 +6404,15 @@ defmodule Nx do
         ]
       >
   """
-  def slice(tensor, start_indices, lengths, opts \\ []) when is_tuple(start_indices) and is_tuple(lengths) and is_list(opts) do
+  def slice(tensor, start_indices, lengths, opts \\ [])
+      when is_list(start_indices) and is_list(lengths) and is_list(opts) do
     assert_keys!(opts, [:strides])
     %T{shape: shape} = tensor = tensor!(tensor)
     strides = opts[:strides] || 1
 
     strides =
       if is_integer(strides),
-        do: Tuple.duplicate(strides, rank(shape)),
+        do: List.duplicate(strides, rank(shape)),
         else: strides
 
     output_shape = Nx.Shape.slice(shape, start_indices, lengths, strides)

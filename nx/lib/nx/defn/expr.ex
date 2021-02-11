@@ -593,33 +593,18 @@ defmodule Nx.Defn.Expr do
          true <- ones_stride?(strides) do
       {start, lengths} =
         0
-        |> merge_slice(
-          axes,
-          Tuple.to_list(inner_start),
-          Tuple.to_list(start),
-          Tuple.to_list(inner_lengths),
-          Tuple.to_list(lengths)
-        )
+        |> merge_slice(axes, inner_start, start, inner_lengths, lengths)
         |> Enum.unzip()
 
       tensor
-      |> Nx.slice(List.to_tuple(start), List.to_tuple(lengths))
+      |> Nx.slice(start, lengths)
       |> Nx.squeeze(axes: axes)
     else
       _ -> expr(out, tensor.data.context, :slice, [tensor, start, lengths, strides])
     end
   end
 
-  defp ones_stride?(strides), do: ones_stride?(strides, tuple_size(strides))
-
-  defp ones_stride?(_strides, 0),
-    do: true
-
-  defp ones_stride?(strides, pos) when :erlang.element(pos, strides) == 1,
-    do: ones_stride?(strides, pos - 1)
-
-  defp ones_stride?(_strides, _pos),
-    do: false
+  defp ones_stride?(strides), do: Enum.all?(strides, & &1 == 1)
 
   defp maybe_squeeze(%T{data: %Expr{op: :squeeze, args: [slice, axes]}}), do: {slice, axes}
   defp maybe_squeeze(slice), do: {slice, []}

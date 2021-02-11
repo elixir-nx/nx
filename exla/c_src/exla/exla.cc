@@ -437,13 +437,13 @@ ERL_NIF_TERM slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
   }
-  if (!exla::nif::get_tuple(env, argv[1], start_indices)) {
+  if (!exla::nif::get_list(env, argv[1], start_indices)) {
     return exla::nif::error(env, "Unable to get start indices.");
   }
-  if (!exla::nif::get_tuple(env, argv[2], limit_indices)) {
+  if (!exla::nif::get_list(env, argv[2], limit_indices)) {
     return exla::nif::error(env, "Unable to get limit indices.");
   }
-  if (!exla::nif::get_tuple(env, argv[3], strides)) {
+  if (!exla::nif::get_list(env, argv[3], strides)) {
     return exla::nif::error(env, "Unable to get strides.");
   }
 
@@ -464,10 +464,10 @@ ERL_NIF_TERM dynamic_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   if (!exla::nif::get(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
   }
-  if (!exla::nif::get_tuple<xla::XlaOp>(env, argv[1], start_indices)) {
+  if (!exla::nif::get_list<xla::XlaOp>(env, argv[1], start_indices)) {
     return exla::nif::error(env, "Unable to get start index ops.");
   }
-  if (!exla::nif::get_tuple(env, argv[2], sizes)) {
+  if (!exla::nif::get_list(env, argv[2], sizes)) {
     return exla::nif::error(env, "Unable to get sizes.");
   }
 
@@ -491,7 +491,7 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get<xla::XlaOp>(env, argv[1], update)) {
     return exla::nif::error(env, "Unable to get update.");
   }
-  if (!exla::nif::get_tuple<xla::XlaOp>(env, argv[2], start_indices)) {
+  if (!exla::nif::get_list<xla::XlaOp>(env, argv[2], start_indices)) {
     return exla::nif::error(env, "Unable to get start indices.");
   }
 

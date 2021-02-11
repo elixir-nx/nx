@@ -255,11 +255,9 @@ defmodule Nx.Defn.Grad do
     inverse_padding_config = Enum.map(padding_config, fn {lo, hi, _} -> {-lo, -hi, 0} end)
     unpadded = Nx.pad(g, 0.0, inverse_padding_config)
 
-    start_indices = Tuple.duplicate(0, Nx.rank(unpadded))
-    lengths = unpadded.shape
-
-    strides =
-      padding_config |> Enum.map(fn {_, _, interior} -> interior + 1 end) |> List.to_tuple()
+    start_indices = List.duplicate(0, Nx.rank(unpadded))
+    lengths = Tuple.to_list(unpadded.shape)
+    strides = padding_config |> Enum.map(fn {_, _, interior} -> interior + 1 end)
 
     t_operand = Nx.slice(unpadded, start_indices, lengths, strides: strides)
     t_value = Nx.subtract(Nx.sum(g), Nx.sum(t_operand))
@@ -271,18 +269,8 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:slice, [x, start_indices, _lengths, strides], _ans, g, cache) do
-    # TODO: Clean me up
-    start_indices = Tuple.to_list(start_indices)
-    strides = Tuple.to_list(strides)
     lo_pads = start_indices
-
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    hi_pads =
-      Enum.zip([Tuple.to_list(g.shape), start_indices, strides])
-      |> Enum.map(fn {shape, start, stride} -> start + (1 + stride * (shape - 1)) end)
-      |> Enum.zip(Tuple.to_list(x.shape))
-      |> Enum.map(fn {x, y} -> y - x end)
-
+    hi_pads = hi_pads(0, g.shape, x.shape, start_indices, strides)
     interior_pads = Enum.map(strides, &(&1 - 1))
 
     padding_config = Enum.zip([lo_pads, hi_pads, interior_pads])
@@ -490,6 +478,16 @@ defmodule Nx.Defn.Grad do
 
     to_grad(x, fun.(g), cache)
   end
+
+  defp hi_pads(pos, g_shape, x_shape, [start | starts], [stride | strides]) do
+    g_dim = elem(g_shape, pos)
+    x_dim = elem(x_shape, pos)
+
+    val = x_dim - (start + (1 + stride * (g_dim - 1)))
+    [val | hi_pads(pos + 1, g_shape, x_shape, starts, strides)]
+  end
+
+  defp hi_pads(_, _, _, [], []), do: []
 
   defp binary_broadcast(x, y, ans) do
     {Nx.broadcast(x, ans), Nx.broadcast(y, ans)}

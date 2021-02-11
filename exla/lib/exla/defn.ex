@@ -532,10 +532,9 @@ defmodule EXLA.Defn do
   defp to_operator(:slice, [tensor, start_indices, lengths, strides], _ans, _state) do
     # TODO: Use Enum.zip_with on Elixir v1.12
     limit_indices =
-      Tuple.to_list(start_indices)
-      |> Enum.zip(Tuple.to_list(lengths))
+      start_indices
+      |> Enum.zip(lengths)
       |> Enum.map(fn {i, len} -> i + len end)
-      |> List.to_tuple()
 
     EXLA.Op.slice(tensor, start_indices, limit_indices, strides)
   end
