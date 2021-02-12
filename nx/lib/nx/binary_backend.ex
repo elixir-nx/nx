@@ -1,10 +1,16 @@
 defmodule Nx.BinaryBackend do
   @moduledoc """
-  A pure Elixir `Nx.Tensor` backend built on top of
-  Elixir's binaries.
+  An opaque backend written in pure Elixir that stores
+  the data in Elixir's binaries.
+
+  This is the default backend used by the `Nx` module.
+  The backend itself (and its data) is private and must
+  not be accessed directly.
   """
 
   @behaviour Nx.Tensor
+
+  @doc false
   defstruct [:device, :state]
 
   alias Nx.Tensor, as: T

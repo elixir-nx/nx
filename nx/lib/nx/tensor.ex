@@ -10,15 +10,20 @@ defmodule Nx.Tensor do
   The behaviour is mostly callback implementations of the functions in
   the `Nx` module with the tensor output shape given as first argument.
 
-  `Nx` ships with the following backends for `Nx.Tensor`:
+  `Nx` backends come in two flavors: opaque backends, of which you should
+  not access its data directly except through the functions in the `Nx`
+  module, and public ones, of which its data can be directly accessed and
+  visited. The former typically have the `Backend` suffix.
 
-    * `Nx.BinaryBackend` - a pure Elixir backend built on top
-      of Elixir's binaries. This is the default backend used
-      by the `Nx` module
+  `Nx` ships with the following backends:
 
-  Note that `Nx.Defn.Expr` is also a tensor backend. It is used
-  by `defn` to build expression graphs that are traversed by
-  custom compilers.
+    * `Nx.BinaryBackend` - an opaque backend written in pure Elixir
+      that stores the data in Elixir's binaries. This is the default
+      backend used by the `Nx` module. The backend itself (and its
+      data) is private and must not be accessed directly.
+
+    * `Nx.Defn.Expr` - a public backend used by `defn` to build
+      expression graphs that are traversed by custom compilers.
   """
 
   @type data :: struct
