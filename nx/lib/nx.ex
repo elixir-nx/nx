@@ -2465,6 +2465,15 @@ defmodule Nx do
   """
   def divide(left, right), do: element_wise_bin_op(left, right, :divide, &Nx.Type.to_floating/1)
 
+  defp assert_quotient_type!({:s, _} = type), do: type
+  defp assert_quotient_type!({:u, _} = type), do: type
+
+  defp assert_quotient_type!(type) do
+    raise ArgumentError,
+          "quotient expects integer tensors as inputs and outputs an integer tensor, " <>
+            "got: #{inspect(type)}"
+  end
+
   @doc """
   Element-wise integer division of two tensors.
 
@@ -2541,7 +2550,7 @@ defmodule Nx do
 
   """
   def quotient(left, right),
-    do: element_wise_bin_op(left, right, :quotient, &Nx.Type.requires_int/1)
+    do: element_wise_bin_op(left, right, :quotient, &assert_quotient_type!/1)
 
   @doc """
   Element-wise arc tangent of two tensors.

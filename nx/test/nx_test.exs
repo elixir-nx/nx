@@ -635,11 +635,13 @@ defmodule NxTest do
 
   describe "quotient/2" do
     test "raises for non-integer values" do
-      assert_raise ArgumentError, "an integer type is required, but got {:f, 64}", fn ->
+      msg = "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
+      
+      assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10, 1.0)
       end
-
-      assert_raise ArgumentError, "an integer type is required, but got {:f, 64}", fn ->
+      
+      assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10.0, 2)
       end
     end
