@@ -2488,12 +2488,16 @@ defmodule Nx do
 
   ## Caveat for `grad`
 
-  The grad for `quotient/2` is 0.0. If you need to support gradients,
-  you might consider using floor division, but beware of errors
-  caused due to floating points:
+  The `grad` operation is not supported for `quotient/2`.
+  Since integer division is, by definition, a closed operation
+  for the set of integers and grad involves floating points,
+  `grad` is undefined.
+
+  If you need to support gradients, you might consider using
+  floor division, but beware of precision errors caused by
+  floating points:
 
       a |> Nx.divide(b) |> Nx.floor()
-
 
   ## Examples
 
