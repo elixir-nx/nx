@@ -294,6 +294,23 @@ defmodule EXLA.DefnTest do
       compare_tensors!(arctan2_two(left, right), Nx.arctan2(left, right))
       compare_tensors!(arctan2_two(right, left), Nx.arctan2(right, left))
     end
+
+    defn quotient_two(a, b), do: Nx.quotient(a, b)
+
+    test "quotient" do
+      int_tensors = [
+        {1, 2},
+        {1, Nx.tensor([1, 2, 3])},
+        {Nx.tensor([1, 2, 3]), 1},
+        {Nx.tensor([[1], [2]]), Nx.tensor([[10, 20]])},
+        {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8})},
+        {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 32})}
+      ]
+      for {left, right} <- int_tensors do
+        compare_tensors!(quotient_two(left, right), Nx.quotient(left, right))
+        compare_tensors!(quotient_two(right, left), Nx.quotient(right, left))
+      end
+    end
   end
 
   describe "element-wise bitwise operators" do

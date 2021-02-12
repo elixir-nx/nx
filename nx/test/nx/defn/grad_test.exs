@@ -968,6 +968,14 @@ defmodule Nx.Defn.GradTest do
         grad_reduce(3)
       end
     end
+
+    defn grad_quotient(t), do: grad(t, Nx.quotient(t, 2))
+
+    test "raises on quotient" do
+      assert_raise ArgumentError, ~r"cannot compute gradient for Nx.quotient/2", fn ->
+        grad_quotient(2)
+      end
+    end
   end
 
   # We need to round the floats because of imprecision between platforms

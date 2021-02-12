@@ -461,7 +461,7 @@ defmodule Nx.Defn.Expr do
   end
 
   binary_ops =
-    [:add, :subtract, :multiply, :divide, :power, :remainder, :arctan2, :max, :min] ++
+    [:add, :subtract, :multiply, :divide, :power, :remainder, :arctan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
