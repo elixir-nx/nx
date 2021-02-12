@@ -1,15 +1,16 @@
 defmodule Nx.Tensor do
   @moduledoc """
-  The tensor data structure.
+  The tensor struct and the behaviour for backends.
 
   `Nx.Tensor` is a generic container for multidimensional data structures.
+  It contains the tensor type, shape, and names. The data itself is a
+  struct that points to a backend responsible for controlling the data.
+  The backend must implement the behaviour defined by this module.
 
-  Its data field can be made by any struct that implements the behaviour
-  defined in this module. The behaviour is mostly callback implementations
-  for the functions in the `Nx` module where the tensor outgoing shape is
-  given as first argument.
+  The behaviour is mostly callback implementations for the functions in
+  the `Nx` module where the tensor outgoing shape is given as first argument.
 
-  `Nx` ships with two implementations of `Nx.Tensor`:
+  `Nx` ships with two backends for `Nx.Tensor`:
 
     * `Nx.BinaryTensor` - a binary tensor implementation with
       support for multiple devices
