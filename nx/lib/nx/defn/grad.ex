@@ -6,25 +6,17 @@ defmodule Nx.Defn.Grad do
 
   def transform({to_grad, expr}) do
     expr = validate_expr!(expr)
-    to_result(to_grad, expr)
-  end
 
-  defp to_result(tuple, expr) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&to_result(&1, expr))
-    |> List.to_tuple()
-  end
+    Expr.traverse_exprs(to_grad, fn to_grad ->
+      id = grad_id!(to_grad)
+      {graded, _} = to_grad(expr, Expr.tensor(1.0), %{id => :stop})
 
-  defp to_result(to_grad, expr) do
-    id = grad_id!(to_grad)
-    {graded, _} = to_grad(expr, Expr.tensor(1.0), %{id => :stop})
-
-    if graded.shape == to_grad.shape do
-      graded
-    else
-      Nx.broadcast(graded, to_grad)
-    end
+      if graded.shape == to_grad.shape do
+        graded
+      else
+        Nx.broadcast(graded, to_grad)
+      end
+    end)
   end
 
   defp grad_id!(%T{data: %Expr{id: id}}) do

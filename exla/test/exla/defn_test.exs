@@ -2024,12 +2024,12 @@ defmodule EXLA.DefnTest do
 
     test "keeps data on device" do
       tensor = add_two_keep_on_device(1, 2)
-      assert %Nx.BinaryTensor{device: EXLA.Device, state: {ref, :default}} = tensor.data
+      assert %Nx.BinaryBackend{device: EXLA.Device, state: {ref, :default}} = tensor.data
       assert is_reference(ref)
       assert tensor |> Nx.device_read() |> Nx.to_binary() == <<3::64-native>>
 
       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
-      assert %Nx.BinaryTensor{device: EXLA.Device, state: {ref, :default}} = tensor.data
+      assert %Nx.BinaryBackend{device: EXLA.Device, state: {ref, :default}} = tensor.data
       assert is_reference(ref)
 
       assert tensor |> Nx.device_read() |> Nx.to_binary() ==

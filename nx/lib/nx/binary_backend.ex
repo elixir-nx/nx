@@ -1,17 +1,14 @@
-defmodule Nx.BinaryTensor do
+defmodule Nx.BinaryBackend do
   @moduledoc """
-  An implementation of `Nx.Tensor` on top of binaries.
-
-  It supports multiple devices via `Nx.Device`, where
-  `Nx.BinaryDevice` is the default implementation which
-  uses Erlang VM immutable binaries to store the data.
+  A pure Elixir `Nx.Tensor` backend built on top of
+  Elixir's binaries.
   """
 
   @behaviour Nx.Tensor
   defstruct [:device, :state]
 
   alias Nx.Tensor, as: T
-  alias Nx.BinaryTensor, as: BT
+  alias Nx.BinaryBackend, as: B
 
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
@@ -91,11 +88,11 @@ defmodule Nx.BinaryTensor do
 
   @impl true
   def from_binary(t, binary) when is_binary(binary) do
-    %{t | data: %BT{device: Nx.BinaryDevice, state: binary}}
+    %{t | data: %B{device: Nx.BinaryDevice, state: binary}}
   end
 
   def from_binary(t, other) do
-    %{t | data: %BT{device: Nx.BinaryDevice, state: IO.iodata_to_binary(other)}}
+    %{t | data: %B{device: Nx.BinaryDevice, state: IO.iodata_to_binary(other)}}
   end
 
   @impl true
@@ -133,7 +130,7 @@ defmodule Nx.BinaryTensor do
   def device_transfer(%T{data: %{device: Nx.BinaryDevice}} = tensor, device, opts) do
     %{type: type, shape: shape} = tensor
     {device, state} = device.allocate(to_binary(tensor), type, shape, opts)
-    %{tensor | data: %BT{device: device, state: state}}
+    %{tensor | data: %B{device: device, state: state}}
   end
 
   def device_transfer(%T{} = tensor, Nx.BinaryDevice, _opts) do
@@ -758,7 +755,7 @@ defmodule Nx.BinaryTensor do
     close = IA.color("]", :list, opts)
 
     case tensor.data do
-      %Nx.BinaryTensor{device: Nx.BinaryDevice} ->
+      %Nx.BinaryBackend{device: Nx.BinaryDevice} ->
         dims = Tuple.to_list(shape)
         limit = opts.limit
         list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
@@ -771,7 +768,7 @@ defmodule Nx.BinaryTensor do
       #
       #     min(opts.limit, Nx.size(shape)) * size
       #
-      %Nx.BinaryTensor{device: device} ->
+      %Nx.BinaryBackend{device: device} ->
         IA.to_doc(device, opts)
     end
   end

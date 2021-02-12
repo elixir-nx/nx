@@ -476,7 +476,7 @@ defmodule Nx do
     end
 
     names = Nx.Shape.named_axes!(opts[:names], shape)
-    backend = opts[:backend] || Nx.BinaryTensor
+    backend = opts[:backend] || Nx.BinaryBackend
     backend.from_binary(%T{shape: shape, type: type, names: names}, data)
   end
 
@@ -647,7 +647,7 @@ defmodule Nx do
     shape = Nx.shape(tensor_or_shape)
     names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
-    backend = opts[:backend] || Nx.BinaryTensor
+    backend = opts[:backend] || Nx.BinaryBackend
     backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
   end
 
@@ -740,7 +740,7 @@ defmodule Nx do
     shape = Nx.shape(tensor_or_shape)
     names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
-    backend = opts[:backend] || Nx.BinaryTensor
+    backend = opts[:backend] || Nx.BinaryBackend
     backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
   end
 
@@ -855,7 +855,7 @@ defmodule Nx do
     shape = Nx.shape(tensor_or_shape)
     names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    backend = opts[:backend] || Nx.BinaryTensor
+    backend = opts[:backend] || Nx.BinaryBackend
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis, names)
@@ -1172,7 +1172,7 @@ defmodule Nx do
       raise ArgumentError, "binary does not match the given size"
     end
 
-    backend = opts[:backend] || Nx.BinaryTensor
+    backend = opts[:backend] || Nx.BinaryBackend
     backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary)
   end
 
@@ -3090,7 +3090,7 @@ defmodule Nx do
     tensor = tensor!(tensor)
     type = tensor.type
     out = %T{shape: {}, type: type, names: []}
-    zero = Nx.BinaryTensor.from_binary(out, number_to_binary(0, type))
+    zero = Nx.BinaryBackend.from_binary(out, number_to_binary(0, type))
     element_wise_pred_op(tensor, zero, :equal)
   end
 
@@ -6703,7 +6703,7 @@ defmodule Nx do
   defp tensor!(number) when is_number(number) do
     type = Nx.Type.infer(number)
     out = %T{shape: {}, type: type, names: []}
-    Nx.BinaryTensor.from_binary(out, number_to_binary(number, type))
+    Nx.BinaryBackend.from_binary(out, number_to_binary(number, type))
   end
 
   defp number_to_binary(number, type),

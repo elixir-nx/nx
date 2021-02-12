@@ -7,18 +7,18 @@ defmodule Nx.Tensor do
   struct that points to a backend responsible for controlling the data.
   The backend must implement the behaviour defined by this module.
 
-  The behaviour is mostly callback implementations for the functions in
-  the `Nx` module where the tensor outgoing shape is given as first argument.
+  The behaviour is mostly callback implementations of the functions in
+  the `Nx` module with the tensor output shape given as first argument.
 
-  `Nx` ships with two backends for `Nx.Tensor`:
+  `Nx` ships with the following backends for `Nx.Tensor`:
 
-    * `Nx.BinaryTensor` - a binary tensor implementation with
-      support for multiple devices
+    * `Nx.BinaryBackend` - a pure Elixir backend built on top
+      of Elixir's binaries. This is the default backend used
+      by the `Nx` module
 
-    * `Nx.Defn.Expr` - a tensor implementation that builds a
-      graph of all invoked operations. Typically used in
-      conjection with `defn` and custom compilers
-
+  Note that `Nx.Defn.Expr` is also a tensor backend. It is used
+  by `defn` to build expression graphs that are traversed by
+  custom compilers.
   """
 
   @type data :: struct

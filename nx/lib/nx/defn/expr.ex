@@ -3,7 +3,7 @@ defmodule Nx.Defn.Expr do
   The expression used by `Nx.Defn.Compiler`.
 
   `Nx.Defn.Compiler` changes `Nx` default implementation from
-  `Nx.BinaryTensor` to `Nx.Defn.Expr`. It is a struct with the
+  `Nx.BinaryBackend` to `Nx.Defn.Expr`. It is a struct with the
   following fields:
 
     * `:id` - a unique identifier
@@ -44,9 +44,6 @@ defmodule Nx.Defn.Expr do
 
   @doc """
   Builds an expression from a tensor.
-
-  This implements a superset of `c:Nx.Tensor.tensor/1` as
-  it also handles numbers for convenience.
   """
   @impl true
   def tensor(t), do: to_expr(t)
@@ -161,7 +158,7 @@ defmodule Nx.Defn.Expr do
   ## Traversal helpers
 
   @doc """
-  Helper to traverse the expression arguments of an expression.
+  Helper to traverse the arguments of an expression.
 
   Note function expressions are never traversed, as they generally
   shouldn't be implicitly modified as that would ultimately change
@@ -177,11 +174,11 @@ defmodule Nx.Defn.Expr do
     {clauses, acc} =
       Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
         {condition, acc} = fun.(condition, acc)
-        {expr, acc} = traverse_tuple_or_expr(expr, acc, fun)
+        {expr, acc} = traverse_exprs(expr, acc, fun)
         {{condition, expr}, acc}
       end)
 
-    {last, acc} = traverse_tuple_or_expr(last, acc, fun)
+    {last, acc} = traverse_exprs(last, acc, fun)
     {[clauses, last], acc}
   end
 
@@ -197,12 +194,35 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
-  defp traverse_tuple_or_expr(tuple, acc, fun) when is_tuple(tuple) do
-    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse_tuple_or_expr(&1, &2, fun))
+  @doc """
+  Traverses the given expressions.
+
+  If an expression is given, the function is invoked for it
+  but not for its arguments (see `traverse_args/3` for that).
+
+  If a tuple of expressions are given, the tuple is recursively
+  traversed for each expression and returned.
+  """
+  def traverse_exprs(expr, fun) when is_function(fun, 1) do
+    {result, []} = traverse_exprs(expr, [], fn expr, [] -> {fun.(expr), []} end)
+    result
+  end
+
+  @doc """
+  Traverses the given expressions with the accumulator
+
+  If an expression is given, the function is invoked for it
+  but not for its arguments (see `traverse_args/3` for that).
+
+  If a tuple of expressions are given, the tuple is recursively
+  traversed for each expression and returned.
+  """
+  def traverse_exprs(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
+    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse_exprs(&1, &2, fun))
     {List.to_tuple(list), acc}
   end
 
-  defp traverse_tuple_or_expr(expr, acc, fun) do
+  def traverse_exprs(%T{} = expr, acc, fun) when is_function(fun, 2) do
     fun.(expr, acc)
   end
 
@@ -210,6 +230,13 @@ defmodule Nx.Defn.Expr do
 
   @doc """
   Rewrites the types of the given expression according to the given options.
+
+  ## Options
+
+    * `:max_float_type` - set the max float type
+    * `:max_signed_type` - set the max signed integer type
+    * `:max_unsigned_type` - set the max unsigned integer type
+
   """
   def rewrite_types(tensor_expr, opts \\ []) when is_list(opts) do
     {_, max_float_size} = max_float_type = opts[:max_float_type] || {:f, 64}
@@ -402,7 +429,7 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def from_binary(out, binary) do
-    to_expr(Nx.BinaryTensor.from_binary(out, binary))
+    to_expr(Nx.BinaryBackend.from_binary(out, binary))
   end
 
   @impl true

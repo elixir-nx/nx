@@ -788,17 +788,17 @@ defmodule EXLA.Defn do
   end
 
   defp buffer_to_data(%EXLA.Buffer{ref: ref, data: nil}),
-    do: %Nx.BinaryTensor{device: EXLA.Device, state: ref}
+    do: %Nx.BinaryBackend{device: EXLA.Device, state: ref}
 
   defp buffer_to_data(%EXLA.Buffer{ref: nil, data: data}),
-    do: %Nx.BinaryTensor{device: Nx.BinaryDevice, state: data}
+    do: %Nx.BinaryBackend{device: Nx.BinaryDevice, state: data}
 
   defp to_nx_type({:pred, 8}), do: {:u, 8}
   defp to_nx_type(type), do: type
 
   defp nx_to_buffer(%T{data: data, type: type, shape: shape} = tensor) do
     case data do
-      %Nx.BinaryTensor{device: EXLA.Device, state: state} ->
+      %Nx.BinaryBackend{device: EXLA.Device, state: state} ->
         EXLA.Buffer.buffer(state, EXLA.Shape.make_shape(type, shape))
 
       _ ->

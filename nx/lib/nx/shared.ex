@@ -184,14 +184,14 @@ defmodule Nx.Shared do
   Gets the implementation of a list of maybe tensors.
   """
   def find_impl!(list) do
-    Enum.reduce(list, Nx.BinaryTensor, fn
+    Enum.reduce(list, Nx.BinaryBackend, fn
       %T{data: %struct{}}, acc -> pick_struct(struct, acc)
       _, acc -> acc
     end)
   end
 
-  defp pick_struct(Nx.BinaryTensor, struct), do: struct
-  defp pick_struct(struct, Nx.BinaryTensor), do: struct
+  defp pick_struct(Nx.BinaryBackend, struct), do: struct
+  defp pick_struct(struct, Nx.BinaryBackend), do: struct
   defp pick_struct(struct, struct), do: struct
 
   defp pick_struct(struct1, struct2) do
