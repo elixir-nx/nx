@@ -18,6 +18,15 @@ Other features include broadcasting, multi-device support, etc. You can find pla
 
 For Python developers, `Nx` takes its main inspirations from [`Numpy`](https://numpy.org/) and [`Jax`](https://github.com/google/jax) but packaged into a single unified library.
 
+## Community and links
+
+The Nx project and team mantain a handful of resources:
+
+  * [Source and issues tracker](https://github.com/elixir-nx/nx)
+  * [The Nx mailing list](https://groups.google.com/g/elixir-nx)
+
+Discussions about Nx are also welcome in any of the Elixir community spaces, such as the [Elixir Forum](https://elixirforum.com/) and the other channels listed [on the sidebar of elixir-lang.org](https://elixir-lang.org/).
+
 ## Installation
 
 Before our first release, you can use Nx as a dependency via Git:
