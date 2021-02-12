@@ -4,15 +4,15 @@ defmodule MNIST do
   @default_defn_compiler {EXLA, keep_on_device: true}
 
   defn init_random_params do
-    w1 = Nx.random_normal({784, 128}, 0.0, 0.1)
-    b1 = Nx.random_normal({128}, 0.0, 0.1)
-    w2 = Nx.random_normal({128, 10}, 0.0, 0.1)
-    b2 = Nx.random_normal({10}, 0.0, 0.1)
+    w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
+    b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
+    w2 = Nx.random_normal({128, 10}, 0.0, 0.1, names: [:layer, :output])
+    b2 = Nx.random_normal({10}, 0.0, 0.1, names: [:output])
     {w1, b1, w2, b2}
   end
 
   defn softmax(logits) do
-    Nx.exp(logits) / Nx.sum(Nx.exp(logits), axes: [1], keep_axes: true)
+    Nx.exp(logits) / Nx.sum(Nx.exp(logits), axes: [:output], keep_axes: true)
   end
 
   defn predict({w1, b1, w2, b2}, batch) do
@@ -28,15 +28,15 @@ defmodule MNIST do
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
     Nx.mean(
       Nx.equal(
-        Nx.argmax(batch_labels, axis: 1),
-        Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: 1)
+        Nx.argmax(batch_labels, axis: :output),
+        Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: :output)
       )
     )
   end
 
   defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
     preds = predict({w1, b1, w2, b2}, batch_images)
-    -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axes: [1]))
+    -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axes: [:batch]))
   end
 
   defn update({w1, b1, w2, b2}, batch_images, batch_labels, step) do
@@ -89,7 +89,7 @@ defmodule MNIST do
     train_images =
       images
       |> Nx.from_binary({:u, 8})
-      |> Nx.reshape({n_images, n_rows * n_cols})
+      |> Nx.reshape({n_images, n_rows * n_cols}, names: [:batch, :input])
       |> Nx.divide(255)
       |> Nx.to_batched_list(30)
 
@@ -100,7 +100,7 @@ defmodule MNIST do
     train_labels =
       labels
       |> Nx.from_binary({:u, 8})
-      |> Nx.new_axis(-1)
+      |> Nx.reshape({n_labels, 1}, names: [:batch, :output])
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
       |> Nx.to_batched_list(30)
 
