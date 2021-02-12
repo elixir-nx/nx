@@ -150,7 +150,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def to_batch(out, %{type: {_, size}} = tensor) do
+  def to_batched_list(out, %{type: {_, size}} = tensor) do
     bitsize = Nx.size(out) * size
 
     for <<data::bitstring-size(bitsize) <- to_binary(tensor)>> do

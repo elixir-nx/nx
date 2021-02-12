@@ -698,7 +698,7 @@ defmodule Nx.Defn.Expr do
 
   ## Undefined
 
-  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, to_binary: 1, to_batch: 2]
+  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, to_binary: 1, to_batched_list: 2]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)

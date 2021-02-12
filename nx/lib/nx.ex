@@ -991,7 +991,7 @@ defmodule Nx do
 
   ## Examples
 
-      iex> [first, second] = Nx.to_batch(Nx.iota({2, 2, 2}), 1)
+      iex> [first, second] = Nx.to_batched_list(Nx.iota({2, 2, 2}), 1)
       iex> first
       #Nx.Tensor<
         s64[1][2][2]
@@ -1013,7 +1013,7 @@ defmodule Nx do
         ]
       >
 
-      iex> [first, second, third] = Nx.to_batch(Nx.iota({6, 2}, names: [:x, :y]), 2)
+      iex> [first, second, third] = Nx.to_batched_list(Nx.iota({6, 2}, names: [:x, :y]), 2)
       iex> first
       #Nx.Tensor<
         s64[x: 2][y: 2]
@@ -1042,10 +1042,10 @@ defmodule Nx do
   In case the dimension cannot be evenly divided by `batch_size`,
   it raises an `ArgumentError`:
 
-      iex> Nx.to_batch(Nx.iota({3, 2}), 2)
+      iex> Nx.to_batched_list(Nx.iota({3, 2}), 2)
       ** (ArgumentError) cannot batch because axis 0 of size 3 is not divisible by batch_size 2
   """
-  def to_batch(tensor, batch_size) when is_integer(batch_size) and batch_size >= 1 do
+  def to_batched_list(tensor, batch_size) when is_integer(batch_size) and batch_size >= 1 do
     %{shape: shape} = tensor!(tensor)
 
     if shape == {} do
@@ -1060,7 +1060,7 @@ defmodule Nx do
               "is not divisible by batch_size #{batch_size}"
     end
 
-    impl!(tensor).to_batch(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor)
+    impl!(tensor).to_batched_list(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor)
   end
 
   @doc """

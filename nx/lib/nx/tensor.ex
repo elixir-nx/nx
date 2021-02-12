@@ -41,7 +41,7 @@ defmodule Nx.Tensor do
   @callback random_uniform(t, number, number) :: t
   @callback random_normal(t, mu :: float, sigma :: float) :: t
 
-  @callback to_batch(out :: t, t) :: [t]
+  @callback to_batched_list(out :: t, t) :: [t]
   @callback to_binary(t) :: binary
   @callback device_read(t) :: t
   @callback device_deallocate(t) :: t

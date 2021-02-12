@@ -91,7 +91,7 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_images, n_rows * n_cols})
       |> Nx.divide(255)
-      |> Nx.to_batch(30)
+      |> Nx.to_batched_list(30)
 
     IO.puts("#{n_images} #{n_rows}x#{n_cols} images\n")
 
@@ -102,7 +102,7 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.new_axis(-1)
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
-      |> Nx.to_batch(30)
+      |> Nx.to_batched_list(30)
 
     IO.puts("#{n_labels} labels\n")
 
