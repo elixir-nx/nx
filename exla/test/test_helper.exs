@@ -19,9 +19,10 @@ defmodule EXLAHelpers do
         {EXLA.Op.parameter(builder, pos, shape, <<?a + pos>>), pos + 1}
       end)
 
-    op = apply(fun, [builder | params])
-    comp = EXLA.Builder.build(op)
-    EXLA.Client.compile(client(), comp, shapes, opts)
+    fun
+    |> apply([builder | params])
+    |> EXLA.Builder.build()
+    |> EXLA.Computation.compile(client(), shapes, opts)
   end
 
   @doc """

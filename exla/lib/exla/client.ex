@@ -6,7 +6,6 @@ defmodule EXLA.Client do
   """
 
   alias __MODULE__
-  alias EXLA.{Computation, Executable}
 
   @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
   defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
@@ -65,47 +64,6 @@ defmodule EXLA.Client do
     end)
   end
 
-  defp unwrap!({:ok, ref}), do: ref
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
-
-  def compile(
-        client = %Client{},
-        computation = %Computation{output_shape: output_shape},
-        argument_shapes,
-        options \\ []
-      ) do
-    # This is the number of replicas coordinating on it
-    num_replicas = Keyword.get(options, :num_replicas, 1)
-    # This is TPU only
-    num_partitions = Keyword.get(options, :num_partitions, 1)
-    # TODO: investigated a bit more
-    use_spmd = Keyword.get(options, :use_spmd, false)
-    use_spmd_int = if use_spmd, do: 1, else: 0
-    shape_refs = Enum.map(argument_shapes, & &1.ref)
-
-    # Executable Build Context
-    # TODO: Validate replicas, partitions, and shapes
-
-    ref =
-      EXLA.NIF.compile(
-        client.ref,
-        computation.ref,
-        shape_refs,
-        num_replicas,
-        num_partitions,
-        use_spmd_int
-      )
-      |> unwrap!
-
-    %Executable{
-      client: client,
-      ref: ref,
-      output_shape: output_shape,
-      num_replicas: num_replicas,
-      num_partitions: num_partitions
-    }
-  end
-
   @doc false
   def check_device_compatibility!(
         %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
@@ -124,23 +82,12 @@ defmodule EXLA.Client do
   end
 
   @doc """
-  Awaits for all running streams on the given device.
-  """
-  def await_streams(%Client{ref: ref, platform: platform}, buffer, keep_on_device) do
-    # See https://github.com/elixir-nx/exla/pull/124, for discussion on this
-    case platform do
-      :host ->
-        EXLA.NIF.await_streams_cpu(ref, buffer, keep_on_device)
-      _ ->
-        EXLA.NIF.await_streams_io(ref, buffer, keep_on_device)
-    end
-  end
-
-  @doc """
   Returns a map of supported platforms with device information.
   """
   def get_supported_platforms do
-    {:ok, platforms} = EXLA.NIF.get_supported_platforms()
-    platforms
+    EXLA.NIF.get_supported_platforms() |> unwrap!()
   end
+
+  defp unwrap!({:ok, ref}), do: ref
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end

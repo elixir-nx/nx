@@ -4,19 +4,28 @@ defmodule Nx.Defn.Compiler do
   """
 
   @doc """
-  The callback required to be implemented for each compiler.
+  Callback for async execution (on top of JIT compilation).
 
-  It receives the function an opaque `key`, often used for caching,
-  the function arguments, the function which builds an expression,
-  and the compiler options.
+  It receives the same arguments as `c:__jit__/4` but must return
+  a struct that implements the `Nx.Async` protocol.
+  """
+  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.Defn.Expr.t()), keyword) ::
+              Nx.Async.t()
+
+  @doc """
+  Callback for JIT compilation.
+
+  It receives an opaque `key`, often used for caching, the function
+  `vars`, the function which builds an expression, and the compiler
+  options.
 
   It must call `fun` with the vars as a list of arguments.
 
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
   """
-  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> result), keyword) :: result
-            when result: Nx.t() | tuple()
+  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.Defn.Expr.t()), keyword) ::
+              Nx.t() | tuple()
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:device_read, :device_deallocate, :device_transfer] ++
@@ -51,29 +60,38 @@ defmodule Nx.Defn.Compiler do
 
   @doc false
   def __jit__(fun, args, compiler, opts) do
-    if Process.get(Nx.Defn.Compiler) do
-      raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
-    end
+    runtime(:__jit__, fun, args, compiler, opts)
+  end
 
-    Process.put(Nx.Defn.Compiler, compiler)
+  @doc false
+  def __async__(fun, args, compiler, opts) do
+    runtime(:__async__, fun, args, compiler, opts)
+  end
 
-    try do
-      compiler.__jit__(
-        fun,
-        Nx.Defn.Expr.validate_args(args),
-        fn vars ->
+  defp runtime(callback, fun, args, compiler, opts) do
+    Kernel.apply(compiler, callback, [
+      fun,
+      Nx.Defn.Expr.validate_args(args),
+      fn vars ->
+        if Process.get(Nx.Defn.Compiler) do
+          raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
+        end
+
+        Process.put(Nx.Defn.Compiler, compiler)
+
+        try do
           params = Nx.Defn.Expr.to_params(vars)
           args = Nx.Defn.Expr.to_args(args, params)
 
           fun
           |> apply(args)
           |> Nx.Defn.Expr.to_result()
-        end,
-        opts
-      )
-    after
-      Process.delete(Nx.Defn.Compiler)
-    end
+        after
+          Process.delete(Nx.Defn.Compiler)
+        end
+      end,
+      opts
+    ])
   end
 
   @doc false
@@ -110,21 +128,20 @@ defmodule Nx.Defn.Compiler do
         if Process.get(Nx.Defn.Compiler) do
           unquote(defn_name)(unquote_splicing(args))
         else
-          Process.put(Nx.Defn.Compiler, unquote(def_module))
-
-          try do
-            unquote(def_module).__jit__(
-              unquote(cache),
-              Nx.Defn.Expr.validate_vars(unquote(vars)),
-              fn unquote(vars) ->
+          unquote(def_module).__jit__(
+            unquote(cache),
+            Nx.Defn.Expr.validate_vars(unquote(vars)),
+            fn unquote(vars) ->
+              Process.put(Nx.Defn.Compiler, unquote(def_module))
+              try do
                 unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
                 Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
-              end,
-              unquote(Macro.escape(def_opts))
-            )
-          after
-            Process.delete(Nx.Defn.Compiler)
-          end
+              after
+                Process.delete(Nx.Defn.Compiler)
+              end
+            end,
+            unquote(Macro.escape(def_opts))
+          )
         end
       end
 

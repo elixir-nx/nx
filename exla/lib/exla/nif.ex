@@ -282,8 +282,6 @@ defmodule EXLA.NIF do
       ),
       do: nif_error(__ENV__.function)
 
-  def device_assignment_to_device_ordinal(_exec, _replica, _partition), do: nif_error(__ENV__.function)
-
   def await_streams_cpu(_client, _buffer, _keep_on_device),
     do: nif_error(__ENV__.function)
 

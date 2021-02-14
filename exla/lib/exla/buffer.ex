@@ -3,18 +3,7 @@ defmodule EXLA.Buffer do
   An EXLA Buffer.
 
   An EXLA Buffer is the data passed as input and retrieved as output
-  to/from EXLA Executables. An EXLA buffer is one of:
-
-    1) A binary
-    2) A reference to an `xla::ScopedShapedBuffer`
-
-  An `xla::ScopedShapedBuffer` is an "owning" wrapper around an
-  `xla::ShapedBuffer`. Shaped Buffers are just buffers of data
-  with an underlying XLA shape. Scoped Shaped Buffers are said
-  to be an "owning" wrapper because they represent an allocated
-  portion of memory on a specified device (like a GPU) owned by
-  that device. Device memory is allocated upon creation of the
-  `xla::ScopedShapedBuffer` and deallocated upon its destruction.
+  to/from EXLA Executables.
   """
 
   alias __MODULE__

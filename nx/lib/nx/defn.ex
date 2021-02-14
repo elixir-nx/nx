@@ -197,10 +197,15 @@ defmodule Nx.Defn do
   alias Nx.Defn.Expr
 
   @impl true
+  def __async__(key, vars, fun, opts) do
+    Nx.Defn.Async.async(fn -> __jit__(key, vars, fun, opts) end)
+  end
+
+  @impl true
   def __jit__(_key, vars, fun, opts) do
     fun.(vars)
     |> Expr.rewrite_types(opts)
-    |> to_result(vars, %{})
+    |> Expr.traverse_exprs(%{}, &eval(&1, vars, &2))
     |> elem(0)
   end
 
@@ -218,12 +223,12 @@ defmodule Nx.Defn do
 
   defp eval(%Nx.Tensor{data: %Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
     {res, cache} = find_clause(clauses, last, vars, cache)
-    eval_maybe_tuple(res, vars, cache)
+    Expr.traverse_exprs(res, cache, &eval(&1, vars, &2))
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, vars, cache) do
     [tuple, i, _size] = args
-    {tuple, cache} = eval_maybe_tuple(tuple, vars, cache)
+    {tuple, cache} = Expr.traverse_exprs(tuple, cache, &eval(&1, vars, &2))
     {elem(tuple, i), cache}
   end
 
@@ -243,29 +248,6 @@ defmodule Nx.Defn do
     {other, cache}
   end
 
-  defp eval_maybe_tuple(tuple, vars, cache) when is_tuple(tuple) do
-    {list, cache} =
-      tuple |> Tuple.to_list() |> Enum.map_reduce(cache, &eval_maybe_tuple(&1, vars, &2))
-
-    {List.to_tuple(list), cache}
-  end
-
-  defp eval_maybe_tuple(other, vars, cache), do: eval(other, vars, cache)
-
-  defp to_result(tuple, vars, cache) when is_tuple(tuple) do
-    {args, cache} =
-      tuple
-      |> Tuple.to_list()
-      |> Enum.map_reduce(cache, &to_result(&1, vars, &2))
-
-    {List.to_tuple(args), cache}
-  end
-
-  defp to_result(other, vars, cache) do
-    {expr, cache} = eval(other, vars, cache)
-    {Nx.tensor(expr), cache}
-  end
-
   defp find_clause([{pred, clause} | clauses], last, vars, cache) do
     {pred, cache} = eval(pred, vars, cache)
     if Nx.to_scalar(pred) != 0, do: {clause, cache}, else: find_clause(clauses, last, vars, cache)
@@ -278,21 +260,46 @@ defmodule Nx.Defn do
   ## Public API
 
   @doc """
-  Invokes the anonymous function with just-in-time compilation.
+  Invokes the anonymous function with asynchronously with
+  just-in-time compilation.
 
-  The anonymous function will be invoked with a
-  tensor expression which is JIT compiled and then
-  invoked.
-
-  For example, take the following definition:
+  The anonymous function will be invoked with tensor expressions
+  which are JIT compiled and then invoked. The anonymous function
+  will also run outside of the current Elixir process. You can
+  retrieve the result by calling `Nx.Async.await!/1`. Take the
+  following definition:
 
       defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
-  By default, invoking `softmax` will use the default
-  `Nx.Defn` compiler. But with `jit/4`, we can change
-  the compiler on the fly:
+  We can invoke it asynchronously as follows:
+
+      some_struct = Nx.Defn.async(&Mod.softmax/1, [my_tensor], EXLA)
+      Nx.Async.await!(some_struct)
+
+  **Note:** similar to `jit/4`, `async/4` will ignore the `@defn_compiler`
+  on the executed function. Be sure to pass the `compiler` and its `opts`
+  as arguments instead.
+  """
+  def async(fun, args, compiler \\ Nx.Defn, opts \\ [])
+      when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
+    Nx.Defn.Compiler.__async__(fun, args, compiler, opts)
+  end
+
+  @doc """
+  Invokes the anonymous function with just-in-time compilation.
+
+  The anonymous function will be invoked with tensor expressions
+  which are JIT compiled and then invoked. For example, take the
+  following definition:
+
+      defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+
+  **Note:** `jit/4` will ignore the `@defn_compiler` on the executed
+  function. Be sure to pass the `compiler` and its `opts` as arguments
+  instead:
 
       Nx.Defn.jit(&Mod.softmax/1, [my_tensor], EXLA)
+      Nx.Defn.jit(&Mod.softmax/1, [my_tensor], EXLA, run_options: [keep_on_device: true])
 
   """
   def jit(fun, args, compiler \\ Nx.Defn, opts \\ [])

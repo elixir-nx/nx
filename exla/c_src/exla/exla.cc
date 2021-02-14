@@ -1518,36 +1518,6 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
   return exla::nif::ok(env, exla::nif::make_map(env, platform_info));
 }
 
-ERL_NIF_TERM device_assignment_to_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::ExlaExecutable** exec;
-  int replica;
-  int partition;
-
-  if (!exla::nif::get<exla::ExlaExecutable*>(env, argv[0], exec)) {
-    return exla::nif::error(env, "Unable to get executable.");
-  }
-  if (!exla::nif::get(env, argv[1], &replica)) {
-    return exla::nif::error(env, "Unable to get replica.");
-  }
-  if (!exla::nif::get(env, argv[2], &partition)) {
-    return exla::nif::error(env, "Unable to get partition.");
-  }
-
-  if (!(*exec)->executables().at(0)->build_options().has_device_assignment()) {
-    int device_id =
-      (*exec)->executables().at(0)->build_options().device_ordinal();
-    return exla::nif::ok(env, exla::nif::make(env, device_id));
-  } else {
-    int device_id =
-      (*exec)->executables().at(0)->build_options().device_assignment()(replica - 1, partition - 1);
-    return exla::nif::ok(env, exla::nif::make(env, device_id));
-  }
-}
-
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 6) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1730,7 +1700,6 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   {"get_supported_platforms", 0, get_supported_platforms},
-  {"device_assignment_to_device_ordinal", 3, device_assignment_to_device_ordinal},
   {"compile", 6, compile},
   {"await_streams_cpu", 3, await_streams, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   {"await_streams_io", 3, await_streams, ERL_NIF_DIRTY_JOB_IO_BOUND},

@@ -82,7 +82,7 @@ defmodule EXLA do
   either be explicitly allocated or kept on the device after a
   computation. For example:
 
-      @defn_compiler {EXLA, keep_on_device: true}
+      @defn_compiler {EXLA, run_options: [keep_on_device: true]}
       defn softmax(tensor) do
         Nx.exp(n) / Nx.sum(Nx.exp(n))
       end
@@ -139,6 +139,10 @@ defmodule EXLA do
   """
 
   @behaviour Nx.Defn.Compiler
+
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
+
+  @impl true
+  defdelegate __async__(key, vars, fun, opts), to: EXLA.Defn
 end

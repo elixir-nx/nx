@@ -14,6 +14,8 @@ defmodule Nx.DefnTest do
   defmodule Identity do
     @behaviour Nx.Defn.Compiler
 
+    def __async__(_, _, _, _), do: raise "not implemented"
+
     def __jit__(key, vars, fun, _opts) do
       Process.put(__MODULE__, key)
       fun.(vars)
@@ -889,6 +891,54 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "async" do
+    defn defn_async({a, b}, c), do: a + b - c
+
+    def elixir_async({a, b}, c) do
+      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn, Identity]
+      a |> Nx.add(b) |> Nx.subtract(c)
+    end
+
+    test "runs defn function async" do
+      assert %_{} = async = Nx.Defn.async(&defn_async/2, [{4, 5}, 3])
+      assert Nx.Async.await!(async) == Nx.tensor(6)
+
+      assert %_{} = async = Nx.Defn.async(&defn_async/2, [{4, 5}, Nx.tensor(3)])
+      assert Nx.Async.await!(async) == Nx.tensor(6)
+      assert %_{} = async = Nx.Defn.async(&defn_async(&1, 3), [{4, 5}])
+      assert Nx.Async.await!(async) == Nx.tensor(6)
+    end
+
+    test "runs elixir function async" do
+      assert %_{} = async = Nx.Defn.async(&elixir_async/2, [{4, 5}, 3])
+      assert Nx.Async.await!(async) == Nx.tensor(6)
+
+      assert %_{} = async = Nx.Defn.async(&elixir_async/2, [{4, 5}, Nx.tensor(3)])
+      assert Nx.Async.await!(async) == Nx.tensor(6)
+
+      assert %_{} = async = Nx.Defn.async(&elixir_async(&1, 3), [{4, 5}])
+      assert Nx.Async.await!(async) == Nx.tensor(6)
+    end
+
+    @tag :capture_log
+    test "raises on errors" do
+      Process.flag(:trap_exit, true)
+      assert %_{} = async = Nx.Defn.async(fn -> :ok end, [])
+
+      ref = Process.monitor(async.pid)
+      assert_receive {:DOWN, ^ref, _, _, _}
+
+      assert catch_exit(Nx.Async.await!(async)) == {:noproc, {Nx.Async, :await!, [async]}}
+      assert_receive {:EXIT, _, _}
+    end
+
+    test "raises if already awaited" do
+      assert %_{} = async = Nx.Defn.async(&defn_async/2, [{4, 5}, 3])
+      assert Nx.Async.await!(async) == Nx.tensor(6)
+      assert catch_exit(Nx.Async.await!(async)) == {:noproc, {Nx.Async, :await!, [async]}}
+    end
+  end
+
   describe "compilation errors" do
     test "invalid numerical expression" do
       assert_raise CompileError, ~r"#{location(+5)}: invalid numerical expression", fn ->
@@ -1012,7 +1062,7 @@ defmodule Nx.DefnTest do
     defnp private(a, b), do: a + b
     defn calls_private(a, b), do: private(a, b)
 
-    test "work" do
+    test "are supported" do
       assert private(1, 2) == Nx.tensor(3)
     end
 

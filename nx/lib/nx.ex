@@ -245,7 +245,7 @@ defmodule Nx do
   functions that on the GPU, you want to keep the data on the
   GPU as much as possible. For example:
 
-      @defn_compiler {EXLA, platform: :host, keep_on_device: true}
+      @defn_compiler {EXLA, platform: :host, run_options: [keep_on_device: true]}
       defn softmax(t) do
         Nx.exp(t) / Nx.sum(Nx.exp(t))
       end
