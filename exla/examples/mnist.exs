@@ -36,12 +36,12 @@ defmodule MNIST do
 
   defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
     preds = predict({w1, b1, w2, b2}, batch_images)
-    -Nx.mean(Nx.sum(Nx.log(preds) * batch_labels, axes: [:batch]))
+    -Nx.sum(Nx.mean(Nx.log(preds) * batch_labels, axes: [:output]))
   end
 
-  defn update({w1, b1, w2, b2}, batch_images, batch_labels, step) do
+  defn update({w1, b1, w2, b2} = params, batch_images, batch_labels, step) do
     {grad_w1, grad_b1, grad_w2, grad_b2} =
-      grad({w1, b1, w2, b2}, loss({w1, b1, w2, b2}, batch_images, batch_labels))
+      grad(params, loss(params, batch_images, batch_labels))
 
     {
       w1 - grad_w1 * step,
