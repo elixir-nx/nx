@@ -1,4 +1,4 @@
-defmodule EXLA.DefnTest do
+defmodule EXLA.DefnExprTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
@@ -2032,32 +2032,6 @@ defmodule EXLA.DefnTest do
     test "works with floating point" do
       assert clip_both(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([[2.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
-    end
-  end
-
-  describe "options" do
-    @defn_compiler {EXLA, keep_on_device: true}
-    defn add_two_keep_on_device(a, b), do: a + b
-
-    test "keeps data on device" do
-      tensor = add_two_keep_on_device(1, 2)
-      assert %Nx.BinaryBackend{device: EXLA.Device, state: {ref, :default}} = tensor.data
-      assert is_reference(ref)
-      assert tensor |> Nx.device_read() |> Nx.to_binary() == <<3::64-native>>
-
-      tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
-      assert %Nx.BinaryBackend{device: EXLA.Device, state: {ref, :default}} = tensor.data
-      assert is_reference(ref)
-
-      assert tensor |> Nx.device_read() |> Nx.to_binary() ==
-               <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
-
-      assert tensor |> Nx.device_transfer() |> Nx.to_binary() ==
-               <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
-
-      assert_raise RuntimeError,
-                   "Attempt to read from deallocated buffer.",
-                   fn -> Nx.device_read(tensor) end
     end
   end
 

@@ -4,25 +4,53 @@ defmodule EXLA.Defn do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
+  @doc false
+  def __async__(key, vars, fun, options) do
+    {run_options, compile_options} = Keyword.pop(options, :run_options, [])
+    {buffers, holes, executable} = compile(key, vars, fun, compile_options)
+
+    async_exec = EXLA.Executable.async_run(executable, buffers, run_options)
+    %EXLA.Async{executable: async_exec, holes: holes}
+  end
+
+  @doc false
+  def __await__(%EXLA.Async{executable: async_exec, holes: holes}) do
+    async_exec
+    |> EXLA.Executable.await_run()
+    |> buffer_to_nx(holes)
+  end
+
+  @doc false
   def __jit__(key, vars, fun, options) do
-    options = Keyword.put_new(options, :max_float_type, {:f, 32})
+    {run_options, compile_options} = Keyword.pop(options, :run_options, [])
+    {buffers, holes, executable} = compile(key, vars, fun, compile_options)
+
+    executable
+    |> EXLA.Executable.run(buffers, run_options)
+    |> buffer_to_nx(holes)
+  end
+
+  defp compile(key, vars, fun, options) do
+    {expr_options, exla_options} =
+      Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])
+
+    expr_options = Keyword.put_new(expr_options, :max_float_type, {:f, 32})
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
-    expr_key = {key, expr_args}
+    expr_key = {key, expr_args, expr_options}
 
     {expr, holes} =
       EXLA.LockedCache.run(expr_key, fn ->
-        expr = fun.(vars) |> Expr.rewrite_types(options)
+        expr = fun.(vars) |> Expr.rewrite_types(expr_options)
         {expr, holes(expr)}
       end)
 
-    # TODO: Options given to run must be given in its own key as they don't affect compilation
     # TODO: We should extract the client and device ordinal from buffers first
     # TODO: Rename :client to :default_client
     # TODO: Client_name plus device_ordinal must be part of the cache key
-    {client_name, options} = Keyword.pop(options, :client, :default)
+    {client_name, exla_options} = Keyword.pop(exla_options, :client, :default)
     buffers = for var <- vars, do: nx_to_buffer(var)
     cache_args = for var <- vars, do: nx_to_cache_key!(var)
-    cache_key = {key, cache_args, client_name, options}
+    cache_key = {key, cache_args, client_name, exla_options}
 
     {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->
@@ -49,14 +77,12 @@ defmodule EXLA.Defn do
           |> EXLA.Builder.build()
 
         client = EXLA.Client.fetch!(client_name)
-        executable = EXLA.Client.compile(client, computation, Enum.map(buffers, & &1.shape))
+        executable = EXLA.Computation.compile(computation, client, Enum.map(buffers, & &1.shape))
         :persistent_term.put(cache_key, executable)
         {nil, executable}
       end)
 
-    executable
-    |> EXLA.Executable.run(buffers, options)
-    |> buffer_to_nx(holes)
+    {buffers, holes, executable}
   end
 
   defp holes(tuple) when is_tuple(tuple),
