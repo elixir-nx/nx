@@ -687,7 +687,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "Nx.Defn" do
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn add_default(a, b), do: {a + b, a - b}
 
     # Check the attribute has been reset
@@ -706,10 +706,10 @@ defmodule Nx.DefnTest do
       assert DefaultCompiler.add(1, 2) == Nx.tensor(3)
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_add_two_int(t), do: Nx.add(t, 2)
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_add_two_float(t), do: Nx.add(t, 2)
 
     test "constant" do
@@ -720,14 +720,14 @@ defmodule Nx.DefnTest do
                default_add_two_float(Nx.tensor([1, 2, 3], type: {:bf, 16}))
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_iota(), do: Nx.iota({2, 2})
 
     test "iota" do
       assert %T{shape: {2, 2}, type: {:s, 64}} = default_iota()
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_concatenate(a, b), do: Nx.concatenate([a, b])
 
     test "concatenate" do
@@ -735,14 +735,14 @@ defmodule Nx.DefnTest do
                Nx.tensor([1, 2, 3, 4, 5, 6])
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_reshape(t), do: Nx.reshape(t, {3, 2})
 
     test "reshape" do
       assert %T{shape: {3, 2}, type: {:s, 64}} = default_reshape(Nx.iota({2, 3}))
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_if3(a, b, c), do: if(a, do: b, else: c)
 
     test "if" do
@@ -762,7 +762,7 @@ defmodule Nx.DefnTest do
                Nx.tensor([[1, 2], [1, 2]])
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
 
     test "if with tuples" do
@@ -779,7 +779,7 @@ defmodule Nx.DefnTest do
                {{Nx.tensor([1, 1]), Nx.tensor(10)}, Nx.tensor([20, 30])}
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_if_tuple_match(a, b, c) do
       {{x, y}, z} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
       x * y - z
@@ -790,7 +790,7 @@ defmodule Nx.DefnTest do
       assert default_if_tuple_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(-10)
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn default_if_tuple_return(a, b, c) do
       {xy, _} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
       xy
@@ -804,13 +804,13 @@ defmodule Nx.DefnTest do
                {Nx.tensor(1), Nx.tensor(10)}
     end
 
-    @defn_compiler {Nx.Defn, max_unsigned_type: {:u, 32}}
+    @defn_compiler {Nx.Defn.Evaluator, max_unsigned_type: {:u, 32}}
     defn default_maxu(a), do: a
 
-    @defn_compiler {Nx.Defn, max_signed_type: {:s, 32}}
+    @defn_compiler {Nx.Defn.Evaluator, max_signed_type: {:s, 32}}
     defn default_maxs(a), do: a
 
-    @defn_compiler {Nx.Defn, max_float_type: {:f, 32}}
+    @defn_compiler {Nx.Defn.Evaluator, max_float_type: {:f, 32}}
     defn default_maxf(a), do: a
 
     test "max_*_type/2" do
@@ -840,13 +840,13 @@ defmodule Nx.DefnTest do
              """
     end
 
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn transform_back_and_forth(a) do
       Nx.exp(transform(Nx.negate(a), &private_back_and_forth/1))
     end
 
     defp private_back_and_forth(a) do
-      Nx.Defn = Process.get(Nx.Defn.Compiler)
+      Nx.Defn.Evaluator = Process.get(Nx.Defn.Compiler)
       final_back_and_forth(a)
     end
 
@@ -862,7 +862,7 @@ defmodule Nx.DefnTest do
     defn defn_jit({a, b}, c), do: a + b - c
 
     def elixir_jit({a, b}, c) do
-      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn, Identity]
+      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Identity]
       a |> Nx.add(b) |> Nx.subtract(c)
     end
 
@@ -886,7 +886,7 @@ defmodule Nx.DefnTest do
       assert_raise ArgumentError,
                    "defn must return an expression tensor or a tuple, got: :ok",
                    fn ->
-                     Nx.Defn.jit(fn -> :ok end, [], Nx.Defn).()
+                     Nx.Defn.jit(fn -> :ok end, [], Nx.Defn.Evaluator).()
                    end
     end
   end
@@ -895,7 +895,7 @@ defmodule Nx.DefnTest do
     defn defn_async({a, b}, c), do: a + b - c
 
     def elixir_async({a, b}, c) do
-      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn, Identity]
+      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Identity]
       a |> Nx.add(b) |> Nx.subtract(c)
     end
 
@@ -1023,7 +1023,7 @@ defmodule Nx.DefnTest do
     end
   end
 
-  @default_defn_compiler Nx.Defn
+  @default_defn_compiler Nx.Defn.Evaluator
 
   describe "default arguments" do
     defn sum_axis_opts(a, opts \\ []), do: Nx.sum(a, opts)

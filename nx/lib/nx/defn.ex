@@ -80,7 +80,7 @@ defmodule Nx.Defn do
   call to `defn`. All other calls that happen within that `defn`
   will use the same compiler. For example, imagine this code:
 
-      @defn_compiler Nx.Defn # the default
+      @defn_compiler Nx.Defn.Evaluator # the default
       defn add(a, b), do: do_add(a, b)
 
       @defn_compiler EXLA
@@ -191,74 +191,6 @@ defmodule Nx.Defn do
 
   """
 
-  ## Default compiler backend
-
-  @behaviour Nx.Defn.Compiler
-  alias Nx.Defn.Expr
-
-  @impl true
-  def __async__(key, vars, fun, opts) do
-    Nx.Defn.Async.async(fn -> __jit__(key, vars, fun, opts) end)
-  end
-
-  @impl true
-  def __jit__(_key, vars, fun, opts) do
-    fun.(vars)
-    |> Expr.rewrite_types(opts)
-    |> Expr.traverse_exprs(%{}, &eval(&1, vars, &2))
-    |> elem(0)
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :fun, args: [_, _, fun]}}, _vars, cache) do
-    {fun, cache}
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :parameter, args: [i]}}, vars, cache) do
-    {Enum.fetch!(vars, i), cache}
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _vars, cache) do
-    {t, cache}
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
-    {res, cache} = find_clause(clauses, last, vars, cache)
-    Expr.traverse_exprs(res, cache, &eval(&1, vars, &2))
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, vars, cache) do
-    [tuple, i, _size] = args
-    {tuple, cache} = Expr.traverse_exprs(tuple, cache, &eval(&1, vars, &2))
-    {elem(tuple, i), cache}
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, vars, cache) do
-    case cache do
-      %{^id => res} ->
-        {res, cache}
-
-      %{} ->
-        {args, cache} = Expr.traverse_args(ans, cache, &eval(&1, vars, &2))
-        res = apply(Nx.Shared.find_impl!(args), op, [ans | args])
-        {res, Map.put(cache, id, res)}
-    end
-  end
-
-  defp eval(other, _vars, cache) do
-    {other, cache}
-  end
-
-  defp find_clause([{pred, clause} | clauses], last, vars, cache) do
-    {pred, cache} = eval(pred, vars, cache)
-    if Nx.to_scalar(pred) != 0, do: {clause, cache}, else: find_clause(clauses, last, vars, cache)
-  end
-
-  defp find_clause([], last, _vars, cache) do
-    {last, cache}
-  end
-
-  ## Public API
-
   @doc """
   Invokes the anonymous function with asynchronously with
   just-in-time compilation.
@@ -280,7 +212,7 @@ defmodule Nx.Defn do
   on the executed function. Be sure to pass the `compiler` and its `opts`
   as arguments instead.
   """
-  def async(fun, args, compiler \\ Nx.Defn, opts \\ [])
+  def async(fun, args, compiler \\ Nx.Defn.Evaluator, opts \\ [])
       when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
     Nx.Defn.Compiler.__async__(fun, args, compiler, opts)
   end
@@ -302,7 +234,7 @@ defmodule Nx.Defn do
       Nx.Defn.jit(&Mod.softmax/1, [my_tensor], EXLA, run_options: [keep_on_device: true])
 
   """
-  def jit(fun, args, compiler \\ Nx.Defn, opts \\ [])
+  def jit(fun, args, compiler \\ Nx.Defn.Evaluator, opts \\ [])
       when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
     Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
   end
@@ -395,7 +327,7 @@ defmodule Nx.Defn do
     compiler =
       Module.delete_attribute(module, @defn_compiler) ||
         Module.get_attribute(module, @default_defn_compiler) ||
-        __MODULE__
+        Nx.Defn.Evaluator
 
     exports =
       Map.put(exports, {name, arity}, %{

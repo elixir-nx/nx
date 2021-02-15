@@ -70,7 +70,7 @@ defmodule EXLA.DefnExprTest do
 
   describe "+/2" do
     defn add_two(a, b), do: a + b
-    @defn_compiler Nx.Defn
+    @defn_compiler Nx.Defn.Evaluator
     defn add_two_nx(a, b), do: a + b
 
     test "same shape and type" do
@@ -629,7 +629,7 @@ defmodule EXLA.DefnExprTest do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
-      @defn_compiler Nx.Defn
+      @defn_compiler Nx.Defn.Evaluator
       defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
 
       test "#{fun}" do
@@ -650,7 +650,7 @@ defmodule EXLA.DefnExprTest do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
-      @defn_compiler Nx.Defn
+      @defn_compiler Nx.Defn.Evaluator
       defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
 
       test "#{fun}" do
