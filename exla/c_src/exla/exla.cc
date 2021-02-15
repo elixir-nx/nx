@@ -1700,7 +1700,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   {"get_supported_platforms", 0, get_supported_platforms},
-  {"compile", 6, compile},
+  {"compile", 6, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   {"await_streams_cpu", 3, await_streams, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   {"await_streams_io", 3, await_streams, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaBuffer
