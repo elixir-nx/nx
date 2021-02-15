@@ -93,60 +93,41 @@ defmodule Nx.BinaryBackend do
   ## Device API
 
   @impl true
-  def from_binary(t, binary) when is_binary(binary) do
-    %{t | data: %B{device: Nx.BinaryDevice, state: binary}}
-  end
+  def from_binary(t, binary, _opts), do: from_binary(t, binary)
 
-  def from_binary(t, other) do
-    %{t | data: %B{device: Nx.BinaryDevice, state: IO.iodata_to_binary(other)}}
-  end
+  defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
+  defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
 
   @impl true
-  def to_binary(%T{data: %{device: Nx.BinaryDevice, state: data}}), do: data
+  def to_binary(t, opts) do
+    binary = to_binary(t)
 
-  def to_binary(%T{data: %{device: device}}) do
-    raise ArgumentError,
-          "cannot read Nx.Tensor data because the data is allocated on device #{inspect(device)}. " <>
-            "Cross-transfer between devices is not currently support. Please use Nx.device_transfer/1 " <>
-            "to transfer data back to Elixir first"
-  end
-
-  @impl true
-  def device_read(%T{data: %{device: device, state: state}} = tensor) do
-    case device.read(state) do
-      binary when is_binary(binary) -> from_binary(tensor, binary)
-      _ -> raise "expected #{inspect(device)}.read/1 to return a binary"
+    if limit = opts[:limit] do
+      %{type: {_, size}} = t
+      binary_part(binary, 0, Kernel.min(byte_size(binary), limit * div(size, 8)))
+    else
+      binary
     end
   end
 
-  @impl true
-  def device_deallocate(%T{data: %{device: device, state: state}}) do
-    device.deallocate(state)
-  end
+  defp to_binary(%T{data: %{state: data}}), do: data
 
   @impl true
-  def device_transfer(tensor, Nx.Device, opts) do
-    device_transfer(tensor, Nx.BinaryDevice, opts)
-  end
-
-  def device_transfer(%T{data: %{device: Nx.BinaryDevice}} = tensor, Nx.BinaryDevice, _opts) do
+  def backend_transfer(tensor, Nx.Tensor, _opts) do
     tensor
   end
 
-  def device_transfer(%T{data: %{device: Nx.BinaryDevice}} = tensor, device, opts) do
-    %{type: type, shape: shape} = tensor
-    {device, state} = device.allocate(to_binary(tensor), type, shape, opts)
-    %{tensor | data: %B{device: device, state: state}}
+  def backend_transfer(tensor, Nx.BinaryBackend, _opts) do
+    tensor
   end
 
-  def device_transfer(%T{} = tensor, Nx.BinaryDevice, _opts) do
-    new = device_read(tensor)
-    _ = device_deallocate(tensor)
-    new
+  def backend_transfer(tensor, backend, opts) do
+    backend.from_binary(tensor, to_binary(tensor), opts)
   end
 
-  def device_transfer(%T{data: %{device: data_device}}, device, _opts) do
-    raise ArgumentError, "cannot transfer from #{inspect(data_device)} to #{inspect(device)}"
+  @impl true
+  def backend_deallocate(_tensor) do
+    :ok
   end
 
   @impl true
@@ -761,23 +742,12 @@ defmodule Nx.BinaryBackend do
     sep = IA.color(",", :list, opts)
     close = IA.color("]", :list, opts)
 
-    case tensor.data do
-      %Nx.BinaryBackend{device: Nx.BinaryDevice} ->
-        dims = Tuple.to_list(shape)
-        limit = opts.limit
-        list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
-        data = Nx.to_flat_list(tensor, [non_numbers: :as_strings] ++ list_opts)
-        {data, _rest, _limit} = chunk(dims, data, limit, {open, sep, close})
-        data
-
-      # TODO: To print data on device, we can support reading a slice
-      # from the device which we will compute with:
-      #
-      #     min(opts.limit, Nx.size(shape)) * size
-      #
-      %Nx.BinaryBackend{device: device} ->
-        IA.to_doc(device, opts)
-    end
+    dims = Tuple.to_list(shape)
+    limit = opts.limit
+    list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
+    data = Nx.to_flat_list(tensor, [non_numbers: :as_strings] ++ list_opts)
+    {data, _rest, _limit} = chunk(dims, data, limit, {open, sep, close})
+    data
   end
 
   defp chunk([], [head | tail], limit, _docs) do

@@ -428,8 +428,8 @@ defmodule Nx.Defn.Expr do
   @behaviour Nx.Tensor
 
   @impl true
-  def from_binary(out, binary) do
-    to_expr(Nx.BinaryBackend.from_binary(out, binary))
+  def from_binary(out, binary, opts) do
+    to_expr(Nx.BinaryBackend.from_binary(out, binary, opts))
   end
 
   @impl true
@@ -698,7 +698,7 @@ defmodule Nx.Defn.Expr do
 
   ## Undefined
 
-  ops = [device_deallocate: 1, device_read: 1, device_transfer: 3, to_binary: 1, to_batched_list: 2]
+  ops = [backend_deallocate: 1, backend_transfer: 3, to_binary: 2, to_batched_list: 2]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)

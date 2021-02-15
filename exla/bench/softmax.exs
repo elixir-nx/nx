@@ -35,16 +35,16 @@ benches = %{
 
 benches =
   if System.get_env("EXLA_TARGET") == "cuda" do
-    dt32 = Nx.device_transfer(t32, EXLA.Device, client: :cuda)
-    dt64 = Nx.device_transfer(t64, EXLA.Device, client: :cuda)
+    dt32 = Nx.backend_transfer(t32, EXLA.DeviceBackend, client: :cuda)
+    dt64 = Nx.backend_transfer(t64, EXLA.DeviceBackend, client: :cuda)
 
     Map.merge(benches, %{
       "xla gpu f32" => fn -> Softmax.cuda(t32) end,
       "xla gpu f64" => fn -> Softmax.cuda(t64) end,
       "xla gpu f32 keep" =>
-        {fn -> Softmax.cuda_keep(dt32) end, after_each: &Nx.device_deallocate/1},
+        {fn -> Softmax.cuda_keep(dt32) end, after_each: &Nx.backend_deallocate/1},
       "xla gpu f64 keep" =>
-        {fn -> Softmax.cuda_keep(dt64) end, after_each: &Nx.device_deallocate/1}
+        {fn -> Softmax.cuda_keep(dt64) end, after_each: &Nx.backend_deallocate/1}
     })
   else
     benches

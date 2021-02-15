@@ -37,8 +37,8 @@ defmodule Nx.MixProject do
         # Nx.Defn.Kernel
 
         "Backends": [
-          Nx.Tensor,
           Nx.BinaryBackend,
+          Nx.Tensor,
           Nx.Type
         ],
         "Compilers": [

@@ -15,9 +15,9 @@ defmodule EXLA.DefnAPITest do
     test "awaits with keep_on_device" do
       async = Nx.Defn.async(&add_two_async/2, [1, 2], EXLA, run_options: [keep_on_device: true])
       assert %Nx.Tensor{} = tensor = Nx.Async.await!(async)
-      assert %Nx.BinaryBackend{device: EXLA.Device, state: {ref, :default}} = tensor.data
+      assert %EXLA.DeviceBackend{state: {ref, :default}} = tensor.data
       assert is_reference(ref)
-      assert tensor |> Nx.device_read() |> Nx.to_binary() == <<3::64-native>>
+      assert tensor |> Nx.backend_transfer() |> Nx.to_binary() == <<3::64-native>>
     end
 
     # TODO: We need to track this on the device
@@ -34,23 +34,19 @@ defmodule EXLA.DefnAPITest do
 
     test "keeps data on device" do
       tensor = add_two_keep_on_device(1, 2)
-      assert %Nx.BinaryBackend{device: EXLA.Device, state: {ref, :default}} = tensor.data
+      assert %EXLA.DeviceBackend{state: {ref, :default}} = tensor.data
       assert is_reference(ref)
-      assert tensor |> Nx.device_read() |> Nx.to_binary() == <<3::64-native>>
 
       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
-      assert %Nx.BinaryBackend{device: EXLA.Device, state: {ref, :default}} = tensor.data
+      assert %EXLA.DeviceBackend{state: {ref, :default}} = tensor.data
       assert is_reference(ref)
 
-      assert tensor |> Nx.device_read() |> Nx.to_binary() ==
-               <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
-
-      assert tensor |> Nx.device_transfer() |> Nx.to_binary() ==
+      assert tensor |> Nx.backend_transfer() |> Nx.to_binary() ==
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
       assert_raise RuntimeError,
                    "Attempt to read from deallocated buffer.",
-                   fn -> Nx.device_read(tensor) end
+                   fn -> Nx.backend_transfer(tensor) end
     end
   end
 end

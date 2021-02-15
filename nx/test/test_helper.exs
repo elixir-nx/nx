@@ -42,18 +42,4 @@ defmodule Nx.GradHelpers do
   end
 end
 
-defmodule Nx.ProcessDevice do
-  @behaviour Nx.Device
-
-  def allocate(data, _type, _shape, opts) do
-    key = Keyword.fetch!(opts, :key)
-    Process.put(key, data)
-    {__MODULE__, key}
-  end
-
-  def read(key), do: Process.get(key) || raise("deallocated")
-
-  def deallocate(key), do: if(Process.delete(key), do: :ok, else: :already_deallocated)
-end
-
 ExUnit.start()

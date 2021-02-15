@@ -30,15 +30,15 @@ defmodule EXLA.Client do
 
       platform = Keyword.get(options, :platform, :host)
       # This is the default num_replicas used on compile, so we should probably rename it
-      number_of_replicas = Keyword.get(options, :number_of_replicas, 1)
+      num_replicas = Keyword.get(options, :default_num_replicas, 1)
       # The number of threads that will get used during a computation
       intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
 
       ref =
         case platform do
-          :host -> EXLA.NIF.get_host_client(number_of_replicas, intra_op_parallelism_threads)
-          :cuda -> EXLA.NIF.get_cuda_client(number_of_replicas, intra_op_parallelism_threads)
-          :rocm -> EXLA.NIF.get_rocm_client(number_of_replicas, intra_op_parallelism_threads)
+          :host -> EXLA.NIF.get_host_client(num_replicas, intra_op_parallelism_threads)
+          :cuda -> EXLA.NIF.get_cuda_client(num_replicas, intra_op_parallelism_threads)
+          :rocm -> EXLA.NIF.get_rocm_client(num_replicas, intra_op_parallelism_threads)
           _ -> raise ArgumentError, "unknown Exla platform: #{inspect(platform)}"
         end
         |> unwrap!()
@@ -64,11 +64,14 @@ defmodule EXLA.Client do
     end)
   end
 
-  @doc false
-  def check_device_compatibility!(
+  @doc """
+  Validates the given device ordinal.
+  """
+  def validate_device_ordinal!(
         %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
         ordinal
-      ) when is_integer(ordinal) do
+      )
+      when is_integer(ordinal) do
     cond do
       ordinal < 0 ->
         default_device_ordinal
@@ -77,7 +80,9 @@ defmodule EXLA.Client do
         ordinal
 
       true ->
-        raise ArgumentError, "Invalid device ordinal."
+        raise ArgumentError,
+              "Invalid device ordinal. It must be -1, to pick the default, " <>
+                "or a number >= 0 and < #{device_count}"
     end
   end
 

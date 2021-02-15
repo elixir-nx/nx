@@ -12,13 +12,7 @@ defmodule EXLA.Buffer do
   @enforce_keys [:shape]
   defstruct [:data, :ref, :shape]
 
-  @doc """
-  Creates a new buffer.
-
-  The argument is either a `binary`, which won't be placed on the
-  device unless `place_on_device` is called, or a `buffer.ref` from
-  a previous buffer.
-  """
+  @doc false
   def buffer(binary_or_reference_pair, shape)
 
   def buffer({reference, client_name}, shape = %Shape{}) when is_reference(reference) do
@@ -33,7 +27,7 @@ defmodule EXLA.Buffer do
   Places the given `buffer` on the given `device` using `client`.
   """
   def place_on_device(buffer = %Buffer{}, client = %Client{}, ordinal) when is_integer(ordinal) do
-    ordinal = Client.check_device_compatibility!(client, ordinal)
+    ordinal = Client.validate_device_ordinal!(client, ordinal)
 
     ref =
       EXLA.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal)

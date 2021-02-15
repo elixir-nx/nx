@@ -4,7 +4,13 @@ Elixir client for Google's XLA (Accelerated Linear Algebra). It includes integra
 
 ## Installation
 
-Before our first release, you can use EXLA as a dependency via Git:
+In order to use `Nx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
+
+```
+$ mix new my_app
+```
+
+Then you can add `EXLA` as dependency in your `mix.exs`. At the moment you will have to use a Git dependency while we work on our first release:
 
 ```elixir
 def deps do
@@ -145,7 +151,7 @@ mix test
 
 ## License
 
-Copyright (c) 2020 Dashbit
+Copyright (c) 2020 Sean Moriarity
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

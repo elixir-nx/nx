@@ -42,14 +42,13 @@ defmodule Nx.Tensor do
   @callback random_normal(t, mu :: float, sigma :: float) :: t
 
   @callback to_batched_list(out :: t, t) :: [t]
-  @callback to_binary(t) :: binary
-  @callback device_read(t) :: t
-  @callback device_deallocate(t) :: t
-  @callback device_transfer(t, module, keyword) :: t
+  @callback to_binary(t, keyword) :: binary
+  @callback backend_deallocate(t) :: :ok | :already_deallocated
+  @callback backend_transfer(t, module, keyword) :: t
 
   @callback tensor(t) :: t
   @callback inspect(t, Inspect.Opts.t()) :: t
-  @callback from_binary(out :: t, binary) :: t
+  @callback from_binary(out :: t, binary, keyword) :: t
   @callback as_type(out :: t, t) :: t
   @callback reshape(out :: t, t, shape) :: t
   @callback squeeze(out :: t, t, axes) :: t

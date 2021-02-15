@@ -10,9 +10,9 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Tensors backends, which enables the main `Nx` API to be used to manipulate binary tensors, GPU-backed tensors, sparse matrices, and more;
 
-  * Numerical definitions, known as `defn`, provide multi-stage compilation of tensor operations to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT);
+  * Numerical definitions, known as `defn`, provide multi-stage compilation of tensor operations to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT) with a compiler of your choice;
 
-Other features include broadcasting, multi-device support, etc. You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know.
+You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know and give us feedback.
 
 *Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/) and [Australian Wildlife Conservancy](https://www.australianwildlife.org).*
 
@@ -29,7 +29,13 @@ Discussions about Nx are also welcome in any of the Elixir community spaces, suc
 
 ## Installation
 
-Before our first release, you can use Nx as a dependency via Git:
+In order to use `Nx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
+
+```
+$ mix new my_app
+```
+
+Then you can add `Nx` as dependency in your `mix.exs`. At the moment you will have to use a Git dependency while we work on our first release:
 
 ```elixir
 def deps do
@@ -64,8 +70,6 @@ iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
 >
 ```
 
-See the `bench` and `examples` directory for some use cases.
-
 ## Numerical definitions
 
 By default, `Nx` uses pure Elixir code. Since Elixir is a functional and immutable language, each operation above makes a copy of the tensor, which is quite innefficient.
@@ -82,7 +86,7 @@ defmodule MyModule do
 end
 ```
 
-`defn` supports multiple compiler backends, which can compile said functions to run on the CPU or in the GPU. For example, using the `EXLA` compiler, which provides bindings to Google's XLA:
+`defn` supports multiple compiler backends, which can compile said functions to run on the CPU or in the GPU. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/exla), which provides bindings to Google's XLA:
 
 ```elixir
 @defn_compiler {EXLA, platform: :host}
@@ -114,6 +118,8 @@ xla cpu f64             168.25 - 90.98x slower +5.88 ms
 elixir f32                3.22 - 4760.93x slower +310.94 ms
 elixir f64                3.11 - 4924.56x slower +321.63 ms
 ```
+
+See the [`bench`](https://github.com/elixir-nx/nx/tree/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/exla/examples) directory inside the EXLA project for more information.
 
 `defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-prgramming capabilities: we transform Elixir code to emit an AST that is then transformed to run on the CPU/GPU. Ultimately, the `defn` compiler is pluggable, which means developers can implement bindings for different tensor compiler technologies and choose the most appropriate one.
 

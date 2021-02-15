@@ -130,12 +130,12 @@ defmodule MNIST do
 
         epoch_avg_loss =
           epoch_avg_loss
-          |> Nx.device_transfer()
+          |> Nx.backend_transfer()
           |> Nx.to_scalar()
 
         epoch_avg_acc =
           epoch_avg_acc
-          |> Nx.device_transfer()
+          |> Nx.backend_transfer()
           |> Nx.to_scalar()
 
         IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s")
@@ -156,4 +156,4 @@ params = MNIST.init_random_params()
 IO.puts("Training MNIST for 10 epochs...\n\n")
 final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
-IO.inspect(Nx.device_transfer(final_params))
+IO.inspect(Nx.backend_transfer(final_params))

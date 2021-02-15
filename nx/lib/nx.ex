@@ -233,30 +233,29 @@ defmodule Nx do
   For a more complex slicing rules, including strides, you
   can always fallback to `Nx.slice/4`.
 
-  ## Devices
+  ## Backends
 
-  The `Nx` library has built-in support for devices. A tensor is
-  always allocated in a device, the default device being the
-  `Nx.BinaryDevice`, which means the tensor is allocated as a
-  binary within the Erlang VM.
+  The `Nx` library has built-in support for multiple backends.
+  A tensor is always handled by a backend, the default device
+  being `Nx.BinaryBackend`, which means the tensor is allocated
+  as a binary within the Erlang VM.
 
-  Most operations in the `Nx` module require the tensor to be
-  allocated within the VM but, most often, when running `defn`
-  functions that on the GPU, you want to keep the data on the
-  GPU as much as possible. For example:
+  Backends have multiple purposes, one of them is to keep the
+  tensor allocated elsewhere, such as the GPU. For example,
+  with EXLA, one might want to do:
 
       @defn_compiler {EXLA, platform: :host, run_options: [keep_on_device: true]}
       defn softmax(t) do
         Nx.exp(t) / Nx.sum(Nx.exp(t))
       end
 
-  You can explicitly transfer data to a certain device or transfer
-  it back as a binary by calling `device_transfer/3`. You can also
-  call `device_read/1` to read the data from the binary, without
-  deallocating it, and then explicitly call `device_deallocate/1`
+  The `keep_on_device: true` run option will keep the tensor on
+  the backend. You can transfer it back to a binary tensor by
+  calling `backend_transfer/3`. If you don't intend to use the
+  data for some reason, you can explicitly call `backend_deallocate/1`
   to deallocate it.
 
-  To implement your own device, check the `Nx.Device` behaviour.
+  To implement your own backend, check the `Nx.Tensor` behaviour.
   """
 
   import Nx.Shared
@@ -442,14 +441,15 @@ defmodule Nx do
       names you must specify a name for every dimension in the tensor.
       Only `nil` and atoms are supported as dimension names.
 
-
     * `:backend` - the backend to allocate the tensor on
+
+    * `:backend_options` - options to configure the allocation on the backend
 
   """
   def tensor(arg, opts \\ [])
 
   def tensor(%T{} = t, opts) do
-    assert_keys!(opts, [:type, :names, :backend])
+    assert_keys!(opts, [:type, :names, :backend, :backend_options])
     type = opts[:type]
 
     if type && type != t.type do
@@ -458,16 +458,15 @@ defmodule Nx do
     end
 
     if backend = opts[:backend] do
-      # TODO: Invoke backend_transfer instead once #202 is in
-      # TODO: Add a test once we have another type of public tensor
-      backend.tensor(t)
+      backend_options = opts[:backend_options] || []
+      impl!(t).backend_transfer(t, backend, backend_options)
     else
       t
     end
   end
 
   def tensor(arg, opts) do
-    assert_keys!(opts, [:type, :names, :backend])
+    assert_keys!(opts, [:type, :names, :backend, :backend_options])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
     {shape, data} = flatten(arg, type)
 
@@ -477,7 +476,8 @@ defmodule Nx do
 
     names = Nx.Shape.named_axes!(opts[:names], shape)
     backend = opts[:backend] || Nx.BinaryBackend
-    backend.from_binary(%T{shape: shape, type: type, names: names}, data)
+    backend_options = opts[:backend_options] || []
+    backend.from_binary(%T{shape: shape, type: type, names: names}, data, backend_options)
   end
 
   defp flatten(list, type) when is_list(list) do
@@ -640,6 +640,7 @@ defmodule Nx do
     * `:type` - the type of the tensor
     * `:names` - the names of the tensor dimensions
     * `:backend` - the backend to allocate the tensor on
+
   """
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
@@ -733,6 +734,7 @@ defmodule Nx do
     * `:type` - the type of the tensor
     * `:names` - the names of the tensor dimensions
     * `:backend` - the backend to allocate the tensor on
+
   """
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
@@ -849,6 +851,7 @@ defmodule Nx do
     * `:axis` - an axis to repeat the iota over
     * `:names` - the names of the tensor dimensions
     * `:backend` - the backend to allocate the tensor on
+
   """
   def iota(tensor_or_shape, opts \\ []) do
     assert_keys!(opts, [:type, :axis, :names, :backend])
@@ -870,6 +873,10 @@ defmodule Nx do
 
   The binary is returned as is (which is row-major).
 
+  ## Options
+
+    * `:limit` - limit the number of entries represented in the binary
+
   ## Examples
 
       iex> Nx.to_binary(1)
@@ -877,10 +884,15 @@ defmodule Nx do
 
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]))
       <<1.0::float-native, 2.0::float-native, 3.0::float-native>>
+
+      iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
+      <<1.0::float-native, 2.0::float-native>>
+
   """
-  def to_binary(tensor) do
+  def to_binary(tensor, opts \\ []) do
+    assert_keys!(opts, [:limit])
     tensor = tensor!(tensor)
-    impl!(tensor).to_binary(tensor)
+    impl!(tensor).to_binary(tensor, opts)
   end
 
   ## Conversions
@@ -915,16 +927,9 @@ defmodule Nx do
   """
   def to_flat_list(tensor, opts \\ []) do
     assert_keys!(opts, [:limit, :non_numbers])
-    tensor = Nx.tensor(tensor)
-    binary = Nx.to_binary(tensor)
+    tensor = tensor(tensor)
+    binary = to_binary(tensor, Keyword.take(opts, [:limit]))
     {kind, size} = type = tensor.type
-
-    binary =
-      if limit = opts[:limit] do
-        binary_part(binary, 0, Kernel.min(byte_size(binary), limit * div(size, 8)))
-      else
-        binary
-      end
 
     case Keyword.get(opts, :non_numbers, :raise) do
       :raise ->
@@ -1158,9 +1163,10 @@ defmodule Nx do
   ## Options
 
     * `:backend` - the backend to allocate the tensor on
+    * `:backend_options` - options to configure the allocation on the backend
   """
   def from_binary(binary, type, opts \\ []) when is_binary(binary) do
-    assert_keys!(opts, [:backend])
+    assert_keys!(opts, [:backend, :backend_options])
     {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
 
@@ -1173,7 +1179,8 @@ defmodule Nx do
     end
 
     backend = opts[:backend] || Nx.BinaryBackend
-    backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary)
+    backend_options = opts[:backend_options] || []
+    backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary, backend_options)
   end
 
   ## Meta operations (do not invoke the backend)
@@ -1935,20 +1942,19 @@ defmodule Nx do
   defp tuple_product(_tuple, 0), do: 1
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
-  ## Device API
+  ## Backend API
 
   @doc """
-  Transfers data to the given device.
+  Transfers data to the given backend.
 
-  If a device is not given, `Nx.Device` is used, which means the
-  tensor implementation will pick the most appropriate device.
-  For Elixir's builtin tensor, that's `Nx.BinaryDevice`.
+  If a backend is not given, `Nx.Tensor` is used, which means
+  the current  tensor implementation will pick the most appropriate
+  backend.
 
-  If the tensor is already using `Nx.BinaryDevice`, the tensor is
-  returned as is. If a different device is given, the data will be
-  moved to the new device. Once transfer is done, the data is
-  deallocated from the current tensor device. If the device has
-  already been deallocated, it raises.
+  For Elixir's builtin tensor, transfering to another backend will
+  call `new_backend.from_binary(tensor, binary, opts)`. Transferring
+  from a mutable backend, such as GPU memory, often means the data
+  is also deallocated from the device.
 
   For convenience, this function accepts a tuple as argument
   and transfers all tensors in the tuple. This behaviour exists
@@ -1957,54 +1963,27 @@ defmodule Nx do
 
   ## Examples
 
-  Move a tensor to a device:
+  Move a tensor to an EXLA device (such as the GPU):
 
-      device_tensor = Nx.device_transfer(tensor, EXLA.Device, client: :cuda)
+      device_tensor = Nx.backend_transfer(tensor, EXLA.DeviceBackend, client: :cuda)
 
-  Read the device tensor back to an Elixir binary:
+  Read the device tensor back to an Elixir tensor:
 
-      tensor = Nx.device_transfer(device_tensor)
+      tensor = Nx.backend_transfer(device_tensor)
 
   """
-  def device_transfer(tuple_or_tensor, device \\ Nx.Device, opts \\ [])
+  def backend_transfer(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
 
-  def device_transfer(tuple, device, opts) when is_tuple(tuple) do
+  def backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
-    |> Enum.map(&device_transfer(&1, device, opts))
+    |> Enum.map(&backend_transfer(&1, backend, opts))
     |> List.to_tuple()
   end
 
-  def device_transfer(tensor, device, opts) do
+  def backend_transfer(tensor, backend, opts) do
     tensor = tensor!(tensor)
-    impl!(tensor).device_transfer(tensor, device, opts)
-  end
-
-  @doc """
-  Reads data allocated in a device.
-
-  For Nx's built tensor, it returns a tensor where the device
-  is a `Nx.BinaryDevice`. The data is not deallocated from the
-  current device. If the device has already been deallocated,
-  it raises.
-
-  For convenience, this function accepts a tuple as argument
-  and reads all tensors in the tuple. This behaviour exists
-  as it is common to read data from tuples after `defn`
-  functions.
-  """
-  def device_read(tuple_or_tensor)
-
-  def device_read(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&device_read/1)
-    |> List.to_tuple()
-  end
-
-  def device_read(tensor) do
-    tensor = tensor!(tensor)
-    impl!(tensor).device_read(tensor)
+    impl!(tensor).backend_transfer(tensor, backend, opts)
   end
 
   @doc """
@@ -2017,18 +1996,18 @@ defmodule Nx do
   exists as it is common to deallocaate data from tuples after
   `defn` functions.
   """
-  def device_deallocate(tuple_or_tensor)
+  def backend_deallocate(tuple_or_tensor)
 
-  def device_deallocate(tuple) when is_tuple(tuple) do
+  def backend_deallocate(tuple) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
-    |> Enum.map(&device_deallocate/1)
+    |> Enum.map(&backend_deallocate/1)
     |> List.to_tuple()
   end
 
-  def device_deallocate(tensor) do
+  def backend_deallocate(tensor) do
     tensor = tensor!(tensor)
-    impl!(tensor).device_deallocate(tensor)
+    impl!(tensor).backend_deallocate(tensor)
   end
 
   ## Element-wise binary ops
@@ -3181,7 +3160,7 @@ defmodule Nx do
     tensor = tensor!(tensor)
     type = tensor.type
     out = %T{shape: {}, type: type, names: []}
-    zero = Nx.BinaryBackend.from_binary(out, number_to_binary(0, type))
+    zero = Nx.BinaryBackend.from_binary(out, number_to_binary(0, type), [])
     element_wise_pred_op(tensor, zero, :equal)
   end
 
@@ -6794,7 +6773,7 @@ defmodule Nx do
   defp tensor!(number) when is_number(number) do
     type = Nx.Type.infer(number)
     out = %T{shape: {}, type: type, names: []}
-    Nx.BinaryBackend.from_binary(out, number_to_binary(number, type))
+    Nx.BinaryBackend.from_binary(out, number_to_binary(number, type), [])
   end
 
   defp number_to_binary(number, type),

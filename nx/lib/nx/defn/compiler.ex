@@ -28,7 +28,7 @@ defmodule Nx.Defn.Compiler do
               Nx.t() | tuple()
 
   # These operations do not have valid meaning for Nx.Defn.Expr
-  @forbidden_ops [:device_read, :device_deallocate, :device_transfer] ++
+  @forbidden_ops [:backend_deallocate, :backend_transfer] ++
                    [:to_binary, :to_scalar, :to_flat_list, :to_heatmap, :to_batched_list]
 
   defguardp is_var(var)

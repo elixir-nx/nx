@@ -462,18 +462,6 @@ defmodule NxTest do
              """
     end
 
-    test "custom device" do
-      t = Nx.tensor([1, 2, 3, 4])
-      t = Nx.device_transfer(t, Nx.ProcessDevice, key: :example)
-
-      assert inspect(t) == """
-             #Nx.Tensor<
-               s64[4]
-               Nx.ProcessDevice
-             >\
-             """
-    end
-
     test "limit" do
       assert inspect(Nx.tensor([1, 2]), limit: :infinity) == """
              #Nx.Tensor<

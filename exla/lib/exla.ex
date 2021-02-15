@@ -80,9 +80,9 @@ defmodule EXLA do
 
   ## Device allocation
 
-  EXLA also ships with a `EXLA.Device` that allows data to be
-  either be explicitly allocated or kept on the device after a
-  computation. For example:
+  EXLA also ships with a `EXLA.DeviceBackend` that allows data
+  to be either be explicitly allocated or kept on the EXLA device
+  after a computation. For example:
 
       @defn_compiler {EXLA, run_options: [keep_on_device: true]}
       defn softmax(tensor) do
@@ -101,13 +101,13 @@ defmodule EXLA do
 
       Nx.tensor([1, 2, 3, 4])
       |> softmax()
-      |> Nx.device_transfer() # bring the data back to Elixir
+      |> Nx.backend_transfer() # bring the data back to Elixir
 
-  You can also use `Nx.device_transfer` to put data on a given
+  You can also use `Nx.backend_transfer` to put data on a given
   device before invoking a `defn` function:
 
       # Explicitly move data to the device, useful for GPU
-      Nx.device_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.Device)
+      Nx.backend_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.DeviceBackend)
 
   ## Docker considerations
 
