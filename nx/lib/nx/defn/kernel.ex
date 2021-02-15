@@ -328,7 +328,7 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Element-wise unary plus operator.
 
-  It delegates to `Nx.negate/2`.
+  It delegates to `Nx.negate/1`.
 
   ## Examples
 

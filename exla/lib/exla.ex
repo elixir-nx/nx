@@ -33,16 +33,18 @@ defmodule EXLA do
     * `:client` - an atom representing the client to use. Defaults
       to `:default`. See "Clients" section
 
-    * `:keep_on_device` - if the data should be kept on the device,
-      useful if multiple computations are done in a row. See
-      "Device allocation" section
-
     * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.max_unsigned_type/2`
 
     * `max_signed_type: type` - the same as `Nx.Defn.Kernel.max_signed_type/2`
 
     * `max_float_type: type` - the same as `Nx.Defn.Kernel.max_float_type/2`.
       Note that by default `EXLA` defaults to `{:f, 32}`
+
+    * `:run_options` - options given when running the computation:
+
+      * `:keep_on_device` - if the data should be kept on the device,
+        useful if multiple computations are done in a row. See
+        "Device allocation" section
 
   ## Clients
 

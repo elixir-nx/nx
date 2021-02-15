@@ -4435,7 +4435,7 @@ defmodule Nx do
     * `:axis` - the axis to aggregate on. If no axis is given,
       returns the index of the absolute maximum value in the tensor.
 
-    * `:tie_break` - how to break ties. one of `:high`, or `:low``.
+    * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       default behavior is to always return the lower index.
 
   ## Examples
@@ -6055,7 +6055,7 @@ defmodule Nx do
   or tuple of positive integers for each spatial dimension
   in the input and kernel. For each spatial dimension, the
   window will slide by the configuration specified in `:strides`.
-  As an example, for a 2-D convolution with `strides: [2, 1],
+  As an example, for a 2-D convolution with `strides: [2, 1]`,
   the window will slide 2 positions along the first spatial
   dimension until it reaches the end of the dimension and then
   1 position along the second spatial dimension.
