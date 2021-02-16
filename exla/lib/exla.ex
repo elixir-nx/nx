@@ -147,4 +147,6 @@ defmodule EXLA do
 
   @impl true
   defdelegate __async__(key, vars, fun, opts), to: EXLA.Defn
+
+  defdelegate __aot__(key, vars, fun, opts), to: EXLA.Defn
 end

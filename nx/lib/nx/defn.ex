@@ -245,7 +245,7 @@ defmodule Nx.Defn do
   """
   def aot(fun, args, compiler, opts \\ [])
       when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
-    Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
+    Nx.Defn.Compiler.__aot__(fun, args, compiler, opts)
   end
 
   @doc """

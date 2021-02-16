@@ -5,7 +5,7 @@ package(default_visibility=["//visibility:private"])
 cc_library(
   name = "exla_allocator",
   srcs = ["exla_allocator.cc"],
-  hdrs = ["exla_allocator.h"] + glob(["erts/**/*.h"]),
+  hdrs = ["exla_allocator.h"],
   deps = [
     ":exla_nif_util",
     ":exla_device",

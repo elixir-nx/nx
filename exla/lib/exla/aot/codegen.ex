@@ -9,7 +9,7 @@ defmodule EXLA.AOT.Codegen do
     "xla:executable_run_options",
     "xla:types"
   ]
-  @bazel_erts_glob "glob([\"erts/**/*.h\"])"
+  @bazel_erts_glob "glob([\"erts/**/*.h\"], allow_empty=False)"
 
   ## Nif Attributes
   @erl_nif_path "tensorflow/compiler/xla/exla/aot/erts/erl_nif"
@@ -142,7 +142,7 @@ defmodule EXLA.AOT.Codegen do
       end)
       |> Enum.join("\n")
 
-    function_includes <> "\n" <> build_include_str(@erl_nif_path) <> "\n" <> "#include <iostream>"
+    function_includes <> "\n" <> build_include_str(@erl_nif_path) <> "\n"
   end
 
   defp build_include_str(path) do

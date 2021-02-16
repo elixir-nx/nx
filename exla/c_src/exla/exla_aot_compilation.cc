@@ -63,7 +63,7 @@ namespace exla {
 
     // Read the generated protobuf input, we can do it as a file, or pass it as a string/binary
     tensorflow::tf2xla::Config config;
-    LOG(WARNING) << tensorflow::ReadTextProto(tensorflow::Env::Default(), pbtext_path, &config);
+    tensorflow::ReadTextProto(tensorflow::Env::Default(), pbtext_path, &config);
 
     // These options are flags we can give to the user
     xla::cpu::CpuAotCompilationOptions aot_opts(
@@ -83,8 +83,8 @@ namespace exla {
     // This is an object file
     const std::vector<char>& obj = compile_result.aot->object_file_data();
 
-    // Write it to a file (we can also do this from Elixir)
-    LOG(WARNING) << tensorflow::WriteStringToFile(tensorflow::Env::Default(), aot_path + function_name + ".o", absl::string_view(obj.data(), obj.size()));
+    // Write it to a file
+    tensorflow::WriteStringToFile(tensorflow::Env::Default(), aot_path + function_name + ".o", absl::string_view(obj.data(), obj.size()));
 
     tensorflow::tfcompile::CodegenOpts codegen_opts;
     codegen_opts.class_name = class_name;
@@ -93,20 +93,20 @@ namespace exla {
     codegen_opts.gen_hlo_profile_printer_data = false;
     codegen_opts.target_triple = "x86_64-pc-linux";
 
-    LOG(WARNING) << tensorflow::tfcompile::ParseCppClass(class_name, &codegen_opts.class_name, &codegen_opts.namespaces);
+    tensorflow::tfcompile::ParseCppClass(class_name, &codegen_opts.class_name, &codegen_opts.namespaces);
 
     tensorflow::tfcompile::MetadataResult metadata_result;
-    LOG(WARNING) << tensorflow::tfcompile::GenerateMetadata(codegen_opts, compile_result, &metadata_result);
+    tensorflow::tfcompile::GenerateMetadata(codegen_opts, compile_result, &metadata_result);
 
     // Write metadata to file
-    // LOG(WARNING) << tensorflow::WriteStringToFile(tensorflow::Env::Default(), "metadata.o", metadata_result.object_file_data);
+    // tensorflow::WriteStringToFile(tensorflow::Env::Default(), "metadata.o", metadata_result.object_file_data);
 
     // The header file
     std::string header;
-    LOG(WARNING) << tensorflow::tfcompile::GenerateHeader(codegen_opts, config, compile_result, metadata_result, &header);
+    tensorflow::tfcompile::GenerateHeader(codegen_opts, config, compile_result, metadata_result, &header);
 
     // Write Header to file
-    LOG(WARNING) << tensorflow::WriteStringToFile(tensorflow::Env::Default(), aot_path + function_name + ".h", header);
+    tensorflow::WriteStringToFile(tensorflow::Env::Default(), aot_path + function_name + ".h", header);
 
     return tensorflow::Status::OK();
   }
