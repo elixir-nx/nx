@@ -30,6 +30,11 @@ defmodule EXLA.Defn do
     |> buffer_to_nx(holes)
   end
 
+  @doc false
+  def __aot__(_key, _vars, _fun, _options) do
+    :ok
+  end
+
   defp compile(key, vars, fun, options) do
     {expr_options, exla_options} =
       Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])

@@ -64,6 +64,11 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
+  def __aot__(fun, args, compiler, opts) do
+    runtime(:__aot__, fun, args, compiler, opts)
+  end
+
+  @doc false
   def __async__(fun, args, compiler, opts) do
     runtime(:__async__, fun, args, compiler, opts)
   end
