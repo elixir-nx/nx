@@ -66,17 +66,20 @@ void ExlaBuffer::AddToInputAsDonated(xla::ShapeTree<xla::MaybeOwningDeviceMemory
   state_ = BufferState::kDonated;
 }
 
-void ExlaBuffer::AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                            const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
-                            xla::ExecutionInput* input) {
+xla::Status ExlaBuffer::AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                                   const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                                   xla::ExecutionInput* input) {
+  if (state_ != BufferState::kValid) {
+    return xla::InvalidArgument("Attempt to read from deallocated buffer.");
+  }
   switch (type_) {
     case BufferType::kZeroCopy:
     case BufferType::kReference:
       AddToInputAsImmutable(iterator, end);
-      return;
+      return xla::Status::OK();
     case BufferType::kTemporary:
       AddToInputAsDonated(iterator, end, input);
-      return;
+      return xla::Status::OK();
   }
   // Something went really wrong
   LOG(FATAL) << "Unexpected type for buffer given to AddToInput.";
@@ -377,7 +380,12 @@ ExlaExecutable::PopulateInputBuffers(absl::Span<ExlaBuffer* const> argument_hand
     xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator iterator_end =
       execution_input.MutableBuffers()->end();
 
-    handle->AddToInput(&input_iterator, iterator_end, &execution_input);
+    xla::Status status = handle->AddToInput(&input_iterator, iterator_end, &execution_input);
+
+    if (!status.ok()) {
+      return status;
+    }
+
     CHECK(input_iterator == iterator_end);
   }
 
@@ -449,10 +457,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
       delete buffer_ref;
     }
 
-    return term;
+    return nif::ok(env, term);
   }
 
-  return nif::make<ExlaBuffer*>(env, buffer_ref);
+  return nif::ok(env, nif::make<ExlaBuffer*>(env, buffer_ref));
 }
 
 // ExlaClient Functions

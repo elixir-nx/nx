@@ -1659,7 +1659,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
                        run_id, rng_seed,
                        launch_id, async_run, keep_on_device), env);
 
-  return exla::nif::ok(env, term);
+  return term;
 }
 
 // Logging Functions
