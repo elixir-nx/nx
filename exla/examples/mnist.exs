@@ -40,8 +40,7 @@ defmodule MNIST do
   end
 
   defn update({w1, b1, w2, b2} = params, batch_images, batch_labels, step) do
-    {grad_w1, grad_b1, grad_w2, grad_b2} =
-      grad(params, loss(params, batch_images, batch_labels))
+    {grad_w1, grad_b1, grad_w2, grad_b2} = grad(params, loss(params, batch_images, batch_labels))
 
     {
       w1 - grad_w1 * step,
@@ -158,4 +157,4 @@ final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
 IO.inspect(Nx.backend_transfer(final_params))
 
-Nx.Defn.aot(&MNIST.predict(final_params, &1), [], EXLA)
+Nx.Defn.aot(&MNIST.predict/2, [final_params, Nx.iota({1, 784}, type: {:f, 32})], EXLA)
