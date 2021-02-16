@@ -138,6 +138,9 @@ defmodule EXLA do
 
       RUN sh -c "mix run"
 
+  Alternatively, you can pass the `--init` flag to `docker run`, so
+  it runs an `init` inside the container that forwards signals and
+  reaps processes.
   """
 
   @behaviour Nx.Defn.Compiler
