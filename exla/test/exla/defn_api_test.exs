@@ -46,6 +46,10 @@ defmodule EXLA.DefnAPITest do
 
       assert_raise RuntimeError,
                    "Attempt to read from deallocated buffer.",
+                   fn -> add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor) end
+
+      assert_raise RuntimeError,
+                   "Attempt to read from deallocated buffer.",
                    fn -> Nx.backend_transfer(tensor) end
     end
   end

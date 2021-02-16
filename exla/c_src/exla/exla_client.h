@@ -129,9 +129,9 @@ class ExlaBuffer {
   // either be donated or immutable. In the case of an immutable input,
   // the caller is responsible for deallocating the buffer at the appropriate
   // time. Donated inputs are deallocated when the computation finishes.
-  void AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
-                  const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
-                  xla::ExecutionInput* input);
+  xla::Status AddToInput(xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator* iterator,
+                         const xla::ShapeTree<xla::MaybeOwningDeviceMemory>::iterator& end,
+                         xla::ExecutionInput* input);
 
   // Converts the underlying buffer to a VM binary to be returned back
   // to the VM. This is a non-destructive operation. The buffer either
