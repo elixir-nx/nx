@@ -2,11 +2,15 @@ defmodule EXLA.DeviceBackend do
   @moduledoc """
   A Nx tensor backend for the data kept on the device.
 
-  It allows the following options:
+  You can directly transfer to this backend by calling
+  `Nx.backend_transfer/3`. It allows the following options:
 
     * `:client` - the client to store the data on
     * `:device_ordinal` - which device to store it on
 
+  To get the data out of the device backend into a regular
+  tensor, call `Nx.backend_transfer/1` (with the device
+  tensor as the single argument).
   """
 
   @behaviour Nx.Backend
