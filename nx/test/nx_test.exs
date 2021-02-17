@@ -624,14 +624,21 @@ defmodule NxTest do
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg = "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
-      
+
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10, 1.0)
       end
-      
+
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10.0, 2)
       end
+    end
+  end
+
+  describe "norm/1" do
+    test "" do
+        t = Nx.tensor([1,2], [3,2])
+        assert Nx.norm()
     end
   end
 end

@@ -6765,6 +6765,10 @@ defmodule Nx do
     impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
+  def norm() do
+
+  end
+
   ## Helpers
 
   defp tensor!(%T{} = t),
