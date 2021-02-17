@@ -35,18 +35,16 @@ If running on Windows, you will also need:
 
 The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. Subsequent commands should be much faster.
 
-### Installation Tips
+#### Installation troubleshooting
 
-  * Python
-    * ElixirLS on VSCode might not compile the project if you are using asdf for python (issue encountered in MacOS Catalina).
   * Bazel
-    * Must be v3.1.0
-    * Homebrew will install v4, so don't use it to install
-    * Can be installed with asdf:
+    * Use `bazel --version` to check your Bazel version, make sure you are using v3.1-v3.7.
+    * It can be installed with `asdf`:
       * asdf plugin-add bazel
       * asdf install bazel 3.1.0
       * asdf global bazel 3.1.0
-
+  * ElixirLS on VSCode
+    * Make sure that your Python installation is available globally, as ElixirLS won't know how to activate Python
 
 ### GPU Support
 
