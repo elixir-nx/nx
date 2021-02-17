@@ -6659,6 +6659,53 @@ defmodule Nx do
   end
 
   @doc """
+  Calculates the p-norm of a tensor.
+
+  For the 0-norm, the norm is the number of non-zero elements in the tensor.
+
+  ### Examples
+
+    iex> Nx.p_norm(Nx.tensor([3, 4]), 2)
+    #Nx.Tensor<
+      f64
+      5.0
+    >
+
+    iex> Nx.p_norm(Nx.tensor([[0, -3, 4], [0, 0, 0]]), 1)
+    #Nx.Tensor<
+      f64
+      7.0
+    >
+
+    iex> Nx.p_norm(Nx.tensor([[[0, -3, -4]], [[0, 0, 0]]]), 0)
+    #Nx.Tensor<
+      f64
+      2.0
+    >
+
+  ### Caveats
+
+  For big values of p, f64 rounding errors come into play
+  """
+  def p_norm(t, 0) do
+    t
+    |> equal(0)
+    |> logical_not()
+    |> sum()
+    |> as_type({:f, 64})
+  end
+
+  def p_norm(t, p) do
+    inv_p = divide(1, p)
+
+    t
+    |> Nx.abs()
+    |> power(p)
+    |> sum()
+    |> power(inv_p)
+  end
+
+  @doc """
   Sorts the tensor along the given axis with the
   given comparator.
 
