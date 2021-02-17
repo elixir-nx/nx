@@ -9,7 +9,7 @@ defmodule EXLA.DeviceBackend do
 
   """
 
-  @behaviour Nx.Tensor
+  @behaviour Nx.Backend
   defstruct [:state]
 
   alias Nx.Tensor, as: T
@@ -47,7 +47,7 @@ defmodule EXLA.DeviceBackend do
 
   ## All remaining callbacks
 
-  funs = Nx.Tensor.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
+  funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
 
   for {fun, arity} <- funs do
     args = Macro.generate_arguments(arity, __MODULE__)

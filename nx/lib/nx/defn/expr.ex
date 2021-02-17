@@ -423,9 +423,9 @@ defmodule Nx.Defn.Expr do
     cond(clauses, last)
   end
 
-  ## Nx.Tensor Callbacks
+  ## Nx.Backend Callbacks
 
-  @behaviour Nx.Tensor
+  @behaviour Nx.Backend
 
   @impl true
   def from_binary(out, binary, opts) do

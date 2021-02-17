@@ -8,7 +8,7 @@ defmodule Nx.BinaryBackend do
   not be accessed directly.
   """
 
-  @behaviour Nx.Tensor
+  @behaviour Nx.Backend
 
   @doc false
   defstruct [:device, :state]
