@@ -71,7 +71,7 @@ defmodule Nx do
         [2, 4, 6]
       >
 
-  In practice, broadcasting is not restricted only to scalars. It
+  In practice, broadcasting is not restricted only to scalars; it
   is a general algorithm that applies to all dimensions of a tensor.
   When broadcasting, `Nx` compares the shapes of the two tensors,
   starting with the trailing ones, such that:
