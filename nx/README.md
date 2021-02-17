@@ -119,7 +119,7 @@ elixir f32                3.22 - 4760.93x slower +310.94 ms
 elixir f64                3.11 - 4924.56x slower +321.63 ms
 ```
 
-See the [`bench`](https://github.com/elixir-nx/nx/tree/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/exla/examples) directory inside the EXLA project for more information.
+See the [`bench`](https://github.com/elixir-nx/nx/tree/main/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/main/exla/examples) directory inside the EXLA project for more information.
 
 `defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-prgramming capabilities: we transform Elixir code to emit an AST that is then transformed to run on the CPU/GPU. Ultimately, the `defn` compiler is pluggable, which means developers can implement bindings for different tensor compiler technologies and choose the most appropriate one.
 
