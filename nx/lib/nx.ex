@@ -58,9 +58,9 @@ defmodule Nx do
         [11, 22, 33]
       >
 
-  Now let's imagine you want to multiply a large tensor, dimensions
-  1000x1000x1000, by 2. If you had to create a similarly large tensor
-  only to perform this operation, it would be inneficient. Therefore,
+  Now let's imagine you want to multiply a large tensor of dimensions
+  1000x1000x1000 by 2. If you had to create a similarly large tensor
+  only to perform this operation, it would be inefficient. Therefore,
   you can simply multiply this large tensor by the scalar 2, and Nx
   will propagate its dimensions at the time the operation happens,
   without allocating a large intermediate tensor:
@@ -71,7 +71,7 @@ defmodule Nx do
         [2, 4, 6]
       >
 
-  In practice, brodcasting is not restricted only to scalars, it
+  In practice, broadcasting is not restricted only to scalars; it
   is a general algorithm that applies to all dimensions of a tensor.
   When broadcasting, `Nx` compares the shapes of the two tensors,
   starting with the trailing ones, such that:
