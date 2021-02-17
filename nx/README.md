@@ -2,7 +2,7 @@
 
 Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its high-level features are:
 
-  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (sizes 8, 16, 32, 64), signed integers (sizes 8, 16, 32, 64), floats (sizes 32, 64) and brain floats (sizes 16);
+  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f32`, `f64`) and brain floats (`bf16`);
 
   * Named tensors, allowing developers to give names to each dimension, leading to more readable and less error prone codebases;
 

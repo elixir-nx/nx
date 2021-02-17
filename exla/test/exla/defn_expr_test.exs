@@ -306,6 +306,7 @@ defmodule EXLA.DefnExprTest do
         {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8})},
         {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 32})}
       ]
+
       for {left, right} <- int_tensors do
         compare_tensors!(quotient_two(left, right), Nx.quotient(left, right))
         compare_tensors!(quotient_two(right, left), Nx.quotient(right, left))
@@ -761,6 +762,20 @@ defmodule EXLA.DefnExprTest do
       assert cond3(Nx.tensor([-1, 0, 1]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(-5.0)
       assert cond3(Nx.tensor([1, 2, 3]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(36.0)
       assert cond3(Nx.tensor([-1, -2, -3]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(-1.0)
+    end
+
+    defn cond_unused_and_slice(_result, state) do
+      cond do
+        Nx.equal(Nx.sum(state[0..1]), 0) -> state[0]
+        Nx.equal(Nx.sum(state[3..4]), 0) -> state[4]
+        true -> state[2]
+      end
+    end
+
+    test "computes cond with slice and unused vars" do
+      assert cond_unused_and_slice(Nx.tensor(1), Nx.iota({5})) == Nx.tensor(2)
+      assert cond_unused_and_slice(Nx.tensor(1), Nx.tensor([-1, 1, 0, 1, 2])) == Nx.tensor(-1)
+      assert cond_unused_and_slice(Nx.tensor(1), Nx.tensor([2, 1, 0, -1, 1])) == Nx.tensor(1)
     end
   end
 

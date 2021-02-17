@@ -698,22 +698,16 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp collect_args(tuple, ids, pred_ids) when is_tuple(tuple) do
-    {list, ids} =
-      tuple |> Tuple.to_list() |> Enum.map_reduce(ids, &collect_args(&1, &2, pred_ids))
-
-    {List.to_tuple(list), ids}
-  end
-
   defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, ids, pred_ids) do
     if Map.has_key?(pred_ids, id) or op == :parameter do
       case ids do
-        %{^id => {_, param}} ->
-          {param, ids}
+        %{^id => {_, _, new}} ->
+          {new, ids}
 
         %{} ->
           i = map_size(ids)
-          {Expr.parameter(expr, i), Map.put(ids, id, {i, expr})}
+          param = Expr.parameter(expr, i)
+          {param, Map.put(ids, id, {i, expr, param})}
       end
     else
       {args, ids} = Expr.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
@@ -722,12 +716,12 @@ defmodule EXLA.Defn do
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, ids_args} = collect_args(expr, %{}, ids)
-    sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _expr}} -> i end)
+    {expr, ids_args} = Expr.traverse_exprs(expr, %{}, &collect_args(&1, &2, ids))
+    sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
     shapes =
-      for {_, {_, %{type: type, shape: shape}}} <- sorted_ids_args do
+      for {_, {_, _, %{type: type, shape: shape}}} <- sorted_ids_args do
         EXLA.Shape.make_shape(type, shape)
       end
 
@@ -735,7 +729,7 @@ defmodule EXLA.Defn do
     param = EXLA.Op.parameter(subbuilder, 0, tuple_shape, "p")
 
     params =
-      for {_, {i, _}} <- sorted_ids_args do
+      for {_, {i, _, _}} <- sorted_ids_args do
         EXLA.Op.get_tuple_element(param, i)
       end
 
@@ -747,8 +741,8 @@ defmodule EXLA.Defn do
 
     args =
       Enum.map(sorted_ids_args, fn
-        {_, {_, %T{data: %Expr{op: :parameter, args: [i]}}}} -> Enum.fetch!(state.params, i)
-        {id, {_, _}} -> Map.fetch!(cache, id)
+        {_, {_, %T{data: %Expr{op: :parameter, args: [i]}}, _}} -> Enum.fetch!(state.params, i)
+        {id, {_, _, _}} -> Map.fetch!(cache, id)
       end)
 
     {EXLA.Op.tuple(state.builder, args), comp}

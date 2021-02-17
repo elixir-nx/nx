@@ -197,6 +197,9 @@ defmodule Nx.Defn.Expr do
   @doc """
   Traverses the given expressions.
 
+  This function exists to handle composite types that may
+  have multiple expressions.
+
   If an expression is given, the function is invoked for it
   but not for its arguments (see `traverse_args/3` for that).
 
