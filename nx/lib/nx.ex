@@ -2573,12 +2573,12 @@ defmodule Nx do
   ### Arc tangent between tensors
 
       # Note there is a bug in Erlang/OTP 23.0 and earlier where the compiler
-      # optimizes -0.0 away as 0.0. So we do: -1.0*(Integer.parse("0")|>elem(0))
+      # optimizes -0.0 away as 0.0. So we do: -1.0 * String.to_integer("0")
       iex> pos_and_neg_zero_x = Nx.multiply(Nx.tensor([[-1.0], [1.0]]), 0.0)
       iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
       iex> t = Nx.arctan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
       iex> Nx.to_binary(t)
-      <<-3.141592653589793::float-64-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-64-native,
+      <<-3.141592653589793::float-64-native, (-1.0 * String.to_integer("0"))::float-64-native,
         3.141592653589793::float-64-native, 0.0::float-64-native>>
       iex> Nx.shape(t)
       {2, 2}
