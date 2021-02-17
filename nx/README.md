@@ -27,6 +27,14 @@ The Nx project and team mantain a handful of resources:
 
 Discussions about Nx are also welcome in any of the Elixir community spaces, such as the [Elixir Forum](https://elixirforum.com/) and the other channels listed [on the sidebar of elixir-lang.org](https://elixir-lang.org/).
 
+### Resources
+
+Here are some introductory resources with more information on Nx as a whole:
+
+  * [A post by José Valim on Dashbit's blog announcing Nx, outlining some of the design decisions, benchmarks, and general direction](https://dashbit.co/blog/nx-numerical-elixir-is-now-publicly-available) (text)
+
+  * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio)
+
 ## Installation
 
 In order to use `Nx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
