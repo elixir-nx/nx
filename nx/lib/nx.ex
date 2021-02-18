@@ -6663,11 +6663,11 @@ defmodule Nx do
 
   For the 0-norm, the norm is the number of non-zero elements in the tensor.
 
-  ### Options
+  ## Options
 
-  - `:axes` - defines the axes upon which the norm will be calculated. Default: `nil`.
-  - `:keep_axes` - defines if the resulting tensor should have the same dimensions as the input. Default: `false`.
-  - `:ord` - defines which norm will be calculated according to the table below. Default: `2`
+    * `:axes` - defines the axes upon which the norm will be calculated. Default: `nil`.
+    * `:keep_axes` - defines if the resulting tensor should have the same dimensions as the input. Default: `false`.
+    * `:ord` - defines which norm will be calculated according to the table below. Default: `2`
 
   | ord          | 2-D                                       | 1-D                               |
   | ------------ | ----------------------------------------- | --------------------------------- |
@@ -6683,7 +6683,7 @@ defmodule Nx do
   | -2           | smallest singular value (not implemented) | as below                          |
   | other        | -                                         | power(sum(power(abs(x), p)), 1/p) |
 
-  ### Examples
+  ## Examples
 
     iex> Nx.norm(Nx.tensor([3, 4]))
     #Nx.Tensor<
@@ -6766,8 +6766,6 @@ defmodule Nx do
       ]
     >
 
-    iex> Nx.norm(Nx.tensor([0, 1]), my_opt: 1)
-    ** (RuntimeError) unknown key :my_opt in [my_opt: 1], expected one of [:ord, :axes, :keep_axes]
 
     iex> Nx.norm(Nx.tensor([[0], [1]]), ord: :nuclear)
     ** (RuntimeError) nuclear norm not implemented yet.
@@ -6780,23 +6778,16 @@ defmodule Nx do
   For big values of p, f64 rounding errors come into play
   """
 
-  def norm(t_raw, input_opts \\ []) when is_list(input_opts) do
+  def norm(tensor, opts \\ []) when is_list(opts) do
     t = tensor!(t_raw)
     assert_keys!(input_opts, [:ord, :axes, :keep_axes])
 
     default_axes_opts = [axes: nil, keep_axes: false, ord: nil]
     opts = Keyword.merge(default_axes_opts, input_opts)
 
-    case shape(t) do
-      {_, _} ->
-        :ok
-
-      {_} ->
-        :ok
-
-      s ->
-        raise "expected 1-D or 2-D tensor. Received a tensor with shape #{inspect(s)} instead."
-    end
+rank = rank(t)
+unless rank == 1 or rank == 2,
+  do: raise "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}"
 
     rank = rank(t)
     ord = get_norm_ord!(opts, rank)
