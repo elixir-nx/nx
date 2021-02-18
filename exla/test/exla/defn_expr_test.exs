@@ -2392,8 +2392,7 @@ defmodule EXLA.DefnExprTest do
     test "works with norm calls" do
       t = Nx.tensor([3.0, 4.0, 0.0])
       assert compare_tensors!(normalize(t), Nx.tensor([0.6, 0.8, 0.0]))
-
-      assert compare_tensors!(Nx.dot(t, t), Nx.power(Nx.norm(t), 2))
+      assert compare_tensors!(Nx.norm(normalize(t)), Nx.tensor(1.0))
     end
   end
 
