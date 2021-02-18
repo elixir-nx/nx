@@ -6766,6 +6766,9 @@ defmodule Nx do
       ]
     >
 
+    iex> Nx.norm(Nx.tensor([0, 1]), my_opt: 1)
+    ** (RuntimeError) unknown key :my_opt in [my_opt: 1], expected one of [:ord, :axes, :keep_axes]
+
   ### Caveats
 
   For big values of p, f64 rounding errors come into play
@@ -6773,6 +6776,10 @@ defmodule Nx do
 
   def norm(t_raw, input_opts \\ []) when is_list(input_opts) do
     t = tensor!(t_raw)
+    assert_keys!(input_opts, [:ord, :axes, :keep_axes])
+
+    default_axes_opts = [axes: nil, keep_axes: false, ord: nil]
+    opts = Keyword.merge(default_axes_opts, input_opts)
 
     case shape(t) do
       {_, _} ->
@@ -6786,11 +6793,9 @@ defmodule Nx do
     end
 
     rank = rank(t)
-    ord = get_norm_ord!(input_opts, rank)
+    ord = get_norm_ord!(opts, rank)
 
-    default_axes_opts = [axes: nil, keep_axes: false]
-
-    axes_opts = Keyword.merge(default_axes_opts, Keyword.take(input_opts, [:axes, :keep_axes]))
+    axes_opts = Keyword.take(opts, [:axes, :keep_axes])
 
     do_p_norm(t, ord, rank, axes_opts)
   end
