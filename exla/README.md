@@ -43,6 +43,7 @@ The first compilation will take a long time, as it needs to compile parts of Ten
       * asdf plugin-add bazel
       * asdf install bazel 3.1.0
       * asdf global bazel 3.1.0
+    * Most binaries are also available on [Github](https://github.com/bazelbuild/bazel/releases)
   * ElixirLS on VSCode
     * Make sure that your Python installation is available globally, as ElixirLS won't know how to activate Python
 
