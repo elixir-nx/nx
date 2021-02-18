@@ -35,6 +35,18 @@ If running on Windows, you will also need:
 
 The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. Subsequent commands should be much faster.
 
+#### Common Installation Issues
+
+  * Bazel
+    * Use `bazel --version` to check your Bazel version, make sure you are using v3.1-v3.7.
+    * Most binaries are also available on [Github](https://github.com/bazelbuild/bazel/releases)
+    * It can also be installed with `asdf`:
+      * asdf plugin-add bazel
+      * asdf install bazel 3.1.0
+      * asdf global bazel 3.1.0
+  * ElixirLS on VSCode
+    * Make sure that your Python installation is available globally, as ElixirLS won't know how to activate Python
+
 ### GPU Support
 
 To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1. You need either cuDNN 7 or 8 installed. [See the installation instructions](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html) and check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
