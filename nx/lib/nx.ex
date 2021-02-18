@@ -6691,7 +6691,7 @@ defmodule Nx do
 
     iex> Nx.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
     #Nx.Tensor<
-      s64
+      u64
       2
     >
 
@@ -6759,8 +6759,9 @@ defmodule Nx do
     rank = rank(t)
     ord = get_norm_ord!(input_opts, rank)
 
-    axes_opts =
-      Keyword.merge([axes: nil, keep_axes: false], Keyword.take(input_opts, [:axes, :keep_axes]))
+    default_axes_opts = [axes: nil, keep_axes: false]
+
+    axes_opts = Keyword.merge(default_axes_opts, Keyword.take(input_opts, [:axes, :keep_axes]))
 
     do_p_norm(t, ord, rank, axes_opts)
   end
@@ -6801,11 +6802,11 @@ defmodule Nx do
     end
   end
 
-  defp do_p_norm(%{type: input_type} = t, 0, 1, opts) do
+  defp do_p_norm(t, 0, 1, opts) do
     t
     |> equal(0)
     |> logical_not()
-    |> aggregate_axes_op(:sum, input_type, opts)
+    |> sum(opts)
   end
 
   defp do_p_norm(_t, 0, 2, _opts) do
@@ -6823,39 +6824,39 @@ defmodule Nx do
     |> function.()
   end
 
-  defp do_p_norm(%{type: input_type} = t, ord, 1, axes_opts) when ord in [:inf, :neg_inf] do
-    function_name = if ord == :inf, do: :reduce_max, else: :reduce_min
+  defp do_p_norm(t, ord, 1, axes_opts) when ord in [:inf, :neg_inf] do
+    function = if ord == :inf, do: &reduce_max/2, else: &reduce_min/2
 
     t
     |> Nx.abs()
-    |> aggregate_axes_op(function_name, input_type, axes_opts)
+    |> function.(axes_opts)
   end
 
-  defp do_p_norm(%{type: input_type} = t, ord, 2, opts) when ord in [1, -1] do
-    function_name =
+  defp do_p_norm(t, ord, 2, opts) when ord in [1, -1] do
+    function =
       if ord == 1 do
-        :reduce_max
+        &reduce_max/2
       else
-        :reduce_min
+        &reduce_min/2
       end
 
     t
     |> Nx.abs()
     |> sum(axes: [0])
-    |> aggregate_axes_op(function_name, input_type, Keyword.take(opts, [:keep_axes]))
+    |> function.(Keyword.take(opts, [:keep_axes]))
   end
 
   defp do_p_norm(_t, ord, 2, _opts) when ord not in -1..2 do
     raise "invalid ord for 2-D tensor. Got: #{inspect(ord)}"
   end
 
-  defp do_p_norm(%{type: input_type} = t, ord, _, opts) do
+  defp do_p_norm(t, ord, _, opts) do
     inv_ord = divide(1, ord)
 
     t
     |> Nx.abs()
     |> power(ord)
-    |> aggregate_axes_op(:sum, input_type, opts)
+    |> sum(opts)
     |> power(inv_ord)
   end
 
