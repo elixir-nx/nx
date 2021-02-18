@@ -6737,6 +6737,15 @@ defmodule Nx do
       5.0
     >
 
+    iex> Nx.norm(Nx.tensor([[3, 4], [0, -4]]), axes: [1], keep_axes: true)
+    #Nx.Tensor<
+      f64[2][1]
+      [
+        [5.0],
+        [4.0]
+      ]
+    >
+
   ### Caveats
 
   For big values of p, f64 rounding errors come into play
