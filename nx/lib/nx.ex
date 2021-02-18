@@ -6663,6 +6663,26 @@ defmodule Nx do
 
   For the 0-norm, the norm is the number of non-zero elements in the tensor.
 
+  ### Options
+
+  - `:axes` - defines the axes upon which the norm will be calculated. Default: `nil`.
+  - `:keep_axes` - defines if the resulting tensor should have the same dimensions as the input. Default: `false`.
+  - `:ord` - defines which norm will be calculated according to the table below. Default: `2`
+
+  | ord          | 2-D                                       | 1-D                               |
+  | ------------ | ----------------------------------------- | --------------------------------- |
+  | `nil`        | Frobenius norm                            | 2-norm                            |
+  | `:frobenius` | Frobenius norm                            | -                                 |
+  | `:nuclear`   | Nuclear norm (not implemented)            | -                                 |
+  | `:inf`       | `max(sum(abs(x), axes: 1))`               | `max(abs(x))`                     |
+  | `:neg_inf`   | `min(sum(abs(x), axes: 1))`               | `min(abs(x))`                     |
+  | 0            | -                                         | Number of non-zero elements       |
+  | 1            | `max(sum(abs(x), axes: 0))`               | as below                          |
+  | -1           | `min(sum(abs(x), axes: 0))`               | as below                          |
+  | 2            | 2-norm                                    | as below                          |
+  | -2           | smallest singular value (not implemented) | as below                          |
+  | other        | -                                         | power(sum(power(abs(x), p)), 1/p) |
+
   ### Examples
 
     iex> Nx.norm(Nx.tensor([3, 4]))
@@ -6695,11 +6715,11 @@ defmodule Nx do
       2
     >
 
-    iex> Nx.norm(Nx.tensor([3, 4]), ord: :fro)
+    iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
     ** (RuntimeError) expected a 2-D tensor. Got a 1-D tensor.
 
-    iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuc)
-    ** (RuntimeError) expected a 2-D tensor. Got a 1-D tensor.
+    iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuclear)
+    ** (RuntimeError) nuclear norm not implemented yet.
 
     iex> Nx.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
     #Nx.Tensor<
@@ -6725,7 +6745,7 @@ defmodule Nx do
       6
     >
 
-    iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :fro)
+    iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
     #Nx.Tensor<
       f64
       5.0
@@ -6782,17 +6802,14 @@ defmodule Nx do
       {nil, _} ->
         2
 
-      {:fro, 2} ->
+      {:frobenius, 2} ->
         2
 
-      {:fro, _} ->
+      {:frobenius, _} ->
         raise "expected a 2-D tensor. Got a #{dims}-D tensor."
 
-      {:nuc, 2} ->
-        :nuc
-
-      {:nuc, _} ->
-        raise "expected a 2-D tensor. Got a #{dims}-D tensor."
+      {:nuclear, _} ->
+        raise "nuclear norm not implemented yet."
 
       {ord, 2} when ord in [:inf, :neg_inf] ->
         ord
@@ -6859,14 +6876,26 @@ defmodule Nx do
     raise "invalid ord for 2-D tensor. Got: #{inspect(ord)}"
   end
 
-  defp do_p_norm(t, ord, _, opts) do
+  defp do_p_norm(%{type: type} = t, ord, _, opts) do
     inv_ord = divide(1, ord)
 
+    # This coefficient is introduced for better numerical stability
+    # The idea is that by dividing the tensor by it, large values of
+    # tensor entries and large values of p are reduced, which in turn
+    # avoids numerical overflow.
+    {:ok, numerical_stability_coefficient} =
+      type
+      |> Nx.Type.max_value_binary()
+      |> Nx.from_binary(type)
+      |> Nx.Tensor.fetch(0)
+
     t
+    |> divide(numerical_stability_coefficient)
     |> Nx.abs()
     |> power(ord)
     |> sum(opts)
     |> power(inv_ord)
+    |> multiply(numerical_stability_coefficient)
   end
 
   @doc """
