@@ -367,11 +367,18 @@ defmodule EXLA.Defn do
   end
 
   @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-              [:bitwise_not, :count_leading_zeros, :population_count] ++
-              [:floor, :ceil, :round]
+              [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :arccos] ++
+              [:arcsin, :arctan, :floor, :ceil, :round, :arccosh, :arcsinh, :arctanh, :erf] ++
+              [:erfc, :erf_inv]
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do
     apply(EXLA.Op, op, [to_type(arg, type)])
+  end
+
+  @unary_lib_op [:tan]
+
+  defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_lib_op do
+    apply(EXLA.Lib, op, [to_type(arg, type)])
   end
 
   defp to_operator(:as_type, [arg], %{type: type}, _state) do

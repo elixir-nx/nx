@@ -16,7 +16,9 @@ defmodule EXLA.ExecutableTest do
     test "succeeds with 2 inputs and default options" do
       t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
       t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-      assert %Buffer{data: <<2::32-native>>} = run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
+
+      assert %Buffer{data: <<2::32-native>>} =
+               run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
     end
 
     test "succeeds when data is preloaded" do
@@ -65,9 +67,10 @@ defmodule EXLA.ExecutableTest do
       t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
       t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
       t1 = Buffer.place_on_device(t1, client(), 0)
-      assert %Buffer{data: <<3::32-native>>} = run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
-    end
 
+      assert %Buffer{data: <<3::32-native>>} =
+               run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
+    end
 
     test "suceeds with tuple return" do
       t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
@@ -116,7 +119,9 @@ defmodule EXLA.ExecutableTest do
     test "succeeds with 2 inputs and default options" do
       t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
       t2 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
-      assert %Buffer{data: <<2::32-native>>} = async_run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
+
+      assert %Buffer{data: <<2::32-native>>} =
+               async_run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
     end
 
     test "succeeds when data is preloaded" do
@@ -157,22 +162,26 @@ defmodule EXLA.ExecutableTest do
 
       exec = compile([t1.shape, t2.shape], fn _builder, x, y -> Op.add(x, y) end)
 
-      assert t3 = %Buffer{ref: {ref, _}} =
-        exec
-        |> Executable.async_run([t1, t2], keep_on_device: true)
-        |> Executable.await_run()
+      assert t3 =
+               %Buffer{ref: {ref, _}} =
+               exec
+               |> Executable.async_run([t1, t2], keep_on_device: true)
+               |> Executable.await_run()
 
       assert is_reference(ref)
-      assert %Buffer{data: <<4::32-native>>} = exec |> Executable.async_run([t3, t3]) |> Executable.await_run()
+
+      assert %Buffer{data: <<4::32-native>>} =
+               exec |> Executable.async_run([t3, t3]) |> Executable.await_run()
     end
 
     test "succeeds with mixed data" do
       t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
       t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
       t1 = Buffer.place_on_device(t1, client(), 0)
-      assert %Buffer{data: <<3::32-native>>} = async_run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
-    end
 
+      assert %Buffer{data: <<3::32-native>>} =
+               async_run([t1, t2], fn _builder, x, y -> Op.add(x, y) end)
+    end
 
     test "suceeds with tuple return" do
       t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}

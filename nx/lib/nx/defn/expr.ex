@@ -451,9 +451,10 @@ defmodule Nx.Defn.Expr do
   end
 
   unary_ops =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-      [:negate, :sign, :abs, :bitwise_not, :population_count, :count_leading_zeros] ++
-      [:floor, :ceil, :round, :as_type]
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
+      [:arccosh, :arcsinh, :arctanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
+      [:population_count, :count_leading_zeros, :floor, :ceil, :round, :as_type] ++
+      [:erf, :erfc, :arccos, :arcsin, :arctan]
 
   for op <- unary_ops do
     @impl true
@@ -634,7 +635,7 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  defp ones_stride?(strides), do: Enum.all?(strides, & &1 == 1)
+  defp ones_stride?(strides), do: Enum.all?(strides, &(&1 == 1))
 
   defp maybe_squeeze(%T{data: %Expr{op: :squeeze, args: [slice, axes]}}), do: {slice, axes}
   defp maybe_squeeze(slice), do: {slice, []}

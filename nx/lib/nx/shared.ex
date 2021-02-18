@@ -148,10 +148,21 @@ defmodule Nx.Shared do
       logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x))))},
       cos: {"cosine", quote(do: :math.cos(var!(x)))},
       sin: {"sine", quote(do: :math.sin(var!(x)))},
+      tan: {"tangent", quote(do: :math.tan(var!(x)))},
+      cosh: {"hyperbolic cosine", quote(do: :math.cosh(var!(x)))},
+      sinh: {"hyperbolic sine", quote(do: :math.sinh(var!(x)))},
       tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
+      arccos: {"inverse cosine", quote(do: :math.acos(var!(x)))},
+      arcsin: {"inverse sine", quote(do: :math.asin(var!(x)))},
+      arctan: {"inverse tangent", quote(do: :math.atan(var!(x)))},
+      arccosh: {"inverse hyperbolic cosine", quote(do: :math.acosh(var!(x)))},
+      arcsinh: {"inverse hyperbolic sine", quote(do: :math.asinh(var!(x)))},
+      arctanh: {"inverse hyperbolic sine", quote(do: :math.atanh(var!(x)))},
       sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
       rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
-      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))}
+      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))},
+      erf: {"error function", quote(do: :math.erf(var!(x)))},
+      erfc: {"one minus error function", quote(do: :math.erfc(var!(x)))}
     ]
 
   ## Types
