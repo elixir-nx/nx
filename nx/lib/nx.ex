@@ -6769,6 +6769,12 @@ defmodule Nx do
     iex> Nx.norm(Nx.tensor([0, 1]), my_opt: 1)
     ** (RuntimeError) unknown key :my_opt in [my_opt: 1], expected one of [:ord, :axes, :keep_axes]
 
+    iex> Nx.norm(Nx.tensor([[0], [1]]), ord: :nuclear)
+    ** (RuntimeError) nuclear norm not implemented yet.
+
+    iex> Nx.norm(Nx.tensor([[0], [1]]), ord: -2)
+    ** (RuntimeError) ord: -2 for 2-D tensor not implemented yet.
+
   ### Caveats
 
   For big values of p, f64 rounding errors come into play
@@ -6816,6 +6822,9 @@ defmodule Nx do
       {:nuclear, _} ->
         raise "nuclear norm not implemented yet."
 
+      {-2, 2} ->
+        raise "ord: -2 for 2-D tensor not implemented yet."
+
       {ord, 2} when ord in [:inf, :neg_inf] ->
         ord
 
@@ -6823,7 +6832,7 @@ defmodule Nx do
         ord
 
       {0, 2} ->
-        raise "ord #{inspect(ord)} not implemented for 2-D tensor."
+        raise "ord 0 not implemented for 2-D tensor."
 
       {0, 1} ->
         0
