@@ -2386,6 +2386,17 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "norm" do
+    defn normalize(t), do: t / Nx.norm(t)
+
+    test "works with norm calls" do
+      t = Nx.tensor([3.0, 4.0, 0.0])
+      assert compare_tensors!(normalize(t), Nx.tensor([0.6, 0.8, 0.0]))
+
+      assert compare_tensors!(Nx.dot(t, t), Nx.power(Nx.norm(t), 2))
+    end
+  end
+
   # We need to round the floats because of imprecision between platforms
   defp compare_tensors!(
          %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
