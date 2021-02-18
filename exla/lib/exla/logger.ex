@@ -21,7 +21,7 @@ defmodule EXLA.Logger do
 
   @impl true
   def handle_info({:warning, msg, file, line}, state) do
-    Logger.warning(msg, domain: [:xla], file: file, line: line)
+    Logger.warn(msg, domain: [:xla], file: file, line: line)
     {:noreply, state}
   end
 
