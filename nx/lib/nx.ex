@@ -6665,44 +6665,198 @@ defmodule Nx do
 
   ### Examples
 
-    iex> Nx.p_norm(Nx.tensor([3, 4]), 2)
+    iex> Nx.norm(Nx.tensor([3, 4]))
     #Nx.Tensor<
       f64
       5.0
     >
 
-    iex> Nx.p_norm(Nx.tensor([[0, -3, 4], [0, 0, 0]]), 1)
+    iex> Nx.norm(Nx.tensor([3, 4]), ord: 1)
     #Nx.Tensor<
       f64
       7.0
     >
 
-    iex> Nx.p_norm(Nx.tensor([[[0, -3, -4]], [[0, 0, 0]]]), 0)
+    iex> Nx.norm(Nx.tensor([3, -4]), ord: :inf)
+    #Nx.Tensor<
+      s64
+      4
+    >
+
+    iex> Nx.norm(Nx.tensor([3, -4]), ord: :neg_inf)
+    #Nx.Tensor<
+      s64
+      3
+    >
+
+    iex> Nx.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
+    #Nx.Tensor<
+      s64
+      2
+    >
+
+    iex> Nx.norm(Nx.tensor([3, 4]), ord: :fro)
+    ** (RuntimeError) expected a 2-D tensor. Got a 1-D tensor.
+
+    iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuc)
+    ** (RuntimeError) expected a 2-D tensor. Got a 1-D tensor.
+
+    iex> Nx.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
+    #Nx.Tensor<
+      s64
+      5
+    >
+
+    iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: 1)
+    #Nx.Tensor<
+      s64
+      6
+    >
+
+    iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :neg_inf)
+    #Nx.Tensor<
+      s64
+      5
+    >
+
+    iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :inf)
+    #Nx.Tensor<
+      s64
+      6
+    >
+
+    iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :fro)
     #Nx.Tensor<
       f64
-      2.0
+      5.0
+    >
+
+    iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]))
+    #Nx.Tensor<
+      f64
+      5.0
     >
 
   ### Caveats
 
   For big values of p, f64 rounding errors come into play
   """
-  def p_norm(t, 0) do
+
+  def norm(t_raw, input_opts \\ []) when is_list(input_opts) do
+    t = tensor!(t_raw)
+
+    case shape(t) do
+      {_, _} ->
+        :ok
+
+      {_} ->
+        :ok
+
+      s ->
+        raise "expected 1-D or 2-D tensor. Received a tensor with shape #{inspect(s)} instead."
+    end
+
+    rank = rank(t)
+    ord = get_norm_ord!(input_opts, rank)
+
+    axes_opts =
+      Keyword.merge([axes: nil, keep_axes: false], Keyword.take(input_opts, [:axes, :keep_axes]))
+
+    do_p_norm(t, ord, rank, axes_opts)
+  end
+
+  defp get_norm_ord!(opts, dims) do
+    ord = Keyword.get(opts, :ord)
+
+    case {ord, dims} do
+      {nil, _} ->
+        2
+
+      {:fro, 2} ->
+        2
+
+      {:fro, _} ->
+        raise "expected a 2-D tensor. Got a #{dims}-D tensor."
+
+      {:nuc, 2} ->
+        :nuc
+
+      {:nuc, _} ->
+        raise "expected a 2-D tensor. Got a #{dims}-D tensor."
+
+      {ord, 2} when ord in [:inf, :neg_inf] ->
+        ord
+
+      {ord, 1} when ord in [:inf, :neg_inf] ->
+        ord
+
+      {0, 2} ->
+        raise "ord #{inspect(ord)} not implemented for 2-D tensor."
+
+      {0, 1} ->
+        0
+
+      {ord, _} ->
+        ord
+    end
+  end
+
+  defp do_p_norm(%{type: input_type} = t, 0, 1, opts) do
     t
     |> equal(0)
     |> logical_not()
-    |> sum()
-    |> as_type({:f, 64})
+    |> aggregate_axes_op(:sum, input_type, opts)
   end
 
-  def p_norm(t, p) do
-    inv_p = divide(1, p)
+  defp do_p_norm(_t, 0, 2, _opts) do
+    raise "expected 1-D tensor for ord: 0. Got: 2-D tensor."
+  end
+
+  defp do_p_norm(t, ord, 2, axes_opts) when ord in [:inf, :neg_inf] do
+    opts = Keyword.merge(axes_opts, axes: [1])
+
+    function = if ord == :inf, do: &reduce_max/1, else: &reduce_min/1
 
     t
     |> Nx.abs()
-    |> power(p)
-    |> sum()
-    |> power(inv_p)
+    |> sum(opts)
+    |> function.()
+  end
+
+  defp do_p_norm(%{type: input_type} = t, ord, 1, axes_opts) when ord in [:inf, :neg_inf] do
+    function_name = if ord == :inf, do: :reduce_max, else: :reduce_min
+
+    t
+    |> Nx.abs()
+    |> aggregate_axes_op(function_name, input_type, axes_opts)
+  end
+
+  defp do_p_norm(%{type: input_type} = t, ord, 2, opts) when ord in [1, -1] do
+    function_name =
+      if ord == 1 do
+        :reduce_max
+      else
+        :reduce_min
+      end
+
+    t
+    |> Nx.abs()
+    |> sum(axes: [0])
+    |> aggregate_axes_op(function_name, input_type, Keyword.take(opts, [:keep_axes]))
+  end
+
+  defp do_p_norm(_t, ord, 2, _opts) when ord not in -1..2 do
+    raise "invalid ord for 2-D tensor. Got: #{inspect(ord)}"
+  end
+
+  defp do_p_norm(%{type: input_type} = t, ord, _, opts) do
+    inv_ord = divide(1, ord)
+
+    t
+    |> Nx.abs()
+    |> power(ord)
+    |> aggregate_axes_op(:sum, input_type, opts)
+    |> power(inv_ord)
   end
 
   @doc """
