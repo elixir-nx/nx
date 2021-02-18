@@ -185,7 +185,7 @@ defmodule Nx.Type do
   @doc """
   Casts the given scalar to type.
 
-  It does not handle overflows/underfows,
+  It does not handle overflow/underflow,
   returning the scalar as is, but cast.
 
   ## Examples
