@@ -2444,13 +2444,14 @@ defmodule Nx do
   """
   def divide(left, right), do: element_wise_bin_op(left, right, :divide, &Nx.Type.to_floating/1)
 
-  defp assert_quotient_type!({:s, _} = type), do: type
-  defp assert_quotient_type!({:u, _} = type), do: type
-
   defp assert_quotient_type!(type) do
-    raise ArgumentError,
-          "quotient expects integer tensors as inputs and outputs an integer tensor, " <>
-            "got: #{inspect(type)}"
+    if Nx.Type.integer?(type) do
+      type
+    else
+      raise ArgumentError,
+            "quotient expects integer tensors as inputs and outputs an integer tensor, " <>
+              "got: #{inspect(type)}"
+    end
   end
 
   @doc """
@@ -2716,13 +2717,14 @@ defmodule Nx do
 
   ## Bitwise ops
 
-  defp assert_bitwise_type!({:s, _} = type), do: type
-  defp assert_bitwise_type!({:u, _} = type), do: type
-
   defp assert_bitwise_type!(type) do
-    raise ArgumentError,
-          "bitwise operators expect integer tensors as inputs and outputs an integer tensor, " <>
-            "got: #{inspect(type)}"
+    if Nx.Type.integer?(type) do
+      type
+    else
+      raise ArgumentError,
+            "bitwise operators expect integer tensors as inputs and outputs an integer tensor, " <>
+              "got: #{inspect(type)}"
+    end
   end
 
   @doc """
@@ -3983,14 +3985,7 @@ defmodule Nx do
   """
   def sum(tensor, opts \\ []) do
     tensor = tensor!(tensor)
-
-    type =
-      case tensor.type do
-        {:u, _} -> {:u, 64}
-        {:s, _} -> {:s, 64}
-        type -> type
-      end
-
+    type = Nx.Type.to_aggregate(tensor.type)
     aggregate_axes_op(tensor, :sum, type, opts)
   end
 
@@ -4223,14 +4218,7 @@ defmodule Nx do
   """
   def product(tensor, opts \\ []) do
     tensor = tensor!(tensor)
-
-    type =
-      case tensor.type do
-        {:u, _} -> {:u, 64}
-        {:s, _} -> {:s, 64}
-        type -> type
-      end
-
+    type = Nx.Type.to_aggregate(tensor.type)
     aggregate_axes_op(tensor, :product, type, opts)
   end
 

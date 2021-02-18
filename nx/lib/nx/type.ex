@@ -385,6 +385,38 @@ defmodule Nx.Type do
   end
 
   @doc """
+  Returns true if the type is an integer in Elixir.
+
+  ## Examples
+
+      iex> Nx.Type.integer?({:s, 8})
+      true
+      iex> Nx.Type.integer?({:u, 64})
+      true
+      iex> Nx.Type.integer?({:f, 64})
+      false
+  """
+  def integer?({:u, _}), do: true
+  def integer?({:s, _}), do: true
+  def integer?({_, _}), do: false
+
+  @doc """
+  Returns true if the type is a float in Elixir.
+
+  ## Examples
+
+      iex> Nx.Type.float?({:f, 32})
+      true
+      iex> Nx.Type.float?({:bf, 16})
+      true
+      iex> Nx.Type.float?({:u, 64})
+      false
+  """
+  def float?({:f, _}), do: true
+  def float?({:bf, _}), do: true
+  def float?({_, _}), do: false
+
+  @doc """
   Returns a string representation of the given type.
 
   ## Examples
