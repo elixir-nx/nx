@@ -145,7 +145,7 @@ defmodule EXLA.Op do
 
   returns_float =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-      [:arccosh, :arcsinh, :arctanh, :arccos, :arcsin, :arctan, :cosh, :sinh, :erf] ++
+      [:arccosh, :arcsinh, :arctanh, :arccos, :arcsin, :arctan, :cosh, :sinh] ++
       [:erf, :erfc, :erf_inv]
 
   returns_any = [:negate]
