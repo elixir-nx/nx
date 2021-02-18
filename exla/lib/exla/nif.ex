@@ -24,96 +24,29 @@ defmodule EXLA.NIF do
   def parameter(_builder, _number, _shape, _name),
     do: nif_error(__ENV__.function)
 
-  def add(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
+  binary_broadcast_ops =
+    [:add, :subtract, :multiply, :divide, :remainder, :min, :max] ++
+      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift_arithmetic] ++
+      [:right_shift_logical, :equal, :not_equal, :greater_equal, :greater, :less_equal] ++
+      [:less, :power, :complex, :arctan2]
 
-  def subtract(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
+  for op <- binary_broadcast_ops do
+    def unquote(op)(_a, _b, _broadcast_dims) do
+      nif_error(__ENV__.function)
+    end
+  end
 
-  def multiply(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
+  unary_ops =
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :real, :imag, :erf_inv] ++
+      [:is_finite, :conj, :arccos, :arcsin, :arctan, :cosh, :sinh, :erf, :erfc] ++
+      [:arccosh, :arcsinh, :arctanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs] ++
+      [:bitwise_not, :population_count, :count_leading_zeros, :floor, :ceil, :round]
 
-  def divide(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def remainder(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def min(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def max(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def bitwise_and(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def bitwise_or(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def bitwise_xor(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def left_shift(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def right_shift_arithmetic(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def right_shift_logical(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def equal(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def not_equal(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def greater_equal(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def greater(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def less_equal(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def less(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def power(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def complex(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def arctan2(_a, _b, _broadcast_dims),
-    do: nif_error(__ENV__.function)
-
-  def abs(_a), do: nif_error(__ENV__.function)
-  def exp(_a), do: nif_error(__ENV__.function)
-  def expm1(_a), do: nif_error(__ENV__.function)
-  def floor(_a), do: nif_error(__ENV__.function)
-  def ceil(_a), do: nif_error(__ENV__.function)
-  def round(_a), do: nif_error(__ENV__.function)
-  def log(_a), do: nif_error(__ENV__.function)
-  def log1p(_a), do: nif_error(__ENV__.function)
-  def logistic(_a), do: nif_error(__ENV__.function)
-  def sign(_a), do: nif_error(__ENV__.function)
-  def cos(_a), do: nif_error(__ENV__.function)
-  def sin(_a), do: nif_error(__ENV__.function)
-  def tanh(_a), do: nif_error(__ENV__.function)
-  def real(_a), do: nif_error(__ENV__.function)
-  def imag(_a), do: nif_error(__ENV__.function)
-  def sqrt(_a), do: nif_error(__ENV__.function)
-  def rsqrt(_a), do: nif_error(__ENV__.function)
-  def cbrt(_a), do: nif_error(__ENV__.function)
-  def is_finite(_a), do: nif_error(__ENV__.function)
-  def negate(_a), do: nif_error(__ENV__.function)
-  def conj(_a), do: nif_error(__ENV__.function)
-  def bitwise_not(_a), do: nif_error(__ENV__.function)
-  def count_leading_zeros(_a), do: nif_error(__ENV__.function)
-  def population_count(_a), do: nif_error(__ENV__.function)
+  for op <- unary_ops do
+    def unquote(op)(_x) do
+      nif_error(__ENV__.function)
+    end
+  end
 
   def dot(_a, _b, _precision),
     do: nif_error(__ENV__.function)

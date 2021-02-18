@@ -143,7 +143,11 @@ defmodule EXLA.Op do
 
   ## Element-wise unary ops
 
-  returns_float = [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
+  returns_float =
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+      [:arccosh, :arcsinh, :arctanh, :arccos, :arcsin, :arctan, :cosh, :sinh, :erf] ++
+      [:erf, :erfc, :erf_inv]
+
   returns_any = [:negate]
   requires_int = [:count_leading_zeros, :population_count, :bitwise_not]
   requires_signed = [:abs, :sign]

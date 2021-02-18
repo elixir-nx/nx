@@ -8,6 +8,7 @@
 #include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
+#include "tensorflow/compiler/xla/client/lib/math.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
 // All of these are created with calls to `new` and subsequently
@@ -772,8 +773,40 @@ ERL_NIF_TERM sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Sin);
 }
 
+ERL_NIF_TERM arccos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Acos);
+}
+
+ERL_NIF_TERM arcsin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Asin);
+}
+
+ERL_NIF_TERM arctan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Atan);
+}
+
+ERL_NIF_TERM cosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Cosh);
+}
+
+ERL_NIF_TERM sinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Sinh);
+}
+
 ERL_NIF_TERM tanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Tanh);
+}
+
+ERL_NIF_TERM arccosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Acosh);
+}
+
+ERL_NIF_TERM arcsinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Asinh);
+}
+
+ERL_NIF_TERM arctanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Atanh);
 }
 
 ERL_NIF_TERM real(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -794,6 +827,18 @@ ERL_NIF_TERM cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 ERL_NIF_TERM rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Rsqrt);
+}
+
+ERL_NIF_TERM erf(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Erf);
+}
+
+ERL_NIF_TERM erfc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Erfc);
+}
+
+ERL_NIF_TERM erf_inv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::ErfInv);
 }
 
 ERL_NIF_TERM is_finite(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1751,12 +1796,23 @@ static ErlNifFunc exla_funcs[] = {
   {"sign", 1, sign},
   {"cos", 1, cos},
   {"sin", 1, sin},
+  {"arccos", 1, arccos},
+  {"arcsin", 1, arcsin},
+  {"arctan", 1, arctan},
+  {"cosh", 1, cosh},
+  {"sinh", 1, sinh},
   {"tanh", 1, tanh},
+  {"arccosh", 1, arccosh},
+  {"arcsinh", 1, arcsinh},
+  {"arctanh", 1, arctanh},
   {"real", 1, real},
   {"imag", 1, imag},
   {"sqrt", 1, sqrt},
   {"rsqrt", 1, rsqrt},
   {"cbrt", 1, cbrt},
+  {"erf", 1, erf},
+  {"erfc", 1, erfc},
+  {"erf_inv", 1, erf_inv},
   {"is_finite", 1, is_finite},
   {"negate", 1, neg},
   {"conj", 1, conj},

@@ -3486,9 +3486,23 @@ defmodule Nx do
   for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
-    {one, _} = Code.eval_quoted(code, x: 1)
-    {two, _} = Code.eval_quoted(code, x: 2)
-    {three, _} = Code.eval_quoted(code, x: 3)
+    {{one, _}, {two, _}, {three, _}} =
+      if name in [:arccos, :arcsin, :arctan, :arctanh] do
+        {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
+         Code.eval_quoted(code, x: 0.9)}
+      else
+        {Code.eval_quoted(code, x: 1), Code.eval_quoted(code, x: 2), Code.eval_quoted(code, x: 3)}
+      end
+
+    first_val =
+      if name in [:arccos, :arcsin, :arctan, :arctanh],
+        do: 0.1,
+        else: 1
+
+    list_of_vals =
+      if name in [:arccos, :arcsin, :arctan, :arctanh],
+        do: [0.1, 0.5, 0.9],
+        else: [1.0, 2.0, 3.0]
 
     @doc """
     Calculates the #{desc} of each element in the tensor.
@@ -3499,13 +3513,13 @@ defmodule Nx do
 
     ## Examples
 
-        iex> Nx.#{name}(1)
+        iex> Nx.#{name}(#{first_val})
         #Nx.Tensor<
           f64
           #{one}
         >
 
-        iex> Nx.#{name}(Nx.tensor([1.0, 2.0, 3.0], names: [:x]))
+        iex> Nx.#{name}(Nx.tensor(#{inspect(list_of_vals)}, names: [:x]))
         #Nx.Tensor<
           f64[x: 3]
           [#{one}, #{two}, #{three}]
