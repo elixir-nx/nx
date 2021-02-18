@@ -6765,8 +6765,13 @@ defmodule Nx do
     impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
-  def norm() do
-
+  @doc """
+  Calculates the L1 norm of a tensor.
+  """
+  def norm(tensor) do
+    tensor
+    |> Nx.abs()
+    |> sum()
   end
 
   ## Helpers
