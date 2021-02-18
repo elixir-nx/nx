@@ -33,7 +33,7 @@ defmodule EXLA.Executable do
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
     %{client: client, output_shape: output_shape} = executable
-    data = run(client, executable, arguments, options, 0)
+    {data, _} = run(client, executable, arguments, options, 0)
     decompose_output(data, output_shape, client)
   end
 
@@ -41,7 +41,7 @@ defmodule EXLA.Executable do
   Runs the given function async.
   """
   def async_run(%Executable{} = executable, arguments, options \\ []) do
-    data = run(executable.client, executable, arguments, options, 1)
+    {data, _} = run(executable.client, executable, arguments, options, 1)
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     %{executable | async: {data, keep_on_device}}
   end

@@ -447,6 +447,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                        client_,
                                        ExlaBuffer::BufferType::kReference);
 
+  ERL_NIF_TERM device_ordinal = nif::make(env, device->device_ordinal());
+
   if (!async_run) {
     device->compute_stream()->BlockHostUntilDone();
 
@@ -456,11 +458,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     if (!keep_on_device) {
       delete buffer_ref;
     }
-
-    return nif::ok(env, term);
+    return nif::ok(env, enif_make_tuple2(env, term, device_ordinal));
   }
 
-  return nif::ok(env, nif::make<ExlaBuffer*>(env, buffer_ref));
+  return nif::ok(env, enif_make_tuple2(env, nif::make<ExlaBuffer*>(env, buffer_ref), device_ordinal));
 }
 
 // ExlaClient Functions
