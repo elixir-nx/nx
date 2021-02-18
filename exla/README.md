@@ -35,7 +35,7 @@ If running on Windows, you will also need:
 
 The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. Subsequent commands should be much faster.
 
-#### Installation troubleshooting
+#### Common Installation Issues
 
   * Bazel
     * Use `bazel --version` to check your Bazel version, make sure you are using v3.1-v3.7.
