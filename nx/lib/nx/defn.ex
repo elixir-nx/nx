@@ -24,7 +24,7 @@ defmodule Nx.Defn do
 
       defn add_and_mult(a, b, c) do
         a
-        |> Nx.multipy(b)
+        |> Nx.multiply(b)
         |> Nx.add(c)
       end
 
