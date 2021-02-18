@@ -635,10 +635,15 @@ defmodule NxTest do
     end
   end
 
-  describe "norm/1" do
-    test "" do
-        t = Nx.tensor([1,2], [3,2])
-        assert Nx.norm()
+  describe "L1 norm/1" do
+    test "calculate L1 norm of a tensor" do
+        tensor = Nx.tensor([1, 2, 3])
+        assert Nx.norm(tensor) == Nx.tensor(6)
+    end
+
+    test "calculate L1 norm of a tensor with a zero element" do
+      tensor = Nx.tensor([0])
+      assert Nx.norm(tensor) == Nx.tensor(0)
     end
   end
 end
