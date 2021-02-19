@@ -6779,17 +6779,17 @@ defmodule Nx do
   """
 
   def norm(tensor, opts \\ []) when is_list(opts) do
-    t = tensor!(t_raw)
-    assert_keys!(input_opts, [:ord, :axes, :keep_axes])
+    %{shape: s} = t = tensor!(tensor)
+    assert_keys!(opts, [:ord, :axes, :keep_axes])
 
     default_axes_opts = [axes: nil, keep_axes: false, ord: nil]
-    opts = Keyword.merge(default_axes_opts, input_opts)
-
-rank = rank(t)
-unless rank == 1 or rank == 2,
-  do: raise "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}"
+    opts = Keyword.merge(default_axes_opts, opts)
 
     rank = rank(t)
+
+    unless rank == 1 or rank == 2,
+      do: raise("expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
+
     ord = get_norm_ord!(opts, rank)
 
     axes_opts = Keyword.take(opts, [:axes, :keep_axes])
@@ -6884,19 +6884,16 @@ unless rank == 1 or rank == 2,
   defp do_p_norm(%{type: type} = t, ord, _, opts) do
     inv_ord = divide(1, ord)
 
+    abs_t = Nx.abs(t)
+
     # This coefficient is introduced for better numerical stability
     # The idea is that by dividing the tensor by it, large values of
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
-    {:ok, numerical_stability_coefficient} =
-      type
-      |> Nx.Type.max_value_binary()
-      |> Nx.from_binary(type)
-      |> Nx.Tensor.fetch(0)
+    numerical_stability_coefficient = reduce_max(t)
 
-    t
+    abs_t
     |> divide(numerical_stability_coefficient)
-    |> Nx.abs()
     |> power(ord)
     |> sum(opts)
     |> power(inv_ord)
