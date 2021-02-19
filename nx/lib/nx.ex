@@ -6791,60 +6791,39 @@ defmodule Nx do
     unless rank == 1 or rank == 2,
       do: raise("expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
 
-    ord = get_norm_ord!(opts, rank)
+    {ord, axes_opts} = Keyword.pop(opts, :ord)
 
-    axes_opts = Keyword.take(opts, [:axes, :keep_axes])
-
-    do_p_norm(t, ord, rank, axes_opts)
+    do_p_norm(t, ord, axes_opts)
   end
 
-  defp get_norm_ord!(opts, dims) do
-    ord = Keyword.get(opts, :ord)
+  defp do_p_norm(t, nil, opts), do: do_p_norm(t, 2, opts)
 
-    case {ord, dims} do
-      {nil, _} ->
-        2
+  defp do_p_norm(_t, :nuclear, _opts), do: raise("nuclear norm not implemented yet.")
 
-      {:frobenius, 2} ->
-        2
+  defp do_p_norm(%{shape: {_}}, :frobenius, _opts),
+    do: raise("expected a 2-D tensor. Got a 1-D tensor.")
 
-      {:frobenius, _} ->
-        raise "expected a 2-D tensor. Got a #{dims}-D tensor."
+  defp do_p_norm(%{shape: {_, _}} = t, :frobenius, opts), do: do_p_norm(t, 2, opts)
 
-      {:nuclear, _} ->
-        raise "nuclear norm not implemented yet."
-
-      {-2, 2} ->
-        raise "ord: -2 for 2-D tensor not implemented yet."
-
-      {ord, 2} when ord in [:inf, :neg_inf] ->
-        ord
-
-      {ord, 1} when ord in [:inf, :neg_inf] ->
-        ord
-
-      {0, 2} ->
-        raise "ord 0 not implemented for 2-D tensor."
-
-      {0, 1} ->
-        0
-
-      {ord, _} ->
-        ord
-    end
-  end
-
-  defp do_p_norm(t, 0, 1, opts) do
+  defp do_p_norm(%{shape: {_}} = t, 0, opts) do
     t
     |> not_equal(0)
     |> sum(opts)
   end
 
-  defp do_p_norm(_t, 0, 2, _opts) do
+  defp do_p_norm(%{shape: {_, _}}, 0, _opts) do
     raise "expected 1-D tensor for ord: 0. Got: 2-D tensor."
   end
 
-  defp do_p_norm(t, ord, 2, axes_opts) when ord in [:inf, :neg_inf] do
+  defp do_p_norm(%{shape: {_}} = t, ord, axes_opts) when ord in [:inf, :neg_inf] do
+    function = if ord == :inf, do: &reduce_max/2, else: &reduce_min/2
+
+    t
+    |> Nx.abs()
+    |> function.(axes_opts)
+  end
+
+  defp do_p_norm(%{shape: {_, _}} = t, ord, axes_opts) when ord in [:inf, :neg_inf] do
     opts = Keyword.merge(axes_opts, axes: [1])
 
     function = if ord == :inf, do: &reduce_max/1, else: &reduce_min/1
@@ -6855,15 +6834,7 @@ defmodule Nx do
     |> function.()
   end
 
-  defp do_p_norm(t, ord, 1, axes_opts) when ord in [:inf, :neg_inf] do
-    function = if ord == :inf, do: &reduce_max/2, else: &reduce_min/2
-
-    t
-    |> Nx.abs()
-    |> function.(axes_opts)
-  end
-
-  defp do_p_norm(t, ord, 2, opts) when ord in [1, -1] do
+  defp do_p_norm(%{shape: {_, _}} = t, ord, opts) when ord in [1, -1] do
     function =
       if ord == 1 do
         &reduce_max/2
@@ -6877,12 +6848,16 @@ defmodule Nx do
     |> function.(Keyword.take(opts, [:keep_axes]))
   end
 
-  defp do_p_norm(_t, ord, 2, _opts) when ord not in -1..2 do
+  defp do_p_norm(%{shape: {_, _}}, -2, _opts) do
+    raise "ord: -2 for 2-D tensor not implemented yet."
+  end
+
+  defp do_p_norm(%{shape: {_, _}}, ord, _opts) when ord not in -1..2 or ord == 0 do
     raise "invalid ord for 2-D tensor. Got: #{inspect(ord)}"
   end
 
-  defp do_p_norm(t, ord, _, opts) do
-    inv_ord = divide(1, ord)
+  defp do_p_norm(t, ord, opts) when is_integer(ord) do
+    inv_ord = tensor(1 / ord)
 
     # We extract this result to a variable because it's used both for
     # getting the normalization coefficient and for the main pipe chain
