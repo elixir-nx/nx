@@ -417,7 +417,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:tan, [x], _ans, g, cache) do
-    g = Nx.divide(g, Nx.multiply(Nx.cos(x), Nx.cos(x)))
+    g = Nx.divide(g, Nx.power(Nx.cos(x), 2))
     to_grad(x, g, cache)
   end
 
