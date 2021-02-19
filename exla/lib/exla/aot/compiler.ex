@@ -32,11 +32,14 @@ defmodule EXLA.AOT.Compiler do
       )
 
     erts_link_path = get_aot_path() <> "erts"
+    _ = File.rm(Path.join(cwd, "libnif.so"))
 
     with {_, 0} <- System.cmd("ln", ["-s", erts_path, erts_link_path]),
          {_, 0} <-
            System.cmd("bazel", ["build", "//tensorflow/compiler/xla/exla/aot:libnif.so"],
-             cd: get_tf_checkout_path()
+             cd: get_tf_checkout_path(),
+             stderr_to_stdout: true,
+             into: IO.stream(:stdio, :line)
            ),
          {_, 0} <-
            System.cmd("mv", ["bazel-bin/tensorflow/compiler/xla/exla/aot/libnif.so", cwd],
@@ -111,7 +114,14 @@ defmodule EXLA.AOT.Compiler do
 
   defp get_aot_path, do: get_tf_checkout_path() <> "/tensorflow/compiler/xla/exla/aot/"
   defp get_tf_checkout_path, do: get_exla_cache() <> @tf_checkout_path
-  defp get_exla_cache, do: System.get_env("EXLA_CACHE")
+
+  defp get_exla_cache,
+    do:
+      System.get_env("EXLA_CACHE") ||
+        Path.join(
+          System.get_env("TEMP") || Path.join(System.get_env("HOME"), ".cache"),
+          "exla"
+        )
 
   defp unwrap!({:ok, return}), do: return
 end

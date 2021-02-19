@@ -18,6 +18,11 @@ EXLA_CACHE=$(TEMP)/exla
 EXLA_TENSORFLOW_GIT_REPO=https://github.com/tensorflow/tensorflow.git
 !ENDIF
 
+# Replicated public configuration
+# When changing this, also change:
+# * Makefile
+# * Makefile.win
+# * lib/exla/aot/compiler.ex
 !IFNDEF EXLA_TENSORFLOW_GIT_REV
 EXLA_TENSORFLOW_GIT_REV=6af836f407f546cf2f9ab3b5fcb7a8285bda5c96
 !ENDIF

@@ -219,9 +219,11 @@ defmodule EXLA.AOT.Codegen do
     """
     ErlNifBinary result#{result_num};
     if(!enif_alloc_binary(#{result_size}, &result#{result_num})) return error(env, #{error_msg});
-    std::copy(#{name}_#{arity}.result#{result_num}_data() + 0, #{name}_#{arity}.result#{
-      result_num
-    }_data() + #{result_size}, result#{result_num}.data);
+    std::copy(
+      #{name}_#{arity}.result#{result_num}_data() + 0,
+      #{name}_#{arity}.result#{result_num}_data() + #{result_size},
+      result#{result_num}.data
+    );
     return enif_make_binary(env, &result#{result_num});
     """
   end
