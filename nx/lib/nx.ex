@@ -6881,7 +6881,7 @@ defmodule Nx do
     raise "invalid ord for 2-D tensor. Got: #{inspect(ord)}"
   end
 
-  defp do_p_norm(%{type: type} = t, ord, _, opts) do
+  defp do_p_norm(t, ord, _, opts) do
     inv_ord = divide(1, ord)
 
     abs_t = Nx.abs(t)
