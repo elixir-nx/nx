@@ -3,12 +3,24 @@ TEMP=$(HOME)\.cache
 
 # mix.exs vars
 # ERTS_INCLUDE_DIR
+# ERTS_VERSION
 
 # Public configuration
-EXLA_MODE=opt # can also be dbg
-EXLA_CACHE=$(TEMP)\exla
+!IFNDEF EXLA_MODE
+EXLA_MODE=opt
+!ENDIF
+
+!IFNDEF EXLA_CACHE
+EXLA_CACHE=$(TEMP)/exla
+!ENDIF
+
+!IFNDEF EXLA_TENSORFLOW_GIT_REPO
 EXLA_TENSORFLOW_GIT_REPO=https://github.com/tensorflow/tensorflow.git
+!ENDIF
+
+!IFNDEF EXLA_TENSORFLOW_GIT_REV
 EXLA_TENSORFLOW_GIT_REV=6af836f407f546cf2f9ab3b5fcb7a8285bda5c96
+!ENDIF
 
 # Private configuration
 EXLA_SO=priv/libexla.dll

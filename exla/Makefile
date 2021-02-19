@@ -3,6 +3,7 @@ TEMP ?= $(HOME)/.cache
 
 # mix.exs vars
 # ERTS_INCLUDE_DIR
+ERTS_VERSION ?= $(shell erl -eval "io:fwrite(erlang:system_info(version))." -noshell -s erlang halt)
 
 # Public configuration
 EXLA_MODE ?= opt # can also be dbg
@@ -17,7 +18,7 @@ ERTS_SYM_DIR = $(EXLA_DIR)/erts
 BAZEL_FLAGS = --define "framework_shared_object=false" -c $(EXLA_MODE)
 
 TENSORFLOW_NS = tf-$(EXLA_TENSORFLOW_GIT_REV)
-TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)
+TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
 TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
 TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 
@@ -28,10 +29,10 @@ all: symlinks
 	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so $(EXLA_SO)
 
 symlinks: $(TENSORFLOW_DIR)
-	rm -f $(TENSORFLOW_EXLA_DIR)
-	ln -s "$(MIX_CURRENT_PATH)/$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)
-	rm -f $(ERTS_SYM_DIR)
-	ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
+	@ rm -f $(TENSORFLOW_EXLA_DIR)
+	@ ln -s "$(MIX_CURRENT_PATH)/$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)
+	@ rm -f $(ERTS_SYM_DIR)
+	@ ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
 
 # Print Tensorflow Dir
 PTD:
