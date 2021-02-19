@@ -165,6 +165,25 @@ defmodule Nx.Shared do
       erfc: {"one minus error function", quote(do: :math.erfc(var!(x))), :erfc, 1}
     ]
 
+  @doc """
+  Returns true for `func` and `arity` functions supported by the
+  erlang :math module.
+
+  Used for compile-time support checking of Nx unary operations.
+  """
+  def math_func_supported?(func, arity) do
+    args = case {func, arity} do
+      {:atan, 1} -> [3.14]
+      {:atanh, 1} -> [0.9]
+      {_, 1} -> [1.0]
+      {_, 2} -> [1.0, 1.0]
+    end
+    _ = apply(:math, func, args)
+    true
+  rescue UndefinedFunctionError ->
+    false
+  end
+
   ## Types
 
   @doc """

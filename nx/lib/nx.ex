@@ -3486,7 +3486,7 @@ defmodule Nx do
   ## Unary ops
 
   for {name, {desc, code, math_dep, math_arity}} <- Nx.Shared.unary_math_funs() do
-    if function_exported?(:math, math_dep, math_arity) do
+    if Nx.Shared.math_func_supported?(math_dep, math_arity) do
       formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
       {{one, _}, {two, _}, {three, _}} =
