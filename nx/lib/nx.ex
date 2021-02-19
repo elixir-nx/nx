@@ -6835,8 +6835,7 @@ defmodule Nx do
 
   defp do_p_norm(t, 0, 1, opts) do
     t
-    |> equal(0)
-    |> logical_not()
+    |> not_equal(0)
     |> sum(opts)
   end
 
@@ -6884,6 +6883,8 @@ defmodule Nx do
   defp do_p_norm(t, ord, _, opts) do
     inv_ord = divide(1, ord)
 
+    # We extract this result to a variable because it's used both for
+    # getting the normalization coefficient and for the main pipe chain
     abs_t = Nx.abs(t)
 
     # This coefficient is introduced for better numerical stability
