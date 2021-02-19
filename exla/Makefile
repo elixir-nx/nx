@@ -28,7 +28,7 @@ TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
 TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
 TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 
-all: symlinks
+all: symlinks disable_python_check
 	cd $(TENSORFLOW_DIR) && \
 		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
 	mkdir -p priv
@@ -52,6 +52,13 @@ $(TENSORFLOW_DIR):
 		git remote add origin $(EXLA_TENSORFLOW_GIT_REPO) && \
 		git fetch --depth 1 origin $(EXLA_TENSORFLOW_GIT_REV) && \
 		git checkout FETCH_HEAD
+
+disable_python_check:
+	cd $(TENSORFLOW_DIR) && \
+		sed -i '21 s/^/#/' WORKSPACE && \
+		sed -i '8 s/^/#/' tensorflow/workspace.bzl && \
+		sed -i '81 s/^/#/' tensorflow/workspace.bzl && \
+		sed -i '101 s/^/#/' tensorflow/workspace.bzl
 
 clean:
 	cd $(TENSORFLOW_DIR) && bazel clean --expunge
