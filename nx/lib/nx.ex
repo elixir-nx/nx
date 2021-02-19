@@ -264,7 +264,7 @@ defmodule Nx do
   @type t :: number | Nx.Tensor.t()
   @type shape :: Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
-  @type axes :: NX.Tensor.axes()
+  @type axes :: Nx.Tensor.axes()
 
   ## Creation API
 
