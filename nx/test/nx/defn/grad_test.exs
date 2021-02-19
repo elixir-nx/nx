@@ -463,6 +463,21 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "tan" do
+    defn grad_tan(t), do: grad(t, Nx.tan(t))
+
+    test "computes gradient" do
+      for _ <- 1..100 do
+          # check_grads!/4 fails for values close to the asymptotes
+          # of tan's gradient, so we select t to avoid them.
+          multiplier = Nx.random_uniform({}, 0, 10, type: {:u, 32})
+          offset = Nx.random_uniform({}, -1.5, 1.5, type: {:f, 64})
+          t = 3.14159 |> Nx.multiply(multiplier) |> Nx.add(offset)
+          check_grads!(&Nx.tan/1, &grad_tan/1, t)
+        end
+    end
+  end
+
   describe "broadcast" do
     defn grad_sum_broadcast(t), do: grad(t, Nx.sum(Nx.broadcast(t, {3, 2, 2})))
 

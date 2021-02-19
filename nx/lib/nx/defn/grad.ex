@@ -416,6 +416,11 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:tan, [x], _ans, g, cache) do
+    g = Nx.divide(g, Nx.power(Nx.cos(x), 2))
+    to_grad(x, g, cache)
+  end
+
   defp grad(:reduce, _, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce/4.
