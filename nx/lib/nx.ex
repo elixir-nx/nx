@@ -6815,23 +6815,16 @@ defmodule Nx do
     raise "expected 1-D tensor for ord: 0. Got: 2-D tensor."
   end
 
-  defp do_p_norm(%{shape: {_}} = t, ord, axes_opts) when ord in [:inf, :neg_inf] do
-    function = if ord == :inf, do: &reduce_max/2, else: &reduce_min/2
+  defp do_p_norm(%{shape: shape} = t, ord, axes_opts) when ord in [:inf, :neg_inf] do
+    aggregate_opts = Keyword.merge(axes_opts, axes: [1])
+
+    aggregate_axes = if tuple_size(shape) == 2, do: &sum(&1, aggregate_opts), else: & &1
+    reduce = if ord == :inf, do: &reduce_max/2, else: &reduce_min/2
 
     t
     |> Nx.abs()
-    |> function.(axes_opts)
-  end
-
-  defp do_p_norm(%{shape: {_, _}} = t, ord, axes_opts) when ord in [:inf, :neg_inf] do
-    opts = Keyword.merge(axes_opts, axes: [1])
-
-    function = if ord == :inf, do: &reduce_max/1, else: &reduce_min/1
-
-    t
-    |> Nx.abs()
-    |> sum(opts)
-    |> function.()
+    |> aggregate_axes.()
+    |> reduce.(axes_opts)
   end
 
   defp do_p_norm(%{shape: {_, _}} = t, ord, opts) when ord in [1, -1] do
