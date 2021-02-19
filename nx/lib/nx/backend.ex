@@ -28,7 +28,7 @@ defmodule Nx.Backend do
   @type tensor :: Nx.Tensor.t()
   @type shape :: Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
-  @type axes :: NX.Tensor.axes()
+  @type axes :: Nx.Tensor.axes()
 
   @callback iota(tensor, axis | nil) :: tensor
   @callback random_uniform(tensor, number, number) :: tensor
