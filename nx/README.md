@@ -50,7 +50,7 @@ Then you can add `Nx` as dependency in your `mix.exs`. At the moment you will ha
 ```elixir
 def deps do
   [
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx"}
+    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", branch: "main", sparse: "nx"}
   ]
 end
 ```
