@@ -6687,96 +6687,96 @@ defmodule Nx do
 
   ### Vector norms
 
-    iex> Nx.norm(Nx.tensor([3, 4]))
-    #Nx.Tensor<
-      f64
-      5.0
-    >
+      iex> Nx.norm(Nx.tensor([3, 4]))
+      #Nx.Tensor<
+        f64
+        5.0
+      >
 
-    iex> Nx.norm(Nx.tensor([3, 4]), ord: 1)
-    #Nx.Tensor<
-      f64
-      7.0
-    >
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: 1)
+      #Nx.Tensor<
+        f64
+        7.0
+      >
 
-    iex> Nx.norm(Nx.tensor([3, -4]), ord: :inf)
-    #Nx.Tensor<
-      s64
-      4
-    >
+      iex> Nx.norm(Nx.tensor([3, -4]), ord: :inf)
+      #Nx.Tensor<
+        s64
+        4
+      >
 
-    iex> Nx.norm(Nx.tensor([3, -4]), ord: :neg_inf)
-    #Nx.Tensor<
-      s64
-      3
-    >
+      iex> Nx.norm(Nx.tensor([3, -4]), ord: :neg_inf)
+      #Nx.Tensor<
+        s64
+        3
+      >
 
-    iex> Nx.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
-    #Nx.Tensor<
-      u64
-      2
-    >
+      iex> Nx.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
+      #Nx.Tensor<
+        u64
+        2
+      >
 
-    ### Matrix norms
+  ### Matrix norms
 
-    iex> Nx.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
-    #Nx.Tensor<
-      s64
-      5
-    >
+      iex> Nx.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
+      #Nx.Tensor<
+        s64
+        5
+      >
 
-    iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: 1)
-    #Nx.Tensor<
-      s64
-      6
-    >
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: 1)
+      #Nx.Tensor<
+        s64
+        6
+      >
 
-    iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :neg_inf)
-    #Nx.Tensor<
-      s64
-      5
-    >
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :neg_inf)
+      #Nx.Tensor<
+        s64
+        5
+      >
 
-    iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :inf)
-    #Nx.Tensor<
-      s64
-      6
-    >
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :inf)
+      #Nx.Tensor<
+        s64
+        6
+      >
 
-    iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
-    #Nx.Tensor<
-      f64
-      5.0
-    >
+      iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
+      #Nx.Tensor<
+        f64
+        5.0
+      >
 
-    iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]))
-    #Nx.Tensor<
-      f64
-      5.0
-    >
+      iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]))
+      #Nx.Tensor<
+        f64
+        5.0
+      >
 
-    iex> Nx.norm(Nx.tensor([[3, 4], [0, -4]]), axes: [1], keep_axes: true)
-    #Nx.Tensor<
-      f64[2][1]
-      [
-        [5.0],
-        [4.0]
-      ]
-    >
+      iex> Nx.norm(Nx.tensor([[3, 4], [0, -4]]), axes: [1], keep_axes: true)
+      #Nx.Tensor<
+        f64[2][1]
+        [
+          [5.0],
+          [4.0]
+        ]
+      >
 
-    ### Error cases
+  ### Error cases
 
-    iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
-    ** (RuntimeError) expected a 2-D tensor. Got a 1-D tensor.
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
+      ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
 
-    iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuclear)
-    ** (RuntimeError) nuclear norm not implemented yet.
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuclear)
+      ** (RuntimeError) nuclear norm not implemented yet
 
-    iex> Nx.norm(Nx.tensor([[0], [1]]), ord: :nuclear)
-    ** (RuntimeError) nuclear norm not implemented yet.
+      iex> Nx.norm(Nx.tensor([[0], [1]]), ord: :nuclear)
+      ** (RuntimeError) nuclear norm not implemented yet
 
-    iex> Nx.norm(Nx.tensor([[0], [1]]), ord: -2)
-    ** (RuntimeError) ord: -2 for 2-D tensor not implemented yet.
+      iex> Nx.norm(Nx.tensor([[0], [1]]), ord: -2)
+      ** (RuntimeError) ord: -2 for 2-D tensor not implemented yet
   """
 
   def norm(tensor, opts \\ []) when is_list(opts) do
