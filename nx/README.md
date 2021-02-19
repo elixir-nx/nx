@@ -35,6 +35,8 @@ Here are some introductory resources with more information on Nx as a whole:
 
   * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio)
 
+  * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc)
+
 ## Installation
 
 In order to use `Nx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
