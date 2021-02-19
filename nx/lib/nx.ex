@@ -6855,8 +6855,9 @@ defmodule Nx do
     raise ArgumentError, "invalid :ord for 2-D tensor, got: #{inspect(ord)}"
   end
 
-  defp norm_integer(t, ord, opts) when is_integer(ord) do
-    inv_ord = tensor(1 / ord)
+  defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
+    output_type = Nx.Type.to_floating(type)
+    inv_ord = tensor(1 / ord, type: output_type)
 
     # We extract this result to a variable because it's used both for
     # getting the normalization coefficient and for the main pipe chain
