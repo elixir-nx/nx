@@ -50,7 +50,7 @@ defmodule Nx.Backend do
   @callback pad(out :: tensor, tensor, pad_value :: tensor, padding_config :: list()) :: tensor
   @callback reverse(out :: tensor, tensor, axes) :: tensor
 
-  @callback dot(out :: tensor, tensor, axes, tensor, axes) :: tensor
+  @callback dot(out :: tensor, tensor, axes, 0 | nil, tensor, axes, 0 | nil) :: tensor
   @callback clip(out :: tensor, tensor, min :: tensor, max :: tensor) :: tensor
   @callback slice(out :: tensor, tensor, list, list, list) :: tensor
   @callback concatenate(out :: tensor, tensor, axis) :: tensor

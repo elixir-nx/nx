@@ -634,4 +634,117 @@ defmodule NxTest do
       end
     end
   end
+
+  describe "dot/6" do
+    test "raises for axis other than nil or norm axis 0 for left tensor" do
+      left = Nx.iota({2, 3}, names: [:x, :y])
+      right = Nx.iota({5, 3, 4}, names: [:batch, :x, :y])
+      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - batch axis must either be nil or normalize to 0, but got 1", fn ->
+        Nx.dot(left, [], 1, right, [0], nil)
+      end)
+      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - batch axis must either be nil or normalize to 0, but got -1 (norm: 1)", fn ->
+        Nx.dot(left, [], -1, right, [0], nil)
+      end)
+      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - batch axis must either be nil or normalize to 0, but got :y (norm: 1)", fn ->
+        Nx.dot(left, [], :y, right, [0], nil)
+      end)
+    end
+    test "raises for axis other than nil or norm axis 0 for right tensor" do
+      left = Nx.iota({2, 3}, names: [:x, :y])
+      right = Nx.iota({5, 3, 4}, names: [:batch, :x, :y])
+      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - batch axis must either be nil or normalize to 0, but got 1", fn ->
+        Nx.dot(left, [], nil, right, [], 1)
+      end)
+      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - batch axis must either be nil or normalize to 0, but got -2 (norm: 1)", fn ->
+        Nx.dot(left, [], nil, right, [], -2)
+      end)
+      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - batch axis must either be nil or normalize to 0, but got :x (norm: 1)", fn ->
+        Nx.dot(left, [], nil, right, [], :x)
+      end)
+    end
+    test "raises when the batch axis sizes are different" do
+      left = Nx.iota({5, 2, 3})
+      right = Nx.iota({6, 3, 4})
+      assert_raise(ArgumentError, "dot batch dimension sizes must match, but the left batch dimension of axis 0 was 5 and the right batch dimension of axis 0 was 6", fn ->
+        Nx.dot(left, [], 0, right, [], 0)
+      end)
+    end
+
+    test "raises when left batch axis conflicts with left contract axes" do
+      left = Nx.iota({2, 2, 3})
+      right = Nx.iota({3, 4})
+      assert_raise(ArgumentError, "dot batch axis 0 for the left tensor cannot be in the contract axes [0, 1]", fn ->
+        Nx.dot(left, [0, 1], 0, right, [0], nil)
+      end)
+    end
+
+    test "raises when right batch axis conflicts with right contract axes" do
+      left = Nx.iota({2, 3})
+      right = Nx.iota({2, 3, 4})
+      assert_raise(ArgumentError, "dot batch axis 0 for the right tensor cannot be in the contract axes [0]", fn ->
+        Nx.dot(left, [1], nil, right, [0], 0)
+      end)
+    end
+
+    test "agrees with dot/4 when both batches axis args are nil (and contracting dims are configured)" do
+      left = Nx.iota({2, 3})
+      right = Nx.iota({3, 4})
+      assert Nx.dot(left, right) == Nx.dot(left, [-1], nil, right, [0], nil)
+    end
+
+    test "works when batching the left tensor" do
+      left = Nx.iota({2, 2, 3})
+      right = Nx.iota({3, 4})
+      out = Nx.dot(left, [-1], 0, right, [0], nil)
+      assert Nx.shape(out) == {2, 2, 4}
+      assert out == Nx.tensor([
+          [
+            [20, 23, 26, 29],
+            [56, 68, 80, 92]
+          ],
+          [
+            [92, 113, 134, 155],
+            [128, 158, 188, 218]
+          ]
+        ])
+    end
+
+    test "works when batching the right tensor" do
+      left = Nx.iota({2, 3})
+      right = Nx.iota({2, 3, 4})
+      out = Nx.dot(left, [-1], nil, right, [1], 0)
+      assert Nx.shape(out) == {2, 2, 4}
+      assert out == Nx.tensor([
+          [
+            [20, 23, 26, 29],
+            [56, 68, 80, 92]
+          ],
+          [
+            [56, 59, 62, 65],
+            [200, 212, 224, 236]
+          ]
+        ])
+    end
+
+    test "works when batching both left and right" do
+      left = Nx.iota({3, 2, 3})
+      right = Nx.iota({3, 3, 4})
+      out = Nx.dot(left, [-1], 0, right, [1], 0)
+      assert Nx.shape(out) == {3, 2, 4}
+      assert out == Nx.tensor([
+        [
+          [  20,   23,   26,   29],
+          [  56,   68,   80,   92]
+        ],
+        [
+          [ 344,  365,  386,  407],
+          [ 488,  518,  548,  578]
+        ],
+        [
+          [1100, 1139, 1178, 1217],
+          [1352, 1400, 1448, 1496]
+        ]
+      ])
+    end
+  end
 end

@@ -582,9 +582,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def dot(out, t1, a1, t2, a2) do
+  def dot(out, t1, a1, b1, t2, a2, b2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    expr(out, context, :dot, [t1, a1, t2, a2])
+    expr(out, context, :dot, [t1, a1, b1, t2, a2, b2])
   end
 
   @impl true

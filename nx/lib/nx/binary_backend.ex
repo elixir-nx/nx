@@ -427,7 +427,54 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def dot(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
+  def dot(out, left, axes1, nil, right, axes2, nil) do
+    dot4(out, left, axes1, right, axes2)
+  end
+
+  def dot(out, left, axes1, batch1, right, axes2, batch2) do
+    {left_tensors, axes1, s1, names1} = prepare_batch(left, axes1, batch1)
+    {right_tensors, axes2, s2, names2} = prepare_batch(right, axes2, batch2)
+    {batch_shape, batch_names} = Nx.Shape.zip_reduce(s1, axes1, names1, s2, axes2, names2)
+
+    batch_out = %{out | shape: batch_shape, names: batch_names}
+
+    dotted_batches =
+      left_tensors
+      |> Stream.zip(right_tensors)
+      |> Enum.map(fn {left_batch, right_batch} ->
+        dot4(batch_out, left_batch, axes1, right_batch, axes2)
+      end)
+    concatenate(out, dotted_batches, 0)
+  end
+
+  defp prepare_batch(t, axes, 0) do
+    # remove index zero from shape and names
+    # shift all axes to the left by 1
+    # ensure each batch row is the new shape
+    raw_batches = Nx.to_batched_list(t, 1)
+    axes = Enum.map(axes, fn n -> n - 1 end)
+    [%{shape: raw_shape, names: raw_names} | _ ] = raw_batches
+    {shape, names} = remove_dimension_zero(raw_shape, raw_names)
+    batches = Enum.map(raw_batches, fn b -> Nx.reshape(b, shape) end)
+    {batches, axes, shape, names}
+  end
+
+  defp prepare_batch(t, axes, nil) do
+    batches = Stream.repeatedly(fn -> t end)
+    %{shape: shape, names: names} = t
+    {batches, axes, shape, names}
+  end
+
+  defp remove_dimension_zero(shape, names) do
+    shape =
+      shape
+      |> Tuple.to_list()
+      |> tl()
+      |> List.to_tuple()
+    {shape, tl(names)}
+  end
+
+  defp dot4(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
     bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
