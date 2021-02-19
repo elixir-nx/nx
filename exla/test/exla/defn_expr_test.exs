@@ -2412,7 +2412,7 @@ defmodule EXLA.DefnExprTest do
     end
 
     test "works with ord: 0" do
-      assert_raise RuntimeError, "ord 0 not implemented for 2-D tensor.", fn ->
+      assert_raise ArgumentError, "expected 1-D tensor for ord: 0, got a 2-D tensor", fn ->
         non_zero_element_count(Nx.tensor([[0, 1, -1, 2]]))
       end
 
