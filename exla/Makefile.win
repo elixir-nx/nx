@@ -37,7 +37,7 @@ all: symlinks
 	cd $(TENSORFLOW_DIR) && \
 		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
 	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla_host.so $(EXLA_SO)
+	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so $(EXLA_SO)
 
 symlinks: $(TENSORFLOW_DIR)
   rm -rf $(TENSORFLOW_EXLA_DIR)
