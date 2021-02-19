@@ -6685,7 +6685,7 @@ defmodule Nx do
 
   ## Examples
 
-    ### Vector norms
+  ### Vector norms
 
     iex> Nx.norm(Nx.tensor([3, 4]))
     #Nx.Tensor<
@@ -6789,7 +6789,7 @@ defmodule Nx do
     rank = rank(t)
 
     unless rank == 1 or rank == 2,
-      do: raise("expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
+      do: raise(ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
 
     {ord, axes_opts} = Keyword.pop(opts, :ord)
 
@@ -6798,10 +6798,10 @@ defmodule Nx do
 
   defp do_p_norm(t, nil, opts), do: do_p_norm(t, 2, opts)
 
-  defp do_p_norm(_t, :nuclear, _opts), do: raise("nuclear norm not implemented yet.")
+  defp do_p_norm(_t, :nuclear, _opts), do: raise("nuclear norm not implemented yet")
 
   defp do_p_norm(%{shape: {_}}, :frobenius, _opts),
-    do: raise("expected a 2-D tensor. Got a 1-D tensor.")
+    do: raise(ArgumentError, "expected a 2-D tensor for ord: :frobenius, got a 1-D tensor")
 
   defp do_p_norm(%{shape: {_, _}} = t, :frobenius, opts), do: do_p_norm(t, 2, opts)
 
@@ -6812,7 +6812,7 @@ defmodule Nx do
   end
 
   defp do_p_norm(%{shape: {_, _}}, 0, _opts) do
-    raise "expected 1-D tensor for ord: 0. Got: 2-D tensor."
+    raise ArgumentError, "expected 1-D tensor for ord: 0, got a 2-D tensor"
   end
 
   defp do_p_norm(%{shape: shape} = t, ord, axes_opts) when ord in [:inf, :neg_inf] do
@@ -6842,11 +6842,11 @@ defmodule Nx do
   end
 
   defp do_p_norm(%{shape: {_, _}}, -2, _opts) do
-    raise "ord: -2 for 2-D tensor not implemented yet."
+    raise "ord: -2 for 2-D tensor not implemented yet"
   end
 
   defp do_p_norm(%{shape: {_, _}}, ord, _opts) when ord not in -1..2 or ord == 0 do
-    raise "invalid ord for 2-D tensor. Got: #{inspect(ord)}"
+    raise ArgumentError, "invalid :ord for 2-D tensor, got: #{inspect(ord)}"
   end
 
   defp do_p_norm(t, ord, opts) when is_integer(ord) do
