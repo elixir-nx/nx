@@ -1734,27 +1734,30 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }
 
 ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if(argc != 5){
+  if (argc != 6) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaComputation* computation;
-  std::string aot_path, function_name, pbtext_path, class_name;
+  std::string aot_path, function_name, pbtext_path, class_name, target_triple;
 
-  if(!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
     return exla::nif::error(env, "Unable to get computation.");
   }
-  if(!exla::nif::get(env, argv[1], pbtext_path)) {
+  if (!exla::nif::get(env, argv[1], pbtext_path)) {
     return exla::nif::error(env, "Unable to get Graph Config Path.");
   }
-  if(!exla::nif::get(env, argv[2], aot_path)) {
+  if (!exla::nif::get(env, argv[2], aot_path)) {
     return exla::nif::error(env, "Unable to get TF Path.");
   }
-  if(!exla::nif::get(env, argv[3], function_name)) {
+  if (!exla::nif::get(env, argv[3], function_name)) {
     return exla::nif::error(env, "Unable to get function name.");
   }
-  if(!exla::nif::get(env, argv[4], class_name)) {
+  if (!exla::nif::get(env, argv[4], class_name)) {
     return exla::nif::error(env, "Unable to get class name.");
+  }
+  if (!exla::nif::get(env, argv[5], target_triple)) {
+    return exla::nif::error(env, "Unable to get target triple.");
   }
 
   xla::Status compile_status =
@@ -1762,7 +1765,8 @@ ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
                              pbtext_path,
                              aot_path,
                              function_name,
-                             class_name);
+                             class_name,
+                             target_triple);
 
   if(!compile_status.ok()) {
     return exla::nif::error(env, compile_status.error_message().c_str());
@@ -1906,7 +1910,7 @@ static ErlNifFunc exla_funcs[] = {
   // Log Sink
   {"start_log_sink", 1, start_log_sink},
   // HLO Functions
-  {"compile_aot", 5, compile_aot}
+  {"compile_aot", 6, compile_aot}
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

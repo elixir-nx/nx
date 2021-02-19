@@ -56,7 +56,8 @@ namespace exla {
                                  std::string pbtext_path,
                                  std::string aot_path,
                                  std::string function_name,
-                                 std::string class_name) {
+                                 std::string class_name,
+                                 std::string target_triple) {
 
     se::Platform* cpu_platform = xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
     xla::CompileOnlyClient* client = xla::ClientLibrary::GetOrCreateCompileOnlyClient(cpu_platform).ValueOrDie();

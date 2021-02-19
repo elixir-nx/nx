@@ -54,6 +54,7 @@ defmodule EXLA.AOT.Compiler do
   end
 
   defp compile_function(%Computation{ref: comp}, {name, arity, args, _result_size}) do
+    target_triple = get_target_triple()
     {:ok, pbtext_path} = write_graph_config_file({name, arity, args})
 
     src_paths =
@@ -62,11 +63,28 @@ defmodule EXLA.AOT.Compiler do
         pbtext_path,
         get_aot_path(),
         "#{name}_#{arity}",
-        "exla_aot_class"
+        "exla_aot_class",
+        target_triple
       )
       |> unwrap!()
 
     [pbtext_path | Tuple.to_list(src_paths)]
+  end
+
+  defp get_target_triple() do
+    # See supported triples: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
+    case :os.type() do
+      {:unix, :linux} ->
+        "x86_64-pc-linux"
+      {:win32, _} ->
+        "x86_64-none-windows"
+      {:unix, osname} ->
+        arch_str = :erlang.system_info(:system_architecture)
+        [arch, vendor, _] =
+          arch_str
+          |> String.split("-")
+        arch <> "-" <> vendor <> "-" <> Atom.to_string(osname)
+    end
   end
 
   defp mk_aot_dir() do
