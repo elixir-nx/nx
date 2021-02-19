@@ -6685,6 +6685,8 @@ defmodule Nx do
 
   ## Examples
 
+    ### Vector norms
+
     iex> Nx.norm(Nx.tensor([3, 4]))
     #Nx.Tensor<
       f64
@@ -6715,11 +6717,7 @@ defmodule Nx do
       2
     >
 
-    iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
-    ** (RuntimeError) expected a 2-D tensor. Got a 1-D tensor.
-
-    iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuclear)
-    ** (RuntimeError) nuclear norm not implemented yet.
+    ### Matrix norms
 
     iex> Nx.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
     #Nx.Tensor<
@@ -6766,16 +6764,19 @@ defmodule Nx do
       ]
     >
 
+    ### Error cases
+
+    iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
+    ** (RuntimeError) expected a 2-D tensor. Got a 1-D tensor.
+
+    iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuclear)
+    ** (RuntimeError) nuclear norm not implemented yet.
 
     iex> Nx.norm(Nx.tensor([[0], [1]]), ord: :nuclear)
     ** (RuntimeError) nuclear norm not implemented yet.
 
     iex> Nx.norm(Nx.tensor([[0], [1]]), ord: -2)
     ** (RuntimeError) ord: -2 for 2-D tensor not implemented yet.
-
-  ### Caveats
-
-  For big values of p, f64 rounding errors come into play
   """
 
   def norm(tensor, opts \\ []) when is_list(opts) do
