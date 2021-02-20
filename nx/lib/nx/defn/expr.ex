@@ -246,6 +246,10 @@ defmodule Nx.Defn.Expr do
     {_, max_signed_size} = max_signed_type = opts[:max_signed_type] || {:s, 64}
     {_, max_unsigned_size} = max_unsigned_type = opts[:max_unsigned_type] || {:u, 64}
 
+    if not Nx.Type.float?(max_float_type) do
+      raise ArgumentError, ":max_float_type must be float type, got: #{inspect(max_float_type)}"
+    end
+
     if max_float_type != {:f, 64} or max_signed_type != {:s, 64} or max_unsigned_type != {:u, 64} do
       rewrite_type(tensor_expr, fn
         {:u, size} when size >= max_unsigned_size -> max_unsigned_type

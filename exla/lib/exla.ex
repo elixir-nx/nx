@@ -38,7 +38,7 @@ defmodule EXLA do
     * `max_signed_type: type` - the same as `Nx.Defn.Kernel.max_signed_type/2`
 
     * `max_float_type: type` - the same as `Nx.Defn.Kernel.max_float_type/2`.
-      Note that by default `EXLA` defaults to `{:f, 32}`
+      Note that by default `EXLA` rewrites to `{:f, 32}`
 
     * `:run_options` - options given when running the computation:
 
