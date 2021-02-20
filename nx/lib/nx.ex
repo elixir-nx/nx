@@ -1262,16 +1262,6 @@ defmodule Nx do
         ]
       >
 
-      iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> Nx.reshape(t, {2, 2}, names: [:x, :y])
-      #Nx.Tensor<
-        s64[x: 2][y: 2]
-        [
-          [1, 2],
-          [3, 4]
-        ]
-      >
-
   The shape can also be an existing tensor:
 
       iex> shape = Nx.tensor([[0], [0], [0], [0]], names: [:x, :y])
