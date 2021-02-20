@@ -641,4 +641,11 @@ defmodule NxTest do
       assert Nx.reshape(t, {2, 2}, names: [:x, :y]) == Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
     end
   end
+
+  describe "broadcast" do
+    test "correctly adds names with same shape" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+      assert Nx.broadcast(t, {2, 2}, names: [:x, :y]) == Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+    end
+  end
 end
