@@ -485,10 +485,11 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient of inverse trig functions" do
       for _ <- 1..100 do
-        t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 64})
+        t = Nx.random_uniform({}, -0.996, 0.996, type: {:f, 64})
         check_grads!(&Nx.arcsin/1, &grad_arcsin/1, t)
         check_grads!(&Nx.arccos/1, &grad_arccos/1, t)
         check_grads!(&Nx.arctan/1, &grad_arctan/1, t)
+        check_grads!(&Nx.arctan/1, &grad_arctan/1, Nx.multiply(1000.0,t))
       end
     end
   end
