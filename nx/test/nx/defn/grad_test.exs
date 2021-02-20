@@ -466,7 +466,7 @@ defmodule Nx.Defn.GradTest do
   describe "tan" do
     defn grad_tan(t), do: grad(t, Nx.tan(t))
 
-    test "computes gradient" do
+    test "computes gradient of tan" do
       for _ <- 1..100 do
           # check_grads!/4 fails for values close to the asymptotes
           # of tan's gradient, so we select t to avoid them.
@@ -475,6 +475,19 @@ defmodule Nx.Defn.GradTest do
           t = 3.14159 |> Nx.multiply(multiplier) |> Nx.add(offset)
           check_grads!(&Nx.tan/1, &grad_tan/1, t)
         end
+    end
+  end
+
+  describe "inverse trig family" do
+    defn grad_arcsin(t), do: grad(t, Nx.arcsin(t))
+    defn grad_arccos(t), do: grad(t, Nx.arccos(t))
+
+    test "computes gradient of inverse trig functions" do
+      for _ <- 1..100 do
+        t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 64})
+        check_grads!(&Nx.arcsin/1, &grad_arcsin/1, t)
+        check_grads!(&Nx.arccos/1, &grad_arccos/1, t)
+      end
     end
   end
 
