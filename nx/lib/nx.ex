@@ -1203,8 +1203,8 @@ defmodule Nx do
   Note it is not possible to cast from floats to integers.
   Use `round/1`, `floor/1`, and `ceil/1` instead.
 
-  Casting from a higher precision may lead to overflow
-  and underflow, which is platform and compiler dependent
+  Casting from a higher precision may lead to an overflow
+  or underflow, which is platform and compiler dependent
   behaviour.
 
   ## Examples
