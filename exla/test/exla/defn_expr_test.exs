@@ -2406,6 +2406,42 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "norm" do
+    defn normalize(t), do: t / Nx.norm(t)
+    defn l2_cols(t), do: Nx.norm(t, ord: 2, axes: [0])
+    defn l2_rows(t), do: Nx.norm(t, ord: 2, axes: [1])
+    defn l2_cols_keep_axes(t), do: Nx.norm(t, ord: 2, axes: [0], keep_axes: true)
+    defn l2_rows_keep_axes(t), do: Nx.norm(t, ord: 2, axes: [1], keep_axes: true)
+
+    defn non_zero_element_count(t), do: Nx.norm(t, ord: 0)
+
+    test "works with norm calls" do
+      t = Nx.tensor([3.0, 4.0, 0.0])
+      compare_tensors!(normalize(t), Nx.tensor([0.6, 0.8, 0.0]))
+      compare_tensors!(Nx.norm(normalize(t)), Nx.tensor(1.0))
+    end
+
+    test "accepts axes and keep_axes arguments" do
+      t = Nx.tensor([[5.0, 12.0, 0.0], [12.0, 5.0, 0.0]])
+
+      compare_tensors!(l2_cols(t),  Nx.tensor([13.0, 13.0, 0.0]))
+      compare_tensors!(l2_rows(t),  Nx.tensor([13.0, 13.0]))
+
+      compare_tensors!(l2_cols_keep_axes(t),  [13.0, 13.0, 0.0] |> Nx.tensor() |> Nx.reshape({1, 3}))
+      compare_tensors!(l2_rows_keep_axes(t),  [13.0, 13.0] |> Nx.tensor() |> Nx.reshape({2, 1}))
+    end
+
+    test "works with ord: 0" do
+      assert_raise ArgumentError, "expected 1-D tensor for ord: 0, got a 2-D tensor", fn ->
+        non_zero_element_count(Nx.tensor([[0, 1, -1, 2]]))
+      end
+
+      %{type: type} = result = non_zero_element_count(Nx.tensor([0, 1, -1, 2]))
+
+      compare_tensors!(result, Nx.tensor(3, type: type))
+    end
+  end
+
   # We need to round the floats because of imprecision between platforms
   defp compare_tensors!(
          %{type: {:f, size}, data: %{state: left_data} = lhs} = left,

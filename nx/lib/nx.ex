@@ -6661,6 +6661,225 @@ defmodule Nx do
   end
 
   @doc """
+  Calculates the p-norm of a tensor.
+
+  For the 0-norm, the norm is the number of non-zero elements in the tensor.
+
+  ## Options
+
+    * `:axes` - defines the axes upon which the norm will be calculated. Default: `nil`.
+    * `:keep_axes` - defines if the resulting tensor should have the same dimensions as the input. Default: `false`.
+    * `:ord` - defines which norm will be calculated according to the table below. Default: `2`
+
+  | ord          | 2-D                                       | 1-D                               |
+  | ------------ | ----------------------------------------- | --------------------------------- |
+  | `nil`        | Frobenius norm                            | 2-norm                            |
+  | `:frobenius` | Frobenius norm                            | -                                 |
+  | `:nuclear`   | Nuclear norm (not implemented)            | -                                 |
+  | `:inf`       | `max(sum(abs(x), axes: 1))`               | `max(abs(x))`                     |
+  | `:neg_inf`   | `min(sum(abs(x), axes: 1))`               | `min(abs(x))`                     |
+  | 0            | -                                         | Number of non-zero elements       |
+  | 1            | `max(sum(abs(x), axes: 0))`               | as below                          |
+  | -1           | `min(sum(abs(x), axes: 0))`               | as below                          |
+  | 2            | 2-norm                                    | as below                          |
+  | -2           | smallest singular value (not implemented) | as below                          |
+  | other        | -                                         | power(sum(power(abs(x), p)), 1/p) |
+
+  ## Examples
+
+  ### Vector norms
+
+      iex> Nx.norm(Nx.tensor([3, 4]))
+      #Nx.Tensor<
+        f64
+        5.0
+      >
+
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: 1)
+      #Nx.Tensor<
+        f64
+        7.0
+      >
+
+      iex> Nx.norm(Nx.tensor([3, -4]), ord: :inf)
+      #Nx.Tensor<
+        s64
+        4
+      >
+
+      iex> Nx.norm(Nx.tensor([3, -4]), ord: :neg_inf)
+      #Nx.Tensor<
+        s64
+        3
+      >
+
+      iex> Nx.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
+      #Nx.Tensor<
+        u64
+        2
+      >
+
+  ### Matrix norms
+
+      iex> Nx.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
+      #Nx.Tensor<
+        s64
+        5
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: 1)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :neg_inf)
+      #Nx.Tensor<
+        s64
+        5
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :inf)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
+      #Nx.Tensor<
+        f64
+        5.0
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]))
+      #Nx.Tensor<
+        f64
+        5.0
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, 4], [0, -4]]), axes: [1], keep_axes: true)
+      #Nx.Tensor<
+        f64[2][1]
+        [
+          [5.0],
+          [4.0]
+        ]
+      >
+
+  ### Error cases
+
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
+      ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
+
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: :nuclear)
+      ** (RuntimeError) nuclear norm not implemented yet
+
+      iex> Nx.norm(Nx.tensor([[0], [1]]), ord: :nuclear)
+      ** (RuntimeError) nuclear norm not implemented yet
+
+      iex> Nx.norm(Nx.tensor([[0], [1]]), ord: -2)
+      ** (RuntimeError) ord: -2 for 2-D tensor not implemented yet
+  """
+
+  def norm(tensor, opts \\ []) when is_list(opts) do
+    %{shape: s} = t = tensor!(tensor)
+    assert_keys!(opts, [:ord, :axes, :keep_axes])
+
+    default_axes_opts = [axes: nil, keep_axes: false, ord: nil]
+    opts = Keyword.merge(default_axes_opts, opts)
+
+    rank = rank(t)
+
+    unless rank == 1 or rank == 2,
+      do: raise(ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
+
+    {ord, axes_opts} = Keyword.pop(opts, :ord)
+
+    case ord do
+      nil when rank == 1 -> norm_integer(t, 2, axes_opts)
+      nil when rank == 2 -> norm_frobenius(t, axes_opts)
+      :frobenius -> norm_frobenius(t, axes_opts)
+      :nuclear -> norm_nuclear(t, axes_opts)
+      _ when ord in [:inf, :neg_inf] -> norm_inf(t, ord, axes_opts)
+      _ when is_integer(ord) -> norm_integer(t, ord, axes_opts)
+      _ -> raise ArgumentError, "unknown ord #{inspect(ord)}"
+    end
+  end
+
+  defp norm_frobenius(%{shape: {_}}, _opts),
+    do: raise(ArgumentError, "expected a 2-D tensor for ord: :frobenius, got a 1-D tensor")
+
+  defp norm_frobenius(%{shape: {_, _}} = t, opts), do: norm_integer(t, 2, opts)
+
+  defp norm_nuclear(_t, _opts), do: raise("nuclear norm not implemented yet")
+
+  defp norm_inf(%{shape: shape} = t, ord, axes_opts) when ord in [:inf, :neg_inf] do
+    aggregate_opts = Keyword.merge(axes_opts, axes: [1])
+
+    aggregate_axes = if tuple_size(shape) == 2, do: &sum(&1, aggregate_opts), else: & &1
+    reduce = if ord == :inf, do: &reduce_max/2, else: &reduce_min/2
+
+    t
+    |> Nx.abs()
+    |> aggregate_axes.()
+    |> reduce.(axes_opts)
+  end
+
+  defp norm_integer(%{shape: {_}} = t, 0, opts) do
+    t
+    |> not_equal(0)
+    |> sum(opts)
+  end
+
+  defp norm_integer(%{shape: {_, _}}, 0, _opts) do
+    raise ArgumentError, "expected 1-D tensor for ord: 0, got a 2-D tensor"
+  end
+
+  defp norm_integer(%{shape: {_, _}} = t, ord, opts) when ord in [1, -1] do
+    function =
+      if ord == 1 do
+        &reduce_max/2
+      else
+        &reduce_min/2
+      end
+
+    t
+    |> Nx.abs()
+    |> sum(axes: [0])
+    |> function.(Keyword.take(opts, [:keep_axes]))
+  end
+
+  defp norm_integer(%{shape: {_, _}}, -2, _opts) do
+    raise "ord: -2 for 2-D tensor not implemented yet"
+  end
+
+  defp norm_integer(%{shape: {_, _}}, ord, _opts) when ord not in -1..2 or ord == 0 do
+    raise ArgumentError, "invalid :ord for 2-D tensor, got: #{inspect(ord)}"
+  end
+
+  defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
+    output_type = Nx.Type.to_floating(type)
+    inv_ord = tensor(1 / ord, type: output_type)
+
+    # We extract this result to a variable because it's used both for
+    # getting the normalization coefficient and for the main pipe chain
+    abs_t = Nx.abs(t)
+
+    # This coefficient is introduced for better numerical stability
+    # The idea is that by dividing the tensor by it, large values of
+    # tensor entries and large values of p are reduced, which in turn
+    # avoids numerical overflow.
+    numerical_stability_coefficient = reduce_max(t)
+
+    abs_t
+    |> divide(numerical_stability_coefficient)
+    |> power(ord)
+    |> sum(opts)
+    |> power(inv_ord)
+    |> multiply(numerical_stability_coefficient)
+  end
+
+  @doc """
   Sorts the tensor along the given axis with the
   given comparator.
 
