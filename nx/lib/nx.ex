@@ -5635,9 +5635,9 @@ defmodule Nx do
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
       {_, 0} -> multiply(t1, t2)
-      {n, 1} -> dot(t1, [n - 1], t2, [0])
-      {1, m} -> dot(t1, [0], t2, [m - 2])
-      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], nil, t2, [m - 2], nil)
+      {n, 1} -> dot(t1, [n - 1], [], t2, [0], [])
+      {1, m} -> dot(t1, [0], [], t2, [m - 2], [])
+      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], [], t2, [m - 2], [])
     end
   end
 
@@ -5726,17 +5726,10 @@ defmodule Nx do
 
   """
   def dot(t1, axes1, t2, axes2) do
-    output_type = binary_type(t1, t2)
-    %T{shape: s1, names: names1} = t1 = tensor!(t1)
-    %T{shape: s2, names: names2} = t2 = tensor!(t2)
-    axes1 = Nx.Shape.normalize_axes(s1, axes1, names1)
-    axes2 = Nx.Shape.normalize_axes(s2, axes2, names2)
-    {output_shape, output_names} = Nx.Shape.zip_reduce(s1, axes1, names1, s2, axes2, names2)
-    out = %{t1 | type: output_type, names: output_names, shape: output_shape}
-    impl!(t1, t2).dot(out, t1, axes1, nil, t2, axes2, nil)
+    dot(t1, axes1, [], t2, axes2, [])
   end
 
-  def dot(t1, contract_axes1, batch_axis1, t2, contract_axes2, batch_axis2) do
+  def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do
     output_type = binary_type(t1, t2)
     %T{shape: s1, names: names1} = t1 = tensor!(t1)
     %T{shape: s2, names: names2} = t2 = tensor!(t2)
@@ -5744,36 +5737,39 @@ defmodule Nx do
     # normalize all the axes
     c1 = Nx.Shape.normalize_axes(s1, contract_axes1, names1)
     c2 = Nx.Shape.normalize_axes(s2, contract_axes2, names2)
-    b1 = normalize_batch_axis(s1, batch_axis1, names1)
-    b2 = normalize_batch_axis(s2, batch_axis2, names2)
+    b1 = Nx.Shape.normalize_axes(s1, batch_axes1, names1)
+    b2 = Nx.Shape.normalize_axes(s2, batch_axes2, names2)
+
+    left_batched? = b1 != []
+    right_batched? = b2 != []
 
     # ensure normalized batch axis of left is valid value
-    if b1 not in [nil, 0] do
-      msg = bad_batch_axis_message("left", batch_axis1, b1)
+    if left_batched? and b1 != [0] do
+      msg = bad_batch_axis_message("left", batch_axes1, b1)
       raise ArgumentError, msg
     end
 
     # ensure normalized batch axis of right is valid value
-    if b2 not in [nil, 0] do
-      msg = bad_batch_axis_message("right", batch_axis2, b2)
+    if right_batched? and b2 != [0] do
+      msg = bad_batch_axis_message("right", batch_axes2, b2)
       raise ArgumentError, msg
     end
 
     # ensure batch dim sizes match if both tensors are batched
-    if b1 == 0 and b2 == 0 and elem(s1, 0) != elem(s2, 0) do
+    if left_batched? and right_batched? and elem(s1, 0) != elem(s2, 0) do
       raise ArgumentError, "dot batch dimension sizes must match, but the left " <>
-        "batch dimension of axis #{inspect(batch_axis1)} was #{elem(s1, 0)} " <>
-        "and the right batch dimension of axis #{inspect(batch_axis2)} was #{elem(s2, 0)}"
+        "batch dimension of axes #{inspect(batch_axes1)} was [#{elem(s1, 0)}] " <>
+        "and the right batch dimension of axes #{inspect(batch_axes2)} was [#{elem(s2, 0)}]"
     end
 
-    # ensure there is no conflict between left batch axis and left contract axes
-    if b1 != nil and b1 in c1 do
-      raise ArgumentError, batch_vs_contract_conflict_message("left", batch_axis1, b1, contract_axes1, c1)
+    # ensure there is no conflict between left batch axes and left contract axes
+    if left_batched? and 0 in c1 do
+      raise ArgumentError, batch_vs_contract_conflict_message("left", batch_axes1, b1, contract_axes1, c1)
     end
 
     # ensure there is no conflict between right batch axis and right contract axes
-    if b2 != nil and b2 in c2 do
-      raise ArgumentError, batch_vs_contract_conflict_message("right", batch_axis2, b2, contract_axes2, c2)
+    if right_batched? and 0 in c2 do
+      raise ArgumentError, batch_vs_contract_conflict_message("right", batch_axes2, b2, contract_axes2, c2)
     end
 
     {output_shape, output_names} = dot_batch_output_shape(s1, c1, names1, b1, s2, c2, names2, b2)
@@ -5798,20 +5794,22 @@ defmodule Nx do
 
   defp prep_dot_batch_output(s1, c1, names1, b1, s2, c2, names2, b2) do
     case {b1, b2} do
-      {_, nil} ->
+      {[], []} ->
+        {nil, nil, s1, c1, names1, s2, c2, names2}
+      {[0], [0]} ->
         batch_dim = elem(s1, 0)
         batch_name = hd(names1)
         {s1, c1, names1} = shift_left_for_batch(s1, c1, names1)
-        {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
-      {nil, _} ->
-        batch_dim = elem(s2, 0)
-        batch_name = hd(names2)
         {s2, c2, names2} = shift_left_for_batch(s2, c2, names2)
         {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
-      {0, 0} ->
+      {[0], []} ->
         batch_dim = elem(s1, 0)
         batch_name = hd(names1)
         {s1, c1, names1} = shift_left_for_batch(s1, c1, names1)
+        {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
+      {[], [0]} ->
+        batch_dim = elem(s2, 0)
+        batch_name = hd(names2)
         {s2, c2, names2} = shift_left_for_batch(s2, c2, names2)
         {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
     end
@@ -5824,36 +5822,30 @@ defmodule Nx do
     {output_shape, output_names} = Nx.Shape.zip_reduce(s1, c1, names1, s2, c2, names2)
     # re-add the batched dimensions.
     # TODO(elbow-jason): make sure this is not skipping some sort of validation. e.g. duplicate names
-    output_shape = shape_push_left(output_shape, batch_dim)
-    output_names = [batch_name | output_names]
-    {output_shape, output_names}
+    if is_nil(batch_dim) do
+      {output_shape, output_names}
+    else
+      output_shape = shape_push_left(output_shape, batch_dim)
+      output_names = [batch_name | output_names]
+      {output_shape, output_names}
+    end
   end
 
   defp shape_push_left(shape, dim) do
     List.to_tuple([dim | Tuple.to_list(shape)])
   end
 
-  defp bad_batch_axis_message(side, axis, norm) do
-    "invalid dot batch axis for the #{side} tensor - batch axis must either " <>
-      "be nil or normalize to 0, but got #{render_norm(axis, norm)}"
+  defp bad_batch_axis_message(side, batch_axes, batch_norm) do
+    "invalid dot batch axis for the #{side} tensor - only batch axis 0 is supported, but got #{render_norm(batch_axes, batch_norm)}"
   end
 
-  defp batch_vs_contract_conflict_message(side, axis, norm_axis, contract_axes, contract_norm) do
-    "dot batch axis #{render_norm(axis, norm_axis)} for the #{side} tensor cannot " <>
+  defp batch_vs_contract_conflict_message(side, batch_axes, batch_norm, contract_axes, contract_norm) do
+    "dot batch axes #{render_norm(batch_axes, batch_norm)} for the #{side} tensor cannot " <>
       "be in the contract axes #{render_norm(contract_axes, contract_norm)}"
   end
 
   defp render_norm(same, same), do: inspect(same)
-  defp render_norm(input, norm), do: "#{inspect(input)} (norm: #{inspect(norm)})"
-
-  defp normalize_batch_axis(_shape, nil, _names) do
-    nil
-  end
-
-  defp normalize_batch_axis(shape, axis, names) when is_integer(axis) or is_atom(axis) do
-    [i] = Nx.Shape.normalize_axes(shape, [axis], names)
-    i
-  end
+  defp render_norm(axes, norm), do: "#{inspect(axes)} (norm: #{inspect(norm)})"
 
   @doc """
   Computes the outer product of two tensors.

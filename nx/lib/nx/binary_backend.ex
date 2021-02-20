@@ -427,7 +427,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def dot(out, left, axes1, nil, right, axes2, nil) do
+  def dot(out, left, axes1, [], right, axes2, []) do
     dot4(out, left, axes1, right, axes2)
   end
 
@@ -447,7 +447,7 @@ defmodule Nx.BinaryBackend do
     concatenate(out, dotted_batches, 0)
   end
 
-  defp prepare_batch(t, axes, 0) do
+  defp prepare_batch(t, axes, [0]) do
     # remove index zero from shape and names
     # shift all axes to the left by 1
     # ensure each batch row is the new shape
@@ -459,7 +459,7 @@ defmodule Nx.BinaryBackend do
     {batches, axes, shape, names}
   end
 
-  defp prepare_batch(t, axes, nil) do
+  defp prepare_batch(t, axes, []) do
     batches = Stream.repeatedly(fn -> t end)
     %{shape: shape, names: names} = t
     {batches, axes, shape, names}

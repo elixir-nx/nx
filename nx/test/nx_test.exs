@@ -636,66 +636,66 @@ defmodule NxTest do
   end
 
   describe "dot/6" do
-    test "raises for axis other than nil or norm axis 0 for left tensor" do
+    test "raises for batch axes other than [] or norm axes [0] for left tensor" do
       left = Nx.iota({2, 3}, names: [:x, :y])
       right = Nx.iota({5, 3, 4}, names: [:batch, :x, :y])
-      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - batch axis must either be nil or normalize to 0, but got 1", fn ->
-        Nx.dot(left, [], 1, right, [0], nil)
+      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - only batch axis 0 is supported, but got [1]", fn ->
+        Nx.dot(left, [-1], [1], right, [0], [])
       end)
-      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - batch axis must either be nil or normalize to 0, but got -1 (norm: 1)", fn ->
-        Nx.dot(left, [], -1, right, [0], nil)
+      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - only batch axis 0 is supported, but got [-1] (norm: [1])", fn ->
+        Nx.dot(left, [-1], [-1], right, [0], [])
       end)
-      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - batch axis must either be nil or normalize to 0, but got :y (norm: 1)", fn ->
-        Nx.dot(left, [], :y, right, [0], nil)
+      assert_raise(ArgumentError, "invalid dot batch axis for the left tensor - only batch axis 0 is supported, but got [:y] (norm: [1])", fn ->
+        Nx.dot(left, [-1], [:y], right, [0], [])
       end)
     end
-    test "raises for axis other than nil or norm axis 0 for right tensor" do
+    test "raises for batch axes other than [] or norm axes [0] for right tensor" do
       left = Nx.iota({2, 3}, names: [:x, :y])
       right = Nx.iota({5, 3, 4}, names: [:batch, :x, :y])
-      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - batch axis must either be nil or normalize to 0, but got 1", fn ->
-        Nx.dot(left, [], nil, right, [], 1)
+      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - only batch axis 0 is supported, but got [1]", fn ->
+        Nx.dot(left, [], [], right, [], [1])
       end)
-      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - batch axis must either be nil or normalize to 0, but got -2 (norm: 1)", fn ->
-        Nx.dot(left, [], nil, right, [], -2)
+      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - only batch axis 0 is supported, but got [-2] (norm: [1])", fn ->
+        Nx.dot(left, [], [], right, [], [-2])
       end)
-      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - batch axis must either be nil or normalize to 0, but got :x (norm: 1)", fn ->
-        Nx.dot(left, [], nil, right, [], :x)
+      assert_raise(ArgumentError, "invalid dot batch axis for the right tensor - only batch axis 0 is supported, but got [:x] (norm: [1])", fn ->
+        Nx.dot(left, [], [], right, [], [:x])
       end)
     end
-    test "raises when the batch axis sizes are different" do
+    test "raises when the batch axes sizes are different" do
       left = Nx.iota({5, 2, 3})
       right = Nx.iota({6, 3, 4})
-      assert_raise(ArgumentError, "dot batch dimension sizes must match, but the left batch dimension of axis 0 was 5 and the right batch dimension of axis 0 was 6", fn ->
-        Nx.dot(left, [], 0, right, [], 0)
+      assert_raise(ArgumentError, "dot batch dimension sizes must match, but the left batch dimension of axes [0] was [5] and the right batch dimension of axes [0] was [6]", fn ->
+        Nx.dot(left, [], [0], right, [], [0])
       end)
     end
 
     test "raises when left batch axis conflicts with left contract axes" do
       left = Nx.iota({2, 2, 3})
       right = Nx.iota({3, 4})
-      assert_raise(ArgumentError, "dot batch axis 0 for the left tensor cannot be in the contract axes [0, 1]", fn ->
-        Nx.dot(left, [0, 1], 0, right, [0], nil)
+      assert_raise(ArgumentError, "dot batch axes [0] for the left tensor cannot be in the contract axes [0, 1]", fn ->
+        Nx.dot(left, [0, 1], [0], right, [0], [])
       end)
     end
 
     test "raises when right batch axis conflicts with right contract axes" do
       left = Nx.iota({2, 3})
       right = Nx.iota({2, 3, 4})
-      assert_raise(ArgumentError, "dot batch axis 0 for the right tensor cannot be in the contract axes [0]", fn ->
-        Nx.dot(left, [1], nil, right, [0], 0)
+      assert_raise(ArgumentError, "dot batch axes [0] for the right tensor cannot be in the contract axes [0]", fn ->
+        Nx.dot(left, [1], [], right, [0], [0])
       end)
     end
 
     test "agrees with dot/4 when both batches axis args are nil (and contracting dims are configured)" do
       left = Nx.iota({2, 3})
       right = Nx.iota({3, 4})
-      assert Nx.dot(left, right) == Nx.dot(left, [-1], nil, right, [0], nil)
+      assert Nx.dot(left, right) == Nx.dot(left, [-1], [], right, [0], [])
     end
 
     test "works when batching the left tensor" do
       left = Nx.iota({2, 2, 3})
       right = Nx.iota({3, 4})
-      out = Nx.dot(left, [-1], 0, right, [0], nil)
+      out = Nx.dot(left, [-1], [0], right, [0], [])
       assert Nx.shape(out) == {2, 2, 4}
       assert out == Nx.tensor([
           [
@@ -712,7 +712,7 @@ defmodule NxTest do
     test "works when batching the right tensor" do
       left = Nx.iota({2, 3})
       right = Nx.iota({2, 3, 4})
-      out = Nx.dot(left, [-1], nil, right, [1], 0)
+      out = Nx.dot(left, [-1], [], right, [1], [0])
       assert Nx.shape(out) == {2, 2, 4}
       assert out == Nx.tensor([
           [
@@ -729,7 +729,7 @@ defmodule NxTest do
     test "works when batching both left and right" do
       left = Nx.iota({3, 2, 3})
       right = Nx.iota({3, 3, 4})
-      out = Nx.dot(left, [-1], 0, right, [1], 0)
+      out = Nx.dot(left, [-1], [0], right, [1], [0])
       assert Nx.shape(out) == {3, 2, 4}
       assert out == Nx.tensor([
         [
