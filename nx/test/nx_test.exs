@@ -624,14 +624,28 @@ defmodule NxTest do
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg = "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
-      
+
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10, 1.0)
       end
-      
+
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10.0, 2)
       end
+    end
+  end
+
+  describe "reshape" do
+    test "correctly adds names with same shape" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+      assert Nx.reshape(t, {2, 2}, names: [:x, :y]) == Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+    end
+  end
+
+  describe "broadcast" do
+    test "correctly adds names with same shape" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+      assert Nx.broadcast(t, {2, 2}, names: [:x, :y]) == Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
     end
   end
 end

@@ -1305,7 +1305,7 @@ defmodule Nx do
     end
 
     if old_shape == new_shape do
-      tensor
+      %{tensor | names: names}
     else
       impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor, new_shape)
     end
