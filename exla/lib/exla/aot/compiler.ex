@@ -51,7 +51,7 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp compile_function(%Computation{ref: comp}, {name, arity, args, _result_size}) do
+  defp compile_function(%Computation{ref: comp}, {name, arity, args, _result_size, _result_byte_size}) do
     target_triple = get_target_triple()
     {:ok, pbtext_path} = write_graph_config_file({name, arity, args})
 

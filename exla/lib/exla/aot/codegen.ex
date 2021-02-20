@@ -107,7 +107,7 @@ defmodule EXLA.AOT.Codegen do
 
     src_files =
       functions
-      |> Enum.flat_map(fn {name, arity, _, _} ->
+      |> Enum.flat_map(fn {name, arity, _, _, _} ->
         [str(Atom.to_string(name) <> "_#{arity}.h"), str(Atom.to_string(name) <> "_#{arity}.o")]
       end)
       |> Enum.join(", ")
@@ -137,7 +137,7 @@ defmodule EXLA.AOT.Codegen do
   defp build_include_block(functions) do
     function_includes =
       functions
-      |> Enum.map(fn {name, arity, _, _} ->
+      |> Enum.map(fn {name, arity, _, _, _} ->
         build_include_str(Atom.to_string(name) <> "_#{arity}")
       end)
       |> Enum.join("\n")
@@ -169,16 +169,17 @@ defmodule EXLA.AOT.Codegen do
     |> Enum.join("\n")
   end
 
-  defp build_nif_func_block({name, arity, args, result_size} = function, class_name) do
+  defp build_nif_func_block({name, arity, args, result_size, {_, result_bits}} = function, class_name) do
+    result_byte_size = result_size * div(result_bits, 8)
     signature_str = build_nif_func_signature(function)
 
     args_str =
       args
-      |> Enum.map(&build_nif_arg_retrieval_block({name, arity, args, result_size}, &1))
+      |> Enum.map(&build_nif_arg_retrieval_block({name, arity, args, result_size, result_byte_size}, &1))
       |> Enum.join("\n")
 
-    run_str = build_nif_run_block({name, arity, args, result_size})
-    result_str = build_nif_results_block({name, arity, args, result_size}, 0, result_size)
+    run_str = build_nif_run_block({name, arity, args, result_size, result_byte_size})
+    result_str = build_nif_results_block({name, arity, args, result_size, result_byte_size}, 0, result_byte_size)
 
     """
     #{signature_str}{
@@ -190,41 +191,45 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_func_signature({name, arity, _, _}) do
+  defp build_nif_func_signature({name, arity, _, _, _}) do
     """
     ERL_NIF_TERM #{Atom.to_string(name)}_#{arity}_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     """
   end
 
-  defp build_nif_arg_retrieval_block({name, arity, _, _}, %{id: id, name: _name, dims: dims}) do
-    arg_size = tuple_product(dims)
+  defp build_nif_arg_retrieval_block({name, arity, _, _, _}, %{id: id}) do
     error_msg = str("could not get argument #{id}")
 
     """
-    ErlNifBinary arg#{id};
-    if(!enif_inspect_binary(env, argv[#{id}], &arg#{id})) return error(env, #{error_msg});
-    std::copy(arg#{id}.data + 0, arg#{id}.data + #{arg_size}, #{name}_#{arity}.arg#{id}_data());
+      ErlNifBinary arg#{id};
+      if(!enif_inspect_binary(env, argv[#{id}], &arg#{id})) {
+        return error(env, #{error_msg});
+      }
+      #{name}_#{arity}.set_arg#{id}_data(arg#{id}.data);
     """
   end
 
-  defp build_nif_run_block({name, arity, _, _}) do
+  defp build_nif_run_block({name, arity, _, _, _}) do
     """
     #{name}_#{arity}.Run();
     """
   end
 
-  defp build_nif_results_block({name, arity, _, _}, result_num, result_size) do
+  defp build_nif_results_block({name, arity, _, _, _}, result_num, result_size) do
     error_msg = str("could not get result #{result_num}")
 
     """
-    ErlNifBinary result#{result_num};
-    if(!enif_alloc_binary(#{result_size}, &result#{result_num})) return error(env, #{error_msg});
-    std::copy(
-      #{name}_#{arity}.result#{result_num}_data() + 0,
-      #{name}_#{arity}.result#{result_num}_data() + #{result_size},
-      result#{result_num}.data
-    );
-    return enif_make_binary(env, &result#{result_num});
+      ErlNifBinary result#{result_num};
+      if(!enif_alloc_binary(#{result_size}, &result#{result_num})) {
+        return error(env, #{error_msg});
+      }
+      unsigned char * result#{result_num}_bytes = reinterpret_cast<unsigned char *>(#{name}_#{arity}.result#{result_num}_data());
+      std::memcpy(
+        result#{result_num}.data,
+        result#{result_num}_bytes,
+        #{result_size}
+      );
+      return enif_make_binary(env, &result#{result_num});
     """
   end
 
@@ -241,7 +246,7 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_func_export({name, arity, _, _}) do
+  defp build_nif_func_export({name, arity, _, _, _}) do
     "{#{str(Atom.to_string(name))}, #{arity}, #{name}_#{arity}_nif}"
   end
 
@@ -254,8 +259,4 @@ defmodule EXLA.AOT.Codegen do
   ## Shared Helpers
 
   defp str(string), do: "\"" <> string <> "\""
-
-  defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
-  defp tuple_product(_tuple, 0), do: 1
-  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 end

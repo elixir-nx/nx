@@ -39,7 +39,7 @@ defmodule EXLA.Defn do
     params_and_vars =
       for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
         exla_shape = EXLA.Shape.make_shape(type, shape)
-        {EXLA.Op.parameter(builder, i, exla_shape, "p#{i}"), %{id: i, name: "p#{i}", dims: shape}}
+        {EXLA.Op.parameter(builder, i, exla_shape, "p#{i}"), %{id: i, name: "p#{i}", dims: shape, type: type}}
       end
 
     {params, vars} = Enum.unzip(params_and_vars)
@@ -61,12 +61,13 @@ defmodule EXLA.Defn do
     %EXLA.Shape{dtype: {:t, [output_shape]}} = computation.output_shape
 
     output_size = Nx.size(output_shape.dims)
+    output_type = output_shape.dtype
 
     fun_info = :erlang.fun_info(key)
 
     EXLA.AOT.Compiler.compile(
       [computation],
-      [{fun_info[:name], fun_info[:arity], vars, output_size}],
+      [{fun_info[:name], fun_info[:arity], vars, output_size, output_type}],
       fun_info[:module]
     )
   end
