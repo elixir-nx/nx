@@ -221,6 +221,9 @@ defmodule EXLA.NIF do
   def await_streams_io(_client, _buffer, _keep_on_device),
     do: nif_error(__ENV__.function)
 
+  def compile_aot(_computation, _pbtext_path, _aot_path, _function_name, _class_name, _target_triple),
+    do: nif_error(__ENV__.function)
+
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
 

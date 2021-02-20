@@ -9,6 +9,12 @@ ERTS_VERSION ?= $(shell erl -eval "io:fwrite(erlang:system_info(version))." -nos
 EXLA_MODE ?= opt # can also be dbg
 EXLA_CACHE ?= $(TEMP)/exla
 EXLA_TENSORFLOW_GIT_REPO ?= https://github.com/tensorflow/tensorflow.git
+
+# Replicated public configuration
+# When changing this, also change:
+# * Makefile
+# * Makefile.win
+# * lib/exla/aot/compiler.ex
 EXLA_TENSORFLOW_GIT_REV ?= 6af836f407f546cf2f9ab3b5fcb7a8285bda5c96
 
 # Private configuration

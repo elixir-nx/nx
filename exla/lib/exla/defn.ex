@@ -30,6 +30,47 @@ defmodule EXLA.Defn do
     |> buffer_to_nx(holes)
   end
 
+  @doc false
+  def __aot__(key, vars, fun, options) do
+    builder = EXLA.Builder.new(inspect(key))
+
+    expr = fun.(vars)
+
+    params_and_vars =
+      for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
+        exla_shape = EXLA.Shape.make_shape(type, shape)
+        {EXLA.Op.parameter(builder, i, exla_shape, "p#{i}"), %{id: i, name: "p#{i}", dims: shape}}
+      end
+
+    {params, vars} = Enum.unzip(params_and_vars)
+
+    state = %{
+      precision: Keyword.get(options, :precision, :default),
+      builder: builder,
+      params: params
+    }
+
+    final_op =
+      expr
+      |> to_result(state, %{})
+      |> elem(0)
+
+    output = EXLA.Op.tuple(builder, [final_op])
+    computation = EXLA.Builder.build(output)
+
+    %EXLA.Shape{dtype: {:t, [output_shape]}} = computation.output_shape
+
+    output_size = Nx.size(output_shape.dims)
+
+    fun_info = :erlang.fun_info(key)
+
+    EXLA.AOT.Compiler.compile(
+      [computation],
+      [{fun_info[:name], fun_info[:arity], vars, output_size}],
+      fun_info[:module]
+    )
+  end
+
   defp compile(key, vars, fun, options) do
     {expr_options, exla_options} =
       Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])
