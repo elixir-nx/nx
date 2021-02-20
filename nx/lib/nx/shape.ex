@@ -287,6 +287,38 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Calculates the number of batches of a shape for the given axes.
+
+  ## Examples
+
+    iex> Nx.Shape.batch_count({3, 4, 5}, [])
+    1
+
+    iex> Nx.Shape.batch_count({3, 4, 5}, [0])
+    3
+
+    iex> Nx.Shape.batch_count({3, 4, 5}, [0, 1])
+    12
+  """
+  def batch_count(shape, axes) do
+    Enum.reduce(axes, 1, fn axis, total -> elem(shape, axis) * total end)
+  end
+
+  @doc """
+  Shifts all the axes by n.
+
+  Used to re-normalize axes for batching.
+
+  ## Examples
+
+    iex > Nx.Shape.shift_axes([1, 2, 3], -1)
+    [0, 1, 2]
+  """
+  def shift_axes(axes, by) do
+    Enum.map(axes, fn axis -> axis + by end)
+  end
+
+  @doc """
   Transposes a shape according to the given permutation.
 
   ## Examples
