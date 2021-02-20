@@ -60,14 +60,24 @@ defmodule EXLA.Defn do
 
     %EXLA.Shape{dtype: {:t, [output_shape]}} = computation.output_shape
 
-    output_size = Nx.size(output_shape.dims)
-    output_type = output_shape.dtype
+    shapes =
+      case output_shape.dtype do
+        {:t, many} -> many
+        _ -> [output_shape]
+      end
+
+    total_size =
+      Enum.map(shapes, fn shape ->
+        {_, size} = shape.dtype
+        Nx.size(shape.dims) * div(size, 8)
+      end)
+      |> Enum.sum()
 
     fun_info = :erlang.fun_info(key)
 
     EXLA.AOT.Compiler.compile(
       [computation],
-      [{fun_info[:name], fun_info[:arity], vars, output_size, output_type}],
+      [{fun_info[:name], fun_info[:arity], vars, total_size}],
       fun_info[:module]
     )
   end
