@@ -272,7 +272,7 @@ defmodule Nx do
   Builds a tensor.
 
   The argument is either a number, which means the tensor is a scalar
-  (zero-dimentions), a list of those (the tensor is a vector) or
+  (zero-dimensions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
 
   You can also give a tensor as argument, which is just returned as
@@ -1203,8 +1203,8 @@ defmodule Nx do
   Note it is not possible to cast from floats to integers.
   Use `round/1`, `floor/1`, and `ceil/1` instead.
 
-  Casting from a higher precision may lead to overflows
-  and underflows, which is platform and compiler dependent
+  Casting from a higher precision may lead to an overflow
+  or underflow, which is platform and compiler dependent
   behaviour.
 
   ## Examples
@@ -1857,7 +1857,7 @@ defmodule Nx do
   def shape(other) do
     raise ArgumentError,
           "expected a shape. A shape is a n-element tuple with the size of each dimension. " <>
-            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
+            "Alternatively, you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
   end
 
