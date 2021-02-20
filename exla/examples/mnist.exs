@@ -156,5 +156,3 @@ IO.puts("Training MNIST for 10 epochs...\n\n")
 final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
 IO.inspect(Nx.backend_transfer(final_params))
-
-Nx.Defn.aot(&MNIST.predict/2, [final_params, Nx.iota({1, 784}, type: {:f, 32})], EXLA)
