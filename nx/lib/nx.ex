@@ -272,7 +272,7 @@ defmodule Nx do
   Builds a tensor.
 
   The argument is either a number, which means the tensor is a scalar
-  (zero-dimentions), a list of those (the tensor is a vector) or
+  (zero-dimensions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
 
   You can also give a tensor as argument, which is just returned as
