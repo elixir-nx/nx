@@ -1262,6 +1262,16 @@ defmodule Nx do
         ]
       >
 
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> Nx.reshape(t, {2, 2}, names: [:x, :y])
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
   The shape can also be an existing tensor:
 
       iex> shape = Nx.tensor([[0], [0], [0], [0]], names: [:x, :y])
@@ -1305,7 +1315,7 @@ defmodule Nx do
     end
 
     if old_shape == new_shape do
-      tensor
+      %{tensor | names: names}
     else
       impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor, new_shape)
     end
