@@ -426,6 +426,11 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:arctan, [x], _ans, g, cache) do
+    g = Nx.divide(g, Nx.add(1.0, Nx.power(x, 2.0)))
+    to_grad(x, g, cache)
+  end
+
   defp grad(:tanh, [x], ans, g, cache) do
     g = Nx.multiply(g, Nx.subtract(1.0, Nx.multiply(ans, ans)))
     to_grad(x, g, cache)
