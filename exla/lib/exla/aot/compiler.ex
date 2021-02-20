@@ -5,9 +5,7 @@ defmodule EXLA.AOT.Compiler do
   alias EXLA.Computation
 
   require Logger
-
-  # We need to put everything inside of the TF checkout
-  @tf_checkout_path "/tf-6af836f407f546cf2f9ab3b5fcb7a8285bda5c96"
+  @tf_rev "6af836f407f546cf2f9ab3b5fcb7a8285bda5c96"
 
   def compile(computations, functions, module_name, lib_name \\ "nif") do
     :ok = mk_aot_dir()
@@ -76,19 +74,20 @@ defmodule EXLA.AOT.Compiler do
     case :os.type() do
       {:unix, :linux} ->
         "x86_64-pc-linux"
+
       {:win32, _} ->
         "x86_64-none-windows"
+
       {:unix, osname} ->
         arch_str = :erlang.system_info(:system_architecture)
-        [arch, vendor, _] =
-          arch_str
-          |> String.split("-")
+        [arch, vendor | _] = arch_str |> List.to_string() |> String.split("-")
         arch <> "-" <> vendor <> "-" <> Atom.to_string(osname)
     end
   end
 
   defp mk_aot_dir() do
     aot_path = get_aot_path()
+    File.rm_rf!(aot_path)
 
     case File.mkdir(aot_path) do
       :ok -> :ok
@@ -131,7 +130,14 @@ defmodule EXLA.AOT.Compiler do
   end
 
   defp get_aot_path, do: get_tf_checkout_path() <> "/tensorflow/compiler/xla/exla/aot/"
-  defp get_tf_checkout_path, do: get_exla_cache() <> @tf_checkout_path
+
+  defp get_tf_checkout_path do
+    Path.join([
+      get_exla_cache(),
+      "tf-#{@tf_rev}",
+      "erts-#{:erlang.system_info(:version)}"
+    ])
+  end
 
   defp get_exla_cache,
     do:

@@ -68,7 +68,7 @@ namespace exla {
 
     // These options are flags we can give to the user
     xla::cpu::CpuAotCompilationOptions aot_opts(
-      /*triple=*/"x86_64-pc-linux",
+      target_triple,
       /*target_cpu=*/"",
       /*target_features=*/"",
       /*entry_point=*/"function",
