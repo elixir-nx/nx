@@ -347,13 +347,13 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:cbrt, [x], ans, g, cache) do
-    g = Nx.divide(g, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))
+  defp grad(:sqrt, [x], ans, g, cache) do
+    g = Nx.multiply(g, Nx.divide(0.5, ans))
     to_grad(x, g, cache)
   end
 
-  defp grad(:cos, [x], _ans, g, cache) do
-    g = Nx.multiply(g, Nx.negate(Nx.sin(x)))
+  defp grad(:cbrt, [x], ans, g, cache) do
+    g = Nx.divide(g, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))
     to_grad(x, g, cache)
   end
 
@@ -406,18 +406,33 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:sqrt, [x], ans, g, cache) do
-    g = Nx.multiply(g, Nx.divide(0.5, ans))
+  defp grad(:arcsin, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.rsqrt(Nx.subtract(1.0, Nx.power(x, 2.0))))
     to_grad(x, g, cache)
   end
 
-  defp grad(:tanh, [x], ans, g, cache) do
-    g = Nx.multiply(g, Nx.subtract(1.0, Nx.multiply(ans, ans)))
+  defp grad(:cos, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.negate(Nx.sin(x)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:arccos, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.negate(Nx.rsqrt(Nx.subtract(1.0, Nx.power(x, 2.0)))))
     to_grad(x, g, cache)
   end
 
   defp grad(:tan, [x], _ans, g, cache) do
     g = Nx.divide(g, Nx.power(Nx.cos(x), 2))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:arctan, [x], _ans, g, cache) do
+    g = Nx.divide(g, Nx.add(1.0, Nx.power(x, 2.0)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:tanh, [x], ans, g, cache) do
+    g = Nx.multiply(g, Nx.subtract(1.0, Nx.multiply(ans, ans)))
     to_grad(x, g, cache)
   end
 
