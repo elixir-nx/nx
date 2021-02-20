@@ -466,7 +466,7 @@ defmodule Nx.Defn.GradTest do
   describe "tan" do
     defn grad_tan(t), do: grad(t, Nx.tan(t))
 
-    test "computes gradient of tan" do
+    test "computes gradient" do
       for _ <- 1..100 do
           # check_grads!/4 fails for values close to the asymptotes
           # of tan's gradient, so we select t to avoid them.
