@@ -30,6 +30,16 @@ defmodule Nx.MixProject do
       main: "Nx",
       source_ref: "v#{@version}",
       source_url: @source_url,
+      groups_for_functions: [
+        "Functions: Aggregates": &(&1[:type] == :aggregation),
+        "Functions: Conversion": &(&1[:type] == :conversion),
+        "Functions: Creation": &(&1[:type] in [:creation, :random]),
+        "Functions: Element-wise": &(&1[:type] == :element),
+        "Functions: Linalg": &(&1[:type] == :linalg),
+        "Functions: N-dim": &(&1[:type] == :ndim),
+        "Functions: Shape": &(&1[:type] == :shape),
+        "Functions: Type": &(&1[:type] == :type)
+      ],
       groups_for_modules: [
         # Nx,
         # Nx.Async,
