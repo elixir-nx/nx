@@ -1857,7 +1857,7 @@ defmodule Nx do
   def shape(other) do
     raise ArgumentError,
           "expected a shape. A shape is a n-element tuple with the size of each dimension. " <>
-            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
+            "Alternatively, you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
   end
 
