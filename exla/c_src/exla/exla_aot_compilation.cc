@@ -59,12 +59,19 @@ namespace exla {
                                  std::string class_name,
                                  std::string target_triple) {
 
+    xla::Status compilation_status;
+
     se::Platform* cpu_platform = xla::PlatformUtil::GetPlatform("Host").ConsumeValueOrDie();
     xla::CompileOnlyClient* client = xla::ClientLibrary::GetOrCreateCompileOnlyClient(cpu_platform).ValueOrDie();
 
     // Read the generated protobuf input, we can do it as a file, or pass it as a string/binary
     tensorflow::tf2xla::Config config;
-    tensorflow::ReadTextProto(tensorflow::Env::Default(), pbtext_path, &config);
+    LOG(INFO) << "Reading input protobuf";
+    compilation_status.Update(tensorflow::ReadTextProto(tensorflow::Env::Default(), pbtext_path, &config));
+    if (!compilation_status.ok()) {
+      LOG(ERROR) << compilation_status;
+      return compilation_status;
+    }
 
     // These options are flags we can give to the user
     xla::cpu::CpuAotCompilationOptions aot_opts(
@@ -79,13 +86,25 @@ namespace exla {
     tensorflow::tfcompile::CompileResult compile_result;
 
     // Compile the Xla computation and populate compile_result
-    CompileXla(client, computation, aot_opts, &compile_result);
+    LOG(INFO) << "Compiling XLA Computation";
+    compilation_status.Update(CompileXla(client, computation, aot_opts, &compile_result));
+    if (!compilation_status.ok()) {
+      LOG(ERROR) << compilation_status;
+      return compilation_status;
+    }
 
     // This is an object file
     const std::vector<char>& obj = compile_result.aot->object_file_data();
 
     // Write it to a file
-    tensorflow::WriteStringToFile(tensorflow::Env::Default(), aot_path + function_name + ".o", absl::string_view(obj.data(), obj.size()));
+    LOG(INFO) << "Writing object file";
+    compilation_status.Update(tensorflow::WriteStringToFile(tensorflow::Env::Default(),
+                                                            absl::StrCat(aot_path, function_name, ".o"),
+                                                            absl::string_view(obj.data(), obj.size())));
+    if (!compilation_status.ok()) {
+      LOG(ERROR) << compilation_status;
+      return compilation_status;
+    }
 
     tensorflow::tfcompile::CodegenOpts codegen_opts;
     codegen_opts.class_name = class_name;
@@ -94,21 +113,49 @@ namespace exla {
     codegen_opts.gen_hlo_profile_printer_data = false;
     codegen_opts.target_triple = "x86_64-pc-linux";
 
-    tensorflow::tfcompile::ParseCppClass(class_name, &codegen_opts.class_name, &codegen_opts.namespaces);
+    LOG(INFO) << "Parsing CPP Header Options";
+    compilation_status.Update(tensorflow::tfcompile::ParseCppClass(class_name,
+                                                                   &codegen_opts.class_name,
+                                                                   &codegen_opts.namespaces));
+    if (!compilation_status.ok()) {
+      LOG(ERROR) << compilation_status;
+      return compilation_status;
+    }
 
+    LOG(INFO) << "Generating metadata";
     tensorflow::tfcompile::MetadataResult metadata_result;
-    tensorflow::tfcompile::GenerateMetadata(codegen_opts, compile_result, &metadata_result);
+    compilation_status.Update(tensorflow::tfcompile::GenerateMetadata(codegen_opts,
+                                                                      compile_result,
+                                                                      &metadata_result));
 
-    // Write metadata to file
-    // tensorflow::WriteStringToFile(tensorflow::Env::Default(), "metadata.o", metadata_result.object_file_data);
+    if (!compilation_status.ok()) {
+      LOG(ERROR) << compilation_status;
+      return compilation_status;
+    }
 
     // The header file
+    LOG(INFO) << "Generating Header file";
     std::string header;
-    tensorflow::tfcompile::GenerateHeader(codegen_opts, config, compile_result, metadata_result, &header);
+    compilation_status.Update(tensorflow::tfcompile::GenerateHeader(codegen_opts,
+                                                                    config,
+                                                                    compile_result,
+                                                                    metadata_result,
+                                                                    &header));
+    if (!compilation_status.ok()) {
+      LOG(ERROR) << compilation_status;
+      return compilation_status;
+    }
 
     // Write Header to file
-    tensorflow::WriteStringToFile(tensorflow::Env::Default(), aot_path + function_name + ".h", header);
+    LOG(INFO) << "Writing to Header file";
+    compilation_status.Update(tensorflow::WriteStringToFile(tensorflow::Env::Default(),
+                                                            absl::StrCat(aot_path, function_name, ".h"),
+                                                            header));
+    if (!compilation_status.ok()) {
+      LOG(ERROR) << compilation_status;
+      return compilation_status;
+    }
 
-    return tensorflow::Status::OK();
+    return compilation_status;
   }
 }
