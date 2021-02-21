@@ -167,7 +167,7 @@ defmodule Nx.Shared do
     ]
 
   defp atanh_formula do
-    if Code.ensure_loaded?(:math) and math_func_supported?(:atanh, 1) do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:atanh, 1) do
       quote(do: :math.atanh(var!(x)))
     else
       quote(do: :math.log((1 + var!(x)) / (1 - var!(x))) / 2)
@@ -175,7 +175,7 @@ defmodule Nx.Shared do
   end
 
   defp asinh_formula do
-    if Code.ensure_loaded?(:math) and math_func_supported?(:asinh, 1) do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:asinh, 1) do
       quote(do: :math.asinh(var!(x)))
     else
       quote(do: :math.log(var!(x) + :math.sqrt(1 + var!(x) * var!(x))))
@@ -183,7 +183,7 @@ defmodule Nx.Shared do
   end
 
   defp acosh_formula do
-    if Code.ensure_loaded?(:math) and math_func_supported?(:acosh, 1) do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:acosh, 1) do
       quote(do: :math.acosh(var!(x)))
     else
       quote(do: :math.log(var!(x) + :math.sqrt(var!(x) + 1) * :math.sqrt(var!(x) - 1)))
@@ -191,23 +191,53 @@ defmodule Nx.Shared do
   end
 
   defp erf_formula do
-    if Code.ensure_loaded?(:math) and math_func_supported?(:erf, 1) do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:erf, 1) do
       quote(do: :math.erf(var!(x)))
     else
-      quote(do: Nx.Shared.erf_fallback(var!(x)))
+      quote(do: Nx.Shared.erf(var!(x)))
     end
   end
 
   defp erfc_formula do
-    if Code.ensure_loaded?(:math) and math_func_supported?(:erfc, 1) do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:erfc, 1) do
       quote(do: :math.erfc(var!(x)))
     else
-      quote(do: 1.0 - Nx.Shared.erf_fallback(var!(x)))
+      quote(do: 1.0 - Nx.Shared.erf(var!(x)))
     end
   end
 
-  @doc false
-  def erf_fallback(x) do
+  @doc """
+  Checks if a given function is supported in the `:math` module.
+  """
+  def math_fun_supported?(fun, arity) do
+    args =
+      case {fun, arity} do
+        {:atan, 1} -> [3.14]
+        {:atanh, 1} -> [0.9]
+        {_, 1} -> [1.0]
+        {_, 2} -> [1.0, 1.0]
+      end
+
+    _ = apply(:math, fun, args)
+    true
+  rescue
+    UndefinedFunctionError ->
+      false
+  end
+
+  @doc """
+  Approximation for the error function.
+
+  ## Examples
+
+      iex> Nx.Shared.erf(0.999)
+      0.8422852791811658
+
+      iex> Nx.Shared.erf(0.01)
+      0.011283414826762329
+
+  """
+  def erf(x) do
     x = x |> max(-4.0) |> min(4.0)
     x2 = x * x
 
@@ -236,23 +266,6 @@ defmodule Nx.Shared do
     acc * t + n
   end
 
-  @doc false
-  def math_func_supported?(func, arity) do
-    args =
-      case {func, arity} do
-        {:atan, 1} -> [3.14]
-        {:atanh, 1} -> [0.9]
-        {_, 1} -> [1.0]
-        {_, 2} -> [1.0, 1.0]
-      end
-
-    _ = apply(:math, func, args)
-    true
-  rescue
-    UndefinedFunctionError ->
-      false
-  end
-
   @doc """
   Approximation for the inverse error function.
 
@@ -263,6 +276,7 @@ defmodule Nx.Shared do
 
       iex> Nx.Shared.erf_inv(0.01)
       0.008862500728738846
+
   """
   def erf_inv(x) do
     w = -:math.log((1 - x) * (1 + x))
