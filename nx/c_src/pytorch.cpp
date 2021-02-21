@@ -36,6 +36,14 @@ at::Tensor *get_tensor(ErlNifEnv *env, ERL_NIF_TERM term)
   }
 }
 
+double get_double(ErlNifEnv *env, ERL_NIF_TERM term)
+{
+  double var;
+  enif_get_double(env, term, &var);
+
+  return var;
+}
+
 std::vector<int64_t> shape_from_tuple(ErlNifEnv *env, ERL_NIF_TERM tuple)
 {
   const ERL_NIF_TERM *shape;
@@ -97,13 +105,29 @@ ERL_NIF_TERM add(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   at::Tensor *a = get_tensor(env, argv[0]);
   at::Tensor *b = get_tensor(env, argv[1]);
+  double scalar = 0.0;
 
   std::cerr << *a << "\r\n";
-  std::cout << *b << "\r\n";
+  if (b == NULL)
+  {
+    scalar = get_double(env, argv[1]);
+    std::cout << "Adding scalar " << scalar << "\n";
+  }
+  else
+  {
 
+    std::cout << *b << "\r\n";
+  }
   try
   {
-    at::Tensor c = *a + *b;
+    at::Tensor c;
+    if (b == NULL)
+    {
+      c = *a + scalar;
+    }
+    else
+      c = *a + *b;
+
     std::cout
         << c << "\r\n";
 
