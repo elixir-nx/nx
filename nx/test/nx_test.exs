@@ -303,6 +303,16 @@ defmodule NxTest do
                  type: {:f, 32}
                )
     end
+
+    test "grouped convolutions" do
+      lhs = Nx.iota({2, 4, 2, 2}, type: {:f, 32})
+      rhs = Nx.iota({6, 2, 2, 2}, type: {:f, 32})
+      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, groups: 2)
+        == Nx.tensor([
+            [[[140.0]], [[364.0]], [[588.0]], [[2572.0]], [[3308.0]], [[4044.0]]],
+            [[[588.0]], [[1836.0]], [[3084.0]], [[6092.0]], [[7852.0]], [[9612.0]]]
+          ], type: {:f, 32})
+    end
   end
 
   test "interior padding" do

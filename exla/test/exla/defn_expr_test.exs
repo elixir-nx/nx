@@ -1593,6 +1593,12 @@ defmodule EXLA.DefnExprTest do
           input_dilation: [1, 2]
         )
 
+    defn grouped_conv_valid_no_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, strides: 1, padding: :valid, groups: 2)
+
+    defn grouped_conv_same_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
@@ -1702,6 +1708,27 @@ defmodule EXLA.DefnExprTest do
           input_dilation: [1, 2],
           kernel_dilation: [2, 1]
         )
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a grouped convolution with valid padding, no stride" do
+      img = Nx.iota({4, 6, 10, 10}, type: {:f, 32})
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+      lhs = grouped_conv_valid_no_stride(img, kernel)
+      rhs =
+        Nx.conv(img, kernel, strides: 1, padding: :valid, groups: 2)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a grouped convolution with same padding, stride, 3-d" do
+      img = Nx.iota({4, 8, 5, 7, 5}, type: {:f, 32})
+      kernel = Nx.iota({4, 2, 2, 2, 1}, type: {:f, 32})
+
+      lhs = grouped_conv_same_stride(img, kernel)
+      rhs =
+        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
 
       compare_tensors!(lhs, rhs)
     end

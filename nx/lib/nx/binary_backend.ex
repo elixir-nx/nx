@@ -804,6 +804,7 @@ defmodule Nx.BinaryBackend do
     strides = opts[:strides]
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
+    groups = opts[:groups]
 
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
@@ -829,7 +830,7 @@ defmodule Nx.BinaryBackend do
     #
     # The final shape is then given as:
     # {batch, num_filters, spatial_dim0, spatial_dim1, ...}
-    %T{type: {_, input_size} = input_type, shape: input_shape} = t
+    %T{type: {_, input_size} = input_type} = t
     %T{type: {_, kernel_size} = kernel_type} = k
 
     %{type: output_type} = out
@@ -852,10 +853,7 @@ defmodule Nx.BinaryBackend do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    num_input_channels = elem(input_shape, 1)
-
-    filter_spatial_dims = Tuple.delete_at(kernel_shape, 0)
-    filter_size = Nx.size(filter_spatial_dims) * kernel_size
+    num_input_channels = elem(kernel_shape, 1)
 
     # We first pad the input tensor with the following semantics
     #   :valid - no padding
@@ -891,6 +889,8 @@ defmodule Nx.BinaryBackend do
     input_data = to_binary(padded_t)
     kernel_data = to_binary(k)
 
+    filter_groups_with_index = split_filters(kernel_data, kernel_shape, kernel_type, groups)
+
     batch_weighted_shape =
       weighted_shape(Tuple.delete_at(padded_shape, 0), input_size, window_shape)
 
@@ -909,20 +909,23 @@ defmodule Nx.BinaryBackend do
       for <<batch::size(batch_size)-bitstring <- input_data>>,
           # Traverse the filters next, this allows us to rebuild
           # the resulting binary correctly
-          <<filter::size(filter_size)-bitstring <- kernel_data>>,
+          {filter, group} <- filter_groups_with_index,
           # Then we traverse the spatial dimension, applying
           # the filter at each step
           anchor <- anchors,
           into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, [0 | anchor])
+        offset = weighted_offset(batch_weighted_shape, [group*num_input_channels | anchor])
         # The shape of the window is {channels} + filter_shape
         # The shape of the kernel is {num_filters, channels} + filter_shape
         window =
-          IO.iodata_to_binary(weighted_traverse(batch_weighted_shape, batch, input_size, offset))
+          batch_weighted_shape
+          |> weighted_traverse(batch, input_size, offset)
+          |> IO.iodata_to_binary()
 
         # The receptive field size of each binary in bytes
         input_field_size = Nx.size(filter_shape) * input_size
         filter_field_size = Nx.size(filter_shape) * kernel_size
+
         # For each channel in both filter and input...
         # The output from a single filter being applied over a window
         # of the input tensor is the sum of the element-wise products
@@ -965,6 +968,17 @@ defmodule Nx.BinaryBackend do
       end
 
     from_binary(out, output_data)
+  end
+
+  defp split_filters(kernel_data, kernel_shape, {_, kernel_size}, groups) do
+    filter_group_size = div(Nx.size(kernel_shape) * kernel_size, groups)
+    filter_size = div(Nx.size(kernel_shape) * kernel_size, elem(kernel_shape, 0))
+
+    for i <- 0..groups - 1,
+          offset = filter_group_size * i,
+          <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring, _::bitstring>> = kernel_data,
+          <<filter::size(filter_size)-bitstring <- filter_group>>,
+          do: {filter, i}
   end
 
   @impl true

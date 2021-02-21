@@ -6142,7 +6142,15 @@ defmodule Nx do
   can be thought of as applying `dilation - 1` interior padding to the
   input or kernel tensor.
 
-  ### Examples
+  You can split both the input and kernel tensor into feature groups
+  using `:groups`. This will split both the input and kernel tensor
+  channels and compute a grouped convolution. The size of the kernel
+  input feature channels times the number of groups must match the size of
+  the input tensor feature channels. Additionally, the size of the kernel
+  output feature channels must be evenly divisible by the number of
+  groups.
+
+  ## Examples
 
       iex> lhs = Nx.iota({9})
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
@@ -6205,14 +6213,16 @@ defmodule Nx do
           ]
         ]
       >
+
   """
   @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do
-    assert_keys!(opts, [:padding, :strides, :input_dilation, :kernel_dilation])
+    assert_keys!(opts, [:padding, :strides, :input_dilation, :kernel_dilation, :groups])
 
     padding = opts[:padding] || :valid
     input_dilation = opts[:input_dilation] || 1
     kernel_dilation = opts[:kernel_dilation] || 1
+    groups = opts[:groups] || 1
 
     %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
@@ -6231,12 +6241,20 @@ defmodule Nx do
 
     tensor_input_channels = elem(input_shape, 1)
     kernel_input_channels = elem(kernel_shape, 1)
+    kernel_output_channels = elem(kernel_shape, 0)
 
-    if tensor_input_channels != kernel_input_channels do
+    if tensor_input_channels != kernel_input_channels*groups do
       raise ArgumentError,
-            "size of input dimension 1 must match size of kernel dimension 1," <>
-              " got #{tensor_input_channels} != #{kernel_input_channels} for shapes" <>
-              " #{inspect(input_shape)} and #{inspect(kernel_shape)}"
+            "size of input dimension 1 divided by groups must match size of kernel" <>
+            " dimension 1, got #{tensor_input_channels} // #{groups} != #{kernel_input_channels}" <>
+            " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
+    end
+
+    if rem(kernel_output_channels, groups) != 0 do
+      raise ArgumentError,
+            "size of kernel dimension 1 must be evenly divisible by groups" <>
+            " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
+            " with shape #{inspect(kernel_shape)}"
     end
 
     filter_shape =
@@ -6372,7 +6390,8 @@ defmodule Nx do
       strides: strides,
       padding: padding_config,
       input_dilation: input_dilation,
-      kernel_dilation: kernel_dilation
+      kernel_dilation: kernel_dilation,
+      groups: groups
     )
   end
 

@@ -1262,7 +1262,7 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 8) {
+  if (argc != 9) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1273,9 +1273,7 @@ ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   std::vector<exla::int64> lhs_dilation;
   std::vector<exla::int64> rhs_dilation;
   xla::ConvolutionDimensionNumbers dimension_numbers;
-  // TODO(seanmor5): When Nx supports these
-  // exla::int64 feature_group_count;
-  // exla::int64 batch_group_count;
+  exla::int64 feature_group_count;
   xla::PrecisionConfig config;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
@@ -1299,13 +1297,16 @@ ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get_conv_dimension_numbers(env, argv[6], &dimension_numbers)) {
     return exla::nif::error(env, "Unable to get conv dimension numbers.");
   }
-  if (!exla::nif::get_precision_config(env, argv[7], &config)) {
+  if (!exla::nif::get(env, argv[7], &feature_group_count)) {
+    return exla::nif::error(env, "Unable to get feature groups");
+  }
+  if (!exla::nif::get_precision_config(env, argv[8], &config)) {
     return exla::nif::error(env, "Unable to get precision config");
   }
 
   xla::XlaOp op = xla::ConvGeneralDilated(*operand, *kernel, strides,
                                           padding, lhs_dilation, rhs_dilation,
-                                          dimension_numbers, 1, 1, &config);
+                                          dimension_numbers, feature_group_count, 1, &config);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -1899,7 +1900,7 @@ static ErlNifFunc exla_funcs[] = {
   // Other
   {"dot", 3, dot},
   {"dot_general", 4, dot_general},
-  {"conv_general_dilated", 8, conv_general_dilated},
+  {"conv_general_dilated", 9, conv_general_dilated},
   {"pad", 3, pad},
   {"clamp", 3, clamp},
   {"reverse", 2, reverse},

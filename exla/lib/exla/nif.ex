@@ -62,6 +62,7 @@ defmodule EXLA.NIF do
         _lhs_dilation,
         _rhs_dilation,
         _dimension_numbers,
+        _feature_group_count,
         _precision_config
       ),
       do: nif_error(__ENV__.function)
