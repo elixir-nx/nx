@@ -169,7 +169,7 @@ defmodule Nx.Shared do
     if Code.ensure_loaded?(:math) and math_func_supported?(:atanh, 1) do
       quote(do: :math.atanh(var!(x)))
     else
-      quote(do: atanh_fallback(var!(x)))
+      quote(do: Nx.Shared.atanh_fallback(var!(x)))
     end
   end
 
