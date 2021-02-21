@@ -3541,7 +3541,7 @@ defmodule Nx do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
     {{one, _}, {two, _}, {three, _}} =
-      if name in [:arccos, :arcsin, :arctan, :arctanh] do
+      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv] do
         {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
          Code.eval_quoted(code, x: 0.9)}
       else
@@ -3549,12 +3549,12 @@ defmodule Nx do
       end
 
     first_val =
-      if name in [:arccos, :arcsin, :arctan, :arctanh],
+      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv],
         do: 0.1,
         else: 1
 
     list_of_vals =
-      if name in [:arccos, :arcsin, :arctan, :arctanh],
+      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv],
         do: [0.1, 0.5, 0.9],
         else: [1.0, 2.0, 3.0]
 

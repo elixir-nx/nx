@@ -162,7 +162,8 @@ defmodule Nx.Shared do
       rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
       cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))},
       erf: {"error function", erf_formula()},
-      erfc: {"one minus error function", erfc_formula()}
+      erfc: {"one minus error function", erfc_formula()},
+      erf_inv: {"inverse error function", quote(do: Nx.Shared.erf_inv(var!(x)))}
     ]
 
   defp atanh_formula do
@@ -247,6 +248,44 @@ defmodule Nx.Shared do
   rescue
     UndefinedFunctionError ->
       false
+  end
+
+  @doc """
+  Approximation for the inverse error function.
+
+  from Giles, M., "Approximating the erfinv function"
+  """
+  def erf_inv(x) do
+    w = -:math.log((1 - x) * (1 + x))
+    erf_inv_p(w) * x
+  end
+
+  defp erf_inv_p(w) when w < 5 do
+    w = w - 2.5
+
+    2.81022636e-08
+    |> muladd(w, 3.43273939e-07)
+    |> muladd(w, -3.5233877e-06)
+    |> muladd(w, -4.39150654e-06)
+    |> muladd(w, 0.00021858087)
+    |> muladd(w, -0.00125372503)
+    |> muladd(w, -0.00417768164)
+    |> muladd(w, 0.246640727)
+    |> muladd(w, 1.50140941)
+  end
+
+  defp erf_inv_p(w) do
+    w = :math.sqrt(w) - 3
+
+    -0.000200214257
+    |> muladd(w, 0.000100950558)
+    |> muladd(w, 0.00134934322)
+    |> muladd(w, -0.00367342844)
+    |> muladd(w, 0.00573950773)
+    |> muladd(w, -0.0076224613)
+    |> muladd(w, 0.00943887047)
+    |> muladd(w, 1.00167406)
+    |> muladd(w, 2.83297682)
   end
 
   ## Types

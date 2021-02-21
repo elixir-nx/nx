@@ -446,6 +446,14 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  @half_sqrt_pi :math.sqrt(:math.pi) / 2
+
+  defp grad(:erf_inv, [x], ans, g, cache) do
+    g = Nx.multiply(g, Nx.exp(Nx.power(ans, 2)))
+    g = Nx.multiply(@half_sqrt_pi, g)
+    to_grad(x, g, cache)
+  end
+
   defp grad(:reduce, _, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce/4.
