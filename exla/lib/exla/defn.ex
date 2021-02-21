@@ -32,41 +32,18 @@ defmodule EXLA.Defn do
 
   @doc false
   def __aot__(key, vars, fun, options) do
-    builder = EXLA.Builder.new(inspect(key))
-
+    {fun, _expr_options, exla_options} = prepare_args(fun, options)
     expr = fun.(vars)
 
-    params_and_vars =
+    shapes_and_args =
       for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
-        exla_shape = EXLA.Shape.make_shape(type, shape)
-
-        {EXLA.Op.parameter(builder, i, exla_shape, "p#{i}"),
-         %{id: i, name: "p#{i}", dims: shape, type: type}}
+        {EXLA.Shape.make_shape(type, shape), %{id: i, name: "p#{i}", dims: shape, type: type}}
       end
 
-    {params, vars} = Enum.unzip(params_and_vars)
+    {shapes, args} = Enum.unzip(shapes_and_args)
+    computation = to_root_computation(key, expr, shapes, exla_options)
 
-    state = %{
-      precision: Keyword.get(options, :precision, :default),
-      builder: builder,
-      params: params
-    }
-
-    final_op =
-      expr
-      |> to_computation_result(state, %{})
-      |> elem(0)
-
-    output = EXLA.Op.tuple(builder, [final_op])
-    computation = EXLA.Builder.build(output)
-
-    %EXLA.Shape{dtype: {:t, [output_shape]}} = computation.output_shape
-
-    shapes =
-      case output_shape.dtype do
-        {:t, many} -> many
-        _ -> [output_shape]
-      end
+    %EXLA.Shape{dtype: {:t, shapes}} = computation.output_shape
 
     total_size =
       Enum.map(shapes, fn shape ->
@@ -79,27 +56,28 @@ defmodule EXLA.Defn do
 
     EXLA.AOT.Compiler.compile(
       [computation],
-      [{fun_info[:name], fun_info[:arity], vars, total_size}],
+      [{fun_info[:name], fun_info[:arity], args, total_size}],
       fun_info[:module]
     )
   end
 
-  defp prepare_options(options) do
+  defp prepare_args(fun, options) do
     {expr_options, exla_options} =
       Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])
 
-    {Keyword.put_new(expr_options, :max_float_type, {:f, 32}), exla_options}
+    expr_options = Keyword.put_new(expr_options, :max_float_type, {:f, 32})
+    fun = fn vars -> vars |> fun.() |> Expr.rewrite_types(expr_options) end
+    {fun, expr_options, exla_options}
   end
 
   defp compile(key, vars, fun, options) do
-    {expr_options, exla_options} = prepare_options(options)
+    {fun, expr_options, exla_options} = prepare_args(fun, options)
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args, expr_options}
-    fun = fn -> fun.(vars) |> Expr.rewrite_types(expr_options) end
 
     {expr, holes} =
       EXLA.LockedCache.run(expr_key, fn ->
-        expr = fun.()
+        expr = fun.(vars)
         {expr, holes(expr)}
       end)
 
@@ -112,27 +90,8 @@ defmodule EXLA.Defn do
 
     {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->
-        builder = EXLA.Builder.new(inspect(key))
-
-        # TODO: Use Enum.with_index on Elixir v1.12
-        params =
-          for {%{shape: shape}, i} <- Enum.with_index(buffers) do
-            EXLA.Op.parameter(builder, i, shape, "p#{i}")
-          end
-
-        state = %{
-          precision: Keyword.get(options, :precision, :default),
-          builder: builder,
-          params: params
-        }
-
-        expr = expr || fun.()
-
-        computation =
-          expr
-          |> to_root_result(state, %{})
-          |> EXLA.Builder.build()
-
+        shapes = Enum.map(buffers, & &1.shape)
+        computation = to_root_computation(key, expr || fun.(vars), shapes, exla_options)
         client = EXLA.Client.fetch!(client_name)
         executable = EXLA.Computation.compile(computation, client, Enum.map(buffers, & &1.shape))
         :persistent_term.put(cache_key, executable)
@@ -147,6 +106,26 @@ defmodule EXLA.Defn do
 
   defp holes(%T{} = t),
     do: %{t | data: nil}
+
+  defp to_root_computation(key, expr, shapes, options) do
+    builder = EXLA.Builder.new(inspect(key))
+
+    # TODO: Use Enum.with_index on Elixir v1.12
+    params =
+      for {shape, i} <- Enum.with_index(shapes) do
+        EXLA.Op.parameter(builder, i, shape, "p#{i}")
+      end
+
+    state = %{
+      precision: Keyword.get(options, :precision, :default),
+      builder: builder,
+      params: params
+    }
+
+    expr
+    |> to_root_result(state, %{})
+    |> EXLA.Builder.build()
+  end
 
   defp to_root_result(tuple_or_expr, state, cache) do
     {acc, _cache} = to_root_result(tuple_or_expr, [], state, cache)
