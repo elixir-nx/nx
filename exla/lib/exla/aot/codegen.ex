@@ -16,9 +16,9 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the graph config file
 
-  def generate_graph_config_file(params) do
+  def generate_graph_config_file(params, num_results) do
     feeds = build_feeds_str(params)
-    fetches = build_fetch_str(params)
+    fetches = build_fetch_str(num_results)
     feeds <> fetches
   end
 
@@ -53,18 +53,17 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_fetch_str(params) do
-    result_name =
-      params
-      |> Enum.map(& &1.id)
-      |> Enum.join("_")
-      |> Kernel.<>("_result")
+  defp build_fetch_str(num_results) do
+    result_ids =
+      for i <- (0..num_results - 1) do
+        """
+        fetch {
+          id { node_name: #{str("result#{i}")} }
+        }
+        """
+      end
 
-    """
-    fetch {
-      id { node_name: #{str(result_name)} }
-    }
-    """
+    result_ids |> Enum.join("\n")
   end
 
   ## Generating the BUILD file
@@ -169,16 +168,16 @@ defmodule EXLA.AOT.Codegen do
     |> Enum.join("\n")
   end
 
-  defp build_nif_func_block({name, arity, args, result_size} = function, class_name) do
+  defp build_nif_func_block({name, arity, args, result_sizes} = function, class_name) do
     signature_str = build_nif_func_signature(function)
 
     args_str =
       args
-      |> Enum.map(&build_nif_arg_retrieval_block({name, arity, args, result_size}, &1))
+      |> Enum.map(&build_nif_arg_retrieval_block({name, arity, args, result_sizes}, &1))
       |> Enum.join("\n")
 
-    run_str = build_nif_run_block({name, arity, args, result_size})
-    result_str = build_nif_results_block({name, arity, args, result_size}, 0)
+    run_str = build_nif_run_block({name, arity, args, result_sizes})
+    result_str = build_nif_results_block({name, arity, args, result_sizes})
 
     """
     #{signature_str}{
@@ -216,10 +215,33 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_results_block({name, arity, _, result_size}, result_num) do
+  defp build_nif_results_block({name, arity, _, result_sizes}) do
+    res_str =
+      result_sizes
+      |> Enum.with_index()
+      |> Enum.map(fn {res, i} -> build_nif_single_result_block({name, arity, res}, i) end)
+      |> Enum.join("\n")
+
+    num_results = Enum.count(result_sizes);
+
+    res_terms =
+      result_sizes
+      |> Enum.with_index()
+      |> Enum.map(fn {_, i} -> "result#{i}_term" end)
+      |> Enum.join(", ")
+
+    """
+    #{res_str}
+    ERL_NIF_TERM result_tuple = enif_make_tuple(env, #{num_results}, #{res_terms});
+    return enif_make_tuple2(env, enif_make_atom(env, \"ok\"), result_tuple);
+    """
+  end
+
+  defp build_nif_single_result_block({name, arity, result_size}, result_num) do
     error_msg = str("could not get result #{result_num}")
 
     """
+
     ErlNifBinary result#{result_num};
     if(!enif_alloc_binary(#{result_size}, &result#{result_num})) {
       return error(env, #{error_msg});
@@ -230,7 +252,9 @@ defmodule EXLA.AOT.Codegen do
       result#{result_num}_bytes,
       #{result_size}
     );
-    return enif_make_tuple2(env, enif_make_atom(env, \"ok\"), enif_make_binary(env, &result#{result_num}));
+
+    ERL_NIF_TERM result#{result_num}_term = enif_make_binary(env, &result#{result_num});
+
     """
   end
 

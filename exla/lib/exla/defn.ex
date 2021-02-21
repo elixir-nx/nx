@@ -45,18 +45,17 @@ defmodule EXLA.Defn do
 
     %EXLA.Shape{dtype: {:t, shapes}} = computation.output_shape
 
-    total_size =
+    total_sizes =
       Enum.map(shapes, fn shape ->
         {_, size} = shape.dtype
         Nx.size(shape.dims) * div(size, 8)
       end)
-      |> Enum.sum()
 
     fun_info = :erlang.fun_info(key)
 
     EXLA.AOT.Compiler.compile(
       [computation],
-      [{fun_info[:name], fun_info[:arity], args, total_size}],
+      [{fun_info[:name], fun_info[:arity], args, total_sizes}],
       fun_info[:module]
     )
   end

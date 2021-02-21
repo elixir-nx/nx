@@ -51,9 +51,9 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp compile_function(%Computation{ref: comp}, {name, arity, args, _size}) do
+  defp compile_function(%Computation{ref: comp}, {name, arity, args, sizes}) do
     target_triple = get_target_triple()
-    {:ok, pbtext_path} = write_graph_config_file({name, arity, args})
+    {:ok, pbtext_path} = write_graph_config_file({name, arity, args, Enum.count(sizes)})
 
     src_paths =
       EXLA.NIF.compile_aot(
@@ -96,8 +96,8 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp write_graph_config_file({name, arity, args}) do
-    pbtext = Codegen.generate_graph_config_file(args)
+  defp write_graph_config_file({name, arity, args, num_results}) do
+    pbtext = Codegen.generate_graph_config_file(args, num_results)
     pbtext_path = get_aot_path() <> "#{name}_#{arity}.pbtxt"
     {:ok, file} = File.open(pbtext_path, [:write])
     :ok = IO.binwrite(file, pbtext)
