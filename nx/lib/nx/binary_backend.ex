@@ -1062,7 +1062,7 @@ defmodule Nx.BinaryBackend do
           h_bin =
             for col <- 0..(reflector_m - 1), row <- 0..(reflector_n - 1), reduce: to_binary(h) do
               acc ->
-                set_value_2d(
+                set_value_at_index(
                   acc,
                   h.type,
                   shape_h,
@@ -1145,15 +1145,24 @@ defmodule Nx.BinaryBackend do
       for col <- 0..(n - 1), row <- 0..(m - 1), reduce: data do
         data ->
           value = if col == row, do: 1, else: 0
-          set_value_2d(data, type, shape, [row, col], value)
+          set_value_at_index(data, type, shape, [row, col], value)
       end
 
     from_binary(%{tensor | shape: {m, n}}, identity_binary)
   end
 
-  defp set_value_2d(tensor_binary, {_, num_bits} = type, {_rows, cols}, [row, col], value) do
-    row_offset = num_bits * cols
-    offset = row_offset * row + col * num_bits
+  defp set_value_at_index(tensor_binary, {_, num_bits} = type, shape, index, value)
+       when tuple_size(shape) == length(index) do
+    {_total_num_elements, offset} =
+      shape
+      |> Tuple.to_list()
+      |> Enum.zip(index)
+      |> Enum.reverse()
+      |> Enum.reduce({num_bits, 0}, fn {dim_length, i}, {dim_offset, result_acc} ->
+        result_acc = result_acc + dim_offset * i
+        dim_offset = dim_length * dim_offset
+        {dim_offset, result_acc}
+      end)
 
     <<prefix::bitstring-size(offset), _current_value::bitstring-size(num_bits), tail::bitstring>> =
       tensor_binary

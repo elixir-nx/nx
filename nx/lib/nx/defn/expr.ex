@@ -676,6 +676,12 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def qr(out, tensor, opts) do
+    tensor = to_expr(tensor)
+    expr(out, tensor.data.context, :qr, [tensor, opts])
+  end
+
+  @impl true
   def sort(out, tensor, opts) do
     comparator = opts[:comparator]
 
