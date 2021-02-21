@@ -7046,6 +7046,58 @@ defmodule Nx do
     impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
+  def qr(tensor) do
+    %T{type: type, shape: shape} = tensor = tensor!(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+
+    {q_shape, r_shape} = Nx.Shape.qr(shape)
+
+    q = iota(q_shape, type: output_type)
+    r = iota(r_shape, type: output_type)
+
+    impl!(tensor).qr(q, r, tensor)
+  end
+
+  # def qr(tensor, opts \\ []) do
+  #   %{shape: shape, type: type} = t = tensor!(tensor)
+
+  #   if tuple_size(shape) != 2, do: raise(ArgumentError, "expected 2-D tensor")
+
+  #   {m, n} = shape
+
+  #   q = eye(m, type: type)
+
+  #   max_i = if m == n, do: n - 1, else: n - 2
+
+  #   for i <- 0..max_i, reduce: {q, t} do
+  #     {q, r} ->
+  #       reflector = householder_reflector(t[[i..(m - 1), i]])
+  #       # placeholder implementation of H = eye(m); H[i:, i:] = reflector[i:, i:]
+  #       h = eye(m, type: type)
+
+  #       for c <- 0..(m - 1), r <- 0..(m - 1), reduce: [] do
+  #         acc ->
+  #           if c < i or r < i do
+  #             [h[[r, c]] | acc]
+  #           else
+  #             [reflector[[r, c]] | acc]
+  #           end
+  #       end
+  #       |> Enum.reverse()
+  #       |> tensor()
+  #       |> reshape({max_i, max_i})
+
+  #       {multiply(q, h), multiply(h, r)}
+  #   end
+  # end
+
+  # # placeholder identity matrix definition
+  # defp eye(n, type: type) do
+  #   m = Enum.map(1..n, fn i -> Enum.map(1..n, fn j -> if i == j, do: 1, else: 0 end) end)
+  #   tensor(m, type: type)
+  # end
+
   ## Helpers
 
   defp tensor!(%T{} = t),

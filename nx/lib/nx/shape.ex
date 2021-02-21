@@ -891,6 +891,15 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def qr({m, n} = shape), do: {{m, m}, {m, n}}
+
+  def qr(shape, _names),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+      )
+
   defp validate_concat_names!(names) do
     :ok =
       names

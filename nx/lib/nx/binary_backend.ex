@@ -1038,6 +1038,93 @@ defmodule Nx.BinaryBackend do
     from_binary(out, output_data)
   end
 
+  @impl true
+  def qr(q, r, tensor) do
+    %T{shape: {m, n}} = tensor
+
+    eye = identity(tensor, shape: {m, m})
+    max_col = if m == n, do: n - 1, else: n - 2
+
+    for i <- 0..max_col, reduce: {eye, tensor, []} do
+      {q, r, hs} ->
+        %{shape: {reflector_n, _}} = reflector = householder_reflector(r[[i..(m - 1), i]])
+        h = identity(as_type(reflector, r), shape: {m, m})
+
+        h_bin =
+          for col <- 0..(reflector_n - 1), row <- 0..(reflector_n - 1), reduce: to_binary(h) do
+            acc ->
+              set_value_2d(
+                acc,
+                h.type,
+                {m, m},
+                [row + i, col + i],
+                reflector[[row, col]]
+              )
+          end
+
+        h = from_binary(h, h_bin)
+
+        {Nx.dot(q, h), Nx.dot(h, r), [h | hs]}
+    end
+  end
+
+  defp householder_reflector(%{shape: {n}, type: type} = a) do
+    a_0 = a[0]
+
+    v =
+      %{type: {_, num_bits} = type_v} =
+      if Nx.sign(a_0) == -1 do
+        Nx.divide(a, Nx.subtract(a_0, Nx.norm(a)))
+      else
+        Nx.divide(a, Nx.add(a_0, Nx.norm(a)))
+      end
+
+    # set first position of v to 1
+    one = scalar_to_binary(1, type_v)
+    v_bin = to_binary(v)
+    <<_::bitstring-size(num_bits), tail::bitstring>> = v_bin
+    v = from_binary(v, one <> tail)
+
+    eye = identity(a, shape: {n, n})
+
+    projection =
+      2
+      |> Nx.divide(Nx.dot(v, v))
+      |> Nx.multiply(Nx.outer(v, v))
+
+    subtract(
+      projection,
+      eye,
+      projection
+    )
+  end
+
+  defp identity(%{type: {_, num_bits} = type} = tensor, shape: {m, n} = shape) do
+    data_size = m * num_bits * n
+    # allocate empty data
+    data = <<0::size(data_size)>>
+
+    identity_binary =
+      for col <- 0..(n - 1), row <- 0..(n - 1), reduce: data do
+        data ->
+          value = if col == row, do: 1, else: 0
+          set_value_2d(data, type, shape, [row, col], value)
+      end
+
+    from_binary(%{tensor | shape: {m, n}}, identity_binary)
+  end
+
+  def set_value_2d(tensor_binary, {_, num_bits} = type, {_rows, cols}, [row, col], value) do
+    row_offset = num_bits * cols
+    offset = row_offset * row + col * num_bits
+
+    <<prefix::bitstring-size(offset), _current_value::bitstring-size(num_bits), tail::bitstring>> =
+      tensor_binary
+
+    data = scalar_to_binary(value, type)
+    <<prefix::bitstring, data::bitstring, tail::bitstring>>
+  end
+
   ## Aggregation
 
   @impl true

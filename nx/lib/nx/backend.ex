@@ -75,7 +75,7 @@ defmodule Nx.Backend do
   @callback sort(out :: tensor, tensor, keyword) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
-
+  @callback qr(q :: tensor, r :: tensor, tensor) :: tensor
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2, :min, :max, :quotient] ++
@@ -96,5 +96,4 @@ defmodule Nx.Backend do
   for unary_op <- unary_ops do
     @callback unquote(unary_op)(out :: t, t) :: t
   end
-
 end
