@@ -3,7 +3,7 @@ defmodule Nx.PytorchBackend do
 
   alias Nx.Pytorch.NIF
 
-  defstruct [:data]
+  defstruct [:ref]
 
   funs =
     Nx.Tensor.behaviour_info(:callbacks) --
@@ -34,28 +34,27 @@ defmodule Nx.PytorchBackend do
   def torch_type({:f, 64}), do: :double
 
   @impl true
-  def random_uniform(%{type: type, shape: shape} = out, min, max) do
-    NIF.randint(min, max, shape, torch_type(type))
-    # gen =
-    #   case type do
-    #     {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-    #     {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-    #     {_, _} -> fn -> (max - min) * :rand.uniform() + min end
-    #   end
-
-    # data = for _ <- 1..Nx.size(shape), into: "", do: number_to_binary(gen.(), type)
-    # from_binary(out, data)
+  def random_uniform(%{type: {s, _} = type, shape: shape} = out, min, max) when s in [:u, :s] do
+    tensor_ref = NIF.randint(min, max, shape, torch_type(type))
+    from_binary(out, tensor_ref)
   end
 
-  def from_binary(tensor, binary, _opts) do
-    put_in(tensor.data, %__MODULE__{data: binary})
+  def random_uniform(%{type: {:f, _} = type, shape: shape} = out, min, max) do
+    tensor_ref = NIF.rand(min, max, shape, torch_type(type))
+    from_binary(out, tensor_ref)
   end
 
+  @impl true
+  def from_binary(t, ref, _opts), do: from_binary(t, ref)
+  defp from_binary(t, ref) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
+
+  @impl true
   def backend_deallocate(%Nx.Tensor{data: _data}) do
     :ok
   end
 
-  def inspect(%{data: %{data: binary}}, opts) do
-    Inspect.BitString.inspect(binary, opts)
+  @impl true
+  def inspect(%{data: %{ref: ref}}, opts) do
+    Inspect.inspect(ref, opts)
   end
 end

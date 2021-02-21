@@ -104,7 +104,7 @@ from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   return create_tensor_resource(env, t);
 }
 
-std::map<std::string, at::ScalarType> types = {{"byte", at::kByte}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}};
+std::map<std::string, at::ScalarType> types = {{"byte", at::kByte}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"float", at::kFloat}, {"double", at::kDouble}};
 
 ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -117,6 +117,23 @@ ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   nx::nif::get_atom(env, argv[3], type);
 
   at::Tensor t = at::randint(min, max, shape, types[type]);
+
+  std::cout << t << "\r\n";
+
+  return create_tensor_resource(env, t);
+}
+
+ERL_NIF_TERM rand(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  double min = get_double(env, argv[0]);
+  double max = get_double(env, argv[1]);
+  std::string type;
+  std::vector<int64_t> shape;
+
+  nx::nif::get_tuple(env, argv[2], shape);
+  nx::nif::get_atom(env, argv[3], type);
+
+  at::Tensor t = min + at::rand(shape, types[type]) * (max - min);
 
   std::cout << t << "\r\n";
 
@@ -211,6 +228,7 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 
 static ErlNifFunc nif_functions[] = {
     {"randint", 4, randint, 0},
+    {"rand", 4, rand, 0},
     {"from_blob", 2, from_blob, 0},
     {"ones", 1, ones, 0},
     {"add",
