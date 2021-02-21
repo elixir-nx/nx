@@ -4,7 +4,7 @@ ARG bazel_bin_url="https://github.com/bazelbuild/bazel/releases/download/3.4.1/b
 WORKDIR /etc/apt/sources.list.d
 RUN rm cuda.list nvidia-ml.list
 WORKDIR /
-RUN apt-get update && apt-get install -y --no-install-recommends wget curl git locales python3 python3-pip ca-certificates python3-dev gdb
+RUN apt-get update && apt-get install -y --no-install-recommends wget curl git locales python3 ca-certificates gdb
 RUN echo ${bazel_bin_url}
 RUN curl -L ${bazel_bin_url} -o /usr/local/bin/bazel \
     && chmod +x /usr/local/bin/bazel \
@@ -25,9 +25,6 @@ RUN echo $LANG UTF-8 > /etc/locale.gen \
     && update-locale LANG=$LANG
 
 RUN mix local.hex --force
-
-# For some reason tensorflow expects numpy
-RUN python3 -m pip install ${pip_args} numpy
 
 RUN ln -s /usr/bin/python3 /usr/bin/python
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"

@@ -30,9 +30,6 @@ RUN echo $LANG UTF-8 > /etc/locale.gen \
 
 RUN mix local.hex --force
 
-# For some reason tensorflow expects numpy
-RUN python3 -m pip install ${pip_args} numpy
-
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
 
 ENV ROCM_PATH="/opt/rocm-3.9.0"
