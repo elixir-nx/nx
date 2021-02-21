@@ -204,7 +204,9 @@ defmodule EXLA.AOT.Codegen do
       if(!enif_inspect_binary(env, argv[#{id}], &arg#{id})) {
         return error(env, #{error_msg});
       }
-      #{name}_#{arity}.set_arg#{id}_data(arg#{id}.data);
+      unsigned char * arg#{id}_bytes = (unsigned char *) malloc(arg#{id}.size);
+      std::memcpy(arg#{id}_bytes, arg#{id}.data, arg#{id}.size);
+      #{name}_#{arity}.set_arg#{id}_data(arg#{id}_bytes);
     """
   end
 
