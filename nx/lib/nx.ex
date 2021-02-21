@@ -925,7 +925,11 @@ defmodule Nx do
   @doc """
   Returns the underlying tensor as a binary.
 
-  The binary is returned as is (which is row-major).
+  It returns the in-memory binary representation of
+  the tensor in a row-major fashion. The binary is
+  in the system endianess, which has to be taken into
+  account if the binary is meant to be serialized to
+  other systems.
 
   ## Options
 
