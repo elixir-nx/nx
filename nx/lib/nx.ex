@@ -3485,74 +3485,53 @@ defmodule Nx do
 
   ## Unary ops
 
-  for {name, {desc, code, math_dep, math_arity}} <- Nx.Shared.unary_math_funs() do
-    if Nx.Shared.math_func_supported?(math_dep, math_arity) do
-      formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
+  for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
+    formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
-      {{one, _}, {two, _}, {three, _}} =
-        if name in [:arccos, :arcsin, :arctan, :arctanh] do
-          {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
-          Code.eval_quoted(code, x: 0.9)}
-        else
-          {Code.eval_quoted(code, x: 1), Code.eval_quoted(code, x: 2), Code.eval_quoted(code, x: 3)}
-        end
-
-      first_val =
-        if name in [:arccos, :arcsin, :arctan, :arctanh],
-          do: 0.1,
-          else: 1
-
-      list_of_vals =
-        if name in [:arccos, :arcsin, :arctan, :arctanh],
-          do: [0.1, 0.5, 0.9],
-          else: [1.0, 2.0, 3.0]
-
-      @doc """
-      Calculates the #{desc} of each element in the tensor.
-
-      It is equivalent to:
-
-          #{formula}
-
-      ## Examples
-
-          iex> Nx.#{name}(#{first_val})
-          #Nx.Tensor<
-            f64
-            #{one}
-          >
-
-          iex> Nx.#{name}(Nx.tensor(#{inspect(list_of_vals)}, names: [:x]))
-          #Nx.Tensor<
-            f64[x: 3]
-            [#{one}, #{two}, #{three}]
-          >
-
-      """
-      def unquote(name)(tensor) do
-        tensor = tensor!(tensor)
-        type = Nx.Type.to_floating(tensor.type)
-        impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
+    {{one, _}, {two, _}, {three, _}} =
+      if name in [:arccos, :arcsin, :arctan, :arctanh] do
+        {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
+         Code.eval_quoted(code, x: 0.9)}
+      else
+        {Code.eval_quoted(code, x: 1), Code.eval_quoted(code, x: 2), Code.eval_quoted(code, x: 3)}
       end
-    else
-      @doc """
-      Due to lack of system support in the environment in which Nx was compiled
-      the operation #{name} is not supported and instead raises an exception
-      when called.
 
-      The documentation you are reading (this documenation) only appears on systems
-      that do not have the required math functions for this operation.
+    first_val =
+      if name in [:arccos, :arcsin, :arctan, :arctanh],
+        do: 0.1,
+        else: 1
 
-      The erlang :math module does not support the function #{math_dep}/#{math_arity}
+    list_of_vals =
+      if name in [:arccos, :arcsin, :arctan, :arctanh],
+        do: [0.1, 0.5, 0.9],
+        else: [1.0, 2.0, 3.0]
 
-      Normally, this operation calculates the #{desc} of each element in the tensor.
-      """
-      def unquote(name)(_tensor) do
-        raise "the operation #{inspect(unquote(name))} is not supported " <>
-          "on your system - erlang's :math module was not compiled with " <>
-          "the #{unquote(math_dep)}/#{unquote(math_arity)} function which " <>
-          "is a required dependency for this operation"
-      end
+    @doc """
+    Calculates the #{desc} of each element in the tensor.
+
+    It is equivalent to:
+
+        #{formula}
+
+    ## Examples
+
+        iex> Nx.#{name}(#{first_val})
+        #Nx.Tensor<
+          f64
+          #{one}
+        >
+
+        iex> Nx.#{name}(Nx.tensor(#{inspect(list_of_vals)}, names: [:x]))
+        #Nx.Tensor<
+          f64[x: 3]
+          [#{one}, #{two}, #{three}]
+        >
+
+    """
+    def unquote(name)(tensor) do
+      tensor = tensor!(tensor)
+      type = Nx.Type.to_floating(tensor.type)
+      impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
     end
   end
 

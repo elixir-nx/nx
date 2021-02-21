@@ -141,36 +141,111 @@ defmodule Nx.Shared do
   """
   def unary_math_funs,
     do: [
-      exp: {"exponential", quote(do: :math.exp(var!(x))), :exp, 1},
-      expm1: {"exponential minus one", quote(do: :math.exp(var!(x)) - 1), :exp, 1},
-      log: {"natural log", quote(do: :math.log(var!(x))), :log, 1},
-      log1p: {"natural log plus one", quote(do: :math.log(var!(x) + 1)), :log, 1},
-      logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x)))), :exp, 1},
-      cos: {"cosine", quote(do: :math.cos(var!(x))), :cos, 1},
-      sin: {"sine", quote(do: :math.sin(var!(x))), :sin, 1},
-      tan: {"tangent", quote(do: :math.tan(var!(x))), :tan, 1},
-      cosh: {"hyperbolic cosine", quote(do: :math.cosh(var!(x))), :cosh, 1},
-      sinh: {"hyperbolic sine", quote(do: :math.sinh(var!(x))), :sinh, 1},
-      tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x))), :tanh, 1},
-      arccos: {"inverse cosine", quote(do: :math.acos(var!(x))), :acos, 1},
-      arcsin: {"inverse sine", quote(do: :math.asin(var!(x))), :asin, 1},
-      arctan: {"inverse tangent", quote(do: :math.atan(var!(x))), :atan, 1},
-      arccosh: {"inverse hyperbolic cosine", quote(do: :math.acosh(var!(x))), :acosh, 1},
-      arcsinh: {"inverse hyperbolic sine", quote(do: :math.asinh(var!(x))), :asinh, 1},
-      arctanh: {"inverse hyperbolic sine", quote(do: :math.atanh(var!(x))), :atanh, 1},
-      sqrt: {"square root", quote(do: :math.sqrt(var!(x))), :sqrt, 1},
-      rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x))), :sqrt, 1},
-      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3)), :pow, 2},
-      erf: {"error function", quote(do: :math.erf(var!(x))), :erf, 1},
-      erfc: {"one minus error function", quote(do: :math.erfc(var!(x))), :erfc, 1}
+      exp: {"exponential", quote(do: :math.exp(var!(x)))},
+      expm1: {"exponential minus one", quote(do: :math.exp(var!(x)) - 1)},
+      log: {"natural log", quote(do: :math.log(var!(x)))},
+      log1p: {"natural log plus one", quote(do: :math.log(var!(x) + 1))},
+      logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x))))},
+      cos: {"cosine", quote(do: :math.cos(var!(x)))},
+      sin: {"sine", quote(do: :math.sin(var!(x)))},
+      tan: {"tangent", quote(do: :math.tan(var!(x)))},
+      cosh: {"hyperbolic cosine", quote(do: :math.cosh(var!(x)))},
+      sinh: {"hyperbolic sine", quote(do: :math.sinh(var!(x)))},
+      tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
+      arccos: {"inverse cosine", quote(do: :math.acos(var!(x)))},
+      arcsin: {"inverse sine", quote(do: :math.asin(var!(x)))},
+      arctan: {"inverse tangent", quote(do: :math.atan(var!(x)))},
+      arccosh: {"inverse hyperbolic cosine", acosh_formula()},
+      arcsinh: {"inverse hyperbolic sine", asinh_formula()},
+      arctanh: {"inverse hyperbolic tangent", atanh_formula()},
+      sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
+      rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
+      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))},
+      erf: {"error function", erf_formula()},
+      erfc: {"one minus error function", erfc_formula()}
     ]
 
-  @doc """
-  Returns true for `func` and `arity` functions supported by the
-  erlang :math module.
+  defp atanh_formula do
+    if Code.ensure_loaded?(:math) and math_func_supported?(:atanh, 1) do
+      quote(do: :math.atanh(var!(x)))
+    else
+      quote(do: atanh_fallback(var!(x)))
+    end
+  end
 
-  Used for compile-time support checking of Nx unary operations.
-  """
+  @doc false
+  def atanh_fallback(x) do
+    :math.log((1 + x) / (1 - x)) / 2
+  end
+
+  defp asinh_formula do
+    if Code.ensure_loaded?(:math) and math_func_supported?(:asinh, 1) do
+      quote(do: :math.asinh(var!(x)))
+    else
+      quote(do: Nx.Shared.asinh_fallback(var!(x)))
+    end
+  end
+
+  @doc false
+  def asinh_fallback(x) do
+    :math.log(x + :math.sqrt(1 + (x * x)))
+  end
+
+  defp acosh_formula do
+    if Code.ensure_loaded?(:math) and math_func_supported?(:acosh, 1) do
+      quote(do: :math.acosh(var!(x)))
+    else
+      quote(do: Nx.Shared.acosh_fallback(var!(x)))
+    end
+  end
+
+  @doc false
+  def acosh_fallback(x) do
+    :math.log(x + :math.sqrt(x + 1) * :math.sqrt(x - 1))
+  end
+
+  defp erf_formula do
+    if Code.ensure_loaded?(:math) and math_func_supported?(:erf, 1) do
+      quote(do: :math.erf(var!(x)))
+    else
+      quote(do: Nx.Shared.erf_fallback(var!(x)))
+    end
+  end
+
+  defp erfc_formula do
+    if Code.ensure_loaded?(:math) and math_func_supported?(:erfc, 1) do
+      quote(do: :math.erfc(var!(x)))
+    else
+      quote(do: 1.0 - Nx.Shared.erf_fallback(var!(x)))
+    end
+  end
+
+  @doc false
+  def erf_fallback(x) do
+    # https://introcs.cs.princeton.edu/java/21function/ErrorFunction.java.html
+    # the Chebyshev fitting estimate below is accurate to 7 significant digits
+
+    t = 1.0 / (1.0 + 0.5 * abs(x))
+    a =
+      0.17087277
+      |> muladd(t, -0.82215223)
+      |> muladd(t, 1.48851587)
+      |> muladd(t, -1.13520398)
+      |> muladd(t, 0.27886807)
+      |> muladd(t, -0.18628806)
+      |> muladd(t, 0.09678418)
+      |> muladd(t, 0.37409196)
+      |> muladd(t, 1.00002368)
+      |> muladd(t, 1.26551223)
+    ans = 1 - t * :math.exp(-x * x - a)
+    if x >= 0.0, do: ans, else: -ans
+  end
+
+  defp muladd(acc, t, n) do
+    acc * t + n
+  end
+
+  @doc false
   def math_func_supported?(func, arity) do
     args = case {func, arity} do
       {:atan, 1} -> [3.14]

@@ -612,7 +612,7 @@ defmodule Nx.BinaryBackend do
 
   ## Element wise unary ops
 
-  for {name, {_desc, code, _math_dep, _math_arity}} <- Nx.Shared.unary_math_funs() do
+  for {name, {_desc, code}} <- Nx.Shared.unary_math_funs() do
     @impl true
     def unquote(name)(out, tensor) do
       element_wise_unary_op(out, tensor, fn x -> unquote(code) end)
