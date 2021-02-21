@@ -169,39 +169,24 @@ defmodule Nx.Shared do
     if Code.ensure_loaded?(:math) and math_func_supported?(:atanh, 1) do
       quote(do: :math.atanh(var!(x)))
     else
-      quote(do: Nx.Shared.atanh_fallback(var!(x)))
+      quote(do: :math.log((1 + var!(x)) / (1 - var!(x))) / 2)
     end
-  end
-
-  @doc false
-  def atanh_fallback(x) do
-    :math.log((1 + x) / (1 - x)) / 2
   end
 
   defp asinh_formula do
     if Code.ensure_loaded?(:math) and math_func_supported?(:asinh, 1) do
       quote(do: :math.asinh(var!(x)))
     else
-      quote(do: Nx.Shared.asinh_fallback(var!(x)))
+      quote(do: :math.log(var!(x) + :math.sqrt(1 + var!(x) * var!(x))))
     end
-  end
-
-  @doc false
-  def asinh_fallback(x) do
-    :math.log(x + :math.sqrt(1 + (x * x)))
   end
 
   defp acosh_formula do
     if Code.ensure_loaded?(:math) and math_func_supported?(:acosh, 1) do
       quote(do: :math.acosh(var!(x)))
     else
-      quote(do: Nx.Shared.acosh_fallback(var!(x)))
+      quote(do: :math.log(var!(x) + :math.sqrt(var!(x) + 1) * :math.sqrt(var!(x) - 1)))
     end
-  end
-
-  @doc false
-  def acosh_fallback(x) do
-    :math.log(x + :math.sqrt(x + 1) * :math.sqrt(x - 1))
   end
 
   defp erf_formula do
@@ -226,6 +211,7 @@ defmodule Nx.Shared do
     # the Chebyshev fitting estimate below is accurate to 7 significant digits
 
     t = 1.0 / (1.0 + 0.5 * abs(x))
+
     a =
       0.17087277
       |> muladd(t, -0.82215223)
@@ -237,6 +223,7 @@ defmodule Nx.Shared do
       |> muladd(t, 0.37409196)
       |> muladd(t, 1.00002368)
       |> muladd(t, 1.26551223)
+
     ans = 1 - t * :math.exp(-x * x - a)
     if x >= 0.0, do: ans, else: -ans
   end
@@ -247,16 +234,19 @@ defmodule Nx.Shared do
 
   @doc false
   def math_func_supported?(func, arity) do
-    args = case {func, arity} do
-      {:atan, 1} -> [3.14]
-      {:atanh, 1} -> [0.9]
-      {_, 1} -> [1.0]
-      {_, 2} -> [1.0, 1.0]
-    end
+    args =
+      case {func, arity} do
+        {:atan, 1} -> [3.14]
+        {:atanh, 1} -> [0.9]
+        {_, 1} -> [1.0]
+        {_, 2} -> [1.0, 1.0]
+      end
+
     _ = apply(:math, func, args)
     true
-  rescue UndefinedFunctionError ->
-    false
+  rescue
+    UndefinedFunctionError ->
+      false
   end
 
   ## Types
