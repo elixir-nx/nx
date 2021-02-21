@@ -411,6 +411,11 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:sinh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.cosh(x))
+    to_grad(x, g, cache)
+  end
+
   defp grad(:cos, [x], _ans, g, cache) do
     g = Nx.multiply(g, Nx.negate(Nx.sin(x)))
     to_grad(x, g, cache)

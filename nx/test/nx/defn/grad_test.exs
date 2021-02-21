@@ -494,6 +494,18 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "hyperbolics" do
+    defn grad_sinh(t), do: grad(t, Nx.sinh(t))
+
+    test "computes gradient" do
+      for _ <- 1..100 do
+          t = Nx.random_uniform({}, -10, 10, type: {:f, 64})
+          check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
+
+        end
+    end
+  end
+
   describe "broadcast" do
     defn grad_sum_broadcast(t), do: grad(t, Nx.sum(Nx.broadcast(t, {3, 2, 2})))
 
