@@ -11,7 +11,8 @@ defmodule Nx.MixProject do
       version: @version,
       elixir: "~> 1.11",
       deps: deps(),
-      docs: docs()
+      docs: docs(),
+      compilers: [:elixir_make] ++ Mix.compilers()
     ]
   end
 
@@ -20,9 +21,7 @@ defmodule Nx.MixProject do
   end
 
   defp deps do
-    [
-      {:ex_doc, "~> 0.23", only: :dev}
-    ]
+    [{:elixir_make, "~> 0.6"}, {:ex_doc, "~> 0.23", only: :dev}]
   end
 
   defp docs do
@@ -36,19 +35,19 @@ defmodule Nx.MixProject do
         # Nx.Defn,
         # Nx.Defn.Kernel
 
-        "Backends": [
+        Backends: [
           Nx.BinaryBackend,
           Nx.Tensor,
           Nx.Type
         ],
-        "Compilers": [
+        Compilers: [
           Nx.Defn.Compiler,
           Nx.Defn.Evaluator,
           Nx.Defn.Expr
         ],
-        "Structs": [
+        Structs: [
           Nx.Heatmap
-        ],
+        ]
       ]
     ]
   end
