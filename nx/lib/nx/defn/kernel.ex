@@ -5,14 +5,7 @@ defmodule Nx.Defn.Kernel do
 
   @special_forms [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
 
-  @doc """
-  Bring in `Nx.Defn.Kernel` functionality.
-
-  Most times, you won't have to `use Nx.Defn.Kernel` directly,
-  but, if you have to, it will remove Kernel functions and
-  import all macros in this module, except the special forms
-  which only exist for documentation purposes.
-  """
+  @doc false
   defmacro __using__(_opts) do
     quote do
       import Kernel, only: []
@@ -201,61 +194,29 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Sets the `max_float_type` of the given tensor expression.
+  Rewrites the types of `expr` recursively according to `opts`
 
-  It will traverse the expression and rewrite all types
-  with equal or higher precision to the given type.
+  ## Options
 
-  ## Examples
+    * `:max_unsigned_type` - replaces all signed tensors with size
+      equal to or greater then the given type by the given type
 
-      max_float_type(expr, {:f, 32})
+    * `:max_signed_type` - replaces all signed tensors with size
+      equal to or greater then the given type by the given type
 
-  """
-  defmacro max_float_type(expr, type) do
-    quote do
-      Nx.Defn.Kernel.transform(
-        unquote(expr),
-        &Nx.Defn.Expr.rewrite_types(&1, max_float_type: unquote(type))
-      )
-    end
-  end
-
-  @doc """
-  Sets the `max_signed_type` of the given tensor expression.
-
-  It will traverse the expression and rewrite all types
-  with equal or higher precision to the given type.
+    * `:max_float_type` - replaces all float tensors with size
+      equal to or greater then the given type by the given type
 
   ## Examples
 
-      max_signed_type(expr, {:f, 32})
+      rewrite_types(expr, max_float_type: {:f, 32})
 
   """
-  defmacro max_signed_type(expr, type) do
+  defmacro rewrite_types(expr, opts) do
     quote do
       Nx.Defn.Kernel.transform(
         unquote(expr),
-        &Nx.Defn.Expr.rewrite_types(&1, max_signed_type: unquote(type))
-      )
-    end
-  end
-
-  @doc """
-  Set the `max_unsigned_type` of the given tensor expression.
-
-  It will traverse the expression and rewrite all types
-  with equal or higher precision to the given type.
-
-  ## Examples
-
-      max_unsigned_type(expr, {:f, 32})
-
-  """
-  defmacro max_unsigned_type(expr, type) do
-    quote do
-      Nx.Defn.Kernel.transform(
-        unquote(expr),
-        &Nx.Defn.Expr.rewrite_types(&1, max_unsigned_type: unquote(type))
+        &Nx.Defn.Expr.rewrite_types(&1, unquote(opts))
       )
     end
   end

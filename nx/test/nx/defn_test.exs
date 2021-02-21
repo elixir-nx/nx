@@ -414,9 +414,9 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :min, args: [_, _]}} = min_two(1, 2)
     end
 
-    defn maxu(a), do: max_unsigned_type(a, {:u, 32})
-    defn maxs(a), do: max_signed_type(a, {:s, 32})
-    defn maxf(a), do: max_float_type(a, {:f, 32})
+    defn maxu(a), do: rewrite_types(a, max_unsigned_type: {:u, 32})
+    defn maxs(a), do: rewrite_types(a, max_signed_type: {:s, 32})
+    defn maxf(a), do: rewrite_types(a, max_float_type: {:f, 32})
 
     test "max_*_type/2" do
       assert %T{data: %Expr{op: :as_type, args: [_]}} = maxu(Nx.tensor(1, type: {:u, 64}))
