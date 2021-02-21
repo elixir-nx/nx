@@ -269,6 +269,7 @@ defmodule EXLA.Defn do
     strides = opts[:strides]
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
+    groups = opts[:groups]
 
     %{type: output_type, shape: shape} = ans
     rank = tuple_size(shape)
@@ -293,6 +294,7 @@ defmodule EXLA.Defn do
       input_dilation,
       kernel_dilation,
       conv_dim_nos,
+      groups,
       state.precision
     )
   end
