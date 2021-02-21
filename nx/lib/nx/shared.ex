@@ -253,7 +253,19 @@ defmodule Nx.Shared do
   @doc """
   Approximation for the inverse error function.
 
-  from Giles, M., "Approximating the erfinv function"
+  ## Examples
+
+    iex> Nx.erf_inv(0.999)
+    #Nx.Tensor<
+      f64
+      2.326753756865462
+    >
+
+    iex> Nx.erf_inv(0.01)
+    #Nx.Tensor<
+      f64
+      0.008862500728738846
+    >
   """
   def erf_inv(x) do
     w = -:math.log((1 - x) * (1 + x))
