@@ -1,5 +1,6 @@
 defmodule Nx.SharedTest do
   use ExUnit.Case, async: true
+  doctest Nx.Shared
 
   if Nx.Shared.math_func_supported?(:erf, 1) do
     describe "erf_fallback/1" do

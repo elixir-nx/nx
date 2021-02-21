@@ -507,6 +507,49 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "erf_inv" do
+    defn grad_erf_inv(t), do: grad(t, Nx.erf_inv(t))
+
+    test "computes gradient close to 0.0" do
+      for _ <- 1..25 do
+        t = Nx.random_uniform({}, 0.0, 0.9, type: {:f, 64})
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, 1.0e-4)
+      end
+    end
+
+    test "computes gradient between 0.9 and 0.95" do
+      for _ <- 1..25 do
+        t = Nx.random_uniform({}, 0.9, 0.95, type: {:f, 64})
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, 1.0e-3)
+      end
+    end
+
+    test "computes gradient between 0.95 and 0.98" do
+      for _ <- 1..25 do
+        t = Nx.random_uniform({}, 0.95, 0.98, type: {:f, 64})
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, 0.00004)
+      end
+    end
+
+    test "computes gradient approaching 1.0 but is sharply curved" do
+      #check_grads! does not work near 1 due to sharp curve between close x's
+      coords = [
+        {0.9, 3.43},
+        {0.98, 13.26},
+        {0.99, 24.45},
+        {0.991, 26.85},
+        {0.992, 29.84},
+        {0.993, 33.64},
+        {0.994, 38.64},
+        {0.995, 45.56},
+        {0.999, 198.94},
+      ]
+      for {x, y} <- coords do
+        assert_in_delta(Nx.to_scalar(grad_erf_inv(x)), y, 0.01)
+      end
+    end
+  end
+
   describe "broadcast" do
     defn grad_sum_broadcast(t), do: grad(t, Nx.sum(Nx.broadcast(t, {3, 2, 2})))
 

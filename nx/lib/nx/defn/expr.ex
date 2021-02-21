@@ -458,7 +458,7 @@ defmodule Nx.Defn.Expr do
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:arccosh, :arcsinh, :arctanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
       [:population_count, :count_leading_zeros, :floor, :ceil, :round, :as_type] ++
-      [:erf, :erfc, :arccos, :arcsin, :arctan]
+      [:erf, :erfc, :erf_inv, :arccos, :arcsin, :arctan]
 
   for op <- unary_ops do
     @impl true

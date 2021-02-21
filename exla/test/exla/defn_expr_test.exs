@@ -628,7 +628,7 @@ defmodule EXLA.DefnExprTest do
 
     for fun <-
           [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-            [:tan, :arccosh, :arcsinh, :cosh, :sinh, :erf, :erfc] do
+            [:tan, :arccosh, :arcsinh, :cosh, :sinh, :erf, :erfc, :erf_inv] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
