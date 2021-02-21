@@ -28,7 +28,7 @@ TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
 TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
 TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 
-all: symlinks disable_python_check
+all: symlinks
 	cd $(TENSORFLOW_DIR) && \
 		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
 	mkdir -p priv
@@ -47,18 +47,18 @@ PTD:
 # Clones tensorflow
 $(TENSORFLOW_DIR):
 	mkdir -p $(TENSORFLOW_DIR)
+
 	cd $(TENSORFLOW_DIR) && \
 		git init && \
 		git remote add origin $(EXLA_TENSORFLOW_GIT_REPO) && \
 		git fetch --depth 1 origin $(EXLA_TENSORFLOW_GIT_REV) && \
 		git checkout FETCH_HEAD
 
-disable_python_check:
 	cd $(TENSORFLOW_DIR) && \
-		sed -e '/register_toolchains("@local_config_python\/\/:py_toolchain")/ s/^#*/#/' -i WORKSPACE && \
-		sed -e '/load("\/\/third_party\/py:python_configure.bzl", "python_configure")/ s/^#*/#/' -i tensorflow/workspace.bzl && \
-		sed -e '/native.register_toolchains("@local_execution_config_python\/\/:py_toolchain")/ s/^#*/#/' -i tensorflow/workspace.bzl && \
-		sed -e '/python_configure(name = "local_config_python")/ s/^#*/#/' -i tensorflow/workspace.bzl
+		sed -e '/register_toolchains("@local_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup WORKSPACE && \
+		sed -e '/load("\/\/third_party\/py:python_configure.bzl", "python_configure")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
+		sed -e '/native.register_toolchains("@local_execution_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
+		sed -e '/python_configure(name = "local_config_python")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl
 
 clean:
 	cd $(TENSORFLOW_DIR) && bazel clean --expunge
