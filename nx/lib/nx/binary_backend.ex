@@ -1137,15 +1137,14 @@ defmodule Nx.BinaryBackend do
   end
 
   defp identity(%{type: {_, num_bits} = type} = tensor, shape: {m, n} = shape) do
-    data_size = m * num_bits * n
-    # allocate empty data
-    data = <<0::size(data_size)>>
-
     identity_binary =
-      for col <- 0..(n - 1), row <- 0..(m - 1), reduce: data do
+      for col <- 0..(n - 1), row <- 0..(m - 1), reduce: "" do
         data ->
-          value = if col == row, do: 1, else: 0
-          set_value_at_index(data, type, shape, [row, col], value)
+          if col == row do
+            data <> <<1::size(num_bits)>>
+          else
+            data <> <<0::size(num_bits)>>
+          end
       end
 
     from_binary(%{tensor | shape: {m, n}}, identity_binary)
