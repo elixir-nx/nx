@@ -891,9 +891,26 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
-  def qr({m, n} = shape), do: {{m, m}, {m, n}}
+  def qr({m, n} = shape, opts) when m >= n do
+    mode = opts[:mode]
 
-  def qr(shape, _names),
+    case mode do
+      :reduced ->
+        {{m, n}, {n, n}}
+
+      _ ->
+        {{m, m}, {m, n}}
+    end
+  end
+
+  def qr({m, n}, _opts),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have at least as many rows than columns, got shape: #{inspect({m, n})}"
+      )
+
+  def qr(shape, _opts),
     do:
       raise(
         ArgumentError,

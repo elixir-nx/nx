@@ -1039,36 +1039,73 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def qr(q, r, tensor) do
-    %T{shape: {m, n}} = tensor
+  def qr(%{shape: {_m, k} = shape_q} = q, %{shape: {k, n}} = r, opts) do
+    mode = opts[:mode]
 
-    eye = identity(tensor, shape: {m, m})
-    max_col = if m == n, do: n - 1, else: n - 2
+    keep_reflectors = mode == :raw
+    calculate_q = mode in [:reduced, :complete, :raw]
 
-    for i <- 0..max_col, reduce: {eye, tensor, []} do
-      {q, r, hs} ->
-        %{shape: {reflector_n, _}} = reflector = householder_reflector(r[[i..(m - 1), i]])
-        h = identity(as_type(reflector, r), shape: {m, m})
+    q =
+      if calculate_q do
+        identity(q, shape: shape_q)
+      end
 
-        h_bin =
-          for col <- 0..(reflector_n - 1), row <- 0..(reflector_n - 1), reduce: to_binary(h) do
-            acc ->
-              set_value_2d(
-                acc,
-                h.type,
-                {m, m},
-                [row + i, col + i],
-                reflector[[row, col]]
-              )
-          end
+    {q, r, reflectors} =
+      for i <- 0..(n - 1), reduce: {q, r, []} do
+        {q, r, reflectors} ->
+          %{shape: {reflector_n, reflector_m}} =
+            reflector = householder_reflector(r[[i..(k - 1), i]])
 
-        h = from_binary(h, h_bin)
+          shape_h = {k, k}
+          h = identity(as_type(reflector, r), shape: shape_h)
 
-        {Nx.dot(q, h), Nx.dot(h, r), [h | hs]}
+          h_bin =
+            for col <- 0..(reflector_m - 1), row <- 0..(reflector_n - 1), reduce: to_binary(h) do
+              acc ->
+                set_value_2d(
+                  acc,
+                  h.type,
+                  shape_h,
+                  [row + i, col + i],
+                  reflector[[row, col]]
+                )
+            end
+
+          h = from_binary(h, h_bin)
+
+          reflectors =
+            if keep_reflectors do
+              [h | reflectors]
+            else
+              reflectors
+            end
+
+          q =
+            if calculate_q do
+              Nx.dot(q, h)
+            end
+
+          r = Nx.dot(h, r)
+
+          {q, r, reflectors}
+      end
+
+    case mode do
+      :complete ->
+        {q, r}
+
+      :reduced ->
+        {q, r[[0..(k - 1), 0..(n - 1)]]}
+
+      :r ->
+        r
+
+      :raw ->
+        {q, r, reflectors}
     end
   end
 
-  defp householder_reflector(%{shape: {n}, type: type} = a) do
+  defp householder_reflector(%{shape: {n}} = a) do
     a_0 = a[0]
 
     v =
@@ -1105,7 +1142,7 @@ defmodule Nx.BinaryBackend do
     data = <<0::size(data_size)>>
 
     identity_binary =
-      for col <- 0..(n - 1), row <- 0..(n - 1), reduce: data do
+      for col <- 0..(n - 1), row <- 0..(m - 1), reduce: data do
         data ->
           value = if col == row, do: 1, else: 0
           set_value_2d(data, type, shape, [row, col], value)
@@ -1114,7 +1151,7 @@ defmodule Nx.BinaryBackend do
     from_binary(%{tensor | shape: {m, n}}, identity_binary)
   end
 
-  def set_value_2d(tensor_binary, {_, num_bits} = type, {_rows, cols}, [row, col], value) do
+  defp set_value_2d(tensor_binary, {_, num_bits} = type, {_rows, cols}, [row, col], value) do
     row_offset = num_bits * cols
     offset = row_offset * row + col * num_bits
 
