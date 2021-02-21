@@ -973,16 +973,12 @@ defmodule Nx.BinaryBackend do
   defp split_filters(kernel_data, kernel_shape, {_, kernel_size}, groups) do
     filter_group_size = div(Nx.size(kernel_shape) * kernel_size, groups)
     filter_size = div(Nx.size(kernel_shape) * kernel_size, elem(kernel_shape, 0))
-    filter_groups_with_index =
-      for i <- 0..groups - 1 do
-        offset = filter_group_size * i
-        <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring, _::bitstring>> = kernel_data
-        for <<filter::size(filter_size)-bitstring <- filter_group>> do
-          {filter, i}
-        end
-      end
 
-    List.flatten(filter_groups_with_index)
+    for i <- 0..groups - 1,
+          offset = filter_group_size * i,
+          <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring, _::bitstring>> = kernel_data,
+          <<filter::size(filter_size)-bitstring <- filter_group>>,
+          do: {filter, i}
   end
 
   @impl true
