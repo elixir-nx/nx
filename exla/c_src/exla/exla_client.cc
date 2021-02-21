@@ -181,7 +181,6 @@ xla::StatusOr<ErlNifBinary> ExlaBuffer::ToBinary() {
   return binary;
 }
 
-// TODO(seanmor5): This really should not be recursive
 ERL_NIF_TERM LiteralToList(ErlNifEnv* env, xla::Literal& literal) {
   std::vector<xla::Literal> literals = literal.DecomposeTuple();
   int elems = literals.size();
@@ -190,25 +189,19 @@ ERL_NIF_TERM LiteralToList(ErlNifEnv* env, xla::Literal& literal) {
 
   for (int i=0; i < elems; i++) {
     xla::Literal lit(std::move(literals.at(i)));
-    if (lit.shape().IsTuple()) {
-      ERL_NIF_TERM term = LiteralToList(env, lit);
-      data.push_back(term);
-    } else {
-      int64 size = lit.size_bytes();
-      ErlNifBinary binary;
-      enif_alloc_binary(size, &binary);
+    int64 size = lit.size_bytes();
+    ErlNifBinary binary;
+    enif_alloc_binary(size, &binary);
 
-      void *src_mem = const_cast<void*>(lit.untyped_data());
-      std::memcpy(binary.data, src_mem, size);
+    void *src_mem = const_cast<void*>(lit.untyped_data());
+    std::memcpy(binary.data, src_mem, size);
 
-      ERL_NIF_TERM term = enif_make_binary(env, &binary);
-      data.push_back(term);
-    }
+    ERL_NIF_TERM term = enif_make_binary(env, &binary);
+    data.push_back(term);
   }
   return enif_make_list_from_array(env, &data[0], elems);
 }
 
-// TODO(seanmor5): This really should not be recursive
 ERL_NIF_TERM BufferToReferenceList(ErlNifEnv* env,
                                    ExlaBuffer* buffer) {
   xla::ShapedBuffer shaped_buffer = buffer->AsShapedBuffer();
@@ -230,11 +223,7 @@ ERL_NIF_TERM BufferToReferenceList(ErlNifEnv* env,
                                          buffer->client(),
                                          ExlaBuffer::BufferType::kReference);
     ERL_NIF_TERM term;
-    if (sub_buffer->is_tuple()) {
-      term = BufferToReferenceList(env, sub_buffer);
-    } else {
-      term = nif::make<ExlaBuffer*>(env, sub_buffer);
-    }
+    term = nif::make<ExlaBuffer*>(env, sub_buffer);
     buffer_terms.push_back(term);
   }
 
@@ -245,15 +234,6 @@ ERL_NIF_TERM BufferToReferenceList(ErlNifEnv* env,
 ExlaBuffer::DecomposeBufferToTerm(ErlNifEnv* env,
                                   ExlaBuffer* buffer,
                                   bool keep_on_device) {
-  if (!buffer->is_tuple()) {
-    if (keep_on_device) {
-      return nif::make<ExlaBuffer*>(env, buffer);
-    } else {
-      EXLA_ASSIGN_OR_RETURN(ErlNifBinary binary, buffer->ToBinary());
-      return nif::make(env, binary);
-    }
-  }
-
   ERL_NIF_TERM term;
   if (!keep_on_device) {
     xla::ShapedBuffer shaped_buffer = buffer->AsShapedBuffer();
