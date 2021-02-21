@@ -83,6 +83,7 @@ defmodule EXLA.Executable do
     partition = Keyword.get(options, :partition, 1)
 
     # TODO: Validate replicas and partitions against the client
+    # TODO: Raise if buffers belong to different clients/ordinals
 
     inputs =
       Enum.map(arguments, fn

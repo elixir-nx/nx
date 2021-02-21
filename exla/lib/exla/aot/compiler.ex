@@ -148,4 +148,5 @@ defmodule EXLA.AOT.Compiler do
         )
 
   defp unwrap!({:ok, return}), do: return
+  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
