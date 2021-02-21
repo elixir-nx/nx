@@ -55,10 +55,10 @@ $(TENSORFLOW_DIR):
 
 disable_python_check:
 	cd $(TENSORFLOW_DIR) && \
-		sed -i '21 s/^/#/' WORKSPACE && \
-		sed -i '8 s/^/#/' tensorflow/workspace.bzl && \
-		sed -i '81 s/^/#/' tensorflow/workspace.bzl && \
-		sed -i '101 s/^/#/' tensorflow/workspace.bzl
+		sed -e '/register_toolchains("@local_config_python\/\/:py_toolchain")/ s/^#*/#/' -i WORKSPACE && \
+		sed -e '/load("\/\/third_party\/py:python_configure.bzl", "python_configure")/ s/^#*/#/' -i tensorflow/workspace.bzl && \
+		sed -e '/native.register_toolchains("@local_execution_config_python\/\/:py_toolchain")/ s/^#*/#/' -i tensorflow/workspace.bzl && \
+		sed -e '/python_configure(name = "local_config_python")/ s/^#*/#/' -i tensorflow/workspace.bzl
 
 clean:
 	cd $(TENSORFLOW_DIR) && bazel clean --expunge
