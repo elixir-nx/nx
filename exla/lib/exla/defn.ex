@@ -871,7 +871,7 @@ defmodule EXLA.Defn do
 
   ## Nx <-> EXLA.Buffer
 
-  defp buffer_to_nx({:tuple, buffers}, holes) do
+  defp buffer_to_nx(buffers, holes) do
     {result, []} = each_buffer_to_nx(holes, buffers)
     result
   end

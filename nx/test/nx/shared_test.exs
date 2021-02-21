@@ -3,7 +3,7 @@ defmodule Nx.SharedTest do
 
   if Nx.Shared.math_func_supported?(:erf, 1) do
     describe "erf_fallback/1" do
-      test "matches :math implemenation" do
+      test "matches :math implementation" do
         for _ <- 0..20 do
           x = :rand.uniform() * 100
           a = :math.erf(x)

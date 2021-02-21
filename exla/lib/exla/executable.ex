@@ -131,23 +131,17 @@ defmodule EXLA.Executable do
   end
 
   defp decompose_output(data, shape, client) do
-    case shape do
-      %Shape{dtype: {:t, shapes}} ->
-        tuple =
-          data
-          |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, client)
-          end)
+    %Shape{dtype: {:t, shapes}} = shape
 
-        {:tuple, tuple}
+    data
+    |> Enum.zip(shapes)
+    |> Enum.map(fn
+      {buf, subshape} when is_reference(buf) ->
+        Buffer.buffer({buf, client.name}, subshape)
 
-      _ when is_reference(data) ->
-        Buffer.buffer({data, client.name}, shape)
-
-      _ ->
-        Buffer.buffer(data, shape)
-    end
+      {buf, subshape} ->
+        Buffer.buffer(buf, subshape)
+    end)
   end
 
   defp unwrap!(:ok), do: :ok
