@@ -1,7 +1,7 @@
 #include <ATen/ATen.h>
 #include <iostream>
 
-#include "erl_nif.h"
+#include "nx_nif_utils.hpp"
 
 ErlNifResourceType *TENSOR_TYPE;
 
@@ -44,6 +44,14 @@ double get_double(ErlNifEnv *env, ERL_NIF_TERM term)
   return var;
 }
 
+double get_long(ErlNifEnv *env, ERL_NIF_TERM term)
+{
+  long var;
+  enif_get_long(env, term, &var);
+
+  return var;
+}
+
 std::vector<int64_t> shape_from_tuple(ErlNifEnv *env, ERL_NIF_TERM tuple)
 {
   const ERL_NIF_TERM *shape;
@@ -74,7 +82,9 @@ ERL_NIF_TERM
 from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   ErlNifBinary blob;
-  std::vector<int64_t> shape = shape_from_tuple(env, argv[1]);
+  std::vector<int64_t> shape;
+
+  nx::nif::get_tuple(env, argv[1], shape);
 
   if (!enif_inspect_binary(env, argv[0], &blob))
     return enif_make_badarg(env);
@@ -89,6 +99,25 @@ from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   at::Tensor t = at::clone(at::from_blob(blob.data, c10::IntArrayRef(shape), at::kFloat));
 
   // at::ones(c10::IntArrayRef(shape_array, shape_size), at::kFloat);
+  std::cout << t << "\r\n";
+
+  return create_tensor_resource(env, t);
+}
+
+std::map<std::string, at::ScalarType> types = {{"byte", at::kByte}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}};
+
+ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  long min = get_long(env, argv[0]);
+  long max = get_long(env, argv[1]);
+  std::string type;
+  std::vector<int64_t> shape;
+
+  nx::nif::get_tuple(env, argv[2], shape);
+  nx::nif::get_atom(env, argv[3], type);
+
+  at::Tensor t = at::randint(min, max, shape, types[type]);
+
   std::cout << t << "\r\n";
 
   return create_tensor_resource(env, t);
@@ -181,6 +210,7 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 }
 
 static ErlNifFunc nif_functions[] = {
+    {"randint", 4, randint, 0},
     {"from_blob", 2, from_blob, 0},
     {"ones", 1, ones, 0},
     {"add",

@@ -7,6 +7,8 @@ defmodule Nx.Pytorch.NIF do
     :erlang.load_nif(path, 0)
   end
 
+  def randint(_min, _max, _shape, _type), do: nif_error(__ENV__.function)
+
   def from_blob(_blob, _shape),
     do: nif_error(__ENV__.function)
 
