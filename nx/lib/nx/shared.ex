@@ -207,25 +207,28 @@ defmodule Nx.Shared do
 
   @doc false
   def erf_fallback(x) do
-    # https://introcs.cs.princeton.edu/java/21function/ErrorFunction.java.html
-    # the Chebyshev fitting estimate below is accurate to 7 significant digits
+    x = x |> max(-4.0) |> min(4.0)
+    x2 = x * x
 
-    t = 1.0 / (1.0 + 0.5 * abs(x))
+    alpha =
+      0.0
+      |> muladd(x2, -2.72614225801306e-10)
+      |> muladd(x2, 2.77068142495902e-08)
+      |> muladd(x2, -2.10102402082508e-06)
+      |> muladd(x2, -5.69250639462346e-05)
+      |> muladd(x2, -7.34990630326855e-04)
+      |> muladd(x2, -2.95459980854025e-03)
+      |> muladd(x2, -1.60960333262415e-02)
 
-    a =
-      0.17087277
-      |> muladd(t, -0.82215223)
-      |> muladd(t, 1.48851587)
-      |> muladd(t, -1.13520398)
-      |> muladd(t, 0.27886807)
-      |> muladd(t, -0.18628806)
-      |> muladd(t, 0.09678418)
-      |> muladd(t, 0.37409196)
-      |> muladd(t, 1.00002368)
-      |> muladd(t, 1.26551223)
+    beta =
+      0.0
+      |> muladd(x2, -1.45660718464996e-05)
+      |> muladd(x2, -2.13374055278905e-04)
+      |> muladd(x2, -1.68282697438203e-03)
+      |> muladd(x2, -7.37332916720468e-03)
+      |> muladd(x2, -1.42647390514189e-02)
 
-    ans = 1 - t * :math.exp(-x * x - a)
-    if x >= 0.0, do: ans, else: -ans
+    min(x * alpha / beta, 1.0)
   end
 
   defp muladd(acc, t, n) do
