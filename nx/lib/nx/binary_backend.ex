@@ -1040,9 +1040,9 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def qr(
-        {%{shape: {m, k} = shape_q} = q_holder,
-         %{shape: {k, n} = shape_r, type: {_, num_bits} = type} = r_holder},
-        tensor,
+        {%{shape: {m, k} = shape_q, type: type_q} = q_holder,
+         %{shape: {k, n} = shape_r} = r_holder},
+        %{type: input_type} = tensor,
         opts
       ) do
     mode = opts[:mode]
@@ -1053,52 +1053,53 @@ defmodule Nx.BinaryBackend do
       else
         tensor
       end
-      |> Nx.as_type(type)
       |> to_binary()
 
     shape_h = {k, k}
 
-    {q_bin, r_bin} =
-      for i <- 0..(n - 1), reduce: {nil, r} do
-        {q, r} ->
+    {q_bin, r_bin, _output_type} =
+      for i <- 0..(n - 1), reduce: {nil, r, input_type} do
+        {q, r, type_r} ->
           # a = r[[i..(k - 1), i]]
-          {a, num_rows_a, _, _} =
-            for <<x::bitstring-size(num_bits) <- r>>, reduce: {<<>>, 0, 0, 0} do
-              {data, num_rows_a_prev, row, col} ->
-                {item, num_rows_a} =
-                  if row >= i and col == i do
-                    {x, num_rows_a_prev + 1}
-                  else
-                    {"", num_rows_a_prev}
-                  end
+          {a_reverse, num_rows_a, _, _} =
+            match_types [type_r] do
+              for <<match!(x, 0) <- r>>, reduce: {[], 0, 0, 0} do
+                {acc, num_rows_a_prev, row, col} ->
+                  {acc, num_rows_a} =
+                    if row >= i and col == i do
+                      {[read!(x, 0) | acc], num_rows_a_prev + 1}
+                    else
+                      {acc, num_rows_a_prev}
+                    end
 
-                {row, col} =
-                  if col + 1 == n do
-                    {row + 1, 0}
-                  else
-                    {row, col + 1}
-                  end
+                  {row, col} =
+                    if col + 1 == n do
+                      {row + 1, 0}
+                    else
+                      {row, col + 1}
+                    end
 
-                {data <> item, num_rows_a, row, col}
+                  {acc, num_rows_a, row, col}
+              end
             end
 
-          h_bin = householder_reflector(a, num_rows_a, type, k)
+          {h_bin, type_h} = householder_reflector(a_reverse, num_rows_a, type_r, k)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
               padding_length = (m - k) * k
 
-              zero = number_to_binary(0, type)
+              zero = number_to_binary(0, type_h)
 
               h_bin <> String.duplicate(zero, padding_length)
             else
-              dot_binary(q, shape_q, h_bin, shape_h, type)
+              dot_binary(q, shape_q, type_q, h_bin, shape_h, type_h, type_h)
             end
 
-          r = dot_binary(h_bin, shape_q, r, shape_r, type)
+          r = dot_binary(h_bin, shape_h, type_h, r, shape_r, type_r, type_h)
 
-          {q, r}
+          {q, r, type_h}
       end
 
     q = from_binary(q_holder, q_bin)
@@ -1113,36 +1114,33 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp dot_binary(b1, shape1, b2, shape2, {_, s} = type) do
+  defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
     # matrix multiplication for when b1 and b2 are matrices
     # represented in binary form
     fun = fn lhs, rhs, acc ->
-      res = binary_to_number(lhs, type) * binary_to_number(rhs, type) + acc
+      res = binary_to_number(lhs, type1) * binary_to_number(rhs, type2) + acc
       {res, res}
     end
 
-    v1 = aggregate_axes(b1, [1], shape1, s)
-    v2 = aggregate_axes(b2, [0], shape2, s)
+    v1 = aggregate_axes(b1, [1], shape1, s1)
+    v2 = aggregate_axes(b2, [0], shape2, s2)
 
     for b1 <- v1, b2 <- v2, into: <<>> do
-      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s, s, <<>>, 0, fun)
-      scalar_to_binary(bin, type)
+      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, 0, fun)
+      scalar_to_binary(bin, output_type)
     end
   end
 
-  defp householder_reflector(a_bin, num_rows_a, {_, num_bits} = type, target_k) do
-    # We receive the target shape so the binary is already pre-generated with 1s in the
-    # main diagonal for rows < k - n
-    <<head::bitstring-size(num_bits), tail::bitstring>> = a_bin
-
-    norm_a_squared =
-      for <<x_bin::bitstring-size(num_bits) <- a_bin>>, reduce: 0 do
-        acc ->
-          x = binary_to_number(x_bin, type)
-          acc + x * x
+  defp householder_reflector(a_reverse, num_rows_a, input_type, target_k) do
+    # This is a trick so we can both calculate the norm of a_reverse and extract the
+    # head a the same time we reverse the array
+    {norm_a_squared, [a_0 | tail]} =
+      for x <- a_reverse, reduce: {0, []} do
+        {acc, l} ->
+          {acc + x * x, [x | l]}
       end
 
-    a_0 = binary_to_number(head, type)
+    output_type = Nx.Type.to_floating(input_type)
 
     v_0 =
       if a_0 > 0 do
@@ -1152,8 +1150,7 @@ defmodule Nx.BinaryBackend do
       end
 
     prefix_threshold = target_k - num_rows_a
-    prefix_size = prefix_threshold * num_bits
-    v_bin = <<0::size(prefix_size)>> <> number_to_binary(v_0, type) <> tail
+    v = List.duplicate(0, prefix_threshold) ++ [v_0 | tail]
 
     # dot(v, v) = norm_v_squared, which can be calculated from norm_a as: norm_v_squared = norm_a_squared - a_0^2 + v_0^2
 
@@ -1162,10 +1159,8 @@ defmodule Nx.BinaryBackend do
     scale = 2 / norm_v_squared
 
     # execute I - 2 / norm_v_squared * outer(v, v)
-    {_, _, reflector_binary} =
-      for <<col_factor::bitstring-size(num_bits) <- v_bin>>,
-          <<row_factor::bitstring-size(num_bits) <- v_bin>>,
-          reduce: {0, 0, ""} do
+    {_, _, reflector_iodata} =
+      for col_factor <- v, row_factor <- v, reduce: {0, 0, []} do
         {row, col, acc} ->
           # The current element in outer(v, v) is given by col_factor * row_factor
           # and the current I element is 1 when row == col
@@ -1174,12 +1169,12 @@ defmodule Nx.BinaryBackend do
           result =
             if row >= prefix_threshold and col >= prefix_threshold do
               identity_element -
-                scale * binary_to_number(col_factor, type) * binary_to_number(row_factor, type)
+                scale * col_factor * row_factor
             else
               identity_element
             end
 
-          acc = acc <> scalar_to_binary(result, type)
+          acc = [acc | [scalar_to_binary(result, output_type)]]
 
           if col + 1 == target_k do
             {row + 1, 0, acc}
@@ -1188,7 +1183,7 @@ defmodule Nx.BinaryBackend do
           end
       end
 
-    reflector_binary
+    {IO.iodata_to_binary(reflector_iodata), output_type}
   end
 
   ## Aggregation
