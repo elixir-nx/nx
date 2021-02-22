@@ -1040,8 +1040,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def qr(
-        {%{shape: {m, k} = shape_q, type: type_q} = q_holder,
-         %{shape: {k, n} = shape_r} = r_holder},
+        {%{shape: {m, k} = shape_q, type: output_type} = q_holder,
+         %{shape: {k, n} = shape_r, type: output_type} = r_holder},
         %{type: input_type} = tensor,
         opts
       ) do
@@ -1083,23 +1083,23 @@ defmodule Nx.BinaryBackend do
               end
             end
 
-          {h_bin, type_h} = householder_reflector(a_reverse, num_rows_a, type_r, k)
+          h_bin = householder_reflector(a_reverse, num_rows_a, k, output_type)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
               padding_length = (m - k) * k
 
-              zero = number_to_binary(0, type_h)
+              zero = number_to_binary(0, output_type)
 
               h_bin <> String.duplicate(zero, padding_length)
             else
-              dot_binary(q, shape_q, type_q, h_bin, shape_h, type_h, type_h)
+              dot_binary(q, shape_q, output_type, h_bin, shape_h, output_type, output_type)
             end
 
-          r = dot_binary(h_bin, shape_h, type_h, r, shape_r, type_r, type_h)
+          r = dot_binary(h_bin, shape_h, output_type, r, shape_r, type_r, output_type)
 
-          {q, r, type_h}
+          {q, r, output_type}
       end
 
     q = from_binary(q_holder, q_bin)
@@ -1131,7 +1131,7 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp householder_reflector(a_reverse, num_rows_a, input_type, target_k) do
+  defp householder_reflector(a_reverse, num_rows_a, target_k, output_type) do
     # This is a trick so we can both calculate the norm of a_reverse and extract the
     # head a the same time we reverse the array
     {norm_a_squared, [a_0 | tail]} =
@@ -1139,8 +1139,6 @@ defmodule Nx.BinaryBackend do
         {acc, l} ->
           {acc + x * x, [x | l]}
       end
-
-    output_type = Nx.Type.to_floating(input_type)
 
     v_0 =
       if a_0 > 0 do
@@ -1183,7 +1181,7 @@ defmodule Nx.BinaryBackend do
           end
       end
 
-    {IO.iodata_to_binary(reflector_iodata), output_type}
+    IO.iodata_to_binary(reflector_iodata)
   end
 
   ## Aggregation
