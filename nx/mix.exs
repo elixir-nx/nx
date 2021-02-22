@@ -37,6 +37,7 @@ defmodule Nx.MixProject do
 
         Backends: [
           Nx.BinaryBackend,
+          Nx.PytorchBackend,
           Nx.Tensor,
           Nx.Type
         ],
