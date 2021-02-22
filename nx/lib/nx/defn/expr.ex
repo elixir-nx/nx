@@ -321,29 +321,6 @@ defmodule Nx.Defn.Expr do
   ## Nx.Defn callbacks
 
   @doc false
-  def validate_args(args) do
-    args
-    |> Enum.reduce([], &validate_args/2)
-    |> Enum.reverse()
-  end
-
-  defp validate_args(%T{} = t, acc),
-    do: [t | acc]
-
-  defp validate_args(number, acc) when is_number(number),
-    do: [Nx.tensor(number) | acc]
-
-  defp validate_args(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &validate_args/2)
-
-  defp validate_args(other, _acc) do
-    raise(
-      ArgumentError,
-      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
-    )
-  end
-
-  @doc false
   def validate_vars(vars) do
     for var <- vars do
       case var do
@@ -366,6 +343,29 @@ defmodule Nx.Defn.Expr do
                   "tagged as default arguments. Got: #{inspect(other)}"
       end
     end
+  end
+
+  @doc false
+  def to_vars(args) do
+    args
+    |> Enum.reduce([], &to_vars/2)
+    |> Enum.reverse()
+  end
+
+  defp to_vars(%T{} = t, acc),
+    do: [t | acc]
+
+  defp to_vars(number, acc) when is_number(number),
+    do: [Nx.tensor(number) | acc]
+
+  defp to_vars(tuple, acc) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &to_vars/2)
+
+  defp to_vars(other, _acc) do
+    raise(
+      ArgumentError,
+      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
+    )
   end
 
   @doc false

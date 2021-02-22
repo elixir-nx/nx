@@ -76,7 +76,7 @@ defmodule Nx.Defn.Compiler do
   defp runtime(callback, fun, args, compiler, opts) do
     Kernel.apply(compiler, callback, [
       fun,
-      Nx.Defn.Expr.validate_args(args),
+      Nx.Defn.Expr.to_vars(args),
       fn vars ->
         if Process.get(Nx.Defn.Compiler) do
           raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
