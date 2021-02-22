@@ -898,6 +898,26 @@ defmodule Nx do
         ]
       >
 
+  The first argument can also be a tensor or a shape of a square
+  matrix:
+
+      iex> Nx.eye(Nx.iota({2, 2}))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 0],
+          [0, 1]
+        ]
+      >
+
+      iex> Nx.eye({1, 1})
+      #Nx.Tensor<
+        s64[1][1]
+        [
+          [1]
+        ]
+      >
+
   ## Options
 
     * `:type` - the type of the tensor
@@ -906,9 +926,21 @@ defmodule Nx do
 
   """
   @doc type: :creation
-  def eye(n, opts \\ []) when is_integer(n) and n > 0 do
+  def eye(n_or_shape_or_tensor, opts \\ [])
+
+  def eye(n, opts) when is_integer(n) and n > 0 do
+    eye({n, n}, opts)
+  end
+
+  def eye(shape_or_tensor, opts) do
     assert_keys!(opts, [:type, :names, :backend])
-    shape = {n, n}
+
+    shape =
+      case shape(shape_or_tensor) do
+        {n, n} -> {n, n}
+        other -> raise ArgumentError, "eye/2 expects a square matrix, got: #{inspect(other)}"
+      end
+
     names = Nx.Shape.named_axes!(opts[:names], shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
     backend = opts[:backend] || Nx.BinaryBackend
