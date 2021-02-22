@@ -7142,6 +7142,42 @@ defmodule Nx do
     impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
+  @doc """
+    Solve the equation a x = b for x, assuming a is a triangular matrix.
+
+  # Examples
+
+  iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2])
+  #Nx.Tensor<
+    f64[4]
+    [1.33333333, -0.66666667, 2.66666667, -1.33333333]
+  >
+
+  iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2], trans: 9)
+  #Nx.Tensor<
+    f64[4]
+    [1.33333333, -0.66666667, 2.66666667, -1.33333333]
+  >
+
+  """
+  @doc type: :linalg
+  def triangular_solve(a, b, opts \\ []) do
+    %T{shape: shape} = a = tensor(a)
+    %T{shape: shape} = b = tensor(b)
+
+    assert_keys!(opts, [:trans])
+
+    case opts[:trans] do
+      0 -> triangular_solve_n(a, b)
+      nil -> triangular_solve_n(a, b)
+      trans -> raise ArgumentError, "unknown trans #{inspect(trans)}"
+    end
+  end
+
+  defp triangular_solve_n(a, b) do
+    # TODO: write implementation
+  end
+
   ## Helpers
 
   defp tensor!(%T{} = t),
