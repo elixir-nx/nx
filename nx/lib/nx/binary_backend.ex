@@ -1039,7 +1039,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def qr(%{shape: {_m, k} = shape_q} = q, %{shape: {k, n}} = r, opts) do
+  def qr(%{shape: {_m, k} = shape_q} = q, %{shape: {k, n}, type: input_type} = t, opts) do
     mode = opts[:mode]
 
     keep_reflectors = mode == :raw
@@ -1051,27 +1051,12 @@ defmodule Nx.BinaryBackend do
       end
 
     {q, r, reflectors} =
-      for i <- 0..(n - 1), reduce: {q, r, []} do
-        {q, r, reflectors} ->
-          %{shape: {reflector_n, reflector_m}} =
-            reflector = householder_reflector(r[[i..(k - 1), i]])
-
+      for i <- 0..(n - 1), reduce: {q, Nx.as_type(t, Nx.Type.to_floating(input_type)), []} do
+        {q, %{type: type} = r, reflectors} ->
           shape_h = {k, k}
-          h = identity(as_type(reflector, r), shape: shape_h)
+          h_bin = householder_reflector(r[[i..(k - 1), i]], k)
 
-          h_bin =
-            for col <- 0..(reflector_m - 1), row <- 0..(reflector_n - 1), reduce: to_binary(h) do
-              acc ->
-                set_value_at_index(
-                  acc,
-                  h.type,
-                  shape_h,
-                  [row + i, col + i],
-                  reflector[[row, col]]
-                )
-            end
-
-          h = from_binary(h, h_bin)
+          h = from_binary(%T{shape: shape_h, type: type, names: [nil, nil]}, h_bin)
 
           reflectors =
             if keep_reflectors do
@@ -1105,35 +1090,65 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp householder_reflector(%{shape: {n}} = a) do
-    a_0 = a[0]
+  defp householder_reflector(%{shape: {n}, type: {_, num_bits} = type} = a, k) do
+    # We receive the target shape so the binary is already pre-generated with 1s in the
+    # main diagonal for rows < k - n
+    <<head::bitstring-size(num_bits), tail::bitstring>> = a_bin = to_binary(a)
 
-    v =
-      %{type: {_, num_bits} = type_v} =
-      if Nx.sign(a_0) == -1 do
-        Nx.divide(a, Nx.subtract(a_0, Nx.norm(a)))
-      else
-        Nx.divide(a, Nx.add(a_0, Nx.norm(a)))
+    norm_a_squared =
+      for <<x_bin::bitstring-size(num_bits) <- a_bin>>, reduce: 0 do
+        acc ->
+          x = binary_to_number(x_bin, type)
+          acc + x * x
       end
 
-    # set first position of v to 1
-    one = scalar_to_binary(1, type_v)
-    v_bin = to_binary(v)
-    <<_::bitstring-size(num_bits), tail::bitstring>> = v_bin
-    v = from_binary(v, one <> tail)
+    a_0 = binary_to_number(head, type)
 
-    eye = identity(a, shape: {n, n})
+    v_0 =
+      if a_0 > 0 do
+        a_0 + :math.sqrt(norm_a_squared)
+      else
+        a_0 - :math.sqrt(norm_a_squared)
+      end
 
-    projection =
-      2
-      |> Nx.divide(Nx.dot(v, v))
-      |> Nx.multiply(Nx.outer(v, v))
+    prefix_threshold = k - n
+    prefix_size = prefix_threshold * num_bits
+    v_bin = <<0::size(prefix_size)>> <> number_to_binary(v_0, type) <> tail
 
-    subtract(
-      projection,
-      eye,
-      projection
-    )
+    # dot(v, v) = norm_v_squared, which can be calculated from norm_a as: norm_v_squared = norm_a_squared - a_0^2 + v_0^2
+
+    norm_v_squared = norm_a_squared - a_0 * a_0 + v_0 * v_0
+
+    scale = 2 / norm_v_squared
+
+    # execute I - 2 / norm_v_squared * outer(v, v)
+    {_, _, reflector_binary} =
+      for <<col_factor::bitstring-size(num_bits) <- v_bin>>,
+          <<row_factor::bitstring-size(num_bits) <- v_bin>>,
+          reduce: {0, 0, ""} do
+        {row, col, acc} ->
+          # The current element in outer(v, v) is given by col_factor * row_factor
+          # and the current I element is 1 when row == col
+          identity_element = if row == col, do: 1, else: 0
+
+          result =
+            if row >= prefix_threshold and col >= prefix_threshold do
+              identity_element -
+                scale * binary_to_number(col_factor, type) * binary_to_number(row_factor, type)
+            else
+              identity_element
+            end
+
+          acc = acc <> scalar_to_binary(result, type)
+
+          if col + 1 == k do
+            {row + 1, 0, acc}
+          else
+            {row, col + 1, acc}
+          end
+      end
+
+    reflector_binary
   end
 
   defp identity(%{type: {_, num_bits} = type} = tensor, shape: {m, n} = shape) do
@@ -1147,7 +1162,7 @@ defmodule Nx.BinaryBackend do
           acc <> value
       end
 
-    from_binary(%{tensor | shape: {m, n}}, identity_binary)
+    from_binary(%{tensor | names: [nil, nil], shape: {m, n}}, identity_binary)
   end
 
   defp set_value_at_index(tensor_binary, {_, num_bits} = type, shape, index, value)

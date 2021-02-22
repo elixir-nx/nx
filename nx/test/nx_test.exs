@@ -648,4 +648,30 @@ defmodule NxTest do
       assert Nx.broadcast(t, {2, 2}, names: [:x, :y]) == Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
     end
   end
+
+  describe "qr" do
+    test "correctly factors a square matrix" do
+      t = Nx.tensor([[2, -2, 18], [2, 1, 0], [1, 2, 0]])
+      assert {q, %{type: output_type} = r} = Nx.qr(t)
+      assert t |> Nx.round() |> Nx.as_type(output_type) == q |> Nx.dot(r) |> Nx.round()
+
+      assert round(q, 1) == Nx.tensor([
+        [-2/3, 2/3, -1/3],
+        [-2/3, -1/3, 2/3],
+        [-1/3, -2/3, -2/3]
+      ]) |> round(1)
+
+      assert round(r, 1) == Nx.tensor([
+        [-3.0, 0.0, -12.0],
+        [0.0, -3.0, 12.0],
+        [0.0, 0.0, -6.0]
+      ]) |> round(1)
+    end
+
+    defp round(tensor, places) do
+      Nx.map(tensor, fn x ->
+        Float.round(x, places)
+      end)
+    end
+  end
 end
