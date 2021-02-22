@@ -7056,107 +7056,81 @@ defmodule Nx do
 
     * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
     * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
-    * `:r` - returns `r` with shape `{K, N}`
-    * `:raw` - returns `{h, tau}`, with `h` being the array of Householder reflectors and
-               `tau` being the array with the respective scaling factors.
 
   ## Examples
 
   Note: The following examples round elements of the output tensors
   to minimize rounding errors on different host machines.
 
-    iex(1)> [q, r] = Nx.qr(Nx.tensor([[12, -51, 4], [6, 167, -68], [-4, 24, -41]])) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-    [
+      iex(1)> [q, r] = Nx.qr(Nx.tensor([[12, -51, 4], [6, 167, -68], [-4, 24, -41]])) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
+      [
+        Nx.tensor([
+          [-0.8571, 0.3943, -0.3314],
+          [-0.4286, -0.9029, 0.0343],
+          [0.2857, -0.1714, -0.9429]
+        ]),
+        Nx.tensor([
+          [-14.0, -21.0, 14.0],
+          [-0.0, -175.0, 70.0],
+          [-0.0, -0.0, 35.0]
+        ])
+      ]
+      iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
       Nx.tensor([
-        [-0.8571, 0.3943, -0.3314],
-        [-0.4286, -0.9029, 0.0343],
-        [0.2857, -0.1714, -0.9429]
-      ]),
-      Nx.tensor([
-        [-14.0, -21.0, 14.0],
-        [-0.0, -175.0, 70.0],
-        [-0.0, -0.0, 35.0]
+        [12.0, -51.0, 4.0],
+        [6.0, 167.0, -68.0],
+        [-4.0, 24.0, -41.0]
       ])
-    ]
-    iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
-    Nx.tensor([
-      [12.0, -51.0, 4.0],
-      [6.0, 167.0, -68.0],
-      [-4.0, 24.0, -41.0]
-    ])
 
-    iex(1)> [q, r] = Nx.qr(Nx.tensor([[1, -1, 4], [1, 4, -2], [1, 4, 2], [1, -1, 0]]), mode: :reduced) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-    [
+      iex(1)> [q, r] = Nx.qr(Nx.tensor([[1, -1, 4], [1, 4, -2], [1, 4, 2], [1, -1, 0]]), mode: :reduced) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
+      [
+        Nx.tensor([
+          [-0.5774, 0.8165, 0.0],
+          [-0.5774, -0.4082, 0.7071],
+          [-0.5774, -0.4082, -0.7071],
+          [0.0, 0.0, 0.0]
+        ]),
+        Nx.tensor([
+          [-1.7321, -4.0415, -2.3094],
+          [0.0, -4.0825, 3.266],
+          [0.0, 0.0, -2.8284]
+        ])
+      ]
+      iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
       Nx.tensor([
-        [-0.5774, 0.8165, 0.0],
-        [-0.5774, -0.4082, 0.7071],
-        [-0.5774, -0.4082, -0.7071],
-        [0.0, 0.0, 0.0]
-      ]),
-      Nx.tensor([
-        [-1.7321, -4.0415, -2.3094],
-        [0.0, -4.0825, 3.266],
-        [0.0, 0.0, -2.8284]
+        [1.0, -1.0, 4.0],
+        [1.0, 4.0, -2.0],
+        [1.0, 4.0, 2.0],
+        [0.0, -0.0, 0.0]
       ])
-    ]
-    iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
-    Nx.tensor([
-      [1.0, -1.0, 4.0],
-      [1.0, 4.0, -2.0],
-      [1.0, 4.0, 2.0],
-      [0.0, -0.0, 0.0]
-    ])
 
-    iex(1)> [q, r] = Nx.qr(Nx.tensor([[1, -1, 4], [1, 4, -2], [1, 4, 2], [1, -1, 0]]), mode: :complete) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-    [
+      iex(1)> [q, r] = Nx.qr(Nx.tensor([[1, -1, 4], [1, 4, -2], [1, 4, 2], [1, -1, 0]]), mode: :complete) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
+      [
+        Nx.tensor([
+          [-0.5, 0.5, -0.5, -0.5],
+          [-0.5, -0.5, 0.5, -0.5],
+          [-0.5, -0.5, -0.5, 0.5],
+          [-0.5, 0.5, 0.5, 0.5]
+        ]),
+        Nx.tensor([
+          [-2.0, -3.0, -2.0],
+          [0.0, -5.0, 2.0],
+          [-0.0, -0.0, -4.0],
+          [0.0, 0.0, 0.0]
+        ])
+      ]
+      iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
       Nx.tensor([
-        [-0.5, 0.5, -0.5, -0.5],
-        [-0.5, -0.5, 0.5, -0.5],
-        [-0.5, -0.5, -0.5, 0.5],
-        [-0.5, 0.5, 0.5, 0.5]
-      ]),
-      Nx.tensor([
-        [-2.0, -3.0, -2.0],
-        [0.0, -5.0, 2.0],
-        [-0.0, -0.0, -4.0],
-        [0.0, 0.0, 0.0]
+        [1.0, -1.0, 4.0],
+        [1.0, 4.0, -2.0],
+        [1.0, 4.0, 2.0],
+        [1.0, -1.0, 0.0]
       ])
-    ]
-    iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
-    Nx.tensor([
-      [1.0, -1.0, 4.0],
-      [1.0, 4.0, -2.0],
-      [1.0, 4.0, 2.0],
-      [1.0, -1.0, 0.0]
-    ])
-
-    iex(1)> {_q, _r, reflectors} = Nx.qr(Nx.tensor([[1, -1, 4], [1, 4, -2], [1, 4, 2], [1, -1, 0]]), mode: :raw)
-    iex(2)> Enum.map(reflectors, fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-    [
-      Nx.tensor([
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, -0.6, 0.8],
-        [0.0, 0.0, 0.8, 0.6]
-      ]),
-      Nx.tensor([
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, -0.6667, -0.6667, 0.3333],
-        [0.0, -0.6667, 0.7333, 0.1333],
-        [0.0, 0.3333, 0.1333, 0.9333]
-      ]),
-      Nx.tensor([
-        [-0.5, -0.5, -0.5, -0.5],
-        [-0.5, 0.8333, -0.1667, -0.1667],
-        [-0.5, -0.1667, 0.8333, -0.1667],
-        [-0.5, -0.1667, -0.1667, 0.8333]
-      ])
-    ]
 
   ## Error cases
 
-    iex> Nx.qr(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]])) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-    ** (ArgumentError) tensor must have at least as many rows than columns, got shape: {3, 4}
+      iex> Nx.qr(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]])) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
+      ** (ArgumentError) tensor must have at least as many rows than columns, got shape: {3, 4}
   """
   @doc type: :linalg
   def qr(tensor, opts \\ []) do
@@ -7176,20 +7150,14 @@ defmodule Nx do
 
     output_type = Nx.Type.to_floating(type)
 
-    {q_shape, {k, n}} = Nx.Shape.qr(shape, opts)
+    {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
-    q = iota(q_shape, type: output_type)
-
-    mode = opts[:mode]
-
-    r =
-      if mode == :reduced do
-        tensor[[0..(k - 1), 0..(n - 1)]]
-      else
-        tensor
-      end
-
-    impl!(tensor).qr(q, r, opts)
+    impl!(tensor).qr(
+      {%{tensor | type: output_type, shape: q_shape},
+       %{tensor | type: output_type, shape: r_shape}},
+      tensor,
+      opts
+    )
   end
 
   ## Helpers

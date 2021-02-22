@@ -1039,46 +1039,46 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def qr(%{shape: {m, k}} = q, %{shape: {k, n}, type: input_type} = t, opts) do
+  def qr(
+        {%{shape: {m, k}}, %{shape: {k, n}, type: type}},
+        tensor,
+        opts
+      ) do
     mode = opts[:mode]
 
-    keep_reflectors = mode == :raw
-    calculate_q = mode in [:reduced, :complete, :raw]
+    r =
+      if mode == :reduced do
+        tensor[[0..(k - 1), 0..(n - 1)]]
+      else
+        tensor
+      end
+      |> Nx.as_type(type)
 
-    {q, r, reflectors} =
-      for i <- 0..(n - 1), reduce: {"", Nx.as_type(t, Nx.Type.to_floating(input_type)), []} do
-        {q, %{type: type} = r, reflectors} ->
+    {q, r} =
+      for i <- 0..(n - 1), reduce: {"", r} do
+        {q, %{type: type} = r} ->
           shape_h = {k, k}
           h_bin = householder_reflector(r[[i..(k - 1), i]], k)
 
           h = from_binary(%T{shape: shape_h, type: type, names: [nil, nil]}, h_bin)
 
-          reflectors =
-            if keep_reflectors do
-              [h | reflectors]
-            else
-              reflectors
-            end
-
           q =
-            if calculate_q do
-              if q != "" do
-                Nx.dot(q, h)
-              else
-                padding_length = (m - k) * k
+            if q != "" do
+              Nx.dot(q, h)
+            else
+              padding_length = (m - k) * k
 
-                zero = number_to_binary(0, type)
+              zero = number_to_binary(0, type)
 
-                from_binary(
-                  %T{shape: {m, k}, type: type, names: [nil, nil]},
-                  h_bin <> String.duplicate(zero, padding_length)
-                )
-              end
+              from_binary(
+                %T{shape: {m, k}, type: type, names: [nil, nil]},
+                h_bin <> String.duplicate(zero, padding_length)
+              )
             end
 
           r = Nx.dot(h, r)
 
-          {q, r, reflectors}
+          {q, r}
       end
 
     case mode do
@@ -1087,12 +1087,6 @@ defmodule Nx.BinaryBackend do
 
       :reduced ->
         {q, r[[0..(k - 1), 0..(n - 1)]]}
-
-      :r ->
-        r
-
-      :raw ->
-        {q, r, reflectors}
     end
   end
 
