@@ -1040,7 +1040,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def qr(
-        {%{shape: {m, k}}, %{shape: {k, n}, type: type}},
+        {%{shape: {m, k} = shape_q} = q_holder,
+         %{shape: {k, n} = shape_r, type: {_, num_bits} = type} = r_holder},
         tensor,
         opts
       ) do
@@ -1053,33 +1054,55 @@ defmodule Nx.BinaryBackend do
         tensor
       end
       |> Nx.as_type(type)
+      |> to_binary()
 
-    {q, r} =
-      for i <- 0..(n - 1), reduce: {"", r} do
-        {q, %{type: type} = r} ->
-          shape_h = {k, k}
-          h_bin = householder_reflector(r[[i..(k - 1), i]], k)
+    shape_h = {k, k}
 
-          h = from_binary(%T{shape: shape_h, type: type, names: [nil, nil]}, h_bin)
+    {q_bin, r_bin} =
+      for i <- 0..(n - 1), reduce: {nil, r} do
+        {q, r} ->
+          # a = r[[i..(k - 1), i]]
+          {a, num_rows_a, _, _} =
+            for <<x::bitstring-size(num_bits) <- r>>, reduce: {<<>>, 0, 0, 0} do
+              {data, num_rows_a_prev, row, col} ->
+                {item, num_rows_a} =
+                  if row >= i and col == i do
+                    {x, num_rows_a_prev + 1}
+                  else
+                    {"", num_rows_a_prev}
+                  end
 
+                {row, col} =
+                  if col + 1 == n do
+                    {row + 1, 0}
+                  else
+                    {row, col + 1}
+                  end
+
+                {data <> item, num_rows_a, row, col}
+            end
+
+          h_bin = householder_reflector(a, num_rows_a, type, k)
+
+          # If we haven't allocated Q yet, let Q = H1
           q =
-            if q != "" do
-              Nx.dot(q, h)
-            else
+            if is_nil(q) do
               padding_length = (m - k) * k
 
               zero = number_to_binary(0, type)
 
-              from_binary(
-                %T{shape: {m, k}, type: type, names: [nil, nil]},
-                h_bin <> String.duplicate(zero, padding_length)
-              )
+              h_bin <> String.duplicate(zero, padding_length)
+            else
+              dot_binary(q, shape_q, h_bin, shape_h, type)
             end
 
-          r = Nx.dot(h, r)
+          r = dot_binary(h_bin, shape_q, r, shape_r, type)
 
           {q, r}
       end
+
+    q = from_binary(q_holder, q_bin)
+    r = from_binary(r_holder, r_bin)
 
     case mode do
       :complete ->
@@ -1090,10 +1113,25 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp householder_reflector(%{shape: {n}, type: {_, num_bits} = type} = a, k) do
+  defp dot_binary(b1, shape1, b2, shape2, {_, s} = type) do
+    fun = fn lhs, rhs, acc ->
+      res = binary_to_number(lhs, type) * binary_to_number(rhs, type) + acc
+      {res, res}
+    end
+
+    v1 = aggregate_axes(b1, [1], shape1, s)
+    v2 = aggregate_axes(b2, [0], shape2, s)
+
+    for b1 <- v1, b2 <- v2, into: <<>> do
+      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s, s, <<>>, 0, fun)
+      scalar_to_binary(bin, type)
+    end
+  end
+
+  defp householder_reflector(a_bin, num_rows_a, {_, num_bits} = type, target_k) do
     # We receive the target shape so the binary is already pre-generated with 1s in the
     # main diagonal for rows < k - n
-    <<head::bitstring-size(num_bits), tail::bitstring>> = a_bin = to_binary(a)
+    <<head::bitstring-size(num_bits), tail::bitstring>> = a_bin
 
     norm_a_squared =
       for <<x_bin::bitstring-size(num_bits) <- a_bin>>, reduce: 0 do
@@ -1111,7 +1149,7 @@ defmodule Nx.BinaryBackend do
         a_0 - :math.sqrt(norm_a_squared)
       end
 
-    prefix_threshold = k - n
+    prefix_threshold = target_k - num_rows_a
     prefix_size = prefix_threshold * num_bits
     v_bin = <<0::size(prefix_size)>> <> number_to_binary(v_0, type) <> tail
 
@@ -1141,7 +1179,7 @@ defmodule Nx.BinaryBackend do
 
           acc = acc <> scalar_to_binary(result, type)
 
-          if col + 1 == k do
+          if col + 1 == target_k do
             {row + 1, 0, acc}
           else
             {row, col + 1, acc}
