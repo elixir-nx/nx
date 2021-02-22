@@ -1975,7 +1975,7 @@ defmodule Nx do
   the current  tensor implementation will pick the most appropriate
   backend.
 
-  For Elixir's builtin tensor, transfering to another backend will
+  For Elixir's builtin tensor, transferring to another backend will
   call `new_backend.from_binary(tensor, binary, opts)`. Transferring
   from a mutable backend, such as GPU memory, often means the data
   is also deallocated from the device.
@@ -2018,7 +2018,7 @@ defmodule Nx do
 
   For convenience, this function accepts a tuple as argument
   and deallocates all devices in the tuple. This behaviour
-  exists as it is common to deallocaate data from tuples after
+  exists as it is common to de-allocate data from tuples after
   `defn` functions.
   """
   @doc type: :conversion
@@ -3453,7 +3453,7 @@ defmodule Nx do
   with a shape that matches the largest shape between `s1` or `s2`.
 
   If the shape of `on_true` or `on_false` do not match the shape of
-  `pred`, attemps to broadcast both so they match the shape of `pred`.
+  `pred`, attempts to broadcast both so they match the shape of `pred`.
 
   ## Examples
 
@@ -4571,7 +4571,7 @@ defmodule Nx do
       returns the index of the absolute minimum value in the tensor.
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
-      default behavior is to always return the lower index.
+      Default behavior is to always return the lower index.
 
   ## Examples
 
@@ -6243,18 +6243,18 @@ defmodule Nx do
     kernel_input_channels = elem(kernel_shape, 1)
     kernel_output_channels = elem(kernel_shape, 0)
 
-    if tensor_input_channels != kernel_input_channels*groups do
+    if tensor_input_channels != kernel_input_channels * groups do
       raise ArgumentError,
             "size of input dimension 1 divided by groups must match size of kernel" <>
-            " dimension 1, got #{tensor_input_channels} // #{groups} != #{kernel_input_channels}" <>
-            " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
+              " dimension 1, got #{tensor_input_channels} // #{groups} != #{kernel_input_channels}" <>
+              " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
     end
 
     if rem(kernel_output_channels, groups) != 0 do
       raise ArgumentError,
             "size of kernel dimension 1 must be evenly divisible by groups" <>
-            " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
-            " with shape #{inspect(kernel_shape)}"
+              " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
+              " with shape #{inspect(kernel_shape)}"
     end
 
     filter_shape =
@@ -6350,7 +6350,7 @@ defmodule Nx do
     # so backends don't deal with atoms themselves
     #
     # We assume padding is specified only for spatial dims and only
-    # as {edge_high, edge_low} tuples, this conceptually simplfies
+    # as {edge_high, edge_low} tuples, this conceptually simplifies
     # things a bit
     padding_config =
       case padding do
@@ -6479,7 +6479,7 @@ defmodule Nx do
   zero. `start_index + length` must not exceed the respective
   tensor dimension.
 
-  If the `:strides` is given, it must be stricty greater than zero.
+  If the `:strides` is given, it must be strictly greater than zero.
   The resulting tensor will have the shape of `length` unless
   `:strides` are given.
 
@@ -6720,7 +6720,7 @@ defmodule Nx do
   end
 
   @doc """
-  Performs a cholesky decomposition of a square matrix.
+  Performs a Cholesky decomposition of a square matrix.
 
   The matrix must be positive-definite and either Hermitian
   if complex or symmetric if real. An error is raised by the
