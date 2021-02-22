@@ -95,11 +95,12 @@ defmodule Nx.Defn do
 
   ### Options
 
-  The `Nx.Defn` compiler supports the following options:
+  The `Nx.Defn` compiler supports the following options which are
+  the same as ones for `Nx.Defn.Kernel.rewrite_types/2`:
 
-    * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.max_unsigned_type/2`
-    * `max_signed_type: type` - the same as `Nx.Defn.Kernel.max_signed_type/2`
-    * `max_float_type: type` - the same as `Nx.Defn.Kernel.max_float_type/2`
+    * `max_unsigned_type: type`
+    * `max_signed_type: type`
+    * `max_float_type: type`
 
   ## Inputs and outputs types
 
