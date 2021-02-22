@@ -7160,15 +7160,21 @@ defmodule Nx do
 
       iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0]], [4, 2, 4, 2], trans: 0)
       ** (ArgumentError) expected a square matrix, got: {2, 4}
+
+      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]], [4], trans: 0)
+      ** (ArgumentError) incompatible dimensions
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
-    %T{shape: s1} = a = tensor!(a)
+    %T{shape: s1} = a = tensor(a)
+    %T{shape: s2} = b = tensor(b)
 
     case shape(s1) do
       {n, n} -> {n, n}
       other -> raise ArgumentError, "expected a square matrix, got: #{inspect(other)}"
     end
+
+    if size(a) / 4 != size(b), do: raise(ArgumentError, "incompatible dimensions")
 
     assert_keys!(opts, [:trans])
 
