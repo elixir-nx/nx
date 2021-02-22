@@ -44,8 +44,7 @@ unsigned long elem_count(std::vector<int64_t> shape)
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>{});
 }
 
-ERL_NIF_TERM
-from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+ERL_NIF_TERM from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   ErlNifBinary blob;
   std::vector<int64_t> shape;
@@ -67,6 +66,17 @@ from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   at::Tensor t = at::clone(at::from_blob(blob.data, shape, dtypes[type]));
 
   return create_tensor_resource(env, t);
+}
+
+ERL_NIF_TERM to_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  ERL_NIF_TERM result;
+  at::Tensor *t = get_tensor(env, argv[0]);
+
+  void *result_data = (void *)enif_make_new_binary(env, t->nbytes(), &result);
+  memcpy(result_data, t->data_ptr(), t->nbytes());
+
+  return result;
 }
 
 ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
@@ -259,6 +269,7 @@ static ErlNifFunc nif_functions[] = {
     {"arange", 4, arange, 0},
     {"arange", 5, arange, 0},
     {"from_blob", 3, from_blob, 0},
+    {"to_blob", 1, to_blob, 0},
     {"ones", 1, ones, 0},
     {"reshape", 2, reshape, 0},
     {"squeeze", 2, squeeze, 0},

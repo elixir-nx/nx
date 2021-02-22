@@ -19,6 +19,7 @@ defmodule Nx.PytorchBackend do
         squeeze: 3,
         add: 3,
         from_binary: 3,
+        to_binary: 2,
         backend_deallocate: 1,
         inspect: 2
       ]
@@ -111,6 +112,9 @@ defmodule Nx.PytorchBackend do
     t = NIF.from_blob(binary, shape, torch_type(type))
     from_ref(out, t)
   end
+
+  @impl true
+  def to_binary(%{data: %{ref: ref}}, _opts), do: NIF.to_blob(ref)
 
   ## Shape
 

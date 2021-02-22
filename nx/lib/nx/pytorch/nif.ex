@@ -19,6 +19,9 @@ defmodule Nx.Pytorch.NIF do
   def from_blob(_blob, _shape, _type),
     do: nif_error(__ENV__.function)
 
+  def to_blob(_tensor),
+    do: nif_error(__ENV__.function)
+
   def ones(_shape),
     do: nif_error(__ENV__.function)
 
