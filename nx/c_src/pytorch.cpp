@@ -222,6 +222,24 @@ ERL_NIF_TERM add(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   }
 }
 
+ERL_NIF_TERM dot(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  at::Tensor *a = get_tensor(env, argv[0]);
+  at::Tensor *b = get_tensor(env, argv[1]);
+
+  try
+  {
+    at::Tensor c = at::matmul(*a, *b);
+
+    return create_tensor_resource(env, c);
+  }
+  catch (c10::Error error)
+  {
+    return enif_raise_exception(env, enif_make_string(env,
+                                                      (std::string("PyTorch: ") + error.msg()).c_str(), ERL_NIF_LATIN1));
+  }
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   std::cout << "Deleting: " << obj << std::endl;
@@ -274,6 +292,7 @@ static ErlNifFunc nif_functions[] = {
     {"reshape", 2, reshape, 0},
     {"squeeze", 2, squeeze, 0},
     {"squeeze", 1, squeeze, 0},
-    {"add", 2, add, 0}};
+    {"add", 2, add, 0},
+    {"dot", 2, dot, 0}};
 
 ERL_NIF_INIT(Elixir.Nx.Pytorch.NIF, nif_functions, load, NULL, upgrade, NULL)

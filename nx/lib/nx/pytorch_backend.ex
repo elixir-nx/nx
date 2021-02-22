@@ -18,6 +18,7 @@ defmodule Nx.PytorchBackend do
         reshape: 3,
         squeeze: 3,
         add: 3,
+        dot: 5,
         from_binary: 3,
         to_binary: 2,
         backend_deallocate: 1,
@@ -128,9 +129,23 @@ defmodule Nx.PytorchBackend do
     from_ref(out, t)
   end
 
+  ## Ops
+
   @impl true
   def add(out, left, right) do
     t = NIF.add(left.data.ref, right.data.ref)
+    from_ref(out, t)
+  end
+
+  @impl true
+  def dot(
+        out,
+        %{type: t1, data: %{ref: left_ref}} = left,
+        _axes1,
+        %{type: t2, data: %{ref: right_ref}} = right,
+        _axes2
+      ) do
+    t = NIF.dot(left_ref, right_ref)
     from_ref(out, t)
   end
 

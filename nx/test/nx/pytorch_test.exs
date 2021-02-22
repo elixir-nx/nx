@@ -12,5 +12,14 @@ defmodule Nx.PytorchTest do
 
       assert Nx.to_flat_list(c) == [6.0, 8.0, 10.0, 12.0]
     end
+
+    test "dot" do
+      a = Nx.tensor([[1, 2], [3, 4]], backend: PytorchBackend)
+      b = Nx.tensor([[5, 6], [7, 8]], backend: PytorchBackend)
+
+      c = Nx.dot(a, b)
+
+      assert Nx.to_flat_list(c) == [19, 22, 43, 50]
+    end
   end
 end
