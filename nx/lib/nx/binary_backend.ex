@@ -1039,19 +1039,14 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def qr(%{shape: {_m, k} = shape_q} = q, %{shape: {k, n}, type: input_type} = t, opts) do
+  def qr(%{shape: {m, k}} = q, %{shape: {k, n}, type: input_type} = t, opts) do
     mode = opts[:mode]
 
     keep_reflectors = mode == :raw
     calculate_q = mode in [:reduced, :complete, :raw]
 
-    q =
-      if calculate_q do
-        identity(q, shape: shape_q)
-      end
-
     {q, r, reflectors} =
-      for i <- 0..(n - 1), reduce: {q, Nx.as_type(t, Nx.Type.to_floating(input_type)), []} do
+      for i <- 0..(n - 1), reduce: {"", Nx.as_type(t, Nx.Type.to_floating(input_type)), []} do
         {q, %{type: type} = r, reflectors} ->
           shape_h = {k, k}
           h_bin = householder_reflector(r[[i..(k - 1), i]], k)
@@ -1067,7 +1062,18 @@ defmodule Nx.BinaryBackend do
 
           q =
             if calculate_q do
-              Nx.dot(q, h)
+              if q != "" do
+                Nx.dot(q, h)
+              else
+                padding_length = (m - k) * k
+
+                zero = number_to_binary(0, type)
+
+                from_binary(
+                  %T{shape: {m, k}, type: type, names: [nil, nil]},
+                  h_bin <> String.duplicate(zero, padding_length)
+                )
+              end
             end
 
           r = Nx.dot(h, r)
@@ -1149,40 +1155,6 @@ defmodule Nx.BinaryBackend do
       end
 
     reflector_binary
-  end
-
-  defp identity(%{type: {_, num_bits} = type} = tensor, shape: {m, n} = shape) do
-    one = number_to_binary(1, type)
-    zero = number_to_binary(0, type)
-
-    identity_binary =
-      for row <- 0..(m - 1), col <- 0..(n - 1), reduce: <<>> do
-        acc ->
-          value = if col == row, do: one, else: zero
-          acc <> value
-      end
-
-    from_binary(%{tensor | names: [nil, nil], shape: {m, n}}, identity_binary)
-  end
-
-  defp set_value_at_index(tensor_binary, {_, num_bits} = type, shape, index, value)
-       when tuple_size(shape) == length(index) do
-    {_total_num_elements, offset} =
-      shape
-      |> Tuple.to_list()
-      |> Enum.zip(index)
-      |> Enum.reverse()
-      |> Enum.reduce({num_bits, 0}, fn {dim_length, i}, {dim_offset, result_acc} ->
-        result_acc = result_acc + dim_offset * i
-        dim_offset = dim_length * dim_offset
-        {dim_offset, result_acc}
-      end)
-
-    <<prefix::bitstring-size(offset), _current_value::bitstring-size(num_bits), tail::bitstring>> =
-      tensor_binary
-
-    data = scalar_to_binary(value, type)
-    <<prefix::bitstring, data::bitstring, tail::bitstring>>
   end
 
   ## Aggregation
