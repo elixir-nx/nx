@@ -1114,6 +1114,8 @@ defmodule Nx.BinaryBackend do
   end
 
   defp dot_binary(b1, shape1, b2, shape2, {_, s} = type) do
+    # matrix multiplication for when b1 and b2 are matrices
+    # represented in binary form
     fun = fn lhs, rhs, acc ->
       res = binary_to_number(lhs, type) * binary_to_number(rhs, type) + acc
       {res, res}
