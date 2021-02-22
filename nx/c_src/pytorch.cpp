@@ -5,6 +5,9 @@
 
 ErlNifResourceType *TENSOR_TYPE;
 
+std::map<const std::string, const at::ScalarType> dtypes = {{"byte", at::kByte}, {"char", at::kChar}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"float", at::kFloat}, {"double", at::kDouble}};
+std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"float", 4}, {"double", 8}};
+
 ERL_NIF_TERM create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
 {
   ERL_NIF_TERM ret;
@@ -83,28 +86,31 @@ from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   ErlNifBinary blob;
   std::vector<int64_t> shape;
+  std::string type;
 
-  nx::nif::get_tuple(env, argv[1], shape);
+  if (!nx::nif::get_tuple(env, argv[1], shape))
+    return enif_make_badarg(env);
+
+  if (!nx::nif::get_atom(env, argv[2], type))
+    return enif_make_badarg(env);
 
   if (!enif_inspect_binary(env, argv[0], &blob))
     return enif_make_badarg(env);
 
-  if (blob.size / sizeof(float) < elem_count(shape))
+  if (blob.size / dtype_sizes[type] < elem_count(shape))
     return enif_make_badarg(env);
 
   // float blob_array[] = {1, 2, 3.2342, 4, 5, 6, 7};
   // auto options = at::TensorOptions().dtype(at::kFloat); // .device(torch::kCUDA, 1);
 
   // Clone here to copy data from blob, which will be GCed.
-  at::Tensor t = at::clone(at::from_blob(blob.data, c10::IntArrayRef(shape), at::kFloat));
+  at::Tensor t = at::clone(at::from_blob(blob.data, shape, dtypes[type]));
 
   // at::ones(c10::IntArrayRef(shape_array, shape_size), at::kFloat);
   std::cout << t << "\r\n";
 
   return create_tensor_resource(env, t);
 }
-
-std::map<std::string, at::ScalarType> types = {{"byte", at::kByte}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"float", at::kFloat}, {"double", at::kDouble}};
 
 ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -116,7 +122,7 @@ ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   nx::nif::get_tuple(env, argv[2], shape);
   nx::nif::get_atom(env, argv[3], type);
 
-  at::Tensor t = at::randint(min, max, shape, types[type]);
+  at::Tensor t = at::randint(min, max, shape, dtypes[type]);
 
   std::cout << t << "\r\n";
 
@@ -133,7 +139,32 @@ ERL_NIF_TERM rand(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   nx::nif::get_tuple(env, argv[2], shape);
   nx::nif::get_atom(env, argv[3], type);
 
-  at::Tensor t = min + at::rand(shape, types[type]) * (max - min);
+  at::Tensor t = min + at::rand(shape, dtypes[type]) * (max - min);
+
+  std::cout << t << "\r\n";
+
+  return create_tensor_resource(env, t);
+}
+
+ERL_NIF_TERM arange(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  int64_t start, end, step;
+  std::string type;
+
+  nx::nif::get(env, argv[0], &start);
+  nx::nif::get(env, argv[1], &end);
+  nx::nif::get(env, argv[2], &step);
+  nx::nif::get_atom(env, argv[3], type);
+
+  at::Tensor t = at::arange((double)start, (double)end, (double)step, dtypes[type]);
+
+  if (argc == 5)
+  {
+    std::vector<int64_t> shape;
+    nx::nif::get_tuple(env, argv[4], shape);
+
+    t = at::reshape(t, shape);
+  }
 
   std::cout << t << "\r\n";
 
@@ -142,7 +173,13 @@ ERL_NIF_TERM rand(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
 ERL_NIF_TERM ones(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
-  at::Tensor t = at::ones(c10::IntArrayRef(shape_from_tuple(env, argv[0])), at::kFloat);
+  std::string type;
+  std::vector<int64_t> shape;
+
+  nx::nif::get_tuple(env, argv[0], shape);
+  nx::nif::get_atom(env, argv[1], type);
+
+  at::Tensor t = at::ones(shape, dtypes[type]);
 
   return create_tensor_resource(env, t);
 }
@@ -229,7 +266,9 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 static ErlNifFunc nif_functions[] = {
     {"randint", 4, randint, 0},
     {"rand", 4, rand, 0},
-    {"from_blob", 2, from_blob, 0},
+    {"arange", 4, arange, 0},
+    {"arange", 5, arange, 0},
+    {"from_blob", 3, from_blob, 0},
     {"ones", 1, ones, 0},
     {"add",
      2,
