@@ -7141,7 +7141,7 @@ defmodule Nx do
     opts = Keyword.merge([mode: :reduced], opts)
 
     mode = opts[:mode]
-    valid_modes = [:reduced, :complete, :r, :raw]
+    valid_modes = [:reduced, :complete]
 
     unless mode in valid_modes do
       raise ArgumentError,
