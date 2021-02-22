@@ -152,11 +152,16 @@ defmodule Nx.DefnTest do
 
   describe "creation ops" do
     defn iota(t), do: Nx.iota(t)
+    defn eye, do: Nx.eye(2)
     defn random_uniform(t), do: Nx.random_uniform(t, 0.0, 2.0)
     defn random_normal(t), do: Nx.random_normal(t, 0.0, 1.0)
 
     test "iota" do
       assert %T{shape: {3}, data: %Expr{op: :iota, args: [nil]}} = iota(Nx.tensor([1, 2, 3]))
+    end
+
+    test "eye" do
+      assert %T{shape: {2, 2}, data: %Expr{op: :eye, args: []}} = eye()
     end
 
     test "random uniform" do

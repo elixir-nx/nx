@@ -628,7 +628,7 @@ defmodule EXLA.DefnExprTest do
 
     for fun <-
           [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-            [:tan, :arccosh, :arcsinh, :cosh, :sinh, :erf, :erfc, :erf_inv] do
+            [:tan, :arccosh, :arcsinh, :cosh, :sinh, :erf, :erfc] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
@@ -646,7 +646,7 @@ defmodule EXLA.DefnExprTest do
     @int_tensor Nx.tensor([0.1, 0.5, 0.9])
     @float_tensor Nx.tensor([0.1, 0.5, 0.9])
 
-    for fun <- [:arctanh, :arccos, :arcsin, :arctan] do
+    for fun <- [:arctanh, :arccos, :arcsin, :arctan, :erf_inv] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
@@ -2069,6 +2069,20 @@ defmodule EXLA.DefnExprTest do
 
     test "generates with negative axis" do
       assert iota_neg_axis() == Nx.iota({2, 2, 2}, axis: -2)
+    end
+  end
+
+  describe "eye" do
+    defn eye, do: Nx.eye(2)
+
+    test "generates with shape" do
+      assert eye() == Nx.tensor([[1, 0], [0, 1]])
+    end
+
+    defn eye_with_type, do: Nx.eye(1, type: {:f, 32})
+
+    test "generates with type" do
+      assert eye_with_type() == Nx.tensor([[1]], type: {:f, 32})
     end
   end
 

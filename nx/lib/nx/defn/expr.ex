@@ -440,6 +440,11 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def eye(out) do
+    expr(out, nil, :eye, [])
+  end
+
+  @impl true
   def iota(out, axis) do
     expr(out, nil, :iota, [axis])
   end

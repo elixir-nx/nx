@@ -226,6 +226,15 @@ defmodule EXLA.Defn do
     EXLA.Lib.iota(state.builder, shape, axis)
   end
 
+  defp to_operator(:eye, [], %{type: type, shape: {n, n}}, state) do
+    iota_type = Nx.Type.merge_scalar({:u, 8}, n)
+    iota_shape = EXLA.Shape.make_shape(iota_type, {n, n})
+
+    i0 = EXLA.Op.iota(state.builder, iota_shape, 0)
+    i1 = EXLA.Op.iota(state.builder, iota_shape, 1)
+    to_type(EXLA.Op.equal(i0, i1), type)
+  end
+
   ## to_operator shape
 
   defp to_operator(:reshape, [op, shape], _ans, _state) do

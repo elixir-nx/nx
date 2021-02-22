@@ -366,6 +366,9 @@ defmodule Nx.Defn.Compiler do
   defp rewrite_args(:iota, [t]), do: [t, add_backend([])]
   defp rewrite_args(:iota, [t, opts]), do: [t, add_backend(opts)]
 
+  defp rewrite_args(:eye, [n]), do: [n, add_backend([])]
+  defp rewrite_args(:eye, [n, opts]), do: [n, add_backend(opts)]
+
   defp rewrite_args(:random_uniform, [t]), do: [t, add_backend([])]
   defp rewrite_args(:random_uniform, [t, opts]), do: [t, add_backend(opts)]
   defp rewrite_args(:random_uniform, [t, min, max]), do: [t, min, max, add_backend([])]

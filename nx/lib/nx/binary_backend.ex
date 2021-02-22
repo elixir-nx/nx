@@ -90,7 +90,20 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
-  ## Device API
+  @impl true
+  def eye(%{shape: {n, n}, type: type} = out) do
+    one = number_to_binary(1, type)
+    zero = number_to_binary(0, type)
+
+    data =
+      for i <- 1..n, j <- 1..n, into: <<>> do
+        if i == j, do: one, else: zero
+      end
+
+    from_binary(out, data)
+  end
+
+  ## Conversions
 
   @impl true
   def from_binary(t, binary, _opts), do: from_binary(t, binary)

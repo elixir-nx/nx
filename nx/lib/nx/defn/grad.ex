@@ -490,7 +490,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  @constants [:tensor, :parameter, :iota, :random_uniform, :random_normal] ++
+  @constants [:tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
                [:all?, :any?, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
@@ -500,6 +500,14 @@ defmodule Nx.Defn.Grad do
 
   defp grad(op, _, _, _, cache) when op in @constants do
     {Expr.tensor(0.0), cache}
+  end
+
+  defp grad(op, _, _, _, _) do
+    raise ArgumentError, """
+    gradient not yet implemented for Nx.#{op}.
+
+    Please open up an issue so we can implement the missing gradient
+    """
   end
 
   ## Helpers

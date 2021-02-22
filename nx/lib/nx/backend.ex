@@ -30,6 +30,7 @@ defmodule Nx.Backend do
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
 
+  @callback eye(tensor) :: tensor
   @callback iota(tensor, axis | nil) :: tensor
   @callback random_uniform(tensor, number, number) :: tensor
   @callback random_normal(tensor, mu :: float, sigma :: float) :: tensor

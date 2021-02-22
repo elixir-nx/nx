@@ -232,7 +232,7 @@ defmodule EXLA.AOT.Codegen do
 
     """
     #{res_str}
-    ERL_NIF_TERM result_tuple = enif_make_tuple(env, #{num_results}, #{res_terms});
+    ERL_NIF_TERM result_tuple = enif_make_list(env, #{num_results}, #{res_terms});
     return enif_make_tuple2(env, enif_make_atom(env, \"ok\"), result_tuple);
     """
   end

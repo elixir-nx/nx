@@ -649,7 +649,7 @@ defmodule Nx do
       when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
     backend = opts[:backend] || Nx.BinaryBackend
     backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
@@ -745,7 +745,7 @@ defmodule Nx do
       when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
     backend = opts[:backend] || Nx.BinaryBackend
     backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
@@ -862,7 +862,7 @@ defmodule Nx do
   def iota(tensor_or_shape, opts \\ []) do
     assert_keys!(opts, [:type, :axis, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
     backend = opts[:backend] || Nx.BinaryBackend
 
@@ -872,6 +872,47 @@ defmodule Nx do
     else
       backend.iota(%T{type: type, shape: shape, names: names}, nil)
     end
+  end
+
+  @doc """
+  Creates the identity matrix of size `n`.
+
+  ## Examples
+
+      iex> Nx.eye(2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 0],
+          [0, 1]
+        ]
+      >
+
+      iex> Nx.eye(3, type: {:f, 32}, names: [:height, :width])
+      #Nx.Tensor<
+        f32[height: 3][width: 3]
+        [
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0.0, 1.0]
+        ]
+      >
+
+  ## Options
+
+    * `:type` - the type of the tensor
+    * `:names` - the names of the tensor dimensions
+    * `:backend` - the backend to allocate the tensor on
+
+  """
+  @doc type: :creation
+  def eye(n, opts \\ []) when is_integer(n) and n > 0 do
+    assert_keys!(opts, [:type, :names, :backend])
+    shape = {n, n}
+    names = Nx.Shape.named_axes!(opts[:names], shape)
+    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+    backend = opts[:backend] || Nx.BinaryBackend
+    backend.eye(%T{type: type, shape: shape, names: names})
   end
 
   @doc """
