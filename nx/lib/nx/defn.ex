@@ -34,7 +34,7 @@ defmodule Nx.Defn do
 
   `defn` attempts to keep as close to the Elixir semantics as
   possible but that's not achievable. For example, mathematical
-  and bitwise operators (`+`, `-`, `&&&`, `<<<`, etc) in Elixir
+  and bitwise operators (`+`, `-`, `&&&`, `<<<`, etc.) in Elixir
   work on numbers, which means mapping them to tensors is
   straight-forward and they largely preserve the same semantics,
   except they are now multi-dimensional.

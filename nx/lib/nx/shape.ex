@@ -864,7 +864,7 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Returns the shape and names after a cholesky decomposition.
+  Returns the shape and names after a Cholesky decomposition.
 
   ## Examples
 

@@ -11,7 +11,7 @@ defmodule Nx.Shared do
 
   A macro that allows us to writes all possibles match types
   in the most efficient format. This is done by looking at @0,
-  @1, etc and replacing them by currently matched type at the
+  @1, etc., and replacing them by currently matched type at the
   given position. In other words, this:
 
      match_types [input_type, output_type] do
@@ -137,7 +137,7 @@ defmodule Nx.Shared do
   ## Reflection
 
   @doc """
-  Returns the definition of mathemtical unary funs.
+  Returns the definition of mathematical unary funs.
   """
   def unary_math_funs,
     do: [
