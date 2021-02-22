@@ -9,6 +9,7 @@ defmodule Nx.Pytorch.NIF do
 
   def randint(_min, _max, _shape, _type), do: nif_error(__ENV__.function)
   def rand(_min, _max, _shape, _type), do: nif_error(__ENV__.function)
+  def normal(_mu, _sigma, _shape, _type), do: nif_error(__ENV__.function)
   def arange(_start, _end, _step, _type), do: nif_error(__ENV__.function)
   def arange(_start, _end, _step, _type, _shape), do: nif_error(__ENV__.function)
 

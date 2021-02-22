@@ -133,13 +133,31 @@ ERL_NIF_TERM rand(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   double min = get_double(env, argv[0]);
   double max = get_double(env, argv[1]);
-  std::string type;
   std::vector<int64_t> shape;
+  std::string type;
 
   nx::nif::get_tuple(env, argv[2], shape);
   nx::nif::get_atom(env, argv[3], type);
 
   at::Tensor t = min + at::rand(shape, dtypes[type]) * (max - min);
+
+  std::cout << t << "\r\n";
+
+  return create_tensor_resource(env, t);
+}
+
+ERL_NIF_TERM normal(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  double mean, std;
+  std::vector<int64_t> shape;
+  std::string type;
+
+  nx::nif::get(env, argv[0], &mean);
+  nx::nif::get(env, argv[1], &std);
+  nx::nif::get_tuple(env, argv[2], shape);
+  nx::nif::get_atom(env, argv[3], type);
+
+  at::Tensor t = at::normal(mean, std, shape);
 
   std::cout << t << "\r\n";
 
@@ -266,6 +284,7 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 static ErlNifFunc nif_functions[] = {
     {"randint", 4, randint, 0},
     {"rand", 4, rand, 0},
+    {"normal", 4, normal, 0},
     {"arange", 4, arange, 0},
     {"arange", 5, arange, 0},
     {"from_blob", 3, from_blob, 0},

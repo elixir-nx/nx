@@ -10,7 +10,15 @@ defmodule Nx.PytorchBackend do
 
   funs =
     Nx.Tensor.behaviour_info(:callbacks) --
-      [tensor: 1, iota: 2, random_uniform: 3, from_binary: 3, backend_deallocate: 1, inspect: 2]
+      [
+        tensor: 1,
+        iota: 2,
+        random_uniform: 3,
+        random_normal: 3,
+        from_binary: 3,
+        backend_deallocate: 1,
+        inspect: 2
+      ]
 
   for {fun, arity} <- funs do
     args = Macro.generate_arguments(arity, __MODULE__)
@@ -86,6 +94,12 @@ defmodule Nx.PytorchBackend do
 
   def random_uniform(%{type: {:f, _} = type, shape: shape} = out, min, max) do
     tensor_ref = NIF.rand(min, max, shape, torch_type(type))
+    from_binary(out, tensor_ref)
+  end
+
+  @impl true
+  def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
+    tensor_ref = NIF.normal(mu, sigma, shape, torch_type(type))
     from_binary(out, tensor_ref)
   end
 
