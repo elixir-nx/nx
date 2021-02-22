@@ -7143,24 +7143,23 @@ defmodule Nx do
   end
 
   @doc """
-    Solve the equation a x = b for x, assuming a is a triangular matrix.
+  Solve the equation a x = b for x, assuming a is a triangular matrix.
 
-  # Examples
+  ## Examples
 
-  iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2])
-  #Nx.Tensor<
-    f64[4]
-    [1.33333333, -0.66666667, 2.66666667, -1.33333333]
-  >
+      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2])
+      #Nx.Tensor<
+        f64[4]
+        [1.33333333, -0.66666667, 2.66666667, -1.33333333]
+      >
 
   ### Error cases
 
-  iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2], trans: 9)
-  ** (ArgumentError) unknown trans 9, expected 0 or 'N' for a x = b
+      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2], trans: 9)
+      ** (ArgumentError) unknown trans 9, expected 0 or 'N' for a x = b
 
-  iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0]], [4, 2, 4, 2], trans: 0)
-  ** (ArgumentError) expected a square matrix, got: {2, 4}
-
+      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0]], [4, 2, 4, 2], trans: 0)
+      ** (ArgumentError) expected a square matrix, got: {2, 4}
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
