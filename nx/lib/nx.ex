@@ -7163,7 +7163,7 @@ defmodule Nx do
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
-    %T{shape: s1} = a = tensor(a)
+    %T{shape: s1} = a = tensor!(a)
 
     case shape(s1) do
       {n, n} -> {n, n}
