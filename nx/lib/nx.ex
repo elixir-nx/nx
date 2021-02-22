@@ -7153,24 +7153,24 @@ defmodule Nx do
     [1.33333333, -0.66666667, 2.66666667, -1.33333333]
   >
 
+  ### Error cases
+
   iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2], trans: 9)
-  #Nx.Tensor<
-    f64[4]
-    [1.33333333, -0.66666667, 2.66666667, -1.33333333]
-  >
+  ** (ArgumentError) unknown trans 9, expected 0 or 'N' for a x = b
 
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
-    %T{shape: shape} = a = tensor(a)
-    %T{shape: shape} = b = tensor(b)
+    a = tensor(a)
+    b = tensor(b)
 
     assert_keys!(opts, [:trans])
 
     case opts[:trans] do
       0 -> triangular_solve_n(a, b)
+      'N' -> triangular_solve_n(a, b)
       nil -> triangular_solve_n(a, b)
-      trans -> raise ArgumentError, "unknown trans #{inspect(trans)}"
+      trans -> raise ArgumentError, "unknown trans #{inspect(trans)}, expected 0 or 'N' for a x = b"
     end
   end
 
