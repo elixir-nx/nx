@@ -51,6 +51,11 @@ namespace nx
                           reinterpret_cast<int *>(var));
     }
 
+    int get(ErlNifEnv *env, ERL_NIF_TERM term, long *var)
+    {
+      return enif_get_long(env, term, var);
+    }
+
     int get(ErlNifEnv *env, ERL_NIF_TERM term, int64_t *var)
     {
       return enif_get_int64(env, term,

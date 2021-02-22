@@ -12,6 +12,9 @@ defmodule Nx.Pytorch.NIF do
   def normal(_mu, _sigma, _shape, _type), do: nif_error(__ENV__.function)
   def arange(_start, _end, _step, _type), do: nif_error(__ENV__.function)
   def arange(_start, _end, _step, _type, _shape), do: nif_error(__ENV__.function)
+  def reshape(_tensor, _shape), do: nif_error(__ENV__.function)
+  def squeeze(_tensor), do: nif_error(__ENV__.function)
+  def squeeze(_tensor, _axis), do: nif_error(__ENV__.function)
 
   def from_blob(_blob, _shape, _type),
     do: nif_error(__ENV__.function)

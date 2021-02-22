@@ -39,43 +39,6 @@ at::Tensor *get_tensor(ErlNifEnv *env, ERL_NIF_TERM term)
   }
 }
 
-double get_double(ErlNifEnv *env, ERL_NIF_TERM term)
-{
-  double var;
-  enif_get_double(env, term, &var);
-
-  return var;
-}
-
-double get_long(ErlNifEnv *env, ERL_NIF_TERM term)
-{
-  long var;
-  enif_get_long(env, term, &var);
-
-  return var;
-}
-
-std::vector<int64_t> shape_from_tuple(ErlNifEnv *env, ERL_NIF_TERM tuple)
-{
-  const ERL_NIF_TERM *shape;
-  int shape_size;
-  std::vector<int64_t> shape_array;
-  int64_t shape_elem;
-
-  if (!enif_get_tuple(env, tuple, &shape_size, &shape))
-    // Signal error here. Raise?
-    // return enif_make_badarg(env);
-    ;
-
-  for (int i = 0; i < shape_size; i++)
-  {
-    enif_get_int64(env, shape[i], (long *)&shape_elem);
-    shape_array.push_back(shape_elem);
-  }
-
-  return shape_array;
-}
-
 unsigned long elem_count(std::vector<int64_t> shape)
 {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>{});
@@ -100,25 +63,20 @@ from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   if (blob.size / dtype_sizes[type] < elem_count(shape))
     return enif_make_badarg(env);
 
-  // float blob_array[] = {1, 2, 3.2342, 4, 5, 6, 7};
-  // auto options = at::TensorOptions().dtype(at::kFloat); // .device(torch::kCUDA, 1);
-
   // Clone here to copy data from blob, which will be GCed.
   at::Tensor t = at::clone(at::from_blob(blob.data, shape, dtypes[type]));
-
-  // at::ones(c10::IntArrayRef(shape_array, shape_size), at::kFloat);
-  std::cout << t << "\r\n";
 
   return create_tensor_resource(env, t);
 }
 
 ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
-  long min = get_long(env, argv[0]);
-  long max = get_long(env, argv[1]);
+  int64_t min, max;
   std::string type;
   std::vector<int64_t> shape;
 
+  nx::nif::get(env, argv[0], &min);
+  nx::nif::get(env, argv[1], &max);
   nx::nif::get_tuple(env, argv[2], shape);
   nx::nif::get_atom(env, argv[3], type);
 
@@ -131,17 +89,16 @@ ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
 ERL_NIF_TERM rand(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
-  double min = get_double(env, argv[0]);
-  double max = get_double(env, argv[1]);
+  double min, max;
   std::vector<int64_t> shape;
   std::string type;
 
+  nx::nif::get(env, argv[0], &min);
+  nx::nif::get(env, argv[1], &max);
   nx::nif::get_tuple(env, argv[2], shape);
   nx::nif::get_atom(env, argv[3], type);
 
   at::Tensor t = min + at::rand(shape, dtypes[type]) * (max - min);
-
-  std::cout << t << "\r\n";
 
   return create_tensor_resource(env, t);
 }
@@ -158,8 +115,6 @@ ERL_NIF_TERM normal(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   nx::nif::get_atom(env, argv[3], type);
 
   at::Tensor t = at::normal(mean, std, shape);
-
-  std::cout << t << "\r\n";
 
   return create_tensor_resource(env, t);
 }
@@ -184,9 +139,36 @@ ERL_NIF_TERM arange(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     t = at::reshape(t, shape);
   }
 
-  std::cout << t << "\r\n";
-
   return create_tensor_resource(env, t);
+}
+
+ERL_NIF_TERM reshape(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  std::vector<int64_t> shape;
+  at::Tensor *t = get_tensor(env, argv[0]);
+  nx::nif::get_tuple(env, argv[1], shape);
+
+  at::Tensor r = at::reshape(*t, shape);
+
+  return create_tensor_resource(env, r);
+}
+
+ERL_NIF_TERM squeeze(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  at::Tensor *t = get_tensor(env, argv[0]);
+  at::Tensor r;
+
+  if (argc == 2)
+  {
+    int64_t dim;
+    nx::nif::get(env, argv[1], &dim);
+
+    r = at::squeeze(*t, dim);
+  }
+  else
+    r = at::squeeze(*t);
+
+  return create_tensor_resource(env, r);
 }
 
 ERL_NIF_TERM ones(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
@@ -208,29 +190,18 @@ ERL_NIF_TERM add(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   at::Tensor *b = get_tensor(env, argv[1]);
   double scalar = 0.0;
 
-  std::cerr << *a << "\r\n";
   if (b == NULL)
   {
-    scalar = get_double(env, argv[1]);
-    std::cout << "Adding scalar " << scalar << "\n";
+    nx::nif::get(env, argv[1], &scalar);
   }
-  else
-  {
 
-    std::cout << *b << "\r\n";
-  }
   try
   {
     at::Tensor c;
     if (b == NULL)
-    {
       c = *a + scalar;
-    }
     else
       c = *a + *b;
-
-    std::cout
-        << c << "\r\n";
 
     return create_tensor_resource(env, c);
   }
@@ -289,9 +260,9 @@ static ErlNifFunc nif_functions[] = {
     {"arange", 5, arange, 0},
     {"from_blob", 3, from_blob, 0},
     {"ones", 1, ones, 0},
-    {"add",
-     2,
-     add,
-     0}};
+    {"reshape", 2, reshape, 0},
+    {"squeeze", 2, squeeze, 0},
+    {"squeeze", 1, squeeze, 0},
+    {"add", 2, add, 0}};
 
 ERL_NIF_INIT(Elixir.Nx.Pytorch.NIF, nif_functions, load, NULL, upgrade, NULL)

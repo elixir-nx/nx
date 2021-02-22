@@ -15,6 +15,9 @@ defmodule Nx.PytorchBackend do
         iota: 2,
         random_uniform: 3,
         random_normal: 3,
+        reshape: 3,
+        squeeze: 3,
+        add: 3,
         from_binary: 3,
         backend_deallocate: 1,
         inspect: 2
@@ -51,12 +54,12 @@ defmodule Nx.PytorchBackend do
 
   def iota(%{shape: shape, type: type} = out, nil) do
     t = NIF.arange(0, Nx.size(shape), 1, torch_type(type), shape)
-    from_binary(out, t)
+    from_ref(out, t)
   end
 
   def iota(%{shape: {n}, type: type} = out, 0) do
     t = NIF.arange(0, n, 1, torch_type(type))
-    from_binary(out, t)
+    from_ref(out, t)
   end
 
   def iota(%{shape: shape, type: type} = out, axis) do
@@ -83,29 +86,49 @@ defmodule Nx.PytorchBackend do
           do: number_to_binary(i, type)
 
     t = NIF.from_blob(data, shape, torch_type(type))
-    from_binary(out, t)
+    from_ref(out, t)
   end
 
   @impl true
   def random_uniform(%{type: {s, _} = type, shape: shape} = out, min, max) when s in [:u, :s] do
     tensor_ref = NIF.randint(min, max, shape, torch_type(type))
-    from_binary(out, tensor_ref)
+    from_ref(out, tensor_ref)
   end
 
   def random_uniform(%{type: {:f, _} = type, shape: shape} = out, min, max) do
     tensor_ref = NIF.rand(min, max, shape, torch_type(type))
-    from_binary(out, tensor_ref)
+    from_ref(out, tensor_ref)
   end
 
   @impl true
   def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
     tensor_ref = NIF.normal(mu, sigma, shape, torch_type(type))
-    from_binary(out, tensor_ref)
+    from_ref(out, tensor_ref)
   end
 
   @impl true
-  def from_binary(t, ref, _opts), do: from_binary(t, ref)
-  defp from_binary(t, ref) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
+  def from_binary(%{type: type, shape: shape} = out, binary, _opts) do
+    t = NIF.from_blob(binary, shape, torch_type(type))
+    from_ref(out, t)
+  end
+
+  ## Shape
+
+  @impl true
+  def reshape(out, %{data: %{ref: ref}} = tensor, shape),
+    do: %{tensor | data: %__MODULE__{ref: NIF.reshape(ref, shape)}}
+
+  @impl true
+  def squeeze(out, tensor, _axes) do
+    t = NIF.squeeze(tensor.data.ref)
+    from_ref(out, t)
+  end
+
+  @impl true
+  def add(out, left, right) do
+    t = NIF.add(left.data.ref, right.data.ref)
+    from_ref(out, t)
+  end
 
   @impl true
   def backend_deallocate(%Nx.Tensor{data: _data}) do
@@ -116,6 +139,8 @@ defmodule Nx.PytorchBackend do
   def inspect(%{data: %{ref: ref}}, opts) do
     Inspect.inspect(ref, opts)
   end
+
+  defp from_ref(t, ref) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
 
   defp number_to_binary(number, type),
     do: match_types([type], do: <<write!(number, 0)>>)
