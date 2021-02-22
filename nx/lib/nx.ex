@@ -7158,19 +7158,33 @@ defmodule Nx do
   iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2], trans: 9)
   ** (ArgumentError) unknown trans 9, expected 0 or 'N' for a x = b
 
+  iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0]], [4, 2, 4, 2], trans: 0)
+  ** (ArgumentError) expected a square matrix, got: {2, 4}
+
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
-    a = tensor(a)
-    b = tensor(b)
+    %T{shape: s1} = a = tensor(a)
+
+    case shape(s1) do
+      {n, n} -> {n, n}
+      other -> raise ArgumentError, "expected a square matrix, got: #{inspect(other)}"
+    end
 
     assert_keys!(opts, [:trans])
 
     case opts[:trans] do
-      0 -> triangular_solve_n(a, b)
-      'N' -> triangular_solve_n(a, b)
-      nil -> triangular_solve_n(a, b)
-      trans -> raise ArgumentError, "unknown trans #{inspect(trans)}, expected 0 or 'N' for a x = b"
+      0 ->
+        triangular_solve_n(a, b)
+
+      'N' ->
+        triangular_solve_n(a, b)
+
+      nil ->
+        triangular_solve_n(a, b)
+
+      trans ->
+        raise ArgumentError, "unknown trans #{inspect(trans)}, expected 0 or 'N' for a x = b"
     end
   end
 
