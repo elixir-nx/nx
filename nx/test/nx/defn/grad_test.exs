@@ -509,6 +509,29 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "inverse hyperbolic functions" do
+    defn grad_arcsinh(t), do: grad(t, Nx.arcsinh(t))
+    defn grad_arccosh(t), do: grad(t, Nx.arccosh(t))
+    defn grad_arctanh(t), do: grad(t, Nx.arctanh(t))
+
+    test "computes gradient of inverse hyperbolic functions" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        check_grads!(&Nx.arcsinh/1, &grad_arcsinh/1, t, eps: 0.1)
+      end
+
+      for _ <- @iters do
+        t = Nx.random_uniform({}, 1.01, 100.0, type: {:f, 64})
+        check_grads!(&Nx.arccosh/1, &grad_arccosh/1, t, eps: 0.1)
+      end
+
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 64})
+        check_grads!(&Nx.arctanh/1, &grad_arctanh/1, t, eps: 0.1)
+      end
+    end
+  end
+
   describe "erf_inv" do
     defn grad_erf_inv(t), do: grad(t, Nx.erf_inv(t))
 
