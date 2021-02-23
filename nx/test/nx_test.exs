@@ -945,15 +945,28 @@ defmodule NxTest do
       end)
     end
 
-    test "raises when input and kernel channels - the second dimension of each shape - is not the same" do
+    test "raises when input channels are mismatched" do
       kernel = Nx.broadcast(Nx.tensor(0), {2, 2, 2})
       t = Nx.iota({4, 4, 4})
 
       assert_raise(
         ArgumentError,
-        ~r/size of input dimension 1 must match size of kernel dimension 1/,
+        ~r/size of input dimension 1 divided by groups must match size of kernel dimension 1/,
         fn ->
           Nx.conv(t, kernel)
+        end
+      )
+    end
+
+    test "raises when :groups cannot divide evenly into the 1st dim (elem 0) of the kernel" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {3, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/size of kernel dimension 0 must be evenly divisible by groups/,
+        fn ->
+          Nx.conv(t, kernel, groups: 2)
         end
       )
     end
@@ -1177,6 +1190,24 @@ defmodule NxTest do
       assert Nx.type(t1) == {:s, 64}
       assert Nx.type(t2) == {:f, 64}
       assert t1 != t2
+    end
+  end
+
+  describe "eye/2" do
+    test "raises for non-square rank 2 tensor" do
+      t = Nx.iota({2, 3})
+
+      assert_raise(ArgumentError, "eye/2 expects a square matrix, got: {2, 3}", fn ->
+        Nx.eye(t)
+      end)
+    end
+
+    test "raises for tensor that is not rank 2" do
+      t = Nx.iota({2, 3, 2})
+
+      assert_raise(ArgumentError, "eye/2 expects a square matrix, got: {2, 3, 2}", fn ->
+        Nx.eye(t)
+      end)
     end
   end
 end

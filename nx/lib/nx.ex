@@ -6326,7 +6326,7 @@ defmodule Nx do
 
     if rem(kernel_output_channels, groups) != 0 do
       raise ArgumentError,
-            "size of kernel dimension 1 must be evenly divisible by groups" <>
+            "size of kernel dimension 0 must be evenly divisible by groups" <>
               " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
               " with shape #{inspect(kernel_shape)}"
     end
