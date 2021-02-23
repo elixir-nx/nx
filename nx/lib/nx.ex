@@ -7047,19 +7047,19 @@ defmodule Nx do
   end
 
   @doc """
-  Calculates the QR decomposition of an 2-D tensor with shape `{M, N}` via the Householder method.
+  Calculates the QR decomposition of a 2-D tensor with shape `{M, N}`.
 
   ## Options
 
-  `:mode` - Can be one of `:reduced`, `:complete`, `:r` or `:raw`. Defaults to `:reduced`
+  `:mode` - Can be one of `:reduced`, `:complete`. Defaults to `:reduced`
     For the following, `K = min(M, N)`
 
     * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
     * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
 
-  `:q_axes` - Defines the axes for the `q` tensor
+  `:q_names` - Defines the axes for the `q` tensor
 
-  `:r_axes` - Defines the axes for the `r` tensor
+  `:r_names` - Defines the axes for the `r` tensor
 
   ## Examples
 
@@ -7080,7 +7080,7 @@ defmodule Nx do
         ])
       }
 
-      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]]), q_axes: [:row, :base_vector], r_axes: [:coef, :vars])
+      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]]), q_names: [:row, :base_vector], r_names: [:coef, :vars])
       {
         Nx.tensor([
           [-1.0, 0.0, 0.0],
@@ -7127,14 +7127,14 @@ defmodule Nx do
 
   ## Error cases
 
-      iex> Nx.qr(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]])) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
+      iex> Nx.qr(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
       ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
   """
   @doc type: :linalg
   def qr(tensor, opts \\ []) do
     %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
 
-    assert_keys!(opts, [:mode, :q_axes, :r_axes])
+    assert_keys!(opts, [:mode, :q_names, :r_names])
 
     opts = Keyword.merge([mode: :reduced], opts)
 
@@ -7152,8 +7152,8 @@ defmodule Nx do
 
     [n1, n2] = names
 
-    q_names = opts[:q_axes] || [n1, nil]
-    r_names = opts[:r_axes] || [nil, n2]
+    q_names = opts[:q_names] || [n1, nil]
+    r_names = opts[:r_names] || [nil, n2]
 
     impl!(tensor).qr(
       {%{tensor | type: output_type, shape: q_shape, names: q_names},

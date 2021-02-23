@@ -1041,24 +1041,29 @@ defmodule Nx.BinaryBackend do
   @impl true
   def qr(
         {%{shape: {m, k} = shape_q, type: output_type} = q_holder,
-         %{shape: {k, n} = shape_r, type: output_type} = r_holder},
-        %{type: input_type} = tensor,
+         %{shape: {k, n} = shape_r, type: {_, output_num_bits} = output_type} = r_holder},
+        %{type: {_, input_num_bits} = input_type} = tensor,
         opts
       ) do
     mode = opts[:mode]
 
-    r =
+    r_bin =
       if mode == :reduced do
-        tensor[[0..(k - 1), 0..(n - 1)]]
+        # Since we want the first k rows of r, we can
+        # just slice the binary by taking the first
+        # n * k * output_type_num_bits bits from the binary.
+        # Trick for r = tensor[[0..(k - 1), 0..(n - 1)]]
+        slice_size = n * k * input_num_bits
+        <<r_bin::bitstring-size(slice_size), _::bitstring>> = to_binary(tensor)
+        r_bin
       else
-        tensor
+        to_binary(tensor)
       end
-      |> to_binary()
 
     shape_h = {k, k}
 
     {q_bin, r_bin, _output_type} =
-      for i <- 0..(n - 1), reduce: {nil, r, input_type} do
+      for i <- 0..(n - 1), reduce: {nil, r_bin, input_type} do
         {q, r, type_r} ->
           # a = r[[i..(k - 1), i]]
           {a_reverse, num_rows_a, _, _} =
@@ -1092,7 +1097,7 @@ defmodule Nx.BinaryBackend do
 
               zero = number_to_binary(0, output_type)
 
-              h_bin <> String.duplicate(zero, padding_length)
+              [h_bin | List.duplicate(zero, padding_length)] |> IO.iodata_to_binary()
             else
               dot_binary(q, shape_q, output_type, h_bin, shape_h, output_type, output_type)
             end
@@ -1105,13 +1110,7 @@ defmodule Nx.BinaryBackend do
     q = from_binary(q_holder, q_bin)
     r = from_binary(r_holder, r_bin)
 
-    case mode do
-      :complete ->
-        {q, r}
-
-      :reduced ->
-        {q, r[[0..(k - 1), 0..(n - 1)]]}
-    end
+    {q, r}
   end
 
   defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
