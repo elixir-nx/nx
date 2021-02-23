@@ -156,6 +156,17 @@ defmodule EXLA.NIF do
 
   def cholesky(_operand), do: nif_error(__ENV__.function)
 
+  def eigh(_operand, _lower), do: nif_error(__ENV__.function)
+
+  def lu(_operand), do: nif_error(__ENV__.function)
+
+  def qr(_operand, _full_matrices, _precision_config), do: nif_error(__ENV__.function)
+
+  def svd(_a, _precision_config), do: nif_error(__ENV__.function)
+
+  def triangular_solve(_a, _b, _left_side, _lower, _unit_diagonal, _transpose_a),
+    do: nif_error(__ENV__.function)
+
   def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: nif_error(__ENV__.function)
 
@@ -222,8 +233,15 @@ defmodule EXLA.NIF do
   def await_streams_io(_client, _buffer, _keep_on_device),
     do: nif_error(__ENV__.function)
 
-  def compile_aot(_computation, _pbtext_path, _aot_path, _function_name, _class_name, _target_triple),
-    do: nif_error(__ENV__.function)
+  def compile_aot(
+        _computation,
+        _pbtext_path,
+        _aot_path,
+        _function_name,
+        _class_name,
+        _target_triple
+      ),
+      do: nif_error(__ENV__.function)
 
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: nif_error(__ENV__.function)
