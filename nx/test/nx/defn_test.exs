@@ -1162,5 +1162,31 @@ defmodule Nx.DefnTest do
         Impl.target_not_defn(1)
       end
     end
+
+    test "raises for non-module :to option" do
+      assert_raise(ArgumentError, ~s|defndelegate expected :to to be a module, got "thing"|, fn ->
+        code = """
+        defmodule BadDefndelegate1 do
+          import Nx.Defn
+
+          defndelegate wont_compile, to: "thing"
+        end
+        """
+        Code.compile_string(code)
+      end)
+    end
+
+    test "raises for non-atom :as option" do
+      assert_raise(ArgumentError, ~s|defndelegate expected :as to be an atom, got "thing"|, fn ->
+        code = """
+        defmodule BadDefndelegate1 do
+          import Nx.Defn
+
+          defndelegate wont_compile, to: Thing, as: "thing"
+        end
+        """
+        Code.compile_string(code)
+      end)
+    end
   end
 end

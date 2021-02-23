@@ -270,7 +270,7 @@ defmodule Nx.Defn do
   @doc """
   Defines a public numerical function that delegates to another module.
 
-  Function signatures must be valid defn function signatures - see defn.
+  Function signature must target defn function signature.
 
   ## Examples
 
@@ -299,11 +299,15 @@ defmodule Nx.Defn do
       {:__aliases__, _, _} ->
         Macro.expand(module, %{__CALLER__ | function: {:__info__, 1}})
       _ ->
-        raise ArgumentError, "expected :to to be a module, got #{Macro.to_string(module)}"
+        raise ArgumentError, "defndelegate expected :to to be a module, got #{Macro.to_string(module)}"
     end
-    func = Keyword.get(opts, :as) || name
-    arity = length(args)
 
+    func = Keyword.get(opts, :as, name)
+    if not is_atom(func) do
+      raise ArgumentError, "defndelegate expected :as to be an atom, got #{Macro.to_string(func)}"
+    end
+    
+    arity = length(args)
     defn_call = {:., [], [{:__aliases__, [alias: false], [:Nx, :Defn]}, :defn]}
 
     {:__block__, [], [
