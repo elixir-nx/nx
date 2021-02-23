@@ -2600,7 +2600,7 @@ defmodule Nx do
 
   ### Arc tangent between scalars
 
-      iex> Nx.arctan2(1, 2)
+      iex> Nx.atan2(1, 2)
       #Nx.Tensor<
         f64
         0.4636476090008061
@@ -2608,13 +2608,13 @@ defmodule Nx do
 
   ### Arc tangent between tensors and scalars
 
-      iex> Nx.arctan2(Nx.tensor([1, 2, 3], names: [:data]), 1)
+      iex> Nx.atan2(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
         f64[data: 3]
         [0.7853981633974483, 1.1071487177940904, 1.2490457723982544]
       >
 
-      iex> Nx.arctan2(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
+      iex> Nx.atan2(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
         f64[data: 3]
         [0.7853981633974483, 0.4636476090008061, 0.3217505543966422]
@@ -2626,7 +2626,7 @@ defmodule Nx do
       # optimizes -0.0 away as 0.0. So we do: -1.0*(Integer.parse("0")|>elem(0))
       iex> pos_and_neg_zero_x = Nx.multiply(Nx.tensor([[-1.0], [1.0]]), 0.0)
       iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
-      iex> t = Nx.arctan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
+      iex> t = Nx.atan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
       iex> Nx.to_binary(t)
       <<-3.141592653589793::float-64-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-64-native,
         3.141592653589793::float-64-native, 0.0::float-64-native>>
@@ -2635,7 +2635,7 @@ defmodule Nx do
 
   """
   @doc type: :element
-  def arctan2(left, right), do: element_wise_bin_op(left, right, :arctan2, &Nx.Type.to_floating/1)
+  def atan2(left, right), do: element_wise_bin_op(left, right, :atan2, &Nx.Type.to_floating/1)
 
   @doc """
   Element-wise maximum of two tensors.
@@ -3557,7 +3557,7 @@ defmodule Nx do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
     {{one, _}, {two, _}, {three, _}} =
-      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv] do
+      if name in [:acos, :asin, :atan, :atanh, :erf_inv] do
         {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
          Code.eval_quoted(code, x: 0.9)}
       else
@@ -3565,12 +3565,12 @@ defmodule Nx do
       end
 
     first_val =
-      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv],
+      if name in [:acos, :asin, :atan, :atanh, :erf_inv],
         do: 0.1,
         else: 1
 
     list_of_vals =
-      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv],
+      if name in [:acos, :asin, :atan, :atanh, :erf_inv],
         do: [0.1, 0.5, 0.9],
         else: [1.0, 2.0, 3.0]
 

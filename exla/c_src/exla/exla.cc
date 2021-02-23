@@ -774,15 +774,15 @@ ERL_NIF_TERM sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Sin);
 }
 
-ERL_NIF_TERM arccos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM acos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Acos);
 }
 
-ERL_NIF_TERM arcsin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM asin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Asin);
 }
 
-ERL_NIF_TERM arctan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM atan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Atan);
 }
 
@@ -798,15 +798,15 @@ ERL_NIF_TERM tanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Tanh);
 }
 
-ERL_NIF_TERM arccosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM acosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Acosh);
 }
 
-ERL_NIF_TERM arcsinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM asinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Asinh);
 }
 
-ERL_NIF_TERM arctanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM atanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Atanh);
 }
 
@@ -1824,7 +1824,7 @@ static ErlNifFunc exla_funcs[] = {
   {"right_shift_arithmetic", 3, shift_right_arithmetic},
   {"power", 3, pow},
   {"complex", 3, complex},
-  {"arctan2", 3, atan2},
+  {"atan2", 3, atan2},
   // Element-wise Binary comparison
   {"equal", 3, equal},
   {"not_equal", 3, not_equal},
@@ -1845,15 +1845,15 @@ static ErlNifFunc exla_funcs[] = {
   {"sign", 1, sign},
   {"cos", 1, cos},
   {"sin", 1, sin},
-  {"arccos", 1, arccos},
-  {"arcsin", 1, arcsin},
-  {"arctan", 1, arctan},
+  {"acos", 1, acos},
+  {"asin", 1, asin},
+  {"atan", 1, atan},
   {"cosh", 1, cosh},
   {"sinh", 1, sinh},
   {"tanh", 1, tanh},
-  {"arccosh", 1, arccosh},
-  {"arcsinh", 1, arcsinh},
-  {"arctanh", 1, arctanh},
+  {"acosh", 1, acosh},
+  {"asinh", 1, asinh},
+  {"atanh", 1, atanh},
   {"real", 1, real},
   {"imag", 1, imag},
   {"sqrt", 1, sqrt},

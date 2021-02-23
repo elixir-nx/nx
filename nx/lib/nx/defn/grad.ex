@@ -142,7 +142,7 @@ defmodule Nx.Defn.Grad do
     {maybe_add(dx, dy), cache}
   end
 
-  defp grad(:arctan2, [x, y], ans, g, cache) do
+  defp grad(:atan2, [x, y], ans, g, cache) do
     {x, y} = binary_broadcast(x, y, ans)
     den = Nx.add(Nx.power(x, 2), Nx.power(y, 2))
     {dx, cache} = to_grad(x, Nx.divide(Nx.multiply(g, y), den), cache)
@@ -403,7 +403,7 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:arcsin, [x], _ans, g, cache) do
+  defp grad(:asin, [x], _ans, g, cache) do
     g = Nx.multiply(g, Nx.rsqrt(Nx.subtract(1.0, Nx.power(x, 2.0))))
     to_grad(x, g, cache)
   end
@@ -413,12 +413,27 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:asinh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.rsqrt(Nx.add(Nx.power(x, 2.0), 1.0)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:acosh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.rsqrt(Nx.subtract(Nx.power(x, 2.0), 1.0)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:atanh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.divide(1.0, Nx.subtract(1.0, Nx.power(x, 2.0))))
+    to_grad(x, g, cache)
+  end
+
   defp grad(:cos, [x], _ans, g, cache) do
     g = Nx.multiply(g, Nx.negate(Nx.sin(x)))
     to_grad(x, g, cache)
   end
 
-  defp grad(:arccos, [x], _ans, g, cache) do
+  defp grad(:acos, [x], _ans, g, cache) do
     g = Nx.multiply(g, Nx.negate(Nx.rsqrt(Nx.subtract(1.0, Nx.power(x, 2.0)))))
     to_grad(x, g, cache)
   end
@@ -433,7 +448,7 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:arctan, [x], _ans, g, cache) do
+  defp grad(:atan, [x], _ans, g, cache) do
     g = Nx.divide(g, Nx.add(1.0, Nx.power(x, 2.0)))
     to_grad(x, g, cache)
   end

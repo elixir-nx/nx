@@ -28,7 +28,7 @@ defmodule EXLA.NIF do
     [:add, :subtract, :multiply, :divide, :remainder, :min, :max] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift_arithmetic] ++
       [:right_shift_logical, :equal, :not_equal, :greater_equal, :greater, :less_equal] ++
-      [:less, :power, :complex, :arctan2]
+      [:less, :power, :complex, :atan2]
 
   for op <- binary_broadcast_ops do
     def unquote(op)(_a, _b, _broadcast_dims) do
@@ -38,8 +38,8 @@ defmodule EXLA.NIF do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :real, :imag, :erf_inv] ++
-      [:is_finite, :conj, :arccos, :arcsin, :arctan, :cosh, :sinh, :erf, :erfc] ++
-      [:arccosh, :arcsinh, :arctanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs] ++
+      [:is_finite, :conj, :acos, :asin, :atan, :cosh, :sinh, :erf, :erfc] ++
+      [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs] ++
       [:bitwise_not, :population_count, :count_leading_zeros, :floor, :ceil, :round]
 
   for op <- unary_ops do

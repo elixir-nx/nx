@@ -216,17 +216,17 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  describe "arctan2 rule" do
-    defn arctan2_rule(t), do: Nx.arctan2(Nx.tanh(t), t)
-    defn grad_arctan2_rule(t), do: grad(t, arctan2_rule(t))
+  describe "atan2 rule" do
+    defn atan2_rule(t), do: Nx.atan2(Nx.tanh(t), t)
+    defn grad_atan2_rule(t), do: grad(t, atan2_rule(t))
 
     test "computes gradient" do
-      assert grad_arctan2_rule(Nx.tensor(1.0)) == Nx.tensor(-0.21621156120382867)
+      assert grad_atan2_rule(Nx.tensor(1.0)) == Nx.tensor(-0.21621156120382867)
 
       for _ <- @iters do
         check_grads!(
-          &arctan2_rule/1,
-          &grad_arctan2_rule/1,
+          &atan2_rule/1,
+          &grad_atan2_rule/1,
           Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
         )
       end
@@ -481,17 +481,17 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "inverse trig family" do
-    defn grad_arcsin(t), do: grad(t, Nx.arcsin(t))
-    defn grad_arccos(t), do: grad(t, Nx.arccos(t))
-    defn grad_arctan(t), do: grad(t, Nx.arctan(t))
+    defn grad_asin(t), do: grad(t, Nx.asin(t))
+    defn grad_acos(t), do: grad(t, Nx.acos(t))
+    defn grad_atan(t), do: grad(t, Nx.atan(t))
 
     test "computes gradient of inverse trig functions" do
       for _ <- @iters do
         t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 32})
-        check_grads!(&Nx.arcsin/1, &grad_arcsin/1, t, eps: 0.1)
-        check_grads!(&Nx.arccos/1, &grad_arccos/1, t, eps: 0.1)
-        check_grads!(&Nx.arctan/1, &grad_arctan/1, t, eps: 0.1)
-        check_grads!(&Nx.arctan/1, &grad_arctan/1, Nx.multiply(1000.0,t), eps: 0.1)
+        check_grads!(&Nx.asin/1, &grad_asin/1, t, eps: 0.1)
+        check_grads!(&Nx.acos/1, &grad_acos/1, t, eps: 0.1)
+        check_grads!(&Nx.atan/1, &grad_atan/1, t, eps: 0.1)
+        check_grads!(&Nx.atan/1, &grad_atan/1, Nx.multiply(1000.0,t), eps: 0.1)
       end
     end
   end
@@ -506,6 +506,29 @@ defmodule Nx.Defn.GradTest do
           check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
           check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
         end
+    end
+  end
+
+  describe "inverse hyperbolic functions" do
+    defn grad_asinh(t), do: grad(t, Nx.asinh(t))
+    defn grad_acosh(t), do: grad(t, Nx.acosh(t))
+    defn grad_atanh(t), do: grad(t, Nx.atanh(t))
+
+    test "computes gradient of inverse hyperbolic functions" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        check_grads!(&Nx.asinh/1, &grad_asinh/1, t, eps: 0.1)
+      end
+
+      for _ <- @iters do
+        t = Nx.random_uniform({}, 1.01, 100.0, type: {:f, 64})
+        check_grads!(&Nx.acosh/1, &grad_acosh/1, t, eps: 0.1)
+      end
+
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 64})
+        check_grads!(&Nx.atanh/1, &grad_atanh/1, t, eps: 0.1)
+      end
     end
   end
 

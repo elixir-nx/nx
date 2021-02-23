@@ -474,9 +474,9 @@ defmodule Nx.Defn.Expr do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
-      [:arccosh, :arcsinh, :arctanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
+      [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
       [:population_count, :count_leading_zeros, :floor, :ceil, :round, :as_type] ++
-      [:erf, :erfc, :erf_inv, :arccos, :arcsin, :arctan]
+      [:erf, :erfc, :erf_inv, :acos, :asin, :atan]
 
   for op <- unary_ops do
     @impl true
@@ -487,7 +487,7 @@ defmodule Nx.Defn.Expr do
   end
 
   binary_ops =
-    [:add, :subtract, :multiply, :divide, :power, :remainder, :arctan2, :max, :min, :quotient] ++
+    [:add, :subtract, :multiply, :divide, :power, :remainder, :atan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
