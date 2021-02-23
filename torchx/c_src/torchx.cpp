@@ -300,12 +300,12 @@ int upgrade(ErlNifEnv *env, void **priv_data, void **old_priv_data, ERL_NIF_TERM
   return 0;
 }
 
-// Used for RNG initialization.
 int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 {
-  // Silence "unused var" warnings.
   if (open_resource_type(env) == -1)
     return -1;
+
+  // Silence "unused var" warnings.
   (void)(priv_data);
   (void)(load_info);
 

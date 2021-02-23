@@ -1,10 +1,11 @@
-default_target: all
 
-ERL_INCLUDE_PATH = $(shell erl -eval 'io:format("~s", [lists:concat([code:root_dir(), "/erts-", erlang:system_info(version), "/include"])])' -s init stop -noshell)
-LIBTORCH_DIR = ../../libtorch
+ifndef LIBTORCH_DIR
+	$(error LIBTORCH_DIR env var is not set. It should point to the directory, where libtorch is installed.)
+endif
+
 LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
-CFLAGS = -fPIC -I$(ERL_INCLUDE_PATH) -I$(LIBTORCH_INCLUDE_PATH) -O3 -Wall -Wextra -Wno-unused-parameter -shared -std=c++14
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(LIBTORCH_INCLUDE_PATH) -O3 -Wall -Wextra -Wno-unused-parameter -shared -std=c++14
 LDFLAGS = -L$(LIBTORCH_LINK_PATH) -Wl,-rpath,$(LIBTORCH_LINK_PATH) -ltorch -lc10
 
 # MacOS needs extra flags to link successfully
@@ -15,10 +16,11 @@ else  # Linux
 	LDFLAGS += -lm
 endif
 
+.DEFAULT_GLOBAL := build
 
-all: c_src/torchx.cpp
-	mkdir -p $(MIX_APP_PATH)/priv
+build: $(MIX_APP_PATH)/priv/torchx.so
+
+$(MIX_APP_PATH)/priv/torchx.so: c_src/torchx.cpp
+	@echo 'Compiling: '$<
+	@mkdir -p $(MIX_APP_PATH)/priv
 	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(MIX_APP_PATH)/priv/torchx.so $(LDFLAGS)
-
-
-clean:
