@@ -668,6 +668,31 @@ defmodule NxTest do
       ]) |> round(1)
     end
 
+    test "factors rectangular matrix" do
+      t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
+      {q, r} = Nx.qr(t, mode: :reduced)
+
+      assert round(q, 1) == Nx.tensor([
+          [-0.5774, 0.8165, 0.0],
+          [-0.5774, -0.4082, 0.7071],
+          [-0.5774, -0.4082, -0.7071],
+          [0.0, 0.0, 0.0]
+        ]) |> round(1)
+
+      assert round(r, 1) == Nx.tensor([
+          [-1.7321, -4.0415, -2.3094],
+          [0.0, -4.0825, 3.266],
+          [0.0, 0.0, -2.8284]
+        ]) |> round(1)
+
+        assert Nx.tensor([
+          [1.0, -1.0, 4.0],
+          [1.0, 4.0, -2.0],
+          [1.0, 4.0, 2.0],
+          [0.0, 0.0, 0.0]
+        ]) == q |> Nx.dot(r) |> round(1)
+    end
+
     defp round(tensor, places) do
       Nx.map(tensor, fn x ->
         Float.round(x, places)

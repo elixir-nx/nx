@@ -7057,86 +7057,84 @@ defmodule Nx do
     * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
     * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
 
+  `:q_axes` - Defines the axes for the `q` tensor
+
+  `:r_axes` - Defines the axes for the `r` tensor
+
   ## Examples
 
   Note: The following examples round elements of the output tensors
   to minimize rounding errors on different host machines.
 
-      iex(1)> [q, r] = Nx.qr(Nx.tensor([[12, -51, 4], [6, 167, -68], [-4, 24, -41]])) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-      [
+      iex> Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
+      {
         Nx.tensor([
-          [-0.8571, 0.3943, -0.3314],
-          [-0.4286, -0.9029, 0.0343],
-          [0.2857, -0.1714, -0.9429]
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0]
         ]),
         Nx.tensor([
-          [-14.0, -21.0, 14.0],
-          [-0.0, -175.0, 70.0],
-          [-0.0, -0.0, 35.0]
+          [3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, 1.0]
         ])
-      ]
-      iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
-      Nx.tensor([
-        [12.0, -51.0, 4.0],
-        [6.0, 167.0, -68.0],
-        [-4.0, 24.0, -41.0]
-      ])
+      }
 
-      iex(1)> [q, r] = Nx.qr(Nx.tensor([[1, -1, 4], [1, 4, -2], [1, 4, 2], [1, -1, 0]]), mode: :reduced) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-      [
+      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]]), q_axes: [:row, :base_vector], r_axes: [:coef, :vars])
+      {
         Nx.tensor([
-          [-0.5774, 0.8165, 0.0],
-          [-0.5774, -0.4082, 0.7071],
-          [-0.5774, -0.4082, -0.7071],
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ], names: [:row, :base_vector]),
+        Nx.tensor([
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0]
+        ], names: [:coef, :vars])
+      }
+
+      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 1]]), mode: :reduced)
+      {
+        Nx.tensor([
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0],
           [0.0, 0.0, 0.0]
         ]),
         Nx.tensor([
-          [-1.7321, -4.0415, -2.3094],
-          [0.0, -4.0825, 3.266],
-          [0.0, 0.0, -2.8284]
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0]
         ])
-      ]
-      iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
-      Nx.tensor([
-        [1.0, -1.0, 4.0],
-        [1.0, 4.0, -2.0],
-        [1.0, 4.0, 2.0],
-        [0.0, -0.0, 0.0]
-      ])
+      }
 
-      iex(1)> [q, r] = Nx.qr(Nx.tensor([[1, -1, 4], [1, 4, -2], [1, 4, 2], [1, -1, 0]]), mode: :complete) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-      [
+      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 0]]), mode: :complete)
+      {
         Nx.tensor([
-          [-0.5, 0.5, -0.5, -0.5],
-          [-0.5, -0.5, 0.5, -0.5],
-          [-0.5, -0.5, -0.5, 0.5],
-          [-0.5, 0.5, 0.5, 0.5]
+          [-1.0, 0.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0, 0.0],
+          [0.0, 0.0, -1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
         ]),
         Nx.tensor([
-          [-2.0, -3.0, -2.0],
-          [0.0, -5.0, 2.0],
-          [-0.0, -0.0, -4.0],
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0],
           [0.0, 0.0, 0.0]
         ])
-      ]
-      iex(2)> Nx.dot(q, r) |> Nx.map(&Float.round(&1, 0))
-      Nx.tensor([
-        [1.0, -1.0, 4.0],
-        [1.0, 4.0, -2.0],
-        [1.0, 4.0, 2.0],
-        [1.0, -1.0, 0.0]
-      ])
+      }
 
   ## Error cases
 
       iex> Nx.qr(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]])) |> Tuple.to_list() |> Enum.map(fn t -> Nx.map(t, &Float.round(&1, 4)) end)
-      ** (ArgumentError) tensor must have at least as many rows than columns, got shape: {3, 4}
+      ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
   """
   @doc type: :linalg
   def qr(tensor, opts \\ []) do
-    %T{type: type, shape: shape} = tensor = tensor!(tensor)
+    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
 
-    assert_keys!(opts, [:mode])
+    assert_keys!(opts, [:mode, :q_axes, :r_axes])
 
     opts = Keyword.merge([mode: :reduced], opts)
 
@@ -7152,9 +7150,14 @@ defmodule Nx do
 
     {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
+    [n1, n2] = names
+
+    q_names = opts[:q_axes] || [n1, nil]
+    r_names = opts[:r_axes] || [nil, n2]
+
     impl!(tensor).qr(
-      {%{tensor | type: output_type, shape: q_shape},
-       %{tensor | type: output_type, shape: r_shape}},
+      {%{tensor | type: output_type, shape: q_shape, names: q_names},
+       %{tensor | type: output_type, shape: r_shape, names: r_names}},
       tensor,
       opts
     )
