@@ -168,9 +168,7 @@ defmodule Nx.PytorchBackend do
   end
 
   @impl true
-  def inspect(%{data: %{ref: ref}}, opts) do
-    Inspect.inspect(ref, opts)
-  end
+  defdelegate inspect(tensor, opts), to: Nx.BinaryBackend
 
   defp from_ref(t, ref) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
 
