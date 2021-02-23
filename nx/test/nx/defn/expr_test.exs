@@ -173,6 +173,20 @@ defmodule Nx.Defn.ExprTest do
              """
     end
 
+    test "with metadata" do
+      a = Expr.parameter(nil, {:s, 64}, {}, 0)
+
+      assert Expr.metadata(a, %{foo: true}) |> inspect(safe: false) == """
+             #Nx.Tensor<
+               s64
+             \s\s
+               Nx.Defn.Expr
+               parameter a                 s64
+               b = metadata [ a, [:foo] ]  s64
+             >\
+             """
+    end
+
     test "with tuple and cond" do
       a = Expr.parameter(nil, {:s, 64}, {}, 0)
       b = Expr.parameter(nil, {:s, 64}, {}, 1)

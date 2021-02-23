@@ -252,6 +252,10 @@ defmodule Nx.Defn.Expr do
     fun.(expr, acc)
   end
 
+  def traverse_exprs(other, _acc, _fun) do
+    raise ArgumentError, "expected a tensor expression, got: #{inspect(other)}"
+  end
+
   ## Type helpers
 
   @doc """
@@ -771,7 +775,7 @@ defmodule Nx.Defn.Expr do
 
   defp to_expr(other) do
     raise ArgumentError,
-          "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
+          "unable to build tensor expression, expected a tensor or a number, got: #{inspect(other)}"
   end
 
   defp to_exprs(list) do
@@ -853,6 +857,10 @@ defmodule Nx.Defn.Expr do
       end)
 
     IO.iodata_to_binary([clauses, ":otherwise -> ", inspect_arg(last, var_map)])
+  end
+
+  defp inspect_args(:metadata, [expr, metadata], var_map) do
+    IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(Map.keys(metadata))])
   end
 
   defp inspect_args(_op, args, var_map), do: inspect_args(args, var_map)

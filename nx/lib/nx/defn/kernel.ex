@@ -249,27 +249,12 @@ defmodule Nx.Defn.Kernel do
 
   """
   defmacro grad(var_or_vars, expr) do
-    var_or_vars =
-      case var_or_vars do
-        {:{}, meta, vars} -> {:{}, meta, Enum.map(vars, &grad_var!/1)}
-        {left, right} -> {grad_var!(left), grad_var!(right)}
-        var -> grad_var!(var)
-      end
-
     quote do
       Nx.Defn.Kernel.transform(
         {unquote(var_or_vars), unquote(expr)},
         &Nx.Defn.Grad.transform/1
       )
     end
-  end
-
-  defp grad_var!({name, _, ctx} = var) when Kernel.and(is_atom(name), is_atom(ctx)), do: var
-
-  defp grad_var!(expr) do
-    raise ArgumentError,
-          "first argument of grad/3 must be a variable or a tuple of variables, got: " <>
-            Macro.to_string(expr)
   end
 
   @doc """
@@ -286,7 +271,7 @@ defmodule Nx.Defn.Kernel do
   defmacro stop_grad(expr) do
     quote do
       Nx.Defn.Kernel.transform(unquote(expr), fn expr ->
-        Nx.Defn.Expr.traverse_exprs(expr, &Nx.Defn.Expr.metadata(&1, %{stop_grad: true}))
+        Nx.Defn.Expr.metadata(expr, %{stop_grad: true})
       end)
     end
   end
@@ -314,7 +299,7 @@ defmodule Nx.Defn.Kernel do
   defmacro custom_grad(expr, fun) do
     quote do
       Nx.Defn.Kernel.transform({unquote(expr), unquote(fun)}, fn {expr, fun} ->
-        Nx.Defn.Expr.traverse_exprs(expr, &Nx.Defn.Expr.metadata(&1, %{custom_grad: fun}))
+        Nx.Defn.Expr.metadata(expr, %{custom_grad: fun})
       end)
     end
   end

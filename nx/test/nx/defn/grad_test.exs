@@ -11,6 +11,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_tensor(t), do: grad(t, Nx.tensor(1.0))
     defn grad_constant(t), do: grad(t, 1.0)
     defn grad_unrelated(t, a), do: grad(t, a)
+    defn grad_invalid(t), do: grad(:invalid, t)
 
     test "computes gradient for scalars" do
       assert grad_itself(Nx.tensor(1.0)) == Nx.tensor(1.0)
@@ -25,6 +26,12 @@ defmodule Nx.Defn.GradTest do
 
       assert grad_unrelated(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor(2.0)) ==
                Nx.tensor([0.0, 0.0, 0.0])
+    end
+
+    test "raises on invalid" do
+      assert_raise ArgumentError, "expected a tensor expression, got: :invalid", fn ->
+        grad_invalid(Nx.tensor(1))
+      end
     end
   end
 
