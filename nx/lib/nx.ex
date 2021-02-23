@@ -1619,13 +1619,13 @@ defmodule Nx do
 
   You must specify a padding configuration. A padding
   configuration is a list of tuples consisting of
-  `{pad_width_low, pad_width_high}` for each dimension
-  in the input tensor. The padding configuration must
-  be of the same length as the tensor shape.
+  `{pad_width_low, pad_width_high, pad_width_interior}`
+  for each dimension in the input tensor. The padding
+  configuration must be of the same length as the tensor shape.
 
   Padding widths can be negative. If they are negative,
   the tensor is clipped on either end according to the
-  padding width.
+  padding width. Interior padding widths cannot be negative.
 
   ## Examples
 
