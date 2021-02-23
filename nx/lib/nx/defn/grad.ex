@@ -347,13 +347,13 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:cbrt, [x], ans, g, cache) do
-    g = Nx.divide(g, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))
+  defp grad(:sqrt, [x], ans, g, cache) do
+    g = Nx.multiply(g, Nx.divide(0.5, ans))
     to_grad(x, g, cache)
   end
 
-  defp grad(:cos, [x], _ans, g, cache) do
-    g = Nx.multiply(g, Nx.negate(Nx.sin(x)))
+  defp grad(:cbrt, [x], ans, g, cache) do
+    g = Nx.divide(g, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))
     to_grad(x, g, cache)
   end
 
@@ -406,13 +406,51 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:sqrt, [x], ans, g, cache) do
-    g = Nx.multiply(g, Nx.divide(0.5, ans))
+  defp grad(:arcsin, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.rsqrt(Nx.subtract(1.0, Nx.power(x, 2.0))))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:sinh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.cosh(x))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:cos, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.negate(Nx.sin(x)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:arccos, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.negate(Nx.rsqrt(Nx.subtract(1.0, Nx.power(x, 2.0)))))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:cosh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.sinh(x))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:tan, [x], _ans, g, cache) do
+    g = Nx.divide(g, Nx.power(Nx.cos(x), 2))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:arctan, [x], _ans, g, cache) do
+    g = Nx.divide(g, Nx.add(1.0, Nx.power(x, 2.0)))
     to_grad(x, g, cache)
   end
 
   defp grad(:tanh, [x], ans, g, cache) do
     g = Nx.multiply(g, Nx.subtract(1.0, Nx.multiply(ans, ans)))
+    to_grad(x, g, cache)
+  end
+
+  @half_sqrt_pi :math.sqrt(:math.pi) / 2
+
+  defp grad(:erf_inv, [x], ans, g, cache) do
+    g = Nx.multiply(g, Nx.exp(Nx.power(ans, 2)))
+    g = Nx.multiply(@half_sqrt_pi, g)
     to_grad(x, g, cache)
   end
 
@@ -452,7 +490,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  @constants [:tensor, :parameter, :iota, :random_uniform, :random_normal] ++
+  @constants [:tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
                [:all?, :any?, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
@@ -462,6 +500,14 @@ defmodule Nx.Defn.Grad do
 
   defp grad(op, _, _, _, cache) when op in @constants do
     {Expr.tensor(0.0), cache}
+  end
+
+  defp grad(op, _, _, _, _) do
+    raise ArgumentError, """
+    gradient not yet implemented for Nx.#{op}.
+
+    Please open up an issue so we can implement the missing gradient
+    """
   end
 
   ## Helpers

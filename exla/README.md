@@ -24,16 +24,28 @@ end
 You will need the following installed in your system to compile EXLA:
 
   * [Git](https://git-scm.com/) for checking out Tensorflow
-  * [Bazel](https://bazel.build/) for compiling Tensorflow
-  * [Python3](https://python.org) with numpy installed (`pip3 install numpy`) for compiling Tensorflow
+  * [Bazel v3.1](https://bazel.build/) for compiling Tensorflow (note Bazel v4 is available but it is not compatible)
+  * [Python3](https://python.org) for compiling Tensorflow
 
 If running on Windows, you will also need:
-  
+
   * [MSYS2](https://www.msys2.org/)
   * [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
   * [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
 
 The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. Subsequent commands should be much faster.
+
+#### Common Installation Issues
+
+  * Bazel
+    * Use `bazel --version` to check your Bazel version, make sure you are using v3.1
+    * Most binaries are also available on [Github](https://github.com/bazelbuild/bazel/releases)
+    * It can also be installed with `asdf`:
+      * asdf plugin-add bazel
+      * asdf install bazel 3.1.0
+      * asdf global bazel 3.1.0
+  * ElixirLS on VSCode
+    * Make sure that your Python installation is available globally, as ElixirLS won't know how to activate Python
 
 ### GPU Support
 

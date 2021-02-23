@@ -24,7 +24,7 @@ defmodule Nx.Defn do
 
       defn add_and_mult(a, b, c) do
         a
-        |> Nx.multipy(b)
+        |> Nx.multiply(b)
         |> Nx.add(c)
       end
 
@@ -34,7 +34,7 @@ defmodule Nx.Defn do
 
   `defn` attempts to keep as close to the Elixir semantics as
   possible but that's not achievable. For example, mathematical
-  and bitwise operators (`+`, `-`, `&&&`, `<<<`, etc) in Elixir
+  and bitwise operators (`+`, `-`, `&&&`, `<<<`, etc.) in Elixir
   work on numbers, which means mapping them to tensors is
   straight-forward and they largely preserve the same semantics,
   except they are now multi-dimensional.
@@ -95,11 +95,12 @@ defmodule Nx.Defn do
 
   ### Options
 
-  The `Nx.Defn` compiler supports the following options:
+  The `Nx.Defn` compiler supports the following options which are
+  the same as ones for `Nx.Defn.Kernel.rewrite_types/2`:
 
-    * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.max_unsigned_type/2`
-    * `max_signed_type: type` - the same as `Nx.Defn.Kernel.max_signed_type/2`
-    * `max_float_type: type` - the same as `Nx.Defn.Kernel.max_float_type/2`
+    * `max_unsigned_type: type`
+    * `max_signed_type: type`
+    * `max_float_type: type`
 
   ## Inputs and outputs types
 
@@ -237,6 +238,15 @@ defmodule Nx.Defn do
   def jit(fun, args, compiler \\ Nx.Defn.Evaluator, opts \\ [])
       when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
     Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
+  end
+
+  @doc """
+  Ahead-of-time compiles the anonymous function with the given
+  defn compiler.
+  """
+  def aot(fun, args, compiler, opts \\ [])
+      when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
+    Nx.Defn.Compiler.__aot__(fun, args, compiler, opts)
   end
 
   @doc """

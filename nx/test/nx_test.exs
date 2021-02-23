@@ -303,6 +303,20 @@ defmodule NxTest do
                  type: {:f, 32}
                )
     end
+
+    test "grouped convolutions" do
+      lhs = Nx.iota({2, 4, 2, 2}, type: {:f, 32})
+      rhs = Nx.iota({6, 2, 2, 2}, type: {:f, 32})
+
+      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, groups: 2) ==
+               Nx.tensor(
+                 [
+                   [[[140.0]], [[364.0]], [[588.0]], [[2572.0]], [[3308.0]], [[4044.0]]],
+                   [[[588.0]], [[1836.0]], [[3084.0]], [[6092.0]], [[7852.0]], [[9612.0]]]
+                 ],
+                 type: {:f, 32}
+               )
+    end
   end
 
   test "interior padding" do
@@ -535,6 +549,12 @@ defmodule NxTest do
              """
     end
 
+    test "cannot build an empty tensor" do
+      assert_raise(ArgumentError, "cannot build an empty tensor", fn ->
+        Nx.from_binary(<<>>, {:f, 64})
+      end)
+    end
+
     test "all dimensions named" do
       assert inspect(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, :x, :y])) ==
                """
@@ -623,15 +643,34 @@ defmodule NxTest do
 
   describe "quotient/2" do
     test "raises for non-integer values" do
-      msg = "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
-      
+      msg =
+        "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
+
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10, 1.0)
       end
-      
+
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10.0, 2)
       end
+    end
+  end
+
+  describe "reshape" do
+    test "correctly adds names with same shape" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert Nx.reshape(t, {2, 2}, names: [:x, :y]) ==
+               Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+    end
+  end
+
+  describe "broadcast" do
+    test "correctly adds names with same shape" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert Nx.broadcast(t, {2, 2}, names: [:x, :y]) ==
+               Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
     end
   end
 end

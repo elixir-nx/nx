@@ -33,12 +33,12 @@ defmodule EXLA do
     * `:client` - an atom representing the client to use. Defaults
       to `:default`. See "Clients" section
 
-    * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.max_unsigned_type/2`
+    * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`
 
-    * `max_signed_type: type` - the same as `Nx.Defn.Kernel.max_signed_type/2`
+    * `max_signed_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`
 
-    * `max_float_type: type` - the same as `Nx.Defn.Kernel.max_float_type/2`.
-      Note that by default `EXLA` defaults to `{:f, 32}`
+    * `max_float_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`.
+      Note that by default `EXLA` sets `:max_float_type` to `{:f, 32}`
 
     * `:run_options` - options given when running the computation:
 
@@ -150,4 +150,6 @@ defmodule EXLA do
 
   @impl true
   defdelegate __async__(key, vars, fun, opts), to: EXLA.Defn
+
+  defdelegate __aot__(key, vars, fun, opts), to: EXLA.Defn
 end

@@ -36,6 +36,12 @@ defmodule EXLA.Computation do
     use_spmd = Keyword.get(options, :use_spmd, false)
     use_spmd_int = if use_spmd, do: 1, else: 0
 
+    unless root_tuple_only?(output_shape) do
+      raise ArgumentError,
+            "can only compile computations with a tuple at the root (and only at the root), " <>
+              "got: #{inspect(output_shape)}"
+    end
+
     # TODO: Validate replicas and partitions against the client
 
     ref =
@@ -56,6 +62,13 @@ defmodule EXLA.Computation do
       num_replicas: num_replicas,
       num_partitions: num_partitions
     }
+  end
+
+  defp root_tuple_only?(shape) do
+    case shape do
+      %{dtype: {:t, inner}} -> Enum.all?(inner, &(not match?({:t, _}, &1.dtype)))
+      %{} -> false
+    end
   end
 
   defp unwrap!({:ok, ref}), do: ref

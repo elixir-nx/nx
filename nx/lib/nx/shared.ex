@@ -11,7 +11,7 @@ defmodule Nx.Shared do
 
   A macro that allows us to writes all possibles match types
   in the most efficient format. This is done by looking at @0,
-  @1, etc and replacing them by currently matched type at the
+  @1, etc., and replacing them by currently matched type at the
   given position. In other words, this:
 
      match_types [input_type, output_type] do
@@ -137,7 +137,7 @@ defmodule Nx.Shared do
   ## Reflection
 
   @doc """
-  Returns the definition of mathemtical unary funs.
+  Returns the definition of mathematical unary funs.
   """
   def unary_math_funs,
     do: [
@@ -148,11 +148,168 @@ defmodule Nx.Shared do
       logistic: {"standard logistic (a sigmoid)", quote(do: 1 / (1 + :math.exp(-var!(x))))},
       cos: {"cosine", quote(do: :math.cos(var!(x)))},
       sin: {"sine", quote(do: :math.sin(var!(x)))},
+      tan: {"tangent", quote(do: :math.tan(var!(x)))},
+      cosh: {"hyperbolic cosine", quote(do: :math.cosh(var!(x)))},
+      sinh: {"hyperbolic sine", quote(do: :math.sinh(var!(x)))},
       tanh: {"hyperbolic tangent", quote(do: :math.tanh(var!(x)))},
+      arccos: {"inverse cosine", quote(do: :math.acos(var!(x)))},
+      arcsin: {"inverse sine", quote(do: :math.asin(var!(x)))},
+      arctan: {"inverse tangent", quote(do: :math.atan(var!(x)))},
+      arccosh: {"inverse hyperbolic cosine", acosh_formula()},
+      arcsinh: {"inverse hyperbolic sine", asinh_formula()},
+      arctanh: {"inverse hyperbolic tangent", atanh_formula()},
       sqrt: {"square root", quote(do: :math.sqrt(var!(x)))},
       rsqrt: {"reverse square root", quote(do: 1 / :math.sqrt(var!(x)))},
-      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))}
+      cbrt: {"cube root", quote(do: :math.pow(var!(x), 1 / 3))},
+      erf: {"error function", erf_formula()},
+      erfc: {"one minus error function", erfc_formula()},
+      erf_inv: {"inverse error function", quote(do: Nx.Shared.erf_inv(var!(x)))}
     ]
+
+  defp atanh_formula do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:atanh, 1) do
+      quote(do: :math.atanh(var!(x)))
+    else
+      quote(do: :math.log((1 + var!(x)) / (1 - var!(x))) / 2)
+    end
+  end
+
+  defp asinh_formula do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:asinh, 1) do
+      quote(do: :math.asinh(var!(x)))
+    else
+      quote(do: :math.log(var!(x) + :math.sqrt(1 + var!(x) * var!(x))))
+    end
+  end
+
+  defp acosh_formula do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:acosh, 1) do
+      quote(do: :math.acosh(var!(x)))
+    else
+      quote(do: :math.log(var!(x) + :math.sqrt(var!(x) + 1) * :math.sqrt(var!(x) - 1)))
+    end
+  end
+
+  defp erf_formula do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:erf, 1) do
+      quote(do: :math.erf(var!(x)))
+    else
+      quote(do: Nx.Shared.erf(var!(x)))
+    end
+  end
+
+  defp erfc_formula do
+    if Code.ensure_loaded?(:math) and math_fun_supported?(:erfc, 1) do
+      quote(do: :math.erfc(var!(x)))
+    else
+      quote(do: 1.0 - Nx.Shared.erf(var!(x)))
+    end
+  end
+
+  @doc """
+  Checks if a given function is supported in the `:math` module.
+  """
+  def math_fun_supported?(fun, arity) do
+    args =
+      case {fun, arity} do
+        {:atan, 1} -> [3.14]
+        {:atanh, 1} -> [0.9]
+        {_, 1} -> [1.0]
+        {_, 2} -> [1.0, 1.0]
+      end
+
+    _ = apply(:math, fun, args)
+    true
+  rescue
+    UndefinedFunctionError ->
+      false
+  end
+
+  @doc """
+  Approximation for the error function.
+
+  ## Examples
+
+      iex> Nx.Shared.erf(0.999)
+      0.8422852791811658
+
+      iex> Nx.Shared.erf(0.01)
+      0.011283414826762329
+
+  """
+  def erf(x) do
+    x = x |> max(-4.0) |> min(4.0)
+    x2 = x * x
+
+    alpha =
+      0.0
+      |> muladd(x2, -2.72614225801306e-10)
+      |> muladd(x2, 2.77068142495902e-08)
+      |> muladd(x2, -2.10102402082508e-06)
+      |> muladd(x2, -5.69250639462346e-05)
+      |> muladd(x2, -7.34990630326855e-04)
+      |> muladd(x2, -2.95459980854025e-03)
+      |> muladd(x2, -1.60960333262415e-02)
+
+    beta =
+      0.0
+      |> muladd(x2, -1.45660718464996e-05)
+      |> muladd(x2, -2.13374055278905e-04)
+      |> muladd(x2, -1.68282697438203e-03)
+      |> muladd(x2, -7.37332916720468e-03)
+      |> muladd(x2, -1.42647390514189e-02)
+
+    min(x * alpha / beta, 1.0)
+  end
+
+  defp muladd(acc, t, n) do
+    acc * t + n
+  end
+
+  @doc """
+  Approximation for the inverse error function.
+
+  ## Examples
+
+      iex> Nx.Shared.erf_inv(0.999)
+      2.326753756865462
+
+      iex> Nx.Shared.erf_inv(0.01)
+      0.008862500728738846
+
+  """
+  def erf_inv(x) do
+    w = -:math.log((1 - x) * (1 + x))
+    erf_inv_p(w) * x
+  end
+
+  defp erf_inv_p(w) when w < 5 do
+    w = w - 2.5
+
+    2.81022636e-08
+    |> muladd(w, 3.43273939e-07)
+    |> muladd(w, -3.5233877e-06)
+    |> muladd(w, -4.39150654e-06)
+    |> muladd(w, 0.00021858087)
+    |> muladd(w, -0.00125372503)
+    |> muladd(w, -0.00417768164)
+    |> muladd(w, 0.246640727)
+    |> muladd(w, 1.50140941)
+  end
+
+  defp erf_inv_p(w) do
+    w = :math.sqrt(w) - 3
+
+    -0.000200214257
+    |> muladd(w, 0.000100950558)
+    |> muladd(w, 0.00134934322)
+    |> muladd(w, -0.00367342844)
+    |> muladd(w, 0.00573950773)
+    |> muladd(w, -0.0076224613)
+    |> muladd(w, 0.00943887047)
+    |> muladd(w, 1.00167406)
+    |> muladd(w, 2.83297682)
+  end
 
   ## Types
 

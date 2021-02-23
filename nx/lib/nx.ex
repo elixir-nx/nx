@@ -58,9 +58,9 @@ defmodule Nx do
         [11, 22, 33]
       >
 
-  Now let's imagine you want to multiply a large tensor, dimensions
-  1000x1000x1000, by 2. If you had to create a similarly large tensor
-  only to perform this operation, it would be inneficient. Therefore,
+  Now let's imagine you want to multiply a large tensor of dimensions
+  1000x1000x1000 by 2. If you had to create a similarly large tensor
+  only to perform this operation, it would be inefficient. Therefore,
   you can simply multiply this large tensor by the scalar 2, and Nx
   will propagate its dimensions at the time the operation happens,
   without allocating a large intermediate tensor:
@@ -71,7 +71,7 @@ defmodule Nx do
         [2, 4, 6]
       >
 
-  In practice, brodcasting is not restricted only to scalars, it
+  In practice, broadcasting is not restricted only to scalars; it
   is a general algorithm that applies to all dimensions of a tensor.
   When broadcasting, `Nx` compares the shapes of the two tensors,
   starting with the trailing ones, such that:
@@ -264,7 +264,7 @@ defmodule Nx do
   @type t :: number | Nx.Tensor.t()
   @type shape :: Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
-  @type axes :: NX.Tensor.axes()
+  @type axes :: Nx.Tensor.axes()
 
   ## Creation API
 
@@ -272,7 +272,7 @@ defmodule Nx do
   Builds a tensor.
 
   The argument is either a number, which means the tensor is a scalar
-  (zero-dimentions), a list of those (the tensor is a vector) or
+  (zero-dimensions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
 
   You can also give a tensor as argument, which is just returned as
@@ -446,6 +446,7 @@ defmodule Nx do
     * `:backend_options` - options to configure the allocation on the backend
 
   """
+  @doc type: :creation
   def tensor(arg, opts \\ [])
 
   def tensor(%T{} = t, opts) do
@@ -521,6 +522,7 @@ defmodule Nx do
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
+  @doc type: :random
   def random_uniform(tensor_or_shape, opts \\ []) do
     random_uniform(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -642,11 +644,12 @@ defmodule Nx do
     * `:backend` - the backend to allocate the tensor on
 
   """
+  @doc type: :random
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
     backend = opts[:backend] || Nx.BinaryBackend
     backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
@@ -655,6 +658,7 @@ defmodule Nx do
   @doc """
   Shortcut for `random_normal(shape, 0.0, 1.0, opts)`.
   """
+  @doc type: :random
   def random_normal(tensor_or_shape, opts \\ []) do
     random_normal(tensor_or_shape, 0.0, 1.0, opts)
   end
@@ -736,11 +740,12 @@ defmodule Nx do
     * `:backend` - the backend to allocate the tensor on
 
   """
+  @doc type: :random
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
     backend = opts[:backend] || Nx.BinaryBackend
     backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
@@ -853,10 +858,11 @@ defmodule Nx do
     * `:backend` - the backend to allocate the tensor on
 
   """
+  @doc type: :creation
   def iota(tensor_or_shape, opts \\ []) do
     assert_keys!(opts, [:type, :axis, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
-    names = opts[:names] || Nx.Shape.named_axes!(names!(tensor_or_shape), shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
     backend = opts[:backend] || Nx.BinaryBackend
 
@@ -869,9 +875,134 @@ defmodule Nx do
   end
 
   @doc """
+  Creates the identity matrix of size `n`.
+
+  ## Examples
+
+      iex> Nx.eye(2)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 0],
+          [0, 1]
+        ]
+      >
+
+      iex> Nx.eye(3, type: {:f, 32}, names: [:height, :width])
+      #Nx.Tensor<
+        f32[height: 3][width: 3]
+        [
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0.0, 1.0]
+        ]
+      >
+
+  The first argument can also be a tensor or a shape of a square
+  matrix:
+
+      iex> Nx.eye(Nx.iota({2, 2}))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 0],
+          [0, 1]
+        ]
+      >
+
+      iex> Nx.eye({1, 1})
+      #Nx.Tensor<
+        s64[1][1]
+        [
+          [1]
+        ]
+      >
+
+  ## Options
+
+    * `:type` - the type of the tensor
+    * `:names` - the names of the tensor dimensions
+    * `:backend` - the backend to allocate the tensor on
+
+  """
+  @doc type: :creation
+  def eye(n_or_shape_or_tensor, opts \\ [])
+
+  def eye(n, opts) when is_integer(n) and n > 0 do
+    eye({n, n}, opts)
+  end
+
+  def eye(shape_or_tensor, opts) do
+    assert_keys!(opts, [:type, :names, :backend])
+
+    shape =
+      case shape(shape_or_tensor) do
+        {n, n} -> {n, n}
+        other -> raise ArgumentError, "eye/2 expects a square matrix, got: #{inspect(other)}"
+      end
+
+    names = Nx.Shape.named_axes!(opts[:names], shape)
+    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+    backend = opts[:backend] || Nx.BinaryBackend
+    backend.eye(%T{type: type, shape: shape, names: names})
+  end
+
+  @doc """
+  Creates a one-dimensional tensor from a `binary` with the given `type`.
+
+  If the binary size does not match its type, an error is raised.
+
+  ## Examples
+
+      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:s, 8})
+      #Nx.Tensor<
+        s8[4]
+        [1, 2, 3, 4]
+      >
+
+      iex> Nx.from_binary(<<12.3::float-64-native>>, {:f, 64})
+      #Nx.Tensor<
+        f64[1]
+        [12.3]
+      >
+
+      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:f, 64})
+      ** (ArgumentError) binary does not match the given size
+
+  ## Options
+
+    * `:backend` - the backend to allocate the tensor on
+    * `:backend_options` - options to configure the allocation on the backend
+  """
+  @doc type: :creation
+  def from_binary(binary, type, opts \\ []) when is_binary(binary) do
+    assert_keys!(opts, [:backend, :backend_options])
+    {_, size} = Nx.Type.normalize!(type)
+    dim = div(bit_size(binary), size)
+
+    if binary == "" do
+      raise ArgumentError, "cannot build an empty tensor"
+    end
+
+    if rem(bit_size(binary), size) != 0 do
+      raise ArgumentError, "binary does not match the given size"
+    end
+
+    backend = opts[:backend] || Nx.BinaryBackend
+    backend_options = opts[:backend_options] || []
+    backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary, backend_options)
+  end
+
+  ## Conversions
+
+  @doc """
   Returns the underlying tensor as a binary.
 
-  The binary is returned as is (which is row-major).
+  It returns the in-memory binary representation of
+  the tensor in a row-major fashion. The binary is
+  in the system endianess, which has to be taken into
+  account if the binary is meant to be serialized to
+  other systems.
 
   ## Options
 
@@ -889,13 +1020,12 @@ defmodule Nx do
       <<1.0::float-native, 2.0::float-native>>
 
   """
+  @doc type: :conversion
   def to_binary(tensor, opts \\ []) do
     assert_keys!(opts, [:limit])
     tensor = tensor!(tensor)
     impl!(tensor).to_binary(tensor, opts)
   end
-
-  ## Conversions
 
   @doc """
   Returns the underlying tensor as a flat list.
@@ -925,6 +1055,7 @@ defmodule Nx do
       ["-Inf", "Inf", "NaN", "NaN"]
 
   """
+  @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
     assert_keys!(opts, [:limit, :non_numbers])
     tensor = tensor(tensor)
@@ -1050,6 +1181,7 @@ defmodule Nx do
       iex> Nx.to_batched_list(Nx.iota({3, 2}), 2)
       ** (ArgumentError) cannot batch because axis 0 of size 3 is not divisible by batch_size 2
   """
+  @doc type: :conversion
   def to_batched_list(tensor, batch_size) when is_integer(batch_size) and batch_size >= 1 do
     %{shape: shape} = tensor!(tensor)
 
@@ -1082,6 +1214,7 @@ defmodule Nx do
       ** (ArgumentError) cannot convert tensor of shape {3} to scalar
 
   """
+  @doc type: :conversion
   def to_scalar(tensor)
 
   def to_scalar(number) when is_number(number), do: number
@@ -1128,6 +1261,7 @@ defmodule Nx do
       whitespace which often prints more precise shapes
 
   """
+  @doc type: :conversion
   def to_heatmap(tensor, opts \\ []) when is_list(opts) do
     tensor = tensor!(tensor)
 
@@ -1138,52 +1272,7 @@ defmodule Nx do
     %Nx.Heatmap{tensor: tensor!(tensor), opts: opts}
   end
 
-  @doc """
-  Creates a one-dimensional tensor from a `binary` with the given `type`.
-
-  If the binary size does not match its type, an error is raised.
-
-  ## Examples
-
-      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:s, 8})
-      #Nx.Tensor<
-        s8[4]
-        [1, 2, 3, 4]
-      >
-
-      iex> Nx.from_binary(<<12.3::float-64-native>>, {:f, 64})
-      #Nx.Tensor<
-        f64[1]
-        [12.3]
-      >
-
-      iex> Nx.from_binary(<<1, 2, 3, 4>>, {:f, 64})
-      ** (ArgumentError) binary does not match the given size
-
-  ## Options
-
-    * `:backend` - the backend to allocate the tensor on
-    * `:backend_options` - options to configure the allocation on the backend
-  """
-  def from_binary(binary, type, opts \\ []) when is_binary(binary) do
-    assert_keys!(opts, [:backend, :backend_options])
-    {_, size} = Nx.Type.normalize!(type)
-    dim = div(bit_size(binary), size)
-
-    if binary == "" do
-      raise ArgumentError, "cannot build an empty tensor"
-    end
-
-    if rem(bit_size(binary), size) != 0 do
-      raise ArgumentError, "binary does not match the given size"
-    end
-
-    backend = opts[:backend] || Nx.BinaryBackend
-    backend_options = opts[:backend_options] || []
-    backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary, backend_options)
-  end
-
-  ## Meta operations (do not invoke the backend)
+  ## Reflection operations (do not invoke the backend)
 
   @doc """
   Changes the type of a tensor.
@@ -1191,8 +1280,8 @@ defmodule Nx do
   Note it is not possible to cast from floats to integers.
   Use `round/1`, `floor/1`, and `ceil/1` instead.
 
-  Casting from a higher precision may lead to overflows
-  and underflows, which is platform and compiler dependent
+  Casting from a higher precision may lead to an overflow
+  or underflow, which is platform and compiler dependent
   behaviour.
 
   ## Examples
@@ -1210,6 +1299,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :type
   def as_type(tensor, type) do
     tensor = tensor!(tensor)
     new_type = Nx.Type.normalize!(type)
@@ -1277,6 +1367,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :shape
   def reshape(tensor, new_shape, opts \\ []) do
     %T{shape: old_shape} = tensor = tensor!(tensor)
     new_names = opts[:names] || names!(new_shape)
@@ -1291,7 +1382,7 @@ defmodule Nx do
     end
 
     if old_shape == new_shape do
-      tensor
+      %{tensor | names: names}
     else
       impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor, new_shape)
     end
@@ -1363,6 +1454,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :shape
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
     %{shape: shape, names: names} = tensor = tensor!(tensor)
     rank = tuple_size(shape)
@@ -1424,6 +1516,7 @@ defmodule Nx do
       iex> Nx.squeeze(Nx.tensor([[[[[1]]]]]), axes: [0, 0])
       ** (ArgumentError) axes [0, 0] must be unique integers between 0 and 4
   """
+  @doc type: :shape
   def squeeze(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
     %T{shape: old_shape, names: names} = tensor = tensor!(tensor)
@@ -1555,6 +1648,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :shape
   def broadcast(tensor, shape, opts \\ []) do
     assert_keys!(opts, [:axes, :names])
 
@@ -1766,6 +1860,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :shape
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
     tensor = tensor!(tensor)
     pad_value = tensor!(pad_value)
@@ -1803,6 +1898,7 @@ defmodule Nx do
       iex> Nx.type(1.0)
       {:f, 64}
   """
+  @doc type: :type
   def type(tensor) do
     %T{type: type} = tensor!(tensor)
     type
@@ -1830,6 +1926,7 @@ defmodule Nx do
       {1, 2, 3}
 
   """
+  @doc type: :shape
   def shape(shape) when is_tuple(shape), do: validate_shape(shape, tuple_size(shape))
   def shape(%T{shape: shape}), do: shape
   def shape(number) when is_number(number), do: {}
@@ -1837,7 +1934,7 @@ defmodule Nx do
   def shape(other) do
     raise ArgumentError,
           "expected a shape. A shape is a n-element tuple with the size of each dimension. " <>
-            "Alternatively you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
+            "Alternatively, you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
   end
 
@@ -1875,6 +1972,7 @@ defmodule Nx do
       3
 
   """
+  @doc type: :shape
   def rank(shape) when is_tuple(shape), do: tuple_size(shape)
   def rank(tensor), do: tuple_size(shape(tensor))
 
@@ -1896,6 +1994,7 @@ defmodule Nx do
       6
 
   """
+  @doc type: :shape
   def size(shape) when is_tuple(shape), do: tuple_product(shape, tuple_size(shape))
   def size(tensor), do: size(shape(tensor))
 
@@ -1916,6 +2015,7 @@ defmodule Nx do
       [0, 1, 2]
 
   """
+  @doc type: :shape
   def axes(shape), do: count_up(rank(shape), 0)
 
   @doc """
@@ -1932,6 +2032,7 @@ defmodule Nx do
       iex> Nx.names(5)
       []
   """
+  @doc type: :shape
   def names(%T{names: names}), do: names
   def names(a) when is_number(a), do: []
 
@@ -1951,7 +2052,7 @@ defmodule Nx do
   the current  tensor implementation will pick the most appropriate
   backend.
 
-  For Elixir's builtin tensor, transfering to another backend will
+  For Elixir's builtin tensor, transferring to another backend will
   call `new_backend.from_binary(tensor, binary, opts)`. Transferring
   from a mutable backend, such as GPU memory, often means the data
   is also deallocated from the device.
@@ -1972,6 +2073,7 @@ defmodule Nx do
       tensor = Nx.backend_transfer(device_tensor)
 
   """
+  @doc type: :conversion
   def backend_transfer(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
 
   def backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
@@ -1993,9 +2095,10 @@ defmodule Nx do
 
   For convenience, this function accepts a tuple as argument
   and deallocates all devices in the tuple. This behaviour
-  exists as it is common to deallocaate data from tuples after
+  exists as it is common to de-allocate data from tuples after
   `defn` functions.
   """
+  @doc type: :conversion
   def backend_deallocate(tuple_or_tensor)
 
   def backend_deallocate(tuple) when is_tuple(tuple) do
@@ -2149,6 +2252,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def add(left, right), do: element_wise_bin_op(left, right, :add, & &1)
 
   @doc """
@@ -2213,6 +2317,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def subtract(left, right), do: element_wise_bin_op(left, right, :subtract, & &1)
 
   @doc """
@@ -2277,6 +2382,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def multiply(left, right), do: element_wise_bin_op(left, right, :multiply, & &1)
 
   @doc """
@@ -2327,6 +2433,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def power(left, right), do: element_wise_bin_op(left, right, :power, & &1)
 
   @doc """
@@ -2373,6 +2480,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def remainder(left, right), do: element_wise_bin_op(left, right, :remainder, & &1)
 
   @doc """
@@ -2442,15 +2550,17 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def divide(left, right), do: element_wise_bin_op(left, right, :divide, &Nx.Type.to_floating/1)
 
-  defp assert_quotient_type!({:s, _} = type), do: type
-  defp assert_quotient_type!({:u, _} = type), do: type
-
   defp assert_quotient_type!(type) do
-    raise ArgumentError,
-          "quotient expects integer tensors as inputs and outputs an integer tensor, " <>
-            "got: #{inspect(type)}"
+    if Nx.Type.integer?(type) do
+      type
+    else
+      raise ArgumentError,
+            "quotient expects integer tensors as inputs and outputs an integer tensor, " <>
+              "got: #{inspect(type)}"
+    end
   end
 
   @doc """
@@ -2532,6 +2642,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def quotient(left, right),
     do: element_wise_bin_op(left, right, :quotient, &assert_quotient_type!/1)
 
@@ -2584,6 +2695,7 @@ defmodule Nx do
       {2, 2}
 
   """
+  @doc type: :element
   def arctan2(left, right), do: element_wise_bin_op(left, right, :arctan2, &Nx.Type.to_floating/1)
 
   @doc """
@@ -2648,6 +2760,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def max(left, right), do: element_wise_bin_op(left, right, :max, & &1)
 
   @doc """
@@ -2712,17 +2825,19 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def min(left, right), do: element_wise_bin_op(left, right, :min, & &1)
 
   ## Bitwise ops
 
-  defp assert_bitwise_type!({:s, _} = type), do: type
-  defp assert_bitwise_type!({:u, _} = type), do: type
-
   defp assert_bitwise_type!(type) do
-    raise ArgumentError,
-          "bitwise operators expect integer tensors as inputs and outputs an integer tensor, " <>
-            "got: #{inspect(type)}"
+    if Nx.Type.integer?(type) do
+      type
+    else
+      raise ArgumentError,
+            "bitwise operators expect integer tensors as inputs and outputs an integer tensor, " <>
+              "got: #{inspect(type)}"
+    end
   end
 
   @doc """
@@ -2771,6 +2886,7 @@ defmodule Nx do
       iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
+  @doc type: :element
   def bitwise_and(left, right),
     do: element_wise_bin_op(left, right, :bitwise_and, &assert_bitwise_type!/1)
 
@@ -2820,6 +2936,7 @@ defmodule Nx do
       iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
+  @doc type: :element
   def bitwise_or(left, right),
     do: element_wise_bin_op(left, right, :bitwise_or, &assert_bitwise_type!/1)
 
@@ -2869,6 +2986,7 @@ defmodule Nx do
       iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
+  @doc type: :element
   def bitwise_xor(left, right),
     do: element_wise_bin_op(left, right, :bitwise_xor, &assert_bitwise_type!/1)
 
@@ -2917,6 +3035,7 @@ defmodule Nx do
       iex> Nx.left_shift(Nx.tensor(1), -1)
       ** (ArgumentError) cannot left shift by -1
   """
+  @doc type: :element
   def left_shift(left, right),
     do: element_wise_bin_op(left, right, :left_shift, &assert_bitwise_type!/1)
 
@@ -2969,6 +3088,7 @@ defmodule Nx do
       iex> Nx.right_shift(Nx.tensor(1), -1)
       ** (ArgumentError) cannot right shift by -1
   """
+  @doc type: :element
   def right_shift(left, right),
     do: element_wise_bin_op(left, right, :right_shift, &assert_bitwise_type!/1)
 
@@ -3015,6 +3135,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def equal(left, right), do: element_wise_pred_op(left, right, :equal)
 
   @doc """
@@ -3054,6 +3175,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def logical_and(left, right), do: element_wise_pred_op(left, right, :logical_and)
 
   @doc """
@@ -3093,6 +3215,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def logical_or(left, right), do: element_wise_pred_op(left, right, :logical_or)
 
   @doc """
@@ -3133,6 +3256,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def logical_xor(left, right), do: element_wise_pred_op(left, right, :logical_xor)
 
   @doc """
@@ -3156,6 +3280,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def logical_not(tensor) do
     tensor = tensor!(tensor)
     type = tensor.type
@@ -3207,6 +3332,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def not_equal(left, right), do: element_wise_pred_op(left, right, :not_equal)
 
   @doc """
@@ -3252,6 +3378,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def greater(left, right), do: element_wise_pred_op(left, right, :greater)
 
   @doc """
@@ -3297,6 +3424,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def less(left, right), do: element_wise_pred_op(left, right, :less)
 
   @doc """
@@ -3342,6 +3470,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def greater_equal(left, right), do: element_wise_pred_op(left, right, :greater_equal)
 
   @doc """
@@ -3387,6 +3516,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def less_equal(left, right), do: element_wise_pred_op(left, right, :less_equal)
 
   @doc """
@@ -3400,7 +3530,7 @@ defmodule Nx do
   with a shape that matches the largest shape between `s1` or `s2`.
 
   If the shape of `on_true` or `on_false` do not match the shape of
-  `pred`, attemps to broadcast both so they match the shape of `pred`.
+  `pred`, attempts to broadcast both so they match the shape of `pred`.
 
   ## Examples
 
@@ -3447,6 +3577,7 @@ defmodule Nx do
         [2, 3, 2, 7, 2]
       >
   """
+  @doc type: :element
   def select(pred, on_true, on_false) do
     output_type = binary_type(on_true, on_false)
 
@@ -3486,9 +3617,23 @@ defmodule Nx do
   for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
     formula = code |> Macro.to_string() |> String.replace("var!(x)", "x")
 
-    {one, _} = Code.eval_quoted(code, x: 1)
-    {two, _} = Code.eval_quoted(code, x: 2)
-    {three, _} = Code.eval_quoted(code, x: 3)
+    {{one, _}, {two, _}, {three, _}} =
+      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv] do
+        {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
+         Code.eval_quoted(code, x: 0.9)}
+      else
+        {Code.eval_quoted(code, x: 1), Code.eval_quoted(code, x: 2), Code.eval_quoted(code, x: 3)}
+      end
+
+    first_val =
+      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv],
+        do: 0.1,
+        else: 1
+
+    list_of_vals =
+      if name in [:arccos, :arcsin, :arctan, :arctanh, :erf_inv],
+        do: [0.1, 0.5, 0.9],
+        else: [1.0, 2.0, 3.0]
 
     @doc """
     Calculates the #{desc} of each element in the tensor.
@@ -3499,19 +3644,20 @@ defmodule Nx do
 
     ## Examples
 
-        iex> Nx.#{name}(1)
+        iex> Nx.#{name}(#{first_val})
         #Nx.Tensor<
           f64
           #{one}
         >
 
-        iex> Nx.#{name}(Nx.tensor([1.0, 2.0, 3.0], names: [:x]))
+        iex> Nx.#{name}(Nx.tensor(#{inspect(list_of_vals)}, names: [:x]))
         #Nx.Tensor<
           f64[x: 3]
           [#{one}, #{two}, #{three}]
         >
 
     """
+    @doc type: :element
     def unquote(name)(tensor) do
       tensor = tensor!(tensor)
       type = Nx.Type.to_floating(tensor.type)
@@ -3551,6 +3697,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def negate(tensor) do
     tensor = tensor!(tensor)
     impl!(tensor).negate(tensor, tensor)
@@ -3573,6 +3720,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def sign(tensor) do
     tensor = tensor!(tensor)
     impl!(tensor).sign(tensor, tensor)
@@ -3590,6 +3738,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :element
   def abs(tensor) do
     tensor = tensor!(tensor)
 
@@ -3627,6 +3776,7 @@ defmodule Nx do
       iex> Nx.bitwise_not(Nx.tensor([0.0, 1.0]))
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
+  @doc type: :element
   def bitwise_not(tensor) do
     tensor = tensor!(tensor)
     assert_bitwise_type!(tensor.type)
@@ -3667,6 +3817,7 @@ defmodule Nx do
       iex> Nx.population_count(Nx.tensor([0.0, 1.0]))
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
+  @doc type: :element
   def population_count(tensor) do
     tensor = tensor!(tensor)
     assert_bitwise_type!(tensor.type)
@@ -3731,6 +3882,7 @@ defmodule Nx do
       iex> Nx.count_leading_zeros(Nx.tensor([0.0, 1.0]))
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
   """
+  @doc type: :element
   def count_leading_zeros(tensor) do
     tensor = tensor!(tensor)
     assert_bitwise_type!(tensor.type)
@@ -3762,6 +3914,7 @@ defmodule Nx do
         >
 
     """
+    @doc type: :element
     def unquote(name)(tensor) do
       case tensor!(tensor) do
         %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
@@ -3807,6 +3960,7 @@ defmodule Nx do
         [0, 1]
       >
   """
+  @doc type: :aggregation
   def all?(tensor, opts \\ []) do
     aggregate_axes_op(tensor!(tensor), :all?, {:u, 8}, opts)
   end
@@ -3846,6 +4000,7 @@ defmodule Nx do
         [1, 1]
       >
   """
+  @doc type: :aggregation
   def any?(tensor, opts \\ []) do
     aggregate_axes_op(tensor!(tensor), :any?, {:u, 8}, opts)
   end
@@ -3981,16 +4136,10 @@ defmodule Nx do
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
   """
+  @doc type: :aggregation
   def sum(tensor, opts \\ []) do
     tensor = tensor!(tensor)
-
-    type =
-      case tensor.type do
-        {:u, _} -> {:u, 64}
-        {:s, _} -> {:s, 64}
-        type -> type
-      end
-
+    type = Nx.Type.to_aggregate(tensor.type)
     aggregate_axes_op(tensor, :sum, type, opts)
   end
 
@@ -4078,6 +4227,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :aggregation
   def mean(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = tensor!(tensor)
 
@@ -4221,16 +4371,10 @@ defmodule Nx do
       iex> Nx.product(Nx.tensor([[1, 2]]), axes: [2])
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
   """
+  @doc type: :aggregation
   def product(tensor, opts \\ []) do
     tensor = tensor!(tensor)
-
-    type =
-      case tensor.type do
-        {:u, _} -> {:u, 64}
-        {:s, _} -> {:s, 64}
-        type -> type
-      end
-
+    type = Nx.Type.to_aggregate(tensor.type)
     aggregate_axes_op(tensor, :product, type, opts)
   end
 
@@ -4302,6 +4446,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :aggregation
   def reduce_max(tensor, opts \\ []) do
     tensor = tensor!(tensor)
     aggregate_axes_op(tensor, :reduce_max, tensor.type, opts)
@@ -4375,6 +4520,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :aggregation
   def reduce_min(tensor, opts \\ []) do
     tensor = tensor!(tensor)
     aggregate_axes_op(tensor, :reduce_min, tensor.type, opts)
@@ -4488,6 +4634,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def argmax(tensor, opts \\ []) do
     argmin_or_max(tensor, :argmax, opts)
   end
@@ -4501,7 +4648,7 @@ defmodule Nx do
       returns the index of the absolute minimum value in the tensor.
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
-      default behavior is to always return the lower index.
+      Default behavior is to always return the lower index.
 
   ## Examples
 
@@ -4574,6 +4721,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def argmin(tensor, opts \\ []) do
     argmin_or_max(tensor, :argmin, opts)
   end
@@ -4774,6 +4922,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def window_sum(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_sum)
 
@@ -4865,6 +5014,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def window_mean(tensor, window_dimensions, opts \\ []) do
     divide(window_sum(tensor, window_dimensions, opts), size(window_dimensions))
   end
@@ -4945,6 +5095,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def window_max(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_max)
 
@@ -5024,6 +5175,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def window_min(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_min)
 
@@ -5106,6 +5258,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def window_product(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_product)
 
@@ -5230,6 +5383,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :aggregation
   def reduce(tensor, acc, opts \\ [], fun) when is_function(fun, 2) do
     assert_keys!(opts, [:axes, :type, :keep_axes])
     keep_axes = opts[:keep_axes] || false
@@ -5334,6 +5488,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :aggregation
   def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun)
       when is_tuple(window_dimensions) do
     assert_keys!(opts, [:padding, :strides, :window_dilations])
@@ -5449,6 +5604,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def map(tensor, opts \\ [], fun) do
     assert_keys!(opts, [:type])
     %T{type: type} = tensor = tensor!(tensor)
@@ -5626,6 +5782,7 @@ defmodule Nx do
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
       ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
   """
+  @doc type: :ndim
   def dot(t1, t2) do
     %T{shape: s1} = t1 = tensor!(t1)
     %T{shape: s2} = t2 = tensor!(t2)
@@ -5723,6 +5880,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :ndim
   def dot(t1, axes1, t2, axes2) do
     output_type = binary_type(t1, t2)
     %T{shape: s1, names: names1} = t1 = tensor!(t1)
@@ -5773,6 +5931,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :ndim
   def outer(t1, t2) do
     type = binary_type(t1, t2)
     %T{shape: s1, names: n1} = t1 = tensor!(t1)
@@ -5917,6 +6076,7 @@ defmodule Nx do
       ** (ArgumentError) given axis (2) invalid for shape with rank 2
 
   """
+  @doc type: :shape
   def transpose(tensor, opts \\ []) do
     %{shape: shape, names: names} = tensor = tensor!(tensor)
     axes = opts[:axes] || Nx.Shape.transpose_axes(shape)
@@ -5995,6 +6155,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :ndim
   def reverse(tensor, opts \\ []) do
     assert_keys!(opts, [:axes])
     %{shape: shape, names: names} = tensor = tensor!(tensor)
@@ -6058,7 +6219,15 @@ defmodule Nx do
   can be thought of as applying `dilation - 1` interior padding to the
   input or kernel tensor.
 
-  ### Examples
+  You can split both the input and kernel tensor into feature groups
+  using `:groups`. This will split both the input and kernel tensor
+  channels and compute a grouped convolution. The size of the kernel
+  input feature channels times the number of groups must match the size of
+  the input tensor feature channels. Additionally, the size of the kernel
+  output feature channels must be evenly divisible by the number of
+  groups.
+
+  ## Examples
 
       iex> lhs = Nx.iota({9})
       iex> lhs = Nx.reshape(lhs, {1, 1, 3, 3})
@@ -6121,13 +6290,16 @@ defmodule Nx do
           ]
         ]
       >
+
   """
+  @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do
-    assert_keys!(opts, [:padding, :strides, :input_dilation, :kernel_dilation])
+    assert_keys!(opts, [:padding, :strides, :input_dilation, :kernel_dilation, :groups])
 
     padding = opts[:padding] || :valid
     input_dilation = opts[:input_dilation] || 1
     kernel_dilation = opts[:kernel_dilation] || 1
+    groups = opts[:groups] || 1
 
     %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
@@ -6146,12 +6318,20 @@ defmodule Nx do
 
     tensor_input_channels = elem(input_shape, 1)
     kernel_input_channels = elem(kernel_shape, 1)
+    kernel_output_channels = elem(kernel_shape, 0)
 
-    if tensor_input_channels != kernel_input_channels do
+    if tensor_input_channels != kernel_input_channels * groups do
       raise ArgumentError,
-            "size of input dimension 1 must match size of kernel dimension 1," <>
-              " got #{tensor_input_channels} != #{kernel_input_channels} for shapes" <>
-              " #{inspect(input_shape)} and #{inspect(kernel_shape)}"
+            "size of input dimension 1 divided by groups must match size of kernel" <>
+              " dimension 1, got #{tensor_input_channels} // #{groups} != #{kernel_input_channels}" <>
+              " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
+    end
+
+    if rem(kernel_output_channels, groups) != 0 do
+      raise ArgumentError,
+            "size of kernel dimension 1 must be evenly divisible by groups" <>
+              " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
+              " with shape #{inspect(kernel_shape)}"
     end
 
     filter_shape =
@@ -6247,7 +6427,7 @@ defmodule Nx do
     # so backends don't deal with atoms themselves
     #
     # We assume padding is specified only for spatial dims and only
-    # as {edge_high, edge_low} tuples, this conceptually simplfies
+    # as {edge_high, edge_low} tuples, this conceptually simplifies
     # things a bit
     padding_config =
       case padding do
@@ -6287,7 +6467,8 @@ defmodule Nx do
       strides: strides,
       padding: padding_config,
       input_dilation: input_dilation,
-      kernel_dilation: kernel_dilation
+      kernel_dilation: kernel_dilation,
+      groups: groups
     )
   end
 
@@ -6345,6 +6526,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :element
   def clip(tensor, min, max) do
     %T{type: type} = tensor = tensor!(tensor)
     %T{type: min_type} = min = tensor!(min)
@@ -6374,7 +6556,7 @@ defmodule Nx do
   zero. `start_index + length` must not exceed the respective
   tensor dimension.
 
-  If the `:strides` is given, it must be stricty greater than zero.
+  If the `:strides` is given, it must be strictly greater than zero.
   The resulting tensor will have the shape of `length` unless
   `:strides` are given.
 
@@ -6452,6 +6634,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :shape
   def slice(tensor, start_indices, lengths, opts \\ [])
       when is_list(start_indices) and is_list(lengths) and is_list(opts) do
     assert_keys!(opts, [:strides])
@@ -6570,6 +6753,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :ndim
   def concatenate(tensors, opts \\ []) when is_list(tensors) do
     assert_keys!(opts, [:axis])
     axis = opts[:axis] || 0
@@ -6613,7 +6797,7 @@ defmodule Nx do
   end
 
   @doc """
-  Performs a cholesky decomposition of a square matrix.
+  Performs a Cholesky decomposition of a square matrix.
 
   The matrix must be positive-definite and either Hermitian
   if complex or symmetric if real. An error is raised by the
@@ -6647,6 +6831,7 @@ defmodule Nx do
       iex> Nx.cholesky(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]))
       ** (ArgumentError) matrix must be symmetric, a matrix is symmetric iff X = X.T
   """
+  @doc type: :linalg
   def cholesky(tensor) do
     %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
 
@@ -6656,6 +6841,197 @@ defmodule Nx do
 
     out = %{tensor | type: output_type, shape: output_shape, names: output_names}
     impl!(tensor).cholesky(out, tensor)
+  end
+
+  @doc """
+  Calculates the p-norm of a tensor.
+
+  For the 0-norm, the norm is the number of non-zero elements in the tensor.
+
+  ## Options
+
+    * `:axes` - defines the axes upon which the norm will be calculated.
+      Applies only on 2-norm for 2-D tensors. Default: `nil`.
+    * `:ord` - defines which norm will be calculated according to the table below. Default: `2`
+
+  | ord          | 2-D                                       | 1-D                               |
+  | ------------ | ----------------------------------------- | --------------------------------- |
+  | `nil`        | Frobenius norm                            | 2-norm                            |
+  | `:frobenius` | Frobenius norm                            | -                                 |
+  | `:inf`       | `max(sum(abs(x), axes: [1]))`             | `max(abs(x))`                     |
+  | `:neg_inf`   | `min(sum(abs(x), axes: [1]))`             | `min(abs(x))`                     |
+  | 0            | -                                         | Number of non-zero elements       |
+  | 1            | `max(sum(abs(x), axes: [0]))`             | as below                          |
+  | -1           | `min(sum(abs(x), axes: [0]))`             | as below                          |
+  | 2            | 2-norm                                    | as below                          |
+  | -2           | smallest singular value (not implemented) | as below                          |
+  | other        | -                                         | power(sum(power(abs(x), p)), 1/p) |
+
+  ## Examples
+
+  ### Vector norms
+
+      iex> Nx.norm(Nx.tensor([3, 4]))
+      #Nx.Tensor<
+        f64
+        5.0
+      >
+
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: 1)
+      #Nx.Tensor<
+        f64
+        7.0
+      >
+
+      iex> Nx.norm(Nx.tensor([3, -4]), ord: :inf)
+      #Nx.Tensor<
+        s64
+        4
+      >
+
+      iex> Nx.norm(Nx.tensor([3, -4]), ord: :neg_inf)
+      #Nx.Tensor<
+        s64
+        3
+      >
+
+      iex> Nx.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
+      #Nx.Tensor<
+        u64
+        2
+      >
+
+  ### Matrix norms
+
+      iex> Nx.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
+      #Nx.Tensor<
+        s64
+        5
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: 1)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :neg_inf)
+      #Nx.Tensor<
+        s64
+        5
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :inf)
+      #Nx.Tensor<
+        s64
+        6
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
+      #Nx.Tensor<
+        f64
+        5.0
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]))
+      #Nx.Tensor<
+        f64
+        5.0
+      >
+
+      iex> Nx.norm(Nx.tensor([[3, 4], [0, -4]]), axes: [1])
+      #Nx.Tensor<
+        f64[2]
+        [5.0, 4.0]
+      >
+
+  ### Error cases
+
+      iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
+      ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
+
+      iex> Nx.norm(Nx.tensor([[0], [1]]), ord: -2)
+      ** (RuntimeError) ord: -2 for 2-D tensor not implemented yet
+  """
+  @doc type: :linalg
+  def norm(tensor, opts \\ []) when is_list(opts) do
+    %{shape: s} = t = tensor!(tensor)
+    assert_keys!(opts, [:ord, :axes])
+    rank = rank(t)
+
+    unless rank == 1 or rank == 2,
+      do: raise(ArgumentError, "expected 1-D or 2-D tensor, got tensor with shape #{inspect(s)}")
+
+    axes_opts = Keyword.take(opts, [:axes])
+
+    case opts[:ord] do
+      nil when rank == 1 -> norm_integer(t, 2, axes_opts)
+      nil when rank == 2 -> norm_integer(t, 2, axes_opts)
+      :frobenius -> norm_frobenius(t, axes_opts)
+      ord when ord in [:inf, :neg_inf] -> norm_inf(t, ord, axes_opts)
+      ord when is_integer(ord) -> norm_integer(t, ord, axes_opts)
+      ord -> raise ArgumentError, "unknown ord #{inspect(ord)}"
+    end
+  end
+
+  defp norm_frobenius(%{shape: {_}}, _opts),
+    do: raise(ArgumentError, "expected a 2-D tensor for ord: :frobenius, got a 1-D tensor")
+
+  defp norm_frobenius(%{shape: {_, _}} = t, opts), do: norm_integer(t, 2, opts)
+
+  defp norm_inf(%{shape: shape} = t, ord, _opts) when ord in [:inf, :neg_inf] do
+    aggregate_axes = if tuple_size(shape) == 2, do: &sum(&1, axes: [1]), else: & &1
+    reduce = if ord == :inf, do: &reduce_max/1, else: &reduce_min/1
+
+    t
+    |> Nx.abs()
+    |> aggregate_axes.()
+    |> reduce.()
+  end
+
+  defp norm_integer(%{shape: {_}} = t, 0, _opts) do
+    t
+    |> not_equal(0)
+    |> sum()
+  end
+
+  defp norm_integer(%{shape: {_, _}} = t, ord, _opts) when ord in [1, -1] do
+    function = if ord == 1, do: &reduce_max/1, else: &reduce_min/1
+
+    t
+    |> Nx.abs()
+    |> sum(axes: [0])
+    |> function.()
+  end
+
+  defp norm_integer(%{shape: {_, _}}, ord, _opts) when ord not in [-2, -1, 1, 2] do
+    raise ArgumentError, "invalid :ord for 2-D tensor, got: #{inspect(ord)}"
+  end
+
+  defp norm_integer(%{shape: {_, _}}, -2, _opts) do
+    raise "ord: -2 for 2-D tensor not implemented yet"
+  end
+
+  defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
+    output_type = Nx.Type.to_floating(type)
+    inv_ord = tensor(1 / ord, type: output_type)
+
+    # We extract this result to a variable because it's used both for
+    # getting the normalization coefficient and for the main pipe chain
+    abs_t = Nx.abs(t)
+
+    # This coefficient is introduced for better numerical stability
+    # The idea is that by dividing the tensor by it, large values of
+    # tensor entries and large values of p are reduced, which in turn
+    # avoids numerical overflow.
+    numerical_stability_coefficient = reduce_max(t)
+
+    abs_t
+    |> divide(numerical_stability_coefficient)
+    |> power(ord)
+    |> sum(opts)
+    |> power(inv_ord)
+    |> multiply(numerical_stability_coefficient)
   end
 
   @doc """
@@ -6753,6 +7129,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :ndim
   def sort(tensor, opts \\ []) do
     assert_keys!(opts, [:axis, :comparator])
     comparator = opts[:comparator] || :desc

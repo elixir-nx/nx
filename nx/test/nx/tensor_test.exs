@@ -2,10 +2,10 @@ defmodule Nx.TensorTest do
   use ExUnit.Case, async: true
 
   defmodule ProcessBackend do
-    @behaviour Nx.Tensor
+    @behaviour Nx.Backend
     defstruct [:key]
 
-    funs = Nx.Tensor.behaviour_info(:callbacks) -- [from_binary: 3, backend_deallocate: 1]
+    funs = Nx.Backend.behaviour_info(:callbacks) -- [from_binary: 3, backend_deallocate: 1]
 
     for {fun, arity} <- funs do
       args = Macro.generate_arguments(arity, __MODULE__)

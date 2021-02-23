@@ -1,8 +1,8 @@
 <h1><img src="https://github.com/elixir-nx/nx/raw/main/nx/nx.png" alt="Nx" width="400"></h1>
 
-Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its main features are:
+Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its high-level features are:
 
-  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (sizes 8, 16, 32, 64), signed integers (sizes 8, 16, 32, 64), floats (sizes 32, 64) and brain floats (sizes 16);
+  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f32`, `f64`) and brain floats (`bf16`);
 
   * Named tensors, allowing developers to give names to each dimension, leading to more readable and less error prone codebases;
 
@@ -16,7 +16,7 @@ You can find planned enhancements and features in the issues tracker. If you nee
 
 *Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/) and [Australian Wildlife Conservancy](https://www.australianwildlife.org).*
 
-For Python developers, `Nx` takes its main inspirations from [`Numpy`](https://numpy.org/) and [`Jax`](https://github.com/google/jax) but packaged into a single unified library.
+For Python developers, `Nx` currently takes its main inspirations from [`Numpy`](https://numpy.org/) and [`JAX`](https://github.com/google/jax) but packaged into a single unified library.
 
 ## Community and links
 
@@ -26,6 +26,16 @@ The Nx project and team mantain a handful of resources:
   * [The Nx mailing list](https://groups.google.com/g/elixir-nx)
 
 Discussions about Nx are also welcome in any of the Elixir community spaces, such as the [Elixir Forum](https://elixirforum.com/) and the other channels listed [on the sidebar of elixir-lang.org](https://elixir-lang.org/).
+
+### Resources
+
+Here are some introductory resources with more information on Nx as a whole:
+
+  * [A post by José Valim on Dashbit's blog announcing Nx, outlining some of the design decisions, benchmarks, and general direction](https://dashbit.co/blog/nx-numerical-elixir-is-now-publicly-available) (text)
+
+  * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio)
+
+  * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc)
 
 ## Installation
 
@@ -40,7 +50,7 @@ Then you can add `Nx` as dependency in your `mix.exs`. At the moment you will ha
 ```elixir
 def deps do
   [
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx"}
+    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", branch: "main", sparse: "nx"}
   ]
 end
 ```
@@ -86,16 +96,16 @@ defmodule MyModule do
 end
 ```
 
-`defn` supports multiple compiler backends, which can compile said functions to run on the CPU or in the GPU. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/exla), which provides bindings to Google's XLA:
+`defn` supports multiple compiler backends, which can compile said functions to run on the CPU or in the GPU. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
 
 ```elixir
-@defn_compiler {EXLA, platform: :host}
+@defn_compiler {EXLA, client: :host}
 defn softmax(t) do
   Nx.exp(t) / Nx.sum(Nx.exp(t))
 end
 ```
 
-Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the tensor type and shape. By passing `platform: :cuda` or `platform: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
+Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the tensor type and shape. By passing `client: :cuda` or `client: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
 
 ```
 Name                       ips        average  deviation         median         99th %
@@ -119,9 +129,9 @@ elixir f32                3.22 - 4760.93x slower +310.94 ms
 elixir f64                3.11 - 4924.56x slower +321.63 ms
 ```
 
-See the [`bench`](https://github.com/elixir-nx/nx/tree/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/exla/examples) directory inside the EXLA project for more information.
+See the [`bench`](https://github.com/elixir-nx/nx/tree/main/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/main/exla/examples) directory inside the EXLA project for more information.
 
-`defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-prgramming capabilities: we transform Elixir code to emit an AST that is then transformed to run on the CPU/GPU. Ultimately, the `defn` compiler is pluggable, which means developers can implement bindings for different tensor compiler technologies and choose the most appropriate one.
+`defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-programming capabilities: we transform Elixir code to emit an AST that is then transformed to run on the CPU/GPU. Ultimately, the `defn` compiler is pluggable, which means developers can implement bindings for different tensor compiler technologies and choose the most appropriate one.
 
 Many of Elixir features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. Other features such as loops and in-place updates are on the roadmap. `defn` also support `transforms`, which allows numerical definitions to be transformed at runtime. Automatic differentiation, via the `grad` function, is one example of transforms.
 

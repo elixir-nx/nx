@@ -13,7 +13,10 @@ defmodule EXLA.MixProject do
       deps: deps(),
       docs: docs(),
       compilers: [:elixir_make] ++ Mix.compilers(),
-      make_env: %{"MIX_CURRENT_PATH" => File.cwd!()}
+      make_env: %{
+        "MIX_CURRENT_PATH" => File.cwd!(),
+        "ERTS_VERSION" => List.to_string(:erlang.system_info(:version))
+      }
     ]
   end
 

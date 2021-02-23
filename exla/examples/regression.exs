@@ -1,6 +1,6 @@
 defmodule LinReg do
   import Nx.Defn
-  @default_defn_compiler Exla
+  @default_defn_compiler EXLA
 
   # y = mx + b
   defn init_random_params do

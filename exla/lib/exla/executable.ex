@@ -33,7 +33,7 @@ defmodule EXLA.Executable do
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
     %{client: client, output_shape: output_shape} = executable
-    data = run(client, executable, arguments, options, 0)
+    {data, _} = run(client, executable, arguments, options, 0)
     decompose_output(data, output_shape, client)
   end
 
@@ -41,7 +41,7 @@ defmodule EXLA.Executable do
   Runs the given function async.
   """
   def async_run(%Executable{} = executable, arguments, options \\ []) do
-    data = run(executable.client, executable, arguments, options, 1)
+    {data, _} = run(executable.client, executable, arguments, options, 1)
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     %{executable | async: {data, keep_on_device}}
   end
@@ -83,6 +83,7 @@ defmodule EXLA.Executable do
     partition = Keyword.get(options, :partition, 1)
 
     # TODO: Validate replicas and partitions against the client
+    # TODO: Raise if buffers belong to different clients/ordinals
 
     inputs =
       Enum.map(arguments, fn
@@ -130,23 +131,17 @@ defmodule EXLA.Executable do
   end
 
   defp decompose_output(data, shape, client) do
-    case shape do
-      %Shape{dtype: {:t, shapes}} ->
-        tuple =
-          data
-          |> Enum.zip(shapes)
-          |> Enum.map(fn {buf, subshape} ->
-            decompose_output(buf, subshape, client)
-          end)
+    %Shape{dtype: {:t, shapes}} = shape
 
-        {:tuple, tuple}
+    data
+    |> Enum.zip(shapes)
+    |> Enum.map(fn
+      {buf, subshape} when is_reference(buf) ->
+        Buffer.buffer({buf, client.name}, subshape)
 
-      _ when is_reference(data) ->
-        Buffer.buffer({data, client.name}, shape)
-
-      _ ->
-        Buffer.buffer(data, shape)
-    end
+      {buf, subshape} ->
+        Buffer.buffer(buf, subshape)
+    end)
   end
 
   defp unwrap!(:ok), do: :ok

@@ -143,7 +143,11 @@ defmodule EXLA.Op do
 
   ## Element-wise unary ops
 
-  returns_float = [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt]
+  returns_float =
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+      [:arccosh, :arcsinh, :arctanh, :arccos, :arcsin, :arctan, :cosh, :sinh] ++
+      [:erf, :erfc, :erf_inv]
+
   returns_any = [:negate]
   requires_int = [:count_leading_zeros, :population_count, :bitwise_not]
   requires_signed = [:abs, :sign]
@@ -261,6 +265,7 @@ defmodule EXLA.Op do
         lhs_dilation,
         rhs_dilation,
         dim_nums,
+        feature_group_count,
         precision_config
       )
       when is_list(strides) and is_list(lhs_dilation) and is_list(rhs_dilation) do
@@ -275,6 +280,7 @@ defmodule EXLA.Op do
         lhs_dilation,
         rhs_dilation,
         dim_nums,
+        feature_group_count,
         config
       )
       |> unwrap!()

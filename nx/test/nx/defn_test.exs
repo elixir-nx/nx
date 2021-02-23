@@ -152,11 +152,16 @@ defmodule Nx.DefnTest do
 
   describe "creation ops" do
     defn iota(t), do: Nx.iota(t)
+    defn eye, do: Nx.eye(2)
     defn random_uniform(t), do: Nx.random_uniform(t, 0.0, 2.0)
     defn random_normal(t), do: Nx.random_normal(t, 0.0, 1.0)
 
     test "iota" do
       assert %T{shape: {3}, data: %Expr{op: :iota, args: [nil]}} = iota(Nx.tensor([1, 2, 3]))
+    end
+
+    test "eye" do
+      assert %T{shape: {2, 2}, data: %Expr{op: :eye, args: []}} = eye()
     end
 
     test "random uniform" do
@@ -414,9 +419,9 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :min, args: [_, _]}} = min_two(1, 2)
     end
 
-    defn maxu(a), do: max_unsigned_type(a, {:u, 32})
-    defn maxs(a), do: max_signed_type(a, {:s, 32})
-    defn maxf(a), do: max_float_type(a, {:f, 32})
+    defn maxu(a), do: rewrite_types(a, max_unsigned_type: {:u, 32})
+    defn maxs(a), do: rewrite_types(a, max_signed_type: {:s, 32})
+    defn maxf(a), do: rewrite_types(a, max_float_type: {:f, 32})
 
     test "max_*_type/2" do
       assert %T{data: %Expr{op: :as_type, args: [_]}} = maxu(Nx.tensor(1, type: {:u, 64}))

@@ -197,6 +197,9 @@ defmodule Nx.Defn.Expr do
   @doc """
   Traverses the given expressions.
 
+  This function exists to handle composite types that may
+  have multiple expressions.
+
   If an expression is given, the function is invoked for it
   but not for its arguments (see `traverse_args/3` for that).
 
@@ -242,6 +245,10 @@ defmodule Nx.Defn.Expr do
     {_, max_float_size} = max_float_type = opts[:max_float_type] || {:f, 64}
     {_, max_signed_size} = max_signed_type = opts[:max_signed_type] || {:s, 64}
     {_, max_unsigned_size} = max_unsigned_type = opts[:max_unsigned_type] || {:u, 64}
+
+    if not Nx.Type.float?(max_float_type) do
+      raise ArgumentError, ":max_float_type must be float type, got: #{inspect(max_float_type)}"
+    end
 
     if max_float_type != {:f, 64} or max_signed_type != {:s, 64} or max_unsigned_type != {:u, 64} do
       rewrite_type(tensor_expr, fn
@@ -314,29 +321,6 @@ defmodule Nx.Defn.Expr do
   ## Nx.Defn callbacks
 
   @doc false
-  def validate_args(args) do
-    args
-    |> Enum.reduce([], &validate_args/2)
-    |> Enum.reverse()
-  end
-
-  defp validate_args(%T{} = t, acc),
-    do: [t | acc]
-
-  defp validate_args(number, acc) when is_number(number),
-    do: [Nx.tensor(number) | acc]
-
-  defp validate_args(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &validate_args/2)
-
-  defp validate_args(other, _acc) do
-    raise(
-      ArgumentError,
-      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
-    )
-  end
-
-  @doc false
   def validate_vars(vars) do
     for var <- vars do
       case var do
@@ -359,6 +343,29 @@ defmodule Nx.Defn.Expr do
                   "tagged as default arguments. Got: #{inspect(other)}"
       end
     end
+  end
+
+  @doc false
+  def to_vars(args) do
+    args
+    |> Enum.reduce([], &to_vars/2)
+    |> Enum.reverse()
+  end
+
+  defp to_vars(%T{} = t, acc),
+    do: [t | acc]
+
+  defp to_vars(number, acc) when is_number(number),
+    do: [Nx.tensor(number) | acc]
+
+  defp to_vars(tuple, acc) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &to_vars/2)
+
+  defp to_vars(other, _acc) do
+    raise(
+      ArgumentError,
+      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
+    )
   end
 
   @doc false
@@ -423,13 +430,18 @@ defmodule Nx.Defn.Expr do
     cond(clauses, last)
   end
 
-  ## Nx.Tensor Callbacks
+  ## Nx.Backend Callbacks
 
-  @behaviour Nx.Tensor
+  @behaviour Nx.Backend
 
   @impl true
   def from_binary(out, binary, opts) do
     to_expr(Nx.BinaryBackend.from_binary(out, binary, opts))
+  end
+
+  @impl true
+  def eye(out) do
+    expr(out, nil, :eye, [])
   end
 
   @impl true
@@ -448,9 +460,10 @@ defmodule Nx.Defn.Expr do
   end
 
   unary_ops =
-    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-      [:negate, :sign, :abs, :bitwise_not, :population_count, :count_leading_zeros] ++
-      [:floor, :ceil, :round, :as_type]
+    [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
+      [:arccosh, :arcsinh, :arctanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
+      [:population_count, :count_leading_zeros, :floor, :ceil, :round, :as_type] ++
+      [:erf, :erfc, :erf_inv, :arccos, :arcsin, :arctan]
 
   for op <- unary_ops do
     @impl true
@@ -631,7 +644,7 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  defp ones_stride?(strides), do: Enum.all?(strides, & &1 == 1)
+  defp ones_stride?(strides), do: Enum.all?(strides, &(&1 == 1))
 
   defp maybe_squeeze(%T{data: %Expr{op: :squeeze, args: [slice, axes]}}), do: {slice, axes}
   defp maybe_squeeze(slice), do: {slice, []}

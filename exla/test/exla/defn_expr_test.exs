@@ -306,6 +306,7 @@ defmodule EXLA.DefnExprTest do
         {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 8})},
         {Nx.tensor([[1], [2]], type: {:s, 8}), Nx.tensor([[10, 20]], type: {:s, 32})}
       ]
+
       for {left, right} <- int_tensors do
         compare_tensors!(quotient_two(left, right), Nx.quotient(left, right))
         compare_tensors!(quotient_two(right, left), Nx.quotient(right, left))
@@ -625,7 +626,27 @@ defmodule EXLA.DefnExprTest do
     @int_tensor Nx.tensor([1, 2, 3])
     @float_tensor Nx.tensor([1.0, 2.0, 3.0])
 
-    for fun <- [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] do
+    for fun <-
+          [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
+            [:tan, :arccosh, :arcsinh, :cosh, :sinh, :erf, :erfc] do
+      exla_fun = :"unary_#{fun}"
+      nx_fun = :"unary_#{fun}_nx"
+      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      @defn_compiler Nx.Defn.Evaluator
+      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+
+      test "#{fun}" do
+        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
+        compare_tensors!(unquote(exla_fun)(@int_tensor), unquote(nx_fun)(@int_tensor))
+      end
+    end
+  end
+
+  describe "unary float ops, restricted domain" do
+    @int_tensor Nx.tensor([0.1, 0.5, 0.9])
+    @float_tensor Nx.tensor([0.1, 0.5, 0.9])
+
+    for fun <- [:arctanh, :arccos, :arcsin, :arctan, :erf_inv] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
@@ -761,6 +782,20 @@ defmodule EXLA.DefnExprTest do
       assert cond3(Nx.tensor([-1, 0, 1]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(-5.0)
       assert cond3(Nx.tensor([1, 2, 3]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(36.0)
       assert cond3(Nx.tensor([-1, -2, -3]), Nx.tensor(2), Nx.tensor(3.0)) == Nx.tensor(-1.0)
+    end
+
+    defn cond_unused_and_slice(_result, state) do
+      cond do
+        Nx.equal(Nx.sum(state[0..1]), 0) -> state[0]
+        Nx.equal(Nx.sum(state[3..4]), 0) -> state[4]
+        true -> state[2]
+      end
+    end
+
+    test "computes cond with slice and unused vars" do
+      assert cond_unused_and_slice(Nx.tensor(1), Nx.iota({5})) == Nx.tensor(2)
+      assert cond_unused_and_slice(Nx.tensor(1), Nx.tensor([-1, 1, 0, 1, 2])) == Nx.tensor(-1)
+      assert cond_unused_and_slice(Nx.tensor(1), Nx.tensor([2, 1, 0, -1, 1])) == Nx.tensor(1)
     end
   end
 
@@ -1558,6 +1593,12 @@ defmodule EXLA.DefnExprTest do
           input_dilation: [1, 2]
         )
 
+    defn grouped_conv_valid_no_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, strides: 1, padding: :valid, groups: 2)
+
+    defn grouped_conv_same_stride(inp, kernel),
+      do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})
@@ -1667,6 +1708,27 @@ defmodule EXLA.DefnExprTest do
           input_dilation: [1, 2],
           kernel_dilation: [2, 1]
         )
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a grouped convolution with valid padding, no stride" do
+      img = Nx.iota({4, 6, 10, 10}, type: {:f, 32})
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+      lhs = grouped_conv_valid_no_stride(img, kernel)
+      rhs =
+        Nx.conv(img, kernel, strides: 1, padding: :valid, groups: 2)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a grouped convolution with same padding, stride, 3-d" do
+      img = Nx.iota({4, 8, 5, 7, 5}, type: {:f, 32})
+      kernel = Nx.iota({4, 2, 2, 2, 1}, type: {:f, 32})
+
+      lhs = grouped_conv_same_stride(img, kernel)
+      rhs =
+        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
 
       compare_tensors!(lhs, rhs)
     end
@@ -2007,6 +2069,20 @@ defmodule EXLA.DefnExprTest do
 
     test "generates with negative axis" do
       assert iota_neg_axis() == Nx.iota({2, 2, 2}, axis: -2)
+    end
+  end
+
+  describe "eye" do
+    defn eye, do: Nx.eye(2)
+
+    test "generates with shape" do
+      assert eye() == Nx.tensor([[1, 0], [0, 1]])
+    end
+
+    defn eye_with_type, do: Nx.eye(1, type: {:f, 32})
+
+    test "generates with type" do
+      assert eye_with_type() == Nx.tensor([[1]], type: {:f, 32})
     end
   end
 

@@ -6,6 +6,13 @@ defmodule EXLA.Lib do
   alias EXLA.{Builder, Op, Shape}
 
   @doc """
+  Element-wise tangent function.
+  """
+  def tan(%Op{} = op) do
+    Op.divide(Op.sin(op), Op.cos(op))
+  end
+
+  @doc """
   Builds iota along axis.
   """
   def iota(builder, shape, nil) do

@@ -3,11 +3,13 @@
 #include "tensorflow/compiler/xla/exla/exla_nif_util.h"
 #include "tensorflow/compiler/xla/exla/exla_client.h"
 #include "tensorflow/compiler/xla/exla/exla_log_sink.h"
+#include "tensorflow/compiler/xla/exla/exla_aot_compilation.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
+#include "tensorflow/compiler/xla/client/lib/math.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
 // All of these are created with calls to `new` and subsequently
@@ -772,8 +774,40 @@ ERL_NIF_TERM sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Sin);
 }
 
+ERL_NIF_TERM arccos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Acos);
+}
+
+ERL_NIF_TERM arcsin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Asin);
+}
+
+ERL_NIF_TERM arctan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Atan);
+}
+
+ERL_NIF_TERM cosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Cosh);
+}
+
+ERL_NIF_TERM sinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Sinh);
+}
+
 ERL_NIF_TERM tanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Tanh);
+}
+
+ERL_NIF_TERM arccosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Acosh);
+}
+
+ERL_NIF_TERM arcsinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Asinh);
+}
+
+ERL_NIF_TERM arctanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Atanh);
 }
 
 ERL_NIF_TERM real(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -794,6 +828,18 @@ ERL_NIF_TERM cbrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 ERL_NIF_TERM rsqrt(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Rsqrt);
+}
+
+ERL_NIF_TERM erf(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Erf);
+}
+
+ERL_NIF_TERM erfc(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::Erfc);
+}
+
+ERL_NIF_TERM erf_inv(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return xla_unary_op(env, argc, argv, xla::ErfInv);
 }
 
 ERL_NIF_TERM is_finite(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1216,7 +1262,7 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 8) {
+  if (argc != 9) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1227,9 +1273,7 @@ ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   std::vector<exla::int64> lhs_dilation;
   std::vector<exla::int64> rhs_dilation;
   xla::ConvolutionDimensionNumbers dimension_numbers;
-  // TODO(seanmor5): When Nx supports these
-  // exla::int64 feature_group_count;
-  // exla::int64 batch_group_count;
+  exla::int64 feature_group_count;
   xla::PrecisionConfig config;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
@@ -1253,13 +1297,16 @@ ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get_conv_dimension_numbers(env, argv[6], &dimension_numbers)) {
     return exla::nif::error(env, "Unable to get conv dimension numbers.");
   }
-  if (!exla::nif::get_precision_config(env, argv[7], &config)) {
+  if (!exla::nif::get(env, argv[7], &feature_group_count)) {
+    return exla::nif::error(env, "Unable to get feature groups");
+  }
+  if (!exla::nif::get_precision_config(env, argv[8], &config)) {
     return exla::nif::error(env, "Unable to get precision config");
   }
 
   xla::XlaOp op = xla::ConvGeneralDilated(*operand, *kernel, strides,
                                           padding, lhs_dilation, rhs_dilation,
-                                          dimension_numbers, 1, 1, &config);
+                                          dimension_numbers, feature_group_count, 1, &config);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -1687,6 +1734,53 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env);
 }
 
+ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaComputation* computation;
+  std::string aot_path, function_name, pbtext_path, class_name, target_triple;
+
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
+    return exla::nif::error(env, "Unable to get computation.");
+  }
+  if (!exla::nif::get(env, argv[1], pbtext_path)) {
+    return exla::nif::error(env, "Unable to get Graph Config Path.");
+  }
+  if (!exla::nif::get(env, argv[2], aot_path)) {
+    return exla::nif::error(env, "Unable to get TF Path.");
+  }
+  if (!exla::nif::get(env, argv[3], function_name)) {
+    return exla::nif::error(env, "Unable to get function name.");
+  }
+  if (!exla::nif::get(env, argv[4], class_name)) {
+    return exla::nif::error(env, "Unable to get class name.");
+  }
+  if (!exla::nif::get(env, argv[5], target_triple)) {
+    return exla::nif::error(env, "Unable to get target triple.");
+  }
+
+  xla::Status compile_status =
+    exla::CompileComputation(*computation,
+                             pbtext_path,
+                             aot_path,
+                             function_name,
+                             class_name,
+                             target_triple);
+
+  if(!compile_status.ok()) {
+    return exla::nif::error(env, compile_status.error_message().c_str());
+  }
+
+  std::string object_path = absl::StrCat(aot_path, function_name, ".o");
+  std::string header_path = absl::StrCat(aot_path, function_name, ".h");
+  ERL_NIF_TERM object_path_term = exla::nif::make(env, object_path.c_str());
+  ERL_NIF_TERM header_path_term = exla::nif::make(env, header_path.c_str());
+
+  return exla::nif::ok(env, enif_make_tuple2(env, object_path_term, header_path_term));
+}
+
 static ErlNifFunc exla_funcs[] = {
   // XlaBuilder
   {"new_builder", 1, new_builder},
@@ -1751,12 +1845,23 @@ static ErlNifFunc exla_funcs[] = {
   {"sign", 1, sign},
   {"cos", 1, cos},
   {"sin", 1, sin},
+  {"arccos", 1, arccos},
+  {"arcsin", 1, arcsin},
+  {"arctan", 1, arctan},
+  {"cosh", 1, cosh},
+  {"sinh", 1, sinh},
   {"tanh", 1, tanh},
+  {"arccosh", 1, arccosh},
+  {"arcsinh", 1, arcsinh},
+  {"arctanh", 1, arctanh},
   {"real", 1, real},
   {"imag", 1, imag},
   {"sqrt", 1, sqrt},
   {"rsqrt", 1, rsqrt},
   {"cbrt", 1, cbrt},
+  {"erf", 1, erf},
+  {"erfc", 1, erfc},
+  {"erf_inv", 1, erf_inv},
   {"is_finite", 1, is_finite},
   {"negate", 1, neg},
   {"conj", 1, conj},
@@ -1795,7 +1900,7 @@ static ErlNifFunc exla_funcs[] = {
   // Other
   {"dot", 3, dot},
   {"dot_general", 4, dot_general},
-  {"conv_general_dilated", 8, conv_general_dilated},
+  {"conv_general_dilated", 9, conv_general_dilated},
   {"pad", 3, pad},
   {"clamp", 3, clamp},
   {"reverse", 2, reverse},
@@ -1804,7 +1909,9 @@ static ErlNifFunc exla_funcs[] = {
   // LinAlg
   {"cholesky", 1, cholesky},
   // Log Sink
-  {"start_log_sink", 1, start_log_sink}
+  {"start_log_sink", 1, start_log_sink},
+  // HLO Functions
+  {"compile_aot", 6, compile_aot}
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

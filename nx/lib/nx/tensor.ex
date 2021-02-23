@@ -5,28 +5,21 @@ defmodule Nx.Tensor do
   `Nx.Tensor` is a generic container for multidimensional data structures.
   It contains the tensor type, shape, and names. The data itself is a
   struct that points to a backend responsible for controlling the data.
-  The backend must implement the behaviour defined by this module.
+  The backend behaviour is described in `Nx.Backend`.
 
-  The behaviour is mostly callback implementations of the functions in
-  the `Nx` module with the tensor output shape given as first argument.
+  The tensor has the following fields:
 
-  `Nx` backends come in two flavors: opaque backends, of which you should
-  not access its data directly except through the functions in the `Nx`
-  module, and public ones, of which its data can be directly accessed and
-  visited. The former typically have the `Backend` suffix.
+    * `:data` - the tensor backend and its data
+    * `:shape` - the tensor shape
+    * `:type` - the tensor type
+    * `:names` - the tensor names
 
-  `Nx` ships with the following backends:
-
-    * `Nx.BinaryBackend` - an opaque backend written in pure Elixir
-      that stores the data in Elixir's binaries. This is the default
-      backend used by the `Nx` module. The backend itself (and its
-      data) is private and must not be accessed directly.
-
-    * `Nx.Defn.Expr` - a public backend used by `defn` to build
-      expression graphs that are traversed by custom compilers.
+  In general it is discouraged to access those fields directly. Use
+  the functions in the `Nx` module instead. Backends have to access those
+  fields but it cannot update them, except for the `:data` field itself.
   """
 
-  @type data :: struct
+  @type data :: Nx.Backend.t()
   @type type :: Nx.Type.t()
   @type shape :: tuple()
   @type axis :: name | integer
@@ -36,72 +29,6 @@ defmodule Nx.Tensor do
 
   @enforce_keys [:type, :shape, :names]
   defstruct [:data, :type, :shape, :names]
-
-  @callback iota(t, axis | nil) :: t
-  @callback random_uniform(t, number, number) :: t
-  @callback random_normal(t, mu :: float, sigma :: float) :: t
-
-  @callback to_batched_list(out :: t, t) :: [t]
-  @callback to_binary(t, keyword) :: binary
-  @callback backend_deallocate(t) :: :ok | :already_deallocated
-  @callback backend_transfer(t, module, keyword) :: t
-
-  @callback tensor(t) :: t
-  @callback inspect(t, Inspect.Opts.t()) :: t
-  @callback from_binary(out :: t, binary, keyword) :: t
-  @callback as_type(out :: t, t) :: t
-  @callback reshape(out :: t, t, shape) :: t
-  @callback squeeze(out :: t, t, axes) :: t
-  @callback broadcast(out :: t, t, shape, axes) :: t
-  @callback transpose(out :: t, t, axes) :: t
-  @callback pad(out :: t, t, pad_value :: t, padding_config :: list()) :: t
-  @callback reverse(out :: t, t, axes) :: t
-
-  @callback dot(out :: t, t, axes, t, axes) :: t
-  @callback clip(out :: t, t, min :: t, max :: t) :: t
-  @callback slice(out :: t, t, list, list, list) :: t
-  @callback concatenate(out :: t, t, axis) :: t
-  @callback select(out :: t, t, t, t) :: t
-
-  @callback conv(out :: t, t, kernel :: t, keyword) :: t
-  @callback all?(out :: t, t, keyword) :: t
-  @callback any?(out :: t, t, keyword) :: t
-  @callback sum(out :: t, t, keyword) :: t
-  @callback product(out :: t, t, keyword) :: t
-  @callback reduce_max(out :: t, t, keyword) :: t
-  @callback reduce_min(out :: t, t, keyword) :: t
-  @callback argmax(out :: t, t, keyword) :: t
-  @callback argmin(out :: t, t, keyword) :: t
-  @callback reduce(out :: t, t, acc :: t, keyword, fun) :: t
-  @callback reduce_window(out :: t, t, acc :: t, shape, keyword, fun) :: t
-  @callback window_sum(out :: t, t, shape, keyword) :: t
-  @callback window_product(out :: t, t, shape, keyword) :: t
-  @callback window_max(out :: t, t, shape, keyword) :: t
-  @callback window_min(out :: t, t, shape, keyword) :: t
-  @callback map(out :: t, t, fun) :: t
-  @callback sort(out :: t, t, keyword) :: t
-
-  @callback cholesky(out :: t, t) :: t
-
-  binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2, :min, :max, :quotient] ++
-      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
-      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
-
-  for binary_op <- binary_ops do
-    @callback unquote(binary_op)(out :: t, t, t) :: t
-  end
-
-  unary_ops =
-    Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
-      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-      [:count_leading_zeros, :population_count]
-
-  for unary_op <- unary_ops do
-    @callback unquote(unary_op)(out :: t, t) :: t
-  end
 
   ## Access
 

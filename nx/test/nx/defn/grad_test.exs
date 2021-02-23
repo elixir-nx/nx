@@ -4,6 +4,8 @@ defmodule Nx.Defn.GradTest do
   import Nx.Defn
   import Nx.GradHelpers
 
+  @iters 1..25
+
   describe "simple" do
     defn grad_itself(t), do: grad(t, t)
     defn grad_tensor(t), do: grad(t, Nx.tensor(1.0))
@@ -59,7 +61,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient of complex rules" do
       assert grad_addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.1566267114813547)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &addition_rule/1,
           &grad_addition_rule/1,
@@ -76,7 +78,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient for scalars" do
       assert grad_product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &product_rule/1,
           &grad_product_rule/1,
@@ -101,7 +103,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_division_rule(Nx.tensor(1.0)) == Nx.tensor(-0.3416198143417387)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &division_rule/1,
           &grad_division_rule/1,
@@ -114,7 +116,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_division_num_rule(t), do: grad(t, division_num_rule(t))
 
     test "computes gradient for constant denominator" do
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &division_num_rule/1,
           &grad_division_num_rule/1,
@@ -127,7 +129,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_division_den_rule(t), do: grad(t, division_den_rule(t))
 
     test "computes gradient for constant numerator" do
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &division_den_rule/1,
           &grad_division_den_rule/1,
@@ -144,7 +146,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_remainder_rule(Nx.tensor(1.0)) == Nx.tensor(0.41997434161402614)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &remainder_rule/1,
           &grad_remainder_rule/1,
@@ -157,7 +159,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_remainder_num_rule(t), do: grad(t, remainder_num_rule(t))
 
     test "computes gradient for constant denominator" do
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &remainder_num_rule/1,
           &grad_remainder_num_rule/1,
@@ -170,7 +172,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_remainder_den_rule(t), do: grad(t, remainder_den_rule(t))
 
     test "computes gradient for constant numerator" do
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &remainder_den_rule/1,
           &grad_remainder_den_rule/1,
@@ -187,7 +189,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_power_rule(Nx.tensor(5.0)) == Nx.tensor(75.0)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &power_rule/1,
           &grad_power_rule/1,
@@ -204,7 +206,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_exp_rule(Nx.tensor(1.0)) == Nx.tensor(1.3704876904488987)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &exp_rule/1,
           &grad_exp_rule/1,
@@ -221,7 +223,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_arctan2_rule(Nx.tensor(1.0)) == Nx.tensor(-0.21621156120382867)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &arctan2_rule/1,
           &grad_arctan2_rule/1,
@@ -393,7 +395,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_tanh_exp(Nx.tensor(1.0)) == Nx.tensor(0.04693651986265914)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
         check_grads!(&Nx.tanh(Nx.exp(&1)), &grad_tanh_exp/1, t)
       end
@@ -407,7 +409,7 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       assert grad_grad_tanh(Nx.tensor(1.0)) == Nx.tensor(-0.6397000084492246)
 
-      for _ <- 1..100 do
+      for _ <- @iters do
         t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
         check_grads!(&grad_tanh_base/1, &grad_grad_tanh/1, t)
       end
@@ -455,10 +457,97 @@ defmodule Nx.Defn.GradTest do
       defn unquote(grad_fun)(t), do: grad(t, Nx.unquote(fun)(t))
 
       test "computes gradient" do
-        for _ <- 1..100 do
+        for _ <- @iters do
           t = Nx.random_uniform({}, 0.1, 10.0, type: {:f, 64})
           check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
         end
+      end
+    end
+  end
+
+  describe "tan" do
+    defn grad_tan(t), do: grad(t, Nx.tan(t))
+
+    test "computes gradient" do
+      for _ <- @iters do
+          # check_grads!/4 fails for values close to the asymptotes
+          # of tan's gradient, so we select t to avoid them.
+          multiplier = Nx.random_uniform({}, 0, 10, type: {:u, 32})
+          offset = Nx.random_uniform({}, -1.5, 1.5, type: {:f, 64})
+          t = 3.14159 |> Nx.multiply(multiplier) |> Nx.add(offset)
+          check_grads!(&Nx.tan/1, &grad_tan/1, t)
+        end
+    end
+  end
+
+  describe "inverse trig family" do
+    defn grad_arcsin(t), do: grad(t, Nx.arcsin(t))
+    defn grad_arccos(t), do: grad(t, Nx.arccos(t))
+    defn grad_arctan(t), do: grad(t, Nx.arctan(t))
+
+    test "computes gradient of inverse trig functions" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 32})
+        check_grads!(&Nx.arcsin/1, &grad_arcsin/1, t, eps: 0.1)
+        check_grads!(&Nx.arccos/1, &grad_arccos/1, t, eps: 0.1)
+        check_grads!(&Nx.arctan/1, &grad_arctan/1, t, eps: 0.1)
+        check_grads!(&Nx.arctan/1, &grad_arctan/1, Nx.multiply(1000.0,t), eps: 0.1)
+      end
+    end
+  end
+
+  describe "hyperbolics" do
+    defn grad_sinh(t), do: grad(t, Nx.sinh(t))
+    defn grad_cosh(t), do: grad(t, Nx.cosh(t))
+
+    test "computes gradient" do
+      for _ <- @iters do
+          t = Nx.random_uniform({}, -10, 10, type: {:f, 64})
+          check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
+          check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
+        end
+    end
+  end
+
+  describe "erf_inv" do
+    defn grad_erf_inv(t), do: grad(t, Nx.erf_inv(t))
+
+    test "computes gradient close to 0.0" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, 0.0, 0.9, type: {:f, 64})
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, eps: 1.0e-4)
+      end
+    end
+
+    test "computes gradient between 0.9 and 0.95" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, 0.9, 0.95, type: {:f, 64})
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, eps: 1.0e-3)
+      end
+    end
+
+    test "computes gradient between 0.95 and 0.98" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, 0.95, 0.98, type: {:f, 64})
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, eps: 0.00004)
+      end
+    end
+
+    test "computes gradient approaching 1.0 but is sharply curved" do
+      #check_grads! does not work near 1 due to sharp curve between close x's
+      coords = [
+        {0.9, 3.43},
+        {0.98, 13.26},
+        {0.99, 24.45},
+        {0.991, 26.85},
+        {0.992, 29.84},
+        {0.993, 33.64},
+        {0.994, 38.64},
+        {0.995, 45.56},
+        {0.999, 198.94},
+      ]
+      for {x, y} <- coords do
+        assert_in_delta(Nx.to_scalar(grad_erf_inv(x)), y, 0.01)
       end
     end
   end
@@ -592,7 +681,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_abs(t), do: grad(t, Nx.sum(Nx.abs(t)))
 
     test "computes gradient with scalars" do
-      for _ <- 1..100 do
+      for _ <- @iters do
         check_grads!(
           &abs_scalar/1,
           &grad_abs_scalar/1,
