@@ -413,6 +413,21 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:arcsinh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.rsqrt(Nx.add(Nx.power(x, 2.0), 1.0)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:arccosh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.rsqrt(Nx.subtract(Nx.power(x, 2.0), 1.0)))
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:arctanh, [x], _ans, g, cache) do
+    g = Nx.multiply(g, Nx.divide(1.0, Nx.subtract(1.0, Nx.power(x, 2.0))))
+    to_grad(x, g, cache)
+  end
+
   defp grad(:cos, [x], _ans, g, cache) do
     g = Nx.multiply(g, Nx.negate(Nx.sin(x)))
     to_grad(x, g, cache)
