@@ -22,12 +22,11 @@ defmodule Nx.Defn.Expr do
 
     * `fun(parameters, t, fun)`
 
-    * `cond(clauses, otherwise)` - note it may return tuples.
+    * `cond(clauses, otherwise)`
 
     * `elem(tuple, pos, size)` - created automatically from
-      `cond`, `fun` and `loop` when they return tuples.
-      Note it may return tuples too in case the expressions
-      above return nested tuples.
+      expression that return tuples. Note it may return tuples
+      too, which means we have nested tuples
 
   """
 
@@ -72,17 +71,14 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a `cond` expression.
+  Creates a tuple, possibly recursively, by executing the
+  given function for each element.
   """
-  def cond(clauses, last) do
-    {preds, exprs} = Enum.unzip(clauses)
-    {preds, context} = to_exprs(preds)
-    [last | exprs] = cond_clauses(last, exprs)
-    clauses = Enum.zip(preds, exprs)
-    cond_result(last, context, &expr(&1, context, :cond, [clauses, last]))
+  def tuple(tuple, context, fun) when is_tuple(tuple) do
+    recur_tuple(tuple, context, fun)
   end
 
-  defp cond_result(tuple, context, fun) when is_tuple(tuple) do
+  defp recur_tuple(tuple, context, fun) when is_tuple(tuple) do
     size = tuple_size(tuple)
     expr = fun.(%T{shape: {}, names: [], type: {:tuple, size}})
 
@@ -92,12 +88,29 @@ defmodule Nx.Defn.Expr do
     |> Enum.with_index()
     |> Enum.map(fn {tensor, i} ->
       fun = &expr(&1, context, :elem, [expr, i, size])
-      cond_result(tensor, context, fun)
+      recur_tuple(tensor, context, fun)
     end)
     |> List.to_tuple()
   end
 
-  defp cond_result(tensor, _context, fun), do: fun.(tensor)
+  defp recur_tuple(tensor, _context, fun), do: fun.(tensor)
+
+  @doc """
+  Creates a `cond` expression.
+  """
+  def cond(clauses, last) do
+    {preds, exprs} = Enum.unzip(clauses)
+    {preds, context} = to_exprs(preds)
+    [last | exprs] = cond_clauses(last, exprs)
+    clauses = Enum.zip(preds, exprs)
+    fun = &expr(&1, context, :cond, [clauses, last])
+
+    if is_tuple(last) do
+      tuple(last, context, fun)
+    else
+      fun.(last)
+    end
+  end
 
   defp cond_clauses(last, exprs) when is_tuple(last) do
     size = tuple_size(last)
@@ -678,6 +691,13 @@ defmodule Nx.Defn.Expr do
   def cholesky(out, tensor) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :cholesky, [tensor])
+  end
+
+  @impl true
+  def qr({q, r}, tensor, opts) do
+    tensor = to_expr(tensor)
+    context = tensor.data.context
+    tuple({q, r}, context, &expr(&1, context, :qr, [{q, r}, tensor, opts]))
   end
 
   @impl true

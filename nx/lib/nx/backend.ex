@@ -21,6 +21,9 @@ defmodule Nx.Backend do
 
     * `Nx.Defn.Expr` - a public backend used by `defn` to build
       expression graphs that are traversed by custom compilers.
+
+  This module also includes functions that are meant to be shared
+  across backends.
   """
 
   @type t :: %{__struct__: atom()}
@@ -36,7 +39,7 @@ defmodule Nx.Backend do
   @callback random_normal(tensor, mu :: float, sigma :: float) :: tensor
 
   @callback to_batched_list(out :: tensor, tensor) :: [tensor]
-  @callback to_binary(tensor, keyword) :: binary
+  @callback to_binary(tensor, limit :: non_neg_integer) :: binary
   @callback backend_deallocate(tensor) :: :ok | :already_deallocated
   @callback backend_transfer(tensor, module, keyword) :: tensor
 
@@ -76,7 +79,7 @@ defmodule Nx.Backend do
   @callback sort(out :: tensor, tensor, keyword) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
-
+  @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2, :min, :max, :quotient] ++
@@ -98,4 +101,118 @@ defmodule Nx.Backend do
     @callback unquote(unary_op)(out :: t, t) :: t
   end
 
+  alias Inspect.Algebra, as: IA
+
+  @doc """
+  Inspects the given tensor given by `binary`.
+
+  Note the `binary` may have fewer elements than the
+  tensor size but, in such cases, it must strictly have
+  more elements than `inspect_opts.limit`
+  """
+  def inspect(%{shape: shape, type: type}, binary, inspect_opts) do
+    open = IA.color("[", :list, inspect_opts)
+    sep = IA.color(",", :list, inspect_opts)
+    close = IA.color("]", :list, inspect_opts)
+
+    dims = Tuple.to_list(shape)
+    {data, _rest, _limit} = chunk(dims, binary, type, inspect_opts.limit, {open, sep, close})
+    data
+  end
+
+  defp chunk([], data, {kind, size}, limit, _docs) do
+    # TODO: Simplify inspection once nonfinite are officially supported in the VM
+    {doc, tail} =
+      case kind do
+        :s ->
+          <<head::size(size)-signed-native, tail::binary>> = data
+          {Integer.to_string(head), tail}
+
+        :u ->
+          <<head::size(size)-unsigned-native, tail::binary>> = data
+          {Integer.to_string(head), tail}
+
+        :f ->
+          <<head::size(size)-bitstring, tail::binary>> = data
+          {inspect_float(head, size), tail}
+
+        :bf ->
+          <<head::16-bitstring, tail::binary>> = data
+          {inspect_bf16(head), tail}
+      end
+
+    if limit == :infinity, do: {doc, tail, limit}, else: {doc, tail, limit - 1}
+  end
+
+  defp chunk([dim | dims], data, type, limit, {open, sep, close} = docs) do
+    {acc, rest, limit} =
+      chunk_each(dim, data, [], limit, fn chunk, limit ->
+        chunk(dims, chunk, type, limit, docs)
+      end)
+
+    {open, sep, close, nest} =
+      if dims == [] do
+        {open, IA.concat(sep, " "), close, 0}
+      else
+        {IA.concat(open, IA.line()), IA.concat(sep, IA.line()), IA.concat(IA.line(), close), 2}
+      end
+
+    doc =
+      open
+      |> IA.concat(IA.concat(Enum.intersperse(acc, sep)))
+      |> IA.nest(nest)
+      |> IA.concat(close)
+
+    {doc, rest, limit}
+  end
+
+  defp chunk_each(0, data, acc, limit, _fun) do
+    {Enum.reverse(acc), data, limit}
+  end
+
+  defp chunk_each(_dim, data, acc, 0, _fun) do
+    {Enum.reverse(["..." | acc]), data, 0}
+  end
+
+  defp chunk_each(dim, data, acc, limit, fun) do
+    {doc, rest, limit} = fun.(data, limit)
+    chunk_each(dim - 1, rest, [doc | acc], limit, fun)
+  end
+
+  defp inspect_bf16(<<0xFF80::16-native>>), do: "-Inf"
+  defp inspect_bf16(<<0x7F80::16-native>>), do: "Inf"
+  defp inspect_bf16(<<0xFFC1::16-native>>), do: "NaN"
+  defp inspect_bf16(<<0xFF81::16-native>>), do: "NaN"
+
+  if System.endianness() == :little do
+    defp inspect_bf16(bf16) do
+      <<x::float-little-32>> = <<0::16, bf16::binary>>
+      Float.to_string(x)
+    end
+  else
+    defp inspect_bf16(bf16) do
+      <<x::float-big-32>> = <<bf16::binary, 0::16>>
+      Float.to_string(x)
+    end
+  end
+
+  defp inspect_float(data, 32) do
+    case data do
+      <<0xFF800000::32-native>> -> "-Inf"
+      <<0x7F800000::32-native>> -> "Inf"
+      <<0xFF800001::32-native>> -> "NaN"
+      <<0xFFC00001::32-native>> -> "NaN"
+      <<x::float-32-native>> -> Float.to_string(x)
+    end
+  end
+
+  defp inspect_float(data, 64) do
+    case data do
+      <<0xFFF0000000000000::64-native>> -> "-Inf"
+      <<0x7FF0000000000000::64-native>> -> "Inf"
+      <<0x7FF0000000000001::64-native>> -> "NaN"
+      <<0x7FF8000000000001::64-native>> -> "NaN"
+      <<x::float-64-native>> -> Float.to_string(x)
+    end
+  end
 end

@@ -262,7 +262,7 @@ defmodule Nx do
   alias Nx.Tensor, as: T
 
   @type t :: number | Nx.Tensor.t()
-  @type shape :: Nx.Tensor.shape()
+  @type shape :: t() | Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
 
@@ -1024,19 +1024,12 @@ defmodule Nx do
   def to_binary(tensor, opts \\ []) do
     assert_keys!(opts, [:limit])
     tensor = tensor!(tensor)
-    impl!(tensor).to_binary(tensor, opts)
+    limit = if limit = opts[:limit], do: Kernel.min(size(tensor), limit), else: size(tensor)
+    impl!(tensor).to_binary(tensor, limit)
   end
 
   @doc """
   Returns the underlying tensor as a flat list.
-
-  ## Options
-
-    * `:limit` - convert at most limit elements to a list
-
-    * `:non_numbers` - control the behaviour when "Inf"
-      and "NaN" are present in the tensor. Defaults to
-      `:raise` but can be set to `:as_strings`
 
   ## Examples
 
@@ -1049,72 +1042,18 @@ defmodule Nx do
       iex> Nx.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       [1.0, 2.0]
 
-      iex> bin = <<0xFFF0000000000000::64-native, 0x7FF0000000000000::64-native,
-      ...>         0x7FF0000000000001::64-native, 0x7FF8000000000001::64-native>>
-      iex> Nx.to_flat_list(Nx.from_binary(bin, {:f, 64}), non_numbers: :as_strings)
-      ["-Inf", "Inf", "NaN", "NaN"]
-
   """
   @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
-    assert_keys!(opts, [:limit, :non_numbers])
-    tensor = tensor(tensor)
-    binary = to_binary(tensor, Keyword.take(opts, [:limit]))
-    {kind, size} = type = tensor.type
+    assert_keys!(opts, [:limit])
+    %{type: {_, size} = type} = tensor = tensor(tensor)
 
-    case Keyword.get(opts, :non_numbers, :raise) do
-      :raise ->
-        for <<part::size(size)-bitstring <- binary>> do
-          match_types [type] do
-            <<match!(var, 0)>> = part
-            read!(var, 0)
-          end
-        end
-
-      :as_strings ->
-        case kind do
-          :s -> for <<x::size(size)-signed-native <- binary>>, do: x
-          :u -> for <<x::size(size)-unsigned-native <- binary>>, do: x
-          :f -> for <<x::size(size)-bitstring <- binary>>, do: read_float(x, size)
-          :bf -> for <<x::16-bitstring <- binary>>, do: read_bf16(x)
-        end
-    end
-  end
-
-  defp read_bf16(<<0xFF80::16-native>>), do: "-Inf"
-  defp read_bf16(<<0x7F80::16-native>>), do: "Inf"
-  defp read_bf16(<<0xFFC1::16-native>>), do: "NaN"
-  defp read_bf16(<<0xFF81::16-native>>), do: "NaN"
-
-  if System.endianness() == :little do
-    defp read_bf16(bf16) do
-      <<x::float-little-32>> = <<0::16, bf16::binary>>
-      x
-    end
-  else
-    defp read_bf16(bf16) do
-      <<x::float-big-32>> = <<bf16::binary, 0::16>>
-      x
-    end
-  end
-
-  defp read_float(data, 32) do
-    case data do
-      <<0xFF800000::32-native>> -> "-Inf"
-      <<0x7F800000::32-native>> -> "Inf"
-      <<0xFF800001::32-native>> -> "NaN"
-      <<0xFFC00001::32-native>> -> "NaN"
-      <<x::float-32-native>> -> x
-    end
-  end
-
-  defp read_float(data, 64) do
-    case data do
-      <<0xFFF0000000000000::64-native>> -> "-Inf"
-      <<0x7FF0000000000000::64-native>> -> "Inf"
-      <<0x7FF0000000000001::64-native>> -> "NaN"
-      <<0x7FF8000000000001::64-native>> -> "NaN"
-      <<x::float-64-native>> -> x
+    # TODO: Simplify loop once nonfinite are officially supported in the VM
+    for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do
+      match_types [type] do
+        <<match!(var, 0)>> = part
+        read!(var, 0)
+      end
     end
   end
 
@@ -4247,9 +4186,6 @@ defmodule Nx do
   defp mean_den(shape, [axis | axes]) when axis >= 0,
     do: elem(shape, axis) * mean_den(shape, axes)
 
-  defp mean_den(shape, [axis | axes]),
-    do: elem(shape, tuple_size(shape) + axis) * mean_den(shape, axes)
-
   @doc """
   Returns the product for the tensor.
 
@@ -6329,7 +6265,7 @@ defmodule Nx do
 
     if rem(kernel_output_channels, groups) != 0 do
       raise ArgumentError,
-            "size of kernel dimension 1 must be evenly divisible by groups" <>
+            "size of kernel dimension 0 must be evenly divisible by groups" <>
               " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
               " with shape #{inspect(kernel_shape)}"
     end
@@ -6353,37 +6289,50 @@ defmodule Nx do
 
     if length(strides) != rank(spatial_dims) do
       raise ArgumentError,
-            "rank of strides much match rank of spatial dimension" <>
-              " got #{inspect(strides)} with rank #{rank(strides)}" <>
-              " for dimensions #{inspect(spatial_dims)} of rank" <>
+            "rank of strides much match rank of spatial dimensions" <>
+              " got strides #{inspect(strides)} with rank #{length(strides)}" <>
+              " and got spatial dimensions #{inspect(spatial_dims)} of rank" <>
               " #{rank(spatial_dims)}"
     end
 
     cond do
       is_integer(input_dilation) and input_dilation < 1 ->
         raise ArgumentError,
-              "input dilation must be greater than or equal to 1, got #{input_dilation}"
+              "input dilation must be a positive integer, got #{input_dilation}"
 
       is_list(input_dilation) and length(input_dilation) != rank(spatial_dims) ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the input" <>
                 " or specify an integer dilation factor"
 
-      is_list(input_dilation) and Enum.any?(input_dilation, &(&1 < 1)) ->
-        raise ArgumentError, "input dilation of each dimension must be greater than or equal to 1"
+      is_list(input_dilation) and Enum.any?(input_dilation, &(&1 < 1 || !is_integer(&1))) ->
+        raise ArgumentError,
+              "input dilation of each dimension must be a positive integer, got " <>
+                inspect(input_dilation)
+
+      !is_integer(input_dilation) and !is_list(input_dilation) ->
+        raise ArgumentError,
+              "input dilation must be a positive integer or list of positive integers, got " <>
+                inspect(input_dilation)
 
       is_integer(kernel_dilation) and kernel_dilation < 1 ->
         raise ArgumentError,
-              "kernel dilation must be greater than or equal to 1, got #{kernel_dilation}"
+              "kernel dilation must be a positive integer, got #{kernel_dilation}"
 
       is_list(kernel_dilation) and length(kernel_dilation) != rank(filter_shape) ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the kernel" <>
                 " or specify an integer dilation factor"
 
-      is_list(kernel_dilation) and Enum.any?(kernel_dilation, &(&1 < 1)) ->
+      is_list(kernel_dilation) and Enum.any?(kernel_dilation, &(&1 < 1 || !is_integer(&1))) ->
         raise ArgumentError,
-              "kernel dilation of each dimension must be greater than or equal to 1"
+              "kernel dilation of each dimension must be a positive integer, got " <>
+                inspect(kernel_dilation)
+
+      !is_integer(kernel_dilation) and !is_list(kernel_dilation) ->
+        raise ArgumentError,
+              "kernel dilation must be a positive integer or list of positive integers, got " <>
+                inspect(kernel_dilation)
 
       true ->
         :ok
@@ -6529,15 +6478,15 @@ defmodule Nx do
   @doc type: :element
   def clip(tensor, min, max) do
     %T{type: type} = tensor = tensor!(tensor)
-    %T{type: min_type} = min = tensor!(min)
-    %T{type: max_type} = max = tensor!(max)
+    %T{type: min_type, shape: min_shape} = min = tensor!(min)
+    %T{type: max_type, shape: max_shape} = max = tensor!(max)
 
-    if min.shape != {} do
-      raise ArgumentError, "min value must be a scalar shape, got: #{min.shape}"
+    if min_shape != {} do
+      raise ArgumentError, "min value must be a scalar shape, got: #{inspect(min_shape)}"
     end
 
-    if max.shape != {} do
-      raise ArgumentError, "max value must be a scalar shape, got: #{max.shape}"
+    if max_shape != {} do
+      raise ArgumentError, "max value must be a scalar shape, got: #{inspect(max_shape)}"
     end
 
     output_type = Nx.Type.merge(type, Nx.Type.merge(min_type, max_type))
@@ -7142,6 +7091,147 @@ defmodule Nx do
     impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
+  @doc """
+  Calculates the QR decomposition of a 2-D tensor with shape `{M, N}`.
+
+  ## Options
+
+    * `:mode` - Can be one of `:reduced`, `:complete`. Defaults to `:reduced`
+      For the following, `K = min(M, N)`
+
+      * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
+      * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
+
+    * `:q_names` - Defines the names for the `q` tensor
+
+    * `:r_names` - Defines the names for the `r` tensor
+
+  ## Examples
+
+      iex> {q, r} = Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
+      iex> q
+      #Nx.Tensor<
+        f64[3][3]
+        [
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f64[3][3]
+        [
+          [3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, 1.0]
+        ]
+      >
+
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]])
+      iex> {q, r} = Nx.qr(t, q_names: [:row, :base_vector], r_names: [:coef, :vars])
+      iex> q
+      #Nx.Tensor<
+        f64[row: 3][base_vector: 3]
+        [
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f64[coef: 3][vars: 3]
+        [
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0]
+        ]
+      >
+
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 1]], type: {:f, 32})
+      iex> {q, r} = Nx.qr(t, mode: :reduced)
+      iex> q
+      #Nx.Tensor<
+        f32[4][3]
+        [
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0],
+          [0.0, 0.0, 0.0]
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0]
+        ]
+      >
+
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 0]], type: {:f, 32})
+      iex> {q, r} = Nx.qr(t, mode: :complete)
+      iex> q
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [-1.0, 0.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0, 0.0],
+          [0.0, 0.0, -1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f32[4][3]
+        [
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0],
+          [0.0, 0.0, 0.0]
+        ]
+      >
+
+  ## Error cases
+
+      iex> Nx.qr(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
+      ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
+  """
+  @doc type: :linalg
+  def qr(tensor, opts \\ []) do
+    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
+
+    assert_keys!(opts, [:mode, :q_names, :r_names])
+
+    opts = Keyword.merge([mode: :reduced], opts)
+
+    mode = opts[:mode]
+    valid_modes = [:reduced, :complete]
+
+    unless mode in valid_modes do
+      raise ArgumentError,
+            "invalid :mode received. Expected one of #{valid_modes}, received: #{mode}"
+    end
+
+    output_type = Nx.Type.to_floating(type)
+
+    {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+
+    [n1, n2] = names
+
+    q_names = opts[:q_names] || [n1, nil]
+    r_names = opts[:r_names] || [nil, n2]
+
+    impl!(tensor).qr(
+      {%{tensor | type: output_type, shape: q_shape, names: q_names},
+       %{tensor | type: output_type, shape: r_shape, names: r_names}},
+      tensor,
+      opts
+    )
+  end
+
   ## Helpers
 
   defp tensor!(%T{} = t),
@@ -7164,12 +7254,14 @@ defmodule Nx do
       case kv do
         {k, _} ->
           if k not in valid do
-            raise "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
+            raise ArgumentError,
+                  "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
                     "expected one of #{inspect(valid)}"
           end
 
         _ ->
-          raise "expected a keyword list with keys #{inspect(valid)}, got: #{inspect(keyword)}"
+          raise ArgumentError,
+                "expected a keyword list with keys #{inspect(valid)}, got: #{inspect(keyword)}"
       end
     end
   end
