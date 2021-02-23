@@ -1079,4 +1079,88 @@ defmodule Nx.DefnTest do
       assert calls_private(1, 2) == Nx.tensor(3)
     end
   end
+
+  defmodule Impl do
+    import Nx.Defn
+
+    defn mul_pair({a, b}), do: a * b
+
+    defn passthrough(a), do: a
+
+    def not_a_defn(a), do: IO.puts(a)
+  end
+
+  defmodule Api do
+    import Nx.Defn
+
+    defndelegate mul_pair({a, b}), to: Impl
+
+    defndelegate mul_pair_without_tuple(pair), to: Impl
+
+    defndelegate passthrough(a), to: Impl
+
+    defndelegate func_no_exist(a, b), to: Impl
+
+    defndelegate module_no_exist(a, b), to: NotAModule
+
+    defndelegate target_not_defn(a), to: Impl, as: :not_a_defn
+  end
+
+  describe "defndelegate" do
+    test "returns the same thing as the target" do
+      assert Api.mul_pair({3, 2}) == Impl.mul_pair({3, 2})
+    end
+
+    test "has the same expression graph as the target" do
+      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
+      b = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
+      api_expr = Api.mul_pair({a, b})
+      impl_expr = Impl.mul_pair({a, b})
+      expected_expr = String.trim_trailing("""
+      #Nx.Tensor<
+        s64[2][2]
+        
+        Nx.Defn.Expr
+        parameter a            s64[2][2]
+        parameter b            s64[2][2]
+        c = multiply [ a, b ]  s64[2][2]
+      >
+      """)
+      assert inspect(impl_expr) == expected_expr
+      assert inspect(api_expr) == expected_expr
+    end
+
+    test "raises when signature of function does not match target" do
+      assert_raise(ArgumentError, ~r/pattern match on the tuple/, fn ->
+        Api.mul_pair_without_tuple({3, 2})
+      end)
+    end
+
+    test "non-tuple target signature cannot be passed tuples" do
+      assert_raise ArgumentError, ~r/pattern match on the tuple/, fn ->
+        assert Api.passthrough({3, 2})
+      end
+      assert Api.passthrough(3) == Nx.tensor(3)
+    end
+
+    test "raises at runtime when target is undefined" do
+      assert_raise UndefinedFunctionError, ~r"Impl.func_no_exist/2 is undefined", fn ->
+        Impl.func_no_exist(1, 2)
+      end
+
+      assert_raise UndefinedFunctionError, ~r"Impl.func_no_exist/2 is undefined", fn ->
+        Api.func_no_exist(1, 2)
+      end
+
+      assert_raise UndefinedFunctionError, ~r"module NotAModule is not available", fn ->
+        Api.module_no_exist(1, 2)
+      end
+    end
+
+    test "raises when the target function is not a defn" do
+      assert_raise UndefinedFunctionError, ~r"Impl.target_not_defn/1 is undefined", fn ->
+        Impl.target_not_defn(1)
+      end
+    end
+  end
 end

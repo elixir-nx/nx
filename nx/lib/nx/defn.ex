@@ -267,6 +267,52 @@ defmodule Nx.Defn do
     define(:defp, call, block, __CALLER__)
   end
 
+  @doc """
+  Defines a public numerical function that delegates to another module.
+
+  Function signatures must be valid defn function signatures - see defn.
+
+  ## Examples
+
+      defmodule MyImpl do
+        import Nx.Defn
+
+        defn calc(a, b), do: a * b + 1
+        defn calc_pair({a, b}), do: calc(a, b)
+      end
+
+      defmodule MyMath do
+        import Nx.Defn
+
+        defndelegate calc(a, b), to: MyImpl
+
+        defndelegate calc_pair({a, b}), to: MyImpl
+
+        defndelegate calc_w_other_name(a, b), to: MyImpl, as: :calc
+
+        defndelegate calc_pair_tuple({a, b}), to: MyImpl, as: :calc_pair
+      end
+  """
+  defmacro defndelegate({name, meta, args}, opts) do
+    module = Keyword.fetch!(opts, :to)
+    module_name = case module do
+      {:__aliases__, _, _} ->
+        Macro.expand(module, %{__CALLER__ | function: {:__info__, 1}})
+      _ ->
+        raise ArgumentError, "expected :to to be a module, got #{Macro.to_string(module)}"
+    end
+    func = Keyword.get(opts, :as) || name
+    arity = length(args)
+
+    defn_call = {:., [], [{:__aliases__, [alias: false], [:Nx, :Defn]}, :defn]}
+
+    {:__block__, [], [
+      {:@, [], [{:doc, [],[[delegate_to: {:{}, [], [module_name, func, arity]}]]}]},
+      {:require, [context: Elixir], [{:__aliases__, [alias: false], [:Nx, :Defn]}]},
+      {defn_call, meta, [{name, meta, args}, [do: {{:., [], [module, func]}, meta, args}]]}
+    ]}
+  end
+
   ## Callbacks
 
   defp define(kind, call, block, env) do
