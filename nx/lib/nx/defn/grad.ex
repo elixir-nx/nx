@@ -46,7 +46,8 @@ defmodule Nx.Defn.Grad do
   ## Recursion
 
   defp to_grad(expr, res, cache) do
-    Expr.traverse_exprs(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans, cache ->
+    Expr.traverse_exprs(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans,
+                                        cache ->
       key = [id | res.data.id]
 
       case cache do
@@ -64,6 +65,35 @@ defmodule Nx.Defn.Grad do
   end
 
   ## Syntax nodes
+
+  defp grad(:metadata, [expr, metadata], _ans, g, cache) do
+    case metadata do
+      %{stop_grad: true} ->
+        {Expr.tensor(1.0), cache}
+
+      %{custom_grad: fun} ->
+        unless is_function(fun, 2) do
+          raise ArgumentError,
+                "custom_grad/2 function must expect 2 arguments, got: #{inspect(fun)}"
+        end
+
+        args = fun.(expr, g)
+
+        unless is_list(args) and Enum.all?(args, &match?({_, _}, &1)) do
+          raise "custom_grad/2 must return a list of tuples, " <>
+                  "where the first element is the expression to continue computing grad " <>
+                  "and the second element is the updated g"
+        end
+
+        Enum.reduce(args, {Expr.tensor(0.0), cache}, fn {expr, g}, {acc, cache} ->
+          {graded, cache} = to_grad(expr, g, cache)
+          {maybe_add(acc, graded), cache}
+        end)
+
+      %{} ->
+        to_grad(expr, g, cache)
+    end
+  end
 
   defp grad(:cond, [clauses, last], _ans, g, cache) do
     {clauses, cache} =
@@ -458,7 +488,7 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  @half_sqrt_pi :math.sqrt(:math.pi) / 2
+  @half_sqrt_pi :math.sqrt(:math.pi()) / 2
 
   defp grad(:erf_inv, [x], ans, g, cache) do
     g = Nx.multiply(g, Nx.exp(Nx.power(ans, 2)))

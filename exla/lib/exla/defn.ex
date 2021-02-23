@@ -259,8 +259,12 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
-  defp to_operator(:elem, [tensor, index, _size], _ans, _state) do
-    EXLA.Op.get_tuple_element(tensor, index)
+  defp to_operator(:metadata, [op, _metadata], _ans, _state) do
+    op
+  end
+
+  defp to_operator(:elem, [op, index, _size], _ans, _state) do
+    EXLA.Op.get_tuple_element(op, index)
   end
 
   defp to_operator(:dot, [left, axes1, right, axes2], %{type: type}, state) do

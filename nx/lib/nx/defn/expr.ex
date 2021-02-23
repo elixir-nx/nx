@@ -24,6 +24,8 @@ defmodule Nx.Defn.Expr do
 
     * `cond(clauses, otherwise)`
 
+    * `metadata(expr, metadata)`
+
     * `elem(tuple, pos, size)` - created automatically from
       expression that return tuples. Note it may return tuples
       too, which means we have nested tuples
@@ -60,6 +62,14 @@ defmodule Nx.Defn.Expr do
   def parameter(context, type, shape, pos) do
     names = List.duplicate(nil, tuple_size(shape))
     expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
+  end
+
+  @doc """
+  Creates a metadata node that around the given expression.
+  """
+  def metadata(expr, metadata) when is_map(metadata) do
+    expr = to_expr(expr)
+    expr(expr, expr.data.context, :metadata, [expr, metadata])
   end
 
   @doc """
@@ -240,6 +250,10 @@ defmodule Nx.Defn.Expr do
 
   def traverse_exprs(%T{} = expr, acc, fun) when is_function(fun, 2) do
     fun.(expr, acc)
+  end
+
+  def traverse_exprs(other, _acc, _fun) do
+    raise ArgumentError, "expected a tensor expression, got: #{inspect(other)}"
   end
 
   ## Type helpers
@@ -761,7 +775,7 @@ defmodule Nx.Defn.Expr do
 
   defp to_expr(other) do
     raise ArgumentError,
-          "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
+          "unable to build tensor expression, expected a tensor or a number, got: #{inspect(other)}"
   end
 
   defp to_exprs(list) do
@@ -843,6 +857,10 @@ defmodule Nx.Defn.Expr do
       end)
 
     IO.iodata_to_binary([clauses, ":otherwise -> ", inspect_arg(last, var_map)])
+  end
+
+  defp inspect_args(:metadata, [expr, metadata], var_map) do
+    IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(Map.keys(metadata))])
   end
 
   defp inspect_args(_op, args, var_map), do: inspect_args(args, var_map)

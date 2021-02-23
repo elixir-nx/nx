@@ -767,6 +767,14 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "metadata" do
+    defn add_with_stop_grad(a, b), do: stop_grad(Nx.add(a, b))
+
+    test "ignores metadata nodes" do
+      assert add_with_stop_grad(1, 2) == Nx.tensor(3)
+    end
+  end
+
   describe "cond" do
     defn cond3(a, b, c) do
       d = Nx.sum(a)
