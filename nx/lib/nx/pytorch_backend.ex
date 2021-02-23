@@ -19,6 +19,7 @@ defmodule Nx.PytorchBackend do
         squeeze: 3,
         add: 3,
         dot: 5,
+        cholesky: 2,
         from_binary: 3,
         to_binary: 2,
         backend_deallocate: 1,
@@ -152,6 +153,12 @@ defmodule Nx.PytorchBackend do
         _axes2
       ) do
     t = NIF.dot(left_ref, right_ref)
+    from_ref(out, t)
+  end
+
+  @impl true
+  def cholesky(%{type: output_type, shape: {rows, cols}} = out, tensor) do
+    t = NIF.cholesky(tensor.data.ref)
     from_ref(out, t)
   end
 

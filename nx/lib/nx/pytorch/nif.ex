@@ -34,6 +34,12 @@ defmodule Nx.Pytorch.NIF do
   def dot(_tensorA, _tensorB),
     do: nif_error(__ENV__.function)
 
+  def cholesky(_tensor),
+    do: nif_error(__ENV__.function)
+
+  def cholesky(_tensor, _upper),
+    do: nif_error(__ENV__.function)
+
   defp nif_error({name, arity}) do
     raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
   end

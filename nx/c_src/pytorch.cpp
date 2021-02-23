@@ -253,6 +253,21 @@ ERL_NIF_TERM dot(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   }
 }
 
+ERL_NIF_TERM cholesky(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  at::Tensor *t = get_tensor(env, argv[0]);
+  bool upper = false;
+
+  if (argc == 2)
+  {
+    nx::nif::get(env, argv[1], &upper);
+  }
+
+  at::Tensor r = at::cholesky(*t, upper);
+
+  return create_tensor_resource(env, r);
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   std::cout << "Deleting: " << obj << std::endl;
@@ -307,6 +322,8 @@ static ErlNifFunc nif_functions[] = {
     {"squeeze", 2, squeeze, 0},
     {"squeeze", 1, squeeze, 0},
     {"add", 2, add, 0},
-    {"dot", 2, dot, 0}};
+    {"dot", 2, dot, 0},
+    {"cholesky", 1, cholesky, 0},
+    {"cholesky", 2, cholesky, 0}};
 
 ERL_NIF_INIT(Elixir.Nx.Pytorch.NIF, nif_functions, load, NULL, upgrade, NULL)
