@@ -25,6 +25,9 @@ defmodule Nx.Pytorch.NIF do
   def ones(_shape),
     do: nif_error(__ENV__.function)
 
+  def eye(_size, _type),
+    do: nif_error(__ENV__.function)
+
   def add(_tensorA, _tensorB),
     do: nif_error(__ENV__.function)
 

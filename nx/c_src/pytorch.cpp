@@ -194,6 +194,19 @@ ERL_NIF_TERM ones(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   return create_tensor_resource(env, t);
 }
 
+ERL_NIF_TERM eye(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  int64_t size;
+  std::string type;
+
+  nx::nif::get(env, argv[0], &size);
+  nx::nif::get_atom(env, argv[1], type);
+
+  at::Tensor t = at::eye(size, dtypes[type]);
+
+  return create_tensor_resource(env, t);
+}
+
 ERL_NIF_TERM add(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   at::Tensor *a = get_tensor(env, argv[0]);
@@ -289,6 +302,7 @@ static ErlNifFunc nif_functions[] = {
     {"from_blob", 3, from_blob, 0},
     {"to_blob", 1, to_blob, 0},
     {"ones", 1, ones, 0},
+    {"eye", 2, eye, 0},
     {"reshape", 2, reshape, 0},
     {"squeeze", 2, squeeze, 0},
     {"squeeze", 1, squeeze, 0},

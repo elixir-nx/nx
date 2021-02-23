@@ -12,6 +12,7 @@ defmodule Nx.PytorchBackend do
       [
         tensor: 1,
         iota: 2,
+        eye: 1,
         random_uniform: 3,
         random_normal: 3,
         reshape: 3,
@@ -87,6 +88,12 @@ defmodule Nx.PytorchBackend do
           do: number_to_binary(i, type)
 
     t = NIF.from_blob(data, shape, torch_type(type))
+    from_ref(out, t)
+  end
+
+  @impl true
+  def eye(%{shape: {n, n}, type: type} = out) do
+    t = NIF.eye(n, torch_type(type))
     from_ref(out, t)
   end
 
