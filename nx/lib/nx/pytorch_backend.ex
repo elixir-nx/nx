@@ -122,7 +122,8 @@ defmodule Nx.PytorchBackend do
   end
 
   @impl true
-  def to_binary(%{data: %{ref: ref}}, _opts), do: NIF.to_blob(ref)
+  def to_binary(%{data: %{ref: ref}}), do: NIF.to_blob(ref)
+  def to_binary(%{data: %{ref: ref}}, limit), do: NIF.to_blob(ref, limit)
 
   ## Shape
 

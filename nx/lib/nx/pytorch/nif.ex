@@ -22,6 +22,9 @@ defmodule Nx.Pytorch.NIF do
   def to_blob(_tensor),
     do: nif_error(__ENV__.function)
 
+  def to_blob(_tensor, _limit),
+    do: nif_error(__ENV__.function)
+
   def ones(_shape),
     do: nif_error(__ENV__.function)
 

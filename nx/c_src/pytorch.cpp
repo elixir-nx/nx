@@ -72,9 +72,15 @@ ERL_NIF_TERM to_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   ERL_NIF_TERM result;
   at::Tensor *t = get_tensor(env, argv[0]);
+  int64_t limit = t->nbytes();
 
-  void *result_data = (void *)enif_make_new_binary(env, t->nbytes(), &result);
-  memcpy(result_data, t->data_ptr(), t->nbytes());
+  if (argc == 2)
+    nx::nif::get(env, argv[1], &limit);
+
+  int64_t byte_size = limit * t->itemsize();
+
+  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
+  memcpy(result_data, t->data_ptr(), byte_size);
 
   return result;
 }
@@ -314,6 +320,7 @@ static ErlNifFunc nif_functions[] = {
     {"arange", 5, arange, 0},
     {"from_blob", 3, from_blob, 0},
     {"to_blob", 1, to_blob, 0},
+    {"to_blob", 2, to_blob, 0},
     {"ones", 1, ones, 0},
     {"eye", 2, eye, 0},
     {"reshape", 2, reshape, 0},
