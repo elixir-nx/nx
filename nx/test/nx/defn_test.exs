@@ -762,9 +762,9 @@ defmodule Nx.DefnTest do
     defn default_qr(t), do: Nx.qr(t)
 
     test "qr" do
-      assert {left, right} = default_qr(Nx.iota({3, 2}))
-      assert left ==  Nx.tensor([[0.0, -1.0], [1.0, 0.0], [0.0, 0.0]])
-      assert right == Nx.tensor([[2.0, 3.0], [0.0, -1.0]])
+      assert {q, r} = default_qr(Nx.iota({3, 2}))
+      assert q == Nx.tensor([[0.0, -1.0], [1.0, 0.0], [0.0, 0.0]])
+      assert r == Nx.tensor([[2.0, 3.0], [0.0, -1.0]])
     end
 
     @defn_compiler Nx.Defn.Evaluator
