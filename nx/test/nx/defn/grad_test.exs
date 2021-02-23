@@ -40,6 +40,26 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "metadata" do
+    defn stop_grad_meta(t),
+      do: grad(t, stop_grad(Nx.exp(t)))
+
+    defn stop_grad_tuple_meta(a, b),
+      do: grad({a, b}, stop_grad(Nx.exp(a) + Nx.exp(b)))
+
+    test "stops computing gradient" do
+      assert stop_grad_meta(Nx.tensor(1)) == Nx.tensor(1.0)
+      assert stop_grad_tuple_meta(Nx.tensor(1), Nx.tensor(1)) == {Nx.tensor(1.0), Nx.tensor(1.0)}
+    end
+
+    defn random_meta(t),
+      do: grad(t, transform(Nx.exp(t), &Nx.Defn.Expr.metadata(&1, %{oops: true})))
+
+    test "ignores unknown metadata" do
+      assert random_meta(Nx.tensor(1)) == Nx.exp(1)
+    end
+  end
+
   describe "cache" do
     defn subexpressions(x, y) do
       z = x * y
@@ -470,13 +490,13 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient" do
       for _ <- @iters do
-          # check_grads!/4 fails for values close to the asymptotes
-          # of tan's gradient, so we select t to avoid them.
-          multiplier = Nx.random_uniform({}, 0, 10, type: {:u, 32})
-          offset = Nx.random_uniform({}, -1.5, 1.5, type: {:f, 64})
-          t = 3.14159 |> Nx.multiply(multiplier) |> Nx.add(offset)
-          check_grads!(&Nx.tan/1, &grad_tan/1, t)
-        end
+        # check_grads!/4 fails for values close to the asymptotes
+        # of tan's gradient, so we select t to avoid them.
+        multiplier = Nx.random_uniform({}, 0, 10, type: {:u, 32})
+        offset = Nx.random_uniform({}, -1.5, 1.5, type: {:f, 64})
+        t = 3.14159 |> Nx.multiply(multiplier) |> Nx.add(offset)
+        check_grads!(&Nx.tan/1, &grad_tan/1, t)
+      end
     end
   end
 
@@ -491,7 +511,7 @@ defmodule Nx.Defn.GradTest do
         check_grads!(&Nx.asin/1, &grad_asin/1, t, eps: 0.1)
         check_grads!(&Nx.acos/1, &grad_acos/1, t, eps: 0.1)
         check_grads!(&Nx.atan/1, &grad_atan/1, t, eps: 0.1)
-        check_grads!(&Nx.atan/1, &grad_atan/1, Nx.multiply(1000.0,t), eps: 0.1)
+        check_grads!(&Nx.atan/1, &grad_atan/1, Nx.multiply(1000.0, t), eps: 0.1)
       end
     end
   end
@@ -502,10 +522,10 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient" do
       for _ <- @iters do
-          t = Nx.random_uniform({}, -10, 10, type: {:f, 64})
-          check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
-          check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
-        end
+        t = Nx.random_uniform({}, -10, 10, type: {:f, 64})
+        check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
+        check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
+      end
     end
   end
 
@@ -557,7 +577,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes gradient approaching 1.0 but is sharply curved" do
-      #check_grads! does not work near 1 due to sharp curve between close x's
+      # check_grads! does not work near 1 due to sharp curve between close x's
       coords = [
         {0.9, 3.43},
         {0.98, 13.26},
@@ -567,8 +587,9 @@ defmodule Nx.Defn.GradTest do
         {0.993, 33.64},
         {0.994, 38.64},
         {0.995, 45.56},
-        {0.999, 198.94},
+        {0.999, 198.94}
       ]
+
       for {x, y} <- coords do
         assert_in_delta(Nx.to_scalar(grad_erf_inv(x)), y, 0.01)
       end

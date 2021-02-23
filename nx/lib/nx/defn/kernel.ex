@@ -273,6 +273,25 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Stop computing the gradient for the given expression.
+
+  It effectively annotates the gradient for the given
+  expression is 1.0.
+
+  ## Examples
+
+      expr = stop_grad(expr)
+
+  """
+  defmacro stop_grad(expr) do
+    quote do
+      Nx.Defn.Kernel.transform(unquote(expr), fn expr ->
+        Nx.Defn.Expr.traverse_exprs(expr, &Nx.Defn.Expr.metadata(&1, %{stop_grad: true}))
+      end)
+    end
+  end
+
+  @doc """
   Element-wise unary plus operator.
 
   Simply returns the given argument.

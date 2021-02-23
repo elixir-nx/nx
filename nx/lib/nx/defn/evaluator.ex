@@ -44,6 +44,10 @@ defmodule Nx.Defn.Evaluator do
     {elem(tuple, i), cache}
   end
 
+  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, vars, cache) do
+    eval(expr, vars, cache)
+  end
+
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}, type: type} = ans, vars, cache) do
     case cache do
       %{^id => res} ->

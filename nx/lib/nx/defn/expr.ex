@@ -24,6 +24,8 @@ defmodule Nx.Defn.Expr do
 
     * `cond(clauses, otherwise)`
 
+    * `metadata(expr, metadata)`
+
     * `elem(tuple, pos, size)` - created automatically from
       expression that return tuples. Note it may return tuples
       too, which means we have nested tuples
@@ -60,6 +62,14 @@ defmodule Nx.Defn.Expr do
   def parameter(context, type, shape, pos) do
     names = List.duplicate(nil, tuple_size(shape))
     expr(%T{type: type, shape: shape, names: names}, context, :parameter, [pos])
+  end
+
+  @doc """
+  Creates a metadata node that around the given expression.
+  """
+  def metadata(expr, metadata) when is_map(metadata) do
+    expr = to_expr(expr)
+    expr(expr, expr.data.context, :metadata, [expr, metadata])
   end
 
   @doc """

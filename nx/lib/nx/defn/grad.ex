@@ -65,6 +65,13 @@ defmodule Nx.Defn.Grad do
 
   ## Syntax nodes
 
+  defp grad(:metadata, [expr, metadata], _ans, g, cache) do
+    case metadata do
+      %{stop_grad: true} -> {Expr.tensor(1.0), cache}
+      %{} -> to_grad(expr, g, cache)
+    end
+  end
+
   defp grad(:cond, [clauses, last], _ans, g, cache) do
     {clauses, cache} =
       Enum.map_reduce(clauses, cache, fn {head, body}, cache ->
