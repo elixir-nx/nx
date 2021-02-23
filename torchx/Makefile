@@ -17,9 +17,8 @@ endif
 
 
 all: c_src/torchx.cpp
-	mkdir -p priv
-	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o priv/torchx.so $(LDFLAGS)
+	mkdir -p $(MIX_APP_PATH)/priv
+	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(MIX_APP_PATH)/priv/torchx.so $(LDFLAGS)
 
 
 clean:
-	rm priv/*.so
