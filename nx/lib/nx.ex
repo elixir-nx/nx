@@ -6368,15 +6368,13 @@ defmodule Nx do
 
       is_list(input_dilation) and Enum.any?(input_dilation, &(&1 < 1 || !is_integer(&1))) ->
         raise ArgumentError,
-              "input dilation of each dimension must be a positive integer, got #{
+              "input dilation of each dimension must be a positive integer, got " <>
                 inspect(input_dilation)
-              }"
 
       !is_integer(input_dilation) and !is_list(input_dilation) ->
         raise ArgumentError,
-              "input dilation must be a positive integer or list of positive integers, got #{
+              "input dilation must be a positive integer or list of positive integers, got " <>
                 inspect(input_dilation)
-              }"
 
       is_integer(kernel_dilation) and kernel_dilation < 1 ->
         raise ArgumentError,
@@ -6389,15 +6387,13 @@ defmodule Nx do
 
       is_list(kernel_dilation) and Enum.any?(kernel_dilation, &(&1 < 1 || !is_integer(&1))) ->
         raise ArgumentError,
-              "kernel dilation of each dimension must be a positive integer, got #{
+              "kernel dilation of each dimension must be a positive integer, got " <>
                 inspect(kernel_dilation)
-              }"
 
       !is_integer(kernel_dilation) and !is_list(kernel_dilation) ->
         raise ArgumentError,
-              "kernel dilation must be a positive integer or list of positive integers, got #{
+              "kernel dilation must be a positive integer or list of positive integers, got " <>
                 inspect(kernel_dilation)
-              }"
 
       true ->
         :ok
