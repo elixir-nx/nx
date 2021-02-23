@@ -213,16 +213,14 @@ ERL_NIF_TERM add(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   at::Tensor *b = get_tensor(env, argv[1]);
   double scalar = 0.0;
 
-  if (b == NULL)
-  {
-    nx::nif::get(env, argv[1], &scalar);
-  }
-
   try
   {
     at::Tensor c;
     if (b == NULL)
+    {
+      nx::nif::get(env, argv[1], &scalar);
       c = *a + scalar;
+    }
     else
       c = *a + *b;
 
