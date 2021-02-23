@@ -268,9 +268,13 @@ defmodule Nx.Defn do
   end
 
   @doc """
-  Defines a public numerical function that delegates to another module.
+  Defines a public numerical function that delegates to another
+  module.
 
-  Function signature must target defn function signature.
+  Delegated function signature patterns must match target defn
+  function signature patterns. For example, if the target function
+  has a 2-tuple as its first arg then the delegated function
+  signature must also have a 2-tuple as its first arg.
 
   ## Examples
 
