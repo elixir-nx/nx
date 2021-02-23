@@ -1,15 +1,14 @@
 defmodule Nx.PytorchBackend do
-  @behaviour Nx.Tensor
+  @behaviour Nx.Backend
 
   defstruct [:ref]
 
-  alias Nx.Tensor, as: T
   alias Nx.Pytorch.NIF
 
   import Nx.Shared
 
   funs =
-    Nx.Tensor.behaviour_info(:callbacks) --
+    Nx.Backend.behaviour_info(:callbacks) --
       [
         tensor: 1,
         iota: 2,
