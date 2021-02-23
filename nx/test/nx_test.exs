@@ -673,4 +673,541 @@ defmodule NxTest do
                Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
     end
   end
+
+  describe "tensor/2" do
+    test "raises for empty list" do
+      assert_raise(RuntimeError, "cannot build empty tensor", fn ->
+        Nx.tensor([])
+      end)
+    end
+
+    test "raises for non-numeric list" do
+      assert_raise(ArgumentError, "cannot infer the numerical type of :error", fn ->
+        Nx.tensor([:error])
+      end)
+    end
+
+    test "raises for nested lists with different shapes" do
+      len3 = [1, 2, 3]
+      len2 = [1, 2]
+
+      assert_raise(ArgumentError, ~r/lists have different shapes/, fn ->
+        Nx.tensor([len3, len2])
+      end)
+    end
+
+    test "raises for improper list" do
+      assert_raise(FunctionClauseError, ~r/reduce\/3/, fn ->
+        Nx.tensor([1 | 1])
+      end)
+    end
+  end
+
+  describe "from_binary/3" do
+    test "raises for empty bitstring" do
+      assert_raise(ArgumentError, "cannot build an empty tensor", fn ->
+        Nx.from_binary("", {:u, 32})
+      end)
+    end
+  end
+
+  describe "to_batched_list/2" do
+    test "raises for scalars" do
+      t = Nx.tensor(1)
+
+      assert_raise(ArgumentError, ~r/cannot batch scalar tensor/, fn ->
+        Nx.to_batched_list(t, 1)
+      end)
+    end
+  end
+
+  describe "reshape/3" do
+    test "raises when tensor shape and new shape are not compatible" do
+      t = Nx.tensor([3, 3, 3])
+
+      assert_raise(ArgumentError, ~r/not compatible with new shape/, fn ->
+        Nx.reshape(t, {7})
+      end)
+    end
+  end
+
+  describe "new_axis/3" do
+    test "raises when axis is out of range of the rank" do
+      t = Nx.tensor([1, 2, 3])
+      assert Nx.rank(t) == 1
+
+      assert_raise(ArgumentError, ~r/must be a number between -2 and 1/, fn ->
+        Nx.new_axis(t, 3)
+      end)
+    end
+
+    test "the new axis can shift the exising axes to the left" do
+      t = Nx.tensor([1, 2, 3], names: [:x])
+      t = Nx.new_axis(t, 0, :batch)
+      assert t.shape == {1, 3}
+      assert t.names == [:batch, :x]
+    end
+  end
+
+  describe "pad/3" do
+    test "raises for non-scalar pad value" do
+      assert_raise(ArgumentError, "padding value must be a scalar", fn ->
+        Nx.pad(Nx.tensor(1), Nx.tensor([0]), [])
+      end)
+    end
+  end
+
+  describe "shape/1" do
+    test "raises for invalid, non-shape values" do
+      assert_raise(ArgumentError, ~r/expected a shape/, fn ->
+        Nx.shape("something else")
+      end)
+    end
+
+    test "raises for invalid shapes" do
+      assert_raise(ArgumentError, ~r/invalid dimension :blep/, fn ->
+        Nx.shape({1, 2, :blep})
+      end)
+    end
+  end
+
+  describe "abs/1" do
+    test "changes nothing for unsigned types" do
+      t = Nx.tensor(10, type: {:u, 8})
+      assert Nx.abs(t) == t
+
+      t = Nx.tensor(10, type: {:u, 16})
+      assert Nx.abs(t) == t
+
+      t = Nx.tensor(10, type: {:u, 32})
+      assert Nx.abs(t) == t
+
+      t = Nx.tensor(10, type: {:u, 64})
+      assert Nx.abs(t) == t
+    end
+  end
+
+  describe "reduce_min/2" do
+    test "removes all axes (scalar) when no axes are specified" do
+      t = Nx.tensor([[1, 2, 3], [3, 1, 2]])
+      out1 = Nx.reduce_min(t)
+      assert out1 == Nx.tensor(1)
+    end
+
+    test "by default removes reduced axes" do
+      t = Nx.tensor([[1, 2, 3], [3, 1, 2]])
+      out1 = Nx.reduce_min(t, axes: [0])
+      assert out1 == Nx.tensor([1, 1, 2])
+      assert out1.shape == {3}
+    end
+
+    test "preserves and reduces given axes to size 1 with :keep_axes as true" do
+      t = Nx.tensor([[1, 2, 3], [3, 1, 2]])
+      assert t.shape == {2, 3}
+      out1 = Nx.reduce_min(t, axes: [0], keep_axes: true)
+      assert out1 == Nx.tensor([[1, 1, 2]])
+      assert out1.shape == {1, 3}
+    end
+
+    test "preserves and reduces all dimensions to size 1 when no axes are specified with :keep_axes as true" do
+      t = Nx.tensor([[1, 2, 3], [3, 1, 2]])
+      assert t.shape == {2, 3}
+      out1 = Nx.reduce_min(t, keep_axes: true)
+      assert out1 == Nx.tensor([[1]])
+      assert out1.shape == {1, 1}
+    end
+  end
+
+  describe "argmin/2" do
+    test "raises for invalid :tie_break option" do
+      assert_raise(
+        ArgumentError,
+        "unknown value for :tie_break, expected :high or :low, got: :blep",
+        fn ->
+          Nx.argmin(Nx.tensor(1), tie_break: :blep)
+        end
+      )
+    end
+  end
+
+  describe "aggregate_window_op" do
+    test "option :window_dilations can be an integer" do
+      t = Nx.tensor([1, 2, 3, 4, 5, 6, 7])
+      out = Nx.window_max(t, {2}, window_dilations: 4)
+      assert out == Nx.tensor([5, 6, 7])
+    end
+
+    test "option :padding can be :same" do
+      t = Nx.tensor([1, 2, 3])
+      out = Nx.window_max(t, {2}, padding: :same)
+      assert out == Nx.tensor([2, 3, 3])
+    end
+
+    test "raises for invalid :padding option" do
+      t = Nx.tensor([1, 2, 3])
+
+      assert_raise(
+        ArgumentError,
+        ~r/padding must be :valid or :same, or a padding configuration/,
+        fn ->
+          Nx.window_max(t, {2}, padding: :whatever)
+        end
+      )
+    end
+  end
+
+  describe "reduce/4" do
+    test "reduces dimension to 1 but does not remove it with :keep_axes as true" do
+      t = Nx.tensor([1, 2, 3])
+      out = Nx.reduce(t, 0, [keep_axes: true], fn x, y -> Nx.add(x, y) end)
+      assert Nx.shape(out) == {1}
+      assert out == Nx.tensor([6])
+    end
+  end
+
+  describe "reduce_window/5" do
+    test "works with :window_dilations option as an integer" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      opts = [window_dilations: 2]
+      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      assert out == Nx.tensor([[9]])
+    end
+
+    test "works with :strides option as an integer" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      opts = [strides: 1]
+      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      assert out == Nx.tensor([[5, 6], [8, 9]])
+    end
+
+    test "works with :padding option as a list of shape-matching integer tuples" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      opts = [padding: [{0, 0}, {0, 1}]]
+      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      assert Nx.shape(out) == {2, 3}
+
+      assert out ==
+               Nx.tensor([
+                 [5, 6, 6],
+                 [8, 9, 9]
+               ])
+    end
+
+    test "raises for invalid :padding option" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+      opts = [padding: :whatever]
+
+      assert_raise(
+        ArgumentError,
+        ~r/padding must be :valid or :same, or a padding configuration/,
+        fn ->
+          Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+        end
+      )
+    end
+  end
+
+  describe "dot/2" do
+    test "second arg call be a scalar" do
+      t = Nx.tensor([[1, 2, 3]])
+      assert Nx.shape(t) == {1, 3}
+      out = Nx.dot(t, 3)
+      assert Nx.shape(out) == {1, 3}
+      assert out == Nx.tensor([[3, 6, 9]])
+    end
+  end
+
+  describe "reverse/2" do
+    test "does nothing when tensor is scalar" do
+      t = Nx.tensor(1)
+      assert Nx.reverse(t) == t
+    end
+  end
+
+  describe "conv/3" do
+    test "raises when input rank is below 3" do
+      kernel = Nx.broadcast(Nx.tensor(0), {2, 2, 2})
+      t = Nx.tensor([[1, 2]])
+      assert Nx.rank(t) == 2
+
+      assert_raise(ArgumentError, ~r/input shape in conv requires at least rank 3/, fn ->
+        Nx.conv(t, kernel)
+      end)
+    end
+
+    test "raises when kernel rank is below 3" do
+      kernel = Nx.broadcast(Nx.tensor(0), {2, 2})
+      assert Nx.rank(kernel) == 2
+      t = Nx.iota({4, 4, 4})
+
+      assert_raise(ArgumentError, ~r/kernel shape in conv requires at least rank 3/, fn ->
+        Nx.conv(t, kernel)
+      end)
+    end
+
+    test "raises when input channels are mismatched" do
+      kernel = Nx.broadcast(Nx.tensor(0), {2, 2, 2})
+      t = Nx.iota({4, 4, 4})
+
+      assert_raise(
+        ArgumentError,
+        ~r/size of input dimension 1 divided by groups must match size of kernel dimension 1/,
+        fn ->
+          Nx.conv(t, kernel)
+        end
+      )
+    end
+
+    test "raises when :groups cannot divide evenly into the 1st dim (elem 0) of the kernel" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {3, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/size of kernel dimension 0 must be evenly divisible by groups/,
+        fn ->
+          Nx.conv(t, kernel, groups: 2)
+        end
+      )
+    end
+
+    test "raises when :strides length does not match spatial dims (input shape without 1st two dims)" do
+      kernel = Nx.broadcast(Nx.tensor(0), {2, 2, 2})
+      t = Nx.iota({4, 2, 4})
+
+      assert_raise(ArgumentError, ~r/rank of strides much match rank of spatial dimension/, fn ->
+        Nx.conv(t, kernel, strides: [1, 1, 1, 1])
+      end)
+    end
+
+    defp conv_raise_for_options(message, opts) do
+      kernel = Nx.broadcast(Nx.tensor(0), {2, 2, 2})
+      t = Nx.iota({4, 2, 4})
+
+      assert_raise(ArgumentError, message, fn ->
+        Nx.conv(t, kernel, opts)
+      end)
+    end
+
+    test "raises when :input_dilation is not positive" do
+      message = ~r/input dilation must be a positive integer/
+      conv_raise_for_options(message, input_dilation: 0)
+    end
+
+    test "works when :input_dilation is valid length list with valid positive integers" do
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 2, 1})
+      t = Nx.iota({2, 2, 2})
+      out = Nx.conv(t, kernel, input_dilation: [1])
+      assert Nx.shape(out) == {2, 1, 2}
+      assert out == Nx.tensor([[[2.0, 4.0]], [[10.0, 12.0]]])
+    end
+
+    test "raises when :input_dilation list is not the same length as spatial dims (inputs shape without 1st two dims)" do
+      message = ~r/must specify dilation for each spatial dimension of the input/
+      conv_raise_for_options(message, input_dilation: [1, 1, 1])
+    end
+
+    test "raises when :input_dilation list has a non-positive int" do
+      message = "input dilation of each dimension must be a positive integer, got [-1]"
+      conv_raise_for_options(message, input_dilation: [-1])
+    end
+
+    test "raises when :input_dilation list has a non-int" do
+      message = "input dilation of each dimension must be a positive integer, got [1.0]"
+      conv_raise_for_options(message, input_dilation: [1.0])
+    end
+
+    test "raises when :input_dilation is invalid type" do
+      message =
+        "input dilation must be a positive integer or list of positive integers, got {1.0}"
+
+      conv_raise_for_options(message, input_dilation: {1.0})
+    end
+
+    # kernel dilation
+    test "raises when :kernel_dilation is not positive" do
+      message = ~r/kernel dilation must be a positive integer/
+      conv_raise_for_options(message, kernel_dilation: 0)
+    end
+
+    test "raises when :kernel_dilation list is not the same length as spatial dims (inputs shape without 1st two dims)" do
+      message = ~r/must specify dilation for each spatial dimension of the kernel/
+      conv_raise_for_options(message, kernel_dilation: [1, 1, 1])
+    end
+
+    test "raises when :kernel_dilation list has a non-positive int" do
+      message = "kernel dilation of each dimension must be a positive integer, got [-1]"
+      conv_raise_for_options(message, kernel_dilation: [-1])
+    end
+
+    test "raises when :kernel_dilation list has a non-int" do
+      message = "kernel dilation of each dimension must be a positive integer, got [1.0]"
+      conv_raise_for_options(message, kernel_dilation: [1.0])
+    end
+
+    test "raises when :kernel_dilation is invalid type" do
+      message =
+        "kernel dilation must be a positive integer or list of positive integers, got {1.0}"
+
+      conv_raise_for_options(message, kernel_dilation: {1.0})
+    end
+
+    test "works when :padding is a valid config-list" do
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 2, 1})
+      t = Nx.iota({2, 2, 2})
+      out = Nx.conv(t, kernel, padding: [{0, 0}])
+      assert Nx.shape(out) == {2, 1, 2}
+      assert out == Nx.tensor([[[2.0, 4.0]], [[10.0, 12.0]]])
+    end
+
+    test "raises when :padding is an invalid type" do
+      message = ~r/invalid padding/
+      conv_raise_for_options(message, padding: :bad_value)
+    end
+  end
+
+  describe "clip/3" do
+    test "raises when min arg is non-scalar" do
+      t = Nx.iota({4})
+      min = Nx.iota({2})
+      max = 3
+
+      assert_raise(ArgumentError, "min value must be a scalar shape, got: {2}", fn ->
+        Nx.clip(t, min, max)
+      end)
+    end
+
+    test "raises when max arg is non-scalar" do
+      t = Nx.iota({4})
+      min = Nx.iota(2)
+      max = Nx.iota({3})
+
+      assert_raise(ArgumentError, "max value must be a scalar shape, got: {3}", fn ->
+        Nx.clip(t, min, max)
+      end)
+    end
+  end
+
+  describe "concatenate/2" do
+    test "raises for an empty list of tensors" do
+      assert_raise(ArgumentError, "empty list passed to concatenate", fn ->
+        Nx.concatenate([])
+      end)
+    end
+  end
+
+  describe "norm/2" do
+    test "raises for rank 3 or greater tensors" do
+      t = Nx.iota({2, 2, 2})
+
+      assert_raise(
+        ArgumentError,
+        "expected 1-D or 2-D tensor, got tensor with shape {2, 2, 2}",
+        fn ->
+          Nx.norm(t)
+        end
+      )
+    end
+
+    test "raises for unknown :ord value" do
+      t = Nx.iota({2, 2})
+
+      assert_raise(ArgumentError, "unknown ord :blep", fn ->
+        Nx.norm(t, ord: :blep)
+      end)
+    end
+
+    test "raises for invalid :ord integer value" do
+      t = Nx.iota({2, 2})
+
+      assert_raise(ArgumentError, "invalid :ord for 2-D tensor, got: -3", fn ->
+        Nx.norm(t, ord: -3)
+      end)
+    end
+  end
+
+  describe "sort/1" do
+    test "works" do
+      t = Nx.tensor([3, 2, 1, 0])
+      assert Nx.sort(t) == Nx.tensor([0, 1, 2, 3])
+    end
+  end
+
+  describe "sort/2" do
+    test "raises for unknown keys in options" do
+      t = Nx.tensor([3, 2, 1, 0])
+
+      assert_raise(
+        ArgumentError,
+        "unknown key :blep in [blep: :all_day], expected one of [:axis, :comparator]",
+        fn ->
+          Nx.sort(t, blep: :all_day)
+        end
+      )
+    end
+
+    test "raises for non-keyword options" do
+      t = Nx.tensor([3, 2, 1, 0])
+
+      assert_raise(
+        ArgumentError,
+        "expected a keyword list with keys [:axis, :comparator], got: [:blep]",
+        fn ->
+          Nx.sort(t, [:blep])
+        end
+      )
+    end
+  end
+
+  describe "random_normal/3" do
+    test "works with shape input" do
+      t = Nx.random_normal({3, 3}, 0.1, 10.0)
+      assert Nx.shape(t) == {3, 3}
+      assert Nx.type(t) == {:f, 64}
+    end
+
+    test "works with tensor input" do
+      t1 = Nx.iota({2})
+      t2 = Nx.random_normal(t1, 0.1, 10.0)
+      assert Nx.shape(t2) == {2}
+      assert Nx.type(t1) == {:s, 64}
+      assert Nx.type(t2) == {:f, 64}
+      assert t1 != t2
+    end
+  end
+
+  describe "random_uniform/3" do
+    test "works with shape input" do
+      t = Nx.random_uniform({3, 3}, 0.1, 10.0)
+      assert Nx.shape(t) == {3, 3}
+      assert Nx.type(t) == {:f, 64}
+    end
+
+    test "works with tensor input" do
+      t1 = Nx.iota({2})
+      t2 = Nx.random_uniform(t1, 0.1, 10.0)
+      assert Nx.shape(t2) == {2}
+      assert Nx.type(t1) == {:s, 64}
+      assert Nx.type(t2) == {:f, 64}
+      assert t1 != t2
+    end
+  end
+
+  describe "eye/2" do
+    test "raises for non-square rank 2 tensor" do
+      t = Nx.iota({2, 3})
+
+      assert_raise(ArgumentError, "eye/2 expects a square matrix, got: {2, 3}", fn ->
+        Nx.eye(t)
+      end)
+    end
+
+    test "raises for tensor that is not rank 2" do
+      t = Nx.iota({2, 3, 2})
+
+      assert_raise(ArgumentError, "eye/2 expects a square matrix, got: {2, 3, 2}", fn ->
+        Nx.eye(t)
+      end)
+    end
+  end
 end

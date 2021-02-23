@@ -4247,9 +4247,6 @@ defmodule Nx do
   defp mean_den(shape, [axis | axes]) when axis >= 0,
     do: elem(shape, axis) * mean_den(shape, axes)
 
-  defp mean_den(shape, [axis | axes]),
-    do: elem(shape, tuple_size(shape) + axis) * mean_den(shape, axes)
-
   @doc """
   Returns the product for the tensor.
 
@@ -6329,7 +6326,7 @@ defmodule Nx do
 
     if rem(kernel_output_channels, groups) != 0 do
       raise ArgumentError,
-            "size of kernel dimension 1 must be evenly divisible by groups" <>
+            "size of kernel dimension 0 must be evenly divisible by groups" <>
               " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
               " with shape #{inspect(kernel_shape)}"
     end
@@ -6353,37 +6350,50 @@ defmodule Nx do
 
     if length(strides) != rank(spatial_dims) do
       raise ArgumentError,
-            "rank of strides much match rank of spatial dimension" <>
-              " got #{inspect(strides)} with rank #{rank(strides)}" <>
-              " for dimensions #{inspect(spatial_dims)} of rank" <>
+            "rank of strides much match rank of spatial dimensions" <>
+              " got strides #{inspect(strides)} with rank #{length(strides)}" <>
+              " and got spatial dimensions #{inspect(spatial_dims)} of rank" <>
               " #{rank(spatial_dims)}"
     end
 
     cond do
       is_integer(input_dilation) and input_dilation < 1 ->
         raise ArgumentError,
-              "input dilation must be greater than or equal to 1, got #{input_dilation}"
+              "input dilation must be a positive integer, got #{input_dilation}"
 
       is_list(input_dilation) and length(input_dilation) != rank(spatial_dims) ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the input" <>
                 " or specify an integer dilation factor"
 
-      is_list(input_dilation) and Enum.any?(input_dilation, &(&1 < 1)) ->
-        raise ArgumentError, "input dilation of each dimension must be greater than or equal to 1"
+      is_list(input_dilation) and Enum.any?(input_dilation, &(&1 < 1 || !is_integer(&1))) ->
+        raise ArgumentError,
+              "input dilation of each dimension must be a positive integer, got " <>
+                inspect(input_dilation)
+
+      !is_integer(input_dilation) and !is_list(input_dilation) ->
+        raise ArgumentError,
+              "input dilation must be a positive integer or list of positive integers, got " <>
+                inspect(input_dilation)
 
       is_integer(kernel_dilation) and kernel_dilation < 1 ->
         raise ArgumentError,
-              "kernel dilation must be greater than or equal to 1, got #{kernel_dilation}"
+              "kernel dilation must be a positive integer, got #{kernel_dilation}"
 
       is_list(kernel_dilation) and length(kernel_dilation) != rank(filter_shape) ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the kernel" <>
                 " or specify an integer dilation factor"
 
-      is_list(kernel_dilation) and Enum.any?(kernel_dilation, &(&1 < 1)) ->
+      is_list(kernel_dilation) and Enum.any?(kernel_dilation, &(&1 < 1 || !is_integer(&1))) ->
         raise ArgumentError,
-              "kernel dilation of each dimension must be greater than or equal to 1"
+              "kernel dilation of each dimension must be a positive integer, got " <>
+                inspect(kernel_dilation)
+
+      !is_integer(kernel_dilation) and !is_list(kernel_dilation) ->
+        raise ArgumentError,
+              "kernel dilation must be a positive integer or list of positive integers, got " <>
+                inspect(kernel_dilation)
 
       true ->
         :ok
@@ -6529,15 +6539,15 @@ defmodule Nx do
   @doc type: :element
   def clip(tensor, min, max) do
     %T{type: type} = tensor = tensor!(tensor)
-    %T{type: min_type} = min = tensor!(min)
-    %T{type: max_type} = max = tensor!(max)
+    %T{type: min_type, shape: min_shape} = min = tensor!(min)
+    %T{type: max_type, shape: max_shape} = max = tensor!(max)
 
-    if min.shape != {} do
-      raise ArgumentError, "min value must be a scalar shape, got: #{min.shape}"
+    if min_shape != {} do
+      raise ArgumentError, "min value must be a scalar shape, got: #{inspect(min_shape)}"
     end
 
-    if max.shape != {} do
-      raise ArgumentError, "max value must be a scalar shape, got: #{max.shape}"
+    if max_shape != {} do
+      raise ArgumentError, "max value must be a scalar shape, got: #{inspect(max_shape)}"
     end
 
     output_type = Nx.Type.merge(type, Nx.Type.merge(min_type, max_type))
@@ -7164,12 +7174,14 @@ defmodule Nx do
       case kv do
         {k, _} ->
           if k not in valid do
-            raise "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
+            raise ArgumentError,
+                  "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
                     "expected one of #{inspect(valid)}"
           end
 
         _ ->
-          raise "expected a keyword list with keys #{inspect(valid)}, got: #{inspect(keyword)}"
+          raise ArgumentError,
+                "expected a keyword list with keys #{inspect(valid)}, got: #{inspect(keyword)}"
       end
     end
   end
