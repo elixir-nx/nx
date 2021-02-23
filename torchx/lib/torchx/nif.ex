@@ -1,9 +1,9 @@
-defmodule Nx.Pytorch.NIF do
+defmodule Torchx.NIF do
   @moduledoc false
   @on_load :__on_load__
 
   def __on_load__ do
-    path = :filename.join(:code.priv_dir(:nx), 'pytorch')
+    path = :filename.join(:code.priv_dir(:torchx), 'torchx')
     :erlang.load_nif(path, 0)
   end
 

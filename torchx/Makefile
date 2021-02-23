@@ -16,9 +16,9 @@ else  # Linux
 endif
 
 
-all: c_src/pytorch.cpp
+all: c_src/torchx.cpp
 	mkdir -p priv
-	@$(CXX) $(CFLAGS) c_src/pytorch.cpp -o priv/pytorch.so $(LDFLAGS)
+	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o priv/torchx.so $(LDFLAGS)
 
 
 clean:

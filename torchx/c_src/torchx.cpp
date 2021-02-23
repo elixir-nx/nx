@@ -331,4 +331,4 @@ static ErlNifFunc nif_functions[] = {
     {"cholesky", 1, cholesky, 0},
     {"cholesky", 2, cholesky, 0}};
 
-ERL_NIF_INIT(Elixir.Nx.Pytorch.NIF, nif_functions, load, NULL, upgrade, NULL)
+ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)

@@ -1,9 +1,9 @@
-defmodule Nx.PytorchBackend do
+defmodule Torchx.Backend do
   @behaviour Nx.Backend
 
   defstruct [:ref]
 
-  alias Nx.Pytorch.NIF
+  alias Torchx.NIF
 
   import Nx.Shared
 

@@ -11,8 +11,7 @@ defmodule Nx.MixProject do
       version: @version,
       elixir: "~> 1.11",
       deps: deps(),
-      docs: docs(),
-      compilers: [:elixir_make] ++ Mix.compilers()
+      docs: docs()
     ]
   end
 
