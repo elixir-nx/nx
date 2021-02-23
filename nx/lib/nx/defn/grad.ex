@@ -45,25 +45,22 @@ defmodule Nx.Defn.Grad do
 
   ## Recursion
 
-  defp to_grad(tuple, res, cache) when is_tuple(tuple) do
-    {res, cache} = tuple |> Tuple.to_list() |> Enum.map_reduce(cache, &to_grad(&1, res, &2))
-    {List.to_tuple(res), cache}
-  end
+  defp to_grad(expr, res, cache) do
+    Expr.traverse_exprs(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans, cache ->
+      key = [id | res.data.id]
 
-  defp to_grad(%T{data: %Expr{id: id, op: op, args: args}} = ans, res, cache) do
-    key = [id | res.data.id]
+      case cache do
+        %{^id => :stop} ->
+          {res, cache}
 
-    case cache do
-      %{^id => :stop} ->
-        {res, cache}
+        %{^key => res} ->
+          {res, cache}
 
-      %{^key => res} ->
-        {res, cache}
-
-      %{} ->
-        {res, cache} = grad(op, args, ans, res, cache)
-        {res, Map.put(cache, key, res)}
-    end
+        %{} ->
+          {res, cache} = grad(op, args, ans, res, cache)
+          {res, Map.put(cache, key, res)}
+      end
+    end)
   end
 
   ## Syntax nodes

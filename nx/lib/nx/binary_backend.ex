@@ -1068,7 +1068,7 @@ defmodule Nx.BinaryBackend do
   @impl true
   def qr(
         {%{shape: {m, k} = shape_q, type: output_type} = q_holder,
-         %{shape: {k, n} = shape_r, type: {_, output_num_bits} = output_type} = r_holder},
+         %{shape: {k, n} = shape_r, type: output_type} = r_holder},
         %{type: {_, input_num_bits} = input_type} = tensor,
         opts
       ) do
@@ -1121,16 +1121,13 @@ defmodule Nx.BinaryBackend do
           q =
             if is_nil(q) do
               padding_length = (m - k) * k
-
               zero = number_to_binary(0, output_type)
-
               [h_bin | List.duplicate(zero, padding_length)] |> IO.iodata_to_binary()
             else
               dot_binary(q, shape_q, output_type, h_bin, shape_h, output_type, output_type)
             end
 
           r = dot_binary(h_bin, shape_h, output_type, r, shape_r, type_r, output_type)
-
           {q, r, output_type}
       end
 
@@ -1176,10 +1173,9 @@ defmodule Nx.BinaryBackend do
     prefix_threshold = target_k - num_rows_a
     v = List.duplicate(0, prefix_threshold) ++ [v_0 | tail]
 
-    # dot(v, v) = norm_v_squared, which can be calculated from norm_a as: norm_v_squared = norm_a_squared - a_0^2 + v_0^2
-
+    # dot(v, v) = norm_v_squared, which can be calculated from norm_a as:
+    # norm_v_squared = norm_a_squared - a_0^2 + v_0^2
     norm_v_squared = norm_a_squared - a_0 * a_0 + v_0 * v_0
-
     scale = 2 / norm_v_squared
 
     # execute I - 2 / norm_v_squared * outer(v, v)
@@ -1198,7 +1194,7 @@ defmodule Nx.BinaryBackend do
               identity_element
             end
 
-          acc = [acc | [scalar_to_binary(result, output_type)]]
+          acc = [acc | scalar_to_binary(result, output_type)]
 
           if col + 1 == target_k do
             {row + 1, 0, acc}

@@ -44,14 +44,14 @@ defmodule Nx.Defn.Evaluator do
     {elem(tuple, i), cache}
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}, type: type} = ans, vars, cache) do
     case cache do
       %{^id => res} ->
         {res, cache}
 
       %{} ->
         {args, cache} = Expr.traverse_args(ans, cache, &eval(&1, vars, &2))
-        res = apply(Nx.Shared.find_impl!(args), op, [ans | args])
+        res = apply(Nx.Shared.find_impl!(args), op, eval_args(type, ans, args))
         {res, Map.put(cache, id, res)}
     end
   end
@@ -59,6 +59,9 @@ defmodule Nx.Defn.Evaluator do
   defp eval(other, _vars, cache) do
     {other, cache}
   end
+
+  defp eval_args({:tuple, _}, _, args), do: args
+  defp eval_args(_, ans, args), do: [ans | args]
 
   defp find_clause([{pred, clause} | clauses], last, vars, cache) do
     {pred, cache} = eval(pred, vars, cache)

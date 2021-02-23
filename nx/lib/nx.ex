@@ -262,7 +262,7 @@ defmodule Nx do
   alias Nx.Tensor, as: T
 
   @type t :: number | Nx.Tensor.t()
-  @type shape :: Nx.Tensor.shape()
+  @type shape :: t() | Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
 
@@ -7157,76 +7157,103 @@ defmodule Nx do
 
   ## Options
 
-  `:mode` - Can be one of `:reduced`, `:complete`. Defaults to `:reduced`
-    For the following, `K = min(M, N)`
+    * `:mode` - Can be one of `:reduced`, `:complete`. Defaults to `:reduced`
+      For the following, `K = min(M, N)`
 
-    * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
-    * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
+      * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
+      * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
 
-  `:q_names` - Defines the axes for the `q` tensor
+    * `:q_names` - Defines the names for the `q` tensor
 
-  `:r_names` - Defines the axes for the `r` tensor
+    * `:r_names` - Defines the names for the `r` tensor
 
   ## Examples
 
-      iex> Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
-      {
-        Nx.tensor([
+      iex> {q, r} = Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
+      iex> q
+      #Nx.Tensor<
+        f64[3][3]
+        [
           [-1.0, 0.0, 0.0],
           [0.0, -1.0, 0.0],
           [0.0, 0.0, -1.0]
-        ]),
-        Nx.tensor([
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f64[3][3]
+        [
           [3.0, -2.0, -1.0],
           [0.0, -1.0, -1.0],
           [0.0, 0.0, 1.0]
-        ])
-      }
+        ]
+      >
 
-      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]]), q_names: [:row, :base_vector], r_names: [:coef, :vars])
-      {
-        Nx.tensor([
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]])
+      iex> {q, r} = Nx.qr(t, q_names: [:row, :base_vector], r_names: [:coef, :vars])
+      iex> q
+      #Nx.Tensor<
+        f64[row: 3][base_vector: 3]
+        [
           [-1.0, 0.0, 0.0],
           [0.0, -1.0, 0.0],
           [0.0, 0.0, -1.0]
-        ], names: [:row, :base_vector]),
-        Nx.tensor([
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f64[coef: 3][vars: 3]
+        [
           [-3.0, -2.0, -1.0],
           [0.0, -1.0, -1.0],
           [0.0, 0.0, -1.0]
-        ], names: [:coef, :vars])
-      }
+        ]
+      >
 
-      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 1]]), mode: :reduced)
-      {
-        Nx.tensor([
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 1]], type: {:f, 32})
+      iex> {q, r} = Nx.qr(t, mode: :reduced)
+      iex> q
+      #Nx.Tensor<
+        f32[4][3]
+        [
           [-1.0, 0.0, 0.0],
           [0.0, -1.0, 0.0],
           [0.0, 0.0, -1.0],
           [0.0, 0.0, 0.0]
-        ]),
-        Nx.tensor([
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f32[3][3]
+        [
           [-3.0, -2.0, -1.0],
           [0.0, -1.0, -1.0],
           [0.0, 0.0, -1.0]
-        ])
-      }
+        ]
+      >
 
-      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 0]]), mode: :complete)
-      {
-        Nx.tensor([
+      iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 0]], type: {:f, 32})
+      iex> {q, r} = Nx.qr(t, mode: :complete)
+      iex> q
+      #Nx.Tensor<
+        f32[4][4]
+        [
           [-1.0, 0.0, 0.0, 0.0],
           [0.0, -1.0, 0.0, 0.0],
           [0.0, 0.0, -1.0, 0.0],
           [0.0, 0.0, 0.0, 1.0]
-        ]),
-        Nx.tensor([
+        ]
+      >
+      iex> r
+      #Nx.Tensor<
+        f32[4][3]
+        [
           [-3.0, -2.0, -1.0],
           [0.0, -1.0, -1.0],
           [0.0, 0.0, -1.0],
           [0.0, 0.0, 0.0]
-        ])
-      }
+        ]
+      >
 
   ## Error cases
 
