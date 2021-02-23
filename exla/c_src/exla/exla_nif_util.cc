@@ -294,22 +294,26 @@ namespace nif {
 
   int get_precision_config(ErlNifEnv* env,
                            ERL_NIF_TERM config_term,
+                           int num_operands,
                            xla::PrecisionConfig* config) {
     int config_int;
     if (!get(env, config_term, &config_int)) return 0;
 
     switch (config_int) {
       case 0:
-        config->add_operand_precision(xla::PrecisionConfig::DEFAULT);
-        config->add_operand_precision(xla::PrecisionConfig::DEFAULT);
+        for (int i = 0;i < num_operands;i++) {
+          config->add_operand_precision(xla::PrecisionConfig::DEFAULT);
+        }
         break;
       case 1:
-        config->add_operand_precision(xla::PrecisionConfig::HIGH);
-        config->add_operand_precision(xla::PrecisionConfig::HIGH);
+        for (int i = 0;i < num_operands;i++) {
+          config->add_operand_precision(xla::PrecisionConfig::HIGH);
+        }
         break;
       case 2:
-        config->add_operand_precision(xla::PrecisionConfig::HIGHEST);
-        config->add_operand_precision(xla::PrecisionConfig::HIGHEST);
+        for (int i = 0;i < num_operands;i++) {
+          config->add_operand_precision(xla::PrecisionConfig::HIGHEST);
+        }
         break;
       default:
         return 0;
@@ -425,7 +429,6 @@ namespace nif {
     *type = type_status.ConsumeValueOrDie();
     return 1;
   }
-
 
   ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape) {
     if (shape.IsTuple()) {
