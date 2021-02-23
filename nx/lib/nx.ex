@@ -7202,11 +7202,8 @@ defmodule Nx do
   @doc type: :linalg
   def qr(tensor, opts \\ []) do
     %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
-
     assert_keys!(opts, [:mode, :q_names, :r_names])
-
-    opts = Keyword.merge([mode: :reduced], opts)
-
+    opts = Keyword.put_new(opts, :mode, :reduced)
     mode = opts[:mode]
     valid_modes = [:reduced, :complete]
 

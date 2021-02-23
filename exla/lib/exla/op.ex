@@ -409,7 +409,9 @@ defmodule EXLA.Op do
     }
   end
 
-  def qr(%Op{builder: builder, ref: operand}, full_matrices, precision) do
+  def qr(%Op{builder: builder, ref: operand}, full_matrices, precision)
+      when is_boolean(full_matrices) do
+    full_matrices = if full_matrices, do: 1, else: 0
     precision_config = get_precision_config_int(precision)
     {q_ref, r_ref} = EXLA.NIF.qr(operand, full_matrices, precision_config) |> unwrap!()
 
