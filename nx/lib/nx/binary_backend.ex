@@ -112,14 +112,14 @@ defmodule Nx.BinaryBackend do
   defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
 
   @impl true
-  def to_binary(t, opts) do
+  def to_binary(%{type: {_, size}} = t, limit) do
+    limit = limit * div(size, 8)
     binary = to_binary(t)
 
-    if limit = opts[:limit] do
-      %{type: {_, size}} = t
-      binary_part(binary, 0, Kernel.min(byte_size(binary), limit * div(size, 8)))
-    else
+    if byte_size(binary) == limit do
       binary
+    else
+      binary_part(binary, 0, limit)
     end
   end
 
@@ -747,66 +747,11 @@ defmodule Nx.BinaryBackend do
 
   ## Inspect
 
-  alias Inspect.Algebra, as: IA
-
   @impl true
-  def inspect(%{shape: shape} = tensor, opts) do
-    open = IA.color("[", :list, opts)
-    sep = IA.color(",", :list, opts)
-    close = IA.color("]", :list, opts)
-
-    dims = Tuple.to_list(shape)
-    limit = opts.limit
-    list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
-    data = Nx.to_flat_list(tensor, [non_numbers: :as_strings] ++ list_opts)
-    {data, _rest, _limit} = chunk(dims, data, limit, {open, sep, close})
-    data
-  end
-
-  defp chunk([], [head | tail], limit, _docs) do
-    doc =
-      cond do
-        is_integer(head) -> Integer.to_string(head)
-        is_float(head) -> Float.to_string(head)
-        is_binary(head) -> head
-      end
-
-    if limit == :infinity, do: {doc, tail, limit}, else: {doc, tail, limit - 1}
-  end
-
-  defp chunk([dim | dims], data, limit, {open, sep, close} = docs) do
-    {acc, rest, limit} =
-      chunk_each(dim, data, [], limit, fn chunk, limit ->
-        chunk(dims, chunk, limit, docs)
-      end)
-
-    {open, sep, close, nest} =
-      if dims == [] do
-        {open, IA.concat(sep, " "), close, 0}
-      else
-        {IA.concat(open, IA.line()), IA.concat(sep, IA.line()), IA.concat(IA.line(), close), 2}
-      end
-
-    doc =
-      open
-      |> IA.concat(IA.concat(Enum.intersperse(acc, sep)))
-      |> IA.nest(nest)
-      |> IA.concat(close)
-
-    {doc, rest, limit}
-  end
-
-  defp chunk_each(0, data, acc, limit, _fun) do
-    {Enum.reverse(acc), data, limit}
-  end
-
-  defp chunk_each(_dim, data, acc, 0, _fun) do
-    {Enum.reverse(["..." | acc]), data, 0}
-  end
-
-  defp chunk_each(dim, data, acc, limit, fun) do
-    {doc, rest, limit} = fun.(data, limit)
-    chunk_each(dim - 1, rest, [doc | acc], limit, fun)
+  def inspect(tensor, inspect_opts) do
+    limit = inspect_opts.limit
+    binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
+    Nx.Backend.inspect(tensor, binary, inspect_opts)
   end
 
   ## Conv
