@@ -7152,6 +7152,120 @@ defmodule Nx do
     impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
+  @doc """
+  Calculates the QR decomposition of a 2-D tensor with shape `{M, N}`.
+
+  ## Options
+
+  `:mode` - Can be one of `:reduced`, `:complete`. Defaults to `:reduced`
+    For the following, `K = min(M, N)`
+
+    * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
+    * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
+
+  `:q_names` - Defines the axes for the `q` tensor
+
+  `:r_names` - Defines the axes for the `r` tensor
+
+  ## Examples
+
+      iex> Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
+      {
+        Nx.tensor([
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ]),
+        Nx.tensor([
+          [3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, 1.0]
+        ])
+      }
+
+      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]]), q_names: [:row, :base_vector], r_names: [:coef, :vars])
+      {
+        Nx.tensor([
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ], names: [:row, :base_vector]),
+        Nx.tensor([
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0]
+        ], names: [:coef, :vars])
+      }
+
+      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 1]]), mode: :reduced)
+      {
+        Nx.tensor([
+          [-1.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0],
+          [0.0, 0.0, -1.0],
+          [0.0, 0.0, 0.0]
+        ]),
+        Nx.tensor([
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0]
+        ])
+      }
+
+      iex> Nx.qr(Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1], [0, 0, 0]]), mode: :complete)
+      {
+        Nx.tensor([
+          [-1.0, 0.0, 0.0, 0.0],
+          [0.0, -1.0, 0.0, 0.0],
+          [0.0, 0.0, -1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ]),
+        Nx.tensor([
+          [-3.0, -2.0, -1.0],
+          [0.0, -1.0, -1.0],
+          [0.0, 0.0, -1.0],
+          [0.0, 0.0, 0.0]
+        ])
+      }
+
+  ## Error cases
+
+      iex> Nx.qr(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
+      ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
+  """
+  @doc type: :linalg
+  def qr(tensor, opts \\ []) do
+    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
+
+    assert_keys!(opts, [:mode, :q_names, :r_names])
+
+    opts = Keyword.merge([mode: :reduced], opts)
+
+    mode = opts[:mode]
+    valid_modes = [:reduced, :complete]
+
+    unless mode in valid_modes do
+      raise ArgumentError,
+            "invalid :mode received. Expected one of #{valid_modes}, received: #{mode}"
+    end
+
+    output_type = Nx.Type.to_floating(type)
+
+    {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
+
+    [n1, n2] = names
+
+    q_names = opts[:q_names] || [n1, nil]
+    r_names = opts[:r_names] || [nil, n2]
+
+    impl!(tensor).qr(
+      {%{tensor | type: output_type, shape: q_shape, names: q_names},
+       %{tensor | type: output_type, shape: r_shape, names: r_names}},
+      tensor,
+      opts
+    )
+  end
+
   ## Helpers
 
   defp tensor!(%T{} = t),
