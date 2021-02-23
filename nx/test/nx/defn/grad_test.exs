@@ -52,6 +52,19 @@ defmodule Nx.Defn.GradTest do
       assert stop_grad_tuple_meta(Nx.tensor(1), Nx.tensor(1)) == {Nx.tensor(1.0), Nx.tensor(1.0)}
     end
 
+    defn custom_grad_meta(t) do
+      custom_cos =
+        custom_grad(Nx.cos(t), fn _ans, g ->
+          [{t, g * (-Nx.sin(t))}]
+        end)
+
+      {grad(t, Nx.cos(t)), grad(t, custom_cos)}
+    end
+
+    test "computes custom grad" do
+      assert {x, x} = custom_grad_meta(Nx.tensor(1))
+    end
+
     defn random_meta(t),
       do: grad(t, transform(Nx.exp(t), &Nx.Defn.Expr.metadata(&1, %{oops: true})))
 

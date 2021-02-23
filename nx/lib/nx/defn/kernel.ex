@@ -273,7 +273,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Stop computing the gradient for the given expression.
+  Stops computing the gradient for the given expression.
 
   It effectively annotates the gradient for the given
   expression is 1.0.
@@ -287,6 +287,34 @@ defmodule Nx.Defn.Kernel do
     quote do
       Nx.Defn.Kernel.transform(unquote(expr), fn expr ->
         Nx.Defn.Expr.traverse_exprs(expr, &Nx.Defn.Expr.metadata(&1, %{stop_grad: true}))
+      end)
+    end
+  end
+
+  @doc """
+  Defines a custom gradient for the given expression.
+
+  It expects a `fun` to compute the gradient. The function
+  will be called with the expression itself and the current
+  gradient. It must return a list of arguments and their
+  updated gradient to continue applying `grad` on.
+
+  ## Examples
+
+  For example, if the gradient of `cos(t)` were to be
+  implemented by hand:
+
+      def cos(t) do
+        custom_grad(Nx.cos(t), fn _ans, g ->
+          [{t, -g * Nx.sin(t)}]
+        end)
+      end
+
+  """
+  defmacro custom_grad(expr, fun) do
+    quote do
+      Nx.Defn.Kernel.transform({unquote(expr), unquote(fun)}, fn {expr, fun} ->
+        Nx.Defn.Expr.traverse_exprs(expr, &Nx.Defn.Expr.metadata(&1, %{custom_grad: fun}))
       end)
     end
   end
@@ -335,7 +363,7 @@ defmodule Nx.Defn.Kernel do
       >
 
   """
-  def first .. last, do: Range.new(first, last)
+  def first..last, do: Range.new(first, last)
 
   @doc """
   Element-wise addition operator.
