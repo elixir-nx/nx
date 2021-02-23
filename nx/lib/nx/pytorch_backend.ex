@@ -169,7 +169,11 @@ defmodule Nx.PytorchBackend do
   end
 
   @impl true
-  defdelegate inspect(tensor, opts), to: Nx.BinaryBackend
+  def inspect(tensor, inspect_opts) do
+    limit = inspect_opts.limit
+    binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
+    Nx.Backend.inspect(tensor, binary, inspect_opts)
+  end
 
   defp from_ref(t, ref) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
 
