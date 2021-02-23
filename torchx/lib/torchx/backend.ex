@@ -5,42 +5,6 @@ defmodule Torchx.Backend do
 
   alias Torchx.NIF
 
-  import Nx.Shared
-
-  funs =
-    Nx.Backend.behaviour_info(:callbacks) --
-      [
-        tensor: 1,
-        iota: 2,
-        eye: 1,
-        random_uniform: 3,
-        random_normal: 3,
-        reshape: 3,
-        squeeze: 3,
-        add: 3,
-        dot: 5,
-        cholesky: 2,
-        from_binary: 3,
-        to_binary: 2,
-        backend_deallocate: 1,
-        inspect: 2
-      ]
-
-  for {fun, arity} <- funs do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    def unquote(fun)(unquote_splicing(args)) do
-      raise "#{unquote(fun)}() is not supported"
-    end
-  end
-
-  ## Creation
-
-  @impl true
-  def tensor(tensor) do
-    tensor
-  end
-
   def torch_type({:u, 8}), do: :byte
   def torch_type({:s, 8}), do: :char
   def torch_type({:s, 16}), do: :short
@@ -49,6 +13,8 @@ defmodule Torchx.Backend do
   def torch_type({:f, 16}), do: :half
   def torch_type({:f, 32}), do: :float
   def torch_type({:f, 64}), do: :double
+
+  ## Creation
 
   @impl true
   def iota(out, axis \\ nil)
@@ -66,30 +32,20 @@ defmodule Torchx.Backend do
   end
 
   def iota(%{shape: shape, type: type} = out, axis) do
-    {dims_before, [dim | dims_after]} =
-      shape
-      |> Tuple.to_list()
-      |> Enum.split(axis)
+    # gets the size of iota
+    dim = elem(shape, axis)
 
-    # Number of repetitions of an index in memory
-    repeat_blocks =
-      dims_after
-      |> Enum.reduce(1, &*/2)
+    # build the iota in one dimension
+    aten = NIF.arange(0, dim, 1, torch_type(type))
 
-    # Number of cycles of the counting pattern
-    cycles =
-      dims_before
-      |> Enum.reduce(1, &*/2)
+    # reshape the tensor above to be have shape where everything is 1, except for dim
+    reshape = Tuple.duplicate(1, Nx.rank(shape)) |> put_elem(axis, dim)
+    aten = NIF.reshape(aten, reshape)
 
-    data =
-      for _ <- 1..cycles,
-          i <- 0..(dim - 1),
-          _ <- 1..repeat_blocks,
-          into: "",
-          do: number_to_binary(i, type)
+    # Now broadcast the tensor using the original shape
+    aten = NIF.broadcast_to(aten, shape)
 
-    t = NIF.from_blob(data, shape, torch_type(type))
-    from_ref(out, t)
+    from_ref(out, aten)
   end
 
   @impl true
@@ -164,9 +120,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def backend_deallocate(%Nx.Tensor{data: _data}) do
-    :ok
-  end
+  def backend_deallocate(%Nx.Tensor{data: %{ref: ref}}), do: NIF.delete_tensor(ref)
 
   @impl true
   def inspect(tensor, inspect_opts) do
@@ -177,6 +131,16 @@ defmodule Torchx.Backend do
 
   defp from_ref(t, ref) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
 
-  defp number_to_binary(number, type),
-    do: match_types([type], do: <<write!(number, 0)>>)
+  ## All remaining callbacks
+
+  funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
+
+  for {fun, arity} <- funs do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    @impl true
+    def unquote(fun)(unquote_splicing(args)) do
+      raise "operation #{unquote(fun)} is not supported on Torchx.Backend."
+    end
+  end
 end

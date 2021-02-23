@@ -15,15 +15,15 @@ defmodule Torchx.NIF do
   def reshape(_tensor, _shape), do: nif_error(__ENV__.function)
   def squeeze(_tensor), do: nif_error(__ENV__.function)
   def squeeze(_tensor, _axis), do: nif_error(__ENV__.function)
+  def broadcast_to(_tensor, _shape), do: nif_error(__ENV__.function)
 
   def from_blob(_blob, _shape, _type),
     do: nif_error(__ENV__.function)
 
-  def to_blob(_tensor),
-    do: nif_error(__ENV__.function)
+  def to_blob(_tensor), do: nif_error(__ENV__.function)
+  def to_blob(_tensor, _limit), do: nif_error(__ENV__.function)
 
-  def to_blob(_tensor, _limit),
-    do: nif_error(__ENV__.function)
+  def delete_tensor(_tensor), do: nif_error(__ENV__.function)
 
   def ones(_shape),
     do: nif_error(__ENV__.function)

@@ -20,7 +20,6 @@ ERL_NIF_TERM create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
   new (tensorPtr) at::Tensor(tensor.variable_data());
 
   ret = enif_make_resource(env, tensorPtr);
-  enif_keep_resource(tensorPtr);
   enif_release_resource(tensorPtr);
 
   return ret;
@@ -37,6 +36,16 @@ at::Tensor *get_tensor(ErlNifEnv *env, ERL_NIF_TERM term)
   {
     return tensorPtr;
   }
+}
+
+ERL_NIF_TERM delete_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  at::Tensor *t = get_tensor(env, argv[0]);
+
+  delete t;
+  enif_release_resource(t);
+
+  return nx::nif::ok(env);
 }
 
 unsigned long elem_count(std::vector<int64_t> shape)
@@ -97,8 +106,6 @@ ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   nx::nif::get_atom(env, argv[3], type);
 
   at::Tensor t = at::randint(min, max, shape, dtypes[type]);
-
-  std::cout << t << "\r\n";
 
   return create_tensor_resource(env, t);
 }
@@ -183,6 +190,17 @@ ERL_NIF_TERM squeeze(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   }
   else
     r = at::squeeze(*t);
+
+  return create_tensor_resource(env, r);
+}
+
+ERL_NIF_TERM broadcast_to(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  std::vector<int64_t> shape;
+  at::Tensor *t = get_tensor(env, argv[0]);
+  nx::nif::get_tuple(env, argv[1], shape);
+
+  at::Tensor r = at::broadcast_to(*t, shape).clone();
 
   return create_tensor_resource(env, r);
 }
@@ -321,11 +339,13 @@ static ErlNifFunc nif_functions[] = {
     {"from_blob", 3, from_blob, 0},
     {"to_blob", 1, to_blob, 0},
     {"to_blob", 2, to_blob, 0},
+    {"delete_tensor", 1, delete_tensor, 0},
     {"ones", 1, ones, 0},
     {"eye", 2, eye, 0},
     {"reshape", 2, reshape, 0},
     {"squeeze", 2, squeeze, 0},
     {"squeeze", 1, squeeze, 0},
+    {"broadcast_to", 2, broadcast_to, 0},
     {"add", 2, add, 0},
     {"dot", 2, dot, 0},
     {"cholesky", 1, cholesky, 0},
