@@ -7063,9 +7063,6 @@ defmodule Nx do
 
   ## Examples
 
-  Note: The following examples round elements of the output tensors
-  to minimize rounding errors on different host machines.
-
       iex> Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
       {
         Nx.tensor([
