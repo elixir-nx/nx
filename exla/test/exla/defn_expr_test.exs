@@ -284,15 +284,15 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn arctan2_two(a, b), do: Nx.arctan2(a, b)
+    defn atan2_two(a, b), do: Nx.atan2(a, b)
 
-    test "arctan2" do
+    test "atan2" do
       <<neg_zero::float>> = <<0x8000000000000000::64>>
       left = Nx.tensor([-1.0, neg_zero, 0.0, 1.0])
       right = Nx.tensor([[-1.0], [neg_zero], [0.0], [1.0]])
 
-      compare_tensors!(arctan2_two(left, right), Nx.arctan2(left, right))
-      compare_tensors!(arctan2_two(right, left), Nx.arctan2(right, left))
+      compare_tensors!(atan2_two(left, right), Nx.atan2(left, right))
+      compare_tensors!(atan2_two(right, left), Nx.atan2(right, left))
     end
 
     defn quotient_two(a, b), do: Nx.quotient(a, b)
@@ -628,7 +628,7 @@ defmodule EXLA.DefnExprTest do
 
     for fun <-
           [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-            [:tan, :arccosh, :arcsinh, :cosh, :sinh, :erf, :erfc] do
+            [:tan, :acosh, :asinh, :cosh, :sinh, :erf, :erfc] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
@@ -646,7 +646,7 @@ defmodule EXLA.DefnExprTest do
     @int_tensor Nx.tensor([0.1, 0.5, 0.9])
     @float_tensor Nx.tensor([0.1, 0.5, 0.9])
 
-    for fun <- [:arctanh, :arccos, :arcsin, :arctan, :erf_inv] do
+    for fun <- [:atanh, :acos, :asin, :atan, :erf_inv] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
       defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)

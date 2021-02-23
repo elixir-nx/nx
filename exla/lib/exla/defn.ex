@@ -364,7 +364,7 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
-  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power, :divide, :arctan2] ++
+  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power, :divide, :atan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
   defp to_operator(op, [left, right], %{type: type}, _state) when op in @bin_op do
@@ -400,8 +400,8 @@ defmodule EXLA.Defn do
   end
 
   @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-              [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :arccos] ++
-              [:arcsin, :arctan, :floor, :ceil, :round, :arccosh, :arcsinh, :arctanh, :erf] ++
+              [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :acos] ++
+              [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
               [:erfc, :erf_inv]
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do
