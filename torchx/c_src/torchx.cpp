@@ -5,8 +5,8 @@
 
 ErlNifResourceType *TENSOR_TYPE;
 
-std::map<const std::string, const at::ScalarType> dtypes = {{"byte", at::kByte}, {"char", at::kChar}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"float", at::kFloat}, {"double", at::kDouble}};
-std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"float", 4}, {"double", 8}};
+std::map<const std::string, const at::ScalarType> dtypes = {{"byte", at::kByte}, {"char", at::kChar}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"brain", at::kBFloat16}, {"float", at::kFloat}, {"double", at::kDouble}, {"bool", at::kBool}};
+std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
 ERL_NIF_TERM create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
 {

@@ -6,10 +6,18 @@ defmodule Torchx.Backend do
   alias Torchx.NIF
 
   def torch_type({:u, 8}), do: :byte
+
+  # PyTorch does not support unsigned 16, 32 and 64 bit integers.
+  # So, we map Nx unsigned ints to their signed versions here.
+  def torch_type({:u, 16}), do: :short
+  def torch_type({:u, 32}), do: :int
+  def torch_type({:u, 64}), do: :long
+
   def torch_type({:s, 8}), do: :char
   def torch_type({:s, 16}), do: :short
   def torch_type({:s, 32}), do: :int
   def torch_type({:s, 64}), do: :long
+  def torch_type({:bf, 16}), do: :brain
   def torch_type({:f, 16}), do: :half
   def torch_type({:f, 32}), do: :float
   def torch_type({:f, 64}), do: :double
@@ -63,7 +71,7 @@ defmodule Torchx.Backend do
     from_ref(out, tensor_ref)
   end
 
-  def random_uniform(%{type: {:f, _} = type, shape: shape} = out, min, max) do
+  def random_uniform(%{type: {f, _} = type, shape: shape} = out, min, max) when f in [:f, :bf] do
     tensor_ref = NIF.rand(min, max, shape, torch_type(type))
     from_ref(out, tensor_ref)
   end
