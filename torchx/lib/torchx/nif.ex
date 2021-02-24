@@ -7,6 +7,7 @@ defmodule Torchx.NIF do
     :erlang.load_nif(path, 0)
   end
 
+  def scalar_tensor(_scalar, _type), do: nif_error(__ENV__.function)
   def randint(_min, _max, _shape, _type), do: nif_error(__ENV__.function)
   def rand(_min, _max, _shape, _type), do: nif_error(__ENV__.function)
   def normal(_mu, _sigma, _shape, _type), do: nif_error(__ENV__.function)

@@ -19,7 +19,10 @@ defmodule Torchx.Backend do
   @impl true
   def iota(out, axis \\ nil)
 
-  def iota(%{shape: {}, type: type} = out, nil), do: iota(%{out | shape: {1}}, nil)
+  def iota(%{shape: {}, type: type} = out, nil) do
+    t = NIF.scalar_tensor(0, torch_type(type))
+    from_ref(out, t)
+  end
 
   def iota(%{shape: shape, type: type} = out, nil) do
     t = NIF.arange(0, Nx.size(shape), 1, torch_type(type), shape)

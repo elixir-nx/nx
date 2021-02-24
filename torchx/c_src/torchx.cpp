@@ -94,6 +94,21 @@ ERL_NIF_TERM to_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   return result;
 }
 
+ERL_NIF_TERM scalar_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  double scalar;
+  std::string type;
+
+  nx::nif::get(env, argv[0], &scalar);
+  nx::nif::get_atom(env, argv[1], type);
+
+  at::Tensor t = at::scalar_tensor(scalar, dtypes[type]);
+
+  std::cout << t << "\r\n";
+
+  return create_tensor_resource(env, t);
+}
+
 ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   int64_t min, max;
@@ -339,6 +354,7 @@ static ErlNifFunc nif_functions[] = {
     {"from_blob", 3, from_blob, 0},
     {"to_blob", 1, to_blob, 0},
     {"to_blob", 2, to_blob, 0},
+    {"scalar_tensor", 2, scalar_tensor, 0},
     {"delete_tensor", 1, delete_tensor, 0},
     {"ones", 1, ones, 0},
     {"eye", 2, eye, 0},
