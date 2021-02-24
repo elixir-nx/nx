@@ -7229,6 +7229,28 @@ defmodule Nx do
     )
   end
 
+  def svd(tensor) do
+    # naive implementation of svd
+
+    {q, r} = Nx.qr(tensor)
+
+    # LQ factorization of R trough QR decomp.
+    {q2_transposed, l_transposed} = r |> Nx.transpose() |> Nx.qr()
+
+    q2 = Nx.transpose(q2_transposed)
+    l = Nx.transpose(l)
+
+    # This yields T = Q.L.Q2, where l is quasi-diagonal
+    # Now we need to perform Jacobi rotations on L until
+    # the algorithm converges: norm(L) - norm(diag(L)) ~= 0
+
+    # This part of the algorithm will yield U1, S and V1transposed
+    # where A = Q U1 S V1_transposed Q2, from which follows:
+    # U = dot(Q, U1) and V = transpose(Q2_transposed, V1)
+    # note that Q2_transposed is already available as a byproduct of the LQ factorization
+
+  end
+
   ## Helpers
 
   defp tensor!(%T{} = t),
