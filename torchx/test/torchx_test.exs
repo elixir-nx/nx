@@ -5,23 +5,28 @@ defmodule TorchxTest do
 
   alias Torchx.Backend, as: TB
 
+  # Torch Tensor creation shortcut
+  defp tt(data), do: Nx.tensor(data, backend: Torchx.Backend)
+
+  defp assert_equal(tt, data), do: assert(Nx.backend_transfer(tt) == Nx.tensor(data))
+
   describe "tensor" do
     test "add" do
-      a = Nx.tensor([[1, 2], [3, 4]], backend: TB)
-      b = Nx.tensor([[5, 6], [7, 8.0]], backend: TB)
+      a = tt([[1, 2], [3, 4]])
+      b = tt([[5, 6], [7, 8.0]])
 
       c = Nx.add(a, b)
 
-      assert Nx.backend_transfer(c) == Nx.tensor([[6.0, 8.0], [10.0, 12.0]])
+      assert_equal(c, [[6.0, 8.0], [10.0, 12.0]])
     end
 
     test "dot" do
-      a = Nx.tensor([[1, 2], [3, 4]], backend: TB)
-      b = Nx.tensor([[5, 6], [7, 8]], backend: TB)
+      a = tt([[1, 2], [3, 4]])
+      b = tt([[5, 6], [7, 8]])
 
       c = Nx.dot(a, b)
 
-      assert Nx.backend_transfer(c) == Nx.tensor([[19, 22], [43, 50]])
+      assert_equal(c, [[19, 22], [43, 50]])
     end
   end
 end
