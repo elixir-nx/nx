@@ -7231,12 +7231,13 @@ defmodule Nx do
 
   def svd(tensor) do
     # This implementation is a mixture of concepts described in [1] and the
-    # algorithmic description found in [2]
+    # algorithmic descriptions found in [2] and [3]
     # [1] -
     #    Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
     #    by Gabriel Oksa and Marian Vajtersic
     #    Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
     # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
+    # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
 
     {q, r} = Nx.qr(tensor)
 
@@ -7244,7 +7245,7 @@ defmodule Nx do
     {q2_transposed, l_transposed} = r |> Nx.transpose() |> Nx.qr()
 
     q2 = Nx.transpose(q2_transposed)
-    l = Nx.transpose(l)
+    l = Nx.transpose(l_transposed)
 
     # This yields T = Q.L.Q2, where l is quasi-diagonal
     # Now we need to perform Jacobi rotations on L until
@@ -7254,6 +7255,55 @@ defmodule Nx do
     # where A = Q U1 S V1_transposed Q2, from which follows:
     # U = dot(Q, U1) and V = transpose(Q2_transposed, V1)
     # note that Q2_transposed is already available as a byproduct of the LQ factorization
+  end
+
+  defp jacobi_rotation(a, p, q, eps) do
+    # calculates the jacobi rotation of a at indices p and q, with tolerance eps
+    t = to_scalar(a[[p, p]]) + to_scalar(a[[q, q]])
+    d = to_scalar(a[[q, p]]) - to_scalar(a[[p, q]])
+
+    {s, c} =
+      if Kernel.abs(d) < eps do
+        {0, 1}
+      else
+        u = t / d
+        tmp = :math.sqrt(1 + u * u)
+        {-1 / tmp, u / tmp}
+      end
+
+    rot = tensor([[c, s], [-s, c]])
+    m_tmp = dot(rot, [a[[p, q]], a[[p, q]]])
+
+    {c_r, s_r} =
+      make_jacobi(
+        to_scalar(m_tmp[[0, 0]]),
+        to_scalar(m_tmp[[1, 1]]),
+        to_scalar(m_tmp[[0, 1]]),
+        eps
+      )
+
+    rot_r = tensor([[c_r, s_r], [-s_r, c_r]])
+    rot_l = dot(rot, rot_r)
+
+    {rot_l, rot_r}
+  end
+
+  defp make_jacobi(ps, qs, pqs, eps) do
+    if Kernel.abs(pqs) > eps do
+      tau = (qs - ps) / (pqs * 2)
+
+      t =
+        if tau >= 0 do
+          1 / (tau + :math.sqrt(1 + tau * tau))
+        else
+          -1 / (-tau + :math.sqrt(1 + tau * tau))
+        end
+
+      c = 1 / :math.sqrt(1 + t * t)
+      {c, t * c}
+    else
+      {1, 0}
+    end
   end
 
   ## Helpers
