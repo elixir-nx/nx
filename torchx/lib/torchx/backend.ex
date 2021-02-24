@@ -85,6 +85,19 @@ defmodule Torchx.Backend do
   def to_binary(%{data: %{ref: ref}}), do: NIF.to_blob(ref)
   def to_binary(%{data: %{ref: ref}}, limit), do: NIF.to_blob(ref, limit)
 
+  @impl true
+  def backend_transfer(tensor, Nx.Tensor, opts) do
+    backend_transfer(tensor, Nx.BinaryBackend, opts)
+  end
+
+  def backend_transfer(tensor, Torchx.Backend, _opts) do
+    tensor
+  end
+
+  def backend_transfer(tensor, backend, opts) do
+    backend.from_binary(tensor, to_binary(tensor), opts)
+  end
+
   ## Shape
 
   @impl true

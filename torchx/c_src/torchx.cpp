@@ -91,12 +91,13 @@ NIF(to_blob)
 {
   ERL_NIF_TERM result;
   TENSOR_PARAM(0, t);
-  int64_t limit = t->nbytes();
+  int64_t byte_size = t->nbytes();
 
   if (argc == 2)
-    GET(1, limit);
-
-  int64_t byte_size = limit * t->itemsize();
+  {
+    PARAM(1, int64_t, limit);
+    byte_size = limit * t->itemsize();
+  }
 
   void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
   memcpy(result_data, t->data_ptr(), byte_size);

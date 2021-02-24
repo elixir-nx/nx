@@ -12,7 +12,7 @@ defmodule TorchxTest do
 
       c = Nx.add(a, b)
 
-      assert Nx.to_flat_list(c) == [6.0, 8.0, 10.0, 12.0]
+      assert Nx.backend_transfer(c) == Nx.tensor([[6.0, 8.0], [10.0, 12.0]])
     end
 
     test "dot" do
@@ -21,7 +21,7 @@ defmodule TorchxTest do
 
       c = Nx.dot(a, b)
 
-      assert Nx.to_flat_list(c) == [19, 22, 43, 50]
+      assert Nx.backend_transfer(c) == Nx.tensor([[19, 22], [43, 50]])
     end
   end
 end
