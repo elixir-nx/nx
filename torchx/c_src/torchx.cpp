@@ -22,7 +22,7 @@ ERL_NIF_TERM create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
 
-  return ret;
+  return nx::nif::ok(env, ret);
 }
 
 at::Tensor *get_tensor(ErlNifEnv *env, ERL_NIF_TERM term)

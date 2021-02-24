@@ -7,7 +7,6 @@ defmodule Torchx.Backend do
 
   def torch_type({:u, 8}), do: :byte
 
-  # PyTorch does not support unsigned 16, 32 and 64 bit integers.
   def torch_type({:u, 16}),
     do: raise(ArgumentError, "PyTorch does not support unsigned 16 bit integer.")
 
@@ -32,18 +31,15 @@ defmodule Torchx.Backend do
   def iota(out, axis \\ nil)
 
   def iota(%{shape: {}, type: type} = out, nil) do
-    t = NIF.scalar_tensor(0, torch_type(type))
-    from_ref(out, t)
+    NIF.scalar_tensor(0, torch_type(type)) |> from_ref(out)
   end
 
   def iota(%{shape: shape, type: type} = out, nil) do
-    t = NIF.arange(0, Nx.size(shape), 1, torch_type(type), shape)
-    from_ref(out, t)
+    NIF.arange(0, Nx.size(shape), 1, torch_type(type), shape) |> from_ref(out)
   end
 
   def iota(%{shape: {n}, type: type} = out, 0) do
-    t = NIF.arange(0, n, 1, torch_type(type))
-    from_ref(out, t)
+    NIF.arange(0, n, 1, torch_type(type)) |> from_ref(out)
   end
 
   def iota(%{shape: shape, type: type} = out, axis) do
@@ -51,45 +47,38 @@ defmodule Torchx.Backend do
     dim = elem(shape, axis)
 
     # build the iota in one dimension
-    aten = NIF.arange(0, dim, 1, torch_type(type))
+    aten = NIF.arange(0, dim, 1, torch_type(type)) |> unwrap!()
 
     # reshape the tensor above to be have shape where everything is 1, except for dim
     reshape = Tuple.duplicate(1, Nx.rank(shape)) |> put_elem(axis, dim)
-    aten = NIF.reshape(aten, reshape)
+    aten = NIF.reshape(aten, reshape) |> unwrap!()
 
     # Now broadcast the tensor using the original shape
-    aten = NIF.broadcast_to(aten, shape)
-
-    from_ref(out, aten)
+    NIF.broadcast_to(aten, shape) |> from_ref(out)
   end
 
   @impl true
   def eye(%{shape: {n, n}, type: type} = out) do
-    t = NIF.eye(n, torch_type(type))
-    from_ref(out, t)
+    NIF.eye(n, torch_type(type)) |> from_ref(out)
   end
 
   @impl true
   def random_uniform(%{type: {s, _} = type, shape: shape} = out, min, max) when s in [:u, :s] do
-    tensor_ref = NIF.randint(min, max, shape, torch_type(type))
-    from_ref(out, tensor_ref)
+    NIF.randint(min, max, shape, torch_type(type)) |> from_ref(out)
   end
 
   def random_uniform(%{type: {f, _} = type, shape: shape} = out, min, max) when f in [:f, :bf] do
-    tensor_ref = NIF.rand(min, max, shape, torch_type(type))
-    from_ref(out, tensor_ref)
+    NIF.rand(min, max, shape, torch_type(type)) |> from_ref(out)
   end
 
   @impl true
   def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
-    tensor_ref = NIF.normal(mu, sigma, shape, torch_type(type))
-    from_ref(out, tensor_ref)
+    NIF.normal(mu, sigma, shape, torch_type(type)) |> from_ref(out)
   end
 
   @impl true
   def from_binary(%{type: type, shape: shape} = out, binary, _opts) do
-    t = NIF.from_blob(binary, shape, torch_type(type))
-    from_ref(out, t)
+    NIF.from_blob(binary, shape, torch_type(type)) |> from_ref(out)
   end
 
   @impl true
@@ -100,20 +89,18 @@ defmodule Torchx.Backend do
 
   @impl true
   def reshape(out, %{data: %{ref: ref}} = tensor, shape),
-    do: %{tensor | data: %__MODULE__{ref: NIF.reshape(ref, shape)}}
+    do: NIF.reshape(ref, shape) |> from_ref(tensor)
 
   @impl true
   def squeeze(out, tensor, _axes) do
-    t = NIF.squeeze(tensor.data.ref)
-    from_ref(out, t)
+    NIF.squeeze(tensor.data.ref) |> from_ref(out)
   end
 
   ## Ops
 
   @impl true
   def add(out, left, right) do
-    t = NIF.add(left.data.ref, right.data.ref)
-    from_ref(out, t)
+    NIF.add(left.data.ref, right.data.ref) |> from_ref(out)
   end
 
   @impl true
@@ -124,14 +111,12 @@ defmodule Torchx.Backend do
         %{type: t2, data: %{ref: right_ref}} = right,
         _axes2
       ) do
-    t = NIF.dot(left_ref, right_ref)
-    from_ref(out, t)
+    NIF.dot(left_ref, right_ref) |> from_ref(out)
   end
 
   @impl true
   def cholesky(%{type: output_type, shape: {rows, cols}} = out, tensor) do
-    t = NIF.cholesky(tensor.data.ref)
-    from_ref(out, t)
+    NIF.cholesky(tensor.data.ref) |> from_ref(out)
   end
 
   @impl true
@@ -144,7 +129,13 @@ defmodule Torchx.Backend do
     Nx.Backend.inspect(tensor, binary, inspect_opts)
   end
 
-  defp from_ref(t, ref) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
+  defp unwrap!({:ok, tensor}), do: tensor
+
+  defp unwrap!({:error, error}) when is_binary(error),
+    do: raise(RuntimeError, error)
+
+  defp from_ref(ref, t) when is_tuple(ref), do: unwrap!(ref) |> from_ref(t)
+  defp from_ref(ref, t) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
 
   ## All remaining callbacks
 
