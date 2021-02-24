@@ -8,10 +8,14 @@ defmodule Torchx.Backend do
   def torch_type({:u, 8}), do: :byte
 
   # PyTorch does not support unsigned 16, 32 and 64 bit integers.
-  # So, we map Nx unsigned ints to their signed versions here.
-  def torch_type({:u, 16}), do: :short
-  def torch_type({:u, 32}), do: :int
-  def torch_type({:u, 64}), do: :long
+  def torch_type({:u, 16}),
+    do: raise(ArgumentError, "PyTorch does not support unsigned 16 bit integer.")
+
+  def torch_type({:u, 32}),
+    do: raise(ArgumentError, "PyTorch does not support unsigned 32 bit integer.")
+
+  def torch_type({:u, 64}),
+    do: raise(ArgumentError, "PyTorch does not support unsigned 64 bit integer.")
 
   def torch_type({:s, 8}), do: :char
   def torch_type({:s, 16}), do: :short

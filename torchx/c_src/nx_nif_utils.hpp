@@ -8,6 +8,7 @@ namespace nx
   {
     // Status helpers
 
+    // Helper for returning `{:error, msg}` from NIF.
     ERL_NIF_TERM error(ErlNifEnv *env, const char *msg)
     {
       ERL_NIF_TERM atom = enif_make_atom(env, "error");
@@ -15,11 +16,13 @@ namespace nx
       return enif_make_tuple2(env, atom, msg_term);
     }
 
+    // Helper for returning `{:ok, term}` from NIF.
     ERL_NIF_TERM ok(ErlNifEnv *env)
     {
       return enif_make_atom(env, "ok");
     }
 
+    // Helper for returning `:ok` from NIF.
     ERL_NIF_TERM ok(ErlNifEnv *env, ERL_NIF_TERM term)
     {
       return enif_make_tuple2(env, ok(env), term);
