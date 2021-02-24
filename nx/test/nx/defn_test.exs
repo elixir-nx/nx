@@ -14,7 +14,7 @@ defmodule Nx.DefnTest do
   defmodule Identity do
     @behaviour Nx.Defn.Compiler
 
-    def __async__(_, _, _, _), do: raise "not implemented"
+    def __async__(_, _, _, _), do: raise("not implemented")
 
     def __jit__(key, vars, fun, _opts) do
       Process.put(__MODULE__, key)
@@ -55,7 +55,7 @@ defmodule Nx.DefnTest do
 
     test "allows pattern matching on the tuple shape with underscores" do
       assert %T{shape: {}, type: {:f, 64}, data: %Expr{op: :add, args: [left, right]}} =
-          tuple_shape_match({1, 2.0})
+               tuple_shape_match({1, 2.0})
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 64}} = right
@@ -1095,7 +1095,7 @@ defmodule Nx.DefnTest do
 
     defndelegate mul_pair({a, b}), to: Impl
 
-    defndelegate mul_pair_without_tuple(pair), to: Impl
+    defndelegate mul_pair_without_tuple(pair), to: Impl, as: :mul_pair
 
     defndelegate passthrough(a), to: Impl
 
@@ -1116,16 +1116,19 @@ defmodule Nx.DefnTest do
       b = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
       api_expr = Api.mul_pair({a, b})
       impl_expr = Impl.mul_pair({a, b})
-      expected_expr = String.trim_trailing("""
-      #Nx.Tensor<
-        s64[2][2]
-        
-        Nx.Defn.Expr
-        parameter a            s64[2][2]
-        parameter b            s64[2][2]
-        c = multiply [ a, b ]  s64[2][2]
-      >
-      """)
+
+      expected_expr =
+        String.trim_trailing("""
+        #Nx.Tensor<
+          s64[2][2]
+          
+          Nx.Defn.Expr
+          parameter a            s64[2][2]
+          parameter b            s64[2][2]
+          c = multiply [ a, b ]  s64[2][2]
+        >
+        """)
+
       assert inspect(impl_expr) == expected_expr
       assert inspect(api_expr) == expected_expr
     end
@@ -1140,6 +1143,7 @@ defmodule Nx.DefnTest do
       assert_raise ArgumentError, ~r/pattern match on the tuple/, fn ->
         assert Api.passthrough({3, 2})
       end
+
       assert Api.passthrough(3) == Nx.tensor(3)
     end
 
@@ -1164,7 +1168,9 @@ defmodule Nx.DefnTest do
     end
 
     test "raises for non-module :to option" do
-      assert_raise(ArgumentError, ~s|defndelegate expected :to to be a module, got "thing"|, fn ->
+      msg = ~s|defndelegate requires :to option to be a module, got "thing"|
+
+      assert_raise(ArgumentError, msg, fn ->
         code = """
         defmodule BadDefndelegate1 do
           import Nx.Defn
@@ -1172,21 +1178,63 @@ defmodule Nx.DefnTest do
           defndelegate wont_compile, to: "thing"
         end
         """
+
         Code.compile_string(code)
       end)
     end
 
     test "raises for non-atom :as option" do
-      assert_raise(ArgumentError, ~s|defndelegate expected :as to be an atom, got "thing"|, fn ->
+      msg = ~s|defndelegate requires :as option to be an atom, got "thing"|
+
+      assert_raise(ArgumentError, msg, fn ->
         code = """
-        defmodule BadDefndelegate1 do
+        defmodule BadDefndelegate2 do
           import Nx.Defn
 
           defndelegate wont_compile, to: Thing, as: "thing"
         end
         """
+
         Code.compile_string(code)
       end)
+    end
+
+    test "works with :to and :as as variables at call site" do
+      code = """
+      defmodule VarModuleImpl do
+        import Nx.Defn
+
+        def elixir_call(a, b), do: a + b
+
+        defn max_sum(a, b) do
+          Nx.sum(Nx.select(Nx.greater(a, b), a, b))
+        end
+      end
+
+      defmodule VarModuleDefndelegate do
+        import Nx.Defn
+
+        impl = VarModuleImpl
+        ex_fun = :elixir_call
+        nx_fun = :max_sum
+
+        defdelegate delegated_elixir_call(a, b), to: impl, as: ex_fun
+
+        defndelegate maximum_sum(a, b), to: impl, as: nx_fun
+      end
+      """
+
+      assert [{VarModuleImpl, _}, {VarModuleDefndelegate, _}] = Code.compile_string(code)
+
+      # apply to avoid compiler warnings
+      out = apply(VarModuleDefndelegate, :delegated_elixir_call, [2, 2])
+      assert out == 4
+
+      a = Nx.tensor([1, 2, 1])
+      b = Nx.tensor([2, 1, 1])
+      # apply to avoid compiler warnings
+      out = apply(VarModuleDefndelegate, :maximum_sum, [a, b])
+      assert Nx.to_scalar(out) == 5
     end
   end
 end

@@ -297,28 +297,104 @@ defmodule Nx.Defn do
         defndelegate calc_pair_tuple({a, b}), to: MyImpl, as: :calc_pair
       end
   """
-  defmacro defndelegate({name, meta, args}, opts) do
-    module = Keyword.fetch!(opts, :to)
-    module_name = case module do
-      {:__aliases__, _, _} ->
-        Macro.expand(module, %{__CALLER__ | function: {:__info__, 1}})
-      _ ->
-        raise ArgumentError, "defndelegate expected :to to be a module, got #{Macro.to_string(module)}"
+  defmacro defndelegate(call, opts) do
+    assert_no_guards!(:defn, call, __CALLER__)
+    {name, args} = decompose_call!(:defn, call, __CALLER__)
+
+    if not Keyword.keyword?(opts) do
+      raise ArgumentError,
+            "defndelegate requires a keyword list" <>
+              " as options, got: #{inspect(opts)}"
     end
 
-    func = Keyword.get(opts, :as, name)
-    if not is_atom(func) do
-      raise ArgumentError, "defndelegate expected :as to be an atom, got #{Macro.to_string(func)}"
+    if not Keyword.has_key?(opts, :to) do
+      raise ArgumentError,
+            "defndelegate requires :to" <>
+              " as an option, got: #{inspect(opts)}"
     end
-    
+
+    parameters_list = Enum.map(args, &build_as_parameter/1)
+
     arity = length(args)
-    defn_call = {:., [], [{:__aliases__, [alias: false], [:Nx, :Defn]}, :defn]}
 
-    {:__block__, [], [
-      {:@, [], [{:doc, [],[[delegate_to: {:{}, [], [module_name, func, arity]}]]}]},
-      {:require, [context: Elixir], [{:__aliases__, [alias: false], [:Nx, :Defn]}]},
-      {defn_call, meta, [{name, meta, args}, [do: {{:., [], [module, func]}, meta, args}]]}
-    ]}
+    parameters_tuple =
+      if arity == 2 do
+        List.to_tuple(parameters_list)
+      else
+        {:{}, [], parameters_list}
+      end
+
+    defaults = for {{:\\, _, [_, _]}, i} <- Enum.with_index(args), do: i
+
+    body =
+      quote do
+        transform(unquote(parameters_tuple), fn unquote(parameters_tuple) ->
+          apply(@__delegate_to, @__delegate_as, unquote(parameters_list))
+        end)
+      end
+
+    quote do
+      name = unquote(name)
+      arity = unquote(arity)
+      defaults = unquote(defaults)
+      opts = unquote(opts)
+      to = opts[:to]
+      as = opts[:as] || name
+
+      if not is_atom(to) do
+        raise ArgumentError,
+              "defndelegate requires :to option to be a" <>
+                " module, got #{inspect(to)}"
+      end
+
+      if not is_atom(as) do
+        raise ArgumentError,
+              "defndelegate requires :as option to be an" <>
+                " atom, got #{inspect(as)}"
+      end
+
+      if not Module.defines?(__MODULE__, {:__apply__, 3}, :defp) do
+        defp __apply__(m, f, a), do: apply(m, f, a)
+      end
+
+      unquote(__MODULE__).__define__(
+        __MODULE__,
+        :defn,
+        name,
+        arity,
+        defaults
+      )
+
+      @__delegate_to to
+      @__delegate_as as
+
+      @doc delegate_to: {to, as, arity}
+
+      def unquote(name)(unquote_splicing(args)) do
+        use Nx.Defn.Kernel
+        unquote(body)
+      end
+    end
+  end
+
+  defp build_as_parameter({:\\, _, [arg, _default_arg]}), do: validate_parameter(arg)
+  defp build_as_parameter(arg), do: validate_parameter(arg)
+
+  defp validate_parameter({name, _, mod} = arg) when is_atom(name) and is_atom(mod) do
+    arg
+  end
+
+  defp validate_parameter({:{}, meta, elems}) do
+    {:{}, meta, Enum.map(elems, &validate_parameter/1)}
+  end
+
+  defp validate_parameter({a, b}) do
+    {validate_parameter(a), validate_parameter(b)}
+  end
+
+  defp validate_parameter(ast) do
+    raise ArgumentError,
+          "defndelegate/2 got an invalid parameter: #{Macro.to_string(ast)}"
   end
 
   ## Callbacks
