@@ -144,8 +144,8 @@ defmodule Torchx.Backend do
 
   defp unwrap!({:ok, tensor}), do: tensor
 
-  defp unwrap!({:error, error}) when is_binary(error),
-    do: raise(RuntimeError, error)
+  defp unwrap!({:error, error}),
+    do: raise(RuntimeError, "PyTorch: " <> to_string(error))
 
   defp from_ref(ref, t) when is_tuple(ref), do: unwrap!(ref) |> from_ref(t)
   defp from_ref(ref, t) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
