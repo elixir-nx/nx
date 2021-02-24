@@ -31,33 +31,32 @@ defmodule EXLA.Defn do
   end
 
   @doc false
-  def __aot__(key, vars, fun, options) do
-    {fun, _expr_options, exla_options} = prepare_args(fun, options)
-    expr = fun.(vars)
+  def __aot__(module, tuples, aot_options) do
+    funs =
+      for {name, fun, vars, options} <- tuples do
+        {fun, _expr_options, exla_options} = prepare_args(fun, options)
+        expr = fun.(vars)
 
-    shapes_and_args =
-      for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
-        {EXLA.Shape.make_shape(type, shape), %{id: i, name: "p#{i}", dims: shape, type: type}}
+        shapes_and_args =
+          for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
+            {EXLA.Shape.make_shape(type, shape), %{id: i, name: "p#{i}", dims: shape, type: type}}
+          end
+
+        {shapes, args} = Enum.unzip(shapes_and_args)
+        computation = to_root_computation(name, expr, shapes, exla_options)
+
+        %EXLA.Shape{dtype: {:t, shapes}} = computation.output_shape
+
+        sizes =
+          Enum.map(shapes, fn shape ->
+            {_, size} = shape.dtype
+            Nx.size(shape.dims) * div(size, 8)
+          end)
+
+        {computation, name, length(vars), args, sizes}
       end
 
-    {shapes, args} = Enum.unzip(shapes_and_args)
-    computation = to_root_computation(key, expr, shapes, exla_options)
-
-    %EXLA.Shape{dtype: {:t, shapes}} = computation.output_shape
-
-    total_sizes =
-      Enum.map(shapes, fn shape ->
-        {_, size} = shape.dtype
-        Nx.size(shape.dims) * div(size, 8)
-      end)
-
-    fun_info = :erlang.fun_info(key)
-
-    EXLA.AOT.Compiler.compile(
-      [computation],
-      [{fun_info[:name], fun_info[:arity], args, total_sizes}],
-      fun_info[:module]
-    )
+    EXLA.AOT.Compiler.compile(module, funs, aot_options)
   end
 
   defp prepare_args(fun, options) do
