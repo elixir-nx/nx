@@ -22,11 +22,6 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
-  def tensor(tensor) do
-    tensor
-  end
-
-  @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max) do
     gen =
       case type do
