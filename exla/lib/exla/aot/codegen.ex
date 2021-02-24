@@ -120,11 +120,11 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the NIF Source File
 
-  def generate_nif_source_file(functions, target_module, class_name) do
+  def generate_nif_source_file(functions, target_module) do
     include_block_str = build_include_block(functions)
     error_block_str = build_error_helper_block()
     load_block_str = build_load_block()
-    functions_str = build_nif_funcs(functions, class_name)
+    functions_str = build_nif_funcs(functions)
     nif_func_export_array_str = build_nif_func_export_array(functions)
     init_block_str = build_init_block(target_module)
 
@@ -162,13 +162,14 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_funcs(functions, class_name) do
+  defp build_nif_funcs(functions) do
     functions
-    |> Enum.map(&build_nif_func_block(&1, class_name))
+    |> Enum.map(&build_nif_func_block(&1))
     |> Enum.join("\n")
   end
 
-  defp build_nif_func_block({_, name, arity, args, result_sizes}, class_name) do
+  defp build_nif_func_block({_, name, arity, args, result_sizes}) do
+    class_name = "#{name}_#{arity}_class"
     signature_str = build_nif_func_signature(name, arity)
 
     args_str =

@@ -15,7 +15,7 @@ defmodule EXLA.AOT.Compiler do
     src_paths = Enum.map(functions, &compile_function/1)
 
     # Write out a NIF/BUILD file
-    {:ok, nif_path} = write_nif_source_file(functions, module_name, "exla_aot_class", lib_name)
+    {:ok, nif_path} = write_nif_source_file(functions, module_name, lib_name)
     {:ok, build_path} = write_bazel_build_file("nif", functions)
 
     # Get cwd for output `.so` path
@@ -59,7 +59,7 @@ defmodule EXLA.AOT.Compiler do
         pbtext_path,
         get_aot_path(),
         "#{name}_#{arity}",
-        "exla_aot_class",
+        "#{name}_#{arity}_class",
         target_triple
       )
       |> unwrap!()
@@ -102,8 +102,8 @@ defmodule EXLA.AOT.Compiler do
     {File.close(file), pbtext_path}
   end
 
-  defp write_nif_source_file(functions, target_module, class_name, nif_name) do
-    src = Codegen.generate_nif_source_file(functions, target_module, class_name)
+  defp write_nif_source_file(functions, target_module, nif_name) do
+    src = Codegen.generate_nif_source_file(functions, target_module)
     nif_path = get_aot_path() <> nif_name <> ".cc"
     {:ok, file} = File.open(nif_path, [:write])
     :ok = IO.binwrite(file, src)

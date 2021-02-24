@@ -46,7 +46,6 @@ defmodule Nx.Defn.Expr do
   @doc """
   Builds an expression from a tensor.
   """
-  @impl true
   def tensor(t), do: to_expr(t)
 
   @doc """

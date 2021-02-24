@@ -43,7 +43,6 @@ defmodule Nx.Backend do
   @callback backend_deallocate(tensor) :: :ok | :already_deallocated
   @callback backend_transfer(tensor, module, keyword) :: tensor
 
-  @callback tensor(tensor) :: tensor
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
   @callback from_binary(out :: tensor, binary, keyword) :: tensor
   @callback as_type(out :: tensor, tensor) :: tensor
