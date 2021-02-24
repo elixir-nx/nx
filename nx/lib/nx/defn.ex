@@ -244,9 +244,18 @@ defmodule Nx.Defn do
   Ahead-of-time compiles the anonymous function with the given
   defn compiler.
   """
-  def aot(fun, args, compiler, opts \\ [])
-      when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
-    Nx.Defn.Compiler.__aot__(fun, args, compiler, opts)
+  def aot(module, tuples, compiler, aot_opts \\ [])
+      when is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
+    tuples =
+      for tuple <- tuples do
+        case tuple do
+          {name, fun, args} -> {name, fun, args, []}
+          {name, fun, args, opts} -> {name, fun, args, opts}
+          _ -> raise ArgumentError, "expected 3- or 4-element tuples, got: #{inspect(tuple)}"
+        end
+      end
+
+    Nx.Defn.Compiler.__aot__(module, tuples, compiler, aot_opts)
   end
 
   @doc """
