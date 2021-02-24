@@ -72,8 +72,8 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
-    NIF.normal(mu, sigma, shape, torch_type(type)) |> from_ref(out)
+  def random_normal(%{type: _type, shape: shape} = out, mu, sigma) do
+    NIF.normal(mu, sigma, shape) |> from_ref(out)
   end
 
   @impl true

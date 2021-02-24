@@ -137,7 +137,6 @@ NIF(normal)
   PARAM(0, double, mean);
   PARAM(1, double, std);
   SHAPE_PARAM(2, shape);
-  TYPE_PARAM(3, type);
 
   TENSOR(at::normal(mean, std, shape));
 }
@@ -171,18 +170,14 @@ NIF(reshape)
 NIF(squeeze)
 {
   TENSOR_PARAM(0, t);
-  at::Tensor r;
 
   if (argc == 2)
   {
     PARAM(1, int64_t, dim);
-
-    r = at::squeeze(*t, dim);
+    TENSOR(at::squeeze(*t, dim));
   }
   else
-    r = at::squeeze(*t);
-
-  TENSOR(r);
+    TENSOR(at::squeeze(*t));
 }
 
 NIF(broadcast_to)
@@ -214,23 +209,13 @@ NIF(add)
   TENSOR_PARAM(0, a);
   TENSOR_PARAM(1, b);
 
-  try
+  if (b == NULL)
   {
-    at::Tensor c;
-    if (b == NULL)
-    {
-      PARAM(1, double, scalar);
-      c = *a + scalar;
-    }
-    else
-      c = *a + *b;
-
-    TENSOR(c);
+    PARAM(1, double, scalar);
+    TENSOR(*a + scalar);
   }
-  catch (c10::Error error)
-  {
-    return nx::nif::error(env, error.msg().c_str());
-  }
+  else
+    TENSOR(*a + *b);
 }
 
 NIF(dot)
@@ -297,7 +282,7 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 static ErlNifFunc nif_functions[] = {
     {"randint", 4, randint, 0},
     {"rand", 4, rand, 0},
-    {"normal", 4, normal, 0},
+    {"normal", 3, normal, 0},
     {"arange", 4, arange, 0},
     {"arange", 5, arange, 0},
     {"from_blob", 3, from_blob, 0},
