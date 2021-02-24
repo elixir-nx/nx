@@ -22,11 +22,6 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
-  def tensor(tensor) do
-    tensor
-  end
-
-  @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max) do
     gen =
       case type do
@@ -112,14 +107,14 @@ defmodule Nx.BinaryBackend do
   defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
 
   @impl true
-  def to_binary(t, opts) do
+  def to_binary(%{type: {_, size}} = t, limit) do
+    limit = limit * div(size, 8)
     binary = to_binary(t)
 
-    if limit = opts[:limit] do
-      %{type: {_, size}} = t
-      binary_part(binary, 0, Kernel.min(byte_size(binary), limit * div(size, 8)))
-    else
+    if byte_size(binary) == limit do
       binary
+    else
+      binary_part(binary, 0, limit)
     end
   end
 
@@ -498,7 +493,7 @@ defmodule Nx.BinaryBackend do
   ## Element wise bin ops
 
   for fun <-
-        [:add, :subtract, :multiply, :power, :remainder, :divide, :arctan2, :min, :max, :quotient] ++
+        [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
           [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
           [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
           [:logical_and, :logical_or, :logical_xor] do
@@ -573,7 +568,7 @@ defmodule Nx.BinaryBackend do
   defp element_multiply(_, a, b), do: a * b
   defp element_divide(_, a, b), do: a / b
   defp element_quotient(_, a, b), do: div(a, b)
-  defp element_arctan2(_, a, b), do: :math.atan2(a, b)
+  defp element_atan2(_, a, b), do: :math.atan2(a, b)
   defp element_max(_, a, b), do: :erlang.max(a, b)
   defp element_min(_, a, b), do: :erlang.min(a, b)
 
@@ -747,66 +742,11 @@ defmodule Nx.BinaryBackend do
 
   ## Inspect
 
-  alias Inspect.Algebra, as: IA
-
   @impl true
-  def inspect(%{shape: shape} = tensor, opts) do
-    open = IA.color("[", :list, opts)
-    sep = IA.color(",", :list, opts)
-    close = IA.color("]", :list, opts)
-
-    dims = Tuple.to_list(shape)
-    limit = opts.limit
-    list_opts = if limit == :infinity, do: [], else: [limit: limit + 1]
-    data = Nx.to_flat_list(tensor, [non_numbers: :as_strings] ++ list_opts)
-    {data, _rest, _limit} = chunk(dims, data, limit, {open, sep, close})
-    data
-  end
-
-  defp chunk([], [head | tail], limit, _docs) do
-    doc =
-      cond do
-        is_integer(head) -> Integer.to_string(head)
-        is_float(head) -> Float.to_string(head)
-        is_binary(head) -> head
-      end
-
-    if limit == :infinity, do: {doc, tail, limit}, else: {doc, tail, limit - 1}
-  end
-
-  defp chunk([dim | dims], data, limit, {open, sep, close} = docs) do
-    {acc, rest, limit} =
-      chunk_each(dim, data, [], limit, fn chunk, limit ->
-        chunk(dims, chunk, limit, docs)
-      end)
-
-    {open, sep, close, nest} =
-      if dims == [] do
-        {open, IA.concat(sep, " "), close, 0}
-      else
-        {IA.concat(open, IA.line()), IA.concat(sep, IA.line()), IA.concat(IA.line(), close), 2}
-      end
-
-    doc =
-      open
-      |> IA.concat(IA.concat(Enum.intersperse(acc, sep)))
-      |> IA.nest(nest)
-      |> IA.concat(close)
-
-    {doc, rest, limit}
-  end
-
-  defp chunk_each(0, data, acc, limit, _fun) do
-    {Enum.reverse(acc), data, limit}
-  end
-
-  defp chunk_each(_dim, data, acc, 0, _fun) do
-    {Enum.reverse(["..." | acc]), data, 0}
-  end
-
-  defp chunk_each(dim, data, acc, limit, fun) do
-    {doc, rest, limit} = fun.(data, limit)
-    chunk_each(dim - 1, rest, [doc | acc], limit, fun)
+  def inspect(tensor, inspect_opts) do
+    limit = inspect_opts.limit
+    binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
+    Nx.Backend.inspect(tensor, binary, inspect_opts)
   end
 
   ## Conv
@@ -1063,6 +1003,147 @@ defmodule Nx.BinaryBackend do
       end
 
     from_binary(out, output_data)
+  end
+
+  @impl true
+  def qr(
+        {%{shape: {m, k} = shape_q, type: output_type} = q_holder,
+         %{shape: {k, n} = shape_r, type: output_type} = r_holder},
+        %{type: {_, input_num_bits} = input_type} = tensor,
+        opts
+      ) do
+    mode = opts[:mode]
+
+    r_bin =
+      if mode == :reduced do
+        # Since we want the first k rows of r, we can
+        # just slice the binary by taking the first
+        # n * k * output_type_num_bits bits from the binary.
+        # Trick for r = tensor[[0..(k - 1), 0..(n - 1)]]
+        slice_size = n * k * input_num_bits
+        <<r_bin::bitstring-size(slice_size), _::bitstring>> = to_binary(tensor)
+        r_bin
+      else
+        to_binary(tensor)
+      end
+
+    shape_h = {k, k}
+
+    {q_bin, r_bin, _output_type} =
+      for i <- 0..(n - 1), reduce: {nil, r_bin, input_type} do
+        {q, r, type_r} ->
+          # a = r[[i..(k - 1), i]]
+          {a_reverse, num_rows_a, _, _} =
+            match_types [type_r] do
+              for <<match!(x, 0) <- r>>, reduce: {[], 0, 0, 0} do
+                {acc, num_rows_a_prev, row, col} ->
+                  {acc, num_rows_a} =
+                    if row >= i and col == i do
+                      {[read!(x, 0) | acc], num_rows_a_prev + 1}
+                    else
+                      {acc, num_rows_a_prev}
+                    end
+
+                  {row, col} =
+                    if col + 1 == n do
+                      {row + 1, 0}
+                    else
+                      {row, col + 1}
+                    end
+
+                  {acc, num_rows_a, row, col}
+              end
+            end
+
+          h_bin = householder_reflector(a_reverse, num_rows_a, k, output_type)
+
+          # If we haven't allocated Q yet, let Q = H1
+          q =
+            if is_nil(q) do
+              padding_length = (m - k) * k
+              zero = number_to_binary(0, output_type)
+              [h_bin | List.duplicate(zero, padding_length)] |> IO.iodata_to_binary()
+            else
+              dot_binary(q, shape_q, output_type, h_bin, shape_h, output_type, output_type)
+            end
+
+          r = dot_binary(h_bin, shape_h, output_type, r, shape_r, type_r, output_type)
+          {q, r, output_type}
+      end
+
+    q = from_binary(q_holder, q_bin)
+    r = from_binary(r_holder, r_bin)
+
+    {q, r}
+  end
+
+  defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
+    # matrix multiplication for when b1 and b2 are matrices
+    # represented in binary form
+    fun = fn lhs, rhs, acc ->
+      res = binary_to_number(lhs, type1) * binary_to_number(rhs, type2) + acc
+      {res, res}
+    end
+
+    v1 = aggregate_axes(b1, [1], shape1, s1)
+    v2 = aggregate_axes(b2, [0], shape2, s2)
+
+    for b1 <- v1, b2 <- v2, into: <<>> do
+      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, 0, fun)
+      scalar_to_binary(bin, output_type)
+    end
+  end
+
+  defp householder_reflector(a_reverse, num_rows_a, target_k, output_type) do
+    # This is a trick so we can both calculate the norm of a_reverse and extract the
+    # head a the same time we reverse the array
+    {norm_a_squared, [a_0 | tail]} =
+      for x <- a_reverse, reduce: {0, []} do
+        {acc, l} ->
+          {acc + x * x, [x | l]}
+      end
+
+    v_0 =
+      if a_0 > 0 do
+        a_0 + :math.sqrt(norm_a_squared)
+      else
+        a_0 - :math.sqrt(norm_a_squared)
+      end
+
+    prefix_threshold = target_k - num_rows_a
+    v = List.duplicate(0, prefix_threshold) ++ [v_0 | tail]
+
+    # dot(v, v) = norm_v_squared, which can be calculated from norm_a as:
+    # norm_v_squared = norm_a_squared - a_0^2 + v_0^2
+    norm_v_squared = norm_a_squared - a_0 * a_0 + v_0 * v_0
+    scale = 2 / norm_v_squared
+
+    # execute I - 2 / norm_v_squared * outer(v, v)
+    {_, _, reflector_iodata} =
+      for col_factor <- v, row_factor <- v, reduce: {0, 0, []} do
+        {row, col, acc} ->
+          # The current element in outer(v, v) is given by col_factor * row_factor
+          # and the current I element is 1 when row == col
+          identity_element = if row == col, do: 1, else: 0
+
+          result =
+            if row >= prefix_threshold and col >= prefix_threshold do
+              identity_element -
+                scale * col_factor * row_factor
+            else
+              identity_element
+            end
+
+          acc = [acc | scalar_to_binary(result, output_type)]
+
+          if col + 1 == target_k do
+            {row + 1, 0, acc}
+          else
+            {row, col + 1, acc}
+          end
+      end
+
+    IO.iodata_to_binary(reflector_iodata)
   end
 
   ## Aggregation

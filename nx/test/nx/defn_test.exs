@@ -14,7 +14,7 @@ defmodule Nx.DefnTest do
   defmodule Identity do
     @behaviour Nx.Defn.Compiler
 
-    def __async__(_, _, _, _), do: raise "not implemented"
+    def __async__(_, _, _, _), do: raise("not implemented")
 
     def __jit__(key, vars, fun, _opts) do
       Process.put(__MODULE__, key)
@@ -55,7 +55,7 @@ defmodule Nx.DefnTest do
 
     test "allows pattern matching on the tuple shape with underscores" do
       assert %T{shape: {}, type: {:f, 64}, data: %Expr{op: :add, args: [left, right]}} =
-          tuple_shape_match({1, 2.0})
+               tuple_shape_match({1, 2.0})
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 64}} = right
@@ -636,6 +636,17 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "qr" do
+    defn qr(t), do: Nx.qr(t)
+
+    test "returns tuples" do
+      assert {left, right} = qr(Nx.iota({3, 2}))
+
+      assert %T{data: %Expr{op: :elem, args: [qr_expr, 0, 2]}, shape: {3, 2}} = left
+      assert %T{data: %Expr{op: :elem, args: [^qr_expr, 1, 2]}, shape: {2, 2}} = right
+    end
+  end
+
   describe "cond" do
     defn cond4(a, b, c, d) do
       cond do
@@ -675,6 +686,15 @@ defmodule Nx.DefnTest do
                  Nx.tensor([[3], [4]], names: [:x, nil]),
                  Nx.tensor(5)
                )
+    end
+
+    defn cond_lit(a) do
+      if Nx.any?(a), do: 1, else: -1
+    end
+
+    test "supports literals" do
+      assert cond_lit(Nx.tensor(0)), do: Nx.tensor(-1)
+      assert cond_lit(Nx.tensor(1)), do: Nx.tensor(1)
     end
 
     test "raises if cond is missing last atom clause" do
@@ -745,6 +765,15 @@ defmodule Nx.DefnTest do
 
     test "reshape" do
       assert %T{shape: {3, 2}, type: {:s, 64}} = default_reshape(Nx.iota({2, 3}))
+    end
+
+    @defn_compiler Nx.Defn.Evaluator
+    defn default_qr(t), do: Nx.qr(t)
+
+    test "qr" do
+      assert {q, r} = default_qr(Nx.iota({3, 2}))
+      assert q == Nx.tensor([[0.0, -1.0], [1.0, 0.0], [0.0, 0.0]])
+      assert r == Nx.tensor([[2.0, 3.0], [0.0, -1.0]])
     end
 
     @defn_compiler Nx.Defn.Evaluator

@@ -31,33 +31,32 @@ defmodule EXLA.Defn do
   end
 
   @doc false
-  def __aot__(key, vars, fun, options) do
-    {fun, _expr_options, exla_options} = prepare_args(fun, options)
-    expr = fun.(vars)
+  def __aot__(module, tuples, aot_options) do
+    funs =
+      for {name, fun, vars, options} <- tuples do
+        {fun, _expr_options, exla_options} = prepare_args(fun, options)
+        expr = fun.(vars)
 
-    shapes_and_args =
-      for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
-        {EXLA.Shape.make_shape(type, shape), %{id: i, name: "p#{i}", dims: shape, type: type}}
+        shapes_and_args =
+          for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
+            {EXLA.Shape.make_shape(type, shape), %{id: i, name: "p#{i}", dims: shape, type: type}}
+          end
+
+        {shapes, args} = Enum.unzip(shapes_and_args)
+        computation = to_root_computation(name, expr, shapes, exla_options)
+
+        %EXLA.Shape{dtype: {:t, shapes}} = computation.output_shape
+
+        sizes =
+          Enum.map(shapes, fn shape ->
+            {_, size} = shape.dtype
+            Nx.size(shape.dims) * div(size, 8)
+          end)
+
+        {computation, name, length(vars), args, sizes}
       end
 
-    {shapes, args} = Enum.unzip(shapes_and_args)
-    computation = to_root_computation(key, expr, shapes, exla_options)
-
-    %EXLA.Shape{dtype: {:t, shapes}} = computation.output_shape
-
-    total_sizes =
-      Enum.map(shapes, fn shape ->
-        {_, size} = shape.dtype
-        Nx.size(shape.dims) * div(size, 8)
-      end)
-
-    fun_info = :erlang.fun_info(key)
-
-    EXLA.AOT.Compiler.compile(
-      [computation],
-      [{fun_info[:name], fun_info[:arity], args, total_sizes}],
-      fun_info[:module]
-    )
+    EXLA.AOT.Compiler.compile(module, funs, aot_options)
   end
 
   defp prepare_args(fun, options) do
@@ -259,8 +258,12 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
-  defp to_operator(:elem, [tensor, index, _size], _ans, _state) do
-    EXLA.Op.get_tuple_element(tensor, index)
+  defp to_operator(:metadata, [op, _metadata], _ans, _state) do
+    op
+  end
+
+  defp to_operator(:elem, [op, index, _size], _ans, _state) do
+    EXLA.Op.get_tuple_element(op, index)
   end
 
   defp to_operator(:dot, [left, axes1, right, axes2], %{type: type}, state) do
@@ -340,6 +343,11 @@ defmodule EXLA.Defn do
     EXLA.Op.select(pred, on_true, on_false)
   end
 
+  defp to_operator(:qr, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
+    {q, r} = EXLA.Op.qr(to_type(tensor, type), opts[:mode] != :reduced, state.precision)
+    EXLA.Op.tuple(state.builder, [q, r])
+  end
+
   ## to_operator element-wise
 
   defp to_operator(:negate, [op], _ans, _state), do: EXLA.Op.negate(op)
@@ -364,7 +372,7 @@ defmodule EXLA.Defn do
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
 
-  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power, :divide, :arctan2] ++
+  @bin_op [:add, :subtract, :multiply, :min, :max, :remainder, :power, :divide, :atan2] ++
             [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift]
 
   defp to_operator(op, [left, right], %{type: type}, _state) when op in @bin_op do
@@ -400,8 +408,8 @@ defmodule EXLA.Defn do
   end
 
   @unary_op [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-              [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :arccos] ++
-              [:arcsin, :arctan, :floor, :ceil, :round, :arccosh, :arcsinh, :arctanh, :erf] ++
+              [:bitwise_not, :count_leading_zeros, :population_count, :cosh, :sinh, :acos] ++
+              [:asin, :atan, :floor, :ceil, :round, :acosh, :asinh, :atanh, :erf] ++
               [:erfc, :erf_inv]
 
   defp to_operator(op, [arg], %{type: type}, _state) when op in @unary_op do

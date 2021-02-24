@@ -22,12 +22,13 @@ defmodule Nx.Defn.Expr do
 
     * `fun(parameters, t, fun)`
 
-    * `cond(clauses, otherwise)` - note it may return tuples.
+    * `cond(clauses, otherwise)`
+
+    * `metadata(expr, metadata)`
 
     * `elem(tuple, pos, size)` - created automatically from
-      `cond`, `fun` and `loop` when they return tuples.
-      Note it may return tuples too in case the expressions
-      above return nested tuples.
+      expression that return tuples. Note it may return tuples
+      too, which means we have nested tuples
 
   """
 
@@ -45,7 +46,6 @@ defmodule Nx.Defn.Expr do
   @doc """
   Builds an expression from a tensor.
   """
-  @impl true
   def tensor(t), do: to_expr(t)
 
   @doc """
@@ -64,6 +64,14 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
+  Creates a metadata node that around the given expression.
+  """
+  def metadata(expr, metadata) when is_map(metadata) do
+    expr = to_expr(expr)
+    expr(expr, expr.data.context, :metadata, [expr, metadata])
+  end
+
+  @doc """
   Creates a function node with the given args and anonymous function.
   """
   def fun(args, fun) when is_function(fun, length(args)) do
@@ -72,17 +80,14 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a `cond` expression.
+  Creates a tuple, possibly recursively, by executing the
+  given function for each element.
   """
-  def cond(clauses, last) do
-    {preds, exprs} = Enum.unzip(clauses)
-    {preds, context} = to_exprs(preds)
-    [last | exprs] = cond_clauses(last, exprs)
-    clauses = Enum.zip(preds, exprs)
-    cond_result(last, context, &expr(&1, context, :cond, [clauses, last]))
+  def tuple(tuple, context, fun) when is_tuple(tuple) do
+    recur_tuple(tuple, context, fun)
   end
 
-  defp cond_result(tuple, context, fun) when is_tuple(tuple) do
+  defp recur_tuple(tuple, context, fun) when is_tuple(tuple) do
     size = tuple_size(tuple)
     expr = fun.(%T{shape: {}, names: [], type: {:tuple, size}})
 
@@ -92,12 +97,29 @@ defmodule Nx.Defn.Expr do
     |> Enum.with_index()
     |> Enum.map(fn {tensor, i} ->
       fun = &expr(&1, context, :elem, [expr, i, size])
-      cond_result(tensor, context, fun)
+      recur_tuple(tensor, context, fun)
     end)
     |> List.to_tuple()
   end
 
-  defp cond_result(tensor, _context, fun), do: fun.(tensor)
+  defp recur_tuple(tensor, _context, fun), do: fun.(tensor)
+
+  @doc """
+  Creates a `cond` expression.
+  """
+  def cond(clauses, last) do
+    {preds, exprs} = Enum.unzip(clauses)
+    {preds, context} = to_exprs(preds)
+    [last | exprs] = cond_clauses(last, exprs)
+    clauses = Enum.zip(preds, exprs)
+    fun = &expr(&1, context, :cond, [clauses, last])
+
+    if is_tuple(last) do
+      tuple(last, context, fun)
+    else
+      fun.(last)
+    end
+  end
 
   defp cond_clauses(last, exprs) when is_tuple(last) do
     size = tuple_size(last)
@@ -227,6 +249,10 @@ defmodule Nx.Defn.Expr do
 
   def traverse_exprs(%T{} = expr, acc, fun) when is_function(fun, 2) do
     fun.(expr, acc)
+  end
+
+  def traverse_exprs(other, _acc, _fun) do
+    raise ArgumentError, "expected a tensor expression, got: #{inspect(other)}"
   end
 
   ## Type helpers
@@ -461,9 +487,9 @@ defmodule Nx.Defn.Expr do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
-      [:arccosh, :arcsinh, :arctanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
+      [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
       [:population_count, :count_leading_zeros, :floor, :ceil, :round, :as_type] ++
-      [:erf, :erfc, :erf_inv, :arccos, :arcsin, :arctan]
+      [:erf, :erfc, :erf_inv, :acos, :asin, :atan]
 
   for op <- unary_ops do
     @impl true
@@ -474,7 +500,7 @@ defmodule Nx.Defn.Expr do
   end
 
   binary_ops =
-    [:add, :subtract, :multiply, :divide, :power, :remainder, :arctan2, :max, :min, :quotient] ++
+    [:add, :subtract, :multiply, :divide, :power, :remainder, :atan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
@@ -681,6 +707,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def qr({q, r}, tensor, opts) do
+    tensor = to_expr(tensor)
+    context = tensor.data.context
+    tuple({q, r}, context, &expr(&1, context, :qr, [{q, r}, tensor, opts]))
+  end
+
+  @impl true
   def sort(out, tensor, opts) do
     comparator = opts[:comparator]
 
@@ -741,7 +774,7 @@ defmodule Nx.Defn.Expr do
 
   defp to_expr(other) do
     raise ArgumentError,
-          "unable to convert #{inspect(other)} into a Nx.Defn.Expr, expected a tensor or a number"
+          "unable to build tensor expression, expected a tensor or a number, got: #{inspect(other)}"
   end
 
   defp to_exprs(list) do
@@ -823,6 +856,10 @@ defmodule Nx.Defn.Expr do
       end)
 
     IO.iodata_to_binary([clauses, ":otherwise -> ", inspect_arg(last, var_map)])
+  end
+
+  defp inspect_args(:metadata, [expr, metadata], var_map) do
+    IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(Map.keys(metadata))])
   end
 
   defp inspect_args(_op, args, var_map), do: inspect_args(args, var_map)

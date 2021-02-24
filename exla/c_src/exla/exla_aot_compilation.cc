@@ -73,12 +73,14 @@ namespace exla {
       return compilation_status;
     }
 
+    std::string entry_point = absl::StrCat("exla_", function_name, "_entry_point");
+
     // These options are flags we can give to the user
     xla::cpu::CpuAotCompilationOptions aot_opts(
       target_triple,
       /*target_cpu=*/"",
       /*target_features=*/"",
-      /*entry_point=*/"function",
+      /*entry_point=*/entry_point,
       xla::cpu::CpuAotCompilationOptions::RelocationModel::BigPic
     );
 

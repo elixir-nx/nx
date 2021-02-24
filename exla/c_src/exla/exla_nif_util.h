@@ -283,10 +283,10 @@ int get_dot_dimension_numbers(ErlNifEnv* env,
 // Gets a precision configuration from the configuration term.
 // The term should be an integer `0`, `1`, or `2` corresponding
 // to default, high, or highest precision respectively. Precision
-// configuration is set for each term in an operation. We assume
-// this is being used in a binary operator.
+// configuration is set for each term in an operation.
 int get_precision_config(ErlNifEnv* env,
                          ERL_NIF_TERM config_term,
+                         int num_operands,
                          xla::PrecisionConfig* precision_config);
 
 // Gets the convolution dimension numbers. Convolutions are determined

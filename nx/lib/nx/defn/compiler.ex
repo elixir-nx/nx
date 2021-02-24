@@ -64,8 +64,14 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def __aot__(fun, args, compiler, opts) do
-    runtime(:__aot__, fun, args, compiler, opts)
+  def __aot__(module, tuples, compiler, aot_opts) do
+    compiler_tuples =
+      Enum.map(tuples, fn {name, fun, args, opts} ->
+        vars = Nx.Defn.Expr.to_vars(args)
+        {:"__aot_#{name}_#{length(args)}__", &runtime_fun(&1, fun, args, compiler), vars, opts}
+      end)
+
+    compiler.__aot__(module, compiler_tuples, aot_opts)
   end
 
   @doc false
@@ -77,26 +83,28 @@ defmodule Nx.Defn.Compiler do
     Kernel.apply(compiler, callback, [
       fun,
       Nx.Defn.Expr.to_vars(args),
-      fn vars ->
-        if Process.get(Nx.Defn.Compiler) do
-          raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
-        end
-
-        Process.put(Nx.Defn.Compiler, compiler)
-
-        try do
-          params = Nx.Defn.Expr.to_params(vars)
-          args = Nx.Defn.Expr.to_args(args, params)
-
-          fun
-          |> apply(args)
-          |> Nx.Defn.Expr.to_result()
-        after
-          Process.delete(Nx.Defn.Compiler)
-        end
-      end,
+      &runtime_fun(&1, fun, args, compiler),
       opts
     ])
+  end
+
+  defp runtime_fun(vars, fun, args, compiler) do
+    if Process.get(Nx.Defn.Compiler) do
+      raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
+    end
+
+    Process.put(Nx.Defn.Compiler, compiler)
+
+    try do
+      params = Nx.Defn.Expr.to_params(vars)
+      args = Nx.Defn.Expr.to_args(args, params)
+
+      fun
+      |> apply(args)
+      |> Nx.Defn.Expr.to_result()
+    after
+      Process.delete(Nx.Defn.Compiler)
+    end
   end
 
   @doc false

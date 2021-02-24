@@ -248,28 +248,47 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro grad(var_or_vars, expr) do
-    var_or_vars =
-      case var_or_vars do
-        {:{}, meta, vars} -> {:{}, meta, Enum.map(vars, &grad_var!/1)}
-        {left, right} -> {grad_var!(left), grad_var!(right)}
-        var -> grad_var!(var)
-      end
-
-    quote do
-      Nx.Defn.Kernel.transform(
-        {unquote(var_or_vars), unquote(expr)},
-        &Nx.Defn.Grad.transform/1
-      )
-    end
+  def grad(var_or_vars, expr) do
+    Nx.Defn.Grad.transform(var_or_vars, expr)
   end
 
-  defp grad_var!({name, _, ctx} = var) when Kernel.and(is_atom(name), is_atom(ctx)), do: var
+  @doc """
+  Stops computing the gradient for the given expression.
 
-  defp grad_var!(expr) do
-    raise ArgumentError,
-          "first argument of grad/3 must be a variable or a tuple of variables, got: " <>
-            Macro.to_string(expr)
+  It effectively annotates the gradient for the given
+  expression is 1.0.
+
+  ## Examples
+
+      expr = stop_grad(expr)
+
+  """
+  def stop_grad(expr) do
+    Nx.Defn.Expr.metadata(expr, %{stop_grad: true})
+  end
+
+  @doc """
+  Defines a custom gradient for the given expression.
+
+  It expects a `fun` to compute the gradient. The function
+  will be called with the expression itself and the current
+  gradient. It must return a list of arguments and their
+  updated gradient to continue applying `grad` on.
+
+  ## Examples
+
+  For example, if the gradient of `cos(t)` were to be
+  implemented by hand:
+
+      def cos(t) do
+        custom_grad(Nx.cos(t), fn _ans, g ->
+          [{t, -g * Nx.sin(t)}]
+        end)
+      end
+
+  """
+  def custom_grad(expr, fun) when is_function(fun, 2) do
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun})
   end
 
   @doc """
@@ -316,7 +335,7 @@ defmodule Nx.Defn.Kernel do
       >
 
   """
-  def first .. last, do: Range.new(first, last)
+  def first..last, do: Range.new(first, last)
 
   @doc """
   Element-wise addition operator.

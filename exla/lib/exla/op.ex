@@ -121,7 +121,7 @@ defmodule EXLA.Op do
 
   ## Element-wise binary ops
 
-  arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :arctan2, :power]
+  arith = [:add, :subtract, :multiply, :divide, :max, :min, :remainder, :atan2, :power]
   bitwise = [:bitwise_and, :bitwise_or, :bitwise_xor]
   shift = [:left_shift, :right_shift_arithmetic, :right_shift_logical]
   comparison = [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal]
@@ -145,7 +145,7 @@ defmodule EXLA.Op do
 
   returns_float =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
-      [:arccosh, :arcsinh, :arctanh, :arccos, :arcsin, :arctan, :cosh, :sinh] ++
+      [:acosh, :asinh, :atanh, :acos, :asin, :atan, :cosh, :sinh] ++
       [:erf, :erfc, :erf_inv]
 
   returns_any = [:negate]
@@ -387,6 +387,75 @@ defmodule EXLA.Op do
 
   def cholesky(%Op{builder: builder, ref: operand}) do
     ref = EXLA.NIF.cholesky(operand) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def eigh(%Op{builder: builder, ref: operand}, lower) do
+    {v_ref, w_ref} = EXLA.NIF.eigh(operand, lower) |> unwrap!()
+
+    {
+      %Op{builder: builder, ref: v_ref},
+      %Op{builder: builder, ref: w_ref}
+    }
+  end
+
+  def lu(%Op{builder: builder, ref: operand}) do
+    {lu_ref, pivot_ref, permutation_ref} = EXLA.NIF.lu(operand) |> unwrap!()
+
+    {
+      %Op{builder: builder, ref: lu_ref},
+      %Op{builder: builder, ref: pivot_ref},
+      %Op{builder: builder, ref: permutation_ref}
+    }
+  end
+
+  def qr(%Op{builder: builder, ref: operand}, full_matrices, precision)
+      when is_boolean(full_matrices) do
+    full_matrices = if full_matrices, do: 1, else: 0
+    precision_config = get_precision_config_int(precision)
+    {q_ref, r_ref} = EXLA.NIF.qr(operand, full_matrices, precision_config) |> unwrap!()
+
+    {
+      %Op{builder: builder, ref: q_ref},
+      %Op{builder: builder, ref: r_ref}
+    }
+  end
+
+  def svd(%Op{builder: builder, ref: operand}, precision) do
+    precision_config = get_precision_config_int(precision)
+    {u_ref, d_ref, v_ref} = EXLA.NIF.svd(operand, precision_config) |> unwrap!()
+
+    {
+      %Op{builder: builder, ref: u_ref},
+      %Op{builder: builder, ref: d_ref},
+      %Op{builder: builder, ref: v_ref}
+    }
+  end
+
+  def triangular_solve(
+        %Op{builder: builder, ref: a},
+        %Op{builder: builder, ref: b},
+        left_side,
+        lower,
+        unit_diagonal,
+        transpose_a
+      ) do
+    transpose_a_int =
+      case transpose_a do
+        :none ->
+          0
+
+        :transpose ->
+          1
+
+        :conjugate ->
+          2
+      end
+
+    ref =
+      EXLA.NIF.triangular_solve(a, b, left_side, lower, unit_diagonal, transpose_a_int)
+      |> unwrap!()
+
     %Op{builder: builder, ref: ref}
   end
 

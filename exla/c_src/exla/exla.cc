@@ -10,6 +10,10 @@
 #include "tensorflow/compiler/xla/client/xla_computation.h"
 #include "tensorflow/compiler/xla/client/client.h"
 #include "tensorflow/compiler/xla/client/lib/math.h"
+#include "tensorflow/compiler/xla/client/lib/lu_decomposition.h"
+#include "tensorflow/compiler/xla/client/lib/qr.h"
+#include "tensorflow/compiler/xla/client/lib/self_adjoint_eig.h"
+#include "tensorflow/compiler/xla/client/lib/svd.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
 // All of these are created with calls to `new` and subsequently
@@ -774,15 +778,15 @@ ERL_NIF_TERM sin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Sin);
 }
 
-ERL_NIF_TERM arccos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM acos(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Acos);
 }
 
-ERL_NIF_TERM arcsin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM asin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Asin);
 }
 
-ERL_NIF_TERM arctan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM atan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Atan);
 }
 
@@ -798,15 +802,15 @@ ERL_NIF_TERM tanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Tanh);
 }
 
-ERL_NIF_TERM arccosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM acosh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Acosh);
 }
 
-ERL_NIF_TERM arcsinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM asinh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Asinh);
 }
 
-ERL_NIF_TERM arctanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM atanh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return xla_unary_op(env, argc, argv, xla::Atanh);
 }
 
@@ -1225,7 +1229,7 @@ ERL_NIF_TERM dot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<xla::XlaOp>(env, argv[1], rhs)) {
     return exla::nif::error(env, "Unable to get right-hand side operand.");
   }
-  if (!exla::nif::get_precision_config(env, argv[2], &config)) {
+  if (!exla::nif::get_precision_config(env, argv[2], 2, &config)) {
     return exla::nif::error(env, "Unable to get precision configuration.");
   }
 
@@ -1252,7 +1256,7 @@ ERL_NIF_TERM dot_general(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get_dot_dimension_numbers(env, argv[2], &dnums)) {
     return exla::nif::error(env, "Unable to get contraction dimensions.");
   }
-  if (!exla::nif::get_precision_config(env, argv[3], &config)) {
+  if (!exla::nif::get_precision_config(env, argv[3], 2, &config)) {
     return exla::nif::error(env, "Unable to get precision configuration.");
   }
 
@@ -1300,7 +1304,7 @@ ERL_NIF_TERM conv_general_dilated(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get(env, argv[7], &feature_group_count)) {
     return exla::nif::error(env, "Unable to get feature groups");
   }
-  if (!exla::nif::get_precision_config(env, argv[8], &config)) {
+  if (!exla::nif::get_precision_config(env, argv[8], 2, &config)) {
     return exla::nif::error(env, "Unable to get precision config");
   }
 
@@ -1441,6 +1445,192 @@ ERL_NIF_TERM cholesky(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   xla::XlaOp op = xla::Cholesky(*operand, true);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM eigh(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  bool lower;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get(env, argv[1], &lower)) {
+    return exla::nif::error(env, "Unable to get lower flag.");
+  }
+
+  xla::SelfAdjointEigResult eigh_result = xla::SelfAdjointEig(*operand,
+                                                              lower,
+                                                              /*max_iter=*/15,
+                                                              /*epsilon=*/1.0e-6);
+
+  ERL_NIF_TERM v = exla::nif::make<xla::XlaOp>(env, eigh_result.v);
+  ERL_NIF_TERM w = exla::nif::make<xla::XlaOp>(env, eigh_result.w);
+
+  return exla::nif::ok(env, enif_make_tuple2(env, v, w));
+}
+
+ERL_NIF_TERM lu(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+
+  xla::LuDecompositionResult lu_result = xla::LuDecomposition(*operand);
+
+  ERL_NIF_TERM lu = exla::nif::make<xla::XlaOp>(env, lu_result.lu);
+  ERL_NIF_TERM pivots = exla::nif::make<xla::XlaOp>(env, lu_result.pivots);
+  ERL_NIF_TERM permutation = exla::nif::make<xla::XlaOp>(env, lu_result.permutation);
+
+  return exla::nif::ok(env, enif_make_tuple3(env, lu, pivots, permutation));
+}
+
+ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  bool full_matrices;
+  int config_int;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get(env, argv[1], &full_matrices)) {
+    return exla::nif::error(env, "Unable to get full matrices flag.");
+  }
+  if (!exla::nif::get(env, argv[2], &config_int)) {
+    return exla::nif::error(env, "Unable to get precision configuration.");
+  }
+
+  xla::PrecisionConfig::Precision precision;
+  switch (config_int) {
+    case 0:
+      precision = xla::PrecisionConfig::DEFAULT;
+      break;
+    case 1:
+      precision = xla::PrecisionConfig::HIGH;
+      break;
+    case 2:
+      precision = xla::PrecisionConfig::HIGHEST;
+      break;
+    default:
+      LOG(ERROR) << "Invalid precision configuration";
+      return exla::nif::error(env, "Invalid precision configuration");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::QRDecompositionResult qr_result,
+    xla::QRDecomposition(*operand, full_matrices, 128, precision), env);
+
+  ERL_NIF_TERM q = exla::nif::make<xla::XlaOp>(env, qr_result.q);
+  ERL_NIF_TERM r = exla::nif::make<xla::XlaOp>(env, qr_result.r);
+
+  return exla::nif::ok(env, enif_make_tuple2(env, q, r));
+}
+
+ERL_NIF_TERM svd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  int config_int;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get(env, argv[1], &config_int)) {
+    return exla::nif::error(env, "Unable to get precision config flag.");
+  }
+
+  xla::PrecisionConfig::Precision precision;
+  switch (config_int) {
+    case 0:
+      precision = xla::PrecisionConfig::DEFAULT;
+      break;
+    case 1:
+      precision = xla::PrecisionConfig::HIGH;
+      break;
+    case 2:
+      precision = xla::PrecisionConfig::HIGHEST;
+      break;
+    default:
+      LOG(ERROR) << "Invalid precision configuration";
+      return exla::nif::error(env, "Invalid precision configuration");
+  }
+
+  xla::SVDResult svd_result = xla::SVD(*operand, /*max_iter=*/100, /*epsilon=*/1.0e-6, precision);
+
+  ERL_NIF_TERM u = exla::nif::make<xla::XlaOp>(env, svd_result.u);
+  ERL_NIF_TERM d = exla::nif::make<xla::XlaOp>(env, svd_result.d);
+  ERL_NIF_TERM v = exla::nif::make<xla::XlaOp>(env, svd_result.v);
+
+  return exla::nif::ok(env, enif_make_tuple3(env, u, d, v));
+}
+
+ERL_NIF_TERM triangular_solve(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 6) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* a;
+  xla::XlaOp* b;
+  bool left_side;
+  bool lower;
+  bool unit_diagonal;
+  int transpose_a_int;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], a)) {
+    return exla::nif::error(env, "Unable to get A.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], b)) {
+    return exla::nif::error(env, "Unable to get B.");
+  }
+  if (!exla::nif::get(env, argv[2], &left_side)) {
+    return exla::nif::error(env, "Unable to get left side flag.");
+  }
+  if (!exla::nif::get(env, argv[3], &lower)) {
+    return exla::nif::error(env, "Unable to get lower flag.");
+  }
+  if (!exla::nif::get(env, argv[4], &unit_diagonal)) {
+    return exla::nif::error(env, "Unable to get unit diagonal flag.");
+  }
+  if (!exla::nif::get(env, argv[5], &transpose_a_int)) {
+    return exla::nif::error(env, "Unable to get triangular solve transpose options.");
+  }
+
+  xla::TriangularSolveOptions::Transpose transpose_a;
+  switch (transpose_a_int) {
+    case 0:
+      transpose_a = xla::TriangularSolveOptions::NO_TRANSPOSE;
+      break;
+    case 1:
+      transpose_a = xla::TriangularSolveOptions::TRANSPOSE;
+      break;
+    case 2:
+      transpose_a = xla::TriangularSolveOptions::ADJOINT;
+      break;
+    default:
+      LOG(ERROR) << "Invalid triangular solve options.";
+      return 0;
+  }
+
+  xla::XlaOp op = xla::TriangularSolve(*a, *b,
+                                       left_side,
+                                       lower,
+                                       unit_diagonal,
+                                       transpose_a);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -1824,7 +2014,7 @@ static ErlNifFunc exla_funcs[] = {
   {"right_shift_arithmetic", 3, shift_right_arithmetic},
   {"power", 3, pow},
   {"complex", 3, complex},
-  {"arctan2", 3, atan2},
+  {"atan2", 3, atan2},
   // Element-wise Binary comparison
   {"equal", 3, equal},
   {"not_equal", 3, not_equal},
@@ -1845,15 +2035,15 @@ static ErlNifFunc exla_funcs[] = {
   {"sign", 1, sign},
   {"cos", 1, cos},
   {"sin", 1, sin},
-  {"arccos", 1, arccos},
-  {"arcsin", 1, arcsin},
-  {"arctan", 1, arctan},
+  {"acos", 1, acos},
+  {"asin", 1, asin},
+  {"atan", 1, atan},
   {"cosh", 1, cosh},
   {"sinh", 1, sinh},
   {"tanh", 1, tanh},
-  {"arccosh", 1, arccosh},
-  {"arcsinh", 1, arcsinh},
-  {"arctanh", 1, arctanh},
+  {"acosh", 1, acosh},
+  {"asinh", 1, asinh},
+  {"atanh", 1, atanh},
   {"real", 1, real},
   {"imag", 1, imag},
   {"sqrt", 1, sqrt},
@@ -1908,6 +2098,11 @@ static ErlNifFunc exla_funcs[] = {
   {"sort", 3, sort},
   // LinAlg
   {"cholesky", 1, cholesky},
+  {"eigh", 2, eigh},
+  {"lu", 1, lu},
+  {"qr", 3, qr},
+  {"triangular_solve", 6, triangular_solve},
+  {"svd", 2, svd},
   // Log Sink
   {"start_log_sink", 1, start_log_sink},
   // HLO Functions

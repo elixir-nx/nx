@@ -7,17 +7,15 @@ defmodule EXLA.AOT.Compiler do
   require Logger
   @tf_rev "6af836f407f546cf2f9ab3b5fcb7a8285bda5c96"
 
-  def compile(computations, functions, module_name, lib_name \\ "nif") do
+  def compile(module_name, functions, _options) do
+    lib_name = "nif"
     :ok = mk_aot_dir()
 
     # Compile each function to header/object
-    src_paths =
-      computations
-      |> Enum.zip(functions)
-      |> Enum.flat_map(fn {comp, func} -> compile_function(comp, func) end)
+    src_paths = Enum.map(functions, &compile_function/1)
 
     # Write out a NIF/BUILD file
-    {:ok, nif_path} = write_nif_source_file(functions, module_name, "exla_aot_class", lib_name)
+    {:ok, nif_path} = write_nif_source_file(functions, module_name, lib_name)
     {:ok, build_path} = write_bazel_build_file("nif", functions)
 
     # Get cwd for output `.so` path
@@ -51,9 +49,9 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp compile_function(%Computation{ref: comp}, {name, arity, args, sizes}) do
+  defp compile_function({%Computation{ref: comp}, name, arity, args, sizes}) do
     target_triple = get_target_triple()
-    {:ok, pbtext_path} = write_graph_config_file({name, arity, args, Enum.count(sizes)})
+    {:ok, pbtext_path} = write_graph_config_file(name, arity, args, Enum.count(sizes))
 
     src_paths =
       EXLA.NIF.compile_aot(
@@ -61,7 +59,7 @@ defmodule EXLA.AOT.Compiler do
         pbtext_path,
         get_aot_path(),
         "#{name}_#{arity}",
-        "exla_aot_class",
+        "#{name}_#{arity}_class",
         target_triple
       )
       |> unwrap!()
@@ -96,7 +94,7 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp write_graph_config_file({name, arity, args, num_results}) do
+  defp write_graph_config_file(name, arity, args, num_results) do
     pbtext = Codegen.generate_graph_config_file(args, num_results)
     pbtext_path = get_aot_path() <> "#{name}_#{arity}.pbtxt"
     {:ok, file} = File.open(pbtext_path, [:write])
@@ -104,8 +102,8 @@ defmodule EXLA.AOT.Compiler do
     {File.close(file), pbtext_path}
   end
 
-  defp write_nif_source_file(functions, target_module, class_name, nif_name) do
-    src = Codegen.generate_nif_source_file(functions, target_module, class_name)
+  defp write_nif_source_file(functions, target_module, nif_name) do
+    src = Codegen.generate_nif_source_file(functions, target_module)
     nif_path = get_aot_path() <> nif_name <> ".cc"
     {:ok, file} = File.open(nif_path, [:write])
     :ok = IO.binwrite(file, src)
