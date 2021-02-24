@@ -168,6 +168,14 @@ NIF(reshape)
   TENSOR(at::reshape(*t, shape));
 }
 
+NIF(to_type)
+{
+  TENSOR_PARAM(0, t);
+  TYPE_PARAM(1, type);
+
+  TENSOR(t->toType(type));
+}
+
 NIF(squeeze)
 {
   TENSOR_PARAM(0, t);
@@ -281,25 +289,26 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 }
 
 static ErlNifFunc nif_functions[] = {
-    {"randint", 4, randint, 0},
-    {"rand", 4, rand, 0},
-    {"normal", 3, normal, 0},
-    {"arange", 4, arange, 0},
-    {"arange", 5, arange, 0},
-    {"from_blob", 3, from_blob, 0},
-    {"to_blob", 1, to_blob, 0},
-    {"to_blob", 2, to_blob, 0},
-    {"scalar_tensor", 2, scalar_tensor, 0},
-    {"delete_tensor", 1, delete_tensor, 0},
-    {"ones", 1, ones, 0},
-    {"eye", 2, eye, 0},
-    {"reshape", 2, reshape, 0},
-    {"squeeze", 2, squeeze, 0},
-    {"squeeze", 1, squeeze, 0},
-    {"broadcast_to", 2, broadcast_to, 0},
-    {"add", 2, add, 0},
-    {"dot", 2, dot, 0},
-    {"cholesky", 1, cholesky, 0},
-    {"cholesky", 2, cholesky, 0}};
+    {"randint", 4, randint},
+    {"rand", 4, rand},
+    {"normal", 3, normal},
+    {"arange", 4, arange},
+    {"arange", 5, arange},
+    {"from_blob", 3, from_blob},
+    {"to_blob", 1, to_blob},
+    {"to_blob", 2, to_blob},
+    {"scalar_tensor", 2, scalar_tensor},
+    {"delete_tensor", 1, delete_tensor},
+    {"ones", 1, ones},
+    {"eye", 2, eye},
+    {"reshape", 2, reshape},
+    {"to_type", 2, to_type},
+    {"squeeze", 2, squeeze},
+    {"squeeze", 1, squeeze},
+    {"broadcast_to", 2, broadcast_to},
+    {"add", 2, add},
+    {"dot", 2, dot},
+    {"cholesky", 1, cholesky},
+    {"cholesky", 2, cholesky}};
 
 ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)

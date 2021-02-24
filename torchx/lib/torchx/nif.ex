@@ -14,6 +14,7 @@ defmodule Torchx.NIF do
   def arange(_start, _end, _step, _type), do: nif_error(__ENV__.function)
   def arange(_start, _end, _step, _type, _shape), do: nif_error(__ENV__.function)
   def reshape(_tensor, _shape), do: nif_error(__ENV__.function)
+  def to_type(_tensor, _type), do: nif_error(__ENV__.function)
   def squeeze(_tensor), do: nif_error(__ENV__.function)
   def squeeze(_tensor, _axis), do: nif_error(__ENV__.function)
   def broadcast_to(_tensor, _shape), do: nif_error(__ENV__.function)

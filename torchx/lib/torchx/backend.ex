@@ -76,14 +76,14 @@ defmodule Torchx.Backend do
     NIF.normal(mu, sigma, shape) |> from_ref(out)
   end
 
-  @impl true
-  def from_binary(%{type: type, shape: shape} = out, binary, _opts) do
-    NIF.from_blob(binary, shape, torch_type(type)) |> from_ref(out)
-  end
+  ## Transfer
 
   @impl true
   def to_binary(%{data: %{ref: ref}}), do: NIF.to_blob(ref)
   def to_binary(%{data: %{ref: ref}}, limit), do: NIF.to_blob(ref, limit)
+
+  @impl true
+  def backend_deallocate(%Nx.Tensor{data: %{ref: ref}}), do: NIF.delete_tensor(ref)
 
   @impl true
   def backend_transfer(tensor, Nx.Tensor, opts) do
@@ -98,11 +98,20 @@ defmodule Torchx.Backend do
     backend.from_binary(tensor, to_binary(tensor), opts)
   end
 
+  @impl true
+  def from_binary(%{type: type, shape: shape} = out, binary, _opts) do
+    NIF.from_blob(binary, shape, torch_type(type)) |> from_ref(out)
+  end
+
   ## Shape
 
   @impl true
   def reshape(out, %{data: %{ref: ref}} = tensor, shape),
     do: NIF.reshape(ref, shape) |> from_ref(tensor)
+
+  @impl true
+  def as_type(%{type: type} = out, %{data: %{ref: ref}} = tensor),
+    do: NIF.to_type(ref, torch_type(type)) |> from_ref(out)
 
   @impl true
   def squeeze(out, tensor, _axes) do
@@ -131,9 +140,6 @@ defmodule Torchx.Backend do
   def cholesky(%{type: output_type, shape: {rows, cols}} = out, tensor) do
     NIF.cholesky(tensor.data.ref) |> from_ref(out)
   end
-
-  @impl true
-  def backend_deallocate(%Nx.Tensor{data: %{ref: ref}}), do: NIF.delete_tensor(ref)
 
   @impl true
   def inspect(tensor, inspect_opts) do
