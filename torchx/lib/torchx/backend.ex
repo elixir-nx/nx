@@ -28,6 +28,11 @@ defmodule Torchx.Backend do
   ## Creation
 
   @impl true
+  def eye(%{shape: {n, n}, type: type} = out) do
+    NIF.eye(n, torch_type(type)) |> from_ref(out)
+  end
+
+  @impl true
   def iota(out, axis \\ nil)
 
   def iota(%{shape: {}, type: type} = out, nil) do
@@ -55,11 +60,6 @@ defmodule Torchx.Backend do
 
     # Now broadcast the tensor using the original shape
     NIF.broadcast_to(aten, shape) |> from_ref(out)
-  end
-
-  @impl true
-  def eye(%{shape: {n, n}, type: type} = out) do
-    NIF.eye(n, torch_type(type)) |> from_ref(out)
   end
 
   @impl true
