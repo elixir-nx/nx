@@ -18,6 +18,8 @@ defmodule Torchx.NIF do
   def squeeze(_tensor), do: nif_error(__ENV__.function)
   def squeeze(_tensor, _axis), do: nif_error(__ENV__.function)
   def broadcast_to(_tensor, _shape), do: nif_error(__ENV__.function)
+  def transpose(_tensor, _dim0, _dim1), do: nif_error(__ENV__.function)
+  def split(_tensor, _split_size), do: nif_error(__ENV__.function)
 
   def from_blob(_blob, _shape, _type),
     do: nif_error(__ENV__.function)

@@ -79,6 +79,10 @@ defmodule Torchx.Backend do
   ## Transfer
 
   @impl true
+  def to_batched_list(%{shape: shape} = out, %{data: %{ref: ref}}),
+    do: NIF.split(ref, elem(shape, 0)) |> from_ref(out)
+
+  @impl true
   def to_binary(%{data: %{ref: ref}}), do: NIF.to_blob(ref)
   def to_binary(%{data: %{ref: ref}}, limit), do: NIF.to_blob(ref, limit)
 
@@ -118,6 +122,10 @@ defmodule Torchx.Backend do
     NIF.squeeze(tensor.data.ref) |> from_ref(out)
   end
 
+  @impl true
+  def transpose(out, tensor, axes), do: IO.inspect(axes)
+  # do: NIF.transpose(tensor, dim0, dim1) |> from_ref(out)
+
   ## Ops
 
   @impl true
@@ -155,6 +163,8 @@ defmodule Torchx.Backend do
 
   defp from_ref(ref, t) when is_tuple(ref), do: unwrap!(ref) |> from_ref(t)
   defp from_ref(ref, t) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
+  defp from_ref([ref | list], t), do: [from_ref(ref, t) | from_ref(list, t)]
+  defp from_ref([], _t), do: []
 
   ## All remaining callbacks
 

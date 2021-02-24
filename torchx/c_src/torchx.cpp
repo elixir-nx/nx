@@ -16,20 +16,37 @@ std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, 
   ATOM_PARAM(ARGN, VAR##_atom) \
   at::ScalarType VAR = dtypes[VAR##_atom]
 
-#define TENSOR_PARAM(ARGN, VAR) \
-  at::Tensor *VAR = get_tensor(env, argv[ARGN])
+#define TENSOR_PARAM(ARGN, VAR)                                        \
+  at::Tensor *VAR;                                                     \
+  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR)) \
+    return nx::nif::error(env, "Unable to get " #VAR " tensor param.");
 
-#define TENSOR(T)                                    \
-  try                                                \
-  {                                                  \
-    return create_tensor_resource(env, T);           \
-  }                                                  \
-  catch (c10::Error error)                           \
-  {                                                  \
-    return nx::nif::error(env, error.msg().c_str()); \
+#define TENSOR(T)                                            \
+  try                                                        \
+  {                                                          \
+    return nx::nif::ok(env, create_tensor_resource(env, T)); \
+  }                                                          \
+  catch (c10::Error error)                                   \
+  {                                                          \
+    return nx::nif::error(env, error.msg().c_str());         \
   }
 
-ERL_NIF_TERM create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
+#define TENSOR_LIST(TL)                                                                        \
+  try                                                                                          \
+  {                                                                                            \
+    std::vector<at::Tensor> tl = TL;                                                           \
+    std::vector<ERL_NIF_TERM> res_list;                                                        \
+    for (at::Tensor t : tl)                                                                    \
+      res_list.push_back(create_tensor_resource(env, t));                                      \
+    return nx::nif::ok(env, enif_make_list_from_array(env, res_list.data(), res_list.size())); \
+  }                                                                                            \
+  catch (c10::Error error)                                                                     \
+  {                                                                                            \
+    return nx::nif::error(env, error.msg().c_str());                                           \
+  }
+
+ERL_NIF_TERM
+create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
 {
   ERL_NIF_TERM ret;
   at::Tensor *tensorPtr;
@@ -43,7 +60,7 @@ ERL_NIF_TERM create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
 
-  return nx::nif::ok(env, ret);
+  return ret;
 }
 
 at::Tensor *get_tensor(ErlNifEnv *env, ERL_NIF_TERM term)
@@ -85,6 +102,14 @@ NIF(from_blob)
 
   // Clone here to copy data from blob, which will be GCed.
   TENSOR(at::clone(at::from_blob(blob.data, shape, type)));
+}
+
+NIF(split)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, batch_size);
+
+  TENSOR_LIST(at::split(*t, batch_size));
 }
 
 NIF(to_blob)
@@ -197,6 +222,15 @@ NIF(broadcast_to)
   TENSOR(at::broadcast_to(*t, shape).clone());
 }
 
+NIF(transpose)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, dim0);
+  PARAM(2, int64_t, dim1);
+
+  TENSOR(at::transpose(*t, dim0, dim1));
+}
+
 NIF(ones)
 {
   SHAPE_PARAM(0, shape);
@@ -288,27 +322,34 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
   return 0;
 }
 
+#define F(NAME, ARITY)    \
+  {                       \
+#NAME, ARITY, NAME, 0 \
+  }
+
 static ErlNifFunc nif_functions[] = {
-    {"randint", 4, randint},
-    {"rand", 4, rand},
-    {"normal", 3, normal},
-    {"arange", 4, arange},
-    {"arange", 5, arange},
-    {"from_blob", 3, from_blob},
-    {"to_blob", 1, to_blob},
-    {"to_blob", 2, to_blob},
-    {"scalar_tensor", 2, scalar_tensor},
-    {"delete_tensor", 1, delete_tensor},
-    {"ones", 1, ones},
-    {"eye", 2, eye},
-    {"reshape", 2, reshape},
-    {"to_type", 2, to_type},
-    {"squeeze", 2, squeeze},
-    {"squeeze", 1, squeeze},
-    {"broadcast_to", 2, broadcast_to},
-    {"add", 2, add},
-    {"dot", 2, dot},
-    {"cholesky", 1, cholesky},
-    {"cholesky", 2, cholesky}};
+    F(randint, 4),
+    F(rand, 4),
+    F(normal, 3),
+    F(arange, 4),
+    F(arange, 5),
+    F(from_blob, 3),
+    F(to_blob, 1),
+    F(to_blob, 2),
+    F(scalar_tensor, 2),
+    F(delete_tensor, 1),
+    F(ones, 1),
+    F(eye, 2),
+    F(reshape, 2),
+    F(split, 2),
+    F(to_type, 2),
+    F(squeeze, 2),
+    F(squeeze, 1),
+    F(broadcast_to, 2),
+    F(transpose, 3),
+    F(add, 2),
+    F(dot, 2),
+    F(cholesky, 1),
+    F(cholesky, 2)};
 
 ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
