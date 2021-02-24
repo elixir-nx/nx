@@ -59,14 +59,9 @@ ERL_NIF_TERM from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   std::vector<int64_t> shape;
   std::string type;
 
-  if (!nx::nif::get_tuple(env, argv[1], shape))
-    return enif_make_badarg(env);
-
-  if (!nx::nif::get_atom(env, argv[2], type))
-    return enif_make_badarg(env);
-
-  if (!enif_inspect_binary(env, argv[0], &blob))
-    return enif_make_badarg(env);
+  BINARY_PARAM(0, blob);
+  TUPLE_PARAM(1, shape);
+  ATOM_PARAM(2, type);
 
   if (blob.size / dtype_sizes[type] < elem_count(shape))
     return enif_make_badarg(env);
@@ -84,7 +79,7 @@ ERL_NIF_TERM to_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   int64_t limit = t->nbytes();
 
   if (argc == 2)
-    nx::nif::get(env, argv[1], &limit);
+    PARAM(1, limit);
 
   int64_t byte_size = limit * t->itemsize();
 
@@ -99,12 +94,10 @@ ERL_NIF_TERM scalar_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   double scalar;
   std::string type;
 
-  nx::nif::get(env, argv[0], &scalar);
-  nx::nif::get_atom(env, argv[1], type);
+  PARAM(0, scalar);
+  ATOM_PARAM(1, type);
 
   at::Tensor t = at::scalar_tensor(scalar, dtypes[type]);
-
-  std::cout << t << "\r\n";
 
   return create_tensor_resource(env, t);
 }
@@ -115,10 +108,10 @@ ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   std::string type;
   std::vector<int64_t> shape;
 
-  nx::nif::get(env, argv[0], &min);
-  nx::nif::get(env, argv[1], &max);
-  nx::nif::get_tuple(env, argv[2], shape);
-  nx::nif::get_atom(env, argv[3], type);
+  PARAM(0, min);
+  PARAM(1, max);
+  TUPLE_PARAM(2, shape);
+  ATOM_PARAM(3, type);
 
   at::Tensor t = at::randint(min, max, shape, dtypes[type]);
 
@@ -131,10 +124,10 @@ ERL_NIF_TERM rand(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   std::vector<int64_t> shape;
   std::string type;
 
-  nx::nif::get(env, argv[0], &min);
-  nx::nif::get(env, argv[1], &max);
-  nx::nif::get_tuple(env, argv[2], shape);
-  nx::nif::get_atom(env, argv[3], type);
+  PARAM(0, min);
+  PARAM(1, max);
+  TUPLE_PARAM(2, shape);
+  ATOM_PARAM(3, type);
 
   at::Tensor t = min + at::rand(shape, dtypes[type]) * (max - min);
 
@@ -147,10 +140,10 @@ ERL_NIF_TERM normal(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   std::vector<int64_t> shape;
   std::string type;
 
-  nx::nif::get(env, argv[0], &mean);
-  nx::nif::get(env, argv[1], &std);
-  nx::nif::get_tuple(env, argv[2], shape);
-  nx::nif::get_atom(env, argv[3], type);
+  PARAM(0, mean);
+  PARAM(1, std);
+  TUPLE_PARAM(2, shape);
+  ATOM_PARAM(3, type);
 
   at::Tensor t = at::normal(mean, std, shape);
 
@@ -162,17 +155,17 @@ ERL_NIF_TERM arange(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   int64_t start, end, step;
   std::string type;
 
-  nx::nif::get(env, argv[0], &start);
-  nx::nif::get(env, argv[1], &end);
-  nx::nif::get(env, argv[2], &step);
-  nx::nif::get_atom(env, argv[3], type);
+  PARAM(0, start);
+  PARAM(1, end);
+  PARAM(2, step);
+  ATOM_PARAM(3, type);
 
   at::Tensor t = at::arange((double)start, (double)end, (double)step, dtypes[type]);
 
   if (argc == 5)
   {
     std::vector<int64_t> shape;
-    nx::nif::get_tuple(env, argv[4], shape);
+    TUPLE_PARAM(4, shape);
 
     t = at::reshape(t, shape);
   }
@@ -184,7 +177,7 @@ ERL_NIF_TERM reshape(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   std::vector<int64_t> shape;
   at::Tensor *t = get_tensor(env, argv[0]);
-  nx::nif::get_tuple(env, argv[1], shape);
+  TUPLE_PARAM(1, shape);
 
   at::Tensor r = at::reshape(*t, shape);
 
@@ -199,7 +192,7 @@ ERL_NIF_TERM squeeze(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   if (argc == 2)
   {
     int64_t dim;
-    nx::nif::get(env, argv[1], &dim);
+    PARAM(1, dim);
 
     r = at::squeeze(*t, dim);
   }
@@ -213,7 +206,7 @@ ERL_NIF_TERM broadcast_to(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
   std::vector<int64_t> shape;
   at::Tensor *t = get_tensor(env, argv[0]);
-  nx::nif::get_tuple(env, argv[1], shape);
+  TUPLE_PARAM(1, shape);
 
   at::Tensor r = at::broadcast_to(*t, shape).clone();
 
@@ -225,8 +218,8 @@ ERL_NIF_TERM ones(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   std::string type;
   std::vector<int64_t> shape;
 
-  nx::nif::get_tuple(env, argv[0], shape);
-  nx::nif::get_atom(env, argv[1], type);
+  TUPLE_PARAM(0, shape);
+  ATOM_PARAM(1, type);
 
   at::Tensor t = at::ones(shape, dtypes[type]);
 
@@ -238,8 +231,8 @@ ERL_NIF_TERM eye(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   int64_t size;
   std::string type;
 
-  nx::nif::get(env, argv[0], &size);
-  nx::nif::get_atom(env, argv[1], type);
+  PARAM(0, size);
+  ATOM_PARAM(1, type);
 
   at::Tensor t = at::eye(size, dtypes[type]);
 
@@ -257,7 +250,7 @@ ERL_NIF_TERM add(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     at::Tensor c;
     if (b == NULL)
     {
-      nx::nif::get(env, argv[1], &scalar);
+      PARAM(1, scalar);
       c = *a + scalar;
     }
     else
@@ -297,7 +290,7 @@ ERL_NIF_TERM cholesky(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
   if (argc == 2)
   {
-    nx::nif::get(env, argv[1], &upper);
+    PARAM(1, upper);
   }
 
   at::Tensor r = at::cholesky(*t, upper);

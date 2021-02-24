@@ -2,6 +2,22 @@
 
 #include "erl_nif.h"
 
+#define PARAM(ARGN, VAR)                    \
+  if (!nx::nif::get(env, argv[ARGN], &VAR)) \
+    return nx::nif::error(env, "Unable to get " #VAR ".");
+
+#define ATOM_PARAM(ARGN, VAR)                   \
+  if (!nx::nif::get_atom(env, argv[ARGN], VAR)) \
+    return nx::nif::error(env, "Unable to get " #VAR ".");
+
+#define TUPLE_PARAM(ARGN, VAR)                   \
+  if (!nx::nif::get_tuple(env, argv[ARGN], VAR)) \
+    return nx::nif::error(env, "Unable to get " #VAR ".");
+
+#define BINARY_PARAM(ARGN, VAR)                    \
+  if (!enif_inspect_binary(env, argv[ARGN], &VAR)) \
+    return nx::nif::error(env, "Unable to get " #VAR ".");
+
 namespace nx
 {
   namespace nif
