@@ -7230,7 +7230,13 @@ defmodule Nx do
   end
 
   def svd(tensor) do
-    # naive implementation of svd
+    # This implementation is a mixture of concepts described in [1] and the
+    # algorithmic description found in [2]
+    # [1] -
+    #    Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
+    #    by Gabriel Oksa and Marian Vajtersic
+    #    Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
+    # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
 
     {q, r} = Nx.qr(tensor)
 
@@ -7248,7 +7254,6 @@ defmodule Nx do
     # where A = Q U1 S V1_transposed Q2, from which follows:
     # U = dot(Q, U1) and V = transpose(Q2_transposed, V1)
     # note that Q2_transposed is already available as a byproduct of the LQ factorization
-
   end
 
   ## Helpers
