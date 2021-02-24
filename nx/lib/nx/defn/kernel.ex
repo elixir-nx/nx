@@ -248,13 +248,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro grad(var_or_vars, expr) do
-    quote do
-      Nx.Defn.Kernel.transform(
-        {unquote(var_or_vars), unquote(expr)},
-        &Nx.Defn.Grad.transform/1
-      )
-    end
+  def grad(var_or_vars, expr) do
+    Nx.Defn.Grad.transform(var_or_vars, expr)
   end
 
   @doc """
@@ -268,12 +263,8 @@ defmodule Nx.Defn.Kernel do
       expr = stop_grad(expr)
 
   """
-  defmacro stop_grad(expr) do
-    quote do
-      Nx.Defn.Kernel.transform(unquote(expr), fn expr ->
-        Nx.Defn.Expr.metadata(expr, %{stop_grad: true})
-      end)
-    end
+  def stop_grad(expr) do
+    Nx.Defn.Expr.metadata(expr, %{stop_grad: true})
   end
 
   @doc """
@@ -296,12 +287,8 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  defmacro custom_grad(expr, fun) do
-    quote do
-      Nx.Defn.Kernel.transform({unquote(expr), unquote(fun)}, fn {expr, fun} ->
-        Nx.Defn.Expr.metadata(expr, %{custom_grad: fun})
-      end)
-    end
+  def custom_grad(expr, fun) when is_function(fun, 2) do
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun})
   end
 
   @doc """
