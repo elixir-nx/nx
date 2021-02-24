@@ -1236,5 +1236,32 @@ defmodule Nx.DefnTest do
       out = apply(VarModuleDefndelegate, :maximum_sum, [a, b])
       assert Nx.to_scalar(out) == 5
     end
+
+    import Nx.Defn
+
+    test "works with default arguments" do
+      code = """
+      defmodule DefaultArgImpl do
+        import Nx.Defn
+
+        defn sum(a, b), do: Nx.sum(Nx.add(a, b))
+      end
+
+      defmodule DefaultArgModule do
+        import Nx.Defn
+
+        defndelegate sum(a, b \\\\ 1), to: DefaultArgImpl, as: :sum
+      end
+      """
+
+      assert [{DefaultArgImpl, _}, {DefaultArgModule, _}] = Code.compile_string(code)
+      t = Nx.tensor([1, 1])
+
+      assert apply(DefaultArgImpl, :sum, [t, 1]) == Nx.tensor(4)
+      assert apply(DefaultArgModule, :sum, [t]) == Nx.tensor(4)
+
+      assert apply(DefaultArgImpl, :sum, [t, 2]) == Nx.tensor(6)
+      assert apply(DefaultArgModule, :sum, [t, 2]) == Nx.tensor(6)
+    end
   end
 end
