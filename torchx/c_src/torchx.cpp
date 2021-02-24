@@ -8,6 +8,27 @@ ErlNifResourceType *TENSOR_TYPE;
 std::map<const std::string, const at::ScalarType> dtypes = {{"byte", at::kByte}, {"char", at::kChar}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"brain", at::kBFloat16}, {"float", at::kFloat}, {"double", at::kDouble}, {"bool", at::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
+#define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+
+#define SHAPE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
+
+#define TYPE_PARAM(ARGN, VAR)  \
+  ATOM_PARAM(ARGN, VAR##_atom) \
+  at::ScalarType VAR = dtypes[VAR##_atom]
+
+#define TENSOR_PARAM(ARGN, VAR) \
+  at::Tensor *VAR = get_tensor(env, argv[ARGN])
+
+#define TENSOR(T)                                    \
+  try                                                \
+  {                                                  \
+    return create_tensor_resource(env, T);           \
+  }                                                  \
+  catch (c10::Error error)                           \
+  {                                                  \
+    return nx::nif::error(env, error.msg().c_str()); \
+  }
+
 ERL_NIF_TERM create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
 {
   ERL_NIF_TERM ret;
@@ -38,9 +59,9 @@ at::Tensor *get_tensor(ErlNifEnv *env, ERL_NIF_TERM term)
   }
 }
 
-ERL_NIF_TERM delete_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(delete_tensor)
 {
-  at::Tensor *t = get_tensor(env, argv[0]);
+  TENSOR_PARAM(0, t);
 
   delete t;
   enif_release_resource(t);
@@ -53,33 +74,27 @@ unsigned long elem_count(std::vector<int64_t> shape)
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>{});
 }
 
-ERL_NIF_TERM from_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(from_blob)
 {
-  ErlNifBinary blob;
-  std::vector<int64_t> shape;
-  std::string type;
-
   BINARY_PARAM(0, blob);
-  TUPLE_PARAM(1, shape);
-  ATOM_PARAM(2, type);
+  SHAPE_PARAM(1, shape);
+  TYPE_PARAM(2, type);
 
-  if (blob.size / dtype_sizes[type] < elem_count(shape))
-    return enif_make_badarg(env);
+  if (blob.size / dtype_sizes[type_atom] < elem_count(shape))
+    return nx::nif::error(env, "Binary size is too small for the requested shape");
 
   // Clone here to copy data from blob, which will be GCed.
-  at::Tensor t = at::clone(at::from_blob(blob.data, shape, dtypes[type]));
-
-  return create_tensor_resource(env, t);
+  TENSOR(at::clone(at::from_blob(blob.data, shape, type)));
 }
 
-ERL_NIF_TERM to_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(to_blob)
 {
   ERL_NIF_TERM result;
-  at::Tensor *t = get_tensor(env, argv[0]);
+  TENSOR_PARAM(0, t);
   int64_t limit = t->nbytes();
 
   if (argc == 2)
-    PARAM(1, limit);
+    GET(1, limit);
 
   int64_t byte_size = limit * t->itemsize();
 
@@ -89,213 +104,154 @@ ERL_NIF_TERM to_blob(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   return result;
 }
 
-ERL_NIF_TERM scalar_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(scalar_tensor)
 {
-  double scalar;
-  std::string type;
+  PARAM(0, double, scalar);
+  TYPE_PARAM(1, type);
 
-  PARAM(0, scalar);
-  ATOM_PARAM(1, type);
-
-  at::Tensor t = at::scalar_tensor(scalar, dtypes[type]);
-
-  return create_tensor_resource(env, t);
+  TENSOR(at::scalar_tensor(scalar, type));
 }
 
-ERL_NIF_TERM randint(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(randint)
 {
-  int64_t min, max;
-  std::string type;
-  std::vector<int64_t> shape;
+  PARAM(0, int64_t, min);
+  PARAM(1, int64_t, max);
+  SHAPE_PARAM(2, shape);
+  TYPE_PARAM(3, type);
 
-  PARAM(0, min);
-  PARAM(1, max);
-  TUPLE_PARAM(2, shape);
-  ATOM_PARAM(3, type);
-
-  at::Tensor t = at::randint(min, max, shape, dtypes[type]);
-
-  return create_tensor_resource(env, t);
+  TENSOR(at::randint(min, max, shape, type));
 }
 
-ERL_NIF_TERM rand(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(rand)
 {
-  double min, max;
-  std::vector<int64_t> shape;
-  std::string type;
+  PARAM(0, double, min);
+  PARAM(1, double, max);
+  SHAPE_PARAM(2, shape);
+  TYPE_PARAM(3, type);
 
-  PARAM(0, min);
-  PARAM(1, max);
-  TUPLE_PARAM(2, shape);
-  ATOM_PARAM(3, type);
-
-  at::Tensor t = min + at::rand(shape, dtypes[type]) * (max - min);
-
-  return create_tensor_resource(env, t);
+  TENSOR(min + at::rand(shape, type) * (max - min));
 }
 
-ERL_NIF_TERM normal(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(normal)
 {
-  double mean, std;
-  std::vector<int64_t> shape;
-  std::string type;
+  PARAM(0, double, mean);
+  PARAM(1, double, std);
+  SHAPE_PARAM(2, shape);
+  TYPE_PARAM(3, type);
 
-  PARAM(0, mean);
-  PARAM(1, std);
-  TUPLE_PARAM(2, shape);
-  ATOM_PARAM(3, type);
-
-  at::Tensor t = at::normal(mean, std, shape);
-
-  return create_tensor_resource(env, t);
+  TENSOR(at::normal(mean, std, shape));
 }
 
-ERL_NIF_TERM arange(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(arange)
 {
-  int64_t start, end, step;
-  std::string type;
+  PARAM(0, int64_t, start);
+  PARAM(1, int64_t, end);
+  PARAM(2, int64_t, step);
+  TYPE_PARAM(3, type);
 
-  PARAM(0, start);
-  PARAM(1, end);
-  PARAM(2, step);
-  ATOM_PARAM(3, type);
-
-  at::Tensor t = at::arange((double)start, (double)end, (double)step, dtypes[type]);
+  at::Tensor t = at::arange((double)start, (double)end, (double)step, type);
 
   if (argc == 5)
   {
-    std::vector<int64_t> shape;
-    TUPLE_PARAM(4, shape);
-
+    SHAPE_PARAM(4, shape);
     t = at::reshape(t, shape);
   }
 
-  return create_tensor_resource(env, t);
+  TENSOR(t);
 }
 
-ERL_NIF_TERM reshape(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(reshape)
 {
-  std::vector<int64_t> shape;
-  at::Tensor *t = get_tensor(env, argv[0]);
-  TUPLE_PARAM(1, shape);
+  TENSOR_PARAM(0, t);
+  SHAPE_PARAM(1, shape);
 
-  at::Tensor r = at::reshape(*t, shape);
-
-  return create_tensor_resource(env, r);
+  TENSOR(at::reshape(*t, shape));
 }
 
-ERL_NIF_TERM squeeze(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(squeeze)
 {
-  at::Tensor *t = get_tensor(env, argv[0]);
+  TENSOR_PARAM(0, t);
   at::Tensor r;
 
   if (argc == 2)
   {
-    int64_t dim;
-    PARAM(1, dim);
+    PARAM(1, int64_t, dim);
 
     r = at::squeeze(*t, dim);
   }
   else
     r = at::squeeze(*t);
 
-  return create_tensor_resource(env, r);
+  TENSOR(r);
 }
 
-ERL_NIF_TERM broadcast_to(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(broadcast_to)
 {
-  std::vector<int64_t> shape;
-  at::Tensor *t = get_tensor(env, argv[0]);
-  TUPLE_PARAM(1, shape);
+  TENSOR_PARAM(0, t);
+  SHAPE_PARAM(1, shape);
 
-  at::Tensor r = at::broadcast_to(*t, shape).clone();
-
-  return create_tensor_resource(env, r);
+  TENSOR(at::broadcast_to(*t, shape).clone());
 }
 
-ERL_NIF_TERM ones(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(ones)
 {
-  std::string type;
-  std::vector<int64_t> shape;
+  SHAPE_PARAM(0, shape);
+  TYPE_PARAM(1, type);
 
-  TUPLE_PARAM(0, shape);
-  ATOM_PARAM(1, type);
-
-  at::Tensor t = at::ones(shape, dtypes[type]);
-
-  return create_tensor_resource(env, t);
+  TENSOR(at::ones(shape, type));
 }
 
-ERL_NIF_TERM eye(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(eye)
 {
-  int64_t size;
-  std::string type;
+  PARAM(0, int64_t, size);
+  TYPE_PARAM(1, type);
 
-  PARAM(0, size);
-  ATOM_PARAM(1, type);
-
-  at::Tensor t = at::eye(size, dtypes[type]);
-
-  return create_tensor_resource(env, t);
+  TENSOR(at::eye(size, type));
 }
 
-ERL_NIF_TERM add(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(add)
 {
-  at::Tensor *a = get_tensor(env, argv[0]);
-  at::Tensor *b = get_tensor(env, argv[1]);
-  double scalar = 0.0;
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
 
   try
   {
     at::Tensor c;
     if (b == NULL)
     {
-      PARAM(1, scalar);
+      PARAM(1, double, scalar);
       c = *a + scalar;
     }
     else
       c = *a + *b;
 
-    return create_tensor_resource(env, c);
+    TENSOR(c);
   }
   catch (c10::Error error)
   {
-    return enif_raise_exception(env, enif_make_string(env,
-                                                      error.msg().c_str(), ERL_NIF_LATIN1));
+    return nx::nif::error(env, error.msg().c_str());
   }
 }
 
-ERL_NIF_TERM dot(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(dot)
 {
-  at::Tensor *a = get_tensor(env, argv[0]);
-  at::Tensor *b = get_tensor(env, argv[1]);
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
 
-  try
-  {
-    at::Tensor c = at::matmul(*a, *b);
-
-    return create_tensor_resource(env, c);
-  }
-  catch (c10::Error error)
-  {
-    return enif_raise_exception(env, enif_make_string(env,
-                                                      (std::string("PyTorch: ") + error.msg()).c_str(), ERL_NIF_LATIN1));
-  }
+  TENSOR(at::matmul(*a, *b));
 }
 
-ERL_NIF_TERM cholesky(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+NIF(cholesky)
 {
-  at::Tensor *t = get_tensor(env, argv[0]);
+  TENSOR_PARAM(0, t);
   bool upper = false;
 
   if (argc == 2)
   {
-    PARAM(1, upper);
+    GET(1, upper);
   }
 
-  at::Tensor r = at::cholesky(*t, upper);
-
-  return create_tensor_resource(env, r);
+  TENSOR(at::cholesky(*t, upper));
 }
 
 void free_tensor(ErlNifEnv *env, void *obj)

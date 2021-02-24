@@ -2,21 +2,28 @@
 
 #include "erl_nif.h"
 
-#define PARAM(ARGN, VAR)                    \
+#define GET(ARGN, VAR)                      \
   if (!nx::nif::get(env, argv[ARGN], &VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR ".");
+    return nx::nif::error(env, "Unable to get " #VAR " param.");
+
+#define PARAM(ARGN, TYPE, VAR) \
+  TYPE VAR;                    \
+  GET(ARGN, VAR)
 
 #define ATOM_PARAM(ARGN, VAR)                   \
+  std::string VAR;                              \
   if (!nx::nif::get_atom(env, argv[ARGN], VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR ".");
+    return nx::nif::error(env, "Unable to get " #VAR " param.");
 
-#define TUPLE_PARAM(ARGN, VAR)                   \
+#define TUPLE_PARAM(ARGN, TYPE, VAR)             \
+  TYPE VAR;                                      \
   if (!nx::nif::get_tuple(env, argv[ARGN], VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR ".");
+    return nx::nif::error(env, "Unable to get " #VAR " param.");
 
 #define BINARY_PARAM(ARGN, VAR)                    \
+  ErlNifBinary VAR;                                \
   if (!enif_inspect_binary(env, argv[ARGN], &VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR ".");
+    return nx::nif::error(env, "Unable to get " #VAR " param.");
 
 namespace nx
 {
