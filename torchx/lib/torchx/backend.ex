@@ -4,17 +4,19 @@ defmodule Torchx.Backend do
   defstruct [:ref]
 
   alias Torchx.NIF
+  alias Nx.Tensor, as: T
+  alias Torchx.Backend, as: TB
 
   def torch_type({:u, 8}), do: :byte
 
   def torch_type({:u, 16}),
-    do: raise(ArgumentError, "PyTorch does not support unsigned 16 bit integer.")
+    do: raise(ArgumentError, "Torchx does not support unsigned 16 bit integer")
 
   def torch_type({:u, 32}),
-    do: raise(ArgumentError, "PyTorch does not support unsigned 32 bit integer.")
+    do: raise(ArgumentError, "Torchx does not support unsigned 32 bit integer")
 
   def torch_type({:u, 64}),
-    do: raise(ArgumentError, "PyTorch does not support unsigned 64 bit integer.")
+    do: raise(ArgumentError, "Torchx does not support unsigned 64 bit integer")
 
   def torch_type({:s, 8}), do: :char
   def torch_type({:s, 16}), do: :short
@@ -28,26 +30,26 @@ defmodule Torchx.Backend do
   ## Creation
 
   @impl true
-  def eye(%{shape: {n, n}, type: type} = out) do
+  def eye(%T{shape: {n, n}, type: type} = out) do
     NIF.eye(n, torch_type(type)) |> from_ref(out)
   end
 
   @impl true
   def iota(out, axis \\ nil)
 
-  def iota(%{shape: {}, type: type} = out, nil) do
+  def iota(%T{shape: {}, type: type} = out, nil) do
     NIF.scalar_tensor(0, torch_type(type)) |> from_ref(out)
   end
 
-  def iota(%{shape: shape, type: type} = out, nil) do
+  def iota(%T{shape: shape, type: type} = out, nil) do
     NIF.arange(0, Nx.size(shape), 1, torch_type(type), shape) |> from_ref(out)
   end
 
-  def iota(%{shape: {n}, type: type} = out, 0) do
+  def iota(%T{shape: {n}, type: type} = out, 0) do
     NIF.arange(0, n, 1, torch_type(type)) |> from_ref(out)
   end
 
-  def iota(%{shape: shape, type: type} = out, axis) do
+  def iota(%T{shape: shape, type: type} = out, axis) do
     # gets the size of iota
     dim = elem(shape, axis)
 
@@ -63,41 +65,37 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def random_uniform(%{type: {s, _} = type, shape: shape} = out, min, max) when s in [:u, :s] do
+  def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max) when s in [:u, :s] do
     NIF.randint(min, max, shape, torch_type(type)) |> from_ref(out)
   end
 
-  def random_uniform(%{type: {f, _} = type, shape: shape} = out, min, max) when f in [:f, :bf] do
+  def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max) when f in [:f, :bf] do
     NIF.rand(min, max, shape, torch_type(type)) |> from_ref(out)
   end
 
   @impl true
-  def random_normal(%{type: _type, shape: shape} = out, mu, sigma) do
+  def random_normal(%T{type: _type, shape: shape} = out, mu, sigma) do
     NIF.normal(mu, sigma, shape) |> from_ref(out)
   end
 
   ## Transfer
 
   @impl true
-  def to_batched_list(%{shape: shape} = out, %{data: %{ref: ref}}),
-    do: NIF.split(ref, elem(shape, 0)) |> from_ref(out)
+  def to_batched_list(%T{shape: shape} = out, %T{data: %TB{ref: ref}}),
+    do: NIF.split(ref, elem(shape, 0)) |> from_list_ref(out)
 
-  @big_tensor_threshold 10_000_000
-
+  @impl true
   def to_binary(_tensor, _limit \\ nil) do
     raise "Operation to_binary is not supported on Torchx.Backend. " <>
             "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
   end
 
-  defp to_blob(%{type: {_, elem_size}, data: %{ref: ref}} = tensor, limit \\ nil) do
-    if(limit,
-      do: NIF.to_blob(ref, limit),
-      else: NIF.to_blob(ref)
-    )
-  end
+  defp to_blob(tensor, limit \\ nil)
+  defp to_blob(%T{data: %TB{ref: ref}} = tensor, nil), do: NIF.to_blob(ref)
+  defp to_blob(%T{data: %TB{ref: ref}} = tensor, limit), do: NIF.to_blob(ref, limit)
 
   @impl true
-  def backend_deallocate(%Nx.Tensor{data: %{ref: ref}}), do: NIF.delete_tensor(ref)
+  def backend_deallocate(%Nx.Tensor{data: %TB{ref: ref}}), do: NIF.delete_tensor(ref)
 
   @impl true
   def backend_transfer(tensor, Nx.Tensor, opts) do
@@ -113,18 +111,18 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def from_binary(%{type: type, shape: shape} = out, binary, _opts) do
+  def from_binary(%T{type: type, shape: shape} = out, binary, _opts) do
     NIF.from_blob(binary, shape, torch_type(type)) |> from_ref(out)
   end
 
   ## Shape
 
   @impl true
-  def reshape(out, %{data: %{ref: ref}} = tensor, shape),
+  def reshape(out, %T{data: %TB{ref: ref}} = tensor, shape),
     do: NIF.reshape(ref, shape) |> from_ref(tensor)
 
   @impl true
-  def as_type(%{type: type} = out, %{data: %{ref: ref}} = tensor),
+  def as_type(%T{type: type} = out, %T{data: %TB{ref: ref}} = tensor),
     do: NIF.to_type(ref, torch_type(type)) |> from_ref(out)
 
   @impl true
@@ -146,16 +144,16 @@ defmodule Torchx.Backend do
   @impl true
   def dot(
         out,
-        %{type: t1, data: %{ref: left_ref}} = left,
+        %T{type: t1, data: %TB{ref: left_ref}} = left,
         _axes1,
-        %{type: t2, data: %{ref: right_ref}} = right,
+        %T{type: t2, data: %TB{ref: right_ref}} = right,
         _axes2
       ) do
     NIF.dot(left_ref, right_ref) |> from_ref(out)
   end
 
   @impl true
-  def cholesky(%{type: output_type, shape: {rows, cols}} = out, tensor) do
+  def cholesky(%T{type: output_type, shape: {rows, cols}} = out, tensor) do
     NIF.cholesky(tensor.data.ref) |> from_ref(out)
   end
 
@@ -165,22 +163,26 @@ defmodule Torchx.Backend do
         tensor,
         opts
       ),
-      do: NIF.qr(tensor.data.ref, opts[:mode] == :reduced) |> from_ref({q_holder, r_holder})
+      do: NIF.qr(tensor.data.ref, opts[:mode] == :reduced) |> from_pair_ref({q_holder, r_holder})
+
+  @big_tensor_threshold 10_000_000
 
   @impl true
-  def inspect(%{type: {_, elem_size}} = tensor, inspect_opts) do
+  def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
     limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
 
     if on_cpu?(tensor) do
       byte_size = nbytes(tensor)
       byte_limit = limit && limit * div(elem_size, 8)
 
-      if(min(byte_limit, byte_size) > @big_tensor_threshold) do
-        raise "Tensor is too big (#{byte_size} bytes) for to_binary/1 operation." <>
-                "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
+      if min(byte_limit, byte_size) > @big_tensor_threshold do
+        "Torchx tensor is too large to inspect. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
       else
+        alias Inspect.Algebra, as: IA
+
         binary = to_blob(tensor, limit)
-        Nx.Backend.inspect(tensor, binary, inspect_opts)
+        result = Nx.Backend.inspect(tensor, binary, inspect_opts)
+        IA.concat(["Torchx.Backend", IA.line(), result])
       end
     else
       raise "Tensor is located on #{device(tensor)} device, so direct to_binary/1 operation is not supported. " <>
@@ -191,17 +193,25 @@ defmodule Torchx.Backend do
   defp unwrap!({:ok, result}), do: result
 
   defp unwrap!({:error, error}),
-    do: raise(RuntimeError, "PyTorch: " <> to_string(error))
+    do: raise(RuntimeError, "Torchx: " <> to_string(error))
 
-  defp from_ref({:ok, ref}, t), do: from_ref(ref, t)
-  defp from_ref({:error, _error} = input, _t), do: unwrap!(input)
-  defp from_ref({ref1, ref2}, {t1, t2}), do: {from_ref(ref1, t1), from_ref(ref2, t2)}
-  defp from_ref([ref | list], t), do: [from_ref(ref, t) | from_ref(list, t)]
-  defp from_ref([], _t), do: []
-  defp from_ref(ref, t) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
+  defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
 
-  defp device(%{data: %{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> to_string()
-  defp nbytes(%{data: %{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
+  defp from_pair_ref(maybe_ref, {t1, t2}) do
+    {left, right} = unwrap!(maybe_ref)
+    {to_tensor(left, t1), to_tensor(right, t2)}
+  end
+
+  defp from_list_ref(maybe_ref, t),
+    do:
+      maybe_ref
+      |> unwrap!()
+      |> Enum.map(&to_tensor(&1, t))
+
+  defp to_tensor(ref, t), do: %T{t | data: %__MODULE__{ref: ref}}
+
+  defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
+  defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
   defp on_cpu?(tensor), do: device(tensor) == "cpu"
 
   ## All remaining callbacks
