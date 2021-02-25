@@ -37,23 +37,13 @@ defmodule EXLA.Defn do
         {fun, _expr_options, exla_options} = prepare_args(fun, options)
         expr = fun.(vars)
 
-        shapes_and_args =
-          for {%{shape: shape, type: type}, i} <- Enum.with_index(vars) do
-            {EXLA.Shape.make_shape(type, shape), %{id: i, name: "p#{i}", dims: shape, type: type}}
+        shapes =
+          for %{shape: shape, type: type} <- vars do
+            EXLA.Shape.make_shape(type, shape)
           end
 
-        {shapes, args} = Enum.unzip(shapes_and_args)
         computation = to_root_computation(name, expr, shapes, exla_options)
-
-        %EXLA.Shape{dtype: {:t, shapes}} = computation.output_shape
-
-        sizes =
-          Enum.map(shapes, fn shape ->
-            {_, size} = shape.dtype
-            Nx.size(shape.dims) * div(size, 8)
-          end)
-
-        {computation, name, length(vars), args, sizes}
+        {computation, name, shapes}
       end
 
     EXLA.AOT.Compiler.compile(module, funs, aot_options)

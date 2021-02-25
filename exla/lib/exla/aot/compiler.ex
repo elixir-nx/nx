@@ -24,8 +24,8 @@ defmodule EXLA.AOT.Compiler do
     File.rm_rf!(config.aot_path)
     File.mkdir_p!(config.aot_path)
 
-    # Compile each function to header/object
-    Enum.each(functions, &compile_function(&1, config))
+    # Compile each function to header/object and return updated tuples
+    functions = Enum.map(functions, &compile_function(&1, config))
 
     # Write out a NIF/BUILD file
     :ok = write_nif_source_file(functions, module_name, config)
@@ -61,11 +61,19 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp compile_function({%Computation{ref: comp}, name, arity, args, sizes}, config) do
-    target_triple = get_target_triple()
-    {:ok, pbtext_path} = write_graph_config_file(name, arity, args, Enum.count(sizes), config)
+  defp compile_function({%Computation{ref: comp, output_shape: out_shape}, name, args}, config) do
+    %EXLA.Shape{dtype: {:t, shapes}} = out_shape
+    arity = length(args)
 
-    # TODO: The name is already unique, so remove arity.
+    sizes =
+      Enum.map(shapes, fn shape ->
+        {_, size} = shape.dtype
+        Nx.size(shape.dims) * div(size, 8)
+      end)
+
+    target_triple = get_target_triple()
+    {:ok, pbtext_path} = write_graph_config_file(name, arity, args, sizes, config)
+
     header_path = Path.join(config.aot_path, "#{name}_#{arity}.h")
     object_path = Path.join(config.aot_path, "#{name}_#{arity}.o")
 
@@ -79,6 +87,8 @@ defmodule EXLA.AOT.Compiler do
       target_triple
     )
     |> unwrap!()
+
+    {name, arity, args, sizes}
   end
 
   defp get_target_triple() do
@@ -97,8 +107,8 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp write_graph_config_file(name, arity, args, num_results, config) do
-    pbtext = Codegen.generate_graph_config_file(args, num_results)
+  defp write_graph_config_file(name, arity, args, sizes, config) do
+    pbtext = Codegen.generate_graph_config_file(args, sizes)
     pbtext_path = Path.join(config.aot_path, "#{name}_#{arity}.pbtxt")
     File.write!(pbtext_path, pbtext)
     {:ok, pbtext_path}
@@ -112,7 +122,7 @@ defmodule EXLA.AOT.Compiler do
   end
 
   defp write_bazel_build_file(functions, config) do
-    build = Codegen.generate_bazel_build_file(config.lib_name, functions)
+    build = Codegen.generate_bazel_build_file(functions, config.lib_name)
     build_path = Path.join(config.aot_path, "BUILD")
     File.write!(build_path, build)
     :ok

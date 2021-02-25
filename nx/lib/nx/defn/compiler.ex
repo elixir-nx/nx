@@ -68,7 +68,10 @@ defmodule Nx.Defn.Compiler do
     compiler_tuples =
       Enum.map(tuples, fn {name, fun, args, opts} ->
         vars = Nx.Defn.Expr.to_vars(args)
-        {:"__aot_#{name}_#{length(args)}__", &runtime_fun(&1, fun, args, compiler), vars, opts}
+        # We need to include the actual arity in the name because
+        # defn foo({a, b}) and defn foo(a, b) compile to the same
+        # name+arity at the AOT level.
+        {:"__aot_#{name}_#{length(args)}", &runtime_fun(&1, fun, args, compiler), vars, opts}
       end)
 
     compiler.__aot__(module, compiler_tuples, aot_opts)
