@@ -13,6 +13,7 @@ defmodule Torchx.NIF do
   def normal(_mu, _sigma, _shape), do: nif_error(__ENV__.function)
   def arange(_start, _end, _step, _type), do: nif_error(__ENV__.function)
   def arange(_start, _end, _step, _type, _shape), do: nif_error(__ENV__.function)
+  def iota(_shape, _axis, _type), do: nif_error(__ENV__.function)
   def reshape(_tensor, _shape), do: nif_error(__ENV__.function)
   def to_type(_tensor, _type), do: nif_error(__ENV__.function)
   def squeeze(_tensor), do: nif_error(__ENV__.function)

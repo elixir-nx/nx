@@ -50,18 +50,7 @@ defmodule Torchx.Backend do
   end
 
   def iota(%T{shape: shape, type: type} = out, axis) do
-    # gets the size of iota
-    dim = elem(shape, axis)
-
-    # build the iota in one dimension
-    aten = NIF.arange(0, dim, 1, torch_type(type)) |> unwrap!()
-
-    # reshape the tensor above to be have shape where everything is 1, except for dim
-    reshape = Tuple.duplicate(1, Nx.rank(shape)) |> put_elem(axis, dim)
-    aten = NIF.reshape(aten, reshape) |> unwrap!()
-
-    # Now broadcast the tensor using the original shape
-    NIF.broadcast_to(aten, shape) |> from_ref(out)
+    NIF.iota(shape, axis, torch_type(type)) |> from_ref(out)
   end
 
   @impl true

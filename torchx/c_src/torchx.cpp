@@ -232,6 +232,36 @@ NIF(arange)
   }
 }
 
+NIF(iota)
+{
+  SHAPE_PARAM(0, shape);
+  PARAM(1, int, axis);
+  TYPE_PARAM(2, type);
+
+  try
+  {
+    // gets the size of iota
+    int64_t dim = shape[axis];
+
+    // build the iota in one dimension
+    at::Tensor aten = at::arange(0.0, (double)dim, 10.0, type);
+
+    std::vector<int64_t> rshape(shape.size());
+    std::fill(rshape.begin(), rshape.end(), 1);
+    rshape[axis] = dim;
+
+    aten = at::reshape(aten, rshape);
+
+    at::Tensor result = at::broadcast_to(aten, shape).clone();
+
+    return nx::nif::ok(env, create_tensor_resource(env, result));
+  }
+  catch (c10::Error error)
+  {
+    return nx::nif::error(env, error.msg().c_str());
+  }
+}
+
 NIF(reshape)
 {
   TENSOR_PARAM(0, t);
@@ -393,6 +423,7 @@ static ErlNifFunc nif_functions[] = {
     F(normal, 3),
     F(arange, 4),
     F(arange, 5),
+    F(iota, 3),
     F(from_blob, 3),
     F(to_blob, 1),
     F(to_blob, 2),
