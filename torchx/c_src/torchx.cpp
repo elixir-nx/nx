@@ -132,6 +132,25 @@ NIF(type)
     return nx::nif::error(env, "Could not determine tensor type.");
 }
 
+NIF(device)
+{
+  TENSOR_PARAM(0, t);
+
+  at::optional<at::Device> device = at::device_of(*t);
+
+  if (device.has_value())
+    return nx::nif::ok(env, nx::nif::make(env, device.value().str().c_str()));
+  else
+    return nx::nif::error(env, "Could not determine tensor device.");
+}
+
+NIF(nbytes)
+{
+  TENSOR_PARAM(0, t);
+
+  return nx::nif::ok(env, enif_make_int64(env, t->nbytes()));
+}
+
 NIF(split)
 {
   TENSOR_PARAM(0, t);
@@ -144,7 +163,7 @@ NIF(to_blob)
 {
   ERL_NIF_TERM result;
   TENSOR_PARAM(0, t);
-  int64_t byte_size = t->nbytes();
+  size_t byte_size = t->nbytes();
 
   if (argc == 2)
   {
@@ -378,6 +397,8 @@ static ErlNifFunc nif_functions[] = {
     F(to_blob, 1),
     F(to_blob, 2),
     F(type, 1),
+    F(device, 1),
+    F(nbytes, 1),
     F(scalar_tensor, 2),
     F(delete_tensor, 1),
     F(ones, 1),

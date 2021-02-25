@@ -21,6 +21,8 @@ defmodule Torchx.NIF do
   def transpose(_tensor, _dim0, _dim1), do: nif_error(__ENV__.function)
   def split(_tensor, _split_size), do: nif_error(__ENV__.function)
   def type(_tensor), do: nif_error(__ENV__.function)
+  def device(_tensor), do: nif_error(__ENV__.function)
+  def nbytes(_tensor), do: nif_error(__ENV__.function)
 
   def from_blob(_blob, _shape, _type),
     do: nif_error(__ENV__.function)

@@ -82,9 +82,19 @@ defmodule Torchx.Backend do
   def to_batched_list(%{shape: shape} = out, %{data: %{ref: ref}}),
     do: NIF.split(ref, elem(shape, 0)) |> from_ref(out)
 
-  @impl true
-  def to_binary(%{data: %{ref: ref}}), do: NIF.to_blob(ref)
-  def to_binary(%{data: %{ref: ref}}, limit), do: NIF.to_blob(ref, limit)
+  @big_tensor_threshold 10_000_000
+
+  def to_binary(_tensor, _limit \\ nil) do
+    raise "Operation to_binary is not supported on Torchx.Backend. " <>
+            "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
+  end
+
+  defp to_blob(%{type: {_, elem_size}, data: %{ref: ref}} = tensor, limit \\ nil) do
+    if(limit,
+      do: NIF.to_blob(ref, limit),
+      else: NIF.to_blob(ref)
+    )
+  end
 
   @impl true
   def backend_deallocate(%Nx.Tensor{data: %{ref: ref}}), do: NIF.delete_tensor(ref)
@@ -99,7 +109,7 @@ defmodule Torchx.Backend do
   end
 
   def backend_transfer(tensor, backend, opts) do
-    backend.from_binary(tensor, to_binary(tensor), opts)
+    backend.from_binary(tensor, to_blob(tensor), opts)
   end
 
   @impl true
@@ -158,13 +168,27 @@ defmodule Torchx.Backend do
       do: NIF.qr(tensor.data.ref, opts[:mode] == :reduced) |> from_ref({q_holder, r_holder})
 
   @impl true
-  def inspect(tensor, inspect_opts) do
-    limit = inspect_opts.limit
-    binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
-    Nx.Backend.inspect(tensor, binary, inspect_opts)
+  def inspect(%{type: {_, elem_size}} = tensor, inspect_opts) do
+    limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
+
+    if on_cpu?(tensor) do
+      byte_size = nbytes(tensor)
+      byte_limit = limit && limit * div(elem_size, 8)
+
+      if(min(byte_limit, byte_size) > @big_tensor_threshold) do
+        raise "Tensor is too big (#{byte_size} bytes) for to_binary/1 operation." <>
+                "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
+      else
+        binary = to_blob(tensor, limit)
+        Nx.Backend.inspect(tensor, binary, inspect_opts)
+      end
+    else
+      raise "Tensor is located on #{device(tensor)} device, so direct to_binary/1 operation is not supported. " <>
+              "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
+    end
   end
 
-  defp unwrap!({:ok, tensor}), do: tensor
+  defp unwrap!({:ok, result}), do: result
 
   defp unwrap!({:error, error}),
     do: raise(RuntimeError, "PyTorch: " <> to_string(error))
@@ -175,6 +199,10 @@ defmodule Torchx.Backend do
   defp from_ref([ref | list], t), do: [from_ref(ref, t) | from_ref(list, t)]
   defp from_ref([], _t), do: []
   defp from_ref(ref, t) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
+
+  defp device(%{data: %{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> to_string()
+  defp nbytes(%{data: %{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
+  defp on_cpu?(tensor), do: device(tensor) == "cpu"
 
   ## All remaining callbacks
 
