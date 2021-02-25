@@ -12,11 +12,7 @@ defmodule Torchx.MixProject do
       elixir: "~> 1.11",
       deps: deps(),
       docs: docs(),
-      compilers: [:elixir_make] ++ Mix.compilers(),
-      make_env: %{
-        "MIX_CURRENT_PATH" => File.cwd!(),
-        "ERTS_VERSION" => List.to_string(:erlang.system_info(:version))
-      }
+      compilers: [:elixir_make] ++ Mix.compilers()
     ]
   end
 
