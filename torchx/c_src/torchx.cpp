@@ -8,13 +8,28 @@ ErlNifResourceType *TENSOR_TYPE;
 std::map<const std::string, const at::ScalarType> dtypes = {{"byte", at::kByte}, {"char", at::kChar}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"brain", at::kBFloat16}, {"float", at::kFloat}, {"double", at::kDouble}, {"bool", at::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
+inline at::ScalarType string2type(const std::string atom)
+{
+  return dtypes[atom];
+}
+
+inline std::string type2string(const at::ScalarType type)
+{
+  for (std::map<const std::string, const at::ScalarType>::iterator i = dtypes.begin(); i != dtypes.end(); ++i)
+  {
+    if (i->second == type)
+      return i->first;
+  }
+  return "";
+}
+
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
 #define SHAPE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
 
 #define TYPE_PARAM(ARGN, VAR)  \
   ATOM_PARAM(ARGN, VAR##_atom) \
-  at::ScalarType VAR = dtypes[VAR##_atom]
+  at::ScalarType VAR = string2type(VAR##_atom)
 
 #define TENSOR_PARAM(ARGN, VAR)                                        \
   at::Tensor *VAR;                                                     \
@@ -63,19 +78,6 @@ create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
   return ret;
 }
 
-at::Tensor *get_tensor(ErlNifEnv *env, ERL_NIF_TERM term)
-{
-  at::Tensor *tensorPtr;
-  if (!enif_get_resource(env, term, TENSOR_TYPE, (void **)&tensorPtr))
-  {
-    return NULL; //&(at::ones({1, 1}, at::kFloat);
-  }
-  else
-  {
-    return tensorPtr;
-  }
-}
-
 NIF(delete_tensor)
 {
   TENSOR_PARAM(0, t);
@@ -102,6 +104,18 @@ NIF(from_blob)
 
   // Clone here to copy data from blob, which will be GCed.
   TENSOR(at::clone(at::from_blob(blob.data, shape, type)));
+}
+
+NIF(type)
+{
+  TENSOR_PARAM(0, t);
+
+  std::string type_name = type2string(t->scalar_type());
+
+  if (!type_name.empty())
+    return nx::nif::ok(env, enif_make_atom(env, type_name.c_str()));
+  else
+    return nx::nif::error(env, "Could not determine tensor type.");
 }
 
 NIF(split)
@@ -336,6 +350,7 @@ static ErlNifFunc nif_functions[] = {
     F(from_blob, 3),
     F(to_blob, 1),
     F(to_blob, 2),
+    F(type, 1),
     F(scalar_tensor, 2),
     F(delete_tensor, 1),
     F(ones, 1),
