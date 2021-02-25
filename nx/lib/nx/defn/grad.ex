@@ -4,7 +4,7 @@ defmodule Nx.Defn.Grad do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
-  def transform({to_grad, expr}) do
+  def transform(to_grad, expr) do
     expr = validate_expr!(expr)
 
     Expr.traverse_exprs(to_grad, fn to_grad ->
@@ -72,11 +72,6 @@ defmodule Nx.Defn.Grad do
         {Expr.tensor(1.0), cache}
 
       %{custom_grad: fun} ->
-        unless is_function(fun, 2) do
-          raise ArgumentError,
-                "custom_grad/2 function must expect 2 arguments, got: #{inspect(fun)}"
-        end
-
         args = fun.(expr, g)
 
         unless is_list(args) and Enum.all?(args, &match?({_, _}, &1)) do
