@@ -60,6 +60,20 @@ inline std::string type2string(const at::ScalarType type)
     return nx::nif::error(env, error.msg().c_str());                                           \
   }
 
+#define TENSOR_TUPLE(TT)                                                                        \
+  try                                                                                           \
+  {                                                                                             \
+    std::tuple<at::Tensor> tt = TT;                                                             \
+    std::vector<ERL_NIF_TERM> res_list;                                                         \
+    for (at::Tensor t : tt)                                                                     \
+      res_list.push_back(create_tensor_resource(env, t));                                       \
+    return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
+  }                                                                                             \
+  catch (c10::Error error)                                                                      \
+  {                                                                                             \
+    return nx::nif::error(env, error.msg().c_str());                                            \
+  }
+
 ERL_NIF_TERM
 create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
 {
@@ -296,6 +310,19 @@ NIF(cholesky)
   TENSOR(at::cholesky(*t, upper));
 }
 
+NIF(qr)
+{
+  TENSOR_PARAM(0, t);
+  bool reduced = true;
+
+  if (argc == 2)
+  {
+    GET(1, reduced);
+  }
+
+  TENSOR_TUPLE(at::qr(*t, reduced));
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   std::cout << "Deleting: " << obj << std::endl;
@@ -365,6 +392,8 @@ static ErlNifFunc nif_functions[] = {
     F(add, 2),
     F(dot, 2),
     F(cholesky, 1),
-    F(cholesky, 2)};
+    F(cholesky, 2),
+    F(qr, 1),
+    F(qr, 2)};
 
 ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
