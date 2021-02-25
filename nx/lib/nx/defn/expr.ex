@@ -196,11 +196,11 @@ defmodule Nx.Defn.Expr do
     {clauses, acc} =
       Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
         {condition, acc} = fun.(condition, acc)
-        {expr, acc} = traverse_exprs(expr, acc, fun)
+        {expr, acc} = traverse(expr, acc, fun)
         {{condition, expr}, acc}
       end)
 
-    {last, acc} = traverse_exprs(last, acc, fun)
+    {last, acc} = traverse(last, acc, fun)
     {[clauses, last], acc}
   end
 
@@ -228,8 +228,8 @@ defmodule Nx.Defn.Expr do
   If a tuple of expressions are given, the tuple is recursively
   traversed for each expression and returned.
   """
-  def traverse_exprs(expr, fun) when is_function(fun, 1) do
-    {result, []} = traverse_exprs(expr, [], fn expr, [] -> {fun.(expr), []} end)
+  def traverse(expr, fun) when is_function(fun, 1) do
+    {result, []} = traverse(expr, [], fn expr, [] -> {fun.(expr), []} end)
     result
   end
 
@@ -242,16 +242,16 @@ defmodule Nx.Defn.Expr do
   If a tuple of expressions are given, the tuple is recursively
   traversed for each expression and returned.
   """
-  def traverse_exprs(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
-    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse_exprs(&1, &2, fun))
+  def traverse(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
+    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse(&1, &2, fun))
     {List.to_tuple(list), acc}
   end
 
-  def traverse_exprs(%T{} = expr, acc, fun) when is_function(fun, 2) do
+  def traverse(%T{} = expr, acc, fun) when is_function(fun, 2) do
     fun.(expr, acc)
   end
 
-  def traverse_exprs(other, _acc, _fun) do
+  def traverse(other, _acc, _fun) do
     raise ArgumentError, "expected a tensor expression, got: #{inspect(other)}"
   end
 

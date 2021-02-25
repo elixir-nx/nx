@@ -792,7 +792,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, ids_args} = Expr.traverse_exprs(expr, %{}, &collect_args(&1, &2, ids))
+    {expr, ids_args} = Expr.traverse(expr, %{}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
