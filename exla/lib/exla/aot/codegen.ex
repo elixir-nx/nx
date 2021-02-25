@@ -11,9 +11,6 @@ defmodule EXLA.AOT.Codegen do
   ]
   @bazel_erts_glob "glob([\"erts/**/*.h\"], allow_empty=False)"
 
-  ## Nif Attributes
-  @erl_nif_path "tensorflow/compiler/xla/exla/aot/erts/erl_nif"
-
   ## Generating the graph config file
 
   def generate_graph_config_file(params, num_results) do
@@ -68,15 +65,12 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the BUILD file
 
-  def generate_bazel_build_file(fname, functions) do
-    name = build_bazel_so_str(fname)
-    srcs = build_bazel_srcs_str(fname, functions)
+  def generate_bazel_build_file(lib_name, functions) do
+    name = build_bazel_so_str(lib_name)
+    srcs = build_bazel_srcs_str(lib_name, functions)
     deps = build_bazel_deps_str()
     linkopts = build_bazel_linkopts_str()
-    build_bazel_file_str(name, srcs, deps, linkopts)
-  end
 
-  defp build_bazel_file_str(name, srcs, deps, linkopts) do
     """
     cc_binary(
       name = #{name},
@@ -88,8 +82,8 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_bazel_so_str(fname) do
-    str("lib" <> fname <> ".so")
+  defp build_bazel_so_str(lib_name) do
+    str(lib_name <> ".so")
   end
 
   defp build_bazel_deps_str do
@@ -101,8 +95,8 @@ defmodule EXLA.AOT.Codegen do
     "[" <> deps_str <> "]"
   end
 
-  defp build_bazel_srcs_str(fname, functions) do
-    cc_name = str(fname <> ".cc")
+  defp build_bazel_srcs_str(lib_name, functions) do
+    cc_name = str(lib_name <> ".cc")
 
     src_files =
       functions
@@ -120,8 +114,8 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the NIF Source File
 
-  def generate_nif_source_file(functions, target_module) do
-    include_block_str = build_include_block(functions)
+  def generate_nif_source_file(functions, target_module, aot_relative_path) do
+    include_block_str = build_include_block(functions, aot_relative_path)
     error_block_str = build_error_helper_block()
     load_block_str = build_load_block()
     functions_str = build_nif_funcs(functions)
@@ -133,7 +127,7 @@ defmodule EXLA.AOT.Codegen do
       load_block_str <> functions_str <> nif_func_export_array_str <> init_block_str
   end
 
-  defp build_include_block(functions) do
+  defp build_include_block(functions, aot_relative_path) do
     function_includes =
       functions
       |> Enum.map(fn {_, name, arity, _, _} ->
@@ -141,7 +135,8 @@ defmodule EXLA.AOT.Codegen do
       end)
       |> Enum.join("\n")
 
-    function_includes <> "\n" <> build_include_str(@erl_nif_path) <> "\n"
+    erl_nif_path = Path.join(aot_relative_path, "erts/erl_nif")
+    function_includes <> "\n" <> build_include_str(erl_nif_path) <> "\n"
   end
 
   defp build_include_str(path) do
