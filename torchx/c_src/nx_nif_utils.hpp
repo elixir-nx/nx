@@ -174,15 +174,6 @@ namespace nx
       return ret;
     }
 
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, bool *var)
-    {
-      int value;
-      if (!enif_get_int(env, term, &value))
-        return 0;
-      *var = static_cast<bool>(value);
-      return 1;
-    }
-
     ERL_NIF_TERM make(ErlNifEnv *env, ErlNifBinary var)
     {
       return enif_make_binary(env, &var);
@@ -221,6 +212,17 @@ namespace nx
     ERL_NIF_TERM atom(ErlNifEnv *env, const char *msg)
     {
       return enif_make_atom(env, msg);
+    }
+
+    // Boolean
+
+    int get(ErlNifEnv *env, ERL_NIF_TERM term, bool *var)
+    {
+      std::string bool_atom;
+      if (!get_atom(env, term, bool_atom))
+        return 0;
+      *var = (bool_atom == "true");
+      return 1;
     }
 
     // Containers

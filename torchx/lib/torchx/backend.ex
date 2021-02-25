@@ -150,6 +150,14 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def qr(
+        {q_holder, r_holder},
+        tensor,
+        opts
+      ),
+      do: NIF.qr(tensor.data.ref, opts[:mode] == :reduced) |> from_ref({q_holder, r_holder})
+
+  @impl true
   def inspect(tensor, inspect_opts) do
     limit = inspect_opts.limit
     binary = Nx.to_binary(tensor, if(limit == :infinity, do: [], else: [limit: limit + 1]))
@@ -161,10 +169,12 @@ defmodule Torchx.Backend do
   defp unwrap!({:error, error}),
     do: raise(RuntimeError, "PyTorch: " <> to_string(error))
 
-  defp from_ref(ref, t) when is_tuple(ref), do: unwrap!(ref) |> from_ref(t)
-  defp from_ref(ref, t) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
+  defp from_ref({:ok, ref}, t), do: from_ref(ref, t)
+  defp from_ref({:error, _error} = input, _t), do: unwrap!(input)
+  defp from_ref({ref1, ref2}, {t1, t2}), do: {from_ref(ref1, t1), from_ref(ref2, t2)}
   defp from_ref([ref | list], t), do: [from_ref(ref, t) | from_ref(list, t)]
   defp from_ref([], _t), do: []
+  defp from_ref(ref, t) when is_reference(ref), do: %{t | data: %__MODULE__{ref: ref}}
 
   ## All remaining callbacks
 

@@ -63,9 +63,9 @@ inline std::string type2string(const at::ScalarType type)
 #define TENSOR_TUPLE(TT)                                                                        \
   try                                                                                           \
   {                                                                                             \
-    std::tuple<at::Tensor> tt = TT;                                                             \
+    std::tuple<at::Tensor, at::Tensor> tt = TT;                                                 \
     std::vector<ERL_NIF_TERM> res_list;                                                         \
-    for (at::Tensor t : tt)                                                                     \
+    for (at::Tensor t : {std::get<0>(tt), std::get<1>(tt)})                                     \
       res_list.push_back(create_tensor_resource(env, t));                                       \
     return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
   }                                                                                             \
@@ -202,15 +202,15 @@ NIF(arange)
   PARAM(2, int64_t, step);
   TYPE_PARAM(3, type);
 
-  at::Tensor t = at::arange((double)start, (double)end, (double)step, type);
-
   if (argc == 5)
   {
     SHAPE_PARAM(4, shape);
-    t = at::reshape(t, shape);
+    TENSOR(at::reshape(at::arange((double)start, (double)end, (double)step, type), shape));
   }
-
-  TENSOR(t);
+  else
+  {
+    TENSOR(at::arange((double)start, (double)end, (double)step, type));
+  }
 }
 
 NIF(reshape)
