@@ -20,7 +20,9 @@ defmodule Nx.MixProject do
   end
 
   defp deps do
-    [{:elixir_make, "~> 0.6"}, {:ex_doc, "~> 0.23", only: :dev}]
+    [
+      {:ex_doc, "~> 0.23", only: :dev}
+    ]
   end
 
   defp docs do
@@ -44,21 +46,20 @@ defmodule Nx.MixProject do
         # Nx.Defn,
         # Nx.Defn.Kernel
 
-        Backends: [
+        "Backends": [
           Nx.Backend,
           Nx.BinaryBackend,
-          Nx.PytorchBackend,
           Nx.Type
         ],
-        Compilers: [
+        "Compilers": [
           Nx.Defn.Compiler,
           Nx.Defn.Evaluator,
           Nx.Defn.Expr
         ],
-        Structs: [
+        "Structs": [
           Nx.Heatmap,
           Nx.Tensor
-        ]
+        ],
       ]
     ]
   end
