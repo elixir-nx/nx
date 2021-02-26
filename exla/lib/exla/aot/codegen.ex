@@ -11,29 +11,27 @@ defmodule EXLA.AOT.Codegen do
   ]
   @bazel_erts_glob "glob([\"erts/**/*.h\"], allow_empty=False)"
 
-  ## Nif Attributes
-  @erl_nif_path "tensorflow/compiler/xla/exla/aot/erts/erl_nif"
-
   ## Generating the graph config file
 
-  def generate_graph_config_file(params, num_results) do
-    feeds = build_feeds_str(params)
-    fetches = build_fetch_str(num_results)
+  def generate_graph_config_file(args, sizes) do
+    feeds = build_feeds_str(args)
+    fetches = build_fetch_str(sizes)
     feeds <> fetches
   end
 
-  defp build_feeds_str(params) do
-    params
+  defp build_feeds_str(args) do
+    args
+    |> Enum.with_index()
     |> Enum.map(&build_feed_str/1)
     |> Enum.join("")
   end
 
-  defp build_feed_str(%{id: _id, name: name, dims: dims}) do
+  defp build_feed_str({%EXLA.Shape{dims: dims}, i}) do
     shape_str = build_shape_str(dims)
 
     """
     feed {
-      id { node_name: #{str(name)} }
+      id { node_name: "arg#{i}" }
       #{shape_str}
     }
     """
@@ -53,12 +51,12 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_fetch_str(num_results) do
+  defp build_fetch_str(sizes) do
     result_ids =
-      for i <- (0..num_results - 1) do
+      for i <- 0..(length(sizes)-1) do
         """
         fetch {
-          id { node_name: #{str("result#{i}")} }
+          id { node_name: "result#{i}" }
         }
         """
       end
@@ -68,15 +66,12 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the BUILD file
 
-  def generate_bazel_build_file(fname, functions) do
-    name = build_bazel_so_str(fname)
-    srcs = build_bazel_srcs_str(fname, functions)
+  def generate_bazel_build_file(functions, lib_name) do
+    name = build_bazel_so_str(lib_name)
+    srcs = build_bazel_srcs_str(functions, lib_name)
     deps = build_bazel_deps_str()
     linkopts = build_bazel_linkopts_str()
-    build_bazel_file_str(name, srcs, deps, linkopts)
-  end
 
-  defp build_bazel_file_str(name, srcs, deps, linkopts) do
     """
     cc_binary(
       name = #{name},
@@ -88,8 +83,8 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_bazel_so_str(fname) do
-    str("lib" <> fname <> ".so")
+  defp build_bazel_so_str(lib_name) do
+    str(lib_name <> ".so")
   end
 
   defp build_bazel_deps_str do
@@ -101,12 +96,12 @@ defmodule EXLA.AOT.Codegen do
     "[" <> deps_str <> "]"
   end
 
-  defp build_bazel_srcs_str(fname, functions) do
-    cc_name = str(fname <> ".cc")
+  defp build_bazel_srcs_str(functions, lib_name) do
+    cc_name = str(lib_name <> ".cc")
 
     src_files =
       functions
-      |> Enum.flat_map(fn {_, name, arity, _, _} ->
+      |> Enum.flat_map(fn {name, arity, _, _} ->
         [str(Atom.to_string(name) <> "_#{arity}.h"), str(Atom.to_string(name) <> "_#{arity}.o")]
       end)
       |> Enum.join(", ")
@@ -120,8 +115,8 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the NIF Source File
 
-  def generate_nif_source_file(functions, target_module) do
-    include_block_str = build_include_block(functions)
+  def generate_nif_source_file(functions, target_module, aot_relative_path) do
+    include_block_str = build_include_block(functions, aot_relative_path)
     error_block_str = build_error_helper_block()
     load_block_str = build_load_block()
     functions_str = build_nif_funcs(functions)
@@ -133,15 +128,16 @@ defmodule EXLA.AOT.Codegen do
       load_block_str <> functions_str <> nif_func_export_array_str <> init_block_str
   end
 
-  defp build_include_block(functions) do
+  defp build_include_block(functions, aot_relative_path) do
     function_includes =
       functions
-      |> Enum.map(fn {_, name, arity, _, _} ->
+      |> Enum.map(fn {name, arity, _, _} ->
         build_include_str(Atom.to_string(name) <> "_#{arity}")
       end)
       |> Enum.join("\n")
 
-    function_includes <> "\n" <> build_include_str(@erl_nif_path) <> "\n"
+    erl_nif_path = Path.join(aot_relative_path, "erts/erl_nif")
+    function_includes <> "\n" <> build_include_str(erl_nif_path) <> "\n"
   end
 
   defp build_include_str(path) do
@@ -168,12 +164,13 @@ defmodule EXLA.AOT.Codegen do
     |> Enum.join("\n")
   end
 
-  defp build_nif_func_block({_, name, arity, args, result_sizes}) do
+  defp build_nif_func_block({name, arity, args, result_sizes}) do
     class_name = "#{name}_#{arity}_class"
     signature_str = build_nif_func_signature(name, arity)
 
     args_str =
       args
+      |> Enum.with_index()
       |> Enum.map(&build_nif_arg_retrieval_block(name, arity, &1))
       |> Enum.join("\n")
 
@@ -196,17 +193,17 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_arg_retrieval_block(name, arity, %{id: id}) do
-    error_msg = str("could not get argument #{id}")
+  defp build_nif_arg_retrieval_block(name, arity, {_shape, i}) do
+    error_msg = str("could not get argument at index #{i}")
 
     """
-      ErlNifBinary arg#{id};
-      if(!enif_inspect_binary(env, argv[#{id}], &arg#{id})) {
-        return error(env, #{error_msg});
-      }
-      unsigned char * arg#{id}_bytes = (unsigned char *) malloc(arg#{id}.size);
-      std::memcpy(arg#{id}_bytes, arg#{id}.data, arg#{id}.size);
-      #{name}_#{arity}.set_arg#{id}_data(arg#{id}_bytes);
+    ErlNifBinary arg#{i};
+    if(!enif_inspect_binary(env, argv[#{i}], &arg#{i})) {
+      return error(env, #{error_msg});
+    }
+    unsigned char * arg#{i}_bytes = (unsigned char *) malloc(arg#{i}.size);
+    std::memcpy(arg#{i}_bytes, arg#{i}.data, arg#{i}.size);
+    #{name}_#{arity}.set_arg#{i}_data(arg#{i}_bytes);
     """
   end
 
@@ -220,10 +217,10 @@ defmodule EXLA.AOT.Codegen do
     res_str =
       result_sizes
       |> Enum.with_index()
-      |> Enum.map(fn {res, i} -> build_nif_single_result_block({name, arity, res}, i) end)
+      |> Enum.map(fn {size, i} -> build_nif_single_result_block(name, arity, size, i) end)
       |> Enum.join("\n")
 
-    num_results = Enum.count(result_sizes);
+    num_results = length(result_sizes);
 
     res_terms =
       result_sizes
@@ -238,24 +235,22 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_single_result_block({name, arity, result_size}, result_num) do
-    error_msg = str("could not get result #{result_num}")
+  defp build_nif_single_result_block(name, arity, size, i) do
+    error_msg = str("could not get result at index #{i}")
 
     """
-
-    ErlNifBinary result#{result_num};
-    if(!enif_alloc_binary(#{result_size}, &result#{result_num})) {
+    ErlNifBinary result#{i};
+    if(!enif_alloc_binary(#{size}, &result#{i})) {
       return error(env, #{error_msg});
     }
-    unsigned char * result#{result_num}_bytes = reinterpret_cast<unsigned char *>(#{name}_#{arity}.result#{result_num}_data());
+    unsigned char * result#{i}_bytes = reinterpret_cast<unsigned char *>(#{name}_#{arity}.result#{i}_data());
     std::memcpy(
-      result#{result_num}.data,
-      result#{result_num}_bytes,
-      #{result_size}
+      result#{i}.data,
+      result#{i}_bytes,
+      #{size}
     );
 
-    ERL_NIF_TERM result#{result_num}_term = enif_make_binary(env, &result#{result_num});
-
+    ERL_NIF_TERM result#{i}_term = enif_make_binary(env, &result#{i});
     """
   end
 
@@ -272,7 +267,7 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_func_export({_, name, arity, _, _}) do
+  defp build_nif_func_export({name, arity, _, _}) do
     "{#{str(Atom.to_string(name))}, #{arity}, #{name}_#{arity}_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND}"
   end
 

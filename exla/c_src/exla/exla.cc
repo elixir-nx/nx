@@ -1925,12 +1925,12 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }
 
 ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if (argc != 6) {
+  if (argc != 7) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaComputation* computation;
-  std::string aot_path, function_name, pbtext_path, class_name, target_triple;
+  std::string function_name, pbtext_path, header_path, object_path, class_name, target_triple;
 
   if (!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
     return exla::nif::error(env, "Unable to get computation.");
@@ -1938,23 +1938,27 @@ ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if (!exla::nif::get(env, argv[1], pbtext_path)) {
     return exla::nif::error(env, "Unable to get Graph Config Path.");
   }
-  if (!exla::nif::get(env, argv[2], aot_path)) {
-    return exla::nif::error(env, "Unable to get TF Path.");
+  if (!exla::nif::get(env, argv[2], header_path)) {
+    return exla::nif::error(env, "Unable to get header path.");
   }
-  if (!exla::nif::get(env, argv[3], function_name)) {
+  if (!exla::nif::get(env, argv[3], object_path)) {
+    return exla::nif::error(env, "Unable to get object path.");
+  }
+  if (!exla::nif::get(env, argv[4], function_name)) {
     return exla::nif::error(env, "Unable to get function name.");
   }
-  if (!exla::nif::get(env, argv[4], class_name)) {
+  if (!exla::nif::get(env, argv[5], class_name)) {
     return exla::nif::error(env, "Unable to get class name.");
   }
-  if (!exla::nif::get(env, argv[5], target_triple)) {
+  if (!exla::nif::get(env, argv[6], target_triple)) {
     return exla::nif::error(env, "Unable to get target triple.");
   }
 
   xla::Status compile_status =
     exla::CompileComputation(*computation,
                              pbtext_path,
-                             aot_path,
+                             header_path,
+                             object_path,
                              function_name,
                              class_name,
                              target_triple);
@@ -1963,12 +1967,7 @@ ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
     return exla::nif::error(env, compile_status.error_message().c_str());
   }
 
-  std::string object_path = absl::StrCat(aot_path, function_name, ".o");
-  std::string header_path = absl::StrCat(aot_path, function_name, ".h");
-  ERL_NIF_TERM object_path_term = exla::nif::make(env, object_path.c_str());
-  ERL_NIF_TERM header_path_term = exla::nif::make(env, header_path.c_str());
-
-  return exla::nif::ok(env, enif_make_tuple2(env, object_path_term, header_path_term));
+  return exla::nif::ok(env);
 }
 
 static ErlNifFunc exla_funcs[] = {
@@ -2106,7 +2105,7 @@ static ErlNifFunc exla_funcs[] = {
   // Log Sink
   {"start_log_sink", 1, start_log_sink},
   // HLO Functions
-  {"compile_aot", 6, compile_aot}
+  {"compile_aot", 7, compile_aot}
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);
