@@ -1113,8 +1113,147 @@ defmodule Nx.BinaryBackend do
                                                                                        fro_norm} ->
       if off_diag_norm > 1.0e-6 * fro_norm do
         # Execute a round of jacobi rotations on u, d and v
+        {u_bin, d_bin, v_bin} =
+          for p <- 0..(m - 1), q <- (p + 1)..(n - 1), reduce: {u_bin, d_bin, v_bin} do
+            {u_bin, d_bin, v_bin} ->
+              # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
+              # However, we'll also need to modify d_bin afterwards, so we need to both access these values and accumulate
+              # the bitstrings that come before, between and after, [p, 0..n-1] and [q, 0..n-1] for updating afterwards
+              d_values =
+                match_types [output_type] do
+                  acc = %{
+                    d_pp: "",
+                    d_pq: "",
+                    d_qp: "",
+                    d_qq: "",
+                    row_p: "",
+                    row_q: "",
+                    before_row_p: "",
+                    between_rows_p_and_q: "",
+                    after_row_q: "",
+                    row: 0,
+                    col: 0
+                  }
 
-        # calculate the norms for d
+                  for <<match!(x, 0) <- d_bin>>, reduce: acc do
+                    acc ->
+                      acc =
+                        case {row, col} do
+                          {^p, ^p} ->
+                            acc
+                            |> Map.put(:d_pp, x)
+                            |> Map.put(:row_p, acc.row_p <> x)
+
+                          {^p, ^q} ->
+                            acc
+                            |> Map.put(:d_pq, x)
+                            |> Map.put(:row_p, acc.row_p <> x)
+
+                          {^p, _} ->
+                            Map.put(acc, :row_q, acc.row_p <> x)
+
+                          {^q, ^q} ->
+                            acc
+                            |> Map.put(:d_qq, x)
+                            |> Map.put(:row_q, acc.row_q <> x)
+
+                          {^q, ^p} ->
+                            acc
+                            |> Map.put(:d_qp, x)
+                            |> Map.put(:row_q, acc.row_q <> x)
+
+                          {^q, _} ->
+                            Map.put(acc, :row_q, acc.row_q <> x)
+
+                          {row, _} when row < p ->
+                            Map.put(acc, :before_row_p, acc.before_row_p <> x)
+
+                          {row, _} when row > p and row < q ->
+                            Map.put(acc, :before_row_p, acc.between_rows_p_and_q <> x)
+
+                          _ ->
+                            Map.put(acc, :after_row_q, acc.after_row_q <> x)
+                        end
+
+                      {row, col} =
+                        if col + 1 == n do
+                          {row + 1, 0}
+                        else
+                          {row, col + 1}
+                        end
+
+                      acc |> Map.put(:row, row) |> Map.put(:col, col)
+                  end
+                end
+
+              {rot_l, rot_l_t, rot_r, shape_l, shape_l_t, shape_r} =
+                jacobi_rotators(d_pp, d_pq, d_qp, d_qq)
+
+              {_, num_bits} = output_type
+              row_size = num_bits * n
+
+              <<row_p::bitstring-size(row_size), row_q::bitstring>> =
+                dot_binary(
+                  row_l_t,
+                  shape_l_t,
+                  output_type,
+                  d_values.row_p <> d_values.row_q,
+                  {2, n},
+                  output_type,
+                  output_type
+                )
+
+              # D[[p, q], :] = [[row_p], [row_q]]
+              d_bin =
+                d_values.before_row_p <>
+                  row_p <> d_values.between_rows_p_and_q <> row_q <> d_values.after_row_q
+
+              d_cols_pq = aggregate_axes(d_bin, [0..(m - 1), [p, q]], {m, n}, num_bits)
+
+              d_cols_pq =
+                dot_binary(
+                  d_cols_pq,
+                  {m, 2},
+                  output_type,
+                  rot_r,
+                  shape_r,
+                  output_type,
+                  output_type
+                )
+
+              u_cols_pq = aggregate_axes(u_bin, [0..(m - 1), [p, q]], {m, m}, num_bits)
+
+              u_cols_pq =
+                dot_binary(
+                  u_cols_pq,
+                  {m, 2},
+                  output_type,
+                  rot_l,
+                  shape_l,
+                  output_type,
+                  output_type
+                )
+
+              v_cols_pq = aggregate_axes(v_bin, [0..(n - 1), [p, q]], {n, n}, num_bits)
+
+              v_cols_pq =
+                dot_binary(
+                  v_cols_pq,
+                  {n, 2},
+                  output_type,
+                  rot_r,
+                  shape_r,
+                  output_type,
+                  output_type
+                )
+
+              # assign d_cols_pq to d_bin
+              # assign u_cols_pq to u_bin
+              # assign v_cols_pq to v_bin
+              {u_bin, d_bin, v_bin}
+          end
+
+        # calculate a posteriori norms for d_bin, so the next iteration of Enum.reduce_while can decide to halt
         {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
 
         {:cont, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}}
@@ -1122,30 +1261,6 @@ defmodule Nx.BinaryBackend do
         {:halt, {u_bin, d_bin, v_bin}}
       end
     end)
-
-    # def jacobi_svd(A):
-    #    U, D, V = house_bidiag(A)
-    #    m, n = D.shape
-    #    iter, max_iter = 0, 100
-    #    frobenius_norm = np.linalg.norm(D)
-    #    diag_norm = np.linalg.norm(np.diag(D))
-    #    off_diag_norm = np.sqrt(
-    #        frobenius_norm - diag_norm) * np.sqrt(frobenius_norm + diag_norm)
-    #    while off_diag_norm >  and iter < max_iter:
-    #        iter += 1
-    #        for p in range(m - 1):
-    #            for q in range(p + 1, n):
-    #                rot_l, rot_r = jacobi_rot(D[p][p], D[p][q], D[q][p], D[q][q])
-    #                D[[p, q], :] = np.matmul(rot_l.T, D[[p, q], :])
-    #                D[:, [p, q]] = np.matmul(D[:, [p, q]], rot_r)
-    #                U[:, [p, q]] = np.matmul(U[:, [p, q]], rot_l)
-    #                V[:, [p, q]] = np.matmul(V[:, [p, q]], rot_r)
-    #        frobenius_norm = np.linalg.norm(D)
-    #        diag_norm = np.linalg.norm(np.diag(D))
-    #        off_diag_norm = np.sqrt(
-    #            frobenius_norm - diag_norm) * np.sqrt(frobenius_norm + diag_norm)
-    #
-    #    return U, np.diag(D), V
   end
 
   defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
@@ -1288,12 +1403,12 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp get_matrix_norms(tensor, {m, n}, type) do
+  defp get_matrix_norms(tensor, {_m, n}, type) do
     # returns a tuple with {frobenius_norm, diagonal_norm, off_diagonal_norm}
-    {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, row, col} =
-      match_types [output_type] do
-        for <<match!(x_bin, 0) <- d_bin>>, reduce: {0, 0, 0, 0, 0} do
-          {fro_norm_sq, off_diag_norm_sq, row, col} ->
+    {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, _row, _col} =
+      match_types [type] do
+        for <<match!(x_bin, 0) <- tensor>>, reduce: {0, 0, 0, 0, 0} do
+          {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, row, col} ->
             x_sq = :math.pow(read!(x_bin, 0), 2)
             fro_norm_sq = fro_norm_sq + x_sq
 
@@ -1317,22 +1432,6 @@ defmodule Nx.BinaryBackend do
 
     {:math.sqrt(fro_norm_sq), :math.sqrt(diag_norm_sq), :math.sqrt(off_diag_norm_sq)}
   end
-
-  # def house_bidiag(A):
-  #    m, n = A.shape
-  #    LL = np.eye(m)
-  #    RR = np.eye(n)
-  #    for i in range(n - 1):
-  #        v, beta = house_col(A, i, i, 1e-8)
-  #        L = np.eye(m) - beta * np.outer(v, v)
-  #        LL = np.matmul(LL, L)
-  #        A = np.matmul(L, A)
-  #        if i < n - 2:
-  #            v, beta = house_row(A, i, i + 1, 1e-8)
-  #            R = np.eye(n) - beta * np.outer(v, v)
-  #            RR = np.matmul(RR, R)
-  #            A = np.matmul(A, R)
-  #    return LL, A, RR
 
   ## Aggregation
 
