@@ -520,6 +520,41 @@ defmodule Nx do
   end
 
   @doc """
+  Creates a tensor template.
+
+  You can't perform any operation on this tensor.
+  It exists exclusively to define APIs that say
+  a tensor with a certain type, shape, and names
+  is expected in the future.
+
+  ## Examples
+
+      iex> Nx.template({:f, 32}, {2, 3})
+      #Nx.Tensor<
+        f32[2][3]
+        Nx.TemplateBackend
+      >
+
+      iex> Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+      #Nx.Tensor<
+        f32[rows: 2][columns: 3]
+        Nx.TemplateBackend
+      >
+
+      iex> t = Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+      iex> Nx.add(t, 1)
+      ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
+
+  """
+  @doc type: :creation
+  def template(type, shape, opts \\ []) do
+    assert_keys!(opts, [:names])
+    type = Nx.Type.normalize!(type)
+    names = Nx.Shape.named_axes!(opts[:names], shape)
+    %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
+  end
+
+  @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
   @doc type: :random
