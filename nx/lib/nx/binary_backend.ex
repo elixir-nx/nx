@@ -1105,12 +1105,8 @@ defmodule Nx.BinaryBackend do
 
     {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
 
-    Enum.reduce_while(1..max_iter, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}, fn _,
-                                                                                      {u_bin,
-                                                                                       d_bin,
-                                                                                       v_bin,
-                                                                                       off_diag_norm,
-                                                                                       fro_norm} ->
+    Enum.reduce_while(1..max_iter, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}, fn
+      _, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm} ->
       if off_diag_norm > 1.0e-6 * fro_norm do
         # Execute a round of jacobi rotations on u, d and v
         {u_bin, d_bin, v_bin} =
