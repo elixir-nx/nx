@@ -1,21 +1,19 @@
 defmodule Torchx.NIF.Macro do
   defmacro dnif(call) do
     {name, args} = Macro.decompose_call(call)
-    name_io = name |> Atom.to_string() |> Kernel.<>("_io") |> String.to_atom()
+    name_io = :"#{name}_io"
     args = underscore_args(args)
 
     quote do
-      def unquote(name)(unquote_splicing(args)), do: nif_error(__ENV__.function)
-      def unquote(name_io)(unquote_splicing(args)), do: nif_error(__ENV__.function)
+      def unquote(name)(unquote_splicing(args)), do: :erlang.nif_error(:undef)
+      def unquote(name_io)(unquote_splicing(args)), do: :erlang.nif_error(:undef)
     end
   end
 
   defp underscore_args(args),
     do:
       args
-      |> Enum.map(fn {name, meta, args_list} -> {underscore(name), meta, args_list} end)
-
-  defp underscore(atom) when is_atom(atom), do: ("_" <> Atom.to_string(atom)) |> String.to_atom()
+      |> Enum.map(fn {name, meta, args_list} -> {:"_#{name}", meta, args_list} end)
 end
 
 defmodule Torchx.NIF do
@@ -60,11 +58,7 @@ defmodule Torchx.NIF do
   dnif(qr(tensor))
   dnif(qr(tensor, reduced))
 
-  def type(_tensor), do: nif_error(__ENV__.function)
-  def device(_tensor), do: nif_error(__ENV__.function)
-  def nbytes(_tensor), do: nif_error(__ENV__.function)
-
-  defp nif_error({name, arity}) do
-    raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"
-  end
+  def type(_tensor), do: :erlang.nif_error(:undef)
+  def device(_tensor), do: :erlang.nif_error(:undef)
+  def nbytes(_tensor), do: :erlang.nif_error(:undef)
 end
