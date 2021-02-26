@@ -20,6 +20,7 @@ erl_crash.dump
 exla-*.tar
 
 # Ignore build artifacts
+/c_src/exla/aot*/
 /c_src/exla/erts
 /priv/
 /tmp/
