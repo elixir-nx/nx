@@ -7230,32 +7230,22 @@ defmodule Nx do
   end
 
   def svd(tensor) do
-    # This implementation is a mixture of concepts described in [1] and the
-    # algorithmic descriptions found in [2] and [3]
-    # [1] -
-    #    Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
-    #    by Gabriel Oksa and Marian Vajtersic
-    #    Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
-    # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
-    # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
+    %T{type: type, shape: shape} = tensor = tensor!(tensor)
 
-    {q, r} = Nx.qr(tensor)
+    output_type = Nx.Type.to_floating(type)
 
-    # LQ factorization of R trough QR decomp.
-    {q2_transposed, l_transposed} = r |> Nx.transpose() |> Nx.qr()
+    {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
 
-    q2 = Nx.transpose(q2_transposed)
-    l = Nx.transpose(l_transposed)
-
-    # This yields T = Q.L.Q2, where l is quasi-diagonal
-    # Now we need to perform Jacobi rotations on L until
-    # the algorithm converges: norm(L) - norm(diag(L)) ~= 0
-
-    # This part of the algorithm will yield U1, S and V1transposed
-    # where A = Q U1 S V1_transposed Q2, from which follows:
-    # U = dot(Q, U1) and V = transpose(Q2_transposed, V1)
-    # note that Q2_transposed is already available as a byproduct of the LQ factorization
+    impl!(tensor).svd(
+      {%{tensor | type: output_type, shape: u_shape},
+       %{tensor | type: output_type, shape: s_shape},
+       %{tensor | type: output_type, shape: v_shape}},
+      tensor
+    )
   end
+
+
+  # end
 
   defp jacobi_rotation(a, p, q, eps) do
     # calculates the jacobi rotation of a at indices p and q, with tolerance eps

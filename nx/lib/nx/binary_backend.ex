@@ -872,7 +872,7 @@ defmodule Nx.BinaryBackend do
           # the filter at each step
           anchor <- anchors,
           into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, [group*num_input_channels | anchor])
+        offset = weighted_offset(batch_weighted_shape, [group * num_input_channels | anchor])
         # The shape of the window is {channels} + filter_shape
         # The shape of the kernel is {num_filters, channels} + filter_shape
         window =
@@ -932,11 +932,12 @@ defmodule Nx.BinaryBackend do
     filter_group_size = div(Nx.size(kernel_shape) * kernel_size, groups)
     filter_size = div(Nx.size(kernel_shape) * kernel_size, elem(kernel_shape, 0))
 
-    for i <- 0..groups - 1,
-          offset = filter_group_size * i,
-          <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring, _::bitstring>> = kernel_data,
-          <<filter::size(filter_size)-bitstring <- filter_group>>,
-          do: {filter, i}
+    for i <- 0..(groups - 1),
+        offset = filter_group_size * i,
+        <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring,
+          _::bitstring>> = kernel_data,
+        <<filter::size(filter_size)-bitstring <- filter_group>>,
+        do: {filter, i}
   end
 
   @impl true
@@ -1082,6 +1083,71 @@ defmodule Nx.BinaryBackend do
     {q, r}
   end
 
+  @impl true
+  def svd(
+        {u_holder, %{shape: {m, n} = s_shape, type: output_type} = s_holder, v_holder},
+        %{type: input_type} = tensor
+      ) do
+    # This implementation is a mixture of concepts described in [1] and the
+    # algorithmic descriptions found in [2] and [3]
+    # [1] -
+    #    Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
+    #    by Gabriel Oksa and Marian Vajtersic
+    #    Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
+    # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
+    # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
+
+    a_bin = to_binary(tensor)
+
+    {u_bin, d_bin, v_bin} = householder_bidiagonalization(a_bin, s_shape, input_type, output_type)
+
+    max_iter = 100
+
+    {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
+
+    Enum.reduce_while(1..max_iter, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}, fn _,
+                                                                                      {u_bin,
+                                                                                       d_bin,
+                                                                                       v_bin,
+                                                                                       off_diag_norm,
+                                                                                       fro_norm} ->
+      if off_diag_norm > 1.0e-6 * fro_norm do
+        # Execute a round of jacobi rotations on u, d and v
+
+        # calculate the norms for d
+        {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
+
+        {:cont, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}}
+      else
+        {:halt, {u_bin, d_bin, v_bin}}
+      end
+    end)
+
+    # def jacobi_svd(A):
+    #    U, D, V = house_bidiag(A)
+    #    m, n = D.shape
+    #    iter, max_iter = 0, 100
+    #    frobenius_norm = np.linalg.norm(D)
+    #    diag_norm = np.linalg.norm(np.diag(D))
+    #    off_diag_norm = np.sqrt(
+    #        frobenius_norm - diag_norm) * np.sqrt(frobenius_norm + diag_norm)
+    #    while off_diag_norm >  and iter < max_iter:
+    #        iter += 1
+    #        for p in range(m - 1):
+    #            for q in range(p + 1, n):
+    #                rot_l, rot_r = jacobi_rot(D[p][p], D[p][q], D[q][p], D[q][q])
+    #                D[[p, q], :] = np.matmul(rot_l.T, D[[p, q], :])
+    #                D[:, [p, q]] = np.matmul(D[:, [p, q]], rot_r)
+    #                U[:, [p, q]] = np.matmul(U[:, [p, q]], rot_l)
+    #                V[:, [p, q]] = np.matmul(V[:, [p, q]], rot_r)
+    #        frobenius_norm = np.linalg.norm(D)
+    #        diag_norm = np.linalg.norm(np.diag(D))
+    #        off_diag_norm = np.sqrt(
+    #            frobenius_norm - diag_norm) * np.sqrt(frobenius_norm + diag_norm)
+    #
+    #    return U, np.diag(D), V
+  end
+
   defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
     # matrix multiplication for when b1 and b2 are matrices
     # represented in binary form
@@ -1150,6 +1216,123 @@ defmodule Nx.BinaryBackend do
 
     IO.iodata_to_binary(reflector_iodata)
   end
+
+  defp householder_bidiagonalization(tensor, {m, n}, input_type, output_type) do
+    # For each column in `tensor`, apply
+    # the current column's householder reflector from the left to tensor.
+    # if the current column is not the penultimate, also apply
+    # the corresponding row's householder reflector from the right
+
+    for col <- 0..(n - 1), reduce: {nil, tensor, nil, input_type} do
+      {ll, a, rr, current_type} ->
+        # a[[0..m-1, col]]
+        {a_reverse, _, _, _} =
+          match_types [current_type] do
+            for <<match!(x, 0) <- tensor>>, reduce: {[], 0, 0, 0} do
+              {acc, num_rows_a_prev, r, c} ->
+                {acc, num_rows_a} =
+                  if r >= col and c == col do
+                    {[read!(x, 0) | acc], num_rows_a_prev + 1}
+                  else
+                    {acc, num_rows_a_prev}
+                  end
+
+                {r, c} =
+                  if c + 1 == n do
+                    {r + 1, 0}
+                  else
+                    {r, c + 1}
+                  end
+
+                {acc, num_rows_a, r, c}
+            end
+          end
+
+        l = householder_reflector(a_reverse, m, m, output_type)
+
+        ll =
+          if is_nil(ll) do
+            l
+          else
+            dot_binary(ll, {m, m}, output_type, l, {m, m}, output_type, output_type)
+          end
+
+        a = dot_binary(ll, {m, m}, output_type, a, {m, n}, current_type, output_type)
+
+        {a, rr} =
+          if col < m - 2 do
+            # a[[col, 0..n-1]]
+            {_, num_bits} = current_type
+            row_size = num_bits * n
+            prefix_size = row_size * col
+
+            <<_::bitstring-size(prefix_size), current_row::bitstring-size(row_size),
+              _::bitstring>> = a
+
+            r = current_row |> String.reverse() |> householder_reflector(n, n, output_type)
+
+            rr =
+              if is_nil(rr) do
+                r
+              else
+                dot_binary(rr, {n, n}, output_type, r, {n, n}, output_type, output_type)
+              end
+
+            a = dot_binary(a, {m, n}, current_type, r, {n, n}, output_type, output_type)
+            {a, rr}
+          else
+            {a, rr}
+          end
+
+        {ll, a, rr, output_type}
+    end
+  end
+
+  defp get_matrix_norms(tensor, {m, n}, type) do
+    # returns a tuple with {frobenius_norm, diagonal_norm, off_diagonal_norm}
+    {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, row, col} =
+      match_types [output_type] do
+        for <<match!(x_bin, 0) <- d_bin>>, reduce: {0, 0, 0, 0, 0} do
+          {fro_norm_sq, off_diag_norm_sq, row, col} ->
+            x_sq = :math.pow(read!(x_bin, 0), 2)
+            fro_norm_sq = fro_norm_sq + x_sq
+
+            {diag_norm_sq, off_diag_norm_sq} =
+              if row == col do
+                {diag_norm_sq + x_sq, off_diag_norm_sq}
+              else
+                {diag_norm_sq, off_diag_norm_sq + x_sq}
+              end
+
+            {row, col} =
+              if col + 1 == n do
+                {row + 1, 0}
+              else
+                {row, col + 1}
+              end
+
+            {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, row, col}
+        end
+      end
+
+    {:math.sqrt(fro_norm_sq), :math.sqrt(diag_norm_sq), :math.sqrt(off_diag_norm_sq)}
+  end
+
+  # def house_bidiag(A):
+  #    m, n = A.shape
+  #    LL = np.eye(m)
+  #    RR = np.eye(n)
+  #    for i in range(n - 1):
+  #        v, beta = house_col(A, i, i, 1e-8)
+  #        L = np.eye(m) - beta * np.outer(v, v)
+  #        LL = np.matmul(LL, L)
+  #        A = np.matmul(L, A)
+  #        if i < n - 2:
+  #            v, beta = house_row(A, i, i + 1, 1e-8)
+  #            R = np.eye(n) - beta * np.outer(v, v)
+  #            RR = np.matmul(RR, R)
+  #            A = np.matmul(A, R)
+  #    return LL, A, RR
 
   ## Aggregation
 
