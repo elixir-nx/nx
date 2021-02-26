@@ -1,4 +1,26 @@
+defmodule Torchx.NIF.Macro do
+  defmacro dnif(call) do
+    {name, args} = Macro.decompose_call(call)
+    name_io = name |> Atom.to_string() |> Kernel.<>("_io") |> String.to_atom()
+    args = underscore_args(args)
+
+    quote do
+      def unquote(name)(unquote_splicing(args)), do: nif_error(__ENV__.function)
+      def unquote(name_io)(unquote_splicing(args)), do: nif_error(__ENV__.function)
+    end
+  end
+
+  defp underscore_args(args),
+    do:
+      args
+      |> Enum.map(fn {name, meta, args_list} -> {underscore(name), meta, args_list} end)
+
+  defp underscore(atom) when is_atom(atom), do: ("_" <> Atom.to_string(atom)) |> String.to_atom()
+end
+
 defmodule Torchx.NIF do
+  import Torchx.NIF.Macro
+
   @moduledoc false
   @on_load :__on_load__
 
@@ -7,49 +29,40 @@ defmodule Torchx.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  def scalar_tensor(_scalar, _type), do: nif_error(__ENV__.function)
-  def randint(_min, _max, _shape, _type), do: nif_error(__ENV__.function)
-  def rand(_min, _max, _shape, _type), do: nif_error(__ENV__.function)
-  def normal(_mu, _sigma, _shape), do: nif_error(__ENV__.function)
-  def arange(_start, _end, _step, _type), do: nif_error(__ENV__.function)
-  def arange(_start, _end, _step, _type, _shape), do: nif_error(__ENV__.function)
-  def iota(_shape, _axis, _type), do: nif_error(__ENV__.function)
-  def reshape(_tensor, _shape), do: nif_error(__ENV__.function)
-  def to_type(_tensor, _type), do: nif_error(__ENV__.function)
-  def squeeze(_tensor), do: nif_error(__ENV__.function)
-  def squeeze(_tensor, _axis), do: nif_error(__ENV__.function)
-  def broadcast_to(_tensor, _shape), do: nif_error(__ENV__.function)
-  def transpose(_tensor, _dim0, _dim1), do: nif_error(__ENV__.function)
-  def split(_tensor, _split_size), do: nif_error(__ENV__.function)
+  dnif(randint(min, max, shape, type))
+  dnif(rand(min, max, shape, type))
+
+  dnif(scalar_tensor(scalar, type))
+  dnif(normal(mu, sigma, shape))
+  dnif(arange(from, to, step, type))
+  dnif(arange(from, to, step, type, shape))
+  dnif(iota(shape, axis, type))
+  dnif(reshape(tensor, shape))
+  dnif(to_type(tensor, type))
+  dnif(from_blob(blob, shape, type))
+  dnif(to_blob(tensor))
+  dnif(to_blob(tensor, limit))
+
+  dnif(delete_tensor(tensor))
+  dnif(squeeze(tensor))
+  dnif(squeeze(tensor, axis))
+  dnif(broadcast_to(tensor, shape))
+  dnif(transpose(tensor, dim0, dim1))
+  dnif(split(tensor, split_size))
+
+  dnif(ones(shape))
+  dnif(eye(size, type))
+  dnif(add(tensorA, tensorB))
+  dnif(dot(tensorA, tensorB))
+  dnif(cholesky(tensor))
+  dnif(cholesky(tensor, upper))
+
+  dnif(qr(tensor))
+  dnif(qr(tensor, reduced))
+
   def type(_tensor), do: nif_error(__ENV__.function)
   def device(_tensor), do: nif_error(__ENV__.function)
   def nbytes(_tensor), do: nif_error(__ENV__.function)
-
-  def from_blob(_blob, _shape, _type),
-    do: nif_error(__ENV__.function)
-
-  def to_blob(_tensor), do: nif_error(__ENV__.function)
-  def to_blob(_tensor, _limit), do: nif_error(__ENV__.function)
-
-  def delete_tensor(_tensor), do: nif_error(__ENV__.function)
-
-  def ones(_shape),
-    do: nif_error(__ENV__.function)
-
-  def eye(_size, _type),
-    do: nif_error(__ENV__.function)
-
-  def add(_tensorA, _tensorB),
-    do: nif_error(__ENV__.function)
-
-  def dot(_tensorA, _tensorB),
-    do: nif_error(__ENV__.function)
-
-  def cholesky(_tensor), do: nif_error(__ENV__.function)
-  def cholesky(_tensor, _upper), do: nif_error(__ENV__.function)
-
-  def qr(_tensor), do: nif_error(__ENV__.function)
-  def qr(_tensor, _reduced), do: nif_error(__ENV__.function)
 
   defp nif_error({name, arity}) do
     raise "failed to load implementation of #{inspect(__MODULE__)}.#{name}/#{arity}"

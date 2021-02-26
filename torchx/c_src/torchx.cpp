@@ -417,35 +417,44 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 #NAME, ARITY, NAME, 0 \
   }
 
+#define DF(NAME, ARITY)                                  \
+  {                                                      \
+      #NAME, ARITY, NAME, ERL_NIF_DIRTY_JOB_CPU_BOUND},  \
+  {                                                      \
+#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND \
+  }
+
 static ErlNifFunc nif_functions[] = {
-    F(randint, 4),
-    F(rand, 4),
-    F(normal, 3),
-    F(arange, 4),
-    F(arange, 5),
-    F(iota, 3),
-    F(from_blob, 3),
-    F(to_blob, 1),
-    F(to_blob, 2),
+    DF(randint, 4),
+    DF(rand, 4),
+    DF(normal, 3),
+    DF(arange, 4),
+    DF(arange, 5),
+    DF(iota, 3),
+    DF(from_blob, 3),
+    DF(to_blob, 1),
+    DF(to_blob, 2),
+    DF(scalar_tensor, 2),
+    DF(delete_tensor, 1),
+    DF(ones, 1),
+    DF(eye, 2),
+    DF(reshape, 2),
+    DF(split, 2),
+    DF(to_type, 2),
+    DF(squeeze, 2),
+    DF(squeeze, 1),
+    DF(broadcast_to, 2),
+    DF(transpose, 3),
+    DF(add, 2),
+    DF(dot, 2),
+    DF(cholesky, 1),
+    DF(cholesky, 2),
+    DF(qr, 1),
+    DF(qr, 2),
+
     F(type, 1),
     F(device, 1),
     F(nbytes, 1),
-    F(scalar_tensor, 2),
-    F(delete_tensor, 1),
-    F(ones, 1),
-    F(eye, 2),
-    F(reshape, 2),
-    F(split, 2),
-    F(to_type, 2),
-    F(squeeze, 2),
-    F(squeeze, 1),
-    F(broadcast_to, 2),
-    F(transpose, 3),
-    F(add, 2),
-    F(dot, 2),
-    F(cholesky, 1),
-    F(cholesky, 2),
-    F(qr, 1),
-    F(qr, 2)};
+};
 
 ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)

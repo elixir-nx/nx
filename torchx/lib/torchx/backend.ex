@@ -182,7 +182,7 @@ defmodule Torchx.Backend do
   defp unwrap!({:ok, result}), do: result
 
   defp unwrap!({:error, error}),
-    do: raise(RuntimeError, "Torchx: " <> to_string(error))
+    do: raise(RuntimeError, "Torchx: " <> List.to_string(error))
 
   defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
 
