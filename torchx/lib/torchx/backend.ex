@@ -75,13 +75,13 @@ defmodule Torchx.Backend do
 
   @impl true
   def to_binary(_tensor, _limit \\ nil) do
-    raise "Operation to_binary is not supported on Torchx.Backend. " <>
+    raise "operation to_binary is not supported on Torchx.Backend. " <>
             "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
   end
 
   defp to_blob(tensor, limit \\ nil)
-  defp to_blob(%T{data: %TB{ref: ref}} = tensor, nil), do: NIF.to_blob(ref)
-  defp to_blob(%T{data: %TB{ref: ref}} = tensor, limit), do: NIF.to_blob(ref, limit)
+  defp to_blob(%T{data: %TB{ref: ref}}, nil), do: NIF.to_blob(ref)
+  defp to_blob(%T{data: %TB{ref: ref}}, limit), do: NIF.to_blob(ref, limit)
 
   @impl true
   def backend_deallocate(%Nx.Tensor{data: %TB{ref: ref}}), do: NIF.delete_tensor(ref)
@@ -107,11 +107,11 @@ defmodule Torchx.Backend do
   ## Shape
 
   @impl true
-  def reshape(out, %T{data: %TB{ref: ref}} = tensor, shape),
-    do: NIF.reshape(ref, shape) |> from_ref(tensor)
+  def reshape(out, %T{data: %TB{ref: ref}}, shape),
+    do: NIF.reshape(ref, shape) |> from_ref(out)
 
   @impl true
-  def as_type(%T{type: type} = out, %T{data: %TB{ref: ref}} = tensor),
+  def as_type(%T{type: type} = out, %T{data: %TB{ref: ref}}),
     do: NIF.to_type(ref, torch_type(type)) |> from_ref(out)
 
   @impl true
@@ -133,17 +133,17 @@ defmodule Torchx.Backend do
   @impl true
   def dot(
         out,
-        %T{type: t1, data: %TB{ref: left_ref}} = left,
+        %T{data: %TB{ref: left_ref}},
         _axes1,
-        %T{type: t2, data: %TB{ref: right_ref}} = right,
+        %T{data: %TB{ref: right_ref}},
         _axes2
       ) do
     NIF.dot(left_ref, right_ref) |> from_ref(out)
   end
 
   @impl true
-  def cholesky(%T{type: output_type, shape: {rows, cols}} = out, tensor) do
-    NIF.cholesky(tensor.data.ref) |> from_ref(out)
+  def cholesky(%T{} = out, %T{data: %TB{ref: ref}}) do
+    NIF.cholesky(ref) |> from_ref(out)
   end
 
   @impl true
@@ -158,26 +158,29 @@ defmodule Torchx.Backend do
 
   @impl true
   def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
+    alias Inspect.Algebra, as: IA
+
     limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
 
-    if on_cpu?(tensor) do
-      byte_size = nbytes(tensor)
-      byte_limit = limit && limit * div(elem_size, 8)
+    result =
+      if on_cpu?(tensor) do
+        byte_size = nbytes(tensor)
+        byte_limit = limit && limit * div(elem_size, 8)
 
-      if min(byte_limit, byte_size) > @big_tensor_threshold do
-        "Torchx tensor is too large to inspect. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
+        if min(byte_limit, byte_size) > @big_tensor_threshold do
+          "Torchx tensor is too large to inspect. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
+        else
+          binary = to_blob(tensor, limit)
+          Nx.Backend.inspect(tensor, binary, inspect_opts)
+        end
       else
-        alias Inspect.Algebra, as: IA
-
-        binary = to_blob(tensor, limit)
-        result = Nx.Backend.inspect(tensor, binary, inspect_opts)
-        IA.concat(["Torchx.Backend", IA.line(), result])
+        "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
       end
-    else
-      raise "Tensor is located on #{device(tensor)} device, so direct to_binary/1 operation is not supported. " <>
-              "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
-    end
+
+    IA.concat(["Torchx.Backend(#{device(tensor)})", IA.line(), result])
   end
+
+  ## Helpers
 
   defp unwrap!({:ok, result}), do: result
 
