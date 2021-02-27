@@ -46,7 +46,7 @@ defmodule Nx.Defn.Expr do
   @doc """
   Builds an expression from a tensor.
   """
-  def tensor(t), do: to_expr(t)
+  def tensor(tensor), do: to_expr(tensor)
 
   @doc """
   Creates a parameter based on the given tensor expression.
@@ -56,7 +56,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a parameter with the given `context`, `type`, `shape`, and `pos`.
+  Creates a tensor expression parameter with the given `context`, `type`, `shape`, and `pos`.
   """
   def parameter(context, type, shape, pos) do
     names = List.duplicate(nil, tuple_size(shape))
@@ -64,7 +64,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a metadata node that around the given expression.
+  Creates a tensor expression metadata node wrapping the given expression.
   """
   def metadata(expr, metadata) when is_map(metadata) do
     expr = to_expr(expr)
@@ -72,7 +72,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a function node with the given args and anonymous function.
+  Creates a tensor expression function node with the given args and anonymous function.
   """
   def fun(args, fun) when is_function(fun, length(args)) do
     out = to_expr(apply(fun, args))
@@ -290,27 +290,22 @@ defmodule Nx.Defn.Expr do
   end
 
   defp rewrite_type(expr, fun) do
-    {res, _} = cached_rewrite_type(expr, %{}, fun)
+    {res, _} = rewrite_type(expr, %{}, fun)
     res
   end
 
-  defp cached_rewrite_type(tuple, cache, fun) when is_tuple(tuple) do
-    {list, cache} =
-      tuple |> Tuple.to_list() |> Enum.map_reduce(cache, &cached_rewrite_type(&1, &2, fun))
+  defp rewrite_type(expr, cache, fun) do
+    traverse(expr, cache, fn %T{data: %Expr{id: id, op: op}} = t, cache ->
+      case cache do
+        %{^id => res} ->
+          {res, cache}
 
-    {List.to_tuple(list), cache}
-  end
-
-  defp cached_rewrite_type(%T{data: %Expr{id: id, op: op}} = t, cache, fun) do
-    case cache do
-      %{^id => res} ->
-        {res, cache}
-
-      %{} ->
-        {args, cache} = traverse_args(t, cache, &cached_rewrite_type(&1, &2, fun))
-        res = rewrite_type(op, args, t, fun)
-        {res, Map.put(cache, id, res)}
-    end
+        %{} ->
+          {args, cache} = traverse_args(t, cache, &rewrite_type(&1, &2, fun))
+          res = rewrite_type(op, args, t, fun)
+          {res, Map.put(cache, id, res)}
+      end
+    end)
   end
 
   defp rewrite_type(:parameter, _args, t, type_fun) do
@@ -347,7 +342,8 @@ defmodule Nx.Defn.Expr do
   ## Nx.Defn callbacks
 
   @doc false
-  def validate_vars(vars) do
+  # Returns tensors from flat args.
+  def from_flat_args(vars) do
     for var <- vars do
       case var do
         %T{} = head ->
@@ -372,56 +368,64 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def to_vars(args) do
+  # Returns tensors from nested args.
+  def from_nested_args(args) do
     args
-    |> Enum.reduce([], &to_vars/2)
+    |> Enum.reduce([], &from_nested_args/2)
     |> Enum.reverse()
   end
 
-  defp to_vars(%T{} = t, acc),
+  defp from_nested_args(%T{} = t, acc),
     do: [t | acc]
 
-  defp to_vars(number, acc) when is_number(number),
+  defp from_nested_args(number, acc) when is_number(number),
     do: [Nx.tensor(number) | acc]
 
-  defp to_vars(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &to_vars/2)
+  defp from_nested_args(tuple, acc) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_nested_args/2)
 
-  defp to_vars(other, _acc) do
+  defp from_nested_args(other, _acc) do
     raise(
       ArgumentError,
-      "arguments to compiled functions must numbers, tensors, or tuples, got: #{inspect(other)}"
+      "arguments to defn functions must numbers, tensors, or tuples, got: #{inspect(other)}"
     )
   end
 
   @doc false
-  def to_args(args, params) when is_list(args) do
-    {args, []} = Enum.map_reduce(args, params, &to_args_each/2)
+  # Converts nested args to nested params.
+  def to_nested_params(args, params) do
+    {args, {[], _}} =
+      to_nested_many(args, {params, 0}, fn _arg, {[param | params], i} ->
+        {expr(param, :root, :parameter, [i]), {params, i + 1}}
+      end)
+
     args
   end
 
-  defp to_args_each(arg, params) when is_tuple(arg) do
-    {list, params} =
-      arg
-      |> Tuple.to_list()
-      |> Enum.map_reduce(params, &to_args_each/2)
+  @doc false
+  # Converts flat args to flat params.
+  # TODO: Use Enum.with_index/2 on Elixir v1.12+
+  def to_flat_params(vars),
+    do: to_flat_params(vars, 0)
 
-    {List.to_tuple(list), params}
-  end
+  defp to_flat_params([head | tail], i),
+    do: [expr(head, :root, :parameter, [i]) | to_flat_params(tail, i + 1)]
 
-  defp to_args_each(_arg, [param | params]) do
-    {param, params}
-  end
+  defp to_flat_params([], _i),
+    do: []
 
   @doc false
-  def to_params(vars),
-    do: to_params(vars, 0)
+  # Converts the arguments to vars.
+  # It returns both flat vars and nested vars.
+  def to_vars(args) do
+    {args, {vars, _}} =
+      to_nested_many(args, {[], 0}, fn arg, {acc, i} ->
+        var = Macro.var(:"arg#{0}", __MODULE__)
+        {var, {[{var, arg} | acc], i + 1}}
+      end)
 
-  defp to_params([head | tail], i),
-    do: [expr(head, :root, :parameter, [i]) | to_params(tail, i + 1)]
-
-  defp to_params([], _i),
-    do: []
+    {args, Enum.reverse(vars)}
+  end
 
   @doc false
   def to_result(tuple) when is_tuple(tuple),
@@ -432,7 +436,24 @@ defmodule Nx.Defn.Expr do
 
   def to_result(other) do
     raise ArgumentError,
-          "defn must return an expression tensor or a tuple, got: #{inspect(other)}"
+          "defn must return a tensor expression or a tuple, got: #{inspect(other)}"
+  end
+
+  defp to_nested_many(args, acc, fun) when is_list(args) do
+    Enum.map_reduce(args, acc, &to_nested_each(&1, &2, fun))
+  end
+
+  defp to_nested_each(arg, acc, fun) when is_tuple(arg) do
+    {list, acc} =
+      arg
+      |> Tuple.to_list()
+      |> Enum.map_reduce(acc, &to_nested_each(&1, &2, fun))
+
+    {List.to_tuple(list), acc}
+  end
+
+  defp to_nested_each(arg, acc, fun) do
+    fun.(arg, acc)
   end
 
   ## Nx.Defn AST callbacks

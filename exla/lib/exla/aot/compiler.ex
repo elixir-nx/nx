@@ -7,13 +7,13 @@ defmodule EXLA.AOT.Compiler do
   require Logger
   @tf_rev "6af836f407f546cf2f9ab3b5fcb7a8285bda5c96"
 
-  def compile(module_name, functions, _options) do
+  def compile(output_dir, module_name, functions, _options) do
     lib_name = "libnif"
     aot_dir = "aot#{System.unique_integer([:positive])}"
     aot_relative_path = "tensorflow/compiler/xla/exla/#{aot_dir}"
     tf_path = tf_checkout_path()
     target_triple = target_triple()
-    target_path = "#{module_name}.#{nif_extension(target_triple)}"
+    target_path = Path.join(output_dir, "#{module_name}.#{nif_extension(target_triple)}")
 
     config = %{
       aot_dir: aot_dir,
@@ -65,10 +65,9 @@ defmodule EXLA.AOT.Compiler do
           |> File.read!()
 
         File.write!(config.target_path, so)
-        :ok
+        {:ok, config.target_path}
 
       {_, _} ->
-        Logger.error("Unable to complete AOT compilation, something went wrong.")
         :error
     end
   end

@@ -67,14 +67,57 @@ defmodule Nx.Defn.Compiler do
   def __aot__(module, tuples, compiler, aot_opts) do
     compiler_tuples =
       Enum.map(tuples, fn {name, fun, args, opts} ->
-        vars = Nx.Defn.Expr.to_vars(args)
+        tensors = Nx.Defn.Expr.from_nested_args(args)
         # We need to include the actual arity in the name because
         # defn foo({a, b}) and defn foo(a, b) compile to the same
         # name+arity at the AOT level.
-        {:"__aot_#{name}_#{length(args)}", &runtime_fun(&1, fun, args, compiler), vars, opts}
+        {:"__aot_#{name}_#{length(args)}", &runtime_fun(&1, fun, args, compiler), tensors, opts}
       end)
 
-    compiler.__aot__(module, compiler_tuples, aot_opts)
+    output_dir = Path.join(System.tmp_dir(), "elixir-nx/aot#{System.unique_integer()}")
+    File.rm_rf!(output_dir)
+    File.mkdir_p!(output_dir)
+
+    case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
+      {:ok, nif} ->
+        nif = nif |> Path.rootname() |> String.to_charlist()
+
+        funs =
+          # TODO: Make it work with tuples
+          # TODO: Check the input tensors
+          # TODO: Check the output tensors
+          for {tuple, compiler_tuple} <- Enum.zip(tuples, compiler_tuples) do
+            {name, _, args, _} = tuple
+            {nif_name, _, nif_args, _} = compiler_tuple
+            args = Macro.generate_arguments(length(args), __MODULE__)
+            nif_args = Macro.generate_arguments(length(nif_args), __MODULE__)
+
+            quote do
+              def unquote(name)(unquote_splicing(args)) do
+                unquote(args) = Enum.map(unquote(args), &Nx.to_binary/1)
+                unquote(nif_name)(unquote_splicing(args))
+              end
+
+              defp unquote(nif_name)(unquote_splicing(nif_args)) do
+                :erlang.nif_error(:undef)
+              end
+            end
+          end
+
+        # TODO: Use @external_resource for import_aot
+        body =
+          quote do
+            @moduledoc false
+            @on_load :__on_load__
+            def __on_load__, do: :erlang.load_nif(unquote(nif), 0)
+            unquote(funs)
+          end
+
+        Module.create(module, body, __ENV__)
+
+      :error ->
+        raise "unable to complete AOT compilation, something went wrong"
+    end
   end
 
   @doc false
@@ -83,15 +126,12 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp runtime(callback, fun, args, compiler, opts) do
-    Kernel.apply(compiler, callback, [
-      fun,
-      Nx.Defn.Expr.to_vars(args),
-      &runtime_fun(&1, fun, args, compiler),
-      opts
-    ])
+    tensors = Nx.Defn.Expr.from_nested_args(args)
+    runtime_fun = &runtime_fun(&1, fun, args, compiler)
+    Kernel.apply(compiler, callback, [fun, tensors, runtime_fun, opts])
   end
 
-  defp runtime_fun(vars, fun, args, compiler) do
+  defp runtime_fun(tensors, fun, args, compiler) do
     if Process.get(Nx.Defn.Compiler) do
       raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
     end
@@ -99,8 +139,7 @@ defmodule Nx.Defn.Compiler do
     Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      params = Nx.Defn.Expr.to_params(vars)
-      args = Nx.Defn.Expr.to_args(args, params)
+      args = Nx.Defn.Expr.to_nested_params(args, tensors)
 
       fun
       |> apply(args)
@@ -128,7 +167,7 @@ defmodule Nx.Defn.Compiler do
   defp compile_each({{name, _arity} = def, def_meta}, state) do
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
     {nx_args, cache_args, cache_vars} = split_args(args, 0, def_meta.defaults, [], [], [])
-    vars = collect_vars(nx_args)
+    flat_args = collect_vars(nx_args)
     {def_module, def_opts} = def_meta.compiler
     defn_name = defn_name(name)
 
@@ -146,11 +185,11 @@ defmodule Nx.Defn.Compiler do
         else
           unquote(def_module).__jit__(
             unquote(cache),
-            Nx.Defn.Expr.validate_vars(unquote(vars)),
-            fn unquote(vars) ->
+            Nx.Defn.Expr.from_flat_args(unquote(flat_args)),
+            fn unquote(flat_args) ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
               try do
-                unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
+                unquote(flat_args) = Nx.Defn.Expr.to_flat_params(unquote(flat_args))
                 Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
               after
                 Process.delete(Nx.Defn.Compiler)

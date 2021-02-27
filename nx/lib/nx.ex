@@ -529,28 +529,40 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.template({:f, 32}, {2, 3})
+      iex> Nx.template({2, 3}, {:f, 32})
       #Nx.Tensor<
         f32[2][3]
         Nx.TemplateBackend
       >
 
-      iex> Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+      iex> Nx.template({2, 3}, {:f, 32}, names: [:rows, :columns])
       #Nx.Tensor<
         f32[rows: 2][columns: 3]
         Nx.TemplateBackend
       >
 
-      iex> t = Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+  A tensor can also be given as first argument, and its shape and names
+  will be used:
+
+      iex> Nx.template(Nx.iota({2, 3}, names: [:rows, :columns]), {:f, 32})
+      #Nx.Tensor<
+        f32[rows: 2][columns: 3]
+        Nx.TemplateBackend
+      >
+
+  Althogh note it is impossible to perform any operation on a tensor template:
+
+      iex> t = Nx.template({2, 3}, {:f, 32}, names: [:rows, :columns])
       iex> Nx.add(t, 1)
       ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
 
   """
   @doc type: :creation
-  def template(type, shape, opts \\ []) do
+  def template(tensor_or_shape, type, opts \\ []) do
     assert_keys!(opts, [:names])
     type = Nx.Type.normalize!(type)
-    names = Nx.Shape.named_axes!(opts[:names], shape)
+    shape = shape(tensor_or_shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
   end
 
@@ -683,7 +695,7 @@ defmodule Nx do
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type, :names, :backend])
-    shape = Nx.shape(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     range_type = Nx.Type.infer(max - min)
     type = Nx.Type.normalize!(opts[:type] || range_type)
@@ -787,7 +799,7 @@ defmodule Nx do
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type, :names, :backend])
-    shape = Nx.shape(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
 

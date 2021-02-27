@@ -918,7 +918,7 @@ defmodule Nx.DefnTest do
 
     test "raises if it doesn't return an expression" do
       assert_raise ArgumentError,
-                   "defn must return an expression tensor or a tuple, got: :ok",
+                   "defn must return a tensor expression or a tuple, got: :ok",
                    fn ->
                      Nx.Defn.jit(fn -> :ok end, [], Nx.Defn.Evaluator).()
                    end

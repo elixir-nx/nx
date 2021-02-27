@@ -31,7 +31,7 @@ defmodule EXLA.Defn do
   end
 
   @doc false
-  def __aot__(module, tuples, aot_options) do
+  def __aot__(output_dir, module, tuples, aot_options) do
     funs =
       for {name, fun, vars, options} <- tuples do
         {fun, _expr_options, exla_options} = prepare_args(fun, options)
@@ -46,7 +46,7 @@ defmodule EXLA.Defn do
         {computation, name, shapes}
       end
 
-    EXLA.AOT.Compiler.compile(module, funs, aot_options)
+    EXLA.AOT.Compiler.compile(output_dir, module, funs, aot_options)
   end
 
   defp prepare_args(fun, options) do
