@@ -685,10 +685,10 @@ defmodule Nx do
     assert_keys!(opts, [:type, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
+    range_type = Nx.Type.infer(max - min)
+    type = Nx.Type.normalize!(opts[:type] || range_type)
 
-    unless Nx.Type.float?(type) or
-           (Nx.Type.integer?(type) and is_integer(min) and is_integer(max)) do
+    unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
       raise ArgumentError,
             "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
             " in range #{inspect(min)} to #{inspect(max)}"
