@@ -1174,6 +1174,12 @@ defmodule NxTest do
       assert Nx.type(t2) == {:f, 64}
       assert t1 != t2
     end
+
+    test "raises with non-float type" do
+      assert_raise(ArgumentError, "random_normal/3 expects float type, got: {:s, 32}", fn ->
+        Nx.random_normal(1, 0.1, 10.0, type: {:s, 32})
+      end)
+    end
   end
 
   describe "random_uniform/3" do
@@ -1190,6 +1196,18 @@ defmodule NxTest do
       assert Nx.type(t1) == {:s, 64}
       assert Nx.type(t2) == {:f, 64}
       assert t1 != t2
+    end
+
+    test "works with compatible types" do
+      t = Nx.random_uniform(1, 0, 10, type: {:s, 32})
+      assert Nx.shape(t) == {}
+      assert Nx.type(t) == {:s, 32}
+    end
+
+    test "raises for incompatible types" do
+      assert_raise(ArgumentError, "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 64}", fn ->
+        Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
+      end)
     end
   end
 
