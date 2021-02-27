@@ -273,7 +273,7 @@ defmodule EXLA.Defn do
     kernel_dilation = opts[:kernel_dilation]
     groups = opts[:groups]
 
-    %{type: output_type, shape: shape} = ans
+    %{type: output_type} = ans
 
     # Build general conv dims
     input_permutation = List.to_tuple(opts[:input_permutation])

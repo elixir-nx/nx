@@ -6196,7 +6196,7 @@ defmodule Nx do
       Nx.conv(img, kernel,
         input_permutation: [:batch, :channels, :height, :width],
         kernel_permutation: [:output, :input, :height, :width],
-        output_permutation: [:batch, :height, :width, :channels]
+        output_permutation: [:batch, :channels, :height, :width]
       )
 
   Notice that `output_permutation` is normalized with respect to
@@ -6340,7 +6340,7 @@ defmodule Nx do
     output_permutation = opts[:output_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
 
     output_permutation =
-      Nx.Shape.normalize_axes(permuted_input_shape, output_permutation, permuted_input_names)
+      Nx.Shape.normalize_axes(input_shape, output_permutation, input_names)
 
     if rank(input_shape) < 3 do
       raise ArgumentError,
@@ -6507,6 +6507,12 @@ defmodule Nx do
         strides,
         padding_config
       )
+
+    output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
 
     {shape, names} = Nx.Shape.transpose(shape, output_permutation, names)
 
