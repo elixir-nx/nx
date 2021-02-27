@@ -484,6 +484,31 @@ defmodule Nx.Defn.Grad do
   end
 
   @half_sqrt_pi :math.sqrt(:math.pi()) / 2
+  @two_rsqrt_pi 2 / :math.sqrt(:math.pi())
+
+  defp grad(:erf, [x], _ans, g, cache) do
+    g =
+      x
+      |> Nx.power(2)
+      |> Nx.negate()
+      |> Nx.exp()
+      |> Nx.multiply(g)
+      |> Nx.multiply(@two_rsqrt_pi)
+
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:erfc, [x], _ans, g, cache) do
+    g =
+      x
+      |> Nx.power(2)
+      |> Nx.negate()
+      |> Nx.exp()
+      |> Nx.multiply(Nx.negate(g))
+      |> Nx.multiply(@two_rsqrt_pi)
+
+    to_grad(x, g, cache)
+  end
 
   defp grad(:erf_inv, [x], ans, g, cache) do
     g = Nx.multiply(g, Nx.exp(Nx.power(ans, 2)))
