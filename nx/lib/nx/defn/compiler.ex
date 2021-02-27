@@ -64,7 +64,6 @@ defmodule Nx.Defn.Compiler do
       raise ArgumentError, "AOT compilation is not available to the #{inspect(compiler)} compiler"
     end
 
-    File.rm_rf!(output_dir)
     File.mkdir_p!(output_dir)
 
     case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
