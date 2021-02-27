@@ -691,7 +691,7 @@ defmodule Nx do
     unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
       raise ArgumentError,
             "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
-            " with range #{inspect(range_type)}"
+              " with range #{inspect(range_type)}"
     end
 
     backend = opts[:backend] || Nx.BinaryBackend
@@ -6164,15 +6164,44 @@ defmodule Nx do
   of summing the element-wise products in the window across
   each input channel.
 
-  The ranks of both `input` and `kernel` must match. Both
-  `input` and `kernel` must have shapes of the following
-  form:
+  The ranks of both `input` and `kernel` must match. By
+  default, both `input` and `kernel` are expected to have shapes
+  of the following form:
 
     * `input` - `{batch_size, input_channels, input_d0, ..., input_dn}`
     * `kernel` - `{output_channels, input_channels, kernel_d0, ..., kernel_dn}`
 
   Where `input_d0...input_dn` and `kernel_d0...kernel_dn` represent
-  an arbitrary number of spatial dimensions.
+  an arbitrary number of spatial dimensions. You can alter this configuration
+  using one of the `_permutation` configuration options. Permutations
+  are input, kernel, and output specifications for the layout of the
+  convolution. For example, if your input tensor is configured with
+  "channels last", you can specify the input permutation with:
+
+      Nx.conv(img, kernel, input_permutation: [0, 3, 1, 2])
+
+  Permutations expect configurations that specify the location of
+  dimensions in the following orders:
+
+    * `input_permutation` - `[batch_dim, input_channel_dim, ...spatial_dims...]`
+    * `kernel_permutation` - `[output_channel_dim, input_channel_dim, ...spatial_dims...]`
+    * `output_permutation` - `[batch_dim, output_channel_dim, ...spatial_dims...]`
+
+  Using named tensors, it's a bit easier to see how permutations
+  help you configure the convolution. Given input tensor with names
+  `[:batch, :height, :width, :channels]` (channels last) and kernel
+  tensor with names `[:input, :output, :height, :width]`, you can
+  configure the convolution with the following permutations:
+
+      Nx.conv(img, kernel,
+        input_permutation: [:batch, :channels, :height, :width],
+        kernel_permutation: [:output, :input, :height, :width],
+        output_permutation: [:batch, :height, :width, :channels]
+      )
+
+  Notice that `output_permutation` is normalized with respect to
+  the input permutation names. We cannot guarantee that every
+  permutation is supported in every backend or compiler.
 
   To configure how the window slides along the input tensor, you
   can specify `:strides`. `:strides` must be a positive integer
@@ -6278,7 +6307,16 @@ defmodule Nx do
   """
   @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do
-    assert_keys!(opts, [:padding, :strides, :input_dilation, :kernel_dilation, :groups])
+    assert_keys!(opts, [
+      :padding,
+      :strides,
+      :input_dilation,
+      :kernel_dilation,
+      :groups,
+      :input_permutation,
+      :kernel_permutation,
+      :output_permutation
+    ])
 
     padding = opts[:padding] || :valid
     input_dilation = opts[:input_dilation] || 1
@@ -6287,6 +6325,22 @@ defmodule Nx do
 
     %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
+
+    input_permutation = opts[:input_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+    input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
+    kernel_permutation = opts[:kernel_permutation] || Enum.to_list(0..(rank(kernel_shape) - 1))
+    kernel_permutation = Nx.Shape.normalize_axes(kernel_shape, kernel_permutation, kernel_names)
+
+    {permuted_input_shape, permuted_input_names} =
+      Nx.Shape.transpose(input_shape, input_permutation, input_names)
+
+    {permuted_kernel_shape, permuted_kernel_names} =
+      Nx.Shape.transpose(kernel_shape, kernel_permutation, kernel_names)
+
+    output_permutation = opts[:output_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+
+    output_permutation =
+      Nx.Shape.normalize_axes(permuted_input_shape, output_permutation, permuted_input_names)
 
     if rank(input_shape) < 3 do
       raise ArgumentError,
@@ -6300,9 +6354,9 @@ defmodule Nx do
               " shape #{inspect(kernel_shape)} has rank #{rank(kernel_shape)}"
     end
 
-    tensor_input_channels = elem(input_shape, 1)
-    kernel_input_channels = elem(kernel_shape, 1)
-    kernel_output_channels = elem(kernel_shape, 0)
+    tensor_input_channels = elem(permuted_input_shape, 1)
+    kernel_input_channels = elem(permuted_kernel_shape, 1)
+    kernel_output_channels = elem(permuted_kernel_shape, 0)
 
     if tensor_input_channels != kernel_input_channels * groups do
       raise ArgumentError,
@@ -6319,12 +6373,12 @@ defmodule Nx do
     end
 
     filter_shape =
-      kernel_shape
+      permuted_kernel_shape
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
     spatial_dims =
-      input_shape
+      permuted_input_shape
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
@@ -6396,7 +6450,7 @@ defmodule Nx do
       {0, 0, 0} | Enum.map(kernel_dilation, &{0, 0, &1 - 1})
     ]
 
-    dilated_kernel_shape = Nx.Shape.pad(kernel_shape, kernel_dilation_padding_config)
+    dilated_kernel_shape = Nx.Shape.pad(permuted_kernel_shape, kernel_dilation_padding_config)
 
     dilated_filter_shape =
       dilated_kernel_shape
@@ -6413,7 +6467,7 @@ defmodule Nx do
       {0, 0, 0} | Enum.map(input_dilation, &{0, 0, &1 - 1})
     ]
 
-    dilated_input_shape = Nx.Shape.pad(input_shape, input_dilation_padding_config)
+    dilated_input_shape = Nx.Shape.pad(permuted_input_shape, input_dilation_padding_config)
 
     dilated_spatial_dims =
       dilated_input_shape
@@ -6447,12 +6501,14 @@ defmodule Nx do
     {shape, names} =
       Nx.Shape.conv(
         dilated_input_shape,
-        input_names,
+        permuted_input_names,
         dilated_kernel_shape,
-        kernel_names,
+        permuted_kernel_names,
         strides,
         padding_config
       )
+
+    {shape, names} = Nx.Shape.transpose(shape, output_permutation, names)
 
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
     out = %{tensor | type: type, shape: shape, names: names}
@@ -6465,7 +6521,10 @@ defmodule Nx do
       padding: padding_config,
       input_dilation: input_dilation,
       kernel_dilation: kernel_dilation,
-      groups: groups
+      groups: groups,
+      input_permutation: input_permutation,
+      kernel_permutation: kernel_permutation,
+      output_permutation: output_permutation
     )
   end
 

@@ -5,7 +5,7 @@ defmodule EXLA.DefnExprTest do
   @default_defn_compiler {EXLA, max_float_type: {:f, 64}}
 
   describe "tuples" do
-    defn add_subtract_tuple(a, b), do: {a + b, a - b}
+    defn(add_subtract_tuple(a, b), do: {a + b, a - b})
 
     test "on results" do
       assert add_subtract_tuple(2, 3) == {Nx.tensor(5), Nx.tensor(-1)}
@@ -14,7 +14,7 @@ defmodule EXLA.DefnExprTest do
                {Nx.tensor([9, 10, 11]), Nx.tensor([-11, -10, -9])}
     end
 
-    defn pattern_tuple({a, b}), do: a + b
+    defn(pattern_tuple({a, b}), do: a + b)
 
     test "on patterns" do
       assert pattern_tuple({2, 3}) == Nx.tensor(5)
@@ -23,7 +23,7 @@ defmodule EXLA.DefnExprTest do
                Nx.tensor([[4, 5], [5, 6]])
     end
 
-    defn calls_pattern_tuple(a, b), do: pattern_tuple({a, b})
+    defn(calls_pattern_tuple(a, b), do: pattern_tuple({a, b}))
 
     test "on inlined tuples" do
       assert calls_pattern_tuple(2, 3) == Nx.tensor(5)
@@ -35,10 +35,10 @@ defmodule EXLA.DefnExprTest do
 
   describe "tensor constants" do
     @two 2
-    defn add_two_attribute(t), do: t + @two
+    defn(add_two_attribute(t), do: t + @two)
 
     @two_per_two Nx.tensor([[1, 2], [3, 4]])
-    defn add_2x2_attribute(t), do: t + @two_per_two
+    defn(add_2x2_attribute(t), do: t + @two_per_two)
 
     test "expands module attributes to scalars" do
       assert add_two_attribute(1) == Nx.tensor(3)
@@ -53,13 +53,13 @@ defmodule EXLA.DefnExprTest do
 
   describe "max_*_type/2" do
     @defn_compiler {EXLA, max_unsigned_type: {:u, 32}}
-    defn maxu(a), do: a
+    defn(maxu(a), do: a)
 
     @defn_compiler {EXLA, max_signed_type: {:s, 32}}
-    defn maxs(a), do: a
+    defn(maxs(a), do: a)
 
     @defn_compiler EXLA
-    defn maxf(a), do: a
+    defn(maxf(a), do: a)
 
     test "converts params" do
       assert maxu(Nx.tensor(1, type: {:u, 64})) == Nx.tensor(1, type: {:u, 32})
@@ -69,9 +69,9 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "+/2" do
-    defn add_two(a, b), do: a + b
+    defn(add_two(a, b), do: a + b)
     @defn_compiler Nx.Defn.Evaluator
-    defn add_two_nx(a, b), do: a + b
+    defn(add_two_nx(a, b), do: a + b)
 
     test "same shape and type" do
       assert add_two(1.0, 2.0) == Nx.tensor(3.0)
@@ -109,8 +109,8 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn add_two_int(t), do: t + 2
-    defn add_two_float(t), do: t + 2.0
+    defn(add_two_int(t), do: t + 2)
+    defn(add_two_float(t), do: t + 2.0)
 
     test "constants" do
       tensors = [
@@ -160,7 +160,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "//2" do
-    defn divide_two(a, b), do: a / b
+    defn(divide_two(a, b), do: a / b)
 
     test "parameters" do
       tensors = [
@@ -178,8 +178,8 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn divide_two_int(t), do: t / 2
-    defn divide_two_float(t), do: t / 2.0
+    defn(divide_two_int(t), do: t / 2)
+    defn(divide_two_float(t), do: t / 2.0)
 
     test "constants" do
       tensors = [
@@ -200,7 +200,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "remainder" do
-    defn remainder(a, b), do: Nx.remainder(a, b)
+    defn(remainder(a, b), do: Nx.remainder(a, b))
 
     test "integers" do
       left = Nx.tensor([-1023, 1023])
@@ -227,7 +227,7 @@ defmodule EXLA.DefnExprTest do
       {Nx.tensor([[1], [2]], type: {:f, 32}), Nx.tensor([[10, 20]], type: {:f, 32})}
     ]
 
-    defn subtract_two(a, b), do: a - b
+    defn(subtract_two(a, b), do: a - b)
 
     test "-" do
       for {left, right} <- @tensors do
@@ -236,7 +236,7 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn multiply_two(a, b), do: a * b
+    defn(multiply_two(a, b), do: a * b)
 
     test "*" do
       for {left, right} <- @tensors do
@@ -245,7 +245,7 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn unary_minus(a), do: -a
+    defn(unary_minus(a), do: -a)
 
     test "negate" do
       for t <- [
@@ -257,7 +257,7 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn max_two(a, b), do: max(a, b)
+    defn(max_two(a, b), do: max(a, b))
 
     test "max" do
       for {left, right} <- @tensors do
@@ -266,7 +266,7 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn min_two(a, b), do: min(a, b)
+    defn(min_two(a, b), do: min(a, b))
 
     test "min" do
       for {left, right} <- @tensors do
@@ -275,7 +275,7 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn power_two(a, b), do: Nx.power(a, b)
+    defn(power_two(a, b), do: Nx.power(a, b))
 
     test "power" do
       for {left, right} <- @tensors do
@@ -284,7 +284,7 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn atan2_two(a, b), do: Nx.atan2(a, b)
+    defn(atan2_two(a, b), do: Nx.atan2(a, b))
 
     test "atan2" do
       <<neg_zero::float>> = <<0x8000000000000000::64>>
@@ -295,7 +295,7 @@ defmodule EXLA.DefnExprTest do
       compare_tensors!(atan2_two(right, left), Nx.atan2(right, left))
     end
 
-    defn quotient_two(a, b), do: Nx.quotient(a, b)
+    defn(quotient_two(a, b), do: Nx.quotient(a, b))
 
     test "quotient" do
       int_tensors = [
@@ -318,42 +318,42 @@ defmodule EXLA.DefnExprTest do
     @left Nx.tensor([-2, -1, 0, 1, 2])
     @right Nx.tensor([[-2], [-1], [0], [1], [2]])
 
-    defn bitwise_and(a, b), do: a &&& b
+    defn(bitwise_and(a, b), do: a &&& b)
 
     test "bitwise_and" do
       assert Nx.shape(bitwise_and(@left, @right)) == {5, 5}
       assert bitwise_and(@left, @right) == Nx.bitwise_and(@left, @right)
     end
 
-    defn bitwise_or(a, b), do: a ||| b
+    defn(bitwise_or(a, b), do: a ||| b)
 
     test "bitwise_or" do
       assert Nx.shape(bitwise_or(@left, @right)) == {5, 5}
       assert bitwise_or(@left, @right) == Nx.bitwise_or(@left, @right)
     end
 
-    defn bitwise_xor(a, b), do: a ^^^ b
+    defn(bitwise_xor(a, b), do: a ^^^ b)
 
     test "bitwise_xor" do
       assert Nx.shape(bitwise_xor(@left, @right)) == {5, 5}
       assert bitwise_xor(@left, @right) == Nx.bitwise_xor(@left, @right)
     end
 
-    defn bitwise_not(a), do: ~~~a
+    defn(bitwise_not(a), do: ~~~a)
 
     test "bitwise_not" do
       assert Nx.shape(bitwise_not(@left)) == {5}
       assert bitwise_not(@left) == Nx.bitwise_not(@left)
     end
 
-    defn bitwise_pc(a), do: Nx.population_count(a)
+    defn(bitwise_pc(a), do: Nx.population_count(a))
 
     test "population_count" do
       assert Nx.shape(bitwise_pc(@left)) == {5}
       assert bitwise_pc(@left) == Nx.population_count(@left)
     end
 
-    defn bitwise_clz(a), do: Nx.count_leading_zeros(a)
+    defn(bitwise_clz(a), do: Nx.count_leading_zeros(a))
 
     test "count_leading_zeros" do
       assert Nx.shape(bitwise_clz(@left)) == {5}
@@ -363,7 +363,7 @@ defmodule EXLA.DefnExprTest do
     @left Nx.tensor([-2, -1, 0, 1, 2])
     @right Nx.tensor([[0], [1], [2], [3], [4]])
 
-    defn left_shift(a, b), do: a <<< b
+    defn(left_shift(a, b), do: a <<< b)
 
     test "left_shift" do
       assert Nx.shape(left_shift(@left, @right)) == {5, 5}
@@ -376,7 +376,7 @@ defmodule EXLA.DefnExprTest do
     @left_unsigned Nx.tensor([0, 1, 2, 253, 254, 255], type: {:u, 8})
     @right_unsigned Nx.tensor([[0], [1], [2], [3], [4], [5]], type: {:u, 8})
 
-    defn right_shift(a, b), do: a >>> b
+    defn(right_shift(a, b), do: a >>> b)
 
     test "right_shift" do
       assert Nx.shape(right_shift(@left_signed, @right_signed)) == {9, 9}
@@ -392,7 +392,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "exp" do
-    defn exp(t), do: Nx.exp(t)
+    defn(exp(t), do: Nx.exp(t))
 
     test "computes the exp across types" do
       assert Nx.tensor([1, 2, 3]) |> exp() ==
@@ -413,7 +413,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "equal" do
-    defn equal(a, b), do: Nx.equal(a, b)
+    defn(equal(a, b), do: Nx.equal(a, b))
 
     test "computes equality of scalars" do
       assert equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
@@ -430,7 +430,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "not equal" do
-    defn not_equal(a, b), do: Nx.not_equal(a, b)
+    defn(not_equal(a, b), do: Nx.not_equal(a, b))
 
     test "computes equality of scalars" do
       assert not_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
@@ -447,7 +447,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "less" do
-    defn less(a, b), do: Nx.less(a, b)
+    defn(less(a, b), do: Nx.less(a, b))
 
     test "compares scalars" do
       assert less(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
@@ -464,7 +464,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "greater" do
-    defn greater(a, b), do: Nx.greater(a, b)
+    defn(greater(a, b), do: Nx.greater(a, b))
 
     test "compares scalars" do
       assert greater(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
@@ -481,7 +481,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "less equal" do
-    defn less_equal(a, b), do: Nx.less_equal(a, b)
+    defn(less_equal(a, b), do: Nx.less_equal(a, b))
 
     test "compares scalars" do
       assert less_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(1, type: {:u, 8})
@@ -498,7 +498,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "greater equal" do
-    defn greater_equal(a, b), do: Nx.greater_equal(a, b)
+    defn(greater_equal(a, b), do: Nx.greater_equal(a, b))
 
     test "compares scalars" do
       assert greater_equal(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(0, type: {:u, 8})
@@ -516,7 +516,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "logical" do
-    defn logical_and(a, b), do: Nx.logical_and(a, b)
+    defn(logical_and(a, b), do: Nx.logical_and(a, b))
 
     test "and" do
       assert logical_and(Nx.tensor([-1, 0, 1]), Nx.tensor([[-1], [0], [1]])) ==
@@ -540,7 +540,7 @@ defmodule EXLA.DefnExprTest do
                )
     end
 
-    defn logical_or(a, b), do: Nx.logical_or(a, b)
+    defn(logical_or(a, b), do: Nx.logical_or(a, b))
 
     test "or" do
       assert logical_or(Nx.tensor([-1, 0, 1]), Nx.tensor([[-1], [0], [1]])) ==
@@ -564,7 +564,7 @@ defmodule EXLA.DefnExprTest do
                )
     end
 
-    defn logical_xor(a, b), do: Nx.logical_xor(a, b)
+    defn(logical_xor(a, b), do: Nx.logical_xor(a, b))
 
     test "xor" do
       assert logical_xor(Nx.tensor([-1, 0, 1]), Nx.tensor([[-1], [0], [1]])) ==
@@ -590,7 +590,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "select" do
-    defn select(pred, x, y), do: Nx.select(pred, x, y)
+    defn(select(pred, x, y), do: Nx.select(pred, x, y))
 
     test "selects one or the other with a scalar" do
       assert select(Nx.tensor(1), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
@@ -631,9 +631,9 @@ defmodule EXLA.DefnExprTest do
             [:tan, :acosh, :asinh, :cosh, :sinh, :erf, :erfc] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
-      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      defn(unquote(exla_fun)(t), do: Nx.unquote(fun)(t))
       @defn_compiler Nx.Defn.Evaluator
-      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+      defn(unquote(nx_fun)(t), do: Nx.unquote(fun)(t))
 
       test "#{fun}" do
         compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
@@ -649,9 +649,9 @@ defmodule EXLA.DefnExprTest do
     for fun <- [:atanh, :acos, :asin, :atan, :erf_inv] do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
-      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      defn(unquote(exla_fun)(t), do: Nx.unquote(fun)(t))
       @defn_compiler Nx.Defn.Evaluator
-      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+      defn(unquote(nx_fun)(t), do: Nx.unquote(fun)(t))
 
       test "#{fun}" do
         compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
@@ -670,9 +670,9 @@ defmodule EXLA.DefnExprTest do
     for fun <- funs do
       exla_fun = :"unary_#{fun}"
       nx_fun = :"unary_#{fun}_nx"
-      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
+      defn(unquote(exla_fun)(t), do: Nx.unquote(fun)(t))
       @defn_compiler Nx.Defn.Evaluator
-      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+      defn(unquote(nx_fun)(t), do: Nx.unquote(fun)(t))
 
       test "#{fun}" do
         compare_tensors!(unquote(exla_fun)(@uint_tensor), unquote(nx_fun)(@uint_tensor))
@@ -683,7 +683,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "as_type" do
-    defn to_float(t), do: Nx.as_type(t, {:f, 32})
+    defn(to_float(t), do: Nx.as_type(t, {:f, 32}))
 
     test "converts tensor type" do
       assert to_float(Nx.tensor([1, 2, 3])) == Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})
@@ -691,7 +691,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "if" do
-    defn if3(a, b, c), do: if(a, do: b, else: c)
+    defn(if3(a, b, c), do: if(a, do: b, else: c))
 
     test "one param per branch" do
       assert if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
@@ -710,7 +710,7 @@ defmodule EXLA.DefnExprTest do
                Nx.tensor([[1, 2], [1, 2]])
     end
 
-    defn if_params(a, b, c), do: if(a, do: b + c, else: b - c)
+    defn(if_params(a, b, c), do: if(a, do: b + c, else: b - c))
 
     test "two params per branch" do
       assert if_params(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(-1)
@@ -727,7 +727,7 @@ defmodule EXLA.DefnExprTest do
       assert if_shared(Nx.tensor(2), Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(12)
     end
 
-    defn if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
+    defn(if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a}))
 
     test "with tuples" do
       assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
@@ -768,7 +768,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "metadata" do
-    defn add_with_stop_grad(a, b), do: stop_grad(Nx.add(a, b))
+    defn(add_with_stop_grad(a, b), do: stop_grad(Nx.add(a, b)))
 
     test "ignores metadata nodes" do
       assert add_with_stop_grad(1, 2) == Nx.tensor(3)
@@ -808,9 +808,9 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "map" do
-    defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
-    defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)
-    defn map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end)
+    defn(map_plus(t), do: Nx.map(t, fn x -> x + 1 end))
+    defn(map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end))
+    defn(map_exp(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.exp(x) end))
 
     test "maps a function over the tensor" do
       assert map_plus(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 3, 4], [5, 6, 7]])
@@ -829,11 +829,12 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "reduce" do
-    defn reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end)
-    defn reduce_keep(t), do: Nx.reduce(t, 1, [keep_axes: true], fn a, b -> a * b end)
+    defn(reduce(t), do: Nx.reduce(t, 1, fn a, b -> a * b end))
+    defn(reduce_keep(t), do: Nx.reduce(t, 1, [keep_axes: true], fn a, b -> a * b end))
 
-    defn reduce_keep_2(t),
+    defn(reduce_keep_2(t),
       do: Nx.reduce(t, 1, [keep_axes: true, axes: [0, 2]], fn a, b -> a * b end)
+    )
 
     test "computes the reduce" do
       assert Nx.tensor([1, 2, 3]) |> reduce() == Nx.tensor(6)
@@ -854,20 +855,25 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "reduce window" do
-    defn reduce_window_valid_no_stride(t),
+    defn(reduce_window_valid_no_stride(t),
       do: Nx.reduce_window(t, 0, {2, 2}, fn a, b -> a + b end)
+    )
 
-    defn reduce_window_valid_stride(t),
+    defn(reduce_window_valid_stride(t),
       do: Nx.reduce_window(t, 0, {2, 2}, [strides: [2, 2]], fn a, b -> a + b end)
+    )
 
-    defn reduce_window_same_no_stride(t),
+    defn(reduce_window_same_no_stride(t),
       do: Nx.reduce_window(t, 0, {2, 2}, [padding: :same], fn a, b -> a + b end)
+    )
 
-    defn reduce_window_same_stride(t),
+    defn(reduce_window_same_stride(t),
       do: Nx.reduce_window(t, 0, {2, 2}, [padding: :same, strides: [2, 1]], fn a, b -> a + b end)
+    )
 
-    defn reduce_window_general_no_stride(t),
+    defn(reduce_window_general_no_stride(t),
       do: Nx.reduce_window(t, 0, {2, 2}, [padding: [{2, 1}, {1, 2}]], fn a, b -> a + b end)
+    )
 
     defn reduce_window_general_stride(t) do
       Nx.reduce_window(t, 0, {2, 2}, [padding: [{1, 2}, {2, 1}], strides: [2, 1]], fn a, b ->
@@ -973,9 +979,9 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "all?" do
-    defn all?(t), do: Nx.all?(t)
-    defn all_axis_0?(t), do: Nx.all?(t, axes: [0])
-    defn all_axis_1?(t), do: Nx.all?(t, axes: [1])
+    defn(all?(t), do: Nx.all?(t))
+    defn(all_axis_0?(t), do: Nx.all?(t, axes: [0]))
+    defn(all_axis_1?(t), do: Nx.all?(t, axes: [1]))
 
     test "computes the bitwise and across types" do
       assert all?(Nx.tensor([1, 2, 3])) == Nx.tensor(1, type: {:u, 8})
@@ -992,9 +998,9 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "any?" do
-    defn any?(t), do: Nx.any?(t)
-    defn any_axis_0?(t), do: Nx.any?(t, axes: [0])
-    defn any_axis_1?(t), do: Nx.any?(t, axes: [1])
+    defn(any?(t), do: Nx.any?(t))
+    defn(any_axis_0?(t), do: Nx.any?(t, axes: [0]))
+    defn(any_axis_1?(t), do: Nx.any?(t, axes: [1]))
 
     test "computes the bitwise and across types" do
       assert any?(Nx.tensor([-1, 0, 1])) == Nx.tensor(1, type: {:u, 8})
@@ -1009,7 +1015,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "sum" do
-    defn sum(t), do: Nx.sum(t)
+    defn(sum(t), do: Nx.sum(t))
 
     test "computes the sum across types" do
       assert Nx.tensor([1, 2, 3]) |> sum() == Nx.tensor(6)
@@ -1019,9 +1025,9 @@ defmodule EXLA.DefnExprTest do
       assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> sum() == Nx.tensor(6, type: {:f, 32})
     end
 
-    defn sum_pos_axis(t), do: Nx.sum(t, axes: [1])
-    defn sum_neg_axis(t), do: Nx.sum(t, axes: [-3])
-    defn sum_pos_neg_axis(t), do: Nx.sum(t, axes: [1, -3])
+    defn(sum_pos_axis(t), do: Nx.sum(t, axes: [1]))
+    defn(sum_neg_axis(t), do: Nx.sum(t, axes: [-3]))
+    defn(sum_pos_neg_axis(t), do: Nx.sum(t, axes: [1, -3]))
 
     test "computes the sum on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
@@ -1030,7 +1036,7 @@ defmodule EXLA.DefnExprTest do
       assert sum_pos_neg_axis(t) == Nx.sum(t, axes: [1, -3])
     end
 
-    defn sum_equal(t), do: Nx.sum(Nx.equal(t, 1.0))
+    defn(sum_equal(t), do: Nx.sum(Nx.equal(t, 1.0)))
 
     test "does not overflow" do
       assert sum_equal(Nx.tensor(1)) == Nx.tensor(1, type: {:u, 64})
@@ -1038,8 +1044,8 @@ defmodule EXLA.DefnExprTest do
       assert sum_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(1, type: {:u, 64})
     end
 
-    defn sum_keep(t), do: Nx.sum(t, keep_axes: true)
-    defn sum_keep_2(t), do: Nx.sum(t, axes: [0, 2], keep_axes: true)
+    defn(sum_keep(t), do: Nx.sum(t, keep_axes: true))
+    defn(sum_keep_2(t), do: Nx.sum(t, axes: [0, 2], keep_axes: true))
 
     test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> sum_keep() == Nx.tensor([6])
@@ -1051,7 +1057,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "product" do
-    defn product(t), do: Nx.product(t)
+    defn(product(t), do: Nx.product(t))
 
     test "computes the product across types" do
       assert Nx.tensor([1, 2, 3]) |> product() == Nx.tensor(6)
@@ -1063,9 +1069,9 @@ defmodule EXLA.DefnExprTest do
                Nx.tensor(6, type: {:f, 32})
     end
 
-    defn product_pos_axis(t), do: Nx.product(t, axes: [1])
-    defn product_neg_axis(t), do: Nx.product(t, axes: [-3])
-    defn product_pos_neg_axis(t), do: Nx.product(t, axes: [1, -3])
+    defn(product_pos_axis(t), do: Nx.product(t, axes: [1]))
+    defn(product_neg_axis(t), do: Nx.product(t, axes: [-3]))
+    defn(product_pos_neg_axis(t), do: Nx.product(t, axes: [1, -3]))
 
     test "computes the sum on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
@@ -1074,7 +1080,7 @@ defmodule EXLA.DefnExprTest do
       assert product_pos_neg_axis(t) == Nx.product(t, axes: [1, -3])
     end
 
-    defn product_equal(t), do: Nx.product(Nx.equal(t, 1.0))
+    defn(product_equal(t), do: Nx.product(Nx.equal(t, 1.0)))
 
     test "does not overflow" do
       assert product_equal(Nx.tensor(1)) == Nx.tensor(1, type: {:u, 64})
@@ -1082,8 +1088,8 @@ defmodule EXLA.DefnExprTest do
       assert product_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0, type: {:u, 64})
     end
 
-    defn product_keep(t), do: Nx.product(t, keep_axes: true)
-    defn product_keep_2(t), do: Nx.product(t, axes: [0, 2], keep_axes: true)
+    defn(product_keep(t), do: Nx.product(t, keep_axes: true))
+    defn(product_keep_2(t), do: Nx.product(t, axes: [0, 2], keep_axes: true))
 
     test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> product_keep() == Nx.tensor([6])
@@ -1095,7 +1101,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "mean" do
-    defn mean(t), do: Nx.mean(t)
+    defn(mean(t), do: Nx.mean(t))
 
     test "computes mean without axis" do
       assert mean(Nx.tensor(42)) == Nx.tensor(42.0)
@@ -1103,7 +1109,7 @@ defmodule EXLA.DefnExprTest do
       assert mean(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2.0, type: {:f, 64})
     end
 
-    defn mean_over_single_axis(t), do: Nx.mean(t, axes: [0])
+    defn(mean_over_single_axis(t), do: Nx.mean(t, axes: [0]))
 
     test "computes mean over a single axis" do
       assert mean_over_single_axis(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
@@ -1115,7 +1121,7 @@ defmodule EXLA.DefnExprTest do
                ])
     end
 
-    defn mean_over_multiple_axes(t), do: Nx.mean(t, axes: [0, 2])
+    defn(mean_over_multiple_axes(t), do: Nx.mean(t, axes: [0, 2]))
 
     test "computes mean over multiple axes" do
       assert mean_over_multiple_axes(
@@ -1123,7 +1129,7 @@ defmodule EXLA.DefnExprTest do
              ) == Nx.tensor([5.0, 8.0])
     end
 
-    defn mean_over_negative_axis(t), do: Nx.mean(t, axes: [-1])
+    defn(mean_over_negative_axis(t), do: Nx.mean(t, axes: [-1]))
 
     test "computes mean over negative axes" do
       assert mean_over_negative_axis(
@@ -1131,7 +1137,7 @@ defmodule EXLA.DefnExprTest do
              ) == Nx.tensor([[2.0, 5.0], [8.0, 11.0]])
     end
 
-    defn mean_equal(t), do: Nx.mean(Nx.equal(t, 1.0))
+    defn(mean_equal(t), do: Nx.mean(Nx.equal(t, 1.0)))
 
     test "does not overflow" do
       assert mean_equal(Nx.tensor(1)) == Nx.tensor(1.0)
@@ -1139,8 +1145,8 @@ defmodule EXLA.DefnExprTest do
       assert mean_equal(Nx.tensor([1, 2, 3])) == Nx.tensor(0.3333333333333333)
     end
 
-    defn mean_keep(t), do: Nx.mean(t, keep_axes: true)
-    defn mean_keep_2(t), do: Nx.mean(t, axes: [0, 2], keep_axes: true)
+    defn(mean_keep(t), do: Nx.mean(t, keep_axes: true))
+    defn(mean_keep_2(t), do: Nx.mean(t, axes: [0, 2], keep_axes: true))
 
     test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> mean_keep() == Nx.tensor([2.0])
@@ -1152,7 +1158,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "reduce_max" do
-    defn reduce_max(t), do: Nx.reduce_max(t)
+    defn(reduce_max(t), do: Nx.reduce_max(t))
 
     test "computes the maximum across types" do
       assert Nx.tensor([1, 2, 3]) |> reduce_max() == Nx.tensor(3)
@@ -1164,9 +1170,9 @@ defmodule EXLA.DefnExprTest do
                Nx.tensor(3, type: {:f, 32})
     end
 
-    defn reduce_max_pos_axis(t), do: Nx.reduce_max(t, axes: [1])
-    defn reduce_max_neg_axis(t), do: Nx.reduce_max(t, axes: [-3])
-    defn reduce_max_pos_neg_axis(t), do: Nx.reduce_max(t, axes: [1, -3])
+    defn(reduce_max_pos_axis(t), do: Nx.reduce_max(t, axes: [1]))
+    defn(reduce_max_neg_axis(t), do: Nx.reduce_max(t, axes: [-3]))
+    defn(reduce_max_pos_neg_axis(t), do: Nx.reduce_max(t, axes: [1, -3]))
 
     test "computes the max on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
@@ -1175,8 +1181,8 @@ defmodule EXLA.DefnExprTest do
       assert reduce_max_pos_neg_axis(t) == Nx.reduce_max(t, axes: [1, -3])
     end
 
-    defn reduce_max_keep(t), do: Nx.reduce_max(t, keep_axes: true)
-    defn reduce_max_keep_2(t), do: Nx.reduce_max(t, axes: [0, 2], keep_axes: true)
+    defn(reduce_max_keep(t), do: Nx.reduce_max(t, keep_axes: true))
+    defn(reduce_max_keep_2(t), do: Nx.reduce_max(t, axes: [0, 2], keep_axes: true))
 
     test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> reduce_max_keep() == Nx.tensor([3])
@@ -1188,7 +1194,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "reduce_min" do
-    defn reduce_min(t), do: Nx.reduce_min(t)
+    defn(reduce_min(t), do: Nx.reduce_min(t))
 
     test "computes the minimum across types" do
       assert Nx.tensor([1, 2, 3]) |> reduce_min() == Nx.tensor(1)
@@ -1200,9 +1206,9 @@ defmodule EXLA.DefnExprTest do
                Nx.tensor(1, type: {:f, 32})
     end
 
-    defn reduce_min_pos_axis(t), do: Nx.reduce_min(t, axes: [1])
-    defn reduce_min_neg_axis(t), do: Nx.reduce_min(t, axes: [-3])
-    defn reduce_min_pos_neg_axis(t), do: Nx.reduce_min(t, axes: [1, -3])
+    defn(reduce_min_pos_axis(t), do: Nx.reduce_min(t, axes: [1]))
+    defn(reduce_min_neg_axis(t), do: Nx.reduce_min(t, axes: [-3]))
+    defn(reduce_min_pos_neg_axis(t), do: Nx.reduce_min(t, axes: [1, -3]))
 
     test "computes the min on a given axis" do
       t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
@@ -1211,8 +1217,8 @@ defmodule EXLA.DefnExprTest do
       assert reduce_min_pos_neg_axis(t) == Nx.reduce_min(t, axes: [1, -3])
     end
 
-    defn reduce_min_keep(t), do: Nx.reduce_min(t, keep_axes: true)
-    defn reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_axes: true)
+    defn(reduce_min_keep(t), do: Nx.reduce_min(t, keep_axes: true))
+    defn(reduce_min_keep_2(t), do: Nx.reduce_min(t, axes: [0, 2], keep_axes: true))
 
     test "keeps dimensions if keep_axes" do
       assert Nx.tensor([1, 2, 3]) |> reduce_min_keep() == Nx.tensor([1])
@@ -1224,12 +1230,12 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "argmax/argmin" do
-    defn argmax(t), do: Nx.argmax(t)
-    defn argmin(t), do: Nx.argmin(t)
-    defn argmax_axis(t), do: Nx.argmax(t, axis: 1)
-    defn argmin_axis(t), do: Nx.argmin(t, axis: 1)
-    defn argmax_high(t), do: Nx.argmax(t, axis: 1, tie_break: :high)
-    defn argmin_high(t), do: Nx.argmin(t, axis: 1, tie_break: :high)
+    defn(argmax(t), do: Nx.argmax(t))
+    defn(argmin(t), do: Nx.argmin(t))
+    defn(argmax_axis(t), do: Nx.argmax(t, axis: 1))
+    defn(argmin_axis(t), do: Nx.argmin(t, axis: 1))
+    defn(argmax_high(t), do: Nx.argmax(t, axis: 1, tie_break: :high))
+    defn(argmin_high(t), do: Nx.argmin(t, axis: 1, tie_break: :high))
 
     test "computes the argmax across types" do
       assert argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
@@ -1268,13 +1274,15 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "window sum" do
-    defn window_sum1(t), do: Nx.window_sum(t, {1, 2, 1})
+    defn(window_sum1(t), do: Nx.window_sum(t, {1, 2, 1}))
 
-    defn window_sum2(t),
+    defn(window_sum2(t),
       do: Nx.window_sum(t, {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
+    )
 
-    defn window_sum3(t),
+    defn(window_sum3(t),
       do: Nx.window_sum(t, {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
+    )
 
     defn dilated_window_sum(t) do
       Nx.window_sum(t, {3, 2, 1}, strides: [1, 1, 1], padding: :same, window_dilations: [1, 2, 2])
@@ -1309,13 +1317,15 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "window mean" do
-    defn window_mean1(t), do: Nx.window_mean(t, {1, 2, 1})
+    defn(window_mean1(t), do: Nx.window_mean(t, {1, 2, 1}))
 
-    defn window_mean2(t),
+    defn(window_mean2(t),
       do: Nx.window_mean(t, {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
+    )
 
-    defn window_mean3(t),
+    defn(window_mean3(t),
       do: Nx.window_mean(t, {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
+    )
 
     defn dilated_window_mean(t) do
       Nx.window_mean(t, {3, 2, 1}, strides: [1, 1, 1], padding: :same, window_dilations: [1, 2, 2])
@@ -1353,13 +1363,15 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "window max" do
-    defn window_max1(t), do: Nx.window_max(t, {1, 2, 1})
+    defn(window_max1(t), do: Nx.window_max(t, {1, 2, 1}))
 
-    defn window_max2(t),
+    defn(window_max2(t),
       do: Nx.window_max(t, {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
+    )
 
-    defn window_max3(t),
+    defn(window_max3(t),
       do: Nx.window_max(t, {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
+    )
 
     defn dilated_window_max(t) do
       Nx.window_max(t, {3, 2, 1}, strides: [1, 1, 1], padding: :same, window_dilations: [1, 2, 2])
@@ -1409,13 +1421,15 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "window min" do
-    defn window_min1(t), do: Nx.window_min(t, {1, 2, 1})
+    defn(window_min1(t), do: Nx.window_min(t, {1, 2, 1}))
 
-    defn window_min2(t),
+    defn(window_min2(t),
       do: Nx.window_min(t, {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
+    )
 
-    defn window_min3(t),
+    defn(window_min3(t),
       do: Nx.window_min(t, {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
+    )
 
     defn dilated_window_min(t) do
       Nx.window_min(t, {3, 2, 1}, strides: [1, 1, 1], padding: :same, window_dilations: [1, 2, 2])
@@ -1465,13 +1479,15 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "window product" do
-    defn window_product1(t), do: Nx.window_product(t, {1, 2, 1})
+    defn(window_product1(t), do: Nx.window_product(t, {1, 2, 1}))
 
-    defn window_product2(t),
+    defn(window_product2(t),
       do: Nx.window_product(t, {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
+    )
 
-    defn window_product3(t),
+    defn(window_product3(t),
       do: Nx.window_product(t, {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
+    )
 
     defn dilated_window_product(t) do
       Nx.window_product(t, {3, 2, 1},
@@ -1510,7 +1526,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "dot product" do
-    defn dot(a, b), do: Nx.dot(a, b)
+    defn(dot(a, b), do: Nx.dot(a, b))
 
     test "computes the dot product of scalars" do
       assert dot(Nx.tensor(2), Nx.tensor(2)) == Nx.tensor(4)
@@ -1568,31 +1584,37 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "convolution" do
-    defn conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel)
+    defn(conv_valid_no_stride(inp, kernel), do: Nx.conv(inp, kernel))
 
-    defn conv_valid_stride(inp, kernel),
+    defn(conv_valid_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [2, 2], padding: :valid)
+    )
 
-    defn conv_same_no_stride(inp, kernel),
+    defn(conv_same_no_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [1, 1], padding: :same)
+    )
 
-    defn conv_same_stride(inp, kernel), do: Nx.conv(inp, kernel, strides: [3, 3], padding: :same)
+    defn(conv_same_stride(inp, kernel), do: Nx.conv(inp, kernel, strides: [3, 3], padding: :same))
 
-    defn conv_general_no_stride(inp, kernel),
+    defn(conv_general_no_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [1, 1], padding: [{-1, 2}, {3, -1}])
+    )
 
-    defn conv_general_stride(inp, kernel),
+    defn(conv_general_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [2, 1], padding: [{2, 2}, {-2, 4}])
+    )
 
-    defn conv_3d(inp, kernel), do: Nx.conv(inp, kernel, strides: [1, 2, 1], padding: :same)
+    defn(conv_3d(inp, kernel), do: Nx.conv(inp, kernel, strides: [1, 2, 1], padding: :same))
 
-    defn dilated_conv(inp, kernel),
+    defn(dilated_conv(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [1, 1], padding: :same, kernel_dilation: [1, 2])
+    )
 
-    defn dilated_input_conv(inp, kernel),
+    defn(dilated_input_conv(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [1, 1], padding: :same, input_dilation: [2, 1])
+    )
 
-    defn dilated_input_kernel_conv(inp, kernel),
+    defn(dilated_input_kernel_conv(inp, kernel),
       do:
         Nx.conv(inp, kernel,
           strides: [2, 1],
@@ -1600,12 +1622,40 @@ defmodule EXLA.DefnExprTest do
           kernel_dilation: [2, 1],
           input_dilation: [1, 2]
         )
+    )
 
-    defn grouped_conv_valid_no_stride(inp, kernel),
+    defn(grouped_conv_valid_no_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: 1, padding: :valid, groups: 2)
+    )
 
-    defn grouped_conv_same_stride(inp, kernel),
+    defn(grouped_conv_same_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+    )
+
+    defn conv_valid_no_stride_channels_last(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :valid,
+        input_permutation: [:batch, :channels, :height, :width],
+        output_permutation: [:batch, :height, :width, :channels]
+      )
+    end
+
+    defn conv_same_stride_permuted(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :same,
+        strides: [2, 1],
+        input_permutation: [3, 2, 0, 1],
+        kernel_permutation: [2, 0, 3, 1],
+        output_permutation: [2, 3, 0, 1]
+      )
+    end
+
+    defn conv_writes_default_output(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :valid,
+        input_permutation: [:batch, :channels, :height, :width]
+      )
+    end
 
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
@@ -1724,8 +1774,7 @@ defmodule EXLA.DefnExprTest do
       img = Nx.iota({4, 6, 10, 10}, type: {:f, 32})
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
       lhs = grouped_conv_valid_no_stride(img, kernel)
-      rhs =
-        Nx.conv(img, kernel, strides: 1, padding: :valid, groups: 2)
+      rhs = Nx.conv(img, kernel, strides: 1, padding: :valid, groups: 2)
 
       compare_tensors!(lhs, rhs)
     end
@@ -1735,15 +1784,64 @@ defmodule EXLA.DefnExprTest do
       kernel = Nx.iota({4, 2, 2, 2, 1}, type: {:f, 32})
 
       lhs = grouped_conv_same_stride(img, kernel)
-      rhs =
-        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+      rhs = Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
 
       compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a convolution with channels last" do
+      img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = conv_valid_no_stride_channels_last(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :valid,
+          input_permutation: [:batch, :channels, :height, :width],
+          output_permutation: [:batch, :height, :width, :channels]
+        )
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a convolution with a permutation" do
+      img = Nx.iota({12, 12, 3, 4}, type: {:f, 32})
+      kernel = Nx.iota({3, 2, 32, 2}, type: {:f, 32})
+
+      lhs = conv_same_stride_permuted(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :same,
+          strides: [2, 1],
+          input_permutation: [3, 2, 0, 1],
+          kernel_permutation: [2, 0, 3, 1],
+          output_permutation: [2, 3, 0, 1]
+        )
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a convolution with default channels first output despite input config" do
+      img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = conv_writes_default_output(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :valid,
+          input_permutation: [:batch, :channels, :height, :width]
+        )
+
+      compare_tensors!(lhs, rhs)
+      assert %{names: [:batch, :channels, :height, :width]} = lhs
     end
   end
 
   describe "outer product" do
-    defn outer(t1, t2), do: Nx.outer(t1, t2)
+    defn(outer(t1, t2), do: Nx.outer(t1, t2))
 
     test "computes the outer product of scalars" do
       assert outer(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor([[2]])
@@ -1761,11 +1859,11 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "transpose" do
-    defn transpose(t), do: Nx.transpose(t)
-    defn transpose_scalar(t), do: Nx.transpose(t, axes: [])
-    defn transpose_perm1(t), do: Nx.transpose(t, axes: [2, 1, 0])
-    defn transpose_perm2(t), do: Nx.transpose(t, axes: [2, 0, 1])
-    defn transpose_perm3(t), do: Nx.transpose(t, axes: [0, 2, 1])
+    defn(transpose(t), do: Nx.transpose(t))
+    defn(transpose_scalar(t), do: Nx.transpose(t, axes: []))
+    defn(transpose_perm1(t), do: Nx.transpose(t, axes: [2, 1, 0]))
+    defn(transpose_perm2(t), do: Nx.transpose(t, axes: [2, 0, 1]))
+    defn(transpose_perm3(t), do: Nx.transpose(t, axes: [0, 2, 1]))
 
     test "transposes without axes" do
       assert transpose(Nx.tensor(1)) == Nx.tensor(1)
@@ -1817,7 +1915,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "softmax" do
-    defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
+    defn(softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t)))
 
     test "computes softmax" do
       assert compare_tensors!(
@@ -1833,13 +1931,13 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "reshape" do
-    defn reshape_with_shape(t), do: Nx.reshape(t, {2, 2})
+    defn(reshape_with_shape(t), do: Nx.reshape(t, {2, 2}))
 
     test "with shape" do
       assert reshape_with_shape(Nx.tensor([1, 2, 3, 4])) == Nx.tensor([[1, 2], [3, 4]])
     end
 
-    defn reshape_with_tensor(t, shape), do: Nx.reshape(t, shape)
+    defn(reshape_with_tensor(t, shape), do: Nx.reshape(t, shape))
 
     test "with tensor" do
       assert reshape_with_tensor(Nx.tensor([1, 2, 3, 4]), Nx.tensor([[0, 0], [0, 0]])) ==
@@ -1851,13 +1949,13 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "pad" do
-    defn pad_scalar(t), do: Nx.pad(t, 0, [])
-    defn pad_vector(t), do: Nx.pad(t, 0, [{1, 1, 0}])
-    defn pad_matrix(t), do: Nx.pad(t, 0, [{1, 1, 0}, {1, 1, 0}])
-    defn pad_tensor(t), do: Nx.pad(t, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}])
-    defn pad_vector_negative_value(t), do: Nx.pad(t, 0.0, [{-1, -1, 0}])
-    defn pad_matrix_negative_value(t), do: Nx.pad(t, 0, [{0, 0, 0}, {-1, 1, 0}])
-    defn pad_tensor_negative_value(t), do: Nx.pad(t, 0, [{-1, 0, 0}, {-1, -1, 0}, {0, -1, 0}])
+    defn(pad_scalar(t), do: Nx.pad(t, 0, []))
+    defn(pad_vector(t), do: Nx.pad(t, 0, [{1, 1, 0}]))
+    defn(pad_matrix(t), do: Nx.pad(t, 0, [{1, 1, 0}, {1, 1, 0}]))
+    defn(pad_tensor(t), do: Nx.pad(t, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}]))
+    defn(pad_vector_negative_value(t), do: Nx.pad(t, 0.0, [{-1, -1, 0}]))
+    defn(pad_matrix_negative_value(t), do: Nx.pad(t, 0, [{0, 0, 0}, {-1, 1, 0}]))
+    defn(pad_tensor_negative_value(t), do: Nx.pad(t, 0, [{-1, 0, 0}, {-1, -1, 0}, {0, -1, 0}]))
 
     test "with scalar" do
       assert pad_scalar(Nx.tensor(1)) == Nx.tensor(1)
@@ -1922,7 +2020,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "broadcast" do
-    defn broadcast_with_shape(t), do: Nx.broadcast(t, {2, 2})
+    defn(broadcast_with_shape(t), do: Nx.broadcast(t, {2, 2}))
 
     test "with shape" do
       assert broadcast_with_shape(Nx.tensor([1, 2])) == Nx.tensor([[1, 2], [1, 2]])
@@ -1930,7 +2028,7 @@ defmodule EXLA.DefnExprTest do
       assert broadcast_with_shape(Nx.tensor([[1], [2]])) == Nx.tensor([[1, 1], [2, 2]])
     end
 
-    defn broadcast_with_tensor(t, shape), do: Nx.broadcast(t, shape)
+    defn(broadcast_with_tensor(t, shape), do: Nx.broadcast(t, shape))
 
     test "with tensor" do
       tensors = [
@@ -1943,8 +2041,8 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn broadcast_with_axes_2(t), do: Nx.broadcast(t, {3, 2}, axes: [0])
-    defn broadcast_with_axes_3(t), do: Nx.broadcast(t, {2, 3, 2}, axes: [1])
+    defn(broadcast_with_axes_2(t), do: Nx.broadcast(t, {3, 2}, axes: [0]))
+    defn(broadcast_with_axes_3(t), do: Nx.broadcast(t, {2, 3, 2}, axes: [1]))
 
     test "with axes" do
       assert broadcast_with_axes_2(Nx.tensor([1, 2, 3])) == Nx.tensor([[1, 1], [2, 2], [3, 3]])
@@ -1955,8 +2053,8 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "squeeze" do
-    defn squeeze(t), do: Nx.squeeze(t)
-    defn squeeze2(t), do: Nx.squeeze(t, axes: [0, 1])
+    defn(squeeze(t), do: Nx.squeeze(t))
+    defn(squeeze2(t), do: Nx.squeeze(t, axes: [0, 1]))
 
     test "with scalar" do
       assert squeeze(Nx.tensor(1)) == Nx.tensor(1)
@@ -1970,7 +2068,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "random uniform" do
-    defn random_uniform_fixed, do: Nx.random_uniform({30, 20})
+    defn(random_uniform_fixed, do: Nx.random_uniform({30, 20}))
 
     test "generates with shape" do
       t = random_uniform_fixed()
@@ -1982,8 +2080,8 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn random_uniform_min_max_int, do: Nx.random_uniform({30, 20}, 5, 10)
-    defn random_uniform_min_max_float, do: Nx.random_uniform({30, 20}, 5.0, 10.0)
+    defn(random_uniform_min_max_int, do: Nx.random_uniform({30, 20}, 5, 10))
+    defn(random_uniform_min_max_float, do: Nx.random_uniform({30, 20}, 5.0, 10.0))
 
     test "generates with min/max" do
       t = random_uniform_min_max_int()
@@ -2003,8 +2101,8 @@ defmodule EXLA.DefnExprTest do
       end
     end
 
-    defn random_uniform_u32, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
-    defn random_uniform_f32, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 32})
+    defn(random_uniform_u32, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32}))
+    defn(random_uniform_f32, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 32}))
 
     test "generates with type" do
       t = random_uniform_u32()
@@ -2026,7 +2124,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "random normal" do
-    defn random_normal_fixed, do: Nx.random_normal({30, 20})
+    defn(random_normal_fixed, do: Nx.random_normal({30, 20}))
 
     test "generates with shape" do
       t = random_uniform_fixed()
@@ -2034,7 +2132,7 @@ defmodule EXLA.DefnExprTest do
       assert Nx.type(t) == {:f, 64}
     end
 
-    defn random_normal_mu_sigma, do: Nx.random_normal({30, 20}, 5.0, 10.0)
+    defn(random_normal_mu_sigma, do: Nx.random_normal({30, 20}, 5.0, 10.0))
 
     test "generates with mu/sigma" do
       t = random_normal_mu_sigma()
@@ -2042,7 +2140,7 @@ defmodule EXLA.DefnExprTest do
       assert Nx.type(t) == {:f, 64}
     end
 
-    defn random_normal_f32, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 32})
+    defn(random_normal_f32, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 32}))
 
     test "generates with type" do
       t = random_normal_f32()
@@ -2050,30 +2148,30 @@ defmodule EXLA.DefnExprTest do
       assert Nx.type(t) == {:f, 32}
     end
 
-    defn random_normal_tensor(t), do: Nx.random_uniform(t)
-    defn random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
+    defn(random_normal_tensor(t), do: Nx.random_uniform(t))
+    defn(random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32}))
   end
 
   describe "iota" do
-    defn iota_with_shape, do: Nx.iota({3, 4, 2, 3}, axis: 2)
+    defn(iota_with_shape, do: Nx.iota({3, 4, 2, 3}, axis: 2))
 
     test "generates with shape" do
       assert iota_with_shape() == Nx.iota({3, 4, 2, 3}, axis: 2)
     end
 
-    defn iota_with_type, do: Nx.iota({1, 2, 3}, axis: 1, type: {:f, 32})
+    defn(iota_with_type, do: Nx.iota({1, 2, 3}, axis: 1, type: {:f, 32}))
 
     test "generates with type" do
       assert iota_with_type() == Nx.iota({1, 2, 3}, axis: 1, type: {:f, 32})
     end
 
-    defn iota_no_axis, do: Nx.iota({2, 2, 2})
+    defn(iota_no_axis, do: Nx.iota({2, 2, 2}))
 
     test "generates without axis" do
       assert iota_no_axis() == Nx.iota({2, 2, 2})
     end
 
-    defn iota_neg_axis, do: Nx.iota({2, 2, 2}, axis: -2)
+    defn(iota_neg_axis, do: Nx.iota({2, 2, 2}, axis: -2))
 
     test "generates with negative axis" do
       assert iota_neg_axis() == Nx.iota({2, 2, 2}, axis: -2)
@@ -2081,13 +2179,13 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "eye" do
-    defn eye, do: Nx.eye(2)
+    defn(eye, do: Nx.eye(2))
 
     test "generates with shape" do
       assert eye() == Nx.tensor([[1, 0], [0, 1]])
     end
 
-    defn eye_with_type, do: Nx.eye(1, type: {:f, 32})
+    defn(eye_with_type, do: Nx.eye(1, type: {:f, 32}))
 
     test "generates with type" do
       assert eye_with_type() == Nx.tensor([[1]], type: {:f, 32})
@@ -2095,9 +2193,9 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "clip" do
-    defn clip_both(value), do: Nx.clip(value, 2, 4)
-    defn clip_mixed_types(value), do: Nx.clip(value, 2.0, 3)
-    defn clip_with_tensor(value), do: Nx.clip(value, Nx.tensor(2.0), Nx.max(1.0, 3.0))
+    defn(clip_both(value), do: Nx.clip(value, 2, 4))
+    defn(clip_mixed_types(value), do: Nx.clip(value, 2.0, 3))
+    defn(clip_with_tensor(value), do: Nx.clip(value, Nx.tensor(2.0), Nx.max(1.0, 3.0)))
 
     test "works with both set" do
       assert clip_both(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == Nx.tensor([[2, 2, 3], [4, 4, 4]])
@@ -2120,9 +2218,9 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "slicing" do
-    defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3])
-    defn slice2(t), do: Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: [1, 2, 3])
-    defn slice3(t), do: Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
+    defn(slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3]))
+    defn(slice2(t), do: Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: [1, 2, 3]))
+    defn(slice3(t), do: Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3]))
 
     test "works without stride" do
       t = Nx.iota({900})
@@ -2147,10 +2245,10 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "reverse" do
-    defn reverse(t), do: Nx.reverse(t)
-    defn reverse1(t), do: Nx.reverse(t, axes: [1])
-    defn reverse2(t), do: Nx.reverse(t, axes: [0, 2])
-    defn reverse3(t), do: Nx.reverse(t, axes: [1, 2, 4])
+    defn(reverse(t), do: Nx.reverse(t))
+    defn(reverse1(t), do: Nx.reverse(t, axes: [1]))
+    defn(reverse2(t), do: Nx.reverse(t, axes: [0, 2]))
+    defn(reverse3(t), do: Nx.reverse(t, axes: [1, 2, 4]))
 
     test "works on all dims" do
       assert reverse(Nx.iota({10})) == Nx.tensor([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
@@ -2230,10 +2328,10 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "concatenate" do
-    defn concatenate0(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 0)
-    defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 1)
-    defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2)
-    defn concatenate1_inp(t1), do: Nx.concatenate([t1], axis: 2)
+    defn(concatenate0(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 0))
+    defn(concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 1))
+    defn(concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2))
+    defn(concatenate1_inp(t1), do: Nx.concatenate([t1], axis: 2))
 
     test "works 0th axis" do
       t1 = Nx.iota({2, 2, 2})
@@ -2338,8 +2436,8 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "decompositions" do
-    defn qr(t), do: Nx.qr(t)
-    defn qr_complete(t), do: Nx.qr(t, mode: :complete)
+    defn(qr(t), do: Nx.qr(t))
+    defn(qr_complete(t), do: Nx.qr(t, mode: :complete))
 
     test "qr" do
       input = Nx.iota({3, 2})
@@ -2358,10 +2456,10 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "sort" do
-    defn sort0(t), do: Nx.sort(t, axis: 0)
-    defn sort1(t), do: Nx.sort(t, axis: 1)
-    defn sort1_asc(t), do: Nx.sort(t, axis: 1, comparator: :asc)
-    defn sort2(t), do: Nx.sort(t, axis: 2)
+    defn(sort0(t), do: Nx.sort(t, axis: 0))
+    defn(sort1(t), do: Nx.sort(t, axis: 1))
+    defn(sort1_asc(t), do: Nx.sort(t, axis: 1, comparator: :asc))
+    defn(sort2(t), do: Nx.sort(t, axis: 2))
 
     test "sorts a 1d tensor" do
       assert sort0(Nx.tensor([0, 5, 2, 1, 3, 4])) == Nx.tensor([0, 1, 2, 3, 4, 5])
@@ -2399,7 +2497,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "cholesky" do
-    defn cholesky(t), do: Nx.cholesky(t)
+    defn(cholesky(t), do: Nx.cholesky(t))
 
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
@@ -2439,7 +2537,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "bfloat16" do
-    defn add(t1, t2), do: t1 + t2
+    defn(add(t1, t2), do: t1 + t2)
 
     test "accepts bfloat16 input" do
       lhs = Nx.tensor([1.0, 2.0, 3.0], type: {:bf, 16})
@@ -2450,10 +2548,10 @@ defmodule EXLA.DefnExprTest do
 
   describe "precision" do
     @defn_compiler {EXLA, precision: :bad}
-    defn bad_precision(t1, t2), do: Nx.dot(t1, t2)
+    defn(bad_precision(t1, t2), do: Nx.dot(t1, t2))
 
     @defn_compiler {EXLA, precision: :high}
-    defn good_precision(t1, t2), do: Nx.dot(t1, t2)
+    defn(good_precision(t1, t2), do: Nx.dot(t1, t2))
 
     test "raises on bad precision" do
       assert_raise ArgumentError,
