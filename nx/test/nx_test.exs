@@ -1191,6 +1191,12 @@ defmodule NxTest do
       assert Nx.type(t2) == {:f, 64}
       assert t1 != t2
     end
+
+    test "works with non-float types using default ranges" do
+      t = Nx.random_uniform(1, type: {:s, 32})
+      assert Nx.shape(t) == {}
+      assert Nx.type(t) == {:s, 32}
+    end
   end
 
   describe "eye/2" do

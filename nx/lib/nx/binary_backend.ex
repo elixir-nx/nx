@@ -25,9 +25,12 @@ defmodule Nx.BinaryBackend do
   def random_uniform(%{type: type, shape: shape} = out, min, max) do
     gen =
       case type do
-        {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {:u, _} -> fn -> min + :rand.uniform(max - min) - 1 end
-        {_, _} -> fn -> (max - min) * :rand.uniform() + min end
+        {type, _} when type in [:s, :u] ->
+          [min, max] = Enum.map([min, max], &round/1)
+          fn -> min + :rand.uniform(max - min) - 1 end
+
+        {_, _} ->
+          fn -> (max - min) * :rand.uniform() + min end
       end
 
     data = for _ <- 1..Nx.size(shape), into: "", do: number_to_binary(gen.(), type)
