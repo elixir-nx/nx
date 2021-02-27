@@ -572,6 +572,29 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+
+  describe "erf" do
+    defn grad_erf(t), do: grad(t, Nx.erf(t))
+
+    test "computes the gradient" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        check_grads!(&Nx.erf/1, &grad_erf/1, t, eps: 1.0e-4)
+      end
+    end
+  end
+
+  describe "erfc" do
+    defn grad_erfc(t), do: grad(t, Nx.erfc(t))
+
+    test "computes the gradient" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        check_grads!(&Nx.erfc/1, &grad_erfc/1, t, eps: 1.0e-4)
+      end
+    end
+  end
+
   describe "erf_inv" do
     defn grad_erf_inv(t), do: grad(t, Nx.erf_inv(t))
 
