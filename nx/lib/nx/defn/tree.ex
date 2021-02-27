@@ -250,6 +250,17 @@ defmodule Nx.Defn.Tree do
     do: []
 
   @doc false
+  # Converts nested args to nested templates.
+  def to_nested_templates(args, params) do
+    {args, []} =
+      to_nested_many(args, params, fn _arg, [param | params] ->
+        {Nx.template(param, param.type), params}
+      end)
+
+    args
+  end
+
+  @doc false
   # Converts the arguments to vars.
   # It returns both flat vars and nested vars.
   def to_vars(args) do

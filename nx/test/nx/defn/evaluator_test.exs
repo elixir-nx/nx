@@ -4,6 +4,7 @@ defmodule Nx.Defn.EvaluatorTest do
   alias Nx.Tensor, as: T
   import Nx.Defn
 
+  @defn_compiler Nx.Defn.Evaluator
   defn add(a, b), do: {a + b, a - b}
 
   # Check the attribute has been reset

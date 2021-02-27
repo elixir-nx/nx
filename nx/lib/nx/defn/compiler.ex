@@ -3,6 +3,8 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
+  @aot_version 1
+
   @doc """
   Callback for async execution (on top of JIT compilation).
 
@@ -59,65 +61,106 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def __jit__(fun, args, compiler, opts) do
-    runtime(:__jit__, fun, args, compiler, opts)
-  end
-
-  @doc false
-  def __aot__(module, tuples, compiler, aot_opts) do
-    compiler_tuples =
-      Enum.map(tuples, fn {name, fun, args, opts} ->
+  def __export_aot__(output_dir, module, tuples, compiler, aot_opts) do
+    {export_tuples, compiler_tuples} =
+      tuples
+      |> Enum.map(fn {name, fun, args, opts} ->
         tensors = Nx.Defn.Tree.from_nested_args(args)
-        # We need to include the actual arity in the name because
-        # defn foo({a, b}) and defn foo(a, b) compile to the same
-        # name+arity at the AOT level.
-        {:"__aot_#{name}_#{length(args)}", &runtime_fun(&1, fun, args, compiler), tensors, opts}
-      end)
+        templates = Nx.Defn.Tree.to_nested_templates(args, tensors)
 
-    output_dir = Path.join(System.tmp_dir(), "elixir-nx/aot#{System.unique_integer()}")
+        export_tuple = {name, templates}
+        runtime_fun = &runtime_fun(&1, fun, args, compiler)
+        compiler_tuple = {aot_name(name, args), runtime_fun, tensors, opts}
+        {export_tuple, compiler_tuple}
+      end)
+      |> Enum.unzip()
+
     File.rm_rf!(output_dir)
     File.mkdir_p!(output_dir)
 
     case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
       {:ok, nif} ->
-        nif = nif |> Path.rootname() |> String.to_charlist()
-
-        funs =
-          # TODO: Make it work with tuples
-          # TODO: Check the input tensors
-          # TODO: Check the output tensors
-          for {tuple, compiler_tuple} <- Enum.zip(tuples, compiler_tuples) do
-            {name, _, args, _} = tuple
-            {nif_name, _, nif_args, _} = compiler_tuple
-            args = Macro.generate_arguments(length(args), __MODULE__)
-            nif_args = Macro.generate_arguments(length(nif_args), __MODULE__)
-
-            quote do
-              def unquote(name)(unquote_splicing(args)) do
-                unquote(args) = Enum.map(unquote(args), &Nx.to_binary/1)
-                unquote(nif_name)(unquote_splicing(args))
-              end
-
-              defp unquote(nif_name)(unquote_splicing(nif_args)) do
-                :erlang.nif_error(:undef)
-              end
-            end
-          end
-
-        # TODO: Use @external_resource for import_aot
-        body =
-          quote do
-            @moduledoc false
-            @on_load :__on_load__
-            def __on_load__, do: :erlang.load_nif(unquote(nif), 0)
-            unquote(funs)
-          end
-
-        Module.create(module, body, __ENV__)
+        path = Path.join(output_dir, "#{module}.nx.aot")
+        export = {Path.extname(nif), export_tuples}
+        File.write!(path, :erlang.term_to_binary({@aot_version, export}))
 
       :error ->
         raise "unable to complete AOT compilation, something went wrong"
     end
+  end
+
+  @doc false
+  def __import_aot__(output_dir, module) do
+    export_path = Path.join(output_dir, "#{module}.nx.aot")
+
+    {nif_extension, export_tuples} =
+      case File.read(export_path) do
+        {:ok, binary} ->
+          try do
+            :erlang.binary_to_term(binary)
+          rescue
+            _ ->
+              raise ArgumentError,
+                    "could not decode AOT export for #{inspect(module)} at #{output_dir}"
+          else
+            {@aot_version, export_tuples} ->
+              export_tuples
+
+            other ->
+              raise ArgumentError,
+                    "incompatible version #{elem(other, 0)} for AOT export for #{inspect(module)} " <>
+                      "at #{output_dir}, expected v#{@aot_version}. Please make sure the Nx version" <>
+                      "used for the export matches the one in the import"
+          end
+
+        {:error, _} ->
+          raise ArgumentError, "could not find AOT export for #{inspect(module)} at #{output_dir}"
+      end
+
+    nif_path = output_dir |> Path.join(Atom.to_string(module)) |> String.to_charlist()
+    nif_ext_path = Path.join(output_dir, "#{module}.#{nif_extension}")
+
+    funs =
+      # TODO: Make it work with tuples
+      # TODO: Check the input tensors
+      # TODO: Check the output tensors
+      for {name, args} <- export_tuples do
+        aot_name = aot_name(name, args)
+        args = Macro.generate_arguments(length(args), __MODULE__)
+
+        quote do
+          def unquote(name)(unquote_splicing(args)) do
+            unquote(args) = Enum.map(unquote(args), &Nx.to_binary/1)
+            unquote(aot_name)(unquote_splicing(args))
+          end
+
+          defp unquote(aot_name)(unquote_splicing(args)) do
+            :erlang.nif_error(:undef)
+          end
+        end
+      end
+
+    body =
+      quote do
+        @external_resource unquote(export_path)
+        @external_resource unquote(nif_ext_path)
+        @on_load :__on_load__
+        def __on_load__, do: :erlang.load_nif(unquote(nif_path), 0)
+        unquote(funs)
+      end
+
+    Module.eval_quoted(module, body, [], line: __ENV__.line, file: __ENV__.file)
+    :ok
+  end
+
+  # We need to include the actual arity in the name because
+  # defn foo({a, b}) and defn foo(a, b) compile to the same
+  # name+arity at the AOT level.
+  defp aot_name(name, args), do: :"__aot_#{name}_#{length(args)}"
+
+  @doc false
+  def __jit__(fun, args, compiler, opts) do
+    runtime(:__jit__, fun, args, compiler, opts)
   end
 
   @doc false

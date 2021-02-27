@@ -240,12 +240,8 @@ defmodule Nx.Defn do
     Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
   end
 
-  @doc """
-  Ahead-of-time compiles the anonymous function with the given
-  defn compiler.
-  """
-  def aot(module, tuples, compiler, aot_opts \\ [])
-      when is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
+  def export_aot(dir, module, tuples, compiler, aot_opts \\ [])
+      when is_binary(dir) and is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
     tuples =
       for tuple <- tuples do
         case tuple do
@@ -255,7 +251,44 @@ defmodule Nx.Defn do
         end
       end
 
-    Nx.Defn.Compiler.__aot__(module, tuples, compiler, aot_opts)
+    Nx.Defn.Compiler.__export_aot__(dir, module, tuples, compiler, aot_opts)
+  end
+
+  def import_aot(dir, module) when is_binary(dir) and is_atom(module) do
+    unless Module.open?(module) do
+      raise ArgumentError,
+            """
+            cannot import_aot/2 for #{inspect(module)} because module was already defined.
+            You should call import_aot/2 while the module is being defined:
+
+                defmodule MyModule do
+                  Nx.Defn.import_aot("priv", MyModule)
+                end
+            """
+    end
+
+    Nx.Defn.Compiler.__import_aot__(dir, module)
+  end
+
+  @doc """
+  Ahead-of-time compiles the anonymous function with the given
+  defn compiler.
+  """
+  def aot(module, tuples, compiler, aot_opts \\ [])
+      when is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
+    output_dir = Path.join(System.tmp_dir(), "elixir-nx/aot#{System.unique_integer()}")
+
+    try do
+      :ok = export_aot(output_dir, module, tuples, compiler, aot_opts)
+
+      defmodule module do
+        @moduledoc false
+        Nx.Defn.import_aot(output_dir, module)
+        :ok
+      end
+    after
+      File.rm_rf!(output_dir)
+    end
   end
 
   @doc """
