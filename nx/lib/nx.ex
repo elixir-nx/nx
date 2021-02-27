@@ -687,9 +687,11 @@ defmodule Nx do
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
 
-    unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and is_integer(min) and is_integer(max)) do
-      raise ArgumentError, "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
-                           " in range #{inspect(min)} to #{inspect(max)}"
+    unless Nx.Type.float?(type) or
+           (Nx.Type.integer?(type) and is_integer(min) and is_integer(max)) do
+      raise ArgumentError,
+            "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
+            " in range #{inspect(min)} to #{inspect(max)}"
     end
 
     backend = opts[:backend] || Nx.BinaryBackend
