@@ -362,6 +362,106 @@ defmodule Nx.Defn.Grad do
     {maybe_add(dx, dy), cache}
   end
 
+  defp grad(:conv, [x, y, opts], ans, g, cache) do
+    g = Nx.broadcast(g, ans)
+
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+    output_permutation = opts[:output_permutation]
+    output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
+
+    strides = opts[:strides]
+    padding = opts[:padding]
+    lhs_dilation = opts[:input_dilation]
+    rhs_dilation = opts[:kernel_dilation]
+
+    [_, _ | rhs_sdim_axes] = kernel_permutation
+    t_lhs_permutation = conv_spec_transpose(input_permutation)
+    t_rhs_permutation = conv_spec_transpose(kernel_permutation)
+    t_out_permutation = conv_spec_transpose(output_permutation)
+
+    lhs_sdims = conv_sdims(x.shape, input_permutation)
+    rhs_sdims = conv_sdims(y.shape, kernel_permutation)
+    out_sdims = conv_sdims(g.shape, output_permutation)
+
+    lhs_padding = conv_lhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation)
+    rhs_padding = conv_rhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation)
+
+    revd_weights = Nx.reverse(y, axes: rhs_sdim_axes)
+
+    gx = Nx.conv(g, revd_weights,
+          strides: lhs_dilation,
+          padding: lhs_padding,
+          input_dilation: strides,
+          kernel_dilation: rhs_dilation,
+          input_permutation: output_permutation,
+          kernel_permutation: t_rhs_permutation,
+          output_permutation: input_permutation,
+          groups: 1
+        )
+
+    gy = Nx.conv(x, g,
+          strides: rhs_dilation,
+          padding: rhs_padding,
+          input_dilation: lhs_dilation,
+          kernel_dilation: strides,
+          input_permutation: t_lhs_permutation,
+          kernel_permutation: t_rhs_permutation,
+          output_permutation: t_out_permutation,
+          groups: 1
+        )
+
+    {dx, cache} = to_grad(x, gx, cache)
+    {dy, cache} = to_grad(y, gy, cache)
+
+    {maybe_add(dx, dy), cache}
+  end
+
+  defp conv_spec_transpose([dim0, dim1 | rest]), do: [dim1, dim0 | rest]
+  defp conv_sdims(shape, [dim0, dim1 | _]), do: Tuple.delete_at(Tuple.delete_at(shape, dim0), dim1 - 1)
+  defp conv_lhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation) do
+    lhs_dilated_padding_config = Enum.map(lhs_dilation, &{0, 0, &1 - 1})
+    rhs_dilated_padding_config = Enum.map(rhs_dilation, &{0, 0, &1 - 1})
+    out_dilated_padding_config = Enum.map(strides, &{0, 0, &1 - 1})
+    lhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(lhs_sdims, lhs_dilated_padding_config))
+    rhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(rhs_sdims, rhs_dilated_padding_config))
+    out_dilated_shape = Tuple.to_list(Nx.Shape.pad(out_sdims, out_dilated_padding_config))
+
+    pad_before =
+      rhs_dilated_shape
+      |> Enum.zip(padding)
+      |> Enum.map(fn {s, {lo, _}} -> s - lo - 1 end)
+
+    pad_after =
+      [lhs_dilated_shape, rhs_dilated_shape, out_dilated_shape, pad_before]
+      |> Enum.zip()
+      |> Enum.map(fn {l, r, o, p} -> (l + r) - 1 - o - p end)
+
+    Enum.zip(pad_before, pad_after)
+  end
+
+  defp conv_rhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation) do
+    lhs_dilated_padding_config = Enum.map(lhs_dilation, &{0, 0, &1 - 1})
+    rhs_dilated_padding_config = Enum.map(rhs_dilation, &{0, 0, &1 - 1})
+    out_dilated_padding_config = Enum.map(strides, &{0, 0, &1 - 1})
+    lhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(lhs_sdims, lhs_dilated_padding_config))
+    rhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(rhs_sdims, rhs_dilated_padding_config))
+    out_dilated_shape = Tuple.to_list(Nx.Shape.pad(out_sdims, out_dilated_padding_config))
+
+    total_in_pad =
+      [out_dilated_shape, rhs_dilated_shape, lhs_dilated_shape]
+      |> Enum.zip()
+      |> Enum.map(fn {o, r, l} -> (o + r) - l - 1 end)
+
+    padding
+    |> Enum.zip(total_in_pad)
+    |> Enum.map(fn {{lo, _}, hi} -> {lo, hi - lo} end)
+  end
+
   ## Other gradients
 
   defp grad(:abs, [x], _ans, g, cache) do

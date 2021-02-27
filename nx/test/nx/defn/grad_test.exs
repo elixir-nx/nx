@@ -389,6 +389,233 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "conv rule" do
+    defn grad_sum_conv_x(x, y), do: grad(x, Nx.sum(Nx.conv(x, y)))
+    defn grad_sum_conv_y(x, y), do: grad(y, Nx.sum(Nx.conv(x, y)))
+
+    test "computes the gradient of the both sides, no padding, no stride" do
+      lhs = Nx.iota({1, 3, 2, 2}, type: {:f, 32})
+      rhs = Nx.iota({6, 3, 2, 1}, type: {:f, 32})
+      assert grad_sum_conv_x(lhs, rhs) ==
+        Nx.tensor([[[[90.0, 90.0], [96.0, 96.0]],
+                    [[102.0, 102.0], [108.0, 108.0]],
+                    [[114.0, 114.0], [120.0, 120.0]]]])
+      assert grad_sum_conv_y(lhs, rhs) ==
+        Nx.tensor([
+                    [[[1.0], [5.0]], [[9.0], [13.0]], [[17.0], [21.0]]],
+                    [[[1.0], [5.0]], [[9.0], [13.0]], [[17.0], [21.0]]],
+                    [[[1.0], [5.0]], [[9.0], [13.0]], [[17.0], [21.0]]],
+                    [[[1.0], [5.0]], [[9.0], [13.0]], [[17.0], [21.0]]],
+                    [[[1.0], [5.0]], [[9.0], [13.0]], [[17.0], [21.0]]],
+                    [[[1.0], [5.0]], [[9.0], [13.0]], [[17.0], [21.0]]]
+                  ])
+    end
+
+    defn grad_sum_conv_x_cos_x_sin_y(x, y), do: grad(x, Nx.sum(Nx.conv(Nx.cos(x), Nx.sin(y))))
+    defn grad_sum_conv_y_cos_x_sin_y(x, y), do: grad(y, Nx.sum(Nx.conv(Nx.cos(x), Nx.sin(y))))
+
+    test "computes the gradient of both sides, no padding, no stride, inner function" do
+      x = Nx.iota({1, 3, 2, 2}, type: {:f, 32})
+      y = Nx.iota({6, 3, 2, 1}, type: {:f, 32})
+
+      lhs = grad_sum_conv_x_cos_x_sin_y(x, y)
+      rhs = Nx.tensor([[[[0.0, 2.9119823], [-1.3931458, -0.21621169]],
+                      [[3.8719478, 4.906042], [1.1166755, -2.625627]],
+                      [[0.789102, 0.3287015], [-2.6430445, -4.858301]]]])
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_conv_y_cos_x_sin_y(x, y)
+      rhs = Nx.tensor([[[[1.5403023], [-0.7597403]], [[0.15396659], [-1.6969188]], [[0.6906596], [-0.23675747]]],
+                        [[[1.4789524], [-1.0600916]], [[0.05383231], [-1.5617433]], [[0.88658834], [-0.00369389]]],
+                        [[[1.2997901], [-1.2759967]], [[-0.05059023], [-1.3021601]], [[1.011892], [0.22966394]]],
+                        [[[1.0170873], [-1.3902565]], [[-0.15098278], [-0.93884766]], [[1.0565889], [0.44472685]]],
+                        [[[0.6533639], [-1.3937694]], [[-0.23934811], [-0.5007471]], [[1.0171185], [0.62436306]]],
+                        [[[0.23759387], [-1.2862552]], [[-0.30864716], [-0.02275731]], [[0.89662504], [0.7542629]]]])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_conv_x_same_padding(x, y), do: grad(x, Nx.sum(Nx.conv(x, y, padding: :same)))
+    defn grad_sum_conv_y_same_padding(x, y), do: grad(y, Nx.sum(Nx.conv(x, y, padding: :same)))
+
+    test "computes the gradient of both sides, padding, no stride" do
+      x = Nx.iota({2, 1, 5, 5}, type: {:f, 32})
+      y = Nx.iota({8, 1, 2, 2}, type: {:f, 32})
+
+      lhs = grad_sum_conv_x_same_padding(x, y)
+      rhs = Nx.tensor(
+              [
+                [
+                  [
+                    [112.0, 232.0, 232.0, 232.0, 232.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0]
+                  ]
+                ],
+                [
+                  [
+                    [112.0, 232.0, 232.0, 232.0, 232.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0],
+                    [240.0, 496.0, 496.0, 496.0, 496.0]
+                  ]
+                ]
+              ]
+            )
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_conv_y_same_padding(x, y)
+      rhs = Nx.tensor(
+              [
+                [[[1225.0, 1000.0], [1080.0,  880.0]]],
+                [[[1225.0, 1000.0], [1080.0,  880.0]]],
+                [[[1225.0, 1000.0], [1080.0,  880.0]]],
+                [[[1225.0, 1000.0], [1080.0,  880.0]]],
+                [[[1225.0, 1000.0], [1080.0,  880.0]]],
+                [[[1225.0, 1000.0], [1080.0,  880.0]]],
+                [[[1225.0, 1000.0], [1080.0,  880.0]]],
+                [[[1225.0, 1000.0], [1080.0,  880.0]]]
+              ]
+            )
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_conv_x_general_stride_lhs_dilated(x, y) do
+      grad(x, Nx.sum(Nx.conv(x, y, strides: [1, 2], padding: [{1, 2}, {-1, 0}], input_dilation: [2, 1])))
+    end
+    defn grad_sum_conv_y_general_stride_lhs_dilated(x, y) do
+      grad(y, Nx.sum(Nx.conv(x, y, strides: [1, 2], padding: [{1, 2}, {-1, 0}], input_dilation: [2, 1])))
+    end
+
+    test "computes the gradient of both sides, general padding, stride, lhs dilated" do
+      x = Nx.iota({1, 1, 8, 5}, type: {:f, 32})
+      y = Nx.iota({2, 1, 2, 2}, type: {:f, 32})
+
+      lhs = grad_sum_conv_x_general_stride_lhs_dilated(x, y)
+      rhs = Nx.tensor(
+              [
+                [
+                  [
+                    [0.0, 12.0, 16.0, 12.0, 16.0],
+                    [0.0, 12.0, 16.0, 12.0, 16.0],
+                    [0.0, 12.0, 16.0, 12.0, 16.0],
+                    [0.0, 12.0, 16.0, 12.0, 16.0],
+                    [0.0, 12.0, 16.0, 12.0, 16.0],
+                    [0.0, 12.0, 16.0, 12.0, 16.0],
+                    [0.0, 12.0, 16.0, 12.0, 16.0],
+                    [0.0, 12.0, 16.0, 12.0, 16.0]
+                  ]
+                ]
+              ]
+            )
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_conv_y_general_stride_lhs_dilated(x, y)
+      rhs = Nx.tensor([[[[312.0, 328.0],[312.0, 328.0]]],
+                      [[[312.0, 328.0], [312.0, 328.0]]]])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_mean_conv_x_general_stride_rhs_dilated(x, y) do
+      grad(x, Nx.mean(Nx.conv(x, y, strides: [1, 2], padding: [{1, 2}, {-1, 0}], kernel_dilation: [1, 2])))
+    end
+    defn grad_mean_conv_y_general_stride_rhs_dilated(x, y) do
+      grad(y, Nx.mean(Nx.conv(x, y, strides: [1, 2], padding: [{1, 2}, {-1, 0}], kernel_dilation: [1, 2])))
+    end
+
+    test "computes the gradient of both sides, general padding, stride, rhs dilated" do
+      x = Nx.iota({1, 1, 8, 5}, type: {:f, 32})
+      y = Nx.iota({2, 1, 2, 2}, type: {:f, 32})
+
+      lhs = grad_mean_conv_x_general_stride_rhs_dilated(x, y)
+      rhs = Nx.tensor(
+              [
+                [
+                  [
+                    [0.0, 0.6, 0.0, 0.8, 0.0],
+                    [0.0, 0.6, 0.0, 0.8, 0.0],
+                    [0.0, 0.6, 0.0, 0.8, 0.0],
+                    [0.0, 0.6, 0.0, 0.8, 0.0],
+                    [0.0, 0.6, 0.0, 0.8, 0.0],
+                    [0.0, 0.6, 0.0, 0.8, 0.0],
+                    [0.0, 0.6, 0.0, 0.8, 0.0],
+                    [0.0, 0.6, 0.0, 0.8, 0.0]
+                  ]
+                ]
+              ]
+            )
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_mean_conv_y_general_stride_rhs_dilated(x, y)
+      rhs = Nx.tensor([[[[7.4000006, 8.2], [7.4000006, 8.2]]], [[[7.4000006, 8.2], [7.4000006, 8.2]]]])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_conv_x_channels_last(x, y) do
+      grad(x, Nx.sum(Nx.conv(x, y, input_permutation: [0, 3, 1, 2], output_permutation: [0, 3, 1, 2])))
+    end
+
+    defn grad_sum_conv_y_channels_last(x, y) do
+      grad(y, Nx.sum(Nx.conv(x, y, input_permutation: [0, 3, 1, 2], output_permutation: [0, 3, 1, 2])))
+    end
+
+    test "computes the gradient of both sides, valid padding, channels last" do
+      x = Nx.iota({3, 4, 4, 2}, type: {:f, 32})
+      y = Nx.iota({4, 2, 2, 2}, type: {:f, 32})
+
+      lhs = grad_sum_conv_x_channels_last(x, y)
+      rhs = Nx.tensor(
+              [
+                [
+                  [[48.0, 64.0], [100.0, 132.0], [100.0, 132.0], [52.0, 68.0]],
+                  [[104.0, 136.0], [216.0, 280.0], [216.0, 280.0], [112.0, 144.0]],
+                  [[104.0, 136.0], [216.0, 280.0], [216.0, 280.0], [112.0, 144.0]],
+                  [[56.0, 72.0], [116.0, 148.0], [116.0, 148.0], [60.0, 76.0]]],
+                  [[[48.0, 64.0], [100.0, 132.0], [100.0, 132.0], [52.0, 68.0]],
+                  [[104.0, 136.0], [216.0, 280.0], [216.0, 280.0], [112.0, 144.0]],
+                  [[104.0, 136.0], [216.0, 280.0], [216.0, 280.0], [112.0, 144.0]],
+                  [[56.0, 72.0], [116.0, 148.0], [116.0, 148.0], [60.0, 76.0]]],
+                  [[[48.0, 64.0], [100.0, 132.0], [100.0, 132.0], [52.0, 68.0]],
+                  [[104.0, 136.0], [216.0, 280.0], [216.0, 280.0], [112.0, 144.0]],
+                  [[104.0, 136.0], [216.0, 280.0], [216.0, 280.0], [112.0, 144.0]],
+                  [[56.0, 72.0], [116.0, 148.0], [116.0, 148.0], [60.0, 76.0]]
+                ]
+              ])
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_conv_y_channels_last(x, y)
+      rhs = Nx.tensor([[[[1134.0, 1188.0],
+                         [1350.0, 1404.0]],
+                        [[1161.0, 1215.0],
+                         [1377.0, 1431.0]]],
+                       [[[1134.0, 1188.0],
+                         [1350.0, 1404.0]],
+                        [[1161.0, 1215.0],
+                         [1377.0, 1431.0]]],
+                       [[[1134.0, 1188.0],
+                         [1350.0, 1404.0]],
+                        [[1161.0, 1215.0],
+                         [1377.0, 1431.0]]],
+                       [[[1134.0, 1188.0],
+                         [1350.0, 1404.0]],
+                        [[1161.0, 1215.0],
+                         [1377.0, 1431.0]]]])
+
+    compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "outer rule" do
     defn grad_outer_lhs_rule(x, y), do: grad(x, Nx.sum(Nx.outer(x, y)))
 
