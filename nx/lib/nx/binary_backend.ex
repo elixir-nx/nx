@@ -829,7 +829,7 @@ defmodule Nx.BinaryBackend do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
-    # TODO: Use Elixir Enum.zip_with on Elixir v1.12
+    # TODO: Use Enum.zip_with on Elixir v1.12
     spatial_padding_config =
       padding
       |> Enum.zip(input_dilation)

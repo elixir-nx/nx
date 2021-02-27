@@ -68,7 +68,8 @@ defmodule EXLA.AOT.Compiler do
         {:ok, config.target_path}
 
       {_, _} ->
-        :error
+        message = "unable to complete AOT compilation, something went wrong"
+        {:error, RuntimeError.exception(message)}
     end
   end
 

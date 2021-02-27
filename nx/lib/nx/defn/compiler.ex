@@ -41,24 +41,7 @@ defmodule Nx.Defn.Compiler do
             when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
                    is_atom(elem(var, 2))
 
-  @doc false
-  def __remote__(module, function, defn, args) do
-    try do
-      apply(module, defn, args)
-    catch
-      :error, :undef ->
-        stack =
-          case __STACKTRACE__ do
-            [{^module, ^defn, args_or_arity, info} | stack] ->
-              [{module, function, args_or_arity, info} | stack]
-
-            stack ->
-              stack
-          end
-
-        :erlang.raise(:error, :undef, stack)
-    end
-  end
+  ## AOT
 
   @doc false
   def __export_aot__(output_dir, module, tuples, compiler, aot_opts) do
@@ -75,22 +58,38 @@ defmodule Nx.Defn.Compiler do
       end)
       |> Enum.unzip()
 
+    _ = Code.ensure_compiled(compiler)
+
+    unless function_exported?(compiler, :__aot__, 4) do
+      raise ArgumentError, "AOT compilation is not available to the #{inspect(compiler)} compiler"
+    end
+
     File.rm_rf!(output_dir)
     File.mkdir_p!(output_dir)
 
     case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
-      {:ok, nif} ->
+      {:ok, results, nif} ->
+        tensors = Nx.Defn.Tree.from_nested_args(results)
+        results = Nx.Defn.Tree.to_nested_templates(results, tensors)
+
+        # TODO: Use Enum.zip_with on Elixir v1.12
+        {export_tuples, []} =
+          Enum.map_reduce(export_tuples, results, fn {name, arity}, [result | results] ->
+            {{name, arity, result}, results}
+          end)
+
         path = Path.join(output_dir, "#{module}.nx.aot")
         export = {Path.extname(nif), export_tuples}
         File.write!(path, :erlang.term_to_binary({@aot_version, export}))
+        :ok
 
-      :error ->
-        raise "unable to complete AOT compilation, something went wrong"
+      {:error, exception} ->
+        {:error, exception}
     end
   end
 
   @doc false
-  def __import_aot__(output_dir, module) do
+  def __import_aot__(output_dir, module, external_resources?) do
     export_path = Path.join(output_dir, "#{module}.nx.aot")
 
     {nif_extension, export_tuples} =
@@ -124,17 +123,23 @@ defmodule Nx.Defn.Compiler do
       # TODO: Make it work with tuples
       # TODO: Check the input tensors
       # TODO: Check the output tensors
-      for {name, args} <- export_tuples do
+      for {name, args, result} <- export_tuples do
         aot_name = aot_name(name, args)
-        args = Macro.generate_arguments(length(args), __MODULE__)
+        {args, vars_and_templates} = aot_args(args)
+        vars = Enum.map(vars_and_templates, &elem(&1, 0))
+        templates = Enum.map(vars_and_templates, fn {v, t} -> {v, Macro.escape(t)} end)
 
         quote do
           def unquote(name)(unquote_splicing(args)) do
-            unquote(args) = Enum.map(unquote(args), &Nx.to_binary/1)
-            unquote(aot_name)(unquote_splicing(args))
+            unquote(vars) = __nx_input__(unquote(templates))
+
+            __nx_output__(
+              unquote(Macro.escape(result)),
+              unquote(aot_name)(unquote_splicing(vars))
+            )
           end
 
-          defp unquote(aot_name)(unquote_splicing(args)) do
+          defp unquote(aot_name)(unquote_splicing(vars)) do
             :erlang.nif_error(:undef)
           end
         end
@@ -142,10 +147,50 @@ defmodule Nx.Defn.Compiler do
 
     body =
       quote do
-        @external_resource unquote(export_path)
-        @external_resource unquote(nif_ext_path)
+        if unquote(external_resources?) do
+          @external_resource unquote(export_path)
+          @external_resource unquote(nif_ext_path)
+        end
+
         @on_load :__on_load__
         def __on_load__, do: :erlang.load_nif(unquote(nif_path), 0)
+
+        @compile {:inline, __nx_input__: 1, __nx_output__: 2}
+
+        defp __nx_input__(vars_and_templates) do
+          for {var, template} <- vars_and_templates do
+            tensor = Nx.Defn.Tree.from_arg(var)
+
+            unless Nx.compatible?(tensor, template) do
+              raise ArgumentError, """
+              Nx AOT-compiled function expected a tensor of type, shape, and names:
+
+              #{inspect(template)}
+
+              But got tensor:
+
+              #{inspect(tensor)}
+              """
+            end
+
+            Nx.to_binary(tensor)
+          end
+        end
+
+        defp __nx_output__(result, {:ok, list}) do
+          {result, []} =
+            Nx.Defn.Tree.composite(result, list, fn
+              %Nx.Tensor{} = t, [binary | list] when is_binary(binary) ->
+                {%{t | data: %Nx.BinaryBackend{state: binary}}, list}
+            end)
+
+          result
+        end
+
+        defp __nx_output__(_result, {:error, reason}) do
+          raise "Nx AOT-compiled function failed with reason: #{inspect(reason)}"
+        end
+
         unquote(funs)
       end
 
@@ -157,6 +202,20 @@ defmodule Nx.Defn.Compiler do
   # defn foo({a, b}) and defn foo(a, b) compile to the same
   # name+arity at the AOT level.
   defp aot_name(name, args), do: :"__aot_#{name}_#{length(args)}"
+
+  defp aot_args(args) do
+    {args, {vars, _}} =
+      Enum.map_reduce(args, {[], 0}, fn arg, {acc, i} ->
+        Nx.Defn.Tree.composite(arg, {acc, i}, fn template, {acc, i} ->
+          var = Macro.var(:"arg#{0}", __MODULE__)
+          {var, {[{var, template} | acc], i + 1}}
+        end)
+      end)
+
+    {args, Enum.reverse(vars)}
+  end
+
+  ## JIT/Async/Stream
 
   @doc false
   def __jit__(fun, args, compiler, opts) do
@@ -192,6 +251,26 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
+  ## Compiler
+
+  @doc false
+  def __remote__(module, function, defn, args) do
+    try do
+      apply(module, defn, args)
+    catch
+      :error, :undef ->
+        stack =
+          case __STACKTRACE__ do
+            [{^module, ^defn, args_or_arity, info} | stack] ->
+              [{module, function, args_or_arity, info} | stack]
+
+            stack ->
+              stack
+          end
+
+        :erlang.raise(:error, :undef, stack)
+    end
+  end
   @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
     state = %{

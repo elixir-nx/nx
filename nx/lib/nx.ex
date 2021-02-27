@@ -1904,6 +1904,56 @@ defmodule Nx do
   end
 
   @doc """
+  Checks if two tensors have the same shape, type, and compatible names.
+
+  The data in the tensor is ignored.
+
+  ## Examples
+
+      iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({3, 2}))
+      true
+
+      iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({3, 2}, names: [:rows, :columns]))
+      true
+
+      iex> Nx.compatible?(
+      ...>   Nx.iota({3, 2}, names: [:rows, nil]),
+      ...>   Nx.iota({3, 2}, names: [nil, :columns])
+      ...> )
+      true
+
+      iex> Nx.compatible?(
+      ...>   Nx.iota({3, 2}, names: [:foo, :bar]),
+      ...>   Nx.iota({3, 2}, names: [:rows, :columns])
+      ...> )
+      false
+
+      iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({2, 3}))
+      false
+
+      iex> Nx.compatible?(Nx.iota({2, 2}), Nx.iota({2, 2}, type: {:f, 32}))
+      false
+
+  """
+  def compatible?(left, right) do
+    %{type: type, shape: shape, names: left_names} = tensor!(left)
+
+    case tensor!(right) do
+      %{type: ^type, shape: ^shape, names: right_names} ->
+        compatible_names?(left_names, right_names)
+
+      %{} ->
+        false
+    end
+  end
+
+  defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
+  defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)
+  defp compatible_names?([_ | lnames], [nil | rnames]), do: compatible_names?(lnames, rnames)
+  defp compatible_names?([], []), do: true
+  defp compatible_names?(_, _), do: false
+
+  @doc """
   Returns the shape of the tensor as a tuple.
 
   The size of this tuple gives the rank of the tensor.

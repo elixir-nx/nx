@@ -32,7 +32,7 @@ defmodule EXLA.Defn do
 
   @doc false
   def __aot__(output_dir, module, tuples, aot_options) do
-    funs =
+    comps_and_exprs =
       for {name, fun, vars, options} <- tuples do
         {fun, _expr_options, exla_options} = prepare_args(fun, options)
         expr = fun.(vars)
@@ -43,10 +43,15 @@ defmodule EXLA.Defn do
           end
 
         computation = to_root_computation(name, expr, shapes, exla_options)
-        {computation, name, shapes}
+        {{computation, name, shapes}, expr}
       end
 
-    EXLA.AOT.Compiler.compile(output_dir, module, funs, aot_options)
+    {comps, exprs} = Enum.unzip(comps_and_exprs)
+
+    case EXLA.AOT.Compiler.compile(output_dir, module, comps, aot_options) do
+      {:ok, nif} -> {:ok, exprs, nif}
+      {:error, exception} -> {:error, exception}
+    end
   end
 
   defp prepare_args(fun, options) do

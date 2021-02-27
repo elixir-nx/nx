@@ -267,7 +267,7 @@ defmodule Nx.Defn do
             """
     end
 
-    Nx.Defn.Compiler.__import_aot__(dir, module)
+    Nx.Defn.Compiler.__import_aot__(dir, module, true)
   end
 
   @doc """
@@ -279,12 +279,16 @@ defmodule Nx.Defn do
     output_dir = Path.join(System.tmp_dir(), "elixir-nx/aot#{System.unique_integer()}")
 
     try do
-      :ok = export_aot(output_dir, module, tuples, compiler, aot_opts)
+      case export_aot(output_dir, module, tuples, compiler, aot_opts) do
+        :ok ->
+          defmodule module do
+            @moduledoc false
+            Nx.Defn.Compiler.__import_aot__(output_dir, module, false)
+            :ok
+          end
 
-      defmodule module do
-        @moduledoc false
-        Nx.Defn.import_aot(output_dir, module)
-        :ok
+        {:error, exception} ->
+          raise exception
       end
     after
       File.rm_rf!(output_dir)

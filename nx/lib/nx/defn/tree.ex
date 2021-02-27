@@ -210,16 +210,18 @@ defmodule Nx.Defn.Tree do
     |> Enum.reverse()
   end
 
-  defp from_nested_args(%T{} = t, acc),
-    do: [t | acc]
-
-  defp from_nested_args(number, acc) when is_number(number),
-    do: [Nx.tensor(number) | acc]
-
   defp from_nested_args(tuple, acc) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_nested_args/2)
 
-  defp from_nested_args(other, _acc) do
+  defp from_nested_args(other, acc),
+    do: [from_arg(other) | acc]
+
+  @doc false
+  # Returns tensor from a single arg.
+  def from_arg(%T{} = t), do: t
+  def from_arg(number) when is_number(number), do: Nx.tensor(number)
+
+  def from_arg(other) do
     raise(
       ArgumentError,
       "arguments to defn functions must numbers, tensors, or tuples, got: #{inspect(other)}"
@@ -230,7 +232,7 @@ defmodule Nx.Defn.Tree do
   # Converts nested args to nested params.
   def to_nested_params(args, params) do
     {args, {[], _}} =
-      to_nested_many(args, {params, 0}, fn _arg, {[param | params], i} ->
+      to_nested_args(args, {params, 0}, fn _arg, {[param | params], i} ->
         {Expr.parameter(param, :root, i), {params, i + 1}}
       end)
 
@@ -253,24 +255,11 @@ defmodule Nx.Defn.Tree do
   # Converts nested args to nested templates.
   def to_nested_templates(args, params) do
     {args, []} =
-      to_nested_many(args, params, fn _arg, [param | params] ->
+      to_nested_args(args, params, fn _arg, [param | params] ->
         {Nx.template(param, param.type), params}
       end)
 
     args
-  end
-
-  @doc false
-  # Converts the arguments to vars.
-  # It returns both flat vars and nested vars.
-  def to_vars(args) do
-    {args, {vars, _}} =
-      to_nested_many(args, {[], 0}, fn arg, {acc, i} ->
-        var = Macro.var(:"arg#{0}", __MODULE__)
-        {var, {[{var, arg} | acc], i + 1}}
-      end)
-
-    {args, Enum.reverse(vars)}
   end
 
   @doc false
@@ -285,7 +274,7 @@ defmodule Nx.Defn.Tree do
           "defn must return a tensor expression or a tuple, got: #{inspect(other)}"
   end
 
-  defp to_nested_many(args, acc, fun) when is_list(args) do
+  defp to_nested_args(args, acc, fun) when is_list(args) do
     Enum.map_reduce(args, acc, &to_nested_each(&1, &2, fun))
   end
 
