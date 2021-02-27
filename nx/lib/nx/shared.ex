@@ -353,6 +353,7 @@ defmodule Nx.Shared do
 
   defp pick_struct(struct1, struct2) do
     raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
-            "#{inspect(struct1)} and #{inspect(struct2)}"
+            "#{inspect(struct1)} and #{inspect(struct2)}. You may need to call Nx.backend_transfer/1 on " <>
+            "one or both of them to transfer them to a common implementation"
   end
 end
