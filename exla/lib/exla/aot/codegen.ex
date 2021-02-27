@@ -7,7 +7,8 @@ defmodule EXLA.AOT.Codegen do
     "tf2xla:xla_compiled_cpu_function",
     "xla:cpu_function_runtime",
     "xla:executable_run_options",
-    "xla:types"
+    "xla:types",
+    "xla/service/cpu:runtime_matmul"
   ]
   @bazel_erts_glob "glob([\"erts/**/*.h\"], allow_empty=False)"
 
@@ -110,12 +111,13 @@ defmodule EXLA.AOT.Codegen do
   end
 
   defp build_bazel_linkopts_str do
-    "[" <> str("-shared") <> "]"
+    "[" <> str("-shared") <> "," <> str("-lpthread") <> "]"
   end
 
   ## Generating the NIF Source File
 
   def generate_nif_source_file(functions, target_module, aot_relative_path) do
+    define_block_str = build_define_block()
     include_block_str = build_include_block(functions, aot_relative_path)
     error_block_str = build_error_helper_block()
     load_block_str = build_load_block()
@@ -123,9 +125,17 @@ defmodule EXLA.AOT.Codegen do
     nif_func_export_array_str = build_nif_func_export_array(functions)
     init_block_str = build_init_block(target_module)
 
-    include_block_str <>
+    define_block_str <>
+      include_block_str <>
       error_block_str <>
       load_block_str <> functions_str <> nif_func_export_array_str <> init_block_str
+  end
+
+  defp build_define_block() do
+    """
+    #define EIGEN_USE_THREADS
+    #define EIGEN_USE_CUSTOM_THREAD_POOL
+    """
   end
 
   defp build_include_block(functions, aot_relative_path) do
@@ -177,9 +187,14 @@ defmodule EXLA.AOT.Codegen do
     run_str = build_nif_run_block(name, arity)
     result_str = build_nif_results_block(name, arity, result_sizes)
 
+    cores = System.schedulers_online()
+
     """
     #{signature_str}{
+      Eigen::ThreadPool tp(#{cores});
+      Eigen::ThreadPoolDevice device(&tp, tp.NumThreads());
       #{class_name} #{name}_#{arity};
+      #{name}_#{arity}.set_thread_pool(&device);
       #{args_str}
       #{run_str}
       #{result_str}
