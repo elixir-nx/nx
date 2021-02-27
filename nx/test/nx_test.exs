@@ -1205,7 +1205,7 @@ defmodule NxTest do
     end
 
     test "raises for incompatible types" do
-      assert_raise(ArgumentError, "random_uniform/3 expects compatible types, got: {:s, 32} in range 0.1 to 10.0", fn ->
+      assert_raise(ArgumentError, "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 64}", fn ->
         Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
       end)
     end

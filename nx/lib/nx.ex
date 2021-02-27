@@ -691,7 +691,7 @@ defmodule Nx do
     unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
       raise ArgumentError,
             "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
-            " in range #{inspect(min)} to #{inspect(max)}"
+            " with range #{inspect(range_type)}"
     end
 
     backend = opts[:backend] || Nx.BinaryBackend
