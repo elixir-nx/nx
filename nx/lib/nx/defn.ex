@@ -326,20 +326,16 @@ defmodule Nx.Defn do
 
     defaults = for {{:\\, _, [_, _]}, i} <- Enum.with_index(args), do: i
 
-    body =
-      quote do
-        transform(unquote(parameters_tuple), fn unquote(parameters_tuple) ->
-          apply(@__delegate_to, @__delegate_as, unquote(parameters_list))
-        end)
-      end
+    to_ast = opts[:to]
+    as_ast = opts[:as] || name
 
     quote do
+      to = unquote(to_ast)
+      as = unquote(as_ast)
+
       name = unquote(name)
       arity = unquote(arity)
       defaults = unquote(defaults)
-      opts = unquote(opts)
-      to = opts[:to]
-      as = opts[:as] || name
 
       if not is_atom(to) do
         raise ArgumentError,
@@ -353,10 +349,6 @@ defmodule Nx.Defn do
                 " atom, got #{inspect(as)}"
       end
 
-      if not Module.defines?(__MODULE__, {:__apply__, 3}, :defp) do
-        defp __apply__(m, f, a), do: apply(m, f, a)
-      end
-
       unquote(__MODULE__).__define__(
         __MODULE__,
         :defn,
@@ -365,14 +357,17 @@ defmodule Nx.Defn do
         defaults
       )
 
+      @doc delegate_to: {to, as, arity}
+
       @__delegate_to to
       @__delegate_as as
 
-      @doc delegate_to: {to, as, arity}
-
       def unquote(name)(unquote_splicing(args)) do
         use Nx.Defn.Kernel
-        unquote(body)
+
+        transform(unquote(parameters_tuple), fn unquote(parameters_tuple) ->
+          apply(@__delegate_to, @__delegate_as, unquote(parameters_list))
+        end)
       end
     end
   end
