@@ -1607,7 +1607,7 @@ defmodule EXLA.DefnExprTest do
     defn grouped_conv_same_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
 
-        defn conv_valid_no_stride_channels_last(inp, kernel) do
+    defn conv_valid_no_stride_channels_last(inp, kernel) do
       Nx.conv(inp, kernel,
         padding: :valid,
         input_permutation: [:batch, :channels, :height, :width],
