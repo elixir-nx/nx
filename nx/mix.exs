@@ -49,6 +49,7 @@ defmodule Nx.MixProject do
         "Backends": [
           Nx.Backend,
           Nx.BinaryBackend,
+          Nx.TemplateBackend,
           Nx.Type
         ],
         "Compilers": [

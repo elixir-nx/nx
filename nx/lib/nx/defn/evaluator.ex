@@ -17,7 +17,7 @@ defmodule Nx.Defn.Evaluator do
   def __jit__(_key, vars, fun, opts) do
     fun.(vars)
     |> Expr.rewrite_types(opts)
-    |> Expr.traverse_exprs(%{}, &eval(&1, vars, &2))
+    |> Expr.traverse(%{}, &eval(&1, vars, &2))
     |> elem(0)
   end
 
@@ -35,12 +35,12 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
     {res, cache} = find_clause(clauses, last, vars, cache)
-    Expr.traverse_exprs(res, cache, &eval(&1, vars, &2))
+    Expr.traverse(res, cache, &eval(&1, vars, &2))
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, vars, cache) do
     [tuple, i, _size] = args
-    {tuple, cache} = Expr.traverse_exprs(tuple, cache, &eval(&1, vars, &2))
+    {tuple, cache} = Expr.traverse(tuple, cache, &eval(&1, vars, &2))
     {elem(tuple, i), cache}
   end
 

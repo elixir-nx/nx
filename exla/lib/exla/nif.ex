@@ -236,7 +236,8 @@ defmodule EXLA.NIF do
   def compile_aot(
         _computation,
         _pbtext_path,
-        _aot_path,
+        _header_path,
+        _object_path,
         _function_name,
         _class_name,
         _target_triple

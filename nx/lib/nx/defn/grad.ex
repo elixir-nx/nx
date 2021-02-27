@@ -7,7 +7,7 @@ defmodule Nx.Defn.Grad do
   def transform(to_grad, expr) do
     expr = validate_expr!(expr)
 
-    Expr.traverse_exprs(to_grad, fn to_grad ->
+    Expr.traverse(to_grad, fn to_grad ->
       id = grad_id!(to_grad)
       {graded, _} = to_grad(expr, Expr.tensor(1.0), %{id => :stop})
 
@@ -46,7 +46,7 @@ defmodule Nx.Defn.Grad do
   ## Recursion
 
   defp to_grad(expr, res, cache) do
-    Expr.traverse_exprs(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans,
+    Expr.traverse(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans,
                                         cache ->
       key = [id | res.data.id]
 

@@ -20,7 +20,8 @@ namespace exla{
 
   xla::Status CompileComputation(const xla::XlaComputation& computation,
                                  std::string pbtext_path,
-                                 std::string aot_path,
+                                 std::string header_path,
+                                 std::string object_path,
                                  std::string function_name,
                                  std::string class_name,
                                  std::string target_triple);
