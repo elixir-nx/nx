@@ -206,7 +206,7 @@ defmodule Nx.Defn.Compiler do
     {args, {vars, _}} =
       Enum.map_reduce(args, {[], 0}, fn arg, {acc, i} ->
         Nx.Defn.Tree.composite(arg, {acc, i}, fn template, {acc, i} ->
-          var = Macro.var(:"arg#{0}", __MODULE__)
+          var = Macro.var(:"arg#{i}", __MODULE__)
           {var, {[{var, template} | acc], i + 1}}
         end)
       end)
