@@ -1,7 +1,7 @@
 defmodule EXLA.Defn do
   @moduledoc false
 
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
   @doc false
@@ -54,7 +54,7 @@ defmodule EXLA.Defn do
       Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])
 
     expr_options = Keyword.put_new(expr_options, :max_float_type, {:f, 32})
-    fun = fn vars -> vars |> fun.() |> Expr.rewrite_types(expr_options) end
+    fun = fn vars -> vars |> fun.() |> Tree.rewrite_types(expr_options) end
     {fun, expr_options, exla_options}
   end
 
@@ -173,7 +173,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
-    {args, cache} = Expr.traverse_args(expr, cache, &recur_operator(&1, state, &2))
+    {args, cache} = Tree.traverse_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
   end
 
@@ -760,7 +760,7 @@ defmodule EXLA.Defn do
   defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
     case ids do
       %{^id => true} -> {t, ids}
-      %{} -> Expr.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
+      %{} -> Tree.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
     end
   end
 
@@ -776,13 +776,13 @@ defmodule EXLA.Defn do
           {param, Map.put(ids, id, {i, expr, param})}
       end
     else
-      {args, ids} = Expr.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
+      {args, ids} = Tree.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
       {put_in(expr.data.args, args), ids}
     end
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, ids_args} = Expr.traverse(expr, %{}, &collect_args(&1, &2, ids))
+    {expr, ids_args} = Tree.composite(expr, %{}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 

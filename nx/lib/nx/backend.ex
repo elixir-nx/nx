@@ -10,7 +10,7 @@ defmodule Nx.Backend do
   `Nx` backends come in two flavors: opaque backends, of which you should
   not access its data directly except through the functions in the `Nx`
   module, and public ones, of which its data can be directly accessed and
-  visited. The former typically have the `Backend` suffix.
+  traversed. The former typically have the `Backend` suffix.
 
   `Nx` ships with the following backends:
 
@@ -24,7 +24,7 @@ defmodule Nx.Backend do
       tensors to be expected in the future.
 
     * `Nx.Defn.Expr` - a public backend used by `defn` to build
-      expression graphs that are traversed by custom compilers.
+      expression trees that are traversed by custom compilers.
 
   This module also includes functions that are meant to be shared
   across backends.

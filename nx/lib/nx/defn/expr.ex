@@ -2,13 +2,16 @@ defmodule Nx.Defn.Expr do
   @doc """
   The expression used by `Nx.Defn.Compiler`.
 
-  `Nx.Defn.Compiler` changes `Nx` default implementation from
-  `Nx.BinaryBackend` to `Nx.Defn.Expr`. It is a struct with the
-  following fields:
+  `Nx.Defn.Compiler` changes `Nx` default backend from `Nx.BinaryBackend`
+  to `Nx.Defn.Expr`. It is a struct with the following fields:
 
     * `:id` - a unique identifier
     * `:op` - the operation name
     * `:args` - the operation arguments
+    * `:context` - the context of the expression
+
+  Convenience functions for traversing expressions can be found
+  in `Nx.Defn.Tree`.
 
   ## Syntax nodes
 
@@ -30,33 +33,41 @@ defmodule Nx.Defn.Expr do
       expression that return tuples. Note it may return tuples
       too, which means we have nested tuples
 
+  Custom compilers must handle said nodes accordingly.
   """
 
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
   import Nx.Shared
 
   @enforce_keys [:id, :op, :args, :context]
-  @type t :: %Expr{}
   defstruct [:id, :op, :args, :context]
 
   ## Public API
 
   @doc """
-  Builds an expression from a tensor.
+  Builds an tensor expression from the given tensor.
   """
   def tensor(tensor), do: to_expr(tensor)
 
   @doc """
-  Creates a parameter based on the given tensor expression.
+  Creates a tensor expression parameter at `pos` based on the given tensor expression.
   """
-  def parameter(tensor, pos) when is_integer(pos) and pos >= 0 do
-    expr(tensor, tensor.data.context, :parameter, [pos])
+  def parameter(%T{data: %Expr{context: context}} = tensor, pos) do
+    parameter(tensor, context, pos)
   end
 
   @doc """
-  Creates a tensor expression parameter with the given `context`, `type`, `shape`, and `pos`.
+  Creates a tensor expression parameter at `pos` based on the given `tensor` and `context`.
+  """
+  def parameter(tensor, context, pos) when is_integer(pos) and pos >= 0 do
+    expr(tensor, context, :parameter, [pos])
+  end
+
+  @doc """
+  Creates a tensor expression parameter at `pos` with the given `context`, `type`,
+  `shape`, and `pos`.
   """
   def parameter(context, type, shape, pos) do
     names = List.duplicate(nil, tuple_size(shape))
@@ -64,7 +75,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tensor expression metadata node wrapping the given expression.
+  Creates a tensor expression metadata node wrapping the given tensor expression.
   """
   def metadata(expr, metadata) when is_map(metadata) do
     expr = to_expr(expr)
@@ -80,14 +91,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tuple, possibly recursively, by executing the
+  Creates a composite type, possibly recursively, by executing the
   given function for each element.
-  """
-  def tuple(tuple, context, fun) when is_tuple(tuple) do
-    recur_tuple(tuple, context, fun)
-  end
 
-  defp recur_tuple(tuple, context, fun) when is_tuple(tuple) do
+  Currently only tuples are supported as composite types. If a non-
+  composite type is given, it is passed to the function as is.
+  """
+  def composite(tuple, context, fun) when is_tuple(tuple) do
     size = tuple_size(tuple)
     expr = fun.(%T{shape: {}, names: [], type: {:tuple, size}})
 
@@ -97,28 +107,22 @@ defmodule Nx.Defn.Expr do
     |> Enum.with_index()
     |> Enum.map(fn {tensor, i} ->
       fun = &expr(&1, context, :elem, [expr, i, size])
-      recur_tuple(tensor, context, fun)
+      composite(tensor, context, fun)
     end)
     |> List.to_tuple()
   end
 
-  defp recur_tuple(tensor, _context, fun), do: fun.(tensor)
+  def composite(tensor, _context, fun), do: fun.(tensor)
 
   @doc """
-  Creates a `cond` expression.
+  Creates a `cond` tensor expression.
   """
   def cond(clauses, last) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
     [last | exprs] = cond_clauses(last, exprs)
     clauses = Enum.zip(preds, exprs)
-    fun = &expr(&1, context, :cond, [clauses, last])
-
-    if is_tuple(last) do
-      tuple(last, context, fun)
-    else
-      fun.(last)
-    end
+    composite(last, context, &expr(&1, context, :cond, [clauses, last]))
   end
 
   defp cond_clauses(last, exprs) when is_tuple(last) do
@@ -177,286 +181,10 @@ defmodule Nx.Defn.Expr do
             "got #{inspect(left)} and #{inspect(right)}"
   end
 
-  ## Traversal helpers
-
-  @doc """
-  Helper to traverse the arguments of an expression.
-
-  Note function expressions are never traversed, as they generally
-  shouldn't be implicitly modified as that would ultimately change
-  the function itself.
-  """
-  def traverse_args(expr, acc, fun)
-
-  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
-    {args, acc}
-  end
-
-  def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
-    {clauses, acc} =
-      Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
-        {condition, acc} = fun.(condition, acc)
-        {expr, acc} = traverse(expr, acc, fun)
-        {{condition, expr}, acc}
-      end)
-
-    {last, acc} = traverse(last, acc, fun)
-    {[clauses, last], acc}
-  end
-
-  def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
-    {list, acc} = Enum.map_reduce(list, acc, fun)
-    {[list | args], acc}
-  end
-
-  def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do
-    Enum.map_reduce(args, acc, fn
-      %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
-      arg, acc -> {arg, acc}
-    end)
-  end
-
-  @doc """
-  Traverses the given expressions.
-
-  This function exists to handle composite types that may
-  have multiple expressions.
-
-  If an expression is given, the function is invoked for it
-  but not for its arguments (see `traverse_args/3` for that).
-
-  If a tuple of expressions are given, the tuple is recursively
-  traversed for each expression and returned.
-  """
-  def traverse(expr, fun) when is_function(fun, 1) do
-    {result, []} = traverse(expr, [], fn expr, [] -> {fun.(expr), []} end)
-    result
-  end
-
-  @doc """
-  Traverses the given expressions with the accumulator
-
-  If an expression is given, the function is invoked for it
-  but not for its arguments (see `traverse_args/3` for that).
-
-  If a tuple of expressions are given, the tuple is recursively
-  traversed for each expression and returned.
-  """
-  def traverse(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
-    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &traverse(&1, &2, fun))
-    {List.to_tuple(list), acc}
-  end
-
-  def traverse(%T{} = expr, acc, fun) when is_function(fun, 2) do
-    fun.(expr, acc)
-  end
-
-  def traverse(other, _acc, _fun) do
-    raise ArgumentError, "expected a tensor expression, got: #{inspect(other)}"
-  end
-
-  ## Type helpers
-
-  @doc """
-  Rewrites the types of the given expression according to the given options.
-
-  ## Options
-
-    * `:max_float_type` - set the max float type
-    * `:max_signed_type` - set the max signed integer type
-    * `:max_unsigned_type` - set the max unsigned integer type
-
-  """
-  def rewrite_types(tensor_expr, opts \\ []) when is_list(opts) do
-    {_, max_float_size} = max_float_type = opts[:max_float_type] || {:f, 64}
-    {_, max_signed_size} = max_signed_type = opts[:max_signed_type] || {:s, 64}
-    {_, max_unsigned_size} = max_unsigned_type = opts[:max_unsigned_type] || {:u, 64}
-
-    if not Nx.Type.float?(max_float_type) do
-      raise ArgumentError, ":max_float_type must be float type, got: #{inspect(max_float_type)}"
-    end
-
-    if max_float_type != {:f, 64} or max_signed_type != {:s, 64} or max_unsigned_type != {:u, 64} do
-      rewrite_type(tensor_expr, fn
-        {:u, size} when size >= max_unsigned_size -> max_unsigned_type
-        {:s, size} when size >= max_signed_size -> max_signed_type
-        {:f, size} when size >= max_float_size -> max_float_type
-        {:bf, size} when size >= max_float_size -> max_float_type
-        type -> type
-      end)
-    else
-      tensor_expr
-    end
-  end
-
-  defp rewrite_type(expr, fun) do
-    {res, _} = rewrite_type(expr, %{}, fun)
-    res
-  end
-
-  defp rewrite_type(expr, cache, fun) do
-    traverse(expr, cache, fn %T{data: %Expr{id: id, op: op}} = t, cache ->
-      case cache do
-        %{^id => res} ->
-          {res, cache}
-
-        %{} ->
-          {args, cache} = traverse_args(t, cache, &rewrite_type(&1, &2, fun))
-          res = rewrite_type(op, args, t, fun)
-          {res, Map.put(cache, id, res)}
-      end
-    end)
-  end
-
-  defp rewrite_type(:parameter, _args, t, type_fun) do
-    Nx.as_type(t, type_fun.(t.type))
-  end
-
-  defp rewrite_type(:fun, [params, _expr, fun], _t, type_fun) do
-    {:arity, arity} = Function.info(fun, :arity)
-    params = Enum.map(params, &%{&1 | type: type_fun.(&1.type)})
-    fun(params, rewrite_type_fun(arity, fun, type_fun))
-  end
-
-  defp rewrite_type(:tensor, [arg], t, type_fun) do
-    type = type_fun.(t.type)
-    rewrite_type_args(t, type, [Nx.as_type(arg, type)])
-  end
-
-  defp rewrite_type(_op, args, t, type_fun) do
-    rewrite_type_args(t, type_fun.(t.type), args)
-  end
-
-  for arity <- 0..15 do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    defp rewrite_type_fun(unquote(arity), op_fun, type_fun) do
-      fn unquote_splicing(args) -> rewrite_type(op_fun.(unquote_splicing(args)), type_fun) end
-    end
-  end
-
-  defp rewrite_type_args(%{data: data} = t, type, args) do
-    %{t | data: %{data | id: id(), args: args}, type: type}
-  end
-
-  ## Nx.Defn callbacks
-
-  @doc false
-  # Returns tensors from flat args.
-  def from_flat_args(vars) do
-    for var <- vars do
-      case var do
-        %T{} = head ->
-          head
-
-        number when is_number(number) ->
-          Nx.tensor(number)
-
-        tuple when is_tuple(tuple) ->
-          raise ArgumentError,
-                "defn functions expects either numbers or tensors as arguments. " <>
-                  "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
-                  "Got: #{inspect(tuple)}"
-
-        other ->
-          raise ArgumentError,
-                "defn functions expects either numbers or tensors as arguments. " <>
-                  "If you want to pass Elixir values, they need to be sent as options and " <>
-                  "tagged as default arguments. Got: #{inspect(other)}"
-      end
-    end
-  end
-
-  @doc false
-  # Returns tensors from nested args.
-  def from_nested_args(args) do
-    args
-    |> Enum.reduce([], &from_nested_args/2)
-    |> Enum.reverse()
-  end
-
-  defp from_nested_args(%T{} = t, acc),
-    do: [t | acc]
-
-  defp from_nested_args(number, acc) when is_number(number),
-    do: [Nx.tensor(number) | acc]
-
-  defp from_nested_args(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_nested_args/2)
-
-  defp from_nested_args(other, _acc) do
-    raise(
-      ArgumentError,
-      "arguments to defn functions must numbers, tensors, or tuples, got: #{inspect(other)}"
-    )
-  end
-
-  @doc false
-  # Converts nested args to nested params.
-  def to_nested_params(args, params) do
-    {args, {[], _}} =
-      to_nested_many(args, {params, 0}, fn _arg, {[param | params], i} ->
-        {expr(param, :root, :parameter, [i]), {params, i + 1}}
-      end)
-
-    args
-  end
-
-  @doc false
-  # Converts flat args to flat params.
-  # TODO: Use Enum.with_index/2 on Elixir v1.12+
-  def to_flat_params(vars),
-    do: to_flat_params(vars, 0)
-
-  defp to_flat_params([head | tail], i),
-    do: [expr(head, :root, :parameter, [i]) | to_flat_params(tail, i + 1)]
-
-  defp to_flat_params([], _i),
-    do: []
-
-  @doc false
-  # Converts the arguments to vars.
-  # It returns both flat vars and nested vars.
-  def to_vars(args) do
-    {args, {vars, _}} =
-      to_nested_many(args, {[], 0}, fn arg, {acc, i} ->
-        var = Macro.var(:"arg#{0}", __MODULE__)
-        {var, {[{var, arg} | acc], i + 1}}
-      end)
-
-    {args, Enum.reverse(vars)}
-  end
-
-  @doc false
-  def to_result(tuple) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
-
-  def to_result(%T{data: %Expr{}} = t),
-    do: t
-
-  def to_result(other) do
-    raise ArgumentError,
-          "defn must return a tensor expression or a tuple, got: #{inspect(other)}"
-  end
-
-  defp to_nested_many(args, acc, fun) when is_list(args) do
-    Enum.map_reduce(args, acc, &to_nested_each(&1, &2, fun))
-  end
-
-  defp to_nested_each(arg, acc, fun) when is_tuple(arg) do
-    {list, acc} =
-      arg
-      |> Tuple.to_list()
-      |> Enum.map_reduce(acc, &to_nested_each(&1, &2, fun))
-
-    {List.to_tuple(list), acc}
-  end
-
-  defp to_nested_each(arg, acc, fun) do
-    fun.(arg, acc)
-  end
-
   ## Nx.Defn AST callbacks
+
+  @doc false
+  def id(), do: System.unique_integer()
 
   @doc false
   def cond(file, clauses, last) do
@@ -731,7 +459,7 @@ defmodule Nx.Defn.Expr do
   def qr({q, r}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context
-    tuple({q, r}, context, &expr(&1, context, :qr, [{q, r}, tensor, opts]))
+    composite({q, r}, context, &expr(&1, context, :qr, [{q, r}, tensor, opts]))
   end
 
   @impl true
@@ -783,8 +511,6 @@ defmodule Nx.Defn.Expr do
 
   ## Helpers
 
-  defp id(), do: System.unique_integer()
-
   defp expr(tensor, context, op, args) do
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}}
   end
@@ -832,7 +558,7 @@ defmodule Nx.Defn.Expr do
   @impl true
   def inspect(tensor, opts) do
     {_, acc} = inspect_expr(tensor, {[], [], %{}})
-    {_, {exprs, params, _var_map}} = traverse_args(tensor, acc, &inspect_expr/2)
+    {_, {exprs, params, _var_map}} = Tree.traverse_args(tensor, acc, &inspect_expr/2)
 
     all =
       params
@@ -863,7 +589,7 @@ defmodule Nx.Defn.Expr do
 
   defp inspect_expr(%T{} = t, acc) do
     %{data: %Expr{id: id, op: op, args: args}} = t
-    {_, {exprs, params, var_map}} = traverse_args(t, acc, &inspect_expr/2)
+    {_, {exprs, params, var_map}} = Tree.traverse_args(t, acc, &inspect_expr/2)
     {var, var_map} = var_for_id(var_map, id)
     args_str = inspect_args(op, args, var_map)
     expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> args_str <> " ]"

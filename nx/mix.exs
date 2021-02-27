@@ -55,7 +55,8 @@ defmodule Nx.MixProject do
         "Compilers": [
           Nx.Defn.Compiler,
           Nx.Defn.Evaluator,
-          Nx.Defn.Expr
+          Nx.Defn.Expr,
+          Nx.Defn.Tree
         ],
         "Structs": [
           Nx.Heatmap,

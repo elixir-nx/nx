@@ -216,7 +216,7 @@ defmodule Nx.Defn.Kernel do
     quote do
       Nx.Defn.Kernel.transform(
         unquote(expr),
-        &Nx.Defn.Expr.rewrite_types(&1, unquote(opts))
+        &Nx.Defn.Tree.rewrite_types(&1, unquote(opts))
       )
     end
   end

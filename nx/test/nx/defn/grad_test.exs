@@ -29,9 +29,9 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "raises on invalid" do
-      assert_raise ArgumentError, "expected a tensor expression, got: :invalid", fn ->
-        grad_invalid(Nx.tensor(1))
-      end
+      assert_raise ArgumentError,
+                   "expected a tensor expression or a tuple of tensor expressions, got: :invalid",
+                   fn -> grad_invalid(Nx.tensor(1)) end
     end
   end
 

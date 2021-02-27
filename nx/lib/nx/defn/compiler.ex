@@ -9,7 +9,7 @@ defmodule Nx.Defn.Compiler do
   It receives the same arguments as `c:__jit__/4` but must return
   a struct that implements the `Nx.Async` protocol.
   """
-  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.Defn.Expr.t()), keyword) ::
+  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), keyword) ::
               Nx.Async.t()
 
   @doc """
@@ -24,7 +24,7 @@ defmodule Nx.Defn.Compiler do
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
   """
-  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.Defn.Expr.t()), keyword) ::
+  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), keyword) ::
               Nx.t() | tuple()
 
   # These operations do not have valid meaning for Nx.Defn.Expr
@@ -67,7 +67,7 @@ defmodule Nx.Defn.Compiler do
   def __aot__(module, tuples, compiler, aot_opts) do
     compiler_tuples =
       Enum.map(tuples, fn {name, fun, args, opts} ->
-        tensors = Nx.Defn.Expr.from_nested_args(args)
+        tensors = Nx.Defn.Tree.from_nested_args(args)
         # We need to include the actual arity in the name because
         # defn foo({a, b}) and defn foo(a, b) compile to the same
         # name+arity at the AOT level.
@@ -126,7 +126,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp runtime(callback, fun, args, compiler, opts) do
-    tensors = Nx.Defn.Expr.from_nested_args(args)
+    tensors = Nx.Defn.Tree.from_nested_args(args)
     runtime_fun = &runtime_fun(&1, fun, args, compiler)
     Kernel.apply(compiler, callback, [fun, tensors, runtime_fun, opts])
   end
@@ -139,11 +139,11 @@ defmodule Nx.Defn.Compiler do
     Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      args = Nx.Defn.Expr.to_nested_params(args, tensors)
+      args = Nx.Defn.Tree.to_nested_params(args, tensors)
 
       fun
       |> apply(args)
-      |> Nx.Defn.Expr.to_result()
+      |> Nx.Defn.Tree.to_result()
     after
       Process.delete(Nx.Defn.Compiler)
     end
@@ -185,12 +185,12 @@ defmodule Nx.Defn.Compiler do
         else
           unquote(def_module).__jit__(
             unquote(cache),
-            Nx.Defn.Expr.from_flat_args(unquote(flat_args)),
+            Nx.Defn.Tree.from_flat_args(unquote(flat_args)),
             fn unquote(flat_args) ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
               try do
-                unquote(flat_args) = Nx.Defn.Expr.to_flat_params(unquote(flat_args))
-                Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
+                unquote(flat_args) = Nx.Defn.Tree.to_flat_params(unquote(flat_args))
+                Nx.Defn.Tree.to_result(unquote(defn_name)(unquote_splicing(args)))
               after
                 Process.delete(Nx.Defn.Compiler)
               end
