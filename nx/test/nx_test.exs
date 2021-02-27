@@ -1198,7 +1198,7 @@ defmodule NxTest do
       assert t1 != t2
     end
 
-    test "raises with non-float type" do
+    test "raises with incompatible types" do
       assert_raise(ArgumentError, "random_uniform/3 expects compatible types, got: {:s, 32} in range 0.1 to 10.0", fn ->
         Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
       end)
