@@ -520,6 +520,41 @@ defmodule Nx do
   end
 
   @doc """
+  Creates a tensor template.
+
+  You can't perform any operation on this tensor.
+  It exists exclusively to define APIs that say
+  a tensor with a certain type, shape, and names
+  is expected in the future.
+
+  ## Examples
+
+      iex> Nx.template({:f, 32}, {2, 3})
+      #Nx.Tensor<
+        f32[2][3]
+        Nx.TemplateBackend
+      >
+
+      iex> Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+      #Nx.Tensor<
+        f32[rows: 2][columns: 3]
+        Nx.TemplateBackend
+      >
+
+      iex> t = Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+      iex> Nx.add(t, 1)
+      ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
+
+  """
+  @doc type: :creation
+  def template(type, shape, opts \\ []) do
+    assert_keys!(opts, [:names])
+    type = Nx.Type.normalize!(type)
+    names = Nx.Shape.named_axes!(opts[:names], shape)
+    %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
+  end
+
+  @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
   """
   @doc type: :random
@@ -650,7 +685,15 @@ defmodule Nx do
     assert_keys!(opts, [:type, :names, :backend])
     shape = Nx.shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(max - min))
+    range_type = Nx.Type.infer(max - min)
+    type = Nx.Type.normalize!(opts[:type] || range_type)
+
+    unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
+      raise ArgumentError,
+            "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
+            " with range #{inspect(range_type)}"
+    end
+
     backend = opts[:backend] || Nx.BinaryBackend
     backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
   end
@@ -747,6 +790,11 @@ defmodule Nx do
     shape = Nx.shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
+
+    unless Nx.Type.float?(type) do
+      raise ArgumentError, "random_normal/3 expects float type, got: #{inspect(type)}"
+    end
+
     backend = opts[:backend] || Nx.BinaryBackend
     backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
   end

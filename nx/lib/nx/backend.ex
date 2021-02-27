@@ -19,6 +19,10 @@ defmodule Nx.Backend do
       backend used by the `Nx` module. The backend itself (and its
       data) is private and must not be accessed directly.
 
+    * `Nx.TemplateBackend` - an opaque backend written that works as
+      a template in APIs to declare the type, shape, and names of
+      tensors to be expected in the future.
+
     * `Nx.Defn.Expr` - a public backend used by `defn` to build
       expression graphs that are traversed by custom compilers.
 
