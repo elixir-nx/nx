@@ -27,6 +27,16 @@ defmodule Torchx.Backend do
   def torch_type({:f, 32}), do: :float
   def torch_type({:f, 64}), do: :double
 
+  def from_torch_type(:char), do: {:s, 8}
+  def from_torch_type(:byte), do: {:u, 8}
+  def from_torch_type(:short), do: {:s, 16}
+  def from_torch_type(:int), do: {:s, 32}
+  def from_torch_type(:long), do: {:s, 64}
+  def from_torch_type(:brain), do: {:bf, 16}
+  def from_torch_type(:half), do: {:f, 16}
+  def from_torch_type(:float), do: {:f, 32}
+  def from_torch_type(:double), do: {:f, 64}
+
   ## Creation
 
   @impl true
@@ -131,6 +141,21 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def subtract(out, left, right) do
+    NIF.subtract(left.data.ref, right.data.ref) |> from_ref(out)
+  end
+
+  @impl true
+  def multiply(out, left, right) do
+    NIF.multiply(left.data.ref, right.data.ref) |> from_ref(out)
+  end
+
+  @impl true
+  def divide(out, left, right) do
+    NIF.divide(left.data.ref, right.data.ref) |> from_ref(out)
+  end
+
+  @impl true
   def dot(
         out,
         %T{data: %TB{ref: left_ref}},
@@ -200,7 +225,8 @@ defmodule Torchx.Backend do
       |> unwrap!()
       |> Enum.map(&to_tensor(&1, t))
 
-  defp to_tensor(ref, t), do: %T{t | data: %__MODULE__{ref: ref}}
+  defp to_tensor(ref, t),
+    do: %T{t | data: %__MODULE__{ref: ref}, type: from_torch_type(unwrap!(NIF.type(ref)))}
 
   defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()

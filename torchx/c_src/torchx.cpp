@@ -338,6 +338,48 @@ NIF(add)
     TENSOR(*a + *b);
 }
 
+NIF(subtract)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+
+  if (b == NULL)
+  {
+    PARAM(1, double, scalar);
+    TENSOR(*a + scalar);
+  }
+  else
+    TENSOR(*a - *b);
+}
+
+NIF(divide)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+
+  if (b == NULL)
+  {
+    PARAM(1, double, scalar);
+    TENSOR(*a / scalar);
+  }
+  else
+    TENSOR(*a / *b);
+}
+
+NIF(multiply)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+
+  if (b == NULL)
+  {
+    PARAM(1, double, scalar);
+    TENSOR(*a * scalar);
+  }
+  else
+    TENSOR(*a * *b);
+}
+
 NIF(dot)
 {
   TENSOR_PARAM(0, a);
@@ -445,8 +487,14 @@ static ErlNifFunc nif_functions[] = {
     DF(squeeze, 1),
     DF(broadcast_to, 2),
     DF(transpose, 3),
+
     DF(add, 2),
+    DF(subtract, 2),
+    DF(divide, 2),
+    DF(multiply, 2),
+
     DF(dot, 2),
+
     DF(cholesky, 1),
     DF(cholesky, 2),
     DF(qr, 1),
