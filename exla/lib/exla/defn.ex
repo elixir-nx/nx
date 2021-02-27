@@ -273,16 +273,21 @@ defmodule EXLA.Defn do
     kernel_dilation = opts[:kernel_dilation]
     groups = opts[:groups]
 
-    %{type: output_type, shape: shape} = ans
-    rank = tuple_size(shape)
+    %{type: output_type} = ans
 
     # Build general conv dims
-    input_dims = List.to_tuple(for i <- 0..(rank - 1), do: i)
-    [out_features, in_features | kernel_spatial] = for i <- 0..(rank - 1), do: i
-    kernel_dims = List.to_tuple([in_features, out_features | kernel_spatial])
-    output_dims = input_dims
+    input_permutation = List.to_tuple(opts[:input_permutation])
+    [out_features, in_features | spatial_features] = opts[:kernel_permutation]
+    kernel_permutation = List.to_tuple([in_features, out_features | spatial_features])
 
-    conv_dim_nos = {input_dims, kernel_dims, output_dims}
+    output_permutation =
+      opts[:output_permutation]
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
+      |> List.to_tuple()
+
+    conv_dim_nos = {input_permutation, kernel_permutation, output_permutation}
 
     # Ensure both types are floating
     operand = to_type(operand, output_type)
