@@ -7131,7 +7131,7 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2])
+      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       #Nx.Tensor<
         f64[4]
         [1.33333333, -0.66666667, 2.66666667, -1.33333333]
@@ -7139,19 +7139,19 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]], [4, 2, 4, 2], trans: 9)
+      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]), trans: 9)
       ** (ArgumentError) unknown trans 9, expected 0 or 'N' for a x = b
 
-      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0]], [4, 2, 4, 2], trans: 0)
+      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]), trans: 0)
       ** (ArgumentError) expected a square matrix, got: {2, 4}
 
-      iex> Nx.triangular_solve([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]], [4], trans: 0)
+      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]), trans: 0)
       ** (ArgumentError) incompatible dimensions
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
-    %T{shape: s1 = {m, n}} = a = tensor(a)
-    %T{shape: {q}} = b = tensor(b)
+    %T{shape: s1 = {m, n}} = a = tensor!(a)
+    %T{shape: {q}} = b = tensor!(b)
 
     case shape(s1) do
       {n, n} -> {n, n}
@@ -7179,7 +7179,6 @@ defmodule Nx do
 
   defp triangular_solve_n(a, b) do
     # TODO: write implementation
-    Nx.tensor([1.33333333, -0.66666667, 2.66666667, -1.33333333])
   end
 
   @doc """
