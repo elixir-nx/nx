@@ -316,6 +316,62 @@ defmodule Nx.Defn.Grad do
     grad_reduce(x, opts, g, cache, & &1)
   end
 
+  defp grad(:product, [x, opts], _ans, g, cache) do
+    axes = opts[:axes] || Enum.to_list(0..Nx.rank(x.shape) - 1)
+    {n, _} = Enum.reduce(axes, {1, x.shape}, fn axis, {size, shape} -> {elem(shape, axis)*size, shape} end)
+    non_axes = Enum.filter(axes, & &1 not in axes)
+    {non_axes_shape, _} =
+      Enum.reduce(non_axes, {{}, x.shape},
+        fn axis, {cur, shape} ->
+          {Tuple.append(cur, elem(shape, axis)), shape}
+        end
+      )
+    permutation = axes ++ non_axes
+
+    new_shape = Tuple.insert_at(non_axes_shape, 0, n)
+
+    operand = Nx.reshape(Nx.transpose(x, axes: permutation), new_shape)
+    # tangents = Nx.reshape(Nx.transpose(g, axes: permutation), new_shape)
+
+    axis_value = elem(operand.shape, 0)
+
+    x = reduce_prod_tree(operand, 0, axis_value, non_axes_shape)
+
+    to_grad(x, g, cache)
+  end
+
+  defp reduce_prod_tree(_, _, 0, non_axes_shape), do: Nx.broadcast(1, non_axes_shape)
+  defp reduce_prod_tree(x, axis, 1, _), do: Nx.squeeze(x, axes: [axis])
+  defp reduce_prod_tree(x, axis, axis_value, non_axes_shape) do
+    n1 = div(axis_value + 1, 2)
+    n2 = axis_value - n1
+
+    x1_start_indices = List.duplicate(0, Nx.rank(x.shape))
+    x1_limit_indices = [n1 | Tuple.to_list(Tuple.delete_at(x.shape, 0))]
+
+    x2_start_indices = [n1 | List.duplicate(0, Nx.rank(x.shape) - 1)]
+    x2_limit_indices =
+      x1_limit_indices
+      |> Enum.zip(Tuple.to_list(x.shape))
+      |> Enum.map(fn {x, y} -> y - x end)
+
+    x1 = Nx.slice(x, x1_start_indices, x1_limit_indices)
+    x2 = Nx.slice(x, x2_start_indices, x2_limit_indices)
+
+    x2 =
+      if n2 != n1 do
+        paddings = List.duplicate({0, 0, 0}, Nx.rank(x.shape))
+        paddings = List.update_at(paddings, axis, fn _ -> {0, 1, 0} end)
+        Nx.pad(x2, 1, paddings)
+      else
+        x2
+      end
+
+    new_operand = Nx.multiply(x1, x2)
+    new_axis_value = elem(new_operand.shape, 0)
+    reduce_prod_tree(new_operand, axis, new_axis_value, non_axes_shape)
+  end
+
   @reduce_min_max_ops [:reduce_max, :reduce_min]
 
   defp grad(op, [x, opts], ans, g, cache) when op in @reduce_min_max_ops do

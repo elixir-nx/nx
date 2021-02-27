@@ -1961,6 +1961,23 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "reduce product rule" do
+    defn grad_reduce_product(t), do: grad(t, Nx.product(t))
+    defn grad_reduce_product_cos(t), do: grad(t, Nx.product(Nx.power(t, 2)))
+
+    test "computes the gradient with product" do
+      lhs = grad_reduce_product(Nx.tensor([[1.0, 4.0, 2.0], [3.0, 6.0, 6.0]]))
+      rhs = Nx.tensor([[864.0, 216.0, 432.0], [288.0, 144.0, 144.0]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes the gradient with product of cosine" do
+      lhs = grad_reduce_product(Nx.iota({3, 1, 2, 2}, type: {:f, 64}))
+      rhs = Nx.broadcast(0.0, {3, 1, 2, 2})
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "not implemented" do
     defn grad_reduce(t), do: grad(t, Nx.reduce(t, 0, fn x, y -> x + y end))
 
