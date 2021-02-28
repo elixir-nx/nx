@@ -225,8 +225,22 @@ defmodule Torchx.Backend do
       |> unwrap!()
       |> Enum.map(&to_tensor(&1, t))
 
-  defp to_tensor(ref, t),
-    do: %T{t | data: %__MODULE__{ref: ref}, type: from_torch_type(unwrap!(NIF.type(ref)))}
+  defp to_tensor(ref, %{type: out_type} = t),
+    do: %T{t | data: %__MODULE__{ref: maybe_cast_type(ref, out_type)}}
+
+  defp maybe_cast_type(ref, type) do
+    if from_torch_type(unwrap!(NIF.type(ref))) != type do
+      IO.puts(
+        "\nCasting #{Nx.Type.to_string(from_torch_type(unwrap!(NIF.type(ref))))} to #{
+          Nx.Type.to_string(type)
+        } \n"
+      )
+
+      NIF.to_type(ref, torch_type(type)) |> unwrap!()
+    else
+      ref
+    end
+  end
 
   defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()

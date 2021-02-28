@@ -416,7 +416,7 @@ NIF(qr)
 
 void free_tensor(ErlNifEnv *env, void *obj)
 {
-  std::cout << "Deleting: " << obj << std::endl;
+  // std::cout << "Deleting: " << obj << std::endl;
 }
 
 static int

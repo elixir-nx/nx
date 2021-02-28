@@ -33,29 +33,40 @@ defmodule TorchxTest do
   end
 
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
-  # , :subtract, :dot]
   @ops [:add, :subtract, :divide, :multiply]
   describe "binary ops" do
     for op <- @ops,
         type_a <- @types,
         type_b <- @types do
       test "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
-        a = tt([[1, 2], [3, 4]], unquote(type_a))
-        b = tt([[5, 6], [7, 8]], unquote(type_b))
+        op = unquote(op)
+        type_a = unquote(type_a)
+        type_b = unquote(type_b)
 
-        c = Kernel.apply(Nx, unquote(op), [a, b])
+        a = tt([[1, 2], [3, 4]], type_a)
+        b = tt([[5, 6], [7, 8]], type_b)
+
+        c = Kernel.apply(Nx, op, [a, b])
 
         binary_a = Nx.backend_transfer(a, Nx.BinaryBackend)
         binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
-        binary_c = Kernel.apply(Nx, unquote(op), [binary_a, binary_b])
+        binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
+
+        if c.type != binary_c.type do
+          IO.puts(
+            "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)}) == #{
+              Nx.Type.to_string(c.type)
+            } instead of #{Nx.Type.to_string(binary_c.type)}"
+          )
+        end
 
         assert(Nx.backend_transfer(c) == binary_c)
       rescue
         e in RuntimeError ->
           IO.puts(
-            "#{unquote(op)}(#{Nx.Type.to_string(unquote(type_a))}, #{
+            "\r#{unquote(op)}(#{Nx.Type.to_string(unquote(type_a))}, #{
               Nx.Type.to_string(unquote(type_b))
-            }): #{e.message}"
+            }): #{e.message}\n"
           )
       end
     end
