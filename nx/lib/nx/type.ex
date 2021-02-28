@@ -152,7 +152,7 @@ defmodule Nx.Type do
       iex> Nx.Type.to_floating({:s, 8})
       {:f, 32}
       iex> Nx.Type.to_floating({:s, 32})
-      {:f, 64}
+      {:f, 32}
       iex> Nx.Type.to_floating({:bf, 16})
       {:bf, 16}
       iex> Nx.Type.to_floating({:f, 32})
@@ -260,20 +260,41 @@ defmodule Nx.Type do
       iex> Nx.Type.merge({:u, 16}, {:f, 32})
       {:f, 32}
       iex> Nx.Type.merge({:u, 32}, {:f, 32})
-      {:f, 64}
+      {:f, 32}
+      iex> Nx.Type.merge({:u, 64}, {:f, 32})
+      {:f, 32}
       iex> Nx.Type.merge({:s, 8}, {:f, 32})
       {:f, 32}
       iex> Nx.Type.merge({:s, 16}, {:f, 32})
       {:f, 32}
       iex> Nx.Type.merge({:s, 32}, {:f, 32})
+      {:f, 32}
+      iex> Nx.Type.merge({:s, 64}, {:f, 32})
+      {:f, 32}
+
+      iex> Nx.Type.merge({:u, 8}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:u, 16}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:u, 32}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:u, 64}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:s, 8}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:s, 16}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:s, 32}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:s, 64}, {:f, 64})
       {:f, 64}
 
       iex> Nx.Type.merge({:s, 8}, {:bf, 16})
       {:bf, 16}
       iex> Nx.Type.merge({:s, 16}, {:bf, 16})
-      {:f, 32}
+      {:bf, 16}
       iex> Nx.Type.merge({:s, 32}, {:bf, 16})
-      {:f, 64}
+      {:bf, 16}
 
       iex> Nx.Type.merge({:f, 32}, {:bf, 16})
       {:f, 32}
@@ -288,8 +309,8 @@ defmodule Nx.Type do
   def merge(left, right) do
     # Sorting right now is straight-forward because
     # the type ordering is also the lexical ordering.
-    {{_type1, size1}, {type2, size2}} = sort(left, right)
-    candidate = {type2, max(size1 * 2, size2)}
+    {{_type1, _size1} = t1, {type2, _size2} = t2} = sort(left, right)
+    candidate = {type2, maybe_inc_size(t1, t2)}
 
     case validate(candidate) do
       :error ->
@@ -315,6 +336,12 @@ defmodule Nx.Type do
       {right, left}
     end
   end
+
+  defp maybe_inc_size({type1, _size1}, {type2, size2})
+       when type1 in [:s, :u] and type2 in [:f, :bf],
+       do: size2
+
+  defp maybe_inc_size({_type1, size1}, {_type2, size2}), do: max(size1 * 2, size2)
 
   @doc """
   Merges the given types with the type of a scalar.
