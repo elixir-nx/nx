@@ -1925,12 +1925,12 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }
 
 ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if (argc != 7) {
+  if (argc != 8) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaComputation* computation;
-  std::string function_name, pbtext_path, header_path, object_path, class_name, target_triple;
+  std::string function_name, pbtext_path, header_path, object_path, class_name, target_triple, target_features;
 
   if (!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
     return exla::nif::error(env, "Unable to get computation.");
@@ -1953,6 +1953,9 @@ ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
   if (!exla::nif::get(env, argv[6], target_triple)) {
     return exla::nif::error(env, "Unable to get target triple.");
   }
+  if (!exla::nif::get(env, argv[7], target_features)) {
+    return exla::nif::error(env, "Unable to get target features.");
+  }
 
   xla::Status compile_status =
     exla::CompileComputation(*computation,
@@ -1961,7 +1964,8 @@ ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
                              object_path,
                              function_name,
                              class_name,
-                             target_triple);
+                             target_triple,
+                             target_features);
 
   if(!compile_status.ok()) {
     return exla::nif::error(env, compile_status.error_message().c_str());
@@ -2105,7 +2109,7 @@ static ErlNifFunc exla_funcs[] = {
   // Log Sink
   {"start_log_sink", 1, start_log_sink},
   // HLO Functions
-  {"compile_aot", 7, compile_aot}
+  {"compile_aot", 8, compile_aot}
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

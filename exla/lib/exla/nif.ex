@@ -240,7 +240,8 @@ defmodule EXLA.NIF do
         _object_path,
         _function_name,
         _class_name,
-        _target_triple
+        _target_triple,
+        _target_features
       ),
       do: :erlang.nif_error(:undef)
 
