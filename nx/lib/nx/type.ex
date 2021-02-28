@@ -81,12 +81,12 @@ defmodule Nx.Type do
       {:s, 64}
 
       iex> Nx.Type.infer([1.0, 2.0, 3.0])
-      {:f, 64}
+      {:f, 32}
       iex> Nx.Type.infer([1, 2.0])
-      {:f, 64}
+      {:f, 32}
 
       iex> Nx.Type.infer([])
-      {:f, 64}
+      {:f, 32}
 
       iex> Nx.Type.infer("string")
       ** (ArgumentError) cannot infer the numerical type of "string"
@@ -94,9 +94,9 @@ defmodule Nx.Type do
   """
   def infer(value) do
     case infer(value, -1) do
-      -1 -> {:f, 64}
+      -1 -> {:f, 32}
       0 -> {:s, 64}
-      1 -> {:f, 64}
+      1 -> {:f, 32}
     end
   end
 
@@ -346,7 +346,7 @@ defmodule Nx.Type do
       iex> Nx.Type.merge_scalar({:s, 8}, -129)
       {:s, 16}
       iex> Nx.Type.merge_scalar({:s, 8}, 1.0)
-      {:f, 64}
+      {:f, 32}
 
       iex> Nx.Type.merge_scalar({:f, 32}, 1)
       {:f, 32}
@@ -377,7 +377,7 @@ defmodule Nx.Type do
   end
 
   def merge_scalar(_, number) when is_number(number) do
-    {:f, 64}
+    {:f, 32}
   end
 
   @doc """

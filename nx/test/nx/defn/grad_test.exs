@@ -43,7 +43,7 @@ defmodule Nx.Defn.GradTest do
 
     test "computes value and grad" do
       assert value_and_grad(1, 2) ==
-               {Nx.tensor(4.761594155955764), {Nx.tensor(0.41997434161402614), Nx.tensor(4.0)}}
+               {Nx.tensor(4.761594155955764, type: {:f, 32}), {Nx.tensor(0.41997434161402614), Nx.tensor(4.0)}}
     end
   end
 
