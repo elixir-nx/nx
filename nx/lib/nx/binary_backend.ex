@@ -121,6 +121,11 @@ defmodule Nx.BinaryBackend do
   defp to_binary(%T{data: %{state: data}}), do: data
 
   @impl true
+  def backend_copy(tensor, backend, opts) do
+    backend_transfer(tensor, backend, opts)
+  end
+
+  @impl true
   def backend_transfer(tensor, Nx.Tensor, _opts) do
     tensor
   end

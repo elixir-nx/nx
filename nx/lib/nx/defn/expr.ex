@@ -493,7 +493,8 @@ defmodule Nx.Defn.Expr do
 
   ## Undefined
 
-  ops = [backend_deallocate: 1, backend_transfer: 3, to_binary: 2, to_batched_list: 2]
+  ops =
+    [backend_copy: 3, backend_deallocate: 1, backend_transfer: 3, to_binary: 2, to_batched_list: 2]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)

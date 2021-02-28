@@ -45,6 +45,7 @@ defmodule Nx.Backend do
   @callback to_batched_list(out :: tensor, tensor) :: [tensor]
   @callback to_binary(tensor, limit :: non_neg_integer) :: binary
   @callback backend_deallocate(tensor) :: :ok | :already_deallocated
+  @callback backend_copy(tensor, module, keyword) :: tensor
   @callback backend_transfer(tensor, module, keyword) :: tensor
 
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor

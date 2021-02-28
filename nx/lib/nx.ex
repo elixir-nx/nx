@@ -251,9 +251,9 @@ defmodule Nx do
 
   The `keep_on_device: true` run option will keep the tensor on
   the backend. You can transfer it back to a binary tensor by
-  calling `backend_transfer/3`. If you don't intend to use the
-  data for some reason, you can explicitly call `backend_deallocate/1`
-  to deallocate it.
+  calling `backend_transfer/3` or `backend_copy/3`. If you don't
+  intend to use the data for some reason, you can explicitly call
+  `backend_deallocate/1` to deallocate it.
 
   To implement your own backend, check the `Nx.Tensor` behaviour.
   """
@@ -2093,6 +2093,28 @@ defmodule Nx do
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   ## Backend API
+
+  @doc """
+  Copies data to the given backend.
+
+  This is similar to `backend_transfer/3` but it keeps the data
+  in the original device. Use this function with care, as it may
+  duplicate large amounts of data across backends.
+  """
+  @doc type: :conversion
+  def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
+
+  def backend_copy(tuple, backend, opts) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&backend_copy(&1, backend, opts))
+    |> List.to_tuple()
+  end
+
+  def backend_copy(tensor, backend, opts) do
+    tensor = tensor!(tensor)
+    impl!(tensor).backend_copy(tensor, backend, opts)
+  end
 
   @doc """
   Transfers data to the given backend.
