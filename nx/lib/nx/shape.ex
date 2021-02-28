@@ -289,6 +289,8 @@ defmodule Nx.Shape do
   @doc """
   Calculates the number of batches of a shape for the given axes.
 
+  It expects the batch_axes to have been normalized.
+
   ## Examples
 
     iex> Nx.Shape.batch_count({3, 4, 5}, [])
@@ -300,8 +302,8 @@ defmodule Nx.Shape do
     iex> Nx.Shape.batch_count({3, 4, 5}, [0, 1])
     12
   """
-  def batch_count(shape, axes) do
-    Enum.reduce(axes, 1, fn axis, total -> elem(shape, axis) * total end)
+  def batch_count(shape, batch_axes) do
+    Enum.reduce(batch_axes, 1, fn axis, total -> elem(shape, axis) * total end)
   end
 
   @doc """
