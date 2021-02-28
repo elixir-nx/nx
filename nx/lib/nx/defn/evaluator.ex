@@ -6,7 +6,7 @@ defmodule Nx.Defn.Evaluator do
   """
 
   @behaviour Nx.Defn.Compiler
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Tree}
 
   @impl true
   def __async__(key, vars, fun, opts) do
@@ -16,8 +16,8 @@ defmodule Nx.Defn.Evaluator do
   @impl true
   def __jit__(_key, vars, fun, opts) do
     fun.(vars)
-    |> Expr.rewrite_types(opts)
-    |> Expr.traverse(%{}, &eval(&1, vars, &2))
+    |> Tree.rewrite_types(opts)
+    |> Tree.composite(%{}, &eval(&1, vars, &2))
     |> elem(0)
   end
 
@@ -35,12 +35,12 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
     {res, cache} = find_clause(clauses, last, vars, cache)
-    Expr.traverse(res, cache, &eval(&1, vars, &2))
+    Tree.composite(res, cache, &eval(&1, vars, &2))
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, vars, cache) do
     [tuple, i, _size] = args
-    {tuple, cache} = Expr.traverse(tuple, cache, &eval(&1, vars, &2))
+    {tuple, cache} = Tree.composite(tuple, cache, &eval(&1, vars, &2))
     {elem(tuple, i), cache}
   end
 
@@ -54,7 +54,7 @@ defmodule Nx.Defn.Evaluator do
         {res, cache}
 
       %{} ->
-        {args, cache} = Expr.traverse_args(ans, cache, &eval(&1, vars, &2))
+        {args, cache} = Tree.traverse_args(ans, cache, &eval(&1, vars, &2))
         res = apply(Nx.Shared.find_impl!(args), op, eval_args(type, ans, args))
         {res, Map.put(cache, id, res)}
     end

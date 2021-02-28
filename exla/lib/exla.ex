@@ -103,11 +103,15 @@ defmodule EXLA do
       |> softmax()
       |> Nx.backend_transfer() # bring the data back to Elixir
 
-  You can also use `Nx.backend_transfer` to put data on a given
+  You can also use `Nx.backend_transfer/1` to put data on a given
   device before invoking a `defn` function:
 
       # Explicitly move data to the device, useful for GPU
       Nx.backend_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.DeviceBackend)
+
+  If instead you want to make a copy of the data, you can use
+  `Nx.backend_copy/1` instead. However, when working with large
+  data, be mindful of memory allocations.
 
   ## Docker considerations
 
@@ -151,5 +155,5 @@ defmodule EXLA do
   @impl true
   defdelegate __async__(key, vars, fun, opts), to: EXLA.Defn
 
-  defdelegate __aot__(module, tuples, opts), to: EXLA.Defn
+  defdelegate __aot__(output_dir, module, tuples, opts), to: EXLA.Defn
 end

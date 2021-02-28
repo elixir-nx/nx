@@ -1607,6 +1607,83 @@ defmodule EXLA.DefnExprTest do
     defn grouped_conv_same_stride(inp, kernel),
       do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
 
+    defn conv_valid_no_stride_channels_last(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :valid,
+        input_permutation: [:batch, :channels, :height, :width],
+        output_permutation: [:batch, :channels, :height, :width]
+      )
+    end
+
+    defn conv_same_stride_permuted(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :same,
+        strides: [2, 1],
+        input_permutation: [3, 2, 0, 1],
+        kernel_permutation: [2, 0, 3, 1],
+        output_permutation: [2, 3, 0, 1]
+      )
+    end
+
+    defn conv_writes_default_output(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :valid,
+        input_permutation: [:batch, :channels, :height, :width]
+      )
+    end
+
+    test "computes a convolution with channels last" do
+      img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = conv_valid_no_stride_channels_last(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :valid,
+          input_permutation: [:batch, :channels, :height, :width],
+          output_permutation: [:batch, :channels, :height, :width]
+        )
+
+      compare_tensors!(lhs, rhs)
+      assert %{names: [:batch, :height, :width, :channels], shape: {8, 11, 11, 6}} = lhs
+    end
+
+    test "computes a convolution with a permutation" do
+      img = Nx.iota({12, 12, 3, 4}, type: {:f, 32})
+      kernel = Nx.iota({3, 2, 32, 2}, type: {:f, 32})
+
+      lhs = conv_same_stride_permuted(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :same,
+          strides: [2, 1],
+          input_permutation: [3, 2, 0, 1],
+          kernel_permutation: [2, 0, 3, 1],
+          output_permutation: [2, 3, 0, 1]
+        )
+
+      compare_tensors!(lhs, rhs)
+      assert %{shape: {6, 12, 4, 32}} = lhs
+    end
+
+    test "computes a convolution with default channels first output despite input config" do
+      img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = conv_writes_default_output(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :valid,
+          input_permutation: [:batch, :channels, :height, :width]
+        )
+
+      compare_tensors!(lhs, rhs)
+      assert %{names: [:batch, :channels, :height, :width]} = lhs
+    end
+
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
       kernel = Nx.iota({32, 1, 3, 3}, type: {:f, 64})

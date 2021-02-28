@@ -1,8 +1,54 @@
 defmodule EXLA.Defn do
   @moduledoc false
 
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
+
+  @aot_runtimes %{
+    dot: :matmul,
+    conv: :conv2d
+  }
+
+  @doc false
+  def __aot__(output_dir, module, tuples, aot_options) do
+    comps_and_exprs =
+      for {name, fun, vars, options} <- tuples do
+        {fun, _expr_options, exla_options} = prepare_args(fun, options)
+        expr = fun.(vars)
+
+        shapes =
+          for %{shape: shape, type: type} <- vars do
+            EXLA.Shape.make_shape(type, shape)
+          end
+
+        computation = to_root_computation(name, expr, shapes, exla_options)
+        {{computation, name, shapes}, expr}
+      end
+
+    {comps, exprs} = Enum.unzip(comps_and_exprs)
+    {_, runtimes} = exprs |> List.to_tuple() |> Tree.composite(%{}, &aot_runtimes/2)
+    aot_options = Keyword.put_new(aot_options, :runtimes, Map.keys(runtimes))
+
+    case EXLA.AOT.compile(output_dir, module, comps, aot_options) do
+      {:ok, nif} -> {:ok, exprs, nif}
+      {:error, exception} -> {:error, exception}
+    end
+  end
+
+  defp aot_runtimes(%T{data: %Expr{op: :fun, args: args}}, acc) do
+    [_, expr, _] = args
+    Tree.composite(expr, acc, &aot_runtimes/2)
+  end
+
+  defp aot_runtimes(%T{data: %Expr{op: op}} = expr, acc) do
+    acc = if runtime = @aot_runtimes[op], do: Map.put(acc, runtime, true), else: acc
+    aot_runtimes_args(expr, acc)
+  end
+
+  defp aot_runtimes_args(expr, acc) do
+    {_, acc} = Tree.traverse_args(expr, acc, &aot_runtimes/2)
+    {expr, acc}
+  end
 
   @doc false
   def __async__(key, vars, fun, options) do
@@ -30,31 +76,12 @@ defmodule EXLA.Defn do
     |> buffer_to_nx(holes)
   end
 
-  @doc false
-  def __aot__(module, tuples, aot_options) do
-    funs =
-      for {name, fun, vars, options} <- tuples do
-        {fun, _expr_options, exla_options} = prepare_args(fun, options)
-        expr = fun.(vars)
-
-        shapes =
-          for %{shape: shape, type: type} <- vars do
-            EXLA.Shape.make_shape(type, shape)
-          end
-
-        computation = to_root_computation(name, expr, shapes, exla_options)
-        {computation, name, shapes}
-      end
-
-    EXLA.AOT.Compiler.compile(module, funs, aot_options)
-  end
-
   defp prepare_args(fun, options) do
     {expr_options, exla_options} =
       Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])
 
     expr_options = Keyword.put_new(expr_options, :max_float_type, {:f, 32})
-    fun = fn vars -> vars |> fun.() |> Expr.rewrite_types(expr_options) end
+    fun = fn vars -> vars |> fun.() |> Tree.rewrite_types(expr_options) end
     {fun, expr_options, exla_options}
   end
 
@@ -173,7 +200,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
-    {args, cache} = Expr.traverse_args(expr, cache, &recur_operator(&1, state, &2))
+    {args, cache} = Tree.traverse_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
   end
 
@@ -273,16 +300,21 @@ defmodule EXLA.Defn do
     kernel_dilation = opts[:kernel_dilation]
     groups = opts[:groups]
 
-    %{type: output_type, shape: shape} = ans
-    rank = tuple_size(shape)
+    %{type: output_type} = ans
 
     # Build general conv dims
-    input_dims = List.to_tuple(for i <- 0..(rank - 1), do: i)
-    [out_features, in_features | kernel_spatial] = for i <- 0..(rank - 1), do: i
-    kernel_dims = List.to_tuple([in_features, out_features | kernel_spatial])
-    output_dims = input_dims
+    input_permutation = List.to_tuple(opts[:input_permutation])
+    [out_features, in_features | spatial_features] = opts[:kernel_permutation]
+    kernel_permutation = List.to_tuple([in_features, out_features | spatial_features])
 
-    conv_dim_nos = {input_dims, kernel_dims, output_dims}
+    output_permutation =
+      opts[:output_permutation]
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
+      |> List.to_tuple()
+
+    conv_dim_nos = {input_permutation, kernel_permutation, output_permutation}
 
     # Ensure both types are floating
     operand = to_type(operand, output_type)
@@ -760,7 +792,7 @@ defmodule EXLA.Defn do
   defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
     case ids do
       %{^id => true} -> {t, ids}
-      %{} -> Expr.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
+      %{} -> Tree.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
     end
   end
 
@@ -776,13 +808,13 @@ defmodule EXLA.Defn do
           {param, Map.put(ids, id, {i, expr, param})}
       end
     else
-      {args, ids} = Expr.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
+      {args, ids} = Tree.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
       {put_in(expr.data.args, args), ids}
     end
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, ids_args} = Expr.traverse(expr, %{}, &collect_args(&1, &2, ids))
+    {expr, ids_args} = Tree.composite(expr, %{}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 

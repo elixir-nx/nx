@@ -3,13 +3,15 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
+  @aot_version 1
+
   @doc """
   Callback for async execution (on top of JIT compilation).
 
   It receives the same arguments as `c:__jit__/4` but must return
   a struct that implements the `Nx.Async` protocol.
   """
-  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.Defn.Expr.t()), keyword) ::
+  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), keyword) ::
               Nx.Async.t()
 
   @doc """
@@ -24,11 +26,11 @@ defmodule Nx.Defn.Compiler do
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
   """
-  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.Defn.Expr.t()), keyword) ::
+  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), keyword) ::
               Nx.t() | tuple()
 
   # These operations do not have valid meaning for Nx.Defn.Expr
-  @forbidden_ops [:backend_deallocate, :backend_transfer] ++
+  @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
                    [:to_binary, :to_scalar, :to_flat_list, :to_heatmap, :to_batched_list]
 
   defguardp is_var(var)
@@ -38,6 +40,217 @@ defmodule Nx.Defn.Compiler do
   defguardp is_underscore(var)
             when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
                    is_atom(elem(var, 2))
+
+  ## AOT
+
+  @doc false
+  def __export_aot__(output_dir, module, tuples, compiler, aot_opts) do
+    {export_tuples, compiler_tuples} =
+      tuples
+      |> Enum.map(fn {name, fun, args, opts} ->
+        tensors = Nx.Defn.Tree.from_nested_args(args)
+        templates = Nx.Defn.Tree.to_nested_templates(args, tensors)
+
+        export_tuple = {name, templates}
+        runtime_fun = &runtime_fun(&1, fun, args, compiler)
+        compiler_tuple = {aot_name(name, args), runtime_fun, tensors, opts}
+        {export_tuple, compiler_tuple}
+      end)
+      |> Enum.unzip()
+
+    _ = Code.ensure_compiled(compiler)
+
+    unless function_exported?(compiler, :__aot__, 4) do
+      raise ArgumentError, "AOT compilation is not available to the #{inspect(compiler)} compiler"
+    end
+
+    File.mkdir_p!(output_dir)
+
+    case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
+      {:ok, results, nif} ->
+        tensors = Nx.Defn.Tree.from_nested_args(results)
+        results = Nx.Defn.Tree.to_nested_templates(results, tensors)
+
+        # TODO: Use Enum.zip_with on Elixir v1.12
+        {export_tuples, []} =
+          Enum.map_reduce(export_tuples, results, fn {name, arity}, [result | results] ->
+            {{name, arity, result}, results}
+          end)
+
+        path = Path.join(output_dir, "#{module}.nx.aot")
+        export = {Path.extname(nif), export_tuples}
+        File.write!(path, :erlang.term_to_binary({@aot_version, export}))
+        :ok
+
+      {:error, exception} ->
+        {:error, exception}
+    end
+  end
+
+  @doc false
+  def __import_aot__(output_dir, module, external_resources?) do
+    export_path = Path.join(output_dir, "#{module}.nx.aot")
+
+    {nif_extension, export_tuples} =
+      case File.read(export_path) do
+        {:ok, binary} ->
+          try do
+            :erlang.binary_to_term(binary)
+          rescue
+            _ ->
+              raise ArgumentError,
+                    "could not decode AOT export for #{inspect(module)} at #{output_dir}"
+          else
+            {@aot_version, export_tuples} ->
+              export_tuples
+
+            other ->
+              raise ArgumentError,
+                    "incompatible version #{elem(other, 0)} for AOT export for #{inspect(module)} " <>
+                      "at #{output_dir}, expected v#{@aot_version}. Please make sure the Nx version" <>
+                      "used for the export matches the one in the import"
+          end
+
+        {:error, _} ->
+          raise ArgumentError, "could not find AOT export for #{inspect(module)} at #{output_dir}"
+      end
+
+    nif_path = output_dir |> Path.join(Atom.to_string(module)) |> String.to_charlist()
+    nif_ext_path = Path.join(output_dir, "#{module}.#{nif_extension}")
+
+    funs =
+      # TODO: Make it work with tuples
+      # TODO: Check the input tensors
+      # TODO: Check the output tensors
+      for {name, args, result} <- export_tuples do
+        aot_name = aot_name(name, args)
+        {args, vars_and_templates} = aot_args(args)
+        vars = Enum.map(vars_and_templates, &elem(&1, 0))
+        templates = Enum.map(vars_and_templates, fn {v, t} -> {v, Macro.escape(t)} end)
+
+        quote do
+          def unquote(name)(unquote_splicing(args)) do
+            unquote(vars) = __nx_input__(unquote(templates))
+
+            __nx_output__(
+              unquote(Macro.escape(result)),
+              unquote(aot_name)(unquote_splicing(vars))
+            )
+          end
+
+          defp unquote(aot_name)(unquote_splicing(vars)) do
+            :erlang.nif_error(:undef)
+          end
+        end
+      end
+
+    body =
+      quote do
+        if unquote(external_resources?) do
+          @external_resource unquote(export_path)
+          @external_resource unquote(nif_ext_path)
+        end
+
+        @on_load :__on_load__
+        def __on_load__, do: :erlang.load_nif(unquote(nif_path), 0)
+
+        @compile {:inline, __nx_input__: 1, __nx_output__: 2}
+
+        defp __nx_input__(vars_and_templates) do
+          for {var, template} <- vars_and_templates do
+            tensor = Nx.Defn.Tree.from_arg(var)
+
+            unless Nx.compatible?(tensor, template) do
+              raise ArgumentError, """
+              Nx AOT-compiled function expected a tensor of type, shape, and names:
+
+              #{inspect(template)}
+
+              But got tensor:
+
+              #{inspect(tensor)}
+              """
+            end
+
+            Nx.to_binary(tensor)
+          end
+        end
+
+        defp __nx_output__(result, {:ok, list}) do
+          {result, []} =
+            Nx.Defn.Tree.composite(result, list, fn
+              %Nx.Tensor{} = t, [binary | list] when is_binary(binary) ->
+                {%{t | data: %Nx.BinaryBackend{state: binary}}, list}
+            end)
+
+          result
+        end
+
+        defp __nx_output__(_result, {:error, reason}) do
+          raise "Nx AOT-compiled function failed with reason: #{inspect(reason)}"
+        end
+
+        unquote(funs)
+      end
+
+    Module.eval_quoted(module, body, [], line: __ENV__.line, file: __ENV__.file)
+    :ok
+  end
+
+  # We need to include the actual arity in the name because
+  # defn foo({a, b}) and defn foo(a, b) compile to the same
+  # name+arity at the AOT level.
+  defp aot_name(name, args), do: :"__aot_#{name}_#{length(args)}"
+
+  defp aot_args(args) do
+    {args, {vars, _}} =
+      Enum.map_reduce(args, {[], 0}, fn arg, {acc, i} ->
+        Nx.Defn.Tree.composite(arg, {acc, i}, fn template, {acc, i} ->
+          var = Macro.var(:"arg#{i}", __MODULE__)
+          {var, {[{var, template} | acc], i + 1}}
+        end)
+      end)
+
+    {args, Enum.reverse(vars)}
+  end
+
+  ## JIT/Async/Stream
+
+  @doc false
+  def __jit__(fun, args, compiler, opts) do
+    runtime(:__jit__, fun, args, compiler, opts)
+  end
+
+  @doc false
+  def __async__(fun, args, compiler, opts) do
+    runtime(:__async__, fun, args, compiler, opts)
+  end
+
+  defp runtime(callback, fun, args, compiler, opts) do
+    tensors = Nx.Defn.Tree.from_nested_args(args)
+    runtime_fun = &runtime_fun(&1, fun, args, compiler)
+    Kernel.apply(compiler, callback, [fun, tensors, runtime_fun, opts])
+  end
+
+  defp runtime_fun(tensors, fun, args, compiler) do
+    if Process.get(Nx.Defn.Compiler) do
+      raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
+    end
+
+    Process.put(Nx.Defn.Compiler, compiler)
+
+    try do
+      args = Nx.Defn.Tree.to_nested_params(args, tensors)
+
+      fun
+      |> apply(args)
+      |> Nx.Defn.Tree.to_result()
+    after
+      Process.delete(Nx.Defn.Compiler)
+    end
+  end
+
+  ## Compiler
 
   @doc false
   def __remote__(module, function, defn, args) do
@@ -57,59 +270,6 @@ defmodule Nx.Defn.Compiler do
         :erlang.raise(:error, :undef, stack)
     end
   end
-
-  @doc false
-  def __jit__(fun, args, compiler, opts) do
-    runtime(:__jit__, fun, args, compiler, opts)
-  end
-
-  @doc false
-  def __aot__(module, tuples, compiler, aot_opts) do
-    compiler_tuples =
-      Enum.map(tuples, fn {name, fun, args, opts} ->
-        vars = Nx.Defn.Expr.to_vars(args)
-        # We need to include the actual arity in the name because
-        # defn foo({a, b}) and defn foo(a, b) compile to the same
-        # name+arity at the AOT level.
-        {:"__aot_#{name}_#{length(args)}", &runtime_fun(&1, fun, args, compiler), vars, opts}
-      end)
-
-    compiler.__aot__(module, compiler_tuples, aot_opts)
-  end
-
-  @doc false
-  def __async__(fun, args, compiler, opts) do
-    runtime(:__async__, fun, args, compiler, opts)
-  end
-
-  defp runtime(callback, fun, args, compiler, opts) do
-    Kernel.apply(compiler, callback, [
-      fun,
-      Nx.Defn.Expr.to_vars(args),
-      &runtime_fun(&1, fun, args, compiler),
-      opts
-    ])
-  end
-
-  defp runtime_fun(vars, fun, args, compiler) do
-    if Process.get(Nx.Defn.Compiler) do
-      raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
-    end
-
-    Process.put(Nx.Defn.Compiler, compiler)
-
-    try do
-      params = Nx.Defn.Expr.to_params(vars)
-      args = Nx.Defn.Expr.to_args(args, params)
-
-      fun
-      |> apply(args)
-      |> Nx.Defn.Expr.to_result()
-    after
-      Process.delete(Nx.Defn.Compiler)
-    end
-  end
-
   @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
     state = %{
@@ -128,7 +288,7 @@ defmodule Nx.Defn.Compiler do
   defp compile_each({{name, _arity} = def, def_meta}, state) do
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
     {nx_args, cache_args, cache_vars} = split_args(args, 0, def_meta.defaults, [], [], [])
-    vars = collect_vars(nx_args)
+    flat_args = collect_vars(nx_args)
     {def_module, def_opts} = def_meta.compiler
     defn_name = defn_name(name)
 
@@ -146,12 +306,12 @@ defmodule Nx.Defn.Compiler do
         else
           unquote(def_module).__jit__(
             unquote(cache),
-            Nx.Defn.Expr.validate_vars(unquote(vars)),
-            fn unquote(vars) ->
+            Nx.Defn.Tree.from_flat_args(unquote(flat_args)),
+            fn unquote(flat_args) ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
               try do
-                unquote(vars) = Nx.Defn.Expr.to_params(unquote(vars))
-                Nx.Defn.Expr.to_result(unquote(defn_name)(unquote_splicing(args)))
+                unquote(flat_args) = Nx.Defn.Tree.to_flat_params(unquote(flat_args))
+                Nx.Defn.Tree.to_result(unquote(defn_name)(unquote_splicing(args)))
               after
                 Process.delete(Nx.Defn.Compiler)
               end

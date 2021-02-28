@@ -29,9 +29,9 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "raises on invalid" do
-      assert_raise ArgumentError, "expected a tensor expression, got: :invalid", fn ->
-        grad_invalid(Nx.tensor(1))
-      end
+      assert_raise ArgumentError,
+                   "expected a tensor expression or a tuple of tensor expressions, got: :invalid",
+                   fn -> grad_invalid(Nx.tensor(1)) end
     end
   end
 
@@ -568,6 +568,29 @@ defmodule Nx.Defn.GradTest do
       for _ <- @iters do
         t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 64})
         check_grads!(&Nx.atanh/1, &grad_atanh/1, t, eps: 0.1)
+      end
+    end
+  end
+
+
+  describe "erf" do
+    defn grad_erf(t), do: grad(t, Nx.erf(t))
+
+    test "computes the gradient" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        check_grads!(&Nx.erf/1, &grad_erf/1, t, eps: 1.0e-4)
+      end
+    end
+  end
+
+  describe "erfc" do
+    defn grad_erfc(t), do: grad(t, Nx.erfc(t))
+
+    test "computes the gradient" do
+      for _ <- @iters do
+        t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
+        check_grads!(&Nx.erfc/1, &grad_erfc/1, t, eps: 1.0e-4)
       end
     end
   end

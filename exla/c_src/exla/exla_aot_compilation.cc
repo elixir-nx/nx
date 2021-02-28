@@ -13,7 +13,6 @@ namespace exla {
                          tensorflow::tfcompile::CompileResult* compile_result) {
 
     // Retrieves arg and result layouts from the computation.
-    // TODO(toddw): Should we let the user choose the major/minor ordering?
     xla::StatusOr<std::unique_ptr<xla::ProgramShape>> pshape_or = client->GetComputationShape(computation);
 
     if (!pshape_or.ok()) {

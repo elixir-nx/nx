@@ -90,12 +90,10 @@ namespace nif {
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, complex64* var) {
-    // TODO(seanmor5): unsupported
     return 0;
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, complex128* var) {
-    // TODO(seanmor5): unsupported
     return 0;
   }
 

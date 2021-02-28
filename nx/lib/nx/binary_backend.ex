@@ -121,6 +121,11 @@ defmodule Nx.BinaryBackend do
   defp to_binary(%T{data: %{state: data}}), do: data
 
   @impl true
+  def backend_copy(tensor, backend, opts) do
+    backend_transfer(tensor, backend, opts)
+  end
+
+  @impl true
   def backend_transfer(tensor, Nx.Tensor, _opts) do
     tensor
   end
@@ -758,6 +763,9 @@ defmodule Nx.BinaryBackend do
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
     groups = opts[:groups]
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+    output_permutation = opts[:output_permutation]
 
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
@@ -783,10 +791,18 @@ defmodule Nx.BinaryBackend do
     #
     # The final shape is then given as:
     # {batch, num_filters, spatial_dim0, spatial_dim1, ...}
-    %T{type: {_, input_size} = input_type} = t
-    %T{type: {_, kernel_size} = kernel_type} = k
+    %T{type: {_, input_size} = input_type} = t = Nx.transpose(t, axes: input_permutation)
+    %T{type: {_, kernel_size} = kernel_type} = k = Nx.transpose(k, axes: kernel_permutation)
 
-    %{type: output_type} = out
+    %{type: output_type, shape: output_shape, names: output_names} = out
+
+    inverse_output_permutation =
+      output_permutation |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+
+    {untransposed_shape, untransposed_names} =
+      Nx.Shape.transpose(output_shape, inverse_output_permutation, output_names)
+
+    untransposed_out = %{out | names: untransposed_names, shape: untransposed_shape}
 
     # We need to dilate the spatial dimensions of the kernel first...
     dilation_padding = [
@@ -818,7 +834,7 @@ defmodule Nx.BinaryBackend do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
-    # TODO: Use Elixir Enum.zip_with on Elixir v1.12
+    # TODO: Use Enum.zip_with on Elixir v1.12
     spatial_padding_config =
       padding
       |> Enum.zip(input_dilation)
@@ -867,7 +883,7 @@ defmodule Nx.BinaryBackend do
           # the filter at each step
           anchor <- anchors,
           into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, [group*num_input_channels | anchor])
+        offset = weighted_offset(batch_weighted_shape, [group * num_input_channels | anchor])
         # The shape of the window is {channels} + filter_shape
         # The shape of the kernel is {num_filters, channels} + filter_shape
         window =
@@ -920,18 +936,19 @@ defmodule Nx.BinaryBackend do
         end
       end
 
-    from_binary(out, output_data)
+    Nx.transpose(from_binary(untransposed_out, output_data), axes: output_permutation)
   end
 
   defp split_filters(kernel_data, kernel_shape, {_, kernel_size}, groups) do
     filter_group_size = div(Nx.size(kernel_shape) * kernel_size, groups)
     filter_size = div(Nx.size(kernel_shape) * kernel_size, elem(kernel_shape, 0))
 
-    for i <- 0..groups - 1,
-          offset = filter_group_size * i,
-          <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring, _::bitstring>> = kernel_data,
-          <<filter::size(filter_size)-bitstring <- filter_group>>,
-          do: {filter, i}
+    for i <- 0..(groups - 1),
+        offset = filter_group_size * i,
+        <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring,
+          _::bitstring>> = kernel_data,
+        <<filter::size(filter_size)-bitstring <- filter_group>>,
+        do: {filter, i}
   end
 
   @impl true

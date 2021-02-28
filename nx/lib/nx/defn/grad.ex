@@ -1,13 +1,13 @@
 defmodule Nx.Defn.Grad do
   @moduledoc false
 
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
   def transform(to_grad, expr) do
     expr = validate_expr!(expr)
 
-    Expr.traverse(to_grad, fn to_grad ->
+    Tree.composite(to_grad, fn to_grad ->
       id = grad_id!(to_grad)
       {graded, _} = to_grad(expr, Expr.tensor(1.0), %{id => :stop})
 
@@ -46,7 +46,7 @@ defmodule Nx.Defn.Grad do
   ## Recursion
 
   defp to_grad(expr, res, cache) do
-    Expr.traverse(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans,
+    Tree.composite(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans,
                                         cache ->
       key = [id | res.data.id]
 
@@ -484,6 +484,31 @@ defmodule Nx.Defn.Grad do
   end
 
   @half_sqrt_pi :math.sqrt(:math.pi()) / 2
+  @two_rsqrt_pi 2 / :math.sqrt(:math.pi())
+
+  defp grad(:erf, [x], _ans, g, cache) do
+    g =
+      x
+      |> Nx.power(2)
+      |> Nx.negate()
+      |> Nx.exp()
+      |> Nx.multiply(g)
+      |> Nx.multiply(@two_rsqrt_pi)
+
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:erfc, [x], _ans, g, cache) do
+    g =
+      x
+      |> Nx.power(2)
+      |> Nx.negate()
+      |> Nx.exp()
+      |> Nx.multiply(Nx.negate(g))
+      |> Nx.multiply(@two_rsqrt_pi)
+
+    to_grad(x, g, cache)
+  end
 
   defp grad(:erf_inv, [x], ans, g, cache) do
     g = Nx.multiply(g, Nx.exp(Nx.power(ans, 2)))

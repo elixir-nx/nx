@@ -251,9 +251,9 @@ defmodule Nx do
 
   The `keep_on_device: true` run option will keep the tensor on
   the backend. You can transfer it back to a binary tensor by
-  calling `backend_transfer/3`. If you don't intend to use the
-  data for some reason, you can explicitly call `backend_deallocate/1`
-  to deallocate it.
+  calling `backend_transfer/3` or `backend_copy/3`. If you don't
+  intend to use the data for some reason, you can explicitly call
+  `backend_deallocate/1` to deallocate it.
 
   To implement your own backend, check the `Nx.Tensor` behaviour.
   """
@@ -529,28 +529,40 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.template({:f, 32}, {2, 3})
+      iex> Nx.template({2, 3}, {:f, 32})
       #Nx.Tensor<
         f32[2][3]
         Nx.TemplateBackend
       >
 
-      iex> Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+      iex> Nx.template({2, 3}, {:f, 32}, names: [:rows, :columns])
       #Nx.Tensor<
         f32[rows: 2][columns: 3]
         Nx.TemplateBackend
       >
 
-      iex> t = Nx.template({:f, 32}, {2, 3}, names: [:rows, :columns])
+  A tensor can also be given as first argument, and its shape and names
+  will be used:
+
+      iex> Nx.template(Nx.iota({2, 3}, names: [:rows, :columns]), {:f, 32})
+      #Nx.Tensor<
+        f32[rows: 2][columns: 3]
+        Nx.TemplateBackend
+      >
+
+  Althogh note it is impossible to perform any operation on a tensor template:
+
+      iex> t = Nx.template({2, 3}, {:f, 32}, names: [:rows, :columns])
       iex> Nx.add(t, 1)
       ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
 
   """
   @doc type: :creation
-  def template(type, shape, opts \\ []) do
+  def template(tensor_or_shape, type, opts \\ []) do
     assert_keys!(opts, [:names])
     type = Nx.Type.normalize!(type)
-    names = Nx.Shape.named_axes!(opts[:names], shape)
+    shape = shape(tensor_or_shape)
+    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
   end
 
@@ -683,7 +695,7 @@ defmodule Nx do
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
       when is_number(min) and is_number(max) do
     assert_keys!(opts, [:type, :names, :backend])
-    shape = Nx.shape(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     range_type = Nx.Type.infer(max - min)
     type = Nx.Type.normalize!(opts[:type] || range_type)
@@ -691,7 +703,7 @@ defmodule Nx do
     unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
       raise ArgumentError,
             "random_uniform/3 expects compatible types, got: #{inspect(type)}" <>
-            " with range #{inspect(range_type)}"
+              " with range #{inspect(range_type)}"
     end
 
     backend = opts[:backend] || Nx.BinaryBackend
@@ -787,7 +799,7 @@ defmodule Nx do
   def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
       when is_float(mu) and is_float(sigma) do
     assert_keys!(opts, [:type, :names, :backend])
-    shape = Nx.shape(tensor_or_shape)
+    shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 64})
 
@@ -1892,6 +1904,56 @@ defmodule Nx do
   end
 
   @doc """
+  Checks if two tensors have the same shape, type, and compatible names.
+
+  The data in the tensor is ignored.
+
+  ## Examples
+
+      iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({3, 2}))
+      true
+
+      iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({3, 2}, names: [:rows, :columns]))
+      true
+
+      iex> Nx.compatible?(
+      ...>   Nx.iota({3, 2}, names: [:rows, nil]),
+      ...>   Nx.iota({3, 2}, names: [nil, :columns])
+      ...> )
+      true
+
+      iex> Nx.compatible?(
+      ...>   Nx.iota({3, 2}, names: [:foo, :bar]),
+      ...>   Nx.iota({3, 2}, names: [:rows, :columns])
+      ...> )
+      false
+
+      iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({2, 3}))
+      false
+
+      iex> Nx.compatible?(Nx.iota({2, 2}), Nx.iota({2, 2}, type: {:f, 32}))
+      false
+
+  """
+  def compatible?(left, right) do
+    %{type: type, shape: shape, names: left_names} = tensor!(left)
+
+    case tensor!(right) do
+      %{type: ^type, shape: ^shape, names: right_names} ->
+        compatible_names?(left_names, right_names)
+
+      %{} ->
+        false
+    end
+  end
+
+  defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
+  defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)
+  defp compatible_names?([_ | lnames], [nil | rnames]), do: compatible_names?(lnames, rnames)
+  defp compatible_names?([], []), do: true
+  defp compatible_names?(_, _), do: false
+
+  @doc """
   Returns the shape of the tensor as a tuple.
 
   The size of this tuple gives the rank of the tensor.
@@ -2031,6 +2093,28 @@ defmodule Nx do
   defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   ## Backend API
+
+  @doc """
+  Copies data to the given backend.
+
+  This is similar to `backend_transfer/3` but it keeps the data
+  in the original device. Use this function with care, as it may
+  duplicate large amounts of data across backends.
+  """
+  @doc type: :conversion
+  def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
+
+  def backend_copy(tuple, backend, opts) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&backend_copy(&1, backend, opts))
+    |> List.to_tuple()
+  end
+
+  def backend_copy(tensor, backend, opts) do
+    tensor = tensor!(tensor)
+    impl!(tensor).backend_copy(tensor, backend, opts)
+  end
 
   @doc """
   Transfers data to the given backend.
@@ -6164,15 +6248,44 @@ defmodule Nx do
   of summing the element-wise products in the window across
   each input channel.
 
-  The ranks of both `input` and `kernel` must match. Both
-  `input` and `kernel` must have shapes of the following
-  form:
+  The ranks of both `input` and `kernel` must match. By
+  default, both `input` and `kernel` are expected to have shapes
+  of the following form:
 
     * `input` - `{batch_size, input_channels, input_d0, ..., input_dn}`
     * `kernel` - `{output_channels, input_channels, kernel_d0, ..., kernel_dn}`
 
   Where `input_d0...input_dn` and `kernel_d0...kernel_dn` represent
-  an arbitrary number of spatial dimensions.
+  an arbitrary number of spatial dimensions. You can alter this configuration
+  using one of the `_permutation` configuration options. Permutations
+  are input, kernel, and output specifications for the layout of the
+  convolution. For example, if your input tensor is configured with
+  "channels last", you can specify the input permutation with:
+
+      Nx.conv(img, kernel, input_permutation: [0, 3, 1, 2])
+
+  Permutations expect configurations that specify the location of
+  dimensions in the following orders:
+
+    * `input_permutation` - `[batch_dim, input_channel_dim, ...spatial_dims...]`
+    * `kernel_permutation` - `[output_channel_dim, input_channel_dim, ...spatial_dims...]`
+    * `output_permutation` - `[batch_dim, output_channel_dim, ...spatial_dims...]`
+
+  Using named tensors, it's a bit easier to see how permutations
+  help you configure the convolution. Given input tensor with names
+  `[:batch, :height, :width, :channels]` (channels last) and kernel
+  tensor with names `[:input, :output, :height, :width]`, you can
+  configure the convolution with the following permutations:
+
+      Nx.conv(img, kernel,
+        input_permutation: [:batch, :channels, :height, :width],
+        kernel_permutation: [:output, :input, :height, :width],
+        output_permutation: [:batch, :channels, :height, :width]
+      )
+
+  Notice that `output_permutation` is normalized with respect to
+  the input permutation names. We cannot guarantee that every
+  permutation is supported in every backend or compiler.
 
   To configure how the window slides along the input tensor, you
   can specify `:strides`. `:strides` must be a positive integer
@@ -6278,7 +6391,16 @@ defmodule Nx do
   """
   @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do
-    assert_keys!(opts, [:padding, :strides, :input_dilation, :kernel_dilation, :groups])
+    assert_keys!(opts, [
+      :padding,
+      :strides,
+      :input_dilation,
+      :kernel_dilation,
+      :groups,
+      :input_permutation,
+      :kernel_permutation,
+      :output_permutation
+    ])
 
     padding = opts[:padding] || :valid
     input_dilation = opts[:input_dilation] || 1
@@ -6287,6 +6409,22 @@ defmodule Nx do
 
     %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
+
+    input_permutation = opts[:input_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+    input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
+    kernel_permutation = opts[:kernel_permutation] || Enum.to_list(0..(rank(kernel_shape) - 1))
+    kernel_permutation = Nx.Shape.normalize_axes(kernel_shape, kernel_permutation, kernel_names)
+
+    {permuted_input_shape, permuted_input_names} =
+      Nx.Shape.transpose(input_shape, input_permutation, input_names)
+
+    {permuted_kernel_shape, permuted_kernel_names} =
+      Nx.Shape.transpose(kernel_shape, kernel_permutation, kernel_names)
+
+    output_permutation = opts[:output_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+
+    output_permutation =
+      Nx.Shape.normalize_axes(input_shape, output_permutation, input_names)
 
     if rank(input_shape) < 3 do
       raise ArgumentError,
@@ -6300,9 +6438,9 @@ defmodule Nx do
               " shape #{inspect(kernel_shape)} has rank #{rank(kernel_shape)}"
     end
 
-    tensor_input_channels = elem(input_shape, 1)
-    kernel_input_channels = elem(kernel_shape, 1)
-    kernel_output_channels = elem(kernel_shape, 0)
+    tensor_input_channels = elem(permuted_input_shape, 1)
+    kernel_input_channels = elem(permuted_kernel_shape, 1)
+    kernel_output_channels = elem(permuted_kernel_shape, 0)
 
     if tensor_input_channels != kernel_input_channels * groups do
       raise ArgumentError,
@@ -6319,12 +6457,12 @@ defmodule Nx do
     end
 
     filter_shape =
-      kernel_shape
+      permuted_kernel_shape
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
     spatial_dims =
-      input_shape
+      permuted_input_shape
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
@@ -6396,7 +6534,7 @@ defmodule Nx do
       {0, 0, 0} | Enum.map(kernel_dilation, &{0, 0, &1 - 1})
     ]
 
-    dilated_kernel_shape = Nx.Shape.pad(kernel_shape, kernel_dilation_padding_config)
+    dilated_kernel_shape = Nx.Shape.pad(permuted_kernel_shape, kernel_dilation_padding_config)
 
     dilated_filter_shape =
       dilated_kernel_shape
@@ -6413,7 +6551,7 @@ defmodule Nx do
       {0, 0, 0} | Enum.map(input_dilation, &{0, 0, &1 - 1})
     ]
 
-    dilated_input_shape = Nx.Shape.pad(input_shape, input_dilation_padding_config)
+    dilated_input_shape = Nx.Shape.pad(permuted_input_shape, input_dilation_padding_config)
 
     dilated_spatial_dims =
       dilated_input_shape
@@ -6447,12 +6585,20 @@ defmodule Nx do
     {shape, names} =
       Nx.Shape.conv(
         dilated_input_shape,
-        input_names,
+        permuted_input_names,
         dilated_kernel_shape,
-        kernel_names,
+        permuted_kernel_names,
         strides,
         padding_config
       )
+
+    output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
+
+    {shape, names} = Nx.Shape.transpose(shape, output_permutation, names)
 
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
     out = %{tensor | type: type, shape: shape, names: names}
@@ -6465,7 +6611,10 @@ defmodule Nx do
       padding: padding_config,
       input_dilation: input_dilation,
       kernel_dilation: kernel_dilation,
-      groups: groups
+      groups: groups,
+      input_permutation: input_permutation,
+      kernel_permutation: kernel_permutation,
+      output_permutation: output_permutation
     )
   end
 
