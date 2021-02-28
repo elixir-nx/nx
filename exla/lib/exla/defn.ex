@@ -29,7 +29,7 @@ defmodule EXLA.Defn do
     {_, runtimes} = exprs |> List.to_tuple() |> Tree.composite(%{}, &aot_runtimes/2)
     aot_options = Keyword.put_new(aot_options, :runtimes, Map.keys(runtimes))
 
-    case EXLA.AOT.Compiler.compile(output_dir, module, comps, aot_options) do
+    case EXLA.AOT.compile(output_dir, module, comps, aot_options) do
       {:ok, nif} -> {:ok, exprs, nif}
       {:error, exception} -> {:error, exception}
     end

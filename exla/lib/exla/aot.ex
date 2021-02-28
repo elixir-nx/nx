@@ -1,5 +1,7 @@
-defmodule EXLA.AOT.Compiler do
-  @moduledoc false
+defmodule EXLA.AOT do
+  @moduledoc """
+  High-level functionality for AOT compilation.
+  """
 
   alias EXLA.AOT.Codegen
   alias EXLA.Computation
@@ -7,12 +9,76 @@ defmodule EXLA.AOT.Compiler do
   require Logger
   @tf_rev "6af836f407f546cf2f9ab3b5fcb7a8285bda5c96"
 
-  # flags
-  # https://github.com/tensorflow/tensorflow/issues/13500
-  #
-  # target_triple
-  # https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
-  def compile(output_dir, module_name, functions, options) do
+  @doc """
+  Compiles a shared object file at the given `output_dir`
+  for `module_name` with the given `functions`.
+
+  The shared object file will be called "libnif.so"
+  (or "libnif.dll" for Windows) and be placed on the given
+  `output_dir`. This function returns `{:ok, path_to_nif}`
+  or `{:error, Exception.t}`.
+
+  `module_name` is an atom representing a module. `functions`
+  is a list of triplets of shape `{computation, name, shapes}`
+  where:
+
+    * `computation` is an EXLA computation which returns
+      a tuple
+
+    * `name` is the name of the function to be defined as NIF
+
+    * `shapes` is a list of computation arguments. Note
+      tuples are not allowed as argument shapes
+
+  Each compiled NIF expects binaries as arguments, as described
+  by the respective shapes, and it returns either `{:ok, list}`
+  or `{:error, charlist}`, where `list` is a list of binaries
+  representing each element of the output tuple.
+
+  ## Options
+
+  This function accepts the following options:
+
+    * `:target_triple` - the target triple to compile to.
+      It defaults to the current target triple but one
+      can be set for cross-compilation. A list is available
+      here: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
+
+    * `:build_env` - a list of two-element tuples of
+      binaries used as environment variables for the
+      underlying `bazel` build. For example, you may
+      want to set `XLA_FLAGS` environemtn varaible
+      when compiling the shared object
+
+    * `:build_flags` - a list of binaries that are
+      added to the bazel call. For example, the default
+      executable makes no assumption about the target
+      runtime, so special instructions such as SIMD are
+      not leveraged. But you can specify those flags if
+      desired:
+
+          build_flags: [
+            ~s|--target_features="+sse4.1",
+            ~s|--target_features="+sse4.2",
+            ~s|--target_features="+avx"|,
+            ~s|--target_features="+avx2"|,
+            ~s|--target_features="+fma"|
+          ]
+
+    * `:runtimes` - some features of the computation
+      graph, such as dot (`matmul`) and conv (`conv2d`)
+      require specific runtimes to operate. You need to
+      explicitly pass said runtimes as argument:
+
+          runtimes: [:matmul, :conv2d]
+
+      The list of runtimes can be found on Tensorflow
+      source [in this directory](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/compiler/xla/service/cpu),
+      starting with the `runtime_` prefix
+
+  """
+  def compile(output_dir, module_name, functions, options \\ [])
+      when is_binary(output_dir) and is_atom(module_name) and is_list(functions) and is_list(options) do
     lib_name = "libnif"
     aot_dir = "aot#{System.unique_integer([:positive])}"
     aot_relative_path = "tensorflow/compiler/xla/exla/#{aot_dir}"
@@ -62,7 +128,7 @@ defmodule EXLA.AOT.Compiler do
     end
 
     system_args =
-      ["build", "//#{config.aot_relative_path}:#{config.lib_name}.so"] ++ config.build_flags
+      ["build"] ++ config.build_flags ++ ["//#{config.aot_relative_path}:#{config.lib_name}.so"]
 
     system_opts = [
       cd: config.tf_path,
@@ -87,7 +153,7 @@ defmodule EXLA.AOT.Compiler do
     end
   end
 
-  defp compile_function({%Computation{ref: comp, output_shape: out_shape}, name, args}, config) do
+  defp compile_function({%Computation{output_shape: out_shape} = comp, name, args}, config) do
     %EXLA.Shape{dtype: {:t, shapes}} = out_shape
     arity = length(args)
 
@@ -102,16 +168,16 @@ defmodule EXLA.AOT.Compiler do
     header_path = Path.join(config.aot_path, "#{name}_#{arity}.h")
     object_path = Path.join(config.aot_path, "#{name}_#{arity}.o")
 
-    EXLA.NIF.compile_aot(
-      comp,
-      pbtext_path,
-      header_path,
-      object_path,
-      "#{name}_#{arity}",
-      "#{name}_#{arity}_class",
-      config.target_triple
-    )
-    |> unwrap!()
+    :ok =
+      Computation.compile_aot(
+        comp,
+        pbtext_path,
+        header_path,
+        object_path,
+        "#{name}_#{arity}",
+        "#{name}_#{arity}_class",
+        config.target_triple
+      )
 
     {name, arity, args, sizes}
   end
@@ -173,7 +239,4 @@ defmodule EXLA.AOT.Compiler do
         "exla"
       )
   end
-
-  defp unwrap!(:ok), do: :ok
-  defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
