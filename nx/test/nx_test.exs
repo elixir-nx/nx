@@ -1088,6 +1088,67 @@ defmodule NxTest do
     end
   end
 
+  describe "cholesky/1" do
+    test "works on 2x2 matrix" do
+      out = Nx.cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
+
+      assert round(out, 1) ==
+               Nx.tensor([
+                 [4.47213595499958, 0.0],
+                 [3.93547964039963, 0.7155417527999305]
+               ])
+               |> round(1)
+    end
+
+    test "works on a 4x4 matrix" do
+      out =
+        Nx.cholesky(
+          Nx.tensor([
+            [6.0, 3.0, 4.0, 8.0],
+            [3.0, 6.0, 5.0, 1.0],
+            [4.0, 5.0, 10.0, 7.0],
+            [8.0, 1.0, 7.0, 25.0]
+          ])
+        )
+
+      assert round(out, 1) ==
+               Nx.tensor([
+                 [2.449489742783178, 0.0, 0.0, 0.0],
+                 [1.2247448713915892, 2.1213203435596424, 0.0, 0.0],
+                 [1.6329931618554523, 1.414213562373095, 2.309401076758503, 0.0],
+                 [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
+               ])
+               |> round(1)
+    end
+
+    test "works on a 3x3 matrix" do
+      t1 = Nx.iota({3, 3})
+      t2 = Nx.add(t1, Nx.transpose(t1))
+      out = Nx.cholesky(t2)
+      Nx.shape(out) == {3, 3}
+    end
+
+    test "raises for non-square matrix" do
+      t = Nx.iota({2, 3})
+
+      assert_raise(ArgumentError, "tensor must be a square matrix, got shape: {2, 3}", fn ->
+        Nx.cholesky(t)
+      end)
+    end
+
+    test "raises for non-symmetric matrix" do
+      t = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "matrix must be symmetric, a matrix is symmetric iff X = X.T",
+        fn ->
+          Nx.cholesky(t)
+        end
+      )
+    end
+  end
+
   describe "concatenate/2" do
     test "raises for an empty list of tensors" do
       assert_raise(ArgumentError, "empty list passed to concatenate", fn ->
