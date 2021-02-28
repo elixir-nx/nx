@@ -1,16 +1,17 @@
 defmodule EXLA.AOT.Codegen do
   @moduledoc false
 
-  ## Bazel Attributes
-  @bazel_deps_base "@org_tensorflow//tensorflow/compiler/"
-  @bazel_deps [
-    "tf2xla:xla_compiled_cpu_function",
-    "xla:cpu_function_runtime",
-    "xla:executable_run_options",
-    "xla:types",
-    "xla/service/cpu:runtime_matmul"
-  ]
   @bazel_erts_glob "glob([\"erts/**/*.h\"], allow_empty=False)"
+  @bazel_deps_base "@org_tensorflow//"
+  @bazel_deps_runtime "tensorflow/compiler/xla/service/cpu:runtime_"
+
+  @bazel_deps [
+    "tensorflow/compiler/tf2xla:xla_compiled_cpu_function",
+    "tensorflow/compiler/xla:cpu_function_runtime",
+    "tensorflow/compiler/xla:executable_run_options",
+    "tensorflow/compiler/xla:types",
+    "third_party/eigen3"
+  ]
 
   ## Generating the graph config file
 
@@ -67,10 +68,10 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the BUILD file
 
-  def generate_bazel_build_file(functions, lib_name) do
+  def generate_bazel_build_file(functions, runtimes, lib_name) do
     name = build_bazel_so_str(lib_name)
     srcs = build_bazel_srcs_str(functions, lib_name)
-    deps = build_bazel_deps_str()
+    deps = build_bazel_deps_str(runtimes)
     linkopts = build_bazel_linkopts_str()
 
     """
@@ -88,12 +89,9 @@ defmodule EXLA.AOT.Codegen do
     str(lib_name <> ".so")
   end
 
-  defp build_bazel_deps_str do
-    deps_str =
-      @bazel_deps
-      |> Enum.map(&str(@bazel_deps_base <> &1))
-      |> Enum.join(", ")
-
+  defp build_bazel_deps_str(runtimes) do
+    deps = @bazel_deps ++ Enum.map(runtimes, &"#{@bazel_deps_runtime}#{&1}")
+    deps_str = Enum.map_join(deps, ", ", &str(@bazel_deps_base <> &1))
     "[" <> deps_str <> "]"
   end
 

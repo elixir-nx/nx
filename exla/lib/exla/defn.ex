@@ -4,6 +4,52 @@ defmodule EXLA.Defn do
   alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
+  @aot_runtimes %{
+    dot: :matmul,
+    conv: :conv2d
+  }
+
+  @doc false
+  def __aot__(output_dir, module, tuples, aot_options) do
+    comps_and_exprs =
+      for {name, fun, vars, options} <- tuples do
+        {fun, _expr_options, exla_options} = prepare_args(fun, options)
+        expr = fun.(vars)
+
+        shapes =
+          for %{shape: shape, type: type} <- vars do
+            EXLA.Shape.make_shape(type, shape)
+          end
+
+        computation = to_root_computation(name, expr, shapes, exla_options)
+        {{computation, name, shapes}, expr}
+      end
+
+    {comps, exprs} = Enum.unzip(comps_and_exprs)
+    {_, runtimes} = exprs |> List.to_tuple() |> Tree.composite(%{}, &aot_runtimes/2)
+    aot_options = Keyword.put_new(aot_options, :runtimes, Map.keys(runtimes))
+
+    case EXLA.AOT.Compiler.compile(output_dir, module, comps, aot_options) do
+      {:ok, nif} -> {:ok, exprs, nif}
+      {:error, exception} -> {:error, exception}
+    end
+  end
+
+  defp aot_runtimes(%T{data: %Expr{op: :fun, args: args}}, acc) do
+    [_, expr, _] = args
+    Tree.composite(expr, acc, &aot_runtimes/2)
+  end
+
+  defp aot_runtimes(%T{data: %Expr{op: op}} = expr, acc) do
+    acc = if runtime = @aot_runtimes[op], do: Map.put(acc, runtime, true), else: acc
+    aot_runtimes_args(expr, acc)
+  end
+
+  defp aot_runtimes_args(expr, acc) do
+    {_, acc} = Tree.traverse_args(expr, acc, &aot_runtimes/2)
+    {expr, acc}
+  end
+
   @doc false
   def __async__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
@@ -28,30 +74,6 @@ defmodule EXLA.Defn do
     executable
     |> EXLA.Executable.run(buffers, run_options)
     |> buffer_to_nx(holes)
-  end
-
-  @doc false
-  def __aot__(output_dir, module, tuples, aot_options) do
-    comps_and_exprs =
-      for {name, fun, vars, options} <- tuples do
-        {fun, _expr_options, exla_options} = prepare_args(fun, options)
-        expr = fun.(vars)
-
-        shapes =
-          for %{shape: shape, type: type} <- vars do
-            EXLA.Shape.make_shape(type, shape)
-          end
-
-        computation = to_root_computation(name, expr, shapes, exla_options)
-        {{computation, name, shapes}, expr}
-      end
-
-    {comps, exprs} = Enum.unzip(comps_and_exprs)
-
-    case EXLA.AOT.Compiler.compile(output_dir, module, comps, aot_options) do
-      {:ok, nif} -> {:ok, exprs, nif}
-      {:error, exception} -> {:error, exception}
-    end
   end
 
   defp prepare_args(fun, options) do

@@ -7,20 +7,28 @@ defmodule EXLA.AOT.Compiler do
   require Logger
   @tf_rev "6af836f407f546cf2f9ab3b5fcb7a8285bda5c96"
 
-  def compile(output_dir, module_name, functions, _options) do
+  # flags
+  # https://github.com/tensorflow/tensorflow/issues/13500
+  #
+  # target_triple
+  # https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
+  def compile(output_dir, module_name, functions, options) do
     lib_name = "libnif"
     aot_dir = "aot#{System.unique_integer([:positive])}"
     aot_relative_path = "tensorflow/compiler/xla/exla/#{aot_dir}"
     tf_path = tf_checkout_path()
-    target_triple = target_triple()
+    target_triple = options[:target_triple] || target_triple()
     target_path = Path.join(output_dir, "#{module_name}.#{nif_extension(target_triple)}")
 
     config = %{
       aot_dir: aot_dir,
       aot_path: Path.join(tf_path, aot_relative_path),
       aot_relative_path: aot_relative_path,
+      build_env: options[:build_env] || [],
+      build_flags: options[:build_flags] || [],
       lib_name: lib_name,
       module_name: module_name,
+      runtimes: options[:runtimes] || [],
       target_triple: target_triple(),
       target_path: target_path,
       tf_path: tf_path
@@ -53,11 +61,17 @@ defmodule EXLA.AOT.Compiler do
       {:error, _} -> File.cp_r!(erts_path, erts_link_path)
     end
 
-    case System.cmd("bazel", ["build", "//#{config.aot_relative_path}:#{config.lib_name}.so"],
-             cd: config.tf_path,
-             stderr_to_stdout: true,
-             into: IO.stream(:stdio, :line)
-           ) do
+    system_args =
+      ["build", "//#{config.aot_relative_path}:#{config.lib_name}.so"] ++ config.build_flags
+
+    system_opts = [
+      cd: config.tf_path,
+      stderr_to_stdout: true,
+      into: IO.stream(:stdio, :line),
+      env: config.build_env
+    ]
+
+    case System.cmd("bazel", system_args, system_opts) do
       {_, 0} ->
         so =
           config.tf_path
@@ -110,14 +124,16 @@ defmodule EXLA.AOT.Compiler do
   end
 
   defp write_nif_source_file(functions, config) do
-    src = Codegen.generate_nif_source_file(functions, config.module_name, config.aot_relative_path)
+    src =
+      Codegen.generate_nif_source_file(functions, config.module_name, config.aot_relative_path)
+
     nif_path = Path.join(config.aot_path, config.lib_name <> ".cc")
     File.write!(nif_path, src)
     :ok
   end
 
   defp write_bazel_build_file(functions, config) do
-    build = Codegen.generate_bazel_build_file(functions, config.lib_name)
+    build = Codegen.generate_bazel_build_file(functions, config.runtimes, config.lib_name)
     build_path = Path.join(config.aot_path, "BUILD")
     File.write!(build_path, build)
     :ok
@@ -128,7 +144,6 @@ defmodule EXLA.AOT.Compiler do
   end
 
   defp target_triple() do
-    # See supported triples: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
     case :os.type() do
       {:unix, :linux} ->
         "x86_64-pc-linux"
