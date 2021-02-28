@@ -257,43 +257,29 @@ defmodule Nx.Type do
 
       iex> Nx.Type.merge({:u, 8}, {:f, 32})
       {:f, 32}
-      iex> Nx.Type.merge({:u, 16}, {:f, 32})
-      {:f, 32}
-      iex> Nx.Type.merge({:u, 32}, {:f, 32})
-      {:f, 32}
       iex> Nx.Type.merge({:u, 64}, {:f, 32})
       {:f, 32}
       iex> Nx.Type.merge({:s, 8}, {:f, 32})
-      {:f, 32}
-      iex> Nx.Type.merge({:s, 16}, {:f, 32})
-      {:f, 32}
-      iex> Nx.Type.merge({:s, 32}, {:f, 32})
       {:f, 32}
       iex> Nx.Type.merge({:s, 64}, {:f, 32})
       {:f, 32}
 
       iex> Nx.Type.merge({:u, 8}, {:f, 64})
       {:f, 64}
-      iex> Nx.Type.merge({:u, 16}, {:f, 64})
-      {:f, 64}
-      iex> Nx.Type.merge({:u, 32}, {:f, 64})
-      {:f, 64}
       iex> Nx.Type.merge({:u, 64}, {:f, 64})
       {:f, 64}
       iex> Nx.Type.merge({:s, 8}, {:f, 64})
       {:f, 64}
-      iex> Nx.Type.merge({:s, 16}, {:f, 64})
-      {:f, 64}
-      iex> Nx.Type.merge({:s, 32}, {:f, 64})
-      {:f, 64}
       iex> Nx.Type.merge({:s, 64}, {:f, 64})
       {:f, 64}
 
+      iex> Nx.Type.merge({:u, 8}, {:bf, 16})
+      {:bf, 16}
+      iex> Nx.Type.merge({:u, 64}, {:bf, 16})
+      {:bf, 16}
       iex> Nx.Type.merge({:s, 8}, {:bf, 16})
       {:bf, 16}
-      iex> Nx.Type.merge({:s, 16}, {:bf, 16})
-      {:bf, 16}
-      iex> Nx.Type.merge({:s, 32}, {:bf, 16})
+      iex> Nx.Type.merge({:s, 64}, {:bf, 16})
       {:bf, 16}
 
       iex> Nx.Type.merge({:f, 32}, {:bf, 16})
@@ -307,8 +293,6 @@ defmodule Nx.Type do
   end
 
   def merge(left, right) do
-    # Sorting right now is straight-forward because
-    # the type ordering is also the lexical ordering.
     {{_type1, _size1} = t1, {type2, _size2} = t2} = sort(left, right)
     candidate = {type2, maybe_inc_size(t1, t2)}
 
