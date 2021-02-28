@@ -187,11 +187,10 @@ defmodule EXLA.AOT.Codegen do
     run_str = build_nif_run_block(name, arity)
     result_str = build_nif_results_block(name, arity, result_sizes)
 
-    cores = System.schedulers_online()
-
     """
     #{signature_str}{
-      Eigen::ThreadPool tp(#{cores});
+      unsigned num_threads = std::thread::hardware_concurrency();
+      Eigen::ThreadPool tp(num_threads);
       Eigen::ThreadPoolDevice device(&tp, tp.NumThreads());
       #{class_name} #{name}_#{arity};
       #{name}_#{arity}.set_thread_pool(&device);
