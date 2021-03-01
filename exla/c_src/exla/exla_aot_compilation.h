@@ -24,6 +24,7 @@ namespace exla{
                                  std::string object_path,
                                  std::string function_name,
                                  std::string class_name,
-                                 std::string target_triple);
+                                 std::string target_triple,
+                                 std::string target_features);
 
 }

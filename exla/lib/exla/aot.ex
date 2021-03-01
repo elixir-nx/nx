@@ -39,32 +39,6 @@ defmodule EXLA.AOT do
 
   This function accepts the following options:
 
-    * `:target_triple` - the target triple to compile to.
-      It defaults to the current target triple but one
-      can be set for cross-compilation. A list is available
-      here: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
-
-    * `:build_env` - a list of two-element tuples of
-      binaries used as environment variables for the
-      underlying `bazel` build. For example, you may
-      want to set `XLA_FLAGS` environemtn varaible
-      when compiling the shared object
-
-    * `:build_flags` - a list of binaries that are
-      added to the bazel call. For example, the default
-      executable makes no assumption about the target
-      runtime, so special instructions such as SIMD are
-      not leveraged. But you can specify those flags if
-      desired:
-
-          build_flags: [
-            ~s|--target_features="+sse4.1",
-            ~s|--target_features="+sse4.2",
-            ~s|--target_features="+avx"|,
-            ~s|--target_features="+avx2"|,
-            ~s|--target_features="+fma"|
-          ]
-
     * `:runtimes` - some features of the computation
       graph, such as dot (`matmul`) and conv (`conv2d`)
       require specific runtimes to operate. You need to
@@ -76,6 +50,7 @@ defmodule EXLA.AOT do
       source [in this directory](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/compiler/xla/service/cpu),
       starting with the `runtime_` prefix
 
+  Also see the options in `EXLA.Compilation.compile_aot/7`.
   """
   def compile(output_dir, module_name, functions, options \\ [])
       when is_binary(output_dir) and is_atom(module_name) and is_list(functions) and is_list(options) do
@@ -83,19 +58,18 @@ defmodule EXLA.AOT do
     aot_dir = "aot#{System.unique_integer([:positive])}"
     aot_relative_path = "tensorflow/compiler/xla/exla/#{aot_dir}"
     tf_path = tf_checkout_path()
-    target_triple = options[:target_triple] || target_triple()
+    target_triple = options[:target_triple] || Computation.target_triple()
     target_path = Path.join(output_dir, "#{module_name}.#{nif_extension(target_triple)}")
 
     config = %{
       aot_dir: aot_dir,
       aot_path: Path.join(tf_path, aot_relative_path),
       aot_relative_path: aot_relative_path,
-      build_env: options[:build_env] || [],
-      build_flags: options[:build_flags] || [],
       lib_name: lib_name,
       module_name: module_name,
       runtimes: options[:runtimes] || [],
-      target_triple: target_triple(),
+      target_features: options[:target_features],
+      target_triple: target_triple,
       target_path: target_path,
       tf_path: tf_path
     }
@@ -128,13 +102,12 @@ defmodule EXLA.AOT do
     end
 
     system_args =
-      ["build"] ++ config.build_flags ++ ["//#{config.aot_relative_path}:#{config.lib_name}.so"]
+      ["build", "//#{config.aot_relative_path}:#{config.lib_name}.so"]
 
     system_opts = [
       cd: config.tf_path,
       stderr_to_stdout: true,
-      into: IO.stream(:stdio, :line),
-      env: config.build_env
+      into: IO.stream(:stdio, :line)
     ]
 
     case System.cmd("bazel", system_args, system_opts) do
@@ -176,7 +149,8 @@ defmodule EXLA.AOT do
         object_path,
         "#{name}_#{arity}",
         "#{name}_#{arity}_class",
-        config.target_triple
+        target_triple: config.target_triple,
+        target_features: config.target_features
       )
 
     {name, arity, args, sizes}
@@ -207,21 +181,6 @@ defmodule EXLA.AOT do
 
   defp nif_extension(target_triple) do
     if String.ends_with?(target_triple, "-windows"), do: :dll, else: :so
-  end
-
-  defp target_triple() do
-    case :os.type() do
-      {:unix, :linux} ->
-        "x86_64-pc-linux"
-
-      {:win32, _} ->
-        "x86_64-none-windows"
-
-      {:unix, osname} ->
-        arch_str = :erlang.system_info(:system_architecture)
-        [arch, vendor | _] = arch_str |> List.to_string() |> String.split("-")
-        arch <> "-" <> vendor <> "-" <> Atom.to_string(osname)
-    end
   end
 
   defp tf_checkout_path() do

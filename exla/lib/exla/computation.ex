@@ -67,9 +67,25 @@ defmodule EXLA.Computation do
     * the path to the output object file
     * the generated function name as a string
     * the generated class name as a string
-    * the target triple (according to Tensorflow: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl)
 
-  It writes the to the output paths and returns `:ok`.
+  It writes to the output paths and returns `:ok`.
+
+  ## Options
+
+    * `:target_triple` - the target triple to compile to.
+      It defaults to the current target triple but one
+      can be set for cross-compilation. A list is available
+      here: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
+
+          target_triple: "x86_64-pc-linux"
+
+    * `:target_features` - the default executable makes
+      no assumption about the target runtime, so special
+      instructions such as SIMD are not leveraged. But you
+      can specify those flags if desired:
+
+          target_features: "+sse4.1 +sse4.2 +avx +avx2 +fma"
+
   """
   def compile_aot(
         %Computation{ref: ref} = comp,
@@ -78,7 +94,7 @@ defmodule EXLA.Computation do
         object_path,
         function_name,
         class_name,
-        target_triple
+        options \\ []
       ) do
     assert_output_shape!(comp)
 
@@ -89,8 +105,27 @@ defmodule EXLA.Computation do
       object_path,
       function_name,
       class_name,
-      target_triple
+      options[:target_triple] || target_triple(),
+      options[:target_features] || ""
     )
+  end
+
+  @doc """
+  Returns the default target triplet for computations.
+  """
+  def target_triple() do
+    case :os.type() do
+      {:unix, :linux} ->
+        "x86_64-pc-linux"
+
+      {:win32, _} ->
+        "x86_64-none-windows"
+
+      {:unix, osname} ->
+        arch_str = :erlang.system_info(:system_architecture)
+        [arch, vendor | _] = arch_str |> List.to_string() |> String.split("-")
+        arch <> "-" <> vendor <> "-" <> Atom.to_string(osname)
+    end
   end
 
   defp assert_output_shape!(%{output_shape: output_shape}) do
