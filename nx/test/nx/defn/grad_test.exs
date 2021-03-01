@@ -815,9 +815,8 @@ defmodule Nx.Defn.GradTest do
       do: grad(t, Nx.reduce_max(Nx.select(Nx.greater(t, 0.0), Nx.exp(t), Nx.cos(t))))
 
     test "computes gradient with sum+select" do
-      assert grad_sum_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]])) ==
-               Nx.tensor([
-                 [
+      lhs = grad_sum_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
+      rhs = Nx.tensor([[
                    0.9092974268256817,
                    2.718281828459045,
                    0.0,
@@ -826,11 +825,15 @@ defmodule Nx.Defn.GradTest do
                  ],
                  [2.718281828459045, 7.38905609893065, 0.0, 148.4131591025766, 0.8414709848078965]
                ])
+
+      compare_tensors!(lhs, rhs)
     end
 
     test "computes the gradient with max+select" do
-      assert grad_max_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]])) ==
-               Nx.tensor([[0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 148.4131591025766, 0.0]])
+      lhs = grad_max_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
+      rhs = Nx.tensor([[0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 148.4131591025766, 0.0]])
+
+      compare_tensors!(lhs, rhs)
     end
   end
 
