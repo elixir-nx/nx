@@ -35,7 +35,7 @@ If running on Windows, you will also need:
 
 The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. Subsequent commands should be much faster.
 
-#### Common Installation Issues
+### Common Installation Issues
 
   * EXLA
     * Make sure you use `:exla` as a `:github` dependency and not as a `:path` dependency to avoid rebuilds
@@ -52,6 +52,17 @@ The first compilation will take a long time, as it needs to compile parts of Ten
 #### Compiling in ElixirLS
 
 ElixirLS will need to run its own compile of `:exla`, so if you want to use ElixirLS, be prepared to possibly wait another 2 hours for it complete. As soon as you open VSCode with ElixirLS enabled and `:exla` as a dependency, let the ElixirLS compile complete (watch the output tab -> ElixirlS) *before* clicking around to any other files in your project, or else ElixirLS will rapid fire queue compiles that will all need to complete before you will be able to use your project. If no output appears in the ElixirLS output, you may need to trigger the compile by opening a file and saving it. Proceed slowly, one step at a time, and as soon as you see a build kick off in the ElixirLS output panel, walk away from the editor until it is done.
+
+#### Python and asdf
+
+Bazel cannot find Python installed via the `asdf` version manager. The error is `unknown command: python. Perhaps you have to reshim?`. One workaround is to use a separate installer or explicitly change your `$PATH` to point to a Python installation. For example, on Homebrew on macOS, you would do:
+
+```
+export PATH=/usr/local/opt/python@3.9/libexec/bin:/usr/local/bin:$PATH
+mix deps.compile
+```
+
+Note the build process looks for `python`, not `python3`. You may need to remove `~/.cache/exla` to clean up from previous build attempts.
 
 ### GPU Support
 
