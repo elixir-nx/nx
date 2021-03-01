@@ -6354,12 +6354,17 @@ defmodule Nx do
   input or kernel tensor.
 
   You can split both the input and kernel tensor into feature groups
-  using `:groups`. This will split both the input and kernel tensor
-  channels and compute a grouped convolution. The size of the kernel
-  input feature channels times the number of groups must match the size of
-  the input tensor feature channels. Additionally, the size of the kernel
-  output feature channels must be evenly divisible by the number of
-  groups.
+  using `:feature_group_size`. This will split both the input and kernel
+  tensor channels and compute a grouped convolution. The size of the
+  kernel input feature channels times the size of the feature group must
+  match the size of the input tensor feature channels. Additionally,
+  the size of the kernel output feature channels must be evenly divisible
+  by the group size.
+
+  You can also split the input tensor along the batch dimension by
+  specifying `:batch_group_size`. This will compute a grouped convolution
+  in the same way as with `:feature_group_size`, however, the input
+  tensor will be split into groups along the batch dimension.
 
   ## Examples
 
@@ -6433,7 +6438,8 @@ defmodule Nx do
       :strides,
       :input_dilation,
       :kernel_dilation,
-      :groups,
+      :feature_group_size,
+      :batch_group_size,
       :input_permutation,
       :kernel_permutation,
       :output_permutation
@@ -6442,7 +6448,8 @@ defmodule Nx do
     padding = opts[:padding] || :valid
     input_dilation = opts[:input_dilation] || 1
     kernel_dilation = opts[:kernel_dilation] || 1
-    groups = opts[:groups] || 1
+    feature_groups = opts[:feature_group_size] || 1
+    batch_groups = opts[:batch_group_size] || 1
 
     %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
@@ -6474,21 +6481,41 @@ defmodule Nx do
               " shape #{inspect(kernel_shape)} has rank #{rank(kernel_shape)}"
     end
 
+    if batch_groups != 1 and feature_groups != 1 do
+      raise ArgumentError,
+            "either batch groups or feature groups must be 1," <>
+            " got batch_groups = #{batch_groups} and feature_groups = #{feature_groups}"
+    end
+
+    tensor_input_batch_size = elem(permuted_input_shape, 0)
     tensor_input_channels = elem(permuted_input_shape, 1)
     kernel_input_channels = elem(permuted_kernel_shape, 1)
     kernel_output_channels = elem(permuted_kernel_shape, 0)
 
-    if tensor_input_channels != kernel_input_channels * groups do
+    if rem(tensor_input_batch_size, batch_groups) != 0 do
       raise ArgumentError,
-            "size of input dimension 1 divided by groups must match size of kernel" <>
-              " dimension 1, got #{tensor_input_channels} // #{groups} != #{kernel_input_channels}" <>
+            "batch groups must evenly divide input batch size" <>
+              " got rem(#{batch_groups}, #{tensor_input_batch_size}) != 0"
+    end
+
+    if tensor_input_channels != kernel_input_channels * feature_groups do
+      raise ArgumentError,
+            "size of input channels divided by feature groups must match size of kernel" <>
+              " channels, got #{tensor_input_channels} // #{feature_groups} != #{kernel_input_channels}" <>
               " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
     end
 
-    if rem(kernel_output_channels, groups) != 0 do
+    if rem(kernel_output_channels, feature_groups) != 0 do
       raise ArgumentError,
-            "size of kernel dimension 0 must be evenly divisible by groups" <>
-              " got rem(#{kernel_output_channels}, #{groups}) != 0 for kernel" <>
+            "size of kernel output channels must be evenly divisible by feature groups" <>
+              " got rem(#{kernel_output_channels}, #{feature_groups}) != 0 for kernel" <>
+              " with shape #{inspect(kernel_shape)}"
+    end
+
+    if rem(kernel_output_channels, batch_groups) != 0 do
+      raise ArgumentError,
+            "size of kernel output channels must be evenly divisible by batch groups" <>
+              " got rem(#{kernel_output_channels}, #{batch_groups}) != 0 for kernel" <>
               " with shape #{inspect(kernel_shape)}"
     end
 
@@ -6625,6 +6652,7 @@ defmodule Nx do
         dilated_kernel_shape,
         permuted_kernel_names,
         strides,
+        batch_groups,
         padding_config
       )
 
@@ -6647,7 +6675,8 @@ defmodule Nx do
       padding: padding_config,
       input_dilation: input_dilation,
       kernel_dilation: kernel_dilation,
-      groups: groups,
+      feature_group_size: feature_groups,
+      batch_group_size: batch_groups,
       input_permutation: input_permutation,
       kernel_permutation: kernel_permutation,
       output_permutation: output_permutation
