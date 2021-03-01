@@ -493,6 +493,7 @@ defmodule Nx.Defn.Grad do
     rhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(rhs_sdims, rhs_dilated_padding_config))
     out_dilated_shape = Tuple.to_list(Nx.Shape.pad(out_sdims, out_dilated_padding_config))
 
+    # TODO: Use Enum.zip_with on Elixir v1.12
     total_in_pad =
       [out_dilated_shape, rhs_dilated_shape, lhs_dilated_shape]
       |> Enum.zip()
