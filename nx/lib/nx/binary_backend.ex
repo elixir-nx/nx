@@ -1082,6 +1082,7 @@ defmodule Nx.BinaryBackend do
     # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
     # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
     # [4] - http://drsfenner.org/blog/2016/03/householder-bidiagonalization/
+    # [5] - http://www.mymathlib.com/c_source/matrices/linearsystems/singular_value_decomposition.c
 
     a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
 
@@ -1187,10 +1188,20 @@ defmodule Nx.BinaryBackend do
               |> transpose_matrix()
               |> dot_matrix([u_col_p, u_col_q])
 
+            inv_norm_u_col_p_rotated =
+              1 / :math.sqrt(Enum.reduce(u_col_p_rotated, 0, &(&1 * &1 + &2)))
+
+            u_col_p_normalized = Enum.map(u_col_p_rotated, &(&1 * inv_norm_u_col_p_rotated))
+
+            inv_norm_u_col_q_rotated =
+              1 / :math.sqrt(Enum.reduce(u_col_q_rotated, 0, &(&1 * &1 + &2)))
+
+            u_col_q_normalized = Enum.map(u_col_q_rotated, &(&1 * inv_norm_u_col_q_rotated))
+
             u =
               u_transposed
-              |> List.replace_at(p, u_col_p_rotated)
-              |> List.replace_at(q, u_col_q_rotated)
+              |> List.replace_at(p, u_col_p_normalized)
+              |> List.replace_at(q, u_col_q_normalized)
               |> transpose_matrix()
 
             v_transposed = transpose_matrix(v)
@@ -1390,13 +1401,13 @@ defmodule Nx.BinaryBackend do
           if is_nil(ll) or not compute_lr do
             l
           else
-            dot_matrix(ll, l)
+            dot_matrix(l, ll)
           end
 
         a = dot_matrix(l, a)
 
         {a, rr} =
-          if col < n - 2 do
+          if col <= n - 2 and compute_lr do
             # r = householder_reflector(a[[col, col+1:]], n)
             r =
               a
@@ -1405,7 +1416,7 @@ defmodule Nx.BinaryBackend do
               |> householder_reflector(n, eps)
 
             rr =
-              if is_nil(rr) or not compute_lr do
+              if is_nil(rr) do
                 r
               else
                 dot_matrix(rr, r)
