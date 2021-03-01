@@ -7106,6 +7106,8 @@ defmodule Nx do
 
     * `:r_names` - Defines the names for the `r` tensor
 
+    * `:eps` - Rounding error threshold that can be applied during the triangularization
+
   ## Examples
 
       iex> {q, r} = Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
@@ -7229,6 +7231,39 @@ defmodule Nx do
     )
   end
 
+  @doc """
+  Calculates the Singular Value Decomposition of 2-D tensors.
+
+  If `compute_uv = true`, returns `{u, s, vt}`. Otherwise, returns `s`.
+  `s` is an array containing the singular values of the input tensor.
+  `u` and `vt` are orthonormal matrices where `input_tensor = u.S.vt`,
+  and `S` is the diagonal matrix which elements are the elements of `s`.
+
+  ## Options
+
+    * `full_matrices`: `boolean`. Defaults to `true`
+      If `true`, `u` and `vt` have the shapes `{m, m}` and `{n, n}`.
+      Otherwise, shapes are `{m, k}` and `{k, m}`, with `k = min(M, N)`
+    * `compute_uv`: `boolean`. Defaults to `true`
+      Whether or not to compute `u` and `vt`. If `false`, the return value is `s`
+
+  ## Examples
+      iex> Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
+      {
+        Nx.tensor([
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0, 1.0]
+        ]),
+        Nx.tensor([1.0, 1.0, -1.0]),
+        Nx.tensor([
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0, 1.0]
+        ])
+      }
+  """
+  @doc type: :linalg
   def svd(tensor) do
     %T{type: type, shape: shape} = tensor = tensor!(tensor)
 
@@ -7238,7 +7273,7 @@ defmodule Nx do
 
     impl!(tensor).svd(
       {%{tensor | type: output_type, shape: u_shape},
-       %{tensor | type: output_type, shape: s_shape},
+       %{tensor | names: [nil], type: output_type, shape: s_shape},
        %{tensor | type: output_type, shape: v_shape}},
       tensor,
       []

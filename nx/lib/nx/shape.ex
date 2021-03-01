@@ -918,7 +918,7 @@ defmodule Nx.Shape do
       )
 
   def svd({m, n}) do
-    {{m, m}, {m, n}, {n, n}}
+    {{m, m}, {n}, {n, n}}
   end
 
   def svd(shape),

@@ -1069,30 +1069,31 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def svd(
-        {u_holder, %{shape: {m, n} = s_shape, type: output_type} = s_holder, v_holder},
+        {u_holder, %{type: output_type} = s_holder, v_holder},
         %{type: input_type, shape: {m, n} = input_shape} = tensor,
         opts
       ) do
     # This implementation is a mixture of concepts described in [1] and the
-    # algorithmic descriptions found in [2] and [3]
-    # [1] -
-    #    Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
-    #    by Gabriel Oksa and Marian Vajtersic
-    #    Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
+    # algorithmic descriptions found in [2], [3] and [4]
+    #
+    # [1] - Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
+    #       by Gabriel Oksa and Marian Vajtersic
+    #       Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
     # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
     # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
+    # [4] - http://drsfenner.org/blog/2016/03/householder-bidiagonalization/
 
     a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
 
     eps = opts[:eps] || @default_eps
 
-    {u, d, v} = householder_bidiagonalization(a, s_shape, eps)
+    {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
 
     max_iter = 100
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
-    {u, s, v, _, _} =
+    {u, s_matrix, v, _, _} =
       Enum.reduce_while(1..max_iter, {u, d, v, off_diag_norm, fro_norm}, fn
         _, {u, d, v, off_diag_norm, fro_norm} ->
           eps = 1.0e-6 * fro_norm
@@ -1178,6 +1179,10 @@ defmodule Nx.BinaryBackend do
           end
       end)
 
+    # Make s a vector
+    s = s_matrix |> Enum.with_index() |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
+
+    # {s, v} = make_singular_values_positive(s, v)
     u_bin = matrix_to_binary(u, output_type)
     s_bin = matrix_to_binary(s, output_type)
     v_bin = matrix_to_binary(v, output_type)
@@ -1187,6 +1192,9 @@ defmodule Nx.BinaryBackend do
     v = from_binary(v_holder, v_bin)
 
     {u, s, v}
+  end
+
+  defp make_singular_values_positive(s, v) do
   end
 
   defp dot_matrix(m1, m2) do
@@ -1210,8 +1218,12 @@ defmodule Nx.BinaryBackend do
 
   defp matrix_to_binary(m, type) do
     m
-    |> Enum.map(fn row ->
-      Enum.map(row, fn x -> scalar_to_binary(x, type) end)
+    |> Enum.map(fn
+      row when is_list(row) ->
+        Enum.map(row, fn x -> scalar_to_binary(x, type) end)
+
+      x ->
+        scalar_to_binary(x, type)
     end)
     |> IO.iodata_to_binary()
   end
