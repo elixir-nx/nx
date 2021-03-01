@@ -467,7 +467,7 @@ defmodule NxTest do
 
       assert inspect(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) == """
              #Nx.Tensor<
-               f64[2][3]
+               f32[2][3]
                [
                  [1.0, 2.0, 3.0],
                  [4.0, 5.0, 6.0]
@@ -644,7 +644,7 @@ defmodule NxTest do
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg =
-        "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
+        "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 32}"
 
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10, 1.0)
@@ -1163,7 +1163,7 @@ defmodule NxTest do
     test "works with shape input" do
       t = Nx.random_normal({3, 3}, 0.1, 10.0)
       assert Nx.shape(t) == {3, 3}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
     end
 
     test "works with tensor input" do
@@ -1171,7 +1171,7 @@ defmodule NxTest do
       t2 = Nx.random_normal(t1, 0.1, 10.0)
       assert Nx.shape(t2) == {2}
       assert Nx.type(t1) == {:s, 64}
-      assert Nx.type(t2) == {:f, 64}
+      assert Nx.type(t2) == {:f, 32}
       assert t1 != t2
     end
 
@@ -1186,7 +1186,7 @@ defmodule NxTest do
     test "works with shape input" do
       t = Nx.random_uniform({3, 3}, 0.1, 10.0)
       assert Nx.shape(t) == {3, 3}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
     end
 
     test "works with tensor input" do
@@ -1194,7 +1194,7 @@ defmodule NxTest do
       t2 = Nx.random_uniform(t1, 0.1, 10.0)
       assert Nx.shape(t2) == {2}
       assert Nx.type(t1) == {:s, 64}
-      assert Nx.type(t2) == {:f, 64}
+      assert Nx.type(t2) == {:f, 32}
       assert t1 != t2
     end
 
@@ -1205,9 +1205,13 @@ defmodule NxTest do
     end
 
     test "raises for incompatible types" do
-      assert_raise(ArgumentError, "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 64}", fn ->
-        Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
-      end)
+      assert_raise(
+        ArgumentError,
+        "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 32}",
+        fn ->
+          Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
+        end
+      )
     end
   end
 
@@ -1235,42 +1239,50 @@ defmodule NxTest do
       assert {q, %{type: output_type} = r} = Nx.qr(t)
       assert t |> Nx.round() |> Nx.as_type(output_type) == q |> Nx.dot(r) |> Nx.round()
 
-      assert round(q, 1) == Nx.tensor([
-        [-2/3, 2/3, -1/3],
-        [-2/3, -1/3, 2/3],
-        [-1/3, -2/3, -2/3]
-      ]) |> round(1)
+      assert round(q, 1) ==
+               Nx.tensor([
+                 [-2 / 3, 2 / 3, -1 / 3],
+                 [-2 / 3, -1 / 3, 2 / 3],
+                 [-1 / 3, -2 / 3, -2 / 3]
+               ])
+               |> round(1)
 
-      assert round(r, 1) == Nx.tensor([
-        [-3.0, 0.0, -12.0],
-        [0.0, -3.0, 12.0],
-        [0.0, 0.0, -6.0]
-      ]) |> round(1)
+      assert round(r, 1) ==
+               Nx.tensor([
+                 [-3.0, 0.0, -12.0],
+                 [0.0, -3.0, 12.0],
+                 [0.0, 0.0, -6.0]
+               ])
+               |> round(1)
     end
 
     test "factors rectangular matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
       {q, r} = Nx.qr(t, mode: :reduced)
 
-      assert round(q, 1) == Nx.tensor([
-          [-0.5774, 0.8165, 0.0],
-          [-0.5774, -0.4082, 0.7071],
-          [-0.5774, -0.4082, -0.7071],
-          [0.0, 0.0, 0.0]
-        ]) |> round(1)
+      assert round(q, 1) ==
+               Nx.tensor([
+                 [-0.5774, 0.8165, 0.0],
+                 [-0.5774, -0.4082, 0.7071],
+                 [-0.5774, -0.4082, -0.7071],
+                 [0.0, 0.0, 0.0]
+               ])
+               |> round(1)
 
-      assert round(r, 1) == Nx.tensor([
-          [-1.7321, -4.0415, -2.3094],
-          [0.0, -4.0825, 3.266],
-          [0.0, 0.0, -2.8284]
-        ]) |> round(1)
+      assert round(r, 1) ==
+               Nx.tensor([
+                 [-1.7321, -4.0415, -2.3094],
+                 [0.0, -4.0825, 3.266],
+                 [0.0, 0.0, -2.8284]
+               ])
+               |> round(1)
 
-        assert Nx.tensor([
-          [1.0, -1.0, 4.0],
-          [1.0, 4.0, -2.0],
-          [1.0, 4.0, 2.0],
-          [0.0, 0.0, 0.0]
-        ]) == q |> Nx.dot(r) |> round(1)
+      assert Nx.tensor([
+               [1.0, -1.0, 4.0],
+               [1.0, 4.0, -2.0],
+               [1.0, 4.0, 2.0],
+               [0.0, 0.0, 0.0]
+             ]) == q |> Nx.dot(r) |> round(1)
     end
 
     defp round(tensor, places) do

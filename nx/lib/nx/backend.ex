@@ -36,20 +36,21 @@ defmodule Nx.Backend do
   @type shape :: Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
+  @type backend_options :: term()
 
   @callback eye(tensor) :: tensor
   @callback iota(tensor, axis | nil) :: tensor
   @callback random_uniform(tensor, number, number) :: tensor
   @callback random_normal(tensor, mu :: float, sigma :: float) :: tensor
 
+  @callback from_binary(out :: tensor, binary, backend_options) :: tensor
+  @callback backend_deallocate(tensor) :: :ok | :already_deallocated
+  @callback backend_copy(tensor, module, backend_options) :: tensor
+  @callback backend_transfer(tensor, module, backend_options) :: tensor
   @callback to_batched_list(out :: tensor, tensor) :: [tensor]
   @callback to_binary(tensor, limit :: non_neg_integer) :: binary
-  @callback backend_deallocate(tensor) :: :ok | :already_deallocated
-  @callback backend_copy(tensor, module, keyword) :: tensor
-  @callback backend_transfer(tensor, module, keyword) :: tensor
-
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
-  @callback from_binary(out :: tensor, binary, keyword) :: tensor
+
   @callback as_type(out :: tensor, tensor) :: tensor
   @callback reshape(out :: tensor, tensor, shape) :: tensor
   @callback squeeze(out :: tensor, tensor, axes) :: tensor

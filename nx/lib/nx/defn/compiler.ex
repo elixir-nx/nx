@@ -33,6 +33,9 @@ defmodule Nx.Defn.Compiler do
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
                    [:to_binary, :to_scalar, :to_flat_list, :to_heatmap, :to_batched_list]
 
+  # These operations wrap a tensor in their original backend
+  @tensor_ops [:tensor, :from_binary]
+
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
                    is_atom(elem(var, 2))
@@ -463,7 +466,13 @@ defmodule Nx.Defn.Compiler do
 
     {args, state} = normalize_list(args, state)
     args = rewrite_args(name, args)
-    {{{:., dot_meta, [Nx, name]}, meta, args}, state}
+    call = {{:., dot_meta, [Nx, name]}, meta, args}
+
+    if name in @tensor_ops do
+      {{{:., dot_meta, [Nx.Defn.Expr, :tensor]}, dot_meta, [call]}, state}
+    else
+      {call, state}
+    end
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, name]} = call, meta, args}, state) do
@@ -527,12 +536,6 @@ defmodule Nx.Defn.Compiler do
   end
 
   ## Rewrite args
-
-  defp rewrite_args(:tensor, [t]), do: [t, add_backend([])]
-  defp rewrite_args(:tensor, [t, opts]), do: [t, add_backend(opts)]
-
-  defp rewrite_args(:from_binary, [t, type]), do: [t, type, add_backend([])]
-  defp rewrite_args(:from_binary, [t, type, opts]), do: [t, type, add_backend(opts)]
 
   defp rewrite_args(:iota, [t]), do: [t, add_backend([])]
   defp rewrite_args(:iota, [t, opts]), do: [t, add_backend(opts)]

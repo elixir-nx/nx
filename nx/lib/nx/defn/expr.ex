@@ -210,11 +210,6 @@ defmodule Nx.Defn.Expr do
   @behaviour Nx.Backend
 
   @impl true
-  def from_binary(out, binary, opts) do
-    to_expr(Nx.BinaryBackend.from_binary(out, binary, opts))
-  end
-
-  @impl true
   def eye(out) do
     expr(out, nil, :eye, [])
   end
@@ -494,7 +489,8 @@ defmodule Nx.Defn.Expr do
   ## Undefined
 
   ops =
-    [backend_copy: 3, backend_deallocate: 1, backend_transfer: 3, to_binary: 2, to_batched_list: 2]
+    [backend_copy: 3, backend_deallocate: 1, backend_transfer: 3] ++
+      [from_binary: 3, to_binary: 2, to_batched_list: 2]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)

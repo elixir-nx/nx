@@ -134,6 +134,14 @@ defmodule Nx.Shared do
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
+  @doc """
+  Converts an Erlang float (float64) to float32 precision.
+  """
+  def to_float32(f64) when is_float(f64) do
+    <<float32::float-32>> = <<f64::float-32>>
+    float32
+  end
+
   ## Reflection
 
   @doc """

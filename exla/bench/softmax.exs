@@ -1,6 +1,7 @@
 size = 1_000_000
-t64 = Nx.tensor(for _ <- 1..size, do: :rand.uniform())
-t32 = Nx.tensor(for(_ <- 1..size, do: :rand.uniform()), type: {:f, 32})
+rand = for(_ <- 1..size, do: :rand.uniform())
+t64 = Nx.tensor(rand, type: {:f, 64})
+t32 = Nx.tensor(rand, type: {:f, 32})
 
 defmodule Softmax do
   import Nx.Defn
@@ -8,18 +9,16 @@ defmodule Softmax do
   # This runs on Elixir
   defn softmax(n), do: Nx.exp(n) / Nx.sum(Nx.exp(n))
 
-  # This is JIT+host compiled. By default EXLA sets max_float_type to 32,
-  # so we override it here and limit it on the tensor input
-  @defn_compiler {EXLA, max_float_type: {:f, 64}}
+  # This is JIT+host compiled.
+  @defn_compiler EXLA
   defn host(n), do: softmax(n)
 
   # This is JIT+cuda compiled
-  @defn_compiler {EXLA, client: :cuda, max_float_type: {:f, 64}}
+  @defn_compiler {EXLA, client: :cuda}
   defn cuda(n), do: softmax(n)
 
   # This is JIT+cuda+keep_on_device compiled
-  @defn_compiler {EXLA,
-                  client: :cuda, max_float_type: {:f, 64}, run_options: [keep_on_device: true]}
+  @defn_compiler {EXLA, client: :cuda, run_options: [keep_on_device: true]}
   defn cuda_keep(n), do: softmax(n)
 end
 

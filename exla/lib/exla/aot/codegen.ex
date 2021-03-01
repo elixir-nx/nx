@@ -190,7 +190,7 @@ defmodule EXLA.AOT.Codegen do
       unsigned num_threads = std::thread::hardware_concurrency();
       Eigen::ThreadPool tp(num_threads);
       Eigen::ThreadPoolDevice device(&tp, tp.NumThreads());
-      #{class_name} #{name}_#{arity};
+      #{class_name} #{name}_#{arity}(#{class_name}::AllocMode::RESULTS_PROFILES_AND_TEMPS_ONLY);
       #{name}_#{arity}.set_thread_pool(&device);
       #{args_str}
       #{run_str}
@@ -213,9 +213,7 @@ defmodule EXLA.AOT.Codegen do
     if(!enif_inspect_binary(env, argv[#{i}], &arg#{i})) {
       return error(env, #{error_msg});
     }
-    unsigned char * arg#{i}_bytes = (unsigned char *) malloc(arg#{i}.size);
-    std::memcpy(arg#{i}_bytes, arg#{i}.data, arg#{i}.size);
-    #{name}_#{arity}.set_arg#{i}_data(arg#{i}_bytes);
+    #{name}_#{arity}.set_arg#{i}_data(arg#{i}.data);
     """
   end
 

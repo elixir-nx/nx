@@ -54,11 +54,11 @@ defmodule Nx.DefnTest do
     end
 
     test "allows pattern matching on the tuple shape with underscores" do
-      assert %T{shape: {}, type: {:f, 64}, data: %Expr{op: :add, args: [left, right]}} =
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                tuple_shape_match({1, 2.0})
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 64}} = right
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
   end
 
@@ -66,7 +66,7 @@ defmodule Nx.DefnTest do
     defn exp(t), do: Nx.exp(t)
 
     test "to expr" do
-      assert %T{shape: {3}, type: {:f, 64}, data: %Expr{op: :exp, args: [_]}} =
+      assert %T{shape: {3}, type: {:f, 32}, data: %Expr{op: :exp, args: [_]}} =
                exp(Nx.tensor([1, 2, 3]))
 
       assert %T{shape: {3}, type: {:f, 32}, data: %Expr{op: :exp, args: [_]}} =
@@ -89,10 +89,10 @@ defmodule Nx.DefnTest do
       assert %T{shape: {2, 2}, type: {:s, 64}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 2]))
 
-      assert %T{shape: {2, 2}, type: {:f, 64}, data: %Expr{op: :add, args: [_, _]}} =
+      assert %T{shape: {2, 2}, type: {:f, 32}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]], type: {:f, 32}), Nx.tensor([1, 2]))
 
-      assert %T{shape: {2, 2}, type: {:f, 64}, data: %Expr{op: :add, args: [_, _]}} =
+      assert %T{shape: {2, 2}, type: {:f, 32}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]], type: {:f, 32}), Nx.tensor([1, 2], type: {:s, 32}))
     end
 
@@ -616,7 +616,7 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 32}} =
                if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 16}), Nx.tensor(0, type: {:f, 32}))
 
-      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 64}} =
+      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 32}} =
                if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 32}), Nx.tensor(0, type: {:f, 32}))
 
       assert %T{data: %Expr{op: :cond}, shape: {}, type: {:u, 16}} =
@@ -719,14 +719,14 @@ defmodule Nx.DefnTest do
     test "executes the transformation" do
       assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
              #Nx.Tensor<
-               f64
+               f32
              \s\s
                Nx.Defn.Expr
                parameter a         s64
                parameter c         s64
-               b = tanh [ a ]      f64
+               b = tanh [ a ]      f32
                d = power [ c, 2 ]  s64
-               e = add [ b, d ]    f64
+               e = add [ b, d ]    f32
              >
              """
     end
@@ -780,6 +780,24 @@ defmodule Nx.DefnTest do
                      Nx.Defn.jit(fn -> :ok end, [], Nx.Defn.Evaluator).()
                    end
     end
+
+    defn jit_iota(), do: Nx.iota({3, 3})
+
+    @tag :capture_log
+    test "uses the default backend on iota" do
+      Nx.default_backend(UnknownBackend)
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0, []) end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end, []) end
+    end
+
+    defn jit_tensor(), do: Nx.tensor([1, 2, 3])
+
+    @tag :capture_log
+    test "uses the default backend on tensor" do
+      Nx.default_backend(UnknownBackend)
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_tensor/0, []) end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.tensor(13) end, []) end
+    end
   end
 
   describe "async" do
@@ -827,6 +845,26 @@ defmodule Nx.DefnTest do
       assert %_{} = async = Nx.Defn.async(&defn_async/2, [{4, 5}, 3])
       assert Nx.Async.await!(async) == Nx.tensor(6)
       assert catch_exit(Nx.Async.await!(async)) == {:noproc, {Nx.Async, :await!, [async]}}
+    end
+
+    defn async_iota(), do: Nx.iota({3, 3})
+
+    @tag :capture_log
+    test "uses the default backend on iota" do
+      Process.flag(:trap_exit, true)
+      Nx.default_backend(UnknownBackend)
+      assert %_{} = Nx.Defn.async(&async_iota/0, [])
+      assert_receive {:EXIT, _, {:undef, _}}
+    end
+
+    defn async_tensor(), do: Nx.tensor([1, 2, 3])
+
+    @tag :capture_log
+    test "uses the default backend on tensor" do
+      Process.flag(:trap_exit, true)
+      Nx.default_backend(UnknownBackend)
+      assert %_{} = Nx.Defn.async(&async_tensor/0, [])
+      assert_receive {:EXIT, _, {:undef, _}}
     end
   end
 

@@ -11,7 +11,7 @@ defmodule Nx.BinaryBackend do
   @behaviour Nx.Backend
 
   @doc false
-  defstruct [:device, :state]
+  defstruct [:state]
 
   alias Nx.Tensor, as: T
   alias Nx.BinaryBackend, as: B
