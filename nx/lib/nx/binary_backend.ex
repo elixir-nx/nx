@@ -1013,14 +1013,14 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def qr(
-        {%{shape: {m, k} = shape_q, type: output_type} = q_holder,
-         %{shape: {k, n} = shape_r, type: output_type} = r_holder},
-        %{type: {_, input_num_bits} = input_type} = tensor,
+        {%{shape: {m, k}, type: output_type} = q_holder,
+         %{shape: {k, n}, type: output_type} = r_holder},
+        %{type: {_, input_num_bits} = input_type, shape: input_shape} = tensor,
         opts
       ) do
     mode = opts[:mode]
 
-    r_bin =
+    r_matrix =
       if mode == :reduced do
         # Since we want the first k rows of r, we can
         # just slice the binary by taking the first
@@ -1028,54 +1028,35 @@ defmodule Nx.BinaryBackend do
         # Trick for r = tensor[[0..(k - 1), 0..(n - 1)]]
         slice_size = n * k * input_num_bits
         <<r_bin::bitstring-size(slice_size), _::bitstring>> = to_binary(tensor)
-        r_bin
+        binary_to_matrix(r_bin, input_type, {k, n})
       else
-        to_binary(tensor)
+        tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
       end
 
-    shape_h = {k, k}
-
-    {q_bin, r_bin, _output_type} =
-      for i <- 0..(n - 1), reduce: {nil, r_bin, input_type} do
-        {q, r, type_r} ->
+    {q_matrix, r_matrix} =
+      for i <- 0..(n - 1), reduce: {nil, r_matrix} do
+        {q, r} ->
           # a = r[[i..(k - 1), i]]
-          {a_reverse, num_rows_a, _, _} =
-            match_types [type_r] do
-              for <<match!(x, 0) <- r>>, reduce: {[], 0, 0, 0} do
-                {acc, num_rows_a_prev, row, col} ->
-                  {acc, num_rows_a} =
-                    if row >= i and col == i do
-                      {[read!(x, 0) | acc], num_rows_a_prev + 1}
-                    else
-                      {acc, num_rows_a_prev}
-                    end
+          a = r |> Enum.slice(i..(k - 1)) |> Enum.map(fn row -> Enum.at(row, i) end)
 
-                  {row, col} =
-                    if col + 1 == n do
-                      {row + 1, 0}
-                    else
-                      {row, col + 1}
-                    end
-
-                  {acc, num_rows_a, row, col}
-              end
-            end
-
-          h_bin = householder_reflector(a_reverse, num_rows_a, k, output_type)
+          h = householder_reflector(a, k)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
-              padding_length = (m - k) * k
-              zero = number_to_binary(0, output_type)
-              [h_bin | List.duplicate(zero, padding_length)] |> IO.iodata_to_binary()
+              zero_padding = 0 |> List.duplicate(k) |> List.duplicate(m - k)
+              h ++ zero_padding
             else
-              dot_binary(q, shape_q, output_type, h_bin, shape_h, output_type, output_type)
+              dot_matrix(q, h)
             end
 
-          r = dot_binary(h_bin, shape_h, output_type, r, shape_r, type_r, output_type)
-          {q, r, output_type}
+          r = dot_matrix(h, r)
+
+          {q, r}
       end
+
+    q_bin = matrix_to_binary(q_matrix, output_type)
+    r_bin = matrix_to_binary(r_matrix, output_type)
 
     q = from_binary(q_holder, q_bin)
     r = from_binary(r_holder, r_bin)
@@ -1107,156 +1088,200 @@ defmodule Nx.BinaryBackend do
 
     Enum.reduce_while(1..max_iter, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}, fn
       _, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm} ->
-      if off_diag_norm > 1.0e-6 * fro_norm do
-        # Execute a round of jacobi rotations on u, d and v
-        {u_bin, d_bin, v_bin} =
-          for p <- 0..(m - 1), q <- (p + 1)..(n - 1), reduce: {u_bin, d_bin, v_bin} do
-            {u_bin, d_bin, v_bin} ->
-              # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
-              # However, we'll also need to modify d_bin afterwards, so we need to both access these values and accumulate
-              # the bitstrings that come before, between and after, [p, 0..n-1] and [q, 0..n-1] for updating afterwards
-              d_values =
-                match_types [output_type] do
-                  acc = %{
-                    d_pp: "",
-                    d_pq: "",
-                    d_qp: "",
-                    d_qq: "",
-                    row_p: "",
-                    row_q: "",
-                    before_row_p: "",
-                    between_rows_p_and_q: "",
-                    after_row_q: "",
-                    row: 0,
-                    col: 0
-                  }
+        if off_diag_norm > 1.0e-6 * fro_norm do
+          # Execute a round of jacobi rotations on u, d and v
+          {u_bin, d_bin, v_bin} =
+            for p <- 0..(m - 1), q <- (p + 1)..(n - 1), reduce: {u_bin, d_bin, v_bin} do
+              {u_bin, d_bin, v_bin} ->
+                # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
+                # However, we'll also need to modify d_bin afterwards, so we need to both access these values and accumulate
+                # the bitstrings that come before, between and after, [p, 0..n-1] and [q, 0..n-1] for updating afterwards
+                d_values =
+                  match_types [output_type] do
+                    acc = %{
+                      d_pp: "",
+                      d_pq: "",
+                      d_qp: "",
+                      d_qq: "",
+                      row_p: "",
+                      row_q: "",
+                      before_row_p: "",
+                      between_rows_p_and_q: "",
+                      after_row_q: "",
+                      row: 0,
+                      col: 0
+                    }
 
-                  for <<match!(x, 0) <- d_bin>>, reduce: acc do
-                    acc ->
-                      acc =
-                        case {row, col} do
-                          {^p, ^p} ->
-                            acc
-                            |> Map.put(:d_pp, x)
-                            |> Map.put(:row_p, acc.row_p <> x)
+                    for <<match!(x, 0) <- d_bin>>, reduce: acc do
+                      %{row: row, col: col} = acc ->
+                        acc =
+                          case {row, col} do
+                            {^p, ^p} ->
+                              acc
+                              |> Map.put(:d_pp, x)
+                              |> Map.put(:row_p, acc.row_p <> x)
 
-                          {^p, ^q} ->
-                            acc
-                            |> Map.put(:d_pq, x)
-                            |> Map.put(:row_p, acc.row_p <> x)
+                            {^p, ^q} ->
+                              acc
+                              |> Map.put(:d_pq, x)
+                              |> Map.put(:row_p, acc.row_p <> x)
 
-                          {^p, _} ->
-                            Map.put(acc, :row_q, acc.row_p <> x)
+                            {^p, _} ->
+                              Map.put(acc, :row_q, acc.row_p <> x)
 
-                          {^q, ^q} ->
-                            acc
-                            |> Map.put(:d_qq, x)
-                            |> Map.put(:row_q, acc.row_q <> x)
+                            {^q, ^q} ->
+                              acc
+                              |> Map.put(:d_qq, x)
+                              |> Map.put(:row_q, acc.row_q <> x)
 
-                          {^q, ^p} ->
-                            acc
-                            |> Map.put(:d_qp, x)
-                            |> Map.put(:row_q, acc.row_q <> x)
+                            {^q, ^p} ->
+                              acc
+                              |> Map.put(:d_qp, x)
+                              |> Map.put(:row_q, acc.row_q <> x)
 
-                          {^q, _} ->
-                            Map.put(acc, :row_q, acc.row_q <> x)
+                            {^q, _} ->
+                              Map.put(acc, :row_q, acc.row_q <> x)
 
-                          {row, _} when row < p ->
-                            Map.put(acc, :before_row_p, acc.before_row_p <> x)
+                            {row, _} when row < p ->
+                              Map.put(acc, :before_row_p, acc.before_row_p <> x)
 
-                          {row, _} when row > p and row < q ->
-                            Map.put(acc, :before_row_p, acc.between_rows_p_and_q <> x)
+                            {row, _} when row > p and row < q ->
+                              Map.put(acc, :before_row_p, acc.between_rows_p_and_q <> x)
 
-                          _ ->
-                            Map.put(acc, :after_row_q, acc.after_row_q <> x)
-                        end
+                            _ ->
+                              Map.put(acc, :after_row_q, acc.after_row_q <> x)
+                          end
 
-                      {row, col} =
-                        if col + 1 == n do
-                          {row + 1, 0}
-                        else
-                          {row, col + 1}
-                        end
+                        {row, col} =
+                          if col + 1 == n do
+                            {row + 1, 0}
+                          else
+                            {row, col + 1}
+                          end
 
-                      acc |> Map.put(:row, row) |> Map.put(:col, col)
+                        acc |> Map.put(:row, row) |> Map.put(:col, col)
+                    end
                   end
-                end
 
-              {rot_l, rot_l_t, rot_r, shape_l, shape_l_t, shape_r} =
-                jacobi_rotators(d_pp, d_pq, d_qp, d_qq)
+                # {rot_l, rot_l_t, rot_r, shape_l, shape_l_t, shape_r} =
+                #   jacobi_rotators(acc.d_pp, acc.d_pq, acc.d_qp, acc.d_qq)
+                rot_l = ""
+                shape_l = ""
+                row_l_t = ""
+                shape_l_t = ""
+                rot_r = ""
+                shape_r = ""
 
-              {_, num_bits} = output_type
-              row_size = num_bits * n
+                {_, num_bits} = output_type
+                row_size = num_bits * n
 
-              <<row_p::bitstring-size(row_size), row_q::bitstring>> =
-                dot_binary(
-                  row_l_t,
-                  shape_l_t,
-                  output_type,
-                  d_values.row_p <> d_values.row_q,
-                  {2, n},
-                  output_type,
-                  output_type
-                )
+                <<row_p::bitstring-size(row_size), row_q::bitstring>> =
+                  dot_binary(
+                    row_l_t,
+                    shape_l_t,
+                    output_type,
+                    d_values.row_p <> d_values.row_q,
+                    {2, n},
+                    output_type,
+                    output_type
+                  )
 
-              # D[[p, q], :] = [[row_p], [row_q]]
-              d_bin =
-                d_values.before_row_p <>
-                  row_p <> d_values.between_rows_p_and_q <> row_q <> d_values.after_row_q
+                # D[[p, q], :] = [[row_p], [row_q]]
+                d_bin =
+                  d_values.before_row_p <>
+                    row_p <> d_values.between_rows_p_and_q <> row_q <> d_values.after_row_q
 
-              d_cols_pq = aggregate_axes(d_bin, [0..(m - 1), [p, q]], {m, n}, num_bits)
+                d_cols_pq = aggregate_axes(d_bin, [0..(m - 1), [p, q]], {m, n}, num_bits)
 
-              d_cols_pq =
-                dot_binary(
-                  d_cols_pq,
-                  {m, 2},
-                  output_type,
-                  rot_r,
-                  shape_r,
-                  output_type,
-                  output_type
-                )
+                d_cols_pq =
+                  dot_binary(
+                    d_cols_pq,
+                    {m, 2},
+                    output_type,
+                    rot_r,
+                    shape_r,
+                    output_type,
+                    output_type
+                  )
 
-              u_cols_pq = aggregate_axes(u_bin, [0..(m - 1), [p, q]], {m, m}, num_bits)
+                u_cols_pq = aggregate_axes(u_bin, [0..(m - 1), [p, q]], {m, m}, num_bits)
 
-              u_cols_pq =
-                dot_binary(
-                  u_cols_pq,
-                  {m, 2},
-                  output_type,
-                  rot_l,
-                  shape_l,
-                  output_type,
-                  output_type
-                )
+                u_cols_pq =
+                  dot_binary(
+                    u_cols_pq,
+                    {m, 2},
+                    output_type,
+                    rot_l,
+                    shape_l,
+                    output_type,
+                    output_type
+                  )
 
-              v_cols_pq = aggregate_axes(v_bin, [0..(n - 1), [p, q]], {n, n}, num_bits)
+                v_cols_pq = aggregate_axes(v_bin, [0..(n - 1), [p, q]], {n, n}, num_bits)
 
-              v_cols_pq =
-                dot_binary(
-                  v_cols_pq,
-                  {n, 2},
-                  output_type,
-                  rot_r,
-                  shape_r,
-                  output_type,
-                  output_type
-                )
+                v_cols_pq =
+                  dot_binary(
+                    v_cols_pq,
+                    {n, 2},
+                    output_type,
+                    rot_r,
+                    shape_r,
+                    output_type,
+                    output_type
+                  )
 
-              # assign d_cols_pq to d_bin
-              # assign u_cols_pq to u_bin
-              # assign v_cols_pq to v_bin
-              {u_bin, d_bin, v_bin}
-          end
+                # assign d_cols_pq to d_bin
+                # assign u_cols_pq to u_bin
+                # assign v_cols_pq to v_bin
+                {u_bin, d_bin, v_bin}
+            end
 
-        # calculate a posteriori norms for d_bin, so the next iteration of Enum.reduce_while can decide to halt
-        {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
+          # calculate a posteriori norms for d_bin, so the next iteration of Enum.reduce_while can decide to halt
+          {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
 
-        {:cont, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}}
-      else
-        {:halt, {u_bin, d_bin, v_bin}}
-      end
+          {:cont, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}}
+        else
+          {:halt, {u_bin, d_bin, v_bin}}
+        end
     end)
+  end
+
+  defp dot_matrix(m1, m2) do
+    # matrix multiplication which works on 2-D lists
+    Enum.map(m1, fn row ->
+      m2
+      |> transpose_matrix()
+      |> Enum.map(fn col ->
+        row
+        |> Enum.zip(col)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
+      end)
+    end)
+  end
+
+  defp transpose_matrix(m) do
+    m
+    |> Enum.zip()
+    |> Enum.map(&Tuple.to_list/1)
+  end
+
+  defp matrix_to_binary(m, type) do
+    m
+    |> Enum.map(fn row ->
+      Enum.map(row, fn x -> scalar_to_binary(x, type) end)
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  defp binary_to_matrix(bin, type, {_, num_cols}) do
+    match_types [type] do
+      flat_list =
+        for <<match!(x, 0) <- bin>>, into: [] do
+          read!(x, 0)
+        end
+
+      Enum.chunk_every(flat_list, num_cols)
+    end
   end
 
   defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
@@ -1276,14 +1301,22 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp householder_reflector(a_reverse, num_rows_a, target_k, output_type) do
+  defp householder_reflector([], target_k) do
+    flat_list =
+      for col <- 0..(target_k - 1), row <- 0..(target_k - 1), into: [] do
+        if col == row, do: 1, else: 0
+      end
+
+    Enum.chunk_every(flat_list, target_k)
+  end
+
+  defp householder_reflector([a_0 | tail] = a, target_k) do
     # This is a trick so we can both calculate the norm of a_reverse and extract the
     # head a the same time we reverse the array
-    {norm_a_squared, [a_0 | tail]} =
-      for x <- a_reverse, reduce: {0, []} do
-        {acc, l} ->
-          {acc + x * x, [x | l]}
-      end
+    # receives a_reverse as a list of numbers and returns the reflector as a
+    # k x k matrix
+
+    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
 
     v_0 =
       if a_0 > 0 do
@@ -1292,7 +1325,7 @@ defmodule Nx.BinaryBackend do
         a_0 - :math.sqrt(norm_a_squared)
       end
 
-    prefix_threshold = target_k - num_rows_a
+    prefix_threshold = target_k - length(a)
     v = List.duplicate(0, prefix_threshold) ++ [v_0 | tail]
 
     # dot(v, v) = norm_v_squared, which can be calculated from norm_a as:
@@ -1301,7 +1334,7 @@ defmodule Nx.BinaryBackend do
     scale = 2 / norm_v_squared
 
     # execute I - 2 / norm_v_squared * outer(v, v)
-    {_, _, reflector_iodata} =
+    {_, _, reflector_reversed} =
       for col_factor <- v, row_factor <- v, reduce: {0, 0, []} do
         {row, col, acc} ->
           # The current element in outer(v, v) is given by col_factor * row_factor
@@ -1316,7 +1349,7 @@ defmodule Nx.BinaryBackend do
               identity_element
             end
 
-          acc = [acc | scalar_to_binary(result, output_type)]
+          acc = [result | acc]
 
           if col + 1 == target_k do
             {row + 1, 0, acc}
@@ -1325,7 +1358,20 @@ defmodule Nx.BinaryBackend do
           end
       end
 
-    IO.iodata_to_binary(reflector_iodata)
+    # This is equivalent to reflector_reversed |> Enum.reverse() |> Enum.chunk_every(target_k)
+    {reflector, _, _} =
+      for x <- reflector_reversed, reduce: {[], [], 0} do
+        {result_acc, row_acc, col} ->
+          row_acc = [x | row_acc]
+
+          if col + 1 == target_k do
+            {[row_acc | result_acc], [], 0}
+          else
+            {result_acc, row_acc, col + 1}
+          end
+      end
+
+    reflector
   end
 
   defp householder_bidiagonalization(tensor, {m, n}, input_type, output_type) do
@@ -1359,7 +1405,7 @@ defmodule Nx.BinaryBackend do
             end
           end
 
-        l = householder_reflector(a_reverse, m, m, output_type)
+        l = householder_reflector(a_reverse, m)
 
         ll =
           if is_nil(ll) do
@@ -1380,7 +1426,7 @@ defmodule Nx.BinaryBackend do
             <<_::bitstring-size(prefix_size), current_row::bitstring-size(row_size),
               _::bitstring>> = a
 
-            r = current_row |> String.reverse() |> householder_reflector(n, n, output_type)
+            r = current_row |> String.reverse() |> householder_reflector(n)
 
             rr =
               if is_nil(rr) do
