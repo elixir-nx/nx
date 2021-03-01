@@ -780,6 +780,24 @@ defmodule Nx.DefnTest do
                      Nx.Defn.jit(fn -> :ok end, [], Nx.Defn.Evaluator).()
                    end
     end
+
+    defn jit_iota(), do: Nx.iota({3, 3})
+
+    @tag :capture_log
+    test "uses the default backend on iota" do
+      Nx.default_backend(UnknownBackend)
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0, []) end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end, []) end
+    end
+
+    defn jit_tensor(), do: Nx.tensor([1, 2, 3])
+
+    @tag :capture_log
+    test "uses the default backend on tensor" do
+      Nx.default_backend(UnknownBackend)
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_tensor/0, []) end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.tensor(13) end, []) end
+    end
   end
 
   describe "async" do
@@ -827,6 +845,26 @@ defmodule Nx.DefnTest do
       assert %_{} = async = Nx.Defn.async(&defn_async/2, [{4, 5}, 3])
       assert Nx.Async.await!(async) == Nx.tensor(6)
       assert catch_exit(Nx.Async.await!(async)) == {:noproc, {Nx.Async, :await!, [async]}}
+    end
+
+    defn async_iota(), do: Nx.iota({3, 3})
+
+    @tag :capture_log
+    test "uses the default backend on iota" do
+      Process.flag(:trap_exit, true)
+      Nx.default_backend(UnknownBackend)
+      assert %_{} = Nx.Defn.async(&async_iota/0, [])
+      assert_receive {:EXIT, _, {:undef, _}}
+    end
+
+    defn async_tensor(), do: Nx.tensor([1, 2, 3])
+
+    @tag :capture_log
+    test "uses the default backend on tensor" do
+      Process.flag(:trap_exit, true)
+      Nx.default_backend(UnknownBackend)
+      assert %_{} = Nx.Defn.async(&async_tensor/0, [])
+      assert_receive {:EXIT, _, {:undef, _}}
     end
   end
 

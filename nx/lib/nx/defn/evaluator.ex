@@ -8,6 +8,8 @@ defmodule Nx.Defn.Evaluator do
   @behaviour Nx.Defn.Compiler
   alias Nx.Defn.{Expr, Tree}
 
+  @creation_ops [:tensor, :eye, :iota, :random_normal, :random_uniform, :from_binary]
+
   @impl true
   def __async__(key, vars, fun, opts) do
     Nx.Defn.Async.async(fn -> __jit__(key, vars, fun, opts) end)
@@ -47,10 +49,15 @@ defmodule Nx.Defn.Evaluator do
     eval(expr, vars, cache)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}, type: type} = ans, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id} = expr, type: type} = ans, vars, cache) do
     case cache do
       %{^id => res} ->
         {res, cache}
+
+      %{} when op in @creation_ops ->
+        {backend, _} = Nx.default_backend()
+        res = apply(backend, op, eval_args(type, ans, expr.args))
+        {res, Map.put(cache, id, res)}
 
       %{} ->
         {args, cache} = Tree.traverse_args(ans, cache, &eval(&1, vars, &2))

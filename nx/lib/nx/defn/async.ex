@@ -8,10 +8,12 @@ defmodule Nx.Defn.Async do
 
   @doc false
   def async(fun) do
+    {backend, backend_options} = Nx.default_backend()
     ref = make_ref()
 
     {:ok, pid} =
       Task.start_link(fn ->
+        Nx.default_backend(backend, backend_options)
         result = fun.()
 
         receive do

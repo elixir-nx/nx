@@ -255,6 +255,14 @@ defmodule Nx do
   intend to use the data for some reason, you can explicitly call
   `backend_deallocate/1` to deallocate it.
 
+  However, most often backends are used to provide a completely
+  different implementation of tensor operations, often accelerated
+  to the GPU. In such cases, you want to guarantee all tensors
+  are allocated in the new backend. This can be done by calling
+  `Nx.default_backend/2`:
+
+      Nx.default_backend(Lib.CustomBackend, device: :cuda)
+
   To implement your own backend, check the `Nx.Tensor` behaviour.
   """
 
@@ -458,11 +466,11 @@ defmodule Nx do
             "got a tensor with type #{inspect(type)} but tensor has type #{inspect(t.type)}"
     end
 
-    if backend = opts[:backend] do
-      backend_options = opts[:backend_options] || []
-      impl!(t).backend_transfer(t, backend, backend_options)
-    else
-      t
+    {backend, backend_options} = backend_with_options!(opts)
+
+    case impl!(t) do
+      ^backend -> t
+      impl -> impl.backend_transfer(t, backend, backend_options)
     end
   end
 
@@ -476,8 +484,7 @@ defmodule Nx do
     end
 
     names = Nx.Shape.named_axes!(opts[:names], shape)
-    backend = opts[:backend] || Nx.BinaryBackend
-    backend_options = opts[:backend_options] || []
+    {backend, backend_options} = backend_with_options!(opts)
     backend.from_binary(%T{shape: shape, type: type, names: names}, data, backend_options)
   end
 
@@ -706,8 +713,7 @@ defmodule Nx do
               " with range #{inspect(range_type)}"
     end
 
-    backend = opts[:backend] || Nx.BinaryBackend
-    backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max)
+    backend!(opts).random_uniform(%T{shape: shape, type: type, names: names}, min, max)
   end
 
   @doc """
@@ -807,8 +813,7 @@ defmodule Nx do
       raise ArgumentError, "random_normal/3 expects float type, got: #{inspect(type)}"
     end
 
-    backend = opts[:backend] || Nx.BinaryBackend
-    backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
+    backend!(opts).random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
   end
 
   @doc """
@@ -924,7 +929,7 @@ defmodule Nx do
     shape = Nx.shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    backend = opts[:backend] || Nx.BinaryBackend
+    backend = backend!(opts)
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis, names)
@@ -1003,8 +1008,7 @@ defmodule Nx do
 
     names = Nx.Shape.named_axes!(opts[:names], shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    backend = opts[:backend] || Nx.BinaryBackend
-    backend.eye(%T{type: type, shape: shape, names: names})
+    backend!(opts).eye(%T{type: type, shape: shape, names: names})
   end
 
   @doc """
@@ -1048,8 +1052,7 @@ defmodule Nx do
       raise ArgumentError, "binary does not match the given size"
     end
 
-    backend = opts[:backend] || Nx.BinaryBackend
-    backend_options = opts[:backend_options] || []
+    {backend, backend_options} = backend_with_options!(opts)
     backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary, backend_options)
   end
 
@@ -2094,6 +2097,35 @@ defmodule Nx do
 
   ## Backend API
 
+  @backend_key {Nx, :default_backend}
+  @backend_default {Nx.BinaryBackend, []}
+
+  @doc """
+  Sets the current process default backend to `backend` with the given `opts`.
+
+  The default backend is stored only in the process dictionary.
+  This means if you start a separate process, such as `Task`,
+  the default backend must be set on the new process too.
+
+  ## Examples
+
+      iex> Nx.default_backend(Lib.CustomBackend, device: :cuda)
+      {Nx.BinaryBackend, []}
+      iex> Nx.default_backend()
+      {Lib.CustomBackend, device: :cuda}
+
+  """
+  def default_backend(backend, opts \\ []) do
+    Process.put(@backend_key, {backend, opts}) || @backend_default
+  end
+
+  @doc """
+  Gets the default backend for the current process.
+  """
+  def default_backend() do
+    Process.get(@backend_key) || @backend_default
+  end
+
   @doc """
   Copies data to the given backend.
 
@@ -2101,7 +2133,7 @@ defmodule Nx do
   in the original device. Use this function with care, as it may
   duplicate large amounts of data across backends.
   """
-  @doc type: :conversion
+  @doc type: :backend
   def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
 
   def backend_copy(tuple, backend, opts) when is_tuple(tuple) do
@@ -2133,6 +2165,11 @@ defmodule Nx do
   as it is common to transfer data from tuples before and after
   `defn` functions.
 
+  *Note: `Nx.default_backend/2` does not affect the behaviour of
+  this function. That's because `Nx.default_backend/2` configures
+  the backend we want to transfer to, which is typically the
+  backend we are transferring *from* in this function.
+
   ## Examples
 
   Move a tensor to an EXLA device (such as the GPU):
@@ -2144,7 +2181,7 @@ defmodule Nx do
       tensor = Nx.backend_transfer(device_tensor)
 
   """
-  @doc type: :conversion
+  @doc type: :backend
   def backend_transfer(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
 
   def backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
@@ -2169,7 +2206,7 @@ defmodule Nx do
   exists as it is common to de-allocate data from tuples after
   `defn` functions.
   """
-  @doc type: :conversion
+  @doc type: :backend
   def backend_deallocate(tuple_or_tensor)
 
   def backend_deallocate(tuple) when is_tuple(tuple) do
@@ -7434,6 +7471,16 @@ defmodule Nx do
     type = Nx.Type.infer(number)
     out = %T{shape: {}, type: type, names: []}
     Nx.BinaryBackend.from_binary(out, number_to_binary(number, type), [])
+  end
+
+  defp backend!(opts) do
+    {default_backend, _default_opts} = default_backend()
+    opts[:backend] || default_backend
+  end
+
+  defp backend_with_options!(opts) do
+    {default_backend, default_opts} = default_backend()
+    {opts[:backend] || default_backend, opts[:backend_options] || default_opts}
   end
 
   defp number_to_binary(number, type),
