@@ -7244,6 +7244,10 @@ defmodule Nx do
   ## Options
     * `compute_uv`: `boolean`. Defaults to `false`
       Whether or not to compute `u` and `vt`. If `false`, the return value is `s`
+    * `max_iter`: `integer`. Defaults to `1000`
+      Number of maximum iterations before stopping the decomposition.
+    * `eps`: `float`. Defaults to 1.0e-12
+      Tolerance applied during the decomposition.
 
   ## Examples
       iex> Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]), compute_uv: true)
@@ -7283,6 +7287,8 @@ defmodule Nx do
   @doc type: :linalg
   def svd(tensor, opts \\ []) do
     %T{type: type, shape: shape} = tensor = tensor!(tensor)
+
+    assert_keys!(opts, [:eps, :max_iter, :compute_uv])
 
     output_type = Nx.Type.to_floating(type)
 

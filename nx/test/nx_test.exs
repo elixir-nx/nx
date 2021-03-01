@@ -1217,48 +1217,88 @@ defmodule NxTest do
       assert {q, %{type: output_type} = r} = Nx.qr(t)
       assert t |> Nx.round() |> Nx.as_type(output_type) == q |> Nx.dot(r) |> Nx.round()
 
-      assert round(q, 1) == Nx.tensor([
-        [2/3, 2/3, 1/3],
-        [2/3, -1/3, -2/3],
-        [1/3, -2/3, 2/3]
-      ]) |> round(1)
+      assert round(q, 1) ==
+               Nx.tensor([
+                 [2 / 3, 2 / 3, 1 / 3],
+                 [2 / 3, -1 / 3, -2 / 3],
+                 [1 / 3, -2 / 3, 2 / 3]
+               ])
+               |> round(1)
 
-      assert round(r, 1) == Nx.tensor([
-        [3.0, 0.0, 12.0],
-        [0.0, -3.0, 12.0],
-        [0.0, 0.0, 6.0]
-      ]) |> round(1)
+      assert round(r, 1) ==
+               Nx.tensor([
+                 [3.0, 0.0, 12.0],
+                 [0.0, -3.0, 12.0],
+                 [0.0, 0.0, 6.0]
+               ])
+               |> round(1)
     end
 
     test "factors rectangular matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
       {q, r} = Nx.qr(t, mode: :reduced)
 
-      assert round(q, 1) == Nx.tensor([
-          [0.5774, -0.8165, 0.0],
-          [0.5774, 0.4082, -0.7071],
-          [0.5774, 0.4082, 0.7071],
-          [0.0, 0.0, 0.0]
-        ]) |> round(1)
+      assert round(q, 1) ==
+               Nx.tensor([
+                 [0.5774, -0.8165, 0.0],
+                 [0.5774, 0.4082, -0.7071],
+                 [0.5774, 0.4082, 0.7071],
+                 [0.0, 0.0, 0.0]
+               ])
+               |> round(1)
 
-      assert round(r, 1) == Nx.tensor([
-          [1.7321, 4.0415, 2.3094],
-          [0.0, 4.0825, -3.266],
-          [0.0, 0.0, 2.8284]
-        ]) |> round(1)
+      assert round(r, 1) ==
+               Nx.tensor([
+                 [1.7321, 4.0415, 2.3094],
+                 [0.0, 4.0825, -3.266],
+                 [0.0, 0.0, 2.8284]
+               ])
+               |> round(1)
 
-        assert Nx.tensor([
-          [1.0, -1.0, 4.0],
-          [1.0, 4.0, -2.0],
-          [1.0, 4.0, 2.0],
-          [0.0, 0.0, 0.0]
-        ]) == q |> Nx.dot(r) |> round(1)
+      assert Nx.tensor([
+               [1.0, -1.0, 4.0],
+               [1.0, 4.0, -2.0],
+               [1.0, 4.0, 2.0],
+               [0.0, 0.0, 0.0]
+             ]) == q |> Nx.dot(r) |> round(1)
     end
+  end
 
-    defp round(tensor, places) do
-      Nx.map(tensor, fn x ->
-        Float.round(x, places)
-      end)
+  describe "svd" do
+    @tag :focus
+    test "correctly finds the singular values of triangular matrices" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
+
+      assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
+               Nx.svd(t, compute_uv: true, max_iter: 10000) |> IO.inspect(label: "{u,s,v}")
+
+      zero_row = List.duplicate(0, 3)
+
+      # turn s into a {4, 3} tensor
+      s_matrix =
+        s
+        |> Nx.to_flat_list()
+        |> Enum.with_index()
+        |> Enum.map(fn {x, idx} -> List.replace_at(zero_row, idx, x) end)
+        |> Enum.concat([zero_row])
+        |> Nx.tensor()
+
+      assert round(u, 3) ==
+               Nx.tensor([
+                 [0.825, 0.141, 0.547, 0.019],
+                 [0.426, 0.344, -0.744, 0.382],
+                 [0.028, 0.547, -0.153, -0.822],
+                 [-0.371, 0.75, 0.35, 0.421]
+               ])
+               |> round(3)
+
+      Nx.dot(u, s_matrix) |> Nx.dot(v)
     end
+  end
+
+  defp round(tensor, places) do
+    Nx.map(tensor, fn x ->
+      Float.round(x, places)
+    end)
   end
 end
