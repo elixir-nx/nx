@@ -19,6 +19,8 @@ defmodule Nx.BinaryBackend do
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
 
+  @default_eps 1.0e-10
+
   ## Creation
 
   @impl true
@@ -1019,6 +1021,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     mode = opts[:mode]
+    eps = opts[:eps] || @default_eps
 
     r_matrix =
       if mode == :reduced do
@@ -1039,7 +1042,7 @@ defmodule Nx.BinaryBackend do
           # a = r[[i..(k - 1), i]]
           a = r |> Enum.slice(i..(k - 1)) |> Enum.map(fn row -> Enum.at(row, i) end)
 
-          h = householder_reflector(a, k)
+          h = householder_reflector(a, k, eps)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
@@ -1068,7 +1071,7 @@ defmodule Nx.BinaryBackend do
   def svd(
         {u_holder, %{shape: {m, n} = s_shape, type: output_type} = s_holder, v_holder},
         %{type: input_type, shape: {m, n} = input_shape} = tensor,
-        _opts
+        opts
       ) do
     # This implementation is a mixture of concepts described in [1] and the
     # algorithmic descriptions found in [2] and [3]
@@ -1081,13 +1084,15 @@ defmodule Nx.BinaryBackend do
 
     a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
 
-    {u, d, v} = householder_bidiagonalization(a, s_shape)
+    eps = opts[:eps] || @default_eps
+
+    {u, d, v} = householder_bidiagonalization(a, s_shape, eps)
 
     max_iter = 100
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
-    {u, s, v} =
+    {u, s, v, _, _} =
       Enum.reduce_while(1..max_iter, {u, d, v, off_diag_norm, fro_norm}, fn
         _, {u, d, v, off_diag_norm, fro_norm} ->
           eps = 1.0e-6 * fro_norm
@@ -1095,16 +1100,11 @@ defmodule Nx.BinaryBackend do
           if off_diag_norm > eps do
             # Execute a round of jacobi rotations on u, d and v
             {u, d, v} =
-              for p <- 0..(m - 1), q <- (p + 1)..(n - 1), reduce: {u, d, v} do
+              for p <- 0..(m - 1), q <- (p + 1)..(n - 1), q <= n - 1, reduce: {u, d, v} do
                 {u, d, v} ->
                   # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
                   row_p = Enum.at(d, p)
                   row_q = Enum.at(d, q)
-                  IO.inspect(d, label: "d")
-                  IO.inspect(p, label: "p")
-                  IO.inspect(q, label: "q")
-                  IO.inspect(row_p, label: "row_p")
-                  IO.inspect(row_q, label: "row_q")
 
                   d_pp = Enum.at(row_p, p)
                   d_pq = Enum.at(row_p, q)
@@ -1118,36 +1118,40 @@ defmodule Nx.BinaryBackend do
                   # D[[p, q], :] = [[row_p], [row_q]]
                   d = d |> List.replace_at(p, row_p) |> List.replace_at(q, row_q)
 
-                  IO.inspect(d, label: "d_updated")
-
                   d_transposed = transpose_matrix(d)
                   d_col_p = Enum.at(d_transposed, p)
                   d_col_q = Enum.at(d_transposed, q)
 
-                  IO.inspect(rot_r, label: "rot r")
-                  IO.inspect([d_col_p, d_col_q], label: "[d_col_p, d_col_q]")
-
-                  [d_col_p, d_col_q] = dot_matrix([d_col_p, d_col_q], rot_r)
+                  [d_col_p, d_col_q] =
+                    [d_col_p, d_col_q]
+                    |> transpose_matrix()
+                    |> dot_matrix(rot_r)
+                    |> transpose_matrix()
 
                   u_transposed = transpose_matrix(u)
                   u_col_p = Enum.at(u_transposed, p)
                   u_col_q = Enum.at(u_transposed, q)
 
-                  [u_col_p, u_col_q] = dot_matrix([u_col_p, u_col_q], rot_l)
+                  [u_col_p, u_col_q] =
+                    [u_col_p, u_col_q]
+                    |> transpose_matrix()
+                    |> dot_matrix(rot_l)
+                    |> transpose_matrix()
 
                   v_transposed = transpose_matrix(v)
                   v_col_p = Enum.at(v_transposed, p)
                   v_col_q = Enum.at(v_transposed, q)
 
-                  [v_col_p, v_col_q] = dot_matrix([v_col_p, v_col_q], rot_r)
+                  [v_col_p, v_col_q] =
+                    [v_col_p, v_col_q]
+                    |> transpose_matrix()
+                    |> dot_matrix(rot_r)
+                    |> transpose_matrix()
 
                   d =
                     d_transposed
-                    |> IO.inspect(label: "d_transposed")
                     |> List.replace_at(p, d_col_p)
-                    |> IO.inspect(label: "d_transposed replace p")
                     |> List.replace_at(q, d_col_q)
-                    |> IO.inspect(label: "d_transposed replace q")
                     |> transpose_matrix()
 
                   u =
@@ -1162,7 +1166,6 @@ defmodule Nx.BinaryBackend do
                     |> List.replace_at(q, v_col_q)
                     |> transpose_matrix()
 
-                  IO.inspect(d, label: "d_result")
                   {u, d, v}
               end
 
@@ -1224,7 +1227,7 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp householder_reflector([], target_k) do
+  defp householder_reflector([], target_k, _eps) do
     flat_list =
       for col <- 0..(target_k - 1), row <- 0..(target_k - 1), into: [] do
         if col == row, do: 1, else: 0
@@ -1233,28 +1236,37 @@ defmodule Nx.BinaryBackend do
     Enum.chunk_every(flat_list, target_k)
   end
 
-  defp householder_reflector([a_0 | tail] = a, target_k) do
+  defp householder_reflector([a_0 | tail] = a, target_k, eps \\ @default_eps) do
     # This is a trick so we can both calculate the norm of a_reverse and extract the
     # head a the same time we reverse the array
     # receives a_reverse as a list of numbers and returns the reflector as a
     # k x k matrix
 
     norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
+    norm_a_sq_1on = norm_a_squared - a_0 * a_0
 
-    v_0 =
-      if a_0 > 0 do
-        a_0 + :math.sqrt(norm_a_squared)
+    {v, scale} =
+      if norm_a_sq_1on < eps do
+        {[1 | tail], 0}
       else
-        a_0 - :math.sqrt(norm_a_squared)
+        v_0 =
+          if a_0 <= 0 do
+            a_0 - :math.sqrt(norm_a_squared)
+          else
+            -norm_a_sq_1on / (a_0 + :math.sqrt(norm_a_squared))
+          end
+
+        v_0_sq = v_0 * v_0
+        scale = 2 * v_0_sq / (norm_a_sq_1on + v_0_sq)
+        v = [1 | Enum.map(tail, &(&1 / v_0))]
+        {v, scale}
       end
 
-    prefix_threshold = target_k - length(a)
-    v = List.duplicate(0, prefix_threshold) ++ [v_0 | tail]
+    prefix_threshold = target_k - length(v)
+    v = List.duplicate(0, prefix_threshold) ++ v
 
     # dot(v, v) = norm_v_squared, which can be calculated from norm_a as:
     # norm_v_squared = norm_a_squared - a_0^2 + v_0^2
-    norm_v_squared = norm_a_squared - a_0 * a_0 + v_0 * v_0
-    scale = 2 / norm_v_squared
 
     # execute I - 2 / norm_v_squared * outer(v, v)
     {_, _, reflector_reversed} =
@@ -1297,7 +1309,7 @@ defmodule Nx.BinaryBackend do
     reflector
   end
 
-  defp householder_bidiagonalization(tensor, {m, n}) do
+  def householder_bidiagonalization(tensor, {m, n}, eps \\ @default_eps) do
     # For each column in `tensor`, apply
     # the current column's householder reflector from the left to `tensor`.
     # if the current column is not the penultimate, also apply
@@ -1305,10 +1317,10 @@ defmodule Nx.BinaryBackend do
 
     for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
       {ll, a, rr} ->
-        # a[[0..m-1, col]] -> take all rows for `col` column
-        a_col = a |> Enum.map(&Enum.at(&1, col)) |> List.flatten()
+        # a[[col..m-1, col]] -> take `m - col` rows from the `col`-th column
+        a_col = a |> Enum.drop(col) |> Enum.map(&Enum.at(&1, col))
 
-        l = householder_reflector(a_col, m)
+        l = householder_reflector(a_col, m, eps)
 
         ll =
           if is_nil(ll) do
@@ -1317,12 +1329,16 @@ defmodule Nx.BinaryBackend do
             dot_matrix(ll, l)
           end
 
-        a = dot_matrix(ll, a)
+        a = dot_matrix(l, a)
 
         {a, rr} =
-          if col < m - 2 do
-            # r = householder_reflector(a[[col, 0..n-1]], n)
-            r = a |> Enum.at(col) |> householder_reflector(n)
+          if col <= m - 2 do
+            # r = householder_reflector(a[[col, col+1:]], n)
+            r =
+              a
+              |> Enum.at(col)
+              |> Enum.drop(col + 1)
+              |> householder_reflector(n)
 
             rr =
               if is_nil(rr) do
