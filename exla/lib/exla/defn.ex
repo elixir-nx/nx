@@ -299,9 +299,6 @@ defmodule EXLA.Defn do
 
     output_permutation =
       opts[:output_permutation]
-      |> Enum.with_index()
-      |> Enum.sort()
-      |> Enum.map(&elem(&1, 1))
       |> List.to_tuple()
 
     conv_dim_nos = {input_permutation, kernel_permutation, output_permutation}

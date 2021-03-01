@@ -6484,7 +6484,7 @@ defmodule Nx do
     if batch_groups != 1 and feature_groups != 1 do
       raise ArgumentError,
             "either batch groups or feature groups must be 1," <>
-            " got batch_groups = #{batch_groups} and feature_groups = #{feature_groups}"
+              " got batch_groups = #{batch_groups} and feature_groups = #{feature_groups}"
     end
 
     tensor_input_batch_size = elem(permuted_input_shape, 0)
@@ -6501,7 +6501,9 @@ defmodule Nx do
     if tensor_input_channels != kernel_input_channels * feature_groups do
       raise ArgumentError,
             "size of input channels divided by feature groups must match size of kernel" <>
-              " channels, got #{tensor_input_channels} // #{feature_groups} != #{kernel_input_channels}" <>
+              " channels, got #{tensor_input_channels} // #{feature_groups} != #{
+                kernel_input_channels
+              }" <>
               " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
     end
 
@@ -6656,13 +6658,13 @@ defmodule Nx do
         padding_config
       )
 
-    output_permutation =
+    inv_output_permutation =
       output_permutation
       |> Enum.with_index()
       |> Enum.sort()
       |> Enum.map(&elem(&1, 1))
 
-    {shape, names} = Nx.Shape.transpose(shape, output_permutation, names)
+    {shape, names} = Nx.Shape.transpose(shape, inv_output_permutation, names)
 
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
     out = %{tensor | type: type, shape: shape, names: names}

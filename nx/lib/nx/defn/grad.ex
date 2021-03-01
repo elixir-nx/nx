@@ -46,8 +46,7 @@ defmodule Nx.Defn.Grad do
   ## Recursion
 
   defp to_grad(expr, res, cache) do
-    Tree.composite(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans,
-                                        cache ->
+    Tree.composite(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans, cache ->
       key = [id | res.data.id]
 
       case cache do
@@ -360,6 +359,206 @@ defmodule Nx.Defn.Grad do
     {dx, cache} = to_grad(x, gx, cache)
     {dy, cache} = to_grad(y, gy, cache)
     {maybe_add(dx, dy), cache}
+  end
+
+  defp grad(:conv, [x, y, opts], ans, g, cache) do
+    g = Nx.broadcast(g, ans)
+
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+    output_permutation = opts[:output_permutation]
+    strides = opts[:strides]
+    padding = opts[:padding]
+    lhs_dilation = opts[:input_dilation]
+    rhs_dilation = opts[:kernel_dilation]
+    feature_group_size = opts[:feature_group_size]
+    batch_group_size = opts[:batch_group_size]
+
+    [lhs0, lhs1 | lhs_sdim_axes] = input_permutation
+    [rhs0, rhs1 | rhs_sdim_axes] = kernel_permutation
+    [_, _ | out_sdim_axes] = output_permutation
+
+    t_lhs_permutation = conv_spec_transpose(input_permutation)
+    t_rhs_permutation = conv_spec_transpose(kernel_permutation)
+    t_out_permutation = conv_spec_transpose(output_permutation)
+
+    lhs_sdims = conv_sdims(x.shape, lhs_sdim_axes)
+    rhs_sdims = conv_sdims(y.shape, rhs_sdim_axes)
+    out_sdims = conv_sdims(g.shape, out_sdim_axes)
+
+    rhs =
+      cond do
+        feature_group_size > 1 ->
+          y = reshape_axis_out_of(rhs0, feature_group_size, y)
+          reshape_axis_into(rhs0, rhs1, y)
+
+        batch_group_size > 1 ->
+          y = reshape_axis_out_of(rhs0, batch_group_size, y)
+          reshape_axis_into(rhs0, rhs1, y)
+
+        true ->
+          y
+      end
+
+    lhs_padding =
+      conv_lhs_padding(
+        lhs_sdims,
+        rhs_sdims,
+        strides,
+        out_sdims,
+        padding,
+        lhs_dilation,
+        rhs_dilation
+      )
+
+    rhs_padding =
+      conv_rhs_padding(
+        lhs_sdims,
+        rhs_sdims,
+        strides,
+        out_sdims,
+        padding,
+        lhs_dilation,
+        rhs_dilation
+      )
+
+    lhs_feature_group_size =
+      if batch_group_size > 1, do: batch_group_size, else: feature_group_size
+
+    {rhs_feature_group_size, rhs_batch_group_size} =
+      cond do
+        batch_group_size > 1 ->
+          {batch_group_size, 1}
+
+        feature_group_size > 1 ->
+          {1, feature_group_size}
+
+        true ->
+          {1, 1}
+      end
+
+    revd_weights = Nx.reverse(rhs, axes: rhs_sdim_axes)
+
+    gx =
+      Nx.conv(g, revd_weights,
+        strides: lhs_dilation,
+        padding: lhs_padding,
+        input_dilation: strides,
+        kernel_dilation: rhs_dilation,
+        input_permutation: output_permutation,
+        kernel_permutation: t_rhs_permutation,
+        output_permutation: input_permutation,
+        feature_group_size: lhs_feature_group_size,
+        batch_group_size: 1
+      )
+
+    gx =
+      if batch_group_size > 1 do
+        gx = reshape_axis_out_of(lhs1, batch_group_size, gx)
+        reshape_axis_into(lhs1, lhs0, gx)
+      else
+        gx
+      end
+
+    gy =
+      Nx.conv(x, g,
+        strides: rhs_dilation,
+        padding: rhs_padding,
+        input_dilation: lhs_dilation,
+        kernel_dilation: strides,
+        input_permutation: t_lhs_permutation,
+        kernel_permutation: t_out_permutation,
+        output_permutation: t_rhs_permutation,
+        feature_group_size: rhs_feature_group_size,
+        batch_group_size: rhs_batch_group_size
+      )
+
+    {dx, cache} = to_grad(x, gx, cache)
+    {dy, cache} = to_grad(y, gy, cache)
+
+    {maybe_add(dx, dy), cache}
+  end
+
+  defp conv_spec_transpose([dim0, dim1 | rest]), do: [dim1, dim0 | rest]
+
+  defp conv_sdims(shape, axes) do
+    axes
+    |> Enum.map(&elem(shape, &1))
+    |> List.to_tuple()
+  end
+
+  defp conv_lhs_padding(
+         lhs_sdims,
+         rhs_sdims,
+         strides,
+         out_sdims,
+         padding,
+         lhs_dilation,
+         rhs_dilation
+       ) do
+    lhs_dilated_padding_config = Enum.map(lhs_dilation, &{0, 0, &1 - 1})
+    rhs_dilated_padding_config = Enum.map(rhs_dilation, &{0, 0, &1 - 1})
+    out_dilated_padding_config = Enum.map(strides, &{0, 0, &1 - 1})
+    lhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(lhs_sdims, lhs_dilated_padding_config))
+    rhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(rhs_sdims, rhs_dilated_padding_config))
+    out_dilated_shape = Tuple.to_list(Nx.Shape.pad(out_sdims, out_dilated_padding_config))
+
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    pad_before =
+      rhs_dilated_shape
+      |> Enum.zip(padding)
+      |> Enum.map(fn {s, {lo, _}} -> s - lo - 1 end)
+
+    pad_after =
+      [lhs_dilated_shape, rhs_dilated_shape, out_dilated_shape, pad_before]
+      |> Enum.zip()
+      |> Enum.map(fn {l, r, o, p} -> l + r - 1 - o - p end)
+
+    Enum.zip(pad_before, pad_after)
+  end
+
+  defp conv_rhs_padding(
+         lhs_sdims,
+         rhs_sdims,
+         strides,
+         out_sdims,
+         padding,
+         lhs_dilation,
+         rhs_dilation
+       ) do
+    lhs_dilated_padding_config = Enum.map(lhs_dilation, &{0, 0, &1 - 1})
+    rhs_dilated_padding_config = Enum.map(rhs_dilation, &{0, 0, &1 - 1})
+    out_dilated_padding_config = Enum.map(strides, &{0, 0, &1 - 1})
+    lhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(lhs_sdims, lhs_dilated_padding_config))
+    rhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(rhs_sdims, rhs_dilated_padding_config))
+    out_dilated_shape = Tuple.to_list(Nx.Shape.pad(out_sdims, out_dilated_padding_config))
+
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    total_in_pad =
+      [out_dilated_shape, rhs_dilated_shape, lhs_dilated_shape]
+      |> Enum.zip()
+      |> Enum.map(fn {o, r, l} -> o + r - l - 1 end)
+
+    padding
+    |> Enum.zip(total_in_pad)
+    |> Enum.map(fn {{lo, _}, hi} -> {lo, hi - lo} end)
+  end
+
+  defp reshape_axis_into(src, dst, x) do
+    perm = for i <- 0..(Nx.rank(x.shape) - 1), i != src, do: i
+    perm = List.insert_at(perm, dst, src)
+    new_shape = Tuple.delete_at(x.shape, src)
+    new_val = elem(new_shape, dst) * elem(x.shape, src)
+    new_shape = put_elem(new_shape, dst, new_val)
+    Nx.reshape(Nx.transpose(x, axes: perm), new_shape)
+  end
+
+  defp reshape_axis_out_of(src, size1, x) do
+    size2 = div(elem(x.shape, src), size1)
+    new_shape = x.shape
+    new_shape = put_elem(new_shape, src+1, size1)
+    new_shape = Tuple.insert_at(new_shape, src+1, size2)
+    Nx.reshape(x, new_shape)
   end
 
   ## Other gradients

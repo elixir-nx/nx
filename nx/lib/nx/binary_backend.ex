@@ -768,6 +768,12 @@ defmodule Nx.BinaryBackend do
     kernel_permutation = opts[:kernel_permutation]
     output_permutation = opts[:output_permutation]
 
+    output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
+
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
     #
@@ -860,8 +866,11 @@ defmodule Nx.BinaryBackend do
     input_data = to_binary(padded_t)
     kernel_data = to_binary(k)
 
-    filter_groups_with_index = split_into_feature_groups(kernel_data, kernel_shape, kernel_type, feature_groups)
-    batch_groups_with_index = split_into_batch_groups(input_data, padded_shape, input_type, batch_groups)
+    filter_groups_with_index =
+      split_into_feature_groups(kernel_data, kernel_shape, kernel_type, feature_groups)
+
+    batch_groups_with_index =
+      split_into_batch_groups(input_data, padded_shape, input_type, batch_groups)
 
     # If we're not splitting across input channels, we're splitting across input batches
     # So we split the filters into groups to apply to the corresponding batch
@@ -889,6 +898,7 @@ defmodule Nx.BinaryBackend do
           if batch_groups > 1,
             do: Enum.at(filter_groups_with_index, batch_group_index),
             else: filter_groups_with_index
+
         # Traverse the batch dim first
         for <<batch::size(batch_size)-bitstring <- batch_group>>,
             # Traverse the filters next, this allows us to rebuild
@@ -898,7 +908,9 @@ defmodule Nx.BinaryBackend do
             # the filter at each step
             anchor <- anchors,
             into: <<>> do
-          offset = weighted_offset(batch_weighted_shape, [feature_group * num_input_channels | anchor])
+          offset =
+            weighted_offset(batch_weighted_shape, [feature_group * num_input_channels | anchor])
+
           # The shape of the window is {channels} + filter_shape
           # The shape of the kernel is {num_filters, channels} + filter_shape
           window =
@@ -918,7 +930,9 @@ defmodule Nx.BinaryBackend do
               current_input_pos = i * input_field_size
               current_filter_pos = i * filter_field_size
               <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
-              <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> = filter
+
+              <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
+                filter
 
               for j <- 0..(Nx.size(filter_shape) - 1) do
                 x =
@@ -961,8 +975,8 @@ defmodule Nx.BinaryBackend do
 
     for i <- 0..(groups - 1),
         offset = group_size * i,
-        <<_::size(offset)-bitstring, data_group::size(group_size)-bitstring,
-          _::bitstring>> = data,
+        <<_::size(offset)-bitstring, data_group::size(group_size)-bitstring, _::bitstring>> =
+          data,
         <<out_data::size(data_size)-bitstring <- data_group>>,
         do: {out_data, i}
   end
@@ -974,7 +988,7 @@ defmodule Nx.BinaryBackend do
     output_batch_groups =
       for i <- 0..(num_groups - 1),
           j <- 0..(groups - 1) do
-        offset = (i + (j * num_groups)) * item_size
+        offset = (i + j * num_groups) * item_size
         <<_::size(offset)-bitstring, item::size(item_size)-bitstring, _::bitstring>> = data
         item
       end
