@@ -614,6 +614,46 @@ defmodule Nx.Defn.GradTest do
 
     compare_tensors!(lhs, rhs)
     end
+
+    defn grad_sum_conv_x_groups(x, y), do: grad(x, Nx.sum(Nx.conv(x, y, groups: 2)))
+    defn grad_sum_conv_y_groups(x, y), do: grad(y, Nx.sum(Nx.conv(x, y, groups: 2)))
+
+    test "computes the gradient for both sides, grouped" do
+      x = Nx.iota({1, 4, 4, 4})
+      y = Nx.iota({2, 2, 2, 2})
+
+      lhs = grad_sum_conv_x_groups(x, y)
+      rhs = Nx.tensor([[[[0.0, 1.0, 1.0, 1.0],
+                         [2.0, 6.0, 6.0, 4.0],
+                         [2.0, 6.0, 6.0, 4.0],
+                         [2.0, 5.0, 5.0, 3.0]],
+                        [[4.0, 9.0, 9.0, 5.0],
+                         [10.0, 22.0, 22.0, 12.0],
+                         [10.0, 22.0, 22.0, 12.0],
+                         [6.0, 13.0, 13.0, 7.0]],
+                        [[8.0, 17.0, 17.0, 9.0],
+                         [18.0, 38.0, 38.0, 20.0],
+                         [18.0, 38.0, 38.0, 20.0],
+                         [10.0, 21.0, 21.0, 11.0]],
+                        [[12.0, 25.0, 25.0, 13.0],
+                         [26.0, 54.0, 54.0, 28.0],
+                         [26.0, 54.0, 54.0, 28.0],
+                         [14.0, 29.0, 29.0, 15.0]]]])
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_conv_y_groups(x, y)
+      rhs = Nx.tensor([[[[45.0, 54.0],
+                         [81.0, 90.0]],
+                        [[189.0, 198.0],
+                         [225.0, 234.0]]],
+                       [[[333.0, 342.0],
+                         [369.0, 378.0]],
+                        [[477.0, 486.0],
+                         [513.0, 522.0]]]])
+
+      compare_tensors!(lhs, rhs)
+    end
   end
 
   describe "outer rule" do

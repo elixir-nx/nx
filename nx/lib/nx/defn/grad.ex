@@ -378,8 +378,9 @@ defmodule Nx.Defn.Grad do
     padding = opts[:padding]
     lhs_dilation = opts[:input_dilation]
     rhs_dilation = opts[:kernel_dilation]
+    groups = opts[:groups]
 
-    [_, _ | rhs_sdim_axes] = kernel_permutation
+    [rhs0, rhs1 | rhs_sdim_axes] = kernel_permutation
     t_lhs_permutation = conv_spec_transpose(input_permutation)
     t_rhs_permutation = conv_spec_transpose(kernel_permutation)
     t_out_permutation = conv_spec_transpose(output_permutation)
@@ -391,7 +392,15 @@ defmodule Nx.Defn.Grad do
     lhs_padding = conv_lhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation)
     rhs_padding = conv_rhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation)
 
-    revd_weights = Nx.reverse(y, axes: rhs_sdim_axes)
+    rhs =
+      if groups > 1 do
+        y = reshape_axis_out_of(rhs0, groups, y)
+        reshape_axis_into(rhs0, rhs1, y)
+      else
+        y
+      end
+
+    revd_weights = Nx.reverse(rhs, axes: rhs_sdim_axes)
 
     gx = Nx.conv(g, revd_weights,
           strides: lhs_dilation,
@@ -401,7 +410,7 @@ defmodule Nx.Defn.Grad do
           input_permutation: output_permutation,
           kernel_permutation: t_rhs_permutation,
           output_permutation: input_permutation,
-          groups: 1
+          groups: groups
         )
 
     gy = Nx.conv(x, g,
@@ -412,7 +421,7 @@ defmodule Nx.Defn.Grad do
           input_permutation: t_lhs_permutation,
           kernel_permutation: t_rhs_permutation,
           output_permutation: t_out_permutation,
-          groups: 1
+          groups: groups
         )
 
     {dx, cache} = to_grad(x, gx, cache)
@@ -460,6 +469,23 @@ defmodule Nx.Defn.Grad do
     padding
     |> Enum.zip(total_in_pad)
     |> Enum.map(fn {{lo, _}, hi} -> {lo, hi - lo} end)
+  end
+
+  defp reshape_axis_into(src, dst, x) do
+    # perm = for i <- 0..Nx.rank(x.shape) - 1, i != src, do: i
+    # perm = List.insert_at(perm, dst, src)
+    new_shape = Tuple.delete_at(x.shape, src)
+    new_val = elem(new_shape, dst) * elem(x.shape, src)
+    new_shape = :erlang.setelement(dst+1, new_shape, new_val)
+    Nx.reshape(x, new_shape)
+  end
+
+  defp reshape_axis_out_of(src, size1, x) do
+    size2 = div(elem(x.shape, src), size1)
+    new_shape = x.shape
+    new_shape = :erlang.setelement(src+1, new_shape, size1)
+    new_shape = Tuple.insert_at(new_shape, src+1, size2)
+    Nx.reshape(x, new_shape)
   end
 
   ## Other gradients
