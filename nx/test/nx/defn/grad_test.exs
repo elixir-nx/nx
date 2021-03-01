@@ -43,7 +43,8 @@ defmodule Nx.Defn.GradTest do
 
     test "computes value and grad" do
       assert value_and_grad(1, 2) ==
-               {Nx.tensor(4.761594155955764), {Nx.tensor(0.41997434161402614), Nx.tensor(4.0)}}
+               {Nx.tensor(4.761594155955764, type: {:f, 32}),
+                {Nx.tensor(0.41997434161402614), Nx.tensor(4.0)}}
     end
   end
 
@@ -62,7 +63,7 @@ defmodule Nx.Defn.GradTest do
     defn custom_grad_meta(t) do
       custom_cos =
         custom_grad(Nx.cos(t), fn _ans, g ->
-          [{t, g * (-Nx.sin(t))}]
+          [{t, g * -Nx.sin(t)}]
         end)
 
       {grad(t, Nx.cos(t)), grad(t, custom_cos)}
@@ -99,7 +100,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_addition_rule(t), do: grad(t, addition_rule(t))
 
     test "computes gradient of complex rules" do
-      assert grad_addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.1566267114813547)
+      assert grad_addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.15662670135498047)
 
       for _ <- @iters do
         check_grads!(
@@ -141,7 +142,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_division_rule(t), do: grad(t, division_rule(t))
 
     test "computes gradient" do
-      assert grad_division_rule(Nx.tensor(1.0)) == Nx.tensor(-0.3416198143417387)
+      assert grad_division_rule(Nx.tensor(1.0)) == Nx.tensor(-0.3416198492050171)
 
       for _ <- @iters do
         check_grads!(
@@ -433,7 +434,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_tanh_exp(t), do: grad(t, Nx.tanh(Nx.exp(t)))
 
     test "computes gradient" do
-      assert grad_tanh_exp(Nx.tensor(1.0)) == Nx.tensor(0.04693651986265914)
+      assert grad_tanh_exp(Nx.tensor(1.0)) == Nx.tensor(0.046936701983213425)
 
       for _ <- @iters do
         t = Nx.random_uniform({}, 0.0, 10.0, type: {:f, 64})
@@ -572,7 +573,6 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-
   describe "erf" do
     defn grad_erf(t), do: grad(t, Nx.erf(t))
 
@@ -705,8 +705,8 @@ defmodule Nx.Defn.GradTest do
     test "computes with pad value from tensor" do
       assert grad_pad_fun(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([
-                 [-0.13259542790912313, -0.1432832308937438, -0.022237092179130596],
-                 [0.1374355447151887, 0.1692850372196461, 0.06221092698892166]
+                 [-0.13259540498256683, -0.14328321814537048, -0.022237088531255722],
+                 [0.13743554055690765, 0.16928502917289734, 0.062210917472839355]
                ])
     end
   end

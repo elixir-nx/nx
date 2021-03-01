@@ -18,10 +18,10 @@ defmodule Nx do
       iex> t = Nx.tensor([[1, 2], [3, 4]])
       iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
       #Nx.Tensor<
-        f64[2][2]
+        f32[2][2]
         [
-          [0.03205860328008499, 0.08714431874203257],
-          [0.23688281808991013, 0.6439142598879722]
+          [0.032058604061603546, 0.08714432269334793],
+          [0.23688282072544098, 0.6439142227172852]
         ]
       >
 
@@ -290,7 +290,7 @@ defmodule Nx do
 
       iex> Nx.tensor(1.0)
       #Nx.Tensor<
-        f64
+        f32
         1.0
       >
 
@@ -304,8 +304,8 @@ defmodule Nx do
 
       iex> Nx.tensor([1.2, 2.3, 3.4, 4.5])
       #Nx.Tensor<
-        f64[4]
-        [1.2, 2.3, 3.4, 4.5]
+        f32[4]
+        [1.2000000476837158, 2.299999952316284, 3.4000000953674316, 4.5]
       >
 
   The type can be explicitly given. Integers and floats
@@ -321,7 +321,7 @@ defmodule Nx do
 
       iex> Nx.tensor([1, 2, 3.0])
       #Nx.Tensor<
-        f64[3]
+        f32[3]
         [1.0, 2.0, 3.0]
       >
 
@@ -590,13 +590,13 @@ defmodule Nx do
   ### Generating Floats
 
       iex> t = Nx.random_uniform({10})
-      iex> for <<x::float-64-native <- Nx.to_binary(t)>> do
+      iex> for <<x::float-32-native <- Nx.to_binary(t)>> do
       ...>   true = x >= 0.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
       {10}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
 
       iex> t = Nx.random_uniform({5, 5}, type: {:bf, 16})
       iex> byte_size(Nx.to_binary(t))
@@ -606,14 +606,14 @@ defmodule Nx do
       iex> Nx.type(t)
       {:bf, 16}
 
-      iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: {:f, 32})
-      iex> for <<x::float-32-native <- Nx.to_binary(t)>> do
+      iex> t = Nx.random_uniform({5, 5}, -1.0, 1.0, type: {:f, 64})
+      iex> for <<x::float-64-native <- Nx.to_binary(t)>> do
       ...>   true = x >= -1.0 and x < 1.0
       ...> end
       iex> Nx.shape(t)
       {5, 5}
       iex> Nx.type(t)
-      {:f, 32}
+      {:f, 64}
 
   ### Generating Integers
 
@@ -644,7 +644,7 @@ defmodule Nx do
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
       iex> Nx.names(t)
       [:batch, :data]
 
@@ -663,13 +663,13 @@ defmodule Nx do
       iex> Nx.shape(t)
       {}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
 
       iex> t = Nx.random_uniform(10.0)
       iex> Nx.shape(t)
       {}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
       iex> Nx.names(t)
       []
 
@@ -680,7 +680,7 @@ defmodule Nx do
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
       iex> Nx.names(t)
       [:batch, nil]
 
@@ -732,7 +732,7 @@ defmodule Nx do
       iex> Nx.shape(t)
       {10}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
 
       iex> t = Nx.random_normal({5, 5}, 2.0, 1.0, type: {:bf, 16})
       iex> Nx.shape(t)
@@ -754,7 +754,7 @@ defmodule Nx do
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
       iex> Nx.names(t)
       [:batch, :data]
 
@@ -773,7 +773,7 @@ defmodule Nx do
       iex> Nx.shape(t)
       {}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
       iex> Nx.names(t)
       []
 
@@ -784,7 +784,7 @@ defmodule Nx do
       iex> Nx.shape(t)
       {2, 2}
       iex> Nx.type(t)
-      {:f, 64}
+      {:f, 32}
       iex> Nx.names(t)
       [:batch, nil]
 
@@ -801,7 +801,7 @@ defmodule Nx do
     assert_keys!(opts, [:type, :names, :backend])
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || {:f, 64})
+    type = Nx.Type.normalize!(opts[:type] || {:f, 32})
 
     unless Nx.Type.float?(type) do
       raise ArgumentError, "random_normal/3 expects float type, got: #{inspect(type)}"
@@ -1074,10 +1074,10 @@ defmodule Nx do
       <<1::64-native>>
 
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]))
-      <<1.0::float-native, 2.0::float-native, 3.0::float-native>>
+      <<1.0::float-32-native, 2.0::float-32-native, 3.0::float-32-native>>
 
       iex> Nx.to_binary(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
-      <<1.0::float-native, 2.0::float-native>>
+      <<1.0::float-32-native, 2.0::float-32-native>>
 
   """
   @doc type: :conversion
@@ -1783,7 +1783,7 @@ defmodule Nx do
       iex> tensor = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
       iex> Nx.pad(tensor, 0.0, [{1, 2, 0}, {1, 0, 0}, {0, 1, 0}])
       #Nx.Tensor<
-        f64[5][3][3]
+        f32[5][3][3]
         [
           [
             [0.0, 0.0, 0.0],
@@ -1895,7 +1895,7 @@ defmodule Nx do
       {:s, 64}
 
       iex> Nx.type(1.0)
-      {:f, 64}
+      {:f, 32}
   """
   @doc type: :type
   def type(tensor) do
@@ -2226,8 +2226,8 @@ defmodule Nx do
 
       iex> Nx.add(1, 2.2)
       #Nx.Tensor<
-        f64
-        3.2
+        f32
+        3.200000047683716
       >
 
   ### Adding a scalar to a tensor
@@ -2248,13 +2248,13 @@ defmodule Nx do
 
       iex> Nx.add(Nx.tensor([1, 2, 3], names: [:data]), 1.0)
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [2.0, 3.0, 4.0]
       >
 
       iex> Nx.add(Nx.tensor([1.0, 2.0, 3.0], names: [:data]), 1)
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [2.0, 3.0, 4.0]
       >
 
@@ -2354,7 +2354,7 @@ defmodule Nx do
 
       iex> Nx.subtract(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [0.0, -1.0, -2.0]
       >
 
@@ -2419,7 +2419,7 @@ defmodule Nx do
 
       iex> Nx.multiply(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [1.0, 2.0, 3.0]
       >
 
@@ -2488,7 +2488,7 @@ defmodule Nx do
 
       iex> Nx.power(2, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [2.0, 4.0, 8.0]
       >
 
@@ -2535,7 +2535,7 @@ defmodule Nx do
 
       iex> Nx.remainder(2, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [0.0, 0.0, 2.0]
       >
 
@@ -2573,7 +2573,7 @@ defmodule Nx do
 
       iex> Nx.divide(1, 2)
       #Nx.Tensor<
-        f64
+        f32
         0.5
       >
 
@@ -2581,24 +2581,24 @@ defmodule Nx do
 
       iex> Nx.divide(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [1.0, 2.0, 3.0]
       >
 
       iex> Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
-        [1.0, 0.5, 0.3333333333333333]
+        f32[data: 3]
+        [1.0, 0.5, 0.3333333432674408]
       >
 
   ### Dividing tensors
 
       iex> Nx.divide(Nx.tensor([[1], [2]], names: [:x, nil]), Nx.tensor([[10, 20]], names: [nil, :y]))
       #Nx.Tensor<
-        f64[x: 2][y: 2]
+        f32[x: 2][y: 2]
         [
-          [0.1, 0.05],
-          [0.2, 0.1]
+          [0.10000000149011612, 0.05000000074505806],
+          [0.20000000298023224, 0.10000000149011612]
         ]
       >
 
@@ -2734,22 +2734,22 @@ defmodule Nx do
 
       iex> Nx.atan2(1, 2)
       #Nx.Tensor<
-        f64
-        0.4636476090008061
+        f32
+        0.46364760398864746
       >
 
   ### Arc tangent between tensors and scalars
 
       iex> Nx.atan2(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
-        f64[data: 3]
-        [0.7853981633974483, 1.1071487177940904, 1.2490457723982544]
+        f32[data: 3]
+        [0.7853981852531433, 1.1071487665176392, 1.249045729637146]
       >
 
       iex> Nx.atan2(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
-        [0.7853981633974483, 0.4636476090008061, 0.3217505543966422]
+        f32[data: 3]
+        [0.7853981852531433, 0.46364760398864746, 0.32175055146217346]
       >
 
   ### Arc tangent between tensors
@@ -2760,8 +2760,8 @@ defmodule Nx do
       iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
       iex> t = Nx.atan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
       iex> Nx.to_binary(t)
-      <<-3.141592653589793::float-64-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-64-native,
-        3.141592653589793::float-64-native, 0.0::float-64-native>>
+      <<-3.141592653589793::float-32-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-32-native,
+        3.141592653589793::float-32-native, 0.0::float-32-native>>
       iex> Nx.shape(t)
       {2, 2}
 
@@ -2797,7 +2797,7 @@ defmodule Nx do
 
       iex> Nx.max(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [1.0, 2.0, 3.0]
       >
 
@@ -2862,7 +2862,7 @@ defmodule Nx do
 
       iex> Nx.min(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
-        f64[data: 3]
+        f32[data: 3]
         [1.0, 1.0, 1.0]
       >
 
@@ -2955,7 +2955,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.bitwise_and(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
   """
   @doc type: :element
   def bitwise_and(left, right),
@@ -3005,7 +3005,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.bitwise_or(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
   """
   @doc type: :element
   def bitwise_or(left, right),
@@ -3055,7 +3055,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.bitwise_xor(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
   """
   @doc type: :element
   def bitwise_xor(left, right),
@@ -3101,7 +3101,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.left_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
 
       iex> Nx.left_shift(Nx.tensor(1), -1)
       ** (ArgumentError) cannot left shift by -1
@@ -3154,7 +3154,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.right_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
 
       iex> Nx.right_shift(Nx.tensor(1), -1)
       ** (ArgumentError) cannot right shift by -1
@@ -3690,15 +3690,15 @@ defmodule Nx do
 
     {{one, _}, {two, _}, {three, _}} =
       if name in [:acos, :asin, :atan, :atanh, :erf_inv] do
-        {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
-         Code.eval_quoted(code, x: 0.9)}
+        {Code.eval_quoted(code, x: to_float32(0.1)), Code.eval_quoted(code, x: to_float32(0.5)),
+         Code.eval_quoted(code, x: to_float32(0.9))}
       else
         {Code.eval_quoted(code, x: 1), Code.eval_quoted(code, x: 2), Code.eval_quoted(code, x: 3)}
       end
 
     first_val =
       if name in [:acos, :asin, :atan, :atanh, :erf_inv],
-        do: 0.1,
+        do: to_float32(0.1),
         else: 1
 
     list_of_vals =
@@ -3717,14 +3717,14 @@ defmodule Nx do
 
         iex> Nx.#{name}(#{first_val})
         #Nx.Tensor<
-          f64
-          #{one}
+          f32
+          #{to_float32(one)}
         >
 
         iex> Nx.#{name}(Nx.tensor(#{inspect(list_of_vals)}, names: [:x]))
         #Nx.Tensor<
-          f64[x: 3]
-          [#{one}, #{two}, #{three}]
+          f32[x: 3]
+          [#{to_float32(one)}, #{to_float32(two)}, #{to_float32(three)}]
         >
 
     """
@@ -3845,7 +3845,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.bitwise_not(Nx.tensor([0.0, 1.0]))
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
   """
   @doc type: :element
   def bitwise_not(tensor) do
@@ -3886,7 +3886,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.population_count(Nx.tensor([0.0, 1.0]))
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
   """
   @doc type: :element
   def population_count(tensor) do
@@ -3951,7 +3951,7 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.count_leading_zeros(Nx.tensor([0.0, 1.0]))
-      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 64}
+      ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
   """
   @doc type: :element
   def count_leading_zeros(tensor) do
@@ -3980,7 +3980,7 @@ defmodule Nx do
 
         iex> Nx.#{name}(Nx.tensor([-1.5, -0.5, 0.5, 1.5], names: [:x]))
         #Nx.Tensor<
-          f64[x: 4]
+          f32[x: 4]
           [#{res1}.0, #{res2}.0, #{res3}.0, #{res4}.0]
         >
 
@@ -4106,7 +4106,7 @@ defmodule Nx do
 
       iex> Nx.sum(Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:x, :y]))
       #Nx.Tensor<
-        f64
+        f32
         10.0
       >
 
@@ -4232,13 +4232,13 @@ defmodule Nx do
 
       iex> Nx.mean(Nx.tensor(42))
       #Nx.Tensor<
-        f64
+        f32
         42.0
       >
 
       iex> Nx.mean(Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        f64
+        f32
         2.0
       >
 
@@ -4246,19 +4246,19 @@ defmodule Nx do
 
       iex> Nx.mean(Nx.tensor([1, 2, 3], names: [:x]), axes: [0])
       #Nx.Tensor<
-        f64
+        f32
         2.0
       >
 
       iex> Nx.mean(Nx.tensor([1, 2, 3], type: {:u, 8}, names: [:x]), axes: [:x])
       #Nx.Tensor<
-        f64
+        f32
         2.0
       >
 
       iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:x])
       #Nx.Tensor<
-        f64[y: 2][z: 3]
+        f32[y: 2][z: 3]
         [
           [4.0, 5.0, 6.0],
           [7.0, 8.0, 9.0]
@@ -4267,13 +4267,13 @@ defmodule Nx do
 
       iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [:x, :z])
       #Nx.Tensor<
-        f64[y: 2]
+        f32[y: 2]
         [5.0, 8.0]
       >
 
       iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [-1])
       #Nx.Tensor<
-        f64[x: 2][y: 2]
+        f32[x: 2][y: 2]
         [
           [2.0, 5.0],
           [8.0, 11.0]
@@ -4284,7 +4284,7 @@ defmodule Nx do
 
       iex> Nx.mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z]), axes: [-1], keep_axes: true)
       #Nx.Tensor<
-        f64[x: 2][y: 2][z: 1]
+        f32[x: 2][y: 2][z: 1]
         [
           [
             [2.0],
@@ -4348,7 +4348,7 @@ defmodule Nx do
 
       iex> Nx.product(Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:x, :y]))
       #Nx.Tensor<
-        f64
+        f32
         24.0
       >
 
@@ -4470,7 +4470,7 @@ defmodule Nx do
 
       iex> Nx.reduce_max(Nx.tensor(42.0))
       #Nx.Tensor<
-        f64
+        f32
         42.0
       >
 
@@ -4544,7 +4544,7 @@ defmodule Nx do
 
       iex> Nx.reduce_min(Nx.tensor(42.0))
       #Nx.Tensor<
-        f64
+        f32
         42.0
       >
 
@@ -4929,15 +4929,15 @@ defmodule Nx do
       iex> Nx.window_sum(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
       ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
-        f64[2][2][5]
+        f32[2][2][5]
         [
           [
             [0.0, 4.0, 2.0, 3.0, 0.0],
             [0.0, 2.0, 5.0, 6.5, 0.0]
           ],
           [
-            [0.0, 1.2, 2.2, 3.2, 0.0],
-            [0.0, 4.0, 5.0, 6.2, 0.0]
+            [0.0, 1.2000000476837158, 2.200000047683716, 3.200000047683716, 0.0],
+            [0.0, 4.0, 5.0, 6.199999809265137, 0.0]
           ]
         ]
       >
@@ -5015,7 +5015,7 @@ defmodule Nx do
 
       iex> Nx.window_mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]), {1, 2, 1})
       #Nx.Tensor<
-        f64[2][1][3]
+        f32[2][1][3]
         [
           [
             [2.5, 3.5, 4.5]
@@ -5029,7 +5029,7 @@ defmodule Nx do
       iex> Nx.window_mean(Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]]),
       ...>  {2, 2, 1}, strides: [1, 2, 3], padding: [{0, 1}, {2, 0}, {1, 1}])
       #Nx.Tensor<
-        f64[2][2][2]
+        f32[2][2][2]
         [
           [
             [0.0, 0.0],
@@ -5045,15 +5045,15 @@ defmodule Nx do
       iex> Nx.window_mean(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
       ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
-        f64[2][2][5]
+        f32[2][2][5]
         [
           [
             [0.0, 2.0, 1.0, 1.5, 0.0],
             [0.0, 1.0, 2.5, 3.25, 0.0]
           ],
           [
-            [0.0, 0.6, 1.1, 1.6, 0.0],
-            [0.0, 2.0, 2.5, 3.1, 0.0]
+            [0.0, 0.6000000238418579, 1.100000023841858, 1.600000023841858, 0.0],
+            [0.0, 2.0, 2.5, 3.0999999046325684, 0.0]
           ]
         ]
       >
@@ -5061,7 +5061,7 @@ defmodule Nx do
       iex> Nx.window_mean(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
       ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 1]])
       #Nx.Tensor<
-        f64[1][2][3]
+        f32[1][2][3]
         [
           [
             [3.0, 1.5, 2.0],
@@ -5073,7 +5073,7 @@ defmodule Nx do
       iex> Nx.window_mean(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
       ...>  {1, 1, 2}, [strides: [2, 1, 1], padding: :valid, window_dilations: [1, 2, 2]])
       #Nx.Tensor<
-        f64[1][2][2]
+        f32[1][2][2]
         [
           [
             [2.5, 2.5],
@@ -5138,15 +5138,15 @@ defmodule Nx do
       iex> Nx.window_max(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
       ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
-        f64[2][2][5]
+        f32[2][2][5]
         [
           [
-            [-1.7976931348623157e308, 4.0, 2.0, 3.0, -1.7976931348623157e308],
-            [-1.7976931348623157e308, 2.0, 5.0, 6.5, -1.7976931348623157e308]
+            [-3.4028234663852886e38, 4.0, 2.0, 3.0, -3.4028234663852886e38],
+            [-3.4028234663852886e38, 2.0, 5.0, 6.5, -3.4028234663852886e38]
           ],
           [
-            [-1.7976931348623157e308, 1.2, 2.2, 3.2, -1.7976931348623157e308],
-            [-1.7976931348623157e308, 4.0, 5.0, 6.2, -1.7976931348623157e308]
+            [-3.4028234663852886e38, 1.2000000476837158, 2.200000047683716, 3.200000047683716, -3.4028234663852886e38],
+            [-3.4028234663852886e38, 4.0, 5.0, 6.199999809265137, -3.4028234663852886e38]
           ]
         ]
       >
@@ -5218,15 +5218,15 @@ defmodule Nx do
       iex> Nx.window_min(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
       ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
-        f64[2][2][5]
+        f32[2][2][5]
         [
           [
-            [1.7976931348623157e308, 4.0, 2.0, 3.0, 1.7976931348623157e308],
-            [1.7976931348623157e308, 2.0, 5.0, 6.5, 1.7976931348623157e308]
+            [3.4028234663852886e38, 4.0, 2.0, 3.0, 3.4028234663852886e38],
+            [3.4028234663852886e38, 2.0, 5.0, 6.5, 3.4028234663852886e38]
           ],
           [
-            [1.7976931348623157e308, 1.2, 2.2, 3.2, 1.7976931348623157e308],
-            [1.7976931348623157e308, 4.0, 5.0, 6.2, 1.7976931348623157e308]
+            [3.4028234663852886e38, 1.2000000476837158, 2.200000047683716, 3.200000047683716, 3.4028234663852886e38],
+            [3.4028234663852886e38, 4.0, 5.0, 6.199999809265137, 3.4028234663852886e38]
           ]
         ]
       >
@@ -5301,15 +5301,15 @@ defmodule Nx do
       iex> Nx.window_product(Nx.tensor([[[4.0, 2.0, 3.0], [2.0, 5.0, 6.5]], [[1.2, 2.2, 3.2], [4.0, 5.0, 6.2]]]),
       ...>  {2, 1, 1}, strides: [2, 1, 1], padding: [{1, 1}, {0, 0}, {1, 1}])
       #Nx.Tensor<
-        f64[2][2][5]
+        f32[2][2][5]
         [
           [
             [1.0, 4.0, 2.0, 3.0, 1.0],
             [1.0, 2.0, 5.0, 6.5, 1.0]
           ],
           [
-            [1.0, 1.2, 2.2, 3.2, 1.0],
-            [1.0, 4.0, 5.0, 6.2, 1.0]
+            [1.0, 1.2000000476837158, 2.200000047683716, 3.200000047683716, 1.0],
+            [1.0, 4.0, 5.0, 6.199999809265137, 1.0]
           ]
         ]
       >
@@ -5378,7 +5378,7 @@ defmodule Nx do
 
       iex> Nx.reduce(Nx.tensor([[1.0, 2.0], [3.0, 4.0]]), 0, fn x, y -> Nx.add(x, y) end)
       #Nx.Tensor<
-        f64
+        f32
         10.0
       >
 
@@ -5723,13 +5723,13 @@ defmodule Nx do
 
       iex> Nx.dot(-2.0, 5.0)
       #Nx.Tensor<
-        f64
+        f32
         -10.0
       >
 
       iex> Nx.dot(2, 2.0)
       #Nx.Tensor<
-        f64
+        f32
         4.0
       >
 
@@ -5743,13 +5743,13 @@ defmodule Nx do
 
       iex> Nx.dot(Nx.tensor([2.0, 4.0, 3.0, 5.0]), Nx.tensor([1.0, 2.0, 3.0, 4.0]))
       #Nx.Tensor<
-        f64
+        f32
         39.0
       >
 
       iex> Nx.dot(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([1, 2, 3]))
       #Nx.Tensor<
-        f64
+        f32
         14.0
       >
 
@@ -5766,7 +5766,7 @@ defmodule Nx do
 
       iex> Nx.dot(Nx.tensor([[10.0, 13.0, 14.0, 15.0], [59.0, 20.0, 10.0, 30.0]], names: [:i, :j]), Nx.tensor([[2.0, 4.0], [5.0, 1.0], [6.0, 8.0], [9.0, 10.0]], names: [:x, :y]))
       #Nx.Tensor<
-        f64[i: 2][y: 2]
+        f32[i: 2][y: 2]
         [
           [304.0, 315.0],
           [548.0, 636.0]
@@ -5775,7 +5775,7 @@ defmodule Nx do
 
       iex> Nx.dot(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:i, :j]), Nx.tensor([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]], names: [:x, :y]))
       #Nx.Tensor<
-        f64[i: 2][y: 2]
+        f32[i: 2][y: 2]
         [
           [58.0, 64.0],
           [139.0, 154.0]
@@ -5801,7 +5801,7 @@ defmodule Nx do
 
       iex> Nx.dot(Nx.tensor([[[[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]]], names: [:shard, :batch, :x, :y, :z]), Nx.tensor([2.0, 2.0], names: [:data]))
       #Nx.Tensor<
-        f64[shard: 1][batch: 1][x: 2][y: 2]
+        f32[shard: 1][batch: 1][x: 2][y: 2]
         [
           [
             [
@@ -6332,7 +6332,7 @@ defmodule Nx do
       iex> rhs = Nx.reshape(rhs, {4, 1, 1, 1})
       iex> Nx.conv(lhs, rhs, strides: [1, 1])
       #Nx.Tensor<
-        f64[1][4][3][3]
+        f32[1][4][3][3]
         [
           [
             [
@@ -6365,7 +6365,7 @@ defmodule Nx do
       iex> rhs = Nx.reshape(rhs, {4, 1, 2, 1})
       iex> Nx.conv(lhs, rhs, strides: 2, padding: :same, kernel_dilation: [2, 1])
       #Nx.Tensor<
-        f64[1][4][2][2]
+        f32[1][4][2][2]
         [
           [
             [
@@ -6423,8 +6423,7 @@ defmodule Nx do
 
     output_permutation = opts[:output_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
 
-    output_permutation =
-      Nx.Shape.normalize_axes(input_shape, output_permutation, input_names)
+    output_permutation = Nx.Shape.normalize_axes(input_shape, output_permutation, input_names)
 
     if rank(input_shape) < 3 do
       raise ArgumentError,
@@ -6638,7 +6637,7 @@ defmodule Nx do
 
       iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), 2.0, 3)
       #Nx.Tensor<
-        f64[x: 2][y: 3]
+        f32[x: 2][y: 3]
         [
           [2.0, 2.0, 3.0],
           [3.0, 3.0, 3.0]
@@ -6647,7 +6646,7 @@ defmodule Nx do
 
       iex> Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), Nx.tensor(2.0), Nx.max(1.0, 3.0))
       #Nx.Tensor<
-        f64[x: 2][y: 3]
+        f32[x: 2][y: 3]
         [
           [2.0, 2.0, 3.0],
           [3.0, 3.0, 3.0]
@@ -6656,7 +6655,7 @@ defmodule Nx do
 
       iex> Nx.clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], names: [:x, :y]), 2, 6.0)
       #Nx.Tensor<
-        f64[x: 2][y: 3]
+        f32[x: 2][y: 3]
         [
           [2.0, 2.0, 3.0],
           [4.0, 5.0, 6.0]
@@ -6665,7 +6664,7 @@ defmodule Nx do
 
       iex> Nx.clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], type: {:f, 32}, names: [:x, :y]), 1, 4)
       #Nx.Tensor<
-        f64[x: 2][y: 3]
+        f32[x: 2][y: 3]
         [
           [1.0, 2.0, 3.0],
           [4.0, 4.0, 4.0]
@@ -6773,7 +6772,7 @@ defmodule Nx do
       ...> ])
       iex> Nx.slice(t, [0, 0], [6, 7], strides: [5, 3])
       #Nx.Tensor<
-        f64[2][3]
+        f32[2][3]
         [
           [0.0, 0.0, 0.0],
           [1.0, 1.0, 1.0]
@@ -6830,7 +6829,7 @@ defmodule Nx do
       iex> t3 = Nx.iota({1, 2, 2}, names: [:x, :y, :z], type: {:s, 64})
       iex> Nx.concatenate([t1, t2, t3], axis: :x)
       #Nx.Tensor<
-        f64[x: 4][y: 2][z: 2]
+        f32[x: 4][y: 2][z: 2]
         [
           [
             [0.0, 1.0],
@@ -6954,21 +6953,21 @@ defmodule Nx do
 
     iex> Nx.cholesky(Nx.tensor([[6.0, 3.0, 4.0, 8.0], [3.0, 6.0, 5.0, 1.0], [4.0, 5.0, 10.0, 7.0], [8.0, 1.0, 7.0, 25.0]]))
     #Nx.Tensor<
-      f64[4][4]
+      f32[4][4]
       [
-        [2.449489742783178, 0.0, 0.0, 0.0],
-        [1.2247448713915892, 2.1213203435596424, 0.0, 0.0],
-        [1.6329931618554523, 1.414213562373095, 2.309401076758503, 0.0],
-        [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
+        [2.4494898319244385, 0.0, 0.0, 0.0],
+        [1.2247447967529297, 2.1213204860687256, 0.0, 0.0],
+        [1.6329931020736694, 1.4142135381698608, 2.309401035308838, 0.0],
+        [3.265986204147339, -1.4142132997512817, 1.5877132415771484, 3.13249135017395]
       ]
     >
 
     iex> Nx.cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
     #Nx.Tensor<
-      f64[2][2]
+      f32[2][2]
       [
-        [4.47213595499958, 0.0],
-        [3.93547964039963, 0.7155417527999305]
+        [4.4721360206604, 0.0],
+        [3.9354796409606934, 0.7155417203903198]
       ]
     >
 
@@ -7019,13 +7018,13 @@ defmodule Nx do
 
       iex> Nx.norm(Nx.tensor([3, 4]))
       #Nx.Tensor<
-        f64
+        f32
         5.0
       >
 
       iex> Nx.norm(Nx.tensor([3, 4]), ord: 1)
       #Nx.Tensor<
-        f64
+        f32
         7.0
       >
 
@@ -7075,19 +7074,19 @@ defmodule Nx do
 
       iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
       #Nx.Tensor<
-        f64
+        f32
         5.0
       >
 
       iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]))
       #Nx.Tensor<
-        f64
+        f32
         5.0
       >
 
       iex> Nx.norm(Nx.tensor([[3, 4], [0, -4]]), axes: [1])
       #Nx.Tensor<
-        f64[2]
+        f32[2]
         [5.0, 4.0]
       >
 
@@ -7308,7 +7307,7 @@ defmodule Nx do
       iex> {q, r} = Nx.qr(Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]]))
       iex> q
       #Nx.Tensor<
-        f64[3][3]
+        f32[3][3]
         [
           [-1.0, 0.0, 0.0],
           [0.0, -1.0, 0.0],
@@ -7317,7 +7316,7 @@ defmodule Nx do
       >
       iex> r
       #Nx.Tensor<
-        f64[3][3]
+        f32[3][3]
         [
           [3.0, -2.0, -1.0],
           [0.0, -1.0, -1.0],
@@ -7329,7 +7328,7 @@ defmodule Nx do
       iex> {q, r} = Nx.qr(t, q_names: [:row, :base_vector], r_names: [:coef, :vars])
       iex> q
       #Nx.Tensor<
-        f64[row: 3][base_vector: 3]
+        f32[row: 3][base_vector: 3]
         [
           [-1.0, 0.0, 0.0],
           [0.0, -1.0, 0.0],
@@ -7338,7 +7337,7 @@ defmodule Nx do
       >
       iex> r
       #Nx.Tensor<
-        f64[coef: 3][vars: 3]
+        f32[coef: 3][vars: 3]
         [
           [-3.0, -2.0, -1.0],
           [0.0, -1.0, -1.0],
