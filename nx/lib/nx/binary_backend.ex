@@ -1086,8 +1086,9 @@ defmodule Nx.BinaryBackend do
     a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
 
     eps = opts[:eps] || @default_eps
+    compute_uv = if x = opts[:compute_uv], do: x, else: false
 
-    {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
+    {u, d, v} = householder_bidiagonalization(a, input_shape, eps, compute_uv)
 
     max_iter = 100
 
@@ -1098,19 +1099,24 @@ defmodule Nx.BinaryBackend do
         _, {u, d, v, off_diag_norm, fro_norm} ->
           eps = 1.0e-6 * fro_norm
 
+          invalid_index_message = fn x, y ->
+            raise ArgumentError,
+                  "invalid index [#{x},#{y}] for matrix of shape {#{m}, #{n}}"
+          end
+
           if off_diag_norm > eps do
             # Execute a round of jacobi rotations on u, d and v
             {u, d, v} =
-              for p <- 0..(m - 1), q <- (p + 1)..(n - 1), q <= n - 1, reduce: {u, d, v} do
+              for p <- 0..(n - 1), q <- (p + 1)..(n - 1), p < m and q < n, reduce: {u, d, v} do
                 {u, d, v} ->
                   # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
-                  row_p = Enum.at(d, p)
-                  row_q = Enum.at(d, q)
+                  row_p = Enum.at(d, p) || invalid_index_message.(p, "0..n-1")
+                  row_q = Enum.at(d, q) || invalid_index_message.(q, "0..n-1")
 
-                  d_pp = Enum.at(row_p, p)
-                  d_pq = Enum.at(row_p, q)
-                  d_qp = Enum.at(row_q, p)
-                  d_qq = Enum.at(row_q, q)
+                  d_pp = Enum.at(row_p, p) || invalid_index_message.(p, p)
+                  d_pq = Enum.at(row_p, q) || invalid_index_message.(p, q)
+                  d_qp = Enum.at(row_q, p) || invalid_index_message.(q, p)
+                  d_qq = Enum.at(row_q, q) || invalid_index_message.(q, q)
 
                   {rot_l, rot_r} = jacobi_rotators(d_pp, d_pq, d_qp, d_qq, eps)
 
@@ -1129,43 +1135,50 @@ defmodule Nx.BinaryBackend do
                     |> dot_matrix(rot_r)
                     |> transpose_matrix()
 
-                  u_transposed = transpose_matrix(u)
-                  u_col_p = Enum.at(u_transposed, p)
-                  u_col_q = Enum.at(u_transposed, q)
-
-                  [u_col_p, u_col_q] =
-                    [u_col_p, u_col_q]
-                    |> transpose_matrix()
-                    |> dot_matrix(rot_l)
-                    |> transpose_matrix()
-
-                  v_transposed = transpose_matrix(v)
-                  v_col_p = Enum.at(v_transposed, p)
-                  v_col_q = Enum.at(v_transposed, q)
-
-                  [v_col_p, v_col_q] =
-                    [v_col_p, v_col_q]
-                    |> transpose_matrix()
-                    |> dot_matrix(rot_r)
-                    |> transpose_matrix()
-
                   d =
                     d_transposed
                     |> List.replace_at(p, d_col_p)
                     |> List.replace_at(q, d_col_q)
                     |> transpose_matrix()
 
-                  u =
-                    u_transposed
-                    |> List.replace_at(p, u_col_p)
-                    |> List.replace_at(q, u_col_q)
-                    |> transpose_matrix()
+                  {u, v} =
+                    if compute_uv do
+                      u_transposed = transpose_matrix(u)
+                      u_col_p = Enum.at(u_transposed, p)
+                      u_col_q = Enum.at(u_transposed, q)
 
-                  v =
-                    v_transposed
-                    |> List.replace_at(p, v_col_p)
-                    |> List.replace_at(q, v_col_q)
-                    |> transpose_matrix()
+                      [u_col_p, u_col_q] =
+                        [u_col_p, u_col_q]
+                        |> transpose_matrix()
+                        |> dot_matrix(rot_l)
+                        |> transpose_matrix()
+
+                      v_transposed = transpose_matrix(v)
+                      v_col_p = Enum.at(v_transposed, p)
+                      v_col_q = Enum.at(v_transposed, q)
+
+                      [v_col_p, v_col_q] =
+                        [v_col_p, v_col_q]
+                        |> transpose_matrix()
+                        |> dot_matrix(rot_r)
+                        |> transpose_matrix()
+
+                      u =
+                        u_transposed
+                        |> List.replace_at(p, u_col_p)
+                        |> List.replace_at(q, u_col_q)
+                        |> transpose_matrix()
+
+                      v =
+                        v_transposed
+                        |> List.replace_at(p, v_col_p)
+                        |> List.replace_at(q, v_col_q)
+                        |> transpose_matrix()
+
+                      {u, v}
+                    else
+                      {nil, nil}
+                    end
 
                   {u, d, v}
               end
@@ -1180,21 +1193,56 @@ defmodule Nx.BinaryBackend do
       end)
 
     # Make s a vector
-    s = s_matrix |> Enum.with_index() |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
+    s =
+      s_matrix
+      |> Enum.with_index()
+      |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
+      |> Enum.reject(&is_nil/1)
 
-    # {s, v} = make_singular_values_positive(s, v)
-    u_bin = matrix_to_binary(u, output_type)
+    {s, v} = apply_singular_value_corrections(s, v, compute_uv)
+
     s_bin = matrix_to_binary(s, output_type)
-    v_bin = matrix_to_binary(v, output_type)
-
-    u = from_binary(u_holder, u_bin)
     s = from_binary(s_holder, s_bin)
-    v = from_binary(v_holder, v_bin)
 
-    {u, s, v}
+    if compute_uv do
+      u_bin = matrix_to_binary(u, output_type)
+      v_bin = matrix_to_binary(v, output_type)
+
+      u = from_binary(u_holder, u_bin)
+      v = from_binary(v_holder, v_bin)
+
+      {u, s, v}
+    else
+      s
+    end
   end
 
-  defp make_singular_values_positive(s, v) do
+  defp apply_singular_value_corrections(s, v, compute_uv) do
+    # Due to convention, the singular values must be positive.
+    # This function fixes any negative singular values.
+    # It's important to note that since s left-multiplies v in
+    # the SVD result, and represents a diagonal matrix,
+    # changing a sign in s implies a sign change in the
+    # corresponding row of v.
+
+    # This function also sorts singular values from highest to lowest,
+    # as this can be convenient.
+
+    if compute_uv do
+      s
+      |> Enum.zip(v)
+      |> Enum.map(fn
+        {singular_value, row} when singular_value < 0 ->
+          {-singular_value, Enum.map(row, &(&1 * -1))}
+
+        {singular_value, row} ->
+          {singular_value, row}
+      end)
+      |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
+      |> Enum.unzip()
+    else
+      {s |> Enum.map(&abs/1) |> Enum.sort(&>=/2), nil}
+    end
   end
 
   defp dot_matrix(m1, m2) do
@@ -1323,7 +1371,7 @@ defmodule Nx.BinaryBackend do
     reflector
   end
 
-  defp householder_bidiagonalization(tensor, {m, n}, eps) do
+  defp householder_bidiagonalization(tensor, {m, n}, eps, compute_lr) do
     # For each column in `tensor`, apply
     # the current column's householder reflector from the left to `tensor`.
     # if the current column is not the penultimate, also apply
@@ -1337,7 +1385,7 @@ defmodule Nx.BinaryBackend do
         l = householder_reflector(a_col, m, eps)
 
         ll =
-          if is_nil(ll) do
+          if is_nil(ll) or not compute_lr do
             l
           else
             dot_matrix(ll, l)
@@ -1355,7 +1403,7 @@ defmodule Nx.BinaryBackend do
               |> householder_reflector(n, eps)
 
             rr =
-              if is_nil(rr) do
+              if is_nil(rr) or not compute_lr do
                 r
               else
                 dot_matrix(rr, r)

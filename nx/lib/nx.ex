@@ -7239,32 +7239,49 @@ defmodule Nx do
   `u` and `vt` are orthonormal matrices where `input_tensor = u.S.vt`,
   and `S` is the diagonal matrix which elements are the elements of `s`.
 
-  ## Options
+  The elemens of `s` are sorted from highest to lowest.
 
-    * `full_matrices`: `boolean`. Defaults to `true`
-      If `true`, `u` and `vt` have the shapes `{m, m}` and `{n, n}`.
-      Otherwise, shapes are `{m, k}` and `{k, m}`, with `k = min(M, N)`
-    * `compute_uv`: `boolean`. Defaults to `true`
+  ## Options
+    * `compute_uv`: `boolean`. Defaults to `false`
       Whether or not to compute `u` and `vt`. If `false`, the return value is `s`
 
   ## Examples
-      iex> Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
+      iex> Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]), compute_uv: true)
       {
         Nx.tensor([
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
           [0.0, 0, 1.0]
         ]),
-        Nx.tensor([1.0, 1.0, -1.0]),
+        Nx.tensor([1.0, 1.0, 1.0]),
         Nx.tensor([
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0, 1.0]
+          [0.0, 0, -1.0]
         ])
       }
+
+      iex> Nx.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]]), compute_uv: true)
+      {
+        Nx.tensor([
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
+          [0.0, 0, 1.0, 0.0],
+          [0.0, 0, 0.0, 1.0],
+        ]),
+        Nx.tensor([3.0, 2.0, 1.0]),
+        Nx.tensor([
+          [0.0, 1.0, 0.0],
+          [1.0, 0.0, 0.0],
+          [0.0, 0, -1.0]
+        ])
+      }
+
+      iex> Nx.svd(Nx.tensor([[2, 0, 0], [0, -3, 0], [0, 0, -1], [0, 0, 0]]))
+      Nx.tensor([3.0, 2.0, 1.0])
   """
   @doc type: :linalg
-  def svd(tensor) do
+  def svd(tensor, opts \\ []) do
     %T{type: type, shape: shape} = tensor = tensor!(tensor)
 
     output_type = Nx.Type.to_floating(type)
@@ -7276,7 +7293,7 @@ defmodule Nx do
        %{tensor | names: [nil], type: output_type, shape: s_shape},
        %{tensor | type: output_type, shape: v_shape}},
       tensor,
-      []
+      opts
     )
   end
 
