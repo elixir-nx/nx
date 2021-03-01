@@ -37,6 +37,8 @@ The first compilation will take a long time, as it needs to compile parts of Ten
 
 ### Common Installation Issues
 
+  * Missing Dependencies
+    * Some Erlang installs do not include some of the dependencies needed to compile the EXLA NIF. You may need to install `erlang-dev` separately.
   * EXLA
     * Make sure you use `:exla` as a `:github` dependency and not as a `:path` dependency to avoid rebuilds
   * Bazel
