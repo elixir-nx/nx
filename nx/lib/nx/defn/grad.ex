@@ -509,7 +509,7 @@ defmodule Nx.Defn.Grad do
     perm = List.insert_at(perm, dst, src)
     new_shape = Tuple.delete_at(x.shape, src)
     new_val = elem(new_shape, dst) * elem(x.shape, src)
-    new_shape = :erlang.setelement(dst+1, new_shape, new_val)
+    new_shape = put_elem(new_shape, dst, new_val)
     Nx.reshape(Nx.transpose(x, axes: perm), new_shape)
   end
 
