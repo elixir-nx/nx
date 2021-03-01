@@ -6317,12 +6317,17 @@ defmodule Nx do
   input or kernel tensor.
 
   You can split both the input and kernel tensor into feature groups
-  using `:feature_groups`. This will split both the input and kernel
+  using `:feature_group_size`. This will split both the input and kernel
   tensor channels and compute a grouped convolution. The size of the
-  kernel input feature channels times the number of feature groups must
+  kernel input feature channels times the size of the feature group must
   match the size of the input tensor feature channels. Additionally,
   the size of the kernel output feature channels must be evenly divisible
-  by the number of groups.
+  by the group size.
+
+  You can also split the input tensor along the batch dimension by
+  specifying `:batch_group_size`. This will compute a grouped convolution
+  in the same way as with `:feature_group_size`, however, the input
+  tensor will be split into groups along the batch dimension.
 
   ## Examples
 
