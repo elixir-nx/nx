@@ -3690,15 +3690,15 @@ defmodule Nx do
 
     {{one, _}, {two, _}, {three, _}} =
       if name in [:acos, :asin, :atan, :atanh, :erf_inv] do
-        {Code.eval_quoted(code, x: 0.1), Code.eval_quoted(code, x: 0.5),
-         Code.eval_quoted(code, x: 0.9)}
+        {Code.eval_quoted(code, x: to_float32(0.1)), Code.eval_quoted(code, x: to_float32(0.5)),
+         Code.eval_quoted(code, x: to_float32(0.9))}
       else
         {Code.eval_quoted(code, x: 1), Code.eval_quoted(code, x: 2), Code.eval_quoted(code, x: 3)}
       end
 
     first_val =
       if name in [:acos, :asin, :atan, :atanh, :erf_inv],
-        do: 0.1,
+        do: to_float32(0.1),
         else: 1
 
     list_of_vals =
