@@ -1,3 +1,6 @@
+all:	setup
+	cd exla && mix compile
+
 setup:
 	cd nx && mix deps.get
 	cd exla && mix deps.get
