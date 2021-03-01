@@ -772,8 +772,8 @@ defmodule Nx.DefnTest do
 
     test "qr" do
       assert {q, r} = default_qr(Nx.iota({3, 2}))
-      assert q == Nx.tensor([[0.0, -1.0], [1.0, 0.0], [0.0, 0.0]])
-      assert r == Nx.tensor([[2.0, 3.0], [0.0, -1.0]])
+      assert q == Nx.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
+      assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
     end
 
     @defn_compiler Nx.Defn.Evaluator

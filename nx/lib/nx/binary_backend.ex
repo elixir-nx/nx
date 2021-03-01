@@ -1227,6 +1227,8 @@ defmodule Nx.BinaryBackend do
     end
   end
 
+  defp householder_reflector(a, target_k, eps)
+
   defp householder_reflector([], target_k, _eps) do
     flat_list =
       for col <- 0..(target_k - 1), row <- 0..(target_k - 1), into: [] do
@@ -1236,7 +1238,7 @@ defmodule Nx.BinaryBackend do
     Enum.chunk_every(flat_list, target_k)
   end
 
-  defp householder_reflector([a_0 | tail] = a, target_k, eps \\ @default_eps) do
+  defp householder_reflector([a_0 | tail] = a, target_k, eps) do
     # This is a trick so we can both calculate the norm of a_reverse and extract the
     # head a the same time we reverse the array
     # receives a_reverse as a list of numbers and returns the reflector as a
@@ -1309,7 +1311,7 @@ defmodule Nx.BinaryBackend do
     reflector
   end
 
-  def householder_bidiagonalization(tensor, {m, n}, eps \\ @default_eps) do
+  defp householder_bidiagonalization(tensor, {m, n}, eps) do
     # For each column in `tensor`, apply
     # the current column's householder reflector from the left to `tensor`.
     # if the current column is not the penultimate, also apply
@@ -1338,7 +1340,7 @@ defmodule Nx.BinaryBackend do
               a
               |> Enum.at(col)
               |> Enum.drop(col + 1)
-              |> householder_reflector(n)
+              |> householder_reflector(n, eps)
 
             rr =
               if is_nil(rr) do
