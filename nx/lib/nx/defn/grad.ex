@@ -46,8 +46,7 @@ defmodule Nx.Defn.Grad do
   ## Recursion
 
   defp to_grad(expr, res, cache) do
-    Tree.composite(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans,
-                                        cache ->
+    Tree.composite(expr, cache, fn %T{data: %Expr{id: id, op: op, args: args}} = ans, cache ->
       key = [id | res.data.id]
 
       case cache do
@@ -392,15 +391,36 @@ defmodule Nx.Defn.Grad do
         feature_group_size > 1 ->
           y = reshape_axis_out_of(rhs0, feature_group_size, y)
           reshape_axis_into(rhs0, rhs1, y)
+
         batch_group_size > 1 ->
           y = reshape_axis_out_of(rhs0, batch_group_size, y)
           reshape_axis_into(rhs0, rhs1, y)
+
         true ->
           y
       end
 
-    lhs_padding = conv_lhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation)
-    rhs_padding = conv_rhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation)
+    lhs_padding =
+      conv_lhs_padding(
+        lhs_sdims,
+        rhs_sdims,
+        strides,
+        out_sdims,
+        padding,
+        lhs_dilation,
+        rhs_dilation
+      )
+
+    rhs_padding =
+      conv_rhs_padding(
+        lhs_sdims,
+        rhs_sdims,
+        strides,
+        out_sdims,
+        padding,
+        lhs_dilation,
+        rhs_dilation
+      )
 
     lhs_feature_group_size =
       if batch_group_size > 1, do: batch_group_size, else: feature_group_size
@@ -409,25 +429,28 @@ defmodule Nx.Defn.Grad do
       cond do
         batch_group_size > 1 ->
           {batch_group_size, 1}
+
         feature_group_size > 1 ->
           {1, feature_group_size}
+
         true ->
           {1, 1}
       end
 
     revd_weights = Nx.reverse(rhs, axes: rhs_sdim_axes)
 
-    gx = Nx.conv(g, revd_weights,
-          strides: lhs_dilation,
-          padding: lhs_padding,
-          input_dilation: strides,
-          kernel_dilation: rhs_dilation,
-          input_permutation: output_permutation,
-          kernel_permutation: t_rhs_permutation,
-          output_permutation: input_permutation,
-          feature_group_size: lhs_feature_group_size,
-          batch_group_size: 1
-        )
+    gx =
+      Nx.conv(g, revd_weights,
+        strides: lhs_dilation,
+        padding: lhs_padding,
+        input_dilation: strides,
+        kernel_dilation: rhs_dilation,
+        input_permutation: output_permutation,
+        kernel_permutation: t_rhs_permutation,
+        output_permutation: input_permutation,
+        feature_group_size: lhs_feature_group_size,
+        batch_group_size: 1
+      )
 
     gx =
       if batch_group_size > 1 do
@@ -437,17 +460,18 @@ defmodule Nx.Defn.Grad do
         gx
       end
 
-    gy = Nx.conv(x, g,
-          strides: rhs_dilation,
-          padding: rhs_padding,
-          input_dilation: lhs_dilation,
-          kernel_dilation: strides,
-          input_permutation: t_lhs_permutation,
-          kernel_permutation: t_out_permutation,
-          output_permutation: t_rhs_permutation,
-          feature_group_size: rhs_feature_group_size,
-          batch_group_size: rhs_batch_group_size
-        )
+    gy =
+      Nx.conv(x, g,
+        strides: rhs_dilation,
+        padding: rhs_padding,
+        input_dilation: lhs_dilation,
+        kernel_dilation: strides,
+        input_permutation: t_lhs_permutation,
+        kernel_permutation: t_out_permutation,
+        output_permutation: t_rhs_permutation,
+        feature_group_size: rhs_feature_group_size,
+        batch_group_size: rhs_batch_group_size
+      )
 
     {dx, cache} = to_grad(x, gx, cache)
     {dy, cache} = to_grad(y, gy, cache)
@@ -463,7 +487,15 @@ defmodule Nx.Defn.Grad do
     |> List.to_tuple()
   end
 
-  defp conv_lhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation) do
+  defp conv_lhs_padding(
+         lhs_sdims,
+         rhs_sdims,
+         strides,
+         out_sdims,
+         padding,
+         lhs_dilation,
+         rhs_dilation
+       ) do
     lhs_dilated_padding_config = Enum.map(lhs_dilation, &{0, 0, &1 - 1})
     rhs_dilated_padding_config = Enum.map(rhs_dilation, &{0, 0, &1 - 1})
     out_dilated_padding_config = Enum.map(strides, &{0, 0, &1 - 1})
@@ -480,12 +512,20 @@ defmodule Nx.Defn.Grad do
     pad_after =
       [lhs_dilated_shape, rhs_dilated_shape, out_dilated_shape, pad_before]
       |> Enum.zip()
-      |> Enum.map(fn {l, r, o, p} -> (l + r) - 1 - o - p end)
+      |> Enum.map(fn {l, r, o, p} -> l + r - 1 - o - p end)
 
     Enum.zip(pad_before, pad_after)
   end
 
-  defp conv_rhs_padding(lhs_sdims, rhs_sdims, strides, out_sdims, padding, lhs_dilation, rhs_dilation) do
+  defp conv_rhs_padding(
+         lhs_sdims,
+         rhs_sdims,
+         strides,
+         out_sdims,
+         padding,
+         lhs_dilation,
+         rhs_dilation
+       ) do
     lhs_dilated_padding_config = Enum.map(lhs_dilation, &{0, 0, &1 - 1})
     rhs_dilated_padding_config = Enum.map(rhs_dilation, &{0, 0, &1 - 1})
     out_dilated_padding_config = Enum.map(strides, &{0, 0, &1 - 1})
@@ -497,7 +537,7 @@ defmodule Nx.Defn.Grad do
     total_in_pad =
       [out_dilated_shape, rhs_dilated_shape, lhs_dilated_shape]
       |> Enum.zip()
-      |> Enum.map(fn {o, r, l} -> (o + r) - l - 1 end)
+      |> Enum.map(fn {o, r, l} -> o + r - l - 1 end)
 
     padding
     |> Enum.zip(total_in_pad)
@@ -505,7 +545,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp reshape_axis_into(src, dst, x) do
-    perm = for i <- 0..Nx.rank(x.shape) - 1, i != src, do: i
+    perm = for i <- 0..(Nx.rank(x.shape) - 1), i != src, do: i
     perm = List.insert_at(perm, dst, src)
     new_shape = Tuple.delete_at(x.shape, src)
     new_val = elem(new_shape, dst) * elem(x.shape, src)
