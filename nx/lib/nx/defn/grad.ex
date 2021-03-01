@@ -556,7 +556,7 @@ defmodule Nx.Defn.Grad do
   defp reshape_axis_out_of(src, size1, x) do
     size2 = div(elem(x.shape, src), size1)
     new_shape = x.shape
-    new_shape = put_elem(new_shape, src+1, size1)
+    new_shape = put_elem(new_shape, src, size1)
     new_shape = Tuple.insert_at(new_shape, src+1, size2)
     Nx.reshape(x, new_shape)
   end
