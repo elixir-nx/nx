@@ -14,28 +14,39 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
 You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know and give us feedback.
 
-*Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/) and [Australian Wildlife Conservancy](https://www.australianwildlife.org).*
-
 For Python developers, `Nx` currently takes its main inspirations from [`Numpy`](https://numpy.org/) and [`JAX`](https://github.com/google/jax) but packaged into a single unified library.
 
-## Community and links
+## Community
 
-The Nx project and team mantain a handful of resources:
+Developers interested in Numerical Elixir can join the community and interact in the following places:
 
-  * [Source and issues tracker](https://github.com/elixir-nx/nx)
-  * [The Nx mailing list](https://groups.google.com/g/elixir-nx)
+  * For general discussion on Numerical Elixir and Machine Learning, [join the #machine-learning channel in the Erlang Ecosystem Foundation Slack](https://erlef.org/wg/machine-learning) (click on the link on the sidebar on the right)
 
-Discussions about Nx are also welcome in any of the Elixir community spaces, such as the [Elixir Forum](https://elixirforum.com/) and the other channels listed [on the sidebar of elixir-lang.org](https://elixir-lang.org/).
+  * For bugs and pull requests, use the [issues tracker](https://github.com/elixir-nx/nx)
 
-### Resources
+  * For feature requests and Nx-specific discussion, [join the Nx mailing list](https://groups.google.com/g/elixir-nx)
+
+Nx discussion is also welcome on any of the Elixir-specific forums and chats maintained by the community.
+
+## Support
+
+In order to support Nx, you might:
+
+  * Become a supporting member or a sponsor of the Erlang Ecosystem Foundation. The Nx project is part of the [Machine Learning WG](https://erlef.org/wg/machine-learning)
+
+  * Nx's mascot is the Numbat, a marsupial native to southern Australia. Unfortunately the Numbat are endangered and it is estimated to be fewer than 1000 left. If you enjoy this project, consider donating to Numbat conservation efforts, such as [Project Numbat](https://www.numbat.org.au/) and [Australian Wildlife Conservancy](https://www.australianwildlife.org). The Project Numbat website also contains Numbat related swag.
+
+## Resources
 
 Here are some introductory resources with more information on Nx as a whole:
 
   * [A post by José Valim on Dashbit's blog announcing Nx, outlining some of the design decisions, benchmarks, and general direction](https://dashbit.co/blog/nx-numerical-elixir-is-now-publicly-available) (text)
 
-  * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio)
+  * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio - starts around 8 minutes in)
 
-  * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc)
+  * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc) (video)
+
+  * [Sean Moriarity's blog](https://seanmoriarity.com/) containing tips on how to use Nx (text)
 
 ## Installation
 
@@ -72,10 +83,10 @@ using this library:
 iex> t = Nx.tensor([[1, 2], [3, 4]])
 iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
 #Nx.Tensor<
-  f64[2][2]
+  f32[2][2]
   [
-    [0.03205860328008499, 0.08714431874203257],
-    [0.23688281808991013, 0.6439142598879722]
+    [0.032058604061603546, 0.08714432269334793],
+    [0.23688282072544098, 0.6439142227172852]
   ]
 >
 ```
@@ -105,7 +116,7 @@ defn softmax(t) do
 end
 ```
 
-Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the tensor type and shape. By passing `client: :cuda` or `client: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
+Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the input tensors type and shape. By passing `client: :cuda` or `client: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:
 
 ```
 Name                       ips        average  deviation         median         99th %
