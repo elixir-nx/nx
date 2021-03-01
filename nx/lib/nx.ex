@@ -6656,13 +6656,13 @@ defmodule Nx do
         padding_config
       )
 
-    output_permutation =
+    inv_output_permutation =
       output_permutation
       |> Enum.with_index()
       |> Enum.sort()
       |> Enum.map(&elem(&1, 1))
 
-    {shape, names} = Nx.Shape.transpose(shape, output_permutation, names)
+    {shape, names} = Nx.Shape.transpose(shape, inv_output_permutation, names)
 
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
     out = %{tensor | type: type, shape: shape, names: names}

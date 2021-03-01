@@ -768,6 +768,12 @@ defmodule Nx.BinaryBackend do
     kernel_permutation = opts[:kernel_permutation]
     output_permutation = opts[:output_permutation]
 
+    output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
+
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
     #
