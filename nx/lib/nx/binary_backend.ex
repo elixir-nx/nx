@@ -1067,7 +1067,8 @@ defmodule Nx.BinaryBackend do
   @impl true
   def svd(
         {u_holder, %{shape: {m, n} = s_shape, type: output_type} = s_holder, v_holder},
-        %{type: input_type} = tensor
+        %{type: input_type, shape: {m, n} = input_shape} = tensor,
+        _opts
       ) do
     # This implementation is a mixture of concepts described in [1] and the
     # algorithmic descriptions found in [2] and [3]
@@ -1078,172 +1079,111 @@ defmodule Nx.BinaryBackend do
     # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
     # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
 
-    a_bin = to_binary(tensor)
+    a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
 
-    {u_bin, d_bin, v_bin} = householder_bidiagonalization(a_bin, s_shape, input_type, output_type)
+    {u, d, v} = householder_bidiagonalization(a, s_shape)
 
     max_iter = 100
 
-    {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
+    {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
-    Enum.reduce_while(1..max_iter, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}, fn
-      _, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm} ->
-        if off_diag_norm > 1.0e-6 * fro_norm do
-          # Execute a round of jacobi rotations on u, d and v
-          {u_bin, d_bin, v_bin} =
-            for p <- 0..(m - 1), q <- (p + 1)..(n - 1), reduce: {u_bin, d_bin, v_bin} do
-              {u_bin, d_bin, v_bin} ->
-                # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
-                # However, we'll also need to modify d_bin afterwards, so we need to both access these values and accumulate
-                # the bitstrings that come before, between and after, [p, 0..n-1] and [q, 0..n-1] for updating afterwards
-                d_values =
-                  match_types [output_type] do
-                    acc = %{
-                      d_pp: "",
-                      d_pq: "",
-                      d_qp: "",
-                      d_qq: "",
-                      row_p: "",
-                      row_q: "",
-                      before_row_p: "",
-                      between_rows_p_and_q: "",
-                      after_row_q: "",
-                      row: 0,
-                      col: 0
-                    }
+    {u, s, v} =
+      Enum.reduce_while(1..max_iter, {u, d, v, off_diag_norm, fro_norm}, fn
+        _, {u, d, v, off_diag_norm, fro_norm} ->
+          eps = 1.0e-6 * fro_norm
 
-                    for <<match!(x, 0) <- d_bin>>, reduce: acc do
-                      %{row: row, col: col} = acc ->
-                        acc =
-                          case {row, col} do
-                            {^p, ^p} ->
-                              acc
-                              |> Map.put(:d_pp, x)
-                              |> Map.put(:row_p, acc.row_p <> x)
+          if off_diag_norm > eps do
+            # Execute a round of jacobi rotations on u, d and v
+            {u, d, v} =
+              for p <- 0..(m - 1), q <- (p + 1)..(n - 1), reduce: {u, d, v} do
+                {u, d, v} ->
+                  # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
+                  row_p = Enum.at(d, p)
+                  row_q = Enum.at(d, q)
+                  IO.inspect(d, label: "d")
+                  IO.inspect(p, label: "p")
+                  IO.inspect(q, label: "q")
+                  IO.inspect(row_p, label: "row_p")
+                  IO.inspect(row_q, label: "row_q")
 
-                            {^p, ^q} ->
-                              acc
-                              |> Map.put(:d_pq, x)
-                              |> Map.put(:row_p, acc.row_p <> x)
+                  d_pp = Enum.at(row_p, p)
+                  d_pq = Enum.at(row_p, q)
+                  d_qp = Enum.at(row_q, p)
+                  d_qq = Enum.at(row_q, q)
 
-                            {^p, _} ->
-                              Map.put(acc, :row_q, acc.row_p <> x)
+                  {rot_l, rot_r} = jacobi_rotators(d_pp, d_pq, d_qp, d_qq, eps)
 
-                            {^q, ^q} ->
-                              acc
-                              |> Map.put(:d_qq, x)
-                              |> Map.put(:row_q, acc.row_q <> x)
+                  [row_p, row_q] = rot_l |> transpose_matrix() |> dot_matrix([row_p, row_q])
 
-                            {^q, ^p} ->
-                              acc
-                              |> Map.put(:d_qp, x)
-                              |> Map.put(:row_q, acc.row_q <> x)
+                  # D[[p, q], :] = [[row_p], [row_q]]
+                  d = d |> List.replace_at(p, row_p) |> List.replace_at(q, row_q)
 
-                            {^q, _} ->
-                              Map.put(acc, :row_q, acc.row_q <> x)
+                  IO.inspect(d, label: "d_updated")
 
-                            {row, _} when row < p ->
-                              Map.put(acc, :before_row_p, acc.before_row_p <> x)
+                  d_transposed = transpose_matrix(d)
+                  d_col_p = Enum.at(d_transposed, p)
+                  d_col_q = Enum.at(d_transposed, q)
 
-                            {row, _} when row > p and row < q ->
-                              Map.put(acc, :before_row_p, acc.between_rows_p_and_q <> x)
+                  IO.inspect(rot_r, label: "rot r")
+                  IO.inspect([d_col_p, d_col_q], label: "[d_col_p, d_col_q]")
 
-                            _ ->
-                              Map.put(acc, :after_row_q, acc.after_row_q <> x)
-                          end
+                  [d_col_p, d_col_q] = dot_matrix([d_col_p, d_col_q], rot_r)
 
-                        {row, col} =
-                          if col + 1 == n do
-                            {row + 1, 0}
-                          else
-                            {row, col + 1}
-                          end
+                  u_transposed = transpose_matrix(u)
+                  u_col_p = Enum.at(u_transposed, p)
+                  u_col_q = Enum.at(u_transposed, q)
 
-                        acc |> Map.put(:row, row) |> Map.put(:col, col)
-                    end
-                  end
+                  [u_col_p, u_col_q] = dot_matrix([u_col_p, u_col_q], rot_l)
 
-                # {rot_l, rot_l_t, rot_r, shape_l, shape_l_t, shape_r} =
-                #   jacobi_rotators(acc.d_pp, acc.d_pq, acc.d_qp, acc.d_qq)
-                rot_l = ""
-                shape_l = ""
-                row_l_t = ""
-                shape_l_t = ""
-                rot_r = ""
-                shape_r = ""
+                  v_transposed = transpose_matrix(v)
+                  v_col_p = Enum.at(v_transposed, p)
+                  v_col_q = Enum.at(v_transposed, q)
 
-                {_, num_bits} = output_type
-                row_size = num_bits * n
+                  [v_col_p, v_col_q] = dot_matrix([v_col_p, v_col_q], rot_r)
 
-                <<row_p::bitstring-size(row_size), row_q::bitstring>> =
-                  dot_binary(
-                    row_l_t,
-                    shape_l_t,
-                    output_type,
-                    d_values.row_p <> d_values.row_q,
-                    {2, n},
-                    output_type,
-                    output_type
-                  )
+                  d =
+                    d_transposed
+                    |> IO.inspect(label: "d_transposed")
+                    |> List.replace_at(p, d_col_p)
+                    |> IO.inspect(label: "d_transposed replace p")
+                    |> List.replace_at(q, d_col_q)
+                    |> IO.inspect(label: "d_transposed replace q")
+                    |> transpose_matrix()
 
-                # D[[p, q], :] = [[row_p], [row_q]]
-                d_bin =
-                  d_values.before_row_p <>
-                    row_p <> d_values.between_rows_p_and_q <> row_q <> d_values.after_row_q
+                  u =
+                    u_transposed
+                    |> List.replace_at(p, u_col_p)
+                    |> List.replace_at(q, u_col_q)
+                    |> transpose_matrix()
 
-                d_cols_pq = aggregate_axes(d_bin, [0..(m - 1), [p, q]], {m, n}, num_bits)
+                  v =
+                    v_transposed
+                    |> List.replace_at(p, v_col_p)
+                    |> List.replace_at(q, v_col_q)
+                    |> transpose_matrix()
 
-                d_cols_pq =
-                  dot_binary(
-                    d_cols_pq,
-                    {m, 2},
-                    output_type,
-                    rot_r,
-                    shape_r,
-                    output_type,
-                    output_type
-                  )
+                  IO.inspect(d, label: "d_result")
+                  {u, d, v}
+              end
 
-                u_cols_pq = aggregate_axes(u_bin, [0..(m - 1), [p, q]], {m, m}, num_bits)
+            # calculate a posteriori norms for d, so the next iteration of Enum.reduce_while can decide to halt
+            {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
-                u_cols_pq =
-                  dot_binary(
-                    u_cols_pq,
-                    {m, 2},
-                    output_type,
-                    rot_l,
-                    shape_l,
-                    output_type,
-                    output_type
-                  )
+            {:cont, {u, d, v, off_diag_norm, fro_norm}}
+          else
+            {:halt, {u, d, v, nil, nil}}
+          end
+      end)
 
-                v_cols_pq = aggregate_axes(v_bin, [0..(n - 1), [p, q]], {n, n}, num_bits)
+    u_bin = matrix_to_binary(u, output_type)
+    s_bin = matrix_to_binary(s, output_type)
+    v_bin = matrix_to_binary(v, output_type)
 
-                v_cols_pq =
-                  dot_binary(
-                    v_cols_pq,
-                    {n, 2},
-                    output_type,
-                    rot_r,
-                    shape_r,
-                    output_type,
-                    output_type
-                  )
+    u = from_binary(u_holder, u_bin)
+    s = from_binary(s_holder, s_bin)
+    v = from_binary(v_holder, v_bin)
 
-                # assign d_cols_pq to d_bin
-                # assign u_cols_pq to u_bin
-                # assign v_cols_pq to v_bin
-                {u_bin, d_bin, v_bin}
-            end
-
-          # calculate a posteriori norms for d_bin, so the next iteration of Enum.reduce_while can decide to halt
-          {fro_norm, _diag_norm, off_diag_norm} = get_matrix_norms(d_bin, s_shape, output_type)
-
-          {:cont, {u_bin, d_bin, v_bin, off_diag_norm, fro_norm}}
-        else
-          {:halt, {u_bin, d_bin, v_bin}}
-        end
-    end)
+    {u, s, v}
   end
 
   defp dot_matrix(m1, m2) do
@@ -1281,23 +1221,6 @@ defmodule Nx.BinaryBackend do
         end
 
       Enum.chunk_every(flat_list, num_cols)
-    end
-  end
-
-  defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
-    # matrix multiplication for when b1 and b2 are matrices
-    # represented in binary form
-    fun = fn lhs, rhs, acc ->
-      res = binary_to_number(lhs, type1) * binary_to_number(rhs, type2) + acc
-      {res, res}
-    end
-
-    v1 = aggregate_axes(b1, [1], shape1, s1)
-    v2 = aggregate_axes(b2, [0], shape2, s2)
-
-    for b1 <- v1, b2 <- v2, into: <<>> do
-      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, 0, fun)
-      scalar_to_binary(bin, output_type)
     end
   end
 
@@ -1374,105 +1297,109 @@ defmodule Nx.BinaryBackend do
     reflector
   end
 
-  defp householder_bidiagonalization(tensor, {m, n}, input_type, output_type) do
+  defp householder_bidiagonalization(tensor, {m, n}) do
     # For each column in `tensor`, apply
-    # the current column's householder reflector from the left to tensor.
+    # the current column's householder reflector from the left to `tensor`.
     # if the current column is not the penultimate, also apply
     # the corresponding row's householder reflector from the right
 
-    for col <- 0..(n - 1), reduce: {nil, tensor, nil, input_type} do
-      {ll, a, rr, current_type} ->
-        # a[[0..m-1, col]]
-        {a_reverse, _, _, _} =
-          match_types [current_type] do
-            for <<match!(x, 0) <- tensor>>, reduce: {[], 0, 0, 0} do
-              {acc, num_rows_a_prev, r, c} ->
-                {acc, num_rows_a} =
-                  if r >= col and c == col do
-                    {[read!(x, 0) | acc], num_rows_a_prev + 1}
-                  else
-                    {acc, num_rows_a_prev}
-                  end
+    for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
+      {ll, a, rr} ->
+        # a[[0..m-1, col]] -> take all rows for `col` column
+        a_col = a |> Enum.map(&Enum.at(&1, col)) |> List.flatten()
 
-                {r, c} =
-                  if c + 1 == n do
-                    {r + 1, 0}
-                  else
-                    {r, c + 1}
-                  end
-
-                {acc, num_rows_a, r, c}
-            end
-          end
-
-        l = householder_reflector(a_reverse, m)
+        l = householder_reflector(a_col, m)
 
         ll =
           if is_nil(ll) do
             l
           else
-            dot_binary(ll, {m, m}, output_type, l, {m, m}, output_type, output_type)
+            dot_matrix(ll, l)
           end
 
-        a = dot_binary(ll, {m, m}, output_type, a, {m, n}, current_type, output_type)
+        a = dot_matrix(ll, a)
 
         {a, rr} =
           if col < m - 2 do
-            # a[[col, 0..n-1]]
-            {_, num_bits} = current_type
-            row_size = num_bits * n
-            prefix_size = row_size * col
-
-            <<_::bitstring-size(prefix_size), current_row::bitstring-size(row_size),
-              _::bitstring>> = a
-
-            r = current_row |> String.reverse() |> householder_reflector(n)
+            # r = householder_reflector(a[[col, 0..n-1]], n)
+            r = a |> Enum.at(col) |> householder_reflector(n)
 
             rr =
               if is_nil(rr) do
                 r
               else
-                dot_binary(rr, {n, n}, output_type, r, {n, n}, output_type, output_type)
+                dot_matrix(rr, r)
               end
 
-            a = dot_binary(a, {m, n}, current_type, r, {n, n}, output_type, output_type)
+            a = dot_matrix(a, r)
             {a, rr}
           else
             {a, rr}
           end
 
-        {ll, a, rr, output_type}
+        {ll, a, rr}
     end
   end
 
-  defp get_matrix_norms(tensor, {_m, n}, type) do
-    # returns a tuple with {frobenius_norm, diagonal_norm, off_diagonal_norm}
-    {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, _row, _col} =
-      match_types [type] do
-        for <<match!(x_bin, 0) <- tensor>>, reduce: {0, 0, 0, 0, 0} do
-          {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, row, col} ->
-            x_sq = :math.pow(read!(x_bin, 0), 2)
-            fro_norm_sq = fro_norm_sq + x_sq
+  defp get_frobenius_norm(tensor) do
+    # returns a tuple with {frobenius_norm, off_diagonal_norm}
+    {fro_norm_sq, off_diag_norm_sq, _row_idx} =
+      Enum.reduce(tensor, {0, 0, 0}, fn row, {fro_norm_sq, off_diag_norm_sq, row_idx} ->
+        {fro_norm_sq, off_diag_norm_sq, _} =
+          Enum.reduce(row, {fro_norm_sq, off_diag_norm_sq, 0}, fn x,
+                                                                  {fro_norm_sq, off_diag_norm_sq,
+                                                                   col_idx} ->
+            if col_idx == row_idx do
+              {fro_norm_sq + x * x, off_diag_norm_sq, col_idx + 1}
+            else
+              {fro_norm_sq + x * x, off_diag_norm_sq + x * x, col_idx + 1}
+            end
+          end)
 
-            {diag_norm_sq, off_diag_norm_sq} =
-              if row == col do
-                {diag_norm_sq + x_sq, off_diag_norm_sq}
-              else
-                {diag_norm_sq, off_diag_norm_sq + x_sq}
-              end
+        {fro_norm_sq, off_diag_norm_sq, row_idx + 1}
+      end)
 
-            {row, col} =
-              if col + 1 == n do
-                {row + 1, 0}
-              else
-                {row, col + 1}
-              end
+    {:math.sqrt(fro_norm_sq), :math.sqrt(off_diag_norm_sq)}
+  end
 
-            {fro_norm_sq, diag_norm_sq, off_diag_norm_sq, row, col}
-        end
+  defp jacobi_rotators(pp, pq, qp, qq, eps) do
+    t = pp + qq
+    d = qp - pq
+
+    {s, c} =
+      if abs(d) < eps do
+        {0, 1}
+      else
+        u = t / d
+        den = :math.sqrt(1 + u * u)
+        {-1 / den, u / den}
       end
 
-    {:math.sqrt(fro_norm_sq), :math.sqrt(diag_norm_sq), :math.sqrt(off_diag_norm_sq)}
+    rot = [[c, s], [-s, c]]
+    rot_t = transpose_matrix(rot)
+    [[m00, m01], [_, m11]] = dot_matrix(rot_t, [[pp, pq], [qp, qq]])
+    {c_r, s_r} = make_jacobi(m00, m11, m01, eps)
+    rot_r = [[c_r, s_r], [-s_r, c_r]]
+    rot_l = dot_matrix(rot, rot_r)
+    {rot_l, rot_r}
+  end
+
+  defp make_jacobi(pp, qq, pq, eps) do
+    if abs(pq) <= eps do
+      {1, 0}
+    else
+      tau = (qq - pp) / (2 * pq)
+
+      t =
+        if tau >= 0 do
+          1 / (tau + :math.sqrt(1 + tau * tau))
+        else
+          -1 / (-tau + :math.sqrt(1 + tau * tau))
+        end
+
+      c = 1 / :math.sqrt(1 + t * t)
+      {c, t * c}
+    end
   end
 
   ## Aggregation

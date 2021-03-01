@@ -917,7 +917,7 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
-  def svd({m, n}, shape) do
+  def svd({m, n}) do
     {{m, m}, {m, n}, {n, n}}
   end
 
