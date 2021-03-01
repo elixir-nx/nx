@@ -53,6 +53,17 @@ The first compilation will take a long time, as it needs to compile parts of Ten
 
 ElixirLS will need to run its own compile of `:exla`, so if you want to use ElixirLS, be prepared to possibly wait another 2 hours for it complete. As soon as you open VSCode with ElixirLS enabled and `:exla` as a dependency, let the ElixirLS compile complete (watch the output tab -> ElixirlS) *before* clicking around to any other files in your project, or else ElixirLS will rapid fire queue compiles that will all need to complete before you will be able to use your project. If no output appears in the ElixirLS output, you may need to trigger the compile by opening a file and saving it. Proceed slowly, one step at a time, and as soon as you see a build kick off in the ElixirLS output panel, walk away from the editor until it is done.
 
+#### asdf python on macOS
+
+Bazel cannot find Python installed via the asdf version manager on macOS. The error is `unknown command: python. Perhaps you have to reshim?`. One workaround is to use the Python that homebrew installs. To do this prepend the homebrew python directories to your path before building. The `/usr/local/opt` path is required as that's where homebrew puts non-versioned python links and the build process looks for `python`, not `python3`
+
+```
+export PATH=/usr/local/opt/python@3.9/libexec/bin:/usr/local/bin:$PATH
+mix deps.compile
+```
+
+You may need to remove `~/.cache/exla` to clean up from previous build attempts.
+
 ### GPU Support
 
 To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1. You need either cuDNN 7 or 8 installed. [See the installation instructions](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html) and check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
