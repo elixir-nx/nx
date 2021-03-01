@@ -308,7 +308,7 @@ defmodule NxTest do
       lhs = Nx.iota({2, 4, 2, 2}, type: {:f, 32})
       rhs = Nx.iota({6, 2, 2, 2}, type: {:f, 32})
 
-      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, groups: 2) ==
+      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, feature_group_size: 2) ==
                Nx.tensor(
                  [
                    [[[140.0]], [[364.0]], [[588.0]], [[2572.0]], [[3308.0]], [[4044.0]]],
@@ -951,24 +951,62 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        ~r/size of input dimension 1 divided by groups must match size of kernel dimension 1/,
+        ~r/size of input channels divided by feature groups must match size of kernel channels/,
         fn ->
           Nx.conv(t, kernel)
         end
       )
     end
 
-    test "raises when :groups cannot divide evenly into the 1st dim (elem 0) of the kernel" do
+    test "raises when :feature_group_size cannot divide evenly into the input channels of the kernel" do
       t = Nx.iota({3, 2, 2})
       kernel = Nx.broadcast(Nx.tensor(1.0), {3, 1, 1})
 
       assert_raise(
         ArgumentError,
-        ~r/size of kernel dimension 0 must be evenly divisible by groups/,
+        ~r/size of kernel output channels must be evenly divisible by feature groups/,
         fn ->
-          Nx.conv(t, kernel, groups: 2)
+          Nx.conv(t, kernel, feature_group_size: 2)
         end
       )
+    end
+
+    test "raises if both :feature_group_size and :batch_group_size are greater than 1" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/either batch groups or feature groups must be 1/,
+        fn ->
+          Nx.conv(t, kernel, feature_group_size: 2, batch_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if :batch_group_size does not evenly divide batch size" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/batch groups must evenly divide input batch size/,
+        fn ->
+          Nx.conv(t, kernel, batch_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if :batch_group_size is not a multiple of output feature channels" do
+      t = Nx.iota({3, 2, 3, 3})
+      kernel = Nx.iota({8, 2, 2, 2})
+
+      assert_raise(
+        ArgumentError,
+        ~r/size of kernel output channels must be evenly divisible by batch groups/,
+        fn ->
+          Nx.conv(t, kernel, batch_group_size: 3)
+        end)
     end
 
     test "raises when :strides length does not match spatial dims (input shape without 1st two dims)" do
