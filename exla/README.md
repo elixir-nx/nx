@@ -37,6 +37,8 @@ The first compilation will take a long time, as it needs to compile parts of Ten
 
 #### Common Installation Issues
 
+  * EXLA
+    * Make sure you use `:exla` as a `:github` dependency and not as a `:path` dependency to avoid rebuilds
   * Bazel
     * Use `bazel --version` to check your Bazel version, make sure you are using v3.1
     * Most binaries are also available on [Github](https://github.com/bazelbuild/bazel/releases)
@@ -46,11 +48,10 @@ The first compilation will take a long time, as it needs to compile parts of Ten
       * asdf global bazel 3.1.0
   * ElixirLS on VSCode
     * Make sure that your Python installation is available globally, as ElixirLS won't know how to activate Python
-  * When importing `:exla` into a project, make sure you use a git ref, and *not* `path: "../exla"`. Using a local reference will trigger a full build of `:exla` every time you compile your project.
 
 #### Compiling in ElixirLS
 
-ElixirLS will need to run its own compile of `:exla`, so if you want to use ElixirLS, be prepared to possibly wait another 2 hours for this compile to complete. As soon as you open VSCode with ElixirLS enabled and `:exla` as a dependency, let the ElixirLS compile complete (watch the output tab -> ElixirlS) *before* clicking around to any other files in your project, or else ElixirLS will rapid fire queue compiles that will all need to complete before you will be able to use your project. If no output appears in the ElixirLS output, you may need to trigger the compile by opening a file and saving it. Proceed slowly, one step at a time, and as soon as you see a build kick off in the ElixirLS output panel, walk away from your computer until it is done.
+ElixirLS will need to run its own compile of `:exla`, so if you want to use ElixirLS, be prepared to possibly wait another 2 hours for it complete. As soon as you open VSCode with ElixirLS enabled and `:exla` as a dependency, let the ElixirLS compile complete (watch the output tab -> ElixirlS) *before* clicking around to any other files in your project, or else ElixirLS will rapid fire queue compiles that will all need to complete before you will be able to use your project. If no output appears in the ElixirLS output, you may need to trigger the compile by opening a file and saving it. Proceed slowly, one step at a time, and as soon as you see a build kick off in the ElixirLS output panel, walk away from the editor until it is done.
 
 ### GPU Support
 
