@@ -15,6 +15,7 @@ defmodule Nx.BinaryBackend do
 
   alias Nx.Tensor, as: T
   alias Nx.BinaryBackend, as: B
+  alias Nx.BinaryBackend.Binary
 
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
@@ -426,6 +427,10 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
+  defp range(len) do
+    0..(len - 1)
+  end
+
   @impl true
   def dot(out, left, axes1, [], right, axes2, []) do
     dot4(out, left, axes1, right, axes2)
@@ -433,29 +438,17 @@ defmodule Nx.BinaryBackend do
 
   def dot(out, tensor1, axes1, batch_axes1, tensor2, axes2, batch_axes2) do
     %{type: type_out} = out
-    %{names: names1, shape: shape1, type: type1 = {_, sizeof1}} = tensor1
-    %{names: names2, shape: shape2, type: type2 = {_, sizeof2}} = tensor2
-    
+    %{names: names1, shape: shape1, type: type1} = tensor1
+    %{names: names2, shape: shape2, type: type2} = tensor2
+
     data1 = to_binary(tensor1)
     data2 = to_binary(tensor2)
 
-    batch_constrict_axes1 = Nx.Shape.shift_axes(axes1, -length(batch_axes1))
-    batch_constrict_axes2 = Nx.Shape.shift_axes(axes2, -length(batch_axes2))
+    # batch_constrict_axes1 = Nx.Shape.shift_axes(axes1, -length(batch_axes1))
+    # batch_constrict_axes2 = Nx.Shape.shift_axes(axes2, -length(batch_axes2))
 
-    {batch_shape1, batch_names1} = Nx.Shape.contract(shape1, batch_axes1, names1, false)
-    {batch_shape2, batch_names2} = Nx.Shape.contract(shape2, batch_axes2, names2, false)
-
-    {batch_shape, batch_names} =
-      Nx.Shape.zip_reduce(
-        batch_shape1,
-        batch_constrict_axes1,
-        batch_names1,
-        batch_shape2,
-        batch_constrict_axes2,
-        batch_names2
-      )
-
-    batch_out = %{out | shape: batch_shape, names: batch_names}
+    {batch_shape1, _} = Nx.Shape.contract(shape1, batch_axes1, names1, false)
+    {batch_shape2, _} = Nx.Shape.contract(shape2, batch_axes2, names2, false)
 
     batch_count1 = Nx.Shape.batch_count(shape1, batch_axes1)
     batch_count2 = Nx.Shape.batch_count(shape2, batch_axes2)
@@ -463,129 +456,39 @@ defmodule Nx.BinaryBackend do
     size1 = Nx.size(tensor1)
     size2 = Nx.size(tensor2)
 
-    batch_size1 = div(size1, batch_count1) 
-    batch_size2 = div(size2, batch_count2)
-
-    batch_sizeof1 = batch_size1 * sizeof1
-    batch_sizeof2 = batch_size2 * sizeof2
-
-    batch_rank1 = Nx.rank(batch_shape1)
-    batch_rank2 = Nx.rank(batch_shape2)
-
-    batch_data_axes1 = Enum.to_list(0..(batch_rank1 - 1))
-    batch_data_axes2 = Enum.to_list(0..(batch_rank2 - 1))
-
+    size = max(size1, size2)
+    batch_count = max(batch_count1, batch_count2)
+    batch_size = div(size, batch_count)
+    
     data_out =
-      for i1 <- 0..(batch_count1 - 1), reduce: <<>> do
-        data_acc ->
-          consumed1 = i1 * batch_sizeof1
-          <<_::size(consumed1)-bitstring, batch_data1::size(batch_sizeof1)-bitstring, _::bitstring>> = data1
-          IO.inspect({i1, consumed1, batch_sizeof1}, label: :i1)
-
-          consumed2 = i1 * batch_sizeof2
-          <<_::size(consumed2)-bitstring, batch_data2::size(batch_sizeof2)-bitstring, _::bitstring>> = data2
-          IO.inspect({i1, consumed2, batch_sizeof2}, label: :i1)
-
-          batch_data_out =
-            for i3 <- (0..(batch_size1 - 1)), reduce: <<>> do
-              big_acc ->
-                row_dot =
-                  for i4 <- (0..(batch_size2 - 1)), reduce: 0 do
-                    little_acc ->
-                      consumed3 = i3 * sizeof1
-                      <<_::size(consumed3)-bitstring, inner1::size(sizeof1)-bitstring, _::bitstring>> = batch_data1
-                      consumed4 = i4 * sizeof2
-                      <<_::size(consumed4)-bitstring, inner2::size(sizeof2)-bitstring, _::bitstring>> = batch_data2
-                      
-                      
-                      n1 = binary_to_number(inner1, type1)
-                      n2 = binary_to_number(inner2, type2)
-                      IO.inspect([n1: n1, n2: n2], label: inspect({i3, i4}))
-                      prod = n1 * n2
-                      prod + little_acc
-                  end
-                big_acc <> scalar_to_binary(row_dot, type_out)
-            end
-        data_acc <> batch_data_out
+      for b <- range(batch_count), reduce: <<>> do
+        acc ->
+          b1 = rem(b, batch_count1)
+          b2 = rem(b, batch_count2)
+          offset1 = b1 * batch_size
+          offset2 = b2 * batch_size
+          dot_batch(acc, type_out, offset1, offset2, batch_shape1, type1, data1, batch_shape2, type2, data2)
       end
     from_binary(out, data_out)
   end
 
-  defp dot_batch_add(
-    {_, sizeof1} = type1,
-    {d10, d11} = shape1,
-    batch_sizeof1,
-    data1,
-    {_, sizeof2} = type2,
-    {d20, d21} = shape2,
-    batch_sizeof2,
-    data2,
-    batch_i,
-    i1,
-    i2
-  ) do
-    batch_start1_i = batch_i * batch_sizeof1
-    batch_start2_i = batch_i * batch_sizeof2
-
-    consumed3 = batch_start1_i + (i1 * sizeof1)
-    <<_::size(consumed3)-bitstring, inner1::size(sizeof1)-bitstring, _::bitstring>> = data1
-    consumed4 = batch_start2_i + (i2 * sizeof2)
-    <<_::size(consumed4)-bitstring, inner2::size(sizeof2)-bitstring, _::bitstring>> = data2
-    n1 = binary_to_number(inner1, type1)
-    n2 = binary_to_number(inner2, type2)
-    prod = n1 * n2
-    IO.inspect("#{prod} = #{n1} + #{n2}", label: inspect({batch_i, i1, i2}))
-    prod
-  end
-
-  # defp dot_batch(out_type, data1, data2, i, batch_size1, batch_size2, {_, sizeof1} = type1, {_, sie} type2) do
-  # end
-
-  defp dot_batch(out_type, type1, shape1, data1, type2, shape2, data2) do
-    {_, sizeof1} = type1
-    {_, sizeof2} = type2
-    len1 = div(bit_size(data1), sizeof1)
-    len2 = div(bit_size(data2), sizeof2)
-    numlist2 = for j <- 0..(len2 - 1) do
-      consumed2 = j * sizeof2
-      <<_::size(consumed2)-bitstring, inner2::size(sizeof2)-bitstring, _::bitstring>> = data2
-      n2 = binary_to_number(inner2, type2)
+  defp dot_batch(acc, type_out, offset1, offset2, {outer_d1, inner_d} = shape1, type1, data1, {inner_d, outer_d2} = shape2, type2, data2) do
+    for outer_i1 <- range(outer_d1), reduce: acc do
+      acc ->
+        for outer_i2 <- range(outer_d2), reduce: acc do
+          acc ->
+            inner_total =
+              for inner_i <- range(inner_d), reduce: 0 do
+                inner_acc ->
+                  i1 = offset1 + Nx.Shape.coords_to_i(shape1, {outer_i1, inner_i})
+                  i2 = offset2 + Nx.Shape.coords_to_i(shape2, {inner_i, outer_i2})
+                  n1 = Binary.number_at(data1, type1, i1)
+                  n2 = Binary.number_at(data2, type2, i2)
+                  inner_acc + n1 * n2
+              end
+          acc <> Binary.from_number(inner_total, type_out)
+        end
     end
-    for i <- 0..(len1 - 1), reduce: 0 do
-      acc_j ->
-        consumed1 = i * sizeof1
-        <<_::size(consumed1)-bitstring, inner1::size(sizeof1)-bitstring, _::bitstring>> = data1
-        n1 = binary_to_number(inner1, type1)
-        # Enum.reduce(numlist2, fn n2 -> n1 )
-    end
-  end
-
-  # defp prepare_batch(t, axes, [0]) do
-  #   %{shape: s1, type: {_, left_size}} = left
-
-  #   # remove index zero from shape and names
-  #   # shift all axes to the left by 1
-  #   # ensure each batch row is the new shape
-  #   raw_batches = Nx.to_batched_list(t, 1)
-  #   axes = Enum.map(axes, fn n -> n - 1 end)
-  #   [%{shape: raw_shape, names: raw_names} | _ ] = raw_batches
-  #   {shape, names} = remove_dimension_zero(raw_shape, raw_names)
-  #   batches = Enum.map(raw_batches, fn b -> Nx.reshape(b, shape) end)
-  #   {batch_size, axes, shape, names}
-  # end
-
-  # defp prepare_batch(t, axes, []) do
-  #   %{shape: shape, names: names} = t
-  #   {batches, axes, shape, names}
-  # end
-
-  defp remove_dimension_zero(shape, names) do
-    shape =
-      shape
-      |> Tuple.to_list()
-      |> tl()
-      |> List.to_tuple()
-    {shape, tl(names)}
   end
 
   defp dot4(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do

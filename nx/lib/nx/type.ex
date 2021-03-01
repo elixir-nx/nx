@@ -385,6 +385,16 @@ defmodule Nx.Type do
   end
 
   @doc """
+  Guard matching integer types.
+  """
+  defguard is_integer_type(t) when elem(t, 0) in [:u, :s]
+
+  @doc """
+  Guard matching float types.
+  """
+  defguard is_float_type(t) when elem(t, 0) in [:f, :bf]
+
+  @doc """
   Returns true if the type is an integer in Elixir.
 
   ## Examples

@@ -18,40 +18,82 @@ defmodule Nx.BinaryBackendTest do
       assert out2 == expected
     end
 
-    test "works for batching {2, 2, 2}" do
-      t1 = Nx.tensor([
+    test "works for batching {2, 2, 3} and {2, 3, 2} into {2, 2, 2}" do
+      t1 = Nx.iota({2, 2, 3})
+      t1 = Nx.add(t1, 1)
+
+      assert t1[0] == Nx.tensor([
+        [1, 2, 3],
+        [4, 5, 6],
+      ])
+
+      assert t1[1] == Nx.tensor([
+        [7, 8, 9],
+        [10, 11, 12],
+      ])
+
+      t2 = Nx.iota({2, 3, 2})
+      t2 = Nx.multiply(t2, 2)
+
+      assert t2[0] == Nx.tensor([
+        [0, 2],
+        [4, 6],
+        [8, 10]
+      ])
+
+      assert t2[1] == Nx.tensor([
+        [12, 14],
+        [16, 18],
+        [20, 22]
+      ])
+
+      # IO.inspect([t1: t1, t2: t2], label: :t1_and_t2)
+      out1 = Nx.iota({2, 2, 2})
+      out2 = BinaryBackend.dot(out1, t1, [2], [0], t2, [1], [0])
+      expected = Nx.tensor([
         [
-          [1, 2],
-          [3, 4]
+          [32, 44],
+          [68, 98]
         ],
         [
-          [5, 6],
-          [7, 8]
+          [392, 440],
+          [536, 602]
         ]
+      ])
+      assert Nx.shape(out2) == {2, 2, 2}
+      assert Nx.shape(expected) == {2, 2, 2}
+      assert out2 == expected
+    end
+
+
+    test "works for batching {2, 3} and {2, 3, 2} into {2, 2, 2}" do
+      t1 = Nx.tensor([
+        [1, 2, 3],
+        [4, 5, 6],
       ])
       t2 = Nx.tensor([
         [
           [0, 2],
-          [4, 6]
+          [4, 6],
+          [8, 10]
         ],
         [
-          [8, 10],
-          [12, 14]
+          [12, 14],
+          [16, 18],
+          [20, 22]
         ]
       ])
 
-      IO.inspect([t1: t1, t2: t2], label: :t1_and_t2)
       out1 = Nx.iota({2, 2, 2})
-      out2 = BinaryBackend.dot(out1, t1, [2], [0], t2, [1], [0])
-
+      out2 = BinaryBackend.dot(out1, t1, [1], [], t2, [1], [0])
       expected = Nx.tensor([
         [
-          [8, 14],
-          [16, 30]
+          [32, 44],
+          [68, 98]
         ],
         [
-          [112, 134],
-          [152, 182]
+          [104, 116],
+          [248, 278]
         ]
       ])
       assert Nx.shape(out2) == {2, 2, 2}
@@ -59,4 +101,5 @@ defmodule Nx.BinaryBackendTest do
       assert out2 == expected
     end
   end
+
 end

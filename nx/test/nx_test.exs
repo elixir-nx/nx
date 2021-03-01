@@ -727,15 +727,21 @@ defmodule NxTest do
     end
 
     test "works when batching both left and right" do
-      left = Nx.iota({1, 1, 2})
-      right = Nx.iota({1, 2, 1})
+      left = Nx.iota({2, 3, 2})
+      right = Nx.iota({2, 2, 3})
       out = Nx.dot(left, [-1], [0], right, [1], [0])
-      assert Nx.shape(out) == {1, 1, 1}
+      assert Nx.shape(out) == {2, 3, 3}
       assert out == Nx.tensor([
         [
-          [2, 3],
-          [6, 11]
-        ] 
+          [3, 4, 5],
+          [9, 14, 19],
+          [15, 24, 33]
+        ],
+        [
+          [99, 112, 125],
+          [129, 146, 163],
+          [159, 180, 201],
+        ]
       ])
     end
   end
