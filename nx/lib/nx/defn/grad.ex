@@ -459,8 +459,7 @@ defmodule Nx.Defn.Grad do
 
   defp conv_sdims(shape, axes) do
     axes
-    |> Enum.reduce([], fn x, acc -> [elem(shape, x) | acc] end)
-    |> Enum.reverse()
+    |> Enum.map(&elem(shape, &1))
     |> List.to_tuple()
   end
 
