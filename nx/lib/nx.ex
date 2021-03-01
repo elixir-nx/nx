@@ -2560,7 +2560,7 @@ defmodule Nx do
   If a number is given, it is converted to a tensor.
 
   It always returns a float tensor. If any of the input
-  tensors are not float, they are converted to f64.
+  tensors are not float, they are converted to f32.
   Division by zero raises, but it may trigger undefined
   behaviour on some compilers.
 
@@ -2723,7 +2723,7 @@ defmodule Nx do
   If a number is given, it is converted to a tensor.
 
   It always returns a float tensor. If any of the input
-  tensors are not float, they are converted to f64.
+  tensors are not float, they are converted to f32.
 
   It will broadcast tensors whenever the dimensions do
   not match and broadcasting is possible.

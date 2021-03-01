@@ -14,9 +14,8 @@ defmodule Nx.Defn.Evaluator do
   end
 
   @impl true
-  def __jit__(_key, vars, fun, opts) do
+  def __jit__(_key, vars, fun, _opts) do
     fun.(vars)
-    |> Tree.rewrite_types(opts)
     |> Tree.composite(%{}, &eval(&1, vars, &2))
     |> elem(0)
   end

@@ -93,15 +93,6 @@ defmodule Nx.Defn do
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
-  ### Options
-
-  The `Nx.Defn` compiler supports the following options which are
-  the same as ones for `Nx.Defn.Kernel.rewrite_types/2`:
-
-    * `max_unsigned_type: type`
-    * `max_signed_type: type`
-    * `max_float_type: type`
-
   ## Inputs and outputs types
 
   The inputs to `defn` functions must be either tuples, numbers,

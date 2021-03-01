@@ -2,7 +2,7 @@ defmodule EXLA.DefnExprTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  @default_defn_compiler {EXLA, max_float_type: {:f, 64}}
+  @default_defn_compiler EXLA
 
   describe "tuples" do
     defn add_subtract_tuple(a, b), do: {a + b, a - b}

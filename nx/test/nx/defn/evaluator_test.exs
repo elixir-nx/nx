@@ -118,19 +118,4 @@ defmodule Nx.Defn.EvaluatorTest do
     assert if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
              {Nx.tensor(1), Nx.tensor(10)}
   end
-
-  @defn_compiler {Nx.Defn.Evaluator, max_unsigned_type: {:u, 32}}
-  defn maxu(a), do: a
-
-  @defn_compiler {Nx.Defn.Evaluator, max_signed_type: {:s, 32}}
-  defn maxs(a), do: a
-
-  @defn_compiler {Nx.Defn.Evaluator, max_float_type: {:f, 32}}
-  defn maxf(a), do: a
-
-  test "max_*_type/2" do
-    assert maxu(Nx.tensor(1, type: {:u, 64})) == Nx.tensor(1, type: {:u, 32})
-    assert maxs(Nx.tensor(1, type: {:s, 64})) == Nx.tensor(1, type: {:s, 32})
-    assert maxf(Nx.tensor(1, type: {:f, 64})) == Nx.tensor(1, type: {:f, 32})
-  end
 end

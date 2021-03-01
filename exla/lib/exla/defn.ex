@@ -13,7 +13,6 @@ defmodule EXLA.Defn do
   def __aot__(output_dir, module, tuples, aot_options) do
     comps_and_exprs =
       for {name, fun, vars, options} <- tuples do
-        {fun, _expr_options, exla_options} = prepare_args(fun, options)
         expr = fun.(vars)
 
         shapes =
@@ -21,7 +20,7 @@ defmodule EXLA.Defn do
             EXLA.Shape.make_shape(type, shape)
           end
 
-        computation = to_root_computation(name, expr, shapes, exla_options)
+        computation = to_root_computation(name, expr, shapes, options)
         {{computation, name, shapes}, expr}
       end
 
@@ -76,19 +75,9 @@ defmodule EXLA.Defn do
     |> buffer_to_nx(holes)
   end
 
-  defp prepare_args(fun, options) do
-    {expr_options, exla_options} =
-      Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])
-
-    expr_options = Keyword.put_new(expr_options, :max_float_type, {:f, 32})
-    fun = fn vars -> vars |> fun.() |> Tree.rewrite_types(expr_options) end
-    {fun, expr_options, exla_options}
-  end
-
   defp compile(key, vars, fun, options) do
-    {fun, expr_options, exla_options} = prepare_args(fun, options)
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
-    expr_key = {key, expr_args, expr_options}
+    expr_key = {key, expr_args}
 
     {expr, holes} =
       EXLA.LockedCache.run(expr_key, fn ->
@@ -98,15 +87,15 @@ defmodule EXLA.Defn do
 
     # TODO: We should extract the client and device ordinal from buffers first
     # TODO: Rename :client to :default_client
-    {client_name, exla_options} = Keyword.pop(exla_options, :client, :default)
+    {client_name, options} = Keyword.pop(options, :client, :default)
     buffers = for var <- vars, do: nx_to_buffer(var)
     cache_args = for var <- vars, do: nx_to_cache_key!(var)
-    cache_key = {key, cache_args, client_name, expr_options, exla_options}
+    cache_key = {key, cache_args, client_name, options}
 
     {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->
         shapes = Enum.map(buffers, & &1.shape)
-        computation = to_root_computation(key, expr || fun.(vars), shapes, exla_options)
+        computation = to_root_computation(key, expr || fun.(vars), shapes, options)
         client = EXLA.Client.fetch!(client_name)
         executable = EXLA.Computation.compile(computation, client, Enum.map(buffers, & &1.shape))
         :persistent_term.put(cache_key, executable)

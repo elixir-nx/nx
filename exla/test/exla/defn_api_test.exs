@@ -2,7 +2,7 @@ defmodule EXLA.DefnAPITest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  @default_defn_compiler {EXLA, max_float_type: {:f, 64}}
+  @default_defn_compiler EXLA
 
   describe "async" do
     defn add_two_async(a, b), do: a + b
