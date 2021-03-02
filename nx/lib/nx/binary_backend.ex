@@ -1091,13 +1091,14 @@ defmodule Nx.BinaryBackend do
     compute_uv = opts[:compute_uv] || false
 
     {u, d, v} = householder_bidiagonalization(a, input_shape, eps, compute_uv)
+    IO.inspect({u, d, v}, label: "{u,d,v} householder")
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
     {u, s_matrix, v, _, _} =
       Enum.reduce_while(1..max_iter, {u, d, v, off_diag_norm, fro_norm}, fn
         _, {u, d, v, off_diag_norm, fro_norm} ->
-          eps = 1.0e-6 * fro_norm
+          eps = 1.0e-9 * fro_norm
 
           if off_diag_norm > eps do
             # Execute a round of jacobi rotations on u, d and v
@@ -1401,7 +1402,7 @@ defmodule Nx.BinaryBackend do
           if is_nil(ll) or not compute_lr do
             l
           else
-            dot_matrix(l, ll)
+            dot_matrix(ll, l)
           end
 
         a = dot_matrix(l, a)
@@ -1466,12 +1467,14 @@ defmodule Nx.BinaryBackend do
         {-1 / den, u / den}
       end
 
-    rot = [[c, s], [-s, c]]
-    rot_t = transpose_matrix(rot)
-    [[m00, m01], [_, m11]] = dot_matrix(rot_t, [[pp, pq], [qp, qq]])
+    [[m00, m01], [_, m11]] = dot_matrix([[c, s], [-s, c]], [[pp, pq], [qp, qq]])
     {c_r, s_r} = make_jacobi(m00, m11, m01, eps)
+    c_l = c_r * c - s_r * s
+    s_l = c_r * s + s_r * c
+
+    rot_l = [[c_l, s_l], [-s_l, c_l]]
     rot_r = [[c_r, s_r], [-s_r, c_r]]
-    rot_l = dot_matrix(rot, rot_r)
+
     {rot_l, rot_r}
   end
 

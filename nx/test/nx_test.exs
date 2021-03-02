@@ -1283,6 +1283,8 @@ defmodule NxTest do
         |> Enum.concat([zero_row])
         |> Nx.tensor()
 
+      IO.inspect(u |> Nx.dot(s_matrix) |> Nx.dot(Nx.transpose(v)))
+
       assert round(u, 3) ==
                Nx.tensor([
                  [0.825, 0.141, 0.547, 0.019],
@@ -1292,7 +1294,7 @@ defmodule NxTest do
                ])
                |> round(3)
 
-      Nx.dot(u, s_matrix) |> Nx.dot(v)
+      Nx.dot(u, s_matrix) |> Nx.dot(v) |> IO.inspect()
     end
   end
 
