@@ -80,6 +80,14 @@ defmodule Torchx.NIF do
 
   dnif outer(tensorA, tensorB)
 
+  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros, :population_count]
+
+  for op <- @unary_ops do
+    def unquote(op)(_tensor), do: :erlang.nif_error(:undef)
+    def unquote(:"#{op}_io")(_tensor), do: :erlang.nif_error(:undef)
+  end
+
+
   dnif dot(tensorA, tensorB)
 
   # Transformations

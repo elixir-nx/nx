@@ -155,6 +155,19 @@ defmodule Torchx.Backend do
     end
   end
 
+  unary_ops =
+    Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
+      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+      # [:count_leading_zeros, :population_count]
+
+  for op <- unary_ops do
+    @impl true
+    def unquote(op)(out, tensor) do
+      NIF.unquote(op)(tensor.data.ref) |> from_ref(out)
+    end
+  end
+
+
   @impl true
   def dot(
         out,

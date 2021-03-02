@@ -7,31 +7,6 @@ defmodule TorchxTest do
 
   # Torch Tensor creation shortcut
   defp tt(data, type \\ {:f, 32}), do: Nx.tensor(data, type: type, backend: TB)
-  defp bt(data, type \\ {:f, 32}), do: Nx.tensor(data, type: type, backend: Nx.BinaryBackend)
-
-  defp assert_equal(tt, data, type \\ {:f, 32}),
-    do: assert(Nx.backend_transfer(tt) == Nx.tensor(data, type: type))
-
-  describe "tensor" do
-    test "add" do
-      a = tt([[1, 2], [3, 4]], {:s, 8})
-      b = tt([[5, 6], [7, 8]])
-
-      c = Nx.add(a, b)
-
-      assert_equal(c, [[6.0, 8.0], [10.0, 12.0]])
-    end
-
-    test "dot" do
-      a = tt([[1, 2], [3, 4]])
-      b = tt([[5, 6], [7, 8]])
-
-      c = Nx.dot(a, b)
-
-      assert_equal(c, [[19, 22], [43, 50]])
-    end
-  end
-
 
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
   @bf16_and_ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}]
@@ -39,6 +14,7 @@ defmodule TorchxTest do
   @ops [:add, :subtract, :divide, :remainder, :multiply, :power, :atan2, :min, :max]
   @bitwise_ops [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @logical_ops [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal, :logical_and, :logical_or, :logical_xor]
+  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
 
   defp test_binary_op(op, data_a \\ [[1, 2], [3, 4]], data_b \\ [[5, 6], [7, 8]], type_a, type_b) do
     a = tt(data_a, type_a)
@@ -51,6 +27,17 @@ defmodule TorchxTest do
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
 
     assert(Nx.backend_transfer(c) == binary_c)
+  end
+
+  defp test_unary_op(op, data \\ [[1, 2], [3, 4]], type) do
+    t = tt(data, type)
+
+    r = Kernel.apply(Nx, op, [t])
+
+    binary_t = Nx.backend_transfer(t, Nx.BinaryBackend)
+    binary_r = Kernel.apply(Nx, op, [binary_t])
+
+    assert(Nx.backend_transfer(r) == binary_r)
   end
 
   describe "binary tensor-tensor ops" do
@@ -79,6 +66,21 @@ defmodule TorchxTest do
         type_b = unquote(type_b)
 
         test_binary_op(op, type_a, type_b)
+      end
+    end
+  end
+
+  describe "unary ops" do
+    for op <- @unary_ops -- [:bitwise_not],
+        type <- @types do
+      test "#{op}(#{Nx.Type.to_string(type)})" do
+        test_unary_op(unquote(op), unquote(type))
+      end
+    end
+
+    for type <- @ints do
+      test "bitwise_not(#{Nx.Type.to_string(type)})" do
+        test_unary_op(:bitwise_not, unquote(type))
       end
     end
   end

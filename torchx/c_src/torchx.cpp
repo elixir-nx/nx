@@ -372,6 +372,17 @@ NIF(eye)
       TENSOR(at::NATIVE_OP(*a, *b)); \
   }
 
+#define UNARY_OP(OP) UNARY_OP2(OP, OP)
+
+#define UNARY_OP2(OP, NATIVE) \
+  NIF(OP)               \
+  {                     \
+    TENSOR_PARAM(0, a); \
+    TENSOR(at::NATIVE(*a)); \
+  }
+
+
+
 BINARY_OP(bitwise_and)
 BINARY_OP(bitwise_or)
 BINARY_OP(bitwise_xor)
@@ -403,75 +414,14 @@ BINARY_OPT(max)
 BINARY_OPT(outer)
 
 
-// NIF(add)
-// {
-//   TENSOR_PARAM(0, a);
-//   TENSOR_PARAM(1, b);
+UNARY_OP(abs)
+UNARY_OP(ceil)
+UNARY_OP(floor)
+UNARY_OP2(negate, negative)
+UNARY_OP(round)
+UNARY_OP(sign)
+UNARY_OP(bitwise_not)
 
-//   if (b == NULL)
-//   {
-//     PARAM(1, double, scalar);
-//     TENSOR(*a + scalar);
-//   }
-//   else
-//     TENSOR(*a + *b);
-// }
-
-// NIF(subtract)
-// {
-//   TENSOR_PARAM(0, a);
-//   TENSOR_PARAM(1, b);
-
-//   if (b == NULL)
-//   {
-//     PARAM(1, double, scalar);
-//     TENSOR(*a + scalar);
-//   }
-//   else
-//     TENSOR(*a - *b);
-// }
-
-// NIF(divide)
-// {
-//   TENSOR_PARAM(0, a);
-//   TENSOR_PARAM(1, b);
-
-//   if (b == NULL)
-//   {
-//     PARAM(1, double, scalar);
-//     TENSOR(at::divide(*a, scalar));
-//   }
-//   else
-//     TENSOR(at::divide(*a, *b));
-// }
-
-// NIF(remainder)
-// {
-//   TENSOR_PARAM(0, a);
-//   TENSOR_PARAM(1, b);
-
-//   if (b == NULL)
-//   {
-//     PARAM(1, double, scalar);
-//     TENSOR(at::remainder(*a, scalar));
-//   }
-//   else
-//     TENSOR(at::remainder(*a, *b));
-// }
-
-// NIF(multiply)
-// {
-//   TENSOR_PARAM(0, a);
-//   TENSOR_PARAM(1, b);
-
-//   if (b == NULL)
-//   {
-//     PARAM(1, double, scalar);
-//     TENSOR(*a * scalar);
-//   }
-//   else
-//     TENSOR(*a * *b);
-// }
 
 NIF(dot)
 {
@@ -609,6 +559,14 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_xor, 2),
 
     DF(outer, 2),
+
+    DF(abs, 1),
+    DF(ceil, 1),
+    DF(floor, 1),
+    DF(negate, 1),
+    DF(round, 1),
+    DF(sign, 1),
+    DF(bitwise_not, 1),
 
     DF(dot, 2),
 
