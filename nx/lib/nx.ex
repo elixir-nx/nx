@@ -2129,9 +2129,25 @@ defmodule Nx do
   @doc """
   Copies data to the given backend.
 
-  This is similar to `backend_transfer/3` but it keeps the data
-  in the original device. Use this function with care, as it may
-  duplicate large amounts of data across backends.
+  If a backend is not given, `Nx.Tensor` is used, which means
+  the given tensor backend will pick the most appropriate
+  backend to copy the data to.
+
+  Note this function keeps the data in the original backend.
+  Therefore, use this function with care, as it may duplicate
+  large amounts of data across backends. Therefore, you must
+  `backend_transfer/3`, unless you explicitly want to copy the
+  data.
+
+  For convenience, this function accepts a tuple as argument
+  and copies all tensors in the tuple. This behaviour exists
+  as it is common to transfer data from tuples before and after
+  `defn` functions.
+
+  *Note: `Nx.default_backend/2` does not affect the behaviour of
+  this function. That's because `Nx.default_backend/2` configures
+  the backend we want to transfer to, which is typically the
+  backend we are copying *from* in this function.
   """
   @doc type: :backend
   def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
@@ -2151,14 +2167,21 @@ defmodule Nx do
   @doc """
   Transfers data to the given backend.
 
-  If a backend is not given, `Nx.Tensor` is used, which means
-  the current  tensor implementation will pick the most appropriate
-  backend.
+  This operation can be seen as an equivalent to `backend_copy/3`
+  followed by a `backend_deallocate/1` on the initial tensor:
 
-  For Elixir's builtin tensor, transferring to another backend will
-  call `new_backend.from_binary(tensor, binary, opts)`. Transferring
-  from a mutable backend, such as GPU memory, often means the data
-  is also deallocated from the device.
+      new_tensor = Nx.backend_copy(old_tensor, new_backend)
+      Nx.backend_deallocate(old_tensor)
+
+  If a backend is not given, `Nx.Tensor` is used, which means
+  the given tensor backend will pick the most appropriate
+  backend to transfer to.
+
+  For Elixir's builtin tensor, transferring to another backend
+  will call `new_backend.from_binary(tensor, binary, opts)`.
+  Transferring from a mutable backend, such as GPU memory,
+  implies the data is copied from the GPU to the Erlang VM
+  and then deallocated from the device.
 
   For convenience, this function accepts a tuple as argument
   and transfers all tensors in the tuple. This behaviour exists
@@ -2172,11 +2195,11 @@ defmodule Nx do
 
   ## Examples
 
-  Move a tensor to an EXLA device (such as the GPU):
+  Transfer a tensor to an EXLA device backend, stored in the GPU:
 
       device_tensor = Nx.backend_transfer(tensor, EXLA.DeviceBackend, client: :cuda)
 
-  Read the device tensor back to an Elixir tensor:
+  Transfer the device tensor back to an Elixir tensor:
 
       tensor = Nx.backend_transfer(device_tensor)
 
