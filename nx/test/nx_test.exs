@@ -308,7 +308,7 @@ defmodule NxTest do
       lhs = Nx.iota({2, 4, 2, 2}, type: {:f, 32})
       rhs = Nx.iota({6, 2, 2, 2}, type: {:f, 32})
 
-      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, groups: 2) ==
+      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, feature_group_size: 2) ==
                Nx.tensor(
                  [
                    [[[140.0]], [[364.0]], [[588.0]], [[2572.0]], [[3308.0]], [[4044.0]]],
@@ -467,7 +467,7 @@ defmodule NxTest do
 
       assert inspect(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) == """
              #Nx.Tensor<
-               f64[2][3]
+               f32[2][3]
                [
                  [1.0, 2.0, 3.0],
                  [4.0, 5.0, 6.0]
@@ -644,7 +644,7 @@ defmodule NxTest do
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg =
-        "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
+        "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 32}"
 
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10, 1.0)
@@ -951,22 +951,61 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        ~r/size of input dimension 1 divided by groups must match size of kernel dimension 1/,
+        ~r/size of input channels divided by feature groups must match size of kernel channels/,
         fn ->
           Nx.conv(t, kernel)
         end
       )
     end
 
-    test "raises when :groups cannot divide evenly into the 1st dim (elem 0) of the kernel" do
+    test "raises when :feature_group_size cannot divide evenly into the input channels of the kernel" do
       t = Nx.iota({3, 2, 2})
       kernel = Nx.broadcast(Nx.tensor(1.0), {3, 1, 1})
 
       assert_raise(
         ArgumentError,
-        ~r/size of kernel dimension 0 must be evenly divisible by groups/,
+        ~r/size of kernel output channels must be evenly divisible by feature groups/,
         fn ->
-          Nx.conv(t, kernel, groups: 2)
+          Nx.conv(t, kernel, feature_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if both :feature_group_size and :batch_group_size are greater than 1" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/either batch groups or feature groups must be 1/,
+        fn ->
+          Nx.conv(t, kernel, feature_group_size: 2, batch_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if :batch_group_size does not evenly divide batch size" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/batch groups must evenly divide input batch size/,
+        fn ->
+          Nx.conv(t, kernel, batch_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if :batch_group_size is not a multiple of output feature channels" do
+      t = Nx.iota({3, 2, 3, 3})
+      kernel = Nx.iota({8, 2, 2, 2})
+
+      assert_raise(
+        ArgumentError,
+        ~r/size of kernel output channels must be evenly divisible by batch groups/,
+        fn ->
+          Nx.conv(t, kernel, batch_group_size: 3)
         end
       )
     end
@@ -1163,7 +1202,7 @@ defmodule NxTest do
     test "works with shape input" do
       t = Nx.random_normal({3, 3}, 0.1, 10.0)
       assert Nx.shape(t) == {3, 3}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
     end
 
     test "works with tensor input" do
@@ -1171,8 +1210,14 @@ defmodule NxTest do
       t2 = Nx.random_normal(t1, 0.1, 10.0)
       assert Nx.shape(t2) == {2}
       assert Nx.type(t1) == {:s, 64}
-      assert Nx.type(t2) == {:f, 64}
+      assert Nx.type(t2) == {:f, 32}
       assert t1 != t2
+    end
+
+    test "raises with non-float type" do
+      assert_raise(ArgumentError, "random_normal/3 expects float type, got: {:s, 32}", fn ->
+        Nx.random_normal(1, 0.1, 10.0, type: {:s, 32})
+      end)
     end
   end
 
@@ -1180,7 +1225,7 @@ defmodule NxTest do
     test "works with shape input" do
       t = Nx.random_uniform({3, 3}, 0.1, 10.0)
       assert Nx.shape(t) == {3, 3}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
     end
 
     test "works with tensor input" do
@@ -1188,8 +1233,24 @@ defmodule NxTest do
       t2 = Nx.random_uniform(t1, 0.1, 10.0)
       assert Nx.shape(t2) == {2}
       assert Nx.type(t1) == {:s, 64}
-      assert Nx.type(t2) == {:f, 64}
+      assert Nx.type(t2) == {:f, 32}
       assert t1 != t2
+    end
+
+    test "works with compatible types" do
+      t = Nx.random_uniform(1, 0, 10, type: {:s, 32})
+      assert Nx.shape(t) == {}
+      assert Nx.type(t) == {:s, 32}
+    end
+
+    test "raises for incompatible types" do
+      assert_raise(
+        ArgumentError,
+        "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 32}",
+        fn ->
+          Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
+        end
+      )
     end
   end
 

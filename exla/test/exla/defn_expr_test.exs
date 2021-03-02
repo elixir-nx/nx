@@ -2,7 +2,7 @@ defmodule EXLA.DefnExprTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  @default_defn_compiler {EXLA, max_float_type: {:f, 64}}
+  @default_defn_compiler EXLA
 
   describe "tuples" do
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
@@ -48,23 +48,6 @@ defmodule EXLA.DefnExprTest do
     test "expands module attributes to tensors" do
       assert add_2x2_attribute(1) == Nx.tensor([[2, 3], [4, 5]])
       assert add_2x2_attribute(Nx.tensor([1, 2])) == Nx.tensor([[2, 4], [4, 6]])
-    end
-  end
-
-  describe "max_*_type/2" do
-    @defn_compiler {EXLA, max_unsigned_type: {:u, 32}}
-    defn maxu(a), do: a
-
-    @defn_compiler {EXLA, max_signed_type: {:s, 32}}
-    defn maxs(a), do: a
-
-    @defn_compiler EXLA
-    defn maxf(a), do: a
-
-    test "converts params" do
-      assert maxu(Nx.tensor(1, type: {:u, 64})) == Nx.tensor(1, type: {:u, 32})
-      assert maxs(Nx.tensor(1, type: {:s, 64})) == Nx.tensor(1, type: {:s, 32})
-      assert maxf(Nx.tensor(1, type: {:f, 64})) == Nx.tensor(1, type: {:f, 32})
     end
   end
 
@@ -818,13 +801,13 @@ defmodule EXLA.DefnExprTest do
 
     test "maps a function with an output type" do
       assert map_equal(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-               Nx.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+               Nx.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], type: {:f, 64})
 
       assert map_exp(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
                Nx.tensor([
                  [2.718281828459045, 7.38905609893065, 20.085536923187668],
                  [54.598150033144236, 148.4131591025766, 403.4287934927351]
-               ])
+               ], type: {:f, 64})
     end
   end
 
@@ -1100,7 +1083,7 @@ defmodule EXLA.DefnExprTest do
     test "computes mean without axis" do
       assert mean(Nx.tensor(42)) == Nx.tensor(42.0)
       assert mean(Nx.tensor([1, 2, 3])) == Nx.tensor(2.0)
-      assert mean(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2.0, type: {:f, 64})
+      assert mean(Nx.tensor([1, 2, 3], type: {:u, 8})) == Nx.tensor(2.0, type: {:f, 32})
     end
 
     defn mean_over_single_axis(t), do: Nx.mean(t, axes: [0])
@@ -1348,7 +1331,7 @@ defmodule EXLA.DefnExprTest do
           window_dilations: [1, 2, 2]
         )
 
-      compare_tensors!(lhs, rhs)
+      compare_tensors!(lhs, rhs, round: 3)
     end
   end
 
@@ -1386,12 +1369,12 @@ defmodule EXLA.DefnExprTest do
              ) ==
                Nx.tensor([
                  [
-                   [-1.7976931348623157e308, 4.0, 2.0, 3.0, -1.7976931348623157e308],
-                   [-1.7976931348623157e308, 2.0, 5.0, 6.5, -1.7976931348623157e308]
+                   [-3.4028234663852886e38, 4.0, 2.0, 3.0, -3.4028234663852886e38],
+                   [-3.4028234663852886e38, 2.0, 5.0, 6.5, -3.4028234663852886e38]
                  ],
                  [
-                   [-1.7976931348623157e308, 1.2, 2.2, 3.2, -1.7976931348623157e308],
-                   [-1.7976931348623157e308, 4.0, 5.0, 6.2, -1.7976931348623157e308]
+                   [-3.4028234663852886e38, 1.2, 2.2, 3.2, -3.4028234663852886e38],
+                   [-3.4028234663852886e38, 4.0, 5.0, 6.2, -3.4028234663852886e38]
                  ]
                ])
     end
@@ -1442,12 +1425,12 @@ defmodule EXLA.DefnExprTest do
              ) ==
                Nx.tensor([
                  [
-                   [1.7976931348623157e308, 4.0, 2.0, 3.0, 1.7976931348623157e308],
-                   [1.7976931348623157e308, 2.0, 5.0, 6.5, 1.7976931348623157e308]
+                   [3.4028234663852886e38, 4.0, 2.0, 3.0, 3.4028234663852886e38],
+                   [3.4028234663852886e38, 2.0, 5.0, 6.5, 3.4028234663852886e38]
                  ],
                  [
-                   [1.7976931348623157e308, 1.2, 2.2, 3.2, 1.7976931348623157e308],
-                   [1.7976931348623157e308, 4.0, 5.0, 6.2, 1.7976931348623157e308]
+                   [3.4028234663852886e38, 1.2, 2.2, 3.2, 3.4028234663852886e38],
+                   [3.4028234663852886e38, 4.0, 5.0, 6.2, 3.4028234663852886e38]
                  ]
                ])
     end
@@ -1602,10 +1585,95 @@ defmodule EXLA.DefnExprTest do
         )
 
     defn grouped_conv_valid_no_stride(inp, kernel),
-      do: Nx.conv(inp, kernel, strides: 1, padding: :valid, groups: 2)
+      do: Nx.conv(inp, kernel, strides: 1, padding: :valid, feature_group_size: 2)
 
     defn grouped_conv_same_stride(inp, kernel),
-      do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+      do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, feature_group_size: 4)
+
+    defn conv_valid_no_stride_channels_last(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :valid,
+        input_permutation: [:batch, :channels, :height, :width],
+        output_permutation: [:batch, :channels, :height, :width]
+      )
+    end
+
+    defn conv_same_stride_permuted(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :same,
+        strides: [2, 1],
+        input_permutation: [3, 2, 0, 1],
+        kernel_permutation: [2, 0, 3, 1],
+        output_permutation: [2, 3, 0, 1]
+      )
+    end
+
+    defn conv_writes_default_output(inp, kernel) do
+      Nx.conv(inp, kernel,
+        padding: :valid,
+        input_permutation: [:batch, :channels, :height, :width]
+      )
+    end
+
+    defn batch_grouped_conv(inp, kernel) do
+      Nx.conv(inp, kernel, batch_group_size: 2)
+    end
+
+    defn batch_grouped_conv_padding_dilated(inp, kernel) do
+      Nx.conv(inp, kernel, batch_group_size: 4, padding: [{2, -1}, {1, 0}], input_dilation: [2, 1])
+    end
+
+    test "computes a convolution with channels last" do
+      img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = conv_valid_no_stride_channels_last(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :valid,
+          input_permutation: [:batch, :channels, :height, :width],
+          output_permutation: [:batch, :channels, :height, :width]
+        )
+
+      compare_tensors!(lhs, rhs)
+      assert %{names: [:batch, :height, :width, :channels], shape: {8, 11, 11, 6}} = lhs
+    end
+
+    test "computes a convolution with a permutation" do
+      img = Nx.iota({12, 12, 3, 4}, type: {:f, 32})
+      kernel = Nx.iota({3, 2, 32, 2}, type: {:f, 32})
+
+      lhs = conv_same_stride_permuted(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :same,
+          strides: [2, 1],
+          input_permutation: [3, 2, 0, 1],
+          kernel_permutation: [2, 0, 3, 1],
+          output_permutation: [2, 3, 0, 1]
+        )
+
+      compare_tensors!(lhs, rhs)
+      assert %{shape: {6, 12, 4, 32}} = lhs
+    end
+
+    test "computes a convolution with default channels first output despite input config" do
+      img = Nx.iota({8, 12, 12, 3}, type: {:f, 32}, names: [:batch, :height, :width, :channels])
+      kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
+
+      lhs = conv_writes_default_output(img, kernel)
+
+      rhs =
+        Nx.conv(img, kernel,
+          padding: :valid,
+          input_permutation: [:batch, :channels, :height, :width]
+        )
+
+      compare_tensors!(lhs, rhs)
+      assert %{names: [:batch, :channels, :height, :width]} = lhs
+    end
 
     test "computes the convolution with valid padding, no stride" do
       img = Nx.iota({5, 1, 12, 12}, type: {:f, 64})
@@ -1725,7 +1793,7 @@ defmodule EXLA.DefnExprTest do
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
       lhs = grouped_conv_valid_no_stride(img, kernel)
       rhs =
-        Nx.conv(img, kernel, strides: 1, padding: :valid, groups: 2)
+        Nx.conv(img, kernel, strides: 1, padding: :valid, feature_group_size: 2)
 
       compare_tensors!(lhs, rhs)
     end
@@ -1736,7 +1804,27 @@ defmodule EXLA.DefnExprTest do
 
       lhs = grouped_conv_same_stride(img, kernel)
       rhs =
-        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, feature_group_size: 4)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a batch grouped convolution" do
+      img = Nx.iota({2, 4, 4, 4}, type: {:f, 32})
+      kernel = Nx.iota({4, 4, 2, 2}, type: {:f, 32})
+
+      lhs = batch_grouped_conv(img, kernel)
+      rhs = Nx.conv(img, kernel, batch_group_size: 2)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a batch grouped convolution with general padding, input dilation" do
+      img = Nx.iota({8, 2, 4, 4}, type: {:f, 32})
+      kernel = Nx.iota({4, 2, 2, 2}, type: {:f, 32})
+
+      lhs = batch_grouped_conv_padding_dilated(img, kernel)
+      rhs = Nx.conv(img, kernel, batch_group_size: 4, padding: [{2, -1}, {1, 0}], input_dilation: [2, 1])
 
       compare_tensors!(lhs, rhs)
     end
@@ -1975,9 +2063,9 @@ defmodule EXLA.DefnExprTest do
     test "generates with shape" do
       t = random_uniform_fixed()
       assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
 
-      for <<x::float-64-native <- Nx.to_binary(t)>> do
+      for <<x::float-32-native <- Nx.to_binary(t)>> do
         assert x >= 0.0 and x < 1
       end
     end
@@ -1996,15 +2084,15 @@ defmodule EXLA.DefnExprTest do
 
       t = random_uniform_min_max_float()
       assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
 
-      for <<x::float-64-native <- Nx.to_binary(t)>> do
+      for <<x::float-32-native <- Nx.to_binary(t)>> do
         assert x >= 5.0 and x < 10.0
       end
     end
 
     defn random_uniform_u32, do: Nx.random_uniform({30, 20}, 5, 10, type: {:u, 32})
-    defn random_uniform_f32, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 32})
+    defn random_uniform_f64, do: Nx.random_uniform({30, 20}, 5.0, 10.0, type: {:f, 64})
 
     test "generates with type" do
       t = random_uniform_u32()
@@ -2015,11 +2103,11 @@ defmodule EXLA.DefnExprTest do
         assert x >= 5 and x < 10
       end
 
-      t = random_uniform_f32()
+      t = random_uniform_f64()
       assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 32}
+      assert Nx.type(t) == {:f, 64}
 
-      for <<x::float-32-native <- Nx.to_binary(t)>> do
+      for <<x::float-64-native <- Nx.to_binary(t)>> do
         assert x >= 5.0 and x < 10.0
       end
     end
@@ -2031,7 +2119,7 @@ defmodule EXLA.DefnExprTest do
     test "generates with shape" do
       t = random_uniform_fixed()
       assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
     end
 
     defn random_normal_mu_sigma, do: Nx.random_normal({30, 20}, 5.0, 10.0)
@@ -2039,19 +2127,16 @@ defmodule EXLA.DefnExprTest do
     test "generates with mu/sigma" do
       t = random_normal_mu_sigma()
       assert Nx.shape(t) == {30, 20}
-      assert Nx.type(t) == {:f, 64}
-    end
-
-    defn random_normal_f32, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 32})
-
-    test "generates with type" do
-      t = random_normal_f32()
-      assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 32}
     end
 
-    defn random_normal_tensor(t), do: Nx.random_uniform(t)
-    defn random_normal_tensor_with_type(t), do: Nx.random_uniform(t, type: {:f, 32})
+    defn random_normal_f64, do: Nx.random_normal({30, 20}, 5.0, 10.0, type: {:f, 64})
+
+    test "generates with type" do
+      t = random_normal_f64()
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 64}
+    end
   end
 
   describe "iota" do
@@ -2343,7 +2428,7 @@ defmodule EXLA.DefnExprTest do
 
     test "qr" do
       input = Nx.iota({3, 2})
-      output = Nx.as_type(input, {:f, 64})
+      output = Nx.as_type(input, {:f, 32})
 
       assert {q, r} = qr(input)
       assert q.shape == {3, 2}
@@ -2404,7 +2489,7 @@ defmodule EXLA.DefnExprTest do
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
-      compare_tensors!(lhs, rhs)
+      compare_tensors!(lhs, rhs, round: 1)
     end
 
     test "works on a 4x4 matrix" do
@@ -2426,7 +2511,7 @@ defmodule EXLA.DefnExprTest do
           [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
         ])
 
-      compare_tensors!(lhs, rhs)
+      compare_tensors!(lhs, rhs, round: 2)
     end
 
     test "works on a 50x50 matrix" do
@@ -2434,7 +2519,7 @@ defmodule EXLA.DefnExprTest do
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
       lhs = cholesky(tensor)
       rhs = Nx.cholesky(tensor)
-      compare_tensors!(lhs, rhs)
+      compare_tensors!(lhs, rhs, round: 2)
     end
   end
 
@@ -2476,25 +2561,30 @@ defmodule EXLA.DefnExprTest do
   end
 
   # We need to round the floats because of imprecision between platforms
+  defp compare_tensors!(left, right, opts \\ [])
+
   defp compare_tensors!(
          %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
-         %{data: %{state: right_data} = rhs} = right
+         %{data: %{state: right_data} = rhs} = right,
+         opts
        ) do
+    round = opts[:round] || 5
+
     left_data =
       for <<x::float-size(size)-native <- left_data>>,
         into: <<>>,
-        do: <<Float.round(x, 5)::float-size(size)-native>>
+        do: <<Float.round(x, round)::float-size(size)-native>>
 
     right_data =
       for <<x::float-size(size)-native <- right_data>>,
         into: <<>>,
-        do: <<Float.round(x, 5)::float-size(size)-native>>
+        do: <<Float.round(x, round)::float-size(size)-native>>
 
     assert %{left | data: %{lhs | state: left_data}} ==
              %{right | data: %{rhs | state: right_data}}
   end
 
-  defp compare_tensors!(left, right) do
+  defp compare_tensors!(left, right, _opts) do
     assert left == right
   end
 end

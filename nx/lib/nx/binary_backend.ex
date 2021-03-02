@@ -11,7 +11,7 @@ defmodule Nx.BinaryBackend do
   @behaviour Nx.Backend
 
   @doc false
-  defstruct [:device, :state]
+  defstruct [:state]
 
   alias Nx.Tensor, as: T
   alias Nx.BinaryBackend, as: B
@@ -22,11 +22,6 @@ defmodule Nx.BinaryBackend do
   @default_eps 1.0e-10
 
   ## Creation
-
-  @impl true
-  def tensor(tensor) do
-    tensor
-  end
 
   @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max) do
@@ -126,6 +121,11 @@ defmodule Nx.BinaryBackend do
   end
 
   defp to_binary(%T{data: %{state: data}}), do: data
+
+  @impl true
+  def backend_copy(tensor, backend, opts) do
+    backend_transfer(tensor, backend, opts)
+  end
 
   @impl true
   def backend_transfer(tensor, Nx.Tensor, _opts) do
@@ -764,7 +764,17 @@ defmodule Nx.BinaryBackend do
     strides = opts[:strides]
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
-    groups = opts[:groups]
+    feature_groups = opts[:feature_group_size]
+    batch_groups = opts[:batch_group_size]
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+    output_permutation = opts[:output_permutation]
+
+    output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
 
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
@@ -790,10 +800,18 @@ defmodule Nx.BinaryBackend do
     #
     # The final shape is then given as:
     # {batch, num_filters, spatial_dim0, spatial_dim1, ...}
-    %T{type: {_, input_size} = input_type} = t
-    %T{type: {_, kernel_size} = kernel_type} = k
+    %T{type: {_, input_size} = input_type} = t = Nx.transpose(t, axes: input_permutation)
+    %T{type: {_, kernel_size} = kernel_type} = k = Nx.transpose(k, axes: kernel_permutation)
 
-    %{type: output_type} = out
+    %{type: output_type, shape: output_shape, names: output_names} = out
+
+    inverse_output_permutation =
+      output_permutation |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+
+    {untransposed_shape, untransposed_names} =
+      Nx.Shape.transpose(output_shape, inverse_output_permutation, output_names)
+
+    untransposed_out = %{out | names: untransposed_names, shape: untransposed_shape}
 
     # We need to dilate the spatial dimensions of the kernel first...
     dilation_padding = [
@@ -813,6 +831,7 @@ defmodule Nx.BinaryBackend do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
+    num_filters = elem(kernel_shape, 0)
     num_input_channels = elem(kernel_shape, 1)
 
     # We first pad the input tensor with the following semantics
@@ -825,7 +844,7 @@ defmodule Nx.BinaryBackend do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
-    # TODO: Use Elixir Enum.zip_with on Elixir v1.12
+    # TODO: Use Enum.zip_with on Elixir v1.12
     spatial_padding_config =
       padding
       |> Enum.zip(input_dilation)
@@ -849,7 +868,18 @@ defmodule Nx.BinaryBackend do
     input_data = to_binary(padded_t)
     kernel_data = to_binary(k)
 
-    filter_groups_with_index = split_filters(kernel_data, kernel_shape, kernel_type, groups)
+    filter_groups_with_index =
+      split_into_feature_groups(kernel_data, kernel_shape, kernel_type, feature_groups)
+
+    batch_groups_with_index =
+      split_into_batch_groups(input_data, padded_shape, input_type, batch_groups)
+
+    # If we're not splitting across input channels, we're splitting across input batches
+    # So we split the filters into groups to apply to the corresponding batch
+    filter_groups_with_index =
+      if batch_groups > 1,
+        do: Enum.chunk_every(filter_groups_with_index, div(num_filters, batch_groups)),
+        else: filter_groups_with_index
 
     batch_weighted_shape =
       weighted_shape(Tuple.delete_at(padded_shape, 0), input_size, window_shape)
@@ -864,82 +894,108 @@ defmodule Nx.BinaryBackend do
 
     anchors = Enum.sort(make_anchors(padded_spatial_dims, strides, filter_shape))
 
-    # Traverse the batch dim first
     output_data =
-      for <<batch::size(batch_size)-bitstring <- input_data>>,
-          # Traverse the filters next, this allows us to rebuild
-          # the resulting binary correctly
-          {filter, group} <- filter_groups_with_index,
-          # Then we traverse the spatial dimension, applying
-          # the filter at each step
-          anchor <- anchors,
-          into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, [group * num_input_channels | anchor])
-        # The shape of the window is {channels} + filter_shape
-        # The shape of the kernel is {num_filters, channels} + filter_shape
-        window =
-          batch_weighted_shape
-          |> weighted_traverse(batch, input_size, offset)
-          |> IO.iodata_to_binary()
+      for {batch_group, batch_group_index} <- batch_groups_with_index, into: <<>> do
+        current_filter_group_with_index =
+          if batch_groups > 1,
+            do: Enum.at(filter_groups_with_index, batch_group_index),
+            else: filter_groups_with_index
 
-        # The receptive field size of each binary in bytes
-        input_field_size = Nx.size(filter_shape) * input_size
-        filter_field_size = Nx.size(filter_shape) * kernel_size
+        # Traverse the batch dim first
+        for <<batch::size(batch_size)-bitstring <- batch_group>>,
+            # Traverse the filters next, this allows us to rebuild
+            # the resulting binary correctly
+            {filter, feature_group} <- current_filter_group_with_index,
+            # Then we traverse the spatial dimension, applying
+            # the filter at each step
+            anchor <- anchors,
+            into: <<>> do
+          offset =
+            weighted_offset(batch_weighted_shape, [feature_group * num_input_channels | anchor])
 
-        # For each channel in both filter and input...
-        # The output from a single filter being applied over a window
-        # of the input tensor is the sum of the element-wise products
-        values =
-          for i <- 0..(num_input_channels - 1) do
-            current_input_pos = i * input_field_size
-            current_filter_pos = i * filter_field_size
-            <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
-            <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> = filter
+          # The shape of the window is {channels} + filter_shape
+          # The shape of the kernel is {num_filters, channels} + filter_shape
+          window =
+            batch_weighted_shape
+            |> weighted_traverse(batch, input_size, offset)
+            |> IO.iodata_to_binary()
 
-            for j <- 0..(Nx.size(filter_shape) - 1) do
-              x =
-                match_types [input_type] do
-                  left_consumed = j * input_size
+          # The receptive field size of each binary in bytes
+          input_field_size = Nx.size(filter_shape) * input_size
+          filter_field_size = Nx.size(filter_shape) * kernel_size
 
-                  <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
-                    input_receptive_field
+          # For each channel in both filter and input...
+          # The output from a single filter being applied over a window
+          # of the input tensor is the sum of the element-wise products
+          values =
+            for i <- 0..(num_input_channels - 1) do
+              current_input_pos = i * input_field_size
+              current_filter_pos = i * filter_field_size
+              <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
 
-                  read!(x, 0)
-                end
+              <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
+                filter
 
-              y =
-                match_types [kernel_type] do
-                  right_consumed = j * kernel_size
+              for j <- 0..(Nx.size(filter_shape) - 1) do
+                x =
+                  match_types [input_type] do
+                    left_consumed = j * input_size
 
-                  <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
-                    filter_receptive_field
+                    <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
+                      input_receptive_field
 
-                  read!(y, 0)
-                end
+                    read!(x, 0)
+                  end
 
-              x * y
+                y =
+                  match_types [kernel_type] do
+                    right_consumed = j * kernel_size
+
+                    <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
+                      filter_receptive_field
+
+                    read!(y, 0)
+                  end
+
+                x * y
+              end
             end
-          end
 
-        match_types [output_type] do
-          sum = Enum.sum(List.flatten(values))
-          <<write!(sum, 0)>>
+          match_types [output_type] do
+            sum = Enum.sum(List.flatten(values))
+            <<write!(sum, 0)>>
+          end
         end
       end
 
-    from_binary(out, output_data)
+    Nx.transpose(from_binary(untransposed_out, output_data), axes: output_permutation)
   end
 
-  defp split_filters(kernel_data, kernel_shape, {_, kernel_size}, groups) do
-    filter_group_size = div(Nx.size(kernel_shape) * kernel_size, groups)
-    filter_size = div(Nx.size(kernel_shape) * kernel_size, elem(kernel_shape, 0))
+  defp split_into_feature_groups(data, shape, {_, size}, groups) do
+    group_size = div(Nx.size(shape) * size, groups)
+    data_size = div(Nx.size(shape) * size, elem(shape, 0))
 
     for i <- 0..(groups - 1),
-        offset = filter_group_size * i,
-        <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring,
-          _::bitstring>> = kernel_data,
-        <<filter::size(filter_size)-bitstring <- filter_group>>,
-        do: {filter, i}
+        offset = group_size * i,
+        <<_::size(offset)-bitstring, data_group::size(group_size)-bitstring, _::bitstring>> =
+          data,
+        <<out_data::size(data_size)-bitstring <- data_group>>,
+        do: {out_data, i}
+  end
+
+  defp split_into_batch_groups(data, shape, {_, size}, groups) do
+    item_size = div(Nx.size(shape) * size, elem(shape, 0))
+    num_groups = div(elem(shape, 0), groups)
+
+    output_batch_groups =
+      for i <- 0..(num_groups - 1),
+          j <- 0..(groups - 1) do
+        offset = (i + j * num_groups) * item_size
+        <<_::size(offset)-bitstring, item::size(item_size)-bitstring, _::bitstring>> = data
+        item
+      end
+
+    output_batch_groups |> Enum.with_index() |> Enum.map(fn {x, i} -> {x, rem(i, groups)} end)
   end
 
   @impl true
@@ -1241,7 +1297,7 @@ defmodule Nx.BinaryBackend do
     # as this can be convenient.
 
     if compute_uv do
-      #TODO: Use Enum.zip_with on Elixir v1.12
+      # TODO: Use Enum.zip_with on Elixir v1.12
       s
       |> Enum.zip(transpose_matrix(v))
       |> Enum.map(fn

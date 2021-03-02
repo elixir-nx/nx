@@ -6,7 +6,9 @@ defmodule Nx.Defn.Evaluator do
   """
 
   @behaviour Nx.Defn.Compiler
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Tree}
+
+  @creation_ops [:tensor, :eye, :iota, :random_normal, :random_uniform, :from_binary]
 
   @impl true
   def __async__(key, vars, fun, opts) do
@@ -14,10 +16,9 @@ defmodule Nx.Defn.Evaluator do
   end
 
   @impl true
-  def __jit__(_key, vars, fun, opts) do
+  def __jit__(_key, vars, fun, _opts) do
     fun.(vars)
-    |> Expr.rewrite_types(opts)
-    |> Expr.traverse_exprs(%{}, &eval(&1, vars, &2))
+    |> Tree.composite(%{}, &eval(&1, vars, &2))
     |> elem(0)
   end
 
@@ -35,12 +36,12 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: :cond, args: [clauses, last]}}, vars, cache) do
     {res, cache} = find_clause(clauses, last, vars, cache)
-    Expr.traverse_exprs(res, cache, &eval(&1, vars, &2))
+    Tree.composite(res, cache, &eval(&1, vars, &2))
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, vars, cache) do
     [tuple, i, _size] = args
-    {tuple, cache} = Expr.traverse_exprs(tuple, cache, &eval(&1, vars, &2))
+    {tuple, cache} = Tree.composite(tuple, cache, &eval(&1, vars, &2))
     {elem(tuple, i), cache}
   end
 
@@ -48,13 +49,18 @@ defmodule Nx.Defn.Evaluator do
     eval(expr, vars, cache)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}, type: type} = ans, vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: op, id: id} = expr, type: type} = ans, vars, cache) do
     case cache do
       %{^id => res} ->
         {res, cache}
 
+      %{} when op in @creation_ops ->
+        {backend, _} = Nx.default_backend()
+        res = apply(backend, op, eval_args(type, ans, expr.args))
+        {res, Map.put(cache, id, res)}
+
       %{} ->
-        {args, cache} = Expr.traverse_args(ans, cache, &eval(&1, vars, &2))
+        {args, cache} = Tree.traverse_args(ans, cache, &eval(&1, vars, &2))
         res = apply(Nx.Shared.find_impl!(args), op, eval_args(type, ans, args))
         {res, Map.put(cache, id, res)}
     end

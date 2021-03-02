@@ -93,15 +93,6 @@ defmodule Nx.Defn do
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
-  ### Options
-
-  The `Nx.Defn` compiler supports the following options which are
-  the same as ones for `Nx.Defn.Kernel.rewrite_types/2`:
-
-    * `max_unsigned_type: type`
-    * `max_signed_type: type`
-    * `max_float_type: type`
-
   ## Inputs and outputs types
 
   The inputs to `defn` functions must be either tuples, numbers,
@@ -240,13 +231,59 @@ defmodule Nx.Defn do
     Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
   end
 
+  def export_aot(dir, module, tuples, compiler, aot_opts \\ [])
+      when is_binary(dir) and is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
+    tuples =
+      for tuple <- tuples do
+        case tuple do
+          {name, fun, args} -> {name, fun, args, []}
+          {name, fun, args, opts} -> {name, fun, args, opts}
+          _ -> raise ArgumentError, "expected 3- or 4-element tuples, got: #{inspect(tuple)}"
+        end
+      end
+
+    Nx.Defn.Compiler.__export_aot__(dir, module, tuples, compiler, aot_opts)
+  end
+
+  def import_aot(dir, module) when is_binary(dir) and is_atom(module) do
+    unless Module.open?(module) do
+      raise ArgumentError,
+            """
+            cannot import_aot/2 for #{inspect(module)} because module was already defined.
+            You should call import_aot/2 while the module is being defined:
+
+                defmodule MyModule do
+                  Nx.Defn.import_aot("priv", MyModule)
+                end
+            """
+    end
+
+    Nx.Defn.Compiler.__import_aot__(dir, module, true)
+  end
+
   @doc """
   Ahead-of-time compiles the anonymous function with the given
   defn compiler.
   """
-  def aot(fun, args, compiler, opts \\ [])
-      when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
-    Nx.Defn.Compiler.__aot__(fun, args, compiler, opts)
+  def aot(module, tuples, compiler, aot_opts \\ [])
+      when is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
+    output_dir = Path.join(System.tmp_dir(), "elixir-nx/aot#{System.unique_integer()}")
+
+    try do
+      case export_aot(output_dir, module, tuples, compiler, aot_opts) do
+        :ok ->
+          defmodule module do
+            @moduledoc false
+            Nx.Defn.Compiler.__import_aot__(output_dir, module, false)
+            :ok
+          end
+
+        {:error, exception} ->
+          raise exception
+      end
+    after
+      File.rm_rf!(output_dir)
+    end
   end
 
   @doc """

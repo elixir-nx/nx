@@ -10,7 +10,7 @@ defmodule Nx.Backend do
   `Nx` backends come in two flavors: opaque backends, of which you should
   not access its data directly except through the functions in the `Nx`
   module, and public ones, of which its data can be directly accessed and
-  visited. The former typically have the `Backend` suffix.
+  traversed. The former typically have the `Backend` suffix.
 
   `Nx` ships with the following backends:
 
@@ -19,8 +19,12 @@ defmodule Nx.Backend do
       backend used by the `Nx` module. The backend itself (and its
       data) is private and must not be accessed directly.
 
+    * `Nx.TemplateBackend` - an opaque backend written that works as
+      a template in APIs to declare the type, shape, and names of
+      tensors to be expected in the future.
+
     * `Nx.Defn.Expr` - a public backend used by `defn` to build
-      expression graphs that are traversed by custom compilers.
+      expression trees that are traversed by custom compilers.
 
   This module also includes functions that are meant to be shared
   across backends.
@@ -32,20 +36,21 @@ defmodule Nx.Backend do
   @type shape :: Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
+  @type backend_options :: term()
 
   @callback eye(tensor) :: tensor
   @callback iota(tensor, axis | nil) :: tensor
   @callback random_uniform(tensor, number, number) :: tensor
   @callback random_normal(tensor, mu :: float, sigma :: float) :: tensor
 
+  @callback from_binary(out :: tensor, binary, backend_options) :: tensor
+  @callback backend_deallocate(tensor) :: :ok | :already_deallocated
+  @callback backend_copy(tensor, module, backend_options) :: tensor
+  @callback backend_transfer(tensor, module, backend_options) :: tensor
   @callback to_batched_list(out :: tensor, tensor) :: [tensor]
   @callback to_binary(tensor, limit :: non_neg_integer) :: binary
-  @callback backend_deallocate(tensor) :: :ok | :already_deallocated
-  @callback backend_transfer(tensor, module, keyword) :: tensor
-
-  @callback tensor(tensor) :: tensor
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
-  @callback from_binary(out :: tensor, binary, keyword) :: tensor
+
   @callback as_type(out :: tensor, tensor) :: tensor
   @callback reshape(out :: tensor, tensor, shape) :: tensor
   @callback squeeze(out :: tensor, tensor, axes) :: tensor

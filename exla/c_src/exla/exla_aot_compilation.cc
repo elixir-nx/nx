@@ -13,7 +13,6 @@ namespace exla {
                          tensorflow::tfcompile::CompileResult* compile_result) {
 
     // Retrieves arg and result layouts from the computation.
-    // TODO(toddw): Should we let the user choose the major/minor ordering?
     xla::StatusOr<std::unique_ptr<xla::ProgramShape>> pshape_or = client->GetComputationShape(computation);
 
     if (!pshape_or.ok()) {
@@ -54,10 +53,12 @@ namespace exla {
 
   xla::Status CompileComputation(const xla::XlaComputation& computation,
                                  std::string pbtext_path,
-                                 std::string aot_path,
+                                 std::string header_path,
+                                 std::string object_path,
                                  std::string function_name,
                                  std::string class_name,
-                                 std::string target_triple) {
+                                 std::string target_triple,
+                                 std::string target_features) {
 
     xla::Status compilation_status;
 
@@ -66,19 +67,21 @@ namespace exla {
 
     // Read the generated protobuf input, we can do it as a file, or pass it as a string/binary
     tensorflow::tf2xla::Config config;
-    LOG(INFO) << "Reading input protobuf";
     compilation_status.Update(tensorflow::ReadTextProto(tensorflow::Env::Default(), pbtext_path, &config));
+
     if (!compilation_status.ok()) {
       LOG(ERROR) << compilation_status;
       return compilation_status;
     }
 
+    std::string entry_point = absl::StrCat("exla_", function_name, "_entry_point");
+
     // These options are flags we can give to the user
     xla::cpu::CpuAotCompilationOptions aot_opts(
       target_triple,
       /*target_cpu=*/"",
-      /*target_features=*/"",
-      /*entry_point=*/"function",
+      target_features,
+      entry_point,
       xla::cpu::CpuAotCompilationOptions::RelocationModel::BigPic
     );
 
@@ -86,8 +89,8 @@ namespace exla {
     tensorflow::tfcompile::CompileResult compile_result;
 
     // Compile the Xla computation and populate compile_result
-    LOG(INFO) << "Compiling XLA Computation";
     compilation_status.Update(CompileXla(client, computation, aot_opts, &compile_result));
+
     if (!compilation_status.ok()) {
       LOG(ERROR) << compilation_status;
       return compilation_status;
@@ -97,9 +100,8 @@ namespace exla {
     const std::vector<char>& obj = compile_result.aot->object_file_data();
 
     // Write it to a file
-    LOG(INFO) << "Writing object file";
     compilation_status.Update(tensorflow::WriteStringToFile(tensorflow::Env::Default(),
-                                                            absl::StrCat(aot_path, function_name, ".o"),
+                                                            object_path,
                                                             absl::string_view(obj.data(), obj.size())));
     if (!compilation_status.ok()) {
       LOG(ERROR) << compilation_status;
@@ -111,9 +113,8 @@ namespace exla {
     codegen_opts.gen_name_to_index = false;
     codegen_opts.gen_program_shape = false;
     codegen_opts.gen_hlo_profile_printer_data = false;
-    codegen_opts.target_triple = "x86_64-pc-linux";
+    codegen_opts.target_triple = target_triple;
 
-    LOG(INFO) << "Parsing CPP Header Options";
     compilation_status.Update(tensorflow::tfcompile::ParseCppClass(class_name,
                                                                    &codegen_opts.class_name,
                                                                    &codegen_opts.namespaces));
@@ -122,7 +123,6 @@ namespace exla {
       return compilation_status;
     }
 
-    LOG(INFO) << "Generating metadata";
     tensorflow::tfcompile::MetadataResult metadata_result;
     compilation_status.Update(tensorflow::tfcompile::GenerateMetadata(codegen_opts,
                                                                       compile_result,
@@ -134,7 +134,6 @@ namespace exla {
     }
 
     // The header file
-    LOG(INFO) << "Generating Header file";
     std::string header;
     compilation_status.Update(tensorflow::tfcompile::GenerateHeader(codegen_opts,
                                                                     config,
@@ -147,9 +146,8 @@ namespace exla {
     }
 
     // Write Header to file
-    LOG(INFO) << "Writing to Header file";
     compilation_status.Update(tensorflow::WriteStringToFile(tensorflow::Env::Default(),
-                                                            absl::StrCat(aot_path, function_name, ".h"),
+                                                            header_path,
                                                             header));
     if (!compilation_status.ok()) {
       LOG(ERROR) << compilation_status;

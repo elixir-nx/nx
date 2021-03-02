@@ -3,7 +3,8 @@ defmodule EXLA.DeviceBackend do
   A Nx tensor backend for the data kept on the device.
 
   You can directly transfer to this backend by calling
-  `Nx.backend_transfer/3`. It allows the following options:
+  `Nx.backend_transfer/3` or `Nx.backend_copy/3`. It
+  allows the following options:
 
     * `:client` - the client to store the data on
     * `:device_ordinal` - which device to store it on
@@ -29,12 +30,17 @@ defmodule EXLA.DeviceBackend do
   end
 
   @impl true
-  def backend_transfer(tensor, Nx.Tensor, opts) do
-    backend_transfer(tensor, Nx.BinaryBackend, opts)
+  def backend_copy(tensor, Nx.Tensor, opts) do
+    backend_copy(tensor, Nx.BinaryBackend, opts)
   end
 
-  def backend_transfer(%T{data: %DB{state: state}} = tensor, backend, opts) do
+  def backend_copy(%T{data: %DB{state: state}} = tensor, backend, opts) do
     backend.from_binary(tensor, EXLA.Buffer.read(state), opts)
+  end
+
+  @impl true
+  def backend_transfer(%T{data: %DB{state: state}} = tensor, backend, opts) do
+    backend_copy(tensor, backend, opts)
   after
     EXLA.Buffer.deallocate(state)
   end

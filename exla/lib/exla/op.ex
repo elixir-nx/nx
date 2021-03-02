@@ -266,6 +266,7 @@ defmodule EXLA.Op do
         rhs_dilation,
         dim_nums,
         feature_group_count,
+        batch_group_count,
         precision_config
       )
       when is_list(strides) and is_list(lhs_dilation) and is_list(rhs_dilation) do
@@ -281,6 +282,7 @@ defmodule EXLA.Op do
         rhs_dilation,
         dim_nums,
         feature_group_count,
+        batch_group_count,
         config
       )
       |> unwrap!()

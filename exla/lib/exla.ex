@@ -33,13 +33,6 @@ defmodule EXLA do
     * `:client` - an atom representing the client to use. Defaults
       to `:default`. See "Clients" section
 
-    * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`
-
-    * `max_signed_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`
-
-    * `max_float_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`.
-      Note that by default `EXLA` sets `:max_float_type` to `{:f, 32}`
-
     * `:run_options` - options given when running the computation:
 
       * `:keep_on_device` - if the data should be kept on the device,
@@ -103,11 +96,15 @@ defmodule EXLA do
       |> softmax()
       |> Nx.backend_transfer() # bring the data back to Elixir
 
-  You can also use `Nx.backend_transfer` to put data on a given
+  You can also use `Nx.backend_transfer/1` to put data on a given
   device before invoking a `defn` function:
 
       # Explicitly move data to the device, useful for GPU
       Nx.backend_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.DeviceBackend)
+
+  If instead you want to make a copy of the data, you can use
+  `Nx.backend_copy/1` instead. However, when working with large
+  data, be mindful of memory allocations.
 
   ## Docker considerations
 
@@ -151,5 +148,5 @@ defmodule EXLA do
   @impl true
   defdelegate __async__(key, vars, fun, opts), to: EXLA.Defn
 
-  defdelegate __aot__(key, vars, fun, opts), to: EXLA.Defn
+  defdelegate __aot__(output_dir, module, tuples, opts), to: EXLA.Defn
 end
