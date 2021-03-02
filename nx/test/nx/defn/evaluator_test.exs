@@ -57,8 +57,8 @@ defmodule Nx.Defn.EvaluatorTest do
 
   test "qr" do
     assert {q, r} = qr(Nx.iota({3, 2}))
-    assert q == Nx.tensor([[0.0, -1.0], [1.0, 0.0], [0.0, 0.0]])
-    assert r == Nx.tensor([[2.0, 3.0], [0.0, -1.0]])
+    assert q == Nx.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
+    assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
   end
 
   defn if3(a, b, c), do: if(a, do: b, else: c)

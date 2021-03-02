@@ -85,6 +85,7 @@ defmodule Nx.Backend do
 
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
+  @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++

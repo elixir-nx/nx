@@ -917,6 +917,17 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def svd({m, n}) do
+    {{m, m}, {n}, {n, n}}
+  end
+
+  def svd(shape),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+      )
+
   defp validate_concat_names!(names) do
     :ok =
       names
