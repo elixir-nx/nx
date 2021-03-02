@@ -1585,10 +1585,10 @@ defmodule EXLA.DefnExprTest do
         )
 
     defn grouped_conv_valid_no_stride(inp, kernel),
-      do: Nx.conv(inp, kernel, strides: 1, padding: :valid, groups: 2)
+      do: Nx.conv(inp, kernel, strides: 1, padding: :valid, feature_group_size: 2)
 
     defn grouped_conv_same_stride(inp, kernel),
-      do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+      do: Nx.conv(inp, kernel, strides: [2, 1, 2], padding: :same, feature_group_size: 4)
 
     defn conv_valid_no_stride_channels_last(inp, kernel) do
       Nx.conv(inp, kernel,
@@ -1613,6 +1613,14 @@ defmodule EXLA.DefnExprTest do
         padding: :valid,
         input_permutation: [:batch, :channels, :height, :width]
       )
+    end
+
+    defn batch_grouped_conv(inp, kernel) do
+      Nx.conv(inp, kernel, batch_group_size: 2)
+    end
+
+    defn batch_grouped_conv_padding_dilated(inp, kernel) do
+      Nx.conv(inp, kernel, batch_group_size: 4, padding: [{2, -1}, {1, 0}], input_dilation: [2, 1])
     end
 
     test "computes a convolution with channels last" do
@@ -1785,7 +1793,7 @@ defmodule EXLA.DefnExprTest do
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
       lhs = grouped_conv_valid_no_stride(img, kernel)
       rhs =
-        Nx.conv(img, kernel, strides: 1, padding: :valid, groups: 2)
+        Nx.conv(img, kernel, strides: 1, padding: :valid, feature_group_size: 2)
 
       compare_tensors!(lhs, rhs)
     end
@@ -1796,7 +1804,27 @@ defmodule EXLA.DefnExprTest do
 
       lhs = grouped_conv_same_stride(img, kernel)
       rhs =
-        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, groups: 4)
+        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, feature_group_size: 4)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a batch grouped convolution" do
+      img = Nx.iota({2, 4, 4, 4}, type: {:f, 32})
+      kernel = Nx.iota({4, 4, 2, 2}, type: {:f, 32})
+
+      lhs = batch_grouped_conv(img, kernel)
+      rhs = Nx.conv(img, kernel, batch_group_size: 2)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes a batch grouped convolution with general padding, input dilation" do
+      img = Nx.iota({8, 2, 4, 4}, type: {:f, 32})
+      kernel = Nx.iota({4, 2, 2, 2}, type: {:f, 32})
+
+      lhs = batch_grouped_conv_padding_dilated(img, kernel)
+      rhs = Nx.conv(img, kernel, batch_group_size: 4, padding: [{2, -1}, {1, 0}], input_dilation: [2, 1])
 
       compare_tensors!(lhs, rhs)
     end

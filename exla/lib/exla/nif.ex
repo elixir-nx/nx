@@ -63,6 +63,7 @@ defmodule EXLA.NIF do
         _rhs_dilation,
         _dimension_numbers,
         _feature_group_count,
+        _batch_group_count,
         _precision_config
       ),
       do: :erlang.nif_error(:undef)

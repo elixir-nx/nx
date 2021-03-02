@@ -287,7 +287,8 @@ defmodule EXLA.Defn do
     strides = opts[:strides]
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
-    groups = opts[:groups]
+    feature_groups = opts[:feature_group_size]
+    batch_groups = opts[:batch_group_size]
 
     %{type: output_type} = ans
 
@@ -298,9 +299,6 @@ defmodule EXLA.Defn do
 
     output_permutation =
       opts[:output_permutation]
-      |> Enum.with_index()
-      |> Enum.sort()
-      |> Enum.map(&elem(&1, 1))
       |> List.to_tuple()
 
     conv_dim_nos = {input_permutation, kernel_permutation, output_permutation}
@@ -317,7 +315,8 @@ defmodule EXLA.Defn do
       input_dilation,
       kernel_dilation,
       conv_dim_nos,
-      groups,
+      feature_groups,
+      batch_groups,
       state.precision
     )
   end
