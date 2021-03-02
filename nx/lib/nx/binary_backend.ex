@@ -2163,7 +2163,7 @@ defmodule Nx.BinaryBackend do
 
   defp replace_cols(m, [], _), do: m
 
-  defp replace_cols(m, cols, [_ | _] = values) do
+  defp replace_cols(m, cols, values) do
     m
     |> transpose_matrix()
     |> replace_rows(cols, transpose_matrix(values))

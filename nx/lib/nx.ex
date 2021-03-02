@@ -7509,6 +7509,9 @@ defmodule Nx do
     * `:eps` - `float`. Defaults to 1.0e-12
       Tolerance applied during the decomposition
 
+  Note not all options apply to all backends, as backends may have
+  specific optimizations that render these mechanisms unnecessary.
+
   ## Examples
 
       iex> {u, s, v} = Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
