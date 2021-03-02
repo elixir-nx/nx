@@ -7506,14 +7506,18 @@ defmodule Nx do
   The elemens of `s` are sorted from highest to lowest.
 
   ## Options
-    * `compute_uv`: `boolean`. Defaults to `false`
+  
+    * `:compute_uv` - `boolean`. Defaults to `false`
       Whether or not to compute `u` and `vt`. If `false`, the return value is `s`
-    * `max_iter`: `integer`. Defaults to `1000`
-      Number of maximum iterations before stopping the decomposition.
-    * `eps`: `float`. Defaults to 1.0e-12
-      Tolerance applied during the decomposition.
+
+    * `:max_iter` - `integer`. Defaults to `1000`
+      Number of maximum iterations before stopping the decomposition
+
+    * `:eps` - `float`. Defaults to 1.0e-12
+      Tolerance applied during the decomposition
 
   ## Examples
+
       iex> {u, s, v} = Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]), compute_uv: true)
       iex> u
       Nx.tensor([
