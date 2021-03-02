@@ -1193,88 +1193,33 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp svd_jacobi_rotation_round(u, d, v, {m, n}, compute_uv, eps) do
-    invalid_index_message = fn x, y ->
-      raise ArgumentError,
-            "invalid index [#{x},#{y}] for matrix of shape {#{m}, #{n}}"
-    end
-
+  defp svd_jacobi_rotation_round(u, d, v, {_, n}, compute_uv, eps) do
     for p <- 0..(n - 2), q <- (p + 1)..(n - 1), reduce: {u, d, v} do
       {u, d, v} ->
         # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
-        row_p = Enum.at(d, p) || invalid_index_message.(p, "0..n-1")
-        row_q = Enum.at(d, q) || invalid_index_message.(q, "0..n-1")
+        d_rows_pq = get_matrix_rows(d, [p, q])
 
-        d_pp = Enum.at(row_p, p) || invalid_index_message.(p, p)
-        d_pq = Enum.at(row_p, q) || invalid_index_message.(p, q)
-        d_qp = Enum.at(row_q, p) || invalid_index_message.(q, p)
-        d_qq = Enum.at(row_q, q) || invalid_index_message.(q, q)
+        [d_pp, d_pq, d_qp, d_qq] = get_matrix_elements(d, [[p, p], [p, q], [q, p], [q, q]])
 
         {rot_l, rot_r} = jacobi_rotators(d_pp, d_pq, d_qp, d_qq, eps)
 
-        [row_p, row_q] = rot_l |> transpose_matrix() |> dot_matrix([row_p, row_q])
+        updated_d_rows_pq = rot_l |> transpose_matrix() |> dot_matrix(d_rows_pq)
 
-        # D[[p, q], :] = [[row_p], [row_q]]
-        d = d |> List.replace_at(p, row_p) |> List.replace_at(q, row_q)
+        d = replace_rows(d, [p, q], updated_d_rows_pq)
 
-        d_transposed = transpose_matrix(d)
-        d_col_p = Enum.at(d_transposed, p)
-        d_col_q = Enum.at(d_transposed, q)
+        d_cols = get_matrix_columns(d, [p, q])
 
-        [d_col_p, d_col_q] =
-          [d_col_p, d_col_q]
-          |> transpose_matrix()
-          |> dot_matrix(rot_r)
-          |> transpose_matrix()
+        updated_d_cols = dot_matrix(d_cols, rot_r)
 
-        d =
-          d_transposed
-          |> List.replace_at(p, d_col_p)
-          |> List.replace_at(q, d_col_q)
-          |> transpose_matrix()
+        d = replace_cols(d, [p, q], updated_d_cols)
 
         {u, v} =
           if compute_uv do
-            u_transposed = transpose_matrix(u)
-            u_col_p = Enum.at(u_transposed, p)
-            u_col_q = Enum.at(u_transposed, q)
+            rotated_u_cols = u |> get_matrix_columns([p, q]) |> dot_matrix(rot_l)
+            u = replace_cols(u, [p, q], rotated_u_cols)
 
-            [u_col_p_rotated, u_col_q_rotated] =
-              rot_l
-              |> transpose_matrix()
-              |> dot_matrix([u_col_p, u_col_q])
-
-            inv_norm_u_col_p_rotated =
-              1 / :math.sqrt(Enum.reduce(u_col_p_rotated, 0, &(&1 * &1 + &2)))
-
-            u_col_p_normalized = Enum.map(u_col_p_rotated, &(&1 * inv_norm_u_col_p_rotated))
-
-            inv_norm_u_col_q_rotated =
-              1 / :math.sqrt(Enum.reduce(u_col_q_rotated, 0, &(&1 * &1 + &2)))
-
-            u_col_q_normalized = Enum.map(u_col_q_rotated, &(&1 * inv_norm_u_col_q_rotated))
-
-            u =
-              u_transposed
-              |> List.replace_at(p, u_col_p_normalized)
-              |> List.replace_at(q, u_col_q_normalized)
-              |> transpose_matrix()
-
-            v_transposed = transpose_matrix(v)
-            v_col_p = Enum.at(v_transposed, p)
-            v_col_q = Enum.at(v_transposed, q)
-
-            [v_col_p, v_col_q] =
-              [v_col_p, v_col_q]
-              |> transpose_matrix()
-              |> dot_matrix(rot_r)
-              |> transpose_matrix()
-
-            v =
-              v_transposed
-              |> List.replace_at(p, v_col_p)
-              |> List.replace_at(q, v_col_q)
-              |> transpose_matrix()
+            rotated_v_cols = v |> get_matrix_columns([p, q]) |> dot_matrix(rot_r)
+            v = replace_cols(v, [p, q], rotated_v_cols)
 
             {u, v}
           else
@@ -1311,48 +1256,6 @@ defmodule Nx.BinaryBackend do
       |> Enum.unzip()
     else
       {s |> Enum.map(&abs/1) |> Enum.sort(&>=/2), nil}
-    end
-  end
-
-  defp dot_matrix(m1, m2) do
-    # matrix multiplication which works on 2-D lists
-    Enum.map(m1, fn row ->
-      m2
-      |> transpose_matrix()
-      |> Enum.map(fn col ->
-        row
-        |> Enum.zip(col)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
-      end)
-    end)
-  end
-
-  defp transpose_matrix(m) do
-    m
-    |> Enum.zip()
-    |> Enum.map(&Tuple.to_list/1)
-  end
-
-  defp matrix_to_binary(m, type) do
-    m
-    |> Enum.map(fn
-      row when is_list(row) ->
-        Enum.map(row, fn x -> scalar_to_binary(x, type) end)
-
-      x ->
-        scalar_to_binary(x, type)
-    end)
-    |> IO.iodata_to_binary()
-  end
-
-  defp binary_to_matrix(bin, type, {_, num_cols}) do
-    match_types [type] do
-      flat_list =
-        for <<match!(x, 0) <- bin>>, into: [] do
-          read!(x, 0)
-        end
-
-      Enum.chunk_every(flat_list, num_cols)
     end
   end
 
@@ -1449,7 +1352,7 @@ defmodule Nx.BinaryBackend do
     for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
       {ll, a, rr} ->
         # a[[col..m-1, col]] -> take `m - col` rows from the `col`-th column
-        a_col = a |> Enum.drop(col) |> Enum.map(&Enum.at(&1, col))
+        a_col = a |> slice_matrix([col, col], [col - m, 1], flatten: true)
 
         l = householder_reflector(a_col, m, eps)
 
@@ -1465,10 +1368,10 @@ defmodule Nx.BinaryBackend do
         {a, rr} =
           if col <= n - 2 and compute_lr do
             # r = householder_reflector(a[[col, col+1:]], n)
+
             r =
               a
-              |> Enum.at(col)
-              |> Enum.drop(col + 1)
+              |> slice_matrix([col, col + 1], [1, n - col], flatten: true)
               |> householder_reflector(n, eps)
 
             rr =
@@ -2196,5 +2099,106 @@ defmodule Nx.BinaryBackend do
         else: d
 
     div(size, dilation_factor) * x + weighted_offset(dims, pos, dilation)
+  end
+
+  ## Matrix (2-D array) manipulation
+
+  defp dot_matrix(m1, m2) do
+    # matrix multiplication which works on 2-D lists
+    Enum.map(m1, fn row ->
+      m2
+      |> transpose_matrix()
+      |> Enum.map(fn col ->
+        row
+        |> Enum.zip(col)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
+      end)
+    end)
+  end
+
+  defp transpose_matrix(m) do
+    m
+    |> Enum.zip()
+    |> Enum.map(&Tuple.to_list/1)
+  end
+
+  defp matrix_to_binary(m, type) do
+    m
+    |> Enum.map(fn
+      row when is_list(row) ->
+        Enum.map(row, fn x -> scalar_to_binary(x, type) end)
+
+      x ->
+        scalar_to_binary(x, type)
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  defp binary_to_matrix(bin, type, {_, num_cols}) do
+    match_types [type] do
+      flat_list =
+        for <<match!(x, 0) <- bin>>, into: [] do
+          read!(x, 0)
+        end
+
+      Enum.chunk_every(flat_list, num_cols)
+    end
+  end
+
+  defp slice_matrix(a, [row_start, col_start], [row_length, col_length], opts \\ []) do
+    result =
+      a
+      |> Enum.drop(row_start)
+      |> Enum.take(row_length)
+      |> Enum.map(&Enum.slice(&1, col_start..(col_start + col_length - 1)))
+
+    if opts[:flatten] do
+      List.flatten(result)
+    else
+      result
+    end
+  end
+
+  defp get_matrix_columns(m, columns) do
+    Enum.map(m, fn row ->
+      row
+      |> Enum.with_index()
+      |> Enum.filter(fn {_, idx} -> idx in columns end)
+      |> Enum.map(fn {item, _} -> item end)
+    end)
+  end
+
+  defp get_matrix_rows(m, rows) do
+    m
+    |> Enum.with_index()
+    |> Enum.filter(fn {_, idx} -> idx in rows end)
+    |> Enum.map(fn {row, _} -> row end)
+  end
+
+  defp get_matrix_elements(m, row_col_pairs) do
+    Enum.map(row_col_pairs, fn [row, col] ->
+      m
+      |> Enum.at(row)
+      |> Enum.at(col)
+      |> case do
+        nil -> raise ArgumentError, "invalid index [#{row},#{col}] for matrix"
+        item -> item
+      end
+    end)
+  end
+
+  defp replace_rows(m, rows, values) when length(rows) == length(values) do
+    rows
+    |> Enum.zip(values)
+    |> Enum.reduce(m, fn {idx, row}, m -> List.replace_at(m, idx, row) end)
+  end
+
+  defp replace_cols(m, [], _), do: m
+
+  defp replace_cols(m, cols, [row | _] = values) when length(row) == length(cols) do
+    m
+    |> transpose_matrix()
+    |> replace_rows(cols, transpose_matrix(values))
+    |> transpose_matrix()
   end
 end
