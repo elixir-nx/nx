@@ -56,6 +56,10 @@ defmodule Torchx.NIF do
   dnif divide(tensorA, tensorB)
   dnif remainder(tensorA, tensorB)
   dnif multiply(tensorA, tensorB)
+  dnif power(tensorA, tensorB)
+  dnif atan2(tensorA, tensorB)
+  dnif min(tensorA, tensorB)
+  dnif max(tensorA, tensorB)
 
   dnif bitwise_and(tensorA, tensorB)
   dnif bitwise_or(tensorA, tensorB)

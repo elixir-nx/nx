@@ -586,6 +586,10 @@ static ErlNifFunc nif_functions[] = {
     DF(divide, 2),
     DF(remainder, 2),
     DF(multiply, 2),
+    DF(power, 2),
+    DF(atan2, 2),
+    DF(min, 2),
+    DF(max, 2),
 
     DF(bitwise_and, 2),
     DF(bitwise_or, 2),

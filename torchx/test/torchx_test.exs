@@ -36,7 +36,7 @@ defmodule TorchxTest do
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
   @bf16_and_ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}]
   @ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}]
-  @ops [:add, :subtract, :divide, :remainder, :multiply]
+  @ops [:add, :subtract, :divide, :remainder, :multiply, :power, :atan2, :min, :max]
   @bitwise_ops [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @logical_ops [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal, :logical_and, :logical_or, :logical_xor]
 
@@ -51,20 +51,13 @@ defmodule TorchxTest do
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
 
     assert(Nx.backend_transfer(c) == binary_c)
-  # rescue
-  #   e in RuntimeError ->
-  #     IO.puts(
-  #       "\r#{op}(#{Nx.Type.to_string(type_a)}, #{
-  #         Nx.Type.to_string(type_b)
-  #       }): #{e.message}\n"
-  #     )
   end
 
   describe "binary tensor-tensor ops" do
     for op <- @ops ++ @logical_ops,
         type_a <- @types,
         type_b <- @types,
-        not ((op in [:divide, :remainder] and (type_a == {:bf, 16} and type_b in @bf16_and_ints)) or
+        not ((op in [:divide, :remainder, :atan2, :power] and (type_a == {:bf, 16} and type_b in @bf16_and_ints)) or
                (type_b == {:bf, 16} and type_a in @bf16_and_ints)) do
       test "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
         op = unquote(op)
@@ -95,7 +88,7 @@ defmodule TorchxTest do
   # So, the result of division is different from what direct bf16 by bf16 division gives us.
   # I.e. 1/5 == 0.19921875 in direct bf16 division and 0.2001953125 when dividing floats
   # converting them to bf16 afterwards (PyTorch style).
-  describe "bfloat16 division" do
+  describe "bfloat16" do
     for type_a <- @bf16_and_ints,
         type_b <- @bf16_and_ints,
         type_a == {:bf, 16} or type_b == {:bf, 16} do
@@ -110,6 +103,25 @@ defmodule TorchxTest do
 
         assert Nx.backend_transfer(c) ==
                  Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]],
+                   type: {:bf, 16}
+                 )
+      end
+    end
+
+    for type_a <- @bf16_and_ints,
+        type_b <- @bf16_and_ints,
+        type_a == {:bf, 16} or type_b == {:bf, 16} do
+      test "power(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
+        type_a = unquote(type_a)
+        type_b = unquote(type_b)
+
+        a = tt([[1, 2], [3, 4]], type_a)
+        b = tt([[5, 6], [7, 8]], type_b)
+
+        c = Nx.power(a, b)
+
+        assert Nx.backend_transfer(c) ==
+                 Nx.tensor([[1.0, 64.0], [2192.0, 65536.0]],
                    type: {:bf, 16}
                  )
       end
