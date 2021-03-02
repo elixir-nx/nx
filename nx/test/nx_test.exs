@@ -1265,12 +1265,11 @@ defmodule NxTest do
   end
 
   describe "svd" do
-    @tag :focus
-    test "correctly finds the singular values of triangular matrices" do
-      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
+    test "correctly finds the singular values of full matrices" do
+      t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
 
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
-               Nx.svd(t, compute_uv: true, max_iter: 10000) |> IO.inspect(label: "{u,s,v}")
+               Nx.svd(t, compute_uv: true, max_iter: 1000)
 
       zero_row = List.duplicate(0, 3)
 
@@ -1283,18 +1282,63 @@ defmodule NxTest do
         |> Enum.concat([zero_row])
         |> Nx.tensor()
 
-      IO.inspect(u |> Nx.dot(s_matrix) |> Nx.dot(Nx.transpose(v)))
+      assert round(t, 2) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(2)
 
       assert round(u, 3) ==
                Nx.tensor([
-                 [0.825, 0.141, 0.547, 0.019],
-                 [0.426, 0.344, -0.744, 0.382],
-                 [0.028, 0.547, -0.153, -0.822],
-                 [-0.371, 0.75, 0.35, 0.421]
+                 [-0.141, -0.825, -0.547, 0.019],
+                 [-0.344, -0.426, 0.744, 0.382],
+                 [-0.547, -0.028, 0.153, -0.822],
+                 [-0.75, 0.371, -0.35, 0.421]
                ])
                |> round(3)
 
-      Nx.dot(u, s_matrix) |> Nx.dot(v) |> IO.inspect()
+      assert Nx.tensor([25.462, 1.291, 0.0]) |> round(3) == round(s, 3)
+
+      assert Nx.tensor([
+               [-0.505, -0.575, -0.644],
+               [0.761, 0.057, -0.646],
+               [-0.408, 0.816, -0.408]
+             ])
+             |> round(3) == round(v, 3)
+    end
+
+    test "correctly finds the singular values triangular matrices" do
+      t = Nx.tensor([[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]])
+
+      assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
+               Nx.svd(t, compute_uv: true)
+
+      zero_row = List.duplicate(0, 3)
+
+      # turn s into a {4, 3} tensor
+      s_matrix =
+        s
+        |> Nx.to_flat_list()
+        |> Enum.with_index()
+        |> Enum.map(fn {x, idx} -> List.replace_at(zero_row, idx, x) end)
+        |> Nx.tensor()
+
+      assert round(t, 2) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(2)
+
+      assert round(u, 3) ==
+               Nx.tensor([
+                 [-0.335, 0.408, -0.849],
+                 [-0.036, 0.895, 0.445],
+                 [-0.941, -0.18, 0.286]
+               ])
+               |> round(3)
+
+      # The expected value is ~ [9, 5, 1] since the eigenvalues of
+      # a triangular matrix are the diagonal elements. Close enough!
+      assert Nx.tensor([9.52, 4.433, 0.853]) |> round(3) == round(s, 3)
+
+      assert Nx.tensor([
+               [-0.035, -0.086, -0.996],
+               [0.092, 0.992, -0.089],
+               [-0.995, 0.095, 0.027]
+             ])
+             |> round(3) == round(v, 3)
     end
   end
 

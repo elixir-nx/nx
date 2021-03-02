@@ -1091,7 +1091,6 @@ defmodule Nx.BinaryBackend do
     compute_uv = opts[:compute_uv] || false
 
     {u, d, v} = householder_bidiagonalization(a, input_shape, eps, compute_uv)
-    IO.inspect({u, d, v}, label: "{u,d,v} householder")
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
@@ -1233,17 +1232,17 @@ defmodule Nx.BinaryBackend do
   defp apply_singular_value_corrections(s, v, compute_uv) do
     # Due to convention, the singular values must be positive.
     # This function fixes any negative singular values.
-    # It's important to note that since s left-multiplies v in
-    # the SVD result, and represents a diagonal matrix,
+    # It's important to note that since s left-multiplies v_transposed in
+    # the SVD result. Since it also represents a diagonal matrix,
     # changing a sign in s implies a sign change in the
-    # corresponding row of v.
+    # corresponding row of v_transposed.
 
     # This function also sorts singular values from highest to lowest,
     # as this can be convenient.
 
     if compute_uv do
       s
-      |> Enum.zip(v)
+      |> Enum.zip(transpose_matrix(v))
       |> Enum.map(fn
         {singular_value, row} when singular_value < 0 ->
           {-singular_value, Enum.map(row, &(&1 * -1))}
@@ -1251,11 +1250,10 @@ defmodule Nx.BinaryBackend do
         {singular_value, row} ->
           {singular_value, row}
       end)
-      # |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
+      |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
       |> Enum.unzip()
     else
-      # {s |> Enum.map(&abs/1) |> Enum.sort(&>=/2), nil}
-      {s |> Enum.map(&abs/1), nil}
+      {s |> Enum.map(&abs/1) |> Enum.sort(&>=/2), nil}
     end
   end
 
@@ -1391,7 +1389,7 @@ defmodule Nx.BinaryBackend do
     # if the current column is not the penultimate, also apply
     # the corresponding row's householder reflector from the right
 
-    for col <- 0..(n - 2), reduce: {nil, tensor, nil} do
+    for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
       {ll, a, rr} ->
         # a[[col..m-1, col]] -> take `m - col` rows from the `col`-th column
         a_col = a |> Enum.drop(col) |> Enum.map(&Enum.at(&1, col))
@@ -1420,7 +1418,7 @@ defmodule Nx.BinaryBackend do
               if is_nil(rr) do
                 r
               else
-                dot_matrix(rr, r)
+                dot_matrix(r, rr)
               end
 
             a = dot_matrix(a, r)
