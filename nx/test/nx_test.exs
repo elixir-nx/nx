@@ -1330,7 +1330,7 @@ defmodule NxTest do
       t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
 
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
-               Nx.svd(t, compute_uv: true, max_iter: 1000)
+               Nx.svd(t, max_iter: 1000)
 
       zero_row = List.duplicate(0, 3)
 
@@ -1368,7 +1368,7 @@ defmodule NxTest do
       t = Nx.tensor([[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]])
 
       assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
-               Nx.svd(t, compute_uv: true)
+               Nx.svd(t)
 
       zero_row = List.duplicate(0, 3)
 

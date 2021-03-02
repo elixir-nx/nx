@@ -7498,18 +7498,11 @@ defmodule Nx do
   @doc """
   Calculates the Singular Value Decomposition of 2-D tensors.
 
-  If `compute_uv = true`, returns `{u, s, vt}`. Otherwise, returns `s`.
-  `s` is an array containing the singular values of the input tensor.
-  `u` and `vt` are orthonormal matrices where `input_tensor = u.S.vt`,
-  and `S` is the diagonal matrix which elements are the elements of `s`.
-
-  The elemens of `s` are sorted from highest to lowest.
+  It returns `{u, s, vt}` where the elemens of `s` are sorted
+  from highest to lowest.
 
   ## Options
   
-    * `:compute_uv` - `boolean`. Defaults to `false`
-      Whether or not to compute `u` and `vt`. If `false`, the return value is `s`
-
     * `:max_iter` - `integer`. Defaults to `1000`
       Number of maximum iterations before stopping the decomposition
 
@@ -7518,50 +7511,63 @@ defmodule Nx do
 
   ## Examples
 
-      iex> {u, s, v} = Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]), compute_uv: true)
+      iex> {u, s, v} = Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
       iex> u
-      Nx.tensor([
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0, 1.0]
-      ])
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0.0, 1.0]
+        ]
+      >
       iex> s
-      Nx.tensor([1.0, 1.0, 1.0])
+      #Nx.Tensor<
+        f32[3]
+        [1.0, 1.0, 1.0]
+      >
       iex> v
-      Nx.tensor([
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0, -1.0]
-      ])
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ]
+      >
 
-      iex> {u, s, vt} = Nx.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]], names: [:row_space, :col_space]), compute_uv: true)
+      iex> {u, s, vt} = Nx.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]], names: [:row_space, :col_space]))
       iex> u
-      Nx.tensor([
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0, 1.0, 0.0],
-        [0.0, 0, 0.0, 1.0],
-      ], names: [:row_space, nil])
+      #Nx.Tensor<
+        f32[row_space: 4][4]
+        [
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ]
+      >
       iex> s
-      Nx.tensor([3.0, 2.0, 1.0])
+      #Nx.Tensor<
+        f32[3]
+        [3.0, 2.0, 1.0]
+      >
       iex> vt
-      Nx.tensor([
-        [0.0, 1.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 0, -1.0]
-      ], names: [nil, :col_space])
+      #Nx.Tensor<
+        f32[3][col_space: 3]
+        [
+          [0.0, 1.0, 0.0],
+          [1.0, 0.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ]
+      >
 
-      iex> Nx.svd(Nx.tensor([[2, 0, 0], [0, -3, 0], [0, 0, -1], [0, 0, 0]]))
-      Nx.tensor([3.0, 2.0, 1.0])
   """
   @doc type: :linalg
   def svd(tensor, opts \\ []) do
     %T{type: type, shape: shape, names: [u_name, v_name]} = tensor = tensor!(tensor)
-
-    assert_keys!(opts, [:eps, :max_iter, :compute_uv])
-
+    assert_keys!(opts, [:eps, :max_iter])
     output_type = Nx.Type.to_floating(type)
-
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
 
     impl!(tensor).svd(

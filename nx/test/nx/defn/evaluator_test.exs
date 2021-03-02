@@ -61,6 +61,15 @@ defmodule Nx.Defn.EvaluatorTest do
     assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
   end
 
+  defn svd(t), do: Nx.svd(t)
+
+  test "svd" do
+    assert {u, s, vt} = svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
+    assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    assert s == Nx.tensor([1.0, 1.0, 1.0])
+    assert vt == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
+  end
+
   defn if3(a, b, c), do: if(a, do: b, else: c)
 
   test "if" do

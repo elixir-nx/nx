@@ -1144,9 +1144,7 @@ defmodule Nx.BinaryBackend do
 
     eps = opts[:eps] || @default_eps
     max_iter = opts[:max_iter] || 1000
-    compute_uv = opts[:compute_uv] || false
-
-    {u, d, v} = householder_bidiagonalization(a, input_shape, eps, compute_uv)
+    {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
@@ -1157,7 +1155,7 @@ defmodule Nx.BinaryBackend do
 
           if off_diag_norm > eps do
             # Execute a round of jacobi rotations on u, d and v
-            {u, d, v} = svd_jacobi_rotation_round(u, d, v, input_shape, compute_uv, eps)
+            {u, d, v} = svd_jacobi_rotation_round(u, d, v, input_shape, eps)
 
             # calculate a posteriori norms for d, so the next iteration of Enum.reduce_while can decide to halt
             {fro_norm, off_diag_norm} = get_frobenius_norm(d)
@@ -1175,25 +1173,21 @@ defmodule Nx.BinaryBackend do
       |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
       |> Enum.reject(&is_nil/1)
 
-    {s, v} = apply_singular_value_corrections(s, v, compute_uv)
+    {s, v} = apply_singular_value_corrections(s, v)
 
     s_bin = matrix_to_binary(s, output_type)
     s = from_binary(s_holder, s_bin)
 
-    if compute_uv do
-      u_bin = matrix_to_binary(u, output_type)
-      v_bin = matrix_to_binary(v, output_type)
+    u_bin = matrix_to_binary(u, output_type)
+    v_bin = matrix_to_binary(v, output_type)
 
-      u = from_binary(u_holder, u_bin)
-      v = from_binary(v_holder, v_bin)
+    u = from_binary(u_holder, u_bin)
+    v = from_binary(v_holder, v_bin)
 
-      {u, s, v}
-    else
-      s
-    end
+    {u, s, v}
   end
 
-  defp svd_jacobi_rotation_round(u, d, v, {_, n}, compute_uv, eps) do
+  defp svd_jacobi_rotation_round(u, d, v, {_, n}, eps) do
     for p <- 0..(n - 2), q <- (p + 1)..(n - 1), reduce: {u, d, v} do
       {u, d, v} ->
         # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
@@ -1206,31 +1200,22 @@ defmodule Nx.BinaryBackend do
         updated_d_rows_pq = rot_l |> transpose_matrix() |> dot_matrix(d_rows_pq)
 
         d = replace_rows(d, [p, q], updated_d_rows_pq)
-
         d_cols = get_matrix_columns(d, [p, q])
 
         updated_d_cols = dot_matrix(d_cols, rot_r)
-
         d = replace_cols(d, [p, q], updated_d_cols)
 
-        {u, v} =
-          if compute_uv do
-            rotated_u_cols = u |> get_matrix_columns([p, q]) |> dot_matrix(rot_l)
-            u = replace_cols(u, [p, q], rotated_u_cols)
+        rotated_u_cols = u |> get_matrix_columns([p, q]) |> dot_matrix(rot_l)
+        u = replace_cols(u, [p, q], rotated_u_cols)
 
-            rotated_v_cols = v |> get_matrix_columns([p, q]) |> dot_matrix(rot_r)
-            v = replace_cols(v, [p, q], rotated_v_cols)
-
-            {u, v}
-          else
-            {nil, nil}
-          end
+        rotated_v_cols = v |> get_matrix_columns([p, q]) |> dot_matrix(rot_r)
+        v = replace_cols(v, [p, q], rotated_v_cols)
 
         {u, d, v}
     end
   end
 
-  defp apply_singular_value_corrections(s, v, compute_uv) do
+  defp apply_singular_value_corrections(s, v) do
     # Due to convention, the singular values must be positive.
     # This function fixes any negative singular values.
     # It's important to note that since s left-multiplies v_transposed in
@@ -1241,22 +1226,18 @@ defmodule Nx.BinaryBackend do
     # This function also sorts singular values from highest to lowest,
     # as this can be convenient.
 
-    if compute_uv do
-      # TODO: Use Enum.zip_with on Elixir v1.12
-      s
-      |> Enum.zip(transpose_matrix(v))
-      |> Enum.map(fn
-        {singular_value, row} when singular_value < 0 ->
-          {-singular_value, Enum.map(row, &(&1 * -1))}
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    s
+    |> Enum.zip(transpose_matrix(v))
+    |> Enum.map(fn
+      {singular_value, row} when singular_value < 0 ->
+        {-singular_value, Enum.map(row, &(&1 * -1))}
 
-        {singular_value, row} ->
-          {singular_value, row}
-      end)
-      |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
-      |> Enum.unzip()
-    else
-      {s |> Enum.map(&abs/1) |> Enum.sort(&>=/2), nil}
-    end
+      {singular_value, row} ->
+        {singular_value, row}
+    end)
+    |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
+    |> Enum.unzip()
   end
 
   defp householder_reflector(a, target_k, eps)
@@ -1343,7 +1324,7 @@ defmodule Nx.BinaryBackend do
     reflector
   end
 
-  defp householder_bidiagonalization(tensor, {m, n}, eps, compute_lr) do
+  defp householder_bidiagonalization(tensor, {m, n}, eps) do
     # For each column in `tensor`, apply
     # the current column's householder reflector from the left to `tensor`.
     # if the current column is not the penultimate, also apply
@@ -1352,12 +1333,12 @@ defmodule Nx.BinaryBackend do
     for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
       {ll, a, rr} ->
         # a[[col..m-1, col]] -> take `m - col` rows from the `col`-th column
-        a_col = a |> slice_matrix([col, col], [col - m, 1], flatten: true)
+        a_col = a |> slice_matrix([col, col], [col - m, 1])
 
         l = householder_reflector(a_col, m, eps)
 
         ll =
-          if is_nil(ll) or not compute_lr do
+          if is_nil(ll) do
             l
           else
             dot_matrix(ll, l)
@@ -1366,12 +1347,12 @@ defmodule Nx.BinaryBackend do
         a = dot_matrix(l, a)
 
         {a, rr} =
-          if col <= n - 2 and compute_lr do
+          if col <= n - 2 do
             # r = householder_reflector(a[[col, col+1:]], n)
 
             r =
               a
-              |> slice_matrix([col, col + 1], [1, n - col], flatten: true)
+              |> slice_matrix([col, col + 1], [1, n - col])
               |> householder_reflector(n, eps)
 
             rr =
@@ -2145,34 +2126,21 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp slice_matrix(a, [row_start, col_start], [row_length, col_length], opts \\ []) do
-    result =
-      a
-      |> Enum.drop(row_start)
-      |> Enum.take(row_length)
-      |> Enum.map(&Enum.slice(&1, col_start..(col_start + col_length - 1)))
-
-    if opts[:flatten] do
-      List.flatten(result)
-    else
-      result
-    end
+  defp slice_matrix(a, [row_start, col_start], [row_length, col_length]) do
+    a
+    |> Enum.drop(row_start)
+    |> Enum.take(row_length)
+    |> Enum.flat_map(&Enum.slice(&1, col_start..(col_start + col_length - 1)))
   end
 
   defp get_matrix_columns(m, columns) do
     Enum.map(m, fn row ->
-      row
-      |> Enum.with_index()
-      |> Enum.filter(fn {_, idx} -> idx in columns end)
-      |> Enum.map(fn {item, _} -> item end)
+      for {item, i} <- Enum.with_index(row), i in columns, do: item
     end)
   end
 
   defp get_matrix_rows(m, rows) do
-    m
-    |> Enum.with_index()
-    |> Enum.filter(fn {_, idx} -> idx in rows end)
-    |> Enum.map(fn {row, _} -> row end)
+    for {row, i} <- Enum.with_index(m), i in rows, do: row
   end
 
   defp get_matrix_elements(m, row_col_pairs) do
@@ -2187,7 +2155,7 @@ defmodule Nx.BinaryBackend do
     end)
   end
 
-  defp replace_rows(m, rows, values) when length(rows) == length(values) do
+  defp replace_rows(m, rows, values) do
     rows
     |> Enum.zip(values)
     |> Enum.reduce(m, fn {idx, row}, m -> List.replace_at(m, idx, row) end)
@@ -2195,7 +2163,7 @@ defmodule Nx.BinaryBackend do
 
   defp replace_cols(m, [], _), do: m
 
-  defp replace_cols(m, cols, [row | _] = values) when length(row) == length(cols) do
+  defp replace_cols(m, cols, [row | _] = values) do
     m
     |> transpose_matrix()
     |> replace_rows(cols, transpose_matrix(values))
