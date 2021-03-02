@@ -7090,18 +7090,19 @@ defmodule Nx do
       Applies only on 2-norm for 2-D tensors. Default: `nil`.
     * `:ord` - defines which norm will be calculated according to the table below. Default: `2`
 
-  | ord          | 2-D                                       | 1-D                               |
-  | ------------ | ----------------------------------------- | --------------------------------- |
-  | `nil`        | Frobenius norm                            | 2-norm                            |
-  | `:frobenius` | Frobenius norm                            | -                                 |
-  | `:inf`       | `max(sum(abs(x), axes: [1]))`             | `max(abs(x))`                     |
-  | `:neg_inf`   | `min(sum(abs(x), axes: [1]))`             | `min(abs(x))`                     |
-  | 0            | -                                         | Number of non-zero elements       |
-  | 1            | `max(sum(abs(x), axes: [0]))`             | as below                          |
-  | -1           | `min(sum(abs(x), axes: [0]))`             | as below                          |
-  | 2            | 2-norm                                    | as below                          |
-  | -2           | smallest singular value (not implemented) | as below                          |
-  | other        | -                                         | power(sum(power(abs(x), p)), 1/p) |
+  | ord          | 2-D                            | 1-D                               |
+  | ------------ | -------------------------------| --------------------------------- |
+  | `nil`        | Frobenius norm                 | 2-norm                            |
+  | `:nuclear`   | Nuclear norm                   | -                                 |
+  | `:frobenius` | Frobenius norm                 | -                                 |
+  | `:inf`       | `max(sum(abs(x), axes: [1]))`  | `max(abs(x))`                     |
+  | `:neg_inf`   | `min(sum(abs(x), axes: [1]))`  | `min(abs(x))`                     |
+  | 0            | -                              | Number of non-zero elements       |
+  | 1            | `max(sum(abs(x), axes: [0]))`  | as below                          |
+  | -1           | `min(sum(abs(x), axes: [0]))`  | as below                          |
+  | 2            | 2-norm                         | as below                          |
+  | -2           | smallest singular value        | as below                          |
+  | other        | -                              | power(sum(power(abs(x), p)), 1/p) |
 
   ## Examples
 
@@ -7169,6 +7170,18 @@ defmodule Nx do
         5.0
       >
 
+      iex> Nx.norm(Nx.tensor([[1, 0, 0], [0, -4, 0], [0, 0, 9]]), ord: :nuclear)
+      #Nx.Tensor<
+        f32
+        14.0
+      >
+
+      iex> Nx.norm(Nx.tensor([[1, 0, 0], [0, -4, 0], [0, 0, 9]]), ord: -2)
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
       iex> Nx.norm(Nx.tensor([[3, 0], [0, -4]]))
       #Nx.Tensor<
         f32
@@ -7185,9 +7198,6 @@ defmodule Nx do
 
       iex> Nx.norm(Nx.tensor([3, 4]), ord: :frobenius)
       ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
-
-      iex> Nx.norm(Nx.tensor([[0], [1]]), ord: -2)
-      ** (RuntimeError) ord: -2 for 2-D tensor not implemented yet
   """
   @doc type: :linalg
   def norm(tensor, opts \\ []) when is_list(opts) do
@@ -7204,6 +7214,8 @@ defmodule Nx do
       nil when rank == 1 -> norm_integer(t, 2, axes_opts)
       nil when rank == 2 -> norm_integer(t, 2, axes_opts)
       :frobenius -> norm_frobenius(t, axes_opts)
+      :nuclear when rank == 2 -> norm_nuclear(t)
+      :nuclear -> raise ArgumentError, "nuclear norm not supported for rank != 2"
       ord when ord in [:inf, :neg_inf] -> norm_inf(t, ord, axes_opts)
       ord when is_integer(ord) -> norm_integer(t, ord, axes_opts)
       ord -> raise ArgumentError, "unknown ord #{inspect(ord)}"
@@ -7214,6 +7226,11 @@ defmodule Nx do
     do: raise(ArgumentError, "expected a 2-D tensor for ord: :frobenius, got a 1-D tensor")
 
   defp norm_frobenius(%{shape: {_, _}} = t, opts), do: norm_integer(t, 2, opts)
+
+  defp norm_nuclear(%{shape: {_, _}} = t) do
+    {_u, s, _v} = svd(t)
+    sum(s)
+  end
 
   defp norm_inf(%{shape: shape} = t, ord, _opts) when ord in [:inf, :neg_inf] do
     aggregate_axes = if tuple_size(shape) == 2, do: &sum(&1, axes: [1]), else: & &1
@@ -7244,8 +7261,9 @@ defmodule Nx do
     raise ArgumentError, "invalid :ord for 2-D tensor, got: #{inspect(ord)}"
   end
 
-  defp norm_integer(%{shape: {_, _}}, -2, _opts) do
-    raise "ord: -2 for 2-D tensor not implemented yet"
+  defp norm_integer(%{shape: {_, _}} = t, -2, _opts) do
+    {_u, s, _v} = svd(t)
+    reduce_min(s)
   end
 
   defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
@@ -7525,7 +7543,7 @@ defmodule Nx do
   from highest to lowest.
 
   ## Options
-  
+
     * `:max_iter` - `integer`. Defaults to `1000`
       Number of maximum iterations before stopping the decomposition
 
