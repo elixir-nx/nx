@@ -360,10 +360,10 @@ NIF(divide)
   if (b == NULL)
   {
     PARAM(1, double, scalar);
-    TENSOR(*a / scalar);
+    TENSOR(at::divide(*a, scalar));
   }
   else
-    TENSOR(*a / *b);
+    TENSOR(at::divide(*a, *b));
 }
 
 NIF(multiply)
