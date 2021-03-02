@@ -29,6 +29,7 @@ defmodule Torchx.Backend do
 
   def from_torch_type(:char), do: {:s, 8}
   def from_torch_type(:byte), do: {:u, 8}
+  def from_torch_type(:bool), do: {:u, 8}
   def from_torch_type(:short), do: {:s, 16}
   def from_torch_type(:int), do: {:s, 32}
   def from_torch_type(:long), do: {:s, 64}
@@ -135,24 +136,23 @@ defmodule Torchx.Backend do
 
   ## Ops
 
-  @impl true
-  def add(out, left, right) do
-    NIF.add(left.data.ref, right.data.ref) |> from_ref(out)
-  end
+  binary_ops =
+    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
+      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
+      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
+      [:logical_and, :logical_or, :logical_xor] ++
+      [:outer]
 
-  @impl true
-  def subtract(out, left, right) do
-    NIF.subtract(left.data.ref, right.data.ref) |> from_ref(out)
-  end
 
-  @impl true
-  def multiply(out, left, right) do
-    NIF.multiply(left.data.ref, right.data.ref) |> from_ref(out)
-  end
+  for op <- binary_ops do
+    @impl true
+    def unquote(op)(out, left, right) when is_number(right) do
+      NIF.unquote(op)(left.data.ref, right) |> from_ref(out)
+    end
 
-  @impl true
-  def divide(out, left, right) do
-    NIF.divide(left.data.ref, right.data.ref) |> from_ref(out)
+    def unquote(op)(out, left, right) do
+      NIF.unquote(op)(left.data.ref, right.data.ref) |> from_ref(out)
+    end
   end
 
   @impl true
@@ -179,7 +179,7 @@ defmodule Torchx.Backend do
       ),
       do: NIF.qr(tensor.data.ref, opts[:mode] == :reduced) |> from_pair_ref({q_holder, r_holder})
 
-  @big_tensor_threshold 10_000_000
+  @big_tensor_threshold_bytes 10_000_000
 
   @impl true
   def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
@@ -192,7 +192,7 @@ defmodule Torchx.Backend do
         byte_size = nbytes(tensor)
         byte_limit = limit && limit * div(elem_size, 8)
 
-        if min(byte_limit, byte_size) > @big_tensor_threshold do
+        if min(byte_limit, byte_size) > @big_tensor_threshold_bytes do
           "Torchx tensor is too large to inspect. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
         else
           binary = to_blob(tensor, limit)
@@ -230,12 +230,6 @@ defmodule Torchx.Backend do
 
   defp maybe_cast_type(ref, type) do
     if from_torch_type(unwrap!(NIF.type(ref))) != type do
-      IO.puts(
-        "\nCasting #{Nx.Type.to_string(from_torch_type(unwrap!(NIF.type(ref))))} to #{
-          Nx.Type.to_string(type)
-        } \n"
-      )
-
       NIF.to_type(ref, torch_type(type)) |> unwrap!()
     else
       ref

@@ -324,61 +324,154 @@ NIF(eye)
   TENSOR(at::eye(size, type));
 }
 
-NIF(add)
-{
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-
-  if (b == NULL)
-  {
-    PARAM(1, double, scalar);
-    TENSOR(*a + scalar);
+#define BINARY_OP(OP)   \
+  NIF(OP)               \
+  {                     \
+    TENSOR_PARAM(0, a); \
+    TENSOR_PARAM(1, b); \
+                        \
+    if (b == NULL)      \
+    {                   \
+      PARAM(1, double, scalar); \
+      TENSOR(at::OP(*a, scalar)); \
+    }                   \
+    else                \
+      TENSOR(at::OP(*a, *b)); \
   }
-  else
-    TENSOR(*a + *b);
-}
 
-NIF(subtract)
-{
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-
-  if (b == NULL)
-  {
-    PARAM(1, double, scalar);
-    TENSOR(*a + scalar);
+#define BINARY_OPT(OP)   \
+  NIF(OP)               \
+  {                     \
+    TENSOR_PARAM(0, a); \
+    TENSOR_PARAM(1, b); \
+                        \
+    TENSOR(at::OP(*a, *b)); \
   }
-  else
-    TENSOR(*a - *b);
-}
 
-NIF(divide)
-{
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-
-  if (b == NULL)
-  {
-    PARAM(1, double, scalar);
-    TENSOR(at::divide(*a, scalar));
+#define BINARY_OPB(OP)   \
+  NIF(OP)               \
+  {                     \
+    TENSOR_PARAM(0, a); \
+    TENSOR_PARAM(1, b); \
+                        \
+    nx::nif::ok(env, nx::nif::make(env, at::OP(*a, *b))); \
   }
-  else
-    TENSOR(at::divide(*a, *b));
-}
 
-NIF(multiply)
-{
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-
-  if (b == NULL)
-  {
-    PARAM(1, double, scalar);
-    TENSOR(*a * scalar);
+#define BINARY_OP2(OP, NATIVE_OP)   \
+  NIF(OP)               \
+  {                     \
+    TENSOR_PARAM(0, a); \
+    TENSOR_PARAM(1, b); \
+                        \
+    if (b == NULL)      \
+    {                   \
+      PARAM(1, double, scalar); \
+      TENSOR(at::NATIVE_OP(*a, scalar)); \
+    }                   \
+    else                \
+      TENSOR(at::NATIVE_OP(*a, *b)); \
   }
-  else
-    TENSOR(*a * *b);
-}
+
+BINARY_OP(bitwise_and)
+BINARY_OP(bitwise_or)
+BINARY_OP(bitwise_xor)
+BINARY_OP2(left_shift, __lshift__)
+BINARY_OP2(right_shift, __rshift__)
+
+BINARY_OP2(equal, eq)
+BINARY_OP(not_equal)
+BINARY_OP(greater)
+BINARY_OP(less)
+BINARY_OP(greater_equal)
+BINARY_OP(less_equal)
+
+BINARY_OPT(logical_and)
+BINARY_OPT(logical_or)
+BINARY_OPT(logical_xor)
+
+BINARY_OP(add)
+BINARY_OP(subtract)
+BINARY_OP(divide)
+BINARY_OP(remainder)
+BINARY_OP2(quotient, true_divide)
+BINARY_OP(multiply)
+BINARY_OP2(power, float_power)
+BINARY_OPT(atan2)
+BINARY_OPT(min)
+BINARY_OPT(max)
+
+BINARY_OPT(outer)
+
+
+// NIF(add)
+// {
+//   TENSOR_PARAM(0, a);
+//   TENSOR_PARAM(1, b);
+
+//   if (b == NULL)
+//   {
+//     PARAM(1, double, scalar);
+//     TENSOR(*a + scalar);
+//   }
+//   else
+//     TENSOR(*a + *b);
+// }
+
+// NIF(subtract)
+// {
+//   TENSOR_PARAM(0, a);
+//   TENSOR_PARAM(1, b);
+
+//   if (b == NULL)
+//   {
+//     PARAM(1, double, scalar);
+//     TENSOR(*a + scalar);
+//   }
+//   else
+//     TENSOR(*a - *b);
+// }
+
+// NIF(divide)
+// {
+//   TENSOR_PARAM(0, a);
+//   TENSOR_PARAM(1, b);
+
+//   if (b == NULL)
+//   {
+//     PARAM(1, double, scalar);
+//     TENSOR(at::divide(*a, scalar));
+//   }
+//   else
+//     TENSOR(at::divide(*a, *b));
+// }
+
+// NIF(remainder)
+// {
+//   TENSOR_PARAM(0, a);
+//   TENSOR_PARAM(1, b);
+
+//   if (b == NULL)
+//   {
+//     PARAM(1, double, scalar);
+//     TENSOR(at::remainder(*a, scalar));
+//   }
+//   else
+//     TENSOR(at::remainder(*a, *b));
+// }
+
+// NIF(multiply)
+// {
+//   TENSOR_PARAM(0, a);
+//   TENSOR_PARAM(1, b);
+
+//   if (b == NULL)
+//   {
+//     PARAM(1, double, scalar);
+//     TENSOR(*a * scalar);
+//   }
+//   else
+//     TENSOR(*a * *b);
+// }
 
 NIF(dot)
 {
@@ -491,7 +584,27 @@ static ErlNifFunc nif_functions[] = {
     DF(add, 2),
     DF(subtract, 2),
     DF(divide, 2),
+    DF(remainder, 2),
     DF(multiply, 2),
+
+    DF(bitwise_and, 2),
+    DF(bitwise_or, 2),
+    DF(bitwise_xor, 2),
+    DF(left_shift, 2),
+    DF(right_shift, 2),
+
+    DF(equal, 2),
+    DF(not_equal, 2),
+    DF(greater, 2),
+    DF(less, 2),
+    DF(greater_equal, 2),
+    DF(less_equal, 2),
+
+    DF(logical_and, 2),
+    DF(logical_or, 2),
+    DF(logical_xor, 2),
+
+    DF(outer, 2),
 
     DF(dot, 2),
 

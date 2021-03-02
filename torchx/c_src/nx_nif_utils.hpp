@@ -169,6 +169,14 @@ namespace nx
       return ret;
     }
 
+    ERL_NIF_TERM make(ErlNifEnv *env, bool var)
+    {
+      if (var)
+        return enif_make_atom(env, "true");
+      
+      return enif_make_atom(env, "false");
+    }
+
     ERL_NIF_TERM make(ErlNifEnv *env, long var)
     {
       return enif_make_int64(env, var);
@@ -193,6 +201,20 @@ namespace nx
     {
       return enif_make_string(env, string, ERL_NIF_LATIN1);
     }
+
+    ERL_NIF_TERM make_map(ErlNifEnv *env, std::map<std::string, int> &map)
+    {
+      ERL_NIF_TERM term = enif_make_new_map(env);
+      std::map<std::string, int>::iterator itr;
+      for (itr = map.begin(); itr != map.end(); ++itr)
+      {
+        ERL_NIF_TERM key = make(env, itr->first);
+        ERL_NIF_TERM value = make(env, itr->second);
+        enif_make_map_put(env, term, key, value, &term);
+      }
+      return term;
+    }
+
 
     // Atoms
 
@@ -288,19 +310,6 @@ namespace nx
         list = tail;
       }
       return 1;
-    }
-
-    ERL_NIF_TERM make_map(ErlNifEnv *env, std::map<std::string, int> &map)
-    {
-      ERL_NIF_TERM term = enif_make_new_map(env);
-      std::map<std::string, int>::iterator itr;
-      for (itr = map.begin(); itr != map.end(); ++itr)
-      {
-        ERL_NIF_TERM key = make(env, itr->first);
-        ERL_NIF_TERM value = make(env, itr->second);
-        enif_make_map_put(env, term, key, value, &term);
-      }
-      return term;
     }
   }
 }

@@ -32,38 +32,60 @@ defmodule TorchxTest do
     end
   end
 
+
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
   @bf16_and_ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}]
-  @ops [:add, :subtract, :divide, :multiply]
+  @ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}]
+  @ops [:add, :subtract, :divide, :remainder, :multiply]
+  @bitwise_ops [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
+  @logical_ops [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal, :logical_and, :logical_or, :logical_xor]
 
-  describe "binary ops" do
-    for op <- @ops,
+  defp test_binary_op(op, data_a \\ [[1, 2], [3, 4]], data_b \\ [[5, 6], [7, 8]], type_a, type_b) do
+    a = tt(data_a, type_a)
+    b = tt(data_b, type_b)
+
+    c = Kernel.apply(Nx, op, [a, b])
+
+    binary_a = Nx.backend_transfer(a, Nx.BinaryBackend)
+    binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
+    binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
+
+    assert(Nx.backend_transfer(c) == binary_c)
+  # rescue
+  #   e in RuntimeError ->
+  #     IO.puts(
+  #       "\r#{op}(#{Nx.Type.to_string(type_a)}, #{
+  #         Nx.Type.to_string(type_b)
+  #       }): #{e.message}\n"
+  #     )
+  end
+
+  describe "binary tensor-tensor ops" do
+    for op <- @ops ++ @logical_ops,
         type_a <- @types,
         type_b <- @types,
-        not ((op == :divide and (type_a == {:bf, 16} and type_b in @bf16_and_ints)) or
+        not ((op in [:divide, :remainder] and (type_a == {:bf, 16} and type_b in @bf16_and_ints)) or
                (type_b == {:bf, 16} and type_a in @bf16_and_ints)) do
       test "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
         op = unquote(op)
         type_a = unquote(type_a)
         type_b = unquote(type_b)
 
-        a = tt([[1, 2], [3, 4]], type_a)
-        b = tt([[5, 6], [7, 8]], type_b)
+        test_binary_op(op, type_a, type_b)
+      end
+    end
+  end
 
-        c = Kernel.apply(Nx, op, [a, b])
+  describe "binary tensor-tensor bitwise ops" do
+    for op <- @bitwise_ops,
+        type_a <- @ints,
+        type_b <- @ints do
+      test "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
+        op = unquote(op)
+        type_a = unquote(type_a)
+        type_b = unquote(type_b)
 
-        binary_a = Nx.backend_transfer(a, Nx.BinaryBackend)
-        binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
-        binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
-
-        assert(Nx.backend_transfer(c) == binary_c)
-      rescue
-        e in RuntimeError ->
-          IO.puts(
-            "\r#{unquote(op)}(#{Nx.Type.to_string(unquote(type_a))}, #{
-              Nx.Type.to_string(unquote(type_b))
-            }): #{e.message}\n"
-          )
+        test_binary_op(op, type_a, type_b)
       end
     end
   end
@@ -90,13 +112,18 @@ defmodule TorchxTest do
                  Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]],
                    type: {:bf, 16}
                  )
-      rescue
-        e in RuntimeError ->
-          IO.puts(
-            "\rdivide(#{Nx.Type.to_string(unquote(type_a))}, #{Nx.Type.to_string(unquote(type_b))}): #{
-              e.message
-            }\n"
-          )
+      end
+    end
+  end
+
+  describe "vectors" do
+    for type_a <- @types,
+        type_b <- @types do
+      test "outer(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
+        type_a = unquote(type_a)
+        type_b = unquote(type_b)
+
+        test_binary_op(:outer, [1, 2, 3, 4], [5, 6, 7, 8], type_a, type_b)
       end
     end
   end
