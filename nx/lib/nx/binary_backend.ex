@@ -1241,6 +1241,7 @@ defmodule Nx.BinaryBackend do
     # as this can be convenient.
 
     if compute_uv do
+      #TODO: Use Enum.zip_with on Elixir v1.12
       s
       |> Enum.zip(transpose_matrix(v))
       |> Enum.map(fn
