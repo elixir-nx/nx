@@ -7250,43 +7250,45 @@ defmodule Nx do
       Tolerance applied during the decomposition.
 
   ## Examples
-      iex> Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]), compute_uv: true)
-      {
-        Nx.tensor([
-          [1.0, 0.0, 0.0],
-          [0.0, 1.0, 0.0],
-          [0.0, 0, 1.0]
-        ]),
-        Nx.tensor([1.0, 1.0, 1.0]),
-        Nx.tensor([
-          [1.0, 0.0, 0.0],
-          [0.0, 1.0, 0.0],
-          [0.0, 0, -1.0]
-        ])
-      }
+      iex> {u, s, v} = Nx.svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]), compute_uv: true)
+      iex> u
+      Nx.tensor([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0, 1.0]
+      ])
+      iex> s
+      Nx.tensor([1.0, 1.0, 1.0])
+      iex> v
+      Nx.tensor([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0, -1.0]
+      ])
 
-      iex> Nx.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]]), compute_uv: true)
-      {
-        Nx.tensor([
-          [1.0, 0.0, 0.0, 0.0],
-          [0.0, 1.0, 0.0, 0.0],
-          [0.0, 0, 1.0, 0.0],
-          [0.0, 0, 0.0, 1.0],
-        ]),
-        Nx.tensor([3.0, 2.0, 1.0]),
-        Nx.tensor([
-          [0.0, 1.0, 0.0],
-          [1.0, 0.0, 0.0],
-          [0.0, 0, -1.0]
-        ])
-      }
+      iex> {u, s, vt} = Nx.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]], names: [:row_space, :col_space]), compute_uv: true)
+      iex> u
+      Nx.tensor([
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0, 1.0, 0.0],
+        [0.0, 0, 0.0, 1.0],
+      ], names: [:row_space, nil])
+      iex> s
+      Nx.tensor([3.0, 2.0, 1.0])
+      iex> vt
+      Nx.tensor([
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0, -1.0]
+      ], names: [nil, :col_space])
 
       iex> Nx.svd(Nx.tensor([[2, 0, 0], [0, -3, 0], [0, 0, -1], [0, 0, 0]]))
       Nx.tensor([3.0, 2.0, 1.0])
   """
   @doc type: :linalg
   def svd(tensor, opts \\ []) do
-    %T{type: type, shape: shape} = tensor = tensor!(tensor)
+    %T{type: type, shape: shape, names: [u_name, v_name]} = tensor = tensor!(tensor)
 
     assert_keys!(opts, [:eps, :max_iter, :compute_uv])
 
@@ -7295,9 +7297,9 @@ defmodule Nx do
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
 
     impl!(tensor).svd(
-      {%{tensor | type: output_type, shape: u_shape},
+      {%{tensor | names: [u_name, nil], type: output_type, shape: u_shape},
        %{tensor | names: [nil], type: output_type, shape: s_shape},
-       %{tensor | type: output_type, shape: v_shape}},
+       %{tensor | names: [nil, v_name], type: output_type, shape: v_shape}},
       tensor,
       opts
     )
