@@ -365,6 +365,42 @@ defmodule Nx.Defn.Grad do
     grad_conv(x, y, opts, ans, g, cache)
   end
 
+  defp grad(:window_sum, [x, window_dimensions, opts], _, ans, cache) do
+    strides = opts[:strides]
+    window_dilation = opts[:window_dilations]
+    base_dilation = List.duplicate(1, Nx.rank(x))
+    padding = opts[:padding]
+
+    padding_config =
+      conv_lhs_padding(
+        x.shape,
+        window_dimensions,
+        strides,
+        ans.shape,
+        padding,
+        base_dilation,
+        window_dilation
+      )
+
+    padding_config =
+      padding_config
+      |> Enum.zip(strides)
+      |> Enum.map(fn {{lo, hi}, s} -> {lo, hi, s - 1} end)
+
+    g = Nx.pad(ans, 0.0, padding_config)
+
+    g =
+      Nx.window_sum(
+        g,
+        window_dimensions,
+        strides: base_dilation,
+        padding: List.duplicate({0, 0}, Nx.rank(x)),
+        window_dilations: window_dilation
+      )
+
+    to_grad(x, g, cache)
+  end
+
   ## Other gradients
 
   defp grad(:abs, [x], _ans, g, cache) do
