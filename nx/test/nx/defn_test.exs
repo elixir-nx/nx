@@ -647,6 +647,18 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "svd" do
+    defn svd(t), do: Nx.svd(t)
+
+    test "returns tuples" do
+      assert {u, s, vt} = svd(Nx.iota({3, 3}))
+
+      assert %T{data: %Expr{op: :elem, args: [svd_expr, 0, 3]}, shape: {3, 3}} = u
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 1, 3]}, shape: {3}} = s
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 2, 3]}, shape: {3, 3}} = vt
+    end
+  end
+
   describe "cond" do
     defn cond4(a, b, c, d) do
       cond do

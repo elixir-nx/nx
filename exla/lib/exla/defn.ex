@@ -358,6 +358,11 @@ defmodule EXLA.Defn do
     EXLA.Op.tuple(state.builder, [q, r])
   end
 
+  defp to_operator(:svd, [{%{type: type}, %{type: type}, %{type: type}}, tensor, _opts], _ans, state) do
+    {u, s, vt} = EXLA.Op.svd(to_type(tensor, type), state.precision)
+    EXLA.Op.tuple(state.builder, [u, s, vt])
+  end
+
   ## to_operator element-wise
 
   defp to_operator(:negate, [op], _ans, _state), do: EXLA.Op.negate(op)

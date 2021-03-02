@@ -2440,6 +2440,20 @@ defmodule EXLA.DefnExprTest do
       assert r.shape == {3, 2}
       assert compare_tensors!(Nx.dot(q, r), output)
     end
+
+    defn svd(t), do: Nx.svd(t)
+
+    test "svd" do
+      input = Nx.iota({3, 3})
+      output = Nx.as_type(input, {:f, 32})
+
+      assert {u, s, vt} = svd(input)
+      assert u.shape == {3, 3}
+      assert s.shape == {3}
+      assert vt.shape == {3, 3}
+      s_full = Nx.multiply(s, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+      assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output)
+    end
   end
 
   describe "sort" do

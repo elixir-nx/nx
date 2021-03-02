@@ -458,6 +458,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def svd({u, s, vt}, tensor, opts) do
+    tensor = to_expr(tensor)
+    context = tensor.data.context
+    composite({u, s, vt}, context, &expr(&1, context, :svd, [{u, s, vt}, tensor, opts]))
+  end
+
+  @impl true
   def sort(out, tensor, opts) do
     comparator = opts[:comparator]
 

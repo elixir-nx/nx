@@ -980,6 +980,234 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "window sum rule" do
+    defn grad_sum_window_sum(t), do: grad(t, Nx.sum(Nx.window_sum(t, {2, 1, 2, 1})))
+
+    test "computes the gradient of a basic window sum" do
+      x = Nx.iota({2, 1, 3, 3}, type: {:f, 32})
+
+      lhs = grad_sum_window_sum(x)
+
+      rhs =
+        Nx.tensor([
+          [[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]]],
+          [[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]]]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_window_sum_cos(t), do: grad(t, Nx.sum(Nx.window_sum(Nx.cos(t), {2, 1, 2, 1})))
+
+    test "computes the gradient with an inner function" do
+      x = Nx.iota({2, 1, 3, 3}, type: {:f, 32})
+
+      lhs = grad_sum_window_sum_cos(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [
+              [0.0, -0.84147096, -0.9092974],
+              [-0.28224, 1.513605, 1.9178486],
+              [0.2794155, -0.6569866, -0.98935825]
+            ]
+          ],
+          [
+            [
+              [-0.4121185, 0.5440211, 0.9999902],
+              [1.0731459, -0.84033406, -1.9812148],
+              [-0.65028787, 0.2879033, 0.96139747]
+            ]
+          ]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_window_sum_dilated(x),
+      do: grad(x, Nx.sum(Nx.window_sum(x, {1, 1, 3, 2}, window_dilations: [2, 2, 1, 1])))
+
+    test "computes the gradient with dilations" do
+      x = Nx.iota({4, 2, 4, 2}, type: {:f, 32})
+
+      lhs = grad_sum_window_sum_dilated(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]],
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]]
+          ],
+          [
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]],
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]]
+          ],
+          [
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]],
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]]
+          ],
+          [
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]],
+            [[1.0, 1.0], [2.0, 2.0], [2.0, 2.0], [1.0, 1.0]]
+          ]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_window_sum_padding(x),
+      do:
+        grad(x, Nx.sum(Nx.window_sum(x, {2, 1, 1, 2}, padding: [{0, 1}, {2, 1}, {3, 0}, {0, 0}])))
+
+    test "computes the gradien with general padding" do
+      x = Nx.iota({3, 2, 1, 2})
+
+      lhs = grad_sum_window_sum_padding(x)
+
+      rhs =
+        Nx.tensor([
+          [[[1.0, 1.0]], [[1.0, 1.0]]],
+          [[[2.0, 2.0]], [[2.0, 2.0]]],
+          [[[2.0, 2.0]], [[2.0, 2.0]]]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_window_sum_stride_padding_dilated(x),
+      do:
+        grad(
+          x,
+          Nx.sum(
+            Nx.window_sum(Nx.cos(Nx.sin(x)), {2, 1, 1, 2},
+              strides: [1, 2, 2, 1],
+              padding: [{0, 1}, {2, 1}, {3, 0}, {0, 0}],
+              window_dilations: [1, 2, 1, 1]
+            )
+          )
+        )
+
+    test "computes the gradient with stride, padding, dilation, inner function" do
+      x = Nx.iota({3, 2, 3, 2})
+
+      lhs = grad_sum_window_sum_stride_padding_dilated(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0, 0.0], [0.32836998, 0.1392445], [0.0, 0.0]],
+            [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+          ],
+          [
+            [[0.0, 0.0], [-0.22872283, 0.9198537], [0.0, 0.0]],
+            [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+          ],
+          [
+            [[0.0, 0.0], [-0.89374965, 0.47741777], [0.0, 0.0]],
+            [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
+          ]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_nested_window_sum(x),
+      do: grad(x, Nx.sum(Nx.window_sum(Nx.window_sum(x, {2, 1, 1, 1}), {1, 2, 1, 1})))
+
+    test "works with nested window sums" do
+      x = Nx.iota({4, 3, 4, 4})
+
+      lhs = grad_nested_window_sum(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0]
+            ],
+            [
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0]
+            ],
+            [
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0]
+            ]
+          ],
+          [
+            [
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0]
+            ],
+            [
+              [4.0, 4.0, 4.0, 4.0],
+              [4.0, 4.0, 4.0, 4.0],
+              [4.0, 4.0, 4.0, 4.0],
+              [4.0, 4.0, 4.0, 4.0]
+            ],
+            [
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0]
+            ]
+          ],
+          [
+            [
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0]
+            ],
+            [
+              [4.0, 4.0, 4.0, 4.0],
+              [4.0, 4.0, 4.0, 4.0],
+              [4.0, 4.0, 4.0, 4.0],
+              [4.0, 4.0, 4.0, 4.0]
+            ],
+            [
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0]
+            ]
+          ],
+          [
+            [
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0]
+            ],
+            [
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0],
+              [2.0, 2.0, 2.0, 2.0]
+            ],
+            [
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0],
+              [1.0, 1.0, 1.0, 1.0]
+            ]
+          ]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "outer rule" do
     defn grad_outer_lhs_rule(x, y), do: grad(x, Nx.sum(Nx.outer(x, y)))
 
