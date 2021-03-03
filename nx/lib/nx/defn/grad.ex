@@ -316,6 +316,25 @@ defmodule Nx.Defn.Grad do
     grad_reduce(x, opts, g, cache, & &1)
   end
 
+  defp grad(:product, [x, opts], _ans, g, cache) do
+    axes = opts[:axes] || Nx.axes(x)
+    non_axes = Nx.axes(x) -- axes
+
+    n = Enum.reduce(axes, 1, fn axis, size -> elem(x.shape, axis) * size end)
+
+    non_axes_shape =
+      non_axes
+      |> Enum.map(&elem(x.shape, &1))
+      |> List.to_tuple()
+
+    permutation = axes ++ non_axes
+    new_shape = Tuple.insert_at(non_axes_shape, 0, n)
+
+    operand = Nx.reshape(Nx.transpose(x, axes: permutation), new_shape)
+    x = reduce_prod_tree(operand, 0, n, non_axes_shape)
+    to_grad(x, g, cache)
+  end
+
   @reduce_min_max_ops [:reduce_max, :reduce_min]
 
   defp grad(op, [x, opts], ans, g, cache) when op in @reduce_min_max_ops do
@@ -568,6 +587,16 @@ defmodule Nx.Defn.Grad do
     """
   end
 
+  defp grad(:window_product, _, _, _, _) do
+    raise ArgumentError, """
+    cannot compute gradient for Nx.window_product/3.
+
+    Consider using stop_grad/1 (making it equivalent \
+    to the identify function) or using custom_grad/2 (giving it \
+    a proper gradient implementation).
+    """
+  end
+
   defp grad(:reduce_window, _, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce_window/5.
@@ -610,6 +639,37 @@ defmodule Nx.Defn.Grad do
 
     Please open up an issue so we can implement the missing gradient
     """
+  end
+
+  ## Windows
+
+  defp reduce_prod_tree(_, _, 0, non_axes_shape), do: Nx.broadcast(Expr.tensor(1.0), non_axes_shape)
+  defp reduce_prod_tree(x, axis, 1, _), do: Nx.squeeze(x, axes: [axis])
+  defp reduce_prod_tree(x, axis, axis_value, non_axes_shape) do
+    n1 = div(axis_value + 1, 2)
+    n2 = axis_value - n1
+
+    x1_start_indices = List.duplicate(0, Nx.rank(x.shape))
+    x1_limit_indices = x.shape |> put_elem(axis, n1) |> Tuple.to_list()
+
+    x2_start_indices = x1_start_indices |> List.update_at(axis, fn _ -> n1 end)
+    x2_limit_indices = x1_limit_indices |> List.update_at(axis, fn _ -> elem(x.shape, axis) - n1 end)
+
+    x1 = Nx.slice(x, x1_start_indices, x1_limit_indices)
+    x2 = Nx.slice(x, x2_start_indices, x2_limit_indices)
+
+    x2 =
+      if n2 != n1 do
+        paddings = List.duplicate({0, 0, 0}, Nx.rank(x.shape))
+        paddings = List.update_at(paddings, axis, fn _ -> {0, 1, 0} end)
+        Nx.pad(x2, 1, paddings)
+      else
+        x2
+      end
+
+    new_operand = Nx.multiply(x1, x2)
+    new_axis_value = elem(new_operand.shape, 0)
+    reduce_prod_tree(new_operand, axis, new_axis_value, non_axes_shape)
   end
 
   ## Conv
