@@ -57,7 +57,7 @@ ElixirLS will need to run its own compile of `:exla`, so if you want to use Elix
 
 #### Python and asdf
 
-`Bazel` cannot find `python` installed via the `asdf` version manager by default.`asdf` uses a function to lookup the specified version of a given binary, this approach prevents `Bazel` from being able to correctly build `EXLA`. The error is `unknown command: python. Perhaps you have to reshim?`. There are two known workarounds:
+`Bazel` cannot find `python` installed via the `asdf` version manager by default. `asdf` uses a function to lookup the specified version of a given binary, this approach prevents `Bazel` from being able to correctly build `EXLA`. The error is `unknown command: python. Perhaps you have to reshim?`. There are two known workarounds:
 
 1. Use a separate installer or explicitly change your `$PATH` to point to a Python installation (note the build process looks for `python`, not `python3`). For example, on Homebrew on macOS, you would do:
 
