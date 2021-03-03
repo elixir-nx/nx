@@ -146,10 +146,6 @@ defmodule Torchx.Backend do
 
   for op <- binary_ops do
     @impl true
-    def unquote(op)(out, left, right) when is_number(right) do
-      NIF.unquote(op)(left.data.ref, right) |> from_ref(out)
-    end
-
     def unquote(op)(out, left, right) do
       NIF.unquote(op)(left.data.ref, right.data.ref) |> from_ref(out)
     end
@@ -239,15 +235,7 @@ defmodule Torchx.Backend do
       |> Enum.map(&to_tensor(&1, t))
 
   defp to_tensor(ref, %{type: out_type} = t),
-    do: %T{t | data: %__MODULE__{ref: maybe_cast_type(ref, out_type)}}
-
-  defp maybe_cast_type(ref, type) do
-    if from_torch_type(unwrap!(NIF.type(ref))) != type do
-      NIF.to_type(ref, torch_type(type)) |> unwrap!()
-    else
-      ref
-    end
-  end
+    do: %T{t | data: %__MODULE__{ref: ref}, type: from_torch_type(unwrap!(NIF.type(ref)))}
 
   defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()

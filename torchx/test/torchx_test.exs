@@ -6,7 +6,7 @@ defmodule TorchxTest do
   alias Torchx.Backend, as: TB
 
   # Torch Tensor creation shortcut
-  defp tt(data, type \\ {:f, 32}), do: Nx.tensor(data, type: type, backend: TB)
+  defp tt(data, type), do: Nx.tensor(data, type: type, backend: TB)
 
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
   @bf16_and_ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}]
@@ -40,7 +40,7 @@ defmodule TorchxTest do
     assert(Nx.backend_transfer(r) == binary_r)
   end
 
-  describe "binary tensor-tensor ops" do
+  describe "binary ops" do
     for op <- @ops ++ @logical_ops,
         type_a <- @types,
         type_b <- @types,
@@ -56,7 +56,7 @@ defmodule TorchxTest do
     end
   end
 
-  describe "binary tensor-tensor bitwise ops" do
+  describe "binary bitwise ops" do
     for op <- @bitwise_ops,
         type_a <- @ints,
         type_b <- @ints do
@@ -85,9 +85,9 @@ defmodule TorchxTest do
     end
   end
 
-  # Division with bfloat16 is a special case with PyTorch,
+  # Division and power with bfloat16 are special cases in PyTorch,
   # because it upcasts bfloat16 args to float for numerical accuracy purposes.
-  # So, the result of division is different from what direct bf16 by bf16 division gives us.
+  # So, e.g., the result of division is different from what direct bf16 by bf16 division gives us.
   # I.e. 1/5 == 0.19921875 in direct bf16 division and 0.2001953125 when dividing floats
   # converting them to bf16 afterwards (PyTorch style).
   describe "bfloat16" do

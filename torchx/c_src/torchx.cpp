@@ -324,28 +324,15 @@ NIF(eye)
   TENSOR(at::eye(size, type));
 }
 
-#define BINARY_OP(OP)   \
-  NIF(OP)               \
-  {                     \
-    TENSOR_PARAM(0, a); \
-    TENSOR_PARAM(1, b); \
-                        \
-    if (b == NULL)      \
-    {                   \
-      PARAM(1, double, scalar); \
-      TENSOR(at::OP(*a, scalar)); \
-    }                   \
-    else                \
-      TENSOR(at::OP(*a, *b)); \
-  }
+#define BINARY_OP(OP)   BINARY_OP2(OP, OP)
 
-#define BINARY_OPT(OP)   \
+#define BINARY_OP2(OP, NATIVE_OP)   \
   NIF(OP)               \
   {                     \
     TENSOR_PARAM(0, a); \
     TENSOR_PARAM(1, b); \
                         \
-    TENSOR(at::OP(*a, *b)); \
+    TENSOR(at::NATIVE_OP(*a, *b)); \
   }
 
 #define BINARY_OPB(OP)   \
@@ -357,20 +344,6 @@ NIF(eye)
     nx::nif::ok(env, nx::nif::make(env, at::OP(*a, *b))); \
   }
 
-#define BINARY_OP2(OP, NATIVE_OP)   \
-  NIF(OP)               \
-  {                     \
-    TENSOR_PARAM(0, a); \
-    TENSOR_PARAM(1, b); \
-                        \
-    if (b == NULL)      \
-    {                   \
-      PARAM(1, double, scalar); \
-      TENSOR(at::NATIVE_OP(*a, scalar)); \
-    }                   \
-    else                \
-      TENSOR(at::NATIVE_OP(*a, *b)); \
-  }
 
 #define UNARY_OP(OP) UNARY_OP2(OP, OP)
 
@@ -396,9 +369,9 @@ BINARY_OP(less)
 BINARY_OP(greater_equal)
 BINARY_OP(less_equal)
 
-BINARY_OPT(logical_and)
-BINARY_OPT(logical_or)
-BINARY_OPT(logical_xor)
+BINARY_OP(logical_and)
+BINARY_OP(logical_or)
+BINARY_OP(logical_xor)
 
 BINARY_OP(add)
 BINARY_OP(subtract)
@@ -407,11 +380,11 @@ BINARY_OP(remainder)
 BINARY_OP2(quotient, true_divide)
 BINARY_OP(multiply)
 BINARY_OP2(power, float_power)
-BINARY_OPT(atan2)
-BINARY_OPT(min)
-BINARY_OPT(max)
+BINARY_OP(atan2)
+BINARY_OP(min)
+BINARY_OP(max)
 
-BINARY_OPT(outer)
+BINARY_OP(outer)
 
 
 UNARY_OP(abs)
