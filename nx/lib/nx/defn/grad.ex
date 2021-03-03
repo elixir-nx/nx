@@ -316,22 +316,22 @@ defmodule Nx.Defn.Grad do
     grad_reduce(x, opts, g, cache, & &1)
   end
 
-  defp grad(:product, [x, opts], _ans, g, cache) do
+  defp grad(:product, [x, opts], ans, g, cache) do
     axes = opts[:axes] || Enum.to_list(0..Nx.rank(x.shape) - 1)
+
     {n, _} = Enum.reduce(axes, {1, x.shape}, fn axis, {size, shape} -> {elem(shape, axis)*size, shape} end)
-    non_axes = Enum.filter(axes, & &1 not in axes)
+    non_axes = Enum.filter(Enum.to_list(0..Nx.rank(x.shape) - 1), & &1 not in axes)
     {non_axes_shape, _} =
       Enum.reduce(non_axes, {{}, x.shape},
         fn axis, {cur, shape} ->
           {Tuple.append(cur, elem(shape, axis)), shape}
         end
       )
-    permutation = axes ++ non_axes
 
+    permutation = axes ++ non_axes
     new_shape = Tuple.insert_at(non_axes_shape, 0, n)
 
     operand = Nx.reshape(Nx.transpose(x, axes: permutation), new_shape)
-    # tangents = Nx.reshape(Nx.transpose(g, axes: permutation), new_shape)
 
     axis_value = elem(operand.shape, 0)
 
@@ -340,16 +340,16 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp reduce_prod_tree(_, _, 0, non_axes_shape), do: Nx.broadcast(1, non_axes_shape)
+  defp reduce_prod_tree(_, _, 0, non_axes_shape), do: Nx.broadcast(Expr.tensor(1.0), non_axes_shape)
   defp reduce_prod_tree(x, axis, 1, _), do: Nx.squeeze(x, axes: [axis])
   defp reduce_prod_tree(x, axis, axis_value, non_axes_shape) do
     n1 = div(axis_value + 1, 2)
     n2 = axis_value - n1
 
     x1_start_indices = List.duplicate(0, Nx.rank(x.shape))
-    x1_limit_indices = [n1 | Tuple.to_list(Tuple.delete_at(x.shape, 0))]
+    x1_limit_indices = List.duplicate(0, Nx.rank(x.shape)) |> List.update_at(axis, fn _ -> n1 end)
 
-    x2_start_indices = [n1 | List.duplicate(0, Nx.rank(x.shape) - 1)]
+    x2_start_indices = List.duplicate(0, Nx.rank(x.shape)) |> List.update_at(axis, fn _ -> n1 end)
     x2_limit_indices =
       x1_limit_indices
       |> Enum.zip(Tuple.to_list(x.shape))
