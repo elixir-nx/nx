@@ -15,7 +15,7 @@ defmodule Nx.GradHelpers do
   end
 
   defp approx_equal?(lhs, rhs, x, atol, rtol) do
-    unless Nx.allclose?(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
+    unless Nx.all_close?(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
       raise """
       expected
 
