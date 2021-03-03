@@ -2574,31 +2574,13 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
-  # We need to round the floats because of imprecision between platforms
-  defp compare_tensors!(left, right, opts \\ [])
-
-  defp compare_tensors!(
-         %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
-         %{data: %{state: right_data} = rhs} = right,
-         opts
-       ) do
-    round = opts[:round] || 5
-
-    left_data =
-      for <<x::float-size(size)-native <- left_data>>,
-        into: <<>>,
-        do: <<Float.round(x, round)::float-size(size)-native>>
-
-    right_data =
-      for <<x::float-size(size)-native <- right_data>>,
-        into: <<>>,
-        do: <<Float.round(x, round)::float-size(size)-native>>
-
-    assert %{left | data: %{lhs | state: left_data}} ==
-             %{right | data: %{rhs | state: right_data}}
-  end
-
-  defp compare_tensors!(left, right, _opts) do
-    assert left == right
+  defp compare_tensors!(left, right) do
+    atol = 1.0e-7
+    rtol = 1.0e-4
+    try do
+      assert Nx.allclose?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
+    rescue
+      _ -> assert left == right # So we can see the diff
+    end
   end
 end
