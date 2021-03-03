@@ -284,7 +284,7 @@ defmodule Torchx.Backend do
 
     @impl true
     def unquote(fun)(unquote_splicing(args)) do
-      raise "operation #{unquote(fun)} is not supported on Torchx.Backend."
+      raise "operation #{unquote(fun)} is not supported on Torchx.Backend"
     end
   end
 end
