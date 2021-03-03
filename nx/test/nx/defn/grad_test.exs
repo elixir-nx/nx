@@ -2021,6 +2021,43 @@ defmodule Nx.Defn.GradTest do
 
       compare_tensors!(lhs, rhs)
     end
+
+    defn grad_reduce_product_min(t), do: grad(t, Nx.product(Nx.reduce_min(t, axes: [1, 2])))
+
+    test "computes the gradient with product of min" do
+      x = Nx.iota({3, 2, 2, 3}, type: {:f, 32})
+      lhs = grad_reduce_product_min(x)
+      rhs = Nx.tensor([[[[68140800.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0]],
+                        [[0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0]]],
+                       [[[0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0]],
+                        [[0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0]]],
+                       [[[0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0]],
+                        [[0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0]]]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_reduce_product_multiple_axes(t), do: grad(t, Nx.sum(Nx.product(t, axes: [0, 3])))
+
+    test "computes the gradient for product with multiple axes" do
+      x = Nx.multiply(Nx.iota({2, 2, 2, 2}, type: {:f, 32}), 0.5)
+      lhs = grad_reduce_product_multiple_axes(x)
+      rhs = Nx.tensor([[[[9.0, 0.0],
+                         [41.25, 27.5]],
+                        [[97.5, 78.0],
+                         [183.75, 157.5]]],
+                       [[[0.0, 0.0],
+                         [8.25, 7.5]],
+                        [[32.5, 30.0],
+                         [78.75, 73.5]]]])
+
+      compare_tensors!(lhs, rhs)
+    end
   end
 
   describe "not implemented" do
@@ -2037,6 +2074,13 @@ defmodule Nx.Defn.GradTest do
     test "raises on quotient" do
       assert_raise ArgumentError, ~r"cannot compute gradient for Nx.quotient/2", fn ->
         grad_quotient(2)
+      end
+    end
+
+    defn grad_window_prod(t), do: grad(t, Nx.window_product(t, {}))
+    test "raises on window_prod" do
+      assert_raise ArgumentError, ~r"cannot compute gradient for Nx.window_product/3", fn ->
+        grad_window_prod(2)
       end
     end
   end

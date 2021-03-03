@@ -586,6 +586,16 @@ defmodule Nx.Defn.Grad do
     """
   end
 
+  defp grad(:window_product, _, _, _, _) do
+    raise ArgumentError, """
+    cannot compute gradient for Nx.window_product/3.
+
+    Consider using stop_grad/1 (making it equivalent \
+    to the identify function) or using custom_grad/2 (giving it \
+    a proper gradient implementation).
+    """
+  end
+
   defp grad(:reduce_window, _, _, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce_window/5.
