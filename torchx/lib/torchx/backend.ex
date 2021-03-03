@@ -141,10 +141,6 @@ defmodule Torchx.Backend do
     NIF.squeeze(to_ref(tensor)) |> from_ref(out)
   end
 
-  @impl true
-  def transpose(_out, _tensor, axes), do: IO.inspect(axes)
-  # do: NIF.transpose(tensor, dim0, dim1) |> from_ref(out)
-
   ## Ops
 
   binary_ops =
