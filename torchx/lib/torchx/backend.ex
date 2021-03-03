@@ -260,8 +260,16 @@ defmodule Torchx.Backend do
     do: Nx.backend_transfer(tensor, TB) |> to_ref()
 
   # Update out tensor type here to mark the cases where our type policy mismatches with the libtorch's one.
-  defp to_tensor(ref, %T{} = t),
-    do: %T{t | data: %__MODULE__{ref: ref}, type: from_torch_type(unwrap!(NIF.type(ref)))}
+  defp to_tensor(ref, %T{type: type} = t) do
+    current_type = ref |> NIF.type() |> unwrap!() |> from_torch_type()
+
+    if current != type do
+      raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
+              "Please report this bug"
+    end
+    
+    %{t | data: %__MODULE__{ref: ref}}
+  end
 
   defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
