@@ -46,7 +46,6 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-
   def iota(out, axis \\ nil)
 
   def iota(%T{shape: {}, type: type} = out, nil) do
