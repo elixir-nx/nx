@@ -157,9 +157,25 @@ defmodule Torchx.Backend do
     end
   end
 
+  defp maybe_cast_u8(%T{type: {t, _}} = left, %T{type: {t, _}} = right), do: {left, right}
+
+  defp maybe_cast_u8(%T{type: {:u, 8}} = left, %T{} = right),
+       do: {Nx.as_type(left, {:s, 16}), right}
+
+  defp maybe_cast_u8(%T{} = left, %T{type: {:u, 8}} = right),
+       do: {left, Nx.as_type(right, {:s, 16})}
+
+  defp maybe_cast_u8(left, right), do: {left, right}
+
+
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
-    def unquote(op)(out, %T{type: {_, size_left}} = left, %T{type: {_, size_right}} = right) do
+    def unquote(op)(out, l, r) do
+      {left, right} = maybe_cast_u8(l, r)
+
+      %T{type: {_, size_left}} = left
+      %T{type: {_, size_right}} = right
+
       if size_left >= size_right do
         NIF.unquote(op)(to_ref(left), to_ref(right))
       else
@@ -261,11 +277,11 @@ defmodule Torchx.Backend do
   defp to_tensor(ref, %T{type: type} = t) do
     current_type = ref |> NIF.type() |> unwrap!() |> from_torch_type()
 
-    if current != type do
+    if current_type != type do
       raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
               "Please report this bug"
     end
-    
+
     %{t | data: %__MODULE__{ref: ref}}
   end
 

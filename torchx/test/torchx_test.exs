@@ -33,13 +33,15 @@ defmodule TorchxTest do
     b = tt(data_b, type_b)
 
     c = Kernel.apply(Nx, op, [a, b])
-    mixed_c = Kernel.apply(Nx, op, [a, binary_b])
 
     binary_a = Nx.backend_transfer(a, Nx.BinaryBackend)
     binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
 
     assert Nx.backend_transfer(c) == binary_c
+
+    mixed_c = Kernel.apply(Nx, op, [a, binary_b])
+
     assert Nx.backend_transfer(mixed_c) == binary_c
   end
 
