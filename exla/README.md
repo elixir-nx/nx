@@ -66,41 +66,11 @@ export PATH=/usr/local/opt/python@3.9/libexec/bin:/usr/local/bin:$PATH
 mix deps.compile
 ```
 
-Note the build process looks for `python`, not `python3`. You may need to remove `~/.cache/exla` to clean up from previous build attempts.
-
+Note the build process looks for `python`, not `python3`.
 
 2. Use the [`asdf direnv`](https://github.com/asdf-community/asdf-direnv) plugin to install [`direnv 2.20.0`](https://direnv.net). `direnv` along with the `asdf-direnv` plugin will explicitly set the paths for any binary specified in your project's `.tool-version` files.
 
-```
-asdf plugin-add direnv
-asdf install direnv 2.20.0
-asdf global  direnv 2.20.0
-```
-
-Add the `asdf direnv hook` to your shell profile:
-
-**BASH** Add the following line to the bottom of your `~/.bashrc`
-```
-eval "$(direnv hook bash)"
-direnv() { asdf exec direnv "$@"; }
-```
-
-**ZSH** Add the following line to the bottom of your `~/.zshrc`
-```
-eval "$(direnv hook zsh)"
-direnv() { asdf exec direnv "$@"; }
-```
-
-Next, add the `asdf-direnv` plugin to the `direnvrc` configuration file `~/.config/direnv/direnvrc`:
-
-```
-source "$(asdf direnv hook asdf)"
-```
-Then, in the root of your `Nx` project add an `.envrc` file with the following: `use asdf`.
-
-`direnv` will now prompt you to allow the changes to the `.envrc` file, you can explicitly allow it with: `direnv allow`. You should now see `direnv` output a list of which `asdf` plugins it is going to set paths for, and any environment variables you choose to set using it. If your `.tool-versions` are all correctly set, `exla` should now be able to successfully compile.
-
-Note after setting up `direnv` it is high recommended you clear the build cache by removing ` ~/.cache/exla`.
+After doing any of the steps above, it may be necessary to clear the build cache by removing ` ~/.cache/exla`.
 
 ### GPU Support
 
