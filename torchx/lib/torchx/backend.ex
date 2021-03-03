@@ -81,8 +81,8 @@ defmodule Torchx.Backend do
   ## Transfer
 
   @impl true
-  def to_batched_list(%T{shape: shape} = out, %T{data: %TB{ref: ref}}),
-    do: NIF.split(ref, elem(shape, 0)) |> from_list_ref(out)
+  def to_batched_list(%T{shape: shape} = out, %T{} = t),
+    do: NIF.split(to_ref(t), elem(shape, 0)) |> from_list_ref(out)
 
   @impl true
   def to_binary(_tensor, _limit \\ nil) do
@@ -91,11 +91,11 @@ defmodule Torchx.Backend do
   end
 
   defp to_blob(tensor, limit \\ nil)
-  defp to_blob(%T{data: %TB{ref: ref}}, nil), do: NIF.to_blob(ref)
-  defp to_blob(%T{data: %TB{ref: ref}}, limit), do: NIF.to_blob(ref, limit)
+  defp to_blob(%T{} = t, nil), do: NIF.to_blob(to_ref(t))
+  defp to_blob(%T{} = t, limit), do: NIF.to_blob(to_ref(t), limit)
 
   @impl true
-  def backend_deallocate(%Nx.Tensor{data: %TB{ref: ref}}), do: NIF.delete_tensor(ref)
+  def backend_deallocate(%T{} = t), do: NIF.delete_tensor(to_ref(t))
 
   @impl true
   def backend_transfer(tensor, Nx.Tensor, opts) do
@@ -118,16 +118,16 @@ defmodule Torchx.Backend do
   ## Shape
 
   @impl true
-  def reshape(out, %T{data: %TB{ref: ref}}, shape),
-    do: NIF.reshape(ref, shape) |> from_ref(out)
+  def reshape(out, %T{} = t, shape),
+    do: NIF.reshape(to_ref(t), shape) |> from_ref(out)
 
   @impl true
-  def as_type(%T{type: type} = out, %T{data: %TB{ref: ref}}),
-    do: NIF.to_type(ref, torch_type(type)) |> from_ref(out)
+  def as_type(%T{type: type} = out, %T{} = t),
+    do: NIF.to_type(to_ref(t), torch_type(type)) |> from_ref(out)
 
   @impl true
   def squeeze(out, tensor, _axes) do
-    NIF.squeeze(tensor.data.ref) |> from_ref(out)
+    NIF.squeeze(to_ref(tensor)) |> from_ref(out)
   end
 
   @impl true
@@ -143,41 +143,40 @@ defmodule Torchx.Backend do
       [:logical_and, :logical_or, :logical_xor] ++
       [:outer]
 
-
   for op <- binary_ops do
     @impl true
     def unquote(op)(out, left, right) do
-      NIF.unquote(op)(left.data.ref, right.data.ref) |> from_ref(out)
+      NIF.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
     end
   end
 
   unary_ops =
     Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
       [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
-      # [:count_leading_zeros, :population_count]
+
+  # [:count_leading_zeros, :population_count]
 
   for op <- unary_ops do
     @impl true
     def unquote(op)(out, tensor) do
-      NIF.unquote(op)(tensor.data.ref) |> from_ref(out)
+      NIF.unquote(op)(to_ref(tensor)) |> from_ref(out)
     end
   end
-
 
   @impl true
   def dot(
         out,
-        %T{data: %TB{ref: left_ref}},
+        %T{} = left,
         _axes1,
-        %T{data: %TB{ref: right_ref}},
+        %T{} = right,
         _axes2
       ) do
-    NIF.dot(left_ref, right_ref) |> from_ref(out)
+    NIF.dot(to_ref(left), to_ref(right)) |> from_ref(out)
   end
 
   @impl true
-  def cholesky(%T{} = out, %T{data: %TB{ref: ref}}) do
-    NIF.cholesky(ref) |> from_ref(out)
+  def cholesky(%T{} = out, %T{} = t) do
+    NIF.cholesky(to_ref(t)) |> from_ref(out)
   end
 
   @impl true
@@ -186,7 +185,7 @@ defmodule Torchx.Backend do
         tensor,
         opts
       ),
-      do: NIF.qr(tensor.data.ref, opts[:mode] == :reduced) |> from_pair_ref({q_holder, r_holder})
+      do: NIF.qr(to_ref(tensor), opts[:mode] == :reduced) |> from_pair_ref({q_holder, r_holder})
 
   @big_tensor_threshold_bytes 10_000_000
 
@@ -234,11 +233,17 @@ defmodule Torchx.Backend do
       |> unwrap!()
       |> Enum.map(&to_tensor(&1, t))
 
+  defp to_ref(%T{data: %TB{ref: ref}} = t), do: ref
+
+  defp to_ref(%T{} = tensor),
+    do: Nx.backend_transfer(tensor, TB) |> to_ref()
+
+  # Update out tensor type here to mark the cases where our type policy mismatches with the libtorch's one.
   defp to_tensor(ref, %{type: out_type} = t),
     do: %T{t | data: %__MODULE__{ref: ref}, type: from_torch_type(unwrap!(NIF.type(ref)))}
 
-  defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
-  defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
+  defp device(%T{data: %TB{ref: ref}} = t), do: NIF.device(ref) |> unwrap!() |> List.to_string()
+  defp nbytes(%T{data: %TB{ref: ref}} = t), do: NIF.nbytes(ref) |> unwrap!()
   defp on_cpu?(tensor), do: device(tensor) == "cpu"
 
   ## All remaining callbacks
