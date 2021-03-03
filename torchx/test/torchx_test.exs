@@ -12,8 +12,8 @@ defmodule TorchxTest do
   @bf16_and_ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}]
   @ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}]
   @ops [:add, :subtract, :divide, :remainder, :multiply, :power, :atan2, :min, :max]
-  @ops_unimplemented_for_bfloat [:remainder, :atan2]
-  @ops_with_bfloat_specific_result [:divide, :power]
+  @ops_unimplemented_for_bfloat [:remainder, :atan2, :power]
+  @ops_with_bfloat_specific_result [:divide]
   @bitwise_ops [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift]
   @logical_ops [
     :equal,
@@ -119,25 +119,6 @@ defmodule TorchxTest do
         assert Nx.backend_transfer(c) ==
                  Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]],
                    type: {:bf, 16}
-                 )
-      end
-    end
-
-    for type_a <- @bf16_and_ints,
-        type_b <- @bf16_and_ints,
-        type_a == {:bf, 16} or type_b == {:bf, 16} do
-      test "power(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
-        type_a = unquote(type_a)
-        type_b = unquote(type_b)
-
-        a = tt([[1, 2], [3, 4]], type_a)
-        b = tt([[5, 6], [7, 8]], type_b)
-
-        c = Nx.power(a, b)
-
-        assert Nx.backend_transfer(c) ==
-                 Nx.tensor([[1.0, 64.0], [2187.0, 65536.0]],
-                   type: {:f, 64}
                  )
       end
     end

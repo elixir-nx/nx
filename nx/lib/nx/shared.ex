@@ -329,13 +329,6 @@ defmodule Nx.Shared do
   def binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(type(a), b)
   def binary_type(a, b), do: Nx.Type.merge(type(a), type(b))
 
-  def binary_type(_a, _b, :power), do: {:f, 64}
-
-  def binary_type(a, _b, op) when op in [:bitwise_and, :bitwise_or, :bitwise_xor],
-    do: type(a)
-
-  def binary_type(a, b, _op), do: binary_type(a, b)
-
   defp type(%T{type: type}), do: type
   defp type(type), do: type
 

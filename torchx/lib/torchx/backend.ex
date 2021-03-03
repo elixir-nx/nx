@@ -149,7 +149,7 @@ defmodule Torchx.Backend do
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
-      [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
+      [:left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
       [:outer]
@@ -158,6 +158,18 @@ defmodule Torchx.Backend do
     @impl true
     def unquote(op)(out, left, right) do
       NIF.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
+    end
+  end
+
+  for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
+    @impl true
+    def unquote(op)(out, %T{type: {_, size_left}} = left, %T{type: {_, size_right}} = right) do
+      if size_left >= size_right do
+        NIF.unquote(op)(to_ref(left), to_ref(right))
+      else
+        NIF.unquote(op)(to_ref(right), to_ref(left))
+      end
+      |> from_ref(out)
     end
   end
 
