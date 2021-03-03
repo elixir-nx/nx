@@ -55,6 +55,7 @@ defmodule Torchx.NIF do
   dnif subtract(tensorA, tensorB)
   dnif divide(tensorA, tensorB)
   dnif remainder(tensorA, tensorB)
+  dnif quotient(tensorA, tensorB)
   dnif multiply(tensorA, tensorB)
   dnif power(tensorA, tensorB)
   dnif atan2(tensorA, tensorB)

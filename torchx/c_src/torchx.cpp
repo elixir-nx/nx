@@ -377,7 +377,6 @@ BINARY_OP(add)
 BINARY_OP(subtract)
 BINARY_OP(divide)
 BINARY_OP(remainder)
-BINARY_OP2(quotient, true_divide)
 BINARY_OP(multiply)
 BINARY_OP2(power, float_power)
 BINARY_OP(atan2)
@@ -385,6 +384,14 @@ BINARY_OP(min)
 BINARY_OP(max)
 
 BINARY_OP(outer)
+
+NIF(quotient)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+  TENSOR(at::divide(*a, *b, "trunc"));
+}
+
 
 
 UNARY_OP(abs)
@@ -508,6 +515,7 @@ static ErlNifFunc nif_functions[] = {
     DF(subtract, 2),
     DF(divide, 2),
     DF(remainder, 2),
+    DF(quotient, 2),
     DF(multiply, 2),
     DF(power, 2),
     DF(atan2, 2),

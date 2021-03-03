@@ -46,6 +46,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+
   def iota(out, axis \\ nil)
 
   def iota(%T{shape: {}, type: type} = out, nil) do
@@ -131,7 +132,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def transpose(out, tensor, axes), do: IO.inspect(axes)
+  def transpose(_out, _tensor, axes), do: IO.inspect(axes)
   # do: NIF.transpose(tensor, dim0, dim1) |> from_ref(out)
 
   ## Ops
@@ -157,9 +158,11 @@ defmodule Torchx.Backend do
   # [:count_leading_zeros, :population_count]
 
   for op <- unary_ops do
-    @impl true
-    def unquote(op)(out, tensor) do
-      NIF.unquote(op)(to_ref(tensor)) |> from_ref(out)
+    if {op, 1} in NIF.__info__(:functions) do
+      @impl true
+      def unquote(op)(out, tensor) do
+        NIF.unquote(op)(to_ref(tensor)) |> from_ref(out)
+      end
     end
   end
 
@@ -233,17 +236,17 @@ defmodule Torchx.Backend do
       |> unwrap!()
       |> Enum.map(&to_tensor(&1, t))
 
-  defp to_ref(%T{data: %TB{ref: ref}} = t), do: ref
+  defp to_ref(%T{data: %TB{ref: ref}}), do: ref
 
   defp to_ref(%T{} = tensor),
     do: Nx.backend_transfer(tensor, TB) |> to_ref()
 
   # Update out tensor type here to mark the cases where our type policy mismatches with the libtorch's one.
-  defp to_tensor(ref, %{type: out_type} = t),
+  defp to_tensor(ref, %T{} = t),
     do: %T{t | data: %__MODULE__{ref: ref}, type: from_torch_type(unwrap!(NIF.type(ref)))}
 
-  defp device(%T{data: %TB{ref: ref}} = t), do: NIF.device(ref) |> unwrap!() |> List.to_string()
-  defp nbytes(%T{data: %TB{ref: ref}} = t), do: NIF.nbytes(ref) |> unwrap!()
+  defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
+  defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
   defp on_cpu?(tensor), do: device(tensor) == "cpu"
 
   ## All remaining callbacks

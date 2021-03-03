@@ -16,7 +16,7 @@ defmodule TorchxTest do
   @logical_ops [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal, :logical_and, :logical_or, :logical_xor]
   @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
 
-  defp test_binary_op(op, data_a \\ [[1, 2], [3, 4]], data_b \\ [[5, 6], [7, 8]], type_a, type_b) do
+  defp test_binary_op(op, data_a \\ [[5, 6], [7, 8]], data_b \\  [[1, 2], [3, 4]], type_a, type_b) do
     a = tt(data_a, type_a)
     b = tt(data_b, type_b)
 
@@ -57,7 +57,7 @@ defmodule TorchxTest do
   end
 
   describe "binary bitwise ops" do
-    for op <- @bitwise_ops,
+    for op <- @bitwise_ops ++ [:quotient],
         type_a <- @ints,
         type_b <- @ints do
       test "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
