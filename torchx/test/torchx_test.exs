@@ -123,8 +123,8 @@ defmodule TorchxTest do
         c = Nx.power(a, b)
 
         assert Nx.backend_transfer(c) ==
-                 Nx.tensor([[1.0, 64.0], [2192.0, 65536.0]],
-                   type: {:bf, 16}
+                 Nx.tensor([[1.0, 64.0], [2187.0, 65536.0]],
+                   type: {:f, 64}
                  )
       end
     end

@@ -2247,7 +2247,7 @@ defmodule Nx do
   ## Element-wise binary ops
 
   defp element_wise_bin_op(left, right, op, fun) do
-    type = binary_type(left, right) |> fun.()
+    type = binary_type(left, right, op) |> fun.()
     %T{shape: left_shape, names: left_names} = left = tensor!(left)
     %T{shape: right_shape, names: right_names} = right = tensor!(right)
 
