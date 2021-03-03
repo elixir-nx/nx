@@ -56,6 +56,7 @@ defmodule TorchxTest do
     end
   end
 
+  # quotient/2 works only with integers, so we put it here.
   describe "binary bitwise ops" do
     for op <- @bitwise_ops ++ [:quotient],
         type_a <- @ints,

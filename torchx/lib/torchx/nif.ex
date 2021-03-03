@@ -34,7 +34,6 @@ defmodule Torchx.NIF do
   dnif normal(mu, sigma, shape)
   dnif arange(from, to, step, type)
   dnif arange(from, to, step, type, shape)
-  dnif iota(shape, axis, type)
   dnif reshape(tensor, shape)
   dnif to_type(tensor, type)
   dnif from_blob(blob, shape, type)
