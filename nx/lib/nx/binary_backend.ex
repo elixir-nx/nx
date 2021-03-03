@@ -15,7 +15,7 @@ defmodule Nx.BinaryBackend do
 
   alias Nx.Tensor, as: T
   alias Nx.BinaryBackend, as: B
-  alias Nx.BinaryBackend.Binary
+  alias Nx.BinaryBackend.Bits
 
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
@@ -280,6 +280,37 @@ defmodule Nx.BinaryBackend do
     end
   end
 
+  def pad2(_out, %{shape: {}} = t, _pad_value, []) do
+    t
+  end
+
+  def pad2(_out, t, pad_value, padding_config) do
+    %{type: type, shape: shape} = t
+    data = to_binary(t)
+    
+    p =
+      pad_value
+      |> to_scalar()
+      |> Bits.from_number({})
+    
+    weights = Nx.Shape.weights(shape)
+    pad2("", p, padding_config, shape, type, weights, data, 0)
+  end
+  
+  defp pad2(acc, [], axis, _, _, _, _, _) do
+    acc
+  end
+  
+  defp pad2(acc, [{lo_pad, hi_pad, inner_pad} | cfg_rest], axis, p, shape, type, weights, data) do
+    
+  end
+
+  defp count_padding
+  
+
+
+
+
   # Add padding to the high and low ends of the last dimension of a tensor
   defp pad_last_dim(
          %T{shape: shape, type: {_, size} = type} = t,
@@ -437,21 +468,44 @@ defmodule Nx.BinaryBackend do
   end
 
   def dot(out, tensor1, axes1, batch_axes1, tensor2, axes2, batch_axes2) do
-    %{type: type_out} = out
-    %{names: names1, shape: shape1, type: type1} = tensor1
-    %{names: names2, shape: shape2, type: type2} = tensor2
+    %Nx.Tensor{type: type_out} = out
+    %Nx.Tensor{
+      names: names1,
+      shape: shape1,
+      type: type1,
+      data: bin_back1
+    } = tensor1
+
+    %Nx.Tensor{
+      names: names2,
+      shape: shape2,
+      type: type2,
+      data: bin_back2
+    } = tensor2
 
     data1 = to_binary(tensor1)
     data2 = to_binary(tensor2)
 
-    # batch_constrict_axes1 = Nx.Shape.shift_axes(axes1, -length(batch_axes1))
-    # batch_constrict_axes2 = Nx.Shape.shift_axes(axes2, -length(batch_axes2))
+    batch_contract_axes1 = Nx.Shape.shift_axes(axes1, -length(batch_axes1))
+    batch_contract_axes2 = Nx.Shape.shift_axes(axes2, -length(batch_axes2))
 
-    {batch_shape1, _} = Nx.Shape.contract(shape1, batch_axes1, names1, false)
-    {batch_shape2, _} = Nx.Shape.contract(shape2, batch_axes2, names2, false)
+    {batch_shape1, batch_names1} = Nx.Shape.contract(shape1, batch_axes1, names1, false)
+    {batch_shape2, batch_names2} = Nx.Shape.contract(shape2, batch_axes2, names2, false)
+
+    batch_size1 = Nx.size(batch_shape1)
+    batch_size2 = Nx.size(batch_shape2)
 
     batch_count1 = Nx.Shape.batch_count(shape1, batch_axes1)
     batch_count2 = Nx.Shape.batch_count(shape2, batch_axes2)
+
+    {batch_shape_out, _output_names} = Nx.Shape.zip_reduce(
+      batch_shape1,
+      batch_contract_axes1,
+      batch_names1,
+      batch_shape2,
+      batch_contract_axes2,
+      batch_names2
+    )
 
     size1 = Nx.size(tensor1)
     size2 = Nx.size(tensor2)
@@ -459,7 +513,11 @@ defmodule Nx.BinaryBackend do
     size = max(size1, size2)
     batch_count = max(batch_count1, batch_count2)
     batch_size = div(size, batch_count)
-    
+
+    batch_tensor1 = %Nx.Tensor{tensor2 | shape: batch_shape1 }
+    batch_tensor2 = %Nx.Tensor{tensor1 | shape: batch_shape2 }
+    batch_tensor_out = %Nx.Tensor{out | shape: batch_shape_out }
+
     data_out =
       for b <- range(batch_count), reduce: <<>> do
         acc ->
@@ -467,12 +525,26 @@ defmodule Nx.BinaryBackend do
           b2 = rem(b, batch_count2)
           offset1 = b1 * batch_size
           offset2 = b2 * batch_size
-          dot_batch(acc, type_out, offset1, offset2, batch_shape1, type1, data1, batch_shape2, type2, data2)
+          batch_bin_back1 = %Nx.BinaryBackend{bin_back1 | state: Bits.slice(data1, type1, offset1, batch_size1)}
+          batch_tensor1 = %Nx.Tensor{batch_tensor1 | data: batch_bin_back1}
+          batch_bin_back2 = %Nx.BinaryBackend{bin_back2 | state: Bits.slice(data2, type2, offset2, batch_size2)}
+          batch_tensor2 = %Nx.Tensor{batch_tensor2 | data: batch_bin_back2}
+        
+          batch_dotted =
+            dot4(
+              batch_tensor_out,
+              batch_tensor1,
+              batch_contract_axes1,
+              batch_tensor2,
+              batch_contract_axes2
+            )
+          acc <> batch_dotted.data.state
       end
     from_binary(out, data_out)
   end
 
   defp dot_batch(acc, type_out, offset1, offset2, {outer_d1, inner_d} = shape1, type1, data1, {inner_d, outer_d2} = shape2, type2, data2) do
+
     for outer_i1 <- range(outer_d1), reduce: acc do
       acc ->
         for outer_i2 <- range(outer_d2), reduce: acc do
@@ -482,18 +554,23 @@ defmodule Nx.BinaryBackend do
                 inner_acc ->
                   i1 = offset1 + Nx.Shape.coords_to_i(shape1, {outer_i1, inner_i})
                   i2 = offset2 + Nx.Shape.coords_to_i(shape2, {inner_i, outer_i2})
-                  n1 = Binary.number_at(data1, type1, i1)
-                  n2 = Binary.number_at(data2, type2, i2)
+                  n1 = Bits.number_at(data1, type1, i1)
+                  n2 = Bits.number_at(data2, type2, i2)
                   inner_acc + n1 * n2
               end
-          acc <> Binary.from_number(inner_total, type_out)
+          acc <> Bits.from_number(inner_total, type_out)
         end
     end
   end
 
   defp dot4(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
+    ref = make_ref()
     bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
-      res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
+      n1 = binary_to_number(lhs, t1)
+      n2 = binary_to_number(rhs, t2)
+      prod = n1 * n2
+      IO.puts("dot4 acc: #{inspect(acc)} --> #{inspect(prod)} = #{inspect(n1)} * #{inspect(n2)} -- #{inspect(ref)}")
+      res = prod + acc
       {res, res}
     end)
   end
@@ -1494,7 +1571,7 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
+  def bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
     %{type: {_, s1}} = t1
     %{type: {_, s2}} = t2
     b1 = to_binary(t1)
@@ -1511,11 +1588,14 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
+  def bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
+    # IO.inspect({axes1, axes2}, label: :hello?)
     {_, s1} = t1.type
     {_, s2} = t2.type
-
+    IO.puts("TENSOR1 = axes: #{inspect(axes1)}, shape: #{inspect(t1.shape)}")
     v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
+    IO.puts("\nBREAK V1 to V2\n")
+    IO.puts("TENSOR2 = axes: #{inspect(axes2)}, shape: #{inspect(t2.shape)}")
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
     data =
@@ -1602,7 +1682,7 @@ defmodule Nx.BinaryBackend do
     List.flatten(view)
   end
 
-  defp aggregate_axes([_ | _] = axes, shape, size) do
+  def aggregate_axes([_ | _] = axes, shape, size) do
     axes = Enum.sort(axes)
     min = hd(axes)
     weighted_shape = weighted_shape(shape, size)
@@ -1619,11 +1699,26 @@ defmodule Nx.BinaryBackend do
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
 
     path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
+    IO.inspect(path, label: :agg_axes_path)
     {chunk_size, read_size, path}
   end
 
-  defp aggregate_axes(axes, _shape, _size) do
+  def aggregate_axes(axes, _shape, _size) do
     raise ArgumentError, ":axes must be a non empty list, got: #{inspect(axes)}"
+  end
+
+  def aggregate_path2(shape, axes) do
+    size = 1
+    weighted_shape = weighted_shape(shape, size)
+    axes = Enum.sort(axes)
+    min = hd(axes)
+    {reverse_pre, reverse_pos} =
+      aggregate_path(weighted_shape, axes, min, [], [])
+    IO.inspect(reverse_pos, label: :rev_pos1)
+    {reverse_pos, _read_size} =
+      aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
+    IO.inspect(reverse_pos, label: :rev_pos2)
+    Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
   end
 
   defp aggregate_path([pair | shape], [i | axes], i, pre, pos),
@@ -1694,11 +1789,13 @@ defmodule Nx.BinaryBackend do
   defp weighted_traverse(weighted_shape, binary, read_size, offset \\ 0)
 
   defp weighted_traverse([], data, read_size, offset) do
+    # IO.inspect(offset, label: "offset --->>")
     <<_::size(offset)-bitstring, chunk::size(read_size)-bitstring, _::bitstring>> = data
     chunk
   end
 
   defp weighted_traverse([{dim, size} | dims], data, read_size, offset) do
+    IO.inspect({dim, size}, label: "dim_size --->>")
     weighted_traverse(dim, size, dims, data, read_size, offset)
   end
 

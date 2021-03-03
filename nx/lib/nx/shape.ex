@@ -980,9 +980,7 @@ defmodule Nx.Shape do
   def i_to_coords({}, 0), do: {}
 
   def i_to_coords(shape, i) do
-    if i >= Nx.size(shape) do
-      raise ArgumentError, "index #{i} is out-of-range for shape #{inspect(shape)}"
-    end
+    index_check!(shape, i)
     shape
     |> i_to_coords(i, tuple_size(shape) - 1)
     |> Enum.reverse()
@@ -1000,6 +998,72 @@ defmodule Nx.Shape do
     [coord | i_to_coords(shape, i_val, i - 1)]
   end
 
+  defp index_check!(shape, i) do
+    if i >= rank(shape) do
+      raise ArgumentError, "index #{i} is out-of-range for shape #{inspect(shape)}"
+    end
+  end
+
+  @compile {:inline, rank: 1, dimension: 2}
+
+  def rank(shape), do: tuple_size(shape)
+
+  def dimension(shape, dim_i), do: elem(shape, dim_i)
+
+
+  @doc """
+  Turns a shape into the shape's weights.
+
+  The weight of a dimension is the product of the
+  shape's dimension times the product of all higher
+  dimensions.
+
+  ## Examples
+
+      iex> Nx.Shape.weights({10, 10, 10})
+      {1000, {100, 10, 1}}
+
+      iex> Nx.Shape.weights({3, 2, 3, 2})
+      {36, {12, 6, 2, 1}}
+  """
+
+  def weights({d0}) do
+    {d0, {1}}
+  end
+
+  def weights({d0, d1}) do
+    {d0 * d1, {d1, 1}}
+  end
+
+  def weights({d2, d1, d0}) do
+    e1 = d1 * d0
+    {d2 * e1, {e1, d0, 1}}
+  end
+
+  def weights({d3, d2, d1, d0}) do
+    e1 = d1 * d0
+    e2 = d2 * e1
+    {d3 * e2, {e2, e1, d0, 1}}
+  end
+
+  def weights(shape) do
+    # just a little slower for rank 5 or greater
+    {size, w} =
+      shape
+      |> to_weights(tuple_size(shape) - 1, 1)
+      |> Enum.reverse([1])
+      |> Enum.split(1)
+    {size, List.to_tuple(w)}
+  end
+
+  defp to_weights(shape, 0, acc) do
+    [acc * elem(shape, 0)]
+  end
+
+  defp to_weights(shape, i, acc) do
+    acc = elem(shape, i) * acc
+    [acc | to_weights(shape, i - 1, acc)]
+  end
 
   defp validate_concat_names!(names) do
     :ok =
