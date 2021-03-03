@@ -1981,7 +1981,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_reduce_product_cos(t), do: grad(t, Nx.product(Nx.power(t, 2)))
 
     test "computes the gradient with product of inner function" do
-      lhs = grad_reduce_product_cos(Nx.iota({3, 1, 2, 2}, type: {:f, 64}))
+      lhs = grad_reduce_product_cos(Nx.iota({3, 1, 2, 2}))
       rhs = Nx.broadcast(0.0, {3, 1, 2, 2})
       compare_tensors!(lhs, rhs)
     end
@@ -2049,15 +2049,12 @@ defmodule Nx.Defn.GradTest do
          %{data: %{state: right_data} = rhs} = right,
          opts
        ) do
-
     round = opts[:round] || 5
     left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.round(x, round)
     right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.round(x, round)
 
-    assert %{left | data: %{lhs | state: left_data}} == %{
-             right
-             | data: %{rhs | state: right_data}
-           }
+    assert %{left | data: %{lhs | state: left_data}} ==
+            %{right | data: %{rhs | state: right_data}}
   end
 
   defp compare_tensors!(left, right, _) do

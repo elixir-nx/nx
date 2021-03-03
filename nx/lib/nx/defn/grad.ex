@@ -316,11 +316,16 @@ defmodule Nx.Defn.Grad do
     grad_reduce(x, opts, g, cache, & &1)
   end
 
-  defp grad(:product, [x, opts], ans, g, cache) do
-    axes = opts[:axes] || Enum.to_list(0..Nx.rank(x.shape) - 1)
+  defp grad(:product, [x, opts], _ans, g, cache) do
+    axes = opts[:axes] || Nx.axes(x)
 
-    {n, _} = Enum.reduce(axes, {1, x.shape}, fn axis, {size, shape} -> {elem(shape, axis)*size, shape} end)
-    non_axes = Enum.filter(Enum.to_list(0..Nx.rank(x.shape) - 1), & &1 not in axes)
+    {n, _} =
+      Enum.reduce(axes, {1, x.shape}, fn axis, {size, shape} ->
+        {elem(shape, axis) * size, shape}
+      end)
+
+    non_axes = Nx.axes(x) -- axes
+
     {non_axes_shape, _} =
       Enum.reduce(non_axes, {{}, x.shape},
         fn axis, {cur, shape} ->

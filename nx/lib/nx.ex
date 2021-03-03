@@ -4914,7 +4914,7 @@ defmodule Nx do
     padding_config =
       case padding do
         :valid ->
-          for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
+          List.duplicate({0, 0}, rank(shape))
 
         :same ->
           Nx.Shape.calculate_padding(shape, window_dimensions, strides)
@@ -5646,7 +5646,7 @@ defmodule Nx do
     padding_config =
       case padding do
         :valid ->
-          for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
+          List.duplicate({0, 0}, rank(shape))
 
         :same ->
           Nx.Shape.calculate_padding(shape, window_dimensions, strides)
@@ -6477,9 +6477,9 @@ defmodule Nx do
     %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
 
-    input_permutation = opts[:input_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+    input_permutation = opts[:input_permutation] || axes(input_shape)
     input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
-    kernel_permutation = opts[:kernel_permutation] || Enum.to_list(0..(rank(kernel_shape) - 1))
+    kernel_permutation = opts[:kernel_permutation] || axes(kernel_shape)
     kernel_permutation = Nx.Shape.normalize_axes(kernel_shape, kernel_permutation, kernel_names)
 
     {permuted_input_shape, permuted_input_names} =
@@ -6488,7 +6488,7 @@ defmodule Nx do
     {permuted_kernel_shape, permuted_kernel_names} =
       Nx.Shape.transpose(kernel_shape, kernel_permutation, kernel_names)
 
-    output_permutation = opts[:output_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+    output_permutation = opts[:output_permutation] || axes(input_shape)
 
     output_permutation = Nx.Shape.normalize_axes(input_shape, output_permutation, input_names)
 
@@ -6523,10 +6523,8 @@ defmodule Nx do
 
     if tensor_input_channels != kernel_input_channels * feature_groups do
       raise ArgumentError,
-            "size of input channels divided by feature groups must match size of kernel" <>
-              " channels, got #{tensor_input_channels} // #{feature_groups} != #{
-                kernel_input_channels
-              }" <>
+            "size of input channels divided by feature groups must match size of kernel channels," <>
+              " got #{tensor_input_channels} / #{feature_groups} != #{kernel_input_channels}" <>
               " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
     end
 
@@ -6655,7 +6653,7 @@ defmodule Nx do
     padding_config =
       case padding do
         :valid ->
-          for _ <- 0..(tuple_size(input_shape) - 3), do: {0, 0}
+          List.duplicate({0, 0}, rank(input_shape) - 2)
 
         :same ->
           Nx.Shape.calculate_padding(dilated_spatial_dims, dilated_filter_shape)

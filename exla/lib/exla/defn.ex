@@ -602,10 +602,9 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
-    dims = for i <- 0..(tuple_size(shape) - 1), do: i
     arg = to_type(arg, type)
     comp = to_computation(fun, type, state)
-    EXLA.Op.map(arg, comp, dims)
+    EXLA.Op.map(arg, comp, Nx.axes(shape))
   end
 
   @reduction_op [:argmax, :argmin, :reduce_max, :reduce_min]
