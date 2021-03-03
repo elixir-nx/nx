@@ -925,6 +925,7 @@ defmodule EXLA.Defn do
         EXLA.Buffer.buffer(ref, EXLA.Shape.make_shape(type, shape))
 
       _ ->
+        # TODO: Call Nx.backend_transfer on the tensor instead
         EXLA.Buffer.buffer(Nx.to_binary(tensor), EXLA.Shape.make_shape(type, shape))
     end
   end

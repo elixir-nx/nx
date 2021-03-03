@@ -34,6 +34,8 @@ defmodule EXLA.DeviceBackend do
     backend_copy(tensor, Nx.BinaryBackend, opts)
   end
 
+  # TODO: Do not copy if transferring to EXLA.DeviceBackend on the same client+ordinal
+
   def backend_copy(%T{data: %DB{state: state}} = tensor, backend, opts) do
     backend.from_binary(tensor, EXLA.Buffer.read(state), opts)
   end
