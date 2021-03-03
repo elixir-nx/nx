@@ -57,7 +57,9 @@ ElixirLS will need to run its own compile of `:exla`, so if you want to use Elix
 
 #### Python and asdf
 
-Bazel cannot find Python installed via the `asdf` version manager. The error is `unknown command: python. Perhaps you have to reshim?`. One workaround is to use a separate installer or explicitly change your `$PATH` to point to a Python installation. For example, on Homebrew on macOS, you would do:
+`Bazel` cannot find `python` installed via the `asdf` version manager by default.`asdf` uses a function to lookup the specified version of a given binary, this approach prevents `Bazel` from being able to correctly build `EXLA`. The error is `unknown command: python. Perhaps you have to reshim?`. There are two known workarounds:
+
+1. Use a separate installer or explicitly change your `$PATH` to point to a Python installation. For example, on Homebrew on macOS, you would do:
 
 ```
 export PATH=/usr/local/opt/python@3.9/libexec/bin:/usr/local/bin:$PATH
@@ -65,6 +67,40 @@ mix deps.compile
 ```
 
 Note the build process looks for `python`, not `python3`. You may need to remove `~/.cache/exla` to clean up from previous build attempts.
+
+
+2. Use the [`asdf direnv`](https://github.com/asdf-community/asdf-direnv) plugin to install [`direnv 2.20.0`](https://direnv.net). `direnv` along with the `asdf-direnv` plugin will explicitly set the paths for any binary specified in your project's `.tool-version` files.
+
+```
+asdf plugin-add direnv
+asdf install direnv 2.20.0
+asdf global  direnv 2.20.0
+```
+
+Add the `asdf direnv hook` to your shell profile:
+
+**BASH** Add the following line to the bottom of your `~/.bashrc`
+```
+eval "$(direnv hook bash)"
+direnv() { asdf exec direnv "$@"; }
+```
+
+**ZSH** Add the following line to the bottom of your `~/.zshrc`
+```
+eval "$(direnv hook zsh)"
+direnv() { asdf exec direnv "$@"; }
+```
+
+Next, add the `asdf-direnv` plugin to the `direnvrc` configuration file `~/.config/direnv/direnvrc`:
+
+```
+source "$(asdf direnv hook asdf)"
+```
+Then, in the root of your `Nx` project add an `.envrc` file with the following: `use asdf`.
+
+`direnv` will now prompt you to allow the changes to the `.envrc` file, you can explicitly allow it with: `direnv allow`. You should now see `direnv` output a list of which `asdf` plugins it is going to set paths for, and any environment variables you choose to set using it. If your `.tool-versions` are all correctly set, `exla` should now be able to successfully compile.
+
+Note after setting up `direnv` it is high recommended you clear the build cache by removing ` ~/.cache/exla`.
 
 ### GPU Support
 
