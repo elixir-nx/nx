@@ -4137,6 +4137,40 @@ defmodule Nx do
   end
 
   @doc """
+  Returns a scalar tensor of value 1 if element-wise values
+  of a are within tolerance of b, value 0 otherwise.
+
+  You may set the absolute tolerane, `:atol` and relative tolerance
+  `:rtol`. Given tolerances, this method returns true if:
+
+      absolute(a - b) <= (atol + rtol * absolute(b))
+
+  returns true for all elements of a and b.
+
+  ## Examples
+
+      iex> Nx.all_close?(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all_close?(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  """
+  @doc type: :aggregation
+  def all_close?(a, b, opts \\ []) do
+    assert_keys!(opts, [:rtol, :atol])
+    rtol = opts[:rtol] || 1.0e-5
+    atol = opts[:atol] || 1.0e-8
+    all?(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+  end
+
+  @doc """
   Returns the sum for the tensor.
 
   If the `:axes` option is given, it aggregates over

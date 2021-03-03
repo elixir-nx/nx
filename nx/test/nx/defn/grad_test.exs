@@ -1348,10 +1348,10 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient of inverse trig functions" do
       for _ <- @iters do
         t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 32})
-        check_grads!(&Nx.asin/1, &grad_asin/1, t, eps: 0.1)
-        check_grads!(&Nx.acos/1, &grad_acos/1, t, eps: 0.1)
-        check_grads!(&Nx.atan/1, &grad_atan/1, t, eps: 0.1)
-        check_grads!(&Nx.atan/1, &grad_atan/1, Nx.multiply(1000.0, t), eps: 0.1)
+        check_grads!(&Nx.asin/1, &grad_asin/1, t, atol: 1.0e-5, rtol: 1.0e-2)
+        check_grads!(&Nx.acos/1, &grad_acos/1, t, atol: 0.1, rtol: 1.0e-2)
+        check_grads!(&Nx.atan/1, &grad_atan/1, t, atol: 0.1, rtol: 1.0e-2)
+        check_grads!(&Nx.atan/1, &grad_atan/1, Nx.multiply(1000.0, t), atol: 1.0e-2)
       end
     end
   end
@@ -1377,17 +1377,17 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient of inverse hyperbolic functions" do
       for _ <- @iters do
         t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
-        check_grads!(&Nx.asinh/1, &grad_asinh/1, t, eps: 0.1)
+        check_grads!(&Nx.asinh/1, &grad_asinh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
 
       for _ <- @iters do
         t = Nx.random_uniform({}, 1.01, 100.0, type: {:f, 64})
-        check_grads!(&Nx.acosh/1, &grad_acosh/1, t, eps: 0.1)
+        check_grads!(&Nx.acosh/1, &grad_acosh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
 
       for _ <- @iters do
         t = Nx.random_uniform({}, -0.999, 0.999, type: {:f, 64})
-        check_grads!(&Nx.atanh/1, &grad_atanh/1, t, eps: 0.1)
+        check_grads!(&Nx.atanh/1, &grad_atanh/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
   end
@@ -1398,7 +1398,7 @@ defmodule Nx.Defn.GradTest do
     test "computes the gradient" do
       for _ <- @iters do
         t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
-        check_grads!(&Nx.erf/1, &grad_erf/1, t, eps: 1.0e-4)
+        check_grads!(&Nx.erf/1, &grad_erf/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
   end
@@ -1409,7 +1409,7 @@ defmodule Nx.Defn.GradTest do
     test "computes the gradient" do
       for _ <- @iters do
         t = Nx.random_uniform({}, -100.0, 100.0, type: {:f, 64})
-        check_grads!(&Nx.erfc/1, &grad_erfc/1, t, eps: 1.0e-4)
+        check_grads!(&Nx.erfc/1, &grad_erfc/1, t, atol: 1.0e-4)
       end
     end
   end
@@ -1420,21 +1420,21 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient close to 0.0" do
       for _ <- @iters do
         t = Nx.random_uniform({}, 0.0, 0.9, type: {:f, 64})
-        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, eps: 1.0e-4)
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
 
     test "computes gradient between 0.9 and 0.95" do
       for _ <- @iters do
         t = Nx.random_uniform({}, 0.9, 0.95, type: {:f, 64})
-        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, eps: 1.0e-3)
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
 
     test "computes gradient between 0.95 and 0.98" do
       for _ <- @iters do
         t = Nx.random_uniform({}, 0.95, 0.98, type: {:f, 64})
-        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, eps: 0.00004)
+        check_grads!(&Nx.erf_inv/1, &grad_erf_inv/1, t, atol: 1.0e-5, rtol: 1.0e-2)
       end
     end
 
@@ -2085,23 +2085,13 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  # We need to round the floats because of imprecision between platforms
-  defp compare_tensors!(left, right, opts \\ [])
-
-  defp compare_tensors!(
-         %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
-         %{data: %{state: right_data} = rhs} = right,
-         opts
-       ) do
-    round = opts[:round] || 5
-    left_data = for <<x::float-size(size)-native <- left_data>>, do: Float.round(x, round)
-    right_data = for <<x::float-size(size)-native <- right_data>>, do: Float.round(x, round)
-
-    assert %{left | data: %{lhs | state: left_data}} ==
-            %{right | data: %{rhs | state: right_data}}
-  end
-
-  defp compare_tensors!(left, right, _) do
-    assert left == right
+  defp compare_tensors!(left, right) do
+    atol = 1.0e-7
+    rtol = 1.0e-4
+    try do
+      assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
+    rescue
+      _ -> assert left == right # So we can see the diff
+    end
   end
 end
