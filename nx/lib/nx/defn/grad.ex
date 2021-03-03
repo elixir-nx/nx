@@ -168,7 +168,7 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:atan2, [x, y], ans, g, cache) do
     {x, y} = binary_broadcast(x, y, ans)
-    den = Nx.add(Nx.power(x, 2), Nx.power(y, 2))
+    den = Nx.add(Nx.multiply(x, x), Nx.multiply(y, y))
     {dx, cache} = to_grad(x, Nx.divide(Nx.multiply(g, y), den), cache)
     {dy, cache} = to_grad(y, Nx.divide(Nx.multiply(g, x), den), cache)
 
@@ -508,12 +508,13 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:tan, [x], _ans, g, cache) do
-    g = Nx.divide(g, Nx.power(Nx.cos(x), 2))
+    cos = Nx.cos(x)
+    g = Nx.divide(g, Nx.multiply(cos, cos))
     to_grad(x, g, cache)
   end
 
   defp grad(:atan, [x], _ans, g, cache) do
-    g = Nx.divide(g, Nx.add(1.0, Nx.power(x, 2.0)))
+    g = Nx.divide(g, Nx.add(1.0, Nx.multiply(x, x)))
     to_grad(x, g, cache)
   end
 
@@ -550,7 +551,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:erf_inv, [x], ans, g, cache) do
-    g = Nx.multiply(g, Nx.exp(Nx.power(ans, 2)))
+    g = Nx.multiply(g, Nx.exp(Nx.multiply(ans, ans)))
     g = Nx.multiply(@half_sqrt_pi, g)
     to_grad(x, g, cache)
   end
