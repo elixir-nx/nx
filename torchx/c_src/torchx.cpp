@@ -6,17 +6,17 @@
 
 ErlNifResourceType *TENSOR_TYPE;
 
-std::map<const std::string, const at::ScalarType> dtypes = {{"byte", at::kByte}, {"char", at::kChar}, {"short", at::kShort}, {"int", at::kInt}, {"long", at::kLong}, {"half", at::kHalf}, {"brain", at::kBFloat16}, {"float", at::kFloat}, {"double", at::kDouble}, {"bool", at::kBool}};
+std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
-inline at::ScalarType string2type(const std::string atom)
+inline torch::ScalarType string2type(const std::string atom)
 {
   return dtypes[atom];
 }
 
-inline std::string type2string(const at::ScalarType type)
+inline std::string type2string(const torch::ScalarType type)
 {
-  for (std::map<const std::string, const at::ScalarType>::iterator i = dtypes.begin(); i != dtypes.end(); ++i)
+  for (std::map<const std::string, const torch::ScalarType>::iterator i = dtypes.begin(); i != dtypes.end(); ++i)
   {
     if (i->second == type)
       return i->first;
@@ -30,10 +30,10 @@ inline std::string type2string(const at::ScalarType type)
 
 #define TYPE_PARAM(ARGN, VAR)  \
   ATOM_PARAM(ARGN, VAR##_atom) \
-  at::ScalarType VAR = string2type(VAR##_atom)
+  torch::ScalarType VAR = string2type(VAR##_atom)
 
 #define TENSOR_PARAM(ARGN, VAR)                                        \
-  at::Tensor *VAR;                                                     \
+  torch::Tensor *VAR;                                                     \
   if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR)) \
     return nx::nif::error(env, "Unable to get " #VAR " tensor param.");
 
@@ -50,9 +50,9 @@ inline std::string type2string(const at::ScalarType type)
 #define TENSOR_LIST(TL)                                                                        \
   try                                                                                          \
   {                                                                                            \
-    std::vector<at::Tensor> tl = TL;                                                           \
+    std::vector<torch::Tensor> tl = TL;                                                           \
     std::vector<ERL_NIF_TERM> res_list;                                                        \
-    for (at::Tensor t : tl)                                                                    \
+    for (torch::Tensor t : tl)                                                                    \
       res_list.push_back(create_tensor_resource(env, t));                                      \
     return nx::nif::ok(env, enif_make_list_from_array(env, res_list.data(), res_list.size())); \
   }                                                                                            \
@@ -64,9 +64,9 @@ inline std::string type2string(const at::ScalarType type)
 #define TENSOR_TUPLE(TT)                                                                        \
   try                                                                                           \
   {                                                                                             \
-    std::tuple<at::Tensor, at::Tensor> tt = TT;                                                 \
+    std::tuple<torch::Tensor, torch::Tensor> tt = TT;                                                 \
     std::vector<ERL_NIF_TERM> res_list;                                                         \
-    for (at::Tensor t : {std::get<0>(tt), std::get<1>(tt)})                                     \
+    for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt)})                                     \
       res_list.push_back(create_tensor_resource(env, t));                                       \
     return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
   }                                                                                             \
@@ -76,16 +76,16 @@ inline std::string type2string(const at::ScalarType type)
   }
 
 ERL_NIF_TERM
-create_tensor_resource(ErlNifEnv *env, at::Tensor tensor)
+create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
 {
   ERL_NIF_TERM ret;
-  at::Tensor *tensorPtr;
+  torch::Tensor *tensorPtr;
 
-  tensorPtr = (at::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(at::Tensor));
+  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor));
   if (tensorPtr == NULL)
     return enif_make_badarg(env);
 
-  new (tensorPtr) at::Tensor(tensor.variable_data());
+  new (tensorPtr) torch::Tensor(tensor.variable_data());
 
   ret = enif_make_resource(env, tensorPtr);
   enif_release_resource(tensorPtr);
@@ -118,7 +118,7 @@ NIF(from_blob)
     return nx::nif::error(env, "Binary size is too small for the requested shape");
 
   // Clone here to copy data from blob, which will be GCed.
-  TENSOR(at::clone(at::from_blob(blob.data, shape, type)));
+  TENSOR(torch::clone(torch::from_blob(blob.data, shape, type)));
 }
 
 NIF(type)
@@ -137,7 +137,7 @@ NIF(device)
 {
   TENSOR_PARAM(0, t);
 
-  at::optional<at::Device> device = at::device_of(*t);
+  torch::optional<torch::Device> device = torch::device_of(*t);
 
   if (device.has_value())
     return nx::nif::ok(env, nx::nif::make(env, device.value().str().c_str()));
@@ -157,7 +157,7 @@ NIF(split)
   TENSOR_PARAM(0, t);
   PARAM(1, int64_t, batch_size);
 
-  TENSOR_LIST(at::split(*t, batch_size));
+  TENSOR_LIST(torch::split(*t, batch_size));
 }
 
 NIF(to_blob)
@@ -183,7 +183,7 @@ NIF(scalar_tensor)
   PARAM(0, double, scalar);
   TYPE_PARAM(1, type);
 
-  TENSOR(at::scalar_tensor(scalar, type));
+  TENSOR(torch::scalar_tensor(scalar, type));
 }
 
 NIF(randint)
@@ -193,7 +193,7 @@ NIF(randint)
   SHAPE_PARAM(2, shape);
   TYPE_PARAM(3, type);
 
-  TENSOR(at::randint(min, max, shape, type));
+  TENSOR(torch::randint(min, max, shape, type));
 }
 
 NIF(rand)
@@ -203,7 +203,7 @@ NIF(rand)
   SHAPE_PARAM(2, shape);
   TYPE_PARAM(3, type);
 
-  TENSOR(min + at::rand(shape, type) * (max - min));
+  TENSOR(min + torch::rand(shape, type) * (max - min));
 }
 
 NIF(normal)
@@ -212,7 +212,7 @@ NIF(normal)
   PARAM(1, double, std);
   SHAPE_PARAM(2, shape);
 
-  TENSOR(at::normal(mean, std, shape));
+  TENSOR(torch::normal(mean, std, shape));
 }
 
 NIF(arange)
@@ -225,11 +225,11 @@ NIF(arange)
   if (argc == 5)
   {
     SHAPE_PARAM(4, shape);
-    TENSOR(at::reshape(at::arange((double)start, (double)end, (double)step, type), shape));
+    TENSOR(torch::reshape(torch::arange((double)start, (double)end, (double)step, type), shape));
   }
   else
   {
-    TENSOR(at::arange((double)start, (double)end, (double)step, type));
+    TENSOR(torch::arange((double)start, (double)end, (double)step, type));
   }
 }
 
@@ -238,7 +238,7 @@ NIF(reshape)
   TENSOR_PARAM(0, t);
   SHAPE_PARAM(1, shape);
 
-  TENSOR(at::reshape(*t, shape));
+  TENSOR(torch::reshape(*t, shape));
 }
 
 NIF(to_type)
@@ -256,10 +256,10 @@ NIF(squeeze)
   if (argc == 2)
   {
     PARAM(1, int64_t, dim);
-    TENSOR(at::squeeze(*t, dim));
+    TENSOR(torch::squeeze(*t, dim));
   }
   else
-    TENSOR(at::squeeze(*t));
+    TENSOR(torch::squeeze(*t));
 }
 
 NIF(broadcast_to)
@@ -267,7 +267,7 @@ NIF(broadcast_to)
   TENSOR_PARAM(0, t);
   SHAPE_PARAM(1, shape);
 
-  TENSOR(at::broadcast_to(*t, shape).clone());
+  TENSOR(torch::broadcast_to(*t, shape).clone());
 }
 
 NIF(transpose)
@@ -276,7 +276,7 @@ NIF(transpose)
   PARAM(1, int64_t, dim0);
   PARAM(2, int64_t, dim1);
 
-  TENSOR(at::transpose(*t, dim0, dim1));
+  TENSOR(torch::transpose(*t, dim0, dim1));
 }
 
 NIF(ones)
@@ -284,7 +284,7 @@ NIF(ones)
   SHAPE_PARAM(0, shape);
   TYPE_PARAM(1, type);
 
-  TENSOR(at::ones(shape, type));
+  TENSOR(torch::ones(shape, type));
 }
 
 NIF(eye)
@@ -292,7 +292,7 @@ NIF(eye)
   PARAM(0, int64_t, size);
   TYPE_PARAM(1, type);
 
-  TENSOR(at::eye(size, type));
+  TENSOR(torch::eye(size, type));
 }
 
 #define BINARY_OP(OP)   BINARY_OP2(OP, OP)
@@ -303,7 +303,7 @@ NIF(eye)
     TENSOR_PARAM(0, a); \
     TENSOR_PARAM(1, b); \
                         \
-    TENSOR(at::NATIVE_OP(*a, *b)); \
+    TENSOR(torch::NATIVE_OP(*a, *b)); \
   }
 
 #define BINARY_OPB(OP)   \
@@ -312,7 +312,7 @@ NIF(eye)
     TENSOR_PARAM(0, a); \
     TENSOR_PARAM(1, b); \
                         \
-    nx::nif::ok(env, nx::nif::make(env, at::OP(*a, *b))); \
+    nx::nif::ok(env, nx::nif::make(env, torch::OP(*a, *b))); \
   }
 
 
@@ -322,7 +322,7 @@ NIF(eye)
   NIF(OP)               \
   {                     \
     TENSOR_PARAM(0, a); \
-    TENSOR(at::NATIVE(*a)); \
+    TENSOR(torch::NATIVE(*a)); \
   }
 
 
@@ -360,7 +360,7 @@ NIF(quotient)
 {
   TENSOR_PARAM(0, a);
   TENSOR_PARAM(1, b);
-  TENSOR(at::divide(*a, *b, "trunc"));
+  TENSOR(torch::divide(*a, *b, "trunc"));
 }
 
 UNARY_OP(abs)
@@ -377,7 +377,7 @@ NIF(dot)
   TENSOR_PARAM(0, a);
   TENSOR_PARAM(1, b);
 
-  TENSOR(at::matmul(*a, *b));
+  TENSOR(torch::matmul(*a, *b));
 }
 
 NIF(cholesky)
@@ -390,7 +390,7 @@ NIF(cholesky)
     GET(1, upper);
   }
 
-  TENSOR(at::cholesky(*t, upper));
+  TENSOR(torch::cholesky(*t, upper));
 }
 
 NIF(qr)
@@ -403,7 +403,7 @@ NIF(qr)
     GET(1, reduced);
   }
 
-  TENSOR_TUPLE(at::qr(*t, reduced));
+  TENSOR_TUPLE(torch::qr(*t, reduced));
 }
 
 void free_tensor(ErlNifEnv *env, void *obj)

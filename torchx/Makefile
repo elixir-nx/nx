@@ -21,9 +21,9 @@ else  # Linux
 	LDFLAGS += -lm
 endif
 
-
-
 .DEFAULT_GLOBAL := build
+
+build: check_version $(MIX_APP_PATH)/priv/torchx.so
 
 check_version:
 ifneq "$(LIBTORCH_VERSION)" "$(REQUIRED_LIBTORCH_VERSION)"
@@ -32,7 +32,6 @@ ifneq "$(LIBTORCH_VERSION)" "$(REQUIRED_LIBTORCH_VERSION)"
 endif
 	@echo > /dev/null
 
-build: check_version $(MIX_APP_PATH)/priv/torchx.so
 
 $(MIX_APP_PATH)/priv/torchx.so: c_src/torchx.cpp
 	@echo 'Compiling: '$<
