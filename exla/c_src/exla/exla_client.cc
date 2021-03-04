@@ -679,7 +679,6 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
                                                    client));
   }
 
-  // TODO(seanmor5): Allocator options should be a configuration option.
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<se::DeviceMemoryAllocator> allocator,
     allocator::GetGpuDeviceAllocator(devices, memory_fraction, preallocate));
 
