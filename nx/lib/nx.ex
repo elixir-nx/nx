@@ -7657,7 +7657,7 @@ defmodule Nx do
   end
 
   @doc """
-  Calculates the (P)LU decomposition of a 2-D tensor with shape `{N, N}`.
+  Calculates the A = PLU decomposition of a 2-D tensor A with shape `{N, N}`.
 
   ## Options
     * `:p_names` - Defines the names for the `p` tensor
