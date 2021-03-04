@@ -33,12 +33,17 @@ defmodule EXLA.Client do
       num_replicas = Keyword.get(options, :default_num_replicas, 1)
       # The number of threads that will get used during a computation
       intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
+      # Fraction of GPU memory to preallocate
+      memory_fraction = Keyword.get(options, :memory_fraction, 0.9)
+      # Flag for preallocating GPU memory
+      preallocate = Keyword.get(options, :preallocate, true)
+      preallocate_int = if preallocate, do: 1, else: 0
 
       ref =
         case platform do
           :host -> EXLA.NIF.get_host_client(num_replicas, intra_op_parallelism_threads)
-          :cuda -> EXLA.NIF.get_cuda_client(num_replicas, intra_op_parallelism_threads)
-          :rocm -> EXLA.NIF.get_rocm_client(num_replicas, intra_op_parallelism_threads)
+          :cuda -> EXLA.NIF.get_cuda_client(num_replicas, intra_op_parallelism_threads, memory_fraction, preallocate_int)
+          :rocm -> EXLA.NIF.get_rocm_client(num_replicas, intra_op_parallelism_threads, memory_fraction, preallocate_int)
           _ -> raise ArgumentError, "unknown Exla platform: #{inspect(platform)}"
         end
         |> unwrap!()

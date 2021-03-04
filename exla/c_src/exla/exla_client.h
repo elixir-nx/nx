@@ -381,7 +381,9 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
                                          int intra_op_parallelism_threads);
 xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
                                         int intra_op_parallelism_threads,
-                                        const char* platform_name);
+                                        const char* platform_name,
+                                        double memory_fraction,
+                                        bool preallocate);
 }  // namespace exla
 
 #endif
