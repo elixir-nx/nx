@@ -1,4 +1,3 @@
-#include <ATen/ATen.h>
 #include <torch/torch.h>
 #include <iostream>
 
@@ -46,6 +45,7 @@ inline std::string type2string(const torch::ScalarType type)
   {                                                          \
     return nx::nif::error(env, error.msg().c_str());         \
   }
+
 
 #define TENSOR_LIST(TL)                                                                        \
   try                                                                                          \
@@ -279,6 +279,14 @@ NIF(transpose)
   TENSOR(torch::transpose(*t, dim0, dim1));
 }
 
+NIF(permute)
+{
+  TENSOR_PARAM(0, t);
+  LIST_PARAM(1, std::vector<int64_t>, dims);
+
+  TENSOR(t->permute(dims).clone());
+}
+
 NIF(ones)
 {
   SHAPE_PARAM(0, shape);
@@ -324,8 +332,6 @@ NIF(eye)
     TENSOR_PARAM(0, a); \
     TENSOR(torch::NATIVE(*a)); \
   }
-
-
 
 BINARY_OP(bitwise_and)
 BINARY_OP(bitwise_or)
@@ -478,6 +484,7 @@ static ErlNifFunc nif_functions[] = {
     DF(squeeze, 1),
     DF(broadcast_to, 2),
     DF(transpose, 3),
+    DF(permute, 2),
 
     DF(add, 2),
     DF(subtract, 2),

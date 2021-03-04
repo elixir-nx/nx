@@ -13,17 +13,22 @@
 #define ATOM_PARAM(ARGN, VAR)                   \
   std::string VAR;                              \
   if (!nx::nif::get_atom(env, argv[ARGN], VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR " param.");
+    return nx::nif::error(env, "Unable to get " #VAR " atom param.");
 
 #define TUPLE_PARAM(ARGN, TYPE, VAR)             \
   TYPE VAR;                                      \
   if (!nx::nif::get_tuple(env, argv[ARGN], VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR " param.");
+    return nx::nif::error(env, "Unable to get " #VAR " tuple param.");
+
+#define LIST_PARAM(ARGN, TYPE, VAR)             \
+  TYPE VAR;                                      \
+  if (!nx::nif::get_list(env, argv[ARGN], VAR)) \
+    return nx::nif::error(env, "Unable to get " #VAR " list param.");
 
 #define BINARY_PARAM(ARGN, VAR)                    \
   ErlNifBinary VAR;                                \
   if (!enif_inspect_binary(env, argv[ARGN], &VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR " param.");
+    return nx::nif::error(env, "Unable to get " #VAR " binary param.");
 
 namespace nx
 {

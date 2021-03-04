@@ -45,6 +45,7 @@ defmodule Torchx.NIF do
   dnif squeeze(tensor, axis)
   dnif broadcast_to(tensor, shape)
   dnif transpose(tensor, dim0, dim1)
+  dnif permute(tensor, dims)
   dnif split(tensor, split_size)
 
   dnif ones(shape)

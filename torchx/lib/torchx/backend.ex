@@ -137,8 +137,13 @@ defmodule Torchx.Backend do
     do: NIF.to_type(to_ref(t), torch_type(type)) |> from_ref(out)
 
   @impl true
-  def squeeze(out, tensor, _axes) do
-    NIF.squeeze(to_ref(tensor)) |> from_ref(out)
+  def squeeze(out, %T{} = t, _axes) do
+    NIF.squeeze(to_ref(t)) |> from_ref(out)
+  end
+
+  @impl true
+  def transpose(out, %T{} = t, opts) do
+    NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
   end
 
   ## Ops
@@ -228,7 +233,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
-    alias Inspect.Algebra, as: IA
 
     limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
 
@@ -247,7 +251,20 @@ defmodule Torchx.Backend do
         "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
       end
 
-    IA.concat(["Torchx.Backend(#{device(tensor)})", IA.line(), result])
+    maybe_add_signature(result, tensor)
+  end
+
+  @doc """
+
+  Do not add signature during tests to match Nx doctests.
+
+  """
+  defp maybe_add_signature(result, tensor) do
+    if Mix.env() == :test do
+      result
+    else
+      Inspect.Algebra.concat(["Torchx.Backend(#{device(tensor)})", Inspect.Algebra.line(), result])
+    end
   end
 
   ## Helpers
@@ -292,6 +309,8 @@ defmodule Torchx.Backend do
   ## All remaining callbacks
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
+
+  def __unimplemented__, do: unquote(funs)
 
   for {fun, arity} <- funs do
     args = Macro.generate_arguments(arity, __MODULE__)
