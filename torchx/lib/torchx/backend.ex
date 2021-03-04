@@ -159,9 +159,20 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(out, %T{} = t, _opts) do
-    NIF.sum(to_ref(t)) |> from_ref(out)
+  def sum(out, %T{} = t, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    dims = axes_to_dims(t, axes)
+
+    NIF.sum(to_ref(t), axes, keep_axes) |> from_ref(out)
   end
+
+  defp axes_to_dims(%T{}, []), do: []
+  defp axes_to_dims(%T{}, [axe | _ ] = axes) when is_integer(axe), do: axes
+  defp axes_to_dims(%T{names: names}, [axe | _ ] = axes) when is_atom(axe), do:
+    Enum.map(axes, &Nx.Shape.find_name!(names, &1))
+
 
   ## Ops
 

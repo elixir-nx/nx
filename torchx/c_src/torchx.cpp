@@ -382,7 +382,6 @@ BINARY_OP(min)
 BINARY_OP(max)
 
 BINARY_OP(outer)
-UNARY_OP(sum)
 
 NIF(quotient)
 {
@@ -407,6 +406,15 @@ NIF(dot)
   TENSOR_PARAM(1, b);
 
   TENSOR(torch::matmul(*a, *b));
+}
+
+NIF(sum)
+{
+  TENSOR_PARAM(0, t);
+  LIST_PARAM(1, std::vector<int64_t>, dims);
+  PARAM(2, bool, keep_dim);
+
+  TENSOR(torch::sum(*t, dims, keep_dim));
 }
 
 NIF(cholesky)
@@ -539,7 +547,7 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_xor, 2),
 
     DF(outer, 2),
-    DF(sum, 1),
+    DF(sum, 3),
 
     DF(abs, 1),
     DF(ceil, 1),

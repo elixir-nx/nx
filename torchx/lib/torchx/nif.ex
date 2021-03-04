@@ -52,7 +52,7 @@ defmodule Torchx.NIF do
   dnif ones(shape)
   dnif eye(size, type)
 
-  dnif sum(tensor)
+  dnif sum(tensor, axes, keep_axes)
 
   dnif add(tensorA, tensorB)
   dnif subtract(tensorA, tensorB)
