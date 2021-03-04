@@ -254,16 +254,13 @@ defmodule Torchx.Backend do
     maybe_add_signature(result, tensor)
   end
 
-  @doc """
-
-  Do not add signature during tests to match Nx doctests.
-
-  """
-  defp maybe_add_signature(result, tensor) do
-    if Mix.env() == :test do
-      result
-    else
+  if Application.get_env(:torchx, :add_backend_on_inspect, true) do
+    defp maybe_add_signature(result, tensor) do
       Inspect.Algebra.concat(["Torchx.Backend(#{device(tensor)})", Inspect.Algebra.line(), result])
+    end
+  else
+    defp maybe_add_signature(result, _tensor) do
+      result
     end
   end
 
