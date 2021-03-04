@@ -636,6 +636,18 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "lu" do
+    defn lu(t), do: Nx.lu(t)
+
+    test "returns tuples" do
+      assert {p, l, u} = lu(Nx.iota({3, 3}))
+
+      assert %T{data: %Expr{op: :elem, args: [lu_expr, 0, 3]}, shape: {3, 3}} = p
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 1, 3]}, shape: {3, 3}} = l
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 2, 3]}, shape: {3, 3}} = u
+    end
+  end
+
   describe "qr" do
     defn qr(t), do: Nx.qr(t)
 

@@ -1189,7 +1189,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def lu(
-        {%{type: p_type} = p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
+        {p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
         %{type: input_type, shape: {n, n} = input_shape} = tensor,
         opts \\ []
       ) do

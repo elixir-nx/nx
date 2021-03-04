@@ -7440,10 +7440,6 @@ defmodule Nx do
       * `:reduced` - returns `q` and `r` with shapes `{M, K}` and `{K, N}`
       * `:complete` - returns `q` and `r` with shapes `{M, M}` and `{M, N}`
 
-    * `:q_names` - Defines the names for the `q` tensor
-
-    * `:r_names` - Defines the names for the `r` tensor
-
     * `:eps` - Rounding error threshold that can be applied during the triangularization
 
   ## Examples
@@ -7469,10 +7465,10 @@ defmodule Nx do
       >
 
       iex> t = Nx.tensor([[3, 2, 1], [0, 1, 1], [0, 0, 1]])
-      iex> {q, r} = Nx.qr(t, q_names: [:row, :base_vector], r_names: [:coef, :vars])
+      iex> {q, r} = Nx.qr(t)
       iex> q
       #Nx.Tensor<
-        f32[row: 3][base_vector: 3]
+        f32[3][3]
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
@@ -7481,7 +7477,7 @@ defmodule Nx do
       >
       iex> r
       #Nx.Tensor<
-        f32[coef: 3][vars: 3]
+        f32[3][3]
         [
           [3.0, 2.0, 1.0],
           [0.0, 1.0, 1.0],
@@ -7541,8 +7537,8 @@ defmodule Nx do
   """
   @doc type: :linalg
   def qr(tensor, opts \\ []) do
-    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
-    assert_keys!(opts, [:mode, :q_names, :r_names])
+    %T{type: type, shape: shape} = tensor = tensor!(tensor)
+    assert_keys!(opts, [:mode])
     opts = Keyword.put_new(opts, :mode, :reduced)
     mode = opts[:mode]
     valid_modes = [:reduced, :complete]
@@ -7553,17 +7549,11 @@ defmodule Nx do
     end
 
     output_type = Nx.Type.to_floating(type)
-
     {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
-    [n1, n2] = names
-
-    q_names = opts[:q_names] || [n1, nil]
-    r_names = opts[:r_names] || [nil, n2]
-
     impl!(tensor).qr(
-      {%{tensor | type: output_type, shape: q_shape, names: q_names},
-       %{tensor | type: output_type, shape: r_shape, names: r_names}},
+      {%{tensor | type: output_type, shape: q_shape, names: [nil, nil]},
+       %{tensor | type: output_type, shape: r_shape, names: [nil, nil]}},
       tensor,
       opts
     )
@@ -7613,10 +7603,10 @@ defmodule Nx do
         ]
       >
 
-      iex> {u, s, vt} = Nx.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]], names: [:row_space, :col_space]))
+      iex> {u, s, vt} = Nx.svd(Nx.tensor([[2, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]]))
       iex> u
       #Nx.Tensor<
-        f32[row_space: 4][4]
+        f32[4][4]
         [
           [1.0, 0.0, 0.0, 0.0],
           [0.0, 1.0, 0.0, 0.0],
@@ -7631,7 +7621,7 @@ defmodule Nx do
       >
       iex> vt
       #Nx.Tensor<
-        f32[3][col_space: 3]
+        f32[3][3]
         [
           [0.0, 1.0, 0.0],
           [1.0, 0.0, 0.0],
@@ -7642,15 +7632,15 @@ defmodule Nx do
   """
   @doc type: :linalg
   def svd(tensor, opts \\ []) do
-    %T{type: type, shape: shape, names: [u_name, v_name]} = tensor = tensor!(tensor)
+    %T{type: type, shape: shape} = tensor = tensor!(tensor)
     assert_keys!(opts, [:eps, :max_iter])
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
 
     impl!(tensor).svd(
-      {%{tensor | names: [u_name, nil], type: output_type, shape: u_shape},
+      {%{tensor | names: [nil, nil], type: output_type, shape: u_shape},
        %{tensor | names: [nil], type: output_type, shape: s_shape},
-       %{tensor | names: [nil, v_name], type: output_type, shape: v_shape}},
+       %{tensor | names: [nil, nil], type: output_type, shape: v_shape}},
       tensor,
       opts
     )
@@ -7660,11 +7650,6 @@ defmodule Nx do
   Calculates the A = PLU decomposition of a 2-D tensor A with shape `{N, N}`.
 
   ## Options
-    * `:p_names` - Defines the names for the `p` tensor
-
-    * `:l_names` - Defines the names for the `l` tensor
-
-    * `:u_names` - Defines the names for the `u` tensor
 
     * `:eps` - Rounding error threshold that can be applied during the factorization
 
@@ -7753,23 +7738,17 @@ defmodule Nx do
   """
   @doc type: :linalg
   def lu(tensor, opts \\ []) do
-    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
-    assert_keys!(opts, [:p_names, :l_names, :u_names, :eps])
+    %T{type: type, shape: shape} = tensor = tensor!(tensor)
+    assert_keys!(opts, [:eps])
 
     output_type = Nx.Type.to_floating(type)
-
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
-
-    [n1, n2] = names
-
-    p_names = opts[:p_names] || [n1, nil]
-    l_names = opts[:l_names] || [n1, nil]
-    u_names = opts[:u_names] || [nil, n2]
+    names = [nil, nil]
 
     impl!(tensor).lu(
-      {%{tensor | type: type, shape: p_shape, names: p_names},
-       %{tensor | type: output_type, shape: l_shape, names: l_names},
-       %{tensor | type: output_type, shape: u_shape, names: u_names}},
+      {%{tensor | type: type, shape: p_shape, names: names},
+       %{tensor | type: output_type, shape: l_shape, names: names},
+       %{tensor | type: output_type, shape: u_shape, names: names}},
       tensor,
       opts
     )
