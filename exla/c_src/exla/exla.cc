@@ -1663,12 +1663,14 @@ ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 }
 
 ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   int num_replicas;
   int intra_op_parallelism_threads;
+  double memory_fraction;
+  bool preallocate;
 
   if (!exla::nif::get(env, argv[0], &num_replicas)) {
     return exla::nif::error(env, "Unable to get number of replicas.");
@@ -1676,21 +1678,31 @@ ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   if (!exla::nif::get(env, argv[1], &intra_op_parallelism_threads)) {
     return exla::nif::error(env, "Unable to get number of parallelism threads.");
   }
+  if (!exla::nif::get(env, argv[2], &memory_fraction)) {
+    return exla::nif::error(env, "Unable to get memory fraction.");
+  }
+  if (!exla::nif::get(env, argv[3], &preallocate)) {
+    return exla::nif::error(env, "Unable to get preallocate flag.");
+  }
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
     exla::GetGpuClient(num_replicas,
                       intra_op_parallelism_threads,
-                      "CUDA"), env);
+                      "CUDA",
+                      memory_fraction,
+                      preallocate), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
 }
 
 ERL_NIF_TERM get_rocm_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
+  if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   int num_replicas;
   int intra_op_parallelism_threads;
+  double memory_fraction;
+  bool preallocate;
 
   if (!exla::nif::get(env, argv[0], &num_replicas)) {
     return exla::nif::error(env, "Unable to get number of replicas.");
@@ -1698,10 +1710,18 @@ ERL_NIF_TERM get_rocm_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   if (!exla::nif::get(env, argv[1], &intra_op_parallelism_threads)) {
     return exla::nif::error(env, "Unable to get number of parallelism threads.");
   }
+  if (!exla::nif::get(env, argv[2], &memory_fraction)) {
+    return exla::nif::error(env, "Unable to get memory fraction.");
+  }
+  if (!exla::nif::get(env, argv[3], &preallocate)) {
+    return exla::nif::error(env, "Unable to get preallocate flag.");
+  }
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
     exla::GetGpuClient(num_replicas,
                        intra_op_parallelism_threads,
-                       "ROCM"), env);
+                       "ROCM",
+                       memory_fraction,
+                       preallocate), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
 }
@@ -1987,8 +2007,8 @@ static ErlNifFunc exla_funcs[] = {
   {"parameter", 4, parameter},
   // ExlaClient
   {"get_host_client", 2, get_host_client},
-  {"get_cuda_client", 2, get_cuda_client},
-  {"get_rocm_client", 2, get_rocm_client},
+  {"get_cuda_client", 4, get_cuda_client},
+  {"get_rocm_client", 4, get_rocm_client},
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   {"get_supported_platforms", 0, get_supported_platforms},
