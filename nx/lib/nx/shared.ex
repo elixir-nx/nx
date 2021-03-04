@@ -137,8 +137,8 @@ defmodule Nx.Shared do
   @doc """
   Converts an Erlang float (float64) to float32 precision.
   """
-  def to_float32(f64) when is_float(f64) do
-    <<float32::float-32>> = <<f64::float-32>>
+  def to_float32(float64) when is_float(float64) do
+    <<float32::float-32>> = <<float64::float-32>>
     float32
   end
 
