@@ -647,7 +647,9 @@ xla::StatusOr<ExlaClient*> GetHostClient(int num_replicas,
 
 xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
                                         int intra_op_parallelism_threads,
-                                        const char* platform_name) {
+                                        const char* platform_name,
+                                        double memory_fraction,
+                                        bool preallocate) {
   EXLA_ASSIGN_OR_RETURN(stream_executor::Platform *platform,
     xla::PlatformUtil::GetPlatform(std::string(platform_name)));
 
@@ -677,9 +679,8 @@ xla::StatusOr<ExlaClient*> GetGpuClient(int num_replicas,
                                                    client));
   }
 
-  // TODO(seanmor5): Allocator options should be a configuration option.
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<se::DeviceMemoryAllocator> allocator,
-    allocator::GetGpuDeviceAllocator(devices, 0.9, true));
+    allocator::GetGpuDeviceAllocator(devices, memory_fraction, preallocate));
 
   std::unique_ptr<tensorflow::BFCAllocator> host_memory_allocator =
     allocator::GetGpuHostAllocator(devices.front()->executor());
