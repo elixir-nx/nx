@@ -7656,6 +7656,125 @@ defmodule Nx do
     )
   end
 
+  @doc """
+  Calculates the (P)LU decomposition of a 2-D tensor with shape `{N, N}`.
+
+  ## Options
+    * `:p_names` - Defines the names for the `p` tensor
+
+    * `:l_names` - Defines the names for the `l` tensor
+
+    * `:u_names` - Defines the names for the `u` tensor
+
+    * `:eps` - Rounding error threshold that can be applied during the factorization
+
+  ## Examples
+
+      iex> {p, l, u} = Nx.lu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+      iex> p
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [0, 0, 1],
+          [0, 1, 0],
+          [1, 0, 0]
+        ]
+      >
+      iex> l
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 0.0, 0.0],
+          [0.5714285969734192, 1.0, 0.0],
+          [0.1428571492433548, 2.0, 1.0]
+        ]
+      >
+      iex> u
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [7.0, 8.0, 9.0],
+          [0.0, 0.4285714328289032, 0.8571428656578064],
+          [0.0, 0.0, 0.0]
+        ]
+      >
+      iex> p |> Nx.dot(l) |> Nx.dot(u)
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 2.0, 3.0],
+          [4.0, 5.0, 6.0],
+          [7.0, 8.0, 9.0]
+        ]
+      >
+
+      iex> {p, l, u} = Nx.lu(Nx.tensor([[1, 0, 1], [-1, 0, -1], [1, 1, 1]]))
+      iex> p
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 0, 0],
+          [0, 0, 1],
+          [0, 1, 0]
+        ]
+      >
+      iex> l
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 0.0, 0.0],
+          [1.0, 1.0, 0.0],
+          [-1.0, 0.0, 1.0]
+        ]
+      >
+      iex> u
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0]
+        ]
+      >
+      iex> p |> Nx.dot(l) |> Nx.dot(u)
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 0.0, 1.0],
+          [-1.0, 0.0, -1.0],
+          [1.0, 1.0, 1.0]
+        ]
+      >
+
+  ## Error cases
+
+      iex> Nx.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
+      ** (ArgumentError) tensor must have as many rows as columns, got shape: {3, 4}
+  """
+  @doc type: :linalg
+  def lu(tensor, opts \\ []) do
+    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
+    assert_keys!(opts, [:p_names, :l_names, :u_names, :eps])
+
+    output_type = Nx.Type.to_floating(type)
+
+    {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
+
+    [n1, n2] = names
+
+    p_names = opts[:p_names] || [n1, nil]
+    l_names = opts[:l_names] || [n1, nil]
+    u_names = opts[:u_names] || [nil, n2]
+
+    impl!(tensor).lu(
+      {%{tensor | type: type, shape: p_shape, names: p_names},
+       %{tensor | type: output_type, shape: l_shape, names: l_names},
+       %{tensor | type: output_type, shape: u_shape, names: u_names}},
+      tensor,
+      opts
+    )
+  end
+
   ## Helpers
 
   defp tensor!(%T{} = t),
