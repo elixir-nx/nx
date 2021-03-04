@@ -4137,6 +4137,40 @@ defmodule Nx do
   end
 
   @doc """
+  Returns a scalar tensor of value 1 if element-wise values
+  of a are within tolerance of b, value 0 otherwise.
+
+  You may set the absolute tolerane, `:atol` and relative tolerance
+  `:rtol`. Given tolerances, this method returns true if:
+
+      absolute(a - b) <= (atol + rtol * absolute(b))
+
+  returns true for all elements of a and b.
+
+  ## Examples
+
+      iex> Nx.all_close?(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+      #Nx.Tensor<
+        u8
+        0
+      >
+
+      iex> Nx.all_close?(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+      #Nx.Tensor<
+        u8
+        1
+      >
+
+  """
+  @doc type: :aggregation
+  def all_close?(a, b, opts \\ []) do
+    assert_keys!(opts, [:rtol, :atol])
+    rtol = opts[:rtol] || 1.0e-5
+    atol = opts[:atol] || 1.0e-8
+    all?(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+  end
+
+  @doc """
   Returns the sum for the tensor.
 
   If the `:axes` option is given, it aggregates over
@@ -4914,7 +4948,7 @@ defmodule Nx do
     padding_config =
       case padding do
         :valid ->
-          for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
+          List.duplicate({0, 0}, rank(shape))
 
         :same ->
           Nx.Shape.calculate_padding(shape, window_dimensions, strides)
@@ -5646,7 +5680,7 @@ defmodule Nx do
     padding_config =
       case padding do
         :valid ->
-          for _ <- 0..(tuple_size(shape) - 1), do: {0, 0}
+          List.duplicate({0, 0}, rank(shape))
 
         :same ->
           Nx.Shape.calculate_padding(shape, window_dimensions, strides)
@@ -6206,6 +6240,7 @@ defmodule Nx do
   """
   @doc type: :shape
   def transpose(tensor, opts \\ []) do
+    assert_keys!(opts, [:axes])
     %{shape: shape, names: names} = tensor = tensor!(tensor)
     axes = opts[:axes] || Nx.Shape.transpose_axes(shape)
     axes = Nx.Shape.normalize_axes(shape, axes, names)
@@ -6477,9 +6512,9 @@ defmodule Nx do
     %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
     %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
 
-    input_permutation = opts[:input_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+    input_permutation = opts[:input_permutation] || axes(input_shape)
     input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
-    kernel_permutation = opts[:kernel_permutation] || Enum.to_list(0..(rank(kernel_shape) - 1))
+    kernel_permutation = opts[:kernel_permutation] || axes(kernel_shape)
     kernel_permutation = Nx.Shape.normalize_axes(kernel_shape, kernel_permutation, kernel_names)
 
     {permuted_input_shape, permuted_input_names} =
@@ -6488,7 +6523,7 @@ defmodule Nx do
     {permuted_kernel_shape, permuted_kernel_names} =
       Nx.Shape.transpose(kernel_shape, kernel_permutation, kernel_names)
 
-    output_permutation = opts[:output_permutation] || Enum.to_list(0..(rank(input_shape) - 1))
+    output_permutation = opts[:output_permutation] || axes(input_shape)
 
     output_permutation = Nx.Shape.normalize_axes(input_shape, output_permutation, input_names)
 
@@ -6523,10 +6558,8 @@ defmodule Nx do
 
     if tensor_input_channels != kernel_input_channels * feature_groups do
       raise ArgumentError,
-            "size of input channels divided by feature groups must match size of kernel" <>
-              " channels, got #{tensor_input_channels} // #{feature_groups} != #{
-                kernel_input_channels
-              }" <>
+            "size of input channels divided by feature groups must match size of kernel channels," <>
+              " got #{tensor_input_channels} / #{feature_groups} != #{kernel_input_channels}" <>
               " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
     end
 
@@ -6655,7 +6688,7 @@ defmodule Nx do
     padding_config =
       case padding do
         :valid ->
-          for _ <- 0..(tuple_size(input_shape) - 3), do: {0, 0}
+          List.duplicate({0, 0}, rank(input_shape) - 2)
 
         :same ->
           Nx.Shape.calculate_padding(dilated_spatial_dims, dilated_filter_shape)

@@ -6,23 +6,22 @@ defmodule Nx.GradHelpers do
   variable with a partial application of `func`.
   """
   def check_grads!(func, grad_func, x, opts \\ []) when is_list(opts) do
-    eps = opts[:eps] || 1.0e-4
+    atol = opts[:atol] || 1.0e-7
+    rtol = opts[:rtol] || 1.0e-4
     step = opts[:step] || 1.0e-4
     est_grad = finite_differences(func, x, step)
     comp_grad = grad_func.(x)
-    approx_equal?(est_grad, comp_grad, x, eps)
+    approx_equal?(comp_grad, est_grad, x, atol, rtol)
   end
 
-  defp approx_equal?(lhs, rhs, x, eps) do
-    [value] = Nx.to_flat_list(Nx.abs(Nx.subtract(lhs, rhs)))
-
-    unless value < eps do
+  defp approx_equal?(lhs, rhs, x, atol, rtol) do
+    unless Nx.all_close?(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
       raise """
       expected
 
       #{inspect(lhs)}
 
-      to be #{eps} within
+      to be within tolerance of
 
       #{inspect(rhs)}
 

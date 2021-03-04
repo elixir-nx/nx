@@ -1331,7 +1331,7 @@ defmodule EXLA.DefnExprTest do
           window_dilations: [1, 2, 2]
         )
 
-      compare_tensors!(lhs, rhs, round: 3)
+      compare_tensors!(lhs, rhs)
     end
   end
 
@@ -2452,7 +2452,7 @@ defmodule EXLA.DefnExprTest do
       assert s.shape == {3}
       assert vt.shape == {3, 3}
       s_full = Nx.multiply(s, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-      assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output)
+      assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output, atol: 1.0e-5, rtol: 1.0e-2)
     end
   end
 
@@ -2503,7 +2503,7 @@ defmodule EXLA.DefnExprTest do
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
-      compare_tensors!(lhs, rhs, round: 1)
+      compare_tensors!(lhs, rhs)
     end
 
     test "works on a 4x4 matrix" do
@@ -2525,7 +2525,7 @@ defmodule EXLA.DefnExprTest do
           [3.2659863237109046, -1.4142135623730956, 1.5877132402714704, 3.1324910215354165]
         ])
 
-      compare_tensors!(lhs, rhs, round: 2)
+      compare_tensors!(lhs, rhs)
     end
 
     test "works on a 50x50 matrix" do
@@ -2533,7 +2533,7 @@ defmodule EXLA.DefnExprTest do
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
       lhs = cholesky(tensor)
       rhs = Nx.cholesky(tensor)
-      compare_tensors!(lhs, rhs, round: 2)
+      compare_tensors!(lhs, rhs, atol: 1.0e-5, rtol: 1.0e-2)
     end
   end
 
@@ -2574,31 +2574,13 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
-  # We need to round the floats because of imprecision between platforms
-  defp compare_tensors!(left, right, opts \\ [])
-
-  defp compare_tensors!(
-         %{type: {:f, size}, data: %{state: left_data} = lhs} = left,
-         %{data: %{state: right_data} = rhs} = right,
-         opts
-       ) do
-    round = opts[:round] || 5
-
-    left_data =
-      for <<x::float-size(size)-native <- left_data>>,
-        into: <<>>,
-        do: <<Float.round(x, round)::float-size(size)-native>>
-
-    right_data =
-      for <<x::float-size(size)-native <- right_data>>,
-        into: <<>>,
-        do: <<Float.round(x, round)::float-size(size)-native>>
-
-    assert %{left | data: %{lhs | state: left_data}} ==
-             %{right | data: %{rhs | state: right_data}}
-  end
-
-  defp compare_tensors!(left, right, _opts) do
-    assert left == right
+  defp compare_tensors!(left, right, opts \\ []) do
+    atol = opts[:atol] || 1.0e-7
+    rtol = opts[:rtol] || 1.0e-4
+    try do
+      assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
+    rescue
+      _ -> assert left == right # So we can see the diff
+    end
   end
 end
