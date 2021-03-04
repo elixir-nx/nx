@@ -146,6 +146,23 @@ defmodule Torchx.Backend do
     NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
   end
 
+  @impl true
+  def slice(out, %T{} = t, start_indices, lengths, _strides) do
+    ref = to_ref(t)
+
+    for dim <- 0..length(start_indices)-1, reduce: ref do
+      ref -> NIF.narrow(ref, dim, Enum.at(start_indices, dim), Enum.at(lengths, dim)) |> unwrap!()
+    end
+    |> to_tensor(out)
+  end
+
+  ## Aggregators
+
+  @impl true
+  def sum(out, %T{} = t, _opts) do
+    NIF.sum(to_ref(t)) |> from_ref(out)
+  end
+
   ## Ops
 
   binary_ops =
@@ -192,7 +209,7 @@ defmodule Torchx.Backend do
 
   unary_ops =
     Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
-      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :exp]
 
   # [:count_leading_zeros, :population_count]
 
@@ -288,11 +305,18 @@ defmodule Torchx.Backend do
     do: Nx.backend_transfer(tensor, TB) |> to_ref()
 
   # Update out tensor type here to mark the cases where our type policy mismatches with the libtorch's one.
-  defp to_tensor(ref, %T{type: type} = t) do
+  defp to_tensor(ref, %T{type: type, shape: shape} = t) do
     current_type = ref |> NIF.type() |> unwrap!() |> from_torch_type()
 
     if current_type != type do
       raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
+              "Please report this bug"
+    end
+
+    current_shape = ref |> NIF.shape() |> unwrap!()
+
+    if current_shape != shape do
+      raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{inspect(current_shape)}. " <>
               "Please report this bug"
     end
 

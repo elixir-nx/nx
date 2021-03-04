@@ -39,5 +39,4 @@ defmodule Torchx.NxDoctestTest do
         all_close?: 3,
         atan2: 2
       )
-      |> Kernel.++([:moduledoc])
 end

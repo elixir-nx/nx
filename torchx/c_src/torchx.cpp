@@ -133,6 +133,17 @@ NIF(type)
     return nx::nif::error(env, "Could not determine tensor type.");
 }
 
+NIF(shape)
+{
+  TENSOR_PARAM(0, t);
+
+  std::vector<ERL_NIF_TERM> sizes;
+  for (int dim = 0; dim < t->dim(); dim++ )
+    sizes.push_back(nx::nif::make(env, ((long)t->size(dim))));
+  
+  return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size())); \
+}
+
 NIF(device)
 {
   TENSOR_PARAM(0, t);
@@ -279,6 +290,16 @@ NIF(transpose)
   TENSOR(torch::transpose(*t, dim0, dim1));
 }
 
+NIF(narrow)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, dim);
+  PARAM(2, int64_t, start);
+  PARAM(3, int64_t, length);
+
+  TENSOR(torch::narrow(*t, dim, start, length).clone());
+}
+
 NIF(permute)
 {
   TENSOR_PARAM(0, t);
@@ -361,6 +382,7 @@ BINARY_OP(min)
 BINARY_OP(max)
 
 BINARY_OP(outer)
+UNARY_OP(sum)
 
 NIF(quotient)
 {
@@ -375,6 +397,7 @@ UNARY_OP(floor)
 UNARY_OP2(negate, negative)
 UNARY_OP(round)
 UNARY_OP(sign)
+UNARY_OP(exp)
 UNARY_OP(bitwise_not)
 
 
@@ -485,6 +508,7 @@ static ErlNifFunc nif_functions[] = {
     DF(broadcast_to, 2),
     DF(transpose, 3),
     DF(permute, 2),
+    DF(narrow, 4),
 
     DF(add, 2),
     DF(subtract, 2),
@@ -515,6 +539,7 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_xor, 2),
 
     DF(outer, 2),
+    DF(sum, 1),
 
     DF(abs, 1),
     DF(ceil, 1),
@@ -522,6 +547,7 @@ static ErlNifFunc nif_functions[] = {
     DF(negate, 1),
     DF(round, 1),
     DF(sign, 1),
+    DF(exp, 1),
     DF(bitwise_not, 1),
 
     DF(dot, 2),
@@ -532,6 +558,7 @@ static ErlNifFunc nif_functions[] = {
     DF(qr, 2),
 
     F(type, 1),
+    F(shape, 1),
     F(device, 1),
     F(nbytes, 1),
 };
