@@ -928,6 +928,17 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def lu({n, n}) do
+    {{n, n}, {n, n}, {n, n}}
+  end
+
+  def lu(shape),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have as many rows as columns, got shape: #{inspect(shape)}"
+      )
+
   defp validate_concat_names!(names) do
     :ok =
       names

@@ -1187,6 +1187,107 @@ defmodule Nx.BinaryBackend do
     {u, s, v}
   end
 
+  @impl true
+  def lu(
+        {%{type: p_type} = p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
+        %{type: input_type, shape: {n, n} = input_shape} = tensor,
+        opts \\ []
+      ) do
+    a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
+
+    eps = opts[:eps] || @default_eps
+
+    {p, a_prime} = lu_validate_and_pivot(a, n)
+
+    # We'll work with linear indices because of the way each matrix
+    # needs to be updated/accessed
+    zeros_matrix = List.duplicate(List.duplicate(0, n), n)
+
+    {l, u} =
+      for j <- 0..(n - 1), reduce: {zeros_matrix, zeros_matrix} do
+        {l, u} ->
+          i_range = if j == 0, do: [0], else: 0..j
+          [l_row_j] = get_matrix_rows(l, [j])
+          l = replace_rows(l, [j], [replace_vector_element(l_row_j, j, 1.0)])
+
+          u_col_j =
+            for i <- i_range,
+                reduce: get_matrix_column(u, j) do
+              u_col_j ->
+                l_row_slice = slice_matrix(l, [i, 0], [1, i])
+
+                u_col_slice = slice_vector(u_col_j, 0, i)
+
+                s = dot_matrix(l_row_slice, u_col_slice)
+                [a_elem] = get_matrix_elements(a_prime, [[i, j]])
+                replace_vector_element(u_col_j, i, a_elem - s)
+            end
+
+          u = replace_cols(u, [j], transpose_matrix(u_col_j))
+
+          [u_jj] = get_matrix_elements(u, [[j, j]])
+
+          l =
+            if u_jj < eps do
+              l
+            else
+              i_range = if j == n - 1, do: [n - 1], else: j..(n - 1)
+
+              for i <- i_range, reduce: l do
+                l ->
+                  u_col_slice = slice_matrix(u, [0, j], [j, 1])
+                  [l_row_i] = get_matrix_rows(l, [i])
+                  s = dot_matrix(u_col_slice, l_row_i)
+                  [a_elem] = get_matrix_elements(a_prime, [[i, j]])
+
+                  l_updated_row = replace_vector_element(l_row_i, j, (a_elem - s) / u_jj)
+
+                  replace_rows(l, [i], [l_updated_row])
+              end
+            end
+
+          {l, u}
+      end
+
+    # Transpose because since P is orthogonal, inv(P) = tranpose(P)
+    # and we want to return P such that A = P.L.U
+    p_bin = p |> transpose_matrix() |> matrix_to_binary(input_type)
+    l_bin = matrix_to_binary(l, l_type)
+    u_bin = matrix_to_binary(u, u_type)
+
+    {from_binary(p_holder, p_bin), from_binary(l_holder, l_bin), from_binary(u_holder, u_bin)}
+  end
+
+  defp lu_validate_and_pivot(a, n) do
+    # pivots a tensor so that the biggest elements of each column lie on the diagonal.
+    # if any of the diagonal elements ends up being 0, raises an ArgumentError
+
+    identity =
+      Enum.map(0..(n - 1), fn i -> Enum.map(0..(n - 1), fn j -> if i == j, do: 1, else: 0 end) end)
+
+    # For each row, find the max value by column.
+    # If its index (max_idx) is not in the diagonal (i.e. j != max_idx)
+    # we need to swap rows j and max_idx in both the permutation matrix
+    # and in the a matrix.
+    Enum.reduce(0..(n - 2), {identity, a}, fn j, {p, a} ->
+      [max_idx | _] =
+        Enum.sort_by(j..(n - 1), fn i -> a |> Enum.at(i) |> Enum.at(j) |> abs() end, &>=/2)
+
+      if max_idx == j do
+        {p, a}
+      else
+        p_row = Enum.at(p, max_idx)
+        p_j = Enum.at(p, j)
+        p = p |> List.replace_at(max_idx, p_j) |> List.replace_at(j, p_row)
+
+        a_row = Enum.at(a, max_idx)
+        a_j = Enum.at(a, j)
+        a = a |> List.replace_at(max_idx, a_j) |> List.replace_at(j, a_row)
+        {p, a}
+      end
+    end)
+  end
+
   defp svd_jacobi_rotation_round(u, d, v, {_, n}, eps) do
     for p <- 0..(n - 2), q <- (p + 1)..(n - 1), reduce: {u, d, v} do
       {u, d, v} ->
@@ -1333,7 +1434,8 @@ defmodule Nx.BinaryBackend do
     for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
       {ll, a, rr} ->
         # a[[col..m-1, col]] -> take `m - col` rows from the `col`-th column
-        a_col = a |> slice_matrix([col, col], [col - m, 1])
+        row_length = if m < col, do: 0, else: m - col
+        a_col = a |> slice_matrix([col, col], [row_length, 1])
 
         l = householder_reflector(a_col, m, eps)
 
@@ -2084,6 +2186,15 @@ defmodule Nx.BinaryBackend do
 
   ## Matrix (2-D array) manipulation
 
+  defp dot_matrix([], _), do: 0
+  defp dot_matrix(_, []), do: 0
+
+  defp dot_matrix([h1 | _] = v1, [h2 | _] = v2) when not is_list(h1) and not is_list(h2) do
+    v1
+    |> Enum.zip(v2)
+    |> Enum.reduce(0, fn {x, y}, acc -> x * y + acc end)
+  end
+
   defp dot_matrix(m1, m2) do
     # matrix multiplication which works on 2-D lists
     Enum.map(m1, fn row ->
@@ -2097,6 +2208,10 @@ defmodule Nx.BinaryBackend do
     end)
   end
 
+  defp transpose_matrix([x | _] = m) when not is_list(x) do
+    Enum.map(m, &[&1])
+  end
+
   defp transpose_matrix(m) do
     m
     |> Enum.zip()
@@ -2107,7 +2222,9 @@ defmodule Nx.BinaryBackend do
     m
     |> Enum.map(fn
       row when is_list(row) ->
-        Enum.map(row, fn x -> scalar_to_binary(x, type) end)
+        Enum.map(row, fn x ->
+          scalar_to_binary(x, type)
+        end)
 
       x ->
         scalar_to_binary(x, type)
@@ -2126,11 +2243,18 @@ defmodule Nx.BinaryBackend do
     end
   end
 
+  defp slice_vector(a, start, length), do: Enum.slice(a, start, length)
+
   defp slice_matrix(a, [row_start, col_start], [row_length, col_length]) do
     a
-    |> Enum.drop(row_start)
-    |> Enum.take(row_length)
-    |> Enum.flat_map(&Enum.slice(&1, col_start..(col_start + col_length - 1)))
+    |> Enum.slice(row_start, row_length)
+    |> Enum.flat_map(&Enum.slice(&1, col_start, col_length))
+  end
+
+  defp get_matrix_column(m, col) do
+    Enum.map(m, fn row ->
+      Enum.at(row, col)
+    end)
   end
 
   defp get_matrix_columns(m, columns) do
@@ -2146,7 +2270,7 @@ defmodule Nx.BinaryBackend do
   defp get_matrix_elements(m, row_col_pairs) do
     Enum.map(row_col_pairs, fn [row, col] ->
       m
-      |> Enum.at(row)
+      |> Enum.at(row, [])
       |> Enum.at(col)
       |> case do
         nil -> raise ArgumentError, "invalid index [#{row},#{col}] for matrix"
@@ -2169,4 +2293,6 @@ defmodule Nx.BinaryBackend do
     |> replace_rows(cols, transpose_matrix(values))
     |> transpose_matrix()
   end
+
+  defp replace_vector_element(m, row, value), do: List.replace_at(m, row, value)
 end
