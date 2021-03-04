@@ -2423,15 +2423,6 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "decompositions" do
-    defn lu(t), do: Nx.lu(t)
-
-    test "lu" do
-      assert {p, l, u} = lu(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
-      assert p == Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-      assert l == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-      assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
-    end
-
     defn qr(t), do: Nx.qr(t)
     defn qr_complete(t), do: Nx.qr(t, mode: :complete)
 

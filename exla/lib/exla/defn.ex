@@ -353,9 +353,8 @@ defmodule EXLA.Defn do
     EXLA.Op.select(pred, on_true, on_false)
   end
 
-  defp to_operator(:lu, [{_, _, _}, tensor, _opts], _ans, state) do
-    {p, l, u} = EXLA.Op.lu(tensor)
-    EXLA.Op.tuple(state.builder, [p, l, u])
+  defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do
+    raise ArgumentError, "XLA does not currently support the LU operation"
   end
 
   defp to_operator(:qr, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
