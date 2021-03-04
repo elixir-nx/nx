@@ -1,4 +1,5 @@
 #include <ATen/ATen.h>
+#include <torch/torch.h>
 #include <iostream>
 
 #include "nx_nif_utils.hpp"
