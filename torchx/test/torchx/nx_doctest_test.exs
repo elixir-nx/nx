@@ -39,7 +39,7 @@ defmodule Torchx.NxDoctestTest do
         all_close?: 3,
         atan2: 2,
         lu: 2,
-        sum: 2
+        bitcast: 2
       )
     |> Kernel.++([:moduledoc])
 end

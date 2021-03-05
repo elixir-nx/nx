@@ -1348,9 +1348,10 @@ defmodule Nx do
     {_, new_bits} = new_type = Nx.Type.normalize!(type)
 
     unless new_bits == bits do
-      raise ArgumentError, "input type width must match new type width," <>
-                           " got input type #{inspect(input_type)} and" <>
-                           " output type #{inspect(type)}"
+      raise ArgumentError,
+            "input type width must match new type width," <>
+              " got input type #{inspect(input_type)} and" <>
+              " output type #{inspect(type)}"
     end
 
     impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
@@ -4250,13 +4251,13 @@ defmodule Nx do
   Giving a tensor with low precision casts it to a higher
   precision to make sure the sum does not overflow:
 
-      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:u, 8}, names: [:x, :y]))
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:s, 8}, names: [:x, :y]))
       #Nx.Tensor<
-        u64
+        s64
         410
       >
 
-      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:s, 8}, names: [:x, :y]))
+      iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:s, 16}, names: [:x, :y]))
       #Nx.Tensor<
         s64
         410
