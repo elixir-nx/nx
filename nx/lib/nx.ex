@@ -1314,6 +1314,49 @@ defmodule Nx do
   end
 
   @doc """
+  Changes the type of a tensor, using a bitcast.
+
+  The width of input tensor's type must match the width
+  of the output type. `bitcast/1` does not change the
+  underlying tensor data, but instead changes how
+  the tensor data is viewed.
+
+  Machines with different floating-point representations
+  will give different results.
+
+  ## Examples
+
+      iex> t = Nx.bitcast(Nx.tensor([0, 0, 0], names: [:data], type: {:s, 32}), {:f, 32})
+      #Nx.Tensor<
+        f32[data: 3]
+        [0.0, 0.0, 0.0]
+      >
+      iex> Nx.bitcast(t, {:s, 32})
+      #Nx.Tensor<
+        s32[data: 3]
+        [0, 0, 0]
+      >
+
+  ### Error cases
+
+      iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: {:s, 16}), {:f, 32})
+      ** (ArgumentError) input type width must match new type width, got input type {:s, 16} and output type {:f, 32}
+  """
+  @doc type: :type
+  def bitcast(tensor, type) do
+    %T{type: {_, bits} = input_type} = tensor = tensor!(tensor)
+    {_, new_bits} = new_type = Nx.Type.normalize!(type)
+
+    unless new_bits == bits do
+      raise ArgumentError, "input type width must match new type width," <>
+                           " got input type #{inspect(input_type)} and" <>
+                           " output type #{inspect(type)}"
+    end
+
+    impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
+  end
+
+  @doc """
   Changes the shape of a tensor.
 
   The new shape is either a tuple or a tensor which we will

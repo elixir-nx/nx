@@ -1836,6 +1836,9 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def bitcast(out, tensor), do: from_binary(out, to_binary(tensor))
+
+  @impl true
   def sort(_out, t, opts) do
     %T{shape: shape, type: type} = t
     last_axis = Nx.rank(t) - 1

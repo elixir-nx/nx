@@ -363,6 +363,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def bitcast_convert_type(%Op{builder: builder, ref: operand}, dtype) do
+    ref = EXLA.NIF.bitcast_convert_type(operand, Shape.dtype_to_charlist(dtype)) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def clamp(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: min}, %Op{
         builder: builder,
         ref: max

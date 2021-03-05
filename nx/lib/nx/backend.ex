@@ -52,6 +52,7 @@ defmodule Nx.Backend do
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
 
   @callback as_type(out :: tensor, tensor) :: tensor
+  @callback bitcast(out :: tensor, tensor) :: tensor
   @callback reshape(out :: tensor, tensor, shape) :: tensor
   @callback squeeze(out :: tensor, tensor, axes) :: tensor
   @callback broadcast(out :: tensor, tensor, shape, axes) :: tensor
