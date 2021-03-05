@@ -1192,6 +1192,26 @@ ERL_NIF_TERM convert_element_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM bitcast_convert_type(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::PrimitiveType type;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get_primitive_type(env, argv[1], &type)) {
+    return exla::nif::error(env, "Unable to get type string.");
+  }
+
+  xla::XlaOp op = xla::BitcastConvertType(*operand, type);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM transpose(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2114,6 +2134,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reshape", 2, reshape},
   {"get_shape", 2, get_shape_op},
   {"convert_element_type", 2, convert_element_type},
+  {"bitcast_convert_type", 2, bitcast_convert_type},
   {"transpose", 2, transpose},
   // Other
   {"dot", 3, dot},

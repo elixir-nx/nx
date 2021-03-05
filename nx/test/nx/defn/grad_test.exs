@@ -1659,11 +1659,16 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  describe "as_type" do
+  describe "as_type/bitcast" do
     defn grad_as_type(t), do: grad(t, Nx.sum(Nx.as_type(t, {:f, 32})))
+    defn grad_bitcast(t), do: grad(t, Nx.sum(Nx.bitcast(t, {:f, 32})))
 
-    test "passes through" do
+    test "as_type passes through" do
       assert grad_as_type(Nx.tensor([1, 2, 3])) == Nx.tensor([1.0, 1.0, 1.0])
+    end
+
+    test "bitcast passes through" do
+      assert grad_bitcast(Nx.tensor([1, 2, 3], type: {:s, 32})) == Nx.tensor([1.0, 1.0, 1.0])
     end
   end
 
