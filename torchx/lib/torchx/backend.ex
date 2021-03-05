@@ -172,13 +172,20 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(out, %T{} = t, opts) do
+  def sum(%T{type: out_type} = out, %T{} = t, opts) do
+    check_out_type!(out_type, "(explicitly cast the input tensor to a signed integer before)")
+
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
-    dims = axes_to_dims(t, axes)
-
     NIF.sum(to_ref(t), axes, keep_axes) |> from_ref(out)
+  end
+
+  defp check_out_type!(type, hint) do
+    torch_type(type)
+  rescue
+    e in ArgumentError ->
+      raise "#{e.message} #{hint}"
   end
 
   defp axes_to_dims(%T{}, []), do: []

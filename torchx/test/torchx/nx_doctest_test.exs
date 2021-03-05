@@ -40,4 +40,5 @@ defmodule Torchx.NxDoctestTest do
         atan2: 2,
         lu: 2
       )
+    |> Kernel.++([:moduledoc])
 end
