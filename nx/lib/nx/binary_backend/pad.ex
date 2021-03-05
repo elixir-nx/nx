@@ -16,12 +16,12 @@ defmodule Nx.BinaryBackend.Pad do
 
   defp build_axis_ctx({lo, hi, mid} = cfg, axis, shape_in, shape_out, weights_in, weights_out) do
     if mid < 0 do
-      raise ArgumentError, "invalid padding config #{cfg} for axis #{axis}"
+      raise ArgumentError, "pad/3 cannot handle negative interior value" <>
+            " #{inspect(mid)} in padding config #{inspect(cfg)} at axis" <>
+            " #{axis}"
     end
     weight_out = Bits.weight_of_axis(weights_out, axis)
     weight_in = Bits.weight_of_axis(weights_in, axis)
-    
-    IO.inspect({weights_in, weights_out}, label: :weights)
     
     remove_lo = abs(min(0, lo))
     remove_hi = abs(min(0, hi))

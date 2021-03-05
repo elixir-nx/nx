@@ -84,7 +84,7 @@ defmodule Nx.BinaryBackend.Bits do
   @doc """
   Slices a bitstring from the start to the start + len according to the type.
   """
-  def slice(bin, {_, sizeof} = type, start, len) when is_integer(len) and len > 0 do
+  def slice(bin, {_, sizeof}, start, len) when is_integer(len) and len > 0 do
     bits_offset = start * sizeof
     sizeof_slice = len * sizeof
     <<_::size(bits_offset), sliced::size(sizeof_slice)-bitstring, _::bitstring>> = bin
@@ -94,7 +94,7 @@ defmodule Nx.BinaryBackend.Bits do
   @doc """
   Zips and reduces the data of the two tensors
   """
-  def zip_reduce(bits_acc, type_out, shape1, type1, data1, [], shape2, type2, data2, [], acc, fun) do
+  def zip_reduce(bits_acc, type_out, _shape1, type1, data1, [], _shape2, type2, data2, [], acc, fun) do
     match_types [type1, type2] do
       for <<match!(bits_n1, 0) <- data1>>, <<match!(bits_n2, 1) <- data2>>, into: bits_acc do
         result = fun.(read!(bits_n1, 0), read!(bits_n2, 1), acc)
@@ -103,17 +103,10 @@ defmodule Nx.BinaryBackend.Bits do
     end
   end
 
-
   def zip_reduce(bits_acc, type_out, shape1, type1, data1, [_ | _] = axes1, shape2, type2, data2, [_ | _] = axes2, init_acc, fun) do
-    {_, sizeof1} = type1
-    {_, sizeof2} = type2
-
     weights1 = Nx.Shape.weights(shape1)
     weights2 = Nx.Shape.weights(shape2)
 
-    rank1 = Nx.Shape.rank(shape1)
-    rank2 = Nx.Shape.rank(shape2)
-    
     tagged_dims1 = tagged_dims(shape1, axes1)
     tagged_dims2 = tagged_dims(shape2, axes2)
 
@@ -185,7 +178,7 @@ defmodule Nx.BinaryBackend.Bits do
         <<_::size(offset1), match!(bits_n1, 0), _::bitstring>> = data1
         <<_::size(offset2), match!(bits_n2, 1), _::bitstring>> = data2
         n1 = read!(bits_n1, 0)
-        n2 = read!(bits_n2, 0)
+        n2 = read!(bits_n2, 1)
         fun.(n1, n2, acc)
       end
     traverse_reduce(bits_acc, type_out, type1, data1, rest1, type2, data2, rest2, acc2, fun)
@@ -199,7 +192,7 @@ defmodule Nx.BinaryBackend.Bits do
     elem(weights, axis)
   end
 
-  def map_i_to_axis({size, ws} = weights, axis, i) do
+  def map_i_to_axis({size, ws}, axis, i) do
     rem(i * elem(ws, axis), size)
   end
 end

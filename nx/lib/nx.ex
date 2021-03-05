@@ -1767,10 +1767,6 @@ defmodule Nx do
 
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
-    if is_scalar?(tensor) do
-      raise ArgumentError, "input tensor cannot be a scalar due to" <>
-            " lack of dimensions, got #{inspect(tensor)}"
-    end
 
     if not is_scalar?(pad_value) do
       raise ArgumentError, "padding value must be a scalar"
@@ -1780,9 +1776,13 @@ defmodule Nx do
 
     tensor = tensor!(tensor, output_type)
 
-    pad_value = tensor!(pad_value, output_type)  
+    pad_value = tensor!(pad_value, output_type)
 
-    # NOTE: ensures padding_config is correct length for well-formatted
+    if pad_value.shape != {} do
+      raise ArgumentError, "padding value must be a scalar"
+    end
+
+    # NOTE: ensures padding_config is correct length and well-formatted
     shape = Nx.Shape.pad(tensor.shape, padding_config)
 
     out = %{tensor | type: output_type, shape: shape}

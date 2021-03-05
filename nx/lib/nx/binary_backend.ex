@@ -253,120 +253,14 @@ defmodule Nx.BinaryBackend do
 
   ## Pad
 
-  # We ignore the out because we need to recur over the shape
-  # as we transpose and build the rest.
   @impl true
   def pad(_out, %Nx.Tensor{shape: {}} = t, _pad_value, _padding_config) do
     t
   end
 
-  def pad(out, %Nx.Tensor{type: type} = t, %Nx.Tensor{} = pad_value, padding_config) do
+  def pad(out, t, pad_value, padding_config) do
     data_out = Nx.BinaryBackend.Pad.run(t, pad_value, padding_config)
     from_binary(out, data_out)
-  end
-
-
-  defp pad_edge(acc, w, n) do
-    case n do
-      0 -> acc
-      n when n > 0 -> [{:pad, n * w} | acc]
-      n when n < 0 -> [{:remove, -1 * n * w} | acc]
-    end
-  end
-  
-  defp pad_inner(acc, w, n) do
-    case n do
-      0 -> acc
-      n when n > 0 -> [{:inner, n * w} | acc]
-    end
-  end
-
-  defp pad_axis(acc, axis) do
-    [{:axis, axis} | acc]
-  end
-
-  # Add padding to the high and low ends of the last dimension of a tensor
-  defp pad_last_dim(
-         %T{shape: shape, type: {_, size} = type} = t,
-         value,
-         edge_low,
-         edge_high,
-         interior
-       ) do
-    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
-    new_shape = pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high, interior)
-
-    {edge_low_padding, edge_high_padding, interior_padding} =
-      match_types [type] do
-        edge_high_padding =
-          if edge_high <= 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_high, into: <<>>, do: <<write!(value, 0)>>)
-
-        edge_low_padding =
-          if edge_low <= 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
-
-        interior_padding =
-          if interior == 0,
-            do: <<>>,
-            else: for(_ <- 1..interior, into: <<>>, do: <<write!(value, 0)>>)
-
-        {edge_low_padding, edge_high_padding, interior_padding}
-      end
-
-    interior_padding_size = interior * size
-
-    interior_padded =
-      for bin <- view do
-        padded =
-          for <<dim::size(size)-bitstring <- bin>>, into: <<>> do
-            <<dim::size(size)-bitstring, interior_padding::bitstring>>
-          end
-
-        new_bytes = byte_size(padded) * 8 - interior_padding_size
-        <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = padded
-        new_bin
-      end
-
-    data =
-      for bin <- interior_padded, into: <<>> do
-        cond do
-          edge_low < 0 and edge_high < 0 ->
-            low_byte = abs(edge_low) * size
-            high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * 8 - high_byte - low_byte
-
-            <<_::size(low_byte)-bitstring, new_bin::size(new_bytes)-bitstring, _::bitstring>> =
-              bin
-
-            new_bin
-
-          edge_low < 0 and edge_high >= 0 ->
-            low_byte = abs(edge_low) * size
-            <<_::size(low_byte)-bitstring, new_bin::bitstring>> = bin
-            <<new_bin::bitstring, edge_high_padding::bitstring>>
-
-          edge_low >= 0 and edge_high < 0 ->
-            high_byte = abs(edge_high) * size
-            new_bytes = byte_size(bin) * 8 - high_byte
-            <<new_bin::size(new_bytes)-bitstring, _::bitstring>> = bin
-            <<edge_low_padding::bitstring, new_bin::bitstring>>
-
-          true ->
-            <<edge_low_padding::bitstring, bin::bitstring, edge_high_padding::bitstring>>
-        end
-      end
-
-    from_binary(%{t | type: type, shape: new_shape}, data)
-  end
-
-  defp pad_in_dim(shape, dim, edge_low, edge_high, interior) do
-    dim_size = elem(shape, dim)
-    interior_padding_factor = (dim_size - 1) * interior
-    new_dim = dim_size + interior_padding_factor + edge_high + edge_low
-    put_elem(shape, dim, new_dim)
   end
 
   @impl true
@@ -517,28 +411,27 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data_out)
   end
 
-  defp dot_batch(acc, type_out, offset1, offset2, {outer_d1, inner_d} = shape1, type1, data1, {inner_d, outer_d2} = shape2, type2, data2) do
+  # defp dot_batch(acc, type_out, offset1, offset2, {outer_d1, inner_d} = shape1, type1, data1, {inner_d, outer_d2} = shape2, type2, data2) do
 
-    for outer_i1 <- range(outer_d1), reduce: acc do
-      acc ->
-        for outer_i2 <- range(outer_d2), reduce: acc do
-          acc ->
-            inner_total =
-              for inner_i <- range(inner_d), reduce: 0 do
-                inner_acc ->
-                  i1 = offset1 + Nx.Shape.coords_to_i(shape1, {outer_i1, inner_i})
-                  i2 = offset2 + Nx.Shape.coords_to_i(shape2, {inner_i, outer_i2})
-                  n1 = Bits.number_at(data1, type1, i1)
-                  n2 = Bits.number_at(data2, type2, i2)
-                  inner_acc + n1 * n2
-              end
-          acc <> Bits.from_number(inner_total, type_out)
-        end
-    end
-  end
+  #   for outer_i1 <- range(outer_d1), reduce: acc do
+  #     acc ->
+  #       for outer_i2 <- range(outer_d2), reduce: acc do
+  #         acc ->
+  #           inner_total =
+  #             for inner_i <- range(inner_d), reduce: 0 do
+  #               inner_acc ->
+  #                 i1 = offset1 + Nx.Shape.coords_to_i(shape1, {outer_i1, inner_i})
+  #                 i2 = offset2 + Nx.Shape.coords_to_i(shape2, {inner_i, outer_i2})
+  #                 n1 = Bits.number_at(data1, type1, i1)
+  #                 n2 = Bits.number_at(data2, type2, i2)
+  #                 inner_acc + n1 * n2
+  #             end
+  #         acc <> Bits.from_number(inner_total, type_out)
+  #       end
+  #   end
+  # end
 
   defp dot4(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
-    ref = make_ref()
     bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) *  binary_to_number(rhs, t2) + acc
       {res, res}
