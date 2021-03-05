@@ -1767,11 +1767,6 @@ defmodule Nx do
 
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
-
-    if not is_scalar?(pad_value) do
-      raise ArgumentError, "padding value must be a scalar"
-    end
-
     output_type = binary_type(tensor, pad_value)
 
     tensor = tensor!(tensor, output_type)
@@ -6922,8 +6917,4 @@ defmodule Nx do
       end
     end
   end
-
-  defp is_scalar?(n) when is_number(n), do: true
-  defp is_scalar?(%Nx.Tensor{shape: shape}), do: shape == {}
-
 end

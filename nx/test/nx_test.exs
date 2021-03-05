@@ -343,6 +343,7 @@ defmodule NxTest do
       assert out2 == expected
     end
   end
+
   describe "reverse" do
     test "works on all dims" do
       assert Nx.reverse(Nx.iota({10})) == Nx.tensor([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
