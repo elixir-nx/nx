@@ -441,6 +441,10 @@ defmodule EXLA.Defn do
     to_type(arg, type)
   end
 
+  defp to_operator(:bitcast, [arg], %{type: type}, _state) do
+    to_type(arg, type, :bitcast)
+  end
+
   ## to_operator reduction
 
   defp to_operator(:all?, [arg, opts], _ans, state) do
@@ -867,8 +871,14 @@ defmodule EXLA.Defn do
   defp op_type(op), do: EXLA.Op.get_shape(op).dtype
   defp op_shape(op), do: EXLA.Op.get_shape(op).dims
 
-  defp to_type(op, type) do
-    if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
+  defp to_type(op, type, cast \\ :convert) do
+    fun =
+      case cast do
+        :convert -> &EXLA.Op.convert_element_type(&1, type)
+        :bitcast -> &EXLA.Op.bitcast_convert_type(&1, type)
+      end
+
+    if op_type(op) == type, do: op, else: fun.(op)
   end
 
   defp to_constant(builder, constant, type) do

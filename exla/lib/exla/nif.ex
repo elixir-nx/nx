@@ -133,6 +133,9 @@ defmodule EXLA.NIF do
   def convert_element_type(_operand, _type),
     do: :erlang.nif_error(:undef)
 
+  def bitcast_convert_type(_operand, _type),
+    do: :erlang.nif_error(:undef)
+
   def clamp(_operand, _min, _max),
     do: :erlang.nif_error(:undef)
 

@@ -312,6 +312,10 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:bitcast, [x], _ans, g, cache) do
+    to_grad(x, g, cache)
+  end
+
   defp grad(:sum, [x, opts], _ans, g, cache) do
     grad_reduce(x, opts, g, cache, & &1)
   end
