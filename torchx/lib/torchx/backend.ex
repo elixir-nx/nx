@@ -12,24 +12,26 @@ defmodule Torchx.Backend do
 
   ## Type conversion
 
-  defp torch_type({:u, 8}), do: :byte
-  defp torch_type({:s, 8}), do: :char
-  defp torch_type({:s, 16}), do: :short
-  defp torch_type({:s, 32}), do: :int
-  defp torch_type({:s, 64}), do: :long
-  defp torch_type({:bf, 16}), do: :brain
-  defp torch_type({:f, 16}), do: :half
-  defp torch_type({:f, 32}), do: :float
-  defp torch_type({:f, 64}), do: :double
+  defp torch_type(nx_type, hint \\ "")
 
-  defp torch_type({:u, 16}),
-    do: raise(ArgumentError, "Torchx does not support unsigned 16 bit integer")
+  defp torch_type({:u, 8}, _), do: :byte
+  defp torch_type({:s, 8}, _), do: :char
+  defp torch_type({:s, 16}, _), do: :short
+  defp torch_type({:s, 32}, _), do: :int
+  defp torch_type({:s, 64}, _), do: :long
+  defp torch_type({:bf, 16}, _), do: :brain
+  defp torch_type({:f, 16}, _), do: :half
+  defp torch_type({:f, 32}, _), do: :float
+  defp torch_type({:f, 64}, _), do: :double
 
-  defp torch_type({:u, 32}),
-    do: raise(ArgumentError, "Torchx does not support unsigned 32 bit integer")
+  defp torch_type({:u, size}, hint) when size in [16, 32, 64], do: raise_unsupported(size, hint)
 
-  defp torch_type({:u, 64}),
-    do: raise(ArgumentError, "Torchx does not support unsigned 64 bit integer")
+  defp raise_unsupported(size, hint \\ ""),
+    do:
+      raise(
+        ArgumentError,
+        "Torchx does not support unsigned #{size} bit integer #{hint}" |> String.trim()
+      )
 
   defp from_torch_type(:char), do: {:s, 8}
   defp from_torch_type(:byte), do: {:u, 8}
@@ -150,6 +152,64 @@ defmodule Torchx.Backend do
     NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
   end
 
+  @impl true
+  def slice(%T{shape: shape} = out, %T{} = t, start_indices, lengths, strides) do
+    t
+    |> to_ref()
+    |> narrow(start_indices, lengths, 0, shape)
+    |> stride(shape, lengths, strides)
+    |> to_tensor(out)
+  end
+
+  defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
+    dim = elem(shape, axis)
+
+    # Nothing to narrow
+    if start == 0 and length == dim do
+      narrow(ref, starts, lengths, axis + 1, shape)
+    else
+      ref
+      |> NIF.narrow(axis, start, length)
+      |> unwrap!()
+      |> narrow(starts, lengths, axis + 1, shape)
+    end
+  end
+
+  defp narrow(ref, [], [], _axis, _shape), do: ref
+
+  defp stride(ref, shape, lengths, strides) do
+    if Enum.all?(strides, &(&1 == 1)) do
+      ref
+    else
+      ref
+      |> NIF.as_strided(shape, steps_to_strides(lengths, strides), 0)
+      |> unwrap!()
+    end
+  end
+
+  def steps_to_strides(shape, steps) do
+    for {dim, step} <- Enum.zip(shape, steps) |> Enum.reverse(), reduce: {1, []} do
+      {offset, strides} -> {offset * dim, [offset * step | strides]}
+    end
+    |> elem(1)
+  end
+
+  ## Aggregators
+
+  @impl true
+  def sum(%T{type: out_type} = out, %T{} = t, opts) do
+    check_type!(out_type)
+
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    NIF.sum(to_ref(t), axes, keep_axes) |> from_ref(out)
+  end
+
+  defp check_type!(type),
+    do:
+      torch_type(type, "(explicitly cast the input tensor to a signed integer before taking sum)")
+
   ## Ops
 
   binary_ops =
@@ -169,10 +229,10 @@ defmodule Torchx.Backend do
   defp maybe_cast_u8(%T{type: {t, _}} = left, %T{type: {t, _}} = right), do: {left, right}
 
   defp maybe_cast_u8(%T{type: {:u, 8}} = left, %T{} = right),
-       do: {Nx.as_type(left, {:s, 16}), right}
+    do: {Nx.as_type(left, {:s, 16}), right}
 
   defp maybe_cast_u8(%T{} = left, %T{type: {:u, 8}} = right),
-       do: {left, Nx.as_type(right, {:s, 16})}
+    do: {left, Nx.as_type(right, {:s, 16})}
 
   defp maybe_cast_u8(left, right), do: {left, right}
 
@@ -195,7 +255,7 @@ defmodule Torchx.Backend do
 
   unary_ops =
     Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
-      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :exp]
 
   # [:count_leading_zeros, :population_count]
 
@@ -236,7 +296,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
-
     limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
 
     result =
@@ -290,16 +349,32 @@ defmodule Torchx.Backend do
   defp to_ref(%T{} = tensor),
     do: Nx.backend_transfer(tensor, TB) |> to_ref()
 
-  # Update out tensor type here to mark the cases where our type policy mismatches with the libtorch's one.
-  defp to_tensor(ref, %T{type: type} = t) do
-    current_type = ref |> NIF.type() |> unwrap!() |> from_torch_type()
+  defp to_tensor(ref, %T{type: type, shape: shape} = t) do
+    %{t | data: %__MODULE__{ref: check_shape_and_type!(ref, shape, type)}}
+  end
 
-    if current_type != type do
-      raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
-              "Please report this bug"
+  if Application.get_env(:torchx, :check_shape_and_type, false) do
+    defp check_shape_and_type!(ref, shape, type) do
+      current_type = ref |> NIF.type() |> unwrap!() |> from_torch_type()
+
+      if current_type != type do
+        raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
+                "Please report this bug"
+      end
+
+      current_shape = ref |> NIF.shape() |> unwrap!()
+
+      if current_shape != shape do
+        raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{
+                inspect(current_shape)
+              }. " <>
+                "Please report this bug"
+      end
+
+      ref
     end
-
-    %{t | data: %__MODULE__{ref: ref}}
+  else
+    defp check_shape_and_type!(ref, _, _), do: ref
   end
 
   defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()

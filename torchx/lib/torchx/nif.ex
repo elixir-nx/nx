@@ -48,9 +48,13 @@ defmodule Torchx.NIF do
   dnif transpose(tensor, dim0, dim1)
   dnif permute(tensor, dims)
   dnif split(tensor, split_size)
+  dnif narrow(tensor, dim, start, length)
+  dnif as_strided(tensor, size, strides, offset)
 
   dnif ones(shape)
   dnif eye(size, type)
+
+  dnif sum(tensor, axes, keep_axes)
 
   dnif add(tensorA, tensorB)
   dnif subtract(tensorA, tensorB)
@@ -82,7 +86,7 @@ defmodule Torchx.NIF do
 
   dnif outer(tensorA, tensorB)
 
-  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros, :population_count]
+  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros, :population_count, :exp]
 
   for op <- @unary_ops do
     def unquote(op)(_tensor), do: :erlang.nif_error(:undef)
@@ -99,6 +103,8 @@ defmodule Torchx.NIF do
   dnif qr(tensor, reduced)
 
   def type(_tensor), do: :erlang.nif_error(:undef)
+  def shape(_tensor), do: :erlang.nif_error(:undef)
+  def strides(_tensor), do: :erlang.nif_error(:undef)
   def device(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
 end
