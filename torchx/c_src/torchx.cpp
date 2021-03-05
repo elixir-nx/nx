@@ -141,7 +141,18 @@ NIF(shape)
   for (int dim = 0; dim < t->dim(); dim++ )
     sizes.push_back(nx::nif::make(env, ((long)t->size(dim))));
   
-  return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size())); \
+  return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
+}
+
+NIF(strides)
+{
+  TENSOR_PARAM(0, t);
+
+  std::vector<ERL_NIF_TERM> strides;
+  for (int dim = 0; dim < t->dim(); dim++ )
+    strides.push_back(nx::nif::make(env, ((long)t->stride(dim))));
+  
+  return nx::nif::ok(env, enif_make_tuple_from_array(env, strides.data(), strides.size()));
 }
 
 NIF(device)
@@ -303,7 +314,7 @@ NIF(narrow)
 NIF(as_strided)
 {
   TENSOR_PARAM(0, t);
-  LIST_PARAM(1, std::vector<int64_t>, size);
+  SHAPE_PARAM(1, size);
   LIST_PARAM(2, std::vector<int64_t>, strides);
   PARAM(3, int64_t, offset);
 
@@ -578,6 +589,7 @@ static ErlNifFunc nif_functions[] = {
 
     F(type, 1),
     F(shape, 1),
+    F(strides, 1),
     F(device, 1),
     F(nbytes, 1),
 };

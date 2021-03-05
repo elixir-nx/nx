@@ -147,16 +147,22 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def slice(out, %T{} = t, start_indices, lengths, strides) do
-    IO.inspect(strides)
+  def slice(%T{shape: shape} = out, %T{} = t, start_indices, lengths, strides) do
     ref = to_ref(t)
 
-    for dim <- 0..length(start_indices)-1, reduce: ref do
+    for dim <- 0..(length(start_indices) - 1), reduce: ref do
       ref -> NIF.narrow(ref, dim, Enum.at(start_indices, dim), Enum.at(lengths, dim)) |> unwrap!()
     end
-    # |> NIF.as_strided(lengths, strides, 0)
-    # |> unwrap!()
+    |> NIF.as_strided(shape, steps_to_strides(lengths, strides), 0)
+    |> unwrap!()
     |> to_tensor(out)
+  end
+
+  def steps_to_strides(shape, steps) do
+    for {dim, step} <- Enum.zip(Enum.reverse(shape), Enum.reverse(steps)), reduce: {1, []} do
+      {offset, strides} -> {offset * dim, [offset * step | strides]}
+    end
+    |> elem(1)
   end
 
   ## Aggregators
@@ -172,10 +178,10 @@ defmodule Torchx.Backend do
   end
 
   defp axes_to_dims(%T{}, []), do: []
-  defp axes_to_dims(%T{}, [axe | _ ] = axes) when is_integer(axe), do: axes
-  defp axes_to_dims(%T{names: names}, [axe | _ ] = axes) when is_atom(axe), do:
-    Enum.map(axes, &Nx.Shape.find_name!(names, &1))
+  defp axes_to_dims(%T{}, [axe | _] = axes) when is_integer(axe), do: axes
 
+  defp axes_to_dims(%T{names: names}, [axe | _] = axes) when is_atom(axe),
+    do: Enum.map(axes, &Nx.Shape.find_name!(names, &1))
 
   ## Ops
 
@@ -196,13 +202,12 @@ defmodule Torchx.Backend do
   defp maybe_cast_u8(%T{type: {t, _}} = left, %T{type: {t, _}} = right), do: {left, right}
 
   defp maybe_cast_u8(%T{type: {:u, 8}} = left, %T{} = right),
-       do: {Nx.as_type(left, {:s, 16}), right}
+    do: {Nx.as_type(left, {:s, 16}), right}
 
   defp maybe_cast_u8(%T{} = left, %T{type: {:u, 8}} = right),
-       do: {left, Nx.as_type(right, {:s, 16})}
+    do: {left, Nx.as_type(right, {:s, 16})}
 
   defp maybe_cast_u8(left, right), do: {left, right}
-
 
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
@@ -264,7 +269,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
-
     limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
 
     result =
@@ -330,11 +334,11 @@ defmodule Torchx.Backend do
     current_shape = ref |> NIF.shape() |> unwrap!()
 
     if current_shape != shape do
-      # raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{inspect(current_shape)}. " <>
-      #         "Please report this bug"
+      raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{inspect(current_shape)}. " <>
+              "Please report this bug"
     end
 
-    %{t | data: %__MODULE__{ref: ref}, shape: current_shape}
+    %{t | data: %__MODULE__{ref: ref}}
   end
 
   defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
