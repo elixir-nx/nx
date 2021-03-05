@@ -1,4 +1,6 @@
 defmodule Torchx.NIF.Macro do
+  @moduledoc false
+
   defmacro dnif(call) do
     {name, args} = Macro.decompose_call(call)
     name_io = :"#{name}_io"
@@ -10,10 +12,9 @@ defmodule Torchx.NIF.Macro do
     end
   end
 
-  defp underscore_args(args),
-    do:
-      args
-      |> Enum.map(fn {name, meta, args_list} -> {:"_#{name}", meta, args_list} end)
+  defp underscore_args(args) do
+    Enum.map(args, fn {name, meta, args_list} -> {:"_#{name}", meta, args_list} end)
+  end
 end
 
 defmodule Torchx.NIF do
