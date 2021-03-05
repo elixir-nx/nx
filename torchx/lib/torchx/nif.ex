@@ -28,7 +28,7 @@ defmodule Torchx.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  dnif randint(min, max, strides, type)
+  dnif randint(min, max, shape, type)
   dnif rand(min, max, shape, type)
 
   dnif scalar_tensor(scalar, type)

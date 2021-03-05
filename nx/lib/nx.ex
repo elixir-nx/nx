@@ -4208,7 +4208,7 @@ defmodule Nx do
   precision to make sure the sum does not overflow:
 
       iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:u, 8}, names: [:x, :y]))
-      ** (RuntimeError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before)
+      ** (RuntimeError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
 
       iex> Nx.sum(Nx.tensor([[101, 102], [103, 104]], type: {:s, 8}, names: [:x, :y]))
       #Nx.Tensor<

@@ -188,12 +188,6 @@ defmodule Torchx.Backend do
       raise "#{e.message} #{hint}"
   end
 
-  defp axes_to_dims(%T{}, []), do: []
-  defp axes_to_dims(%T{}, [axe | _] = axes) when is_integer(axe), do: axes
-
-  defp axes_to_dims(%T{names: names}, [axe | _] = axes) when is_atom(axe),
-    do: Enum.map(axes, &Nx.Shape.find_name!(names, &1))
-
   ## Ops
 
   binary_ops =
