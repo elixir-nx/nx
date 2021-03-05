@@ -18,7 +18,6 @@ defmodule Nx.BinaryBackend.Bits do
       <<252, 169, 241, 210, 77, 98, 80, 63>>
   """
   def from_number(number, type) do
-    IO.inspect({number, type}, label: :from_number)
     match_types([type], do: <<write!(number, 0)>>)
   end
 
@@ -121,42 +120,7 @@ defmodule Nx.BinaryBackend.Bits do
     indices1 = tagged_dims_to_indices(tagged_dims1, weights1, 0)
     indices2 = tagged_dims_to_indices(tagged_dims2, weights2, 0)
 
-    IO.inspect(indices1, label: :indices1)
-    IO.inspect(indices2, label: :indices2)
-
     traverse_reduce(bits_acc, type_out,  type1, data1, indices1, type2, data2, indices2, init_acc, fun)
-    
-          # cond do
-          #   is_list(i1) && is_list(i2) ->
-          #   offset1 = i1 * sizeof1
-          #   <<_::size(offset1), match!(bits_n1, 0), _::bitstring>> = data1
-          #   n1 = read!(bits_n1, 0)
-          
-          # {bits_acc3, _} =
-          #   for di1 <- 0..(dim1 - 1), reduce: {bits_acc1, init_acc} do
-          #     {bits_acc2, acc1} ->
-
-               
-
-          #       for di2 <- 0..(dim2 - 1), reduce: {bits_acc2, acc1} do
-          #         {bits_acc3, acc2} ->
-
-          #           i2 = map_i_to_axis(weights2, axis2, di2)
-                  
-          #           # IO.inspect(binding(), label: :before_slice)
-          #           offset2 = i2 * sizeof2
-          #           <<_::size(offset2), match!(bits_n2, 1), _::bitstring>> = data2
-                  
-          #           n2 = read!(bits_n2, 1)
-
-          #           {result, acc2} = fun.(n1, n2, acc2)
-          #           IO.inspect([n1: n1, n2: n2, result: result, acc2: acc2], label: :n1_and_n2)
-          #           {bits_acc3 <> from_number(result, type_out), acc2}
-          #       end
-          #   end
-          # bits_acc3
-      # end
-    # end
   end
 
   defp tagged_dims(shape, axes) do
@@ -228,7 +192,6 @@ defmodule Nx.BinaryBackend.Bits do
   end
 
   defp traverse_reduce(bits_acc, type_out, _type1, _data1, [], _type2, _data2, [], acc, _fun) do
-    IO.puts("acc was #{acc}")
     bits_acc <> from_number(acc, type_out)
   end
 

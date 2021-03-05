@@ -47,7 +47,6 @@ defmodule Nx.BinaryBackendTest do
         [20, 22]
       ])
 
-      # IO.inspect([t1: t1, t2: t2], label: :t1_and_t2)
       out1 = Nx.iota({2, 2, 2})
       out2 = BinaryBackend.dot(out1, t1, [2], [0], t2, [1], [0])
       expected = Nx.tensor([
@@ -83,7 +82,6 @@ defmodule Nx.BinaryBackendTest do
           [20, 22]
         ]
       ])
-      IO.inspect([t1: t1, t2: t2])
 
       out1 = Nx.iota({2, 2, 2})
       out2 = BinaryBackend.dot(out1, t1, [1], [], t2, [1], [0])

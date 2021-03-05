@@ -1768,9 +1768,11 @@ defmodule Nx do
   """
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
     tensor = tensor!(tensor)
-    pad_value = tensor!(pad_value)
-
     output_type = binary_type(tensor, pad_value)
+    
+    pad_value = tensor!(pad_value, output_type)
+
+    
 
     if pad_value.shape != {} do
       raise ArgumentError, "padding value must be a scalar"
@@ -1779,6 +1781,7 @@ defmodule Nx do
     shape = Nx.Shape.pad(tensor.shape, padding_config)
 
     out = %{tensor | type: output_type, shape: shape}
+
     impl!(tensor).pad(out, tensor, pad_value, padding_config)
   end
 
@@ -6880,11 +6883,16 @@ defmodule Nx do
 
   ## Helpers
 
-  defp tensor!(%T{} = t),
-    do: t
+  defp tensor!(%T{} = t), do: t
 
   defp tensor!(number) when is_number(number) do
     type = Nx.Type.infer(number)
+    tensor!(number, type)
+  end
+
+  defp tensor!(%T{} = t, _), do: t
+
+  defp tensor!(number, type) when is_number(number) do
     out = %T{shape: {}, type: type, names: []}
     Nx.BinaryBackend.from_binary(out, number_to_binary(number, type), [])
   end

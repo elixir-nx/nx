@@ -256,60 +256,34 @@ defmodule Nx.BinaryBackend do
   # We ignore the out because we need to recur over the shape
   # as we transpose and build the rest.
   @impl true
-  def pad(_out, t, pad_value, padding_config) do
-    pad_value = to_scalar(pad_value)
-
-    case t.shape do
-      {} ->
-        t
-
-      {_} ->
-        [{edge_low, edge_high, interior}] = padding_config
-        pad_last_dim(t, pad_value, edge_low, edge_high, interior)
-
-      _ ->
-        permutation = for i <- 0..(Nx.rank(t) - 2), do: i
-        permutation = [Nx.rank(t) - 1 | permutation]
-
-        for {edge_low, edge_high, interior} <- Enum.reverse(padding_config), reduce: t do
-          acc ->
-            Nx.transpose(pad_last_dim(acc, pad_value, edge_low, edge_high, interior),
-              axes: permutation
-            )
-        end
-    end
-  end
-
-  def pad2(_out, %{shape: {}} = t, _pad_value, []) do
+  def pad(_out, %Nx.Tensor{shape: {}} = t, _pad_value, _padding_config) do
     t
   end
 
-  def pad2(_out, t, pad_value, padding_config) do
-    %{type: type, shape: shape} = t
-    data = to_binary(t)
-    
-    p =
-      pad_value
-      |> to_scalar()
-      |> Bits.from_number({})
-    
-    weights = Nx.Shape.weights(shape)
-    pad2("", p, padding_config, shape, type, weights, data, 0)
-  end
-  
-  defp pad2(acc, [], axis, _, _, _, _, _) do
-    acc
-  end
-  
-  defp pad2(acc, [{lo_pad, hi_pad, inner_pad} | cfg_rest], axis, p, shape, type, weights, data) do
-    
+  def pad(out, %Nx.Tensor{type: type} = t, %Nx.Tensor{} = pad_value, padding_config) do
+    data_out = Nx.BinaryBackend.Pad.run(t, pad_value, padding_config)
+    from_binary(out, data_out)
   end
 
-  defp count_padding
+
+  defp pad_edge(acc, w, n) do
+    case n do
+      0 -> acc
+      n when n > 0 -> [{:pad, n * w} | acc]
+      n when n < 0 -> [{:remove, -1 * n * w} | acc]
+    end
+  end
   
+  defp pad_inner(acc, w, n) do
+    case n do
+      0 -> acc
+      n when n > 0 -> [{:inner, n * w} | acc]
+    end
+  end
 
-
-
+  defp pad_axis(acc, axis) do
+    [{:axis, axis} | acc]
+  end
 
   # Add padding to the high and low ends of the last dimension of a tensor
   defp pad_last_dim(
@@ -566,11 +540,7 @@ defmodule Nx.BinaryBackend do
   defp dot4(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
     ref = make_ref()
     bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
-      n1 = binary_to_number(lhs, t1)
-      n2 = binary_to_number(rhs, t2)
-      prod = n1 * n2
-      IO.puts("dot4 acc: #{inspect(acc)} --> #{inspect(prod)} = #{inspect(n1)} * #{inspect(n2)} -- #{inspect(ref)}")
-      res = prod + acc
+      res = binary_to_number(lhs, t1) *  binary_to_number(rhs, t2) + acc
       {res, res}
     end)
   end
@@ -1589,13 +1559,10 @@ defmodule Nx.BinaryBackend do
   end
 
   def bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
-    # IO.inspect({axes1, axes2}, label: :hello?)
     {_, s1} = t1.type
     {_, s2} = t2.type
-    IO.puts("TENSOR1 = axes: #{inspect(axes1)}, shape: #{inspect(t1.shape)}")
+
     v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
-    IO.puts("\nBREAK V1 to V2\n")
-    IO.puts("TENSOR2 = axes: #{inspect(axes2)}, shape: #{inspect(t2.shape)}")
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
     data =
@@ -1699,7 +1666,6 @@ defmodule Nx.BinaryBackend do
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
 
     path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
-    IO.inspect(path, label: :agg_axes_path)
     {chunk_size, read_size, path}
   end
 
@@ -1714,10 +1680,10 @@ defmodule Nx.BinaryBackend do
     min = hd(axes)
     {reverse_pre, reverse_pos} =
       aggregate_path(weighted_shape, axes, min, [], [])
-    IO.inspect(reverse_pos, label: :rev_pos1)
+
     {reverse_pos, _read_size} =
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
-    IO.inspect(reverse_pos, label: :rev_pos2)
+
     Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
   end
 
@@ -1789,13 +1755,11 @@ defmodule Nx.BinaryBackend do
   defp weighted_traverse(weighted_shape, binary, read_size, offset \\ 0)
 
   defp weighted_traverse([], data, read_size, offset) do
-    # IO.inspect(offset, label: "offset --->>")
     <<_::size(offset)-bitstring, chunk::size(read_size)-bitstring, _::bitstring>> = data
     chunk
   end
 
   defp weighted_traverse([{dim, size} | dims], data, read_size, offset) do
-    IO.inspect({dim, size}, label: "dim_size --->>")
     weighted_traverse(dim, size, dims, data, read_size, offset)
   end
 
