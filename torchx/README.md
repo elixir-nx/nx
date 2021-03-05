@@ -1,6 +1,6 @@
 # Torchx
 
-Elixir client for PyTorch. It includes a backend for `Nx` for native execution of tensor operations (inside and outside of `defn`).
+Elixir client for LibTorch (from PyTorch). It includes a backend for `Nx` for native execution of tensor operations (inside and outside of `defn`).
 
 This project is currently alpha and it supports only a fraction of `Nx`'s API.
 
