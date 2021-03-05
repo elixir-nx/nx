@@ -159,7 +159,7 @@ defmodule Torchx.Backend do
   end
 
   def steps_to_strides(shape, steps) do
-    for {dim, step} <- Enum.zip(Enum.reverse(shape), Enum.reverse(steps)), reduce: {1, []} do
+    for {dim, step} <- Enum.zip(shape, steps) |> Enum.reverse(), reduce: {1, []} do
       {offset, strides} -> {offset * dim, [offset * step | strides]}
     end
     |> elem(1)
