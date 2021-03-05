@@ -24,14 +24,10 @@ defmodule Torchx.Backend do
   defp torch_type({:f, 32}, _), do: :float
   defp torch_type({:f, 64}, _), do: :double
 
-  defp torch_type({:u, size}, hint) when size in [16, 32, 64], do: raise_unsupported(size, hint)
-
-  defp raise_unsupported(size, hint \\ ""),
-    do:
-      raise(
-        ArgumentError,
-        "Torchx does not support unsigned #{size} bit integer #{hint}" |> String.trim()
-      )
+  defp torch_type({:u, size}, hint) when size in [16, 32, 64] do
+    raise ArgumentError,
+          String.trim("Torchx does not support unsigned #{size} bit integer #{hint}")
+  end
 
   defp from_torch_type(:char), do: {:s, 8}
   defp from_torch_type(:byte), do: {:u, 8}
@@ -255,7 +251,7 @@ defmodule Torchx.Backend do
 
   unary_ops =
     Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
-      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :exp]
+      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
 
   # [:count_leading_zeros, :population_count]
 
