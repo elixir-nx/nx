@@ -7,21 +7,12 @@ defmodule Nx.BinaryBackend.Pad do
     pad_value =
       pad_value
       |> Nx.to_scalar()
-      |> IO.inspect(label: :pad_value_scalar)
       |> Bits.from_number(type)
-      |> IO.inspect(label: :pad_value_scalar)
 
-    IO.inspect(padding_configs, label: :padding_configs)
     axis_ctxs = build_axis_ctxs(padding_configs, shape)
-    IO.puts("ctx layout: {add_lo_wo, remove_lo, {repeat_count, mid_wo}, remove_hi, add_hi_wo, weight_in}")
-    for {a, i} <- Enum.with_index(axis_ctxs) do
-      IO.inspect(a, label: "ctx_at_axis #{i}")  
-    end
-    data = run_ctx("", pad_value, 0, type, data, axis_ctxs)
-    IO.puts("\nPAD DONE\n")
-    data
-  end
 
+    run_ctx("", pad_value, 0, type, data, axis_ctxs)
+  end
 
   defp build_axis_ctx({lo, hi, mid} = cfg, axis, shape_in, shape_out, weights_in, weights_out) do
     if mid < 0 do
@@ -58,7 +49,7 @@ defmodule Nx.BinaryBackend.Pad do
       end
     
     cycle_size = 1 + mid
-    IO.inspect(binding(), label: :CTX)
+    # IO.inspect(binding(), label: :CTX)
     
     {add_lo_wo, remove_lo, {repeat_iter, cycle_size, mid, mid_wo}, remove_hi, add_hi_wo, weight_in, weight_out}
   end
@@ -210,34 +201,8 @@ defmodule Nx.BinaryBackend.Pad do
     acc
   end
 
-  defp print_seq do
-    key = {__MODULE__, :seq}
-    seq = Process.get(key)
-    if seq == nil do
-      IO.puts("")
-      
-      print({:label, "KEY"}, {:label, "VALUE"}, {:label, "ACC"}, {:label, "O"}, {:label, "H"}, {:label, "I"}, " ", {:label, "SEQ"})
-      IO.puts("")
-    end
-    seq = seq || 1
-    next_seq = seq + 1
-    Process.put(key, next_seq)
-    seq
-  end
-
-  def print(key, value, acc, offset, height, i \\ nil, padder \\ " ", seq \\ print_seq(), indent \\ "   ") do
-    [
-      indent,
-      fmt(seq, 4, padder),
-      fmt(key, 20, padder),
-      fmt(value, 8, padder),
-      fmt(i, 4, padder),
-      fmt(height, 4, padder),
-      fmt(offset, 4, padder),
-      fmt(acc, 20, padder),
-    ]
-    |> IO.iodata_to_binary()
-    |> IO.puts()
+  def print(key, value, acc, offset, height, i \\ nil, padder \\ " ", seq \\ nil, indent \\ "   ") do
+    :ok
   end
 
   def fmt(nil, padding, padder) do
