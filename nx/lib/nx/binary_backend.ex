@@ -1251,7 +1251,7 @@ defmodule Nx.BinaryBackend do
 
     # Transpose because since P is orthogonal, inv(P) = tranpose(P)
     # and we want to return P such that A = P.L.U
-    p_bin = p |> transpose_matrix() |> matrix_to_binary(input_type)
+    p_bin = p |> transpose_matrix() |> matrix_to_binary(p_type)
     l_bin = matrix_to_binary(l, l_type)
     u_bin = matrix_to_binary(u, u_type)
 

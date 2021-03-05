@@ -451,6 +451,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def lu({p, l, u}, tensor, opts) do
+    tensor = to_expr(tensor)
+    context = tensor.data.context
+    composite({p, l, u}, context, &expr(&1, context, :lu, [{p, l, u}, tensor, opts]))
+  end
+
+  @impl true
   def qr({q, r}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context

@@ -84,6 +84,7 @@ defmodule Nx.Backend do
   @callback sort(out :: tensor, tensor, keyword) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
+  @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
