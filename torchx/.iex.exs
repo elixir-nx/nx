@@ -1,4 +1,4 @@
 
-if :code.module_status(Nx) == :loaded do
+if Code.ensure_loaded?(Nx) do
   Nx.default_backend(Torchx.Backend)
 end

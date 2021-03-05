@@ -38,7 +38,8 @@ defmodule Torchx.NxDoctestTest do
         norm_integer: 3,
         all_close?: 3,
         atan2: 2,
-        lu: 2
+        lu: 2,
+        sum: 2
       )
     |> Kernel.++([:moduledoc])
 end
