@@ -4,7 +4,7 @@ ifndef LIBTORCH_DIR
 endif
 
 LIBTORCH_VERSION := $(shell head -c 3 $(LIBTORCH_DIR)/build-version)
-REQUIRED_LIBTORCH_VERSION := 1.9
+REQUIRED_LIBTORCH_VERSION := 1.8
 
 LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
