@@ -4,7 +4,7 @@ Elixir client for Google's XLA (Accelerated Linear Algebra). It includes integra
 
 ## Installation
 
-In order to use `Nx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
+In order to use `EXLA`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
 
 ```
 $ mix new my_app
@@ -101,6 +101,39 @@ You can use the following env vars to customize your build:
   * `EXLA_CACHE` - controls where to store Tensorflow checkouts and builds
 
   * `XLA_FLAGS` - controls XLA-specific options, see: [tensorflow/compiler/xla/debug_options_flags.cc](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/debug_options_flags.cc) for list of flags
+
+## Usage
+
+The main mechanism to use EXLA is by setting it as the `@defn_compiler` for your numerical definitions:
+
+```elixir
+@defn_compiler EXLA
+defn softmax(tensor) do
+  Nx.exp(n) / Nx.sum(Nx.exp(n))
+end
+```
+
+You can also pass `EXLA` as a compiler to `Nx.Defn.jit/4/` and friends:
+
+```elixir
+# JIT
+Nx.Defn.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], EXLA)
+
+# Async/await
+async = Nx.Defn.async(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], EXLA)
+Nx.Async.await(async)
+```
+
+Those functions are also aliased in the `EXLA` module for your convenience:
+
+```elixir
+# JIT
+EXLA.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)])
+
+# Async/await
+async = EXLA.async(&some_function/2, [Nx.tensor(1), Nx.tensor(2)])
+Nx.Async.await(async)
+```
 
 ## Contributing
 

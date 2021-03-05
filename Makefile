@@ -1,4 +1,4 @@
-SUBDIRS=	nx exla
+SUBDIRS=	nx exla torchx
 
 all:	setup
 	@for _dir in ${SUBDIRS}; do \
@@ -22,7 +22,6 @@ clean:
 
 # Convenient shorthand for doing all of the appropriate steps in CUDA
 # environment since it's easy to miss the extra flag setting in the docs.
-# FIX: Should also check for missing cuda / cudnn deps and fail informatively.
 cuda:
 	@env EXLA_FLAGS=--config=cuda ${MAKE} all test
 

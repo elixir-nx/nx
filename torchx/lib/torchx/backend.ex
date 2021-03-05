@@ -1,42 +1,46 @@
 defmodule Torchx.Backend do
-  @behaviour Nx.Backend
+  @moduledoc """
+  An opaque backend Nx backend with bindings to libtorch/Pytorch.
+  """
 
+  @behaviour Nx.Backend
   defstruct [:ref]
 
   alias Torchx.NIF
   alias Nx.Tensor, as: T
   alias Torchx.Backend, as: TB
 
-  def torch_type({:u, 8}), do: :byte
+  ## Type conversion
 
-  def torch_type({:u, 16}),
+  defp torch_type({:u, 8}), do: :byte
+  defp torch_type({:s, 8}), do: :char
+  defp torch_type({:s, 16}), do: :short
+  defp torch_type({:s, 32}), do: :int
+  defp torch_type({:s, 64}), do: :long
+  defp torch_type({:bf, 16}), do: :brain
+  defp torch_type({:f, 16}), do: :half
+  defp torch_type({:f, 32}), do: :float
+  defp torch_type({:f, 64}), do: :double
+
+  defp torch_type({:u, 16}),
     do: raise(ArgumentError, "Torchx does not support unsigned 16 bit integer")
 
-  def torch_type({:u, 32}),
+  defp torch_type({:u, 32}),
     do: raise(ArgumentError, "Torchx does not support unsigned 32 bit integer")
 
-  def torch_type({:u, 64}),
+  defp torch_type({:u, 64}),
     do: raise(ArgumentError, "Torchx does not support unsigned 64 bit integer")
 
-  def torch_type({:s, 8}), do: :char
-  def torch_type({:s, 16}), do: :short
-  def torch_type({:s, 32}), do: :int
-  def torch_type({:s, 64}), do: :long
-  def torch_type({:bf, 16}), do: :brain
-  def torch_type({:f, 16}), do: :half
-  def torch_type({:f, 32}), do: :float
-  def torch_type({:f, 64}), do: :double
-
-  def from_torch_type(:char), do: {:s, 8}
-  def from_torch_type(:byte), do: {:u, 8}
-  def from_torch_type(:bool), do: {:u, 8}
-  def from_torch_type(:short), do: {:s, 16}
-  def from_torch_type(:int), do: {:s, 32}
-  def from_torch_type(:long), do: {:s, 64}
-  def from_torch_type(:brain), do: {:bf, 16}
-  def from_torch_type(:half), do: {:f, 16}
-  def from_torch_type(:float), do: {:f, 32}
-  def from_torch_type(:double), do: {:f, 64}
+  defp from_torch_type(:char), do: {:s, 8}
+  defp from_torch_type(:byte), do: {:u, 8}
+  defp from_torch_type(:bool), do: {:u, 8}
+  defp from_torch_type(:short), do: {:s, 16}
+  defp from_torch_type(:int), do: {:s, 32}
+  defp from_torch_type(:long), do: {:s, 64}
+  defp from_torch_type(:brain), do: {:bf, 16}
+  defp from_torch_type(:half), do: {:f, 16}
+  defp from_torch_type(:float), do: {:f, 32}
+  defp from_torch_type(:double), do: {:f, 64}
 
   ## Creation
 
@@ -172,7 +176,6 @@ defmodule Torchx.Backend do
 
   defp maybe_cast_u8(left, right), do: {left, right}
 
-
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
     def unquote(op)(out, l, r) do
@@ -307,6 +310,7 @@ defmodule Torchx.Backend do
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
 
+  @doc false
   def __unimplemented__, do: unquote(funs)
 
   for {fun, arity} <- funs do
