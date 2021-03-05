@@ -173,7 +173,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_out_type!(out_type, "(explicitly cast the input tensor to a signed integer before)")
+    check_out_type!(out_type, "(explicitly cast the input tensor to a signed integer before taking sum)")
 
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
