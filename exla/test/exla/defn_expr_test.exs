@@ -673,6 +673,14 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "bitcast" do
+    defn bitcast_to_float(t), do: Nx.bitcast(t, {:f, 32})
+
+    test "converts tensor type" do
+      assert bitcast_to_float(Nx.tensor([0, 0, 0], type: {:s, 32})) == Nx.tensor([0.0, 0.0, 0.0])
+    end
+  end
+
   describe "if" do
     defn if3(a, b, c), do: if(a, do: b, else: c)
 

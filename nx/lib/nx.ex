@@ -1326,15 +1326,20 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.bitcast(Nx.tensor([0, 0, 0], names: [:data], type: {:s, 32}), {:f, 32})
+      iex> t = Nx.bitcast(Nx.tensor([0, 0, 0], names: [:data], type: {:s, 32}), {:f, 32})
       #Nx.Tensor<
-        f32[3]
+        f32[data: 3]
         [0.0, 0.0, 0.0]
+      >
+      iex> Nx.bitcast(t, {:s, 32})
+      #Nx.Tensor<
+        s32[data: 3]
+        [0, 0, 0]
       >
 
   ### Error cases
 
-      iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: {:s, 16}), type: {:f, 32})
+      iex> Nx.bitcast(Nx.tensor([0, 1, 2], names: [:data], type: {:s, 16}), {:f, 32})
       ** (ArgumentError) input type width must match new type width, got input type {:s, 16} and output type {:f, 32}
   """
   @doc type: :type
