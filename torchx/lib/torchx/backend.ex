@@ -147,12 +147,15 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def slice(out, %T{} = t, start_indices, lengths, _strides) do
+  def slice(out, %T{} = t, start_indices, lengths, strides) do
+    IO.inspect(strides)
     ref = to_ref(t)
 
     for dim <- 0..length(start_indices)-1, reduce: ref do
       ref -> NIF.narrow(ref, dim, Enum.at(start_indices, dim), Enum.at(lengths, dim)) |> unwrap!()
     end
+    # |> NIF.as_strided(lengths, strides, 0)
+    # |> unwrap!()
     |> to_tensor(out)
   end
 
@@ -327,11 +330,11 @@ defmodule Torchx.Backend do
     current_shape = ref |> NIF.shape() |> unwrap!()
 
     if current_shape != shape do
-      raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{inspect(current_shape)}. " <>
-              "Please report this bug"
+      # raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{inspect(current_shape)}. " <>
+      #         "Please report this bug"
     end
 
-    %{t | data: %__MODULE__{ref: ref}}
+    %{t | data: %__MODULE__{ref: ref}, shape: current_shape}
   end
 
   defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()

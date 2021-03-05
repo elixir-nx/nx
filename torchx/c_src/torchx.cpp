@@ -300,6 +300,16 @@ NIF(narrow)
   TENSOR(torch::narrow(*t, dim, start, length).clone());
 }
 
+NIF(as_strided)
+{
+  TENSOR_PARAM(0, t);
+  LIST_PARAM(1, std::vector<int64_t>, size);
+  LIST_PARAM(2, std::vector<int64_t>, strides);
+  PARAM(3, int64_t, offset);
+
+  TENSOR(torch::as_strided(*t, size, strides, offset).clone());
+}
+
 NIF(permute)
 {
   TENSOR_PARAM(0, t);
@@ -517,6 +527,7 @@ static ErlNifFunc nif_functions[] = {
     DF(transpose, 3),
     DF(permute, 2),
     DF(narrow, 4),
+    DF(as_strided, 4),
 
     DF(add, 2),
     DF(subtract, 2),

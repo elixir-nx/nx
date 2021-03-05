@@ -48,6 +48,7 @@ defmodule Torchx.NIF do
   dnif permute(tensor, dims)
   dnif split(tensor, split_size)
   dnif narrow(tensor, dim, start, length)
+  dnif as_strided(tensor, size, strides, offset)
 
   dnif ones(shape)
   dnif eye(size, type)

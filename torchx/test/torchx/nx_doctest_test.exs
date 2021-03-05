@@ -37,6 +37,7 @@ defmodule Torchx.NxDoctestTest do
         norm: 2,
         norm_integer: 3,
         all_close?: 3,
-        atan2: 2
+        atan2: 2,
+        lu: 2
       )
 end
