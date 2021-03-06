@@ -319,18 +319,34 @@ defmodule NxTest do
     end
   end
 
-  test "interior padding" do
-    assert Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{0, 0, 1}, {0, 0, 1}]) ==
-             Nx.tensor([[1, 0, 2, 0, 3], [0, 0, 0, 0, 0], [4, 0, 5, 0, 6]])
+  describe "pad" do
+    test "with interior padding" do
+      assert Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{0, 0, 1}, {0, 0, 1}]) ==
+               Nx.tensor([[1, 0, 2, 0, 3], [0, 0, 0, 0, 0], [4, 0, 5, 0, 6]])
 
-    assert Nx.pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), 2.0, [{-2, 1, 4}, {1, 3, 2}]) ==
-             Nx.tensor([
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
-               [2.0, 4.0, 2.0, 2.0, 5.0, 2.0, 2.0, 6.0, 2.0, 2.0, 2.0],
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-             ])
+      assert Nx.pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), 2.0, [{-2, 1, 4}, {1, 3, 2}]) ==
+               Nx.tensor([
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                 [2.0, 4.0, 2.0, 2.0, 5.0, 2.0, 2.0, 6.0, 2.0, 2.0, 2.0],
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+               ])
+    end
+  end
+
+  describe "bitshift" do
+    test "raises for negative numbers on the right" do
+      assert_raise ArgumentError,
+                   "cannot right shift by -1",
+                   fn -> Nx.right_shift(Nx.tensor(1), -1) end
+    end
+
+    test "raises for negative numbers on the left" do
+      assert_raise ArgumentError,
+                   "cannot left shift by -1",
+                   fn -> Nx.left_shift(Nx.tensor(1), -1) end
+    end
   end
 
   describe "reverse" do

@@ -3174,7 +3174,9 @@ defmodule Nx do
   behaviour on some compilers.
 
   It will broadcast tensors whenever the dimensions do
-  not match and broadcasting is possible.
+  not match and broadcasting is possible. If the number of
+  shifts are negative, Nx's default backend will raise,
+  but it may trigger undefined behaviour in other backends.
 
   ## Examples
 
@@ -3207,8 +3209,6 @@ defmodule Nx do
       iex> Nx.left_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
 
-      iex> Nx.left_shift(Nx.tensor(1), -1)
-      ** (ArgumentError) cannot left shift by -1
   """
   @doc type: :element
   def left_shift(left, right),
@@ -3227,7 +3227,9 @@ defmodule Nx do
   In other words, it preserves the sign for signed integers.
 
   It will broadcast tensors whenever the dimensions do
-  not match and broadcasting is possible.
+  not match and broadcasting is possible. If the number of
+  shifts are negative, Nx's default backend will raise,
+  but it may trigger undefined behaviour in other backends.
 
   ## Examples
 
@@ -3260,8 +3262,6 @@ defmodule Nx do
       iex> Nx.right_shift(Nx.tensor([0, 0, 1, 1]), 1.0)
       ** (ArgumentError) bitwise operators expect integer tensors as inputs and outputs an integer tensor, got: {:f, 32}
 
-      iex> Nx.right_shift(Nx.tensor(1), -1)
-      ** (ArgumentError) cannot right shift by -1
   """
   @doc type: :element
   def right_shift(left, right),
