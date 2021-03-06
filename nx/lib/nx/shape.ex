@@ -977,46 +977,11 @@ defmodule Nx.Shape do
     {dim, coord}
   end
 
-  @doc """
-  Turns an index into coordinates according to the shape.
-
-  ## Examples
-
-      iex>
-  """
-  def i_to_coords({}, 0), do: {}
-
-  def i_to_coords(shape, i) do
-    index_check!(shape, i)
-    shape
-    |> i_to_coords(i, tuple_size(shape) - 1)
-    |> Enum.reverse()
-    |> List.to_tuple()
-  end
-
-  defp i_to_coords(_shape, i_val, 0) do
-    [i_val]
-  end
-
-  defp i_to_coords(shape, i_val, i) do
-    dim = elem(shape, i)
-    coord = rem(i_val, dim)
-    i_val = div(i_val, dim)
-    [coord | i_to_coords(shape, i_val, i - 1)]
-  end
-
-  defp index_check!(shape, i) do
-    if i >= rank(shape) do
-      raise ArgumentError, "index #{i} is out-of-range for shape #{inspect(shape)}"
-    end
-  end
-
   @compile {:inline, rank: 1, dimension: 2}
 
   def rank(shape), do: tuple_size(shape)
 
   def dimension(shape, dim_i), do: elem(shape, dim_i)
-
 
   @doc """
   Turns a shape into the shape's weights.
