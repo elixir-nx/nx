@@ -106,68 +106,34 @@ defmodule Nx.BinaryBackend.Pad do
             acc <> Bits.slice(data, type, offset + offset_by, len)
 
           {:slice_and_pad, range, cycle_size, pad_n} ->
-            slice_and_pad(acc, offset, range, cycle_size, pad_n, pad_v, type, data)
+            for i <- range, reduce: acc do
+              acc ->
+                if rem(i, cycle_size) == 0 do
+                  # normalize the index
+                  i = div(i, cycle_size)
+                  acc <> Bits.slice(data, type, offset + i, 1)
+                else
+                  pad_n_times(acc, pad_v, pad_n)
+                end
+            end
 
-          {:iter_axis, iter, offset_weight} ->
-            iter_axis(rest, acc, offset, pad_v, type, data, iter, offset_weight)
+          {:iter_axis, range, offset_weight} ->
+            for i <- range, reduce: acc do
+              acc ->
+                run_steps(rest, acc, offset + offset_weight * i, pad_v, type, data)
+            end
 
-          {:iter_axis_and_pad, iter, cycle_size, offset_weight, pad_n} ->
-            iter_axis_and_pad(
-              rest,
-              acc,
-              offset,
-              pad_v,
-              type,
-              data,
-              iter,
-              cycle_size,
-              offset_weight,
-              pad_n
-            )
-        end
-    end
-  end
-
-  defp iter_axis_and_pad(
-         steps,
-         acc,
-         offset,
-         pad_v,
-         type,
-         data,
-         iter,
-         cycle_size,
-         offset_weight,
-         pad_n
-       ) do
-    for i <- iter, reduce: acc do
-      acc ->
-        if rem(i, cycle_size) == 0 do
-          # normalize the index
-          i = div(i, cycle_size)
-          run_steps(steps, acc, offset + offset_weight * i, pad_v, type, data)
-        else
-          pad_n_times(acc, pad_v, pad_n)
-        end
-    end
-  end
-
-  defp iter_axis(steps, acc, offset, pad_v, type, data, iter, offset_weight) do
-    for i <- iter, reduce: acc do
-      acc ->
-        run_steps(steps, acc, offset + offset_weight * i, pad_v, type, data)
-    end
-  end
-
-  defp slice_and_pad(acc, offset, start..stop, cycle_size, pad_n, pad_v, type, data) do
-    for i <- start..stop, reduce: acc do
-      acc ->
-        if rem(i, cycle_size) == 0 do
-          # normalize the index
-          i = div(i, cycle_size)
-          acc <> Bits.slice(data, type, offset + i, 1)
-        else
-          pad_n_times(acc, pad_v, pad_n)
+          {:iter_axis_and_pad, range, cycle_size, offset_weight, pad_n} ->
+            for i <- range, reduce: acc do
+              acc ->
+                if rem(i, cycle_size) == 0 do
+                  # normalize the index
+                  i = div(i, cycle_size)
+                  run_steps(rest, acc, offset + offset_weight * i, pad_v, type, data)
+                else
+                  pad_n_times(acc, pad_v, pad_n)
+                end
+            end
         end
     end
   end
