@@ -17,33 +17,27 @@ defmodule Nx.BinaryBackend.PadTest do
     %{t | data: %{t.data | state: data}}
   end
 
-  defp run_padding(type, shape, padding_configs, expected_list, opts \\ []) do
+  defp run_padding(type, shape, padding_config, expected_list, opts \\ []) do
   
     t = Nx.iota(shape, type: type)
     pad_value = opts[:pad_value] || Nx.tensor(100, type: type)
-
-    good_pad = Nx.pad(t, pad_value, padding_configs)
-
     expected = Nx.tensor(expected_list, type: type)
 
-    assert good_pad == expected
-
-    expected_shape = Nx.Shape.pad(shape, padding_configs)
+    expected_shape = Nx.Shape.pad(shape, padding_config)
     assert expected_shape == Nx.shape(expected)
-    data = Pad.run(t, pad_value, padding_configs)
+    data = Pad.run(t, pad_value, padding_config)
     
     insp_data = inspect(data, binaries: :as_binaries)
     insp_expt = inspect(expected.data.state, binaries: :as_binaries)
     assert insp_data == insp_expt, """
-    data mismatch -
+    Pad.run/3 data mismatch -
 
       want:  #{insp_expt}
       got:   #{insp_data}
       
-      
       tensor: #{inspect(t)}
       pad_value: #{inspect(pad_value)}
-      padding_configs: #{inspect(padding_configs)}
+      padding_config: #{inspect(padding_config)}
     """
 
 
