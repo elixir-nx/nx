@@ -15,8 +15,6 @@ defmodule Torchx.NxDoctestTest do
         default_backend: 2,
         round: 1,
 
-        # add: 2,
-        norm_nuclear: 1,
         outer: 2,
         random_uniform: 4,
         dot: 2,
@@ -24,7 +22,6 @@ defmodule Torchx.NxDoctestTest do
         qr: 2,
         quotient: 2,
         window_mean: 3,
-        iota: 2,
         transpose: 2,
         mean: 2,
         dot: 4,

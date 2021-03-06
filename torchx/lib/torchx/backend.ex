@@ -51,7 +51,7 @@ defmodule Torchx.Backend do
   def iota(out, axis \\ nil)
 
   def iota(%T{shape: {}, type: type} = out, nil) do
-    NIF.scalar_tensor(0, torch_type(type)) |> from_ref(out)
+    NIF.scalar_tensor(0.0, torch_type(type)) |> from_ref(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, nil) do
