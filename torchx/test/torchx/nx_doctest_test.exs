@@ -13,6 +13,7 @@ defmodule Torchx.NxDoctestTest do
       |> Kernel.++(
         to_binary: 2,
         default_backend: 2,
+
         add: 2,
         round: 1,
         norm_nuclear: 1,
