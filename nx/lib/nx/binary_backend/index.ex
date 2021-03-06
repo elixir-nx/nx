@@ -67,6 +67,27 @@ defmodule Nx.BinaryBackend.Index do
     rem(i * w, size)
   end
 
+  @doc """
+  For a count returns a value that can be enumerated for indices.
+
+  Raises for negative values.
+
+  ## Example
+
+      iex> Index.range(0)
+      []
+
+      iex> Index.range(1)
+      0..0
+
+      iex> Index.range(10)
+      0..9
+  """
+  def range(0), do: []
+  def range(n) when n > 0, do: 0..(n - 1)
+
+
+
   # defp index_check!(shape, i) do
   #   if i >= tuple_size(shape) do
   #     raise ArgumentError, "index #{i} is out-of-range for shape #{inspect(shape)}"
