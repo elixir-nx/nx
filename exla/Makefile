@@ -28,11 +28,15 @@ TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
 TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
 TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 
-all: symlinks
+XLA_SO = $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so
+
+all: symlinks $(XLA_SO)
+	mkdir -p priv
+	cp -f $(XLA_SO) $(EXLA_SO)
+
+$(XLA_SO): $(TENSORFLOW_DIR)
 	cd $(TENSORFLOW_DIR) && \
 		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
-	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so $(EXLA_SO)
 
 symlinks: $(TENSORFLOW_DIR)
 	@ rm -f $(TENSORFLOW_EXLA_DIR)
@@ -56,11 +60,13 @@ $(TENSORFLOW_DIR):
 
 	cd $(TENSORFLOW_DIR) && \
 		sed -e '/register_toolchains("@local_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup WORKSPACE && \
-		sed -e '/load("\/\/third_party\/py:python_configure.bzl", "python_configure")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
-		sed -e '/native.register_toolchains("@local_execution_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
-		sed -e '/python_configure(name = "local_config_python")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl
+		sed -e '/load("\/\/third_party\/py:python_configure.bzl", "python_configure")/ s/^#*/#/' \
+		    -e '/native.register_toolchains("@local_execution_config_python\/\/:py_toolchain")/ s/^#*/#/' \
+		    -e '/python_configure(name = "local_config_python")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl
 
 clean:
 	cd $(TENSORFLOW_DIR) && bazel clean --expunge
 	rm -f $(ERTS_SYM_DIR) $(TENSORFLOW_EXLA_DIR)
 	rm -rf $(EXLA_SO) $(TENSORFLOW_DIR)
+
+.PHONY: all clean PTD symlinks
