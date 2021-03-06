@@ -232,29 +232,4 @@ defmodule Nx.BinaryBackend.BitsTest do
     assert out2 == expected
     assert out3 == expected
   end
-
-  describe "map_i_to_axis/3" do
-    test "works" do
-      shape = {2, 3}
-      weights = Nx.Shape.weights(shape)
-      weight1 = Bits.weight_of_axis(weights, 1)
-      assert weight1 == 1
-      weight0 = Bits.weight_of_axis(weights, 0)
-      assert weight0 == 3
-
-      assert Bits.map_i_to_axis(weights, 1, 0) == 0
-      assert Bits.map_i_to_axis(weights, 1, 1) == 1
-      assert Bits.map_i_to_axis(weights, 1, 2) == 2
-      assert Bits.map_i_to_axis(weights, 1, 3) == 3
-      assert Bits.map_i_to_axis(weights, 1, 4) == 4
-      assert Bits.map_i_to_axis(weights, 1, 5) == 5
-
-      assert Bits.map_i_to_axis(weights, 0, 0) == 0
-      assert Bits.map_i_to_axis(weights, 0, 1) == 3
-      assert Bits.map_i_to_axis(weights, 0, 2) == 0
-      assert Bits.map_i_to_axis(weights, 0, 3) == 3
-      assert Bits.map_i_to_axis(weights, 0, 4) == 0
-      assert Bits.map_i_to_axis(weights, 0, 5) == 3
-    end
-  end
 end

@@ -1,6 +1,8 @@
 defmodule Nx.BinaryBackend.Bits do
   import Nx.Shared
 
+  alias Nx.BinaryBackend.Index
+
   @compile {:inline, from_number: 2, to_number: 2, number_at: 3}
 
   @doc """
@@ -78,7 +80,7 @@ defmodule Nx.BinaryBackend.Bits do
       5
   """
   def number_at(bin, shape, type, coords) when tuple_size(shape) == tuple_size(coords) do
-    number_at(bin, type, Nx.Shape.coords_to_i(shape, coords))
+    number_at(bin, type, Index.coords_to_i(shape, coords))
   end
 
   @doc """

@@ -420,8 +420,8 @@ defmodule Nx.BinaryBackend do
   #           inner_total =
   #             for inner_i <- range(inner_d), reduce: 0 do
   #               inner_acc ->
-  #                 i1 = offset1 + Nx.Shape.coords_to_i(shape1, {outer_i1, inner_i})
-  #                 i2 = offset2 + Nx.Shape.coords_to_i(shape2, {inner_i, outer_i2})
+  #                 i1 = offset1 + Index.coords_to_i(shape1, {outer_i1, inner_i})
+  #                 i2 = offset2 + Index.coords_to_i(shape2, {inner_i, outer_i2})
   #                 n1 = Bits.number_at(data1, type1, i1)
   #                 n2 = Bits.number_at(data2, type2, i2)
   #                 inner_acc + n1 * n2
