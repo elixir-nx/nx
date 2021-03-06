@@ -217,7 +217,9 @@ defmodule Torchx.Backend do
 
   for op <- binary_ops do
     @impl true
-    def unquote(op)(out, left, right) do
+    def unquote(op)(out, l, r) do
+      {left, right} = maybe_cast_u8(l, r)
+
       NIF.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
     end
   end

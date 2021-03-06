@@ -13,9 +13,9 @@ defmodule Torchx.NxDoctestTest do
       |> Kernel.++(
         to_binary: 2,
         default_backend: 2,
-
-        add: 2,
         round: 1,
+
+        # add: 2,
         norm_nuclear: 1,
         outer: 2,
         random_uniform: 4,
