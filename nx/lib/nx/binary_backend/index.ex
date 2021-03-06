@@ -6,34 +6,6 @@ defmodule Nx.BinaryBackend.Index do
   alias Nx.BinaryBackend.Weights
 
   @doc """
-  Turns an index into coordinates according to the shape.
-
-  ## Examples
-
-      iex>
-  """
-  def i_to_coords({}, 0), do: {}
-
-  def i_to_coords(shape, i) do
-    index_check!(shape, i)
-    shape
-    |> i_to_coords(i, tuple_size(shape) - 1)
-    |> Enum.reverse()
-    |> List.to_tuple()
-  end
-
-  defp i_to_coords(_shape, i_val, 0) do
-    [i_val]
-  end
-
-  defp i_to_coords(shape, i_val, i) do
-    dim = elem(shape, i)
-    coord = rem(i_val, dim)
-    i_val = div(i_val, dim)
-    [coord | i_to_coords(shape, i_val, i - 1)]
-  end
-
-  @doc """
   Turns coordinates into an index according to the given shape.
 
   ### Examples
@@ -95,9 +67,9 @@ defmodule Nx.BinaryBackend.Index do
     rem(i * w, size)
   end
 
-  defp index_check!(shape, i) do
-    if i >= tuple_size(shape) do
-      raise ArgumentError, "index #{i} is out-of-range for shape #{inspect(shape)}"
-    end
-  end
+  # defp index_check!(shape, i) do
+  #   if i >= tuple_size(shape) do
+  #     raise ArgumentError, "index #{i} is out-of-range for shape #{inspect(shape)}"
+  #   end
+  # end
 end

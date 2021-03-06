@@ -31,9 +31,6 @@ defmodule Nx.BinaryBackend.Pad do
     add_hi = max(0, hi)
     add_hi_wo = add_hi * weight_out
 
-    # mid_wi = mid * weight_in
-    # mid_wo = mid * weight_out
-
     dim_in = elem(shape_in, axis)
 
     interior = (dim_in - 1) * mid
@@ -64,7 +61,6 @@ defmodule Nx.BinaryBackend.Pad do
     acc =
       for i <- repeat_iter, reduce: acc do
         acc ->
-          
 
           slice? = rem(i, cycle_size) == 0
           cond do
@@ -89,11 +85,9 @@ defmodule Nx.BinaryBackend.Pad do
               add_n_pad_values(acc, weight_out, pad_value)
           end
       end
-    
-    
+
     acc = add_n_pad_values(acc, add_hi_wo, pad_value)
-    
-    
+
     acc
   end
 
