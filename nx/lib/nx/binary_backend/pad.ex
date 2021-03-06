@@ -1,4 +1,6 @@
 defmodule Nx.BinaryBackend.Pad do
+  @moduledoc false
+
   alias Nx.BinaryBackend.Bits
   alias Nx.BinaryBackend.Index
 
@@ -13,7 +15,6 @@ defmodule Nx.BinaryBackend.Pad do
     padding_config
     |> build_steps(shape)
     |> run_steps("", 0, pad_value, type, data)
-    # run_ctx("", pad_value, 0, type, data, axis_ctxs)
   end
 
    defp build_steps(padding_config, shape) do
