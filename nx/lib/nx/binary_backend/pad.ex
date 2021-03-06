@@ -17,7 +17,7 @@ defmodule Nx.BinaryBackend.Pad do
     |> run_steps("", 0, pad_value, type, data)
   end
 
-   defp build_steps(padding_config, shape) do
+  defp build_steps(padding_config, shape) do
     shape_out = Nx.Shape.pad(shape, padding_config)
     weights_out = Nx.Shape.weights(shape_out)
     weights_in = Nx.Shape.weights(shape)
@@ -29,17 +29,15 @@ defmodule Nx.BinaryBackend.Pad do
     end)
   end
 
-
   defp build_step({lo, hi, mid}, axis, shape_in, weights_in, weights_out) do
-
     max_axis? = axis == Nx.Shape.rank(shape_in) - 1
 
     weight_out = Bits.weight_of_axis(weights_out, axis)
     weight_in = Bits.weight_of_axis(weights_in, axis)
-    
+
     remove_lo = abs(min(0, lo))
     remove_hi = abs(min(0, hi))
-    
+
     add_lo = max(0, lo)
     add_lo_wo = add_lo * weight_out
     add_hi = max(0, hi)
@@ -48,10 +46,11 @@ defmodule Nx.BinaryBackend.Pad do
     dim_in = elem(shape_in, axis)
 
     interior = (dim_in - 1) * mid
-    repeat_count = (dim_in + interior) - (remove_lo + remove_hi)
+    repeat_count = dim_in + interior - (remove_lo + remove_hi)
 
     start = remove_lo
-    stop = (start + repeat_count) - 1
+    stop = start + repeat_count - 1
+
     repeat_iter =
       if start < 0 || stop < 0 || stop < start do
         Index.range(0)
@@ -105,7 +104,7 @@ defmodule Nx.BinaryBackend.Pad do
 
           {:slice_binary, offset_by, len} ->
             acc <> Bits.slice(data, type, offset + offset_by, len)
-          
+
           {:slice_and_pad, range, cycle_size, pad_n} ->
             slice_and_pad(acc, offset, range, cycle_size, pad_n, pad_v, type, data)
 
@@ -113,18 +112,40 @@ defmodule Nx.BinaryBackend.Pad do
             iter_axis(rest, acc, offset, pad_v, type, data, iter, offset_weight)
 
           {:iter_axis_and_pad, iter, cycle_size, offset_weight, pad_n} ->
-            iter_axis_and_pad(rest, acc, offset, pad_v, type, data, iter, cycle_size, offset_weight, pad_n)
+            iter_axis_and_pad(
+              rest,
+              acc,
+              offset,
+              pad_v,
+              type,
+              data,
+              iter,
+              cycle_size,
+              offset_weight,
+              pad_n
+            )
         end
     end
   end
 
-  defp iter_axis_and_pad(steps, acc, offset, pad_v, type, data, iter, cycle_size, offset_weight, pad_n) do
+  defp iter_axis_and_pad(
+         steps,
+         acc,
+         offset,
+         pad_v,
+         type,
+         data,
+         iter,
+         cycle_size,
+         offset_weight,
+         pad_n
+       ) do
     for i <- iter, reduce: acc do
       acc ->
         if rem(i, cycle_size) == 0 do
           # normalize the index
           i = div(i, cycle_size)
-          run_steps(steps, acc, offset + (offset_weight * i), pad_v, type, data)
+          run_steps(steps, acc, offset + offset_weight * i, pad_v, type, data)
         else
           pad_n_times(acc, pad_v, pad_n)
         end
@@ -134,7 +155,7 @@ defmodule Nx.BinaryBackend.Pad do
   defp iter_axis(steps, acc, offset, pad_v, type, data, iter, offset_weight) do
     for i <- iter, reduce: acc do
       acc ->
-        run_steps(steps, acc, offset + (offset_weight * i), pad_v, type, data)
+        run_steps(steps, acc, offset + offset_weight * i, pad_v, type, data)
     end
   end
 
@@ -154,7 +175,7 @@ defmodule Nx.BinaryBackend.Pad do
   defp pad_n_times(acc, pad_v, n) when n > 0 do
     pad_n_times(acc <> pad_v, pad_v, n - 1)
   end
-  
+
   defp pad_n_times(acc, _pad_v, _n) do
     acc
   end
