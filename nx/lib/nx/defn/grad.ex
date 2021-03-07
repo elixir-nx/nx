@@ -647,8 +647,11 @@ defmodule Nx.Defn.Grad do
 
   ## Windows
 
-  defp reduce_prod_tree(_, _, 0, non_axes_shape), do: Nx.broadcast(Expr.tensor(1.0), non_axes_shape)
+  defp reduce_prod_tree(_, _, 0, non_axes_shape),
+    do: Nx.broadcast(Expr.tensor(1.0), non_axes_shape)
+
   defp reduce_prod_tree(x, axis, 1, _), do: Nx.squeeze(x, axes: [axis])
+
   defp reduce_prod_tree(x, axis, axis_value, non_axes_shape) do
     n1 = div(axis_value + 1, 2)
     n2 = axis_value - n1
@@ -657,7 +660,9 @@ defmodule Nx.Defn.Grad do
     x1_limit_indices = x.shape |> put_elem(axis, n1) |> Tuple.to_list()
 
     x2_start_indices = x1_start_indices |> List.update_at(axis, fn _ -> n1 end)
-    x2_limit_indices = x1_limit_indices |> List.update_at(axis, fn _ -> elem(x.shape, axis) - n1 end)
+
+    x2_limit_indices =
+      x1_limit_indices |> List.update_at(axis, fn _ -> elem(x.shape, axis) - n1 end)
 
     x1 = Nx.slice(x, x1_start_indices, x1_limit_indices)
     x2 = Nx.slice(x, x2_start_indices, x2_limit_indices)
@@ -874,7 +879,7 @@ defmodule Nx.Defn.Grad do
     size2 = div(elem(x.shape, src), size1)
     new_shape = x.shape
     new_shape = put_elem(new_shape, src, size1)
-    new_shape = Tuple.insert_at(new_shape, src+1, size2)
+    new_shape = Tuple.insert_at(new_shape, src + 1, size2)
     Nx.reshape(x, new_shape)
   end
 
