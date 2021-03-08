@@ -67,13 +67,13 @@ defmodule Torchx.MNIST do
     m_batch = 30 # Nx.size(grad_z2) |> IO.inspect()
 
     grad_w2 = Nx.divide(Nx.dot(Nx.transpose(grad_z2), a1), m_batch) |> Nx.transpose()
-    grad_b2 = Nx.divide(Nx.sum(grad_z2, axes: [:output], keep_axes: true), m_batch)
+    grad_b2 = Nx.mean(grad_z2, axes: [:output], keep_axes: true)
 
     grad_a1 = Nx.dot(w2, Nx.transpose(grad_z2)) |> Nx.transpose()
     grad_z1 = Nx.multiply(grad_a1, Nx.logistic(z1)) |> Nx.multiply(Nx.subtract(1.0, Nx.logistic(z1)))
 
     grad_w1 = Nx.divide(Nx.dot(Nx.transpose(grad_z1), batch_images), m_batch) |> Nx.transpose()
-    grad_b1 = Nx.divide(Nx.sum(grad_z1, axes: [1], keep_axes: true), m_batch)
+    grad_b1 = Nx.mean(grad_z1, axes: [1], keep_axes: true)
 
     {
       Nx.subtract(w1, Nx.multiply(grad_w1, step)),
