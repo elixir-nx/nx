@@ -142,6 +142,91 @@ defmodule EXLA do
 
   @behaviour Nx.Defn.Compiler
 
+  @doc """
+  A shortcut for `Nx.Defn.jit/4` with the EXLA compiler.
+
+      iex> EXLA.jit(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  See the moduledoc for options.
+  """
+  def jit(function, args, options \\ []) do
+    Nx.Defn.jit(function, args, EXLA, options)
+  end
+
+  @doc """
+  A shortcut for `Nx.Defn.async/4` with the EXLA compiler.
+
+      iex> async = EXLA.async(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
+      iex> async
+      #EXLA.Async<...>
+      iex> Nx.Async.await!(async)
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  See the moduledoc for options.
+  """
+  def async(function, args, options \\ []) do
+    Nx.Defn.async(function, args, EXLA, options)
+  end
+
+  @doc """
+  A shortcut for `Nx.Defn.aot/4` with the EXLA compiler.
+
+      iex> functions = [{:exp, &Nx.exp/1, [Nx.template({3}, {:s, 64})]}]
+      iex> EXLA.aot(ExpAotDemo, functions)
+      iex> ExpAotDemo.exp(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  See `export_aot/4` for options.
+  """
+  def aot(module, functions, options \\ []) do
+    Nx.Defn.aot(module, functions, EXLA, options)
+  end
+
+  @doc """
+  A shortcut for `Nx.Defn.export_aot/5` with the EXLA compiler.
+
+      iex> functions = [{:exp, &Nx.exp/1, [Nx.template({3}, {:s, 64})]}]
+      iex> :ok = EXLA.export_aot("tmp", ExpExportDemo, functions)
+      iex> defmodule Elixir.ExpExportDemo do
+      ...>   Nx.Defn.import_aot("tmp", __MODULE__)
+      ...> end
+      iex> ExpExportDemo.exp(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  ## Options
+
+      * `:target_triple` - the target triple to compile to.
+      It defaults to the current target triple but one
+      can be set for cross-compilation. A list is available
+      here: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
+
+          target_triple: "x86_64-pc-linux"
+
+    * `:target_features` - the default executable makes
+      no assumption about the target runtime, so special
+      instructions such as SIMD are not leveraged. But you
+      can specify those flags if desired:
+
+          target_features: "+sse4.1 +sse4.2 +avx +avx2 +fma"
+
+  """
+  def export_aot(dir, module, functions, options \\ []) do
+    Nx.Defn.export_aot(dir, module, functions, EXLA, options)
+  end
+
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
 
