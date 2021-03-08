@@ -37,7 +37,7 @@ defmodule Torchx.MNIST do
     Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
   end
 
-  defp update({w1, b1, w2, b2} = params, batch_images, batch_labels, step) do
+  defp update({w1, b1, w2, b2} = params, batch_images, batch_labels, avg_loss, avg_accuracy, total) do
     # {grad_w1, grad_b1, grad_w2, grad_b2} = grad(params, loss(params, batch_images, batch_labels))
 
 
@@ -46,9 +46,23 @@ defmodule Torchx.MNIST do
     z1 = Nx.dot(batch_images, w1) |> Nx.add(b1)
     a1 = Nx.logistic(z1)
     z2 = Nx.dot(a1, w2) |> Nx.add(b2)
-    preds = a2 = softmax(z2)
+    preds = softmax(z2)
 
-    # loss = Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
+
+    batch_loss = Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
+
+    batch_accuracy =
+          Nx.mean(
+            Nx.equal(
+              Nx.argmax(Nx.as_type(batch_labels, {:s, 8}), axis: :output),
+              Nx.argmax(preds, axis: :output)
+            ) |> Nx.as_type({:s, 8})
+          )
+
+    avg_loss = Nx.add(avg_loss, Nx.divide(batch_loss, total))
+    avg_accuracy = Nx.add(avg_accuracy, Nx.divide(batch_accuracy, total))
+
+
 
     # gradients at last layer (Py2 need 1. to transform to float)
     # dW2 = (1. / m_batch) * np.matmul(dZ2, cache["A1"].T)
@@ -62,25 +76,27 @@ defmodule Torchx.MNIST do
     # dW1 = (1. / m_batch) * np.matmul(dZ1, X.T)
     # db1 = (1. / m_batch) * np.sum(dZ1, axis=1, keepdims=True)
 
-    grad_z2 = Nx.subtract(preds, batch_labels)
+    grad_z2 = Nx.subtract(preds, batch_labels) |> Nx.transpose()
 
     m_batch = 30 # Nx.size(grad_z2) |> IO.inspect()
 
-    grad_w2 = Nx.divide(Nx.dot(Nx.transpose(grad_z2), a1), m_batch) |> Nx.transpose()
-    grad_b2 = Nx.mean(grad_z2, axes: [:output], keep_axes: true)
+    grad_w2 = Nx.divide(Nx.dot(grad_z2, a1), m_batch) |> Nx.transpose()
+    grad_b2 = Nx.mean(Nx.transpose(grad_z2), axes: [:output], keep_axes: true)
 
-    grad_a1 = Nx.dot(w2, Nx.transpose(grad_z2)) |> Nx.transpose()
-    grad_z1 = Nx.multiply(grad_a1, Nx.logistic(z1)) |> Nx.multiply(Nx.subtract(1.0, Nx.logistic(z1)))
+    grad_a1 = Nx.dot(w2, grad_z2) |> Nx.transpose()
+    grad_z1 = Nx.multiply(grad_a1, a1) |> Nx.multiply(Nx.subtract(1.0, a1))
 
     grad_w1 = Nx.divide(Nx.dot(Nx.transpose(grad_z1), batch_images), m_batch) |> Nx.transpose()
     grad_b1 = Nx.mean(grad_z1, axes: [1], keep_axes: true)
 
-    {
+    step = 0.01
+
+    {{
       Nx.subtract(w1, Nx.multiply(grad_w1, step)),
       Nx.subtract(b1, Nx.multiply(grad_b1, step)),
       Nx.subtract(w2, Nx.multiply(grad_w2, step)),
       Nx.subtract(b2, Nx.multiply(grad_b2, step))
-    }
+    }, avg_loss, avg_accuracy}
   end
 
   defp update_with_averages({_, _, _, _} = cur_params, imgs, tar, avg_loss, avg_accuracy, total) do
@@ -88,7 +104,7 @@ defmodule Torchx.MNIST do
     batch_accuracy = accuracy(cur_params, imgs, tar)
     avg_loss = Nx.add(avg_loss, Nx.divide(batch_loss, total))
     avg_accuracy = Nx.add(avg_accuracy, Nx.divide(batch_accuracy, total))
-    {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
+    # {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
   end
 
   defp unzip_cache_or_download(zip) do
@@ -148,7 +164,7 @@ defmodule Torchx.MNIST do
     |> Enum.zip(labels)
     |> Enum.reduce({cur_params, Nx.tensor(0.0), Nx.tensor(0.0)}, fn
       {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
-        update_with_averages(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)
+        update(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)
     end)
   end
 
@@ -189,11 +205,11 @@ IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
 IO.puts("Training MNIST for 10 epochs...\n\n")
-final_params = MNIST.train(train_images, train_labels, params, epochs: 3)
+final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
-IO.puts("Bring the parameters back from the device and print them")
-final_params = Nx.backend_transfer(final_params)
-IO.inspect(final_params)
+# IO.puts("Bring the parameters back from the device and print them")
+# final_params = Nx.backend_transfer(final_params)
+# IO.inspect(final_params)
 
 # IO.puts("AOT-compiling a trained neural network that predicts a batch")
 # Nx.Defn.aot(
