@@ -11,7 +11,7 @@ defmodule Nx.Defn.Compiler do
   It receives the same arguments as `c:__jit__/4` but must return
   a struct that implements the `Nx.Async` protocol.
   """
-  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), keyword) ::
+  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), opts :: keyword) ::
               Nx.Async.t()
 
   @doc """
@@ -26,8 +26,40 @@ defmodule Nx.Defn.Compiler do
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
   """
-  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), keyword) ::
+  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), opts :: keyword) ::
               Nx.t() | tuple()
+
+  @doc """
+  Callback for AOT compilation.
+
+  It compiles the given functions to NIFs.
+
+  It receives the output directory for compiled artifacts, the module
+  the NIFs belong to, the function definitions, alongside the options
+  to customize the AOT compilation.
+
+  The function definitions are four element tuples containing the function
+  name, a function that builds the tensor expression, the tensor expression
+  arguments as a list, and the definition options. The compilation of the
+  tensor expression should behave as close to the JIT compilation as possible,
+  except that each tuple is compiled to a NIF. The NIF will receive the
+  binaries equivalent to each tensor expression argument and it must return
+  `{:ok, list_of_binaries}`, where `list_of_binaries` represents each tensor
+  on the output, where composite types are flattened. Or it may return
+  `{:error, charlist}`.
+
+  It must return `{:ok, results, nif_path}`, where results is the result
+  of each anonymous function call, and `nif_path` is the path the compiled
+  NIF artifact was written to. It may also return `{:error, Exception.t}`
+  in case of errors.
+
+  This callback is optional.
+  """
+  @callback __aot__(output_dir :: binary, module :: atom, [def], aot_opts :: keyword) ::
+              {:ok, [Nx.t()], nif_path :: binary} | {:error, Exception.t()}
+            when def: {function_name :: atom, ([Nx.t()] -> Nx.t()), [Nx.t()], opts :: keyword}
+
+  @optional_callbacks __aot__: 4
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
@@ -122,9 +154,6 @@ defmodule Nx.Defn.Compiler do
     nif_ext_path = Path.join(output_dir, "#{module}.#{nif_extension}")
 
     funs =
-      # TODO: Make it work with tuples
-      # TODO: Check the input tensors
-      # TODO: Check the output tensors
       for {name, args, result} <- export_tuples do
         aot_name = aot_name(name, args)
         {args, vars_and_templates} = aot_args(args)
@@ -273,6 +302,7 @@ defmodule Nx.Defn.Compiler do
         :erlang.raise(:error, :undef, stack)
     end
   end
+
   @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
     state = %{
@@ -312,6 +342,7 @@ defmodule Nx.Defn.Compiler do
             Nx.Defn.Tree.from_flat_args(unquote(flat_args)),
             fn unquote(flat_args) ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
+
               try do
                 unquote(flat_args) = Nx.Defn.Tree.to_flat_params(unquote(flat_args))
                 Nx.Defn.Tree.to_result(unquote(defn_name)(unquote_splicing(args)))
