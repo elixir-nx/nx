@@ -204,12 +204,13 @@ defmodule Nx.Backend do
     end
   end
 
+  import Nx.Shared, only: [is_nan32: 1, is_nan64: 1]
+
   defp inspect_float(data, 32) do
     case data do
       <<0xFF800000::32-native>> -> "-Inf"
       <<0x7F800000::32-native>> -> "Inf"
-      <<0xFF800001::32-native>> -> "NaN"
-      <<0xFFC00001::32-native>> -> "NaN"
+      <<nan::32-native>> when is_nan32(nan) -> "NaN"
       <<x::float-32-native>> -> Float.to_string(x)
     end
   end
@@ -218,8 +219,7 @@ defmodule Nx.Backend do
     case data do
       <<0xFFF0000000000000::64-native>> -> "-Inf"
       <<0x7FF0000000000000::64-native>> -> "Inf"
-      <<0x7FF0000000000001::64-native>> -> "NaN"
-      <<0x7FF8000000000001::64-native>> -> "NaN"
+      <<nan::64-native>> when is_nan64(nan) -> "NaN"
       <<x::float-64-native>> -> Float.to_string(x)
     end
   end
