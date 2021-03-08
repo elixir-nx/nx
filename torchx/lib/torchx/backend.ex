@@ -202,6 +202,16 @@ defmodule Torchx.Backend do
     NIF.sum(to_ref(t), axes, keep_axes) |> from_ref(out)
   end
 
+  @impl true
+  def argmax(%T{type: out_type} = out, %T{} = t, opts) do
+    # check_type!(out_type)
+
+    axe = opts[:axis] || 0
+    keep_axes = opts[:keep_axes] || false
+
+    NIF.argmax(to_ref(t), axe, keep_axes) |> from_ref(out)
+  end
+
   defp check_type!(type),
     do:
       torch_type(type, "(explicitly cast the input tensor to a signed integer before taking sum)")

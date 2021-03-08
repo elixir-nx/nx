@@ -418,7 +418,9 @@ UNARY_OP2(negate, negative)
 UNARY_OP(round)
 UNARY_OP(sign)
 UNARY_OP(exp)
+UNARY_OP(log)
 UNARY_OP(bitwise_not)
+UNARY_OP2(logistic, sigmoid)
 
 
 NIF(dot)
@@ -436,6 +438,15 @@ NIF(sum)
   PARAM(2, bool, keep_dim);
 
   TENSOR(torch::sum(*t, dims, keep_dim));
+}
+
+NIF(argmax)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, dim);
+  PARAM(2, bool, keep_dim);
+
+  TENSOR(torch::argmax(*t, dim, keep_dim));
 }
 
 NIF(cholesky)
@@ -570,6 +581,7 @@ static ErlNifFunc nif_functions[] = {
 
     DF(outer, 2),
     DF(sum, 3),
+    DF(argmax, 3),
 
     DF(abs, 1),
     DF(ceil, 1),
@@ -578,7 +590,9 @@ static ErlNifFunc nif_functions[] = {
     DF(round, 1),
     DF(sign, 1),
     DF(exp, 1),
+    DF(log, 1),
     DF(bitwise_not, 1),
+    DF(logistic, 1),
 
     DF(dot, 2),
 

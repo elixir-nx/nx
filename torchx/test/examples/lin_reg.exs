@@ -1,4 +1,4 @@
-defmodule LinReg do
+defmodule Torchx.LinReg do
   # Data size
   @n 32
 
