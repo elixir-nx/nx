@@ -231,20 +231,80 @@ defmodule Nx.Defn do
     Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
   end
 
-  def export_aot(dir, module, tuples, compiler, aot_opts \\ [])
-      when is_binary(dir) and is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
-    tuples =
-      for tuple <- tuples do
+  @doc """
+  Exports the ahead-of-time definition of a module with the
+  given `functions` using the given `compiler`. For example:
+
+      functions = [
+        {:softmax, &Nx.exp(&1)/Nx.sum(Nx.exp(&1)), [Nx.template({100, 100}, {:f, 32})]},
+        {:normalize, &Nx.divide(&1, 255), [Nx.template({100, 100}, {:f, 32})]}
+      ]
+
+      :ok = Nx.Defn.export_aot("priv", MyModule, functions, EXLA)
+
+  The above will export a module definition called `MyModule`
+  to the given directory with `softmax/1` and `normalize/1` as
+  functions that expects f32 tensors that are 100x100 of shape.
+  This definition can then be imported at will.
+
+  `functions` is a list of 3- or 4-element tuples. The first element
+  is the function name, the second is an anonymous function that returns
+  the tensor expression for a given function, the third is a list of
+  the arguments as templates, and the fourth is an option list of
+  options for the given tensor expression (often similar to the options
+  you would pass on the call to `jit/2`).
+
+  The options to each function as long as the `aot_options` are specific
+  to the given compiler.
+
+  ## AOT export with Mix
+
+  This is useful because you only need the compilation environment,
+  such as EXLA, when exporting. In practice, you can do this:
+
+    1. Add `{:exla, ..., only: :export_aot}` as a dependency
+
+    2. Define an exporting script at `script/export_my_module.exs`
+
+    3. Run the script to export the AOT `mix run script/export_my_module.exs`
+
+    4. Now inside `lib/my_module.ex` you can import it:
+
+          if File.exists?("priv/MyModule.nx.aot") do
+            defmodule MyModule do
+              Nx.Defn.import_aot("priv", __MODULE__)
+            end
+          else
+            IO.warn "Skipping MyModule because aot definition was not found"
+          end
+
+  """
+  def export_aot(dir, module, functions, compiler, aot_opts \\ [])
+      when is_binary(dir) and is_atom(module) and is_list(functions) and is_atom(compiler) and
+             is_list(aot_opts) do
+    functions =
+      for tuple <- functions do
         case tuple do
-          {name, fun, args} -> {name, fun, args, []}
-          {name, fun, args, opts} -> {name, fun, args, opts}
-          _ -> raise ArgumentError, "expected 3- or 4-element tuples, got: #{inspect(tuple)}"
+          {name, fun, args} ->
+            {name, fun, args, []}
+
+          {name, fun, args, opts} ->
+            {name, fun, args, opts}
+
+          _ ->
+            raise ArgumentError,
+                  "expected 3- or 4-element tuples as functions, got: #{inspect(tuple)}"
         end
       end
 
-    Nx.Defn.Compiler.__export_aot__(dir, module, tuples, compiler, aot_opts)
+    Nx.Defn.Compiler.__export_aot__(dir, module, functions, compiler, aot_opts)
   end
 
+  @doc """
+  Imports a previousy exported AOT definition for `module` at `dir`.
+
+  See `export_aot/4` for more information.
+  """
   def import_aot(dir, module) when is_binary(dir) and is_atom(module) do
     unless Module.open?(module) do
       raise ArgumentError,
@@ -262,15 +322,42 @@ defmodule Nx.Defn do
   end
 
   @doc """
-  Ahead-of-time compiles the anonymous function with the given
-  defn compiler.
+  Defines a `module` by compiling an ahead-of-time definition
+  with the given `functions` using the given `compiler`.
+  For example:
+
+      functions = [
+        {:softmax, &Nx.exp(&1)/Nx.sum(Nx.exp(&1)), [Nx.template({100, 100}, {:f, 32})]},
+        {:normalize, &Nx.divide(&1, 255), [Nx.template({100, 100}, {:f, 32})]}
+      ]
+
+      Nx.Defn.aot(MyModule, functions, EXLA)
+
+  The above will define a module called `MyModule` with
+  `softmax/1` and `normalize/1` as functions that expects
+  f32 tensors that are 100x100 of shape.
+
+  While this function defines the module immediately, in
+  practice most developers will use `export_aot` to export
+  the AOT definition and then use `import_aot` to import it.
+  This is useful because you only need the compilation
+  environment, such as EXLA, only when exporting. In practice,
+  this function is equivalent to the following:
+
+      :ok = Nx.Defn.export_aot("priv/my_app/aot", MyModule, functions, EXLA)
+
+      defmodule MyModule do
+        Nx.Defn.import_aot("priv/my_app/aot", __MODULE__)
+      end
+
+  See `export_aot/5` for more information.
   """
-  def aot(module, tuples, compiler, aot_opts \\ [])
-      when is_atom(module) and is_list(tuples) and is_atom(compiler) and is_list(aot_opts) do
+  def aot(module, functions, compiler, aot_opts \\ [])
+      when is_atom(module) and is_list(functions) and is_atom(compiler) and is_list(aot_opts) do
     output_dir = Path.join(System.tmp_dir(), "elixir-nx/aot#{System.unique_integer()}")
 
     try do
-      case export_aot(output_dir, module, tuples, compiler, aot_opts) do
+      case export_aot(output_dir, module, functions, compiler, aot_opts) do
         :ok ->
           defmodule module do
             @moduledoc false
