@@ -97,7 +97,7 @@ NIF(delete_tensor)
 {
   TENSOR_PARAM(0, t);
 
-  delete t;
+  t->~Tensor();
   enif_release_resource(t);
 
   return nx::nif::ok(env);
@@ -477,7 +477,11 @@ NIF(qr)
 
 void free_tensor(ErlNifEnv *env, void *obj)
 {
-  // std::cout << "Deleting: " << obj << std::endl;
+  torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
+  if (tensor != nullptr) {
+    tensor->~Tensor();
+    tensor = nullptr;
+  }
 }
 
 static int
