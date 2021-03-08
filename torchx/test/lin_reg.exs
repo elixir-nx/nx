@@ -1,6 +1,6 @@
 defmodule LinReg do
-
-  @n 32 # Data size
+  # Data size
+  @n 32
 
   # y = mx + b
   def init_random_params do
@@ -15,28 +15,19 @@ defmodule LinReg do
     |> Nx.add(b)
   end
 
-  # MSE Loss
-  # def loss({m, b}, inp, tar) do
-  #   preds = predict({m, b}, inp)
-  #   Nx.mean(Nx.power(tar - preds, 2))
-  # end
-
   def update({m, b}, inp, tar, step) do
-
-    # {grad_m, grad_b} = grad({m, b}, loss({m, b}, inp, tar))
-
     preds = predict({m, b}, inp)
-    # Nx.mean(Nx.power(tar - preds, 2))
 
     errors = Nx.subtract(tar, preds)
 
-    grad_m = Nx.mean(Nx.multiply(inp, errors))  # Derivative wrt m
-    grad_b = Nx.mean(errors)  # Derivative wrt b
+    # Derivative wrt m
+    grad_m = Nx.mean(Nx.multiply(inp, errors))
+    # Derivative wrt b
+    grad_b = Nx.mean(errors)
 
-
-    {Nx.subtract(m, Nx.multiply(grad_m, -2*step)), Nx.subtract(b, Nx.multiply(grad_b, -2*step))}
+    {Nx.subtract(m, Nx.multiply(grad_m, -2 * step)),
+     Nx.subtract(b, Nx.multiply(grad_b, -2 * step))}
   end
-
 
   def train(params, epochs, lin_fn) do
     data =
@@ -59,7 +50,7 @@ defmodule LinReg do
     end
   end
 
-  def run do
+  def run(epochs \\ 100) do
     Nx.default_backend(Torchx.Backend)
     params = LinReg.init_random_params()
     m = :rand.normal(0.0, 10.0)
@@ -67,7 +58,6 @@ defmodule LinReg do
     IO.puts("Target m: #{m} Target b: #{b}\n")
 
     lin_fn = fn x -> m * x + b end
-    epochs = 100
 
     # These will be very close to the above coefficients
     IO.inspect(LinReg.train(params, epochs, lin_fn))
