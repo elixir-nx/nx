@@ -549,6 +549,22 @@ defmodule NxTest do
              """
     end
 
+    test "more nan for f32" do
+      bin =
+        <<0x7F800001::32-native, 0xFF800002::32-native, 0x7FC00000::32-native,
+          0xFFC00000::32-native>>
+
+      # Assert that none of them are indeed valid
+      assert for(<<x::float-32-native <- bin>>, do: x) == []
+
+      assert inspect(Nx.from_binary(bin, {:f, 32})) == """
+             #Nx.Tensor<
+               f32[4]
+               [NaN, NaN, NaN, NaN]
+             >\
+             """
+    end
+
     test "infinity and nan for f64" do
       bin =
         <<0xFFF0000000000000::64-native, 0x7FF0000000000000::64-native,
@@ -561,6 +577,22 @@ defmodule NxTest do
              #Nx.Tensor<
                f64[4]
                [-Inf, Inf, NaN, NaN]
+             >\
+             """
+    end
+
+    test "more nan for f64" do
+      bin =
+        <<0xFFF0000000000001::64-native, 0x7FF0000000000002::64-native,
+          0xFFF8000000000000::64-native, 0x7FF8000000000000::64-native>>
+
+      # Assert that none of them are indeed valid
+      assert for(<<x::float-64-native <- bin>>, do: x) == []
+
+      assert inspect(Nx.from_binary(bin, {:f, 64})) == """
+             #Nx.Tensor<
+               f64[4]
+               [NaN, NaN, NaN, NaN]
              >\
              """
     end
