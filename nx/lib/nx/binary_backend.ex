@@ -420,8 +420,8 @@ defmodule Nx.BinaryBackend do
   #           inner_total =
   #             for inner_i <- range(inner_d), reduce: 0 do
   #               inner_acc ->
-  #                 i1 = offset1 + Index.coords_to_i(shape1, {outer_i1, inner_i})
-  #                 i2 = offset2 + Index.coords_to_i(shape2, {inner_i, outer_i2})
+  #                 i1 = offset1 + Nx.Shape.coords_to_i(shape1, {outer_i1, inner_i})
+  #                 i2 = offset2 + Nx.Shape.coords_to_i(shape2, {inner_i, outer_i2})
   #                 n1 = Bits.number_at(data1, type1, i1)
   #                 n2 = Bits.number_at(data2, type2, i2)
   #                 inner_acc + n1 * n2
@@ -1470,11 +1470,12 @@ defmodule Nx.BinaryBackend do
   # Helper for reducing down a single axis over two tensors,
   # returning tensor data and a final accumulator.
   defp bin_zip_reduce_axis(<<>>, <<>>, _s1, _s2, bin, acc, _fun),
-    do: {bin, acc}
+    do: {bin, acc} # |> IO.inspect(label: :bzr_axis_fin)
 
   defp bin_zip_reduce_axis(b1, b2, s1, s2, _bin, acc, fun) do
     <<x::size(s1)-bitstring, rest1::bitstring>> = b1
     <<y::size(s2)-bitstring, rest2::bitstring>> = b2
+    # IO.inspect({x, y}, label: :bzr_axis)
     {bin, acc} = fun.(x, y, acc)
     bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
   end
@@ -1531,28 +1532,48 @@ defmodule Nx.BinaryBackend do
 
   ## Aggregation helpers
 
-  defp aggregate_axes(binary, axes, shape, size) do
+  def aggregate_axes(binary, axes, shape, size) do
     {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
-
+    
     view =
       for <<chunk::size(chunk_size)-bitstring <- binary>> do
         weighted_traverse(path, chunk, read_size)
       end
 
-    List.flatten(view)
+    view = List.flatten(view)
+    IO.inspect(view, label: :view)
+    view
+  end
+
+  defp get_seq do
+    key = {__MODULE__, :seq}
+    seq = Process.get(key)
+    seq = seq || 0
+    next_seq = seq + 1
+    Process.put(key, next_seq)
+    seq
+  end
+
+  def print_data(tag, data) do
+    IO.puts("#{get_seq()} #{Kernel.inspect(tag)} #{Kernel.inspect(data, binaries: :as_binaries)}")
   end
 
   def aggregate_axes([_ | _] = axes, shape, size) do
     axes = Enum.sort(axes)
     min = hd(axes)
     weighted_shape = weighted_shape(shape, size)
+    # IO.inspect(weighted_shape, label: :ws1)
     [{axis_count, axis_weight} | _] = weighted_shape = Enum.drop(weighted_shape, min)
+    # IO.inspect(axes, label: :axes)
+    # IO.inspect(min, label: :min)
+    # IO.inspect(weighted_shape, label: :ws2)
     chunk_size = axis_count * axis_weight
-
+    # IO.inspect({size, chunk_size}, label: :chunk_size)
     # The goal of aggregate path is to split the paths
     # we are reducing from the ones we are keeping as is.
+    IO.inspect(axes, label: :axes)
     {reverse_pre, reverse_pos} = aggregate_path(weighted_shape, axes, min, [], [])
-
+    IO.inspect({reverse_pre, reverse_pos}, label: :reverse_pre)
     # Now if we are reducing on the last dimensions, we
     # can increase the read size.
     {reverse_pos, read_size} =
@@ -1566,27 +1587,23 @@ defmodule Nx.BinaryBackend do
     raise ArgumentError, ":axes must be a non empty list, got: #{inspect(axes)}"
   end
 
-  def aggregate_path2(shape, axes) do
-    size = 1
-    weighted_shape = weighted_shape(shape, size)
-    axes = Enum.sort(axes)
-    min = hd(axes)
-    {reverse_pre, reverse_pos} =
-      aggregate_path(weighted_shape, axes, min, [], [])
-
-    {reverse_pos, _read_size} =
-      aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
-
-    Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
+  defp aggregate_path([pair | shape], [i | axes], i, pre, pos) do
+    # IO.inspect(binding(), label: :agg_path_hd_axis_eq_i)
+    # IO.puts("aggregate_path(shape, axes, i + 1, pre, [pair | pos])\n")
+    aggregate_path(shape, axes, i + 1, pre, [pair | pos])
   end
 
-  defp aggregate_path([pair | shape], [i | axes], i, pre, pos),
-    do: aggregate_path(shape, axes, i + 1, pre, [pair | pos])
+  defp aggregate_path([pair | shape], axes, i, pre, pos) do
+    # IO.inspect(binding(), label: :agg_path_hd_axis_neq_i)
+    # IO.puts("aggregate_path(shape, axes, i + 1, [pair | pre], pos)\n")
+    aggregate_path(shape, axes, i + 1, [pair | pre], pos)
+  end
 
-  defp aggregate_path([pair | shape], axes, i, pre, pos),
-    do: aggregate_path(shape, axes, i + 1, [pair | pre], pos)
-
-  defp aggregate_path([], [], _i, pre, pos), do: {pre, pos}
+  defp aggregate_path([], [], _i, pre, pos) do
+    # IO.inspect(binding(), label: :agg_path_done)
+    # IO.puts("{pre, pos}\n")
+    {pre, pos}
+  end
 
   defp aggregate_read([{axis, weight} | shape], i, [i | axis], _size),
     do: aggregate_read(shape, i - 1, axis, axis * weight)
@@ -1605,7 +1622,7 @@ defmodule Nx.BinaryBackend do
   #
   # This is often given to `weighted_traverse/4` as a general
   # mechanism to traverse binaries.
-  defp weighted_shape(shape, size, limits \\ :none, dilations \\ 1) do
+  def weighted_shape(shape, size, limits \\ :none, dilations \\ 1) do
     rank = tuple_size(shape)
 
     dilations =
@@ -1649,10 +1666,13 @@ defmodule Nx.BinaryBackend do
 
   defp weighted_traverse([], data, read_size, offset) do
     <<_::size(offset)-bitstring, chunk::size(read_size)-bitstring, _::bitstring>> = data
+    print_data(:chunk, chunk)
     chunk
   end
 
   defp weighted_traverse([{dim, size} | dims], data, read_size, offset) do
+    IO.inspect({dim, size}, label: :traverse)
+    IO.inspect(dims, label: :traverse_rest)
     weighted_traverse(dim, size, dims, data, read_size, offset)
   end
 
@@ -1661,15 +1681,22 @@ defmodule Nx.BinaryBackend do
   end
 
   defp weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
+    # recurse on the next dims accumulating into head
     head = weighted_traverse(dims, data, read_size, offset)
+    # IO.inspect({dim, offset, head}, label: :head)
 
     case dim do
       1 ->
+        # IO.inspect({dim, offset, [head]}, label: :return_lone_head)
         [head]
 
       _ ->
         <<_::size(dim_size)-bitstring, data::bitstring>> = data
-        [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
+        # print_data(:chunk, data)
+        # IO.inspect({dim, offset, data}, label: :read_data)
+        acc = [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
+        IO.inspect({dim, offset, acc}, label: :return_acc, binaries: :as_binaries)
+        acc
     end
   end
 

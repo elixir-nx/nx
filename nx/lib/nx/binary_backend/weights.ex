@@ -117,6 +117,8 @@ defmodule Nx.BinaryBackend.Weights do
   @doc """
   Returns the weight of the given axis.
 
+  Used in multiplication or division.
+
   ## Examples
 
       iex> Weights.weight_of_axis(Weights.build({3, 4, 5}), 0)
@@ -132,6 +134,33 @@ defmodule Nx.BinaryBackend.Weights do
       1
   """
   def weight_of_axis({_, weights}, axis) do
+    elem(weights, axis)
+  end
+
+  @doc """
+  Returns the offset of the given axis.
+
+  Used in addition and subtraction.
+
+  ## Examples
+
+      iex> Weights.offset_of_axis(Weights.build({3, 4, 5}), 0)
+      20
+
+      iex> Weights.offset_of_axis(Weights.build({4, 5}), 0)
+      5
+
+      iex> Weights.weight_of_axis(Weights.build({4, 5}), 1)
+      0
+
+      iex> Weights.weight_of_axis(Weights.build({10}), 0)
+      0
+  """
+  def offset_of_axis({_, weights}, axis) when axis == tuple_size(weights) - 1 do
+    0
+  end
+  
+  def offset_of_axis({_, weights}, axis) do
     elem(weights, axis)
   end
 end

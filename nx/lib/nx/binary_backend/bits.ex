@@ -2,6 +2,7 @@ defmodule Nx.BinaryBackend.Bits do
   import Nx.Shared
 
   alias Nx.BinaryBackend.Index
+  alias Nx.BinaryBackend.Weights
 
   @compile {:inline, from_number: 2, to_number: 2, number_at: 3}
 
@@ -94,7 +95,7 @@ defmodule Nx.BinaryBackend.Bits do
   end
 
   @doc """
-  Zips and reduces the data of the two tensors
+  Zips and reduces the data of the two tensors.
   """
   def zip_reduce(bits_acc, type_out, _shape1, type1, data1, [], _shape2, type2, data2, [], acc, fun) do
     match_types [type1, type2] do
@@ -111,50 +112,151 @@ defmodule Nx.BinaryBackend.Bits do
 
     tagged_dims1 = tagged_dims(shape1, axes1)
     tagged_dims2 = tagged_dims(shape2, axes2)
+    # IO.puts("""
 
-    indices1 = tagged_dims_to_indices(tagged_dims1, weights1, 0)
-    indices2 = tagged_dims_to_indices(tagged_dims2, weights2, 0)
+    # BREAK --- start zip_reduce
+    
+    # shape1: #{inspect(shape1)}
+    # axes1:  #{inspect(axes1)}
+    # data1:  #{inspect(data1)}
+    # weights1: #{inspect(weights1)}
+    
+    # vs 
 
-    traverse_reduce(bits_acc, type_out,  type1, data1, indices1, type2, data2, indices2, init_acc, fun)
+    # shape2: #{inspect(shape2)}
+    # axes2:  #{inspect(axes2)}
+    # data2:  #{inspect(data2)}
+    # weights2: #{inspect(weights2)}
+
+    # """)
+    # IO.puts("start indices1")
+    indices1 = tagged_dims_to_indices(tagged_dims1, 0)
+    # IO.inspect(indices1, label: "got indices1")
+    # IO.puts("start indices2")
+    indices2 = tagged_dims_to_indices(tagged_dims2, 0)
+    # IO.inspect(indices2, label: "got indices2")
+
+    mappers1 = tagged_range_and_mapper(tagged_dims1, weights1)
+    mappers2 = tagged_range_and_mapper(tagged_dims1, weights2)
+    # mappers1 = []
+    # mappers2 = []
+    # IO.inspect({mappers1, mappers2}, label: :imappers)
+
+    out_data2 = traverse_reduce2(bits_acc, type_out, type1, data1, mappers1, type2, data2, mappers2, init_acc, fun)
+    # IO.puts("traverse_reduce2 result: #{out_data2}")
+
+    # IO.inspect(indices2, label: :indices2)
+    traverse_reduce(bits_acc, type_out, type1, data1, indices1, type2, data2, indices2, init_acc, fun)
   end
 
   defp tagged_dims(shape, axes) do
+    weights = Weights.build(shape)
     0..(tuple_size(shape) - 1)
     |> Enum.map(fn axis ->
       dim = Nx.Shape.dimension(shape, axis)
+      weight = Weights.weight_of_axis(weights, axis)
       if axis in axes do
-        {:contract, axis, dim}
+        {:contract, axis, dim, weight}
       else
-        {:normal, axis, dim}
+        {:normal, axis, dim, weight}
       end
     end)
     |> Enum.sort(&(&1 >= &2))
   end
 
 
-  defp tagged_dims_to_indices([], _weights, _i) do
+  defp tagged_dims_to_indices([], _i) do
     []
   end
 
-  defp tagged_dims_to_indices([{tag, axis, dim} | tagged_dims], weights, offset) do
-    w = weight_of_axis(weights, axis)
-
+  defp tagged_dims_to_indices([{tag, axis, dim, w} | tagged_dims], offset) do
+    # IO.puts("tagged_dims_to_indices: {tag, axis, dim, w} = #{inspect({tag, axis, dim, w})}")
     idxs = 
-      for i <- 0..(dim - 1) do
-        i = offset + i * w
-        [i | tagged_dims_to_indices(tagged_dims, weights, i)]
+      for i <- Index.range(dim) do
+        offset_by_iw = offset + i * w
+        [offset_by_iw | tagged_dims_to_indices(tagged_dims, offset_by_iw)]
       end
 
     aggregate(tag, idxs)
   end
 
-  def aggregate(:contract, [_ | idxs]) do
+   defp tagged_range_and_mapper([], _weights) do
+    []
+  end
+
+  defp tagged_range_and_mapper([{tag, axis, dim, w} | tagged_dims], weights) do
+    range = tagged_range(tag, dim)
+    mapper = tagged_mapper(tag, axis, dim, w)
+    [{tag, range, mapper, axis} | tagged_range_and_mapper(tagged_dims, weights)]
+  end
+
+  defp tagged_mapper(:contract, axis, dim, w) do
+    # Index.axis_mapper(weights, axis)
+    fn _ -> {0, 0} end
+  end
+
+  defp tagged_mapper(:normal, axis, dim, w) do
+    # Index.axis_mapper(weights, axis)
+    fn _ -> {0, 0} end
+  end
+
+  defp tagged_range(:contract, dim) do
+    Index.range(dim)
+  end
+  
+  defp tagged_range(:normal, dim) do
+    start..stop = Index.range(dim)
+    start..(stop + 1)
+  end
+
+  def aggregate(:contract, [_ignored | idxs]) do
+    # IO.puts("aggregate with tag :contract ignoring head of idxs #{inspect(_ignored)}")
     List.flatten(idxs)
   end
 
   def aggregate(:normal, idxs) do
     idxs
   end
+
+  def traverse_reduce2(bits_acc, type_out, type1, data1, imappers1, type2, data2, imappers2, init_acc, fun) do
+    IO.puts("")
+    for {tag1, r1, im1, axis1} <- imappers1, {tag2, r2, im2, axis2} <- imappers2 do
+      if Enum.count(r1) != Enum.count(r2) do
+        raise ArgumentError, "during traversal #{inspect(r1)}" <>
+              " on axis #{axis1} did not match the size of" <>
+              " #{inspect(r2)} on axis #{axis2}"
+      end
+      # IO.puts("""
+      # start zip_reduce traversal
+      # """)
+      for i <- r1, reduce: {<<>>, 0, 0} do
+        {acc, offset1, offset2} ->
+          {i1, o1} = im1.(i)
+          {i2, o2} = im2.(i)
+          new_offset1 = offset1 + o1
+          new_offset2 = offset2 + o2
+
+          # IO.puts("""
+          # zip_reduce traversal -
+          #   i: #{i} of #{inspect(r1)}
+
+          #   i1: #{i1}
+          #   axis1: #{axis1} #{tag1}
+          #   offsets: #{offset1} + #{o1} ==> #{new_offset1}
+
+          #   i2: #{i2}
+          #   axis1: #{axis2} #{tag2}
+          #   offsets: #{offset2} + #{o2} ==> #{new_offset2}
+
+          #   pair: {#{new_offset1}, #{new_offset2}}
+          # """)
+        {acc, new_offset1, new_offset2}
+      end
+    end
+    <<>>
+  end
+
+ 
   
   defp traverse_reduce(bits_acc, type_out, type1, data1, [i1 | _] = indices1, type2, data2, indices2, acc, fun) when is_list(i1) do
     for idx1 <- indices1, reduce: bits_acc do

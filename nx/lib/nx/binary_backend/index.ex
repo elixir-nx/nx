@@ -57,15 +57,34 @@ defmodule Nx.BinaryBackend.Index do
 
   ### Examples
 
-      iex> Index.project_on_axis(Weights.build({3, 4, 5}), 2, 1)
+      iex> Index.contract_axis(Weights.build({3, 4, 5}), 2, 1)
       1
 
   """
-  def project_on_axis(weights, axis, i) do
+  def contract_axis(weights, axis, i) do
     w = Weights.weight_of_axis(weights, axis)
     size = Weights.size(weights)
     rem(i * w, size)
   end
+
+  # def contract_axis_mapper(weights, axis) do
+  #   w = Weights.weight_of_axis(weights, axis)
+  #   size = Weights.size(weights)
+    
+  #   fn i ->
+  #     absolute = i * w
+  #     relative = rem(absolute, size)
+  #     {relative, absolute}
+  #   end
+  # end
+
+
+
+  # defp groups_to_aggregate_axes(shape, weights, groups) do
+  #   Enum.reduce(groups, {[], []}, fn
+  #     n..n ->
+  #   end)
+  # end
 
   @doc """
   For a count returns a value that can be enumerated for indices.
@@ -86,7 +105,42 @@ defmodule Nx.BinaryBackend.Index do
   def range(0), do: []
   def range(n) when n > 0, do: 0..(n - 1)
 
+  def range_shift(start1..stop1, start2..stop2) do
+    (start1 + start2)..(stop1 + stop2)
+  end
 
+  def range_split_right(start..stop, n) when n in start..stop do
+    {range_forward(start..(n - 1)), n..stop}
+  end
+
+  def range_split_left(start..stop, n) when n in start..stop do
+    {start..n, range_forward((n + 1)..stop)}
+  end
+
+  def range_non_negative(start.._) when start < 0 do
+    []
+  end
+
+  def range_non_negative(_..stop) when stop < 0 do
+    []
+  end
+
+  def range_non_negative(r) do
+    r
+  end
+
+  def range_forward(start..stop) when start > stop do
+    []
+  end
+
+  def range_forward(range) do
+    range
+  end
+
+  def range_pop_left(start..stop) when start <= stop do
+    r = (start + 1)..stop
+    {start, range_forward(r)}
+  end
 
   # defp index_check!(shape, i) do
   #   if i >= tuple_size(shape) do

@@ -205,7 +205,48 @@ defmodule Nx.BinaryBackend.BitsTest do
       data_out = Bits.zip_reduce("", type, {1, 2}, type, <<1, 2>>, [], {2, 1}, type, <<3, 4>>, [], 0, fn a, b, acc -> acc + a * b end)
       assert data_out == <<3, 4, 6, 8>>
     end
+
+    test "works with non-matrix dot" do
+      t1 = Nx.iota({2, 2, 2}, type: {:u, 8})
+
+      t2 = Nx.iota({2, 2, 2}, type: {:u, 8})
+
+      out_data = Bits.zip_reduce("", {:u, 8}, t1.shape, t1.type, t1.data.state, [0], t2.shape, t2.type, t2.data.state, [1], 0, fn a, b, acc ->
+        acc + a * b
+      end)
+
+      _good = Nx.dot(t1, [0], t2, [1])
+
+      t3 = Nx.from_binary(out_data, {:u, 8})
+      t3 = Nx.reshape(t3, {2, 2, 2, 2})
+      t4 = Nx.tensor([
+        [
+          [
+            [8, 10],
+            [12, 14]
+          ],
+          [
+            [12, 16],
+            [20, 24]
+          ]
+        ],
+        [
+          [
+            [24, 34],
+            [44, 54]
+          ],
+          [
+            [28, 40],
+            [52, 64]
+          ]
+        ]
+      ], type: {:u, 8})
+      assert t3 == t4 
+    end
+    
+    
   end
+
 
   defp do_dot_test do
     t1 = Nx.tensor([
