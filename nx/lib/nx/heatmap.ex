@@ -107,9 +107,9 @@ defmodule Nx.Heatmap do
       base = max - min
 
       {[], doc} =
-        Enum.reduce(1..cols, {acc, empty()}, fn _, {acc, doc} ->
+        Enum.reduce(1..rows, {acc, empty()}, fn _, {acc, doc} ->
           {line, acc} =
-            Enum.map_reduce(1..rows, acc, fn _, [elem | acc] ->
+            Enum.map_reduce(1..cols, acc, fn _, [elem | acc] ->
               {entry_fun.((elem - min) / base), acc}
             end)
 
