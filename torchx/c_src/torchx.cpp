@@ -121,6 +121,24 @@ NIF(from_blob)
   TENSOR(torch::clone(torch::from_blob(blob.data, shape, type)));
 }
 
+NIF(to_blob)
+{
+  ERL_NIF_TERM result;
+  TENSOR_PARAM(0, t);
+  size_t byte_size = t->nbytes();
+
+  if (argc == 2)
+  {
+    PARAM(1, int64_t, limit);
+    byte_size = limit * t->itemsize();
+  }
+
+  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
+  memcpy(result_data, t->data_ptr(), byte_size);
+
+  return result;
+}
+
 NIF(type)
 {
   TENSOR_PARAM(0, t);
@@ -180,24 +198,6 @@ NIF(split)
   PARAM(1, int64_t, batch_size);
 
   TENSOR_LIST(torch::split(*t, batch_size));
-}
-
-NIF(to_blob)
-{
-  ERL_NIF_TERM result;
-  TENSOR_PARAM(0, t);
-  size_t byte_size = t->nbytes();
-
-  if (argc == 2)
-  {
-    PARAM(1, int64_t, limit);
-    byte_size = limit * t->itemsize();
-  }
-
-  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-  memcpy(result_data, t->data_ptr(), byte_size);
-
-  return result;
 }
 
 NIF(scalar_tensor)

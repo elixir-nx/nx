@@ -13,7 +13,7 @@ defmodule Torchx.MNIST do
     Nx.divide(exp, Nx.sum(exp, axes: [:output], keep_axes: true))
   end
 
-  defp predict({w1, b1, w2, b2}, batch) do
+  def predict({w1, b1, w2, b2}, batch) do
     batch
     |> Nx.dot(w1)
     |> Nx.add(b1)
@@ -48,7 +48,7 @@ defmodule Torchx.MNIST do
     z2 = Nx.dot(a1, w2) |> Nx.add(b2)
     preds = a2 = softmax(z2)
 
-    loss = Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
+    # loss = Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
 
     # gradients at last layer (Py2 need 1. to transform to float)
     # dW2 = (1. / m_batch) * np.matmul(dZ2, cache["A1"].T)
@@ -62,18 +62,18 @@ defmodule Torchx.MNIST do
     # dW1 = (1. / m_batch) * np.matmul(dZ1, X.T)
     # db1 = (1. / m_batch) * np.sum(dZ1, axis=1, keepdims=True)
 
-    grad_z2 = Nx.subtract(batch_labels, preds)
+    grad_z2 = Nx.subtract(preds, batch_labels)
 
-    m_batch = Nx.size(grad_z2)
+    m_batch = 30 # Nx.size(grad_z2) |> IO.inspect()
 
-    grad_w2 = Nx.multiply(1/m_batch, Nx.dot(Nx.transpose(grad_z2), a1)) |> Nx.transpose()
-    grad_b2 = Nx.mean(grad_z2)
+    grad_w2 = Nx.divide(Nx.dot(Nx.transpose(grad_z2), a1), m_batch) |> Nx.transpose()
+    grad_b2 = Nx.divide(Nx.sum(grad_z2, axes: [:output], keep_axes: true), m_batch)
 
     grad_a1 = Nx.dot(w2, Nx.transpose(grad_z2)) |> Nx.transpose()
-    grad_z1 = Nx.multiply(grad_a1, Nx.logistic(z1)) |> Nx.multiply(Nx.subtract(1, Nx.logistic(z1)))
+    grad_z1 = Nx.multiply(grad_a1, Nx.logistic(z1)) |> Nx.multiply(Nx.subtract(1.0, Nx.logistic(z1)))
 
-    grad_w1 = Nx.multiply(1/m_batch, Nx.dot(Nx.transpose(grad_z1), batch_images)) |> Nx.transpose()
-    grad_b1 = Nx.mean(grad_z1)
+    grad_w1 = Nx.divide(Nx.dot(Nx.transpose(grad_z1), batch_images), m_batch) |> Nx.transpose()
+    grad_b1 = Nx.divide(Nx.sum(grad_z1, axes: [1], keep_axes: true), m_batch)
 
     {
       Nx.subtract(w1, Nx.multiply(grad_w1, step)),
@@ -84,7 +84,7 @@ defmodule Torchx.MNIST do
   end
 
   defp update_with_averages({_, _, _, _} = cur_params, imgs, tar, avg_loss, avg_accuracy, total) do
-    batch_loss = loss(cur_params, imgs, tar) |> IO.inspect()
+    batch_loss = loss(cur_params, imgs, tar)
     batch_accuracy = accuracy(cur_params, imgs, tar)
     avg_loss = Nx.add(avg_loss, Nx.divide(batch_loss, total))
     avg_accuracy = Nx.add(avg_accuracy, Nx.divide(batch_accuracy, total))
@@ -160,12 +160,10 @@ defmodule Torchx.MNIST do
         {time, {new_params, epoch_avg_loss, epoch_avg_acc}} =
           :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
 
-        epoch_avg_loss =
-          epoch_avg_loss
-          |> IO.inspect()
-          |> Nx.backend_transfer(Nx.BinaryBackend)
-          |> IO.inspect()
-          |> Nx.to_scalar()
+        # epoch_avg_loss =
+        #   epoch_avg_loss
+        #   |> Nx.backend_transfer(Nx.BinaryBackend)
+        #   |> Nx.to_scalar()
 
         # epoch_avg_acc =
         #   epoch_avg_acc
@@ -191,7 +189,7 @@ IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
 IO.puts("Training MNIST for 10 epochs...\n\n")
-final_params = MNIST.train(train_images, train_labels, params, epochs: 1)
+final_params = MNIST.train(train_images, train_labels, params, epochs: 3)
 
 IO.puts("Bring the parameters back from the device and print them")
 final_params = Nx.backend_transfer(final_params)
@@ -204,5 +202,20 @@ IO.inspect(final_params)
 #   EXLA
 # )
 
-# IO.puts("The result of the first batch against the AOT-compiled one")
-# IO.inspect MNIST.predict(hd(train_images))
+IO.puts("The result of the first batch")
+IO.inspect MNIST.predict(final_params, hd(train_images)) |> Nx.argmax(axis: :output)
+
+IO.puts("Labels for the first batch")
+IO.inspect hd(train_labels) |> Nx.as_type({:s, 8}) |> Nx.argmax(axis: :output)
+
+# first30 =
+#   hd(train_images)
+#   |> Nx.reshape({30, 28, 28})
+#   |> Nx.backend_transfer(Nx.BinaryBackend)
+#   # |> Nx.to_heatmap()
+
+# Nx.default_backend(Nx.BinaryBackend)
+
+# first30
+# |> Nx.to_heatmap()
+# |> IO.puts()
