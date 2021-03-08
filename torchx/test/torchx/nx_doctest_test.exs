@@ -27,7 +27,7 @@ defmodule Torchx.NxDoctestTest do
         dot: 4,
         map: 3,
         backend_transfer: 1,
-        to_flat_list: 2,
+        # to_flat_list: 2,
         norm_inf: 3,
         cholesky: 1,
         norm: 2,
