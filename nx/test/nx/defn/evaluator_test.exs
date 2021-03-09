@@ -27,11 +27,9 @@ defmodule Nx.Defn.EvaluatorTest do
   defn add_two_float(t), do: Nx.add(t, 2)
 
   test "constant" do
-    assert %T{shape: {3}, type: {:u, 8}} =
-             add_two_int(Nx.tensor([1, 2, 3], type: {:u, 8}))
+    assert %T{shape: {3}, type: {:u, 8}} = add_two_int(Nx.tensor([1, 2, 3], type: {:u, 8}))
 
-    assert %T{shape: {3}, type: {:bf, 16}} =
-             add_two_float(Nx.tensor([1, 2, 3], type: {:bf, 16}))
+    assert %T{shape: {3}, type: {:bf, 16}} = add_two_float(Nx.tensor([1, 2, 3], type: {:bf, 16}))
   end
 
   defn iota(), do: Nx.iota({2, 2})

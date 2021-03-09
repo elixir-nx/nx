@@ -47,22 +47,22 @@ defmodule Nx.MixProject do
         # Nx.Defn,
         # Nx.Defn.Kernel
 
-        "Backends": [
+        Backends: [
           Nx.Backend,
           Nx.BinaryBackend,
           Nx.TemplateBackend,
           Nx.Type
         ],
-        "Compilers": [
+        Compilers: [
           Nx.Defn.Compiler,
           Nx.Defn.Evaluator,
           Nx.Defn.Expr,
           Nx.Defn.Tree
         ],
-        "Structs": [
+        Structs: [
           Nx.Heatmap,
           Nx.Tensor
-        ],
+        ]
       ]
     ]
   end
