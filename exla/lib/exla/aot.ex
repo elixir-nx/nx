@@ -50,6 +50,12 @@ defmodule EXLA.AOT do
       source [in this directory](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/compiler/xla/service/cpu),
       starting with the `runtime_` prefix
 
+    * `:bazel_flags` - flags that customize `bazel build` command
+
+    * `:bazel_env` - flags that customize `bazel build` environment.
+      It must be a list of tuples where the env key and env value
+      are binaries
+
   Also see the options in `EXLA.Compilation.compile_aot/7`.
   """
   def compile(output_dir, module_name, functions, options \\ [])
@@ -65,6 +71,8 @@ defmodule EXLA.AOT do
       aot_dir: aot_dir,
       aot_path: Path.join(tf_path, aot_relative_path),
       aot_relative_path: aot_relative_path,
+      bazel_flags: options[:bazel_flags] || [],
+      bazel_env: options[:bazel_env] || [],
       lib_name: lib_name,
       module_name: module_name,
       runtimes: options[:runtimes] || [],
@@ -102,12 +110,13 @@ defmodule EXLA.AOT do
     end
 
     system_args =
-      ["build", "//#{config.aot_relative_path}:#{config.lib_name}.so"]
+      ["build"] ++ config.bazel_flags ++ ["//#{config.aot_relative_path}:#{config.lib_name}.so"]
 
     system_opts = [
       cd: config.tf_path,
-      stderr_to_stdout: true,
-      into: IO.stream(:stdio, :line)
+      env: config.bazel_env,
+      into: IO.stream(:stdio, :line),
+      stderr_to_stdout: true
     ]
 
     case System.cmd("bazel", system_args, system_opts) do
