@@ -145,16 +145,15 @@ defmodule Torchx.MNIST do
         {time, {new_params, epoch_avg_loss, epoch_avg_acc}} =
           :timer.tc(__MODULE__, :train_epoch, [cur_params, imgs, labels])
 
-        # epoch_avg_loss =
-        #   epoch_avg_loss
-        #   |> Nx.backend_transfer(Nx.BinaryBackend)
-        #   |> Nx.to_scalar()
+        epoch_avg_loss =
+          epoch_avg_loss
+          |> Nx.backend_transfer()
+          |> Nx.to_scalar()
 
-        # epoch_avg_acc =
-        #   epoch_avg_acc
-        #   |> Nx.backend_transfer()
-        #   |> IO.inspect(label: "before")
-        #   |> Nx.to_scalar()
+        epoch_avg_acc =
+          epoch_avg_acc
+          |> Nx.backend_transfer()
+          |> Nx.to_scalar()
 
         IO.puts("Epoch #{epoch} Time: #{time / 1_000_000}s")
         IO.puts("Epoch #{epoch} average loss: #{inspect(epoch_avg_loss)}")
