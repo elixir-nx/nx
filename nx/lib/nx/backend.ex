@@ -204,23 +204,39 @@ defmodule Nx.Backend do
     end
   end
 
-  import Nx.Shared, only: [is_nan32: 1, is_nan64: 1]
+  defp inspect_float(<<0xFF800000::32-native>>, 32), do: "-Inf"
+  defp inspect_float(<<0x7F800000::32-native>>, 32), do: "Inf"
 
-  defp inspect_float(data, 32) do
-    case data do
-      <<0xFF800000::32-native>> -> "-Inf"
-      <<0x7F800000::32-native>> -> "Inf"
-      <<nan::32-native>> when is_nan32(nan) -> "NaN"
-      <<x::float-32-native>> -> Float.to_string(x)
+  defp inspect_float(<<0x7FF0000000000000::64-native>>, 64), do: "Inf"
+  defp inspect_float(<<0xFFF0000000000000::64-native>>, 64), do: "-Inf"
+
+  if System.endianness() == :little do
+    defp inspect_float(data, 32) do
+      case data do
+        <<_::16, 1::1, _::7, _sign::1, 0x7F::7>> -> "NaN"
+        <<x::float-32-native>> -> Float.to_string(x)
+      end
     end
-  end
 
-  defp inspect_float(data, 64) do
-    case data do
-      <<0xFFF0000000000000::64-native>> -> "-Inf"
-      <<0x7FF0000000000000::64-native>> -> "Inf"
-      <<nan::64-native>> when is_nan64(nan) -> "NaN"
-      <<x::float-64-native>> -> Float.to_string(x)
+    defp inspect_float(data, 64) do
+      case data do
+        <<_::48, 0xF::4, _::4, _sign::1, 0x7F::7>> -> "NaN"
+        <<x::float-64-native>> -> Float.to_string(x)
+      end
+    end
+  else
+    defp inspect_float(data, 32) do
+      case data do
+        <<_sign::1, 0x7F::7, 1::1, _::7, _::16>> -> "NaN"
+        <<x::float-32-native>> -> Float.to_string(x)
+      end
+    end
+
+    defp inspect_float(data, 64) do
+      case data do
+        <<_sign::1, 0x7F::7, 0xF::4, _::4, _::48>> -> "NaN"
+        <<x::float-64-native>> -> Float.to_string(x)
+      end
     end
   end
 end
