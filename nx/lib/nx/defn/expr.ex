@@ -319,6 +319,32 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def scatter_window_max(out, tensor, source, window_dims, opts, init_value) do
+    {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
+
+    expr(out, context, :scatter_window_max, [
+      tensor,
+      source,
+      window_dims,
+      opts,
+      init_value
+    ])
+  end
+
+  @impl true
+  def scatter_window_min(out, tensor, source, window_dims, opts, init_value) do
+    {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
+
+    expr(out, context, :scatter_window_min, [
+      tensor,
+      source,
+      window_dims,
+      opts,
+      init_value
+    ])
+  end
+
+  @impl true
   def reshape(out, tensor, shape) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :reshape, [tensor, shape])
@@ -532,7 +558,9 @@ defmodule Nx.Defn.Expr do
 
   defp to_expr(other) do
     raise ArgumentError,
-          "unable to build tensor expression, expected a tensor or a number, got: #{inspect(other)}"
+          "unable to build tensor expression, expected a tensor or a number, got: #{
+            inspect(other)
+          }"
   end
 
   defp to_exprs(list) do

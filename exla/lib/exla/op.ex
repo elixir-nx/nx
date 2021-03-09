@@ -353,6 +353,30 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def select_and_scatter(
+    %Op{builder: builder, ref: operand},
+    %Computation{ref: select_fn},
+    window_dimensions,
+    window_strides,
+    padding_config,
+    %Op{builder: builder, ref: source},
+    %Op{builder: builder, ref: init_value},
+    %Computation{ref: scatter_fn}) when is_tuple(window_dimensions) and is_list(window_strides) and is_list(padding_config) do
+    ref =
+      EXLA.NIF.select_and_scatter(
+        operand,
+        select_fn,
+        window_dimensions,
+        window_strides,
+        padding_config,
+        source,
+        init_value,
+        scatter_fn
+      )
+      |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   def map(%Op{builder: builder, ref: operand}, %Computation{ref: function}, dimensions) do
     ref = EXLA.NIF.map(builder, operand, function, dimensions) |> unwrap!()
     %Op{builder: builder, ref: ref}

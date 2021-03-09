@@ -115,6 +115,16 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
+  def select_and_scatter(
+        _operand,
+        _select_fn,
+        _window_dimensions,
+        _window_strides,
+        _padding_config,
+        _source,
+        _init_value,
+        _scatter_fn), do: :erlang.nif_error(:undef)
+
   def map(_builder, _operand, _computation, _dimensions),
     do: :erlang.nif_error(:undef)
 
