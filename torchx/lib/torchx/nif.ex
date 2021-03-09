@@ -56,6 +56,7 @@ defmodule Torchx.NIF do
 
   dnif sum(tensor, axes, keep_axes)
   dnif argmax(tensor, axe, keep_axes)
+  dnif argmin(tensor, axe, keep_axes)
 
   dnif add(tensorA, tensorB)
   dnif subtract(tensorA, tensorB)

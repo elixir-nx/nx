@@ -449,6 +449,15 @@ NIF(argmax)
   TENSOR(torch::argmax(*t, dim, keep_dim));
 }
 
+NIF(argmin)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, dim);
+  PARAM(2, bool, keep_dim);
+
+  TENSOR(torch::argmin(*t, dim, keep_dim));
+}
+
 NIF(cholesky)
 {
   TENSOR_PARAM(0, t);
@@ -586,6 +595,7 @@ static ErlNifFunc nif_functions[] = {
     DF(outer, 2),
     DF(sum, 3),
     DF(argmax, 3),
+    DF(argmin, 3),
 
     DF(abs, 1),
     DF(ceil, 1),

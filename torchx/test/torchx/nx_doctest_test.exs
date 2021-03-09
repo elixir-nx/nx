@@ -26,8 +26,7 @@ defmodule Torchx.NxDoctestTest do
         mean: 2,
         dot: 4,
         map: 3,
-        backend_transfer: 1,
-        # to_flat_list: 2,
+        to_flat_list: 2,
         norm_inf: 3,
         cholesky: 1,
         norm: 2,
@@ -35,7 +34,10 @@ defmodule Torchx.NxDoctestTest do
         all_close?: 3,
         atan2: 2,
         lu: 2,
-        bitcast: 2
+        bitcast: 2,
+        argmax: 2,
+        argmin: 2,
+        logistic: 1
       )
     |> Kernel.++([:moduledoc])
 end

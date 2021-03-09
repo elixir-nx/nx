@@ -204,12 +204,18 @@ defmodule Torchx.Backend do
 
   @impl true
   def argmax(%T{type: out_type} = out, %T{} = t, opts) do
-    # check_type!(out_type)
-
     axe = opts[:axis] || 0
     keep_axes = opts[:keep_axes] || false
 
     NIF.argmax(to_ref(t), axe, keep_axes) |> from_ref(out)
+  end
+
+  @impl true
+  def argmin(%T{type: out_type} = out, %T{} = t, opts) do
+    axe = opts[:axis] || 0
+    keep_axes = opts[:keep_axes] || false
+
+    NIF.argmin(to_ref(t), axe, keep_axes) |> from_ref(out)
   end
 
   defp check_type!(type),
