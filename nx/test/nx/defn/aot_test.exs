@@ -44,7 +44,7 @@ defmodule Nx.Defn.AOTTest do
 
         # Overwrite the load function so we don't try to load the NIF
         defoverridable __on_load__: 0
-        defp __on_load__(), do: :ok
+        def __on_load__(), do: :ok
 
         # Now define a mock for each function we are going to call
         unquote(functions)

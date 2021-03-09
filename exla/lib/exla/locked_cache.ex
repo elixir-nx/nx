@@ -16,6 +16,7 @@ defmodule EXLA.LockedCache do
   cached yet.
   """
   def run(key, fun) do
+    # TODO: Move this to ETS once we add a process.
     case :persistent_term.get(key, __MODULE__) do
       __MODULE__ ->
         case GenServer.call(@name, {:lock, key}, @timeout) do

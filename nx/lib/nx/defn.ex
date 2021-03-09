@@ -232,7 +232,7 @@ defmodule Nx.Defn do
   end
 
   @doc """
-  Exports the ahead-of-time definition of a module with the
+  Exports the ahead-of-time (AOT) definition of a module with the
   given `functions` using the given `compiler`. For example:
 
       functions = [
@@ -259,8 +259,9 @@ defmodule Nx.Defn do
 
   ## AOT export with Mix
 
-  This is useful because you only need the compilation environment,
-  such as EXLA, when exporting. In practice, you can do this:
+  Ahead-of-time exports with Mix are useful because you only need
+  the compilation environment, such as EXLA, when exporting.
+  In practice, you can do this:
 
     1. Add `{:exla, ..., only: :export_aot}` as a dependency
 
@@ -322,7 +323,7 @@ defmodule Nx.Defn do
   end
 
   @doc """
-  Defines a `module` by compiling an ahead-of-time definition
+  Defines a `module` by compiling an ahead-of-time (AOT) definition
   with the given `functions` using the given `compiler`.
   For example:
 
