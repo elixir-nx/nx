@@ -208,19 +208,30 @@ defmodule EXLA do
 
   ## Options
 
-      * `:target_triple` - the target triple to compile to.
-      It defaults to the current target triple but one
-      can be set for cross-compilation. A list is available
-      here: https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl
-
-          target_triple: "x86_64-pc-linux"
-
     * `:target_features` - the default executable makes
       no assumption about the target runtime, so special
       instructions such as SIMD are not leveraged. But you
       can specify those flags if desired:
 
           target_features: "+sse4.1 +sse4.2 +avx +avx2 +fma"
+
+  The following options might be used for cross compilation:
+
+    * `:bazel_flags` - flags that customize `bazel build` command
+
+    * `:bazel_env` - flags that customize `bazel build` environment.
+      It must be a list of tuples where the env key and env value
+      are binaries
+
+    * `:target_triple` - the target triple to compile to.
+      It defaults to the current target triple but one
+      can be set for cross-compilation. A list is available
+      [on Tensorflow repo](https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl).
+      Note this configures only how the tensor expression is
+      compiled but not the underlying NIF. For cross compilation,
+      one has to set the proper `:bazel_flags` and `:bazel_env`.
+
+          target_triple: "x86_64-pc-linux"
 
   """
   def export_aot(dir, module, functions, options \\ []) do
