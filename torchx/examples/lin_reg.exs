@@ -20,13 +20,13 @@ defmodule Torchx.LinReg do
 
     errors = Nx.subtract(tar, preds)
 
-    # Derivative wrt m
+    # Derivative m
     grad_m = Nx.mean(Nx.multiply(inp, errors))
-    # Derivative wrt b
+    # Derivative b
     grad_b = Nx.mean(errors)
 
-    {Nx.subtract(m, Nx.multiply(grad_m, -2 * step)),
-     Nx.subtract(b, Nx.multiply(grad_b, -2 * step))}
+    {Nx.subtract(m, Nx.multiply(grad_m, Nx.tensor(-2 * step))),
+     Nx.subtract(b, Nx.multiply(grad_b, Nx.tensor(-2 * step)))}
   end
 
   def train(params, epochs, lin_fn) do
@@ -50,9 +50,9 @@ defmodule Torchx.LinReg do
     end
   end
 
-  def run(epochs \\ 100) do
+  def run(epochs \\ 50) do
     Nx.default_backend(Torchx.Backend)
-    params = LinReg.init_random_params()
+    params = init_random_params()
     m = :rand.normal(0.0, 10.0)
     b = :rand.normal(0.0, 5.0)
     IO.puts("Target m: #{m} Target b: #{b}\n")
@@ -60,6 +60,23 @@ defmodule Torchx.LinReg do
     lin_fn = fn x -> m * x + b end
 
     # These will be very close to the above coefficients
-    IO.inspect(LinReg.train(params, epochs, lin_fn))
+    {trained_m, trained_b} = train(params, epochs, lin_fn)
+
+    trained_m =
+      trained_m
+      |> Nx.squeeze()
+      |> Nx.backend_transfer()
+      |> Nx.to_scalar()
+
+    trained_b =
+      trained_b
+      |> Nx.squeeze()
+      |> Nx.backend_transfer()
+      |> Nx.to_scalar()
+
+    IO.puts("Trained m: #{trained_m} Trained b: #{trained_b}\n")
   end
 end
+
+
+Torchx.LinReg.run()
