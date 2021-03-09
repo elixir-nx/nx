@@ -1,5 +1,4 @@
 defmodule Torchx.MNIST do
-
   @batch_size 50
   @step 0.02
   @epochs 10
@@ -27,22 +26,30 @@ defmodule Torchx.MNIST do
     |> softmax()
   end
 
-  defp update({w1, b1, w2, b2} = _params, batch_images, batch_labels, avg_loss, avg_accuracy, total) do
+  defp update(
+         {w1, b1, w2, b2} = _params,
+         batch_images,
+         batch_labels,
+         avg_loss,
+         avg_accuracy,
+         total
+       ) do
     z1 = Nx.dot(batch_images, w1) |> Nx.add(b1)
     a1 = Nx.logistic(z1)
     z2 = Nx.dot(a1, w2) |> Nx.add(b2)
     preds = softmax(z2)
 
-
-    batch_loss = Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
+    batch_loss =
+      Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
 
     batch_accuracy =
-          Nx.mean(
-            Nx.equal(
-              Nx.argmax(Nx.as_type(batch_labels, {:s, 8}), axis: :output),
-              Nx.argmax(preds, axis: :output)
-            ) |> Nx.as_type({:s, 8})
-          )
+      Nx.mean(
+        Nx.equal(
+          Nx.argmax(Nx.as_type(batch_labels, {:s, 8}), axis: :output),
+          Nx.argmax(preds, axis: :output)
+        )
+        |> Nx.as_type({:s, 8})
+      )
 
     total = Nx.tensor(total)
 
@@ -65,11 +72,11 @@ defmodule Torchx.MNIST do
     step = Nx.tensor(@step)
 
     {{
-      Nx.subtract(w1, Nx.multiply(grad_w1, step)),
-      Nx.subtract(b1, Nx.multiply(grad_b1, step)),
-      Nx.subtract(w2, Nx.multiply(grad_w2, step)),
-      Nx.subtract(b2, Nx.multiply(grad_b2, step))
-    }, avg_loss, avg_accuracy}
+       Nx.subtract(w1, Nx.multiply(grad_w1, step)),
+       Nx.subtract(b1, Nx.multiply(grad_b1, step)),
+       Nx.subtract(w2, Nx.multiply(grad_w2, step)),
+       Nx.subtract(b2, Nx.multiply(grad_b2, step))
+     }, avg_loss, avg_accuracy}
   end
 
   defp unzip_cache_or_download(zip) do
@@ -94,8 +101,6 @@ defmodule Torchx.MNIST do
 
     :zlib.gunzip(data)
   end
-
-
 
   def download(images, labels) do
     <<_::32, n_images::32, n_rows::32, n_cols::32, images::binary>> =
@@ -175,9 +180,8 @@ params = MNIST.init_random_params()
 
 final_params = MNIST.train(train_images, train_labels, params)
 
-
 IO.puts("The result of the first batch")
-IO.inspect MNIST.predict(final_params, hd(train_images)) |> Nx.argmax(axis: :output)
+IO.inspect(MNIST.predict(final_params, hd(train_images)) |> Nx.argmax(axis: :output))
 
 IO.puts("Labels for the first batch")
-IO.inspect hd(train_labels) |> Nx.as_type({:s, 8}) |> Nx.argmax(axis: :output)
+IO.inspect(hd(train_labels) |> Nx.as_type({:s, 8}) |> Nx.argmax(axis: :output))
