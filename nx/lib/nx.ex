@@ -3793,6 +3793,120 @@ defmodule Nx do
     impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
   end
 
+  @doc """
+  Performs a `reduce_window` to select indices in the input
+  tensor according to `select_fn` and scatters source tensor
+  to corresponding indices in the output tensor.
+
+  Output tensor is initialized as a full tensor with values
+  `init_value`. If indices overlap, performs `scatter_fn` on
+  source values. The shape of the source tensor must match the
+  valid windows in the input tensor. This means the shape of
+  the source tensor must match the shape of the input tensor
+  after a `reduce_window` op with padding `padding` and strides
+  `strides`.
+
+  `select_fn` must be a scalar predicate function of arity 2.
+  `scatter_fn` must be a scalar function of arity 2. The output
+  tensor type is the result of merging the initial value type
+  and source tensor type.
+
+  ## Examples
+
+      iex> t = Nx.tensor([
+      ...>  [7, 2, 5, 3, 10, 2], [3, 8, 9, 3, 4, 2],
+      ...>  [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]
+      ...> ])
+      iex> Nx.select_and_scatter(t, Nx.tensor([[2, 6], [3, 1]]), &Nx.greater_equal/2,
+      ...>  {2, 3}, [strides: [2, 3], padding: :valid], 0, &Nx.add/2)
+      #Nx.Tensor<
+        s64[4][6]
+        [
+          [0, 0, 0, 0, 6, 0],
+          [0, 0, 2, 0, 0, 0],
+          [0, 0, 3, 0, 0, 0],
+          [0, 0, 0, 0, 0, 1]
+        ]
+      >
+
+      iex> t = Nx.tensor([
+      ...>  [7, 2, 5, 3, 8], [3, 8, 9, 3, 4],
+      ...>  [1, 5, 7, 5, 6], [0, 6, 2, 10, 2]
+      ...> ])
+      iex> Nx.select_and_scatter(t, Nx.tensor([[2, 6], [3, 1]]), &Nx.greater_equal/2,
+      ...>  {2, 3}, [strides: [2, 2], padding: :valid], 0, &Nx.add/2)
+      #Nx.Tensor<
+        s64[4][5]
+        [
+          [0, 0, 0, 0, 0],
+          [0, 0, 8, 0, 0],
+          [0, 0, 3, 0, 0],
+          [0, 0, 0, 1, 0]
+        ]
+      >
+  """
+  def select_and_scatter(
+        tensor,
+        source,
+        select_fn,
+        window_dimensions,
+        opts,
+        init_value,
+        scatter_fn
+      ) do
+    assert_keys!(opts, [:padding, :strides])
+
+    %T{shape: input_shape} = tensor = tensor!(tensor)
+    %T{shape: source_shape, type: source_type} = source = tensor!(source)
+    %T{type: value_type} = init_value = tensor!(init_value)
+
+    padding = opts[:padding] || :valid
+    strides = opts[:strides] || 1
+
+    strides =
+      if is_integer(strides),
+        do: List.duplicate(strides, rank(input_shape)),
+        else: strides
+
+    padding_config =
+      case padding do
+        :valid ->
+          List.duplicate({0, 0}, rank(input_shape))
+
+        :same ->
+          Nx.Shape.calculate_padding(input_shape, window_dimensions, strides)
+
+        config when is_list(config) ->
+          config
+
+        _ ->
+          raise ArgumentError,
+                "invalid padding configuration, padding must be" <>
+                  " :valid or :same, or a padding configuration for" <>
+                  " the dimensions of the input tensor"
+      end
+
+    padded_shape = Nx.Shape.pad(input_shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
+    output_window_shape = Nx.Shape.window(padded_shape, window_dimensions, strides)
+
+    unless output_window_shape == source_shape do
+      raise ArgumentError, "source shape must match valid windows in input tensor"
+    end
+
+    output_type = Nx.Type.merge(source_type, value_type)
+
+    impl!(tensor).select_and_scatter(
+      %{tensor | type: output_type},
+      tensor,
+      source,
+      select_fn,
+      window_dimensions,
+      [padding: padding_config, strides: strides],
+      init_value,
+      scatter_fn
+    )
+  end
+
   ## Unary ops
 
   for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
