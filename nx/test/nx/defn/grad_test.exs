@@ -1979,7 +1979,10 @@ defmodule Nx.Defn.GradTest do
 
     test "computes the second order" do
       lhs = grad_sum_grad_product(Nx.tensor([[0.95, 0.90, 0.95], [0.75, 0.74, 1.0]]))
-      rhs = Nx.tensor([[0.09798507, 0.10342869, 0.09798507], [0.12411442, 0.12579165, 0.09308582]])
+
+      rhs =
+        Nx.tensor([[0.09798507, 0.10342869, 0.09798507], [0.12411442, 0.12579165, 0.09308582]])
+
       compare_tensors!(lhs, rhs)
     end
 
@@ -1996,20 +1999,25 @@ defmodule Nx.Defn.GradTest do
     test "computes the gradient with product of sum" do
       x = Nx.multiply(0.1, Nx.iota({3, 2, 2, 2}, type: {:f, 32}))
       lhs = grad_reduce_product_sum(x)
-      rhs = Nx.tensor([[[[3028.823, 2019.2152],
-                         [1514.4116, 1211.5292]],
-                        [[3028.823, 2019.2152],
-                         [1514.4116, 1211.5292]]],
-                       [[[605.76465, 550.6951],
-                         [504.8038, 465.97278]],
-                        [[605.76465, 550.6951],
-                         [504.8038, 465.97278]]],
-                       [[[336.53592, 318.82346],
-                         [302.88232, 288.45935]],
-                        [[336.53592, 318.82346],
-                         [302.88232, 288.45935]]]])
 
-      assert Nx.all?(Nx.less_equal(Nx.abs(Nx.subtract(lhs, rhs)), 1.0e-3)) == Nx.tensor(1, type: {:u, 8})
+      rhs =
+        Nx.tensor([
+          [
+            [[3028.823, 2019.2152], [1514.4116, 1211.5292]],
+            [[3028.823, 2019.2152], [1514.4116, 1211.5292]]
+          ],
+          [
+            [[605.76465, 550.6951], [504.8038, 465.97278]],
+            [[605.76465, 550.6951], [504.8038, 465.97278]]
+          ],
+          [
+            [[336.53592, 318.82346], [302.88232, 288.45935]],
+            [[336.53592, 318.82346], [302.88232, 288.45935]]
+          ]
+        ])
+
+      assert Nx.all?(Nx.less_equal(Nx.abs(Nx.subtract(lhs, rhs)), 1.0e-3)) ==
+               Nx.tensor(1, type: {:u, 8})
     end
 
     defn grad_reduce_product_product(t), do: grad(t, Nx.product(Nx.product(t, axes: [3])))
@@ -2017,12 +2025,15 @@ defmodule Nx.Defn.GradTest do
     test "computes the gradient with product of product" do
       x = Nx.iota({1, 3, 2, 2}, type: {:f, 32})
       lhs = grad_reduce_product_product(x)
-      rhs = Nx.tensor([[[[39916800.0, 0.0],
-                         [0.0, 0.0]],
-                        [[0.0, 0.0],
-                         [0.0, 0.0]],
-                        [[0.0, 0.0],
-                         [0.0, 0.0]]]])
+
+      rhs =
+        Nx.tensor([
+          [
+            [[39_916_800.0, 0.0], [0.0, 0.0]],
+            [[0.0, 0.0], [0.0, 0.0]],
+            [[0.0, 0.0], [0.0, 0.0]]
+          ]
+        ])
 
       compare_tensors!(lhs, rhs)
     end
@@ -2032,18 +2043,14 @@ defmodule Nx.Defn.GradTest do
     test "computes the gradient with product of min" do
       x = Nx.iota({3, 2, 2, 3}, type: {:f, 32})
       lhs = grad_reduce_product_min(x)
-      rhs = Nx.tensor([[[[68140800.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0]],
-                        [[0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0]]],
-                       [[[0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0]],
-                        [[0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0]]],
-                       [[[0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0]],
-                        [[0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0]]]])
+
+      rhs =
+        Nx.tensor([
+          [[[68_140_800.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]],
+          [[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]],
+          [[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]
+        ])
+
       compare_tensors!(lhs, rhs)
     end
 
@@ -2052,14 +2059,12 @@ defmodule Nx.Defn.GradTest do
     test "computes the gradient for product with multiple axes" do
       x = Nx.multiply(Nx.iota({2, 2, 2, 2}, type: {:f, 32}), 0.5)
       lhs = grad_reduce_product_multiple_axes(x)
-      rhs = Nx.tensor([[[[9.0, 0.0],
-                         [41.25, 27.5]],
-                        [[97.5, 78.0],
-                         [183.75, 157.5]]],
-                       [[[0.0, 0.0],
-                         [8.25, 7.5]],
-                        [[32.5, 30.0],
-                         [78.75, 73.5]]]])
+
+      rhs =
+        Nx.tensor([
+          [[[9.0, 0.0], [41.25, 27.5]], [[97.5, 78.0], [183.75, 157.5]]],
+          [[[0.0, 0.0], [8.25, 7.5]], [[32.5, 30.0], [78.75, 73.5]]]
+        ])
 
       compare_tensors!(lhs, rhs)
     end
@@ -2083,6 +2088,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     defn grad_window_prod(t), do: grad(t, Nx.window_product(t, {}))
+
     test "raises on window_prod" do
       assert_raise ArgumentError, ~r"cannot compute gradient for Nx.window_product/3", fn ->
         grad_window_prod(2)
@@ -2093,10 +2099,12 @@ defmodule Nx.Defn.GradTest do
   defp compare_tensors!(left, right) do
     atol = 1.0e-7
     rtol = 1.0e-4
+
     try do
       assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
     rescue
-      _ -> assert left == right # So we can see the diff
+      # So we can see the diff
+      _ -> assert left == right
     end
   end
 end
