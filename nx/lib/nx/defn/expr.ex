@@ -319,46 +319,28 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def select_and_scatter(
-        %{type: type} = out,
-        tensor,
-        source,
-        select_fn,
-        window_dims,
-        opts,
-        init_value,
-        scatter_fn
-      ) do
-    args = [
-      parameter(:select_and_scatter, type, {}, 0),
-      parameter(:select_and_scatter, type, {}, 1)
-    ]
-
+  def scatter_window_max(out, tensor, source, window_dims, opts, init_value) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
-    select_fn = fun(args, select_fn)
-    scatter_fn = fun(args, scatter_fn)
 
-    if select_fn.shape != {} or select_fn.type != {:u, 8} do
-      raise "select_and_scatter select function must return a scalar predicate, got shape: #{
-              inspect(select_fn.shape)
-            }" <>
-              " with type: #{inspect(select_fn.type)}"
-    end
-
-    if scatter_fn.shape != {} do
-      raise "select_and_scatter scatter function must return a scalar tensor, got: #{
-              inspect(scatter_fn.shape)
-            }"
-    end
-
-    expr(out, context, :select_and_scatter, [
+    expr(out, context, :scatter_window_max, [
       tensor,
       source,
-      select_fn,
       window_dims,
       opts,
-      init_value,
-      scatter_fn
+      init_value
+    ])
+  end
+
+  @impl true
+  def scatter_window_min(out, tensor, source, window_dims, opts, init_value) do
+    {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
+
+    expr(out, context, :scatter_window_min, [
+      tensor,
+      source,
+      window_dims,
+      opts,
+      init_value
     ])
   end
 

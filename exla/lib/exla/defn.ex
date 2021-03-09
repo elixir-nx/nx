@@ -609,6 +609,54 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(:scatter_window_max, [arg, source, window_dimensions, opts, init_value], %{type: type}, state) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
+    arg = to_type(arg, type)
+    source = to_type(source, type)
+    init_value = to_type(init_value, type)
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    select_fn = to_computation(:scatter_window_max_select, args, state, &apply(EXLA.Op, :greater, &1.params))
+    scatter_fn = to_computation(:scatter_window_max_scatter, args, state, &apply(EXLA.Op, :add, &1.params))
+
+    EXLA.Op.select_and_scatter(
+      arg,
+      select_fn,
+      window_dimensions,
+      strides,
+      padding_config,
+      source,
+      init_value,
+      scatter_fn
+    )
+  end
+
+  defp to_operator(:scatter_window_min, [arg, source, window_dimensions, opts, init_value], %{type: type}, state) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
+    arg = to_type(arg, type)
+    source = to_type(source, type)
+    init_value = to_type(init_value, type)
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    select_fn = to_computation(:scatter_window_min_select, args, state, &apply(EXLA.Op, :less, &1.params))
+    scatter_fn = to_computation(:scatter_window_min_scatter, args, state, &apply(EXLA.Op, :add, &1.params))
+
+    EXLA.Op.select_and_scatter(
+      arg,
+      select_fn,
+      window_dimensions,
+      strides,
+      padding_config,
+      source,
+      init_value,
+      scatter_fn
+    )
+  end
+
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
     arg = to_type(arg, type)
     comp = to_computation(fun, type, state)

@@ -1078,6 +1078,57 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 8) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaComputation* select_fn;
+  std::vector<exla::int64> window_dimensions;
+  std::vector<exla::int64> window_strides;
+  std::vector<std::pair<exla::int64, exla::int64>> padding_config;
+  xla::XlaOp* source;
+  xla::XlaOp* init_value;
+  xla::XlaComputation* scatter_fn;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], select_fn)) {
+    return exla::nif::error(env, "Unable to get select function.");
+  }
+  if (!exla::nif::get_tuple(env, argv[2], window_dimensions)) {
+    return exla::nif::error(env, "Unable to get window dimensions.");
+  }
+  if (!exla::nif::get_list(env, argv[3], window_strides)) {
+    return exla::nif::error(env, "Unable to get window strides.");
+  }
+  if (!exla::nif::get_general_padding(env, argv[4], padding_config)) {
+    return exla::nif::error(env, "Unable to get padding configuration.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[5], source)) {
+    return exla::nif::error(env, "Unable to get source.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[6], init_value)) {
+    return exla::nif::error(env, "Unable to get initial value.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[7], scatter_fn)) {
+    return exla::nif::error(env, "Unable to get scatter function.");
+  }
+
+  xla::XlaOp op = xla::SelectAndScatterWithGeneralPadding(*operand,
+                                                          *select_fn,
+                                                          window_dimensions,
+                                                          window_strides,
+                                                          padding_config,
+                                                          *source,
+                                                          *init_value,
+                                                          *scatter_fn);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2128,6 +2179,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},
   {"reduce_window", 7, reduce_window},
+  {"select_and_scatter", 8, select_and_scatter},
   {"map", 4, map},
   // Shape/Type Manipulation
   {"broadcast_in_dim", 3, broadcast_in_dim},

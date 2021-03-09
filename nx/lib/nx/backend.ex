@@ -83,8 +83,8 @@ defmodule Nx.Backend do
   @callback window_min(out :: tensor, tensor, shape, keyword) :: tensor
   @callback map(out :: tensor, tensor, fun) :: tensor
   @callback sort(out :: tensor, tensor, keyword) :: tensor
-  @callback select_and_scatter(out :: tensor, tensor, tensor, fun, shape, keyword, tensor, fun) ::
-              tensor
+  @callback scatter_window_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
+  @callback scatter_window_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
