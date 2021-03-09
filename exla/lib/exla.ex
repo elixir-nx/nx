@@ -206,6 +206,11 @@ defmodule EXLA do
         [2.7182817459106445, 7.389056205749512, 20.08553695678711]
       >
 
+  Note ahead-of-time compilation for EXLA only runs on the CPU.
+  It is slightly less performant than the JIT variant for the
+  CPU but it compensates the loss in performance by removing
+  the need to have EXLA up and ornning in production.
+
   ## Options
 
     * `:target_features` - the default executable makes
@@ -232,6 +237,27 @@ defmodule EXLA do
       one has to set the proper `:bazel_flags` and `:bazel_env`.
 
           target_triple: "x86_64-pc-linux"
+
+  ## AOT export with Mix
+
+  Ahead-of-time exports with Mix are useful because you only need
+  EXLA when exporting. In practice, you can do this:
+
+    1. Add `{:exla, ..., only: :export_aot}` as a dependency
+
+    2. Define an exporting script at `script/export_my_module.exs`
+
+    3. Run the script to export the AOT `mix run script/export_my_module.exs`
+
+    4. Now inside `lib/my_module.ex` you can import it:
+
+          if File.exists?("priv/MyModule.nx.aot") do
+            defmodule MyModule do
+              Nx.Defn.import_aot("priv", __MODULE__)
+            end
+          else
+            IO.warn "Skipping MyModule because aot definition was not found"
+          end
 
   """
   def export_aot(dir, module, functions, options \\ []) do
