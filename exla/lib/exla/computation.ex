@@ -115,11 +115,11 @@ defmodule EXLA.Computation do
   """
   def target_triple() do
     case :os.type() do
-      {:unix, :linux} ->
-        "x86_64-pc-linux"
-
       {:win32, _} ->
         "x86_64-none-windows"
+
+      {:unix, :linux} ->
+        "x86_64-pc-linux"
 
       {:unix, osname} ->
         arch_str = :erlang.system_info(:system_architecture)

@@ -282,9 +282,13 @@ defmodule Nx do
   The argument is either a number, which means the tensor is a scalar
   (zero-dimensions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
+  The tensor will be allocated in `Nx.default_backend/2`, unless the
+  `:backend` option is given, which overrides the default one.
 
   You can also give a tensor as argument, which is just returned as
-  is.
+  is, unless the `:backend` option is given, which will cause a
+  backend transfer. `Nx.default_backend/2` is ignored when a tensor
+  is given.
 
   ## Examples
 
@@ -466,11 +470,13 @@ defmodule Nx do
             "got a tensor with type #{inspect(type)} but tensor has type #{inspect(t.type)}"
     end
 
-    {backend, backend_options} = backend_with_options!(opts)
+    backend = opts[:backend]
+    impl = impl!(t)
 
-    case impl!(t) do
-      ^backend -> t
-      impl -> impl.backend_transfer(t, backend, backend_options)
+    if backend && backend != impl do
+      impl.backend_transfer(t, backend, opts[:backend_options] || [])
+    else
+      t
     end
   end
 
@@ -1222,7 +1228,7 @@ defmodule Nx do
   def to_scalar(number) when is_number(number), do: number
 
   def to_scalar(tensor) do
-    tensor = Nx.tensor(tensor)
+    tensor = tensor!(tensor)
 
     if tensor.shape != {} do
       raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to scalar"
