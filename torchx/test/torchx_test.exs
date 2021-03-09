@@ -3,6 +3,8 @@ defmodule TorchxTest do
 
   alias Torchx.Backend, as: TB
 
+  doctest TB
+
   # Torch Tensor creation shortcut
   defp tt(data, type), do: Nx.tensor(data, type: type, backend: TB)
 
