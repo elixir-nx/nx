@@ -1,8 +1,6 @@
 defmodule TorchxTest do
   use ExUnit.Case, async: true
 
-  doctest Torchx
-
   alias Torchx.Backend, as: TB
 
   # Torch Tensor creation shortcut

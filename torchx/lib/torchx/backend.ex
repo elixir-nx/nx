@@ -1,6 +1,38 @@
 defmodule Torchx.Backend do
   @moduledoc """
+
   An opaque backend Nx backend with bindings to libtorch/Pytorch.
+
+  Torchx behaviour that is different from BinaryBackend:
+
+  1. Torchx doesn't support u16/u32/u64. Only u8 is supported.
+
+      iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
+      ** (ArgumentError) Torchx does not support unsigned 16 bit integer
+
+
+  2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
+
+      iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
+      ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
+
+  3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
+     So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
+
+      iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Torchx.Backend) |> Nx.round()
+      #Nx.Tensor<
+        f32[4]
+        [-2.0, 0.0, 0.0, 2.0]
+      >
+
+    While binary backend will do:
+
+      iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Nx.BinaryBackend) |> Nx.round()
+      #Nx.Tensor<
+        f32[4]
+        [-2.0, -1.0, 1.0, 2.0]
+      >
+
   """
 
   @behaviour Nx.Backend
@@ -204,18 +236,33 @@ defmodule Torchx.Backend do
 
   @impl true
   def argmax(%T{type: out_type} = out, %T{} = t, opts) do
-    axe = opts[:axis] || 0
+    unsupported_option!(opts, :tie_break, :low)
+
+    axis = opts[:axis] || -1
     keep_axes = opts[:keep_axes] || false
 
-    NIF.argmax(to_ref(t), axe, keep_axes) |> from_ref(out)
+    NIF.argmax(to_ref(t), axis, keep_axes) |> from_ref(out)
   end
 
   @impl true
   def argmin(%T{type: out_type} = out, %T{} = t, opts) do
-    axe = opts[:axis] || 0
+    unsupported_option!(opts, :tie_break, :low)
+
+    axis = opts[:axis] || -1
     keep_axes = opts[:keep_axes] || false
 
-    NIF.argmin(to_ref(t), axe, keep_axes) |> from_ref(out)
+    NIF.argmin(to_ref(t), axis, keep_axes) |> from_ref(out)
+  end
+
+  defp unsupported_option!(opts, key, acceptable_default \\ nil),
+    do:
+      if(opts[key] != acceptable_default, do: raise("#{inspect(key)} option is not supported in #{caller()}"))
+
+  defp caller() do
+    {module, func, arity, [file: _file, line: _line]} =
+      Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(3)
+
+    "#{inspect(module)}.#{func}/#{arity - 1}"
   end
 
   defp check_type!(type),

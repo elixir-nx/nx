@@ -143,7 +143,7 @@ defmodule Torchx.MNIST do
   def train(imgs, labels, params, opts \\ []) do
     epochs = opts[:epochs] || @epochs
 
-    IO.puts("Training MNIST for #{epochs}...\n\n")
+    IO.puts("Training MNIST for #{epochs} epochs...\n\n")
 
     for epoch <- 1..epochs, reduce: params do
       cur_params ->

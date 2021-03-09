@@ -446,7 +446,11 @@ NIF(argmax)
   PARAM(1, int64_t, dim);
   PARAM(2, bool, keep_dim);
 
-  TENSOR(torch::argmax(*t, dim, keep_dim));
+  if (dim == -1) {
+    TENSOR(torch::argmax(*t));
+  } else {
+    TENSOR(torch::argmax(*t, dim, keep_dim));
+  }
 }
 
 NIF(argmin)
@@ -455,7 +459,11 @@ NIF(argmin)
   PARAM(1, int64_t, dim);
   PARAM(2, bool, keep_dim);
 
-  TENSOR(torch::argmin(*t, dim, keep_dim));
+  if (dim == -1) {
+    TENSOR(torch::argmin(*t));
+  } else {
+    TENSOR(torch::argmin(*t, dim, keep_dim));
+  }
 }
 
 NIF(cholesky)

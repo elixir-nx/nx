@@ -81,45 +81,6 @@ defmodule Nx.Shared do
     end
   end
 
-  @doc """
-
-  Checks for float nan values. Input should be 32 bit integer.
-
-      iex> import Nx.Shared, only: [is_nan32: 1]
-      iex> <<nan::32-native>> = <<0, 0, 192, 255>>
-      iex> (fn f when is_nan32(f) -> true end).(nan)
-      true
-      iex> <<nan::32-native>> = <<0, 0, 192, 127>>
-      iex> (fn f when is_nan32(f) -> true end).(nan)
-      true
-
-  """
-  defguard is_nan32(val)
-           when is_integer(val) and
-                  (val in 0x7F800001..0x7FBFFFFF or
-                     val in 0xFF800001..0xFFBFFFFF or
-                     val in 0x7FC00000..0x7FFFFFFF or val in 0xFFC00000..0xFFFFFFFF)
-
-  @doc """
-
-  Checks for double nan values. Input should be 64 bit integer.
-
-      iex> import Nx.Shared, only: [is_nan64: 1]
-      iex> <<nan::64-native>> = <<0, 0, 0, 0, 0, 0, 248, 127>>
-      iex> (fn f when is_nan64(f) -> true end).(nan)
-      true
-      iex> <<nan::64-native>> = <<0, 0, 0, 0, 0, 0, 248, 255>>
-      iex> (fn f when is_nan64(f) -> true end).(nan)
-      true
-
-  """
-  defguard is_nan64(val)
-           when is_integer(val) and
-                  (val in 0x7FF0000000000001..0x7FF7FFFFFFFFFFFF or
-                     val in 0xFFF0000000000001..0xFFF7FFFFFFFFFFFF or
-                     val in 0x7FF8000000000000..0x7FFFFFFFFFFFFFFF or
-                     val in 0xFFF8000000000000..0xFFFFFFFFFFFFFFFF)
-
   @all_types [:s, :f, :bf, :u]
 
   defp match_types([h | t]) do
