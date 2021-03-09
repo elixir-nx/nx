@@ -1722,6 +1722,123 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def select_and_scatter(
+        %{type: {_, output_size} = output_type, shape: output_shape} = out,
+        t,
+        source,
+        select_fn,
+        window_dimensions,
+        opts,
+        init_value,
+        scatter_fn
+      ) do
+    padding = opts[:padding]
+    strides = opts[:strides]
+
+    init_value = to_scalar(init_value)
+
+    %T{shape: padded_shape, type: {_, size} = type} =
+      tensor = Nx.pad(t, init_value, Enum.map(padding, &Tuple.append(&1, 0)))
+
+    input_data = to_binary(tensor)
+    input_weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
+    input_anchors = Enum.sort(make_anchors(padded_shape, strides, window_dimensions))
+
+    %T{type: {_, source_size} = source_type} = source
+    source_data = to_binary(source)
+
+    output_windows =
+      for {anchor, i} <- Enum.with_index(input_anchors) do
+        offset = weighted_offset(input_weighted_shape, anchor)
+
+        window =
+          IO.iodata_to_binary(weighted_traverse(input_weighted_shape, input_data, size, offset))
+
+        # Get the index where `select_fn` is true
+        match_types [type] do
+          <<match!(first_elem, 0), _::bitstring>> = window
+
+          {_, index, _} =
+            for <<match!(x, 0) <- window>>, reduce: {0, 0, read!(first_elem, 0)} do
+              {cur_index, selected_index, acc} ->
+                if select_fn.(read!(x, 0), acc) == Nx.tensor(1, type: {:u, 8}) do
+                  {cur_index + 1, cur_index, read!(x, 0)}
+                else
+                  {cur_index + 1, selected_index, acc}
+                end
+            end
+
+          offset_from_anchor =
+            flattened_index_to_offset(index, Tuple.to_list(window_dimensions), 0, [])
+
+          absolute_index =
+            anchor
+            |> Enum.zip(offset_from_anchor)
+            |> Enum.map(fn {x, y} -> x + y end)
+
+          source_consumed = i * source_size
+
+          <<_::size(source_consumed)-bitstring, from_source::size(source_size)-bitstring,
+            _::bitstring>> = source_data
+
+          source_value = binary_to_number(from_source, source_type)
+
+          {source_value, absolute_index}
+        end
+      end
+
+    output_weighted_shape = weighted_shape(output_shape, output_size)
+
+    # Fold duplicate indices into one another using `scatter_fn` and sort
+    # by absolute offset
+    values_with_indices =
+      output_windows
+      |> Enum.group_by(&elem(&1, 1), &elem(&1, 0))
+      |> Enum.map(fn {index, value} ->
+        offset = weighted_offset(output_weighted_shape, index)
+        {offset, Enum.reduce(value, init_value, scatter_fn)}
+      end)
+      |> Enum.sort_by(&elem(&1, 0))
+
+    output_data =
+      match_types [output_type] do
+        {final_offset, output_data} =
+          for {offset, value} <- values_with_indices, reduce: {0, <<>>} do
+            {acc_offset, acc_binary} ->
+              num_vals_before = div(offset - acc_offset, output_size)
+              vals_before = List.duplicate(<<write!(init_value, 0)>>, num_vals_before)
+              source_val = to_binary(value)
+              new_binary = IO.iodata_to_binary([vals_before, source_val])
+
+              {offset + output_size,
+               <<acc_binary::size(acc_offset)-bitstring, new_binary::bitstring>>}
+          end
+
+        num_vals_left = div(output_size * Nx.size(output_shape) - final_offset, output_size)
+        vals_left = IO.iodata_to_binary(List.duplicate(<<write!(init_value, 0)>>, num_vals_left))
+        <<output_data::size(final_offset)-bitstring, vals_left::bitstring>>
+      end
+
+    from_binary(out, output_data)
+  end
+
+  defp flattened_index_to_offset(leftover, [dim | []], _, acc),
+    do: Enum.reverse([rem(leftover, dim) | acc])
+
+  defp flattened_index_to_offset(leftover, [dim | rest], n, acc) do
+    if leftover < Nx.size(List.to_tuple(rest)) do
+      flattened_index_to_offset(leftover, rest, 0, [n | acc])
+    else
+      flattened_index_to_offset(
+        leftover - Nx.size(List.to_tuple(rest)),
+        [dim | rest],
+        n + 1,
+        acc
+      )
+    end
+  end
+
+  @impl true
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor

@@ -153,6 +153,9 @@ defmodule Nx.Defn.Compiler do
     nif_path = output_dir |> Path.join(Atom.to_string(module)) |> String.to_charlist()
     nif_ext_path = Path.join(output_dir, "#{module}.#{nif_extension}")
 
+    # TODO: Make it work with tuples
+    # TODO: Check the input tensors
+    # TODO: Check the output tensors
     funs =
       for {name, args, result} <- export_tuples do
         aot_name = aot_name(name, args)
