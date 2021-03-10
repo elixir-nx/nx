@@ -2004,7 +2004,8 @@ defmodule Nx.BinaryBackend do
 
   ## Aggregation helpers
 
-  defp aggregate_axes(binary, axes, shape, size) do
+  @doc false
+  def aggregate_axes(binary, axes, shape, size) do
     {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
 
     view =
@@ -2015,7 +2016,8 @@ defmodule Nx.BinaryBackend do
     List.flatten(view)
   end
 
-  defp aggregate_axes([_ | _] = axes, shape, size) do
+  @doc false
+  def aggregate_axes([_ | _] = axes, shape, size) do
     axes = Enum.sort(axes)
     min = hd(axes)
     weighted_shape = weighted_shape(shape, size)
@@ -2035,7 +2037,7 @@ defmodule Nx.BinaryBackend do
     {chunk_size, read_size, path}
   end
 
-  defp aggregate_axes(axes, _shape, _size) do
+  def aggregate_axes(axes, _shape, _size) do
     raise ArgumentError, ":axes must be a non empty list, got: #{inspect(axes)}"
   end
 
