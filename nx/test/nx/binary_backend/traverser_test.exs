@@ -72,18 +72,20 @@ defmodule Nx.BinaryBackend.TraverserTest do
     assert Enum.to_list(trav) == Enum.to_list(0..127)
   end
 
-  test "simple transpose works" do
-    trav = Traverser.build({2, 2, 2}, [0], transpose: [2, 1, 0])
-    assert Enum.to_list(trav) == [0, 1, 4, 5, 2, 3, 6, 7]
-    aggs = Traverser.agg_iter(trav)
+  test "simple transpose works for {2, 3}" do
+    trav = Traverser.build({2, 3}, [], transpose: [1, 0])
+    cur = Nx.to_flat_list(Nx.transpose(Nx.iota({2, 3}, type: {:u, 8})))
+    out = Enum.to_list(trav)
+    assert out == cur
+    assert out == [0, 3, 1, 4, 2, 5]
+  end
 
-    out =
-      Enum.map(aggs, fn agg ->
-        Enum.to_list(agg)
-      end)
-
-    expected = [[0, 1], [4, 5], [2, 3], [6, 7]]
-    assert out == expected
+  test "simple transpose works for {3, 2}" do
+    trav = Traverser.build({3, 2}, [], transpose: [1, 0])
+    cur = Nx.to_flat_list(Nx.transpose(Nx.iota({3, 2}, type: {:u, 8})))
+    out = Enum.to_list(trav)
+    assert out == cur
+    assert out == [0, 2, 4, 1, 3, 5]
   end
 
   test "reverse works" do
