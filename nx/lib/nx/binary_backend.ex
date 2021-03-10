@@ -1948,39 +1948,6 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data_out)
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
-    %{type: {_, s1}} = t1
-    %{type: {_, s2}} = t2
-    b1 = to_binary(t1)
-    b2 = to_binary(t2)
-
-    data =
-      match_types [t1.type, t2.type] do
-        for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
-          {result, _} = fun.(d1, d2, acc)
-          scalar_to_binary(result, type)
-        end
-      end
-
-    from_binary(out, data)
-  end
-
-  defp bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
-    {_, s1} = t1.type
-    {_, s2} = t2.type
-
-    v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
-    v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
-
-    data =
-      for b1 <- v1, b2 <- v2 do
-        {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
-        scalar_to_binary(bin, type)
-      end
-
-    from_binary(out, data)
-  end
-
   # Helper for reducing down a single axis over two tensors,
   # returning tensor data and a final accumulator.
   defp bin_zip_reduce_axis(<<>>, <<>>, _s1, _s2, bin, acc, _fun),
@@ -1992,6 +1959,34 @@ defmodule Nx.BinaryBackend do
     {bin, acc} = fun.(x, y, acc)
     bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
   end
+
+  defp bin_zip_reduce(out, t1, axes1, t2, axes2, acc, fun) do
+    %T{type: type_out} = out
+    %T{type: {_, sizeof1}, shape: shape1} = t1
+    %T{type: {_, sizeof2}, shape: shape2} = t2
+
+    trav1 = Traverser.build(shape1, axes1)
+    trav2 = Traverser.build(shape2, axes2)
+
+    data1 = to_binary(t1)
+    data2 = to_binary(t2)
+
+    data_out =
+      Traverser.zip_reduce(trav1, trav2, <<>>, acc, fn o1, o2, acc2 ->
+        o1 = o1 * sizeof1
+        <<_::size(o1)-bitstring, bin1::size(sizeof1)-bitstring, _::bitstring>> = data1
+        o2 = o2 * sizeof2
+        <<_::size(o2)-bitstring, bin2::size(sizeof2)-bitstring, _::bitstring>> = data2
+        {_, acc3} = fun.(bin1, bin2, acc2)
+        acc3
+      end,
+      fn acc3 ->
+        scalar_to_binary(acc3, type_out)
+      end)
+
+    from_binary(out, data_out)
+  end
+
 
   ## Scalar helpers
 

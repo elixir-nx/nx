@@ -128,6 +128,23 @@ defmodule Nx.BinaryBackend.Traverser do
     }
   end
 
+  def zip_reduce(t1, t2, big_acc, small_acc, fun, fun2) do
+    for v1 <- iter_views(t1), v2 <- iter_views(t2), into: big_acc do
+      small_acc2 = zip_reduce(v1, v2, small_acc, fun)
+      fun2.(small_acc2)
+    end
+  end
+
+  def zip_reduce(v1, v2, acc, fun) do
+    case {next(v1), next(v2)} do
+      {:done, :done} ->
+        acc
+      {{:cont, i1, next_v1}, {:cont, i2, next_v2}} ->
+        acc = fun.(i1, i2, acc)
+        zip_reduce(next_v1, next_v2, acc, fun)
+    end
+  end
+
   defimpl Enumerable do
     def count(%Traverser{size: size}) do
       {:ok, size}
