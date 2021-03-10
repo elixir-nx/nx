@@ -251,7 +251,9 @@ defmodule Nx.BinaryBackend.Traverser do
     ws
   end
 
-  defp transpose_weighted_shape(ws, order) when length(ws) == length(order) do
+  defp transpose_weighted_shape(ws, order) do
+    check_transpose!(ws, order)
+
     map =
       ws
       |> Enum.with_index()
@@ -260,10 +262,20 @@ defmodule Nx.BinaryBackend.Traverser do
     Enum.map(order, fn i -> Map.fetch!(map, i) end)
   end
 
-  defp transpose_weighted_shape(ws, order) do
-    raise ArgumentError,
-          "expected length of permutation list" <>
-            " #{inspect(order)} to match rank of weighted" <>
-            " shape #{length(ws)}"
+  defp check_transpose!(ws, order) do
+    len = length(order)
+
+    if length(ws) != len do
+      raise ArgumentError,
+            "expected length of permutation list" <>
+              " #{inspect(order)} to match rank of weighted" <>
+              " shape #{length(ws)}"
+    end
+
+    if Enum.sort(order) != Enum.to_list(0..(len - 1)) do
+      raise ArgumentError,
+            "expected each axis of the permutation list to appear exactly" <>
+              " 1 time, got: #{inspect(order)}"
+    end
   end
 end
