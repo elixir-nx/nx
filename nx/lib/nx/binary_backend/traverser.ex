@@ -110,6 +110,24 @@ defmodule Nx.BinaryBackend.Traverser do
     AggIter.build(trav)
   end
 
+  def flatten(%Traverser{size: size} = trav) do
+    readers =
+      trav
+      |> agg_iter()
+      |> Enum.flat_map(fn %Traverser{offsets: [o], readers: readers} ->
+        Enum.map(readers, fn r -> r + o end)
+      end)
+    %Traverser{
+      readers_template: readers,
+      readers: readers,
+      offsets_template: [0],
+      offsets: [0],
+      size: size,
+      cycle_size: size,
+      cycle: 0,
+    }
+  end
+
   defimpl Enumerable do
     def count(%Traverser{size: size}) do
       {:ok, size}

@@ -15,6 +15,7 @@ defmodule Nx.BinaryBackend do
 
   alias Nx.Tensor, as: T
   alias Nx.BinaryBackend, as: B
+  alias Nx.BinaryBackend.Traverser
 
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
@@ -1540,51 +1541,50 @@ defmodule Nx.BinaryBackend do
   ## Aggregation
 
   @impl true
-  def all?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+  def all?(out, tensor, opts) do
+    num_reduce(out, tensor, 1, opts, fn num, acc ->
+      res = if num != 0, do: acc, else: 0
       {res, res}
     end)
   end
 
   @impl true
-  def any?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: 1, else: acc
+  def any?(out, tensor, opts) do
+    num_reduce(out, tensor, 0, opts, fn num, acc ->
+      res = if num != 0, do: 1, else: acc
+      # res = if num != 0, do: 1, else: acc
       {res, res}
     end)
   end
 
   @impl true
-  def sum(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) + acc
+  def sum(out, tensor, opts) do
+    num_reduce(out, tensor, 0, opts, fn num, acc ->
+      res = num + acc
       {res, res}
     end)
   end
 
   @impl true
-  def product(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) * acc
+  def product(out, tensor, opts) do
+    num_reduce(out, tensor, 1, opts, fn num, acc ->
+      res = num * acc
       {res, res}
     end)
   end
 
   @impl true
-  def reduce_max(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.max(acc, val)
+  def reduce_max(out, tensor, opts) do
+    num_reduce(out, tensor, :first, opts, fn num, acc ->
+      res = if acc == :first, do: num, else: Kernel.max(acc, num)
       {res, res}
     end)
   end
 
   @impl true
-  def reduce_min(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.min(acc, val)
+  def reduce_min(out, tensor, opts) do
+    num_reduce(out, tensor, :first, opts, fn num, acc ->
+      res = if acc == :first, do: num, else: Kernel.min(acc, num)
       {res, res}
     end)
   end
@@ -1611,12 +1611,10 @@ defmodule Nx.BinaryBackend do
     argmin_or_max(out, tensor, comparator, opts[:axis])
   end
 
-  defp argmin_or_max(out, %{type: type} = tensor, comparator, axis) do
+  defp argmin_or_max(out, tensor, comparator, axis) do
     opts = if axis, do: [axes: [axis]], else: []
 
-    bin_reduce(out, tensor, {0, :first, -1}, opts, fn bin, {i, cur_extreme_x, cur_extreme_i} ->
-      x = binary_to_number(bin, type)
-
+    num_reduce(out, tensor, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
       if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
         {i, {i + 1, x, i}}
       else
@@ -1909,27 +1907,42 @@ defmodule Nx.BinaryBackend do
 
   ## Binary reducers
 
+  defp num_reduce(out, tensor, acc, opts, fun) do
+    %T{type: type} = tensor
+    match_types [type] do
+      bin_reduce(out, tensor, acc, opts, fn bin, acc ->
+        <<match!(num, 0)>> = bin
+        fun.(num, acc)
+      end)
+    end
+  end
+
   defp bin_reduce(out, tensor, acc, opts, fun) do
-    %T{type: {_, size}, shape: shape} = tensor
+    %T{type: {_, sizeof}, shape: shape} = tensor
+    %T{type: type_out} = out
 
-    view =
-      if axes = opts[:axes] do
-        aggregate_axes(to_binary(tensor), axes, shape, size)
+    axes = Keyword.get(opts, :axes, []) || []
+    data = to_binary(tensor)
+    trav = Traverser.build(shape, axes)
+    trav =
+      if axes == [] do
+        Traverser.flatten(trav)
       else
-        [to_binary(tensor)]
+        trav
       end
 
-    data =
-      for axis <- view do
-        {result, _} =
-          for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
-            {_, acc} -> fun.(bin, acc)
+    data_out =
+      for agg <- Traverser.agg_iter(trav) do
+        {result, _agg_out} =
+          for o <- agg, reduce: {<<>>, acc} do
+            {_, acc} ->
+              offset = o * sizeof
+              <<_::size(offset)-bitstring, bin::size(sizeof)-bitstring, _::bitstring>> = data
+              fun.(bin, acc)
           end
-
-        scalar_to_binary(result, out.type)
+        scalar_to_binary(result, type_out)
       end
-
-    from_binary(out, data)
+    from_binary(out, data_out)
   end
 
   defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do

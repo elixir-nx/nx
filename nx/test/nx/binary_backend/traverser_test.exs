@@ -90,15 +90,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
 
   test "reverse works" do
     trav = Traverser.build({2, 2, 2}, [], reverse: true)
-    aggs = Traverser.agg_iter(trav)
-
-    out =
-      Enum.map(aggs, fn agg ->
-        Enum.to_list(agg)
-      end)
-
-    expected = Enum.map(7..0, fn i -> [i] end)
-    assert out == expected
+    assert Enum.to_list(trav) == Enum.map(7..0, fn i -> i end)
   end
 
   defp trav_dot(shape1, axes1, shape2, axes2) do
