@@ -1923,18 +1923,21 @@ defmodule Nx.BinaryBackend do
 
     axes = Keyword.get(opts, :axes, []) || []
     data = to_binary(tensor)
-    trav = Traverser.build(shape, axes)
-    trav =
+
+    views =
       if axes == [] do
-        Traverser.flatten(trav)
+        size = Nx.size(shape)
+        [0..(size - 1)]
       else
-        trav
+        shape
+        |> Traverser.build(axes)
+        |> Traverser.iter_views()
       end
 
     data_out =
-      for agg <- Traverser.agg_iter(trav) do
-        {result, _agg_out} =
-          for o <- agg, reduce: {<<>>, acc} do
+      for view <- views do
+        {result, _} =
+          for o <- view, reduce: {<<>>, acc} do
             {_, acc} ->
               offset = o * sizeof
               <<_::size(offset)-bitstring, bin::size(sizeof)-bitstring, _::bitstring>> = data

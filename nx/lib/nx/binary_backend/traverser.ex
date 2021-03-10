@@ -1,6 +1,6 @@
 defmodule Nx.BinaryBackend.Traverser do
   alias Nx.BinaryBackend.Traverser
-  alias Nx.BinaryBackend.AggIter
+  alias Nx.BinaryBackend.ViewIter
 
   defstruct [
     :offsets,
@@ -83,7 +83,7 @@ defmodule Nx.BinaryBackend.Traverser do
     {:cont, o + r, %Traverser{trav | readers: rest}}
   end
 
-  def next_agg(
+  def next_view(
         %Traverser{
           offsets: [head_o | offsets],
           readers: readers,
@@ -91,29 +91,29 @@ defmodule Nx.BinaryBackend.Traverser do
         } = trav
       ) do
     size = length(readers_template)
-    agg = do_build_struct(size, size, [head_o], readers)
+    view = do_build_struct(size, size, [head_o], readers)
     trav = %Traverser{trav | offsets: offsets, readers: readers_template}
-    {:cont, agg, trav}
+    {:cont, view, trav}
   end
 
-  def next_agg(%Traverser{offsets: []} = trav) do
+  def next_view(%Traverser{offsets: []} = trav) do
     case next_cycle(trav) do
       :done ->
         :done
 
       trav ->
-        next_agg(trav)
+        next_view(trav)
     end
   end
 
-  def agg_iter(trav) do
-    AggIter.build(trav)
+  def iter_views(%Traverser{} = trav) do
+    ViewIter.build(trav)
   end
 
   def flatten(%Traverser{size: size} = trav) do
     readers =
       trav
-      |> agg_iter()
+      |> iter_views()
       |> Enum.flat_map(fn %Traverser{offsets: [o], readers: readers} ->
         Enum.map(readers, fn r -> r + o end)
       end)

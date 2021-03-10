@@ -56,12 +56,12 @@ defmodule Nx.BinaryBackend.TraverserTest do
     assert Enum.to_list(trav2) == exp2 |> Enum.join() |> to_charlist()
   end
 
-  test "agg_iter works" do
+  test "iter_views works" do
     shape = {2, 2, 2, 2, 2, 2, 2}
     axes = [0, 3, 6]
     trav = Traverser.build(shape, axes)
-    aggs = Traverser.agg_iter(trav)
-    out = Enum.map(aggs, fn agg -> Enum.to_list(agg) end)
+    views = Traverser.iter_views(trav)
+    out = Enum.map(views, fn v -> Enum.to_list(v) end)
     assert out == @example_expected
   end
 
@@ -97,19 +97,16 @@ defmodule Nx.BinaryBackend.TraverserTest do
     trav1 = Traverser.build(shape1, axes1)
     trav2 = Traverser.build(shape2, axes2)
 
-    aggs1 = Traverser.agg_iter(trav1)
-    aggs2 = Traverser.agg_iter(trav2)
+    views1 = Traverser.iter_views(trav1)
+    views2 = Traverser.iter_views(trav2)
 
-    out =
-      for agg1 <- aggs1, agg2 <- aggs2 do
-        # without a zip_reduce for now
-        agg1
-        |> Enum.zip(agg2)
-        |> Enum.map(fn {i1, i2} -> i1 * i2 end)
-        |> Enum.sum()
-      end
-
-    List.flatten(out)
+    for view1 <- views1, view2 <- views2 do
+      # without a zip_reduce for now
+      view1
+      |> Enum.zip(view2)
+      |> Enum.map(fn {i1, i2} -> i1 * i2 end)
+      |> Enum.sum()
+    end
   end
 
   test "simplest dot works just like the current implementation" do
@@ -123,8 +120,8 @@ defmodule Nx.BinaryBackend.TraverserTest do
 
     cur_out = Nx.dot(t1, axes1, t2, axes2)
     cur_out = Nx.to_flat_list(cur_out)
-
-    assert trav_dot(shape1, axes1, shape2, axes2) == cur_out
+    dot = trav_dot(shape1, axes1, shape2, axes2)
+    assert List.flatten(dot) == cur_out
   end
 
   test "works on a dot without any contraction axes" do
@@ -138,7 +135,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
 
     cur_out = Nx.dot(t1, axes1, t2, axes2)
     cur_out = Nx.to_flat_list(cur_out)
-
-    assert trav_dot(shape1, axes1, shape2, axes2) == cur_out
+    dot = trav_dot(shape1, axes1, shape2, axes2)
+    assert List.flatten(dot) == cur_out
   end
 end
