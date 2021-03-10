@@ -963,6 +963,36 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "scatter_window_min/max" do
+    defn scatter_window_max_no_padding(t) do
+      Nx.scatter_window_max(t, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+    end
+
+    test "scatter_window_max produces the same result as Nx with no padding" do
+      x = Nx.tensor([[7, 2, 5, 3, 10, 2], [3, 8, 9, 3, 4, 2],
+                      [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]])
+
+      lhs = scatter_window_max_no_padding(x)
+      rhs = Nx.scatter_window_max(x, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn scatter_window_min_no_padding(t) do
+      Nx.scatter_window_min(t, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+    end
+
+    test "scatter_window_min produces the same result as Nx with no padding" do
+      x = Nx.tensor([[7, 2, 5, 3, 10, 2], [3, 8, 9, 3, 4, 2],
+                      [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]])
+
+      lhs = scatter_window_min_no_padding(x)
+      rhs = Nx.scatter_window_min(x, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "all?" do
     defn all?(t), do: Nx.all?(t)
     defn all_axis_0?(t), do: Nx.all?(t, axes: [0])
