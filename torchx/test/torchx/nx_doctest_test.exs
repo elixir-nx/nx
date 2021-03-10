@@ -1,6 +1,5 @@
 defmodule Torchx.NxDoctestTest do
   @moduledoc """
-
   # Why some doctests are excluded?
 
   ## Not callbacks
@@ -15,7 +14,7 @@ defmodule Torchx.NxDoctestTest do
 
   * logistic/1
 
-  ## Callback or test requires explicity backend transfer to BinaryBackend
+  ## Callback or test requires explicit backend transfer to BinaryBackend
 
   * to_binary/2
   * to_flat_list/2
@@ -94,7 +93,7 @@ defmodule Torchx.NxDoctestTest do
         cholesky: 1,
         norm: 2,
         all_close?: 3,
-        atan2: 2,
+        # atan2: 2,
         bitcast: 2
       )
     |> Kernel.++([:moduledoc])
