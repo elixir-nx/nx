@@ -424,6 +424,23 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  @window_chooser_op [:window_min, :window_max]
+
+  defp grad(op, [x, window_dimensions, opts], _ans, g, cache)
+      when op in @window_chooser_op do
+    padding = opts[:padding]
+    strides = opts[:strides]
+
+    fun =
+      if op == :window_min,
+        do: &Nx.scatter_window_min/5,
+        else: &Nx.scatter_window_max/5
+
+    g = fun.(x, g, window_dimensions, [padding: padding, strides: strides], 0)
+
+    to_grad(x, g, cache)
+  end
+
   ## Other gradients
 
   defp grad(:abs, [x], _ans, g, cache) do
