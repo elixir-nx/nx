@@ -251,9 +251,9 @@ defmodule Torchx.Backend do
     NIF.argmin(to_ref(t), axis, keep_axes) |> from_ref(out)
   end
 
-  defp unsupported_option!(opts, key, acceptable_default \\ nil),
-    do:
-      if(opts[key] != acceptable_default, do: raise("#{inspect(key)} option is not supported in #{caller()}"))
+  defp unsupported_option!(opts, key, acceptable_default) do
+    if(opts[key] != acceptable_default, do: raise("#{inspect(key)} option is not supported in #{caller()}"))
+  end
 
   defp caller() do
     {module, func, arity, [file: _file, line: _line]} =
