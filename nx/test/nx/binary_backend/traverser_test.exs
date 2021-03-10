@@ -3,18 +3,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
 
   alias Nx.BinaryBackend.Traverser
 
-  test "Enum.count/1 works" do
-    trav = Traverser.build({2, 2, 2, 2, 2, 2, 2}, [0])
-    assert Enum.count(trav) == 128
-  end
-
-  test "works for examples case" do
-    shape = {2, 2, 2, 2, 2, 2, 2}
-    axes = [0, 3, 6]
-    trav = Traverser.build(shape, axes)
-
-    assert Enum.to_list(trav) ==
-             List.flatten([
+  @example_expected [
                [0, 1, 8, 9, 64, 65, 72, 73],
                [2, 3, 10, 11, 66, 67, 74, 75],
                [4, 5, 12, 13, 68, 69, 76, 77],
@@ -31,7 +20,19 @@ defmodule Nx.BinaryBackend.TraverserTest do
                [50, 51, 58, 59, 114, 115, 122, 123],
                [52, 53, 60, 61, 116, 117, 124, 125],
                [54, 55, 62, 63, 118, 119, 126, 127]
-             ])
+             ]
+
+  test "Enum.count/1 works" do
+    trav = Traverser.build({2, 2, 2, 2, 2, 2, 2}, [0])
+    assert Enum.count(trav) == 128
+  end
+
+  test "works for examples case" do
+    shape = {2, 2, 2, 2, 2, 2, 2}
+    axes = [0, 3, 6]
+    trav = Traverser.build(shape, axes)
+
+    assert Enum.to_list(trav) == List.flatten(@example_expected)
   end
 
   test "works for {2, 3} and {3, 2} cases" do
@@ -60,12 +61,8 @@ defmodule Nx.BinaryBackend.TraverserTest do
     axes = [0, 3, 6]
     trav = Traverser.build(shape, axes)
     aggs = Traverser.agg_iter(trav)
-    agg0 = Enum.at(aggs, 0)
-    agg_size = Enum.count(agg0)
-
-    expected = Enum.chunk_every(expected(shape, axes), agg_size)
     out = Enum.map(aggs, fn agg -> Enum.to_list(agg) end)
-    assert out == expected
+    assert out == @example_expected
   end
 
   test "works for no axes" do
