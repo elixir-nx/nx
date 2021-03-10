@@ -44,6 +44,7 @@ defmodule Torchx.NIF do
   dnif delete_tensor(tensor)
   dnif squeeze(tensor)
   dnif squeeze(tensor, axis)
+  dnif expand(tensor, shape)
   dnif broadcast_to(tensor, shape)
   dnif transpose(tensor, dim0, dim1)
   dnif permute(tensor, dims)
@@ -107,6 +108,7 @@ defmodule Torchx.NIF do
 
   def type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
+  def names(_tensor), do: :erlang.nif_error(:undef)
   def strides(_tensor), do: :erlang.nif_error(:undef)
   def device(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)

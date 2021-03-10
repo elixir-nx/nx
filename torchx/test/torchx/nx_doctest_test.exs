@@ -93,7 +93,7 @@ defmodule Torchx.NxDoctestTest do
         cholesky: 1,
         norm: 2,
         all_close?: 3,
-        # atan2: 2,
+        atan2: 2,
         bitcast: 2
       )
     |> Kernel.++([:moduledoc])

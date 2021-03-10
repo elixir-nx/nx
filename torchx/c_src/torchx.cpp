@@ -162,6 +162,19 @@ NIF(shape)
   return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
 }
 
+NIF(names)
+{
+  TENSOR_PARAM(0, t);
+
+  at::DimnameList dimnames = t->names();
+
+  std::vector<ERL_NIF_TERM> names;
+  for (size_t i = 0; i < dimnames.size(); i++ )
+    names.push_back(nx::nif::make(env, dimnames[i].symbol().toUnqualString()));
+  
+  return nx::nif::ok(env, enif_make_list_from_array(env, names.data(), names.size()));
+}
+
 NIF(strides)
 {
   TENSOR_PARAM(0, t);
@@ -282,6 +295,14 @@ NIF(squeeze)
   }
   else
     TENSOR(torch::squeeze(*t));
+}
+
+NIF(expand)
+{
+  TENSOR_PARAM(0, t);
+  SHAPE_PARAM(1, shape);
+
+  TENSOR(t->expand(shape).clone());
 }
 
 NIF(broadcast_to)
@@ -566,6 +587,7 @@ static ErlNifFunc nif_functions[] = {
     DF(to_type, 2),
     DF(squeeze, 2),
     DF(squeeze, 1),
+    DF(expand, 2),
     DF(broadcast_to, 2),
     DF(transpose, 3),
     DF(permute, 2),
@@ -625,6 +647,7 @@ static ErlNifFunc nif_functions[] = {
 
     F(type, 1),
     F(shape, 1),
+    F(names, 1),
     F(strides, 1),
     F(device, 1),
     F(nbytes, 1),

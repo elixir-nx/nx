@@ -172,6 +172,16 @@ defmodule Torchx.Backend do
     NIF.squeeze(to_ref(t)) |> from_ref(out)
   end
 
+  def expand(%T{} = t, shape) do
+    NIF.expand(to_ref(t), shape) |> from_bare_ref()
+  end
+
+  @impl true
+  def broadcast(out, %T{} = t, shape, axes) do
+    IO.inspect(axes)
+    NIF.broadcast_to(to_ref(t), shape) |> from_ref(out)
+  end
+
   @impl true
   def transpose(out, %T{} = t, opts) do
     NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
@@ -252,7 +262,9 @@ defmodule Torchx.Backend do
   end
 
   defp unsupported_option!(opts, key, acceptable_default) do
-    if(opts[key] != acceptable_default, do: raise("#{inspect(key)} option is not supported in #{caller()}"))
+    if(opts[key] != acceptable_default,
+      do: raise("#{inspect(key)} option is not supported in #{caller()}")
+    )
   end
 
   defp caller() do
@@ -390,6 +402,25 @@ defmodule Torchx.Backend do
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 
   defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
+
+  defp from_bare_ref(maybe_ref) do
+    ref = unwrap!(maybe_ref)
+
+    type = NIF.type(ref) |> unwrap!() |> from_torch_type()
+    shape = NIF.shape(ref) |> unwrap!()
+
+    names =
+      ref
+      |> NIF.names()
+      |> unwrap!()
+      |> Enum.map(&List.to_string/1)
+      |> Enum.map(fn
+        "*" -> nil
+        name -> String.to_atom(name)
+      end)
+
+    to_tensor(ref, %T{shape: shape, type: type, names: names})
+  end
 
   defp from_pair_ref(maybe_ref, {t1, t2}) do
     {left, right} = unwrap!(maybe_ref)
