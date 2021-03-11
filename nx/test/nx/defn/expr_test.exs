@@ -3,6 +3,14 @@ defmodule Nx.Defn.ExprTest do
 
   alias Nx.Defn.Expr
 
+  describe "tensor" do
+    test "uses the binary backend" do
+      Nx.default_backend(Unknown)
+      assert %Nx.Tensor{data: %Expr{op: :tensor, args: [tensor]}} = Expr.tensor(0)
+      assert Nx.to_scalar(tensor) == 0
+    end
+  end
+
   describe "inspect" do
     test "with scalar" do
       assert inspect(Expr.tensor(Nx.tensor(0)), safe: false) == """
@@ -13,6 +21,22 @@ defmodule Nx.Defn.ExprTest do
              >\
              """
     end
+
+    test "with scalar from invalid backend" do
+      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
+      b = %Nx.Tensor{data: %{__struct__: Unknown}, shape: {}, type: {:s, 64}, names: []}
+
+      assert inspect(Nx.add(a, Expr.tensor(b)), safe: false) == """
+             #Nx.Tensor<
+               s64[2][2]
+             \s\s
+               Nx.Defn.Expr
+               parameter a            s64[2][2]
+               b = add [ a, SCALAR ]  s64[2][2]
+             >\
+             """
+    end
+
 
     test "with parameters" do
       a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)

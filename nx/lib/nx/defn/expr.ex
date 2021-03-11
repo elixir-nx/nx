@@ -554,13 +554,14 @@ defmodule Nx.Defn.Expr do
 
   defp to_expr(%T{data: %Expr{}} = t), do: t
   defp to_expr(%T{} = t), do: expr(t, nil, :tensor, [t])
-  defp to_expr(number) when is_number(number), do: to_expr(Nx.tensor(number))
+
+  defp to_expr(number) when is_number(number),
+    do: to_expr(Nx.tensor(number, backend: Nx.BinaryBackend))
 
   defp to_expr(other) do
     raise ArgumentError,
-          "unable to build tensor expression, expected a tensor or a number, got: #{
-            inspect(other)
-          }"
+          "unable to build tensor expression, expected a tensor or a number, " <>
+            "got: #{inspect(other)}"
   end
 
   defp to_exprs(list) do
@@ -660,7 +661,11 @@ defmodule Nx.Defn.Expr do
         inspect(fun)
 
       %T{data: %Expr{op: :tensor, args: [t]}, shape: {}} ->
-        t |> Nx.to_scalar() |> to_string()
+        try do
+          t |> Nx.to_scalar() |> to_string()
+        rescue
+          _ -> "SCALAR"
+        end
 
       %T{data: %Expr{id: id}} ->
         Map.fetch!(var_map, id)
