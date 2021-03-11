@@ -177,9 +177,14 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def broadcast(out, %T{} = t, shape, axes) do
-    NIF.broadcast_to(to_ref(t), shape) |> from_ref(out)
+  def broadcast(out, %T{shape: orig_shape} = t, shape, axes) do
+    # IO.puts("broadcast(#{inspect(Nx.shape(t))}, #{inspect(shape)}, #{inspect(axes)})")
+    NIF.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref(), shape) |> from_ref(out)
   end
+
+  defp maybe_reshape(%T{shape: {n}} = t, {n, _}, [0]), do: Nx.reshape(t, {n, 1})
+  defp maybe_reshape(%T{} = t, _, _), do: t
+
 
   @impl true
   def transpose(out, %T{} = t, opts) do
@@ -346,13 +351,18 @@ defmodule Torchx.Backend do
         axes2
       ) do
     # IO.puts("dot(#{inspect(Nx.shape(left))}, #{inspect(axes1)}, #{inspect(Nx.shape(right))}, #{inspect(axes2)})")
-    NIF.dot(maybe_transpose(to_ref(left), axes1), to_ref(right)) |> from_ref(out)
+    NIF.dot(maybe_transpose_left(to_ref(left), axes1), maybe_transpose_right(to_ref(right), axes2)) |> from_ref(out)
   end
 
-  defp maybe_transpose(ref, [0]), do:
+  defp maybe_transpose_left(ref, [0]), do:
     NIF.transpose(ref, 0, 1) |> unwrap!()
 
-  defp maybe_transpose(ref, _), do: ref
+  defp maybe_transpose_left(ref, _), do: ref
+
+  defp maybe_transpose_right(ref, [1]), do:
+    NIF.transpose(ref, 0, 1) |> unwrap!()
+
+  defp maybe_transpose_right(ref, _), do: ref
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do

@@ -27,9 +27,9 @@ defmodule MNIST do
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
     Nx.mean(
       Nx.equal(
-        Nx.argmax(batch_labels, axis: :output),
+        Nx.argmax(Nx.as_type(batch_labels, {:s, 8}), axis: :output),
         Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: :output)
-      )
+      ) |> Nx.as_type({:s, 8})
     )
   end
 
@@ -156,16 +156,8 @@ params = MNIST.init_random_params()
 IO.puts("Training MNIST for 10 epochs...\n\n")
 final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
 
-IO.puts("Bring the parameters back from the device and print them")
-final_params = Nx.backend_transfer(final_params)
-IO.inspect(final_params)
+IO.puts("The result of the first batch")
+IO.inspect(MNIST.predict(final_params, hd(train_images)) |> Nx.argmax(axis: :output))
 
-# IO.puts("AOT-compiling a trained neural network that predicts a batch")
-# Nx.Defn.aot(
-#   MNIST.Trained,
-#   [{:predict, &MNIST.predict(final_params, &1), [Nx.template({30, 784}, {:f, 32})]}],
-#   EXLA
-# )
-
-# IO.puts("The result of the first batch against the AOT-compiled one")
-# IO.inspect MNIST.Trained.predict(hd(train_images))
+IO.puts("Labels for the first batch")
+IO.inspect(hd(train_labels) |> Nx.as_type({:s, 8}) |> Nx.argmax(axis: :output))

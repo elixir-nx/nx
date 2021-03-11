@@ -1641,7 +1641,7 @@ defmodule Nx do
       >
 
   Note that, even if there is no broadcasting because the
-  shape is the name, names are discarded if none are given:
+  shape is the same, names are discarded if none are given:
 
       iex> Nx.broadcast(Nx.iota({2, 2}, names: [:x, :y]), {2, 2})
       #Nx.Tensor<

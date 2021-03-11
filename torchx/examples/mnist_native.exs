@@ -1,11 +1,10 @@
 defmodule Torchx.MNIST do
-  import Nx.Defn
 
-  @batch_size 50
-  @step 0.02
+  @batch_size 30
+  @step 0.01
   @epochs 10
 
-  defn init_random_params do
+  def init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
     b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
     w2 = Nx.random_normal({128, 10}, 0.0, 0.1, names: [:layer, :output])
@@ -13,12 +12,12 @@ defmodule Torchx.MNIST do
     {w1, b1, w2, b2}
   end
 
-  defn softmax(logits) do
+  defp softmax(logits) do
     exp = Nx.exp(logits)
     Nx.divide(exp, Nx.sum(exp, axes: [:output], keep_axes: true))
   end
 
-  defn predict({w1, b1, w2, b2}, batch) do
+  def predict({w1, b1, w2, b2}, batch) do
     batch
     |> Nx.dot(w1)
     |> Nx.add(b1)
@@ -28,7 +27,7 @@ defmodule Torchx.MNIST do
     |> softmax()
   end
 
-  defn update(
+  defp update(
          {w1, b1, w2, b2} = _params,
          batch_images,
          batch_labels,
