@@ -714,6 +714,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def triangular_solve(out, a, b) do
+    a = to_expr(a)
+    b =  to_expr(b)
+    expr(out, b.data.context, :triangular_solve, [out, a, b])
+  end
+
+  @impl true
   def sort(out, tensor, opts) do
     comparator = opts[:comparator]
 
@@ -774,7 +781,9 @@ defmodule Nx.Defn.Expr do
 
   defp to_expr(other) do
     raise ArgumentError,
-          "unable to build tensor expression, expected a tensor or a number, got: #{inspect(other)}"
+          "unable to build tensor expression, expected a tensor or a number, got: #{
+            inspect(other)
+          }"
   end
 
   defp to_exprs(list) do
