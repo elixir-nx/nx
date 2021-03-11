@@ -43,7 +43,9 @@ inline std::string type2string(const torch::ScalarType type)
   }                                                          \
   catch (c10::Error error)                                   \
   {                                                          \
-    return nx::nif::error(env, error.msg().c_str());         \
+    std::ostringstream msg;                                  \
+    msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
+    return nx::nif::error(env, msg.str().c_str());           \
   }
 
 
@@ -418,6 +420,7 @@ BINARY_OP(subtract)
 BINARY_OP(divide)
 BINARY_OP(remainder)
 BINARY_OP(multiply)
+BINARY_OP2(dot, matmul)
 BINARY_OP2(power, pow)
 BINARY_OP(atan2)
 BINARY_OP(min)
@@ -443,14 +446,6 @@ UNARY_OP(log)
 UNARY_OP(bitwise_not)
 UNARY_OP2(logistic, sigmoid)
 
-
-NIF(dot)
-{
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-
-  TENSOR(torch::matmul(*a, *b));
-}
 
 NIF(sum)
 {

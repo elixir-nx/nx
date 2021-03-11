@@ -50,7 +50,7 @@ defmodule Torchx.LinReg do
     end
   end
 
-  def run(epochs \\ 50) do
+  def run(epochs \\ 100) do
     Nx.default_backend(Torchx.Backend)
     params = init_random_params()
     m = :rand.normal(0.0, 10.0)

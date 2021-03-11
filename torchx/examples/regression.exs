@@ -1,6 +1,5 @@
 defmodule LinReg do
   import Nx.Defn
-  @default_defn_compiler EXLA
 
   # y = mx + b
   defn init_random_params do
@@ -40,13 +39,15 @@ defmodule LinReg do
           fn batch, cur_params ->
             {inp, tar} = Enum.unzip(batch)
             x = Nx.reshape(Nx.tensor(inp), {32, 1})
-            y = Nx.reshape(Nx.tensor(tar), {1, 32})
+            y = Nx.reshape(Nx.tensor(tar), {32, 1})
             update(cur_params, x, y, 0.001)
           end
         )
     end
   end
 end
+
+Nx.default_backend(Torchx.Backend)
 
 params = LinReg.init_random_params()
 m = :rand.normal(0.0, 10.0)

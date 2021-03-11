@@ -178,7 +178,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def broadcast(out, %T{} = t, shape, axes) do
-    IO.inspect(axes)
     NIF.broadcast_to(to_ref(t), shape) |> from_ref(out)
   end
 
@@ -267,9 +266,9 @@ defmodule Torchx.Backend do
     )
   end
 
-  defp caller() do
+  defp caller(depth \\ 3) do
     {module, func, arity, [file: _file, line: _line]} =
-      Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(3)
+      Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(depth)
 
     "#{inspect(module)}.#{func}/#{arity - 1}"
   end
@@ -342,12 +341,18 @@ defmodule Torchx.Backend do
   def dot(
         out,
         %T{} = left,
-        _axes1,
+        axes1,
         %T{} = right,
-        _axes2
+        axes2
       ) do
-    NIF.dot(to_ref(left), to_ref(right)) |> from_ref(out)
+    # IO.puts("dot(#{inspect(Nx.shape(left))}, #{inspect(axes1)}, #{inspect(Nx.shape(right))}, #{inspect(axes2)})")
+    NIF.dot(maybe_transpose(to_ref(left), axes1), to_ref(right)) |> from_ref(out)
   end
+
+  defp maybe_transpose(ref, [0]), do:
+    NIF.transpose(ref, 0, 1) |> unwrap!()
+
+  defp maybe_transpose(ref, _), do: ref
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do

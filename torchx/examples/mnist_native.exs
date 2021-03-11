@@ -1,6 +1,9 @@
-defmodule MNIST do
+defmodule Torchx.MNIST do
   import Nx.Defn
 
+  @batch_size 50
+  @step 0.02
+  @epochs 10
 
   defn init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
@@ -11,7 +14,8 @@ defmodule MNIST do
   end
 
   defn softmax(logits) do
-    Nx.exp(logits) / Nx.sum(Nx.exp(logits), axes: [:output], keep_axes: true)
+    exp = Nx.exp(logits)
+    Nx.divide(exp, Nx.sum(exp, axes: [:output], keep_axes: true))
   end
 
   defn predict({w1, b1, w2, b2}, batch) do
@@ -24,37 +28,57 @@ defmodule MNIST do
     |> softmax()
   end
 
-  defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
-    Nx.mean(
-      Nx.equal(
-        Nx.argmax(batch_labels, axis: :output),
-        Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: :output)
+  defn update(
+         {w1, b1, w2, b2} = _params,
+         batch_images,
+         batch_labels,
+         avg_loss,
+         avg_accuracy,
+         total
+       ) do
+    z1 = Nx.dot(batch_images, w1) |> Nx.add(b1)
+    a1 = Nx.logistic(z1)
+    z2 = Nx.dot(a1, w2) |> Nx.add(b2)
+    preds = softmax(z2)
+
+    batch_loss =
+      Nx.sum(Nx.mean(Nx.multiply(Nx.log(preds), batch_labels), axes: [:output])) |> Nx.negate()
+
+    batch_accuracy =
+      Nx.mean(
+        Nx.equal(
+          Nx.argmax(Nx.as_type(batch_labels, {:s, 8}), axis: :output),
+          Nx.argmax(preds, axis: :output)
+        )
+        |> Nx.as_type({:s, 8})
       )
-    )
-  end
 
-  defn loss({w1, b1, w2, b2}, batch_images, batch_labels) do
-    preds = predict({w1, b1, w2, b2}, batch_images)
-    -Nx.sum(Nx.mean(Nx.log(preds) * batch_labels, axes: [:output]))
-  end
+    total = Nx.tensor(total)
 
-  defn update({w1, b1, w2, b2} = params, batch_images, batch_labels, step) do
-    {grad_w1, grad_b1, grad_w2, grad_b2} = grad(params, loss(params, batch_images, batch_labels))
+    avg_loss = Nx.add(avg_loss, Nx.divide(batch_loss, total))
+    avg_accuracy = Nx.add(avg_accuracy, Nx.divide(batch_accuracy, total))
 
-    {
-      w1 - grad_w1 * step,
-      b1 - grad_b1 * step,
-      w2 - grad_w2 * step,
-      b2 - grad_b2 * step
-    }
-  end
+    grad_z2 = Nx.subtract(preds, batch_labels) |> Nx.transpose()
 
-  defn update_with_averages({_, _, _, _} = cur_params, imgs, tar, avg_loss, avg_accuracy, total) do
-    batch_loss = loss(cur_params, imgs, tar)
-    batch_accuracy = accuracy(cur_params, imgs, tar)
-    avg_loss = avg_loss + batch_loss / total
-    avg_accuracy = avg_accuracy + batch_accuracy / total
-    {update(cur_params, imgs, tar, 0.01), avg_loss, avg_accuracy}
+    batch_size = Nx.tensor(@batch_size)
+
+    grad_w2 = Nx.divide(Nx.dot(grad_z2, a1), batch_size) |> Nx.transpose()
+    grad_b2 = Nx.mean(Nx.transpose(grad_z2), axes: [:output], keep_axes: true)
+
+    grad_a1 = Nx.dot(w2, grad_z2) |> Nx.transpose()
+    grad_z1 = Nx.multiply(grad_a1, a1) |> Nx.multiply(Nx.subtract(Nx.tensor(1.0), a1))
+
+    grad_w1 = Nx.divide(Nx.dot(Nx.transpose(grad_z1), batch_images), batch_size) |> Nx.transpose()
+    grad_b1 = Nx.mean(grad_z1, axes: [1], keep_axes: true)
+
+    step = Nx.tensor(@step)
+
+    {{
+       Nx.subtract(w1, Nx.multiply(grad_w1, step)),
+       Nx.subtract(b1, Nx.multiply(grad_b1, step)),
+       Nx.subtract(w2, Nx.multiply(grad_w2, step)),
+       Nx.subtract(b2, Nx.multiply(grad_b2, step))
+     }, avg_loss, avg_accuracy}
   end
 
   defp unzip_cache_or_download(zip) do
@@ -88,8 +112,8 @@ defmodule MNIST do
       images
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_images, n_rows * n_cols}, names: [:batch, :input])
-      |> Nx.divide(255)
-      |> Nx.to_batched_list(30)
+      |> Nx.divide(Nx.tensor(255))
+      |> Nx.to_batched_list(@batch_size)
 
     IO.puts("#{n_images} #{n_rows}x#{n_cols} images\n")
 
@@ -100,7 +124,7 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_labels, 1}, names: [:batch, :output])
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
-      |> Nx.to_batched_list(30)
+      |> Nx.to_batched_list(@batch_size)
 
     IO.puts("#{n_labels} labels\n")
 
@@ -114,12 +138,14 @@ defmodule MNIST do
     |> Enum.zip(labels)
     |> Enum.reduce({cur_params, Nx.tensor(0.0), Nx.tensor(0.0)}, fn
       {imgs, tar}, {cur_params, avg_loss, avg_accuracy} ->
-        update_with_averages(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)
+        update(cur_params, imgs, tar, avg_loss, avg_accuracy, total_batches)
     end)
   end
 
   def train(imgs, labels, params, opts \\ []) do
-    epochs = opts[:epochs] || 5
+    epochs = opts[:epochs] || @epochs
+
+    IO.puts("Training MNIST for #{epochs} epochs...\n\n")
 
     for epoch <- 1..epochs, reduce: params do
       cur_params ->
@@ -145,6 +171,7 @@ defmodule MNIST do
   end
 end
 
+alias Torchx.MNIST
 Nx.default_backend(Torchx.Backend)
 
 {train_images, train_labels} =
@@ -153,19 +180,10 @@ Nx.default_backend(Torchx.Backend)
 IO.puts("Initializing parameters...\n")
 params = MNIST.init_random_params()
 
-IO.puts("Training MNIST for 10 epochs...\n\n")
-final_params = MNIST.train(train_images, train_labels, params, epochs: 10)
+final_params = MNIST.train(train_images, train_labels, params)
 
-IO.puts("Bring the parameters back from the device and print them")
-final_params = Nx.backend_transfer(final_params)
-IO.inspect(final_params)
+IO.puts("The result of the first batch")
+IO.inspect(MNIST.predict(final_params, hd(train_images)) |> Nx.argmax(axis: :output))
 
-# IO.puts("AOT-compiling a trained neural network that predicts a batch")
-# Nx.Defn.aot(
-#   MNIST.Trained,
-#   [{:predict, &MNIST.predict(final_params, &1), [Nx.template({30, 784}, {:f, 32})]}],
-#   EXLA
-# )
-
-# IO.puts("The result of the first batch against the AOT-compiled one")
-# IO.inspect MNIST.Trained.predict(hd(train_images))
+IO.puts("Labels for the first batch")
+IO.inspect(hd(train_labels) |> Nx.as_type({:s, 8}) |> Nx.argmax(axis: :output))
