@@ -7164,21 +7164,32 @@ defmodule Nx do
 
     case opts[:trans] do
       0 ->
-        triangular_solve_n(a, b)
+        triangular_solve_n(a, b, opts)
 
       'N' ->
-        triangular_solve_n(a, b)
+        triangular_solve_n(a, b, opts)
 
       nil ->
-        triangular_solve_n(a, b)
+        triangular_solve_n(a, b, opts)
 
       trans ->
         raise ArgumentError, "unknown trans #{inspect(trans)}, expected 0 or 'N' for a x = b"
     end
   end
 
-  defp triangular_solve_n(a, b) do
-    # TODO: write implementation
+  defp triangular_solve_n(a, b, opts) do
+    %T{shape: {m, n}} = tensor!(a)
+    %T{type: type, shape: shape} = tensor!(b)
+
+    output_type = Nx.Type.to_floating(type)
+
+    impl!(b).triangular_solve(
+      {
+        %{b | type: output_type, shape: shape}
+      },
+      a,
+      b
+    )
   end
 
   @doc """
