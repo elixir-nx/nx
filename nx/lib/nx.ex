@@ -1497,13 +1497,6 @@ defmodule Nx do
       >
 
       iex> b = Nx.tensor([[1,2],[3,4]])
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 2],
-          [3, 4]
-        ]
-      >
       iex> Nx.tile(b, 2)
       #Nx.Tensor<
         s64[2][4]
@@ -1532,10 +1525,6 @@ defmodule Nx do
       >
 
       iex> c = Nx.tensor([1,2,3,4])
-      #Nx.Tensor<
-        s64[4]
-        [1, 2, 3, 4]
-      >
       iex> Nx.tile(c, [4,1])
       #Nx.Tensor<
         s64[4][4]
@@ -1547,16 +1536,16 @@ defmodule Nx do
         ]
       >
 
-    ### Error cases
+  ### Error cases
 
-    iex> Nx.tile(Nx.tensor([1,2]), 1.0)
-    ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: 1.0
+      iex> Nx.tile(Nx.tensor([1,2]), 1.0)
+      ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: 1.0
 
-    iex> Nx.tile(Nx.tensor([1,2]), [1, 1.0])
-    ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: [1, 1.0]
+      iex> Nx.tile(Nx.tensor([1,2]), [1, 1.0])
+       ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: [1, 1.0]
 
-    iex> Nx.tile(Nx.tensor([1,2]), nil)
-    ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: nil
+      iex> Nx.tile(Nx.tensor([1,2]), nil)
+      ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: nil
   """
   @doc type: :shape
   def tile(tensor, repetitions) do
@@ -1597,9 +1586,7 @@ defmodule Nx do
     broadcast_shape = zipped_shapes |> Enum.flat_map(&Tuple.to_list/1) |> List.to_tuple()
 
     tensor_reshape =
-      [nil | resized_shape_list]
-      |> Enum.intersperse(1)
-      |> tl()
+      [1 | Enum.intersperse(resized_shape_list, 1)]
       |> List.to_tuple()
 
     result_shape = zipped_shapes |> Enum.map(fn {x, y} -> x * y end) |> List.to_tuple()
