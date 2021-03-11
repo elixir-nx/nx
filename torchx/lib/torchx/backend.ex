@@ -266,9 +266,9 @@ defmodule Torchx.Backend do
   end
 
   defp unsupported_option!(opts, key, acceptable_default) do
-    if(opts[key] != acceptable_default,
-      do: raise("#{inspect(key)} option is not supported in #{caller()}")
-    )
+    if opts[key] != acceptable_default do
+      raise "#{inspect(key)} option is not supported in #{caller()}"
+    end
   end
 
   defp caller(depth \\ 3) do
