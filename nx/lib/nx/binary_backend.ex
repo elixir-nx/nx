@@ -867,7 +867,7 @@ defmodule Nx.BinaryBackend do
           # the filter at each step
           anchor <- anchors,
           into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, [group*num_input_channels | anchor])
+        offset = weighted_offset(batch_weighted_shape, [group * num_input_channels | anchor])
         # The shape of the window is {channels} + filter_shape
         # The shape of the kernel is {num_filters, channels} + filter_shape
         window =
@@ -927,11 +927,12 @@ defmodule Nx.BinaryBackend do
     filter_group_size = div(Nx.size(kernel_shape) * kernel_size, groups)
     filter_size = div(Nx.size(kernel_shape) * kernel_size, elem(kernel_shape, 0))
 
-    for i <- 0..groups - 1,
-          offset = filter_group_size * i,
-          <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring, _::bitstring>> = kernel_data,
-          <<filter::size(filter_size)-bitstring <- filter_group>>,
-          do: {filter, i}
+    for i <- 0..(groups - 1),
+        offset = filter_group_size * i,
+        <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring,
+          _::bitstring>> = kernel_data,
+        <<filter::size(filter_size)-bitstring <- filter_group>>,
+        do: {filter, i}
   end
 
   @impl true
@@ -1511,6 +1512,17 @@ defmodule Nx.BinaryBackend do
       end
 
     from_binary(t, new_data)
+  end
+
+  @impl true
+  def triangular_solve(
+        {
+          %{shape: shape, type: output_type = b_holder}
+        },
+        %{type: input_type, shape: input_shape} = a,
+        b
+      ) do
+    # Write implementation for backend here
   end
 
   ## Binary reducers
