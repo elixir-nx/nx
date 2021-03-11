@@ -1441,6 +1441,176 @@ defmodule Nx do
   end
 
   @doc """
+  Creates a new tensor by repeating the input tensor
+  along the given axes.
+
+  If the `tensor` has less dimensions than the repetitions given,
+  the tensor will grow in dimensionality.
+
+  If the `tensor` has more dimensions than the repetitions given,
+  tiling is done from the rightmost dimensions (i.e. if the input
+  shape is `{1,2,3}` and `repetitions = [2]`, the result is the same
+  as if `repetitions = [1,1,2]`).
+
+  ## Examples
+
+      iex> a = Nx.tensor([0, 1, 2])
+      iex> Nx.tile(a, 2)
+      #Nx.Tensor<
+        s64[6]
+        [0, 1, 2, 0, 1, 2]
+      >
+      iex> Nx.tile(a, [1, 2])
+      #Nx.Tensor<
+        s64[1][6]
+        [
+          [0, 1, 2, 0, 1, 2]
+        ]
+      >
+      iex> Nx.tile(a, [2, 2])
+      #Nx.Tensor<
+        s64[2][6]
+        [
+          [0, 1, 2, 0, 1, 2],
+          [0, 1, 2, 0, 1, 2]
+        ]
+      >
+      iex> Nx.tile(a, [2, 1])
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 1, 2],
+          [0, 1, 2]
+        ]
+      >
+      iex> Nx.tile(a, [2, 1, 2])
+      #Nx.Tensor<
+        s64[2][1][6]
+        [
+          [
+            [0, 1, 2, 0, 1, 2]
+          ],
+          [
+            [0, 1, 2, 0, 1, 2]
+          ]
+        ]
+      >
+
+      iex> b = Nx.tensor([[1,2],[3,4]])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+      iex> Nx.tile(b, 2)
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [1, 2, 1, 2],
+          [3, 4, 3, 4]
+        ]
+      >
+      iex> Nx.tile(b, [2, 1])
+      #Nx.Tensor<
+        s64[4][2]
+        [
+          [1, 2],
+          [3, 4],
+          [1, 2],
+          [3, 4]
+        ]
+      >
+      iex> Nx.tile(b, [1, 2])
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [1, 2, 1, 2],
+          [3, 4, 3, 4]
+        ]
+      >
+
+      iex> c = Nx.tensor([1,2,3,4])
+      #Nx.Tensor<
+        s64[4]
+        [1, 2, 3, 4]
+      >
+      iex> Nx.tile(c, [4,1])
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [1, 2, 3, 4],
+          [1, 2, 3, 4],
+          [1, 2, 3, 4],
+          [1, 2, 3, 4]
+        ]
+      >
+
+    ### Error cases
+
+    iex> Nx.tile(Nx.tensor([1,2]), 1.0)
+    ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: 1.0
+
+    iex> Nx.tile(Nx.tensor([1,2]), [1, 1.0])
+    ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: [1, 1.0]
+
+    iex> Nx.tile(Nx.tensor([1,2]), nil)
+    ** (ArgumentError) repetitions must be either an integer or a list of integers. Got: nil
+  """
+  @doc type: :shape
+  def tile(tensor, repetitions) do
+    %T{shape: old_shape} = tensor = tensor!(tensor)
+
+    invalid_repetitions_message =
+      "repetitions must be either an integer or a list of integers. Got: #{inspect(repetitions)}"
+
+    repetitions =
+      case repetitions do
+        reps when is_list(reps) ->
+          if Enum.any?(reps, &(not is_integer(&1))) do
+            raise ArgumentError, invalid_repetitions_message
+          end
+
+          reps
+
+        reps when is_integer(reps) and reps > 0 ->
+          reps
+
+        _ ->
+          raise ArgumentError, invalid_repetitions_message
+      end
+
+    repetitions = List.wrap(repetitions)
+
+    num_dims = tuple_size(old_shape)
+    length_reps = length(repetitions)
+
+    # grow the dimensionality of the tensor by new_dims_count
+    shape_grow_count = Kernel.max(length_reps - num_dims, 0)
+    resized_shape_list = List.duplicate(1, shape_grow_count) ++ Tuple.to_list(old_shape)
+
+    repetitions_grow_count = Kernel.max(num_dims - length_reps, 0)
+    resized_repetitions = List.duplicate(1, repetitions_grow_count) ++ repetitions
+
+    zipped_shapes = Enum.zip(resized_repetitions, resized_shape_list)
+    broadcast_shape = zipped_shapes |> Enum.flat_map(&Tuple.to_list/1) |> List.to_tuple()
+
+    tensor_reshape =
+      [nil | resized_shape_list]
+      |> Enum.intersperse(1)
+      |> tl()
+      |> List.to_tuple()
+
+    result_shape = zipped_shapes |> Enum.map(fn {x, y} -> x * y end) |> List.to_tuple()
+
+    tensor
+    |> reshape(tensor_reshape)
+    |> broadcast(broadcast_shape)
+    |> reshape(result_shape)
+  end
+
+  @doc """
   Adds a new `axis` of size 1 with optional `name`.
 
   ## Examples
