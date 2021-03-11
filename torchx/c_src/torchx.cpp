@@ -43,7 +43,9 @@ inline std::string type2string(const torch::ScalarType type)
   }                                                          \
   catch (c10::Error error)                                   \
   {                                                          \
-    return nx::nif::error(env, error.msg().c_str());         \
+    std::ostringstream msg;                                  \
+    msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
+    return nx::nif::error(env, msg.str().c_str());           \
   }
 
 
@@ -97,7 +99,7 @@ NIF(delete_tensor)
 {
   TENSOR_PARAM(0, t);
 
-  delete t;
+  t->~Tensor();
   enif_release_resource(t);
 
   return nx::nif::ok(env);
@@ -121,6 +123,24 @@ NIF(from_blob)
   TENSOR(torch::clone(torch::from_blob(blob.data, shape, type)));
 }
 
+NIF(to_blob)
+{
+  ERL_NIF_TERM result;
+  TENSOR_PARAM(0, t);
+  size_t byte_size = t->nbytes();
+
+  if (argc == 2)
+  {
+    PARAM(1, int64_t, limit);
+    byte_size = limit * t->itemsize();
+  }
+
+  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
+  memcpy(result_data, t->data_ptr(), byte_size);
+
+  return result;
+}
+
 NIF(type)
 {
   TENSOR_PARAM(0, t);
@@ -142,6 +162,19 @@ NIF(shape)
     sizes.push_back(nx::nif::make(env, ((long)t->size(dim))));
   
   return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
+}
+
+NIF(names)
+{
+  TENSOR_PARAM(0, t);
+
+  at::DimnameList dimnames = t->names();
+
+  std::vector<ERL_NIF_TERM> names;
+  for (size_t i = 0; i < dimnames.size(); i++ )
+    names.push_back(nx::nif::make(env, dimnames[i].symbol().toUnqualString()));
+  
+  return nx::nif::ok(env, enif_make_list_from_array(env, names.data(), names.size()));
 }
 
 NIF(strides)
@@ -180,24 +213,6 @@ NIF(split)
   PARAM(1, int64_t, batch_size);
 
   TENSOR_LIST(torch::split(*t, batch_size));
-}
-
-NIF(to_blob)
-{
-  ERL_NIF_TERM result;
-  TENSOR_PARAM(0, t);
-  size_t byte_size = t->nbytes();
-
-  if (argc == 2)
-  {
-    PARAM(1, int64_t, limit);
-    byte_size = limit * t->itemsize();
-  }
-
-  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-  memcpy(result_data, t->data_ptr(), byte_size);
-
-  return result;
 }
 
 NIF(scalar_tensor)
@@ -397,6 +412,7 @@ BINARY_OP(subtract)
 BINARY_OP(divide)
 BINARY_OP(remainder)
 BINARY_OP(multiply)
+BINARY_OP2(dot, matmul)
 BINARY_OP2(power, pow)
 BINARY_OP(atan2)
 BINARY_OP(min)
@@ -418,16 +434,10 @@ UNARY_OP2(negate, negative)
 UNARY_OP(round)
 UNARY_OP(sign)
 UNARY_OP(exp)
+UNARY_OP(log)
 UNARY_OP(bitwise_not)
+UNARY_OP2(logistic, sigmoid)
 
-
-NIF(dot)
-{
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-
-  TENSOR(torch::matmul(*a, *b));
-}
 
 NIF(sum)
 {
@@ -436,6 +446,32 @@ NIF(sum)
   PARAM(2, bool, keep_dim);
 
   TENSOR(torch::sum(*t, dims, keep_dim));
+}
+
+NIF(argmax)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, dim);
+  PARAM(2, bool, keep_dim);
+
+  if (dim == -1) {
+    TENSOR(torch::argmax(*t));
+  } else {
+    TENSOR(torch::argmax(*t, dim, keep_dim));
+  }
+}
+
+NIF(argmin)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, dim);
+  PARAM(2, bool, keep_dim);
+
+  if (dim == -1) {
+    TENSOR(torch::argmin(*t));
+  } else {
+    TENSOR(torch::argmin(*t, dim, keep_dim));
+  }
 }
 
 NIF(cholesky)
@@ -466,7 +502,11 @@ NIF(qr)
 
 void free_tensor(ErlNifEnv *env, void *obj)
 {
-  // std::cout << "Deleting: " << obj << std::endl;
+  torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
+  if (tensor != nullptr) {
+    tensor->~Tensor();
+    tensor = nullptr;
+  }
 }
 
 static int
@@ -570,6 +610,8 @@ static ErlNifFunc nif_functions[] = {
 
     DF(outer, 2),
     DF(sum, 3),
+    DF(argmax, 3),
+    DF(argmin, 3),
 
     DF(abs, 1),
     DF(ceil, 1),
@@ -578,7 +620,9 @@ static ErlNifFunc nif_functions[] = {
     DF(round, 1),
     DF(sign, 1),
     DF(exp, 1),
+    DF(log, 1),
     DF(bitwise_not, 1),
+    DF(logistic, 1),
 
     DF(dot, 2),
 
@@ -589,6 +633,7 @@ static ErlNifFunc nif_functions[] = {
 
     F(type, 1),
     F(shape, 1),
+    F(names, 1),
     F(strides, 1),
     F(device, 1),
     F(nbytes, 1),

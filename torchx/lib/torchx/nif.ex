@@ -55,6 +55,8 @@ defmodule Torchx.NIF do
   dnif eye(size, type)
 
   dnif sum(tensor, axes, keep_axes)
+  dnif argmax(tensor, axe, keep_axes)
+  dnif argmin(tensor, axe, keep_axes)
 
   dnif add(tensorA, tensorB)
   dnif subtract(tensorA, tensorB)
@@ -86,7 +88,8 @@ defmodule Torchx.NIF do
 
   dnif outer(tensorA, tensorB)
 
-  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros, :population_count, :exp]
+  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros]
+      ++ [:population_count, :exp, :log, :logistic]
 
   for op <- @unary_ops do
     def unquote(op)(_tensor), do: :erlang.nif_error(:undef)
@@ -104,6 +107,7 @@ defmodule Torchx.NIF do
 
   def type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
+  def names(_tensor), do: :erlang.nif_error(:undef)
   def strides(_tensor), do: :erlang.nif_error(:undef)
   def device(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)

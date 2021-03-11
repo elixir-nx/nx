@@ -1,6 +1,35 @@
 defmodule Torchx.Backend do
   @moduledoc """
   An opaque backend Nx backend with bindings to libtorch/Pytorch.
+
+  Torchx behaviour that is different from BinaryBackend:
+
+    1. Torchx doesn't support u16/u32/u64. Only u8 is supported.
+
+        iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
+        ** (ArgumentError) Torchx does not support unsigned 16 bit integer
+
+    2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
+
+        iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
+        ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
+
+    3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
+     So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
+
+        iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Torchx.Backend) |> Nx.round()
+        #Nx.Tensor<
+          f32[4]
+          [-2.0, 0.0, 0.0, 2.0]
+        >
+
+    While binary backend will do:
+
+        iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Nx.BinaryBackend) |> Nx.round()
+        #Nx.Tensor<
+          f32[4]
+          [-2.0, -1.0, 1.0, 2.0]
+        >
   """
 
   @behaviour Nx.Backend
@@ -51,7 +80,7 @@ defmodule Torchx.Backend do
   def iota(out, axis \\ nil)
 
   def iota(%T{shape: {}, type: type} = out, nil) do
-    NIF.scalar_tensor(0, torch_type(type)) |> from_ref(out)
+    NIF.scalar_tensor(0.0, torch_type(type)) |> from_ref(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, nil) do
@@ -144,6 +173,16 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def broadcast(out, %T{shape: orig_shape} = t, shape, axes) do
+    # IO.puts("broadcast(#{inspect(Nx.shape(t))}, #{inspect(shape)}, #{inspect(axes)})")
+    NIF.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref(), shape) |> from_ref(out)
+  end
+
+  defp maybe_reshape(%T{shape: {n}} = t, {n, _}, [0]), do: Nx.reshape(t, {n, 1})
+  defp maybe_reshape(%T{} = t, _, _), do: t
+
+
+  @impl true
   def transpose(out, %T{} = t, opts) do
     NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
   end
@@ -202,6 +241,39 @@ defmodule Torchx.Backend do
     NIF.sum(to_ref(t), axes, keep_axes) |> from_ref(out)
   end
 
+  @impl true
+  def argmax(%T{type: out_type} = out, %T{} = t, opts) do
+    unsupported_option!(opts, :tie_break, :low)
+
+    axis = opts[:axis] || -1
+    keep_axes = opts[:keep_axes] || false
+
+    NIF.argmax(to_ref(t), axis, keep_axes) |> from_ref(out)
+  end
+
+  @impl true
+  def argmin(%T{type: out_type} = out, %T{} = t, opts) do
+    unsupported_option!(opts, :tie_break, :low)
+
+    axis = opts[:axis] || -1
+    keep_axes = opts[:keep_axes] || false
+
+    NIF.argmin(to_ref(t), axis, keep_axes) |> from_ref(out)
+  end
+
+  defp unsupported_option!(opts, key, acceptable_default) do
+    if opts[key] != acceptable_default do
+      raise "#{inspect(key)} option is not supported in #{caller()}"
+    end
+  end
+
+  defp caller(depth \\ 3) do
+    {module, func, arity, [file: _file, line: _line]} =
+      Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(depth)
+
+    "#{inspect(module)}.#{func}/#{arity - 1}"
+  end
+
   defp check_type!(type),
     do:
       torch_type(type, "(explicitly cast the input tensor to a signed integer before taking sum)")
@@ -217,7 +289,9 @@ defmodule Torchx.Backend do
 
   for op <- binary_ops do
     @impl true
-    def unquote(op)(out, left, right) do
+    def unquote(op)(out, l, r) do
+      {left, right} = maybe_cast_u8(l, r)
+
       NIF.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
     end
   end
@@ -268,12 +342,23 @@ defmodule Torchx.Backend do
   def dot(
         out,
         %T{} = left,
-        _axes1,
+        axes1,
         %T{} = right,
-        _axes2
+        axes2
       ) do
-    NIF.dot(to_ref(left), to_ref(right)) |> from_ref(out)
+    # IO.puts("dot(#{inspect(Nx.shape(left))}, #{inspect(axes1)}, #{inspect(Nx.shape(right))}, #{inspect(axes2)})")
+    NIF.dot(maybe_transpose_left(to_ref(left), axes1), maybe_transpose_right(to_ref(right), axes2)) |> from_ref(out)
   end
+
+  defp maybe_transpose_left(ref, [0]), do:
+    NIF.transpose(ref, 0, 1) |> unwrap!()
+
+  defp maybe_transpose_left(ref, _), do: ref
+
+  defp maybe_transpose_right(ref, [1]), do:
+    NIF.transpose(ref, 0, 1) |> unwrap!()
+
+  defp maybe_transpose_right(ref, _), do: ref
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
@@ -328,6 +413,25 @@ defmodule Torchx.Backend do
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 
   defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
+
+  defp from_bare_ref(maybe_ref) do
+    ref = unwrap!(maybe_ref)
+
+    type = NIF.type(ref) |> unwrap!() |> from_torch_type()
+    shape = NIF.shape(ref) |> unwrap!()
+
+    names =
+      ref
+      |> NIF.names()
+      |> unwrap!()
+      |> Enum.map(&List.to_string/1)
+      |> Enum.map(fn
+        "*" -> nil
+        name -> String.to_atom(name)
+      end)
+
+    to_tensor(ref, %T{shape: shape, type: type, names: names})
+  end
 
   defp from_pair_ref(maybe_ref, {t1, t2}) do
     {left, right} = unwrap!(maybe_ref)
