@@ -79,7 +79,7 @@ defmodule Torchx.NxDoctestTest do
         random_uniform: 4,
         random_normal: 4,
 
-
+        broadcast: 3,
         outer: 2,
         dot: 2,
         qr: 2,

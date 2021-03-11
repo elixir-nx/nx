@@ -299,14 +299,6 @@ NIF(squeeze)
     TENSOR(torch::squeeze(*t));
 }
 
-NIF(expand)
-{
-  TENSOR_PARAM(0, t);
-  SHAPE_PARAM(1, shape);
-
-  TENSOR(t->expand(shape).clone());
-}
-
 NIF(broadcast_to)
 {
   TENSOR_PARAM(0, t);
@@ -582,7 +574,6 @@ static ErlNifFunc nif_functions[] = {
     DF(to_type, 2),
     DF(squeeze, 2),
     DF(squeeze, 1),
-    DF(expand, 2),
     DF(broadcast_to, 2),
     DF(transpose, 3),
     DF(permute, 2),

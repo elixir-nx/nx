@@ -1,10 +1,11 @@
 defmodule Torchx.MNIST do
+  import Nx.Defn
 
   @batch_size 30
   @step 0.01
   @epochs 10
 
-  def init_random_params do
+  defn init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
     b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
     w2 = Nx.random_normal({128, 10}, 0.0, 0.1, names: [:layer, :output])
@@ -12,12 +13,12 @@ defmodule Torchx.MNIST do
     {w1, b1, w2, b2}
   end
 
-  defp softmax(logits) do
+  defn softmax(logits) do
     exp = Nx.exp(logits)
     Nx.divide(exp, Nx.sum(exp, axes: [:output], keep_axes: true))
   end
 
-  def predict({w1, b1, w2, b2}, batch) do
+  defn predict({w1, b1, w2, b2}, batch) do
     batch
     |> Nx.dot(w1)
     |> Nx.add(b1)
@@ -27,7 +28,7 @@ defmodule Torchx.MNIST do
     |> softmax()
   end
 
-  defp update(
+  defn update(
          {w1, b1, w2, b2} = _params,
          batch_images,
          batch_labels,
@@ -46,10 +47,9 @@ defmodule Torchx.MNIST do
     batch_accuracy =
       Nx.mean(
         Nx.equal(
-          Nx.argmax(Nx.as_type(batch_labels, {:s, 8}), axis: :output),
+          Nx.argmax(batch_labels, axis: :output),
           Nx.argmax(preds, axis: :output)
-        )
-        |> Nx.as_type({:s, 8})
+        ) |> Nx.as_type({:s, 8})
       )
 
     total = Nx.tensor(total)
@@ -123,6 +123,7 @@ defmodule Torchx.MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_labels, 1}, names: [:batch, :output])
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
+      |> Nx.as_type({:s, 8})
       |> Nx.to_batched_list(@batch_size)
 
     IO.puts("#{n_labels} labels\n")

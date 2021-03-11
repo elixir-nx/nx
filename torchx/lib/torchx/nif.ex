@@ -44,7 +44,6 @@ defmodule Torchx.NIF do
   dnif delete_tensor(tensor)
   dnif squeeze(tensor)
   dnif squeeze(tensor, axis)
-  dnif expand(tensor, shape)
   dnif broadcast_to(tensor, shape)
   dnif transpose(tensor, dim0, dim1)
   dnif permute(tensor, dims)

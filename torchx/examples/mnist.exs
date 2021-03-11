@@ -27,7 +27,7 @@ defmodule MNIST do
   defn accuracy({w1, b1, w2, b2}, batch_images, batch_labels) do
     Nx.mean(
       Nx.equal(
-        Nx.argmax(Nx.as_type(batch_labels, {:s, 8}), axis: :output),
+        Nx.argmax(batch_labels, axis: :output),
         Nx.argmax(predict({w1, b1, w2, b2}, batch_images), axis: :output)
       ) |> Nx.as_type({:s, 8})
     )
@@ -100,6 +100,7 @@ defmodule MNIST do
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_labels, 1}, names: [:batch, :output])
       |> Nx.equal(Nx.tensor(Enum.to_list(0..9)))
+      |> Nx.as_type({:s, 8})
       |> Nx.to_batched_list(30)
 
     IO.puts("#{n_labels} labels\n")

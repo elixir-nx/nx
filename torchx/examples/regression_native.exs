@@ -1,21 +1,23 @@
 defmodule Torchx.LinReg do
+  import Nx.Defn
+
   # Data size
   @n 32
 
   # y = mx + b
-  def init_random_params do
+  defn init_random_params do
     m = Nx.random_normal({1, 1}, 0.0, 0.1)
     b = Nx.random_normal({1}, 0.0, 0.1)
     {m, b}
   end
 
-  def predict({m, b}, inp) do
+  defn predict({m, b}, inp) do
     inp
     |> Nx.dot(m)
     |> Nx.add(b)
   end
 
-  def update({m, b}, inp, tar, step) do
+  defn update({m, b}, inp, tar, step) do
     preds = predict({m, b}, inp)
 
     errors = Nx.subtract(tar, preds)

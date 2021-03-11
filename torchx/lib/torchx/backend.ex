@@ -172,10 +172,6 @@ defmodule Torchx.Backend do
     NIF.squeeze(to_ref(t)) |> from_ref(out)
   end
 
-  def expand(%T{} = t, shape) do
-    NIF.expand(to_ref(t), shape) |> from_bare_ref()
-  end
-
   @impl true
   def broadcast(out, %T{shape: orig_shape} = t, shape, axes) do
     # IO.puts("broadcast(#{inspect(Nx.shape(t))}, #{inspect(shape)}, #{inspect(axes)})")
