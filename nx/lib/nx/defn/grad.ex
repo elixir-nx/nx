@@ -177,18 +177,11 @@ defmodule Nx.Defn.Grad do
 
   defp grad(op, [x, y], ans, g, cache) when op in [:min, :max] do
     {x, y} = binary_broadcast(x, y, ans)
+    x_equal = Nx.equal(x, ans)
+    y_equal = Nx.equal(y, ans)
 
-    lhs =
-      Nx.divide(
-        Nx.select(Nx.equal(x, ans), 1.0, 0.0),
-        Nx.select(Nx.equal(y, ans), 2.0, 1.0)
-      )
-
-    rhs =
-      Nx.divide(
-        Nx.select(Nx.equal(y, ans), 1.0, 0.0),
-        Nx.select(Nx.equal(x, ans), 2.0, 1.0)
-      )
+    lhs = Nx.divide(Nx.select(x_equal, 1.0, 0.0), Nx.select(y_equal, 2.0, 1.0))
+    rhs = Nx.divide(Nx.select(y_equal, 1.0, 0.0), Nx.select(x_equal, 2.0, 1.0))
 
     {dx, cache} = to_grad(x, Nx.multiply(g, lhs), cache)
     {dy, cache} = to_grad(y, Nx.multiply(g, rhs), cache)
@@ -518,17 +511,17 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:asinh, [x], _ans, g, cache) do
-    g = Nx.multiply(g, Nx.rsqrt(Nx.add(Nx.power(x, 2.0), 1.0)))
+    g = Nx.multiply(g, Nx.rsqrt(Nx.add(Nx.multiply(x, x), 1.0)))
     to_grad(x, g, cache)
   end
 
   defp grad(:acosh, [x], _ans, g, cache) do
-    g = Nx.multiply(g, Nx.rsqrt(Nx.subtract(Nx.power(x, 2.0), 1.0)))
+    g = Nx.multiply(g, Nx.rsqrt(Nx.subtract(Nx.multiply(x, x), 1.0)))
     to_grad(x, g, cache)
   end
 
   defp grad(:atanh, [x], _ans, g, cache) do
-    g = Nx.multiply(g, Nx.divide(1.0, Nx.subtract(1.0, Nx.power(x, 2.0))))
+    g = Nx.multiply(g, Nx.divide(1.0, Nx.subtract(1.0, Nx.multiply(x, x))))
     to_grad(x, g, cache)
   end
 
@@ -538,7 +531,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:acos, [x], _ans, g, cache) do
-    g = Nx.multiply(g, Nx.negate(Nx.rsqrt(Nx.subtract(1.0, Nx.power(x, 2.0)))))
+    g = Nx.multiply(g, Nx.negate(Nx.rsqrt(Nx.subtract(1.0, Nx.multiply(x, x)))))
     to_grad(x, g, cache)
   end
 
