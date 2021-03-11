@@ -161,4 +161,4 @@ IO.puts("The result of the first batch")
 IO.inspect(MNIST.predict(final_params, hd(train_images)) |> Nx.argmax(axis: :output))
 
 IO.puts("Labels for the first batch")
-IO.inspect(hd(train_labels) |> Nx.as_type({:s, 8}) |> Nx.argmax(axis: :output))
+IO.inspect(hd(train_labels) |> Nx.argmax(axis: :output))
