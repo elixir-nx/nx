@@ -1549,34 +1549,14 @@ defmodule Nx do
   """
   @doc type: :shape
   def tile(tensor, repetitions) do
-    %T{shape: old_shape} = tensor = tensor!(tensor)
+    tensor = tensor!(tensor)
 
     unless tile_valid_repetitions?(repetitions) do
       raise ArgumentError,
             "repetitions must be a list of integers. Got: #{inspect(repetitions)}"
     end
 
-    num_dims = tuple_size(old_shape)
-    length_reps = length(repetitions)
-
-    # grow the dimensionality of the tensor by new_dims_count
-    shape_grow_count = Kernel.max(length_reps - num_dims, 0)
-    resized_shape_list = List.duplicate(1, shape_grow_count) ++ Tuple.to_list(old_shape)
-
-    repetitions_grow_count = Kernel.max(num_dims - length_reps, 0)
-    resized_repetitions = List.duplicate(1, repetitions_grow_count) ++ repetitions
-
-    broadcast_shape = resized_repetitions |> alternate(resized_shape_list) |> List.to_tuple()
-
-    tensor_reshape =
-      [1 | Enum.intersperse(resized_shape_list, 1)]
-      |> List.to_tuple()
-
-    result_shape =
-      resized_repetitions
-      |> Enum.zip(resized_shape_list)
-      |> Enum.map(fn {x, y} -> x * y end)
-      |> List.to_tuple()
+    {tensor_reshape, broadcast_shape, result_shape} = Nx.Shape.tile(tensor, repetitions)
 
     tensor
     |> reshape(tensor_reshape)
@@ -1589,9 +1569,6 @@ defmodule Nx do
   defp tile_valid_repetitions?(reps) do
     Enum.all?(reps, &(is_integer(&1) and &1 >= 1))
   end
-
-  defp alternate([], []), do: []
-  defp alternate([h1 | tl1], [h2 | tl2]), do: [h1, h2 | alternate(tl1, tl2)]
 
   @doc """
   Adds a new `axis` of size 1 with optional `name`.
