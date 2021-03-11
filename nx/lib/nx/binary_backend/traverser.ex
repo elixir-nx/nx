@@ -1,219 +1,150 @@
 defmodule Nx.BinaryBackend.Traverser do
   alias Nx.BinaryBackend.Traverser
-  alias Nx.BinaryBackend.ViewIter
 
-  defstruct [
-    :offsets,
-    :offsets_template,
-    :readers_template,
-    :readers,
-    :cycle_size,
-    :size,
-    cycle: 0
-  ]
+  defstruct [:ctx]
 
-  def build(shape, axes, opts \\ []) do
+  def range(count) when is_integer(count) and count >= 0 do
+    %Traverser{ctx: {{1, count, [0]}, Enum.to_list(0..(count - 1))}}
+  end
+
+  def build(shape, opts \\ []) do
+    agg_axes = Keyword.get(opts, :aggregate, [])
     limits = Keyword.get(opts, :limits, :none)
     dilations = Keyword.get(opts, :dilations, 1)
     transpose = Keyword.get(opts, :transpose, :none)
     reverse? = Keyword.get(opts, :reverse, false)
-    do_build(shape, axes, limits, dilations, transpose, reverse?)
+    weight = Keyword.get(opts, :weight, 1)
+    do_build(shape, weight, agg_axes, limits, dilations, transpose, reverse?)
   end
 
-  defp do_build(shape, axes, limits, dilations, transpose, reverse?) do
-    size = Nx.size(shape)
-    {offsets_path, readers_path} = do_build_paths(shape, axes, limits, dilations, transpose)
+  def size(%Traverser{ctx: {{n_cycles, cycle_size, _}, _}}) do
+    n_cycles * cycle_size
+  end
+
+  def zip_reduce_aggregates(
+        %Traverser{ctx: {o1, r1}},
+        %Traverser{ctx: {o2, r2}},
+        outer_acc,
+        inner_acc,
+        inner_fn,
+        outer_fn
+      ) do
+    reduce(0, o1, r1, outer_acc, fn {offset1, readers1}, outer_acc2 ->
+      reduce(0, o2, r2, outer_acc2, fn {offset2, readers2}, outer_acc3 ->
+        result = zip_reduce_readers(offset1, readers1, offset2, readers2, inner_acc, inner_fn)
+        outer_fn.(result, outer_acc3)
+      end)
+    end)
+  end
+
+  def reduce(%Traverser{ctx: {o, r}}, acc, reducer) do
+    reduce(0, o, r, acc, fn {offset, readers}, acc2 ->
+      reduce_readers(offset, readers, acc2, reducer)
+    end)
+  end
+
+  def to_flat_list(trav) do
+    trav
+    |> reduce([], fn i, acc -> [i | acc] end)
+    |> Enum.reverse()
+  end
+
+  def reduce_aggregates(%Traverser{ctx: {o, r}}, acc, fun) do
+    reduce(0, o, r, acc, fn {offset, reads}, acc ->
+      fun.(Enum.map(reads, fn r -> offset + r end), acc)
+    end)
+  end
+
+  def map(%Traverser{ctx: {o, r}}, fun) do
+    reduce(0, o, r, [], fn {offset, readers}, acc2 ->
+      reduce_readers(offset, readers, acc2, fn o, acc3 ->
+        [fun.(o) | acc3]
+      end)
+    end)
+  end
+
+  defp do_build(shape, weight, agg_axes, limits, dilations, transpose, reverse?) do
+    size = Nx.size(shape) * weight
+
+    {offsets_path, readers_path} =
+      do_build_paths(shape, weight, agg_axes, limits, dilations, transpose)
 
     offsets = expand_path(offsets_path)
     readers = expand_path(readers_path)
 
-    cycle_size = length(offsets) * length(readers)
+    cycle_size = length(offsets) * length(readers) * weight
 
     do_build_struct(size, cycle_size, offsets, readers, reverse?)
   end
 
-  defp do_build_struct(size, cycle_size, offsets, readers, reverse? \\ false) do
-    offsets = reverse_list(offsets, reverse?)
+  defp do_build_struct(size, cycle_size, offsets, readers, reverse?) do
     readers = reverse_list(readers, reverse?)
 
-    %Traverser{
-      size: size,
-      cycle_size: cycle_size,
-      offsets_template: offsets,
-      offsets: offsets,
-      readers_template: readers,
-      readers: readers
-    }
+    offsets = reverse_list(offsets, reverse?)
+    n_cycles = div(size, cycle_size)
+    offset_ctx = {n_cycles, cycle_size, offsets}
+
+    %Traverser{ctx: {offset_ctx, readers}}
   end
 
-  defp do_build_paths(shape, [_ | _] = axes, limits, dilations, transpose) do
-    axes = Enum.sort(axes)
-    min = hd(axes)
+  defp do_build_paths(shape, weight, [_ | _] = agg_axes, limits, dilations, transpose) do
+    agg_axes = Enum.sort(agg_axes)
+    min = hd(agg_axes)
 
     shape
-    |> weighted_shape(limits, dilations)
+    |> weighted_shape(weight, limits, dilations)
     |> transpose_weighted_shape(transpose)
     |> Enum.drop(min)
-    |> aggregate_paths(axes, min, [], [])
+    |> aggregate_paths(agg_axes, min, [], [])
   end
 
-  defp do_build_paths(shape, [], limits, dilations, transpose) do
+  defp do_build_paths(shape, weight, [], limits, dilations, transpose) do
     shape
-    |> weighted_shape(limits, dilations)
+    |> weighted_shape(weight, limits, dilations)
     |> transpose_weighted_shape(transpose)
     |> aggregate_paths([], 0, [], [])
   end
 
-  def next(%Traverser{offsets: []} = trav) do
-    case next_cycle(trav) do
-      :done ->
-        :done
-
-      trav ->
-        next(trav)
-    end
+  defp reduce(cycle, {n_cycles, cycle_size, offsets}, readers, acc, fun) do
+    reduce(cycle, n_cycles, cycle_size, offsets, readers, acc, fun)
   end
 
-  def next(%Traverser{offsets: [_ | offsets], readers: [], readers_template: rt} = trav) do
-    next(%Traverser{trav | offsets: offsets, readers: rt})
+  defp reduce(cycle, n_cycles, _cycle_size, _ot, _readers, acc, _fun) when cycle >= n_cycles do
+    acc
   end
 
-  def next(%Traverser{offsets: [o | _], readers: readers} = trav) do
-    {:cont, r, rest} = next_item(readers)
-    {:cont, o + r, %Traverser{trav | readers: rest}}
+  defp reduce(cycle, n_cycles, cycle_size, offsets, readers, acc, fun) do
+    acc = reduce_cycle(cycle * cycle_size, offsets, readers, acc, fun)
+    reduce(cycle + 1, n_cycles, cycle_size, offsets, readers, acc, fun)
   end
 
-  def next_view(
-        %Traverser{
-          offsets: [head_o | offsets],
-          readers: readers,
-          readers_template: readers_template
-        } = trav
-      ) do
-    size = length(readers_template)
-    view = do_build_struct(size, size, [head_o], readers)
-    trav = %Traverser{trav | offsets: offsets, readers: readers_template}
-    {:cont, view, trav}
+  @compile {:inline, reduce_cycle: 5, reduce_readers: 4, zip_reduce_readers: 6}
+
+  defp reduce_cycle(_, [], _, acc, _) do
+    acc
   end
 
-  def next_view(%Traverser{offsets: []} = trav) do
-    case next_cycle(trav) do
-      :done ->
-        :done
-
-      trav ->
-        next_view(trav)
-    end
+  defp reduce_cycle(cycle_offset, [o | offsets], readers, acc, fun) do
+    reduce_cycle(cycle_offset, offsets, readers, fun.({cycle_offset + o, readers}, acc), fun)
   end
 
-  def iter_views(%Traverser{} = trav) do
-    ViewIter.build(trav)
+  defp reduce_readers(_offset, [], acc, _fun) do
+    acc
   end
 
-  def flatten(%Traverser{size: size} = trav) do
-    readers =
-      trav
-      |> iter_views()
-      |> Enum.flat_map(fn %Traverser{offsets: [o], readers: readers} ->
-        Enum.map(readers, fn r -> r + o end)
-      end)
-    %Traverser{
-      readers_template: readers,
-      readers: readers,
-      offsets_template: [0],
-      offsets: [0],
-      size: size,
-      cycle_size: size,
-      cycle: 0,
-    }
+  defp reduce_readers(offset, [reader | rest], acc, fun) do
+    reduce_readers(offset, rest, fun.(offset + reader, acc), fun)
   end
 
-  def zip_reduce(t1, t2, big_acc, small_acc, fun, fun2) do
-    for v1 <- iter_views(t1), v2 <- iter_views(t2), into: big_acc do
-      small_acc2 = zip_reduce(v1, v2, small_acc, fun)
-      fun2.(small_acc2)
-    end
+  defp zip_reduce_readers(_o1, [], _o2, [], inner_acc, _inner_fn) do
+    inner_acc
   end
 
-  def zip_reduce(v1, v2, acc, fun) do
-    case {next(v1), next(v2)} do
-      {:done, :done} ->
-        acc
-      {{:cont, i1, next_v1}, {:cont, i2, next_v2}} ->
-        acc = fun.(i1, i2, acc)
-        zip_reduce(next_v1, next_v2, acc, fun)
-    end
+  defp zip_reduce_readers(o1, [r1 | rest1], o2, [r2 | rest2], inner_acc, inner_fn) do
+    zip_reduce_readers(o1, rest1, o2, rest2, inner_fn.(o1 + r1, o2 + r2, inner_acc), inner_fn)
   end
 
-  defimpl Enumerable do
-    def count(%Traverser{size: size}) do
-      {:ok, size}
-    end
-
-    def member?(_, _) do
-      {:error, __MODULE__}
-    end
-
-    def slice(_) do
-      {:error, __MODULE__}
-    end
-
-    def reduce(_, {:halt, acc}, _fun) do
-      {:halted, acc}
-    end
-
-    def reduce(trav, {:suspend, acc}, fun) do
-      {:suspended, acc, fn acc2 -> reduce(trav, acc2, fun) end}
-    end
-
-    def reduce(trav, {:cont, acc}, fun) do
-      case Traverser.next(trav) do
-        {:cont, i, trav2} ->
-          reduce(trav2, fun.(i, acc), fun)
-
-        :done ->
-          {:done, acc}
-      end
-    end
-  end
-
-  defp next_cycle(trav) do
-    %Traverser{
-      cycle: cycle_prev,
-      size: size,
-      cycle_size: cycle_size,
-      offsets_template: offsets_template,
-      readers_template: readers_template
-    } = trav
-
-    cycle = cycle_prev + 1
-
-    if div(size, cycle_size) == cycle do
-      :done
-    else
-      cycle_offset = cycle * cycle_size
-      offsets = Enum.map(offsets_template, fn o -> o + cycle_offset end)
-      %Traverser{trav | cycle: cycle, offsets: offsets, readers: readers_template}
-    end
-  end
-
-  defp next_item([]) do
-    :done
-  end
-
-  defp next_item(start..stop) when start == stop do
-    {:cont, start, []}
-  end
-
-  defp next_item(start..stop) when start < stop do
-    {:cont, start, (start + 1)..stop}
-  end
-
-  defp next_item([first | rest]) do
-    {:cont, first, rest}
-  end
-
-  defp weighted_shape(shape, limits, dilations) do
+  defp weighted_shape(shape, weight, limits, dilations) do
     rank = tuple_size(shape)
 
     dilations =
@@ -221,7 +152,7 @@ defmodule Nx.BinaryBackend.Traverser do
         do: Enum.reverse(dilations),
         else: List.duplicate(dilations, rank)
 
-    weighted_shape(shape, rank, 1, limits, dilations, [])
+    weighted_shape(shape, rank, weight, limits, dilations, [])
   end
 
   defp weighted_shape(_shape, 0, _weight, _limits, [], acc), do: acc
@@ -253,7 +184,6 @@ defmodule Nx.BinaryBackend.Traverser do
   defp reverse_list(list, false), do: list
 
   defp expand_path(path) do
-    # expanded path comes out backward so we just flatten
     path
     |> Enum.reverse()
     |> weighted_traverse(0)
@@ -287,30 +217,11 @@ defmodule Nx.BinaryBackend.Traverser do
   end
 
   defp transpose_weighted_shape(ws, order) do
-    check_transpose!(ws, order)
-
     map =
       ws
       |> Enum.with_index()
       |> Map.new(fn {item, i} -> {i, item} end)
 
     Enum.map(order, fn i -> Map.fetch!(map, i) end)
-  end
-
-  defp check_transpose!(ws, order) do
-    len = length(order)
-
-    if length(ws) != len do
-      raise ArgumentError,
-            "expected length of permutation list" <>
-              " #{inspect(order)} to match rank of weighted" <>
-              " shape #{length(ws)}"
-    end
-
-    if Enum.sort(order) != Enum.to_list(0..(len - 1)) do
-      raise ArgumentError,
-            "expected each axis of the permutation list to appear exactly" <>
-              " 1 time, got: #{inspect(order)}"
-    end
   end
 end

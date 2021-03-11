@@ -14,8 +14,8 @@ defmodule Nx.BinaryBackend do
   defstruct [:state]
 
   alias Nx.Tensor, as: T
-  alias Nx.BinaryBackend, as: B
-  alias Nx.BinaryBackend.Traverser
+  alias Nx.BinaryBackend, as: B  
+  alias Nx.BinaryBackend.TraverserReducer
 
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
@@ -106,8 +106,9 @@ defmodule Nx.BinaryBackend do
   @impl true
   def from_binary(t, binary, _opts), do: from_binary(t, binary)
 
-  defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
-  defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
+  @doc false
+  def from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
+  def from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
 
   @impl true
   def to_binary(%{type: {_, size}} = t, limit) do
@@ -121,7 +122,8 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp to_binary(%T{data: %{state: data}}), do: data
+  @doc false
+  def to_binary(%T{data: %{state: data}}), do: data
 
   @impl true
   def backend_copy(tensor, backend, opts) do
@@ -1626,7 +1628,6 @@ defmodule Nx.BinaryBackend do
   @impl true
   def reduce(out, tensor, acc, opts, fun) do
     each = %{tensor | shape: {}}
-
     bin_reduce(out, tensor, acc, opts, fn bin, acc ->
       res = fun.(from_binary(each, bin), acc)
       {res, res}
@@ -1917,34 +1918,13 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp bin_reduce(out, tensor, acc, opts, fun) do
-    %T{type: {_, sizeof}, shape: shape} = tensor
-    %T{type: type_out} = out
+  def bin_reduce(out, tensor, acc, opts, fun) do
+    data_out = TraverserReducer.bin_reduce(out, tensor, acc, opts, fun)
+    from_binary(out, data_out)
+  end
 
-    axes = Keyword.get(opts, :axes, []) || []
-    data = to_binary(tensor)
-
-    views =
-      if axes == [] do
-        size = Nx.size(shape)
-        [0..(size - 1)]
-      else
-        shape
-        |> Traverser.build(axes)
-        |> Traverser.iter_views()
-      end
-
-    data_out =
-      for view <- views do
-        {result, _} =
-          for o <- view, reduce: {<<>>, acc} do
-            {_, acc} ->
-              offset = o * sizeof
-              <<_::size(offset)-bitstring, bin::size(sizeof)-bitstring, _::bitstring>> = data
-              fun.(bin, acc)
-          end
-        scalar_to_binary(result, type_out)
-      end
+  def bin_zip_reduce(out, t1, axes1, t2, axes2, acc, fun) do
+    data_out = TraverserReducer.bin_zip_reduce(out, t1, axes1, t2, axes2, acc, fun)
     from_binary(out, data_out)
   end
 
@@ -1960,53 +1940,26 @@ defmodule Nx.BinaryBackend do
     bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
   end
 
-  defp bin_zip_reduce(out, t1, axes1, t2, axes2, acc, fun) do
-    %T{type: type_out} = out
-    %T{type: {_, sizeof1}, shape: shape1} = t1
-    %T{type: {_, sizeof2}, shape: shape2} = t2
-
-    trav1 = Traverser.build(shape1, axes1)
-    trav2 = Traverser.build(shape2, axes2)
-
-    data1 = to_binary(t1)
-    data2 = to_binary(t2)
-
-    data_out =
-      Traverser.zip_reduce(trav1, trav2, <<>>, acc, fn o1, o2, acc2 ->
-        o1 = o1 * sizeof1
-        <<_::size(o1)-bitstring, bin1::size(sizeof1)-bitstring, _::bitstring>> = data1
-        o2 = o2 * sizeof2
-        <<_::size(o2)-bitstring, bin2::size(sizeof2)-bitstring, _::bitstring>> = data2
-        {_, acc3} = fun.(bin1, bin2, acc2)
-        acc3
-      end,
-      fn acc3 ->
-        scalar_to_binary(acc3, type_out)
-      end)
-
-    from_binary(out, data_out)
-  end
-
-
   ## Scalar helpers
 
   @compile {:inline, number_to_binary: 2, binary_to_number: 2}
-
-  defp scalar_to_binary(value, type) when is_number(value),
+  
+  @doc false
+  def scalar_to_binary(value, type) when is_number(value),
     do: number_to_binary(value, type)
 
-  defp scalar_to_binary(%T{shape: {}, type: type} = t, type),
+  def scalar_to_binary(%T{shape: {}, type: type} = t, type),
     do: to_binary(t)
 
-  defp scalar_to_binary(t, type) do
+  def scalar_to_binary(t, type) do
     raise ArgumentError,
           "expected a number or a scalar tensor of type #{inspect(type)}, got: #{inspect(t)}"
   end
 
-  defp number_to_binary(number, type),
+  def number_to_binary(number, type),
     do: match_types([type], do: <<write!(number, 0)>>)
 
-  defp binary_to_number(bin, type) do
+  def binary_to_number(bin, type) do
     match_types [type] do
       <<match!(value, 0)>> = bin
       read!(value, 0)
