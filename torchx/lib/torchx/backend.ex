@@ -193,7 +193,7 @@ defmodule Torchx.Backend do
       binary,
       shape,
       torch_type(type),
-      device_option(backend_options) |> torch_device()
+      torch_device(backend_options)
     )
     |> from_ref(out)
   end

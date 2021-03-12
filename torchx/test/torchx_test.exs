@@ -143,11 +143,24 @@ defmodule TorchxTest do
   describe "aggregates" do
     test "sum throws on type mismatch" do
       t = tt([[101, 102], [103, 104]], {:u, 8})
+
       assert_raise(
         ArgumentError,
         "Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)",
         fn -> Nx.sum(t) end
       )
+    end
+  end
+
+  describe "creation" do
+    test "eye" do
+      t = Nx.eye({9, 9}, backend: TB) |> Nx.backend_transfer()
+      one = Nx.tensor(1)
+      zero = Nx.tensor(0)
+
+      for i <- 0..8, j <- 0..8 do
+        assert (i == j && t[i][j] == one) || t[i][j] == zero
+      end
     end
   end
 end
