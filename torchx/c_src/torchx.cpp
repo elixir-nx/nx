@@ -31,22 +31,29 @@ inline std::string type2string(const torch::ScalarType type)
   ATOM_PARAM(ARGN, VAR##_atom) \
   torch::ScalarType VAR = string2type(VAR##_atom)
 
+#define DEVICE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
+
+#define DEVICE(DEV_VEC) torch::device(torch::Device((torch::DeviceType)DEV_VEC[0], (torch::DeviceIndex)DEV_VEC[1]))
+
 #define TENSOR_PARAM(ARGN, VAR)                                        \
   torch::Tensor *VAR;                                                     \
   if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR)) \
     return nx::nif::error(env, "Unable to get " #VAR " tensor param.");
 
-#define TENSOR(T)                                            \
-  try                                                        \
-  {                                                          \
-    return nx::nif::ok(env, create_tensor_resource(env, T)); \
-  }                                                          \
+#define CATCH()                                              \
   catch (c10::Error error)                                   \
   {                                                          \
     std::ostringstream msg;                                  \
     msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
     return nx::nif::error(env, msg.str().c_str());           \
   }
+
+#define TENSOR(T)                                            \
+  try                                                        \
+  {                                                          \
+    return nx::nif::ok(env, create_tensor_resource(env, T)); \
+  }                                                          \
+  CATCH()
 
 
 #define TENSOR_LIST(TL)                                                                        \
@@ -58,10 +65,7 @@ inline std::string type2string(const torch::ScalarType type)
       res_list.push_back(create_tensor_resource(env, t));                                      \
     return nx::nif::ok(env, enif_make_list_from_array(env, res_list.data(), res_list.size())); \
   }                                                                                            \
-  catch (c10::Error error)                                                                     \
-  {                                                                                            \
-    return nx::nif::error(env, error.msg().c_str());                                           \
-  }
+  CATCH()
 
 #define TENSOR_TUPLE(TT)                                                                        \
   try                                                                                           \
@@ -72,10 +76,7 @@ inline std::string type2string(const torch::ScalarType type)
       res_list.push_back(create_tensor_resource(env, t));                                       \
     return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
   }                                                                                             \
-  catch (c10::Error error)                                                                      \
-  {                                                                                             \
-    return nx::nif::error(env, error.msg().c_str());                                            \
-  }
+  CATCH()
 
 ERL_NIF_TERM
 create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
@@ -115,12 +116,13 @@ NIF(from_blob)
   BINARY_PARAM(0, blob);
   SHAPE_PARAM(1, shape);
   TYPE_PARAM(2, type);
+  DEVICE_PARAM(3, device);
 
   if (blob.size / dtype_sizes[type_atom] < elem_count(shape))
     return nx::nif::error(env, "Binary size is too small for the requested shape");
 
   // Clone here to copy data from blob, which will be GCed.
-  TENSOR(torch::clone(torch::from_blob(blob.data, shape, type)));
+  TENSOR(torch::clone(torch::from_blob(blob.data, shape, DEVICE(device).dtype(type))));
 }
 
 NIF(to_blob)
@@ -284,6 +286,14 @@ NIF(to_type)
   TYPE_PARAM(1, type);
 
   TENSOR(t->toType(type));
+}
+
+NIF(to_device)
+{
+  TENSOR_PARAM(0, t);
+  DEVICE_PARAM(1, device);
+
+  TENSOR(t->to(DEVICE(device)));
 }
 
 NIF(squeeze)
@@ -562,7 +572,7 @@ static ErlNifFunc nif_functions[] = {
     DF(normal, 3),
     DF(arange, 4),
     DF(arange, 5),
-    DF(from_blob, 3),
+    DF(from_blob, 4),
     DF(to_blob, 1),
     DF(to_blob, 2),
     DF(scalar_tensor, 2),
@@ -572,6 +582,7 @@ static ErlNifFunc nif_functions[] = {
     DF(reshape, 2),
     DF(split, 2),
     DF(to_type, 2),
+    DF(to_device, 2),
     DF(squeeze, 2),
     DF(squeeze, 1),
     DF(broadcast_to, 2),
