@@ -24,7 +24,7 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
-  def random_uniform(%{type: type, shape: shape} = out, min, max) do
+  def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
@@ -37,7 +37,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
+  def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
@@ -47,21 +47,21 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def iota(%{shape: {}, type: type} = out, nil) do
+  def iota(%{shape: {}, type: type} = out, nil, _backend_options) do
     from_binary(out, number_to_binary(0, type))
   end
 
-  def iota(%{shape: shape, type: type} = out, nil) do
-    t = iota(%T{type: type, shape: {Nx.size(shape)}, names: [nil]}, 0)
+  def iota(%{shape: shape, type: type} = out, nil, backend_options) do
+    t = iota(%T{type: type, shape: {Nx.size(shape)}, names: [nil]}, 0, backend_options)
     %{out | data: t.data}
   end
 
-  def iota(%{shape: {n}, type: type} = out, 0) do
+  def iota(%{shape: {n}, type: type} = out, 0, _backend_options) do
     data = for i <- 0..(n - 1), do: number_to_binary(i, type)
     from_binary(out, data)
   end
 
-  def iota(%{shape: shape, type: type} = out, axis) do
+  def iota(%{shape: shape, type: type} = out, axis, _backend_options) do
     {dims_before, [dim | dims_after]} =
       shape
       |> Tuple.to_list()
@@ -88,7 +88,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def eye(%{shape: {n, n}, type: type} = out) do
+  def eye(%{shape: {n, n}, type: type} = out, _backend_options) do
     one = number_to_binary(1, type)
     zero = number_to_binary(0, type)
 
@@ -103,7 +103,7 @@ defmodule Nx.BinaryBackend do
   ## Conversions
 
   @impl true
-  def from_binary(t, binary, _opts), do: from_binary(t, binary)
+  def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
 
   defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
   defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}

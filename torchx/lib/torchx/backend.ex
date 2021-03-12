@@ -183,12 +183,12 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def from_binary(%T{type: type, shape: shape} = out, binary, opts) do
+  def from_binary(%T{type: type, shape: shape} = out, binary, backend_options) do
     NIF.from_blob(
       binary,
       shape,
       torch_type(type),
-      device_option(opts[:backend_options]) |> torch_device()
+      device_option(backend_options) |> torch_device()
     )
     |> from_ref(out)
   end

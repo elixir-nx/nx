@@ -13,7 +13,7 @@ defmodule Nx.Defn.Async do
 
     {:ok, pid} =
       Task.start_link(fn ->
-        Nx.default_backend(backend, backend_options)
+        Nx.default_backend({backend, backend_options})
         result = fun.()
 
         receive do

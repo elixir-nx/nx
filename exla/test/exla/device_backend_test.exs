@@ -50,7 +50,7 @@ defmodule EXLA.DeviceBackendTest do
     assert_raise ArgumentError,
                  ~r"could not find EXLA client named :unknown",
                  fn ->
-                   Nx.backend_transfer(Nx.tensor([1, 2]), EXLA.DeviceBackend, client: :unknown)
+                   Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.DeviceBackend, client: :unknown})
                  end
   end
 end
