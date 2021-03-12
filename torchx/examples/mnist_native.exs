@@ -49,7 +49,8 @@ defmodule Torchx.MNIST do
         Nx.equal(
           Nx.argmax(batch_labels, axis: :output),
           Nx.argmax(preds, axis: :output)
-        ) |> Nx.as_type({:s, 8})
+        )
+        |> Nx.as_type({:s, 8})
       )
 
     total = Nx.tensor(total)

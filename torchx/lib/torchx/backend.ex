@@ -69,6 +69,30 @@ defmodule Torchx.Backend do
   defp from_torch_type(:float), do: {:f, 32}
   defp from_torch_type(:double), do: {:f, 64}
 
+  def device_option(nil), do: :cpu
+  def device_option(backend_opts), do: backend_opts[:device] || :cpu
+
+  @devices %{
+    cpu: 0,
+    cuda: 1,
+    mkldnn: 2,
+    opengl: 3,
+    opencl: 4,
+    ideep: 5,
+    hip: 6,
+    fpga: 7,
+    msnpu: 8,
+    xla: 9,
+    vulkan: 10,
+    metal: 11,
+    xpu: 12
+  }
+
+  defp torch_device({device, index}) when is_atom(device) and is_integer(index),
+    do: {@devices[device], index}
+
+  defp torch_device(device) when is_atom(device), do: {@devices[device], -1}
+
   ## Creation
 
   @impl true
@@ -144,8 +168,14 @@ defmodule Torchx.Backend do
     backend_transfer(tensor, Nx.BinaryBackend, opts)
   end
 
-  def backend_transfer(tensor, Torchx.Backend, _opts) do
-    tensor
+  def backend_transfer(tensor, Torchx.Backend, opts) do
+    device = device_option(opts)
+
+    if device != device(tensor) do
+      NIF.to_device(to_ref(tensor), torch_device(device)) |> from_ref(tensor)
+    else
+      tensor
+    end
   end
 
   def backend_transfer(tensor, backend, opts) do
@@ -153,8 +183,14 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def from_binary(%T{type: type, shape: shape} = out, binary, _opts) do
-    NIF.from_blob(binary, shape, torch_type(type)) |> from_ref(out)
+  def from_binary(%T{type: type, shape: shape} = out, binary, opts) do
+    NIF.from_blob(
+      binary,
+      shape,
+      torch_type(type),
+      device_option(opts[:backend_options]) |> torch_device()
+    )
+    |> from_ref(out)
   end
 
   ## Shape
@@ -173,7 +209,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def broadcast(out, %T{shape: orig_shape} = t, shape, axes) do
+  def broadcast(out, %T{} = t, shape, axes) do
     # IO.puts("broadcast(#{inspect(Nx.shape(t))}, #{inspect(shape)}, #{inspect(axes)})")
     NIF.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref(), shape) |> from_ref(out)
   end
@@ -181,9 +217,8 @@ defmodule Torchx.Backend do
   defp maybe_reshape(%T{shape: {n}} = t, {n, _}, [0]), do: Nx.reshape(t, {n, 1})
   defp maybe_reshape(%T{} = t, _, _), do: t
 
-
   @impl true
-  def transpose(out, %T{} = t, opts) do
+  def transpose(out, %T{} = t, _opts) do
     NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
   end
 
@@ -242,7 +277,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argmax(%T{type: out_type} = out, %T{} = t, opts) do
+  def argmax(%T{} = out, %T{} = t, opts) do
     unsupported_option!(opts, :tie_break, :low)
 
     axis = opts[:axis] || -1
@@ -252,7 +287,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argmin(%T{type: out_type} = out, %T{} = t, opts) do
+  def argmin(%T{} = out, %T{} = t, opts) do
     unsupported_option!(opts, :tie_break, :low)
 
     axis = opts[:axis] || -1
@@ -347,16 +382,18 @@ defmodule Torchx.Backend do
         axes2
       ) do
     # IO.puts("dot(#{inspect(Nx.shape(left))}, #{inspect(axes1)}, #{inspect(Nx.shape(right))}, #{inspect(axes2)})")
-    NIF.dot(maybe_transpose_left(to_ref(left), axes1), maybe_transpose_right(to_ref(right), axes2)) |> from_ref(out)
+    NIF.dot(
+      maybe_transpose_left(to_ref(left), axes1),
+      maybe_transpose_right(to_ref(right), axes2)
+    )
+    |> from_ref(out)
   end
 
-  defp maybe_transpose_left(ref, [0]), do:
-    NIF.transpose(ref, 0, 1) |> unwrap!()
+  defp maybe_transpose_left(ref, [0]), do: NIF.transpose(ref, 0, 1) |> unwrap!()
 
   defp maybe_transpose_left(ref, _), do: ref
 
-  defp maybe_transpose_right(ref, [1]), do:
-    NIF.transpose(ref, 0, 1) |> unwrap!()
+  defp maybe_transpose_right(ref, [1]), do: NIF.transpose(ref, 0, 1) |> unwrap!()
 
   defp maybe_transpose_right(ref, _), do: ref
 
@@ -477,9 +514,24 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(ref, _, _), do: ref
   end
 
-  defp device(%T{data: %TB{ref: ref}}), do: NIF.device(ref) |> unwrap!() |> List.to_string()
+  @doc false
+  def device(%T{data: %TB{ref: ref}}),
+    do: NIF.device(ref) |> unwrap!() |> List.to_string() |> parse_torch_device_str()
+
+  defp parse_torch_device_str(str) when is_binary(str) do
+    str
+    |> String.split(":")
+    |> case do
+      [type, index] ->
+        {String.to_existing_atom(type), String.to_integer(index)}
+
+      [type] ->
+        String.to_existing_atom(type)
+    end
+  end
+
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
-  defp on_cpu?(tensor), do: device(tensor) == "cpu"
+  defp on_cpu?(tensor), do: device(tensor) == :cpu
 
   ## All remaining callbacks
 

@@ -37,7 +37,8 @@ defmodule Torchx.NIF do
   dnif arange(from, to, step, type, shape)
   dnif reshape(tensor, shape)
   dnif to_type(tensor, type)
-  dnif from_blob(blob, shape, type)
+  dnif to_device(tensor, device)
+  dnif from_blob(blob, shape, type, device)
   dnif to_blob(tensor)
   dnif to_blob(tensor, limit)
 
@@ -88,14 +89,13 @@ defmodule Torchx.NIF do
 
   dnif outer(tensorA, tensorB)
 
-  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros]
-      ++ [:population_count, :exp, :log, :logistic]
+  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros] ++
+               [:population_count, :exp, :log, :logistic]
 
   for op <- @unary_ops do
     def unquote(op)(_tensor), do: :erlang.nif_error(:undef)
     def unquote(:"#{op}_io")(_tensor), do: :erlang.nif_error(:undef)
   end
-
 
   dnif dot(tensorA, tensorB)
 
@@ -104,6 +104,9 @@ defmodule Torchx.NIF do
   dnif cholesky(tensor, upper)
   dnif qr(tensor)
   dnif qr(tensor, reduced)
+
+  dnif cuda_is_available()
+  dnif cuda_device_count()
 
   def type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
