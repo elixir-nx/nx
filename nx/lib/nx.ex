@@ -251,7 +251,7 @@ defmodule Nx do
 
   The `keep_on_device: true` run option will keep the tensor on
   the backend. You can transfer it back to a binary tensor by
-  calling `backend_transfer/3` or `backend_copy/3`. If you don't
+  calling `backend_transfer/2` or `backend_copy/2`. If you don't
   intend to use the data for some reason, you can explicitly call
   `backend_deallocate/1` to deallocate it.
 
@@ -259,9 +259,9 @@ defmodule Nx do
   different implementation of tensor operations, often accelerated
   to the GPU. In such cases, you want to guarantee all tensors
   are allocated in the new backend. This can be done by calling
-  `Nx.default_backend/2`:
+  `Nx.default_backend/1`:
 
-      Nx.default_backend(Lib.CustomBackend, device: :cuda)
+      Nx.default_backend({Lib.CustomBackend, device: :cuda})
 
   To implement your own backend, check the `Nx.Tensor` behaviour.
   """
@@ -282,12 +282,12 @@ defmodule Nx do
   The argument is either a number, which means the tensor is a scalar
   (zero-dimensions), a list of those (the tensor is a vector) or
   a list of n-lists of those, leading to n-dimensional tensors.
-  The tensor will be allocated in `Nx.default_backend/2`, unless the
+  The tensor will be allocated in `Nx.default_backend/1`, unless the
   `:backend` option is given, which overrides the default one.
 
   You can also give a tensor as argument, which is just returned as
   is, unless the `:backend` option is given, which will cause a
-  backend transfer. `Nx.default_backend/2` is ignored when a tensor
+  backend transfer. `Nx.default_backend/1` is ignored when a tensor
   is given.
 
   ## Examples
@@ -453,16 +453,16 @@ defmodule Nx do
       names you must specify a name for every dimension in the tensor.
       Only `nil` and atoms are supported as dimension names.
 
-    * `:backend` - the backend to allocate the tensor on
-
-    * `:backend_options` - options to configure the allocation on the backend
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
 
   """
   @doc type: :creation
   def tensor(arg, opts \\ [])
 
   def tensor(%T{} = t, opts) do
-    assert_keys!(opts, [:type, :names, :backend, :backend_options])
+    assert_keys!(opts, [:type, :names, :backend])
     type = opts[:type]
 
     if type && type != t.type do
@@ -470,18 +470,17 @@ defmodule Nx do
             "got a tensor with type #{inspect(type)} but tensor has type #{inspect(t.type)}"
     end
 
-    backend = opts[:backend]
-    impl = impl!(t)
+    case backend_from_options!(opts) do
+      {backend, backend_options} ->
+        impl!(t).backend_transfer(t, backend, backend_options)
 
-    if backend && backend != impl do
-      impl.backend_transfer(t, backend, opts[:backend_options] || [])
-    else
-      t
+      nil ->
+        t
     end
   end
 
   def tensor(arg, opts) do
-    assert_keys!(opts, [:type, :names, :backend, :backend_options])
+    assert_keys!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
     {shape, data} = flatten(arg, type)
 
@@ -490,7 +489,7 @@ defmodule Nx do
     end
 
     names = Nx.Shape.named_axes!(opts[:names], shape)
-    {backend, backend_options} = backend_with_options!(opts)
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
     backend.from_binary(%T{shape: shape, type: type, names: names}, data, backend_options)
   end
 
@@ -700,8 +699,12 @@ defmodule Nx do
   ## Options
 
     * `:type` - the type of the tensor
+
     * `:names` - the names of the tensor dimensions
-    * `:backend` - the backend to allocate the tensor on
+
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
 
   """
   @doc type: :random
@@ -719,7 +722,8 @@ defmodule Nx do
               " with range #{inspect(range_type)}"
     end
 
-    backend!(opts).random_uniform(%T{shape: shape, type: type, names: names}, min, max)
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
+    backend.random_uniform(%T{shape: shape, type: type, names: names}, min, max, backend_options)
   end
 
   @doc """
@@ -803,8 +807,12 @@ defmodule Nx do
   ## Options
 
     * `:type` - the type of the tensor
+
     * `:names` - the names of the tensor dimensions
-    * `:backend` - the backend to allocate the tensor on
+
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
 
   """
   @doc type: :random
@@ -819,7 +827,8 @@ defmodule Nx do
       raise ArgumentError, "random_normal/3 expects float type, got: #{inspect(type)}"
     end
 
-    backend!(opts).random_normal(%T{shape: shape, type: type, names: names}, mu, sigma)
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
+    backend.random_normal(%T{shape: shape, type: type, names: names}, mu, sigma, backend_options)
   end
 
   @doc """
@@ -924,9 +933,14 @@ defmodule Nx do
   ## Options
 
     * `:type` - the type of the tensor
+
     * `:axis` - an axis to repeat the iota over
+
     * `:names` - the names of the tensor dimensions
-    * `:backend` - the backend to allocate the tensor on
+
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
 
   """
   @doc type: :creation
@@ -935,13 +949,13 @@ defmodule Nx do
     shape = Nx.shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    backend = backend!(opts)
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
 
     if axis = opts[:axis] do
       axis = Nx.Shape.normalize_axis(shape, axis, names)
-      backend.iota(%T{type: type, shape: shape, names: names}, axis)
+      backend.iota(%T{type: type, shape: shape, names: names}, axis, backend_options)
     else
-      backend.iota(%T{type: type, shape: shape, names: names}, nil)
+      backend.iota(%T{type: type, shape: shape, names: names}, nil, backend_options)
     end
   end
 
@@ -992,8 +1006,12 @@ defmodule Nx do
   ## Options
 
     * `:type` - the type of the tensor
+
     * `:names` - the names of the tensor dimensions
-    * `:backend` - the backend to allocate the tensor on
+
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
 
   """
   @doc type: :creation
@@ -1014,7 +1032,9 @@ defmodule Nx do
 
     names = Nx.Shape.named_axes!(opts[:names], shape)
     type = Nx.Type.normalize!(opts[:type] || {:s, 64})
-    backend!(opts).eye(%T{type: type, shape: shape, names: names})
+
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
+    backend.eye(%T{type: type, shape: shape, names: names}, backend_options)
   end
 
   @doc """
@@ -1041,12 +1061,13 @@ defmodule Nx do
 
   ## Options
 
-    * `:backend` - the backend to allocate the tensor on
-    * `:backend_options` - options to configure the allocation on the backend
+    * `:backend` - the backend to allocate the tensor on. It is either
+      an atom or a tuple in the shape `{backend, options}`. This option
+      is ignored inside `defn`
   """
   @doc type: :creation
   def from_binary(binary, type, opts \\ []) when is_binary(binary) do
-    assert_keys!(opts, [:backend, :backend_options])
+    assert_keys!(opts, [:backend])
     {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
 
@@ -1058,7 +1079,7 @@ defmodule Nx do
       raise ArgumentError, "binary does not match the given size"
     end
 
-    {backend, backend_options} = backend_with_options!(opts)
+    {backend, backend_options} = backend_from_options!(opts) || default_backend()
     backend.from_binary(%T{type: type, shape: {dim}, names: [nil]}, binary, backend_options)
   end
 
@@ -2159,14 +2180,14 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.default_backend(Lib.CustomBackend, device: :cuda)
+      iex> Nx.default_backend({Lib.CustomBackend, device: :cuda})
       {Nx.BinaryBackend, []}
       iex> Nx.default_backend()
       {Lib.CustomBackend, device: :cuda}
 
   """
-  def default_backend(backend, opts \\ []) do
-    Process.put(@backend_key, {backend, opts}) || @backend_default
+  def default_backend(backend) do
+    Process.put(@backend_key, backend!(backend)) || @backend_default
   end
 
   @doc """
@@ -2186,7 +2207,7 @@ defmodule Nx do
   Note this function keeps the data in the original backend.
   Therefore, use this function with care, as it may duplicate
   large amounts of data across backends. Therefore, you must
-  `backend_transfer/3`, unless you explicitly want to copy the
+  `backend_transfer/2`, unless you explicitly want to copy the
   data.
 
   For convenience, this function accepts a tuple as argument
@@ -2194,22 +2215,25 @@ defmodule Nx do
   as it is common to transfer data from tuples before and after
   `defn` functions.
 
-  *Note: `Nx.default_backend/2` does not affect the behaviour of
-  this function. That's because `Nx.default_backend/2` configures
+  *Note: `Nx.default_backend/1` does not affect the behaviour of
+  this function. That's because `Nx.default_backend/1` configures
   the backend we want to transfer to, which is typically the
   backend we are copying *from* in this function.
   """
   @doc type: :backend
-  def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
+  def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor) do
+    {backend, options} = backend!(backend)
+    backend_copy(tuple_or_tensor, backend, options)
+  end
 
-  def backend_copy(tuple, backend, opts) when is_tuple(tuple) do
+  defp backend_copy(tuple, backend, opts) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
     |> Enum.map(&backend_copy(&1, backend, opts))
     |> List.to_tuple()
   end
 
-  def backend_copy(tensor, backend, opts) do
+  defp backend_copy(tensor, backend, opts) do
     tensor = tensor!(tensor)
     impl!(tensor).backend_copy(tensor, backend, opts)
   end
@@ -2238,8 +2262,8 @@ defmodule Nx do
   as it is common to transfer data from tuples before and after
   `defn` functions.
 
-  *Note: `Nx.default_backend/2` does not affect the behaviour of
-  this function. That's because `Nx.default_backend/2` configures
+  *Note: `Nx.default_backend/1` does not affect the behaviour of
+  this function. That's because `Nx.default_backend/1` configures
   the backend we want to transfer to, which is typically the
   backend we are transferring *from* in this function.
 
@@ -2247,7 +2271,7 @@ defmodule Nx do
 
   Transfer a tensor to an EXLA device backend, stored in the GPU:
 
-      device_tensor = Nx.backend_transfer(tensor, EXLA.DeviceBackend, client: :cuda)
+      device_tensor = Nx.backend_transfer(tensor, {EXLA.DeviceBackend, client: :cuda})
 
   Transfer the device tensor back to an Elixir tensor:
 
@@ -2255,16 +2279,19 @@ defmodule Nx do
 
   """
   @doc type: :backend
-  def backend_transfer(tuple_or_tensor, backend \\ Nx.Tensor, opts \\ [])
+  def backend_transfer(tuple_or_tensor, backend \\ Nx.Tensor) do
+    {backend, opts} = backend!(backend)
+    backend_transfer(tuple_or_tensor, backend, opts)
+  end
 
-  def backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
+  defp backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
     |> Enum.map(&backend_transfer(&1, backend, opts))
     |> List.to_tuple()
   end
 
-  def backend_transfer(tensor, backend, opts) do
+  defp backend_transfer(tensor, backend, opts) do
     tensor = tensor!(tensor)
     impl!(tensor).backend_transfer(tensor, backend, opts)
   end
@@ -8015,14 +8042,32 @@ defmodule Nx do
     Nx.BinaryBackend.from_binary(out, number_to_binary(number, type), [])
   end
 
-  defp backend!(opts) do
-    {default_backend, _default_opts} = default_backend()
-    opts[:backend] || default_backend
+  defp backend!(backend) when is_atom(backend),
+    do: {backend, []}
+
+  defp backend!({backend, options}) when is_atom(backend) and is_list(options),
+    do: {backend, options}
+
+  defp backend!(other) do
+    raise ArgumentError,
+          "backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
   end
 
-  defp backend_with_options!(opts) do
-    {default_backend, default_opts} = default_backend()
-    {opts[:backend] || default_backend, opts[:backend_options] || default_opts}
+  defp backend_from_options!(opts) do
+    case Keyword.fetch(opts, :backend) do
+      {:ok, backend} when is_atom(backend) ->
+        {backend, []}
+
+      {:ok, {backend, options}} when is_atom(backend) and is_list(options) ->
+        {backend, options}
+
+      {:ok, other} ->
+        raise ArgumentError,
+              ":backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
+
+      :error ->
+        nil
+    end
   end
 
   defp number_to_binary(number, type),

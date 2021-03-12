@@ -3,7 +3,7 @@ defmodule EXLA.DeviceBackend do
   A Nx tensor backend for the data kept on the device.
 
   You can directly transfer to this backend by calling
-  `Nx.backend_transfer/3` or `Nx.backend_copy/3`. It
+  `Nx.backend_transfer/2` or `Nx.backend_copy/2`. It
   allows the following options:
 
     * `:client` - the client to store the data on

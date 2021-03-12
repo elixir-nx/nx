@@ -32,33 +32,33 @@ defmodule Nx.TensorTest do
 
   describe "tensor" do
     test "transfers existing tensor" do
-      Nx.tensor(Nx.tensor([1, 2, 3]), backend: ProcessBackend, backend_options: [key: :example])
+      Nx.tensor(Nx.tensor([1, 2, 3]), backend: {ProcessBackend, key: :example})
       assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
     end
 
     test "transfers new tensor" do
-      Nx.tensor([1, 2, 3], backend: ProcessBackend, backend_options: [key: :example])
+      Nx.tensor([1, 2, 3], backend: {ProcessBackend, key: :example})
       assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
     end
   end
 
   describe "backend_transfer" do
     test "transfers existing tensor" do
-      Nx.tensor([1, 2, 3]) |> Nx.backend_transfer(ProcessBackend, key: :example)
+      Nx.tensor([1, 2, 3]) |> Nx.backend_transfer({ProcessBackend, key: :example})
       assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
     end
   end
 
   describe "backend_copy" do
     test "copies existing tensor" do
-      Nx.tensor([1, 2, 3]) |> Nx.backend_copy(ProcessBackend, key: :example)
+      Nx.tensor([1, 2, 3]) |> Nx.backend_copy({ProcessBackend, key: :example})
       assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
     end
   end
 
   describe "backend_deallocate" do
     test "deallocates existing tensor" do
-      t = Nx.tensor([1, 2, 3]) |> Nx.backend_transfer(ProcessBackend, key: :example)
+      t = Nx.tensor([1, 2, 3]) |> Nx.backend_transfer({ProcessBackend, key: :example})
       assert Process.get(:example) == <<1::64-native, 2::64-native, 3::64-native>>
       assert Nx.backend_deallocate(t) == :ok
       refute Process.get(:example)
@@ -82,7 +82,7 @@ defmodule Nx.TensorTest do
 
   describe "default backend" do
     setup do
-      Nx.default_backend(ProcessBackend, key: :example)
+      Nx.default_backend({ProcessBackend, key: :example})
       :ok
     end
 

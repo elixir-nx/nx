@@ -55,8 +55,8 @@ defmodule Nx.Defn.Evaluator do
         {res, cache}
 
       %{} when op in @creation_ops ->
-        {backend, _} = Nx.default_backend()
-        res = apply(backend, op, eval_args(type, ans, expr.args))
+        {backend, backend_options} = Nx.default_backend()
+        res = apply(backend, op, eval_args(type, ans, expr.args ++ [backend_options]))
         {res, Map.put(cache, id, res)}
 
       %{} ->

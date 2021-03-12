@@ -53,7 +53,7 @@ Nx.tensor([1, 2, 3])
 Nx.iota({100, 100})
 ```
 
-See `Nx.default_backend/2` for more information.
+See `Nx.default_backend/1` for more information.
 
 ## License
 

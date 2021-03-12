@@ -4,7 +4,7 @@ defmodule Torchx.NxDoctestTest do
 
   ## Not callbacks
 
-  * default_backend/2
+  * default_backend/1
 
   ## Python rounds differently, than Elixir (for now)
 
@@ -71,7 +71,7 @@ defmodule Torchx.NxDoctestTest do
       |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
       |> Kernel.++(
         to_binary: 2,
-        default_backend: 2,
+        default_backend: 1,
         round: 1,
         argmax: 2,
         argmin: 2,

@@ -38,12 +38,12 @@ defmodule Nx.Backend do
   @type axes :: Nx.Tensor.axes()
   @type backend_options :: term()
 
-  @callback eye(tensor) :: tensor
-  @callback iota(tensor, axis | nil) :: tensor
-  @callback random_uniform(tensor, number, number) :: tensor
-  @callback random_normal(tensor, mu :: float, sigma :: float) :: tensor
-
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
+  @callback eye(tensor, backend_options) :: tensor
+  @callback iota(tensor, axis | nil, backend_options) :: tensor
+  @callback random_uniform(tensor, number, number, backend_options) :: tensor
+  @callback random_normal(tensor, mu :: float, sigma :: float, backend_options) :: tensor
+
   @callback backend_deallocate(tensor) :: :ok | :already_deallocated
   @callback backend_copy(tensor, module, backend_options) :: tensor
   @callback backend_transfer(tensor, module, backend_options) :: tensor

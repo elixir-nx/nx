@@ -16,19 +16,19 @@ defmodule Torchx.DeviceTest do
 
   describe "creation" do
     test "from_binary" do
-      t = Nx.tensor([1, 2, 3], backend_options: [device: @device])
+      t = Nx.tensor([1, 2, 3], backend: {TB, device: @device})
       assert TB.device(t) == @device
     end
 
-    test "backend transfer" do
+    test "backend_transfer" do
       t = Nx.tensor([1, 2, 3])
-      td = Nx.backend_transfer(t, TB, device: @device)
+      td = Nx.backend_transfer(t, {TB, device: @device})
 
       assert TB.device(td) == @device
     end
 
-    test "scalar" do
-      t = Nx.tensor(7.77, backend_options: [device: @device])
+    test "tensor" do
+      t = Nx.tensor(7.77, backend: {TB, device: @device})
 
       assert TB.device(t) == @device
     end
