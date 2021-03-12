@@ -136,19 +136,19 @@ defmodule Nx.Defn.Grad do
                     %{} -> jvp(op, args, ans)
                   end
 
-                {res, {result_cache, jvp_cache}} = grad_jvps(jvps, res, cache)
+                {res, {result_cache, jvp_cache}} = grad_jvps(jvps, ans, res, cache)
                 {res, {Map.put(result_cache, key, res), Map.put(jvp_cache, id, jvps)}}
             end
         end
     end)
   end
 
-  defp grad_jvps([], _g, cache), do: {Expr.tensor(0.0), cache}
+  defp grad_jvps([], _ans, _g, cache), do: {Expr.tensor(0.0), cache}
 
-  defp grad_jvps(jvps, g, cache) do
+  defp grad_jvps(jvps, ans, g, cache) do
     {exprs, cache} =
       Enum.map_reduce(jvps, cache, fn {expr, subg}, cache ->
-        to_grad(expr, maybe_multiply(g, subg), cache)
+        to_grad(Nx.broadcast(expr, ans), maybe_multiply(g, subg), cache)
       end)
 
     template = Expr.tensor(Nx.template(g.shape, g.type))
@@ -430,23 +430,19 @@ defmodule Nx.Defn.Grad do
 
   ## JVP gradients
 
-  defp jvp(:add, [x, y], ans) do
-    {x, y} = binary_broadcast(x, y, ans)
+  defp jvp(:add, [x, y], _ans) do
     [{x, Expr.tensor(1.0)}, {y, Expr.tensor(1.0)}]
   end
 
-  defp jvp(:subtract, [x, y], ans) do
-    {x, y} = binary_broadcast(x, y, ans)
+  defp jvp(:subtract, [x, y], _ans) do
     [{x, Expr.tensor(1.0)}, {y, Expr.tensor(-1.0)}]
   end
 
-  defp jvp(:multiply, [x, y], ans) do
-    {x, y} = binary_broadcast(x, y, ans)
+  defp jvp(:multiply, [x, y], _ans) do
     [{x, y}, {y, x}]
   end
 
   defp jvp(:divide, [x, y], ans) do
-    {x, y} = binary_broadcast(x, y, ans)
     [{x, Nx.divide(1.0, y)}, {y, Nx.negate(Nx.divide(ans, y))}]
   end
 
@@ -460,13 +456,11 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp jvp(:remainder, [x, y], ans) do
-    {x, y} = binary_broadcast(x, y, ans)
+  defp jvp(:remainder, [x, y], _ans) do
     [{x, Expr.tensor(1.0)}, {y, Nx.negate(Nx.floor(Nx.divide(x, y)))}]
   end
 
   defp jvp(:power, [x, y], ans) do
-    {x, y} = binary_broadcast(x, y, ans)
     exponent = Nx.select(Nx.equal(y, 0.0), 1.0, Nx.subtract(y, 1.0))
     base = Nx.select(Nx.equal(x, 0.0), 1.0, x)
 
@@ -475,15 +469,12 @@ defmodule Nx.Defn.Grad do
     [{x, gx}, {y, gy}]
   end
 
-  defp jvp(:atan2, [x, y], ans) do
-    {x, y} = binary_broadcast(x, y, ans)
+  defp jvp(:atan2, [x, y], _ans) do
     den = Nx.add(Nx.multiply(x, x), Nx.multiply(y, y))
     [{x, Nx.divide(y, den)}, {y, Nx.negate(Nx.divide(x, den))}]
   end
 
   defp jvp(op, [x, y], ans) when op in [:min, :max] do
-    {x, y} = binary_broadcast(x, y, ans)
-
     lhs =
       Nx.divide(
         Nx.select(Nx.equal(x, ans), 1.0, 0.0),
@@ -499,10 +490,9 @@ defmodule Nx.Defn.Grad do
     [{x, lhs}, {y, rhs}]
   end
 
-  defp jvp(:outer, [x, y], ans) do
+  defp jvp(:outer, [x, y], _ans) do
     x = Nx.reshape(x, {Nx.size(x.shape), 1})
     y = Nx.reshape(y, {1, Nx.size(y.shape)})
-    {x, y} = binary_broadcast(x, y, ans)
     [{x, y}, {y, x}]
   end
 
@@ -971,10 +961,6 @@ defmodule Nx.Defn.Grad do
   end
 
   defp hi_pads(_, _, _, [], []), do: []
-
-  defp binary_broadcast(x, y, ans) do
-    {Nx.broadcast(x, ans), Nx.broadcast(y, ans)}
-  end
 
   defp maybe_add(x, %T{data: %Expr{op: :negate, args: [y]}} = negated_y) do
     cond do
