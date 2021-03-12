@@ -203,7 +203,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def broadcast(out, %T{shape: orig_shape} = t, shape, axes) do
+  def broadcast(out, %T{} = t, shape, axes) do
     # IO.puts("broadcast(#{inspect(Nx.shape(t))}, #{inspect(shape)}, #{inspect(axes)})")
     NIF.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref(), shape) |> from_ref(out)
   end
@@ -212,7 +212,7 @@ defmodule Torchx.Backend do
   defp maybe_reshape(%T{} = t, _, _), do: t
 
   @impl true
-  def transpose(out, %T{} = t, opts) do
+  def transpose(out, %T{} = t, _opts) do
     NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
   end
 
@@ -271,7 +271,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argmax(%T{type: out_type} = out, %T{} = t, opts) do
+  def argmax(%T{} = out, %T{} = t, opts) do
     unsupported_option!(opts, :tie_break, :low)
 
     axis = opts[:axis] || -1
@@ -281,7 +281,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argmin(%T{type: out_type} = out, %T{} = t, opts) do
+  def argmin(%T{} = out, %T{} = t, opts) do
     unsupported_option!(opts, :tie_break, :low)
 
     axis = opts[:axis] || -1
@@ -515,12 +515,12 @@ defmodule Torchx.Backend do
     str
     |> String.split(":")
     |> case do
-          [type, index] ->
-            {String.to_existing_atom(type), String.to_integer(index)}
+      [type, index] ->
+        {String.to_existing_atom(type), String.to_integer(index)}
 
-          [type] ->
-            String.to_existing_atom(type)
-        end
+      [type] ->
+        String.to_existing_atom(type)
+    end
   end
 
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
