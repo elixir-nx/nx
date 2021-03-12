@@ -4,6 +4,7 @@ defmodule Nx.BinaryBackend.Bits do
   """
   import Nx.Shared
 
+  alias Nx.BinaryBackend
   alias Nx.Tensor, as: T
 
   @compile {:inline, from_number: 2, to_number: 2, number_at: 3, slice: 4, from_scalar: 2}
@@ -28,8 +29,8 @@ defmodule Nx.BinaryBackend.Bits do
     from_number(value, type)
   end
 
-  def from_scalar(%T{shape: {}, type: type, data: %{state: data}}, type) do
-    data
+  def from_scalar(%T{shape: {}, type: type} = t, type) do
+    BinaryBackend.to_binary(t)
   end
 
   def from_scalar(t, type) do

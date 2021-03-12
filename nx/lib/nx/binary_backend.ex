@@ -7,18 +7,19 @@ defmodule Nx.BinaryBackend do
   The backend itself (and its data) is private and must
   not be accessed directly.
   """
-
   @behaviour Nx.Backend
-
-  @doc false
-  defstruct [:state]
 
   alias Nx.Tensor, as: T
   alias Nx.BinaryBackend, as: B  
   alias Nx.BinaryBackend.TraverserReducer
+  alias Nx.BinaryBackend.Traverser
+  alias Nx.BinaryBackend.View
 
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
+
+  @doc false
+  defstruct [:state, :view]
 
   @default_eps 1.0e-10
 
@@ -107,8 +108,12 @@ defmodule Nx.BinaryBackend do
   def from_binary(t, binary, _opts), do: from_binary(t, binary)
 
   @doc false
-  def from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
-  def from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
+  def from_binary(t, binary) when is_binary(binary) do
+    %{t | data: %B{state: binary}}
+  end
+  def from_binary(t, other) do
+    %{t | data: %B{state: IO.iodata_to_binary(other)}}
+  end
 
   @impl true
   def to_binary(%{type: {_, size}} = t, limit) do
@@ -123,7 +128,18 @@ defmodule Nx.BinaryBackend do
   end
 
   @doc false
-  def to_binary(%T{data: %{state: data}}), do: data
+  def to_binary(%T{data: %{state: bin, view: nil}}) do
+    bin
+  end
+
+  def to_binary(%T{data: %{state: bin, view: view}} = t) do
+    if View.has_changes?(view) do
+      %T{type: type} = t
+      resolve_view_binary(view, type, bin)
+    else
+      bin
+    end
+  end
 
   @impl true
   def backend_copy(tensor, backend, opts) do
@@ -228,45 +244,10 @@ defmodule Nx.BinaryBackend do
   ## Shape
 
   @impl true
-  def transpose(out, %T{shape: shape, type: {_, size}} = t, axes) do
-    data = to_binary(t)
-    {list, min, max} = transpose_axes(shape, axes)
-    weighted_shape = weighted_shape(shape, size)
-
-    # The chunk size is computed based on all dimensions
-    # before the minimum one being changed. For example,
-    # for {0, 1, 2, 3} and the swap is between 1 and 2,
-    # the chunk_size will be d1 * d2 * d3 * size.
-    chunk_size = weighted_chunk(weighted_shape, min, size)
-
-    # All of the major dimensions not being transposed can be
-    # read at once. For example, for {0, 1, 2, 3} and the swap
-    # is between 1 and 2, the read_size will be d3 * size.
-    read_size = weighted_chunk(weighted_shape, max + 1, size)
-
-    # And now how we will traverse
-    traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
-
-    data =
-      for <<chunk::size(chunk_size)-bitstring <- data>> do
-        weighted_traverse(traverse_list, chunk, read_size)
-      end
-
-    from_binary(out, data)
+  def transpose(out, %T{} = t, axes) do
+    t = update_view(t, fn view -> View.meta_transpose(view, axes) end)
+    resolve_view(%T{out | data: t.data})
   end
-
-  defp transpose_axes(shape, axes) do
-    size = tuple_size(shape)
-    {axes, min} = transpose_min(axes, 0)
-    {axes, max} = transpose_max(Enum.reverse(axes), size - 1)
-    {axes, min, max}
-  end
-
-  defp transpose_min([head | tail], head), do: transpose_min(tail, head + 1)
-  defp transpose_min(tail, head), do: {tail, head}
-
-  defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
-  defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
 
   ## Pad
 
@@ -1996,7 +1977,6 @@ defmodule Nx.BinaryBackend do
     # can increase the read size.
     {reverse_pos, read_size} =
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
-
     path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
     {chunk_size, read_size, path}
   end
@@ -2264,4 +2244,50 @@ defmodule Nx.BinaryBackend do
   end
 
   defp replace_vector_element(m, row, value), do: List.replace_at(m, row, value)
+
+  defp update_view(t, fun) do
+    t = resolve_view_if_needed(t)
+    view = get_or_create_view(t)
+    put_view(t, fun.(view))
+  end
+
+  defp get_or_create_view(%T{shape: shape, data: %B{view: view}}) do
+    view || View.build(shape)
+  end
+
+  defp put_view(%T{data: data} = t, view) do
+    %T{t | data: %B{data | view: view}}
+  end
+
+  defp resolve_view_if_needed(%T{data: %{view: view}} = t) do
+    if view && View.must_be_resolved?(view) do
+      resolve_view(t)
+    else
+      t
+    end
+  end
+
+  defp resolve_view(t) do
+    %T{type: type, data: %B{state: bin, view: view}} = t
+    if is_nil(view) do
+      t
+    else
+      data = %B{
+        state: resolve_view_binary(view, type, bin),
+        view: nil
+      }
+      %T{t | data: data}
+    end
+  end
+
+  defp resolve_view_binary(view, {_, sizeof} = type, bin) do
+    view
+    |> View.with_type(type)
+    |> View.build_traverser()
+    |> Traverser.reduce([], fn offset, acc ->
+      <<_::size(offset)-bitstring, target::size(sizeof)-bitstring, _::bitstring>> = bin
+      [acc | target]
+    end)
+    |> IO.iodata_to_binary()
+  end
 end
