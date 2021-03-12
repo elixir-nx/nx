@@ -513,13 +513,13 @@ defmodule Torchx.Backend do
   defp parse_torch_device_str(str) when is_binary(str) do
     str
     |> String.split(":")
-    |> (fn
+    |> case do
           [type, index] ->
             {String.to_existing_atom(type), String.to_integer(index)}
 
           [type] ->
             String.to_existing_atom(type)
-        end).()
+        end
   end
 
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
