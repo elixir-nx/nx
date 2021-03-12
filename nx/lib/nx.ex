@@ -1539,13 +1539,13 @@ defmodule Nx do
   ### Error cases
 
       iex> Nx.tile(Nx.tensor([1,2]), 1.0)
-      ** (ArgumentError) repetitions must be a list of integers. Got: 1.0
+      ** (ArgumentError) repetitions must be a list of integers, got: 1.0
 
       iex> Nx.tile(Nx.tensor([1,2]), [1, 1.0])
-      ** (ArgumentError) repetitions must be a list of integers. Got: [1, 1.0]
+      ** (ArgumentError) repetitions must be a list of integers, got: [1, 1.0]
 
       iex> Nx.tile(Nx.tensor([1,2]), nil)
-      ** (ArgumentError) repetitions must be a list of integers. Got: nil
+      ** (ArgumentError) repetitions must be a list of integers, got: nil
   """
   @doc type: :shape
   def tile(tensor, repetitions) do
@@ -1553,7 +1553,7 @@ defmodule Nx do
 
     unless tile_valid_repetitions?(repetitions) do
       raise ArgumentError,
-            "repetitions must be a list of integers. Got: #{inspect(repetitions)}"
+            "repetitions must be a list of integers, got: #{inspect(repetitions)}"
     end
 
     {tensor_reshape, broadcast_shape, result_shape} = Nx.Shape.tile(tensor, repetitions)
