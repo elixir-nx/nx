@@ -134,6 +134,14 @@ defmodule Nx.Shared do
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
+  @doc """
+  Converts an Erlang float (float64) to float32 precision.
+  """
+  def to_float32(float64) when is_float(float64) do
+    <<float32::float-32>> = <<float64::float-32>>
+    float32
+  end
+
   ## Reflection
 
   @doc """
@@ -353,6 +361,7 @@ defmodule Nx.Shared do
 
   defp pick_struct(struct1, struct2) do
     raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
-            "#{inspect(struct1)} and #{inspect(struct2)}"
+            "#{inspect(struct1)} and #{inspect(struct2)}. You may need to call Nx.backend_transfer/1 " <>
+            "(or Nx.backend_copy/1) on one or both of them to transfer them to a common implementation"
   end
 end

@@ -40,7 +40,7 @@ defmodule LinReg do
           fn batch, cur_params ->
             {inp, tar} = Enum.unzip(batch)
             x = Nx.reshape(Nx.tensor(inp), {32, 1})
-            y = Nx.reshape(Nx.tensor(tar), {32, 1})
+            y = Nx.reshape(Nx.tensor(tar), {1, 32})
             update(cur_params, x, y, 0.001)
           end
         )

@@ -32,6 +32,7 @@ defmodule Nx.MixProject do
       source_url: @source_url,
       groups_for_functions: [
         "Functions: Aggregates": &(&1[:type] == :aggregation),
+        "Functions: Backend": &(&1[:type] == :backend),
         "Functions: Conversion": &(&1[:type] == :conversion),
         "Functions: Creation": &(&1[:type] in [:creation, :random]),
         "Functions: Element-wise": &(&1[:type] == :element),
@@ -46,21 +47,22 @@ defmodule Nx.MixProject do
         # Nx.Defn,
         # Nx.Defn.Kernel
 
-        "Backends": [
+        Backends: [
           Nx.Backend,
           Nx.BinaryBackend,
           Nx.TemplateBackend,
           Nx.Type
         ],
-        "Compilers": [
+        Compilers: [
           Nx.Defn.Compiler,
           Nx.Defn.Evaluator,
-          Nx.Defn.Expr
+          Nx.Defn.Expr,
+          Nx.Defn.Tree
         ],
-        "Structs": [
+        Structs: [
           Nx.Heatmap,
           Nx.Tensor
-        ],
+        ]
       ]
     ]
   end

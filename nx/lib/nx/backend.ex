@@ -10,7 +10,7 @@ defmodule Nx.Backend do
   `Nx` backends come in two flavors: opaque backends, of which you should
   not access its data directly except through the functions in the `Nx`
   module, and public ones, of which its data can be directly accessed and
-  visited. The former typically have the `Backend` suffix.
+  traversed. The former typically have the `Backend` suffix.
 
   `Nx` ships with the following backends:
 
@@ -24,7 +24,7 @@ defmodule Nx.Backend do
       tensors to be expected in the future.
 
     * `Nx.Defn.Expr` - a public backend used by `defn` to build
-      expression graphs that are traversed by custom compilers.
+      expression trees that are traversed by custom compilers.
 
   This module also includes functions that are meant to be shared
   across backends.
@@ -36,20 +36,23 @@ defmodule Nx.Backend do
   @type shape :: Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
+  @type backend_options :: term()
 
-  @callback eye(tensor) :: tensor
-  @callback iota(tensor, axis | nil) :: tensor
-  @callback random_uniform(tensor, number, number) :: tensor
-  @callback random_normal(tensor, mu :: float, sigma :: float) :: tensor
+  @callback from_binary(out :: tensor, binary, backend_options) :: tensor
+  @callback eye(tensor, backend_options) :: tensor
+  @callback iota(tensor, axis | nil, backend_options) :: tensor
+  @callback random_uniform(tensor, number, number, backend_options) :: tensor
+  @callback random_normal(tensor, mu :: float, sigma :: float, backend_options) :: tensor
 
+  @callback backend_deallocate(tensor) :: :ok | :already_deallocated
+  @callback backend_copy(tensor, module, backend_options) :: tensor
+  @callback backend_transfer(tensor, module, backend_options) :: tensor
   @callback to_batched_list(out :: tensor, tensor) :: [tensor]
   @callback to_binary(tensor, limit :: non_neg_integer) :: binary
-  @callback backend_deallocate(tensor) :: :ok | :already_deallocated
-  @callback backend_transfer(tensor, module, keyword) :: tensor
-
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
-  @callback from_binary(out :: tensor, binary, keyword) :: tensor
+
   @callback as_type(out :: tensor, tensor) :: tensor
+  @callback bitcast(out :: tensor, tensor) :: tensor
   @callback reshape(out :: tensor, tensor, shape) :: tensor
   @callback squeeze(out :: tensor, tensor, axes) :: tensor
   @callback broadcast(out :: tensor, tensor, shape, axes) :: tensor
@@ -80,10 +83,14 @@ defmodule Nx.Backend do
   @callback window_min(out :: tensor, tensor, shape, keyword) :: tensor
   @callback map(out :: tensor, tensor, fun) :: tensor
   @callback sort(out :: tensor, tensor, keyword) :: tensor
+  @callback scatter_window_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
+  @callback scatter_window_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
+  @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
+  @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
@@ -193,30 +200,46 @@ defmodule Nx.Backend do
       <<x::float-little-32>> = <<0::16, bf16::binary>>
       Float.to_string(x)
     end
+
+    defp inspect_float(data, 32) do
+      case data do
+        <<0xFF800000::32-native>> -> "-Inf"
+        <<0x7F800000::32-native>> -> "Inf"
+        <<_::16, 1::1, _::7, _sign::1, 0x7F::7>> -> "NaN"
+        <<x::float-32-native>> -> Float.to_string(x)
+      end
+    end
+
+    defp inspect_float(data, 64) do
+      case data do
+        <<0x7FF0000000000000::64-native>> -> "Inf"
+        <<0xFFF0000000000000::64-native>> -> "-Inf"
+        <<_::48, 0xF::4, _::4, _sign::1, 0x7F::7>> -> "NaN"
+        <<x::float-64-native>> -> Float.to_string(x)
+      end
+    end
   else
     defp inspect_bf16(bf16) do
       <<x::float-big-32>> = <<bf16::binary, 0::16>>
       Float.to_string(x)
     end
-  end
 
-  defp inspect_float(data, 32) do
-    case data do
-      <<0xFF800000::32-native>> -> "-Inf"
-      <<0x7F800000::32-native>> -> "Inf"
-      <<0xFF800001::32-native>> -> "NaN"
-      <<0xFFC00001::32-native>> -> "NaN"
-      <<x::float-32-native>> -> Float.to_string(x)
+    defp inspect_float(data, 32) do
+      case data do
+        <<0xFF800000::32-native>> -> "-Inf"
+        <<0x7F800000::32-native>> -> "Inf"
+        <<_sign::1, 0x7F::7, 1::1, _::7, _::16>> -> "NaN"
+        <<x::float-32-native>> -> Float.to_string(x)
+      end
     end
-  end
 
-  defp inspect_float(data, 64) do
-    case data do
-      <<0xFFF0000000000000::64-native>> -> "-Inf"
-      <<0x7FF0000000000000::64-native>> -> "Inf"
-      <<0x7FF0000000000001::64-native>> -> "NaN"
-      <<0x7FF8000000000001::64-native>> -> "NaN"
-      <<x::float-64-native>> -> Float.to_string(x)
+    defp inspect_float(data, 64) do
+      case data do
+        <<0x7FF0000000000000::64-native>> -> "Inf"
+        <<0xFFF0000000000000::64-native>> -> "-Inf"
+        <<_sign::1, 0x7F::7, 0xF::4, _::4, _::48>> -> "NaN"
+        <<x::float-64-native>> -> Float.to_string(x)
+      end
     end
   end
 end

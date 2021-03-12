@@ -413,7 +413,7 @@ defmodule Nx.Shape do
   @doc """
   Output shape after a convolution, already padded.
   """
-  def conv(input_shape, input_names, kernel_shape, _kernel_names, strides, padding) do
+  def conv(input_shape, input_names, kernel_shape, _kernel_names, strides, batch_groups, padding) do
     filter_shape =
       kernel_shape
       |> Tuple.delete_at(0)
@@ -435,7 +435,7 @@ defmodule Nx.Shape do
     spatial_dims = do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), strides)
 
     # TODO: Is it always the case that it's best to return the input names?
-    {List.to_tuple([batch_size, num_filters | spatial_dims]), input_names}
+    {List.to_tuple([div(batch_size, batch_groups), num_filters | spatial_dims]), input_names}
   end
 
   defp do_spatial_dims([], [], []), do: []
@@ -864,6 +864,39 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Calculates the intermediate and final shapes used by the
+  `Nx.tile` function.
+  """
+  def tile(%Nx.Tensor{shape: old_shape}, repetitions) do
+    num_dims = tuple_size(old_shape)
+    length_reps = length(repetitions)
+
+    # grow the dimensionality of the tensor by new_dims_count
+    shape_grow_count = Kernel.max(length_reps - num_dims, 0)
+    resized_shape_list = List.duplicate(1, shape_grow_count) ++ Tuple.to_list(old_shape)
+
+    repetitions_grow_count = Kernel.max(num_dims - length_reps, 0)
+    resized_repetitions = List.duplicate(1, repetitions_grow_count) ++ repetitions
+
+    broadcast_shape = resized_repetitions |> alternate(resized_shape_list) |> List.to_tuple()
+
+    tensor_reshape =
+      [1 | Enum.intersperse(resized_shape_list, 1)]
+      |> List.to_tuple()
+
+    result_shape =
+      resized_repetitions
+      |> Enum.zip(resized_shape_list)
+      |> Enum.map(fn {x, y} -> x * y end)
+      |> List.to_tuple()
+
+    {tensor_reshape, broadcast_shape, result_shape}
+  end
+
+  defp alternate([], []), do: []
+  defp alternate([h1 | tl1], [h2 | tl2]), do: [h1, h2 | alternate(tl1, tl2)]
+
+  @doc """
   Returns the shape and names after a Cholesky decomposition.
 
   ## Examples
@@ -915,6 +948,28 @@ defmodule Nx.Shape do
       raise(
         ArgumentError,
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+      )
+
+  def svd({m, n}) do
+    {{m, m}, {n}, {n, n}}
+  end
+
+  def svd(shape),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+      )
+
+  def lu({n, n}) do
+    {{n, n}, {n, n}, {n, n}}
+  end
+
+  def lu(shape),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have as many rows as columns, got shape: #{inspect(shape)}"
       )
 
   defp validate_concat_names!(names) do

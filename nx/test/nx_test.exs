@@ -308,7 +308,7 @@ defmodule NxTest do
       lhs = Nx.iota({2, 4, 2, 2}, type: {:f, 32})
       rhs = Nx.iota({6, 2, 2, 2}, type: {:f, 32})
 
-      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, groups: 2) ==
+      assert Nx.conv(lhs, rhs, strides: 1, padding: :valid, feature_group_size: 2) ==
                Nx.tensor(
                  [
                    [[[140.0]], [[364.0]], [[588.0]], [[2572.0]], [[3308.0]], [[4044.0]]],
@@ -319,18 +319,34 @@ defmodule NxTest do
     end
   end
 
-  test "interior padding" do
-    assert Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{0, 0, 1}, {0, 0, 1}]) ==
-             Nx.tensor([[1, 0, 2, 0, 3], [0, 0, 0, 0, 0], [4, 0, 5, 0, 6]])
+  describe "pad" do
+    test "with interior padding" do
+      assert Nx.pad(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{0, 0, 1}, {0, 0, 1}]) ==
+               Nx.tensor([[1, 0, 2, 0, 3], [0, 0, 0, 0, 0], [4, 0, 5, 0, 6]])
 
-    assert Nx.pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), 2.0, [{-2, 1, 4}, {1, 3, 2}]) ==
-             Nx.tensor([
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
-               [2.0, 4.0, 2.0, 2.0, 5.0, 2.0, 2.0, 6.0, 2.0, 2.0, 2.0],
-               [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
-             ])
+      assert Nx.pad(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), 2.0, [{-2, 1, 4}, {1, 3, 2}]) ==
+               Nx.tensor([
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                 [2.0, 4.0, 2.0, 2.0, 5.0, 2.0, 2.0, 6.0, 2.0, 2.0, 2.0],
+                 [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+               ])
+    end
+  end
+
+  describe "bitshift" do
+    test "raises for negative numbers on the right" do
+      assert_raise ArgumentError,
+                   "cannot right shift by -1",
+                   fn -> Nx.right_shift(Nx.tensor(1), -1) end
+    end
+
+    test "raises for negative numbers on the left" do
+      assert_raise ArgumentError,
+                   "cannot left shift by -1",
+                   fn -> Nx.left_shift(Nx.tensor(1), -1) end
+    end
   end
 
   describe "reverse" do
@@ -467,7 +483,7 @@ defmodule NxTest do
 
       assert inspect(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) == """
              #Nx.Tensor<
-               f64[2][3]
+               f32[2][3]
                [
                  [1.0, 2.0, 3.0],
                  [4.0, 5.0, 6.0]
@@ -533,6 +549,22 @@ defmodule NxTest do
              """
     end
 
+    test "more nan for f32" do
+      bin =
+        <<0x7F800001::32-native, 0xFF800002::32-native, 0x7FC00000::32-native,
+          0xFFC00000::32-native>>
+
+      # Assert that none of them are indeed valid
+      assert for(<<x::float-32-native <- bin>>, do: x) == []
+
+      assert inspect(Nx.from_binary(bin, {:f, 32})) == """
+             #Nx.Tensor<
+               f32[4]
+               [NaN, NaN, NaN, NaN]
+             >\
+             """
+    end
+
     test "infinity and nan for f64" do
       bin =
         <<0xFFF0000000000000::64-native, 0x7FF0000000000000::64-native,
@@ -545,6 +577,22 @@ defmodule NxTest do
              #Nx.Tensor<
                f64[4]
                [-Inf, Inf, NaN, NaN]
+             >\
+             """
+    end
+
+    test "more nan for f64" do
+      bin =
+        <<0xFFF0000000000001::64-native, 0x7FF0000000000002::64-native,
+          0xFFF8000000000000::64-native, 0x7FF8000000000000::64-native>>
+
+      # Assert that none of them are indeed valid
+      assert for(<<x::float-64-native <- bin>>, do: x) == []
+
+      assert inspect(Nx.from_binary(bin, {:f, 64})) == """
+             #Nx.Tensor<
+               f64[4]
+               [NaN, NaN, NaN, NaN]
              >\
              """
     end
@@ -644,7 +692,7 @@ defmodule NxTest do
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg =
-        "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 64}"
+        "quotient expects integer tensors as inputs and outputs an integer tensor, got: {:f, 32}"
 
       assert_raise ArgumentError, msg, fn ->
         Nx.quotient(10, 1.0)
@@ -951,22 +999,61 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        ~r/size of input dimension 1 divided by groups must match size of kernel dimension 1/,
+        ~r/size of input channels divided by feature groups must match size of kernel channels/,
         fn ->
           Nx.conv(t, kernel)
         end
       )
     end
 
-    test "raises when :groups cannot divide evenly into the 1st dim (elem 0) of the kernel" do
+    test "raises when :feature_group_size cannot divide evenly into the input channels of the kernel" do
       t = Nx.iota({3, 2, 2})
       kernel = Nx.broadcast(Nx.tensor(1.0), {3, 1, 1})
 
       assert_raise(
         ArgumentError,
-        ~r/size of kernel dimension 0 must be evenly divisible by groups/,
+        ~r/size of kernel output channels must be evenly divisible by feature groups/,
         fn ->
-          Nx.conv(t, kernel, groups: 2)
+          Nx.conv(t, kernel, feature_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if both :feature_group_size and :batch_group_size are greater than 1" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/either batch groups or feature groups must be 1/,
+        fn ->
+          Nx.conv(t, kernel, feature_group_size: 2, batch_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if :batch_group_size does not evenly divide batch size" do
+      t = Nx.iota({3, 2, 2})
+      kernel = Nx.broadcast(Nx.tensor(1.0), {1, 1, 1})
+
+      assert_raise(
+        ArgumentError,
+        ~r/batch groups must evenly divide input batch size/,
+        fn ->
+          Nx.conv(t, kernel, batch_group_size: 2)
+        end
+      )
+    end
+
+    test "raises if :batch_group_size is not a multiple of output feature channels" do
+      t = Nx.iota({3, 2, 3, 3})
+      kernel = Nx.iota({8, 2, 2, 2})
+
+      assert_raise(
+        ArgumentError,
+        ~r/size of kernel output channels must be evenly divisible by batch groups/,
+        fn ->
+          Nx.conv(t, kernel, batch_group_size: 3)
         end
       )
     end
@@ -1163,7 +1250,7 @@ defmodule NxTest do
     test "works with shape input" do
       t = Nx.random_normal({3, 3}, 0.1, 10.0)
       assert Nx.shape(t) == {3, 3}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
     end
 
     test "works with tensor input" do
@@ -1171,8 +1258,14 @@ defmodule NxTest do
       t2 = Nx.random_normal(t1, 0.1, 10.0)
       assert Nx.shape(t2) == {2}
       assert Nx.type(t1) == {:s, 64}
-      assert Nx.type(t2) == {:f, 64}
+      assert Nx.type(t2) == {:f, 32}
       assert t1 != t2
+    end
+
+    test "raises with non-float type" do
+      assert_raise(ArgumentError, "random_normal/3 expects float type, got: {:s, 32}", fn ->
+        Nx.random_normal(1, 0.1, 10.0, type: {:s, 32})
+      end)
     end
   end
 
@@ -1180,7 +1273,7 @@ defmodule NxTest do
     test "works with shape input" do
       t = Nx.random_uniform({3, 3}, 0.1, 10.0)
       assert Nx.shape(t) == {3, 3}
-      assert Nx.type(t) == {:f, 64}
+      assert Nx.type(t) == {:f, 32}
     end
 
     test "works with tensor input" do
@@ -1188,8 +1281,24 @@ defmodule NxTest do
       t2 = Nx.random_uniform(t1, 0.1, 10.0)
       assert Nx.shape(t2) == {2}
       assert Nx.type(t1) == {:s, 64}
-      assert Nx.type(t2) == {:f, 64}
+      assert Nx.type(t2) == {:f, 32}
       assert t1 != t2
+    end
+
+    test "works with compatible types" do
+      t = Nx.random_uniform(1, 0, 10, type: {:s, 32})
+      assert Nx.shape(t) == {}
+      assert Nx.type(t) == {:s, 32}
+    end
+
+    test "raises for incompatible types" do
+      assert_raise(
+        ArgumentError,
+        "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 32}",
+        fn ->
+          Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
+        end
+      )
     end
   end
 
@@ -1217,48 +1326,134 @@ defmodule NxTest do
       assert {q, %{type: output_type} = r} = Nx.qr(t)
       assert t |> Nx.round() |> Nx.as_type(output_type) == q |> Nx.dot(r) |> Nx.round()
 
-      assert round(q, 1) == Nx.tensor([
-        [-2/3, 2/3, -1/3],
-        [-2/3, -1/3, 2/3],
-        [-1/3, -2/3, -2/3]
-      ]) |> round(1)
+      assert round(q, 1) ==
+               Nx.tensor([
+                 [2 / 3, 2 / 3, 1 / 3],
+                 [2 / 3, -1 / 3, -2 / 3],
+                 [1 / 3, -2 / 3, 2 / 3]
+               ])
+               |> round(1)
 
-      assert round(r, 1) == Nx.tensor([
-        [-3.0, 0.0, -12.0],
-        [0.0, -3.0, 12.0],
-        [0.0, 0.0, -6.0]
-      ]) |> round(1)
+      assert round(r, 1) ==
+               Nx.tensor([
+                 [3.0, 0.0, 12.0],
+                 [0.0, -3.0, 12.0],
+                 [0.0, 0.0, 6.0]
+               ])
+               |> round(1)
     end
 
     test "factors rectangular matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
       {q, r} = Nx.qr(t, mode: :reduced)
 
-      assert round(q, 1) == Nx.tensor([
-          [-0.5774, 0.8165, 0.0],
-          [-0.5774, -0.4082, 0.7071],
-          [-0.5774, -0.4082, -0.7071],
-          [0.0, 0.0, 0.0]
-        ]) |> round(1)
+      assert round(q, 1) ==
+               Nx.tensor([
+                 [0.5774, -0.8165, 0.0],
+                 [0.5774, 0.4082, -0.7071],
+                 [0.5774, 0.4082, 0.7071],
+                 [0.0, 0.0, 0.0]
+               ])
+               |> round(1)
 
-      assert round(r, 1) == Nx.tensor([
-          [-1.7321, -4.0415, -2.3094],
-          [0.0, -4.0825, 3.266],
-          [0.0, 0.0, -2.8284]
-        ]) |> round(1)
+      assert round(r, 1) ==
+               Nx.tensor([
+                 [1.7321, 4.0415, 2.3094],
+                 [0.0, 4.0825, -3.266],
+                 [0.0, 0.0, 2.8284]
+               ])
+               |> round(1)
 
-        assert Nx.tensor([
-          [1.0, -1.0, 4.0],
-          [1.0, 4.0, -2.0],
-          [1.0, 4.0, 2.0],
-          [0.0, 0.0, 0.0]
-        ]) == q |> Nx.dot(r) |> round(1)
+      assert Nx.tensor([
+               [1.0, -1.0, 4.0],
+               [1.0, 4.0, -2.0],
+               [1.0, 4.0, 2.0],
+               [0.0, 0.0, 0.0]
+             ]) == q |> Nx.dot(r) |> round(1)
+    end
+  end
+
+  describe "svd" do
+    test "correctly finds the singular values of full matrices" do
+      t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
+
+      assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
+               Nx.svd(t, max_iter: 1000)
+
+      zero_row = List.duplicate(0, 3)
+
+      # turn s into a {4, 3} tensor
+      s_matrix =
+        s
+        |> Nx.to_flat_list()
+        |> Enum.with_index()
+        |> Enum.map(fn {x, idx} -> List.replace_at(zero_row, idx, x) end)
+        |> Enum.concat([zero_row])
+        |> Nx.tensor()
+
+      assert round(t, 2) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(2)
+
+      assert round(u, 3) ==
+               Nx.tensor([
+                 [-0.141, -0.825, -0.547, 0.019],
+                 [-0.344, -0.426, 0.744, 0.382],
+                 [-0.547, -0.028, 0.153, -0.822],
+                 [-0.75, 0.371, -0.35, 0.421]
+               ])
+               |> round(3)
+
+      assert Nx.tensor([25.462, 1.291, 0.0]) |> round(3) == round(s, 3)
+
+      assert Nx.tensor([
+               [-0.505, -0.575, -0.644],
+               [0.761, 0.057, -0.646],
+               [-0.408, 0.816, -0.408]
+             ])
+             |> round(3) == round(v, 3)
     end
 
-    defp round(tensor, places) do
-      Nx.map(tensor, fn x ->
-        Float.round(x, places)
-      end)
+    test "correctly finds the singular values triangular matrices" do
+      t = Nx.tensor([[1.0, 2.0, 3.0], [0.0, 4.0, 0.0], [0.0, 0.0, 9.0]])
+
+      assert {%{type: output_type} = u, %{type: output_type} = s, %{type: output_type} = v} =
+               Nx.svd(t)
+
+      zero_row = List.duplicate(0, 3)
+
+      # turn s into a {4, 3} tensor
+      s_matrix =
+        s
+        |> Nx.to_flat_list()
+        |> Enum.with_index()
+        |> Enum.map(fn {x, idx} -> List.replace_at(zero_row, idx, x) end)
+        |> Nx.tensor()
+
+      assert round(t, 2) == u |> Nx.dot(s_matrix) |> Nx.dot(v) |> round(2)
+
+      assert round(u, 3) ==
+               Nx.tensor([
+                 [-0.335, 0.408, -0.849],
+                 [-0.036, 0.895, 0.445],
+                 [-0.941, -0.18, 0.286]
+               ])
+               |> round(3)
+
+      # The expected value is ~ [9, 5, 1] since the eigenvalues of
+      # a triangular matrix are the diagonal elements. Close enough!
+      assert Nx.tensor([9.52, 4.433, 0.853]) |> round(3) == round(s, 3)
+
+      assert Nx.tensor([
+               [-0.035, -0.086, -0.996],
+               [0.092, 0.992, -0.089],
+               [-0.995, 0.095, 0.027]
+             ])
+             |> round(3) == round(v, 3)
     end
+  end
+
+  defp round(tensor, places) do
+    Nx.map(tensor, fn x ->
+      Float.round(x, places)
+    end)
   end
 end

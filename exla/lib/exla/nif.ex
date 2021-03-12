@@ -63,6 +63,7 @@ defmodule EXLA.NIF do
         _rhs_dilation,
         _dimension_numbers,
         _feature_group_count,
+        _batch_group_count,
         _precision_config
       ),
       do: :erlang.nif_error(:undef)
@@ -114,6 +115,16 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
+  def select_and_scatter(
+        _operand,
+        _select_fn,
+        _window_dimensions,
+        _window_strides,
+        _padding_config,
+        _source,
+        _init_value,
+        _scatter_fn), do: :erlang.nif_error(:undef)
+
   def map(_builder, _operand, _computation, _dimensions),
     do: :erlang.nif_error(:undef)
 
@@ -130,6 +141,9 @@ defmodule EXLA.NIF do
     do: :erlang.nif_error(:undef)
 
   def convert_element_type(_operand, _type),
+    do: :erlang.nif_error(:undef)
+
+  def bitcast_convert_type(_operand, _type),
     do: :erlang.nif_error(:undef)
 
   def clamp(_operand, _min, _max),
@@ -170,10 +184,10 @@ defmodule EXLA.NIF do
   def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: :erlang.nif_error(:undef)
 
-  def get_cuda_client(_num_replicas, _intra_op_parallelism_threads),
+  def get_cuda_client(_num_replicas, _intra_op_parallelism_threads, _memory_fraction, _preallocate),
     do: :erlang.nif_error(:undef)
 
-  def get_rocm_client(_num_replicas, _intra_op_parallelism_threads),
+  def get_rocm_client(_num_replicas, _intra_op_parallelism_threads, _memory_fraction, _preallocate),
     do: :erlang.nif_error(:undef)
 
   def get_supported_platforms, do: :erlang.nif_error(:undef)
@@ -240,7 +254,8 @@ defmodule EXLA.NIF do
         _object_path,
         _function_name,
         _class_name,
-        _target_triple
+        _target_triple,
+        _target_features
       ),
       do: :erlang.nif_error(:undef)
 

@@ -25,9 +25,10 @@ defmodule Nx.HeatmapTest do
              #Nx.Heatmap<
                s64[4][3]
              \s\s
-               0122
-               3456
-               7789
+               012
+               234
+               567
+               789
              >\
              """
     end
@@ -37,13 +38,11 @@ defmodule Nx.HeatmapTest do
              #Nx.Heatmap<
                s64[2][2][3]
                [
-                 02
-                 45
-                 79,
+                 024
+                 579,
              \s\s\s\s
-                 02
-                 45
-                 79
+                 024
+                 579
                ]
              >\
              """
@@ -65,9 +64,10 @@ defmodule Nx.HeatmapTest do
              #Nx.Heatmap<
                s64[4][3]
              \s\s
-               \e[48;5;232m\u3000\e[48;5;234m\u3000\e[48;5;236m\u3000\e[48;5;238m\u3000\e[0m
-               \e[48;5;240m\u3000\e[48;5;242m\u3000\e[48;5;245m\u3000\e[48;5;247m\u3000\e[0m
-               \e[48;5;249m\u3000\e[48;5;251m\u3000\e[48;5;253m\u3000\e[48;5;255m\u3000\e[0m
+               \e[48;5;232m\u3000\e[48;5;234m\u3000\e[48;5;236m\u3000\e[0m
+               \e[48;5;238m\u3000\e[48;5;240m\u3000\e[48;5;242m\u3000\e[0m
+               \e[48;5;245m\u3000\e[48;5;247m\u3000\e[48;5;249m\u3000\e[0m
+               \e[48;5;251m\u3000\e[48;5;253m\u3000\e[48;5;255m\u3000\e[0m
              >\
              """
     end
@@ -77,13 +77,11 @@ defmodule Nx.HeatmapTest do
              #Nx.Heatmap<
                s64[2][2][3]
                [
-                 \e[48;5;232m\u3000\e[48;5;237m\u3000\e[0m
-                 \e[48;5;241m\u3000\e[48;5;246m\u3000\e[0m
-                 \e[48;5;250m\u3000\e[48;5;255m\u3000\e[0m,
+                 \e[48;5;232m\u3000\e[48;5;237m\u3000\e[48;5;241m\u3000\e[0m
+                 \e[48;5;246m\u3000\e[48;5;250m\u3000\e[48;5;255m\u3000\e[0m,
              \s\s\s\s
-                 \e[48;5;232m\u3000\e[48;5;237m\u3000\e[0m
-                 \e[48;5;241m\u3000\e[48;5;246m\u3000\e[0m
-                 \e[48;5;250m\u3000\e[48;5;255m\u3000\e[0m
+                 \e[48;5;232m\u3000\e[48;5;237m\u3000\e[48;5;241m\u3000\e[0m
+                 \e[48;5;246m\u3000\e[48;5;250m\u3000\e[48;5;255m\u3000\e[0m
                ]
              >\
              """
@@ -104,7 +102,7 @@ defmodule Nx.HeatmapTest do
     end
 
     test "preserves options" do
-assert Nx.to_heatmap(Nx.tensor([[1, 2], [3, 4]]), ansi_whitespace: "\s")[0] ==
+      assert Nx.to_heatmap(Nx.tensor([[1, 2], [3, 4]]), ansi_whitespace: "\s")[0] ==
                Nx.to_heatmap(Nx.tensor([1, 2]), ansi_whitespace: "\s")
     end
   end

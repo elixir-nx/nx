@@ -4,7 +4,7 @@ Elixir client for Google's XLA (Accelerated Linear Algebra). It includes integra
 
 ## Installation
 
-In order to use `Nx`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
+In order to use `EXLA`, you will need Elixir installed. Then create an Elixir project via the `mix` build tool:
 
 ```
 $ mix new my_app
@@ -35,8 +35,12 @@ If running on Windows, you will also need:
 
 The first compilation will take a long time, as it needs to compile parts of Tensorflow + XLA. Subsequent commands should be much faster.
 
-#### Common Installation Issues
+### Common Installation Issues
 
+  * Missing Dependencies
+    * Some Erlang installs do not include some of the dependencies needed to compile the EXLA NIF. You may need to install `erlang-dev` separately.
+  * EXLA
+    * Make sure you use `:exla` as a `:github` dependency and not as a `:path` dependency to avoid rebuilds
   * Bazel
     * Use `bazel --version` to check your Bazel version, make sure you are using v3.1
     * Most binaries are also available on [Github](https://github.com/bazelbuild/bazel/releases)
@@ -46,6 +50,25 @@ The first compilation will take a long time, as it needs to compile parts of Ten
       * asdf global bazel 3.1.0
   * ElixirLS on VSCode
     * Make sure that your Python installation is available globally, as ElixirLS won't know how to activate Python
+
+#### Compiling in ElixirLS
+
+ElixirLS will need to run its own compile of `:exla`, so if you want to use ElixirLS, be prepared to possibly wait another 2 hours for it complete. As soon as you open VSCode with ElixirLS enabled and `:exla` as a dependency, let the ElixirLS compile complete (watch the output tab -> ElixirlS) *before* clicking around to any other files in your project, or else ElixirLS will rapid fire queue compiles that will all need to complete before you will be able to use your project. If no output appears in the ElixirLS output, you may need to trigger the compile by opening a file and saving it. Proceed slowly, one step at a time, and as soon as you see a build kick off in the ElixirLS output panel, walk away from the editor until it is done.
+
+#### Python and asdf
+
+`Bazel` cannot find `python` installed via the `asdf` version manager by default. `asdf` uses a function to lookup the specified version of a given binary, this approach prevents `Bazel` from being able to correctly build `EXLA`. The error is `unknown command: python. Perhaps you have to reshim?`. There are two known workarounds:
+
+1. Use a separate installer or explicitly change your `$PATH` to point to a Python installation (note the build process looks for `python`, not `python3`). For example, on Homebrew on macOS, you would do:
+
+    ```
+    export PATH=/usr/local/opt/python@3.9/libexec/bin:/usr/local/bin:$PATH
+    mix deps.compile
+    ```
+
+2. Use the [`asdf direnv`](https://github.com/asdf-community/asdf-direnv) plugin to install [`direnv 2.20.0`](https://direnv.net). `direnv` along with the `asdf-direnv` plugin will explicitly set the paths for any binary specified in your project's `.tool-version` files.
+
+After doing any of the steps above, it may be necessary to clear the build cache by removing ` ~/.cache/exla`.
 
 ### GPU Support
 
@@ -78,6 +101,39 @@ You can use the following env vars to customize your build:
   * `EXLA_CACHE` - controls where to store Tensorflow checkouts and builds
 
   * `XLA_FLAGS` - controls XLA-specific options, see: [tensorflow/compiler/xla/debug_options_flags.cc](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/debug_options_flags.cc) for list of flags
+
+## Usage
+
+The main mechanism to use EXLA is by setting it as the `@defn_compiler` for your numerical definitions:
+
+```elixir
+@defn_compiler EXLA
+defn softmax(tensor) do
+  Nx.exp(n) / Nx.sum(Nx.exp(n))
+end
+```
+
+You can also pass `EXLA` as a compiler to `Nx.Defn.jit/4/` and friends:
+
+```elixir
+# JIT
+Nx.Defn.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], EXLA)
+
+# Async/await
+async = Nx.Defn.async(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], EXLA)
+Nx.Async.await(async)
+```
+
+Those functions are also aliased in the `EXLA` module for your convenience:
+
+```elixir
+# JIT
+EXLA.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)])
+
+# Async/await
+async = EXLA.async(&some_function/2, [Nx.tensor(1), Nx.tensor(2)])
+Nx.Async.await(async)
+```
 
 ## Contributing
 

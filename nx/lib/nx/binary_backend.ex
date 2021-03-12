@@ -11,7 +11,7 @@ defmodule Nx.BinaryBackend do
   @behaviour Nx.Backend
 
   @doc false
-  defstruct [:device, :state]
+  defstruct [:state]
 
   alias Nx.Tensor, as: T
   alias Nx.BinaryBackend, as: B
@@ -19,10 +19,12 @@ defmodule Nx.BinaryBackend do
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
 
+  @default_eps 1.0e-10
+
   ## Creation
 
   @impl true
-  def random_uniform(%{type: type, shape: shape} = out, min, max) do
+  def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
@@ -35,7 +37,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def random_normal(%{type: type, shape: shape} = out, mu, sigma) do
+  def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
@@ -45,21 +47,21 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def iota(%{shape: {}, type: type} = out, nil) do
+  def iota(%{shape: {}, type: type} = out, nil, _backend_options) do
     from_binary(out, number_to_binary(0, type))
   end
 
-  def iota(%{shape: shape, type: type} = out, nil) do
-    t = iota(%T{type: type, shape: {Nx.size(shape)}, names: [nil]}, 0)
+  def iota(%{shape: shape, type: type} = out, nil, backend_options) do
+    t = iota(%T{type: type, shape: {Nx.size(shape)}, names: [nil]}, 0, backend_options)
     %{out | data: t.data}
   end
 
-  def iota(%{shape: {n}, type: type} = out, 0) do
+  def iota(%{shape: {n}, type: type} = out, 0, _backend_options) do
     data = for i <- 0..(n - 1), do: number_to_binary(i, type)
     from_binary(out, data)
   end
 
-  def iota(%{shape: shape, type: type} = out, axis) do
+  def iota(%{shape: shape, type: type} = out, axis, _backend_options) do
     {dims_before, [dim | dims_after]} =
       shape
       |> Tuple.to_list()
@@ -86,7 +88,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def eye(%{shape: {n, n}, type: type} = out) do
+  def eye(%{shape: {n, n}, type: type} = out, _backend_options) do
     one = number_to_binary(1, type)
     zero = number_to_binary(0, type)
 
@@ -101,7 +103,7 @@ defmodule Nx.BinaryBackend do
   ## Conversions
 
   @impl true
-  def from_binary(t, binary, _opts), do: from_binary(t, binary)
+  def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
 
   defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
   defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
@@ -119,6 +121,11 @@ defmodule Nx.BinaryBackend do
   end
 
   defp to_binary(%T{data: %{state: data}}), do: data
+
+  @impl true
+  def backend_copy(tensor, backend, opts) do
+    backend_transfer(tensor, backend, opts)
+  end
 
   @impl true
   def backend_transfer(tensor, Nx.Tensor, _opts) do
@@ -757,7 +764,17 @@ defmodule Nx.BinaryBackend do
     strides = opts[:strides]
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
-    groups = opts[:groups]
+    feature_groups = opts[:feature_group_size]
+    batch_groups = opts[:batch_group_size]
+    input_permutation = opts[:input_permutation]
+    kernel_permutation = opts[:kernel_permutation]
+    output_permutation = opts[:output_permutation]
+
+    output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
 
     # Consider an image representation, the input shape should be:
     # {batch, channels, height, width}
@@ -783,10 +800,18 @@ defmodule Nx.BinaryBackend do
     #
     # The final shape is then given as:
     # {batch, num_filters, spatial_dim0, spatial_dim1, ...}
-    %T{type: {_, input_size} = input_type} = t
-    %T{type: {_, kernel_size} = kernel_type} = k
+    %T{type: {_, input_size} = input_type} = t = Nx.transpose(t, axes: input_permutation)
+    %T{type: {_, kernel_size} = kernel_type} = k = Nx.transpose(k, axes: kernel_permutation)
 
-    %{type: output_type} = out
+    %{type: output_type, shape: output_shape, names: output_names} = out
+
+    inverse_output_permutation =
+      output_permutation |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+
+    {untransposed_shape, untransposed_names} =
+      Nx.Shape.transpose(output_shape, inverse_output_permutation, output_names)
+
+    untransposed_out = %{out | names: untransposed_names, shape: untransposed_shape}
 
     # We need to dilate the spatial dimensions of the kernel first...
     dilation_padding = [
@@ -806,6 +831,7 @@ defmodule Nx.BinaryBackend do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
+    num_filters = elem(kernel_shape, 0)
     num_input_channels = elem(kernel_shape, 1)
 
     # We first pad the input tensor with the following semantics
@@ -818,7 +844,7 @@ defmodule Nx.BinaryBackend do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
-    # TODO: Use Elixir Enum.zip_with on Elixir v1.12
+    # TODO: Use Enum.zip_with on Elixir v1.12
     spatial_padding_config =
       padding
       |> Enum.zip(input_dilation)
@@ -842,7 +868,18 @@ defmodule Nx.BinaryBackend do
     input_data = to_binary(padded_t)
     kernel_data = to_binary(k)
 
-    filter_groups_with_index = split_filters(kernel_data, kernel_shape, kernel_type, groups)
+    filter_groups_with_index =
+      split_into_feature_groups(kernel_data, kernel_shape, kernel_type, feature_groups)
+
+    batch_groups_with_index =
+      split_into_batch_groups(input_data, padded_shape, input_type, batch_groups)
+
+    # If we're not splitting across input channels, we're splitting across input batches
+    # So we split the filters into groups to apply to the corresponding batch
+    filter_groups_with_index =
+      if batch_groups > 1,
+        do: Enum.chunk_every(filter_groups_with_index, div(num_filters, batch_groups)),
+        else: filter_groups_with_index
 
     batch_weighted_shape =
       weighted_shape(Tuple.delete_at(padded_shape, 0), input_size, window_shape)
@@ -857,82 +894,108 @@ defmodule Nx.BinaryBackend do
 
     anchors = Enum.sort(make_anchors(padded_spatial_dims, strides, filter_shape))
 
-    # Traverse the batch dim first
     output_data =
-      for <<batch::size(batch_size)-bitstring <- input_data>>,
-          # Traverse the filters next, this allows us to rebuild
-          # the resulting binary correctly
-          {filter, group} <- filter_groups_with_index,
-          # Then we traverse the spatial dimension, applying
-          # the filter at each step
-          anchor <- anchors,
-          into: <<>> do
-        offset = weighted_offset(batch_weighted_shape, [group * num_input_channels | anchor])
-        # The shape of the window is {channels} + filter_shape
-        # The shape of the kernel is {num_filters, channels} + filter_shape
-        window =
-          batch_weighted_shape
-          |> weighted_traverse(batch, input_size, offset)
-          |> IO.iodata_to_binary()
+      for {batch_group, batch_group_index} <- batch_groups_with_index, into: <<>> do
+        current_filter_group_with_index =
+          if batch_groups > 1,
+            do: Enum.at(filter_groups_with_index, batch_group_index),
+            else: filter_groups_with_index
 
-        # The receptive field size of each binary in bytes
-        input_field_size = Nx.size(filter_shape) * input_size
-        filter_field_size = Nx.size(filter_shape) * kernel_size
+        # Traverse the batch dim first
+        for <<batch::size(batch_size)-bitstring <- batch_group>>,
+            # Traverse the filters next, this allows us to rebuild
+            # the resulting binary correctly
+            {filter, feature_group} <- current_filter_group_with_index,
+            # Then we traverse the spatial dimension, applying
+            # the filter at each step
+            anchor <- anchors,
+            into: <<>> do
+          offset =
+            weighted_offset(batch_weighted_shape, [feature_group * num_input_channels | anchor])
 
-        # For each channel in both filter and input...
-        # The output from a single filter being applied over a window
-        # of the input tensor is the sum of the element-wise products
-        values =
-          for i <- 0..(num_input_channels - 1) do
-            current_input_pos = i * input_field_size
-            current_filter_pos = i * filter_field_size
-            <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
-            <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> = filter
+          # The shape of the window is {channels} + filter_shape
+          # The shape of the kernel is {num_filters, channels} + filter_shape
+          window =
+            batch_weighted_shape
+            |> weighted_traverse(batch, input_size, offset)
+            |> IO.iodata_to_binary()
 
-            for j <- 0..(Nx.size(filter_shape) - 1) do
-              x =
-                match_types [input_type] do
-                  left_consumed = j * input_size
+          # The receptive field size of each binary in bytes
+          input_field_size = Nx.size(filter_shape) * input_size
+          filter_field_size = Nx.size(filter_shape) * kernel_size
 
-                  <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
-                    input_receptive_field
+          # For each channel in both filter and input...
+          # The output from a single filter being applied over a window
+          # of the input tensor is the sum of the element-wise products
+          values =
+            for i <- 0..(num_input_channels - 1) do
+              current_input_pos = i * input_field_size
+              current_filter_pos = i * filter_field_size
+              <<_::size(current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
 
-                  read!(x, 0)
-                end
+              <<_::size(current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
+                filter
 
-              y =
-                match_types [kernel_type] do
-                  right_consumed = j * kernel_size
+              for j <- 0..(Nx.size(filter_shape) - 1) do
+                x =
+                  match_types [input_type] do
+                    left_consumed = j * input_size
 
-                  <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
-                    filter_receptive_field
+                    <<_::size(left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
+                      input_receptive_field
 
-                  read!(y, 0)
-                end
+                    read!(x, 0)
+                  end
 
-              x * y
+                y =
+                  match_types [kernel_type] do
+                    right_consumed = j * kernel_size
+
+                    <<_::size(right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
+                      filter_receptive_field
+
+                    read!(y, 0)
+                  end
+
+                x * y
+              end
             end
-          end
 
-        match_types [output_type] do
-          sum = Enum.sum(List.flatten(values))
-          <<write!(sum, 0)>>
+          match_types [output_type] do
+            sum = Enum.sum(List.flatten(values))
+            <<write!(sum, 0)>>
+          end
         end
       end
 
-    from_binary(out, output_data)
+    Nx.transpose(from_binary(untransposed_out, output_data), axes: output_permutation)
   end
 
-  defp split_filters(kernel_data, kernel_shape, {_, kernel_size}, groups) do
-    filter_group_size = div(Nx.size(kernel_shape) * kernel_size, groups)
-    filter_size = div(Nx.size(kernel_shape) * kernel_size, elem(kernel_shape, 0))
+  defp split_into_feature_groups(data, shape, {_, size}, groups) do
+    group_size = div(Nx.size(shape) * size, groups)
+    data_size = div(Nx.size(shape) * size, elem(shape, 0))
 
     for i <- 0..(groups - 1),
-        offset = filter_group_size * i,
-        <<_::size(offset)-bitstring, filter_group::size(filter_group_size)-bitstring,
-          _::bitstring>> = kernel_data,
-        <<filter::size(filter_size)-bitstring <- filter_group>>,
-        do: {filter, i}
+        offset = group_size * i,
+        <<_::size(offset)-bitstring, data_group::size(group_size)-bitstring, _::bitstring>> =
+          data,
+        <<out_data::size(data_size)-bitstring <- data_group>>,
+        do: {out_data, i}
+  end
+
+  defp split_into_batch_groups(data, shape, {_, size}, groups) do
+    item_size = div(Nx.size(shape) * size, elem(shape, 0))
+    num_groups = div(elem(shape, 0), groups)
+
+    output_batch_groups =
+      for i <- 0..(num_groups - 1),
+          j <- 0..(groups - 1) do
+        offset = (i + j * num_groups) * item_size
+        <<_::size(offset)-bitstring, item::size(item_size)-bitstring, _::bitstring>> = data
+        item
+      end
+
+    output_batch_groups |> Enum.with_index() |> Enum.map(fn {x, i} -> {x, rem(i, groups)} end)
   end
 
   @impl true
@@ -1008,14 +1071,15 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def qr(
-        {%{shape: {m, k} = shape_q, type: output_type} = q_holder,
-         %{shape: {k, n} = shape_r, type: output_type} = r_holder},
-        %{type: {_, input_num_bits} = input_type} = tensor,
+        {%{shape: {m, k}, type: output_type} = q_holder,
+         %{shape: {k, n}, type: output_type} = r_holder},
+        %{type: {_, input_num_bits} = input_type, shape: input_shape} = tensor,
         opts
       ) do
     mode = opts[:mode]
+    eps = opts[:eps] || @default_eps
 
-    r_bin =
+    r_matrix =
       if mode == :reduced do
         # Since we want the first k rows of r, we can
         # just slice the binary by taking the first
@@ -1023,54 +1087,35 @@ defmodule Nx.BinaryBackend do
         # Trick for r = tensor[[0..(k - 1), 0..(n - 1)]]
         slice_size = n * k * input_num_bits
         <<r_bin::bitstring-size(slice_size), _::bitstring>> = to_binary(tensor)
-        r_bin
+        binary_to_matrix(r_bin, input_type, {k, n})
       else
-        to_binary(tensor)
+        tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
       end
 
-    shape_h = {k, k}
-
-    {q_bin, r_bin, _output_type} =
-      for i <- 0..(n - 1), reduce: {nil, r_bin, input_type} do
-        {q, r, type_r} ->
+    {q_matrix, r_matrix} =
+      for i <- 0..(n - 1), reduce: {nil, r_matrix} do
+        {q, r} ->
           # a = r[[i..(k - 1), i]]
-          {a_reverse, num_rows_a, _, _} =
-            match_types [type_r] do
-              for <<match!(x, 0) <- r>>, reduce: {[], 0, 0, 0} do
-                {acc, num_rows_a_prev, row, col} ->
-                  {acc, num_rows_a} =
-                    if row >= i and col == i do
-                      {[read!(x, 0) | acc], num_rows_a_prev + 1}
-                    else
-                      {acc, num_rows_a_prev}
-                    end
+          a = r |> Enum.slice(i..(k - 1)) |> Enum.map(fn row -> Enum.at(row, i) end)
 
-                  {row, col} =
-                    if col + 1 == n do
-                      {row + 1, 0}
-                    else
-                      {row, col + 1}
-                    end
-
-                  {acc, num_rows_a, row, col}
-              end
-            end
-
-          h_bin = householder_reflector(a_reverse, num_rows_a, k, output_type)
+          h = householder_reflector(a, k, eps)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
-              padding_length = (m - k) * k
-              zero = number_to_binary(0, output_type)
-              [h_bin | List.duplicate(zero, padding_length)] |> IO.iodata_to_binary()
+              zero_padding = 0 |> List.duplicate(k) |> List.duplicate(m - k)
+              h ++ zero_padding
             else
-              dot_binary(q, shape_q, output_type, h_bin, shape_h, output_type, output_type)
+              dot_matrix(q, h)
             end
 
-          r = dot_binary(h_bin, shape_h, output_type, r, shape_r, type_r, output_type)
-          {q, r, output_type}
+          r = dot_matrix(h, r)
+
+          {q, r}
       end
+
+    q_bin = matrix_to_binary(q_matrix, output_type)
+    r_bin = matrix_to_binary(r_matrix, output_type)
 
     q = from_binary(q_holder, q_bin)
     r = from_binary(r_holder, r_bin)
@@ -1078,49 +1123,269 @@ defmodule Nx.BinaryBackend do
     {q, r}
   end
 
-  defp dot_binary(b1, shape1, {_, s1} = type1, b2, shape2, {_, s2} = type2, output_type) do
-    # matrix multiplication for when b1 and b2 are matrices
-    # represented in binary form
-    fun = fn lhs, rhs, acc ->
-      res = binary_to_number(lhs, type1) * binary_to_number(rhs, type2) + acc
-      {res, res}
-    end
+  @impl true
+  def svd(
+        {u_holder, %{type: output_type} = s_holder, v_holder},
+        %{type: input_type, shape: input_shape} = tensor,
+        opts
+      ) do
+    # This implementation is a mixture of concepts described in [1] and the
+    # algorithmic descriptions found in [2], [3] and [4]
+    #
+    # [1] - Parallel One-Sided Block Jacobi SVD Algorithm: I. Analysis and Design,
+    #       by Gabriel Oksa and Marian Vajtersic
+    #       Source: https://www.cosy.sbg.ac.at/research/tr/2007-02_Oksa_Vajtersic.pdf
+    # [2] - https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/client/lib/svd.cc#L784
+    # [3] - https://github.com/tensorflow/tensorflow/blob/dcdc6b2f9015829cde2c02b111c04b2852687efc/tensorflow/compiler/xla/client/lib/svd.cc#L386
+    # [4] - http://drsfenner.org/blog/2016/03/householder-bidiagonalization/
+    # [5] - http://www.mymathlib.com/c_source/matrices/linearsystems/singular_value_decomposition.c
 
-    v1 = aggregate_axes(b1, [1], shape1, s1)
-    v2 = aggregate_axes(b2, [0], shape2, s2)
+    a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
 
-    for b1 <- v1, b2 <- v2, into: <<>> do
-      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, 0, fun)
-      scalar_to_binary(bin, output_type)
+    eps = opts[:eps] || @default_eps
+    max_iter = opts[:max_iter] || 1000
+    {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
+
+    {fro_norm, off_diag_norm} = get_frobenius_norm(d)
+
+    {u, s_matrix, v, _, _} =
+      Enum.reduce_while(1..max_iter, {u, d, v, off_diag_norm, fro_norm}, fn
+        _, {u, d, v, off_diag_norm, fro_norm} ->
+          eps = 1.0e-9 * fro_norm
+
+          if off_diag_norm > eps do
+            # Execute a round of jacobi rotations on u, d and v
+            {u, d, v} = svd_jacobi_rotation_round(u, d, v, input_shape, eps)
+
+            # calculate a posteriori norms for d, so the next iteration of Enum.reduce_while can decide to halt
+            {fro_norm, off_diag_norm} = get_frobenius_norm(d)
+
+            {:cont, {u, d, v, off_diag_norm, fro_norm}}
+          else
+            {:halt, {u, d, v, nil, nil}}
+          end
+      end)
+
+    # Make s a vector
+    s =
+      s_matrix
+      |> Enum.with_index()
+      |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
+      |> Enum.reject(&is_nil/1)
+
+    {s, v} = apply_singular_value_corrections(s, v)
+
+    s_bin = matrix_to_binary(s, output_type)
+    s = from_binary(s_holder, s_bin)
+
+    u_bin = matrix_to_binary(u, output_type)
+    v_bin = matrix_to_binary(v, output_type)
+
+    u = from_binary(u_holder, u_bin)
+    v = from_binary(v_holder, v_bin)
+
+    {u, s, v}
+  end
+
+  @impl true
+  def lu(
+        {%{type: p_type} = p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
+        %{type: input_type, shape: {n, n} = input_shape} = tensor,
+        opts \\ []
+      ) do
+    a = tensor |> to_binary() |> binary_to_matrix(input_type, input_shape)
+
+    eps = opts[:eps] || @default_eps
+
+    {p, a_prime} = lu_validate_and_pivot(a, n)
+
+    # We'll work with linear indices because of the way each matrix
+    # needs to be updated/accessed
+    zeros_matrix = List.duplicate(List.duplicate(0, n), n)
+
+    {l, u} =
+      for j <- 0..(n - 1), reduce: {zeros_matrix, zeros_matrix} do
+        {l, u} ->
+          i_range = if j == 0, do: [0], else: 0..j
+          [l_row_j] = get_matrix_rows(l, [j])
+          l = replace_rows(l, [j], [replace_vector_element(l_row_j, j, 1.0)])
+
+          u_col_j =
+            for i <- i_range,
+                reduce: get_matrix_column(u, j) do
+              u_col_j ->
+                l_row_slice = slice_matrix(l, [i, 0], [1, i])
+
+                u_col_slice = slice_vector(u_col_j, 0, i)
+
+                s = dot_matrix(l_row_slice, u_col_slice)
+                [a_elem] = get_matrix_elements(a_prime, [[i, j]])
+                replace_vector_element(u_col_j, i, a_elem - s)
+            end
+
+          u = replace_cols(u, [j], transpose_matrix(u_col_j))
+
+          [u_jj] = get_matrix_elements(u, [[j, j]])
+
+          l =
+            if u_jj < eps do
+              l
+            else
+              i_range = if j == n - 1, do: [n - 1], else: j..(n - 1)
+
+              for i <- i_range, reduce: l do
+                l ->
+                  u_col_slice = slice_matrix(u, [0, j], [j, 1])
+                  [l_row_i] = get_matrix_rows(l, [i])
+                  s = dot_matrix(u_col_slice, l_row_i)
+                  [a_elem] = get_matrix_elements(a_prime, [[i, j]])
+
+                  l_updated_row = replace_vector_element(l_row_i, j, (a_elem - s) / u_jj)
+
+                  replace_rows(l, [i], [l_updated_row])
+              end
+            end
+
+          {l, u}
+      end
+
+    # Transpose because since P is orthogonal, inv(P) = tranpose(P)
+    # and we want to return P such that A = P.L.U
+    p_bin = p |> transpose_matrix() |> matrix_to_binary(p_type)
+    l_bin = matrix_to_binary(l, l_type)
+    u_bin = matrix_to_binary(u, u_type)
+
+    {from_binary(p_holder, p_bin), from_binary(l_holder, l_bin), from_binary(u_holder, u_bin)}
+  end
+
+  defp lu_validate_and_pivot(a, n) do
+    # pivots a tensor so that the biggest elements of each column lie on the diagonal.
+    # if any of the diagonal elements ends up being 0, raises an ArgumentError
+
+    identity =
+      Enum.map(0..(n - 1), fn i -> Enum.map(0..(n - 1), fn j -> if i == j, do: 1, else: 0 end) end)
+
+    # For each row, find the max value by column.
+    # If its index (max_idx) is not in the diagonal (i.e. j != max_idx)
+    # we need to swap rows j and max_idx in both the permutation matrix
+    # and in the a matrix.
+    Enum.reduce(0..(n - 2), {identity, a}, fn j, {p, a} ->
+      [max_idx | _] =
+        Enum.sort_by(j..(n - 1), fn i -> a |> Enum.at(i) |> Enum.at(j) |> abs() end, &>=/2)
+
+      if max_idx == j do
+        {p, a}
+      else
+        p_row = Enum.at(p, max_idx)
+        p_j = Enum.at(p, j)
+        p = p |> List.replace_at(max_idx, p_j) |> List.replace_at(j, p_row)
+
+        a_row = Enum.at(a, max_idx)
+        a_j = Enum.at(a, j)
+        a = a |> List.replace_at(max_idx, a_j) |> List.replace_at(j, a_row)
+        {p, a}
+      end
+    end)
+  end
+
+  defp svd_jacobi_rotation_round(u, d, v, {_, n}, eps) do
+    for p <- 0..(n - 2), q <- (p + 1)..(n - 1), reduce: {u, d, v} do
+      {u, d, v} ->
+        # We need the values for d_bin at indices [p,p], [p,q], [q,p], [q,q], [[p,q], 0..n-1] for this first iteration
+        d_rows_pq = get_matrix_rows(d, [p, q])
+
+        [d_pp, d_pq, d_qp, d_qq] = get_matrix_elements(d, [[p, p], [p, q], [q, p], [q, q]])
+
+        {rot_l, rot_r} = jacobi_rotators(d_pp, d_pq, d_qp, d_qq, eps)
+
+        updated_d_rows_pq = rot_l |> transpose_matrix() |> dot_matrix(d_rows_pq)
+
+        d = replace_rows(d, [p, q], updated_d_rows_pq)
+        d_cols = get_matrix_columns(d, [p, q])
+
+        updated_d_cols = dot_matrix(d_cols, rot_r)
+        d = replace_cols(d, [p, q], updated_d_cols)
+
+        rotated_u_cols = u |> get_matrix_columns([p, q]) |> dot_matrix(rot_l)
+        u = replace_cols(u, [p, q], rotated_u_cols)
+
+        rotated_v_cols = v |> get_matrix_columns([p, q]) |> dot_matrix(rot_r)
+        v = replace_cols(v, [p, q], rotated_v_cols)
+
+        {u, d, v}
     end
   end
 
-  defp householder_reflector(a_reverse, num_rows_a, target_k, output_type) do
+  defp apply_singular_value_corrections(s, v) do
+    # Due to convention, the singular values must be positive.
+    # This function fixes any negative singular values.
+    # It's important to note that since s left-multiplies v_transposed in
+    # the SVD result. Since it also represents a diagonal matrix,
+    # changing a sign in s implies a sign change in the
+    # corresponding row of v_transposed.
+
+    # This function also sorts singular values from highest to lowest,
+    # as this can be convenient.
+
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    s
+    |> Enum.zip(transpose_matrix(v))
+    |> Enum.map(fn
+      {singular_value, row} when singular_value < 0 ->
+        {-singular_value, Enum.map(row, &(&1 * -1))}
+
+      {singular_value, row} ->
+        {singular_value, row}
+    end)
+    |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
+    |> Enum.unzip()
+  end
+
+  defp householder_reflector(a, target_k, eps)
+
+  defp householder_reflector([], target_k, _eps) do
+    flat_list =
+      for col <- 0..(target_k - 1), row <- 0..(target_k - 1), into: [] do
+        if col == row, do: 1, else: 0
+      end
+
+    Enum.chunk_every(flat_list, target_k)
+  end
+
+  defp householder_reflector([a_0 | tail] = a, target_k, eps) do
     # This is a trick so we can both calculate the norm of a_reverse and extract the
     # head a the same time we reverse the array
-    {norm_a_squared, [a_0 | tail]} =
-      for x <- a_reverse, reduce: {0, []} do
-        {acc, l} ->
-          {acc + x * x, [x | l]}
-      end
+    # receives a_reverse as a list of numbers and returns the reflector as a
+    # k x k matrix
 
-    v_0 =
-      if a_0 > 0 do
-        a_0 + :math.sqrt(norm_a_squared)
+    norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
+    norm_a_sq_1on = norm_a_squared - a_0 * a_0
+
+    {v, scale} =
+      if norm_a_sq_1on < eps do
+        {[1 | tail], 0}
       else
-        a_0 - :math.sqrt(norm_a_squared)
+        v_0 =
+          if a_0 <= 0 do
+            a_0 - :math.sqrt(norm_a_squared)
+          else
+            -norm_a_sq_1on / (a_0 + :math.sqrt(norm_a_squared))
+          end
+
+        v_0_sq = v_0 * v_0
+        scale = 2 * v_0_sq / (norm_a_sq_1on + v_0_sq)
+        v = [1 | Enum.map(tail, &(&1 / v_0))]
+        {v, scale}
       end
 
-    prefix_threshold = target_k - num_rows_a
-    v = List.duplicate(0, prefix_threshold) ++ [v_0 | tail]
+    prefix_threshold = target_k - length(v)
+    v = List.duplicate(0, prefix_threshold) ++ v
 
     # dot(v, v) = norm_v_squared, which can be calculated from norm_a as:
     # norm_v_squared = norm_a_squared - a_0^2 + v_0^2
-    norm_v_squared = norm_a_squared - a_0 * a_0 + v_0 * v_0
-    scale = 2 / norm_v_squared
 
     # execute I - 2 / norm_v_squared * outer(v, v)
-    {_, _, reflector_iodata} =
+    {_, _, reflector_reversed} =
       for col_factor <- v, row_factor <- v, reduce: {0, 0, []} do
         {row, col, acc} ->
           # The current element in outer(v, v) is given by col_factor * row_factor
@@ -1135,7 +1400,7 @@ defmodule Nx.BinaryBackend do
               identity_element
             end
 
-          acc = [acc | scalar_to_binary(result, output_type)]
+          acc = [result | acc]
 
           if col + 1 == target_k do
             {row + 1, 0, acc}
@@ -1144,7 +1409,132 @@ defmodule Nx.BinaryBackend do
           end
       end
 
-    IO.iodata_to_binary(reflector_iodata)
+    # This is equivalent to reflector_reversed |> Enum.reverse() |> Enum.chunk_every(target_k)
+    {reflector, _, _} =
+      for x <- reflector_reversed, reduce: {[], [], 0} do
+        {result_acc, row_acc, col} ->
+          row_acc = [x | row_acc]
+
+          if col + 1 == target_k do
+            {[row_acc | result_acc], [], 0}
+          else
+            {result_acc, row_acc, col + 1}
+          end
+      end
+
+    reflector
+  end
+
+  defp householder_bidiagonalization(tensor, {m, n}, eps) do
+    # For each column in `tensor`, apply
+    # the current column's householder reflector from the left to `tensor`.
+    # if the current column is not the penultimate, also apply
+    # the corresponding row's householder reflector from the right
+
+    for col <- 0..(n - 1), reduce: {nil, tensor, nil} do
+      {ll, a, rr} ->
+        # a[[col..m-1, col]] -> take `m - col` rows from the `col`-th column
+        row_length = if m < col, do: 0, else: m - col
+        a_col = a |> slice_matrix([col, col], [row_length, 1])
+
+        l = householder_reflector(a_col, m, eps)
+
+        ll =
+          if is_nil(ll) do
+            l
+          else
+            dot_matrix(ll, l)
+          end
+
+        a = dot_matrix(l, a)
+
+        {a, rr} =
+          if col <= n - 2 do
+            # r = householder_reflector(a[[col, col+1:]], n)
+
+            r =
+              a
+              |> slice_matrix([col, col + 1], [1, n - col])
+              |> householder_reflector(n, eps)
+
+            rr =
+              if is_nil(rr) do
+                r
+              else
+                dot_matrix(r, rr)
+              end
+
+            a = dot_matrix(a, r)
+            {a, rr}
+          else
+            {a, rr}
+          end
+
+        {ll, a, rr}
+    end
+  end
+
+  defp get_frobenius_norm(tensor) do
+    # returns a tuple with {frobenius_norm, off_diagonal_norm}
+    {fro_norm_sq, off_diag_norm_sq, _row_idx} =
+      Enum.reduce(tensor, {0, 0, 0}, fn row, {fro_norm_sq, off_diag_norm_sq, row_idx} ->
+        {fro_norm_sq, off_diag_norm_sq, _} =
+          Enum.reduce(row, {fro_norm_sq, off_diag_norm_sq, 0}, fn x,
+                                                                  {fro_norm_sq, off_diag_norm_sq,
+                                                                   col_idx} ->
+            if col_idx == row_idx do
+              {fro_norm_sq + x * x, off_diag_norm_sq, col_idx + 1}
+            else
+              {fro_norm_sq + x * x, off_diag_norm_sq + x * x, col_idx + 1}
+            end
+          end)
+
+        {fro_norm_sq, off_diag_norm_sq, row_idx + 1}
+      end)
+
+    {:math.sqrt(fro_norm_sq), :math.sqrt(off_diag_norm_sq)}
+  end
+
+  defp jacobi_rotators(pp, pq, qp, qq, eps) do
+    t = pp + qq
+    d = qp - pq
+
+    {s, c} =
+      if abs(d) < eps do
+        {0, 1}
+      else
+        u = t / d
+        den = :math.sqrt(1 + u * u)
+        {-1 / den, u / den}
+      end
+
+    [[m00, m01], [_, m11]] = dot_matrix([[c, s], [-s, c]], [[pp, pq], [qp, qq]])
+    {c_r, s_r} = make_jacobi(m00, m11, m01, eps)
+    c_l = c_r * c - s_r * s
+    s_l = c_r * s + s_r * c
+
+    rot_l = [[c_l, s_l], [-s_l, c_l]]
+    rot_r = [[c_r, s_r], [-s_r, c_r]]
+
+    {rot_l, rot_r}
+  end
+
+  defp make_jacobi(pp, qq, pq, eps) do
+    if abs(pq) <= eps do
+      {1, 0}
+    else
+      tau = (qq - pp) / (2 * pq)
+
+      t =
+        if tau >= 0 do
+          1 / (tau + :math.sqrt(1 + tau * tau))
+        else
+          -1 / (-tau + :math.sqrt(1 + tau * tau))
+        end
+
+      c = 1 / :math.sqrt(1 + t * t)
+      {c, t * c}
+    end
   end
 
   ## Aggregation
@@ -1332,6 +1722,132 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def scatter_window_max(out, tensor, source, window_dimensions, opts, init_value) do
+    select_and_scatter(out, tensor, source, &Nx.greater_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+  end
+
+  @impl true
+  def scatter_window_min(out, tensor, source, window_dimensions, opts, init_value) do
+    select_and_scatter(out, tensor, source, &Nx.less_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+  end
+
+  defp select_and_scatter(
+        %{type: {_, output_size} = output_type, shape: output_shape} = out,
+        t,
+        source,
+        select_fn,
+        window_dimensions,
+        opts,
+        init_value,
+        scatter_fn
+      ) do
+    padding = opts[:padding]
+    strides = opts[:strides]
+
+    init_value = to_scalar(init_value)
+
+    %T{shape: padded_shape, type: {_, size} = type} =
+      tensor = Nx.pad(t, init_value, Enum.map(padding, &Tuple.append(&1, 0)))
+
+    input_data = to_binary(tensor)
+    input_weighted_shape = weighted_shape(padded_shape, size, window_dimensions)
+    input_anchors = Enum.sort(make_anchors(padded_shape, strides, window_dimensions))
+
+    %T{type: {_, source_size} = source_type} = source
+    source_data = to_binary(source)
+
+    output_windows =
+      for {anchor, i} <- Enum.with_index(input_anchors) do
+        offset = weighted_offset(input_weighted_shape, anchor)
+
+        window =
+          IO.iodata_to_binary(weighted_traverse(input_weighted_shape, input_data, size, offset))
+
+        # Get the index where `select_fn` is true
+        match_types [type] do
+          <<match!(first_elem, 0), _::bitstring>> = window
+
+          {_, index, _} =
+            for <<match!(x, 0) <- window>>, reduce: {0, 0, read!(first_elem, 0)} do
+              {cur_index, selected_index, acc} ->
+                if select_fn.(read!(x, 0), acc) == Nx.tensor(1, type: {:u, 8}) do
+                  {cur_index + 1, cur_index, read!(x, 0)}
+                else
+                  {cur_index + 1, selected_index, acc}
+                end
+            end
+
+          offset_from_anchor =
+            flattened_index_to_offset(index, Tuple.to_list(window_dimensions), 0, [])
+
+          absolute_index =
+            anchor
+            |> Enum.zip(offset_from_anchor)
+            |> Enum.map(fn {x, y} -> x + y end)
+
+          source_consumed = i * source_size
+
+          <<_::size(source_consumed)-bitstring, from_source::size(source_size)-bitstring,
+            _::bitstring>> = source_data
+
+          source_value = binary_to_number(from_source, source_type)
+
+          {source_value, absolute_index}
+        end
+      end
+
+    output_weighted_shape = weighted_shape(output_shape, output_size)
+
+    # Fold duplicate indices into one another using `scatter_fn` and sort
+    # by absolute offset
+    values_with_indices =
+      output_windows
+      |> Enum.group_by(&elem(&1, 1), &elem(&1, 0))
+      |> Enum.map(fn {index, value} ->
+        offset = weighted_offset(output_weighted_shape, index)
+        {offset, Enum.reduce(value, init_value, scatter_fn)}
+      end)
+      |> Enum.sort_by(&elem(&1, 0))
+
+    output_data =
+      match_types [output_type] do
+        {final_offset, output_data} =
+          for {offset, value} <- values_with_indices, reduce: {0, <<>>} do
+            {acc_offset, acc_binary} ->
+              num_vals_before = div(offset - acc_offset, output_size)
+              vals_before = List.duplicate(<<write!(init_value, 0)>>, num_vals_before)
+              source_val = to_binary(value)
+              new_binary = IO.iodata_to_binary([vals_before, source_val])
+
+              {offset + output_size,
+               <<acc_binary::size(acc_offset)-bitstring, new_binary::bitstring>>}
+          end
+
+        num_vals_left = div(output_size * Nx.size(output_shape) - final_offset, output_size)
+        vals_left = IO.iodata_to_binary(List.duplicate(<<write!(init_value, 0)>>, num_vals_left))
+        <<output_data::size(final_offset)-bitstring, vals_left::bitstring>>
+      end
+
+    from_binary(out, output_data)
+  end
+
+  defp flattened_index_to_offset(leftover, [dim | []], _, acc),
+    do: Enum.reverse([rem(leftover, dim) | acc])
+
+  defp flattened_index_to_offset(leftover, [dim | rest], n, acc) do
+    if leftover < Nx.size(List.to_tuple(rest)) do
+      flattened_index_to_offset(leftover, rest, 0, [n | acc])
+    else
+      flattened_index_to_offset(
+        leftover - Nx.size(List.to_tuple(rest)),
+        [dim | rest],
+        n + 1,
+        acc
+      )
+    end
+  end
+
+  @impl true
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor
@@ -1444,6 +1960,9 @@ defmodule Nx.BinaryBackend do
         from_binary(out, output_data)
     end
   end
+
+  @impl true
+  def bitcast(out, tensor), do: from_binary(out, to_binary(tensor))
 
   @impl true
   def sort(_out, t, opts) do
@@ -1806,4 +2325,116 @@ defmodule Nx.BinaryBackend do
 
     div(size, dilation_factor) * x + weighted_offset(dims, pos, dilation)
   end
+
+  ## Matrix (2-D array) manipulation
+
+  defp dot_matrix([], _), do: 0
+  defp dot_matrix(_, []), do: 0
+
+  defp dot_matrix([h1 | _] = v1, [h2 | _] = v2) when not is_list(h1) and not is_list(h2) do
+    v1
+    |> Enum.zip(v2)
+    |> Enum.reduce(0, fn {x, y}, acc -> x * y + acc end)
+  end
+
+  defp dot_matrix(m1, m2) do
+    # matrix multiplication which works on 2-D lists
+    Enum.map(m1, fn row ->
+      m2
+      |> transpose_matrix()
+      |> Enum.map(fn col ->
+        row
+        |> Enum.zip(col)
+        |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
+      end)
+    end)
+  end
+
+  defp transpose_matrix([x | _] = m) when not is_list(x) do
+    Enum.map(m, &[&1])
+  end
+
+  defp transpose_matrix(m) do
+    m
+    |> Enum.zip()
+    |> Enum.map(&Tuple.to_list/1)
+  end
+
+  defp matrix_to_binary(m, type) do
+    m
+    |> Enum.map(fn
+      row when is_list(row) ->
+        Enum.map(row, fn x ->
+          scalar_to_binary(x, type)
+        end)
+
+      x ->
+        scalar_to_binary(x, type)
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  defp binary_to_matrix(bin, type, {_, num_cols}) do
+    match_types [type] do
+      flat_list =
+        for <<match!(x, 0) <- bin>>, into: [] do
+          read!(x, 0)
+        end
+
+      Enum.chunk_every(flat_list, num_cols)
+    end
+  end
+
+  defp slice_vector(a, start, length), do: Enum.slice(a, start, length)
+
+  defp slice_matrix(a, [row_start, col_start], [row_length, col_length]) do
+    a
+    |> Enum.slice(row_start, row_length)
+    |> Enum.flat_map(&Enum.slice(&1, col_start, col_length))
+  end
+
+  defp get_matrix_column(m, col) do
+    Enum.map(m, fn row ->
+      Enum.at(row, col)
+    end)
+  end
+
+  defp get_matrix_columns(m, columns) do
+    Enum.map(m, fn row ->
+      for {item, i} <- Enum.with_index(row), i in columns, do: item
+    end)
+  end
+
+  defp get_matrix_rows(m, rows) do
+    for {row, i} <- Enum.with_index(m), i in rows, do: row
+  end
+
+  defp get_matrix_elements(m, row_col_pairs) do
+    Enum.map(row_col_pairs, fn [row, col] ->
+      m
+      |> Enum.at(row, [])
+      |> Enum.at(col)
+      |> case do
+        nil -> raise ArgumentError, "invalid index [#{row},#{col}] for matrix"
+        item -> item
+      end
+    end)
+  end
+
+  defp replace_rows(m, rows, values) do
+    rows
+    |> Enum.zip(values)
+    |> Enum.reduce(m, fn {idx, row}, m -> List.replace_at(m, idx, row) end)
+  end
+
+  defp replace_cols(m, [], _), do: m
+
+  defp replace_cols(m, cols, values) do
+    m
+    |> transpose_matrix()
+    |> replace_rows(cols, transpose_matrix(values))
+    |> transpose_matrix()
+  end
+
+  defp replace_vector_element(m, row, value), do: List.replace_at(m, row, value)
 end

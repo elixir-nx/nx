@@ -81,12 +81,12 @@ defmodule Nx.Type do
       {:s, 64}
 
       iex> Nx.Type.infer([1.0, 2.0, 3.0])
-      {:f, 64}
+      {:f, 32}
       iex> Nx.Type.infer([1, 2.0])
-      {:f, 64}
+      {:f, 32}
 
       iex> Nx.Type.infer([])
-      {:f, 64}
+      {:f, 32}
 
       iex> Nx.Type.infer("string")
       ** (ArgumentError) cannot infer the numerical type of "string"
@@ -94,9 +94,9 @@ defmodule Nx.Type do
   """
   def infer(value) do
     case infer(value, -1) do
-      -1 -> {:f, 64}
+      -1 -> {:f, 32}
       0 -> {:s, 64}
-      1 -> {:f, 64}
+      1 -> {:f, 32}
     end
   end
 
@@ -152,7 +152,7 @@ defmodule Nx.Type do
       iex> Nx.Type.to_floating({:s, 8})
       {:f, 32}
       iex> Nx.Type.to_floating({:s, 32})
-      {:f, 64}
+      {:f, 32}
       iex> Nx.Type.to_floating({:bf, 16})
       {:bf, 16}
       iex> Nx.Type.to_floating({:f, 32})
@@ -253,27 +253,34 @@ defmodule Nx.Type do
       iex> Nx.Type.merge({:s, 64}, {:u, 8})
       {:s, 64}
       iex> Nx.Type.merge({:s, 8}, {:u, 64})
-      {:f, 64}
+      {:s, 64}
 
       iex> Nx.Type.merge({:u, 8}, {:f, 32})
       {:f, 32}
-      iex> Nx.Type.merge({:u, 16}, {:f, 32})
+      iex> Nx.Type.merge({:u, 64}, {:f, 32})
       {:f, 32}
-      iex> Nx.Type.merge({:u, 32}, {:f, 32})
-      {:f, 64}
       iex> Nx.Type.merge({:s, 8}, {:f, 32})
       {:f, 32}
-      iex> Nx.Type.merge({:s, 16}, {:f, 32})
+      iex> Nx.Type.merge({:s, 64}, {:f, 32})
       {:f, 32}
-      iex> Nx.Type.merge({:s, 32}, {:f, 32})
+
+      iex> Nx.Type.merge({:u, 8}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:u, 64}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:s, 8}, {:f, 64})
+      {:f, 64}
+      iex> Nx.Type.merge({:s, 64}, {:f, 64})
       {:f, 64}
 
+      iex> Nx.Type.merge({:u, 8}, {:bf, 16})
+      {:bf, 16}
+      iex> Nx.Type.merge({:u, 64}, {:bf, 16})
+      {:bf, 16}
       iex> Nx.Type.merge({:s, 8}, {:bf, 16})
       {:bf, 16}
-      iex> Nx.Type.merge({:s, 16}, {:bf, 16})
-      {:f, 32}
-      iex> Nx.Type.merge({:s, 32}, {:bf, 16})
-      {:f, 64}
+      iex> Nx.Type.merge({:s, 64}, {:bf, 16})
+      {:bf, 16}
 
       iex> Nx.Type.merge({:f, 32}, {:bf, 16})
       {:f, 32}
@@ -286,20 +293,9 @@ defmodule Nx.Type do
   end
 
   def merge(left, right) do
-    # Sorting right now is straight-forward because
-    # the type ordering is also the lexical ordering.
-    {{_type1, size1}, {type2, size2}} = sort(left, right)
-    candidate = {type2, max(size1 * 2, size2)}
-
-    case validate(candidate) do
-      :error ->
-        case candidate do
-          {:bf, 32} -> {:f, 32}
-          _ -> {:f, 64}
-        end
-
-      type ->
-        type
+    case sort(left, right) do
+      {{:u, size1}, {:s, size2}} -> {:s, max(min(size1 * 2, 64), size2)}
+      {_, type2} -> type2
     end
   end
 
@@ -350,7 +346,7 @@ defmodule Nx.Type do
       iex> Nx.Type.merge_scalar({:s, 8}, -129)
       {:s, 16}
       iex> Nx.Type.merge_scalar({:s, 8}, 1.0)
-      {:f, 64}
+      {:f, 32}
 
       iex> Nx.Type.merge_scalar({:f, 32}, 1)
       {:f, 32}
@@ -381,7 +377,7 @@ defmodule Nx.Type do
   end
 
   def merge_scalar(_, number) when is_number(number) do
-    {:f, 64}
+    {:f, 32}
   end
 
   @doc """

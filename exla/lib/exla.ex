@@ -33,13 +33,6 @@ defmodule EXLA do
     * `:client` - an atom representing the client to use. Defaults
       to `:default`. See "Clients" section
 
-    * `max_unsigned_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`
-
-    * `max_signed_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`
-
-    * `max_float_type: type` - the same as `Nx.Defn.Kernel.rewrite_types/2`.
-      Note that by default `EXLA` sets `:max_float_type` to `{:f, 32}`
-
     * `:run_options` - options given when running the computation:
 
       * `:keep_on_device` - if the data should be kept on the device,
@@ -103,11 +96,15 @@ defmodule EXLA do
       |> softmax()
       |> Nx.backend_transfer() # bring the data back to Elixir
 
-  You can also use `Nx.backend_transfer` to put data on a given
+  You can also use `Nx.backend_transfer/1` to put data on a given
   device before invoking a `defn` function:
 
       # Explicitly move data to the device, useful for GPU
       Nx.backend_transfer(Nx.tensor([1, 2, 3, 4]), EXLA.DeviceBackend)
+
+  If instead you want to make a copy of the data, you can use
+  `Nx.backend_copy/1` instead. However, when working with large
+  data, be mindful of memory allocations.
 
   ## Docker considerations
 
@@ -145,11 +142,134 @@ defmodule EXLA do
 
   @behaviour Nx.Defn.Compiler
 
+  @doc """
+  A shortcut for `Nx.Defn.jit/4` with the EXLA compiler.
+
+      iex> EXLA.jit(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  See the moduledoc for options.
+  """
+  def jit(function, args, options \\ []) do
+    Nx.Defn.jit(function, args, EXLA, options)
+  end
+
+  @doc """
+  A shortcut for `Nx.Defn.async/4` with the EXLA compiler.
+
+      iex> async = EXLA.async(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
+      iex> async
+      #EXLA.Async<...>
+      iex> Nx.Async.await!(async)
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  See the moduledoc for options.
+  """
+  def async(function, args, options \\ []) do
+    Nx.Defn.async(function, args, EXLA, options)
+  end
+
+  @doc """
+  A shortcut for `Nx.Defn.aot/4` with the EXLA compiler.
+
+      iex> functions = [{:exp, &Nx.exp/1, [Nx.template({3}, {:s, 64})]}]
+      iex> EXLA.aot(ExpAotDemo, functions)
+      iex> ExpAotDemo.exp(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  See `export_aot/4` for options.
+  """
+  def aot(module, functions, options \\ []) do
+    Nx.Defn.aot(module, functions, EXLA, options)
+  end
+
+  @doc """
+  A shortcut for `Nx.Defn.export_aot/5` with the EXLA compiler.
+
+      iex> functions = [{:exp, &Nx.exp/1, [Nx.template({3}, {:s, 64})]}]
+      iex> :ok = EXLA.export_aot("tmp", ExpExportDemo, functions)
+      iex> defmodule Elixir.ExpExportDemo do
+      ...>   Nx.Defn.import_aot("tmp", __MODULE__)
+      ...> end
+      iex> ExpExportDemo.exp(Nx.tensor([1, 2, 3]))
+      #Nx.Tensor<
+        f32[3]
+        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+      >
+
+  Note ahead-of-time compilation for EXLA only runs on the CPU.
+  It is slightly less performant than the JIT variant for the
+  CPU but it compensates the loss in performance by removing
+  the need to have EXLA up and ornning in production.
+
+  ## Options
+
+    * `:target_features` - the default executable makes
+      no assumption about the target runtime, so special
+      instructions such as SIMD are not leveraged. But you
+      can specify those flags if desired:
+
+          target_features: "+sse4.1 +sse4.2 +avx +avx2 +fma"
+
+  The following options might be used for cross compilation:
+
+    * `:bazel_flags` - flags that customize `bazel build` command
+
+    * `:bazel_env` - flags that customize `bazel build` environment.
+      It must be a list of tuples where the env key and env value
+      are binaries
+
+    * `:target_triple` - the target triple to compile to.
+      It defaults to the current target triple but one
+      can be set for cross-compilation. A list is available
+      [on Tensorflow repo](https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl).
+      Note this configures only how the tensor expression is
+      compiled but not the underlying NIF. For cross compilation,
+      one has to set the proper `:bazel_flags` and `:bazel_env`.
+
+          target_triple: "x86_64-pc-linux"
+
+  ## AOT export with Mix
+
+  Ahead-of-time exports with Mix are useful because you only need
+  EXLA when exporting. In practice, you can do this:
+
+    1. Add `{:exla, ..., only: :export_aot}` as a dependency
+
+    2. Define an exporting script at `script/export_my_module.exs`
+
+    3. Run the script to export the AOT `mix run script/export_my_module.exs`
+
+    4. Now inside `lib/my_module.ex` you can import it:
+
+          if File.exists?("priv/MyModule.nx.aot") do
+            defmodule MyModule do
+              Nx.Defn.import_aot("priv", __MODULE__)
+            end
+          else
+            IO.warn "Skipping MyModule because aot definition was not found"
+          end
+
+  """
+  def export_aot(dir, module, functions, options \\ []) do
+    Nx.Defn.export_aot(dir, module, functions, EXLA, options)
+  end
+
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
 
   @impl true
   defdelegate __async__(key, vars, fun, opts), to: EXLA.Defn
 
-  defdelegate __aot__(module, tuples, opts), to: EXLA.Defn
+  @impl true
+  defdelegate __aot__(output_dir, module, tuples, opts), to: EXLA.Defn
 end

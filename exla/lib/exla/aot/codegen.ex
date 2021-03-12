@@ -1,15 +1,17 @@
 defmodule EXLA.AOT.Codegen do
   @moduledoc false
 
-  ## Bazel Attributes
-  @bazel_deps_base "@org_tensorflow//tensorflow/compiler/"
-  @bazel_deps [
-    "tf2xla:xla_compiled_cpu_function",
-    "xla:cpu_function_runtime",
-    "xla:executable_run_options",
-    "xla:types"
-  ]
   @bazel_erts_glob "glob([\"erts/**/*.h\"], allow_empty=False)"
+  @bazel_deps_base "@org_tensorflow//"
+  @bazel_deps_runtime "tensorflow/compiler/xla/service/cpu:runtime_"
+
+  @bazel_deps [
+    "tensorflow/compiler/tf2xla:xla_compiled_cpu_function",
+    "tensorflow/compiler/xla:cpu_function_runtime",
+    "tensorflow/compiler/xla:executable_run_options",
+    "tensorflow/compiler/xla:types",
+    "third_party/eigen3"
+  ]
 
   ## Generating the graph config file
 
@@ -66,10 +68,10 @@ defmodule EXLA.AOT.Codegen do
 
   ## Generating the BUILD file
 
-  def generate_bazel_build_file(functions, lib_name) do
+  def generate_bazel_build_file(functions, runtimes, lib_name) do
     name = build_bazel_so_str(lib_name)
     srcs = build_bazel_srcs_str(functions, lib_name)
-    deps = build_bazel_deps_str()
+    deps = build_bazel_deps_str(runtimes)
     linkopts = build_bazel_linkopts_str()
 
     """
@@ -87,12 +89,9 @@ defmodule EXLA.AOT.Codegen do
     str(lib_name <> ".so")
   end
 
-  defp build_bazel_deps_str do
-    deps_str =
-      @bazel_deps
-      |> Enum.map(&str(@bazel_deps_base <> &1))
-      |> Enum.join(", ")
-
+  defp build_bazel_deps_str(runtimes) do
+    deps = @bazel_deps ++ Enum.map(runtimes, &"#{@bazel_deps_runtime}#{&1}")
+    deps_str = Enum.map_join(deps, ", ", &str(@bazel_deps_base <> &1))
     "[" <> deps_str <> "]"
   end
 
@@ -110,12 +109,13 @@ defmodule EXLA.AOT.Codegen do
   end
 
   defp build_bazel_linkopts_str do
-    "[" <> str("-shared") <> "]"
+    "[" <> str("-shared") <> "," <> str("-lpthread") <> "]"
   end
 
   ## Generating the NIF Source File
 
   def generate_nif_source_file(functions, target_module, aot_relative_path) do
+    define_block_str = build_define_block()
     include_block_str = build_include_block(functions, aot_relative_path)
     error_block_str = build_error_helper_block()
     load_block_str = build_load_block()
@@ -123,9 +123,17 @@ defmodule EXLA.AOT.Codegen do
     nif_func_export_array_str = build_nif_func_export_array(functions)
     init_block_str = build_init_block(target_module)
 
-    include_block_str <>
+    define_block_str <>
+      include_block_str <>
       error_block_str <>
       load_block_str <> functions_str <> nif_func_export_array_str <> init_block_str
+  end
+
+  defp build_define_block() do
+    """
+    #define EIGEN_USE_THREADS
+    #define EIGEN_USE_CUSTOM_THREAD_POOL
+    """
   end
 
   defp build_include_block(functions, aot_relative_path) do
@@ -179,7 +187,11 @@ defmodule EXLA.AOT.Codegen do
 
     """
     #{signature_str}{
-      #{class_name} #{name}_#{arity};
+      unsigned num_threads = std::thread::hardware_concurrency();
+      Eigen::ThreadPool tp(num_threads);
+      Eigen::ThreadPoolDevice device(&tp, tp.NumThreads());
+      #{class_name} #{name}_#{arity}(#{class_name}::AllocMode::RESULTS_PROFILES_AND_TEMPS_ONLY);
+      #{name}_#{arity}.set_thread_pool(&device);
       #{args_str}
       #{run_str}
       #{result_str}
@@ -201,9 +213,7 @@ defmodule EXLA.AOT.Codegen do
     if(!enif_inspect_binary(env, argv[#{i}], &arg#{i})) {
       return error(env, #{error_msg});
     }
-    unsigned char * arg#{i}_bytes = (unsigned char *) malloc(arg#{i}.size);
-    std::memcpy(arg#{i}_bytes, arg#{i}.data, arg#{i}.size);
-    #{name}_#{arity}.set_arg#{i}_data(arg#{i}_bytes);
+    #{name}_#{arity}.set_arg#{i}_data(arg#{i}.data);
     """
   end
 

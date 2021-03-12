@@ -54,11 +54,11 @@ defmodule Nx.DefnTest do
     end
 
     test "allows pattern matching on the tuple shape with underscores" do
-      assert %T{shape: {}, type: {:f, 64}, data: %Expr{op: :add, args: [left, right]}} =
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
                tuple_shape_match({1, 2.0})
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 64}} = right
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
   end
 
@@ -66,7 +66,7 @@ defmodule Nx.DefnTest do
     defn exp(t), do: Nx.exp(t)
 
     test "to expr" do
-      assert %T{shape: {3}, type: {:f, 64}, data: %Expr{op: :exp, args: [_]}} =
+      assert %T{shape: {3}, type: {:f, 32}, data: %Expr{op: :exp, args: [_]}} =
                exp(Nx.tensor([1, 2, 3]))
 
       assert %T{shape: {3}, type: {:f, 32}, data: %Expr{op: :exp, args: [_]}} =
@@ -89,10 +89,10 @@ defmodule Nx.DefnTest do
       assert %T{shape: {2, 2}, type: {:s, 64}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 2]))
 
-      assert %T{shape: {2, 2}, type: {:f, 64}, data: %Expr{op: :add, args: [_, _]}} =
+      assert %T{shape: {2, 2}, type: {:f, 32}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]], type: {:f, 32}), Nx.tensor([1, 2]))
 
-      assert %T{shape: {2, 2}, type: {:f, 64}, data: %Expr{op: :add, args: [_, _]}} =
+      assert %T{shape: {2, 2}, type: {:f, 32}, data: %Expr{op: :add, args: [_, _]}} =
                add(Nx.tensor([[1, 2], [3, 4]], type: {:f, 32}), Nx.tensor([1, 2], type: {:s, 32}))
     end
 
@@ -182,8 +182,6 @@ defmodule Nx.DefnTest do
     defn transpose_1(t), do: Nx.transpose(t)
     defn transpose_2(t), do: Nx.transpose(t, axes: [-1, -2])
     defn reshape(t), do: Nx.reshape(t, {2, 3})
-    defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
-    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2])
 
     test "dot product" do
       assert %T{data: %Expr{op: :dot, args: [_, [0], _, [0]]}, shape: {2}} =
@@ -216,13 +214,62 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :reshape, args: [_, _]}, shape: {2, 3}} =
                reshape(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
     end
+  end
 
-    test "broadcast" do
+  describe "broadcast" do
+    defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
+    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2])
+
+    test "with and without axes" do
       assert %T{data: %Expr{op: :broadcast, args: [_, _, [2]]}, shape: {3, 3, 3}} =
                broadcast(Nx.tensor([1, 2, 3]))
 
       assert %T{data: %Expr{op: :broadcast, args: [_, _, [0]]}, shape: {3, 2}} =
                broadcast_axes(Nx.tensor([1, 2, 3]))
+    end
+
+    defn broadcast_collapse1(t),
+      do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3})
+
+    defn broadcast_collapse2(t),
+      do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({3, 5, 7}, axes: [0, 1])
+
+    defn broadcast_collapse3(t),
+      do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({3, 7, 5}, axes: [0, 2])
+
+    defn broadcast_collapse4(t),
+      do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({7, 3, 5}, axes: [1, 2])
+
+    defn broadcast_collapse5(t),
+      do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3, 9}, axes: [1, 2])
+
+    defn broadcast_collapse6(t),
+      do: t |> Nx.broadcast({5, 3, 7}, axes: [1]) |> Nx.broadcast({9, 5, 3, 7}, axes: [1, 2, 3])
+
+    defn broadcast_collapse7(t),
+      do: t |> Nx.broadcast({3, 5, 7}, axes: [0, 2]) |> Nx.broadcast({3, 9, 5, 7}, axes: [0, 2, 3])
+
+    test "collapses" do
+      assert %T{data: %Expr{op: :broadcast, args: [_, {7, 5, 3}, [1]]}, shape: {7, 5, 3}} =
+               broadcast_collapse1(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {3, 5, 7}, [0]]}, shape: {3, 5, 7}} =
+               broadcast_collapse2(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {3, 7, 5}, [0, 2]]}} =
+               broadcast_collapse3(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {7, 3, 5}, [1, 2]]}} =
+               broadcast_collapse4(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {7, 5, 3, 9}, [1, 2]]}} =
+               broadcast_collapse5(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {9, 5, 3, 7}, [1, 2, 3]]}} =
+               broadcast_collapse6(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {3, 9, 5, 7}, [0, 2, 3]]}} =
+               broadcast_collapse7(Nx.iota({3, 7}))
     end
   end
 
@@ -616,7 +663,7 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 32}} =
                if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 16}), Nx.tensor(0, type: {:f, 32}))
 
-      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 64}} =
+      assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 32}} =
                if3(Nx.tensor(0), Nx.tensor(0, type: {:s, 32}), Nx.tensor(0, type: {:f, 32}))
 
       assert %T{data: %Expr{op: :cond}, shape: {}, type: {:u, 16}} =
@@ -636,6 +683,18 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "lu" do
+    defn lu(t), do: Nx.lu(t)
+
+    test "returns tuples" do
+      assert {p, l, u} = lu(Nx.iota({3, 3}))
+
+      assert %T{data: %Expr{op: :elem, args: [lu_expr, 0, 3]}, shape: {3, 3}} = p
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 1, 3]}, shape: {3, 3}} = l
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 2, 3]}, shape: {3, 3}} = u
+    end
+  end
+
   describe "qr" do
     defn qr(t), do: Nx.qr(t)
 
@@ -644,6 +703,18 @@ defmodule Nx.DefnTest do
 
       assert %T{data: %Expr{op: :elem, args: [qr_expr, 0, 2]}, shape: {3, 2}} = left
       assert %T{data: %Expr{op: :elem, args: [^qr_expr, 1, 2]}, shape: {2, 2}} = right
+    end
+  end
+
+  describe "svd" do
+    defn svd(t), do: Nx.svd(t)
+
+    test "returns tuples" do
+      assert {u, s, vt} = svd(Nx.iota({3, 3}))
+
+      assert %T{data: %Expr{op: :elem, args: [svd_expr, 0, 3]}, shape: {3, 3}} = u
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 1, 3]}, shape: {3}} = s
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 2, 3]}, shape: {3, 3}} = vt
     end
   end
 
@@ -711,149 +782,6 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "Nx.Defn" do
-    @defn_compiler Nx.Defn.Evaluator
-    defn add_default(a, b), do: {a + b, a - b}
-
-    # Check the attribute has been reset
-    nil = Module.get_attribute(__MODULE__, :defn_compiler)
-
-    test "can be set explicitly set" do
-      assert add_default(1, 2) == {Nx.tensor(3), Nx.tensor(-1)}
-    end
-
-    test "is the default compiler" do
-      defmodule DefaultCompiler do
-        import Nx.Defn
-        defn add(a, b), do: a + b
-      end
-
-      assert DefaultCompiler.add(1, 2) == Nx.tensor(3)
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_add_two_int(t), do: Nx.add(t, 2)
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_add_two_float(t), do: Nx.add(t, 2)
-
-    test "constant" do
-      assert %T{shape: {3}, type: {:u, 8}} =
-               default_add_two_int(Nx.tensor([1, 2, 3], type: {:u, 8}))
-
-      assert %T{shape: {3}, type: {:bf, 16}} =
-               default_add_two_float(Nx.tensor([1, 2, 3], type: {:bf, 16}))
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_iota(), do: Nx.iota({2, 2})
-
-    test "iota" do
-      assert %T{shape: {2, 2}, type: {:s, 64}} = default_iota()
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_concatenate(a, b), do: Nx.concatenate([a, b])
-
-    test "concatenate" do
-      assert default_concatenate(Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])) ==
-               Nx.tensor([1, 2, 3, 4, 5, 6])
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_reshape(t), do: Nx.reshape(t, {3, 2})
-
-    test "reshape" do
-      assert %T{shape: {3, 2}, type: {:s, 64}} = default_reshape(Nx.iota({2, 3}))
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_qr(t), do: Nx.qr(t)
-
-    test "qr" do
-      assert {q, r} = default_qr(Nx.iota({3, 2}))
-      assert q == Nx.tensor([[0.0, -1.0], [1.0, 0.0], [0.0, 0.0]])
-      assert r == Nx.tensor([[2.0, 3.0], [0.0, -1.0]])
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_if3(a, b, c), do: if(a, do: b, else: c)
-
-    test "if" do
-      assert default_if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
-               Nx.tensor(2, type: {:f, 32})
-
-      assert default_if3(Nx.tensor(1), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
-               Nx.tensor(1, type: {:f, 32})
-
-      assert default_if3(Nx.tensor(2), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
-               Nx.tensor(1, type: {:f, 32})
-
-      assert default_if3(Nx.tensor(0), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
-               Nx.tensor([[3, 3], [4, 4]])
-
-      assert default_if3(Nx.tensor(1), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
-               Nx.tensor([[1, 2], [1, 2]])
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
-
-    test "if with tuples" do
-      assert default_if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
-               {{Nx.tensor(20), Nx.tensor(10)}, Nx.tensor(0)}
-
-      assert default_if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
-               {{Nx.tensor(1), Nx.tensor(10)}, Nx.tensor(20)}
-
-      assert default_if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor([20, 30])) ==
-               {{Nx.tensor([20, 30]), Nx.tensor(10)}, Nx.tensor([0, 0])}
-
-      assert default_if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor([20, 30])) ==
-               {{Nx.tensor([1, 1]), Nx.tensor(10)}, Nx.tensor([20, 30])}
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_if_tuple_match(a, b, c) do
-      {{x, y}, z} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
-      x * y - z
-    end
-
-    test "if with matched tuples" do
-      assert default_if_tuple_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(200)
-      assert default_if_tuple_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(-10)
-    end
-
-    @defn_compiler Nx.Defn.Evaluator
-    defn default_if_tuple_return(a, b, c) do
-      {xy, _} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
-      xy
-    end
-
-    test "if with return tuple" do
-      assert default_if_tuple_return(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
-               {Nx.tensor(20), Nx.tensor(10)}
-
-      assert default_if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
-               {Nx.tensor(1), Nx.tensor(10)}
-    end
-
-    @defn_compiler {Nx.Defn.Evaluator, max_unsigned_type: {:u, 32}}
-    defn default_maxu(a), do: a
-
-    @defn_compiler {Nx.Defn.Evaluator, max_signed_type: {:s, 32}}
-    defn default_maxs(a), do: a
-
-    @defn_compiler {Nx.Defn.Evaluator, max_float_type: {:f, 32}}
-    defn default_maxf(a), do: a
-
-    test "max_*_type/2" do
-      assert default_maxu(Nx.tensor(1, type: {:u, 64})) == Nx.tensor(1, type: {:u, 32})
-      assert default_maxs(Nx.tensor(1, type: {:s, 64})) == Nx.tensor(1, type: {:s, 32})
-      assert default_maxf(Nx.tensor(1, type: {:f, 64})) == Nx.tensor(1, type: {:f, 32})
-    end
-  end
-
   describe "transform" do
     defn transform_inspect(a, b) do
       (Nx.tanh(a) + Nx.power(b, 2)) |> inspect_expr()
@@ -862,14 +790,14 @@ defmodule Nx.DefnTest do
     test "executes the transformation" do
       assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
              #Nx.Tensor<
-               f64
+               f32
              \s\s
                Nx.Defn.Expr
                parameter a         s64
                parameter c         s64
-               b = tanh [ a ]      f64
+               b = tanh [ a ]      f32
                d = power [ c, 2 ]  s64
-               e = add [ b, d ]    f64
+               e = add [ b, d ]    f32
              >
              """
     end
@@ -918,10 +846,28 @@ defmodule Nx.DefnTest do
 
     test "raises if it doesn't return an expression" do
       assert_raise ArgumentError,
-                   "defn must return an expression tensor or a tuple, got: :ok",
+                   "defn must return a tensor expression or a tuple, got: :ok",
                    fn ->
                      Nx.Defn.jit(fn -> :ok end, [], Nx.Defn.Evaluator).()
                    end
+    end
+
+    defn jit_iota(), do: Nx.iota({3, 3})
+
+    @tag :capture_log
+    test "uses the default backend on iota" do
+      Nx.default_backend(UnknownBackend)
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0, []) end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end, []) end
+    end
+
+    defn jit_tensor(), do: Nx.tensor([1, 2, 3])
+
+    @tag :capture_log
+    test "uses the default backend on tensor" do
+      Nx.default_backend(UnknownBackend)
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_tensor/0, []) end
+      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.tensor(13) end, []) end
     end
   end
 
@@ -970,6 +916,26 @@ defmodule Nx.DefnTest do
       assert %_{} = async = Nx.Defn.async(&defn_async/2, [{4, 5}, 3])
       assert Nx.Async.await!(async) == Nx.tensor(6)
       assert catch_exit(Nx.Async.await!(async)) == {:noproc, {Nx.Async, :await!, [async]}}
+    end
+
+    defn async_iota(), do: Nx.iota({3, 3})
+
+    @tag :capture_log
+    test "uses the default backend on iota" do
+      Process.flag(:trap_exit, true)
+      Nx.default_backend(UnknownBackend)
+      assert %_{} = Nx.Defn.async(&async_iota/0, [])
+      assert_receive {:EXIT, _, {:undef, _}}
+    end
+
+    defn async_tensor(), do: Nx.tensor([1, 2, 3])
+
+    @tag :capture_log
+    test "uses the default backend on tensor" do
+      Process.flag(:trap_exit, true)
+      Nx.default_backend(UnknownBackend)
+      assert %_{} = Nx.Defn.async(&async_tensor/0, [])
+      assert_receive {:EXIT, _, {:undef, _}}
     end
   end
 

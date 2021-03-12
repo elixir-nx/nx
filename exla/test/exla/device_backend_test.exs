@@ -16,6 +16,20 @@ defmodule EXLA.DeviceBackendTest do
     end
   end
 
+  test "copies data" do
+    t = Nx.tensor([1, 2, 3, 4])
+
+    et = Nx.backend_transfer(t, EXLA.DeviceBackend)
+    assert %EXLA.DeviceBackend{state: {ref, :default}} = et.data
+    assert is_reference(ref)
+
+    nt = Nx.backend_copy(et)
+    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+
+    nt = Nx.backend_copy(et)
+    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+  end
+
   test "can be inspected" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.DeviceBackend)
 
@@ -36,7 +50,7 @@ defmodule EXLA.DeviceBackendTest do
     assert_raise ArgumentError,
                  ~r"could not find EXLA client named :unknown",
                  fn ->
-                   Nx.backend_transfer(Nx.tensor([1, 2]), EXLA.DeviceBackend, client: :unknown)
+                   Nx.backend_transfer(Nx.tensor([1, 2]), {EXLA.DeviceBackend, client: :unknown})
                  end
   end
 end

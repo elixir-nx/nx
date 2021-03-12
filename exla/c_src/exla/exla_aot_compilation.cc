@@ -13,7 +13,6 @@ namespace exla {
                          tensorflow::tfcompile::CompileResult* compile_result) {
 
     // Retrieves arg and result layouts from the computation.
-    // TODO(toddw): Should we let the user choose the major/minor ordering?
     xla::StatusOr<std::unique_ptr<xla::ProgramShape>> pshape_or = client->GetComputationShape(computation);
 
     if (!pshape_or.ok()) {
@@ -58,7 +57,8 @@ namespace exla {
                                  std::string object_path,
                                  std::string function_name,
                                  std::string class_name,
-                                 std::string target_triple) {
+                                 std::string target_triple,
+                                 std::string target_features) {
 
     xla::Status compilation_status;
 
@@ -80,8 +80,8 @@ namespace exla {
     xla::cpu::CpuAotCompilationOptions aot_opts(
       target_triple,
       /*target_cpu=*/"",
-      /*target_features=*/"",
-      /*entry_point=*/entry_point,
+      target_features,
+      entry_point,
       xla::cpu::CpuAotCompilationOptions::RelocationModel::BigPic
     );
 

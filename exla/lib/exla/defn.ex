@@ -1,8 +1,53 @@
 defmodule EXLA.Defn do
   @moduledoc false
 
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
+
+  @aot_runtimes %{
+    dot: :matmul,
+    conv: :conv2d
+  }
+
+  @doc false
+  def __aot__(output_dir, module, tuples, aot_options) do
+    comps_and_exprs =
+      for {name, fun, vars, options} <- tuples do
+        expr = fun.(vars)
+
+        shapes =
+          for %{shape: shape, type: type} <- vars do
+            EXLA.Shape.make_shape(type, shape)
+          end
+
+        computation = to_root_computation(name, expr, shapes, options)
+        {{computation, name, shapes}, expr}
+      end
+
+    {comps, exprs} = Enum.unzip(comps_and_exprs)
+    {_, runtimes} = exprs |> List.to_tuple() |> Tree.composite(%{}, &aot_runtimes/2)
+    aot_options = Keyword.put_new(aot_options, :runtimes, Map.keys(runtimes))
+
+    case EXLA.AOT.compile(output_dir, module, comps, aot_options) do
+      {:ok, nif} -> {:ok, exprs, nif}
+      {:error, exception} -> {:error, exception}
+    end
+  end
+
+  defp aot_runtimes(%T{data: %Expr{op: :fun, args: args}}, acc) do
+    [_, expr, _] = args
+    Tree.composite(expr, acc, &aot_runtimes/2)
+  end
+
+  defp aot_runtimes(%T{data: %Expr{op: op}} = expr, acc) do
+    acc = if runtime = @aot_runtimes[op], do: Map.put(acc, runtime, true), else: acc
+    aot_runtimes_args(expr, acc)
+  end
+
+  defp aot_runtimes_args(expr, acc) do
+    {_, acc} = Tree.traverse_args(expr, acc, &aot_runtimes/2)
+    {expr, acc}
+  end
 
   @doc false
   def __async__(key, vars, fun, options) do
@@ -30,38 +75,9 @@ defmodule EXLA.Defn do
     |> buffer_to_nx(holes)
   end
 
-  @doc false
-  def __aot__(module, tuples, aot_options) do
-    funs =
-      for {name, fun, vars, options} <- tuples do
-        {fun, _expr_options, exla_options} = prepare_args(fun, options)
-        expr = fun.(vars)
-
-        shapes =
-          for %{shape: shape, type: type} <- vars do
-            EXLA.Shape.make_shape(type, shape)
-          end
-
-        computation = to_root_computation(name, expr, shapes, exla_options)
-        {computation, name, shapes}
-      end
-
-    EXLA.AOT.Compiler.compile(module, funs, aot_options)
-  end
-
-  defp prepare_args(fun, options) do
-    {expr_options, exla_options} =
-      Keyword.split(options, [:max_float_type, :max_signed_type, :max_unsigned_type])
-
-    expr_options = Keyword.put_new(expr_options, :max_float_type, {:f, 32})
-    fun = fn vars -> vars |> fun.() |> Expr.rewrite_types(expr_options) end
-    {fun, expr_options, exla_options}
-  end
-
   defp compile(key, vars, fun, options) do
-    {fun, expr_options, exla_options} = prepare_args(fun, options)
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
-    expr_key = {key, expr_args, expr_options}
+    expr_key = {key, expr_args}
 
     {expr, holes} =
       EXLA.LockedCache.run(expr_key, fn ->
@@ -71,15 +87,15 @@ defmodule EXLA.Defn do
 
     # TODO: We should extract the client and device ordinal from buffers first
     # TODO: Rename :client to :default_client
-    {client_name, exla_options} = Keyword.pop(exla_options, :client, :default)
+    {client_name, options} = Keyword.pop(options, :client, :default)
     buffers = for var <- vars, do: nx_to_buffer(var)
     cache_args = for var <- vars, do: nx_to_cache_key!(var)
-    cache_key = {key, cache_args, client_name, expr_options, exla_options}
+    cache_key = {key, cache_args, client_name, options}
 
     {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->
         shapes = Enum.map(buffers, & &1.shape)
-        computation = to_root_computation(key, expr || fun.(vars), shapes, exla_options)
+        computation = to_root_computation(key, expr || fun.(vars), shapes, options)
         client = EXLA.Client.fetch!(client_name)
         executable = EXLA.Computation.compile(computation, client, Enum.map(buffers, & &1.shape))
         :persistent_term.put(cache_key, executable)
@@ -173,7 +189,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
-    {args, cache} = Expr.traverse_args(expr, cache, &recur_operator(&1, state, &2))
+    {args, cache} = Tree.traverse_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
   end
 
@@ -271,18 +287,21 @@ defmodule EXLA.Defn do
     strides = opts[:strides]
     input_dilation = opts[:input_dilation]
     kernel_dilation = opts[:kernel_dilation]
-    groups = opts[:groups]
+    feature_groups = opts[:feature_group_size]
+    batch_groups = opts[:batch_group_size]
 
-    %{type: output_type, shape: shape} = ans
-    rank = tuple_size(shape)
+    %{type: output_type} = ans
 
     # Build general conv dims
-    input_dims = List.to_tuple(for i <- 0..(rank - 1), do: i)
-    [out_features, in_features | kernel_spatial] = for i <- 0..(rank - 1), do: i
-    kernel_dims = List.to_tuple([in_features, out_features | kernel_spatial])
-    output_dims = input_dims
+    input_permutation = List.to_tuple(opts[:input_permutation])
+    [out_features, in_features | spatial_features] = opts[:kernel_permutation]
+    kernel_permutation = List.to_tuple([in_features, out_features | spatial_features])
 
-    conv_dim_nos = {input_dims, kernel_dims, output_dims}
+    output_permutation =
+      opts[:output_permutation]
+      |> List.to_tuple()
+
+    conv_dim_nos = {input_permutation, kernel_permutation, output_permutation}
 
     # Ensure both types are floating
     operand = to_type(operand, output_type)
@@ -296,7 +315,8 @@ defmodule EXLA.Defn do
       input_dilation,
       kernel_dilation,
       conv_dim_nos,
-      groups,
+      feature_groups,
+      batch_groups,
       state.precision
     )
   end
@@ -333,9 +353,18 @@ defmodule EXLA.Defn do
     EXLA.Op.select(pred, on_true, on_false)
   end
 
+  defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do
+    raise ArgumentError, "XLA does not currently support the LU operation"
+  end
+
   defp to_operator(:qr, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
     {q, r} = EXLA.Op.qr(to_type(tensor, type), opts[:mode] != :reduced, state.precision)
     EXLA.Op.tuple(state.builder, [q, r])
+  end
+
+  defp to_operator(:svd, [{%{type: type}, %{type: type}, %{type: type}}, tensor, _opts], _ans, state) do
+    {u, s, vt} = EXLA.Op.svd(to_type(tensor, type), state.precision)
+    EXLA.Op.tuple(state.builder, [u, s, vt])
   end
 
   ## to_operator element-wise
@@ -414,6 +443,10 @@ defmodule EXLA.Defn do
 
   defp to_operator(:as_type, [arg], %{type: type}, _state) do
     to_type(arg, type)
+  end
+
+  defp to_operator(:bitcast, [arg], %{type: type}, _state) do
+    to_type(arg, type, :bitcast)
   end
 
   ## to_operator reduction
@@ -576,11 +609,58 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(:scatter_window_max, [arg, source, window_dimensions, opts, init_value], %{type: type}, state) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
+    arg = to_type(arg, type)
+    source = to_type(source, type)
+    init_value = to_type(init_value, type)
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    select_fn = to_computation(:scatter_window_max_select, args, state, &apply(EXLA.Op, :greater, &1.params))
+    scatter_fn = to_computation(:scatter_window_max_scatter, args, state, &apply(EXLA.Op, :add, &1.params))
+
+    EXLA.Op.select_and_scatter(
+      arg,
+      select_fn,
+      window_dimensions,
+      strides,
+      padding_config,
+      source,
+      init_value,
+      scatter_fn
+    )
+  end
+
+  defp to_operator(:scatter_window_min, [arg, source, window_dimensions, opts, init_value], %{type: type}, state) do
+    padding_config = opts[:padding]
+    strides = opts[:strides]
+
+    arg = to_type(arg, type)
+    source = to_type(source, type)
+    init_value = to_type(init_value, type)
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    select_fn = to_computation(:scatter_window_min_select, args, state, &apply(EXLA.Op, :less, &1.params))
+    scatter_fn = to_computation(:scatter_window_min_scatter, args, state, &apply(EXLA.Op, :add, &1.params))
+
+    EXLA.Op.select_and_scatter(
+      arg,
+      select_fn,
+      window_dimensions,
+      strides,
+      padding_config,
+      source,
+      init_value,
+      scatter_fn
+    )
+  end
+
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
-    dims = for i <- 0..(tuple_size(shape) - 1), do: i
     arg = to_type(arg, type)
     comp = to_computation(fun, type, state)
-    EXLA.Op.map(arg, comp, dims)
+    EXLA.Op.map(arg, comp, Nx.axes(shape))
   end
 
   @reduction_op [:argmax, :argmin, :reduce_max, :reduce_min]
@@ -760,7 +840,7 @@ defmodule EXLA.Defn do
   defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
     case ids do
       %{^id => true} -> {t, ids}
-      %{} -> Expr.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
+      %{} -> Tree.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
     end
   end
 
@@ -776,13 +856,13 @@ defmodule EXLA.Defn do
           {param, Map.put(ids, id, {i, expr, param})}
       end
     else
-      {args, ids} = Expr.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
+      {args, ids} = Tree.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
       {put_in(expr.data.args, args), ids}
     end
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, ids_args} = Expr.traverse(expr, %{}, &collect_args(&1, &2, ids))
+    {expr, ids_args} = Tree.composite(expr, %{}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
@@ -843,8 +923,14 @@ defmodule EXLA.Defn do
   defp op_type(op), do: EXLA.Op.get_shape(op).dtype
   defp op_shape(op), do: EXLA.Op.get_shape(op).dims
 
-  defp to_type(op, type) do
-    if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
+  defp to_type(op, type, cast \\ :convert) do
+    fun =
+      case cast do
+        :convert -> &EXLA.Op.convert_element_type(&1, type)
+        :bitcast -> &EXLA.Op.bitcast_convert_type(&1, type)
+      end
+
+    if op_type(op) == type, do: op, else: fun.(op)
   end
 
   defp to_constant(builder, constant, type) do
@@ -900,6 +986,7 @@ defmodule EXLA.Defn do
         EXLA.Buffer.buffer(ref, EXLA.Shape.make_shape(type, shape))
 
       _ ->
+        # TODO: Call Nx.backend_transfer on the tensor instead
         EXLA.Buffer.buffer(Nx.to_binary(tensor), EXLA.Shape.make_shape(type, shape))
     end
   end
