@@ -12,7 +12,6 @@ LDFLAGS = -L$(LIBTORCH_LINK_PATH) -Wl,-rpath,$(LIBTORCH_LINK_PATH) -ltorch -lc10
 ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 else  # Linux
-	CFLAGS += -shared
 	LDFLAGS += -lm
 endif
 
