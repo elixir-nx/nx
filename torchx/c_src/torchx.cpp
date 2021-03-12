@@ -36,7 +36,7 @@ inline std::string type2string(const torch::ScalarType type)
 #define DEVICE(DEV_VEC) torch::device(torch::Device((torch::DeviceType)DEV_VEC[0], (torch::DeviceIndex)DEV_VEC[1]))
 
 #define TENSOR_PARAM(ARGN, VAR)                                        \
-  torch::Tensor *VAR;                                                     \
+  torch::Tensor *VAR;                                                  \
   if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR)) \
     return nx::nif::error(env, "Unable to get " #VAR " tensor param.");
 
@@ -55,13 +55,12 @@ inline std::string type2string(const torch::ScalarType type)
   }                                                          \
   CATCH()
 
-
 #define TENSOR_LIST(TL)                                                                        \
   try                                                                                          \
   {                                                                                            \
-    std::vector<torch::Tensor> tl = TL;                                                           \
+    std::vector<torch::Tensor> tl = TL;                                                        \
     std::vector<ERL_NIF_TERM> res_list;                                                        \
-    for (torch::Tensor t : tl)                                                                    \
+    for (torch::Tensor t : tl)                                                                 \
       res_list.push_back(create_tensor_resource(env, t));                                      \
     return nx::nif::ok(env, enif_make_list_from_array(env, res_list.data(), res_list.size())); \
   }                                                                                            \
@@ -70,9 +69,9 @@ inline std::string type2string(const torch::ScalarType type)
 #define TENSOR_TUPLE(TT)                                                                        \
   try                                                                                           \
   {                                                                                             \
-    std::tuple<torch::Tensor, torch::Tensor> tt = TT;                                                 \
+    std::tuple<torch::Tensor, torch::Tensor> tt = TT;                                           \
     std::vector<ERL_NIF_TERM> res_list;                                                         \
-    for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt)})                                     \
+    for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt)})                                  \
       res_list.push_back(create_tensor_resource(env, t));                                       \
     return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
   }                                                                                             \
