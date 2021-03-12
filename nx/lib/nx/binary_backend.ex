@@ -1516,9 +1516,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def triangular_solve(
-        {
-          %{shape: shape, type: output_type = b_holder}
-        },
+        %{shape: shape, type: output_type = b_holder},
         %{type: input_type, shape: input_shape} = a,
         b
       ) do
