@@ -86,6 +86,7 @@ defmodule Torchx.Backend do
     metal: 11,
     xpu: 12
   ]
+
   defp torch_device({device, index}) when is_atom(device) and is_integer(index),
     do: {@devices[device], index}
 

@@ -201,6 +201,16 @@ NIF(device)
     return nx::nif::error(env, "Could not determine tensor device.");
 }
 
+NIF(cuda_is_available)
+{
+  return nx::nif::make(env, (bool)torch::cuda::is_available());
+}
+
+NIF(cuda_device_count)
+{
+  return nx::nif::make(env, (int)torch::cuda::device_count());
+}
+
 NIF(nbytes)
 {
   TENSOR_PARAM(0, t);
@@ -640,6 +650,9 @@ static ErlNifFunc nif_functions[] = {
     DF(cholesky, 2),
     DF(qr, 1),
     DF(qr, 2),
+
+    DF(cuda_is_available, 0),
+    DF(cuda_device_count, 0),
 
     F(type, 1),
     F(shape, 1),

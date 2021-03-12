@@ -8,14 +8,29 @@ defmodule Torchx.DeviceTest do
     :ok
   end
 
+  if Torchx.cuda_is_available?() do
+    @device {:cuda, 0}
+  else
+    @device :cpu
+  end
+
   describe "creation" do
     test "from_binary" do
-      t = Nx.tensor([1, 2, 3], backend_options: [device: :cpu])
-      Nx.backend_transfer(t, TB, backend_options: [device: :cpu])
+      t = Nx.tensor([1, 2, 3], backend_options: [device: @device])
+      assert TB.device(t) == @device
+    end
+
+    test "backend transfer" do
+      t = Nx.tensor([1, 2, 3])
+      td = Nx.backend_transfer(t, TB, device: @device)
+
+      assert TB.device(td) == @device
     end
 
     test "scalar" do
-      t = Nx.tensor(7.77, backend_options: [device: :cpu])
+      t = Nx.tensor(7.77, backend_options: [device: @device])
+
+      assert TB.device(t) == @device
     end
   end
 end

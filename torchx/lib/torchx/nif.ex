@@ -105,6 +105,9 @@ defmodule Torchx.NIF do
   dnif qr(tensor)
   dnif qr(tensor, reduced)
 
+  dnif cuda_is_available()
+  dnif cuda_device_count()
+
   def type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
   def names(_tensor), do: :erlang.nif_error(:undef)
