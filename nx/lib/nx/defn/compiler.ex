@@ -65,9 +65,6 @@ defmodule Nx.Defn.Compiler do
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
                    [:to_binary, :to_scalar, :to_flat_list, :to_heatmap, :to_batched_list]
 
-  # These operations wrap a tensor in their original backend
-  @tensor_ops [:tensor, :from_binary]
-
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and
                    is_atom(elem(var, 2))
@@ -497,13 +494,7 @@ defmodule Nx.Defn.Compiler do
 
     {args, state} = normalize_list(args, state)
     args = rewrite_args(name, args)
-    call = {{:., dot_meta, [Nx, name]}, meta, args}
-
-    if name in @tensor_ops do
-      {{{:., dot_meta, [Nx.Defn.Expr, :tensor]}, dot_meta, [call]}, state}
-    else
-      {call, state}
-    end
+    {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, name]} = call, meta, args}, state) do
