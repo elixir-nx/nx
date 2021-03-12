@@ -71,7 +71,7 @@ defmodule Torchx.Backend do
 
   def device_option(opts), do: (opts[:backend_options] || [])[:device] || opts[:device] || :cpu
 
-  @devices [
+  @devices %{
     cpu: 0,
     cuda: 1,
     mkldnn: 2,
@@ -85,7 +85,7 @@ defmodule Torchx.Backend do
     vulkan: 10,
     metal: 11,
     xpu: 12
-  ]
+  }
 
   defp torch_device({device, index}) when is_atom(device) and is_integer(index),
     do: {@devices[device], index}

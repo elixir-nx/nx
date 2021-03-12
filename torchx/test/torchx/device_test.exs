@@ -8,7 +8,7 @@ defmodule Torchx.DeviceTest do
     :ok
   end
 
-  if Torchx.cuda_is_available?() do
+  if Torchx.device_available?(:cuda) do
     @device {:cuda, 0}
   else
     @device :cpu
