@@ -1521,6 +1521,10 @@ defmodule Nx.BinaryBackend do
         b
       ) do
     # Write implementation for backend here
+    a_matrix = a |> to_binary() |> binary_to_matrix(input_type, input_shape)
+    b_vector = b |> to_binary() |> binary_to_matrix(output_type, shape)
+    IO.inspect(a)
+    IO.inspect(b)
   end
 
   ## Binary reducers
