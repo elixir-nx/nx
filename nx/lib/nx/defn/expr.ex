@@ -383,8 +383,24 @@ defmodule Nx.Defn.Expr do
   @impl true
   def broadcast(out, tensor, shape, axes) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
+
+    with %T{data: %Expr{op: :broadcast, args: [inner_tensor, inner_shape, inner_axes]}} <- tensor,
+         true <-
+          (contiguous?(inner_axes, 0) and contiguous?(axes, 0)) or
+             (contiguous_last?(inner_axes, inner_shape, inner_tensor) and
+              contiguous_last?(axes, shape, tensor)) do
+      expr(out, tensor.data.context, :broadcast, [inner_tensor, shape, inner_axes])
+    else
+      _ -> expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
+    end
   end
+
+  defp contiguous_last?(axes, out_shape, in_shape),
+    do: contiguous?(axes, Nx.rank(out_shape) - Nx.rank(in_shape))
+
+  defp contiguous?([], _), do: true
+  defp contiguous?([i | rest], i), do: contiguous?(rest, i + 1)
+  defp contiguous?(_, _), do: false
 
   @impl true
   def dot(out, t1, a1, t2, a2) do

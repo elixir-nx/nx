@@ -113,10 +113,6 @@ defmodule Nx.Defn.Grad do
   # computation. Both are important to reduce the amount of nodes
   # in the AST.
   defp to_grad(expr, res, cache) do
-    if not Nx.Type.float?(res.type) do
-      raise "OMG"
-    end
-
     Tree.composite(expr, cache, fn
       %T{data: %Expr{id: id, op: op, args: args}} = ans, {result_cache, jvp_cache} = cache ->
         key = [id | res.data.id]

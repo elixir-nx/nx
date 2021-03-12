@@ -182,8 +182,6 @@ defmodule Nx.DefnTest do
     defn transpose_1(t), do: Nx.transpose(t)
     defn transpose_2(t), do: Nx.transpose(t, axes: [-1, -2])
     defn reshape(t), do: Nx.reshape(t, {2, 3})
-    defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
-    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2])
 
     test "dot product" do
       assert %T{data: %Expr{op: :dot, args: [_, [0], _, [0]]}, shape: {2}} =
@@ -216,13 +214,62 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :reshape, args: [_, _]}, shape: {2, 3}} =
                reshape(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
     end
+  end
 
-    test "broadcast" do
+  describe "broadcast" do
+    defn broadcast(t), do: Nx.broadcast(t, {3, 3, 3})
+    defn broadcast_axes(t), do: Nx.broadcast(t, {3, 2}, axes: [-2])
+
+    test "with and without axes" do
       assert %T{data: %Expr{op: :broadcast, args: [_, _, [2]]}, shape: {3, 3, 3}} =
                broadcast(Nx.tensor([1, 2, 3]))
 
       assert %T{data: %Expr{op: :broadcast, args: [_, _, [0]]}, shape: {3, 2}} =
                broadcast_axes(Nx.tensor([1, 2, 3]))
+    end
+
+    defn broadcast_collapse1(t),
+      do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3})
+
+    defn broadcast_collapse2(t),
+      do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({3, 5, 7}, axes: [0, 1])
+
+    defn broadcast_collapse3(t),
+      do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({3, 7, 5}, axes: [0, 2])
+
+    defn broadcast_collapse4(t),
+      do: t |> Nx.broadcast({3, 5}, axes: [0]) |> Nx.broadcast({7, 3, 5}, axes: [1, 2])
+
+    defn broadcast_collapse5(t),
+      do: t |> Nx.broadcast({5, 3}) |> Nx.broadcast({7, 5, 3, 9}, axes: [1, 2])
+
+    defn broadcast_collapse6(t),
+      do: t |> Nx.broadcast({5, 3, 7}, axes: [1]) |> Nx.broadcast({9, 5, 3, 7}, axes: [1, 2, 3])
+
+    defn broadcast_collapse7(t),
+      do: t |> Nx.broadcast({3, 5, 7}, axes: [0, 2]) |> Nx.broadcast({3, 9, 5, 7}, axes: [0, 2, 3])
+
+    test "collapses" do
+      assert %T{data: %Expr{op: :broadcast, args: [_, {7, 5, 3}, [1]]}, shape: {7, 5, 3}} =
+               broadcast_collapse1(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {3, 5, 7}, [0]]}, shape: {3, 5, 7}} =
+               broadcast_collapse2(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {3, 7, 5}, [0, 2]]}} =
+               broadcast_collapse3(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {7, 3, 5}, [1, 2]]}} =
+               broadcast_collapse4(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {7, 5, 3, 9}, [1, 2]]}} =
+               broadcast_collapse5(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {9, 5, 3, 7}, [1, 2, 3]]}} =
+               broadcast_collapse6(Nx.tensor([1, 2, 3]))
+
+      assert %T{data: %Expr{op: :broadcast, args: [_, {3, 9, 5, 7}, [0, 2, 3]]}} =
+               broadcast_collapse7(Nx.iota({3, 7}))
     end
   end
 
