@@ -1462,6 +1462,136 @@ defmodule Nx do
   end
 
   @doc """
+  Creates a new tensor by repeating the input tensor
+  along the given axes.
+
+  If the `tensor` has less dimensions than the repetitions given,
+  the tensor will grow in dimensionality.
+
+  If the `tensor` has more dimensions than the repetitions given,
+  tiling is done from the rightmost dimensions (i.e. if the input
+  shape is `{1,2,3}` and `repetitions = [2]`, the result is the same
+  as if `repetitions = [1,1,2]`).
+
+  ## Examples
+
+      iex> a = Nx.tensor([0, 1, 2])
+      iex> Nx.tile(a, [2])
+      #Nx.Tensor<
+        s64[6]
+        [0, 1, 2, 0, 1, 2]
+      >
+      iex> Nx.tile(a, [1, 2])
+      #Nx.Tensor<
+        s64[1][6]
+        [
+          [0, 1, 2, 0, 1, 2]
+        ]
+      >
+      iex> Nx.tile(a, [2, 2])
+      #Nx.Tensor<
+        s64[2][6]
+        [
+          [0, 1, 2, 0, 1, 2],
+          [0, 1, 2, 0, 1, 2]
+        ]
+      >
+      iex> Nx.tile(a, [2, 1])
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [0, 1, 2],
+          [0, 1, 2]
+        ]
+      >
+      iex> Nx.tile(a, [2, 1, 2])
+      #Nx.Tensor<
+        s64[2][1][6]
+        [
+          [
+            [0, 1, 2, 0, 1, 2]
+          ],
+          [
+            [0, 1, 2, 0, 1, 2]
+          ]
+        ]
+      >
+
+      iex> b = Nx.tensor([[1,2],[3,4]])
+      iex> Nx.tile(b, [2])
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [1, 2, 1, 2],
+          [3, 4, 3, 4]
+        ]
+      >
+      iex> Nx.tile(b, [2, 1])
+      #Nx.Tensor<
+        s64[4][2]
+        [
+          [1, 2],
+          [3, 4],
+          [1, 2],
+          [3, 4]
+        ]
+      >
+      iex> Nx.tile(b, [1, 2])
+      #Nx.Tensor<
+        s64[2][4]
+        [
+          [1, 2, 1, 2],
+          [3, 4, 3, 4]
+        ]
+      >
+
+      iex> c = Nx.tensor([1,2,3,4])
+      iex> Nx.tile(c, [4,1])
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [1, 2, 3, 4],
+          [1, 2, 3, 4],
+          [1, 2, 3, 4],
+          [1, 2, 3, 4]
+        ]
+      >
+
+  ### Error cases
+
+      iex> Nx.tile(Nx.tensor([1,2]), 1.0)
+      ** (ArgumentError) repetitions must be a list of integers, got: 1.0
+
+      iex> Nx.tile(Nx.tensor([1,2]), [1, 1.0])
+      ** (ArgumentError) repetitions must be a list of integers, got: [1, 1.0]
+
+      iex> Nx.tile(Nx.tensor([1,2]), nil)
+      ** (ArgumentError) repetitions must be a list of integers, got: nil
+  """
+  @doc type: :shape
+  def tile(tensor, repetitions) do
+    tensor = tensor!(tensor)
+
+    unless tile_valid_repetitions?(repetitions) do
+      raise ArgumentError,
+            "repetitions must be a list of integers, got: #{inspect(repetitions)}"
+    end
+
+    {tensor_reshape, broadcast_shape, result_shape} = Nx.Shape.tile(tensor, repetitions)
+
+    tensor
+    |> reshape(tensor_reshape)
+    |> broadcast(broadcast_shape)
+    |> reshape(result_shape)
+  end
+
+  defp tile_valid_repetitions?(reps) when not is_list(reps), do: false
+
+  defp tile_valid_repetitions?(reps) do
+    Enum.all?(reps, &(is_integer(&1) and &1 >= 1))
+  end
+
+  @doc """
   Adds a new `axis` of size 1 with optional `name`.
 
   ## Examples
