@@ -716,7 +716,7 @@ defmodule Nx.Defn.Expr do
   @impl true
   def triangular_solve(out, a, b) do
     a = to_expr(a)
-    b =  to_expr(b)
+    b = to_expr(b)
     expr(out, b.data.context, :triangular_solve, [out, a, b])
   end
 
