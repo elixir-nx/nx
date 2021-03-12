@@ -7,6 +7,13 @@ defmodule Nx.Defn.Tree do
   alias Nx.Tensor, as: T
 
   @doc """
+  Puts new args in the given expression and gives it a new id.
+  """
+  def put_args(%T{data: %Expr{} = expr} = t, args) do
+    %{t | data: %{expr | id: Expr.id(), args: args}}
+  end
+
+  @doc """
   Helper to traverse the arguments of a tensor expression.
 
   Note the arguments of function nodes are never traversed, as it is

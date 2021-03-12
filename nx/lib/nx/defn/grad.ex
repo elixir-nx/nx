@@ -6,33 +6,38 @@ defmodule Nx.Defn.Grad do
 
   def transform(to_grad, expr) do
     expr = validate_expr!(expr)
-    initial = Expr.tensor(1.0)
 
-    {graded, _} =
-      Tree.composite(to_grad, %{}, fn to_grad, shared ->
-        id = grad_id!(to_grad)
-        {graded, _} = to_grad(expr, initial, {%{id => :stop}, shared})
-
-        graded =
-          if graded.shape == to_grad.shape do
-            graded
-          else
-            Nx.broadcast(graded, to_grad)
-          end
-
-        {graded, shared}
+    {_, ids} =
+      Tree.composite(to_grad, %{}, fn to_grad, ids ->
+        {to_grad, Map.put(ids, grad_id!(to_grad), :stop)}
       end)
 
-    graded
+    # Grad with all known IDs
+    {graded, _} = to_grad(expr, Expr.tensor(1.0), {ids, %{}})
+
+    # Now traverse the expression again zerofying
+    # the parts that comes from other variables.
+    # We do so by encoding special nodes in the Expr
+    # AST and unpack them as we verify.
+    Tree.composite(to_grad, fn to_grad ->
+      id = grad_id!(to_grad)
+      {graded, _, _} = zerofy_ids(graded, %{}, Map.delete(ids, id))
+
+      if graded.shape == to_grad.shape do
+        graded
+      else
+        Nx.broadcast(graded, to_grad)
+      end
+    end)
   end
 
-  defp grad_id!(%T{data: %Expr{id: id}}) do
+  defp grad_id!(%T{data: %Expr{id: id, op: :parameter}}) do
     id
   end
 
   defp grad_id!(other) do
     raise ArgumentError,
-          "the first argument of grad must be a variable or a tuple of defn expressions, " <>
+          "the first argument of grad must be a parameter or a tuple of parameters, " <>
             "got: #{inspect(other)}"
   end
 
@@ -50,51 +55,123 @@ defmodule Nx.Defn.Grad do
     validate_expr!(Expr.tensor(other))
   end
 
+  ## Zerofy
+
+  defp zerofy_ids(%T{data: %Expr{id: id}} = t, cache, ids) do
+    case cache do
+      %{^id => {res, tainted?}} ->
+        {res, cache, tainted?}
+
+      %{} ->
+        {res, cache, tainted?} = zerofy_each(t, cache, ids)
+        {res, Map.put(cache, id, {res, tainted?}), tainted?}
+    end
+  end
+
+  defp zerofy_each(%T{data: %Expr{op: :metadata, args: [t, %{__MODULE__ => code}]}}, cache, ids) do
+    case code do
+      {:sum, exprs} ->
+        {exprs, cache} =
+          Enum.map_reduce(exprs, cache, fn expr, cache ->
+            {expr, cache, _} = zerofy_ids(expr, cache, ids)
+            {expr, cache}
+          end)
+
+        {Enum.reduce(exprs, &maybe_add/2), cache, true}
+
+      {:tainted, id} ->
+        if Map.has_key?(ids, id) do
+          {Expr.tensor(0.0), cache, true}
+        else
+          zerofy_ids(t, cache, ids)
+        end
+    end
+  end
+
+  defp zerofy_each(t, cache, ids) do
+    {args, {cache, tainted?}} =
+      Tree.traverse_args(t, {cache, false}, fn arg, {cache, acc_tainted?} ->
+        {arg, cache, tainted?} = zerofy_ids(arg, cache, ids)
+        {arg, {cache, tainted? or acc_tainted?}}
+      end)
+
+    if tainted? do
+      {Tree.put_args(t, args), cache, true}
+    else
+      {t, cache, false}
+    end
+  end
+
   ## Recursion
 
+  # The gradient recursion.
+  #
+  # We keep two caches. One is the result cache, which is used for
+  # when visiting the same nodes in the AST.
+  #
+  # The other cache is the JVP cache, that shares parts of the JVP
+  # computation. Both are important to reduce the amount of nodes
+  # in the AST.
   defp to_grad(expr, res, cache) do
+    if not Nx.Type.float?(res.type) do
+      raise "OMG"
+    end
+
     Tree.composite(expr, cache, fn
-      %T{data: %Expr{id: id, op: op, args: args}} = ans, {result_cache, grad_cache} = cache ->
+      %T{data: %Expr{id: id, op: op, args: args}} = ans, {result_cache, jvp_cache} = cache ->
         key = [id | res.data.id]
 
         case result_cache do
           %{^id => :stop} ->
-            {res, cache}
+            {Expr.metadata(res, %{__MODULE__ => {:tainted, id}}), cache}
 
           %{^key => res} ->
             {res, cache}
 
           %{} ->
             case grad(op, args, ans, res, cache) do
-              {res, {result_cache, grad_cache}} ->
-                {res, {Map.put(result_cache, key, res), grad_cache}}
+              {res, {result_cache, jvp_cache}} ->
+                {res, {Map.put(result_cache, key, res), jvp_cache}}
 
               :none ->
-                parts =
-                  case grad_cache do
-                    %{^id => parts} -> parts
-                    %{} -> cached_grad(op, args, ans)
+                jvps =
+                  case jvp_cache do
+                    %{^id => jvps} -> jvps
+                    %{} -> jvp(op, args, ans)
                   end
 
-                {res, {result_cache, grad_cache}} = grad_parts(parts, res, cache)
-                {res, {Map.put(result_cache, key, res), Map.put(grad_cache, id, parts)}}
+                {res, {result_cache, jvp_cache}} = grad_jvps(jvps, res, cache)
+                {res, {Map.put(result_cache, key, res), Map.put(jvp_cache, id, jvps)}}
             end
         end
     end)
   end
 
-  defp grad_parts([], _res, cache), do: {Expr.tensor(0.0), cache}
+  defp grad_jvps([], _g, cache), do: {Expr.tensor(0.0), cache}
 
-  defp grad_parts([{head, subg} | tail], g, cache) do
-    acc = to_grad(head, maybe_multiply(g, subg), cache)
+  defp grad_jvps(jvps, g, cache) do
+    {exprs, cache} =
+      Enum.map_reduce(jvps, cache, fn {expr, subg}, cache ->
+        to_grad(expr, maybe_multiply(g, subg), cache)
+      end)
 
-    Enum.reduce(tail, acc, fn {expr, subg}, {acc, cache} ->
-      {graded, cache} = to_grad(expr, maybe_multiply(g, subg), cache)
-      {maybe_add(acc, graded), cache}
-    end)
+    template = Expr.tensor(Nx.template(g.shape, g.type))
+    {Expr.metadata(template, %{__MODULE__ => {:sum, exprs}}), cache}
   end
 
-  ## Control-flow / syntax nodes
+  defp grad_pairs([], _g, cache), do: {Expr.tensor(0.0), cache}
+
+  defp grad_pairs(parts, g, cache) do
+    {exprs, cache} =
+      Enum.map_reduce(parts, cache, fn {expr, g}, cache ->
+        to_grad(expr, g, cache)
+      end)
+
+    template = Expr.tensor(Nx.template(g.shape, g.type))
+    {Expr.metadata(template, %{__MODULE__ => {:sum, exprs}}), cache}
+  end
+
+  ## Syntax / linear grad
 
   defp grad(:metadata, [_, %{stop_grad: true}], _ans, _g, cache) do
     {Expr.tensor(1.0), cache}
@@ -109,10 +186,7 @@ defmodule Nx.Defn.Grad do
               "and the second element is the updated g"
     end
 
-    Enum.reduce(args, {Expr.tensor(0.0), cache}, fn {expr, g}, {acc, cache} ->
-      {graded, cache} = to_grad(expr, g, cache)
-      {maybe_add(acc, graded), cache}
-    end)
+    grad_pairs(args, g, cache)
   end
 
   defp grad(:cond, [clauses, last], _ans, g, cache) do
@@ -136,15 +210,6 @@ defmodule Nx.Defn.Grad do
     {d_on_false, cache} = to_grad(on_false, g, cache)
     result = Nx.select(pred, d_on_true, d_on_false)
     {result, cache}
-  end
-
-  defp grad(:outer, [x, y], ans, g, cache) do
-    x = Nx.reshape(x, {Nx.size(x.shape), 1})
-    y = Nx.reshape(y, {1, Nx.size(y.shape)})
-    {x, y} = binary_broadcast(x, y, ans)
-    {dx, cache} = to_grad(x, Nx.multiply(g, y), cache)
-    {dy, cache} = to_grad(y, Nx.multiply(g, x), cache)
-    {maybe_add(dx, dy), cache}
   end
 
   defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do
@@ -191,10 +256,13 @@ defmodule Nx.Defn.Grad do
     # w.r.t max
     w_max = Nx.select(Nx.less(max, operand), Nx.broadcast(g, operand), 0.0)
 
-    {g_operand, cache} = to_grad(operand, Nx.multiply(g, w_operand), cache)
-    {g_min, cache} = to_grad(min, Nx.multiply(g, w_min), cache)
-    {g_max, cache} = to_grad(max, Nx.multiply(g, w_max), cache)
-    {g_operand |> maybe_add(g_min) |> maybe_add(g_max), cache}
+    parts = [
+      {operand, Nx.multiply(g, w_operand)},
+      {min, Nx.multiply(g, w_min)},
+      {max, Nx.multiply(g, w_max)}
+    ]
+
+    grad_pairs(parts, g, cache)
   end
 
   defp grad(:squeeze, [x, axes], _ans, g, cache) do
@@ -221,9 +289,7 @@ defmodule Nx.Defn.Grad do
     g_operand = Nx.slice(unpadded, start_indices, lengths, strides: strides)
     g_value = Nx.subtract(Nx.sum(g), Nx.sum(g_operand))
 
-    {dx, cache} = to_grad(x, g_operand, cache)
-    {dvalue, cache} = to_grad(value, g_value, cache)
-    {maybe_add(dx, dvalue), cache}
+    grad_pairs([{x, g_operand}, {value, g_value}], g, cache)
   end
 
   defp grad(:slice, [x, start_indices, _lengths, strides], _ans, g, cache) do
@@ -304,9 +370,7 @@ defmodule Nx.Defn.Grad do
       |> Nx.dot(contract_gy, x, contract_x)
       |> Nx.transpose(axes: argsort(contract_y ++ transpose_y))
 
-    {dx, cache} = to_grad(x, gx, cache)
-    {dy, cache} = to_grad(y, gy, cache)
-    {maybe_add(dx, dy), cache}
+    grad_pairs([{x, gx}, {y, gy}], g, cache)
   end
 
   defp grad(:conv, [x, y, opts], ans, g, cache) do
@@ -368,29 +432,29 @@ defmodule Nx.Defn.Grad do
     :none
   end
 
-  ## Cached gradients
+  ## JVP gradients
 
-  defp cached_grad(:add, [x, y], ans) do
+  defp jvp(:add, [x, y], ans) do
     {x, y} = binary_broadcast(x, y, ans)
     [{x, Expr.tensor(1.0)}, {y, Expr.tensor(1.0)}]
   end
 
-  defp cached_grad(:subtract, [x, y], ans) do
+  defp jvp(:subtract, [x, y], ans) do
     {x, y} = binary_broadcast(x, y, ans)
     [{x, Expr.tensor(1.0)}, {y, Expr.tensor(-1.0)}]
   end
 
-  defp cached_grad(:multiply, [x, y], ans) do
+  defp jvp(:multiply, [x, y], ans) do
     {x, y} = binary_broadcast(x, y, ans)
     [{x, y}, {y, x}]
   end
 
-  defp cached_grad(:divide, [x, y], ans) do
+  defp jvp(:divide, [x, y], ans) do
     {x, y} = binary_broadcast(x, y, ans)
     [{x, Nx.divide(1.0, y)}, {y, Nx.negate(Nx.divide(ans, y))}]
   end
 
-  defp cached_grad(:quotient, _, _) do
+  defp jvp(:quotient, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.quotient/2.
 
@@ -400,12 +464,12 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp cached_grad(:remainder, [x, y], ans) do
+  defp jvp(:remainder, [x, y], ans) do
     {x, y} = binary_broadcast(x, y, ans)
     [{x, Expr.tensor(1.0)}, {y, Nx.negate(Nx.floor(Nx.divide(x, y)))}]
   end
 
-  defp cached_grad(:power, [x, y], ans) do
+  defp jvp(:power, [x, y], ans) do
     {x, y} = binary_broadcast(x, y, ans)
     exponent = Nx.select(Nx.equal(y, 0.0), 1.0, Nx.subtract(y, 1.0))
     base = Nx.select(Nx.equal(x, 0.0), 1.0, x)
@@ -415,13 +479,13 @@ defmodule Nx.Defn.Grad do
     [{x, gx}, {y, gy}]
   end
 
-  defp cached_grad(:atan2, [x, y], ans) do
+  defp jvp(:atan2, [x, y], ans) do
     {x, y} = binary_broadcast(x, y, ans)
     den = Nx.add(Nx.multiply(x, x), Nx.multiply(y, y))
     [{x, Nx.divide(y, den)}, {y, Nx.negate(Nx.divide(x, den))}]
   end
 
-  defp cached_grad(op, [x, y], ans) when op in [:min, :max] do
+  defp jvp(op, [x, y], ans) when op in [:min, :max] do
     {x, y} = binary_broadcast(x, y, ans)
 
     lhs =
@@ -439,47 +503,54 @@ defmodule Nx.Defn.Grad do
     [{x, lhs}, {y, rhs}]
   end
 
-  defp cached_grad(:as_type, [x], _ans) do
+  defp jvp(:outer, [x, y], ans) do
+    x = Nx.reshape(x, {Nx.size(x.shape), 1})
+    y = Nx.reshape(y, {1, Nx.size(y.shape)})
+    {x, y} = binary_broadcast(x, y, ans)
+    [{x, y}, {y, x}]
+  end
+
+  defp jvp(:as_type, [x], _ans) do
     [{x, Expr.tensor(1.0)}]
   end
 
-  defp cached_grad(:bitcast, [x], _ans) do
+  defp jvp(:bitcast, [x], _ans) do
     [{x, Expr.tensor(1.0)}]
   end
 
-  defp cached_grad(:metadata, [expr, _metadata], _ans) do
+  defp jvp(:metadata, [expr, _metadata], _ans) do
     [{expr, Expr.tensor(1.0)}]
   end
 
-  defp cached_grad(:abs, [x], _ans) do
+  defp jvp(:abs, [x], _ans) do
     [{x, Nx.select(Nx.greater_equal(x, 0.0), 1.0, -1.0)}]
   end
 
-  defp cached_grad(:sqrt, [x], ans) do
+  defp jvp(:sqrt, [x], ans) do
     [{x, Nx.divide(0.5, ans)}]
   end
 
-  defp cached_grad(:cbrt, [x], ans) do
+  defp jvp(:cbrt, [x], ans) do
     [{x, Nx.divide(1.0, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))}]
   end
 
-  defp cached_grad(:exp, [x], ans) do
+  defp jvp(:exp, [x], ans) do
     [{x, ans}]
   end
 
-  defp cached_grad(:expm1, [x], ans) do
+  defp jvp(:expm1, [x], ans) do
     [{x, Nx.add(ans, 1)}]
   end
 
-  defp cached_grad(:log, [x], _ans) do
+  defp jvp(:log, [x], _ans) do
     [{x, Nx.divide(1.0, x)}]
   end
 
-  defp cached_grad(:log1p, [x], _ans) do
+  defp jvp(:log1p, [x], _ans) do
     [{x, Nx.divide(1.0, Nx.add(x, 1))}]
   end
 
-  defp cached_grad(:logistic, [x], ans) do
+  defp jvp(:logistic, [x], ans) do
     g =
       x
       |> Nx.negate()
@@ -490,67 +561,67 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp cached_grad(:negate, [x], _ans) do
+  defp jvp(:negate, [x], _ans) do
     [{x, Expr.tensor(-1.0)}]
   end
 
-  defp cached_grad(:rsqrt, [x], _ans) do
+  defp jvp(:rsqrt, [x], _ans) do
     [{x, Nx.multiply(-0.5, Nx.power(x, -1.5))}]
   end
 
-  defp cached_grad(:sin, [x], _ans) do
+  defp jvp(:sin, [x], _ans) do
     [{x, Nx.cos(x)}]
   end
 
-  defp cached_grad(:asin, [x], _ans) do
+  defp jvp(:asin, [x], _ans) do
     [{x, Nx.rsqrt(Nx.subtract(1.0, Nx.multiply(x, x)))}]
   end
 
-  defp cached_grad(:sinh, [x], _ans) do
+  defp jvp(:sinh, [x], _ans) do
     [{x, Nx.cosh(x)}]
   end
 
-  defp cached_grad(:asinh, [x], _ans) do
+  defp jvp(:asinh, [x], _ans) do
     [{x, Nx.rsqrt(Nx.add(Nx.multiply(x, x), 1.0))}]
   end
 
-  defp cached_grad(:acosh, [x], _ans) do
+  defp jvp(:acosh, [x], _ans) do
     [{x, Nx.rsqrt(Nx.subtract(Nx.multiply(x, x), 1.0))}]
   end
 
-  defp cached_grad(:atanh, [x], _ans) do
+  defp jvp(:atanh, [x], _ans) do
     [{x, Nx.divide(1.0, Nx.subtract(1.0, Nx.multiply(x, x)))}]
   end
 
-  defp cached_grad(:cos, [x], _ans) do
+  defp jvp(:cos, [x], _ans) do
     [{x, Nx.negate(Nx.sin(x))}]
   end
 
-  defp cached_grad(:acos, [x], _ans) do
+  defp jvp(:acos, [x], _ans) do
     [{x, Nx.negate(Nx.rsqrt(Nx.subtract(1.0, Nx.multiply(x, x))))}]
   end
 
-  defp cached_grad(:cosh, [x], _ans) do
+  defp jvp(:cosh, [x], _ans) do
     [{x, Nx.sinh(x)}]
   end
 
-  defp cached_grad(:tan, [x], _ans) do
+  defp jvp(:tan, [x], _ans) do
     cos = Nx.cos(x)
     [{x, 1 |> Nx.divide(cos) |> Nx.divide(cos)}]
   end
 
-  defp cached_grad(:atan, [x], _ans) do
+  defp jvp(:atan, [x], _ans) do
     [{x, Nx.divide(1.0, Nx.add(1.0, Nx.multiply(x, x)))}]
   end
 
-  defp cached_grad(:tanh, [x], ans) do
+  defp jvp(:tanh, [x], ans) do
     [{x, Nx.subtract(1.0, Nx.multiply(ans, ans))}]
   end
 
   @half_sqrt_pi :math.sqrt(:math.pi()) / 2
   @two_rsqrt_pi 2 / :math.sqrt(:math.pi())
 
-  defp cached_grad(:erf, [x], _ans) do
+  defp jvp(:erf, [x], _ans) do
     g =
       x
       |> Nx.multiply(x)
@@ -561,7 +632,7 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp cached_grad(:erfc, [x], _ans) do
+  defp jvp(:erfc, [x], _ans) do
     g =
       x
       |> Nx.multiply(x)
@@ -572,12 +643,12 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp cached_grad(:erf_inv, [x], ans) do
+  defp jvp(:erf_inv, [x], ans) do
     g = Nx.multiply(@half_sqrt_pi, Nx.exp(Nx.multiply(ans, ans)))
     [{x, g}]
   end
 
-  defp cached_grad(:reduce, _, _) do
+  defp jvp(:reduce, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce/4.
 
@@ -589,7 +660,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp cached_grad(:window_product, _, _) do
+  defp jvp(:window_product, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.window_product/3.
 
@@ -599,7 +670,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp cached_grad(:reduce_window, _, _) do
+  defp jvp(:reduce_window, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce_window/5.
 
@@ -613,7 +684,7 @@ defmodule Nx.Defn.Grad do
 
   @error [:map]
 
-  defp cached_grad(op, _, _) when op in @error do
+  defp jvp(op, _, _) when op in @error do
     raise ArgumentError, """
     cannot compute gradient for Nx.#{op}.
 
@@ -631,11 +702,11 @@ defmodule Nx.Defn.Grad do
                [:floor, :round, :ceil, :sign] ++
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal]
 
-  defp cached_grad(op, _, _) when op in @constants do
+  defp jvp(op, _, _) when op in @constants do
     []
   end
 
-  defp cached_grad(op, _, _) do
+  defp jvp(op, _, _) do
     raise ArgumentError, """
     gradient not yet implemented for Nx.#{op}.
 
@@ -793,9 +864,7 @@ defmodule Nx.Defn.Grad do
         batch_group_size: rhs_batch_group_size
       )
 
-    {dx, cache} = to_grad(x, gx, cache)
-    {dy, cache} = to_grad(y, gy, cache)
-    {maybe_add(dx, dy), cache}
+    grad_pairs([{x, gx}, {y, gy}], g, cache)
   end
 
   defp conv_spec_transpose([dim0, dim1 | rest]), do: [dim1, dim0 | rest]
@@ -937,8 +1006,8 @@ defmodule Nx.Defn.Grad do
 
   defp maybe_multiply(x, y) do
     cond do
-      one?(y) -> x
-      one?(x) -> y
+      one?(y) and Nx.Type.float?(x.type) -> x
+      one?(x) and Nx.Type.float?(y.type) -> y
       true -> Nx.multiply(x, y)
     end
   end

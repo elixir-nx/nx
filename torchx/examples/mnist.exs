@@ -1,7 +1,6 @@
 defmodule MNIST do
   import Nx.Defn
 
-
   defn init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
     b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
