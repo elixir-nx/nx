@@ -7179,14 +7179,12 @@ defmodule Nx do
 
   defp triangular_solve_n(a, b, opts) do
     %T{shape: {m, n}} = tensor!(a)
-    %T{type: type, shape: shape} = tensor!(b)
+    %T{type: type} = tensor!(b)
 
     output_type = Nx.Type.to_floating(type)
 
     impl!(b).triangular_solve(
-      {
-        %{b | type: output_type, shape: shape}
-      },
+      %{b | type: output_type},
       a,
       b
     )
