@@ -69,7 +69,8 @@ defmodule Torchx.Backend do
   defp from_torch_type(:float), do: {:f, 32}
   defp from_torch_type(:double), do: {:f, 64}
 
-  def device_option(opts), do: (opts[:backend_options] || [])[:device] || opts[:device] || :cpu
+  def device_option(nil), do: :cpu
+  def device_option(backend_opts), do: backend_opts[:device] || :cpu
 
   @devices %{
     cpu: 0,
@@ -183,7 +184,12 @@ defmodule Torchx.Backend do
 
   @impl true
   def from_binary(%T{type: type, shape: shape} = out, binary, opts) do
-    NIF.from_blob(binary, shape, torch_type(type), device_option(opts) |> torch_device())
+    NIF.from_blob(
+      binary,
+      shape,
+      torch_type(type),
+      device_option(opts[:backend_options]) |> torch_device()
+    )
     |> from_ref(out)
   end
 
@@ -508,6 +514,7 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(ref, _, _), do: ref
   end
 
+  @doc false
   def device(%T{data: %TB{ref: ref}}),
     do: NIF.device(ref) |> unwrap!() |> List.to_string() |> parse_torch_device_str()
 
