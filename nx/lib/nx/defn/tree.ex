@@ -276,9 +276,6 @@ defmodule Nx.Defn.Tree do
   def to_result(%T{data: %Expr{}} = t),
     do: t
 
-  def to_result(%T{} = t),
-    do: Expr.tensor(t)
-
   def to_result(other) do
     raise ArgumentError,
           "defn must return a tensor expression or a tuple, got: #{inspect(other)}"
