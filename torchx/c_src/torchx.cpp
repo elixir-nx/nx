@@ -264,9 +264,10 @@ NIF(normal)
   PARAM(0, double, mean);
   PARAM(1, double, std);
   SHAPE_PARAM(2, shape);
-  DEVICE_PARAM(3, device);
+  TYPE_PARAM(3, type);
+  DEVICE_PARAM(4, device);
 
-  TENSOR(torch::normal(mean, std, shape));
+  TENSOR(torch::normal(mean, std, shape, c10::nullopt, OPTS(type, device)));
 }
 
 NIF(arange)

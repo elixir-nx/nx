@@ -32,7 +32,7 @@ check_version:
 		exit 1; \
 	fi
 
-$(MIX_APP_PATH)/priv/torchx.so: c_src/torchx.cpp
+$(MIX_APP_PATH)/priv/torchx.so: c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	@echo 'Compiling: '$<
 	@mkdir -p $(MIX_APP_PATH)/priv
 	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(MIX_APP_PATH)/priv/torchx.so $(LDFLAGS)
