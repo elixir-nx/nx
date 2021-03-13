@@ -8,32 +8,13 @@ defmodule Nx.BinaryBackend.Traverser do
     %Traverser{ctx: {{1, count, [0]}, Enum.to_list(0..(count - 1))}}
   end
 
-  # def build(_shape, _opts \\ []) do
-  #   raise "build is removed"
-  #   # agg_axes = Keyword.get(opts, :aggregate, [])
-  #   # limits = Keyword.get(opts, :limits, :none)
-  #   # dilations = Keyword.get(opts, :dilations, 1)
-  #   # transpose = Keyword.get(opts, :transpose, :none)
-  #   # reverse = Keyword.get(opts, :reverse, :none)
-  #   # weight = Keyword.get(opts, :weight, 1)
-
-  #   # size = Nx.size(shape)
-
-  #   # {offsets_ws, readers_ws} =
-  #   #   build_weighted_shape(shape, weight, agg_axes, limits, dilations, transpose, reverse)
-
-  #   # build_from_parts(size, offsets_ws, readers_ws, weight)
-
-  
-  # end
-
+  @doc """
+  Build a traverser from weighted shape or an aggregate-weighted-shape-tuple.
+  """
   def build(size, weight, weighted_shape) when is_list(weighted_shape) do
     build(size, weight, WeightedShape.aggregate(weighted_shape, []))
   end
 
-  @doc """
-  Build a traverser from weighted shape.
-  """
   def build(size, weight, {offsets_ws, readers_ws}) do    
     size = size * weight
     offsets = expand_path(offsets_ws)
@@ -50,19 +31,6 @@ defmodule Nx.BinaryBackend.Traverser do
 
     %Traverser{ctx: {offset_ctx, readers}}
   end
-
-  # defp build_weighted_shape(shape, weight, agg_axes, limits, dilations, transpose, reverse) do
-  #   shape
-  #   |> WeightedShape.build(weight, limits, dilations)
-  #   |> case do
-  #     ws when transpose == :none ->
-  #       ws
-
-  #     ws when is_list(transpose) ->
-  #       WeightedShape.transpose(ws, transpose)
-  #   end
-  #   |> WeightedShape.aggregate(agg_axes)
-  # end
 
   def size(%Traverser{ctx: {{n_cycles, cycle_size, _}, _}}) do
     n_cycles * cycle_size

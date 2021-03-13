@@ -108,15 +108,6 @@ defmodule Nx.BinaryBackend.WeightedShape do
     Enum.map(axes, fn i -> Map.fetch!(map, i) end)
   end
 
-  # defp check_transpose!(axes) do
-  #   len = length(axes)
-  #   if Enum.sort(axes) != Enum.to_list(0..(len - 1)) do
-  #     raise ArgumentError,
-  #           "expected each axis of transpose permutation list to" <>
-  #           " appear exactly 1 time, got: #{inspect(axes)}"
-  #   end
-  # end
-
   @doc """
   Multiplies the current weights by the given weight.
 
