@@ -1267,6 +1267,28 @@ defmodule NxTest do
         Nx.random_normal(1, 0.1, 10.0, type: {:s, 32})
       end)
     end
+
+    test "accepts random seed option" do
+      result = Nx.random_normal(1, 0.1, 10.0, backend: {Nx.BinaryBackend, prng_seed: 42})
+      results = Enum.map(1..4, fn _ -> Nx.random_normal(1, 0.1, 10.0) end)
+
+      assert result == Nx.random_normal(1, 0.1, 10.0, backend: {Nx.BinaryBackend, prng_seed: 42})
+      assert results == Enum.map(1..4, fn _ -> Nx.random_normal(1, 0.1, 10.0) end)
+    end
+
+    test "accepts random seed option with the prng alg" do
+      result =
+        Nx.random_normal(1, 0.1, 10.0, backend: {Nx.BinaryBackend, prng_seed: {:exs1024s, 42}})
+
+      results = Enum.map(1..4, fn _ -> Nx.random_normal(1, 0.1, 10.0) end)
+
+      assert result ==
+               Nx.random_normal(1, 0.1, 10.0,
+                 backend: {Nx.BinaryBackend, prng_seed: {:exs1024s, 42}}
+               )
+
+      assert results == Enum.map(1..4, fn _ -> Nx.random_normal(1, 0.1, 10.0) end)
+    end
   end
 
   describe "random_uniform/3" do
@@ -1299,6 +1321,28 @@ defmodule NxTest do
           Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
         end
       )
+    end
+
+    test "accepts random seed option" do
+      result = Nx.random_uniform(1, 0.1, 10.0, backend: {Nx.BinaryBackend, prng_seed: 42})
+      results = Enum.map(1..4, fn _ -> Nx.random_uniform(1, 0.1, 10.0) end)
+
+      assert result == Nx.random_uniform(1, 0.1, 10.0, backend: {Nx.BinaryBackend, prng_seed: 42})
+      assert results == Enum.map(1..4, fn _ -> Nx.random_uniform(1, 0.1, 10.0) end)
+    end
+
+    test "accepts random seed option with the prng alg" do
+      result =
+        Nx.random_uniform(1, 0.1, 10.0, backend: {Nx.BinaryBackend, prng_seed: {:exs1024s, 42}})
+
+      results = Enum.map(1..4, fn _ -> Nx.random_uniform(1, 0.1, 10.0) end)
+
+      assert result ==
+               Nx.random_uniform(1, 0.1, 10.0,
+                 backend: {Nx.BinaryBackend, prng_seed: {:exs1024s, 42}}
+               )
+
+      assert results == Enum.map(1..4, fn _ -> Nx.random_uniform(1, 0.1, 10.0) end)
     end
   end
 

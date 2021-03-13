@@ -25,7 +25,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max, backend_options) do
-    if prng_seed = backend_options[:prng_seed], do: :rand.seed(prng_seed)
+    set_random_seed(backend_options)
 
     gen =
       case type do
@@ -40,7 +40,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_normal(%{type: type, shape: shape} = out, mu, sigma, backend_options) do
-    if prng_seed = backend_options[:prng_seed], do: :rand.seed(prng_seed)
+    set_random_seed(backend_options)
 
     data =
       for _ <- 1..Nx.size(shape),
@@ -48,6 +48,20 @@ defmodule Nx.BinaryBackend do
           do: number_to_binary(:rand.normal(mu, sigma), type)
 
     from_binary(out, data)
+  end
+
+  defp set_random_seed(backend_options) do
+    case backend_options[:prng_seed] do
+      prng_seed when is_integer(prng_seed) ->
+        {alg, _} = :rand.export_seed()
+        :rand.seed(alg, prng_seed)
+
+      {alg, seed} when is_atom(alg) ->
+        :rand.seed(alg, seed)
+
+      _ ->
+        nil
+    end
   end
 
   @impl true
