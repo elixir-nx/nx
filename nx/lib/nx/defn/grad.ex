@@ -425,44 +425,20 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:concatenate, [tensors, axis], %{shape: ans_shape}, g, cache) do
-    operand_shapes = Enum.map(tensors, & &1.shape)
-    limit_points = Enum.scan(operand_shapes, 0, fn x, acc -> elem(x, axis) + acc end)
+    zero_axes = List.duplicate(0, tuple_size(ans_shape))
+    ans_shape_list = Tuple.to_list(ans_shape)
 
-    n_tensors = length(tensors)
+    tensors
+    |> Enum.reduce({0, []}, fn t, {limit, result} ->
+      t_len = elem(t.shape, axis)
+      current_limit = t_len + limit
+      start = List.replace_at(zero_axes, axis, limit)
+      len = List.replace_at(ans_shape_list, axis, t_len)
 
-    axes = Nx.axes(ans_shape)
-
-    starts =
-      Enum.map(0..(n_tensors - 1), fn row ->
-        Enum.map(axes, fn col ->
-          if col == axis and row > 0 do
-            Enum.fetch!(limit_points, row - 1)
-          else
-            0
-          end
-        end)
-      end)
-
-    # TODO: Use Enum.zip_with/3 on Elixir v1.12
-    limits =
-      ans_shape
-      |> Tuple.to_list()
-      |> List.duplicate(n_tensors)
-      |> Enum.zip(limit_points)
-      |> Enum.map(fn {row, p} -> List.replace_at(row, axis, p) end)
-
-    starts
-    |> Enum.zip(limits)
-    |> Enum.zip(tensors)
-    |> Enum.map(fn {{start, limit}, t} ->
-      {start, len} =
-        start
-        |> Enum.zip(limit)
-        |> Enum.map(fn {s, lim} -> {s, lim - s} end)
-        |> Enum.unzip()
-
-      {t, Nx.slice(g, start, len)}
+      result = [{t, Nx.slice(g, start, len)} | result]
+      {current_limit, result}
     end)
+    |> elem(1)
     |> grad_pairs(g, cache)
   end
 
