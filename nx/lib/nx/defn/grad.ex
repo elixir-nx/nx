@@ -425,6 +425,35 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:concatenate, [tensors, axis], %{shape: ans_shape} = ans, g, cache) do
+    # temporary code annotations -- should not merge with this
+    """
+    # operand_shapes = Enum.map(tensors, & &1.shape)
+    -- operand_shapes = [o.aval.shape if ad.is_undefined_primal(o) else o.shape
+    --                  for o in operands]
+
+    # cumulative sum [1,2,3,4] -> [1,3,6,10]
+    --limit_points = np.cumsum([shape[dimension] for shape in operand_shapes])
+
+    # starts.shape = length(tensors) x tuple_size(Enum.at(operand_shapes, 0))
+    # starts = [
+    # [0,0,... 0]
+    # [0,0, ..., limit_points[1], 0, 0]
+    # [0,0, ..., limit_points[2], 0, 0]
+    # ...
+    # ]
+    --starts = np.zeros((len(operands), t.ndim), dtype=int)
+    --starts[1:, dimension] = limit_points[:-1]
+
+    # limits = List.duplicate(ans.shape, length(tensors)) |> Enum.zip(limit_points) |> Enum.map(fn {row, p} -> List.replace_at(row, axis, p) end)
+    -- limits = np.tile(t.shape, (len(operands), 1))
+    -- limits[:, dimension] = limit_points
+
+
+
+    return [slice(t, start, limit) if ad.is_undefined_primal(o) else None
+        for o, start, limit in zip(operands, starts, limits)]
+    """
+
     operand_shapes = Enum.map(tensors, & &1.shape)
 
     limit_points =
