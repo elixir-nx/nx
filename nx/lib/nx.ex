@@ -7328,6 +7328,62 @@ defmodule Nx do
   end
 
   @doc """
+  Slices a tensor along the given axis.
+
+  You can optionally provide a `stride` to specify the amount
+  of stride in along the given dimension.
+
+  Start index must be greater than or equal to zero. Length must
+  be strictly greater than zero. `start_index + length` must not
+  exceed the respective tensor dimension.
+
+  The axis will be normalized with the dimensions and names of the
+  given tensor.
+
+  If the `:strides` is given, it must be strictly greater than zero.
+
+  It is not possible to slice in reverse.
+
+  ## Examples
+
+      iex> Nx.slice_axis(Nx.iota({2, 5}), 1, 2, 1)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [6, 7]
+        ]
+      >
+
+      iex> Nx.slice_axis(Nx.iota({2, 5}, names: [:x, :y]), 0, 1, :x)
+      #Nx.Tensor<
+        s64[x: 1][y: 5]
+        [
+          [0, 1, 2, 3, 4]
+        ]
+      >
+
+      iex> Nx.slice_axis(Nx.iota({2, 5}), 0, 2, -1)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [0, 1],
+          [5, 6]
+        ]
+      >
+
+  """
+  def slice_axis(tensor, start_index, len, axis, opts \\ [])
+      when is_integer(start_index) and is_integer(len) do
+    assert_keys!(opts, [:strides])
+    %T{shape: shape, names: names} = tensor = tensor!(tensor)
+    axis = Nx.Shape.normalize_axis(shape, axis, names)
+    start_indices = List.duplicate(0, rank(tensor)) |> List.replace_at(axis, start_index)
+    lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
+    slice(tensor, start_indices, lengths, opts)
+  end
+
+  @doc """
   Concatenates tensors along the given axis.
 
   If no axis is provided, defaults to 0.
