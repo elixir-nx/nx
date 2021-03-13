@@ -424,6 +424,51 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:concatenate, [tensors, axis], %{shape: ans_shape} = ans, g, cache) do
+    operand_shapes = Enum.map(tensors, & &1.shape)
+
+    limit_points =
+      Enum.reduce(operand_shapes, [], fn
+        x, [] -> [elem(x, axis) - 1]
+        x, [h | _] = acc -> [elem(x, axis) - 1 + h | acc]
+      end)
+      |> Enum.reverse()
+
+    n_tensors = length(tensors)
+    ndim = tuple_size(ans_shape)
+
+    starts =
+      Enum.map(0..(n_tensors - 1), fn row ->
+        Enum.map(0..(ndim - 1), fn col ->
+          if col == axis and row > 0 do
+            Enum.at(limit_points, row)
+          else
+            0
+          end
+        end)
+      end)
+
+    limits =
+      ans_shape
+      |> Tuple.to_list()
+      |> List.duplicate(n_tensors)
+      |> Enum.zip(limit_points)
+      |> Enum.map(fn {row, p} -> List.replace_at(row, axis, p) end)
+
+    starts
+    |> Enum.zip(limits)
+    |> Enum.map(fn {start, limit} ->
+      {start, len} =
+        start
+        |> Enum.zip(limit)
+        |> Enum.map(fn {s, lim} -> {s, lim - s + 1} end)
+        |> Enum.unzip()
+
+      {Nx.slice(ans, start, len), g}
+    end)
+    |> grad_pairs(g, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
