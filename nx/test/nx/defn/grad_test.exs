@@ -1594,52 +1594,20 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes grad for {1}-tensor" do
-      # for all wip examples below
-      # jax.lax._concatenate_transpose_rule returns `result`
-      # and jax.grad(...) returns `Out[x]`
-
-      # (jax.grad(lambda x: jnp.sum(jnp.sum(jnp.concatenate((x, x),
-      # ...: 0)))))(np.array([1.0]))
-      # result [DeviceArray([1.], dtype=float32), DeviceArray([1.], dtype=float32)]
-      # Out[14]: DeviceArray([2.], dtype=float32)
       assert concatenate_grad(Nx.tensor([1.0])) == Nx.tensor([2.0])
     end
 
     test "computes grad for {2, 2} tensor" do
-      # (jax.grad(lambda x: jnp.sum(jnp.sum(jnp.concatenate((x, x),
-      # ...: 0)))))(np.array([[1.0, 2.0], [3.0, 4.0]]))
-      # result [DeviceArray([[1., 1.],
-      #             [1., 1.]], dtype=float32), DeviceArray([[1., 1.],
-      #             [1., 1.]], dtype=float32)]
-      # Out[13]:
-      # DeviceArray([[2., 2.],
-      #             [2., 2.]], dtype=float32)
       assert concatenate_grad(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
                Nx.tensor([[2.0, 2.0], [2.0, 2.0]])
     end
 
     test "computes grad for powers of a {2, 2}-tensor" do
-      # (jax.grad(lambda x: jnp.sum(jnp.sum(jnp.concatenate((jnp.power(x, 2), jnp.power(x, 3),
-      # ...: 0)))))(np.array([[1.0, 2.0], [3.0, 4.0]]))
-      # result [DeviceArray([[1., 1.],
-      #              [1., 1.]], dtype=float32), DeviceArray([[1., 1.],
-      #              [1., 1.]], dtype=float32)]
-      # Out[11]:
-      # DeviceArray([[ 5., 16.],
-      #              [33., 56.]], dtype=float32)
       assert concatenate_grad_power(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
                Nx.tensor([[5.0, 16.0], [33.0, 56.0]])
     end
 
     test "computes grad for composed functions on a multidim tensor" do
-      # (jax.grad(lambda x: jnp.sum(jnp.sum(jnp.concatenate((jnp.power(x, 2), jnp.power(x, 3),
-      # ...: 0)))))(np.array([[1.0, 2.0], [3.0, 4.0]]))
-      # result [DeviceArray([[1., 1.],
-      #              [1., 1.]], dtype=float32), DeviceArray([[1., 1.],
-      #              [1., 1.]], dtype=float32)]
-      # Out[11]:
-      # DeviceArray([[ 5., 16.],
-      #              [33., 56.]], dtype=float32)
       assert concatenate_grad_composed(Nx.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]]])) ==
                Nx.tensor([[[[5.0, 2.5], [1.6666667, 1.25], [1.0, 0.8333334]]]])
     end
