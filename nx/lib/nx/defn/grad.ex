@@ -338,8 +338,11 @@ defmodule Nx.Defn.Grad do
         end
 
       locs = Nx.equal(x, Nx.reshape(ans, List.to_tuple(shape)))
+      IO.inspect(locs, label: "locs")
       num = Nx.multiply(g, locs)
+      IO.inspect(num, label: "num")
       den = Nx.sum(locs, axes: axes, keep_axes: true)
+      IO.inspect(den, label: "den")
       Nx.divide(num, den)
     end)
   end
@@ -463,7 +466,7 @@ defmodule Nx.Defn.Grad do
         |> Enum.map(fn {s, lim} -> {s, lim - s} end)
         |> Enum.unzip()
 
-      {t, Nx.slice(ones, start, len)}
+      {t, Nx.slice(g, start, len)}
     end)
     |> grad_pairs(g, cache)
   end

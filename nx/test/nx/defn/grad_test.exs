@@ -1593,6 +1593,13 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    defn concatenate_grad_log1p(t) do
+      grad(
+        t,
+        Nx.sum(Nx.log1p(Nx.concatenate([Nx.power(t, 2), Nx.power(t, 3)], axis: 3)))
+      )
+    end
+
     test "computes grad for {1}-tensor" do
       assert concatenate_grad(Nx.tensor([1.0])) == Nx.tensor([2.0])
     end
@@ -1610,6 +1617,11 @@ defmodule Nx.Defn.GradTest do
     test "computes grad for composed functions on a multidim tensor" do
       assert concatenate_grad_composed(Nx.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]]])) ==
                Nx.tensor([[[[5.0, 2.5], [1.6666667, 1.25], [1.0, 0.8333334]]]])
+    end
+
+    test "computes grad for composed functions applied to concatenate" do
+      assert concatenate_grad_log1p(Nx.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]]])) ==
+               Nx.tensor([[[[2.5, 2.1333334], [1.5642858, 1.2090498], [0.9798535, 0.8220202]]]])
     end
   end
 
