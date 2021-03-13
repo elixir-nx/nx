@@ -24,7 +24,9 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
-  def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
+  def random_uniform(%{type: type, shape: shape} = out, min, max, backend_options) do
+    if prng_seed = backend_options[:prng_seed], do: :rand.seed(prng_seed)
+
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
@@ -37,7 +39,9 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
+  def random_normal(%{type: type, shape: shape} = out, mu, sigma, backend_options) do
+    if prng_seed = backend_options[:prng_seed], do: :rand.seed(prng_seed)
+
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
@@ -1723,24 +1727,42 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def scatter_window_max(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(out, tensor, source, &Nx.greater_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+    select_and_scatter(
+      out,
+      tensor,
+      source,
+      &Nx.greater_equal/2,
+      window_dimensions,
+      opts,
+      init_value,
+      &Nx.add/2
+    )
   end
 
   @impl true
   def scatter_window_min(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(out, tensor, source, &Nx.less_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+    select_and_scatter(
+      out,
+      tensor,
+      source,
+      &Nx.less_equal/2,
+      window_dimensions,
+      opts,
+      init_value,
+      &Nx.add/2
+    )
   end
 
   defp select_and_scatter(
-        %{type: {_, output_size} = output_type, shape: output_shape} = out,
-        t,
-        source,
-        select_fn,
-        window_dimensions,
-        opts,
-        init_value,
-        scatter_fn
-      ) do
+         %{type: {_, output_size} = output_type, shape: output_shape} = out,
+         t,
+         source,
+         select_fn,
+         window_dimensions,
+         opts,
+         init_value,
+         scatter_fn
+       ) do
     padding = opts[:padding]
     strides = opts[:strides]
 

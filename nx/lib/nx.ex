@@ -705,7 +705,6 @@ defmodule Nx do
     * `:backend` - the backend to allocate the tensor on. It is either
       an atom or a tuple in the shape `{backend, options}`. This option
       is ignored inside `defn`
-
   """
   @doc type: :random
   def random_uniform(tensor_or_shape, min, max, opts \\ [])
