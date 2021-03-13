@@ -338,11 +338,8 @@ defmodule Nx.Defn.Grad do
         end
 
       locs = Nx.equal(x, Nx.reshape(ans, List.to_tuple(shape)))
-      IO.inspect(locs, label: "locs")
       num = Nx.multiply(g, locs)
-      IO.inspect(num, label: "num")
       den = Nx.sum(locs, axes: axes, keep_axes: true)
-      IO.inspect(den, label: "den")
       Nx.divide(num, den)
     end)
   end
@@ -427,7 +424,7 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:concatenate, [tensors, axis], %{shape: ans_shape} = ans, g, cache) do
+  defp grad(:concatenate, [tensors, axis], %{shape: ans_shape}, g, cache) do
     operand_shapes = Enum.map(tensors, & &1.shape)
     limit_points = Enum.scan(operand_shapes, 0, fn x, acc -> elem(x, axis) + acc end)
 
