@@ -62,7 +62,7 @@ defmodule Torchx.LinReg do
     lin_fn = fn x -> m * x + b end
 
     # These will be very close to the above coefficients
-    {trained_m, trained_b} = train(params, epochs, lin_fn)
+    {time, {trained_m, trained_b}} = :timer.tc(__MODULE__, :train, [params, epochs, lin_fn])
 
     trained_m =
       trained_m
@@ -76,9 +76,10 @@ defmodule Torchx.LinReg do
       |> Nx.backend_transfer()
       |> Nx.to_scalar()
 
+    IO.puts("Trained in #{time / 1_000_000} sec.")
     IO.puts("Trained m: #{trained_m} Trained b: #{trained_b}\n")
+    IO.puts("Accuracy m: #{m - trained_m} Accuracy b: #{b - trained_b}")
   end
 end
-
 
 Torchx.LinReg.run()
