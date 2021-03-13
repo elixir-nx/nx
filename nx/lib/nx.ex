@@ -7378,7 +7378,7 @@ defmodule Nx do
     assert_keys!(opts, [:strides])
     %T{shape: shape, names: names} = tensor = tensor!(tensor)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
-    start_indices = List.duplicate(0, rank(tensor)) |> List.update_at(axis, fn _ -> start_index end)
+    start_indices = List.duplicate(0, rank(tensor)) |> List.replace_at(axis, start_index)
     lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
     slice(tensor, start_indices, lengths, opts)
   end
