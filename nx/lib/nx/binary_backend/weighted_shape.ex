@@ -127,7 +127,10 @@ defmodule Nx.BinaryBackend.WeightedShape do
       [{3, 80}, {10, 8}]
   """
   def with_weight(weighted_shape, weight) do
-    Enum.map(weighted_shape, fn {d, w} -> {d, w * weight} end)
+    Enum.map(weighted_shape, fn
+      {d, w} -> {d, w * weight}
+      a when is_atom(a) -> a
+    end)
   end
 
   @doc """
@@ -193,6 +196,20 @@ defmodule Nx.BinaryBackend.WeightedShape do
     [{dim, w * dilation_factor(dim, dil)} | dilate_list(rest, dilations)]
   end
 
+  def reverse(weighted_shape, axes) do
+    reverse(weighted_shape, 0, axes)
+  end
+
+  defp reverse([head | tail], axis, axes) do
+    if axis in axes do
+      [:reverse, head | reverse(tail, axis + 1, axes)]
+    else
+      [head | reverse(tail, axis + 1, axes)]
+    end
+  end
+
+  defp reverse([], _axis, _axes), do: []
+
   @doc """
   Reads the chunk size from a weighted shape at the given index.
 
@@ -235,6 +252,12 @@ defmodule Nx.BinaryBackend.WeightedShape do
 
   defp traversal_list([], i) do
     i
+  end
+
+  defp traversal_list([:reverse | dims], i) do
+    dims
+    |> traversal_list(i)
+    |> Enum.reverse()
   end
 
   defp traversal_list([{dim, size} | dims], i) do

@@ -2,6 +2,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
   use ExUnit.Case, async: true
 
   alias Nx.BinaryBackend.Traverser
+  alias Nx.BinaryBackend.WeightedShape
 
   @example_expected [
     [0, 1, 8, 9, 64, 65, 72, 73],
@@ -22,16 +23,27 @@ defmodule Nx.BinaryBackend.TraverserTest do
     [54, 55, 62, 63, 118, 119, 126, 127]
   ]
 
-  test "Enum.count/1 works" do
-    trav = Traverser.build({2, 2, 2, 2, 2, 2, 2}, [0])
-    assert Traverser.size(trav) == 128
+  describe "size/1" do
+    test "works" do
+      shape = {2, 2, 2, 2, 2, 2, 2}
+      ws = WeightedShape.build(shape)
+      size = Nx.size(shape)
+      trav = Traverser.build(size, 1, ws)
+      assert Traverser.size(trav) == 128
+    end
   end
 
   test "works for examples case" do
     shape = {2, 2, 2, 2, 2, 2, 2}
     axes = [0, 3, 6]
-    trav = Traverser.build(shape, aggregate: axes)
 
+    ws =
+      shape
+      |> WeightedShape.build()
+      |> WeightedShape.aggregate(axes)
+
+    size = Nx.size(shape)
+    trav = Traverser.build(size, 1, ws)
     assert Traverser.to_flat_list(trav) == List.flatten(@example_expected)
   end
 
@@ -44,7 +56,15 @@ defmodule Nx.BinaryBackend.TraverserTest do
 
     assert t1.data.state == <<0, 1, 2, 3, 4, 5>>
 
-    trav1 = Traverser.build(shape1, aggregate: axes1)
+    ws1 =
+      shape1
+      |> WeightedShape.build()
+      |> WeightedShape.aggregate(axes1)
+
+    size1 = Nx.size(shape1)
+
+    trav1 = Traverser.build(size1, 1, ws1)
+
     assert Traverser.to_flat_list(trav1) == exp1 |> Enum.join() |> to_charlist()
 
     shape2 = {3, 2}
@@ -52,48 +72,135 @@ defmodule Nx.BinaryBackend.TraverserTest do
     t2 = Nx.iota(shape2, type: {:u, 8})
 
     exp2 = Nx.BinaryBackend.aggregate_axes(t2.data.state, axes2, t2.shape, 8)
-    trav2 = Traverser.build(shape2, aggregate: axes2)
+
+     ws2 =
+      t2.shape
+      |> WeightedShape.build()
+      |> WeightedShape.aggregate(axes2)
+
+    size2 = Nx.size(t2.shape)
+    trav2 = Traverser.build(size2, 1, ws2)
     assert Traverser.to_flat_list(trav2) == exp2 |> Enum.join() |> to_charlist()
   end
 
   test "reduce_aggregates works" do
     shape = {2, 2, 2, 2, 2, 2, 2}
     axes = [0, 3, 6]
-    trav = Traverser.build(shape, aggregate: axes)
+    ws =
+      shape
+      |> WeightedShape.build()
+      |> WeightedShape.aggregate(axes)
+
+    size = Nx.size(shape)
+
+    trav = Traverser.build(size, 1, ws)
+
     out = Traverser.reduce_aggregates(trav, [], fn agg, acc -> [agg | acc] end)
+
     assert Enum.reverse(out) == @example_expected
   end
 
-  test "works with no :aggregate axes" do
+  test "works for aggregate with empty axes" do
     shape = {2, 2, 2, 2, 2, 2, 2}
-    trav = Traverser.build(shape, aggregate: [])
+
+    ws =
+      shape
+      |> WeightedShape.build()
+      |> WeightedShape.aggregate([])
+
+    size = Nx.size(shape)
+    trav = Traverser.build(size, 1, ws)
     assert Traverser.to_flat_list(trav) == Enum.to_list(0..127)
   end
 
   test "simple transpose works for {2, 3}" do
-    trav = Traverser.build({2, 3}, transpose: [1, 0])
-    cur = Nx.to_flat_list(Nx.transpose(Nx.iota({2, 3}, type: {:u, 8})))
+    shape = {2, 3}
+    ws =
+      shape
+      |> WeightedShape.build()
+      |> WeightedShape.transpose([1, 0])
+
+    size = Nx.size(shape)
+    trav = Traverser.build(size, 1, ws)
+
+    cur = Nx.to_flat_list(Nx.transpose(Nx.iota(shape, type: {:u, 8})))
     out = Traverser.to_flat_list(trav)
     assert out == cur
     assert out == [0, 3, 1, 4, 2, 5]
   end
 
   test "simple transpose works for {3, 2}" do
-    trav = Traverser.build({3, 2}, transpose: [1, 0])
-    cur = Nx.to_flat_list(Nx.transpose(Nx.iota({3, 2}, type: {:u, 8})))
+    shape = {3, 2}
+    ws =
+      shape
+      |> WeightedShape.build()
+      |> WeightedShape.transpose([1, 0])
+
+    size = Nx.size(shape)
+    trav = Traverser.build(size, 1, ws)
+
+    cur = Nx.to_flat_list(Nx.transpose(Nx.iota(shape, type: {:u, 8})))
     out = Traverser.to_flat_list(trav)
     assert out == cur
     assert out == [0, 2, 4, 1, 3, 5]
   end
 
-  test "reverse works" do
-    trav = Traverser.build({2, 2, 2}, reverse: true)
-    assert Traverser.to_flat_list(trav) == Enum.map(7..0, fn i -> i end)
+  describe "reverse/2" do
+    test "results in a reversed order when all dims are reversed" do
+      shape = {2, 2, 2}
+      ws =
+        shape
+        |> WeightedShape.build()
+        |> WeightedShape.reverse([0, 1, 2])
+
+      size = Nx.size(shape)
+      trav = Traverser.build(size, 1, ws)
+      assert Traverser.to_flat_list(trav) == Enum.map(7..0, fn i -> i end)
+    end
+
+    test "flips a matrix's rows for axis 0" do
+      shape = {3, 3}
+      ws =
+        shape
+        |> WeightedShape.build()
+        |> WeightedShape.reverse([0])
+
+      size = Nx.size(shape)
+      trav = Traverser.build(size, 1, ws)
+      assert Traverser.to_flat_list(trav) == List.flatten([
+        [6, 7, 8],
+        [3, 4, 5],
+        [0, 1, 2]
+      ])
+    end
+
+    test "flips a matrix's columns for axis 1" do
+      shape = {3, 3}
+      ws =
+        shape
+        |> WeightedShape.build()
+        |> WeightedShape.reverse([1])
+
+      size = Nx.size(shape)
+      trav = Traverser.build(size, 1, ws)
+      assert Traverser.to_flat_list(trav) == List.flatten([
+        [2, 1, 0],
+        [5, 4, 3],
+        [8, 7, 6]
+      ])
+    end
   end
 
   defp trav_dot(shape1, axes1, shape2, axes2) do
-    trav1 = Traverser.build(shape1, aggregate: axes1)
-    trav2 = Traverser.build(shape2, aggregate: axes2)
+    ws1 = WeightedShape.build(shape1)
+    ws1 = WeightedShape.aggregate(ws1, axes1)
+    size1 = Nx.size(shape1)
+    trav1 = Traverser.build(size1, 1, ws1)
+
+    ws2 = WeightedShape.build(shape2)
+    ws2 = WeightedShape.aggregate(ws2, axes2)
+    size2 = Nx.size(shape2)
+    trav2 = Traverser.build(size2, 1, ws2)
 
     Traverser.zip_reduce_aggregates(
       trav1,

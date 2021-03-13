@@ -7,7 +7,7 @@ defmodule Nx.BinaryBackend.Bits do
   alias Nx.BinaryBackend
   alias Nx.Tensor, as: T
 
-  @compile {:inline, from_number: 2, to_number: 2, number_at: 3, slice: 4, from_scalar: 2}
+  @compile {:inline, from_number: 2, to_number: 2, number_at: 3, slice: 4, slice: 3, from_scalar: 2}
 
   @doc """
   Encodes a scalar number or tensor into a bitstring according to the type.
@@ -107,9 +107,20 @@ defmodule Nx.BinaryBackend.Bits do
 
   """
   def slice(bin, {_, sizeof}, start, len) when is_integer(len) and len > 0 do
-    bits_offset = start * sizeof
-    sizeof_slice = len * sizeof
-    <<_::size(bits_offset), sliced::size(sizeof_slice)-bitstring, _::bitstring>> = bin
+    slice(bin, start * sizeof, len * sizeof)
+  end
+
+
+  @doc """
+  Slices a bitstring from the start to the start + len.
+
+  ## Examples
+
+      iex> Bits.slice(<<1, 2, 3, 4>>, 8, 16)
+      <<2, 3>>
+  """
+  def slice(bin, start, len) when is_integer(len) and len > 0 do
+    <<_::size(start), sliced::size(len)-bitstring, _::bitstring>> = bin
     sliced
   end
 end

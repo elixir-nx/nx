@@ -7,8 +7,7 @@ defmodule Nx.BinaryBackend.View do
             weighted_shape: nil,
             weight: 1,
             changes: [],
-            must_be_resolved?: false,
-            reversed?: false
+            must_be_resolved?: false
 
   def build(shape) do
     %View{
@@ -23,21 +22,22 @@ defmodule Nx.BinaryBackend.View do
 
   def has_changes?(%View{changes: c}), do: c != []
 
-  def meta_aggregate(view, axes) do
+  def aggregate(view, axes) do
     %View{view | must_be_resolved?: true}
     |> add_change(:aggregate, axes)
     |> update_weighted_shape(fn ws -> WeightedShape.aggregate(ws, axes) end)
   end
 
-  def meta_transpose(view, axes) do
+  def transpose(view, axes) do
     view
     |> add_change(:transpose, axes)
     |> update_weighted_shape(fn ws -> WeightedShape.transpose(ws, axes) end)
   end
 
-  def meta_reverse(view) do
-    view = add_change(view, :reverse, true)
-    %View{view | reversed?: !view.reversed?}
+  def reverse(view, axes) do
+    view
+    |> add_change(:reverse, axes)
+    |> update_weighted_shape(fn ws -> WeightedShape.reverse(ws, axes) end)
   end
 
   def dilate(view, dilation) do
@@ -53,9 +53,19 @@ defmodule Nx.BinaryBackend.View do
   end
 
   def with_type(view, {_, weight} = type) do
-    view
+    %View{
+      view |
+      weight: weight
+    }
     |> add_change(:type, type)
-    |> update_weighted_shape(fn ws -> WeightedShape.with_weight(ws, weight) end)
+    |> update_weighted_shape(fn
+      {o, r} -> 
+        ow = WeightedShape.with_weight(o, weight)
+        rw = WeightedShape.with_weight(r, weight)
+        {ow, rw}
+      ws when is_list(ws) ->
+        WeightedShape.with_weight(ws, weight)
+    end)
   end
 
   defp add_change(%View{changes: changes} = view, key, value) do
@@ -66,23 +76,7 @@ defmodule Nx.BinaryBackend.View do
     %View{view | weighted_shape: fun.(ws)}
   end
 
-  def build_traverser(%View{} = view) do
-    %View{
-      size: size,
-      weighted_shape: weighted_shape,
-      weight: weight,
-      reversed?: reversed?
-    } = view
-
-    {offsets_ws, readers_ws} =
-      case weighted_shape do
-        {_, _} = offsets_and_readers ->
-          offsets_and_readers
-
-        offsets when is_list(offsets) ->
-          WeightedShape.aggregate(offsets, [])
-      end
-
-    Traverser.build_from_parts(size, offsets_ws, readers_ws, weight, reversed?)
+  def build_traverser(%View{size: s, weight: w, weighted_shape: ws}) do
+    Traverser.build(s, w, ws)
   end
 end

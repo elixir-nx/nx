@@ -8,63 +8,61 @@ defmodule Nx.BinaryBackend.Traverser do
     %Traverser{ctx: {{1, count, [0]}, Enum.to_list(0..(count - 1))}}
   end
 
-  def build(shape, opts \\ []) when is_tuple(shape) do
-    agg_axes = Keyword.get(opts, :aggregate, [])
-    limits = Keyword.get(opts, :limits, :none)
-    dilations = Keyword.get(opts, :dilations, 1)
-    transpose = Keyword.get(opts, :transpose, :none)
-    reversed? = Keyword.get(opts, :reverse, false)
-    weight = Keyword.get(opts, :weight, 1)
+  # def build(_shape, _opts \\ []) do
+  #   raise "build is removed"
+  #   # agg_axes = Keyword.get(opts, :aggregate, [])
+  #   # limits = Keyword.get(opts, :limits, :none)
+  #   # dilations = Keyword.get(opts, :dilations, 1)
+  #   # transpose = Keyword.get(opts, :transpose, :none)
+  #   # reverse = Keyword.get(opts, :reverse, :none)
+  #   # weight = Keyword.get(opts, :weight, 1)
 
-    size = Nx.size(shape)
+  #   # size = Nx.size(shape)
 
-    {offsets_ws, readers_ws} =
-      build_weighted_shape(shape, weight, agg_axes, limits, dilations, transpose)
+  #   # {offsets_ws, readers_ws} =
+  #   #   build_weighted_shape(shape, weight, agg_axes, limits, dilations, transpose, reverse)
 
-    build_from_parts(size, offsets_ws, readers_ws, weight, reversed?)
+  #   # build_from_parts(size, offsets_ws, readers_ws, weight)
+
+  
+  # end
+
+  def build(size, weight, weighted_shape) when is_list(weighted_shape) do
+    build(size, weight, WeightedShape.aggregate(weighted_shape, []))
   end
 
   @doc """
-  Build a traverser from size, weighted shape parts, and weights.
+  Build a traverser from weighted shape.
   """
-  def build_from_parts(
-        size,
-        offsets_weighted_shape,
-        readers_weighted_shape,
-        weight,
-        reversed? \\ false
-      ) do
+  def build(size, weight, {offsets_ws, readers_ws}) do    
     size = size * weight
-    offsets = expand_path(offsets_weighted_shape)
-    readers = expand_path(readers_weighted_shape)
+    offsets = expand_path(offsets_ws)
+    readers = expand_path(readers_ws)
 
     cycle_size = length(offsets) * length(readers) * weight
 
-    do_build_struct(size, cycle_size, offsets, readers, reversed?)
+    do_build_struct(size, cycle_size, offsets, readers)
   end
 
-  defp do_build_struct(size, cycle_size, offsets, readers, reversed?) do
-    readers = reverse_list(readers, reversed?)
-
-    offsets = reverse_list(offsets, reversed?)
+  defp do_build_struct(size, cycle_size, offsets, readers) do
     n_cycles = div(size, cycle_size)
     offset_ctx = {n_cycles, cycle_size, offsets}
 
     %Traverser{ctx: {offset_ctx, readers}}
   end
 
-  defp build_weighted_shape(shape, weight, agg_axes, limits, dilations, transpose) do
-    shape
-    |> WeightedShape.build(weight, limits, dilations)
-    |> case do
-      ws when transpose == :none ->
-        ws
+  # defp build_weighted_shape(shape, weight, agg_axes, limits, dilations, transpose, reverse) do
+  #   shape
+  #   |> WeightedShape.build(weight, limits, dilations)
+  #   |> case do
+  #     ws when transpose == :none ->
+  #       ws
 
-      ws when is_list(transpose) ->
-        WeightedShape.transpose(ws, transpose)
-    end
-    |> WeightedShape.aggregate(agg_axes)
-  end
+  #     ws when is_list(transpose) ->
+  #       WeightedShape.transpose(ws, transpose)
+  #   end
+  #   |> WeightedShape.aggregate(agg_axes)
+  # end
 
   def size(%Traverser{ctx: {{n_cycles, cycle_size, _}, _}}) do
     n_cycles * cycle_size
@@ -89,12 +87,12 @@ defmodule Nx.BinaryBackend.Traverser do
   @doc """
   Element-wise reduce over 2 traversals.
   """
-  def elem_wise_reduce(trav1, trav2, acc, fun) do
+  def elem_wise_reduce2(trav1, trav2, acc, fun) do
     n = size(trav1)
 
     # TODO: remove this check - for debugging while WIP
     if n != size(trav2) do
-      raise ArgumentError, "reduce2 sizes were different, got: #{n} and #{size(trav2)} "
+      raise ArgumentError, "elem_wise_reduce2 sizes were different, got: #{n} and #{size(trav2)} "
     end
 
     %Traverser{ctx: {{_nc1, cs1, o1}, r1}} = trav1
@@ -190,9 +188,6 @@ defmodule Nx.BinaryBackend.Traverser do
   defp zip_reduce_readers(o1, [r1 | rest1], o2, [r2 | rest2], inner_acc, inner_fn) do
     zip_reduce_readers(o1, rest1, o2, rest2, inner_fn.(o1 + r1, o2 + r2, inner_acc), inner_fn)
   end
-
-  defp reverse_list(list, true), do: Enum.reverse(list)
-  defp reverse_list(list, false), do: list
 
   defp expand_path(path) do
     path
