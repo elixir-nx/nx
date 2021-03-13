@@ -5,26 +5,26 @@ defmodule Nx.Defn.TreeTest do
   alias Nx.Tensor, as: T
 
   describe "rewrite_types" do
-    @u64_param Expr.parameter(nil, {:u, 64}, {}, 0)
-    @s64_param Expr.parameter(nil, {:s, 64}, {}, 1)
-    @f64_param Expr.parameter(nil, {:f, 64}, {}, 2)
-
     test "wraps parameters" do
-      assert %T{data: %Expr{op: :as_type, args: [@u64_param]}, type: {:u, 32}} =
-               Tree.rewrite_types(@u64_param, max_unsigned_type: {:u, 32})
+      u64_param = Expr.parameter(nil, {:u, 64}, {}, 0)
+      s64_param = Expr.parameter(nil, {:s, 64}, {}, 1)
+      f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
 
-      assert %T{data: %Expr{op: :as_type, args: [@s64_param]}, type: {:s, 32}} =
-               Tree.rewrite_types(@s64_param, max_signed_type: {:s, 32})
+      assert %T{data: %Expr{op: :as_type, args: [^u64_param]}, type: {:u, 32}} =
+               Tree.rewrite_types(u64_param, max_unsigned_type: {:u, 32})
 
-      assert %T{data: %Expr{op: :as_type, args: [@f64_param]}, type: {:f, 32}} =
-               Tree.rewrite_types(@f64_param, max_float_type: {:f, 32})
+      assert %T{data: %Expr{op: :as_type, args: [^s64_param]}, type: {:s, 32}} =
+               Tree.rewrite_types(s64_param, max_signed_type: {:s, 32})
 
-      assert %T{data: %Expr{op: :as_type, args: [@f64_param]}, type: {:bf, 16}} =
-               Tree.rewrite_types(@f64_param, max_float_type: {:bf, 16})
+      assert %T{data: %Expr{op: :as_type, args: [^f64_param]}, type: {:f, 32}} =
+               Tree.rewrite_types(f64_param, max_float_type: {:f, 32})
 
-      assert @s64_param = Tree.rewrite_types(@s64_param, max_float_type: {:f, 32})
-      assert @f64_param = Tree.rewrite_types(@f64_param, max_signed_type: {:s, 32})
-      assert @f64_param = Tree.rewrite_types(@f64_param, max_unsigned_type: {:u, 32})
+      assert %T{data: %Expr{op: :as_type, args: [^f64_param]}, type: {:bf, 16}} =
+               Tree.rewrite_types(f64_param, max_float_type: {:bf, 16})
+
+      assert Tree.rewrite_types(s64_param, max_float_type: {:f, 32}) == s64_param
+      assert Tree.rewrite_types(f64_param, max_signed_type: {:s, 32}) == f64_param
+      assert Tree.rewrite_types(f64_param, max_unsigned_type: {:u, 32}) == f64_param
     end
 
     test "converts tensors" do
@@ -48,21 +48,26 @@ defmodule Nx.Defn.TreeTest do
     end
 
     test "converts expressions" do
+      s64_param = Expr.parameter(nil, {:s, 64}, {}, 1)
+      f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
+
       assert %T{data: %Expr{op: :exp, args: [_]}, type: {:f, 32}} =
-               Tree.rewrite_types(Nx.exp(@s64_param), max_float_type: {:f, 32})
+               Tree.rewrite_types(Nx.exp(s64_param), max_float_type: {:f, 32})
 
       assert %T{
                data: %Expr{
                  op: :exp,
-                 args: [%T{data: %Expr{op: :as_type, args: [@f64_param]}, type: {:f, 32}}]
+                 args: [%T{data: %Expr{op: :as_type, args: [^f64_param]}, type: {:f, 32}}]
                },
                type: {:f, 32}
-             } = Tree.rewrite_types(Nx.exp(@f64_param), max_float_type: {:f, 32})
+             } = Tree.rewrite_types(Nx.exp(f64_param), max_float_type: {:f, 32})
     end
 
     test "converts functions" do
+      f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
+
       assert %T{data: %Expr{op: :reduce, args: [_, _, _, fun]}, type: {:f, 32}} =
-               Tree.rewrite_types(Nx.reduce(@f64_param, 1, &Nx.divide/2), max_float_type: {:f, 32})
+               Tree.rewrite_types(Nx.reduce(f64_param, 1, &Nx.divide/2), max_float_type: {:f, 32})
 
       assert %T{data: %Expr{op: :fun, args: [[arg1, arg2], div, _]}} = fun
       assert %T{data: %Expr{op: :parameter}, type: {:f, 32}} = arg1
@@ -71,21 +76,28 @@ defmodule Nx.Defn.TreeTest do
     end
 
     test "converts tuples" do
-      assert {%T{data: %Expr{op: :as_type, args: [@s64_param]}, type: {:s, 32}},
-              %T{data: %Expr{op: :as_type, args: [@f64_param]}, type: {:f, 32}}} =
-               Tree.rewrite_types({@s64_param, @f64_param},
+      s64_param = Expr.parameter(nil, {:s, 64}, {}, 1)
+      f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
+
+      assert {%T{data: %Expr{op: :as_type, args: [^s64_param]}, type: {:s, 32}},
+              %T{data: %Expr{op: :as_type, args: [^f64_param]}, type: {:f, 32}}} =
+               Tree.rewrite_types({s64_param, f64_param},
                  max_signed_type: {:s, 32},
                  max_float_type: {:f, 32}
                )
     end
 
     test "keeps a cache" do
+      f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
+
       assert %T{data: %Expr{op: :add, args: [arg, arg]}, type: {:f, 32}} =
-               Tree.rewrite_types(Nx.add(@f64_param, @f64_param), max_float_type: {:f, 32})
+               Tree.rewrite_types(Nx.add(f64_param, f64_param), max_float_type: {:f, 32})
     end
 
     test "is no-op with max types" do
-      expr = Nx.exp(@f64_param)
+      f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
+
+      expr = Nx.exp(f64_param)
       assert Tree.rewrite_types(expr, []) == expr
       assert Tree.rewrite_types(expr, max_float_type: {:f, 64}) == expr
     end

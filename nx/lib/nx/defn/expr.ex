@@ -184,7 +184,7 @@ defmodule Nx.Defn.Expr do
   ## Nx.Defn AST callbacks
 
   @doc false
-  def id(), do: System.unique_integer()
+  def id(), do: make_ref()
 
   @doc false
   def cond(file, clauses, last) do
