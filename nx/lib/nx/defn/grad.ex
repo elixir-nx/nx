@@ -450,6 +450,8 @@ defmodule Nx.Defn.Grad do
 
 
 
+    # slice here is slice(tensor, start_indices, end_indices), instead
+    # of Nx.slice which is (tensor, start_indices, lenghts)
     return [slice(t, start, limit) if ad.is_undefined_primal(o) else None
         for o, start, limit in zip(operands, starts, limits)]
     """
