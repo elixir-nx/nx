@@ -461,7 +461,7 @@ defmodule Nx.Defn.Grad do
     limit_points =
       Enum.reduce(operand_shapes, [], fn
         x, [] -> [elem(x, axis) - 1]
-        x, [h | _] = acc -> [elem(x, axis) - 1 + h | acc]
+        x, [h | _] = acc -> [elem(x, axis) + h | acc]
       end)
       |> Enum.reverse()
 
@@ -492,10 +492,10 @@ defmodule Nx.Defn.Grad do
       {start, len} =
         start
         |> Enum.zip(limit)
-        |> Enum.map(fn {s, lim} -> {s, lim - s + 1} end)
+        |> Enum.map(fn {s, lim} -> {s, max(lim - s, 1)} end)
         |> Enum.unzip()
 
-      {Nx.slice(ans, start, len), g}
+      {ans, Nx.slice(ans, start, len)}
     end)
     |> grad_pairs(g, cache)
   end
