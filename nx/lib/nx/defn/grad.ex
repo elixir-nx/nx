@@ -454,8 +454,6 @@ defmodule Nx.Defn.Grad do
       |> Enum.zip(limit_points)
       |> Enum.map(fn {row, p} -> List.replace_at(row, axis, p) end)
 
-    ones = Nx.map(ans, fn _ -> 1 end)
-
     starts
     |> Enum.zip(limits)
     |> Enum.zip(tensors)
