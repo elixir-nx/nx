@@ -425,40 +425,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:concatenate, [tensors, axis], %{shape: ans_shape} = ans, g, cache) do
-    # temporary code annotations -- should not merge with this
-    """
-    # operand_shapes = Enum.map(tensors, & &1.shape)
-    -- operand_shapes = [o.aval.shape if ad.is_undefined_primal(o) else o.shape
-    --                  for o in operands]
-
-    # cumulative sum [1,2,3,4] -> [1,3,6,10]
-    --limit_points = np.cumsum([shape[dimension] for shape in operand_shapes])
-
-    # starts.shape = length(tensors) x tuple_size(Enum.at(operand_shapes, 0))
-    # starts = [
-    # [0,0,... 0]
-    # [0,0, ..., limit_points[1], 0, 0]
-    # [0,0, ..., limit_points[2], 0, 0]
-    # ...
-    # ]
-    --starts = np.zeros((len(operands), t.ndim), dtype=int)
-    --starts[1:, dimension] = limit_points[:-1]
-
-    # limits = List.duplicate(ans.shape, length(tensors)) |> Enum.zip(limit_points) |> Enum.map(fn {row, p} -> List.replace_at(row, axis, p) end)
-    -- limits = np.tile(t.shape, (len(operands), 1))
-    -- limits[:, dimension] = limit_points
-
-
-
-    # slice here is slice(tensor, start_indices, end_indices), instead
-    # of Nx.slice which is (tensor, start_indices, lenghts)
-    return [slice(t, start, limit) if ad.is_undefined_primal(o) else None
-        for o, start, limit in zip(operands, starts, limits)]
-    """
-
     operand_shapes = Enum.map(tensors, & &1.shape)
-    IO.inspect(operand_shapes, label: "operand shapes")
-
     limit_points = Enum.scan(operand_shapes, 0, fn x, acc -> elem(x, axis) + acc end)
 
     n_tensors = length(tensors)
@@ -484,11 +451,7 @@ defmodule Nx.Defn.Grad do
       |> Enum.zip(limit_points)
       |> Enum.map(fn {row, p} -> List.replace_at(row, axis, p) end)
 
-    IO.inspect(limit_points, label: "limit points")
-    IO.inspect(starts, label: "starts")
-    IO.inspect(limits, label: "limits")
-
-    a = Nx.concatenate(tensors, axis: axis)
+    ones = Nx.map(ans, fn _ -> 1 end)
 
     starts
     |> Enum.zip(limits)
@@ -500,11 +463,9 @@ defmodule Nx.Defn.Grad do
         |> Enum.map(fn {s, lim} -> {s, lim - s} end)
         |> Enum.unzip()
 
-      {t, Nx.slice(a, start, len)}
+      {t, Nx.slice(ones, start, len)}
     end)
-    |> IO.inspect(label: "slices")
     |> grad_pairs(g, cache)
-    |> IO.inspect(label: "grad pairs")
   end
 
   defp grad(_op, _args, _ans, _g, _cache) do

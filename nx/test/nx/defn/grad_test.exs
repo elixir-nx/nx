@@ -1586,6 +1586,13 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    defn concatenate_grad_composed(t) do
+      grad(
+        t,
+        Nx.sum(Nx.concatenate([Nx.log(Nx.power(t, 2)), Nx.log(Nx.power(t, 3))], axis: 3))
+      )
+    end
+
     test "computes grad for {1}-tensor" do
       # for all wip examples below
       # jax.lax._concatenate_transpose_rule returns `result`
@@ -1622,6 +1629,19 @@ defmodule Nx.Defn.GradTest do
       #              [33., 56.]], dtype=float32)
       assert concatenate_grad_power(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
                Nx.tensor([[5.0, 16.0], [33.0, 56.0]])
+    end
+
+    test "computes grad for composed functions on a multidim tensor" do
+      # (jax.grad(lambda x: jnp.sum(jnp.sum(jnp.concatenate((jnp.power(x, 2), jnp.power(x, 3),
+      # ...: 0)))))(np.array([[1.0, 2.0], [3.0, 4.0]]))
+      # result [DeviceArray([[1., 1.],
+      #              [1., 1.]], dtype=float32), DeviceArray([[1., 1.],
+      #              [1., 1.]], dtype=float32)]
+      # Out[11]:
+      # DeviceArray([[ 5., 16.],
+      #              [33., 56.]], dtype=float32)
+      assert concatenate_grad_composed(Nx.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]]])) ==
+               Nx.tensor([[[[5.0, 2.5], [1.6666667, 1.25], [1.0, 0.8333334]]]])
     end
   end
 
