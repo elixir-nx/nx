@@ -184,7 +184,7 @@ defmodule Nx.Defn.Expr do
   ## Nx.Defn AST callbacks
 
   @doc false
-  def id(), do: System.unique_integer()
+  def id(), do: make_ref()
 
   @doc false
   def cond(file, clauses, last) do
@@ -208,6 +208,12 @@ defmodule Nx.Defn.Expr do
   ## Nx.Backend Callbacks
 
   @behaviour Nx.Backend
+
+  @impl true
+  def from_binary(binary, type, _options) do
+    {backend, options} = Nx.default_backend()
+    tensor(backend.from_binary(binary, type, options))
+  end
 
   @impl true
   def eye(out, _backend_options) do
@@ -546,7 +552,7 @@ defmodule Nx.Defn.Expr do
 
   ops =
     [backend_copy: 3, backend_deallocate: 1, backend_transfer: 3] ++
-      [from_binary: 3, to_binary: 2, to_batched_list: 2]
+      [to_binary: 2, to_batched_list: 2]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)

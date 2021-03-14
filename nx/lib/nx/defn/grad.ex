@@ -711,16 +711,8 @@ defmodule Nx.Defn.Grad do
     n1 = div(axis_value + 1, 2)
     n2 = axis_value - n1
 
-    x1_start_indices = List.duplicate(0, Nx.rank(x.shape))
-    x1_limit_indices = x.shape |> put_elem(axis, n1) |> Tuple.to_list()
-
-    x2_start_indices = x1_start_indices |> List.update_at(axis, fn _ -> n1 end)
-
-    x2_limit_indices =
-      x1_limit_indices |> List.update_at(axis, fn _ -> elem(x.shape, axis) - n1 end)
-
-    x1 = Nx.slice(x, x1_start_indices, x1_limit_indices)
-    x2 = Nx.slice(x, x2_start_indices, x2_limit_indices)
+    x1 = Nx.slice_axis(x, 0, n1, axis)
+    x2 = Nx.slice_axis(x, n1, n2, axis)
 
     x2 =
       if n2 != n1 do
