@@ -428,8 +428,8 @@ defmodule Nx.Defn.Grad do
     zero_axes = List.duplicate(0, tuple_size(ans_shape))
     ans_shape_list = Tuple.to_list(ans_shape)
 
-    {pairs, _} = 
-      Enum.map_reduce(tensors, limit, fn t, limit ->
+    {pairs, _} =
+      Enum.map_reduce(tensors, 0, fn t, limit ->
         t_len = elem(t.shape, axis)
         current_limit = t_len + limit
         start = List.replace_at(zero_axes, axis, limit)
