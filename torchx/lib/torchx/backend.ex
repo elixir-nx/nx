@@ -98,6 +98,15 @@ defmodule Torchx.Backend do
   ## Creation
 
   @impl true
+  def scalar(%T{shape: {}, type: type} = out, scalar, backend_options) do
+    NIF.scalar_tensor(scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+  end
+
+  def scalar(%T{shape: shape, type: type} = out, scalar, backend_options) do
+    NIF.full(shape, scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+  end
+
+  @impl true
   def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
     NIF.eye(n, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
@@ -213,9 +222,9 @@ defmodule Torchx.Backend do
     NIF.squeeze(to_ref(t)) |> from_ref(out)
   end
 
+  # TODO: Handle axes properly
   @impl true
   def broadcast(out, %T{} = t, shape, axes) do
-    # IO.puts("broadcast(#{inspect(Nx.shape(t))}, #{inspect(shape)}, #{inspect(axes)})")
     NIF.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref(), shape) |> from_ref(out)
   end
 
@@ -223,6 +232,7 @@ defmodule Torchx.Backend do
   defp maybe_reshape(%T{} = t, _, _), do: t
 
   @impl true
+  # TODO: Handle all dimensions
   def transpose(out, %T{} = t, _opts) do
     NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
   end
@@ -379,6 +389,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  # TODO: Handle axes properly
   def dot(
         out,
         %T{} = left,
@@ -386,7 +397,6 @@ defmodule Torchx.Backend do
         %T{} = right,
         axes2
       ) do
-    # IO.puts("dot(#{inspect(Nx.shape(left))}, #{inspect(axes1)}, #{inspect(Nx.shape(right))}, #{inspect(axes2)})")
     NIF.dot(
       maybe_transpose_left(to_ref(left), axes1),
       maybe_transpose_right(to_ref(right), axes2)

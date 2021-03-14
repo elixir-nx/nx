@@ -389,6 +389,16 @@ NIF(eye)
   TENSOR(torch::eye(size, OPTS(type, device)));
 }
 
+NIF(full)
+{
+  SHAPE_PARAM(0, shape);
+  PARAM(1, double, scalar);
+  TYPE_PARAM(2, type);
+  DEVICE_PARAM(3, device);
+
+  TENSOR(torch::full(shape, scalar, OPTS(type, device)));
+}
+
 #define BINARY_OP(OP)   BINARY_OP2(OP, OP)
 
 #define BINARY_OP2(OP, NATIVE_OP)   \

@@ -31,29 +31,24 @@ defmodule TorchxTest do
   defp test_binary_op(op, data_a \\ [[5, 6], [7, 8]], data_b \\ [[1, 2], [3, 4]], type_a, type_b) do
     a = tt(data_a, type_a)
     b = tt(data_b, type_b)
-
     c = Kernel.apply(Nx, op, [a, b])
 
     binary_a = Nx.backend_transfer(a, Nx.BinaryBackend)
     binary_b = Nx.backend_transfer(b, Nx.BinaryBackend)
     binary_c = Kernel.apply(Nx, op, [binary_a, binary_b])
-
     assert Nx.backend_transfer(c) == binary_c
 
     mixed_c = Kernel.apply(Nx, op, [a, binary_b])
-
     assert Nx.backend_transfer(mixed_c) == binary_c
   end
 
   defp test_unary_op(op, data \\ [[1, 2], [3, 4]], type) do
     t = tt(data, type)
-
     r = Kernel.apply(Nx, op, [t])
 
     binary_t = Nx.backend_transfer(t, Nx.BinaryBackend)
     binary_r = Kernel.apply(Nx, op, [binary_t])
-
-    assert(Nx.backend_transfer(r) == binary_r)
+    assert Nx.backend_transfer(r) == binary_r
   end
 
   describe "binary ops" do
