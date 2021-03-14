@@ -64,7 +64,6 @@ defmodule Torchx.NxDoctestTest do
     :ok
   end
 
-
   doctest Nx,
     except:
       Torchx.Backend.__unimplemented__()
@@ -78,8 +77,8 @@ defmodule Torchx.NxDoctestTest do
         logistic: 1,
         random_uniform: 4,
         random_normal: 4,
-
         broadcast: 3,
+        slice_axis: 5,
         outer: 2,
         dot: 2,
         qr: 2,
@@ -96,5 +95,5 @@ defmodule Torchx.NxDoctestTest do
         atan2: 2,
         bitcast: 2
       )
-    |> Kernel.++([:moduledoc])
+      |> Kernel.++([:moduledoc])
 end
