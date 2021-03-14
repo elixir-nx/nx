@@ -8,6 +8,14 @@ defmodule Torchx.DefnTest do
     :ok
   end
 
+  # TODO: Add a test using rewrite_types where
+  # the result of an operation (say Nx.add/2)
+  # is lowered to mismatch PyTorch type and
+  # therefore explicit casting will be required.
+  # We don't want to add this test right now
+  # because we want to raise on type mismatches
+  # as we develop the lib.
+
   describe "scalar" do
     defn float_scalar(x), do: Nx.add(1.0, x)
     defn integer_scalar(x), do: Nx.add(1, x)
