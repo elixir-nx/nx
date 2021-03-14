@@ -11,7 +11,7 @@ defmodule Torchx.DefnTest do
   describe "scalar" do
     defn float_scalar(x), do: Nx.add(1.0, x)
     defn integer_scalar(x), do: Nx.add(1, x)
-    defn broadcast_scalar(), do: Nx.broadcast(1, {2, 2})
+    defn broadcast_scalar(x), do: Nx.add(Nx.broadcast(1, {2, 2}), x)
 
     test "works" do
       assert float_scalar(0.0) |> Nx.backend_transfer() ==
@@ -20,7 +20,7 @@ defmodule Torchx.DefnTest do
       assert integer_scalar(0) |> Nx.backend_transfer() ==
                Nx.tensor(1, backend: Nx.BinaryBackend)
 
-      assert broadcast_scalar() |> Nx.backend_transfer() ==
+      assert broadcast_scalar(0) |> Nx.backend_transfer() ==
                Nx.broadcast(Nx.tensor(1, backend: Nx.BinaryBackend), {2, 2})
     end
   end
