@@ -162,5 +162,46 @@ defmodule TorchxTest do
         assert (i == j && t[i][j] == one) || t[i][j] == zero
       end
     end
+
+    test "iota" do
+      t = Nx.iota({2, 3}, backend: {TB, device: :cpu})
+      assert Nx.backend_transfer(t) == Nx.tensor([[0, 1, 2], [3, 4, 5]])
+    end
+
+    test "random_uniform" do
+      t = Nx.random_uniform({30, 50}, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 0.0 and &1 < 1.0))
+    end
+
+    test "random_uniform with range" do
+      t = Nx.random_uniform({30, 50}, 7, 12, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 7.0 and &1 < 12.0))
+    end
+
+    test "random_normal" do
+      t = Nx.random_normal({30, 50}, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 0.0 and &1 < 1.0))
+    end
+
+    test "random_normal with range" do
+      t = Nx.random_normal({30, 50}, 7.0, 3.0, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 7.0 - 3.0 and &1 < 7.0 + 3.0))
+    end
   end
 end
