@@ -8,6 +8,20 @@ defmodule Nx.Defn.ExprTest do
     test "broadcast" do
       assert %T{data: %Expr{op: :scalar, args: [1.0]}, type: {:f, 32}, shape: {1, 2, 3}} =
                Nx.broadcast(Expr.tensor(1.0), {1, 2, 3})
+
+      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
+
+      assert %T{
+               data: %Expr{
+                 op: :add,
+                 args: [
+                   %T{shape: {}, data: %Expr{op: :scalar, args: [1.0]}},
+                   %T{shape: {2, 2}, data: %Expr{op: :parameter}}
+                 ]
+               },
+               shape: {2, 2},
+               type: {:f, 32}
+             } = Nx.add(Nx.broadcast(Expr.tensor(1.0), {2, 2}), param)
     end
 
     test "as_type" do
@@ -38,6 +52,15 @@ defmodule Nx.Defn.ExprTest do
                Nx.add(param1, Nx.subtract(Expr.tensor(0.0), param2))
     end
 
+    test "subtract" do
+      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+
+      assert ^param = Nx.subtract(param, Expr.tensor(0))
+
+      assert %T{data: %Expr{op: :as_type, args: [^param]}, type: {:f, 32}} =
+               Nx.subtract(param, Expr.tensor(0.0))
+    end
+
     test "multiply" do
       assert %T{data: %Expr{op: :scalar, args: [4.0]}, type: {:f, 32}} =
                Nx.multiply(Expr.tensor(2.0), Expr.tensor(2))
@@ -61,14 +84,93 @@ defmodule Nx.Defn.ExprTest do
                Nx.multiply(param1, Nx.divide(Expr.tensor(1.0), param2))
     end
 
-    test "power" do
+    test "divide" do
       param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
 
       assert %T{data: %Expr{op: :as_type, args: [^param]}, type: {:f, 32}} =
-               Nx.power(param, Expr.tensor(1.0))
+               Nx.divide(param, Expr.tensor(1.0))
 
-      assert %T{data: %Expr{op: :power, args: [^param, _]}, type: {:f, 32}} =
-               Nx.power(param, Expr.tensor(3.0))
+      assert %T{data: %Expr{op: :as_type, args: [^param]}, type: {:f, 32}} =
+               Nx.divide(param, Expr.tensor(1))
+    end
+
+    test "power" do
+      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+
+      assert ^param = Nx.power(param, Expr.tensor(1))
+
+      assert %T{data: %Expr{op: :as_type, args: [^param]}, type: {:f, 32}} =
+               Nx.power(param, Expr.tensor(1.0))
+    end
+
+    test "commute" do
+      param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
+      param2 = Expr.parameter(nil, {:s, 64}, {2}, 2)
+      param3 = Expr.parameter(nil, {:s, 64}, {2}, 3)
+
+      assert %T{
+               data: %Expr{
+                 op: :add,
+                 args: [
+                   %T{data: %Expr{op: :scalar, args: [3.0]}, shape: {}, type: {:f, 32}},
+                   %T{data: %Expr{op: :add, args: [^param2, ^param1]}, shape: {2, 2}}
+                 ]
+               },
+               type: {:f, 32},
+               shape: {2, 2}
+             } = param1 |> Nx.add(Expr.tensor(1.0)) |> Nx.add(param2) |> Nx.add(Expr.tensor(2))
+
+      assert %T{
+               data: %Expr{
+                 op: :add,
+                 args: [
+                   %T{data: %Expr{op: :scalar, args: [3.0]}, shape: {}, type: {:f, 32}},
+                   %T{
+                     data: %Expr{
+                       op: :broadcast,
+                       args: [
+                         %T{data: %Expr{op: :add, args: [^param3, ^param2]}, shape: {2}},
+                         {2, 2},
+                         [1]
+                       ]
+                     },
+                     shape: {2, 2}
+                   }
+                 ]
+               },
+               type: {:f, 32},
+               shape: {2, 2}
+             } =
+               param2
+               |> Nx.add(Nx.broadcast(Expr.tensor(1.0), {2, 2}))
+               |> Nx.add(param3)
+               |> Nx.add(Expr.tensor(2))
+
+      assert %T{
+               data: %Expr{
+                 op: :add,
+                 args: [
+                   %T{data: %Expr{op: :scalar, args: [3.0]}, shape: {}, type: {:f, 32}},
+                   %T{
+                     data: %Expr{
+                       op: :broadcast,
+                       args: [
+                         %T{data: %Expr{op: :add, args: [^param3, ^param2]}, shape: {2}},
+                         {2, 2},
+                         [1]
+                       ]
+                     },
+                     shape: {2, 2}
+                   }
+                 ]
+               },
+               type: {:f, 32},
+               shape: {2, 2}
+             } =
+               param2
+               |> Nx.add(Expr.tensor(1.0))
+               |> Nx.add(param3)
+               |> Nx.add(Nx.broadcast(Expr.tensor(2), {2, 2}))
     end
   end
 

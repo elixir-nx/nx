@@ -268,17 +268,30 @@ defmodule Nx.Defn.Expr do
         to_scalar(s1 + s2, out)
 
       s2 ->
-        expr(out, context, :add, [t2, t1])
+        commute(out, context, :add, &+/2, s2, t2, t1)
 
       true ->
         case t2 do
           %T{data: %Expr{op: :subtract, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
           when scalar == 0 ->
-            expr(out, context, :subtract, [t1, t2])
+            binary_expr(out, context, :subtract, t1, t2)
 
           %T{} ->
-            expr(out, context, :add, [t1, t2])
+            commute(out, context, :add, &+/2, s1, t1, t2)
         end
+    end
+  end
+
+  @impl true
+  def subtract(out, t1, t2) do
+    {[t1, t2], context} = to_exprs([t1, t2])
+    s1 = maybe_scalar(t1)
+    s2 = maybe_scalar(t2)
+
+    cond do
+      s2 == 0 -> ensure_compatible(t1, out)
+      s1 && s2 -> to_scalar(s1 - s2, out)
+      true -> binary_expr(out, context, :subtract, t1, t2)
     end
   end
 
@@ -299,17 +312,30 @@ defmodule Nx.Defn.Expr do
         to_scalar(s1 * s2, out)
 
       s2 ->
-        expr(out, context, :multiply, [t2, t1])
+        commute(out, context, :multiply, &*/2, s2, t2, t1)
 
       true ->
         case t2 do
           %T{data: %Expr{op: :divide, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
           when scalar == 1 ->
-            expr(out, context, :divide, [t1, t2])
+            binary_expr(out, context, :divide, t1, t2)
 
           %T{} ->
-            expr(out, context, :multiply, [t1, t2])
+            commute(out, context, :multiply, &*/2, s1, t1, t2)
         end
+    end
+  end
+
+  @impl true
+  def divide(out, t1, t2) do
+    {[t1, t2], context} = to_exprs([t1, t2])
+    s1 = maybe_scalar(t1)
+    s2 = maybe_scalar(t2)
+
+    cond do
+      s2 == 1 -> ensure_compatible(t1, out)
+      s1 && s2 -> to_scalar(s1 / s2, out)
+      true -> binary_expr(out, context, :divide, t1, t2)
     end
   end
 
@@ -320,12 +346,12 @@ defmodule Nx.Defn.Expr do
 
     cond do
       s2 == 1 -> ensure_compatible(t1, out)
-      true -> expr(out, context, :power, [t1, t2])
+      true -> binary_expr(out, context, :power, t1, t2)
     end
   end
 
   binary_ops =
-    [:subtract, :divide, :remainder, :atan2, :max, :min, :quotient] ++
+    [:remainder, :atan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
@@ -335,7 +361,7 @@ defmodule Nx.Defn.Expr do
     @impl true
     def unquote(op)(out, t1, t2) do
       {[t1, t2], context} = to_exprs([t1, t2])
-      expr(out, context, unquote(op), [t1, t2])
+      binary_expr(out, context, unquote(op), t1, t2)
     end
   end
 
@@ -713,6 +739,8 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
+  ## Scalar helpers and related optimizations
+
   defp maybe_scalar(expr) do
     case expr do
       %T{data: %Expr{op: :scalar, args: [number]}} -> number
@@ -720,13 +748,57 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  # For scalars, make the ID be the number itself to improve cache reuse
-  defp to_scalar(number, tensor) when is_number(number) do
-    %{tensor | data: %Expr{id: number, op: :scalar, args: [number], context: nil}}
+  # For scalars, make the ID be deterministic to improve cache reuse
+  defp to_scalar(number, %{type: type, shape: shape} = tensor) when is_number(number) do
+    id = {number, type, shape}
+    %{tensor | data: %Expr{id: id, op: :scalar, args: [number], context: nil}}
   end
 
   defp ensure_compatible(t, out) do
     t |> Nx.as_type(out.type) |> Nx.broadcast(out.shape)
+  end
+
+  # Rewrite commutative operations so the scalar always come on the left
+  defp commute(out, context, op, fun, s1, t1, t2) do
+    {a1, a2} =
+      case t2 do
+        %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :scalar, args: [s2]}}, t3]}} ->
+          nullary_out = %{out | shape: {}, names: []}
+
+          if s1 do
+            {to_scalar(fun.(s1, s2), nullary_out), t3 |> Nx.broadcast(out.shape)}
+          else
+            {to_scalar(s2, nullary_out), apply(Nx, op, [t1, t3]) |> Nx.broadcast(out.shape)}
+          end
+
+        %T{} ->
+          case t1 do
+            %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :scalar, args: [s1]}}, t3]}} ->
+              nullary_out = %{out | shape: {}, names: []}
+              {to_scalar(s1, nullary_out), apply(Nx, op, [t2, t3]) |> Nx.broadcast(out.shape)}
+
+            %T{} ->
+              {t1, t2}
+          end
+      end
+
+    binary_expr(out, context, op, a1, a2)
+  end
+
+  defp binary_expr(tensor, context, op, arg1, arg2) do
+    {arg1, arg2} =
+      case {arg1, arg2} do
+        {%T{data: %Expr{op: :scalar, args: [s]}, shape: shape}, %T{shape: shape}} ->
+          {to_scalar(s, %{arg1 | shape: {}, names: []}), arg2}
+
+        {%T{shape: shape}, %T{data: %Expr{op: :scalar, args: [s]}, shape: shape}} ->
+          {arg1, to_scalar(s, %{arg2 | shape: {}, names: []})}
+
+        {_, _} ->
+          {arg1, arg2}
+      end
+
+    expr(tensor, context, op, [arg1, arg2])
   end
 
   ## Inspect
@@ -798,7 +870,7 @@ defmodule Nx.Defn.Expr do
       %T{data: %Expr{op: :fun, args: [_, _, fun]}} ->
         inspect(fun)
 
-      %T{data: %Expr{op: :scalar, args: [number]}, shape: {}} ->
+      %T{data: %Expr{op: :scalar, args: [number]}} ->
         to_string(number)
 
       %T{data: %Expr{id: id}} ->
