@@ -60,24 +60,22 @@ defmodule Torchx.MNIST do
 
     grad_z2 = Nx.subtract(preds, batch_labels) |> Nx.transpose()
 
-    batch_size = Nx.tensor(@batch_size)
-
-    grad_w2 = Nx.divide(Nx.dot(grad_z2, a1), batch_size) |> Nx.transpose()
+    grad_w2 = Nx.divide(Nx.dot(grad_z2, a1), @batch_size) |> Nx.transpose()
     grad_b2 = Nx.mean(Nx.transpose(grad_z2), axes: [:output], keep_axes: true)
 
     grad_a1 = Nx.dot(w2, grad_z2) |> Nx.transpose()
-    grad_z1 = Nx.multiply(grad_a1, a1) |> Nx.multiply(Nx.subtract(Nx.tensor(1.0), a1))
+    grad_z1 = Nx.multiply(grad_a1, a1) |> Nx.multiply(Nx.subtract(1.0, a1))
 
-    grad_w1 = Nx.divide(Nx.dot(Nx.transpose(grad_z1), batch_images), batch_size) |> Nx.transpose()
+    grad_w1 =
+      Nx.divide(Nx.dot(Nx.transpose(grad_z1), batch_images), @batch_size) |> Nx.transpose()
+
     grad_b1 = Nx.mean(grad_z1, axes: [1], keep_axes: true)
 
-    step = Nx.tensor(@step)
-
     {{
-       Nx.subtract(w1, Nx.multiply(grad_w1, step)),
-       Nx.subtract(b1, Nx.multiply(grad_b1, step)),
-       Nx.subtract(w2, Nx.multiply(grad_w2, step)),
-       Nx.subtract(b2, Nx.multiply(grad_b2, step))
+       Nx.subtract(w1, Nx.multiply(grad_w1, @step)),
+       Nx.subtract(b1, Nx.multiply(grad_b1, @step)),
+       Nx.subtract(w2, Nx.multiply(grad_w2, @step)),
+       Nx.subtract(b2, Nx.multiply(grad_b2, @step))
      }, avg_loss, avg_accuracy}
   end
 

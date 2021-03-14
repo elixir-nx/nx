@@ -143,11 +143,65 @@ defmodule TorchxTest do
   describe "aggregates" do
     test "sum throws on type mismatch" do
       t = tt([[101, 102], [103, 104]], {:u, 8})
+
       assert_raise(
         ArgumentError,
         "Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)",
         fn -> Nx.sum(t) end
       )
+    end
+  end
+
+  describe "creation" do
+    test "eye" do
+      t = Nx.eye({9, 9}, backend: TB) |> Nx.backend_transfer()
+      one = Nx.tensor(1)
+      zero = Nx.tensor(0)
+
+      for i <- 0..8, j <- 0..8 do
+        assert (i == j && t[i][j] == one) || t[i][j] == zero
+      end
+    end
+
+    test "iota" do
+      t = Nx.iota({2, 3}, backend: {TB, device: :cpu})
+      assert Nx.backend_transfer(t) == Nx.tensor([[0, 1, 2], [3, 4, 5]])
+    end
+
+    test "random_uniform" do
+      t = Nx.random_uniform({30, 50}, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 0.0 and &1 < 1.0))
+    end
+
+    test "random_uniform with range" do
+      t = Nx.random_uniform({30, 50}, 7, 12, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 7.0 and &1 < 12.0))
+    end
+
+    test "random_normal" do
+      t = Nx.random_normal({30, 50}, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 0.0 and &1 < 1.0))
+    end
+
+    test "random_normal with range" do
+      t = Nx.random_normal({30, 50}, 7.0, 3.0, backend: TB)
+
+      t
+      |> Nx.backend_transfer()
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 > 7.0 - 3.0 and &1 < 7.0 + 3.0))
     end
   end
 end

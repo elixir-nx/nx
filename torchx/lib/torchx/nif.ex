@@ -28,13 +28,15 @@ defmodule Torchx.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  dnif randint(min, max, shape, type)
-  dnif rand(min, max, shape, type)
+  dnif randint(min, max, shape, type, device)
+  dnif rand(min, max, shape, type, device)
+  dnif normal(mu, sigma, shape, type, device)
+  dnif scalar_tensor(scalar, type, device)
+  dnif arange(from, to, step, type, device)
+  dnif arange(from, to, step, type, device, shape)
+  dnif ones(shape, device)
+  dnif eye(size, type, device)
 
-  dnif scalar_tensor(scalar, type)
-  dnif normal(mu, sigma, shape)
-  dnif arange(from, to, step, type)
-  dnif arange(from, to, step, type, shape)
   dnif reshape(tensor, shape)
   dnif to_type(tensor, type)
   dnif to_device(tensor, device)
@@ -51,9 +53,6 @@ defmodule Torchx.NIF do
   dnif split(tensor, split_size)
   dnif narrow(tensor, dim, start, length)
   dnif as_strided(tensor, size, strides, offset)
-
-  dnif ones(shape)
-  dnif eye(size, type)
 
   dnif sum(tensor, axes, keep_axes)
   dnif argmax(tensor, axe, keep_axes)

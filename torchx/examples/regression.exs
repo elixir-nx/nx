@@ -58,4 +58,20 @@ lin_fn = fn x -> m * x + b end
 epochs = 100
 
 # These will be very close to the above coefficients
-IO.inspect(LinReg.train(params, epochs, lin_fn))
+{time, {trained_m, trained_b}} = :timer.tc(LinReg, :train, [params, epochs, lin_fn])
+
+trained_m =
+  trained_m
+  |> Nx.squeeze()
+  |> Nx.backend_transfer()
+  |> Nx.to_scalar()
+
+trained_b =
+  trained_b
+  |> Nx.squeeze()
+  |> Nx.backend_transfer()
+  |> Nx.to_scalar()
+
+IO.puts("Trained in #{time / 1_000_000} sec.")
+IO.puts("Trained m: #{trained_m} Trained b: #{trained_b}\n")
+IO.puts("Accuracy m: #{m - trained_m} Accuracy b: #{b - trained_b}")

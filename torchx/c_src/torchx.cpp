@@ -35,6 +35,8 @@ inline std::string type2string(const torch::ScalarType type)
 
 #define DEVICE(DEV_VEC) torch::device(torch::Device((torch::DeviceType)DEV_VEC[0], (torch::DeviceIndex)DEV_VEC[1]))
 
+#define OPTS(TYPE, DEV_VEC) DEVICE(DEV_VEC).dtype(TYPE)
+
 #define TENSOR_PARAM(ARGN, VAR)                                        \
   torch::Tensor *VAR;                                                  \
   if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR)) \
@@ -121,7 +123,7 @@ NIF(from_blob)
     return nx::nif::error(env, "Binary size is too small for the requested shape");
 
   // Clone here to copy data from blob, which will be GCed.
-  TENSOR(torch::clone(torch::from_blob(blob.data, shape, DEVICE(device).dtype(type))));
+  TENSOR(torch::clone(torch::from_blob(blob.data, shape, OPTS(type, device))));
 }
 
 NIF(to_blob)
@@ -230,8 +232,9 @@ NIF(scalar_tensor)
 {
   PARAM(0, double, scalar);
   TYPE_PARAM(1, type);
+  DEVICE_PARAM(2, device);
 
-  TENSOR(torch::scalar_tensor(scalar, type));
+  TENSOR(torch::scalar_tensor(scalar, OPTS(type, device)));
 }
 
 NIF(randint)
@@ -240,8 +243,9 @@ NIF(randint)
   PARAM(1, int64_t, max);
   SHAPE_PARAM(2, shape);
   TYPE_PARAM(3, type);
+  DEVICE_PARAM(4, device);
 
-  TENSOR(torch::randint(min, max, shape, type));
+  TENSOR(torch::randint(min, max, shape, OPTS(type, device)));
 }
 
 NIF(rand)
@@ -250,8 +254,9 @@ NIF(rand)
   PARAM(1, double, max);
   SHAPE_PARAM(2, shape);
   TYPE_PARAM(3, type);
+  DEVICE_PARAM(4, device);
 
-  TENSOR(min + torch::rand(shape, type) * (max - min));
+  TENSOR(min + torch::rand(shape, OPTS(type, device)) * (max - min));
 }
 
 NIF(normal)
@@ -259,8 +264,10 @@ NIF(normal)
   PARAM(0, double, mean);
   PARAM(1, double, std);
   SHAPE_PARAM(2, shape);
+  TYPE_PARAM(3, type);
+  DEVICE_PARAM(4, device);
 
-  TENSOR(torch::normal(mean, std, shape));
+  TENSOR(torch::normal(mean, std, shape, c10::nullopt, OPTS(type, device)));
 }
 
 NIF(arange)
@@ -269,15 +276,16 @@ NIF(arange)
   PARAM(1, int64_t, end);
   PARAM(2, int64_t, step);
   TYPE_PARAM(3, type);
+  DEVICE_PARAM(4, device);
 
-  if (argc == 5)
+  if (argc == 6)
   {
-    SHAPE_PARAM(4, shape);
-    TENSOR(torch::reshape(torch::arange((double)start, (double)end, (double)step, type), shape));
+    SHAPE_PARAM(5, shape);
+    TENSOR(torch::reshape(torch::arange((double)start, (double)end, (double)step, OPTS(type, device)), shape));
   }
   else
   {
-    TENSOR(torch::arange((double)start, (double)end, (double)step, type));
+    TENSOR(torch::arange((double)start, (double)end, (double)step, OPTS(type, device)));
   }
 }
 
@@ -367,16 +375,18 @@ NIF(ones)
 {
   SHAPE_PARAM(0, shape);
   TYPE_PARAM(1, type);
+  DEVICE_PARAM(2, device);
 
-  TENSOR(torch::ones(shape, type));
+  TENSOR(torch::ones(shape, OPTS(type, device)));
 }
 
 NIF(eye)
 {
   PARAM(0, int64_t, size);
   TYPE_PARAM(1, type);
+  DEVICE_PARAM(2, device);
 
-  TENSOR(torch::eye(size, type));
+  TENSOR(torch::eye(size, OPTS(type, device)));
 }
 
 #define BINARY_OP(OP)   BINARY_OP2(OP, OP)
@@ -576,18 +586,19 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
   }
 
 static ErlNifFunc nif_functions[] = {
-    DF(randint, 4),
-    DF(rand, 4),
-    DF(normal, 3),
-    DF(arange, 4),
+    DF(randint, 5),
+    DF(rand, 5),
+    DF(normal, 5),
     DF(arange, 5),
+    DF(arange, 6),
+    DF(scalar_tensor, 3),
+    DF(ones, 2),
+    DF(eye, 3),
+
     DF(from_blob, 4),
     DF(to_blob, 1),
     DF(to_blob, 2),
-    DF(scalar_tensor, 2),
     DF(delete_tensor, 1),
-    DF(ones, 1),
-    DF(eye, 2),
     DF(reshape, 2),
     DF(split, 2),
     DF(to_type, 2),

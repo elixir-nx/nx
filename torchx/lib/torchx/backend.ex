@@ -93,34 +93,37 @@ defmodule Torchx.Backend do
 
   defp torch_device(device) when is_atom(device), do: {@devices[device], -1}
 
+  defp torch_device(opts) when is_list(opts), do: opts |> device_option() |> torch_device()
+
   ## Creation
 
   @impl true
-  def eye(%T{shape: {n, n}, type: type} = out) do
-    NIF.eye(n, torch_type(type)) |> from_ref(out)
+  def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
+    NIF.eye(n, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   @impl true
-  def iota(out, axis \\ nil)
+  def iota(out, axis \\ nil, backend_options)
 
-  def iota(%T{shape: {}, type: type} = out, nil) do
-    NIF.scalar_tensor(0.0, torch_type(type)) |> from_ref(out)
+  def iota(%T{shape: {}, type: type} = out, nil, backend_options) do
+    NIF.scalar_tensor(0.0, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
-  def iota(%T{shape: shape, type: type} = out, nil) do
-    NIF.arange(0, Nx.size(shape), 1, torch_type(type), shape) |> from_ref(out)
+  def iota(%T{shape: shape, type: type} = out, nil, backend_options) do
+    NIF.arange(0, Nx.size(shape), 1, torch_type(type), torch_device(backend_options), shape)
+    |> from_ref(out)
   end
 
-  def iota(%T{shape: {n}, type: type} = out, 0) do
-    NIF.arange(0, n, 1, torch_type(type)) |> from_ref(out)
+  def iota(%T{shape: {n}, type: type} = out, 0, backend_options) do
+    NIF.arange(0, n, 1, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
-  def iota(%T{shape: shape, type: type} = out, axis) do
+  def iota(%T{shape: shape, type: type} = out, axis, backend_options) do
     # gets the size of iota
     dim = elem(shape, axis)
 
     # build the iota in one dimension
-    aten = NIF.arange(0, dim, 1, torch_type(type)) |> unwrap!()
+    aten = NIF.arange(0, dim, 1, torch_type(type), torch_device(backend_options)) |> unwrap!()
 
     # reshape the tensor above to be have shape where everything is 1, except for dim
     reshape = Tuple.duplicate(1, Nx.rank(shape)) |> put_elem(axis, dim)
@@ -131,17 +134,19 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max) when s in [:u, :s] do
-    NIF.randint(min, max, shape, torch_type(type)) |> from_ref(out)
+  def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max, backend_options)
+      when s in [:u, :s] do
+    NIF.randint(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
-  def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max) when f in [:f, :bf] do
-    NIF.rand(min, max, shape, torch_type(type)) |> from_ref(out)
+  def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
+      when f in [:f, :bf] do
+    NIF.rand(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   @impl true
-  def random_normal(%T{type: _type, shape: shape} = out, mu, sigma) do
-    NIF.normal(mu, sigma, shape) |> from_ref(out)
+  def random_normal(%T{type: type, shape: shape} = out, mu, sigma, backend_options) do
+    NIF.normal(mu, sigma, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   ## Transfer
@@ -188,7 +193,7 @@ defmodule Torchx.Backend do
       binary,
       shape,
       torch_type(type),
-      device_option(backend_options) |> torch_device()
+      torch_device(backend_options)
     )
     |> from_ref(out)
   end

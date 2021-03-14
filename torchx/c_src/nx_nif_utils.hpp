@@ -15,10 +15,13 @@
   if (!nx::nif::get_atom(env, argv[ARGN], VAR)) \
     return nx::nif::error(env, "Unable to get " #VAR " atom param.");
 
-#define TUPLE_PARAM(ARGN, TYPE, VAR)             \
-  TYPE VAR;                                      \
-  if (!nx::nif::get_tuple(env, argv[ARGN], VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR " tuple param.");
+#define TUPLE_PARAM(ARGN, TYPE, VAR)                 \
+  TYPE VAR;                                          \
+  if (!nx::nif::get_tuple(env, argv[ARGN], VAR))  {  \
+    std::ostringstream msg;                          \
+    msg << "Unable to get " #VAR " tuple param in NIF." << __func__ << "/" << argc; \
+    return nx::nif::error(env, msg.str().c_str());    \
+  }
 
 #define LIST_PARAM(ARGN, TYPE, VAR)             \
   TYPE VAR;                                      \
