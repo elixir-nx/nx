@@ -71,12 +71,8 @@ defmodule Torchx.MNIST do
 
     grad_b1 = Nx.mean(grad_z1, axes: [1], keep_axes: true)
 
-    {{
-       Nx.subtract(w1, Nx.multiply(grad_w1, @step)),
-       Nx.subtract(b1, Nx.multiply(grad_b1, @step)),
-       Nx.subtract(w2, Nx.multiply(grad_w2, @step)),
-       Nx.subtract(b2, Nx.multiply(grad_b2, @step))
-     }, avg_loss, avg_accuracy}
+    {{w1 - grad_w1 * @step, b1 - grad_b1 * @step, w2 - grad_w2 * @step, b2 - grad_b2 * @step},
+     avg_loss, avg_accuracy}
   end
 
   defp unzip_cache_or_download(zip) do

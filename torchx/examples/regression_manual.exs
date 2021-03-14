@@ -26,8 +26,8 @@ defmodule Torchx.LinReg do
     # Derivative b
     grad_b = Nx.mean(errors)
 
-    {m - grad_m * Nx.tensor(-2 * step),
-     b - grad_b * Nx.tensor(-2 * step)}
+    {m + 2 * grad_m * step,
+     b + 2 * grad_b * step}
   end
 
   def train(params, epochs, lin_fn) do

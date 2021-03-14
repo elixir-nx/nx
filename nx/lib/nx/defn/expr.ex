@@ -213,8 +213,7 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def from_binary(binary, type, _options) do
-    {backend, options} = Nx.default_backend()
-    tensor(backend.from_binary(binary, type, options))
+    tensor(Nx.BinaryBackend.from_binary(binary, type, []))
   end
 
   @impl true

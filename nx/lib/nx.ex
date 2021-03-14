@@ -285,11 +285,6 @@ defmodule Nx do
   The tensor will be allocated in `Nx.default_backend/1`, unless the
   `:backend` option is given, which overrides the default one.
 
-  You can also give a tensor as argument, which is just returned as
-  is, unless the `:backend` option is given, which will cause a
-  backend transfer. `Nx.default_backend/1` is ignored when a tensor
-  is given.
-
   ## Examples
 
   A number returns a tensor of zero dimensions:
@@ -385,18 +380,6 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
-  Given a tensor to `tensor/2` returns the tensor itself:
-
-      iex> t = Nx.tensor([1, 2, 3])
-      iex> Nx.tensor(t) == t
-      true
-
-  However, if a :type is given and they don't match, an error is
-  raised:
-
-      iex> Nx.tensor(Nx.tensor([1, 2, 3]), type: {:f, 64})
-      ** (ArgumentError) got a tensor with type {:f, 64} but tensor has type {:s, 64}
-
   You can also provide names for tensor dimensions. Names are either atoms or `nil`:
 
       iex> Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y])
@@ -459,27 +442,7 @@ defmodule Nx do
 
   """
   @doc type: :creation
-  def tensor(arg, opts \\ [])
-
-  def tensor(%T{} = t, opts) do
-    assert_keys!(opts, [:type, :names, :backend])
-    type = opts[:type]
-
-    if type && type != t.type do
-      raise ArgumentError,
-            "got a tensor with type #{inspect(type)} but tensor has type #{inspect(t.type)}"
-    end
-
-    case backend_from_options!(opts) do
-      {backend, backend_options} ->
-        impl!(t).backend_transfer(t, backend, backend_options)
-
-      nil ->
-        t
-    end
-  end
-
-  def tensor(arg, opts) do
+  def tensor(arg, opts \\ []) when is_number(arg) or is_list(arg) do
     assert_keys!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
     {shape, data} = flatten(arg, type)
@@ -1136,7 +1099,7 @@ defmodule Nx do
   @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
     assert_keys!(opts, [:limit])
-    %{type: {_, size} = type} = tensor = tensor(tensor)
+    %{type: {_, size} = type} = tensor = tensor!(tensor)
 
     # TODO: Simplify loop once nonfinite are officially supported in the VM
     for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do

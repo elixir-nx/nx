@@ -25,20 +25,6 @@ defmodule Nx.DefnTest do
   @default_defn_compiler Identity
 
   describe "constants" do
-    @tensor Nx.tensor([1, 2, 3])
-    defn tensor_constant, do: Nx.tensor(@tensor)
-
-    test "from tensor" do
-      assert %T{data: %Expr{op: :tensor}} = tensor_constant()
-    end
-
-    @tensor Nx.tensor([1, 2, 3])
-    defn tensor_tensor_constant, do: Nx.tensor(Nx.tensor(@tensor))
-
-    test "from tensor calling tensor" do
-      assert %T{data: %Expr{op: :tensor}} = tensor_tensor_constant()
-    end
-
     @tensor [1, 2, 3]
     defn list_constant, do: Nx.tensor(@tensor)
 
@@ -867,15 +853,6 @@ defmodule Nx.DefnTest do
       assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0, []) end
       assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.iota({3, 3}) end, []) end
     end
-
-    defn jit_tensor(), do: Nx.tensor([1, 2, 3])
-
-    @tag :capture_log
-    test "uses the default backend on tensor" do
-      Nx.default_backend(UnknownBackend)
-      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_tensor/0, []) end
-      assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(fn -> Nx.tensor(13) end, []) end
-    end
   end
 
   describe "async" do
@@ -932,16 +909,6 @@ defmodule Nx.DefnTest do
       Process.flag(:trap_exit, true)
       Nx.default_backend(UnknownBackend)
       assert %_{} = Nx.Defn.async(&async_iota/0, [])
-      assert_receive {:EXIT, _, {:undef, _}}
-    end
-
-    defn async_tensor(), do: Nx.tensor([1, 2, 3])
-
-    @tag :capture_log
-    test "uses the default backend on tensor" do
-      Process.flag(:trap_exit, true)
-      Nx.default_backend(UnknownBackend)
-      assert %_{} = Nx.Defn.async(&async_tensor/0, [])
       assert_receive {:EXIT, _, {:undef, _}}
     end
   end
