@@ -1256,7 +1256,7 @@ defmodule Nx do
     end
 
     match_types [tensor.type] do
-      <<match!(x, 0)>> = Nx.to_binary(tensor)
+      <<match!(x, 0)>> = to_binary(tensor)
       read!(x, 0)
     end
   end
@@ -8262,8 +8262,7 @@ defmodule Nx do
     end
   end
 
-  defp number_to_binary(number, type),
-    do: match_types([type], do: <<write!(number, 0)>>)
+  defp number_to_binary(number, type), do: match_types([type], do: <<write!(number, 0)>>)
 
   defp names!(%T{names: names}), do: names
   defp names!(_), do: nil

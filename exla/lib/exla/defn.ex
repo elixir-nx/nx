@@ -195,6 +195,16 @@ defmodule EXLA.Defn do
 
   ## to_operator creation
 
+  defp to_operator(:scalar, [scalar], ans, state) do
+    op = to_constant(state.builder, scalar, ans.type)
+
+    if ans.shape == {} do
+      op
+    else
+      EXLA.Op.broadcast_in_dim(op, ans.shape, [])
+    end
+  end
+
   defp to_operator(:tensor, [tensor], _ans, state) do
     case tensor.shape do
       {} ->

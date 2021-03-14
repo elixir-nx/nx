@@ -19,16 +19,15 @@ defmodule Torchx.LinReg do
 
   defn update({m, b}, inp, tar, step) do
     preds = predict({m, b}, inp)
-
-    errors = Nx.subtract(tar, preds)
+    errors = tar - preds
 
     # Derivative m
-    grad_m = Nx.mean(Nx.multiply(inp, errors))
+    grad_m = Nx.mean(inp * errors)
     # Derivative b
     grad_b = Nx.mean(errors)
 
-    {Nx.subtract(m, Nx.multiply(grad_m, Nx.tensor(-2 * step))),
-     Nx.subtract(b, Nx.multiply(grad_b, Nx.tensor(-2 * step)))}
+    {m - grad_m * Nx.tensor(-2 * step),
+     b - grad_b * Nx.tensor(-2 * step)}
   end
 
   def train(params, epochs, lin_fn) do

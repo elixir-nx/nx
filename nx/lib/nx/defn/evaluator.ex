@@ -8,7 +8,7 @@ defmodule Nx.Defn.Evaluator do
   @behaviour Nx.Defn.Compiler
   alias Nx.Defn.{Expr, Tree}
 
-  @creation_ops [:tensor, :eye, :iota, :random_normal, :random_uniform, :from_binary]
+  @creation_ops [:scalar, :eye, :iota, :random_normal, :random_uniform, :from_binary]
 
   @impl true
   def __async__(key, vars, fun, opts) do

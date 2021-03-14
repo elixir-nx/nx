@@ -47,6 +47,18 @@ defmodule Nx.Defn.TreeTest do
                [Nx.tensor([1, 2, 3], type: {:bf, 16})]
     end
 
+    test "converts scalars" do
+      expr = Expr.tensor(Nx.tensor(3, type: {:s, 64}))
+
+      assert %T{data: %Expr{op: :scalar}, type: {:s, 32}} =
+               Tree.rewrite_types(expr, max_signed_type: {:s, 32})
+
+      expr = Expr.tensor(Nx.tensor(3.0, type: {:f, 64}))
+
+      assert %T{data: %Expr{op: :scalar}, type: {:f, 32}} =
+               Tree.rewrite_types(expr, max_float_type: {:f, 32})
+    end
+
     test "converts expressions" do
       s64_param = Expr.parameter(nil, {:s, 64}, {}, 1)
       f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
@@ -105,7 +117,7 @@ defmodule Nx.Defn.TreeTest do
 
   describe "traverse_args" do
     test "handles regular operations" do
-      expr = Expr.add(Nx.tensor(3), Nx.tensor(1), Nx.tensor(2))
+      expr = Expr.add(Nx.tensor([0, 1]), Nx.tensor([1, 2]), Nx.tensor([2, 3]))
       {[arg1, arg2], acc} = Tree.traverse_args(expr, [], &{&1, [&1.data.id | &2]})
       assert acc == [arg2.data.id, arg1.data.id]
     end

@@ -24,6 +24,12 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
+  def scalar(%{type: type, shape: shape} = out, scalar, _backend_options) do
+    data = :binary.copy(number_to_binary(scalar, type), Nx.size(shape))
+    from_binary(out, data)
+  end
+
+  @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
     gen =
       case type do

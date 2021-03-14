@@ -21,6 +21,8 @@ defmodule Nx.Defn.Expr do
 
     * `parameter(integer)`
 
+    * `scalar(number)`
+
     * `tensor(Nx.Tensor.t)`
 
     * `fun(parameters, t, fun)`
@@ -238,7 +240,7 @@ defmodule Nx.Defn.Expr do
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
-      [:population_count, :count_leading_zeros, :floor, :ceil, :round, :as_type] ++
+      [:population_count, :count_leading_zeros, :floor, :ceil, :round] ++
       [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast]
 
   for op <- unary_ops do
@@ -249,8 +251,81 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  @impl true
+  def add(out, t1, t2) do
+    {[t1, t2], context} = to_exprs([t1, t2])
+    s1 = maybe_scalar(t1)
+    s2 = maybe_scalar(t2)
+
+    cond do
+      s1 == 0 ->
+        ensure_compatible(t2, out)
+
+      s2 == 0 ->
+        ensure_compatible(t1, out)
+
+      s1 && s2 ->
+        to_scalar(s1 + s2, out)
+
+      s2 ->
+        expr(out, context, :add, [t2, t1])
+
+      true ->
+        case t2 do
+          %T{data: %Expr{op: :subtract, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
+          when scalar == 0 ->
+            expr(out, context, :subtract, [t1, t2])
+
+          %T{} ->
+            expr(out, context, :add, [t1, t2])
+        end
+    end
+  end
+
+  @impl true
+  def multiply(out, t1, t2) do
+    {[t1, t2], context} = to_exprs([t1, t2])
+    s1 = maybe_scalar(t1)
+    s2 = maybe_scalar(t2)
+
+    cond do
+      s1 == 1 ->
+        ensure_compatible(t2, out)
+
+      s2 == 1 ->
+        ensure_compatible(t1, out)
+
+      s1 && s2 ->
+        to_scalar(s1 * s2, out)
+
+      s2 ->
+        expr(out, context, :multiply, [t2, t1])
+
+      true ->
+        case t2 do
+          %T{data: %Expr{op: :divide, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
+          when scalar == 1 ->
+            expr(out, context, :divide, [t1, t2])
+
+          %T{} ->
+            expr(out, context, :multiply, [t1, t2])
+        end
+    end
+  end
+
+  @impl true
+  def power(out, t1, t2) do
+    {[t1, t2], context} = to_exprs([t1, t2])
+    s2 = maybe_scalar(t2)
+
+    cond do
+      s2 == 1 -> ensure_compatible(t1, out)
+      true -> expr(out, context, :power, [t1, t2])
+    end
+  end
+
   binary_ops =
-    [:add, :subtract, :multiply, :divide, :power, :remainder, :atan2, :max, :min, :quotient] ++
+    [:subtract, :divide, :remainder, :atan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
@@ -387,17 +462,33 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def as_type(out, tensor) do
+    tensor = to_expr(tensor)
+
+    if s = maybe_scalar(tensor) do
+      to_scalar(s, out)
+    else
+      expr(out, tensor.data.context, :as_type, [tensor])
+    end
+  end
+
+  @impl true
   def broadcast(out, tensor, shape, axes) do
     tensor = to_expr(tensor)
 
     with %T{data: %Expr{op: :broadcast, args: [inner_tensor, inner_shape, inner_axes]}} <- tensor,
          true <-
-          (contiguous?(inner_axes, 0) and contiguous?(axes, 0)) or
+           (contiguous?(inner_axes, 0) and contiguous?(axes, 0)) or
              (contiguous_last?(inner_axes, inner_shape, inner_tensor) and
-              contiguous_last?(axes, shape, tensor)) do
+                contiguous_last?(axes, shape, tensor)) do
       expr(out, tensor.data.context, :broadcast, [inner_tensor, shape, inner_axes])
     else
-      _ -> expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
+      _ ->
+        if scalar = maybe_scalar(tensor) do
+          to_scalar(scalar, out)
+        else
+          expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
+        end
     end
   end
 
@@ -550,9 +641,12 @@ defmodule Nx.Defn.Expr do
 
   ## Undefined
 
+  @impl true
+  def backend_transfer(out, __MODULE__, _), do: out
+
   ops =
     [backend_copy: 3, backend_deallocate: 1, backend_transfer: 3] ++
-      [to_binary: 2, to_batched_list: 2]
+      [to_binary: 2, to_batched_list: 2, scalar: 3]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)
@@ -574,11 +668,17 @@ defmodule Nx.Defn.Expr do
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}}
   end
 
-  defp to_expr(%T{data: %Expr{}} = t), do: t
-  defp to_expr(%T{} = t), do: expr(t, nil, :tensor, [t])
+  defp to_expr(%T{data: %Expr{}} = t),
+    do: t
+
+  defp to_expr(%T{data: %Nx.BinaryBackend{}, shape: {}} = t),
+    do: to_scalar(Nx.to_scalar(t), t)
+
+  defp to_expr(%T{} = t),
+    do: expr(t, nil, :tensor, [t])
 
   defp to_expr(number) when is_number(number),
-    do: to_expr(Nx.tensor(number, backend: Nx.BinaryBackend))
+    do: to_scalar(number, %T{shape: {}, names: [], type: Nx.Type.infer(number)})
 
   defp to_expr(other) do
     raise ArgumentError,
@@ -613,6 +713,22 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
+  defp maybe_scalar(expr) do
+    case expr do
+      %T{data: %Expr{op: :scalar, args: [number]}} -> number
+      _ -> nil
+    end
+  end
+
+  # For scalars, make the ID be the number itself to improve cache reuse
+  defp to_scalar(number, tensor) when is_number(number) do
+    %{tensor | data: %Expr{id: number, op: :scalar, args: [number], context: nil}}
+  end
+
+  defp ensure_compatible(t, out) do
+    t |> Nx.as_type(out.type) |> Nx.broadcast(out.shape)
+  end
+
   ## Inspect
 
   import Inspect.Algebra
@@ -639,7 +755,7 @@ defmodule Nx.Defn.Expr do
   end
 
   # Scalars and funs are shown as is
-  defp inspect_expr(%T{data: %Expr{op: :tensor}, shape: {}} = t, acc), do: {t, acc}
+  defp inspect_expr(%T{data: %Expr{op: :scalar}} = t, acc), do: {t, acc}
   defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
 
   defp inspect_expr(%T{data: %Expr{op: op, id: id}} = t, {exprs, params, var_map})
@@ -682,12 +798,8 @@ defmodule Nx.Defn.Expr do
       %T{data: %Expr{op: :fun, args: [_, _, fun]}} ->
         inspect(fun)
 
-      %T{data: %Expr{op: :tensor, args: [t]}, shape: {}} ->
-        try do
-          t |> Nx.to_scalar() |> to_string()
-        rescue
-          _ -> "SCALAR"
-        end
+      %T{data: %Expr{op: :scalar, args: [number]}, shape: {}} ->
+        to_string(number)
 
       %T{data: %Expr{id: id}} ->
         Map.fetch!(var_map, id)

@@ -2,12 +2,73 @@ defmodule Nx.Defn.ExprTest do
   use ExUnit.Case, async: true
 
   alias Nx.Defn.Expr
+  alias Nx.Tensor, as: T
 
-  describe "tensor" do
-    test "uses the binary backend" do
-      Nx.default_backend(Unknown)
-      assert %Nx.Tensor{data: %Expr{op: :tensor, args: [tensor]}} = Expr.tensor(0)
-      assert Nx.to_scalar(tensor) == 0
+  describe "scalar optimizations" do
+    test "broadcast" do
+      assert %T{data: %Expr{op: :scalar, args: [1.0]}, type: {:f, 32}, shape: {1, 2, 3}} =
+               Nx.broadcast(Expr.tensor(1.0), {1, 2, 3})
+    end
+
+    test "as_type" do
+      assert %T{data: %Expr{op: :scalar, args: [1]}, type: {:f, 32}, shape: {}} =
+               Nx.as_type(Expr.tensor(1), {:f, 32})
+    end
+
+    test "add" do
+      assert %T{data: %Expr{op: :scalar, args: [3.0]}, type: {:f, 32}} =
+               Nx.add(Expr.tensor(1.0), Expr.tensor(2))
+
+      param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
+      param2 = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+
+      assert %T{data: %Expr{op: :as_type, args: [^param1]}, type: {:f, 32}} =
+               Nx.add(param1, Expr.tensor(0.0))
+
+      assert %T{data: %Expr{op: :as_type, args: [^param1]}, type: {:f, 32}} =
+               Nx.add(Expr.tensor(0.0), param1)
+
+      assert %T{data: %Expr{op: :broadcast, args: [^param1, {2, 2, 2}, [1, 2]]}} =
+               Nx.add(Nx.broadcast(Expr.tensor(0), {2, 2, 2}), param1)
+
+      assert %T{data: %Expr{op: :add, args: [_, ^param1]}, type: {:f, 32}} =
+               Nx.add(param1, Expr.tensor(1.0))
+
+      assert %T{data: %Expr{op: :subtract, args: [^param1, ^param2]}, type: {:f, 32}} =
+               Nx.add(param1, Nx.subtract(Expr.tensor(0.0), param2))
+    end
+
+    test "multiply" do
+      assert %T{data: %Expr{op: :scalar, args: [4.0]}, type: {:f, 32}} =
+               Nx.multiply(Expr.tensor(2.0), Expr.tensor(2))
+
+      param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
+      param2 = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+
+      assert %T{data: %Expr{op: :as_type, args: [^param1]}, type: {:f, 32}} =
+               Nx.multiply(param1, Expr.tensor(1.0))
+
+      assert %T{data: %Expr{op: :as_type, args: [^param1]}, type: {:f, 32}} =
+               Nx.multiply(Expr.tensor(1.0), param1)
+
+      assert %T{data: %Expr{op: :broadcast, args: [^param1, {2, 2, 2}, [1, 2]]}} =
+               Nx.multiply(Nx.broadcast(Expr.tensor(1), {2, 2, 2}), param1)
+
+      assert %T{data: %Expr{op: :multiply, args: [_, ^param1]}, type: {:f, 32}} =
+               Nx.multiply(param1, Expr.tensor(2.0))
+
+      assert %T{data: %Expr{op: :divide, args: [^param1, ^param2]}, type: {:f, 32}} =
+               Nx.multiply(param1, Nx.divide(Expr.tensor(1.0), param2))
+    end
+
+    test "power" do
+      param = Expr.parameter(nil, {:s, 64}, {2, 2}, 2)
+
+      assert %T{data: %Expr{op: :as_type, args: [^param]}, type: {:f, 32}} =
+               Nx.power(param, Expr.tensor(1.0))
+
+      assert %T{data: %Expr{op: :power, args: [^param, _]}, type: {:f, 32}} =
+               Nx.power(param, Expr.tensor(3.0))
     end
   end
 
@@ -21,22 +82,6 @@ defmodule Nx.Defn.ExprTest do
              >\
              """
     end
-
-    test "with scalar from invalid backend" do
-      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
-      b = %Nx.Tensor{data: %{__struct__: Unknown}, shape: {}, type: {:s, 64}, names: []}
-
-      assert inspect(Nx.add(a, Expr.tensor(b)), safe: false) == """
-             #Nx.Tensor<
-               s64[2][2]
-             \s\s
-               Nx.Defn.Expr
-               parameter a            s64[2][2]
-               b = add [ a, SCALAR ]  s64[2][2]
-             >\
-             """
-    end
-
 
     test "with parameters" do
       a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
@@ -53,7 +98,7 @@ defmodule Nx.Defn.ExprTest do
                b = dot [ a, [1], a, [0] ]                  s64[2][2]
                d = tanh [ c ]                              f32[2][2]
                e = add [ b, d ]                            f32[2][2]
-               f = add [ e, 2 ]                            f32[2][2]
+               f = add [ 2, e ]                            f32[2][2]
                g = sum [ f, axes: nil, keep_axes: false ]  f32
              >\
              """

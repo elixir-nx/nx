@@ -165,6 +165,11 @@ defmodule Nx.Defn.Tree do
     rewrite_type_args(t, type, [Nx.as_type(arg, type)])
   end
 
+  defp rewrite_type(:scalar, [arg], t, type_fun) do
+    type = type_fun.(t.type)
+    rewrite_type_args(t, type, [arg])
+  end
+
   defp rewrite_type(_op, args, t, type_fun) do
     rewrite_type_args(t, type_fun.(t.type), args)
   end

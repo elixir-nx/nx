@@ -32,6 +32,13 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :tensor}} = tensor_constant()
     end
 
+    @tensor Nx.tensor([1, 2, 3])
+    defn tensor_tensor_constant, do: Nx.tensor(Nx.tensor(@tensor))
+
+    test "from tensor calling tensor" do
+      assert %T{data: %Expr{op: :tensor}} = tensor_tensor_constant()
+    end
+
     @tensor [1, 2, 3]
     defn list_constant, do: Nx.tensor(@tensor)
 
@@ -723,7 +730,7 @@ defmodule Nx.DefnTest do
       cond do
         Nx.greater(a, 0) -> b + 1
         Nx.less(a, 0) -> c - 1
-        true -> d * 1
+        true -> d * 2
       end
     end
 
@@ -784,7 +791,7 @@ defmodule Nx.DefnTest do
 
   describe "transform" do
     defn transform_inspect(a, b) do
-      (Nx.tanh(a) + Nx.power(b, 2)) |> inspect_expr()
+      (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr()
     end
 
     test "executes the transformation" do
@@ -796,7 +803,7 @@ defmodule Nx.DefnTest do
                parameter a         s64
                parameter c         s64
                b = tanh [ a ]      f32
-               d = power [ c, 2 ]  s64
+               d = power [ c, 3 ]  s64
                e = add [ b, d ]    f32
              >
              """

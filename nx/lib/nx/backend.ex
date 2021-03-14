@@ -38,6 +38,7 @@ defmodule Nx.Backend do
   @type axes :: Nx.Tensor.axes()
   @type backend_options :: term()
 
+  @callback scalar(out :: tensor, binary, backend_options) :: tensor
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
   @callback eye(tensor, backend_options) :: tensor
   @callback iota(tensor, axis | nil, backend_options) :: tensor

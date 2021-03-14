@@ -77,7 +77,7 @@ defmodule Nx.Defn.Grad do
             {expr, cache}
           end)
 
-        {Enum.reduce(exprs, &maybe_add/2), cache, true}
+        {Enum.reduce(exprs, &Nx.add/2), cache, true}
 
       {:tainted, id} ->
         if Map.has_key?(ids, id) do
@@ -148,7 +148,7 @@ defmodule Nx.Defn.Grad do
   defp grad_jvps(jvps, ans, g, cache) do
     {exprs, cache} =
       Enum.map_reduce(jvps, cache, fn {expr, subg}, cache ->
-        to_grad(Nx.broadcast(expr, ans), maybe_multiply(g, subg), cache)
+        to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
       end)
 
     template = Expr.tensor(Nx.template(g.shape, g.type))
@@ -461,10 +461,15 @@ defmodule Nx.Defn.Grad do
   end
 
   defp jvp(:power, [x, y], ans) do
-    exponent = Nx.select(Nx.equal(y, 0.0), 1.0, Nx.subtract(y, 1.0))
-    base = Nx.select(Nx.equal(x, 0.0), 1.0, x)
+    # Since we do many options against literals,
+    # we try to surface any scalar number.
+    sx = surface_nuldim_scalar(x)
+    sy = surface_nuldim_scalar(y)
 
-    gx = Nx.multiply(y, Nx.power(x, exponent))
+    exponent = Nx.select(Nx.equal(sy, 0.0), 1.0, Nx.subtract(sy, 1.0))
+    base = Nx.select(Nx.equal(sx, 0.0), 1.0, sx)
+
+    gx = Nx.multiply(sy, Nx.power(sx, exponent))
     gy = Nx.multiply(Nx.log(base), ans)
     [{x, gx}, {y, gy}]
   end
@@ -680,7 +685,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  @constants [:tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
+  @constants [:scalar, :tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
                [:all?, :any?, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
@@ -954,42 +959,12 @@ defmodule Nx.Defn.Grad do
 
   defp hi_pads(_, _, _, [], []), do: []
 
-  defp maybe_add(x, %T{data: %Expr{op: :negate, args: [y]}} = negated_y) do
-    cond do
-      zero?(x) -> negated_y
-      zero?(y) -> x
-      true -> Nx.subtract(x, y)
+  defp surface_nuldim_scalar(expr) do
+    case expr do
+      %T{data: %Expr{op: :scalar, args: [scalar]}, shape: {}} -> scalar
+      %T{} -> expr
     end
   end
-
-  defp maybe_add(x, y) do
-    cond do
-      zero?(x) -> y
-      zero?(y) -> x
-      true -> Nx.add(x, y)
-    end
-  end
-
-  defp maybe_multiply(x, %T{data: %Expr{op: :divide, args: [y, z]}} = division) do
-    cond do
-      one?(x) -> division
-      one?(y) -> Nx.divide(x, z)
-      true -> Nx.multiply(x, division)
-    end
-  end
-
-  defp maybe_multiply(x, y) do
-    cond do
-      one?(y) and Nx.Type.float?(x.type) -> x
-      one?(x) and Nx.Type.float?(y.type) -> y
-      true -> Nx.multiply(x, y)
-    end
-  end
-
-  @zero Nx.tensor(0.0)
-  @one Nx.tensor(1.0)
-  defp zero?(expr), do: match?(%T{data: %Expr{op: :tensor, args: [@zero]}}, expr)
-  defp one?(expr), do: match?(%T{data: %Expr{op: :tensor, args: [@one]}}, expr)
 
   defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
   defp up_to(_, _), do: []
