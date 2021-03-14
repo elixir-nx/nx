@@ -98,13 +98,13 @@ defmodule Torchx.Backend do
   ## Creation
 
   @impl true
-  # TODO: Do not cast to floats as there is low of precision for large integers
   def scalar(%T{shape: {}, type: type} = out, scalar, backend_options) do
-    NIF.scalar_tensor(1.0 * scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    NIF.scalar_tensor(scalar, torch_type(type), torch_device(backend_options))
+    |> from_ref(out)
   end
 
   def scalar(%T{shape: shape, type: type} = out, scalar, backend_options) do
-    NIF.full(shape, 1.0 * scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    NIF.full(shape, scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   @impl true
