@@ -751,6 +751,7 @@ defmodule Nx.Defn.Expr do
   # For scalars, make the ID be deterministic to improve cache reuse
   defp to_scalar(number, %{type: type, shape: shape} = tensor) when is_number(number) do
     id = {number, type, shape}
+    number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
     %{tensor | data: %Expr{id: id, op: :scalar, args: [number], context: nil}}
   end
 
