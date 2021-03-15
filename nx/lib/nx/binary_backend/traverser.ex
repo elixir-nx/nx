@@ -159,7 +159,6 @@ defmodule Nx.BinaryBackend.Traverser do
 
   defp expand_path(path) do
     path
-    |> Enum.reverse()
     |> WeightedShape.traversal_list()
     |> List.flatten()
   end
