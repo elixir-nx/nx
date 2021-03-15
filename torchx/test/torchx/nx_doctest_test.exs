@@ -83,7 +83,6 @@ defmodule Torchx.NxDoctestTest do
         qr: 2,
         quotient: 2,
         window_mean: 3,
-        # transpose: 2,
         mean: 2,
         map: 3,
         to_flat_list: 2,
