@@ -390,28 +390,26 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  # TODO: Handle axes properly
   def dot(
         %T{type: out_type} = out,
-        %T{} = left,
+        %T{type: left_type, data: %TB{ref: left_ref}},
         axes1,
-        %T{} = right,
+        %T{type: right_type, data: %TB{ref: right_ref}} = right,
         axes2
       ) do
     NIF.tensordot(
-      # as_type(out, left) |> to_ref(),
-      # as_type(out, right) |> to_ref(),
-      # to_ref(left),
-      # to_ref(right),
-      # left |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
-      # right |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
-      Nx.as_type(left, out_type) |> to_ref(),
-      Nx.as_type(right, out_type) |> to_ref(),
+      from_typed_ref(left_ref, left_type, out_type),
+      from_typed_ref(right_ref, right_type, out_type),
       axes1,
       axes2
     )
     |> from_ref(out)
   end
+
+  defp from_typed_ref(ref, expected_type, expected_type), do: ref
+
+  defp from_typed_ref(ref, ref_type, expected_type),
+    do: NIF.to_type(ref, torch_type(expected_type)) |> unwrap!()
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
