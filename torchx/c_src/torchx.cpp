@@ -25,6 +25,18 @@ inline std::string type2string(const torch::ScalarType type)
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
+#define SCALAR_PARAM(ARGN, VAR) \
+  torch::Scalar VAR;            \
+  VAR.~Scalar();                \
+  double double_##VAR;          \
+  if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0) { \
+    long long_##VAR;                                  \
+    enif_get_int64(env, argv[ARGN], &long_##VAR);     \
+    new (&VAR) torch::Scalar((int64_t)long_##VAR);             \
+  } else {                                            \
+    new (&VAR) torch::Scalar(double_##VAR);           \
+  }
+
 #define SHAPE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
 
 #define TYPE_PARAM(ARGN, VAR)  \
@@ -230,7 +242,7 @@ NIF(split)
 
 NIF(scalar_tensor)
 {
-  PARAM(0, double, scalar);
+  SCALAR_PARAM(0, scalar);
   TYPE_PARAM(1, type);
   DEVICE_PARAM(2, device);
 
@@ -392,7 +404,7 @@ NIF(eye)
 NIF(full)
 {
   SHAPE_PARAM(0, shape);
-  PARAM(1, double, scalar);
+  SCALAR_PARAM(1, scalar);
   TYPE_PARAM(2, type);
   DEVICE_PARAM(3, device);
 
@@ -604,6 +616,7 @@ static ErlNifFunc nif_functions[] = {
     DF(scalar_tensor, 3),
     DF(ones, 2),
     DF(eye, 3),
+    DF(full, 4),
 
     DF(from_blob, 4),
     DF(to_blob, 1),
