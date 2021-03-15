@@ -59,36 +59,32 @@ defmodule Nx.BinaryBackend.WeightedShape do
   ## Examples
 
       iex> WeightedShape.aggregate(WeightedShape.build({2, 3}), [1])
-      {[], [{3, 1}]}
+      {[{2, 3}], [], [{3, 1}]}
 
       iex> WeightedShape.aggregate(WeightedShape.build({2, 3}), [0])
-      {[{3, 1}], [{2, 3}]}
+      {[], [{3, 1}], [{2, 3}]}
 
       iex> WeightedShape.aggregate(WeightedShape.build({2, 3}), [])
-      {[{2, 3}, {3, 1}], []}
+      {[], [{2, 3}, {3, 1}], []}
 
       iex> WeightedShape.aggregate(WeightedShape.build({2, 3, 3}), [2])
-      {[], [{3, 1}]}
+      {[{2, 9}, {3, 3}], [], [{3, 1}]}
 
       iex> WeightedShape.aggregate(WeightedShape.build({2, 3, 4, 5, 6}), [1, 2])
-      {[{5, 6}, {6, 1}], [{3, 120}, {4, 30}]}
+      {[{2, 360}], [{5, 6}, {6, 1}], [{3, 120}, {4, 30}]}
   """
   def aggregate(weighted_shape, []) do
-    {weighted_shape, []}
+    {[], weighted_shape, []}
   end
 
   def aggregate(weighted_shape, axes) do
     axes = Enum.sort(axes)
     min = List.first(axes) || 0
 
-    # drops = Enum.take(weighted_shape, min)
+    {drops, takes} = Enum.split(weighted_shape, min)
+    {kept, aggs} = aggregate(takes, axes, min, [], [])
 
-    {ws_rev, rev_aggs} =
-      weighted_shape
-      |> Enum.drop(min)
-      |> aggregate(axes, min, [], [])
-
-    {Enum.reverse(ws_rev), Enum.reverse(rev_aggs)}
+    {drops, kept, aggs}
   end
 
   defp aggregate([pair | rest], [i | axes], i, pre, pos) do
@@ -100,7 +96,7 @@ defmodule Nx.BinaryBackend.WeightedShape do
   end
 
   defp aggregate([], [], _i, pre, pos) do
-    {pre, pos}
+    {Enum.reverse(pre), Enum.reverse(pos)}
   end
 
   @doc """
@@ -229,12 +225,12 @@ defmodule Nx.BinaryBackend.WeightedShape do
       [[0, 1], [2, 3], [4, 5]]
 
       iex> ws = WeightedShape.build({3, 2})
-      iex> {_, pos} = WeightedShape.aggregate(ws, [1])
+      iex> {_, _, pos} = WeightedShape.aggregate(ws, [1])
       iex> WeightedShape.traversal_list(pos)
       [0, 1]
 
       iex> ws = WeightedShape.build({3, 2})
-      iex> {pre, _} = WeightedShape.aggregate(ws, [1])
+      iex> {_, pre, _} = WeightedShape.aggregate(ws, [1])
       iex> WeightedShape.traversal_list(pre)
       [0]
   """

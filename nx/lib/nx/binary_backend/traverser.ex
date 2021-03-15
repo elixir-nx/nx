@@ -15,7 +15,7 @@ defmodule Nx.BinaryBackend.Traverser do
     build(size, weight, WeightedShape.aggregate(weighted_shape, []))
   end
 
-  def build(size, weight, {offsets_ws, readers_ws}) do    
+  def build(size, weight, {_drops, offsets_ws, readers_ws}) do    
     size = size * weight
     offsets = expand_path(offsets_ws)
     readers = expand_path(readers_ws)
