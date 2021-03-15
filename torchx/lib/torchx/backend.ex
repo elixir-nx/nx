@@ -403,8 +403,10 @@ defmodule Torchx.Backend do
       # as_type(out, right) |> to_ref(),
       # to_ref(left),
       # to_ref(right),
-      left |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
-      right |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
+      # left |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
+      # right |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
+      Nx.as_type(left, out_type) |> to_ref(),
+      Nx.as_type(right, out_type) |> to_ref(),
       axes1,
       axes2
     )
