@@ -80,7 +80,6 @@ defmodule Torchx.NxDoctestTest do
         broadcast: 3,
         slice_axis: 5,
         outer: 2,
-        # dot: 2,
         qr: 2,
         quotient: 2,
         window_mean: 3,
