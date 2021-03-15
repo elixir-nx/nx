@@ -3,20 +3,18 @@ defmodule Nx.BinaryBackend.View do
   alias Nx.BinaryBackend.WeightedShape
   alias Nx.BinaryBackend.Traverser
 
-  defstruct size: nil,
-            weighted_shape: nil,
+  defstruct weighted_shape: nil,
             weight: 1,
             changes: [],
             must_be_resolved?: false
 
   def build(shape) do
     %View{
-      size: Nx.size(shape),
       weighted_shape: WeightedShape.build(shape)
     }
   end
 
-  def size(%View{size: s}), do: s
+  # def size(%View{size: s}), do: s
 
   def must_be_resolved?(%View{must_be_resolved?: r}), do: r
 
@@ -76,7 +74,7 @@ defmodule Nx.BinaryBackend.View do
     %View{view | weighted_shape: fun.(ws)}
   end
 
-  def build_traverser(%View{size: s, weight: w, weighted_shape: ws}) do
-    Traverser.build(s, w, ws)
+  def build_traverser(%View{weighted_shape: ws}) do
+    Traverser.build(ws)
   end
 end

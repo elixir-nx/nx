@@ -8,7 +8,6 @@ defmodule Nx.BinaryBackend.ViewTest do
       assert View.build({2, 3}) == %View{
         changes: [],
         must_be_resolved?: false,
-        size: 6,
         weight: 1,
         weighted_shape: [{2, 3}, {3, 1}]
       }

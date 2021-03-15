@@ -113,10 +113,10 @@ defmodule Nx.BinaryBackend.WeightedShape do
   def transpose(weighted_shape, axes) do
     map =
       weighted_shape
-      |> Enum.with_index()
-      |> Map.new(fn {item, i} -> {i, item} end)
+      |> map_with_axis(fn {item, a} -> {a, item} end)
+      |> Map.new()
 
-    Enum.map(axes, fn i -> Map.fetch!(map, i) end)
+    Enum.map(axes, fn a -> Map.fetch!(map, a) end)
   end
 
   @doc """
@@ -266,6 +266,37 @@ defmodule Nx.BinaryBackend.WeightedShape do
         i = i + dim_size
         [head | traversal_list(dim - 1, dim_size, dims, i)]
     end
+  end
+
+  @doc """
+  Returns the count of the elements by multiplying dimension lengths.
+
+  Works just like Nx.size/1 for shapes.
+
+  ## Examples
+
+      iex> WeightedShape.size(WeightedShape.build({4, 3, 2, 1}))
+      24
+
+      iex> shape = {4, 3, 2, 1}
+      iex> ws = WeightedShape.build(shape)
+      iex> WeightedShape.size(ws) == Nx.size(shape)
+      true
+
+      iex> shape = {}
+      iex> ws = WeightedShape.build(shape)
+      iex> WeightedShape.size(ws) == Nx.size(shape)
+      true
+  """
+  def size([]) do
+    1
+  end
+
+  def size(ws) do
+    Enum.reduce(ws, 1, fn
+      {d, _}, acc -> d * acc
+      {d, _, _}, acc -> d * acc
+    end)
   end
 
   # Helpers

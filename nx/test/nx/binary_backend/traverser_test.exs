@@ -23,16 +23,6 @@ defmodule Nx.BinaryBackend.TraverserTest do
     [54, 55, 62, 63, 118, 119, 126, 127]
   ]
 
-  describe "size/1" do
-    test "works" do
-      shape = {2, 2, 2, 2, 2, 2, 2}
-      ws = WeightedShape.build(shape)
-      size = Nx.size(shape)
-      trav = Traverser.build(size, 1, ws)
-      assert Traverser.size(trav) == 128
-    end
-  end
-
   test "works for examples case" do
     shape = {2, 2, 2, 2, 2, 2, 2}
     axes = [0, 3, 6]
@@ -42,8 +32,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
       |> WeightedShape.build()
       |> WeightedShape.aggregate(axes)
 
-    size = Nx.size(shape)
-    trav = Traverser.build(size, 1, ws)
+    trav = Traverser.build(ws)
     assert Traverser.to_flat_list(trav) == List.flatten(@example_expected)
   end
 
@@ -61,9 +50,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
       |> WeightedShape.build()
       |> WeightedShape.aggregate(axes1)
 
-    size1 = Nx.size(shape1)
-
-    trav1 = Traverser.build(size1, 1, ws1)
+    trav1 = Traverser.build(ws1)
 
     assert Traverser.to_flat_list(trav1) == exp1 |> Enum.join() |> to_charlist()
 
@@ -78,8 +65,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
       |> WeightedShape.build()
       |> WeightedShape.aggregate(axes2)
 
-    size2 = Nx.size(t2.shape)
-    trav2 = Traverser.build(size2, 1, ws2)
+    trav2 = Traverser.build(ws2)
     assert Traverser.to_flat_list(trav2) == exp2 |> Enum.join() |> to_charlist()
   end
 
@@ -91,9 +77,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
       |> WeightedShape.build()
       |> WeightedShape.aggregate(axes)
 
-    size = Nx.size(shape)
-
-    trav = Traverser.build(size, 1, ws)
+    trav = Traverser.build(ws)
 
     out = Traverser.reduce_aggregates(trav, [], fn agg, acc -> [agg | acc] end)
 
@@ -108,8 +92,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
       |> WeightedShape.build()
       |> WeightedShape.aggregate([])
 
-    size = Nx.size(shape)
-    trav = Traverser.build(size, 1, ws)
+    trav = Traverser.build(ws)
     assert Traverser.to_flat_list(trav) == Enum.to_list(0..127)
   end
 
@@ -119,10 +102,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
       shape
       |> WeightedShape.build()
       |> WeightedShape.transpose([1, 0])
-
-    size = Nx.size(shape)
-    trav = Traverser.build(size, 1, ws)
-
+    trav = Traverser.build(ws)
     cur = Nx.to_flat_list(Nx.transpose(Nx.iota(shape, type: {:u, 8})))
     out = Traverser.to_flat_list(trav)
     assert out == cur
@@ -136,8 +116,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
       |> WeightedShape.build()
       |> WeightedShape.transpose([1, 0])
 
-    size = Nx.size(shape)
-    trav = Traverser.build(size, 1, ws)
+    trav = Traverser.build(ws)
 
     cur = Nx.to_flat_list(Nx.transpose(Nx.iota(shape, type: {:u, 8})))
     out = Traverser.to_flat_list(trav)
@@ -153,8 +132,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
         |> WeightedShape.build()
         |> WeightedShape.reverse([0, 1, 2])
 
-      size = Nx.size(shape)
-      trav = Traverser.build(size, 1, ws)
+      trav = Traverser.build(ws)
       assert Traverser.to_flat_list(trav) == Enum.map(7..0, fn i -> i end)
     end
 
@@ -165,8 +143,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
         |> WeightedShape.build()
         |> WeightedShape.reverse([0])
 
-      size = Nx.size(shape)
-      trav = Traverser.build(size, 1, ws)
+      trav = Traverser.build(ws)
       assert Traverser.to_flat_list(trav) == List.flatten([
         [6, 7, 8],
         [3, 4, 5],
@@ -181,8 +158,7 @@ defmodule Nx.BinaryBackend.TraverserTest do
         |> WeightedShape.build()
         |> WeightedShape.reverse([1])
 
-      size = Nx.size(shape)
-      trav = Traverser.build(size, 1, ws)
+      trav = Traverser.build(ws)
       assert Traverser.to_flat_list(trav) == List.flatten([
         [2, 1, 0],
         [5, 4, 3],
@@ -194,13 +170,11 @@ defmodule Nx.BinaryBackend.TraverserTest do
   defp trav_dot(shape1, axes1, shape2, axes2) do
     ws1 = WeightedShape.build(shape1)
     ws1 = WeightedShape.aggregate(ws1, axes1)
-    size1 = Nx.size(shape1)
-    trav1 = Traverser.build(size1, 1, ws1)
+    trav1 = Traverser.build(ws1)
 
     ws2 = WeightedShape.build(shape2)
     ws2 = WeightedShape.aggregate(ws2, axes2)
-    size2 = Nx.size(shape2)
-    trav2 = Traverser.build(size2, 1, ws2)
+    trav2 = Traverser.build(ws2)
 
     Traverser.zip_reduce_aggregates(
       trav1,
