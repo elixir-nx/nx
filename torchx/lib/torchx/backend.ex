@@ -233,9 +233,8 @@ defmodule Torchx.Backend do
   defp maybe_reshape(%T{} = t, _, _), do: t
 
   @impl true
-  # TODO: Handle all dimensions
-  def transpose(out, %T{} = t, _opts) do
-    NIF.transpose(to_ref(t), 0, 1) |> from_ref(out)
+  def transpose(out, %T{} = t, axes) do
+    NIF.permute(to_ref(t), axes) |> from_ref(out)
   end
 
   @impl true
@@ -394,7 +393,7 @@ defmodule Torchx.Backend do
         %T{type: out_type} = out,
         %T{type: left_type, data: %TB{ref: left_ref}},
         axes1,
-        %T{type: right_type, data: %TB{ref: right_ref}} = right,
+        %T{type: right_type, data: %TB{ref: right_ref}},
         axes2
       ) do
     NIF.tensordot(
@@ -408,7 +407,7 @@ defmodule Torchx.Backend do
 
   defp from_typed_ref(ref, expected_type, expected_type), do: ref
 
-  defp from_typed_ref(ref, ref_type, expected_type),
+  defp from_typed_ref(ref, _ref_type, expected_type),
     do: NIF.to_type(ref, torch_type(expected_type)) |> unwrap!()
 
   @impl true

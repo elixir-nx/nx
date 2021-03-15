@@ -320,7 +320,7 @@ NIF(permute)
   TENSOR_PARAM(0, t);
   LIST_PARAM(1, std::vector<int64_t>, dims);
 
-  TENSOR(t->permute(dims).clone());
+  TENSOR(t->permute(dims).contiguous());
 }
 
 
