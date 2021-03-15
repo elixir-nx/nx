@@ -120,7 +120,7 @@ defmodule Nx.BinaryBackend.WeightedShape do
   def with_weight(weighted_shape, weight) do
     Enum.map(weighted_shape, fn
       {d, w} -> {d, w * weight}
-      a when is_atom(a) -> a
+      {d, w, tags} -> {d, w * weight, tags}
     end)
   end
 
@@ -187,34 +187,22 @@ defmodule Nx.BinaryBackend.WeightedShape do
     [{dim, w * dilation_factor(dim, dil)} | dilate_list(rest, dilations)]
   end
 
-  def reverse(weighted_shape, axes) do
-    reverse(weighted_shape, 0, axes)
-  end
-
-  defp reverse([head | tail], axis, axes) do
-    if axis in axes do
-      [:reverse, head | reverse(tail, axis + 1, axes)]
-    else
-      [head | reverse(tail, axis + 1, axes)]
-    end
-  end
-
-  defp reverse([], _axis, _axes), do: []
-
   @doc """
-  Reads the chunk size from a weighted shape at the given index.
+  Tags the dims at the given axes as reversed.
 
   ## Examples
 
-      iex> WeightedShape.chunk_size(WeightedShape.build({2, 3, 4}), 0, 128)
-      24
-
-      iex> WeightedShape.chunk_size(WeightedShape.build({2, 3, 4}), 10, 128)
-      128
+      iex> WeightedShape.reverse(WeightedShape.build({2, 3}), [1])
+      [{2, 3}, {3, 1, [:reverse]}]
   """
-  def chunk_size(weighted_shape, index, size) do
-    {element, size} = Enum.at(weighted_shape, index, {1, size})
-    element * size
+  def reverse(weighted_shape, axes) do
+    map_with_axis(weighted_shape, fn {dim, axis} ->
+      if axis in axes do
+        tag_dim(dim, :reverse)
+      else
+        dim
+      end
+    end)
   end
 
   @doc """
@@ -237,6 +225,7 @@ defmodule Nx.BinaryBackend.WeightedShape do
   """
   def traversal_list(weighted_shape) do
     weighted_shape
+    |> expand()
     |> traversal_list(0)
     |> List.wrap()
   end
@@ -266,5 +255,48 @@ defmodule Nx.BinaryBackend.WeightedShape do
         i = i + dim_size
         [head | traversal_list(dim - 1, dim_size, dims, i)]
     end
+  end
+
+  # Helpers
+
+  defp tag_dim({d, w}, tag) do
+    {d, w, [tag]}
+  end
+
+  defp tag_dim({d, w, tags}, tag) do
+    {d, w, [tag | tags]}
+  end
+
+  defp map_with_axis(weighted_shape, fun) do
+    map_with_axis(weighted_shape, 0, fun)
+  end
+
+  defp map_with_axis([], _axis, _fun) do
+    []
+  end
+
+  defp map_with_axis([head | tail], axis, fun) do
+    [fun.({head, axis}) | map_with_axis(tail, axis + 1, fun)]
+  end
+
+  # unravels tagged dims into a flat list of dim-weight pairs and ops.
+  defp expand([]) do
+    []
+  end
+
+  defp expand([{d, _} = head | tail]) when is_integer(d) do
+    [head | expand(tail)]
+  end
+
+  defp expand([{d, w, tags} | tail]) do
+    expand_dim(d, w, tags, tail)
+  end
+
+  defp expand_dim(d, w, [], tail) when is_integer(d) do
+    [{d, w} | expand(tail)]
+  end
+
+  defp expand_dim(d, w, [:reverse | tags], tail) do
+    [:reverse | expand_dim(d, w, tags, tail)]
   end
 end

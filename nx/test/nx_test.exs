@@ -1419,6 +1419,19 @@ defmodule NxTest do
     end
   end
 
+  describe "aggregation" do
+    test "removes the aggregated axes from the resulting shape" do
+      t = Nx.tensor([
+        [0, 1, 2],
+        [3, 4, 5]
+      ])
+      
+      t2 = Nx.sum(t, axes: [1])
+      assert t2.shape == {2}
+      assert t2 == Nx.tensor([3, 12])
+    end
+  end
+
   defp round(tensor, places) do
     Nx.map(tensor, fn x ->
       Float.round(x, places)

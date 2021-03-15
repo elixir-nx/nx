@@ -36,4 +36,15 @@ defmodule Nx.BinaryBackend.ViewTest do
       assert view_t.weighted_shape == [{4, 1}, {2, 12}, {3, 4}]
     end
   end
+
+  describe "reverse/2" do
+    @tag :skip
+    test "flips a matrix vertically for axes [1]"
+
+    @tag :skip
+    test "flips a matrix horizontally for axes [0]"
+
+    @tag :skip
+    test "reverses the order of a matrix for axes [0, 1]"
+  end
 end
