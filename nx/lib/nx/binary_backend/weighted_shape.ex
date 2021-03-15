@@ -66,14 +66,21 @@ defmodule Nx.BinaryBackend.WeightedShape do
 
       iex> WeightedShape.aggregate(WeightedShape.build({2, 3}), [])
       {[{3, 1}, {2, 3}], []}
+
+      iex> WeightedShape.aggregate(WeightedShape.build({2, 3, 3}), [2])
+      {[], [{3, 1}]}
+
+      iex> WeightedShape.aggregate(WeightedShape.build({2, 3, 4, 5, 6}), [2])
+      {[{6, 1}, {5, 6}], [{4, 30}]}
   """
   def aggregate(weighted_shape, axes) do
     axes = Enum.sort(axes)
     min = List.first(axes) || 0
 
-    weighted_shape
-    |> Enum.drop(min)
-    |> aggregate(axes, min, [], [])
+    # drops = Enum.take(weighted_shape, min)
+    takes = Enum.drop(weighted_shape, min)
+
+    {ws, aggs} = aggregate(takes, axes, min, [], [])
   end
 
   defp aggregate([pair | rest], [i | axes], i, pre, pos) do

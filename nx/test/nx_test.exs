@@ -1419,16 +1419,25 @@ defmodule NxTest do
     end
   end
 
-  describe "aggregation" do
-    test "removes the aggregated axes from the resulting shape" do
-      t = Nx.tensor([
-        [0, 1, 2],
-        [3, 4, 5]
-      ])
-      
-      t2 = Nx.sum(t, axes: [1])
-      assert t2.shape == {2}
-      assert t2 == Nx.tensor([3, 12])
+  describe "aggregation shapes" do
+    test "removes axes [1] from rank 2 shape" do
+      t = Nx.iota({2, 3})
+      assert Nx.shape(Nx.sum(t, axes: [1])) == {2}
+    end
+
+    test "removes axes [0] from rank 2 shape" do
+      t = Nx.iota({2, 3})
+      assert Nx.shape(Nx.sum(t, axes: [0])) == {3}
+    end
+
+    test "removes axes [0, 1] from rank 2 shape" do
+      t = Nx.iota({2, 3})
+      assert Nx.shape(Nx.sum(t, axes: [0, 1])) == {}
+    end
+
+    test "removes the aggregated axes from shape" do
+      t = Nx.iota({2, 3, 4, 5, 6, 7})
+      assert Nx.shape(Nx.sum(t, axes: [2])) == {2, 3, 5, 6, 7}
     end
   end
 
