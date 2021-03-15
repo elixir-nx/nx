@@ -97,7 +97,8 @@ defmodule Torchx.NIF do
     def unquote(:"#{op}_io")(_tensor), do: :erlang.nif_error(:undef)
   end
 
-  dnif dot(tensorA, tensorB)
+  dnif tensordot(tensorA, tensorB, axesA, axesB)
+  dnif matmul(tensorA, tensorB)
 
   # Transformations
   dnif cholesky(tensor)

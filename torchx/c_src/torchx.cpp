@@ -470,7 +470,7 @@ BINARY_OP(subtract)
 BINARY_OP(divide)
 BINARY_OP(remainder)
 BINARY_OP(multiply)
-BINARY_OP2(dot, matmul)
+BINARY_OP(matmul)
 BINARY_OP2(power, pow)
 BINARY_OP(atan2)
 BINARY_OP(min)
@@ -483,6 +483,16 @@ NIF(quotient)
   TENSOR_PARAM(0, a);
   TENSOR_PARAM(1, b);
   TENSOR(torch::divide(*a, *b, "trunc"));
+}
+
+NIF(tensordot)
+{
+  TENSOR_PARAM(0, t1);
+  TENSOR_PARAM(1, t2);
+  LIST_PARAM(2, std::vector<int64_t>, axes1);
+  LIST_PARAM(3, std::vector<int64_t>, axes2);
+
+  TENSOR(torch::tensordot(*t1, *t2, axes1, axes2));
 }
 
 
@@ -693,7 +703,8 @@ static ErlNifFunc nif_functions[] = {
     DF(bitwise_not, 1),
     DF(logistic, 1),
 
-    DF(dot, 2),
+    DF(tensordot, 4),
+    DF(matmul, 2),
 
     DF(cholesky, 1),
     DF(cholesky, 2),

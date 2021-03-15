@@ -392,26 +392,24 @@ defmodule Torchx.Backend do
   @impl true
   # TODO: Handle axes properly
   def dot(
-        out,
+        %T{type: out_type} = out,
         %T{} = left,
         axes1,
         %T{} = right,
         axes2
       ) do
-    NIF.dot(
-      maybe_transpose_left(to_ref(left), axes1),
-      maybe_transpose_right(to_ref(right), axes2)
+    NIF.tensordot(
+      # as_type(out, left) |> to_ref(),
+      # as_type(out, right) |> to_ref(),
+      # to_ref(left),
+      # to_ref(right),
+      left |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
+      right |> to_ref() |> NIF.to_type(torch_type(out_type)) |> unwrap!(),
+      axes1,
+      axes2
     )
     |> from_ref(out)
   end
-
-  defp maybe_transpose_left(ref, [0]), do: NIF.transpose(ref, 0, 1) |> unwrap!()
-
-  defp maybe_transpose_left(ref, _), do: ref
-
-  defp maybe_transpose_right(ref, [1]), do: NIF.transpose(ref, 0, 1) |> unwrap!()
-
-  defp maybe_transpose_right(ref, _), do: ref
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
