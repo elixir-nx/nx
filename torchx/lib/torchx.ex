@@ -83,8 +83,5 @@ defmodule Torchx do
     {device, [ref | refs]}
   end
 
-  defp wrap_with_device(maybe_ref, device) do
-    ref = unwrap!(maybe_ref)
-    {device, ref}
-  end
+  defp wrap_with_device(maybe_ref, device), do: {device, unwrap!(maybe_ref)}
 end
