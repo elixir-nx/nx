@@ -1779,6 +1779,60 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def sort(_out, t, opts) do
+    %T{shape: shape} = t
+    last_axis = Nx.rank(t) - 1
+
+    comparator =
+      case opts[:comparator] do
+        :desc ->
+          &</2
+
+        :asc ->
+          &>/2
+
+        fun -> fn a, b -> to_scalar(fun.(a, b)) != 0 end
+      end
+
+    axis = opts[:axis]
+
+    case shape do
+      {} ->
+        t
+
+      _ when axis == last_axis ->
+        sort_last_dim(t, comparator)
+
+      _ ->
+        permutation = Nx.axes(t)
+
+        permutation =
+          permutation
+          |> List.delete(axis)
+          |> List.insert_at(last_axis, axis)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        t
+        |> TensorView.update(fn view -> View.transpose(view, permutation) end)
+        |> sort_last_dim(comparator)
+        |> TensorView.update(fn view -> View.transpose(view, inverse_permutation) end)
+        |> TensorView.resolve()
+    end
+  end
+
+  defp sort_last_dim(%T{shape: shape} = t, comparator) do
+    last_axis = Nx.rank(shape) - 1
+
+    t
+    |> TensorView.update(fn view -> View.aggregate(view, [last_axis]) end)
+    |> TensorView.map_aggregates(fn agg -> Enum.sort(agg, comparator) end)
+  end
+
+  def old_sort(_out, t, opts) do
     %T{shape: shape, type: type} = t
     last_axis = Nx.rank(t) - 1
 
@@ -1823,12 +1877,12 @@ defmodule Nx.BinaryBackend do
 
         t
         |> Nx.transpose(axes: permutation)
-        |> sort_last_dim(comparator)
+        |> old_sort_last_dim(comparator)
         |> Nx.transpose(axes: inverse_permutation)
     end
   end
 
-  defp sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator) do
+  defp old_sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator) do
     view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
 
     new_data =

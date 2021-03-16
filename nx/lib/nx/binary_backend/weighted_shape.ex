@@ -50,8 +50,30 @@ defmodule Nx.BinaryBackend.WeightedShape do
     do_build(shape, pos - 1, weight * shape_elem, limits, dilations, acc)
   end
 
-  defp dilation_factor(1, _dilation), do: 1
-  defp dilation_factor(_, dilation), do: dilation
+  defp shape(weighted_shape) when is_list(weighted_shape) do
+    weighted_shape
+    |> Enum.map(fn
+      {d, _, _} -> d
+      {d, _} -> d
+    end)
+    |> List.to_tuple()
+  end
+
+  def shape_without_aggregates(ws) when is_list(ws) do
+    shape(ws)
+  end
+
+  def shape_without_aggregates({cycles, offsets, _}) do
+    shape(cycles ++ offsets)
+  end
+
+  def shape_with_aggregates(ws) when is_list(ws) do
+    shape(ws)
+  end
+
+  def shape_with_aggregates({cycles, offsets, aggs}) do
+    shape(cycles ++ offsets ++ aggs)
+  end
 
   @doc """
   Split the weighted shape into the paths for aggregating.
@@ -197,6 +219,9 @@ defmodule Nx.BinaryBackend.WeightedShape do
   defp dilate_list([{dim, w} | rest], [dil | dilations]) do
     [{dim, w * dilation_factor(dim, dil)} | dilate_list(rest, dilations)]
   end
+
+  defp dilation_factor(1, _dilation), do: 1
+  defp dilation_factor(_, dilation), do: dilation
 
   @doc """
   Tags the dims at the given axes as reversed.

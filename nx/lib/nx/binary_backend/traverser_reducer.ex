@@ -41,8 +41,8 @@ defmodule Nx.BinaryBackend.TraverserReducer do
     %T{type: {_, sizeof1} = type1} = t1
     %T{type: {_, sizeof2} = type2} = t2
 
-    t1 = TensorView.resolve(t1)
-    t2 = TensorView.resolve(t2)
+    t1 = TensorView.resolve_if_required(t1)
+    t2 = TensorView.resolve_if_required(t2)
 
     bin1 = TensorView.raw_binary(t1)
     bin2 = TensorView.raw_binary(t2)
