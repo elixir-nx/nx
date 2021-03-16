@@ -1,7 +1,7 @@
 defmodule Torchx do
   alias Torchx.NIF
 
-  import Torchx.Backend, only: [torch_type: 1, torch_device: 1]
+  alias Torchx.Backend, as: TB
 
   @doc """
   Check if device of the given type is available for Torchx.
@@ -44,9 +44,16 @@ defmodule Torchx do
   ## Utils
 
   @doc false
+  def type_of({_device, ref}), do: type_of(ref)
   def type_of(ref), do: NIF.scalar_type(ref) |> unwrap!()
 
   @doc false
+  def shape_of({_device, ref}), do: shape_of(ref)
+  def shape_of(ref), do: NIF.shape(ref) |> unwrap!()
+
+  @doc false
+  def device_of({_device, ref}), do: device_of(ref)
+
   def device_of(ref),
     do: NIF.device_of(ref) |> unwrap!() |> List.to_string() |> parse_torch_device_str()
 
@@ -62,8 +69,29 @@ defmodule Torchx do
     end
   end
 
+  @devices %{
+    cpu: 0,
+    cuda: 1,
+    mkldnn: 2,
+    opengl: 3,
+    opencl: 4,
+    ideep: 5,
+    hip: 6,
+    fpga: 7,
+    msnpu: 8,
+    xla: 9,
+    vulkan: 10,
+    metal: 11,
+    xpu: 12
+  }
+
   @doc false
-  def shape_of(ref), do: NIF.shape(ref) |> unwrap!()
+  def torch_device({device, index}) when is_atom(device) and is_integer(index),
+    do: {@devices[device], index}
+
+  def torch_device(device) when is_atom(device), do: {@devices[device], -1}
+
+  def torch_device(opts) when is_list(opts), do: opts |> TB.device_option() |> torch_device()
 
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
