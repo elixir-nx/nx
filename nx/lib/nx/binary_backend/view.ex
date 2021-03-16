@@ -4,9 +4,8 @@ defmodule Nx.BinaryBackend.View do
   alias Nx.BinaryBackend.Traverser
 
   defstruct weighted_shape: nil,
-            weight: 1,
-            changes: [],
-            must_be_resolved?: false
+            type: nil,
+            changed?: false
 
   def build(shape) do
     %View{
@@ -14,67 +13,44 @@ defmodule Nx.BinaryBackend.View do
     }
   end
 
-  # def size(%View{size: s}), do: s
+  def must_be_resolved?(%View{weighted_shape: {_, _, _}}), do: true
+  def must_be_resolved?(_), do: false
 
-  def must_be_resolved?(%View{must_be_resolved?: r}), do: r
-
-  def has_changes?(%View{changes: c}), do: c != []
+  def has_changes?(%View{changed?: c}), do: c
 
   def aggregate(view, axes) do
-    %View{view | must_be_resolved?: true}
-    |> add_change(:aggregate, axes)
-    |> update_weighted_shape(fn ws -> WeightedShape.aggregate(ws, axes) end)
+    change(view, fn ws -> WeightedShape.aggregate(ws, axes) end)
   end
 
   def transpose(view, axes) do
-    view
-    |> add_change(:transpose, axes)
-    |> update_weighted_shape(fn ws -> WeightedShape.transpose(ws, axes) end)
+    change(view, fn ws -> WeightedShape.transpose(ws, axes) end)
   end
 
   def reverse(view, axes) do
-    view
-    |> add_change(:reverse, axes)
-    |> update_weighted_shape(fn ws -> WeightedShape.reverse(ws, axes) end)
+    change(view, fn ws -> WeightedShape.reverse(ws, axes) end)
   end
 
   def dilate(view, dilation) do
-    view
-    |> add_change(:dilate, dilation)
-    |> update_weighted_shape(fn ws -> WeightedShape.dilate(ws, dilation) end)
+    change(view, fn ws -> WeightedShape.dilate(ws, dilation) end)
   end
 
   def limit(view, limits) do
-    view
-    |> add_change(:limit, limits)
-    |> update_weighted_shape(fn ws -> WeightedShape.limit(ws, limits) end)
+    change(view, fn ws -> WeightedShape.limit(ws, limits) end)
   end
 
-  def with_type(view, {_, weight} = type) do
-    %View{
-      view |
-      weight: weight
-    }
-    |> add_change(:type, type)
-    |> update_weighted_shape(fn
-      {o, r} -> 
-        ow = WeightedShape.with_weight(o, weight)
-        rw = WeightedShape.with_weight(r, weight)
-        {ow, rw}
-      ws when is_list(ws) ->
-        WeightedShape.with_weight(ws, weight)
-    end)
+  def with_type(view, type) do
+    %View{view | type: type}
   end
 
-  defp add_change(%View{changes: changes} = view, key, value) do
-    %View{view | changes: [{key, value} | changes]}
+  defp change(%View{weighted_shape: ws} = view, fun) when is_list(ws) do
+    %View{view | weighted_shape: fun.(ws), changed?: true}
   end
 
-  defp update_weighted_shape(%View{weighted_shape: ws} = view, fun) do
-    %View{view | weighted_shape: fun.(ws)}
+  def build_traverser(%View{weighted_shape: ws, type: {_, _} = type}) do
+    Traverser.build(ws, type)
   end
 
-  def build_traverser(%View{weighted_shape: ws}) do
+  def build_traverser(%View{weighted_shape: ws, type: nil}) do
     Traverser.build(ws)
   end
 end

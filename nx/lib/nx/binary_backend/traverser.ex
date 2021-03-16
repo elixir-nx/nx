@@ -5,9 +5,18 @@ defmodule Nx.BinaryBackend.Traverser do
   defstruct [:count, :ctx]
 
   def range(count) when is_integer(count) and count >= 0 do
+    readers = Enum.to_list(0..(count - 1))
     %Traverser{
       count: count,
-      ctx: {[0], [0], Enum.to_list(0..(count - 1))}
+      ctx: {[0], [0], readers}
+    }
+  end
+
+  def range(count, {_, sizeof}) when is_integer(count) and count >= 0 do
+    readers = Enum.map(0..(count - 1), fn o -> o * sizeof end)
+    %Traverser{
+      count: count,
+      ctx: {[0], [0], readers}
     }
   end
 
@@ -33,6 +42,19 @@ defmodule Nx.BinaryBackend.Traverser do
       count: c_count * o_count * r_count,
       ctx: {cycles, offsets, readers}
     }
+  end
+
+  def build(weighted_shape, {_, sizeof}) when is_list(weighted_shape) do
+    weighted_shape
+    |> WeightedShape.with_weight(sizeof)
+    |> build()
+  end
+
+  def build({c, o, r}, {_, sizeof}) do
+    c = WeightedShape.with_weight(c, sizeof)
+    o = WeightedShape.with_weight(o, sizeof)
+    r = WeightedShape.with_weight(r, sizeof)
+    build({c, o, r})
   end
 
   def count(%Traverser{count: c}), do: c
