@@ -53,14 +53,14 @@ md_benches_axis_1 = %{
   "old sort md_f32 axis: 1" => old_sort.(md_f32, 1, :asc),
   "new sort md_f32 axis: 1" => new_sort.(md_f32, 1, :asc),
 
-  "old sort md_f64 axis: 0" => old_sort.(md_f64, 1, :asc),
-  "new sort md_f64 axis: 0" => new_sort.(md_f64, 1, :asc),
+  "old sort md_f64 axis: 1" => old_sort.(md_f64, 1, :asc),
+  "new sort md_f64 axis: 1" => new_sort.(md_f64, 1, :asc),
 
-  "old sort md_s64 axis: 0" => old_sort.(md_s64, 1, :asc),
-  "new sort md_s64 axis: 0" => new_sort.(md_s64, 1, :asc),
+  "old sort md_s64 axis: 1" => old_sort.(md_s64, 1, :asc),
+  "new sort md_s64 axis: 1" => new_sort.(md_s64, 1, :asc),
 
-  "old sort md_u8 axis: 0" => old_sort.(md_u8, 1, :asc),
-  "new sort md_u8 axis: 0" => new_sort.(md_u8, 1, :asc),
+  "old sort md_u8 axis: 1" => old_sort.(md_u8, 1, :asc),
+  "new sort md_u8 axis: 1" => new_sort.(md_u8, 1, :asc),
 }
 
 sm_benches_axis_0 = %{
