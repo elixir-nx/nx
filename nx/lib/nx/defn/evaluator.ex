@@ -18,14 +18,7 @@ defmodule Nx.Defn.Evaluator do
   @impl true
   def __jit__(_key, vars, fun, _opts) do
     fun.(vars)
-    |> Tree.composite(
-      %{},
-      &eval(
-        IO.inspect(&1, label: "e1"),
-        IO.inspect(vars, label: "vars"),
-        IO.inspect(&2, label: "e2")
-      )
-    )
+    |> Tree.composite(%{}, &eval(&1, vars, &2))
     |> elem(0)
   end
 
@@ -68,14 +61,7 @@ defmodule Nx.Defn.Evaluator do
 
       %{} ->
         {args, cache} = Tree.traverse_args(ans, cache, &eval(&1, vars, &2))
-
-        res =
-          apply(
-            Nx.Shared.find_impl!(args),
-            op,
-            eval_args(type, ans, args) |> IO.inspect(label: "eval args")
-          )
-
+        res = apply(Nx.Shared.find_impl!(args), op, eval_args(type, ans, args))
         {res, Map.put(cache, id, res)}
     end
   end
@@ -85,9 +71,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_args({:tuple, _}, _, args), do: args
-
-  defp eval_args(_, ans, args),
-    do: [ans | args]
+  defp eval_args(_, ans, args), do: [ans | args]
 
   defp find_clause([{pred, clause} | clauses], last, vars, cache) do
     {pred, cache} = eval(pred, vars, cache)
