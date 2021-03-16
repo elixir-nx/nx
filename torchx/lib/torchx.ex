@@ -25,40 +25,26 @@ defmodule Torchx do
   ## Creation
 
   def arange(from, to, step \\ 1, opts \\ []) do
-    type = opts[:type] || Nx.Type.infer([from, to])
+    type = opts[:type] || :float
     device = opts[:device] || :cpu
 
-    NIF.arange(from, to, step, torch_type(type), torch_device(device))
-    |> wrap_with_device()
+    NIF.call(:arange, device, [from, to, step, type, torch_device(device)])
+    |> wrap_with_device(device)
   end
 
   ## Operations
 
-  def tensordot(left_ref, right_ref, left_axes, right_axes) do
-    NIF.tensordot(
-      left_ref,
-      right_ref,
-      left_axes,
-      right_axes
-    )
-    |> wrap_with_device()
+  def tensordot(left, right, left_axes, right_axes) do
+    {device, [left_ref, right_ref]} = to_refs([left, right])
+
+    NIF.call(:tensordot, device, [left_ref, right_ref, left_axes, right_axes])
+    |> wrap_with_device(device)
   end
 
   ## Utils
 
   @doc false
-  def type_of(ref), do: NIF.scalar_type(ref) |> unwrap!() |> from_torch_type()
-
-  defp from_torch_type(:char), do: {:s, 8}
-  defp from_torch_type(:byte), do: {:u, 8}
-  defp from_torch_type(:bool), do: {:u, 8}
-  defp from_torch_type(:short), do: {:s, 16}
-  defp from_torch_type(:int), do: {:s, 32}
-  defp from_torch_type(:long), do: {:s, 64}
-  defp from_torch_type(:brain), do: {:bf, 16}
-  defp from_torch_type(:half), do: {:f, 16}
-  defp from_torch_type(:float), do: {:f, 32}
-  defp from_torch_type(:double), do: {:f, 64}
+  def type_of(ref), do: NIF.scalar_type(ref) |> unwrap!()
 
   @doc false
   def device_of(ref),
@@ -82,8 +68,23 @@ defmodule Torchx do
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 
-  defp wrap_with_device(maybe_ref) do
+  defp to_refs([{device, ref} | t]) do
+    refs =
+      Enum.map(t, fn
+        {^device, ref} ->
+          ref
+
+        {other_device, _ref} ->
+          raise "cannot perform operations on across devices: #{inspect(device)} and #{
+                  inspect(other_device)
+                }"
+      end)
+
+    {device, [ref | refs]}
+  end
+
+  defp wrap_with_device(maybe_ref, device) do
     ref = unwrap!(maybe_ref)
-    {device_of(ref), ref}
+    {device, ref}
   end
 end

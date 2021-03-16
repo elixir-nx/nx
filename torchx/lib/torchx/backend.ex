@@ -41,6 +41,17 @@ defmodule Torchx.Backend do
 
   ## Type conversion
 
+  defp from_torch_type(:char), do: {:s, 8}
+  defp from_torch_type(:byte), do: {:u, 8}
+  defp from_torch_type(:bool), do: {:u, 8}
+  defp from_torch_type(:short), do: {:s, 16}
+  defp from_torch_type(:int), do: {:s, 32}
+  defp from_torch_type(:long), do: {:s, 64}
+  defp from_torch_type(:brain), do: {:bf, 16}
+  defp from_torch_type(:half), do: {:f, 16}
+  defp from_torch_type(:float), do: {:f, 32}
+  defp from_torch_type(:double), do: {:f, 64}
+
   @doc false
   def torch_type(nx_type, hint \\ "")
 
@@ -462,7 +473,7 @@ defmodule Torchx.Backend do
   defp from_bare_ref(maybe_ref) do
     ref = unwrap!(maybe_ref)
 
-    type = Torchx.type_of(ref)
+    type = Torchx.type_of(ref) |> from_torch_type()
     shape = NIF.shape(ref) |> unwrap!()
 
     names =
@@ -500,7 +511,7 @@ defmodule Torchx.Backend do
 
   if Application.get_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(ref, shape, type) do
-      current_type = Torchx.type_of(ref)
+      current_type = Torchx.type_of(ref) |> from_torch_type()
 
       if current_type != type do
         raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
