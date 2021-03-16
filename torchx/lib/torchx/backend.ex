@@ -41,33 +41,23 @@ defmodule Torchx.Backend do
 
   ## Type conversion
 
-  defp torch_type(nx_type, hint \\ "")
+  @doc false
+  def torch_type(nx_type, hint \\ "")
 
-  defp torch_type({:u, 8}, _), do: :byte
-  defp torch_type({:s, 8}, _), do: :char
-  defp torch_type({:s, 16}, _), do: :short
-  defp torch_type({:s, 32}, _), do: :int
-  defp torch_type({:s, 64}, _), do: :long
-  defp torch_type({:bf, 16}, _), do: :brain
-  defp torch_type({:f, 16}, _), do: :half
-  defp torch_type({:f, 32}, _), do: :float
-  defp torch_type({:f, 64}, _), do: :double
+  def torch_type({:u, 8}, _), do: :byte
+  def torch_type({:s, 8}, _), do: :char
+  def torch_type({:s, 16}, _), do: :short
+  def torch_type({:s, 32}, _), do: :int
+  def torch_type({:s, 64}, _), do: :long
+  def torch_type({:bf, 16}, _), do: :brain
+  def torch_type({:f, 16}, _), do: :half
+  def torch_type({:f, 32}, _), do: :float
+  def torch_type({:f, 64}, _), do: :double
 
-  defp torch_type({:u, size}, hint) when size in [16, 32, 64] do
+  def torch_type({:u, size}, hint) when size in [16, 32, 64] do
     raise ArgumentError,
           String.trim("Torchx does not support unsigned #{size} bit integer #{hint}")
   end
-
-  defp from_torch_type(:char), do: {:s, 8}
-  defp from_torch_type(:byte), do: {:u, 8}
-  defp from_torch_type(:bool), do: {:u, 8}
-  defp from_torch_type(:short), do: {:s, 16}
-  defp from_torch_type(:int), do: {:s, 32}
-  defp from_torch_type(:long), do: {:s, 64}
-  defp from_torch_type(:brain), do: {:bf, 16}
-  defp from_torch_type(:half), do: {:f, 16}
-  defp from_torch_type(:float), do: {:f, 32}
-  defp from_torch_type(:double), do: {:f, 64}
 
   def device_option(nil), do: :cpu
   def device_option(backend_opts), do: backend_opts[:device] || :cpu
@@ -88,12 +78,13 @@ defmodule Torchx.Backend do
     xpu: 12
   }
 
-  defp torch_device({device, index}) when is_atom(device) and is_integer(index),
+  @doc false
+  def torch_device({device, index}) when is_atom(device) and is_integer(index),
     do: {@devices[device], index}
 
-  defp torch_device(device) when is_atom(device), do: {@devices[device], -1}
+  def torch_device(device) when is_atom(device), do: {@devices[device], -1}
 
-  defp torch_device(opts) when is_list(opts), do: opts |> device_option() |> torch_device()
+  def torch_device(opts) when is_list(opts), do: opts |> device_option() |> torch_device()
 
   ## Creation
 
@@ -392,15 +383,15 @@ defmodule Torchx.Backend do
   def dot(
         %T{type: out_type} = out,
         %T{type: left_type, data: %TB{ref: left_ref}},
-        axes1,
+        left_axes,
         %T{type: right_type, data: %TB{ref: right_ref}},
-        axes2
+        right_axes
       ) do
     NIF.tensordot(
       from_typed_ref(left_ref, left_type, out_type),
       from_typed_ref(right_ref, right_type, out_type),
-      axes1,
-      axes2
+      left_axes,
+      right_axes
     )
     |> from_ref(out)
   end
@@ -449,7 +440,11 @@ defmodule Torchx.Backend do
 
   if Application.get_env(:torchx, :add_backend_on_inspect, true) do
     defp maybe_add_signature(result, tensor) do
-      Inspect.Algebra.concat(["Torchx.Backend(#{device(tensor)})", Inspect.Algebra.line(), result])
+      Inspect.Algebra.concat([
+        "Torchx.Backend(#{device(tensor)})",
+        Inspect.Algebra.line(),
+        result
+      ])
     end
   else
     defp maybe_add_signature(result, _tensor) do
@@ -467,7 +462,7 @@ defmodule Torchx.Backend do
   defp from_bare_ref(maybe_ref) do
     ref = unwrap!(maybe_ref)
 
-    type = NIF.type(ref) |> unwrap!() |> from_torch_type()
+    type = Torchx.type_of(ref)
     shape = NIF.shape(ref) |> unwrap!()
 
     names =
@@ -505,7 +500,7 @@ defmodule Torchx.Backend do
 
   if Application.get_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(ref, shape, type) do
-      current_type = ref |> NIF.type() |> unwrap!() |> from_torch_type()
+      current_type = Torchx.type_of(ref)
 
       if current_type != type do
         raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
@@ -527,21 +522,7 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(ref, _, _), do: ref
   end
 
-  @doc false
-  def device(%T{data: %TB{ref: ref}}),
-    do: NIF.device(ref) |> unwrap!() |> List.to_string() |> parse_torch_device_str()
-
-  defp parse_torch_device_str(str) when is_binary(str) do
-    str
-    |> String.split(":")
-    |> case do
-      [type, index] ->
-        {String.to_existing_atom(type), String.to_integer(index)}
-
-      [type] ->
-        String.to_existing_atom(type)
-    end
-  end
+  def device(%T{data: %TB{ref: ref}}), do: Torchx.device_of(ref)
 
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()
   defp on_cpu?(tensor), do: device(tensor) == :cpu

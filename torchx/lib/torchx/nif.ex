@@ -109,10 +109,10 @@ defmodule Torchx.NIF do
   dnif cuda_is_available()
   dnif cuda_device_count()
 
-  def type(_tensor), do: :erlang.nif_error(:undef)
+  def scalar_type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
   def names(_tensor), do: :erlang.nif_error(:undef)
   def strides(_tensor), do: :erlang.nif_error(:undef)
-  def device(_tensor), do: :erlang.nif_error(:undef)
+  def device_of(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
 end

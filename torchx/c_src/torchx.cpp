@@ -156,7 +156,7 @@ NIF(to_blob)
   return result;
 }
 
-NIF(type)
+NIF(scalar_type)
 {
   TENSOR_PARAM(0, t);
 
@@ -203,7 +203,7 @@ NIF(strides)
   return nx::nif::ok(env, enif_make_tuple_from_array(env, strides.data(), strides.size()));
 }
 
-NIF(device)
+NIF(device_of)
 {
   TENSOR_PARAM(0, t);
 
@@ -714,11 +714,11 @@ static ErlNifFunc nif_functions[] = {
     DF(cuda_is_available, 0),
     DF(cuda_device_count, 0),
 
-    F(type, 1),
+    F(scalar_type, 1),
     F(shape, 1),
     F(names, 1),
     F(strides, 1),
-    F(device, 1),
+    F(device_of, 1),
     F(nbytes, 1),
 };
 
