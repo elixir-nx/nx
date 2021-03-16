@@ -73,29 +73,7 @@ defmodule Torchx.Backend do
   def device_option(nil), do: :cpu
   def device_option(backend_opts), do: backend_opts[:device] || :cpu
 
-  @devices %{
-    cpu: 0,
-    cuda: 1,
-    mkldnn: 2,
-    opengl: 3,
-    opencl: 4,
-    ideep: 5,
-    hip: 6,
-    fpga: 7,
-    msnpu: 8,
-    xla: 9,
-    vulkan: 10,
-    metal: 11,
-    xpu: 12
-  }
-
-  @doc false
-  def torch_device({device, index}) when is_atom(device) and is_integer(index),
-    do: {@devices[device], index}
-
-  def torch_device(device) when is_atom(device), do: {@devices[device], -1}
-
-  def torch_device(opts) when is_list(opts), do: opts |> device_option() |> torch_device()
+  defp torch_device(opts) when is_list(opts), do: opts |> device_option() |> Torchx.torch_device()
 
   ## Creation
 

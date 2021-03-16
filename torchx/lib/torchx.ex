@@ -1,8 +1,6 @@
 defmodule Torchx do
   alias Torchx.NIF
 
-  alias Torchx.Backend, as: TB
-
   @doc """
   Check if device of the given type is available for Torchx.
   Device atom can be any of
@@ -90,8 +88,6 @@ defmodule Torchx do
     do: {@devices[device], index}
 
   def torch_device(device) when is_atom(device), do: {@devices[device], -1}
-
-  def torch_device(opts) when is_list(opts), do: opts |> TB.device_option() |> torch_device()
 
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))

@@ -116,6 +116,9 @@ defmodule Torchx.NIF do
   def device_of(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
 
-  def call(func, :cpu, args), do: apply(__MODULE__, func, args)
-  def call(func, _device, args), do: apply(__MODULE__, :"#{func}_io", args)
+  def call(func, :cpu, args) when is_atom(func) and is_list(args),
+    do: apply(__MODULE__, func, args)
+
+  def call(func, _device, args) when is_atom(func) and is_list(args),
+    do: apply(__MODULE__, :"#{func}_io", args)
 end
