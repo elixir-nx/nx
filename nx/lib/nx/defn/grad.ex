@@ -440,6 +440,77 @@ defmodule Nx.Defn.Grad do
     grad_pairs(pairs, g, cache)
   end
 
+  defp grad(:sort, [tensor, opts, _], ans, g, cache) do
+    # shape = tensor[0].shape
+    # iotas = []
+    # for dim, size in enumerate(shape):
+    #   dtype = np.int32 if size < np.iinfo(np.int32).max else np.int64
+    #   iotas.append(broadcasted_iota(dtype, shape, dim))
+    # sorted_tensor = sort_p.bind(*(tensor + (iotas[dimension],)), dimension=dimension,
+    #                       is_stable=is_stable, num_keys=num_keys)
+    # idx = tuple(sorted_tensor[-1] if i == dimension else iotas[i]
+    #             for i in range(len(shape)))
+    # g_out = tuple(t if type(t) is ad_util.Zero else t[idx] for t in g)
+    # return tuple(sorted_tensor[:-1]), g_out
+
+    # iotas =
+    #   tensor.shape
+    #   |> Tuple.to_list()
+    #   |> Enum.map(fn dim ->
+    #     Nx.iota(tensor, axis: dim)
+    #     |> IO.inspect(label: "iotas[#{dim}]")
+    #   end)
+
+    # sorted_tensor = Enum.map(iotas, fn iota -> Nx.add(tensor, iota) |> Nx.sort(opts) end)
+
+    # IO.inspect(sorted_tensor, label: "sorted_tensor")
+
+    # idx =
+    #   tensor.shape
+    #   |> Nx.axes()
+    #   |> Enum.map(fn
+    #     ^axis -> List.last(sorted_tensor)
+    #     i -> Enum.at(iotas, i)
+    #   end)
+
+    # IO.inspect(idx, label: "idx")
+
+    # g_out = tuple(t if type(t) is ad_util.Zero else t[idx] for t in g)
+
+    axis = opts[:axis]
+
+    iota = Nx.iota(tensor, axis: max(axis - 1, 0))
+
+    g_idx =
+      [tensor, iota]
+      |> Nx.concatenate(axis: axis)
+      |> Nx.sort(axis: max(axis - 1, 0), comparator: opts[:comparator])
+      |> Nx.slice_axis(elem(tensor.shape, axis), 1, axis)
+
+    zero_axes = List.duplicate(0, tuple_size(tensor.shape) + 1)
+    tensor_len = Tuple.to_list(tensor.shape) ++ [0]
+
+    g_out =
+      g_idx
+      |> IO.inspect(label: "g_idx")
+      |> Nx.reduce(0, fn idx, acc ->
+        start =
+          List.replace_at(zero_axes, axis, Nx.to_scalar(idx))
+          |> IO.inspect(label: "start")
+
+        if acc == 0 do
+          [Nx.slice(g, start, tensor_len)]
+        else
+          [Nx.slice(g, start, tensor_len) | acc]
+        end
+      end)
+      |> IO.inspect(label: "reduce")
+      |> Enum.reverse()
+      |> Nx.concatenate()
+
+    to_grad(ans, g_out, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end

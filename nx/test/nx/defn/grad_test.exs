@@ -1625,6 +1625,57 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "sort" do
+    defn sort_grad(t) do
+      grad(t, Nx.sum(Nx.sort(t)))
+    end
+
+    defn sort_grad_power(t) do
+      grad(
+        t,
+        Nx.sum(Nx.sort(Nx.power(t, 2)))
+      )
+    end
+
+    defn sort_grad_composed(t) do
+      grad(
+        t,
+        Nx.sum(Nx.sort(Nx.log(Nx.power(t, 2))))
+      )
+    end
+
+    defn sort_grad_log1p(t) do
+      grad(
+        t,
+        Nx.sum(Nx.log1p(Nx.sort(Nx.power(t, 2), axis: 1)))
+      )
+    end
+
+    test "computes grad for {1}-tensor" do
+      assert sort_grad(Nx.tensor([1.0])) == Nx.tensor([1.0])
+    end
+
+    test "computes grad for {2, 2} tensor" do
+      assert sort_grad(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
+               Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+    end
+
+    test "computes grad for powers of a {2, 2}-tensor" do
+      assert sort_grad_power(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
+               Nx.tensor([[2.0, 4.0], [6.0, 8.0]])
+    end
+
+    test "computes grad for composed functions on a multidim tensor" do
+      assert sort_grad_composed(Nx.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]]])) ==
+               Nx.tensor([[[[2.0, 1.0], [0.6666667, 0.5], [0.3999, 0.33333]]]])
+    end
+
+    test "computes grad for composed functions applied to sort" do
+      assert sort_grad_log1p(Nx.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]]])) ==
+               Nx.tensor([[[[1.0, 0.8], [0.6, 0.47058824], [0.3846154, 0.32432434]]]])
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, Nx.sum(Nx.squeeze(Nx.broadcast(t, {3, 2, 2}))))
