@@ -106,7 +106,7 @@ defmodule Nx.BinaryBackend.Traverser do
 
   def reduce_aggregates(%Traverser{ctx: {c, o, reads}}, acc, fun) do
     reduce_co(c, o, acc, fn offset, acc ->
-      fun.(Enum.map(reads, fn r -> offset + r end), acc)
+      fun.({offset, reads}, acc)
     end)
   end
 

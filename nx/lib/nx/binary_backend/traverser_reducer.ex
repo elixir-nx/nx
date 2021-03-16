@@ -6,7 +6,7 @@ defmodule Nx.BinaryBackend.TraverserReducer do
   alias Nx.Tensor, as: T
 
   def bin_reduce(out, tensor, acc, opts, fun) do
-    %T{type: {_, sizeof}, shape: shape} = tensor
+    %T{type: {_, sizeof} = type, shape: shape} = tensor
     %T{type: type_out} = out
 
     axes = Keyword.get(opts, :axes, []) || []
@@ -16,22 +16,28 @@ defmodule Nx.BinaryBackend.TraverserReducer do
 
     trav =
       if axes == [] do
-        Traverser.range(Nx.size(shape))
+        shape
+        |> Nx.size()
+        |> Traverser.range(type)
       else
         tensor
         |> TensorView.get_or_create_view()
         |> View.aggregate(axes)
+        |> View.with_type(type)
         |> View.build_traverser()
       end
 
-    Traverser.reduce_aggregates(trav, [], fn aggs, outer_acc ->
+    Traverser.reduce_aggregates(trav, [], fn {agg_o, agg_indices}, outer_acc ->
       {agg_out, _} =
-        Enum.reduce(aggs, {[], acc}, fn o, {_, agg_acc} ->
-          offset = o * sizeof
-          <<_::size(offset)-bitstring, bin::size(sizeof)-bitstring, _::bitstring>> = data
+        Enum.reduce(agg_indices, {[], acc}, fn agg_i, {_, agg_acc} ->
+          <<
+            _::size(agg_o)-bitstring,
+            _::size(agg_i)-bitstring,
+            bin::size(sizeof)-bitstring,
+            _::bitstring
+          >> = data
           fun.(bin, agg_acc)
         end)
-
       [outer_acc, Bits.from_scalar(agg_out, type_out)]
     end)
   end
@@ -73,6 +79,7 @@ defmodule Nx.BinaryBackend.TraverserReducer do
         acc3
       end,
       fn acc3, outer_acc ->
+      
         [outer_acc, Bits.from_scalar(acc3, type_out)]
       end
     )

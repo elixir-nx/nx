@@ -2,7 +2,9 @@ defmodule Nx.BinaryBackend.View do
   alias Nx.BinaryBackend.View
   alias Nx.BinaryBackend.WeightedShape
   alias Nx.BinaryBackend.Traverser
-  alias Nx.BinaryBackend.Bits
+  # alias Nx.BinaryBackend.Bits
+
+  import Nx.Shared
 
   defstruct weighted_shape: nil,
             type: nil,
@@ -63,22 +65,29 @@ defmodule Nx.BinaryBackend.View do
     Traverser.build(ws)
   end
 
-  def map_aggregates(view, {_, sizeof} = type, data, mapper) do
-    view
-    |> with_type(type)
-    |> build_traverser()
-    |> Traverser.reduce_aggregates([], fn agg_offsets, acc ->
-      out =
-        agg_offsets
-        |> Enum.map(fn o ->
-          <<_::size(o)-bitstring, bin::size(sizeof)-bitstring, _::bitstring>> = data
-          Bits.to_number(bin, type)
-        end)
-        |> mapper.()
-        |> Enum.map(fn n ->
-          Bits.from_number(n, type)
-        end)
-      [acc | out]
-    end)
+  def map_aggregates(view, type, data, mapper) do
+    match_types [type] do
+      view
+      |> with_type(type)
+      |> build_traverser()
+      |> Traverser.reduce_aggregates([], fn {agg_o, agg_indices}, acc ->
+        out =
+          agg_indices
+          |> Enum.map(fn agg_i ->
+            <<
+              _::size(agg_o)-bitstring,
+              _::size(agg_i)-bitstring,
+              match!(bin_num, 0),
+              _::bitstring
+            >> = data
+            read!(bin_num, 0)
+          end)
+          |> mapper.()
+          |> Enum.map(fn n ->
+            <<write!(n, 0)>>
+          end)
+        [acc | out]
+      end)
+    end
   end
 end

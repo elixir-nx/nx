@@ -79,7 +79,9 @@ defmodule Nx.BinaryBackend.TraverserTest do
 
     trav = Traverser.build(ws)
 
-    out = Traverser.reduce_aggregates(trav, [], fn agg, acc -> [agg | acc] end)
+    out = Traverser.reduce_aggregates(trav, [], fn {o, aggs}, acc ->
+      [Enum.map(aggs, fn a -> o + a end) | acc]
+    end)
 
     assert Enum.reverse(out) == @example_expected
   end
