@@ -67,18 +67,35 @@ defmodule Nx.BinaryBackend.Traverser do
         inner_fn,
         outer_fn
       ) do
-    reduce(c1, o1, r1, outer_acc, fn {offset1, readers1}, outer_acc2 ->
-      reduce(c2, o2, r2, outer_acc2, fn {offset2, readers2}, outer_acc3 ->
-        result = zip_reduce_readers(offset1, readers1, offset2, readers2, inner_acc, inner_fn)
+    reduce_co(c1, o1, outer_acc, fn offset1, outer_acc2 ->
+      reduce_co(c2, o2, outer_acc2, fn offset2, outer_acc3 ->
+        result = zip_reduce_readers(offset1, r1, offset2, r2, inner_acc, inner_fn)
         outer_fn.(result, outer_acc3)
       end)
     end)
   end
 
   def reduce(%Traverser{ctx: {c, o, r}}, acc, reducer) do
-    reduce(c, o, r, acc, fn {offset, readers}, acc2 ->
-      reduce_readers(offset, readers, acc2, reducer)
+    reduce_co(c, o, acc, fn offset, acc2 ->
+      reduce_readers(offset, r, acc2, reducer)
     end)
+  end
+
+  defp reduce_co([], _offsets, acc, _fun) do
+    acc
+  end
+
+  defp reduce_co([c | c_rest], offsets, acc, fun) do
+    acc = reduce_o(c, offsets, acc, fun)
+    reduce_co(c_rest, offsets, acc, fun)
+  end
+
+  defp reduce_o(_, [], acc, _) do
+    acc
+  end
+
+  defp reduce_o(c, [o | offsets], acc, fun) do
+    reduce_o(c, offsets, fun.(c + o, acc), fun)
   end
 
   def to_flat_list(trav) do
@@ -87,30 +104,13 @@ defmodule Nx.BinaryBackend.Traverser do
     |> Enum.reverse()
   end
 
-  def reduce_aggregates(%Traverser{ctx: {c, o, r}}, acc, fun) do
-    reduce(c, o, r, acc, fn {offset, reads}, acc ->
+  def reduce_aggregates(%Traverser{ctx: {c, o, reads}}, acc, fun) do
+    reduce_co(c, o, acc, fn offset, acc ->
       fun.(Enum.map(reads, fn r -> offset + r end), acc)
     end)
   end
 
-  defp reduce([], _offsets, _readers, acc, _fun) do
-    acc
-  end
-
-  defp reduce([c | c_rest], offsets, readers, acc, fun) do
-    acc = reduce_cycle(c, offsets, readers, acc, fun)
-    reduce(c_rest, offsets, readers, acc, fun)
-  end
-
-  @compile {:inline, reduce_cycle: 5, reduce_readers: 4, zip_reduce_readers: 6}
-
-  defp reduce_cycle(_, [], _, acc, _) do
-    acc
-  end
-
-  defp reduce_cycle(cycle_offset, [o | offsets], readers, acc, fun) do
-    reduce_cycle(cycle_offset, offsets, readers, fun.({cycle_offset + o, readers}, acc), fun)
-  end
+  @compile {:inline, reduce_readers: 4, zip_reduce_readers: 6}
 
   defp reduce_readers(_offset, [], acc, _fun) do
     acc
