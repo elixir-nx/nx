@@ -35,12 +35,7 @@ defmodule Torchx.NxDoctestTest do
   ## Output mismatch
 
   * qr/2
-  * dot/4
   * cholesky/1
-
-  ## Not all data types supported
-
-  * dot/2
 
   ## Not implemented yet or depends on not implemented
 
@@ -50,10 +45,6 @@ defmodule Torchx.NxDoctestTest do
   * norm/2
   * all_close?/3
   * bitcast/2
-
-  ## WIP
-
-  * transpose/2
 
   """
 
