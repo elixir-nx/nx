@@ -201,7 +201,7 @@ defmodule EXLA.Defn do
     if ans.shape == {} do
       op
     else
-      EXLA.Op.broadcast_in_dim(op, ans.shape, [])
+      EXLA.Op.broadcast_in_dim(op, ans.shape, {})
     end
   end
 
