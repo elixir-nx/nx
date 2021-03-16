@@ -1729,42 +1729,24 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def scatter_window_max(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(
-      out,
-      tensor,
-      source,
-      &Nx.greater_equal/2,
-      window_dimensions,
-      opts,
-      init_value,
-      &Nx.add/2
-    )
+    select_and_scatter(out, tensor, source, &Nx.greater_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
   end
 
   @impl true
   def scatter_window_min(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(
-      out,
-      tensor,
-      source,
-      &Nx.less_equal/2,
-      window_dimensions,
-      opts,
-      init_value,
-      &Nx.add/2
-    )
+    select_and_scatter(out, tensor, source, &Nx.less_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
   end
 
   defp select_and_scatter(
-         %{type: {_, output_size} = output_type, shape: output_shape} = out,
-         t,
-         source,
-         select_fn,
-         window_dimensions,
-         opts,
-         init_value,
-         scatter_fn
-       ) do
+        %{type: {_, output_size} = output_type, shape: output_shape} = out,
+        t,
+        source,
+        select_fn,
+        window_dimensions,
+        opts,
+        init_value,
+        scatter_fn
+      ) do
     padding = opts[:padding]
     strides = opts[:strides]
 
