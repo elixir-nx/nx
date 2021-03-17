@@ -79,17 +79,17 @@ defmodule Torchx.Backend do
 
   @impl true
   def scalar(%T{shape: {}, type: type} = out, scalar, backend_options) do
-    NIF.scalar_tensor(scalar, torch_type(type), torch_device(backend_options))
+    Torchx.scalar_tensor(scalar, torch_type(type), torch_device(backend_options))
     |> from_ref(out)
   end
 
   def scalar(%T{shape: shape, type: type} = out, scalar, backend_options) do
-    NIF.full(shape, scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.full(shape, scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   @impl true
   def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
-    NIF.eye(n, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.eye(n, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   @impl true
@@ -446,6 +446,7 @@ defmodule Torchx.Backend do
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 
+  defp from_ref({_device, ref}, t) when is_reference(ref), do: to_tensor(ref, t)
   defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
 
   defp from_bare_ref(maybe_ref) do

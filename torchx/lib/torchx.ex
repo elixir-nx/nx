@@ -22,12 +22,20 @@ defmodule Torchx do
 
   ## Creation
 
+  def scalar_tensor(scalar, type, device),
+    do: NIF.call(:scalar, device, [scalar, type, device]) |> wrap(device)
+
+  def full(shape, scalar, type, device),
+    do: NIF.call(:full, device, shape, scalar, type, device) |> wrap(device)
+
+  def eye(size, type, device), do: NIF.call(:eye, device, [size, type, device]) |> wrap(device)
+
   def arange(from, to, step \\ 1, opts \\ []) do
     type = opts[:type] || :float
     device = opts[:device] || :cpu
 
     NIF.call(:arange, device, [from, to, step, type, torch_device(device)])
-    |> wrap_with_device(device)
+    |> wrap(device)
   end
 
   ## Operations
@@ -36,7 +44,7 @@ defmodule Torchx do
     {device, [left_ref, right_ref]} = to_refs([left, right])
 
     NIF.call(:tensordot, device, [left_ref, right_ref, left_axes, right_axes])
-    |> wrap_with_device(device)
+    |> wrap(device)
   end
 
   ## Utils
@@ -107,5 +115,5 @@ defmodule Torchx do
     {device, [ref | refs]}
   end
 
-  defp wrap_with_device(maybe_ref, device), do: {device, unwrap!(maybe_ref)}
+  defp wrap(maybe_ref, device), do: {device, unwrap!(maybe_ref)}
 end
