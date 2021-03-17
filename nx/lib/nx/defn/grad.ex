@@ -83,7 +83,7 @@ defmodule Nx.Defn.Grad do
         if Map.has_key?(ids, id) do
           {Expr.tensor(0.0), cache, true}
         else
-          zerofy_ids(t, cache, ids)
+          {t, cache, false}
         end
     end
   end
@@ -477,7 +477,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp jvp(:power, [x, y], ans) do
-    # Since we do many options against literals,
+    # Since we do many operations against literals,
     # we try to surface any scalar number.
     sx = surface_nuldim_scalar(x)
     sy = surface_nuldim_scalar(y)

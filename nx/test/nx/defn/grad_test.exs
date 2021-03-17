@@ -1388,12 +1388,19 @@ defmodule Nx.Defn.GradTest do
       grad({a, b, c}, Nx.power(a, 2) * Nx.power(b, 3) * Nx.power(c, 4))
     end
 
+    defn grad_tuple_unused(a, b) do
+      grad({a, b}, Nx.power(a, a))
+    end
+
     test "as multiple inputs" do
       assert grad_tuple_input(Nx.tensor(1.0), Nx.tensor(1.0)) ==
                {Nx.tensor(2.0), Nx.tensor(3.0)}
 
       assert grad_tuple_input(Nx.tensor(1.0), Nx.tensor(1.0), Nx.tensor(1.0)) ==
                {Nx.tensor(2.0), Nx.tensor(3.0), Nx.tensor(4.0)}
+
+      assert grad_tuple_unused(Nx.tensor(1.0), Nx.tensor(1.0)) ==
+               {Nx.tensor(1.0), Nx.tensor(0.0)}
     end
 
     defn grad_tuple_output(a), do: grad(a, {a + 1, a - 1})
