@@ -15,7 +15,7 @@ defmodule Torchx.Backend do
         ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
 
     3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
-     So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
+       So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
 
         iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Torchx.Backend) |> Nx.round()
         #Nx.Tensor<

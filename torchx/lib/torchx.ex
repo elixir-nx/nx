@@ -5,8 +5,21 @@ defmodule Torchx do
 
   @doc """
   Check if device of the given type is available for Torchx.
-  Device atom can be any of
-  [:cpu, :cuda, :mkldnn, :opengl, :opencl, :ideep, :hip, :fpga, :msnpu, :xla, :vulkan, :metal, :xpu].
+  Device atom can be any of:
+
+    * :cpu
+    * :cuda
+    * :mkldnn
+    * :opengl
+    * :opencl
+    * :ideep
+    * :hip
+    * :fpga
+    * :msnpu
+    * :xla
+    * :vulkan
+    * :metal
+    * :xpu
 
   But only :cuda availability check is supported for now.
   """
