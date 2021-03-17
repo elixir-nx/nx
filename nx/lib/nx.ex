@@ -2143,28 +2143,15 @@ defmodule Nx do
 
   """
   @doc type: :shape
-  def shape(shape) when is_tuple(shape), do: validate_shape(shape, tuple_size(shape))
   def shape(%T{shape: shape}), do: shape
   def shape(number) when is_number(number), do: {}
+  def shape(shape) when is_tuple(shape), do: Nx.Shape.validate!(shape, :shape)
 
   def shape(other) do
     raise ArgumentError,
           "expected a shape. A shape is a n-element tuple with the size of each dimension. " <>
             "Alternatively, you can pass a tensor (or a number) and the shape will be retrieved from the tensor. " <>
             "Got: #{inspect(other)}"
-  end
-
-  defp validate_shape(shape, 0), do: shape
-
-  defp validate_shape(shape, pos) do
-    dim = :erlang.element(pos, shape)
-
-    if is_integer(dim) and dim > 0 do
-      validate_shape(shape, pos - 1)
-    else
-      raise ArgumentError,
-            "invalid dimension #{inspect(dim)} in shape #{inspect(shape)}. Each dimension must be a positive integer"
-    end
   end
 
   @doc """
@@ -3963,6 +3950,7 @@ defmodule Nx do
   """
   def scatter_window_max(tensor, source, window_dimensions, opts \\ [], init_value) do
     assert_keys!(opts, [:padding, :strides])
+    Nx.Shape.validate!(window_dimensions, :window_dimensions)
 
     %T{shape: input_shape} = tensor = tensor!(tensor)
     %T{shape: source_shape, type: source_type} = source = tensor!(source)
@@ -5290,9 +5278,9 @@ defmodule Nx do
     apply(impl!(tensor), op, [out, tensor, opts])
   end
 
-  defp aggregate_window_op(tensor, window_dimensions, opts, op)
-       when is_tuple(window_dimensions) and is_list(opts) do
+  defp aggregate_window_op(tensor, window_dimensions, opts, op) when is_list(opts) do
     assert_keys!(opts, [:padding, :strides, :window_dilations])
+    Nx.Shape.validate!(window_dimensions, :window_dimensions)
     %T{shape: shape} = tensor = tensor!(tensor)
 
     strides = opts[:strides] || 1

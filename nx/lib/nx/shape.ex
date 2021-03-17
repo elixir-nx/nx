@@ -3,6 +3,42 @@ defmodule Nx.Shape do
   @moduledoc false
 
   @doc """
+  Validates a given shape with `kind`.
+
+  ## Examples
+
+      iex> Nx.Shape.validate!({1, 2, 3}, :window_dimensions)
+      {1, 2, 3}
+
+      iex> Nx.Shape.validate!({0, 2, 3}, :window_dimensions)
+      ** (ArgumentError) invalid dimension in axis 0 in window_dimensions. Each dimension must be a positive integer, got 0 in shape {0, 2, 3}
+
+  """
+  def validate!(shape, kind) when is_tuple(shape) do
+    validate!(shape, tuple_size(shape), kind)
+  end
+
+  def validate!(other, kind) do
+    raise ArgumentError,
+          "invalid #{kind}. #{kind} is a n-element tuple with the size of each dimension. " <>
+            "Got: #{inspect(other)}"
+  end
+
+  defp validate!(shape, 0, _kind), do: shape
+
+  defp validate!(shape, pos, kind) do
+    dim = :erlang.element(pos, shape)
+
+    if is_integer(dim) and dim > 0 do
+      validate!(shape, pos - 1, kind)
+    else
+      raise ArgumentError,
+            "invalid dimension in axis #{pos - 1} in #{kind}. Each dimension must be a positive integer, " <>
+              "got #{inspect(dim)} in shape #{inspect(shape)}"
+    end
+  end
+
+  @doc """
   Converts a shape to an algebra document for inspection.
   """
   def to_algebra(shape, names, open, close) do

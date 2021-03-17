@@ -813,7 +813,7 @@ defmodule NxTest do
     end
 
     test "raises for invalid shapes" do
-      assert_raise(ArgumentError, ~r/invalid dimension :blep/, fn ->
+      assert_raise(ArgumentError, ~r/invalid dimension in axis 2/, fn ->
         Nx.shape({1, 2, :blep})
       end)
     end
