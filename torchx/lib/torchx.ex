@@ -1,5 +1,47 @@
+defmodule Torchx.Macro do
+  defmacro deftorch(call) do
+    {name, args} = Macro.decompose_call(call)
+
+    if Enum.any?(args, &match?({:device, _, nil}, &1)) do
+      quote do
+        def unquote(name)(unquote_splicing(args)) do
+          Torchx.NIF.call(unquote(name), var!(device), [unquote_splicing(args)])
+          |> wrap(var!(device))
+        end
+      end
+    else
+      quote do
+        def unquote(name)(unquote_splicing(args)) do
+          {device, prepared_args} = prepare_args(unquote(args))
+
+          Torchx.NIF.call(unquote(name), device, prepared_args)
+          |> wrap(device)
+        end
+      end
+    end
+  end
+
+  defguardp is_tensor(t)
+            when is_tuple(t) and is_integer(elem(elem(t, 0), 0)) and
+                   is_integer(elem(elem(t, 0), 1)) and is_reference(elem(t, 1))
+
+  def prepare_args(args) do
+    {prepared_args, device} =
+      Enum.map_reduce(args, nil, fn
+        t, nil when is_tensor(t) -> {elem(t, 1), elem(t, 0)}
+        {dev, ref} = t, dev when is_tensor(t) -> {ref, dev}
+        {dev, ref} = t, other_dev when is_tensor(t) -> raise "cannot perform across devices"
+        var, dev -> {var, dev}
+      end)
+
+    {device, prepared_args}
+  end
+end
+
 defmodule Torchx do
   alias Torchx.NIF
+
+  import Torchx.Macro
 
   @doc """
   Check if device of the given type is available for Torchx.
@@ -22,23 +64,16 @@ defmodule Torchx do
 
   ## Creation
 
-  def scalar_tensor(scalar, type, device),
-    do: NIF.call(:scalar, device, [scalar, type, device]) |> wrap(device)
-
-  def full(shape, scalar, type, device),
-    do: NIF.call(:full, device, shape, scalar, type, device) |> wrap(device)
-
-  def eye(size, type, device), do: NIF.call(:eye, device, [size, type, device]) |> wrap(device)
-
-  def arange(from, to, step \\ 1, opts \\ []) do
-    type = opts[:type] || :float
-    device = opts[:device] || :cpu
-
-    NIF.call(:arange, device, [from, to, step, type, torch_device(device)])
-    |> wrap(device)
-  end
+  deftorch arange(from, to, step, type, device)
+  deftorch full(shape, scalar, type, device)
+  deftorch scalar_tensor(scalar, type, device)
+  deftorch ones(shape, type, device)
+  deftorch eye(size, type, device)
 
   ## Operations
+
+  deftorch add(tensorA, tensorB)
+  deftorch subtract(tensorA, tensorB)
 
   def tensordot(left, right, left_axes, right_axes) do
     {device, [left_ref, right_ref]} = to_refs([left, right])

@@ -311,7 +311,7 @@ defmodule Torchx.Backend do
   ## Ops
 
   binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
+    [:multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
@@ -323,6 +323,15 @@ defmodule Torchx.Backend do
       {left, right} = maybe_cast_u8(l, r)
 
       NIF.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
+    end
+  end
+
+  for op <- [:add, :subtract] do
+    @impl true
+    def unquote(op)(out, l, r) do
+      {left, right} = maybe_cast_u8(l, r)
+
+      Torchx.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
     end
   end
 

@@ -639,7 +639,7 @@ static ErlNifFunc nif_functions[] = {
     DF(arange, 5),
     DF(arange, 6),
     DF(scalar_tensor, 3),
-    DF(ones, 2),
+    DF(ones, 3),
     DF(eye, 3),
     DF(full, 4),
 

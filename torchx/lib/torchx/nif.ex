@@ -34,7 +34,7 @@ defmodule Torchx.NIF do
   dnif scalar_tensor(scalar, type, device)
   dnif arange(from, to, step, type, device)
   dnif arange(from, to, step, type, device, shape)
-  dnif ones(shape, device)
+  dnif ones(shape, type, device)
   dnif full(shape, scalar, type, device)
   dnif eye(size, type, device)
 
