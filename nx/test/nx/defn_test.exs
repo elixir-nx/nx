@@ -240,7 +240,8 @@ defmodule Nx.DefnTest do
       do: t |> Nx.broadcast({5, 3, 7}, axes: [1]) |> Nx.broadcast({9, 5, 3, 7}, axes: [1, 2, 3])
 
     defn broadcast_collapse7(t),
-      do: t |> Nx.broadcast({3, 5, 7}, axes: [0, 2]) |> Nx.broadcast({3, 9, 5, 7}, axes: [0, 2, 3])
+      do:
+        t |> Nx.broadcast({3, 5, 7}, axes: [0, 2]) |> Nx.broadcast({3, 9, 5, 7}, axes: [0, 2, 3])
 
     test "collapses" do
       assert %T{data: %Expr{op: :broadcast, args: [_, {7, 5, 3}, [1]]}, shape: {7, 5, 3}} =
@@ -1029,6 +1030,21 @@ defmodule Nx.DefnTest do
 
       sum_axis_expr(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
       assert Process.get(Identity) == key0
+    end
+
+    test "raise when not hinted" do
+      assert_raise ArgumentError,
+                   ~r"You have to hint defn argument",
+                   fn ->
+                     defmodule Sample do
+                       import Nx.Defn
+
+                       defn access(t, i), do: t[i]
+                     end
+
+                     t = Nx.tensor([1, 2, 3])
+                     Sample.access(t, 1)
+                   end
     end
   end
 

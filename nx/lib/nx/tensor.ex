@@ -55,6 +55,11 @@ defmodule Nx.Tensor do
   def fetch(tensor, [_ | _] = list),
     do: {:ok, fetch_axes(tensor, with_index(list, 0, []))}
 
+  def fetch(tensor, %Nx.Tensor{shape: {}, data: %Nx.Defn.Expr{op: :parameter}}) do
+    raise ArgumentError,
+          "You have to hint defn argument with default value, if you want it to be passed \"as is\""
+  end
+
   def fetch(_tensor, value) do
     raise """
     tensor[slice] expects slice to be one of:
