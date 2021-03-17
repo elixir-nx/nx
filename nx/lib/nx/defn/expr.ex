@@ -807,14 +807,10 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def inspect(tensor, opts) do
-    {_, acc} = inspect_expr(tensor, {[], [], %{}})
-    {_, {exprs, params, _var_map}} = Tree.traverse_args(tensor, acc, &inspect_expr/2)
+    {_, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
+    {_, {exprs, params, _var_map, _cache}} = Tree.traverse_args(tensor, acc, &inspect_expr/2)
 
-    all =
-      params
-      |> Enum.reverse()
-      |> Kernel.++(Enum.reverse(exprs))
-
+    all = Enum.reverse(params, Enum.reverse(exprs))
     header = concat(line(), color("Nx.Defn.Expr", :map, opts))
     length = Enum.reduce(all, 0, fn {str, _tensor}, acc -> max(byte_size(str), acc) end)
 
@@ -830,20 +826,27 @@ defmodule Nx.Defn.Expr do
   defp inspect_expr(%T{data: %Expr{op: :scalar}} = t, acc), do: {t, acc}
   defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
 
-  defp inspect_expr(%T{data: %Expr{op: op, id: id}} = t, {exprs, params, var_map})
+  defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
+    case cache do
+      %{^id => _} -> {t, acc}
+      %{} -> cached_inspect_expr(t, {exprs, params, var_map, Map.put(cache, id, true)})
+    end
+  end
+
+  defp cached_inspect_expr(%T{data: %Expr{op: op, id: id}} = t, {exprs, params, var_map, cache})
        when op in [:tensor, :parameter] do
     {var, var_map} = var_for_id(var_map, id)
     param = Atom.to_string(op) <> " " <> var
-    {t, {exprs, [{param, t} | params], var_map}}
+    {t, {exprs, [{param, t} | params], var_map, cache}}
   end
 
-  defp inspect_expr(%T{} = t, acc) do
+  defp cached_inspect_expr(%T{} = t, acc) do
     %{data: %Expr{id: id, op: op, args: args}} = t
-    {_, {exprs, params, var_map}} = Tree.traverse_args(t, acc, &inspect_expr/2)
+    {_, {exprs, params, var_map, cache}} = Tree.traverse_args(t, acc, &inspect_expr/2)
     {var, var_map} = var_for_id(var_map, id)
     args_str = inspect_args(op, args, var_map)
     expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> args_str <> " ]"
-    {t, {[{expr_str, t} | exprs], params, var_map}}
+    {t, {[{expr_str, t} | exprs], params, var_map, cache}}
   end
 
   defp inspect_args(:cond, [clauses, last], var_map) do
