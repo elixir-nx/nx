@@ -2053,7 +2053,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def triangular_solve(
-        %{shape: shape, type: output_type = b_holder},
+        %{type: output_type} = b_holder,
         %{type: input_type, shape: {rows, rows}} = a,
         b
       ) do
@@ -2062,20 +2062,16 @@ defmodule Nx.BinaryBackend do
 
     solution = List.duplicate(0, rows)
 
-    Enum.with_index(a_matrix)
-    |> Enum.zip(b_vector)
-    |> Enum.reduce([], fn {current_row_and_idx, current_b} = {{row, idx}, b}, previous_y ->
-      y =
-        cond  do
-          idx == 0 -> current_b / Enum.at(row, idx)
-          idx in 1..rows - 1 -> current_b - Enum.at(row, idx) * Enum.at(previous_y, 0)
-          idx == rows - 1 -> current_b - Enum.at(row, idx) * Enum.sum(previous_y)
-        end
+    x =
+      Enum.with_index(a_matrix)
+      |> Enum.zip(b_vector)
+      |> Enum.reduce(solution, fn data = {{row, idx}, current_b}, previous_y ->
+        y = (current_b - dot_matrix(row, previous_y)) / Enum.at(row, idx)
+        replace_vector_element(previous_y, idx, y)
+      end)
 
-      solution = replace_vector_element(solution, idx, y)
-    end)
-
-    solution
+    x_bin = matrix_to_binary(x, output_type)
+    from_binary(b_holder, x_bin)
   end
 
   ## Binary reducers
