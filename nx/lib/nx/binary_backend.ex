@@ -2064,10 +2064,7 @@ defmodule Nx.BinaryBackend do
 
     Enum.with_index(a_matrix)
     |> Enum.zip(b_vector)
-    |> Enum.reduce([], fn {current_row_and_idx, current_b}, previous_y ->
-      idx = elem(current_row_and_idx, 1)
-      row = elem(current_row_and_idx, 0)
-
+    |> Enum.reduce([], fn {current_row_and_idx, current_b} = {{row, idx}, b}, previous_y ->
       y =
         cond  do
           idx == 0 -> current_b / Enum.at(row, idx)
