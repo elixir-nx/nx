@@ -2065,7 +2065,7 @@ defmodule Nx.BinaryBackend do
     x =
       Enum.with_index(a_matrix)
       |> Enum.zip(b_vector)
-      |> Enum.reduce(solution, fn data = {{row, idx}, current_b}, previous_y ->
+      |> Enum.reduce(solution, fn {{row, idx}, current_b}, previous_y ->
         y = (current_b - dot_matrix(row, previous_y)) / Enum.at(row, idx)
         replace_vector_element(previous_y, idx, y)
       end)
