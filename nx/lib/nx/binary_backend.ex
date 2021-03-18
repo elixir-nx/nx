@@ -1723,24 +1723,42 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def scatter_window_max(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(out, tensor, source, &Nx.greater_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+    select_and_scatter(
+      out,
+      tensor,
+      source,
+      &Nx.greater_equal/2,
+      window_dimensions,
+      opts,
+      init_value,
+      &Nx.add/2
+    )
   end
 
   @impl true
   def scatter_window_min(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(out, tensor, source, &Nx.less_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+    select_and_scatter(
+      out,
+      tensor,
+      source,
+      &Nx.less_equal/2,
+      window_dimensions,
+      opts,
+      init_value,
+      &Nx.add/2
+    )
   end
 
   defp select_and_scatter(
-        %{type: {_, output_size} = output_type, shape: output_shape} = out,
-        t,
-        source,
-        select_fn,
-        window_dimensions,
-        opts,
-        init_value,
-        scatter_fn
-      ) do
+         %{type: {_, output_size} = output_type, shape: output_shape} = out,
+         t,
+         source,
+         select_fn,
+         window_dimensions,
+         opts,
+         init_value,
+         scatter_fn
+       ) do
     padding = opts[:padding]
     strides = opts[:strides]
 
@@ -2036,14 +2054,31 @@ defmodule Nx.BinaryBackend do
   @impl true
   def triangular_solve(
         %{shape: shape, type: output_type = b_holder},
-        %{type: input_type, shape: input_shape} = a,
+        %{type: input_type, shape: {rows, rows}} = a,
         b
       ) do
-    # Write implementation for backend here
-    a_matrix = a |> to_binary() |> binary_to_matrix(input_type, input_shape)
-    b_vector = b |> to_binary() |> binary_to_matrix(output_type, shape)
-    IO.inspect(a)
-    IO.inspect(b)
+    a_matrix = a |> to_binary() |> binary_to_matrix(input_type, {rows, rows})
+    b_vector = b |> to_binary() |> binary_to_matrix(input_type, {0, 1}) |> List.flatten()
+
+    solution = List.duplicate(0, rows)
+
+    Enum.with_index(a_matrix)
+    |> Enum.zip(b_vector)
+    |> Enum.reduce([], fn {current_row_and_idx, current_b}, previous_y ->
+      idx = elem(current_row_and_idx, 1)
+      row = elem(current_row_and_idx, 0)
+
+      y =
+        cond  do
+          idx == 0 -> current_b / Enum.at(row, idx)
+          idx in 1..rows - 1 -> current_b - Enum.at(row, idx) * Enum.at(previous_y, 0)
+          idx == rows - 1 -> current_b - Enum.at(row, idx) * Enum.sum(previous_y)
+        end
+
+      solution = replace_vector_element(solution, idx, y)
+    end)
+
+    solution
   end
 
   ## Binary reducers
