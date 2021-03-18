@@ -20,8 +20,8 @@ defmodule LinReg do
     Nx.mean(Nx.power(tar - preds, 2))
   end
 
-  defn update({m, b}, inp, tar, step) do
-    {grad_m, grad_b} = grad({m, b}, loss({m, b}, inp, tar))
+  defn update({m, b} = params, inp, tar, step) do
+    {grad_m, grad_b} = grad(params, &loss(&1, inp, tar))
     {m - grad_m * step, b - grad_b * step}
   end
 

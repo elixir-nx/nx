@@ -4,40 +4,49 @@ defmodule Nx.Defn.Grad do
   alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
-  def transform(to_grad, expr) do
-    expr = validate_expr!(expr)
-
-    {_, ids} =
+  def transform(to_grad, fun) do
+    {to_grad, ids} =
       Tree.composite(to_grad, %{}, fn to_grad, ids ->
-        {to_grad, Map.put(ids, grad_id!(to_grad), :stop)}
+        validate_grad!(to_grad)
+        to_grad = Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
+        {to_grad, Map.put(ids, to_grad.data.id, :to_grad)}
       end)
 
-    # Grad with all known IDs
+    expr = to_grad |> fun.() |> validate_expr!()
+
+    # Collect all IDs in the function environment and mark
+    # them as stop grads. This is an optimization to avoid
+    # traversing trees when not necessary.
+    {:env, env} = Function.info(fun, :env)
+    ids = stop_grads(env, ids)
+
+    # Grad all the parameters at the same time to share subtrees.
     {graded, _} = to_grad(expr, Expr.tensor(1.0), {ids, %{}})
 
     # Now traverse the expression again zerofying
     # the parts that comes from other variables.
     # We do so by encoding special nodes in the Expr
     # AST and unpack them as we verify.
-    Tree.composite(to_grad, fn to_grad ->
-      id = grad_id!(to_grad)
-      {graded, _, _} = zerofy_ids(graded, %{}, Map.delete(ids, id))
+    graded =
+      Tree.composite(to_grad, fn to_grad ->
+        id = to_grad.data.id
+        {graded, _, _} = zerofy_ids(graded, %{}, Map.delete(ids, id))
 
-      if graded.shape == to_grad.shape do
-        graded
-      else
-        Nx.broadcast(graded, to_grad)
-      end
-    end)
+        if graded.shape == to_grad.shape do
+          graded
+        else
+          Nx.broadcast(graded, to_grad)
+        end
+      end)
+
+    {expr, graded}
   end
 
-  defp grad_id!(%T{data: %Expr{id: id, op: :parameter}}) do
-    id
-  end
+  defp validate_grad!(%T{data: %Expr{}} = t), do: t
 
-  defp grad_id!(other) do
+  defp validate_grad!(other) do
     raise ArgumentError,
-          "the first argument of grad must be a parameter or a tuple of parameters, " <>
+          "the first argument of grad must be a tensor expression or a tuple of tensor expressions, " <>
             "got: #{inspect(other)}"
   end
 
@@ -54,6 +63,24 @@ defmodule Nx.Defn.Grad do
   defp validate_expr!(other) do
     validate_expr!(Expr.tensor(other))
   end
+
+  defp stop_grads(list, ids) when is_list(list),
+    do: Enum.reduce(list, ids, &stop_grads/2)
+
+  defp stop_grads(tuple, ids) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(ids, &stop_grads/2)
+
+  defp stop_grads(%T{data: %Expr{id: id}}, ids),
+    do: Map.put(ids, id, :stop)
+
+  defp stop_grads(%_{}, ids),
+    do: ids
+
+  defp stop_grads(map, ids) when is_map(map),
+    do: map |> Map.values() |> Enum.reduce(ids, &stop_grads/2)
+
+  defp stop_grads(_, ids),
+    do: ids
 
   ## Zerofy
 
@@ -85,6 +112,9 @@ defmodule Nx.Defn.Grad do
         else
           {t, cache, false}
         end
+
+      :to_grad ->
+        {t, cache, false}
     end
   end
 
@@ -119,6 +149,9 @@ defmodule Nx.Defn.Grad do
 
         case result_cache do
           %{^id => :stop} ->
+            {Expr.tensor(0.0), cache}
+
+          %{^id => :to_grad} ->
             {Expr.metadata(res, %{__MODULE__ => {:tainted, id}}), cache}
 
           %{^key => res} ->

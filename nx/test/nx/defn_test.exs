@@ -780,9 +780,26 @@ defmodule Nx.DefnTest do
       (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr()
     end
 
+    defn transform_inspect_label(a, b) do
+      (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr(label: "HELLO")
+    end
+
     test "executes the transformation" do
       assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
              #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a         s64
+               parameter c         s64
+               b = tanh [ a ]      f32
+               d = power [ c, 3 ]  s64
+               e = add [ b, d ]    f32
+             >
+             """
+
+      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect_label(1, 2) end) == """
+             HELLO: #Nx.Tensor<
                f32
              \s\s
                Nx.Defn.Expr

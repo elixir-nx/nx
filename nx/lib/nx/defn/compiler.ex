@@ -421,6 +421,10 @@ defmodule Nx.Defn.Compiler do
     {{:=, meta, [left, right]}, state}
   end
 
+  defp normalize({:&, _, _} = expr, state) do
+    {expr, state}
+  end
+
   defp normalize({:fn, meta, clauses}, state) do
     unless match?([_], clauses) do
       compile_error!(meta, state, "only a single clause is allowed inside fn")
