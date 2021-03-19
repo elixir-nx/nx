@@ -615,6 +615,12 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def triangular_solve(out, a, b, opts) do
+    {[a, b], context} = to_exprs([a, b])
+    expr(out, context, :triangular_solve, [a, b, opts])
+  end
+
+  @impl true
   def lu({p, l, u}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context
@@ -633,12 +639,6 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     composite({u, s, vt}, context, &expr(&1, context, :svd, [{u, s, vt}, tensor, opts]))
-  end
-
-  @impl true
-  def triangular_solve(out, a, b, opts) do
-    {[a, b], context} = to_exprs([a, b])
-    expr(out, context, :triangular_solve, [out, a, b, opts])
   end
 
   @impl true

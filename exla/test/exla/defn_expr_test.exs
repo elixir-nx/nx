@@ -2461,6 +2461,14 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "decompositions" do
+    defn ts(a, b), do: Nx.triangular_solve(a, b)
+
+    test "triangular_solve" do
+      a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      b = Nx.tensor([4, 2, 4, 2])
+      assert compare_tensors!(Nx.dot(a, ts(a, b)), b)
+    end
+
     defn qr(t), do: Nx.qr(t)
     defn qr_complete(t), do: Nx.qr(t, mode: :complete)
 

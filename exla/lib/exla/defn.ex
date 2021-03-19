@@ -363,6 +363,19 @@ defmodule EXLA.Defn do
     EXLA.Op.select(pred, on_true, on_false)
   end
 
+  defp to_operator(:triangular_solve, [a, b, _opts], %{type: type}, _state) do
+    b_shape = EXLA.Op.get_shape(b).dims
+
+    b =
+      b
+      |> to_type(type)
+      |> EXLA.Op.reshape(Tuple.append(b_shape, 1))
+
+    to_type(a, type)
+    |> EXLA.Op.triangular_solve(b, true, true, false, :none)
+    |> EXLA.Op.reshape(b_shape)
+  end
+
   defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do
     raise ArgumentError, "XLA does not currently support the LU operation"
   end

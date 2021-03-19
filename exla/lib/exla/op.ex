@@ -442,7 +442,7 @@ defmodule EXLA.Op do
 
   def qr(%Op{builder: builder, ref: operand}, full_matrices, precision)
       when is_boolean(full_matrices) do
-    full_matrices = if full_matrices, do: 1, else: 0
+    full_matrices = boolean_to_int(full_matrices)
     precision_config = get_precision_config_int(precision)
     {q_ref, r_ref} = EXLA.NIF.qr(operand, full_matrices, precision_config) |> unwrap!()
 
@@ -470,17 +470,16 @@ defmodule EXLA.Op do
         lower,
         unit_diagonal,
         transpose_a
-      ) do
+      ) when is_boolean(left_side) and is_boolean(lower) and is_boolean(unit_diagonal) do
+    left_side = boolean_to_int(left_side)
+    lower = boolean_to_int(lower)
+    unit_diagonal = boolean_to_int(unit_diagonal)
+
     transpose_a_int =
       case transpose_a do
-        :none ->
-          0
-
-        :transpose ->
-          1
-
-        :conjugate ->
-          2
+        :none -> 0
+        :transpose -> 1
+        :conjugate -> 2
       end
 
     ref =
@@ -514,6 +513,9 @@ defmodule EXLA.Op do
                 " :default, :high, or :highest, got: #{inspect(precision_config)}"
     end
   end
+
+  defp boolean_to_int(true), do: 1
+  defp boolean_to_int(false), do: 0
 
   defp tuple_product(tuple), do: tuple_product(tuple, tuple_size(tuple))
   defp tuple_product(_tuple, 0), do: 1
