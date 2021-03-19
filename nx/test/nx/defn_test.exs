@@ -818,7 +818,7 @@ defmodule Nx.DefnTest do
     end
 
     defp private_back_and_forth(a) do
-      Nx.Defn.Evaluator = Process.get(Nx.Defn.Compiler)
+      Nx.Defn.Evaluator = Nx.Defn.Compiler.current()
       final_back_and_forth(a)
     end
 

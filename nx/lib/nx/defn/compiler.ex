@@ -73,6 +73,15 @@ defmodule Nx.Defn.Compiler do
             when is_tuple(var) and tuple_size(var) == 3 and elem(var, 0) == :_ and
                    is_atom(elem(var, 2))
 
+  @doc """
+  Returns the current compiler.
+
+  Returns nil if we are not inside `defn`.
+  """
+  def current() do
+    Process.get(Nx.Defn.Compiler)
+  end
+
   ## AOT
 
   @doc false
