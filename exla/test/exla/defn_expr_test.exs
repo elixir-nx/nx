@@ -2149,6 +2149,14 @@ defmodule EXLA.DefnExprTest do
         assert x >= 5.0 and x < 10.0
       end
     end
+
+    defn random_uniform_tensor(min, max), do: Nx.random_uniform({30, 20}, min, max)
+
+    test "generates with min/max tensor" do
+      t = random_uniform_tensor(Nx.tensor(-100.0), Nx.tensor(100.0))
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 32}
+    end
   end
 
   describe "random normal" do
@@ -2174,6 +2182,14 @@ defmodule EXLA.DefnExprTest do
       t = random_normal_f64()
       assert Nx.shape(t) == {30, 20}
       assert Nx.type(t) == {:f, 64}
+    end
+
+    defn random_normal_tensor(mu, sigma), do: Nx.random_normal({30, 20}, mu, sigma)
+
+    test "generates with tensor mu/sigma" do
+      t = random_normal_tensor(Nx.tensor(1.0), Nx.tensor(1.0))
+      assert Nx.shape(t) == {30, 20}
+      assert Nx.type(t) == {:f, 32}
     end
   end
 

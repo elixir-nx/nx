@@ -228,12 +228,14 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def random_uniform(out, min, max, _backend_options) do
-    expr(out, nil, :random_uniform, [min, max])
+    {[min, max], context} = to_exprs([min, max])
+    expr(out, context, :random_uniform, [min, max])
   end
 
   @impl true
   def random_normal(out, mu, sigma, _backend_options) do
-    expr(out, nil, :random_normal, [mu, sigma])
+    {[mu, sigma], context} = to_exprs([mu, sigma])
+    expr(out, context, :random_normal, [mu, sigma])
   end
 
   unary_ops =

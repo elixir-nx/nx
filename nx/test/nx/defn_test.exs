@@ -158,12 +158,12 @@ defmodule Nx.DefnTest do
     end
 
     test "random uniform" do
-      assert %T{shape: {3}, data: %Expr{op: :random_uniform, args: [0.0, 2.0]}} =
+      assert %T{shape: {3}, data: %Expr{op: :random_uniform, args: [%T{shape: {}}, %T{shape: {}}]}} =
                random_uniform(Nx.tensor([1, 2, 3]))
     end
 
     test "random normal" do
-      assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [0.0, 1.0]}} =
+      assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [%T{shape: {}}, %T{shape: {}}]}} =
                random_normal(Nx.tensor([1, 2, 3]))
     end
   end

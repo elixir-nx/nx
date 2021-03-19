@@ -671,13 +671,21 @@ defmodule Nx do
 
   """
   @doc type: :random
-  def random_uniform(tensor_or_shape, min, max, opts \\ [])
-      when is_number(min) and is_number(max) do
+  def random_uniform(tensor_or_shape, min, max, opts \\ []) do
     assert_keys!(opts, [:type, :names, :backend])
+    %T{type: min_type, shape: min_shape} = min = tensor!(min)
+    %T{type: max_type, shape: max_shape} = max = tensor!(max)
+
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    range_type = Nx.Type.infer(max - min)
+    range_type = Nx.Type.merge(min_type, max_type)
     type = Nx.Type.normalize!(opts[:type] || range_type)
+
+    unless min_shape == {} and max_shape == {} do
+      raise ArgumentError,
+             "random_uniform/3 expects min and max to be scalars, got:" <>
+             " min shape: #{inspect(min_shape)} and max shape: #{inspect(max_shape)}"
+    end
 
     unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
       raise ArgumentError,
@@ -779,12 +787,24 @@ defmodule Nx do
 
   """
   @doc type: :random
-  def random_normal(tensor_or_shape, mu, sigma, opts \\ [])
-      when is_float(mu) and is_float(sigma) do
+  def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
     assert_keys!(opts, [:type, :names, :backend])
+    %T{type: mu_type, shape: mu_shape} = mu = tensor!(mu)
+    %T{type: sigma_type, shape: sigma_shape} = sigma = tensor!(sigma)
+
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
     type = Nx.Type.normalize!(opts[:type] || {:f, 32})
+
+    unless mu_shape == {} and sigma_shape == {} do
+      raise ArgumentError, "random_normal/3 expects mu and sigma to be scalars" <>
+                           " got: mu shape: #{inspect(mu_shape)} and sigma shape: #{inspect(sigma_shape)}"
+    end
+
+    unless Nx.Type.float?(mu_type) and Nx.Type.float?(sigma_type) do
+      raise ArgumentError, "random_normal/3 expects mu and sigma to be float types," <>
+                           " got: mu type: #{inspect(mu_type)} and sigma type: #{inspect(sigma_type)}"
+    end
 
     unless Nx.Type.float?(type) do
       raise ArgumentError, "random_normal/3 expects float type, got: #{inspect(type)}"

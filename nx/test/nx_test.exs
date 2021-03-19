@@ -1262,10 +1262,32 @@ defmodule NxTest do
       assert t1 != t2
     end
 
+    test "works with tensor mu/sigma" do
+      t = Nx.random_normal({3, 3}, Nx.tensor(1.0), Nx.tensor(1.0))
+      assert Nx.shape(t) == {3, 3}
+      assert Nx.type(t) == {:f, 32}
+    end
+
     test "raises with non-float type" do
       assert_raise(ArgumentError, "random_normal/3 expects float type, got: {:s, 32}", fn ->
         Nx.random_normal(1, 0.1, 10.0, type: {:s, 32})
       end)
+    end
+
+    test "raises with non-float sigma/mu" do
+      assert_raise(ArgumentError,
+        "random_normal/3 expects mu and sigma to be float types, got: mu type: {:s, 64} and sigma type: {:s, 64}",
+        fn ->
+          Nx.random_normal({}, Nx.tensor(1), Nx.tensor(0))
+        end)
+    end
+
+    test "raises with non-scalar shapes" do
+      assert_raise(ArgumentError,
+        "random_normal/3 expects mu and sigma to be scalars got: mu shape: {2} and sigma shape: {2}",
+        fn ->
+          Nx.random_normal({}, Nx.tensor([1.0, 2.0]), Nx.tensor([1.0, 2.0]))
+        end)
     end
   end
 
@@ -1285,6 +1307,12 @@ defmodule NxTest do
       assert t1 != t2
     end
 
+    test "works with tensor min/max" do
+      t = Nx.random_uniform({2}, Nx.tensor(-1.0), Nx.tensor(5.0))
+      assert Nx.shape(t) == {2}
+      assert Nx.type(t) == {:f, 32}
+    end
+
     test "works with compatible types" do
       t = Nx.random_uniform(1, 0, 10, type: {:s, 32})
       assert Nx.shape(t) == {}
@@ -1297,6 +1325,16 @@ defmodule NxTest do
         "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 32}",
         fn ->
           Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
+        end
+      )
+    end
+
+    test "raises for incompatible shapes" do
+      assert_raise(
+        ArgumentError,
+        "random_uniform/3 expects min and max to be scalars, got: min shape: {3} and max shape: {3}",
+        fn ->
+          Nx.random_uniform(1, Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([1.0, 2.0, 3.0]))
         end
       )
     end
