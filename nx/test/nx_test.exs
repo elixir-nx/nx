@@ -1220,7 +1220,29 @@ defmodule NxTest do
     end
   end
 
+  def compare_tensors!(expected, got) do
+    assert expected == got, """
+    tensors were different!
+
+    expected: #{inspect(expected)}
+
+    got: #{inspect(got)}
+    """
+  end
+
   describe "sort/2" do
+    test "works" do
+      t = Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y])
+      sorted = Nx.sort(t, axis: :x, comparator: &Nx.less/2)
+
+      expected = Nx.tensor([
+        [2, 1, 4],
+        [3, 5, 7]
+      ], names: [:x, :y])
+
+      compare_tensors!(expected, sorted)
+    end
+
     test "raises for unknown keys in options" do
       t = Nx.tensor([3, 2, 1, 0])
 
@@ -1450,6 +1472,29 @@ defmodule NxTest do
              |> round(3) == round(v, 3)
     end
   end
+
+  describe "aggregation shapes" do
+    test "removes axes [1] from rank 2 shape" do
+      t = Nx.iota({2, 3})
+      assert Nx.shape(Nx.sum(t, axes: [1])) == {2}
+    end
+
+    test "removes axes [0] from rank 2 shape" do
+      t = Nx.iota({2, 3})
+      assert Nx.shape(Nx.sum(t, axes: [0])) == {3}
+    end
+
+    test "removes axes [0, 1] from rank 2 shape" do
+      t = Nx.iota({2, 3})
+      assert Nx.shape(Nx.sum(t, axes: [0, 1])) == {}
+    end
+
+    test "removes the aggregated axes from shape" do
+      t = Nx.iota({2, 3, 4, 5, 6, 7})
+      assert Nx.shape(Nx.sum(t, axes: [2])) == {2, 3, 5, 6, 7}
+    end
+  end
+
 
   defp round(tensor, places) do
     Nx.map(tensor, fn x ->

@@ -7,17 +7,20 @@ defmodule Nx.BinaryBackend do
   The backend itself (and its data) is private and must
   not be accessed directly.
   """
-
   @behaviour Nx.Backend
 
-  @doc false
-  defstruct [:state]
-
   alias Nx.Tensor, as: T
-  alias Nx.BinaryBackend, as: B
+  alias Nx.BinaryBackend, as: B  
+  alias Nx.BinaryBackend.TraverserReducer
+  # alias Nx.BinaryBackend.Traverser
+  alias Nx.BinaryBackend.View
+  alias Nx.BinaryBackend.TensorView
 
   import Nx.Shared
   import Bitwise, only: [>>>: 2, &&&: 2]
+
+  @doc false
+  defstruct [:state, :view]
 
   @default_eps 1.0e-10
 
@@ -111,8 +114,13 @@ defmodule Nx.BinaryBackend do
   @impl true
   def from_binary(t, binary, _backend_options), do: from_binary(t, binary)
 
-  defp from_binary(t, binary) when is_binary(binary), do: %{t | data: %B{state: binary}}
-  defp from_binary(t, other), do: %{t | data: %B{state: IO.iodata_to_binary(other)}}
+  @doc false
+  def from_binary(t, binary) when is_binary(binary) do
+    %{t | data: %B{state: binary}}
+  end
+  def from_binary(t, other) do
+    %{t | data: %B{state: IO.iodata_to_binary(other)}}
+  end
 
   @impl true
   def to_binary(%{type: {_, size}} = t, limit) do
@@ -126,7 +134,11 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp to_binary(%T{data: %{state: data}}), do: data
+  @doc false
+  def to_binary(t) do
+    %T{data: %B{state: bin}} = TensorView.resolve(t)
+    bin
+  end
 
   @impl true
   def backend_copy(tensor, backend, opts) do
@@ -231,45 +243,13 @@ defmodule Nx.BinaryBackend do
   ## Shape
 
   @impl true
-  def transpose(out, %T{shape: shape, type: {_, size}} = t, axes) do
-    data = to_binary(t)
-    {list, min, max} = transpose_axes(shape, axes)
-    weighted_shape = weighted_shape(shape, size)
+  def transpose(out, %T{} = t, axes) do
+    t = TensorView.update(t, fn view -> View.transpose(view, axes) end)
 
-    # The chunk size is computed based on all dimensions
-    # before the minimum one being changed. For example,
-    # for {0, 1, 2, 3} and the swap is between 1 and 2,
-    # the chunk_size will be d1 * d2 * d3 * size.
-    chunk_size = weighted_chunk(weighted_shape, min, size)
-
-    # All of the major dimensions not being transposed can be
-    # read at once. For example, for {0, 1, 2, 3} and the swap
-    # is between 1 and 2, the read_size will be d3 * size.
-    read_size = weighted_chunk(weighted_shape, max + 1, size)
-
-    # And now how we will traverse
-    traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
-
-    data =
-      for <<chunk::size(chunk_size)-bitstring <- data>> do
-        weighted_traverse(traverse_list, chunk, read_size)
-      end
-
-    from_binary(out, data)
+    out
+    |> put_data(t)
+    |> TensorView.resolve()
   end
-
-  defp transpose_axes(shape, axes) do
-    size = tuple_size(shape)
-    {axes, min} = transpose_min(axes, 0)
-    {axes, max} = transpose_max(Enum.reverse(axes), size - 1)
-    {axes, min, max}
-  end
-
-  defp transpose_min([head | tail], head), do: transpose_min(tail, head + 1)
-  defp transpose_min(tail, head), do: {tail, head}
-
-  defp transpose_max([head | tail], head), do: transpose_max(tail, head - 1)
-  defp transpose_max(tail, head), do: {Enum.reverse(tail), head}
 
   ## Pad
 
@@ -385,49 +365,13 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def reverse(out, %{type: {_, size}, shape: shape} = t, axes) do
-    data = to_binary(t)
-    weighted_shape = weighted_shape(shape, size)
+  def reverse(out, %T{} = t, axes) do
+    t = TensorView.update(t, fn view -> View.reverse(view, axes) end)
 
-    # Nx guaranteex axes is sorted and non-empty.
-    min = List.first(axes)
-    max = List.last(axes) + 1
-
-    # The chunk size is computed based on all dimensions
-    # before the minimum one being changed. For example,
-    # for {0, 1, 2, 3} and the reverse is between 1 and 2,
-    # the chunk_size will be d1 * d2 * d3 * size.
-    chunk_size = weighted_chunk(weighted_shape, min, size)
-
-    # All of the major dimensions not being reverse can be
-    # read at once. For example, for {0, 1, 2, 3} and the reverse
-    # is between 1 and 2, the read_size will be d3 * size.
-    read_size = weighted_chunk(weighted_shape, max, size)
-
-    # And now how we will traverse
-    traverse =
-      weighted_shape
-      |> Enum.take(max)
-      |> Enum.drop(min)
-      |> reverse_traverse(min, axes)
-
-    data =
-      for <<chunk::size(chunk_size)-bitstring <- data>> do
-        weighted_traverse(traverse, chunk, read_size)
-      end
-
-    from_binary(out, data)
+    out
+    |> put_data(t)
+    |> TensorView.resolve()
   end
-
-  defp reverse_traverse([head | tail], axis, axes) do
-    if axis in axes do
-      [&Enum.reverse/1, head | reverse_traverse(tail, axis + 1, axes)]
-    else
-      [head | reverse_traverse(tail, axis + 1, axes)]
-    end
-  end
-
-  defp reverse_traverse([], _axis, _axes), do: []
 
   ## Two-element
 
@@ -1546,51 +1490,49 @@ defmodule Nx.BinaryBackend do
   ## Aggregation
 
   @impl true
-  def all?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+  def all?(out, tensor, opts) do
+    num_reduce(out, tensor, 1, opts, fn num, acc ->
+      res = if num != 0, do: acc, else: 0
       {res, res}
     end)
   end
 
   @impl true
-  def any?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: 1, else: acc
+  def any?(out, tensor, opts) do
+    num_reduce(out, tensor, 0, opts, fn num, acc ->
+      res = if num != 0, do: 1, else: acc
       {res, res}
     end)
   end
 
   @impl true
-  def sum(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) + acc
+  def sum(out, tensor, opts) do
+    num_reduce(out, tensor, 0, opts, fn num, acc ->
+      res = num + acc
       {res, res}
     end)
   end
 
   @impl true
-  def product(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) * acc
+  def product(out, tensor, opts) do
+    num_reduce(out, tensor, 1, opts, fn num, acc ->
+      res = num * acc
       {res, res}
     end)
   end
 
   @impl true
-  def reduce_max(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.max(acc, val)
+  def reduce_max(out, tensor, opts) do
+    num_reduce(out, tensor, :first, opts, fn num, acc ->
+      res = if acc == :first, do: num, else: Kernel.max(acc, num)
       {res, res}
     end)
   end
 
   @impl true
-  def reduce_min(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.min(acc, val)
+  def reduce_min(out, tensor, opts) do
+    num_reduce(out, tensor, :first, opts, fn num, acc ->
+      res = if acc == :first, do: num, else: Kernel.min(acc, num)
       {res, res}
     end)
   end
@@ -1617,12 +1559,10 @@ defmodule Nx.BinaryBackend do
     argmin_or_max(out, tensor, comparator, opts[:axis])
   end
 
-  defp argmin_or_max(out, %{type: type} = tensor, comparator, axis) do
+  defp argmin_or_max(out, tensor, comparator, axis) do
     opts = if axis, do: [axes: [axis]], else: []
 
-    bin_reduce(out, tensor, {0, :first, -1}, opts, fn bin, {i, cur_extreme_x, cur_extreme_i} ->
-      x = binary_to_number(bin, type)
-
+    num_reduce(out, tensor, {0, :first, -1}, opts, fn x, {i, cur_extreme_x, cur_extreme_i} ->
       if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
         {i, {i + 1, x, i}}
       else
@@ -1634,7 +1574,6 @@ defmodule Nx.BinaryBackend do
   @impl true
   def reduce(out, tensor, acc, opts, fun) do
     each = %{tensor | shape: {}}
-
     bin_reduce(out, tensor, acc, opts, fn bin, acc ->
       res = fun.(from_binary(each, bin), acc)
       {res, res}
@@ -1990,6 +1929,60 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def sort(_out, t, opts) do
+    %T{shape: shape} = t
+    last_axis = Nx.rank(t) - 1
+
+    comparator =
+      case opts[:comparator] do
+        :desc ->
+          &</2
+
+        :asc ->
+          &>/2
+
+        fun -> fn a, b -> to_scalar(fun.(a, b)) != 0 end
+      end
+
+    axis = opts[:axis]
+
+    case shape do
+      {} ->
+        t
+
+      _ when axis == last_axis ->
+        sort_last_dim(t, comparator)
+
+      _ ->
+        permutation = Nx.axes(t)
+
+        permutation =
+          permutation
+          |> List.delete(axis)
+          |> List.insert_at(last_axis, axis)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        t
+        |> TensorView.update(fn view -> View.transpose(view, permutation) end)
+        |> sort_last_dim(comparator)
+        |> TensorView.update(fn view -> View.transpose(view, inverse_permutation) end)
+        |> TensorView.resolve()
+    end
+  end
+
+  defp sort_last_dim(%T{shape: shape} = t, comparator) do
+    last_axis = Nx.rank(shape) - 1
+
+    t
+    |> TensorView.update(fn view -> View.aggregate(view, [last_axis]) end)
+    |> TensorView.map_aggregates(fn agg -> Enum.sort(agg, comparator) end)
+  end
+
+  def old_sort(_out, t, opts) do
     %T{shape: shape, type: type} = t
     last_axis = Nx.rank(t) - 1
 
@@ -2034,12 +2027,12 @@ defmodule Nx.BinaryBackend do
 
         t
         |> Nx.transpose(axes: permutation)
-        |> sort_last_dim(comparator)
+        |> old_sort_last_dim(comparator)
         |> Nx.transpose(axes: inverse_permutation)
     end
   end
 
-  defp sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator) do
+  defp old_sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator) do
     view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
 
     new_data =
@@ -2082,60 +2075,24 @@ defmodule Nx.BinaryBackend do
 
   ## Binary reducers
 
-  defp bin_reduce(out, tensor, acc, opts, fun) do
-    %T{type: {_, size}, shape: shape} = tensor
-
-    view =
-      if axes = opts[:axes] do
-        aggregate_axes(to_binary(tensor), axes, shape, size)
-      else
-        [to_binary(tensor)]
-      end
-
-    data =
-      for axis <- view do
-        {result, _} =
-          for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
-            {_, acc} -> fun.(bin, acc)
-          end
-
-        scalar_to_binary(result, out.type)
-      end
-
-    from_binary(out, data)
+  defp num_reduce(out, tensor, acc, opts, fun) do
+    %T{type: type} = tensor
+    match_types [type] do
+      bin_reduce(out, tensor, acc, opts, fn bin, acc ->
+        <<match!(num, 0)>> = bin
+        fun.(num, acc)
+      end)
+    end
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
-    %{type: {_, s1}} = t1
-    %{type: {_, s2}} = t2
-    b1 = to_binary(t1)
-    b2 = to_binary(t2)
-
-    data =
-      match_types [t1.type, t2.type] do
-        for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
-          {result, _} = fun.(d1, d2, acc)
-          scalar_to_binary(result, type)
-        end
-      end
-
-    from_binary(out, data)
+  def bin_reduce(out, tensor, acc, opts, fun) do
+    data_out = TraverserReducer.bin_reduce(out, tensor, acc, opts, fun)
+    from_binary(out, data_out)
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
-    {_, s1} = t1.type
-    {_, s2} = t2.type
-
-    v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
-    v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
-
-    data =
-      for b1 <- v1, b2 <- v2 do
-        {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
-        scalar_to_binary(bin, type)
-      end
-
-    from_binary(out, data)
+  def bin_zip_reduce(out, t1, axes1, t2, axes2, acc, fun) do
+    data_out = TraverserReducer.bin_zip_reduce(out, t1, axes1, t2, axes2, acc, fun)
+    from_binary(out, data_out)
   end
 
   # Helper for reducing down a single axis over two tensors,
@@ -2153,22 +2110,23 @@ defmodule Nx.BinaryBackend do
   ## Scalar helpers
 
   @compile {:inline, number_to_binary: 2, binary_to_number: 2}
-
-  defp scalar_to_binary(value, type) when is_number(value),
+  
+  @doc false
+  def scalar_to_binary(value, type) when is_number(value),
     do: number_to_binary(value, type)
 
-  defp scalar_to_binary(%T{shape: {}, type: type} = t, type),
+  def scalar_to_binary(%T{shape: {}, type: type} = t, type),
     do: to_binary(t)
 
-  defp scalar_to_binary(t, type) do
+  def scalar_to_binary(t, type) do
     raise ArgumentError,
           "expected a number or a scalar tensor of type #{inspect(type)}, got: #{inspect(t)}"
   end
 
-  defp number_to_binary(number, type),
+  def number_to_binary(number, type),
     do: match_types([type], do: <<write!(number, 0)>>)
 
-  defp binary_to_number(bin, type) do
+  def binary_to_number(bin, type) do
     match_types [type] do
       <<match!(value, 0)>> = bin
       read!(value, 0)
@@ -2177,7 +2135,8 @@ defmodule Nx.BinaryBackend do
 
   ## Aggregation helpers
 
-  defp aggregate_axes(binary, axes, shape, size) do
+  @doc false
+  def aggregate_axes(binary, axes, shape, size) do
     {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
 
     view =
@@ -2188,7 +2147,8 @@ defmodule Nx.BinaryBackend do
     List.flatten(view)
   end
 
-  defp aggregate_axes([_ | _] = axes, shape, size) do
+  @doc false
+  def aggregate_axes([_ | _] = axes, shape, size) do
     axes = Enum.sort(axes)
     min = hd(axes)
     weighted_shape = weighted_shape(shape, size)
@@ -2203,12 +2163,11 @@ defmodule Nx.BinaryBackend do
     # can increase the read size.
     {reverse_pos, read_size} =
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
-
     path = Enum.reverse(reverse_pre, [(&IO.iodata_to_binary/1) | Enum.reverse(reverse_pos)])
     {chunk_size, read_size, path}
   end
 
-  defp aggregate_axes(axes, _shape, _size) do
+  def aggregate_axes(axes, _shape, _size) do
     raise ArgumentError, ":axes must be a non empty list, got: #{inspect(axes)}"
   end
 
@@ -2263,12 +2222,6 @@ defmodule Nx.BinaryBackend do
 
     acc = [{element, dilation_factor * weight} | acc]
     weighted_shape(shape, pos - 1, weight * shape_elem, limits, dilations, acc)
-  end
-
-  # Reads the chunk size from a weighted list at the given position.
-  defp weighted_chunk(list, at, size) do
-    {element, size} = Enum.at(list, at, {1, size})
-    element * size
   end
 
   # Traverses a binary using the elements and shape given by `weighted_shape`.
@@ -2471,4 +2424,12 @@ defmodule Nx.BinaryBackend do
   end
 
   defp replace_vector_element(m, row, value), do: List.replace_at(m, row, value)
+
+  defp put_data(out, %T{data: data}) do
+    put_data(out, data)
+  end
+
+  defp put_data(out, %B{} = data) do
+    %T{out | data: data}
+  end
 end
