@@ -7888,7 +7888,7 @@ defmodule Nx do
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
-    %T{shape: s1 = {m, n}} = a = tensor!(a)
+    %T{shape: s1 = {m, _}} = a = tensor!(a)
     %T{shape: {q}} = b = tensor!(b)
 
     case shape(s1) do
@@ -7919,8 +7919,7 @@ defmodule Nx do
     end
   end
 
-  defp triangular_solve_n(a, b, opts) do
-    %T{shape: {m, n}} = tensor!(a)
+  defp triangular_solve_n(a, b, _) do
     %T{type: type} = tensor!(b)
 
     output_type = Nx.Type.to_floating(type)
