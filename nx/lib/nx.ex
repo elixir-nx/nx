@@ -7854,15 +7854,17 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
+      iex> a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      iex> Nx.triangular_solve(a, Nx.tensor([4, 2, 4, 2]))
       #Nx.Tensor<
         f32[4]
         [1.3333333730697632, -0.6666666865348816, 2.6666667461395264, -1.3333333730697632]
       >
 
-      iex> Nx.triangular_solve(Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]]), Nx.tensor([1, 2, 1]))
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.triangular_solve(a, Nx.tensor([1, 2, 1]))
       #Nx.Tensor<
-        f32[3]
+        f64[3]
         [1.0, 1.0, -1.0]
       >
       

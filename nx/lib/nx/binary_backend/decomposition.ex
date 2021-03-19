@@ -7,17 +7,22 @@ defmodule Nx.BinaryBackend.Decomposition do
     a_matrix = binary_to_matrix(a_data, a_type, {rows, rows})
     b_vector = binary_to_vector(b_data, b_type)
 
-    # TODO: Implement this using a single pass reduce
-    Enum.with_index(a_matrix)
-    |> Enum.zip(b_vector)
-    |> Enum.reduce([], fn {{row, idx}, current_b}, previous_y ->
-      value = Enum.at(row, idx)
-      if value == 0, do: raise(ArgumentError, "can't solve for singular matrix")
-      y = (current_b - dot_matrix(row, previous_y)) / value
-      previous_y ++ [y]
-    end)
+    ts(a_matrix, b_vector, 0, [])
     |> matrix_to_binary(output_type)
   end
+
+  defp ts([row | rows], [b | bs], idx, acc) do
+    value = Enum.fetch!(row, idx)
+
+    if value == 0 do
+      raise ArgumentError, "can't solve for singular matrix"
+    end
+
+    y = (b - dot_matrix(row, acc)) / value
+    ts(rows, bs, idx + 1, acc ++ [y])
+  end
+
+  defp ts([], [], _idx, acc), do: acc
 
   def qr(input_data, input_type, input_shape, output_type, m, k, n, opts) do
     {_, input_num_bits} = input_type
