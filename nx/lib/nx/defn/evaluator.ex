@@ -8,7 +8,8 @@ defmodule Nx.Defn.Evaluator do
   @behaviour Nx.Defn.Compiler
   alias Nx.Defn.{Expr, Tree}
 
-  @creation_ops [:scalar, :eye, :iota, :random_normal, :random_uniform, :from_binary]
+  @creation_ops [:scalar, :eye, :iota, :from_binary]
+  @random_ops [:random_uniform, :random_normal]
 
   @impl true
   def __async__(key, vars, fun, opts) do
@@ -57,6 +58,12 @@ defmodule Nx.Defn.Evaluator do
       %{} when op in @creation_ops ->
         {backend, backend_options} = Nx.default_backend()
         res = apply(backend, op, eval_args(type, ans, expr.args ++ [backend_options]))
+        {res, Map.put(cache, id, res)}
+
+      %{} when op in @random_ops ->
+        {_, backend_options} = Nx.default_backend()
+        {args, cache} = Tree.traverse_args(ans, cache, &eval(&1, vars, &2))
+        res = apply(Nx.Shared.find_impl!(args), op, eval_args(type, ans, args ++ [backend_options]))
         {res, Map.put(cache, id, res)}
 
       %{} ->

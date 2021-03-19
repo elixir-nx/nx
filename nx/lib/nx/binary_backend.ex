@@ -29,6 +29,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
+    min = to_scalar(min)
+    max = to_scalar(max)
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
@@ -42,6 +44,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
+    mu = to_scalar(mu)
+    sigma = to_scalar(sigma)
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
