@@ -90,6 +90,7 @@ defmodule Nx.Backend do
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
+  @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
   @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
   binary_ops =

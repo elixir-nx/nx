@@ -1729,24 +1729,42 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def scatter_window_max(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(out, tensor, source, &Nx.greater_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+    select_and_scatter(
+      out,
+      tensor,
+      source,
+      &Nx.greater_equal/2,
+      window_dimensions,
+      opts,
+      init_value,
+      &Nx.add/2
+    )
   end
 
   @impl true
   def scatter_window_min(out, tensor, source, window_dimensions, opts, init_value) do
-    select_and_scatter(out, tensor, source, &Nx.less_equal/2, window_dimensions, opts, init_value, &Nx.add/2)
+    select_and_scatter(
+      out,
+      tensor,
+      source,
+      &Nx.less_equal/2,
+      window_dimensions,
+      opts,
+      init_value,
+      &Nx.add/2
+    )
   end
 
   defp select_and_scatter(
-        %{type: {_, output_size} = output_type, shape: output_shape} = out,
-        t,
-        source,
-        select_fn,
-        window_dimensions,
-        opts,
-        init_value,
-        scatter_fn
-      ) do
+         %{type: {_, output_size} = output_type, shape: output_shape} = out,
+         t,
+         source,
+         select_fn,
+         window_dimensions,
+         opts,
+         init_value,
+         scatter_fn
+       ) do
     padding = opts[:padding]
     strides = opts[:strides]
 
@@ -2037,6 +2055,29 @@ defmodule Nx.BinaryBackend do
       end
 
     from_binary(t, new_data)
+  end
+
+  @impl true
+  def triangular_solve(
+        %{type: output_type} = b_holder,
+        %{type: input_type, shape: {rows, rows}} = a,
+        b
+      ) do
+    a_matrix = a |> to_binary() |> binary_to_matrix(input_type, {rows, rows})
+    b_vector = b |> to_binary() |> binary_to_matrix(input_type, {0, 1}) |> List.flatten()
+
+    x =
+      Enum.with_index(a_matrix)
+      |> Enum.zip(b_vector)
+      |> Enum.reduce([], fn {{row, idx}, current_b}, previous_y ->
+        if Enum.at(row, idx) == 0, do: raise(ArgumentError, "can't solve for singular matrix")
+
+        y = (current_b - dot_matrix(row, previous_y)) / Enum.at(row, idx)
+        previous_y ++ [y]
+      end)
+
+    x_bin = matrix_to_binary(x, output_type)
+    from_binary(b_holder, x_bin)
   end
 
   ## Binary reducers

@@ -636,6 +636,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def triangular_solve(out, a, b) do
+    a = to_expr(a)
+    b = to_expr(b)
+    expr(out, b.data.context, :triangular_solve, [out, a, b])
+  end
+
+  @impl true
   def sort(out, tensor, opts) do
     comparator = opts[:comparator]
 
