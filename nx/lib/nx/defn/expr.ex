@@ -636,10 +636,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def triangular_solve(out, a, b) do
-    a = to_expr(a)
-    b = to_expr(b)
-    expr(out, b.data.context, :triangular_solve, [out, a, b])
+  def triangular_solve(out, a, b, opts) do
+    {[a, b], context} = to_exprs([a, b])
+    expr(out, context, :triangular_solve, [out, a, b, opts])
   end
 
   @impl true
