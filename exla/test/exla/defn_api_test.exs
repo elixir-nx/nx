@@ -8,12 +8,17 @@ defmodule EXLA.DefnAPITest do
     defn add_two_async(a, b), do: a + b
 
     test "awaits" do
-      async = Nx.Defn.async(&add_two_async/2, [1, 2], EXLA)
+      async = Nx.Defn.async(&add_two_async/2, [1, 2], compiler: EXLA)
       assert Nx.Async.await!(async) == Nx.tensor(3)
     end
 
     test "awaits with keep_on_device" do
-      async = Nx.Defn.async(&add_two_async/2, [1, 2], EXLA, run_options: [keep_on_device: true])
+      async =
+        Nx.Defn.async(&add_two_async/2, [1, 2],
+          compiler: EXLA,
+          run_options: [keep_on_device: true]
+        )
+
       assert %Nx.Tensor{} = tensor = Nx.Async.await!(async)
       assert %EXLA.DeviceBackend{state: {ref, :default}} = tensor.data
       assert is_reference(ref)

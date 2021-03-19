@@ -197,16 +197,16 @@ defmodule Nx.Defn do
 
   We can invoke it asynchronously as follows:
 
-      some_struct = Nx.Defn.async(&Mod.softmax/1, [my_tensor], EXLA)
+      some_struct = Nx.Defn.async(&Mod.softmax/1, [my_tensor], compiler: EXLA)
       Nx.Async.await!(some_struct)
 
   **Note:** similar to `jit/4`, `async/4` will ignore the `@defn_compiler`
   on the executed function. Be sure to pass the `compiler` and its `opts`
   as arguments instead.
   """
-  def async(fun, args, compiler \\ Nx.Defn.Evaluator, opts \\ [])
-      when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
-    Nx.Defn.Compiler.__async__(fun, args, compiler, opts)
+  def async(fun, args, opts \\ [])
+      when is_function(fun) and is_list(args) and is_list(opts) do
+    Nx.Defn.Compiler.__async__(fun, args, opts)
   end
 
   @doc """
@@ -219,16 +219,16 @@ defmodule Nx.Defn do
       defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
   **Note:** `jit/4` will ignore the `@defn_compiler` on the executed
-  function. Be sure to pass the `compiler` and its `opts` as arguments
+  function. Be sure to pass the `compiler` and its `opts` as keywords
   instead:
 
-      Nx.Defn.jit(&Mod.softmax/1, [my_tensor], EXLA)
-      Nx.Defn.jit(&Mod.softmax/1, [my_tensor], EXLA, run_options: [keep_on_device: true])
+      Nx.Defn.jit(&Mod.softmax/1, [my_tensor], compiler: EXLA)
+      Nx.Defn.jit(&Mod.softmax/1, [my_tensor], compiler: EXLA, run_options: [keep_on_device: true])
 
   """
-  def jit(fun, args, compiler \\ Nx.Defn.Evaluator, opts \\ [])
-      when is_function(fun) and is_list(args) and is_atom(compiler) and is_list(opts) do
-    Nx.Defn.Compiler.__jit__(fun, args, compiler, opts)
+  def jit(fun, args, opts \\ [])
+      when is_function(fun) and is_list(args) and is_list(opts) do
+    Nx.Defn.Compiler.__jit__(fun, args, opts)
   end
 
   @doc """
@@ -240,7 +240,7 @@ defmodule Nx.Defn do
         {:normalize, &Nx.divide(&1, 255), [Nx.template({100, 100}, {:f, 32})]}
       ]
 
-      :ok = Nx.Defn.export_aot("priv", MyModule, functions, EXLA)
+      :ok = Nx.Defn.export_aot("priv", MyModule, functions, compiler: EXLA)
 
   The above will export a module definition called `MyModule`
   to the given directory with `softmax/1` and `normalize/1` as
@@ -280,9 +280,8 @@ defmodule Nx.Defn do
           end
 
   """
-  def export_aot(dir, module, functions, compiler, aot_opts \\ [])
-      when is_binary(dir) and is_atom(module) and is_list(functions) and is_atom(compiler) and
-             is_list(aot_opts) do
+  def export_aot(dir, module, functions, aot_opts \\ [])
+      when is_binary(dir) and is_atom(module) and is_list(functions) and is_list(aot_opts) do
     functions =
       for tuple <- functions do
         case tuple do
@@ -298,7 +297,7 @@ defmodule Nx.Defn do
         end
       end
 
-    Nx.Defn.Compiler.__export_aot__(dir, module, functions, compiler, aot_opts)
+    Nx.Defn.Compiler.__export_aot__(dir, module, functions, aot_opts)
   end
 
   @doc """
@@ -345,7 +344,7 @@ defmodule Nx.Defn do
   environment, such as EXLA, only when exporting. In practice,
   this function is equivalent to the following:
 
-      :ok = Nx.Defn.export_aot("priv/my_app/aot", MyModule, functions, EXLA)
+      :ok = Nx.Defn.export_aot("priv/my_app/aot", MyModule, functions, compiler: EXLA)
 
       defmodule MyModule do
         Nx.Defn.import_aot("priv/my_app/aot", __MODULE__)
@@ -353,12 +352,12 @@ defmodule Nx.Defn do
 
   See `export_aot/5` for more information.
   """
-  def aot(module, functions, compiler, aot_opts \\ [])
-      when is_atom(module) and is_list(functions) and is_atom(compiler) and is_list(aot_opts) do
+  def aot(module, functions, aot_opts \\ [])
+      when is_atom(module) and is_list(functions) and is_list(aot_opts) do
     output_dir = Path.join(System.tmp_dir(), "elixir-nx/aot#{System.unique_integer()}")
 
     try do
-      case export_aot(output_dir, module, functions, compiler, aot_opts) do
+      case export_aot(output_dir, module, functions, aot_opts) do
         :ok ->
           defmodule module do
             @moduledoc false

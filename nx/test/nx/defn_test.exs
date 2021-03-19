@@ -843,7 +843,7 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&defn_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], Identity)
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
     end
 
     test "compiles elixir function" do
@@ -851,14 +851,14 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&elixir_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], Identity)
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], compiler: Identity)
     end
 
     test "raises if it doesn't return an expression" do
       assert_raise ArgumentError,
                    "defn must return a tensor expression or a tuple, got: :ok",
                    fn ->
-                     Nx.Defn.jit(fn -> :ok end, [], Nx.Defn.Evaluator).()
+                     Nx.Defn.jit(fn -> :ok end, [], compiler: Nx.Defn.Evaluator).()
                    end
     end
 

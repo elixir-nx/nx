@@ -85,7 +85,13 @@ defmodule Nx.Defn.Compiler do
   ## AOT
 
   @doc false
-  def __export_aot__(output_dir, module, tuples, compiler, aot_opts) do
+  def __export_aot__(output_dir, module, tuples, aot_opts) do
+    {compiler, aot_opts} =
+      Keyword.pop_lazy(aot_opts, :compiler, fn ->
+        raise ArgumentError,
+              "Nx.Defn.export_aot/3 and Nx.Defn.export_aot/4 require the :compiler option to be given"
+      end)
+
     {export_tuples, compiler_tuples} =
       tuples
       |> Enum.map(fn {name, fun, args, opts} ->
@@ -255,16 +261,17 @@ defmodule Nx.Defn.Compiler do
   ## JIT/Async/Stream
 
   @doc false
-  def __jit__(fun, args, compiler, opts) do
-    runtime(:__jit__, fun, args, compiler, opts)
+  def __jit__(fun, args, opts) do
+    runtime(:__jit__, fun, args, opts)
   end
 
   @doc false
-  def __async__(fun, args, compiler, opts) do
-    runtime(:__async__, fun, args, compiler, opts)
+  def __async__(fun, args, opts) do
+    runtime(:__async__, fun, args, opts)
   end
 
-  defp runtime(callback, fun, args, compiler, opts) do
+  defp runtime(callback, fun, args, opts) do
+    {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
     tensors = Nx.Defn.Tree.from_nested_args(args)
     runtime_fun = &runtime_fun(&1, fun, args, compiler)
     Kernel.apply(compiler, callback, [fun, tensors, runtime_fun, opts])
