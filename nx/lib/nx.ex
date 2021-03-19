@@ -7854,7 +7854,7 @@ defmodule Nx do
   | `nil` or 0 or 'N'        | a x = b                       |
 
     * `:lower` - Use only data contained in the lower triangle of a. Default is to use lower triangle, Optional
-  
+
   ## Examples
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
@@ -7901,7 +7901,7 @@ defmodule Nx do
     assert_keys!(opts, [:trans, :lower])
 
     if opts[:lower] == false do
-        raise ArgumentError, "upper triangles are currently not supported"
+      raise ArgumentError, "upper triangles are currently not supported"
     end
 
     case opts[:trans] do
