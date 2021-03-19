@@ -7863,6 +7863,9 @@ defmodule Nx do
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]), trans: 0)
       ** (ArgumentError) incompatible dimensions
+
+      iex> Nx.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
+      ** (ArgumentError) can't solve for singular matrix
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
