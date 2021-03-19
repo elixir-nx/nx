@@ -2066,6 +2066,8 @@ defmodule Nx.BinaryBackend do
       Enum.with_index(a_matrix)
       |> Enum.zip(b_vector)
       |> Enum.reduce(solution, fn {{row, idx}, current_b}, previous_y ->
+        if Enum.at(row, idx) == 0, do: raise(ArgumentError, "can't solve for singular matrix")
+
         y = (current_b - dot_matrix(row, previous_y)) / Enum.at(row, idx)
         replace_vector_element(previous_y, idx, y)
       end)
