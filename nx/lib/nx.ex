@@ -7845,6 +7845,16 @@ defmodule Nx do
   @doc """
   Solve the equation a x = b for x, assuming a is a triangular matrix.
 
+  ## Options
+
+    * `:trans` - Type of system to solve, if none is provided defaults to: a x = b - Optional
+
+  | trans                    | system                        |
+  | ------------------------ | ------------------------------|
+  | `nil` or 0 or 'N'        | a x = b                       |
+
+    * `:lower` - Use only data contained in the lower triangle of a. Default is to use lower triangle, Optional
+  
   ## Examples
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
@@ -7872,6 +7882,9 @@ defmodule Nx do
 
       iex> Nx.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) can't solve for singular matrix
+
+      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]), lower: false)
+      ** (ArgumentError) upper triangles are currently not supported
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
@@ -7885,7 +7898,11 @@ defmodule Nx do
 
     if m != q, do: raise(ArgumentError, "incompatible dimensions")
 
-    assert_keys!(opts, [:trans])
+    assert_keys!(opts, [:trans, :lower])
+
+    if opts[:lower] == false do
+        raise ArgumentError, "upper triangles are currently not supported"
+    end
 
     case opts[:trans] do
       0 ->
