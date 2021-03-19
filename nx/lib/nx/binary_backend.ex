@@ -2060,16 +2060,14 @@ defmodule Nx.BinaryBackend do
     a_matrix = a |> to_binary() |> binary_to_matrix(input_type, {rows, rows})
     b_vector = b |> to_binary() |> binary_to_matrix(input_type, {0, 1}) |> List.flatten()
 
-    solution = List.duplicate(0, rows)
-
     x =
       Enum.with_index(a_matrix)
       |> Enum.zip(b_vector)
-      |> Enum.reduce(solution, fn {{row, idx}, current_b}, previous_y ->
+      |> Enum.reduce([], fn {{row, idx}, current_b}, previous_y ->
         if Enum.at(row, idx) == 0, do: raise(ArgumentError, "can't solve for singular matrix")
 
         y = (current_b - dot_matrix(row, previous_y)) / Enum.at(row, idx)
-        replace_vector_element(previous_y, idx, y)
+        previous_y ++ [y]
       end)
 
     x_bin = matrix_to_binary(x, output_type)
