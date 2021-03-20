@@ -7873,6 +7873,8 @@ defmodule Nx do
 
   @doc """
   Solve the equation `a x = b` for x, assuming `a` is a lower triangular matrix.
+  `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
+  with as many rows as `a`.
 
   ## Examples
 
@@ -7890,6 +7892,18 @@ defmodule Nx do
         [1.0, 1.0, -1.0]
       >
 
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      iex> b = Nx.tensor([[1, 2, 3], [2, 2, 4], [2, 0, 1]])
+      iex> Nx.triangular_solve(a, b)
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 2.0, 3.0],
+          [1.0, 0.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]), trans: 0)
@@ -7905,15 +7919,22 @@ defmodule Nx do
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
     %T{shape: s1 = {m, _}} = a = tensor!(a)
-    %T{shape: {q}} = b = tensor!(b)
+    %T{shape: b_shape} = b = tensor!(b)
 
     case shape(s1) do
       {n, n} -> {n, n}
       other -> raise ArgumentError, "expected a square matrix, got: #{inspect(other)}"
     end
 
-    if m != q do
-      raise ArgumentError, "incompatible dimensions for a and b on tringular solve"
+    case b_shape do
+      {^m, ^m} ->
+        nil
+
+      {^m} ->
+        nil
+
+      _ ->
+        raise ArgumentError, "incompatible dimensions for a and b on tringular solve"
     end
 
     assert_keys!(opts, [])
@@ -7966,12 +7987,12 @@ defmodule Nx do
       ** (ArgumentError) can only invert square matrices, got: {2, 4}
 
       iex> Nx.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
-      ** (ArgumentError) can't invert a singular matrix
+      ** (ArgumentError) can't solve for singular matrix
 
   """
   @doc type: :linalg
   def invert(tensor) do
-    %T{shape: {m, n}} = tensor = tensor!(tensor)
+    %T{shape: {m, n}, type: type} = tensor = tensor!(tensor)
 
     if m != n,
       do:
@@ -7980,40 +8001,8 @@ defmodule Nx do
           "can only invert square matrices, got: {#{m}, #{n}}"
         )
 
-    # We need to achieve an LQ decomposition for `tensor` (henceforth called A)
-    # because triangular_solve only accepts lower_triangular matrices
-    # Therefore, we can use the fact that if we have B = Q'R' -> transpose(B) = LQ.
-    # If we set B = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
-
-    # Given A = LQ, we can then solve Ax = b as shown below
-    # Ax = b -> L(Qx) = b -> Ly = b, where y = Qx -> x = transpose(Q)b
-
-    # Finally, it can be shown that inv(A) can be calculated by setting
-    # b as each of the I matrix columns, which means that if we can solve Ax = b
-    # we can invert A by iteratively calculating x
-
-    {qt, r_prime} = tensor |> transpose() |> qr()
-
-    l = transpose(r_prime)
-
-    identity = eye(n)
-
-    n
-    |> count_up(0)
-    |> Enum.map(fn i ->
-      b = identity |> slice([0, i], [n, 1]) |> Nx.reshape({n})
-
-      y =
-        try do
-          triangular_solve(l, b)
-        rescue
-          ArgumentError ->
-            raise ArgumentError, "can't invert a singular matrix"
-        end
-
-      qt |> dot(y) |> reshape({n, 1})
-    end)
-    |> concatenate(axis: 1)
+    output_type = Nx.Type.to_floating(type)
+    impl!(tensor).invert(%{tensor | type: output_type}, tensor)
   end
 
   @doc """
