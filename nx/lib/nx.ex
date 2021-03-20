@@ -7994,12 +7994,10 @@ defmodule Nx do
   def invert(tensor) do
     %T{shape: {m, n}, type: type} = tensor = tensor!(tensor)
 
-    if m != n,
-      do:
-        raise(
-          ArgumentError,
-          "can only invert square matrices, got: {#{m}, #{n}}"
-        )
+    if m != n do
+      raise ArgumentError,
+            "can only invert square matrices, got: {#{m}, #{n}}"
+    end
 
     output_type = Nx.Type.to_floating(type)
     impl!(tensor).invert(%{tensor | type: output_type}, tensor)
