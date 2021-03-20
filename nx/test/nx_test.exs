@@ -1077,7 +1077,7 @@ defmodule NxTest do
     end
 
     test "raises when :input_dilation is not positive" do
-      message = ~r/input dilation must be a positive integer/
+      message = ~r/input dilation of each dimension must be a positive integer/
       conv_raise_for_options(message, input_dilation: 0)
     end
 
@@ -1113,7 +1113,7 @@ defmodule NxTest do
 
     # kernel dilation
     test "raises when :kernel_dilation is not positive" do
-      message = ~r/kernel dilation must be a positive integer/
+      message = ~r/kernel dilation of each dimension must be a positive integer/
       conv_raise_for_options(message, kernel_dilation: 0)
     end
 
