@@ -644,6 +644,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def invert(output, input) do
+    input = to_expr(input)
+    context = input.data.context
+    composite(output, context, &expr(&1, context, :invert, [output, input]))
+  end
+
+  @impl true
   def sort(out, tensor, opts) do
     comparator = opts[:comparator]
 
