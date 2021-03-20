@@ -896,7 +896,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        ~r/padding must be :valid or :same, or a padding configuration/,
+        ~r/invalid padding mode specified/,
         fn ->
           Nx.window_max(t, {2}, padding: :whatever)
         end
@@ -947,7 +947,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        ~r/padding must be :valid or :same, or a padding configuration/,
+        ~r/invalid padding mode specified/,
         fn ->
           Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
         end

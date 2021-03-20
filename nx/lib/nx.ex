@@ -3984,26 +3984,10 @@ defmodule Nx do
         do: List.duplicate(strides, rank(input_shape)),
         else: strides
 
-    padding_config =
-      case padding do
-        :valid ->
-          List.duplicate({0, 0}, rank(input_shape))
+    dilations = List.duplicate(1, rank(input_shape))
 
-        :same ->
-          Nx.Shape.calculate_padding(input_shape, window_dimensions, strides)
-
-        config when is_list(config) ->
-          config
-
-        _ ->
-          raise ArgumentError,
-                "invalid padding configuration, padding must be" <>
-                  " :valid or :same, or a padding configuration for" <>
-                  " the dimensions of the input tensor"
-      end
-
-    padded_shape = Nx.Shape.pad(input_shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
-    output_window_shape = Nx.Shape.window(padded_shape, window_dimensions, strides)
+    {output_window_shape, padding_config} =
+      Nx.Shape.pool(input_shape, window_dimensions, strides, padding, dilations)
 
     unless output_window_shape == source_shape do
       raise ArgumentError, "source shape must match valid windows in input tensor"
@@ -4084,26 +4068,10 @@ defmodule Nx do
         do: List.duplicate(strides, rank(input_shape)),
         else: strides
 
-    padding_config =
-      case padding do
-        :valid ->
-          List.duplicate({0, 0}, rank(input_shape))
+    dilations = List.duplicate(1, rank(input_shape))
 
-        :same ->
-          Nx.Shape.calculate_padding(input_shape, window_dimensions, strides)
-
-        config when is_list(config) ->
-          config
-
-        _ ->
-          raise ArgumentError,
-                "invalid padding configuration, padding must be" <>
-                  " :valid or :same, or a padding configuration for" <>
-                  " the dimensions of the input tensor"
-      end
-
-    padded_shape = Nx.Shape.pad(input_shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
-    output_window_shape = Nx.Shape.window(padded_shape, window_dimensions, strides)
+    {output_window_shape, padding_config} =
+      Nx.Shape.pool(input_shape, window_dimensions, strides, padding, dilations)
 
     unless output_window_shape == source_shape do
       raise ArgumentError, "source shape must match valid windows in input tensor"
@@ -5317,33 +5285,8 @@ defmodule Nx do
         do: List.duplicate(dilations, rank(tensor.shape)),
         else: dilations
 
-    # Cheat to calculate shape for dilated window
-    window_padding_config =
-      for d <- dilations do
-        {0, 0, d - 1}
-      end
-
-    padding_config =
-      case padding do
-        :valid ->
-          List.duplicate({0, 0}, rank(shape))
-
-        :same ->
-          Nx.Shape.calculate_padding(shape, window_dimensions, strides)
-
-        config when is_list(config) ->
-          config
-
-        _ ->
-          raise ArgumentError,
-                "invalid padding configuration, padding must be" <>
-                  " :valid or :same, or a padding configuration for" <>
-                  " the spatial dimensions of the input tensor"
-      end
-
-    padded_shape = Nx.Shape.pad(shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
-    dilated_shape = Nx.Shape.pad(window_dimensions, window_padding_config)
-    output_shape = Nx.Shape.window(padded_shape, dilated_shape, strides)
+    {output_shape, padding_config} =
+      Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
 
     out = %{tensor | shape: output_shape}
     opts = [padding: padding_config, strides: strides, window_dilations: dilations]
@@ -6044,38 +5987,13 @@ defmodule Nx do
         do: List.duplicate(dilations, rank(tensor.shape)),
         else: dilations
 
-    # Cheat to calculate the output shape with dilations
-    window_padding_config =
-      for d <- dilations do
-        {0, 0, d - 1}
-      end
-
     strides =
       if is_integer(strides),
         do: List.duplicate(strides, rank(tensor.shape)),
         else: strides
 
-    padding_config =
-      case padding do
-        :valid ->
-          List.duplicate({0, 0}, rank(shape))
-
-        :same ->
-          Nx.Shape.calculate_padding(shape, window_dimensions, strides)
-
-        config when is_list(config) ->
-          config
-
-        _ ->
-          raise ArgumentError,
-                "invalid padding configuration, padding must be" <>
-                  " :valid or :same, or a padding configuration for" <>
-                  " the spatial dimensions of the input tensor"
-      end
-
-    padded_shape = Nx.Shape.pad(shape, Enum.map(padding_config, &Tuple.append(&1, 0)))
-    dilated_shape = Nx.Shape.pad(window_dimensions, window_padding_config)
-    output_shape = Nx.Shape.window(padded_shape, dilated_shape, strides)
+    {output_shape, padding_config} =
+      Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
 
     out = %{tensor | shape: output_shape}
     opts = [padding: padding_config, strides: strides, window_dilations: dilations]
