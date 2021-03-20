@@ -407,46 +407,6 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Calculates the padding needed for same padding accounting for stride.
-
-  Only calculates padding on the edges, not dilations.
-
-  ## Examples
-
-      iex> Nx.Shape.calculate_padding({4, 4}, {2, 2}, [1, 1])
-      [{0, 1}, {0, 1}]
-
-      iex> Nx.Shape.calculate_padding({3, 3}, {2, 2}, [2, 2])
-      [{0, 1}, {0, 1}]
-  """
-  def calculate_padding(shape, window, strides)
-      when is_tuple(shape) and is_tuple(window) and is_list(strides) do
-    validate_window!(shape, window)
-    validate_strides!(shape, strides)
-    calculate_padding(strides, shape, window, 0)
-  end
-
-  def calculate_padding([], _shape, _window, _pos), do: []
-
-  def calculate_padding([s | strides], shape, window, pos) do
-    dim = elem(shape, pos)
-    w = elem(window, pos)
-    output_dim = ceil(dim / s)
-    padding_size = max((output_dim - 1) * s + w - dim, 0)
-    lo = floor(padding_size / 2)
-    hi = ceil(padding_size / 2)
-    [{lo, hi} | calculate_padding(strides, shape, window, pos + 1)]
-  end
-
-  @doc """
-  Calculates the padding needed for same padding not accounting for stride.
-  """
-  def calculate_padding(shape, window) when is_tuple(shape) and is_tuple(window) do
-    validate_window!(shape, window)
-    calculate_padding(List.duplicate(1, tuple_size(shape)), shape, window, 0)
-  end
-
-  @doc """
   Returns a padding configuration based on the given pad mode
   for the given input shape, kernel size and stride.
 
@@ -455,45 +415,50 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :valid)
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 1], :valid)
       [{0, 0}, {0, 0}, {0, 0}]
 
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :valid, true)
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 1], :valid, true)
       [{0, 0, 0}, {0, 0, 0}, {0, 0, 0}]
 
-      iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, :same)
+      iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, [1, 1], :same)
       [{0, 1}, {0, 1}]
 
+  ### Error cases
+
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, [1, 1, 2], :foo)
+      ** (ArgumentError) invalid padding mode specified, padding must be one of :valid, :same, or a padding configuration, got: :foo
+
   """
-  def to_padding_config(shape, kernel_size, mode, interior \\ false) do
+  def to_padding_config(shape, kernel_size, strides, mode, interior \\ false) do
     case mode do
       :valid ->
-        pad_valid(shape, kernel_size, interior)
+        pad_valid(shape, kernel_size, strides, interior)
 
       :same ->
-        pad_same(shape, kernel_size, interior)
+        pad_same(shape, kernel_size, strides, interior)
 
       config when is_list(config) ->
         config
 
-      _ ->
-        raise ArgumentError, "invalid padding mode specified"
+      mode ->
+        raise ArgumentError, "invalid padding mode specified, padding must be one" <>
+                             " of :valid, :same, or a padding configuration, got:" <>
+                             " #{inspect(mode)}"
     end
   end
 
-  defp pad_valid(shape, _, interior) do
+  defp pad_valid(shape, _, _, interior) do
     if interior,
       do: List.duplicate({0, 0, 0}, Nx.rank(shape)),
       else: List.duplicate({0, 0}, Nx.rank(shape))
   end
 
-  defp pad_same(shape, kernel_size, interior) do
-    shape
-    |> Tuple.to_list()
-    |> Enum.zip(Tuple.to_list(kernel_size))
+  defp pad_same(shape, kernel_size, strides, interior) do
+    Enum.zip([Tuple.to_list(shape), Tuple.to_list(kernel_size), strides])
     |> Enum.map(
-        fn {dim, k} ->
-          padding_size = max((dim - 1) + k - dim, 0)
+        fn {dim, k, s} ->
+          padding_size = max((dim - 1) * s + k - dim, 0)
           lo = floor(padding_size / 2)
           hi = ceil(padding_size / 2)
           if interior, do: {lo, hi, 0}, else: {lo, hi}
@@ -519,7 +484,7 @@ defmodule Nx.Shape do
     end
 
     dilated_padding_config = Enum.map(dilation, fn x -> {0, 0, x - 1} end)
-    Nx.Shape.pad(shape, dilated_padding_config)
+    pad(shape, dilated_padding_config)
   end
 
   @doc """
@@ -544,11 +509,11 @@ defmodule Nx.Shape do
     validate_conv_strides!(input_shape, strides)
     validate_conv_dilations!(input_shape, kernel_shape, input_dilation, kernel_dilation)
 
-    {input_shape, permuted_input_names} = Nx.Shape.transpose(input_shape, input_permutation, input_names)
-    input_shape = Nx.Shape.dilate(input_shape, [1, 1 | input_dilation])
+    {input_shape, permuted_input_names} = transpose(input_shape, input_permutation, input_names)
+    input_shape = dilate(input_shape, [1, 1 | input_dilation])
 
-    {kernel_shape, _} = Nx.Shape.transpose(kernel_shape, kernel_permutation, kernel_names)
-    kernel_shape = Nx.Shape.dilate(kernel_shape, [1, 1 | kernel_dilation])
+    {kernel_shape, _} = transpose(kernel_shape, kernel_permutation, kernel_names)
+    kernel_shape = dilate(kernel_shape, [1, 1 | kernel_dilation])
 
     validate_conv_groups!(input_shape, kernel_shape, feature_group_count, batch_group_count)
 
@@ -565,14 +530,14 @@ defmodule Nx.Shape do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    padding_config = Nx.Shape.to_padding_config(spatial_dims, filter_shape, padding)
+    padding_config = to_padding_config(spatial_dims, filter_shape, List.duplicate(1, Nx.rank(spatial_dims)), padding)
 
     old_spatial_dims =
       spatial_dims
-      |> Nx.Shape.pad(Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
+      |> pad(Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
       |> Tuple.to_list()
 
-    spatial_dims = do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), strides)
+    spatial_dims = do_conv_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), strides)
     shape = List.to_tuple([div(batch_size, batch_group_count), num_filters | spatial_dims])
 
     inv_output_permutation =
@@ -581,7 +546,7 @@ defmodule Nx.Shape do
       |> Enum.sort()
       |> Enum.map(&elem(&1, 1))
 
-    {shape, names} = Nx.Shape.transpose(shape, inv_output_permutation, permuted_input_names)
+    {shape, names} =transpose(shape, inv_output_permutation, permuted_input_names)
 
     {shape, names, padding_config}
   end
@@ -681,40 +646,48 @@ defmodule Nx.Shape do
     end
   end
 
-  defp do_spatial_dims([], [], []), do: []
+  defp do_conv_spatial_dims([], [], []), do: []
 
-  defp do_spatial_dims([cur | spatial], [f | filters], [s | strides]),
-    do: [floor((cur - f) / s) + 1 | do_spatial_dims(spatial, filters, strides)]
+  defp do_conv_spatial_dims([cur | spatial], [f | filters], [s | strides]),
+    do: [floor((cur - f) / s) + 1 | do_conv_spatial_dims(spatial, filters, strides)]
 
   @doc """
-  Output shape after a window operation.
+  Output shape after a pooling or reduce window operation.
 
   ## Examples
 
-      iex> Nx.Shape.window({3, 3}, {2, 2}, [1, 1])
-      {2, 2}
+    iex> Nx.Shape.pool({3, 3}, {1, 2}, [1, 1], :valid, [1, 1])
+    {{3, 2}, [{0, 0}, {0, 0}]}
+
+    iex> Nx.Shape.pool({3, 2, 3}, {2, 1, 1}, [1, 2, 1], :same, [1, 1, 1])
+    {{3, 1, 3}, [{0, 1}, {0, 0}, {0, 0}]}
 
   ### Error cases
 
-      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, [1, 1, 1])
-      ** (ArgumentError) window dimensions would result in empty tensor which is not currently supported in Nx, please open an issue if you'd like this behavior to change
+    iex> Nx.Shape.pool({1, 2, 3}, {2, 1, 1}, [1, 1, 1], :valid, [1, 1, 1])
+    ** (ArgumentError) window dimensions would result in empty tensor which is not currently supported in Nx, please open an issue if you'd like this behavior to change
 
-      iex> Nx.Shape.window({1, 2, 3}, {2, 1}, [1, 1, 1])
-      ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
+    iex> Nx.Shape.pool({1, 2, 3}, {2, 1}, [1, 1, 1], :valid, [1, 1, 1])
+    ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
 
-      iex> Nx.Shape.window({1, 2, 3}, {2, 1, 1}, [1, 1])
-      ** (ArgumentError) invalid stride dimensions, rank of shape (3) does not match rank of stride (2)
+    iex> Nx.Shape.pool({1, 2, 3}, {2, 1, 1}, [1, 1], :valid, [1, 1, 1])
+    ** (ArgumentError) invalid stride dimensions, rank of shape (3) does not match rank of stride (2)
   """
-  def window(shape, window, strides)
-      when is_tuple(shape) and is_tuple(window) and is_list(strides) do
-    validate_window!(shape, window)
+  def pool(shape, kernel_size, strides, padding, kernel_dilation) do
+    validate_window!(shape, kernel_size)
     validate_strides!(shape, strides)
-    List.to_tuple(window(strides, shape, window, 0))
+
+    kernel_size = dilate(kernel_size, kernel_dilation)
+    padding_config = to_padding_config(shape, kernel_size, List.duplicate(1, Nx.rank(shape)), padding)
+
+    shape = pad(shape, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
+
+    {List.to_tuple(do_pool(strides, shape, kernel_size, 0)), padding_config}
   end
 
-  defp window([], _shape, _window, _pos), do: []
+  defp do_pool([], _shape, _window, _pos), do: []
 
-  defp window([s | strides], shape, window, pos) do
+  defp do_pool([s | strides], shape, window, pos) do
     dim = elem(shape, pos)
     w = elem(window, pos)
     new_dim = div(dim - w, s) + 1
@@ -726,7 +699,7 @@ defmodule Nx.Shape do
               " open an issue if you'd like this behavior to change"
     end
 
-    [new_dim | window(strides, shape, window, pos + 1)]
+    [new_dim | do_pool(strides, shape, window, pos + 1)]
   end
 
   # Ensures the window is valid given the shape.
