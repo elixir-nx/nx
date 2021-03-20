@@ -7973,12 +7973,10 @@ defmodule Nx do
   def invert(tensor) do
     %T{shape: {m, n}} = tensor = tensor!(tensor)
 
-    if m != n,
-      do:
-        raise(
-          ArgumentError,
-          "can only invert square matrices, got: {#{m}, #{n}}"
-        )
+    if m != n do
+      raise ArgumentError,
+            "can only invert square matrices, got: {#{m}, #{n}}"
+    end
 
     # We need to achieve an LQ decomposition for `tensor` (henceforth called A)
     # because triangular_solve only accepts lower_triangular matrices
