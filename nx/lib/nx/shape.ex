@@ -656,6 +656,12 @@ defmodule Nx.Shape do
 
   ## Examples
 
+    iex> Nx.Shape.pool({3, 3}, {1, 2}, [1, 1], :valid, [1, 1])
+    {{3, 2}, [{0, 0}, {0, 0}]}
+
+    iex> Nx.Shape.pool({3, 2, 3}, {2, 1, 1}, [1, 2, 1], :same, [1, 1, 1])
+    {{3, 1, 3}, [{0, 1}, {0, 0}, {0, 0}]}
+
   ### Error cases
 
     iex> Nx.Shape.pool({1, 2, 3}, {2, 1, 1}, [1, 1, 1], :valid, [1, 1, 1])
