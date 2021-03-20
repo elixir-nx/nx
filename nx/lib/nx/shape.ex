@@ -447,31 +447,238 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Output shape after a convolution, already padded.
+  Returns a padding configuration based on the given pad mode
+  for the given input shape, kernel size and stride.
+
+  By default, interior padding is not considered in the padding
+  configuration.
+
+  ## Examples
+
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :valid)
+      [{0, 0}, {0, 0}, {0, 0}]
+
+      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :valid, true)
+      [{0, 0, 0}, {0, 0, 0}, {0, 0, 0}]
+
+      iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, :same)
+      [{0, 1}, {0, 1}]
+
   """
-  def conv(input_shape, input_names, kernel_shape, _kernel_names, strides, batch_groups, padding) do
+  def to_padding_config(shape, kernel_size, mode, interior \\ false) do
+    case mode do
+      :valid ->
+        pad_valid(shape, kernel_size, interior)
+
+      :same ->
+        pad_same(shape, kernel_size, interior)
+
+      config when is_list(config) ->
+        config
+
+      _ ->
+        raise ArgumentError, "invalid padding mode specified"
+    end
+  end
+
+  defp pad_valid(shape, _, interior) do
+    if interior,
+      do: List.duplicate({0, 0, 0}, Nx.rank(shape)),
+      else: List.duplicate({0, 0}, Nx.rank(shape))
+  end
+
+  defp pad_same(shape, kernel_size, interior) do
+    shape
+    |> Tuple.to_list()
+    |> Enum.zip(Tuple.to_list(kernel_size))
+    |> Enum.map(
+        fn {dim, k} ->
+          padding_size = max((dim - 1) + k - dim, 0)
+          lo = floor(padding_size / 2)
+          hi = ceil(padding_size / 2)
+          if interior, do: {lo, hi, 0}, else: {lo, hi}
+        end
+      )
+  end
+
+  @doc """
+  Dilates the given input shape according to dilation.
+
+  ## Examples
+
+      iex> Nx.Shape.dilate({3, 3, 3}, [1, 2, 1])
+      {3, 5, 3}
+
+      iex> Nx.Shape.dilate({2, 4, 2}, [3, 1, 3])
+      {4, 4, 4}
+  """
+  def dilate(shape, dilation) when is_tuple(shape) and is_list(dilation) do
+    unless Enum.all?(dilation, & &1 >= 1) do
+      raise ArgumentError, "dilation rates must be greater than or equal to 1" <>
+                           " got #{inspect(dilation)}"
+    end
+
+    dilated_padding_config = Enum.map(dilation, fn x -> {0, 0, x - 1} end)
+    Nx.Shape.pad(shape, dilated_padding_config)
+  end
+
+  @doc """
+  Output shape after a convolution.
+  """
+  def conv(
+        input_shape,
+        input_names,
+        kernel_shape,
+        kernel_names,
+        strides,
+        padding,
+        feature_group_count,
+        batch_group_count,
+        input_dilation,
+        kernel_dilation,
+        input_permutation,
+        kernel_permutation,
+        output_permutation
+      ) do
+    validate_conv_ranks!(input_shape, kernel_shape)
+    validate_conv_strides!(input_shape, strides)
+    validate_conv_dilations!(input_shape, kernel_shape, input_dilation, kernel_dilation)
+
+    {input_shape, permuted_input_names} = Nx.Shape.transpose(input_shape, input_permutation, input_names)
+    input_shape = Nx.Shape.dilate(input_shape, [1, 1 | input_dilation])
+
+    {kernel_shape, _} = Nx.Shape.transpose(kernel_shape, kernel_permutation, kernel_names)
+    kernel_shape = Nx.Shape.dilate(kernel_shape, [1, 1 | kernel_dilation])
+
+    validate_conv_groups!(input_shape, kernel_shape, feature_group_count, batch_group_count)
+
+    num_filters = elem(kernel_shape, 0)
+    batch_size = elem(input_shape, 0)
+
     filter_shape =
       kernel_shape
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    num_filters = elem(kernel_shape, 0)
-    batch_size = elem(input_shape, 0)
+    spatial_dims =
+      input_shape
+      |> Tuple.delete_at(0)
+      |> Tuple.delete_at(0)
 
-    # Assume padding only pads spatial dims
-    padding_config = [{0, 0, 0}, {0, 0, 0} | Enum.map(padding, &Tuple.append(&1, 0))]
-    padded_shape = Nx.Shape.pad(input_shape, padding_config)
+    padding_config = Nx.Shape.to_padding_config(spatial_dims, filter_shape, padding)
 
     old_spatial_dims =
-      padded_shape
-      |> Tuple.delete_at(0)
-      |> Tuple.delete_at(0)
+      spatial_dims
+      |> Nx.Shape.pad(Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
       |> Tuple.to_list()
 
     spatial_dims = do_spatial_dims(old_spatial_dims, Tuple.to_list(filter_shape), strides)
+    shape = List.to_tuple([div(batch_size, batch_group_count), num_filters | spatial_dims])
 
-    # TODO: Is it always the case that it's best to return the input names?
-    {List.to_tuple([div(batch_size, batch_groups), num_filters | spatial_dims]), input_names}
+    inv_output_permutation =
+      output_permutation
+      |> Enum.with_index()
+      |> Enum.sort()
+      |> Enum.map(&elem(&1, 1))
+
+    {shape, names} = Nx.Shape.transpose(shape, inv_output_permutation, permuted_input_names)
+
+    {shape, names, padding_config}
+  end
+
+  defp validate_conv_ranks!(input_shape, kernel_shape) do
+    cond do
+      Nx.rank(input_shape) < 3 ->
+        raise ArgumentError,
+              "input shape in conv requires at least rank 3," <>
+                " shape #{inspect(input_shape)} has rank #{Nx.rank(input_shape)}"
+
+      Nx.rank(kernel_shape) < 3 ->
+        raise ArgumentError,
+              "kernel shape in conv requires at least rank 3," <>
+                " shape #{inspect(kernel_shape)} has rank #{Nx.rank(kernel_shape)}"
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_conv_strides!(input_shape, strides) do
+    if length(strides) != Nx.rank(input_shape) - 2 do
+      raise ArgumentError,
+            "rank of strides much match rank of spatial dimensions" <>
+              " got strides #{inspect(strides)} with rank #{length(strides)}" <>
+              " and got input shape #{inspect(input_shape)} of rank" <>
+              " #{Nx.rank(input_shape) - 2}"
+    end
+  end
+
+  # Validates the input and kernel dilations given to Nx.conv
+  defp validate_conv_dilations!(input_shape, kernel_shape, input_dilation, kernel_dilation) do
+    cond do
+      is_list(input_dilation) and length(input_dilation) != Nx.rank(input_shape) - 2 ->
+        raise ArgumentError,
+              "must specify dilation for each spatial dimension of the input" <>
+                " or specify an integer dilation factor"
+
+      is_list(input_dilation) and Enum.any?(input_dilation, &(&1 < 1 || !is_integer(&1))) ->
+        raise ArgumentError,
+              "input dilation of each dimension must be a positive integer, got " <>
+                inspect(input_dilation)
+
+      is_list(kernel_dilation) and length(kernel_dilation) != Nx.rank(kernel_shape) - 2 ->
+        raise ArgumentError,
+              "must specify dilation for each spatial dimension of the kernel" <>
+                " or specify an integer dilation factor"
+
+      is_list(kernel_dilation) and Enum.any?(kernel_dilation, &(&1 < 1 || !is_integer(&1))) ->
+        raise ArgumentError,
+              "kernel dilation of each dimension must be a positive integer, got " <>
+                inspect(kernel_dilation)
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_conv_groups!(input_shape, kernel_shape, feature_groups, batch_groups) do
+    tensor_input_batch_size = elem(input_shape, 0)
+    tensor_input_channels = elem(input_shape, 1)
+    kernel_input_channels = elem(kernel_shape, 1)
+    kernel_output_channels = elem(kernel_shape, 0)
+
+    cond do
+      batch_groups != 1 and feature_groups != 1 ->
+        raise ArgumentError,
+              "either batch groups or feature groups must be 1," <>
+                " got batch_groups = #{batch_groups} and feature_groups = #{feature_groups}"
+
+      rem(tensor_input_batch_size, batch_groups) != 0 ->
+        raise ArgumentError,
+              "batch groups must evenly divide input batch size" <>
+                " got rem(#{batch_groups}, #{tensor_input_batch_size}) != 0"
+
+      rem(kernel_output_channels, feature_groups) != 0 ->
+        raise ArgumentError,
+              "size of kernel output channels must be evenly divisible by feature groups" <>
+                " got rem(#{kernel_output_channels}, #{feature_groups}) != 0 for kernel" <>
+                " with shape #{inspect(kernel_shape)}"
+
+      rem(kernel_output_channels, batch_groups) != 0 ->
+        raise ArgumentError,
+              "size of kernel output channels must be evenly divisible by batch groups" <>
+                " got rem(#{kernel_output_channels}, #{batch_groups}) != 0 for kernel" <>
+                " with shape #{inspect(kernel_shape)}"
+
+      tensor_input_channels != kernel_input_channels * feature_groups ->
+        raise ArgumentError,
+              "size of input channels divided by feature groups must match size of kernel channels," <>
+                " got #{tensor_input_channels} / #{feature_groups} != #{kernel_input_channels}" <>
+                " for shapes #{inspect(input_shape)} and #{inspect(kernel_shape)}"
+
+      true ->
+        :ok
+    end
   end
 
   defp do_spatial_dims([], [], []), do: []
