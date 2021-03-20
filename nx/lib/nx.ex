@@ -683,8 +683,8 @@ defmodule Nx do
 
     unless min_shape == {} and max_shape == {} do
       raise ArgumentError,
-             "random_uniform/3 expects min and max to be scalars, got:" <>
-             " min shape: #{inspect(min_shape)} and max shape: #{inspect(max_shape)}"
+            "random_uniform/3 expects min and max to be scalars, got:" <>
+              " min shape: #{inspect(min_shape)} and max shape: #{inspect(max_shape)}"
     end
 
     unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
@@ -797,13 +797,15 @@ defmodule Nx do
     type = Nx.Type.normalize!(opts[:type] || {:f, 32})
 
     unless mu_shape == {} and sigma_shape == {} do
-      raise ArgumentError, "random_normal/3 expects mu and sigma to be scalars" <>
-                           " got: mu shape: #{inspect(mu_shape)} and sigma shape: #{inspect(sigma_shape)}"
+      raise ArgumentError,
+            "random_normal/3 expects mu and sigma to be scalars" <>
+              " got: mu shape: #{inspect(mu_shape)} and sigma shape: #{inspect(sigma_shape)}"
     end
 
     unless Nx.Type.float?(mu_type) and Nx.Type.float?(sigma_type) do
-      raise ArgumentError, "random_normal/3 expects mu and sigma to be float types," <>
-                           " got: mu type: #{inspect(mu_type)} and sigma type: #{inspect(sigma_type)}"
+      raise ArgumentError,
+            "random_normal/3 expects mu and sigma to be float types," <>
+              " got: mu type: #{inspect(mu_type)} and sigma type: #{inspect(sigma_type)}"
     end
 
     unless Nx.Type.float?(type) do
@@ -7887,7 +7889,7 @@ defmodule Nx do
         f64[3]
         [1.0, 1.0, -1.0]
       >
-      
+
   ### Error cases
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]), trans: 0)
@@ -7917,6 +7919,101 @@ defmodule Nx do
     assert_keys!(opts, [])
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, [])
+  end
+
+  @doc """
+  Invert a square 2-D tensor.
+
+  For non-square tensors, use `Nx.svd/2` for pseudo-inverse calculations.
+
+  ## Examples
+
+      iex> a = Nx.tensor([[1, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      iex> a_inv = Nx.invert(a)
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [1.0, 0.0, 0.0, 0.0],
+          [-2.0, 1.0, 0.0, 0.0],
+          [-1.0, 0.0, 1.0, 0.0],
+          [2.0, -1.0, -1.0, 1.0]
+        ]
+      >
+      iex> Nx.dot(a, a_inv)
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ]
+      >
+      iex> Nx.dot(a_inv, a)
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ]
+      >
+
+  ### Error cases
+
+      iex> Nx.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
+      ** (ArgumentError) can only invert square matrices, got: {2, 4}
+
+      iex> Nx.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
+      ** (ArgumentError) can't invert a singular matrix
+
+  """
+  @doc type: :linalg
+  def invert(tensor) do
+    %T{shape: {m, n}} = tensor = tensor!(tensor)
+
+    if m != n,
+      do:
+        raise(
+          ArgumentError,
+          "can only invert square matrices, got: {#{m}, #{n}}"
+        )
+
+    # We need to achieve an LQ decomposition for `tensor` (henceforth called A)
+    # because triangular_solve only accepts lower_triangular matrices
+    # Therefore, we can use the fact that if we have B = Q'R' -> transpose(B) = LQ.
+    # If we set B = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
+
+    # Given A = LQ, we can then solve Ax = b as shown below
+    # Ax = b -> L(Qx) = b -> Ly = b, where y = Qx -> x = transpose(Q)b
+
+    # Finally, it can be shown that inv(A) can be calculated by setting
+    # b as each of the I matrix columns, which means that if we can solve Ax = b
+    # we can invert A by iteratively calculating x
+
+    {qt, r_prime} = tensor |> transpose() |> qr()
+
+    l = transpose(r_prime)
+
+    identity = eye(n)
+
+    n
+    |> count_up(0)
+    |> Enum.map(fn i ->
+      b = identity |> slice([0, i], [n, 1]) |> Nx.reshape({n})
+
+      y =
+        try do
+          triangular_solve(l, b)
+        rescue
+          ArgumentError ->
+            raise ArgumentError, "can't invert a singular matrix"
+        end
+
+      qt |> dot(y) |> reshape({n, 1})
+    end)
+    |> concatenate(axis: 1)
   end
 
   @doc """
