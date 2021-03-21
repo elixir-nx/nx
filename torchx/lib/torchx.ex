@@ -25,16 +25,18 @@ defmodule Torchx.Macro do
             when is_tuple(t) and is_integer(elem(elem(t, 0), 0)) and
                    is_integer(elem(elem(t, 0), 1)) and is_reference(elem(t, 1))
 
+  # TODO: select tensor args by variable names
+  # (args starting with 'tensor' should be considered {device, ref} tensor tuples)
   def prepare_args(args) do
     {prepared_args, device} =
       Enum.map_reduce(args, nil, fn
-        t, nil when is_tensor(t) -> {elem(t, 1), elem(t, 0)}
+        {dev, ref} = t, nil when is_tensor(t) -> {ref, dev}
         {dev, ref} = t, dev when is_tensor(t) -> {ref, dev}
         {dev, ref} = t, other_dev when is_tensor(t) -> raise "cannot perform across devices"
         var, dev -> {var, dev}
       end)
 
-    {device, prepared_args}
+    {device, prepared_args} |> IO.inspect()
   end
 end
 

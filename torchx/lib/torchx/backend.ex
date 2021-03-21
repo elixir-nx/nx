@@ -455,7 +455,7 @@ defmodule Torchx.Backend do
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 
-  defp from_ref({_device, ref}, t) when is_reference(ref), do: to_tensor(ref, t)
+  defp from_ref({_device, ref} = data, t) when is_reference(ref), do: to_tensor(data, t)
   defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
 
   defp from_bare_ref(maybe_ref) do
@@ -488,10 +488,16 @@ defmodule Torchx.Backend do
       |> unwrap!()
       |> Enum.map(&to_tensor(&1, t))
 
+  defp to_ref(%T{data: %TB{ref: {{_, _} = _device, ref}}}), do: ref
   defp to_ref(%T{data: %TB{ref: ref}}), do: ref
 
   defp to_ref(%T{} = tensor),
     do: Nx.backend_transfer(tensor, TB) |> to_ref()
+
+  defp to_tensor({{_, _} = device, ref}, %T{type: type, shape: shape} = t)
+       when is_reference(ref) do
+    %{t | data: %__MODULE__{ref: {device, check_shape_and_type!(ref, shape, type)}}}
+  end
 
   defp to_tensor(ref, %T{type: type, shape: shape} = t) do
     %{t | data: %__MODULE__{ref: check_shape_and_type!(ref, shape, type)}}
@@ -521,6 +527,7 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(ref, _, _), do: ref
   end
 
+  def device(%T{data: %TB{ref: {device, ref}}}), do: Torchx.device_of(ref)
   def device(%T{data: %TB{ref: ref}}), do: Torchx.device_of(ref)
 
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()

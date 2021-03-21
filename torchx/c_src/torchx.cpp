@@ -5,6 +5,24 @@
 
 ErlNifResourceType *TENSOR_TYPE;
 
+std::map<const std::string, const torch::DeviceType> devices = {{"cpu", torch::kCPU}, {"cuda", torch::kCUDA}, {"hip", torch::kHIP}, {"fpga", torch::kFPGA}, {"msnpu", torch::kMSNPU}, {"xla", torch::kXLA}, {"vulkan", torch::kVulkan}, {"metal", torch::kMetal}, {"xpu", torch::kXPU}};
+
+inline torch::DeviceType string2device(const std::string atom)
+{
+  return devices[atom];
+}
+
+inline std::string device2string(const torch::DeviceType device)
+{
+  for (std::map<const std::string, const torch::DeviceType>::iterator i = devices.begin(); i != devices.end(); ++i)
+  {
+    if (i->second == device)
+      return i->first;
+  }
+  return "";
+}
+
+
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
