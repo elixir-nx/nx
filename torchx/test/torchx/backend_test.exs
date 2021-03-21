@@ -199,4 +199,16 @@ defmodule BackendTest do
       |> Enum.all?(&(&1 > 7.0 - 3.0 and &1 < 7.0 + 3.0))
     end
   end
+
+  describe "backend transfer" do
+    test "do not realloc on CPU tensor transfer" do
+      t = Nx.eye(5, backend: TB)
+      _bt = Nx.backend_transfer(t, Nx.BinaryBackend)
+
+      t
+      |> Nx.add(Nx.iota({5, 5}))
+      |> Nx.transpose()
+      |> Nx.backend_transfer(Nx.BinaryBackend)
+    end
+  end
 end

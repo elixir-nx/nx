@@ -150,8 +150,8 @@ NIF(to_blob)
     byte_size = limit * t->itemsize();
   }
 
-  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-  memcpy(result_data, t->data_ptr(), byte_size);
+  // Return existing data reference
+  result = enif_make_resource_binary(env, t, t->data_ptr(), byte_size);
 
   return result;
 }
