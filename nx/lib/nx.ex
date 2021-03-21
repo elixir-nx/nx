@@ -7934,7 +7934,7 @@ defmodule Nx do
         nil
 
       _ ->
-        raise ArgumentError, "incompatible dimensions for a and b on tringular solve"
+        raise ArgumentError, "incompatible dimensions for a and b on triangular solve"
     end
 
     assert_keys!(opts, [])
