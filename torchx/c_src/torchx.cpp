@@ -150,7 +150,7 @@ NIF(to_blob)
     byte_size = limit * t->itemsize();
   }
 
-  // Return existing data reference
+  // Return existing data
   result = enif_make_resource_binary(env, t, t->data_ptr(), byte_size);
 
   return result;

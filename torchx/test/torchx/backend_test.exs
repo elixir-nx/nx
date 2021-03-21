@@ -209,6 +209,8 @@ defmodule BackendTest do
       |> Nx.add(Nx.iota({5, 5}))
       |> Nx.transpose()
       |> Nx.backend_transfer(Nx.BinaryBackend)
+
+      t = nil
     end
   end
 end
