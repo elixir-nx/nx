@@ -425,23 +425,12 @@ defmodule Torchx.Backend do
       ),
       do: NIF.qr(to_ref(tensor), opts[:mode] == :reduced) |> from_pair_ref({q_holder, r_holder})
 
-  @big_tensor_threshold_bytes 10_000_000
-
   @impl true
-  def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
-    limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
-
+  def inspect(%T{} = tensor, inspect_opts) do
     result =
       if on_cpu?(tensor) do
-        byte_size = nbytes(tensor)
-        byte_limit = limit && limit * div(elem_size, 8)
-
-        if min(byte_limit, byte_size) > @big_tensor_threshold_bytes do
-          "Torchx tensor is too large to inspect. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
-        else
-          binary = to_blob(tensor, limit)
-          Nx.Backend.inspect(tensor, binary, inspect_opts)
-        end
+        binary = NIF.to_blob_view(to_ref(tensor))
+        Nx.Backend.inspect(tensor, binary, inspect_opts)
       else
         "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
       end

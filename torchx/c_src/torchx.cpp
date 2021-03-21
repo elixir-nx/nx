@@ -150,10 +150,17 @@ NIF(to_blob)
     byte_size = limit * t->itemsize();
   }
 
-  // Return existing data
-  result = enif_make_resource_binary(env, t, t->data_ptr(), byte_size);
+  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
+  memcpy(result_data, t->data_ptr(), byte_size);
 
   return result;
+}
+
+NIF(to_blob_view)
+{
+  TENSOR_PARAM(0, t);
+
+  return enif_make_resource_binary(env, t, t->data_ptr(), t->nbytes());
 }
 
 NIF(scalar_type)
@@ -720,6 +727,7 @@ static ErlNifFunc nif_functions[] = {
     F(strides, 1),
     F(device_of, 1),
     F(nbytes, 1),
+    F(to_blob_view, 1),
 };
 
 ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
