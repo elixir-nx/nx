@@ -2048,10 +2048,9 @@ defmodule Nx do
   """
   @doc type: :shape
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
+    output_type = binary_type(tensor, pad_value)
     tensor = tensor!(tensor)
     pad_value = tensor!(pad_value)
-
-    output_type = binary_type(tensor, pad_value)
 
     if pad_value.shape != {} do
       raise ArgumentError, "padding value must be a scalar"
@@ -5869,8 +5868,9 @@ defmodule Nx do
   @doc type: :aggregation
   def reduce(tensor, acc, opts \\ [], fun) when is_function(fun, 2) do
     assert_keys!(opts, [:axes, :type, :keep_axes])
-    keep_axes = opts[:keep_axes] || false
     type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, acc))
+    keep_axes = opts[:keep_axes] || false
+
     %{shape: shape, names: names} = tensor = tensor!(tensor)
     acc = tensor!(acc)
 
@@ -6799,6 +6799,7 @@ defmodule Nx do
       :output_permutation
     ])
 
+    type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
     strides = opts[:strides] || 1
     padding = opts[:padding] || :valid
     input_dilation = opts[:input_dilation] || 1
@@ -6863,7 +6864,6 @@ defmodule Nx do
         output_permutation
       )
 
-    type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
     out = %{tensor | type: type, shape: shape, names: names}
 
     impl!(tensor).conv(
@@ -7665,6 +7665,7 @@ defmodule Nx do
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
+    output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: s1 = {m, _}} = a = tensor!(a)
     %T{shape: {q}} = b = tensor!(b)
 
@@ -7678,7 +7679,6 @@ defmodule Nx do
     end
 
     assert_keys!(opts, [])
-    output_type = binary_type(a, b) |> Nx.Type.to_floating()
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, [])
   end
 
@@ -8016,6 +8016,10 @@ defmodule Nx do
     type = Nx.Type.infer(number)
     out = %T{shape: {}, type: type, names: []}
     Nx.BinaryBackend.from_binary(out, number_to_binary(number, type), [])
+  end
+
+  defp tensor!(t) do
+    raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
   end
 
   defp backend!(backend) when is_atom(backend),
