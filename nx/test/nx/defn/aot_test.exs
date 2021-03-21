@@ -21,7 +21,7 @@ defmodule Nx.Defn.AOTTest do
     tmp_dir = config.tmp_dir
     module = :"Elixir.Nx.Defn.AOTTest#{System.unique_integer([:positive])}"
 
-    :ok = Nx.Defn.export_aot(tmp_dir, module, functions, AOT)
+    :ok = Nx.Defn.export_aot(tmp_dir, module, functions, compiler: AOT)
 
     functions =
       for {name, _, args, _} <- functions do

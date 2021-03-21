@@ -42,8 +42,8 @@ defmodule Nx.Backend do
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
   @callback eye(tensor, backend_options) :: tensor
   @callback iota(tensor, axis | nil, backend_options) :: tensor
-  @callback random_uniform(tensor, number, number, backend_options) :: tensor
-  @callback random_normal(tensor, mu :: float, sigma :: float, backend_options) :: tensor
+  @callback random_uniform(tensor, tensor, tensor, backend_options) :: tensor
+  @callback random_normal(tensor, mu :: tensor, sigma :: tensor, backend_options) :: tensor
 
   @callback backend_deallocate(tensor) :: :ok | :already_deallocated
   @callback backend_copy(tensor, module, backend_options) :: tensor
@@ -90,6 +90,7 @@ defmodule Nx.Backend do
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
+  @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor, keyword) :: tensor
   @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
   binary_ops =

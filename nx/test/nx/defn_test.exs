@@ -158,12 +158,12 @@ defmodule Nx.DefnTest do
     end
 
     test "random uniform" do
-      assert %T{shape: {3}, data: %Expr{op: :random_uniform, args: [0.0, 2.0]}} =
+      assert %T{shape: {3}, data: %Expr{op: :random_uniform, args: [%T{shape: {}}, %T{shape: {}}]}} =
                random_uniform(Nx.tensor([1, 2, 3]))
     end
 
     test "random normal" do
-      assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [0.0, 1.0]}} =
+      assert %T{shape: {3}, data: %Expr{op: :random_normal, args: [%T{shape: {}}, %T{shape: {}}]}} =
                random_normal(Nx.tensor([1, 2, 3]))
     end
   end
@@ -780,9 +780,26 @@ defmodule Nx.DefnTest do
       (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr()
     end
 
+    defn transform_inspect_label(a, b) do
+      (Nx.tanh(a) + Nx.power(b, 3)) |> inspect_expr(label: "HELLO")
+    end
+
     test "executes the transformation" do
       assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
              #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a         s64
+               parameter c         s64
+               b = tanh [ a ]      f32
+               d = power [ c, 3 ]  s64
+               e = add [ b, d ]    f32
+             >
+             """
+
+      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect_label(1, 2) end) == """
+             HELLO: #Nx.Tensor<
                f32
              \s\s
                Nx.Defn.Expr
@@ -801,7 +818,7 @@ defmodule Nx.DefnTest do
     end
 
     defp private_back_and_forth(a) do
-      Nx.Defn.Evaluator = Process.get(Nx.Defn.Compiler)
+      Nx.Defn.Evaluator = Nx.Defn.Compiler.current()
       final_back_and_forth(a)
     end
 
@@ -826,7 +843,7 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&defn_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], Identity)
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
     end
 
     test "compiles elixir function" do
@@ -834,14 +851,14 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&elixir_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], Identity)
+      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], compiler: Identity)
     end
 
     test "raises if it doesn't return an expression" do
       assert_raise ArgumentError,
                    "defn must return a tensor expression or a tuple, got: :ok",
                    fn ->
-                     Nx.Defn.jit(fn -> :ok end, [], Nx.Defn.Evaluator).()
+                     Nx.Defn.jit(fn -> :ok end, [], compiler: Nx.Defn.Evaluator).()
                    end
     end
 

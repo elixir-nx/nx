@@ -169,7 +169,7 @@ defmodule Nx.Defn.Kernel do
   ### Examples
 
       defn tanh_grad(t) do
-        grad(t, Nx.tanh(t)) |> inspect_expr()
+        grad(t, &Nx.tanh/1) |> inspect_expr()
       end
 
   When invoked, it will print the expression being built by `defn`:
@@ -184,13 +184,8 @@ defmodule Nx.Defn.Kernel do
       >
 
   """
-  defmacro inspect_expr(expr) do
-    quote do
-      Nx.Defn.Kernel.transform(
-        unquote(expr),
-        &IO.inspect/1
-      )
-    end
+  def inspect_expr(expr, opts \\ []) do
+    IO.inspect(expr, opts)
   end
 
   @doc """
@@ -212,44 +207,53 @@ defmodule Nx.Defn.Kernel do
       rewrite_types(expr, max_float_type: {:f, 32})
 
   """
-  defmacro rewrite_types(expr, opts) do
-    quote do
-      Nx.Defn.Kernel.transform(
-        unquote(expr),
-        &Nx.Defn.Tree.rewrite_types(&1, unquote(opts))
-      )
-    end
+  def rewrite_types(expr, opts) do
+    Nx.Defn.Tree.rewrite_types(expr, opts)
   end
 
   @doc """
-  Computes the gradient of the given `var` on `expr`.
+  Computes the gradient of the given `var` on `fun`.
 
   ### Examples
 
       defn tanh_grad(t) do
-        grad(t, Nx.tanh(t))
+        grad(t, &Nx.tanh/&1)
       end
 
   To differentiate on multiple vars, pass a tuple as first argument:
 
       defn tanh_power_grad(a, b) do
-        grad({a, b}, Nx.tanh(a) + Nx.power(b, 2))
+        grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
       end
 
   When a tuple is given, a tuple will be returned.
+  """
+  def grad(var_or_vars, fun) when is_function(fun, 1) do
+    {_value, grad} = Nx.Defn.Grad.transform(var_or_vars, fun)
+    grad
+  end
 
-  Note you can also pass an already built expression to grad. For
-  example, if you want to return the result of an expression and its
-  gradient, you can do:
+  @doc """
+  Computes the value and gradient of the given `var` on `fun`.
 
-      defn tanh_power_grad(a, b) do
-        expr = Nx.tanh(a) + Nx.power(b, 2)
-        {expr, grad({a, b}, expr)}
+  It returns a tuple with the value and the gradient.
+
+  ### Examples
+
+      defn tanh_grad(t) do
+        value_and_grad(t, &Nx.tanh/&1)
       end
 
+  To differentiate on multiple vars, pass a tuple as first argument:
+
+      defn tanh_power_grad(a, b) do
+        value_and_grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
+      end
+
+  When a tuple is given, a tuple will be returned.
   """
-  def grad(var_or_vars, expr) do
-    Nx.Defn.Grad.transform(var_or_vars, expr)
+  def value_and_grad(var_or_vars, fun) when is_function(fun, 1) do
+    Nx.Defn.Grad.transform(var_or_vars, fun)
   end
 
   @doc """

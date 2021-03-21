@@ -216,22 +216,22 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_operator(:random_uniform, [min, max], %{type: type, shape: shape}, state) do
+  defp to_operator(:random_uniform, [min, max], %{type: type, shape: shape}, _state) do
     if match?({int, size} when int in [:s, :u] and size < 32, type) do
       raise ArgumentError,
             "Nx.random_uniform/4 for EXLA requires signed and unsigned tensors to be " <>
               "at least of size 32, got: #{elem(type, 1)}"
     end
 
-    min = to_constant(state.builder, min, type)
-    max = to_constant(state.builder, max, type)
+    min = to_type(min, type)
+    max = to_type(max, type)
     shape = EXLA.Shape.make_shape(type, shape)
     EXLA.Op.rng_uniform(min, max, shape)
   end
 
-  defp to_operator(:random_normal, [mu, sigma], %{type: type, shape: shape}, state) do
-    mu = to_constant(state.builder, mu, type)
-    sigma = to_constant(state.builder, sigma, type)
+  defp to_operator(:random_normal, [mu, sigma], %{type: type, shape: shape}, _state) do
+    mu = to_type(mu, type)
+    sigma = to_type(sigma, type)
     shape = EXLA.Shape.make_shape(type, shape)
     EXLA.Op.rng_normal(mu, sigma, shape)
   end
@@ -361,6 +361,19 @@ defmodule EXLA.Defn do
       |> EXLA.Op.broadcast_in_dim(shape, broadcast_axes(op_shape(on_false), shape))
 
     EXLA.Op.select(pred, on_true, on_false)
+  end
+
+  defp to_operator(:triangular_solve, [a, b, _opts], %{type: type}, _state) do
+    b_shape = EXLA.Op.get_shape(b).dims
+
+    b =
+      b
+      |> to_type(type)
+      |> EXLA.Op.reshape(Tuple.append(b_shape, 1))
+
+    to_type(a, type)
+    |> EXLA.Op.triangular_solve(b, true, true, false, :none)
+    |> EXLA.Op.reshape(b_shape)
   end
 
   defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do

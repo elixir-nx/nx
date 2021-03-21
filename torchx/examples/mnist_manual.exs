@@ -53,8 +53,6 @@ defmodule Torchx.MNIST do
         |> Nx.as_type({:s, 8})
       )
 
-    total = Nx.tensor(total)
-
     avg_loss = Nx.add(avg_loss, Nx.divide(batch_loss, total))
     avg_accuracy = Nx.add(avg_accuracy, Nx.divide(batch_accuracy, total))
 
@@ -106,7 +104,7 @@ defmodule Torchx.MNIST do
       images
       |> Nx.from_binary({:u, 8})
       |> Nx.reshape({n_images, n_rows * n_cols}, names: [:batch, :input])
-      |> Nx.divide(Nx.tensor(255))
+      |> Nx.divide(255)
       |> Nx.to_batched_list(@batch_size)
 
     IO.puts("#{n_images} #{n_rows}x#{n_cols} images\n")

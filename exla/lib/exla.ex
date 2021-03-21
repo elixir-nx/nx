@@ -154,7 +154,7 @@ defmodule EXLA do
   See the moduledoc for options.
   """
   def jit(function, args, options \\ []) do
-    Nx.Defn.jit(function, args, EXLA, options)
+    Nx.Defn.jit(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
   @doc """
@@ -172,7 +172,7 @@ defmodule EXLA do
   See the moduledoc for options.
   """
   def async(function, args, options \\ []) do
-    Nx.Defn.async(function, args, EXLA, options)
+    Nx.Defn.async(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
   @doc """
@@ -189,7 +189,7 @@ defmodule EXLA do
   See `export_aot/4` for options.
   """
   def aot(module, functions, options \\ []) do
-    Nx.Defn.aot(module, functions, EXLA, options)
+    Nx.Defn.aot(module, functions, Keyword.put(options, :compiler, EXLA))
   end
 
   @doc """
@@ -261,7 +261,7 @@ defmodule EXLA do
 
   """
   def export_aot(dir, module, functions, options \\ []) do
-    Nx.Defn.export_aot(dir, module, functions, EXLA, options)
+    Nx.Defn.export_aot(dir, module, functions, Keyword.put(options, :compiler, EXLA))
   end
 
   @impl true

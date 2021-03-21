@@ -329,8 +329,11 @@ defmodule Nx.Shared do
   def binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(type(a), b)
   def binary_type(a, b), do: Nx.Type.merge(type(a), type(b))
 
+  # For unknown types, return {:f, 32} as the caller
+  # should validate the input in a later pass.
   defp type(%T{type: type}), do: type
-  defp type(type), do: type
+  defp type({_, _} = type), do: type
+  defp type(_other), do: {:f, 32}
 
   ## Helpers
 

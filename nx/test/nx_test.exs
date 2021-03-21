@@ -813,7 +813,7 @@ defmodule NxTest do
     end
 
     test "raises for invalid shapes" do
-      assert_raise(ArgumentError, ~r/invalid dimension :blep/, fn ->
+      assert_raise(ArgumentError, ~r/invalid dimension in axis 2/, fn ->
         Nx.shape({1, 2, :blep})
       end)
     end
@@ -896,7 +896,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        ~r/padding must be :valid or :same, or a padding configuration/,
+        ~r/invalid padding mode specified/,
         fn ->
           Nx.window_max(t, {2}, padding: :whatever)
         end
@@ -947,7 +947,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        ~r/padding must be :valid or :same, or a padding configuration/,
+        ~r/invalid padding mode specified/,
         fn ->
           Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
         end
@@ -962,6 +962,12 @@ defmodule NxTest do
       out = Nx.dot(t, 3)
       assert Nx.shape(out) == {1, 3}
       assert out == Nx.tensor([[3, 6, 9]])
+    end
+
+    test "raises readable error on invalid inputs" do
+      assert_raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: nil", fn ->
+        Nx.dot(Nx.tensor([1, 2, 3]), nil)
+      end
     end
   end
 
@@ -1077,7 +1083,7 @@ defmodule NxTest do
     end
 
     test "raises when :input_dilation is not positive" do
-      message = ~r/input dilation must be a positive integer/
+      message = ~r/input dilation of each dimension must be a positive integer/
       conv_raise_for_options(message, input_dilation: 0)
     end
 
@@ -1113,7 +1119,7 @@ defmodule NxTest do
 
     # kernel dilation
     test "raises when :kernel_dilation is not positive" do
-      message = ~r/kernel dilation must be a positive integer/
+      message = ~r/kernel dilation of each dimension must be a positive integer/
       conv_raise_for_options(message, kernel_dilation: 0)
     end
 
@@ -1262,10 +1268,36 @@ defmodule NxTest do
       assert t1 != t2
     end
 
+    test "works with tensor mu/sigma" do
+      t = Nx.random_normal({3, 3}, Nx.tensor(1.0), Nx.tensor(1.0))
+      assert Nx.shape(t) == {3, 3}
+      assert Nx.type(t) == {:f, 32}
+    end
+
     test "raises with non-float type" do
       assert_raise(ArgumentError, "random_normal/3 expects float type, got: {:s, 32}", fn ->
         Nx.random_normal(1, 0.1, 10.0, type: {:s, 32})
       end)
+    end
+
+    test "raises with non-float sigma/mu" do
+      assert_raise(
+        ArgumentError,
+        "random_normal/3 expects mu and sigma to be float types, got: mu type: {:s, 64} and sigma type: {:s, 64}",
+        fn ->
+          Nx.random_normal({}, Nx.tensor(1), Nx.tensor(0))
+        end
+      )
+    end
+
+    test "raises with non-scalar shapes" do
+      assert_raise(
+        ArgumentError,
+        "random_normal/3 expects mu and sigma to be scalars got: mu shape: {2} and sigma shape: {2}",
+        fn ->
+          Nx.random_normal({}, Nx.tensor([1.0, 2.0]), Nx.tensor([1.0, 2.0]))
+        end
+      )
     end
   end
 
@@ -1285,6 +1317,12 @@ defmodule NxTest do
       assert t1 != t2
     end
 
+    test "works with tensor min/max" do
+      t = Nx.random_uniform({2}, Nx.tensor(-1.0), Nx.tensor(5.0))
+      assert Nx.shape(t) == {2}
+      assert Nx.type(t) == {:f, 32}
+    end
+
     test "works with compatible types" do
       t = Nx.random_uniform(1, 0, 10, type: {:s, 32})
       assert Nx.shape(t) == {}
@@ -1297,6 +1335,16 @@ defmodule NxTest do
         "random_uniform/3 expects compatible types, got: {:s, 32} with range {:f, 32}",
         fn ->
           Nx.random_uniform(1, 0.1, 10.0, type: {:s, 32})
+        end
+      )
+    end
+
+    test "raises for incompatible shapes" do
+      assert_raise(
+        ArgumentError,
+        "random_uniform/3 expects min and max to be scalars, got: min shape: {3} and max shape: {3}",
+        fn ->
+          Nx.random_uniform(1, Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([1.0, 2.0, 3.0]))
         end
       )
     end
