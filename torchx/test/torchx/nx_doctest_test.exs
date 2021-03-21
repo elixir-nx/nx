@@ -1,6 +1,9 @@
 defmodule Torchx.NxDoctestTest do
   @moduledoc """
-  # Why some doctests are excluded?
+  Import Nx' doctest and run them on the Torchx backend.
+
+  Many tests are excluded for the reasons below, coverage
+  for the excluded tests can be found on Torchx.BackendTest.
 
   ## Not callbacks
 
@@ -47,6 +50,8 @@ defmodule Torchx.NxDoctestTest do
     * bitcast/2
 
   """
+
+  # TODO: Add backend tests for the doctests that are excluded
 
   use ExUnit.Case, async: true
 

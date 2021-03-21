@@ -1,4 +1,4 @@
-defmodule BackendTest do
+defmodule Torchx.BackendTest do
   use ExUnit.Case, async: true
 
   alias Torchx.Backend, as: TB
