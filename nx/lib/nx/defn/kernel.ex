@@ -546,24 +546,6 @@ defmodule Nx.Defn.Kernel do
   def left ||| right, do: Nx.bitwise_or(left, right)
 
   @doc """
-  Element-wise bitwise XOR operation.
-
-  Only integer tensors are supported.
-  It delegates to `Nx.bitwise_xor/2` (supports broadcasting).
-
-  ## Examples
-
-      defn and_or_xor(a, b) do
-        {a &&& b, a ||| b, a ^^^ b}
-      end
-
-  """
-  def left ^^^ right when Kernel.and(is_number(left), is_number(right)),
-    do: Bitwise.^^^(left, right)
-
-  def left ^^^ right, do: Nx.bitwise_xor(left, right)
-
-  @doc """
   Element-wise bitwise not operation.
 
   Only integer tensors are supported.

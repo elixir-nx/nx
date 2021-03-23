@@ -315,13 +315,6 @@ defmodule EXLA.DefnExprTest do
       assert bitwise_or(@left, @right) == Nx.bitwise_or(@left, @right)
     end
 
-    defn bitwise_xor(a, b), do: a ^^^ b
-
-    test "bitwise_xor" do
-      assert Nx.shape(bitwise_xor(@left, @right)) == {5, 5}
-      assert bitwise_xor(@left, @right) == Nx.bitwise_xor(@left, @right)
-    end
-
     defn bitwise_not(a), do: ~~~a
 
     test "bitwise_not" do

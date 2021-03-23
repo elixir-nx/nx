@@ -65,10 +65,6 @@ defmodule Nx.Defn.KernelTest do
       assert Nx.Defn.Kernel.|||(1, 2) == 3
     end
 
-    test "^^^" do
-      assert Nx.Defn.Kernel.^^^(1, 2) == 3
-    end
-
     test "<<<" do
       assert Nx.Defn.Kernel.<<<(1, 2) == 4
     end

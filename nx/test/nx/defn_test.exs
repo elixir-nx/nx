@@ -403,12 +403,6 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :bitwise_or, args: [_, _]}} = bor_two(1, 2)
     end
 
-    defn bxor_two(a, b), do: a ^^^ b
-
-    test "^^^" do
-      assert %T{data: %Expr{op: :bitwise_xor, args: [_, _]}} = bxor_two(1, 2)
-    end
-
     defn bsl_two(a, b), do: a <<< b
 
     test "<<<" do
