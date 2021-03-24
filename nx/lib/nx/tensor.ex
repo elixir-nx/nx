@@ -43,6 +43,7 @@ defmodule Nx.Tensor do
   def fetch(tensor, index) when is_integer(index),
     do: {:ok, fetch_axes(tensor, [{0, index}])}
 
+  # TODO: Match on _.._//_ on Elixir v1.12
   def fetch(tensor, _.._ = range),
     do: {:ok, fetch_axes(tensor, [{0, range}])}
 
@@ -93,6 +94,7 @@ defmodule Nx.Tensor do
         index = normalize_index(index, axis, shape)
         fetch_axes(axis - 1, axes, shape, [index | start], [1 | lengths], [axis | squeeze])
 
+      # TODO: Raise on stepped ranges on _.._//_ on Elixir v1.12
       {{^axis, first..last}, axes} ->
         first = normalize_index(first, axis, shape)
         last = normalize_index(last, axis, shape)
