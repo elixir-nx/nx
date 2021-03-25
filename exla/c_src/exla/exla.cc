@@ -76,6 +76,9 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
     return -1;
   }
+  if (!exla::nif::open_resource<xla::Literal>(env, mod, "Literal")) {
+    return -1;
+  }
   return 1;
 }
 

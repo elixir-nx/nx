@@ -188,16 +188,12 @@ ERL_NIF_TERM LiteralToList(ErlNifEnv* env, xla::Literal& literal) {
   data.reserve(elems);
 
   for (int i=0; i < elems; i++) {
-    xla::Literal lit(std::move(literals.at(i)));
-    int64 size = lit.size_bytes();
-    ErlNifBinary binary;
-    enif_alloc_binary(size, &binary);
-
-    void *src_mem = const_cast<void*>(lit.untyped_data());
-    std::memcpy(binary.data, src_mem, size);
-
-    ERL_NIF_TERM term = enif_make_binary(env, &binary);
-    data.push_back(term);
+    void * ptr = enif_alloc_resource(nif::resource_object<xla::Literal>::type, sizeof(xla::Literal));
+    xla::Literal* lit = new(ptr) xla::Literal(std::move(literals.at(i)));
+    int64 size = lit->size_bytes();
+    ERL_NIF_TERM bin_term = enif_make_resource_binary(env, ptr, lit->untyped_data(), size);
+    enif_release_resource(ptr);
+    data.push_back(bin_term);
   }
   return enif_make_list_from_array(env, &data[0], elems);
 }
