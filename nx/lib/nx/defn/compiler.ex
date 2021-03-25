@@ -95,8 +95,8 @@ defmodule Nx.Defn.Compiler do
     {export_tuples, compiler_tuples} =
       tuples
       |> Enum.map(fn {name, fun, args, opts} ->
-        tensors = Nx.Defn.Tree.from_nested_args(args)
-        templates = Nx.Defn.Tree.to_nested_templates(args, tensors)
+        tensors = Nx.Defn.Tree.from_runtime_args(args)
+        templates = Nx.Defn.Tree.args_to_templates(args, tensors)
 
         export_tuple = {name, templates}
         runtime_fun = &runtime_fun(&1, fun, args, compiler)
@@ -115,8 +115,8 @@ defmodule Nx.Defn.Compiler do
 
     case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
       {:ok, results, nif} ->
-        tensors = Nx.Defn.Tree.from_nested_args(results)
-        results = Nx.Defn.Tree.to_nested_templates(results, tensors)
+        tensors = Nx.Defn.Tree.from_runtime_args(results)
+        results = Nx.Defn.Tree.args_to_templates(results, tensors)
 
         # TODO: Use Enum.zip_with on Elixir v1.12
         {export_tuples, []} =
@@ -272,7 +272,7 @@ defmodule Nx.Defn.Compiler do
 
   defp runtime(callback, fun, args, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-    tensors = Nx.Defn.Tree.from_nested_args(args)
+    tensors = Nx.Defn.Tree.from_runtime_args(args)
     runtime_fun = &runtime_fun(&1, fun, args, compiler)
     Kernel.apply(compiler, callback, [fun, tensors, runtime_fun, opts])
   end
@@ -285,7 +285,7 @@ defmodule Nx.Defn.Compiler do
     Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      args = Nx.Defn.Tree.to_nested_params(args, tensors)
+      args = Nx.Defn.Tree.args_to_params(args, tensors)
 
       fun
       |> apply(args)
@@ -331,34 +331,48 @@ defmodule Nx.Defn.Compiler do
     {:__block__, [], quoted}
   end
 
-  defp compile_each({{name, _arity} = def, def_meta}, state) do
+  defp compile_each({{name, arity} = def, def_meta}, state) do
+    %{compiler: {def_module, def_opts}, defaults: def_defaults} = def_meta
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
-    {nx_args, cache_args, cache_vars} = split_args(args, 0, def_meta.defaults, [], [], [])
-    flat_args = collect_vars(nx_args)
-    {def_module, def_opts} = def_meta.compiler
     defn_name = defn_name(name)
 
-    cache =
-      quote do
-        fn unquote_splicing(cache_vars) -> unquote(defn_name)(unquote_splicing(cache_args)) end
+    all_args = Macro.generate_arguments(arity, __MODULE__)
+    fn_args = for {arg, i} <- Enum.with_index(all_args), i not in def_defaults, do: arg
+
+    fun =
+      if def_defaults == [] do
+        quote do
+          (&unquote(Macro.var(defn_name, __MODULE__))/unquote(arity))
+        end
+      else
+        quote do
+          fn unquote_splicing(fn_args) -> unquote(defn_name)(unquote_splicing(all_args)) end
+        end
       end
 
     quote line: state.line do
       Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
 
-      Kernel.unquote(kind)(unquote(name)(unquote_splicing(args))) do
+      Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
         if Process.get(Nx.Defn.Compiler) do
-          unquote(defn_name)(unquote_splicing(args))
+          unquote(defn_name)(unquote_splicing(all_args))
         else
+          fun = unquote(fun)
+          args = unquote(fn_args)
+          {cache, tensors} = Nx.Defn.Tree.from_compile_args(args, fun)
+
           unquote(def_module).__jit__(
-            unquote(cache),
-            Nx.Defn.Tree.from_flat_args(unquote(flat_args)),
-            fn unquote(flat_args) ->
+            cache,
+            Nx.Defn.Tree.from_runtime_args(tensors),
+            fn tensors ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
 
               try do
-                unquote(flat_args) = Nx.Defn.Tree.to_flat_params(unquote(flat_args))
-                Nx.Defn.Tree.to_result(unquote(defn_name)(unquote_splicing(args)))
+                args = Nx.Defn.Tree.args_to_params(args, tensors)
+
+                fun
+                |> apply(args)
+                |> Nx.Defn.Tree.to_result()
               after
                 Process.delete(Nx.Defn.Compiler)
               end
@@ -372,31 +386,6 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp split_args([arg | args], i, defaults, nx, cache, vars) do
-    if i in defaults do
-      split_args(args, i + 1, defaults, nx, [arg | cache], vars)
-    else
-      var = Macro.var(:"arg#{i}", __MODULE__)
-      split_args(args, i + 1, defaults, [arg | nx], [var | cache], [var | vars])
-    end
-  end
-
-  defp split_args([], _, _, nx, cache, vars),
-    do: {Enum.reverse(nx), Enum.reverse(cache), Enum.reverse(vars)}
-
-  defp collect_vars(args) do
-    {_, vars} =
-      Macro.prewalk(args, [], fn
-        var, acc when is_var(var) and not is_underscore(var) ->
-          {var, [var | acc]}
-
-        node, acc ->
-          {node, acc}
-      end)
-
-    Enum.reverse(vars)
-  end
-
   defp get_and_normalize_definition(def, state) do
     {:v1, kind, meta, clauses} = Nx.Defn.Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
@@ -408,14 +397,7 @@ defmodule Nx.Defn.Compiler do
       [{meta, args, [], ast}] ->
         {args, state} = normalize_args(args, meta, state)
         {ast, state} = normalize(ast, %{state | rewrite_underscore?: false})
-
-        case extract_assigns(args, state) do
-          {_, []} ->
-            {{kind, meta, args, ast}, state}
-
-          {args, assigns} ->
-            {{kind, meta, args, {:__block__, meta, assigns ++ [ast]}}, state}
-        end
+        {{kind, meta, args, ast}, state}
 
       [_, _ | _] ->
         compile_error!(meta, state, "cannot compile #{kind}n with multiple clauses")
@@ -666,30 +648,6 @@ defmodule Nx.Defn.Compiler do
     end)
 
     :ok
-  end
-
-  defp extract_assigns(args, state) do
-    Macro.prewalk(args, [], fn
-      {:=, meta, [left, right]} = expr, acc ->
-        cond do
-          is_var(left) ->
-            {right, [{:=, meta, [left, right]} | acc]}
-
-          is_var(right) ->
-            {left, [{:=, meta, [right, left]} | acc]}
-
-          true ->
-            compile_error!(
-              meta,
-              state,
-              "using = in arguments expects at least one of the sides to be a variable, " <>
-                "got: #{Macro.to_string(expr)}"
-            )
-        end
-
-      node, acc ->
-        {node, acc}
-    end)
   end
 
   ## Helpers
