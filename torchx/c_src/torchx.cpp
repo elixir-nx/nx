@@ -65,8 +65,10 @@ inline std::string type2string(const torch::ScalarType type)
 #define SCALAR(S)                                            \
   try                                                        \
   {                                                          \
-    return nx::nif::ok(env, nx::nif::make(env,               \
-       S.isIntegral(true) ? S.to<int>() : S.to<double>())); \
+    if (c10::isFloatingType(S.type()))                       \
+      return nx::nif::ok(env, nx::nif::make(env, S.toDouble())); \
+    else                                                     \
+      return nx::nif::ok(env, nx::nif::make(env, (long)S.toLong())); \
   }                                                          \
   CATCH()
 

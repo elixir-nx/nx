@@ -148,8 +148,8 @@ defmodule Torchx.Backend do
   @impl true
   def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max, backend_options)
       when s in [:u, :s] do
-    min = to_scalar(min) |> trunc()
-    max = to_scalar(max) |> trunc()
+    min = to_scalar(min)
+    max = to_scalar(max)
     NIF.randint(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
