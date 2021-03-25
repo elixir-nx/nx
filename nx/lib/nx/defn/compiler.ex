@@ -489,6 +489,12 @@ defmodule Nx.Defn.Compiler do
     {{name, [counter: version, generated: true] ++ meta, ctx}, state}
   end
 
+  defp normalize({{:., dot_meta, [fun]}, meta, args}, state) do
+    {fun, state} = normalize(fun, state)
+    {args, state} = normalize_list(args, state)
+    {{{:., dot_meta, [fun]}, meta, args}, state}
+  end
+
   defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
     if name in @forbidden_ops do
       compile_error!(meta, state, "Nx.#{name}/#{length(args)} is not allowed inside defn")

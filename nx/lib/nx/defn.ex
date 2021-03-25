@@ -95,9 +95,10 @@ defmodule Nx.Defn do
 
   ## Inputs and outputs types
 
-  The inputs to `defn` functions must be either tuples, numbers,
-  or tensors. To pass any other values to numerical definitions,
-  they must be declared as default arguments (see next subsection).
+  The arguments to `defn` functions must be either tensors, numbers,
+  anonymous functions, or tuples of tensors and numbers. To pass any
+  other values to numerical definitions, they must be declared as
+  default arguments (see next subsection).
 
   `defn` functions can only return tensors or tuples of tensors.
 

@@ -260,7 +260,10 @@ defmodule Nx.Defn.Tree do
   end
 
   defp args_to(args, acc, fun) when is_list(args) do
-    Enum.map_reduce(args, acc, &args_to_each(&1, &2, fun))
+    Enum.map_reduce(args, acc, fn
+      arg, acc when is_function(arg) -> {arg, acc}
+      arg, acc -> args_to_each(arg, acc, fun)
+    end)
   end
 
   defp args_to_each(arg, acc, fun) when is_tuple(arg) do

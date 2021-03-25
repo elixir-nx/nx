@@ -80,6 +80,18 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "anonymous functions args" do
+    defn calls_binary_fun(fun, a, b), do: fun.(a, b)
+
+    test "calls anonymous function" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               calls_binary_fun(&Nx.add/2, 1, 2.0)
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+  end
+
   describe "unary ops" do
     defn exp(t), do: Nx.exp(t)
 
