@@ -51,87 +51,105 @@ defmodule Nx.Defn.EvaluatorTest do
     assert %T{shape: {3, 2}, type: {:s, 64}} = reshape(Nx.iota({2, 3}))
   end
 
-  defn lu(t), do: Nx.lu(t)
+  describe "decompositions" do
+    defn lu(t), do: Nx.lu(t)
 
-  test "lu" do
-    assert {p, l, u} = lu(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
-    assert p == Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-    assert l == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-    assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
+    test "lu" do
+      assert {p, l, u} = lu(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
+      assert p == Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+      assert l == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+      assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
+    end
+
+    defn qr(t), do: Nx.qr(t)
+
+    test "qr" do
+      assert {q, r} = qr(Nx.iota({3, 2}))
+      assert q == Nx.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
+      assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
+    end
+
+    defn svd(t), do: Nx.svd(t)
+
+    test "svd" do
+      assert {u, s, vt} = svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
+      assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+      assert s == Nx.tensor([1.0, 1.0, 1.0])
+      assert vt == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
+    end
   end
 
-  defn qr(t), do: Nx.qr(t)
+  describe "if" do
+    defn if3(a, b, c), do: if(a, do: b, else: c)
 
-  test "qr" do
-    assert {q, r} = qr(Nx.iota({3, 2}))
-    assert q == Nx.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
-    assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
+    test "simple" do
+      assert if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(2, type: {:f, 32})
+
+      assert if3(Nx.tensor(1), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(1, type: {:f, 32})
+
+      assert if3(Nx.tensor(2), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
+               Nx.tensor(1, type: {:f, 32})
+
+      assert if3(Nx.tensor(0), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[3, 3], [4, 4]])
+
+      assert if3(Nx.tensor(1), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
+               Nx.tensor([[1, 2], [1, 2]])
+    end
+
+    defn if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
+
+    test "with tuples" do
+      assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
+               {{Nx.tensor(20), Nx.tensor(10)}, Nx.tensor(0)}
+
+      assert if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
+               {{Nx.tensor(1), Nx.tensor(10)}, Nx.tensor(20)}
+
+      assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {{Nx.tensor([20, 30]), Nx.tensor(10)}, Nx.tensor([0, 0])}
+
+      assert if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {{Nx.tensor([1, 1]), Nx.tensor(10)}, Nx.tensor([20, 30])}
+    end
+
+    defn if_tuple_match(a, b, c) do
+      {{x, y}, z} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
+      x * y - z
+    end
+
+    test "with matched tuples" do
+      assert if_tuple_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(200)
+      assert if_tuple_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(-10)
+    end
+
+    defn if_tuple_return(a, b, c) do
+      {xy, _} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
+      xy
+    end
+
+    test "with return tuple" do
+      assert if_tuple_return(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
+               {Nx.tensor(20), Nx.tensor(10)}
+
+      assert if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
+               {Nx.tensor(1), Nx.tensor(10)}
+    end
   end
 
-  defn svd(t), do: Nx.svd(t)
+  describe "anonymous functions args" do
+    defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
-  test "svd" do
-    assert {u, s, vt} = svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
-    assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-    assert s == Nx.tensor([1.0, 1.0, 1.0])
-    assert vt == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
-  end
+    test "calls anonymous function directly" do
+      assert calls_binary_fun(&Nx.add/2, 1, 2.0) == Nx.tensor(3.0)
+    end
 
-  defn if3(a, b, c), do: if(a, do: b, else: c)
+    defn calls_reduce_fun(fun, t), do: Nx.reduce(t, 0, fun)
 
-  test "if" do
-    assert if3(Nx.tensor(0), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
-             Nx.tensor(2, type: {:f, 32})
-
-    assert if3(Nx.tensor(1), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
-             Nx.tensor(1, type: {:f, 32})
-
-    assert if3(Nx.tensor(2), Nx.tensor(1, type: {:s, 16}), Nx.tensor(2, type: {:f, 32})) ==
-             Nx.tensor(1, type: {:f, 32})
-
-    assert if3(Nx.tensor(0), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
-             Nx.tensor([[3, 3], [4, 4]])
-
-    assert if3(Nx.tensor(1), Nx.tensor([1, 2]), Nx.tensor([[3], [4]])) ==
-             Nx.tensor([[1, 2], [1, 2]])
-  end
-
-  defn if_tuple(a, b, c), do: if(a, do: {{a, b}, c}, else: {{c, b}, a})
-
-  test "if with tuples" do
-    assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
-             {{Nx.tensor(20), Nx.tensor(10)}, Nx.tensor(0)}
-
-    assert if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
-             {{Nx.tensor(1), Nx.tensor(10)}, Nx.tensor(20)}
-
-    assert if_tuple(Nx.tensor(0), Nx.tensor(10), Nx.tensor([20, 30])) ==
-             {{Nx.tensor([20, 30]), Nx.tensor(10)}, Nx.tensor([0, 0])}
-
-    assert if_tuple(Nx.tensor(1), Nx.tensor(10), Nx.tensor([20, 30])) ==
-             {{Nx.tensor([1, 1]), Nx.tensor(10)}, Nx.tensor([20, 30])}
-  end
-
-  defn if_tuple_match(a, b, c) do
-    {{x, y}, z} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
-    x * y - z
-  end
-
-  test "if with matched tuples" do
-    assert if_tuple_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(200)
-    assert if_tuple_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(-10)
-  end
-
-  defn if_tuple_return(a, b, c) do
-    {xy, _} = if(a, do: {{a, b}, c}, else: {{c, b}, a})
-    xy
-  end
-
-  test "if with return tuple" do
-    assert if_tuple_return(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
-             {Nx.tensor(20), Nx.tensor(10)}
-
-    assert if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
-             {Nx.tensor(1), Nx.tensor(10)}
+    test "calls anonymous function via reduce" do
+      assert calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3])) == Nx.tensor(6)
+    end
   end
 end
