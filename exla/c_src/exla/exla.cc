@@ -76,6 +76,9 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
     return -1;
   }
+  if (!exla::nif::open_resource<xla::Literal>(env, mod, "Literal")) {
+    return -1;
+  }
   return 1;
 }
 
@@ -223,9 +226,9 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     return exla::nif::ok(env);
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*buffer)->ToBinary(), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM binary, (*buffer)->ToBinary(env), env);
 
-  return exla::nif::ok(env, exla::nif::make(env, binary));
+  return exla::nif::ok(env, binary);
 }
 
 ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
