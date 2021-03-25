@@ -148,16 +148,22 @@ defmodule Torchx.Backend do
   @impl true
   def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max, backend_options)
       when s in [:u, :s] do
+    min = to_scalar(min)
+    max = to_scalar(max)
     NIF.randint(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
       when f in [:f, :bf] do
+    min = to_scalar(min)
+    max = to_scalar(max)
     NIF.rand(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   @impl true
   def random_normal(%T{type: type, shape: shape} = out, mu, sigma, backend_options) do
+    mu = to_scalar(mu)
+    sigma = to_scalar(sigma)
     NIF.normal(mu, sigma, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
@@ -497,6 +503,9 @@ defmodule Torchx.Backend do
   defp to_tensor(ref, %T{type: type, shape: shape} = t) do
     %{t | data: %__MODULE__{ref: check_shape_and_type!(ref, shape, type)}}
   end
+
+  defp to_scalar(n) when is_number(n), do: n
+  defp to_scalar(%T{} = t), do: NIF.item(to_ref(t)) |> unwrap!()
 
   if Application.get_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(ref, shape, type) do

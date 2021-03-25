@@ -133,6 +133,11 @@ namespace nx
       return enif_make_int(env, var);
     }
 
+    ERL_NIF_TERM make(ErlNifEnv *env, double var)
+    {
+      return enif_make_double(env, var);
+    }
+
     ERL_NIF_TERM make(ErlNifEnv *env, ErlNifBinary var)
     {
       return enif_make_binary(env, &var);

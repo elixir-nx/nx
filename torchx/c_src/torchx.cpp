@@ -62,6 +62,17 @@ inline std::string type2string(const torch::ScalarType type)
     return nx::nif::error(env, msg.str().c_str());           \
   }
 
+#define SCALAR(S)                                            \
+  try                                                        \
+  {                                                          \
+    if (c10::isFloatingType(S.type()))                       \
+      return nx::nif::ok(env, nx::nif::make(env, S.toDouble())); \
+    else                                                     \
+      return nx::nif::ok(env, nx::nif::make(env, (long)S.toLong())); \
+  }                                                          \
+  CATCH()
+
+
 #define TENSOR(T)                                            \
   try                                                        \
   {                                                          \
@@ -161,6 +172,13 @@ NIF(to_blob_view)
   TENSOR_PARAM(0, t);
 
   return enif_make_resource_binary(env, t, t->data_ptr(), t->nbytes());
+}
+
+NIF(item)
+{
+  TENSOR_PARAM(0, t);
+
+  SCALAR(t->item());
 }
 
 NIF(scalar_type)
@@ -721,6 +739,7 @@ static ErlNifFunc nif_functions[] = {
     DF(cuda_is_available, 0),
     DF(cuda_device_count, 0),
 
+    F(item, 1),
     F(scalar_type, 1),
     F(shape, 1),
     F(names, 1),
