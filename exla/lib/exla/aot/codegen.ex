@@ -188,7 +188,7 @@ defmodule EXLA.AOT.Codegen do
       unsigned num_threads = std::thread::hardware_concurrency();
       Eigen::ThreadPool tp(num_threads);
       Eigen::ThreadPoolDevice device(&tp, tp.NumThreads());
-      #{class_name} #{name}_#{arity}(#{class_name}::AllocMode::RESULTS_PROFILES_AND_TEMPS_ONLY);
+      #{class_name} #{name}_#{arity};
       #{name}_#{arity}.set_thread_pool(&device);
       #{args_str}
       #{run_str}
