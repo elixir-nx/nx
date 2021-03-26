@@ -163,7 +163,7 @@ IO.puts("AOT-compiling a trained neural network that predicts a batch")
 Nx.Defn.aot(
   MNIST.Trained,
   [{:predict, &MNIST.predict(final_params, &1), [Nx.template({30, 784}, {:f, 32})]}],
-  EXLA
+  compiler: EXLA
 )
 
 IO.puts("The result of the first batch against the AOT-compiled one")

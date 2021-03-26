@@ -29,7 +29,7 @@ Nx.Defn.aot(
     {:softmax_64, &Softmax.softmax/1, [t64]},
     {:softmax_32, &Softmax.softmax/1, [t32]},
   ],
-  EXLA
+  compiler: EXLA
 )
 
 IO.inspect(AOTSoftmax.softmax_32(t32))
