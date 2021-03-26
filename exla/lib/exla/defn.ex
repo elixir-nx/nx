@@ -55,11 +55,11 @@ defmodule EXLA.Defn do
     {buffers, holes, executable} = compile(key, vars, fun, compile_options)
 
     async_exec = EXLA.Executable.async_run(executable, buffers, run_options)
-    %EXLA.Async{executable: async_exec, holes: holes}
+    %EXLA.Defn.Async{executable: async_exec, holes: holes}
   end
 
   @doc false
-  def __await__(%EXLA.Async{executable: async_exec, holes: holes}) do
+  def __await__(%EXLA.Defn.Async{executable: async_exec, holes: holes}) do
     async_exec
     |> EXLA.Executable.await_run()
     |> buffer_to_nx(holes)

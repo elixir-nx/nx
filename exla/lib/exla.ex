@@ -162,7 +162,7 @@ defmodule EXLA do
 
       iex> async = EXLA.async(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
       iex> async
-      #EXLA.Async<...>
+      #EXLA.Defn.Async<...>
       iex> Nx.Async.await!(async)
       #Nx.Tensor<
         f32[3]

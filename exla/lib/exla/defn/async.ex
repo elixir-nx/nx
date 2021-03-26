@@ -1,4 +1,4 @@
-defmodule EXLA.Async do
+defmodule EXLA.Defn.Async do
   @moduledoc false
 
   @derive {Inspect, only: []}
