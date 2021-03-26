@@ -14,14 +14,11 @@ defmodule EXLA.Defn do
     comps_and_exprs =
       for {name, fun, vars, options} <- tuples do
         expr = fun.(vars)
+        inputs = inputs(expr)
+        inputs_and_shapes = aot_shapes(vars, 0, inputs)
 
-        shapes =
-          for %{shape: shape, type: type} <- vars do
-            EXLA.Shape.make_shape(type, shape)
-          end
-
-        computation = to_root_computation(name, expr, shapes, options)
-        {{computation, name, shapes}, expr}
+        computation = to_root_computation(name, expr, inputs_and_shapes, options)
+        {{computation, name, length(vars), inputs_and_shapes}, expr}
       end
 
     {comps, exprs} = Enum.unzip(comps_and_exprs)
@@ -33,6 +30,16 @@ defmodule EXLA.Defn do
       {:error, exception} -> {:error, exception}
     end
   end
+
+  defp aot_shapes([%{shape: shape, type: type} | vars], i, [i | inputs]) do
+    [{i, EXLA.Shape.make_shape(type, shape)} | aot_shapes(vars, i + 1, inputs)]
+  end
+
+  defp aot_shapes([_var | vars], i, inputs) do
+    aot_shapes(vars, i + 1, inputs)
+  end
+
+  defp aot_shapes([], _i, []), do: []
 
   defp aot_runtimes(%T{data: %Expr{op: :fun, args: args}}, acc) do
     [_, expr, _] = args
@@ -52,78 +59,89 @@ defmodule EXLA.Defn do
   @doc false
   def __async__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-    {buffers, holes, executable} = compile(key, vars, fun, compile_options)
+    {buffers, outputs, executable} = compile(key, vars, fun, compile_options)
 
     async_exec = EXLA.Executable.async_run(executable, buffers, run_options)
-    %EXLA.Defn.Async{executable: async_exec, holes: holes}
+    %EXLA.Defn.Async{executable: async_exec, outputs: outputs}
   end
 
   @doc false
-  def __await__(%EXLA.Defn.Async{executable: async_exec, holes: holes}) do
+  def __await__(%EXLA.Defn.Async{executable: async_exec, outputs: outputs}) do
     async_exec
     |> EXLA.Executable.await_run()
-    |> buffer_to_nx(holes)
+    |> buffer_to_nx(outputs)
   end
 
   @doc false
   def __jit__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-    {buffers, holes, executable} = compile(key, vars, fun, compile_options)
+    {buffers, outputs, executable} = compile(key, vars, fun, compile_options)
 
     executable
     |> EXLA.Executable.run(buffers, run_options)
-    |> buffer_to_nx(holes)
+    |> buffer_to_nx(outputs)
   end
 
   defp compile(key, vars, fun, options) do
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args}
 
-    {expr, holes} =
+    {expr, {inputs, outputs}} =
       EXLA.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
-        {expr, holes(expr)}
+        {expr, {inputs(expr), outputs(expr)}}
       end)
 
     # TODO: We should extract the client and device ordinal from buffers first
     # TODO: Rename :client to :default_client
     {client_name, options} = Keyword.pop(options, :client, :default)
-    buffers = for var <- vars, do: nx_to_buffer(var)
-    cache_args = for var <- vars, do: nx_to_cache_key!(var)
+    {buffers, cache_args} = nx_to_buffer(vars, inputs)
     cache_key = {key, cache_args, client_name, options}
 
     {_, executable} =
       EXLA.LockedCache.run(cache_key, fn ->
         shapes = Enum.map(buffers, & &1.shape)
-        computation = to_root_computation(key, expr || fun.(vars), shapes, options)
+        inputs_and_shapes = Enum.zip(inputs, shapes)
+        computation = to_root_computation(key, expr || fun.(vars), inputs_and_shapes, options)
         client = EXLA.Client.fetch!(client_name)
-        executable = EXLA.Computation.compile(computation, client, Enum.map(buffers, & &1.shape))
+        executable = EXLA.Computation.compile(computation, client, shapes)
         :persistent_term.put(cache_key, executable)
         {nil, executable}
       end)
 
-    {buffers, holes, executable}
+    {buffers, outputs, executable}
   end
 
-  defp holes(tuple) when is_tuple(tuple),
-    do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&holes/1)}
+  defp inputs(expr) do
+    {_, inputs} = Tree.composite(expr, %{}, &inputs/2)
+    inputs |> Map.keys() |> Enum.sort()
+  end
 
-  defp holes(%T{} = t),
+  defp inputs(%T{data: %Expr{op: :parameter, args: [i], context: :root}} = t, acc),
+    do: {t, Map.put(acc, i, true)}
+
+  defp inputs(t, acc),
+    do: Tree.traverse_args(t, acc, &inputs/2)
+
+  defp outputs(tuple) when is_tuple(tuple),
+    do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&outputs/1)}
+
+  defp outputs(%T{} = t),
     do: %{t | data: nil}
 
-  defp to_root_computation(key, expr, shapes, options) do
+  defp to_root_computation(key, expr, pos_shapes, options) do
     builder = EXLA.Builder.new(inspect(key))
 
     # TODO: Use Enum.with_index on Elixir v1.12
     params =
-      for {shape, i} <- Enum.with_index(shapes) do
-        EXLA.Op.parameter(builder, i, shape, "p#{i}")
+      for {{pos, shape}, i} <- Enum.with_index(pos_shapes) do
+        {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
       end
 
     state = %{
       precision: Keyword.get(options, :precision, :default),
       builder: builder,
-      params: params
+      params: Map.new(params)
     }
 
     expr
@@ -181,7 +199,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:parameter, %T{data: %Expr{args: [i]}}, state, cache) do
-    {Enum.fetch!(state.params, i), cache}
+    {Map.fetch!(state.params, i), cache}
   end
 
   defp cached_recur_operator(:fun, expr, _state, cache) do
@@ -385,7 +403,12 @@ defmodule EXLA.Defn do
     EXLA.Op.tuple(state.builder, [q, r])
   end
 
-  defp to_operator(:svd, [{%{type: type}, %{type: type}, %{type: type}}, tensor, _opts], _ans, state) do
+  defp to_operator(
+         :svd,
+         [{%{type: type}, %{type: type}, %{type: type}}, tensor, _opts],
+         _ans,
+         state
+       ) do
     {u, s, vt} = EXLA.Op.svd(to_type(tensor, type), state.precision)
     EXLA.Op.tuple(state.builder, [u, s, vt])
   end
@@ -475,72 +498,29 @@ defmodule EXLA.Defn do
   ## to_operator reduction
 
   defp to_operator(:all?, [arg, opts], _ans, state) do
-    to_aggregate(
-      :all?,
-      {:pred, 8},
-      {},
-      arg,
-      1,
-      opts,
-      state,
-      &apply(EXLA.Op, :bitwise_and, &1.params)
-    )
+    to_aggregate(:all?, {:pred, 8}, {}, arg, 1, opts, state, binary_op_fun(:bitwise_and))
   end
 
   defp to_operator(:any?, [arg, opts], _ans, state) do
-    to_aggregate(
-      :any?,
-      {:pred, 8},
-      {},
-      arg,
-      0,
-      opts,
-      state,
-      &apply(EXLA.Op, :bitwise_or, &1.params)
-    )
+    to_aggregate(:any?, {:pred, 8}, {}, arg, 0, opts, state, binary_op_fun(:bitwise_or))
   end
 
   defp to_operator(:sum, [arg, opts], %{type: type, shape: shape}, state) do
-    to_aggregate(:sum, type, shape, arg, 0, opts, state, &apply(EXLA.Op, :add, &1.params))
+    to_aggregate(:sum, type, shape, arg, 0, opts, state, binary_op_fun(:add))
   end
 
   defp to_operator(:product, [arg, opts], %{type: type, shape: shape}, state) do
-    to_aggregate(
-      :product,
-      type,
-      shape,
-      arg,
-      1,
-      opts,
-      state,
-      &apply(EXLA.Op, :multiply, &1.params)
-    )
+    to_aggregate(:product, type, shape, arg, 1, opts, state, binary_op_fun(:multiply))
   end
 
   defp to_operator(:reduce_max, [arg, opts], %{type: type, shape: shape}, state) do
-    to_aggregate(
-      :reduce_max,
-      type,
-      shape,
-      arg,
-      EXLA.Lib.min_value(state.builder, type),
-      opts,
-      state,
-      &apply(EXLA.Op, :max, &1.params)
-    )
+    min_value = EXLA.Lib.min_value(state.builder, type)
+    to_aggregate(:reduce_max, type, shape, arg, min_value, opts, state, binary_op_fun(:max))
   end
 
   defp to_operator(:reduce_min, [arg, opts], %{type: type, shape: shape}, state) do
-    to_aggregate(
-      :reduce_max,
-      type,
-      shape,
-      arg,
-      EXLA.Lib.max_value(state.builder, type),
-      opts,
-      state,
-      &apply(EXLA.Op, :min, &1.params)
-    )
+    max_value = EXLA.Lib.max_value(state.builder, type)
+    to_aggregate(:reduce_max, type, shape, arg, max_value, opts, state, binary_op_fun(:min))
   end
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, state) do
@@ -556,56 +536,25 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_operator(:window_sum, [arg, window_dimensions, opts], %{type: type}, state) do
-    to_window_aggregate(
-      :window_sum,
-      type,
-      arg,
-      0,
-      window_dimensions,
-      opts,
-      state,
-      &apply(EXLA.Op, :add, &1.params)
-    )
+  defp to_operator(:window_sum, [arg, window_dims, opts], %{type: type}, state) do
+    to_window_aggregate(:window_sum, type, arg, 0, window_dims, opts, state, binary_op_fun(:add))
   end
 
-  defp to_operator(:window_max, [arg, window_dimensions, opts], %{type: type}, state) do
-    to_window_aggregate(
-      :window_max,
-      type,
-      arg,
-      EXLA.Lib.min_value(state.builder, type),
-      window_dimensions,
-      opts,
-      state,
-      &apply(EXLA.Op, :max, &1.params)
-    )
+  defp to_operator(:window_max, [arg, window_dims, opts], %{type: type}, state) do
+    min_value = EXLA.Lib.min_value(state.builder, type)
+    fun = binary_op_fun(:max)
+    to_window_aggregate(:window_max, type, arg, min_value, window_dims, opts, state, fun)
   end
 
-  defp to_operator(:window_min, [arg, window_dimensions, opts], %{type: type}, state) do
-    to_window_aggregate(
-      :window_min,
-      type,
-      arg,
-      EXLA.Lib.max_value(state.builder, type),
-      window_dimensions,
-      opts,
-      state,
-      &apply(EXLA.Op, :min, &1.params)
-    )
+  defp to_operator(:window_min, [arg, window_dims, opts], %{type: type}, state) do
+    max_value = EXLA.Lib.max_value(state.builder, type)
+    fun = binary_op_fun(:min)
+    to_window_aggregate(:window_min, type, arg, max_value, window_dims, opts, state, fun)
   end
 
-  defp to_operator(:window_product, [arg, window_dimensions, opts], %{type: type}, state) do
-    to_window_aggregate(
-      :window_product,
-      type,
-      arg,
-      1,
-      window_dimensions,
-      opts,
-      state,
-      &apply(EXLA.Op, :multiply, &1.params)
-    )
+  defp to_operator(:window_product, [arg, window_dims, opts], %{type: type}, state) do
+    fun = binary_op_fun(:multiply)
+    to_window_aggregate(:window_product, type, arg, 1, window_dims, opts, state, fun)
   end
 
   defp to_operator(
@@ -632,7 +581,12 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:scatter_window_max, [arg, source, window_dimensions, opts, init_value], %{type: type}, state) do
+  defp to_operator(
+         :scatter_window_max,
+         [arg, source, window_dimensions, opts, init_value],
+         %{type: type},
+         state
+       ) do
     padding_config = opts[:padding]
     strides = opts[:strides]
 
@@ -641,8 +595,9 @@ defmodule EXLA.Defn do
     init_value = to_type(init_value, type)
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    select_fn = to_computation(:scatter_window_max_select, args, state, &apply(EXLA.Op, :greater, &1.params))
-    scatter_fn = to_computation(:scatter_window_max_scatter, args, state, &apply(EXLA.Op, :add, &1.params))
+
+    select_fn = to_computation(:scatter_window_max_select, args, state, binary_op_fun(:greater))
+    scatter_fn = to_computation(:scatter_window_max_scatter, args, state, binary_op_fun(:add))
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -656,7 +611,12 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:scatter_window_min, [arg, source, window_dimensions, opts, init_value], %{type: type}, state) do
+  defp to_operator(
+         :scatter_window_min,
+         [arg, source, window_dimensions, opts, init_value],
+         %{type: type},
+         state
+       ) do
     padding_config = opts[:padding]
     strides = opts[:strides]
 
@@ -665,8 +625,9 @@ defmodule EXLA.Defn do
     init_value = to_type(init_value, type)
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    select_fn = to_computation(:scatter_window_min_select, args, state, &apply(EXLA.Op, :less, &1.params))
-    scatter_fn = to_computation(:scatter_window_min_scatter, args, state, &apply(EXLA.Op, :add, &1.params))
+
+    select_fn = to_computation(:scatter_window_min_select, args, state, binary_op_fun(:less))
+    scatter_fn = to_computation(:scatter_window_min_scatter, args, state, binary_op_fun(:add))
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -761,10 +722,10 @@ defmodule EXLA.Defn do
     params =
       for {%{type: type, shape: shape}, i} <- Enum.with_index(args) do
         fun_shape = EXLA.Shape.make_shape(type, shape)
-        EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")
+        {i, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
       end
 
-    state = %{state | builder: subbuilder, params: params}
+    state = %{state | builder: subbuilder, params: Map.new(params)}
     EXLA.Builder.build(fun.(state))
   end
 
@@ -800,6 +761,10 @@ defmodule EXLA.Defn do
   end
 
   ## Aggregation
+
+  defp binary_op_fun(op) do
+    fn %{params: %{0 => arg0, 1 => arg1}} -> apply(EXLA.Op, op, [arg0, arg1]) end
+  end
 
   defp to_aggregate(name, type, shape, arg, initial, opts, state, fun) do
     arg = to_type(arg, type)
@@ -899,18 +864,18 @@ defmodule EXLA.Defn do
 
     params =
       for {_, {i, _, _}} <- sorted_ids_args do
-        EXLA.Op.get_tuple_element(param, i)
+        {i, EXLA.Op.get_tuple_element(param, i)}
       end
 
     comp =
       expr
-      |> to_computation_result(%{state | builder: subbuilder, params: params}, %{})
+      |> to_computation_result(%{state | builder: subbuilder, params: Map.new(params)}, %{})
       |> elem(0)
       |> EXLA.Builder.build()
 
     args =
       Enum.map(sorted_ids_args, fn
-        {_, {_, %T{data: %Expr{op: :parameter, args: [i]}}, _}} -> Enum.fetch!(state.params, i)
+        {_, {_, %T{data: %Expr{op: :parameter, args: [i]}}, _}} -> Map.fetch!(state.params, i)
         {id, {_, _, _}} -> Map.fetch!(cache, id)
       end)
 
@@ -965,15 +930,15 @@ defmodule EXLA.Defn do
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
-  ## Nx <-> EXLA.Buffer
+  ## EXLA.Buffer -> Nx
 
-  defp buffer_to_nx(buffers, holes) do
-    {result, []} = each_buffer_to_nx(holes, buffers)
+  defp buffer_to_nx(buffers, outputs) do
+    {result, []} = each_buffer_to_nx(outputs, buffers)
     result
   end
 
-  defp each_buffer_to_nx({:tuple, holes}, acc) when is_list(holes) do
-    {exprs, acc} = Enum.map_reduce(holes, acc, &each_buffer_to_nx/2)
+  defp each_buffer_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
+    {exprs, acc} = Enum.map_reduce(outputs, acc, &each_buffer_to_nx/2)
     {List.to_tuple(exprs), acc}
   end
 
@@ -1003,7 +968,24 @@ defmodule EXLA.Defn do
   defp to_nx_type({:pred, 8}), do: {:u, 8}
   defp to_nx_type(type), do: type
 
-  defp nx_to_buffer(%T{data: data, type: type, shape: shape} = tensor) do
+  ## Nx -> EXLA.Buffer
+
+  defp nx_to_buffer(vars, inputs), do: nx_to_buffer(vars, 0, inputs, [], [])
+
+  defp nx_to_buffer([var | vars], i, [i | inputs], buffers, cache) do
+    i = i + 1
+    nx_to_buffer(vars, i, inputs, [nx_to_buffer!(var) | buffers], [nx_to_cache_key!(var) | cache])
+  end
+
+  defp nx_to_buffer([var | vars], i, inputs, buffers, cache) do
+    nx_to_buffer(vars, i + 1, inputs, buffers, [nx_to_cache_key!(var) | cache])
+  end
+
+  defp nx_to_buffer([], _i, [], buffers, cache) do
+    {Enum.reverse(buffers), cache}
+  end
+
+  defp nx_to_buffer!(%T{data: data, type: type, shape: shape} = tensor) do
     case data do
       %EXLA.DeviceBackend{state: ref} ->
         EXLA.Buffer.buffer(ref, EXLA.Shape.make_shape(type, shape))

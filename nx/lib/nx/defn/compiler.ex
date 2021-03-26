@@ -17,11 +17,16 @@ defmodule Nx.Defn.Compiler do
   @doc """
   Callback for JIT compilation.
 
-  It receives an opaque `key`, often used for caching, the function
+  It receives an opaque `key` used for caching, the function
   `vars`, the function which builds an expression, and the compiler
   options.
 
   It must call `fun` with the vars as a list of arguments.
+  Note the `key` does not include the `vars` in its cache.
+  Therefore, if you want to cache the result of `fun.(vars)`,
+  you likely want to include the vars in the cache key.
+  Given `vars` are all tensors, it is often a matter of
+  retrieving its type, shape, and names.
 
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.

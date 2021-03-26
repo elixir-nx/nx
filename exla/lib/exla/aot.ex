@@ -19,16 +19,19 @@ defmodule EXLA.AOT do
   or `{:error, Exception.t}`.
 
   `module_name` is an atom representing a module. `functions`
-  is a list of triplets of shape `{computation, name, shapes}`
-  where:
+  is a list of 4-element tuples  of shape
+  `{computation, name, arity, shapes}` where:
 
     * `computation` is an EXLA computation which returns
       a tuple
 
     * `name` is the name of the function to be defined as NIF
 
-    * `shapes` is a list of computation arguments. Note
-      tuples are not allowed as argument shapes
+    * `arity` is the arity of the function to be defined as NIF
+
+    * `shapes` is a list of 2-element tuples with the computation
+      arguments. The first element is the zero-based index of the
+      argument and the second element is its EXLA.Shape
 
   Each compiled NIF expects binaries as arguments, as described
   by the respective shapes, and it returns either `{:ok, list}`
@@ -135,9 +138,8 @@ defmodule EXLA.AOT do
     end
   end
 
-  defp compile_function({%Computation{output_shape: out_shape} = comp, name, args}, config) do
+  defp compile_function({%Computation{output_shape: out_shape} = comp, name, arity, args}, config) do
     %EXLA.Shape{dtype: {:t, shapes}} = out_shape
-    arity = length(args)
 
     sizes =
       Enum.map(shapes, fn shape ->

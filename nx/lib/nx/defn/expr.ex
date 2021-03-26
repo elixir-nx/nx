@@ -8,7 +8,8 @@ defmodule Nx.Defn.Expr do
     * `:id` - a unique identifier
     * `:op` - the operation name
     * `:args` - the operation arguments
-    * `:context` - the context of the expression
+    * `:context` - the context of the expression.
+      The default context is `:root`.
 
   Convenience functions for traversing expressions can be found
   in `Nx.Defn.Tree`.
