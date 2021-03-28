@@ -7943,6 +7943,65 @@ defmodule Nx do
   end
 
   @doc """
+  Solves the system `AX = B`.
+
+  `A` must have shape `{n, n}` and `B` must have shape `{n, m}` or `{n}`.
+  `X` has the same shape as `B`.
+
+  ## Examples
+
+      iex> a = Nx.tensor([[1, 3, 2, 1], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      iex> Nx.solve(a, Nx.tensor([-3, 0, 4, -2])) |> Nx.round()
+      #Nx.Tensor<
+        f32[4]
+        [1.0, -2.0, 3.0, -4.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.solve(a, Nx.tensor([0, 2, 1])) |> Nx.round()
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [0, 1, 1]])
+      iex> b = Nx.tensor([[2, 2, 3], [2, 2, 4], [2, 0, 1]])
+      iex> Nx.solve(a, b) |> Nx.round()
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 2.0, 3.0],
+          [1.0, 0.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ]
+      >
+  """
+  def solve(a, b) do
+    %T{shape: a_shape} = a = tensor!(a)
+    %T{shape: b_shape} = b = tensor!(b)
+
+    Nx.Shape.solve(a_shape, b_shape)
+
+    # We need to achieve an LQ decomposition for `a` (henceforth called A)
+    # because triangular_solve only accepts lower_triangular matrices
+    # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
+    # If we set M = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
+
+    # Given A = LQ, we can then solve AX = B as shown below
+    # AX = B -> L(QX) = B -> LY = B, where Y = QX -> X = transpose(Q)Y
+
+    # Finally, it can be shown that when B is a matrix, X can be
+    # calculated by solving for each corresponding column in B
+    {qt, r_prime} = a |> transpose() |> qr()
+
+    l = transpose(r_prime)
+
+    y = triangular_solve(l, b)
+
+    dot(qt, y)
+  end
+
+  @doc """
   Invert a square 2-D tensor.
 
   For non-square tensors, use `Nx.svd/2` for pseudo-inverse calculations.
@@ -7992,15 +8051,15 @@ defmodule Nx do
   """
   @doc type: :linalg
   def invert(tensor) do
-    %T{shape: {m, n}, type: type} = tensor = tensor!(tensor)
+    %T{shape: {m, n}} = tensor = tensor!(tensor)
 
     if m != n do
       raise ArgumentError,
             "can only invert square matrices, got: {#{m}, #{n}}"
     end
 
-    output_type = Nx.Type.to_floating(type)
-    impl!(tensor).invert(%{tensor | type: output_type}, tensor)
+    identity = eye(tensor)
+    solve(tensor, identity)
   end
 
   @doc """

@@ -1127,42 +1127,6 @@ defmodule Nx.BinaryBackend do
     from_binary(out, out_bin)
   end
 
-  @doc false
-  def solve(%T{type: output_type} = output_holder, %T{shape: {n, n}} = a, %T{shape: b_shape} = b)
-      when b_shape == {n, n} or b_shape == {n} do
-    # We need to achieve an LQ decomposition for `a` (henceforth called A)
-    # because triangular_solve only accepts lower_triangular matrices
-    # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
-    # If we set M = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
-
-    # Given A = LQ, we can then solve AX = B as shown below
-    # AX = B -> L(QX) = B -> LY = B, where Y = QX -> X = transpose(Q)Y
-
-    # Finally, it can be shown that when B is a matrix, X can be
-    # calculated by solving for each corresponding column in B
-    transpose_axes = Nx.Shape.transpose_axes({n, n})
-    a_transposed = transpose(a, a, transpose_axes)
-
-    {qt, r_prime} =
-      qr(
-        {%{a_transposed | type: output_type}, %{a_transposed | type: output_type}},
-        a_transposed,
-        []
-      )
-
-    l = transpose(r_prime, r_prime, transpose_axes)
-
-    y = triangular_solve(l, l, b, [])
-
-    dot(output_holder, qt, [1], y, [0])
-  end
-
-  @impl true
-  def invert(output, %T{shape: {n, n}} = tensor) do
-    identity = eye(tensor, [])
-    solve(output, tensor, identity)
-  end
-
   ## Aggregation
 
   @impl true
