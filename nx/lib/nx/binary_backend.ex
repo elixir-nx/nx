@@ -1484,7 +1484,7 @@ defmodule Nx.BinaryBackend do
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
 
-    if top_dimension_slice?(Nx.rank(shape), shape, output_shape) do
+    if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
       offset = div(length, elem(output_shape, 0)) * hd(start_indices)
       from_binary(out, binary_part(to_binary(tensor), offset, length))
@@ -1521,34 +1521,27 @@ defmodule Nx.BinaryBackend do
   @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
-    tensors = Enum.map(tensors, fn t -> as_type(%{t | type: output_type}, t) end)
+    rank = tuple_size(output_shape)
+    steps = product_part(output_shape, 0, axis)
 
-    output_data =
-      if axis == tuple_size(output_shape) - 1 do
-        aggregate_axes =
-          tensors
-          |> Enum.map(fn %T{shape: shape} = t ->
-            aggregate_axes(to_binary(t), [axis], shape, size)
-          end)
-          |> Enum.zip()
+    tensors = Enum.map(tensors, fn %{shape: shape} = t ->
+      t = as_type(%{t | type: output_type}, t)
+      {to_binary(t), product_part(shape, axis, rank) * size}
+    end)
 
-        for axis <- aggregate_axes, into: <<>> do
-          IO.iodata_to_binary(Tuple.to_list(axis))
-        end
-      else
-        input_data = Enum.map(tensors, &to_binary/1) |> IO.iodata_to_binary()
-
-        if axis == 0 do
-          # When concatenating along the first axis, joining bytes is all we need
-          input_data
-        else
-          output_weighted_shape = weighted_shape(output_shape, size)
-          IO.iodata_to_binary(weighted_traverse(output_weighted_shape, input_data, size))
-        end
+    data =
+      for step <- 1..steps,
+          {binary, product} <- tensors do
+        before = (step - 1) * product
+        <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
+        part
       end
 
-    from_binary(out, output_data)
+    from_binary(out, data)
   end
+
+  defp product_part(_tuple, n, n), do: 1
+  defp product_part(tuple, n, limit), do: elem(tuple, n) * product_part(tuple, n + 1, limit)
 
   @impl true
   def as_type(out, tensor) do

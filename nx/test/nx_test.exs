@@ -1182,6 +1182,32 @@ defmodule NxTest do
   end
 
   describe "concatenate/2" do
+    test "middle axis" do
+      t1 = Nx.iota({2, 2, 2})
+      t2 = Nx.add(t1, 10)
+      t3 = Nx.add(t1, 20)
+
+      assert Nx.concatenate([t1, t2, t3], axis: 1) ==
+               Nx.tensor([
+                 [
+                   [0, 1],
+                   [2, 3],
+                   [10, 11],
+                   [12, 13],
+                   [20, 21],
+                   [22, 23]
+                 ],
+                 [
+                   [4, 5],
+                   [6, 7],
+                   [14, 15],
+                   [16, 17],
+                   [24, 25],
+                   [26, 27]
+                 ]
+               ])
+    end
+
     test "raises for an empty list of tensors" do
       assert_raise(ArgumentError, "empty list passed to concatenate", fn ->
         Nx.concatenate([])
