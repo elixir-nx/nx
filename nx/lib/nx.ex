@@ -7975,6 +7975,14 @@ defmodule Nx do
           [1.0, 0.0, 0.0]
         ]
       >
+
+    ### Error cases
+
+      iex> Nx.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
+      ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
+
+      iex> Nx.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
+      ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
   def solve(a, b) do
     %T{shape: a_shape} = a = tensor!(a)
