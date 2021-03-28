@@ -7910,7 +7910,7 @@ defmodule Nx do
       ** (ArgumentError) expected a square matrix, got: {2, 4}
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]), trans: 0)
-      ** (ArgumentError) incompatible dimensions for a and b on tringular solve
+      ** (ArgumentError) incompatible dimensions for a and b on triangular solve
 
       iex> Nx.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) can't solve for singular matrix
