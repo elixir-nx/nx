@@ -805,10 +805,13 @@ defmodule EXLA.DefnExprTest do
                Nx.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], type: {:f, 64})
 
       assert map_exp(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-               Nx.tensor([
-                 [2.718281828459045, 7.38905609893065, 20.085536923187668],
-                 [54.598150033144236, 148.4131591025766, 403.4287934927351]
-               ], type: {:f, 64})
+               Nx.tensor(
+                 [
+                   [2.718281828459045, 7.38905609893065, 20.085536923187668],
+                   [54.598150033144236, 148.4131591025766, 403.4287934927351]
+                 ],
+                 type: {:f, 64}
+               )
     end
   end
 
@@ -958,29 +961,67 @@ defmodule EXLA.DefnExprTest do
 
   describe "scatter_window_min/max" do
     defn scatter_window_max_no_padding(t) do
-      Nx.scatter_window_max(t, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+      Nx.scatter_window_max(
+        t,
+        Nx.tensor([[2, 6], [3, 1]]),
+        {2, 3},
+        [padding: :valid, strides: [2, 3]],
+        0
+      )
     end
 
     test "scatter_window_max produces the same result as Nx with no padding" do
-      x = Nx.tensor([[7, 2, 5, 3, 10, 2], [3, 8, 9, 3, 4, 2],
-                      [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]])
+      x =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
 
       lhs = scatter_window_max_no_padding(x)
-      rhs = Nx.scatter_window_max(x, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+
+      rhs =
+        Nx.scatter_window_max(
+          x,
+          Nx.tensor([[2, 6], [3, 1]]),
+          {2, 3},
+          [padding: :valid, strides: [2, 3]],
+          0
+        )
 
       compare_tensors!(lhs, rhs)
     end
 
     defn scatter_window_min_no_padding(t) do
-      Nx.scatter_window_min(t, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+      Nx.scatter_window_min(
+        t,
+        Nx.tensor([[2, 6], [3, 1]]),
+        {2, 3},
+        [padding: :valid, strides: [2, 3]],
+        0
+      )
     end
 
     test "scatter_window_min produces the same result as Nx with no padding" do
-      x = Nx.tensor([[7, 2, 5, 3, 10, 2], [3, 8, 9, 3, 4, 2],
-                      [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]])
+      x =
+        Nx.tensor([
+          [7, 2, 5, 3, 10, 2],
+          [3, 8, 9, 3, 4, 2],
+          [1, 5, 7, 5, 6, 1],
+          [0, 6, 2, 7, 2, 8]
+        ])
 
       lhs = scatter_window_min_no_padding(x)
-      rhs = Nx.scatter_window_min(x, Nx.tensor([[2, 6], [3, 1]]), {2, 3}, [padding: :valid, strides: [2, 3]], 0)
+
+      rhs =
+        Nx.scatter_window_min(
+          x,
+          Nx.tensor([[2, 6], [3, 1]]),
+          {2, 3},
+          [padding: :valid, strides: [2, 3]],
+          0
+        )
 
       compare_tensors!(lhs, rhs)
     end
@@ -1823,8 +1864,7 @@ defmodule EXLA.DefnExprTest do
       img = Nx.iota({4, 6, 10, 10}, type: {:f, 32})
       kernel = Nx.iota({6, 3, 2, 2}, type: {:f, 32})
       lhs = grouped_conv_valid_no_stride(img, kernel)
-      rhs =
-        Nx.conv(img, kernel, strides: 1, padding: :valid, feature_group_size: 2)
+      rhs = Nx.conv(img, kernel, strides: 1, padding: :valid, feature_group_size: 2)
 
       compare_tensors!(lhs, rhs)
     end
@@ -1834,8 +1874,7 @@ defmodule EXLA.DefnExprTest do
       kernel = Nx.iota({4, 2, 2, 2, 1}, type: {:f, 32})
 
       lhs = grouped_conv_same_stride(img, kernel)
-      rhs =
-        Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, feature_group_size: 4)
+      rhs = Nx.conv(img, kernel, strides: [2, 1, 2], padding: :same, feature_group_size: 4)
 
       compare_tensors!(lhs, rhs)
     end
@@ -1855,7 +1894,13 @@ defmodule EXLA.DefnExprTest do
       kernel = Nx.iota({4, 2, 2, 2}, type: {:f, 32})
 
       lhs = batch_grouped_conv_padding_dilated(img, kernel)
-      rhs = Nx.conv(img, kernel, batch_group_size: 4, padding: [{2, -1}, {1, 0}], input_dilation: [2, 1])
+
+      rhs =
+        Nx.conv(img, kernel,
+          batch_group_size: 4,
+          padding: [{2, -1}, {1, 0}],
+          input_dilation: [2, 1]
+        )
 
       compare_tensors!(lhs, rhs)
     end
@@ -2409,6 +2454,30 @@ defmodule EXLA.DefnExprTest do
                    [2, 3]
                  ]
                ])
+
+      t1 = Nx.iota({2, 2, 2})
+      t2 = Nx.add(t1, 10)
+      t3 = Nx.add(t1, 20)
+
+      assert concatenate1(t1, t2, t3) ==
+               Nx.tensor([
+                 [
+                   [0, 1],
+                   [2, 3],
+                   [10, 11],
+                   [12, 13],
+                   [20, 21],
+                   [22, 23]
+                 ],
+                 [
+                   [4, 5],
+                   [6, 7],
+                   [14, 15],
+                   [16, 17],
+                   [24, 25],
+                   [26, 27]
+                 ]
+               ])
     end
 
     test "works on 2nd axis" do
@@ -2507,7 +2576,11 @@ defmodule EXLA.DefnExprTest do
       assert s.shape == {3}
       assert vt.shape == {3, 3}
       s_full = Nx.multiply(s, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-      assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output, atol: 1.0e-5, rtol: 1.0e-2)
+
+      assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output,
+               atol: 1.0e-5,
+               rtol: 1.0e-2
+             )
     end
   end
 
@@ -2632,10 +2705,12 @@ defmodule EXLA.DefnExprTest do
   defp compare_tensors!(left, right, opts \\ []) do
     atol = opts[:atol] || 1.0e-7
     rtol = opts[:rtol] || 1.0e-4
+
     try do
       assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
     rescue
-      _ -> assert left == right # So we can see the diff
+      # So we can see the diff
+      _ -> assert left == right
     end
   end
 end
