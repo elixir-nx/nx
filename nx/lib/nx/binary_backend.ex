@@ -1537,8 +1537,14 @@ defmodule Nx.BinaryBackend do
         end
       else
         input_data = Enum.map(tensors, &to_binary/1) |> IO.iodata_to_binary()
-        output_weighted_shape = weighted_shape(output_shape, size)
-        IO.iodata_to_binary(weighted_traverse(output_weighted_shape, input_data, size))
+
+        if axis == 0 do
+          # When concatenating along the first axis, joining bytes is all we need
+          input_data
+        else
+          output_weighted_shape = weighted_shape(output_shape, size)
+          IO.iodata_to_binary(weighted_traverse(output_weighted_shape, input_data, size))
+        end
       end
 
     from_binary(out, output_data)
