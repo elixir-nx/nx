@@ -338,6 +338,26 @@ defmodule Nx.Shared do
   ## Helpers
 
   @doc """
+  Asserts on the given keys.
+  """
+  def assert_keys!(keyword, valid) do
+    for kv <- keyword do
+      case kv do
+        {k, _} ->
+          if k not in valid do
+            raise ArgumentError,
+                  "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
+                    "expected one of #{inspect(valid)}"
+          end
+
+        _ ->
+          raise ArgumentError,
+                "expected a keyword list with keys #{inspect(valid)}, got: #{inspect(keyword)}"
+      end
+    end
+  end
+
+  @doc """
   Gets the implementation of a tensor.
   """
   def impl!(%T{data: %struct{}}), do: struct

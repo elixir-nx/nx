@@ -624,7 +624,7 @@ defmodule Nx.Defn.Kernel do
   Passing an unknown key raises:
 
       iex> keyword!([three: 3], [one: 1, two: 2])
-      ** (ArgumentError) unknown key :three in [three: 3], expected to be one of [one: 1, two: 2]
+      ** (ArgumentError) unknown key :three in [three: 3], expected one of [:one, :two]
 
   """
   def keyword!(keyword, values) when Kernel.and(is_list(keyword), is_list(values)) do
@@ -634,14 +634,21 @@ defmodule Nx.Defn.Kernel do
       {:ok, keyword} ->
         keyword
 
-      {:badkey, key} ->
-        raise ArgumentError,
-              "unknown key #{inspect(key)} in #{inspect(keyword)}, " <>
-                "expected to be one of #{inspect(values)}"
+      error ->
+        keys =
+          for value <- values,
+              do: Kernel.if(is_atom(value), do: value, else: Kernel.elem(value, 0))
 
-      :badkey ->
-        raise ArgumentError,
-              "keyword!/2 expects the first argument to be a list, got: #{inspect(keyword)}"
+        case error do
+          {:badkey, key} ->
+            raise ArgumentError,
+                  "unknown key #{inspect(key)} in #{inspect(keyword)}, " <>
+                    "expected one of #{inspect(keys)}"
+
+          :badkey ->
+            raise ArgumentError,
+                  "expected a keyword list with keys #{inspect(keys)}, got: #{inspect(keyword)}"
+        end
     end
   end
 

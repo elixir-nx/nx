@@ -267,6 +267,8 @@ defmodule Nx do
   """
 
   import Nx.Shared
+  import Nx.Defn.Kernel, only: [keyword!: 2]
+
   alias Nx.Tensor, as: T
 
   @type t :: number | Nx.Tensor.t()
@@ -443,7 +445,7 @@ defmodule Nx do
   """
   @doc type: :creation
   def tensor(arg, opts \\ []) when is_number(arg) or is_list(arg) do
-    assert_keys!(opts, [:type, :names, :backend])
+    opts = keyword!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
     {shape, data} = flatten(arg, type)
 
@@ -534,7 +536,7 @@ defmodule Nx do
   """
   @doc type: :creation
   def template(tensor_or_shape, type, opts \\ []) do
-    assert_keys!(opts, [:names])
+    opts = keyword!(opts, [:names])
     type = Nx.Type.normalize!(type)
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -672,9 +674,9 @@ defmodule Nx do
   """
   @doc type: :random
   def random_uniform(tensor_or_shape, min, max, opts \\ []) do
-    assert_keys!(opts, [:type, :names, :backend])
-    %T{type: min_type, shape: min_shape} = min = tensor!(min)
-    %T{type: max_type, shape: max_shape} = max = tensor!(max)
+    opts = keyword!(opts, [:type, :names, :backend])
+    %T{type: min_type, shape: min_shape} = min = to_tensor(min)
+    %T{type: max_type, shape: max_shape} = max = to_tensor(max)
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -788,9 +790,9 @@ defmodule Nx do
   """
   @doc type: :random
   def random_normal(tensor_or_shape, mu, sigma, opts \\ []) do
-    assert_keys!(opts, [:type, :names, :backend])
-    %T{type: mu_type, shape: mu_shape} = mu = tensor!(mu)
-    %T{type: sigma_type, shape: sigma_shape} = sigma = tensor!(sigma)
+    opts = keyword!(opts, [:type, :names, :backend])
+    %T{type: mu_type, shape: mu_shape} = mu = to_tensor(mu)
+    %T{type: sigma_type, shape: sigma_shape} = sigma = to_tensor(sigma)
 
     shape = shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
@@ -930,10 +932,10 @@ defmodule Nx do
   """
   @doc type: :creation
   def iota(tensor_or_shape, opts \\ []) do
-    assert_keys!(opts, [:type, :axis, :names, :backend])
+    opts = keyword!(opts, [:axis, :names, :backend, type: {:s, 64}])
     shape = Nx.shape(tensor_or_shape)
     names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
-    type = Nx.Type.normalize!(opts[:type] || {:s, 64})
+    type = Nx.Type.normalize!(opts[:type])
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
 
     if axis = opts[:axis] do
@@ -1007,7 +1009,7 @@ defmodule Nx do
   end
 
   def eye(shape_or_tensor, opts) do
-    assert_keys!(opts, [:type, :names, :backend])
+    opts = keyword!(opts, [:names, :backend, type: {:s, 64}])
 
     shape =
       case shape(shape_or_tensor) do
@@ -1052,7 +1054,7 @@ defmodule Nx do
   """
   @doc type: :creation
   def from_binary(binary, type, opts \\ []) when is_binary(binary) do
-    assert_keys!(opts, [:backend])
+    opts = keyword!(opts, [:backend])
     {_, size} = Nx.Type.normalize!(type)
     dim = div(bit_size(binary), size)
 
@@ -1097,10 +1099,32 @@ defmodule Nx do
   """
   @doc type: :conversion
   def to_binary(tensor, opts \\ []) do
-    assert_keys!(opts, [:limit])
-    tensor = tensor!(tensor)
+    opts = keyword!(opts, [:limit])
+    tensor = to_tensor(tensor)
     limit = if limit = opts[:limit], do: Kernel.min(size(tensor), limit), else: size(tensor)
     impl!(tensor).to_binary(tensor, limit)
+  end
+
+
+  @doc """
+  Converts the given number (or tensor) to a tensor.
+
+  This function exists for data normalization. If your
+  goal is to create tensors from numbers and lists,
+  use `tensor/2` instead.
+  """
+  @doc type: :conversion
+  def to_tensor(%T{} = t),
+    do: t
+
+  def to_tensor(number) when is_number(number) do
+    type = Nx.Type.infer(number)
+    out = %T{shape: {}, type: type, names: []}
+    Nx.BinaryBackend.from_binary(out, number_to_binary(number, type), [])
+  end
+
+  def to_tensor(t) do
+    raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
   end
 
   @doc """
@@ -1120,8 +1144,8 @@ defmodule Nx do
   """
   @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
-    assert_keys!(opts, [:limit])
-    %{type: {_, size} = type} = tensor = tensor!(tensor)
+    opts = keyword!(opts, [:limit])
+    %{type: {_, size} = type} = tensor = to_tensor(tensor)
 
     # TODO: Simplify loop once nonfinite are officially supported in the VM
     for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do
@@ -1197,7 +1221,7 @@ defmodule Nx do
   """
   @doc type: :conversion
   def to_batched_list(tensor, batch_size) when is_integer(batch_size) and batch_size >= 1 do
-    %{shape: shape} = tensor!(tensor)
+    %{shape: shape} = to_tensor(tensor)
 
     if shape == {} do
       raise ArgumentError, "cannot batch scalar tensor #{inspect(tensor)}"
@@ -1234,7 +1258,7 @@ defmodule Nx do
   def to_scalar(number) when is_number(number), do: number
 
   def to_scalar(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
 
     if tensor.shape != {} do
       raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to scalar"
@@ -1277,13 +1301,13 @@ defmodule Nx do
   """
   @doc type: :conversion
   def to_heatmap(tensor, opts \\ []) when is_list(opts) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
 
     if tensor.shape == {} do
       raise ArgumentError, "cannot show heatmap for scalar tensors, got: #{inspect(tensor)}"
     end
 
-    %Nx.Heatmap{tensor: tensor!(tensor), opts: opts}
+    %Nx.Heatmap{tensor: to_tensor(tensor), opts: opts}
   end
 
   ## Reflection operations (do not invoke the backend)
@@ -1315,7 +1339,7 @@ defmodule Nx do
   """
   @doc type: :type
   def as_type(tensor, type) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     new_type = Nx.Type.normalize!(type)
 
     if tensor.type == new_type do
@@ -1356,7 +1380,7 @@ defmodule Nx do
   """
   @doc type: :type
   def bitcast(tensor, type) do
-    %T{type: {_, bits} = input_type} = tensor = tensor!(tensor)
+    %T{type: {_, bits} = input_type} = tensor = to_tensor(tensor)
     {_, new_bits} = new_type = Nx.Type.normalize!(type)
 
     unless new_bits == bits do
@@ -1427,7 +1451,7 @@ defmodule Nx do
   """
   @doc type: :shape
   def reshape(tensor, new_shape, opts \\ []) do
-    %T{shape: old_shape} = tensor = tensor!(tensor)
+    %T{shape: old_shape} = tensor = to_tensor(tensor)
     new_names = opts[:names] || names!(new_shape)
     new_shape = shape(new_shape)
 
@@ -1555,7 +1579,7 @@ defmodule Nx do
   """
   @doc type: :shape
   def tile(tensor, repetitions) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
 
     unless tile_valid_repetitions?(repetitions) do
       raise ArgumentError,
@@ -1644,7 +1668,7 @@ defmodule Nx do
   """
   @doc type: :shape
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
-    %{shape: shape, names: names} = tensor = tensor!(tensor)
+    %{shape: shape, names: names} = tensor = to_tensor(tensor)
     rank = tuple_size(shape)
     norm = if axis < 0, do: axis + rank + 1, else: axis
 
@@ -1706,8 +1730,8 @@ defmodule Nx do
   """
   @doc type: :shape
   def squeeze(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes])
-    %T{shape: old_shape, names: names} = tensor = tensor!(tensor)
+    opts = keyword!(opts, [:axes])
+    %T{shape: old_shape, names: names} = tensor = to_tensor(tensor)
     axes = opts[:axes] || Nx.Shape.squeeze_axes(old_shape)
     axes = Nx.Shape.normalize_axes(old_shape, axes, names)
     {new_shape, new_names} = Nx.Shape.squeeze(old_shape, axes, names)
@@ -1838,9 +1862,9 @@ defmodule Nx do
   """
   @doc type: :shape
   def broadcast(tensor, shape, opts \\ []) do
-    assert_keys!(opts, [:axes, :names])
+    opts = keyword!(opts, [:axes, :names])
 
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     broadcast_names = opts[:names] || names!(shape)
     broadcast_shape = shape(shape)
     opts_axes = opts[:axes]
@@ -2051,8 +2075,8 @@ defmodule Nx do
   @doc type: :shape
   def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
     output_type = binary_type(tensor, pad_value)
-    tensor = tensor!(tensor)
-    pad_value = tensor!(pad_value)
+    tensor = to_tensor(tensor)
+    pad_value = to_tensor(pad_value)
 
     if pad_value.shape != {} do
       raise ArgumentError, "padding value must be a scalar"
@@ -2087,7 +2111,7 @@ defmodule Nx do
   """
   @doc type: :type
   def type(tensor) do
-    %T{type: type} = tensor!(tensor)
+    %T{type: type} = to_tensor(tensor)
     type
   end
 
@@ -2124,9 +2148,9 @@ defmodule Nx do
 
   """
   def compatible?(left, right) do
-    %{type: type, shape: shape, names: left_names} = tensor!(left)
+    %{type: type, shape: shape, names: left_names} = to_tensor(left)
 
-    case tensor!(right) do
+    case to_tensor(right) do
       %{type: ^type, shape: ^shape, names: right_names} ->
         compatible_names?(left_names, right_names)
 
@@ -2335,7 +2359,7 @@ defmodule Nx do
   end
 
   defp backend_copy(tensor, backend, opts) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     impl!(tensor).backend_copy(tensor, backend, opts)
   end
 
@@ -2393,7 +2417,7 @@ defmodule Nx do
   end
 
   defp backend_transfer(tensor, backend, opts) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     impl!(tensor).backend_transfer(tensor, backend, opts)
   end
 
@@ -2418,7 +2442,7 @@ defmodule Nx do
   end
 
   def backend_deallocate(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     impl!(tensor).backend_deallocate(tensor)
   end
 
@@ -2426,8 +2450,8 @@ defmodule Nx do
 
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
-    %T{shape: left_shape, names: left_names} = left = tensor!(left)
-    %T{shape: right_shape, names: right_names} = right = tensor!(right)
+    %T{shape: left_shape, names: left_names} = left = to_tensor(left)
+    %T{shape: right_shape, names: right_names} = right = to_tensor(right)
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
@@ -2435,8 +2459,8 @@ defmodule Nx do
   end
 
   defp element_wise_pred_op(left, right, op) do
-    %T{shape: left_shape, names: left_names} = left = tensor!(left)
-    %T{shape: right_shape, names: right_names} = right = tensor!(right)
+    %T{shape: left_shape, names: left_names} = left = to_tensor(left)
+    %T{shape: right_shape, names: right_names} = right = to_tensor(right)
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
@@ -3591,7 +3615,7 @@ defmodule Nx do
   """
   @doc type: :element
   def logical_not(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     type = tensor.type
     out = %T{shape: {}, type: type, names: []}
     zero = Nx.BinaryBackend.from_binary(out, number_to_binary(0, type), [])
@@ -3890,9 +3914,9 @@ defmodule Nx do
   def select(pred, on_true, on_false) do
     output_type = binary_type(on_true, on_false)
 
-    %T{shape: pred_shape, names: pred_names} = pred = tensor!(pred)
-    %T{shape: true_shape, names: true_names} = on_true = tensor!(on_true)
-    %T{shape: false_shape, names: false_names} = on_false = tensor!(on_false)
+    %T{shape: pred_shape, names: pred_names} = pred = to_tensor(pred)
+    %T{shape: true_shape, names: true_names} = on_true = to_tensor(on_true)
+    %T{shape: false_shape, names: false_names} = on_false = to_tensor(on_false)
 
     {output_shape, output_names} =
       case pred_shape do
@@ -3970,15 +3994,15 @@ defmodule Nx do
       >
   """
   def scatter_window_max(tensor, source, window_dimensions, opts \\ [], init_value) do
-    assert_keys!(opts, [:padding, :strides])
+    opts = keyword!(opts, [padding: :valid, strides: 1])
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
 
-    %T{shape: input_shape} = tensor = tensor!(tensor)
-    %T{shape: source_shape, type: source_type} = source = tensor!(source)
-    %T{type: value_type} = init_value = tensor!(init_value)
+    %T{shape: input_shape} = tensor = to_tensor(tensor)
+    %T{shape: source_shape, type: source_type} = source = to_tensor(source)
+    %T{type: value_type} = init_value = to_tensor(init_value)
 
-    padding = opts[:padding] || :valid
-    strides = opts[:strides] || 1
+    padding = opts[:padding]
+    strides = opts[:strides]
 
     strides =
       if is_integer(strides),
@@ -4055,14 +4079,14 @@ defmodule Nx do
       >
   """
   def scatter_window_min(tensor, source, window_dimensions, opts \\ [], init_value) do
-    assert_keys!(opts, [:padding, :strides])
+    opts = keyword!(opts, [padding: :valid, strides: 1])
 
-    %T{shape: input_shape} = tensor = tensor!(tensor)
-    %T{shape: source_shape, type: source_type} = source = tensor!(source)
-    %T{type: value_type} = init_value = tensor!(init_value)
+    %T{shape: input_shape} = tensor = to_tensor(tensor)
+    %T{shape: source_shape, type: source_type} = source = to_tensor(source)
+    %T{type: value_type} = init_value = to_tensor(init_value)
 
-    padding = opts[:padding] || :valid
-    strides = opts[:strides] || 1
+    padding = opts[:padding]
+    strides = opts[:strides]
 
     strides =
       if is_integer(strides),
@@ -4137,7 +4161,7 @@ defmodule Nx do
     """
     @doc type: :element
     def unquote(name)(tensor) do
-      tensor = tensor!(tensor)
+      tensor = to_tensor(tensor)
       type = Nx.Type.to_floating(tensor.type)
       impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
     end
@@ -4177,7 +4201,7 @@ defmodule Nx do
   """
   @doc type: :element
   def negate(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     impl!(tensor).negate(tensor, tensor)
   end
 
@@ -4200,7 +4224,7 @@ defmodule Nx do
   """
   @doc type: :element
   def sign(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     impl!(tensor).sign(tensor, tensor)
   end
 
@@ -4218,7 +4242,7 @@ defmodule Nx do
   """
   @doc type: :element
   def abs(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
 
     case tensor.type do
       {:u, _} -> tensor
@@ -4256,7 +4280,7 @@ defmodule Nx do
   """
   @doc type: :element
   def bitwise_not(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).bitwise_not(tensor, tensor)
   end
@@ -4297,7 +4321,7 @@ defmodule Nx do
   """
   @doc type: :element
   def population_count(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).population_count(tensor, tensor)
   end
@@ -4362,7 +4386,7 @@ defmodule Nx do
   """
   @doc type: :element
   def count_leading_zeros(tensor) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     assert_bitwise_type!(tensor.type)
     impl!(tensor).count_leading_zeros(tensor, tensor)
   end
@@ -4394,7 +4418,7 @@ defmodule Nx do
     """
     @doc type: :element
     def unquote(name)(tensor) do
-      case tensor!(tensor) do
+      case to_tensor(tensor) do
         %T{type: {type, _}} = tensor when type in [:s, :u] -> tensor
         %T{} = tensor -> impl!(tensor).unquote(name)(tensor, tensor)
       end
@@ -4440,7 +4464,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def all?(tensor, opts \\ []) do
-    aggregate_axes_op(tensor!(tensor), :all?, {:u, 8}, opts)
+    aggregate_axes_op(to_tensor(tensor), :all?, {:u, 8}, opts)
   end
 
   @doc """
@@ -4480,7 +4504,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def any?(tensor, opts \\ []) do
-    aggregate_axes_op(tensor!(tensor), :any?, {:u, 8}, opts)
+    aggregate_axes_op(to_tensor(tensor), :any?, {:u, 8}, opts)
   end
 
   @doc """
@@ -4511,9 +4535,9 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def all_close?(a, b, opts \\ []) do
-    assert_keys!(opts, [:rtol, :atol])
-    rtol = opts[:rtol] || 1.0e-5
-    atol = opts[:atol] || 1.0e-8
+    opts = keyword!(opts, [rtol: 1.0e-5, atol: 1.0e-8])
+    rtol = opts[:rtol]
+    atol = opts[:atol]
     all?(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
   end
 
@@ -4650,7 +4674,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def sum(tensor, opts \\ []) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     type = Nx.Type.to_aggregate(tensor.type)
     aggregate_axes_op(tensor, :sum, type, opts)
   end
@@ -4741,7 +4765,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def mean(tensor, opts \\ []) do
-    %T{shape: shape, names: names} = tensor = tensor!(tensor)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
 
     mean_den =
       if axes = opts[:axes] do
@@ -4882,7 +4906,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def product(tensor, opts \\ []) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     type = Nx.Type.to_aggregate(tensor.type)
     aggregate_axes_op(tensor, :product, type, opts)
   end
@@ -4957,7 +4981,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def reduce_max(tensor, opts \\ []) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     aggregate_axes_op(tensor, :reduce_max, tensor.type, opts)
   end
 
@@ -5031,13 +5055,13 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def reduce_min(tensor, opts \\ []) do
-    tensor = tensor!(tensor)
+    tensor = to_tensor(tensor)
     aggregate_axes_op(tensor, :reduce_min, tensor.type, opts)
   end
 
   defp aggregate_axes_op(%T{shape: shape, names: names} = tensor, op, type, opts) do
-    assert_keys!(opts, [:axes, :keep_axes])
-    keep_axes = opts[:keep_axes] || false
+    opts = keyword!(opts, [:axes, keep_axes: false])
+    keep_axes = opts[:keep_axes]
 
     {shape, names, axes} =
       cond do
@@ -5236,10 +5260,10 @@ defmodule Nx do
   end
 
   defp argmin_or_max(tensor, op, opts) do
-    assert_keys!(opts, [:axis, :tie_break])
+    opts = keyword!(opts, [:axis, tie_break: :low])
 
     tie_break =
-      case opts[:tie_break] || :low do
+      case opts[:tie_break] do
         :high ->
           :high
 
@@ -5251,7 +5275,7 @@ defmodule Nx do
                 "unknown value for :tie_break, expected :high or :low, got: #{inspect(other)}"
       end
 
-    %{shape: shape, names: names} = tensor = tensor!(tensor)
+    %{shape: shape, names: names} = tensor = to_tensor(tensor)
 
     {shape, names, axis} =
       if axis = opts[:axis] do
@@ -5268,12 +5292,12 @@ defmodule Nx do
   end
 
   defp aggregate_window_op(tensor, window_dimensions, opts, op) when is_list(opts) do
-    assert_keys!(opts, [:padding, :strides, :window_dilations])
+    opts = keyword!(opts, [:window_dilations, padding: :valid, strides: 1])
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
-    %T{shape: shape} = tensor = tensor!(tensor)
+    %T{shape: shape} = tensor = to_tensor(tensor)
 
-    strides = opts[:strides] || 1
-    padding = opts[:padding] || :valid
+    strides = opts[:strides]
+    padding = opts[:padding]
     dilations = opts[:window_dilations] || List.duplicate(1, rank(tensor.shape))
 
     strides =
@@ -5869,12 +5893,12 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def reduce(tensor, acc, opts \\ [], fun) when is_function(fun, 2) do
-    assert_keys!(opts, [:axes, :type, :keep_axes])
+    opts = keyword!(opts, [:axes, :type, keep_axes: false])
     type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, acc))
-    keep_axes = opts[:keep_axes] || false
+    keep_axes = opts[:keep_axes]
 
-    %{shape: shape, names: names} = tensor = tensor!(tensor)
-    acc = tensor!(acc)
+    %{shape: shape, names: names} = tensor = to_tensor(tensor)
+    acc = to_tensor(acc)
 
     {shape, names, axes} =
       if axes = opts[:axes] do
@@ -5976,12 +6000,12 @@ defmodule Nx do
   @doc type: :aggregation
   def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun)
       when is_tuple(window_dimensions) do
-    assert_keys!(opts, [:padding, :strides, :window_dilations])
-    %T{shape: shape} = tensor = tensor!(tensor)
-    acc = tensor!(acc)
+    opts = keyword!(opts, [:window_dilations, :strides, padding: :valid])
+    %T{shape: shape} = tensor = to_tensor(tensor)
+    acc = to_tensor(acc)
 
+    padding = opts[:padding]
     strides = opts[:strides] || List.duplicate(1, rank(tensor.shape))
-    padding = opts[:padding] || :valid
     dilations = opts[:window_dilations] || List.duplicate(1, rank(tensor.shape))
 
     dilations =
@@ -6066,9 +6090,9 @@ defmodule Nx do
   """
   @doc type: :element
   def map(tensor, opts \\ [], fun) do
-    assert_keys!(opts, [:type])
-    %T{type: type} = tensor = tensor!(tensor)
-    output_type = opts[:type] || type
+    %T{type: type} = tensor = to_tensor(tensor)
+    opts = keyword!(opts, [type: type])
+    output_type = opts[:type]
     out = %{tensor | type: output_type}
     impl!(tensor).map(out, tensor, fun)
   end
@@ -6244,8 +6268,8 @@ defmodule Nx do
   """
   @doc type: :ndim
   def dot(t1, t2) do
-    %T{shape: s1} = t1 = tensor!(t1)
-    %T{shape: s2} = t2 = tensor!(t2)
+    %T{shape: s1} = t1 = to_tensor(t1)
+    %T{shape: s2} = t2 = to_tensor(t2)
 
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
@@ -6343,8 +6367,8 @@ defmodule Nx do
   @doc type: :ndim
   def dot(t1, axes1, t2, axes2) do
     output_type = binary_type(t1, t2)
-    %T{shape: s1, names: names1} = t1 = tensor!(t1)
-    %T{shape: s2, names: names2} = t2 = tensor!(t2)
+    %T{shape: s1, names: names1} = t1 = to_tensor(t1)
+    %T{shape: s2, names: names2} = t2 = to_tensor(t2)
     axes1 = Nx.Shape.normalize_axes(s1, axes1, names1)
     axes2 = Nx.Shape.normalize_axes(s2, axes2, names2)
     {output_shape, output_names} = Nx.Shape.zip_reduce(s1, axes1, names1, s2, axes2, names2)
@@ -6394,8 +6418,8 @@ defmodule Nx do
   @doc type: :ndim
   def outer(t1, t2) do
     type = binary_type(t1, t2)
-    %T{shape: s1, names: n1} = t1 = tensor!(t1)
-    %T{shape: s2, names: n2} = t2 = tensor!(t2)
+    %T{shape: s1, names: n1} = t1 = to_tensor(t1)
+    %T{shape: s2, names: n2} = t2 = to_tensor(t2)
     new_shape = {size(s1), size(s2)}
 
     names =
@@ -6538,8 +6562,8 @@ defmodule Nx do
   """
   @doc type: :shape
   def transpose(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes])
-    %{shape: shape, names: names} = tensor = tensor!(tensor)
+    opts = keyword!(opts, [:axes])
+    %{shape: shape, names: names} = tensor = to_tensor(tensor)
     axes = opts[:axes] || Nx.Shape.transpose_axes(shape)
     axes = Nx.Shape.normalize_axes(shape, axes, names)
 
@@ -6618,8 +6642,8 @@ defmodule Nx do
   """
   @doc type: :ndim
   def reverse(tensor, opts \\ []) do
-    assert_keys!(opts, [:axes])
-    %{shape: shape, names: names} = tensor = tensor!(tensor)
+    opts = keyword!(opts, [:axes])
+    %{shape: shape, names: names} = tensor = to_tensor(tensor)
     axes = opts[:axes] || axes(shape)
 
     case Nx.Shape.normalize_axes(shape, axes, names) do
@@ -6789,28 +6813,28 @@ defmodule Nx do
   """
   @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do
-    assert_keys!(opts, [
-      :padding,
-      :strides,
-      :input_dilation,
-      :kernel_dilation,
-      :feature_group_size,
-      :batch_group_size,
+    opts = keyword!(opts, [
       :input_permutation,
       :kernel_permutation,
-      :output_permutation
+      :output_permutation,
+      padding: :valid,
+      strides: 1,
+      input_dilation: 1,
+      kernel_dilation: 1,
+      feature_group_size: 1,
+      batch_group_size: 1
     ])
 
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
-    strides = opts[:strides] || 1
-    padding = opts[:padding] || :valid
-    input_dilation = opts[:input_dilation] || 1
-    kernel_dilation = opts[:kernel_dilation] || 1
-    feature_group_count = opts[:feature_group_size] || 1
-    batch_group_count = opts[:batch_group_size] || 1
+    padding = opts[:padding]
+    strides = opts[:strides]
+    input_dilation = opts[:input_dilation]
+    kernel_dilation = opts[:kernel_dilation]
+    feature_group_count = opts[:feature_group_size]
+    batch_group_count = opts[:batch_group_size]
 
-    %{shape: input_shape, names: input_names} = tensor = tensor!(tensor)
-    %{shape: kernel_shape, names: kernel_names} = kernel = tensor!(kernel)
+    %{shape: input_shape, names: input_names} = tensor = to_tensor(tensor)
+    %{shape: kernel_shape, names: kernel_names} = kernel = to_tensor(kernel)
 
     input_permutation = opts[:input_permutation] || axes(input_shape)
     input_permutation = Nx.Shape.normalize_axes(input_shape, input_permutation, input_names)
@@ -6940,9 +6964,9 @@ defmodule Nx do
   """
   @doc type: :element
   def clip(tensor, min, max) do
-    %T{type: type} = tensor = tensor!(tensor)
-    %T{type: min_type, shape: min_shape} = min = tensor!(min)
-    %T{type: max_type, shape: max_shape} = max = tensor!(max)
+    %T{type: type} = tensor = to_tensor(tensor)
+    %T{type: min_type, shape: min_shape} = min = to_tensor(min)
+    %T{type: max_type, shape: max_shape} = max = to_tensor(max)
 
     if min_shape != {} do
       raise ArgumentError, "min value must be a scalar shape, got: #{inspect(min_shape)}"
@@ -7049,9 +7073,9 @@ defmodule Nx do
   @doc type: :shape
   def slice(tensor, start_indices, lengths, opts \\ [])
       when is_list(start_indices) and is_list(lengths) and is_list(opts) do
-    assert_keys!(opts, [:strides])
-    %T{shape: shape} = tensor = tensor!(tensor)
-    strides = opts[:strides] || 1
+    opts = keyword!(opts, [strides: 1])
+    %T{shape: shape} = tensor = to_tensor(tensor)
+    strides = opts[:strides]
 
     strides =
       if is_integer(strides),
@@ -7111,8 +7135,8 @@ defmodule Nx do
   """
   def slice_axis(tensor, start_index, len, axis, opts \\ [])
       when is_integer(start_index) and is_integer(len) do
-    assert_keys!(opts, [:strides])
-    %T{shape: shape, names: names} = tensor = tensor!(tensor)
+    opts = keyword!(opts, [:strides])
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
     start_indices = List.duplicate(0, rank(tensor)) |> List.replace_at(axis, start_index)
     lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
@@ -7223,8 +7247,8 @@ defmodule Nx do
   """
   @doc type: :ndim
   def concatenate(tensors, opts \\ []) when is_list(tensors) do
-    assert_keys!(opts, [:axis])
-    axis = opts[:axis] || 0
+    opts = keyword!(opts, [axis: 0])
+    axis = opts[:axis]
 
     case tensors do
       [] ->
@@ -7237,7 +7261,7 @@ defmodule Nx do
         {tensors, [type1 | rest], [s1 | _] = shapes, [n1 | _] = names} =
           tensors
           |> Enum.map(fn t ->
-            %T{type: type, shape: shape, names: names} = t = tensor!(t)
+            %T{type: type, shape: shape, names: names} = t = to_tensor(t)
             {t, type, shape, names}
           end)
           |> unzip4()
@@ -7307,7 +7331,7 @@ defmodule Nx do
   """
   @doc type: :linalg
   def cholesky(tensor) do
-    %T{type: type, shape: shape, names: names} = tensor = tensor!(tensor)
+    %T{type: type, shape: shape, names: names} = tensor = to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
 
@@ -7439,8 +7463,8 @@ defmodule Nx do
   """
   @doc type: :linalg
   def norm(tensor, opts \\ []) when is_list(opts) do
-    %{shape: s} = t = tensor!(tensor)
-    assert_keys!(opts, [:ord, :axes])
+    %{shape: s} = t = to_tensor(tensor)
+    opts = keyword!(opts, [:ord, :axes])
     rank = rank(t)
 
     unless rank == 1 or rank == 2,
@@ -7623,19 +7647,18 @@ defmodule Nx do
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    assert_keys!(opts, [:axis, :comparator])
-    comparator = opts[:comparator] || :desc
+    opts = keyword!(opts, [axis: 0, comparator: :desc])
+    comparator = opts[:comparator]
 
-    %T{shape: shape, names: names} = tensor = tensor!(tensor)
-
-    axis = opts[:axis] || 0
-    axis = Nx.Shape.normalize_axis(shape, axis, names)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
     impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
   end
 
   @doc """
   Solve the equation `a x = b` for x, assuming `a` is a lower triangular matrix.
+
   `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
   with as many rows as `a`.
 
@@ -7669,10 +7692,10 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]), trans: 0)
+      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) expected a square matrix, got: {2, 4}
 
-      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]), trans: 0)
+      iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) incompatible dimensions for a and b on triangular solve
 
       iex> Nx.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
@@ -7681,9 +7704,10 @@ defmodule Nx do
   """
   @doc type: :linalg
   def triangular_solve(a, b, opts \\ []) do
+    opts = keyword!(opts, [])
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
-    %T{shape: s1 = {m, _}} = a = tensor!(a)
-    %T{shape: b_shape} = b = tensor!(b)
+    %T{shape: s1 = {m, _}} = a = to_tensor(a)
+    %T{shape: b_shape} = b = to_tensor(b)
 
     case shape(s1) do
       {n, n} -> {n, n}
@@ -7701,8 +7725,7 @@ defmodule Nx do
         raise ArgumentError, "incompatible dimensions for a and b on triangular solve"
     end
 
-    assert_keys!(opts, [])
-    impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, [])
+    impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
   end
 
   @doc """
@@ -7748,8 +7771,8 @@ defmodule Nx do
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
   def solve(a, b) do
-    %T{shape: a_shape} = a = tensor!(a)
-    %T{shape: b_shape} = b = tensor!(b)
+    %T{shape: a_shape} = a = to_tensor(a)
+    %T{shape: b_shape} = b = to_tensor(b)
 
     Nx.Shape.solve(a_shape, b_shape)
 
@@ -7822,7 +7845,7 @@ defmodule Nx do
   """
   @doc type: :linalg
   def invert(tensor) do
-    %T{shape: {m, n}} = tensor = tensor!(tensor)
+    %T{shape: {m, n}} = tensor = to_tensor(tensor)
 
     if m != n do
       raise ArgumentError,
@@ -7941,9 +7964,9 @@ defmodule Nx do
   """
   @doc type: :linalg
   def qr(tensor, opts \\ []) do
-    %T{type: type, shape: shape} = tensor = tensor!(tensor)
-    assert_keys!(opts, [:mode])
-    opts = Keyword.put_new(opts, :mode, :reduced)
+    opts = keyword!(opts, [mode: :reduced])
+    %T{type: type, shape: shape} = tensor = to_tensor(tensor)
+
     mode = opts[:mode]
     valid_modes = [:reduced, :complete]
 
@@ -8036,8 +8059,9 @@ defmodule Nx do
   """
   @doc type: :linalg
   def svd(tensor, opts \\ []) do
-    %T{type: type, shape: shape} = tensor = tensor!(tensor)
-    assert_keys!(opts, [:eps, :max_iter])
+    opts = keyword!(opts, [:eps, :max_iter])
+    %T{type: type, shape: shape} = tensor = to_tensor(tensor)
+
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape)
 
@@ -8142,8 +8166,8 @@ defmodule Nx do
   """
   @doc type: :linalg
   def lu(tensor, opts \\ []) do
-    %T{type: type, shape: shape} = tensor = tensor!(tensor)
-    assert_keys!(opts, [:eps])
+    opts = keyword!(opts, [:eps])
+    %T{type: type, shape: shape} = tensor = to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
@@ -8159,19 +8183,6 @@ defmodule Nx do
   end
 
   ## Helpers
-
-  defp tensor!(%T{} = t),
-    do: t
-
-  defp tensor!(number) when is_number(number) do
-    type = Nx.Type.infer(number)
-    out = %T{shape: {}, type: type, names: []}
-    Nx.BinaryBackend.from_binary(out, number_to_binary(number, type), [])
-  end
-
-  defp tensor!(t) do
-    raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
-  end
 
   defp backend!(backend) when is_atom(backend),
     do: {backend, []}
@@ -8205,21 +8216,4 @@ defmodule Nx do
 
   defp names!(%T{names: names}), do: names
   defp names!(_), do: nil
-
-  defp assert_keys!(keyword, valid) do
-    for kv <- keyword do
-      case kv do
-        {k, _} ->
-          if k not in valid do
-            raise ArgumentError,
-                  "unknown key #{inspect(k)} in #{inspect(keyword)}, " <>
-                    "expected one of #{inspect(valid)}"
-          end
-
-        _ ->
-          raise ArgumentError,
-                "expected a keyword list with keys #{inspect(valid)}, got: #{inspect(keyword)}"
-      end
-    end
-  end
 end
