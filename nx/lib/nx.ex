@@ -42,7 +42,11 @@ defmodule Nx do
   ## Creating tensors
 
   The main APIs for creating tensors are `tensor/2`, `from_binary/2`,
-  `iota/2`, `random_uniform/2`, `random_normal/2`, and `broadcast/3`.
+  `iota/2`, `eye/2`, `random_uniform/2`, `random_normal/2`, and
+  `broadcast/3`.
+
+  All other APIs accept exclusively numbers or tensors, unless
+  explicitly noted otherwise.
 
   ## Broadcasting
 
@@ -1110,8 +1114,9 @@ defmodule Nx do
   Converts the given number (or tensor) to a tensor.
 
   This function exists for data normalization. If your
-  goal is to create tensors from numbers and lists,
-  use `tensor/2` instead.
+  goal is to create tensors from lists, see `tensor/2`.
+  If you want to create a tensor from binary, see
+  `from_binary/3`.
   """
   @doc type: :conversion
   def to_tensor(%T{} = t),
