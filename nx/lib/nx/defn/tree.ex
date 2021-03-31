@@ -197,6 +197,14 @@ defmodule Nx.Defn.Tree do
     from_compile_args(args, [arg | cache], vars)
   end
 
+  defp from_compile_args([arg | args], cache, vars) when is_tuple(arg) do
+    if arg |> Tuple.to_list() |> Enum.all?(&is_function/1) do
+      from_compile_args(args, [arg | cache], vars)
+    else
+      from_compile_args(args, cache, [arg | vars])
+    end
+  end
+
   defp from_compile_args([arg | args], cache, vars) do
     from_compile_args(args, cache, [arg | vars])
   end
@@ -220,10 +228,21 @@ defmodule Nx.Defn.Tree do
   def from_arg(%T{} = t), do: t
   def from_arg(number) when is_number(number), do: Nx.tensor(number)
 
+  def from_arg(other) when is_function(other) do
+    raise(
+      ArgumentError,
+      "arguments to defn must be numbers, tensors, and functions. " <>
+        "It may also be a tuple with said elements, although the tuple " <>
+        "must contain only functions or only number/tensors, not both. " <>
+        "Got the following function inside a tuple: #{inspect(other)}"
+    )
+  end
+
   def from_arg(other) do
     raise(
       ArgumentError,
-      "arguments to defn functions must numbers, tensors, or tuples, got: #{inspect(other)}"
+      "arguments to defn must be numbers, tensors, and functions, or a tuple of said elements. " <>
+        "Got: #{inspect(other)}"
     )
   end
 
@@ -261,8 +280,13 @@ defmodule Nx.Defn.Tree do
 
   defp args_to(args, acc, fun) when is_list(args) do
     Enum.map_reduce(args, acc, fn
-      arg, acc when is_function(arg) -> {arg, acc}
-      arg, acc -> args_to_each(arg, acc, fun)
+      arg, acc
+      when is_function(arg)
+      when is_tuple(arg) and is_function(elem(arg, 0)) ->
+        {arg, acc}
+
+      arg, acc ->
+        args_to_each(arg, acc, fun)
     end)
   end
 
