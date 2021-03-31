@@ -1087,7 +1087,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {q, r} = B.Decomposition.qr(bin, input_type, input_shape, output_type, m, k, n, opts)
+    {q, r} = B.Matrix.qr(bin, input_type, input_shape, output_type, m, k, n, opts)
     {from_binary(q_holder, q), from_binary(r_holder, r)}
   end
 
@@ -1098,7 +1098,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {u, s, v} = B.Decomposition.svd(bin, input_type, input_shape, output_type, opts)
+    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, output_type, opts)
     {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 
@@ -1109,7 +1109,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {p, l, u} = B.Decomposition.lu(bin, input_type, input_shape, p_type, l_type, u_type, opts)
+    {p, l, u} = B.Matrix.lu(bin, input_type, input_shape, p_type, l_type, u_type, opts)
     {from_binary(p_holder, p), from_binary(l_holder, l), from_binary(u_holder, u)}
   end
 
@@ -1123,7 +1123,7 @@ defmodule Nx.BinaryBackend do
       when b_shape == {rows, rows} or b_shape == {rows} do
     a_data = to_binary(a)
     b_data = to_binary(b)
-    out_bin = B.Decomposition.ts(a_data, a_type, b_data, b_type, b_shape, output_type, opts)
+    out_bin = B.Matrix.ts(a_data, a_type, b_data, b_type, b_shape, output_type, opts)
     from_binary(out, out_bin)
   end
 

@@ -52,7 +52,7 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "decompositions" do
-    defn lu(t), do: Nx.lu(t)
+    defn lu(t), do: Nx.LinAlg.lu(t)
 
     test "lu" do
       assert {p, l, u} = lu(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
@@ -61,7 +61,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert u == Nx.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
     end
 
-    defn qr(t), do: Nx.qr(t)
+    defn qr(t), do: Nx.LinAlg.qr(t)
 
     test "qr" do
       assert {q, r} = qr(Nx.iota({3, 2}))
@@ -69,7 +69,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
     end
 
-    defn svd(t), do: Nx.svd(t)
+    defn svd(t), do: Nx.LinAlg.svd(t)
 
     test "svd" do
       assert {u, s, vt} = svd(Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))

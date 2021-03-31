@@ -1,4 +1,4 @@
-defmodule Nx.BinaryBackend.Decomposition do
+defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
   @default_eps 1.0e-10
   import Nx.Shared

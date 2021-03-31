@@ -500,14 +500,16 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [fun]}, meta, args}, state}
   end
 
-  defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
+  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state)
+       when mod in [Nx, Nx.LinAlg] do
     if name in @forbidden_ops do
-      compile_error!(meta, state, "Nx.#{name}/#{length(args)} is not allowed inside defn")
+      mfa = Exception.format_mfa(mod, name, length(args))
+      compile_error!(meta, state, "#{mfa} is not allowed inside defn")
     end
 
     {args, state} = normalize_list(args, state)
     args = rewrite_args(name, args)
-    {{{:., dot_meta, [Nx, name]}, meta, args}, state}
+    {{{:., dot_meta, [mod, name]}, meta, args}, state}
   end
 
   defp normalize({{:., _, [Nx.Defn.Kernel, name]} = call, meta, args}, state) do

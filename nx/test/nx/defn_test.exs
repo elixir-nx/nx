@@ -733,7 +733,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "lu" do
-    defn lu(t), do: Nx.lu(t)
+    defn lu(t), do: Nx.LinAlg.lu(t)
 
     test "returns tuples" do
       assert {p, l, u} = lu(Nx.iota({3, 3}))
@@ -745,7 +745,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "qr" do
-    defn qr(t), do: Nx.qr(t)
+    defn qr(t), do: Nx.LinAlg.qr(t)
 
     test "returns tuples" do
       assert {left, right} = qr(Nx.iota({3, 2}))
@@ -756,7 +756,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "svd" do
-    defn svd(t), do: Nx.svd(t)
+    defn svd(t), do: Nx.LinAlg.svd(t)
 
     test "returns tuples" do
       assert {u, s, vt} = svd(Nx.iota({3, 3}))
