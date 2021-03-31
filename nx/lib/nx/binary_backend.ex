@@ -31,6 +31,7 @@ defmodule Nx.BinaryBackend do
   def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
     min = to_scalar(min)
     max = to_scalar(max)
+
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
@@ -46,6 +47,7 @@ defmodule Nx.BinaryBackend do
   def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
     mu = to_scalar(mu)
     sigma = to_scalar(sigma)
+
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
@@ -1115,12 +1117,13 @@ defmodule Nx.BinaryBackend do
   def triangular_solve(
         %{type: output_type} = out,
         %{type: a_type, shape: {rows, rows}} = a,
-        %{type: b_type, shape: {rows}} = b,
+        %{type: b_type, shape: b_shape} = b,
         opts
-      ) do
+      )
+      when b_shape == {rows, rows} or b_shape == {rows} do
     a_data = to_binary(a)
     b_data = to_binary(b)
-    out_bin = B.Decomposition.ts(a_data, a_type, b_data, b_type, rows, output_type, opts)
+    out_bin = B.Decomposition.ts(a_data, a_type, b_data, b_type, b_shape, output_type, opts)
     from_binary(out, out_bin)
   end
 

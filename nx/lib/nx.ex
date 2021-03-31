@@ -683,8 +683,8 @@ defmodule Nx do
 
     unless min_shape == {} and max_shape == {} do
       raise ArgumentError,
-             "random_uniform/3 expects min and max to be scalars, got:" <>
-             " min shape: #{inspect(min_shape)} and max shape: #{inspect(max_shape)}"
+            "random_uniform/3 expects min and max to be scalars, got:" <>
+              " min shape: #{inspect(min_shape)} and max shape: #{inspect(max_shape)}"
     end
 
     unless Nx.Type.float?(type) or (Nx.Type.integer?(type) and Nx.Type.integer?(range_type)) do
@@ -797,13 +797,15 @@ defmodule Nx do
     type = Nx.Type.normalize!(opts[:type] || {:f, 32})
 
     unless mu_shape == {} and sigma_shape == {} do
-      raise ArgumentError, "random_normal/3 expects mu and sigma to be scalars" <>
-                           " got: mu shape: #{inspect(mu_shape)} and sigma shape: #{inspect(sigma_shape)}"
+      raise ArgumentError,
+            "random_normal/3 expects mu and sigma to be scalars" <>
+              " got: mu shape: #{inspect(mu_shape)} and sigma shape: #{inspect(sigma_shape)}"
     end
 
     unless Nx.Type.float?(mu_type) and Nx.Type.float?(sigma_type) do
-      raise ArgumentError, "random_normal/3 expects mu and sigma to be float types," <>
-                           " got: mu type: #{inspect(mu_type)} and sigma type: #{inspect(sigma_type)}"
+      raise ArgumentError,
+            "random_normal/3 expects mu and sigma to be float types," <>
+              " got: mu type: #{inspect(mu_type)} and sigma type: #{inspect(sigma_type)}"
     end
 
     unless Nx.Type.float?(type) do
@@ -7634,6 +7636,8 @@ defmodule Nx do
 
   @doc """
   Solve the equation `a x = b` for x, assuming `a` is a lower triangular matrix.
+  `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
+  with as many rows as `a`.
 
   ## Examples
 
@@ -7650,14 +7654,26 @@ defmodule Nx do
         f64[3]
         [1.0, 1.0, -1.0]
       >
-      
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      iex> b = Nx.tensor([[1, 2, 3], [2, 2, 4], [2, 0, 1]])
+      iex> Nx.triangular_solve(a, b)
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 2.0, 3.0],
+          [1.0, 0.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]), trans: 0)
       ** (ArgumentError) expected a square matrix, got: {2, 4}
 
       iex> Nx.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]), trans: 0)
-      ** (ArgumentError) incompatible dimensions for a and b on tringular solve
+      ** (ArgumentError) incompatible dimensions for a and b on triangular solve
 
       iex> Nx.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) can't solve for singular matrix
@@ -7667,19 +7683,154 @@ defmodule Nx do
   def triangular_solve(a, b, opts \\ []) do
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: s1 = {m, _}} = a = tensor!(a)
-    %T{shape: {q}} = b = tensor!(b)
+    %T{shape: b_shape} = b = tensor!(b)
 
     case shape(s1) do
       {n, n} -> {n, n}
       other -> raise ArgumentError, "expected a square matrix, got: #{inspect(other)}"
     end
 
-    if m != q do
-      raise ArgumentError, "incompatible dimensions for a and b on tringular solve"
+    case b_shape do
+      {^m, ^m} ->
+        nil
+
+      {^m} ->
+        nil
+
+      _ ->
+        raise ArgumentError, "incompatible dimensions for a and b on triangular solve"
     end
 
     assert_keys!(opts, [])
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, [])
+  end
+
+  @doc """
+  Solves the system `AX = B`.
+
+  `A` must have shape `{n, n}` and `B` must have shape `{n, m}` or `{n}`.
+  `X` has the same shape as `B`.
+
+  ## Examples
+
+      iex> a = Nx.tensor([[1, 3, 2, 1], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      iex> Nx.solve(a, Nx.tensor([-3, 0, 4, -2])) |> Nx.round()
+      #Nx.Tensor<
+        f32[4]
+        [1.0, -2.0, 3.0, -4.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.solve(a, Nx.tensor([0, 2, 1])) |> Nx.round()
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [0, 1, 1]])
+      iex> b = Nx.tensor([[2, 2, 3], [2, 2, 4], [2, 0, 1]])
+      iex> Nx.solve(a, b) |> Nx.round()
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [1.0, 2.0, 3.0],
+          [1.0, 0.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ]
+      >
+
+    ### Error cases
+
+      iex> Nx.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
+      ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
+
+      iex> Nx.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
+      ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
+  """
+  def solve(a, b) do
+    %T{shape: a_shape} = a = tensor!(a)
+    %T{shape: b_shape} = b = tensor!(b)
+
+    Nx.Shape.solve(a_shape, b_shape)
+
+    # We need to achieve an LQ decomposition for `a` (henceforth called A)
+    # because triangular_solve only accepts lower_triangular matrices
+    # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
+    # If we set M = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
+
+    # Given A = LQ, we can then solve AX = B as shown below
+    # AX = B -> L(QX) = B -> LY = B, where Y = QX -> X = transpose(Q)Y
+
+    # Finally, it can be shown that when B is a matrix, X can be
+    # calculated by solving for each corresponding column in B
+    {qt, r_prime} = a |> transpose() |> qr()
+
+    l = transpose(r_prime)
+
+    y = triangular_solve(l, b)
+
+    dot(qt, y)
+  end
+
+  @doc """
+  Invert a square 2-D tensor.
+
+  For non-square tensors, use `Nx.svd/2` for pseudo-inverse calculations.
+
+  ## Examples
+
+      iex> a = Nx.tensor([[1, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      iex> a_inv = Nx.invert(a)
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [1.0, 0.0, 0.0, 0.0],
+          [-2.0, 1.0, 0.0, 0.0],
+          [-1.0, 0.0, 1.0, 0.0],
+          [2.0, -1.0, -1.0, 1.0]
+        ]
+      >
+      iex> Nx.dot(a, a_inv)
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ]
+      >
+      iex> Nx.dot(a_inv, a)
+      #Nx.Tensor<
+        f32[4][4]
+        [
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ]
+      >
+
+  ### Error cases
+
+      iex> Nx.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
+      ** (ArgumentError) can only invert square matrices, got: {2, 4}
+
+      iex> Nx.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
+      ** (ArgumentError) can't solve for singular matrix
+
+  """
+  @doc type: :linalg
+  def invert(tensor) do
+    %T{shape: {m, n}} = tensor = tensor!(tensor)
+
+    if m != n do
+      raise ArgumentError,
+            "can only invert square matrices, got: {#{m}, #{n}}"
+    end
+
+    identity = eye(tensor)
+    solve(tensor, identity)
   end
 
   @doc """
