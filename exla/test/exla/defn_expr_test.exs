@@ -2539,7 +2539,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "decompositions" do
-    defn ts(a, b), do: Nx.triangular_solve(a, b)
+    defn ts(a, b), do: Nx.LinAlg.triangular_solve(a, b)
 
     test "triangular_solve" do
       a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
@@ -2547,8 +2547,8 @@ defmodule EXLA.DefnExprTest do
       assert compare_tensors!(Nx.dot(a, ts(a, b)), b)
     end
 
-    defn qr(t), do: Nx.qr(t)
-    defn qr_complete(t), do: Nx.qr(t, mode: :complete)
+    defn qr(t), do: Nx.LinAlg.qr(t)
+    defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
     test "qr" do
       input = Nx.iota({3, 2})
@@ -2565,7 +2565,7 @@ defmodule EXLA.DefnExprTest do
       assert compare_tensors!(Nx.dot(q, r), output)
     end
 
-    defn svd(t), do: Nx.svd(t)
+    defn svd(t), do: Nx.LinAlg.svd(t)
 
     test "svd" do
       input = Nx.iota({3, 3})
@@ -2626,7 +2626,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "cholesky" do
-    defn cholesky(t), do: Nx.cholesky(t)
+    defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 
     test "works on 2x2 matrix" do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
@@ -2660,7 +2660,7 @@ defmodule EXLA.DefnExprTest do
       tensor = Nx.random_normal({50, 50})
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
       lhs = cholesky(tensor)
-      rhs = Nx.cholesky(tensor)
+      rhs = Nx.LinAlg.cholesky(tensor)
       compare_tensors!(lhs, rhs, atol: 1.0e-5, rtol: 1.0e-2)
     end
   end
