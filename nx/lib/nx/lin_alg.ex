@@ -317,10 +317,10 @@ defmodule Nx.LinAlg do
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, [])
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
-    %T{shape: s1 = {m, _}} = a = Nx.to_tensor(a)
+    %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
-    case s1 do
+    case a_shape do
       {n, n} -> nil
       other -> raise ArgumentError, "expected a square matrix, got: #{inspect(other)}"
     end
