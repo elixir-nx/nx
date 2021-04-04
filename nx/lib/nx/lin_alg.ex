@@ -305,7 +305,7 @@ defmodule Nx.LinAlg do
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
-      ** (ArgumentError) expected a square matrix, got: {2, 4}
+      ** (ArgumentError) expected a square matrix, got matrix with shape: {2, 4}
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) incompatible dimensions for a and b on triangular solve
@@ -317,12 +317,12 @@ defmodule Nx.LinAlg do
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, [])
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
-    %T{shape: s1 = {m, _}} = a = Nx.to_tensor(a)
+    %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
-    case s1 do
-      {n, n} -> {n, n}
-      other -> raise ArgumentError, "expected a square matrix, got: #{inspect(other)}"
+    case a_shape do
+      {n, n} -> nil
+      other -> raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
     end
 
     case b_shape do
