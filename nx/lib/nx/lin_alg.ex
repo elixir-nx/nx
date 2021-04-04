@@ -321,7 +321,7 @@ defmodule Nx.LinAlg do
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
     case s1 do
-      {n, n} -> {n, n}
+      {n, n} -> nil
       other -> raise ArgumentError, "expected a square matrix, got: #{inspect(other)}"
     end
 
