@@ -65,7 +65,7 @@ defmodule EXLA.LockedCacheTest do
   end
 
   @tag :capture_log
-  test "allows cache to be recomputed if cache exiots when locked", config do
+  test "allows cache to be recomputed if cache exits when locked", config do
     Process.flag(:trap_exit, true)
     %Task{pid: error_pid, ref: error_ref} = task_run(config.test, fn -> raise "oops" end)
     assert_receive {:running, ^error_pid}
