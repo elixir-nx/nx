@@ -21,7 +21,7 @@ defmodule EXLA.Computation do
 
   Some options apply to TPU only and therefore are not currently supported:
 
-    * `:num_partitions` - the number of partitions this computatio will run on
+    * `:num_partitions` - the number of partitions this computation will run on
 
   """
   def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options \\ []) do
