@@ -7299,6 +7299,12 @@ defmodule Nx do
 
   If no axis is given, defaults to `0`.
 
+  ### Options
+
+  * `:axis`: The name or number of the corresponding axis on which the sort should be applied.
+  * `:return_indices`: If `true`, returns the sorted indices instead of the values. Defaults to `false`
+  * `:comparator`: Can be `:asc`, `:desc` or a arity-2 function for comparison between two tensor elements. Defaults to `:asc`
+
   ### Examples
 
       iex> Nx.sort(Nx.tensor([16, 23, 42, 4, 8, 15]))
@@ -7394,7 +7400,7 @@ defmodule Nx do
         ]
       >
 
-    ### Returning indices instead of values
+    ### Returning the corresponding tensor indices instead of the original values
 
       iex> Nx.sort(Nx.tensor([16, 23, 42, 4, 8, 15]), return_indices: true)
       #Nx.Tensor<
