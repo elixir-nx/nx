@@ -7301,6 +7301,12 @@ defmodule Nx do
 
   ### Examples
 
+      iex> Nx.sort(Nx.tensor([16, 23, 42, 4, 8, 15]))
+      #Nx.Tensor<
+        s64[6]
+        [4, 8, 15, 16, 23, 42]
+      >
+
       iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x)
       #Nx.Tensor<
         s64[x: 2][y: 3]
@@ -7387,22 +7393,63 @@ defmodule Nx do
           [3, 5, 7]
         ]
       >
+
+    ### Returning indices instead of values
+
+      iex> Nx.sort(Nx.tensor([16, 23, 42, 4, 8, 15]), return_indices: true)
+      #Nx.Tensor<
+        u64[6]
+        [3, 4, 5, 0, 1, 2]
+      >
+
+      iex> tensor = Nx.tensor([[[4, 5, 2],[2, 5, 3],[5, 0, 2]],[[1, 9, 8],[2, 1, 3],[2, 1, 4]]],names: [:x, :y, :z])
+      #Nx.Tensor<
+        s64[x: 2][y: 3][z: 3]
+        [
+          [
+            [4, 5, 2],
+            [2, 5, 3],
+            [5, 0, 2]
+          ],
+          [
+            [1, 9, 8],
+            [2, 1, 3],
+            [2, 1, 4]
+          ]
+        ]
+      >
+      iex> Nx.sort(tensor, axis: :z, return_indices: true)
+      #Nx.Tensor<
+        u64[x: 2][y: 3][z: 3]
+        [
+          [
+            [2, 0, 1],
+            [0, 2, 1],
+            [1, 2, 0]
+          ],
+          [
+            [0, 2, 1],
+            [1, 0, 2],
+            [1, 0, 2]
+          ]
+        ]
+      >
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, comparator: :desc, argsort: false)
+    opts = keyword!(opts, axis: 0, comparator: :desc, return_indices: false)
     comparator = opts[:comparator]
-    argsort = opts[:argsort]
+    return_indices = opts[:return_indices]
 
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    output_type = if argsort, do: {:u, 64}, else: tensor.type
+    output_type = if return_indices, do: {:u, 64}, else: tensor.type
 
-    impl!(tensor).sort(tensor, tensor,
+    impl!(tensor).sort(%{tensor | type: output_type}, tensor,
       axis: axis,
       comparator: comparator,
-      argsort: argsort
+      return_indices: return_indices
     )
   end
 

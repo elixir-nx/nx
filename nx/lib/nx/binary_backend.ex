@@ -1578,7 +1578,7 @@ defmodule Nx.BinaryBackend do
     last_axis = Nx.rank(t) - 1
 
     axis = opts[:axis]
-    argsort = opts[:argsort]
+    return_indices = opts[:return_indices]
 
     comparator =
       case opts[:comparator] do
@@ -1597,14 +1597,14 @@ defmodule Nx.BinaryBackend do
       end
 
     case shape do
-      {} when argsort ->
-        sort_last_dim(t, comparator, output, argsort)
+      {} when return_indices ->
+        sort_last_dim(t, comparator, output, return_indices)
 
       {} ->
         t
 
       _ when axis == last_axis ->
-        sort_last_dim(t, comparator, output, argsort)
+        sort_last_dim(t, comparator, output, return_indices)
 
       _ ->
         permutation = Nx.axes(t)
@@ -1623,12 +1623,17 @@ defmodule Nx.BinaryBackend do
         permuted_t = Nx.transpose(t, axes: permutation)
 
         permuted_t
-        |> sort_last_dim(comparator, %{permuted_t | type: output.type}, argsort)
+        |> sort_last_dim(comparator, %{permuted_t | type: output.type}, return_indices)
         |> Nx.transpose(axes: inverse_permutation)
     end
   end
 
-  defp sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator, output, argsort) do
+  defp sort_last_dim(
+         %T{shape: shape, type: {_, size} = type} = t,
+         comparator,
+         output,
+         return_indices
+       ) do
     view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
 
     new_data =
@@ -1641,11 +1646,11 @@ defmodule Nx.BinaryBackend do
           end
 
         sorted =
-          if argsort do
+          if return_indices do
             data
             |> Enum.with_index()
             |> Enum.sort_by(&elem(&1, 0), comparator)
-            |> Enum.map(&elem(&1, 1))
+            |> Enum.map(fn {_, index} -> scalar_to_binary(index, output.type) end)
           else
             Enum.sort(data, comparator)
           end
