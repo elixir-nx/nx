@@ -1228,7 +1228,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "unknown key :blep in [blep: :all_day], expected one of [:axis, :comparator]",
+        "unknown key :blep in [blep: :all_day], expected one of [:axis, :comparator, :argsort]",
         fn ->
           Nx.sort(t, blep: :all_day)
         end
@@ -1240,7 +1240,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "expected a keyword list with keys [:axis, :comparator], got: [:blep]",
+        "expected a keyword list with keys [:axis, :comparator, :argsort], got: [:blep]",
         fn ->
           Nx.sort(t, [:blep])
         end

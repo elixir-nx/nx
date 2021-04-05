@@ -1109,7 +1109,6 @@ defmodule Nx do
     impl!(tensor).to_binary(tensor, limit)
   end
 
-
   @doc """
   Converts the given number (or tensor) to a tensor.
 
@@ -3999,7 +3998,7 @@ defmodule Nx do
       >
   """
   def scatter_window_max(tensor, source, window_dimensions, opts \\ [], init_value) do
-    opts = keyword!(opts, [padding: :valid, strides: 1])
+    opts = keyword!(opts, padding: :valid, strides: 1)
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
 
     %T{shape: input_shape} = tensor = to_tensor(tensor)
@@ -4084,7 +4083,7 @@ defmodule Nx do
       >
   """
   def scatter_window_min(tensor, source, window_dimensions, opts \\ [], init_value) do
-    opts = keyword!(opts, [padding: :valid, strides: 1])
+    opts = keyword!(opts, padding: :valid, strides: 1)
 
     %T{shape: input_shape} = tensor = to_tensor(tensor)
     %T{shape: source_shape, type: source_type} = source = to_tensor(source)
@@ -4540,7 +4539,7 @@ defmodule Nx do
   """
   @doc type: :aggregation
   def all_close?(a, b, opts \\ []) do
-    opts = keyword!(opts, [rtol: 1.0e-5, atol: 1.0e-8])
+    opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
     all?(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
@@ -6096,7 +6095,7 @@ defmodule Nx do
   @doc type: :element
   def map(tensor, opts \\ [], fun) do
     %T{type: type} = tensor = to_tensor(tensor)
-    opts = keyword!(opts, [type: type])
+    opts = keyword!(opts, type: type)
     output_type = opts[:type]
     out = %{tensor | type: output_type}
     impl!(tensor).map(out, tensor, fun)
@@ -6818,17 +6817,18 @@ defmodule Nx do
   """
   @doc type: :ndim
   def conv(tensor, kernel, opts \\ []) when is_list(opts) do
-    opts = keyword!(opts, [
-      :input_permutation,
-      :kernel_permutation,
-      :output_permutation,
-      padding: :valid,
-      strides: 1,
-      input_dilation: 1,
-      kernel_dilation: 1,
-      feature_group_size: 1,
-      batch_group_size: 1
-    ])
+    opts =
+      keyword!(opts, [
+        :input_permutation,
+        :kernel_permutation,
+        :output_permutation,
+        padding: :valid,
+        strides: 1,
+        input_dilation: 1,
+        kernel_dilation: 1,
+        feature_group_size: 1,
+        batch_group_size: 1
+      ])
 
     type = binary_type(tensor, kernel) |> Nx.Type.to_floating()
     padding = opts[:padding]
@@ -6871,12 +6871,12 @@ defmodule Nx do
     input_dilation =
       if is_list(input_dilation),
         do: input_dilation,
-        else: for(_ <- 1..Nx.rank(input_shape) - 2, do: input_dilation)
+        else: for(_ <- 1..(Nx.rank(input_shape) - 2), do: input_dilation)
 
     kernel_dilation =
       if is_list(kernel_dilation),
         do: kernel_dilation,
-        else: for(_ <- 1..Nx.rank(kernel_shape) - 2, do: kernel_dilation)
+        else: for(_ <- 1..(Nx.rank(kernel_shape) - 2), do: kernel_dilation)
 
     {shape, names, padding_config} =
       Nx.Shape.conv(
@@ -7078,7 +7078,7 @@ defmodule Nx do
   @doc type: :shape
   def slice(tensor, start_indices, lengths, opts \\ [])
       when is_list(start_indices) and is_list(lengths) and is_list(opts) do
-    opts = keyword!(opts, [strides: 1])
+    opts = keyword!(opts, strides: 1)
     %T{shape: shape} = tensor = to_tensor(tensor)
     strides = opts[:strides]
 
@@ -7252,7 +7252,7 @@ defmodule Nx do
   """
   @doc type: :ndim
   def concatenate(tensors, opts \\ []) when is_list(tensors) do
-    opts = keyword!(opts, [axis: 0])
+    opts = keyword!(opts, axis: 0)
     axis = opts[:axis]
 
     case tensors do
@@ -7390,13 +7390,20 @@ defmodule Nx do
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    opts = keyword!(opts, [axis: 0, comparator: :desc])
+    opts = keyword!(opts, axis: 0, comparator: :desc, argsort: false)
     comparator = opts[:comparator]
+    argsort = opts[:argsort]
 
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    impl!(tensor).sort(tensor, tensor, axis: axis, comparator: comparator)
+    output_type = if argsort, do: {:u, 64}, else: tensor.type
+
+    impl!(tensor).sort(tensor, tensor,
+      axis: axis,
+      comparator: comparator,
+      argsort: argsort
+    )
   end
 
   ## Helpers
