@@ -7458,13 +7458,13 @@ defmodule Nx do
 
       iex> Nx.argsort(Nx.tensor([16, 23, 42, 4, 8, 15]))
       #Nx.Tensor<
-        u64[6]
+        s64[6]
         [3, 4, 5, 0, 1, 2]
       >
 
       iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x)
       #Nx.Tensor<
-        u64[x: 2][y: 3]
+        s64[x: 2][y: 3]
         [
           [1, 0, 1],
           [0, 1, 0]
@@ -7473,7 +7473,7 @@ defmodule Nx do
 
       iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y)
       #Nx.Tensor<
-        u64[x: 2][y: 3]
+        s64[x: 2][y: 3]
         [
           [1, 0, 2],
           [0, 2, 1]
@@ -7482,7 +7482,7 @@ defmodule Nx do
 
       iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y, comparator: :asc)
       #Nx.Tensor<
-        u64[x: 2][y: 3]
+        s64[x: 2][y: 3]
         [
           [2, 0, 1],
           [1, 2, 0]
@@ -7492,7 +7492,7 @@ defmodule Nx do
       iex> tensor = Nx.tensor([[[4, 5], [2, 5], [5, 0]], [[1, 9], [2, 1], [2, 1]], [[0, -1], [-1, 0], [0, -1]], [[-1, 0], [0, -1], [-1, 0]]], names: [:x, :y, :z])
       iex> Nx.argsort(tensor, axis: :x)
       #Nx.Tensor<
-        u64[x: 4][y: 3][z: 2]
+        s64[x: 4][y: 3][z: 2]
         [
           [
             [3, 2],
@@ -7519,7 +7519,7 @@ defmodule Nx do
 
       iex> Nx.argsort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :x)
       #Nx.Tensor<
-        u64[x: 2][y: 3][z: 3]
+        s64[x: 2][y: 3][z: 3]
         [
           [
             [1, 0, 0],
@@ -7536,7 +7536,7 @@ defmodule Nx do
 
       iex> Nx.argsort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :y)
       #Nx.Tensor<
-        u64[x: 2][y: 3][z: 3]
+        s64[x: 2][y: 3][z: 3]
         [
           [
             [1, 2, 0],
@@ -7553,7 +7553,7 @@ defmodule Nx do
 
       iex> Nx.argsort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :z)
       #Nx.Tensor<
-        u64[x: 2][y: 3][z: 3]
+        s64[x: 2][y: 3][z: 3]
         [
           [
             [2, 0, 1],
@@ -7570,7 +7570,7 @@ defmodule Nx do
 
       iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x, comparator: &Nx.less/2)
       #Nx.Tensor<
-        u64[x: 2][y: 3]
+        s64[x: 2][y: 3]
         [
           [1, 0, 1],
           [0, 1, 0]
@@ -7585,7 +7585,7 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    impl!(tensor).argsort(%{tensor | type: {:u, 64}}, tensor,
+    impl!(tensor).argsort(%{tensor | type: {:s, 64}}, tensor,
       axis: axis,
       comparator: comparator
     )

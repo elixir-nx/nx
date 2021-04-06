@@ -1517,15 +1517,15 @@ ERL_NIF_TERM variadic_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
 
   std::vector<xla::XlaOp> operands;
   xla::XlaComputation* comparator;
-  std::vector<exla::int64> dimension;
+  exla::int64 dimension;
 
   if (!exla::nif::get_list<xla::XlaOp>(env, argv[0], operands)) {
     return exla::nif::error(env, "Unable to get operands.");
   }
-  if (!exla::nif::get_list<xla::XlaComputation>(env, argv[1], comparator)) {
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], comparator)) {
     return exla::nif::error(env, "Unable to get comparator.");
   }
-  if (!exla::nif::get_tuple(env, argv[2], dimension)) {
+  if (!exla::nif::get(env, argv[2], &dimension)) {
     return exla::nif::error(env, "Unable to get dimension.");
   }
 
@@ -2224,6 +2224,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reverse", 2, reverse},
   {"concatenate", 3, concatenate},
   {"sort", 3, sort},
+  {"variadic_sort", 3, variadic_sort},
   // LinAlg
   {"cholesky", 1, cholesky},
   {"eigh", 2, eigh},

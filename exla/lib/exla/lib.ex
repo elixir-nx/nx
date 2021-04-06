@@ -144,20 +144,16 @@ defmodule EXLA.Lib do
   @doc """
   Sorts a tensor and returns the corresponding indices in the new positions.
   """
-  def argsort(operand, type, dimension, comparator) do
+  def argsort(builder, operand, type, dimension, comparator) do
     op_shape = Op.get_shape(operand)
     iota = iota(builder, Shape.make_shape(type, op_shape.dims), dimension)
 
-    result =
-      Op.variadic_sort(
-        builder,
-        [operand, iota],
-        comparator,
-        dimension
-      )
-
-    result
-    |> Op.tuple()
+    builder
+    |> Op.variadic_sort(
+      [operand, iota],
+      comparator,
+      dimension
+    )
     |> Op.get_tuple_element(1)
   end
 end

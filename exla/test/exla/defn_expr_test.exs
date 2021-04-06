@@ -2625,6 +2625,47 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "argsort" do
+    defn argsort0(t), do: Nx.argsort(t, axis: 0)
+    defn argsort1(t), do: Nx.argsort(t, axis: 1)
+    defn argsort1_asc(t), do: Nx.argsort(t, axis: 1, comparator: :asc)
+    defn argsort2(t), do: Nx.argsort(t, axis: 2)
+
+    test "sorts a 1d tensor and returns its indices" do
+      assert argsort0(Nx.tensor([0, 5, 2, 1, 3, 4])) == Nx.tensor([0, 3, 2, 4, 5, 1])
+    end
+
+    test "sorts a 2d tensor along the 0th axis and returns its indices" do
+      assert argsort0(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[1, 0, 1], [0, 1, 0]])
+    end
+
+    test "sorts a 2d tensor along the 1st axis and returns its indices" do
+      assert argsort1(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[1, 0, 2], [0, 2, 1]])
+    end
+
+    test "sorts a 2d tensor along the 1st axis ascending and returns its indices" do
+      assert argsort1_asc(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[2, 0, 1], [1, 2, 0]])
+    end
+
+    test "sorts a 3d tensor along the 2nd axis and returns its indices" do
+      assert argsort2(
+               Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]])
+             ) ==
+               Nx.tensor([
+                 [
+                   [2, 0, 1],
+                   [0, 2, 1],
+                   [1, 2, 0]
+                 ],
+                 [
+                   [0, 2, 1],
+                   [1, 0, 2],
+                   [1, 0, 2]
+                 ]
+               ])
+    end
+  end
+
   describe "cholesky" do
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 

@@ -702,6 +702,25 @@ defmodule EXLA.Defn do
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
+  defp to_operator(:argsort, [tensor, opts, comparator], %{type: type, shape: shape}, state) do
+    dimension = opts[:axis]
+
+    # Grow the comparator to arity 4 because argsort uses
+    # variadic_sort underneath
+    path = [Access.key!(:data), Access.key!(:args)]
+    [[arg_1, arg_2], expr, fun] = get_in(comparator, path)
+
+    comparator_4 =
+      put_in(comparator, path, [
+        [arg_1, arg_2, arg_1, arg_2],
+        expr,
+        fn x, y, _, _ -> fun.(x, y) end
+      ])
+
+    comp = to_computation(comparator_4, {:pred, 8}, state)
+    EXLA.Lib.argsort(state.builder, tensor, type, dimension, comp)
+  end
+
   ## Computation helpers
 
   defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}}, type, state) do
