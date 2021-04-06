@@ -7340,6 +7340,34 @@ defmodule Nx do
         ]
       >
 
+      iex> tensor = Nx.tensor([[[4, 5], [2, 5], [5, 0]], [[1, 9], [2, 1], [2, 1]], [[0, -1], [-1, 0], [0, -1]], [[-1, 0], [0, -1], [-1, 0]]], names: [:x, :y, :z])
+      iex> Nx.sort(tensor, axis: :x)
+      #Nx.Tensor<
+        s64[x: 4][y: 3][z: 2]
+        [
+          [
+            [-1, -1],
+            [-1, -1],
+            [-1, -1]
+          ],
+          [
+            [0, 0],
+            [0, 0],
+            [0, 0]
+          ],
+          [
+            [1, 5],
+            [2, 1],
+            [2, 0]
+          ],
+          [
+            [4, 9],
+            [2, 5],
+            [5, 1]
+          ]
+        ]
+      >
+
       iex> Nx.sort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :x)
       #Nx.Tensor<
         s64[x: 2][y: 3][z: 3]
@@ -7399,32 +7427,131 @@ defmodule Nx do
           [3, 5, 7]
         ]
       >
+  """
+  @doc type: :ndim
+  def sort(tensor, opts \\ []) do
+    opts = keyword!(opts, axis: 0, comparator: :desc)
+    comparator = opts[:comparator]
 
-    ### Returning the corresponding tensor indices instead of the original values
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-      iex> Nx.sort(Nx.tensor([16, 23, 42, 4, 8, 15]), return_indices: true)
+    impl!(tensor).sort(tensor, tensor,
+      axis: axis,
+      comparator: comparator
+    )
+  end
+
+  @doc """
+  Sorts the tensor along the given axis with the
+  given comparator and returns the corresponding indices
+  of the original tensor in the new sorted positions.
+
+  If no axis is given, defaults to `0`.
+
+  ### Options
+
+  * `:axis`: The name or number of the corresponding axis on which the sort should be applied.
+  * `:comparator`: Can be `:asc`, `:desc` or a arity-2 function for comparison between two tensor elements. Defaults to `:asc`
+
+  ### Examples
+
+      iex> Nx.argsort(Nx.tensor([16, 23, 42, 4, 8, 15]))
       #Nx.Tensor<
         u64[6]
         [3, 4, 5, 0, 1, 2]
       >
 
-      iex> tensor = Nx.tensor([[[4, 5, 2],[2, 5, 3],[5, 0, 2]],[[1, 9, 8],[2, 1, 3],[2, 1, 4]]],names: [:x, :y, :z])
+      iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x)
       #Nx.Tensor<
-        s64[x: 2][y: 3][z: 3]
+        u64[x: 2][y: 3]
+        [
+          [1, 0, 1],
+          [0, 1, 0]
+        ]
+      >
+
+      iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y)
+      #Nx.Tensor<
+        u64[x: 2][y: 3]
+        [
+          [1, 0, 2],
+          [0, 2, 1]
+        ]
+      >
+
+      iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y, comparator: :asc)
+      #Nx.Tensor<
+        u64[x: 2][y: 3]
+        [
+          [2, 0, 1],
+          [1, 2, 0]
+        ]
+      >
+
+      iex> tensor = Nx.tensor([[[4, 5], [2, 5], [5, 0]], [[1, 9], [2, 1], [2, 1]], [[0, -1], [-1, 0], [0, -1]], [[-1, 0], [0, -1], [-1, 0]]], names: [:x, :y, :z])
+      iex> Nx.argsort(tensor, axis: :x)
+      #Nx.Tensor<
+        u64[x: 4][y: 3][z: 2]
         [
           [
-            [4, 5, 2],
-            [2, 5, 3],
-            [5, 0, 2]
+            [3, 2],
+            [2, 3],
+            [3, 2]
           ],
           [
-            [1, 9, 8],
-            [2, 1, 3],
-            [2, 1, 4]
+            [2, 3],
+            [3, 2],
+            [2, 3]
+          ],
+          [
+            [1, 0],
+            [1, 1],
+            [1, 0]
+          ],
+          [
+            [0, 1],
+            [0, 0],
+            [0, 1]
           ]
         ]
       >
-      iex> Nx.sort(tensor, axis: :z, return_indices: true)
+
+      iex> Nx.argsort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :x)
+      #Nx.Tensor<
+        u64[x: 2][y: 3][z: 3]
+        [
+          [
+            [1, 0, 0],
+            [1, 1, 1],
+            [1, 0, 0]
+          ],
+          [
+            [0, 1, 1],
+            [0, 0, 0],
+            [0, 1, 1]
+          ]
+        ]
+      >
+
+      iex> Nx.argsort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :y)
+      #Nx.Tensor<
+        u64[x: 2][y: 3][z: 3]
+        [
+          [
+            [1, 2, 2],
+            [0, 1, 0],
+            [2, 0, 1]
+          ],
+          [
+            [0, 2, 1],
+            [2, 1, 2],
+            [1, 0, 0]
+          ]
+        ]
+      >
+
+      iex> Nx.argsort(Nx.tensor([[[4, 5, 2], [2, 5, 3], [5, 0, 2]], [[1, 9, 8], [2, 1, 3], [2, 1, 4]]], names: [:x, :y, :z]), axis: :z)
       #Nx.Tensor<
         u64[x: 2][y: 3][z: 3]
         [
@@ -7440,22 +7567,27 @@ defmodule Nx do
           ]
         ]
       >
+
+      iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x, comparator: &Nx.less/2)
+      #Nx.Tensor<
+        u64[x: 2][y: 3]
+        [
+          [1, 0, 1],
+          [0, 1, 0]
+        ]
+      >
   """
   @doc type: :ndim
-  def sort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, comparator: :desc, return_indices: false)
+  def argsort(tensor, opts \\ []) do
+    opts = keyword!(opts, axis: 0, comparator: :desc)
     comparator = opts[:comparator]
-    return_indices = opts[:return_indices]
 
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    output_type = if return_indices, do: {:u, 64}, else: tensor.type
-
-    impl!(tensor).sort(%{tensor | type: output_type}, tensor,
+    impl!(tensor).argsort(%{tensor | type: {:u, 64}}, tensor,
       axis: axis,
-      comparator: comparator,
-      return_indices: return_indices
+      comparator: comparator
     )
   end
 

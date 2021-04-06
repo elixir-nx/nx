@@ -666,6 +666,28 @@ defmodule Nx.Defn.Expr do
     expr(out, tensor.data.context, :sort, [tensor, opts, fun])
   end
 
+  @impl true
+  def argsort(out, tensor, opts) do
+    comparator = opts[:comparator]
+
+    %{type: type} = out
+    tensor = to_expr(tensor)
+
+    args = [parameter(:argsort, type, {}, 0), parameter(:argsort, type, {}, 1)]
+    comparator = to_nx_comparator(comparator)
+    fun = fun(args, comparator)
+
+    if fun.shape != {} do
+      raise "argsort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
+    end
+
+    if fun.type != {:u, 8} do
+      raise "argsort comparator must return a predicate type, got: #{inspect(fun.type)}"
+    end
+
+    expr(out, tensor.data.context, :argsort, [tensor, opts, fun])
+  end
+
   defp to_nx_comparator(:desc), do: &Nx.less/2
   defp to_nx_comparator(:asc), do: &Nx.greater/2
   defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
