@@ -1650,12 +1650,7 @@ defmodule Nx.BinaryBackend do
 
     new_data =
       for bin <- view, into: <<>> do
-        data =
-          match_types [type] do
-            for <<x::size(size)-bitstring <- bin>> do
-              x
-            end
-          end
+        data = for <<x::size(size)-bitstring <- bin>>, do: x
 
         sorted =
           if return_indices do
