@@ -1641,7 +1641,7 @@ defmodule Nx.BinaryBackend do
   end
 
   defp sort_last_dim(
-         %T{shape: shape, type: {_, size} = type} = t,
+         %T{shape: shape, type: {_, size}} = t,
          comparator,
          output,
          return_indices
