@@ -702,7 +702,7 @@ defmodule EXLA.Defn do
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
-  defp to_operator(:argsort, [tensor, opts, comparator], %{type: type}, state) do
+  defp to_operator(:argsort, [tensor, opts, comparator], _ans, state) do
     dimension = opts[:axis]
 
     # Grow the comparator to arity 4 because argsort uses
@@ -712,7 +712,7 @@ defmodule EXLA.Defn do
     comparator_4 = Expr.fun([arg1, arg2, arg1, arg2], fn x, y, _, _ -> fun.(x, y) end)
 
     comp = to_computation(comparator_4, {:pred, 8}, state)
-    EXLA.Lib.argsort(state.builder, tensor, type, dimension, comp)
+    EXLA.Lib.argsort(state.builder, tensor, dimension, comp)
   end
 
   ## Computation helpers
