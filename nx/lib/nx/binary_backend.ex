@@ -1590,14 +1590,14 @@ defmodule Nx.BinaryBackend do
           fn a, b ->
             a = binary_to_number(a, type)
             b = binary_to_number(b, type)
-            a < b
+            a <= b
           end
 
         :asc ->
           fn a, b ->
             a = binary_to_number(a, type)
             b = binary_to_number(b, type)
-            a > b
+            a >= b
           end
 
         fun ->
