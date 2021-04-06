@@ -7448,14 +7448,14 @@ defmodule Nx do
 
   If no axis is given, defaults to `0`.
 
-  ### Options
+  ## Options
 
-  * `:axis` - The name or number of the corresponding axis on which the sort
-    should be applied
-  * `:comparator` - Can be `:asc`, `:desc` or a arity-2 function for comparison
-    between two tensor elements. Defaults to `:asc`
+    * `:axis` - The name or number of the corresponding axis on which the sort
+      should be applied
+    * `:comparator` - Can be `:asc`, `:desc` or a arity-2 function for comparison
+      between two tensor elements. Defaults to `:asc`
 
-  ### Examples
+  ## Examples
 
       iex> Nx.argsort(Nx.tensor([16, 23, 42, 4, 8, 15]))
       #Nx.Tensor<
