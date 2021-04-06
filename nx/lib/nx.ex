@@ -7335,8 +7335,8 @@ defmodule Nx do
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
-          [7, 3, 1],
-          [5, 4, 2]
+          [1, 3, 7],
+          [2, 4, 5]
         ]
       >
 
@@ -7430,7 +7430,7 @@ defmodule Nx do
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, comparator: :desc)
+    opts = keyword!(opts, axis: 0, comparator: :asc)
     comparator = opts[:comparator]
 
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
@@ -7484,36 +7484,8 @@ defmodule Nx do
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
-          [2, 0, 1],
-          [1, 2, 0]
-        ]
-      >
-
-      iex> tensor = Nx.tensor([[[4, 5], [2, 5], [5, 0]], [[1, 9], [2, 1], [2, 1]], [[0, -1], [-1, 0], [0, -1]], [[-1, 0], [0, -1], [-1, 0]]], names: [:x, :y, :z])
-      iex> Nx.argsort(tensor, axis: :x)
-      #Nx.Tensor<
-        s64[x: 4][y: 3][z: 2]
-        [
-          [
-            [3, 2],
-            [2, 3],
-            [3, 2]
-          ],
-          [
-            [2, 3],
-            [3, 2],
-            [2, 0]
-          ],
-          [
-            [1, 0],
-            [0, 1],
-            [1, 3]
-          ],
-          [
-            [0, 1],
-            [1, 0],
-            [0, 1]
-          ]
+          [1, 0, 2],
+          [0, 2, 1]
         ]
       >
 
@@ -7579,7 +7551,7 @@ defmodule Nx do
   """
   @doc type: :ndim
   def argsort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, comparator: :desc)
+    opts = keyword!(opts, axis: 0, comparator: :asc)
     comparator = opts[:comparator]
 
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
