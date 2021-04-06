@@ -1487,15 +1487,13 @@ ERL_NIF_TERM concatenate(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 5) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaOp* operand;
-  xla::XlaOp* indices;
   xla::XlaComputation* comparator;
   exla::int64 dimension;
-  bool return_indices;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
@@ -1507,28 +1505,7 @@ ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return exla::nif::error(env, "Unable to get dimension.");
   }
 
-  if (!exla:nif::get(env, argv[3], &return_indices)) {
-    return exla::nif::error(env, "Unable to get return_indices");
-  }
-
-  if (!exla:nif::get(env, argv[4], &return_indices)) {
-    return exla::nif::error(env, "Unable to get return_indices");
-  }
-
-  if (return_indices && !exla:nif::get(env, argv[5], indices)) {
-    return exla::nif::error(env, "Unable to get indices");
-  }
-
-
-
-  xla::XlaOp op;
-
-  if (!return_indices) {
-   op = xla::Sort({*operand}, *comparator, dimension);
-  }
-  else {
-   op = xla::Sort({*operand, *indices}, *comparator, dimension);
-  }
+  xla::XlaOp op = xla::Sort({*operand}, *comparator, dimension);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }

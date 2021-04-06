@@ -698,13 +698,8 @@ defmodule EXLA.Defn do
 
   defp to_operator(:sort, [tensor, opts, comparator], _ans, state) do
     dimension = opts[:axis]
-    sort_indices = opts[:sort_indices]
     comp = to_computation(comparator, {:pred, 8}, state)
-
-    iota_axis = tensor |> Nx.axes() |> Enum.at(-1)
-
-    indices = if sort_indices, do: EXLA.Lib.iota(state.builder, tensor.shape, iota_axis)
-    EXLA.Op.sort(tensor, comp, dimension, sort_indices, indices)
+    EXLA.Op.sort(tensor, comp, dimension)
   end
 
   ## Computation helpers

@@ -489,8 +489,8 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def sort(%Op{builder: builder, ref: operand}, %Computation{ref: comparator}, dimension, sort_indices, indices) do
-    ref = EXLA.NIF.sort(operand, comparator, dimension, sort_indices, indices) |> unwrap!()
+  def sort(%Op{builder: builder, ref: operand}, %Computation{ref: comparator}, dimension) do
+    ref = EXLA.NIF.sort(operand, comparator, dimension) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
