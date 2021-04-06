@@ -354,14 +354,16 @@ defmodule EXLA.Op do
   end
 
   def select_and_scatter(
-    %Op{builder: builder, ref: operand},
-    %Computation{ref: select_fn},
-    window_dimensions,
-    window_strides,
-    padding_config,
-    %Op{builder: builder, ref: source},
-    %Op{builder: builder, ref: init_value},
-    %Computation{ref: scatter_fn}) when is_tuple(window_dimensions) and is_list(window_strides) and is_list(padding_config) do
+        %Op{builder: builder, ref: operand},
+        %Computation{ref: select_fn},
+        window_dimensions,
+        window_strides,
+        padding_config,
+        %Op{builder: builder, ref: source},
+        %Op{builder: builder, ref: init_value},
+        %Computation{ref: scatter_fn}
+      )
+      when is_tuple(window_dimensions) and is_list(window_strides) and is_list(padding_config) do
     ref =
       EXLA.NIF.select_and_scatter(
         operand,
@@ -374,6 +376,7 @@ defmodule EXLA.Op do
         scatter_fn
       )
       |> unwrap!()
+
     %Op{builder: builder, ref: ref}
   end
 
@@ -470,7 +473,8 @@ defmodule EXLA.Op do
         lower,
         unit_diagonal,
         transpose_a
-      ) when is_boolean(left_side) and is_boolean(lower) and is_boolean(unit_diagonal) do
+      )
+      when is_boolean(left_side) and is_boolean(lower) and is_boolean(unit_diagonal) do
     left_side = boolean_to_int(left_side)
     lower = boolean_to_int(lower)
     unit_diagonal = boolean_to_int(unit_diagonal)
@@ -491,6 +495,17 @@ defmodule EXLA.Op do
 
   def sort(%Op{builder: builder, ref: operand}, %Computation{ref: comparator}, dimension) do
     ref = EXLA.NIF.sort(operand, comparator, dimension) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def variadic_sort(
+        %Builder{ref: builder},
+        operands,
+        %Computation{ref: comparator},
+        dimension
+      ) do
+    operand_refs = Enum.map(operands, & &1.ref)
+    ref = EXLA.NIF.variadic_sort(operand_refs, comparator, dimension) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
