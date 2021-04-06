@@ -707,15 +707,9 @@ defmodule EXLA.Defn do
 
     # Grow the comparator to arity 4 because argsort uses
     # variadic_sort underneath
-    path = [Access.key!(:data), Access.key!(:args)]
-    [[arg_1, arg_2], expr, fun] = get_in(comparator, path)
+    [[arg1, arg2], _expr, fun] = comparator.data.args
 
-    comparator_4 =
-      put_in(comparator, path, [
-        [arg_1, arg_2, arg_1, arg_2],
-        expr,
-        fn x, y, _, _ -> fun.(x, y) end
-      ])
+    comparator_4 = Expr.fun([arg1, arg2, arg1, arg2], fn x, y, _, _ -> fun.(x, y) end)
 
     comp = to_computation(comparator_4, {:pred, 8}, state)
     EXLA.Lib.argsort(state.builder, tensor, type, dimension, comp)
