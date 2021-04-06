@@ -7558,7 +7558,7 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    impl!(tensor).argsort(%{tensor | type: {:s, 64}}, tensor,
+    impl!(tensor).argsort(tensor, tensor,
       axis: axis,
       comparator: comparator
     )

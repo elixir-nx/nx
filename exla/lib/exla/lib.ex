@@ -146,7 +146,7 @@ defmodule EXLA.Lib do
   """
   def argsort(builder, operand, type, dimension, comparator) do
     op_shape = Op.get_shape(operand)
-    iota = iota(builder, Shape.make_shape(type, op_shape.dims), dimension)
+    iota = iota(builder, Shape.make_shape(op_shape.dtype, op_shape.dims), dimension)
 
     builder
     |> Op.variadic_sort(
