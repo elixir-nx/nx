@@ -2603,7 +2603,7 @@ defmodule EXLA.DefnExprTest do
     end
 
     test "sorts a 2d tensor along the 1st axis ascending" do
-      assert sort1_asc(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[7, 3, 1], [5, 4, 2]])
+      assert sort1_asc(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[1, 3, 7], [2, 4, 5]])
     end
 
     test "sorts a 3d tensor along the 2nd axis" do
@@ -2644,7 +2644,7 @@ defmodule EXLA.DefnExprTest do
     end
 
     test "sorts a 2d tensor along the 1st axis ascending and returns its indices" do
-      assert argsort1_asc(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[2, 0, 1], [1, 2, 0]])
+      assert argsort1_asc(Nx.tensor([[3, 1, 7], [2, 5, 4]])) == Nx.tensor([[1, 0, 2], [0, 2, 1]])
     end
 
     test "sorts a 3d tensor along the 2nd axis and returns its indices" do
