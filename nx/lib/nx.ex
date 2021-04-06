@@ -7302,7 +7302,6 @@ defmodule Nx do
   ### Options
 
   * `:axis`: The name or number of the corresponding axis on which the sort should be applied.
-  * `:return_indices`: If `true`, returns the sorted indices instead of the values. Defaults to `false`
   * `:comparator`: Can be `:asc`, `:desc` or a arity-2 function for comparison between two tensor elements. Defaults to `:asc`
 
   ### Examples
@@ -7451,8 +7450,10 @@ defmodule Nx do
 
   ### Options
 
-  * `:axis`: The name or number of the corresponding axis on which the sort should be applied.
-  * `:comparator`: Can be `:asc`, `:desc` or a arity-2 function for comparison between two tensor elements. Defaults to `:asc`
+  * `:axis` - The name or number of the corresponding axis on which the sort
+    should be applied
+  * `:comparator` - Can be `:asc`, `:desc` or a arity-2 function for comparison
+    between two tensor elements. Defaults to `:asc`
 
   ### Examples
 
