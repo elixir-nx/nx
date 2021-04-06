@@ -1220,6 +1220,62 @@ defmodule NxTest do
       t = Nx.tensor([3, 2, 1, 0])
       assert Nx.sort(t) == Nx.tensor([0, 1, 2, 3])
     end
+
+    test "works with non-symmetric tensors" do
+      tensor =
+        Nx.tensor(
+          [
+            [
+              [4, 5],
+              [2, 5],
+              [5, 0]
+            ],
+            [
+              [1, 9],
+              [2, 1],
+              [2, 1]
+            ],
+            [
+              [0, -1],
+              [-1, 0],
+              [0, -1]
+            ],
+            [
+              [-1, 0],
+              [0, -1],
+              [-1, 0]
+            ]
+          ],
+          names: [:x, :y, :z]
+        )
+
+      assert Nx.sort(tensor, axis: :x) ==
+               Nx.tensor(
+                 [
+                   [
+                     [-1, -1],
+                     [-1, -1],
+                     [-1, -1]
+                   ],
+                   [
+                     [0, 0],
+                     [0, 0],
+                     [0, 0]
+                   ],
+                   [
+                     [1, 5],
+                     [2, 1],
+                     [2, 0]
+                   ],
+                   [
+                     [4, 9],
+                     [2, 5],
+                     [5, 1]
+                   ]
+                 ],
+                 names: [:x, :y, :z]
+               )
+    end
   end
 
   describe "sort/2" do
@@ -1245,6 +1301,48 @@ defmodule NxTest do
           Nx.sort(t, [:blep])
         end
       )
+    end
+  end
+
+  describe "argsort/2" do
+    test "works with non-symmetric tensors" do
+      tensor =
+        Nx.tensor(
+          [
+            [[4, 5], [2, 5], [5, 0]],
+            [[1, 9], [2, 1], [2, 1]],
+            [[0, -1], [-1, 0], [0, -1]],
+            [[-1, 0], [0, -1], [-1, 0]]
+          ],
+          names: [:x, :y, :z]
+        )
+
+      assert Nx.argsort(tensor, axis: :x) ==
+               Nx.tensor(
+                 [
+                   [
+                     [3, 2],
+                     [2, 3],
+                     [3, 2]
+                   ],
+                   [
+                     [2, 3],
+                     [3, 2],
+                     [2, 0]
+                   ],
+                   [
+                     [1, 0],
+                     [0, 1],
+                     [1, 3]
+                   ],
+                   [
+                     [0, 1],
+                     [1, 0],
+                     [0, 1]
+                   ]
+                 ],
+                 names: [:x, :y, :z]
+               )
     end
   end
 
