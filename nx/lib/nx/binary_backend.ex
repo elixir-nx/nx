@@ -31,6 +31,7 @@ defmodule Nx.BinaryBackend do
   def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
     min = to_scalar(min)
     max = to_scalar(max)
+
     gen =
       case type do
         {:s, _} -> fn -> min + :rand.uniform(max - min) - 1 end
@@ -46,6 +47,7 @@ defmodule Nx.BinaryBackend do
   def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
     mu = to_scalar(mu)
     sigma = to_scalar(sigma)
+
     data =
       for _ <- 1..Nx.size(shape),
           into: "",
@@ -1085,7 +1087,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {q, r} = B.Decomposition.qr(bin, input_type, input_shape, output_type, m, k, n, opts)
+    {q, r} = B.Matrix.qr(bin, input_type, input_shape, output_type, m, k, n, opts)
     {from_binary(q_holder, q), from_binary(r_holder, r)}
   end
 
@@ -1096,7 +1098,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {u, s, v} = B.Decomposition.svd(bin, input_type, input_shape, output_type, opts)
+    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, output_type, opts)
     {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 
@@ -1107,7 +1109,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     bin = to_binary(tensor)
-    {p, l, u} = B.Decomposition.lu(bin, input_type, input_shape, p_type, l_type, u_type, opts)
+    {p, l, u} = B.Matrix.lu(bin, input_type, input_shape, p_type, l_type, u_type, opts)
     {from_binary(p_holder, p), from_binary(l_holder, l), from_binary(u_holder, u)}
   end
 
@@ -1115,12 +1117,13 @@ defmodule Nx.BinaryBackend do
   def triangular_solve(
         %{type: output_type} = out,
         %{type: a_type, shape: {rows, rows}} = a,
-        %{type: b_type, shape: {rows}} = b,
+        %{type: b_type, shape: b_shape} = b,
         opts
-      ) do
+      )
+      when b_shape == {rows, rows} or b_shape == {rows} do
     a_data = to_binary(a)
     b_data = to_binary(b)
-    out_bin = B.Decomposition.ts(a_data, a_type, b_data, b_type, rows, output_type, opts)
+    out_bin = B.Matrix.ts(a_data, a_type, b_data, b_type, b_shape, output_type, opts)
     from_binary(out, out_bin)
   end
 
@@ -1484,7 +1487,7 @@ defmodule Nx.BinaryBackend do
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
 
-    if top_dimension_slice?(Nx.rank(shape), shape, output_shape) do
+    if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
       offset = div(length, elem(output_shape, 0)) * hd(start_indices)
       from_binary(out, binary_part(to_binary(tensor), offset, length))
@@ -1521,28 +1524,28 @@ defmodule Nx.BinaryBackend do
   @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
-    tensors = Enum.map(tensors, fn t -> as_type(%{t | type: output_type}, t) end)
+    rank = tuple_size(output_shape)
+    steps = product_part(output_shape, 0, axis)
 
-    output_data =
-      if axis == tuple_size(output_shape) - 1 do
-        aggregate_axes =
-          tensors
-          |> Enum.map(fn %T{shape: shape} = t ->
-            aggregate_axes(to_binary(t), [axis], shape, size)
-          end)
-          |> Enum.zip()
+    tensors =
+      Enum.map(tensors, fn %{shape: shape} = t ->
+        t = as_type(%{t | type: output_type}, t)
+        {to_binary(t), product_part(shape, axis, rank) * size}
+      end)
 
-        for axis <- aggregate_axes, into: <<>> do
-          IO.iodata_to_binary(Tuple.to_list(axis))
-        end
-      else
-        input_data = Enum.map(tensors, &to_binary/1) |> IO.iodata_to_binary()
-        output_weighted_shape = weighted_shape(output_shape, size)
-        IO.iodata_to_binary(weighted_traverse(output_weighted_shape, input_data, size))
+    data =
+      for step <- 1..steps,
+          {binary, product} <- tensors do
+        before = (step - 1) * product
+        <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
+        part
       end
 
-    from_binary(out, output_data)
+    from_binary(out, data)
   end
+
+  defp product_part(_tuple, n, n), do: 1
+  defp product_part(tuple, n, limit), do: elem(tuple, n) * product_part(tuple, n + 1, limit)
 
   @impl true
   def as_type(out, tensor) do
@@ -1570,17 +1573,32 @@ defmodule Nx.BinaryBackend do
   def bitcast(out, tensor), do: from_binary(out, to_binary(tensor))
 
   @impl true
-  def sort(_out, t, opts) do
+  def sort(output, t, opts), do: do_sort(output, t, opts, false)
+
+  @impl true
+  def argsort(output, t, opts), do: do_sort(output, t, opts, true)
+
+  defp do_sort(output, t, opts, return_indices) do
     %T{shape: shape, type: type} = t
     last_axis = Nx.rank(t) - 1
+
+    axis = opts[:axis]
 
     comparator =
       case opts[:comparator] do
         :desc ->
-          &</2
+          fn a, b ->
+            a = binary_to_number(a, type)
+            b = binary_to_number(b, type)
+            a >= b
+          end
 
         :asc ->
-          &>/2
+          fn a, b ->
+            a = binary_to_number(a, type)
+            b = binary_to_number(b, type)
+            a <= b
+          end
 
         fun ->
           fn a, b ->
@@ -1590,14 +1608,15 @@ defmodule Nx.BinaryBackend do
           end
       end
 
-    axis = opts[:axis]
-
     case shape do
+      {} when return_indices ->
+        sort_last_dim(t, comparator, output, return_indices)
+
       {} ->
         t
 
       _ when axis == last_axis ->
-        sort_last_dim(t, comparator)
+        sort_last_dim(t, comparator, output, return_indices)
 
       _ ->
         permutation = Nx.axes(t)
@@ -1613,29 +1632,40 @@ defmodule Nx.BinaryBackend do
           |> Enum.sort_by(fn {x, _} -> x end)
           |> Enum.map(fn {_, i} -> i end)
 
-        t
-        |> Nx.transpose(axes: permutation)
-        |> sort_last_dim(comparator)
+        permuted_t = Nx.transpose(t, axes: permutation)
+
+        permuted_t
+        |> sort_last_dim(comparator, %{permuted_t | type: output.type}, return_indices)
         |> Nx.transpose(axes: inverse_permutation)
     end
   end
 
-  defp sort_last_dim(%T{shape: shape, type: {_, size} = type} = t, comparator) do
+  defp sort_last_dim(
+         %T{shape: shape, type: {_, size}} = t,
+         comparator,
+         output,
+         return_indices
+       ) do
     view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
 
     new_data =
       for bin <- view, into: <<>> do
-        data =
-          match_types [type] do
-            for <<x::size(size)-bitstring <- bin>> do
-              x
-            end
+        data = for <<x::size(size)-bitstring <- bin>>, do: x
+
+        sorted =
+          if return_indices do
+            data
+            |> Enum.with_index()
+            |> Enum.sort_by(&elem(&1, 0), comparator)
+            |> Enum.map(fn {_, index} -> scalar_to_binary(index, output.type) end)
+          else
+            Enum.sort(data, comparator)
           end
 
-        IO.iodata_to_binary(Enum.sort(data, comparator))
+        IO.iodata_to_binary(sorted)
       end
 
-    from_binary(t, new_data)
+    from_binary(output, new_data)
   end
 
   ## Binary reducers

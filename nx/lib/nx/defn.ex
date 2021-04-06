@@ -95,18 +95,22 @@ defmodule Nx.Defn do
 
   ## Inputs and outputs types
 
-  The inputs to `defn` functions must be either tuples, numbers,
-  or tensors. To pass non-numerical values to numerical definitions,
-  they must be declared as default arguments (see next subsection).
+  The arguments to `defn` functions must be either tensors, numbers,
+  or anonymous functions. It may also be a tuple with said elements,
+  although the tuple must contain only functions or only number/tensors,
+  not both.
+
+  To pass any other values to numerical definitions, they must be
+  declared as default arguments (see next subsection).
 
   `defn` functions can only return tensors or tuples of tensors.
 
   ### Default arguments
 
-  `defn` functions also support default arguments. They are typically
-  used as options. For example, imagine you want to create a function
-  named zeros, which returns a tensor of zeroes with a given type and
-  shape. It could be implemented like this:
+  `defn` functions support default arguments. They are typically used
+  as options. For example, imagine you want to create a function named
+  zeros, which returns a tensor of zeroes with a given type and shape.
+  It could be implemented like this:
 
       defn zeros(opts \\ []) do
         opts = keyword!(opts, type: {:f, 32}, shape: {})
@@ -128,31 +132,6 @@ defmodule Nx.Defn do
   even if you pass different tensors with the same type and shape, it
   will lead to different compilation artifacts. For this reason, it
   is **extremely discouraged to pass tensors through default arguments**.
-
-  ### Tuples and pattern matching
-
-  When passing tuples as inputs to `defn` functions, the tuples
-  must be matched on the function head. For example, this is valid:
-
-      defn my_example({a, b}, c), do: a * b + c
-
-  This is not:
-
-      defn my_example(ab, c) do
-        {a, b} = ab
-        a * b + c
-      end
-
-  This, however, works:
-
-      defn my_example({_, _} = ab, c) do
-        {a, b} = ab
-        a * b + c
-      end
-
-  In other words, it is important for `defn` to the see the shapes
-  of the input. If you write the latter format and call `defn` from
-  Elixir, `defn` will raise.
 
   ## Invoking custom Elixir code
 

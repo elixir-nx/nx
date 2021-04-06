@@ -189,62 +189,67 @@ defmodule Nx.Defn.Tree do
   ## Nx.Defn callbacks
 
   @doc false
-  # Returns tensors from flat args.
-  def from_flat_args(vars) do
-    for var <- vars do
-      case var do
-        %T{} = head ->
-          head
+  def from_compile_args(args, cache) do
+    from_compile_args(args, cache, [])
+  end
 
-        number when is_number(number) ->
-          Nx.tensor(number)
+  defp from_compile_args([arg | args], cache, vars) when is_function(arg) do
+    from_compile_args(args, [arg | cache], vars)
+  end
 
-        tuple when is_tuple(tuple) ->
-          raise ArgumentError,
-                "defn functions expects either numbers or tensors as arguments. " <>
-                  "If you want to pass a tuple, you must explicitly pattern match on the tuple in the signature" <>
-                  "Got: #{inspect(tuple)}"
-
-        other ->
-          raise ArgumentError,
-                "defn functions expects either numbers or tensors as arguments. " <>
-                  "If you want to pass Elixir values, they need to be sent as options and " <>
-                  "tagged as default arguments. Got: #{inspect(other)}"
-      end
+  defp from_compile_args([arg | args], cache, vars) when is_tuple(arg) do
+    if arg |> Tuple.to_list() |> Enum.all?(&is_function/1) do
+      from_compile_args(args, [arg | cache], vars)
+    else
+      from_compile_args(args, cache, [arg | vars])
     end
   end
 
+  defp from_compile_args([arg | args], cache, vars) do
+    from_compile_args(args, cache, [arg | vars])
+  end
+
+  defp from_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
+
   @doc false
-  # Returns tensors from nested args.
-  def from_nested_args(args) do
+  def from_runtime_args(args) do
     args
-    |> Enum.reduce([], &from_nested_args/2)
+    |> Enum.reduce([], &from_runtime_args/2)
     |> Enum.reverse()
   end
 
-  defp from_nested_args(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_nested_args/2)
+  defp from_runtime_args(tuple, acc) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_runtime_args/2)
 
-  defp from_nested_args(other, acc),
+  defp from_runtime_args(other, acc),
     do: [from_arg(other) | acc]
 
   @doc false
-  # Returns tensor from a single arg.
   def from_arg(%T{} = t), do: t
   def from_arg(number) when is_number(number), do: Nx.tensor(number)
+
+  def from_arg(other) when is_function(other) do
+    raise(
+      ArgumentError,
+      "arguments to defn must be numbers, tensors, and functions. " <>
+        "It may also be a tuple with said elements, although the tuple " <>
+        "must contain only functions or only number/tensors, not both. " <>
+        "Got the following function inside a tuple: #{inspect(other)}"
+    )
+  end
 
   def from_arg(other) do
     raise(
       ArgumentError,
-      "arguments to defn functions must numbers, tensors, or tuples, got: #{inspect(other)}"
+      "arguments to defn must be numbers, tensors, and functions, or a tuple of said elements. " <>
+        "Got: #{inspect(other)}"
     )
   end
 
   @doc false
-  # Converts nested args to nested params.
-  def to_nested_params(args, params) do
+  def args_to_params(args, params) do
     {args, {[], _}} =
-      to_nested_args(args, {params, 0}, fn _arg, {[param | params], i} ->
+      args_to(args, {params, 0}, fn _arg, {[param | params], i} ->
         {Expr.parameter(param, :root, i), {params, i + 1}}
       end)
 
@@ -252,22 +257,9 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc false
-  # Converts flat args to flat params.
-  # TODO: Use Enum.with_index/2 on Elixir v1.12+
-  def to_flat_params(vars),
-    do: to_flat_params(vars, 0)
-
-  defp to_flat_params([head | tail], i),
-    do: [Expr.parameter(head, :root, i) | to_flat_params(tail, i + 1)]
-
-  defp to_flat_params([], _i),
-    do: []
-
-  @doc false
-  # Converts nested args to nested templates.
-  def to_nested_templates(args, params) do
+  def args_to_templates(args, params) do
     {args, []} =
-      to_nested_args(args, params, fn _arg, [param | params] ->
+      args_to(args, params, fn _arg, [param | params] ->
         {Nx.template(param, param.type), params}
       end)
 
@@ -286,20 +278,28 @@ defmodule Nx.Defn.Tree do
           "defn must return a tensor expression or a tuple, got: #{inspect(other)}"
   end
 
-  defp to_nested_args(args, acc, fun) when is_list(args) do
-    Enum.map_reduce(args, acc, &to_nested_each(&1, &2, fun))
+  defp args_to(args, acc, fun) when is_list(args) do
+    Enum.map_reduce(args, acc, fn
+      arg, acc
+      when is_function(arg)
+      when is_tuple(arg) and is_function(elem(arg, 0)) ->
+        {arg, acc}
+
+      arg, acc ->
+        args_to_each(arg, acc, fun)
+    end)
   end
 
-  defp to_nested_each(arg, acc, fun) when is_tuple(arg) do
+  defp args_to_each(arg, acc, fun) when is_tuple(arg) do
     {list, acc} =
       arg
       |> Tuple.to_list()
-      |> Enum.map_reduce(acc, &to_nested_each(&1, &2, fun))
+      |> Enum.map_reduce(acc, &args_to_each(&1, &2, fun))
 
     {List.to_tuple(list), acc}
   end
 
-  defp to_nested_each(arg, acc, fun) do
+  defp args_to_each(arg, acc, fun) do
     fun.(arg, acc)
   end
 end

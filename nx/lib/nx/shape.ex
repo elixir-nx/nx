@@ -1188,6 +1188,27 @@ defmodule Nx.Shape do
         "tensor must have as many rows as columns, got shape: #{inspect(shape)}"
       )
 
+  def solve({n, n}, {n}), do: :ok
+  def solve({n, n}, {n, _m}), do: :ok
+
+  def solve({n, n}, b_shape) do
+    raise(
+      ArgumentError,
+      "`b` tensor has incompatible dimensions, expected #{inspect({n, n})} or {#{n}}, got: #{
+        inspect(b_shape)
+      }"
+    )
+  end
+
+  def solve(a_shape, _b_shape) do
+    raise(
+      ArgumentError,
+      "`a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: #{
+        inspect(a_shape)
+      }"
+    )
+  end
+
   defp validate_concat_names!(names) do
     :ok =
       names

@@ -126,16 +126,22 @@ defmodule Torchx.Backend do
   @impl true
   def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max, backend_options)
       when s in [:u, :s] do
+    min = to_scalar(min)
+    max = to_scalar(max)
     NIF.randint(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
       when f in [:f, :bf] do
+    min = to_scalar(min)
+    max = to_scalar(max)
     NIF.rand(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
   @impl true
   def random_normal(%T{type: type, shape: shape} = out, mu, sigma, backend_options) do
+    mu = to_scalar(mu)
+    sigma = to_scalar(sigma)
     NIF.normal(mu, sigma, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
   end
 
@@ -412,23 +418,12 @@ defmodule Torchx.Backend do
       ),
       do: NIF.qr(to_ref(tensor), opts[:mode] == :reduced) |> from_pair_ref({q_holder, r_holder})
 
-  @big_tensor_threshold_bytes 10_000_000
-
   @impl true
-  def inspect(%T{type: {_, elem_size}} = tensor, inspect_opts) do
-    limit = if(inspect_opts.limit == :infinity, do: nil, else: inspect_opts.limit + 1)
-
+  def inspect(%T{} = tensor, inspect_opts) do
     result =
       if on_cpu?(tensor) do
-        byte_size = nbytes(tensor)
-        byte_limit = limit && limit * div(elem_size, 8)
-
-        if min(byte_limit, byte_size) > @big_tensor_threshold_bytes do
-          "Torchx tensor is too large to inspect. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
-        else
-          binary = to_blob(tensor, limit)
-          Nx.Backend.inspect(tensor, binary, inspect_opts)
-        end
+        binary = NIF.to_blob_view(to_ref(tensor))
+        Nx.Backend.inspect(tensor, binary, inspect_opts)
       else
         "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
       end
@@ -502,6 +497,9 @@ defmodule Torchx.Backend do
   defp to_tensor(ref, %T{type: type, shape: shape} = t) do
     %{t | data: %__MODULE__{ref: check_shape_and_type!(ref, shape, type)}}
   end
+
+  defp to_scalar(n) when is_number(n), do: n
+  defp to_scalar(%T{} = t), do: NIF.item(to_ref(t)) |> unwrap!()
 
   if Application.get_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(ref, shape, type) do

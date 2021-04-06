@@ -140,4 +140,20 @@ defmodule EXLA.Lib do
 
   defp max_value_binary({:pred, 8}), do: <<1>>
   defp max_value_binary(type), do: Nx.Type.max_value_binary(type)
+
+  @doc """
+  Sorts a tensor and returns the corresponding indices in the new positions.
+  """
+  def argsort(builder, operand, type, dimension, comparator) do
+    op_shape = Op.get_shape(operand)
+    iota = iota(builder, Shape.make_shape(type, op_shape.dims), dimension)
+
+    builder
+    |> Op.variadic_sort(
+      [operand, iota],
+      comparator,
+      dimension
+    )
+    |> Op.get_tuple_element(1)
+  end
 end

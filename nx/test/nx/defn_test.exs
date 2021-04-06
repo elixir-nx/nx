@@ -41,17 +41,76 @@ defmodule Nx.DefnTest do
   end
 
   describe "tuple" do
-    defn tuple_shape_match({_, _} = var) do
+    defn tuple_shape_match_signature({a, b}) do
+      a + b
+    end
+
+    test "allows pattern matching on the tuple shape on signature" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               tuple_shape_match_signature({1, 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn tuple_shape_match_alias({_, _} = var) do
       {a, b} = var
       a + b
     end
 
-    test "allows pattern matching on the tuple shape with underscores" do
+    test "allows pattern matching on the tuple shape with alias and underscores" do
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
-               tuple_shape_match({1, 2.0})
+               tuple_shape_match_alias({1, 2.0})
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn tuple_shape_match_inside_body(var) do
+      {a, b} = var
+      a + b
+    end
+
+    test "allows pattern matching on the tuple shape inside body" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               tuple_shape_match_inside_body({1, 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+  end
+
+  describe "anonymous functions args" do
+    defn calls_binary_fun(fun, a, b), do: fun.(a, b)
+
+    test "calls anonymous function directly" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               calls_binary_fun(&Nx.add/2, 1, 2.0)
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn calls_reduce_fun(fun, t), do: Nx.reduce(t, 0, fun)
+
+    test "calls anonymous function via reduce" do
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :reduce}} =
+               calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3]))
+    end
+
+    defn calls_tuple_fun({funa, funb}, a, b), do: {funa.(a, b), funb.(a, b)}
+
+    test "calls anonymous function from tuples" do
+      assert {%T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}},
+              %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [left, right]}}} =
+               calls_tuple_fun({&Nx.add/2, &Nx.subtract/2}, 1, 2.0)
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+
+      assert_raise ArgumentError, ~r"Got the following function inside a tuple", fn ->
+        calls_tuple_fun({&Nx.add/2, 0}, 1, 2.0)
+      end
     end
   end
 
@@ -158,8 +217,10 @@ defmodule Nx.DefnTest do
     end
 
     test "random uniform" do
-      assert %T{shape: {3}, data: %Expr{op: :random_uniform, args: [%T{shape: {}}, %T{shape: {}}]}} =
-               random_uniform(Nx.tensor([1, 2, 3]))
+      assert %T{
+               shape: {3},
+               data: %Expr{op: :random_uniform, args: [%T{shape: {}}, %T{shape: {}}]}
+             } = random_uniform(Nx.tensor([1, 2, 3]))
     end
 
     test "random normal" do
@@ -240,7 +301,8 @@ defmodule Nx.DefnTest do
       do: t |> Nx.broadcast({5, 3, 7}, axes: [1]) |> Nx.broadcast({9, 5, 3, 7}, axes: [1, 2, 3])
 
     defn broadcast_collapse7(t),
-      do: t |> Nx.broadcast({3, 5, 7}, axes: [0, 2]) |> Nx.broadcast({3, 9, 5, 7}, axes: [0, 2, 3])
+      do:
+        t |> Nx.broadcast({3, 5, 7}, axes: [0, 2]) |> Nx.broadcast({3, 9, 5, 7}, axes: [0, 2, 3])
 
     test "collapses" do
       assert %T{data: %Expr{op: :broadcast, args: [_, {7, 5, 3}, [1]]}, shape: {7, 5, 3}} =
@@ -401,12 +463,6 @@ defmodule Nx.DefnTest do
 
     test "|||" do
       assert %T{data: %Expr{op: :bitwise_or, args: [_, _]}} = bor_two(1, 2)
-    end
-
-    defn bxor_two(a, b), do: a ^^^ b
-
-    test "^^^" do
-      assert %T{data: %Expr{op: :bitwise_xor, args: [_, _]}} = bxor_two(1, 2)
     end
 
     defn bsl_two(a, b), do: a <<< b
@@ -677,7 +733,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "lu" do
-    defn lu(t), do: Nx.lu(t)
+    defn lu(t), do: Nx.LinAlg.lu(t)
 
     test "returns tuples" do
       assert {p, l, u} = lu(Nx.iota({3, 3}))
@@ -689,7 +745,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "qr" do
-    defn qr(t), do: Nx.qr(t)
+    defn qr(t), do: Nx.LinAlg.qr(t)
 
     test "returns tuples" do
       assert {left, right} = qr(Nx.iota({3, 2}))
@@ -700,7 +756,7 @@ defmodule Nx.DefnTest do
   end
 
   describe "svd" do
-    defn svd(t), do: Nx.svd(t)
+    defn svd(t), do: Nx.LinAlg.svd(t)
 
     test "returns tuples" do
       assert {u, s, vt} = svd(Nx.iota({3, 3}))
@@ -843,7 +899,8 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&defn_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
+      assert %T{data: %Expr{op: :subtract}} =
+               Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
     end
 
     test "compiles elixir function" do
@@ -851,7 +908,8 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&elixir_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
 
-      assert %T{data: %Expr{op: :subtract}} = Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], compiler: Identity)
+      assert %T{data: %Expr{op: :subtract}} =
+               Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], compiler: Identity)
     end
 
     test "raises if it doesn't return an expression" do
@@ -952,17 +1010,6 @@ defmodule Nx.DefnTest do
                      defmodule Sample do
                        import Nx.Defn
                        defn add(1, 2), do: 3
-                     end
-                   end
-    end
-
-    test "non-variables matching as arguments" do
-      assert_raise CompileError,
-                   ~r"#{location(+4)}: using = in arguments expects at least one of the sides to be a variable, got: {arg, arg} = {arg, arg}",
-                   fn ->
-                     defmodule Sample do
-                       import Nx.Defn
-                       defn add({_, _} = {_, _}, x), do: x
                      end
                    end
     end

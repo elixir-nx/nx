@@ -23,12 +23,11 @@ defmodule EXLA.AOT.Codegen do
 
   defp build_feeds_str(args) do
     args
-    |> Enum.with_index()
     |> Enum.map(&build_feed_str/1)
     |> Enum.join("")
   end
 
-  defp build_feed_str({%EXLA.Shape{dims: dims}, i}) do
+  defp build_feed_str({i, %EXLA.Shape{dims: dims}}) do
     shape_str = build_shape_str(dims)
 
     """
@@ -178,7 +177,6 @@ defmodule EXLA.AOT.Codegen do
 
     args_str =
       args
-      |> Enum.with_index()
       |> Enum.map(&build_nif_arg_retrieval_block(name, arity, &1))
       |> Enum.join("\n")
 
@@ -190,7 +188,7 @@ defmodule EXLA.AOT.Codegen do
       unsigned num_threads = std::thread::hardware_concurrency();
       Eigen::ThreadPool tp(num_threads);
       Eigen::ThreadPoolDevice device(&tp, tp.NumThreads());
-      #{class_name} #{name}_#{arity}(#{class_name}::AllocMode::RESULTS_PROFILES_AND_TEMPS_ONLY);
+      #{class_name} #{name}_#{arity};
       #{name}_#{arity}.set_thread_pool(&device);
       #{args_str}
       #{run_str}
@@ -205,7 +203,7 @@ defmodule EXLA.AOT.Codegen do
     """
   end
 
-  defp build_nif_arg_retrieval_block(name, arity, {_shape, i}) do
+  defp build_nif_arg_retrieval_block(name, arity, {i, _shape}) do
     error_msg = str("could not get argument at index #{i}")
 
     """
@@ -227,16 +225,14 @@ defmodule EXLA.AOT.Codegen do
     res_str =
       result_sizes
       |> Enum.with_index()
-      |> Enum.map(fn {size, i} -> build_nif_single_result_block(name, arity, size, i) end)
-      |> Enum.join("\n")
+      |> Enum.map_join("\n", fn {size, i} -> build_nif_single_result_block(name, arity, size, i) end)
 
     num_results = length(result_sizes);
 
     res_terms =
       result_sizes
       |> Enum.with_index()
-      |> Enum.map(fn {_, i} -> "result#{i}_term" end)
-      |> Enum.join(", ")
+      |> Enum.map_join(", ", fn {_, i} -> "result#{i}_term" end)
 
     """
     #{res_str}
@@ -265,10 +261,7 @@ defmodule EXLA.AOT.Codegen do
   end
 
   defp build_nif_func_export_array(functions) do
-    functions_str =
-      functions
-      |> Enum.map(&build_nif_func_export/1)
-      |> Enum.join(",\n")
+    functions_str = Enum.map_join(functions, ",\n", &build_nif_func_export/1)
 
     """
     static ErlNifFunc nif_funcs[] = {

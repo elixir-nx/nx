@@ -36,7 +36,6 @@ defmodule Nx.MixProject do
         "Functions: Conversion": &(&1[:type] == :conversion),
         "Functions: Creation": &(&1[:type] in [:creation, :random]),
         "Functions: Element-wise": &(&1[:type] == :element),
-        "Functions: Linalg": &(&1[:type] == :linalg),
         "Functions: N-dim": &(&1[:type] == :ndim),
         "Functions: Shape": &(&1[:type] == :shape),
         "Functions: Type": &(&1[:type] == :type)
@@ -45,7 +44,8 @@ defmodule Nx.MixProject do
         # Nx,
         # Nx.Async,
         # Nx.Defn,
-        # Nx.Defn.Kernel
+        # Nx.Defn.Kernel,
+        # Nx.LinAlg
 
         Backends: [
           Nx.Backend,

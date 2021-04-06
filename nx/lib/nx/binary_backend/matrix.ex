@@ -1,9 +1,23 @@
-defmodule Nx.BinaryBackend.Decomposition do
+defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
   @default_eps 1.0e-10
   import Nx.Shared
 
-  def ts(a_data, a_type, b_data, b_type, rows, output_type, _opts) do
+  def ts(a_data, a_type, b_data, b_type, {rows, rows} = shape, output_type, _opts) do
+    a_matrix = binary_to_matrix(a_data, a_type, shape)
+    b_matrix = binary_to_matrix(b_data, b_type, shape)
+
+    Enum.uniq(1..rows)
+    |> Enum.map(fn b_col ->
+      b_vector = get_matrix_column(b_matrix, b_col - 1)
+
+      ts(a_matrix, b_vector, 0, [])
+    end)
+    |> transpose_matrix()
+    |> matrix_to_binary(output_type)
+  end
+
+  def ts(a_data, a_type, b_data, b_type, {rows}, output_type, _opts) do
     a_matrix = binary_to_matrix(a_data, a_type, {rows, rows})
     b_vector = binary_to_vector(b_data, b_type)
 

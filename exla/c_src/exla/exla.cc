@@ -76,6 +76,9 @@ static int open_resources(ErlNifEnv* env) {
   if (!exla::nif::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
     return -1;
   }
+  if (!exla::nif::open_resource<xla::Literal>(env, mod, "Literal")) {
+    return -1;
+  }
   return 1;
 }
 
@@ -223,9 +226,9 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     return exla::nif::ok(env);
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ErlNifBinary binary, (*buffer)->ToBinary(), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM binary, (*buffer)->ToBinary(env), env);
 
-  return exla::nif::ok(env, exla::nif::make(env, binary));
+  return exla::nif::ok(env, binary);
 }
 
 ERL_NIF_TERM deallocate_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1507,6 +1510,30 @@ ERL_NIF_TERM sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM variadic_sort(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  std::vector<xla::XlaOp> operands;
+  xla::XlaComputation* comparator;
+  exla::int64 dimension;
+
+  if (!exla::nif::get_list<xla::XlaOp>(env, argv[0], operands)) {
+    return exla::nif::error(env, "Unable to get operands.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], comparator)) {
+    return exla::nif::error(env, "Unable to get comparator.");
+  }
+  if (!exla::nif::get(env, argv[2], &dimension)) {
+    return exla::nif::error(env, "Unable to get dimension.");
+  }
+
+  xla::XlaOp op = xla::Sort(operands, *comparator, dimension);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 // LinAlg Functions
 
 ERL_NIF_TERM cholesky(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2197,6 +2224,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reverse", 2, reverse},
   {"concatenate", 3, concatenate},
   {"sort", 3, sort},
+  {"variadic_sort", 3, variadic_sort},
   // LinAlg
   {"cholesky", 1, cholesky},
   {"eigh", 2, eigh},

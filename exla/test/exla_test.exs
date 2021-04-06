@@ -10,6 +10,7 @@ defmodule EXLATest do
 
   import Nx.Defn
   defn tuple_return({a, b}, c, d), do: {{a + c, b + d}, a + b}
+  defn tuple_unused({a, _b}, c, _d), do: a + c
 
   test "complex aot example" do
     a = Nx.tensor([1, 2, 3])
@@ -22,6 +23,7 @@ defmodule EXLATest do
     functions = [
       {:tuple_return1, &tuple_return(&1, &2, -5), [{a, b}, c]},
       {:tuple_return2, &tuple_return(&1, 5, &2), [{a, b}, -5]},
+      {:tuple_unused, &tuple_unused(&1, 5, &2), [{a, b}, c]},
       {:dot, &Nx.dot/2, [dot1, dot2]}
     ]
 
@@ -32,6 +34,8 @@ defmodule EXLATest do
 
     assert ComplexAotDemo.tuple_return2({a, b}, -5) ==
              {{Nx.tensor([6, 7, 8]), Nx.tensor([-4.0, -3.0, -2.0])}, Nx.tensor([2.0, 4.0, 6.0])}
+
+    assert ComplexAotDemo.tuple_unused({a, b}, c) == Nx.tensor([6, 7, 8])
 
     assert ComplexAotDemo.dot(dot1, dot2) == dot1
     assert ComplexAotDemo.dot(dot2, dot1) == dot1

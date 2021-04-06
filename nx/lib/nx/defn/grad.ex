@@ -234,11 +234,14 @@ defmodule Nx.Defn.Grad do
     {elem(tuple, index), cache}
   end
 
-  defp grad(:select, [pred, on_true, on_false], _ans, g, cache) do
-    {d_on_true, cache} = to_grad(on_true, g, cache)
-    {d_on_false, cache} = to_grad(on_false, g, cache)
-    result = Nx.select(pred, d_on_true, d_on_false)
-    {result, cache}
+  defp grad(:select, [pred, on_true, on_false], ans, g, cache) do
+    gs = Nx.broadcast(g, ans)
+    zeros = Nx.broadcast(Expr.tensor(0.0), ans)
+
+    d_on_true = Nx.select(pred, gs, zeros)
+    d_on_false = Nx.select(pred, zeros, gs)
+
+    grad_pairs([{on_true, d_on_true}, {on_false, d_on_false}], g, cache)
   end
 
   defp grad(:broadcast, [x, shape, axes], _ans, g, cache) do

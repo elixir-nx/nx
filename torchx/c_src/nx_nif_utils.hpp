@@ -61,78 +61,16 @@ namespace nx
 
     // Numeric types
 
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, char *var)
-    {
-      int value;
-      if (!enif_get_int(env, term, &value))
-        return 0;
-      *var = static_cast<char>(value);
-      return 1;
-    }
-
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, short *var)
-    {
-      int value;
-      if (!enif_get_int(env, term, &value))
-        return 0;
-      *var = static_cast<short>(value);
-      return 1;
-    }
-
     int get(ErlNifEnv *env, ERL_NIF_TERM term, int *var)
     {
       return enif_get_int(env, term,
                           reinterpret_cast<int *>(var));
     }
 
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, long *var)
-    {
-      return enif_get_long(env, term, var);
-    }
-
     int get(ErlNifEnv *env, ERL_NIF_TERM term, int64_t *var)
     {
       return enif_get_int64(env, term,
                             reinterpret_cast<ErlNifSInt64 *>(var));
-    }
-
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, unsigned char *var)
-    {
-      unsigned int value;
-      if (!enif_get_uint(env, term, &value))
-        return 0;
-      *var = static_cast<unsigned char>(value);
-      return 1;
-    }
-
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, unsigned short *var)
-    {
-      unsigned int value;
-      if (!enif_get_uint(env, term, &value))
-        return 0;
-      *var = static_cast<unsigned short>(value);
-      return 1;
-    }
-
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, unsigned int *var)
-    {
-      return enif_get_uint(env, term,
-                           reinterpret_cast<unsigned int *>(var));
-    }
-
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, uint64_t *var)
-    {
-      return enif_get_uint64(env, term,
-                             reinterpret_cast<ErlNifUInt64 *>(var));
-    }
-
-    int get(ErlNifEnv *env, ERL_NIF_TERM term, float *var)
-    {
-      double value;
-      if (!enif_get_double(env, term, &value))
-        return 0;
-      *var = static_cast<float>(value);
-      return 1;
     }
 
     int get(ErlNifEnv *env, ERL_NIF_TERM term, double *var)
@@ -195,6 +133,11 @@ namespace nx
       return enif_make_int(env, var);
     }
 
+    ERL_NIF_TERM make(ErlNifEnv *env, double var)
+    {
+      return enif_make_double(env, var);
+    }
+
     ERL_NIF_TERM make(ErlNifEnv *env, ErlNifBinary var)
     {
       return enif_make_binary(env, &var);
@@ -209,20 +152,6 @@ namespace nx
     {
       return enif_make_string(env, string, ERL_NIF_LATIN1);
     }
-
-    ERL_NIF_TERM make_map(ErlNifEnv *env, std::map<std::string, int> &map)
-    {
-      ERL_NIF_TERM term = enif_make_new_map(env);
-      std::map<std::string, int>::iterator itr;
-      for (itr = map.begin(); itr != map.end(); ++itr)
-      {
-        ERL_NIF_TERM key = make(env, itr->first);
-        ERL_NIF_TERM value = make(env, itr->second);
-        enif_make_map_put(env, term, key, value, &term);
-      }
-      return term;
-    }
-
 
     // Atoms
 

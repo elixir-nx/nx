@@ -162,7 +162,7 @@ defmodule EXLA do
 
       iex> async = EXLA.async(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
       iex> async
-      #EXLA.Async<...>
+      #EXLA.Defn.Async<...>
       iex> Nx.Async.await!(async)
       #Nx.Tensor<
         f32[3]
@@ -209,7 +209,7 @@ defmodule EXLA do
   Note ahead-of-time compilation for EXLA only runs on the CPU.
   It is slightly less performant than the JIT variant for the
   CPU but it compensates the loss in performance by removing
-  the need to have EXLA up and ornning in production.
+  the need to have EXLA up and running in production.
 
   ## Options
 

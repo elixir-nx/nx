@@ -137,7 +137,7 @@ class ExlaBuffer {
   // to the VM. This is a non-destructive operation. The buffer either
   // has to be explicitly deallocated, or deallocated when the object
   // goes out of scope.
-  xla::StatusOr<ErlNifBinary> ToBinary();
+  xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env);
 
   // Deallocates the underlying device memory and returns a success
   // status or an error status. Only temporary and reference tensors

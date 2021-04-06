@@ -109,12 +109,14 @@ defmodule Torchx.NIF do
   dnif cuda_is_available()
   dnif cuda_device_count()
 
+  def item(_tensor), do: :erlang.nif_error(:undef)
   def scalar_type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
   def names(_tensor), do: :erlang.nif_error(:undef)
   def strides(_tensor), do: :erlang.nif_error(:undef)
   def device_of(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
+  def to_blob_view(_tensor), do: :erlang.nif_error(:undef)
 
   def call(func, :cpu, args) when is_atom(func) and is_list(args),
     do: apply(__MODULE__, func, args)
