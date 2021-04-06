@@ -688,8 +688,8 @@ defmodule Nx.Defn.Expr do
     expr(out, tensor.data.context, :argsort, [tensor, opts, fun])
   end
 
-  defp to_nx_comparator(:desc), do: &Nx.less/2
-  defp to_nx_comparator(:asc), do: &Nx.greater/2
+  defp to_nx_comparator(:asc), do: &Nx.less_equal/2
+  defp to_nx_comparator(:desc), do: &Nx.greater_equal/2
   defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
 
   defp to_nx_comparator(_),
