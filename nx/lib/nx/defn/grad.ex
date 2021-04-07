@@ -476,6 +476,19 @@ defmodule Nx.Defn.Grad do
     grad_pairs(pairs, g, cache)
   end
 
+  defp grad(:qr, [{q, r}, input, _opts], _ans, g, cache) do
+    {dq, cache} = to_grad(input, Nx.multiply(q, g), cache)
+    {dr, cache} = to_grad(input, Nx.multiply(r, g), cache)
+
+    m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
+
+    m_ltu = copyltu(m)
+    inv_r = Nx.LinAlg.invert(Nx.transpose(r))
+
+    da = Nx.add(dq, dq) |> Nx.dot(m_ltu) |> Nx.dot(Nx.transpose(inv_r))
+    to_grad(input, da, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
@@ -1022,4 +1035,24 @@ defmodule Nx.Defn.Grad do
   defp up_to(_, _), do: []
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+
+  # copies the lower triangle over the upper triangle of a 2x2 tensor
+  defp copyltu(tensor) do
+    iota = Nx.iota(tensor, axis: 0)
+    zeros = Nx.broadcast(0, tensor)
+    identity = Nx.eye(tensor)
+
+    # Trick to yield a matrix where every element below
+    # the main diagonal is 1, and the rest is 0
+    selector = Nx.greater(iota, Nx.transpose(iota))
+
+    # Fetch the lower triangle of the matrix without the diagonal
+    lower = Nx.select(selector, tensor, zeros)
+
+    # Get the diagonal
+    diag = Nx.select(identity, tensor, zeros)
+
+    # transpose(lower) + lower + diag == copyltu
+    lower |> Nx.add(diag) |> Nx.transpose() |> Nx.add(lower)
+  end
 end

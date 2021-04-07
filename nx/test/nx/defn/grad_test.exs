@@ -1646,6 +1646,20 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "qr" do
+    defn qr_grad(t) do
+      grad(t, fn tensor ->
+        {q, r} = Nx.LinAlg.qr(tensor)
+
+        Nx.sum(Nx.concatenate([q, r]))
+      end)
+    end
+
+    test "computes grad for tensor" do
+      assert qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])) == Nx.tensor([[1, 1], [-1, 1]])
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))
