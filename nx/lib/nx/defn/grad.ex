@@ -482,6 +482,16 @@ defmodule Nx.Defn.Grad do
 
     m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
 
+    # Due to the way m is defined, it will always be a square matrix
+    # So we can apply a square-matrix implementation for copyltu
+    # Proof:
+    # For any matrix A with shape {m, n}, we have:
+    # shape(q) = shape(dq) = {m, k}
+    # shape(r) = shape(dr) = {k, n}
+    # From this, it follows:
+    # shape(qq = transpose(dq).q) = {k, k}
+    # shape(rr = r.transpose(dr)) = {k, k}
+    # Since m = rr - qq, shape(m) = {k, k}
     m_ltu = copyltu(m)
     inv_r = Nx.LinAlg.invert(Nx.transpose(r))
 
@@ -1043,7 +1053,6 @@ defmodule Nx.Defn.Grad do
     selector = Nx.greater(Nx.iota(tensor, axis: 0), Nx.iota(tensor, axis: 1))
 
     zeros = Nx.broadcast(0, tensor)
-    identity = Nx.eye(tensor)
 
     # Fetch the lower triangle of the matrix without the diagonal
     lower = Nx.select(selector, tensor, zeros)
