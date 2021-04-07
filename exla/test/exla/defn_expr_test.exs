@@ -2664,6 +2664,11 @@ defmodule EXLA.DefnExprTest do
                  ]
                ])
     end
+
+    test "sorts a floating-point tensor and returns its indices" do
+      assert argsort0(Nx.tensor([42.0, 23.0, 16.0, 15.0, 8.0, 4.0])) ==
+               Nx.tensor([5, 4, 3, 2, 1, 0])
+    end
   end
 
   describe "cholesky" do
