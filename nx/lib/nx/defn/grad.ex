@@ -1036,15 +1036,14 @@ defmodule Nx.Defn.Grad do
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
 
-  # copies the lower triangle over the upper triangle of a 2x2 tensor
+  # copies the lower triangle over the upper triangle of a 2-D square tensor
   defp copyltu(tensor) do
-    iota = Nx.iota(tensor, axis: 0)
-    zeros = Nx.broadcast(0, tensor)
-    identity = Nx.eye(tensor)
-
     # Trick to yield a matrix where every element below
     # the main diagonal is 1, and the rest is 0
-    selector = Nx.greater(iota, Nx.transpose(iota))
+    selector = Nx.greater(Nx.iota(tensor, axis: 0), Nx.iota(tensor, axis: 1))
+
+    zeros = Nx.broadcast(0, tensor)
+    identity = Nx.eye(tensor)
 
     # Fetch the lower triangle of the matrix without the diagonal
     lower = Nx.select(selector, tensor, zeros)
