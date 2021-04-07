@@ -496,7 +496,8 @@ defmodule Nx.Defn.Grad do
     inv_r = Nx.LinAlg.invert(Nx.transpose(r))
 
     da = Nx.add(dq, dq) |> Nx.dot(m_ltu) |> Nx.dot(Nx.transpose(inv_r))
-    to_grad(input, da, cache)
+    {res, cache} = to_grad(input, da, cache)
+    {{res, res}, cache}
   end
 
   defp grad(_op, _args, _ans, _g, _cache) do
@@ -1058,7 +1059,7 @@ defmodule Nx.Defn.Grad do
     lower = Nx.select(selector, tensor, zeros)
 
     # Get the diagonal
-    diag = Nx.select(identity, tensor, zeros)
+    diag = tensor |> Nx.eye() |> Nx.select(tensor, zeros)
 
     # transpose(lower) + lower + diag == copyltu
     lower |> Nx.add(diag) |> Nx.transpose() |> Nx.add(lower)

@@ -1656,7 +1656,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes grad for tensor" do
-      assert qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])) == Nx.tensor([[1, 1], [-1, 1]])
+      assert qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])) == Nx.tensor([[-0.7071, -1.4142], [-0.7071, 5.62e-8]])
     end
   end
 
