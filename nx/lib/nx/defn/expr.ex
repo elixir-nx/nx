@@ -667,13 +667,12 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def argsort(out, tensor, opts) do
+  def argsort(out, %{type: input_type} = tensor, opts) do
     comparator = opts[:comparator]
 
-    %{type: type} = out
     tensor = to_expr(tensor)
 
-    args = [parameter(:argsort, type, {}, 0), parameter(:argsort, type, {}, 1)]
+    args = [parameter(:argsort, input_type, {}, 0), parameter(:argsort, input_type, {}, 1)]
     comparator = to_nx_comparator(comparator)
     fun = fun(args, comparator)
 
