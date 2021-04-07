@@ -476,28 +476,20 @@ defmodule Nx.Defn.Grad do
     grad_pairs(pairs, g, cache)
   end
 
-  defp grad(:qr, [{q, r}, input, _opts], _ans, g, cache) do
-    {dq, cache} = to_grad(input, Nx.multiply(q, g), cache)
-    {dr, cache} = to_grad(input, Nx.multiply(r, g), cache)
+  defp grad(:qr, [{q, r}, _input, _opts], _ans, dx, cache) do
+    dx_rinv = dx |> Nx.dot(Nx.LinAlg.invert(r))
+    qt_dx_rinv = q |> Nx.transpose() |> Nx.dot(dx_rinv)
+    qt_dx_rinv_lower = tril(qt_dx_rinv)
 
-    m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
+    correction_factor = Nx.subtract(qt_dx_rinv_lower, Nx.transpose(qt_dx_rinv_lower))
 
-    # Due to the way m is defined, it will always be a square matrix
-    # So we can apply a square-matrix implementation for copyltu
-    # Proof:
-    # For any matrix A with shape {m, n}, we have:
-    # shape(q) = shape(dq) = {m, k}
-    # shape(r) = shape(dr) = {k, n}
-    # From this, it follows:
-    # shape(qq = transpose(dq).q) = {k, k}
-    # shape(rr = r.transpose(dr)) = {k, k}
-    # Since m = rr - qq, shape(m) = {k, k}
-    m_ltu = copyltu(m)
-    inv_r = Nx.LinAlg.invert(Nx.transpose(r))
+    dq = q |> Nx.dot(Nx.subtract(correction_factor, qt_dx_rinv)) |> Nx.add(dx_rinv)
+    dr = qt_dx_rinv |> Nx.subtract(correction_factor) |> Nx.dot(r)
 
-    da = Nx.add(dq, dq) |> Nx.dot(m_ltu) |> Nx.dot(Nx.transpose(inv_r))
-    {res, cache} = to_grad(input, da, cache)
-    {{res, res}, cache}
+    {dq, cache} = to_grad(q, dq, cache)
+    {dr, cache} = to_grad(r, dr, cache)
+
+    {{dq, dr}, cache}
   end
 
   defp grad(_op, _args, _ans, _g, _cache) do
@@ -1047,19 +1039,25 @@ defmodule Nx.Defn.Grad do
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
 
-  # copies the lower triangle over the upper triangle of a 2-D square tensor
-  defp copyltu(tensor) do
+  defp tril(tensor) do
     # Trick to yield a matrix where every element below
     # the main diagonal is 1, and the rest is 0
     selector = Nx.greater(Nx.iota(tensor, axis: 0), Nx.iota(tensor, axis: 1))
 
     zeros = Nx.broadcast(0, tensor)
 
+    selector = Nx.greater(Nx.iota(tensor, axis: 0), Nx.iota(tensor, axis: 1))
+    zeros = Nx.broadcast(0, tensor)
     # Fetch the lower triangle of the matrix without the diagonal
     lower = Nx.select(selector, tensor, zeros)
+  end
+
+  # copies the lower triangle over the upper triangle of a 2-D square tensor
+  defp copyltu(tensor) do
+    lower = tril(tensor)
 
     # Get the diagonal
-    diag = tensor |> Nx.eye() |> Nx.select(tensor, zeros)
+    diag = Nx.multiply(tensor, Nx.eye(tensor))
 
     # transpose(lower) + lower + diag == copyltu
     lower |> Nx.add(diag) |> Nx.transpose() |> Nx.add(lower)
