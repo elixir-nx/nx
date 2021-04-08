@@ -70,8 +70,8 @@ defmodule Torchx.Backend do
           String.trim("Torchx does not support unsigned #{size} bit integer #{hint}")
   end
 
-  def device_option(nil), do: :cpu
-  def device_option(backend_opts), do: backend_opts[:device] || :cpu
+  def device_option(nil), do: {:cpu, -1}
+  def device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
 
   defp torch_device(opts) when is_list(opts), do: opts |> device_option() |> Torchx.torch_device()
 
@@ -79,17 +79,17 @@ defmodule Torchx.Backend do
 
   @impl true
   def scalar(%T{shape: {}, type: type} = out, scalar, backend_options) do
-    Torchx.scalar_tensor(scalar, torch_type(type), torch_device(backend_options))
+    Torchx.scalar_tensor(scalar, torch_type(type), device_option(backend_options))
     |> from_ref(out)
   end
 
   def scalar(%T{shape: shape, type: type} = out, scalar, backend_options) do
-    Torchx.full(shape, scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.full(shape, scalar, torch_type(type), device_option(backend_options)) |> from_ref(out)
   end
 
   @impl true
   def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
-    Torchx.eye(n, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.eye(n, torch_type(type), device_option(backend_options)) |> from_ref(out)
   end
 
   @impl true
@@ -191,7 +191,7 @@ defmodule Torchx.Backend do
       torch_type(type),
       torch_device(backend_options)
     )
-    |> from_ref(out)
+    |> from_ref(out, device_option(backend_options))
   end
 
   ## Shape
@@ -337,7 +337,8 @@ defmodule Torchx.Backend do
     def unquote(op)(out, l, r) do
       {left, right} = maybe_cast_u8(l, r)
 
-      Torchx.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
+      Torchx.unquote(op)(to_ref_with_device(left), to_ref_with_device(right))
+      |> from_ref(out)
     end
   end
 
@@ -391,7 +392,7 @@ defmodule Torchx.Backend do
         %T{type: right_type, data: %TB{ref: right_ref}},
         right_axes
       ) do
-    NIF.tensordot(
+    Torchx.tensordot(
       from_typed_ref(left_ref, left_type, out_type),
       from_typed_ref(right_ref, right_type, out_type),
       left_axes,
@@ -402,8 +403,8 @@ defmodule Torchx.Backend do
 
   defp from_typed_ref(ref, expected_type, expected_type), do: ref
 
-  defp from_typed_ref(ref, _ref_type, expected_type),
-    do: NIF.to_type(ref, torch_type(expected_type)) |> unwrap!()
+  defp from_typed_ref({device, ref}, _ref_type, expected_type),
+    do: NIF.to_type(ref, torch_type(expected_type)) |> unwrap!() |> wrap_with_device(device)
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
@@ -447,11 +448,14 @@ defmodule Torchx.Backend do
 
   ## Helpers
 
+  defp wrap_with_device(ref, device), do: {device, ref}
+
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 
-  defp from_ref({_device, ref} = data, t) when is_reference(ref), do: to_tensor(data, t)
+  defp from_ref({{_, _} = _device, ref} = data, t) when is_reference(ref), do: to_tensor(data, t)
   defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
+  defp from_ref(maybe_ref, t, device), do: maybe_ref |> unwrap!() |> to_tensor(t, device)
 
   defp from_bare_ref(maybe_ref) do
     ref = unwrap!(maybe_ref)
@@ -483,7 +487,13 @@ defmodule Torchx.Backend do
       |> unwrap!()
       |> Enum.map(&to_tensor(&1, t))
 
+  defp to_ref_with_device(%T{data: %TB{ref: ref}}), do: ref
+
+  defp to_ref_with_device(%T{} = tensor),
+    do: Nx.backend_transfer(tensor, TB) |> to_ref_with_device()
+
   defp to_ref(%T{data: %TB{ref: {{_, _} = _device, ref}}}), do: ref
+  defp to_ref(%T{data: %TB{ref: {:cpu, ref}}}), do: ref
   defp to_ref(%T{data: %TB{ref: ref}}), do: ref
 
   defp to_ref(%T{} = tensor),
@@ -496,6 +506,10 @@ defmodule Torchx.Backend do
 
   defp to_tensor(ref, %T{type: type, shape: shape} = t) do
     %{t | data: %__MODULE__{ref: check_shape_and_type!(ref, shape, type)}}
+  end
+
+  defp to_tensor(ref, %T{type: type, shape: shape} = t, device) do
+    %{t | data: %__MODULE__{ref: {device, check_shape_and_type!(ref, shape, type)}}}
   end
 
   defp to_scalar(n) when is_number(n), do: n

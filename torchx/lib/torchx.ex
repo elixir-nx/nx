@@ -22,7 +22,7 @@ defmodule Torchx.Macro do
   end
 
   defguardp is_tensor(t)
-            when is_tuple(t) and is_integer(elem(elem(t, 0), 0)) and
+            when is_tuple(t) and is_atom(elem(elem(t, 0), 0)) and
                    is_integer(elem(elem(t, 0), 1)) and is_reference(elem(t, 1))
 
   # TODO: select tensor args by variable names
@@ -36,7 +36,7 @@ defmodule Torchx.Macro do
         var, dev -> {var, dev}
       end)
 
-    {device, prepared_args} |> IO.inspect()
+    {device, prepared_args}
   end
 end
 
