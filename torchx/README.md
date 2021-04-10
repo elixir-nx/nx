@@ -1,4 +1,4 @@
-# Torchx
+<h1><img src="https://github.com/elixir-nx/nx/raw/main/torchx/torchx.png" alt="Torchx" width="400"></h1>
 
 Elixir client for LibTorch (from PyTorch). It includes a backend for `Nx` for native execution of tensor operations (inside and outside of `defn`).
 
