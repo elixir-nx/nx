@@ -21,6 +21,17 @@ defmodule Torchx.Macro do
     end
   end
 
+  defmacro deftorch(op, a, b) do
+    quote do
+      def unquote(op)(a, b) do
+        {device, prepared_args} = prepare_args([a, b])
+
+        Torchx.NIF.call(unquote(op), device, prepared_args)
+        |> wrap(device)
+      end
+    end
+  end
+
   defguardp is_tensor(t)
             when is_tuple(t) and is_atom(elem(elem(t, 0), 0)) and
                    is_integer(elem(elem(t, 0), 1)) and is_reference(elem(t, 1))
@@ -32,7 +43,7 @@ defmodule Torchx.Macro do
       Enum.map_reduce(args, nil, fn
         {dev, ref} = t, nil when is_tensor(t) -> {ref, dev}
         {dev, ref} = t, dev when is_tensor(t) -> {ref, dev}
-        {dev, ref} = t, other_dev when is_tensor(t) -> raise "cannot perform across devices"
+        {_dev, _ref} = t, _other_dev when is_tensor(t) -> raise "cannot perform across devices"
         var, dev -> {var, dev}
       end)
 
@@ -86,9 +97,16 @@ defmodule Torchx do
   deftorch eye(size, type, device)
 
   ## Operations
+  binary_ops =
+    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
+      [:left_shift, :right_shift] ++
+      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
+      [:logical_and, :logical_or, :logical_xor] ++
+      [:outer]
 
-  deftorch add(tensorA, tensorB)
-  deftorch subtract(tensorA, tensorB)
+  for op <- binary_ops do
+    deftorch(unquote(op), tensorA, tensorB)
+  end
 
   def tensordot(left, right, left_axes, right_axes) do
     {device, [left_ref, right_ref]} = to_refs([left, right])
