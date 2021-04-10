@@ -121,9 +121,6 @@ defmodule Torchx.NIF do
   def call(func, :cpu, args) when is_atom(func) and is_list(args),
     do: apply(__MODULE__, func, args |> convert_device_arg(:cpu))
 
-  # def call(func, {0, -1}, args) when is_atom(func) and is_list(args),
-  #   do: apply(__MODULE__, func, args)
-
   def call(func, device, args) when is_atom(func) and is_list(args),
     do: apply(__MODULE__, :"#{func}_io", args |> convert_device_arg(device))
 

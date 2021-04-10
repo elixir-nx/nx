@@ -21,10 +21,21 @@ defmodule Torchx.Macro do
     end
   end
 
-  defmacro deftorch(op, a, b) do
+  defmacro deftorch(op, _a, _b) do
     quote do
-      def unquote(op)(a, b) do
-        {device, prepared_args} = prepare_args([a, b])
+      def unquote(op)(tensorA, tensorB) do
+        {device, prepared_args} = prepare_args([tensorA, tensorB])
+
+        Torchx.NIF.call(unquote(op), device, prepared_args)
+        |> wrap(device)
+      end
+    end
+  end
+
+  defmacro deftorch(op, _t) do
+    quote do
+      def unquote(op)(tensor) do
+        {device, prepared_args} = prepare_args([tensor])
 
         Torchx.NIF.call(unquote(op), device, prepared_args)
         |> wrap(device)
@@ -90,11 +101,37 @@ defmodule Torchx do
 
   ## Creation
 
+  deftorch randint(min, max, shape, type, device)
+  deftorch rand(min, max, shape, type, device)
+  deftorch normal(mu, sigma, shape, type, device)
+
   deftorch arange(from, to, step, type, device)
+  deftorch arange(from, to, step, type, device, shape)
   deftorch full(shape, scalar, type, device)
   deftorch scalar_tensor(scalar, type, device)
   deftorch ones(shape, type, device)
   deftorch eye(size, type, device)
+
+  deftorch reshape(tensor, shape)
+  deftorch to_type(tensor, type)
+  deftorch to_device(tensor, device)
+  deftorch from_blob(blob, shape, type, device)
+  deftorch to_blob(tensor)
+  deftorch to_blob(tensor, limit)
+
+  deftorch delete_tensor(tensor)
+  deftorch squeeze(tensor)
+  deftorch squeeze(tensor, axis)
+  deftorch broadcast_to(tensor, shape)
+  deftorch transpose(tensor, dim0, dim1)
+  deftorch permute(tensor, dims)
+  deftorch split(tensor, split_size)
+  deftorch narrow(tensor, dim, start, length)
+  deftorch as_strided(tensor, size, strides, offset)
+
+  deftorch sum(tensor, axes, keep_axes)
+  deftorch argmax(tensor, axe, keep_axes)
+  deftorch argmin(tensor, axe, keep_axes)
 
   ## Operations
   binary_ops =
@@ -102,11 +139,26 @@ defmodule Torchx do
       [:left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
       [:logical_and, :logical_or, :logical_xor] ++
+      [:bitwise_and, :bitwise_or, :bitwise_xor] ++
       [:outer]
 
   for op <- binary_ops do
     deftorch(unquote(op), tensorA, tensorB)
   end
+
+  unary_ops =
+    Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
+      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+
+  for op <- unary_ops do
+    deftorch(unquote(op), tensor)
+  end
+
+  # Transformations
+  deftorch cholesky(tensor)
+  deftorch cholesky(tensor, upper)
+  deftorch qr(tensor)
+  deftorch qr(tensor, reduced)
 
   def tensordot(left, right, left_axes, right_axes) do
     {device, [left_ref, right_ref]} = to_refs([left, right])

@@ -67,10 +67,13 @@ inline std::string type2string(const torch::ScalarType type)
 
 #define OPTS(TYPE, DEV_VEC) DEVICE(DEV_VEC).dtype(TYPE)
 
-#define TENSOR_PARAM(ARGN, VAR)                                        \
-  torch::Tensor *VAR;                                                  \
-  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR " tensor param.");
+#define TENSOR_PARAM(ARGN, VAR)                                           \
+  torch::Tensor *VAR;                                                     \
+  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))  { \
+    std::ostringstream msg;                                               \
+    msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc;  \
+    return nx::nif::error(env, msg.str().c_str());                        \
+  }
 
 #define CATCH()                                              \
   catch (c10::Error error)                                   \
