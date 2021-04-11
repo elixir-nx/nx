@@ -180,10 +180,6 @@ defmodule Torchx do
     |> wrap(device)
   end
 
-  for fun <- @torch_function do
-    IO.inspect(fun)
-  end
-
   def torch_functions(), do: @torch_function
 
   ## Utils
