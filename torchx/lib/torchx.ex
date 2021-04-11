@@ -1,9 +1,19 @@
 defmodule Torchx.Macro do
+  defmacro __using__(_opts) do
+    quote do
+      import unquote(__MODULE__)
+      Module.register_attribute(Torchx, :torch_function, accumulate: true)
+    end
+  end
+
   defmacro deftorch(call) do
     {name, args} = Macro.decompose_call(call)
 
+    args_names = Enum.map(args, &elem(&1, 0))
+
     if Enum.any?(args, &match?({:device, _, nil}, &1)) do
       quote do
+        @torch_function {unquote(name), unquote(args_names)}
         def unquote(name)(unquote_splicing(args)) do
           Torchx.NIF.call(unquote(name), var!(device), [unquote_splicing(args)])
           |> wrap(var!(device))
@@ -11,6 +21,7 @@ defmodule Torchx.Macro do
       end
     else
       quote do
+        @torch_function {unquote(name), unquote(args_names)}
         def unquote(name)(unquote_splicing(args)) do
           {device, prepared_args} = prepare_args(unquote(args))
 
@@ -23,6 +34,7 @@ defmodule Torchx.Macro do
 
   defmacro deftorch(op, _a, _b) do
     quote do
+      @torch_function {var!(op), [:tensorA, :tensorB]}
       def unquote(op)(tensorA, tensorB) do
         {device, prepared_args} = prepare_args([tensorA, tensorB])
 
@@ -34,6 +46,7 @@ defmodule Torchx.Macro do
 
   defmacro deftorch(op, _t) do
     quote do
+      @torch_function {var!(op), [:tensor]}
       def unquote(op)(tensor) do
         {device, prepared_args} = prepare_args([tensor])
 
@@ -65,7 +78,7 @@ end
 defmodule Torchx do
   alias Torchx.NIF
 
-  import Torchx.Macro
+  use Torchx.Macro
 
   @doc """
   Check if device of the given type is available for Torchx.
@@ -166,6 +179,12 @@ defmodule Torchx do
     NIF.call(:tensordot, device, [left_ref, right_ref, left_axes, right_axes])
     |> wrap(device)
   end
+
+  for fun <- @torch_function do
+    IO.inspect(fun)
+  end
+
+  def torch_functions(), do: @torch_function
 
   ## Utils
 

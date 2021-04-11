@@ -551,9 +551,29 @@ UNARY_OP2(negate, negative)
 UNARY_OP(round)
 UNARY_OP(sign)
 UNARY_OP(exp)
+UNARY_OP(expm1)
+UNARY_OP(sqrt)
+UNARY_OP(rsqrt)
 UNARY_OP(log)
+UNARY_OP(log1p)
 UNARY_OP(bitwise_not)
 UNARY_OP2(logistic, sigmoid)
+
+UNARY_OP(sin)
+UNARY_OP(asin)
+UNARY_OP(sinh)
+UNARY_OP(asinh)
+UNARY_OP(cos)
+UNARY_OP(acos)
+UNARY_OP(cosh)
+UNARY_OP(acosh)
+UNARY_OP(tan)
+UNARY_OP(atan)
+UNARY_OP(tanh)
+UNARY_OP(atanh)
+UNARY_OP(erf)
+UNARY_OP(erfc)
+UNARY_OP2(erf_inv, erfinv)
 
 
 /* Aggregates */
@@ -745,9 +765,28 @@ static ErlNifFunc nif_functions[] = {
     DF(round, 1),
     DF(sign, 1),
     DF(exp, 1),
+    DF(expm1, 1),
+    DF(sqrt, 1),
+    DF(rsqrt, 1),
     DF(log, 1),
+    DF(log1p, 1),
     DF(bitwise_not, 1),
     DF(logistic, 1),
+    DF(sin, 1),
+    DF(asin, 1),
+    DF(sinh, 1),
+    DF(asinh, 1),
+    DF(cos, 1),
+    DF(acos, 1),
+    DF(cosh, 1),
+    DF(acosh, 1),
+    DF(tan, 1),
+    DF(atan, 1),
+    DF(tanh, 1),
+    DF(atanh, 1),
+    DF(erf, 1),
+    DF(erfc, 1),
+    DF(erf_inv, 1),
 
     DF(tensordot, 4),
     DF(matmul, 2),

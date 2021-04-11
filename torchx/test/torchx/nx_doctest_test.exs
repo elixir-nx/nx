@@ -16,6 +16,8 @@ defmodule Torchx.NxDoctestTest do
   ## Result mismatch in less significant digits (precision issue)
 
     * logistic/1
+    * cos/1
+    * erfc/1
 
   ## Callback or test requires explicit backend transfer to BinaryBackend
 
@@ -86,7 +88,10 @@ defmodule Torchx.NxDoctestTest do
         norm: 2,
         all_close?: 3,
         atan2: 2,
-        bitcast: 2
+        bitcast: 2,
+        cbrt: 1,
+        cos: 1,
+        erfc: 1
       )
       |> Kernel.++([:moduledoc])
 end
