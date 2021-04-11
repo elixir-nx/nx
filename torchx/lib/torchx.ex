@@ -125,6 +125,8 @@ defmodule Torchx do
   deftorch ones(shape, type, device)
   deftorch eye(size, type, device)
 
+  ## Manipulation
+
   deftorch reshape(tensor, shape)
   deftorch to_type(tensor, type)
   deftorch to_device(tensor, device)
@@ -142,11 +144,14 @@ defmodule Torchx do
   deftorch narrow(tensor, dim, start, length)
   deftorch as_strided(tensor, size, strides, offset)
 
+  ## Aggregation
+
   deftorch sum(tensor, axes, keep_axes)
-  deftorch argmax(tensor, axe, keep_axes)
-  deftorch argmin(tensor, axe, keep_axes)
+  deftorch argmax(tensor, axis, keep_axes)
+  deftorch argmin(tensor, axis, keep_axes)
 
   ## Operations
+
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:left_shift, :right_shift] ++
@@ -167,7 +172,8 @@ defmodule Torchx do
     deftorch(unquote(op), tensor)
   end
 
-  # Transformations
+  ## Transformations
+
   deftorch cholesky(tensor)
   deftorch cholesky(tensor, upper)
   deftorch qr(tensor)
@@ -180,7 +186,7 @@ defmodule Torchx do
     |> wrap(device)
   end
 
-  def torch_functions(), do: @torch_function
+  def __torch__, do: @torch_function
 
   ## Utils
 

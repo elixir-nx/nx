@@ -28,7 +28,7 @@ defmodule Torchx.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  for {op, args} <- Torchx.torch_functions() do
+  for {op, args} <- Torchx.__torch__() do
     def unquote(op)(unquote_splicing(Macro.generate_arguments(length(args), __MODULE__))),
       do: :erlang.nif_error(:undef)
 
