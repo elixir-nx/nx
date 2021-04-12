@@ -109,7 +109,7 @@ The main mechanism to use EXLA is by setting it as the `@defn_compiler` for your
 ```elixir
 @defn_compiler EXLA
 defn softmax(tensor) do
-  Nx.exp(n) / Nx.sum(Nx.exp(n))
+  Nx.exp(tensor) / Nx.sum(Nx.exp(tensor))
 end
 ```
 
