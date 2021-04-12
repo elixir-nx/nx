@@ -884,6 +884,15 @@ defmodule Nx.DefnTest do
       assert transform_back_and_forth(Nx.tensor(1)) ==
                Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
     end
+
+    @defn_compiler Nx.Defn.Evaluator
+    defn transform_variable_access(a, b) do
+      transform(:ok, fn :ok -> a + b end)
+    end
+
+    test "supports variable access" do
+      assert transform_variable_access(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(3)
+    end
   end
 
   describe "jit" do
