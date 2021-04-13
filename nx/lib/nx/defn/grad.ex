@@ -476,15 +476,13 @@ defmodule Nx.Defn.Grad do
     grad_pairs(pairs, g, cache)
   end
 
-  defp grad(:qr, [{q, r}, _input, _opts], _ans, dx, cache) do
-    dx_rinv = dx |> Nx.dot(Nx.LinAlg.invert(r))
-    qt_dx_rinv = q |> Nx.transpose() |> Nx.dot(dx_rinv)
-    qt_dx_rinv_lower = tril(qt_dx_rinv)
-
-    correction_factor = Nx.subtract(qt_dx_rinv_lower, Nx.transpose(qt_dx_rinv_lower))
-
-    dq = q |> Nx.dot(Nx.subtract(correction_factor, qt_dx_rinv)) |> Nx.add(dx_rinv)
-    dr = qt_dx_rinv |> Nx.subtract(correction_factor) |> Nx.dot(r)
+  defp grad(:qr, [{q, r}, input, _opts], _ans, g, cache) do
+    g_rinv = Nx.dot(g, Nx.LinAlg.invert(r))
+    qt_g_rinv = Nx.dot(Nx.transpose(q), g_rinv)
+    qt_g_rinv_lower = tril(qt_g_rinv)
+    doff = Nx.subtract(qt_g_rinv_lower, Nx.transpose(qt_g_rinv_lower))
+    dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
+    dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
 
     {dq, cache} = to_grad(q, dq, cache)
     {dr, cache} = to_grad(r, dr, cache)
@@ -1052,14 +1050,14 @@ defmodule Nx.Defn.Grad do
     lower = Nx.select(selector, tensor, zeros)
   end
 
-  # copies the lower triangle over the upper triangle of a 2-D square tensor
-  defp copyltu(tensor) do
-    lower = tril(tensor)
+  # # copies the lower triangle over the upper triangle of a 2-D square tensor
+  # defp copyltu(tensor) do
+  #   lower = tril(tensor)
 
-    # Get the diagonal
-    diag = Nx.multiply(tensor, Nx.eye(tensor))
+  #   # Get the diagonal
+  #   diag = Nx.multiply(tensor, Nx.eye(tensor))
 
-    # transpose(lower) + lower + diag == copyltu
-    lower |> Nx.add(diag) |> Nx.transpose() |> Nx.add(lower)
-  end
+  #   # transpose(lower) + lower + diag == copyltu
+  #   lower |> Nx.add(diag) |> Nx.transpose() |> Nx.add(lower)
+  # end
 end
