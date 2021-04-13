@@ -71,7 +71,7 @@ defmodule MNIST do
         :inets.start()
         :ssl.start()
 
-        {:ok, {_status, _response, data}} = :httpc.request(:get, {base_url ++ zip, []}, [], [])
+        {:ok, {_status, _response, data}} = :httpc.request(base_url ++ zip)
         File.mkdir_p!("tmp")
         File.write!(path, data)
 
