@@ -1221,7 +1221,7 @@ defmodule Nx do
         ]
       >
 
-      If the batch size would result in uneven batches, you can repeat or discard excess data:
+  If the batch size would result in uneven batches, you can repeat or discard excess data:
 
       iex> [first, second, third] = Nx.to_batched_list(Nx.iota({5, 2}, names: [:x, :y]), 2)
       iex> first
