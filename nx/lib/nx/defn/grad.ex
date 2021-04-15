@@ -477,15 +477,36 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:qr, [{q, r}, input, _opts], _ans, g, cache) do
-    g_rinv = Nx.dot(g, Nx.LinAlg.invert(r))
-    qt_g_rinv = Nx.dot(Nx.transpose(q), g_rinv)
-    qt_g_rinv_lower = tril(qt_g_rinv)
-    doff = Nx.subtract(qt_g_rinv_lower, Nx.transpose(qt_g_rinv_lower))
-    dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
-    dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
+    r_inv = Nx.LinAlg.invert(r)
+    c = Nx.transpose(q) |> Nx.dot(g) |> Nx.dot(r_inv)
 
-    {dq, cache} = to_grad(q, dq, cache)
-    {dr, cache} = to_grad(r, dr, cache)
+    # matrix where every element above the main diagonal is 2
+    # and every element on the main diagonal is 1
+    e =
+      Nx.less_equal(Nx.iota(c, axis: 0), Nx.iota(c, axis: 1))
+      |> Nx.multiply(2)
+      |> Nx.subtract(Nx.eye(c))
+
+    dr = c |> Nx.add(Nx.transpose(c)) |> Nx.divide(2) |> Nx.multiply(e) |> Nx.dot(r)
+    dq = g |> Nx.subtract(Nx.dot(q, dr)) |> Nx.dot(r_inv)
+
+    # The code below yields the following thensor for the test at  test/nx/defn/grad_test.exs:1658
+    # #Nx.Tensor<\n  f32[2][2]\n  [\n    [1.9999998807907104, -0.33333325386047363],\n    [-0.3333333134651184, -0.9999999403953552]\n  ]\n>
+    # While the code above yields
+    # #Nx.Tensor<\n  f32[2][2]\n  [\n    [2.0, -0.3333331346511841],\n    [-0.33333325386047363, -0.9999999403953552]\n  ]\n>
+
+    # The code below was translated from jax, while the code above was translated from
+    # https://arxiv.org/pdf/2009.10071.pdf, page 5
+
+    # g_rinv = Nx.dot(g, Nx.LinAlg.invert(r))
+    # qt_g_rinv = Nx.dot(Nx.transpose(q), g_rinv)
+    # qt_g_rinv_lower = tril(qt_g_rinv)
+    # doff = Nx.subtract(qt_g_rinv_lower, Nx.transpose(qt_g_rinv_lower))
+    # dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
+    # dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
+
+    # {dq, cache} = to_grad(q, dq, cache)
+    # {dr, cache} = to_grad(r, dr, cache)
 
     {{dq, dr}, cache}
   end
