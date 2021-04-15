@@ -173,19 +173,18 @@ defmodule Nx.BinaryBackend do
         from_binary(out, data)
       end
 
-    if excess != 0 do
-      case opts[:leftover] do
-        :repeat ->
-          size_needed = (elem(output_shape, 0) - excess) * bitsize
-          <<wrapped::bitstring-size(size_needed), _::bitstring>> = even_batches
-          last_batch = from_binary(out, IO.iodata_to_binary([leftover, wrapped]))
-          [last_batch | tensors]
+    case opts[:leftover] do
+      _ when excess == 0 ->
+        tensors
 
-        :discard ->
-          tensors
-      end
-    else
-      tensors
+      :repeat ->
+        size_needed = (elem(output_shape, 0) - excess) * bitsize
+        <<wrapped::bitstring-size(size_needed), _::bitstring>> = even_batches
+        last_batch = from_binary(out, IO.iodata_to_binary([leftover, wrapped]))
+        [last_batch | tensors]
+
+      :discard ->
+        tensors
     end
   end
 
