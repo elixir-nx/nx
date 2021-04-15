@@ -1165,7 +1165,11 @@ defmodule Nx do
 
   The first dimension (axis 0) is divided by `batch_size`.
   In case the dimension cannot be evenly divided by
-  `batch_size`, it raises an `ArgumentError`.
+  `batch_size`, you may specify what to do with leftover
+  data using `:leftover`. `:leftover` must be one of `:repeat`
+  or `:discard`. `:repeat` repeats the first `n` values to
+  make the last batch match the desired batch size. `:discard`
+  discards excess elements.
 
   ## Examples
 
@@ -1217,29 +1221,64 @@ defmodule Nx do
         ]
       >
 
-  In case the dimension cannot be evenly divided by `batch_size`,
-  it raises an `ArgumentError`:
+  If the batch size would result in uneven batches, you can repeat or discard excess data:
 
-      iex> Nx.to_batched_list(Nx.iota({3, 2}), 2)
-      ** (ArgumentError) cannot batch because axis 0 of size 3 is not divisible by batch_size 2
+      iex> [first, second, third] = Nx.to_batched_list(Nx.iota({5, 2}, names: [:x, :y]), 2)
+      iex> first
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [8, 9],
+          [0, 1]
+        ]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [0, 1],
+          [2, 3]
+        ]
+      >
+      iex> third
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [4, 5],
+          [6, 7]
+        ]
+      >
+
+      iex> [first, second] = Nx.to_batched_list(Nx.iota({5, 2}, names: [:x, :y]), 2, leftover: :discard)
+      iex> first
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [0, 1],
+          [2, 3]
+        ]
+      >
+      iex> second
+      #Nx.Tensor<
+        s64[x: 2][y: 2]
+        [
+          [4, 5],
+          [6, 7]
+        ]
+      >
   """
   @doc type: :conversion
-  def to_batched_list(tensor, batch_size) when is_integer(batch_size) and batch_size >= 1 do
+  def to_batched_list(tensor, batch_size, opts \\ [])
+      when is_integer(batch_size) and batch_size >= 1 do
+    opts = keyword!(opts, leftover: :repeat)
+
     %{shape: shape} = to_tensor(tensor)
 
     if shape == {} do
       raise ArgumentError, "cannot batch scalar tensor #{inspect(tensor)}"
     end
 
-    higher = elem(shape, 0)
-
-    if rem(higher, batch_size) != 0 do
-      raise ArgumentError,
-            "cannot batch because axis 0 of size #{higher} " <>
-              "is not divisible by batch_size #{batch_size}"
-    end
-
-    impl!(tensor).to_batched_list(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor)
+    impl!(tensor).to_batched_list(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor, opts)
   end
 
   @doc """
