@@ -85,7 +85,7 @@ defmodule Nx do
     * If one of the dimensions have size of 1, it is "broadcast"
       to match the dimension of the other
 
-  In case on tensor has more dimensions than the other, the missing
+  In case one tensor has more dimensions than the other, the missing
   dimensions are considered to be of size one. Here are some examples
   of how broadcast would work when multiplying two tensors with the
   following shapes:
