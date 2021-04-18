@@ -4555,11 +4555,11 @@ defmodule Nx do
   are within tolerance of b. Otherwise returns value 0.
 
   You may set the absolute tolerance, `:atol` and relative tolerance
-  `:rtol`. Given tolerances, this method returns true if:
+  `:rtol`. Given tolerances, this functions returns 1 if
 
       absolute(a - b) <= (atol + rtol * absolute(b))
 
-  Returns true for all elements of a and b.
+  is true for all elements of a and b.
 
   ## Examples
 
