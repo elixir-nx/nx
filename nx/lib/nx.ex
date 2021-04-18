@@ -4551,15 +4551,15 @@ defmodule Nx do
   end
 
   @doc """
-  Returns a scalar tensor of value 1 if element-wise values
-  of a are within tolerance of b, value 0 otherwise.
+  Returns a scalar tensor of value 1 if all element-wise values
+  are within tolerance of b. Otherwise returns value 0.
 
-  You may set the absolute tolerane, `:atol` and relative tolerance
-  `:rtol`. Given tolerances, this method returns true if:
+  You may set the absolute tolerance, `:atol` and relative tolerance
+  `:rtol`. Given tolerances, this functions returns 1 if
 
       absolute(a - b) <= (atol + rtol * absolute(b))
 
-  returns true for all elements of a and b.
+  is true for all elements of a and b.
 
   ## Examples
 
