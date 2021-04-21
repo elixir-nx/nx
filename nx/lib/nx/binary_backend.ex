@@ -511,11 +511,8 @@ defmodule Nx.BinaryBackend do
     left_batch_count = Nx.Shape.batch_count(left_shape, left_batch_axes)
     right_batch_count = Nx.Shape.batch_count(right_shape, right_batch_axes)
 
-    size = max(left_batch_size, right_batch_size)
     batch_count = max(left_batch_count, right_batch_count)
     range = if batch_count == 0, do: [], else: Enum.uniq(0..(batch_count - 1))
-
-    batch_size = div(size, batch_count)
 
     {batch_shape_out, _output_names} =
       Nx.Shape.zip_reduce(
@@ -532,13 +529,11 @@ defmodule Nx.BinaryBackend do
 
     bin_result =
       for index <- range, into: <<>> do
-        left_index = rem(index, left_batch_count)
-        right_index = rem(index, right_batch_count)
-        left_traversed_size = left_index * batch_size
-        right_traversed_size = right_index * batch_size
-
         left_batch_item_size = left_size * left_batch_size
         right_batch_item_size = right_size * right_batch_size
+
+        left_traversed_size = index * left_batch_item_size
+        right_traversed_size = index * right_batch_item_size
 
         <<_::bitstring-size(left_traversed_size),
           left_batch_item_binary::bitstring-size(left_batch_item_size),
