@@ -511,9 +511,6 @@ defmodule Nx.BinaryBackend do
     left_batch_count = Nx.Shape.batch_count(left_shape, left_batch_axes)
     right_batch_count = Nx.Shape.batch_count(right_shape, right_batch_axes)
 
-    batch_count = max(left_batch_count, right_batch_count)
-    range = if batch_count == 0, do: [], else: Enum.uniq(0..(batch_count - 1))
-
     {batch_shape_out, _output_names} =
       Nx.Shape.zip_reduce(
         left_batch_shape,
@@ -524,23 +521,39 @@ defmodule Nx.BinaryBackend do
         right_batch_names
       )
 
+    left_count = Nx.size(left)
+    right_count = Nx.size(right)
+
+    count = max(left_count, right_count)
+
+    max_batch_count = max(left_batch_count, right_batch_count)
+    batch_count = div(count, max_batch_count)
+
+    range = if max_batch_count == 0, do: [], else: Enum.uniq(0..(max_batch_count - 1))
+
     left_batch_item_template = %{left | shape: left_batch_shape}
     right_batch_item_template = %{right | shape: right_batch_shape}
 
     bin_result =
       for index <- range, into: <<>> do
-        left_batch_item_size = left_size * left_batch_size
-        right_batch_item_size = right_size * right_batch_size
+        left_index = rem(index, left_batch_count)
+        right_index = rem(index, right_batch_count)
 
-        left_traversed_size = index * left_batch_item_size
-        right_traversed_size = index * right_batch_item_size
+        left_offset = left_index * batch_count
+        right_offset = right_index * batch_count
 
-        <<_::bitstring-size(left_traversed_size),
-          left_batch_item_binary::bitstring-size(left_batch_item_size),
+        left_offset_bits = left_offset * left_size
+        right_offset_bits = right_offset * right_size
+
+        left_batch_item_bits = left_batch_size * left_size
+        right_batch_item_bits = right_batch_size * right_size
+
+        <<_::bitstring-size(left_offset_bits),
+          left_batch_item_binary::bitstring-size(left_batch_item_bits),
           _::bitstring>> = left_binary
 
-        <<_::bitstring-size(right_traversed_size),
-          right_batch_item_binary::bitstring-size(right_batch_item_size),
+        <<_::bitstring-size(right_offset_bits),
+          right_batch_item_binary::bitstring-size(right_batch_item_bits),
           _::bitstring>> = right_binary
 
         %{out | shape: batch_shape_out}
