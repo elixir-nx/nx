@@ -238,16 +238,16 @@ defmodule Nx.DefnTest do
     defn reshape(t), do: Nx.reshape(t, {2, 3})
 
     test "dot product" do
-      assert %T{data: %Expr{op: :dot, args: [_, [0], _, [0]]}, shape: {2}} =
+      assert %T{data: %Expr{op: :dot, args: [_, [0], _, _, [0], _]}, shape: {2}} =
                dot2(Nx.tensor([1, 2, 3]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
 
-      assert %T{data: %Expr{op: :dot, args: [_, [1], _, [0]]}, shape: {2}} =
+      assert %T{data: %Expr{op: :dot, args: [_, [1], _, _, [0], _]}, shape: {2}} =
                dot2(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([1, 2, 3]))
 
-      assert %T{data: %Expr{op: :dot, args: [_, [1], _, [0]]}, shape: {2, 2}} =
+      assert %T{data: %Expr{op: :dot, args: [_, [1], _, _, [0], _]}, shape: {2, 2}} =
                dot2(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
 
-      assert %T{data: %Expr{op: :dot, args: [_, [0], _, [1]]}, shape: {3, 3}} =
+      assert %T{data: %Expr{op: :dot, args: [_, [0], _, _, [1], _]}, shape: {3, 3}} =
                dot4(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
     end
 

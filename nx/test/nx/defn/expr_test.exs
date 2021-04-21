@@ -197,7 +197,7 @@ defmodule Nx.Defn.ExprTest do
                Nx.Defn.Expr
                parameter a                                 s64[2][2]
                parameter c                                 s64[2][2]
-               b = dot [ a, [1], a, [0] ]                  s64[2][2]
+               b = dot [ a, [1], [], a, [0], [] ]          s64[2][2]
                d = tanh [ c ]                              f32[2][2]
                e = add [ b, d ]                            f32[2][2]
                f = add [ 2, e ]                            f32[2][2]
@@ -220,7 +220,7 @@ defmodule Nx.Defn.ExprTest do
                tensor b                                       s64[2][2]
                parameter e                                    s64[2][2]
                a = iota [ nil ]                               s64[2][2]
-               c = dot [ a, [1], b, [0] ]                     s64[2][2]
+               c = dot [ a, [1], [], b, [0], [] ]             s64[2][2]
                d = tanh [ c ]                                 f32[2][2]
                f = add [ d, e ]                               f32[2][2]
                g = argmin [ f, tie_break: :high, axis: nil ]  s64
