@@ -323,6 +323,32 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Calculates the number of batches of a shape for the given axes.
+  It expects the batch_axes to have been normalized.
+  ## Examples
+    iex> Nx.Shape.batch_count({3, 4, 5}, [])
+    1
+    iex> Nx.Shape.batch_count({3, 4, 5}, [0])
+    3
+    iex> Nx.Shape.batch_count({3, 4, 5}, [0, 1])
+    12
+  """
+  def batch_count(shape, batch_axes) do
+    Enum.reduce(batch_axes, 1, fn axis, total -> elem(shape, axis) * total end)
+  end
+
+  @doc """
+  Shifts all the axes by n.
+  Used to re-normalize axes for batching.
+  ## Examples
+    iex > Nx.Shape.shift_axes([1, 2, 3], -1)
+    [0, 1, 2]
+  """
+  def shift_axes(axes, by) do
+    Enum.map(axes, fn axis -> axis + by end)
+  end
+
+  @doc """
   Transposes a shape according to the given permutation.
 
   ## Examples
@@ -442,9 +468,10 @@ defmodule Nx.Shape do
         config
 
       mode ->
-        raise ArgumentError, "invalid padding mode specified, padding must be one" <>
-                             " of :valid, :same, or a padding configuration, got:" <>
-                             " #{inspect(mode)}"
+        raise ArgumentError,
+              "invalid padding mode specified, padding must be one" <>
+                " of :valid, :same, or a padding configuration, got:" <>
+                " #{inspect(mode)}"
     end
   end
 
@@ -456,14 +483,12 @@ defmodule Nx.Shape do
 
   defp pad_same(shape, kernel_size, strides, interior) do
     Enum.zip([Tuple.to_list(shape), Tuple.to_list(kernel_size), strides])
-    |> Enum.map(
-        fn {dim, k, s} ->
-          padding_size = max((dim - 1) * s + k - dim, 0)
-          lo = floor(padding_size / 2)
-          hi = ceil(padding_size / 2)
-          if interior, do: {lo, hi, 0}, else: {lo, hi}
-        end
-      )
+    |> Enum.map(fn {dim, k, s} ->
+      padding_size = max((dim - 1) * s + k - dim, 0)
+      lo = floor(padding_size / 2)
+      hi = ceil(padding_size / 2)
+      if interior, do: {lo, hi, 0}, else: {lo, hi}
+    end)
   end
 
   @doc """
@@ -478,9 +503,10 @@ defmodule Nx.Shape do
       {4, 4, 4}
   """
   def dilate(shape, dilation) when is_tuple(shape) and is_list(dilation) do
-    unless Enum.all?(dilation, & &1 >= 1) do
-      raise ArgumentError, "dilation rates must be greater than or equal to 1" <>
-                           " got #{inspect(dilation)}"
+    unless Enum.all?(dilation, &(&1 >= 1)) do
+      raise ArgumentError,
+            "dilation rates must be greater than or equal to 1" <>
+              " got #{inspect(dilation)}"
     end
 
     dilated_padding_config = Enum.map(dilation, fn x -> {0, 0, x - 1} end)
@@ -530,7 +556,13 @@ defmodule Nx.Shape do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    padding_config = to_padding_config(spatial_dims, filter_shape, List.duplicate(1, Nx.rank(spatial_dims)), padding)
+    padding_config =
+      to_padding_config(
+        spatial_dims,
+        filter_shape,
+        List.duplicate(1, Nx.rank(spatial_dims)),
+        padding
+      )
 
     old_spatial_dims =
       spatial_dims
@@ -546,7 +578,7 @@ defmodule Nx.Shape do
       |> Enum.sort()
       |> Enum.map(&elem(&1, 1))
 
-    {shape, names} =transpose(shape, inv_output_permutation, permuted_input_names)
+    {shape, names} = transpose(shape, inv_output_permutation, permuted_input_names)
 
     {shape, names, padding_config}
   end
@@ -678,7 +710,9 @@ defmodule Nx.Shape do
     validate_strides!(shape, strides)
 
     kernel_size = dilate(kernel_size, kernel_dilation)
-    padding_config = to_padding_config(shape, kernel_size, List.duplicate(1, Nx.rank(shape)), padding)
+
+    padding_config =
+      to_padding_config(shape, kernel_size, List.duplicate(1, Nx.rank(shape)), padding)
 
     shape = pad(shape, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
 

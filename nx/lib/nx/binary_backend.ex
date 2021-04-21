@@ -476,8 +476,93 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def dot(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
-    bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
+  def dot(out, left, contract_axes1, [], right, contract_axes2, []) do
+    # dot/4 is directed to this specific clause so we can keep a more efficient implementation
+    # for non-batched dot products. See the clause below for batched dot products
+    dot4(out, left, contract_axes1, right, contract_axes2)
+  end
+
+  def dot(
+        out,
+        %{shape: left_shape, type: {_, left_size}, names: left_names} = left,
+        left_contract_axes,
+        left_batch_axes,
+        %{shape: right_shape, type: {_, right_size}, names: right_names} = right,
+        right_contract_axes,
+        right_batch_axes
+      ) do
+    left_binary = to_binary(left)
+    right_binary = to_binary(right)
+
+    left_batch_contract_axes = Nx.Shape.shift_axes(left_contract_axes, -length(left_batch_axes))
+
+    right_batch_contract_axes =
+      Nx.Shape.shift_axes(right_contract_axes, -length(right_batch_axes))
+
+    {left_batch_shape, left_batch_names} =
+      Nx.Shape.contract(left_shape, left_batch_axes, left_names, false)
+
+    {right_batch_shape, right_batch_names} =
+      Nx.Shape.contract(right_shape, right_batch_axes, right_names, false)
+
+    left_batch_size = Nx.size(left_batch_shape)
+    right_batch_size = Nx.size(right_batch_shape)
+
+    left_batch_count = Nx.Shape.batch_count(left_shape, left_batch_axes)
+    right_batch_count = Nx.Shape.batch_count(right_shape, right_batch_axes)
+
+    size = max(left_batch_size, right_batch_size)
+    batch_count = max(left_batch_count, right_batch_count)
+    range = if batch_count == 0, do: [], else: Enum.uniq(0..(batch_count - 1))
+
+    batch_size = div(size, batch_count)
+
+    {batch_shape_out, _output_names} =
+      Nx.Shape.zip_reduce(
+        left_batch_shape,
+        left_batch_contract_axes,
+        left_batch_names,
+        right_batch_shape,
+        right_batch_contract_axes,
+        right_batch_names
+      )
+
+    left_batch_item_template = %{left | shape: left_batch_shape}
+    right_batch_item_template = %{right | shape: right_batch_shape}
+
+    bin_result =
+      for index <- range, into: <<>> do
+        left_index = rem(index, left_batch_count)
+        right_index = rem(index, right_batch_count)
+        left_traversed_size = left_index * batch_size
+        right_traversed_size = right_index * batch_size
+
+        left_batch_item_size = left_size * left_batch_size
+        right_batch_item_size = right_size * right_batch_size
+
+        <<_::bitstring-size(left_traversed_size),
+          left_batch_item_binary::bitstring-size(left_batch_item_size),
+          _::bitstring>> = left_binary
+
+        <<_::bitstring-size(right_traversed_size),
+          right_batch_item_binary::bitstring-size(right_batch_item_size),
+          _::bitstring>> = right_binary
+
+        %{out | shape: batch_shape_out}
+        |> dot4(
+          from_binary(left_batch_item_template, left_batch_item_binary),
+          left_batch_contract_axes,
+          from_binary(right_batch_item_template, right_batch_item_binary),
+          right_batch_contract_axes
+        )
+        |> to_binary()
+      end
+
+    from_binary(out, bin_result)
+  end
+
+  defp dot4(out, %{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2) do
+    bin_zip_reduce(out, left, contract_axes1, right, contract_axes2, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
     end)
