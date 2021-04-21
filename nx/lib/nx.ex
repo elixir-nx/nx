@@ -6414,6 +6414,9 @@ defmodule Nx do
   Computes the dot-product of two batched tensors, throughout the batch dimensions.
 
   ## Examples
+
+    ### Dot product between two batched tensors
+
       iex> u = Nx.tensor([[[1]], [[2]]])
       iex> v = Nx.tensor([[[3]], [[4]]])
       iex> Nx.dot(u, [2], [0], v, [2], [0])
@@ -6444,6 +6447,8 @@ defmodule Nx do
         ]
       >
 
+    ### Dot product between a batched tensor and a non-batched tensor
+
       iex> u = Nx.tensor([[[-1, -1, -1], [1, 1, 1]], [[2, 2, 2], [3, 3, 3]]])
       iex> v = Nx.tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]])
       iex> Nx.dot(u, [-1], [0], v, [0], [])
@@ -6460,6 +6465,8 @@ defmodule Nx do
           ]
         ]
       >
+
+    ### Dot product between a non-batched tensor and a batched tensor
 
       iex> u = Nx.tensor([[1.0, 0.0, 1.0], [0.0, -1.0, 1.0]])
       iex> v = Nx.tensor([[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]], [[1, 1, 1, 0], [0, 1, 1, 1], [0, 0, 1, 1]]])
