@@ -534,6 +534,8 @@ defmodule Nx.BinaryBackend do
     left_batch_item_template = %{left | shape: left_batch_shape}
     right_batch_item_template = %{right | shape: right_batch_shape}
 
+    batch_item_output_template = %{out | shape: batch_item_output_shape}
+
     bin_result =
       for index <- range, into: <<>> do
         left_index = rem(index, left_batch_count)
@@ -556,7 +558,7 @@ defmodule Nx.BinaryBackend do
           right_batch_item_binary::bitstring-size(right_batch_item_bits),
           _::bitstring>> = right_binary
 
-        %{out | shape: batch_item_output_shape}
+        batch_item_output_template
         |> dot4(
           from_binary(left_batch_item_template, left_batch_item_binary),
           left_batch_contract_axes,
