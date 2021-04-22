@@ -220,8 +220,6 @@ defmodule Torchx do
     |> wrap(device)
   end
 
-  IO.inspect(@torch_function)
-
   def __torch__, do: @torch_function
 
   ## Utils

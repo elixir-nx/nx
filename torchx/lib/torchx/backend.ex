@@ -154,7 +154,7 @@ defmodule Torchx.Backend do
   ## Transfer
 
   @impl true
-  def to_batched_list(%T{shape: shape} = out, %T{} = t),
+  def to_batched_list(%T{shape: shape} = out, %T{} = t, backend_options),
     do: Torchx.split(to_ref_with_device(t), elem(shape, 0)) |> from_list_ref(out)
 
   @impl true
