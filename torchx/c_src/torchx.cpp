@@ -487,10 +487,10 @@ NIF(full)
 
 #define UNARY_OP(OP) UNARY_OP2(OP, OP)
 
-#define UNARY_OP2(OP, NATIVE) \
-  NIF(OP)               \
-  {                     \
-    TENSOR_PARAM(0, a); \
+#define UNARY_OP2(OP, NATIVE)  \
+  NIF(OP)                      \
+  {                            \
+    TENSOR_PARAM(0, a);        \
     TENSOR(torch::NATIVE(*a)); \
   }
 

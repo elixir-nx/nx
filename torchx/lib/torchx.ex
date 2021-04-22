@@ -6,55 +6,41 @@ defmodule Torchx.Macro do
     end
   end
 
+  defmacro defdevice(call) do
+    {name, args} = Macro.decompose_call(call)
+
+    args_names = args_names(args)
+
+    if(not Enum.any?(args, &match?({:device, _, nil}, &1)),
+      do: raise("At least one argument of defdevice function should be named 'device'.")
+    )
+
+    quote do
+      @torch_function {unquote(name), unquote(args_names)}
+      def unquote(name)(unquote_splicing(args)) do
+        Torchx.NIF.call(unquote(name), var!(device), [unquote_splicing(args)])
+        |> wrap(var!(device))
+      end
+    end
+  end
+
   defmacro deftorch(call) do
     {name, args} = Macro.decompose_call(call)
 
-    args_names = Enum.map(args, &elem(&1, 0))
+    args_names = args_names(args)
 
-    if Enum.any?(args, &match?({:device, _, nil}, &1)) do
-      quote do
-        @torch_function {unquote(name), unquote(args_names)}
-        def unquote(name)(unquote_splicing(args)) do
-          Torchx.NIF.call(unquote(name), var!(device), [unquote_splicing(args)])
-          |> wrap(var!(device))
-        end
-      end
-    else
-      quote do
-        @torch_function {unquote(name), unquote(args_names)}
-        def unquote(name)(unquote_splicing(args)) do
-          {device, prepared_args} = prepare_args(unquote(args))
-
-          Torchx.NIF.call(unquote(name), device, prepared_args)
-          |> wrap(device)
-        end
-      end
-    end
-  end
-
-  defmacro deftorch(op, _a, _b) do
     quote do
-      @torch_function {var!(op), [:tensorA, :tensorB]}
-      def unquote(op)(tensorA, tensorB) do
-        {device, prepared_args} = prepare_args([tensorA, tensorB])
+      @torch_function {unquote(name), unquote(args_names)}
+      def unquote(name)(unquote_splicing(args)) do
+        {device, prepared_args} = prepare_args(unquote(args))
 
-        Torchx.NIF.call(unquote(op), device, prepared_args)
+        Torchx.NIF.call(unquote(name), device, prepared_args)
         |> wrap(device)
       end
     end
   end
 
-  defmacro deftorch(op, _t) do
-    quote do
-      @torch_function {var!(op), [:tensor]}
-      def unquote(op)(tensor) do
-        {device, prepared_args} = prepare_args([tensor])
-
-        Torchx.NIF.call(unquote(op), device, prepared_args)
-        |> wrap(device)
-      end
-    end
-  end
+  defp args_names(args), do: Enum.map(args, &elem(&1, 0))
 
   defguardp is_tensor(t)
             when is_tuple(t) and is_atom(elem(elem(t, 0), 0)) and
@@ -114,23 +100,23 @@ defmodule Torchx do
 
   ## Creation
 
-  deftorch randint(min, max, shape, type, device)
-  deftorch rand(min, max, shape, type, device)
-  deftorch normal(mu, sigma, shape, type, device)
+  defdevice randint(min, max, shape, type, device)
+  defdevice rand(min, max, shape, type, device)
+  defdevice normal(mu, sigma, shape, type, device)
 
-  deftorch arange(from, to, step, type, device)
-  deftorch arange(from, to, step, type, device, shape)
-  deftorch full(shape, scalar, type, device)
-  deftorch scalar_tensor(scalar, type, device)
-  deftorch ones(shape, type, device)
-  deftorch eye(size, type, device)
+  defdevice arange(from, to, step, type, device)
+  defdevice arange(from, to, step, type, device, shape)
+  defdevice full(shape, scalar, type, device)
+  defdevice scalar_tensor(scalar, type, device)
+  defdevice ones(shape, type, device)
+  defdevice eye(size, type, device)
 
   ## Manipulation
 
   deftorch reshape(tensor, shape)
   deftorch to_type(tensor, type)
   deftorch to_device(tensor, device)
-  deftorch from_blob(blob, shape, type, device)
+  defdevice from_blob(blob, shape, type, device)
   deftorch to_blob(tensor)
   deftorch to_blob(tensor, limit)
 
@@ -152,25 +138,73 @@ defmodule Torchx do
 
   ## Operations
 
-  binary_ops =
-    [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
-      [:left_shift, :right_shift] ++
-      [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:bitwise_and, :bitwise_or, :bitwise_xor] ++
-      [:outer]
+  ### Binary
 
-  for op <- binary_ops do
-    deftorch(unquote(op), tensorA, tensorB)
-  end
+  deftorch add(tensorA, tensorB)
 
-  unary_ops =
-    Enum.map(Nx.Shared.unary_math_funs(), &elem(&1, 0)) ++
-      [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
+  deftorch subtract(tensorA, tensorB)
+  deftorch multiply(tensorA, tensorB)
+  deftorch power(tensorA, tensorB)
+  deftorch remainder(tensorA, tensorB)
+  deftorch divide(tensorA, tensorB)
+  deftorch atan2(tensorA, tensorB)
+  deftorch min(tensorA, tensorB)
+  deftorch max(tensorA, tensorB)
+  deftorch quotient(tensorA, tensorB)
 
-  for op <- unary_ops do
-    deftorch(unquote(op), tensor)
-  end
+  deftorch left_shift(tensorA, tensorB)
+  deftorch right_shift(tensorA, tensorB)
+
+  deftorch equal(tensorA, tensorB)
+  deftorch not_equal(tensorA, tensorB)
+  deftorch greater(tensorA, tensorB)
+  deftorch less(tensorA, tensorB)
+  deftorch greater_equal(tensorA, tensorB)
+  deftorch less_equal(tensorA, tensorB)
+
+  deftorch logical_and(tensorA, tensorB)
+  deftorch logical_or(tensorA, tensorB)
+  deftorch logical_xor(tensorA, tensorB)
+
+  deftorch bitwise_and(tensorA, tensorB)
+  deftorch bitwise_or(tensorA, tensorB)
+  deftorch bitwise_xor(tensorA, tensorB)
+
+  deftorch outer(tensorA, tensorB)
+
+  ### Unary
+
+  deftorch exp(tensor)
+  deftorch expm1(tensor)
+  deftorch log(tensor)
+  deftorch log1p(tensor)
+  deftorch logistic(tensor)
+  deftorch cos(tensor)
+  deftorch sin(tensor)
+  deftorch tan(tensor)
+  deftorch cosh(tensor)
+  deftorch sinh(tensor)
+  deftorch tanh(tensor)
+  deftorch acos(tensor)
+  deftorch asin(tensor)
+  deftorch atan(tensor)
+  deftorch acosh(tensor)
+  deftorch asinh(tensor)
+  deftorch atanh(tensor)
+  deftorch sqrt(tensor)
+  deftorch rsqrt(tensor)
+  deftorch cbrt(tensor)
+  deftorch erf(tensor)
+  deftorch erfc(tensor)
+  deftorch erf_inv(tensor)
+
+  deftorch abs(tensor)
+  deftorch bitwise_not(tensor)
+  deftorch ceil(tensor)
+  deftorch floor(tensor)
+  deftorch negate(tensor)
+  deftorch round(tensor)
+  deftorch sign(tensor)
 
   ## Transformations
 
@@ -185,6 +219,8 @@ defmodule Torchx do
     NIF.call(:tensordot, device, [left_ref, right_ref, left_axes, right_axes])
     |> wrap(device)
   end
+
+  IO.inspect(@torch_function)
 
   def __torch__, do: @torch_function
 
