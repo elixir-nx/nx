@@ -1147,6 +1147,87 @@ defmodule Nx.Shape do
   defp alternate([h1 | tl1], [h2 | tl2]), do: [h1, h2 | alternate(tl1, tl2)]
 
   @doc """
+  Validates tensor shape compatibility for `Nx.dot/6`.
+
+  Returns the shape, the tensor names and the normalized axes
+  for both the contracting and the batching axes.
+  """
+  def dot(
+        %Nx.Tensor{} = t1,
+        contract_axes1,
+        batch_axes1,
+        %Nx.Tensor{} = t2,
+        contract_axes2,
+        batch_axes2
+      ) do
+    %Nx.Tensor{shape: s1, names: names1} = t1
+    %Nx.Tensor{shape: s2, names: names2} = t2
+
+    # Axes normalization
+    c1 = Nx.Shape.normalize_axes(s1, contract_axes1, names1)
+    c2 = Nx.Shape.normalize_axes(s2, contract_axes2, names2)
+    b1 = Nx.Shape.normalize_axes(s1, batch_axes1, names1)
+    b2 = Nx.Shape.normalize_axes(s2, batch_axes2, names2)
+
+    left_batched? = b1 != []
+    right_batched? = b2 != []
+
+    # ensure normalized batch axis of left is valid value
+    if left_batched? and b1 != [0] do
+      msg = bad_batch_axis_message("left", batch_axes1, b1)
+      raise ArgumentError, msg
+    end
+
+    # ensure normalized batch axis of right is valid value
+    if right_batched? and b2 != [0] do
+      msg = bad_batch_axis_message("right", batch_axes2, b2)
+      raise ArgumentError, msg
+    end
+
+    # ensure batch dim sizes match if both tensors are batched
+    if left_batched? and right_batched? and elem(s1, 0) != elem(s2, 0) do
+      raise ArgumentError,
+            "dot batch dimension sizes must match, but the left " <>
+              "batch dimension of axes #{inspect(batch_axes1)} was [#{elem(s1, 0)}] " <>
+              "and the right batch dimension of axes #{inspect(batch_axes2)} was [#{elem(s2, 0)}]"
+    end
+
+    # ensure there is no conflict between left batch axes and left contract axes
+    if left_batched? and 0 in c1 do
+      raise ArgumentError,
+            batch_vs_contract_conflict_message("left", batch_axes1, b1, contract_axes1, c1)
+    end
+
+    # ensure there is no conflict between right batch axis and right contract axes
+    if right_batched? and 0 in c2 do
+      raise ArgumentError,
+            batch_vs_contract_conflict_message("right", batch_axes2, b2, contract_axes2, c2)
+    end
+
+    {s1, names1, c1, b1, s2, names2, c2, b2}
+  end
+
+  defp bad_batch_axis_message(side, batch_axes, batch_norm) do
+    "invalid dot batch axis for the #{side} tensor - only batch axis 0 is supported, but got #{
+      render_normalized_axes(batch_axes, batch_norm)
+    }"
+  end
+
+  defp batch_vs_contract_conflict_message(
+         side,
+         batch_axes,
+         batch_norm,
+         contract_axes,
+         contract_norm
+       ) do
+    "dot batch axes #{render_normalized_axes(batch_axes, batch_norm)} for the #{side} tensor cannot " <>
+      "be in the contract axes #{render_normalized_axes(contract_axes, contract_norm)}"
+  end
+
+  defp render_normalized_axes(same, same), do: inspect(same)
+  defp render_normalized_axes(axes, norm), do: "#{inspect(axes)} (norm: #{inspect(norm)})"
+
+  @doc """
   Returns the shape and names after a Cholesky decomposition.
 
   ## Examples
