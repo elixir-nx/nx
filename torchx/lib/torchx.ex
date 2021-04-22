@@ -33,7 +33,6 @@ defmodule Torchx.Macro do
       @torch_function {unquote(name), unquote(args_names)}
       def unquote(name)(unquote_splicing(args)) do
         name_io = :"#{unquote(name)}_io"
-        # {device, prepared_args} = prepare_args(unquote(args))
 
         case prepare_args(unquote(args)) do
           {:cpu, prepared_args} ->
