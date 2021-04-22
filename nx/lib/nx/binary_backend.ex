@@ -156,11 +156,35 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def to_batched_list(out, %{type: {_, size}} = tensor) do
+  def to_batched_list(
+        %{shape: output_shape} = out,
+        %{type: {_, size}, shape: input_shape} = tensor,
+        opts
+      ) do
     bitsize = Nx.size(out) * size
+    excess = rem(elem(input_shape, 0), elem(output_shape, 0))
+    excess_size = elem(output_shape, 0) * excess * size
+    even_size = Nx.size(input_shape) * size - excess_size
 
-    for <<data::bitstring-size(bitsize) <- to_binary(tensor)>> do
-      from_binary(out, data)
+    <<even_batches::bitstring-size(even_size), leftover::bitstring>> = to_binary(tensor)
+
+    tensors =
+      for <<data::bitstring-size(bitsize) <- even_batches>> do
+        from_binary(out, data)
+      end
+
+    case opts[:leftover] do
+      _ when excess == 0 ->
+        tensors
+
+      :repeat ->
+        size_needed = (elem(output_shape, 0) - excess) * bitsize
+        <<wrapped::bitstring-size(size_needed), _::bitstring>> = even_batches
+        last_batch = from_binary(out, IO.iodata_to_binary([leftover, wrapped]))
+        [last_batch | tensors]
+
+      :discard ->
+        tensors
     end
   end
 

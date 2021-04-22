@@ -347,7 +347,7 @@ defmodule Nx.Defn.Compiler do
     fun =
       if def_defaults == [] do
         quote do
-          (&unquote(Macro.var(defn_name, __MODULE__))/unquote(arity))
+          &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity))
         end
       else
         quote do
@@ -489,9 +489,8 @@ defmodule Nx.Defn.Compiler do
     {underscore, state}
   end
 
-  defp normalize({name, meta, ctx} = var, state) when is_var(var) do
-    {version, meta} = Keyword.pop!(meta, :version)
-    {{name, [counter: version, generated: true] ++ meta, ctx}, state}
+  defp normalize(var, state) when is_var(var) do
+    {normalize_var(var), state}
   end
 
   defp normalize({{:., dot_meta, [fun]}, meta, args}, state) do
@@ -517,6 +516,13 @@ defmodule Nx.Defn.Compiler do
       case args do
         [ast, fun] when name == :transform ->
           {ast, state} = normalize(ast, state)
+
+          fun =
+            Macro.prewalk(fun, fn
+              var when is_var(var) -> normalize_var(var)
+              node -> node
+            end)
+
           {[ast, fun], state}
 
         _ ->
@@ -556,6 +562,13 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize(expr, state) do
     invalid_numerical_expression!(expr, state)
+  end
+
+  defp normalize_var({name, meta, ctx} = var) do
+    case Keyword.pop(meta, :version) do
+      {nil, _} -> var
+      {version, meta} -> {name, [counter: version, generated: true] ++ meta, ctx}
+    end
   end
 
   defp normalize_list(list, state) do

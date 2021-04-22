@@ -1,3 +1,8 @@
+Application.put_env(:exla, :clients,
+  default: [platform: :host],
+  cuda: [platform: :cuda]
+)
+
 size = 1_000_000
 rand = for(_ <- 1..size, do: :rand.uniform())
 t64 = Nx.tensor(rand, type: {:f, 64})
