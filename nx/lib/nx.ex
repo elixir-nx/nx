@@ -7288,6 +7288,12 @@ defmodule Nx do
           ]
         ]
       >
+
+      iex> Nx.concatenate([Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)])
+      #Nx.Tensor<
+        s64
+        [1, 2, 3]
+      >
   """
   @doc type: :ndim
   def concatenate(tensors, opts \\ []) when is_list(tensors) do
@@ -7310,7 +7316,7 @@ defmodule Nx do
           end)
           |> unzip4()
 
-        axis = Nx.Shape.normalize_axis(s1, axis, n1)
+        axis = Nx.Shape.normalize_axis(s1, axis, n1, accept_zero_axis_for_scalar: true)
         {output_shape, output_names} = Nx.Shape.concatenate(shapes, names, axis)
 
         output_type =

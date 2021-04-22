@@ -1568,6 +1568,7 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
+  defp product_part({}, _, _), do: 1
   defp product_part(_tuple, n, n), do: 1
   defp product_part(tuple, n, limit), do: elem(tuple, n) * product_part(tuple, n + 1, limit)
 

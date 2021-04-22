@@ -442,9 +442,10 @@ defmodule Nx.Shape do
         config
 
       mode ->
-        raise ArgumentError, "invalid padding mode specified, padding must be one" <>
-                             " of :valid, :same, or a padding configuration, got:" <>
-                             " #{inspect(mode)}"
+        raise ArgumentError,
+              "invalid padding mode specified, padding must be one" <>
+                " of :valid, :same, or a padding configuration, got:" <>
+                " #{inspect(mode)}"
     end
   end
 
@@ -456,14 +457,12 @@ defmodule Nx.Shape do
 
   defp pad_same(shape, kernel_size, strides, interior) do
     Enum.zip([Tuple.to_list(shape), Tuple.to_list(kernel_size), strides])
-    |> Enum.map(
-        fn {dim, k, s} ->
-          padding_size = max((dim - 1) * s + k - dim, 0)
-          lo = floor(padding_size / 2)
-          hi = ceil(padding_size / 2)
-          if interior, do: {lo, hi, 0}, else: {lo, hi}
-        end
-      )
+    |> Enum.map(fn {dim, k, s} ->
+      padding_size = max((dim - 1) * s + k - dim, 0)
+      lo = floor(padding_size / 2)
+      hi = ceil(padding_size / 2)
+      if interior, do: {lo, hi, 0}, else: {lo, hi}
+    end)
   end
 
   @doc """
@@ -478,9 +477,10 @@ defmodule Nx.Shape do
       {4, 4, 4}
   """
   def dilate(shape, dilation) when is_tuple(shape) and is_list(dilation) do
-    unless Enum.all?(dilation, & &1 >= 1) do
-      raise ArgumentError, "dilation rates must be greater than or equal to 1" <>
-                           " got #{inspect(dilation)}"
+    unless Enum.all?(dilation, &(&1 >= 1)) do
+      raise ArgumentError,
+            "dilation rates must be greater than or equal to 1" <>
+              " got #{inspect(dilation)}"
     end
 
     dilated_padding_config = Enum.map(dilation, fn x -> {0, 0, x - 1} end)
@@ -530,7 +530,13 @@ defmodule Nx.Shape do
       |> Tuple.delete_at(0)
       |> Tuple.delete_at(0)
 
-    padding_config = to_padding_config(spatial_dims, filter_shape, List.duplicate(1, Nx.rank(spatial_dims)), padding)
+    padding_config =
+      to_padding_config(
+        spatial_dims,
+        filter_shape,
+        List.duplicate(1, Nx.rank(spatial_dims)),
+        padding
+      )
 
     old_spatial_dims =
       spatial_dims
@@ -546,7 +552,7 @@ defmodule Nx.Shape do
       |> Enum.sort()
       |> Enum.map(&elem(&1, 1))
 
-    {shape, names} =transpose(shape, inv_output_permutation, permuted_input_names)
+    {shape, names} = transpose(shape, inv_output_permutation, permuted_input_names)
 
     {shape, names, padding_config}
   end
@@ -678,7 +684,9 @@ defmodule Nx.Shape do
     validate_strides!(shape, strides)
 
     kernel_size = dilate(kernel_size, kernel_dilation)
-    padding_config = to_padding_config(shape, kernel_size, List.duplicate(1, Nx.rank(shape)), padding)
+
+    padding_config =
+      to_padding_config(shape, kernel_size, List.duplicate(1, Nx.rank(shape)), padding)
 
     shape = pad(shape, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
 
@@ -828,6 +836,10 @@ defmodule Nx.Shape do
   @doc """
   Normalize the axis to the given shape.
 
+  ## Options
+
+    * `:accept_zero_axis_for_scalar` - If `true`, `0` is accepted as the valid axis for scalar tensors. Defaults to `false`
+
   ## Examples
 
       iex> Nx.Shape.normalize_axis({4, 2, 3}, -1, [:batch, :x, :y])
@@ -841,6 +853,9 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.normalize_axis({4, 2, 1, 4}, :z, [:batch, :x, :y, :z])
       3
+
+      iex> Nx.Shape.normalize_axis({}, 0, [], accept_zero_axis_for_scalar: true)
+      0
 
   ### Error cases
 
@@ -857,18 +872,25 @@ defmodule Nx.Shape do
       ** (ArgumentError) axis name cannot be nil
 
   """
-  def normalize_axis(shape, axis, names)
+  def normalize_axis(shape, axis, names, opts \\ [accept_zero_axis_for_scalar: false]) do
+    do_normalize_axis(shape, axis, names, opts[:accept_zero_axis_for_scalar])
+  end
 
-  def normalize_axis(shape, axis, _names) when axis < 0 and abs(axis) <= tuple_size(shape),
-    do: tuple_size(shape) + axis
+  defp do_normalize_axis({}, 0, _names, true), do: 0
 
-  def normalize_axis(shape, axis, _names) when axis >= 0 and axis < tuple_size(shape),
-    do: axis
+  defp do_normalize_axis(shape, axis, _names, _accept_zero_axis_for_scalar)
+       when axis < 0 and abs(axis) <= tuple_size(shape),
+       do: tuple_size(shape) + axis
 
-  def normalize_axis(_shape, nil, _names),
+  defp do_normalize_axis(shape, axis, _names, _accept_zero_axis_for_scalar)
+       when axis >= 0 and axis < tuple_size(shape),
+       do: axis
+
+  defp do_normalize_axis(_shape, nil, _names, _accept_zero_axis_for_scalar),
     do: raise(ArgumentError, "axis name cannot be nil")
 
-  def normalize_axis(_shape, axis, names) when is_atom(axis) do
+  defp do_normalize_axis(_shape, axis, names, _accept_zero_axis_for_scalar)
+       when is_atom(axis) do
     if axis in names do
       Enum.with_index(names)[axis]
     else
@@ -876,7 +898,7 @@ defmodule Nx.Shape do
     end
   end
 
-  def normalize_axis(shape, axis, _names) do
+  defp do_normalize_axis(shape, axis, _names, _accept_zero_axis_for_scalar) do
     raise ArgumentError,
           "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
   end
@@ -1050,11 +1072,18 @@ defmodule Nx.Shape do
   end
 
   defp concat_dims([s1 | shapes], axis) do
-    s1 = Tuple.to_list(s1)
+    s1 = concatenate_shape_list(s1)
 
     shapes
-    |> Enum.reduce(s1, &concat_shapes(Tuple.to_list(&1), &2, axis))
+    |> Enum.reduce(s1, &concat_shapes(concatenate_shape_list(&1), &2, axis))
     |> List.to_tuple()
+  end
+
+  defp concatenate_shape_list(shape) do
+    case shape do
+      {} -> [1]
+      _ -> Tuple.to_list(shape)
+    end
   end
 
   defp concat_shapes(shape1, shape2, axis) do
