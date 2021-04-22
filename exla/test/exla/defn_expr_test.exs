@@ -2412,6 +2412,10 @@ defmodule EXLA.DefnExprTest do
     defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2)
     defn concatenate1_inp(t1), do: Nx.concatenate([t1], axis: 2)
 
+    test "works on list of scalar tensors" do
+      assert concatenate0(Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)) == Nx.tensor([1, 2, 3])
+    end
+
     test "works 0th axis" do
       t1 = Nx.iota({2, 2, 2})
       t2 = Nx.iota({1, 2, 2})
