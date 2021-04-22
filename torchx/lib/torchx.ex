@@ -32,15 +32,33 @@ defmodule Torchx.Macro do
     quote do
       @torch_function {unquote(name), unquote(args_names)}
       def unquote(name)(unquote_splicing(args)) do
-        {device, prepared_args} = prepare_args(unquote(args))
+        name_io = :"#{unquote(name)}_io"
+        # {device, prepared_args} = prepare_args(unquote(args))
 
-        Torchx.NIF.call(unquote(name), device, prepared_args)
-        |> wrap(device)
+        case prepare_args(unquote(args)) do
+          {:cpu, prepared_args} ->
+            apply(Torchx.NIF, unquote(name), prepared_args |> convert_device_arg(:cpu))
+            |> wrap(:cpu)
+
+          {device, prepared_args} ->
+            apply(Torchx.NIF, name_io, prepared_args |> convert_device_arg(device))
+            |> wrap(device)
+        end
       end
     end
   end
 
   defp args_names(args), do: Enum.map(args, &elem(&1, 0))
+
+  def convert_device_arg(args, device),
+    do:
+      Enum.map(
+        args,
+        fn
+          ^device -> Torchx.torch_device(device)
+          arg -> arg
+        end
+      )
 
   defguardp is_tensor(t)
             when is_tuple(t) and is_atom(elem(elem(t, 0), 0)) and

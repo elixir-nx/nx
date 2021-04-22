@@ -52,20 +52,4 @@ defmodule Torchx.NIF do
   def device_of(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
   def to_blob_view(_tensor), do: :erlang.nif_error(:undef)
-
-  def call(func, :cpu, args) when is_atom(func) and is_list(args),
-    do: apply(__MODULE__, func, args |> convert_device_arg(:cpu))
-
-  def call(func, device, args) when is_atom(func) and is_list(args),
-    do: apply(__MODULE__, :"#{func}_io", args |> convert_device_arg(device))
-
-  defp convert_device_arg(args, device),
-    do:
-      Enum.map(
-        args,
-        fn
-          ^device -> Torchx.torch_device(device)
-          arg -> arg
-        end
-      )
 end
