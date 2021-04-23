@@ -6466,7 +6466,7 @@ defmodule Nx do
         ]
       >
 
-    ### Dot product between a non-batched tensor and a batched tensor
+  ### Dot product between a non-batched tensor and a batched tensor
 
       iex> u = Nx.tensor([[1.0, 0.0, 1.0], [0.0, -1.0, 1.0]])
       iex> v = Nx.tensor([[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]], [[1, 1, 1, 0], [0, 1, 1, 1], [0, 0, 1, 1]]])
