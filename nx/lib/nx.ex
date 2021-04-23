@@ -6411,7 +6411,12 @@ defmodule Nx do
   def dot(t1, axes1, t2, axes2), do: dot(t1, axes1, [], t2, axes2, [])
 
   @doc """
-  Computes the dot-product of two batched tensors, throughout the batch dimensions.
+  Computes the generalized dot product bewteen two tensors, given the contracting
+  and batch axes.
+
+
+  The contracting axes must be dot-product compatible and the batch dimensions must
+  always have the same number of elements.
 
   ## Examples
 
@@ -6446,45 +6451,6 @@ defmodule Nx do
           ]
         ]
       >
-
-  ### Dot product between a batched tensor and a non-batched tensor
-
-      iex> u = Nx.tensor([[[-1, -1, -1], [1, 1, 1]], [[2, 2, 2], [3, 3, 3]]])
-      iex> v = Nx.tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]])
-      iex> Nx.dot(u, [-1], [0], v, [0], [])
-      #Nx.Tensor<
-        f32[2][2][4]
-        [
-          [
-            [-15.0, -18.0, -21.0, -24.0],
-            [15.0, 18.0, 21.0, 24.0]
-          ],
-          [
-            [30.0, 36.0, 42.0, 48.0],
-            [45.0, 54.0, 63.0, 72.0]
-          ]
-        ]
-      >
-
-  ### Dot product between a non-batched tensor and a batched tensor
-
-      iex> u = Nx.tensor([[1.0, 0.0, 1.0], [0.0, -1.0, 1.0]])
-      iex> v = Nx.tensor([[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]], [[1, 1, 1, 0], [0, 1, 1, 1], [0, 0, 1, 1]]])
-      iex> Nx.dot(u, [-1], [], v, [1], [0])
-      #Nx.Tensor<
-        f32[2][2][4]
-        [
-          [
-            [2.0, 2.0, 2.0, 2.0],
-            [0.0, 0.0, 0.0, 0.0]
-          ],
-          [
-            [1.0, 1.0, 2.0, 1.0],
-            [0.0, -1.0, 0.0, 0.0]
-          ]
-        ]
-      >
-
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do
