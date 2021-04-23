@@ -6451,6 +6451,38 @@ defmodule Nx do
           ]
         ]
       >
+
+  ### Error cases
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [0], v, [1], [])
+      ** (ArgumentError) right tensor must be batched if left tensor is batched
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [], v, [1], [0])
+      ** (ArgumentError) left tensor must be batched if right tensor is batched
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [1], v, [1], [0])
+      ** (ArgumentError) invalid dot batch axis for the left tensor - only batch axis 0 is supported, but got [1]
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [0], v, [1], [1])
+      ** (ArgumentError) invalid dot batch axis for the right tensor - only batch axis 0 is supported, but got [1]
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [0], [0], v, [1], [0])
+      ** (ArgumentError) dot batch axes [0] for the left tensor cannot be in the contract axes [0]
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [0], v, [0], [0])
+      ** (ArgumentError) dot batch axes [0] for the right tensor cannot be in the contract axes [0]
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do

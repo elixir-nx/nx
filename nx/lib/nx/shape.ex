@@ -1172,6 +1172,14 @@ defmodule Nx.Shape do
     left_batched? = b1 != []
     right_batched? = b2 != []
 
+    if not left_batched? and right_batched? do
+      raise ArgumentError, "left tensor must be batched if right tensor is batched"
+    end
+
+    if left_batched? and not right_batched? do
+      raise ArgumentError, "right tensor must be batched if left tensor is batched"
+    end
+
     # ensure normalized batch axis of left is valid value
     if left_batched? and b1 != [0] do
       msg = bad_batch_axis_message("left", batch_axes1, b1)
@@ -1184,22 +1192,25 @@ defmodule Nx.Shape do
       raise ArgumentError, msg
     end
 
+    b1_count = Nx.Shape.batch_count(s1, b1)
+    b2_count = Nx.Shape.batch_count(s2, b2)
+
     # ensure batch dim sizes match if both tensors are batched
-    if left_batched? and right_batched? and elem(s1, 0) != elem(s2, 0) do
+    if left_batched? and right_batched? and b1_count != b2_count do
       raise ArgumentError,
             "dot batch dimension sizes must match, but the left " <>
-              "batch dimension of axes #{inspect(batch_axes1)} was [#{elem(s1, 0)}] " <>
-              "and the right batch dimension of axes #{inspect(batch_axes2)} was [#{elem(s2, 0)}]"
+              "batch dimension of axes #{inspect(batch_axes1)} has #{b1_count} elements " <>
+              "and the right batch dimension of axes #{inspect(batch_axes2)} has #{b2_count} elements"
     end
 
     # ensure there is no conflict between left batch axes and left contract axes
-    if left_batched? and 0 in c1 do
+    if left_batched? and Enum.any?(b1, &(&1 in c1)) do
       raise ArgumentError,
             batch_vs_contract_conflict_message("left", batch_axes1, b1, contract_axes1, c1)
     end
 
     # ensure there is no conflict between right batch axis and right contract axes
-    if right_batched? and 0 in c2 do
+    if right_batched? and Enum.any?(b2, &(&1 in c2)) do
       raise ArgumentError,
             batch_vs_contract_conflict_message("right", batch_axes2, b2, contract_axes2, c2)
     end
