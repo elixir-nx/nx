@@ -6415,7 +6415,7 @@ defmodule Nx do
 
   ## Examples
 
-    ### Dot product between two batched tensors
+  ### Dot product between two batched tensors
 
       iex> u = Nx.tensor([[[1]], [[2]]])
       iex> v = Nx.tensor([[[3]], [[4]]])
