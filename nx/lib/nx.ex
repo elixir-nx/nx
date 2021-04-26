@@ -7353,7 +7353,7 @@ defmodule Nx do
         [1, 2]
       >
   """
-  def stack(enumerable, opts \\ []) do
+  def stack(tensors, opts \\ []) when is_list(tensors) do
     opts = keyword!(opts, name: nil)
     name = opts[:name]
 
