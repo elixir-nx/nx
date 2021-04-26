@@ -94,28 +94,28 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a composite type, possibly recursively, by executing the
-  given function for each element.
-
-  Currently only tuples are supported as composite types. If a non-
-  composite type is given, it is passed to the function as is.
+  Creates a tuple given by the shapes in `tuple` that point to `expr`.
   """
-  def composite(tuple, context, fun) when is_tuple(tuple) do
-    size = tuple_size(tuple)
-    expr = fun.(%T{shape: {}, names: [], type: {:tuple, size}})
-
+  def tuple(tuple, %T{type: {:tuple, size}, data: %{context: context}} = expr)
+      when is_tuple(tuple) and tuple_size(tuple) == size do
     # TODO: Use Enum.with_index on Elixir v1.12
     tuple
     |> Tuple.to_list()
     |> Enum.with_index()
     |> Enum.map(fn {tensor, i} ->
       fun = &expr(&1, context, :elem, [expr, i, size])
-      composite(tensor, context, fun)
+      composite(tensor, fun)
     end)
     |> List.to_tuple()
   end
 
-  def composite(tensor, _context, fun), do: fun.(tensor)
+  # Convert to a composite type recursively - if there is any composite type at all.
+  defp composite(tuple, fun) when is_tuple(tuple) do
+    expr = fun.(%T{shape: {}, names: [], type: {:tuple, tuple_size(tuple)}})
+    tuple(tuple, expr)
+  end
+
+  defp composite(tensor, fun), do: fun.(tensor)
 
   @doc """
   Creates a `cond` tensor expression.
@@ -125,7 +125,7 @@ defmodule Nx.Defn.Expr do
     {preds, context} = to_exprs(preds)
     [last | exprs] = cond_clauses(last, exprs)
     clauses = Enum.zip(preds, exprs)
-    composite(last, context, &expr(&1, context, :cond, [clauses, last]))
+    composite(last, &expr(&1, context, :cond, [clauses, last]))
   end
 
   defp cond_clauses(last, exprs) when is_tuple(last) do
@@ -627,21 +627,24 @@ defmodule Nx.Defn.Expr do
   def lu({p, l, u}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context
-    composite({p, l, u}, context, &expr(&1, context, :lu, [{p, l, u}, tensor, opts]))
+    out = %T{names: [], shape: {}, type: {:tuple, 3}}
+    tuple({p, l, u}, expr(out, context, :lu, [{p, l, u}, tensor, opts]))
   end
 
   @impl true
   def qr({q, r}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context
-    composite({q, r}, context, &expr(&1, context, :qr, [{q, r}, tensor, opts]))
+    out = %T{names: [], shape: {}, type: {:tuple, 2}}
+    tuple({q, r}, expr(out, context, :qr, [{q, r}, tensor, opts]))
   end
 
   @impl true
   def svd({u, s, vt}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context
-    composite({u, s, vt}, context, &expr(&1, context, :svd, [{u, s, vt}, tensor, opts]))
+    out = %T{names: [], shape: {}, type: {:tuple, 3}}
+    tuple({u, s, vt}, expr(out, context, :svd, [{u, s, vt}, tensor, opts]))
   end
 
   @impl true
@@ -892,7 +895,11 @@ defmodule Nx.Defn.Expr do
     IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(Map.keys(metadata))])
   end
 
-  defp inspect_args(_op, args, var_map), do: inspect_args(args, var_map)
+  defp inspect_args(_op, [tuple | args], var_map) when is_tuple(tuple),
+    do: inspect_args(args, var_map)
+
+  defp inspect_args(_op, args, var_map),
+    do: inspect_args(args, var_map)
 
   defp inspect_args(args, var_map) do
     Enum.map_join(args, ", ", &inspect_arg(&1, var_map))
