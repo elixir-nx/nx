@@ -7333,6 +7333,36 @@ defmodule Nx do
   end
 
   @doc """
+  Stacks a list of `n` scalar tensors into an `{n}`-shaped tensor
+
+  ### Options
+
+    * `:name` - optional name for the added dimension. Defaults to an unnamed axis.
+
+  ### Examples
+
+      iex> Nx.stack([1, 2, 3])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
+      iex> Nx.stack([Nx.tensor(1), Nx.tensor(2)], name: :x)
+      #Nx.Tensor<
+        s64[x: 2]
+        [1, 2]
+      >
+  """
+  def stack(tensors, opts \\ []) when is_list(tensors) do
+    opts = keyword!(opts, name: nil)
+    name = opts[:name]
+
+    enumerable
+    |> Enum.map(&Nx.new_axis(&1, 0, name))
+    |> Nx.concatenate()
+  end
+
+  @doc """
   Sorts the tensor along the given axis with the
   given comparator.
 
