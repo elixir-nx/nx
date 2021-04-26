@@ -7357,7 +7357,7 @@ defmodule Nx do
     opts = keyword!(opts, name: nil)
     name = opts[:name]
 
-    enumerable
+    tensors
     |> Enum.map(&Nx.new_axis(&1, 0, name))
     |> Nx.concatenate()
   end
