@@ -7333,7 +7333,7 @@ defmodule Nx do
   end
 
   @doc """
-  Stacks an `Enumerable` of `n` scalar tensors into an `{n}`-shaped tensor
+  Stacks a list of `n` scalar tensors into an `{n}`-shaped tensor
 
   ### Options
 
