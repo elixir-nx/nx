@@ -479,7 +479,8 @@ defmodule Nx.BinaryBackend do
   def dot(out, left, contract_axes1, [], right, contract_axes2, []) do
     # dot/4 is directed to this specific clause so we can keep a more efficient implementation
     # for non-batched dot products. See the clause below for batched dot products
-    dot4(out, left, contract_axes1, right, contract_axes2)
+    data = dot4(left, contract_axes1, right, contract_axes2, out.type)
+    from_binary(out, data)
   end
 
   def dot(
@@ -499,35 +500,23 @@ defmodule Nx.BinaryBackend do
     right_batch_contract_axes =
       Nx.Shape.shift_axes(right_contract_axes, -length(right_batch_axes))
 
-    {left_batch_shape, left_batch_names} =
+    {left_batch_shape, _left_batch_names} =
       Nx.Shape.contract(left_shape, left_batch_axes, left_names, false)
 
-    {right_batch_shape, right_batch_names} =
+    {right_batch_shape, _right_batch_names} =
       Nx.Shape.contract(right_shape, right_batch_axes, right_names, false)
 
     batch_item_length = Nx.size(left_batch_shape)
 
     batch_count = Nx.Shape.batch_count(left_shape, left_batch_axes)
 
-    {batch_item_output_shape, _output_names} =
-      Nx.Shape.zip_reduce(
-        left_batch_shape,
-        left_batch_contract_axes,
-        left_batch_names,
-        right_batch_shape,
-        right_batch_contract_axes,
-        right_batch_names
-      )
-
     range = if batch_count == 0, do: [], else: 0..(batch_count - 1)
 
     left_batch_item_template = %{left | shape: left_batch_shape}
     right_batch_item_template = %{right | shape: right_batch_shape}
 
-    batch_item_output_template = %{out | shape: batch_item_output_shape}
-
     bin_result =
-      for index <- range, into: <<>> do
+      for index <- range do
         offset = index * batch_item_length
 
         left_offset_bits = offset * left_size
@@ -544,21 +533,20 @@ defmodule Nx.BinaryBackend do
           right_batch_item_binary::bitstring-size(right_batch_item_bits),
           _::bitstring>> = right_binary
 
-        batch_item_output_template
-        |> dot4(
+        dot4(
           from_binary(left_batch_item_template, left_batch_item_binary),
           left_batch_contract_axes,
           from_binary(right_batch_item_template, right_batch_item_binary),
-          right_batch_contract_axes
+          right_batch_contract_axes,
+          out.type
         )
-        |> to_binary()
       end
 
     from_binary(out, bin_result)
   end
 
-  defp dot4(out, %{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2) do
-    bin_zip_reduce(out, left, contract_axes1, right, contract_axes2, 0, fn lhs, rhs, acc ->
+  defp dot4(%{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2, type) do
+    bin_zip_reduce(left, contract_axes1, right, contract_axes2, type, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
     end)
@@ -1798,37 +1786,31 @@ defmodule Nx.BinaryBackend do
     from_binary(out, data)
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
+  defp bin_zip_reduce(t1, [], t2, [], type, acc, fun) do
     %{type: {_, s1}} = t1
     %{type: {_, s2}} = t2
     b1 = to_binary(t1)
     b2 = to_binary(t2)
 
-    data =
-      match_types [t1.type, t2.type] do
-        for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
-          {result, _} = fun.(d1, d2, acc)
-          scalar_to_binary(result, type)
-        end
+    match_types [t1.type, t2.type] do
+      for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
+        {result, _} = fun.(d1, d2, acc)
+        scalar_to_binary(result, type)
       end
-
-    from_binary(out, data)
+    end
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
+  defp bin_zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, type, acc, fun) do
     {_, s1} = t1.type
     {_, s2} = t2.type
 
     v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
-    data =
-      for b1 <- v1, b2 <- v2 do
-        {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
-        scalar_to_binary(bin, type)
-      end
-
-    from_binary(out, data)
+    for b1 <- v1, b2 <- v2 do
+      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
+      scalar_to_binary(bin, type)
+    end
   end
 
   # Helper for reducing down a single axis over two tensors,
