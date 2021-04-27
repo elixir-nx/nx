@@ -6414,7 +6414,6 @@ defmodule Nx do
   Computes the generalized dot product bewteen two tensors, given the contracting
   and batch axes.
 
-
   The contracting axes must be dot-product compatible and the batch dimensions must
   always have the same number of elements.
 

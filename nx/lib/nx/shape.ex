@@ -325,7 +325,9 @@ defmodule Nx.Shape do
   @doc """
   Calculates the number of batches of a shape for the given axes.
   It expects the batch_axes to have been normalized.
+
   ## Examples
+
     iex> Nx.Shape.batch_count({3, 4, 5}, [])
     1
     iex> Nx.Shape.batch_count({3, 4, 5}, [0])
@@ -340,7 +342,9 @@ defmodule Nx.Shape do
   @doc """
   Shifts all the axes by n.
   Used to re-normalize axes for batching.
+
   ## Examples
+
     iex > Nx.Shape.shift_axes([1, 2, 3], -1)
     [0, 1, 2]
   """
