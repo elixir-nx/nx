@@ -380,7 +380,7 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp grad(:dot, [x, axes_x, y, axes_y], ans, g, cache) do
+  defp grad(:dot, [x, axes_x, _x_batch_axes, y, axes_y, _y_batch_axes], ans, g, cache) do
     g = Nx.broadcast(g, ans)
 
     contract_gx = up_to(Nx.rank(x.shape) - length(axes_x), Nx.rank(g.shape))

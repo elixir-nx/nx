@@ -528,9 +528,9 @@ defmodule Nx.Defn.Expr do
   defp contiguous?(_, _), do: false
 
   @impl true
-  def dot(out, t1, a1, t2, a2) do
+  def dot(out, t1, c1, b1, t2, c2, b2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    expr(out, context, :dot, [t1, a1, t2, a2])
+    expr(out, context, :dot, [t1, c1, b1, t2, c2, b2])
   end
 
   @impl true

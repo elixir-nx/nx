@@ -6408,15 +6408,139 @@ defmodule Nx do
 
   """
   @doc type: :ndim
-  def dot(t1, axes1, t2, axes2) do
+  def dot(t1, axes1, t2, axes2), do: dot(t1, axes1, [], t2, axes2, [])
+
+  @doc """
+  Computes the generalized dot product bewteen two tensors, given the contracting
+  and batch axes.
+
+  The contracting axes must be dot-product compatible and the batch dimensions must
+  always have the same number of elements.
+
+  ## Examples
+
+  ### Dot product between two batched tensors
+
+      iex> u = Nx.tensor([[[1]], [[2]]])
+      iex> v = Nx.tensor([[[3]], [[4]]])
+      iex> Nx.dot(u, [2], [0], v, [2], [0])
+      #Nx.Tensor<
+        s64[2][1][1]
+        [
+          [
+            [3]
+          ],
+          [
+            [8]
+          ]
+        ]
+      >
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [0], v, [1], [0])
+      #Nx.Tensor<
+        s64[2][1][1]
+        [
+          [
+            [6]
+          ],
+          [
+            [16]
+          ]
+        ]
+      >
+
+  ### Error cases
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [0], v, [1], [])
+      ** (ArgumentError) right tensor must be batched if left tensor is batched
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [], v, [1], [0])
+      ** (ArgumentError) left tensor must be batched if right tensor is batched
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [1], v, [1], [0])
+      ** (ArgumentError) invalid dot batch axis for the left tensor - only batch axis 0 is supported, but got [1]
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [0], v, [1], [1])
+      ** (ArgumentError) invalid dot batch axis for the right tensor - only batch axis 0 is supported, but got [1]
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [0], [0], v, [1], [0])
+      ** (ArgumentError) dot batch axes [0] for the left tensor cannot be in the contract axes [0]
+
+      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
+      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
+      iex> Nx.dot(u, [2], [0], v, [0], [0])
+      ** (ArgumentError) dot batch axes [0] for the right tensor cannot be in the contract axes [0]
+  """
+  @doc type: :ndim
+  def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do
+    %{shape: s1, names: names1} = t1 = to_tensor(t1)
+    %{shape: s2, names: names2} = t2 = to_tensor(t2)
+
     output_type = binary_type(t1, t2)
-    %T{shape: s1, names: names1} = t1 = to_tensor(t1)
-    %T{shape: s2, names: names2} = t2 = to_tensor(t2)
-    axes1 = Nx.Shape.normalize_axes(s1, axes1, names1)
-    axes2 = Nx.Shape.normalize_axes(s2, axes2, names2)
-    {output_shape, output_names} = Nx.Shape.zip_reduce(s1, axes1, names1, s2, axes2, names2)
+
+    # Axes normalization
+    c1 = Nx.Shape.normalize_axes(s1, contract_axes1, names1)
+    c2 = Nx.Shape.normalize_axes(s2, contract_axes2, names2)
+    b1 = Nx.Shape.normalize_axes(s1, batch_axes1, names1)
+    b2 = Nx.Shape.normalize_axes(s2, batch_axes2, names2)
+
+    {s1, s2} = Nx.Shape.dot(t1, c1, b1, t2, c2, b2)
+
+    {output_shape, output_names} = dot_batch_output_shape(s1, c1, names1, b1, s2, c2, names2, b2)
+
     out = %{t1 | type: output_type, names: output_names, shape: output_shape}
-    impl!(t1, t2).dot(out, t1, axes1, t2, axes2)
+    impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+  end
+
+  defp dot_batch_output_shape(s1, c1, names1, b1, s2, c2, names2, b2) do
+    {batch_dim, batch_name, s1, c1, names1, s2, c2, names2} =
+      prep_dot_batch_output(s1, c1, names1, b1, s2, c2, names2, b2)
+
+    # zip reduce without the batched dimensions
+    {output_shape, output_names} = Nx.Shape.zip_reduce(s1, c1, names1, s2, c2, names2)
+    # re-add the batched dimensions.
+    # TODO: make sure this is not skipping some sort of validation. e.g. duplicate names
+    if is_nil(batch_dim) do
+      {output_shape, output_names}
+    else
+      output_shape = Tuple.insert_at(output_shape, 0, batch_dim)
+      output_names = [batch_name | output_names]
+      {output_shape, output_names}
+    end
+  end
+
+  defp prep_dot_batch_output(s1, c1, names1, b1, s2, c2, names2, b2) do
+    case {b1, b2} do
+      {[], []} ->
+        {nil, nil, s1, c1, names1, s2, c2, names2}
+
+      {[0], [0]} ->
+        batch_dim = elem(s1, 0)
+        batch_name = hd(names1)
+        {s1, c1, names1} = shift_left_for_batch(s1, c1, names1)
+        {s2, c2, names2} = shift_left_for_batch(s2, c2, names2)
+        {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
+    end
+  end
+
+  defp shift_left_for_batch(shape, contract_axes, names) do
+    {Tuple.delete_at(shape, 0), shift_left_axes(contract_axes), tl(names)}
+  end
+
+  defp shift_left_axes(axes) do
+    Enum.map(axes, fn a -> a - 1 end)
   end
 
   @doc """

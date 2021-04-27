@@ -476,8 +476,77 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def dot(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
-    bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
+  def dot(out, left, contract_axes1, [], right, contract_axes2, []) do
+    # dot/4 is directed to this specific clause so we can keep a more efficient implementation
+    # for non-batched dot products. See the clause below for batched dot products
+    data = bin_dot(left, contract_axes1, right, contract_axes2, out.type)
+    from_binary(out, data)
+  end
+
+  def dot(
+        out,
+        %{shape: left_shape, type: {_, left_size}, names: left_names} = left,
+        left_contract_axes,
+        left_batch_axes,
+        %{shape: right_shape, type: {_, right_size}, names: right_names} = right,
+        right_contract_axes,
+        right_batch_axes
+      ) do
+    left_binary = to_binary(left)
+    right_binary = to_binary(right)
+
+    left_batch_contract_axes = Nx.Shape.shift_axes(left_contract_axes, -length(left_batch_axes))
+
+    right_batch_contract_axes =
+      Nx.Shape.shift_axes(right_contract_axes, -length(right_batch_axes))
+
+    {left_batch_shape, _left_batch_names} =
+      Nx.Shape.contract(left_shape, left_batch_axes, left_names, false)
+
+    {right_batch_shape, _right_batch_names} =
+      Nx.Shape.contract(right_shape, right_batch_axes, right_names, false)
+
+    batch_item_length = Nx.size(left_batch_shape)
+
+    batch_count = Nx.Shape.batch_count(left_shape, left_batch_axes)
+
+    range = if batch_count == 0, do: [], else: 0..(batch_count - 1)
+
+    left_batch_item_template = %{left | shape: left_batch_shape}
+    right_batch_item_template = %{right | shape: right_batch_shape}
+
+    bin_result =
+      for index <- range do
+        offset = index * batch_item_length
+
+        left_offset_bits = offset * left_size
+        right_offset_bits = offset * right_size
+
+        left_batch_item_bits = batch_item_length * left_size
+        right_batch_item_bits = batch_item_length * right_size
+
+        <<_::bitstring-size(left_offset_bits),
+          left_batch_item_binary::bitstring-size(left_batch_item_bits),
+          _::bitstring>> = left_binary
+
+        <<_::bitstring-size(right_offset_bits),
+          right_batch_item_binary::bitstring-size(right_batch_item_bits),
+          _::bitstring>> = right_binary
+
+        bin_dot(
+          from_binary(left_batch_item_template, left_batch_item_binary),
+          left_batch_contract_axes,
+          from_binary(right_batch_item_template, right_batch_item_binary),
+          right_batch_contract_axes,
+          out.type
+        )
+      end
+
+    from_binary(out, bin_result)
+  end
+
+  defp bin_dot(%{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2, type) do
+    bin_zip_reduce(left, contract_axes1, right, contract_axes2, type, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
     end)
@@ -1155,52 +1224,70 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def all?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: acc, else: 0
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
+        res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def any?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: 1, else: acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
+        res = if binary_to_number(bin, type) != 0, do: 1, else: acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def sum(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) + acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
+        res = binary_to_number(bin, type) + acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def product(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) * acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
+        res = binary_to_number(bin, type) * acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce_max(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.max(acc, val)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
+        val = binary_to_number(bin, type)
+        res = if acc == :first, do: val, else: Kernel.max(acc, val)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce_min(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.min(acc, val)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
+        val = binary_to_number(bin, type)
+        res = if acc == :first, do: val, else: Kernel.min(acc, val)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
@@ -1228,25 +1315,32 @@ defmodule Nx.BinaryBackend do
   defp argmin_or_max(out, %{type: type} = tensor, comparator, axis) do
     opts = if axis, do: [axes: [axis]], else: []
 
-    bin_reduce(out, tensor, {0, :first, -1}, opts, fn bin, {i, cur_extreme_x, cur_extreme_i} ->
-      x = binary_to_number(bin, type)
+    data =
+      bin_reduce(tensor, out.type, {0, :first, -1}, opts, fn bin,
+                                                             {i, cur_extreme_x, cur_extreme_i} ->
+        x = binary_to_number(bin, type)
 
-      if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-        {i, {i + 1, x, i}}
-      else
-        {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-      end
-    end)
+        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          {i, {i + 1, x, i}}
+        else
+          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+        end
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce(out, tensor, acc, opts, fun) do
     each = %{tensor | shape: {}}
 
-    bin_reduce(out, tensor, acc, opts, fn bin, acc ->
-      res = fun.(from_binary(each, bin), acc)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, acc, opts, fn bin, acc ->
+        res = fun.(from_binary(each, bin), acc)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
@@ -1694,7 +1788,7 @@ defmodule Nx.BinaryBackend do
 
   ## Binary reducers
 
-  defp bin_reduce(out, tensor, acc, opts, fun) do
+  defp bin_reduce(tensor, type, acc, opts, fun) do
     %T{type: {_, size}, shape: shape} = tensor
 
     view =
@@ -1704,50 +1798,41 @@ defmodule Nx.BinaryBackend do
         [to_binary(tensor)]
       end
 
-    data =
-      for axis <- view do
-        {result, _} =
-          for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
-            {_, acc} -> fun.(bin, acc)
-          end
+    for axis <- view, into: <<>> do
+      {result, _} =
+        for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
+          {_, acc} -> fun.(bin, acc)
+        end
 
-        scalar_to_binary(result, out.type)
-      end
-
-    from_binary(out, data)
+      scalar_to_binary(result, type)
+    end
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
+  defp bin_zip_reduce(t1, [], t2, [], type, acc, fun) do
     %{type: {_, s1}} = t1
     %{type: {_, s2}} = t2
     b1 = to_binary(t1)
     b2 = to_binary(t2)
 
-    data =
-      match_types [t1.type, t2.type] do
-        for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
-          {result, _} = fun.(d1, d2, acc)
-          scalar_to_binary(result, type)
-        end
+    match_types [t1.type, t2.type] do
+      for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
+        {result, _} = fun.(d1, d2, acc)
+        scalar_to_binary(result, type)
       end
-
-    from_binary(out, data)
+    end
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
+  defp bin_zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, type, acc, fun) do
     {_, s1} = t1.type
     {_, s2} = t2.type
 
     v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
-    data =
-      for b1 <- v1, b2 <- v2 do
-        {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
-        scalar_to_binary(bin, type)
-      end
-
-    from_binary(out, data)
+    for b1 <- v1, b2 <- v2 do
+      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
+      scalar_to_binary(bin, type)
+    end
   end
 
   # Helper for reducing down a single axis over two tensors,
