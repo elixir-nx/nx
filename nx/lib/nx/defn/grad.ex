@@ -394,12 +394,12 @@ defmodule Nx.Defn.Grad do
 
     gx =
       g
-      |> Nx.dot(contract_gx, y, contract_y)
+      |> Nx.dot(contract_gx, [], y, contract_y, [])
       |> Nx.transpose(axes: argsort(contract_x ++ transpose_x))
 
     gy =
       g
-      |> Nx.dot(contract_gy, x, contract_x)
+      |> Nx.dot(contract_gy, [], x, contract_x, [])
       |> Nx.transpose(axes: argsort(contract_y ++ transpose_y))
 
     grad_pairs([{x, gx}, {y, gy}], g, cache)

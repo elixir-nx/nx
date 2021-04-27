@@ -265,26 +265,46 @@ namespace nif {
     const ERL_NIF_TERM* terms;
     int count;
     if (!enif_get_tuple(env, tuple, &count, &terms)) return 0;
-    if (count != 2) return 0;
+    if (count != 4) return 0;
 
-    ERL_NIF_TERM lhs, lhs_tail;
+    ERL_NIF_TERM lhs_contract, lhs_contract_tail;
     ERL_NIF_TERM list = terms[0];
-    while (enif_get_list_cell(env, list, &lhs, &lhs_tail)) {
+    while (enif_get_list_cell(env, list, &lhs_contract, &lhs_contract_tail)) {
       int64 dim;
-      if (!get(env, lhs, &dim)) return 0;
+      if (!get(env, lhs_contract, &dim)) return 0;
       dims->add_lhs_contracting_dimensions(dim);
 
-      list = lhs_tail;
+      list = lhs_contract_tail;
     }
 
-    ERL_NIF_TERM rhs, rhs_tail;
+    ERL_NIF_TERM lhs_batch, lhs_batch_tail;
     list = terms[1];
-    while (enif_get_list_cell(env, list, &rhs, &rhs_tail)) {
+    while (enif_get_list_cell(env, list, &lhs_batch, &lhs_batch_tail)) {
       int64 dim;
-      if (!get(env, rhs, &dim)) return 0;
+      if (!get(env, lhs_batch, &dim)) return 0;
+      dims->add_lhs_batch_dimensions(dim);
+
+      list = lhs_batch_tail;
+    }
+
+    ERL_NIF_TERM rhs_contract, rhs_contract_tail;
+    list = terms[2];
+    while (enif_get_list_cell(env, list, &rhs_contract, &rhs_contract_tail)) {
+      int64 dim;
+      if (!get(env, rhs_contract, &dim)) return 0;
       dims->add_rhs_contracting_dimensions(dim);
 
-      list = rhs_tail;
+      list = rhs_contract_tail;
+    }
+
+    ERL_NIF_TERM rhs_batch, rhs_batch_tail;
+    list = terms[3];
+    while (enif_get_list_cell(env, list, &rhs_batch, &rhs_batch_tail)) {
+      int64 dim;
+      if (!get(env, rhs_batch, &dim)) return 0;
+      dims->add_rhs_batch_dimensions(dim);
+
+      list = rhs_batch_tail;
     }
 
     return 1;
