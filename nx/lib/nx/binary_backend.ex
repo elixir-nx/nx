@@ -1224,52 +1224,70 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def all?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: acc, else: 0
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
+        res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def any?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: 1, else: acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
+        res = if binary_to_number(bin, type) != 0, do: 1, else: acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def sum(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) + acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
+        res = binary_to_number(bin, type) + acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def product(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) * acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
+        res = binary_to_number(bin, type) * acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce_max(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.max(acc, val)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
+        val = binary_to_number(bin, type)
+        res = if acc == :first, do: val, else: Kernel.max(acc, val)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce_min(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.min(acc, val)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
+        val = binary_to_number(bin, type)
+        res = if acc == :first, do: val, else: Kernel.min(acc, val)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
@@ -1297,25 +1315,32 @@ defmodule Nx.BinaryBackend do
   defp argmin_or_max(out, %{type: type} = tensor, comparator, axis) do
     opts = if axis, do: [axes: [axis]], else: []
 
-    bin_reduce(out, tensor, {0, :first, -1}, opts, fn bin, {i, cur_extreme_x, cur_extreme_i} ->
-      x = binary_to_number(bin, type)
+    data =
+      bin_reduce(tensor, out.type, {0, :first, -1}, opts, fn bin,
+                                                             {i, cur_extreme_x, cur_extreme_i} ->
+        x = binary_to_number(bin, type)
 
-      if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-        {i, {i + 1, x, i}}
-      else
-        {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-      end
-    end)
+        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          {i, {i + 1, x, i}}
+        else
+          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+        end
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce(out, tensor, acc, opts, fun) do
     each = %{tensor | shape: {}}
 
-    bin_reduce(out, tensor, acc, opts, fn bin, acc ->
-      res = fun.(from_binary(each, bin), acc)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, acc, opts, fn bin, acc ->
+        res = fun.(from_binary(each, bin), acc)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
@@ -1763,7 +1788,7 @@ defmodule Nx.BinaryBackend do
 
   ## Binary reducers
 
-  defp bin_reduce(out, tensor, acc, opts, fun) do
+  defp bin_reduce(tensor, type, acc, opts, fun) do
     %T{type: {_, size}, shape: shape} = tensor
 
     view =
@@ -1773,17 +1798,14 @@ defmodule Nx.BinaryBackend do
         [to_binary(tensor)]
       end
 
-    data =
-      for axis <- view do
-        {result, _} =
-          for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
-            {_, acc} -> fun.(bin, acc)
-          end
+    for axis <- view, into: <<>> do
+      {result, _} =
+        for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
+          {_, acc} -> fun.(bin, acc)
+        end
 
-        scalar_to_binary(result, out.type)
-      end
-
-    from_binary(out, data)
+      scalar_to_binary(result, type)
+    end
   end
 
   defp bin_zip_reduce(t1, [], t2, [], type, acc, fun) do
