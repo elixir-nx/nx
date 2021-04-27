@@ -305,11 +305,6 @@ defmodule EXLA.Defn do
     EXLA.Op.dot_general(to_type(left, type), to_type(right, type), {contract_axes1, contract_axes2}, precision)
   end
 
-  defp to_operator(:dot, _, _, _) do
-    raise ArgumentError, "dot operation not implemented for batched tensors"
-  end
-
-
   defp to_operator(
          :conv,
          [operand, kernel, opts],

@@ -6532,18 +6532,6 @@ defmodule Nx do
         {s1, c1, names1} = shift_left_for_batch(s1, c1, names1)
         {s2, c2, names2} = shift_left_for_batch(s2, c2, names2)
         {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
-
-      {[0], []} ->
-        batch_dim = elem(s1, 0)
-        batch_name = hd(names1)
-        {s1, c1, names1} = shift_left_for_batch(s1, c1, names1)
-        {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
-
-      {[], [0]} ->
-        batch_dim = elem(s2, 0)
-        batch_name = hd(names2)
-        {s2, c2, names2} = shift_left_for_batch(s2, c2, names2)
-        {batch_dim, batch_name, s1, c1, names1, s2, c2, names2}
     end
   end
 

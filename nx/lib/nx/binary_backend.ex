@@ -479,7 +479,7 @@ defmodule Nx.BinaryBackend do
   def dot(out, left, contract_axes1, [], right, contract_axes2, []) do
     # dot/4 is directed to this specific clause so we can keep a more efficient implementation
     # for non-batched dot products. See the clause below for batched dot products
-    data = dot4(left, contract_axes1, right, contract_axes2, out.type)
+    data = bin_dot(left, contract_axes1, right, contract_axes2, out.type)
     from_binary(out, data)
   end
 
@@ -533,7 +533,7 @@ defmodule Nx.BinaryBackend do
           right_batch_item_binary::bitstring-size(right_batch_item_bits),
           _::bitstring>> = right_binary
 
-        dot4(
+        bin_dot(
           from_binary(left_batch_item_template, left_batch_item_binary),
           left_batch_contract_axes,
           from_binary(right_batch_item_template, right_batch_item_binary),
@@ -545,7 +545,7 @@ defmodule Nx.BinaryBackend do
     from_binary(out, bin_result)
   end
 
-  defp dot4(%{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2, type) do
+  defp bin_dot(%{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2, type) do
     bin_zip_reduce(left, contract_axes1, right, contract_axes2, type, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
