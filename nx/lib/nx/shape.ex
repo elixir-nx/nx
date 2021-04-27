@@ -1156,22 +1156,24 @@ defmodule Nx.Shape do
   Returns the shape, the tensor names and the normalized axes
   for both the contracting and the batching axes.
   """
+  @spec dot(
+          left :: Nx.Tensor.t(),
+          contract_axes_left :: Nx.Tensor.axes(),
+          batch_axes_left :: Nx.Tensor.axes(),
+          right :: Nx.Tensor.t(),
+          contract_axes_right :: Nx.Tensor.axes(),
+          batch_axes_right :: Nx.Tensor.axes()
+        ) :: Nx.Tensor.shape() | no_return
   def dot(
         %Nx.Tensor{} = t1,
-        contract_axes1,
-        batch_axes1,
+        c1,
+        b1,
         %Nx.Tensor{} = t2,
-        contract_axes2,
-        batch_axes2
+        c2,
+        b2
       ) do
     %Nx.Tensor{shape: s1, names: names1} = t1
     %Nx.Tensor{shape: s2, names: names2} = t2
-
-    # Axes normalization
-    c1 = Nx.Shape.normalize_axes(s1, contract_axes1, names1)
-    c2 = Nx.Shape.normalize_axes(s2, contract_axes2, names2)
-    b1 = Nx.Shape.normalize_axes(s1, batch_axes1, names1)
-    b2 = Nx.Shape.normalize_axes(s2, batch_axes2, names2)
 
     left_batched? = b1 != []
     right_batched? = b2 != []
@@ -1186,13 +1188,13 @@ defmodule Nx.Shape do
 
     # ensure normalized batch axis of left is valid value
     if left_batched? and b1 != [0] do
-      msg = bad_batch_axis_message("left", batch_axes1, b1)
+      msg = bad_batch_axis_message("left", names1, b1)
       raise ArgumentError, msg
     end
 
     # ensure normalized batch axis of right is valid value
     if right_batched? and b2 != [0] do
-      msg = bad_batch_axis_message("right", batch_axes2, b2)
+      msg = bad_batch_axis_message("right", names2, b2)
       raise ArgumentError, msg
     end
 
@@ -1203,44 +1205,53 @@ defmodule Nx.Shape do
     if left_batched? and right_batched? and b1_count != b2_count do
       raise ArgumentError,
             "dot batch dimension sizes must match, but the left " <>
-              "batch dimension of axes #{inspect(batch_axes1)} has #{b1_count} elements " <>
-              "and the right batch dimension of axes #{inspect(batch_axes2)} has #{b2_count} elements"
+              "batch dimension of axes #{render_normalized_axes(names1, b1)} has #{b1_count} elements " <>
+              "and the right batch dimension of axes #{render_normalized_axes(names2, b2)} has #{
+                b2_count
+              } elements"
     end
 
     # ensure there is no conflict between left batch axes and left contract axes
     if left_batched? and Enum.any?(b1, &(&1 in c1)) do
       raise ArgumentError,
-            batch_vs_contract_conflict_message("left", batch_axes1, b1, contract_axes1, c1)
+            batch_vs_contract_conflict_message("left", names1, b1, c1)
     end
 
     # ensure there is no conflict between right batch axis and right contract axes
     if right_batched? and Enum.any?(b2, &(&1 in c2)) do
       raise ArgumentError,
-            batch_vs_contract_conflict_message("right", batch_axes2, b2, contract_axes2, c2)
+            batch_vs_contract_conflict_message("right", names2, b2, c2)
     end
 
-    {s1, names1, c1, b1, s2, names2, c2, b2}
+    {s1, s2}
   end
 
-  defp bad_batch_axis_message(side, batch_axes, batch_norm) do
+  defp bad_batch_axis_message(side, names, batch_norm) do
     "invalid dot batch axis for the #{side} tensor - only batch axis 0 is supported, but got #{
-      render_normalized_axes(batch_axes, batch_norm)
+      render_normalized_axes(names, batch_norm)
     }"
   end
 
   defp batch_vs_contract_conflict_message(
          side,
-         batch_axes,
+         names,
          batch_norm,
-         contract_axes,
          contract_norm
        ) do
-    "dot batch axes #{render_normalized_axes(batch_axes, batch_norm)} for the #{side} tensor cannot " <>
-      "be in the contract axes #{render_normalized_axes(contract_axes, contract_norm)}"
+    "dot batch axes #{render_normalized_axes(names, batch_norm)} for the #{side} tensor cannot " <>
+      "be in the contract axes #{render_normalized_axes(names, contract_norm)}"
   end
 
-  defp render_normalized_axes(same, same), do: inspect(same)
-  defp render_normalized_axes(axes, norm), do: "#{inspect(axes)} (norm: #{inspect(norm)})"
+  defp render_normalized_axes(names, normalized) do
+    normalized
+    |> Enum.map(fn ax ->
+      case Enum.fetch!(names, ax) do
+        nil -> ax
+        name -> name
+      end
+    end)
+    |> inspect()
+  end
 
   @doc """
   Returns the shape and names after a Cholesky decomposition.

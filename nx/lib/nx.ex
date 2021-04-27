@@ -6485,13 +6485,18 @@ defmodule Nx do
   """
   @doc type: :ndim
   def dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2) do
-    t1 = to_tensor(t1)
-    t2 = to_tensor(t2)
+    %{shape: s1, names: names1} = t1 = to_tensor(t1)
+    %{shape: s2, names: names2} = t2 = to_tensor(t2)
 
     output_type = binary_type(t1, t2)
 
-    {s1, names1, c1, b1, s2, names2, c2, b2} =
-      Nx.Shape.dot(t1, contract_axes1, batch_axes1, t2, contract_axes2, batch_axes2)
+    # Axes normalization
+    c1 = Nx.Shape.normalize_axes(s1, contract_axes1, names1)
+    c2 = Nx.Shape.normalize_axes(s2, contract_axes2, names2)
+    b1 = Nx.Shape.normalize_axes(s1, batch_axes1, names1)
+    b2 = Nx.Shape.normalize_axes(s2, batch_axes2, names2)
+
+    {s1, s2} = Nx.Shape.dot(t1, c1, b1, t2, c2, b2)
 
     {output_shape, output_names} = dot_batch_output_shape(s1, c1, names1, b1, s2, c2, names2, b2)
 
@@ -6506,11 +6511,11 @@ defmodule Nx do
     # zip reduce without the batched dimensions
     {output_shape, output_names} = Nx.Shape.zip_reduce(s1, c1, names1, s2, c2, names2)
     # re-add the batched dimensions.
-    # TODO(elbow-jason): make sure this is not skipping some sort of validation. e.g. duplicate names
+    # TODO: make sure this is not skipping some sort of validation. e.g. duplicate names
     if is_nil(batch_dim) do
       {output_shape, output_names}
     else
-      output_shape = shape_push_left(output_shape, batch_dim)
+      output_shape = Tuple.insert_at(output_shape, 0, batch_dim)
       output_names = [batch_name | output_names]
       {output_shape, output_names}
     end
@@ -6543,22 +6548,11 @@ defmodule Nx do
   end
 
   defp shift_left_for_batch(shape, contract_axes, names) do
-    {shift_left_shape(shape), shift_left_axes(contract_axes), tl(names)}
-  end
-
-  defp shift_left_shape(shape) do
-    shape
-    |> Tuple.to_list()
-    |> tl()
-    |> List.to_tuple()
+    {Tuple.delete_at(shape, 0), shift_left_axes(contract_axes), tl(names)}
   end
 
   defp shift_left_axes(axes) do
     Enum.map(axes, fn a -> a - 1 end)
-  end
-
-  defp shape_push_left(shape, dim) do
-    List.to_tuple([dim | Tuple.to_list(shape)])
   end
 
   @doc """
