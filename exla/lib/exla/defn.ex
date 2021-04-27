@@ -300,10 +300,15 @@ defmodule EXLA.Defn do
     EXLA.Op.get_tuple_element(op, index)
   end
 
-  defp to_operator(:dot, [left, contract_axes1, _batch_axes1, right, contract_axes2, _batch_axes2], %{type: type}, state) do
+  defp to_operator(:dot, [left, contract_axes1, [], right, contract_axes2, []], %{type: type}, state) do
     precision = state.precision
     EXLA.Op.dot_general(to_type(left, type), to_type(right, type), {contract_axes1, contract_axes2}, precision)
   end
+
+  defp to_operator(:dot, _, _, _) do
+    raise ArgumentError, "dot operation not implemented for batched tensors"
+  end
+
 
   defp to_operator(
          :conv,
