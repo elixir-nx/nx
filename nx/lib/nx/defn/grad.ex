@@ -478,36 +478,38 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:qr, [{q, r}, input, _opts], ans, g, cache) do
     {q, r} = Nx.Defn.Expr.tuple({q, r}, ans)
-    r_inv = Nx.LinAlg.invert(r)
-    c = Nx.transpose(q) |> Nx.dot(g) |> Nx.dot(r_inv)
+    # r_inv = Nx.LinAlg.invert(r)
+    # c = Nx.transpose(q) |> Nx.dot(g) |> Nx.dot(r_inv)
 
-    # matrix where every element above the main diagonal is 2
-    # and every element on the main diagonal is 1
-    e =
-      Nx.less_equal(Nx.iota(c, axis: 0), Nx.iota(c, axis: 1))
-      |> Nx.multiply(2)
-      |> Nx.subtract(Nx.eye(c))
+    # # matrix where every element above the main diagonal is 2
+    # # and every element on the main diagonal is 1
+    # e =
+    #   Nx.less_equal(Nx.iota(c, axis: 0), Nx.iota(c, axis: 1))
+    #   |> Nx.multiply(2)
+    #   |> Nx.subtract(Nx.eye(c))
 
-    dr = c |> Nx.add(Nx.transpose(c)) |> Nx.divide(2) |> Nx.multiply(e) |> Nx.dot(r)
-    dq = g |> Nx.subtract(Nx.dot(q, dr)) |> Nx.dot(r_inv)
+    # dr = c |> Nx.add(Nx.transpose(c)) |> Nx.divide(2) |> Nx.multiply(e) |> Nx.dot(r)
+    # {dr, cache} = to_grad(input, dr, cache)
 
-    # The code below yields the following thensor for the test at  test/nx/defn/grad_test.exs:1658
-    # #Nx.Tensor<\n  f32[2][2]\n  [\n    [1.9999998807907104, -0.33333325386047363],\n    [-0.3333333134651184, -0.9999999403953552]\n  ]\n>
-    # While the code above yields
-    # #Nx.Tensor<\n  f32[2][2]\n  [\n    [2.0, -0.3333331346511841],\n    [-0.33333325386047363, -0.9999999403953552]\n  ]\n>
+    # dq = g |> Nx.subtract(Nx.dot(q, dr)) |> Nx.dot(r_inv) |> IO.inspect(label: "dq")
+
+    # {dq, cache} = to_grad(input, dq, cache)
 
     # The code below was translated from jax, while the code above was translated from
     # https://arxiv.org/pdf/2009.10071.pdf, page 5
 
-    # g_rinv = Nx.dot(g, Nx.LinAlg.invert(r))
-    # qt_g_rinv = Nx.dot(Nx.transpose(q), g_rinv)
-    # qt_g_rinv_lower = tril(qt_g_rinv)
-    # doff = Nx.subtract(qt_g_rinv_lower, Nx.transpose(qt_g_rinv_lower))
-    # dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
-    # dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
+    r = Nx.multiply(r, -1)
+    q = Nx.multiply(q, -1)
+    # ok
+    r_inv = Nx.LinAlg.invert(r)
+    # ok
+    g_rinv = Nx.dot(g, r_inv)
 
-    # {dq, cache} = to_grad(q, dq, cache)
-    # {dr, cache} = to_grad(r, dr, cache)
+    qt_g_rinv = Nx.dot(Nx.transpose(q), g_rinv)
+    qt_g_rinv_lower = tril(qt_g_rinv)
+    doff = Nx.subtract(qt_g_rinv_lower, Nx.transpose(qt_g_rinv_lower))
+    dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
+    dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
 
     {{dq, dr}, cache}
   end
@@ -1063,13 +1065,9 @@ defmodule Nx.Defn.Grad do
     # Trick to yield a matrix where every element below
     # the main diagonal is 1, and the rest is 0
     selector = Nx.greater(Nx.iota(tensor, axis: 0), Nx.iota(tensor, axis: 1))
-
-    zeros = Nx.broadcast(0, tensor)
-
-    selector = Nx.greater(Nx.iota(tensor, axis: 0), Nx.iota(tensor, axis: 1))
     zeros = Nx.broadcast(0, tensor)
     # Fetch the lower triangle of the matrix without the diagonal
-    lower = Nx.select(selector, tensor, zeros)
+    Nx.select(selector, tensor, zeros)
   end
 
   # # copies the lower triangle over the upper triangle of a 2-D square tensor
