@@ -1651,7 +1651,7 @@ defmodule Nx.Defn.GradTest do
       grad(t, fn tensor ->
         {q, r} = Nx.LinAlg.qr(tensor)
 
-        Nx.sum(q)
+        Nx.sum(r)
       end)
     end
 

@@ -501,7 +501,7 @@ defmodule Nx.Defn.Grad do
     r = Nx.multiply(r, -1)
     q = Nx.multiply(q, -1)
     # ok
-    r_inv = Nx.LinAlg.invert(r)
+    r_inv = Nx.LinAlg.invert(r |> Nx.transpose())
     # ok
     g_rinv = Nx.dot(g, r_inv)
 
@@ -511,7 +511,7 @@ defmodule Nx.Defn.Grad do
     dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
     dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
 
-    {{dq, dr}, cache}
+    {{qt_g_rinv, qt_g_rinv}, cache}
   end
 
   defp grad(_op, _args, _ans, _g, _cache) do
