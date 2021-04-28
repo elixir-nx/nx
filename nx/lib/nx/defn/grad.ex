@@ -476,6 +476,44 @@ defmodule Nx.Defn.Grad do
     grad_pairs(pairs, g, cache)
   end
 
+  defp grad(:qr, [{q, r}, input, _opts], ans, g, cache) do
+    {q, r} = Nx.Defn.Expr.tuple({q, r}, ans)
+    # r_inv = Nx.LinAlg.invert(r)
+    # c = Nx.transpose(q) |> Nx.dot(g) |> Nx.dot(r_inv)
+
+    # # matrix where every element above the main diagonal is 2
+    # # and every element on the main diagonal is 1
+    # e =
+    #   Nx.less_equal(Nx.iota(c, axis: 0), Nx.iota(c, axis: 1))
+    #   |> Nx.multiply(2)
+    #   |> Nx.subtract(Nx.eye(c))
+
+    # dr = c |> Nx.add(Nx.transpose(c)) |> Nx.divide(2) |> Nx.multiply(e) |> Nx.dot(r)
+    # {dr, cache} = to_grad(input, dr, cache)
+
+    # dq = g |> Nx.subtract(Nx.dot(q, dr)) |> Nx.dot(r_inv) |> IO.inspect(label: "dq")
+
+    # {dq, cache} = to_grad(input, dq, cache)
+
+    # The code below was translated from jax, while the code above was translated from
+    # https://arxiv.org/pdf/2009.10071.pdf, page 5
+
+    r = Nx.multiply(r, -1)
+    q = Nx.multiply(q, -1)
+    # ok
+    r_inv = Nx.LinAlg.invert(r |> Nx.transpose())
+    # ok
+    g_rinv = Nx.dot(g, r_inv)
+
+    qt_g_rinv = Nx.dot(Nx.transpose(q), g_rinv)
+    qt_g_rinv_lower = tril(qt_g_rinv)
+    doff = Nx.subtract(qt_g_rinv_lower, Nx.transpose(qt_g_rinv_lower))
+    dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
+    dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
+
+    {{qt_g_rinv, qt_g_rinv}, cache}
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
@@ -1022,4 +1060,24 @@ defmodule Nx.Defn.Grad do
   defp up_to(_, _), do: []
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+
+  defp tril(tensor) do
+    # Trick to yield a matrix where every element below
+    # the main diagonal is 1, and the rest is 0
+    selector = Nx.greater(Nx.iota(tensor, axis: 0), Nx.iota(tensor, axis: 1))
+    zeros = Nx.broadcast(0, tensor)
+    # Fetch the lower triangle of the matrix without the diagonal
+    Nx.select(selector, tensor, zeros)
+  end
+
+  # # copies the lower triangle over the upper triangle of a 2-D square tensor
+  # defp copyltu(tensor) do
+  #   lower = tril(tensor)
+
+  #   # Get the diagonal
+  #   diag = Nx.multiply(tensor, Nx.eye(tensor))
+
+  #   # transpose(lower) + lower + diag == copyltu
+  #   lower |> Nx.add(diag) |> Nx.transpose() |> Nx.add(lower)
+  # end
 end

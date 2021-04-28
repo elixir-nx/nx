@@ -1646,6 +1646,21 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "qr" do
+    defn qr_grad(t) do
+      grad(t, fn tensor ->
+        {q, r} = Nx.LinAlg.qr(tensor)
+
+        Nx.sum(r)
+      end)
+    end
+
+    test "computes grad for tensor" do
+      assert qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])) ==
+               Nx.tensor([[-0.7071, -1.4142], [-0.7071, 5.62e-8]])
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))
@@ -1804,7 +1819,11 @@ defmodule Nx.Defn.GradTest do
       do: grad(t, &Nx.reduce_max(Nx.select(Nx.greater(&1, 0.0), Nx.exp(&1), Nx.cos(&1))))
 
     defn grad_sum_select_sum(t),
-      do: grad(t, &Nx.sum(Nx.select(Nx.greater(Nx.sum(&1, axes: [0]), 0.0), Nx.sum(&1, axes: [0]), 0.0)))
+      do:
+        grad(
+          t,
+          &Nx.sum(Nx.select(Nx.greater(Nx.sum(&1, axes: [0]), 0.0), Nx.sum(&1, axes: [0]), 0.0))
+        )
 
     test "computes gradient with sum+select" do
       lhs = grad_sum_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
@@ -1832,7 +1851,9 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes the gradient with sum+select+sum" do
-      lhs = grad_sum_select_sum(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
+      lhs =
+        grad_sum_select_sum(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
+
       rhs = Nx.tensor([[0.0, 1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0, 0.0]])
 
       compare_tensors!(lhs, rhs)
