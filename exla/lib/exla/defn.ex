@@ -382,16 +382,21 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:triangular_solve, [a, b, _opts], %{type: type}, _state) do
-    b_shape = EXLA.Op.get_shape(b).dims
+    case EXLA.Op.get_shape(b).dims do
+      {_} = b_shape ->
+        b =
+          b
+          |> to_type(type)
+          |> EXLA.Op.reshape(Tuple.append(b_shape, 1))
 
-    b =
-      b
-      |> to_type(type)
-      |> EXLA.Op.reshape(Tuple.append(b_shape, 1))
+        to_type(a, type)
+        |> EXLA.Op.triangular_solve(b, true, true, false, :none)
+        |> EXLA.Op.reshape(b_shape)
 
-    to_type(a, type)
-    |> EXLA.Op.triangular_solve(b, true, true, false, :none)
-    |> EXLA.Op.reshape(b_shape)
+      _ ->
+        to_type(a, type)
+        |> EXLA.Op.triangular_solve(to_type(b, type), true, true, false, :none)
+    end
   end
 
   defp to_operator(:lu, [{_, _, _}, _tensor, _opts], _ans, _state) do

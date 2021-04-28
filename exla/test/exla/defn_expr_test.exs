@@ -2545,6 +2545,10 @@ defmodule EXLA.DefnExprTest do
       a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
       b = Nx.tensor([4, 2, 4, 2])
       assert compare_tensors!(Nx.dot(a, ts(a, b)), b)
+
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([[1, 2, 3], [2, 2, 4], [2, 0, 1]])
+      assert compare_tensors!(Nx.dot(a, ts(a, b)), b)
     end
 
     defn qr(t), do: Nx.LinAlg.qr(t)
