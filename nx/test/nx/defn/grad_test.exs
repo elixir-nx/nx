@@ -396,6 +396,20 @@ defmodule Nx.Defn.GradTest do
              ) ==
                Nx.tensor([25.0, 115.0, 205.0])
     end
+
+    defn grad_batched_dot_rule_lhs(t1, t2) do
+      grad(t1, &Nx.sum(Nx.dot(&1, [1], [0], t2, [2], [0])))
+    end
+
+    test "computes the gradient with dot with batching" do
+      assert grad_batched_dot_rule_lhs(Nx.iota({3, 2, 4}, type: {:f, 32}), Nx.iota({3, 3, 2}, type: {:f, 32})) ==
+        Nx.tensor([[[ 6.0,  6.0,  6.0,  6.0],
+                    [ 9.0,  9.0,  9.0,  9.0]],
+                   [[24.0, 24.0, 24.0, 24.0],
+                    [27.0, 27.0, 27.0, 27.0]],
+                   [[42.0, 42.0, 42.0, 42.0],
+                    [45.0, 45.0, 45.0, 45.0]]])
+    end
   end
 
   describe "conv rule" do
