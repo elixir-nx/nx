@@ -6317,27 +6317,45 @@ defmodule Nx do
     case {tuple_size(s1), tuple_size(s2)} do
       {0, _} -> multiply(t1, t2)
       {_, 0} -> multiply(t1, t2)
-      {n, 1} -> dot(t1, [n - 1], t2, [0])
-      {1, m} -> dot(t1, [0], t2, [m - 2])
-      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], t2, [m - 2])
+      {n, 1} -> dot(t1, [n - 1], [], t2, [0], [])
+      {1, m} -> dot(t1, [0], [], t2, [m - 2], [])
+      {n, m} when n >= 2 and m >= 2 -> dot(t1, [n - 1], [], t2, [m - 2], [])
     end
   end
 
   @doc """
-  Computes the dot product of two tensors over the given axes.
+  Computes the generalized dot product bewteen two tensors, given
+  the contracting and batch axes.
 
   The dot product is computed by multiplying the values from `t1`
-  given by `axes1` against the values from `t2` given by `axes2`.
-  For instance, the first axis in `axes1` will be matched against
-  the first axis in `axes2` and so on. The axes given by `axes1`
-  and `axes2` are effectively removed from the final tensor, which
-  is why they are often called the contraction axes.
+  given by `contract_axes1` against the values from `t2` given by
+  `contract_axes2`, considering batch axes of `batch_axes1` and
+  `batch_axes2`. For instance, the first axis in `contract_axes1`
+  will be matched against the first axis in `contract_axes2` and
+  so on. The axes given by `contract_axes1` and `contract_axes2`
+  are effectively removed from the final tensor, which is why they
+  are often called the contraction axes.
+
+  If no contracting axes are given, the final product works like
+  `Nx.outer/2`.
+
+  Specifying batch axes will compute a vectorized dot product
+  along the given batch dimensions. The length of `batch_axes1`
+  and `batch_axes2` must match. Additionally, `batch_axes1` and
+  `batch_axes2` must be a list of successive dimension numbers,
+  where each batch axis matches the dimension of the corresponding
+  batch axis in the other input.
+
+  The contracting axes must be dot-product compatible and the
+  batch dimensions must always have the same number of elements.
 
   ## Examples
 
+  ### Contracting along axes
+
       iex> t1 = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
       iex> t2 = Nx.tensor([[10, 20], [30, 40]], names: [:height, :width])
-      iex> Nx.dot(t1, [0], t2, [0])
+      iex> Nx.dot(t1, [0], [], t2, [0], [])
       #Nx.Tensor<
         s64[y: 2][width: 2]
         [
@@ -6345,7 +6363,7 @@ defmodule Nx do
           [140, 200]
         ]
       >
-      iex> Nx.dot(t1, [0], t2, [1])
+      iex> Nx.dot(t1, [0], [], t2, [1], [])
       #Nx.Tensor<
         s64[y: 2][height: 2]
         [
@@ -6353,7 +6371,7 @@ defmodule Nx do
           [100, 220]
         ]
       >
-      iex> Nx.dot(t1, [1], t2, [0])
+      iex> Nx.dot(t1, [1], [], t2, [0], [])
       #Nx.Tensor<
         s64[x: 2][width: 2]
         [
@@ -6361,7 +6379,7 @@ defmodule Nx do
           [150, 220]
         ]
       >
-      iex> Nx.dot(t1, [1], t2, [1])
+      iex> Nx.dot(t1, [1], [], t2, [1], [])
       #Nx.Tensor<
         s64[x: 2][height: 2]
         [
@@ -6369,7 +6387,7 @@ defmodule Nx do
           [110, 250]
         ]
       >
-      iex> Nx.dot(t1, [0, 1], t2, [0, 1])
+      iex> Nx.dot(t1, [0, 1], [], t2, [0, 1], [])
       #Nx.Tensor<
         s64
         300
@@ -6379,7 +6397,7 @@ defmodule Nx do
 
       iex> t1 = Nx.tensor([[1, 2], [3, 4]])
       iex> t2 = Nx.tensor([[10, 20], [30, 40]])
-      iex> Nx.dot(t1, [], t2, [])
+      iex> Nx.dot(t1, [], [], t2, [], [])
       #Nx.Tensor<
         s64[2][2][2][2]
         [
@@ -6405,19 +6423,6 @@ defmodule Nx do
           ]
         ]
       >
-
-  """
-  @doc type: :ndim
-  def dot(t1, axes1, t2, axes2), do: dot(t1, axes1, [], t2, axes2, [])
-
-  @doc """
-  Computes the generalized dot product bewteen two tensors, given the contracting
-  and batch axes.
-
-  The contracting axes must be dot-product compatible and the batch dimensions must
-  always have the same number of elements.
-
-  ## Examples
 
   ### Dot product between two batched tensors
 
