@@ -971,6 +971,14 @@ defmodule NxTest do
     end
   end
 
+  describe "dot/6" do
+    test "works with batched dot and different size non-batch dims" do
+      t1 = Nx.iota({3, 2, 4, 1})
+      t2 = Nx.iota({3, 4, 2, 2})
+      assert Nx.dot(t1, [1, 2], [0], t2, [2, 1], [0]) == Nx.tensor([[[280, 308]], [[2200, 2292]], [[6168, 6324]]])
+    end
+  end
+
   describe "reverse/2" do
     test "does nothing when tensor is scalar" do
       t = Nx.tensor(1)

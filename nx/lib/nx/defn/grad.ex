@@ -380,27 +380,30 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp grad(:dot, [x, axes_x, _x_batch_axes, y, axes_y, _y_batch_axes], ans, g, cache) do
+  defp grad(:dot, [x, axes_x, x_batch_axes, y, axes_y, y_batch_axes], ans, g, cache) do
     g = Nx.broadcast(g, ans)
 
-    contract_gx = up_to(Nx.rank(x.shape) - length(axes_x), Nx.rank(g.shape))
-    contract_gy = up_to(0, Nx.rank(x.shape) - length(axes_x))
+    batch_gx = up_to(0, length(x_batch_axes))
+    batch_gy = up_to(0, length(y_batch_axes))
 
-    contract_x = Nx.axes(x.shape) -- axes_x
-    contract_y = Nx.axes(y.shape) -- axes_y
+    contract_gx = up_to(Nx.rank(x.shape) - length(axes_x), Nx.rank(g.shape))
+    contract_gy = up_to(length(y_batch_axes), Nx.rank(x.shape) - length(axes_x))
+
+    contract_x = (Nx.axes(x.shape) -- axes_x) -- batch_gx
+    contract_y = (Nx.axes(y.shape) -- axes_y) -- batch_gy
 
     transpose_x = Enum.map(argsort(axes_y), &Enum.fetch!(axes_x, &1))
     transpose_y = Enum.map(argsort(axes_x), &Enum.fetch!(axes_y, &1))
 
     gx =
       g
-      |> Nx.dot(contract_gx, [], y, contract_y, [])
-      |> Nx.transpose(axes: argsort(contract_x ++ transpose_x))
+      |> Nx.dot(contract_gx, batch_gx, y, contract_y, y_batch_axes)
+      |> Nx.transpose(axes: argsort(x_batch_axes ++ contract_x ++ transpose_x))
 
     gy =
       g
-      |> Nx.dot(contract_gy, [], x, contract_x, [])
-      |> Nx.transpose(axes: argsort(contract_y ++ transpose_y))
+      |> Nx.dot(contract_gy, batch_gy, x, contract_x, x_batch_axes)
+      |> Nx.transpose(axes: argsort(y_batch_axes ++ contract_y ++ transpose_y))
 
     grad_pairs([{x, gx}, {y, gy}], g, cache)
   end

@@ -506,7 +506,8 @@ defmodule Nx.BinaryBackend do
     {right_batch_shape, _right_batch_names} =
       Nx.Shape.contract(right_shape, right_batch_axes, right_names, false)
 
-    batch_item_length = Nx.size(left_batch_shape)
+    left_batch_item_length = Nx.size(left_batch_shape)
+    right_batch_item_length = Nx.size(right_batch_shape)
 
     batch_count = Nx.Shape.batch_count(left_shape, left_batch_axes)
 
@@ -517,13 +518,14 @@ defmodule Nx.BinaryBackend do
 
     bin_result =
       for index <- range do
-        offset = index * batch_item_length
+        left_offset = index * left_batch_item_length
+        right_offset = index * right_batch_item_length
 
-        left_offset_bits = offset * left_size
-        right_offset_bits = offset * right_size
+        left_offset_bits = left_offset * left_size
+        right_offset_bits = right_offset * right_size
 
-        left_batch_item_bits = batch_item_length * left_size
-        right_batch_item_bits = batch_item_length * right_size
+        left_batch_item_bits = left_batch_item_length * left_size
+        right_batch_item_bits = right_batch_item_length * right_size
 
         <<_::bitstring-size(left_offset_bits),
           left_batch_item_binary::bitstring-size(left_batch_item_bits),
