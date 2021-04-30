@@ -6325,6 +6325,33 @@ defmodule Nx do
 
   @doc """
   Computes the generalized dot product bewteen two tensors, given
+  the contracting axes.
+
+  This is equivalent to calling `Nx.dot/6` with no batching dimensions:
+
+      Nx.dot(t1, contract_axes1, [], t2, contract_axes2, [])
+
+  ## Examples
+
+      iex> t1 = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      iex> t2 = Nx.tensor([[10, 20], [30, 40]], names: [:height, :width])
+      iex> Nx.dot(t1, [0], t2, [0])
+      #Nx.Tensor<
+        s64[y: 2][width: 2]
+        [
+          [100, 140],
+          [140, 200]
+        ]
+      >
+
+  """
+  @doc type: :ndim
+  def dot(t1, contract_axes1, t2, contract_axes2) do
+    dot(t1, contract_axes1, [], t2, contract_axes2, [])
+  end
+
+  @doc """
+  Computes the generalized dot product between two tensors, given
   the contracting and batch axes.
 
   The dot product is computed by multiplying the values from `t1`
