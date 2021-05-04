@@ -323,36 +323,6 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Calculates the number of batches of a shape for the given axes.
-  It expects the batch_axes to have been normalized.
-
-  ## Examples
-
-    iex> Nx.Shape.batch_count({3, 4, 5}, [])
-    1
-    iex> Nx.Shape.batch_count({3, 4, 5}, [0])
-    3
-    iex> Nx.Shape.batch_count({3, 4, 5}, [0, 1])
-    12
-  """
-  def batch_count(shape, batch_axes) do
-    Enum.reduce(batch_axes, 1, fn axis, total -> elem(shape, axis) * total end)
-  end
-
-  @doc """
-  Shifts all the axes by n.
-  Used to re-normalize axes for batching.
-
-  ## Examples
-
-    iex > Nx.Shape.shift_axes([1, 2, 3], -1)
-    [0, 1, 2]
-  """
-  def shift_axes(axes, by) do
-    Enum.map(axes, fn axis -> axis + by end)
-  end
-
-  @doc """
   Transposes a shape according to the given permutation.
 
   ## Examples
@@ -1151,30 +1121,60 @@ defmodule Nx.Shape do
   defp alternate([h1 | tl1], [h2 | tl2]), do: [h1, h2 | alternate(tl1, tl2)]
 
   @doc """
-  Validates tensor shape compatibility for `Nx.dot/6`.
-
-  Returns the shape, the tensor names and the normalized axes
-  for both the contracting and the batching axes.
+  Calculates the output shape of a dot product.
   """
-  @spec dot(
-          left :: Nx.Tensor.t(),
-          contract_axes_left :: Nx.Tensor.axes(),
-          batch_axes_left :: Nx.Tensor.axes(),
-          right :: Nx.Tensor.t(),
-          contract_axes_right :: Nx.Tensor.axes(),
-          batch_axes_right :: Nx.Tensor.axes()
-        ) :: Nx.Tensor.shape() | no_return
-  def dot(
-        %Nx.Tensor{} = t1,
-        c1,
-        b1,
-        %Nx.Tensor{} = t2,
-        c2,
-        b2
-      ) do
-    %Nx.Tensor{shape: s1, names: names1} = t1
-    %Nx.Tensor{shape: s2, names: names2} = t2
+  def dot(s1, c1, names1, b1, s2, c2, names2, b2) do
+    validate_dot_axes!(s1, c1, b1, s2, c2, b2)
 
+    {batch_dims, batch_names, s1, c1, names1, s2, c2, names2} =
+      prep_dot_batch_output(s1, c1, names1, b1, s2, c2, names2, b2)
+
+    # zip reduce without the batched dimensions
+    {output_shape, output_names} = zip_reduce(s1, c1, names1, s2, c2, names2)
+
+    # re-add the batched dimensions.
+    if is_nil(batch_dims) do
+      {output_shape, output_names}
+    else
+      output_shape = Enum.reduce(Enum.reverse(batch_dims), output_shape, fn x, acc -> Tuple.insert_at(acc, 0, x) end)
+      output_names = batch_names ++ output_names
+      {output_shape, output_names}
+    end
+  end
+
+  defp prep_dot_batch_output(s1, c1, names1, b1, s2, c2, names2, b2) do
+    case {b1, b2} do
+      {[], []} ->
+        {nil, nil, s1, c1, names1, s2, c2, names2}
+
+      {b1, b2} ->
+        batch_dims = Enum.map(b1, &elem(s1, &1))
+        batch_names = Enum.map(b1, &Enum.at(names1, &1))
+        {s1, c1, names1} = shift_left_for_batch(s1, c1, b1, names1)
+        {s2, c2, names2} = shift_left_for_batch(s2, c2, b2, names2)
+        {batch_dims, batch_names, s1, c1, names1, s2, c2, names2}
+    end
+  end
+
+  defp shift_left_for_batch(shape, contract_axes, batch_axes, names) do
+    non_batch_shapes =
+      batch_axes
+      |> Enum.reduce(shape, fn _, acc -> Tuple.delete_at(acc, 0) end)
+
+    contract_axes = shift_left_axes(contract_axes, length(batch_axes))
+
+    names =
+      batch_axes
+      |> Enum.reduce(names, fn _, [_ | tail] -> tail end)
+
+    {non_batch_shapes, contract_axes, names}
+  end
+
+  defp shift_left_axes(axes, num_batch_dims) do
+    Enum.map(axes, fn a -> a - num_batch_dims end)
+  end
+
+  defp validate_dot_axes!(s1, c1, b1, s2, c2, b2) do
     left_batched? = b1 != []
     right_batched? = b2 != []
 
@@ -1186,71 +1186,47 @@ defmodule Nx.Shape do
       raise ArgumentError, "right tensor must be batched if left tensor is batched"
     end
 
+    # batch axes must be increasing starting from 0
+    valid_batch_axes = Enum.to_list(0..(length(b1) - 1))
+
     # ensure normalized batch axis of left is valid value
-    if left_batched? and b1 != [0] do
-      msg = bad_batch_axis_message("left", names1, b1)
-      raise ArgumentError, msg
+    if left_batched? and b1 != valid_batch_axes do
+      raise ArgumentError,
+            "invalid dot batch axis for the left tensor, batch axes must be successive" <>
+              " dimensions starting from 0, got #{inspect(b1)}"
     end
 
     # ensure normalized batch axis of right is valid value
-    if right_batched? and b2 != [0] do
-      msg = bad_batch_axis_message("right", names2, b2)
-      raise ArgumentError, msg
+    if right_batched? and b2 != valid_batch_axes do
+      raise ArgumentError,
+            "invalid dot batch axis for the right tensor, batch axes must be successive" <>
+              " dimensions starting from 0, got #{inspect(b2)}"
     end
 
-    b1_count = Nx.Shape.batch_count(s1, b1)
-    b2_count = Nx.Shape.batch_count(s2, b2)
+    b1_sizes = Enum.map(b1, &elem(s1, &1))
+    b2_sizes = Enum.map(b2, &elem(s2, &1))
 
     # ensure batch dim sizes match if both tensors are batched
-    if left_batched? and right_batched? and b1_count != b2_count do
+    if left_batched? and right_batched? and b1_sizes != b2_sizes do
       raise ArgumentError,
             "dot batch dimension sizes must match, but the left " <>
-              "batch dimension of axes #{render_normalized_axes(names1, b1)} has #{b1_count} elements " <>
-              "and the right batch dimension of axes #{render_normalized_axes(names2, b2)} has #{
-                b2_count
-              } elements"
+              "batch dimension of axes #{inspect(b1)} has dimension sizes #{inspect(b1_sizes)}" <>
+              "and the right batch dimension of axes #{inspect(b2)} has sizes #{inspect(b2_sizes)}"
     end
 
     # ensure there is no conflict between left batch axes and left contract axes
     if left_batched? and Enum.any?(b1, &(&1 in c1)) do
-      raise ArgumentError,
-            batch_vs_contract_conflict_message("left", names1, b1, c1)
+      raise ArgumentError, "dot batch axes for left tensor (#{inspect(b1)}) cannot be in contract axes"
+                           <> " (#{inspect(c1)})"
     end
 
     # ensure there is no conflict between right batch axis and right contract axes
     if right_batched? and Enum.any?(b2, &(&1 in c2)) do
-      raise ArgumentError,
-            batch_vs_contract_conflict_message("right", names2, b2, c2)
+      raise ArgumentError, "dot batch axes for right tensor (#{inspect(b2)}) cannot be in contract axes"
+                           <> " (#{inspect(c2)})"
     end
 
-    {s1, s2}
-  end
-
-  defp bad_batch_axis_message(side, names, batch_norm) do
-    "invalid dot batch axis for the #{side} tensor - only batch axis 0 is supported, but got #{
-      render_normalized_axes(names, batch_norm)
-    }"
-  end
-
-  defp batch_vs_contract_conflict_message(
-         side,
-         names,
-         batch_norm,
-         contract_norm
-       ) do
-    "dot batch axes #{render_normalized_axes(names, batch_norm)} for the #{side} tensor cannot " <>
-      "be in the contract axes #{render_normalized_axes(names, contract_norm)}"
-  end
-
-  defp render_normalized_axes(names, normalized) do
-    normalized
-    |> Enum.map(fn ax ->
-      case Enum.fetch!(names, ax) do
-        nil -> ax
-        name -> name
-      end
-    end)
-    |> inspect()
+    :ok
   end
 
   @doc """
@@ -1335,18 +1311,14 @@ defmodule Nx.Shape do
   def solve({n, n}, b_shape) do
     raise(
       ArgumentError,
-      "`b` tensor has incompatible dimensions, expected #{inspect({n, n})} or {#{n}}, got: #{
-        inspect(b_shape)
-      }"
+      "`b` tensor has incompatible dimensions, expected #{inspect({n, n})} or {#{n}}, got: #{inspect(b_shape)}"
     )
   end
 
   def solve(a_shape, _b_shape) do
     raise(
       ArgumentError,
-      "`a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: #{
-        inspect(a_shape)
-      }"
+      "`a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: #{inspect(a_shape)}"
     )
   end
 

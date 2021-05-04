@@ -495,10 +495,11 @@ defmodule Nx.BinaryBackend do
     left_binary = to_binary(left)
     right_binary = to_binary(right)
 
-    left_batch_contract_axes = Nx.Shape.shift_axes(left_contract_axes, -length(left_batch_axes))
+    left_batch_contract_axes =
+      Enum.map(left_contract_axes, fn axis -> axis - length(left_batch_axes) end)
 
     right_batch_contract_axes =
-      Nx.Shape.shift_axes(right_contract_axes, -length(right_batch_axes))
+      Enum.map(right_contract_axes, fn axis -> axis - length(right_batch_axes) end)
 
     {left_batch_shape, _left_batch_names} =
       Nx.Shape.contract(left_shape, left_batch_axes, left_names, false)
@@ -509,9 +510,9 @@ defmodule Nx.BinaryBackend do
     left_batch_item_length = Nx.size(left_batch_shape)
     right_batch_item_length = Nx.size(right_batch_shape)
 
-    batch_count = Nx.Shape.batch_count(left_shape, left_batch_axes)
+    batch_count = Enum.reduce(left_batch_axes, 1, fn x, acc -> elem(left_shape, x) * acc end) - 1
 
-    range = if batch_count == 0, do: [], else: 0..(batch_count - 1)
+    range = if batch_count == 0, do: [], else: 0..batch_count
 
     left_batch_item_template = %{left | shape: left_batch_shape}
     right_batch_item_template = %{right | shape: right_batch_shape}
