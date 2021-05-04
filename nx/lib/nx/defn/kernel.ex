@@ -234,6 +234,13 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Vectorizes `fun` over given `args`.
+  """
+  def vmap(fun, args, in_axes \\ nil) when is_function(fun) do
+    Nx.Defn.Vectorize.transform(fun, args, in_axes)
+  end
+
+  @doc """
   Computes the value and gradient of the given `var` on `fun`.
 
   It returns a tuple with the value and the gradient.
