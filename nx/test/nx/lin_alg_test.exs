@@ -31,6 +31,26 @@ defmodule Nx.LinAlgTest do
         Nx.LinAlg.norm(t, ord: -3)
       end)
     end
+
+    test "returns 0 for a zero vector" do
+      t = Nx.broadcast(0.0, {2})
+      ords = [nil, :inf, :neg_inf, 0, 1, 2, 3]
+
+      Enum.each(ords, fn ord ->
+        float_norm = t |> Nx.LinAlg.norm(ord: ord) |> Nx.as_type({:f, 32})
+        assert float_norm == Nx.tensor(0.0)
+      end)
+    end
+
+    test "returns 0 for a zero matrix" do
+      t = Nx.broadcast(0.0, {2, 2})
+      ords = [nil, :nuclear, :frobenius, :inf, :neg_inf, 1, -1, 2, -2]
+
+      Enum.each(ords, fn ord ->
+        float_norm = t |> Nx.LinAlg.norm(ord: ord) |> Nx.as_type({:f, 32})
+        assert float_norm == Nx.tensor(0.0)
+      end)
+    end
   end
 
   describe "qr" do
