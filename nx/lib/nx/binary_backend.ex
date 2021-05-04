@@ -1789,6 +1789,21 @@ defmodule Nx.BinaryBackend do
     from_binary(output, new_data)
   end
 
+  ## Control flow
+
+  @impl true
+  def while(_, cond_fn, body_fn, init_value) do
+    do_while(init_value, cond_fn, body_fn)
+  end
+
+  defp do_while(value, cond_fn, body_fn) do
+    if cond_fn.(value) == Nx.tensor(1, type: {:u, 8}) do
+      do_while(body_fn.(value), cond_fn, body_fn)
+    else
+      value
+    end
+  end
+
   ## Binary reducers
 
   defp bin_reduce(tensor, type, acc, opts, fun) do

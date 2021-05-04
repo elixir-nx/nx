@@ -7748,6 +7748,80 @@ defmodule Nx do
     )
   end
 
+  @doc """
+  Repeatedly performs `body_fn` on initial value
+  `init_val` while `cond_fn` is true.
+
+  This method can be thought of as a `reduce_while` starting
+  from an infinite stream:
+
+      Stream.iterate(0, & &1)
+      |> Enum.reduce_while(init_value, fn _, val ->
+          if cond_fn.(val) do
+            {:halt, val}
+          else
+            {:cont, body_fn.(val)}
+          end
+        )
+
+  Or as a recursive function:
+
+      def while(value, cond_fn, body_fn) do
+        if cond_fn.(value) do
+          while(body_fn.(value), cond_fn, body_fn)
+        else
+          value
+        end
+      end
+
+  The loop will repeatedly apply `body_fn.(val)` while
+  `cond_fn.(val)` is true.
+
+  ## Examples
+
+      iex> Nx.while(Nx.tensor(0), &Nx.less(&1, 10), fn x -> Nx.add(x, 1) end)
+      #Nx.Tensor<
+        s64
+        10
+      >
+
+  It also supports tuples of initial values:
+
+      iex> {i, sum} = Nx.while({Nx.tensor(0), Nx.tensor(0)},
+      ...>  fn {i, _} -> Nx.less(i, 10) end,
+      ...>  fn {i, sum} -> {Nx.add(i, 1), Nx.add(i, sum)} end
+      ...> )
+      iex> i
+      #Nx.Tensor<
+        s64
+        10
+      >
+      iex> sum
+      #Nx.Tensor<
+        s64
+        45
+      >
+  """
+  @doc type: :control
+  def while(init_value, cond_fn, body_fn) do
+    {tensor, out} =
+      case init_value do
+        ts when is_tuple(ts) ->
+          out =
+            ts
+            |> Tuple.to_list()
+            |> Enum.map(&to_tensor/1)
+            |> List.to_tuple()
+          {elem(out, 0), out}
+
+        t ->
+          out = to_tensor(t)
+          {out, out}
+      end
+
+    impl!(tensor).while(out, cond_fn, body_fn, init_value)
+  end
+
   ## Helpers
 
   defp backend!(backend) when is_atom(backend),

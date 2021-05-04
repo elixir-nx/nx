@@ -94,6 +94,8 @@ defmodule Nx.Backend do
   @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor, keyword) :: tensor
   @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
+  @callback while(out :: tuple | tensor, cond_fn :: fun, body_fn :: fun, value :: tuple | tensor) :: tuple | tensor
+
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
