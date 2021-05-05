@@ -4,6 +4,9 @@ defmodule Nx.Defn.ExprTest do
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
 
+  import Nx.Defn
+  @default_defn_compiler Nx.Defn.Identity
+
   describe "scalar optimizations" do
     test "broadcast" do
       assert %T{data: %Expr{op: :scalar, args: [1.0]}, type: {:f, 32}, shape: {1, 2, 3}} =
@@ -311,6 +314,28 @@ defmodule Nx.Defn.ExprTest do
                b = any? [ a, axes: nil, keep_axes: false ]     u8
                d = cond [ b -> {a, c}, :otherwise -> {c, a} ]  tuple2
                e = elem [ d, 1, 2 ]                            s64
+             >\
+             """
+    end
+
+    defn factorial(x) do
+      {factorial, _} =
+        while {factorial = 1.0, x}, Nx.greater(x, 1) do
+          {factorial * x, x - 1}
+        end
+
+      factorial
+    end
+
+    test "with while" do
+      assert inspect(factorial(Nx.template({}, {:f, 32})), safe: false) == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a             f32
+               b = while [ {1.0, a} ]  tuple2
+               c = elem [ b, 0, 2 ]    f32
              >\
              """
     end

@@ -2,24 +2,13 @@ defmodule Nx.DefnTest do
   use ExUnit.Case, async: true
 
   alias Nx.Tensor, as: T
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Expr, Identity, Evaluator}
   alias Nx.DefnTest.Sample
   import Nx.Defn
 
   defmacrop location(plus) do
     file = Path.relative_to_cwd(__CALLER__.file)
     quote do: "#{unquote(file)}:#{unquote(__CALLER__.line) + unquote(plus)}"
-  end
-
-  defmodule Identity do
-    @behaviour Nx.Defn.Compiler
-
-    def __async__(_, _, _, _), do: raise("not implemented")
-
-    def __jit__(key, vars, fun, _opts) do
-      Process.put(__MODULE__, key)
-      fun.(vars)
-    end
   end
 
   @default_defn_compiler Identity
@@ -372,6 +361,8 @@ defmodule Nx.DefnTest do
   describe "reduce ops" do
     defn reduce(t1, acc), do: Nx.reduce(t1, acc, fn x, y -> x + y end)
 
+    defn reduce_static(t1, acc), do: Nx.reduce(t1, acc, fn _, _ -> 0 end)
+
     defn reduce_invalid(t1, amplifier), do: Nx.reduce(t1, 0, fn x, y -> x * amplifier + y end)
 
     defn reduce_non_scalar(t1), do: Nx.reduce(t1, 0, fn x, y -> Nx.broadcast(x * y, {1, 1}) end)
@@ -393,6 +384,24 @@ defmodule Nx.DefnTest do
                type: {:f, 64},
                shape: {3}
              } = reduce_with_opts(Nx.tensor([[1], [2], [3]]), 0)
+
+      assert %T{data: %Expr{op: :fun}} = fun
+    end
+
+    test "reduces with constant" do
+      assert %{
+               data: %Expr{op: :reduce, args: [_, _, [axes: nil, keep_axes: false], fun]},
+               type: {:s, 64},
+               shape: {}
+             } = reduce_static(Nx.tensor([1, 2, 3]), 0)
+
+      assert %T{data: %Expr{op: :fun}} = fun
+
+      assert %{
+               data: %Expr{op: :reduce, args: [_, _, [axes: nil, keep_axes: false], fun]},
+               type: {:f, 32},
+               shape: {}
+             } = reduce_static(Nx.tensor([1, 2, 3]), 0.0)
 
       assert %T{data: %Expr{op: :fun}} = fun
     end
@@ -596,6 +605,41 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "lu" do
+    defn lu(t), do: Nx.LinAlg.lu(t)
+
+    test "returns tuples" do
+      assert {p, l, u} = lu(Nx.iota({3, 3}))
+
+      assert %T{data: %Expr{op: :elem, args: [lu_expr, 0, 3]}, shape: {3, 3}} = p
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 1, 3]}, shape: {3, 3}} = l
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 2, 3]}, shape: {3, 3}} = u
+    end
+  end
+
+  describe "qr" do
+    defn qr(t), do: Nx.LinAlg.qr(t)
+
+    test "returns tuples" do
+      assert {left, right} = qr(Nx.iota({3, 2}))
+
+      assert %T{data: %Expr{op: :elem, args: [qr_expr, 0, 2]}, shape: {3, 2}} = left
+      assert %T{data: %Expr{op: :elem, args: [^qr_expr, 1, 2]}, shape: {2, 2}} = right
+    end
+  end
+
+  describe "svd" do
+    defn svd(t), do: Nx.LinAlg.svd(t)
+
+    test "returns tuples" do
+      assert {u, s, vt} = svd(Nx.iota({3, 3}))
+
+      assert %T{data: %Expr{op: :elem, args: [svd_expr, 0, 3]}, shape: {3, 3}} = u
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 1, 3]}, shape: {3}} = s
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 2, 3]}, shape: {3, 3}} = vt
+    end
+  end
+
   describe "macros" do
     defmodule Macros do
       defmacro add(a, b) do
@@ -697,10 +741,19 @@ defmodule Nx.DefnTest do
 
     defn add_two_unknown(a, b), do: Nx.DefnTest.unknown(a, b)
 
-    test "invalid remote" do
+    def not_defn(a, b), do: Nx.add(a, b)
+    defn add_two_not_defn(a, b), do: Nx.DefnTest.not_defn(a, b)
+
+    test "undefined remote" do
       assert_raise UndefinedFunctionError,
                    "function Nx.DefnTest.unknown/2 is undefined or private",
                    fn -> add_two_unknown(1, 2) end
+    end
+
+    test "not defn remote" do
+      assert_raise RuntimeError,
+                   "cannot invoke Nx.DefnTest.not_defn/2 inside defn because it was not defined with defn",
+                   fn -> add_two_not_defn(1, 2) end
     end
   end
 
@@ -729,41 +782,6 @@ defmodule Nx.DefnTest do
                  Nx.tensor([1, 2], names: [:y]),
                  Nx.tensor([[3], [4]], names: [:x, nil])
                )
-    end
-  end
-
-  describe "lu" do
-    defn lu(t), do: Nx.LinAlg.lu(t)
-
-    test "returns tuples" do
-      assert {p, l, u} = lu(Nx.iota({3, 3}))
-
-      assert %T{data: %Expr{op: :elem, args: [lu_expr, 0, 3]}, shape: {3, 3}} = p
-      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 1, 3]}, shape: {3, 3}} = l
-      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 2, 3]}, shape: {3, 3}} = u
-    end
-  end
-
-  describe "qr" do
-    defn qr(t), do: Nx.LinAlg.qr(t)
-
-    test "returns tuples" do
-      assert {left, right} = qr(Nx.iota({3, 2}))
-
-      assert %T{data: %Expr{op: :elem, args: [qr_expr, 0, 2]}, shape: {3, 2}} = left
-      assert %T{data: %Expr{op: :elem, args: [^qr_expr, 1, 2]}, shape: {2, 2}} = right
-    end
-  end
-
-  describe "svd" do
-    defn svd(t), do: Nx.LinAlg.svd(t)
-
-    test "returns tuples" do
-      assert {u, s, vt} = svd(Nx.iota({3, 3}))
-
-      assert %T{data: %Expr{op: :elem, args: [svd_expr, 0, 3]}, shape: {3, 3}} = u
-      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 1, 3]}, shape: {3}} = s
-      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 2, 3]}, shape: {3, 3}} = vt
     end
   end
 
@@ -829,6 +847,76 @@ defmodule Nx.DefnTest do
         end
       end
     end
+
+    test "raises if given a non-scalar as condition" do
+      assert_raise CompileError, ~r"condition must be a scalar tensor, got shape: \{2\}", fn ->
+        cond4(Nx.tensor([0, 0]), Nx.tensor(1), Nx.tensor(2), Nx.tensor(3))
+      end
+    end
+  end
+
+  describe "while/3" do
+    defn upto10(x) do
+      while x, Nx.less(x, 10) do
+        x + 1
+      end
+    end
+
+    test "simple" do
+      assert %T{
+               data: %Expr{op: :while, args: [initial, condition, body]},
+               shape: {},
+               type: {:s, 64}
+             } = upto10(Nx.tensor(0))
+
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = initial
+      assert %T{data: %Expr{op: :fun}, shape: {}, type: {:u, 8}} = condition
+      assert %T{data: %Expr{op: :fun}, shape: {}, type: {:s, 64}} = body
+    end
+
+    defn while_mixed(a, b) do
+      while a, Nx.less(a, 10) do
+        a + b
+      end
+    end
+
+    test "raises on mixed context" do
+      assert_raise RuntimeError,
+                   ~r"cannot build defn because expressions come from different contexts: :root and :while",
+                   fn -> while_mixed(Nx.tensor(0), Nx.tensor(1)) end
+    end
+
+    test "raises if non-variable is given as pattern" do
+      assert_raise ArgumentError,
+                   ~r"invalid initial argument for \"while\". Expected a variable, a variable assignment, or a tuple of the same",
+                   fn ->
+                     defmodule InvalidWhile do
+                       defn upto(a) do
+                         while :foo, Nx.less(a, 10) do
+                           a + 1
+                         end
+                       end
+                     end
+                   end
+    end
+
+    test "raises if non-block is given" do
+      assert_raise ArgumentError,
+                   ~r"expected third argument to \"while\" to be a do block, got: a \+ 1",
+                   fn ->
+                     defmodule InvalidWhile do
+                       defn upto(a) do
+                         while(:foo, Nx.less(a, 10), a + 1)
+                       end
+                     end
+                   end
+    end
+
+    test "raises if given a non-scalar as condition" do
+      assert_raise CompileError, ~r"condition must be a scalar tensor, got shape: \{2\}", fn ->
+        upto10(Nx.tensor([0, 0]))
+      end
+    end
   end
 
   describe "transform" do
@@ -868,13 +956,13 @@ defmodule Nx.DefnTest do
              """
     end
 
-    @defn_compiler Nx.Defn.Evaluator
+    @defn_compiler Evaluator
     defn transform_back_and_forth(a) do
       Nx.exp(transform(Nx.negate(a), &private_back_and_forth/1))
     end
 
     defp private_back_and_forth(a) do
-      Nx.Defn.Evaluator = Nx.Defn.Compiler.current()
+      Evaluator = Nx.Defn.Compiler.current()
       final_back_and_forth(a)
     end
 
@@ -885,7 +973,7 @@ defmodule Nx.DefnTest do
                Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
     end
 
-    @defn_compiler Nx.Defn.Evaluator
+    @defn_compiler Evaluator
     defn transform_variable_access(a, b) do
       transform(:ok, fn :ok -> a + b end)
     end
@@ -899,7 +987,7 @@ defmodule Nx.DefnTest do
     defn defn_jit({a, b}, c), do: a + b - c
 
     def elixir_jit({a, b}, c) do
-      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Identity]
+      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Identity]
       a |> Nx.add(b) |> Nx.subtract(c)
     end
 
@@ -925,7 +1013,7 @@ defmodule Nx.DefnTest do
       assert_raise ArgumentError,
                    "defn must return a tensor expression or a tuple, got: :ok",
                    fn ->
-                     Nx.Defn.jit(fn -> :ok end, [], compiler: Nx.Defn.Evaluator).()
+                     Nx.Defn.jit(fn -> :ok end, [], compiler: Evaluator).()
                    end
     end
 
@@ -943,7 +1031,7 @@ defmodule Nx.DefnTest do
     defn defn_async({a, b}, c), do: a + b - c
 
     def elixir_async({a, b}, c) do
-      true = Process.get(Nx.Defn.Compiler) in [Nx.Defn.Evaluator, Identity]
+      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Identity]
       a |> Nx.add(b) |> Nx.subtract(c)
     end
 
@@ -1070,7 +1158,7 @@ defmodule Nx.DefnTest do
     end
   end
 
-  @default_defn_compiler Nx.Defn.Evaluator
+  @default_defn_compiler Evaluator
 
   describe "default arguments" do
     defn sum_axis_opts(a, opts \\ []), do: Nx.sum(a, opts)

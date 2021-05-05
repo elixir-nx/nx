@@ -385,11 +385,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def while_loop(%Computation{ref: cond_fn}, %Computation{ref: body_fn}, %Op{
-        builder: builder,
-        ref: init_value
-      }) do
-    ref = EXLA.NIF.while_loop(cond_fn, body_fn, init_value)
+  def while(
+        %Computation{ref: cond_fn},
+        %Computation{ref: body_fn},
+        %Op{builder: builder, ref: init_value}) do
+    ref = EXLA.NIF.while(cond_fn, body_fn, init_value)
     %Op{builder: builder, ref: ref}
   end
 

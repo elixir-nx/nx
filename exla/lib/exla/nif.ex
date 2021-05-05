@@ -130,7 +130,7 @@ defmodule EXLA.NIF do
   def map(_builder, _operand, _computation, _dimensions),
     do: :erlang.nif_error(:undef)
 
-  def while_loop(_cond_fn, _body_fn, _init_value),
+  def while(_cond_fn, _body_fn, _init_value),
     do: :erlang.nif_error(:undef)
 
   def reshape(_operand, _dimensions),

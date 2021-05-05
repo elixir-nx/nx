@@ -39,6 +39,13 @@ defmodule Nx.Defn.Tree do
     {[clauses, last], acc}
   end
 
+  def traverse_args(%T{data: %Expr{op: :while, args: [initial, conditional, block]}}, acc, fun) do
+    {initial, acc} = composite(initial, acc, fun)
+    {conditional, acc} = fun.(conditional, acc)
+    {block, acc} = composite(block, acc, fun)
+    {[initial, conditional, block], acc}
+  end
+
   def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
     {list, acc} = Enum.map_reduce(list, acc, fun)
     {[list | args], acc}
@@ -87,13 +94,8 @@ defmodule Nx.Defn.Tree do
     {List.to_tuple(list), acc}
   end
 
-  def composite(%T{} = expr, acc, fun) when is_function(fun, 2) do
+  def composite(expr, acc, fun) when is_function(fun, 2) do
     fun.(expr, acc)
-  end
-
-  def composite(other, _acc, _fun) do
-    raise ArgumentError,
-          "expected a tensor expression or a tuple of tensor expressions, got: #{inspect(other)}"
   end
 
   ## Type helpers
@@ -154,10 +156,10 @@ defmodule Nx.Defn.Tree do
     Nx.as_type(t, type_fun.(t.type))
   end
 
-  defp rewrite_type(:fun, [params, _expr, fun], _t, type_fun) do
+  defp rewrite_type(:fun, [params, _expr, fun], t, type_fun) do
     {:arity, arity} = Function.info(fun, :arity)
-    params = Enum.map(params, &%{&1 | type: type_fun.(&1.type)})
-    Expr.fun(params, rewrite_type_fun(arity, fun, type_fun))
+    params = Enum.map(params, fn param -> composite(param, &%{&1 | type: type_fun.(&1.type)}) end)
+    Expr.fun(params, t.data.context, rewrite_type_fun(arity, fun, type_fun))
   end
 
   defp rewrite_type(:tensor, [arg], t, type_fun) do
