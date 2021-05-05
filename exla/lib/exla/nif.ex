@@ -123,9 +123,14 @@ defmodule EXLA.NIF do
         _padding_config,
         _source,
         _init_value,
-        _scatter_fn), do: :erlang.nif_error(:undef)
+        _scatter_fn
+      ),
+      do: :erlang.nif_error(:undef)
 
   def map(_builder, _operand, _computation, _dimensions),
+    do: :erlang.nif_error(:undef)
+
+  def while_loop(_cond_fn, _body_fn, _init_value),
     do: :erlang.nif_error(:undef)
 
   def reshape(_operand, _dimensions),
@@ -187,11 +192,21 @@ defmodule EXLA.NIF do
   def get_host_client(_num_replicas, _intra_op_parallelism_threads),
     do: :erlang.nif_error(:undef)
 
-  def get_cuda_client(_num_replicas, _intra_op_parallelism_threads, _memory_fraction, _preallocate),
-    do: :erlang.nif_error(:undef)
+  def get_cuda_client(
+        _num_replicas,
+        _intra_op_parallelism_threads,
+        _memory_fraction,
+        _preallocate
+      ),
+      do: :erlang.nif_error(:undef)
 
-  def get_rocm_client(_num_replicas, _intra_op_parallelism_threads, _memory_fraction, _preallocate),
-    do: :erlang.nif_error(:undef)
+  def get_rocm_client(
+        _num_replicas,
+        _intra_op_parallelism_threads,
+        _memory_fraction,
+        _preallocate
+      ),
+      do: :erlang.nif_error(:undef)
 
   def get_supported_platforms, do: :erlang.nif_error(:undef)
 
