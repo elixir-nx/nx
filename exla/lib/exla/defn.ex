@@ -185,9 +185,7 @@ defmodule EXLA.Defn do
     {initial, cache} = recur_composite(initial, state, cache)
     condition = to_computation(condition, {:pred, 8}, state)
     body = to_computation(body, :any, state)
-    op = EXLA.Op.while(condition, body, initial)
-    IO.inspect EXLA.Op.get_shape(op)
-    {op, cache}
+    {EXLA.Op.while(condition, body, initial), cache}
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do

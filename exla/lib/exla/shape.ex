@@ -8,9 +8,7 @@ defmodule EXLA.Shape do
   @enforce_keys [:ref, :dims, :dtype]
   defstruct [:ref, :dims, :dtype]
 
-  @doc """
-  Gets shape information from given shape reference.
-  """
+  @doc false
   def get_shape_info(ref) when is_reference(ref) do
     case EXLA.NIF.get_shape_info(ref) |> unwrap!() do
       {dims_term, type_str} ->
