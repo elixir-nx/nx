@@ -728,7 +728,9 @@ defmodule Nx.Defn.Expr do
       raise "argsort comparator must return a predicate type, got: #{inspect(fun.type)}"
     end
 
-    expr(out, context, :argsort, [tensor, opts, fun])
+    opts = put_in(opts[:comparator_fun], fun)
+
+    expr(out, context, :argsort, [tensor, opts])
   end
 
   defp to_nx_comparator(:asc), do: &Nx.less_equal/2

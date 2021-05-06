@@ -728,8 +728,9 @@ defmodule EXLA.Defn do
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
-  defp to_operator(:argsort, [tensor, opts, comparator], ans, state) do
+  defp to_operator(:argsort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
+    comparator = opts[:comparator_fun]
 
     # Grow the comparator to arity 4 because argsort uses
     # variadic_sort underneath

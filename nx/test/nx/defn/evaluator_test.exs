@@ -168,6 +168,15 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
+  describe "argsort/2" do
+    defn argsort(x), do: Nx.argsort(x)
+
+    test "simple" do
+      t = Nx.tensor([3, 1, 2])
+      assert argsort(t) == Nx.tensor([1, 2, 0])
+    end
+  end
+
   describe "anonymous functions args" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
