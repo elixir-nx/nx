@@ -688,14 +688,11 @@ defmodule EXLA.Defn do
     EXLA.Op.clamp(operand, min, max)
   end
 
-  defp to_operator(:slice, [tensor, start_indices, lengths, strides], _ans, _state) do
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    limit_indices =
-      start_indices
-      |> Enum.zip(lengths)
-      |> Enum.map(fn {i, len} -> i + len end)
+  defp to_operator(:slice, [tensor, start_indices, lengths, strides], ans, _state) do
+    zeros = List.duplicate(0, tuple_size(ans.shape))
+    slice = EXLA.Op.dynamic_slice(tensor, start_indices, lengths)
 
-    EXLA.Op.slice(tensor, start_indices, limit_indices, strides)
+    EXLA.Op.slice(slice, zeros, lengths, strides)
   end
 
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do

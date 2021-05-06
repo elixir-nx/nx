@@ -1601,12 +1601,20 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def slice(out, tensor, start_indices, _lengths, strides) do
+  def slice(out, tensor, start_indices, lengths, strides) do
     # If you think of a slice as drawing a bounding box in the dimensions
     # of the tensor, then it's clear we can simply use a weighted
     # traversal to construct the new tensor
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
+
+    start_indices =
+      [Tuple.to_list(shape), start_indices, lengths]
+      |> Enum.zip()
+      |> Enum.map(fn {dim_size, idx, len} ->
+          idx = to_scalar(idx)
+          min(max(idx, 0), dim_size - len)
+      end)
 
     if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
@@ -1629,6 +1637,41 @@ defmodule Nx.BinaryBackend do
 
       output_data =
         IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
+
+      from_binary(out, output_data)
+    end
+  end
+
+  @impl true
+  def put_slice(out, tensor, slice, start_indices) do
+    %T{type: {_, size}, shape: shape} = as_type(out, tensor)
+    %T{type: {_, slice_size}, shape: slice_shape} = as_type(out, slice)
+
+    %{shape: output_shape} = out
+
+    start_indices =
+      [Tuple.to_list(shape), start_indices, Tuple.to_list(slice_shape)]
+      |> Enum.zip()
+      |> Enum.map(fn {dim_size, idx, len} ->
+          idx = to_scalar(idx)
+          min(max(idx, 0), dim_size - len)
+      end)
+
+    if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
+      offset = Nx.size(output_shape) * size
+      slice_offset = Nx.size(slice_shape) * slice_size
+      <<start::size(offset)-bitstring, _::size(slice_offset)-bitstring, rest::bitstring>> = to_binary(tensor)
+      output_data = IO.iodata_to_binary([start, to_binary(slice), rest])
+      from_binary(out, output_data)
+    else
+      # Anchored around the start indices
+      weighted_shape = weighted_shape(shape, size, output_shape)
+      offset = weighted_offset(weighted_shape, start_indices)
+      slice_offset = Nx.shape(slice_shape) * slice_size
+
+      <<start::size(offset)-bitstring, _::size(slice_offset)-bitstring, rest::bitstring>> = to_binary(tensor)
+
+      output_data = IO.iodata_to_binary([start, to_binary(slice), rest])
 
       from_binary(out, output_data)
     end

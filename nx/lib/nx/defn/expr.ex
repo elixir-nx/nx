@@ -601,7 +601,7 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def slice(out, tensor, start, lengths, strides) do
-    tensor = to_expr(tensor)
+    {[tensor | start], context} = to_exprs([tensor | start])
 
     # If we are in a sequence of slices, it is the access syntax,
     # so we compact them into a single slice.
@@ -619,7 +619,8 @@ defmodule Nx.Defn.Expr do
       |> Nx.slice(start, lengths)
       |> Nx.squeeze(axes: axes)
     else
-      _ -> expr(out, tensor.data.context, :slice, [tensor, start, lengths, strides])
+      _ ->
+        expr(out, context, :slice, [tensor, start, lengths, strides])
     end
   end
 
@@ -637,7 +638,7 @@ defmodule Nx.Defn.Expr do
     else
       [s | start] = start
       [l | lengths] = lengths
-      [{is + s, l} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
+      [{Nx.add(is, 1), l} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
     end
   end
 

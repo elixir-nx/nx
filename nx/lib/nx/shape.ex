@@ -1001,8 +1001,8 @@ defmodule Nx.Shape do
 
   ### Error cases
 
-      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [2, 1, 1], [1, 1, 1])
-      ** (ArgumentError) start index + length at axis 0 must be less than axis size of 2, got: 3
+      iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [3, 1, 1], [1, 1, 1])
+      ** (ArgumentError) length at axis 0 must be less than axis size of 2, got: 3
 
   """
   def slice(shape, start_indices, lengths, strides) do
@@ -1021,17 +1021,12 @@ defmodule Nx.Shape do
     end
 
     shape
-    |> slice(0, start_indices, lengths, strides)
+    |> do_slice(0, lengths, strides)
     |> List.to_tuple()
   end
 
-  defp slice(shape, pos, [i | start_indices], [len | lengths], [s | strides]) do
+  defp do_slice(shape, pos, [len | lengths], [s | strides]) do
     dim = elem(shape, pos)
-
-    if not is_integer(i) or i < 0 do
-      raise ArgumentError,
-            "start index at axis #{pos} must be greater than or equal to 0, got: #{inspect(i)}"
-    end
 
     if not is_integer(len) or len < 1 do
       raise ArgumentError,
@@ -1043,21 +1038,59 @@ defmodule Nx.Shape do
             "stride at axis #{pos} must be greater than or equal to 1, got: #{inspect(s)}"
     end
 
-    if i >= dim do
+    if len > dim do
       raise ArgumentError,
-            "start index at axis #{pos} must be less than axis size of #{dim}, got: #{i}"
+            "length at axis #{pos} must be less than axis size of #{dim}, " <>
+              "got: #{len}"
     end
 
-    if i + len > dim do
-      raise ArgumentError,
-            "start index + length at axis #{pos} must be less than axis size of #{dim}, " <>
-              "got: #{i + len}"
-    end
-
-    [Kernel.ceil(len / s) | slice(shape, pos + 1, start_indices, lengths, strides)]
+    [Kernel.ceil(len / s) | do_slice(shape, pos + 1, lengths, strides)]
   end
 
-  defp slice(_shape, _pos, [], [], []), do: []
+  defp do_slice(_shape, _pos, [], []), do: []
+
+  @doc """
+  Returns the shape and names after a put_slice.
+
+  ## Examples
+
+      iex> Nx.Shape.put_slice({2, 3}, [nil, :data], {1, 2}, [:batch, nil], [1, 1])
+      {{2, 3}, [:batch, :data]}
+
+      iex> Nx.Shape.put_slice({2, 3}, [nil, nil], {2, 3}, [nil, nil], [0, 1])
+      {{2, 3}, [nil, nil]}
+  """
+  def put_slice(shape, names, slice_shape, slice_names, start_indices) do
+    rank = tuple_size(shape)
+
+    if length(start_indices) != rank do
+      raise ArgumentError, "invalid start indices rank for shape of rank #{rank}"
+    end
+
+    if tuple_size(slice_shape) != rank do
+      raise ArgumentError, "invalid slice for put_slice, rank of slice must match"
+                           <> " #{rank}, got #{tuple_size(slice_shape)}"
+    end
+
+    {shape, names} =
+      shape
+      |> Tuple.to_list()
+      |> do_put_slice(names, Tuple.to_list(slice_shape), slice_names, [])
+      |> Enum.reverse()
+      |> Enum.unzip()
+
+    {List.to_tuple(shape), names}
+  end
+
+  defp do_put_slice([s | shape], [n | names], [slice | slice_shape], [s_name | slice_names], acc) do
+    if slice > s do
+      raise ArgumentError, "slice shape must be strictly less than shape in all dimensions"
+    end
+
+    do_put_slice(shape, names, slice_shape, slice_names, [{s, merge_names!(n, s_name)} | acc])
+  end
+
+  defp do_put_slice([], [], [], [], acc), do: acc
 
   @doc """
   Returns the shape and names after a concat.

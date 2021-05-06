@@ -2342,7 +2342,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "slicing" do
-    defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3])
+    defn slice1(t), do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(6), Nx.tensor(2)], [2, 1, 3])
     defn slice2(t), do: Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: [1, 2, 3])
     defn slice3(t), do: Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
 
@@ -2456,6 +2456,7 @@ defmodule EXLA.DefnExprTest do
     defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 1)
     defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2)
     defn concatenate1_inp(t1), do: Nx.concatenate([t1], axis: 2)
+    defn concat_constants(), do: Nx.concatenate([Nx.tensor([1]), Nx.tensor([2])], axis: 0)
 
     test "works 0th axis" do
       t1 = Nx.iota({2, 2, 2})
@@ -2580,6 +2581,10 @@ defmodule EXLA.DefnExprTest do
                  ],
                  type: {:f, 32}
                )
+    end
+
+    test "works with constants" do
+      assert concat_constants() == Nx.tensor([1, 2])
     end
   end
 
