@@ -822,7 +822,7 @@ defmodule Nx.Defn.Kernel do
 
   defmacro while(_var, _cond, other) do
     raise ArgumentError,
-          "expected third argument to \"while\" to be a do block, " <>
+          "expected third argument to \"while\" to be a do-block, " <>
             "got: #{Macro.to_string(other)}"
   end
 
@@ -845,9 +845,9 @@ defmodule Nx.Defn.Kernel do
     {{name, [generated: true] ++ meta, ctx}, {[var | vars], [value | values]}}
   end
 
-  defp while_arg({name, _meta, ctx} = var, prelude)
+  defp while_arg({name, meta, ctx}, prelude)
        when Kernel.and(is_atom(name), is_atom(ctx)) do
-    {var, prelude}
+    {{name, [generated: true] ++ meta, ctx}, prelude}
   end
 
   defp while_arg(other, _prelude) do

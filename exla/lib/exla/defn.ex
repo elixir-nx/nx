@@ -761,14 +761,39 @@ defmodule EXLA.Defn do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
     # TODO: Use Enum.with_index on Elixir v1.12
-    params =
-      for {%{type: type, shape: shape}, i} <- Enum.with_index(args) do
-        fun_shape = EXLA.Shape.make_shape(type, shape)
-        {i, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
+    arg_params =
+      for {arg, i} <- Enum.with_index(args) do
+        fun_shape = computation_arg_shape(arg)
+        {arg, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
       end
 
+    {_, params} = Enum.reduce(arg_params, {0, []}, &computation_arg_param(&1, &2))
     state = %{state | builder: subbuilder, params: Map.new(params)}
     EXLA.Builder.build(fun.(state))
+  end
+
+  defp computation_arg_shape(%{type: type, shape: shape}) do
+    EXLA.Shape.make_shape(type, shape)
+  end
+
+  defp computation_arg_shape(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&computation_arg_shape/1)
+    |> EXLA.Shape.make_tuple_shape()
+  end
+
+  defp computation_arg_param({%{}, param}, {counter, acc}) do
+    {counter + 1, [{counter, param} | acc]}
+  end
+
+  defp computation_arg_param({tuple, param}, counter_acc) do
+    # TODO: Use Enum.with_index on Elixir v1.12
+    tuple
+    |> Tuple.to_list()
+    |> Enum.with_index()
+    |> Enum.map(fn {arg, i} -> {arg, EXLA.Op.get_tuple_element(param, i)} end)
+    |> Enum.reduce(counter_acc, &computation_arg_param/2)
   end
 
   defp recur_composite(tuple, state, cache) when is_tuple(tuple) do

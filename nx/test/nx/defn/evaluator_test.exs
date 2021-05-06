@@ -152,8 +152,10 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     defn factorial(x) do
+      factorial = Nx.tensor(1, type: Nx.type(x))
+
       {factorial, _} =
-        while {factorial = 1, x}, Nx.greater(x, 1) do
+        while {factorial, x}, Nx.greater(x, 1) do
           {factorial * x, x - 1}
         end
 

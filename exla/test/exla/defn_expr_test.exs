@@ -805,7 +805,7 @@ defmodule EXLA.DefnExprTest do
 
     defn factorial(x) do
       {factorial, _} =
-        while {factorial = 1, x}, Nx.greater(x, 1) do
+        while {factorial = 1.0, x}, Nx.greater(x, 1) do
           {factorial * x, x - 1}
         end
 
@@ -813,7 +813,7 @@ defmodule EXLA.DefnExprTest do
     end
 
     test "factorial" do
-      assert factorial(5) == Nx.tensor(120)
+      assert factorial(5) == Nx.tensor(120.0)
       assert factorial(10.0) == Nx.tensor(3628800.0)
     end
   end

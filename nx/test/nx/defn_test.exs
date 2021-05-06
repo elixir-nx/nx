@@ -874,6 +874,23 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :fun}, shape: {}, type: {:s, 64}} = body
     end
 
+    defn factorial(x) do
+      {factorial, _} =
+        while {factorial = 1, x}, Nx.greater(x, 1) do
+          {factorial * x, x - 1}
+        end
+
+      factorial
+    end
+
+    test "factorial" do
+      assert %T{} = factorial(5)
+
+      assert_raise CompileError,
+                   ~r/the do-block in while must return the shape, type, and names as the initial arguments. Got body \{f32, f32\} and initial \{s64, f32\}/,
+                   fn -> factorial(10.0) end
+    end
+
     defn while_mixed(a, b) do
       while a, Nx.less(a, 10) do
         a + b
@@ -902,7 +919,7 @@ defmodule Nx.DefnTest do
 
     test "raises if non-block is given" do
       assert_raise ArgumentError,
-                   ~r"expected third argument to \"while\" to be a do block, got: a \+ 1",
+                   ~r"expected third argument to \"while\" to be a do-block, got: a \+ 1",
                    fn ->
                      defmodule InvalidWhile do
                        defn upto(a) do

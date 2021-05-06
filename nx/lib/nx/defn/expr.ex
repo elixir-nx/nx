@@ -233,9 +233,21 @@ defmodule Nx.Defn.Expr do
         description: "condition must be a scalar tensor, got shape: #{inspect(condition.shape)}"
     end
 
-    # TODO: compare that body has the exact same return type as param
-    body = fun([param], context, body)
-    composite(param, &expr(&1, context, :while, [initial, condition, body]))
+    %T{data: %Expr{args: [_, body_expr, _]}} = body = fun([param], context, body)
+
+    if compatible?(initial, body_expr) do
+      composite(param, &expr(&1, context, :while, [initial, condition, body]))
+    else
+      initial = to_type_shape_string(initial)
+      body_expr = to_type_shape_string(body_expr)
+
+      raise CompileError,
+        line: line,
+        file: file,
+        description:
+          "the do-block in while must return the shape, type, and names as the initial arguments. " <>
+            "Got body #{body_expr} and initial #{initial}"
+    end
   end
 
   ## Nx.Backend Callbacks
@@ -801,6 +813,34 @@ defmodule Nx.Defn.Expr do
     end
 
     context || acc
+  end
+
+  ## Compatible checking
+
+  defp compatible?(%{} = left, %{} = right),
+    do: Nx.compatible?(left, right)
+
+  defp compatible?(left, right) when tuple_size(left) == tuple_size(right),
+    do: compatible_tuple?(left, right, tuple_size(left))
+
+  defp compatible?(_, _),
+    do: false
+
+  defp compatible_tuple?(_left, _right, 0),
+    do: true
+
+  defp compatible_tuple?(left, right, pos) do
+    compatible?(:erlang.element(pos, left), :erlang.element(pos, right)) and
+      compatible_tuple?(left, right, pos - 1)
+  end
+
+  defp to_type_shape_string(%{type: type, shape: shape, names: names}) do
+    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
+  end
+
+  defp to_type_shape_string(tuple) when is_tuple(tuple) do
+    list = Tuple.to_list(tuple)
+    IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &to_type_shape_string/1), "}"])
   end
 
   ## Scalar helpers and related optimizations

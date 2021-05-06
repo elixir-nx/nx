@@ -63,6 +63,21 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Converts shape and name to a string.
+
+  ## Examples
+
+      iex> Nx.Shape.to_string({1, 2, 3}, [:foo, nil, :bat])
+      "[foo: 1][2][bat: 3]"
+
+  """
+  def to_string(shape, names) do
+    to_algebra(shape, names, "[", "]")
+    |> Inspect.Algebra.format(:infinity)
+    |> IO.iodata_to_binary()
+  end
+
+  @doc """
   Validates the names of axes.
   """
   def named_axes!(names, shape) do
