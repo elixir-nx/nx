@@ -708,7 +708,9 @@ defmodule Nx.Defn.Expr do
       raise "sort comparator must return a predicate type, got: #{inspect(fun.type)}"
     end
 
-    expr(out, context, :sort, [tensor, opts, fun])
+    opts = put_in(opts[:comparator_fun], fun)
+
+    expr(out, context, :sort, [tensor, opts])
   end
 
   @impl true
