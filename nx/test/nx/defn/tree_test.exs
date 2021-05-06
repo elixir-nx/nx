@@ -4,6 +4,9 @@ defmodule Nx.Defn.TreeTest do
   alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
+  import Nx.Defn
+  @default_defn_compiler Nx.Defn.Identity
+
   describe "rewrite_types" do
     test "wraps parameters" do
       u64_param = Expr.parameter(nil, {:u, 64}, {}, 0)
@@ -112,6 +115,70 @@ defmodule Nx.Defn.TreeTest do
       expr = Nx.exp(f64_param)
       assert Tree.rewrite_types(expr, []) == expr
       assert Tree.rewrite_types(expr, max_float_type: {:f, 64}) == expr
+    end
+
+    defmacro param(type) do
+      quote do
+        %T{data: %Expr{op: :parameter}, type: unquote(type)}
+      end
+    end
+
+    defn if3(a, b, c), do: if(a, do: b, else: c)
+
+    test "with cond" do
+      int = Nx.template({}, {:s, 64})
+      float = Nx.template({}, {:f, 64})
+
+      assert %T{data: %Expr{op: :cond, args: [clauses, last]}} =
+               Tree.rewrite_types(if3(int, int, int), max_signed_type: {:s, 32})
+
+      assert [
+               {%T{data: %Expr{op: :as_type, args: [param({:s, 64})]}, type: {:s, 32}},
+                %T{data: %Expr{op: :as_type, args: [param({:s, 64})]}, type: {:s, 32}}}
+             ] = clauses
+
+      assert %T{data: %Expr{op: :as_type, args: [param({:s, 64})]}, type: {:s, 32}} = last
+
+      assert %T{data: %Expr{op: :cond, args: [clauses, last]}} =
+               Tree.rewrite_types(if3(int, float, int), max_float_type: {:f, 32})
+
+      assert [
+               {param({:s, 64}),
+                %T{data: %Expr{op: :as_type, args: [param({:f, 64})]}, type: {:f, 32}}}
+             ] = clauses
+
+      assert %T{data: %Expr{op: :as_type, args: [param({:s, 64})]}, type: {:f, 32}} = last
+    end
+
+    defn factorial(x) do
+      {factorial, _} =
+        while {factorial = 1.0, x}, Nx.greater(x, 1) do
+          {factorial * x, x - 1}
+        end
+
+      factorial
+    end
+
+    test "with while" do
+      expr = factorial(Nx.template({}, {:s, 64}))
+
+      assert %T{data: %Expr{op: :elem, args: [while, 0, 2]}, type: {:f, 32}} =
+               Tree.rewrite_types(expr, max_signed_type: {:s, 32}, max_float_type: {:f, 32})
+
+      assert %T{data: %Expr{op: :while, args: [initial, condition, block]}, type: {:tuple, 2}} =
+               while
+
+      assert {%T{type: {:f, 32}},
+              %T{data: %Expr{op: :as_type, args: [param({:s, 64})]}, type: {:s, 32}}} = initial
+
+      assert %T{data: %Expr{op: :fun, args: [params, _, _]}, type: {:u, 8}} = condition
+      assert [{param({:f, 32}), param({:s, 32})}] = params
+
+      assert %T{data: %Expr{op: :fun, args: [params, fun_body, _]}, type: {:tuple, 2}} = block
+      assert [{param({:f, 32}), param({:s, 32})}] = params
+
+      assert {%T{data: %Expr{op: :multiply}, type: {:f, 32}},
+              %T{data: %Expr{op: :subtract}, type: {:s, 32}}} = fun_body
     end
   end
 

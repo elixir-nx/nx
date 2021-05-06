@@ -1379,16 +1379,27 @@ defmodule Nx do
         [0.0, 1.0, 2.0]
       >
 
+  ## Errors
+
+      iex> Nx.as_type(Nx.tensor([0.0, 1.0, 2.0], names: [:data]), {:s, 64})
+      ** (ArgumentError) cannot convert tensor from type {:f, 32} to {:s, 64}
+
   """
   @doc type: :type
   def as_type(tensor, type) do
     tensor = to_tensor(tensor)
     new_type = Nx.Type.normalize!(type)
 
-    if tensor.type == new_type do
-      tensor
-    else
-      impl!(tensor).as_type(%{tensor | type: new_type}, tensor)
+    cond do
+      Nx.Type.float?(tensor.type) and Nx.Type.integer?(new_type) ->
+        raise ArgumentError,
+              "cannot convert tensor from type #{inspect(tensor.type)} to #{inspect(new_type)}"
+
+      tensor.type == new_type ->
+        tensor
+
+      true ->
+        impl!(tensor).as_type(%{tensor | type: new_type}, tensor)
     end
   end
 

@@ -139,6 +139,35 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
+  describe "while/3" do
+    defn upto10(x) do
+      while x, Nx.less(x, 10) do
+        x + 1
+      end
+    end
+
+    test "simple" do
+      assert upto10(0) == Nx.tensor(10)
+      assert upto10(5) == Nx.tensor(10)
+    end
+
+    defn factorial(x) do
+      factorial = Nx.tensor(1, type: Nx.type(x))
+
+      {factorial, _} =
+        while {factorial, x}, Nx.greater(x, 1) do
+          {factorial * x, x - 1}
+        end
+
+      factorial
+    end
+
+    test "factorial" do
+      assert factorial(5) == Nx.tensor(120)
+      assert factorial(10.0) == Nx.tensor(3628800.0)
+    end
+  end
+
   describe "anonymous functions args" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 

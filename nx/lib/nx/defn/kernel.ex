@@ -759,7 +759,117 @@ defmodule Nx.Defn.Kernel do
   defmacro if(_pred, other) do
     raise ArgumentError,
           "expected second argument to \"if\" to be a do/else block, " <>
-            "got: #{inspect(Macro.to_string(other))}"
+            "got: #{Macro.to_string(other)}"
+  end
+
+  @doc """
+  Defines a `while` loop.
+
+  It expects the `initial` arguments, a `condition` expression, and
+  a `block`:
+
+      while initial, condition do
+        block
+      end
+
+  `condition` must return a scalar tensor where 0 is false and any
+  other number is true. The given `block` will be executed while
+  `condition` is true. Each invocation of `block` must return a
+  value in the same shape as `initial` arguments.
+
+  `while` will return the value of the last execution of `block`.
+  If `block` is never executed because the initial `condition` is
+  false, it returns `initial`.
+
+  ## Examples
+
+  A simple loop that increments `x` until it is `10` can be written as:
+
+        while x = 0, Nx.less_than(x, 10) do
+          x + 1
+        end
+
+  Similarly, to compute the factorial of `x` using `while`:
+
+        defn factorial(x) do
+          {factorial, _} =
+            while {factorial = 1, x}, Nx.greater(x, 1) do
+              {factorial * x, x - 1}
+            end
+
+          factorial
+        end
+
+  Note `while/3` does not behave as a closure. Therefore, all
+  variables used inside the `while` must be explicitly given
+  as an `initial` value to `while`.
+  """
+  defmacro while(initial, condition, do: block) do
+    {pattern, {vars, values}} = while_arg(initial, {[], []})
+
+    quote do
+      {unquote_splicing(vars)} = {unquote_splicing(values)}
+
+      Nx.Defn.Kernel.__while__(
+        __ENV__.file,
+        __ENV__.line,
+        unquote(pattern),
+        fn unquote(pattern) -> unquote(condition) end,
+        fn unquote(pattern) -> unquote(block) end
+      )
+    end
+  end
+
+  defmacro while(_var, _cond, other) do
+    raise ArgumentError,
+          "expected third argument to \"while\" to be a do-block, " <>
+            "got: #{Macro.to_string(other)}"
+  end
+
+  @doc false
+  defdelegate __while__(file, line, pattern, condition, block), to: Nx.Defn.Expr, as: :while
+
+  defp while_arg({left, right}, prelude) do
+    {left, prelude} = while_arg(left, prelude)
+    {right, prelude} = while_arg(right, prelude)
+    {{left, right}, prelude}
+  end
+
+  defp while_arg({:{}, meta, args}, prelude) do
+    {args, prelude} = Enum.map_reduce(args, prelude, &while_arg/2)
+    {{:{}, meta, args}, prelude}
+  end
+
+  defp while_arg({:=, _meta, [{name, meta, ctx} = var, value]}, {vars, values})
+       when Kernel.and(is_atom(name), is_atom(ctx)) do
+    {{name, [generated: true] ++ meta, ctx}, {[var | vars], [value | values]}}
+  end
+
+  defp while_arg({name, meta, ctx}, prelude)
+       when Kernel.and(is_atom(name), is_atom(ctx)) do
+    {{name, [generated: true] ++ meta, ctx}, prelude}
+  end
+
+  defp while_arg(other, _prelude) do
+    raise ArgumentError, """
+    invalid initial argument for \"while\". Expected a variable, a variable assignment, \
+    or a tuple of the same. For example:
+
+        while x = 0, Nx.less(x, 10) do
+          x + 1
+        end
+
+    Or when using tuples:
+
+        x = 0
+
+        {x, y} =
+          while {x, y = 10}, Nx.not_equal(x, y) do
+            {x + 1, y - 1}
+          end
+
+    Got: #{Macro.to_string(other)}
+    """
   end
 
   @doc """

@@ -791,6 +791,33 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "while/3" do
+    defn upto10(x) do
+      while x, Nx.less(x, 10) do
+        x + 1
+      end
+    end
+
+    test "simple" do
+      assert upto10(0) == Nx.tensor(10)
+      assert upto10(5) == Nx.tensor(10)
+    end
+
+    defn factorial(x) do
+      {factorial, _} =
+        while {factorial = 1.0, x}, Nx.greater(x, 1) do
+          {factorial * x, x - 1}
+        end
+
+      factorial
+    end
+
+    test "factorial" do
+      assert factorial(5) == Nx.tensor(120.0)
+      assert factorial(10.0) == Nx.tensor(3628800.0)
+    end
+  end
+
   describe "map" do
     defn map_plus(t), do: Nx.map(t, fn x -> x + 1 end)
     defn map_equal(t), do: Nx.map(t, [type: {:f, 64}], fn x -> Nx.equal(x, 1) end)

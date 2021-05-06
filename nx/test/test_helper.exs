@@ -43,4 +43,15 @@ defmodule Nx.GradHelpers do
   end
 end
 
+defmodule Nx.Defn.Identity do
+  @behaviour Nx.Defn.Compiler
+
+  def __async__(_, _, _, _), do: raise("not implemented")
+
+  def __jit__(key, vars, fun, _opts) do
+    Process.put(__MODULE__, key)
+    fun.(vars)
+  end
+end
+
 ExUnit.start()

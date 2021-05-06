@@ -180,7 +180,17 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp cached_recur_operator(:cond, %T{data: %Expr{args: [clauses, last]}} = t, state, cache) do
+  defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
+    [initial, condition, body] = args
+    {initial, cache} = recur_composite(initial, state, cache)
+    condition = to_computation(condition, {:pred, 8}, state)
+    body = to_computation(body, :any, state)
+    {EXLA.Op.while(condition, body, initial), cache}
+  end
+
+  defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
+    [clauses, last] = args
+
     case clauses do
       [{pred, on_true}] ->
         to_if(pred, on_true, last, state, cache)
@@ -723,12 +733,12 @@ defmodule EXLA.Defn do
 
     # Grow the comparator to arity 4 because argsort uses
     # variadic_sort underneath
-    [[arg0, arg1], _expr, fun] = comparator.data.args
+    %{args: [[arg0, arg1], _expr, fun], context: context} = comparator.data
 
     arg2 = Expr.parameter(:argsort, ans.type, {}, 2)
     arg3 = Expr.parameter(:argsort, ans.type, {}, 3)
 
-    comparator_4 = Expr.fun([arg0, arg1, arg2, arg3], fn x, y, _, _ -> fun.(x, y) end)
+    comparator_4 = Expr.fun([arg0, arg1, arg2, arg3], context, fn x, y, _, _ -> fun.(x, y) end)
 
     comp = to_computation(comparator_4, {:pred, 8}, state)
     EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
@@ -741,7 +751,7 @@ defmodule EXLA.Defn do
 
     to_computation(name, args, state, fn state ->
       expr
-      |> to_computation_result(state, %{})
+      |> recur_composite(state, %{})
       |> elem(0)
       |> to_type(type)
     end)
@@ -751,28 +761,53 @@ defmodule EXLA.Defn do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
     # TODO: Use Enum.with_index on Elixir v1.12
-    params =
-      for {%{type: type, shape: shape}, i} <- Enum.with_index(args) do
-        fun_shape = EXLA.Shape.make_shape(type, shape)
-        {i, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
+    arg_params =
+      for {arg, i} <- Enum.with_index(args) do
+        fun_shape = computation_arg_shape(arg)
+        {arg, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
       end
 
+    {_, params} = Enum.reduce(arg_params, {0, []}, &computation_arg_param(&1, &2))
     state = %{state | builder: subbuilder, params: Map.new(params)}
     EXLA.Builder.build(fun.(state))
   end
 
-  defp to_computation_result(tuple, state, cache) when is_tuple(tuple) do
+  defp computation_arg_shape(%{type: type, shape: shape}) do
+    EXLA.Shape.make_shape(type, shape)
+  end
+
+  defp computation_arg_shape(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&computation_arg_shape/1)
+    |> EXLA.Shape.make_tuple_shape()
+  end
+
+  defp computation_arg_param({%{}, param}, {counter, acc}) do
+    {counter + 1, [{counter, param} | acc]}
+  end
+
+  defp computation_arg_param({tuple, param}, counter_acc) do
+    # TODO: Use Enum.with_index on Elixir v1.12
+    tuple
+    |> Tuple.to_list()
+    |> Enum.with_index()
+    |> Enum.map(fn {arg, i} -> {arg, EXLA.Op.get_tuple_element(param, i)} end)
+    |> Enum.reduce(counter_acc, &computation_arg_param/2)
+  end
+
+  defp recur_composite(tuple, state, cache) when is_tuple(tuple) do
     list = Tuple.to_list(tuple)
 
     if expr = full_tuple(list, tuple_size(tuple)) do
-      to_computation_result(expr, state, cache)
+      recur_composite(expr, state, cache)
     else
-      {elements, cache} = Enum.map_reduce(list, cache, &to_computation_result(&1, state, &2))
+      {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, state, &2))
       {EXLA.Op.tuple(state.builder, elements), cache}
     end
   end
 
-  defp to_computation_result(expr, state, cache) do
+  defp recur_composite(expr, state, cache) do
     recur_operator(expr, state, cache)
   end
 
@@ -847,6 +882,9 @@ defmodule EXLA.Defn do
   ## Cond
 
   defp to_if(pred, on_true, on_false, state, cache) do
+    # Collect all predicate parameters, as those are evaluated
+    # outside of the conditional. All other graphs are evaluated
+    # only if necessary inside the conditional.
     {_, pred_ids} = collect_ids(pred, %{})
 
     {pred_op, cache} = recur_operator(pred, state, cache)
@@ -901,7 +939,7 @@ defmodule EXLA.Defn do
 
     comp =
       expr
-      |> to_computation_result(%{state | builder: subbuilder, params: Map.new(params)}, %{})
+      |> recur_composite(%{state | builder: subbuilder, params: Map.new(params)}, %{})
       |> elem(0)
       |> EXLA.Builder.build()
 
@@ -950,7 +988,7 @@ defmodule EXLA.Defn do
         :bitcast -> &EXLA.Op.bitcast_convert_type(&1, type)
       end
 
-    if op_type(op) == type, do: op, else: fun.(op)
+    if type == :any or op_type(op) == type, do: op, else: fun.(op)
   end
 
   defp to_constant(builder, constant, type) do

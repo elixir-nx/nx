@@ -88,9 +88,16 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a tensor expression function node with the given args and anonymous function.
   """
-  def fun(args, fun) when is_function(fun, length(args)) do
-    out = to_expr(apply(fun, args))
-    expr(out, out.data.context, :fun, [args, out, fun])
+  def fun(args, context, fun) when is_function(fun, length(args)) do
+    body = apply(fun, args)
+
+    out =
+      case Tree.composite(body, &to_expr/1) do
+        tuple when is_tuple(tuple) -> %T{shape: {}, names: [], type: {:tuple, tuple_size(tuple)}}
+        %T{} = tensor -> tensor
+      end
+
+    expr(out, context, :fun, [args, body, fun])
   end
 
   @doc """
@@ -199,13 +206,48 @@ defmodule Nx.Defn.Expr do
           raise CompileError,
             line: meta[:line],
             file: file,
-            description: "condition must be a scalar tensor, got: #{inspect(pred.shape)}"
+            description: "condition must be a scalar tensor, got shape: #{inspect(pred.shape)}"
         end
 
         {pred, expr}
       end
 
     cond(clauses, last)
+  end
+
+  @doc false
+  def while(file, line, initial, condition, body) do
+    initial = Tree.composite(initial, &to_expr/1)
+
+    {param, {_counter, context}} =
+      Tree.composite(initial, {0, nil}, fn expr, {counter, acc} ->
+        {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
+      end)
+
+    condition = fun([param], context, condition)
+
+    if condition.shape != {} do
+      raise CompileError,
+        line: line,
+        file: file,
+        description: "condition must be a scalar tensor, got shape: #{inspect(condition.shape)}"
+    end
+
+    %T{data: %Expr{args: [_, body_expr, _]}} = body = fun([param], context, body)
+
+    if compatible?(initial, body_expr) do
+      composite(param, &expr(&1, context, :while, [initial, condition, body]))
+    else
+      initial = to_type_shape_string(initial)
+      body_expr = to_type_shape_string(body_expr)
+
+      raise CompileError,
+        line: line,
+        file: file,
+        description:
+          "the do-block in while must return the shape, type, and names as the initial arguments. " <>
+            "Got body #{body_expr} and initial #{initial}"
+    end
   end
 
   ## Nx.Backend Callbacks
@@ -391,7 +433,7 @@ defmodule Nx.Defn.Expr do
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, fun)
+    fun = fun(args, context, fun)
 
     if fun.shape != {} do
       raise "reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -411,7 +453,7 @@ defmodule Nx.Defn.Expr do
       ) do
     args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, fun)
+    fun = fun(args, context, fun)
 
     if fun.shape != {} do
       raise "reduce_window function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -423,8 +465,8 @@ defmodule Nx.Defn.Expr do
   @impl true
   def map(%{type: type} = out, tensor, fun) do
     args = [parameter(:map, type, {}, 0)]
-    tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :map, [tensor, fun(args, fun)])
+    %{data: %{context: context}} = tensor = to_expr(tensor)
+    expr(out, context, :map, [tensor, fun(args, context, fun)])
   end
 
   @impl true
@@ -652,11 +694,11 @@ defmodule Nx.Defn.Expr do
     comparator = opts[:comparator]
 
     %{type: type} = out
-    tensor = to_expr(tensor)
+    %{data: %{context: context}} = tensor = to_expr(tensor)
 
     args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
     comparator = to_nx_comparator(comparator)
-    fun = fun(args, comparator)
+    fun = fun(args, context, comparator)
 
     if fun.shape != {} do
       raise "sort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -666,18 +708,17 @@ defmodule Nx.Defn.Expr do
       raise "sort comparator must return a predicate type, got: #{inspect(fun.type)}"
     end
 
-    expr(out, tensor.data.context, :sort, [tensor, opts, fun])
+    expr(out, context, :sort, [tensor, opts, fun])
   end
 
   @impl true
   def argsort(out, %{type: input_type} = tensor, opts) do
     comparator = opts[:comparator]
-
-    tensor = to_expr(tensor)
+    %{data: %{context: context}} = tensor = to_expr(tensor)
 
     args = [parameter(:argsort, input_type, {}, 0), parameter(:argsort, input_type, {}, 1)]
     comparator = to_nx_comparator(comparator)
-    fun = fun(args, comparator)
+    fun = fun(args, context, comparator)
 
     if fun.shape != {} do
       raise "argsort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -687,7 +728,7 @@ defmodule Nx.Defn.Expr do
       raise "argsort comparator must return a predicate type, got: #{inspect(fun.type)}"
     end
 
-    expr(out, tensor.data.context, :argsort, [tensor, opts, fun])
+    expr(out, context, :argsort, [tensor, opts, fun])
   end
 
   defp to_nx_comparator(:asc), do: &Nx.less_equal/2
@@ -746,29 +787,60 @@ defmodule Nx.Defn.Expr do
 
   defp to_exprs(list) do
     Enum.map_reduce(list, nil, fn tensor, acc ->
-      %{data: %{context: context}} = expr = to_expr(tensor)
-
-      if context != acc and context != nil and acc != nil do
-        raise """
-        cannot build defn because expressions come from different contexts: \
-        #{inspect(context)} and #{inspect(acc)}.
-
-        This typically happens on anonymous functions, which do not behave \
-        like closures inside defn. For example, this is not valid:
-
-            defn example(t, amplifier) do
-              Nx.reduce(t, 0, fn val, acc ->
-                val * amplifier + acc
-              end)
-            end
-
-        In the example above, "amplifier" is a variable defined outside of \
-        the anonymous function, which is not allowed in defn.
-        """
-      end
-
-      {expr, context || acc}
+      expr = to_expr(tensor)
+      {expr, merge_context!(expr, acc)}
     end)
+  end
+
+  defp merge_context!(%{data: %{context: context}}, acc) do
+    if context != acc and context != nil and acc != nil do
+      raise """
+      cannot build defn because expressions come from different contexts: \
+      #{inspect(context)} and #{inspect(acc)}.
+
+      This typically happens on "while" and inside anonymous functions, which \
+      do not behave like closures inside defn. For example, this is not valid:
+
+          defn example(t, amplifier) do
+            Nx.reduce(t, 0, fn val, acc ->
+              val * amplifier + acc
+            end)
+          end
+
+      In the example above, "amplifier" is a variable defined outside of \
+      the anonymous function, which is not allowed in defn.
+      """
+    end
+
+    context || acc
+  end
+
+  ## Compatible checking
+
+  defp compatible?(%{} = left, %{} = right),
+    do: Nx.compatible?(left, right)
+
+  defp compatible?(left, right) when tuple_size(left) == tuple_size(right),
+    do: compatible_tuple?(left, right, tuple_size(left))
+
+  defp compatible?(_, _),
+    do: false
+
+  defp compatible_tuple?(_left, _right, 0),
+    do: true
+
+  defp compatible_tuple?(left, right, pos) do
+    compatible?(:erlang.element(pos, left), :erlang.element(pos, right)) and
+      compatible_tuple?(left, right, pos - 1)
+  end
+
+  defp to_type_shape_string(%{type: type, shape: shape, names: names}) do
+    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
+  end
+
+  defp to_type_shape_string(tuple) when is_tuple(tuple) do
+    list = Tuple.to_list(tuple)
+    IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &to_type_shape_string/1), "}"])
   end
 
   ## Scalar helpers and related optimizations
@@ -882,6 +954,10 @@ defmodule Nx.Defn.Expr do
     {t, {[{expr_str, t} | exprs], params, var_map, cache}}
   end
 
+  defp inspect_args(:while, [initial, _, _], var_map) do
+    IO.iodata_to_binary(inspect_arg(initial, var_map))
+  end
+
   defp inspect_args(:cond, [clauses, last], var_map) do
     clauses =
       Enum.map(clauses, fn {pred, expr} ->
@@ -901,9 +977,8 @@ defmodule Nx.Defn.Expr do
   defp inspect_args(_op, args, var_map),
     do: inspect_args(args, var_map)
 
-  defp inspect_args(args, var_map) do
-    Enum.map_join(args, ", ", &inspect_arg(&1, var_map))
-  end
+  defp inspect_args(args, var_map),
+    do: Enum.map_join(args, ", ", &inspect_arg(&1, var_map))
 
   defp inspect_arg(arg, var_map) do
     case arg do

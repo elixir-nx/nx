@@ -2232,7 +2232,7 @@ static ErlNifFunc exla_funcs[] = {
   {"reduce_window", 7, reduce_window},
   {"select_and_scatter", 8, select_and_scatter},
   {"map", 4, map},
-  {"while_loop", 3, while_loop},
+  {"while", 3, while_loop},
   // Shape/Type Manipulation
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},

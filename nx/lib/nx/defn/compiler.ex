@@ -310,8 +310,15 @@ defmodule Nx.Defn.Compiler do
       :error, :undef ->
         stack =
           case __STACKTRACE__ do
-            [{^module, ^defn, args_or_arity, info} | stack] ->
-              [{module, function, args_or_arity, info} | stack]
+            [{^module, ^defn, args_or_arity, info}, _ | stack] ->
+              if function_exported?(module, function, length(args)) do
+                formatted = Exception.format_mfa(module, function, length(args))
+
+                reraise "cannot invoke #{formatted} inside defn because it was not defined with defn",
+                        stack
+              else
+                [{module, function, args_or_arity, info} | stack]
+              end
 
             stack ->
               stack
