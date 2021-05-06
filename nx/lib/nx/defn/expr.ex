@@ -690,14 +690,11 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def sort(out, tensor, opts) do
-    comparator = opts[:comparator]
-
+  def sort(out, tensor, opts, comparator) do
     %{type: type} = out
     %{data: %{context: context}} = tensor = to_expr(tensor)
 
     args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
-    comparator = to_nx_comparator(comparator)
     fun = fun(args, context, comparator)
 
     if fun.shape != {} do
@@ -708,18 +705,14 @@ defmodule Nx.Defn.Expr do
       raise "sort comparator must return a predicate type, got: #{inspect(fun.type)}"
     end
 
-    opts = put_in(opts[:comparator_fun], fun)
-
-    expr(out, context, :sort, [tensor, opts])
+    expr(out, context, :sort, [tensor, opts, fun])
   end
 
   @impl true
-  def argsort(out, %{type: input_type} = tensor, opts) do
-    comparator = opts[:comparator]
+  def argsort(out, %{type: input_type} = tensor, opts, comparator) do
     %{data: %{context: context}} = tensor = to_expr(tensor)
 
     args = [parameter(:argsort, input_type, {}, 0), parameter(:argsort, input_type, {}, 1)]
-    comparator = to_nx_comparator(comparator)
     fun = fun(args, context, comparator)
 
     if fun.shape != {} do
@@ -730,17 +723,8 @@ defmodule Nx.Defn.Expr do
       raise "argsort comparator must return a predicate type, got: #{inspect(fun.type)}"
     end
 
-    opts = put_in(opts[:comparator_fun], fun)
-
-    expr(out, context, :argsort, [tensor, opts])
+    expr(out, context, :argsort, [tensor, opts, fun])
   end
-
-  defp to_nx_comparator(:asc), do: &Nx.less_equal/2
-  defp to_nx_comparator(:desc), do: &Nx.greater_equal/2
-  defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
-
-  defp to_nx_comparator(_),
-    do: "comparator must be either :desc or :asc or a function with arity 2"
 
   ## Undefined
 

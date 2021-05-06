@@ -1357,6 +1357,18 @@ defmodule NxTest do
         end
       )
     end
+
+    test "raises for invalid comparator" do
+      t = Nx.tensor([3, 2, 1, 0])
+
+      assert_raise(
+        ArgumentError,
+        "comparator must be either :desc or :asc or a function with arity 2",
+        fn ->
+          Nx.sort(t, comparator: :invalid)
+        end
+      )
+    end
   end
 
   describe "argsort/2" do
@@ -1398,6 +1410,18 @@ defmodule NxTest do
                  ],
                  names: [:x, :y, :z]
                )
+    end
+
+    test "raises for invalid comparator" do
+      t = Nx.tensor([3, 2, 1, 0])
+
+      assert_raise(
+        ArgumentError,
+        "comparator must be either :desc or :asc or a function with arity 2",
+        fn ->
+          Nx.argsort(t, comparator: :invalid)
+        end
+      )
     end
   end
 
