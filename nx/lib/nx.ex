@@ -7630,9 +7630,11 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    impl!(tensor).sort(tensor, tensor,
-      axis: axis,
-      comparator: comparator
+    impl!(tensor).sort(
+      tensor,
+      tensor,
+      [axis: axis, comparator: comparator],
+      to_nx_comparator(comparator)
     )
   end
 
@@ -7753,13 +7755,23 @@ defmodule Nx do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    impl!(tensor).argsort(%{tensor | type: {:s, 64}}, tensor,
-      axis: axis,
-      comparator: comparator
+    impl!(tensor).argsort(
+      %{tensor | type: {:s, 64}},
+      tensor,
+      [axis: axis, comparator: comparator],
+      to_nx_comparator(comparator)
     )
   end
 
   ## Helpers
+
+  defp to_nx_comparator(:asc), do: &Nx.less_equal/2
+  defp to_nx_comparator(:desc), do: &Nx.greater_equal/2
+  defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
+
+  defp to_nx_comparator(_) do
+    raise ArgumentError, "comparator must be either :desc or :asc or a function with arity 2"
+  end
 
   defp backend!(backend) when is_atom(backend),
     do: {backend, []}
