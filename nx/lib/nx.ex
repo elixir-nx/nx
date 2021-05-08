@@ -7496,8 +7496,10 @@ defmodule Nx do
 
   ### Options
 
-  * `:axis`: The name or number of the corresponding axis on which the sort should be applied.
-  * `:comparator`: Can be `:asc`, `:desc` or a arity-2 function for comparison between two tensor elements. Defaults to `:asc`
+    * `:axis` - The name or number of the corresponding axis on which the sort
+      should be applied
+    * `:comparator` - Can be `:asc`, `:desc` or an arity-2 function for comparison
+      between two tensor elements (strict inequality). Defaults to `:asc`
 
   ### Examples
 
@@ -7649,8 +7651,8 @@ defmodule Nx do
 
     * `:axis` - The name or number of the corresponding axis on which the sort
       should be applied
-    * `:comparator` - Can be `:asc`, `:desc` or a arity-2 function for comparison
-      between two tensor elements. Defaults to `:asc`
+    * `:comparator` - Can be `:asc`, `:desc` or an arity-2 function for comparison
+      between two tensor elements (strict inequality). Defaults to `:asc`
 
   ## Examples
 
@@ -7765,8 +7767,8 @@ defmodule Nx do
 
   ## Helpers
 
-  defp to_nx_comparator(:asc), do: &Nx.less_equal/2
-  defp to_nx_comparator(:desc), do: &Nx.greater_equal/2
+  defp to_nx_comparator(:asc), do: &Nx.less/2
+  defp to_nx_comparator(:desc), do: &Nx.greater/2
   defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
 
   defp to_nx_comparator(_) do
