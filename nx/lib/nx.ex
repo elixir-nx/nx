@@ -5856,6 +5856,14 @@ defmodule Nx do
   retain the rank of the input tensor by setting the reduced
   axes to size 1.
 
+  ## Limitations
+
+  Given this function relies on anonymous functions, it
+  may not be available or efficient on all Nx backends.
+  Therefore, you should avoid using `reduce/4` whenever
+  possible. Instead, use functions `sum/2`, `reduce_max/2`,
+  `all?/1`, and so forth.
+
   ## Examples
 
       iex> Nx.reduce(Nx.tensor(42), 0, fn x, y -> Nx.add(x, y) end)
@@ -6104,8 +6112,13 @@ defmodule Nx do
         ]
       >
 
-  Generally, you should prefer other using more idiomatic
-  tensor operators to this function.
+  ## Limitations
+
+  Given this function relies on anonymous functions, it
+  may not be available or efficient on all Nx backends.
+  Therefore, you should avoid using `map/2` whenever possible
+  and use other functions in the `Nx` module to achieve the
+  desired result.
 
   ### Examples
 
