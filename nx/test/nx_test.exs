@@ -1339,7 +1339,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "unknown key :blep in [blep: :all_day], expected one of [:axis, :comparator]",
+        "unknown key :blep in [blep: :all_day], expected one of [:axis, :direction]",
         fn ->
           Nx.sort(t, blep: :all_day)
         end
@@ -1351,21 +1351,21 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "expected a keyword list with keys [:axis, :comparator], got: [:blep]",
+        "expected a keyword list with keys [:axis, :direction], got: [:blep]",
         fn ->
           Nx.sort(t, [:blep])
         end
       )
     end
 
-    test "raises for invalid comparator" do
+    test "raises for invalid direction" do
       t = Nx.tensor([3, 2, 1, 0])
 
       assert_raise(
         ArgumentError,
-        "comparator must be either :desc or :asc or a function with arity 2",
+        "unknown value for :direction, expected :asc or :desc, got: :invalid",
         fn ->
-          Nx.sort(t, comparator: :invalid)
+          Nx.sort(t, direction: :invalid)
         end
       )
     end
@@ -1412,14 +1412,14 @@ defmodule NxTest do
                )
     end
 
-    test "raises for invalid comparator" do
+    test "raises for invalid direction" do
       t = Nx.tensor([3, 2, 1, 0])
 
       assert_raise(
         ArgumentError,
-        "comparator must be either :desc or :asc or a function with arity 2",
+        "unknown value for :direction, expected :asc or :desc, got: :invalid",
         fn ->
-          Nx.argsort(t, comparator: :invalid)
+          Nx.argsort(t, direction: :invalid)
         end
       )
     end

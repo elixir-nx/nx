@@ -722,25 +722,38 @@ defmodule EXLA.Defn do
     EXLA.Op.select(EXLA.Op.equal(cholesky, tensor), zeros, cholesky)
   end
 
-  defp to_operator(:sort, [tensor, opts, comparator], _ans, state) do
+  defp to_operator(:sort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
-    comp = to_computation(comparator, {:pred, 8}, state)
+
+    fun =
+      case opts[:direction] do
+        :asc -> binary_op_fun(:less)
+        :desc -> binary_op_fun(:greater)
+      end
+
+    args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
+    comp = to_computation(:comparator, args, state, fun)
+
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
-  defp to_operator(:argsort, [tensor, opts, comparator], ans, state) do
+  defp to_operator(:argsort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
 
-    # Grow the comparator to arity 4 because argsort uses
-    # variadic_sort underneath
-    %{args: [[arg0, arg1], _expr, fun], context: context} = comparator.data
+    fun =
+      case opts[:direction] do
+        :asc -> binary_op_fun(:less)
+        :desc -> binary_op_fun(:greater)
+      end
 
-    arg2 = Expr.parameter(:argsort, ans.type, {}, 2)
-    arg3 = Expr.parameter(:argsort, ans.type, {}, 3)
+    args = [
+      %{type: op_type(tensor), shape: {}},
+      %{type: op_type(tensor), shape: {}},
+      %{type: ans.type, shape: {}},
+      %{type: ans.type, shape: {}}
+    ]
 
-    comparator_4 = Expr.fun([arg0, arg1, arg2, arg3], context, fn x, y, _, _ -> fun.(x, y) end)
-
-    comp = to_computation(comparator_4, {:pred, 8}, state)
+    comp = to_computation(:comparator, args, state, fun)
     EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
   end
 

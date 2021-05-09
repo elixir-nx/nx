@@ -2636,7 +2636,7 @@ defmodule EXLA.DefnExprTest do
   describe "sort" do
     defn sort0(t), do: Nx.sort(t, axis: 0)
     defn sort1(t), do: Nx.sort(t, axis: 1)
-    defn sort1_asc(t), do: Nx.sort(t, axis: 1, comparator: :asc)
+    defn sort1_asc(t), do: Nx.sort(t, axis: 1, direction: :asc)
     defn sort2(t), do: Nx.sort(t, axis: 2)
 
     test "sorts a 1d tensor" do
@@ -2677,7 +2677,7 @@ defmodule EXLA.DefnExprTest do
   describe "argsort" do
     defn argsort0(t), do: Nx.argsort(t, axis: 0)
     defn argsort1(t), do: Nx.argsort(t, axis: 1)
-    defn argsort1_asc(t), do: Nx.argsort(t, axis: 1, comparator: :asc)
+    defn argsort1_asc(t), do: Nx.argsort(t, axis: 1, direction: :asc)
     defn argsort2(t), do: Nx.argsort(t, axis: 2)
 
     test "sorts a 1d tensor and returns its indices" do

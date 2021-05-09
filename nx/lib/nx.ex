@@ -7502,8 +7502,8 @@ defmodule Nx do
   end
 
   @doc """
-  Sorts the tensor along the given axis with the
-  given comparator.
+  Sorts the tensor along the given axis according
+  to the given direction.
 
   If no axis is given, defaults to `0`.
 
@@ -7511,8 +7511,7 @@ defmodule Nx do
 
     * `:axis` - The name or number of the corresponding axis on which the sort
       should be applied
-    * `:comparator` - Can be `:asc`, `:desc` or an arity-2 function for comparison
-      between two tensor elements (strict inequality). Defaults to `:asc`
+    * `:direction` - Can be `:asc` or `:desc`. Defaults to `:asc`
 
   ### Examples
 
@@ -7540,7 +7539,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y, comparator: :asc)
+      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y, direction: :asc)
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -7627,20 +7626,23 @@ defmodule Nx do
           ]
         ]
       >
-
-      iex> Nx.sort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x, comparator: &Nx.less/2)
-      #Nx.Tensor<
-        s64[x: 2][y: 3]
-        [
-          [2, 1, 4],
-          [3, 5, 7]
-        ]
-      >
   """
   @doc type: :ndim
   def sort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, comparator: :asc)
-    comparator = opts[:comparator]
+    opts = keyword!(opts, axis: 0, direction: :asc)
+
+    direction =
+      case opts[:direction] do
+        :asc ->
+          :asc
+
+        :desc ->
+          :desc
+
+        other ->
+          raise ArgumentError,
+                "unknown value for :direction, expected :asc or :desc, got: #{inspect(other)}"
+      end
 
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
@@ -7648,14 +7650,13 @@ defmodule Nx do
     impl!(tensor).sort(
       tensor,
       tensor,
-      [axis: axis, comparator: comparator],
-      to_nx_comparator(comparator)
+      [axis: axis, direction: direction]
     )
   end
 
   @doc """
-  Sorts the tensor along the given axis with the
-  given comparator and returns the corresponding indices
+  Sorts the tensor along the given axis according
+  to the given direction and returns the corresponding indices
   of the original tensor in the new sorted positions.
 
   If no axis is given, defaults to `0`.
@@ -7664,8 +7665,7 @@ defmodule Nx do
 
     * `:axis` - The name or number of the corresponding axis on which the sort
       should be applied
-    * `:comparator` - Can be `:asc`, `:desc` or an arity-2 function for comparison
-      between two tensor elements (strict inequality). Defaults to `:asc`
+    * `:direction` - Can be `:asc` or `:desc`. Defaults to `:asc`
 
   ## Examples
 
@@ -7693,7 +7693,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y, comparator: :asc)
+      iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :y, direction: :asc)
       #Nx.Tensor<
         s64[x: 2][y: 3]
         [
@@ -7752,20 +7752,23 @@ defmodule Nx do
           ]
         ]
       >
-
-      iex> Nx.argsort(Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), axis: :x, comparator: &Nx.less/2)
-      #Nx.Tensor<
-        s64[x: 2][y: 3]
-        [
-          [1, 0, 1],
-          [0, 1, 0]
-        ]
-      >
   """
   @doc type: :ndim
   def argsort(tensor, opts \\ []) do
-    opts = keyword!(opts, axis: 0, comparator: :asc)
-    comparator = opts[:comparator]
+    opts = keyword!(opts, axis: 0, direction: :asc)
+
+    direction =
+      case opts[:direction] do
+        :asc ->
+          :asc
+
+        :desc ->
+          :desc
+
+        other ->
+          raise ArgumentError,
+                "unknown value for :direction, expected :asc or :desc, got: #{inspect(other)}"
+      end
 
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
@@ -7773,20 +7776,11 @@ defmodule Nx do
     impl!(tensor).argsort(
       %{tensor | type: {:s, 64}},
       tensor,
-      [axis: axis, comparator: comparator],
-      to_nx_comparator(comparator)
+      [axis: axis, direction: direction]
     )
   end
 
   ## Helpers
-
-  defp to_nx_comparator(:asc), do: &Nx.less/2
-  defp to_nx_comparator(:desc), do: &Nx.greater/2
-  defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
-
-  defp to_nx_comparator(_) do
-    raise ArgumentError, "comparator must be either :desc or :asc or a function with arity 2"
-  end
 
   defp backend!(backend) when is_atom(backend),
     do: {backend, []}
