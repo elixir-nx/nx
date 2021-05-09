@@ -690,40 +690,15 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def sort(out, tensor, opts, comparator) do
-    %{type: type} = out
+  def sort(out, tensor, opts) do
     %{data: %{context: context}} = tensor = to_expr(tensor)
-
-    args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
-    fun = fun(args, context, comparator)
-
-    if fun.shape != {} do
-      raise "sort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
-    end
-
-    if fun.type != {:u, 8} do
-      raise "sort comparator must return a predicate type, got: #{inspect(fun.type)}"
-    end
-
-    expr(out, context, :sort, [tensor, opts, fun])
+    expr(out, context, :sort, [tensor, opts])
   end
 
   @impl true
-  def argsort(out, %{type: input_type} = tensor, opts, comparator) do
+  def argsort(out, tensor, opts) do
     %{data: %{context: context}} = tensor = to_expr(tensor)
-
-    args = [parameter(:argsort, input_type, {}, 0), parameter(:argsort, input_type, {}, 1)]
-    fun = fun(args, context, comparator)
-
-    if fun.shape != {} do
-      raise "argsort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
-    end
-
-    if fun.type != {:u, 8} do
-      raise "argsort comparator must return a predicate type, got: #{inspect(fun.type)}"
-    end
-
-    expr(out, context, :argsort, [tensor, opts, fun])
+    expr(out, context, :argsort, [tensor, opts])
   end
 
   ## Undefined

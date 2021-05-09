@@ -1694,19 +1694,19 @@ defmodule Nx.BinaryBackend do
   def bitcast(out, tensor), do: from_binary(out, to_binary(tensor))
 
   @impl true
-  def sort(output, t, opts, comparator), do: do_sort(output, t, opts, comparator, false)
+  def sort(output, t, opts), do: do_sort(output, t, opts, false)
 
   @impl true
-  def argsort(output, t, opts, comparator), do: do_sort(output, t, opts, comparator, true)
+  def argsort(output, t, opts), do: do_sort(output, t, opts, true)
 
-  defp do_sort(output, t, opts, comparator, return_indices) do
+  defp do_sort(output, t, opts, return_indices) do
     %T{shape: shape, type: type} = t
     last_axis = Nx.rank(t) - 1
 
     axis = opts[:axis]
 
     comparator =
-      case opts[:comparator] do
+      case opts[:direction] do
         :desc ->
           fn a, b ->
             a = binary_to_number(a, type)
@@ -1719,13 +1719,6 @@ defmodule Nx.BinaryBackend do
             a = binary_to_number(a, type)
             b = binary_to_number(b, type)
             a <= b
-          end
-
-        _ ->
-          fn a, b ->
-            a = binary_to_number(a, type)
-            b = binary_to_number(b, type)
-            to_scalar(comparator.(a, b)) != 0
           end
       end
 
