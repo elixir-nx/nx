@@ -7472,10 +7472,11 @@ defmodule Nx do
   end
 
   @doc """
-  Stacks a list of `n` scalar tensors into an `{n}`-shaped tensor
+  Joins a list of tensors with the same shape along a new axis.
 
   ### Options
 
+    * `:axis` - optional index of the axis along which the tensors are stacked. Defaults to 0.
     * `:name` - optional name for the added dimension. Defaults to an unnamed axis.
 
   ### Examples
@@ -7486,6 +7487,73 @@ defmodule Nx do
         [1, 2, 3]
       >
 
+      iex> Nx.stack([Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6])])
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 2, 3],
+          [4, 5, 6]
+        ]
+      >
+
+      iex> t1 = Nx.iota({2, 1, 4})
+      iex> t2 = Nx.iota({2, 1, 4})
+      iex> t3 = Nx.iota({2, 1, 4})
+      iex> Nx.stack([t1, t2, t3], axis: -1)
+      #Nx.Tensor<
+        s64[2][1][4][3]
+        [
+          [
+            [
+              [0, 0, 0],
+              [1, 1, 1],
+              [2, 2, 2],
+              [3, 3, 3]
+            ]
+          ],
+          [
+            [
+              [4, 4, 4],
+              [5, 5, 5],
+              [6, 6, 6],
+              [7, 7, 7]
+            ]
+          ]
+        ]
+      >
+
+      iex> t1 = Nx.iota({2, 1, 4})
+      iex> t2 = Nx.iota({2, 1, 4})
+      iex> t3 = Nx.iota({2, 1, 4})
+      iex> Nx.stack([t1, t2, t3], axis: 1)
+      #Nx.Tensor<
+        s64[2][3][1][4]
+        [
+          [
+            [
+              [0, 1, 2, 3]
+            ],
+            [
+              [0, 1, 2, 3]
+            ],
+            [
+              [0, 1, 2, 3]
+            ]
+          ],
+          [
+            [
+              [4, 5, 6, 7]
+            ],
+            [
+              [4, 5, 6, 7]
+            ],
+            [
+              [4, 5, 6, 7]
+            ]
+          ]
+        ]
+      >
+
       iex> Nx.stack([Nx.tensor(1), Nx.tensor(2)], name: :x)
       #Nx.Tensor<
         s64[x: 2]
@@ -7493,12 +7561,13 @@ defmodule Nx do
       >
   """
   def stack(tensors, opts \\ []) when is_list(tensors) do
-    opts = keyword!(opts, name: nil)
+    opts = keyword!(opts, axis: 0, name: nil)
+    axis = opts[:axis]
     name = opts[:name]
 
     tensors
-    |> Enum.map(&Nx.new_axis(&1, 0, name))
-    |> Nx.concatenate()
+    |> Enum.map(&Nx.new_axis(&1, axis, name))
+    |> Nx.concatenate(axis: axis)
   end
 
   @doc """
