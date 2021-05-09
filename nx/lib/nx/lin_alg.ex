@@ -103,46 +103,46 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, -4]), ord: :inf)
       #Nx.Tensor<
-        s64
-        4
+        f32
+        4.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, -4]), ord: :neg_inf)
       #Nx.Tensor<
-        s64
-        3
+        f32
+        3.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
       #Nx.Tensor<
-        u64
-        2
+        f32
+        2.0
       >
 
   ### Matrix norms
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
       #Nx.Tensor<
-        s64
-        5
+        f32
+        5.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -2], [2, -4]]), ord: 1)
       #Nx.Tensor<
-        s64
-        6
+        f32
+        6.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :neg_inf)
       #Nx.Tensor<
-        s64
-        5
+        f32
+        5.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :inf)
       #Nx.Tensor<
-        s64
-        6
+        f32
+        6.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
@@ -212,7 +212,8 @@ defmodule Nx.LinAlg do
     Nx.sum(s)
   end
 
-  defp norm_inf(%{shape: shape} = t, ord, _opts) when ord in [:inf, :neg_inf] do
+  defp norm_inf(%{shape: shape, type: type} = t, ord, _opts) when ord in [:inf, :neg_inf] do
+    output_type = Nx.Type.to_floating(type)
     aggregate_axes = if tuple_size(shape) == 2, do: &Nx.sum(&1, axes: [1]), else: & &1
     reduce = if ord == :inf, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
@@ -220,21 +221,27 @@ defmodule Nx.LinAlg do
     |> Nx.abs()
     |> aggregate_axes.()
     |> reduce.()
+    |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_}} = t, 0, _opts) do
+  defp norm_integer(%{shape: {_}, type: type} = t, 0, _opts) do
+    output_type = Nx.Type.to_floating(type)
+
     t
     |> Nx.not_equal(0)
     |> Nx.sum()
+    |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_, _}} = t, ord, _opts) when ord in [1, -1] do
+  defp norm_integer(%{shape: {_, _}, type: type} = t, ord, _opts) when ord in [1, -1] do
+    output_type = Nx.Type.to_floating(type)
     function = if ord == 1, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
     t
     |> Nx.abs()
     |> Nx.sum(axes: [0])
     |> function.()
+    |> Nx.as_type(output_type)
   end
 
   defp norm_integer(%{shape: {_, _}}, ord, _opts) when ord not in [-2, -1, 1, 2] do
