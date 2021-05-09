@@ -248,6 +248,7 @@ defmodule Nx.LinAlg do
 
   defp norm_integer(%{type: type} = t, ord, opts) when is_integer(ord) do
     output_type = Nx.Type.to_floating(type)
+    inv_ord = Nx.tensor(1 / ord, type: output_type)
 
     # We extract this result to a variable because it's used both for
     # getting the normalization coefficient and for the main pipe chain
@@ -259,18 +260,12 @@ defmodule Nx.LinAlg do
     # avoids numerical overflow.
     numerical_stability_coefficient = Nx.reduce_max(abs_t)
 
-    if numerical_stability_coefficient == Nx.tensor(0, type: type) do
-      Nx.tensor(0, type: output_type)
-    else
-      inv_ord = Nx.tensor(1 / ord, type: output_type)
-
-      abs_t
-      |> Nx.divide(numerical_stability_coefficient)
-      |> Nx.power(ord)
-      |> Nx.sum(opts)
-      |> Nx.power(inv_ord)
-      |> Nx.multiply(numerical_stability_coefficient)
-    end
+    abs_t
+    |> Nx.divide(numerical_stability_coefficient)
+    |> Nx.power(ord)
+    |> Nx.sum(opts)
+    |> Nx.power(inv_ord)
+    |> Nx.multiply(numerical_stability_coefficient)
   end
 
   @doc """
