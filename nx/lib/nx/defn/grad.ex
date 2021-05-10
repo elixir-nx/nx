@@ -144,7 +144,7 @@ defmodule Nx.Defn.Grad do
   # in the AST.
   defp to_grad(expr, res, cache) do
     Tree.composite(expr, cache, fn
-      %T{data: %Expr{id: id, op: op, args: args}} = ans, {result_cache, jvp_cache} = cache ->
+      %T{data: %Expr{id: id, op: op, args: args}} = ans, {result_cache, no_g_cache} = cache ->
         key = [id | res.data.id]
 
         case result_cache do
@@ -159,28 +159,28 @@ defmodule Nx.Defn.Grad do
 
           %{} ->
             case grad(op, args, ans, res, cache) do
-              {res, {result_cache, jvp_cache}} ->
-                {res, {Map.put(result_cache, key, res), jvp_cache}}
+              {res, {result_cache, no_g_cache}} ->
+                {res, {Map.put(result_cache, key, res), no_g_cache}}
 
               :none ->
-                jvps =
-                  case jvp_cache do
-                    %{^id => jvps} -> jvps
-                    %{} -> jvp(op, args, ans)
+                no_gs =
+                  case no_g_cache do
+                    %{^id => no_gs} -> no_gs
+                    %{} -> no_g_grad(op, args, ans)
                   end
 
-                {res, {result_cache, jvp_cache}} = grad_jvps(jvps, ans, res, cache)
-                {res, {Map.put(result_cache, key, res), Map.put(jvp_cache, id, jvps)}}
+                {res, {result_cache, no_g_cache}} = grad_no_gs(no_gs, ans, res, cache)
+                {res, {Map.put(result_cache, key, res), Map.put(no_g_cache, id, no_gs)}}
             end
         end
     end)
   end
 
-  defp grad_jvps([], _ans, _g, cache), do: {Expr.tensor(0.0), cache}
+  defp grad_no_gs([], _ans, _g, cache), do: {Expr.tensor(0.0), cache}
 
-  defp grad_jvps(jvps, ans, g, cache) do
+  defp grad_no_gs(no_gs, ans, g, cache) do
     {exprs, cache} =
-      Enum.map_reduce(jvps, cache, fn {expr, subg}, cache ->
+      Enum.map_reduce(no_gs, cache, fn {expr, subg}, cache ->
         to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
       end)
 
@@ -483,25 +483,25 @@ defmodule Nx.Defn.Grad do
     :none
   end
 
-  ## JVP gradients
+  ## Gradients that don't rely on g and can be cached more often
 
-  defp jvp(:add, [x, y], _ans) do
+  defp no_g_grad(:add, [x, y], _ans) do
     [{x, Expr.tensor(1.0)}, {y, Expr.tensor(1.0)}]
   end
 
-  defp jvp(:subtract, [x, y], _ans) do
+  defp no_g_grad(:subtract, [x, y], _ans) do
     [{x, Expr.tensor(1.0)}, {y, Expr.tensor(-1.0)}]
   end
 
-  defp jvp(:multiply, [x, y], _ans) do
+  defp no_g_grad(:multiply, [x, y], _ans) do
     [{x, y}, {y, x}]
   end
 
-  defp jvp(:divide, [x, y], ans) do
+  defp no_g_grad(:divide, [x, y], ans) do
     [{x, Nx.divide(1.0, y)}, {y, Nx.negate(Nx.divide(ans, y))}]
   end
 
-  defp jvp(:quotient, _, _) do
+  defp no_g_grad(:quotient, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.quotient/2.
 
@@ -511,11 +511,11 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp jvp(:remainder, [x, y], _ans) do
+  defp no_g_grad(:remainder, [x, y], _ans) do
     [{x, Expr.tensor(1.0)}, {y, Nx.negate(Nx.floor(Nx.divide(x, y)))}]
   end
 
-  defp jvp(:power, [x, y], ans) do
+  defp no_g_grad(:power, [x, y], ans) do
     # Since we do many operations against literals,
     # we try to surface any scalar number.
     sx = surface_nuldim_scalar(x)
@@ -529,12 +529,12 @@ defmodule Nx.Defn.Grad do
     [{x, gx}, {y, gy}]
   end
 
-  defp jvp(:atan2, [x, y], _ans) do
+  defp no_g_grad(:atan2, [x, y], _ans) do
     den = Nx.add(Nx.multiply(x, x), Nx.multiply(y, y))
     [{x, Nx.divide(y, den)}, {y, Nx.negate(Nx.divide(x, den))}]
   end
 
-  defp jvp(op, [x, y], ans) when op in [:min, :max] do
+  defp no_g_grad(op, [x, y], ans) when op in [:min, :max] do
     lhs =
       Nx.divide(
         Nx.select(Nx.equal(x, ans), 1.0, 0.0),
@@ -550,53 +550,53 @@ defmodule Nx.Defn.Grad do
     [{x, lhs}, {y, rhs}]
   end
 
-  defp jvp(:outer, [x, y], _ans) do
+  defp no_g_grad(:outer, [x, y], _ans) do
     x = Nx.reshape(x, {Nx.size(x.shape), 1})
     y = Nx.reshape(y, {1, Nx.size(y.shape)})
     [{x, y}, {y, x}]
   end
 
-  defp jvp(:as_type, [x], _ans) do
+  defp no_g_grad(:as_type, [x], _ans) do
     [{x, Expr.tensor(1.0)}]
   end
 
-  defp jvp(:bitcast, [x], _ans) do
+  defp no_g_grad(:bitcast, [x], _ans) do
     [{x, Expr.tensor(1.0)}]
   end
 
-  defp jvp(:metadata, [expr, _metadata], _ans) do
+  defp no_g_grad(:metadata, [expr, _metadata], _ans) do
     [{expr, Expr.tensor(1.0)}]
   end
 
-  defp jvp(:abs, [x], _ans) do
+  defp no_g_grad(:abs, [x], _ans) do
     [{x, Nx.select(Nx.greater_equal(x, 0.0), 1.0, -1.0)}]
   end
 
-  defp jvp(:sqrt, [x], ans) do
+  defp no_g_grad(:sqrt, [x], ans) do
     [{x, Nx.divide(0.5, ans)}]
   end
 
-  defp jvp(:cbrt, [x], ans) do
+  defp no_g_grad(:cbrt, [x], ans) do
     [{x, Nx.divide(1.0, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))}]
   end
 
-  defp jvp(:exp, [x], ans) do
+  defp no_g_grad(:exp, [x], ans) do
     [{x, ans}]
   end
 
-  defp jvp(:expm1, [x], ans) do
+  defp no_g_grad(:expm1, [x], ans) do
     [{x, Nx.add(ans, 1)}]
   end
 
-  defp jvp(:log, [x], _ans) do
+  defp no_g_grad(:log, [x], _ans) do
     [{x, Nx.divide(1.0, x)}]
   end
 
-  defp jvp(:log1p, [x], _ans) do
+  defp no_g_grad(:log1p, [x], _ans) do
     [{x, Nx.divide(1.0, Nx.add(x, 1))}]
   end
 
-  defp jvp(:logistic, [x], ans) do
+  defp no_g_grad(:logistic, [x], ans) do
     g =
       x
       |> Nx.negate()
@@ -607,67 +607,67 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp jvp(:negate, [x], _ans) do
+  defp no_g_grad(:negate, [x], _ans) do
     [{x, Expr.tensor(-1.0)}]
   end
 
-  defp jvp(:rsqrt, [x], _ans) do
+  defp no_g_grad(:rsqrt, [x], _ans) do
     [{x, Nx.multiply(-0.5, Nx.power(x, -1.5))}]
   end
 
-  defp jvp(:sin, [x], _ans) do
+  defp no_g_grad(:sin, [x], _ans) do
     [{x, Nx.cos(x)}]
   end
 
-  defp jvp(:asin, [x], _ans) do
+  defp no_g_grad(:asin, [x], _ans) do
     [{x, Nx.rsqrt(Nx.subtract(1.0, Nx.multiply(x, x)))}]
   end
 
-  defp jvp(:sinh, [x], _ans) do
+  defp no_g_grad(:sinh, [x], _ans) do
     [{x, Nx.cosh(x)}]
   end
 
-  defp jvp(:asinh, [x], _ans) do
+  defp no_g_grad(:asinh, [x], _ans) do
     [{x, Nx.rsqrt(Nx.add(Nx.multiply(x, x), 1.0))}]
   end
 
-  defp jvp(:acosh, [x], _ans) do
+  defp no_g_grad(:acosh, [x], _ans) do
     [{x, Nx.rsqrt(Nx.subtract(Nx.multiply(x, x), 1.0))}]
   end
 
-  defp jvp(:atanh, [x], _ans) do
+  defp no_g_grad(:atanh, [x], _ans) do
     [{x, Nx.divide(1.0, Nx.subtract(1.0, Nx.multiply(x, x)))}]
   end
 
-  defp jvp(:cos, [x], _ans) do
+  defp no_g_grad(:cos, [x], _ans) do
     [{x, Nx.negate(Nx.sin(x))}]
   end
 
-  defp jvp(:acos, [x], _ans) do
+  defp no_g_grad(:acos, [x], _ans) do
     [{x, Nx.negate(Nx.rsqrt(Nx.subtract(1.0, Nx.multiply(x, x))))}]
   end
 
-  defp jvp(:cosh, [x], _ans) do
+  defp no_g_grad(:cosh, [x], _ans) do
     [{x, Nx.sinh(x)}]
   end
 
-  defp jvp(:tan, [x], _ans) do
+  defp no_g_grad(:tan, [x], _ans) do
     cos = Nx.cos(x)
     [{x, 1 |> Nx.divide(cos) |> Nx.divide(cos)}]
   end
 
-  defp jvp(:atan, [x], _ans) do
+  defp no_g_grad(:atan, [x], _ans) do
     [{x, Nx.divide(1.0, Nx.add(1.0, Nx.multiply(x, x)))}]
   end
 
-  defp jvp(:tanh, [x], ans) do
+  defp no_g_grad(:tanh, [x], ans) do
     [{x, Nx.subtract(1.0, Nx.multiply(ans, ans))}]
   end
 
   @half_sqrt_pi :math.sqrt(:math.pi()) / 2
   @two_rsqrt_pi 2 / :math.sqrt(:math.pi())
 
-  defp jvp(:erf, [x], _ans) do
+  defp no_g_grad(:erf, [x], _ans) do
     g =
       x
       |> Nx.multiply(x)
@@ -678,7 +678,7 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp jvp(:erfc, [x], _ans) do
+  defp no_g_grad(:erfc, [x], _ans) do
     g =
       x
       |> Nx.multiply(x)
@@ -689,12 +689,12 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp jvp(:erf_inv, [x], ans) do
+  defp no_g_grad(:erf_inv, [x], ans) do
     g = Nx.multiply(@half_sqrt_pi, Nx.exp(Nx.multiply(ans, ans)))
     [{x, g}]
   end
 
-  defp jvp(:reduce, _, _) do
+  defp no_g_grad(:reduce, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce/4.
 
@@ -706,7 +706,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp jvp(:window_product, _, _) do
+  defp no_g_grad(:window_product, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.window_product/3.
 
@@ -716,7 +716,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp jvp(:reduce_window, _, _) do
+  defp no_g_grad(:reduce_window, _, _) do
     raise ArgumentError, """
     cannot compute gradient for Nx.reduce_window/5.
 
@@ -730,7 +730,7 @@ defmodule Nx.Defn.Grad do
 
   @error [:map]
 
-  defp jvp(op, _, _) when op in @error do
+  defp no_g_grad(op, _, _) when op in @error do
     raise ArgumentError, """
     cannot compute gradient for Nx.#{op}.
 
@@ -748,11 +748,11 @@ defmodule Nx.Defn.Grad do
                [:floor, :round, :ceil, :sign] ++
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal]
 
-  defp jvp(op, _, _) when op in @constants do
+  defp no_g_grad(op, _, _) when op in @constants do
     []
   end
 
-  defp jvp(op, _, _) do
+  defp no_g_grad(op, _, _) do
     raise ArgumentError, """
     gradient not yet implemented for Nx.#{op}.
 
