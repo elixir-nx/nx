@@ -695,6 +695,12 @@ defmodule EXLA.Defn do
     EXLA.Op.slice(slice, zeros, lengths, strides)
   end
 
+  defp to_operator(:put_slice, [tensor, slice, start_indices], ans, _state) do
+    tensor = to_type(tensor, ans.type)
+    slice = to_type(slice, ans.type)
+    EXLA.Op.dynamic_update_slice(tensor, slice, start_indices)
+  end
+
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do
     EXLA.Op.reverse(tensor, axes)
   end

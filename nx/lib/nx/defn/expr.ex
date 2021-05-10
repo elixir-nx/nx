@@ -636,10 +636,21 @@ defmodule Nx.Defn.Expr do
     if axis in axes do
       [{is, il} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
     else
-      [s | start] = start
+      [_ | start] = start
       [l | lengths] = lengths
-      [{Nx.add(is, 1), l} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
+
+      [
+        {Nx.add(is, 1), l}
+        | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)
+      ]
     end
+  end
+
+  @impl true
+  def put_slice(out, tensor, slice, start) do
+    {[tensor, slice | start], context} = to_exprs([tensor, slice | start])
+
+    expr(out, context, :put_slice, [tensor, slice, start])
   end
 
   @impl true

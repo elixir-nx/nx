@@ -324,13 +324,13 @@ defmodule Nx.Defn.Grad do
     grad_pairs([{x, g_operand}, {value, g_value}], g, cache)
   end
 
-  defp grad(:slice, [x, start_indices, _lengths, strides], _ans, g, cache) do
-    lo_pads = start_indices
-    hi_pads = hi_pads(0, g.shape, x.shape, start_indices, strides)
-    interior_pads = Enum.map(strides, &(&1 - 1))
+  defp grad(:slice, [x, start_indices, _lengths, strides], ans, g, cache) do
+    zeros = Nx.broadcast(0.0, ans)
+    g = Nx.put_slice(zeros, g, start_indices)
 
-    padding_config = Enum.zip([lo_pads, hi_pads, interior_pads])
+    padding_config = Enum.map(strides, &{0, 0, &1 - 1})
     pad_value = 0.0
+
     to_grad(x, Nx.pad(g, pad_value, padding_config), cache)
   end
 
@@ -1003,16 +1003,6 @@ defmodule Nx.Defn.Grad do
 
     to_grad(x, fun.(g), cache)
   end
-
-  defp hi_pads(pos, g_shape, x_shape, [start | starts], [stride | strides]) do
-    g_dim = elem(g_shape, pos)
-    x_dim = elem(x_shape, pos)
-
-    val = x_dim - (start + (1 + stride * (g_dim - 1)))
-    [val | hi_pads(pos + 1, g_shape, x_shape, starts, strides)]
-  end
-
-  defp hi_pads(_, _, _, [], []), do: []
 
   defp surface_nuldim_scalar(expr) do
     case expr do

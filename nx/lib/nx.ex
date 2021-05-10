@@ -7267,22 +7267,24 @@ defmodule Nx do
       start_indices
       |> Enum.with_index()
       |> Enum.map(fn {index, i} ->
-          %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
-          unless idx_shape == {} do
-            raise ArgumentError, "index must be scalar, got shape #{inspect(idx_shape)}"
-                                 <> " for axis #{i}"
-          end
+        %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
 
-          case idx_type do
-            {:s, _} ->
-              t
+        unless idx_shape == {} do
+          raise ArgumentError,
+                "index must be scalar, got shape #{inspect(idx_shape)}" <>
+                  " for axis #{i}"
+        end
 
-            {:u, _} ->
-              t
+        case idx_type do
+          {:s, _} ->
+            t
 
-            type ->
-              raise ArgumentError, "index must be integer type, got #{inspect(type)} for axis #{i}"
-          end
+          {:u, _} ->
+            t
+
+          type ->
+            raise ArgumentError, "index must be integer type, got #{inspect(type)} for axis #{i}"
+        end
       end)
 
     strides =
@@ -7395,33 +7397,43 @@ defmodule Nx do
       >
   """
   def put_slice(tensor, slice, start_indices) when is_list(start_indices) do
-    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    %T{shape: slice_shape, names: slice_names} = slice = to_tensor(slice)
+    %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
+    %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
+
+    output_type = binary_type(type, slice_type)
 
     start_indices =
       start_indices
       |> Enum.with_index()
       |> Enum.map(fn {index, i} ->
-          %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
-          unless idx_shape == {} do
-            raise ArgumentError, "index must be scalar, got shape #{inspect(idx_shape)}"
-                                 <> " for axis #{i}"
-          end
+        %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
 
-          case idx_type do
-            {:s, _} ->
-              t
+        unless idx_shape == {} do
+          raise ArgumentError,
+                "index must be scalar, got shape #{inspect(idx_shape)}" <>
+                  " for axis #{i}"
+        end
 
-            {:u, _} ->
-              t
+        case idx_type do
+          {:s, _} ->
+            t
 
-            type ->
-              raise ArgumentError, "index must be integer type, got #{inspect(type)} for axis #{i}"
-          end
+          {:u, _} ->
+            t
+
+          type ->
+            raise ArgumentError, "index must be integer type, got #{inspect(type)} for axis #{i}"
+        end
       end)
 
     {shape, names} = Nx.Shape.put_slice(shape, names, slice_shape, slice_names, start_indices)
-    impl!(tensor).put_slice(%{tensor | shape: shape, names: names}, tensor, slice, start_indices)
+
+    impl!(tensor).put_slice(
+      %{tensor | shape: shape, names: names, type: output_type},
+      tensor,
+      slice,
+      start_indices
+    )
   end
 
   @doc """

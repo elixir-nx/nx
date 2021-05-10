@@ -53,13 +53,37 @@ defmodule Nx.Defn.Tree do
 
   def traverse_args(%T{data: %Expr{op: :slice, args: [tensor, start_indices | args]}}, acc, fun) do
     {tensor, acc} = fun.(tensor, acc)
-    {start_indices, acc} = Enum.map_reduce(start_indices, acc, fn
-      x, acc when is_integer(x) ->
-        {x, acc}
-      x, acc ->
-        fun.(x, acc)
+
+    {start_indices, acc} =
+      Enum.map_reduce(start_indices, acc, fn
+        x, acc when is_integer(x) ->
+          {x, acc}
+
+        x, acc ->
+          fun.(x, acc)
       end)
+
     {[tensor, start_indices | args], acc}
+  end
+
+  def traverse_args(
+        %T{data: %Expr{op: :put_slice, args: [tensor, slice, start_indices]}},
+        acc,
+        fun
+      ) do
+    {tensor, acc} = fun.(tensor, acc)
+    {slice, acc} = fun.(slice, acc)
+
+    {start_indices, acc} =
+      Enum.map_reduce(start_indices, acc, fn
+        x, acc when is_integer(x) ->
+          {x, acc}
+
+        x, acc ->
+          fun.(x, acc)
+      end)
+
+    {[tensor, slice, start_indices], acc}
   end
 
   def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do

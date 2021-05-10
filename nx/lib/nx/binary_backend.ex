@@ -1612,8 +1612,8 @@ defmodule Nx.BinaryBackend do
       [Tuple.to_list(shape), start_indices, lengths]
       |> Enum.zip()
       |> Enum.map(fn {dim_size, idx, len} ->
-          idx = to_scalar(idx)
-          min(max(idx, 0), dim_size - len)
+        idx = to_scalar(idx)
+        min(max(idx, 0), dim_size - len)
       end)
 
     if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
@@ -1642,41 +1642,6 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  @impl true
-  def put_slice(out, tensor, slice, start_indices) do
-    %T{type: {_, size}, shape: shape} = as_type(out, tensor)
-    %T{type: {_, slice_size}, shape: slice_shape} = as_type(out, slice)
-
-    %{shape: output_shape} = out
-
-    start_indices =
-      [Tuple.to_list(shape), start_indices, Tuple.to_list(slice_shape)]
-      |> Enum.zip()
-      |> Enum.map(fn {dim_size, idx, len} ->
-          idx = to_scalar(idx)
-          min(max(idx, 0), dim_size - len)
-      end)
-
-    if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
-      offset = Nx.size(output_shape) * size
-      slice_offset = Nx.size(slice_shape) * slice_size
-      <<start::size(offset)-bitstring, _::size(slice_offset)-bitstring, rest::bitstring>> = to_binary(tensor)
-      output_data = IO.iodata_to_binary([start, to_binary(slice), rest])
-      from_binary(out, output_data)
-    else
-      # Anchored around the start indices
-      weighted_shape = weighted_shape(shape, size, output_shape)
-      offset = weighted_offset(weighted_shape, start_indices)
-      slice_offset = Nx.shape(slice_shape) * slice_size
-
-      <<start::size(offset)-bitstring, _::size(slice_offset)-bitstring, rest::bitstring>> = to_binary(tensor)
-
-      output_data = IO.iodata_to_binary([start, to_binary(slice), rest])
-
-      from_binary(out, output_data)
-    end
-  end
-
   defp top_dimension_slice?(1, _, _), do: true
 
   defp top_dimension_slice?(i, is, os)
@@ -1684,6 +1649,51 @@ defmodule Nx.BinaryBackend do
        do: top_dimension_slice?(i - 1, is, os)
 
   defp top_dimension_slice?(_, _, _), do: false
+
+  @impl true
+  def put_slice(out, tensor, slice, start_indices) do
+    %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
+    %T{shape: slice_shape} = slice = as_type(out, slice)
+
+    start_indices =
+      [Tuple.to_list(shape), start_indices, Tuple.to_list(slice_shape)]
+      |> Enum.zip()
+      |> Enum.map(fn {dim_size, idx, len} ->
+        idx = to_scalar(idx)
+        min(max(idx, 0), dim_size - len)
+      end)
+
+    weighted_shape = weighted_shape(shape, size)
+
+    rank = Nx.rank(shape)
+    ones = List.duplicate(1, rank)
+
+    offsets =
+      slice_shape
+      |> make_anchors(ones, List.to_tuple(ones))
+      |> Enum.map(fn index ->
+        pos =
+          index
+          |> Enum.zip(start_indices)
+          |> Enum.map(fn {x, s} -> x + s end)
+
+        weighted_offset(weighted_shape, pos)
+      end)
+      |> Enum.sort()
+
+    {_, data} =
+      for offset <- offsets, reduce: {to_binary(slice), to_binary(tensor)} do
+        {<<cur_elem::size(size)-bitstring, rest_of_slice::bitstring>>, binary} ->
+          <<before::size(offset)-bitstring, _::size(size)-bitstring, rest_of_tensor::bitstring>> =
+            binary
+
+          {rest_of_slice,
+           <<before::size(offset)-bitstring, cur_elem::size(size)-bitstring,
+             rest_of_tensor::bitstring>>}
+      end
+
+    from_binary(out, data)
+  end
 
   @impl true
   def concatenate(out, tensors, axis) do
