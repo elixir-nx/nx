@@ -1631,7 +1631,7 @@ defmodule Nx do
       iex> Nx.tile(Nx.tensor([1,2]), nil)
       ** (ArgumentError) repetitions must be a list of integers, got: nil
   """
-  @doc type: :shape
+  @doc type: :shape, from_backend: false
   def tile(tensor, repetitions) do
     tensor = to_tensor(tensor)
 
@@ -1720,7 +1720,7 @@ defmodule Nx do
       >
 
   """
-  @doc type: :shape
+  @doc type: :shape, from_backend: false
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
     %{shape: shape, names: names} = tensor = to_tensor(tensor)
     rank = tuple_size(shape)
@@ -4817,7 +4817,7 @@ defmodule Nx do
       >
 
   """
-  @doc type: :aggregation
+  @doc type: :aggregation, from_backend: false
   def mean(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
 
@@ -7316,6 +7316,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :shape, from_backend: false
   def slice_axis(tensor, start_index, len, axis, opts \\ [])
       when is_integer(start_index) and is_integer(len) do
     opts = keyword!(opts, [:strides])
@@ -7560,6 +7561,7 @@ defmodule Nx do
         [1, 2]
       >
   """
+  @doc type: :ndim, from_backend: false
   def stack(tensors, opts \\ []) when is_list(tensors) do
     opts = keyword!(opts, axis: 0, name: nil)
     axis = opts[:axis]
