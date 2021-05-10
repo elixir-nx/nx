@@ -180,6 +180,7 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.norm(Nx.tensor([3, 4]), ord: :frobenius)
       ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
   """
+  @doc from_backend: false
   def norm(tensor, opts \\ []) when is_list(opts) do
     %{shape: s} = t = Nx.to_tensor(tensor)
     opts = keyword!(opts, [:ord, :axes])
@@ -389,6 +390,7 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
+  @doc from_backend: false
   def solve(a, b) do
     %T{shape: a_shape} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
@@ -412,7 +414,7 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Invert a square 2-D tensor.
+  Inverts a square 2-D tensor.
 
   For non-square tensors, use `svd/2` for pseudo-inverse calculations.
 
@@ -459,6 +461,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) can't solve for singular matrix
 
   """
+  @doc from_backend: false
   def invert(tensor) do
     %T{shape: {m, n}} = tensor = Nx.to_tensor(tensor)
 
