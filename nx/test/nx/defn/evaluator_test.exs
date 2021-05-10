@@ -186,17 +186,27 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
-  describe "anonymous functions args" do
+  describe "anonymous functions" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
-    test "calls anonymous function directly" do
+    test "calls external anonymous function directly" do
       assert calls_binary_fun(&Nx.add/2, 1, 2.0) == Nx.tensor(3.0)
     end
 
     defn calls_reduce_fun(fun, t), do: Nx.reduce(t, 0, fun)
 
-    test "calls anonymous function via reduce" do
+    test "calls external anonymous function via reduce" do
       assert calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3])) == Nx.tensor(6)
+    end
+
+    defn calls_map_fun(t) do
+      Nx.map(t, fn x ->
+        if Nx.equal(x, 0), do: 1, else: -x
+      end)
+    end
+
+    test "calls internal anonymous function via map" do
+      assert calls_map_fun(Nx.tensor([0, 1, 2])) == Nx.tensor([1, -1, -2])
     end
   end
 end

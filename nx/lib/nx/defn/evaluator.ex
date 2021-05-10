@@ -18,12 +18,25 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __jit__(_key, vars, fun, _opts) do
-    fun.(vars)
+    eval_fun(fun.(vars), vars)
+  end
+
+  defp eval_fun(res, vars) do
+    res
     |> composite_eval(vars, %{})
     |> elem(0)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :fun, args: [_, _, fun]}}, _vars, cache) do
+    fun =
+      cond do
+        is_function(fun, 1) ->
+          fn arg1 -> eval_fun(fun.(arg1), [arg1]) end
+
+        is_function(fun, 2) ->
+          fn arg1, arg2 -> eval_fun(fun.(arg1, arg2), [arg1, arg2]) end
+      end
+
     {fun, cache}
   end
 
