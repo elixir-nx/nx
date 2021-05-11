@@ -277,10 +277,24 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Solve the equation `a x = b` for x, assuming `a` is a lower triangular matrix.
+  Solve the equation `a x = b` for x, assuming `a` is a triangular matrix.
+  Can also solve `x a = b` for x. See the `:left_side` option below.
 
   `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
   with as many rows as `a`.
+
+  ## Options
+
+  The following options are defined in order of precedence
+
+  * `:transform_a` - Defines `op(a)`, depending on its value. Can be one of:
+    * `:none` -> `op(a) = a`
+    * `:transpose` -> `op(a) = transpose(a)`
+    Defaults to `:none`
+  * `:lower` - When `true`, defines the `a` matrix as lower triangular. If false, a is upper triangular.
+               Defaults to `true`
+  * `:left_side` - When `true`, solves the system as `op(A).X = B`. Otherwise, solves `X.op(A) = B`. Defaults to `true`.
+  * `:unit_diagonal` - When `true`, the diagonal elements aren't accessed. Defaults to `false`
 
   ## Examples
 
@@ -354,6 +368,14 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) can't solve for singular matrix
 
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
+      ** (ArgumentError) complex numbers not supported yet
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
+      ** (ArgumentError) invalid value for :transform_a option, expected one of [:none, :transpose, :conjugate], got :other
+
   """
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, unit_diagonal: false, transform_a: :none)
@@ -371,24 +393,9 @@ defmodule Nx.LinAlg do
       t ->
         raise ArgumentError,
               "invalid value for :transform_a option, expected one of [:none, :transpose, :conjugate], got #{
-                t
+                inspect(t)
               }"
     end
-
-    # opts to implement:
-    # OK left_side: true/false ->
-    #   if true, solves op(A).X = B
-    #   if false solves X.op(A) = B
-    # OK lower: true/false
-    #   if true, solves as if A is lower triangular
-    #   if false, solves as if A is upper triangular
-    # unit_diagonal: true/false (not relevant to implementation)
-    #   if true, the diagonal elements are not accessed
-    #   if false, the solver proceeds normally
-    # transform_a: :none, :transpose, :conjugate
-    #   :none -> op(a) = a
-    #   :transpose -> op(a) = transpose(a)
-    #   :conjugate -> op(a) = conjugate(a) # not implemented
 
     case a_shape do
       {n, n} ->
