@@ -719,7 +719,11 @@ defmodule EXLA.Defn do
       |> to_constant(0.0, ans.type)
       |> EXLA.Op.broadcast_in_dim(ans.shape, broadcast_axes({}, ans.shape))
 
-    EXLA.Op.select(EXLA.Op.equal(cholesky, tensor), zeros, cholesky)
+    iota_shape = EXLA.Shape.make_shape({:s, 64}, ans.shape)
+    iota_one = EXLA.Op.iota(state.builder, iota_shape, 1)
+    iota_zero = EXLA.Op.iota(state.builder, iota_shape, 0)
+
+    EXLA.Op.select(EXLA.Op.less_equal(iota_one, iota_zero), cholesky, zeros)
   end
 
   defp to_operator(:sort, [tensor, opts], ans, state) do

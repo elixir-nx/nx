@@ -2727,6 +2727,10 @@ defmodule EXLA.DefnExprTest do
       lhs = cholesky(Nx.tensor([[20.0, 17.6], [17.6, 16.0]]))
       rhs = Nx.tensor([[4.47213595499958, 0.0], [3.93547964039963, 0.7155417527999305]])
       compare_tensors!(lhs, rhs)
+
+      lhs = cholesky(Nx.tensor([[1, 2], [2, 5]]))
+      rhs = Nx.tensor([[1.0, 0.0], [2.0, 1.0]])
+      compare_tensors!(lhs, rhs)
     end
 
     test "works on a 4x4 matrix" do
