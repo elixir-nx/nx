@@ -324,14 +324,15 @@ defmodule Nx.Defn.Grad do
     grad_pairs([{x, g_operand}, {value, g_value}], g, cache)
   end
 
-  defp grad(:slice, [x, start_indices, _lengths, strides], ans, g, cache) do
-    zeros = Nx.broadcast(Expr.tensor(0.0), ans)
-    g = Nx.put_slice(zeros, g, start_indices)
-
+  defp grad(:slice, [x, start_indices, _lengths, strides], _ans, g, cache) do
     padding_config = Enum.map(strides, &{0, 0, &1 - 1})
     pad_value = 0.0
+    g = Nx.pad(g, pad_value, padding_config)
 
-    to_grad(x, Nx.pad(g, pad_value, padding_config), cache)
+    zeros = Nx.broadcast(Expr.tensor(0.0), x)
+    g = Nx.put_slice(zeros, g, start_indices)
+
+    to_grad(x, g, cache)
   end
 
   defp grad(:reverse, [x, axes], _ans, g, cache) do
