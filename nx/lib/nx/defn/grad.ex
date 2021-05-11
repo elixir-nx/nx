@@ -325,7 +325,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:slice, [x, start_indices, _lengths, strides], ans, g, cache) do
-    zeros = Nx.broadcast(0.0, ans)
+    zeros = Nx.broadcast(Expr.tensor(0.0), ans)
     g = Nx.put_slice(zeros, g, start_indices)
 
     padding_config = Enum.map(strides, &{0, 0, &1 - 1})
