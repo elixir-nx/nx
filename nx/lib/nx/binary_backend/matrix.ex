@@ -3,31 +3,78 @@ defmodule Nx.BinaryBackend.Matrix do
   @default_eps 1.0e-10
   import Nx.Shared
 
-  def ts(a_data, a_type, b_data, b_type, {rows, rows} = shape, output_type, opts) do
-    a_matrix = a_data |> binary_to_matrix(a_type, shape) |> ts_handle_lower_opt(opts, :a)
-    b_matrix = b_data |> binary_to_matrix(b_type, shape) |> ts_handle_lower_opt(opts, :b)
+  def ts(a_data, a_type, b_data, b_type, shape, output_type, opts) do
+    a_shape =
+      case shape do
+        {rows} -> {rows, rows}
+        shape -> shape
+      end
 
+    a_matrix = a_data |> binary_to_matrix(a_type, a_shape) |> ts_handle_lower_opt(opts, :a)
+
+    b_matrix_or_vec =
+      case shape do
+        {rows, rows} ->
+          b_data |> binary_to_matrix(b_type, shape) |> ts_handle_lower_opt(opts, :b)
+
+        {_rows} ->
+          b_data |> binary_to_vector(b_type) |> ts_handle_lower_opt(opts, :b)
+      end
+
+    result =
+      if opts[:left_side] do
+        do_ts(a_matrix, b_matrix_or_vec, shape, opts)
+      else
+        do_ts_right_side(a_matrix, b_matrix_or_vec, shape, opts)
+      end
+
+    matrix_to_binary(result, output_type)
+  end
+
+  defp do_ts_right_side(a_matrix, b_matrix_or_vec, shape, opts) do
+    # Let's notate the system matrix as L when it's a lower triangular matrix
+    # and U when it's upper triangular
+    #
+    # To solve X.L = B, we can then transpose both sides:
+    # transpose(X.L) = transpose(L).X_t = U.X_t = b_t
+    # This equation, in turn, has the same shape (U.X = B) as the one we can solve through
+    # applying `ts_handle_lower_opt` properly, which would yield X_t.
+    # Transposing the result suffices for yielding the final result.
+
+    u = transpose_matrix(a_matrix) |> ts_handle_lower_opt([lower: false], :a)
+
+    b_t =
+      case shape do
+        {_, _} ->
+          b_matrix_or_vec |> transpose_matrix() |> ts_handle_lower_opt([lower: false], :b)
+
+        {_} ->
+          b_matrix_or_vec |> ts_handle_lower_opt([lower: false], :b)
+      end
+
+    u
+    |> do_ts(b_t, shape, Keyword.put(opts, :lower, false))
+    |> transpose_matrix()
+  end
+
+  defp do_ts(a_matrix, b_matrix, {rows, rows}, opts) do
     Enum.uniq(1..rows)
     |> Enum.map(fn b_col ->
       b_vector = get_matrix_column(b_matrix, b_col - 1)
 
-      ts(a_matrix, b_vector, 0, [])
+      do_ts(a_matrix, b_vector, 0, [])
     end)
     |> transpose_matrix()
     |> ts_handle_lower_opt(opts, :result)
-    |> matrix_to_binary(output_type)
   end
 
-  def ts(a_data, a_type, b_data, b_type, {rows}, output_type, opts) do
-    a_matrix = binary_to_matrix(a_data, a_type, {rows, rows}) |> ts_handle_lower_opt(opts, :a)
-    b_vector = binary_to_vector(b_data, b_type) |> ts_handle_lower_opt(opts, :b)
-
-    ts(a_matrix, b_vector, 0, [])
+  defp do_ts(a_matrix, b_vector, {_}, opts) do
+    a_matrix
+    |> do_ts(b_vector, 0, [])
     |> ts_handle_lower_opt(opts, :result)
-    |> matrix_to_binary(output_type)
   end
 
-  defp ts([row | rows], [b | bs], idx, acc) do
+  defp do_ts([row | rows], [b | bs], idx, acc) do
     value = Enum.fetch!(row, idx)
 
     if value == 0 do
@@ -35,10 +82,10 @@ defmodule Nx.BinaryBackend.Matrix do
     end
 
     y = (b - dot_matrix(row, acc)) / value
-    ts(rows, bs, idx + 1, acc ++ [y])
+    do_ts(rows, bs, idx + 1, acc ++ [y])
   end
 
-  defp ts([], [], _idx, acc), do: acc
+  defp do_ts([], [], _idx, acc), do: acc
 
   defp ts_handle_lower_opt(matrix, opts, :a) do
     if opts[:lower] do

@@ -317,6 +317,18 @@ defmodule Nx.LinAlg do
         [-1.3333333730697632, 2.6666667461395264, -0.6666666865348816, 1.3333333730697632]
       >
 
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+      iex> b = Nx.tensor([[0, 2, 1], [1, 1, 0], [3, 3, 1]])
+      iex> Nx.LinAlg.triangular_solve(a, b, left_side: false)
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [-1.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0],
+          [1.0, 1.0, 1.0]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -330,7 +342,7 @@ defmodule Nx.LinAlg do
 
   """
   def triangular_solve(a, b, opts \\ []) do
-    opts = keyword!(opts, lower: true)
+    opts = keyword!(opts, lower: true, left_side: true)
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
@@ -339,7 +351,7 @@ defmodule Nx.LinAlg do
     # left_side: true/false ->
     #   if true, solves op(A).X = B
     #   if false solves X.op(A) = B
-    # lower: true/false
+    # OK lower: true/false
     #   if true, solves as if A is lower triangular
     #   if false, solves as if A is upper triangular
     # unit_diagonal: true/false
