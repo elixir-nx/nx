@@ -1601,12 +1601,14 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def slice(out, tensor, start_indices, _lengths, strides) do
+  def slice(out, tensor, start_indices, lengths, strides) do
     # If you think of a slice as drawing a bounding box in the dimensions
     # of the tensor, then it's clear we can simply use a weighted
     # traversal to construct the new tensor
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
+
+    start_indices = clamp_indices(start_indices, shape, lengths)
 
     if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
@@ -1634,6 +1636,16 @@ defmodule Nx.BinaryBackend do
     end
   end
 
+  defp clamp_indices(start_indices, shape, lengths) do
+    # TODO: Use Enum.zip_with on Elixir v1.12
+    [Tuple.to_list(shape), start_indices, lengths]
+    |> Enum.zip()
+    |> Enum.map(fn {dim_size, idx, len} ->
+      idx = to_scalar(idx)
+      min(max(idx, 0), dim_size - len)
+    end)
+  end
+
   defp top_dimension_slice?(1, _, _), do: true
 
   defp top_dimension_slice?(i, is, os)
@@ -1641,6 +1653,45 @@ defmodule Nx.BinaryBackend do
        do: top_dimension_slice?(i - 1, is, os)
 
   defp top_dimension_slice?(_, _, _), do: false
+
+  @impl true
+  def put_slice(out, tensor, slice, start_indices) do
+    %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
+    %T{shape: slice_shape} = slice = as_type(out, slice)
+
+    start_indices = clamp_indices(start_indices, shape, Tuple.to_list(slice_shape))
+
+    weighted_shape = weighted_shape(shape, size)
+
+    rank = Nx.rank(shape)
+    ones = List.duplicate(1, rank)
+
+    offsets =
+      slice_shape
+      |> make_anchors(ones, List.to_tuple(ones))
+      |> Enum.map(fn index ->
+        pos =
+          index
+          |> Enum.zip(start_indices)
+          |> Enum.map(fn {x, s} -> x + s end)
+
+        weighted_offset(weighted_shape, pos)
+      end)
+      |> Enum.sort()
+
+    {_, data} =
+      for offset <- offsets, reduce: {to_binary(slice), to_binary(tensor)} do
+        {<<cur_elem::size(size)-bitstring, rest_of_slice::bitstring>>, binary} ->
+          <<before::size(offset)-bitstring, _::size(size)-bitstring, rest_of_tensor::bitstring>> =
+            binary
+
+          {rest_of_slice,
+           <<before::size(offset)-bitstring, cur_elem::size(size)-bitstring,
+             rest_of_tensor::bitstring>>}
+      end
+
+    from_binary(out, data)
+  end
 
   @impl true
   def concatenate(out, tensors, axis) do

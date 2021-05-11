@@ -325,13 +325,23 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:slice, [x, start_indices, _lengths, strides], _ans, g, cache) do
-    lo_pads = start_indices
-    hi_pads = hi_pads(0, g.shape, x.shape, start_indices, strides)
-    interior_pads = Enum.map(strides, &(&1 - 1))
-
-    padding_config = Enum.zip([lo_pads, hi_pads, interior_pads])
+    padding_config = Enum.map(strides, &{0, 0, &1 - 1})
     pad_value = 0.0
-    to_grad(x, Nx.pad(g, pad_value, padding_config), cache)
+    g = Nx.pad(g, pad_value, padding_config)
+
+    zeros = Nx.broadcast(Expr.tensor(0.0), x)
+    g = Nx.put_slice(zeros, g, start_indices)
+
+    to_grad(x, g, cache)
+  end
+
+  defp grad(:put_slice, [x, update, start_indices], _ans, g, cache) do
+    zeros = Nx.broadcast(Expr.tensor(0.0), update)
+
+    operand_t = Nx.put_slice(g, zeros, start_indices)
+    update_t = Nx.slice(g, start_indices, Tuple.to_list(Nx.shape(update)))
+
+    grad_pairs([{x, operand_t}, {update, update_t}], g, cache)
   end
 
   defp grad(:reverse, [x, axes], _ans, g, cache) do
@@ -1003,16 +1013,6 @@ defmodule Nx.Defn.Grad do
 
     to_grad(x, fun.(g), cache)
   end
-
-  defp hi_pads(pos, g_shape, x_shape, [start | starts], [stride | strides]) do
-    g_dim = elem(g_shape, pos)
-    x_dim = elem(x_shape, pos)
-
-    val = x_dim - (start + (1 + stride * (g_dim - 1)))
-    [val | hi_pads(pos + 1, g_shape, x_shape, starts, strides)]
-  end
-
-  defp hi_pads(_, _, _, [], []), do: []
 
   defp surface_nuldim_scalar(expr) do
     case expr do

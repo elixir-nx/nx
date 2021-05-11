@@ -164,7 +164,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "factorial" do
       assert factorial(5) == Nx.tensor(120)
-      assert factorial(10.0) == Nx.tensor(3628800.0)
+      assert factorial(10.0) == Nx.tensor(3_628_800.0)
     end
   end
 
@@ -207,6 +207,14 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "calls internal anonymous function via map" do
       assert calls_map_fun(Nx.tensor([0, 1, 2])) == Nx.tensor([1, -1, -2])
+    end
+  end
+
+  describe "access" do
+    defn slice1(t), do: t[1][0]
+
+    test "supports correct access" do
+      assert slice1(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])) == Nx.tensor(4)
     end
   end
 end

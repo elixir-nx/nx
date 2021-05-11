@@ -7244,7 +7244,7 @@ defmodule Nx do
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
       ...> ])
-      iex> Nx.slice(t, [0, 0], [6, 7], strides: [5, 3])
+      iex> Nx.slice(t, [Nx.tensor(0), Nx.tensor(0)], [6, 7], strides: [5, 3])
       #Nx.Tensor<
         f32[2][3]
         [
@@ -7252,6 +7252,22 @@ defmodule Nx do
           [1.0, 1.0, 1.0]
         ]
       >
+
+      iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1), Nx.tensor(2)], [1, 1])
+      #Nx.Tensor<
+        s64[1][1]
+        [
+          [6]
+        ]
+      >
+
+  ### Error cases
+
+      iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor([1, 2]), Nx.tensor(1)], [1, 1])
+      ** (ArgumentError) index must be scalar, got shape {2} for axis 0
+
+      iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1.0), Nx.tensor(0)], [1, 1])
+      ** (ArgumentError) index must be integer type, got {:f, 32} for axis 0
   """
   @doc type: :shape
   def slice(tensor, start_indices, lengths, opts \\ [])
@@ -7259,6 +7275,8 @@ defmodule Nx do
     opts = keyword!(opts, strides: 1)
     %T{shape: shape} = tensor = to_tensor(tensor)
     strides = opts[:strides]
+
+    start_indices = to_indices(start_indices)
 
     strides =
       if is_integer(strides),
@@ -7325,6 +7343,67 @@ defmodule Nx do
     start_indices = List.duplicate(0, rank(tensor)) |> List.replace_at(axis, start_index)
     lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
     slice(tensor, start_indices, lengths, opts)
+  end
+
+  @doc """
+  Puts the given slice into the given tensor at the given
+  start indices.
+
+  The given slice shape must be less than or equal to the
+  shape of the given tensor. All start indices must be less
+  than their respective dimensions.
+
+  ## Examples
+
+      iex> Nx.put_slice(Nx.tensor([0, 1, 2, 3, 4]), Nx.tensor([5, 6]), [2])
+      #Nx.Tensor<
+        s64[5]
+        [0, 1, 5, 6, 4]
+      >
+
+      iex> Nx.put_slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10]]), [1, 2])
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [1, 7, 8],
+          [4, 9, 10]
+        ]
+      >
+
+      iex> Nx.put_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]]), [2, 2])
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [7.0, 8.0, 9.0],
+          [10.0, 11.0, 12.0]
+        ]
+      >
+
+      iex> Nx.put_slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[10.0, 11.0]]), [Nx.tensor(0), Nx.tensor(2)])
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [1.0, 10.0, 11.0],
+          [4.0, 5.0, 6.0]
+        ]
+      >
+  """
+  def put_slice(tensor, slice, start_indices) when is_list(start_indices) do
+    %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
+    %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
+
+    output_type = binary_type(type, slice_type)
+
+    start_indices = to_indices(start_indices)
+
+    {shape, names} = Nx.Shape.put_slice(shape, names, slice_shape, slice_names, start_indices)
+
+    impl!(tensor).put_slice(
+      %{tensor | shape: shape, names: names, type: output_type},
+      tensor,
+      slice,
+      start_indices
+    )
   end
 
   @doc """
@@ -7885,4 +7964,31 @@ defmodule Nx do
 
   defp names!(%T{names: names}), do: names
   defp names!(_), do: nil
+
+  defp to_indices(start_indices) do
+    all_static? = Enum.all?(start_indices, &is_integer/1)
+
+    # TODO: Use Enum.with_index/3 in Elixir v1.12
+    if all_static? do
+      start_indices
+    else
+      start_indices
+      |> Enum.with_index()
+      |> Enum.map(fn {index, i} ->
+        %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
+
+        unless idx_shape == {} do
+          raise ArgumentError,
+                "index must be scalar, got shape #{inspect(idx_shape)}" <>
+                  " for axis #{i}"
+        end
+
+        unless Nx.Type.integer?(idx_type) do
+          raise ArgumentError, "index must be integer type, got #{inspect(idx_type)} for axis #{i}"
+        end
+
+        t
+      end)
+    end
+  end
 end

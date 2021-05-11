@@ -2343,19 +2343,24 @@ defmodule EXLA.DefnExprTest do
 
   describe "slicing" do
     defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3])
+    defn slice1_dynamic(t), do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(6), Nx.tensor(2)], [2, 1, 3])
     defn slice2(t), do: Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: [1, 2, 3])
+    defn slice2_dynamic(t), do: Nx.slice(t, [Nx.tensor(1), Nx.tensor(4), Nx.tensor(10)], [1, 1, 10], strides: [1, 2, 3])
     defn slice3(t), do: Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
+    defn slice3_dynamic(t), do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(4), Nx.tensor(11)], [2, 3, 9], strides: [2, 1, 3])
 
     test "works without stride" do
       t = Nx.iota({900})
       t = Nx.reshape(t, {2, 15, 30})
       assert slice1(t) == Nx.tensor([[[182, 183, 184]], [[632, 633, 634]]])
+      assert slice1_dynamic(t) == Nx.tensor([[[182, 183, 184]], [[632, 633, 634]]])
     end
 
     test "works with stride" do
       t = Nx.iota({900})
       t = Nx.reshape(t, {2, 15, 30})
       assert slice2(t) == Nx.tensor([[[580, 583, 586, 589]]])
+      assert slice2_dynamic(t) == Nx.tensor([[[580, 583, 586, 589]]])
 
       assert slice3(t) ==
                Nx.tensor([
@@ -2365,6 +2370,39 @@ defmodule EXLA.DefnExprTest do
                    [191, 194, 197]
                  ]
                ])
+      assert slice3_dynamic(t) ==
+               Nx.tensor([
+                 [
+                   [131, 134, 137],
+                   [161, 164, 167],
+                   [191, 194, 197]
+                 ]
+               ])
+    end
+  end
+
+  describe "put slice" do
+    defn put_slice1(t1, t2), do: Nx.put_slice(t1, t2, [2])
+    defn put_slice2(t1, t2), do: Nx.put_slice(t1, t2, [1, 2])
+    defn put_slice3(t1, t2), do: Nx.put_slice(t1, t2, [2, 2])
+    defn put_slice4(t1, t2), do: Nx.put_slice(t1, t2, [Nx.tensor(0), Nx.tensor(2)])
+
+    test "works with one dimension" do
+      assert put_slice1(Nx.tensor([0, 1, 2, 3, 4]), Nx.tensor([5, 6])) == Nx.tensor([0, 1, 5, 6, 4])
+    end
+
+    test "works with two dimensions" do
+      assert put_slice2(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10]])) == Nx.tensor([[1, 7, 8], [4, 9, 10]])
+    end
+
+    test "works with float types" do
+      assert put_slice3(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])) ==
+        Nx.tensor([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])
+    end
+
+    test "works with mixed types" do
+      assert put_slice4(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[10.0, 11.0]])) ==
+        Nx.tensor([[1.0, 10.0, 11.0], [4.0, 5.0, 6.0]])
     end
   end
 
@@ -2456,6 +2494,7 @@ defmodule EXLA.DefnExprTest do
     defn concatenate1(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 1)
     defn concatenate2(t1, t2, t3), do: Nx.concatenate([t1, t2, t3], axis: 2)
     defn concatenate1_inp(t1), do: Nx.concatenate([t1], axis: 2)
+    defn concat_constants(), do: Nx.concatenate([Nx.tensor([1]), Nx.tensor([2])], axis: 0)
 
     test "works 0th axis" do
       t1 = Nx.iota({2, 2, 2})
@@ -2580,6 +2619,10 @@ defmodule EXLA.DefnExprTest do
                  ],
                  type: {:f, 32}
                )
+    end
+
+    test "works with constants" do
+      assert concat_constants() == Nx.tensor([1, 2])
     end
   end
 

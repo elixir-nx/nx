@@ -601,7 +601,15 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def slice(out, tensor, start, lengths, strides) do
-    tensor = to_expr(tensor)
+    all_static? = Enum.all?(start, &is_integer/1)
+
+    {[tensor | start], context} =
+      if all_static? do
+        tensor = to_expr(tensor)
+        {[tensor | start], tensor.data.context}
+      else
+        to_exprs([tensor | start])
+      end
 
     # If we are in a sequence of slices, it is the access syntax,
     # so we compact them into a single slice.
@@ -619,7 +627,8 @@ defmodule Nx.Defn.Expr do
       |> Nx.slice(start, lengths)
       |> Nx.squeeze(axes: axes)
     else
-      _ -> expr(out, tensor.data.context, :slice, [tensor, start, lengths, strides])
+      _ ->
+        expr(out, context, :slice, [tensor, start, lengths, strides])
     end
   end
 
@@ -637,8 +646,19 @@ defmodule Nx.Defn.Expr do
     else
       [s | start] = start
       [l | lengths] = lengths
-      [{is + s, l} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
+
+      [
+        {Nx.Defn.Kernel.+(is, s), l}
+        | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)
+      ]
     end
+  end
+
+  @impl true
+  def put_slice(out, tensor, slice, start) do
+    {[tensor, slice | start], context} = to_exprs([tensor, slice | start])
+
+    expr(out, context, :put_slice, [tensor, slice, start])
   end
 
   @impl true
