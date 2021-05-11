@@ -392,9 +392,8 @@ defmodule Nx.LinAlg do
 
       t ->
         raise ArgumentError,
-              "invalid value for :transform_a option, expected one of [:none, :transpose, :conjugate], got #{
-                inspect(t)
-              }"
+              "invalid value for :transform_a option, expected one of [:none, :transpose], " <>
+                "got: #{inspect(t)}"
     end
 
     case a_shape do
