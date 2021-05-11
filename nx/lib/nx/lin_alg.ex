@@ -329,6 +329,20 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :transpose)
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :none)
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -342,19 +356,33 @@ defmodule Nx.LinAlg do
 
   """
   def triangular_solve(a, b, opts \\ []) do
-    opts = keyword!(opts, lower: true, left_side: true)
+    opts = keyword!(opts, lower: true, left_side: true, unit_diagonal: false, transform_a: :none)
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
+    case opts[:transform_a] do
+      t when t in [:none, :transpose] ->
+        nil
+
+      :conjugate ->
+        raise ArgumentError, "complex numbers not supported yet"
+
+      t ->
+        raise ArgumentError,
+              "invalid value for :transform_a option, expected one of [:none, :transpose, :conjugate], got #{
+                t
+              }"
+    end
+
     # opts to implement:
-    # left_side: true/false ->
+    # OK left_side: true/false ->
     #   if true, solves op(A).X = B
     #   if false solves X.op(A) = B
     # OK lower: true/false
     #   if true, solves as if A is lower triangular
     #   if false, solves as if A is upper triangular
-    # unit_diagonal: true/false
+    # unit_diagonal: true/false (not relevant to implementation)
     #   if true, the diagonal elements are not accessed
     #   if false, the solver proceeds normally
     # transform_a: :none, :transpose, :conjugate

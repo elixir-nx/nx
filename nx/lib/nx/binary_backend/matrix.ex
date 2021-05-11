@@ -10,7 +10,11 @@ defmodule Nx.BinaryBackend.Matrix do
         shape -> shape
       end
 
-    a_matrix = a_data |> binary_to_matrix(a_type, a_shape) |> ts_handle_lower_opt(opts, :a)
+    a_matrix =
+      a_data
+      |> binary_to_matrix(a_type, a_shape)
+      |> ts_handle_lower_opt(opts, :a)
+      |> ts_handle_transform_a_opt(opts)
 
     b_matrix_or_vec =
       case shape do
@@ -124,6 +128,13 @@ defmodule Nx.BinaryBackend.Matrix do
       matrix
     else
       Enum.reverse(matrix)
+    end
+  end
+
+  defp ts_handle_transform_a_opt(matrix, opts) do
+    case opts[:transform_a] do
+      :transpose -> transpose_matrix(matrix)
+      _ -> matrix
     end
   end
 
