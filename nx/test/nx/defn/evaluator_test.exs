@@ -181,4 +181,12 @@ defmodule Nx.Defn.EvaluatorTest do
       assert calls_reduce_fun(&Nx.add/2, Nx.tensor([1, 2, 3])) == Nx.tensor(6)
     end
   end
+
+  describe "access" do
+    defn slice1(t), do: t[1][0]
+
+    test "supports correct access" do
+      assert slice1(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])) == Nx.tensor(4)
+    end
+  end
 end

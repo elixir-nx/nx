@@ -321,8 +321,11 @@ defmodule Nx.LinAlg do
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
     case a_shape do
-      {n, n} -> nil
-      other -> raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
+      {n, n} ->
+        nil
+
+      other ->
+        raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
     end
 
     case b_shape do
@@ -338,7 +341,6 @@ defmodule Nx.LinAlg do
 
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
   end
-
 
   @doc """
   Solves the system `AX = B`.
@@ -571,7 +573,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, [mode: :reduced])
+    opts = keyword!(opts, mode: :reduced)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     mode = opts[:mode]

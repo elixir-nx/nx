@@ -1716,7 +1716,9 @@ defmodule Nx.Defn.GradTest do
 
   describe "slice" do
     defn grad_mean_slice(t), do: grad(t, &Nx.mean(Nx.slice(&1, [0, 1], [1, 2], strides: [1, 2])))
+    defn grad_mean_dynamic_slice(t), do: grad(t, &Nx.mean(Nx.slice(&1, [Nx.tensor(0), Nx.tensor(1)], [1, 2], strides: [1, 2])))
     defn grad_sum_slice(t), do: grad(t, &Nx.sum(Nx.slice(&1, [1, 0], [1, 2], strides: [1, 1])))
+    defn grad_sum_dynamic_slice(t), do: grad(t, &Nx.sum(Nx.slice(&1, [Nx.tensor(1), Nx.tensor(0)], [1, 2], strides: [1, 1])))
 
     defn grad_sum_pad_slice(t) do
       grad(
@@ -1729,11 +1731,28 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    defn grad_sum_pad_dynamic_slice(t) do
+      grad(
+        t,
+        fn t ->
+          Nx.slice(t, [Nx.tensor(1), Nx.tensor(0)], [1, 2], strides: [1, 1])
+          |> Nx.pad(Nx.mean(Nx.sin(t)), [{2, 1, 2}, {-1, 2, 0}])
+          |> Nx.sum()
+        end
+      )
+    end
+
     test "computes gradient" do
       assert grad_mean_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
 
+      assert grad_mean_dynamic_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
+
       assert grad_sum_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
+
+      assert grad_sum_dynamic_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
 
       lhs = grad_sum_pad_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
@@ -1743,6 +1762,10 @@ defmodule Nx.Defn.GradTest do
           [0.9905542274249228, -0.7629358670030943, -1.8149862437674833],
           [-1.1983466382499552, 1.520047340015915, 1.7603121921923377]
         ])
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_pad_dynamic_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
 
       compare_tensors!(lhs, rhs)
     end

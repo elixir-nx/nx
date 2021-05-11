@@ -7231,7 +7231,7 @@ defmodule Nx do
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
       ...>   [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
       ...> ])
-      iex> Nx.slice(t, [0, 0], [6, 7], strides: [5, 3])
+      iex> Nx.slice(t, [Nx.tensor(0), Nx.tensor(0)], [6, 7], strides: [5, 3])
       #Nx.Tensor<
         f32[2][3]
         [
@@ -7263,29 +7263,31 @@ defmodule Nx do
     %T{shape: shape} = tensor = to_tensor(tensor)
     strides = opts[:strides]
 
+    all_static? = Enum.all?(start_indices, &is_integer/1)
+
+    # TODO: Use Enum.with_index/3 in Elixir v1.12
     start_indices =
-      start_indices
-      |> Enum.with_index()
-      |> Enum.map(fn {index, i} ->
-        %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
+      if all_static? do
+        start_indices
+      else
+        start_indices
+        |> Enum.with_index()
+        |> Enum.map(fn {index, i} ->
+          %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
 
-        unless idx_shape == {} do
-          raise ArgumentError,
-                "index must be scalar, got shape #{inspect(idx_shape)}" <>
-                  " for axis #{i}"
-        end
+          unless idx_shape == {} do
+            raise ArgumentError,
+                  "index must be scalar, got shape #{inspect(idx_shape)}" <>
+                    " for axis #{i}"
+          end
 
-        case idx_type do
-          {:s, _} ->
-            t
+          unless Nx.Type.integer?(idx_type) do
+            raise ArgumentError, "index must be integer type, got #{inspect(Nx.type(t))} for axis #{i}"
+          end
 
-          {:u, _} ->
-            t
-
-          type ->
-            raise ArgumentError, "index must be integer type, got #{inspect(type)} for axis #{i}"
-        end
-      end)
+          t
+        end)
+      end
 
     strides =
       if is_integer(strides),

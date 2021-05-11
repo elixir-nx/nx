@@ -1608,13 +1608,7 @@ defmodule Nx.BinaryBackend do
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
 
-    start_indices =
-      [Tuple.to_list(shape), start_indices, lengths]
-      |> Enum.zip()
-      |> Enum.map(fn {dim_size, idx, len} ->
-        idx = to_scalar(idx)
-        min(max(idx, 0), dim_size - len)
-      end)
+    start_indices = clamp_indices(start_indices, shape, lengths)
 
     if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
@@ -1640,6 +1634,15 @@ defmodule Nx.BinaryBackend do
 
       from_binary(out, output_data)
     end
+  end
+
+  defp clamp_indices(start_indices, shape, lengths) do
+    [Tuple.to_list(shape), start_indices, lengths]
+    |> Enum.zip()
+    |> Enum.map(fn {dim_size, idx, len} ->
+      idx = to_scalar(idx)
+      min(max(idx, 0), dim_size - len)
+    end)
   end
 
   defp top_dimension_slice?(1, _, _), do: true

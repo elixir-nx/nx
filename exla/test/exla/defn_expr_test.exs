@@ -2342,22 +2342,35 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "slicing" do
-    defn slice1(t), do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(6), Nx.tensor(2)], [2, 1, 3])
+    defn slice1(t), do: Nx.slice(t, [0, 6, 2], [2, 1, 3])
+    defn slice1_dynamic(t), do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(6), Nx.tensor(2)], [2, 1, 3])
     defn slice2(t), do: Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: [1, 2, 3])
+    defn slice2_dynamic(t), do: Nx.slice(t, [Nx.tensor(1), Nx.tensor(4), Nx.tensor(10)], [1, 1, 10], strides: [1, 2, 3])
     defn slice3(t), do: Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
+    defn slice3_dynamic(t), do: Nx.slice(t, [Nx.tensor(0), Nx.tensor(4), Nx.tensor(11)], [2, 3, 9], strides: [2, 1, 3])
 
     test "works without stride" do
       t = Nx.iota({900})
       t = Nx.reshape(t, {2, 15, 30})
       assert slice1(t) == Nx.tensor([[[182, 183, 184]], [[632, 633, 634]]])
+      assert slice1_dynamic(t) == Nx.tensor([[[182, 183, 184]], [[632, 633, 634]]])
     end
 
     test "works with stride" do
       t = Nx.iota({900})
       t = Nx.reshape(t, {2, 15, 30})
       assert slice2(t) == Nx.tensor([[[580, 583, 586, 589]]])
+      assert slice2_dynamic(t) == Nx.tensor([[[580, 583, 586, 589]]])
 
       assert slice3(t) ==
+               Nx.tensor([
+                 [
+                   [131, 134, 137],
+                   [161, 164, 167],
+                   [191, 194, 197]
+                 ]
+               ])
+      assert slice3_dynamic(t) ==
                Nx.tensor([
                  [
                    [131, 134, 137],
