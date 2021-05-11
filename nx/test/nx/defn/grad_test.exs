@@ -1769,6 +1769,12 @@ defmodule Nx.Defn.GradTest do
 
       compare_tensors!(lhs, rhs)
     end
+
+    defn grad_of_index(t, index), do: grad(index, &Nx.mean(Nx.slice(t, [&1], [2])))
+
+    test "computes gradient of index" do
+      assert grad_of_index(Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0]), Nx.reduce_max(Nx.tensor([-1, 0, 1]))) == Nx.tensor(0.0)
+    end
   end
 
   describe "put_slice" do

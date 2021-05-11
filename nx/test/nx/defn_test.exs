@@ -571,7 +571,7 @@ defmodule Nx.DefnTest do
                multi_access(Nx.iota({3, 4, 5}))
 
       assert %T{
-               data: %Expr{op: :slice, args: [_, [%T{}, %T{}, %T{}], [1, 1, 1], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, [1, 2, 3], [1, 1, 1], [1, 1, 1]]},
                shape: {1, 1, 1}
              } = slice
     end
@@ -583,7 +583,7 @@ defmodule Nx.DefnTest do
                range_access(Nx.iota({3, 4, 5}))
 
       assert %T{
-               data: %Expr{op: :slice, args: [_, [%T{}, %T{}, %T{}], [1, 2, 5], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, [1, 1, 0], [1, 2, 5], [1, 1, 1]]},
                shape: {1, 2, 5}
              } = slice
     end
@@ -592,7 +592,7 @@ defmodule Nx.DefnTest do
 
     test "multi dimensional multi-access with keywords is collapsed" do
       assert %T{
-               data: %Expr{op: :slice, args: [_, [%T{}, %T{}, %T{}], [3, 2, 3], [1, 1, 1]]},
+               data: %Expr{op: :slice, args: [_, [0, 1, 1], [3, 2, 3], [1, 1, 1]]},
                shape: {3, 2, 3}
              } = keyword_access(Nx.iota({3, 4, 5}, names: [:x, :y, :z]))
     end

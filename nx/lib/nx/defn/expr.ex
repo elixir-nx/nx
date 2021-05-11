@@ -648,7 +648,7 @@ defmodule Nx.Defn.Expr do
       [l | lengths] = lengths
 
       [
-        {Nx.add(is, s), l}
+        {Nx.Defn.Kernel.+(is, s), l}
         | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)
       ]
     end

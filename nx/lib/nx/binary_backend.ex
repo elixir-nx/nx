@@ -1637,6 +1637,7 @@ defmodule Nx.BinaryBackend do
   end
 
   defp clamp_indices(start_indices, shape, lengths) do
+    # TODO: Use Enum.zip_with on Elixir v1.12
     [Tuple.to_list(shape), start_indices, lengths]
     |> Enum.zip()
     |> Enum.map(fn {dim_size, idx, len} ->
@@ -1658,13 +1659,7 @@ defmodule Nx.BinaryBackend do
     %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
     %T{shape: slice_shape} = slice = as_type(out, slice)
 
-    start_indices =
-      [Tuple.to_list(shape), start_indices, Tuple.to_list(slice_shape)]
-      |> Enum.zip()
-      |> Enum.map(fn {dim_size, idx, len} ->
-        idx = to_scalar(idx)
-        min(max(idx, 0), dim_size - len)
-      end)
+    start_indices = clamp_indices(start_indices, shape, Tuple.to_list(slice_shape))
 
     weighted_shape = weighted_shape(shape, size)
 

@@ -7263,31 +7263,7 @@ defmodule Nx do
     %T{shape: shape} = tensor = to_tensor(tensor)
     strides = opts[:strides]
 
-    all_static? = Enum.all?(start_indices, &is_integer/1)
-
-    # TODO: Use Enum.with_index/3 in Elixir v1.12
-    start_indices =
-      if all_static? do
-        start_indices
-      else
-        start_indices
-        |> Enum.with_index()
-        |> Enum.map(fn {index, i} ->
-          %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
-
-          unless idx_shape == {} do
-            raise ArgumentError,
-                  "index must be scalar, got shape #{inspect(idx_shape)}" <>
-                    " for axis #{i}"
-          end
-
-          unless Nx.Type.integer?(idx_type) do
-            raise ArgumentError, "index must be integer type, got #{inspect(Nx.type(t))} for axis #{i}"
-          end
-
-          t
-        end)
-      end
+    start_indices = to_indices(start_indices)
 
     strides =
       if is_integer(strides),
@@ -7404,29 +7380,7 @@ defmodule Nx do
 
     output_type = binary_type(type, slice_type)
 
-    start_indices =
-      start_indices
-      |> Enum.with_index()
-      |> Enum.map(fn {index, i} ->
-        %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
-
-        unless idx_shape == {} do
-          raise ArgumentError,
-                "index must be scalar, got shape #{inspect(idx_shape)}" <>
-                  " for axis #{i}"
-        end
-
-        case idx_type do
-          {:s, _} ->
-            t
-
-          {:u, _} ->
-            t
-
-          type ->
-            raise ArgumentError, "index must be integer type, got #{inspect(type)} for axis #{i}"
-        end
-      end)
+    start_indices = to_indices(start_indices)
 
     {shape, names} = Nx.Shape.put_slice(shape, names, slice_shape, slice_names, start_indices)
 
@@ -7918,4 +7872,31 @@ defmodule Nx do
 
   defp names!(%T{names: names}), do: names
   defp names!(_), do: nil
+
+  defp to_indices(start_indices) do
+    all_static? = Enum.all?(start_indices, &is_integer/1)
+
+    # TODO: Use Enum.with_index/3 in Elixir v1.12
+    if all_static? do
+      start_indices
+    else
+      start_indices
+      |> Enum.with_index()
+      |> Enum.map(fn {index, i} ->
+        %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
+
+        unless idx_shape == {} do
+          raise ArgumentError,
+                "index must be scalar, got shape #{inspect(idx_shape)}" <>
+                  " for axis #{i}"
+        end
+
+        unless Nx.Type.integer?(idx_type) do
+          raise ArgumentError, "index must be integer type, got #{inspect(idx_type)} for axis #{i}"
+        end
+
+        t
+      end)
+    end
+  end
 end
