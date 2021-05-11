@@ -1746,6 +1746,60 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "put_slice" do
+    defn grad_mean_put_slice_operand(t1, t2), do: grad(t1, &Nx.mean(Nx.put_slice(&1, t2, [0, 1])))
+    defn grad_mean_put_slice_update(t1, t2), do: grad(t2, &Nx.mean(Nx.put_slice(t1, &1, [0, 1])))
+
+    defn grad_sum_pad_put_slice_cos_operand(t1, t2) do
+      grad(t1, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.put_slice(Nx.sin(t2), [1, 2])
+        |> Nx.pad(Nx.mean(Nx.sin(t)), [{2, 1, 2}, {-1, 2, 0}])
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_sum_pad_put_slice_sin_update(t1, t2) do
+      grad(t2, fn t ->
+        t1
+        |> Nx.cos()
+        |> Nx.put_slice(Nx.sin(t), [1, 2])
+        |> Nx.pad(Nx.mean(Nx.sin(t1)), [{2, 1, 2}, {-1, 2, 0}])
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes gradient of operand" do
+      lhs = grad_mean_put_slice_operand(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([[10.0, 11.0]]))
+      rhs = Nx.tensor([[0.16666667, 0.0, 0.0], [0.16666667, 0.16666667, 0.16666667]])
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_pad_put_slice_cos_operand(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [4.0, 5.0, 6.0, 7.0], [7.0, 8.0, 9.0, 10.0]]), Nx.tensor([[10.0, 11.0], [12.0, 13.0]]))
+
+      rhs = Nx.tensor([
+            [1.84603288, -2.33113245, -3.52359437, -1.47647988],
+            [-2.23328237, 1.92810341, 3.28058181, 2.5758327],
+            [2.5758327, -1.48648336, -3.11302839, -2.86682772]
+          ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    test "computes gradient of update" do
+      lhs = grad_mean_put_slice_update(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([[10.0, 11.0]]))
+      rhs = Nx.tensor([[0.16666667, 0.16666667]])
+
+      compare_tensors!(lhs, rhs)
+
+      lhs = grad_sum_pad_put_slice_sin_update(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [4.0, 5.0, 6.0, 7.0], [7.0, 8.0, 9.0, 10.0]]), Nx.tensor([[10.0, 11.0], [12.0, 13.0]]))
+      rhs = Nx.tensor([[-0.83907153, 0.0044257], [0.84385396,  0.90744678]])
+
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "reverse" do
     defn grad_sum_reverse_exp(t), do: grad(t, &Nx.sum(Nx.reverse(Nx.exp(&1))))
     defn grad_sum_exp_reverse(t), do: grad(t, &Nx.sum(Nx.exp(Nx.reverse(&1))))

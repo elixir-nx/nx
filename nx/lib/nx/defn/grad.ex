@@ -335,6 +335,15 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
+  defp grad(:put_slice, [x, update, start_indices], _ans, g, cache) do
+    zeros = Nx.broadcast(Expr.tensor(0.0), update)
+
+    operand_t = Nx.put_slice(g, zeros, start_indices)
+    update_t = Nx.slice(g, start_indices, Tuple.to_list(Nx.shape(update)))
+
+    grad_pairs([{x, operand_t}, {update, update_t}], g, cache)
+  end
+
   defp grad(:reverse, [x, axes], _ans, g, cache) do
     reversed = Nx.reverse(g, axes: axes)
     to_grad(x, reversed, cache)
