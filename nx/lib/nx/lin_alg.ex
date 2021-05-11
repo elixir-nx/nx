@@ -277,10 +277,23 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Solve the equation `a x = b` for x, assuming `a` is a lower triangular matrix.
+  Solve the equation `a x = b` for x, assuming `a` is a triangular matrix.
+  Can also solve `x a = b` for x. See the `:left_side` option below.
 
   `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
   with as many rows as `a`.
+
+  ## Options
+
+  The following options are defined in order of precedence
+
+  * `:transform_a` - Defines `op(a)`, depending on its value. Can be one of:
+    * `:none` -> `op(a) = a`
+    * `:transpose` -> `op(a) = transpose(a)`
+    Defaults to `:none`
+  * `:lower` - When `true`, defines the `a` matrix as lower triangular. If false, a is upper triangular.
+               Defaults to `true`
+  * `:left_side` - When `true`, solves the system as `op(A).X = B`. Otherwise, solves `X.op(A) = B`. Defaults to `true`.
 
   ## Examples
 
@@ -310,6 +323,39 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[1, 1, 1, 1], [0, 1, 0, 1], [0, 0, 1, 2], [0, 0, 0, 3]])
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([2, 4, 2, 4]), lower: false)
+      #Nx.Tensor<
+        f32[4]
+        [-1.3333333730697632, 2.6666667461395264, -0.6666666865348816, 1.3333333730697632]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+      iex> b = Nx.tensor([[0, 2, 1], [1, 1, 0], [3, 3, 1]])
+      iex> Nx.LinAlg.triangular_solve(a, b, left_side: false)
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [-1.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0],
+          [1.0, 1.0, 1.0]
+        ]
+      >
+
+      iex> a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :transpose)
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :none)
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -321,16 +367,40 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) can't solve for singular matrix
 
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
+      ** (ArgumentError) complex numbers not supported yet
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
+      ** (ArgumentError) invalid value for :transform_a option, expected one of [:none, :transpose, :conjugate], got :other
+
   """
   def triangular_solve(a, b, opts \\ []) do
-    opts = keyword!(opts, [])
+    opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
+    case opts[:transform_a] do
+      t when t in [:none, :transpose] ->
+        nil
+
+      :conjugate ->
+        raise ArgumentError, "complex numbers not supported yet"
+
+      t ->
+        raise ArgumentError,
+              "invalid value for :transform_a option, expected one of [:none, :transpose], " <>
+                "got: #{inspect(t)}"
+    end
+
     case a_shape do
-      {n, n} -> nil
-      other -> raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
+      {n, n} ->
+        nil
+
+      other ->
+        raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
     end
 
     case b_shape do
@@ -346,7 +416,6 @@ defmodule Nx.LinAlg do
 
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
   end
-
 
   @doc """
   Solves the system `AX = B`.
@@ -581,7 +650,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, [mode: :reduced])
+    opts = keyword!(opts, mode: :reduced)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     mode = opts[:mode]
