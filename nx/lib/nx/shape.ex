@@ -1006,7 +1006,7 @@ defmodule Nx.Shape do
 
   """
   def slice(shape, start_indices, lengths, strides) do
-    rank = tuple_size(shape)
+    rank = Nx.rank(shape)
 
     if length(strides) != rank do
       raise ArgumentError, "invalid strides rank for shape of rank #{rank}"
@@ -1040,8 +1040,7 @@ defmodule Nx.Shape do
 
     if len > dim do
       raise ArgumentError,
-            "length at axis #{pos} must be less than axis size of #{dim}, " <>
-              "got: #{len}"
+            "length at axis #{pos} must be less than axis size of #{dim}, got: #{len}"
     end
 
     [Kernel.ceil(len / s) | do_slice(shape, pos + 1, lengths, strides)]
@@ -1062,36 +1061,41 @@ defmodule Nx.Shape do
 
   """
   def put_slice(shape, names, slice_shape, slice_names, start_indices) do
-    rank = tuple_size(shape)
+    rank = Nx.rank(shape)
 
     if length(start_indices) != rank do
       raise ArgumentError, "invalid start indices rank for shape of rank #{rank}"
     end
 
-    if tuple_size(slice_shape) != rank do
-      raise ArgumentError, "invalid slice for put_slice, rank of slice must match"
-                           <> " #{rank}, got #{tuple_size(slice_shape)}"
+    if Nx.rank(slice_shape) != rank do
+      raise ArgumentError,
+            "invalid slice for put_slice, rank of slice must match #{rank}, " <>
+              "got: #{Nx.rank(slice_shape)}"
     end
 
-    {shape, names} =
-      shape
-      |> Tuple.to_list()
-      |> do_put_slice(names, Tuple.to_list(slice_shape), slice_names, [])
-      |> Enum.reverse()
-      |> Enum.unzip()
+    shape
+    |> Tuple.to_list()
+    |> do_put_slice(names, Tuple.to_list(slice_shape), slice_names, [])
+    |> case do
+      :error ->
+        raise ArgumentError,
+              "slice shape #{inspect(slice_shape)} must be less than or equal to " <>
+                "tensor shape #{inspect(shape)}"
 
-    {List.to_tuple(shape), names}
-  end
-
-  defp do_put_slice([s | shape], [n | names], [slice | slice_shape], [s_name | slice_names], acc) do
-    if slice > s do
-      raise ArgumentError, "slice shape must be strictly less than shape in all dimensions"
+      names ->
+        {shape, names}
     end
-
-    do_put_slice(shape, names, slice_shape, slice_names, [{s, merge_names!(n, s_name)} | acc])
   end
 
-  defp do_put_slice([], [], [], [], acc), do: acc
+  defp do_put_slice([s | _], _, [slice | _], _, _) when slice > s do
+    :error
+  end
+
+  defp do_put_slice([_ | shape], [n | names], [_ | s_shape], [s_name | s_names], acc) do
+    do_put_slice(shape, names, s_shape, s_names, [merge_names!(n, s_name) | acc])
+  end
+
+  defp do_put_slice([], [], [], [], acc), do: Enum.reverse(acc)
 
   @doc """
   Returns the shape and names after a concat.
@@ -1185,7 +1189,11 @@ defmodule Nx.Shape do
     if is_nil(batch_dims) do
       {output_shape, output_names}
     else
-      output_shape = Enum.reduce(Enum.reverse(batch_dims), output_shape, fn x, acc -> Tuple.insert_at(acc, 0, x) end)
+      output_shape =
+        Enum.reduce(Enum.reverse(batch_dims), output_shape, fn x, acc ->
+          Tuple.insert_at(acc, 0, x)
+        end)
+
       output_names = batch_names ++ output_names
       {output_shape, output_names}
     end
@@ -1265,14 +1273,16 @@ defmodule Nx.Shape do
 
     # ensure there is no conflict between left batch axes and left contract axes
     if left_batched? and Enum.any?(b1, &(&1 in c1)) do
-      raise ArgumentError, "dot batch axes for left tensor (#{inspect(b1)}) cannot be in contract axes"
-                           <> " (#{inspect(c1)})"
+      raise ArgumentError,
+            "dot batch axes for left tensor (#{inspect(b1)}) cannot be in contract axes" <>
+              " (#{inspect(c1)})"
     end
 
     # ensure there is no conflict between right batch axis and right contract axes
     if right_batched? and Enum.any?(b2, &(&1 in c2)) do
-      raise ArgumentError, "dot batch axes for right tensor (#{inspect(b2)}) cannot be in contract axes"
-                           <> " (#{inspect(c2)})"
+      raise ArgumentError,
+            "dot batch axes for right tensor (#{inspect(b2)}) cannot be in contract axes" <>
+              " (#{inspect(c2)})"
     end
 
     :ok
