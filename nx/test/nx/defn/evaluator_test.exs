@@ -164,7 +164,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "factorial" do
       assert factorial(5) == Nx.tensor(120)
-      assert factorial(10.0) == Nx.tensor(3628800.0)
+      assert factorial(10.0) == Nx.tensor(3_628_800.0)
     end
   end
 
