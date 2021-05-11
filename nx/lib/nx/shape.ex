@@ -1059,6 +1059,7 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.put_slice({2, 3}, [nil, nil], {2, 3}, [nil, nil], [0, 1])
       {{2, 3}, [nil, nil]}
+
   """
   def put_slice(shape, names, slice_shape, slice_names, start_indices) do
     rank = tuple_size(shape)

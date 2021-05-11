@@ -56,11 +56,8 @@ defmodule Nx.Defn.Tree do
 
     {start_indices, acc} =
       Enum.map_reduce(start_indices, acc, fn
-        x, acc when is_integer(x) ->
-          {x, acc}
-
-        x, acc ->
-          fun.(x, acc)
+        x, acc when is_integer(x) -> {x, acc}
+        x, acc -> fun.(x, acc)
       end)
 
     {[tensor, start_indices | args], acc}
@@ -76,11 +73,8 @@ defmodule Nx.Defn.Tree do
 
     {start_indices, acc} =
       Enum.map_reduce(start_indices, acc, fn
-        x, acc when is_integer(x) ->
-          {x, acc}
-
-        x, acc ->
-          fun.(x, acc)
+        x, acc when is_integer(x) -> {x, acc}
+        x, acc -> fun.(x, acc)
       end)
 
     {[tensor, slice, start_indices], acc}
