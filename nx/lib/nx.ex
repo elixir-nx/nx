@@ -7335,8 +7335,7 @@ defmodule Nx do
 
   """
   @doc type: :shape, from_backend: false
-  def slice_axis(tensor, start_index, len, axis, opts \\ [])
-      when is_integer(start_index) and is_integer(len) do
+  def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
     opts = keyword!(opts, [:strides])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
