@@ -3,9 +3,9 @@ defmodule Nx.BinaryBackend.Matrix do
   @default_eps 1.0e-10
   import Nx.Shared
 
-  def ts(a_data, a_type, b_data, b_type, {rows, rows} = shape, output_type, _opts) do
-    a_matrix = binary_to_matrix(a_data, a_type, shape)
-    b_matrix = binary_to_matrix(b_data, b_type, shape)
+  def ts(a_data, a_type, b_data, b_type, {rows, rows} = shape, output_type, opts) do
+    a_matrix = a_data |> binary_to_matrix(a_type, shape) |> ts_handle_lower_opt(opts, :a)
+    b_matrix = b_data |> binary_to_matrix(b_type, shape) |> ts_handle_lower_opt(opts, :b)
 
     Enum.uniq(1..rows)
     |> Enum.map(fn b_col ->
@@ -14,14 +14,16 @@ defmodule Nx.BinaryBackend.Matrix do
       ts(a_matrix, b_vector, 0, [])
     end)
     |> transpose_matrix()
+    |> ts_handle_lower_opt(opts, :result)
     |> matrix_to_binary(output_type)
   end
 
-  def ts(a_data, a_type, b_data, b_type, {rows}, output_type, _opts) do
-    a_matrix = binary_to_matrix(a_data, a_type, {rows, rows})
-    b_vector = binary_to_vector(b_data, b_type)
+  def ts(a_data, a_type, b_data, b_type, {rows}, output_type, opts) do
+    a_matrix = binary_to_matrix(a_data, a_type, {rows, rows}) |> ts_handle_lower_opt(opts, :a)
+    b_vector = binary_to_vector(b_data, b_type) |> ts_handle_lower_opt(opts, :b)
 
     ts(a_matrix, b_vector, 0, [])
+    |> ts_handle_lower_opt(opts, :result)
     |> matrix_to_binary(output_type)
   end
 
@@ -37,6 +39,46 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp ts([], [], _idx, acc), do: acc
+
+  defp ts_handle_lower_opt(matrix, opts, :a) do
+    if opts[:lower] do
+      matrix
+    else
+      # We need to reverse both rows and colums
+      # so we can turn an upper-triangular matrix
+      # into a lower-triangular one.
+      # The result will also be reversed in this case.
+      #
+      # Proof:
+      # For a result [x1, x2, x3.., xn] and a row [a1, a2, a4, ..., an]
+      # we have the corresponding b = a1 * x1 + a2 * x2 + a3 * x3 + ...+ an * xn
+      # Since the addition of a_i * x_i is commutative, by reversing the columns
+      # of a, the yielded x will be reversed.
+      # Furthermore, if we reverse the rows of a, we need to reverse the rows of b
+      # so each row is kept together with it's corresponding result.
+      #
+      # For example, the system:
+      # A = [[a b c], [0 d e], [0 0 f]]
+      # b = [b1, b2, b3, b4]
+      # which yields x = [x1, x2, x3, x4]
+      # is therefore equivalent to:
+      # A = [[f 0 0], [e d 0], [c b a]]
+      # b = [b4, b3, b2, b1]
+      # which yields [x4, x3, x2, x1]
+
+      matrix
+      |> Enum.map(&Enum.reverse/1)
+      |> Enum.reverse()
+    end
+  end
+
+  defp ts_handle_lower_opt(matrix, opts, _) do
+    if opts[:lower] do
+      matrix
+    else
+      Enum.reverse(matrix)
+    end
+  end
 
   def qr(input_data, input_type, input_shape, output_type, m, k, n, opts) do
     {_, input_num_bits} = input_type

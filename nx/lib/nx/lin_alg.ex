@@ -310,6 +310,13 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[1, 1, 1, 1], [0, 1, 0, 1], [0, 0, 1, 2], [0, 0, 0, 3]])
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([2, 4, 2, 4]), lower: false)
+      #Nx.Tensor<
+        f32[4]
+        [-1.3333333730697632, 2.6666667461395264, -0.6666666865348816, 1.3333333730697632]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -323,14 +330,32 @@ defmodule Nx.LinAlg do
 
   """
   def triangular_solve(a, b, opts \\ []) do
-    opts = keyword!(opts, [])
+    opts = keyword!(opts, lower: true)
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
+    # opts to implement:
+    # left_side: true/false ->
+    #   if true, solves op(A).X = B
+    #   if false solves X.op(A) = B
+    # lower: true/false
+    #   if true, solves as if A is lower triangular
+    #   if false, solves as if A is upper triangular
+    # unit_diagonal: true/false
+    #   if true, the diagonal elements are not accessed
+    #   if false, the solver proceeds normally
+    # transform_a: :none, :transpose, :conjugate
+    #   :none -> op(a) = a
+    #   :transpose -> op(a) = transpose(a)
+    #   :conjugate -> op(a) = conjugate(a) # not implemented
+
     case a_shape do
-      {n, n} -> nil
-      other -> raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
+      {n, n} ->
+        nil
+
+      other ->
+        raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
     end
 
     case b_shape do
@@ -346,7 +371,6 @@ defmodule Nx.LinAlg do
 
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
   end
-
 
   @doc """
   Solves the system `AX = B`.
@@ -581,7 +605,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, [mode: :reduced])
+    opts = keyword!(opts, mode: :reduced)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     mode = opts[:mode]
