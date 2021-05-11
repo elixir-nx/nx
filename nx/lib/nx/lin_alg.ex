@@ -294,7 +294,6 @@ defmodule Nx.LinAlg do
   * `:lower` - When `true`, defines the `a` matrix as lower triangular. If false, a is upper triangular.
                Defaults to `true`
   * `:left_side` - When `true`, solves the system as `op(A).X = B`. Otherwise, solves `X.op(A) = B`. Defaults to `true`.
-  * `:unit_diagonal` - When `true`, the diagonal elements aren't accessed. Defaults to `false`
 
   ## Examples
 
@@ -378,7 +377,7 @@ defmodule Nx.LinAlg do
 
   """
   def triangular_solve(a, b, opts \\ []) do
-    opts = keyword!(opts, lower: true, left_side: true, unit_diagonal: false, transform_a: :none)
+    opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
