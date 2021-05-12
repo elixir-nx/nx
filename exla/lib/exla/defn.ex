@@ -401,7 +401,11 @@ defmodule EXLA.Defn do
     EXLA.Op.select(pred, on_true, on_false)
   end
 
-  defp to_operator(:triangular_solve, [a, b, _opts], %{type: type}, _state) do
+  defp to_operator(:triangular_solve, [a, b, opts], %{type: type}, _state) do
+    left_side = Keyword.fetch!(opts, :left_side)
+    lower = Keyword.fetch!(opts, :lower)
+    transform = Keyword.fetch!(opts, :transform_a)
+
     case EXLA.Op.get_shape(b).dims do
       {_} = b_shape ->
         b =
@@ -410,12 +414,12 @@ defmodule EXLA.Defn do
           |> EXLA.Op.reshape(Tuple.append(b_shape, 1))
 
         to_type(a, type)
-        |> EXLA.Op.triangular_solve(b, true, true, false, :none)
+        |> EXLA.Op.triangular_solve(b, left_side, lower, false, transform)
         |> EXLA.Op.reshape(b_shape)
 
       _ ->
         to_type(a, type)
-        |> EXLA.Op.triangular_solve(to_type(b, type), true, true, false, :none)
+        |> EXLA.Op.triangular_solve(to_type(b, type), left_side, lower, false, transform)
     end
   end
 

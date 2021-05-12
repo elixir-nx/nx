@@ -3,6 +3,28 @@ defmodule Nx.LinAlgTest do
 
   doctest Nx.LinAlg
 
+  describe "triangular_solve" do
+    test "property" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([[1.0, 2.0, 3.0], [2.0, 2.0, 4.0], [2.0, 0.0, 1.0]])
+      assert Nx.dot(a, Nx.LinAlg.triangular_solve(a, b)) == b
+
+      upper = Nx.transpose(a)
+      assert Nx.dot(upper, Nx.LinAlg.triangular_solve(upper, b, lower: false)) == b
+
+      # TODO: THese properties hold for EXLA but not here.
+      # assert Nx.dot(
+      #         Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false),
+      #         upper
+      #        ) == b
+
+      # assert Nx.dot(
+      #          Nx.transpose(a),
+      #          Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
+      #        ) == b
+    end
+  end
+
   describe "norm/2" do
     test "raises for rank 3 or greater tensors" do
       t = Nx.iota({2, 2, 2})

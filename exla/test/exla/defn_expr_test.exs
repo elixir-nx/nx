@@ -2627,7 +2627,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "decompositions" do
-    defn ts(a, b), do: Nx.LinAlg.triangular_solve(a, b)
+    defn ts(a, b, opts \\ []), do: Nx.LinAlg.triangular_solve(a, b, opts)
 
     test "triangular_solve" do
       a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
@@ -2637,6 +2637,11 @@ defmodule EXLA.DefnExprTest do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
       b = Nx.tensor([[1, 2, 3], [2, 2, 4], [2, 0, 1]])
       assert compare_tensors!(Nx.dot(a, ts(a, b)), b)
+
+      upper = Nx.transpose(a)
+      assert compare_tensors!(Nx.dot(upper, ts(upper, b, lower: false)), b)
+      assert compare_tensors!(Nx.dot(ts(upper, b, left_side: false, lower: false), upper), b)
+      assert compare_tensors!(Nx.dot(Nx.transpose(a), ts(a, b, transform_a: :transpose)), b)
     end
 
     defn qr(t), do: Nx.LinAlg.qr(t)
