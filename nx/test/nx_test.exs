@@ -1032,6 +1032,11 @@ defmodule NxTest do
                  ]
                ])
     end
+
+    test "works with batch dimension of size 1" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]]])
+      assert Nx.dot(t, [2], [0], t, [2], [0]) == Nx.tensor([[[14, 32], [32, 77]]])
+    end
   end
 
   describe "reverse/2" do

@@ -510,9 +510,9 @@ defmodule Nx.BinaryBackend do
     left_batch_item_length = Nx.size(left_batch_shape)
     right_batch_item_length = Nx.size(right_batch_shape)
 
-    batch_count = Enum.reduce(left_batch_axes, 1, fn x, acc -> elem(left_shape, x) * acc end) - 1
+    batch_count = Enum.reduce(left_batch_axes, 1, fn x, acc -> elem(left_shape, x) * acc end)
 
-    range = if batch_count == 0, do: [], else: 0..batch_count
+    range = if batch_count == 0, do: [], else: 0..(batch_count - 1)
 
     left_batch_item_template = %{left | shape: left_batch_shape}
     right_batch_item_template = %{right | shape: right_batch_shape}
