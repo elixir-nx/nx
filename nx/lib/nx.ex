@@ -7294,9 +7294,10 @@ defmodule Nx do
   You can optionally provide a `stride` to specify the amount
   of stride in along the given dimension.
 
-  Start index must be greater than or equal to zero. Length must
-  be strictly greater than zero. `start_index + length` must not
-  exceed the respective tensor dimension.
+  Start index must be greater than or equal to zero. It can be an
+  integer or a scalar tensor. Length must be strictly greater than
+  zero. `start_index + length` must not exceed the respective tensor
+  dimension.
 
   The axis will be normalized with the dimensions and names of the
   given tensor.
@@ -7317,6 +7318,14 @@ defmodule Nx do
       >
 
       iex> Nx.slice_axis(Nx.iota({2, 5}, names: [:x, :y]), 0, 1, :x)
+      #Nx.Tensor<
+        s64[x: 1][y: 5]
+        [
+          [0, 1, 2, 3, 4]
+        ]
+      >
+
+      iex> Nx.slice_axis(Nx.iota({2, 5}, names: [:x, :y]), Nx.tensor(0), 1, :x)
       #Nx.Tensor<
         s64[x: 1][y: 5]
         [

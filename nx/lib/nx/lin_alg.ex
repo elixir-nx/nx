@@ -373,7 +373,7 @@ defmodule Nx.LinAlg do
 
       iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
-      ** (ArgumentError) invalid value for :transform_a option, expected one of [:none, :transpose, :conjugate], got :other
+      ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
 
   """
   def triangular_solve(a, b, opts \\ []) do
@@ -391,7 +391,7 @@ defmodule Nx.LinAlg do
 
       t ->
         raise ArgumentError,
-              "invalid value for :transform_a option, expected one of [:none, :transpose], " <>
+              "invalid value for :transform_a option, expected :none, :transpose, or :conjugate, " <>
                 "got: #{inspect(t)}"
     end
 
