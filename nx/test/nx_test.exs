@@ -672,6 +672,14 @@ defmodule NxTest do
       assert tensor[[]] == tensor
     end
 
+    test "supports an dynamic tensor" do
+      tensor = Nx.tensor([1, 2, 3], names: [:row])
+      assert tensor[Nx.tensor(1)] == Nx.tensor(2)
+      assert tensor[[Nx.tensor(1)]] == Nx.tensor(2)
+      assert tensor[row: Nx.tensor(1)] == Nx.tensor(2)
+      assert tensor[Nx.tensor(-1)] == Nx.tensor(1)
+    end
+
     test "raises on duplicated axis" do
       tensor = Nx.tensor([[1, 2, 3]], names: [:x, :y])
 

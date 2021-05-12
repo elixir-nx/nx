@@ -146,6 +146,28 @@ defmodule Nx do
       iex> Nx.tensor([1, 2])[-3]
       ** (ArgumentError) index -3 is out of bounds for axis 0 in shape {2}
 
+  The index can also be another tensor but in such cases it must be
+  a number between 0 and the dimension size. Out of bound dynamic indexes
+  are always clamped to the tensor dimensions:
+
+      iex> one = Nx.tensor(1)
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t[one][one]
+      #Nx.Tensor<
+        s64
+        4
+      >
+
+  For example, a `minus_one` dynamic index will be clamped to zero:
+
+      iex> minus_one = Nx.tensor(-1)
+      iex> t = Nx.tensor([[1, 2], [3, 4]])
+      iex> t[minus_one][minus_one]
+      #Nx.Tensor<
+        s64
+        1
+      >
+
   Access also accepts ranges. Ranges in Elixir are inclusive:
 
       iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
