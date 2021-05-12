@@ -234,7 +234,32 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Vectorizes `fun` over given `args`.
+  Vectorizes `fun` over `args` with `in_axes`.
+
+  `vmap` acts similar to `apply`; however, the given `fun` is
+  "vectorized" over `in_axes` of the given `args`. `in_axes` are
+  treated as "batch dimensions" in the input function. For example,
+  consider a dot product between 2 rank 3 tensors:
+
+      a = Nx.iota({2, 3, 2})
+      b = Nx.iota({2, 2, 3})
+      Nx.dot(a, b)
+
+  The result would have shape `{2, 2, 2, 2}` as the dot product contracts
+  `a` along axis 1 and `b` along axis 2. With `vmap`, we can compute the
+  dot product such that `Nx.dot(a, b)` is treated as 2 distinct matrix
+  multiplications between matrices with shapes `{3, 2}` and `{2, 3}`:
+
+      a = Nx.iota({2, 3, 2})
+      b = Nx.iota({2, 2, 3})
+      vmap(&Nx.dot(&1, &2), [a, b])
+
+  `a` and `b` are "vectorized" along the leading axis such that the expression
+  is treated as 2 stacked matrix multiplications and the output shape is
+  `{2, 3, 3}`.
+
+  `in_axes` tells which axes to vectorize over. By default, it vectorizes over
+  all leading axes.
   """
   def vmap(fun, args, in_axes \\ nil) when is_function(fun) do
     Nx.Defn.Vectorize.transform(fun, args, in_axes)

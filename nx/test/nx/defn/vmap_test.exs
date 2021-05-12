@@ -57,11 +57,50 @@ defmodule Nx.Defn.VmapTest do
     end
   end
 
+  describe "nested vmap" do
+    defn vmap_nested(t1, t2), do: vmap(&Nx.cos(Nx.dot(&1, [1], [], &2, [1], [])), [t1, t2])
+
+    test "vectorizes over nested expression" do
+      t = Nx.tensor([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+      lhs = vmap_nested(t, t)
+      rhs = Nx.tensor([[[0.13673722, 0.83422336], [0.83422336, -0.03097503]]])
+
+      compare_tensors!(lhs, rhs)
+    end
+  end
+
   describe "element-wise unary ops" do
     defn vmap_cos(t), do: vmap(fn t -> Nx.cos(t) end, [t])
 
     test "vectorizes over cos" do
       assert vmap_cos(Nx.iota({4, 4, 4})) == Nx.cos(Nx.iota({4, 4, 4}))
+    end
+  end
+
+  describe "dot product" do
+    defn vmap_dot(t1, t2), do: vmap(&Nx.dot(&1, &2), [t1, t2])
+    defn vmap_dot_general(t1, t2), do: vmap(&Nx.dot(&1, [1], [], &2, [1], []), [t1, t2])
+
+    test "vectorizes over both sides" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]]])
+      # assert vmap_dot_general(t, t) == Nx.tensor([[[14, 32], [32, 77]]])
+
+      t1 = Nx.iota({2, 3, 2})
+      t2 = Nx.iota({2, 2, 3})
+
+      assert vmap_dot(t1, t2) == Nx.tensor(1)
+    end
+  end
+
+  defp compare_tensors!(left, right) do
+    atol = 1.0e-7
+    rtol = 1.0e-4
+
+    try do
+      assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
+    rescue
+      # So we can see the diff
+      _ -> assert left == right
     end
   end
 end
