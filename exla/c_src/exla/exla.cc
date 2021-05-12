@@ -1042,7 +1042,6 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   xla::XlaComputation* computation;
   std::vector<exla::int64> window_dimensions;
   std::vector<exla::int64> window_strides;
-  // TODO(seanmor5): Not yet supported in Nx
   // std::vector<exla::int64> base_dilations;
   std::vector<exla::int64> window_dilations;
   std::vector<std::pair<exla::int64, exla::int64>> padding_config;

@@ -82,7 +82,7 @@ defmodule EXLA.Executable do
     rng_seed = Keyword.get(options, :rng_seed, 0)
     partition = Keyword.get(options, :partition, 1)
 
-    # TODO: Validate replicas and partitions against the client
+    # TODO: Validate replicas against the client
     # TODO: Raise if buffers belong to different clients/ordinals
 
     inputs =

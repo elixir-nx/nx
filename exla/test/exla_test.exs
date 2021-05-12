@@ -12,6 +12,7 @@ defmodule EXLATest do
   defn tuple_return({a, b}, c, d), do: {{a + c, b + d}, a + b}
   defn tuple_unused({a, _b}, c, _d), do: a + c
 
+  @tag :aot
   test "complex aot example" do
     a = Nx.tensor([1, 2, 3])
     b = Nx.tensor([1.0, 2.0, 3.0])

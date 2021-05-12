@@ -93,7 +93,6 @@ defmodule EXLA.Defn do
       end)
 
     # TODO: We should extract the client and device ordinal from buffers first
-    # TODO: Rename :client to :default_client
     {client_name, options} = Keyword.pop(options, :client, :default)
     {buffers, cache_args} = nx_to_buffer(vars, inputs)
     cache_key = {key, cache_args, client_name, options}

@@ -37,8 +37,21 @@ defmodule EXLAHelpers do
   end
 end
 
+client = EXLAHelpers.client()
+
+multi_device =
+  if client.device_count < 2 or client.platform != :host, do: [:multi_device], else: []
+
+if client.platform == :host and client.device_count < 2 do
+  cores = System.schedulers_online()
+
+  IO.puts(
+    "To run multi-device tests, set XLA_FLAGS=--xla_force_host_platform_device_count=#{cores}"
+  )
+end
+
 ExUnit.start(
-  exclude: [:platform],
+  exclude: [:platform] ++ multi_device,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )

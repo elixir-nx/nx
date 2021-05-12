@@ -13,11 +13,12 @@ defmodule EXLA.Computation do
 
   ## Options
 
-    * `:num_replicas` - the number of replicas this computation will run on
-    * `:use_spmd` - enable single-program multiple data
+    * `:num_replicas` - the number of replicas this computation will run on.
+      It defaults to 1 but you can set it if you want to enable single-program
+      multiple data
 
   Currently those options do not have an effect as they related to running the
-  same compiled executabled on multiple replicas.
+  same compiled executable on multiple replicas.
 
   Some options apply to TPU only and therefore are not currently supported:
 
@@ -28,12 +29,10 @@ defmodule EXLA.Computation do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
 
-    use_spmd = Keyword.get(options, :use_spmd, false)
-    use_spmd_int = if use_spmd, do: 1, else: 0
-
+    use_spmd = if num_replicas >= 1 or num_partitions >= 1, do: 1, else: 0
     output_shape = assert_output_shape!(computation)
 
-    # TODO: Validate replicas and partitions against the client
+    # TODO: Validate replicas against the client
 
     ref =
       EXLA.NIF.compile(
@@ -42,7 +41,7 @@ defmodule EXLA.Computation do
         Enum.map(argument_shapes, & &1.ref),
         num_replicas,
         num_partitions,
-        use_spmd_int
+        use_spmd
       )
       |> unwrap!()
 
