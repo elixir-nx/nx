@@ -12,16 +12,47 @@ defmodule Nx.LinAlgTest do
       upper = Nx.transpose(a)
       assert Nx.dot(upper, Nx.LinAlg.triangular_solve(upper, b, lower: false)) == b
 
-      # TODO: THese properties hold for EXLA but not here.
-      # assert Nx.dot(
-      #         Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false),
-      #         upper
-      #        ) == b
+      # TODO: These properties hold for EXLA but not here.
+      assert Nx.dot(
+               Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false),
+               upper
+             ) == b
 
-      # assert Nx.dot(
-      #          Nx.transpose(a),
-      #          Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
-      #        ) == b
+      # import jax.lax as lax
+      # import numpy as np
+      # In [39]: a = np.array([[1, 0, 0], [1, 1, 0], [0,
+      #     ...: 1, 1.0]])
+
+      # In [40]: b = np.array([[1, 2, 3], [2, 2, 4], [2,
+      #     ...: 0, 1.0]])
+
+      # In [41]: lax.linalg.triangular_solve(a * 1.0, b,
+      #     ...: transpose_a=True)
+      # Out[41]:
+      # DeviceArray([[1., 2., 3.],
+      #              [2., 2., 4.],
+      #              [2., 0., 1.]], dtype=float32)
+      # In [51]: a @ lax.linalg.triangular_solve(a * 1.0,
+      # ...:  b, transpose_a=True, lower=False)
+      # Out[51]:
+      # DeviceArray([[1., 2., 3.],
+      #              [3., 4., 7.],
+      #              [4., 2., 5.]], dtype=float32)
+
+      # In [52]: a @ lax.linalg.triangular_solve(a * 1.0,
+      #     ...:  b, transpose_a=True, lower=True)
+      # Out[52]:
+      # DeviceArray([[ 1.,  1.,  2.],
+      #              [ 3.,  1.,  6.],
+      #              [ 4., -2.,  7.]], dtype=float32
+
+      assert Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose) ==
+               Nx.LinAlg.triangular_solve(upper, b, lower: false)
+
+      assert Nx.dot(
+               Nx.transpose(a),
+               Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
+             ) == b
     end
   end
 
