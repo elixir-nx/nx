@@ -32,7 +32,7 @@ defmodule Nx.Defn.Compiler do
   at root modules without affecting the module's main API.
   """
   @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), opts :: keyword) ::
-              Nx.t() | tuple()
+              Nx.t() | tuple() | map()
 
   @doc """
   Callback for AOT compilation.
@@ -418,6 +418,12 @@ defmodule Nx.Defn.Compiler do
 
   ## Normalization
 
+  defp normalize({:%{}, meta, [{:|, update_meta, [map, args]}]}, state) do
+    {map, state} = normalize(map, state)
+    {args, state} = normalize(args, state)
+    {{:%{}, meta, [{:|, update_meta, [map, args]}]}, state}
+  end
+
   defp normalize({special_form, meta, args}, state)
        when special_form in [:{}, :%{}, :__block__] do
     {args, state} = normalize_list(args, state)
@@ -552,6 +558,11 @@ defmodule Nx.Defn.Compiler do
      state}
   end
 
+  defp normalize({{:., dot_meta, [remote, name]}, meta, []}, state) when is_atom(name) do
+    {remote, state} = normalize(remote, state)
+    {{{:., dot_meta, [Map, :fetch!]}, meta, [remote, name]}, state}
+  end
+
   defp normalize({left, right}, state) do
     {left, state} = normalize(left, state)
     {right, state} = normalize(right, state)
@@ -638,6 +649,16 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
+  defp normalize_arg({:%{}, meta, args}, _meta, state) do
+    {args, state} =
+      Enum.map_reduce(args, state, fn {k, v}, acc ->
+        {v, acc} = normalize_arg(v, meta, acc)
+        {{k, v}, acc}
+      end)
+
+    {{:%{}, meta, args}, state}
+  end
+
   defp normalize_arg({op, meta, args}, _meta, state) when op in [:{}, :=] do
     {args, state} = Enum.map_reduce(args, state, &normalize_arg(&1, meta, &2))
     {{op, meta, args}, state}
@@ -653,7 +674,7 @@ defmodule Nx.Defn.Compiler do
     compile_error!(
       meta,
       state,
-      "only variables and tuples are allowed as arguments in defn, got: #{Macro.to_string(expr)}"
+      "only variables, tuples, and maps are allowed as patterns in defn, got: #{Macro.to_string(expr)}"
     )
   end
 

@@ -102,6 +102,18 @@ defmodule Nx.Defn.TreeTest do
                )
     end
 
+    test "converts maps" do
+      s64_param = Expr.parameter(nil, {:s, 64}, {}, 1)
+      f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
+
+      assert %{a: %T{data: %Expr{op: :as_type, args: [^s64_param]}, type: {:s, 32}},
+               b: %T{data: %Expr{op: :as_type, args: [^f64_param]}, type: {:f, 32}}} =
+               Tree.rewrite_types(%{a: s64_param, b: f64_param},
+                 max_signed_type: {:s, 32},
+                 max_float_type: {:f, 32}
+               )
+    end
+
     test "keeps a cache" do
       f64_param = Expr.parameter(nil, {:f, 64}, {}, 2)
 

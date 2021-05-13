@@ -1436,7 +1436,7 @@ defmodule Nx.Defn.GradTest do
     defn grad_tuple_output(a), do: grad(a, &{&1 + 1, &1 - 1})
 
     test "raises on tuple output" do
-      assert_raise ArgumentError, ~r"expected a tensor or a numbe", fn ->
+      assert_raise ArgumentError, ~r"expected a tensor or a number", fn ->
         grad_tuple_output(Nx.tensor(1.0))
       end
     end

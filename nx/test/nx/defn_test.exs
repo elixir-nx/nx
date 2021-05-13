@@ -69,6 +69,96 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "map" do
+    defn map_shape_match_signature(%{a: a, b: b}) do
+      a + b
+    end
+
+    test "allows pattern matching on the map shape on signature" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               map_shape_match_signature(%{a: 1, b: 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn map_shape_match_alias(%{} = var) do
+      %{a: a, b: b} = var
+      a + b
+    end
+
+    test "allows pattern matching on the map shape with alias and underscores" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               map_shape_match_alias(%{a: 1, b: 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn map_shape_match_inside_body(var) do
+      %{a: a, b: b} = var
+      a + b
+    end
+
+    test "allows pattern matching on the map shape inside body" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               map_shape_match_inside_body(%{a: 1, b: 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn map_shape_access(var) do
+      var[:a] + var[:b]
+    end
+
+    test "allows access on maps" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               map_shape_access(%{a: 1, b: 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn map_shape_dot(var) do
+      var.a + var.b
+    end
+
+    test "allows dot on maps" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} =
+               map_shape_dot(%{a: 1, b: 2.0})
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
+    end
+
+    defn map_return(a, b) do
+      %{add: a + b, subtract: a - b}
+    end
+
+    test "returns a map" do
+      assert %{add: add, subtract: subtract} = map_return(1, 2.0)
+
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} = add
+
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [^left, ^right]}} =
+               subtract
+    end
+
+    defn map_update(map) do
+      %{map | b: map.a + map.b}
+    end
+
+    test "updates a map" do
+      assert %{a: a, b: add} = map_update(%{a: 1, b: 2.0})
+
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [^a, b]}} = add
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = a
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = b
+    end
+  end
+
   describe "anonymous functions args" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
@@ -97,9 +187,9 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
 
-      assert_raise ArgumentError, ~r"Got the following function inside a tuple", fn ->
-        calls_tuple_fun({&Nx.add/2, 0}, 1, 2.0)
-      end
+      assert_raise ArgumentError,
+                   ~r"The following function is unexpected inside a tuple/map",
+                   fn -> calls_tuple_fun({&Nx.add/2, 0}, 1, 2.0) end
     end
   end
 
@@ -874,6 +964,25 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :fun}, shape: {}, type: {:s, 64}} = body
     end
 
+    defn while_constant(x) do
+      while x, Nx.less(x, 10) do
+        1
+      end
+    end
+
+    test "constant" do
+      assert %T{
+               data: %Expr{op: :while, args: [initial, condition, body]},
+               shape: {},
+               type: {:s, 64}
+             } = while_constant(Nx.tensor(0))
+
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = initial
+      assert %T{data: %Expr{op: :fun}, shape: {}, type: {:u, 8}} = condition
+      assert %T{data: %Expr{op: :fun, args: [_, tensor, _]}, shape: {}, type: {:s, 64}} = body
+      assert %T{data: %Expr{op: :scalar, args: [1]}} = tensor
+    end
+
     defn factorial(x) do
       {factorial, _} =
         while {factorial = 1, x}, Nx.greater(x, 1) do
@@ -891,7 +1000,19 @@ defmodule Nx.DefnTest do
                    fn -> factorial(10.0) end
     end
 
-    defn while_mixed(a, b) do
+    defn while_mixed_return(a, b) do
+      while {a, b}, Nx.less(a, 10) do
+        %{a: a, b: b}
+      end
+    end
+
+    test "raises on mixed return" do
+      assert_raise CompileError,
+                   ~r/the do-block in while must return the shape, type, and names as the initial arguments. Got body %\{:a => s64, :b => s64\} and initial \{s64, s64\}/,
+                   fn -> while_mixed_return(Nx.tensor(0), Nx.tensor(1)) end
+    end
+
+    defn while_mixed_context(a, b) do
       while a, Nx.less(a, 10) do
         a + b
       end
@@ -900,7 +1021,7 @@ defmodule Nx.DefnTest do
     test "raises on mixed context" do
       assert_raise RuntimeError,
                    ~r"cannot build defn because expressions come from different contexts: :root and :while",
-                   fn -> while_mixed(Nx.tensor(0), Nx.tensor(1)) end
+                   fn -> while_mixed_context(Nx.tensor(0), Nx.tensor(1)) end
     end
 
     test "raises if non-variable is given as pattern" do
@@ -1119,7 +1240,7 @@ defmodule Nx.DefnTest do
 
     test "non-variables used as arguments" do
       assert_raise CompileError,
-                   ~r"#{location(+4)}: only variables and tuples are allowed as arguments in defn",
+                   ~r"#{location(+4)}: only variables, tuples, and maps are allowed as patterns in defn",
                    fn ->
                      defmodule Sample do
                        import Nx.Defn

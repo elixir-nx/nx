@@ -118,9 +118,25 @@ defmodule Nx.Defn.Tree do
   is invoked for it but not for its arguments (see `traverse_args/3`
   for that).
   """
+  def composite(%T{} = expr, acc, fun) when is_function(fun, 2) do
+    fun.(expr, acc)
+  end
+
   def composite(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
     {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &composite(&1, &2, fun))
     {List.to_tuple(list), acc}
+  end
+
+  def composite(map, acc, fun) when is_map(map) and is_function(fun, 2) do
+    {list, acc} =
+      map
+      |> assert_no_struct!()
+      |> Enum.map_reduce(acc, fn {k, v}, acc ->
+        {v, acc} = composite(v, acc, fun)
+        {{k, v}, acc}
+      end)
+
+    {Map.new(list), acc}
   end
 
   def composite(expr, acc, fun) when is_function(fun, 2) do
@@ -249,32 +265,33 @@ defmodule Nx.Defn.Tree do
     |> Enum.reverse()
   end
 
+  defp from_runtime_args(%T{} = tensor, acc),
+    do: [tensor | acc]
+
   defp from_runtime_args(tuple, acc) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_runtime_args/2)
+
+  defp from_runtime_args(map, acc) when is_map(map),
+    do: map |> assert_no_struct!() |> Enum.sort() |> Enum.reduce(acc, &from_runtime_args(elem(&1, 1), &2))
 
   defp from_runtime_args(other, acc),
     do: [from_arg(other) | acc]
 
+  @valid "arguments to defn must be numbers, tensors, and functions. " <>
+            "It may also be a maps with numbers/tensors as values, " <>
+            "a tuple of numbers/tensors or a tuple of functions. "
+
   @doc false
-  def from_arg(%T{} = t), do: t
+  def from_arg(%T{} = tensor), do: tensor
   def from_arg(number) when is_number(number), do: Nx.tensor(number)
 
   def from_arg(other) when is_function(other) do
-    raise(
-      ArgumentError,
-      "arguments to defn must be numbers, tensors, and functions. " <>
-        "It may also be a tuple with said elements, although the tuple " <>
-        "must contain only functions or only number/tensors, not both. " <>
-        "Got the following function inside a tuple: #{inspect(other)}"
-    )
+    raise ArgumentError,
+          @valid <> "The following function is unexpected inside a tuple/map: #{inspect(other)}"
   end
 
   def from_arg(other) do
-    raise(
-      ArgumentError,
-      "arguments to defn must be numbers, tensors, and functions, or a tuple of said elements. " <>
-        "Got: #{inspect(other)}"
-    )
+    raise ArgumentError, @valid <> "Got: #{inspect(other)}"
   end
 
   @doc false
@@ -298,11 +315,14 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc false
-  def to_result(tuple) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
-
   def to_result(%T{data: %Expr{}} = t),
     do: t
+
+  def to_result(map) when is_map(map),
+    do: map |> assert_no_struct!() |> Enum.map(fn {k, v} -> {k, to_result(v)} end) |> Map.new()
+
+  def to_result(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
 
   def to_result(other) do
     raise ArgumentError,
@@ -321,16 +341,38 @@ defmodule Nx.Defn.Tree do
     end)
   end
 
-  defp args_to_each(arg, acc, fun) when is_tuple(arg) do
+  defp args_to_each(%T{} = arg, acc, fun) do
+    fun.(arg, acc)
+  end
+
+  defp args_to_each(tuple, acc, fun) when is_tuple(tuple) do
     {list, acc} =
-      arg
+      tuple
       |> Tuple.to_list()
       |> Enum.map_reduce(acc, &args_to_each(&1, &2, fun))
 
     {List.to_tuple(list), acc}
   end
 
+  defp args_to_each(map, acc, fun) when is_map(map) do
+    {list, acc} =
+      map
+      |> assert_no_struct!()
+      |> Enum.map_reduce(acc, fn {k, v}, acc ->
+        {v, acc} = args_to_each(v, acc, fun)
+        {{k, v}, acc}
+      end)
+
+    {Map.new(list), acc}
+  end
+
   defp args_to_each(arg, acc, fun) do
     fun.(arg, acc)
   end
+
+  defp assert_no_struct!(%_{} = struct),
+    do: raise("unexpected struct inside defn: #{inspect(struct)}")
+
+  defp assert_no_struct!(map),
+    do: map
 end
