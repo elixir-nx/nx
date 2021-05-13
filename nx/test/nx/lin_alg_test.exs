@@ -12,16 +12,18 @@ defmodule Nx.LinAlgTest do
       upper = Nx.transpose(a)
       assert Nx.dot(upper, Nx.LinAlg.triangular_solve(upper, b, lower: false)) == b
 
-      # TODO: THese properties hold for EXLA but not here.
-      # assert Nx.dot(
-      #         Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false),
-      #         upper
-      #        ) == b
+      assert Nx.dot(
+               Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false),
+               upper
+             ) == b
 
-      # assert Nx.dot(
-      #          Nx.transpose(a),
-      #          Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
-      #        ) == b
+      assert Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose) ==
+               Nx.LinAlg.triangular_solve(upper, b, lower: false)
+
+      assert Nx.dot(
+               Nx.transpose(a),
+               Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
+             ) == b
     end
   end
 
