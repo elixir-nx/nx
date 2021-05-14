@@ -780,9 +780,7 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}}, type, state) do
-    {:name, name} = Function.info(fun, :name)
-
+  defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, {_, name, _}]}}, type, state) do
     to_computation(name, args, state, fn state ->
       expr
       |> recur_composite(state, %{})

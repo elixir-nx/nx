@@ -15,16 +15,13 @@ defmodule Nx.Defn.Tree do
 
   @doc """
   Helper to traverse the arguments of a tensor expression.
-
-  Note the arguments of function nodes are never traversed, as it is
-  not always desired to recursively modify them. If you want to modify
-  a function, you will need to build a new function node by wrapping
-  the function node `fun` with the new desired logic.
   """
   def traverse_args(expr, acc, fun)
 
-  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
-    {args, acc}
+  def traverse_args(%T{data: %Expr{op: :fun, args: [args, expr, mfa]}}, acc, fun) do
+    {args, acc} = Enum.map_reduce(args, acc, &composite(&1, &2, fun))
+    {expr, acc} = composite(expr, acc, fun)
+    {[args, expr, mfa], acc}
   end
 
   def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
@@ -197,14 +194,8 @@ defmodule Nx.Defn.Tree do
     end)
   end
 
-  defp rewrite_type(:parameter, _args, t, type_fun) do
+  defp rewrite_type(:parameter, _args, %{data: %{context: :root}} = t, type_fun) do
     Nx.as_type(t, type_fun.(t.type))
-  end
-
-  defp rewrite_type(:fun, [params, _expr, fun], t, type_fun) do
-    {:arity, arity} = Function.info(fun, :arity)
-    params = Enum.map(params, fn param -> composite(param, &%{&1 | type: type_fun.(&1.type)}) end)
-    Expr.fun(params, t.data.context, rewrite_type_fun(arity, fun, type_fun))
   end
 
   defp rewrite_type(:tensor, [arg], t, type_fun) do
@@ -219,14 +210,6 @@ defmodule Nx.Defn.Tree do
 
   defp rewrite_type(_op, args, t, type_fun) do
     rewrite_type_args(t, type_fun.(t.type), args)
-  end
-
-  for arity <- 0..15 do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    defp rewrite_type_fun(unquote(arity), op_fun, type_fun) do
-      fn unquote_splicing(args) -> rewrite_type(op_fun.(unquote_splicing(args)), type_fun) end
-    end
   end
 
   defp rewrite_type_args(%{data: data} = t, type, args) do

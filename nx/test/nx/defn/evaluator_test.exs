@@ -192,6 +192,22 @@ defmodule Nx.Defn.EvaluatorTest do
       assert factorial_tuple(5) == Nx.tensor(120)
       assert factorial_tuple(10.0) == Nx.tensor(3_628_800.0)
     end
+
+    defn factorial_map(x) do
+      factorial = Nx.tensor(1, type: Nx.type(x))
+
+      %{factorial: factorial} =
+        while map = %{factorial: factorial, x: x}, Nx.greater(map.x, 1) do
+          %{map | factorial: map.factorial * map.x, x: map.x - 1}
+        end
+
+      factorial
+    end
+
+    test "factorial map" do
+      assert factorial_map(5) == Nx.tensor(120)
+      assert factorial_map(10.0) == Nx.tensor(3_628_800.0)
+    end
   end
 
   describe "argsort/2" do

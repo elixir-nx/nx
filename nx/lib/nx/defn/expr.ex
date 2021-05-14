@@ -24,17 +24,20 @@ defmodule Nx.Defn.Expr do
 
     * `scalar(number)`
 
-    * `tensor(Nx.Tensor.t)`
-
-    * `fun(parameters, t, fun)`
-
-    * `cond(clauses, otherwise)`
+    * `tensor(tensor)`
 
     * `metadata(expr, metadata)`
 
     * `elem(tuple, pos, size)` - created automatically from
       expression that return tuples. Note it may return tuples
       too, which means we have nested tuples
+
+    * `fun(parameters, t, mfa)` - the `mfa` is used only for
+      introspection purposes
+
+    * `cond(clauses, otherwise)`
+
+    * `while(initial, condition, body)`
 
   Custom compilers must handle said nodes accordingly.
   """
@@ -86,21 +89,27 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tensor expression function node with the given args and anonymous function.
+  Creates a tensor expression function node with the given context,
+  args, body, context and mfa for metadata.
   """
-  def fun(args, context, fun) when is_function(fun, length(args)) do
-    body = apply(fun, args)
-
+  def fun(context, args, body, {_, _, _} = mfa) do
     case Tree.composite(body, &to_expr/1) do
       %T{} = tensor ->
-        expr(tensor, context, :fun, [args, tensor, fun])
+        expr(tensor, context, :fun, [args, tensor, mfa])
 
       tuple when is_tuple(tuple) ->
-        expr(tuple_out(tuple_size(tuple)), context, :fun, [args, tuple, fun])
+        expr(tuple_out(tuple_size(tuple)), context, :fun, [args, tuple, mfa])
 
       map when is_map(map) ->
-        expr(tuple_out(map_size(map)), context, :fun, [args, map, fun])
+        expr(tuple_out(map_size(map)), context, :fun, [args, map, mfa])
     end
+  end
+
+  defp fun(context, fun, args) when is_function(fun, length(args)) do
+    {:module, mod} = Function.info(fun, :module)
+    {:name, name} = Function.info(fun, :name)
+    {:arity, arity} = Function.info(fun, :arity)
+    fun(context, args, apply(fun, args), {mod, name, arity})
   end
 
   @doc """
@@ -153,97 +162,32 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a `cond` tensor expression.
   """
+  @cond_mismatch "cond/if expects all branches to return tensors, tuples of the same size, or maps with the same keys"
+
   def cond(clauses, last) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
-    {out, [last | exprs]} = cond_clauses(last, exprs)
+    {out, [last | exprs]} = to_clauses(last, exprs, &cond_clause/2, @cond_mismatch)
     clauses = Enum.zip(preds, exprs)
     composite(out, &expr(&1, context, :cond, [clauses, last]))
   end
 
-  defp cond_clauses(last, exprs) when is_map(last) and not is_struct(last) do
-    keys = Map.keys(last)
-
-    for expr <- exprs,
-        not is_map(expr) or Map.keys(expr) != keys,
-        do: branch_mismatch!(expr, last)
-
-    keys = Enum.sort(keys)
-
-    {list_of_last, list_of_lists} =
-      keys
-      |> Enum.map(fn key ->
-        exprs = Enum.map(exprs, & &1[key])
-        cond_clauses(last[key], exprs)
-      end)
-      |> Enum.unzip()
-
-
-    {Map.new(Enum.zip(keys, list_of_last)), unzip_cons([last | exprs], list_of_lists)}
-  end
-
-  defp cond_clauses(last, exprs) when is_tuple(last) do
-    size = tuple_size(last)
-
-    for expr <- exprs,
-        not is_tuple(expr) or tuple_size(expr) != size,
-        do: branch_mismatch!(expr, last)
-
-    # TODO: Use Enum.with_index on Elixir v1.12
-    {list_of_last, list_of_lists} =
-      last
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.map(fn {last, index} ->
-        exprs = Enum.map(exprs, &elem(&1, index))
-        cond_clauses(last, exprs)
-      end)
-      |> Enum.unzip()
-
-    {List.to_tuple(list_of_last), unzip_cons([last | exprs], list_of_lists)}
-  end
-
-  defp cond_clauses(type = last, exprs) do
+  defp cond_clause(type = last, exprs) do
     %{shape: shape, names: names} = last = to_expr(last)
 
     {exprs, {type, shape, names}} =
       Enum.map_reduce(exprs, {type, shape, names}, fn expr, {type, shape, names} ->
-        unless is_number(expr) or is_struct(expr, T), do: branch_mismatch!(expr, last)
         type = binary_type(type, expr)
         expr = to_expr(expr)
         {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
         {expr, {type, shape, names}}
       end)
 
-    [last | exprs] =
-      for expr <- [last | exprs] do
-        expr
-        |> Nx.as_type(type)
-        |> Nx.broadcast(shape, names: names)
-      end
-
-    {last, [last | exprs]}
-  end
-
-  defp unzip_cons(last_and_exprs, list_of_lists) do
-    {last_and_exprs, _} =
-      Enum.map_reduce(last_and_exprs, list_of_lists, fn _, list_of_lists ->
-        unzip_cons(list_of_lists, [], [])
-      end)
-
-    last_and_exprs
-  end
-
-  defp unzip_cons([[head | tail] | rest], heads, tails),
-    do: unzip_cons(rest, [head | heads], [tail | tails])
-
-  defp unzip_cons([], heads, tails),
-    do: {heads |> Enum.reverse() |> List.to_tuple(), Enum.reverse(tails)}
-
-  defp branch_mismatch!(left, right) do
-    raise ArgumentError,
-          "cond/if expects all branches to return tensors, tuples of the same size, or maps with the same keys, " <>
-            "got #{to_type_shape_string(left)} and #{to_type_shape_string(right)}"
+    for expr <- [last | exprs] do
+      expr
+      |> Nx.as_type(type)
+      |> Nx.broadcast(shape, names: names)
+    end
   end
 
   ## Nx.Defn AST callbacks
@@ -279,7 +223,7 @@ defmodule Nx.Defn.Expr do
         {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 
-    condition = fun([param], context, condition)
+    condition = fun(context, condition, [param])
 
     if condition.shape != {} do
       raise CompileError,
@@ -288,7 +232,7 @@ defmodule Nx.Defn.Expr do
         description: "condition must be a scalar tensor, got shape: #{inspect(condition.shape)}"
     end
 
-    %T{data: %Expr{args: [_, body_expr, _]}} = body = fun([param], context, body)
+    %T{data: %Expr{args: [_, body_expr, _]}} = body = fun(context, body, [param])
 
     if compatible?(initial, body_expr) do
       composite(param, &expr(&1, context, :while, [initial, condition, body]))
@@ -488,7 +432,7 @@ defmodule Nx.Defn.Expr do
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, context, fun)
+    fun = fun(context, fun, args)
 
     if fun.shape != {} do
       raise "reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -508,7 +452,7 @@ defmodule Nx.Defn.Expr do
       ) do
     args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, context, fun)
+    fun = fun(context, fun, args)
 
     if fun.shape != {} do
       raise "reduce_window function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -521,7 +465,7 @@ defmodule Nx.Defn.Expr do
   def map(%{type: type} = out, tensor, fun) do
     args = [parameter(:map, type, {}, 0)]
     %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :map, [tensor, fun(args, context, fun)])
+    expr(out, context, :map, [tensor, fun(context, fun, args)])
   end
 
   @impl true
@@ -853,10 +797,20 @@ defmodule Nx.Defn.Expr do
     context || acc
   end
 
-  ## Compatible checking
+  ## Clause checking
 
-  defp compatible?(%T{} = left, %T{} = right),
-    do: Nx.compatible?(left, right)
+  defp to_clauses(last, exprs, fun, error_info) do
+    if incompatible = Enum.find(exprs, &not compatible?(last, &1)) do
+      left = to_type_shape_string(last)
+      right = to_type_shape_string(incompatible)
+      raise ArgumentError, error_info <> ", got #{left} and #{right}"
+    else
+      to_clauses(last, exprs, fun)
+    end
+  end
+
+  defp compatible?(left, right) when (is_number(left) or is_struct(left, T)) and (is_number(right) or is_struct(right, T)),
+    do: true
 
   defp compatible?(left, right) when tuple_size(left) == tuple_size(right),
     do: compatible_tuple?(left, right, tuple_size(left))
@@ -899,6 +853,55 @@ defmodule Nx.Defn.Expr do
 
     IO.iodata_to_binary(["%{", pairs, "}"])
   end
+
+  defp to_clauses(last, exprs, fun) when is_map(last) and not is_struct(last) do
+    keys = Enum.sort(Map.keys(last))
+
+    {list_of_last, list_of_lists} =
+      keys
+      |> Enum.map(fn key ->
+        exprs = Enum.map(exprs, & &1[key])
+        to_clauses(last[key], exprs, fun)
+      end)
+      |> Enum.unzip()
+
+    {Map.new(Enum.zip(keys, list_of_last)), unzip_cons([last | exprs], list_of_lists)}
+  end
+
+  defp to_clauses(last, exprs, fun) when is_tuple(last) do
+    # TODO: Use Enum.with_index on Elixir v1.12
+    {list_of_last, list_of_lists} =
+      last
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.map(fn {last, index} ->
+        exprs = Enum.map(exprs, &elem(&1, index))
+        to_clauses(last, exprs, fun)
+      end)
+      |> Enum.unzip()
+
+    {List.to_tuple(list_of_last), unzip_cons([last | exprs], list_of_lists)}
+  end
+
+  defp to_clauses(last, exprs, fun) do
+    [last | exprs] = fun.(last, exprs)
+    {last, [last | exprs]}
+  end
+
+  defp unzip_cons(last_and_exprs, list_of_lists) do
+    {last_and_exprs, _} =
+      Enum.map_reduce(last_and_exprs, list_of_lists, fn _, list_of_lists ->
+        unzip_cons(list_of_lists, [], [])
+      end)
+
+    last_and_exprs
+  end
+
+  defp unzip_cons([[head | tail] | rest], heads, tails),
+    do: unzip_cons(rest, [head | heads], [tail | tails])
+
+  defp unzip_cons([], heads, tails),
+    do: {heads |> Enum.reverse() |> List.to_tuple(), Enum.reverse(tails)}
 
   ## Scalar helpers and related optimizations
 
@@ -1039,8 +1042,8 @@ defmodule Nx.Defn.Expr do
 
   defp inspect_arg(arg, var_map) do
     case arg do
-      %T{data: %Expr{op: :fun, args: [_, _, fun]}} ->
-        inspect(fun)
+      %T{data: %Expr{op: :fun, args: [_, _, {m, f, a}]}} ->
+        "&" <> Exception.format_mfa(m, f, a)
 
       %T{data: %Expr{op: :scalar, args: [number]}} ->
         to_string(number)

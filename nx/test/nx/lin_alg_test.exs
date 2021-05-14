@@ -188,7 +188,7 @@ defmodule Nx.LinAlgTest do
 
   defp round(tensor, places) do
     Nx.map(tensor, fn x ->
-      Float.round(x, places)
+      Float.round(Nx.to_scalar(x), places)
     end)
   end
 end
