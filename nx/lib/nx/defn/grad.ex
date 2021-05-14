@@ -4,7 +4,7 @@ defmodule Nx.Defn.Grad do
   alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
-  def transform(to_grad, fun) do
+  def transform(to_grad, fun, transform) do
     {to_grad, ids} =
       Tree.composite(to_grad, %{}, fn to_grad, ids ->
         validate_grad!(to_grad)
@@ -12,7 +12,8 @@ defmodule Nx.Defn.Grad do
         {to_grad, Map.put(ids, to_grad.data.id, :to_grad)}
       end)
 
-    expr = to_grad |> fun.() |> validate_expr!()
+    expr = to_grad |> fun.()
+    transformed_expr = transform.(expr) |> validate_expr!()
 
     # Collect all IDs in the function environment and mark
     # them as stop grads. This is an optimization to avoid
@@ -21,7 +22,7 @@ defmodule Nx.Defn.Grad do
     ids = stop_grads(env, ids)
 
     # Grad all the parameters at the same time to share subtrees.
-    {graded, _} = to_grad(expr, Expr.tensor(1.0), {ids, %{}})
+    {graded, _} = to_grad(transformed_expr, Expr.tensor(1.0), {ids, %{}})
 
     # Now traverse the expression again zerofying
     # the parts that comes from other variables.
