@@ -939,7 +939,7 @@ defmodule Nx.DefnTest do
     end
 
     test "raises if given a non-scalar as condition" do
-      assert_raise CompileError, ~r"condition must be a scalar tensor, got shape: \{2\}", fn ->
+      assert_raise CompileError, ~r"condition must be a scalar tensor, got:", fn ->
         cond4(Nx.tensor([0, 0]), Nx.tensor(1), Nx.tensor(2), Nx.tensor(3))
       end
     end
@@ -954,14 +954,15 @@ defmodule Nx.DefnTest do
 
     test "simple" do
       assert %T{
-               data: %Expr{op: :while, args: [initial, condition, body]},
+               data: %Expr{op: :while, args: [initial, arg, condition, body]},
                shape: {},
                type: {:s, 64}
              } = upto10(Nx.tensor(0))
 
       assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = initial
-      assert %T{data: %Expr{op: :fun}, shape: {}, type: {:u, 8}} = condition
-      assert %T{data: %Expr{op: :fun}, shape: {}, type: {:s, 64}} = body
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = arg
+      assert %T{data: %Expr{op: :less}, shape: {}, type: {:u, 8}} = condition
+      assert %T{data: %Expr{op: :add}, shape: {}, type: {:s, 64}} = body
     end
 
     defn while_constant(x) do
@@ -972,15 +973,15 @@ defmodule Nx.DefnTest do
 
     test "constant" do
       assert %T{
-               data: %Expr{op: :while, args: [initial, condition, body]},
+               data: %Expr{op: :while, args: [initial, arg, condition, body]},
                shape: {},
                type: {:s, 64}
              } = while_constant(Nx.tensor(0))
 
       assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = initial
-      assert %T{data: %Expr{op: :fun}, shape: {}, type: {:u, 8}} = condition
-      assert %T{data: %Expr{op: :fun, args: [_, tensor, _]}, shape: {}, type: {:s, 64}} = body
-      assert %T{data: %Expr{op: :scalar, args: [1]}} = tensor
+      assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = arg
+      assert %T{data: %Expr{op: :less}, shape: {}, type: {:u, 8}} = condition
+      assert %T{data: %Expr{op: :scalar, args: [1]}, shape: {}, type: {:s, 64}} = body
     end
 
     defn factorial(x) do
@@ -1051,7 +1052,7 @@ defmodule Nx.DefnTest do
     end
 
     test "raises if given a non-scalar as condition" do
-      assert_raise CompileError, ~r"condition must be a scalar tensor, got shape: \{2\}", fn ->
+      assert_raise CompileError, ~r"condition must be a scalar tensor, got:", fn ->
         upto10(Nx.tensor([0, 0]))
       end
     end

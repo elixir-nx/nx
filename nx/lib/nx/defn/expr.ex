@@ -91,6 +91,8 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a tensor expression function node with the given context,
   args, body, context and mfa for metadata.
+
+  args must be a list of parameter nodes.
   """
   def fun(context, args, body, {_, _, _} = mfa) do
     case Tree.composite(body, &to_expr/1) do
@@ -99,13 +101,16 @@ defmodule Nx.Defn.Expr do
 
       tuple when is_tuple(tuple) ->
         expr(tuple_out(tuple_size(tuple)), context, :fun, [args, tuple, mfa])
-
-      map when is_map(map) ->
-        expr(tuple_out(map_size(map)), context, :fun, [args, map, mfa])
     end
   end
 
-  defp fun(context, fun, args) when is_function(fun, length(args)) do
+  @doc """
+  Creates a tensor expression function node with the given context,
+  the anonymous function and args.
+
+  args must be a list of parameter nodes.
+  """
+  def fun(context, fun, args) when is_function(fun, length(args)) do
     {:module, mod} = Function.info(fun, :module)
     {:name, name} = Function.info(fun, :name)
     {:arity, arity} = Function.info(fun, :arity)
@@ -132,42 +137,13 @@ defmodule Nx.Defn.Expr do
     %T{shape: {}, names: [], type: {:tuple, size}}
   end
 
-  # Convert to a composite type recursively - if there is any composite type at all.
-  # Notice maps only exist in Elixir, they are converted to tuples in the GPUs.
-
-  defp composite(%T{} = tensor, fun), do: fun.(tensor)
-
-  defp composite(tuple, fun) when is_tuple(tuple) do
-    expr = fun.(tuple_out(tuple_size(tuple)))
-    tuple(tuple, expr)
-  end
-
-  defp composite(map, fun) when is_map(map) do
-    size = map_size(map)
-    %{data: %{context: context}} = expr = fun.(tuple_out(size))
-
-    # TODO: Use Enum.with_index on Elixir v1.12
-    map
-    |> Enum.sort()
-    |> Enum.with_index()
-    |> Enum.map(fn {{k, v}, i} ->
-      fun = &expr(&1, context, :elem, [expr, i, size])
-      {k, composite(v, fun)}
-    end)
-    |> Map.new()
-  end
-
-  defp composite(other, fun), do: fun.(to_expr(other))
-
   @doc """
   Creates a `cond` tensor expression.
   """
-  @cond_mismatch "cond/if expects all branches to return tensors, tuples of the same size, or maps with the same keys"
-
   def cond(clauses, last) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
-    {out, [last | exprs]} = to_clauses(last, exprs, &cond_clause/2, @cond_mismatch)
+    {out, [last | exprs]} = to_clauses(last, exprs, &cond_clause/2)
     clauses = Enum.zip(preds, exprs)
     composite(out, &expr(&1, context, :cond, [clauses, last]))
   end
@@ -201,11 +177,20 @@ defmodule Nx.Defn.Expr do
       for {meta, {pred, expr}} <- clauses do
         pred = to_expr(pred)
 
-        if pred.shape != {} do
+        if not match?(%T{shape: {}}, pred) do
           raise CompileError,
             line: meta[:line],
             file: file,
-            description: "condition must be a scalar tensor, got shape: #{inspect(pred.shape)}"
+            description: "condition must be a scalar tensor, got: #{inspect(pred)}"
+        end
+
+        if not compatible?(last, expr, fn _, _ -> true end) do
+          raise CompileError,
+            line: meta[:line],
+            file: file,
+            description:
+              "cond/if expects all branches to return tensors, tuples of the same size, or maps with the same keys. " <>
+                "Got #{to_type_shape_string(last)} and #{to_type_shape_string(expr)}"
         end
 
         {pred, expr}
@@ -218,36 +203,61 @@ defmodule Nx.Defn.Expr do
   def while(file, line, initial, condition, body) do
     initial = Tree.composite(initial, &to_expr/1)
 
-    {param, {_counter, context}} =
+    {arg, {_counter, context}} =
       Tree.composite(initial, {0, nil}, fn expr, {counter, acc} ->
         {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 
-    condition = fun(context, condition, [param])
+    condition = condition.(arg)
 
-    if condition.shape != {} do
+    if not match?(%T{shape: {}}, condition) do
       raise CompileError,
         line: line,
         file: file,
-        description: "condition must be a scalar tensor, got shape: #{inspect(condition.shape)}"
+        description: "condition must be a scalar tensor, got: #{inspect(condition)}"
     end
 
-    %T{data: %Expr{args: [_, body_expr, _]}} = body = fun(context, body, [param])
+    body = arg |> body.() |> Tree.composite(&to_expr/1)
 
-    if compatible?(initial, body_expr) do
-      composite(param, &expr(&1, context, :while, [initial, condition, body]))
-    else
-      initial = to_type_shape_string(initial)
-      body_expr = to_type_shape_string(body_expr)
-
+    if not compatible?(initial, body, &Nx.compatible?/2) do
       raise CompileError,
         line: line,
         file: file,
         description:
           "the do-block in while must return the shape, type, and names as the initial arguments. " <>
-            "Got body #{body_expr} and initial #{initial}"
+            "Got body #{to_type_shape_string(body)} and initial #{to_type_shape_string(initial)}"
     end
+
+    {out, [initial, arg, body]} = to_clauses(initial, [arg, body], &[&1 | &2])
+    composite(out, &expr(&1, context, :while, [initial, arg, condition, body]))
   end
+
+  # Convert to a composite type recursively - if there is any composite type at all.
+  # Notice maps only exist in Elixir, they are converted to tuples in the GPUs.
+
+  defp composite(%T{} = tensor, fun), do: fun.(tensor)
+
+  defp composite(tuple, fun) when is_tuple(tuple) do
+    expr = fun.(tuple_out(tuple_size(tuple)))
+    tuple(tuple, expr)
+  end
+
+  defp composite(map, fun) when is_map(map) do
+    size = map_size(map)
+    %{data: %{context: context}} = expr = fun.(tuple_out(size))
+
+    # TODO: Use Enum.with_index on Elixir v1.12
+    map
+    |> Enum.sort()
+    |> Enum.with_index()
+    |> Enum.map(fn {{k, v}, i} ->
+      fun = &expr(&1, context, :elem, [expr, i, size])
+      {k, composite(v, fun)}
+    end)
+    |> Map.new()
+  end
+
+  defp composite(other, fun), do: fun.(to_expr(other))
 
   ## Nx.Backend Callbacks
 
@@ -797,43 +807,33 @@ defmodule Nx.Defn.Expr do
     context || acc
   end
 
-  ## Clause checking
+  ## Compatibility checking
 
-  defp to_clauses(last, exprs, fun, error_info) do
-    if incompatible = Enum.find(exprs, &not compatible?(last, &1)) do
-      left = to_type_shape_string(last)
-      right = to_type_shape_string(incompatible)
-      raise ArgumentError, error_info <> ", got #{left} and #{right}"
-    else
-      to_clauses(last, exprs, fun)
-    end
-  end
+  defp compatible?(left, right, fun)
+       when (is_number(left) or is_struct(left, T)) and (is_number(right) or is_struct(right, T)),
+       do: fun.(left, right)
 
-  defp compatible?(left, right) when (is_number(left) or is_struct(left, T)) and (is_number(right) or is_struct(right, T)),
-    do: true
+  defp compatible?(left, right, fun) when tuple_size(left) == tuple_size(right),
+    do: compatible_tuple?(left, right, tuple_size(left), fun)
 
-  defp compatible?(left, right) when tuple_size(left) == tuple_size(right),
-    do: compatible_tuple?(left, right, tuple_size(left))
+  defp compatible?(left, right, fun) when map_size(left) == map_size(right),
+    do: compatible_map?(left, right, Map.keys(left), fun)
 
-  defp compatible?(left, right) when map_size(left) == map_size(right),
-    do: compatible_map?(left, right, Map.keys(left))
-
-  defp compatible?(_, _),
+  defp compatible?(_, _, _),
     do: false
 
-  defp compatible_tuple?(_left, _right, 0),
+  defp compatible_map?(_left, _right, [], _fun),
     do: true
 
-  defp compatible_tuple?(left, right, pos) do
-    compatible?(:erlang.element(pos, left), :erlang.element(pos, right)) and
-      compatible_tuple?(left, right, pos - 1)
-  end
+  defp compatible_map?(left, right, [key | keys], fun),
+    do: compatible?(left[key], right[key], fun) and compatible_map?(left, right, keys, fun)
 
-  defp compatible_map?(_left, _right, []),
+  defp compatible_tuple?(_left, _right, 0, _fun),
     do: true
 
-  defp compatible_map?(left, right, [key | keys]) do
-    compatible?(left[key], right[key]) and compatible_map?(left, right, keys)
+  defp compatible_tuple?(left, right, pos, fun) do
+    compatible?(:erlang.element(pos, left), :erlang.element(pos, right), fun) and
+      compatible_tuple?(left, right, pos - 1, fun)
   end
 
   defp to_type_shape_string(%{type: type, shape: shape, names: names}) do
@@ -853,6 +853,8 @@ defmodule Nx.Defn.Expr do
 
     IO.iodata_to_binary(["%{", pairs, "}"])
   end
+
+  ## Clause handling
 
   defp to_clauses(last, exprs, fun) when is_map(last) and not is_struct(last) do
     keys = Enum.sort(Map.keys(last))
@@ -1006,15 +1008,24 @@ defmodule Nx.Defn.Expr do
   end
 
   defp cached_inspect_expr(%T{} = t, acc) do
-    %{data: %Expr{id: id, op: op, args: args}} = t
-    {_, {exprs, params, var_map, cache}} = Tree.traverse_args(t, acc, &inspect_expr/2)
+    %{data: %Expr{id: id, op: op}} = t
+    {args, {exprs, params, var_map, cache}} = traverse_args(op, t, acc)
     {var, var_map} = var_for_id(var_map, id)
     args_str = inspect_args(op, args, var_map)
     expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> args_str <> " ]"
     {t, {[{expr_str, t} | exprs], params, var_map, cache}}
   end
 
-  defp inspect_args(:while, [initial, _, _], var_map) do
+  defp traverse_args(:while, %T{data: %{args: [initial, _, _, _]}}, acc) do
+    {initial, acc} = Tree.composite(initial, acc, &inspect_expr/2)
+    {[initial], acc}
+  end
+
+  defp traverse_args(_op, t, acc) do
+    Tree.traverse_args(t, acc, &inspect_expr/2)
+  end
+
+  defp inspect_args(:while, [initial], var_map) do
     IO.iodata_to_binary(inspect_arg(initial, var_map))
   end
 
@@ -1043,7 +1054,7 @@ defmodule Nx.Defn.Expr do
   defp inspect_arg(arg, var_map) do
     case arg do
       %T{data: %Expr{op: :fun, args: [_, _, {m, f, a}]}} ->
-        "&" <> Exception.format_mfa(m, f, a)
+        [?&, Exception.format_mfa(m, f, a)]
 
       %T{data: %Expr{op: :scalar, args: [number]}} ->
         to_string(number)

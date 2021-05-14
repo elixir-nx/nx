@@ -36,11 +36,13 @@ defmodule Nx.Defn.Tree do
     {[clauses, last], acc}
   end
 
-  def traverse_args(%T{data: %Expr{op: :while, args: [initial, conditional, block]}}, acc, fun) do
+  def traverse_args(%T{data: %Expr{op: :while, args: args}}, acc, fun) do
+    [initial, arg, conditional, block] = args
     {initial, acc} = composite(initial, acc, fun)
+    {arg, acc} = composite(arg, acc, fun)
     {conditional, acc} = fun.(conditional, acc)
     {block, acc} = composite(block, acc, fun)
-    {[initial, conditional, block], acc}
+    {[initial, arg, conditional, block], acc}
   end
 
   def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
@@ -255,14 +257,18 @@ defmodule Nx.Defn.Tree do
     do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_runtime_args/2)
 
   defp from_runtime_args(map, acc) when is_map(map),
-    do: map |> assert_no_struct!() |> Enum.sort() |> Enum.reduce(acc, &from_runtime_args(elem(&1, 1), &2))
+    do:
+      map
+      |> assert_no_struct!()
+      |> Enum.sort()
+      |> Enum.reduce(acc, &from_runtime_args(elem(&1, 1), &2))
 
   defp from_runtime_args(other, acc),
     do: [from_arg(other) | acc]
 
   @valid "arguments to defn must be numbers, tensors, and functions. " <>
-            "It may also be a maps with numbers/tensors as values, " <>
-            "a tuple of numbers/tensors or a tuple of functions. "
+           "It may also be a maps with numbers/tensors as values, " <>
+           "a tuple of numbers/tensors or a tuple of functions. "
 
   @doc false
   def from_arg(%T{} = tensor), do: tensor

@@ -106,8 +106,10 @@ defmodule Nx.Defn.TreeTest do
       s64_param = Expr.parameter(:root, {:s, 64}, {}, 1)
       f64_param = Expr.parameter(:root, {:f, 64}, {}, 2)
 
-      assert %{a: %T{data: %Expr{op: :as_type, args: [^s64_param]}, type: {:s, 32}},
-               b: %T{data: %Expr{op: :as_type, args: [^f64_param]}, type: {:f, 32}}} =
+      assert %{
+               a: %T{data: %Expr{op: :as_type, args: [^s64_param]}, type: {:s, 32}},
+               b: %T{data: %Expr{op: :as_type, args: [^f64_param]}, type: {:f, 32}}
+             } =
                Tree.rewrite_types(%{a: s64_param, b: f64_param},
                  max_signed_type: {:s, 32},
                  max_float_type: {:f, 32}
@@ -177,20 +179,18 @@ defmodule Nx.Defn.TreeTest do
       assert %T{data: %Expr{op: :elem, args: [while, 0, 2]}, type: {:f, 32}} =
                Tree.rewrite_types(expr, max_signed_type: {:s, 32}, max_float_type: {:f, 32})
 
-      assert %T{data: %Expr{op: :while, args: [initial, condition, block]}, type: {:tuple, 2}} =
+      assert %T{data: %Expr{op: :while, args: [initial, arg, condition, body]}, type: {:tuple, 2}} =
                while
 
       assert {%T{type: {:f, 32}},
               %T{data: %Expr{op: :as_type, args: [param({:s, 64})]}, type: {:s, 32}}} = initial
 
-      assert %T{data: %Expr{op: :fun, args: [params, _, _]}, type: {:u, 8}} = condition
-      assert [{param({:f, 32}), param({:s, 32})}] = params
+      assert {param({:f, 32}), param({:s, 32})} = arg
 
-      assert %T{data: %Expr{op: :fun, args: [params, fun_body, _]}, type: {:tuple, 2}} = block
-      assert [{param({:f, 32}), param({:s, 32})}] = params
+      assert %T{data: %Expr{op: :greater}, type: {:u, 8}} = condition
 
       assert {%T{data: %Expr{op: :multiply}, type: {:f, 32}},
-              %T{data: %Expr{op: :subtract}, type: {:s, 32}}} = fun_body
+              %T{data: %Expr{op: :subtract}, type: {:s, 32}}} = body
     end
   end
 

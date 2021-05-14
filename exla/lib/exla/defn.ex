@@ -180,10 +180,10 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
-    [initial, condition, body] = args
+    [initial, arg, condition, body] = args
     {initial, cache} = recur_composite(initial, state, cache)
-    condition = to_computation(condition, {:pred, 8}, state)
-    body = to_computation(body, :any, state)
+    condition = recur_computation(:while_condition, [arg], condition, {:pred, 8}, state)
+    body = recur_computation(:while_body, [arg], body, :any, state)
     {EXLA.Op.while(condition, body, initial), cache}
   end
 
@@ -521,7 +521,11 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:bitcast, [arg], %{type: type}, _state) do
-    to_type(arg, type, :bitcast)
+    if op_type(arg) == type do
+      arg
+    else
+      EXLA.Op.bitcast_convert_type(arg, type)
+    end
   end
 
   ## to_operator reduction
@@ -554,7 +558,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, state) do
     arg = to_type(arg, type)
-    comp = to_computation(fun, type, state)
+    comp = recur_computation(fun, type, state)
     keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
 
@@ -597,7 +601,7 @@ defmodule EXLA.Defn do
     window_dilations = opts[:window_dilations]
 
     arg = to_type(arg, type)
-    comp = to_computation(fun, type, state)
+    comp = recur_computation(fun, type, state)
 
     EXLA.Op.reduce_window(
       arg,
@@ -672,7 +676,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
     arg = to_type(arg, type)
-    comp = to_computation(fun, type, state)
+    comp = recur_computation(fun, type, state)
     EXLA.Op.map(arg, comp, Nx.axes(shape))
   end
 
@@ -780,13 +784,18 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, {_, name, _}]}}, type, state) do
+  defp recur_computation(name, args, expr, type, state) do
     to_computation(name, args, state, fn state ->
       expr
       |> recur_composite(state, %{})
       |> elem(0)
       |> to_type(type)
     end)
+  end
+
+  defp recur_computation(%T{data: %Expr{op: :fun, args: args}}, type, state) do
+    [args, expr, {_, name, _}] = args
+    recur_computation(name, args, expr, type, state)
   end
 
   defp to_computation(name, args, state, fun) do
@@ -1013,14 +1022,10 @@ defmodule EXLA.Defn do
   defp op_type(op), do: EXLA.Op.get_shape(op).dtype
   defp op_shape(op), do: EXLA.Op.get_shape(op).dims
 
-  defp to_type(op, type, cast \\ :convert) do
-    fun =
-      case cast do
-        :convert -> &EXLA.Op.convert_element_type(&1, type)
-        :bitcast -> &EXLA.Op.bitcast_convert_type(&1, type)
-      end
+  defp to_type(op, :any), do: op
 
-    if type == :any or op_type(op) == type, do: op, else: fun.(op)
+  defp to_type(op, type) do
+    if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
   end
 
   defp to_constant(builder, constant, type) do

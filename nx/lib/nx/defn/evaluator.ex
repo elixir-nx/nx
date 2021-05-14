@@ -46,9 +46,8 @@ defmodule Nx.Defn.Evaluator do
     composite_eval(res, vars, cache)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :while, args: [initial, condition, block]}}, vars, cache) do
-    %Nx.Tensor{data: %Expr{op: :fun, args: [_, condition, _]}} = condition
-    %Nx.Tensor{data: %Expr{op: :fun, args: [_, block, _]}} = block
+  defp eval(%Nx.Tensor{data: %Expr{op: :while, args: args}}, vars, cache) do
+    [initial, _arg, condition, block] = args
     {initial, cache} = composite_eval(initial, vars, cache)
     {while(initial, condition, block, cache), cache}
   end
