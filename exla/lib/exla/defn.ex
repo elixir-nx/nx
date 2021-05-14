@@ -122,11 +122,14 @@ defmodule EXLA.Defn do
   defp inputs(t, acc),
     do: Tree.traverse_args(t, acc, &inputs/2)
 
+  defp outputs(%T{} = t),
+    do: %{t | data: nil}
+
   defp outputs(tuple) when is_tuple(tuple),
     do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&outputs/1)}
 
-  defp outputs(%T{} = t),
-    do: %{t | data: nil}
+  defp outputs(map) when is_map(map),
+    do: {:map, map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, outputs(v)} end)}
 
   defp to_root_computation(key, expr, pos_shapes, options) do
     builder = EXLA.Builder.new(inspect(key))
@@ -148,9 +151,14 @@ defmodule EXLA.Defn do
     |> EXLA.Builder.build()
   end
 
-  defp to_root_result(tuple_or_expr, state, cache) do
-    {acc, _cache} = to_root_result(tuple_or_expr, [], state, cache)
+  defp to_root_result(composite, state, cache) do
+    {acc, _cache} = to_root_result(composite, [], state, cache)
     EXLA.Op.tuple(state.builder, Enum.reverse(acc))
+  end
+
+  defp to_root_result(%T{} = expr, acc, state, cache) do
+    {expr, cache} = recur_operator(expr, state, cache)
+    {[expr | acc], cache}
   end
 
   defp to_root_result(tuple, acc, state, cache) when is_tuple(tuple) do
@@ -161,9 +169,12 @@ defmodule EXLA.Defn do
     end)
   end
 
-  defp to_root_result(expr, acc, state, cache) do
-    {expr, cache} = recur_operator(expr, state, cache)
-    {[expr | acc], cache}
+  defp to_root_result(map, acc, state, cache) when is_map(map) do
+    map
+    |> Enum.sort()
+    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
+      to_root_result(expr, acc, state, cache)
+    end)
   end
 
   ## Operator handling
@@ -1047,6 +1058,16 @@ defmodule EXLA.Defn do
   defp each_buffer_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
     {exprs, acc} = Enum.map_reduce(outputs, acc, &each_buffer_to_nx/2)
     {List.to_tuple(exprs), acc}
+  end
+
+  defp each_buffer_to_nx({:map, outputs}, acc) when is_list(outputs) do
+    {exprs, acc} =
+      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
+        {v, acc} = each_buffer_to_nx(v, acc)
+        {{k, v}, acc}
+      end)
+
+    {Map.new(exprs), acc}
   end
 
   defp each_buffer_to_nx(hole, [%EXLA.Buffer{shape: shape} = buffer | acc]) do
