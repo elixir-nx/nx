@@ -73,6 +73,8 @@ defmodule EXLA.Executable do
 
     run_id = Keyword.get(options, :run_id, System.unique_integer([:positive, :monotonic]))
     replica = Keyword.get(options, :replica, 1)
+
+    # device_id = device_assignment_to_device_id(executable, {replica, 1})
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
@@ -128,6 +130,10 @@ defmodule EXLA.Executable do
       end
 
     unwrap!(data)
+  end
+
+  def device_assignment_to_device_id(%Executable{ref: ref}, {replica, partition}) do
+    EXLA.NIF.device_assignment_to_device_id(ref, replica, partition) |> unwrap!()
   end
 
   defp decompose_output(data, shape, client) do

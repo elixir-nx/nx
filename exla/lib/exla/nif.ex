@@ -259,6 +259,8 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
+  def device_assignment_to_device_id(_executable, _replica, _partition), do: :erlang.nif_error(:undef)
+
   def await_streams_cpu(_client, _buffer, _keep_on_device),
     do: :erlang.nif_error(:undef)
 

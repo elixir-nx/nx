@@ -2045,6 +2045,35 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return term;
 }
 
+ERL_NIF_TERM device_assignment_to_device_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaExecutable** exec;
+  exla::int32 replica, partition;
+
+  if (!exla::get<exla::ExlaExecutable*>(env, argv[0], exec)) {
+    return exla::nif::error(env, "Unable to get executable.");
+  }
+  if (!exla::get(env, argv[1], &replica)) {
+    return exla::nif::error(env, "Unable to get replica.");
+  }
+  if (!exla::get(env, argv[2], &partition)) {
+    return exla::nif::error(env, "Unable to get partition.");
+  }
+
+  if (!(*exec)->executables().at(0)->build_options().has_device_assignment()) {
+    exla::int32 device_id =
+      (*exec)->executables().at(0)->build_options().device_ordinal();
+    return exla::ok(env, exla::make(env, device_id));
+  } else {
+    exla::int32 device_id =
+      (*exec)->executables().at(0)->build_options().device_assignment()(replica - 1, partition - 1);
+    return exla::ok(env, exla::make(env, device_id));
+  }
+}
+
 // Logging Functions
 
 ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2143,6 +2172,7 @@ static ErlNifFunc exla_funcs[] = {
   // ExlaExecutable
   {"run_io", 11, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"run_cpu", 11, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"device_assignment_to_device_id", 3, device_assignment_to_device_id},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_tuple_shape", 1, make_tuple_shape},
