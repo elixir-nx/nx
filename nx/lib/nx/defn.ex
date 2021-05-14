@@ -132,6 +132,33 @@ defmodule Nx.Defn do
   will lead to different compilation artifacts. For this reason, it
   is **extremely discouraged to pass tensors through default arguments**.
 
+  ### Working with maps
+
+  While `Nx` works supports maps in `defn`, you must be careful
+  if your numerical definitions are receiving maps and returning
+  maps. For example, imagine this code:
+
+      defn update_a(map) do
+        %{map | a: Nx.add(map.a, 1)}
+      end
+
+  The following code increments the value under the key `:a` by
+  1. However, because the function receives the whole map and
+  returns the whole map, it means if the map has 120 keys, the
+  whole map will be copied to the CPU/GPU, and then brought back.
+
+  However, if you do this instead:
+
+      defn update_a(map) do
+        Nx.add(map.a, 1)
+      end
+
+  And then update the map on Elixir:
+
+      %{map | a: update_a(map)}
+
+  `Nx` will only send the parts of the map that matters.
+
   ## Invoking custom Elixir code
 
   Inside `defn` you can only call other `defn` functions and
