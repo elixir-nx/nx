@@ -96,9 +96,8 @@ defmodule Nx.Defn do
   ## Inputs and outputs types
 
   The arguments to `defn` functions must be either tensors, numbers,
-  or anonymous functions. It may also be a tuple with said elements,
-  although the tuple must contain only functions or only number/tensors,
-  not both.
+  or anonymous functions. It may also be a map with numbers/tensors as
+  values, a tuple of numbers/tensors or a tuple of functions.
 
   To pass any other values to numerical definitions, they must be
   declared as default arguments (see next subsection).
@@ -132,6 +131,33 @@ defmodule Nx.Defn do
   even if you pass different tensors with the same type and shape, it
   will lead to different compilation artifacts. For this reason, it
   is **extremely discouraged to pass tensors through default arguments**.
+
+  ### Working with maps
+
+  While `Nx` works supports maps in `defn`, you must be careful
+  if your numerical definitions are receiving maps and returning
+  maps. For example, imagine this code:
+
+      defn update_a(map) do
+        %{map | a: Nx.add(map.a, 1)}
+      end
+
+  The following code increments the value under the key `:a` by
+  1. However, because the function receives the whole map and
+  returns the whole map, it means if the map has 120 keys, the
+  whole map will be copied to the CPU/GPU, and then brought back.
+
+  However, if you do this instead:
+
+      defn update_a(map) do
+        Nx.add(map.a, 1)
+      end
+
+  And then update the map on Elixir:
+
+      %{map | a: update_a(map)}
+
+  `Nx` will only send the parts of the map that matters.
 
   ## Invoking custom Elixir code
 

@@ -122,11 +122,14 @@ defmodule EXLA.Defn do
   defp inputs(t, acc),
     do: Tree.traverse_args(t, acc, &inputs/2)
 
+  defp outputs(%T{} = t),
+    do: %{t | data: nil}
+
   defp outputs(tuple) when is_tuple(tuple),
     do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&outputs/1)}
 
-  defp outputs(%T{} = t),
-    do: %{t | data: nil}
+  defp outputs(map) when is_map(map),
+    do: {:map, map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, outputs(v)} end)}
 
   defp to_root_computation(key, expr, pos_shapes, options) do
     builder = EXLA.Builder.new(inspect(key))
@@ -148,9 +151,14 @@ defmodule EXLA.Defn do
     |> EXLA.Builder.build()
   end
 
-  defp to_root_result(tuple_or_expr, state, cache) do
-    {acc, _cache} = to_root_result(tuple_or_expr, [], state, cache)
+  defp to_root_result(composite, state, cache) do
+    {acc, _cache} = to_root_result(composite, [], state, cache)
     EXLA.Op.tuple(state.builder, Enum.reverse(acc))
+  end
+
+  defp to_root_result(%T{} = expr, acc, state, cache) do
+    {expr, cache} = recur_operator(expr, state, cache)
+    {[expr | acc], cache}
   end
 
   defp to_root_result(tuple, acc, state, cache) when is_tuple(tuple) do
@@ -161,9 +169,12 @@ defmodule EXLA.Defn do
     end)
   end
 
-  defp to_root_result(expr, acc, state, cache) do
-    {expr, cache} = recur_operator(expr, state, cache)
-    {[expr | acc], cache}
+  defp to_root_result(map, acc, state, cache) when is_map(map) do
+    map
+    |> Enum.sort()
+    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
+      to_root_result(expr, acc, state, cache)
+    end)
   end
 
   ## Operator handling
@@ -180,10 +191,10 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
-    [initial, condition, body] = args
+    [initial, arg, condition, body] = args
     {initial, cache} = recur_composite(initial, state, cache)
-    condition = to_computation(condition, {:pred, 8}, state)
-    body = to_computation(body, :any, state)
+    condition = recur_computation(:while_condition, [arg], condition, {:pred, 8}, state)
+    body = recur_computation(:while_body, [arg], body, :any, state)
     {EXLA.Op.while(condition, body, initial), cache}
   end
 
@@ -521,7 +532,11 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:bitcast, [arg], %{type: type}, _state) do
-    to_type(arg, type, :bitcast)
+    if op_type(arg) == type do
+      arg
+    else
+      EXLA.Op.bitcast_convert_type(arg, type)
+    end
   end
 
   ## to_operator reduction
@@ -554,7 +569,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, state) do
     arg = to_type(arg, type)
-    comp = to_computation(fun, type, state)
+    comp = recur_computation(fun, type, state)
     keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
 
@@ -597,7 +612,7 @@ defmodule EXLA.Defn do
     window_dilations = opts[:window_dilations]
 
     arg = to_type(arg, type)
-    comp = to_computation(fun, type, state)
+    comp = recur_computation(fun, type, state)
 
     EXLA.Op.reduce_window(
       arg,
@@ -672,7 +687,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
     arg = to_type(arg, type)
-    comp = to_computation(fun, type, state)
+    comp = recur_computation(fun, type, state)
     EXLA.Op.map(arg, comp, Nx.axes(shape))
   end
 
@@ -780,15 +795,18 @@ defmodule EXLA.Defn do
 
   ## Computation helpers
 
-  defp to_computation(%T{data: %Expr{op: :fun, args: [args, expr, fun]}}, type, state) do
-    {:name, name} = Function.info(fun, :name)
-
+  defp recur_computation(name, args, expr, type, state) do
     to_computation(name, args, state, fn state ->
       expr
       |> recur_composite(state, %{})
       |> elem(0)
       |> to_type(type)
     end)
+  end
+
+  defp recur_computation(%T{data: %Expr{op: :fun, args: args}}, type, state) do
+    [args, expr, {_, name, _}] = args
+    recur_computation(name, args, expr, type, state)
   end
 
   defp to_computation(name, args, state, fun) do
@@ -1015,14 +1033,10 @@ defmodule EXLA.Defn do
   defp op_type(op), do: EXLA.Op.get_shape(op).dtype
   defp op_shape(op), do: EXLA.Op.get_shape(op).dims
 
-  defp to_type(op, type, cast \\ :convert) do
-    fun =
-      case cast do
-        :convert -> &EXLA.Op.convert_element_type(&1, type)
-        :bitcast -> &EXLA.Op.bitcast_convert_type(&1, type)
-      end
+  defp to_type(op, :any), do: op
 
-    if type == :any or op_type(op) == type, do: op, else: fun.(op)
+  defp to_type(op, type) do
+    if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
   end
 
   defp to_constant(builder, constant, type) do
@@ -1044,6 +1058,16 @@ defmodule EXLA.Defn do
   defp each_buffer_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
     {exprs, acc} = Enum.map_reduce(outputs, acc, &each_buffer_to_nx/2)
     {List.to_tuple(exprs), acc}
+  end
+
+  defp each_buffer_to_nx({:map, outputs}, acc) when is_list(outputs) do
+    {exprs, acc} =
+      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
+        {v, acc} = each_buffer_to_nx(v, acc)
+        {{k, v}, acc}
+      end)
+
+    {Map.new(exprs), acc}
   end
 
   defp each_buffer_to_nx(hole, [%EXLA.Buffer{shape: shape} = buffer | acc]) do

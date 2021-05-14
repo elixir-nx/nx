@@ -6120,12 +6120,12 @@ defmodule Nx do
   For example, if you have an integer tensor and you convert
   it to a float, it will fail:
 
-      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> x * 1.0 end)
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> Nx.multiply(x, 1.0) end)
       ** (ArgumentError) argument error
 
   You need to explicitly pass the output type in such cases:
 
-      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 32}], fn x -> x * 1.0 end)
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 32}], fn x -> Nx.multiply(x, 1.0) end)
       #Nx.Tensor<
         f32[2][3]
         [
@@ -6144,7 +6144,7 @@ defmodule Nx do
 
   ### Examples
 
-      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> x + 1 end)
+      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), fn x -> Nx.add(x, 1) end)
       #Nx.Tensor<
         s64[2][3]
         [
@@ -6153,19 +6153,10 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.map(Nx.tensor(1), fn x -> x + 1 end)
+      iex> Nx.map(Nx.tensor(1), fn x -> Nx.add(x, 1) end)
       #Nx.Tensor<
         s64
         2
-      >
-
-      iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 64}], fn x -> x + 1 end)
-      #Nx.Tensor<
-        f64[2][3]
-        [
-          [2.0, 3.0, 4.0],
-          [5.0, 6.0, 7.0]
-        ]
       >
 
       iex> Nx.map(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [type: {:f, 64}], fn x -> Nx.add(x, 1) end)
@@ -6176,6 +6167,7 @@ defmodule Nx do
           [5.0, 6.0, 7.0]
         ]
       >
+
   """
   @doc type: :element
   def map(tensor, opts \\ [], fun) do

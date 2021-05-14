@@ -18,23 +18,16 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __jit__(_key, vars, fun, _opts) do
-    eval_fun(fun.(vars), vars)
-  end
-
-  defp eval_fun(res, vars) do
-    res
+    fun.(vars)
     |> composite_eval(vars, %{})
     |> elem(0)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :fun, args: [_, _, fun]}}, _vars, cache) do
+  defp eval(%Nx.Tensor{data: %Expr{op: :fun, args: [args, expr, _mfa]}}, _vars, cache) do
     fun =
-      cond do
-        is_function(fun, 1) ->
-          fn arg1 -> eval_fun(fun.(arg1), [arg1]) end
-
-        is_function(fun, 2) ->
-          fn arg1, arg2 -> eval_fun(fun.(arg1, arg2), [arg1, arg2]) end
+      case length(args) do
+        1 -> fn arg1 -> expr |> composite_eval([arg1], %{}) |> elem(0) end
+        2 -> fn arg1, arg2 -> expr |> composite_eval([arg1, arg2], %{}) |> elem(0) end
       end
 
     {fun, cache}
@@ -53,9 +46,8 @@ defmodule Nx.Defn.Evaluator do
     composite_eval(res, vars, cache)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :while, args: [initial, condition, block]}}, vars, cache) do
-    %Nx.Tensor{data: %Expr{op: :fun, args: [_, condition, _]}} = condition
-    %Nx.Tensor{data: %Expr{op: :fun, args: [_, block, _]}} = block
+  defp eval(%Nx.Tensor{data: %Expr{op: :while, args: args}}, vars, cache) do
+    [initial, _arg, condition, block] = args
     {initial, cache} = composite_eval(initial, vars, cache)
     {while(initial, condition, block, cache), cache}
   end

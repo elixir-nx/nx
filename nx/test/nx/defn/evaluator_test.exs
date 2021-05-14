@@ -137,6 +137,32 @@ defmodule Nx.Defn.EvaluatorTest do
       assert if_tuple_return(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
                {Nx.tensor(1), Nx.tensor(10)}
     end
+
+    defn if_map(a, b, c), do: if(a, do: {%{a: a, b: b, c: 1}, c}, else: {%{a: c, b: b, c: 2}, a})
+
+    test "with map" do
+      assert if_map(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) ==
+               {%{a: Nx.tensor(20), b: Nx.tensor(10), c: Nx.tensor(2)}, Nx.tensor(0)}
+
+      assert if_map(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) ==
+               {%{a: Nx.tensor(1), b: Nx.tensor(10), c: Nx.tensor(1)}, Nx.tensor(20)}
+
+      assert if_map(Nx.tensor(0), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {%{a: Nx.tensor([20, 30]), b: Nx.tensor(10), c: Nx.tensor(2)}, Nx.tensor([0, 0])}
+
+      assert if_map(Nx.tensor(1), Nx.tensor(10), Nx.tensor([20, 30])) ==
+               {%{a: Nx.tensor([1, 1]), b: Nx.tensor(10), c: Nx.tensor(1)}, Nx.tensor([20, 30])}
+    end
+
+    defn if_map_match(a, b, c) do
+      {%{a: x, b: y}, z} = if(a, do: {%{a: a, b: b}, c}, else: {%{a: c, b: b}, a})
+      x * y - z
+    end
+
+    test "with matched map" do
+      assert if_map_match(Nx.tensor(0), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(200)
+      assert if_map_match(Nx.tensor(1), Nx.tensor(10), Nx.tensor(20)) == Nx.tensor(-10)
+    end
   end
 
   describe "while/3" do
@@ -151,7 +177,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert upto10(5) == Nx.tensor(10)
     end
 
-    defn factorial(x) do
+    defn factorial_tuple(x) do
       factorial = Nx.tensor(1, type: Nx.type(x))
 
       {factorial, _} =
@@ -162,9 +188,39 @@ defmodule Nx.Defn.EvaluatorTest do
       factorial
     end
 
-    test "factorial" do
-      assert factorial(5) == Nx.tensor(120)
-      assert factorial(10.0) == Nx.tensor(3_628_800.0)
+    test "factorial tuple" do
+      assert factorial_tuple(5) == Nx.tensor(120)
+      assert factorial_tuple(10.0) == Nx.tensor(3_628_800.0)
+    end
+
+    defn factorial_map(x) do
+      factorial = Nx.tensor(1, type: Nx.type(x))
+
+      %{factorial: factorial} =
+        while map = %{factorial: factorial, x: x}, Nx.greater(map.x, 1) do
+          %{map | factorial: map.factorial * map.x, x: map.x - 1}
+        end
+
+      factorial
+    end
+
+    test "factorial map" do
+      assert factorial_map(5) == Nx.tensor(120)
+      assert factorial_map(10.0) == Nx.tensor(3_628_800.0)
+    end
+
+    defn factorial_map_input(map) do
+      %{factorial: factorial} =
+        while map, Nx.greater(map.x, 1) do
+          %{map | factorial: map.factorial * map.x, x: map.x - 1}
+        end
+
+      factorial
+    end
+
+    test "factorial map input" do
+      assert factorial_map_input(%{factorial: 1, x: 5}) == Nx.tensor(120)
+      assert factorial_map_input(%{factorial: 1.0, x: 10.0}) == Nx.tensor(3_628_800.0)
     end
   end
 

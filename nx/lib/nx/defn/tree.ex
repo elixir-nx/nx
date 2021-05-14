@@ -15,16 +15,13 @@ defmodule Nx.Defn.Tree do
 
   @doc """
   Helper to traverse the arguments of a tensor expression.
-
-  Note the arguments of function nodes are never traversed, as it is
-  not always desired to recursively modify them. If you want to modify
-  a function, you will need to build a new function node by wrapping
-  the function node `fun` with the new desired logic.
   """
   def traverse_args(expr, acc, fun)
 
-  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
-    {args, acc}
+  def traverse_args(%T{data: %Expr{op: :fun, args: [args, expr, mfa]}}, acc, fun) do
+    {args, acc} = Enum.map_reduce(args, acc, &composite(&1, &2, fun))
+    {expr, acc} = composite(expr, acc, fun)
+    {[args, expr, mfa], acc}
   end
 
   def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
@@ -39,11 +36,13 @@ defmodule Nx.Defn.Tree do
     {[clauses, last], acc}
   end
 
-  def traverse_args(%T{data: %Expr{op: :while, args: [initial, conditional, block]}}, acc, fun) do
+  def traverse_args(%T{data: %Expr{op: :while, args: args}}, acc, fun) do
+    [initial, arg, conditional, block] = args
     {initial, acc} = composite(initial, acc, fun)
+    {arg, acc} = composite(arg, acc, fun)
     {conditional, acc} = fun.(conditional, acc)
     {block, acc} = composite(block, acc, fun)
-    {[initial, conditional, block], acc}
+    {[initial, arg, conditional, block], acc}
   end
 
   def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
@@ -118,9 +117,25 @@ defmodule Nx.Defn.Tree do
   is invoked for it but not for its arguments (see `traverse_args/3`
   for that).
   """
+  def composite(%T{} = expr, acc, fun) when is_function(fun, 2) do
+    fun.(expr, acc)
+  end
+
   def composite(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
     {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &composite(&1, &2, fun))
     {List.to_tuple(list), acc}
+  end
+
+  def composite(map, acc, fun) when is_map(map) and is_function(fun, 2) do
+    {list, acc} =
+      map
+      |> assert_no_struct!()
+      |> Enum.map_reduce(acc, fn {k, v}, acc ->
+        {v, acc} = composite(v, acc, fun)
+        {{k, v}, acc}
+      end)
+
+    {Map.new(list), acc}
   end
 
   def composite(expr, acc, fun) when is_function(fun, 2) do
@@ -181,14 +196,8 @@ defmodule Nx.Defn.Tree do
     end)
   end
 
-  defp rewrite_type(:parameter, _args, t, type_fun) do
+  defp rewrite_type(:parameter, _args, %{data: %{context: :root}} = t, type_fun) do
     Nx.as_type(t, type_fun.(t.type))
-  end
-
-  defp rewrite_type(:fun, [params, _expr, fun], t, type_fun) do
-    {:arity, arity} = Function.info(fun, :arity)
-    params = Enum.map(params, fn param -> composite(param, &%{&1 | type: type_fun.(&1.type)}) end)
-    Expr.fun(params, t.data.context, rewrite_type_fun(arity, fun, type_fun))
   end
 
   defp rewrite_type(:tensor, [arg], t, type_fun) do
@@ -203,14 +212,6 @@ defmodule Nx.Defn.Tree do
 
   defp rewrite_type(_op, args, t, type_fun) do
     rewrite_type_args(t, type_fun.(t.type), args)
-  end
-
-  for arity <- 0..15 do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    defp rewrite_type_fun(unquote(arity), op_fun, type_fun) do
-      fn unquote_splicing(args) -> rewrite_type(op_fun.(unquote_splicing(args)), type_fun) end
-    end
   end
 
   defp rewrite_type_args(%{data: data} = t, type, args) do
@@ -249,32 +250,37 @@ defmodule Nx.Defn.Tree do
     |> Enum.reverse()
   end
 
+  defp from_runtime_args(%T{} = tensor, acc),
+    do: [tensor | acc]
+
   defp from_runtime_args(tuple, acc) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_runtime_args/2)
+
+  defp from_runtime_args(map, acc) when is_map(map),
+    do:
+      map
+      |> assert_no_struct!()
+      |> Enum.sort()
+      |> Enum.reduce(acc, &from_runtime_args(elem(&1, 1), &2))
 
   defp from_runtime_args(other, acc),
     do: [from_arg(other) | acc]
 
+  @valid "arguments to defn must be numbers, tensors, and functions. " <>
+           "It may also be a maps with numbers/tensors as values, " <>
+           "a tuple of numbers/tensors or a tuple of functions. "
+
   @doc false
-  def from_arg(%T{} = t), do: t
+  def from_arg(%T{} = tensor), do: tensor
   def from_arg(number) when is_number(number), do: Nx.tensor(number)
 
   def from_arg(other) when is_function(other) do
-    raise(
-      ArgumentError,
-      "arguments to defn must be numbers, tensors, and functions. " <>
-        "It may also be a tuple with said elements, although the tuple " <>
-        "must contain only functions or only number/tensors, not both. " <>
-        "Got the following function inside a tuple: #{inspect(other)}"
-    )
+    raise ArgumentError,
+          @valid <> "The following function is unexpected inside a tuple/map: #{inspect(other)}"
   end
 
   def from_arg(other) do
-    raise(
-      ArgumentError,
-      "arguments to defn must be numbers, tensors, and functions, or a tuple of said elements. " <>
-        "Got: #{inspect(other)}"
-    )
+    raise ArgumentError, @valid <> "Got: #{inspect(other)}"
   end
 
   @doc false
@@ -298,11 +304,14 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc false
-  def to_result(tuple) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
-
   def to_result(%T{data: %Expr{}} = t),
     do: t
+
+  def to_result(map) when is_map(map),
+    do: map |> assert_no_struct!() |> Enum.map(fn {k, v} -> {k, to_result(v)} end) |> Map.new()
+
+  def to_result(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
 
   def to_result(other) do
     raise ArgumentError,
@@ -321,16 +330,38 @@ defmodule Nx.Defn.Tree do
     end)
   end
 
-  defp args_to_each(arg, acc, fun) when is_tuple(arg) do
+  defp args_to_each(%T{} = arg, acc, fun) do
+    fun.(arg, acc)
+  end
+
+  defp args_to_each(tuple, acc, fun) when is_tuple(tuple) do
     {list, acc} =
-      arg
+      tuple
       |> Tuple.to_list()
       |> Enum.map_reduce(acc, &args_to_each(&1, &2, fun))
 
     {List.to_tuple(list), acc}
   end
 
+  defp args_to_each(map, acc, fun) when is_map(map) do
+    {list, acc} =
+      map
+      |> assert_no_struct!()
+      |> Enum.map_reduce(acc, fn {k, v}, acc ->
+        {v, acc} = args_to_each(v, acc, fun)
+        {{k, v}, acc}
+      end)
+
+    {Map.new(list), acc}
+  end
+
   defp args_to_each(arg, acc, fun) do
     fun.(arg, acc)
   end
+
+  defp assert_no_struct!(%_{} = struct),
+    do: raise("unexpected struct inside defn: #{inspect(struct)}")
+
+  defp assert_no_struct!(map),
+    do: map
 end

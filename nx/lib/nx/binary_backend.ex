@@ -1419,13 +1419,15 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def map(%{type: output_type} = out, %{type: type} = tensor, fun) do
+  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, fun) do
     data = to_binary(tensor)
+    template = %{tensor | shape: {}}
 
     output_data =
-      match_types [type, output_type] do
-        for <<match!(x, 0) <- data>>, into: <<>> do
-          <<write!(to_scalar(fun.(read!(x, 0))), 1)>>
+      match_types [output_type] do
+        for <<bin::size(size)-bitstring <- data>>, into: <<>> do
+          tensor = put_in(template.data.state, bin)
+          <<write!(to_scalar(fun.(tensor)), 0)>>
         end
       end
 
