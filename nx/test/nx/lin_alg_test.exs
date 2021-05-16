@@ -190,11 +190,10 @@ defmodule Nx.LinAlgTest do
 
   describe "lu" do
     test "property" do
-      a = Nx.tensor([[0, 1, 3], [0, -1, -2], [1, 1, 2]])
+      # PLU is well conditioned if the biggest elements are
+      # in the matrix diagonal and
+      a = Nx.tensor([[0.0, 1.0, 3.0], [0.0, -1.0, -2.0], [1.0, 1.0, 2.0]])
       {p, l, u} = Nx.LinAlg.lu(a)
-      IO.inspect(l, label: "l")
-      IO.inspect(u, label: "u")
-
       assert p |> Nx.dot(l) |> Nx.dot(u) == a
     end
   end
