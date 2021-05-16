@@ -246,7 +246,14 @@ defmodule Nx.BinaryBackend.Matrix do
                 l_slice = slice_matrix(l, [i, 0], [1, i])
                 sum = dot_matrix(u_slice, l_slice)
                 [a_ij] = get_matrix_elements(a_prime, [[i, j]])
-                replace_matrix_element(u, i, j, a_ij - sum)
+
+                value = a_ij - sum
+
+                if abs(value) < eps do
+                  replace_matrix_element(u, i, j, 0)
+                else
+                  replace_matrix_element(u, i, j, value)
+                end
             end
 
           l =
@@ -259,7 +266,13 @@ defmodule Nx.BinaryBackend.Matrix do
                 [a_ij] = get_matrix_elements(a_prime, [[i, j]])
                 [u_jj] = get_matrix_elements(u, [[j, j]])
 
-                replace_matrix_element(l, i, j, (a_ij - sum) / u_jj)
+                value = (a_ij - sum) / u_jj
+
+                if abs(value) < eps do
+                  replace_matrix_element(l, i, j, 0)
+                else
+                  replace_matrix_element(l, i, j, value)
+                end
             end
 
           {l, u}
@@ -659,8 +672,6 @@ defmodule Nx.BinaryBackend.Matrix do
     |> binary_to_vector(type)
     |> Enum.chunk_every(num_cols)
   end
-
-  defp slice_vector(a, start, length), do: Enum.slice(a, start, length)
 
   defp slice_matrix(a, [row_start, col_start], [row_length, col_length]) do
     a
