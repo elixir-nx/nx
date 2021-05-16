@@ -3,6 +3,10 @@ defmodule Nx.LinAlgTest do
 
   doctest Nx.LinAlg
 
+  # cholesky
+  # SVD
+  # LU
+
   describe "triangular_solve" do
     test "property" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
@@ -107,6 +111,21 @@ defmodule Nx.LinAlgTest do
                [1.0, 4.0, 2.0],
                [0.0, 0.0, 0.0]
              ]) == q |> Nx.dot(r) |> round(1)
+    end
+
+    test "reconstruction check" do
+      for _ <- 1..10 do
+        square = Nx.random_uniform({4, 4})
+        tall = Nx.random_uniform({4, 3})
+        wide = Nx.random_uniform({3, 4})
+        # Wide-matrix QR is not yet implemented
+
+        assert {q, r} = Nx.LinAlg.qr(square)
+        assert q |> Nx.dot(r) |> Nx.subtract(square) |> Nx.all_close?(1.0e-5)
+
+        assert {q, r} = Nx.LinAlg.qr(tall)
+        assert q |> Nx.dot(r) |> Nx.subtract(tall) |> Nx.all_close?(1.0e-5)
+      end
     end
   end
 
