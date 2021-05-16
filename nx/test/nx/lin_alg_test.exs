@@ -4,7 +4,6 @@ defmodule Nx.LinAlgTest do
   doctest Nx.LinAlg
 
   # cholesky
-  # SVD
   # LU
 
   describe "triangular_solve" do
@@ -117,7 +116,6 @@ defmodule Nx.LinAlgTest do
       for _ <- 1..10 do
         square = Nx.random_uniform({4, 4})
         tall = Nx.random_uniform({4, 3})
-        wide = Nx.random_uniform({3, 4})
         # Wide-matrix QR is not yet implemented
 
         assert {q, r} = Nx.LinAlg.qr(square)
@@ -205,6 +203,49 @@ defmodule Nx.LinAlgTest do
              ])
              |> round(3) == round(v, 3)
     end
+
+    test "reconstruction check" do
+      for _ <- 1..10 do
+        square = Nx.random_uniform({4, 4})
+
+        assert {u, d, vt} = Nx.LinAlg.svd(square)
+        m = u |> Nx.shape() |> elem(1)
+        n = vt |> Nx.shape() |> elem(0)
+
+        assert u
+               |> Nx.dot(diag(d, m, n))
+               |> Nx.dot(vt)
+               |> Nx.subtract(square)
+               |> Nx.all_close?(1.0e-5)
+
+        tall = Nx.random_uniform({4, 3})
+
+        assert {u, d, vt} = Nx.LinAlg.svd(tall)
+        m = u |> Nx.shape() |> elem(1)
+        n = vt |> Nx.shape() |> elem(0)
+
+        assert u
+               |> Nx.dot(diag(d, m, n))
+               |> Nx.dot(vt)
+               |> Nx.subtract(tall)
+               |> Nx.all_close?(1.0e-5)
+
+        # TODO: SVD does not work for wide matrices and
+        # raises a non-semantic error
+
+        #  wide = Nx.random_uniform({3, 4})
+
+        # assert {u, d, vt} = Nx.LinAlg.svd(wide)
+        # m = u |> Nx.shape() |> elem(1)
+        # n = vt |> Nx.shape() |> elem(0)
+
+        # assert u
+        #        |> Nx.dot(diag(d, m, n))
+        #        |> Nx.dot(vt)
+        #        |> Nx.subtract(wide)
+        #        |> Nx.all_close?(1.0e-5)
+      end
+    end
   end
 
   describe "lu" do
@@ -221,5 +262,19 @@ defmodule Nx.LinAlgTest do
     Nx.map(tensor, fn x ->
       Float.round(Nx.to_scalar(x), places)
     end)
+  end
+
+  defp diag(%Nx.Tensor{shape: {r}} = t, m, n) do
+    base_result =
+      t
+      |> Nx.reshape({r, 1})
+      |> Nx.tile([1, n])
+      |> Nx.multiply(Nx.eye(n))
+
+    if m > r do
+      Nx.concatenate([base_result, Nx.broadcast(0, {m - r, n})])
+    else
+      base_result
+    end
   end
 end
