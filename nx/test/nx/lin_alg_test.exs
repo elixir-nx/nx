@@ -4,7 +4,6 @@ defmodule Nx.LinAlgTest do
   doctest Nx.LinAlg
 
   # cholesky
-  # LU
 
   describe "triangular_solve" do
     test "property" do
@@ -250,11 +249,25 @@ defmodule Nx.LinAlgTest do
 
   describe "lu" do
     test "property" do
-      # PLU is well conditioned if the biggest elements are
-      # in the matrix diagonal and
-      a = Nx.tensor([[0.0, 1.0, 3.0], [0.0, -1.0, -2.0], [1.0, 1.0, 2.0]])
-      {p, l, u} = Nx.LinAlg.lu(a)
-      assert p |> Nx.dot(l) |> Nx.dot(u) == a
+      for _ <- 1..10 do
+        # Generate random L and U matrices so we can construct
+        # a factorizable A matrix:
+        shape = {4, 4}
+        lower_selector = Nx.iota(shape, axis: 0) |> Nx.greater_equal(Nx.iota(shape, axis: 1))
+        upper_selector = Nx.transpose(lower_selector)
+
+        l_prime =
+          shape
+          |> Nx.random_uniform()
+          |> Nx.multiply(lower_selector)
+
+        u_prime = shape |> Nx.random_uniform() |> Nx.multiply(upper_selector)
+
+        a = Nx.dot(l_prime, u_prime)
+
+        assert {p, l, u} = Nx.LinAlg.lu(a)
+        assert p |> Nx.dot(l) |> Nx.dot(u) |> Nx.subtract(a) |> Nx.all_close?(1.0e-5)
+      end
     end
   end
 
