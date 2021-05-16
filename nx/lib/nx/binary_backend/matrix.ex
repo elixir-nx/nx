@@ -242,33 +242,24 @@ defmodule Nx.BinaryBackend.Matrix do
           u =
             for i <- 0..j, reduce: u do
               u ->
-                s1 =
-                  for k <- 0..(i - 1), reduce: 0 do
-                    sum ->
-                      [u_kj] = get_matrix_elements(u, [[k, j]])
-                      [l_ik] = get_matrix_elements(l, [[i, k]])
-                      sum + u_kj * l_ik
-                  end
-
+                u_slice = slice_matrix(u, [0, j], [i, 1])
+                l_slice = slice_matrix(l, [i, 0], [1, i])
+                sum = dot_matrix(u_slice, l_slice)
                 [a_ij] = get_matrix_elements(a_prime, [[i, j]])
-                replace_matrix_element(u, i, j, a_ij - s1)
+                replace_matrix_element(u, i, j, a_ij - sum)
             end
 
           l =
             for i <- j..(n - 1), i != j, reduce: l do
               l ->
-                s2 =
-                  for k <- 0..(i - 1), reduce: 0 do
-                    sum ->
-                      [u_kj] = get_matrix_elements(u, [[k, j]])
-                      [l_ik] = get_matrix_elements(l, [[i, k]])
-                      sum + u_kj * l_ik
-                  end
+                u_slice = slice_matrix(u, [0, j], [i, 1])
+                l_slice = slice_matrix(l, [i, 0], [1, i])
+                sum = dot_matrix(u_slice, l_slice)
 
                 [a_ij] = get_matrix_elements(a_prime, [[i, j]])
                 [u_jj] = get_matrix_elements(u, [[j, j]])
 
-                replace_matrix_element(l, i, j, (a_ij - s2) / u_jj)
+                replace_matrix_element(l, i, j, (a_ij - sum) / u_jj)
             end
 
           {l, u}
