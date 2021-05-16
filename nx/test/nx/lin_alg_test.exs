@@ -188,6 +188,17 @@ defmodule Nx.LinAlgTest do
     end
   end
 
+  describe "lu" do
+    test "property" do
+      a = Nx.tensor([[0, 1, 3], [0, -1, -2], [1, 1, 2]])
+      {p, l, u} = Nx.LinAlg.lu(a)
+      IO.inspect(l, label: "l")
+      IO.inspect(u, label: "u")
+
+      assert p |> Nx.dot(l) |> Nx.dot(u) == a
+    end
+  end
+
   defp round(tensor, places) do
     Nx.map(tensor, fn x ->
       Float.round(Nx.to_scalar(x), places)
