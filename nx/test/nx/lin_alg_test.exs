@@ -188,6 +188,16 @@ defmodule Nx.LinAlgTest do
     end
   end
 
+  describe "lu" do
+    test "property" do
+      # PLU is well conditioned if the biggest elements are
+      # in the matrix diagonal and
+      a = Nx.tensor([[0.0, 1.0, 3.0], [0.0, -1.0, -2.0], [1.0, 1.0, 2.0]])
+      {p, l, u} = Nx.LinAlg.lu(a)
+      assert p |> Nx.dot(l) |> Nx.dot(u) == a
+    end
+  end
+
   defp round(tensor, places) do
     Nx.map(tensor, fn x ->
       Float.round(Nx.to_scalar(x), places)

@@ -237,44 +237,42 @@ defmodule Nx.BinaryBackend.Matrix do
     {l, u} =
       for j <- 0..(n - 1), reduce: {zeros_matrix, zeros_matrix} do
         {l, u} ->
-          i_range = if j == 0, do: [0], else: 0..j
-          [l_row_j] = get_matrix_rows(l, [j])
-          l = replace_rows(l, [j], [replace_vector_element(l_row_j, j, 1.0)])
+          l = replace_matrix_element(l, j, j, 1.0)
 
-          u_col_j =
-            for i <- i_range,
-                reduce: get_matrix_column(u, j) do
-              u_col_j ->
-                l_row_slice = slice_matrix(l, [i, 0], [1, i])
+          u =
+            for i <- 0..j, reduce: u do
+              u ->
+                u_slice = slice_matrix(u, [0, j], [i, 1])
+                l_slice = slice_matrix(l, [i, 0], [1, i])
+                sum = dot_matrix(u_slice, l_slice)
+                [a_ij] = get_matrix_elements(a_prime, [[i, j]])
 
-                u_col_slice = slice_vector(u_col_j, 0, i)
+                value = a_ij - sum
 
-                s = dot_matrix(l_row_slice, u_col_slice)
-                [a_elem] = get_matrix_elements(a_prime, [[i, j]])
-                replace_vector_element(u_col_j, i, a_elem - s)
+                if abs(value) < eps do
+                  replace_matrix_element(u, i, j, 0)
+                else
+                  replace_matrix_element(u, i, j, value)
+                end
             end
 
-          u = replace_cols(u, [j], transpose_matrix(u_col_j))
-
-          [u_jj] = get_matrix_elements(u, [[j, j]])
-
           l =
-            if u_jj < eps do
-              l
-            else
-              i_range = if j == n - 1, do: [n - 1], else: j..(n - 1)
+            for i <- j..(n - 1), i != j, reduce: l do
+              l ->
+                u_slice = slice_matrix(u, [0, j], [i, 1])
+                l_slice = slice_matrix(l, [i, 0], [1, i])
+                sum = dot_matrix(u_slice, l_slice)
 
-              for i <- i_range, reduce: l do
-                l ->
-                  u_col_slice = slice_matrix(u, [0, j], [j, 1])
-                  [l_row_i] = get_matrix_rows(l, [i])
-                  s = dot_matrix(u_col_slice, l_row_i)
-                  [a_elem] = get_matrix_elements(a_prime, [[i, j]])
+                [a_ij] = get_matrix_elements(a_prime, [[i, j]])
+                [u_jj] = get_matrix_elements(u, [[j, j]])
 
-                  l_updated_row = replace_vector_element(l_row_i, j, (a_elem - s) / u_jj)
+                value = (a_ij - sum) / u_jj
 
-                  replace_rows(l, [i], [l_updated_row])
-              end
+                if abs(value) < eps do
+                  replace_matrix_element(l, i, j, 0)
+                else
+                  replace_matrix_element(l, i, j, value)
+                end
             end
 
           {l, u}
@@ -675,8 +673,6 @@ defmodule Nx.BinaryBackend.Matrix do
     |> Enum.chunk_every(num_cols)
   end
 
-  defp slice_vector(a, start, length), do: Enum.slice(a, start, length)
-
   defp slice_matrix(a, [row_start, col_start], [row_length, col_length]) do
     a
     |> Enum.slice(row_start, row_length)
@@ -726,5 +722,8 @@ defmodule Nx.BinaryBackend.Matrix do
     |> transpose_matrix()
   end
 
-  defp replace_vector_element(m, row, value), do: List.replace_at(m, row, value)
+  defp replace_matrix_element(m, row, col, value) do
+    updated = m |> Enum.at(row) |> List.replace_at(col, value)
+    List.replace_at(m, row, updated)
+  end
 end
