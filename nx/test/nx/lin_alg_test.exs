@@ -108,6 +108,20 @@ defmodule Nx.LinAlgTest do
                [0.0, 0.0, 0.0]
              ]) == q |> Nx.dot(r) |> round(1)
     end
+
+    test "property" do
+      for _ <- 1..10 do
+        square = Nx.random_uniform({4, 4})
+        tall = Nx.random_uniform({4, 3})
+        # Wide-matrix QR is not yet implemented
+
+        assert {q, r} = Nx.LinAlg.qr(square)
+        assert q |> Nx.dot(r) |> Nx.subtract(square) |> Nx.all_close?(1.0e-5)
+
+        assert {q, r} = Nx.LinAlg.qr(tall)
+        assert q |> Nx.dot(r) |> Nx.subtract(tall) |> Nx.all_close?(1.0e-5)
+      end
+    end
   end
 
   describe "svd" do
@@ -186,15 +200,93 @@ defmodule Nx.LinAlgTest do
              ])
              |> round(3) == round(v, 3)
     end
+
+    test "property" do
+      for _ <- 1..10 do
+        square = Nx.random_uniform({4, 4})
+
+        assert {u, d, vt} = Nx.LinAlg.svd(square)
+        m = u |> Nx.shape() |> elem(1)
+        n = vt |> Nx.shape() |> elem(0)
+
+        assert u
+               |> Nx.dot(diag(d, m, n))
+               |> Nx.dot(vt)
+               |> Nx.subtract(square)
+               |> Nx.all_close?(1.0e-5)
+
+        tall = Nx.random_uniform({4, 3})
+
+        assert {u, d, vt} = Nx.LinAlg.svd(tall)
+        m = u |> Nx.shape() |> elem(1)
+        n = vt |> Nx.shape() |> elem(0)
+
+        assert u
+               |> Nx.dot(diag(d, m, n))
+               |> Nx.dot(vt)
+               |> Nx.subtract(tall)
+               |> Nx.all_close?(1.0e-5)
+
+        # TODO: SVD does not work for wide matrices and
+        # raises a non-semantic error
+
+        #  wide = Nx.random_uniform({3, 4})
+
+        # assert {u, d, vt} = Nx.LinAlg.svd(wide)
+        # m = u |> Nx.shape() |> elem(1)
+        # n = vt |> Nx.shape() |> elem(0)
+
+        # assert u
+        #        |> Nx.dot(diag(d, m, n))
+        #        |> Nx.dot(vt)
+        #        |> Nx.subtract(wide)
+        #        |> Nx.all_close?(1.0e-5)
+      end
+    end
   end
 
   describe "lu" do
     test "property" do
-      # PLU is well conditioned if the biggest elements are
-      # in the matrix diagonal and
-      a = Nx.tensor([[0.0, 1.0, 3.0], [0.0, -1.0, -2.0], [1.0, 1.0, 2.0]])
-      {p, l, u} = Nx.LinAlg.lu(a)
-      assert p |> Nx.dot(l) |> Nx.dot(u) == a
+      for _ <- 1..10 do
+        # Generate random L and U matrices so we can construct
+        # a factorizable A matrix:
+        shape = {4, 4}
+        lower_selector = Nx.iota(shape, axis: 0) |> Nx.greater_equal(Nx.iota(shape, axis: 1))
+        upper_selector = Nx.transpose(lower_selector)
+
+        l_prime =
+          shape
+          |> Nx.random_uniform()
+          |> Nx.multiply(lower_selector)
+
+        u_prime = shape |> Nx.random_uniform() |> Nx.multiply(upper_selector)
+
+        a = Nx.dot(l_prime, u_prime)
+
+        assert {p, l, u} = Nx.LinAlg.lu(a)
+        assert p |> Nx.dot(l) |> Nx.dot(u) |> Nx.subtract(a) |> Nx.all_close?(1.0e-5)
+      end
+    end
+  end
+
+  describe "cholesky" do
+    test "property" do
+      for _ <- 1..10 do
+        # Generate random L matrix so we can construct
+        # a factorizable A matrix:
+        shape = {4, 4}
+        lower_selector = Nx.iota(shape, axis: 0) |> Nx.greater_equal(Nx.iota(shape, axis: 1))
+
+        l_prime =
+          shape
+          |> Nx.random_uniform()
+          |> Nx.multiply(lower_selector)
+
+        a = Nx.dot(l_prime, Nx.transpose(l_prime))
+
+        assert l = Nx.LinAlg.cholesky(a)
+        assert l |> Nx.dot(Nx.transpose(l)) |> Nx.subtract(a) |> Nx.all_close?(1.0e-5)
+      end
     end
   end
 
@@ -202,5 +294,19 @@ defmodule Nx.LinAlgTest do
     Nx.map(tensor, fn x ->
       Float.round(Nx.to_scalar(x), places)
     end)
+  end
+
+  defp diag(%Nx.Tensor{shape: {r}} = t, m, n) do
+    base_result =
+      t
+      |> Nx.reshape({r, 1})
+      |> Nx.tile([1, n])
+      |> Nx.multiply(Nx.eye(n))
+
+    if m > r do
+      Nx.concatenate([base_result, Nx.broadcast(0, {m - r, n})])
+    else
+      base_result
+    end
   end
 end

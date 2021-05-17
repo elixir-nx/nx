@@ -115,7 +115,8 @@ defmodule Nx.Tensor do
 
       {{^axis, value}, _} ->
         raise ArgumentError,
-              "slicing a tensor on an axis requires an integer, a scalar tensor or a range, got: #{inspect(value)}"
+              "slicing a tensor on an axis requires an integer, a scalar tensor or a range, got: " <>
+                inspect(value)
 
       nil ->
         fetch_axes(axis - 1, axes, shape, [0 | start], [elem(shape, axis) | lengths], squeeze)

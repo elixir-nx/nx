@@ -676,7 +676,7 @@ defmodule NxTest do
       tensor = Nx.tensor([1, 2, 3], names: [:row])
       assert tensor[Nx.tensor(1)] == Nx.tensor(2)
       assert tensor[[Nx.tensor(1)]] == Nx.tensor(2)
-      assert tensor[row: Nx.tensor(1)] == Nx.tensor(2)
+      assert tensor[[row: Nx.tensor(1)]] == Nx.tensor(2)
       assert tensor[Nx.tensor(-1)] == Nx.tensor(1)
     end
 

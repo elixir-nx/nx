@@ -7822,7 +7822,8 @@ defmodule Nx do
     impl!(tensor).sort(
       tensor,
       tensor,
-      [axis: axis, direction: direction]
+      axis: axis,
+      direction: direction
     )
   end
 
@@ -7948,7 +7949,8 @@ defmodule Nx do
     impl!(tensor).argsort(
       %{tensor | type: {:s, 64}},
       tensor,
-      [axis: axis, direction: direction]
+      axis: axis,
+      direction: direction
     )
   end
 
@@ -8006,7 +8008,8 @@ defmodule Nx do
         end
 
         unless Nx.Type.integer?(idx_type) do
-          raise ArgumentError, "index must be integer type, got #{inspect(idx_type)} for axis #{i}"
+          raise ArgumentError,
+                "index must be integer type, got #{inspect(idx_type)} for axis #{i}"
         end
 
         t

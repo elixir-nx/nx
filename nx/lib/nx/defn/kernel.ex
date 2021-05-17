@@ -271,7 +271,8 @@ defmodule Nx.Defn.Kernel do
   `preds` can be re-used to compute other metrics such as accuracy, absolute error,
   etc. without having to do another forward pass.
   """
-  def value_and_grad(var_or_vars, fun, transform \\ & &1) when Kernel.and(is_function(fun, 1), is_function(transform, 1)) do
+  def value_and_grad(var_or_vars, fun, transform \\ & &1)
+      when Kernel.and(is_function(fun, 1), is_function(transform, 1)) do
     Nx.Defn.Grad.transform(var_or_vars, fun, transform)
   end
 

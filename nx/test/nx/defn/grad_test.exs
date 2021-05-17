@@ -1716,9 +1716,14 @@ defmodule Nx.Defn.GradTest do
 
   describe "slice" do
     defn grad_mean_slice(t), do: grad(t, &Nx.mean(Nx.slice(&1, [0, 1], [1, 2], strides: [1, 2])))
-    defn grad_mean_dynamic_slice(t), do: grad(t, &Nx.mean(Nx.slice(&1, [Nx.tensor(0), Nx.tensor(1)], [1, 2], strides: [1, 2])))
+
+    defn grad_mean_dynamic_slice(t),
+      do: grad(t, &Nx.mean(Nx.slice(&1, [Nx.tensor(0), Nx.tensor(1)], [1, 2], strides: [1, 2])))
+
     defn grad_sum_slice(t), do: grad(t, &Nx.sum(Nx.slice(&1, [1, 0], [1, 2], strides: [1, 1])))
-    defn grad_sum_dynamic_slice(t), do: grad(t, &Nx.sum(Nx.slice(&1, [Nx.tensor(1), Nx.tensor(0)], [1, 2], strides: [1, 1])))
+
+    defn grad_sum_dynamic_slice(t),
+      do: grad(t, &Nx.sum(Nx.slice(&1, [Nx.tensor(1), Nx.tensor(0)], [1, 2], strides: [1, 1])))
 
     defn grad_sum_pad_slice(t) do
       grad(
@@ -1773,7 +1778,10 @@ defmodule Nx.Defn.GradTest do
     defn grad_of_index(t, index), do: grad(index, &Nx.mean(Nx.slice(t, [&1], [2])))
 
     test "computes gradient of index" do
-      assert grad_of_index(Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0]), Nx.reduce_max(Nx.tensor([-1, 0, 1]))) == Nx.tensor(0.0)
+      assert grad_of_index(
+               Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0]),
+               Nx.reduce_max(Nx.tensor([-1, 0, 1]))
+             ) == Nx.tensor(0.0)
     end
   end
 
