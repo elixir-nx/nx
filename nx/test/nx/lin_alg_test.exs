@@ -109,7 +109,7 @@ defmodule Nx.LinAlgTest do
              ]) == q |> Nx.dot(r) |> round(1)
     end
 
-    test "reconstruction check" do
+    test "property" do
       for _ <- 1..10 do
         square = Nx.random_uniform({4, 4})
         tall = Nx.random_uniform({4, 3})
@@ -201,7 +201,7 @@ defmodule Nx.LinAlgTest do
              |> round(3) == round(v, 3)
     end
 
-    test "reconstruction check" do
+    test "property" do
       for _ <- 1..10 do
         square = Nx.random_uniform({4, 4})
 
