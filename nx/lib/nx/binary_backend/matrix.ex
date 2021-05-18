@@ -280,8 +280,9 @@ defmodule Nx.BinaryBackend.Matrix do
 
     # Transpose because since P is orthogonal, inv(P) = tranpose(P)
     # and we want to return P such that A = P.L.U
-    {p |> transpose_matrix() |> matrix_to_binary(p_type), matrix_to_binary(l, l_type),
-     matrix_to_binary(u, u_type)}
+    {p |> transpose_matrix() |> matrix_to_binary(p_type),
+     l |> approximate_zeros(eps) |> matrix_to_binary(l_type),
+     u |> approximate_zeros(eps) |> matrix_to_binary(u_type)}
   end
 
   defp lu_validate_and_pivot(a, n) do
@@ -360,8 +361,9 @@ defmodule Nx.BinaryBackend.Matrix do
 
     {s, v} = apply_singular_value_corrections(s, v)
 
-    {matrix_to_binary(u, output_type), matrix_to_binary(s, output_type),
-     matrix_to_binary(v, output_type)}
+    {u |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     s |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     v |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
   defp svd_jacobi_rotation_round(u, d, v, {_, n}, eps) do
@@ -728,6 +730,11 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp approximate_zeros(matrix, tol) do
-    Enum.map(matrix, fn row -> Enum.map(row, fn x -> if abs(x) < tol, do: 0, else: x end) end)
+    do_round = fn x -> if abs(x) < tol, do: 0, else: x end
+
+    Enum.map(matrix, fn
+      row when is_list(row) -> Enum.map(row, do_round)
+      e -> do_round.(e)
+    end)
   end
 end
