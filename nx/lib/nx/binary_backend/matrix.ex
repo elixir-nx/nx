@@ -202,8 +202,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {q_matrix, r_matrix} =
       for i <- 0..(n - 1), reduce: {nil, r_matrix} do
         {q, r} ->
-          # a = r[[i..(k - 1), i]]
-          a = r |> Enum.slice(i..(k - 1)) |> Enum.map(fn row -> Enum.at(row, i) end)
+          a = slice_matrix(r, [i, i], [k - i, 1])
 
           h = householder_reflector(a, k, eps)
 
@@ -221,7 +220,8 @@ defmodule Nx.BinaryBackend.Matrix do
           {q, r}
       end
 
-    {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
+    {q_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     r_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
@@ -725,5 +725,9 @@ defmodule Nx.BinaryBackend.Matrix do
   defp replace_matrix_element(m, row, col, value) do
     updated = m |> Enum.at(row) |> List.replace_at(col, value)
     List.replace_at(m, row, updated)
+  end
+
+  defp approximate_zeros(matrix, tol) do
+    Enum.map(matrix, fn row -> Enum.map(row, fn x -> if abs(x) < tol, do: 0, else: x end) end)
   end
 end
