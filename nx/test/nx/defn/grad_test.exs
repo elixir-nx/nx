@@ -1662,6 +1662,35 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "cholesky" do
+    defn cholesky_grad(t) do
+      grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.sum() end)
+    end
+
+    defn cholesky_cos_grad(t) do
+      grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.cos() |> Nx.sum() end)
+    end
+
+    defn exp_cholesky_grad(t) do
+      grad(t, fn x -> x |> Nx.exp() |> Nx.LinAlg.cholesky() |> Nx.sum() end)
+    end
+
+    test "computes grad for {2, 2}-tensor" do
+      t = Nx.tensor([[1.0, 2.0], [2.0, 5.0]])
+      assert cholesky_grad(t) == Nx.tensor([[1.5, -1.0], [0.0, 0.5]])
+    end
+
+    test "computes grad for composed {2,2}-tensor" do
+      t = Nx.tensor([[1.0, 2.0], [2.0, 5.0]])
+
+      assert cholesky_cos_grad(t) ==
+               Nx.tensor([[-1.1943799, 0.84147096], [-0.06782645, -0.42073548]])
+
+      assert exp_cholesky_grad(t) ==
+               Nx.tensor([[-0.5299541, -0.88652998], [3.59515929, 6.550619]])
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))

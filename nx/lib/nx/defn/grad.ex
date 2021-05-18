@@ -490,6 +490,16 @@ defmodule Nx.Defn.Grad do
     grad_pairs(pairs, g, cache)
   end
 
+  defp grad(:cholesky, [input], l, g, cache) do
+    num = g |> tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
+    den = l |> Nx.eye(backend: Nx.Defn.Expr) |> Nx.add(1)
+    phi_tril = num |> Nx.divide(den) |> tril()
+
+    bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
+    dl = Nx.LinAlg.triangular_solve(l, bm, left_side: false)
+    to_grad(input, dl, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
@@ -1026,4 +1036,13 @@ defmodule Nx.Defn.Grad do
   defp up_to(_, _), do: []
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
+
+  defp tril(t) do
+    lower_selector =
+      t
+      |> Nx.iota(axis: 0, backend: Nx.Defn.Expr)
+      |> Nx.greater_equal(Nx.iota(t, axis: 1, backend: Nx.Defn.Expr))
+
+    Nx.select(lower_selector, t, Nx.tensor(0, backend: Nx.Defn.Expr, type: t.type))
+  end
 end
