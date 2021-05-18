@@ -1,6 +1,5 @@
 defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
-  @default_eps 1.0e-10
   import Nx.Shared
 
   def ts(a_data, a_type, b_data, b_type, shape, output_type, input_opts) do
@@ -184,7 +183,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {_, input_num_bits} = input_type
 
     mode = opts[:mode]
-    eps = opts[:eps] || @default_eps
+    eps = opts[:eps]
 
     r_matrix =
       if mode == :reduced do
@@ -226,7 +225,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
     a = binary_to_matrix(input_data, input_type, input_shape)
-    eps = opts[:eps] || @default_eps
+    eps = opts[:eps]
 
     {p, a_prime} = lu_validate_and_pivot(a, n)
 
@@ -328,7 +327,7 @@ defmodule Nx.BinaryBackend.Matrix do
     # [5] - http://www.mymathlib.com/c_source/matrices/linearsystems/singular_value_decomposition.c
     a = binary_to_matrix(input_data, input_type, input_shape)
 
-    eps = opts[:eps] || @default_eps
+    eps = opts[:eps]
     max_iter = opts[:max_iter] || 1000
     {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
 
