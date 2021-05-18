@@ -1,6 +1,5 @@
 defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
-  @default_eps 1.0e-10
   import Nx.Shared
 
   def ts(a_data, a_type, b_data, b_type, shape, output_type, input_opts) do
@@ -184,7 +183,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {_, input_num_bits} = input_type
 
     mode = opts[:mode]
-    eps = opts[:eps] || @default_eps
+    eps = opts[:eps]
 
     r_matrix =
       if mode == :reduced do
@@ -202,8 +201,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {q_matrix, r_matrix} =
       for i <- 0..(n - 1), reduce: {nil, r_matrix} do
         {q, r} ->
-          # a = r[[i..(k - 1), i]]
-          a = r |> Enum.slice(i..(k - 1)) |> Enum.map(fn row -> Enum.at(row, i) end)
+          a = slice_matrix(r, [i, i], [k - i, 1])
 
           h = householder_reflector(a, k, eps)
 
@@ -221,12 +219,13 @@ defmodule Nx.BinaryBackend.Matrix do
           {q, r}
       end
 
-    {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
+    {q_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     r_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
     a = binary_to_matrix(input_data, input_type, input_shape)
-    eps = opts[:eps] || @default_eps
+    eps = opts[:eps]
 
     {p, a_prime} = lu_validate_and_pivot(a, n)
 
@@ -280,8 +279,9 @@ defmodule Nx.BinaryBackend.Matrix do
 
     # Transpose because since P is orthogonal, inv(P) = tranpose(P)
     # and we want to return P such that A = P.L.U
-    {p |> transpose_matrix() |> matrix_to_binary(p_type), matrix_to_binary(l, l_type),
-     matrix_to_binary(u, u_type)}
+    {p |> transpose_matrix() |> matrix_to_binary(p_type),
+     l |> approximate_zeros(eps) |> matrix_to_binary(l_type),
+     u |> approximate_zeros(eps) |> matrix_to_binary(u_type)}
   end
 
   defp lu_validate_and_pivot(a, n) do
@@ -327,7 +327,7 @@ defmodule Nx.BinaryBackend.Matrix do
     # [5] - http://www.mymathlib.com/c_source/matrices/linearsystems/singular_value_decomposition.c
     a = binary_to_matrix(input_data, input_type, input_shape)
 
-    eps = opts[:eps] || @default_eps
+    eps = opts[:eps]
     max_iter = opts[:max_iter] || 1000
     {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
 
@@ -360,8 +360,9 @@ defmodule Nx.BinaryBackend.Matrix do
 
     {s, v} = apply_singular_value_corrections(s, v)
 
-    {matrix_to_binary(u, output_type), matrix_to_binary(s, output_type),
-     matrix_to_binary(v, output_type)}
+    {u |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     s |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     v |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
   defp svd_jacobi_rotation_round(u, d, v, {_, n}, eps) do
@@ -725,5 +726,14 @@ defmodule Nx.BinaryBackend.Matrix do
   defp replace_matrix_element(m, row, col, value) do
     updated = m |> Enum.at(row) |> List.replace_at(col, value)
     List.replace_at(m, row, updated)
+  end
+
+  defp approximate_zeros(matrix, tol) do
+    do_round = fn x -> if abs(x) < tol, do: 0, else: x end
+
+    Enum.map(matrix, fn
+      row when is_list(row) -> Enum.map(row, do_round)
+      e -> do_round.(e)
+    end)
   end
 end

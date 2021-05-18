@@ -8,6 +8,8 @@ defmodule Nx.LinAlg do
 
   alias Nx.Tensor, as: T
 
+  @default_eps 1.0e-10
+
   @doc """
   Performs a Cholesky decomposition of a square matrix.
 
@@ -650,7 +652,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, mode: :reduced)
+    opts = keyword!(opts, mode: :reduced, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     mode = opts[:mode]
@@ -744,7 +746,7 @@ defmodule Nx.LinAlg do
 
   """
   def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, [:eps, :max_iter])
+    opts = keyword!(opts, [:max_iter, eps: @default_eps])
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
@@ -850,7 +852,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have as many rows as columns, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
-    opts = keyword!(opts, [:eps])
+    opts = keyword!(opts, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
