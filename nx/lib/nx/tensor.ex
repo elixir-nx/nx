@@ -46,8 +46,7 @@ defmodule Nx.Tensor do
   def fetch(tensor, index) when is_integer(index),
     do: {:ok, fetch_axes(tensor, [{0, index}])}
 
-  # TODO: Match on _.._//_ on Elixir v1.12
-  def fetch(tensor, _.._ = range),
+  def fetch(tensor, _.._//_ = range),
     do: {:ok, fetch_axes(tensor, [{0, range}])}
 
   def fetch(tensor, []),
@@ -100,14 +99,13 @@ defmodule Nx.Tensor do
         index = normalize_index(index, axis, shape)
         fetch_axes(axis - 1, axes, shape, [index | start], [1 | lengths], [axis | squeeze])
 
-      # TODO: Raise on stepped ranges on _.._//_ on Elixir v1.12
-      {{^axis, first..last}, axes} ->
+      {{^axis, first..last//step = range}, axes} ->
         first = normalize_index(first, axis, shape)
         last = normalize_index(last, axis, shape)
 
-        if last < first do
+        if last < first or step != 1 do
           raise ArgumentError,
-                "slicing a tensor requires an increasing range, got: #{inspect(first..last)}"
+                "slicing a tensor requires a non-empty range with a step of 1, got: #{inspect(range)}"
         end
 
         len = last - first + 1

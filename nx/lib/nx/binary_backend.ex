@@ -688,19 +688,8 @@ defmodule Nx.BinaryBackend do
   defp element_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
   defp element_remainder(_, a, b), do: :math.fmod(a, b)
 
-  defp element_power({type, _}, a, b) when type in [:s, :u], do: integer_pow(a, b)
+  defp element_power({type, _}, a, b) when type in [:s, :u], do: Integer.pow(a, b)
   defp element_power(_, a, b), do: :math.pow(a, b)
-
-  # TODO: Use Integer.pow on Elixir v1.12
-  defp integer_pow(base, exponent) when is_integer(base) and is_integer(exponent) do
-    if exponent < 0, do: :erlang.error(:badarith, [base, exponent])
-    guarded_pow(base, exponent)
-  end
-
-  defp guarded_pow(_, 0), do: 1
-  defp guarded_pow(b, 1), do: b
-  defp guarded_pow(b, e) when (e &&& 1) == 0, do: guarded_pow(b * b, e >>> 1)
-  defp guarded_pow(b, e), do: b * guarded_pow(b * b, e >>> 1)
 
   defp element_bitwise_and(_, a, b), do: :erlang.band(a, b)
   defp element_bitwise_or(_, a, b), do: :erlang.bor(a, b)
@@ -950,11 +939,10 @@ defmodule Nx.BinaryBackend do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
-    # TODO: Use Enum.zip_with on Elixir v1.12
     spatial_padding_config =
-      padding
-      |> Enum.zip(input_dilation)
-      |> Enum.map(fn {{lo, hi}, dilation} -> {lo, hi, dilation - 1} end)
+      Enum.zip_with(padding, input_dilation, fn {lo, hi}, dilation ->
+        {lo, hi, dilation - 1}
+      end)
 
     padding_config = [
       {0, 0, 0},
@@ -1623,11 +1611,10 @@ defmodule Nx.BinaryBackend do
 
       # The weighted shape is altered such that we traverse
       # with respect to the stride for each dimension
-      # TODO: Use Enum.zip_with on Elixir v1.12
       weighted_shape =
-        weighted_shape
-        |> Enum.zip(strides)
-        |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
+        Enum.zip_with(weighted_shape, strides, fn {d, dim_size}, s ->
+          {d, dim_size + (s - 1) * dim_size}
+        end)
 
       input_data = to_binary(tensor)
 
@@ -1639,10 +1626,7 @@ defmodule Nx.BinaryBackend do
   end
 
   defp clamp_indices(start_indices, shape, lengths) do
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    [Tuple.to_list(shape), start_indices, lengths]
-    |> Enum.zip()
-    |> Enum.map(fn {dim_size, idx, len} ->
+    Enum.zip_with([Tuple.to_list(shape), start_indices, lengths], fn [dim_size, idx, len] ->
       idx = to_scalar(idx)
       min(max(idx, 0), dim_size - len)
     end)

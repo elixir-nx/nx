@@ -133,14 +133,11 @@ defmodule EXLA.Executable do
   defp decompose_output(data, shape, client) do
     %Shape{dtype: {:t, shapes}} = shape
 
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    data
-    |> Enum.zip(shapes)
-    |> Enum.map(fn
-      {buf, subshape} when is_reference(buf) ->
+    Enum.zip_with(data, shapes, fn
+      buf, subshape when is_reference(buf) ->
         Buffer.buffer({buf, client.name}, subshape)
 
-      {buf, subshape} ->
+      buf, subshape ->
         Buffer.buffer(buf, subshape)
     end)
   end

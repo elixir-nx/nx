@@ -122,11 +122,9 @@ defmodule Nx.Defn.Expr do
   """
   def tuple(tuple, %T{type: {:tuple, size}, data: %{context: context}} = expr)
       when is_tuple(tuple) and tuple_size(tuple) == size do
-    # TODO: Use Enum.with_index on Elixir v1.12
     tuple
     |> Tuple.to_list()
-    |> Enum.with_index()
-    |> Enum.map(fn {tensor, i} ->
+    |> Enum.with_index(fn tensor, i ->
       fun = &expr(&1, context, :elem, [expr, i, size])
       composite(tensor, fun)
     end)
@@ -246,11 +244,9 @@ defmodule Nx.Defn.Expr do
     size = map_size(map)
     %{data: %{context: context}} = expr = fun.(tuple_out(size))
 
-    # TODO: Use Enum.with_index on Elixir v1.12
     map
     |> Enum.sort()
-    |> Enum.with_index()
-    |> Enum.map(fn {{k, v}, i} ->
+    |> Enum.with_index(fn {k, v}, i ->
       fun = &expr(&1, context, :elem, [expr, i, size])
       {k, composite(v, fun)}
     end)
@@ -871,12 +867,10 @@ defmodule Nx.Defn.Expr do
   end
 
   defp to_clauses(last, exprs, fun) when is_tuple(last) do
-    # TODO: Use Enum.with_index on Elixir v1.12
     {list_of_last, list_of_lists} =
       last
       |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.map(fn {last, index} ->
+      |> Enum.with_index(fn last, index ->
         exprs = Enum.map(exprs, &elem(&1, index))
         to_clauses(last, exprs, fun)
       end)

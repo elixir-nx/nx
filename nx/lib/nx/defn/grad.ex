@@ -950,16 +950,11 @@ defmodule Nx.Defn.Grad do
     rhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(rhs_sdims, rhs_dilated_padding_config))
     out_dilated_shape = Tuple.to_list(Nx.Shape.pad(out_sdims, out_dilated_padding_config))
 
-    # TODO: Use Enum.zip_with on Elixir v1.12
-    pad_before =
-      rhs_dilated_shape
-      |> Enum.zip(padding)
-      |> Enum.map(fn {s, {lo, _}} -> s - lo - 1 end)
+    pad_before = Enum.zip_with(rhs_dilated_shape, padding, fn s, {lo, _} -> s - lo - 1 end)
 
     pad_after =
       [lhs_dilated_shape, rhs_dilated_shape, out_dilated_shape, pad_before]
-      |> Enum.zip()
-      |> Enum.map(fn {l, r, o, p} -> l + r - 1 - o - p end)
+      |> Enum.zip_with(fn [l, r, o, p] -> l + r - 1 - o - p end)
 
     Enum.zip(pad_before, pad_after)
   end
@@ -980,15 +975,11 @@ defmodule Nx.Defn.Grad do
     rhs_dilated_shape = Tuple.to_list(Nx.Shape.pad(rhs_sdims, rhs_dilated_padding_config))
     out_dilated_shape = Tuple.to_list(Nx.Shape.pad(out_sdims, out_dilated_padding_config))
 
-    # TODO: Use Enum.zip_with on Elixir v1.12
     total_in_pad =
       [out_dilated_shape, rhs_dilated_shape, lhs_dilated_shape]
-      |> Enum.zip()
-      |> Enum.map(fn {o, r, l} -> o + r - l - 1 end)
+      |> Enum.zip_with(fn [o, r, l] -> o + r - l - 1 end)
 
-    padding
-    |> Enum.zip(total_in_pad)
-    |> Enum.map(fn {{lo, _}, hi} -> {lo, hi - lo} end)
+    Enum.zip_with(padding, total_in_pad, fn {lo, _}, hi -> {lo, hi - lo} end)
   end
 
   defp reshape_axis_into(src, dst, x) do

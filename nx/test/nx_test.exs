@@ -533,6 +533,17 @@ defmodule NxTest do
              """
     end
 
+    test "infinity and nan for f16" do
+      bin = <<0xFC00::16-native, 0x7C00::16-native, 0xFC01::16-native, 0xFC0F::16-native>>
+
+      assert inspect(Nx.from_binary(bin, {:f, 16})) == """
+             #Nx.Tensor<
+               f16[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
+    end
+
     test "infinity and nan for f32" do
       bin =
         <<0xFF800000::32-native, 0x7F800000::32-native, 0xFF800001::32-native,
@@ -692,7 +703,7 @@ defmodule NxTest do
       tensor = Nx.tensor([[1, 2, 3]], names: [:x, :y])
 
       assert_raise ArgumentError,
-                   ~r"slicing a tensor requires an increasing range, got: 2..1",
+                   ~r"slicing a tensor requires a non-empty range with a step of 1, got: 2..1//-1",
                    fn -> tensor[[y: 2..1]] end
     end
   end
