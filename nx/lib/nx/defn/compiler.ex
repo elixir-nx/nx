@@ -672,9 +672,7 @@ defmodule Nx.Defn.Compiler do
     compile_error!(
       meta,
       state,
-      "only variables, tuples, and maps are allowed as patterns in defn, got: #{
-        Macro.to_string(expr)
-      }"
+      "only variables, tuples, and maps are allowed as patterns in defn, got: #{Macro.to_string(expr)}"
     )
   end
 
