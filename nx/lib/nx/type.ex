@@ -8,7 +8,7 @@ defmodule Nx.Type do
 
       * `:s` - signed integer (8, 16, 32, 64)
       * `:u` - unsigned integer (8, 16, 32, 64)
-      * `:f` - float (32, 64)
+      * `:f` - float (16, 32, 64)
       * `:bf` - a brain floating point (16)
 
   Note: there is a special type used by the `defn` compiler
@@ -26,6 +26,7 @@ defmodule Nx.Type do
           | {:u, 16}
           | {:u, 32}
           | {:u, 64}
+          | {:f, 16}
           | {:f, 32}
           | {:f, 64}
           | {:bf, 16}
@@ -42,6 +43,7 @@ defmodule Nx.Type do
   def min_value_binary({:s, 64}), do: <<-9_223_372_036_854_775_808::64-signed-native>>
   def min_value_binary({:u, size}), do: <<0::size(size)-native>>
   def min_value_binary({:bf, 16}), do: <<0xFF80::16-native>>
+  def min_value_binary({:f, 16}), do: <<0xFBFF::16-native>>
   def min_value_binary({:f, 32}), do: <<0xFF7FFFFF::32-native>>
   def min_value_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
 
@@ -59,6 +61,7 @@ defmodule Nx.Type do
   def max_value_binary({:u, 32}), do: <<4_294_967_295::32-native>>
   def max_value_binary({:u, 64}), do: <<18_446_744_073_709_551_615::64-native>>
   def max_value_binary({:bf, 16}), do: <<0x7F80::16-native>>
+  def max_value_binary({:f, 16}), do: <<0x7BFF::16-native>>
   def max_value_binary({:f, 32}), do: <<0x7F7FFFFF::32-native>>
   def max_value_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
 
@@ -137,7 +140,7 @@ defmodule Nx.Type do
 
   defp validate({:s, size} = type) when size in [8, 16, 32, 64], do: type
   defp validate({:u, size} = type) when size in [8, 16, 32, 64], do: type
-  defp validate({:f, size} = type) when size in [32, 64], do: type
+  defp validate({:f, size} = type) when size in [16, 32, 64], do: type
   defp validate({:bf, size} = type) when size in [16], do: type
   defp validate(_type), do: :error
 

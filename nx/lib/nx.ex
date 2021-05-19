@@ -354,7 +354,7 @@ defmodule Nx do
         [44, 45, 46]
       >
 
-  Mixed types get the highest precision type:
+  Mixed types give higher priority to floats:
 
       iex> Nx.tensor([1, 2, 3.0])
       #Nx.Tensor<
@@ -400,9 +400,24 @@ defmodule Nx do
         ]
       >
 
+  Besides single-precision (32 bits), floats can also have
+  half-precision (16) or double-precision (64):
+
+      iex> Nx.tensor([1, 2, 3], type: {:f, 16})
+      #Nx.Tensor<
+        f16[3]
+        [1.0, 2.0, 3.0]
+      >
+
+      iex> Nx.tensor([1, 2, 3], type: {:f, 64})
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 2.0, 3.0]
+      >
+
   Brain-floating points are also supported, although they are
   emulated in Elixir and therefore perform slower without a
-  compilation backend:
+  native backend:
 
       iex> Nx.tensor([1, 2, 3], type: {:bf, 16})
       #Nx.Tensor<
