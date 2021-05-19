@@ -134,11 +134,10 @@ defmodule EXLA.Defn do
   defp to_root_computation(key, expr, pos_shapes, options) do
     builder = EXLA.Builder.new(inspect(key))
 
-    # TODO: Use Enum.with_index on Elixir v1.12
     params =
-      for {{pos, shape}, i} <- Enum.with_index(pos_shapes) do
+       Enum.with_index(pos_shapes, fn {pos, shape}, i ->
         {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
-      end
+      end)
 
     state = %{
       precision: Keyword.get(options, :precision, :default),
@@ -710,12 +709,7 @@ defmodule EXLA.Defn do
     all_static? = Enum.all?(start_indices, &is_integer/1)
 
     if all_static? do
-      # TODO: Use Enum.zip_with on Elixir v1.12
-      limit_indices =
-        start_indices
-        |> Enum.zip(lengths)
-        |> Enum.map(fn {i, len} -> i + len end)
-
+      limit_indices = Enum.zip_with(start_indices, lengths, fn i, len -> i + len end)
       EXLA.Op.slice(tensor, start_indices, limit_indices, strides)
     else
       zeros = List.duplicate(0, tuple_size(ans.shape))
@@ -812,12 +806,11 @@ defmodule EXLA.Defn do
   defp to_computation(name, args, state, fun) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
-    # TODO: Use Enum.with_index on Elixir v1.12
     arg_params =
-      for {arg, i} <- Enum.with_index(args) do
+       Enum.with_index(args, fn arg, i ->
         fun_shape = computation_arg_shape(arg)
         {arg, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
-      end
+      end)
 
     {_, params} = Enum.reduce(arg_params, {0, []}, &computation_arg_param(&1, &2))
     state = %{state | builder: subbuilder, params: Map.new(params)}
@@ -840,11 +833,9 @@ defmodule EXLA.Defn do
   end
 
   defp computation_arg_param({tuple, param}, counter_acc) do
-    # TODO: Use Enum.with_index on Elixir v1.12
     tuple
     |> Tuple.to_list()
-    |> Enum.with_index()
-    |> Enum.map(fn {arg, i} -> {arg, EXLA.Op.get_tuple_element(param, i)} end)
+    |> Enum.with_index(fn arg, i -> {arg, EXLA.Op.get_tuple_element(param, i)} end)
     |> Enum.reduce(counter_acc, &computation_arg_param/2)
   end
 

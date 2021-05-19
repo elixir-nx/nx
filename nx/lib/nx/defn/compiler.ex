@@ -123,10 +123,9 @@ defmodule Nx.Defn.Compiler do
         tensors = Nx.Defn.Tree.from_runtime_args(results)
         results = Nx.Defn.Tree.args_to_templates(results, tensors)
 
-        # TODO: Use Enum.zip_with on Elixir v1.12
-        {export_tuples, []} =
-          Enum.map_reduce(export_tuples, results, fn {name, arity}, [result | results] ->
-            {{name, arity, result}, results}
+        export_tuples =
+          Enum.zip_with(export_tuples, results, fn {name, arity}, result ->
+            {name, arity, result}
           end)
 
         path = Path.join(output_dir, "#{module}.nx.aot")
@@ -363,7 +362,7 @@ defmodule Nx.Defn.Compiler do
       end
 
     quote line: state.line do
-      Nx.Defn.Module.delete_definition(__MODULE__, unquote(def))
+      Module.delete_definition(__MODULE__, unquote(def))
 
       Kernel.unquote(kind)(unquote(name)(unquote_splicing(all_args))) do
         if Process.get(Nx.Defn.Compiler) do
@@ -399,7 +398,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp get_and_normalize_definition(def, state) do
-    {:v1, kind, meta, clauses} = Nx.Defn.Module.get_definition(state.module, def)
+    {:v1, kind, meta, clauses} = Module.get_definition(state.module, def)
     state = %{state | function: def, line: meta[:line] || state.line, rewrite_underscore?: true}
 
     case clauses do
@@ -642,8 +641,7 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize_arg(var, _meta, state) when is_var(var) do
     if state.rewrite_underscore? and is_underscore(var) do
-      # TODO: Use Macro.unique_var on Elixir v1.12
-      {{:arg, [counter: :elixir_module.next_counter(state.module)], state.module}, state}
+      {Macro.unique_var(:arg, state.module), state}
     else
       normalize(var, state)
     end

@@ -42,15 +42,13 @@ defmodule Nx.Shape do
   Converts a shape to an algebra document for inspection.
   """
   def to_algebra(shape, names, open, close) do
-    # TODO: Use Enum.zip_with on Elixir v1.12
     shape
     |> Tuple.to_list()
-    |> Enum.zip(names)
-    |> Enum.map(fn
-      {number, nil} ->
+    |> Enum.zip_with(names, fn
+      number, nil ->
         Inspect.Algebra.concat([open, Integer.to_string(number), close])
 
-      {number, name} ->
+      number, name ->
         Inspect.Algebra.concat([
           open,
           Atom.to_string(name),
@@ -471,8 +469,7 @@ defmodule Nx.Shape do
   end
 
   defp pad_same(shape, kernel_size, strides, interior) do
-    Enum.zip([Tuple.to_list(shape), Tuple.to_list(kernel_size), strides])
-    |> Enum.map(fn {dim, k, s} ->
+    Enum.zip_with([Tuple.to_list(shape), Tuple.to_list(kernel_size), strides], fn [dim, k, s] ->
       padding_size = max((dim - 1) * s + k - dim, 0)
       lo = floor(padding_size / 2)
       hi = ceil(padding_size / 2)
@@ -1119,11 +1116,9 @@ defmodule Nx.Shape do
   end
 
   defp concat_shapes(shape1, shape2, axis) do
-    # TODO: Use Enum.with_index on Elixir v1.12
     shape1
     |> Enum.zip(shape2)
-    |> Enum.with_index()
-    |> Enum.map(fn {{s1, s2}, i} ->
+    |> Enum.with_index(fn {s1, s2}, i ->
       cond do
         i == axis ->
           s1 + s2
@@ -1384,12 +1379,9 @@ defmodule Nx.Shape do
   end
 
   defp validate_concat_names!(names) do
-    :ok =
-      names
-      |> Enum.zip()
-      |> Enum.each(fn tuple ->
-        [n1 | rest] = Tuple.to_list(tuple)
-        Enum.reduce(rest, n1, &merge_names!(&1, &2))
+    _ =
+      Enum.zip_with(names, fn [name | rest] ->
+        Enum.reduce(rest, name, &merge_names!(&1, &2))
       end)
 
     hd(names)

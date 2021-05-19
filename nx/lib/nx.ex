@@ -180,11 +180,13 @@ defmodule Nx do
         ]
       >
 
-  Negative positions in ranges read from the back. The right-side of
-  the range must be equal or greater than the left-side:
+  Ranges can receive negative positions and they will read from
+  the back. In such cases, the range step must be explicitly given
+  and the right-side of the range must be equal or greater than
+  the left-side:
 
       iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
-      iex> t[1..-2]
+      iex> t[1..-2//1]
       #Nx.Tensor<
         s64[2][2]
         [
@@ -198,7 +200,7 @@ defmodule Nx do
   axes with ranges, it is often desired to use a list:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
-      iex> t[[1..-2, 1..2]]
+      iex> t[[1..-2//1, 1..2]]
       #Nx.Tensor<
         s64[2][2]
         [
@@ -210,14 +212,14 @@ defmodule Nx do
   You can mix both ranges and integers in the list too:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
-      iex> t[[1..-2, 2]]
+      iex> t[[1..-2//1, 2]]
       #Nx.Tensor<
         s64[2]
         [6, 9]
       >
 
   If the list has less elements than axes, the remaining dimensions
-  are returned in full (equivalent to 0..-1):
+  are returned in full:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
       iex> t[[1..2]]
@@ -2319,7 +2321,7 @@ defmodule Nx do
 
   """
   @doc type: :shape
-  def size(shape) when is_tuple(shape), do: tuple_product(shape, tuple_size(shape))
+  def size(shape) when is_tuple(shape), do: Tuple.product(shape)
   def size(tensor), do: size(shape(tensor))
 
   @doc """
@@ -2362,10 +2364,6 @@ defmodule Nx do
 
   defp count_up(0, _n), do: []
   defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
-
-  # TODO: Use Tuple.product on Elixir v1.12
-  defp tuple_product(_tuple, 0), do: 1
-  defp tuple_product(tuple, i), do: :erlang.element(i, tuple) * tuple_product(tuple, i - 1)
 
   ## Backend API
 
@@ -7992,13 +7990,10 @@ defmodule Nx do
   defp to_indices(start_indices) do
     all_static? = Enum.all?(start_indices, &is_integer/1)
 
-    # TODO: Use Enum.with_index/3 in Elixir v1.12
     if all_static? do
       start_indices
     else
-      start_indices
-      |> Enum.with_index()
-      |> Enum.map(fn {index, i} ->
+      Enum.with_index(start_indices, fn index, i ->
         %T{shape: idx_shape, type: idx_type} = t = to_tensor(index)
 
         unless idx_shape == {} do

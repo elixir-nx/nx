@@ -403,15 +403,12 @@ defmodule Nx.BinaryBackend.Matrix do
 
     # This function also sorts singular values from highest to lowest,
     # as this can be convenient.
-
-    # TODO: Use Enum.zip_with on Elixir v1.12
     s
-    |> Enum.zip(transpose_matrix(v))
-    |> Enum.map(fn
-      {singular_value, row} when singular_value < 0 ->
+    |> Enum.zip_with(transpose_matrix(v), fn
+      singular_value, row when singular_value < 0 ->
         {-singular_value, Enum.map(row, &(&1 * -1))}
 
-      {singular_value, row} ->
+      singular_value, row ->
         {singular_value, row}
     end)
     |> Enum.sort_by(fn {s, _} -> s end, &>=/2)
@@ -645,9 +642,7 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp transpose_matrix(m) do
-    m
-    |> Enum.zip()
-    |> Enum.map(&Tuple.to_list/1)
+    Enum.zip_with(m, & &1)
   end
 
   defp matrix_to_binary([r | _] = m, type) when is_list(r) do

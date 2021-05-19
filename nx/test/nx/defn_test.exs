@@ -678,7 +678,7 @@ defmodule Nx.DefnTest do
              } = slice
     end
 
-    defn keyword_access(t), do: t[[z: 1..-2]][[y: 1..2]]
+    defn keyword_access(t), do: t[[z: 1..-2//1]][[y: 1..2]]
 
     test "multi dimensional multi-access with keywords is collapsed" do
       assert %T{

@@ -349,6 +349,9 @@ defmodule Nx.Defn.Kernel do
 
   Ranges are inclusive and both sides must be integers.
 
+  The step of the range is computed based on the first
+  and last values of the range.
+
   ## Examples
 
       iex> t = Nx.tensor([1, 2, 3])
@@ -360,6 +363,23 @@ defmodule Nx.Defn.Kernel do
 
   """
   def first..last, do: Range.new(first, last)
+
+  @doc """
+  Builds a range with step.
+
+  Ranges are inclusive and both sides must be integers.
+
+  ## Examples
+
+      iex> t = Nx.tensor([1, 2, 3])
+      iex> t[1..2//1]
+      #Nx.Tensor<
+        s64[2]
+        [2, 3]
+      >
+
+  """
+  def first..last//step, do: Range.new(first, last, step)
 
   @doc """
   Element-wise addition operator.
