@@ -268,9 +268,9 @@ defmodule Nx.Defn.ExprTest do
                f32[2][2]
              \s\s
                Nx.Defn.Expr
-               parameter a                   s64[2][2]
-               b = qr [ a, mode: :reduced, eps: 1.0e-10 ]  tuple2
-               c = elem [ b, 0, 2 ]          f32[2][2]
+               parameter a                                 s64[2][2]
+               b = qr [ a, eps: 1.0e-10, mode: :reduced ]  tuple2
+               c = elem [ b, 0, 2 ]                        f32[2][2]
              >\
              """
 
@@ -279,9 +279,9 @@ defmodule Nx.Defn.ExprTest do
                f32[2][2]
              \s\s
                Nx.Defn.Expr
-               parameter a                   s64[2][2]
-               b = qr [ a, mode: :reduced ]  tuple2
-               c = elem [ b, 1, 2 ]          f32[2][2]
+               parameter a                                 s64[2][2]
+               b = qr [ a, eps: 1.0e-10, mode: :reduced ]  tuple2
+               c = elem [ b, 1, 2 ]                        f32[2][2]
              >\
              """
     end
