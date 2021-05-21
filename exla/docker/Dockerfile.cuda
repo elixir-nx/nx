@@ -10,11 +10,10 @@ RUN curl -L ${bazel_bin_url} -o /usr/local/bin/bazel \
     && chmod +x /usr/local/bin/bazel \
     && bazel
 
-RUN wget https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && dpkg -i erlang-solutions_2.0_all.deb && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends esl-erlang && \
-    apt-get install -y --no-install-recommends elixir && \
-    rm erlang-solutions_2.0_all.deb
+ENV OTP_VERSION=24.0.1
+ENV ELIXIR_VERSION=1.12.0
+
+RUN curl https://raw.githubusercontent.com/wojtekmach/beamup/master/install.sh | bash
 
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
@@ -25,6 +24,7 @@ RUN echo $LANG UTF-8 > /etc/locale.gen \
     && update-locale LANG=$LANG
 
 RUN mix local.hex --force
+RUN mix escript.install hex livebook
 
 RUN ln -s /usr/bin/python3 /usr/bin/python
 ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
