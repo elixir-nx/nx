@@ -12,6 +12,8 @@ RUN curl -L ${bazel_bin_url} -o /usr/local/bin/bazel \
 # it seems that we need to up the threshold slightly to 320MB
 ENV HIP_HIDDEN_FREE_MEM=320
 
+RUN apt-get install -y --no-install-recommends locales ca-certificates gdb
+
 ENV OTP_VERSION=24.0.1
 ENV ELIXIR_VERSION=1.12.0
 
