@@ -204,7 +204,7 @@ defmodule Nx.Defn.Grad do
   ## Syntax / linear grad
 
   defp grad(:metadata, [_, %{stop_grad: true}], _ans, _g, cache) do
-    {Expr.tensor(1.0), cache}
+    {Expr.tensor(0.0), cache}
   end
 
   defp grad(:metadata, [expr, %{custom_grad: fun}], _ans, g, cache) do
