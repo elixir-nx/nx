@@ -57,8 +57,8 @@ defmodule Nx.Defn.GradTest do
       do: grad({a, b}, fn {a, b} -> stop_grad(Nx.exp(a) + Nx.exp(b)) end)
 
     test "stops computing gradient" do
-      assert stop_grad_meta(Nx.tensor(1)) == Nx.tensor(1.0)
-      assert stop_grad_tuple_meta(Nx.tensor(1), Nx.tensor(1)) == {Nx.tensor(1.0), Nx.tensor(1.0)}
+      assert stop_grad_meta(Nx.tensor(1)) == Nx.tensor(0.0)
+      assert stop_grad_tuple_meta(Nx.tensor(1), Nx.tensor(1)) == {Nx.tensor(0.0), Nx.tensor(0.0)}
     end
 
     defn custom_grad_meta(t) do
