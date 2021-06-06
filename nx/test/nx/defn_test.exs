@@ -535,6 +535,7 @@ defmodule Nx.DefnTest do
     end
 
     defn land_two(a, b), do: a and b
+
     defn land_true(a) do
       val = transform({}, fn _ -> true end)
       val and a
@@ -549,6 +550,7 @@ defmodule Nx.DefnTest do
     end
 
     defn lor_two(a, b), do: a or b
+
     defn lor_true(a) do
       val = transform({}, fn _ -> true end)
       val or a
