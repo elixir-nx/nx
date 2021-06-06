@@ -1397,8 +1397,10 @@ defmodule Nx do
   @doc """
   Changes the type of a tensor.
 
-  Note it is not possible to cast from floats to integers.
-  Use `round/1`, `floor/1`, and `ceil/1` instead.
+  Note conversion between float and integers truncates the
+  result. Consider using `round/1`, `floor/1`, or `ceil/1`
+  before casting from float to integer to guarantee consistent
+  behavior.
 
   Casting from a higher precision may lead to an overflow
   or underflow, which is platform and compiler dependent
@@ -1418,10 +1420,11 @@ defmodule Nx do
         [0.0, 1.0, 2.0]
       >
 
-  ## Errors
-
       iex> Nx.as_type(Nx.tensor([0.0, 1.0, 2.0], names: [:data]), {:s, 64})
-      ** (ArgumentError) cannot convert tensor from type {:f, 32} to {:s, 64}
+      #Nx.Tensor<
+        s64[data: 3]
+        [0, 1, 2]
+      >
 
   """
   @doc type: :type
@@ -1430,10 +1433,6 @@ defmodule Nx do
     new_type = Nx.Type.normalize!(type)
 
     cond do
-      Nx.Type.float?(tensor.type) and Nx.Type.integer?(new_type) ->
-        raise ArgumentError,
-              "cannot convert tensor from type #{inspect(tensor.type)} to #{inspect(new_type)}"
-
       tensor.type == new_type ->
         tensor
 

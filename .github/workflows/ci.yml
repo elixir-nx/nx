@@ -33,9 +33,9 @@ jobs:
           mix local.rebar --force
           mix local.hex --force
           mix deps.get
-      - name: Ensure Code is Formatted
-        run: mix format --check-formatted
       - name: Compile for Tests
         run: MIX_ENV=test mix compile --warnings-as-errors
       - name: Run Tests
         run: mix test
+      - name: Ensure code is Formatted
+        run: mix format --check-formatted
