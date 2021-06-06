@@ -136,7 +136,7 @@ defmodule Nx.Shape do
       ** (ArgumentError) cannot reshape, current shape {1, 3} is not compatible with new shape {4}
   """
   def reshape(old_shape, new_shape) do
-    old_size = Nx.size(old_shape)
+    old_size = tuple_size(old_shape)
     new_shape =
       case Enum.find_index(Tuple.to_list(new_shape), & &1 == :auto) do
         nil ->
@@ -144,7 +144,7 @@ defmodule Nx.Shape do
 
         idx ->
           shape_without_auto = Tuple.delete_at(new_shape, idx)
-          inferred_dim = div(old_size, Nx.size(shape_without_auto))
+          inferred_dim = div(old_size, tuple_size(shape_without_auto))
           if inferred_dim == 0 do
             raise ArgumentError,
                   "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
@@ -153,7 +153,7 @@ defmodule Nx.Shape do
           put_elem(new_shape, idx, inferred_dim)
       end
 
-    if Nx.size(old_shape) != Nx.size(new_shape) do
+    if tuple_size(old_shape) != tuple_size(new_shape) do
       raise ArgumentError,
             "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
               "new shape #{inspect(new_shape)}"
