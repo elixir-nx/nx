@@ -109,6 +109,59 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Reshapes `old_shape` to `new_shape`.
+
+  The product of all dimensions in `old_shape` must match the
+  product of all dimensions in `new_shape`. You may optionally
+  specify an `:auto` dimension to infer the shape of that dimension.
+
+  ## Examples
+      
+      iex> Nx.Shape.reshape({}, {})
+      {}
+
+      iex> Nx.Shape.reshape({2, 3}, {1, 6})
+      {1, 6}
+
+      iex> Nx.Shape.reshape({2, 2, 2}, {:auto, 4})
+      {2, 4}
+
+  ### Error cases
+
+      iex> Nx.Shape.reshape({2, 2, 2}, {2, 3})
+          if size(old_shape) != size(new_shape) do
+      ** (ArgumentError) cannot reshape, current shape {2, 2, 2} is not compatible with new shape {2, 3}
+
+      iex> Nx.Shape.reshape({1, 3}, {:auto, 4})
+      ** (ArgumentError) cannot reshape, current shape {1, 3} is not compatible with new shape {4}
+  """
+  def reshape(old_shape, new_shape) do
+    old_size = Nx.size(old_shape)
+    new_shape =
+      case Enum.find_index(Tuple.to_list(new_shape), & &1 == :auto) do
+        nil ->
+          new_shape
+
+        idx ->
+          shape_without_auto = Tuple.delete_at(new_shape, idx)
+          inferred_dim = div(old_size, Nx.size(shape_without_auto))
+          if inferred_dim == 0 do
+            raise ArgumentError,
+                  "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
+                    "new shape #{inspect(shape_without_auto)}"
+          end
+          put_elem(new_shape, idx, inferred_dim)
+      end
+
+    if Nx.size(old_shape) != Nx.size(new_shape) do
+      raise ArgumentError,
+            "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
+              "new shape #{inspect(new_shape)}"
+    end
+
+    new_shape
+  end
+  @doc """
   Broadcasts a shape to a new shape.
 
   The dimensions of `shape` is expanded to match the

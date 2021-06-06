@@ -1493,6 +1493,9 @@ defmodule Nx do
   retrieve the current shape from. The shapes must be compatible:
   the product of each dimension in the shape must be equal.
 
+  You may specify one of the dimensions as `:auto`. Nx will compute
+  the size of the dimension based on the original shape and new shape.
+
   Reshaping only changes the tensor metadata, it doesn't copy
   the underlying structure.
 
@@ -1540,21 +1543,28 @@ defmodule Nx do
           ]
         ]
       >
+  
+  You can use `:auto` to infer dimension sizes. This is useful when you
+  don't know the size some dimension should be ahead of time:
 
+      iex> t= Nx.tensor([[[1, 2, 3]], [4, 5, 6]])
+      iex> Nx.reshape({:auto, 2}, names: [:x, :y])
+      #Nx.Tensor<
+        s64[x: 3][y: 2]
+        [
+          [1, 2],
+          [3, 4],
+          [5, 6]
+        ]
+      >
   """
   @doc type: :shape
   def reshape(tensor, new_shape, opts \\ []) do
     %T{shape: old_shape} = tensor = to_tensor(tensor)
     new_names = opts[:names] || names!(new_shape)
-    new_shape = shape(new_shape)
+    new_shape = Nx.Shape.reshape(old_shape, new_shape)
 
     names = Nx.Shape.named_axes!(new_names, new_shape)
-
-    if size(old_shape) != size(new_shape) do
-      raise ArgumentError,
-            "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
-              "new shape #{inspect(new_shape)}"
-    end
 
     if old_shape == new_shape do
       %{tensor | names: names}
