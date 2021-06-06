@@ -2,7 +2,7 @@ defmodule Nx.BinaryBackend do
   @moduledoc """
   An opaque backend written in pure Elixir that stores
   the data in Elixir's binaries.
-
+  
   This is the default backend used by the `Nx` module.
   The backend itself (and its data) is private and must
   not be accessed directly.
@@ -1722,7 +1722,8 @@ defmodule Nx.BinaryBackend do
               val =
                 if Nx.Type.integer?(output_type),
                   do: trunc(read!(x, 0)),
-                  else: read!(x, 0) 
+                  else: read!(x, 0)
+
               scalar_to_binary(val, output_type)
             end
           end
