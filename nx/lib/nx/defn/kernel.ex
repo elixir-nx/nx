@@ -491,10 +491,11 @@ defmodule Nx.Defn.Kernel do
 
   """
   def left and right when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError, "boolean value passed to Nx.Defn.Kernel.and/2, " <>
-                         "values passed to Nx.Defn.Kernel.and/2 must be " <>
-                         "tensors or numbers, consider using 1 for true " <>
-                         "and 0 for false as an alternative"
+    raise ArgumentError,
+          "boolean value passed to Nx.Defn.Kernel.and/2, " <>
+            "values passed to Nx.Defn.Kernel.and/2 must be " <>
+            "tensors or numbers, consider using 1 for true " <>
+            "and 0 for false as an alternative"
   end
 
   def left and right when Kernel.and(is_number(left), is_number(right)),
@@ -518,10 +519,11 @@ defmodule Nx.Defn.Kernel do
 
   """
   def left or right when Kernel.or(is_boolean(left), is_boolean(right)) do
-    raise ArgumentError, "boolean value passed to Nx.Defn.Kernel.or/2, " <>
-                         "values passed to Nx.Defn.Kernel.or/2 must be " <>
-                         "tensors or numbers, consider using 1 for true " <>
-                         "and 0 for false as an alternative"
+    raise ArgumentError,
+          "boolean value passed to Nx.Defn.Kernel.or/2, " <>
+            "values passed to Nx.Defn.Kernel.or/2 must be " <>
+            "tensors or numbers, consider using 1 for true " <>
+            "and 0 for false as an alternative"
   end
 
   def left or right when Kernel.and(is_number(left), is_number(right)),
@@ -543,10 +545,11 @@ defmodule Nx.Defn.Kernel do
 
   """
   def not tensor when is_boolean(tensor) do
-    raise ArgumentError, "boolean value passed to Nx.Defn.Kernel.not/1, " <>
-                         "values passed to Nx.Defn.Kernel.not/1 must be " <>
-                         "tensors or numbers, consider using 1 for true " <>
-                         "and 0 for false as an alternative"
+    raise ArgumentError,
+          "boolean value passed to Nx.Defn.Kernel.not/1, " <>
+            "values passed to Nx.Defn.Kernel.not/1 must be " <>
+            "tensors or numbers, consider using 1 for true " <>
+            "and 0 for false as an alternative"
   end
 
   def not tensor when is_number(tensor), do: logical_not(tensor)
