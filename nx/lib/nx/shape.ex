@@ -464,8 +464,8 @@ defmodule Nx.Shape do
 
   defp pad_valid(shape, _, _, interior) do
     if interior,
-      do: List.duplicate({0, 0, 0}, Nx.rank(shape)),
-      else: List.duplicate({0, 0}, Nx.rank(shape))
+      do: List.duplicate({0, 0, 0}, tuple_size(shape)),
+      else: List.duplicate({0, 0}, tuple_size(shape))
   end
 
   defp pad_same(shape, kernel_size, strides, interior) do
@@ -546,7 +546,7 @@ defmodule Nx.Shape do
       to_padding_config(
         spatial_dims,
         filter_shape,
-        List.duplicate(1, Nx.rank(spatial_dims)),
+        List.duplicate(1, tuple_size(spatial_dims)),
         padding
       )
 
@@ -571,15 +571,15 @@ defmodule Nx.Shape do
 
   defp validate_conv_ranks!(input_shape, kernel_shape) do
     cond do
-      Nx.rank(input_shape) < 3 ->
+      tuple_size(input_shape) < 3 ->
         raise ArgumentError,
               "input shape in conv requires at least rank 3," <>
-                " shape #{inspect(input_shape)} has rank #{Nx.rank(input_shape)}"
+                " shape #{inspect(input_shape)} has rank #{tuple_size(input_shape)}"
 
-      Nx.rank(kernel_shape) < 3 ->
+      tuple_size(kernel_shape) < 3 ->
         raise ArgumentError,
               "kernel shape in conv requires at least rank 3," <>
-                " shape #{inspect(kernel_shape)} has rank #{Nx.rank(kernel_shape)}"
+                " shape #{inspect(kernel_shape)} has rank #{tuple_size(kernel_shape)}"
 
       true ->
         :ok
@@ -587,19 +587,19 @@ defmodule Nx.Shape do
   end
 
   defp validate_conv_strides!(input_shape, strides) do
-    if length(strides) != Nx.rank(input_shape) - 2 do
+    if length(strides) != tuple_size(input_shape) - 2 do
       raise ArgumentError,
             "rank of strides much match rank of spatial dimensions" <>
               " got strides #{inspect(strides)} with rank #{length(strides)}" <>
               " and got input shape #{inspect(input_shape)} of rank" <>
-              " #{Nx.rank(input_shape) - 2}"
+              " #{tuple_size(input_shape) - 2}"
     end
   end
 
   # Validates the input and kernel dilations given to Nx.conv
   defp validate_conv_dilations!(input_shape, kernel_shape, input_dilation, kernel_dilation) do
     cond do
-      is_list(input_dilation) and length(input_dilation) != Nx.rank(input_shape) - 2 ->
+      is_list(input_dilation) and length(input_dilation) != tuple_size(input_shape) - 2 ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the input" <>
                 " or specify an integer dilation factor"
@@ -609,7 +609,7 @@ defmodule Nx.Shape do
               "input dilation of each dimension must be a positive integer, got " <>
                 inspect(input_dilation)
 
-      is_list(kernel_dilation) and length(kernel_dilation) != Nx.rank(kernel_shape) - 2 ->
+      is_list(kernel_dilation) and length(kernel_dilation) != tuple_size(kernel_shape) - 2 ->
         raise ArgumentError,
               "must specify dilation for each spatial dimension of the kernel" <>
                 " or specify an integer dilation factor"
@@ -698,7 +698,7 @@ defmodule Nx.Shape do
     kernel_size = dilate(kernel_size, kernel_dilation)
 
     padding_config =
-      to_padding_config(shape, kernel_size, List.duplicate(1, Nx.rank(shape)), padding)
+      to_padding_config(shape, kernel_size, List.duplicate(1, tuple_size(shape)), padding)
 
     shape = pad(shape, Enum.map(padding_config, fn {x, y} -> {x, y, 0} end))
 
@@ -1003,7 +1003,7 @@ defmodule Nx.Shape do
 
   """
   def slice(shape, start_indices, lengths, strides) do
-    rank = Nx.rank(shape)
+    rank = tuple_size(shape)
 
     if length(strides) != rank do
       raise ArgumentError, "invalid strides rank for shape of rank #{rank}"
@@ -1058,16 +1058,16 @@ defmodule Nx.Shape do
 
   """
   def put_slice(shape, names, slice_shape, slice_names, start_indices) do
-    rank = Nx.rank(shape)
+    rank = tuple_size(shape)
 
     if length(start_indices) != rank do
       raise ArgumentError, "invalid start indices rank for shape of rank #{rank}"
     end
 
-    if Nx.rank(slice_shape) != rank do
+    if tuple_size(slice_shape) != rank do
       raise ArgumentError,
             "invalid slice for put_slice, rank of slice must match #{rank}, " <>
-              "got: #{Nx.rank(slice_shape)}"
+              "got: #{tuple_size(slice_shape)}"
     end
 
     shape
