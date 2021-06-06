@@ -1719,7 +1719,11 @@ defmodule Nx.BinaryBackend do
         output_data =
           match_types [input_type] do
             for <<match!(x, 0) <- data>>, into: <<>> do
-              scalar_to_binary(read!(x, 0), output_type)
+              val =
+                if Nx.Type.integer?(output_type),
+                  do: trunc(read!(x, 0)),
+                  else: read!(x, 0) 
+              scalar_to_binary(val, output_type)
             end
           end
 
