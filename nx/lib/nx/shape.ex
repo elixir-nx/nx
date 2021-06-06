@@ -116,7 +116,7 @@ defmodule Nx.Shape do
   specify an `:auto` dimension to infer the shape of that dimension.
 
   ## Examples
-      
+
       iex> Nx.Shape.reshape({}, {})
       {}
 
@@ -129,7 +129,6 @@ defmodule Nx.Shape do
   ### Error cases
 
       iex> Nx.Shape.reshape({2, 2, 2}, {2, 3})
-          if size(old_shape) != size(new_shape) do
       ** (ArgumentError) cannot reshape, current shape {2, 2, 2} is not compatible with new shape {2, 3}
 
       iex> Nx.Shape.reshape({1, 3}, {:auto, 4})
@@ -163,6 +162,7 @@ defmodule Nx.Shape do
 
     new_shape
   end
+
   @doc """
   Broadcasts a shape to a new shape.
 
