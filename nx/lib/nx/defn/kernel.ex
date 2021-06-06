@@ -711,6 +711,8 @@ defmodule Nx.Defn.Kernel do
   def left > right when Kernel.and(is_number(left), is_number(right)),
     do: Kernel.>(left, right)
 
+  def left > right, do: Nx.greater(left, right)
+
   @doc """
   Element-wise less-equal operation.
 
@@ -723,6 +725,8 @@ defmodule Nx.Defn.Kernel do
   def left <= right when Kernel.and(is_number(left), is_number(right)),
     do: Kernel.<=(left, right)
 
+  def left <= right, do: Nx.less_equal(left, right)
+
   @doc """
   Element-wise greater-equal operation.
 
@@ -734,6 +738,8 @@ defmodule Nx.Defn.Kernel do
   """
   def left >= right when Kernel.and(is_number(left), is_number(right)),
     do: Kernel.>=(left, right)
+
+  def left >= right, do: Nx.greater_equal(left, right)
 
   @doc """
   Ensures the first argument is a `keyword` with the given

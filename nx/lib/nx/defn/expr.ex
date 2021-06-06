@@ -173,18 +173,7 @@ defmodule Nx.Defn.Expr do
   def cond(file, clauses, last) do
     clauses =
       for {meta, {pred, expr}} <- clauses do
-        pred =
-          case pred do
-            pred when is_boolean(pred) ->
-              raise CompileError,
-                line: meta[:line],
-                file: file,
-                description: "boolean predicate passed to cond/if, cond/if expects" <>
-                             " scalar tensor predicate, consider using 1 for true" <>
-                             " or 0 for false as an alternative"
-            pred ->
-              to_expr(pred)
-            end
+        pred = to_pred(pred, :cond)
 
         if not match?(%T{shape: {}}, pred) do
           raise CompileError,
@@ -219,13 +208,15 @@ defmodule Nx.Defn.Expr do
         {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 
-    condition = condition.(arg)
+    condition = to_pred(condition.(arg), :while)
 
     if not match?(%T{shape: {}}, condition) do
       raise CompileError,
         line: line,
         file: file,
-        description: "condition must be a scalar tensor, got: #{inspect(condition)}"
+        description: "condition must be a scalar tensor, got: #{inspect(condition)}," <>
+                     " consider using Nx.all?/1 or Nx.any?/1 to obtain a scalar" <>
+                     " predicate tensor"
     end
 
     body = arg |> body.() |> Tree.composite(&to_expr/1)
@@ -791,6 +782,20 @@ defmodule Nx.Defn.Expr do
       expr = to_expr(tensor)
       {expr, merge_context!(expr, acc)}
     end)
+  end
+
+  defp to_pred(pred, op) do
+    case pred do
+      pred when is_boolean(pred) ->
+        raise CompileError,
+          line: meta[:line],
+          file: file,
+          description: "boolean predicate passed to #{Atom.to_string(op)}, expects" <>
+                       " scalar tensor predicate, consider using 1 for true" <>
+                       " or 0 for false as an alternative"
+      pred ->
+        to_expr(pred)
+      end
   end
 
   defp merge_context!(%{data: %{context: context}}, acc) do
