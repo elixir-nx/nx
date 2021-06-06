@@ -1547,7 +1547,7 @@ defmodule Nx do
   You can use `:auto` to infer dimension sizes. This is useful when you
   don't know the size some dimension should be ahead of time:
 
-      iex> t= Nx.tensor([[[1, 2, 3]], [4, 5, 6]])
+      iex> t = Nx.tensor([[[1, 2, 3]], [4, 5, 6]])
       iex> Nx.reshape({:auto, 2}, names: [:x, :y])
       #Nx.Tensor<
         s64[x: 3][y: 2]
