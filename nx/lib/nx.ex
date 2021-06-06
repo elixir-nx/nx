@@ -1562,6 +1562,7 @@ defmodule Nx do
   def reshape(tensor, new_shape, opts \\ []) do
     %T{shape: old_shape} = tensor = to_tensor(tensor)
     new_names = opts[:names] || names!(new_shape)
+    new_shape = if is_tuple(new_shape), do: new_shape, else: shape(new_shape)
     new_shape = Nx.Shape.reshape(old_shape, new_shape)
 
     names = Nx.Shape.named_axes!(new_names, new_shape)
