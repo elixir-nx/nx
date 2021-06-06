@@ -1543,6 +1543,7 @@ defmodule Nx do
           ]
         ]
       >
+
   You can use `:auto` to infer dimension sizes. This is useful when you
   don't know the size some dimension should be ahead of time:
 
