@@ -138,7 +138,7 @@ defmodule Nx.Shape do
     old_size = Tuple.product(old_shape)
 
     new_shape =
-      case Enum.find_index(Tuple.to_list(new_shape), & &1 == :auto) do
+      case Enum.find_index(Tuple.to_list(new_shape), &(&1 == :auto)) do
         nil ->
           new_shape
 
