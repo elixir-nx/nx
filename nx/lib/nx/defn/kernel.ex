@@ -490,6 +490,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
+  def left and right when Kernel.or(is_boolean(left), is_boolean(right)) do
+    raise ArgumentError, "boolean value passed to Nx.Defn.Kernel.and/2, " <>
+                         "values passed to Nx.Defn.Kernel.and/2 must be " <>
+                         "tensors or numbers, consider using 1 for true " <>
+                         "and 0 for false as an alternative"
+  end
+
   def left and right when Kernel.and(is_number(left), is_number(right)),
     do: logical_and(left, right)
 
@@ -510,6 +517,13 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
+  def left or right when Kernel.or(is_boolean(left), is_boolean(right)) do
+    raise ArgumentError, "boolean value passed to Nx.Defn.Kernel.or/2, " <>
+                         "values passed to Nx.Defn.Kernel.or/2 must be " <>
+                         "tensors or numbers, consider using 1 for true " <>
+                         "and 0 for false as an alternative"
+  end
+
   def left or right when Kernel.and(is_number(left), is_number(right)),
     do: logical_or(left, right)
 
@@ -528,14 +542,21 @@ defmodule Nx.Defn.Kernel do
       defn logical_not(a), do: not a
 
   """
+  def not tensor when is_boolean(tensor) do
+    raise ArgumentError, "boolean value passed to Nx.Defn.Kernel.not/1, " <>
+                         "values passed to Nx.Defn.Kernel.not/1 must be " <>
+                         "tensors or numbers, consider using 1 for true " <>
+                         "and 0 for false as an alternative"
+  end
+
   def not tensor when is_number(tensor), do: logical_not(tensor)
   def not tensor, do: Nx.logical_not(tensor)
 
-  defp logical_and(l, r) when l == 0, do: zero(l, r)
-  defp logical_and(l, r) when r == 0, do: zero(l, r)
+  defp logical_and(l, r) when Kernel.==(l, 0), do: zero(l, r)
+  defp logical_and(l, r) when Kernel.==(r, 0), do: zero(l, r)
   defp logical_and(l, r), do: one(l, r)
 
-  defp logical_or(l, r) when Kernel.and(l == 0, r == 0), do: zero(l, r)
+  defp logical_or(l, r) when Kernel.and(Kernel.==(l, 0), Kernel.==(r, 0)), do: zero(l, r)
   defp logical_or(l, r), do: one(l, r)
 
   defp logical_not(0), do: 1
@@ -634,6 +655,85 @@ defmodule Nx.Defn.Kernel do
     do: Bitwise.>>>(left, right)
 
   def left >>> right, do: Nx.right_shift(left, right)
+
+  @doc """
+  Element-wise equality operation.
+
+  ## Examples
+
+      defn check_equality(a, b) do
+        a == b
+      end
+
+  """
+  def left == right when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.==(left, right)
+
+  def left == right, do: Nx.equal(left, right)
+
+  @doc """
+  Element-wise inequality operation.
+
+  ## Examples
+
+      defn check_inequality(a, b) do
+        a != b
+      end
+  """
+  def left != right when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.!=(left, right)
+
+  def left != right, do: Nx.not_equal(left, right)
+
+  @doc """
+  Element-wise less than operation.
+
+  ## Examples
+
+      defn check_less_than(a, b) do
+        a < b
+      end
+  """
+  def left < right when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.<(left, right)
+
+  def left < right, do: Nx.less(left, right)
+
+  @doc """
+  Element-wise greater than operation.
+
+  ## Examples
+
+      defn check_greater_than(a, b) do
+        a > b
+      end
+  """
+  def left > right when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.>(left, right)
+
+  @doc """
+  Element-wise less-equal operation.
+
+  ## Examples
+
+      defn check_less_equal(a, b) do
+        a <= b
+      end
+  """
+  def left <= right when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.<=(left, right)
+
+  @doc """
+  Element-wise greater-equal operation.
+
+  ## Examples
+
+      defn check_greater_equal(a, b) do
+        a >= b
+      end
+  """
+  def left >= right when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.>=(left, right)
 
   @doc """
   Ensures the first argument is a `keyword` with the given

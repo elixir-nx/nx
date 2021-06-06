@@ -173,13 +173,26 @@ defmodule Nx.Defn.Expr do
   def cond(file, clauses, last) do
     clauses =
       for {meta, {pred, expr}} <- clauses do
-        pred = to_expr(pred)
+        pred =
+          case pred do
+            pred when is_boolean(pred) ->
+              raise CompileError,
+                line: meta[:line],
+                file: file,
+                description: "boolean predicate passed to cond/if, cond/if expects" <>
+                             " scalar tensor predicate, consider using 1 for true" <>
+                             " or 0 for false as an alternative"
+            pred ->
+              to_expr(pred)
+            end
 
         if not match?(%T{shape: {}}, pred) do
           raise CompileError,
             line: meta[:line],
             file: file,
-            description: "condition must be a scalar tensor, got: #{inspect(pred)}"
+            description: "condition must be a scalar tensor, got: #{inspect(pred)}," <>
+                            " consider using Nx.all?/1 or Nx.any?/1 to obtain a scalar" <>
+                            " predicate from tensor"
         end
 
         if not compatible?(last, expr, fn _, _ -> true end) do

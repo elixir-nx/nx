@@ -535,21 +535,42 @@ defmodule Nx.DefnTest do
     end
 
     defn land_two(a, b), do: a and b
+    defn land_true(a) do
+      val = transform({}, fn _ -> true end)
+      val and a
+    end
 
     test "and" do
       assert %T{data: %Expr{op: :logical_and, args: [_, _]}} = land_two(1, 2)
+
+      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.and\/2/, fn ->
+        land_true(2)
+      end
     end
 
     defn lor_two(a, b), do: a or b
+    defn lor_true(a) do
+      val = transform({}, fn _ -> true end)
+      val or a
+    end
 
     test "or" do
       assert %T{data: %Expr{op: :logical_or, args: [_, _]}} = lor_two(1, 2)
+
+      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.or\/2/, fn ->
+        lor_true(2)
+      end
     end
 
     defn lnot(a), do: not a
+    defn lnot_true(), do: not transform({}, fn _ -> true end)
 
     test "not" do
       assert %T{data: %Expr{op: :equal, args: [_, _]}} = lnot(1)
+
+      assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.not\/1/, fn ->
+        lnot_true()
+      end
     end
 
     defn band_two(a, b), do: a &&& b
@@ -594,6 +615,42 @@ defmodule Nx.DefnTest do
 
     test "~~~" do
       assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
+    end
+
+    defn equality(a, b), do: a == b
+
+    test "==" do
+      assert %T{data: %Expr{op: :equal, args: [_, _]}} = equality(1, 2)
+    end
+
+    defn inequality(a, b), do: a != b
+
+    test "!=" do
+      assert %T{data: %Expr{op: :not_equal, args: [_, _]}} = inequality(1, 2)
+    end
+
+    defn less_than(a, b), do: a < b
+
+    test "<" do
+      assert %T{data: %Expr{op: :less, args: [_, _]}} = less_than(1, 2)
+    end
+
+    defn greater_than(a, b), do: a > b
+
+    test ">" do
+      assert %T{data: %Expr{op: :greater, args: [_, _]}} = greater_than(1, 2)
+    end
+
+    defn less_than_or_equal(a, b), do: a <= b
+
+    test "<=" do
+      assert %T{data: %Expr{op: :less_equal, args: [_, _]}} = less_than_or_equal(1, 2)
+    end
+
+    defn greater_than_or_equal(a, b), do: a >= b
+
+    test ">=" do
+      assert %T{data: %Expr{op: :greater_equal, args: [_, _]}} = greater_than_or_equal(1, 2)
     end
   end
 
