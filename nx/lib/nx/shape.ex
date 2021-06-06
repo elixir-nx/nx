@@ -145,11 +145,13 @@ defmodule Nx.Shape do
         idx ->
           shape_without_auto = Tuple.delete_at(new_shape, idx)
           inferred_dim = div(old_size, tuple_size(shape_without_auto))
+
           if inferred_dim == 0 do
             raise ArgumentError,
                   "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
                     "new shape #{inspect(shape_without_auto)}"
           end
+
           put_elem(new_shape, idx, inferred_dim)
       end
 
