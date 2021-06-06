@@ -155,7 +155,7 @@ defmodule Nx.Shape do
           put_elem(new_shape, idx, inferred_dim)
       end
 
-    if Tuple.product(old_shape) != Tuple.product(new_shape) do
+    if old_size != Tuple.product(new_shape) do
       raise ArgumentError,
             "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
               "new shape #{inspect(new_shape)}"
