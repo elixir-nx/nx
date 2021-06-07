@@ -175,16 +175,6 @@ defmodule Nx.Defn.Expr do
       for {meta, {pred, expr}} <- clauses do
         pred = to_pred(pred, meta[:line], file, :cond)
 
-        if not match?(%T{shape: {}}, pred) do
-          raise CompileError,
-            line: meta[:line],
-            file: file,
-            description:
-              "condition must be a scalar tensor, got: #{inspect(pred)}," <>
-                " consider using Nx.all?/1 or Nx.any?/1 to obtain a scalar" <>
-                " predicate from tensor"
-        end
-
         if not compatible?(last, expr, fn _, _ -> true end) do
           raise CompileError,
             line: meta[:line],
@@ -210,16 +200,6 @@ defmodule Nx.Defn.Expr do
       end)
 
     condition = to_pred(condition.(arg), line, file, :while)
-
-    if not match?(%T{shape: {}}, condition) do
-      raise CompileError,
-        line: line,
-        file: file,
-        description:
-          "condition must be a scalar tensor, got: #{inspect(condition)}," <>
-            " consider using Nx.all?/1 or Nx.any?/1 to obtain a scalar" <>
-            " predicate tensor"
-    end
 
     body = arg |> body.() |> Tree.composite(&to_expr/1)
 
@@ -787,19 +767,32 @@ defmodule Nx.Defn.Expr do
   end
 
   defp to_pred(pred, line, file, op) do
-    case pred do
-      pred when is_boolean(pred) ->
-        raise CompileError,
-          line: line,
-          file: file,
-          description:
-            "boolean predicate passed to #{Atom.to_string(op)}, expects" <>
-              " scalar tensor predicate, consider using 1 for true" <>
-              " or 0 for false as an alternative"
+    pred =
+      case pred do
+        pred when is_boolean(pred) ->
+          raise CompileError,
+            line: line,
+            file: file,
+            description:
+              "boolean predicate passed to #{Atom.to_string(op)}, expects" <>
+                " scalar tensor predicate, consider using 1 for true" <>
+                " or 0 for false as an alternative"
 
-      pred ->
-        to_expr(pred)
+        pred ->
+          to_expr(pred)
+      end
+
+    if not match?(%T{shape: {}}, pred) do
+      raise CompileError,
+        line: line,
+        file: file,
+        description:
+          "condition must be a scalar tensor, got: #{inspect(pred)}," <>
+            " consider using Nx.all?/1 or Nx.any?/1 to obtain a scalar" <>
+            " predicate from tensor"
     end
+
+    pred
   end
 
   defp merge_context!(%{data: %{context: context}}, acc) do
