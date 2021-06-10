@@ -156,6 +156,33 @@ defmodule Nx.Defn.Kernel do
         e = add [ b, d ] ()
       >
 
+  ## Pitfalls
+  
+  Because `transform/2` is invoked inside `defn`, its scope is tied
+  to `defn`. For example, if you do this:
+  
+      transform(tensor, fn tensor ->
+        if Nx.shape(tensor) != {2, 2} do
+          raise "bad"
+        end
+      end)
+
+  it won't work because it will use the `!=` operator defined in
+  this module, which only works with tensors, instead of the operator
+  defined in Elixir's `Kernel`. Therefore, we recommend all `transform/2`
+  calls to simply dispatch to a separate function. The example above
+  could be rewritten as:
+  
+      transform(tensor, &assert_2x2_shape(&1))
+
+  where:
+
+      defp assert_2x2_shape(tensor) do
+        if Nx.shape(tensor) != {2, 2} do
+          raise "bad"
+        end
+      end
+
   """
   def transform(arg, fun) when is_function(fun, 1) do
     fun.(arg)
