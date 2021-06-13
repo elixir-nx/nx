@@ -57,6 +57,7 @@ using uint8 = tensorflow::uint8;
 using uint16 = tensorflow::uint16;
 using uint32 = tensorflow::uint32;
 using uint64 = tensorflow::uint64;
+using float16 = Eigen::half;
 using bfloat16 = tensorflow::bfloat16;
 using float32 = float;
 using float64 = double;

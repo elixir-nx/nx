@@ -919,7 +919,14 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       op = xla::ConstantR0(*builder, exla::nif::get_value<xla::PrimitiveType::S64>(env, term));
       break;
     case xla::PrimitiveType::F16:
-      return exla::nif::error(env, "Unsupported constant type.");
+    {
+      // Not sure why the pattern breaks here
+      double var;
+      if (!enif_get_double(env, term, &var)) return exla::nif::error(env, "Unable to get constant");
+      exla::float16 val = static_cast<exla::float16>(var);
+      op = xla::ConstantR0(*builder, val);
+      break;
+    }
     case xla::PrimitiveType::BF16:
       op = xla::ConstantR0(*builder, exla::nif::get_value<xla::PrimitiveType::BF16>(env, term));
       break;

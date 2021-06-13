@@ -51,6 +51,14 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "float16" do
+    defn return_float, do: Nx.tensor(1, type: {:f, 16})
+
+    test "supports float16 return types" do
+      assert return_float() == Nx.tensor(1, type: {:f, 16})
+    end
+  end
+
   describe "+/2" do
     defn add_two(a, b), do: a + b
     @defn_compiler Nx.Defn.Evaluator
