@@ -429,7 +429,7 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp householder_reflector([a_0 | tail] = a, target_k, eps) do
-    # This is a trick so we can both calculate the norm of a_reverse and extract the
+    # This is a trick so we can both calculate the norm of a and extract the
     # head a the same time we reverse the array
     # receives a_reverse as a list of numbers and returns the reflector as a
     # k x k matrix
@@ -610,6 +610,28 @@ defmodule Nx.BinaryBackend.Matrix do
 
       c = 1 / :math.sqrt(1 + t * t)
       {c, t * c}
+    end
+  end
+
+  defp hessenberg_decomposition(a, {n, n}, eps) do
+    # Calculates the Hessenberg decomposition of a square matrix `a`
+    # Returns the transformed hessenberg matrix `hess` and the invertible
+    # linear transformation `t` which defines is such that:
+    # Hess = T . A . T_transposed
+    identity =
+      for row <- 0..(n - 1) do
+        for col <- 0..(n - 1) do
+          if row == col, do: 1, else: 0
+        end
+      end
+
+    for col <- 0..(n - 2), reduce: {a, identity} do
+      {a, linear_transform} ->
+        reflector =
+          a |> slice_matrix([col + 1, col], [n - col, 1]) |> householder_reflector(n, eps)
+
+        {dot_matrix(reflector, a) |> dot_matrix(transpose_matrix(reflector)),
+         dot_matrix(reflector, linear_transform)}
     end
   end
 
