@@ -1670,7 +1670,7 @@ ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ERL_NIF_TERM q_term = exla::nif::make<xla::XlaOp>(env, q);
   ERL_NIF_TERM r_term = exla::nif::make<xla::XlaOp>(env, r);
 
-  return exla::nif::ok(env, enif_make_tuple2(env, q, r));
+  return exla::nif::ok(env, enif_make_tuple2(env, q_term, r_term));
 }
 
 ERL_NIF_TERM svd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
