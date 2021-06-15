@@ -1663,11 +1663,12 @@ ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       return exla::nif::error(env, "Invalid precision configuration");
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::QRDecompositionResult qr_result,
-    xla::QRDecomposition(*operand, full_matrices, 128, precision), env);
+  xla::XlaOp q, r;
 
-  ERL_NIF_TERM q = exla::nif::make<xla::XlaOp>(env, qr_result.q);
-  ERL_NIF_TERM r = exla::nif::make<xla::XlaOp>(env, qr_result.r);
+  QrExplicit(*operand, true, q, r);
+
+  ERL_NIF_TERM q_term = exla::nif::make<xla::XlaOp>(env, q);
+  ERL_NIF_TERM r_term = exla::nif::make<xla::XlaOp>(env, r);
 
   return exla::nif::ok(env, enif_make_tuple2(env, q, r));
 }

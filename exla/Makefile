@@ -15,7 +15,7 @@ EXLA_TENSORFLOW_GIT_REPO ?= https://github.com/tensorflow/tensorflow.git
 # * Makefile
 # * Makefile.win
 # * lib/exla/aot/compiler.ex
-EXLA_TENSORFLOW_GIT_REV ?= 6af836f407f546cf2f9ab3b5fcb7a8285bda5c96
+EXLA_TENSORFLOW_GIT_REV ?= a4dfb8d1a71385bd6d122e4f27f86dcebb96712d
 
 # Private configuration
 EXLA_SO = priv/libexla.so
@@ -53,12 +53,6 @@ $(TENSORFLOW_DIR):
 		git remote add origin $(EXLA_TENSORFLOW_GIT_REPO) && \
 		git fetch --depth 1 origin $(EXLA_TENSORFLOW_GIT_REV) && \
 		git checkout FETCH_HEAD
-
-	cd $(TENSORFLOW_DIR) && \
-		sed -e '/register_toolchains("@local_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup WORKSPACE && \
-		sed -e '/load("\/\/third_party\/py:python_configure.bzl", "python_configure")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
-		sed -e '/native.register_toolchains("@local_execution_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
-		sed -e '/python_configure(name = "local_config_python")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl
 
 clean:
 	cd $(TENSORFLOW_DIR) && bazel clean --expunge
