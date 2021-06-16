@@ -51,14 +51,13 @@ defmodule Nx.Defn.Grad do
             "got: #{inspect(other)}"
   end
 
-  defp validate_expr!(%T{data: %Expr{}, shape: {}} = expr) do
+  defp validate_expr!(%T{data: %Expr{}} = expr) do
     expr
   end
 
-  defp validate_expr!(%T{data: %Expr{}, shape: shape}) do
+  defp validate_expr!(%T{} = t) do
     raise ArgumentError,
-          "can only compute gradients of expressions that return scalars, " <>
-            "got shape: #{inspect(shape)}"
+          "can only compute gradients of tensor expressions, got: #{inspect(t)}"
   end
 
   defp validate_expr!(other) do

@@ -30,6 +30,14 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([0.0, 0.0, 0.0])
     end
 
+    test "computes gradient for multidimensional" do
+      assert grad_itself(Nx.tensor([1.0, 2.0])) == Nx.tensor([1.0, 1.0])
+      assert grad_tensor(Nx.tensor([1.0, 2.0])) == Nx.tensor([0.0, 0.0])
+      assert grad_constant(Nx.tensor([1.0, 2.0])) == Nx.tensor([0.0, 0.0])
+      assert grad_unrelated(Nx.tensor([1.0, 2.0]), Nx.tensor([2.0, 3.0])) == Nx.tensor([0.0, 0.0])
+      assert grad_old_node(Nx.tensor([1.0, 2.0])) == Nx.tensor([0.0, 0.0])
+    end
+
     test "raises on invalid" do
       assert_raise ArgumentError,
                    "the first argument of grad must be a tensor expression or a tuple of tensor expressions, got: :invalid",
@@ -1499,6 +1507,12 @@ defmodule Nx.Defn.GradTest do
         check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
         check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
       end
+    end
+
+    test "computes multidimensional gradient" do
+      t = Nx.random_uniform({Enum.count(@iters)}, -10, 10, type: {:f, 64})
+      check_grads!(&Nx.sinh/1, &grad_sinh/1, t)
+      check_grads!(&Nx.cosh/1, &grad_cosh/1, t)
     end
   end
 

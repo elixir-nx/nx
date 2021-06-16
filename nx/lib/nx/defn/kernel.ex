@@ -241,6 +241,10 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Computes the gradient of the given `var` on `fun`.
 
+  The result of the `grad` function must be a scalar tensor.
+  If a non-scalar tensor is given, it is assume the additional
+  dimensions are batch dimensions.
+
   ### Examples
 
       defn tanh_grad(t) do
