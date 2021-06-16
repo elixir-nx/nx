@@ -198,8 +198,14 @@ defmodule Nx.BinaryBackend.Matrix do
         binary_to_matrix(input_data, input_type, input_shape)
       end
 
+    {q_matrix, r_matrix} = qr_matrix(r_matrix, m, k, n, eps)
+
+    {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
+  end
+
+  defp qr_matrix(a_matrix, m, k, n, eps) do
     {q_matrix, r_matrix} =
-      for i <- 0..(n - 1), reduce: {nil, r_matrix} do
+      for i <- 0..(n - 1), reduce: {nil, a_matrix} do
         {q, r} ->
           a = slice_matrix(r, [i, i], [k - i, 1])
 
@@ -219,8 +225,7 @@ defmodule Nx.BinaryBackend.Matrix do
           {q, r}
       end
 
-    {q_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type),
-     r_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
+    {approximate_zeros(q_matrix, eps), approximate_zeros(r_matrix, eps)}
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
@@ -613,17 +618,50 @@ defmodule Nx.BinaryBackend.Matrix do
     end
   end
 
+  def eigen_decomposition(input_data, input_type, {n, n} = input_shape, output_type, opts) do
+    # This decomposition is only implemented for square matrices
+    # Implementation based on the algorithm described in:
+    # [1] - http://www.math.iit.edu/~fass/477577_Chapter_11.pdf
+    # [2] - http://article.sciencepublishinggroup.com/html/10.11648.j.pamj.20160504.15.html
+
+    eps = opts[:eps]
+    max_iter = opts[:max_iter]
+
+    {h, q} =
+      input_data
+      |> binary_to_matrix(input_type, input_shape)
+      |> hessenberg_decomposition(input_shape, eps)
+
+    identity = identity_matrix(n, n)
+
+    for _ <- 1..max_iter, reduce: {h, q} do
+      {a_prev, q_prev} ->
+        # Coefficient for eigenvalue shifting as described in [1]
+        [c_next] = get_matrix_elements(a_prev, [[n - 1, n - 1]])
+
+        # As described in [1] and [2], we want to calculate
+        # Q.R = A_prev - c_next.I
+        # A_next = R.Q + c_next.I
+
+        shifting_matrix = element_wise_bin_op(c_next, identity, &*/2)
+        shifted_matrix = element_wise_bin_op(a_prev, shifting_matrix, &-/2)
+
+        {q_current, r_current} = qr_matrix(shifted_matrix, n, n, n, eps)
+
+        a_next = r_current |> dot_matrix(q_current) |> element_wise_bin_op(shifting_matrix, &+/2)
+
+        q_next = dot_matrix(q_current, q_prev)
+
+        {a_next, q_next}
+    end
+  end
+
   defp hessenberg_decomposition(a, {n, n}, eps) do
     # Calculates the Hessenberg decomposition of a square matrix `a`
     # Returns the transformed hessenberg matrix `hess` and the invertible
     # linear transformation `t` which defines is such that:
     # Hess = T . A . T_transposed
-    identity =
-      for row <- 0..(n - 1) do
-        for col <- 0..(n - 1) do
-          if row == col, do: 1, else: 0
-        end
-      end
+    identity = identity_matrix(n, n)
 
     for col <- 0..(n - 2), reduce: {a, identity} do
       {a, linear_transform} ->
@@ -665,6 +703,23 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp transpose_matrix(m) do
     Enum.zip_with(m, & &1)
+  end
+
+  defp element_wise_bin_op(a, b, fun) when is_list(a) and is_list(b) do
+    # Applies a binary operation element-wise between two matrices with the same shape
+    Enum.zip_with([a, b], fn [a_row, b_row] ->
+      Enum.zip_with([a_row, b_row], fn [a_elem, b_elem] -> fun.(a_elem, b_elem) end)
+    end)
+  end
+
+  defp element_wise_bin_op(a, b, fun) when is_number(a) and is_list(b),
+    do: element_wise_bin_op(b, a, &fun.(&2, &1))
+
+  defp element_wise_bin_op(a, b, fun) when is_list(a) and is_number(b) do
+    # Applies a binary operation element-wise between a matrix and a scalar
+    Enum.map(a, fn a_row ->
+      Enum.map(a_row, fn a_elem -> fun.(a_elem, b) end)
+    end)
   end
 
   defp matrix_to_binary([r | _] = m, type) when is_list(r) do
@@ -752,5 +807,13 @@ defmodule Nx.BinaryBackend.Matrix do
       row when is_list(row) -> Enum.map(row, do_round)
       e -> do_round.(e)
     end)
+  end
+
+  defp identity_matrix(rows, cols) do
+    for row <- 0..(rows - 1) do
+      for col <- 0..(cols - 1) do
+        if row == col, do: 1, else: 0
+      end
+    end
   end
 end
