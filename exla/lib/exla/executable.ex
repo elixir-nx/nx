@@ -37,50 +37,42 @@ defmodule EXLA.Executable do
     decompose_output(data, output_shape, client)
   end
 
-  @doc """
-  Runs the given function async.
-  """
-  def async_run(%Executable{} = executable, arguments, options \\ []) do
-    {data, _} = run(executable.client, executable, arguments, options, 1)
-    keep_on_device = Keyword.get(options, :keep_on_device, false)
-    %{executable | async: {data, keep_on_device}}
-  end
+  # @doc """
+  # Runs the given function async.
+  # """
+  # def async_run(%Executable{} = executable, arguments, options \\ []) do
+  #   {data, _} = run(executable.client, executable, arguments, options, 1)
+  #   keep_on_device = Keyword.get(options, :keep_on_device, false)
+  #   %{executable | async: {data, keep_on_device}}
+  # end
 
-  @doc """
-  Awaits the given function run.
-  """
-  def await_run(%Executable{async: {data, keep_on_device}} = executable) do
-    %{client: client, output_shape: output_shape} = executable
+  # @doc """
+  # Awaits the given function run.
+  # """
+  # def await_run(%Executable{async: {data, keep_on_device}} = executable) do
+  #   %{client: client, output_shape: output_shape} = executable
 
-    client
-    |> await_streams(data, keep_on_device)
-    |> unwrap!()
-    |> decompose_output(output_shape, client)
-  end
+  #   client
+  #   |> await_streams(data, keep_on_device)
+  #   |> unwrap!()
+  #   |> decompose_output(output_shape, client)
+  # end
 
-  defp await_streams(%Client{ref: ref, platform: platform}, buffer, keep_on_device) do
-    keep_on_device_int = if keep_on_device, do: 1, else: 0
+  # defp await_streams(%Client{ref: ref, platform: platform}, buffer, keep_on_device) do
+  #   keep_on_device_int = if keep_on_device, do: 1, else: 0
 
-    # See https://github.com/elixir-nx/exla/pull/124 for discussion on this
-    case platform do
-      :host -> EXLA.NIF.await_streams_cpu(ref, buffer, keep_on_device_int)
-      _ -> EXLA.NIF.await_streams_io(ref, buffer, keep_on_device_int)
-    end
-  end
+  #   # See https://github.com/elixir-nx/exla/pull/124 for discussion on this
+  #   case platform do
+  #     :host -> EXLA.NIF.await_streams_cpu(ref, buffer, keep_on_device_int)
+  #     _ -> EXLA.NIF.await_streams_io(ref, buffer, keep_on_device_int)
+  #   end
+  # end
 
   defp run(client, executable, arguments, options, async_run_int) do
     %{ref: exec, output_shape: output_shape} = executable
 
-    run_id = Keyword.get(options, :run_id, System.unique_integer([:positive, :monotonic]))
-    replica = Keyword.get(options, :replica, 1)
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
-
-    # Launch ID used to coordinate multi-device launches.
-    # See: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/compiler/xla/pjrt/pjrt_client.h#L752-L755
-    launch_id = Keyword.get(options, :launch_id, 0)
-    rng_seed = Keyword.get(options, :rng_seed, 0)
-    partition = Keyword.get(options, :partition, 1)
 
     # TODO: Validate replicas against the client
     # TODO: Raise if buffers belong to different clients/ordinals
@@ -101,13 +93,6 @@ defmodule EXLA.Executable do
             client.ref,
             exec,
             inputs,
-            output_shape.ref,
-            run_id,
-            rng_seed,
-            launch_id,
-            replica,
-            partition,
-            async_run_int,
             keep_on_device_int
           )
 
@@ -116,13 +101,6 @@ defmodule EXLA.Executable do
             client.ref,
             exec,
             inputs,
-            output_shape.ref,
-            run_id,
-            rng_seed,
-            launch_id,
-            replica,
-            partition,
-            async_run_int,
             keep_on_device_int
           )
       end
