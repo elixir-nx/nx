@@ -40,7 +40,8 @@ class ExlaBuffer {
 
 class ExlaExecutable {
  public:
-  explicit ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable);
+  explicit ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
+                          ExlaClient* client);
 
   xla::PjRtExecutable* executable() { executable_.get(); }
 
@@ -50,6 +51,7 @@ class ExlaExecutable {
 
  private:
   std::unique_ptr<xla::PjRtExecutable> executable_;
+  ExlaClient* client_;
 };
 
 class ExlaClient {

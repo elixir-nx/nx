@@ -3,13 +3,13 @@
 
 namespace exla {
 
-ExlaBuffer::ExlaBuffer(xla::PjRtBuffer* buffer): buffer_(buffer) {}
+ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer): buffer_(std::move(buffer)) {}
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
 
   ErlNifBinary binary;
-  enif_alloc_binary(literal->size, &binary);
+  enif_alloc_binary(literal->size_bytes(), &binary);
   std::memcpy(binary.data, literal->untyped_data(), literal->size_bytes());
 
   return nif::make(env, binary);
@@ -37,7 +37,7 @@ xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(
   arg_buffers.reserve(length);
 
   ERL_NIF_TERM head, tail;
-  while (enif_get_list_cell(env, list, &head, &tail)) {
+  while (enif_get_list_cell(env, arguments, &head, &tail)) {
     const ERL_NIF_TERM* tuple;
     int arity;
     ExlaBuffer** buffer;
@@ -73,7 +73,7 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique
     if (keep_on_device) {
       return nif::ok(env, nif::make<ExlaBuffer*>(env, buf));
     } else {
-      EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term, buf->ToBinary(), env);
+      EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term, buf->ToBinary(env), env);
       delete buf;
       return nif::ok(env, term);
     }
@@ -82,7 +82,9 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique
   }
 }
 
-ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable) : executable_(std::move(executable)) {}
+ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
+                               ExlaClient* client) : executable_(std::move(executable)),
+                                                     client_(client) {}
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM arguments,
@@ -101,9 +103,9 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   return ret;
 }
 
-ExlaClient::ExlaClient(std::unique_ptr<xla::PjRtClient> client) : client_(std::move(client)) {}
+ExlaClient::ExlaClient(xla::PjRtClient* client) : client_(client) {}
 
-ExlaClient::BufferFromBinary(const ErlNifBinary& binary, xla::Shape& shape, int device_id) {
+xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& binary, xla::Shape& shape, int device_id) {
   void * data = const_cast<void *>(binary.data);
   xla::PjRtClient::HostBufferSemantics semantics = PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
 
@@ -119,8 +121,14 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
                                                    std::vector<xla::Shape*> argument_layouts,
                                                    xla::ExecutableBuildOptions& options,
                                                    bool compile_portable_executable) {
+  std::vector<xla::Shape> layouts;
+  layouts.reserve(argument_layouts.size());
+  for (auto s : argument_layouts) {
+    layouts.push_back(*s);
+  }
+
   xla::CompileOptions compile_opts = {
-    .argument_layouts = std::move(argument_layouts),
+    .argument_layouts = std::move(layouts),
     .parameter_is_tupled_arguments = false,
     .executable_build_options = options,
     .compile_portable_executable = compile_portable_executable
@@ -129,7 +137,7 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtExecutable> executable,
     client_->Compile(computation, compile_opts));
 
-  return new ExlaExecutable(std::move(executable));
+  return new ExlaExecutable(std::move(executable), this);
 }
 
 xla::StatusOr<ExlaClient*> GetHostClient() {
