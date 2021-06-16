@@ -33,7 +33,7 @@ xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(
     return xla::InvalidArgument("Argument is not a list.");
   }
 
-  std::vector<std::unique_ptr<xla::PjRtBuffer>> arg_buffers;
+  std::vector<xla::PjRtBuffer*> arg_buffers;
   arg_buffers.reserve(length);
 
   ERL_NIF_TERM head, tail;
@@ -54,10 +54,10 @@ xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(
       }
 
       EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(data, *shape, 0));
-      arg_buffers.push_back(std::move(buf->buffer()));
+      arg_buffers.push_back(buf->buffer());
 
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
-      arg_buffers.push_back(std::move(buffer->buffer()));
+      arg_buffers.push_back(buffer->buffer());
     } else {
       return xla::InvalidArgument("Expected argument to be buffer reference.");
     }
@@ -91,10 +91,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 bool keep_on_device) {
   xla::ExecuteOptions options;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::PjRtBuffer>> input_buffers,
+  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<xla::PjRtBuffer*> input_buffers,
     UnpackRunArguments(env, arguments, client_), env);
 
-  auto inputs = std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>>({input_buffers});
+  auto inputs = std::vector<std::vector<xla::PjRtBuffer*>>({input_buffers});
 
   EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
 
