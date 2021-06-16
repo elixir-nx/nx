@@ -1,22 +1,7 @@
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_cuda_or_rocm",)
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_grpc_cc_dependency",)
 
 package(default_visibility=["//visibility:private"])
-
-cc_library(
-  name = "exla_allocator",
-  srcs = ["exla_allocator.cc"],
-  hdrs = ["exla_allocator.h"],
-  deps = [
-    ":exla_nif_util",
-    ":exla_device",
-    "@org_tensorflow//tensorflow/core:lib",
-    "@org_tensorflow//tensorflow/core/framework:allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_bfc_allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime/device:device_mem_allocator",
-    "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
-  ],
-)
 
 cc_library(
   name = "exla_log_sink",
@@ -27,29 +12,16 @@ cc_library(
   ],
 )
 
-cc_library (
-  name = "exla_device",
-  srcs = ["exla_device.cc"],
-  hdrs = ["exla_device.h"],
-  deps = [
-    "@org_tensorflow//tensorflow/compiler/xla/client:local_client",
-    "@org_tensorflow//tensorflow/stream_executor:stream_executor",
-  ],
-)
-
 cc_library(
   name = "exla_client",
   srcs = ["exla_client.cc"],
   hdrs = ["exla_client.h"],
   deps = [
-    ":exla_device",
-    ":exla_allocator",
     ":exla_nif_util",
-    "@org_tensorflow//tensorflow/core/framework:allocator",
-    "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
-    "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
-    "@org_tensorflow//tensorflow/core:lib",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt/distributed:protocol",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt/distributed:protocol_proto_cc",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:pjrt_client",
+    tf_grpc_cc_dependency(),
   ],
 )
 
