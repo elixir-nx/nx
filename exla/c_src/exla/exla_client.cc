@@ -61,7 +61,7 @@ xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(
     } else {
       return xla::InvalidArgument("Expected argument to be buffer reference.");
     }
-    list = tail;
+    arguments = tail;
   }
 
   return std::move(arg_buffers);
@@ -92,9 +92,9 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   xla::ExecuteOptions options;
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::PjRtBuffer>> input_buffers,
-    UnpackRunArguments(env, arguments, this), env);
+    UnpackRunArguments(env, arguments, client_), env);
 
-  auto inputs = absl::Span<std::vector<std::unique_ptr<xla::PjRtBuffer>>>({input_buffers});
+  auto inputs = std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>>({input_buffers});
 
   EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
 
@@ -106,8 +106,8 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 ExlaClient::ExlaClient(xla::PjRtClient* client) : client_(client) {}
 
 xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& binary, xla::Shape& shape, int device_id) {
-  void * data = const_cast<void *>(binary.data);
-  xla::PjRtClient::HostBufferSemantics semantics = PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
+  unsigned char * data = const_cast<unsigned char *>(binary.data);
+  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
 
   // TODO(seanmor5): control this with an option
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
