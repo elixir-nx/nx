@@ -209,7 +209,7 @@ defmodule Nx.BinaryBackend.Matrix do
         {q, r} ->
           a = slice_matrix(r, [i, i], [k - i, 1])
 
-          h = householder_reflector(a, k, eps)
+          h = householder_reflector(a, k)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
@@ -334,7 +334,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
     eps = opts[:eps]
     max_iter = opts[:max_iter] || 1000
-    {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
+    {u, d, v} = householder_bidiagonalization(a, input_shape)
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
@@ -422,18 +422,13 @@ defmodule Nx.BinaryBackend.Matrix do
 
   ## Householder helpers
 
-  defp householder_reflector(a, target_k, eps)
+  defp householder_reflector(a, target_k)
 
-  defp householder_reflector([], target_k, _eps) do
-    flat_list =
-      for col <- 0..(target_k - 1), row <- 0..(target_k - 1), into: [] do
-        if col == row, do: 1, else: 0
-      end
-
-    Enum.chunk_every(flat_list, target_k)
+  defp householder_reflector([], target_k) do
+    identity_matrix(target_k, target_k)
   end
 
-  defp householder_reflector([a_0 | tail] = a, target_k, eps) do
+  defp householder_reflector([a_0 | tail] = a, target_k) do
     # This is a trick so we can both calculate the norm of a and extract the
     # head a the same time we reverse the array
     # receives a_reverse as a list of numbers and returns the reflector as a
@@ -443,7 +438,7 @@ defmodule Nx.BinaryBackend.Matrix do
     norm_a_sq_1on = norm_a_squared - a_0 * a_0
 
     {v, scale} =
-      if norm_a_sq_1on < eps do
+      if norm_a_sq_1on == 0 do
         {[1 | tail], 0}
       else
         v_0 =
@@ -506,7 +501,7 @@ defmodule Nx.BinaryBackend.Matrix do
     reflector
   end
 
-  defp householder_bidiagonalization(tensor, {m, n}, eps) do
+  defp householder_bidiagonalization(tensor, {m, n}) do
     # For each column in `tensor`, apply
     # the current column's householder reflector from the left to `tensor`.
     # if the current column is not the penultimate, also apply
@@ -518,7 +513,7 @@ defmodule Nx.BinaryBackend.Matrix do
         row_length = if m < col, do: 0, else: m - col
         a_col = a |> slice_matrix([col, col], [row_length, 1])
 
-        l = householder_reflector(a_col, m, eps)
+        l = householder_reflector(a_col, m)
 
         ll =
           if is_nil(ll) do
@@ -531,12 +526,10 @@ defmodule Nx.BinaryBackend.Matrix do
 
         {a, rr} =
           if col <= n - 2 do
-            # r = householder_reflector(a[[col, col+1:]], n)
-
             r =
               a
               |> slice_matrix([col, col + 1], [1, n - col])
-              |> householder_reflector(n, eps)
+              |> householder_reflector(n)
 
             rr =
               if is_nil(rr) do
@@ -630,12 +623,12 @@ defmodule Nx.BinaryBackend.Matrix do
     {h, q} =
       input_data
       |> binary_to_matrix(input_type, input_shape)
-      |> hessenberg_decomposition(input_shape, eps)
+      |> hessenberg_decomposition(input_shape)
 
     identity = identity_matrix(n, n)
 
-    for _ <- 1..max_iter, reduce: {h, q} do
-      {a_prev, q_prev} ->
+    {eigen_val_upper_tri, eigen_vec} =
+      Enum.reduce_while(1..max_iter, {h, q}, fn _, {a_prev, q_prev} ->
         # Coefficient for eigenvalue shifting as described in [1]
         [c_next] = get_matrix_elements(a_prev, [[n - 1, n - 1]])
 
@@ -650,13 +643,23 @@ defmodule Nx.BinaryBackend.Matrix do
 
         a_next = r_current |> dot_matrix(q_current) |> element_wise_bin_op(shifting_matrix, &+/2)
 
-        q_next = dot_matrix(q_current, q_prev)
+        q_next = dot_matrix(q_prev, q_current |> transpose_matrix())
 
-        {a_next, q_next}
-    end
+        result = {a_next, q_next} |> IO.inspect(label: "nx/lib/nx/binary_backend/matrix.ex:648")
+
+        if is_approximately_upper_triangular?(a_next, eps) do
+          {:halt, result}
+        else
+          {:cont, result}
+        end
+      end)
+
+    eigen_val_diag = element_wise_bin_op(eigen_val_upper_tri, identity, &*/2)
+
+    {matrix_to_binary(eigen_val_diag, output_type), matrix_to_binary(eigen_vec, output_type)}
   end
 
-  defp hessenberg_decomposition(a, {n, n}, eps) do
+  defp hessenberg_decomposition(a, {n, n}) do
     # Calculates the Hessenberg decomposition of a square matrix `a`
     # Returns the transformed hessenberg matrix `hess` and the invertible
     # linear transformation `t` which defines is such that:
@@ -665,12 +668,23 @@ defmodule Nx.BinaryBackend.Matrix do
 
     for col <- 0..(n - 2), reduce: {a, identity} do
       {a, linear_transform} ->
-        reflector =
-          a |> slice_matrix([col + 1, col], [n - col, 1]) |> householder_reflector(n, eps)
+        reflector = a |> slice_matrix([col + 1, col], [n - col, 1]) |> householder_reflector(n)
 
         {dot_matrix(reflector, a) |> dot_matrix(transpose_matrix(reflector)),
          dot_matrix(reflector, linear_transform)}
     end
+  end
+
+  defp is_approximately_upper_triangular?(matrix, eps) do
+    matrix
+    |> Enum.with_index()
+    |> Enum.all?(fn {row, row_idx} ->
+      row
+      |> Enum.with_index()
+      |> Enum.all?(fn {matrix_elem, col_idx} ->
+        col_idx >= row_idx or matrix_elem <= eps
+      end)
+    end)
   end
 
   ## Matrix (2-D array) manipulation
