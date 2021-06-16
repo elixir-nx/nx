@@ -3,13 +3,13 @@
 
 namespace exla {
 
-ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer): buffer_(std::move(buffer)) {}
+ExlaBuffer::ExlaBuffer(xla::PjRtBuffer* buffer): buffer_(buffer) {}
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
 
   ErlNifBinary binary;
-  enif_alloc_binary(size, &binary);
+  enif_alloc_binary(literal->size, &binary);
   std::memcpy(binary.data, literal->untyped_data(), literal->size_bytes());
 
   return nif::make(env, binary);
@@ -27,14 +27,14 @@ xla::Status ExlaBuffer::Deallocate() {
 
 xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(ErlNifEnv* env,
                                                                                 ERL_NIF_TERM arguments,
-                                                                                xla::PjRtClient* client) {
+                                                                                ExlaClient* client) {
   unsigned int length;
-  if (!enif_get_list_length(env, list, &length)) {
+  if (!enif_get_list_length(env, arguments, &length)) {
     return xla::InvalidArgument("Argument is not a list.");
   }
 
   std::vector<std::unique_ptr<xla::PjRtBuffer>> arg_buffers;
-  arguments.reserve(length);
+  arg_buffers.reserve(length);
 
   ERL_NIF_TERM head, tail;
   while (enif_get_list_cell(env, list, &head, &tail)) {
@@ -54,10 +54,10 @@ xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(
       }
 
       EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(data, *shape, 0));
-      arg_buffers.push_back(std::move(buf->buffer_));
+      arg_buffers.push_back(std::move(buf->buffer()));
 
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
-      arg_buffers.push_back(std::move(buffer->buffer_));
+      arg_buffers.push_back(std::move(buffer->buffer()));
     } else {
       return xla::InvalidArgument("Expected argument to be buffer reference.");
     }
@@ -89,10 +89,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 bool keep_on_device) {
   xla::ExecuteOptions options;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::PjRtBuffer>> arguments,
-    UnpackRunArguments(env, arguments, client_.get()), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<std::unique_ptr<xla::PjRtBuffer>> input_buffers,
+    UnpackRunArguments(env, arguments, this), env);
 
-  auto inputs = absl::make_span<std::vector<std::unique_ptr<xla::PjRtBuffer>>>({arguments});
+  auto inputs = absl::Span<std::vector<std::unique_ptr<xla::PjRtBuffer>>>({input_buffers});
 
   EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
 

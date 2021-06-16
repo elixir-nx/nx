@@ -27,7 +27,7 @@ class ExlaBuffer {
 
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env);
 
-  void Deallocate();
+  xla::Status Deallocate();
 
   // static xla::StatusOr<ERL_NIF_TERM>
   // DecomposeBufferToTerm(ErlNifEnv* env,
@@ -36,7 +36,7 @@ class ExlaBuffer {
 
  private:
   std::unique_ptr<xla::PjRtBuffer> buffer_;
-}
+};
 
 class ExlaExecutable {
  public:
@@ -44,13 +44,13 @@ class ExlaExecutable {
 
   xla::PjRtExecutable* executable() { executable_.get(); }
 
-  xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
-                                                ERL_NIF_TERM arguments,
-                                                bool keep_on_device);
+  xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
+                                  ERL_NIF_TERM arguments,
+                                  bool keep_on_device);
 
  private:
   std::unique_ptr<xla::PjRtExecutable> executable_;
-}
+};
 
 class ExlaClient {
  public:
@@ -73,7 +73,7 @@ class ExlaClient {
 
  private:
   xla::PjRtClient* client_;
-}
+};
 
 xla::StatusOr<ExlaClient*> GetCpuClient();
 
