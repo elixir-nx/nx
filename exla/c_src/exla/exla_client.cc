@@ -25,9 +25,9 @@ xla::Status ExlaBuffer::Deallocate() {
   }
 }
 
-xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(ErlNifEnv* env,
-                                                                                ERL_NIF_TERM arguments,
-                                                                                ExlaClient* client) {
+xla::StatusOr<std::vector<xla::PjRtBuffer*>> UnpackRunArguments(ErlNifEnv* env,
+                                                                ERL_NIF_TERM arguments,
+                                                                ExlaClient* client) {
   unsigned int length;
   if (!enif_get_list_length(env, arguments, &length)) {
     return xla::InvalidArgument("Argument is not a list.");
@@ -57,7 +57,7 @@ xla::StatusOr<std::vector<std::unique_ptr<xla::PjRtBuffer>>> UnpackRunArguments(
       arg_buffers.push_back(buf->buffer());
 
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
-      arg_buffers.push_back(buffer->buffer());
+      arg_buffers.push_back((*buffer)->buffer());
     } else {
       return xla::InvalidArgument("Expected argument to be buffer reference.");
     }

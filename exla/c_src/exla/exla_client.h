@@ -9,6 +9,7 @@
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/platform/status.h"
 #include "tensorflow/compiler/xla/pjrt/pjrt_client.h"
+#include "tensorflow/compiler/xla/pjrt/gpu_device.h"
 
 // The implementations in this module are designed after implementations
 // in the XLA runtime, PjRt. Deviations are made where it makes sense
