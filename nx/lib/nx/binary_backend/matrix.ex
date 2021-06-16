@@ -643,9 +643,9 @@ defmodule Nx.BinaryBackend.Matrix do
 
         a_next = r_current |> dot_matrix(q_current) |> element_wise_bin_op(shifting_matrix, &+/2)
 
-        q_next = dot_matrix(q_prev, q_current |> transpose_matrix())
+        q_next = dot_matrix(q_current, q_prev)
 
-        result = {a_next, q_next} |> IO.inspect(label: "nx/lib/nx/binary_backend/matrix.ex:648")
+        result = {a_next, q_next}
 
         if is_approximately_upper_triangular?(a_next, eps) do
           {:halt, result}
