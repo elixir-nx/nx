@@ -136,7 +136,7 @@ xla::StatusOr<ExlaClient*> GetHostClient() {
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
     xla::GetCpuClient(false));
 
-  return new ExlaClient(std::move(client));
+  return new ExlaClient(client.release());
 }
 
 xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
@@ -151,13 +151,13 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
     xla::GetGpuClient(false, allocator_config, nullptr, 0));
 
-  return new ExlaClient(std::move(client));
+  return new ExlaClient(client.release());
 }
 
 xla::StatusOr<ExlaClient*> GetTpuClient() {
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::PjRtClient> client,
     xla::GetTpuClient(32));
 
-  return new ExlaClient(std::move(client));
+  return new ExlaClient(client.get());
 }
 }  // namespace exla

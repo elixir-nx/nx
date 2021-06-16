@@ -54,11 +54,11 @@ class ExlaExecutable {
 
 class ExlaClient {
  public:
-  explicit ExlaClient(std::unique_ptr<xla::PjRtClient> client);
+  explicit ExlaClient(xla::PjRtClient* client);
 
   virtual ~ExlaClient() = default;
 
-  xla::PjRtClient* client() { client_.get(); }
+  xla::PjRtClient* client() { client_; }
 
   // Compiles the given computation with the given compile
   // options
@@ -72,7 +72,7 @@ class ExlaClient {
                                               int device_id);
 
  private:
-  std::unique_ptr<xla::PjRtClient> client_;
+  xla::PjRtClient* client_;
 }
 
 xla::StatusOr<ExlaClient*> GetCpuClient();
