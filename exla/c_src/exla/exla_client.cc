@@ -107,9 +107,11 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<xla::PjRtBuffer*> input_buffers,
     UnpackRunArguments(env, arguments, client_), env);
 
-  std::vector<std::vector<xla::PjRtBuffer*>> inputs;
-  inputs.reserve(1);
-  inputs.push_back(std::move(input_buffers));
+  for (auto buf : input_buffers) {
+    LOG(INFO) << xla::ShapeUtil::HumanStringWithLayout(buf->on_device_shape());
+  }
+
+  std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({input_buffers});
 
   EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
 
