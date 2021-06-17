@@ -624,6 +624,7 @@ defmodule Nx.BinaryBackend.Matrix do
       input_data
       |> binary_to_matrix(input_type, input_shape)
       |> hessenberg_decomposition(input_shape)
+      |> IO.inspect(label: "lib/nx/binary_backend/matrix.ex:627")
 
     identity = identity_matrix(n, n)
 
@@ -632,6 +633,15 @@ defmodule Nx.BinaryBackend.Matrix do
         # Coefficient for eigenvalue shifting as described in [1]
         [c_next] = get_matrix_elements(a_prev, [[n - 1, n - 1]])
 
+        # if the last diagonal element is "zero", we add 'eps' so we can de-stabilize
+        # the matrix from a fixed point. Otherwise, spectral shifting is removed by said "zero" element
+        c_next =
+          if c_next < eps do
+            c_next + eps
+          else
+            c_next
+          end
+
         # As described in [1] and [2], we want to calculate
         # Q.R = A_prev - c_next.I
         # A_next = R.Q + c_next.I
@@ -639,13 +649,15 @@ defmodule Nx.BinaryBackend.Matrix do
         shifting_matrix = element_wise_bin_op(c_next, identity, &*/2)
         shifted_matrix = element_wise_bin_op(a_prev, shifting_matrix, &-/2)
 
-        {q_current, r_current} = qr_matrix(shifted_matrix, n, n, n, eps)
+        {q_current, r_current} =
+          qr_matrix(shifted_matrix, n, n, n, eps)
+          |> IO.inspect(label: "lib/nx/binary_backend/matrix.ex:644")
 
         a_next = r_current |> dot_matrix(q_current) |> element_wise_bin_op(shifting_matrix, &+/2)
 
-        q_next = dot_matrix(q_current, q_prev)
+        q_next = dot_matrix(q_prev, q_current)
 
-        result = {a_next, q_next}
+        result = {a_next, q_next} |> IO.inspect(label: "lib/nx/binary_backend/matrix.ex:648")
 
         if is_approximately_upper_triangular?(a_next, eps) do
           {:halt, result}
