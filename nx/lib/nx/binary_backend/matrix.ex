@@ -636,10 +636,10 @@ defmodule Nx.BinaryBackend.Matrix do
         # if the last diagonal element is "zero", we add 'eps' so we can de-stabilize
         # the matrix from a fixed point. Otherwise, spectral shifting is removed by said "zero" element
         c_next =
-          if c_next < eps do
-            c_next + eps
-          else
-            c_next
+          cond do
+            c_next >= 0 and c_next < eps -> c_next + eps
+            c_next < 0 and c_next > -eps -> c_next - eps
+            true -> c_next
           end
 
         # As described in [1] and [2], we want to calculate
