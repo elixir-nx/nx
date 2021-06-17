@@ -62,7 +62,8 @@ defmodule EXLA.AOT do
   Also see the options in `EXLA.Compilation.compile_aot/7`.
   """
   def compile(output_dir, module_name, functions, options \\ [])
-      when is_binary(output_dir) and is_atom(module_name) and is_list(functions) and is_list(options) do
+      when is_binary(output_dir) and is_atom(module_name) and is_list(functions) and
+             is_list(options) do
     lib_name = "libnif"
     aot_dir = "aot#{System.unique_integer([:positive])}"
     aot_relative_path = "tensorflow/compiler/xla/exla/#{aot_dir}"

@@ -25,7 +25,7 @@ defmodule EXLA.BufferTest do
       :ok = Buffer.deallocate(b1.ref)
       assert binary == <<1::32, 2::32, 3::32, 4::32>>
 
-      assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn ->
+      assert_raise RuntimeError, "CopyToHostAsync() called on deleted or donated buffer", fn ->
         Buffer.read(b1.ref)
       end
     end

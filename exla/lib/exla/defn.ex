@@ -56,21 +56,21 @@ defmodule EXLA.Defn do
     {expr, acc}
   end
 
-  @doc false
-  def __async__(key, vars, fun, options) do
-    {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-    {buffers, outputs, executable} = compile(key, vars, fun, compile_options)
+  #  @doc false
+  #  def __async__(key, vars, fun, options) do
+  #    {run_options, compile_options} = Keyword.pop(options, :run_options, [])
+  #    {buffers, outputs, executable} = compile(key, vars, fun, compile_options)
+  #
+  #    async_exec = EXLA.Executable.async_run(executable, buffers, run_options)
+  #    %EXLA.Defn.Async{executable: async_exec, outputs: outputs}
+  #  end
 
-    async_exec = EXLA.Executable.async_run(executable, buffers, run_options)
-    %EXLA.Defn.Async{executable: async_exec, outputs: outputs}
-  end
-
-  @doc false
-  def __await__(%EXLA.Defn.Async{executable: async_exec, outputs: outputs}) do
-    async_exec
-    |> EXLA.Executable.await_run()
-    |> buffer_to_nx(outputs)
-  end
+  #  @doc false
+  #  def __await__(%EXLA.Defn.Async{executable: async_exec, outputs: outputs}) do
+  #    async_exec
+  #    |> EXLA.Executable.await_run()
+  #    |> buffer_to_nx(outputs)
+  #  end
 
   @doc false
   def __jit__(key, vars, fun, options) do
@@ -135,7 +135,7 @@ defmodule EXLA.Defn do
     builder = EXLA.Builder.new(inspect(key))
 
     params =
-       Enum.with_index(pos_shapes, fn {pos, shape}, i ->
+      Enum.with_index(pos_shapes, fn {pos, shape}, i ->
         {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
       end)
 
@@ -807,7 +807,7 @@ defmodule EXLA.Defn do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
     arg_params =
-       Enum.with_index(args, fn arg, i ->
+      Enum.with_index(args, fn arg, i ->
         fun_shape = computation_arg_shape(arg)
         {arg, EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")}
       end)

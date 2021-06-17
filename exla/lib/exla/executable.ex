@@ -82,7 +82,7 @@ defmodule EXLA.Executable do
         %Buffer{ref: {ref, _}, data: nil} ->
           ref
 
-        %Buffer{data: data, shape: shape, ref: nil} ->
+        %Buffer{data: data, shape: shape, ref: nil} = buffer ->
           {data, shape.ref}
       end)
 

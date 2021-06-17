@@ -195,11 +195,9 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get<xla::Shape>(env, argv[2], shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
-  if (!exla::nif::get(env, argv[3], &device_ordinal)) {
+  if (!exla::nif::get(env, argv[3], &device_id)) {
     return exla::nif::error(env, "Unable to get device ordinal.");
   }
-
-  exla::ExlaDevice* device = (*client)->device(device_ordinal);
 
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer,
     (*client)->BufferFromBinary(bin, *shape, device_id), env);
@@ -220,10 +218,6 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   }
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
     return exla::nif::error(env, "Unable to get buffer.");
-  }
-
-  if ((*buffer)->is_tuple()) {
-    return exla::nif::ok(env);
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM binary, (*buffer)->ToBinary(env), env);
@@ -1796,7 +1790,7 @@ ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
     return exla::nif::error(env, "Unable to get preallocate flag.");
   }
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
-    exla::GetGpuClient(memory_fraction, preallocate, xla::GpuAllocatorConfig::Kind::BFC), env);
+    exla::GetGpuClient(memory_fraction, preallocate, xla::GpuAllocatorConfig::Kind::kBFC), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
 }
@@ -1822,7 +1816,7 @@ ERL_NIF_TERM get_default_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_
     return exla::nif::error(env, "Unable to get client.");
   }
 
-  int device_ordinal = (*client)->client()->default_device_ordinal();
+  int device_ordinal = 0;
 
   return exla::nif::ok(env, exla::nif::make(env, device_ordinal));
 }
@@ -1973,7 +1967,7 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-    (*executable)->Run(env, arguments, keep_on_device), env);
+     (*executable)->Run(env, arguments, keep_on_device), env);
 
   return term;
 }
@@ -2066,7 +2060,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_default_device_ordinal", 1, get_default_device_ordinal},
   {"get_supported_platforms", 0, get_supported_platforms},
-  {"compile", 6, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"compile", 6, compile},
   // {"await_streams_cpu", 3, await_streams, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // {"await_streams_io", 3, await_streams, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaBuffer

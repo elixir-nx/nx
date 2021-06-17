@@ -54,7 +54,7 @@ defmodule EXLA.AOT.Codegen do
 
   defp build_fetch_str(sizes) do
     result_ids =
-      for i <- 0..(length(sizes)-1) do
+      for i <- 0..(length(sizes) - 1) do
         """
         fetch {
           id { node_name: "result#{i}" }
@@ -225,9 +225,11 @@ defmodule EXLA.AOT.Codegen do
     res_str =
       result_sizes
       |> Enum.with_index()
-      |> Enum.map_join("\n", fn {size, i} -> build_nif_single_result_block(name, arity, size, i) end)
+      |> Enum.map_join("\n", fn {size, i} ->
+        build_nif_single_result_block(name, arity, size, i)
+      end)
 
-    num_results = length(result_sizes);
+    num_results = length(result_sizes)
 
     res_terms =
       result_sizes

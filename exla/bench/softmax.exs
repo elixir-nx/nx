@@ -32,7 +32,7 @@ Nx.Defn.aot(
   AOTSoftmax,
   [
     {:softmax_64, &Softmax.softmax/1, [t64]},
-    {:softmax_32, &Softmax.softmax/1, [t32]},
+    {:softmax_32, &Softmax.softmax/1, [t32]}
   ],
   compiler: EXLA
 )

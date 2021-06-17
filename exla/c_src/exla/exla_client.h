@@ -22,18 +22,13 @@ class ExlaClient;
 
 class ExlaBuffer {
  public:
-  explicit ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer);
+  ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer);
 
-  xla::PjRtBuffer* buffer() { buffer_.get(); }
+  xla::PjRtBuffer* buffer() { return buffer_.get(); }
 
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env);
 
   xla::Status Deallocate();
-
-  // static xla::StatusOr<ERL_NIF_TERM>
-  // DecomposeBufferToTerm(ErlNifEnv* env,
-  //                       ExlaBuffer* buffer,
-  //                       bool keep_on_device);
 
  private:
   std::unique_ptr<xla::PjRtBuffer> buffer_;
@@ -41,7 +36,8 @@ class ExlaBuffer {
 
 class ExlaExecutable {
  public:
-  explicit ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
+   ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
+                          absl::optional<std::string> fingerprint,
                           ExlaClient* client);
 
   xla::PjRtExecutable* executable() { executable_.get(); }
@@ -53,15 +49,16 @@ class ExlaExecutable {
  private:
   std::unique_ptr<xla::PjRtExecutable> executable_;
   ExlaClient* client_;
+  absl::optional<std::string> fingerprint_;
 };
 
 class ExlaClient {
  public:
-  explicit ExlaClient(xla::PjRtClient* client);
+  explicit ExlaClient(std::shared_ptr<xla::PjRtClient> client);
 
   virtual ~ExlaClient() = default;
 
-  xla::PjRtClient* client() { client_; }
+  xla::PjRtClient* client() { return client_.get(); }
 
   // Compiles the given computation with the given compile
   // options
@@ -75,10 +72,10 @@ class ExlaClient {
                                               int device_id);
 
  private:
-  xla::PjRtClient* client_;
+  std::shared_ptr<xla::PjRtClient> client_;
 };
 
-xla::StatusOr<ExlaClient*> GetCpuClient();
+xla::StatusOr<ExlaClient*> GetHostClient();
 
 xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
                                         bool preallocate,

@@ -3,12 +3,14 @@
 #include "tensorflow/compiler/xla/pjrt/gpu_device.h"
 #include "tensorflow/compiler/xla/pjrt/cpu_device.h"
 #include "tensorflow/compiler/xla/pjrt/tpu_client.h"
+#include "tensorflow/stream_executor/tpu/tpu_transfer_manager.h"
 
 namespace exla {
 
 ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer): buffer_(std::move(buffer)) {}
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
+  buffer_->BlockHostUntilReady();
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
 
   ErlNifBinary binary;
@@ -57,6 +59,7 @@ xla::StatusOr<std::vector<xla::PjRtBuffer*>> UnpackRunArguments(ErlNifEnv* env,
       }
 
       EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(data, *shape, 0));
+
       arg_buffers.push_back(buf->buffer());
 
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
@@ -71,28 +74,35 @@ xla::StatusOr<std::vector<xla::PjRtBuffer*>> UnpackRunArguments(ErlNifEnv* env,
 }
 
 xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique_ptr<xla::PjRtBuffer>> result, bool keep_on_device) {
-  if (result.size() > 1) {
-    ExlaBuffer* buf = new ExlaBuffer(std::move(result.at(0)));
+  result.at(0)->BlockHostUntilReady();
+  std::vector<ERL_NIF_TERM> terms;
+  terms.reserve(result.size());
+  for (auto& pjrt_buf : result) {
+    ExlaBuffer* buf = new ExlaBuffer(std::move(pjrt_buf));
+    ERL_NIF_TERM term;
     if (keep_on_device) {
-      return nif::ok(env, nif::make<ExlaBuffer*>(env, buf));
+      term = nif::make<ExlaBuffer*>(env, buf);
     } else {
-      EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term, buf->ToBinary(env), env);
+      EXLA_ASSIGN_OR_RETURN_NIF(term, buf->ToBinary(env), env);
       delete buf;
-      return nif::ok(env, term);
     }
-  } else {
-    return nif::ok(env);
+    terms.push_back(term);
   }
+  return nif::ok(env, enif_make_tuple2(env, enif_make_list_from_array(env, &terms[0], terms.size()), enif_make_int(env, 0)));
 }
 
 ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
-                               ExlaClient* client) : executable_(std::move(executable)),
+			       absl::optional<std::string> fingerprint,
+			       ExlaClient* client) : executable_(std::move(executable)),
+                                                     fingerprint_(std::move(fingerprint)),
                                                      client_(client) {}
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM arguments,
                                                 bool keep_on_device) {
-  xla::ExecuteOptions options;
+  xla::ExecuteOptions options = {
+    .untuple_result = true
+  };
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<xla::PjRtBuffer*> input_buffers,
     UnpackRunArguments(env, arguments, client_), env);
@@ -108,16 +118,14 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   return ret;
 }
 
-ExlaClient::ExlaClient(xla::PjRtClient* client) : client_(client) {}
+ExlaClient::ExlaClient(std::shared_ptr<xla::PjRtClient> client) : client_(std::move(client)) {}
 
 xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& binary, xla::Shape& shape, int device_id) {
-  unsigned char * data = const_cast<unsigned char *>(binary.data);
-  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
+  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kZeroCopy;
 
-  // TODO(seanmor5): control this with an option
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
-
-  EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(data, shape, semantics, nullptr, device));
+  EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(binary.data, shape, semantics, nullptr, device));
+  buffer->BlockHostUntilReady();
 
   return new ExlaBuffer(std::move(buffer));
 }
@@ -128,28 +136,32 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
                                                    bool compile_portable_executable) {
   std::vector<xla::Shape> layouts;
   layouts.reserve(argument_layouts.size());
-  for (auto s : argument_layouts) {
-    layouts.push_back(*s);
+  for (auto shape : argument_layouts) {
+    xla::Shape cpy_shape = xla::ShapeUtil::MakeShape(shape->element_type(), shape->dimensions());
+    xla::LayoutUtil::ClearLayout(&cpy_shape);
+    layouts.push_back(cpy_shape);
   }
 
   xla::CompileOptions compile_opts = {
-    .argument_layouts = std::move(layouts),
+    .argument_layouts = layouts,
     .parameter_is_tupled_arguments = false,
     .executable_build_options = options,
     .compile_portable_executable = compile_portable_executable
   };
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtExecutable> executable,
-    client_->Compile(computation, compile_opts));
+    client_->Compile(computation, std::move(compile_opts)));
+  EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
+    client_->ExecutableFingerprint(*executable));
 
-  return new ExlaExecutable(std::move(executable), this);
+  return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
 }
 
 xla::StatusOr<ExlaClient*> GetHostClient() {
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
     xla::GetCpuClient(false));
 
-  return new ExlaClient(client.release());
+  return new ExlaClient(std::move(client));
 }
 
 xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
@@ -164,13 +176,13 @@ xla::StatusOr<ExlaClient*> GetGpuClient(double memory_fraction,
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
     xla::GetGpuClient(false, allocator_config, nullptr, 0));
 
-  return new ExlaClient(client.release());
+  return new ExlaClient(std::move(client));
 }
 
 xla::StatusOr<ExlaClient*> GetTpuClient() {
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::PjRtClient> client,
     xla::GetTpuClient(32));
 
-  return new ExlaClient(client.get());
+  return new ExlaClient(std::move(client));
 }
 }  // namespace exla
