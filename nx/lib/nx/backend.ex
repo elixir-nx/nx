@@ -90,10 +90,14 @@ defmodule Nx.Backend do
   @callback scatter_window_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
-  @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
-  @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
+  @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) ::
+              {p :: tensor, l :: tensor, u :: tensor}
+  @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: {q :: tensor, r :: tensor}
   @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor, keyword) :: tensor
-  @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
+  @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) ::
+              {u :: tensor, s :: tensor, v :: tensor}
+  @callback eigen({eigenval :: tensor, eigenvec :: tensor}, tensor, keyword) ::
+              {eigenval :: tensor, eigenvec :: tensor}
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++

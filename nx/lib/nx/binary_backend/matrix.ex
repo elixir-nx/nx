@@ -3,6 +3,29 @@ defmodule Nx.BinaryBackend.Matrix do
   import Nx.Shared
 
   def ts(a_data, a_type, b_data, b_type, shape, output_type, input_opts) do
+    a_shape =
+      case shape do
+        {rows} -> {rows, rows}
+        shape -> shape
+      end
+
+    a_matrix = binary_to_matrix(a_data, a_type, a_shape)
+
+    b_matrix_or_vec =
+      case shape do
+        {rows, rows} ->
+          binary_to_matrix(b_data, b_type, shape)
+
+        {_rows} ->
+          binary_to_vector(b_data, b_type)
+      end
+
+    a_matrix
+    |> ts_matrix(b_matrix_or_vec, shape, input_opts)
+    |> matrix_to_binary(output_type)
+  end
+
+  defp ts_matrix(a_matrix, b_matrix_or_vec, shape, input_opts) do
     transform_a = input_opts[:transform_a]
     lower_input = input_opts[:lower]
 
@@ -14,33 +37,16 @@ defmodule Nx.BinaryBackend.Matrix do
       left_side: input_opts[:left_side]
     }
 
-    a_shape =
-      case shape do
-        {rows} -> {rows, rows}
-        shape -> shape
-      end
-
     a_matrix =
-      a_data
-      |> binary_to_matrix(a_type, a_shape)
+      a_matrix
       |> ts_transform_a(transform_a)
       |> ts_handle_opts(opts, :a)
 
-    b_matrix_or_vec =
-      case shape do
-        {rows, rows} ->
-          b_data |> binary_to_matrix(b_type, shape) |> ts_handle_opts(opts, :b)
+    b_matrix_or_vec = ts_handle_opts(b_matrix_or_vec, opts, :b)
 
-        {_rows} ->
-          b_data |> binary_to_vector(b_type) |> ts_handle_opts(opts, :b)
-      end
-
-    result =
-      a_matrix
-      |> do_ts(b_matrix_or_vec, shape)
-      |> ts_handle_opts(opts, :result)
-
-    matrix_to_binary(result, output_type)
+    a_matrix
+    |> do_ts(b_matrix_or_vec, shape)
+    |> ts_handle_opts(opts, :result)
   end
 
   # For ts_handle_opts/3, we need some theoretical proofs:
@@ -611,7 +617,7 @@ defmodule Nx.BinaryBackend.Matrix do
     end
   end
 
-  def eigen_decomposition(input_data, input_type, {n, n} = input_shape, output_type, opts) do
+  def eigen(input_data, input_type, {n, n} = input_shape, output_type, opts) do
     # This decomposition is only implemented for square matrices
     # Implementation based on the algorithm described in:
     # [1] - http://www.math.iit.edu/~fass/477577_Chapter_11.pdf
@@ -620,16 +626,15 @@ defmodule Nx.BinaryBackend.Matrix do
     eps = opts[:eps]
     max_iter = opts[:max_iter]
 
-    {h, q} =
+    {h, _q} =
       input_data
       |> binary_to_matrix(input_type, input_shape)
       |> hessenberg_decomposition(input_shape)
-      |> IO.inspect(label: "lib/nx/binary_backend/matrix.ex:627")
 
     identity = identity_matrix(n, n)
 
-    {eigen_val_upper_tri, eigen_vec} =
-      Enum.reduce_while(1..max_iter, {h, q}, fn _, {a_prev, q_prev} ->
+    eigen_val_upper_tri =
+      Enum.reduce_while(1..max_iter, h, fn _, a_prev ->
         # Coefficient for eigenvalue shifting as described in [1]
         [c_next] = get_matrix_elements(a_prev, [[n - 1, n - 1]])
 
@@ -649,26 +654,39 @@ defmodule Nx.BinaryBackend.Matrix do
         shifting_matrix = element_wise_bin_op(c_next, identity, &*/2)
         shifted_matrix = element_wise_bin_op(a_prev, shifting_matrix, &-/2)
 
-        {q_current, r_current} =
-          qr_matrix(shifted_matrix, n, n, n, eps)
-          |> IO.inspect(label: "lib/nx/binary_backend/matrix.ex:644")
+        {q_current, r_current} = qr_matrix(shifted_matrix, n, n, n, eps)
 
         a_next = r_current |> dot_matrix(q_current) |> element_wise_bin_op(shifting_matrix, &+/2)
 
-        q_next = dot_matrix(q_prev, q_current)
-
-        result = {a_next, q_next} |> IO.inspect(label: "lib/nx/binary_backend/matrix.ex:648")
-
         if is_approximately_upper_triangular?(a_next, eps) do
-          {:halt, result}
+          {:halt, a_next}
         else
-          {:cont, result}
+          {:cont, a_next}
         end
       end)
 
-    eigen_val_diag = element_wise_bin_op(eigen_val_upper_tri, identity, &*/2)
+    diag_indices = for idx <- 0..(n - 1), do: [idx, idx]
 
-    {matrix_to_binary(eigen_val_diag, output_type), matrix_to_binary(eigen_vec, output_type)}
+    eigenvals = eigen_val_upper_tri |> get_matrix_elements(diag_indices) |> Enum.sort_by(&abs/1)
+
+    zeros = zeros_matrix(n, n)
+
+    eigenvecs =
+      eigenvals
+      |> Enum.map(fn lambda ->
+        # Solve for the eigenvectors of the triangularized hessenberg matrix:
+        # H.v = lambda.v
+        # H.v - lambda.v = 0
+        # (H - lambda.I).v = 0
+
+        lambda_eye = element_wise_bin_op(lambda, identity, &*/2)
+        system_matrix = element_wise_bin_op(h, lambda_eye, &-/2)
+
+        solve_matrix(system_matrix, {n, n}, zeros, eps)
+      end)
+      |> transpose_matrix()
+
+    {matrix_to_binary(eigenvals, output_type), matrix_to_binary(eigenvecs, output_type)}
   end
 
   defp hessenberg_decomposition(a, {n, n}) do
@@ -841,5 +859,28 @@ defmodule Nx.BinaryBackend.Matrix do
         if row == col, do: 1, else: 0
       end
     end
+  end
+
+  defp zeros_matrix(rows, cols) do
+    for _row <- 0..(rows - 1) do
+      for _col <- 0..(cols - 1) do
+        0
+      end
+    end
+  end
+
+  defp solve_matrix(a, {n, n}, b, eps) do
+    # Solves A.x = B through QR decomposition
+    # For now, enforce square a matrix
+
+    # QRx = B
+    # Rx = Q_transposed.B
+    # x = triangular_solve(R, Q_transposed.B)
+
+    {q, r} = qr_matrix(a, n, n, n, eps)
+
+    qt_b = q |> transpose_matrix() |> dot_matrix(b)
+
+    ts_matrix(r, qt_b, {n, n}, left_side: true, transform_a: :none, lower: false)
   end
 end

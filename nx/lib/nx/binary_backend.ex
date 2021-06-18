@@ -1187,6 +1187,18 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def eigen(
+        {%{type: output_type} = eigenval_holder, eigenvec_holder},
+        %{type: input_type, shape: input_shape} = tensor,
+        opts
+      ) do
+    bin = to_binary(tensor)
+    {eigenval, eigenvec} = B.Matrix.eigen(bin, input_type, input_shape, output_type, opts)
+
+    {from_binary(eigenval_holder, eigenval), from_binary(eigenvec_holder, eigenvec)}
+  end
+
+  @impl true
   def lu(
         {%{type: p_type} = p_holder, %{type: l_type} = l_holder, %{type: u_type} = u_holder},
         %{type: input_type, shape: input_shape} = tensor,
