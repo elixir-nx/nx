@@ -96,18 +96,17 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique
 }
 
 ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
-			       absl::optional<std::string> fingerprint,
-			       ExlaClient* client) : executable_(std::move(executable)),
+			                         absl::optional<std::string> fingerprint,
+			                         ExlaClient* client) : executable_(std::move(executable)),
                                                      fingerprint_(std::move(fingerprint)),
                                                      client_(client) {}
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM arguments,
                                                 bool keep_on_device) {
-  xla::ExecuteOptions options = {
-    .untuple_result = true,
-    .strict_shape_checking = false
-  };
+  xla::ExecuteOptions options;
+  options.untuple_result = true;
+  options.strict_shape_checking = false;
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<xla::PjRtBuffer*> input_buffers,
     UnpackRunArguments(env, arguments, client_), env);
@@ -117,6 +116,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM ret, UnpackResult(env, std::move(result.at(0)), keep_on_device), env);
+
+  for (auto inp : input_buffers) {
+    inp->Delete();
+  }
 
   return ret;
 }
@@ -144,12 +147,11 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
     layouts.push_back(cpy_shape);
   }
 
-  xla::CompileOptions compile_opts = {
-    .argument_layouts = layouts,
-    .parameter_is_tupled_arguments = false,
-    .executable_build_options = options,
-    .compile_portable_executable = compile_portable_executable
-  };
+  xla::CompileOptions compile_opts;
+  compile_opts.argument_layouts = layouts;
+  compile_opts.parameter_is_tupled_arguments = false;
+  compile_opts.executable_build_options = options;
+  compile_opts.compile_portable_executable = compile_portable_executable;
 
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtExecutable> executable,
     client_->Compile(computation, std::move(compile_opts)));

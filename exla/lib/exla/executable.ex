@@ -4,7 +4,7 @@ defmodule EXLA.Executable do
   """
 
   alias __MODULE__
-  alias EXLA.{Buffer, Shape, Client}
+  alias EXLA.{Buffer, Shape}
 
   @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions]
   defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :async]
@@ -33,12 +33,12 @@ defmodule EXLA.Executable do
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
     %{client: client, output_shape: output_shape} = executable
-    {data, _} = run(client, executable, arguments, options, 0)
+    {data, _} = run(client, executable, arguments, options)
     decompose_output(data, output_shape, client)
   end
 
-  defp run(client, executable, arguments, options, async_run_int) do
-    %{ref: exec, output_shape: output_shape} = executable
+  defp run(client, executable, arguments, options) do
+    %{ref: exec} = executable
 
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
@@ -51,7 +51,7 @@ defmodule EXLA.Executable do
         %Buffer{ref: {ref, _}, data: nil} ->
           ref
 
-        %Buffer{data: data, shape: shape, ref: nil} = buffer ->
+        %Buffer{data: data, shape: shape, ref: nil} ->
           {data, shape.ref}
       end)
 
