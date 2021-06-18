@@ -159,6 +159,19 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
 }
 
+xla::StatusOr<std::vector<ExlaDevice*>> ExlaClient::GetDevices() {
+  EXLA_ASSIGN_OR_RETURN(absl::Span<xla::PjRtDevice*> pjrt_devices, client_->devices());
+
+  std::vector<ExlaDevice*> devices;
+  devices.reserve(pjrt_devices.size());
+  for (auto pjrt_device : pjrt_devices) {
+    ExlaDevice* device = new ExlaDevice(pjrt_device, this);
+    devices.push_back(device);
+  }
+
+  return devices;
+}
+
 xla::StatusOr<ExlaClient*> GetHostClient() {
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
     xla::GetCpuClient(false));

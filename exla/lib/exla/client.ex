@@ -7,8 +7,8 @@ defmodule EXLA.Client do
 
   alias __MODULE__
 
-  @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
-  defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
+  @enforce_keys [:ref, :platform, :name, :device_count, :devices]
+  defstruct [:ref, :platform, :name, :device_count, :devices]
 
   @doc """
   Fetches a client with the given `name` from configuration.
@@ -45,40 +45,19 @@ defmodule EXLA.Client do
         end
         |> unwrap!()
 
-      #      device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
+      device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
+      devices = EXLA.NIF.get_devices(ref) |> unwrap!()
 
       client = %Client{
         ref: ref,
         platform: platform,
         name: name,
-        device_count: 1,
-        default_device_ordinal: 0
+        device_count: device_count,
+        devices: devices
       }
 
       {nil, client}
     end)
-  end
-
-  @doc """
-  Validates the given device ordinal.
-  """
-  def validate_device_ordinal!(
-        %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
-        ordinal
-      )
-      when is_integer(ordinal) do
-    cond do
-      ordinal < 0 ->
-        default_device_ordinal
-
-      ordinal < device_count ->
-        ordinal
-
-      true ->
-        raise ArgumentError,
-              "Invalid device ordinal. It must be -1, to pick the default, " <>
-                "or a number >= 0 and < #{device_count}"
-    end
   end
 
   @doc """

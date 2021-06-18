@@ -210,10 +210,10 @@ defmodule EXLA.NIF do
 
   def get_supported_platforms, do: :erlang.nif_error(:undef)
 
-  def get_default_device_ordinal(_client),
+  def get_device_count(_client),
     do: :erlang.nif_error(:undef)
 
-  def get_device_count(_client),
+  def get_devices(_client),
     do: :erlang.nif_error(:undef)
 
   def build(_builder, _root),
@@ -244,12 +244,6 @@ defmodule EXLA.NIF do
         _keep_on_device
       ),
       do: :erlang.nif_error(:undef)
-
-  # def await_streams_cpu(_client, _buffer, _keep_on_device),
-  #   do: :erlang.nif_error(:undef)
-
-  # def await_streams_io(_client, _buffer, _keep_on_device),
-  #   do: :erlang.nif_error(:undef)
 
   def compile_aot(
         _computation,

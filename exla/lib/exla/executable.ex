@@ -37,37 +37,6 @@ defmodule EXLA.Executable do
     decompose_output(data, output_shape, client)
   end
 
-  # @doc """
-  # Runs the given function async.
-  # """
-  # def async_run(%Executable{} = executable, arguments, options \\ []) do
-  #   {data, _} = run(executable.client, executable, arguments, options, 1)
-  #   keep_on_device = Keyword.get(options, :keep_on_device, false)
-  #   %{executable | async: {data, keep_on_device}}
-  # end
-
-  # @doc """
-  # Awaits the given function run.
-  # """
-  # def await_run(%Executable{async: {data, keep_on_device}} = executable) do
-  #   %{client: client, output_shape: output_shape} = executable
-
-  #   client
-  #   |> await_streams(data, keep_on_device)
-  #   |> unwrap!()
-  #   |> decompose_output(output_shape, client)
-  # end
-
-  # defp await_streams(%Client{ref: ref, platform: platform}, buffer, keep_on_device) do
-  #   keep_on_device_int = if keep_on_device, do: 1, else: 0
-
-  #   # See https://github.com/elixir-nx/exla/pull/124 for discussion on this
-  #   case platform do
-  #     :host -> EXLA.NIF.await_streams_cpu(ref, buffer, keep_on_device_int)
-  #     _ -> EXLA.NIF.await_streams_io(ref, buffer, keep_on_device_int)
-  #   end
-  # end
-
   defp run(client, executable, arguments, options, async_run_int) do
     %{ref: exec, output_shape: output_shape} = executable
 

@@ -26,11 +26,9 @@ defmodule EXLA.Buffer do
   @doc """
   Places the given `buffer` on the given `device` using `client`.
   """
-  def place_on_device(buffer = %Buffer{}, client = %Client{}, ordinal) when is_integer(ordinal) do
-    ordinal = Client.validate_device_ordinal!(client, ordinal)
-
+  def place_on_device(buffer = %Buffer{}, client = %Client{}, device_id) when is_integer(device_id) do
     ref =
-      EXLA.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, ordinal)
+      EXLA.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, device_id)
       |> unwrap!()
 
     %Buffer{buffer | data: nil, ref: {ref, client.name}}

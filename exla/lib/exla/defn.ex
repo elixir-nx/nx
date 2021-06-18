@@ -56,22 +56,6 @@ defmodule EXLA.Defn do
     {expr, acc}
   end
 
-  #  @doc false
-  #  def __async__(key, vars, fun, options) do
-  #    {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-  #    {buffers, outputs, executable} = compile(key, vars, fun, compile_options)
-  #
-  #    async_exec = EXLA.Executable.async_run(executable, buffers, run_options)
-  #    %EXLA.Defn.Async{executable: async_exec, outputs: outputs}
-  #  end
-
-  #  @doc false
-  #  def __await__(%EXLA.Defn.Async{executable: async_exec, outputs: outputs}) do
-  #    async_exec
-  #    |> EXLA.Executable.await_run()
-  #    |> buffer_to_nx(outputs)
-  #  end
-
   @doc false
   def __jit__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])

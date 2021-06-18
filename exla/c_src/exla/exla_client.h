@@ -20,6 +20,16 @@ namespace exla {
 
 class ExlaClient;
 
+class ExlaDevice {
+ public:
+  ExlaDevice(xla::PjRtDevice* device, ExlaClient* client) : device_(device),
+                                                            client_(client) {}
+
+ private:
+  xla::PjRtDevice* device_;
+  ExlaClient* client_;
+}
+
 class ExlaBuffer {
  public:
   ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer);
@@ -36,9 +46,9 @@ class ExlaBuffer {
 
 class ExlaExecutable {
  public:
-   ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
-                          absl::optional<std::string> fingerprint,
-                          ExlaClient* client);
+  ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
+                 absl::optional<std::string> fingerprint,
+                 ExlaClient* client);
 
   xla::PjRtExecutable* executable() { executable_.get(); }
 
@@ -70,6 +80,8 @@ class ExlaClient {
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(const ErlNifBinary& binary,
                                               xla::Shape& shape,
                                               int device_id);
+
+  xla::StatusOr<std::vector<ExlaDevice*>> GetDevices();
 
  private:
   std::shared_ptr<xla::PjRtClient> client_;
