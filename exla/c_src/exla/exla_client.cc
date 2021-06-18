@@ -79,7 +79,6 @@ xla::StatusOr<std::vector<xla::PjRtBuffer*>> UnpackRunArguments(ErlNifEnv* env,
 }
 
 xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique_ptr<xla::PjRtBuffer>> result, bool keep_on_device) {
-  result.at(0)->BlockHostUntilReady();
   std::vector<ERL_NIF_TERM> terms;
   terms.reserve(result.size());
   for (auto& pjrt_buf : result) {
@@ -129,7 +128,6 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& bina
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
   EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(binary.data, shape, semantics, nullptr, device));
-  buffer->BlockHostUntilReady();
 
   return new ExlaBuffer(std::move(buffer));
 }
