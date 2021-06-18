@@ -6,15 +6,6 @@ defmodule Nx.Defn.Compiler do
   @aot_version 1
 
   @doc """
-  Callback for async execution (on top of JIT compilation).
-
-  It receives the same arguments as `c:__jit__/4` but must return
-  a struct that implements the `Nx.Async` protocol.
-  """
-  @callback __async__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), opts :: keyword) ::
-              Nx.Async.t()
-
-  @doc """
   Callback for JIT compilation.
 
   It receives an opaque `key` used for caching, the function
@@ -262,16 +253,11 @@ defmodule Nx.Defn.Compiler do
     {args, Enum.reverse(vars)}
   end
 
-  ## JIT/Async/Stream
+  ## JIT/Stream
 
   @doc false
   def __jit__(fun, args, opts) do
     runtime(:__jit__, fun, args, opts)
-  end
-
-  @doc false
-  def __async__(fun, args, opts) do
-    runtime(:__async__, fun, args, opts)
   end
 
   defp runtime(callback, fun, args, opts) do

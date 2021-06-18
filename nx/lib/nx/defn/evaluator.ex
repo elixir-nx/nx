@@ -12,11 +12,6 @@ defmodule Nx.Defn.Evaluator do
   @random_ops [:random_uniform, :random_normal]
 
   @impl true
-  def __async__(key, vars, fun, opts) do
-    Nx.Defn.Async.async(fn -> __jit__(key, vars, fun, opts) end)
-  end
-
-  @impl true
   def __jit__(_key, vars, fun, _opts) do
     fun.(vars)
     |> composite_eval(vars, %{})
