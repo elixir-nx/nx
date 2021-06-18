@@ -157,10 +157,10 @@ defmodule Nx.Defn.Kernel do
       >
 
   ## Pitfalls
-  
+
   Because `transform/2` is invoked inside `defn`, its scope is tied
   to `defn`. For example, if you do this:
-  
+
       transform(tensor, fn tensor ->
         if Nx.shape(tensor) != {2, 2} do
           raise "bad"
@@ -172,7 +172,7 @@ defmodule Nx.Defn.Kernel do
   defined in Elixir's `Kernel`. Therefore, we recommend all `transform/2`
   calls to simply dispatch to a separate function. The example above
   could be rewritten as:
-  
+
       transform(tensor, &assert_2x2_shape(&1))
 
   where:
