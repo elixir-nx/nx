@@ -264,7 +264,7 @@ defmodule Nx do
   ## Backends
 
   The `Nx` library has built-in support for multiple backends.
-  A tensor is always handled by a backend, the default device
+  A tensor is always handled by a backend, the default backend
   being `Nx.BinaryBackend`, which means the tensor is allocated
   as a binary within the Erlang VM.
 
@@ -2430,19 +2430,16 @@ defmodule Nx do
 
   Note this function keeps the data in the original backend.
   Therefore, use this function with care, as it may duplicate
-  large amounts of data across backends. Therefore, you must
-  `backend_transfer/2`, unless you explicitly want to copy the
-  data.
+  large amounts of data across backends. Generally speaking,
+  you may want to use `backend_transfer/2`, unless you explicitly
+  want to copy the data.
 
-  For convenience, this function accepts a tuple as argument
-  and copies all tensors in the tuple. This behaviour exists
-  as it is common to transfer data from tuples before and after
-  `defn` functions.
+  For convenience, this function accepts tuples and maps as arguments
+  and copies all tensors in them. This behaviour exists as it is
+  common to transfer data from tuples before and after `defn` functions.
 
   *Note: `Nx.default_backend/1` does not affect the behaviour of
-  this function. That's because `Nx.default_backend/1` configures
-  the backend we want to transfer to, which is typically the
-  backend we are copying *from* in this function.
+  this function.
   """
   @doc type: :backend
   def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor) do
@@ -2455,6 +2452,14 @@ defmodule Nx do
     |> Tuple.to_list()
     |> Enum.map(&backend_copy(&1, backend, opts))
     |> List.to_tuple()
+  end
+
+  defp backend_copy(%T{} = tensor, backend, opts) do
+    impl!(tensor).backend_copy(tensor, backend, opts)
+  end
+
+  defp backend_copy(map, backend, opts) when is_map(map) do
+    Map.new(map, fn {k, v} -> {k, backend_copy(v, backend, opts)} end)
   end
 
   defp backend_copy(tensor, backend, opts) do
@@ -2481,15 +2486,13 @@ defmodule Nx do
   implies the data is copied from the GPU to the Erlang VM
   and then deallocated from the device.
 
-  For convenience, this function accepts a tuple as argument
-  and transfers all tensors in the tuple. This behaviour exists
-  as it is common to transfer data from tuples before and after
-  `defn` functions.
+  For convenience, this function accepts maps and tuples as arguments
+  and transfers all tensors in them. This behaviour exists as it is
+  common to transfer data from tuples and maps before and after `defn`
+  functions.
 
   *Note: `Nx.default_backend/1` does not affect the behaviour of
-  this function. That's because `Nx.default_backend/1` configures
-  the backend we want to transfer to, which is typically the
-  backend we are transferring *from* in this function.
+  this function.
 
   ## Examples
 
@@ -2515,6 +2518,14 @@ defmodule Nx do
     |> List.to_tuple()
   end
 
+  defp backend_transfer(%T{} = tensor, backend, opts) do
+    impl!(tensor).backend_transfer(tensor, backend, opts)
+  end
+
+  defp backend_transfer(map, backend, opts) when is_map(map) do
+    Map.new(map, fn {k, v} -> {k, backend_transfer(v, backend, opts)} end)
+  end
+
   defp backend_transfer(tensor, backend, opts) do
     tensor = to_tensor(tensor)
     impl!(tensor).backend_transfer(tensor, backend, opts)
@@ -2525,10 +2536,9 @@ defmodule Nx do
 
   It returns either `:ok` or `:already_deallocated`.
 
-  For convenience, this function accepts a tuple as argument
-  and deallocates all devices in the tuple. This behaviour
-  exists as it is common to de-allocate data from tuples after
-  `defn` functions.
+  For convenience, this function accepts tuples and maps as arguments
+  and deallocates all devices in them. This behaviour exists as it is
+  common to deallocate data from tuples and maps after `defn` functions.
   """
   @doc type: :backend
   def backend_deallocate(tuple_or_tensor)
@@ -2537,7 +2547,17 @@ defmodule Nx do
     tuple
     |> Tuple.to_list()
     |> Enum.map(&backend_deallocate/1)
-    |> List.to_tuple()
+
+    :ok
+  end
+
+  def backend_deallocate(%T{} = tensor) do
+    impl!(tensor).backend_deallocate(tensor)
+  end
+
+  def backend_deallocate(map) when is_map(map) do
+    Enum.map(map, fn {_, v} -> backend_deallocate(v) end)
+    :ok
   end
 
   def backend_deallocate(tensor) do

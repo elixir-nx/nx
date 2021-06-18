@@ -71,7 +71,27 @@ defmodule Nx.TensorTest do
     end
 
     test "on backend_deallocate" do
-      assert Nx.backend_deallocate({Nx.tensor(1), 2}) == {:ok, :ok}
+      assert Nx.backend_deallocate({Nx.tensor(1), 2}) == :ok
+    end
+  end
+
+  describe "maps" do
+    test "on backend_transfer" do
+      assert Nx.backend_transfer(%{foo: Nx.tensor(1), bar: 2}) == %{
+               foo: Nx.tensor(1),
+               bar: Nx.tensor(2)
+             }
+    end
+
+    test "on backend_copy" do
+      assert Nx.backend_copy(%{foo: Nx.tensor(1), bar: 2}) == %{
+               foo: Nx.tensor(1),
+               bar: Nx.tensor(2)
+             }
+    end
+
+    test "on backend_deallocate" do
+      assert Nx.backend_deallocate(%{foo: Nx.tensor(1), bar: 2}) == :ok
     end
   end
 
