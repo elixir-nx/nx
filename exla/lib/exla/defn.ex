@@ -124,7 +124,7 @@ defmodule EXLA.Defn do
       end)
 
     state = %{
-      precision: Keyword.get(options, :precision, :default),
+      precision: Keyword.get(options, :precision, :highest),
       builder: builder,
       params: Map.new(params)
     }
@@ -422,7 +422,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:qr, [{%{type: type}, %{type: type}}, tensor, opts], _ans, state) do
-    {q, r} = EXLA.Op.qr(to_type(tensor, type), opts[:mode] != :reduced, state.precision)
+    {q, r} = EXLA.Op.qr(to_type(tensor, type), opts[:mode] != :reduced)
     EXLA.Op.tuple(state.builder, [q, r])
   end
 

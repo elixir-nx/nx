@@ -2,7 +2,6 @@ defmodule EXLA.DefnAPITest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  @default_defn_compiler EXLA
 
   describe "options" do
     @defn_compiler {EXLA, run_options: [keep_on_device: true]}
@@ -21,7 +20,7 @@ defmodule EXLA.DefnAPITest do
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
       assert_raise RuntimeError,
-                   "Invalid buffer passed to Execute() as argument 1 to replica 0: Invalid argument: Hold requested on deleted or donated buffer",
+                   "Invalid buffer passed to Execute() as argument 1 to replica 0: Invalid argument: Buffer has been deleted or donated.",
                    fn -> add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor) end
 
       assert_raise RuntimeError,

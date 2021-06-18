@@ -28,7 +28,7 @@ class ExlaDevice {
  private:
   xla::PjRtDevice* device_;
   ExlaClient* client_;
-}
+};
 
 class ExlaBuffer {
  public:
@@ -81,7 +81,7 @@ class ExlaClient {
                                               xla::Shape& shape,
                                               int device_id);
 
-  xla::StatusOr<std::vector<ExlaDevice*>> GetDevices();
+  std::vector<ExlaDevice*> GetDevices();
 
  private:
   std::shared_ptr<xla::PjRtClient> client_;

@@ -3,10 +3,7 @@ defmodule EXLA.DefnExprTest do
 
   import Nx.Defn
 
-  @default_defn_compiler {EXLA,
-                          max_float_type: {:f, 32},
-                          max_signed_type: {:s, 32},
-                          max_unsigned_type: {:u, 32}}
+  @default_defn_compiler EXLA
 
   describe "tuples" do
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
@@ -383,20 +380,20 @@ defmodule EXLA.DefnExprTest do
     defn exp(t), do: Nx.exp(t)
 
     test "computes the exp across types" do
-      assert Nx.tensor([1, 2, 3]) |> exp() ==
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
+      assert compare_tensors!(Nx.tensor([1, 2, 3]) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668]))
 
-      assert Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp() ==
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+      assert compare_tensors!(Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32}))
 
-      assert Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp() ==
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+      assert compare_tensors!(Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32}))
 
-      assert Nx.tensor([1.0, 2.0, 3.0]) |> exp() ==
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
+      assert compare_tensors!(Nx.tensor([1.0, 2.0, 3.0]) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668]))
 
-      assert Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp() ==
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+      assert compare_tensors!(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32}))
     end
   end
 

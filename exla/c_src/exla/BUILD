@@ -83,6 +83,7 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
+    "@org_tensorflow//tensorflow/core/tpu:tpu_executor_dlsym_initializer",
   ],
   linkopts = ["-shared"],
   linkshared = 1,

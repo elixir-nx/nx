@@ -7,7 +7,7 @@ defmodule EXLA.DeviceBackend do
   allows the following options:
 
     * `:client` - the client to store the data on
-    * `:device_ordinal` - which device to store it on
+    * `:device_id` - which device to store it on
 
   To get the data out of the device backend into a regular
   tensor, call `Nx.backend_transfer/1` (with the device
@@ -23,9 +23,9 @@ defmodule EXLA.DeviceBackend do
   @impl true
   def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
     client = opts[:client] || :default
-    device_ordinal = opts[:device_ordinal] || -1
+    device_id = opts[:device_id] || 0
     buffer = EXLA.Buffer.buffer(binary, EXLA.Shape.make_shape(type, shape))
-    buffer = EXLA.Buffer.place_on_device(buffer, EXLA.Client.fetch!(client), device_ordinal)
+    buffer = EXLA.Buffer.place_on_device(buffer, EXLA.Client.fetch!(client), device_id)
     put_in(tensor.data, %DB{state: buffer.ref})
   end
 

@@ -13,9 +13,14 @@ xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
   buffer_->BlockHostUntilReady();
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
 
+  // TODO(seanmor5): Investigate ways around this, it should not be necessary
+  // on CPU and GPU
+  xla::Shape host_shape = xla::ShapeUtil::MakeShape(buffer_->on_device_shape().element_type(), buffer_->on_device_shape().dimensions());
+  xla::Literal new_literal = literal->Relayout(host_shape);
+
   ErlNifBinary binary;
-  enif_alloc_binary(literal->size_bytes(), &binary);
-  std::memcpy(binary.data, literal->untyped_data(), literal->size_bytes());
+  enif_alloc_binary(new_literal.size_bytes(), &binary);
+  std::memcpy(binary.data, new_literal.untyped_data(), new_literal.size_bytes());
 
   return nif::make(env, binary);
 }
@@ -101,15 +106,12 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM arguments,
                                                 bool keep_on_device) {
   xla::ExecuteOptions options = {
-    .untuple_result = true
+    .untuple_result = true,
+    .strict_shape_checking = false
   };
 
   EXLA_ASSIGN_OR_RETURN_NIF(std::vector<xla::PjRtBuffer*> input_buffers,
     UnpackRunArguments(env, arguments, client_), env);
-
-  for (auto buf : input_buffers) {
-    LOG(INFO) << xla::ShapeUtil::HumanStringWithLayout(buf->on_device_shape());
-  }
 
   std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({input_buffers});
 
@@ -159,8 +161,8 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
 }
 
-xla::StatusOr<std::vector<ExlaDevice*>> ExlaClient::GetDevices() {
-  EXLA_ASSIGN_OR_RETURN(absl::Span<xla::PjRtDevice*> pjrt_devices, client_->devices());
+std::vector<ExlaDevice*> ExlaClient::GetDevices() {
+ absl::Span<xla::PjRtDevice* const> pjrt_devices = client_->devices();
 
   std::vector<ExlaDevice*> devices;
   devices.reserve(pjrt_devices.size());

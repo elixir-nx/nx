@@ -1631,7 +1631,7 @@ ERL_NIF_TERM lu(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+  if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1645,29 +1645,10 @@ ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[1], &full_matrices)) {
     return exla::nif::error(env, "Unable to get full matrices flag.");
   }
-  if (!exla::nif::get(env, argv[2], &config_int)) {
-    return exla::nif::error(env, "Unable to get precision configuration.");
-  }
-
-  xla::PrecisionConfig::Precision precision;
-  switch (config_int) {
-    case 0:
-      precision = xla::PrecisionConfig::DEFAULT;
-      break;
-    case 1:
-      precision = xla::PrecisionConfig::HIGH;
-      break;
-    case 2:
-      precision = xla::PrecisionConfig::HIGHEST;
-      break;
-    default:
-      LOG(ERROR) << "Invalid precision configuration";
-      return exla::nif::error(env, "Invalid precision configuration");
-  }
 
   xla::XlaOp q, r;
 
-  QrExplicit(*operand, true, q, r);
+  QrExplicit(*operand, full_matrices, q, r);
 
   ERL_NIF_TERM q_term = exla::nif::make<xla::XlaOp>(env, q);
   ERL_NIF_TERM r_term = exla::nif::make<xla::XlaOp>(env, r);
@@ -2152,7 +2133,7 @@ static ErlNifFunc exla_funcs[] = {
   {"cholesky", 1, cholesky},
   {"eigh", 2, eigh},
   {"lu", 1, lu},
-  {"qr", 3, qr},
+  {"qr", 2, qr},
   {"triangular_solve", 6, triangular_solve},
   {"svd", 2, svd},
   // Log Sink

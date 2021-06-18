@@ -145,10 +145,10 @@ defmodule EXLA do
   @doc """
   A shortcut for `Nx.Defn.jit/4` with the EXLA compiler.
 
-      iex> EXLA.jit(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
+      iex> EXLA.jit(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
       #Nx.Tensor<
-        f32[3]
-        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+        s64[3]
+        [2, 4, 6]
       >
 
   See the moduledoc for options.

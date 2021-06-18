@@ -182,7 +182,7 @@ defmodule EXLA.NIF do
 
   def lu(_operand), do: :erlang.nif_error(:undef)
 
-  def qr(_operand, _full_matrices, _precision_config), do: :erlang.nif_error(:undef)
+  def qr(_operand, _full_matrices), do: :erlang.nif_error(:undef)
 
   def svd(_a, _precision_config), do: :erlang.nif_error(:undef)
 
