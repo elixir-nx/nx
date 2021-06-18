@@ -669,21 +669,9 @@ defmodule Nx.BinaryBackend.Matrix do
 
     eigenvals = eigen_val_upper_tri |> get_matrix_elements(diag_indices) |> Enum.sort_by(&abs/1)
 
-    zeros = zeros_matrix(n, n)
-
     eigenvecs =
       eigenvals
-      |> Enum.map(fn lambda ->
-        # Solve for the eigenvectors of the triangularized hessenberg matrix:
-        # H.v = lambda.v
-        # H.v - lambda.v = 0
-        # (H - lambda.I).v = 0
-
-        lambda_eye = element_wise_bin_op(lambda, identity, &*/2)
-        system_matrix = element_wise_bin_op(h, lambda_eye, &-/2)
-
-        solve_matrix(system_matrix, {n, n}, zeros, eps)
-      end)
+      |> Enum.map(&eigen_inverse_power_iteration(&1, h, {n, n}, eps))
       |> transpose_matrix()
 
     {matrix_to_binary(eigenvals, output_type), matrix_to_binary(eigenvecs, output_type)}
@@ -703,6 +691,40 @@ defmodule Nx.BinaryBackend.Matrix do
         {dot_matrix(reflector, a) |> dot_matrix(transpose_matrix(reflector)),
          dot_matrix(reflector, linear_transform)}
     end
+  end
+
+  defp eigen_inverse_power_iteration(eigenvalue, matrix, {n, n}, eps) do
+    # Inverse power iteration method gives eigenvector b through:
+    # b_k+1 = inv(A - lambda.I).b_k / C_k
+    # Where C_k = norm(inv(A - lambda.I).b_k)
+
+    eye = identity_matrix(n, n)
+    lambda_eye = element_wise_bin_op(eye, eigenvalue + 10 * eps, &*/2)
+
+    shifted = element_wise_bin_op(matrix, lambda_eye, &-/2)
+
+    # Initialize b as a random vector
+    b = for _ <- 0..(n - 1), do: :rand.uniform()
+
+    # Since we know the eigenvalue, we can assume the algorithm converges rapidily
+    Enum.reduce_while(0..10, b, fn _, b ->
+      norm_b = b |> Enum.reduce(0, &(&1 * &1 + &2)) |> :math.sqrt()
+
+      {b, norm_b}
+
+      b_normalized = element_wise_bin_op(b, norm_b, &//2)
+
+      b_next = solve_matrix(shifted, {n, n}, b_normalized, eps)
+
+      b_next
+      |> Enum.zip_with(b, &-/2)
+      |> Enum.all?(&(&1 <= eps))
+      |> if do
+        {:halt, b_next}
+      else
+        {:cont, b_next}
+      end
+    end)
   end
 
   defp is_approximately_upper_triangular?(matrix, eps) do
@@ -761,8 +783,12 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp element_wise_bin_op(a, b, fun) when is_list(a) and is_number(b) do
     # Applies a binary operation element-wise between a matrix and a scalar
-    Enum.map(a, fn a_row ->
-      Enum.map(a_row, fn a_elem -> fun.(a_elem, b) end)
+    Enum.map(a, fn
+      a_row when is_list(a_row) ->
+        Enum.map(a_row, fn a_elem -> fun.(a_elem, b) end)
+
+      a_elem ->
+        fun.(a_elem, b)
     end)
   end
 
@@ -877,10 +903,13 @@ defmodule Nx.BinaryBackend.Matrix do
     # Rx = Q_transposed.B
     # x = triangular_solve(R, Q_transposed.B)
 
-    {q, r} = qr_matrix(a, n, n, n, eps)
+    {q, r} = qr_matrix(a, n, n, n, 0)
 
-    qt_b = q |> transpose_matrix() |> dot_matrix(b)
+    qt_b =
+      q
+      |> transpose_matrix()
+      |> Enum.map(&dot_matrix(&1, b))
 
-    ts_matrix(r, qt_b, {n, n}, left_side: true, transform_a: :none, lower: false)
+    ts_matrix(r, qt_b, {n}, left_side: true, transform_a: :none, lower: false)
   end
 end
