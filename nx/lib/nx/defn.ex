@@ -223,7 +223,7 @@ defmodule Nx.Defn do
 
       defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
 
-  **Note:** `jit/4` will ignore the `@defn_compiler` on the executed
+  **Note:** `jit/3` will ignore the `@defn_compiler` on the executed
   function. Be sure to pass the `compiler` and its `opts` as keywords
   instead:
 
@@ -234,6 +234,27 @@ defmodule Nx.Defn do
   def jit(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
     Nx.Defn.Compiler.__jit__(fun, args, opts)
+  end
+
+  @doc """
+  JITs the given function if outside of `defn`, otherwise invokes it.
+
+  It is not possible to invoke `jit/3` inside `defn`, as all code inside
+  `defn` is already either jitted or aot-compiled. However, some libraries
+  may want to provide abstractions that can be invoked either inside `defn`
+  or outside. In such cases, `jit_or_apply/3` can be used to start jitting
+  if it has been invoked outside of a numerical definition.
+
+  The `opts` are the same as the ones given to `jit/3` and they are only
+  used if invoking this function outside of `defn`.
+  """
+  def jit_or_apply(fun, args, opts \\ [])
+      when is_function(fun) and is_list(args) and is_list(opts) do
+    if Nx.Defn.Compiler.current() do
+      apply(fun, args)
+    else
+      jit(fun, args, opts)
+    end
   end
 
   @doc """
@@ -376,6 +397,125 @@ defmodule Nx.Defn do
     after
       File.rm_rf!(output_dir)
     end
+  end
+
+  @doc """
+  Receives an anonymous function and returns a new anonymous function
+  that returns the gradient of the input function when invoked.
+
+  This function is typically used to compute the gradient outside of
+  `defn`. To compute them inside `defn`, prefer `grad/2` instead.
+
+  ## Examples
+
+      iex> fun = Nx.Defn.grad(fn x -> Nx.sin(x) end)
+      iex> fun.(Nx.tensor(0))
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+  """
+  def grad(fun) when is_function(fun, 1) do
+    fn t -> jit_or_apply(fn t -> grad(t, fun) end, [t]) end
+  end
+
+  @doc """
+  Computes the gradient of the given `var` on `fun`.
+
+  This is typically used inside `defn`. The result of the `grad`
+  function must be a scalar tensor. If a non-scalar tensor is given,
+  it is assumed the additional dimensions are batch dimensions.
+
+  ### Examples
+
+      defn tanh_grad(t) do
+        grad(t, &Nx.tanh/&1)
+      end
+
+  To differentiate on multiple vars, pass a tuple as first argument:
+
+      defn tanh_power_grad(a, b) do
+        grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
+      end
+
+  When a tuple is given, a tuple will be returned.
+  """
+  def grad(var_or_vars, fun) when is_function(fun, 1) do
+    {_value, grad} = Nx.Defn.Grad.transform(var_or_vars, fun, & &1)
+    grad
+  end
+
+  @doc """
+  Receives an anonymous function and returns a new anonymous function
+  that returns the value and gradient of the input function when invoked.
+
+  This function is typically used to compute the value and gradient
+  outside of `defn`. To compute them inside `defn`, prefer
+  `value_and_grad/2` instead.
+
+  ## Examples
+
+      iex> fun = Nx.Defn.value_and_grad(fn x -> Nx.sin(x) end)
+      iex> {value, grad} = fun.(Nx.tensor(0))
+      iex> value
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+      iex> grad
+      #Nx.Tensor<
+        f32
+        1.0
+      >
+
+  """
+  def value_and_grad(fun) when is_function(fun, 1) do
+    fn t -> jit_or_apply(fn t -> value_and_grad(t, fun) end, [t]) end
+  end
+
+  @doc """
+  Computes the value and gradient of the given `var` on `fun`
+  with an optional data transformation.
+
+  This is typically used inside `defn`. It returns a tuple with
+  the value and the gradient.
+
+  ### Examples
+
+      defn tanh_grad(t) do
+        value_and_grad(t, &Nx.tanh/&1)
+      end
+
+  To differentiate on multiple vars, pass a tuple as first argument:
+
+      defn tanh_power_grad(a, b) do
+        value_and_grad({a, b}, fn {a, b} -> Nx.tanh(a) + Nx.power(b, 2) end)
+      end
+
+  When a tuple is given, a tuple will be returned.
+
+  `transform` allows you to transform the expression before the gradient is
+  calculated. This enables optimizations that reuse parts of expressions. As
+  an example, consider the following objective function:
+
+      defn objective(predict_fn, loss_fn, params, inputs, targets) do
+        preds = predict_fn.(params, inputs)
+        loss = loss_fn.(preds, targets)
+        {preds, loss}
+      end
+
+  You can compute the gradient with respect to just the loss function by applying
+  a transform:
+
+      {{preds, loss}, gradient} = value_and_grad(params, &objective(predict_fn, loss_fn, &1, inputs, targets), &elem(&1, 1))
+
+  `preds` can be re-used to compute other metrics such as accuracy, absolute error,
+  etc. without having to do another forward pass.
+  """
+  def value_and_grad(var_or_vars, fun, transform \\ & &1)
+      when Kernel.and(is_function(fun, 1), is_function(transform, 1)) do
+    Nx.Defn.Grad.transform(var_or_vars, fun, transform)
   end
 
   @doc """
