@@ -1,4 +1,5 @@
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_cuda_or_rocm",)
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_with_tpu_support",)
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_grpc_cc_dependency",)
 
 package(default_visibility=["//visibility:private"])
@@ -67,7 +68,7 @@ cc_binary(
   srcs = ["exla.cc"],
   deps = if_cuda_or_rocm([
     "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
-    ]) + [
+  ]) + [
     ":exla_nif_util",
     ":exla_client",
     ":exla_aot_compilation",
@@ -83,8 +84,9 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
+  ] + if_with_tpu_support([
     "@org_tensorflow//tensorflow/core/tpu:tpu_executor_dlsym_initializer",
-  ],
+  ]),
   linkopts = ["-shared"],
   linkshared = 1,
 )
