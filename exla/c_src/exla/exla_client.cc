@@ -7,7 +7,9 @@
 
 namespace exla {
 
-ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer): buffer_(std::move(buffer)) {}
+ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
+                       bool can_be_released_after_run): buffer_(std::move(buffer)),
+                                                        can_be_released_after_run_(can_be_released_after_run) {}
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
   buffer_->BlockHostUntilReady();
@@ -35,15 +37,16 @@ xla::Status ExlaBuffer::Deallocate() {
   }
 }
 
-xla::StatusOr<std::vector<xla::PjRtBuffer*>> UnpackRunArguments(ErlNifEnv* env,
-                                                                ERL_NIF_TERM arguments,
-                                                                ExlaClient* client) {
+xla::StatusOr<std::vector<ExlaBuffer*>> UnpackRunArguments(ErlNifEnv* env,
+                                                           ERL_NIF_TERM arguments,
+                                                           ExlaClient* client,
+                                                           int device_id) {
   unsigned int length;
   if (!enif_get_list_length(env, arguments, &length)) {
     return xla::InvalidArgument("Argument is not a list.");
   }
 
-  std::vector<xla::PjRtBuffer*> arg_buffers;
+  std::vector<ExlaBuffer*> arg_buffers;
   arg_buffers.reserve(length);
 
   ERL_NIF_TERM head, tail;
@@ -63,12 +66,12 @@ xla::StatusOr<std::vector<xla::PjRtBuffer*>> UnpackRunArguments(ErlNifEnv* env,
         return xla::InvalidArgument("Expected argument to be shape reference.");
       }
 
-      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(data, *shape, 0));
+      EXLA_ASSIGN_OR_RETURN(ExlaBuffer* buf, client->BufferFromBinary(data, *shape, device_id, true));
 
-      arg_buffers.push_back(buf->buffer());
+      arg_buffers.push_back(buf);
 
     } else if (nif::get<ExlaBuffer*>(env, head, buffer)) {
-      arg_buffers.push_back((*buffer)->buffer());
+      arg_buffers.push_back(*buffer);
     } else {
       return xla::InvalidArgument("Expected argument to be buffer reference.");
     }
@@ -108,31 +111,46 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   options.untuple_result = true;
   options.strict_shape_checking = false;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<xla::PjRtBuffer*> input_buffers,
-    UnpackRunArguments(env, arguments, client_), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<ExlaBuffer*> input_buffers,
+    UnpackRunArguments(env, arguments, client_, 0), env);
 
-  std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({input_buffers});
+  std::vector<xla::PjRtBuffer*> pjrt_buffers;
+  std::vector<ERL_NIF_TERM> terms;
+  pjrt_buffers.reserve(input_buffers.size());
+  terms.reserve(input_buffers.size());
+
+  for (auto buf : input_buffers) {
+    pjrt_buffers.push_back(buf->buffer());
+    // If the buffer was not received as a resource (e.g. we converted
+    // it from a binary to a buffer), we need to make it a resource so
+    // it's tracked and GC'ed along with other buffers that are no longer
+    // in use
+    if (buf->release_after_run()) {
+      terms.push_back(nif::make<ExlaBuffer*>(env, buf));
+    }
+  }
+
+  std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({pjrt_buffers});
 
   EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM ret, UnpackResult(env, std::move(result.at(0)), keep_on_device), env);
-
-  for (auto inp : input_buffers) {
-    inp->Delete();
-  }
 
   return ret;
 }
 
 ExlaClient::ExlaClient(std::shared_ptr<xla::PjRtClient> client) : client_(std::move(client)) {}
 
-xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& binary, xla::Shape& shape, int device_id) {
+xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& binary,
+                                                        xla::Shape& shape,
+                                                        int device_id,
+                                                        bool can_be_released_after_run) {
   xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kZeroCopy;
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
   EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(binary.data, shape, semantics, nullptr, device));
 
-  return new ExlaBuffer(std::move(buffer));
+  return new ExlaBuffer(std::move(buffer), can_be_released_after_run);
 }
 
 xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& computation,
