@@ -166,7 +166,9 @@ The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). 
 To build, clone this repo, select your preferred Dockerfile, and run:
 
 ```shell
-docker build --rm -t exla:cuda10.1 .
+docker build --rm -t exla:host . # Host Docker image
+docker build --rm -t exla:cuda10.2 . # CUDA 10.2 Docker image
+docker build --rm -t exla:rocm . # ROCm Docker image
 ```
 
 Then to run (without Cuda):
@@ -177,7 +179,7 @@ docker run -it \
   -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
   -e EXLA_CACHE=$PWD/tmp/exla_cache \
   -w $PWD \
-  --rm exla:cuda10.1 bash
+  --rm exla:host bash
 ```
 
 With CUDA enabled:
@@ -191,7 +193,7 @@ docker run -it \
   -e EXLA_TARGET=cuda \
   -w $PWD \
   --gpus=all \
-  --rm exla:cuda10.1 bash
+  --rm exla:cuda10.2 bash
 ```
 
 With ROCm enabled:
