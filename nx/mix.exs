@@ -46,7 +46,6 @@ defmodule Nx.MixProject do
       ],
       groups_for_modules: [
         # Nx,
-        # Nx.Async,
         # Nx.Defn,
         # Nx.Defn.Kernel,
         # Nx.LinAlg

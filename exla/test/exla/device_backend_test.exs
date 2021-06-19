@@ -11,7 +11,7 @@ defmodule EXLA.DeviceBackendTest do
     nt = Nx.backend_transfer(et)
     assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
 
-    assert_raise RuntimeError, "Attempt to read from deallocated buffer.", fn ->
+    assert_raise RuntimeError, "CopyToHostAsync() called on deleted or donated buffer", fn ->
       Nx.backend_transfer(et)
     end
   end

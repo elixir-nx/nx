@@ -7,8 +7,8 @@ defmodule EXLA.Client do
 
   alias __MODULE__
 
-  @enforce_keys [:ref, :platform, :name, :device_count, :default_device_ordinal]
-  defstruct [:ref, :platform, :name, :device_count, :default_device_ordinal]
+  @enforce_keys [:ref, :platform, :name, :device_count, :devices]
+  defstruct [:ref, :platform, :name, :device_count, :devices]
 
   @doc """
   Fetches a client with the given `name` from configuration.
@@ -29,10 +29,6 @@ defmodule EXLA.Client do
                   "in your config files are: #{inspect(Keyword.keys(clients))}"
 
       platform = Keyword.get(options, :platform, :host)
-      # This is the default num_replicas used on compile, so we should probably rename it
-      num_replicas = Keyword.get(options, :default_num_replicas, 1)
-      # The number of threads that will get used during a computation
-      intra_op_parallelism_threads = Keyword.get(options, :intra_op_parallelism_threads, -1)
       # Fraction of GPU memory to preallocate
       memory_fraction = Keyword.get(options, :memory_fraction, 0.9)
       # Flag for preallocating GPU memory
@@ -41,54 +37,27 @@ defmodule EXLA.Client do
 
       ref =
         case platform do
-          :host -> EXLA.NIF.get_host_client(num_replicas, intra_op_parallelism_threads)
-          :cuda -> EXLA.NIF.get_cuda_client(num_replicas, intra_op_parallelism_threads, memory_fraction, preallocate_int)
-          :rocm -> EXLA.NIF.get_rocm_client(num_replicas, intra_op_parallelism_threads, memory_fraction, preallocate_int)
+          :host -> EXLA.NIF.get_host_client()
+          :cuda -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+          :rocm -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+          :tpu -> EXLA.NIF.get_tpu_client()
           _ -> raise ArgumentError, "unknown Exla platform: #{inspect(platform)}"
         end
         |> unwrap!()
 
       device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
-
-      default_device_ordinal =
-        if default = options[:default_device_ordinal] do
-          default
-        else
-          EXLA.NIF.get_default_device_ordinal(ref) |> unwrap!()
-        end
+      devices = EXLA.NIF.get_devices(ref) |> unwrap!()
 
       client = %Client{
         ref: ref,
         platform: platform,
         name: name,
         device_count: device_count,
-        default_device_ordinal: default_device_ordinal
+        devices: devices
       }
 
       {nil, client}
     end)
-  end
-
-  @doc """
-  Validates the given device ordinal.
-  """
-  def validate_device_ordinal!(
-        %Client{device_count: device_count, default_device_ordinal: default_device_ordinal},
-        ordinal
-      )
-      when is_integer(ordinal) do
-    cond do
-      ordinal < 0 ->
-        default_device_ordinal
-
-      ordinal < device_count ->
-        ordinal
-
-      true ->
-        raise ArgumentError,
-              "Invalid device ordinal. It must be -1, to pick the default, " <>
-                "or a number >= 0 and < #{device_count}"
-    end
   end
 
   @doc """

@@ -388,7 +388,8 @@ defmodule EXLA.Op do
   def while(
         %Computation{ref: cond_fn},
         %Computation{ref: body_fn},
-        %Op{builder: builder, ref: init_value}) do
+        %Op{builder: builder, ref: init_value}
+      ) do
     ref = EXLA.NIF.while(cond_fn, body_fn, init_value) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
@@ -451,11 +452,10 @@ defmodule EXLA.Op do
     }
   end
 
-  def qr(%Op{builder: builder, ref: operand}, full_matrices, precision)
+  def qr(%Op{builder: builder, ref: operand}, full_matrices)
       when is_boolean(full_matrices) do
     full_matrices = boolean_to_int(full_matrices)
-    precision_config = get_precision_config_int(precision)
-    {q_ref, r_ref} = EXLA.NIF.qr(operand, full_matrices, precision_config) |> unwrap!()
+    {q_ref, r_ref} = EXLA.NIF.qr(operand, full_matrices) |> unwrap!()
 
     {
       %Op{builder: builder, ref: q_ref},

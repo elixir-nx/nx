@@ -189,32 +189,6 @@ defmodule Nx.Defn do
   """
 
   @doc """
-  Invokes the anonymous function with asynchronously with
-  just-in-time compilation.
-
-  The anonymous function will be invoked with tensor expressions
-  which are JIT compiled and then invoked. The anonymous function
-  will also run outside of the current Elixir process. You can
-  retrieve the result by calling `Nx.Async.await!/1`. Take the
-  following definition:
-
-      defn softmax(t), do: Nx.exp(t) / Nx.sum(Nx.exp(t))
-
-  We can invoke it asynchronously as follows:
-
-      some_struct = Nx.Defn.async(&Mod.softmax/1, [my_tensor], compiler: EXLA)
-      Nx.Async.await!(some_struct)
-
-  **Note:** similar to `jit/4`, `async/4` will ignore the `@defn_compiler`
-  on the executed function. Be sure to pass the `compiler` and its `opts`
-  as arguments instead.
-  """
-  def async(fun, args, opts \\ [])
-      when is_function(fun) and is_list(args) and is_list(opts) do
-    Nx.Defn.Compiler.__async__(fun, args, opts)
-  end
-
-  @doc """
   Invokes the anonymous function with just-in-time compilation.
 
   The anonymous function will be invoked with tensor expressions

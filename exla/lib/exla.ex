@@ -145,34 +145,16 @@ defmodule EXLA do
   @doc """
   A shortcut for `Nx.Defn.jit/4` with the EXLA compiler.
 
-      iex> EXLA.jit(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
+      iex> EXLA.jit(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
       #Nx.Tensor<
-        f32[3]
-        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
+        s64[3]
+        [2, 4, 6]
       >
 
   See the moduledoc for options.
   """
   def jit(function, args, options \\ []) do
     Nx.Defn.jit(function, args, Keyword.put(options, :compiler, EXLA))
-  end
-
-  @doc """
-  A shortcut for `Nx.Defn.async/4` with the EXLA compiler.
-
-      iex> async = EXLA.async(&Nx.exp/1, [Nx.tensor([1, 2, 3])])
-      iex> async
-      #EXLA.Defn.Async<...>
-      iex> Nx.Async.await!(async)
-      #Nx.Tensor<
-        f32[3]
-        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
-      >
-
-  See the moduledoc for options.
-  """
-  def async(function, args, options \\ []) do
-    Nx.Defn.async(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
   @doc """
@@ -266,9 +248,6 @@ defmodule EXLA do
 
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
-
-  @impl true
-  defdelegate __async__(key, vars, fun, opts), to: EXLA.Defn
 
   @impl true
   defdelegate __aot__(output_dir, module, tuples, opts), to: EXLA.Defn

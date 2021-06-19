@@ -1,6 +1,6 @@
 FROM rocm/tensorflow:latest
 
-ARG bazel_bin_url="https://github.com/bazelbuild/bazel/releases/download/3.4.1/bazel-3.4.1-linux-x86_64"
+ARG bazel_bin_url="https://github.com/bazelbuild/bazel/releases/download/3.7.2/bazel-3.7.2-linux-x86_64"
 
 RUN echo ${bazel_bin_url}
 RUN curl -L ${bazel_bin_url} -o /usr/local/bin/bazel \

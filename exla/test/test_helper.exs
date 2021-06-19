@@ -42,6 +42,11 @@ client = EXLAHelpers.client()
 multi_device =
   if client.device_count < 2 or client.platform != :host, do: [:multi_device], else: []
 
+skip_tpu_tests =
+  if client.platform == :tpu,
+    do: [:unsupported_dilated_reduce_window, :unsupported_64_bit_op, :aot],
+    else: []
+
 if client.platform == :host and client.device_count < 2 do
   cores = System.schedulers_online()
 
@@ -51,7 +56,7 @@ if client.platform == :host and client.device_count < 2 do
 end
 
 ExUnit.start(
-  exclude: [:platform] ++ multi_device,
+  exclude: [:platform] ++ multi_device ++ skip_tpu_tests,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )

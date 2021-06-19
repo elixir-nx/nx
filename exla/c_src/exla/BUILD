@@ -1,22 +1,8 @@
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_cuda_or_rocm",)
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_with_tpu_support",)
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_grpc_cc_dependency",)
 
 package(default_visibility=["//visibility:private"])
-
-cc_library(
-  name = "exla_allocator",
-  srcs = ["exla_allocator.cc"],
-  hdrs = ["exla_allocator.h"],
-  deps = [
-    ":exla_nif_util",
-    ":exla_device",
-    "@org_tensorflow//tensorflow/core:lib",
-    "@org_tensorflow//tensorflow/core/framework:allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime/gpu:gpu_bfc_allocator",
-    "@org_tensorflow//tensorflow/core/common_runtime/device:device_mem_allocator",
-    "@org_tensorflow//tensorflow/stream_executor:tf_allocator_adapter",
-  ],
-)
 
 cc_library(
   name = "exla_log_sink",
@@ -27,29 +13,27 @@ cc_library(
   ],
 )
 
-cc_library (
-  name = "exla_device",
-  srcs = ["exla_device.cc"],
-  hdrs = ["exla_device.h"],
-  deps = [
-    "@org_tensorflow//tensorflow/compiler/xla/client:local_client",
-    "@org_tensorflow//tensorflow/stream_executor:stream_executor",
-  ],
-)
-
 cc_library(
   name = "exla_client",
   srcs = ["exla_client.cc"],
   hdrs = ["exla_client.h"],
   deps = [
-    ":exla_device",
-    ":exla_allocator",
     ":exla_nif_util",
-    "@org_tensorflow//tensorflow/core/framework:allocator",
-    "@org_tensorflow//tensorflow/compiler/xla:cpu_function_runtime",
-    "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/compiler/xla/service/gpu:gpu_executable_run_options",
-    "@org_tensorflow//tensorflow/core:lib",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt/distributed:protocol",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt/distributed:protocol_proto_cc",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:pjrt_client",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:gpu_device",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt/distributed:client",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:pjrt_stream_executor_client",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:local_device_state",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:event_pool",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:semaphore",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:worker_thread",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:tracked_device_buffer",
+    "@org_tensorflow//tensorflow/core/common_runtime:bfc_allocator",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:cpu_device",
+    "@org_tensorflow//tensorflow/compiler/xla/pjrt:tpu_client",
+     tf_grpc_cc_dependency(),
   ],
 )
 
@@ -84,7 +68,7 @@ cc_binary(
   srcs = ["exla.cc"],
   deps = if_cuda_or_rocm([
     "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
-    ]) + [
+  ]) + [
     ":exla_nif_util",
     ":exla_client",
     ":exla_aot_compilation",
@@ -100,7 +84,9 @@ cc_binary(
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_builder",
     "@org_tensorflow//tensorflow/compiler/xla/client:xla_computation",
     "@org_tensorflow//tensorflow/compiler/jit:xla_cpu_jit",
-  ],
+  ] + if_with_tpu_support([
+    "@org_tensorflow//tensorflow/core/tpu:tpu_executor_dlsym_initializer",
+  ]),
   linkopts = ["-shared"],
   linkshared = 1,
 )

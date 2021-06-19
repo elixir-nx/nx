@@ -182,38 +182,30 @@ defmodule EXLA.NIF do
 
   def lu(_operand), do: :erlang.nif_error(:undef)
 
-  def qr(_operand, _full_matrices, _precision_config), do: :erlang.nif_error(:undef)
+  def qr(_operand, _full_matrices), do: :erlang.nif_error(:undef)
 
   def svd(_a, _precision_config), do: :erlang.nif_error(:undef)
 
   def triangular_solve(_a, _b, _left_side, _lower, _unit_diagonal, _transpose_a),
     do: :erlang.nif_error(:undef)
 
-  def get_host_client(_num_replicas, _intra_op_parallelism_threads),
+  def get_host_client(),
     do: :erlang.nif_error(:undef)
 
-  def get_cuda_client(
-        _num_replicas,
-        _intra_op_parallelism_threads,
+  def get_gpu_client(
         _memory_fraction,
         _preallocate
       ),
       do: :erlang.nif_error(:undef)
 
-  def get_rocm_client(
-        _num_replicas,
-        _intra_op_parallelism_threads,
-        _memory_fraction,
-        _preallocate
-      ),
-      do: :erlang.nif_error(:undef)
+  def get_tpu_client(), do: :erlang.nif_error(:undef)
 
   def get_supported_platforms, do: :erlang.nif_error(:undef)
 
-  def get_default_device_ordinal(_client),
+  def get_device_count(_client),
     do: :erlang.nif_error(:undef)
 
-  def get_device_count(_client),
+  def get_devices(_client),
     do: :erlang.nif_error(:undef)
 
   def build(_builder, _root),
@@ -233,13 +225,6 @@ defmodule EXLA.NIF do
         _client,
         _executable,
         _arguments,
-        _output_shape,
-        _run_id,
-        _rng_seed,
-        _launch_id,
-        _replica,
-        _partition,
-        _async_run,
         _keep_on_device
       ),
       do: :erlang.nif_error(:undef)
@@ -248,22 +233,9 @@ defmodule EXLA.NIF do
         _client,
         _executable,
         _arguments,
-        _output_shape,
-        _run_id,
-        _rng_seed,
-        _launch_id,
-        _replica,
-        _partition,
-        _async_run,
         _keep_on_device
       ),
       do: :erlang.nif_error(:undef)
-
-  def await_streams_cpu(_client, _buffer, _keep_on_device),
-    do: :erlang.nif_error(:undef)
-
-  def await_streams_io(_client, _buffer, _keep_on_device),
-    do: :erlang.nif_error(:undef)
 
   def compile_aot(
         _computation,

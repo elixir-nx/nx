@@ -1,6 +1,6 @@
 <h1><img src="https://github.com/elixir-nx/nx/raw/main/exla/exla.png" alt="EXLA" width="350"></h1>
 
-Elixir client for Google's XLA (Accelerated Linear Algebra). It includes integration with the `Nx` library to compile numerical definitions (`defn`) to the CPU/GPU.
+Elixir client for Google's XLA (Accelerated Linear Algebra). It includes integration with the `Nx` library to compile numerical definitions (`defn`) to the CPU/GPU/TPU.
 
 ## Installation
 
@@ -24,8 +24,8 @@ end
 You will need the following installed in your system to compile EXLA:
 
   * [Git](https://git-scm.com/) for checking out Tensorflow
-  * [Bazel v3.1](https://bazel.build/) for compiling Tensorflow (note Bazel v4 is available but it is not compatible)
-  * [Python3](https://python.org) for compiling Tensorflow
+  * [Bazel v3.7.2](https://bazel.build/) for compiling Tensorflow
+  * [Python3](https://python.org) with NumPy installed for compiling Tensorflow
 
 If running on Windows, you will also need:
 
@@ -42,12 +42,14 @@ The first compilation will take a long time, as it needs to compile parts of Ten
   * EXLA
     * Make sure you use `:exla` as a `:github` dependency and not as a `:path` dependency to avoid rebuilds
   * Bazel
-    * Use `bazel --version` to check your Bazel version, make sure you are using v3.1
+    * Use `bazel --version` to check your Bazel version, make sure you are using v3.7.2
     * Most binaries are also available on [Github](https://github.com/bazelbuild/bazel/releases)
     * It can also be installed with `asdf`:
       * asdf plugin-add bazel
-      * asdf install bazel 3.1.0
-      * asdf global bazel 3.1.0
+      * asdf install bazel 3.7.2
+      * asdf global bazel 3.7.2
+  * GCC
+    * You may have issues with newer and older versions of GCC. TensorFlow builds are known to work with GCC versions between 7.5 and 9.3. If your system uses a newer GCC version, you can install an older version and tell Bazel to use it with `export CC=/path/to/gcc-{version}` where version is the GCC version you installed. 
   * ElixirLS on VSCode
     * Make sure that your Python installation is available globally, as ElixirLS won't know how to activate Python
 
@@ -72,7 +74,7 @@ After doing any of the steps above, it may be necessary to clear the build cache
 
 ### GPU Support
 
-To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1. You need either cuDNN 7 or 8 installed. [See the installation instructions](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html) and check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
+To run EXLA on a GPU, you need either ROCm or CUDA/cuDNN. EXLA has been tested with combinations of CUDA 10.1, 10.2, 11.0, and 11.1. You need either cuDNN 7 or 8 installed. **NOTE: There are known [issues](https://github.com/elixir-nx/nx/issues/197) with cuDNN 8 at this time. Consider using the CUDA Dockerfile which has been tested and known to work.** [See the installation instructions](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html) and check the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/support-matrix/index.html) to ensure your drivers and versions are compatible. EXLA has been tested only on ROCm 3.9.0.
 
 In order to link-in the appropriate dependencies for your platform's accelerator, you need to set the appropriate configuration flags in the `EXLA_FLAGS` environment variable.
 
@@ -90,11 +92,20 @@ export EXLA_FLAGS=--config=rocm --action_env=HIP_PLATFORM=hcc
 
 When building EXLA locally, it's recommended you set these flags in `.bash_profile` or a similar configuration file so you don't need to export them every time you need to build EXLA.
 
+### TPU Support
+
+EXLA supports GCP TPU VMs. If you have acess to a TPU VM, you need only to install Elixir and OTP24. Then, set the appropriate environment variables:
+
+```
+export EXLA_FLAGS=--config=tpu
+export EXLA_TARGET=tpu
+```
+
 ### Environment variables
 
 You can use the following env vars to customize your build:
 
-  * `EXLA_FLAGS` - controls compilation with GPU support
+  * `EXLA_FLAGS` - controls compilation with accelerator support
 
   * `EXLA_MODE` - controls to compile `opt` (default) artifacts or `dbg`, example: `EXLA_MODE=dbg`
 
@@ -155,7 +166,9 @@ The easiest way to build is with [Docker](https://docs.docker.com/get-docker/). 
 To build, clone this repo, select your preferred Dockerfile, and run:
 
 ```shell
-docker build --rm -t exla:cuda10.1 .
+docker build --rm -t exla:host . # Host Docker image
+docker build --rm -t exla:cuda10.2 . # CUDA 10.2 Docker image
+docker build --rm -t exla:rocm . # ROCm Docker image
 ```
 
 Then to run (without Cuda):
@@ -166,7 +179,7 @@ docker run -it \
   -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
   -e EXLA_CACHE=$PWD/tmp/exla_cache \
   -w $PWD \
-  --rm exla:cuda10.1 bash
+  --rm exla:host bash
 ```
 
 With CUDA enabled:
@@ -180,7 +193,7 @@ docker run -it \
   -e EXLA_TARGET=cuda \
   -w $PWD \
   --gpus=all \
-  --rm exla:cuda10.1 bash
+  --rm exla:cuda10.2 bash
 ```
 
 With ROCm enabled:

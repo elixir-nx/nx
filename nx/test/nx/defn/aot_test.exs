@@ -6,7 +6,6 @@ defmodule Nx.Defn.AOTTest do
   defmodule AOT do
     @behaviour Nx.Defn.Compiler
 
-    def __async__(_, _, _, _), do: raise("not implemented")
     def __jit__(_, _, _, _), do: raise("not implemented")
 
     def __aot__(dir, module, functions, _) do
