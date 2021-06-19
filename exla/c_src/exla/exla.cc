@@ -1764,7 +1764,7 @@ ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
 }
 
-ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM get_gpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -2010,7 +2010,7 @@ static ErlNifFunc exla_funcs[] = {
   {"parameter", 4, parameter},
   // ExlaClient
   {"get_host_client", 0, get_host_client},
-  {"get_cuda_client", 2, get_cuda_client},
+  {"get_gpu_client", 2, get_gpu_client},
   {"get_tpu_client", 0, get_tpu_client},
   {"get_device_count", 1, get_device_count},
   {"get_devices", 1, get_devices},

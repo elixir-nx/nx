@@ -38,9 +38,9 @@ defmodule EXLA.Client do
       ref =
         case platform do
           :host -> EXLA.NIF.get_host_client()
-          :cuda -> EXLA.NIF.get_cuda_client(memory_fraction, preallocate_int)
+          :cuda -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+          :rocm -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
           :tpu -> EXLA.NIF.get_tpu_client()
-          #         :rocm -> EXLA.NIF.get_rocm_client(num_replicas, intra_op_parallelism_threads, memory_fraction, preallocate_int)
           _ -> raise ArgumentError, "unknown Exla platform: #{inspect(platform)}"
         end
         |> unwrap!()

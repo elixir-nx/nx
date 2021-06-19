@@ -192,21 +192,13 @@ defmodule EXLA.NIF do
   def get_host_client(),
     do: :erlang.nif_error(:undef)
 
-  def get_cuda_client(
+  def get_gpu_client(
         _memory_fraction,
         _preallocate
       ),
       do: :erlang.nif_error(:undef)
 
   def get_tpu_client(), do: :erlang.nif_error(:undef)
-
-  # def get_rocm_client(
-  #       _num_replicas,
-  #       _intra_op_parallelism_threads,
-  #       _memory_fraction,
-  #       _preallocate
-  #     ),
-  #     do: :erlang.nif_error(:undef)
 
   def get_supported_platforms, do: :erlang.nif_error(:undef)
 
