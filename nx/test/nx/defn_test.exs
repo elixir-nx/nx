@@ -4,7 +4,9 @@ defmodule Nx.DefnTest do
   alias Nx.Tensor, as: T
   alias Nx.Defn.{Expr, Identity, Evaluator}
   alias Nx.DefnTest.Sample
+
   import Nx.Defn
+  doctest Nx.Defn
 
   defmacrop location(plus) do
     file = Path.relative_to_cwd(__CALLER__.file)
@@ -1184,11 +1186,6 @@ defmodule Nx.DefnTest do
   describe "jit" do
     defn defn_jit({a, b}, c), do: a + b - c
 
-    def elixir_jit({a, b}, c) do
-      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Identity]
-      a |> Nx.add(b) |> Nx.subtract(c)
-    end
-
     test "compiles defn function" do
       assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
       assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
@@ -1196,6 +1193,19 @@ defmodule Nx.DefnTest do
 
       assert %T{data: %Expr{op: :subtract}} =
                Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
+    end
+
+    @defn_compiler Evaluator
+    defn defn_jit_or_apply(ab, c), do: Nx.Defn.jit_or_apply(&defn_jit/2, [ab, c])
+
+    test "jits or applies" do
+      assert Nx.Defn.jit_or_apply(&defn_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
+      assert defn_jit_or_apply({4, 5}, 3) == Nx.tensor(6)
+    end
+
+    def elixir_jit({a, b}, c) do
+      true = Process.get(Nx.Defn.Compiler) in [Evaluator, Identity]
+      a |> Nx.add(b) |> Nx.subtract(c)
     end
 
     test "compiles elixir function" do

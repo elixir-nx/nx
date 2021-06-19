@@ -511,8 +511,20 @@ defmodule Nx.Defn.Compiler do
     {{{:., dot_meta, [fun]}, meta, args}, state}
   end
 
+  defp normalize({{:., _, [Nx.Defn.Kernel, :transform]} = call, meta, [ast, fun]}, state) do
+    {ast, state} = normalize(ast, state)
+
+    fun =
+      Macro.prewalk(fun, fn
+        var when is_var(var) -> normalize_var(var)
+        node -> node
+      end)
+
+    {{call, meta, [ast, fun]}, state}
+  end
+
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state)
-       when mod in [Nx, Nx.LinAlg] do
+       when mod in [Nx, Nx.LinAlg, Nx.Defn, Nx.Defn.Kernel] do
     if name in @forbidden_ops do
       mfa = Exception.format_mfa(mod, name, length(args))
       compile_error!(meta, state, "#{mfa} is not allowed inside defn")
@@ -521,27 +533,6 @@ defmodule Nx.Defn.Compiler do
     {args, state} = normalize_list(args, state)
     args = rewrite_args(name, args)
     {{{:., dot_meta, [mod, name]}, meta, args}, state}
-  end
-
-  defp normalize({{:., _, [Nx.Defn.Kernel, name]} = call, meta, args}, state) do
-    {args, state} =
-      case args do
-        [ast, fun] when name == :transform ->
-          {ast, state} = normalize(ast, state)
-
-          fun =
-            Macro.prewalk(fun, fn
-              var when is_var(var) -> normalize_var(var)
-              node -> node
-            end)
-
-          {[ast, fun], state}
-
-        _ ->
-          normalize_list(args, state)
-      end
-
-    {{call, meta, args}, state}
   end
 
   defp normalize({{:., _, [Access, :get]} = call, meta, args}, state) do
