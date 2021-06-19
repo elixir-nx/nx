@@ -936,21 +936,21 @@ defmodule NxTest do
     test "works with :window_dilations option as an integer" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       opts = [window_dilations: 2]
-      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> Nx.max(x, acc) end)
       assert out == Nx.tensor([[9]])
     end
 
     test "works with :strides option as an integer" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       opts = [strides: 1]
-      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> Nx.max(x, acc) end)
       assert out == Nx.tensor([[5, 6], [8, 9]])
     end
 
     test "works with :padding option as a list of shape-matching integer tuples" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       opts = [padding: [{0, 0}, {0, 1}]]
-      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> Nx.max(x, acc) end)
       assert Nx.shape(out) == {2, 3}
 
       assert out ==

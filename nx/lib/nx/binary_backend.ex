@@ -1357,9 +1357,9 @@ defmodule Nx.BinaryBackend do
           window_val =
             for <<match!(x, 0) <- window>>,
               reduce: acc,
-              do: (acc -> fun.(read!(x, 0), acc))
+              do: (acc -> fun.(to_scalar(read!(x, 0)), acc))
 
-          <<write!(window_val, 0)>>
+          to_binary(window_val)
         end
       end
 
@@ -1368,7 +1368,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def window_sum(out, tensor, window_dimensions, opts) do
-    fun = fn a, b -> a + b end
+    fun = fn a, b -> Nx.add(a, b) end
     reduce_window(out, tensor, 0, window_dimensions, opts, fun)
   end
 
@@ -1382,7 +1382,7 @@ defmodule Nx.BinaryBackend do
         read!(x, 0)
       end
 
-    fun = fn a, b -> max(a, b) end
+    fun = fn a, b -> Nx.max(a, b) end
     reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
@@ -1396,13 +1396,13 @@ defmodule Nx.BinaryBackend do
         read!(x, 0)
       end
 
-    fun = fn a, b -> min(a, b) end
+    fun = fn a, b -> Nx.min(a, b) end
     reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
   def window_product(out, tensor, window_dimensions, opts) do
-    fun = fn a, b -> a * b end
+    fun = fn a, b -> Nx.multiply(a, b) end
     reduce_window(out, tensor, 1, window_dimensions, opts, fun)
   end
 
