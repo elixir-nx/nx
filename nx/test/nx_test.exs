@@ -675,6 +675,34 @@ defmodule NxTest do
                  ]
                ])
     end
+
+    test "computes a same padding window sum f64" do
+      t = Nx.iota({3, 3}, type: {:f, 64})
+
+      assert Nx.window_sum(t, {2, 1}, padding: :same) ==
+               Nx.tensor([[3.0, 5.0, 7.0], [9.0, 11.0, 13.0], [6.0, 7.0, 8.0]], type: {:f, 64})
+    end
+
+    test "computes a same padding window product f64" do
+      t = Nx.iota({3, 3}, type: {:f, 64})
+
+      assert Nx.window_product(t, {2, 1}, padding: :same) ==
+               Nx.tensor([[0.0, 4.0, 10.0], [18.0, 28.0, 40.0], [6.0, 7.0, 8.0]], type: {:f, 64})
+    end
+
+    test "computes a same padding window max f64" do
+      t = Nx.iota({3, 3}, type: {:f, 64})
+
+      assert Nx.window_max(t, {2, 1}, padding: :same) ==
+               Nx.tensor([[3, 4, 5], [6, 7, 8], [6, 7, 8]], type: {:f, 64})
+    end
+
+    test "computes a same padding window min f64" do
+      t = Nx.iota({3, 3}, type: {:f, 64})
+
+      assert Nx.window_min(t, {2, 1}, padding: :same) ==
+               Nx.tensor([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]], type: {:f, 64})
+    end
   end
 
   describe "access" do
