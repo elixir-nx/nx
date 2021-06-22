@@ -6072,7 +6072,7 @@ defmodule Nx do
       iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
       ...>  init_value, {2, 2},
-      ...>  fn x, acc -> max(x, acc) end
+      ...>  fn x, acc -> Nx.max(x, acc) end
       ...> )
       #Nx.Tensor<
         s64[3][3]
@@ -6087,7 +6087,7 @@ defmodule Nx do
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
       ...>  init_value, {2, 2},
       ...>  [padding: :same, strides: [1, 1]],
-      ...>  fn x, acc -> max(x, acc) end
+      ...>  fn x, acc -> Nx.max(x, acc) end
       ...> )
       #Nx.Tensor<
         s64[3][3]
@@ -6101,7 +6101,7 @@ defmodule Nx do
       iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6]]),
       ...>  0, {1, 2},
       ...>  [padding: :same, strides: [1, 1]],
-      ...>  fn x, acc -> x + acc end
+      ...>  fn x, acc -> Nx.add(x, acc) end
       ...> )
       #Nx.Tensor<
         s64[2][3]
@@ -6113,7 +6113,7 @@ defmodule Nx do
 
       iex> Nx.reduce_window(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
       ...>  0, {1, 1, 2}, [padding: :valid, strides: [2, 1, 1], window_dilations: [1, 1, 2]],
-      ...>  fn x, acc -> x + acc end)
+      ...>  fn x, acc -> Nx.add(x, acc) end)
       #Nx.Tensor<
         s64[1][2][2]
         [
