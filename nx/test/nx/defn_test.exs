@@ -159,6 +159,27 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = a
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = b
     end
+
+    defn verify_maps(map) do
+      transform(map, fn map ->
+        for {k, v} <- map do
+          assert Elixir.Kernel.==(v.shape, {String.to_integer(k)})
+        end
+
+        map
+      end)
+    end
+
+    test "keeps map ordering across different sizes" do
+      size = 50
+      map = for i <- 1..size, into: %{}, do: {"#{i}", Nx.iota({i})}
+      map = verify_maps(map)
+      assert map_size(map) == size
+
+      for {k, v} <- map do
+        assert v.shape == {String.to_integer(k)}
+      end
+    end
   end
 
   describe "anonymous functions args" do

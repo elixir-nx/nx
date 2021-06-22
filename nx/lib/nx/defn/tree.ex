@@ -347,6 +347,7 @@ defmodule Nx.Defn.Tree do
     {list, acc} =
       map
       |> assert_no_struct!()
+      |> Enum.sort()
       |> Enum.map_reduce(acc, fn {k, v}, acc ->
         {v, acc} = args_to_each(v, acc, fun)
         {{k, v}, acc}
