@@ -10,7 +10,7 @@ defmodule EXLA.Application do
       _ -> :os.set_signal(:sigchld, :default)
     end
 
-    children = [EXLA.LockedCache, EXLA.Logger]
+    children = [EXLA.LockedCache, EXLA.Logger, EXLA.CallbackRegistry]
     Supervisor.start_link(children, name: __MODULE__, strategy: :one_for_one)
   end
 end
