@@ -304,8 +304,8 @@ defmodule Nx.BinaryBackend do
   # We ignore the out because we need to recur over the shape
   # as we transpose and build the rest.
   @impl true
-  def pad(_out, t, pad_value, padding_config) do
-    pad_value = to_scalar(pad_value)
+  def pad(out, t, pad_value, padding_config) do
+    pad_value = to_binary(as_type(out, pad_value))
 
     case t.shape do
       {} ->
@@ -339,25 +339,20 @@ defmodule Nx.BinaryBackend do
     view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
     new_shape = pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high, interior)
 
-    {edge_low_padding, edge_high_padding, interior_padding} =
-      match_types [type] do
-        edge_high_padding =
-          if edge_high <= 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_high, into: <<>>, do: <<write!(value, 0)>>)
+    edge_high_padding =
+      if edge_high <= 0,
+        do: <<>>,
+        else: for(_ <- 1..edge_high, into: <<>>, do: value)
 
-        edge_low_padding =
-          if edge_low <= 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
+    edge_low_padding =
+      if edge_low <= 0,
+        do: <<>>,
+        else: for(_ <- 1..edge_low, into: <<>>, do: value)
 
-        interior_padding =
-          if interior == 0,
-            do: <<>>,
-            else: for(_ <- 1..interior, into: <<>>, do: <<write!(value, 0)>>)
-
-        {edge_low_padding, edge_high_padding, interior_padding}
-      end
+    interior_padding =
+      if interior == 0,
+        do: <<>>,
+        else: for(_ <- 1..interior, into: <<>>, do: value)
 
     interior_padding_size = interior * size
 
@@ -1339,10 +1334,11 @@ defmodule Nx.BinaryBackend do
     padding_config = opts[:padding]
     strides = opts[:strides]
     dilations = opts[:window_dilations]
-    acc = to_scalar(acc)
 
     %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
+
+    acc = to_scalar(acc)
 
     data = to_binary(tensor)
     weighted_shape = weighted_shape(padded_shape, size, window_dimensions, dilations)
@@ -1368,19 +1364,21 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def window_sum(out, tensor, window_dimensions, opts) do
+    %{type: type} = out
+
+    init_value = scalar_to_binary(0, type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
+
     fun = fn a, b -> a + b end
-    reduce_window(out, tensor, 0, window_dimensions, opts, fun)
+    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
   def window_max(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value =
-      match_types [type] do
-        <<match!(x, 0)>> = Nx.Type.min_value_binary(type)
-        read!(x, 0)
-      end
+    init_value = Nx.Type.min_value_binary(type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> max(a, b) end
     reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
@@ -1390,11 +1388,8 @@ defmodule Nx.BinaryBackend do
   def window_min(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value =
-      match_types [type] do
-        <<match!(x, 0)>> = Nx.Type.max_value_binary(type)
-        read!(x, 0)
-      end
+    init_value = Nx.Type.max_value_binary(type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> min(a, b) end
     reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
@@ -1402,8 +1397,13 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def window_product(out, tensor, window_dimensions, opts) do
+    %{type: type} = out
+
+    init_value = scalar_to_binary(1, type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
+
     fun = fn a, b -> a * b end
-    reduce_window(out, tensor, 1, window_dimensions, opts, fun)
+    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
