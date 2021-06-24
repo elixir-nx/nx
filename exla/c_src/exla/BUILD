@@ -14,6 +14,17 @@ cc_library(
 )
 
 cc_library(
+  name = "exla_host_callback",
+  srcs = ["exla_host_callback.cc"],
+  hdrs = ["exla_host_callback.h"],
+  deps = [
+    ":exla_nif_util",
+    "@org_tensorflow//tensorflow/compiler/xla:shape_util",
+    "@org_tensorflow//tensorflow/compiler/xla/service:custom_call_target_registry"
+  ]
+)
+
+cc_library(
   name = "exla_client",
   srcs = ["exla_client.cc"],
   hdrs = ["exla_client.h"],
@@ -73,6 +84,7 @@ cc_binary(
     ":exla_client",
     ":exla_aot_compilation",
     ":exla_log_sink",
+    ":exla_host_callback",
     "@org_tensorflow//tensorflow/compiler/xla/client:client",
     "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
     "@org_tensorflow//tensorflow/compiler/xla/client/lib:lu_decomposition",

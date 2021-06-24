@@ -771,6 +771,12 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
   end
 
+  ## Callbacks
+
+  defp to_operator(:host_callback, [name, input, fun], _ans, _state) do
+    EXLA.CallbackRegistry.register(name, input, fun)
+  end
+
   ## Computation helpers
 
   defp recur_computation(name, args, expr, type, state) do

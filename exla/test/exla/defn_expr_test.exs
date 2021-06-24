@@ -2945,6 +2945,22 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "host callbacks" do
+    defn intermediate_inspect(x) do
+      a = Nx.cos(x)
+      a = host_callback("logger", a, &IO.inspect/1)
+      b = Nx.sin(a)
+      b = host_callback("logger", b, &IO.inspect/1)
+      c = Nx.exp(b)
+      c = host_callback("logger", c, &IO.inspect/1)
+      {a, b, c}
+    end
+
+    test "can inspect intermediate values" do
+      assert intermediate_inspect(Nx.tensor([1, 2, 3])) == Nx.tensor([1, 2, 3])
+    end
+  end
+
   defp compare_tensors!(left, right, opts \\ []) do
     atol = opts[:atol] || 1.0e-7
     rtol = opts[:rtol] || 1.0e-4

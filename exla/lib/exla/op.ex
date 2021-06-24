@@ -517,6 +517,11 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def host_callback(%Op{builder: builder, ref: operand}, pid, name) do
+    ref = EXLA.NIF.host_callback(builder, operand, pid, name) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp get_precision_config_int(precision_config) do

@@ -254,6 +254,23 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Executes a named host callback with the given arguments.
+
+  Host callbacks are useful for accessing intermediate values and plugging
+  side-effecting operations into a computation. Host callbacks execute `fun`
+  on the given tensor argument inside the VM. The result of `fun` is ignored.
+  `host_callback` is treated like the identity function.
+
+  ## Examples
+
+      a = Nx.cos(input)
+      host_callback("logger", a, &IO.inspect/1) # outputs value of `a`, result is identity function
+  """
+  def host_callback(name, expr, fun) when is_function(fun, 1) do
+    Nx.Defn.Expr.host_callback(name, expr, fun)
+  end
+
+  @doc """
   Defines a custom gradient for the given expression.
 
   It expects a `fun` to compute the gradient. The function

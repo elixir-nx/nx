@@ -189,6 +189,8 @@ defmodule EXLA.NIF do
   def triangular_solve(_a, _b, _left_side, _lower, _unit_diagonal, _transpose_a),
     do: :erlang.nif_error(:undef)
 
+  def host_callback(_builder, _operand, _pid, _name), do: :erlang.nif_error(:undef)
+
   def get_host_client(),
     do: :erlang.nif_error(:undef)
 

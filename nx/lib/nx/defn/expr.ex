@@ -89,6 +89,14 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
+  Creates a tensor expression host callback node.
+  """
+  def host_callback(name, expr, fun) do
+    expr = to_expr(expr)
+    expr(expr, expr.data.context, :host_callback, [name, expr, fun])
+  end
+
+  @doc """
   Creates a tensor expression function node with the given context,
   args, body, context and mfa for metadata.
 

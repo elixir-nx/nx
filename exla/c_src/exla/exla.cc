@@ -4,6 +4,7 @@
 #include "tensorflow/compiler/xla/exla/exla_client.h"
 #include "tensorflow/compiler/xla/exla/exla_log_sink.h"
 #include "tensorflow/compiler/xla/exla/exla_aot_compilation.h"
+#include "tensorflow/compiler/xla/exla/exla_host_callback.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
@@ -1927,6 +1928,54 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return term;
 }
 
+// Host Callbacks as CustomCalls
+
+ERL_NIF_TERM host_callback(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 4) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaBuilder** builder;
+  xla::XlaOp* value;
+  ErlNifPid registry_pid;
+  std::string callback_name;
+
+  if (!exla::nif::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+    return exla::nif::error(env, "Unable to get builder.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], value)) {
+    return exla::nif::error(env, "Unable to get value.");
+  }
+  if (!enif_get_local_pid(env, argv[2], &registry_pid)) {
+    return exla::nif::error(env, "Unable to get registry pid");
+  }
+  if (!exla::nif::get(env, argv[3], callback_name)) {
+    return exla::nif::error(env, "Unable to get callback name");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape value_shape,
+    (*builder)->GetShape(*value), env);
+
+  size_t size_bytes = xla::ShapeUtil::ByteSizeOf(value_shape);
+
+  // TODO(seanmor5): Make callback a resource held by the Callback
+  // registry so it can be properly garbage collected on shutdown
+  exla::ExlaCallback * callback = new exla::ExlaCallback(registry_pid, callback_name, value_shape, size_bytes);
+
+  LOG(INFO) << "HERE";
+  std::vector<xla::XlaOp> custom_call_args;
+  custom_call_args.reserve(2);
+  custom_call_args[0] = xla::ConstantR0<std::uintptr_t>(*builder, absl::bit_cast<std::uintptr_t>(callback));
+  custom_call_args[1] = *value;
+
+  xla::XlaOp result = xla::CustomCall(*builder,
+                                      "xla_nif_cpu_callback",
+                                      custom_call_args,
+                                      value_shape);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, result));
+}
+
 // Logging Functions
 
 ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2129,6 +2178,7 @@ static ErlNifFunc exla_funcs[] = {
   {"concatenate", 3, concatenate},
   {"sort", 3, sort},
   {"variadic_sort", 3, variadic_sort},
+  {"host_callback", 4, host_callback},
   // LinAlg
   {"cholesky", 1, cholesky},
   {"eigh", 2, eigh},
