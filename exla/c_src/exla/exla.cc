@@ -1962,7 +1962,6 @@ ERL_NIF_TERM host_callback(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   // registry so it can be properly garbage collected on shutdown
   exla::ExlaCallback * callback = new exla::ExlaCallback(registry_pid, callback_name, value_shape, size_bytes);
 
-  LOG(INFO) << "HERE";
   std::vector<xla::XlaOp> custom_call_args;
   custom_call_args.reserve(2);
   custom_call_args[0] = xla::ConstantR0<std::uintptr_t>(*builder, absl::bit_cast<std::uintptr_t>(callback));
