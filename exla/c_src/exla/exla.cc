@@ -1956,21 +1956,26 @@ ERL_NIF_TERM host_callback(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   EXLA_ASSIGN_OR_RETURN_NIF(xla::Shape value_shape,
     (*builder)->GetShape(*value), env);
 
+  std::vector<xla::Shape> custom_call_arg_layouts(2);
+  custom_call_arg_layouts[0] = xla::ShapeUtil::MakeShapeWithDescendingLayout(xla::primitive_util::NativeToPrimitiveType<std::uintptr_t>(), {});
+  custom_call_arg_layouts[1] = xla::ShapeUtil::MakeShapeWithDescendingLayout(value_shape.element_type(), value_shape.dimensions());
+
   size_t size_bytes = xla::ShapeUtil::ByteSizeOf(value_shape);
 
   // TODO(seanmor5): Make callback a resource held by the Callback
   // registry so it can be properly garbage collected on shutdown
-  exla::ExlaCallback * callback = new exla::ExlaCallback(registry_pid, callback_name, value_shape, size_bytes);
+  exla::ExlaCallback * callback =
+    new exla::ExlaCallback(registry_pid, callback_name, value_shape, size_bytes);
 
-  std::vector<xla::XlaOp> custom_call_args;
-  custom_call_args.reserve(2);
+  std::vector<xla::XlaOp> custom_call_args(2);
   custom_call_args[0] = xla::ConstantR0<std::uintptr_t>(*builder, absl::bit_cast<std::uintptr_t>(callback));
   custom_call_args[1] = *value;
 
-  xla::XlaOp result = xla::CustomCall(*builder,
-                                      "xla_nif_cpu_callback",
-                                      custom_call_args,
-                                      value_shape);
+  xla::XlaOp result = xla::CustomCallWithLayout(*builder,
+                                                "xla_nif_cpu_callback",
+                                                custom_call_args,
+                                                value_shape,
+                                                custom_call_arg_layouts, "", true);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, result));
 }

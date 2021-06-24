@@ -27,15 +27,14 @@ void ExlaCallback::Call(void ** inputs) {
 
   ERL_NIF_TERM send_term = enif_make_tuple4(caller_env_, run_atom, name, data, shape);
 
-  LOG(INFO) << "HERE";
-
   if (!enif_send(caller_env_, &registry_pid_, NULL, send_term)) {
     LOG(ERROR) << "Unable to send message to registry.";
   }
 }
 
 extern "C" void XlaNIFCpuCallback(void * output, void ** inputs) {
-  ExlaCallback * callback = absl::bit_cast<ExlaCallback*>(*static_cast<uintptr_t*>(inputs[0]));
+  ExlaCallback* callback =
+      absl::bit_cast<ExlaCallback*>(*static_cast<uintptr_t*>(inputs[0]));
   callback->Call(inputs + 1);
   output = inputs[1];
 }

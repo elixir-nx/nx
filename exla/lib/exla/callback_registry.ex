@@ -51,12 +51,13 @@ defmodule EXLA.CallbackRegistry do
 
   @impl true
   def handle_info({:run, name, data, shape}, callbacks) do
+    name = List.to_string(name)
     case callbacks[name] do
-      {fun, _} when is_function(fun) ->
+      fun when is_function(fun) ->
         %Shape{dtype: type, dims: dims} = Shape.get_shape_info(shape)
         tensor =
           data
-          |> Nx.from_binary(type: type)
+          |> Nx.from_binary(type)
           |> Nx.reshape(dims)
 
         fun.(tensor)
@@ -64,5 +65,7 @@ defmodule EXLA.CallbackRegistry do
       _ ->
         raise "Callback #{name} not found"
     end
+
+    {:noreply, callbacks}
   end
 end
