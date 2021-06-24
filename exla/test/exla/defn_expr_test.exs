@@ -2947,6 +2947,7 @@ defmodule EXLA.DefnExprTest do
 
   describe "host callbacks" do
     defn intermediate_inspect(x) do
+      # TODO(seanmor5): Prevent defn from ignoring results not used later on
       a = Nx.cos(x)
       a = host_callback("logger", a, &IO.inspect/1)
       b = Nx.sin(a)
@@ -2957,7 +2958,8 @@ defmodule EXLA.DefnExprTest do
     end
 
     test "can inspect intermediate values" do
-      assert intermediate_inspect(Nx.tensor([1, 2, 3])) == Nx.tensor([1, 2, 3])
+      a = Nx.tensor([1, 2, 3])
+      assert intermediate_inspect(Nx.tensor([1, 2, 3])) == {Nx.cos(a), Nx.sin(Nx.cos(a)), Nx.exp(Nx.sin(Nx.cos(a)))}
     end
   end
 

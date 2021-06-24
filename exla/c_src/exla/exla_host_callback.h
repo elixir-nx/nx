@@ -16,7 +16,7 @@ class ExlaCallback {
 
   ~ExlaCallback() { enif_free_env(caller_env_); }
 
-  void Call(void ** inputs);
+  void Call(void * output, void ** inputs);
 
  private:
   ErlNifEnv* caller_env_;

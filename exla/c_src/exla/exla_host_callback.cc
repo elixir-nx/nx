@@ -15,7 +15,7 @@ ExlaCallback::ExlaCallback(ErlNifPid registry_pid,
   caller_env_ = enif_alloc_env();
 }
 
-void ExlaCallback::Call(void ** inputs) {
+void ExlaCallback::Call(void * output, void ** inputs) {
   ErlNifBinary result_binary;
   enif_alloc_binary(value_size_, &result_binary);
   std::memcpy(result_binary.data, inputs[0], value_size_);
@@ -30,13 +30,14 @@ void ExlaCallback::Call(void ** inputs) {
   if (!enif_send(caller_env_, &registry_pid_, NULL, send_term)) {
     LOG(ERROR) << "Unable to send message to registry.";
   }
+
+  std::memcpy(output, inputs[0], value_size_);
 }
 
 extern "C" void XlaNIFCpuCallback(void * output, void ** inputs) {
   ExlaCallback* callback =
       absl::bit_cast<ExlaCallback*>(*static_cast<uintptr_t*>(inputs[0]));
-  callback->Call(inputs + 1);
-  output = inputs[1];
+  callback->Call(output, inputs + 1);
 }
 
 XLA_CPU_REGISTER_CUSTOM_CALL_TARGET_WITH_SYM("xla_nif_cpu_callback", &XlaNIFCpuCallback);
