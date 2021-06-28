@@ -68,7 +68,7 @@ ElixirLS will need to run its own compile of `:exla`, so if you want to use Elix
     mix deps.compile
     ```
 
-2. Use the [`asdf direnv`](https://github.com/asdf-community/asdf-direnv) plugin to install [`direnv 2.20.0`](https://direnv.net). `direnv` along with the `asdf-direnv` plugin will explicitly set the paths for any binary specified in your project's `.tool-version` files.
+2. Use the [`asdf direnv`](https://github.com/asdf-community/asdf-direnv) plugin to install [`direnv 2.20.0`](https://direnv.net). `direnv` along with the `asdf-direnv` plugin will explicitly set the paths for any binary specified in your project's `.tool-versions` files.
 
 After doing any of the steps above, it may be necessary to clear the build cache by removing ` ~/.cache/exla`.
 
