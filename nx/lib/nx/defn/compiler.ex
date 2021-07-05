@@ -114,7 +114,7 @@ defmodule Nx.Defn.Compiler do
     {export_tuples, compiler_tuples} =
       tuples
       |> Enum.map(fn {name, fun, args, opts} ->
-        tensors = Nx.Defn.Tree.flatten_list(args)
+        tensors = Nx.Defn.Tree.from_runtime_args(args)
         templates = Nx.Defn.Tree.args_to_templates(args, tensors)
 
         export_tuple = {name, templates}
@@ -134,7 +134,7 @@ defmodule Nx.Defn.Compiler do
 
     case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
       {:ok, results, nif} ->
-        tensors = Nx.Defn.Tree.flatten_list(results)
+        tensors = Nx.Defn.Tree.from_runtime_args(results)
         results = Nx.Defn.Tree.args_to_templates(results, tensors)
 
         export_tuples =
@@ -292,7 +292,7 @@ defmodule Nx.Defn.Compiler do
 
   defp runtime(fun, args, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-    tensors = Nx.Defn.Tree.flatten_list(args)
+    tensors = Nx.Defn.Tree.from_runtime_args(args)
     runtime_fun = &runtime_fun(&1, fun, args, compiler)
     {compiler, [tensors, runtime_fun, opts]}
   end
@@ -390,7 +390,7 @@ defmodule Nx.Defn.Compiler do
 
           unquote(def_module).__jit__(
             cache,
-            Nx.Defn.Tree.flatten_list(tensors),
+            Nx.Defn.Tree.from_runtime_args(tensors),
             fn tensors ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
 

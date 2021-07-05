@@ -222,33 +222,43 @@ defmodule Nx.Defn.Tree do
   Flattens the given list of tensor expressions, flattening maps,
   tuples, into a list.
 
+  Elements that are not tensors are converted to tensors via
+  `Nx.tensor/1`.
+
   ## Examples
 
       iex> Nx.Defn.Tree.flatten_list([1, {2, 3}])
       [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)]
 
+      iex> Nx.Defn.Tree.flatten_list([1, {2, 3}], [Nx.tensor(4)])
+      [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3), Nx.tensor(4)]
+
   """
   def flatten_list(args, tail \\ []) when is_list(args) do
+    flatten_list(args, tail, &Nx.tensor/1)
+  end
+
+  defp flatten_list(args, tail, fun) do
     args
-    |> Enum.reduce([], &flatten_each/2)
+    |> Enum.reduce([], &flatten_each(&1, &2, fun))
     |> Enum.reverse(tail)
   end
 
-  defp flatten_each(%T{} = tensor, acc),
+  defp flatten_each(%T{} = tensor, acc, _fun),
     do: [tensor | acc]
 
-  defp flatten_each(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &flatten_each/2)
+  defp flatten_each(tuple, acc, fun) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &flatten_each(&1, &2, fun))
 
-  defp flatten_each(map, acc) when is_map(map),
+  defp flatten_each(map, acc, fun) when is_map(map),
     do:
       map
       |> assert_no_struct!()
       |> Enum.sort()
-      |> Enum.reduce(acc, &flatten_each(elem(&1, 1), &2))
+      |> Enum.reduce(acc, &flatten_each(elem(&1, 1), &2, fun))
 
-  defp flatten_each(other, acc),
-    do: [from_arg(other) | acc]
+  defp flatten_each(other, acc, fun),
+    do: [fun.(other) | acc]
 
   ## Nx.Defn callbacks
 
@@ -274,6 +284,11 @@ defmodule Nx.Defn.Tree do
   end
 
   defp from_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
+
+  @doc false
+  def from_runtime_args(args) do
+    flatten_list(args, [], &from_arg/1)
+  end
 
   @valid "defn arguments must be numbers, tensors, and functions. " <>
            "It may also be a maps with numbers/tensors as values, " <>
