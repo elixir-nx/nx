@@ -5,6 +5,8 @@ defmodule Nx.Defn.Compiler do
 
   @aot_version 1
 
+  @type expr :: Nx.t() | tuple() | %{optional(term()) => expr()}
+
   @doc """
   Callback for JIT compilation.
 
@@ -22,8 +24,29 @@ defmodule Nx.Defn.Compiler do
   The callback uses double underscores so it can be defined
   at root modules without affecting the module's main API.
   """
-  @callback __jit__(key :: term, vars :: [Nx.t()], ([Nx.t()] -> Nx.t()), opts :: keyword) ::
-              Nx.t() | tuple() | map()
+  @callback __jit__(
+              key :: term,
+              vars :: [Nx.t()],
+              ([Nx.t()] -> expr()),
+              opts :: keyword
+            ) :: expr
+
+  @doc """
+  Callback for streaming (on top of JIT compilation).
+
+  It receives the same arguments as `c:__jit__/4` with the addition
+  of the streaming and accumulator templates. It must return a struct
+  that implements the `Nx.Stream` protocol.
+  """
+  @callback __stream__(
+              key :: term,
+              stream,
+              acc,
+              vars :: [Nx.t()],
+              ([Nx.t()] -> acc),
+              opts :: keyword
+            ) :: Nx.Stream.t()
+            when stream: expr(), acc: expr()
 
   @doc """
   Callback for AOT compilation.
@@ -257,14 +280,21 @@ defmodule Nx.Defn.Compiler do
 
   @doc false
   def __jit__(fun, args, opts) do
-    runtime(:__jit__, fun, args, opts)
+    {compiler, tail} = runtime(fun, args, opts)
+    Kernel.apply(compiler, :__jit__, [fun | tail])
   end
 
-  defp runtime(callback, fun, args, opts) do
+  @doc false
+  def __stream__(fun, input, acc, args, opts) do
+    {compiler, tail} = runtime(fun, [input, acc | args], opts)
+    Kernel.apply(compiler, :__stream__, [fun, input, acc | tail])
+  end
+
+  defp runtime(fun, args, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
     tensors = Nx.Defn.Tree.from_runtime_args(args)
     runtime_fun = &runtime_fun(&1, fun, args, compiler)
-    Kernel.apply(compiler, callback, [fun, tensors, runtime_fun, opts])
+    {compiler, [tensors, runtime_fun, opts]}
   end
 
   defp runtime_fun(tensors, fun, args, compiler) do
