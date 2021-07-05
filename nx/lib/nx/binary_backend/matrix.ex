@@ -3,6 +3,29 @@ defmodule Nx.BinaryBackend.Matrix do
   import Nx.Shared
 
   def ts(a_data, a_type, b_data, b_type, shape, output_type, input_opts) do
+    a_shape =
+      case shape do
+        {rows} -> {rows, rows}
+        shape -> shape
+      end
+
+    a_matrix = binary_to_matrix(a_data, a_type, a_shape)
+
+    b_matrix_or_vec =
+      case shape do
+        {rows, rows} ->
+          binary_to_matrix(b_data, b_type, shape)
+
+        {_rows} ->
+          binary_to_vector(b_data, b_type)
+      end
+
+    a_matrix
+    |> ts_matrix(b_matrix_or_vec, shape, input_opts)
+    |> matrix_to_binary(output_type)
+  end
+
+  defp ts_matrix(a_matrix, b_matrix_or_vec, shape, input_opts) do
     transform_a = input_opts[:transform_a]
     lower_input = input_opts[:lower]
 
@@ -14,33 +37,16 @@ defmodule Nx.BinaryBackend.Matrix do
       left_side: input_opts[:left_side]
     }
 
-    a_shape =
-      case shape do
-        {rows} -> {rows, rows}
-        shape -> shape
-      end
-
     a_matrix =
-      a_data
-      |> binary_to_matrix(a_type, a_shape)
+      a_matrix
       |> ts_transform_a(transform_a)
       |> ts_handle_opts(opts, :a)
 
-    b_matrix_or_vec =
-      case shape do
-        {rows, rows} ->
-          b_data |> binary_to_matrix(b_type, shape) |> ts_handle_opts(opts, :b)
+    b_matrix_or_vec = ts_handle_opts(b_matrix_or_vec, opts, :b)
 
-        {_rows} ->
-          b_data |> binary_to_vector(b_type) |> ts_handle_opts(opts, :b)
-      end
-
-    result =
-      a_matrix
-      |> do_ts(b_matrix_or_vec, shape)
-      |> ts_handle_opts(opts, :result)
-
-    matrix_to_binary(result, output_type)
+    a_matrix
+    |> do_ts(b_matrix_or_vec, shape)
+    |> ts_handle_opts(opts, :result)
   end
 
   # For ts_handle_opts/3, we need some theoretical proofs:
@@ -198,12 +204,18 @@ defmodule Nx.BinaryBackend.Matrix do
         binary_to_matrix(input_data, input_type, input_shape)
       end
 
+    {q_matrix, r_matrix} = qr_matrix(r_matrix, m, k, n, eps)
+
+    {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
+  end
+
+  defp qr_matrix(a_matrix, m, k, n, eps) do
     {q_matrix, r_matrix} =
-      for i <- 0..(n - 1), reduce: {nil, r_matrix} do
+      for i <- 0..(n - 1), reduce: {nil, a_matrix} do
         {q, r} ->
           a = slice_matrix(r, [i, i], [k - i, 1])
 
-          h = householder_reflector(a, k, eps)
+          h = householder_reflector(a, k)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
@@ -219,15 +231,14 @@ defmodule Nx.BinaryBackend.Matrix do
           {q, r}
       end
 
-    {q_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type),
-     r_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
+    {approximate_zeros(q_matrix, eps), approximate_zeros(r_matrix, eps)}
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
     a = binary_to_matrix(input_data, input_type, input_shape)
     eps = opts[:eps]
 
-    {p, a_prime} = lu_validate_and_pivot(a, n)
+    {p, a_prime} = pivot_matrix(a, n)
 
     # We'll work with linear indices because of the way each matrix
     # needs to be updated/accessed
@@ -284,7 +295,7 @@ defmodule Nx.BinaryBackend.Matrix do
      u |> approximate_zeros(eps) |> matrix_to_binary(u_type)}
   end
 
-  defp lu_validate_and_pivot(a, n) do
+  defp pivot_matrix(a, n) do
     # pivots a tensor so that the biggest elements of each column lie on the diagonal.
     # if any of the diagonal elements ends up being 0, raises an ArgumentError
 
@@ -329,7 +340,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
     eps = opts[:eps]
     max_iter = opts[:max_iter] || 1000
-    {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
+    {u, d, v} = householder_bidiagonalization(a, input_shape)
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
@@ -417,19 +428,14 @@ defmodule Nx.BinaryBackend.Matrix do
 
   ## Householder helpers
 
-  defp householder_reflector(a, target_k, eps)
+  defp householder_reflector(a, target_k)
 
-  defp householder_reflector([], target_k, _eps) do
-    flat_list =
-      for col <- 0..(target_k - 1), row <- 0..(target_k - 1), into: [] do
-        if col == row, do: 1, else: 0
-      end
-
-    Enum.chunk_every(flat_list, target_k)
+  defp householder_reflector([], target_k) do
+    identity_matrix(target_k, target_k)
   end
 
-  defp householder_reflector([a_0 | tail] = a, target_k, eps) do
-    # This is a trick so we can both calculate the norm of a_reverse and extract the
+  defp householder_reflector([a_0 | tail] = a, target_k) do
+    # This is a trick so we can both calculate the norm of a and extract the
     # head a the same time we reverse the array
     # receives a_reverse as a list of numbers and returns the reflector as a
     # k x k matrix
@@ -438,7 +444,7 @@ defmodule Nx.BinaryBackend.Matrix do
     norm_a_sq_1on = norm_a_squared - a_0 * a_0
 
     {v, scale} =
-      if norm_a_sq_1on < eps do
+      if norm_a_sq_1on == 0 do
         {[1 | tail], 0}
       else
         v_0 =
@@ -501,7 +507,7 @@ defmodule Nx.BinaryBackend.Matrix do
     reflector
   end
 
-  defp householder_bidiagonalization(tensor, {m, n}, eps) do
+  defp householder_bidiagonalization(tensor, {m, n}) do
     # For each column in `tensor`, apply
     # the current column's householder reflector from the left to `tensor`.
     # if the current column is not the penultimate, also apply
@@ -513,7 +519,7 @@ defmodule Nx.BinaryBackend.Matrix do
         row_length = if m < col, do: 0, else: m - col
         a_col = a |> slice_matrix([col, col], [row_length, 1])
 
-        l = householder_reflector(a_col, m, eps)
+        l = householder_reflector(a_col, m)
 
         ll =
           if is_nil(ll) do
@@ -526,12 +532,10 @@ defmodule Nx.BinaryBackend.Matrix do
 
         {a, rr} =
           if col <= n - 2 do
-            # r = householder_reflector(a[[col, col+1:]], n)
-
             r =
               a
               |> slice_matrix([col, col + 1], [1, n - col])
-              |> householder_reflector(n, eps)
+              |> householder_reflector(n)
 
             rr =
               if is_nil(rr) do
@@ -613,6 +617,106 @@ defmodule Nx.BinaryBackend.Matrix do
     end
   end
 
+  def eigen(input_data, input_type, {n, n} = input_shape, output_type, opts) do
+    # This decomposition is only implemented for square matrices
+    # Implementation based on the algorithm described in:
+    # [1] - http://www.math.iit.edu/~fass/477577_Chapter_11.pdf
+    # [2] - http://article.sciencepublishinggroup.com/html/10.11648.j.pamj.20160504.15.html
+
+    eps = opts[:eps]
+    max_iter = opts[:max_iter]
+
+    {h, _q} =
+      input_data
+      |> binary_to_matrix(input_type, input_shape)
+      |> hessenberg_decomposition(input_shape)
+
+    identity = identity_matrix(n, n)
+
+    eigen_val_upper_tri =
+      Enum.reduce_while(1..max_iter, h, fn _, a_prev ->
+        # Coefficient for eigenvalue shifting as described in [1]
+        [c_next] = get_matrix_elements(a_prev, [[n - 1, n - 1]])
+
+        # if the last diagonal element is "zero", we add 'eps' so we can de-stabilize
+        # the matrix from a fixed point. Otherwise, spectral shifting is removed by said "zero" element
+        c_next =
+          cond do
+            c_next >= 0 and c_next < eps -> c_next + eps
+            c_next < 0 and c_next > -eps -> c_next - eps
+            true -> c_next
+          end
+
+        # As described in [1] and [2], we want to calculate
+        # Q.R = A_prev - c_next.I
+        # A_next = R.Q + c_next.I
+
+        shifting_matrix = element_wise_bin_op(c_next, identity, &*/2)
+        shifted_matrix = element_wise_bin_op(a_prev, shifting_matrix, &-/2)
+
+        {q_current, r_current} = qr_matrix(shifted_matrix, n, n, n, eps)
+
+        a_next = r_current |> dot_matrix(q_current) |> element_wise_bin_op(shifting_matrix, &+/2)
+
+        if is_approximately_upper_triangular?(a_next, eps) do
+          {:halt, a_next}
+        else
+          {:cont, a_next}
+        end
+      end)
+
+    diag_indices = for idx <- 0..(n - 1), do: [idx, idx]
+
+    eigenvals = eigen_val_upper_tri |> get_matrix_elements(diag_indices) |> Enum.sort_by(&abs/1)
+
+    eigenvecs =
+      eigenvals
+      |> Enum.map(&calculate_eigenvector(&1, h, {n, n}, eps))
+      |> transpose_matrix()
+
+    {matrix_to_binary(eigenvals, output_type), matrix_to_binary(eigenvecs, output_type)}
+  end
+
+  defp hessenberg_decomposition(a, {n, n}) do
+    # Calculates the Hessenberg decomposition of a square matrix `a`
+    # Returns the transformed hessenberg matrix `hess` and the invertible
+    # linear transformation `t` which defines is such that:
+    # Hess = T . A . T_transposed
+    identity = identity_matrix(n, n)
+
+    for col <- 0..(n - 2), reduce: {a, identity} do
+      {a, linear_transform} ->
+        reflector = a |> slice_matrix([col + 1, col], [n - col, 1]) |> householder_reflector(n)
+
+        {dot_matrix(reflector, a) |> dot_matrix(transpose_matrix(reflector)),
+         dot_matrix(reflector, linear_transform)}
+    end
+  end
+
+  defp calculate_eigenvector(eigenvalue, matrix, {n, n}, eps) do
+    # We want to solve A.v = lambda.v for v, which is equivalent to
+    # (A - lambda.I).v = 0
+
+    eye = identity_matrix(n, n)
+    lambda_eye = element_wise_bin_op(eye, eigenvalue + 10 * eps, &*/2)
+
+    matrix
+    |> element_wise_bin_op(lambda_eye, &-/2)
+    |> solve_matrix({n, n}, zeros_matrix(n, 1), eps)
+  end
+
+  defp is_approximately_upper_triangular?(matrix, eps) do
+    matrix
+    |> Enum.with_index()
+    |> Enum.all?(fn {row, row_idx} ->
+      row
+      |> Enum.with_index()
+      |> Enum.all?(fn {matrix_elem, col_idx} ->
+        col_idx >= row_idx or matrix_elem <= eps
+      end)
+    end)
+  end
+
   ## Matrix (2-D array) manipulation
 
   defp dot_matrix([], _), do: 0
@@ -643,6 +747,31 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp transpose_matrix(m) do
     Enum.zip_with(m, & &1)
+  end
+
+  defp element_wise_bin_op(a, b, fun) when is_list(a) and is_list(b) do
+    # Applies a binary operation element-wise between two matrices with the same shape
+    Enum.zip_with([a, b], fn
+      [a_row, b_row] when is_list(a_row) and is_list(b_row) ->
+        Enum.zip_with([a_row, b_row], fn [a_elem, b_elem] -> fun.(a_elem, b_elem) end)
+
+      [a_elem, b_elem] when is_number(a_elem) and is_number(b_elem) ->
+        fun.(a_elem, b_elem)
+    end)
+  end
+
+  defp element_wise_bin_op(a, b, fun) when is_number(a) and is_list(b),
+    do: element_wise_bin_op(b, a, &fun.(&2, &1))
+
+  defp element_wise_bin_op(a, b, fun) when is_list(a) and is_number(b) do
+    # Applies a binary operation element-wise between a matrix and a scalar
+    Enum.map(a, fn
+      a_row when is_list(a_row) ->
+        Enum.map(a_row, fn a_elem -> fun.(a_elem, b) end)
+
+      a_elem ->
+        fun.(a_elem, b)
+    end)
   end
 
   defp matrix_to_binary([r | _] = m, type) when is_list(r) do
@@ -688,7 +817,7 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp get_matrix_rows(m, rows) do
-    for {row, i} <- Enum.with_index(m), i in rows, do: row
+    for idx <- rows, do: Enum.at(m, idx)
   end
 
   defp get_matrix_elements(m, row_col_pairs) do
@@ -730,5 +859,127 @@ defmodule Nx.BinaryBackend.Matrix do
       row when is_list(row) -> Enum.map(row, do_round)
       e -> do_round.(e)
     end)
+  end
+
+  defp identity_matrix(rows, cols) do
+    for row <- 0..(rows - 1) do
+      for col <- 0..(cols - 1) do
+        if row == col, do: 1, else: 0
+      end
+    end
+  end
+
+  defp zeros_matrix(rows, cols) do
+    for _row <- 0..(rows - 1) do
+      for _col <- 0..(cols - 1) do
+        0
+      end
+    end
+  end
+
+  defp solve_matrix(a, {n, n}, [[_] | _] = b, eps) do
+    # Solves A.x = B through gauss-jordan elimination
+    # For indeterminate systems, any zero-line will be
+    # forced to return x_n = 1
+
+    # Construct the augmented system matrix and pivot it accordingly
+    {_p, system_matrix} =
+      a
+      |> Enum.zip_with(b, &++/2)
+      |> pivot_matrix(n)
+      |> IO.inspect(label: "nx/lib/nx/binary_backend/matrix.ex:890")
+
+    # Transform into upper triangular
+    upper_triangular_system_matrix =
+      system_matrix
+      |> solve_matrix_iteration(
+        0..(n - 1),
+        &(&1..(n - 1)),
+        fn row, pivot ->
+          element_wise_bin_op(row, pivot, &//2)
+        end,
+        eps
+      )
+      |> IO.inspect(label: "nx/lib/nx/binary_backend/matrix.ex:903")
+      |> solve_matrix_iteration(
+        (n - 1)..1//-1,
+        &(&1..0//-1),
+        fn row, _pivot ->
+          row
+        end,
+        eps
+      )
+      |> IO.inspect(label: "nx/lib/nx/binary_backend/matrix.ex:911")
+
+    # For each row, ensure the system is solvable
+
+    placeholder_row = List.duplicate(0, n) ++ [1]
+
+    {system_matrix_reversed, updated_idx_reversed} =
+      upper_triangular_system_matrix
+      |> Enum.with_index()
+      |> Enum.reduce({[], []}, fn {row, idx}, {rows, indices} ->
+        if Enum.all?(row, &(abs(&1) <= eps)) do
+          # For x_idx = 1
+          row = List.replace_at(placeholder_row, idx, 1)
+
+          new_indices = if idx > 0, do: [idx | indices], else: indices
+          {[row | rows], new_indices}
+        else
+          {[row | rows], indices}
+        end
+      end)
+
+    # Apply second backward pass for newly defined rows.
+    # The resulting system will be fully diagonalized and normalized,
+    # which implies that the solution is in the last column.
+    system_matrix_reversed
+    |> Enum.reverse()
+    |> solve_matrix_iteration(
+      updated_idx_reversed,
+      &(&1..0//-1),
+      fn row, _pivot ->
+        row
+      end,
+      eps
+    )
+    |> get_matrix_column(n)
+  end
+
+  defp solve_matrix_iteration(
+         system_matrix,
+         iteration_range,
+         update_range_function,
+         transform_pivot_row_function,
+         eps
+       ) do
+    for idx <- iteration_range, reduce: system_matrix do
+      system_matrix ->
+        # Find pivot
+        [pivot] = get_matrix_elements(system_matrix, [[idx, idx]])
+
+        if abs(pivot) >= eps do
+          upd_row_idx = update_range_function.(idx)
+          [pivot_row | other_rows] = get_matrix_rows(system_matrix, upd_row_idx)
+
+          normalized_pivot_row = transform_pivot_row_function.(pivot_row, pivot)
+
+          updated_rows =
+            Enum.map(other_rows, fn row ->
+              coef = Enum.at(row, idx)
+
+              # upd_row = row - coef * normalized_pivot_row
+              normalized_pivot_row
+              |> element_wise_bin_op(-coef, &*/2)
+              |> element_wise_bin_op(row, &+/2)
+              |> approximate_zeros(eps)
+            end)
+
+          replace_rows(system_matrix, upd_row_idx, [normalized_pivot_row | updated_rows])
+        else
+          # Pivot is zero, so we skip this iteration
+          system_matrix
+        end
+    end
   end
 end

@@ -1404,6 +1404,17 @@ defmodule Nx.Shape do
         "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
       )
 
+  def eigen({n, n}) do
+    {{n}, {n, n}}
+  end
+
+  def eigen(shape),
+    do:
+      raise(
+        ArgumentError,
+        "tensor must have rank 2 and equal dimensions, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+      )
+
   def lu({n, n}) do
     {{n, n}, {n, n}, {n, n}}
   end

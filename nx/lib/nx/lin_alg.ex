@@ -746,7 +746,7 @@ defmodule Nx.LinAlg do
 
   """
   def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, [:max_iter, eps: @default_eps])
+    opts = keyword!(opts, max_iter: 1000, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
@@ -756,6 +756,73 @@ defmodule Nx.LinAlg do
       {%{tensor | names: [nil, nil], type: output_type, shape: u_shape},
        %{tensor | names: [nil], type: output_type, shape: s_shape},
        %{tensor | names: [nil, nil], type: output_type, shape: v_shape}},
+      tensor,
+      opts
+    )
+  end
+
+  @doc """
+  Calculates the Eigenvalues and Eigenvectors of square 2-D tensors.
+
+  It returns `{eigenval, eigenvec}` where the elemens of `eigenval` are sorted
+  from highest to lowest.
+
+  ## Options
+
+    * `:max_iter` - `integer`. Defaults to `1000`
+      Number of maximum iterations before stopping the decomposition
+
+    * `:eps` - `float`. Defaults to 1.0e-12
+      Tolerance applied during the decomposition
+
+  Note not all options apply to all backends, as backends may have
+  specific optimizations that render these mechanisms unnecessary.
+
+  ## Examples
+
+      iex> {eigenval, eigenvec} = Nx.LinAlg.eigen(Nx.tensor([[5, -1, 0], [-1, 5, 0], [0, 0, 4]]))
+      iex> eigenval
+      #Nx.Tensor<
+        f32[3]
+        [4.0, 3.0, 2.0]
+      >
+      iex> eigenvec
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [0.0, -1.0, 1.0],
+          [0.0, 1.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ]
+      >
+
+      iex> {eigenval, eigenvec} = Nx.LinAlg.eigen(Nx.tensor([[1, 1, 0], [-1, 3, 0], [0, 0, 2]]))
+      iex> eigenval
+      #Nx.Tensor<
+        f32[3]
+        [2.0, 1.0, 1.0],
+      >
+      iex> eigenvec
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [0.0, -1.0, 1.0],
+          [0.0, 1.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ]
+      >
+
+  """
+  def eigen(tensor, opts \\ []) do
+    opts = keyword!(opts, max_iter: 1000, eps: @default_eps)
+    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+    {eigenval_shape, eigenvec_shape} = Nx.Shape.eigen(shape)
+
+    impl!(tensor).eigen(
+      {%{tensor | names: [nil], type: output_type, shape: eigenval_shape},
+       %{tensor | names: [nil, nil], type: output_type, shape: eigenvec_shape}},
       tensor,
       opts
     )
