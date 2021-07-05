@@ -297,7 +297,7 @@ defmodule Nx.Defn.Tree do
   def args_to_templates(args, params) do
     {args, []} =
       args_to(args, params, fn _arg, [param | params] ->
-        {Nx.template(param, param.type), params}
+        {Nx.to_template(param), params}
       end)
 
     args

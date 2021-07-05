@@ -561,29 +561,76 @@ defmodule Nx do
         Nx.TemplateBackend
       >
 
-  A tensor can also be given as first argument, and its shape and names
-  will be used:
-
-      iex> Nx.template(Nx.iota({2, 3}, names: [:rows, :columns]), {:f, 32})
-      #Nx.Tensor<
-        f32[rows: 2][columns: 3]
-        Nx.TemplateBackend
-      >
-
-  Althogh note it is impossible to perform any operation on a tensor template:
+  Although note it is impossible to perform any operation on a tensor template:
 
       iex> t = Nx.template({2, 3}, {:f, 32}, names: [:rows, :columns])
       iex> Nx.add(t, 1)
       ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
 
+  To convert existing tensors to templates, use `to_template/1`.
   """
   @doc type: :creation
-  def template(tensor_or_shape, type, opts \\ []) do
+  def template(shape, type, opts \\ []) when is_tuple(shape) do
     opts = keyword!(opts, [:names])
     type = Nx.Type.normalize!(type)
-    shape = shape(tensor_or_shape)
-    names = Nx.Shape.named_axes!(opts[:names] || names!(tensor_or_shape), shape)
+    names = Nx.Shape.named_axes!(opts[:names], shape)
     %T{shape: shape, type: type, names: names, data: %Nx.TemplateBackend{}}
+  end
+
+  @doc """
+  Converts a tensor (or tuples and maps of tensors) to tensor templates.
+
+  Templates are useful when you need to pass types and shapes to
+  operations and the data is not yet available.
+
+  ## Examples
+
+      iex> Nx.iota({2, 3}) |> Nx.to_template()
+      #Nx.Tensor<
+        s64[2][3]
+        Nx.TemplateBackend
+      >
+
+      iex> {int, float} = Nx.to_template({1, 2.0})
+      iex> int
+      #Nx.Tensor<
+        s64
+        Nx.TemplateBackend
+      >
+      iex> float
+      #Nx.Tensor<
+        f32
+        Nx.TemplateBackend
+      >
+
+  Although note it is impossible to perform any operation on a tensor template:
+
+      iex> t = Nx.iota({2, 3}) |> Nx.to_template()
+      iex> Nx.add(t, 1)
+      ** (RuntimeError) cannot perform operations on a Nx.TemplateBackend tensor
+
+  To build a template from scratch, use `template/3`.
+  """
+  @doc type: :conversion
+  def to_template(tensor_or_tuple_or_map)
+
+  def to_template(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&to_template(&1))
+    |> List.to_tuple()
+  end
+
+  def to_template(%T{} = tensor) do
+    %T{tensor | data: %Nx.TemplateBackend{}}
+  end
+
+  def to_template(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {k, to_template(v)} end)
+  end
+
+  def to_template(other) do
+    %T{to_tensor(other) | data: %Nx.TemplateBackend{}}
   end
 
   @doc """
@@ -2442,9 +2489,9 @@ defmodule Nx do
   this function.
   """
   @doc type: :backend
-  def backend_copy(tuple_or_tensor, backend \\ Nx.Tensor) do
+  def backend_copy(tensor_or_tuple_or_map, backend \\ Nx.Tensor) do
     {backend, options} = backend!(backend)
-    backend_copy(tuple_or_tensor, backend, options)
+    backend_copy(tensor_or_tuple_or_map, backend, options)
   end
 
   defp backend_copy(tuple, backend, opts) when is_tuple(tuple) do
@@ -2506,9 +2553,9 @@ defmodule Nx do
 
   """
   @doc type: :backend
-  def backend_transfer(tuple_or_tensor, backend \\ Nx.Tensor) do
+  def backend_transfer(tensor_or_tuple_or_map, backend \\ Nx.Tensor) do
     {backend, opts} = backend!(backend)
-    backend_transfer(tuple_or_tensor, backend, opts)
+    backend_transfer(tensor_or_tuple_or_map, backend, opts)
   end
 
   defp backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
@@ -2541,7 +2588,7 @@ defmodule Nx do
   common to deallocate data from tuples and maps after `defn` functions.
   """
   @doc type: :backend
-  def backend_deallocate(tuple_or_tensor)
+  def backend_deallocate(tensor_or_tuple_or_map)
 
   def backend_deallocate(tuple) when is_tuple(tuple) do
     tuple
