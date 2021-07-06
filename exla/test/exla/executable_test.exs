@@ -109,4 +109,28 @@ defmodule EXLA.ExecutableTest do
       assert <<3::32-native>> == Buffer.read(c.ref)
     end
   end
+
+  describe "infeed/outfeed" do
+    test "successfully sends to/from device asynchronously" do
+      t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+
+      assert [a = %Buffer{}] =
+               run([], [keep_on_device: true], fn b ->
+                 token = Op.create_token(b)
+                 val_and_token = Op.infeed(token, t1.shape)
+                 val = Op.get_tuple_element(val_and_token, 0)
+                 new_token = Op.get_tuple_element(val_and_token, 1)
+                 outfeed_val = Op.add(val, val)
+                 _outfeed_token = Op.outfeed(outfeed_val, new_token, t1.shape)
+                 Op.tuple(b, [Op.add(outfeed_val, val)])
+               end)
+
+      assert :ok = Buffer.to_infeed(t1, client(), 0)
+
+      assert %Buffer{data: <<2::32-native>>} =
+               Buffer.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {}))
+
+      assert <<3::32-native>> == Buffer.read(a.ref)
+    end
+  end
 end

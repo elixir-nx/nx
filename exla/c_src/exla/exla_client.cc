@@ -192,6 +192,32 @@ std::vector<ExlaDevice*> ExlaClient::GetDevices() {
   return devices;
 }
 
+xla::Status ExlaClient::TransferToInfeed(int device_id, ErlNifBinary data, const xla::Shape& shape) {
+  const char * data_ptr = const_cast<char *>(reinterpret_cast<char *>(data.data));
+  xla::BorrowingLiteral literal(data_ptr, shape);
+
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
+
+  return device->TransferToInfeed(literal);
+}
+
+xla::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv* env, int device_id, xla::Shape& shape) {
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
+
+  auto literal = std::make_shared<xla::Literal>(shape);
+  xla::Status transfer_status = device->TransferFromOutfeed(literal.get());
+
+  if (!transfer_status.ok()) {
+    return transfer_status;
+  }
+
+  ErlNifBinary binary;
+  enif_alloc_binary(literal->size_bytes(), &binary);
+  std::memcpy(binary.data, literal->untyped_data(), literal->size_bytes());
+
+  return nif::make(env, binary);
+}
+
 xla::StatusOr<ExlaClient*> GetHostClient() {
   EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtClient> client,
     xla::GetCpuClient(false));
