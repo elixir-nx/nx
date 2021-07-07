@@ -70,64 +70,42 @@ defmodule Torchx.Backend do
           String.trim("Torchx does not support unsigned #{size} bit integer #{hint}")
   end
 
-  def device_option(nil), do: :cpu
-  def device_option(backend_opts), do: backend_opts[:device] || :cpu
+  def device_option(nil), do: {:cpu, -1}
+  def device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
 
-  @devices %{
-    cpu: 0,
-    cuda: 1,
-    mkldnn: 2,
-    opengl: 3,
-    opencl: 4,
-    ideep: 5,
-    hip: 6,
-    fpga: 7,
-    msnpu: 8,
-    xla: 9,
-    vulkan: 10,
-    metal: 11,
-    xpu: 12
-  }
-
-  @doc false
-  def torch_device({device, index}) when is_atom(device) and is_integer(index),
-    do: {@devices[device], index}
-
-  def torch_device(device) when is_atom(device), do: {@devices[device], -1}
-
-  def torch_device(opts) when is_list(opts), do: opts |> device_option() |> torch_device()
+  defp torch_device(opts) when is_list(opts), do: opts |> device_option() |> Torchx.torch_device()
 
   ## Creation
 
   @impl true
   def scalar(%T{shape: {}, type: type} = out, scalar, backend_options) do
-    NIF.scalar_tensor(scalar, torch_type(type), torch_device(backend_options))
+    Torchx.scalar_tensor(scalar, torch_type(type), device_option(backend_options))
     |> from_ref(out)
   end
 
   def scalar(%T{shape: shape, type: type} = out, scalar, backend_options) do
-    NIF.full(shape, scalar, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.full(shape, scalar, torch_type(type), device_option(backend_options)) |> from_ref(out)
   end
 
   @impl true
   def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
-    NIF.eye(n, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.eye(n, torch_type(type), device_option(backend_options)) |> from_ref(out)
   end
 
   @impl true
   def iota(out, axis \\ nil, backend_options)
 
   def iota(%T{shape: {}, type: type} = out, nil, backend_options) do
-    NIF.scalar_tensor(0.0, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.scalar_tensor(0.0, torch_type(type), device_option(backend_options)) |> from_ref(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, nil, backend_options) do
-    NIF.arange(0, Nx.size(shape), 1, torch_type(type), torch_device(backend_options), shape)
+    Torchx.arange(0, Nx.size(shape), 1, torch_type(type), device_option(backend_options), shape)
     |> from_ref(out)
   end
 
   def iota(%T{shape: {n}, type: type} = out, 0, backend_options) do
-    NIF.arange(0, n, 1, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+    Torchx.arange(0, n, 1, torch_type(type), device_option(backend_options)) |> from_ref(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, axis, backend_options) do
@@ -135,14 +113,14 @@ defmodule Torchx.Backend do
     dim = elem(shape, axis)
 
     # build the iota in one dimension
-    aten = NIF.arange(0, dim, 1, torch_type(type), torch_device(backend_options)) |> unwrap!()
+    aten = Torchx.arange(0, dim, 1, torch_type(type), device_option(backend_options))
 
     # reshape the tensor above to be have shape where everything is 1, except for dim
     reshape = Tuple.duplicate(1, Nx.rank(shape)) |> put_elem(axis, dim)
-    aten = NIF.reshape(aten, reshape) |> unwrap!()
+    aten = Torchx.reshape(aten, reshape)
 
     # Now broadcast the tensor using the original shape
-    NIF.broadcast_to(aten, shape) |> from_ref(out)
+    Torchx.broadcast_to(aten, shape) |> from_ref(out)
   end
 
   @impl true
@@ -150,28 +128,34 @@ defmodule Torchx.Backend do
       when s in [:u, :s] do
     min = to_scalar(min)
     max = to_scalar(max)
-    NIF.randint(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+
+    Torchx.randint(min, max, shape, torch_type(type), device_option(backend_options))
+    |> from_ref(out)
   end
 
   def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
       when f in [:f, :bf] do
     min = to_scalar(min)
     max = to_scalar(max)
-    NIF.rand(min, max, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+
+    Torchx.rand(min, max, shape, torch_type(type), device_option(backend_options))
+    |> from_ref(out)
   end
 
   @impl true
   def random_normal(%T{type: type, shape: shape} = out, mu, sigma, backend_options) do
     mu = to_scalar(mu)
     sigma = to_scalar(sigma)
-    NIF.normal(mu, sigma, shape, torch_type(type), torch_device(backend_options)) |> from_ref(out)
+
+    Torchx.normal(mu, sigma, shape, torch_type(type), device_option(backend_options))
+    |> from_ref(out)
   end
 
   ## Transfer
 
   @impl true
-  def to_batched_list(%T{shape: shape} = out, %T{} = t),
-    do: NIF.split(to_ref(t), elem(shape, 0)) |> from_list_ref(out)
+  def to_batched_list(%T{shape: shape} = out, %T{} = t, backend_options),
+    do: Torchx.split(to_ref_with_device(t), elem(shape, 0)) |> from_list_ref(out)
 
   @impl true
   def to_binary(_tensor, _limit \\ nil) do
@@ -213,28 +197,29 @@ defmodule Torchx.Backend do
       torch_type(type),
       torch_device(backend_options)
     )
-    |> from_ref(out)
+    |> from_ref(out, device_option(backend_options))
   end
 
   ## Shape
 
   @impl true
   def reshape(out, %T{} = t, shape),
-    do: NIF.reshape(to_ref(t), shape) |> from_ref(out)
+    do: Torchx.reshape(to_ref_with_device(t), shape) |> from_ref(out)
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t),
-    do: NIF.to_type(to_ref(t), torch_type(type)) |> from_ref(out)
+    do: Torchx.to_type(to_ref_with_device(t), torch_type(type)) |> from_ref(out)
 
   @impl true
   def squeeze(out, %T{} = t, _axes) do
-    NIF.squeeze(to_ref(t)) |> from_ref(out)
+    Torchx.squeeze(to_ref_with_device(t)) |> from_ref(out)
   end
 
   # TODO: Handle axes properly
   @impl true
   def broadcast(out, %T{} = t, shape, axes) do
-    NIF.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref(), shape) |> from_ref(out)
+    Torchx.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref_with_device(), shape)
+    |> from_ref(out)
   end
 
   defp maybe_reshape(%T{shape: {n}} = t, {n, _}, [0]), do: Nx.reshape(t, {n, 1})
@@ -242,13 +227,13 @@ defmodule Torchx.Backend do
 
   @impl true
   def transpose(out, %T{} = t, axes) do
-    NIF.permute(to_ref(t), axes) |> from_ref(out)
+    Torchx.permute(to_ref_with_device(t), axes) |> from_ref(out)
   end
 
   @impl true
   def slice(%T{shape: shape} = out, %T{} = t, start_indices, lengths, strides) do
     t
-    |> to_ref()
+    |> to_ref_with_device()
     |> narrow(start_indices, lengths, 0, shape)
     |> stride(shape, lengths, strides)
     |> to_tensor(out)
@@ -262,8 +247,7 @@ defmodule Torchx.Backend do
       narrow(ref, starts, lengths, axis + 1, shape)
     else
       ref
-      |> NIF.narrow(axis, start, length)
-      |> unwrap!()
+      |> Torchx.narrow(axis, start, length)
       |> narrow(starts, lengths, axis + 1, shape)
     end
   end
@@ -275,8 +259,7 @@ defmodule Torchx.Backend do
       ref
     else
       ref
-      |> NIF.as_strided(shape, steps_to_strides(lengths, strides), 0)
-      |> unwrap!()
+      |> Torchx.as_strided(shape, steps_to_strides(lengths, strides), 0)
     end
   end
 
@@ -296,7 +279,7 @@ defmodule Torchx.Backend do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
-    NIF.sum(to_ref(t), axes, keep_axes) |> from_ref(out)
+    Torchx.sum(to_ref_with_device(t), axes, keep_axes) |> from_ref(out)
   end
 
   @impl true
@@ -306,7 +289,7 @@ defmodule Torchx.Backend do
     axis = opts[:axis] || -1
     keep_axes = opts[:keep_axes] || false
 
-    NIF.argmax(to_ref(t), axis, keep_axes) |> from_ref(out)
+    Torchx.argmax(to_ref_with_device(t), axis, keep_axes) |> from_ref(out)
   end
 
   @impl true
@@ -316,7 +299,7 @@ defmodule Torchx.Backend do
     axis = opts[:axis] || -1
     keep_axes = opts[:keep_axes] || false
 
-    NIF.argmin(to_ref(t), axis, keep_axes) |> from_ref(out)
+    Torchx.argmin(to_ref_with_device(t), axis, keep_axes) |> from_ref(out)
   end
 
   defp unsupported_option!(opts, key, acceptable_default) do
@@ -345,12 +328,22 @@ defmodule Torchx.Backend do
       [:logical_and, :logical_or, :logical_xor] ++
       [:outer]
 
+  # for op <- binary_ops do
+  #   @impl true
+  #   def unquote(op)(out, l, r) do
+  #     {left, right} = maybe_cast_u8(l, r)
+
+  #     NIF.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
+  #   end
+  # end
+
   for op <- binary_ops do
     @impl true
     def unquote(op)(out, l, r) do
       {left, right} = maybe_cast_u8(l, r)
 
-      NIF.unquote(op)(to_ref(left), to_ref(right)) |> from_ref(out)
+      Torchx.unquote(op)(to_ref_with_device(left), to_ref_with_device(right))
+      |> from_ref(out)
     end
   end
 
@@ -373,9 +366,9 @@ defmodule Torchx.Backend do
       %T{type: {_, size_right}} = right
 
       if size_left >= size_right do
-        NIF.unquote(op)(to_ref(left), to_ref(right))
+        Torchx.unquote(op)(to_ref_with_device(left), to_ref_with_device(right))
       else
-        NIF.unquote(op)(to_ref(right), to_ref(left))
+        Torchx.unquote(op)(to_ref_with_device(right), to_ref_with_device(left))
       end
       |> from_ref(out)
     end
@@ -391,7 +384,7 @@ defmodule Torchx.Backend do
     if {op, 1} in NIF.__info__(:functions) do
       @impl true
       def unquote(op)(out, tensor) do
-        NIF.unquote(op)(to_ref(tensor)) |> from_ref(out)
+        Torchx.unquote(op)(to_ref_with_device(tensor)) |> from_ref(out)
       end
     end
   end
@@ -404,7 +397,7 @@ defmodule Torchx.Backend do
         %T{type: right_type, data: %TB{ref: right_ref}},
         right_axes
       ) do
-    NIF.tensordot(
+    Torchx.tensordot(
       from_typed_ref(left_ref, left_type, out_type),
       from_typed_ref(right_ref, right_type, out_type),
       left_axes,
@@ -415,12 +408,12 @@ defmodule Torchx.Backend do
 
   defp from_typed_ref(ref, expected_type, expected_type), do: ref
 
-  defp from_typed_ref(ref, _ref_type, expected_type),
-    do: NIF.to_type(ref, torch_type(expected_type)) |> unwrap!()
+  defp from_typed_ref({device, ref}, _ref_type, expected_type),
+    do: NIF.to_type(ref, torch_type(expected_type)) |> unwrap!() |> wrap_with_device(device)
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
-    NIF.cholesky(to_ref(t)) |> from_ref(out)
+    Torchx.cholesky(to_ref_with_device(t)) |> from_ref(out)
   end
 
   @impl true
@@ -429,13 +422,15 @@ defmodule Torchx.Backend do
         tensor,
         opts
       ),
-      do: NIF.qr(to_ref(tensor), opts[:mode] == :reduced) |> from_pair_ref({q_holder, r_holder})
+      do:
+        Torchx.qr(to_ref_with_device(tensor), opts[:mode] == :reduced)
+        |> from_pair_ref({q_holder, r_holder})
 
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if on_cpu?(tensor) do
-        binary = NIF.to_blob_view(to_ref(tensor))
+        binary = NIF.to_blob_view(to_ref(tensor) |> ref())
         Nx.Backend.inspect(tensor, binary, inspect_opts)
       else
         "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
@@ -460,10 +455,15 @@ defmodule Torchx.Backend do
 
   ## Helpers
 
+  defp wrap_with_device(ref, device), do: {device, ref}
+
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 
+  defp from_ref({{_, _} = _device, ref} = data, t) when is_reference(ref), do: to_tensor(data, t)
+  defp from_ref({:cpu, ref} = data, t) when is_reference(ref), do: to_tensor(data, t)
   defp from_ref(maybe_ref, t), do: maybe_ref |> unwrap!() |> to_tensor(t)
+  defp from_ref(maybe_ref, t, device), do: maybe_ref |> unwrap!() |> to_tensor(t, device)
 
   defp from_bare_ref(maybe_ref) do
     ref = unwrap!(maybe_ref)
@@ -489,19 +489,34 @@ defmodule Torchx.Backend do
     {to_tensor(left, t1), to_tensor(right, t2)}
   end
 
-  defp from_list_ref(maybe_ref, t),
+  defp from_list_ref({device, refs_list}, t),
     do:
-      maybe_ref
-      |> unwrap!()
-      |> Enum.map(&to_tensor(&1, t))
+      refs_list
+      |> Enum.map(&to_tensor(&1, t, device))
 
+  defp to_ref_with_device(%T{data: %TB{ref: ref}}), do: ref
+
+  defp to_ref_with_device(%T{} = tensor),
+    do: Nx.backend_transfer(tensor, TB) |> to_ref_with_device()
+
+  defp to_ref(%T{data: %TB{ref: {{_, _} = _device, ref}}}), do: ref
+  defp to_ref(%T{data: %TB{ref: {:cpu, ref}}}), do: ref
   defp to_ref(%T{data: %TB{ref: ref}}), do: ref
 
   defp to_ref(%T{} = tensor),
     do: Nx.backend_transfer(tensor, TB) |> to_ref()
 
+  defp to_tensor({{_, _} = device, ref}, %T{type: type, shape: shape} = t)
+       when is_reference(ref) do
+    %{t | data: %__MODULE__{ref: {device, check_shape_and_type!(ref, shape, type)}}}
+  end
+
   defp to_tensor(ref, %T{type: type, shape: shape} = t) do
     %{t | data: %__MODULE__{ref: check_shape_and_type!(ref, shape, type)}}
+  end
+
+  defp to_tensor(ref, %T{type: type, shape: shape} = t, device) do
+    %{t | data: %__MODULE__{ref: {device, check_shape_and_type!(ref, shape, type)}}}
   end
 
   defp to_scalar(n) when is_number(n), do: n
@@ -516,7 +531,7 @@ defmodule Torchx.Backend do
                 "Please report this bug"
       end
 
-      current_shape = ref |> NIF.shape() |> unwrap!()
+      current_shape = ref(ref) |> NIF.shape() |> unwrap!()
 
       if current_shape != shape do
         raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{
@@ -531,6 +546,10 @@ defmodule Torchx.Backend do
     defp check_shape_and_type!(ref, _, _), do: ref
   end
 
+  defp ref({_device, ref}) when is_reference(ref), do: ref
+  defp ref(ref) when is_reference(ref), do: ref
+
+  def device(%T{data: %TB{ref: {_device, ref}}}), do: Torchx.device_of(ref)
   def device(%T{data: %TB{ref: ref}}), do: Torchx.device_of(ref)
 
   defp nbytes(%T{data: %TB{ref: ref}}), do: NIF.nbytes(ref) |> unwrap!()

@@ -5,6 +5,24 @@
 
 ErlNifResourceType *TENSOR_TYPE;
 
+std::map<const std::string, const torch::DeviceType> devices = {{"cpu", torch::kCPU}, {"cuda", torch::kCUDA}, {"hip", torch::kHIP}, {"fpga", torch::kFPGA}, {"msnpu", torch::kMSNPU}, {"xla", torch::kXLA}, {"vulkan", torch::kVulkan}, {"metal", torch::kMetal}, {"xpu", torch::kXPU}};
+
+inline torch::DeviceType string2device(const std::string atom)
+{
+  return devices[atom];
+}
+
+inline std::string device2string(const torch::DeviceType device)
+{
+  for (std::map<const std::string, const torch::DeviceType>::iterator i = devices.begin(); i != devices.end(); ++i)
+  {
+    if (i->second == device)
+      return i->first;
+  }
+  return "";
+}
+
+
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
@@ -49,10 +67,13 @@ inline std::string type2string(const torch::ScalarType type)
 
 #define OPTS(TYPE, DEV_VEC) DEVICE(DEV_VEC).dtype(TYPE)
 
-#define TENSOR_PARAM(ARGN, VAR)                                        \
-  torch::Tensor *VAR;                                                  \
-  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR)) \
-    return nx::nif::error(env, "Unable to get " #VAR " tensor param.");
+#define TENSOR_PARAM(ARGN, VAR)                                           \
+  torch::Tensor *VAR;                                                     \
+  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))  { \
+    std::ostringstream msg;                                               \
+    msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc;  \
+    return nx::nif::error(env, msg.str().c_str());                        \
+  }
 
 #define CATCH()                                              \
   catch (c10::Error error)                                   \
@@ -466,10 +487,10 @@ NIF(full)
 
 #define UNARY_OP(OP) UNARY_OP2(OP, OP)
 
-#define UNARY_OP2(OP, NATIVE) \
-  NIF(OP)               \
-  {                     \
-    TENSOR_PARAM(0, a); \
+#define UNARY_OP2(OP, NATIVE)  \
+  NIF(OP)                      \
+  {                            \
+    TENSOR_PARAM(0, a);        \
     TENSOR(torch::NATIVE(*a)); \
   }
 
@@ -530,9 +551,29 @@ UNARY_OP2(negate, negative)
 UNARY_OP(round)
 UNARY_OP(sign)
 UNARY_OP(exp)
+UNARY_OP(expm1)
+UNARY_OP(sqrt)
+UNARY_OP(rsqrt)
 UNARY_OP(log)
+UNARY_OP(log1p)
 UNARY_OP(bitwise_not)
 UNARY_OP2(logistic, sigmoid)
+
+UNARY_OP(sin)
+UNARY_OP(asin)
+UNARY_OP(sinh)
+UNARY_OP(asinh)
+UNARY_OP(cos)
+UNARY_OP(acos)
+UNARY_OP(cosh)
+UNARY_OP(acosh)
+UNARY_OP(tan)
+UNARY_OP(atan)
+UNARY_OP(tanh)
+UNARY_OP(atanh)
+UNARY_OP(erf)
+UNARY_OP(erfc)
+UNARY_OP2(erf_inv, erfinv)
 
 
 /* Aggregates */
@@ -664,7 +705,7 @@ static ErlNifFunc nif_functions[] = {
     DF(arange, 5),
     DF(arange, 6),
     DF(scalar_tensor, 3),
-    DF(ones, 2),
+    DF(ones, 3),
     DF(eye, 3),
     DF(full, 4),
 
@@ -724,9 +765,28 @@ static ErlNifFunc nif_functions[] = {
     DF(round, 1),
     DF(sign, 1),
     DF(exp, 1),
+    DF(expm1, 1),
+    DF(sqrt, 1),
+    DF(rsqrt, 1),
     DF(log, 1),
+    DF(log1p, 1),
     DF(bitwise_not, 1),
     DF(logistic, 1),
+    DF(sin, 1),
+    DF(asin, 1),
+    DF(sinh, 1),
+    DF(asinh, 1),
+    DF(cos, 1),
+    DF(acos, 1),
+    DF(cosh, 1),
+    DF(acosh, 1),
+    DF(tan, 1),
+    DF(atan, 1),
+    DF(tanh, 1),
+    DF(atanh, 1),
+    DF(erf, 1),
+    DF(erfc, 1),
+    DF(erf_inv, 1),
 
     DF(tensordot, 4),
     DF(matmul, 2),
