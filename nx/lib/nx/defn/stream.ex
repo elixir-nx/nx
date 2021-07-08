@@ -17,24 +17,45 @@ defmodule Nx.Defn.Stream do
   @impl true
   def init({backend, backend_options, acc, fun}) do
     Nx.default_backend({backend, backend_options})
-    {:ok, {:queue.new(), acc, fun}}
+    {:ok, {:queue.new(), :queue.new(), acc, fun}}
   end
 
   @impl true
-  def handle_cast({:send, input}, {output, acc, fun}) do
-    {entry, acc} = fun.(input, acc)
-    {:noreply, {:queue.in(entry, output), acc, fun}}
+  def handle_cast({:send, input}, {output, waiting, acc, fun}) do
+    {data, acc} = fun.(input, acc)
+
+    case :queue.out(waiting) do
+      {:empty, waiting} ->
+        {:noreply, {:queue.in(data, output), waiting, acc, fun}}
+
+      {{:value, from}, waiting} ->
+        GenServer.reply(from, {:ok, data})
+        {:noreply, {output, waiting, acc, fun}}
+    end
   end
 
   @impl true
-  def handle_call(:recv, _from, {output, acc, fun}) do
-    {response, output} = :queue.out(output)
-    {:reply, response, {output, acc, fun}}
+  def handle_call(:recv, from, {output, waiting, acc, fun}) do
+    case :queue.out(output) do
+      {:empty, output} ->
+        {:noreply, {output, :queue.in(from, waiting), acc, fun}}
+
+      {{:value, data}, output} ->
+        {:reply, {:ok, data}, {output, waiting, acc, fun}}
+    end
   end
 
   @impl true
-  def handle_call(:done, _from, {output, acc, fun}) do
-    {:stop, :normal, acc, {output, acc, fun}}
+  def handle_call(:done, _from, {output, waiting, acc, fun}) do
+    if :queue.is_empty(output) do
+      for from <- :queue.to_list(waiting) do
+        GenServer.reply(from, :done)
+      end
+
+      {:stop, :normal, {:ok, acc}, {output, waiting, acc, fun}}
+    else
+      {:reply, :recv_pending, {output, waiting, acc, fun}}
+    end
   end
 
   defimpl Nx.Stream do
@@ -55,9 +76,8 @@ defmodule Nx.Defn.Stream do
     end
 
     def recv(%{pid: pid, output: output}) do
-      # TODO: See if recv can be blocking on EXLA and, if so, support it
       case GenServer.call(pid, :recv, :infinity) do
-        {:value, data} ->
+        {:ok, data} ->
           unless compatible?(output, data) do
             raise ArgumentError, """
             Nx stream expected a tensor of type, shape, and names on recv:
@@ -72,13 +92,19 @@ defmodule Nx.Defn.Stream do
 
           data
 
-        :empty ->
-          raise "nothing to receive from Nx.Stream"
+        :done ->
+          raise "cannot recv from stream because it has been terminated"
       end
     end
 
     def done(%{pid: pid}) do
-      GenServer.call(pid, :done, :infinity)
+      case GenServer.call(pid, :done, :infinity) do
+        {:ok, acc} ->
+          acc
+
+        :recv_pending ->
+          raise "cannot mark stream as done when there are recv messages pending"
+      end
     end
 
     defp compatible?(%Nx.Tensor{} = left, right), do: Nx.compatible?(left, right)

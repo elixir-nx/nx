@@ -2,6 +2,7 @@ defmodule Nx.Defn.StreamTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
+  import ExUnit.CaptureLog
 
   defn defn_sum(entry, acc), do: {acc, entry + acc}
 
@@ -32,10 +33,23 @@ defmodule Nx.Defn.StreamTest do
     assert Nx.Stream.done(stream) == Nx.tensor(3)
   end
 
+  test "converts accumulator to tensors" do
+    assert %_{} = stream = Nx.Defn.stream(fn -> :unused end, [1, {2, 3}])
+    assert Nx.Stream.done(stream) == {Nx.tensor(2), Nx.tensor(3)}
+  end
+
+  test "can recv before send" do
+    %_{} = stream = Nx.Defn.stream(&defn_sum/2, [0, 0])
+    task = Task.async(fn -> Nx.Stream.recv(stream) end)
+    Process.sleep(100)
+    assert Nx.Stream.send(stream, 1) == :ok
+    assert Task.await(task) == Nx.tensor(0)
+  end
+
   @tag :capture_log
   test "raises on errors" do
     Process.flag(:trap_exit, true)
-    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> :bar end, [1, 2])
+    assert %_{} = stream = Nx.Defn.stream(fn _, _ -> :bad end, [1, 2])
 
     assert Nx.Stream.send(stream, 1) == :ok
     assert catch_exit(Nx.Stream.recv(stream))
@@ -44,19 +58,12 @@ defmodule Nx.Defn.StreamTest do
     assert_receive {:DOWN, ^ref, _, _, _}
   end
 
-  test "converts accumulator to tensors" do
-    assert %_{} = stream = Nx.Defn.stream(fn -> :unused end, [1, {2, 3}])
-    assert Nx.Stream.done(stream) == {Nx.tensor(2), Nx.tensor(3)}
-  end
-
   test "raises if stream is not compatible on send" do
     assert %_{} = stream = Nx.Defn.stream(fn -> :unused end, [1, {2, 3}])
 
     assert_raise ArgumentError,
                  ~r/Nx stream expected a tensor of type, shape, and names on send/,
-                 fn ->
-                   Nx.Stream.send(stream, Nx.iota({3}))
-                 end
+                 fn -> Nx.Stream.send(stream, Nx.iota({3})) end
   end
 
   test "raises if stream is not compatible on recv" do
@@ -66,15 +73,31 @@ defmodule Nx.Defn.StreamTest do
 
     assert_raise ArgumentError,
                  ~r/Nx stream expected a tensor of type, shape, and names on recv/,
-                 fn ->
-                   Nx.Stream.recv(stream)
-                 end
+                 fn -> Nx.Stream.recv(stream) end
   end
 
   test "raises if already done" do
     assert %_{} = stream = Nx.Defn.stream(fn -> :bad end, [1, 2])
     assert Nx.Stream.done(stream) == Nx.tensor(2)
     assert {:noproc, _} = catch_exit(Nx.Stream.done(stream))
+  end
+
+  test "raises if recv is pending on done" do
+    %_{} = stream = Nx.Defn.stream(&defn_sum/2, [0, 0])
+    assert Nx.Stream.send(stream, 1) == :ok
+    assert_raise RuntimeError, "cannot mark stream as done when there are recv messages pending", fn -> Nx.Stream.done(stream) end
+  end
+
+  test "raises if stream is done when recving" do
+    Process.flag(:trap_exit, true)
+    assert %_{} = stream = Nx.Defn.stream(fn -> :bad end, [1, 2])
+
+    assert capture_log(fn ->
+             Task.start_link(fn -> Nx.Stream.recv(stream) end)
+             Process.sleep(100)
+             Nx.Stream.done(stream)
+             assert_receive {:EXIT, _, {%RuntimeError{}, _}}
+           end) =~ "cannot recv from stream because it has been terminated"
   end
 
   defn stream_iota(_, _), do: {Nx.iota({}), Nx.iota({})}
