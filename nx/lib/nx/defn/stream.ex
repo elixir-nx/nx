@@ -4,14 +4,14 @@ defmodule Nx.Defn.Stream do
   use GenServer
 
   @doc false
-  @enforce_keys [:pid, :input, :acc]
-  defstruct [:pid, :input, :acc]
+  @enforce_keys [:pid, :input, :output]
+  defstruct [:pid, :input, :output]
 
   @doc false
   def start_link(input, acc, fun) do
     {backend, backend_options} = Nx.default_backend()
     {:ok, pid} = GenServer.start_link(__MODULE__, {backend, backend_options, acc, fun})
-    %Nx.Defn.Stream{input: input, acc: acc, pid: pid}
+    %Nx.Defn.Stream{input: input, output: Nx.to_template(acc), pid: pid}
   end
 
   @impl true
@@ -41,7 +41,7 @@ defmodule Nx.Defn.Stream do
     def send(%{pid: pid, input: input}, data) do
       unless compatible?(input, data) do
         raise ArgumentError, """
-        Nx stream expected a tensor of type, shape, and names:
+        Nx stream expected a tensor of type, shape, and names on send:
 
         #{inspect(input)}
 
@@ -54,11 +54,26 @@ defmodule Nx.Defn.Stream do
       GenServer.cast(pid, {:send, data})
     end
 
-    def recv(%{pid: pid}) do
+    def recv(%{pid: pid, output: output}) do
       # TODO: See if recv can be blocking on EXLA and, if so, support it
       case GenServer.call(pid, :recv, :infinity) do
-        {:value, value} -> value
-        :empty -> raise "nothing to receive from Nx.Stream"
+        {:value, data} ->
+          unless compatible?(output, data) do
+            raise ArgumentError, """
+            Nx stream expected a tensor of type, shape, and names on recv:
+
+            #{inspect(output)}
+
+            But got tensor:
+
+            #{inspect(data)}
+            """
+          end
+
+          data
+
+        :empty ->
+          raise "nothing to receive from Nx.Stream"
       end
     end
 
@@ -82,5 +97,7 @@ defmodule Nx.Defn.Stream do
         end
       end)
     end
+
+    defp compatible?(_, _), do: false
   end
 end
