@@ -52,9 +52,11 @@ defmodule Nx.Defn.StreamTest do
   test "raises if stream is not compatible on send" do
     assert %_{} = stream = Nx.Defn.stream(fn -> :unused end, [1, {2, 3}])
 
-    assert_raise ArgumentError, ~r/Nx stream expected a tensor of type, shape, and names on send/, fn ->
-      Nx.Stream.send(stream, Nx.iota({3}))
-    end
+    assert_raise ArgumentError,
+                 ~r/Nx stream expected a tensor of type, shape, and names on send/,
+                 fn ->
+                   Nx.Stream.send(stream, Nx.iota({3}))
+                 end
   end
 
   test "raises if stream is not compatible on recv" do
@@ -62,9 +64,11 @@ defmodule Nx.Defn.StreamTest do
 
     assert Nx.Stream.send(stream, Nx.iota({})) == :ok
 
-    assert_raise ArgumentError, ~r/Nx stream expected a tensor of type, shape, and names on recv/, fn ->
-      Nx.Stream.recv(stream)
-    end
+    assert_raise ArgumentError,
+                 ~r/Nx stream expected a tensor of type, shape, and names on recv/,
+                 fn ->
+                   Nx.Stream.recv(stream)
+                 end
   end
 
   test "raises if already done" do
