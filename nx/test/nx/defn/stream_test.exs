@@ -85,7 +85,10 @@ defmodule Nx.Defn.StreamTest do
   test "raises if recv is pending on done" do
     %_{} = stream = Nx.Defn.stream(&defn_sum/2, [0, 0])
     assert Nx.Stream.send(stream, 1) == :ok
-    assert_raise RuntimeError, "cannot mark stream as done when there are recv messages pending", fn -> Nx.Stream.done(stream) end
+
+    assert_raise RuntimeError,
+                 "cannot mark stream as done when there are recv messages pending",
+                 fn -> Nx.Stream.done(stream) end
   end
 
   test "raises if stream is done when recving" do
