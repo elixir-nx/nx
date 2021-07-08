@@ -28,11 +28,13 @@ TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
 TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
 TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 
-all: symlinks
-	cd $(TENSORFLOW_DIR) && \
-		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
+$(EXLA_SO): $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so
 	mkdir -p priv
 	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so $(EXLA_SO)
+
+$(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so: symlinks
+	cd $(TENSORFLOW_DIR) && \
+		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
 
 symlinks: $(TENSORFLOW_DIR)
 	@ rm -f $(TENSORFLOW_EXLA_DIR)
