@@ -12,6 +12,17 @@ defmodule Nx.Defn.Evaluator do
   @random_ops [:random_uniform, :random_normal]
 
   @impl true
+  def __stream__(key, input, acc, vars, fun, opts) do
+    dynamic = Nx.Defn.Tree.flatten_list([input, acc])
+    vars = Enum.drop(vars, length(dynamic))
+
+    Nx.Defn.Stream.start_link(input, acc, fn input, acc ->
+      vars = Nx.Defn.Tree.flatten_list([input, acc], vars)
+      __jit__(key, vars, fun, opts)
+    end)
+  end
+
+  @impl true
   def __jit__(_key, vars, fun, _opts) do
     fun.(vars)
     |> composite_eval(vars, %{})

@@ -39,6 +39,9 @@ defmodule EXLA do
         useful if multiple computations are done in a row. See
         "Device allocation" section
 
+      * `:device_id` - the default device id to run the computation
+        on. Defaults to the `:default_device_id` on the client
+
   ## Clients
 
   The `EXLA` library uses a client for compiling and executing code.
@@ -70,6 +73,23 @@ defmodule EXLA do
   per platform, they can race each other and fight for resources,
   such as memory. Therefore, we recommend developers to use the
   `:default` client as much as possible.
+
+  ### Client options
+
+  Each client configuration accepts the following options:
+
+    * `:platform` - the platform the client runs on. It can be
+      `:host` (CPU), `:cuda`, `:rocm`, or `:tpu`
+
+    * `:default_device_id` - the default device ID to run on.
+      For example, if you have two GPUs, you can choose one as
+      the default
+
+    * `:preallocate`- if the memory should be preallocated on
+      GPU devices. Defaults to `true`
+
+    * `:memory_fraction` - how much memory of a GPU device to
+      allocate. Defaults to `0.9.`
 
   ## Device allocation
 
@@ -105,6 +125,14 @@ defmodule EXLA do
   If instead you want to make a copy of the data, you can use
   `Nx.backend_copy/1` instead. However, when working with large
   data, be mindful of memory allocations.
+
+  > **Important!** EXLA operations and the `defn` compiler do not
+  take the input devices into account when executing. So, if you
+  transfer a tensor to the GPU, by explicitly passing the client
+  to be CUDA, but then your default client runs on the CPU, the
+  tensors will be transferred back to CPU before execution. That's
+  why it is important to configure the `:default` client with your
+  desired specifications.
 
   ## Docker considerations
 

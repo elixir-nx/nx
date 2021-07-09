@@ -211,7 +211,7 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
 
       assert_raise ArgumentError,
-                   ~r"The following function is unexpected inside a tuple/map",
+                   ~r"Anonymous functions are only allowed as direct arguments to defn",
                    fn -> calls_tuple_fun({&Nx.add/2, 0}, 1, 2.0) end
     end
   end

@@ -16,6 +16,21 @@ defmodule EXLA.DeviceBackendTest do
     end
   end
 
+  test "transfers data to a specific device" do
+    t = Nx.tensor([1, 2, 3, 4])
+
+    et = Nx.backend_transfer(t, {EXLA.DeviceBackend, device_id: 0})
+    assert %EXLA.DeviceBackend{state: {ref, :default}} = et.data
+    assert is_reference(ref)
+
+    nt = Nx.backend_transfer(et)
+    assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+
+    assert_raise RuntimeError, "CopyToHostAsync() called on deleted or donated buffer", fn ->
+      Nx.backend_transfer(et)
+    end
+  end
+
   test "copies data" do
     t = Nx.tensor([1, 2, 3, 4])
 

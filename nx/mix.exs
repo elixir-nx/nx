@@ -48,7 +48,8 @@ defmodule Nx.MixProject do
         # Nx,
         # Nx.Defn,
         # Nx.Defn.Kernel,
-        # Nx.LinAlg
+        # Nx.LinAlg,
+        # Nx.Stream,
 
         Backends: [
           Nx.Backend,

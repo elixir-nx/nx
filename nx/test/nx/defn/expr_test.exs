@@ -3,6 +3,7 @@ defmodule Nx.Defn.ExprTest do
 
   alias Nx.Defn.Expr
   alias Nx.Tensor, as: T
+  doctest Nx.Defn.Expr
 
   import Nx.Defn
   @default_defn_compiler Nx.Defn.Identity

@@ -15,6 +15,7 @@ defmodule EXLA.DeviceBackend do
   """
 
   @behaviour Nx.Backend
+  @enforce_keys [:state]
   defstruct [:state]
 
   alias Nx.Tensor, as: T
@@ -22,10 +23,10 @@ defmodule EXLA.DeviceBackend do
 
   @impl true
   def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
-    client = opts[:client] || :default
-    device_id = opts[:device_id] || 0
+    client = EXLA.Client.fetch!(opts[:client] || :default)
+    device_id = opts[:device_id] || client.default_device_id
     buffer = EXLA.Buffer.buffer(binary, EXLA.Shape.make_shape(type, shape))
-    buffer = EXLA.Buffer.place_on_device(buffer, EXLA.Client.fetch!(client), device_id)
+    buffer = EXLA.Buffer.place_on_device(buffer, client, device_id)
     put_in(tensor.data, %DB{state: buffer.ref})
   end
 
@@ -34,8 +35,7 @@ defmodule EXLA.DeviceBackend do
     backend_copy(tensor, Nx.BinaryBackend, opts)
   end
 
-  # TODO: Do not copy if transferring to EXLA.DeviceBackend on the same client+ordinal
-
+  # TODO: Support direct transfers without going through Elixir
   def backend_copy(%T{data: %DB{state: state}} = tensor, backend, opts) do
     backend.from_binary(tensor, EXLA.Buffer.read(state), opts)
   end
