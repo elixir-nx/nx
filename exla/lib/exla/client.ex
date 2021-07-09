@@ -8,13 +8,13 @@ defmodule EXLA.Client do
   use GenServer
   @name __MODULE__
 
-  @enforce_keys [:ref, :platform, :name, :device_count, :devices]
-  defstruct [:ref, :platform, :name, :device_count, :devices]
+  @enforce_keys [:ref, :platform, :name, :device_count, :devices, :default_device_id]
+  defstruct [:ref, :platform, :name, :device_count, :devices, :default_device_id]
 
   @doc """
   Fetches a client with the given `name` from configuration.
   """
-  def fetch!(name) do
+  def fetch!(name) when is_atom(name) do
     :persistent_term.get({__MODULE__, name}, nil) ||
       (
         clients = Application.fetch_env!(:exla, :clients)
@@ -57,11 +57,9 @@ defmodule EXLA.Client do
 
   defp build_client(name, options) do
     platform = Keyword.get(options, :platform, :host)
-
-    # Fraction of GPU memory to preallocate
+    default_device_id = Keyword.get(options, :default_device_id, 0)
     memory_fraction = Keyword.get(options, :memory_fraction, 0.9)
 
-    # Flag for preallocating GPU memory
     preallocate = Keyword.get(options, :preallocate, true)
     preallocate_int = if preallocate, do: 1, else: 0
 
@@ -71,19 +69,24 @@ defmodule EXLA.Client do
         :cuda -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
         :rocm -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
         :tpu -> EXLA.NIF.get_tpu_client()
-        _ -> raise ArgumentError, "unknown Exla platform: #{inspect(platform)}"
+        _ -> raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
       end
       |> unwrap!()
 
     device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
     devices = EXLA.NIF.get_devices(ref) |> unwrap!()
 
+    if default_device_id not in 0..device_count-1 do
+      raise ArgumentError, ":default_device_id must be a number between 0 and #{device_count-1}"
+    end
+
     %EXLA.Client{
       ref: ref,
       platform: platform,
       name: name,
       device_count: device_count,
-      devices: devices
+      devices: devices,
+      default_device_id: default_device_id
     }
   end
 

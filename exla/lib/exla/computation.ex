@@ -20,7 +20,7 @@ defmodule EXLA.Computation do
   Currently those options do not have an effect as they related to running the
   same compiled executable on multiple replicas.
 
-  Some options apply to TPU only and therefore are not currently supported:
+  Some options apply to TPU only:
 
     * `:num_partitions` - the number of partitions this computation will run on
 
@@ -31,8 +31,6 @@ defmodule EXLA.Computation do
 
     use_spmd = if num_replicas >= 1 or num_partitions >= 1, do: 1, else: 0
     output_shape = assert_output_shape!(computation)
-
-    # TODO: Validate replicas against the client
 
     ref =
       EXLA.NIF.compile(

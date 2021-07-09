@@ -40,14 +40,14 @@ end
 client = EXLAHelpers.client()
 
 multi_device =
-  if client.device_count < 2 or client.platform != :host, do: [:multi_device], else: []
+  if client.device_count > 1 and client.platform == :host, do: [:multi_device], else: []
 
 skip_tpu_tests =
   if client.platform == :tpu,
     do: [:unsupported_dilated_reduce_window, :unsupported_64_bit_op, :aot],
     else: []
 
-if client.platform == :host and client.device_count < 2 do
+if client.platform == :host and client.device_count == 1 do
   cores = System.schedulers_online()
 
   IO.puts(
