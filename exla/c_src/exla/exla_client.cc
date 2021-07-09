@@ -112,8 +112,13 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   options.untuple_result = true;
   options.strict_shape_checking = false;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<ExlaBuffer*> input_buffers,
-    UnpackRunArguments(env, arguments, client_, 0), env);
+  std::vector<ExlaBuffer*> input_buffers;
+  if (device_id >= 0) {
+    EXLA_ASSIGN_OR_RETURN_NIF(input_buffers, UnpackRunArguments(env, arguments, client_, device_id), env);
+  } else {
+    // TODO(seanmor5): With pmap, this should unpack to all devices
+    EXLA_ASSIGN_OR_RETURN_NIF(input_buffers, UnpackRunArguments(env, arguments, client_, 0), env);
+  }
 
   std::vector<xla::PjRtBuffer*> pjrt_buffers;
   std::vector<ERL_NIF_TERM> terms;

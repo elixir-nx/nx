@@ -32,7 +32,7 @@ defmodule EXLAHelpers do
   used for compilation and then given on execution.
   """
   def run(args, opts \\ [], fun) do
-    exec = compile(Enum.map(args, & &1.shape), fun)
+    exec = compile(Enum.map(args, & &1.shape), fun, opts)
     EXLA.Executable.run(exec, args, opts)
   end
 end
