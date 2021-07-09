@@ -40,7 +40,7 @@ end
 client = EXLAHelpers.client()
 
 multi_device =
-  if client.device_count > 1 and client.platform == :host, do: [:multi_device], else: []
+  if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]
 
 skip_tpu_tests =
   if client.platform == :tpu,

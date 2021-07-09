@@ -223,7 +223,8 @@ defmodule EXLA.NIF do
         _argument_layouts,
         _num_replicas,
         _num_partitions,
-        _use_spmd
+        _use_spmd,
+        _device_id
       ),
       do: :erlang.nif_error(:undef)
 
@@ -231,7 +232,8 @@ defmodule EXLA.NIF do
         _client,
         _executable,
         _arguments,
-        _keep_on_device
+        _keep_on_device,
+        _device_id
       ),
       do: :erlang.nif_error(:undef)
 
@@ -239,7 +241,8 @@ defmodule EXLA.NIF do
         _client,
         _executable,
         _arguments,
-        _keep_on_device
+        _keep_on_device,
+        _device_id
       ),
       do: :erlang.nif_error(:undef)
 

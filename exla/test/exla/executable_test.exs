@@ -108,6 +108,21 @@ defmodule EXLA.ExecutableTest do
       assert <<2::32-native>> == Buffer.read(b.ref)
       assert <<3::32-native>> == Buffer.read(c.ref)
     end
+
+    @tag :multi_device
+    test "succeeds with device set" do
+      t1 = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+      t2 = %Buffer{data: <<2::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
+
+      assert [a = %Buffer{}, b = %Buffer{}, c = %Buffer{}] =
+               run([t1, t2], [keep_on_device: true, device_id: 1], fn b, x, y ->
+                 Op.tuple(b, [x, y, Op.add(x, y)])
+               end)
+
+      assert <<1::32-native>> == Buffer.read(a.ref)
+      assert <<2::32-native>> == Buffer.read(b.ref)
+      assert <<3::32-native>> == Buffer.read(c.ref)
+    end
   end
 
   describe "infeed/outfeed" do

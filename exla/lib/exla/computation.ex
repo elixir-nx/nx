@@ -28,6 +28,7 @@ defmodule EXLA.Computation do
   def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options \\ []) do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
+    device_id = Keyword.get(options, :device_id, -1)
 
     use_spmd = if num_replicas >= 1 or num_partitions >= 1, do: 1, else: 0
     output_shape = assert_output_shape!(computation)
@@ -39,7 +40,8 @@ defmodule EXLA.Computation do
         Enum.map(argument_shapes, & &1.ref),
         num_replicas,
         num_partitions,
-        use_spmd
+        use_spmd,
+        device_id
       )
       |> unwrap!()
 
@@ -48,7 +50,8 @@ defmodule EXLA.Computation do
       ref: ref,
       output_shape: output_shape,
       num_replicas: num_replicas,
-      num_partitions: num_partitions
+      num_partitions: num_partitions,
+      device_id: device_id
     }
   end
 

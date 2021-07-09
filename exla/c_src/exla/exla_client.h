@@ -58,7 +58,8 @@ class ExlaExecutable {
 
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
-                                  bool keep_on_device);
+                                  bool keep_on_device,
+                                  int device_id);
 
  private:
   std::unique_ptr<xla::PjRtExecutable> executable_;

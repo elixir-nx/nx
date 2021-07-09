@@ -106,7 +106,8 @@ ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM arguments,
-                                                bool keep_on_device) {
+                                                bool keep_on_device,
+                                                int device_id) {
   xla::ExecuteOptions options;
   options.untuple_result = true;
   options.strict_shape_checking = false;
@@ -130,11 +131,17 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     }
   }
 
-  std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({pjrt_buffers});
+  ERL_NIF_TERM ret;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
-
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM ret, UnpackResult(env, std::move(result.at(0)), keep_on_device), env);
+  if (device_id >= 0) {
+    EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->ExecutePortable(pjrt_buffers, device, options), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ret, UnpackResult(env, std::move(result), keep_on_device), env);
+  } else {
+    std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({pjrt_buffers});
+    EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ret, UnpackResult(env, std::move(result.at(0)), keep_on_device), env);
+  }
 
   return ret;
 }

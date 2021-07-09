@@ -1978,7 +1978,7 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
 }
 
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 6) {
+  if (argc != 7) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1989,6 +1989,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   int num_replicas;
   int num_partitions;
   bool use_spmd;
+  int device_id;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
@@ -2008,13 +2009,22 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[5], &use_spmd)) {
     return exla::nif::error(env, "Unable to get SPMD Partitioning Flag.");
   }
+  if (!exla::nif::get(env, argv[6], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
 
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
 
+  bool compile_portable_executable = false;
+  if (device_id >= 0) {
+    compile_portable_executable = true;
+    build_options.set_device_ordinal(device_id);
+  }
+
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable* executable,
-    (*client)->Compile(*computation, argument_layouts, build_options, false), env);
+    (*client)->Compile(*computation, argument_layouts, build_options, compile_portable_executable), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
 }
@@ -2022,13 +2032,14 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
+  if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   exla::ExlaExecutable** executable;
   bool keep_on_device;
+  int device_id;
 
   ERL_NIF_TERM arguments = argv[2];
 
@@ -2041,9 +2052,12 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[3], &keep_on_device)) {
     return exla::nif::error(env, "Unable to get keep on device flag.");
   }
+  if (!exla::nif::get(env, argv[4], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-     (*executable)->Run(env, arguments, keep_on_device), env);
+     (*executable)->Run(env, arguments, keep_on_device, device_id), env);
 
   return term;
 }
@@ -2136,7 +2150,7 @@ static ErlNifFunc exla_funcs[] = {
   {"get_device_count", 1, get_device_count},
   {"get_devices", 1, get_devices},
   {"get_supported_platforms", 0, get_supported_platforms},
-  {"compile", 6, compile},
+  {"compile", 7, compile},
   // ExlaBuffer
   {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -2144,8 +2158,8 @@ static ErlNifFunc exla_funcs[] = {
   {"transfer_to_infeed", 4, transfer_to_infeed},
   {"transfer_from_outfeed", 3, transfer_from_outfeed},
   // ExlaExecutable
-  {"run_io", 4, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"run_cpu", 4, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 5, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
   {"make_tuple_shape", 1, make_tuple_shape},

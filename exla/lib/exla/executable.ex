@@ -7,7 +7,7 @@ defmodule EXLA.Executable do
   alias EXLA.{Buffer, Shape}
 
   @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions]
-  defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions]
+  defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
 
   @doc """
   Runs the given executable with arguments.
@@ -51,7 +51,8 @@ defmodule EXLA.Executable do
             client.ref,
             exec,
             inputs,
-            keep_on_device_int
+            keep_on_device_int,
+            executable.device_id
           )
 
         _ ->
@@ -59,7 +60,8 @@ defmodule EXLA.Executable do
             client.ref,
             exec,
             inputs,
-            keep_on_device_int
+            keep_on_device_int,
+            executable.device_id
           )
       end
 
