@@ -32,6 +32,7 @@ defmodule EXLA.Executable do
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
+    # TODO: Pass this downstream
     _device_id = options[:device_id] || client.default_device_id
 
     inputs =
