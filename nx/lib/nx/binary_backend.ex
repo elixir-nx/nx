@@ -1680,6 +1680,32 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def take(out, tensor, indices, axis) do
+    %T{type: {_, idx_size}} = indices
+
+    # We iterate over the indices in a flat manner,
+    # and take a unit tensor slice along axis given
+    # by each index. Then we concatenate the tensors
+    # along the axis, which gives us the result with
+    # index dimensions flattened and we just reshape.
+
+    tensor_rank = tuple_size(tensor.shape)
+    slice_start = List.duplicate(0, tensor_rank)
+    slice_lengths = tensor.shape |> Tuple.to_list() |> List.replace_at(axis, 1)
+
+    slices =
+      for <<bin::size(idx_size)-bitstring <- to_binary(indices)>> do
+        idx = binary_to_number(bin, indices.type)
+        slice_start = List.replace_at(slice_start, axis, idx)
+        Nx.slice(tensor, slice_start, slice_lengths)
+      end
+
+    slices
+    |> Nx.concatenate(axis: axis)
+    |> Nx.reshape(out.shape, names: out.names)
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
     rank = tuple_size(output_shape)

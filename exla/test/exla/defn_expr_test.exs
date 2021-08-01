@@ -2502,6 +2502,62 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "take" do
+    defn take_axis_0(t, idx), do: Nx.take(t, idx)
+    defn take_axis_1(t, idx), do: Nx.take(t, idx, axis: 1)
+
+    test "1d indices" do
+      assert take_axis_0(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1])) ==
+               Nx.tensor([[3, 4], [1, 2], [3, 4]])
+
+      assert take_axis_1(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1])) ==
+               Nx.tensor([[2, 1, 2], [4, 3, 4]])
+    end
+
+    test "2d indices" do
+      assert take_axis_1(
+               Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]),
+               Nx.tensor([[0, 0, 0], [1, 1, 1], [0, 0, 0]])
+             ) ==
+               Nx.tensor([
+                 [
+                   [
+                     [1, 2],
+                     [1, 2],
+                     [1, 2]
+                   ],
+                   [
+                     [11, 12],
+                     [11, 12],
+                     [11, 12]
+                   ],
+                   [
+                     [1, 2],
+                     [1, 2],
+                     [1, 2]
+                   ]
+                 ],
+                 [
+                   [
+                     [101, 102],
+                     [101, 102],
+                     [101, 102]
+                   ],
+                   [
+                     [111, 112],
+                     [111, 112],
+                     [111, 112]
+                   ],
+                   [
+                     [101, 102],
+                     [101, 102],
+                     [101, 102]
+                   ]
+                 ]
+               ])
+    end
+  end
+
   describe "reverse" do
     defn reverse(t), do: Nx.reverse(t)
     defn reverse1(t), do: Nx.reverse(t, axes: [1])
