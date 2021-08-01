@@ -7279,6 +7279,10 @@ defmodule Nx do
   zero. `start_index + length` must not exceed the respective
   tensor dimension.
 
+  It is possible for `start_indices` to be a list of tensors.
+  However, `lengths` must always be a list of integers. If you
+  want to specify a tensor as the list of indices, see `take/3`.
+
   If the `:strides` is given, it must be strictly greater than zero.
   The resulting tensor will have the shape of `length` unless
   `:strides` are given.
