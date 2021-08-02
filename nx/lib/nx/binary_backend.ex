@@ -1708,7 +1708,7 @@ defmodule Nx.BinaryBackend do
       end
 
     concat_shape = put_elem(tensor.shape, axis, length(slices))
-    result_data = do_concatenate(slices, size, concat_shape, axis)
+    result_data = do_concatenate(slices, size, axis, concat_shape)
     from_binary(out, result_data)
   end
 
@@ -1721,11 +1721,11 @@ defmodule Nx.BinaryBackend do
       t = as_type(%{t | type: output_type}, t)
       {to_binary(t), shape}
     end)
-    |> do_concatenate(size, output_shape, axis)
+    |> do_concatenate(size, axis, output_shape)
     |> then(&from_binary(out, &1))
   end
 
-  defp do_concatenate(binaries_with_shape, size, output_shape, axis) do
+  defp do_concatenate(binaries_with_shape, size, axis, output_shape) do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
 
