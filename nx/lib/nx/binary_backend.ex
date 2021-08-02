@@ -1600,11 +1600,11 @@ defmodule Nx.BinaryBackend do
 
     tensor
     |> to_binary()
-    |> do_slice(shape, size, start_indices, lengths, strides, output_shape)
+    |> bin_slice(shape, size, start_indices, lengths, strides, output_shape)
     |> then(&from_binary(out, &1))
   end
 
-  defp do_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
+  defp bin_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
     start_indices = clamp_indices(start_indices, shape, lengths)
 
     if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
@@ -1703,12 +1703,15 @@ defmodule Nx.BinaryBackend do
       for <<bin::size(idx_size)-bitstring <- to_binary(indices)>> do
         idx = binary_to_number(bin, indices.type)
         slice_start = List.replace_at(slice_start, axis, idx)
-        slice_data = do_slice(data, shape, size, slice_start, slice_lengths, strides, slice_shape)
+
+        slice_data =
+          bin_slice(data, shape, size, slice_start, slice_lengths, strides, slice_shape)
+
         {slice_data, slice_shape}
       end
 
     concat_shape = put_elem(tensor.shape, axis, length(slices))
-    result_data = do_concatenate(slices, size, axis, concat_shape)
+    result_data = bin_concatenate(slices, size, axis, concat_shape)
     from_binary(out, result_data)
   end
 
@@ -1721,11 +1724,11 @@ defmodule Nx.BinaryBackend do
       t = as_type(%{t | type: output_type}, t)
       {to_binary(t), shape}
     end)
-    |> do_concatenate(size, axis, output_shape)
+    |> bin_concatenate(size, axis, output_shape)
     |> then(&from_binary(out, &1))
   end
 
-  defp do_concatenate(binaries_with_shape, size, axis, output_shape) do
+  defp bin_concatenate(binaries_with_shape, size, axis, output_shape) do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
 
