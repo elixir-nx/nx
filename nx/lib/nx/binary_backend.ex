@@ -1702,6 +1702,12 @@ defmodule Nx.BinaryBackend do
     slices =
       for <<bin::size(idx_size)-bitstring <- to_binary(indices)>> do
         idx = binary_to_number(bin, indices.type)
+
+        if idx < 0 or idx >= elem(shape, axis) do
+          raise ArgumentError,
+                "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+        end
+
         slice_start = List.replace_at(slice_start, axis, idx)
 
         slice_data =
