@@ -310,7 +310,7 @@ defmodule EXLA.Op do
         start_indices = [[0], [1]]
         index_vector_dim = 1
       and given
-        start_index_map = [1] # effectively %{0 => 0, 1 => 1}
+        start_index_map = [1] # effectively %{0 => 1}
       then
         actual index vectors are [0, 0], [0, 1] (leading 0 is inserted)
 
