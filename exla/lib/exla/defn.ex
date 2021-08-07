@@ -708,6 +708,28 @@ defmodule EXLA.Defn do
     EXLA.Op.dynamic_update_slice(tensor, slice, start_indices)
   end
 
+  defp to_operator(:take, [tensor, indices, axis], _ans, _state) do
+    tensor_rank = tensor |> op_shape() |> tuple_size()
+    indices_rank = indices |> op_shape() |> tuple_size()
+    result_rank = tensor_rank - 1 + indices_rank
+
+    index_vector_dim = indices_rank
+    slice_sizes = tensor |> op_shape() |> put_elem(axis, 1) |> Tuple.to_list()
+    offset_dims = result_rank |> axes_for_rank() |> delete_slice(axis, indices_rank)
+    collapsed_slice_dims = [axis]
+    start_index_map = [axis]
+
+    EXLA.Op.gather(
+      tensor,
+      indices,
+      index_vector_dim,
+      slice_sizes,
+      offset_dims,
+      collapsed_slice_dims,
+      start_index_map
+    )
+  end
+
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do
     EXLA.Op.reverse(tensor, axes)
   end
@@ -1003,6 +1025,12 @@ defmodule EXLA.Defn do
   defp count_up(0, _n), do: []
   defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
 
+  defp axes_for_rank(0), do: []
+
+  defp axes_for_rank(rank) do
+    Enum.to_list(0..(rank - 1))
+  end
+
   ## Op Helpers
 
   defp op_type(op), do: EXLA.Op.get_shape(op).dtype
@@ -1101,4 +1129,11 @@ defmodule EXLA.Defn do
 
   defp nx_to_cache_key!(%T{type: type, shape: shape}), do: {type, shape}
   defp nx_to_expr_key!(%T{type: type, shape: shape, names: names}), do: {type, shape, names}
+
+  # Helpers
+
+  defp delete_slice(enumerable, index, length) do
+    {left, right} = Enum.split(enumerable, index)
+    left ++ Enum.drop(right, length)
+  end
 end

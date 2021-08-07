@@ -511,6 +511,60 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM gather(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 7) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* start_indices;
+  exla::int64 index_vector_dim;
+  std::vector<xla::int64> slice_sizes;
+  std::vector<xla::int64> offset_dims;
+  std::vector<xla::int64> collapsed_slice_dims;
+  std::vector<xla::int64> start_index_map;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], start_indices)) {
+    return exla::nif::error(env, "Unable to get start indices.");
+  }
+  if (!exla::nif::get(env, argv[2], &index_vector_dim)) {
+    return exla::nif::error(env, "Unable to get index vector dim.");
+  }
+  if (!exla::nif::get_list(env, argv[3], slice_sizes)) {
+    return exla::nif::error(env, "Unable to get slice sizes.");
+  }
+  if (!exla::nif::get_list(env, argv[4], offset_dims)) {
+    return exla::nif::error(env, "Unable to get offset dims.");
+  }
+  if (!exla::nif::get_list(env, argv[5], collapsed_slice_dims)) {
+    return exla::nif::error(env, "Unable to get collapsed slice dims.");
+  }
+  if (!exla::nif::get_list(env, argv[6], start_index_map)) {
+    return exla::nif::error(env, "Unable to get start index map.");
+  }
+
+  xla::GatherDimensionNumbers dim_numbers;
+
+  dim_numbers.set_index_vector_dim(index_vector_dim);
+
+  for (auto dim : offset_dims) {
+    dim_numbers.add_offset_dims(dim);
+  }
+  for (auto dim : collapsed_slice_dims) {
+    dim_numbers.add_collapsed_slice_dims(dim);
+  }
+  for (auto dim : start_index_map) {
+    dim_numbers.add_start_index_map(dim);
+  }
+
+  xla::XlaOp op = xla::Gather(*operand, *start_indices, dim_numbers, slice_sizes);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 // Creation
 
 ERL_NIF_TERM rng_normal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2101,6 +2155,7 @@ static ErlNifFunc exla_funcs[] = {
   {"slice", 4, slice},
   {"dynamic_slice", 3, dynamic_slice},
   {"dynamic_update_slice", 3, dynamic_update_slice},
+  {"gather", 7, gather},
   // Tensor Creation
   {"rng_normal", 3, rng_normal},
   {"rng_uniform", 3, rng_uniform},

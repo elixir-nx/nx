@@ -89,6 +89,17 @@ defmodule EXLA.NIF do
   def dynamic_update_slice(_op, _update, _start_indices),
     do: :erlang.nif_error(:undef)
 
+  def gather(
+        _op,
+        _start_indices,
+        _index_vector_dim,
+        _slice_sizes,
+        _offset_dims,
+        _collapsed_slice_dims,
+        _start_index_map
+      ),
+      do: :erlang.nif_error(:undef)
+
   def rng_normal(_mu, _sigma, _shape),
     do: :erlang.nif_error(:undef)
 

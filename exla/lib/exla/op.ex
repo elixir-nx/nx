@@ -236,6 +236,187 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  @doc """
+  The XLA gather operation stitches together several slices
+  of an input array.
+
+  Note that this operation is extremely generic and far from
+  intuitive for regular usage. However, it can be used to implement
+  many specific operations that have to do with combining multiple
+  tensor slices.
+
+  ## Parameteres
+
+  The XLA docs are rather cryptic unless already understood,
+  so here's an attempt of a more intuitive description.
+
+  ### `index_vector_dim`
+
+  Determines which dimension contains index vectors. In most cases
+  we want to set this to the last dimension.
+
+      given
+        start_indices = [[0, 1], [1, 1]]
+      and given
+        index_vector_dim = 1
+      then
+        index vectors are [0, 1] and [1, 1]
+
+  Note that we can set this to `last_dimension + 1`, in which case
+  `start_indices` are implicitly reshaped to have a trailing dimension
+  of 1.
+
+      given
+        start_indices = [[0, 1], [1, 1]]
+      and given
+        index_vector_dim = 2
+      then
+        start_indices <- [[[0], [1]], [[1], [1]]]
+        index vectors are [0], [1], [1], [1]
+
+  ### `start_index_map`
+
+  Note: though given as a list, it can be treated as a map of `list_idx -> value`.
+
+  An index vector may have less elements than the operand tensor shape.
+  For example:
+
+      given
+        operand = [[1, 2], [3, 4]]
+        start_indices = [[1], [0]]
+        index_vector_dim = 1
+
+  As described above, in this case index vectors are `[1]`, `[0]` and they have
+  length 1. However, the operand has rank 2, so we need vectors of the form `[_, _]`
+  to point to a specific element in the operand. The `start_index_map` determines
+  where indices go into this template:
+
+      and given
+        start_index_map = [0] # effectively %{0 => 0}
+      then
+        actual index vectors are [1, _] and [0, _]
+
+      and given
+        start_index_map = [1] # effectively %{0 => 1}
+      then
+        actual index vectors are [_, 1] and [_, 0]
+
+  Finally, the missing elements (`_`) are assumed to be 0.
+
+  Complete examples:
+
+      given
+        operand = [[1, 2], [3, 4]]
+        start_indices = [[0], [1]]
+        index_vector_dim = 1
+      and given
+        start_index_map = [1] # effectively %{0 => 1}
+      then
+        actual index vectors are [0, 0], [0, 1] (leading 0 is inserted)
+
+      given
+        operand = [[1, 2], [3, 4]]
+        start_indices = [[0, 1], [1, 1]]
+        index_vector_dim = 1
+      and given
+        start_index_map = [0, 1] # effectively %{0 => 0, 1 => 1}
+      then
+        actual index vectors are [0, 1], [1, 1] (as expected)
+
+      given
+        operand = [[1, 2], [3, 4]]
+        start_indices = [[0, 1], [1, 1]]
+        index_vector_dim = 1
+      and given
+        start_index_map = [1, 0] # effectively %{0 => 1, 1 => 0}
+      then
+        actual index vectors are [1, 0], [1, 1] (see how the first vector is reversed)
+
+  ### `slice_sizes`
+
+  For every starting point (as described above) we take a slice given
+  by `slice_sizes`. Naturally, `slice_sizes` must have the same length
+  as operand rank, so that we have one size per dimension.
+
+      given
+        operand = [[1, 2], [3, 4]]
+        actual index vector [1, 0]
+      and given
+        slice_sizes = [1, 2]
+      then
+        slice for actual index vector is [[3, 4]]
+
+  ### `collapsed_slice_dims`
+
+  A list of dimensions that are collapsed (effectively removed) in
+  the slice shape. Only dimensions of size 1 can be collapsed.
+
+      given
+        slice is [[3, 4]] # shape: [1][2]
+      and given
+        collapsed_slice_dims = [0]
+      then
+        actual slice is [3, 4] # shape [2]
+
+  ### `offset_dims`
+
+  A list of dimensions in the output tensor corresponding to the
+  non-collapsed dimensions in slice tensors. In other words, these
+  dimensions are used for indexing elements of the slice tensors.
+
+      given
+        operand = [[1, 2], [3, 4]]
+        start_indices = [[1, 0], [0, 0], [1, 0]]
+        index_vector_dim = 1
+        start_index_map = [1, 2] # effectively %{0 => 0, 1 => 1}
+        collapsed_slice_dims = [0]
+      and given
+        offset_dims = [1]
+      then
+        result is [[3, 4], [1, 2], [3, 4]]
+
+  In the above example the collapsed slices are `[3, 4]`, `[1, 2]`, `[3, 4]`
+  and have rank 1. Using `offset_dims` we specify that the first
+  dimension in each slice corresponds to the second dimension in
+  the output tensor.
+
+  If we use the first output dimension instead, we get:
+
+      and given
+        offset_dims = [0]
+      then
+        result is [[3, 1, 3], [4, 2, 4]]
+
+  ## Docs
+
+  More formal specification can be found in [the XLA Gather docs](https://www.tensorflow.org/xla/operation_semantics#gather).
+  """
+  def gather(
+        %Op{builder: builder, ref: op},
+        %Op{builder: builder, ref: start_indices},
+        index_vector_dim,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map
+      )
+      when is_integer(index_vector_dim) and is_list(slice_sizes) and is_list(offset_dims) and
+             is_list(collapsed_slice_dims) and is_list(start_index_map) do
+    ref =
+      EXLA.NIF.gather(
+        op,
+        start_indices,
+        index_vector_dim,
+        slice_sizes,
+        offset_dims,
+        collapsed_slice_dims,
+        start_index_map
+      )
+      |> unwrap!()
+
+    %Op{builder: builder, ref: ref}
+  end
+
   def dot(
         %Op{builder: builder, ref: left},
         %Op{builder: builder, ref: right},
