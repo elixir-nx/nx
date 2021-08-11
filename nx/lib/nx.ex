@@ -7279,6 +7279,10 @@ defmodule Nx do
   zero. `start_index + length` must not exceed the respective
   tensor dimension.
 
+  It is possible for `start_indices` to be a list of tensors.
+  However, `lengths` must always be a list of integers. If you
+  want to specify a tensor as the list of indices, see `take/3`.
+
   If the `:strides` is given, it must be strictly greater than zero.
   The resulting tensor will have the shape of `length` unless
   `:strides` are given.
@@ -7516,6 +7520,150 @@ defmodule Nx do
       slice,
       start_indices
     )
+  end
+
+  @doc """
+  Takes and concatenates slices along an axis.
+
+  Intuitively speaking, `take/3` reorders tensor slices along
+  the given axis based on the given indices, possibly duplicating
+  and removing slices.
+
+  Passing a multi-dimensional indices tensor only affects the
+  resulting shape. Specifically, the given axis in the input shape
+  gets replaced with the indices shape.
+
+  ## Options
+
+    * `:axis` - an axis to take tensor slices over. Defaults to 0.
+
+  ## Examples
+
+      iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1]))
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [3, 4],
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
+      iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3]
+        [
+          [2, 1, 2],
+          [4, 3, 4]
+        ]
+      >
+
+      iex> Nx.take(Nx.tensor([[1, 2], [3, 4]], names: [:x, :y]), Nx.tensor([1, 0, 1]), axis: :y)
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [2, 1, 2],
+          [4, 3, 4]
+        ]
+      >
+
+      iex> Nx.take(Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]), Nx.tensor([1, 0, 1]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3][2]
+        [
+          [
+            [11, 12],
+            [1, 2],
+            [11, 12]
+          ],
+          [
+            [111, 112],
+            [101, 102],
+            [111, 112]
+          ]
+        ]
+      >
+
+  Multi-dimensional indices tensor:
+
+      iex> Nx.take(Nx.tensor([[1, 2], [11, 12]]), Nx.tensor([[0, 0], [1, 1], [0, 0]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3][2]
+        [
+          [
+            [1, 1],
+            [2, 2],
+            [1, 1]
+          ],
+          [
+            [11, 11],
+            [12, 12],
+            [11, 11]
+          ]
+        ]
+      >
+
+      iex> Nx.take(Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]), Nx.tensor([[0, 0, 0], [1, 1, 1], [0, 0, 0]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][3][3][2]
+        [
+          [
+            [
+              [1, 2],
+              [1, 2],
+              [1, 2]
+            ],
+            [
+              [11, 12],
+              [11, 12],
+              [11, 12]
+            ],
+            [
+              [1, 2],
+              [1, 2],
+              [1, 2]
+            ]
+          ],
+          [
+            [
+              [101, 102],
+              [101, 102],
+              [101, 102]
+            ],
+            [
+              [111, 112],
+              [111, 112],
+              [111, 112]
+            ],
+            [
+              [101, 102],
+              [101, 102],
+              [101, 102]
+            ]
+          ]
+        ]
+      >
+
+  ### Error cases
+
+      iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1], type: {:f, 32}))
+      ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
+  """
+  @doc type: :shape
+  def take(tensor, indices, opts \\ []) when is_list(opts) do
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
+    unless Nx.Type.integer?(indices.type) do
+      raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
+    end
+
+    opts = keyword!(opts, axis: 0)
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+
+    {shape, names} = Nx.Shape.take(tensor.shape, tensor.names, indices.shape, indices.names, axis)
+
+    impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
   end
 
   @doc """

@@ -653,6 +653,12 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def take(out, tensor, indices, axis) do
+    {[tensor, indices], context} = to_exprs([tensor, indices])
+    expr(out, context, :take, [tensor, indices, axis])
+  end
+
+  @impl true
   def reverse(out, tensor, axes) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :reverse, [tensor, axes])

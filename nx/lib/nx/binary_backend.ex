@@ -1598,12 +1598,19 @@ defmodule Nx.BinaryBackend do
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
 
+    tensor
+    |> to_binary()
+    |> bin_slice(shape, size, start_indices, lengths, strides, output_shape)
+    |> then(&from_binary(out, &1))
+  end
+
+  defp bin_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
     start_indices = clamp_indices(start_indices, shape, lengths)
 
     if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
       offset = div(length, elem(output_shape, 0)) * hd(start_indices)
-      from_binary(out, binary_part(to_binary(tensor), offset, length))
+      binary_part(data, offset, length)
     else
       # Anchored around the start indices
       weighted_shape = weighted_shape(shape, size, output_shape)
@@ -1616,12 +1623,7 @@ defmodule Nx.BinaryBackend do
           {d, dim_size + (s - 1) * dim_size}
         end)
 
-      input_data = to_binary(tensor)
-
-      output_data =
-        IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
-
-      from_binary(out, output_data)
+      IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
     end
   end
 
@@ -1680,26 +1682,72 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def take(out, tensor, indices, axis) do
+    # We iterate over the indices in a flat manner,
+    # and take a unit tensor slice along axis given
+    # by each index. Then we concatenate the tensors
+    # along the axis, which gives us the result with
+    # index dimensions flattened and we just reshape.
+
+    %T{type: {_, size}, shape: shape} = tensor
+    %T{type: {_, idx_size}} = indices
+
+    data = to_binary(tensor)
+    tensor_rank = tuple_size(shape)
+    slice_start = List.duplicate(0, tensor_rank)
+    slice_lengths = shape |> Tuple.to_list() |> List.replace_at(axis, 1)
+    slice_shape = List.to_tuple(slice_lengths)
+    strides = List.duplicate(1, tensor_rank)
+
+    slices =
+      for <<bin::size(idx_size)-bitstring <- to_binary(indices)>> do
+        idx = binary_to_number(bin, indices.type)
+
+        if idx < 0 or idx >= elem(shape, axis) do
+          raise ArgumentError,
+                "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+        end
+
+        slice_start = List.replace_at(slice_start, axis, idx)
+
+        slice_data =
+          bin_slice(data, shape, size, slice_start, slice_lengths, strides, slice_shape)
+
+        {slice_data, slice_shape}
+      end
+
+    concat_shape = put_elem(tensor.shape, axis, length(slices))
+    result_data = bin_concatenate(slices, size, axis, concat_shape)
+    from_binary(out, result_data)
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
+
+    tensors
+    |> Enum.map(fn %{shape: shape} = t ->
+      t = as_type(%{t | type: output_type}, t)
+      {to_binary(t), shape}
+    end)
+    |> bin_concatenate(size, axis, output_shape)
+    |> then(&from_binary(out, &1))
+  end
+
+  defp bin_concatenate(binaries_with_shape, size, axis, output_shape) do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
 
-    tensors =
-      Enum.map(tensors, fn %{shape: shape} = t ->
-        t = as_type(%{t | type: output_type}, t)
-        {to_binary(t), product_part(shape, axis, rank) * size}
-      end)
-
     data =
       for step <- 1..steps,
-          {binary, product} <- tensors do
+          {binary, shape} <- binaries_with_shape do
+        product = product_part(shape, axis, rank) * size
         before = (step - 1) * product
         <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
         part
       end
 
-    from_binary(out, data)
+    IO.iodata_to_binary(data)
   end
 
   defp product_part(_tuple, n, n), do: 1

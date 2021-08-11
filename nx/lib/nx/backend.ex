@@ -65,6 +65,7 @@ defmodule Nx.Backend do
   @callback clip(out :: tensor, tensor, min :: tensor, max :: tensor) :: tensor
   @callback slice(out :: tensor, tensor, list, list, list) :: tensor
   @callback put_slice(out :: tensor, tensor, tensor, list) :: tensor
+  @callback take(out :: tensor, tensor, tensor, axis) :: tensor
   @callback concatenate(out :: tensor, tensor, axis) :: tensor
   @callback select(out :: tensor, tensor, tensor, tensor) :: tensor
 

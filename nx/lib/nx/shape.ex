@@ -1151,6 +1151,48 @@ defmodule Nx.Shape do
   defp do_put_slice([], [], [], [], acc), do: Enum.reverse(acc)
 
   @doc """
+  Returns the shape and names after a take.
+
+  In practice, `axis` in `shape` gets replaced by `indices_shape`.
+
+  ## Examples
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [nil], 0)
+      {{10, 3}, [nil, :data]}
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [nil], 1)
+      {{2, 10}, [nil, :data]}
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [:reordered], 0)
+      {{10, 3}, [:reordered, :data]}
+
+      iex> Nx.Shape.take({2, 3, 4}, [:x, :y, :z], {10, 20}, [:a, :b], 1)
+      {{2, 10, 20, 4}, [:x, :a, :b, :z]}
+
+  ### Error cases
+
+      iex> Nx.Shape.take({2, 3}, [nil, :data], {10}, [:reordered], 1)
+      ** (ArgumentError) cannot merge names :data, :reordered
+  """
+  def take(shape, names, indices_shape, indices_names, axis) do
+    shape = Tuple.to_list(shape)
+    indices_shape = Tuple.to_list(indices_shape)
+
+    {leading_lengths, [_ | trailing_lengths]} = Enum.split(shape, axis)
+    {leading_names, [axis_name | trailing_names]} = Enum.split(names, axis)
+
+    indices_names =
+      case indices_names do
+        [name] -> [merge_names!(axis_name, name)]
+        names -> names
+      end
+
+    result_shape = leading_lengths ++ indices_shape ++ trailing_lengths
+    result_names = leading_names ++ indices_names ++ trailing_names
+    {List.to_tuple(result_shape), result_names}
+  end
+
+  @doc """
   Returns the shape and names after a concat.
 
   ## Examples
