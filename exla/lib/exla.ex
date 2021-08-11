@@ -199,6 +199,7 @@ defmodule EXLA do
     Nx.Defn.jit(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
+  # TODO: docs
   def stream(function, args, options \\ []) do
     Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
   end
