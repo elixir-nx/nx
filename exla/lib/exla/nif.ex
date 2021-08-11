@@ -18,6 +18,9 @@ defmodule EXLA.NIF do
   def make_shape(_type, _dims),
     do: :erlang.nif_error(:undef)
 
+  def make_token_shape(),
+    do: :erlang.nif_error(:undef)
+
   def make_tuple_shape(_shapes),
     do: :erlang.nif_error(:undef)
 

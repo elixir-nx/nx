@@ -30,6 +30,14 @@ defmodule EXLA.Shape do
   end
 
   @doc """
+  Creates a token shape.
+  """
+  def make_token_shape() do
+    ref = EXLA.NIF.make_token_shape() |> unwrap!()
+    %Shape{dims: {}, dtype: :token, ref: ref}
+  end
+
+  @doc """
   Creates a tuple shape with the given shapes.
   """
   def make_tuple_shape(shapes) when is_list(shapes) do
@@ -54,11 +62,10 @@ defmodule EXLA.Shape do
   @doc """
   Converts a charlist type into Nx' tuple format.
   """
+  def charlist_to_dtype('token'), do: :token
   def charlist_to_dtype('bf16'), do: {:bf, 16}
   def charlist_to_dtype('pred'), do: {:pred, 8}
-
-  def charlist_to_dtype([letter | integer]),
-    do: {List.to_atom([letter]), List.to_integer(integer)}
+  def charlist_to_dtype([letter | int]), do: {List.to_atom([letter]), List.to_integer(int)}
 
   @doc """
   Converts Nx's tuple format into charlist.

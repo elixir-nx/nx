@@ -291,6 +291,15 @@ ERL_NIF_TERM make_tuple_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
 
+ERL_NIF_TERM make_token_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 0){
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::Shape shape = xla::ShapeUtil::MakeTokenShape();
+  return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
+}
+
 ERL_NIF_TERM get_shape_info(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2216,6 +2225,7 @@ static ErlNifFunc exla_funcs[] = {
   {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
+  {"make_token_shape", 0, make_token_shape},
   {"make_tuple_shape", 1, make_tuple_shape},
   {"get_shape_info", 1, get_shape_info},
   // Element-wise Binary
