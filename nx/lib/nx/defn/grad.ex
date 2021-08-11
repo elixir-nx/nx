@@ -330,15 +330,15 @@ defmodule Nx.Defn.Grad do
     g = Nx.pad(g, pad_value, padding_config)
 
     zeros = Nx.broadcast(Expr.tensor(0.0), x)
-    g = Nx.put_slice(zeros, g, start_indices)
+    g = Nx.put_slice(zeros, start_indices, g)
 
     to_grad(x, g, cache)
   end
 
-  defp grad(:put_slice, [x, update, start_indices], _ans, g, cache) do
+  defp grad(:put_slice, [x, start_indices, update], _ans, g, cache) do
     zeros = Nx.broadcast(Expr.tensor(0.0), update)
 
-    operand_t = Nx.put_slice(g, zeros, start_indices)
+    operand_t = Nx.put_slice(g, start_indices, zeros)
     update_t = Nx.slice(g, start_indices, Tuple.to_list(Nx.shape(update)))
 
     grad_pairs([{x, operand_t}, {update, update_t}], g, cache)

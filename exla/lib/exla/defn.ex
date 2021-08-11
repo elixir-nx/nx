@@ -702,7 +702,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_operator(:put_slice, [tensor, slice, start_indices], ans, _state) do
+  defp to_operator(:put_slice, [tensor, start_indices, slice], ans, _state) do
     tensor = to_type(tensor, ans.type)
     slice = to_type(slice, ans.type)
     EXLA.Op.dynamic_update_slice(tensor, slice, start_indices)
