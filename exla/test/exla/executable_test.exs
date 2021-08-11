@@ -136,7 +136,7 @@ defmodule EXLA.ExecutableTest do
                  val = Op.get_tuple_element(val_and_token, 0)
                  new_token = Op.get_tuple_element(val_and_token, 1)
                  outfeed_val = Op.add(val, val)
-                 _outfeed_token = Op.outfeed(outfeed_val, new_token, t.shape)
+                 _outfeed_token = Op.outfeed(outfeed_val, new_token)
                  Op.tuple(b, [Op.add(outfeed_val, val)])
                end)
 
@@ -166,7 +166,7 @@ defmodule EXLA.ExecutableTest do
                  param = EXLA.Op.parameter(while_b, 0, tuple_shape, "arg")
                  val = Op.get_tuple_element(param, 0)
                  token = Op.get_tuple_element(param, 1)
-                 token = Op.outfeed(Op.add(val, val), token, t.shape)
+                 token = Op.outfeed(Op.add(val, val), token)
                  while = EXLA.Builder.build(Op.infeed(token, t.shape))
 
                  token = Op.create_token(b)

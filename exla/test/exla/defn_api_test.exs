@@ -30,4 +30,35 @@ defmodule EXLA.DefnAPITest do
                    fn -> Nx.backend_transfer(tensor) end
     end
   end
+
+  describe "stream" do
+    defn defn_sum(entry, acc), do: {acc, entry + acc}
+
+    test "poc" do
+      alias EXLA.{Buffer, Shape}
+      [res] = EXLA.stream(&defn_sum/2, [0, 0])
+
+      yes = %Buffer{data: <<1::8-native>>, shape: Shape.make_shape({:pred, 8}, {})}
+      no = %Buffer{data: <<0::8-native>>, shape: Shape.make_shape({:pred, 8}, {})}
+
+      one = %Buffer{data: <<1::64-native>>, shape: Shape.make_shape({:s, 64}, {})}
+      two = %Buffer{data: <<2::64-native>>, shape: Shape.make_shape({:s, 64}, {})}
+
+      client = EXLA.Client.fetch!(:default)
+      assert :ok = Buffer.to_infeed(yes, client, 0)
+      assert :ok = Buffer.to_infeed(one, client, 0)
+
+      assert %Buffer{data: <<0::64-native>>} =
+               Buffer.from_outfeed(client, 0, Shape.make_shape({:s, 64}, {}))
+
+      assert :ok = Buffer.to_infeed(yes, client, 0)
+      assert :ok = Buffer.to_infeed(two, client, 0)
+
+      assert %Buffer{data: <<1::64-native>>} =
+               Buffer.from_outfeed(client, 0, Shape.make_shape({:s, 64}, {}))
+
+      assert :ok = Buffer.to_infeed(no, client, 0)
+      assert <<3::64-native>> == Buffer.read(res.ref)
+    end
+  end
 end

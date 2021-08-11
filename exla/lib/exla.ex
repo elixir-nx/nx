@@ -199,9 +199,13 @@ defmodule EXLA do
     Nx.Defn.jit(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
+  def stream(function, args, options \\ []) do
+    Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
+  end
+
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
 
   @impl true
-  def __stream__(_, _, _, _, _, _), do: raise("not implemented")
+  defdelegate __stream__(key, input, acc, vars, fun, opts), to: EXLA.Defn
 end

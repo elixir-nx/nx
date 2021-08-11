@@ -736,10 +736,9 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def outfeed(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: token}, %Shape{
-        ref: shape
-      }) do
-    ref = EXLA.NIF.outfeed(operand, token, shape) |> unwrap!()
+  def outfeed(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: token}) do
+    shape_ref = EXLA.NIF.get_shape(builder, operand) |> unwrap!()
+    ref = EXLA.NIF.outfeed(operand, token, shape_ref) |> unwrap!()
     %Op{builder: builder, ref: ref}
   end
 
