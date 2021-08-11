@@ -63,7 +63,7 @@ defmodule Nx.Defn.Tree do
   end
 
   def traverse_args(
-        %T{data: %Expr{op: :put_slice, args: [tensor, slice, start_indices]}},
+        %T{data: %Expr{op: :put_slice, args: [tensor, start_indices, slice]}},
         acc,
         fun
       ) do
@@ -76,7 +76,7 @@ defmodule Nx.Defn.Tree do
         x, acc -> fun.(x, acc)
       end)
 
-    {[tensor, slice, start_indices], acc}
+    {[tensor, start_indices, slice], acc}
   end
 
   def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do

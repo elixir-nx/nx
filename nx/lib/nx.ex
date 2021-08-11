@@ -7471,13 +7471,13 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.put_slice(Nx.tensor([0, 1, 2, 3, 4]), Nx.tensor([5, 6]), [2])
+      iex> Nx.put_slice(Nx.tensor([0, 1, 2, 3, 4]), [2], Nx.tensor([5, 6]))
       #Nx.Tensor<
         s64[5]
         [0, 1, 5, 6, 4]
       >
 
-      iex> Nx.put_slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[7, 8], [9, 10]]), [1, 2])
+      iex> Nx.put_slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [1, 2], Nx.tensor([[7, 8], [9, 10]]))
       #Nx.Tensor<
         s64[2][3]
         [
@@ -7486,7 +7486,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.put_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), Nx.tensor([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]]), [2, 2])
+      iex> Nx.put_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), [2, 2], Nx.tensor([[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]]))
       #Nx.Tensor<
         f32[2][3]
         [
@@ -7495,7 +7495,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.put_slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[10.0, 11.0]]), [Nx.tensor(0), Nx.tensor(2)])
+      iex> Nx.put_slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(0), Nx.tensor(2)], Nx.tensor([[10.0, 11.0]]))
       #Nx.Tensor<
         f32[2][3]
         [
@@ -7504,7 +7504,7 @@ defmodule Nx do
         ]
       >
   """
-  def put_slice(tensor, slice, start_indices) when is_list(start_indices) do
+  def put_slice(tensor, start_indices, slice) when is_list(start_indices) do
     %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
     %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
 
@@ -7517,8 +7517,8 @@ defmodule Nx do
     impl!(tensor).put_slice(
       %{tensor | shape: shape, names: names, type: output_type},
       tensor,
-      slice,
-      start_indices
+      start_indices,
+      slice
     )
   end
 

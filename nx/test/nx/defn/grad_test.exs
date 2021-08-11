@@ -1829,14 +1829,14 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "put_slice" do
-    defn grad_mean_put_slice_operand(t1, t2), do: grad(t1, &Nx.mean(Nx.put_slice(&1, t2, [0, 1])))
-    defn grad_mean_put_slice_update(t1, t2), do: grad(t2, &Nx.mean(Nx.put_slice(t1, &1, [0, 1])))
+    defn grad_mean_put_slice_operand(t1, t2), do: grad(t1, &Nx.mean(Nx.put_slice(&1, [0, 1], t2)))
+    defn grad_mean_put_slice_update(t1, t2), do: grad(t2, &Nx.mean(Nx.put_slice(t1, [0, 1], &1)))
 
     defn grad_sum_pad_put_slice_cos_operand(t1, t2) do
       grad(t1, fn t ->
         t
         |> Nx.cos()
-        |> Nx.put_slice(Nx.sin(t2), [1, 2])
+        |> Nx.put_slice([1, 2], Nx.sin(t2))
         |> Nx.pad(Nx.mean(Nx.sin(t)), [{2, 1, 2}, {-1, 2, 0}])
         |> Nx.sum()
       end)
@@ -1846,7 +1846,7 @@ defmodule Nx.Defn.GradTest do
       grad(t2, fn t ->
         t1
         |> Nx.cos()
-        |> Nx.put_slice(Nx.sin(t), [1, 2])
+        |> Nx.put_slice([1, 2], Nx.sin(t))
         |> Nx.pad(Nx.mean(Nx.sin(t1)), [{2, 1, 2}, {-1, 2, 0}])
         |> Nx.sum()
       end)

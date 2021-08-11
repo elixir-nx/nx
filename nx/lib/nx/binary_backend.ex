@@ -1643,7 +1643,7 @@ defmodule Nx.BinaryBackend do
   defp top_dimension_slice?(_, _, _), do: false
 
   @impl true
-  def put_slice(out, tensor, slice, start_indices) do
+  def put_slice(out, tensor, start_indices, slice) do
     %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
     %T{shape: slice_shape} = slice = as_type(out, slice)
 

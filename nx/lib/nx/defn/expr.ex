@@ -646,10 +646,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def put_slice(out, tensor, slice, start) do
+  def put_slice(out, tensor, start, slice) do
     {[tensor, slice | start], context} = to_exprs([tensor, slice | start])
 
-    expr(out, context, :put_slice, [tensor, slice, start])
+    expr(out, context, :put_slice, [tensor, start, slice])
   end
 
   @impl true

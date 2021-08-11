@@ -2473,10 +2473,10 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "put slice" do
-    defn put_slice1(t1, t2), do: Nx.put_slice(t1, t2, [2])
-    defn put_slice2(t1, t2), do: Nx.put_slice(t1, t2, [1, 2])
-    defn put_slice3(t1, t2), do: Nx.put_slice(t1, t2, [2, 2])
-    defn put_slice4(t1, t2), do: Nx.put_slice(t1, t2, [Nx.tensor(0), Nx.tensor(2)])
+    defn put_slice1(t1, t2), do: Nx.put_slice(t1, [2], t2)
+    defn put_slice2(t1, t2), do: Nx.put_slice(t1, [1, 2], t2)
+    defn put_slice3(t1, t2), do: Nx.put_slice(t1, [2, 2], t2)
+    defn put_slice4(t1, t2), do: Nx.put_slice(t1, [Nx.tensor(0), Nx.tensor(2)], t2)
 
     test "works with one dimension" do
       assert put_slice1(Nx.tensor([0, 1, 2, 3, 4]), Nx.tensor([5, 6])) ==
