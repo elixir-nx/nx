@@ -13,6 +13,9 @@ defmodule EXLA.Computation do
 
   ## Options
 
+    * `:device_id` - the device id to compile to and run the executable on.
+      Defaults to the `:default_device_id` on the client.
+
     * `:num_replicas` - the number of replicas this computation will run on.
       It defaults to 1 but you can set it if you want to enable single-program
       multiple data
@@ -28,7 +31,7 @@ defmodule EXLA.Computation do
   def compile(computation = %Computation{}, client = %Client{}, argument_shapes, options \\ []) do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
-    device_id = Keyword.get(options, :device_id, -1)
+    device_id = Keyword.get(options, :device_id, client.default_device_id)
 
     use_spmd = if num_replicas >= 1 or num_partitions >= 1, do: 1, else: 0
     output_shape = assert_output_shape!(computation)

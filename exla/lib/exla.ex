@@ -33,14 +33,14 @@ defmodule EXLA do
     * `:client` - an atom representing the client to use. Defaults
       to `:default`. See "Clients" section
 
+    * `:device_id` - the default device id to run the computation
+        on. Defaults to the `:default_device_id` on the client
+
     * `:run_options` - options given when running the computation:
 
       * `:keep_on_device` - if the data should be kept on the device,
         useful if multiple computations are done in a row. See
         "Device allocation" section
-
-      * `:device_id` - the default device id to run the computation
-        on. Defaults to the `:default_device_id` on the client
 
   ## Clients
 
