@@ -2,10 +2,10 @@ defmodule Nx do
   @moduledoc """
   Numerical Elixir.
 
-  The `Nx` library is collection of functions and data
+  The `Nx` library is a collection of functions and data
   types to work with Numerical Elixir. This module defines
   the main entry point for building and working with said
-  data-structures. For example, to create a n-dimensional
+  data-structures. For example, to create an n-dimensional
   tensor, do:
 
       iex> t = Nx.tensor([[1, 2], [3, 4]])
@@ -331,7 +331,7 @@ defmodule Nx do
         1.0
       >
 
-  Giving a list returns a vector (an one-dimensional tensor):
+  Giving a list returns a vector (a one-dimensional tensor):
 
       iex> Nx.tensor([1, 2, 3])
       #Nx.Tensor<
@@ -1167,7 +1167,7 @@ defmodule Nx do
 
   It returns the in-memory binary representation of
   the tensor in a row-major fashion. The binary is
-  in the system endianess, which has to be taken into
+  in the system endianness, which has to be taken into
   account if the binary is meant to be serialized to
   other systems.
 
@@ -1409,7 +1409,7 @@ defmodule Nx do
   ## Terminal coloring
 
   Coloring is enabled by default on most Unix terminals.
-  They are also available on Windows consoles from Windows
+  It is also available on Windows consoles from Windows
   10, although it must be explicitly enabled for the current
   user in the registry by running the following command:
 
@@ -2375,7 +2375,7 @@ defmodule Nx do
   def rank(tensor), do: tuple_size(shape(tensor))
 
   @doc """
-  Returns how many elements they are in the tensor.
+  Returns the number of elements in the tensor.
 
   If a tuple is given as a shape, it computes the size
   of the given tuple.
