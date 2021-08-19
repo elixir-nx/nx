@@ -3,6 +3,7 @@ defmodule Nx.Defn.TreeTest do
 
   alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
+  doctest Nx.Defn.Tree
 
   import Nx.Defn
   @default_defn_compiler Nx.Defn.Identity

@@ -106,13 +106,19 @@ ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
 
 xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
                                                 ERL_NIF_TERM arguments,
-                                                bool keep_on_device) {
+                                                bool keep_on_device,
+                                                int device_id) {
   xla::ExecuteOptions options;
   options.untuple_result = true;
   options.strict_shape_checking = false;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(std::vector<ExlaBuffer*> input_buffers,
-    UnpackRunArguments(env, arguments, client_, 0), env);
+  std::vector<ExlaBuffer*> input_buffers;
+  if (device_id >= 0) {
+    EXLA_ASSIGN_OR_RETURN_NIF(input_buffers, UnpackRunArguments(env, arguments, client_, device_id), env);
+  } else {
+    // TODO(seanmor5): With pmap, this should unpack to all devices
+    EXLA_ASSIGN_OR_RETURN_NIF(input_buffers, UnpackRunArguments(env, arguments, client_, 0), env);
+  }
 
   std::vector<xla::PjRtBuffer*> pjrt_buffers;
   std::vector<ERL_NIF_TERM> terms;
@@ -130,11 +136,17 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     }
   }
 
-  std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({pjrt_buffers});
+  ERL_NIF_TERM ret;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
-
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM ret, UnpackResult(env, std::move(result.at(0)), keep_on_device), env);
+  if (device_id >= 0) {
+    EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->ExecutePortable(pjrt_buffers, device, options), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ret, UnpackResult(env, std::move(result), keep_on_device), env);
+  } else {
+    std::vector<std::vector<xla::PjRtBuffer*>> inputs = std::vector<std::vector<xla::PjRtBuffer*>>({pjrt_buffers});
+    EXLA_ASSIGN_OR_RETURN_NIF(auto result, executable_->Execute(inputs, options), env);
+    EXLA_ASSIGN_OR_RETURN_NIF(ret, UnpackResult(env, std::move(result.at(0)), keep_on_device), env);
+  }
 
   return ret;
 }
@@ -190,6 +202,32 @@ std::vector<ExlaDevice*> ExlaClient::GetDevices() {
   }
 
   return devices;
+}
+
+xla::Status ExlaClient::TransferToInfeed(int device_id, ErlNifBinary data, const xla::Shape& shape) {
+  const char * data_ptr = const_cast<char *>(reinterpret_cast<char *>(data.data));
+  xla::BorrowingLiteral literal(data_ptr, shape);
+
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
+
+  return device->TransferToInfeed(literal);
+}
+
+xla::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv* env, int device_id, xla::Shape& shape) {
+  EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
+
+  auto literal = std::make_shared<xla::Literal>(shape);
+  xla::Status transfer_status = device->TransferFromOutfeed(literal.get());
+
+  if (!transfer_status.ok()) {
+    return transfer_status;
+  }
+
+  ErlNifBinary binary;
+  enif_alloc_binary(literal->size_bytes(), &binary);
+  std::memcpy(binary.data, literal->untyped_data(), literal->size_bytes());
+
+  return nif::make(env, binary);
 }
 
 xla::StatusOr<ExlaClient*> GetHostClient() {

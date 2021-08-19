@@ -698,6 +698,23 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def create_token(%Builder{ref: builder}) do
+    ref = EXLA.NIF.create_token(builder) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def infeed(%Op{builder: builder, ref: token}, %Shape{ref: shape}) do
+    ref = EXLA.NIF.infeed(token, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
+  def outfeed(%Op{builder: builder, ref: operand}, %Op{builder: builder, ref: token}, %Shape{
+        ref: shape
+      }) do
+    ref = EXLA.NIF.outfeed(operand, token, shape) |> unwrap!()
+    %Op{builder: builder, ref: ref}
+  end
+
   ## Helpers
 
   defp get_precision_config_int(precision_config) do

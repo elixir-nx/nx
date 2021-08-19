@@ -58,7 +58,8 @@ class ExlaExecutable {
 
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,
-                                  bool keep_on_device);
+                                  bool keep_on_device,
+                                  int device_id);
 
  private:
   std::unique_ptr<xla::PjRtExecutable> executable_;
@@ -87,6 +88,11 @@ class ExlaClient {
                                               bool can_be_released_after_run);
 
   std::vector<ExlaDevice*> GetDevices();
+
+  // TODO(seanmor5): This is device logic and should be refactored
+  xla::Status TransferToInfeed(int device_id, ErlNifBinary binary, const xla::Shape& shape);
+
+  xla::StatusOr<ERL_NIF_TERM> TransferFromOutfeed(ErlNifEnv* env, int device_id, xla::Shape& shape);
 
  private:
   std::shared_ptr<xla::PjRtClient> client_;

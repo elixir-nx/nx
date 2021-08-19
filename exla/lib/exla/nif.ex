@@ -18,6 +18,9 @@ defmodule EXLA.NIF do
   def make_shape(_type, _dims),
     do: :erlang.nif_error(:undef)
 
+  def make_token_shape(),
+    do: :erlang.nif_error(:undef)
+
   def make_tuple_shape(_shapes),
     do: :erlang.nif_error(:undef)
 
@@ -200,6 +203,12 @@ defmodule EXLA.NIF do
   def triangular_solve(_a, _b, _left_side, _lower, _unit_diagonal, _transpose_a),
     do: :erlang.nif_error(:undef)
 
+  def infeed(_token, _shape), do: :erlang.nif_error(:undef)
+
+  def outfeed(_operand, _token, _shape), do: :erlang.nif_error(:undef)
+
+  def create_token(_builder), do: :erlang.nif_error(:undef)
+
   def get_host_client(),
     do: :erlang.nif_error(:undef)
 
@@ -228,7 +237,8 @@ defmodule EXLA.NIF do
         _argument_layouts,
         _num_replicas,
         _num_partitions,
-        _use_spmd
+        _use_spmd,
+        _device_id
       ),
       do: :erlang.nif_error(:undef)
 
@@ -236,7 +246,8 @@ defmodule EXLA.NIF do
         _client,
         _executable,
         _arguments,
-        _keep_on_device
+        _keep_on_device,
+        _device_id
       ),
       do: :erlang.nif_error(:undef)
 
@@ -244,7 +255,8 @@ defmodule EXLA.NIF do
         _client,
         _executable,
         _arguments,
-        _keep_on_device
+        _keep_on_device,
+        _device_id
       ),
       do: :erlang.nif_error(:undef)
 
@@ -267,6 +279,12 @@ defmodule EXLA.NIF do
     do: :erlang.nif_error(:undef)
 
   def deallocate_device_mem(_buffer),
+    do: :erlang.nif_error(:undef)
+
+  def transfer_to_infeed(_client, _device, _data, _shape),
+    do: :erlang.nif_error(:undef)
+
+  def transfer_from_outfeed(_client, _device, _shape),
     do: :erlang.nif_error(:undef)
 
   def start_log_sink(_sink_pid),

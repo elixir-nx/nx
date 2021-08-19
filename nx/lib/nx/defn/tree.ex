@@ -14,7 +14,7 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
-  Helper to traverse the arguments of a tensor expression.
+  Traverses the arguments of a tensor expression.
   """
   def traverse_args(expr, acc, fun)
 
@@ -218,6 +218,48 @@ defmodule Nx.Defn.Tree do
     %{t | data: %{data | id: Expr.id(), args: args}, type: type}
   end
 
+  @doc """
+  Flattens the given list of tensor expressions, flattening maps,
+  tuples, into a list.
+
+  Elements that are not tensors are converted to tensors via
+  `Nx.tensor/1`.
+
+  ## Examples
+
+      iex> Nx.Defn.Tree.flatten_list([1, {2, 3}])
+      [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)]
+
+      iex> Nx.Defn.Tree.flatten_list([1, {2, 3}], [Nx.tensor(4)])
+      [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3), Nx.tensor(4)]
+
+  """
+  def flatten_list(args, tail \\ []) when is_list(args) do
+    flatten_list(args, tail, &Nx.tensor/1)
+  end
+
+  defp flatten_list(args, tail, fun) do
+    args
+    |> Enum.reduce([], &flatten_each(&1, &2, fun))
+    |> Enum.reverse(tail)
+  end
+
+  defp flatten_each(%T{} = tensor, acc, _fun),
+    do: [tensor | acc]
+
+  defp flatten_each(tuple, acc, fun) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &flatten_each(&1, &2, fun))
+
+  defp flatten_each(map, acc, fun) when is_map(map),
+    do:
+      map
+      |> assert_no_struct!()
+      |> Enum.sort()
+      |> Enum.reduce(acc, &flatten_each(elem(&1, 1), &2, fun))
+
+  defp flatten_each(other, acc, fun),
+    do: [fun.(other) | acc]
+
   ## Nx.Defn callbacks
 
   @doc false
@@ -245,28 +287,10 @@ defmodule Nx.Defn.Tree do
 
   @doc false
   def from_runtime_args(args) do
-    args
-    |> Enum.reduce([], &from_runtime_args/2)
-    |> Enum.reverse()
+    flatten_list(args, [], &from_arg/1)
   end
 
-  defp from_runtime_args(%T{} = tensor, acc),
-    do: [tensor | acc]
-
-  defp from_runtime_args(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_runtime_args/2)
-
-  defp from_runtime_args(map, acc) when is_map(map),
-    do:
-      map
-      |> assert_no_struct!()
-      |> Enum.sort()
-      |> Enum.reduce(acc, &from_runtime_args(elem(&1, 1), &2))
-
-  defp from_runtime_args(other, acc),
-    do: [from_arg(other) | acc]
-
-  @valid "arguments to defn must be numbers, tensors, and functions. " <>
+  @valid "defn arguments must be numbers, tensors, and functions. " <>
            "It may also be a maps with numbers/tensors as values, " <>
            "a tuple of numbers/tensors or a tuple of functions. "
 
@@ -276,7 +300,8 @@ defmodule Nx.Defn.Tree do
 
   def from_arg(other) when is_function(other) do
     raise ArgumentError,
-          @valid <> "The following function is unexpected inside a tuple/map: #{inspect(other)}"
+          @valid <>
+            "Anonymous functions are only allowed as direct arguments to defn: " <> inspect(other)
   end
 
   def from_arg(other) do

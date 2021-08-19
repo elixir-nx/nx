@@ -232,6 +232,71 @@ defmodule Nx.Defn do
   end
 
   @doc """
+  Starts streaming the given anonymous function with just-in-time
+  compilation.
+
+  At least two arguments are expected:
+
+    1. The first argument is a tensor template of the data to
+       be streamed in
+
+    2. The second argument is a tensor with the stream initial state
+
+  The streaming function must return a two element tuple, the
+  first element is the data to be sent and the second is the
+  accumulator.
+
+  For each streamed chunk, you must call `Nx.Stream.send/2` and
+  `Nx.Stream.recv/1`. You don't need to call `recv` immediately
+  after `send`, but doing so can be a useful mechanism to provide
+  backpressure. Once all chunks are sent, you must use `Nx.Stream.done/1`
+  to receive the accumulated result. Let's see an example:
+
+      defmodule Streamed do
+        import Nx.Defn
+
+        defn sum(tensor, acc) do
+          {acc, tensor + acc}
+        end
+      end
+
+  Now let's invoke it:
+
+      stream = Nx.Defn.stream(&Streamed.sum/2, [Nx.template({}, {:s, 64}), 0])
+
+      for i <- 1..5 do
+        Nx.Stream.send(stream, i)
+        IO.inspect {:chunk, Nx.Stream.recv(stream)}
+      end
+
+      IO.inspect {:result, Nx.Stream.done(stream)}
+
+  It will print:
+
+      {:chunk, 0}
+      {:chunk, 1}
+      {:chunk, 2}
+      {:chunk, 3}
+      {:chunk, 4}
+      {:result, 5}
+
+  **Note:** similar to `jit/3`, `stream/3` will ignore the `@defn_compiler`
+  on the executed function. Be sure to pass the `compiler` and its `opts`
+  as arguments instead.
+  """
+  def stream(fun, args, opts \\ [])
+      when is_function(fun) and is_list(args) and is_list(opts) do
+    case args do
+      [input, acc | args] ->
+        acc = Nx.Defn.Tree.composite(acc, &Nx.to_tensor/1)
+        Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, opts)
+
+      _ ->
+        raise ArgumentError, "Nx.Defn.stream/3 expects at least two arguments"
+    end
+  end
+
+  @doc """
   Exports the ahead-of-time (AOT) definition of a module with the
   given `functions` using the given `compiler`. For example:
 
