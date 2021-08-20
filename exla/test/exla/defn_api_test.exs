@@ -34,31 +34,33 @@ defmodule EXLA.DefnAPITest do
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
-    test "poc" do
-      alias EXLA.{Buffer, Shape}
-      [res] = EXLA.stream(&defn_sum/2, [0, 0])
+    test "immediately done" do
+      stream = EXLA.stream(&defn_sum/2, [0, 0])
+      assert Nx.Stream.done(stream) == Nx.tensor(0)
 
-      yes = %Buffer{data: <<1::8-native>>, shape: Shape.make_shape({:pred, 8}, {})}
-      no = %Buffer{data: <<0::8-native>>, shape: Shape.make_shape({:pred, 8}, {})}
+      stream = EXLA.stream(&defn_sum/2, [1, 2])
+      assert Nx.Stream.done(stream) == Nx.tensor(2)
+    end
 
-      one = %Buffer{data: <<1::64-native>>, shape: Shape.make_shape({:s, 64}, {})}
-      two = %Buffer{data: <<2::64-native>>, shape: Shape.make_shape({:s, 64}, {})}
+    test "immediately done with keep_on_device" do
+      stream = EXLA.stream(&defn_sum/2, [0, 0], run_options: [keep_on_device: true])
+      assert %Nx.Tensor{data: %EXLA.DeviceBackend{}} = done = Nx.Stream.done(stream)
+      assert Nx.backend_transfer(done) == Nx.tensor(0)
 
-      client = EXLA.Client.fetch!(:default)
-      assert :ok = Buffer.to_infeed(yes, client, 0)
-      assert :ok = Buffer.to_infeed(one, client, 0)
+      stream = EXLA.stream(&defn_sum/2, [1, 2], run_options: [keep_on_device: true])
+      assert %Nx.Tensor{data: %EXLA.DeviceBackend{}} = done = Nx.Stream.done(stream)
+      assert Nx.backend_transfer(done) == Nx.tensor(2)
+    end
 
-      assert %Buffer{data: <<0::64-native>>} =
-               Buffer.from_outfeed(client, 0, Shape.make_shape({:s, 64}, {}))
+    test "send/recv" do
+      %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
+      assert Nx.Stream.send(stream, 1) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(0)
 
-      assert :ok = Buffer.to_infeed(yes, client, 0)
-      assert :ok = Buffer.to_infeed(two, client, 0)
+      assert Nx.Stream.send(stream, 2) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(1)
 
-      assert %Buffer{data: <<1::64-native>>} =
-               Buffer.from_outfeed(client, 0, Shape.make_shape({:s, 64}, {}))
-
-      assert :ok = Buffer.to_infeed(no, client, 0)
-      assert <<3::64-native>> == Buffer.read(res.ref)
+      assert Nx.Stream.done(stream) == Nx.tensor(3)
     end
   end
 end

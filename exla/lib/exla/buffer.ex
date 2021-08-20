@@ -55,21 +55,6 @@ defmodule EXLA.Buffer do
     EXLA.NIF.deallocate_device_mem(ref) |> unwrap!()
   end
 
-  @doc """
-  Sends buffer to device infeed. Buffer must be VM binary.
-  """
-  def to_infeed(%Buffer{data: data, shape: %Shape{ref: shape}}, %Client{ref: client}, device_id) do
-    EXLA.NIF.transfer_to_infeed(client, device_id, data, shape) |> unwrap!()
-  end
-
-  @doc """
-  Retrieves buffer from device outfeed.
-  """
-  def from_outfeed(%Client{ref: client}, device_id, %Shape{ref: shape_ref} = shape) do
-    data = EXLA.NIF.transfer_from_outfeed(client, device_id, shape_ref) |> unwrap!()
-    buffer(data, shape)
-  end
-
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
   defp unwrap!(status) when is_atom(status), do: status

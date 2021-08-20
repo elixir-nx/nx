@@ -619,25 +619,8 @@ defmodule Nx do
   To build a template from scratch, use `template/3`.
   """
   @doc type: :conversion
-  def to_template(tensor_or_tuple_or_map)
-
-  def to_template(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&to_template(&1))
-    |> List.to_tuple()
-  end
-
-  def to_template(%T{} = tensor) do
-    %T{tensor | data: %Nx.TemplateBackend{}}
-  end
-
-  def to_template(map) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, to_template(v)} end)
-  end
-
-  def to_template(other) do
-    %T{to_tensor(other) | data: %Nx.TemplateBackend{}}
+  def to_template(tensor_or_tuple_or_map) do
+    to_tensor(tensor_or_tuple_or_map, &%T{to_tensor(&1) | data: %Nx.TemplateBackend{}})
   end
 
   @doc """
@@ -1226,6 +1209,25 @@ defmodule Nx do
 
   def to_tensor(t) do
     raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
+  end
+
+  defp to_tensor(%T{} = tensor, fun) do
+    fun.(tensor)
+  end
+
+  defp to_tensor(map, fun) when is_map(map) do
+    Map.new(map, fn {k, v} -> {k, fun.(v)} end)
+  end
+
+  defp to_tensor(tuple, fun) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(fun)
+    |> List.to_tuple()
+  end
+
+  defp to_tensor(other, fun) do
+    fun.(other)
   end
 
   @doc """
@@ -2281,6 +2283,10 @@ defmodule Nx do
 
   The data in the tensor is ignored.
 
+  A collection of tensors, wrapped in tuples or maps, can also be given
+  as arguments and they will match as long they have the same shape and
+  keys.
+
   ## Examples
 
       iex> Nx.compatible?(Nx.iota({3, 2}), Nx.iota({3, 2}))
@@ -2307,9 +2313,21 @@ defmodule Nx do
       iex> Nx.compatible?(Nx.iota({2, 2}), Nx.iota({2, 2}, type: {:f, 32}))
       false
 
+  Using collections:
+
+      iex> Nx.compatible?(%{foo: Nx.iota({3, 2})}, %{foo: Nx.iota({3, 2})})
+      true
+
+      iex> Nx.compatible?(%{foo: Nx.iota({3, 2})}, %{bar: Nx.iota({3, 2})})
+      false
+
   """
   def compatible?(left, right) do
-    %{type: type, shape: shape, names: left_names} = to_tensor(left)
+    tensor_compatible?(to_tensor(left, &to_tensor/1), to_tensor(right, &to_tensor/1))
+  end
+
+  defp tensor_compatible?(%T{} = left, %T{} = right) do
+    %{type: type, shape: shape, names: left_names} = left
 
     case to_tensor(right) do
       %{type: ^type, shape: ^shape, names: right_names} ->
@@ -2319,6 +2337,23 @@ defmodule Nx do
         false
     end
   end
+
+  defp tensor_compatible?(left, right) when tuple_size(left) == tuple_size(right) do
+    Tuple.to_list(left)
+    |> Enum.zip(Tuple.to_list(right))
+    |> Enum.all?(fn {l, r} -> tensor_compatible?(l, r) end)
+  end
+
+  defp tensor_compatible?(left, right) when map_size(left) == map_size(right) do
+    Enum.all?(left, fn {k, v1} ->
+      case right do
+        %{^k => v2} -> tensor_compatible?(v1, v2)
+        %{} -> false
+      end
+    end)
+  end
+
+  defp tensor_compatible?(_, _), do: false
 
   defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
   defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)

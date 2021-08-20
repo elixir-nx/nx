@@ -1,7 +1,7 @@
 defmodule EXLA.ExecutableTest do
   use ExUnit.Case, async: true
 
-  alias EXLA.{Buffer, Executable, Op, Shape}
+  alias EXLA.{Buffer, Client, Executable, Op, Shape}
 
   import EXLAHelpers
 
@@ -140,12 +140,10 @@ defmodule EXLA.ExecutableTest do
                  Op.tuple(b, [Op.add(outfeed_val, val)])
                end)
 
-      assert :ok = Buffer.to_infeed(t, client(), 0)
+      assert :ok = Client.to_infeed(client(), 0, t.data, t.shape)
 
-      assert %Buffer{data: <<2::32-native>>} =
-               Buffer.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {}))
-
-      assert <<3::32-native>> == Buffer.read(a.ref)
+      assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<2::32-native>>
+      assert Buffer.read(a.ref) == <<3::32-native>>
     end
 
     test "successfully sends to/from device asynchronously in a loop" do
@@ -174,19 +172,14 @@ defmodule EXLA.ExecutableTest do
                  Op.tuple(b, [Op.get_tuple_element(while, 0)])
                end)
 
-      assert :ok = Buffer.to_infeed(t, client(), 0)
+      assert :ok = Client.to_infeed(client(), 0, <<1::32-native>>, t.shape)
+      assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<2::32-native>>
 
-      assert %Buffer{data: <<2::32-native>>} =
-               Buffer.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {}))
+      assert :ok = Client.to_infeed(client(), 0, <<2::32-native>>, t.shape)
+      assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<4::32-native>>
 
-      assert :ok = Buffer.to_infeed(%{t | data: <<2::32-native>>}, client(), 0)
-
-      assert %Buffer{data: <<4::32-native>>} =
-               Buffer.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {}))
-
-      assert :ok = Buffer.to_infeed(%{t | data: <<0::32-native>>}, client(), 0)
-
-      assert <<0::32-native>> == Buffer.read(a.ref)
+      assert :ok = Client.to_infeed(client(), 0, <<0::32-native>>, t.shape)
+      assert Buffer.read(a.ref) == <<0::32-native>>
     end
   end
 end

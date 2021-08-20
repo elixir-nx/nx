@@ -60,7 +60,7 @@ defmodule Nx.Defn.Stream do
 
   defimpl Nx.Stream do
     def send(%{pid: pid, input: input}, data) do
-      unless compatible?(input, data) do
+      unless Nx.compatible?(input, data) do
         raise ArgumentError, """
         Nx stream expected a tensor of type, shape, and names on send:
 
@@ -78,7 +78,7 @@ defmodule Nx.Defn.Stream do
     def recv(%{pid: pid, output: output}) do
       case GenServer.call(pid, :recv, :infinity) do
         {:ok, data} ->
-          unless compatible?(output, data) do
+          unless Nx.compatible?(output, data) do
             raise ArgumentError, """
             Nx stream expected a tensor of type, shape, and names on recv:
 
@@ -106,24 +106,5 @@ defmodule Nx.Defn.Stream do
           raise "cannot mark stream as done when there are recv messages pending"
       end
     end
-
-    defp compatible?(%Nx.Tensor{} = left, right), do: Nx.compatible?(left, right)
-
-    defp compatible?(left, right) when tuple_size(left) == tuple_size(right) do
-      Tuple.to_list(left)
-      |> Enum.zip(Tuple.to_list(right))
-      |> Enum.all?(fn {l, r} -> compatible?(l, r) end)
-    end
-
-    defp compatible?(left, right) when map_size(left) == map_size(right) do
-      Enum.all?(left, fn {k, v1} ->
-        case right do
-          %{^k => v2} -> compatible?(v1, v2)
-          %{} -> false
-        end
-      end)
-    end
-
-    defp compatible?(_, _), do: false
   end
 end

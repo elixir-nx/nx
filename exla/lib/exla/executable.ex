@@ -17,8 +17,6 @@ defmodule EXLA.Executable do
     * `:keep_on_device` - if the data should be kept on the device
       after the computation (defaults to `false`).
 
-    * `:device_id` - the device ID to run on
-
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
     %{client: client, output_shape: output_shape} = executable
@@ -44,22 +42,10 @@ defmodule EXLA.Executable do
     data =
       case client.platform do
         :host ->
-          EXLA.NIF.run_cpu(
-            client.ref,
-            exec,
-            inputs,
-            keep_on_device_int,
-            executable.device_id
-          )
+          EXLA.NIF.run_cpu(client.ref, exec, inputs, keep_on_device_int, executable.device_id)
 
         _ ->
-          EXLA.NIF.run_io(
-            client.ref,
-            exec,
-            inputs,
-            keep_on_device_int,
-            executable.device_id
-          )
+          EXLA.NIF.run_io(client.ref, exec, inputs, keep_on_device_int, executable.device_id)
       end
 
     unwrap!(data)

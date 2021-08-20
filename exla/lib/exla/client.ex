@@ -36,6 +36,23 @@ defmodule EXLA.Client do
     EXLA.NIF.get_supported_platforms() |> unwrap!()
   end
 
+  @doc """
+  Sends data to device infeed.
+
+  Data must be VM binary.
+  """
+  def to_infeed(%EXLA.Client{ref: client}, device_id, data, %EXLA.Shape{ref: shape})
+      when is_binary(data) do
+    EXLA.NIF.transfer_to_infeed(client, device_id, data, shape) |> unwrap!()
+  end
+
+  @doc """
+  Retrieves buffer from device outfeed.
+  """
+  def from_outfeed(%EXLA.Client{ref: client}, device_id, %EXLA.Shape{ref: shape_ref}) do
+    EXLA.NIF.transfer_from_outfeed(client, device_id, shape_ref) |> unwrap!()
+  end
+
   ## Callbacks
 
   @doc false
@@ -90,6 +107,7 @@ defmodule EXLA.Client do
     }
   end
 
+  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end
