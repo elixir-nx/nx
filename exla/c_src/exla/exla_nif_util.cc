@@ -1,6 +1,6 @@
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/primitive_util.h"
+#include "exla_nif_util.h"
+#include <tensorflow/compiler/xla/shape_util.h>
+#include <tensorflow/compiler/xla/primitive_util.h>
 
 namespace exla {
 namespace nif {

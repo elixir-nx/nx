@@ -1,24 +1,29 @@
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_cuda_or_rocm",)
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "if_with_tpu_support",)
 load("@org_tensorflow//tensorflow:tensorflow.bzl", "tf_grpc_cc_dependency",)
+load("@org_tensorflow//tensorflow:tensorflow.bzl", "cc_header_only_library")
+load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar")
 
 package(default_visibility=["//visibility:private"])
 
-cc_library(
+cc_header_only_library(
   name = "exla_log_sink",
-  hdrs = ["exla_log_sink.h"],
   deps = [
-    ":exla_nif_util",
     "@org_tensorflow//tensorflow/core:lib",
   ],
 )
 
-cc_library(
-  name = "exla_client",
-  srcs = ["exla_client.cc"],
-  hdrs = ["exla_client.h"],
+cc_header_only_library(
+  name = "exla_nif_util",
   deps = [
-    ":exla_nif_util",
+    "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
+    "@org_tensorflow//tensorflow/core:lib",
+  ],
+)
+
+cc_header_only_library(
+  name = "exla_client",
+  deps = [
     "@org_tensorflow//tensorflow/compiler/xla/pjrt/distributed:protocol",
     "@org_tensorflow//tensorflow/compiler/xla/pjrt/distributed:protocol_proto_cc",
     "@org_tensorflow//tensorflow/compiler/xla/pjrt:pjrt_client",
@@ -34,16 +39,6 @@ cc_library(
     "@org_tensorflow//tensorflow/compiler/xla/pjrt:cpu_device",
     "@org_tensorflow//tensorflow/compiler/xla/pjrt:tpu_client",
      tf_grpc_cc_dependency(),
-  ],
-)
-
-cc_library(
-  name = "exla_nif_util",
-  srcs = ["exla_nif_util.cc"],
-  hdrs = ["exla_nif_util.h"] + glob(["erts/**/*.h"]),
-  deps = [
-    "@org_tensorflow//tensorflow/compiler/xla/client:client_library",
-    "@org_tensorflow//tensorflow/core:lib",
   ],
 )
 
@@ -64,8 +59,7 @@ cc_library(
 )
 
 cc_binary(
-  name = "libexla.so",
-  srcs = ["exla.cc"],
+  name = "libxla_extension.so",
   deps = if_cuda_or_rocm([
     "@org_tensorflow//tensorflow/compiler/jit:xla_gpu_jit",
   ]) + [
@@ -89,4 +83,13 @@ cc_binary(
   ]),
   linkopts = ["-shared"],
   linkshared = 1,
+)
+
+pkg_tar(
+  name = "xla_extension",
+  mode = "0755",
+  srcs = [
+    ":libxla_extension.so",
+    "@org_tensorflow//tensorflow:install_headers",
+  ]
 )

@@ -3,9 +3,9 @@
 
 #include <string>
 
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include "tensorflow/core/platform/logging.h"
-#include "absl/base/log_severity.h"
+#include "exla_nif_util.h"
+#include <tensorflow/core/platform/logging.h>
+#include <absl/base/log_severity.h>
 
 namespace exla {
 

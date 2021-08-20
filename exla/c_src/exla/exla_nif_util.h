@@ -8,10 +8,10 @@
 #include <utility>
 #include <map>
 
-#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
-#include "tensorflow/compiler/xla/xla_data.pb.h"
-#include "tensorflow/compiler/xla/types.h"
-#include "tensorflow/compiler/xla/shape.h"
+#include <erl_nif.h>
+#include <tensorflow/compiler/xla/xla_data.pb.h>
+#include <tensorflow/compiler/xla/types.h>
+#include <tensorflow/compiler/xla/shape.h>
 
 #if !defined(__GNUC__) && (defined(__WIN32__) || defined(_WIN32) || defined(_WIN32_))
   typedef unsigned __int64 nif_uint64_t;

@@ -28,13 +28,24 @@ TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
 TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
 TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
 
-$(EXLA_SO): $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so
-	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so $(EXLA_SO)
+XLA_EXTENSION_LIB = /home/sean/projects/xla_extension/lib
+XLA_INCLUDE_PATH = /home/sean/projects/xla_extension/include
 
-$(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so: symlinks
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -I${Protobuf_INCLUDE_PATH} -O3 -Wall -Wextra \
+				 -Wno-unused-parameter -Wno-missing-field-initializers -shared -std=c++14
+LDFLAGS = -L$(XLA_EXTENSION_LIB) -Wl,-rpath,$(XLA_EXTENSION_LIB) -lxla_extension
+
+$(EXLA_SO):
+	@mkdir -p $(MIX_APP_PATH)/priv
+	@$(CXX) $(CFLAGS) c_src/exla/exla.cc c_src/exla/exla_nif_util.h \
+										c_src/exla/exla_nif_util.cc c_src/exla/exla_client.h \
+										c_src/exla/exla_client.cc c_src/exla/exla_log_sink.h \
+										-o $(MIX_APP_PATH)/priv/libexla.so $(LDFLAGS)
+
+$(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/xla_extension: symlinks
 	cd $(TENSORFLOW_DIR) && \
-		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
+		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):xla_extension
+
 
 symlinks: $(TENSORFLOW_DIR)
 	@ rm -f $(TENSORFLOW_EXLA_DIR)

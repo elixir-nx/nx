@@ -1,20 +1,20 @@
 #include <map>
 
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include "tensorflow/compiler/xla/exla/exla_client.h"
-#include "tensorflow/compiler/xla/exla/exla_log_sink.h"
-#include "tensorflow/compiler/xla/exla/exla_aot_compilation.h"
-#include "tensorflow/compiler/xla/service/platform_util.h"
-#include "tensorflow/compiler/xla/shape_util.h"
-#include "tensorflow/compiler/xla/client/xla_builder.h"
-#include "tensorflow/compiler/xla/client/xla_computation.h"
-#include "tensorflow/compiler/xla/client/client.h"
-#include "tensorflow/compiler/xla/client/lib/math.h"
-#include "tensorflow/compiler/xla/client/lib/lu_decomposition.h"
-#include "tensorflow/compiler/xla/client/lib/qr.h"
-#include "tensorflow/compiler/xla/client/lib/self_adjoint_eig.h"
-#include "tensorflow/compiler/xla/client/lib/svd.h"
-#include "tensorflow/compiler/xla/primitive_util.h"
+#include "exla_nif_util.h"
+#include "exla_client.h"
+#include "exla_log_sink.h"
+#include "exla_aot_compilation.h"
+#include <tensorflow/compiler/xla/service/platform_util.h>
+#include <tensorflow/compiler/xla/shape_util.h>
+#include <tensorflow/compiler/xla/client/xla_builder.h>
+#include <tensorflow/compiler/xla/client/xla_computation.h>
+#include <tensorflow/compiler/xla/client/client.h>
+#include <tensorflow/compiler/xla/client/lib/math.h>
+#include <tensorflow/compiler/xla/client/lib/lu_decomposition.h>
+#include <tensorflow/compiler/xla/client/lib/qr.h>
+#include <tensorflow/compiler/xla/client/lib/self_adjoint_eig.h>
+#include <tensorflow/compiler/xla/client/lib/svd.h>
+#include <tensorflow/compiler/xla/primitive_util.h>
 
 // All of these are created with calls to `new` and subsequently
 // passed to the VM as pointers-to-pointers so we balance it out
