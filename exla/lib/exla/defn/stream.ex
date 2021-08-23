@@ -35,7 +35,7 @@ defmodule EXLA.Defn.Stream do
     end
 
     defp nx_to_binary(tuple) when is_tuple(tuple) do
-      Enum.flat_map(tuple, &nx_to_binary/1)
+      tuple |> Tuple.to_list() |> Enum.flat_map(&nx_to_binary/1)
     end
 
     defp nx_to_binary(other) do
