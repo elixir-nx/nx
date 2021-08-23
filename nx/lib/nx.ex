@@ -1216,13 +1216,13 @@ defmodule Nx do
   end
 
   defp to_tensor(map, fun) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, fun.(v)} end)
+    Map.new(map, fn {k, v} -> {k, to_tensor(v, fun)} end)
   end
 
   defp to_tensor(tuple, fun) when is_tuple(tuple) do
     tuple
     |> Tuple.to_list()
-    |> Enum.map(fun)
+    |> Enum.map(&to_tensor(&1, fun))
     |> List.to_tuple()
   end
 
@@ -2314,6 +2314,9 @@ defmodule Nx do
       false
 
   Using collections:
+
+      iex> Nx.compatible?({Nx.iota({3, 2}), {1, 2}}, {Nx.iota({3, 2}), {3, 4}})
+      true
 
       iex> Nx.compatible?(%{foo: Nx.iota({3, 2})}, %{foo: Nx.iota({3, 2})})
       true
