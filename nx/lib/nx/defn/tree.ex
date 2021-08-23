@@ -26,10 +26,10 @@ defmodule Nx.Defn.Tree do
 
   def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
     {clauses, acc} =
-      Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
-        {condition, acc} = fun.(condition, acc)
+      Enum.map_reduce(clauses, acc, fn {pred, expr}, acc ->
+        {pred, acc} = fun.(pred, acc)
         {expr, acc} = composite(expr, acc, fun)
-        {{condition, expr}, acc}
+        {{pred, expr}, acc}
       end)
 
     {last, acc} = composite(last, acc, fun)
@@ -37,12 +37,12 @@ defmodule Nx.Defn.Tree do
   end
 
   def traverse_args(%T{data: %Expr{op: :while, args: args}}, acc, fun) do
-    [initial, arg, conditional, block] = args
+    [initial, arg, pred, block] = args
     {initial, acc} = composite(initial, acc, fun)
     {arg, acc} = composite(arg, acc, fun)
-    {conditional, acc} = fun.(conditional, acc)
+    {pred, acc} = fun.(pred, acc)
     {block, acc} = composite(block, acc, fun)
-    {[initial, arg, conditional, block], acc}
+    {[initial, arg, pred, block], acc}
   end
 
   def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do

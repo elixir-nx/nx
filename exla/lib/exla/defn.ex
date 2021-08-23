@@ -72,12 +72,12 @@ defmodule EXLA.Defn do
 
     arg_shape = EXLA.Shape.make_tuple_shape([infeed_shape, acc_shape, constant_shape])
 
-    cond_b = EXLA.Builder.new(builder, "while-cond-" <> inspected_key)
-    param = EXLA.Op.parameter(cond_b, 0, arg_shape, "arg")
+    pred_b = EXLA.Builder.new(builder, "while-pred-" <> inspected_key)
+    param = EXLA.Op.parameter(pred_b, 0, arg_shape, "arg")
     infeed = EXLA.Op.get_tuple_element(param, 0)
     flag = EXLA.Op.get_tuple_element(infeed, 0)
-    cond_op = EXLA.Op.equal(flag, EXLA.Op.constant_r0(cond_b, 1, {:pred, 8}))
-    cond = EXLA.Builder.build(cond_op)
+    pred_op = EXLA.Op.equal(flag, EXLA.Op.constant_r0(pred_b, 1, {:pred, 8}))
+    pred = EXLA.Builder.build(pred_op)
 
     body_b = EXLA.Builder.new(builder, "while-body-" <> inspected_key)
     param = EXLA.Op.parameter(body_b, 0, arg_shape, "arg")
@@ -151,7 +151,7 @@ defmodule EXLA.Defn do
       ])
 
     computation =
-      EXLA.Op.while(cond, body, init)
+      EXLA.Op.while(pred, body, init)
       |> EXLA.Op.get_tuple_element(1)
       |> EXLA.Builder.build()
 
@@ -287,11 +287,11 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
-    [initial, arg, condition, body] = args
+    [initial, arg, pred, body] = args
     {initial, cache} = recur_composite(initial, state, cache)
-    condition = recur_computation(:while_condition, [arg], condition, {:pred, 8}, state)
+    pred = recur_computation(:while_pred, [arg], pred, {:pred, 8}, state)
     body = recur_computation(:while_body, [arg], body, :any, state)
-    {EXLA.Op.while(condition, body, initial), cache}
+    {EXLA.Op.while(pred, body, initial), cache}
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
