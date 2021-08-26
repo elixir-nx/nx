@@ -3,8 +3,7 @@ defmodule Nx.Type do
   Conveniences for working with types.
 
   A type is a two-element tuple with the name and the size.
-  The first element must be one of followed by the respective
-  sizes:
+  The respective sizes for the types are the following:
 
       * `:s` - signed integer (8, 16, 32, 64)
       * `:u` - unsigned integer (8, 16, 32, 64)
@@ -48,7 +47,7 @@ defmodule Nx.Type do
   def min_value_binary({:f, 64}), do: <<0xFFEFFFFFFFFFFFFF::64-native>>
 
   @doc """
-  Returns the minimum possible value for the given type.
+  Returns the maximum possible value for the given type.
   """
   def max_value_binary(type)
 
