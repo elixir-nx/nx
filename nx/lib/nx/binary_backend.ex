@@ -1855,31 +1855,26 @@ defmodule Nx.BinaryBackend do
          output
        ) do
     tensors
-    |> Enum.map(&to_binary/1)
-    |> Enum.map(&aggregate_axes(&1, [tuple_size(shape) - 1], shape, size))
-    # group corresponding aggregated axes into lists
-    |> Enum.zip()
-    |> Enum.map(&Tuple.to_list/1)
+    |> Enum.map(&aggregate_axes(to_binary(&1), [tuple_size(shape) - 1], shape, size))
     # Each chunk is a chunk of aggregated views, as binaries
     # We need to split those as lists, so we can apply the same
     # sorting to each one
-    |> Enum.map(fn views ->
+    |> Enum.zip_with(fn views ->
       views_as_lists =
         views |> Enum.map(fn view -> for(<<x::size(size)-bitstring <- view>>, do: x) end)
 
       views_as_lists
-      |> Enum.zip()
-      |> Enum.sort_by(&elem(&1, 0), comparator)
+      |> Enum.zip_with(& &1)
+      |> Enum.sort_by(&hd/1, comparator)
       |> Enum.reduce(List.duplicate([], length(views)), fn chunk, acc ->
-        Enum.zip_with(acc, Tuple.to_list(chunk), fn acc_1, elem_1 -> [acc_1 | [elem_1]] end)
+        Enum.zip_with(acc, chunk, fn acc_1, elem_1 -> [acc_1 | [elem_1]] end)
       end)
     end)
     |> Enum.reduce(List.duplicate([], length(tensors)), fn views, acc ->
       Enum.zip_with(acc, views, fn acc, view ->
-        [acc | [view]]
+        [acc | view]
       end)
     end)
-    |> Enum.map(&IO.iodata_to_binary/1)
     |> Enum.map(&from_binary(output, &1))
   end
 
