@@ -214,6 +214,35 @@ std::vector<ExlaDevice*> ExlaClient::GetDevices() {
 
 xla::Status ExlaClient::TransferToInfeed(int device_id, ErlNifBinary data, const xla::Shape& shape) {
   const char * data_ptr = const_cast<char *>(reinterpret_cast<char *>(data.data));
+  // Tuples need to be decomposed a bit
+  if (shape.IsTuple()) {
+    // unsupported right now
+    if (xla::ShapeUtil::IsNestedTuple(shape)) {
+      return xla::InvalidArgument("nested tuples are not supported in infeed operation");
+    }
+
+    int num_elements = xla::ShapeUtil::TupleElementCount(shape);
+    std::vector<const char*> buf_ptrs;
+    buf_ptrs.reserve(num_elements);
+
+    size_t accumulated_bytes = 0;
+    for (int i = 0; i < num_elements; i++) {
+      const xla::Shape& shape_i = shape.tuple_shapes(i);
+      size_t byte_size = xla::ShapeUtil::ByteSizeOf(shape_i);
+
+      buf_ptrs.push_back(&(data_ptr[accumulated_bytes]));
+      accumulated_bytes += byte_size;
+    }
+
+    xla::BorrowingLiteral literal(buf_ptrs, shape);
+
+    EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
+
+    xla::Status status = device->TransferToInfeed(literal);
+
+    return status;
+  }
+
   xla::BorrowingLiteral literal(data_ptr, shape);
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
@@ -225,6 +254,7 @@ xla::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv* env, int 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
 
   auto literal = std::make_shared<xla::Literal>(shape);
+
   xla::Status transfer_status = device->TransferFromOutfeed(literal.get());
 
   if (!transfer_status.ok()) {
