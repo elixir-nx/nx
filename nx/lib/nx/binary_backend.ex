@@ -1791,9 +1791,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def argsort(output, t, opts) do
-    [_, sorted_idx] =
-      variadic_sort([output, output], [t, iota(%{t | type: {:s, 64}}, opts[:axis], [])], opts)
-
+    [sorted_idx] = variadic_sort([output], [t], Keyword.put(opts, :is_argsort, true))
     sorted_idx
   end
 
@@ -1802,6 +1800,8 @@ defmodule Nx.BinaryBackend do
     last_axis = Nx.rank(t) - 1
 
     axis = opts[:axis]
+
+    is_argsort = opts[:is_argsort] || false
 
     comparator =
       case opts[:direction] do
@@ -1821,11 +1821,14 @@ defmodule Nx.BinaryBackend do
       end
 
     case shape do
+      {} when is_argsort ->
+        iota(output, axis, [])
+
       {} ->
         input_tensors
 
       _ when axis == last_axis ->
-        sort_last_dim(input_tensors, comparator, output)
+        sort_last_dim(input_tensors, comparator, output, is_argsort)
 
       _ ->
         permutation =
@@ -1844,7 +1847,7 @@ defmodule Nx.BinaryBackend do
           permuted_input = Enum.map(input_tensors, &Nx.transpose(&1, axes: permutation))
 
         permuted_input
-        |> sort_last_dim(comparator, %{permuted_t | type: output.type})
+        |> sort_last_dim(comparator, %{permuted_t | type: output.type}, is_argsort)
         |> Enum.map(&Nx.transpose(&1, axes: inverse_permutation))
     end
   end
@@ -1852,7 +1855,8 @@ defmodule Nx.BinaryBackend do
   defp sort_last_dim(
          [%T{shape: shape, type: {_, size}} | _] = tensors,
          comparator,
-         output
+         output,
+         false
        ) do
     tensors
     |> Enum.map(&aggregate_axes(to_binary(&1), [tuple_size(shape) - 1], shape, size))
@@ -1876,6 +1880,31 @@ defmodule Nx.BinaryBackend do
       end)
     end)
     |> Enum.map(&from_binary(output, &1))
+  end
+
+  defp sort_last_dim(
+         [%T{shape: shape, type: {_, size}} = tensor | _],
+         comparator,
+         %{type: type} = output,
+         true
+       ) do
+    # This is a simpler version of the other `sort_last_dim/4` clause.
+    # Here, we implement argsort through Enum.with_index, which enables
+    # us to only look at the reference tensor instead of zipping the whole
+    # tensor list.
+    tensor
+    |> to_binary()
+    |> aggregate_axes([tuple_size(shape) - 1], shape, size)
+    |> Enum.map(fn view ->
+      data = for(<<x::size(size)-bitstring <- view>>, do: x)
+
+      data
+      |> Enum.with_index()
+      |> Enum.sort_by(&elem(&1, 0), comparator)
+      |> Enum.map(fn {_v, i} -> scalar_to_binary(i, type) end)
+    end)
+    |> IO.iodata_to_binary()
+    |> then(&[from_binary(output, &1)])
   end
 
   ## Binary reducers
