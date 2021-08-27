@@ -310,6 +310,11 @@ defmodule Nx.Defn.Grad do
     to_grad(x, Nx.transpose(g, axes: argsort(axes)), cache)
   end
 
+  defp grad(:sort, [x, opts], _ans, g, cache) do
+    [_sorted_x, sorted_g] = Nx.sort([x, g], opts)
+    to_grad(x, sorted_g, cache)
+  end
+
   defp grad(:pad, [x, value, padding_config], _ans, g, cache) do
     inverse_padding_config = Enum.map(padding_config, fn {lo, hi, _} -> {-lo, -hi, 0} end)
     unpadded = Nx.pad(g, 0.0, inverse_padding_config)

@@ -2199,6 +2199,22 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "sort" do
+    defn grad_sum_sort(t), do: grad(t, &Nx.sum(Nx.sort(&1, direction: :desc)))
+
+    defn grad_sum_power_sort(t), do: grad(t, &Nx.sum(Nx.power(Nx.sort(&1, direction: :desc), 2)))
+
+    test "computes gradient with sum" do
+      assert grad_sum_sort(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[0.0, 1.0, 1.0], [0.0, 0.0, 0.0]])
+    end
+
+    test "computes gradient with sum and power" do
+      assert grad_sum_power_sort(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
+               Nx.tensor([[0.0, 1.0, 1.0], [0.0, 0.0, 0.0]])
+    end
+  end
+
   describe "clip" do
     defn grad_sum_clip(t), do: grad(t, &Nx.sum(Nx.clip(&1, Nx.tensor(1.0), Nx.tensor(4.0))))
 

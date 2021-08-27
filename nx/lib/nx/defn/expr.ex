@@ -715,7 +715,7 @@ defmodule Nx.Defn.Expr do
   def sort(out, tensors, opts) when is_list(tensors) do
     {tensors, context} = to_expr(tensors)
 
-    Enum.map(out, &expr(&1, context, :sort, [tensors, opts]))
+    expr(out, context, :sort, [tensors, opts])
   end
 
   @impl true
