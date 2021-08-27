@@ -1787,9 +1787,12 @@ defmodule Nx.BinaryBackend do
   def sort(output, t, opts), do: do_sort(output, t, opts, false)
 
   @impl true
-  def argsort(output, t, opts), do: do_sort(output, t, opts, true)
+  def argsort(output, t, opts) do
+    [_, sorted_idx] = variadic_sort([output, output], [t, Nx.iota(t, axis: opts[:axis])], opts)
+    sorted_idx
+  end
 
-  def variadic_sort(output, [%T{shape: shape, type: type} = t | _] = input_tensors, opts) do
+  def variadic_sort([output | _], [%T{shape: shape, type: type} = t | _] = input_tensors, opts) do
     last_axis = Nx.rank(t) - 1
 
     axis = opts[:axis]
@@ -1805,9 +1808,6 @@ defmodule Nx.BinaryBackend do
 
         :asc ->
           fn a, b ->
-            IO.inspect(a, label: "a bin")
-            IO.inspect(b, label: "b bin")
-            IO.inspect(type, label: "type")
             a = binary_to_number(a, type)
             b = binary_to_number(b, type)
             a <= b
@@ -1816,7 +1816,7 @@ defmodule Nx.BinaryBackend do
 
     case shape do
       {} ->
-        t
+        input_tensors
 
       _ when axis == last_axis ->
         sort_last_dim(input_tensors, comparator, output)
@@ -1903,14 +1903,9 @@ defmodule Nx.BinaryBackend do
          comparator,
          output
        ) do
-    aggregated_axes =
-      tensors
-      |> Enum.map(&to_binary/1)
-      |> Enum.map(&aggregate_axes(&1, [tuple_size(shape) - 1], shape, size))
-
-    view_chunk_size = aggregated_axes |> hd() |> length()
-
-    aggregated_axes
+    tensors
+    |> Enum.map(&to_binary/1)
+    |> Enum.map(&aggregate_axes(&1, [tuple_size(shape) - 1], shape, size))
     # group corresponding aggregated axes into lists
     |> Enum.zip()
     |> Enum.map(&Tuple.to_list/1)
@@ -1943,9 +1938,7 @@ defmodule Nx.BinaryBackend do
          output,
          return_indices
        ) do
-    view =
-      aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
-      |> IO.inspect(label: "view")
+    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
 
     new_data =
       for bin <- view, into: <<>> do
