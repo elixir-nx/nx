@@ -7913,7 +7913,9 @@ defmodule Nx do
 
   @doc """
   Sorts the tensor along the given axis according
-  to the given direction.
+  to the given direction. If a list of tensors is
+  passed, each tensor in the list will undergo the same permutations as the
+  first tensor of the list.
 
   If no axis is given, defaults to `0`.
 
@@ -8036,9 +8038,48 @@ defmodule Nx do
           ]
         ]
       >
+
+    ### Sorting lists of tensors
+
+      iex> [sorted] = Nx.sort([Nx.tensor([16, 23, 42, 4, 8, 15])])
+      iex> sorted
+      #Nx.Tensor<
+        s64[6]
+        [4, 8, 15, 16, 23, 42]
+      >
+
+      iex> [sorted_1, sorted_2] = Nx.sort([Nx.tensor([16, 23, 42, 4, 8, 15]), Nx.tensor([0, 1, 2, 3, 4, 5])])
+      iex> sorted_1
+      #Nx.Tensor<
+        s64[6]
+        [4, 8, 15, 16, 23, 42]
+      >
+      iex> sorted_2
+      #Nx.Tensor<
+        s64[6]
+        [3, 4, 5, 0, 1, 2]
+      >
+
+      iex> [sorted_1, sorted_2] = Nx.sort([Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y])], axis: :x)
+      iex> sorted_1
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [2, 1, 4],
+          [3, 5, 7]
+        ]
+      >
+      iex> sorted_2
+      #Nx.Tensor<
+        s64[x: 2][y: 3]
+        [
+          [3, 1, 5],
+          [0, 4, 2]
+        ]
+      >
   """
   @doc type: :ndim
-  def sort(tensor, opts \\ []) do
+  def sort(tensor_or_tensors, opts \\ []) do
     opts = keyword!(opts, axis: 0, direction: :asc)
 
     direction =
@@ -8054,15 +8095,41 @@ defmodule Nx do
                 "unknown value for :direction, expected :asc or :desc, got: #{inspect(other)}"
       end
 
-    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    tensors = List.wrap(tensor_or_tensors)
+
+    [%T{shape: shape, names: names} = tensor | _] = tensors = Enum.map(tensors, &to_tensor/1)
+
+    for tensor <- tensors do
+      if tensor.shape != shape do
+        raise ArgumentError,
+              "all tensors must have the same shape. Expected #{inspect(shape)}, got: #{inspect(tensor.shape)}"
+      end
+
+      if tensor.names != names do
+        raise ArgumentError,
+              "all tensors must have the same axes' names. Expected #{inspect(names)}, got: #{inspect(tensor.names)}"
+      end
+    end
+
     axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
 
-    impl!(tensor).sort(
-      tensor,
-      tensor,
-      axis: axis,
-      direction: direction
-    )
+    case tensors do
+      [tensor] when not is_list(tensor_or_tensors) ->
+        impl!(tensor).sort(
+          tensor,
+          tensor,
+          axis: axis,
+          direction: direction
+        )
+
+      _ ->
+        impl!(tensor).sort(
+          tensors,
+          tensors,
+          axis: axis,
+          direction: direction
+        )
+    end
   end
 
   @doc """
@@ -8187,103 +8254,6 @@ defmodule Nx do
     impl!(tensor).argsort(
       %{tensor | type: {:s, 64}},
       tensor,
-      axis: axis,
-      direction: direction
-    )
-  end
-
-  @doc """
-  Sorts a tensor list along the given axis according
-  to the given direction.
-
-  Each tensor in the list will undergo the same permutations as the
-  first tensor of the list, which is itself sorted as in `sort/2`
-
-  If no axis is given, defaults to `0`.
-
-  ## Options
-
-    * `:axis` - The name or number of the corresponding axis on which the sort
-      should be applied
-    * `:direction` - Can be `:asc` or `:desc`. Defaults to `:asc`
-
-  ## Examples
-
-      iex> [sorted] = Nx.variadic_sort([Nx.tensor([16, 23, 42, 4, 8, 15])])
-      iex> sorted
-      #Nx.Tensor<
-        s64[6]
-        [4, 8, 15, 16, 23, 42]
-      >
-
-      iex> [sorted_1, sorted_2] = Nx.variadic_sort([Nx.tensor([16, 23, 42, 4, 8, 15]), Nx.tensor([0, 1, 2, 3, 4, 5])])
-      iex> sorted_1
-      #Nx.Tensor<
-        s64[6]
-        [4, 8, 15, 16, 23, 42]
-      >
-      iex> sorted_2
-      #Nx.Tensor<
-        s64[6]
-        [3, 4, 5, 0, 1, 2]
-      >
-
-      iex> [sorted_1, sorted_2] = Nx.variadic_sort([Nx.tensor([[3, 1, 7], [2, 5, 4]], names: [:x, :y]), Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y])], axis: :x)
-      iex> sorted_1
-      #Nx.Tensor<
-        s64[x: 2][y: 3]
-        [
-          [2, 1, 4],
-          [3, 5, 7]
-        ]
-      >
-      iex> sorted_2
-      #Nx.Tensor<
-        s64[x: 2][y: 3]
-        [
-          [3, 1, 5],
-          [0, 4, 2]
-        ]
-      >
-
-  """
-  @doc type: :ndim
-  def variadic_sort(tensors, opts \\ []) do
-    opts = keyword!(opts, axis: 0, direction: :asc)
-
-    direction =
-      case opts[:direction] do
-        :asc ->
-          :asc
-
-        :desc ->
-          :desc
-
-        other ->
-          raise ArgumentError,
-                "unknown value for :direction, expected :asc or :desc, got: #{inspect(other)}"
-      end
-
-    [%T{shape: shape, names: names} = tensor | _] = tensors = Enum.map(tensors, &to_tensor/1)
-
-    for tensor <- tensors do
-      if tensor.shape != shape do
-        raise ArgumentError,
-              "all tensors must have the same shape. Expected #{inspect(shape)}, got: #{inspect(tensor.shape)}"
-      end
-
-      if tensor.names != names do
-        raise ArgumentError,
-              "all tensors must have the same axes' names. Expected #{inspect(names)}, got: #{inspect(tensor.names)}"
-      end
-    end
-
-    axis = Nx.Shape.normalize_axis(shape, opts[:axis], names)
-
-    # TO-DO: deal with different backends
-    impl!(tensor).variadic_sort(
-      tensors,
-      tensors,
       axis: axis,
       direction: direction
     )

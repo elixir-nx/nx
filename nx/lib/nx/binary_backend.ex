@@ -1784,19 +1784,12 @@ defmodule Nx.BinaryBackend do
   def bitcast(out, tensor), do: from_binary(out, to_binary(tensor))
 
   @impl true
-  def sort(output, t, opts) do
-    [output] = variadic_sort([output], [t], opts)
+  def sort(output, %T{} = t, opts) do
+    [output] = sort([output], [t], opts)
     output
   end
 
-  @impl true
-  def argsort(output, t, opts) do
-    [sorted_idx] = variadic_sort([output], [t], Keyword.put(opts, :is_argsort, true))
-    sorted_idx
-  end
-
-  @impl true
-  def variadic_sort([output | _], [%T{shape: shape, type: type} = t | _] = input_tensors, opts) do
+  def sort([output | _], [%T{shape: shape, type: type} = t | _] = input_tensors, opts) do
     last_axis = Nx.rank(t) - 1
 
     axis = opts[:axis]
@@ -1850,6 +1843,12 @@ defmodule Nx.BinaryBackend do
         |> sort_last_dim(comparator, %{permuted_t | type: output.type}, is_argsort)
         |> Enum.map(&Nx.transpose(&1, axes: inverse_permutation))
     end
+  end
+
+  @impl true
+  def argsort(output, t, opts) do
+    [sorted_idx] = sort([output], [t], Keyword.put(opts, :is_argsort, true))
+    sorted_idx
   end
 
   defp sort_last_dim(

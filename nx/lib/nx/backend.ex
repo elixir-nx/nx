@@ -85,9 +85,9 @@ defmodule Nx.Backend do
   @callback window_max(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_min(out :: tensor, tensor, shape, keyword) :: tensor
   @callback map(out :: tensor, tensor, fun) :: tensor
-  @callback sort(out :: tensor, tensor, keyword) :: tensor
+  @callback sort(out :: tensor_or_tensors, tensor_or_tensors, keyword) :: tensor_or_tensors
+            when [tensor_or_tensors: tensor | [tensor]]
   @callback argsort(out :: tensor, tensor, keyword) :: tensor
-  @callback variadic_sort(out :: [tensor], [tensor], keyword) :: [tensor]
   @callback scatter_window_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
   @callback scatter_window_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
 
