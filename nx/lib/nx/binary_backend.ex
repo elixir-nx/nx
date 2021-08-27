@@ -1789,6 +1789,60 @@ defmodule Nx.BinaryBackend do
   @impl true
   def argsort(output, t, opts), do: do_sort(output, t, opts, true)
 
+  def variadic_sort(output, [%T{shape: shape, type: type} = t | _] = input_tensors, opts) do
+    last_axis = Nx.rank(t) - 1
+
+    axis = opts[:axis]
+
+    comparator =
+      case opts[:direction] do
+        :desc ->
+          fn a, b ->
+            a = binary_to_number(a, type)
+            b = binary_to_number(b, type)
+            a >= b
+          end
+
+        :asc ->
+          fn a, b ->
+            IO.inspect(a, label: "a bin")
+            IO.inspect(b, label: "b bin")
+            IO.inspect(type, label: "type")
+            a = binary_to_number(a, type)
+            b = binary_to_number(b, type)
+            a <= b
+          end
+      end
+
+    case shape do
+      {} ->
+        t
+
+      _ when axis == last_axis ->
+        sort_last_dim(input_tensors, comparator, output)
+
+      _ ->
+        permutation =
+          t
+          |> Nx.axes()
+          |> List.delete(axis)
+          |> List.insert_at(last_axis, axis)
+
+        inverse_permutation =
+          permutation
+          |> Enum.with_index()
+          |> Enum.sort_by(fn {x, _} -> x end)
+          |> Enum.map(fn {_, i} -> i end)
+
+        [permuted_t | _] =
+          permuted_input = Enum.map(input_tensors, &Nx.transpose(&1, axes: permutation))
+
+        permuted_input
+        |> sort_last_dim(comparator, %{permuted_t | type: output.type})
+        |> Enum.map(&Nx.transpose(&1, axes: inverse_permutation))
+    end
+  end
+
   defp do_sort(output, t, opts, return_indices) do
     %T{shape: shape, type: type} = t
     last_axis = Nx.rank(t) - 1
@@ -1845,12 +1899,53 @@ defmodule Nx.BinaryBackend do
   end
 
   defp sort_last_dim(
+         [%T{shape: shape, type: {_, size}} | _] = tensors,
+         comparator,
+         output
+       ) do
+    aggregated_axes =
+      tensors
+      |> Enum.map(&to_binary/1)
+      |> Enum.map(&aggregate_axes(&1, [tuple_size(shape) - 1], shape, size))
+
+    view_chunk_size = aggregated_axes |> hd() |> length()
+
+    aggregated_axes
+    # group corresponding aggregated axes into lists
+    |> Enum.zip()
+    |> Enum.map(&Tuple.to_list/1)
+    # Each chunk is a chunk of aggregated views, as binaries
+    # We need to split those as lists, so we can apply the same
+    # sorting to each one
+    |> Enum.map(fn views ->
+      views_as_lists =
+        views |> Enum.map(fn view -> for(<<x::size(size)-bitstring <- view>>, do: x) end)
+
+      views_as_lists
+      |> Enum.zip()
+      |> Enum.sort_by(&elem(&1, 0), comparator)
+      |> Enum.reduce(List.duplicate([], length(views)), fn chunk, acc ->
+        Enum.zip_with(acc, Tuple.to_list(chunk), fn acc_1, elem_1 -> [acc_1 | [elem_1]] end)
+      end)
+    end)
+    |> Enum.reduce(List.duplicate([], length(tensors)), fn views, acc ->
+      Enum.zip_with(acc, views, fn acc, view ->
+        [acc | [view]]
+      end)
+    end)
+    |> Enum.map(&IO.iodata_to_binary/1)
+    |> Enum.map(&from_binary(output, &1))
+  end
+
+  defp sort_last_dim(
          %T{shape: shape, type: {_, size}} = t,
          comparator,
          output,
          return_indices
        ) do
-    view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
+    view =
+      aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
+      |> IO.inspect(label: "view")
 
     new_data =
       for bin <- view, into: <<>> do
