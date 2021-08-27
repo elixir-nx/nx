@@ -43,7 +43,7 @@ defmodule EXLA.Client do
   """
   def to_infeed(%EXLA.Client{ref: client}, device_id, data, %EXLA.Shape{ref: shape})
       when is_binary(data) do
-    EXLA.NIF.transfer_to_infeed(client, device_id, data, shape) |> unwrap!()
+    EXLA.NIF.transfer_to_infeed(client, device_id, List.wrap(data), shape) |> unwrap!()
   end
 
   @doc """

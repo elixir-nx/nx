@@ -212,8 +212,10 @@ std::vector<ExlaDevice*> ExlaClient::GetDevices() {
   return devices;
 }
 
-xla::Status ExlaClient::TransferToInfeed(int device_id, ErlNifBinary data, const xla::Shape& shape) {
-  const char * data_ptr = const_cast<char *>(reinterpret_cast<char *>(data.data));
+xla::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
+                                         ERL_NIF_TERM data,
+                                         const xla::Shape& shape,
+                                         int device_id) {
   // Tuples need to be decomposed a bit
   if (shape.IsTuple()) {
     // unsupported right now
@@ -225,13 +227,15 @@ xla::Status ExlaClient::TransferToInfeed(int device_id, ErlNifBinary data, const
     std::vector<const char*> buf_ptrs;
     buf_ptrs.reserve(num_elements);
 
-    size_t accumulated_bytes = 0;
-    for (int i = 0; i < num_elements; i++) {
-      const xla::Shape& shape_i = shape.tuple_shapes(i);
-      size_t byte_size = xla::ShapeUtil::ByteSizeOf(shape_i);
+    ERL_NIF_TERM head, tail;
+    while (enif_get_list_cell(env, data, &head, &tail)) {
+      ErlNifBinary tmp_bin;
+      if (!nif::get_binary(env, head, &tmp_bin)) {
+        return xla::InvalidArgument("infeed operation expects a list of binaries");
+      }
 
-      buf_ptrs.push_back(&(data_ptr[accumulated_bytes]));
-      accumulated_bytes += byte_size;
+      const char * data_ptr = const_cast<char *>(reinterpret_cast<char *>(tmp_bin.data));
+      buf_ptrs.push_back(data_ptr);
     }
 
     xla::BorrowingLiteral literal(buf_ptrs, shape);
@@ -243,6 +247,18 @@ xla::Status ExlaClient::TransferToInfeed(int device_id, ErlNifBinary data, const
     return status;
   }
 
+  // Fast path to avoid any traversal when not sending Tuples
+  ERL_NIF_TERM head, tail;
+  if (!enif_get_list_cell(env, data, &head, &tail)) {
+    return xla::InvalidArgument("infeed operation expects a list of binaries");
+  }
+
+  ErlNifBinary binary;
+  if (!nif::get_binary(env, head, &binary)) {
+    return xla::InvalidArgument("infeed operation expects a list of binaries");
+  }
+
+  const char * data_ptr = const_cast<char *>(reinterpret_cast<char *>(binary.data));
   xla::BorrowingLiteral literal(data_ptr, shape);
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));

@@ -1966,7 +1966,7 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   // TODO(seanmor5): Maybe this should be a reference to the device?
   exla::ExlaClient** client;
   int device_id;
-  ErlNifBinary data;
+  ERL_NIF_TERM data = argv[2];
   xla::Shape* shape;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
@@ -1975,14 +1975,11 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   if (!exla::nif::get(env, argv[1], &device_id)) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
-  if (!exla::nif::get_binary(env, argv[2], &data)) {
-    return exla::nif::error(env, "Unable to get data.");
-  }
   if (!exla::nif::get<xla::Shape>(env, argv[3], shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
 
-  xla::Status transfer_status = (*client)->TransferToInfeed(device_id, data, *shape);
+  xla::Status transfer_status = (*client)->TransferToInfeed(env, data, *shape, device_id);
 
   if(!transfer_status.ok()) {
     return exla::nif::error(env, transfer_status.error_message().c_str());
