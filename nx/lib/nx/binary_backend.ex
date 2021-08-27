@@ -1791,10 +1791,13 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def argsort(output, t, opts) do
-    [_, sorted_idx] = variadic_sort([output, output], [t, Nx.iota(t, axis: opts[:axis])], opts)
+    [_, sorted_idx] =
+      variadic_sort([output, output], [t, iota(%{t | type: {:s, 64}}, opts[:axis], [])], opts)
+
     sorted_idx
   end
 
+  @impl true
   def variadic_sort([output | _], [%T{shape: shape, type: type} = t | _] = input_tensors, opts) do
     last_axis = Nx.rank(t) - 1
 
