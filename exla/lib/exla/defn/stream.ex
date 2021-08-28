@@ -20,7 +20,7 @@ defmodule EXLA.Defn.Stream do
 
       %{client: client, device_id: device_id} = executable
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
-      :ok = EXLA.Client.to_infeed(client, device_id, <<0::8-native>>, pred)
+      :ok = EXLA.Client.to_infeed(client, device_id, <<1::8-native>>, pred)
 
       %EXLA.Shape{dtype: {:t, shapes}} = send_shape
 

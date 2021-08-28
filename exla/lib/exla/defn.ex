@@ -17,7 +17,7 @@ defmodule EXLA.Defn do
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
 
     comp_fun =
-      &to_stream_computation(key, input_vars, input_shape, acc_vars, &1, &2, compile_options)
+      &to_stream_computation(key, input_shape, acc_vars, &1, &2, compile_options)
 
     {buffers, {:tuple, [output, acc_outputs]}, {executable, output_shape}} =
       compile({:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
@@ -48,7 +48,7 @@ defmodule EXLA.Defn do
     {Enum.take(vars, input_length), used}
   end
 
-  defp to_stream_computation(key, input_vars, input_shape, acc_vars, expr, used_shapes, options) do
+  defp to_stream_computation(key, input_shape, acc_vars, expr, used_shapes, options) do
     inspected_key = inspect(key)
     builder = EXLA.Builder.new(inspected_key)
 

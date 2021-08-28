@@ -35,6 +35,7 @@ defmodule EXLA.DefnAPITest do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
     # TODO: Test returning an empty map/tuple
+    # TODO: Make infeed/outfeed dirty NIFs (cpu for host, io for others)
 
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])
@@ -55,12 +56,13 @@ defmodule EXLA.DefnAPITest do
     end
 
     test "send/recv" do
+      # TODO: Build outfeed
       %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert Nx.Stream.send(stream, 1) == :ok
-      assert Nx.Stream.recv(stream) == Nx.tensor(0)
+      assert Nx.Stream.recv(stream) ==  [<<0::64-native>>]
 
       assert Nx.Stream.send(stream, 2) == :ok
-      assert Nx.Stream.recv(stream) == Nx.tensor(1)
+      assert Nx.Stream.recv(stream) == [<<1::64-native>>]
 
       assert Nx.Stream.done(stream) == Nx.tensor(3)
     end
