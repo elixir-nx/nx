@@ -62,6 +62,25 @@ defmodule EXLA.Client do
     EXLA.NIF.transfer_from_outfeed(client, device_id, shape_ref) |> unwrap!()
   end
 
+  @doc """
+  Retrieves buffer from device outfeed with a tuple shape.
+
+  It returns a list of binaries mapping to the tuple.
+  """
+  def from_tuple_outfeed(
+        %EXLA.Client{ref: client},
+        device_id,
+        %EXLA.Shape{ref: shape_ref, dtype: {:t, shapes}}
+      ) do
+    sizes =
+      for shape <- shapes do
+        %EXLA.Shape{dtype: {_, size}, dims: dims} = shape
+        Tuple.product(dims) * div(size, 8)
+      end
+
+    EXLA.NIF.transfer_from_outfeed_list(client, device_id, shape_ref, sizes) |> unwrap!()
+  end
+
   ## Callbacks
 
   @doc false
