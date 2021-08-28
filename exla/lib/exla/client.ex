@@ -39,11 +39,20 @@ defmodule EXLA.Client do
   @doc """
   Sends data to device infeed.
 
-  Data must be VM binary.
+  Data must be a VM binary or a flat list of VM binaries.
   """
   def to_infeed(%EXLA.Client{ref: client}, device_id, data, %EXLA.Shape{ref: shape})
       when is_binary(data) do
-    EXLA.NIF.transfer_to_infeed(client, device_id, List.wrap(data), shape) |> unwrap!()
+    EXLA.NIF.transfer_to_infeed(client, device_id, [data], shape) |> unwrap!()
+  end
+
+  def to_infeed(%EXLA.Client{}, _device_id, [], %EXLA.Shape{}) do
+    :ok
+  end
+
+  def to_infeed(%EXLA.Client{ref: client}, device_id, [data | _] = list, %EXLA.Shape{ref: shape})
+      when is_binary(data) do
+    EXLA.NIF.transfer_to_infeed(client, device_id, list, shape) |> unwrap!()
   end
 
   @doc """

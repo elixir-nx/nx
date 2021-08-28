@@ -34,6 +34,8 @@ defmodule EXLA.DefnAPITest do
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
+    # TODO: Test returning an empty map/tuple
+
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert Nx.Stream.done(stream) == Nx.tensor(0)

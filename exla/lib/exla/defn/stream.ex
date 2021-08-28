@@ -18,33 +18,31 @@ defmodule EXLA.Defn.Stream do
         """
       end
 
+      %{client: client, device_id: device_id} = executable
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
-      :ok = EXLA.Client.to_infeed(executable.client, executable.device_id, <<0::8-native>>, pred)
-
-      # TODO: Allow a list of binaries to be given to infeed
-      binary = data |> nx_to_binary() |> IO.iodata_to_binary()
-      :ok = EXLA.Client.to_infeed(executable.client, executable.device_id, binary, send_shape)
+      :ok = EXLA.Client.to_infeed(client, device_id, <<0::8-native>>, pred)
+      :ok = EXLA.Client.to_infeed(client, device_id, nx_to_io(data), send_shape)
     end
 
-    defp nx_to_binary(%Nx.Tensor{} = tensor) do
-      [tensor |> Nx.backend_transfer() |> Nx.to_binary()]
-    end
+    defp nx_to_io(%Nx.Tensor{} = tensor),
+      do: [tensor |> Nx.backend_transfer() |> Nx.to_binary()]
 
-    defp nx_to_binary(map) when is_map(map) do
-      map |> Enum.sort() |> Enum.flat_map(fn {_, v} -> nx_to_binary(v) end)
-    end
+    defp nx_to_io(map) when is_map(map),
+      do: map |> Enum.sort() |> Enum.flat_map(fn {_, v} -> nx_to_io(v) end)
 
-    defp nx_to_binary(tuple) when is_tuple(tuple) do
-      tuple |> Tuple.to_list() |> Enum.flat_map(&nx_to_binary/1)
-    end
+    defp nx_to_io(tuple) when is_tuple(tuple),
+      do: tuple |> Tuple.to_list() |> Enum.flat_map(&nx_to_io/1)
 
-    defp nx_to_binary(other) do
-      [other |> Nx.to_tensor() |> Nx.to_binary()]
-    end
+    defp nx_to_io(other),
+      do: [other |> Nx.to_tensor() |> Nx.to_binary()]
 
     def recv(%{executable: executable, recv_shape: recv_shape}) do
-      # TODO: Decode binary into tensors
-      EXLA.Client.from_outfeed(executable.client, executable.device_id, recv_shape)
+      %EXLA.Shape{dtype: {:t, shapes}} = recv_shape
+      %{client: client, device_id: device_id} = executable
+
+      for shape <- shapes do
+        EXLA.Client.from_outfeed(client, device_id, shape)
+      end
     end
 
     def done(%{executable: executable, keep_on_device: keep_on_device, done: done}) do
