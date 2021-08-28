@@ -88,16 +88,21 @@ defmodule EXLA.Defn do
     # The first infeed call is a flag.
     # Call infeed again to get the actual input.
     token = EXLA.Op.get_tuple_element(infeed, 1)
-    infeed = EXLA.Op.infeed(token, input_shape)
-    input = EXLA.Op.get_tuple_element(infeed, 0)
-    token = EXLA.Op.get_tuple_element(infeed, 1)
+
+    %EXLA.Shape{dtype: {:t, shapes}} = input_shape
+
+    {infeeds, token} =
+      Enum.map_reduce(shapes, token, fn shape, token ->
+        infeed = EXLA.Op.infeed(token, shape)
+        {EXLA.Op.get_tuple_element(infeed, 0), EXLA.Op.get_tuple_element(infeed, 1)}
+      end)
 
     {output, acc} =
       case expr do
         {output_expr, acc_expr} ->
           {input_params, counter} =
-            Enum.map_reduce(input_vars, 0, fn _shape, i ->
-              {{i, EXLA.Op.get_tuple_element(input, i)}, i + 1}
+            Enum.map_reduce(infeeds, 0, fn infeed, i ->
+              {{i, infeed}, i + 1}
             end)
 
           {acc_params, _counter} =

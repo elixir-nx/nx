@@ -21,7 +21,14 @@ defmodule EXLA.Defn.Stream do
       %{client: client, device_id: device_id} = executable
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
       :ok = EXLA.Client.to_infeed(client, device_id, <<0::8-native>>, pred)
-      :ok = EXLA.Client.to_infeed(client, device_id, nx_to_io(data), send_shape)
+
+      %EXLA.Shape{dtype: {:t, shapes}} = send_shape
+
+      Enum.zip_with(shapes, nx_to_io(data), fn shape, binary ->
+        :ok = EXLA.Client.to_infeed(client, device_id, binary, shape)
+      end)
+
+      :ok
     end
 
     defp nx_to_io(%Nx.Tensor{} = tensor),
