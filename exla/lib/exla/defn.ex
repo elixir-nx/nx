@@ -48,7 +48,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_stream_computation(key, input_shape, acc_vars, expr, used_shapes, options) do
-    client = EXLA.Client.fetch!(Keyword.get(options, :client, :default))
+    %{platform: platform} = EXLA.Client.fetch!(Keyword.get(options, :client, :default))
 
     inspected_key = inspect(key)
     builder = EXLA.Builder.new(inspected_key)
@@ -93,7 +93,7 @@ defmodule EXLA.Defn do
 
     {infeeds, token} =
       # EXLA on host does not support tuples, so we emit multiple infeed operations.
-      if client.platform == :host do
+      if platform == :host do
         Enum.map_reduce(shapes, token, fn shape, token ->
           infeed = EXLA.Op.infeed(token, shape)
           {EXLA.Op.get_tuple_element(infeed, 0), EXLA.Op.get_tuple_element(infeed, 1)}
@@ -139,12 +139,17 @@ defmodule EXLA.Defn do
       end
 
     output_shape = EXLA.Op.get_shape(output)
-    %EXLA.Shape{dims: {size}, dtype: {:tuple, _}} = output_shape
 
     token =
-      Enum.reduce(1..size//1, token, fn pos, token ->
-        EXLA.Op.outfeed(EXLA.Op.get_tuple_element(output, pos - 1), token)
-      end)
+      if platform == :host do
+        %EXLA.Shape{dims: {size}, dtype: {:tuple, _}} = output_shape
+
+        Enum.reduce(1..size//1, token, fn pos, token ->
+          EXLA.Op.outfeed(EXLA.Op.get_tuple_element(output, pos - 1), token)
+        end)
+      else
+        EXLA.Op.outfeed(output, token)
+      end
 
     body_tuple = EXLA.Op.tuple(body_b, [EXLA.Op.infeed(token, flag_shape), acc, constant])
     body = EXLA.Builder.build(body_tuple)
