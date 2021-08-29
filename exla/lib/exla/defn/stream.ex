@@ -22,11 +22,15 @@ defmodule EXLA.Defn.Stream do
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
       :ok = EXLA.Client.to_infeed(client, device_id, <<1::8-native>>, pred)
 
-      %EXLA.Shape{dtype: {:tuple, shapes}} = send_shape
+      if client.platform == :host do
+        %EXLA.Shape{dtype: {:tuple, shapes}} = send_shape
 
-      Enum.zip_with(shapes, nx_to_io(data), fn shape, binary ->
-        :ok = EXLA.Client.to_infeed(client, device_id, binary, shape)
-      end)
+        Enum.zip_with(shapes, nx_to_io(data), fn shape, binary ->
+          :ok = EXLA.Client.to_infeed(client, device_id, binary, shape)
+        end)
+      else
+        :ok = EXLA.Client.to_infeed(client, device_id, nx_to_io(data), send_shape)
+      end
 
       :ok
     end

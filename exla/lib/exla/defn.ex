@@ -48,6 +48,8 @@ defmodule EXLA.Defn do
   end
 
   defp to_stream_computation(key, input_shape, acc_vars, expr, used_shapes, options) do
+    client = EXLA.Client.fetch!(Keyword.get(options, :client, :default))
+
     inspected_key = inspect(key)
     builder = EXLA.Builder.new(inspected_key)
 
@@ -87,14 +89,21 @@ defmodule EXLA.Defn do
     # The first infeed call is a flag.
     # Call infeed again to get the actual input.
     token = EXLA.Op.get_tuple_element(infeed, 1)
-
     %EXLA.Shape{dtype: {:tuple, shapes}} = input_shape
 
     {infeeds, token} =
-      Enum.map_reduce(shapes, token, fn shape, token ->
-        infeed = EXLA.Op.infeed(token, shape)
-        {EXLA.Op.get_tuple_element(infeed, 0), EXLA.Op.get_tuple_element(infeed, 1)}
-      end)
+      # EXLA on host does not support tuples, so we emit multiple infeed operations.
+      if client.platform == :host do
+        Enum.map_reduce(shapes, token, fn shape, token ->
+          infeed = EXLA.Op.infeed(token, shape)
+          {EXLA.Op.get_tuple_element(infeed, 0), EXLA.Op.get_tuple_element(infeed, 1)}
+        end)
+      else
+        infeed = EXLA.Op.infeed(token, input_shape)
+        input = EXLA.Op.get_tuple_element(infeed, 0)
+        token = EXLA.Op.get_tuple_element(infeed, 1)
+        {Enum.with_index(shapes, fn _shape, i -> EXLA.Op.get_tuple_element(input, i) end), token}
+      end
 
     {output, acc} =
       case expr do
