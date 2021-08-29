@@ -40,6 +40,10 @@ defmodule EXLA.Client do
   Sends data to device infeed.
 
   Data must be a VM binary or a flat list of VM binaries.
+
+  > Note: XLA does not support tuple infeed shapes when running on
+  > host. Passing one will simply block the operation indefinitely.
+  > Instead, convert the tuple into multiple infeed operations.
   """
   def to_infeed(%EXLA.Client{ref: client}, device_id, data, %EXLA.Shape{ref: shape})
       when is_binary(data) do
@@ -57,6 +61,9 @@ defmodule EXLA.Client do
 
   @doc """
   Retrieves buffer from device outfeed.
+
+  If you want to receive a tuple shape, consider using `from_tuple_outfeed/2`,
+  as it will return a separate binary for each individual tuple element.
   """
   def from_outfeed(%EXLA.Client{ref: client}, device_id, %EXLA.Shape{ref: shape_ref}) do
     EXLA.NIF.transfer_from_outfeed(client, device_id, shape_ref) |> unwrap!()
@@ -66,18 +73,17 @@ defmodule EXLA.Client do
   Retrieves buffer from device outfeed with a tuple shape.
 
   It returns a list of binaries mapping to the tuple.
+
+  > Note: XLA does not support tuple outfeed shapes when running on
+  > host. Passing one will simply block the operation indefinitely.
+  > Instead, convert the tuple into multiple outfeed operations.
   """
   def from_tuple_outfeed(
         %EXLA.Client{ref: client},
         device_id,
-        %EXLA.Shape{ref: shape_ref, dtype: {:t, shapes}}
+        %EXLA.Shape{ref: shape_ref, dtype: {:tuple, shapes}}
       ) do
-    sizes =
-      for shape <- shapes do
-        %EXLA.Shape{dtype: {_, size}, dims: dims} = shape
-        Tuple.product(dims) * div(size, 8)
-      end
-
+    sizes = Enum.map(shapes, &EXLA.Shape.byte_size/1)
     EXLA.NIF.transfer_from_outfeed_list(client, device_id, shape_ref, sizes) |> unwrap!()
   end
 
@@ -88,12 +94,12 @@ defmodule EXLA.Client do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  @doc false
+  @impl true
   def init(:ok) do
     {:ok, :unused_state}
   end
 
-  @doc false
+  @impl true
   def handle_call({:client, name, options}, _from, state) do
     client = :persistent_term.get({__MODULE__, name}, nil) || build_client(name, options)
     :persistent_term.put({__MODULE__, name}, client)

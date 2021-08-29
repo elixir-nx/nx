@@ -16,8 +16,7 @@ defmodule EXLA.Defn do
     acc_vars = Nx.Defn.Tree.flatten_list([acc])
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
 
-    comp_fun =
-      &to_stream_computation(key, input_shape, acc_vars, &1, &2, compile_options)
+    comp_fun = &to_stream_computation(key, input_shape, acc_vars, &1, &2, compile_options)
 
     {buffers, {:tuple, [output, acc_outputs]}, {executable, output_shape}} =
       compile({:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
@@ -89,7 +88,7 @@ defmodule EXLA.Defn do
     # Call infeed again to get the actual input.
     token = EXLA.Op.get_tuple_element(infeed, 1)
 
-    %EXLA.Shape{dtype: {:t, shapes}} = input_shape
+    %EXLA.Shape{dtype: {:tuple, shapes}} = input_shape
 
     {infeeds, token} =
       Enum.map_reduce(shapes, token, fn shape, token ->
@@ -131,11 +130,11 @@ defmodule EXLA.Defn do
       end
 
     output_shape = EXLA.Op.get_shape(output)
-    %EXLA.Shape{dims: {size}, dtype: {:t, _}} = output_shape
+    %EXLA.Shape{dims: {size}, dtype: {:tuple, _}} = output_shape
 
     token =
       Enum.reduce(1..size//1, token, fn pos, token ->
-        EXLA.Op.outfeed(EXLA.Op.get_tuple_element(output, pos-1), token)
+        EXLA.Op.outfeed(EXLA.Op.get_tuple_element(output, pos - 1), token)
       end)
 
     body_tuple = EXLA.Op.tuple(body_b, [EXLA.Op.infeed(token, flag_shape), acc, constant])

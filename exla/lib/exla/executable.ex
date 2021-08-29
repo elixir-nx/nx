@@ -52,7 +52,7 @@ defmodule EXLA.Executable do
   end
 
   defp decompose_output(data, shape, client) do
-    %Shape{dtype: {:t, shapes}} = shape
+    %Shape{dtype: {:tuple, shapes}} = shape
 
     Enum.zip_with(data, shapes, fn
       buf, subshape when is_reference(buf) ->

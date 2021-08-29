@@ -92,7 +92,7 @@ defmodule EXLA.OpTest do
     assert %Shape{
              dims: {4},
              dtype:
-               {:t,
+               {:tuple,
                 [
                   %Shape{dtype: {:s, 64}, dims: {0}},
                   %Shape{dtype: {:s, 64}, dims: {}},
@@ -104,12 +104,12 @@ defmodule EXLA.OpTest do
     assert %Shape{
              dims: {2},
              dtype:
-               {:t,
+               {:tuple,
                 [
                   %Shape{
                     dims: {4},
                     dtype:
-                      {:t,
+                      {:tuple,
                        [
                          %Shape{dtype: {:s, 64}, dims: {0}},
                          %Shape{dtype: {:s, 64}, dims: {}},
@@ -124,17 +124,17 @@ defmodule EXLA.OpTest do
     assert %Shape{
              dims: {5},
              dtype:
-               {:t,
+               {:tuple,
                 [
                   %Shape{
                     dims: {2},
                     dtype:
-                      {:t,
+                      {:tuple,
                        [
                          %Shape{
                            dims: {4},
                            dtype:
-                             {:t,
+                             {:tuple,
                               [
                                 %Shape{dtype: {:s, 64}, dims: {0}},
                                 %Shape{dtype: {:s, 64}, dims: {}},
@@ -142,7 +142,7 @@ defmodule EXLA.OpTest do
                                 %Shape{dtype: {:s, 16}, dims: {1, 1, 1, 1}}
                               ]}
                          },
-                         %Shape{dims: {0}, dtype: {:t, []}}
+                         %Shape{dims: {0}, dtype: {:tuple, []}}
                        ]}
                   },
                   %Shape{dims: {}, dtype: {:s, 64}},
@@ -150,12 +150,12 @@ defmodule EXLA.OpTest do
                   %Shape{
                     dims: {2},
                     dtype:
-                      {:t,
+                      {:tuple,
                        [
                          %Shape{
                            dims: {4},
                            dtype:
-                             {:t,
+                             {:tuple,
                               [
                                 %Shape{dtype: {:s, 64}, dims: {0}},
                                 %Shape{dtype: {:s, 64}, dims: {}},
@@ -166,11 +166,14 @@ defmodule EXLA.OpTest do
                          %Shape{dtype: {:s, 64}, dims: {0}}
                        ]}
                   },
-                  %Shape{dims: {1}, dtype: {:t, [%Shape{dims: {1, 1, 1, 1}, dtype: {:s, 16}}]}}
+                  %Shape{
+                    dims: {1},
+                    dtype: {:tuple, [%Shape{dims: {1, 1, 1, 1}, dtype: {:s, 16}}]}
+                  }
                 ]}
            } = Op.get_shape(h)
 
-    assert %Shape{dims: {0}, dtype: {:t, []}} = Op.get_shape(g)
+    assert %Shape{dims: {0}, dtype: {:tuple, []}} = Op.get_shape(g)
   end
 
   test "get_tuple_element/2" do
@@ -196,7 +199,7 @@ defmodule EXLA.OpTest do
     assert %Shape{
              dims: {4},
              dtype:
-               {:t,
+               {:tuple,
                 [
                   %Shape{dtype: {:s, 64}, dims: {0}},
                   %Shape{dtype: {:s, 64}, dims: {}},

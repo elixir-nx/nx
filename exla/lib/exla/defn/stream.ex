@@ -22,7 +22,7 @@ defmodule EXLA.Defn.Stream do
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
       :ok = EXLA.Client.to_infeed(client, device_id, <<1::8-native>>, pred)
 
-      %EXLA.Shape{dtype: {:t, shapes}} = send_shape
+      %EXLA.Shape{dtype: {:tuple, shapes}} = send_shape
 
       Enum.zip_with(shapes, nx_to_io(data), fn shape, binary ->
         :ok = EXLA.Client.to_infeed(client, device_id, binary, shape)
@@ -44,7 +44,7 @@ defmodule EXLA.Defn.Stream do
       do: [other |> Nx.to_tensor() |> Nx.to_binary()]
 
     def recv(%{executable: executable, recv_shape: recv_shape}) do
-      %EXLA.Shape{dtype: {:t, shapes}} = recv_shape
+      %EXLA.Shape{dtype: {:tuple, shapes}} = recv_shape
       %{client: client, device_id: device_id} = executable
 
       for shape <- shapes do
