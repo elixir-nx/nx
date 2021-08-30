@@ -1729,6 +1729,11 @@ defmodule Nx.BinaryBackend do
   @impl true
   def take_along_axis(out, tensor, indices, axis) do
     raise "not implmented"
+
+    # plan:
+    # 1. transpose `axis` into the last dimension for both `tensors` and `indices` (like sort/argsort)
+    # 2. iterate through `zip(tensor, indices)`, using Enum.take(tensor_last_dim, indices_row)
+    # 3. undo the permutation (like sort/argsort)
   end
 
   @impl true
