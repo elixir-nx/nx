@@ -380,20 +380,30 @@ defmodule EXLA.DefnExprTest do
     defn exp(t), do: Nx.exp(t)
 
     test "computes the exp across types" do
-      assert compare_tensors!(Nx.tensor([1, 2, 3]) |> exp(),
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668]))
+      assert compare_tensors!(
+               Nx.tensor([1, 2, 3]) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
+             )
 
-      assert compare_tensors!(Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp(),
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32}))
+      assert compare_tensors!(
+               Nx.tensor([1, 2, 3], type: {:s, 8}) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+             )
 
-      assert compare_tensors!(Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp(),
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32}))
+      assert compare_tensors!(
+               Nx.tensor([1, 2, 3], type: {:u, 8}) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+             )
 
-      assert compare_tensors!(Nx.tensor([1.0, 2.0, 3.0]) |> exp(),
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668]))
+      assert compare_tensors!(
+               Nx.tensor([1.0, 2.0, 3.0]) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668])
+             )
 
-      assert compare_tensors!(Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp(),
-               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32}))
+      assert compare_tensors!(
+               Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32}) |> exp(),
+               Nx.tensor([2.718281828459045, 7.38905609893065, 20.085536923187668], type: {:f, 32})
+             )
     end
   end
 
@@ -2825,6 +2835,38 @@ defmodule EXLA.DefnExprTest do
       assert s.shape == {3}
       assert vt.shape == {3, 3}
       s_full = Nx.multiply(s, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+
+      assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output,
+               atol: 1.0e-5,
+               rtol: 1.0e-2
+             )
+    end
+
+    test "svd (tall matrix)" do
+      input = Nx.tensor([[2, 0], [0, 1], [0, 0]])
+      output = Nx.as_type(input, {:f, 32})
+
+      assert {u, s, vt} = svd(input)
+      assert u.shape == {3, 3}
+      assert s.shape == {2}
+      assert vt.shape == {2, 2}
+      s_full = Nx.multiply(s, Nx.tensor([[1, 0], [0, 1], [0, 0]]))
+
+      assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output,
+               atol: 1.0e-5,
+               rtol: 1.0e-2
+             )
+    end
+
+     test "svd (wide matrix)" do
+      input = Nx.tensor([[2, 0, 0], [0, 1, 0]])
+      output = Nx.as_type(input, {:f, 32})
+
+      assert {u, s, vt} = svd(input)
+      assert u.shape == {2, 2}
+      assert s.shape == {2}
+      assert vt.shape == {3, 3}
+      s_full = Nx.multiply(Nx.reshape(s, {2, 1}), Nx.tensor([[1, 0, 0], [0, 1, 0]]))
 
       assert compare_tensors!(u |> Nx.dot(s_full) |> Nx.dot(Nx.transpose(vt)), output,
                atol: 1.0e-5,

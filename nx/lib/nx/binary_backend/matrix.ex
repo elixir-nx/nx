@@ -314,7 +314,13 @@ defmodule Nx.BinaryBackend.Matrix do
     end)
   end
 
-  def svd(input_data, input_type, input_shape, output_type, opts) do
+  def svd(
+        input_data,
+        input_type,
+        input_shape,
+        {_u_holder, %{type: output_type}, %{shape: {vt_rows, vt_cols}}},
+        opts
+      ) do
     # This implementation is a mixture of concepts described in [1] and the
     # algorithmic descriptions found in [2], [3] and [4]
     #
@@ -329,25 +335,25 @@ defmodule Nx.BinaryBackend.Matrix do
 
     eps = opts[:eps]
     max_iter = opts[:max_iter] || 1000
-    {u, d, v} = householder_bidiagonalization(a, input_shape, eps)
+    {u, d, vt} = householder_bidiagonalization(a, input_shape, eps)
 
     {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
-    {u, s_matrix, v, _, _} =
-      Enum.reduce_while(1..max_iter, {u, d, v, off_diag_norm, fro_norm}, fn
-        _, {u, d, v, off_diag_norm, fro_norm} ->
+    {u, s_matrix, vt, _, _} =
+      Enum.reduce_while(1..max_iter, {u, d, vt, off_diag_norm, fro_norm}, fn
+        _, {u, d, vt, off_diag_norm, fro_norm} ->
           eps = 1.0e-9 * fro_norm
 
           if off_diag_norm > eps do
-            # Execute a round of jacobi rotations on u, d and v
-            {u, d, v} = svd_jacobi_rotation_round(u, d, v, input_shape, eps)
+            # Execute a round of jacobi rotations on u, d and vt
+            {u, d, vt} = svd_jacobi_rotation_round(u, d, vt, input_shape, eps)
 
             # calculate a posteriori norms for d, so the next iteration of Enum.reduce_while can decide to halt
             {fro_norm, off_diag_norm} = get_frobenius_norm(d)
 
-            {:cont, {u, d, v, off_diag_norm, fro_norm}}
+            {:cont, {u, d, vt, off_diag_norm, fro_norm}}
           else
-            {:halt, {u, d, v, nil, nil}}
+            {:halt, {u, d, vt, nil, nil}}
           end
       end)
 
@@ -358,11 +364,18 @@ defmodule Nx.BinaryBackend.Matrix do
       |> Enum.map(fn {row, idx} -> Enum.at(row, idx) end)
       |> Enum.reject(&is_nil/1)
 
-    {s, v} = apply_singular_value_corrections(s, v)
+    {s, [vt_row | _] = vt} = apply_singular_value_corrections(s, vt)
+
+    # TO-DO: complete the vt matrix with linearly independent rows
+    # requires solving a homogeneous equation system for non-homogenous
+    # solutions
+    if length(vt) != vt_rows or length(vt_row) != vt_cols do
+      raise "vt matrix completion for wide-matrices not implemented"
+    end
 
     {u |> approximate_zeros(eps) |> matrix_to_binary(output_type),
      s |> approximate_zeros(eps) |> matrix_to_binary(output_type),
-     v |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
+     vt |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
   defp svd_jacobi_rotation_round(u, d, v, {_, n}, eps) do

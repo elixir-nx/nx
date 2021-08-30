@@ -1172,12 +1172,17 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def svd(
-        {u_holder, %{type: output_type} = s_holder, v_holder},
+        {%{shape: {m, _}} = u_holder, s_holder, %{shape: {_, n}} = v_holder} = outputs,
         %{type: input_type, shape: input_shape} = tensor,
         opts
       ) do
+    if m < n do
+      raise ArgumentError,
+            "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
+    end
+
     bin = to_binary(tensor)
-    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, output_type, opts)
+    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, outputs, opts)
     {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 
