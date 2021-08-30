@@ -1772,9 +1772,6 @@ defmodule Nx.BinaryBackend do
       match_types [t_type, idx_type, output_type] do
         data = for <<match!(x, 0) <- data_bin>>, do: x
 
-        IO.inspect(data, label: "data")
-        IO.inspect(idx_bin, label: "idx_bin")
-
         for <<match!(x, 1) <- idx_bin>>, into: <<>> do
           index = read!(x, 1)
 

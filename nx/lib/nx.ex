@@ -7678,6 +7678,54 @@ defmodule Nx do
           [6, 6, 5, 5, 4, 4]
         ]
       >
+
+      iex> Nx.take_along_axis(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[0, 1, 1], [1, 0, 0], [0, 1, 0]]), axis: 0)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 5, 6],
+          [4, 2, 3],
+          [1, 5, 3]
+        ]
+      >
+
+    The indices returned from `Nx.argsort/2` can be used with `Nx.take_along_axis/3` to
+    produce the sorted tensor (or to sort more tensors according to the same criteria).
+
+      iex> tensor = Nx.tensor([[[1, 2], [3, 4], [5, 6]]])
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [1, 2],
+            [3, 4],
+            [5, 6]
+          ]
+        ]
+      >
+      iex> idx = Nx.argsort(tensor, axis: 2, direction: :desc)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [1, 0],
+            [1, 0],
+            [1, 0]
+          ]
+        ]
+      >
+      iex> Nx.take_along_axis(tensor, idx, axis: 2)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [2, 1],
+            [4, 3],
+            [6, 5]
+          ]
+        ]
+      >
+
   """
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
