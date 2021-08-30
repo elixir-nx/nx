@@ -10,28 +10,36 @@ defmodule EXLA.Defn do
     keep_on_device? = Keyword.get(run_options, :keep_on_device, false)
     run_options = Keyword.put(run_options, :keep_on_device, true)
 
+    {client_name, compile_options} = Keyword.pop(compile_options, :client, :default)
+    client = EXLA.Client.fetch!(client_name)
+
     # The input vars should not be converted to buffers as they come from infeed
     input_vars = Nx.Defn.Tree.flatten_list([input])
-    input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_vars, &nx_to_shape/1))
+    input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_vars, &nx_to_shape!/1))
     acc_vars = Nx.Defn.Tree.flatten_list([acc])
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
+    comp_fun = &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, compile_options)
 
-    comp_fun = &to_stream_computation(key, input_shape, acc_vars, &1, &2, compile_options)
+    {inputs, {:tuple, [output, acc_outputs]}, {executable, output_shape}} =
+      compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
 
-    {buffers, {:tuple, [output, acc_outputs]}, {executable, output_shape}} =
-      compile({:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
+    # TODO: Add synchronization before transferring buffers
+    buffers = nx_to_buffer!(inputs)
 
-    # TODO: Add synchronization
-    # TODO: Should we transfer the buffers only before execution?
-    result = EXLA.Executable.run(executable, buffers, run_options)
+    # TODO: Use a task supervisor?
+    task =
+      Task.async(fn ->
+        EXLA.Executable.run(executable, buffers, run_options)
+      end)
 
     %EXLA.Defn.Stream{
       send: input,
       send_shape: input_shape,
       recv: output,
       recv_shape: output_shape,
-      executable: executable,
-      done: fn -> buffer_to_nx(result, acc_outputs) end,
+      client: client,
+      device_id: executable.device_id,
+      done: fn -> task |> Task.await(:infinity) |> buffer_to_nx!(acc_outputs) end,
       keep_on_device: keep_on_device?
     }
   end
@@ -47,9 +55,8 @@ defmodule EXLA.Defn do
     {Enum.take(vars, input_length), used}
   end
 
-  defp to_stream_computation(key, input_shape, acc_vars, expr, used_shapes, options) do
-    %{platform: platform} = EXLA.Client.fetch!(Keyword.get(options, :client, :default))
-
+  defp to_stream_computation(client, key, input_shape, acc_vars, expr, used_shapes, options) do
+    %{platform: platform} = client
     inspected_key = inspect(key)
     builder = EXLA.Builder.new(inspected_key)
 
@@ -63,7 +70,7 @@ defmodule EXLA.Defn do
     #   The looping constants.
     #
     # The input will be read as part of the infeed.
-    acc_shapes = Enum.map(acc_vars, &nx_to_shape/1)
+    acc_shapes = Enum.map(acc_vars, &nx_to_shape!/1)
     acc_shape = EXLA.Shape.make_tuple_shape(acc_shapes)
     constant_shape = EXLA.Shape.make_tuple_shape(Enum.map(used_shapes, &elem(&1, 1)))
 
@@ -91,8 +98,8 @@ defmodule EXLA.Defn do
     token = EXLA.Op.get_tuple_element(infeed, 1)
     %EXLA.Shape{dtype: {:tuple, shapes}} = input_shape
 
+    # EXLA on host does not support tuples, so we emit multiple infeed operations.
     {infeeds, token} =
-      # EXLA on host does not support tuples, so we emit multiple infeed operations.
       if platform == :host do
         Enum.map_reduce(shapes, token, fn shape, token ->
           infeed = EXLA.Op.infeed(token, shape)
@@ -185,17 +192,19 @@ defmodule EXLA.Defn do
   @doc false
   def __jit__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
+    {client_name, compile_options} = Keyword.pop(compile_options, :client, :default)
+    client = EXLA.Client.fetch!(client_name)
     callback = &to_root_computation(key, &1, &2, compile_options)
 
-    {buffers, outputs, {executable, :ok}} =
-      compile(key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
+    {inputs, outputs, {executable, :ok}} =
+      compile(client, key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
 
     executable
-    |> EXLA.Executable.run(buffers, run_options)
-    |> buffer_to_nx(outputs)
+    |> EXLA.Executable.run(nx_to_buffer!(inputs), run_options)
+    |> buffer_to_nx!(outputs)
   end
 
-  defp compile(key, vars, fun, options, to_split, to_computation) do
+  defp compile(client, key, vars, fun, options, to_split, to_computation) do
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args}
 
@@ -206,22 +215,19 @@ defmodule EXLA.Defn do
       end)
 
     {non_buffers, used_inputs} = to_split.(vars, used_inputs)
-    {buffers, cache_args} = nx_to_buffer(vars, used_inputs)
+    {inputs, cache_args} = filter_inputs(vars, used_inputs)
     cache_args = Enum.map(non_buffers, &nx_to_cache_key!/1) ++ cache_args
-
-    {client_name, options} = Keyword.pop(options, :client, :default)
-    cache_key = {key, cache_args, client_name, options}
+    cache_key = {key, cache_args, client.name, options}
 
     {_, executable_extra} =
       EXLA.LockedCache.run(cache_key, fn ->
-        shapes = Enum.map(buffers, & &1.shape)
+        shapes = Enum.map(inputs, &nx_to_shape!/1)
         {computation, extra} = to_computation.(expr || fun.(vars), Enum.zip(used_inputs, shapes))
-        client = EXLA.Client.fetch!(client_name)
         executable = EXLA.Computation.compile(computation, client, shapes)
         {nil, {executable, extra}}
       end)
 
-    {buffers, outputs, executable_extra}
+    {inputs, outputs, executable_extra}
   end
 
   defp used_inputs(expr) do
@@ -1305,7 +1311,7 @@ defmodule EXLA.Defn do
 
   ## EXLA.Buffer -> Nx
 
-  defp buffer_to_nx(buffers, outputs) do
+  defp buffer_to_nx!(buffers, outputs) do
     {result, []} = each_buffer_to_nx(outputs, buffers)
     result
   end
@@ -1353,34 +1359,38 @@ defmodule EXLA.Defn do
 
   ## Nx -> EXLA.Buffer
 
-  defp nx_to_buffer(vars, inputs), do: nx_to_buffer(vars, 0, inputs, [], [])
+  defp nx_to_buffer!(tensors) do
+    for tensor <- tensors do
+      %T{data: data} = tensor
 
-  defp nx_to_buffer([var | vars], i, [i | inputs], buffers, cache) do
-    i = i + 1
-    nx_to_buffer(vars, i, inputs, [nx_to_buffer!(var) | buffers], [nx_to_cache_key!(var) | cache])
-  end
-
-  defp nx_to_buffer([var | vars], i, inputs, buffers, cache) do
-    nx_to_buffer(vars, i + 1, inputs, buffers, [nx_to_cache_key!(var) | cache])
-  end
-
-  defp nx_to_buffer([], _i, [], buffers, cache) do
-    {Enum.reverse(buffers), cache}
-  end
-
-  defp nx_to_buffer!(%T{data: data} = tensor) do
-    case data do
-      %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.buffer(ref, nx_to_shape(tensor))
-      # TODO: Call Nx.backend_transfer on the tensor instead
-      _ -> EXLA.Buffer.buffer(Nx.to_binary(tensor), nx_to_shape(tensor))
+      case data do
+        %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.buffer(ref, nx_to_shape!(tensor))
+        # TODO: Call Nx.backend_transfer on the tensor instead
+        _ -> EXLA.Buffer.buffer(Nx.to_binary(tensor), nx_to_shape!(tensor))
+      end
     end
   end
 
-  defp nx_to_shape(%T{type: type, shape: shape}), do: EXLA.Shape.make_shape(type, shape)
+  # Helpers
+
+  defp filter_inputs(vars, inputs), do: filter_inputs(vars, 0, inputs, [], [])
+
+  defp filter_inputs([var | vars], i, [i | inputs], buffers, cache) do
+    i = i + 1
+    filter_inputs(vars, i, inputs, [var | buffers], [nx_to_cache_key!(var) | cache])
+  end
+
+  defp filter_inputs([var | vars], i, inputs, buffers, cache) do
+    filter_inputs(vars, i + 1, inputs, buffers, [nx_to_cache_key!(var) | cache])
+  end
+
+  defp filter_inputs([], _i, [], buffers, cache) do
+    {Enum.reverse(buffers), cache}
+  end
+
+  defp nx_to_shape!(%T{type: type, shape: shape}), do: EXLA.Shape.make_shape(type, shape)
   defp nx_to_cache_key!(%T{type: type, shape: shape}), do: {type, shape}
   defp nx_to_expr_key!(%T{type: type, shape: shape, names: names}), do: {type, shape, names}
-
-  # Helpers
 
   defp delete_slice(enumerable, index, length) do
     {left, right} = Enum.split(enumerable, index)

@@ -5,6 +5,10 @@ defmodule EXLA.LockedCache do
   # the executable that we want to compute just once.
   # This module provides a cache functionality so that
   # those are done only once, even if concurrently.
+  #
+  # Since those resources can be created dynamically,
+  # multiple times, they are stored in ETS instead of
+  # persistent term.
   use GenServer
 
   @name __MODULE__
@@ -15,8 +19,10 @@ defmodule EXLA.LockedCache do
   cached yet.
   """
   def run(key, fun) do
-    case :ets.lookup(@name, key) do
-      [] ->
+    try do
+      {nil, :ets.lookup_element(@name, key, 2)}
+    catch
+      :error, :badarg ->
         case GenServer.call(@name, {:lock, key}, @timeout) do
           {:uncached, ref} ->
             try do
@@ -35,9 +41,6 @@ defmodule EXLA.LockedCache do
           :cached ->
             {nil, :ets.lookup_element(@name, key, 2)}
         end
-
-      [{_, value}] ->
-        {nil, value}
     end
   end
 

@@ -15,6 +15,8 @@ defmodule EXLA.Client do
   Fetches a client with the given `name` from configuration.
   """
   def fetch!(name) when is_atom(name) do
+    # We could use the LockedCache but that is ETS based and the clients
+    # are static enough that we can keep them on `persistent_term`.
     :persistent_term.get({__MODULE__, name}, nil) ||
       (
         clients = Application.fetch_env!(:exla, :clients)

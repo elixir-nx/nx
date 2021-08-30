@@ -6,7 +6,7 @@ defmodule EXLA.Executable do
   alias __MODULE__
   alias EXLA.{Buffer, Shape}
 
-  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions]
+  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
   defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
 
   @doc """
