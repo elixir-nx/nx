@@ -1177,7 +1177,7 @@ defmodule Nx.BinaryBackend do
         opts
       ) do
     if m < n do
-      raise ArgumentError, "SVD not implemented for wide matrices (m x n 2-D tensors where m < n)"
+      raise ArgumentError, "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
     end
 
     bin = to_binary(tensor)
