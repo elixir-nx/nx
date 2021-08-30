@@ -7667,6 +7667,19 @@ defmodule Nx do
   end
 
   @doc """
+  Takes the values from a tensor given an `indices` tensor, along the specified axis.
+
+  The `indices` shape must be the same as the `tensor`'s shape, with the exception for
+  the `axis` dimension, which can have arbitrary size.
+
+  Arbitrary tensors according to the shape rules are accept, but `Nx.argsort/2` also
+  produces suitable indices for this function, as shown in the examples below.
+
+  See also: `Nx.take/3`, `Nx.sort/2`, `Nx.argsort/2`
+
+  ## Options
+
+    * `:axis` - The axis along which to take the values from. Defaults to `0`.
 
   ## Examples
 
