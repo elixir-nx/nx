@@ -1193,6 +1193,72 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Returns the shape and names after a `take_along_axis` operation is performed.
+
+  In practice, `axis` in `shape` gets replaced by `indices_shape`.
+
+  ## Examples
+
+      iex> Nx.Shape.take_along_axis({2, 3}, {10, 3}, 0)
+      {10, 3}
+
+      iex> Nx.Shape.take_along_axis({2, 3}, {2, 10}, 1)
+      {2, 10}
+
+      iex> Nx.Shape.take_along_axis({2, 3, 4}, {10, 3, 4}, 0)
+      {10, 3, 4}
+
+  ### Error cases
+
+      iex> Nx.Shape.take_along_axis({2, 3, 4}, {3, 10, 4}, 1)
+      ** (ArgumentError) non-indexing dimensions must match. Expected {2, *, 4}, got: {3, 10, 4}
+
+      iex> Nx.Shape.take_along_axis({2, 3}, {1, 2, 3}, 0)
+      ** (ArgumentError) shapes must have the same number of dimensions. Expected {*, 3}, got: {1, 2, 3}
+  """
+  def take_along_axis(shape, indices_shape, axis) do
+    if axis >= tuple_size(shape) or axis < 0 do
+      raise ArgumentError, "axis must be a non-negative less than #{tuple_size(shape)}"
+    end
+
+    shape_list = Tuple.to_list(shape)
+
+    shape_template =
+      shape_list
+      |> Enum.with_index()
+      |> Enum.map(fn
+        {_, ^axis} -> "*"
+        {l, _} -> "#{l}"
+      end)
+      |> Enum.join(", ")
+
+    shape_template = "{#{shape_template}}"
+
+    if tuple_size(shape) != tuple_size(indices_shape) do
+      raise ArgumentError,
+            "shapes must have the same number of dimensions. Expected #{shape_template}, got: #{inspect(indices_shape)}"
+    end
+
+    indices_shape_list = Tuple.to_list(indices_shape)
+
+    [shape_list, indices_shape_list]
+    |> Enum.zip()
+    |> Enum.with_index()
+    |> Enum.each(fn
+      {{_input_length, _output_length}, ^axis} ->
+        :ok
+
+      {{input_length, output_length}, _axis} ->
+        unless input_length == output_length do
+          raise ArgumentError,
+                "non-indexing dimensions must match. Expected #{shape_template}, got: #{inspect(indices_shape)}"
+        end
+    end)
+
+    indices_shape
+  end
+
+  @doc """
   Returns the shape and names after a concat.
 
   ## Examples

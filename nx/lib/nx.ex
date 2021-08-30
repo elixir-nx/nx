@@ -7666,6 +7666,22 @@ defmodule Nx do
     impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
   end
 
+  def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
+    unless Nx.Type.integer?(indices.type) do
+      raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
+    end
+
+    opts = keyword!(opts, axis: 0)
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+
+    shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
+
+    impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+  end
+
   @doc """
   Concatenates tensors along the given axis.
 

@@ -1727,6 +1727,11 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def take_along_axis(out, tensor, indices, axis) do
+    raise "not implmented"
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
 
