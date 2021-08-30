@@ -367,7 +367,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {s, [vt_row | _] = vt} = apply_singular_value_corrections(s, vt)
 
     # TO-DO: complete the vt matrix with linearly independent rows
-    # requires solvting a homogeneous equation system for non-homogenous
+    # requires solving a homogeneous equation system for non-homogenous
     # solutions
     if length(vt) != vt_rows or length(vt_row) != vt_cols do
       raise "vt matrix completion for wide-matrices not implemented"
