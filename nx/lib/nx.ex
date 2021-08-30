@@ -7666,6 +7666,19 @@ defmodule Nx do
     impl!(tensor).take(%{tensor | shape: shape, names: names}, tensor, indices, axis)
   end
 
+  @doc """
+
+  ## Examples
+
+      iex> Nx.take_along_axis(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[0, 0, 2, 2, 1, 1], [2, 2, 1, 1, 0, 0]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][6]
+        [
+          [1, 1, 3, 3, 2, 2],
+          [6, 6, 5, 5, 4, 4]
+        ]
+      >
+  """
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)

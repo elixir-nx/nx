@@ -1728,12 +1728,62 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def take_along_axis(out, tensor, indices, axis) do
-    raise "not implmented"
-
     # plan:
     # 1. transpose `axis` into the last dimension for both `tensors` and `indices` (like sort/argsort)
     # 2. iterate through `zip(tensor, indices)`, using Enum.take(tensor_last_dim, indices_row)
     # 3. undo the permutation (like sort/argsort)
+
+    permute = fn t ->
+      permutation =
+        t
+        |> Nx.axes()
+        |> List.delete(axis)
+        |> List.insert_at(Nx.rank(t) - 1, axis)
+
+      inverse_permutation =
+        permutation
+        |> Enum.with_index()
+        |> Enum.sort_by(fn {x, _} -> x end)
+        |> Enum.map(fn {_, i} -> i end)
+
+      {permutation, inverse_permutation}
+    end
+
+    {permutation, inverse_permutation} = permute.(tensor)
+
+    permuted_indices = Nx.transpose(indices, axes: permutation)
+
+    tensor
+    |> Nx.transpose(axes: permutation)
+    |> take_along_last_dim(permuted_indices, out)
+    |> Nx.transpose(axes: inverse_permutation)
+  end
+
+  defp take_along_last_dim(
+         %T{shape: t_shape, type: {_, t_size} = t_type} = t,
+         %T{shape: idx_shape, type: {_, idx_size} = idx_type} = idx,
+         %T{type: output_type} = output
+       ) do
+    t_view = aggregate_axes(to_binary(t), [tuple_size(t_shape) - 1], t_shape, t_size)
+    idx_view = aggregate_axes(to_binary(idx), [tuple_size(idx_shape) - 1], idx_shape, idx_size)
+
+    [t_view, idx_view]
+    |> Enum.zip_with(fn [data_bin, idx_bin] ->
+      match_types [t_type, idx_type, output_type] do
+        data = for <<match!(x, 0) <- data_bin>>, do: x
+
+        IO.inspect(data, label: "data")
+        IO.inspect(idx_bin, label: "idx_bin")
+
+        for <<match!(x, 1) <- idx_bin>>, into: <<>> do
+          index = read!(x, 1)
+
+          val = Enum.at(data, index)
+          <<write!(val, 2)>>
+        end
+      end
+    end)
+    |> then(&from_binary(output, &1))
   end
 
   @impl true
