@@ -7672,7 +7672,7 @@ defmodule Nx do
   The `indices` shape must be the same as the `tensor`'s shape, with the exception for
   the `axis` dimension, which can have arbitrary size.
 
-  Arbitrary tensors according to the shape rules are accept, but `Nx.argsort/2` also
+  Arbitrary tensors according to the shape rules are accepted. `Nx.argsort/2` also
   produces suitable indices for this function, as shown in the examples below.
 
   See also: `Nx.take/3`, `Nx.sort/2`, `Nx.argsort/2`
