@@ -1727,7 +1727,12 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def take_along_axis(out, tensor, indices, axis) do
+  def take_along_axis(
+        %T{type: output_type} = output,
+        %T{shape: t_shape, type: {_, t_size} = t_type} = tensor,
+        %T{shape: idx_shape, type: {_, idx_size} = idx_type} = indices,
+        axis
+      ) do
     permute = fn t ->
       permutation =
         t
@@ -1741,7 +1746,7 @@ defmodule Nx.BinaryBackend do
         |> Enum.sort_by(fn {x, _} -> x end)
         |> Enum.map(fn {_, i} -> i end)
 
-      shape_list = Tuple.to_list(out.shape)
+      shape_list = Tuple.to_list(output.shape)
       permuted_shape = permutation |> Enum.map(&Enum.at(shape_list, &1)) |> List.to_tuple()
 
       {permuted_shape, inverse_permutation}
@@ -1749,21 +1754,9 @@ defmodule Nx.BinaryBackend do
 
     {permuted_shape, inverse_permutation} = permute.(tensor)
 
-    tensor
-    |> take_along_last_dim(indices, out, axis, permuted_shape, inverse_permutation)
-  end
+    t_view = tensor |> to_binary() |> aggregate_axes([axis], t_shape, t_size)
 
-  defp take_along_last_dim(
-         %T{shape: t_shape, type: {_, t_size} = t_type} = t,
-         %T{shape: idx_shape, type: {_, idx_size} = idx_type} = idx,
-         %T{type: output_type} = output,
-         axis,
-         permuted_shape,
-         inverse_permutation
-       ) do
-    t_view = aggregate_axes(to_binary(t), [axis], t_shape, t_size)
-
-    idx_view = aggregate_axes(to_binary(idx), [axis], idx_shape, idx_size)
+    idx_view = indices |> to_binary() |> aggregate_axes([axis], idx_shape, idx_size)
 
     [t_view, idx_view]
     |> Enum.zip_with(fn [data_bin, idx_bin] ->
