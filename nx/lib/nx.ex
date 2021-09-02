@@ -7716,7 +7716,29 @@ defmodule Nx do
           ]
         ]
       >
-      iex> idx = Nx.argsort(tensor, axis: 2, direction: :desc)
+      iex> idx1 = Nx.argsort(tensor, axis: 1, direction: :desc)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [2, 2],
+            [1, 1],
+            [0, 0]
+          ]
+        ]
+      >
+      iex> Nx.take_along_axis(tensor, idx1, axis: 1)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [5, 6],
+            [3, 4],
+            [1, 2]
+          ]
+        ]
+      >
+      iex> idx2 = Nx.argsort(tensor, axis: 2, direction: :desc)
       #Nx.Tensor<
         s64[1][3][2]
         [
@@ -7727,7 +7749,7 @@ defmodule Nx do
           ]
         ]
       >
-      iex> Nx.take_along_axis(tensor, idx, axis: 2)
+      iex> Nx.take_along_axis(tensor, idx2, axis: 2)
       #Nx.Tensor<
         s64[1][3][2]
         [
@@ -7739,6 +7761,12 @@ defmodule Nx do
         ]
       >
 
+    ### Error cases
+
+      iex> tensor = Nx.iota({3, 3})
+      iex> idx = Nx.tensor([[2.0], [1.0], [2.0]], type: {:f, 32})
+      iex> Nx.take_along_axis(tensor, idx, axis: 1)
+      ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
