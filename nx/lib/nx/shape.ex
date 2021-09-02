@@ -1226,8 +1226,8 @@ defmodule Nx.Shape do
     shape_template =
       shape_list
       |> Enum.with_index(fn
-        {_, ^axis} -> "*"
-        {l, _} -> "#{l}"
+        _, ^axis -> "*"
+        l, _ -> "#{l}"
       end)
       |> Enum.join(", ")
 
@@ -1243,10 +1243,10 @@ defmodule Nx.Shape do
     [shape_list, indices_shape_list]
     |> Enum.zip()
     |> Enum.with_index(fn
-      {{_input_length, _output_length}, ^axis} ->
+      {_input_length, _output_length}, ^axis ->
         :ok
 
-      {{input_length, output_length}, _axis} ->
+      {input_length, output_length}, _axis ->
         unless input_length == output_length do
           raise ArgumentError,
                 "non-indexing dimensions must match. Expected #{shape_template}, got: #{inspect(indices_shape)}"
