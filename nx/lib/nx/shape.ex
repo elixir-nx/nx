@@ -1225,8 +1225,7 @@ defmodule Nx.Shape do
 
     shape_template =
       shape_list
-      |> Enum.with_index()
-      |> Enum.map(fn
+      |> Enum.with_index(fn
         {_, ^axis} -> "*"
         {l, _} -> "#{l}"
       end)
@@ -1243,8 +1242,7 @@ defmodule Nx.Shape do
 
     [shape_list, indices_shape_list]
     |> Enum.zip()
-    |> Enum.with_index()
-    |> Enum.each(fn
+    |> Enum.with_index(fn
       {{_input_length, _output_length}, ^axis} ->
         :ok
 
