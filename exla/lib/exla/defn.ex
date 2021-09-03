@@ -14,7 +14,7 @@ defmodule EXLA.Defn do
     comps_and_exprs =
       for {name, fun, vars, options} <- tuples do
         expr = fun.(vars)
-        inputs = inputs(expr)
+        inputs = used_inputs(expr)
         inputs_and_shapes = aot_shapes(vars, 0, inputs)
 
         computation = to_root_computation(name, expr, inputs_and_shapes, options)
@@ -73,7 +73,7 @@ defmodule EXLA.Defn do
     {expr, {inputs, outputs}} =
       EXLA.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
-        {expr, {inputs(expr), outputs(expr)}}
+        {expr, {used_inputs(expr), outputs(expr)}}
       end)
 
     {client_name, options} = Keyword.pop(options, :client, :default)
@@ -94,16 +94,20 @@ defmodule EXLA.Defn do
     {buffers, outputs, executable}
   end
 
-  defp inputs(expr) do
-    {_, inputs} = Tree.composite(expr, %{}, &inputs/2)
-    inputs |> Map.keys() |> Enum.sort()
+  defp used_inputs(expr) do
+    {_, {_, used_inputs}} = Tree.composite(expr, {%{}, %{}}, &used_inputs/2)
+    used_inputs |> Map.keys() |> Enum.sort()
   end
 
-  defp inputs(%T{data: %Expr{op: :parameter, args: [i], context: :root}} = t, acc),
-    do: {t, Map.put(acc, i, true)}
+  defp used_inputs(%T{data: %Expr{op: :parameter, args: [i], context: :root}} = t, {seen, used}),
+    do: {t, {seen, Map.put(used, i, true)}}
 
-  defp inputs(t, acc),
-    do: Tree.traverse_args(t, acc, &inputs/2)
+  defp used_inputs(%T{data: %Expr{id: id}} = t, {seen, used}) do
+    case seen do
+      %{^id => true} -> {t, {seen, used}}
+      %{} -> Tree.traverse_args(t, {Map.put(seen, id, true), used}, &used_inputs/2)
+    end
+  end
 
   defp outputs(%T{} = t),
     do: %{t | data: nil}
