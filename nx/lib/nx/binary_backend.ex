@@ -1733,26 +1733,20 @@ defmodule Nx.BinaryBackend do
         %T{shape: idx_shape, type: {_, idx_size} = idx_type} = indices,
         axis
       ) do
-    permute = fn t ->
-      permutation =
-        t
-        |> Nx.axes()
-        |> List.delete(axis)
-        |> List.insert_at(Nx.rank(t) - 1, axis)
+    permutation =
+      tensor
+      |> Nx.axes()
+      |> List.delete(axis)
+      |> List.insert_at(Nx.rank(tensor) - 1, axis)
 
-      inverse_permutation =
-        permutation
-        |> Enum.with_index()
-        |> Enum.sort_by(fn {x, _} -> x end)
-        |> Enum.map(fn {_, i} -> i end)
+    inverse_permutation =
+      permutation
+      |> Enum.with_index()
+      |> Enum.sort_by(fn {x, _} -> x end)
+      |> Enum.map(fn {_, i} -> i end)
 
-      shape_list = Tuple.to_list(output.shape)
-      permuted_shape = permutation |> Enum.map(&Enum.at(shape_list, &1)) |> List.to_tuple()
-
-      {permuted_shape, inverse_permutation}
-    end
-
-    {permuted_shape, inverse_permutation} = permute.(tensor)
+    shape_list = Tuple.to_list(output.shape)
+    permuted_shape = permutation |> Enum.map(&Enum.at(shape_list, &1)) |> List.to_tuple()
 
     t_view = tensor |> to_binary() |> aggregate_axes([axis], t_shape, t_size)
 

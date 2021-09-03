@@ -1221,23 +1221,12 @@ defmodule Nx.Shape do
       raise ArgumentError, "axis must be a non-negative less than #{tuple_size(shape)}"
     end
 
-    shape_list = Tuple.to_list(shape)
-
-    shape_template =
-      shape_list
-      |> Enum.with_index(fn
-        _, ^axis -> "*"
-        l, _ -> "#{l}"
-      end)
-      |> Enum.join(", ")
-
-    shape_template = "{#{shape_template}}"
-
     if tuple_size(shape) != tuple_size(indices_shape) do
       raise ArgumentError,
-            "shapes must have the same number of dimensions. Expected #{shape_template}, got: #{inspect(indices_shape)}"
+            "shapes must have the same number of dimensions. Expected #{take_along_axis_shape_template(shape, axis)}, got: #{inspect(indices_shape)}"
     end
 
+    shape_list = Tuple.to_list(shape)
     indices_shape_list = Tuple.to_list(indices_shape)
 
     [shape_list, indices_shape_list]
@@ -1249,11 +1238,25 @@ defmodule Nx.Shape do
       {input_length, output_length}, _axis ->
         unless input_length == output_length do
           raise ArgumentError,
-                "non-indexing dimensions must match. Expected #{shape_template}, got: #{inspect(indices_shape)}"
+                "non-indexing dimensions must match. Expected #{take_along_axis_shape_template(shape, axis)}, got: #{inspect(indices_shape)}"
         end
     end)
 
     indices_shape
+  end
+
+  defp take_along_axis_shape_template(shape, axis) do
+    shape_list = Tuple.to_list(shape)
+
+    shape_template =
+      shape_list
+      |> Enum.with_index(fn
+        _, ^axis -> "*"
+        l, _ -> "#{l}"
+      end)
+      |> Enum.join(", ")
+
+    "{#{shape_template}}"
   end
 
   @doc """
