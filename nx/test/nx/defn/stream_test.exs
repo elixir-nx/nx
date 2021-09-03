@@ -112,6 +112,6 @@ defmodule Nx.Defn.StreamTest do
     Nx.default_backend(UnknownBackend)
     assert %_{} = stream = Nx.Defn.stream(&stream_iota/2, args)
     assert Nx.Stream.send(stream, hd(args))
-    assert_receive {:EXIT, _, {:undef, _}}
+    assert_receive {:EXIT, _, {:undef, _}}, 500
   end
 end
