@@ -15,6 +15,10 @@ defmodule Nx.Defn.Tree do
 
   @doc """
   Traverses the arguments of a tensor expression.
+
+  Warning: be very careful when using this function to traverse the expression
+  recursively. If you plan to do so, you should consider also storing the visited
+  nodes to avoid multiple traversals.
   """
   def traverse_args(expr, acc, fun)
 
