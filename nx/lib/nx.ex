@@ -7702,8 +7702,8 @@ defmodule Nx do
         ]
       >
 
-    The indices returned from `Nx.argsort/2` can be used with `Nx.take_along_axis/3` to
-    produce the sorted tensor (or to sort more tensors according to the same criteria).
+  The indices returned from `Nx.argsort/2` can be used with `Nx.take_along_axis/3` to
+  produce the sorted tensor (or to sort more tensors according to the same criteria).
 
       iex> tensor = Nx.tensor([[[1, 2], [3, 4], [5, 6]]])
       #Nx.Tensor<
@@ -7761,7 +7761,7 @@ defmodule Nx do
         ]
       >
 
-    ### Error cases
+  ### Error cases
 
       iex> tensor = Nx.iota({3, 3})
       iex> idx = Nx.tensor([[2.0], [1.0], [2.0]], type: {:f, 32})
