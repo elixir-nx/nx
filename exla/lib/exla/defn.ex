@@ -22,7 +22,7 @@ defmodule EXLA.Defn do
       end
 
     {comps, exprs} = Enum.unzip(comps_and_exprs)
-    {_, runtimes} = exprs |> List.to_tuple() |> Tree.composite(%{}, &aot_runtimes/2)
+    {_, {_, runtimes}} = exprs |> List.to_tuple() |> Tree.composite({%{}, %{}}, &aot_runtimes/2)
     aot_options = Keyword.put_new(aot_options, :runtimes, Map.keys(runtimes))
 
     case EXLA.AOT.compile(output_dir, module, comps, aot_options) do
@@ -41,19 +41,19 @@ defmodule EXLA.Defn do
 
   defp aot_shapes([], _i, []), do: []
 
-  defp aot_runtimes(%T{data: %Expr{op: :fun, args: args}}, acc) do
-    [_, expr, _] = args
-    Tree.composite(expr, acc, &aot_runtimes/2)
-  end
+  defp aot_runtimes(%T{data: %Expr{op: op, id: id}} = expr, {seen, runtimes}) do
+    case seen do
+      %{^id => _} ->
+        {expr, {seen, runtimes}}
 
-  defp aot_runtimes(%T{data: %Expr{op: op}} = expr, acc) do
-    acc = if runtime = @aot_runtimes[op], do: Map.put(acc, runtime, true), else: acc
-    aot_runtimes_args(expr, acc)
-  end
+      %{} ->
+        runtimes =
+          if runtime = @aot_runtimes[op],
+            do: Map.put(runtimes, runtime, true),
+            else: runtimes
 
-  defp aot_runtimes_args(expr, acc) do
-    {_, acc} = Tree.traverse_args(expr, acc, &aot_runtimes/2)
-    {expr, acc}
+        Tree.traverse_args(expr, {Map.put(seen, id, true), runtimes}, &aot_runtimes/2)
+    end
   end
 
   @doc false
@@ -954,25 +954,33 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, ids, pred_ids) do
-    if Map.has_key?(pred_ids, id) or op == :parameter do
-      case ids do
-        %{^id => {_, _, new}} ->
-          {new, ids}
+  defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, {cache, ids}, pred_ids) do
+    cond do
+      Map.has_key?(pred_ids, id) or op == :parameter ->
+        case ids do
+          %{^id => {_, _, new}} ->
+            {new, {cache, ids}}
 
-        %{} ->
-          i = map_size(ids)
-          param = Expr.parameter(expr, i)
-          {param, Map.put(ids, id, {i, expr, param})}
-      end
-    else
-      {args, ids} = Tree.traverse_args(expr, ids, &collect_args(&1, &2, pred_ids))
-      {put_in(expr.data.args, args), ids}
+          %{} ->
+            i = map_size(ids)
+            param = Expr.parameter(expr, i)
+            {param, {cache, Map.put(ids, id, {i, expr, param})}}
+        end
+
+      expr = Map.get(cache, id) ->
+        {expr, {cache, ids}}
+
+      true ->
+        {args, {cache, ids}} =
+          Tree.traverse_args(expr, {cache, ids}, &collect_args(&1, &2, pred_ids))
+
+        expr = put_in(expr.data.args, args)
+        {expr, {Map.put(cache, id, expr), ids}}
     end
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, ids_args} = Tree.composite(expr, %{}, &collect_args(&1, &2, ids))
+    {expr, {_cache, ids_args}} = Tree.composite(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
