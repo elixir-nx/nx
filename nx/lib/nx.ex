@@ -7667,6 +7667,124 @@ defmodule Nx do
   end
 
   @doc """
+  Takes the values from a tensor given an `indices` tensor, along the specified axis.
+
+  The `indices` shape must be the same as the `tensor`'s shape, with the exception for
+  the `axis` dimension, which can have arbitrary size.
+
+  Arbitrary tensors according to the shape rules are accepted. `Nx.argsort/2` also
+  produces suitable indices for this function, as shown in the examples below.
+
+  See also: `Nx.take/3`, `Nx.sort/2`, `Nx.argsort/2`
+
+  ## Options
+
+    * `:axis` - The axis along which to take the values from. Defaults to `0`.
+
+  ## Examples
+
+      iex> Nx.take_along_axis(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[0, 0, 2, 2, 1, 1], [2, 2, 1, 1, 0, 0]]), axis: 1)
+      #Nx.Tensor<
+        s64[2][6]
+        [
+          [1, 1, 3, 3, 2, 2],
+          [6, 6, 5, 5, 4, 4]
+        ]
+      >
+
+      iex> Nx.take_along_axis(Nx.tensor([[1, 2, 3], [4, 5, 6]]), Nx.tensor([[0, 1, 1], [1, 0, 0], [0, 1, 0]]), axis: 0)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 5, 6],
+          [4, 2, 3],
+          [1, 5, 3]
+        ]
+      >
+
+  The indices returned from `Nx.argsort/2` can be used with `Nx.take_along_axis/3` to
+  produce the sorted tensor (or to sort more tensors according to the same criteria).
+
+      iex> tensor = Nx.tensor([[[1, 2], [3, 4], [5, 6]]])
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [1, 2],
+            [3, 4],
+            [5, 6]
+          ]
+        ]
+      >
+      iex> idx1 = Nx.argsort(tensor, axis: 1, direction: :desc)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [2, 2],
+            [1, 1],
+            [0, 0]
+          ]
+        ]
+      >
+      iex> Nx.take_along_axis(tensor, idx1, axis: 1)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [5, 6],
+            [3, 4],
+            [1, 2]
+          ]
+        ]
+      >
+      iex> idx2 = Nx.argsort(tensor, axis: 2, direction: :desc)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [1, 0],
+            [1, 0],
+            [1, 0]
+          ]
+        ]
+      >
+      iex> Nx.take_along_axis(tensor, idx2, axis: 2)
+      #Nx.Tensor<
+        s64[1][3][2]
+        [
+          [
+            [2, 1],
+            [4, 3],
+            [6, 5]
+          ]
+        ]
+      >
+
+  ### Error cases
+
+      iex> tensor = Nx.iota({3, 3})
+      iex> idx = Nx.tensor([[2.0], [1.0], [2.0]], type: {:f, 32})
+      iex> Nx.take_along_axis(tensor, idx, axis: 1)
+      ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
+  """
+  def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
+    unless Nx.Type.integer?(indices.type) do
+      raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
+    end
+
+    opts = keyword!(opts, axis: 0)
+    axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names)
+
+    shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
+
+    impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+  end
+
+  @doc """
   Concatenates tensors along the given axis.
 
   If no axis is provided, defaults to 0.
