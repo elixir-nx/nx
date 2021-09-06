@@ -740,7 +740,7 @@ defmodule EXLA.Defn do
     axes_range = 0..(indices_rank-1)
 
     index_vector_dim = indices_rank
-    slice_sizes = 1 |> List.duplicate(indices_rank)
+    slice_sizes = List.duplicate(1, indices_rank)
     offset_dims = []
     collapsed_slice_dims = Enum.to_list(axes_range)
     start_index_map = Enum.to_list(axes_range)
