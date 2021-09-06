@@ -733,43 +733,40 @@ defmodule EXLA.Defn do
     )
   end
 
-   defp to_operator(:take_along_axis, [tensor, indices, axis], _ans, state) do
-    tensor_rank = tensor |> op_shape() |> tuple_size()
-
+  defp to_operator(:take_along_axis, [tensor, indices, axis], _ans, state) do
     indices_shape = op_shape(indices)
     indices_rank = tuple_size(indices_shape)
-    result_rank = indices_rank
+
+    axes_range = 0..(indices_rank-1)
 
     index_vector_dim = indices_rank
-    slice_sizes = 1 |> List.duplicate(result_rank)
+    slice_sizes = 1 |> List.duplicate(indices_rank)
     offset_dims = []
-    collapsed_slice_dims = Enum.to_list(0..(result_rank - 1))
-    start_index_map = Enum.to_list(0..(result_rank-1))
+    collapsed_slice_dims = Enum.to_list(axes_range)
+    start_index_map = Enum.to_list(axes_range)
 
-    num_elems_indices = indices_shape |> Tuple.to_list() |> Enum.product()
+    iotas =
+      Enum.map(axes_range, fn axis ->
+        shape = EXLA.Op.get_shape(indices)
+        EXLA.Op.iota(state.builder, shape, axis)
+      end)
 
-    # indices_unrolled_shape = EXLA.Shape.make_shape(op_type(indices), {1, num_elems_indices})
-    indices_unrolled_shape = {num_elems_indices, 1}
+    new_axis_shape = Tuple.insert_at(indices_shape, indices_rank, 1)
 
-    # iotas = Enum.map(1..indices_rank, fn axis -> state.builder |> EXLA.Op.iota(EXLA.Op.get_shape(indices), axis - 1) |> EXLA.Op.reshape(indices_unrolled_shape) end)
-    iotas = Enum.map(1..indices_rank, fn axis -> state.builder |> EXLA.Op.iota(EXLA.Op.get_shape(indices), axis - 1) end)
-
-    # indices = EXLA.Op.reshape(indices, indices_unrolled_shape)
-
-    new_axis_shape = indices_shape |> Tuple.to_list() |> List.insert_at(indices_rank, 1) |> List.to_tuple()
-
-    indices = iotas |> List.replace_at(axis, indices) |> Enum.map(&EXLA.Op.reshape(&1, new_axis_shape)) |> EXLA.Op.concatenate(indices_rank)
-
-    # IO.inspect(op_shape(indices), label: "result indices shape")
+    indices =
+      iotas
+      |> List.replace_at(axis, indices)
+      |> Enum.map(&EXLA.Op.reshape(&1, new_axis_shape))
+      |> EXLA.Op.concatenate(indices_rank)
 
     EXLA.Op.gather(
       tensor,
       indices,
-      index_vector_dim |> IO.inspect(label: "index_vector_dim"),
-      slice_sizes |> IO.inspect(label: "slice_sizes"),
-      offset_dims |> IO.inspect(label: "offset_dims"),
-      collapsed_slice_dims |> IO.inspect(label: "collapsed_slice_dims"),
-      start_index_map |> IO.inspect(label: "start_index_map")
+      index_vector_dim,
+      slice_sizes,
+      offset_dims,
+      collapsed_slice_dims,
+      start_index_map
     )
   end
 
@@ -1133,10 +1130,10 @@ defmodule EXLA.Defn do
               "but got #{inspect(nx_type)}"
     end
 
-    # if hole.shape != nx_shape do
-    #   raise "internal bug! Nx.Defn expected a tensor with shape #{inspect(hole.shape)} " <>
-    #           "but got #{inspect(nx_shape)}"
-    # end
+    if hole.shape != nx_shape do
+      raise "internal bug! Nx.Defn expected a tensor with shape #{inspect(hole.shape)} " <>
+              "but got #{inspect(nx_shape)}"
+    end
 
     {%{hole | data: buffer_to_data(buffer)}, acc}
   end

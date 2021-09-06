@@ -76,8 +76,8 @@ defmodule EXLA.Client do
     device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
     devices = EXLA.NIF.get_devices(ref) |> unwrap!()
 
-    if default_device_id not in 0..device_count-1 do
-      raise ArgumentError, ":default_device_id must be a number between 0 and #{device_count-1}"
+    if default_device_id not in 0..(device_count - 1) do
+      raise ArgumentError, ":default_device_id must be a number between 0 and #{device_count - 1}"
     end
 
     %EXLA.Client{
