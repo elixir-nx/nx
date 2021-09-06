@@ -3043,6 +3043,48 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "take_along_axis/3" do
+    defn take_along_axis(t, idx, axis \\ 0), do: Nx.take_along_axis(t, idx, axis: axis)
+
+    test "works for {3, 2, 2} tensor along axis 2" do
+      t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]])
+      i = Nx.tensor([[[0, 1], [0, 1]], [[0, 1], [0, 1]], [[0, 1], [0, 1]]])
+
+      assert take_along_axis(t, i, 2) == Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]])
+    end
+
+    test "works for {3, 2, 2} tensor growing along axis = 2" do
+      t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]])
+      i = Nx.tensor([[[0, 1, 1, 0], [0, 1, 1, 0]], [[0, 1, 1, 0], [0, 1, 1, 0]], [[0, 1, 1, 0], [0, 1, 1, 0]]])
+
+      assert take_along_axis(t, i, 2) == Nx.tensor([[[1, 2, 2, 1], [3, 4, 4, 3]], [[5, 6, 6, 5], [7, 8, 8, 7]], [[9, 10, 10, 9], [11, 12, 12, 11]]])
+    end
+
+    test "works for {3, 2, 2} tensor growing along axis = 0" do
+      t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]])
+      i = Nx.tensor([
+        [
+          [0, 0],
+          [0, 0]
+        ],
+        [
+          [1, 1],
+          [1, 1]
+        ],
+        [
+          [2, 2],
+          [2, 2]
+        ],
+        [
+          [2, 1],
+          [1, 0]
+        ]
+      ])
+
+      assert take_along_axis(t, i) == Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[9, 6], [7, 4]]])
+    end
+  end
+
   defp compare_tensors!(left, right, opts \\ []) do
     atol = opts[:atol] || 1.0e-7
     rtol = opts[:rtol] || 1.0e-4
