@@ -745,13 +745,14 @@ defmodule EXLA.Defn do
     collapsed_slice_dims = Enum.to_list(axes_range)
     start_index_map = Enum.to_list(axes_range)
 
+    indices_exla_shape = EXLA.Op.get_shape(indices)
+
     iotas =
       Enum.map(axes_range, fn axis ->
-        shape = EXLA.Op.get_shape(indices)
-        EXLA.Op.iota(state.builder, shape, axis)
+        EXLA.Op.iota(state.builder, indices_exla_shape, axis)
       end)
 
-    new_axis_shape = Tuple.insert_at(indices_shape, indices_rank, 1)
+    new_axis_shape = Tuple.append(indices_shape, indices_rank)
 
     indices =
       iotas
