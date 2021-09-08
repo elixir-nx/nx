@@ -499,6 +499,14 @@ defmodule Nx.Defn.Grad do
     to_grad(input, dl, cache)
   end
 
+  defp grad(:sort, [t, opts], _ans, g, cache) do
+    idx = Nx.argsort(t, opts)
+    take_along_opts = Keyword.take(opts, [:axis])
+    g = Nx.take_along_axis(g, idx, take_along_opts)
+
+    to_grad(t, g, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
