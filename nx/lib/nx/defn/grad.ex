@@ -499,6 +499,14 @@ defmodule Nx.Defn.Grad do
     to_grad(input, dl, cache)
   end
 
+  defp grad(:sort, [t, opts], _ans, g, cache) do
+    idx = Nx.argsort(t, opts)
+    take_along_opts = Keyword.take(opts, [:axis])
+    g = Nx.take_along_axis(g, idx, take_along_opts)
+
+    to_grad(t, g, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
@@ -766,7 +774,7 @@ defmodule Nx.Defn.Grad do
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
                [:floor, :round, :ceil, :sign] ++
-               [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal]
+               [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp no_g_grad(op, _, _) when op in @constants do
     []

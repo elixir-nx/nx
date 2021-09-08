@@ -2430,6 +2430,79 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "sort" do
+    defn grad_sum_sort(t) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.sort(direction: :desc)
+          |> Nx.sum()
+        end
+      )
+    end
+
+    defn grad_sum_sort_power(t) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.power(2)
+          |> Nx.sort(direction: :desc)
+          |> Nx.sum()
+        end
+      )
+    end
+
+    defn grad_sum_power_sort(t) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.sort(direction: :desc)
+          |> Nx.power(2)
+          |> Nx.sum()
+        end
+      )
+    end
+
+    defn grad_sum_log_power_sort_cos(t, opts \\ []) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.cos()
+          |> Nx.sort(opts)
+          |> Nx.power(2)
+          |> Nx.log()
+          |> Nx.sum()
+        end
+      )
+    end
+
+    test "computes gradient" do
+      assert Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]) ==
+               grad_sum_sort(Nx.tensor([4.0, 8.0, 15.0, 16.0, 23.0, 42.0]))
+
+      assert Nx.tensor([2.0, 4.0, 6.0, 8.0]) == grad_sum_sort_power(Nx.tensor([1, 2, 3, 4]))
+
+      assert Nx.tensor([2.0, 4.0, 6.0, 8.0]) == grad_sum_power_sort(Nx.tensor([1, 2, 3, 4]))
+
+      assert Nx.tensor([-2.3156426, 0.2850931, 4.370079, -3.1148152]) ==
+               grad_sum_log_power_sort_cos(Nx.tensor([4, 3, 2, 1]), [])
+    end
+
+    test "computes gradient along axis" do
+      assert Nx.tensor([
+               [
+                 [-2.3156426, 0.2850931, 4.370079, -3.1148152],
+                 [-3.1148152, 4.370079, 0.2850931, -2.3156426]
+               ]
+             ]) ==
+               grad_sum_log_power_sort_cos(Nx.tensor([[[4, 3, 2, 1], [1, 2, 3, 4]]]), axis: 1)
+    end
+  end
+
   describe "not implemented" do
     defn grad_reduce(t), do: grad(t, &Nx.reduce(&1, 0, fn x, y -> x + y end))
 
