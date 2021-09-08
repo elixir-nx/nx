@@ -2466,13 +2466,13 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
-    defn grad_sum_log_sort_cos(t) do
+    defn grad_sum_log_power_sort_cos(t, opts \\ []) do
       grad(
         t,
         fn t ->
           t
           |> Nx.cos()
-          |> Nx.sort()
+          |> Nx.sort(opts)
           |> Nx.power(2)
           |> Nx.log()
           |> Nx.sum()
@@ -2489,7 +2489,17 @@ defmodule Nx.Defn.GradTest do
       assert Nx.tensor([2.0, 4.0, 6.0, 8.0]) == grad_sum_power_sort(Nx.tensor([1, 2, 3, 4]))
 
       assert Nx.tensor([-2.3156426, 0.2850931, 4.370079, -3.1148152]) ==
-               grad_sum_log_power_sort_cos(Nx.tensor([4, 3, 2, 1]))
+               grad_sum_log_power_sort_cos(Nx.tensor([4, 3, 2, 1]), [])
+    end
+
+    test "computes gradient along axis" do
+      assert Nx.tensor([
+               [
+                 [-2.3156426, 0.2850931, 4.370079, -3.1148152],
+                 [-3.1148152, 4.370079, 0.2850931, -2.3156426]
+               ]
+             ]) ==
+               grad_sum_log_power_sort_cos(Nx.tensor([[[4, 3, 2, 1], [1, 2, 3, 4]]]), axis: 1)
     end
   end
 
