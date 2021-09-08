@@ -774,7 +774,7 @@ defmodule Nx.Defn.Grad do
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
                [:floor, :round, :ceil, :sign] ++
-               [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal]
+               [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp no_g_grad(op, _, _) when op in @constants do
     []
