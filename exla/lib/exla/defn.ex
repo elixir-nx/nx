@@ -4,58 +4,6 @@ defmodule EXLA.Defn do
   alias Nx.Defn.{Expr, Tree}
   alias Nx.Tensor, as: T
 
-  @aot_runtimes %{
-    dot: :matmul,
-    conv: :conv2d
-  }
-
-  @doc false
-  def __aot__(output_dir, module, tuples, aot_options) do
-    comps_and_exprs =
-      for {name, fun, vars, options} <- tuples do
-        expr = fun.(vars)
-        inputs = used_inputs(expr)
-        inputs_and_shapes = aot_shapes(vars, 0, inputs)
-
-        computation = to_root_computation(name, expr, inputs_and_shapes, options)
-        {{computation, name, length(vars), inputs_and_shapes}, expr}
-      end
-
-    {comps, exprs} = Enum.unzip(comps_and_exprs)
-    {_, {_, runtimes}} = exprs |> List.to_tuple() |> Tree.composite({%{}, %{}}, &aot_runtimes/2)
-    aot_options = Keyword.put_new(aot_options, :runtimes, Map.keys(runtimes))
-
-    case EXLA.AOT.compile(output_dir, module, comps, aot_options) do
-      {:ok, nif} -> {:ok, exprs, nif}
-      {:error, exception} -> {:error, exception}
-    end
-  end
-
-  defp aot_shapes([%{shape: shape, type: type} | vars], i, [i | inputs]) do
-    [{i, EXLA.Shape.make_shape(type, shape)} | aot_shapes(vars, i + 1, inputs)]
-  end
-
-  defp aot_shapes([_var | vars], i, inputs) do
-    aot_shapes(vars, i + 1, inputs)
-  end
-
-  defp aot_shapes([], _i, []), do: []
-
-  defp aot_runtimes(%T{data: %Expr{op: op, id: id}} = expr, {seen, runtimes}) do
-    case seen do
-      %{^id => _} ->
-        {expr, {seen, runtimes}}
-
-      %{} ->
-        runtimes =
-          if runtime = @aot_runtimes[op],
-            do: Map.put(runtimes, runtime, true),
-            else: runtimes
-
-        Tree.traverse_args(expr, {Map.put(seen, id, true), runtimes}, &aot_runtimes/2)
-    end
-  end
-
   @doc false
   def __jit__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
@@ -737,7 +685,7 @@ defmodule EXLA.Defn do
     indices_shape = op_shape(indices)
     indices_rank = tuple_size(indices_shape)
 
-    axes_range = 0..(indices_rank-1)
+    axes_range = 0..(indices_rank-1)//1
 
     index_vector_dim = indices_rank
     slice_sizes = List.duplicate(1, indices_rank)

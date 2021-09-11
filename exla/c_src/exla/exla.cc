@@ -1,9 +1,8 @@
 #include <map>
 
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include "tensorflow/compiler/xla/exla/exla_client.h"
-#include "tensorflow/compiler/xla/exla/exla_log_sink.h"
-#include "tensorflow/compiler/xla/exla/exla_aot_compilation.h"
+#include "exla_nif_util.h"
+#include "exla_client.h"
+#include "exla_log_sink.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
@@ -1700,7 +1699,6 @@ ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   xla::XlaOp* operand;
   bool full_matrices;
-  int config_int;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
@@ -2150,56 +2148,6 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env);
 }
 
-ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if (argc != 8) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaComputation* computation;
-  std::string function_name, pbtext_path, header_path, object_path, class_name, target_triple, target_features;
-
-  if (!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
-    return exla::nif::error(env, "Unable to get computation.");
-  }
-  if (!exla::nif::get(env, argv[1], pbtext_path)) {
-    return exla::nif::error(env, "Unable to get Graph Config Path.");
-  }
-  if (!exla::nif::get(env, argv[2], header_path)) {
-    return exla::nif::error(env, "Unable to get header path.");
-  }
-  if (!exla::nif::get(env, argv[3], object_path)) {
-    return exla::nif::error(env, "Unable to get object path.");
-  }
-  if (!exla::nif::get(env, argv[4], function_name)) {
-    return exla::nif::error(env, "Unable to get function name.");
-  }
-  if (!exla::nif::get(env, argv[5], class_name)) {
-    return exla::nif::error(env, "Unable to get class name.");
-  }
-  if (!exla::nif::get(env, argv[6], target_triple)) {
-    return exla::nif::error(env, "Unable to get target triple.");
-  }
-  if (!exla::nif::get(env, argv[7], target_features)) {
-    return exla::nif::error(env, "Unable to get target features.");
-  }
-
-  xla::Status compile_status =
-    exla::CompileComputation(*computation,
-                             pbtext_path,
-                             header_path,
-                             object_path,
-                             function_name,
-                             class_name,
-                             target_triple,
-                             target_features);
-
-  if(!compile_status.ok()) {
-    return exla::nif::error(env, compile_status.error_message().c_str());
-  }
-
-  return exla::nif::ok(env);
-}
-
 static ErlNifFunc exla_funcs[] = {
   // XlaBuilder
   {"new_builder", 1, new_builder},
@@ -2343,9 +2291,7 @@ static ErlNifFunc exla_funcs[] = {
   {"outfeed", 3, outfeed},
   {"create_token", 1, create_token},
   // Log Sink
-  {"start_log_sink", 1, start_log_sink},
-  // HLO Functions
-  {"compile_aot", 8, compile_aot}
+  {"start_log_sink", 1, start_log_sink}
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

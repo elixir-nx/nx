@@ -260,18 +260,6 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
-  def compile_aot(
-        _computation,
-        _pbtext_path,
-        _header_path,
-        _object_path,
-        _function_name,
-        _class_name,
-        _target_triple,
-        _target_features
-      ),
-      do: :erlang.nif_error(:undef)
-
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: :erlang.nif_error(:undef)
 

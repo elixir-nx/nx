@@ -5,7 +5,7 @@
 #include <vector>
 #include <utility>
 
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "exla_nif_util.h"
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/platform/status.h"
 #include "tensorflow/compiler/xla/pjrt/pjrt_client.h"
@@ -54,7 +54,7 @@ class ExlaExecutable {
                  absl::optional<std::string> fingerprint,
                  ExlaClient* client);
 
-  xla::PjRtExecutable* executable() { executable_.get(); }
+  xla::PjRtExecutable* executable() { return executable_.get(); }
 
   xla::StatusOr<ERL_NIF_TERM> Run(ErlNifEnv* env,
                                   ERL_NIF_TERM arguments,

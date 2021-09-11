@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "exla_nif_util.h"
 #include "tensorflow/core/platform/logging.h"
 #include "absl/base/log_severity.h"
 
@@ -45,6 +45,14 @@ class ExlaLogSink : public tensorflow::TFLogSink {
     return enif_make_tuple4(env_, status, msg, file, line_term);
   }
 
+  ERL_NIF_TERM debug(std::string str, std::string fname, int32 line) {
+    ERL_NIF_TERM status = nif::atom(env_, "debug");
+    ERL_NIF_TERM msg = nif::make(env_, str);
+    ERL_NIF_TERM file = nif::make(env_, fname);
+    ERL_NIF_TERM line_term = nif::make(env_, line);
+    return enif_make_tuple4(env_, status, msg, file, line_term);
+  }
+
   void Send(const tensorflow::TFLogEntry& entry) {
     ERL_NIF_TERM msg;
     std::string msg_str = entry.ToString();
@@ -67,9 +75,9 @@ class ExlaLogSink : public tensorflow::TFLogSink {
         // crashes
         std::cerr << "[FATAL] " << fname << ":"
                   << line << " " << msg_str << "\n";
+        break;
       default:
         msg = info(msg_str, fname, line);
-        break;
     }
     enif_send(env_, &sink_pid_, NULL, msg);
   }
