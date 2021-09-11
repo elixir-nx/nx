@@ -45,14 +45,6 @@ class ExlaLogSink : public tensorflow::TFLogSink {
     return enif_make_tuple4(env_, status, msg, file, line_term);
   }
 
-  ERL_NIF_TERM debug(std::string str, std::string fname, int32 line) {
-    ERL_NIF_TERM status = nif::atom(env_, "debug");
-    ERL_NIF_TERM msg = nif::make(env_, str);
-    ERL_NIF_TERM file = nif::make(env_, fname);
-    ERL_NIF_TERM line_term = nif::make(env_, line);
-    return enif_make_tuple4(env_, status, msg, file, line_term);
-  }
-
   void Send(const tensorflow::TFLogEntry& entry) {
     ERL_NIF_TERM msg;
     std::string msg_str = entry.ToString();
