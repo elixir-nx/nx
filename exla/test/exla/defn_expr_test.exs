@@ -3111,7 +3111,6 @@ defmodule EXLA.DefnExprTest do
 
     test "uses argsort indices properly" do
       t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]])
-      i = Nx.tensor([[[0, 1], [0, 1]], [[0, 1], [0, 1]], [[0, 1], [0, 1]]])
 
       assert sort_with_take_along_axis(t, axis: 1, direction: :desc) == Nx.sort(t, axis: 1, direction: :desc)
     end

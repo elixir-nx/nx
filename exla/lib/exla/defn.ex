@@ -752,7 +752,7 @@ defmodule EXLA.Defn do
         EXLA.Op.iota(state.builder, indices_exla_shape, axis)
       end)
 
-    new_axis_shape = Tuple.append(indices_shape, indices_rank)
+    new_axis_shape = Tuple.append(indices_shape, 1)
 
     indices =
       iotas
