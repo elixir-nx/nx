@@ -3046,7 +3046,7 @@ defmodule EXLA.DefnExprTest do
   describe "take_along_axis/3" do
     defn take_along_axis(t, idx, axis \\ 0), do: Nx.take_along_axis(t, idx, axis: axis)
 
-    defn sort_with_take_along_axis(t, opts \\ [])  do
+    defn sort_with_take_along_axis(t, opts \\ []) do
       idx = Nx.argsort(t, opts)
       Nx.take_along_axis(t, idx, axis: opts[:axis])
     end
@@ -3113,7 +3113,8 @@ defmodule EXLA.DefnExprTest do
       t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]])
       i = Nx.tensor([[[0, 1], [0, 1]], [[0, 1], [0, 1]], [[0, 1], [0, 1]]])
 
-      assert sort_with_take_along_axis(t, axis: 1, direction: :desc) == Nx.sort(t, axis: 1, direction: :desc)
+      assert sort_with_take_along_axis(t, axis: 1, direction: :desc) ==
+               Nx.sort(t, axis: 1, direction: :desc)
     end
   end
 

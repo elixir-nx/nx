@@ -12,12 +12,15 @@ defmodule EXLA.MixProject do
       elixir: "~> 1.12-dev",
       deps: deps(),
       docs: docs(),
-      compilers: [:exla, :elixir_make] ++ Mix.compilers(),
-      aliases: aliases(),
+      # We want to always trigger XLA compilation when XLA_BUILD is set,
+      # otherwise its Makefile will run only upon the initial compilation
+      compilers:
+        if(xla_build?(), do: [:xla], else: []) ++ [:exla, :elixir_make] ++ Mix.compilers(),
       make_env: %{
         "MIX_CURRENT_PATH" => File.cwd!(),
         "ERTS_VERSION" => List.to_string(:erlang.system_info(:version))
-      }
+      },
+      aliases: aliases()
     ]
   end
 
@@ -52,38 +55,42 @@ defmodule EXLA.MixProject do
 
   defp aliases do
     [
+      "compile.xla": "deps.compile xla",
       "compile.exla": &compile/1
     ]
   end
 
-  # Custom compiler, extracts the archive from xla priv directory
-  # into exla priv directory
-
+  # We keep track of the current XLA archive path in xla_snapshot.txt.
+  # Whenever the path changes, we extract it again and Makefile picks
+  # up this change
   defp compile(_) do
-    exla_priv_path = Path.join(__DIR__, "priv")
-    unpacked_archive_path = Path.join(exla_priv_path, "xla_extension")
+    xla_archive_path = XLA.archive_path!()
 
-    unless File.exists?(unpacked_archive_path) do
-      case :code.priv_dir(:xla) do
-        {:error, :bad_name} ->
-          Mix.raise("could not find xla priv directory")
+    cache_dir = Path.join(__DIR__, "cache")
+    xla_snapshot_path = Path.join(cache_dir, "xla_snapshot.txt")
+    xla_extension_path = Path.join(cache_dir, "xla_extension")
 
-        xla_priv_path ->
-          archive_path = Path.join(xla_priv_path, "xla_extension.tar.gz")
+    case File.read(xla_snapshot_path) do
+      {:ok, ^xla_archive_path} ->
+        :ok
 
-          case :erl_tar.extract(archive_path, [:compressed, cwd: exla_priv_path]) do
-            :ok ->
-              :ok
+      _ ->
+        File.rm_rf!(xla_extension_path)
 
-            {:error, term} ->
-              Mix.raise("failed to extract xla archive, reason: #{inspect(term)}")
-          end
-      end
+        Mix.shell().info("Unpacking #{xla_archive_path} into #{cache_dir}")
+
+        case :erl_tar.extract(xla_archive_path, [:compressed, cwd: cache_dir]) do
+          :ok -> :ok
+          {:error, term} -> Mix.raise("failed to extract xla archive, reason: #{inspect(term)}")
+        end
+
+        File.write!(xla_snapshot_path, xla_archive_path)
     end
 
-    # Symlink the priv directory
-    Mix.Project.build_structure()
-
     {:ok, []}
+  end
+
+  defp xla_build?() do
+    System.get_env("XLA_BUILD") == "true"
   end
 end
