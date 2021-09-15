@@ -2,15 +2,16 @@
 # ERTS_INCLUDE_DIR
 # ERTS_VERSION
 
+# XLA Extension Installation Location
+XLA_EXTENSION_DIR ?= cache/xla_extension
+
+XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
+XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
+
 # Private configuration
 PRIV_DIR = priv
 EXLA_SO = $(PRIV_DIR)/libexla.so
 EXLA_DIR = c_src/exla
-
-# XLA Extension Installation Location
-XLA_EXTENSION_DIR ?= cache/xla_extension
-XLA_EXTENSION_LIB ?= $(XLA_EXTENSION_DIR)/lib
-XLA_INCLUDE_PATH ?= $(XLA_EXTENSION_DIR)/include
 
 # Build Flags
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -isystem $(XLA_INCLUDE_PATH) -O3 -Wall -Wextra \
