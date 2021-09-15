@@ -16,10 +16,6 @@ defmodule EXLA.MixProject do
       # otherwise its Makefile will run only upon the initial compilation
       compilers:
         if(xla_build?(), do: [:xla], else: []) ++ [:exla, :elixir_make] ++ Mix.compilers(),
-      make_env: %{
-        "MIX_CURRENT_PATH" => File.cwd!(),
-        "ERTS_VERSION" => List.to_string(:erlang.system_info(:version))
-      },
       aliases: aliases()
     ]
   end

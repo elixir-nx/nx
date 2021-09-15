@@ -1,6 +1,5 @@
 # Environment variables passed via elixir_make
 # ERTS_INCLUDE_DIR
-# ERTS_VERSION
 
 # XLA Extension Installation Location
 XLA_EXTENSION_DIR ?= cache/xla_extension
