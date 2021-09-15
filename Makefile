@@ -23,10 +23,9 @@ clean:
 # Convenient shorthand for doing all of the appropriate steps in CUDA
 # environment since it's easy to miss the extra flag setting in the docs.
 cuda:
-	@env EXLA_FLAGS=--config=cuda ${MAKE} all test
+	@env XLA_TARGET=cuda ${MAKE} all test
 
 # Convenient shorthand for doing all of the appropriate steps in ROCm
 # environment since it's easy to miss the extra flag setting in the docs.
 rocm:
-	@env EXLA_FLAGS="--config=rocm --action_env=HIP_PLATFORM=hcc" \
-		${MAKE} all test
+	@env XLA_TARGET=rocm ${MAKE} all test
