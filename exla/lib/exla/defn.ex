@@ -685,7 +685,7 @@ defmodule EXLA.Defn do
     indices_shape = op_shape(indices)
     indices_rank = tuple_size(indices_shape)
 
-    axes_range = 0..(indices_rank-1)//1
+    axes_range = 0..(indices_rank - 1)//1
 
     index_vector_dim = indices_rank
     slice_sizes = List.duplicate(1, indices_rank)
