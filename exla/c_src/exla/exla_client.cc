@@ -1,5 +1,5 @@
-#include "tensorflow/compiler/xla/exla/exla_client.h"
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "exla_client.h"
+#include "exla_nif_util.h"
 #include "tensorflow/compiler/xla/pjrt/gpu_device.h"
 #include "tensorflow/compiler/xla/pjrt/cpu_device.h"
 #include "tensorflow/compiler/xla/pjrt/tpu_client.h"

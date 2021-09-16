@@ -8,7 +8,7 @@
 #include <utility>
 #include <map>
 
-#include "tensorflow/compiler/xla/exla/erts/erl_nif.h"
+#include "erl_nif.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/compiler/xla/shape.h"

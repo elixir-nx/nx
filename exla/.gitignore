@@ -23,4 +23,5 @@ exla-*.tar
 /c_src/exla/aot*/
 /c_src/exla/erts
 /priv/
+/cache/
 /tmp/
