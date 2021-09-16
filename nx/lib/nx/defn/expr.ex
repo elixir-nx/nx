@@ -494,7 +494,7 @@ defmodule Nx.Defn.Expr do
       target,
       indices,
       updates,
-      opts
+      opts[:axis]
     ])
   end
 
