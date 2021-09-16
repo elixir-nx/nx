@@ -33,8 +33,7 @@ defmodule EXLA.MixProject do
   defp deps do
     [
       {:nx, path: "../nx"},
-      # TODO: adjust
-      {:xla, "~> 0.1.1-dev", runtime: false, github: "jonatanklosko/xla", branch: "jk-build"},
+      {:xla, "~> 0.1.0", runtime: false, github: "elixir-nx/xla"},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.23", only: :dev}
