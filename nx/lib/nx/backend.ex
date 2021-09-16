@@ -90,6 +90,7 @@ defmodule Nx.Backend do
   @callback argsort(out :: tensor, tensor, keyword) :: tensor
   @callback scatter_window_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
   @callback scatter_window_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
+  @callback scatter_add(out :: tensor, tensor, tensor, tensor, keyword) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor

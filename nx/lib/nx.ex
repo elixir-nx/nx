@@ -4280,6 +4280,35 @@ defmodule Nx do
     )
   end
 
+  @doc """
+  Performs a scatter-add operation on the `target` tensor,
+  adding the `updates` into the corresponding `indices` positions.
+
+  This operation is the grad for gather-like operations such as
+  `take/3` and `take_along_axis/3`.
+
+  `indices` must be a tensor of indices along a given axis (see the options below).
+  `argsort/2` produces suitable indices for this function.
+  """
+  def scatter_add(target, indices, updates, opts \\ []) do
+    opts = keyword!(opts, axis: 1)
+
+    # nx_take = fn %{shape: shape} = t, i ->
+    #   shape_l = Tuple.to_list(shape)
+    #   num_el = Enum.reduce(shape_l, &*/2)
+
+    #   flat_dim =
+    #     List.duplicate(1, tuple_size(shape)) |> List.replace_at(0, num_el) |> List.to_tuple()
+
+    #   Nx.take_along_axis(t, i |> Nx.reshape(flat_dim) |> Nx.tile(List.replace_at(shape_l, 0, 1)),
+    #     axis: 0
+    #   )
+    #   |> Nx.reshape(List.replace_at(shape_l, 0, shape_l) |> List.flatten() |> List.to_tuple())
+    # end
+
+    impl!(target).scatter_add(target, target, indices, updates, opts)
+  end
+
   ## Unary ops
 
   for {name, {desc, code}} <- Nx.Shared.unary_math_funs() do
