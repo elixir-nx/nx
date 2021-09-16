@@ -1203,6 +1203,70 @@ ERL_NIF_TERM select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  if (argc != 9)
+  {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp *target;
+  xla::XlaOp *indices;
+  xla::XlaOp *updates;
+  xla::XlaComputation *scatter_fn;
+  int64 index_vector_dim;
+  std::vector<exla::int64> update_window_dims;
+  std::vector<exla::int64> inserted_window_dims;
+  std::vector<exla::int64> scatter_dims_to_operand_dims;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], target))
+  {
+    return exla::nif::error(env, "Unable to get target.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], indices))
+  {
+    return exla::nif::error(env, "Unable to get indices.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[2], updates))
+  {
+    return exla::nif::error(env, "Unable to get updates.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[3], scatter_fn))
+  {
+    return exla::nif::error(env, "Unable to get scatter function.");
+  }
+  if (!exla::nif::get_int(env, argv[4], index_vector_dim))
+  {
+    return exla::nif::error(env, "Unable to get index vector dim.");
+  }
+  if (!exla::nif::get_list(env, argv[5], update_window_dims))
+  {
+    return exla::nif::error(env, "Unable to get update window dims.");
+  }
+  if (!exla::nif::get_list(env, argv[6], inserted_window_dims))
+  {
+    return exla::nif::error(env, "Unable to get update window dims.");
+  }
+  if (!exla::nif::get_list(env, argv[7], scatter_dims_to_operand_dims))
+  {
+    return exla::nif::error(env, "Unable to get update window dims.");
+  }
+
+  xla::XlaOp op = xla::Scatter(
+    *target,
+    *indices,
+    *updates,
+    *scatter_fn,
+    index_vector_dim,
+    update_window_dims,
+    inserted_window_dims,
+    scatter_dims_to_operand_dims,
+    false
+  );
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");

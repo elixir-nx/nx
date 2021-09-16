@@ -671,6 +671,33 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(
+         :scatter_add,
+         [target, indices, updates, opts],
+         %{type: type},
+         state
+       ) do
+    target = to_type(target, type)
+    updates = to_type(updates, type)
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    scatter_fn = to_computation(:scatter_add_addition, args, state, binary_op_fun(:add))
+
+    indices_rank = indices |> op_shape() |> tuple_size()
+    axes = axes_for_rank(indices_rank)
+
+    EXLA.Op.scatter(
+      target,
+      indices,
+      updates,
+      scatter_fn,
+      indices_rank,
+      [],
+      axes,
+      axes
+    )
+  end
+
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
     arg = to_type(arg, type)
     comp = recur_computation(fun, type, state)
