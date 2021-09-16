@@ -186,4 +186,7 @@ defmodule EXLA do
 
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
+
+  @impl true
+  def __stream__(_, _, _, _, _, _), do: raise("not implemented")
 end
