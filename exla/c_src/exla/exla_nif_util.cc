@@ -1,4 +1,4 @@
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "exla_nif_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
@@ -249,7 +249,7 @@ namespace nif {
       const ERL_NIF_TERM* terms;
       int length;
       if (!enif_get_tuple(env, head, &length, &terms)) return 0;
-      if (!length == 3) return 0;
+      if (length != 3) return 0;
 
       int64 pad_lo, pad_hi, interior;
       if (!get(env, terms[0], &pad_lo)) return 0;

@@ -13,8 +13,7 @@ defmodule EXLA do
 
   Then, every time `softmax/1` is called, EXLA will just-in-time (JIT)
   compile a native implementation of the function above, tailored for the
-  type and shape of the given tensor. Ahead-of-time (AOT) compilation is
-  planned for future versions.
+  type and shape of the given tensor.
 
   EXLA is able to compile to the CPU or GPU, by customizing the default
   client or specifying your own client:
@@ -185,98 +184,6 @@ defmodule EXLA do
     Nx.Defn.jit(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
-  @doc """
-  A shortcut for `Nx.Defn.aot/4` with the EXLA compiler.
-
-      iex> functions = [{:exp, &Nx.exp/1, [Nx.template({3}, {:s, 64})]}]
-      iex> EXLA.aot(ExpAotDemo, functions)
-      iex> ExpAotDemo.exp(Nx.tensor([1, 2, 3]))
-      #Nx.Tensor<
-        f32[3]
-        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
-      >
-
-  See `export_aot/4` for options.
-  """
-  def aot(module, functions, options \\ []) do
-    Nx.Defn.aot(module, functions, Keyword.put(options, :compiler, EXLA))
-  end
-
-  @doc """
-  A shortcut for `Nx.Defn.export_aot/5` with the EXLA compiler.
-
-      iex> functions = [{:exp, &Nx.exp/1, [Nx.template({3}, {:s, 64})]}]
-      iex> :ok = EXLA.export_aot("tmp", ExpExportDemo, functions)
-      iex> defmodule Elixir.ExpExportDemo do
-      ...>   Nx.Defn.import_aot("tmp", __MODULE__)
-      ...> end
-      iex> ExpExportDemo.exp(Nx.tensor([1, 2, 3]))
-      #Nx.Tensor<
-        f32[3]
-        [2.7182817459106445, 7.389056205749512, 20.08553695678711]
-      >
-
-  Note ahead-of-time compilation for EXLA only runs on the CPU.
-  It is slightly less performant than the JIT variant for the
-  CPU but it compensates the loss in performance by removing
-  the need to have EXLA up and running in production.
-
-  ## Options
-
-    * `:target_features` - the default executable makes
-      no assumption about the target runtime, so special
-      instructions such as SIMD are not leveraged. But you
-      can specify those flags if desired:
-
-          target_features: "+sse4.1 +sse4.2 +avx +avx2 +fma"
-
-  The following options might be used for cross compilation:
-
-    * `:bazel_flags` - flags that customize `bazel build` command
-
-    * `:bazel_env` - flags that customize `bazel build` environment.
-      It must be a list of tuples where the env key and env value
-      are binaries
-
-    * `:target_triple` - the target triple to compile to.
-      It defaults to the current target triple but one
-      can be set for cross-compilation. A list is available
-      [on Tensorflow repo](https://github.com/tensorflow/tensorflow/blob/e687cab61615a95b8aea79120c9f168d4cc30955/tensorflow/compiler/aot/tfcompile.bzl).
-      Note this configures only how the tensor expression is
-      compiled but not the underlying NIF. For cross compilation,
-      one has to set the proper `:bazel_flags` and `:bazel_env`.
-
-          target_triple: "x86_64-pc-linux"
-
-  ## AOT export with Mix
-
-  Ahead-of-time exports with Mix are useful because you only need
-  EXLA when exporting. In practice, you can do this:
-
-    1. Add `{:exla, ..., only: :export_aot}` as a dependency
-
-    2. Define an exporting script at `script/export_my_module.exs`
-
-    3. Run the script to export the AOT `mix run script/export_my_module.exs`
-
-    4. Now inside `lib/my_module.ex` you can import it:
-
-          if File.exists?("priv/MyModule.nx.aot") do
-            defmodule MyModule do
-              Nx.Defn.import_aot("priv", __MODULE__)
-            end
-          else
-            IO.warn "Skipping MyModule because aot definition was not found"
-          end
-
-  """
-  def export_aot(dir, module, functions, options \\ []) do
-    Nx.Defn.export_aot(dir, module, functions, Keyword.put(options, :compiler, EXLA))
-  end
-
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
-
-  @impl true
-  defdelegate __aot__(output_dir, module, tuples, opts), to: EXLA.Defn
 end
