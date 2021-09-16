@@ -1213,7 +1213,7 @@ ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   xla::XlaOp *indices;
   xla::XlaOp *updates;
   xla::XlaComputation *scatter_fn;
-  int64 index_vector_dim;
+  exla::int64 index_vector_dim;
   std::vector<exla::int64> update_window_dims;
   std::vector<exla::int64> inserted_window_dims;
   std::vector<exla::int64> scatter_dims_to_operand_dims;
@@ -1234,7 +1234,7 @@ ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   {
     return exla::nif::error(env, "Unable to get scatter function.");
   }
-  if (!exla::nif::get_int(env, argv[4], index_vector_dim))
+  if (!exla::nif::get(env, argv[4], &index_vector_dim))
   {
     return exla::nif::error(env, "Unable to get index vector dim.");
   }
@@ -1251,17 +1251,20 @@ ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     return exla::nif::error(env, "Unable to get update window dims.");
   }
 
-  xla::XlaOp op = xla::Scatter(
-    *target,
-    *indices,
-    *updates,
-    *scatter_fn,
-    index_vector_dim,
-    update_window_dims,
-    inserted_window_dims,
-    scatter_dims_to_operand_dims,
-    false
-  );
+  xla::ScatterDimensionNumbers scatter_dim_numbers;
+
+  scatter_dim_numbers.set_index_vector_dim(index_vector_dim);
+  scatter_dim_numbers.set_update_window_dims(update_window_dims);
+  scatter_dim_numbers.set_inserted_window_dims(inserted_window_dims);
+  scatter_dim_numbers.set_scatter_dims_to_operand_dims(scatter_dims_to_operand_dims);
+
+      xla::XlaOp op = xla::Scatter(
+          *target,
+          *indices,
+          *updates,
+          *scatter_fn,
+          scatter_dim_numbers,
+          false);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }

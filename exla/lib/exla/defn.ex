@@ -631,7 +631,8 @@ defmodule EXLA.Defn do
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
     scatter_fn = to_computation(:scatter_add_addition, args, state, binary_op_fun(:add))
 
-    indices_rank = indices |> op_shape() |> tuple_size()
+    indices_shape = op_shape(indices)
+    indices_rank = tuple_size(indices_shape)
     axes = axes_for_rank(indices_rank)
 
     indices_exla_shape = EXLA.Op.get_shape(indices)
