@@ -1770,6 +1770,43 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def gather(out, tensor, indices) do
+    %T{type: {_, size}, shape: shape} = tensor
+    %T{type: {_, idx_size}} = indices
+
+    data = to_binary(tensor)
+    rank = tuple_size(shape)
+    byte_size = div(size, 8)
+
+    idx_last_dim_bin_size = rank * idx_size
+
+    new_data =
+      for <<bin::size(idx_last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
+        slice_start =
+          for <<bin::size(idx_size)-bitstring <- bin>>, do: binary_to_number(bin, indices.type)
+
+        {offset, []} =
+          slice_start
+          |> Enum.with_index()
+          |> Enum.reduce(
+            {0, Tuple.to_list(shape)},
+            fn {idx, axis}, {offset, [dim_size | shape]} ->
+              if idx < 0 or idx >= dim_size do
+                raise ArgumentError,
+                      "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+              end
+
+              {offset + idx * Enum.product(shape), shape}
+            end
+          )
+
+        binary_part(data, offset * byte_size, byte_size)
+      end
+
+    from_binary(out, new_data)
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
 

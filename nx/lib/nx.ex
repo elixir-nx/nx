@@ -7785,6 +7785,54 @@ defmodule Nx do
   end
 
   @doc """
+  Builds a new tensor by taking individual values from the original
+  tensor at the given indices.
+
+  The last dimension in indices must have the same size as the tensor
+  rank, think of it as one value per axis.
+
+  ## Examples
+
+      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[1, 1], [0, 1], [1, 0]]))
+      #Nx.Tensor<
+        s64[3]
+        [4, 2, 3]
+      >
+
+      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [4, 1],
+          [3, 2]
+        ]
+      >
+
+      iex> Nx.gather(Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]), Nx.tensor([[0, 0, 0], [0, 1, 1], [1, 1, 1]]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 12, 112]
+      >
+
+  ### Error cases
+
+      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: {:f, 32}))
+      ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
+  """
+  def gather(tensor, indices) do
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
+    unless Nx.Type.integer?(indices.type) do
+      raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
+    end
+
+    {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape)
+
+    impl!(tensor).gather(%{tensor | shape: shape, names: names}, tensor, indices)
+  end
+
+  @doc """
   Concatenates tensors along the given axis.
 
   If no axis is provided, defaults to 0.

@@ -67,6 +67,7 @@ defmodule Nx.Backend do
   @callback put_slice(out :: tensor, tensor, tensor, list) :: tensor
   @callback take(out :: tensor, input :: tensor, indices :: tensor, axis) :: tensor
   @callback take_along_axis(out :: tensor, input :: tensor, indices :: tensor, axis) :: tensor
+  @callback gather(out :: tensor, input :: tensor, indices :: tensor) :: tensor
   @callback concatenate(out :: tensor, tensor, axis) :: tensor
   @callback select(out :: tensor, tensor, tensor, tensor) :: tensor
 
