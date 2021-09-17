@@ -7536,7 +7536,7 @@ defmodule Nx do
   Passing a multi-dimensional indices tensor only affects the
   resulting shape. Specifically, the given axis in the input shape
   gets replaced with the indices shape.
-  
+
   See `gather/2`, `slice/3`, `slice_axis/3`, and `take_along_axis/3`
   for other ways to retrieve values from a tensor.
 
