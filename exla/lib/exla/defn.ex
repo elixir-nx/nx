@@ -631,34 +631,15 @@ defmodule EXLA.Defn do
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
     scatter_fn = to_computation(:scatter_add_addition, args, state, binary_op_fun(:add))
 
-    indices_shape = op_shape(indices)
-    indices_rank = tuple_size(indices_shape)
-    axes = axes_for_rank(indices_rank)
-
-    indices_exla_shape = EXLA.Op.get_shape(indices)
-
-    axes_range = 0..(indices_rank-1)
-
-    iotas =
-      Enum.map(axes_range, fn axis ->
-        EXLA.Op.iota(state.builder, indices_exla_shape, axis)
-      end)
-
-    new_axis_shape = Tuple.append(indices_shape, 1)
-
-    indices =
-      iotas
-      |> List.replace_at(axis, indices)
-      |> Enum.map(&EXLA.Op.reshape(&1, new_axis_shape))
-      |> EXLA.Op.concatenate(indices_rank)
-
+    rank = target |> op_shape() |> tuple_size()
+    axes = axes_for_rank(rank)
 
     EXLA.Op.scatter(
       target,
       indices,
       updates,
       scatter_fn,
-      indices_rank,
+      rank,
       [],
       axes,
       axes
