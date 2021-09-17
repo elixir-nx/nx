@@ -150,9 +150,9 @@ defmodule Nx do
   a scalar between 0 and the dimension size. Out of bound dynamic indexes
   are always clamped to the tensor dimensions:
 
-      iex> one = Nx.tensor(1)
+      iex> two = Nx.tensor(2)
       iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> t[one][one]
+      iex> t[two][two]
       #Nx.Tensor<
         s64
         4
