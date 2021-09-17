@@ -1176,6 +1176,48 @@ defmodule EXLA.DefnExprTest do
         ]
       ]) == scatter_add(target, indices, updates)
     end
+
+    test "scatter_add works for multi-dim tensor with other indices/updates shape" do
+      target =
+        Nx.broadcast(0, {2, 3, 4})
+
+      indices = Nx.tensor([[
+        [
+          [0, 0, 0],
+          [0, 0, 1],
+          [0, 0, 0]
+        ],
+        [
+          [1, 2, 2],
+          [1, 2, 3],
+          [1, 0, 3]
+        ]
+      ]])
+
+      updates = Nx.tensor([[
+        [
+        1,
+        1,
+        -1],
+        [
+        -1,
+        3,
+        4
+      ]]])
+
+      assert Nx.tensor([
+        [
+        [0, 1, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0]
+        ],
+        [
+          [0, 0, 0, 4],
+          [0, 0, 0, 0],
+          [0, 0, -1, 3]
+        ]
+      ]) == scatter_add(target, indices, updates)
+    end
   end
 
   describe "all?" do
