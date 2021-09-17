@@ -33,7 +33,7 @@ defmodule EXLA.MixProject do
   defp deps do
     [
       {:nx, path: "../nx"},
-      {:xla, "~> 0.1.0", runtime: false, github: "elixir-nx/xla"},
+      {:xla, "~> 0.1.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.23", only: :dev}
