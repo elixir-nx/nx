@@ -1254,17 +1254,29 @@ ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
   xla::ScatterDimensionNumbers scatter_dim_numbers;
 
   scatter_dim_numbers.set_index_vector_dim(index_vector_dim);
-  scatter_dim_numbers.set_update_window_dims(update_window_dims);
-  scatter_dim_numbers.set_inserted_window_dims(inserted_window_dims);
-  scatter_dim_numbers.set_scatter_dims_to_operand_dims(scatter_dims_to_operand_dims);
 
-      xla::XlaOp op = xla::Scatter(
-          *target,
-          *indices,
-          *updates,
-          *scatter_fn,
-          scatter_dim_numbers,
-          false);
+  for (size_t i = 0; i < update_window_dims.size(); i++)
+  {
+    scatter_dim_numbers.set_update_window_dims(i, update_window_dims[i]);
+  }
+
+  for (size_t i = 0; i < inserted_window_dims.size(); i++)
+  {
+    scatter_dim_numbers.set_inserted_window_dims(i, inserted_window_dims[i]);
+  }
+
+  for (size_t i = 0; i < scatter_dims_to_operand_dims.size(); i++)
+  {
+    scatter_dim_numbers.set_scatter_dims_to_operand_dims(i, scatter_dims_to_operand_dims[i]);
+  }
+
+  xla::XlaOp op = xla::Scatter(
+      *target,
+      *indices,
+      *updates,
+      *scatter_fn,
+      scatter_dim_numbers,
+      false);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
