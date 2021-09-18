@@ -2373,6 +2373,7 @@ static ErlNifFunc exla_funcs[] = {
   {"outfeed", 3, outfeed},
   {"create_token", 1, create_token},
   // Log Sink
-  {"start_log_sink", 1, start_log_sink}};
+  {"start_log_sink", 1, start_log_sink}
+};
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);
