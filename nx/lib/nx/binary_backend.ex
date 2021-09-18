@@ -1849,9 +1849,14 @@ defmodule Nx.BinaryBackend do
         data = for <<match!(x, 0) <- data_bin>>, do: x
 
         for <<match!(x, 1) <- idx_bin>>, into: <<>> do
-          index = read!(x, 1)
+          idx = read!(x, 1)
 
-          val = Enum.at(data, index)
+          if idx < 0 or idx >= elem(tensor.shape, axis) do
+            raise ArgumentError,
+                  "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(tensor.shape)}"
+          end
+
+          val = Enum.at(data, idx)
           <<write!(val, 2)>>
         end
       end
