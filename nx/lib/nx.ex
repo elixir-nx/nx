@@ -7588,8 +7588,7 @@ defmodule Nx do
         ]
       >
   """
-  def put_slice(tensor, start_indices, slice)
-      when is_list(start_indices) do
+  def put_slice(tensor, start_indices, slice) when is_list(start_indices) do
     %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
     %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
 
