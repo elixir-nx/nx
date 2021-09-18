@@ -1574,7 +1574,7 @@ defmodule Nx.BinaryBackend do
   @impl true
   def scatter_add(
         %T{} = out,
-        %T{shape: shape} = target,
+        %T{shape: shape, type: {_, target_size}} = target,
         %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
         %T{shape: {indices_rows}} = updates,
         _opts
@@ -1582,23 +1582,29 @@ defmodule Nx.BinaryBackend do
     indices_bin_list =
       indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
 
-    indices_list =
-      match_types [indices.type] do
-        for idx <- indices_bin_list do
-          {_, reversed} =
-            for <<match!(x, 0) <- idx>>, reduce: {Tuple.to_list(shape), []} do
-              {[current_dim | tl], acc} ->
-                item = read!(x, 0)
+    target_byte_size = div(target_size, 8)
 
-                unless item < current_dim do
-                  # TO-DO: better error message
-                  raise ArgumentError, "invalid index received for tensor"
+    offsets_list =
+      match_types [indices.type] do
+        for idx_bin <- indices_bin_list do
+          idx = for <<match!(x, 0) <- idx_bin>>, do: read!(x, 0)
+
+          {offset, []} =
+            idx
+            |> Enum.with_index()
+            |> Enum.reduce(
+              {0, Tuple.to_list(shape)},
+              fn {idx, axis}, {offset, [dim_size | shape]} ->
+                if idx < 0 or idx >= dim_size do
+                  raise ArgumentError,
+                        "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
                 end
 
-                {tl, [item | acc]}
-            end
+                {offset + idx * Enum.product(shape), shape}
+              end
+            )
 
-          Enum.reverse(reversed)
+          offset * target_byte_size
         end
       end
 
@@ -1607,27 +1613,36 @@ defmodule Nx.BinaryBackend do
         for <<match!(x, 0) <- to_binary(updates)>>, do: read!(x, 0)
       end
 
-    indices_with_updates =
-      indices_list
+    {offsets_with_updates, last_offset} =
+      offsets_list
       |> Enum.zip(updates_list)
-      |> Enum.group_by(fn {idx, _} -> idx end, fn {_, upd} -> upd end)
-      |> Enum.map(fn {idx, upds} -> {idx, Enum.sum(upds)} end)
+      |> Enum.group_by(fn {off, _} -> off end, fn {_, upd} -> upd end)
+      |> Enum.sort_by(fn {off, _} -> off end)
+      |> Enum.map_reduce(0, fn {next_offset, upds}, previous_offset ->
+        {{
+           previous_offset + target_byte_size,
+           next_offset,
+           Enum.sum(upds)
+         }, next_offset}
+      end)
 
-    for {idx, upd} <- indices_with_updates, reduce: target do
-      t ->
-        put_slice(
-          out,
-          t,
-          idx,
-          Nx.tensor(upd) |> Nx.reshape(Tuple.duplicate(1, length(idx))),
-          fn x, y ->
-            x = from_binary(%T{names: [], shape: {}, type: t.type}, x)
-            y = from_binary(%T{names: [], shape: {}, type: updates.type}, y)
+    target_binary = to_binary(target)
 
-            Nx.add(x, y) |> Nx.as_type(out.type) |> Nx.to_binary()
-          end
-        )
-    end
+    result =
+      for {previous, current, update} <- offsets_with_updates, into: <<>> do
+        before_offset = binary_part(target_binary, previous, max(current - previous, 0))
+
+        element = binary_part(target_binary, current, target_byte_size)
+
+        updated_element =
+          scalar_to_binary(binary_to_number(element, target.type) + update, out.type)
+
+        before_offset <> updated_element
+      end
+
+    last_offset_bits = (last_offset + target_byte_size) * 8
+    <<_::size(last_offset_bits), tail::bitstring>> = target_binary
+    from_binary(out, result <> tail)
   end
 
   @impl true

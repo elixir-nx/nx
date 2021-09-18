@@ -4292,25 +4292,25 @@ defmodule Nx do
 
   ### Examples
 
-      iex> t = Nx.broadcast(0, {1, 2, 3})
+      iex> t = Nx.iota({1, 2, 3})
       #Nx.Tensor<
         s64[1][2][3]
         [
           [
-            [0, 0, 0],
-            [0, 0, 0]
+            [0, 1, 2],
+            [3, 4, 5]
           ]
         ]
       >
-      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2]])
-      iex> updates = Nx.tensor([1, 3, 1, -2])
+      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]])
+      iex> updates = Nx.tensor([1, 3, 1, -2, 5])
       iex> Nx.scatter_add(t, indices, updates)
       #Nx.Tensor<
         s64[1][2][3]
         [
           [
-            [2, 0, -2],
-            [0, 3, 0]
+            [2, 1, 0],
+            [3, 7, 10]
           ]
         ]
       >
@@ -4332,7 +4332,7 @@ defmodule Nx do
   >
   iex> num_elements = t |> Nx.shape() |> Tuple.product()
   iex> iotas = Enum.map(0..(Nx.rank(t) - 1)//1, fn axis -> t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements, 1}) end)
-  iex> iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1})) |> IO.inspect()
+  iex> iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1}))
   iex> indices = Nx.concatenate(iotas, axis: 1)
   iex> Nx.scatter_add(Nx.broadcast(0, Nx.shape(t)), indices, Nx.reshape(t, {num_elements}))
   #Nx.Tensor<
