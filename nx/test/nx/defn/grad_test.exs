@@ -2503,6 +2503,58 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "take_along_axis" do
+    defn grad_sum_take_along_axis(t, i) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.take_along_axis(i, axis: 1)
+          |> Nx.sum()
+        end
+      )
+    end
+
+    defn grad_sum_take_along_axis_power(t, i) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.power(2)
+          |> Nx.take_along_axis(
+            Nx.tensor([
+              [0, 0, 0],
+              [1, 1, 0],
+              [0, 1, 1]
+            ]),
+            axis: 1
+          )
+          |> Nx.sum()
+        end
+      )
+    end
+
+    test "computes gradient" do
+      assert Nx.tensor([
+               [3, 0],
+               [1, 2],
+               [1, 2]
+             ]) ==
+               grad_sum_take_along_axis(
+                 Nx.tensor([
+                   [0, 1],
+                   [2, 3],
+                   [4, 5]
+                 ]),
+                 Nx.tensor([
+                   [0, 0, 0],
+                   [1, 1, 0],
+                   [0, 1, 1]
+                 ])
+               )
+    end
+  end
+
   describe "not implemented" do
     defn grad_reduce(t), do: grad(t, &Nx.reduce(&1, 0, fn x, y -> x + y end))
 

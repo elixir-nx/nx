@@ -507,6 +507,36 @@ defmodule Nx.Defn.Grad do
     to_grad(t, g, cache)
   end
 
+  defp grad(:take_along_axis, [t, i, axis], _ans, g, cache) do
+    num_elements = i |> Nx.shape() |> Tuple.product()
+
+    iotas =
+      Enum.map(0..(Nx.rank(g) - 1)//1, fn axis ->
+        i |> Nx.iota(axis: axis, backend: Nx.Defn.Expr) |> Nx.reshape({num_elements, 1})
+      end)
+
+    iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1}))
+
+    indices = Nx.concatenate(iotas, axis: 1)
+
+    updates_shape = {indices |> Nx.shape() |> elem(0)}
+
+    IO.inspect(indices, label: "indices")
+
+    g =
+      t
+      |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
+      |> IO.inspect(label: "zeros")
+      |> Nx.scatter_add(
+        indices,
+        Expr.broadcast(%{indices | shape: updates_shape}, 1, updates_shape, [nil])
+        |> IO.inspect(label: "ones")
+      )
+      |> IO.inspect(label: "scatter_add")
+
+    to_grad(t, g, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
