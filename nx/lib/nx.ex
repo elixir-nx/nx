@@ -4315,7 +4315,7 @@ defmodule Nx do
         ]
       >
 
-  Type promotions should happen automatically
+  Type promotions should happen automatically.
 
       iex> Nx.scatter_add(Nx.tensor([1.0]), Nx.tensor([[0], [0]]), Nx.tensor([1, 1]))
       #Nx.Tensor<
