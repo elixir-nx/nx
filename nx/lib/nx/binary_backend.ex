@@ -1572,6 +1572,14 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def scatter_add(out, target, indices, updates, _opts) do
+    rank = Nx.rank(target)
+    axes = Enum.to_list(0..(rank - 1)//1)
+
+    raise "not implemented"
+  end
+
+  @impl true
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor
