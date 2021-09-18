@@ -4343,8 +4343,24 @@ defmodule Nx do
       [1, 0]
     ]
   >
+
+  ### Error cases
+
+      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
+      ** (ArgumentError) indices must be a rank 2 tensor, got: 3
+
+      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
+      ** (ArgumentError) updates must be a rank 1 tensor, got: 2
+
+      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
+      ** (ArgumentError) expected indices to have shape {*, 2}, got: {1, 3}
+
+      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
+      ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
   """
   def scatter_add(target, indices, updates, opts \\ []) do
+    Nx.Shape.scatter_add(target, indices, updates)
+
     impl!(target).scatter_add(target, target, indices, updates, opts)
   end
 

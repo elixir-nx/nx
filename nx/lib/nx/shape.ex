@@ -808,6 +808,32 @@ defmodule Nx.Shape do
 
   defp validate_strides!(_, _), do: :ok
 
+  @doc "Validates the input shapes for `Nx.scatter_add/3`"
+  def scatter_add(
+        %Nx.Tensor{shape: target_shape},
+        %Nx.Tensor{shape: indices_shape},
+        %Nx.Tensor{shape: updates_shape}
+      ) do
+    case {indices_shape, updates_shape} do
+      _ when tuple_size(indices_shape) != 2 ->
+        raise(ArgumentError, "indices must be a rank 2 tensor, got: #{tuple_size(indices_shape)}")
+
+      _ when tuple_size(updates_shape) != 1 ->
+        raise(ArgumentError, "updates must be a rank 1 tensor, got: #{tuple_size(updates_shape)}")
+
+      {{_, n}, _} when n != tuple_size(target_shape) ->
+        raise ArgumentError,
+              "expected indices to have shape {*, #{tuple_size(target_shape)}}, got: #{inspect(indices_shape)}"
+
+      {{n, _}, {m}} when n != m ->
+        raise ArgumentError,
+              "expected updates tensor to match the first axis of indices tensor with shape #{inspect(indices_shape)}, got {#{m}}"
+
+      _ ->
+        :ok
+    end
+  end
+
   @doc """
   Output shape after a squeeze operation.
 
