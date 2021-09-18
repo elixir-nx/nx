@@ -2639,6 +2639,26 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "gather" do
+    defn gather(t, idx), do: Nx.gather(t, idx)
+
+    test "1d result" do
+      assert gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[1, 1], [0, 1], [1, 0]])) ==
+               Nx.tensor([4, 2, 3])
+
+      assert gather(
+               Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]),
+               Nx.tensor([[0, 0, 0], [0, 1, 1], [1, 1, 1]])
+             ) ==
+               Nx.tensor([1, 12, 112])
+    end
+
+    test "2d indices" do
+      assert gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]])) ==
+               Nx.tensor([[4, 1], [3, 2]])
+    end
+  end
+
   describe "reverse" do
     defn reverse(t), do: Nx.reverse(t)
     defn reverse1(t), do: Nx.reverse(t, axes: [1])

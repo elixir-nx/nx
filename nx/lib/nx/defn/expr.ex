@@ -676,6 +676,12 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def gather(out, tensor, indices) do
+    {[tensor, indices], context} = to_exprs([tensor, indices])
+    expr(out, context, :gather, [tensor, indices])
+  end
+
+  @impl true
   def reverse(out, tensor, axes) do
     tensor = to_expr(tensor)
     expr(out, tensor.data.context, :reverse, [tensor, axes])

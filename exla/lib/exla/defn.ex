@@ -767,6 +767,27 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(:gather, [tensor, indices], _ans, _state) do
+    tensor_rank = tensor |> op_shape() |> tuple_size()
+    indices_rank = indices |> op_shape() |> tuple_size()
+
+    index_vector_dim = indices_rank - 1
+    slice_sizes = List.duplicate(1, tensor_rank)
+    offset_dims = []
+    collapsed_slice_dims = axes_for_rank(tensor_rank)
+    start_index_map = axes_for_rank(tensor_rank)
+
+    EXLA.Op.gather(
+      tensor,
+      indices,
+      index_vector_dim,
+      slice_sizes,
+      offset_dims,
+      collapsed_slice_dims,
+      start_index_map
+    )
+  end
+
   defp to_operator(:reverse, [tensor, axes], _ans, _state) do
     EXLA.Op.reverse(tensor, axes)
   end

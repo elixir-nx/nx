@@ -1286,6 +1286,55 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Returns the shape after a gather.
+
+  ## Examples
+
+      iex> Nx.Shape.gather({2, 3}, {10, 2})
+      {{10}, [nil]}
+
+      iex> Nx.Shape.gather({2, 3}, {4, 5, 2})
+      {{4, 5}, [nil, nil]}
+
+      iex> Nx.Shape.gather({2}, {4, 5, 1})
+      {{4, 5}, [nil, nil]}
+
+      iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 5})
+      {{3, 3}, [nil, nil]}
+
+      iex> Nx.Shape.gather({2, 2, 2}, {3})
+      {{}, []}
+
+  ### Error cases
+
+      iex> Nx.Shape.gather({2, 3}, {})
+      ** (ArgumentError) expected indices rank to be at least 1, got: 0
+
+      iex> Nx.Shape.gather({2, 3}, {1})
+      ** (ArgumentError) expected the last indices dimension size (1) to match the tensor rank (2)
+  """
+  def gather(shape, indices_shape) do
+    shape = Tuple.to_list(shape)
+    rank = length(shape)
+    indices_shape = Tuple.to_list(indices_shape)
+
+    if indices_shape == [] do
+      raise ArgumentError, "expected indices rank to be at least 1, got: 0"
+    end
+
+    {outer_shape, [last_size]} = Enum.split(indices_shape, -1)
+
+    if last_size != rank do
+      raise ArgumentError,
+            "expected the last indices dimension size (#{last_size}) to match the tensor rank (#{rank})"
+    end
+
+    shape = List.to_tuple(outer_shape)
+    names = List.duplicate(nil, tuple_size(shape))
+    {shape, names}
+  end
+
+  @doc """
   Returns the shape and names after a concat.
 
   ## Examples
