@@ -487,14 +487,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def scatter_add(out, target, indices, updates, opts) do
+  def scatter_add(out, target, indices, updates, _opts) do
     {[target, indices, updates], context} = to_exprs([target, indices, updates])
 
     expr(out, context, :scatter_add, [
       target,
       indices,
-      updates,
-      opts[:axis]
+      updates
     ])
   end
 

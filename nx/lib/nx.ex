@@ -4284,28 +4284,68 @@ defmodule Nx do
   Performs a scatter-add operation on the `target` tensor,
   adding the `updates` into the corresponding `indices` positions.
 
-  This operation is the grad for gather-like operations such as
+  This operation is the grad for `gather/2` and gather-like operations such as
   `take/3` and `take_along_axis/3`.
 
-  `indices` must be a tensor of indices along a given axis (see the options below).
-  `argsort/2` produces suitable indices for this function.
+  `indices` must be a fully qualified tensor of shape `{n, Nx.rank(target)}`, with `n`
+  being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
+
+  ### Examples
+
+      iex> t = Nx.broadcast(0, {1, 2, 3})
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [0, 0, 0],
+          [0, 0, 0]
+        ]
+      >
+      iex> indices = Nx.tensor([
+        [0, 0],
+        [1, 1],
+        [0, 0],
+        [0, 1]
+      ])
+      iex> updates = Nx.tensor([1, 3, 1, -2])
+      iex> Nx.scatter_add(t, indices, updates)
+      #Nx.Tensor<
+        s64[1][2][3]
+        [
+          [2, 0, -2],
+          [0, 3, 0]
+        ]
+      >
+
+  One can also convert the indices produced by argsort into suitable
+  indices for scatter-add as below. The following example emulates `take_along_axis/3`
+  with `scatter_add/3`
+
+  iex> t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+  iex> axis = 1
+  iex> i = Nx.argsort(t, axis: axis, direction: :desc)
+  #Nx.Tensor<
+    s64[3][2]
+    [
+      [1, 0],
+      [1, 0],
+      [0, 1]
+    ]
+  >
+  iex> num_elements = t |> Nx.shape() |> Tuple.product()
+  iex> iotas = Enum.map(0..(Nx.rank(t) - 1)//1, fn axis -> t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements}) end)
+  iex> iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements}))
+  iex> indices = Nx.concatenate(iotas, Nx.rank(t))
+  iex> Nx.scatter_add(Nx.broadcast(0, Nx.shape(t)), indices, Nx.reshape(t, {num_elements}))
+  #Nx.Tensor<
+    s64[3][2]
+    [
+      [5, 4],
+      [3, 2],
+      [1, 0]
+    ]
+  >
   """
   def scatter_add(target, indices, updates, opts \\ []) do
-    opts = keyword!(opts, axis: 1)
-
-    # nx_take = fn %{shape: shape} = t, i ->
-    #   shape_l = Tuple.to_list(shape)
-    #   num_el = Enum.reduce(shape_l, &*/2)
-
-    #   flat_dim =
-    #     List.duplicate(1, tuple_size(shape)) |> List.replace_at(0, num_el) |> List.to_tuple()
-
-    #   Nx.take_along_axis(t, i |> Nx.reshape(flat_dim) |> Nx.tile(List.replace_at(shape_l, 0, 1)),
-    #     axis: 0
-    #   )
-    #   |> Nx.reshape(List.replace_at(shape_l, 0, shape_l) |> List.flatten() |> List.to_tuple())
-    # end
-
     impl!(target).scatter_add(target, target, indices, updates, opts)
   end
 
