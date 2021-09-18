@@ -4319,30 +4319,50 @@ defmodule Nx do
   indices for scatter-add as below. The following example emulates `take_along_axis/3`
   with `scatter_add/3`
 
-  iex> t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
-  iex> axis = 1
-  iex> i = Nx.argsort(t, axis: axis, direction: :desc)
-  #Nx.Tensor<
-    s64[3][2]
-    [
-      [1, 0],
-      [1, 0],
-      [0, 1]
-    ]
-  >
-  iex> num_elements = t |> Nx.shape() |> Tuple.product()
-  iex> iotas = Enum.map(0..(Nx.rank(t) - 1)//1, fn axis -> t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements, 1}) end)
-  iex> iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1}))
-  iex> indices = Nx.concatenate(iotas, axis: 1)
-  iex> Nx.scatter_add(Nx.broadcast(0, Nx.shape(t)), indices, Nx.reshape(t, {num_elements}))
-  #Nx.Tensor<
-    s64[3][2]
-    [
-      [5, 4],
-      [3, 2],
-      [1, 0]
-    ]
-  >
+      iex> t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      iex> axis = 1
+      iex> i = Nx.argsort(t, axis: axis, direction: :desc)
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [1, 0],
+          [1, 0],
+          [0, 1]
+        ]
+      >
+      iex> num_elements = t |> Nx.shape() |> Tuple.product()
+      iex> iotas = Enum.map(0..(Nx.rank(t) - 1)//1, fn axis -> t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements, 1}) end)
+      iex> iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1}))
+      iex> indices = Nx.concatenate(iotas, axis: 1)
+      iex> Nx.scatter_add(Nx.broadcast(0, Nx.shape(t)), indices, Nx.reshape(t, {num_elements}))
+      #Nx.Tensor<
+        s64[3][2]
+        [
+          [5, 4],
+          [3, 2],
+          [1, 0]
+        ]
+      >
+
+  Type promotions should happen automatically
+
+      iex> Nx.scatter_add(Nx.tensor([1.0]), Nx.tensor([[0], [0]]), Nx.tensor([1, 1]))
+      #Nx.Tensor<
+        f32[1]
+        [3.0]
+      >
+
+      iex> Nx.scatter_add(Nx.tensor([1]), Nx.tensor([[0], [0]]), Nx.tensor([1.0, 1.0]))
+      #Nx.Tensor<
+        f32[1]
+        [3.0]
+      >
+
+      iex> Nx.scatter_add(Nx.tensor([1], type: {:u, 32}), Nx.tensor([[0], [0]]), Nx.tensor([1, 1], type: {:u, 64}))
+      #Nx.Tensor<
+        u64[1]
+        [3]
+      >
 
   ### Error cases
 
@@ -4359,9 +4379,15 @@ defmodule Nx do
       ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
   """
   def scatter_add(target, indices, updates, opts \\ []) do
+    %T{} = target = to_tensor(target)
+    %T{} = indices = to_tensor(indices)
+    %T{} = updates = to_tensor(updates)
+
+    type = binary_type(target, updates)
+
     Nx.Shape.scatter_add(target, indices, updates)
 
-    impl!(target).scatter_add(target, target, indices, updates, opts)
+    impl!(target).scatter_add(%{target | type: type}, target, indices, updates, opts)
   end
 
   ## Unary ops
