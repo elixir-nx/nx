@@ -521,18 +521,13 @@ defmodule Nx.Defn.Grad do
 
     updates_shape = {indices |> Nx.shape() |> elem(0)}
 
-    IO.inspect(indices, label: "indices")
-
     g =
       t
       |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
-      |> IO.inspect(label: "zeros")
       |> Nx.scatter_add(
         indices,
         Expr.broadcast(%{indices | shape: updates_shape}, 1, updates_shape, [nil])
-        |> IO.inspect(label: "ones")
       )
-      |> IO.inspect(label: "scatter_add")
 
     to_grad(t, g, cache)
   end

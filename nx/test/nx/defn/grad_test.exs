@@ -2521,14 +2521,7 @@ defmodule Nx.Defn.GradTest do
         fn t ->
           t
           |> Nx.power(2)
-          |> Nx.take_along_axis(
-            Nx.tensor([
-              [0, 0, 0],
-              [1, 1, 0],
-              [0, 1, 1]
-            ]),
-            axis: 1
-          )
+          |> Nx.take_along_axis(i, axis: 1)
           |> Nx.sum()
         end
       )
@@ -2541,6 +2534,24 @@ defmodule Nx.Defn.GradTest do
                [1, 2]
              ]) ==
                grad_sum_take_along_axis(
+                 Nx.tensor([
+                   [0, 1],
+                   [2, 3],
+                   [4, 5]
+                 ]),
+                 Nx.tensor([
+                   [0, 0, 0],
+                   [1, 1, 0],
+                   [0, 1, 1]
+                 ])
+               )
+
+      assert Nx.tensor([
+               [0.0, 0.0],
+               [4.0, 12.0],
+               [8.0, 20.0]
+             ]) ==
+               grad_sum_take_along_axis_power(
                  Nx.tensor([
                    [0, 1],
                    [2, 3],
