@@ -519,14 +519,12 @@ defmodule Nx.Defn.Grad do
 
     indices = Nx.concatenate(iotas, axis: 1)
 
-    updates_shape = {indices |> Nx.shape() |> elem(0)}
-
     g =
       t
       |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
       |> Nx.scatter_add(
         indices,
-        Expr.broadcast(%{indices | shape: updates_shape}, 1, updates_shape, [nil])
+        Nx.gather(g, indices)
       )
 
     to_grad(t, g, cache)
