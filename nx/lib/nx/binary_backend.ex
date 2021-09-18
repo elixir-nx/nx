@@ -1648,10 +1648,10 @@ defmodule Nx.BinaryBackend do
           updated_element =
             scalar_to_binary(binary_to_number(element, target.type) + update, out.type)
 
-          {traversed <> before_offset <> updated_element, to_traverse}
+          {[traversed | [before_offset, updated_element]], to_traverse}
       end
 
-    from_binary(out, result <> tail)
+    from_binary(out, IO.iodata_to_binary([result, tail]))
   end
 
   @impl true
