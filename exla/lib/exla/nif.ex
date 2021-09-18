@@ -141,6 +141,18 @@ defmodule EXLA.NIF do
       ),
       do: :erlang.nif_error(:undef)
 
+  def scatter(
+        _target,
+        _indices,
+        _updates,
+        _scatter_fn,
+        _indices_rank,
+        _update_window_dims,
+        _inserted_window_dims,
+        _index_axes_to_target_axes
+      ),
+      do: :erlang.nif_error(:undef)
+
   def map(_builder, _operand, _computation, _dimensions),
     do: :erlang.nif_error(:undef)
 

@@ -1572,6 +1572,95 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def scatter_add(
+        %T{} = out,
+        %T{shape: shape, type: {_, target_size}} = target,
+        %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
+        %T{shape: {indices_rows}} = updates,
+        _opts
+      ) do
+    indices_bin_list =
+      indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
+
+    target_byte_size = div(target_size, 8)
+
+    offsets_list =
+      match_types [indices.type] do
+        for idx_bin <- indices_bin_list do
+          idx = for <<match!(x, 0) <- idx_bin>>, do: read!(x, 0)
+
+          {offset, []} =
+            idx
+            |> Enum.with_index()
+            |> Enum.reduce(
+              {0, Tuple.to_list(shape)},
+              fn {idx, axis}, {offset, [dim_size | shape]} ->
+                if idx < 0 or idx >= dim_size do
+                  raise ArgumentError,
+                        "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+                end
+
+                {offset + idx * Enum.product(shape), shape}
+              end
+            )
+
+          offset * target_byte_size
+        end
+      end
+
+    updates_list =
+      match_types [updates.type] do
+        for <<match!(x, 0) <- to_binary(updates)>>, do: read!(x, 0)
+      end
+
+    {offsets_with_updates, _last_offset} =
+      offsets_list
+      |> Enum.zip(updates_list)
+      |> Enum.group_by(fn {off, _} -> off end, fn {_, upd} -> upd end)
+      |> Enum.sort_by(fn {off, _} -> off end)
+      |> Enum.map_reduce(0, fn {next_offset, upds}, previous_offset ->
+        {{
+           previous_offset + target_byte_size,
+           next_offset,
+           Enum.sum(upds)
+         }, next_offset}
+      end)
+
+    target_binary = to_binary(target)
+
+    {result, tail} =
+      for {previous, current, update} <- offsets_with_updates, reduce: {<<>>, target_binary} do
+        {traversed, to_traverse} ->
+          before_slice_size = max(current - previous, 0)
+          before_offset = binary_part(to_traverse, 0, before_slice_size)
+
+          # this can be a list of binaries because we are accumulation an iodata list
+          before_offset =
+            match_types [target.type] do
+              for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+            end
+
+          element = binary_part(to_traverse, before_slice_size, target_byte_size)
+
+          total_size = byte_size(to_traverse)
+
+          to_traverse =
+            binary_part(
+              to_traverse,
+              before_slice_size + target_byte_size,
+              total_size - (before_slice_size + target_byte_size)
+            )
+
+          updated_element =
+            scalar_to_binary(binary_to_number(element, target.type) + update, out.type)
+
+          {[traversed | [before_offset, updated_element]], to_traverse}
+      end
+
+    from_binary(out, IO.iodata_to_binary([result, tail]))
+  end
+
+  @impl true
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor
@@ -1648,7 +1737,7 @@ defmodule Nx.BinaryBackend do
   defp top_dimension_slice?(_, _, _), do: false
 
   @impl true
-  def put_slice(out, tensor, start_indices, slice) do
+  def put_slice(out, tensor, start_indices, slice, combine_fn \\ fn _prev, new -> new end) do
     %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
     %T{shape: slice_shape} = slice = as_type(out, slice)
 
@@ -1675,11 +1764,13 @@ defmodule Nx.BinaryBackend do
     {_, data} =
       for offset <- offsets, reduce: {to_binary(slice), to_binary(tensor)} do
         {<<cur_elem::size(size)-bitstring, rest_of_slice::bitstring>>, binary} ->
-          <<before::size(offset)-bitstring, _::size(size)-bitstring, rest_of_tensor::bitstring>> =
-            binary
+          <<before::size(offset)-bitstring, prev_elem::size(size)-bitstring,
+            rest_of_tensor::bitstring>> = binary
+
+          new_elem = combine_fn.(prev_elem, cur_elem)
 
           {rest_of_slice,
-           <<before::size(offset)-bitstring, cur_elem::size(size)-bitstring,
+           <<before::size(offset)-bitstring, new_elem::size(size)-bitstring,
              rest_of_tensor::bitstring>>}
       end
 

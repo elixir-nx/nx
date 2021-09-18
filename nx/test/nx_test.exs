@@ -1592,4 +1592,40 @@ defmodule NxTest do
       end)
     end
   end
+
+  describe "scatter_add/3" do
+    test "can emulate take_along_axis" do
+      # One can also convert the indices produced by argsort into suitable
+      # indices for scatter-add as below.
+      # The following example emulates `take_along_axis/3` with `scatter_add/3`
+
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      axis = 1
+      i = Nx.argsort(t, axis: axis, direction: :desc)
+
+      assert Nx.tensor([
+               [1, 0],
+               [1, 0],
+               [0, 1]
+             ]) == i
+
+      num_elements = t |> Nx.shape() |> Tuple.product()
+
+      iotas =
+        Enum.map(0..(Nx.rank(t) - 1)//1, fn axis ->
+          t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements, 1})
+        end)
+
+      iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1}))
+
+      indices = Nx.concatenate(iotas, axis: 1)
+
+      assert Nx.tensor([[5, 4], [3, 2], [1, 0]]) ==
+               Nx.scatter_add(
+                 Nx.broadcast(0, Nx.shape(t)),
+                 indices,
+                 Nx.reshape(t, {num_elements})
+               )
+    end
+  end
 end

@@ -561,6 +561,34 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
+  def scatter(
+        %Op{builder: builder, ref: target},
+        %Op{ref: indices},
+        %Op{ref: updates},
+        %Computation{ref: scatter_fn},
+        indices_rank,
+        update_window_dims,
+        inserted_window_dims,
+        index_dims_to_window_dims
+      )
+      when is_integer(indices_rank) and is_list(update_window_dims) and
+             is_list(inserted_window_dims) and is_list(index_dims_to_window_dims) do
+    ref =
+      EXLA.NIF.scatter(
+        target,
+        indices,
+        updates,
+        scatter_fn,
+        indices_rank,
+        update_window_dims,
+        inserted_window_dims,
+        index_dims_to_window_dims
+      )
+      |> unwrap!()
+
+    %Op{builder: builder, ref: ref}
+  end
+
   def map(%Op{builder: builder, ref: operand}, %Computation{ref: function}, dimensions) do
     ref = EXLA.NIF.map(builder, operand, function, dimensions) |> unwrap!()
     %Op{builder: builder, ref: ref}

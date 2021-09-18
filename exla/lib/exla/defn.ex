@@ -619,6 +619,54 @@ defmodule EXLA.Defn do
     )
   end
 
+  defp to_operator(
+         :scatter_add,
+         [target, indices, updates],
+         %{type: type},
+         state
+       ) do
+    target = to_type(target, type)
+    updates = to_type(updates, type)
+
+    args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
+    scatter_fn = to_computation(:scatter_add_addition, args, state, binary_op_fun(:add))
+
+    rank = target |> op_shape() |> tuple_size()
+    # indices_rank is guaranteed to be 2 by Nx.Shape
+    indices_rank = 2
+    rank_diff = rank - indices_rank + 1
+
+    indices_shape = op_shape(indices)
+
+    indices_shape =
+      [List.duplicate(1, rank_diff) | Tuple.to_list(indices_shape)]
+      |> List.flatten()
+      |> List.to_tuple()
+
+    indices = EXLA.Op.reshape(indices, indices_shape)
+
+    # If indices has shape {x, y}, updates is guaranteed by Nx.Shape to
+    # have shape {x}, so if we reshaped indices to {..., x, y}, we need to
+    # reshape updates to {..., x}
+
+    updates_shape = Tuple.delete_at(indices_shape, tuple_size(indices_shape) - 1)
+
+    updates = EXLA.Op.reshape(updates, updates_shape)
+
+    axes = axes_for_rank(rank)
+
+    EXLA.Op.scatter(
+      target,
+      indices,
+      updates,
+      scatter_fn,
+      rank,
+      [],
+      axes,
+      axes
+    )
+  end
+
   defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
     arg = to_type(arg, type)
     comp = recur_computation(fun, type, state)
@@ -685,7 +733,7 @@ defmodule EXLA.Defn do
     indices_shape = op_shape(indices)
     indices_rank = tuple_size(indices_shape)
 
-    axes_range = 0..(indices_rank-1)//1
+    axes_range = 0..(indices_rank - 1)//1
 
     index_vector_dim = indices_rank
     slice_sizes = List.duplicate(1, indices_rank)
