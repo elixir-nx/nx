@@ -1634,6 +1634,12 @@ defmodule Nx.BinaryBackend do
           before_slice_size = max(current - previous, 0)
           before_offset = binary_part(to_traverse, 0, before_slice_size)
 
+          # this can be a list of binaries because we are accumulation an iodata list
+          before_offset =
+            match_types [target.type] do
+              for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+            end
+
           element = binary_part(to_traverse, before_slice_size, target_byte_size)
 
           total_size = byte_size(to_traverse)
