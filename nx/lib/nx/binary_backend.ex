@@ -1613,7 +1613,7 @@ defmodule Nx.BinaryBackend do
         for <<match!(x, 0) <- to_binary(updates)>>, do: read!(x, 0)
       end
 
-    {offsets_with_updates, last_offset} =
+    {offsets_with_updates, _last_offset} =
       offsets_list
       |> Enum.zip(updates_list)
       |> Enum.group_by(fn {off, _} -> off end, fn {_, upd} -> upd end)
@@ -1628,20 +1628,29 @@ defmodule Nx.BinaryBackend do
 
     target_binary = to_binary(target)
 
-    result =
-      for {previous, current, update} <- offsets_with_updates, into: <<>> do
-        before_offset = binary_part(target_binary, previous, max(current - previous, 0))
+    {result, tail} =
+      for {previous, current, update} <- offsets_with_updates, reduce: {<<>>, target_binary} do
+        {traversed, to_traverse} ->
+          before_slice_size = max(current - previous, 0)
+          before_offset = binary_part(to_traverse, 0, before_slice_size)
 
-        element = binary_part(target_binary, current, target_byte_size)
+          element = binary_part(to_traverse, before_slice_size, target_byte_size)
 
-        updated_element =
-          scalar_to_binary(binary_to_number(element, target.type) + update, out.type)
+          total_size = byte_size(to_traverse)
 
-        before_offset <> updated_element
+          to_traverse =
+            binary_part(
+              to_traverse,
+              before_slice_size + target_byte_size,
+              total_size - (before_slice_size + target_byte_size)
+            )
+
+          updated_element =
+            scalar_to_binary(binary_to_number(element, target.type) + update, out.type)
+
+          {traversed <> before_offset <> updated_element, to_traverse}
       end
 
-    last_offset_bits = (last_offset + target_byte_size) * 8
-    <<_::size(last_offset_bits), tail::bitstring>> = target_binary
     from_binary(out, result <> tail)
   end
 
