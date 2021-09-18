@@ -2569,7 +2569,7 @@ defmodule EXLA.DefnExprTest do
   end
 
   describe "gather" do
-    defn(gather(t, idx), do: Nx.gather(t, idx))
+    defn gather(t, idx), do: Nx.gather(t, idx)
 
     test "1d result" do
       assert gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[1, 1], [0, 1], [1, 0]])) ==
