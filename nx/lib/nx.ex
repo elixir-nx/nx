@@ -147,12 +147,12 @@ defmodule Nx do
       ** (ArgumentError) index -3 is out of bounds for axis 0 in shape {2}
 
   The index can also be another tensor but in such cases it must be
-  a number between 0 and the dimension size. Out of bound dynamic indexes
+  a scalar between 0 and the dimension size. Out of bound dynamic indexes
   are always clamped to the tensor dimensions:
 
-      iex> one = Nx.tensor(1)
+      iex> two = Nx.tensor(2)
       iex> t = Nx.tensor([[1, 2], [3, 4]])
-      iex> t[one][one]
+      iex> t[two][two]
       #Nx.Tensor<
         s64
         4
@@ -200,7 +200,7 @@ defmodule Nx do
   axes with ranges, it is often desired to use a list:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
-      iex> t[[1..-2//1, 1..2]]
+      iex> t[[1..2, 1..2]]
       #Nx.Tensor<
         s64[2][2]
         [
@@ -212,7 +212,7 @@ defmodule Nx do
   You can mix both ranges and integers in the list too:
 
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
-      iex> t[[1..-2//1, 2]]
+      iex> t[[1..2, 2]]
       #Nx.Tensor<
         s64[2]
         [6, 9]
@@ -7287,7 +7287,9 @@ defmodule Nx do
   The resulting tensor will have the shape of `length` unless
   `:strides` are given.
 
-  It is not possible to slice in reverse.
+  It is not possible to slice in reverse. See `gather/2`,
+  `slice_axis/3`, `take/3`, and `take_along_axis/3` for other ways
+  to retrieve values from a tensor.
 
   ### Examples
 
@@ -7412,7 +7414,9 @@ defmodule Nx do
 
   If the `:strides` is given, it must be strictly greater than zero.
 
-  It is not possible to slice in reverse.
+  It is not possible to slice in reverse. See `gather/2`, `slice/3`,
+  `take/3`, and `take_along_axis/3` for other ways to retrieve values
+  from a tensor.
 
   ## Examples
 
@@ -7532,6 +7536,9 @@ defmodule Nx do
   Passing a multi-dimensional indices tensor only affects the
   resulting shape. Specifically, the given axis in the input shape
   gets replaced with the indices shape.
+
+  See `gather/2`, `slice/3`, `slice_axis/3`, and `take_along_axis/3`
+  for other ways to retrieve values from a tensor.
 
   ## Options
 
@@ -7670,12 +7677,11 @@ defmodule Nx do
   Takes the values from a tensor given an `indices` tensor, along the specified axis.
 
   The `indices` shape must be the same as the `tensor`'s shape, with the exception for
-  the `axis` dimension, which can have arbitrary size.
+  the `axis` dimension, which can have arbitrary size. The returned tensor will have the
+  same shape as the `indices` tensor.
 
-  Arbitrary tensors according to the shape rules are accepted. `Nx.argsort/2` also
-  produces suitable indices for this function, as shown in the examples below.
-
-  See also: `Nx.take/3`, `Nx.sort/2`, `Nx.argsort/2`
+  See `gather/2`, `slice/3`, `slice_axis/3`, and `take/3` for other ways to retrieve
+  values from a tensor.
 
   ## Options
 
@@ -7768,6 +7774,7 @@ defmodule Nx do
       iex> Nx.take_along_axis(tensor, idx, axis: 1)
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
+  @doc type: :shape
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
@@ -7782,6 +7789,55 @@ defmodule Nx do
     shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
 
     impl!(tensor).take_along_axis(%{tensor | shape: shape}, tensor, indices, axis)
+  end
+
+  @doc """
+  Builds a new tensor by taking individual values from the original
+  tensor at the given indices.
+
+  The last dimension in indices must have the same size as the tensor
+  rank, think of it as one value per axis.
+
+  ## Examples
+
+      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[1, 1], [0, 1], [1, 0]]))
+      #Nx.Tensor<
+        s64[3]
+        [4, 2, 3]
+      >
+
+      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[[1, 1], [0, 0]], [[1, 0], [0, 1]]]))
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [4, 1],
+          [3, 2]
+        ]
+      >
+
+      iex> Nx.gather(Nx.tensor([[[1, 2], [11, 12]], [[101, 102], [111, 112]]]), Nx.tensor([[0, 0, 0], [0, 1, 1], [1, 1, 1]]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 12, 112]
+      >
+
+  ### Error cases
+
+      iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: {:f, 32}))
+      ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
+  """
+  @doc type: :shape
+  def gather(tensor, indices) do
+    tensor = to_tensor(tensor)
+    indices = to_tensor(indices)
+
+    unless Nx.Type.integer?(indices.type) do
+      raise ArgumentError, "indices must be an integer tensor, got #{inspect(indices.type)}"
+    end
+
+    {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape)
+
+    impl!(tensor).gather(%{tensor | shape: shape, names: names}, tensor, indices)
   end
 
   @doc """
