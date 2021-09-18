@@ -4296,23 +4296,22 @@ defmodule Nx do
       #Nx.Tensor<
         s64[1][2][3]
         [
-          [0, 0, 0],
-          [0, 0, 0]
+          [
+            [0, 0, 0],
+            [0, 0, 0]
+          ]
         ]
       >
-      iex> indices = Nx.tensor([
-        [0, 0],
-        [1, 1],
-        [0, 0],
-        [0, 1]
-      ])
+      iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2]])
       iex> updates = Nx.tensor([1, 3, 1, -2])
       iex> Nx.scatter_add(t, indices, updates)
       #Nx.Tensor<
         s64[1][2][3]
         [
-          [2, 0, -2],
-          [0, 3, 0]
+          [
+            [2, 0, -2],
+            [0, 3, 0]
+          ]
         ]
       >
 
@@ -4332,9 +4331,9 @@ defmodule Nx do
     ]
   >
   iex> num_elements = t |> Nx.shape() |> Tuple.product()
-  iex> iotas = Enum.map(0..(Nx.rank(t) - 1)//1, fn axis -> t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements}) end)
-  iex> iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements}))
-  iex> indices = Nx.concatenate(iotas, Nx.rank(t))
+  iex> iotas = Enum.map(0..(Nx.rank(t) - 1)//1, fn axis -> t |> Nx.iota(axis: axis) |> Nx.reshape({num_elements, 1}) end)
+  iex> iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1})) |> IO.inspect()
+  iex> indices = Nx.concatenate(iotas, axis: 1)
   iex> Nx.scatter_add(Nx.broadcast(0, Nx.shape(t)), indices, Nx.reshape(t, {num_elements}))
   #Nx.Tensor<
     s64[3][2]
@@ -7573,7 +7572,8 @@ defmodule Nx do
         ]
       >
   """
-  def put_slice(tensor, start_indices, slice) when is_list(start_indices) do
+  def put_slice(tensor, start_indices, slice)
+      when is_list(start_indices) do
     %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
     %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
 

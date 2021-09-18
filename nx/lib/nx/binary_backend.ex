@@ -1572,11 +1572,62 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def scatter_add(out, target, indices, updates, _opts) do
-    rank = Nx.rank(target)
-    axes = Enum.to_list(0..(rank - 1)//1)
+  def scatter_add(
+        %T{} = out,
+        %T{shape: shape} = target,
+        %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
+        %T{shape: {indices_rows}} = updates,
+        _opts
+      ) do
+    indices_bin_list =
+      indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
 
-    raise "not implemented"
+    indices_list =
+      match_types [indices.type] do
+        for idx <- indices_bin_list do
+          {_, reversed} =
+            for <<match!(x, 0) <- idx>>, reduce: {Tuple.to_list(shape), []} do
+              {[current_dim | tl], acc} ->
+                item = read!(x, 0)
+
+                unless item < current_dim do
+                  # TO-DO: better error message
+                  raise ArgumentError, "invalid index received for tensor"
+                end
+
+                {tl, [item | acc]}
+            end
+
+          Enum.reverse(reversed)
+        end
+      end
+
+    updates_list =
+      match_types [updates.type] do
+        for <<match!(x, 0) <- to_binary(updates)>>, do: read!(x, 0)
+      end
+
+    indices_with_updates =
+      indices_list
+      |> Enum.zip(updates_list)
+      |> Enum.group_by(fn {idx, _} -> idx end, fn {_, upd} -> upd end)
+      |> Enum.map(fn {idx, upds} -> {idx, Enum.sum(upds)} end)
+
+    for {idx, upd} <- indices_with_updates, reduce: target do
+      t ->
+        put_slice(
+          out,
+          t,
+          idx,
+          Nx.tensor(upd) |> Nx.reshape(Tuple.duplicate(1, length(idx))),
+          fn x, y ->
+            x = from_binary(%T{names: [], shape: {}, type: t.type}, x)
+            y = from_binary(%T{names: [], shape: {}, type: updates.type}, y)
+
+            Nx.add(x, y) |> Nx.as_type(out.type) |> Nx.to_binary()
+          end
+        )
+    end
   end
 
   @impl true
@@ -1656,7 +1707,7 @@ defmodule Nx.BinaryBackend do
   defp top_dimension_slice?(_, _, _), do: false
 
   @impl true
-  def put_slice(out, tensor, start_indices, slice) do
+  def put_slice(out, tensor, start_indices, slice, combine_fn \\ fn _prev, new -> new end) do
     %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
     %T{shape: slice_shape} = slice = as_type(out, slice)
 
@@ -1683,11 +1734,13 @@ defmodule Nx.BinaryBackend do
     {_, data} =
       for offset <- offsets, reduce: {to_binary(slice), to_binary(tensor)} do
         {<<cur_elem::size(size)-bitstring, rest_of_slice::bitstring>>, binary} ->
-          <<before::size(offset)-bitstring, _::size(size)-bitstring, rest_of_tensor::bitstring>> =
-            binary
+          <<before::size(offset)-bitstring, prev_elem::size(size)-bitstring,
+            rest_of_tensor::bitstring>> = binary
+
+          new_elem = combine_fn.(prev_elem, cur_elem)
 
           {rest_of_slice,
-           <<before::size(offset)-bitstring, cur_elem::size(size)-bitstring,
+           <<before::size(offset)-bitstring, new_elem::size(size)-bitstring,
              rest_of_tensor::bitstring>>}
       end
 
