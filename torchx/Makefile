@@ -1,5 +1,5 @@
 LIBTORCH_VERSION := $(shell head -c 3 $(LIBTORCH_DIR)/build-version)
-MINIMUM_LIBTORCH_VERSION := 1.8
+EXPECTED_LIBTORCH_VERSION := 1.8
 
 LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
@@ -26,8 +26,8 @@ check_version:
 		exit 1; \
 	fi
 
-	@ if [ $(LIBTORCH_VERSION) >= $(MINIMUM_LIBTORCH_VERSION) ]; then \
-		echo "LibTorch version should be at least $(MINIMUM_LIBTORCH_VERSION). Got: $(LIBTORCH_VERSION)."; \
+	@ if [ $(LIBTORCH_VERSION) != $(EXPECTED_LIBTORCH_VERSION) ]; then \
+		echo "LibTorch version should be $(EXPECTED_LIBTORCH_VERSION). Got: $(LIBTORCH_VERSION)."; \
 		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
 		exit 1; \
 	fi
