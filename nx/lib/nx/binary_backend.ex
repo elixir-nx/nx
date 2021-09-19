@@ -1576,8 +1576,7 @@ defmodule Nx.BinaryBackend do
         %T{} = out,
         %T{shape: shape, type: {_, target_size}} = target,
         %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
-        %T{shape: {indices_rows}} = updates,
-        _opts
+        %T{shape: {indices_rows}} = updates
       ) do
     indices_bin_list =
       indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
@@ -1588,22 +1587,7 @@ defmodule Nx.BinaryBackend do
       match_types [indices.type] do
         for idx_bin <- indices_bin_list do
           idx = for <<match!(x, 0) <- idx_bin>>, do: read!(x, 0)
-
-          {offset, []} =
-            idx
-            |> Enum.with_index()
-            |> Enum.reduce(
-              {0, Tuple.to_list(shape)},
-              fn {idx, axis}, {offset, [dim_size | shape]} ->
-                if idx < 0 or idx >= dim_size do
-                  raise ArgumentError,
-                        "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
-                end
-
-                {offset + idx * Enum.product(shape), shape}
-              end
-            )
-
+          offset = index_to_binary_offset(idx, shape)
           offset * target_byte_size
         end
       end
@@ -1849,9 +1833,14 @@ defmodule Nx.BinaryBackend do
         data = for <<match!(x, 0) <- data_bin>>, do: x
 
         for <<match!(x, 1) <- idx_bin>>, into: <<>> do
-          index = read!(x, 1)
+          idx = read!(x, 1)
 
-          val = Enum.at(data, index)
+          if idx < 0 or idx >= elem(tensor.shape, axis) do
+            raise ArgumentError,
+                  "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(tensor.shape)}"
+          end
+
+          val = Enum.at(data, idx)
           <<write!(val, 2)>>
         end
       end
@@ -1876,25 +1865,30 @@ defmodule Nx.BinaryBackend do
         slice_start =
           for <<bin::size(idx_size)-bitstring <- bin>>, do: binary_to_number(bin, indices.type)
 
-        {offset, []} =
-          slice_start
-          |> Enum.with_index()
-          |> Enum.reduce(
-            {0, Tuple.to_list(shape)},
-            fn {idx, axis}, {offset, [dim_size | shape]} ->
-              if idx < 0 or idx >= dim_size do
-                raise ArgumentError,
-                      "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
-              end
-
-              {offset + idx * Enum.product(shape), shape}
-            end
-          )
-
+        offset = index_to_binary_offset(slice_start, shape)
         binary_part(data, offset * byte_size, byte_size)
       end
 
     from_binary(out, new_data)
+  end
+
+  defp index_to_binary_offset(index, shape) when is_list(index) and is_tuple(shape) do
+    {offset, []} =
+      index
+      |> Enum.with_index()
+      |> Enum.reduce(
+        {0, Tuple.to_list(shape)},
+        fn {idx, axis}, {offset, [dim_size | shape]} ->
+          if idx < 0 or idx >= dim_size do
+            raise ArgumentError,
+                  "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+          end
+
+          {offset + idx * Enum.product(shape), shape}
+        end
+      )
+
+    offset
   end
 
   @impl true

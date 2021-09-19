@@ -4349,7 +4349,7 @@ defmodule Nx do
       iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
       ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
   """
-  def scatter_add(target, indices, updates, opts \\ []) do
+  def scatter_add(target, indices, updates) do
     target = to_tensor(target)
     indices = to_tensor(indices)
     updates = to_tensor(updates)
@@ -4358,7 +4358,7 @@ defmodule Nx do
 
     Nx.Shape.scatter_add(target, indices, updates)
 
-    impl!(target).scatter_add(%{target | type: type}, target, indices, updates, opts)
+    impl!(target).scatter_add(%{target | type: type}, target, indices, updates)
   end
 
   ## Unary ops
