@@ -621,7 +621,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :scatter_add,
-         [target, indices, updates, _opts],
+         [target, indices, updates],
          %{type: type},
          state
        ) do

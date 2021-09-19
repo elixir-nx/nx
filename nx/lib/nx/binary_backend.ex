@@ -1576,8 +1576,7 @@ defmodule Nx.BinaryBackend do
         %T{} = out,
         %T{shape: shape, type: {_, target_size}} = target,
         %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
-        %T{shape: {indices_rows}} = updates,
-        _opts
+        %T{shape: {indices_rows}} = updates
       ) do
     indices_bin_list =
       indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
