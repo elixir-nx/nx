@@ -3,7 +3,6 @@
 
 # XLA Extension Installation Location
 XLA_EXTENSION_DIR ?= cache/xla_extension
-
 XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
 XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
@@ -24,13 +23,15 @@ CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -isystem $(XLA_INCLUDE_PATH) -O3 -Wall -Wex
 # and single quotes to escape shell variable
 LDFLAGS = -L$(EXLA_LIB_DIR) -Wl,-rpath,'$$ORIGIN/lib' -lxla_extension
 
+ifeq ($(shell uname -s), Darwin)
+	# LDFLAGS += -undefined dynamic_lookup -dynamiclib
+	# LDFLAGS += -flat_namespace -undefined suppress
+endif
+
 $(EXLA_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
-	mkdir -p $(PRIV_DIR) && \
-		ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR) && \
-		$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.h \
-											$(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_client.h \
-											$(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_log_sink.h \
-											-o $(EXLA_SO) $(LDFLAGS)
+	mkdir -p $(PRIV_DIR)
+	ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR)
+	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_SO) $(LDFLAGS)
 
 clean:
 	rm -rf $(EXLA_SO)
