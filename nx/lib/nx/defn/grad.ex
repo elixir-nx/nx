@@ -510,22 +510,29 @@ defmodule Nx.Defn.Grad do
   defp grad(:take_along_axis, [t, i, axis], _ans, g, cache) do
     num_elements = i |> Nx.shape() |> Tuple.product()
 
-    iotas =
-      Enum.map(0..(Nx.rank(g) - 1)//1, fn axis ->
-        i |> Nx.iota(axis: axis, backend: Nx.Defn.Expr) |> Nx.reshape({num_elements, 1})
+    indices =
+      0..(Nx.rank(g) - 1)//1
+      |> Enum.map(fn
+        ^axis ->
+          Nx.reshape(i, {num_elements, 1})
+
+        axis ->
+          i
+          |> Nx.iota(axis: axis, backend: Nx.Defn.Expr)
+          |> Nx.reshape({num_elements, 1})
       end)
+      |> Nx.concatenate(axis: 1)
 
-    iotas = List.replace_at(iotas, axis, Nx.reshape(i, {num_elements, 1}))
-
-    indices = Nx.concatenate(iotas, axis: 1)
+    # Since g is produced through the given indices,
+    # we can reshape g to be a {num_elements} shaped tensor
+    # which will directly correspond to each of the reshaped
+    # indices above
+    updates = Nx.reshape(g, {num_elements})
 
     g =
       t
       |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
-      |> Nx.scatter_add(
-        indices,
-        Nx.reshape(g, {num_elements})
-      )
+      |> Nx.scatter_add(indices, updates)
 
     to_grad(t, g, cache)
   end
