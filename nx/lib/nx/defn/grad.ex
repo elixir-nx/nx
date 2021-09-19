@@ -524,7 +524,7 @@ defmodule Nx.Defn.Grad do
       |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
       |> Nx.scatter_add(
         indices,
-        Nx.gather(g, indices)
+        Nx.reshape(g, {num_elements})
       )
 
     to_grad(t, g, cache)
