@@ -1,5 +1,6 @@
 # Environment variables passed via elixir_make
 # ERTS_INCLUDE_DIR
+# MIX_APP_PATH
 
 # XLA Extension Installation Location
 XLA_EXTENSION_DIR ?= cache/xla_extension
@@ -8,7 +9,7 @@ XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
 # Private configuration
 EXLA_DIR = c_src/exla
-PRIV_DIR = priv
+PRIV_DIR = $(MIX_APP_PATH)/priv
 EXLA_SO = $(PRIV_DIR)/libexla.so
 EXLA_LIB_DIR = $(PRIV_DIR)/lib
 
@@ -25,7 +26,7 @@ LDFLAGS = -L$(EXLA_LIB_DIR) -Wl,-rpath,'$$ORIGIN/lib' -lxla_extension
 
 ifeq ($(shell uname -s), Darwin)
 	# LDFLAGS += -undefined dynamic_lookup -dynamiclib
-	# LDFLAGS += -flat_namespace -undefined suppress
+	LDFLAGS += -flat_namespace -undefined suppress
 endif
 
 $(EXLA_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
