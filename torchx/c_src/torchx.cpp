@@ -185,14 +185,14 @@ NIF(to_blob)
   void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
   memcpy(result_data, t->data_ptr(), byte_size);
 
-  return result;
+  return nx::nif::ok(env, result);
 }
 
 NIF(to_blob_view)
 {
   TENSOR_PARAM(0, t);
 
-  return enif_make_resource_binary(env, t, t->data_ptr(), t->nbytes());
+  return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), t->nbytes()));
 }
 
 NIF(item)
@@ -221,44 +221,8 @@ NIF(shape)
   std::vector<ERL_NIF_TERM> sizes;
   for (int dim = 0; dim < t->dim(); dim++ )
     sizes.push_back(nx::nif::make(env, ((long)t->size(dim))));
-  
+
   return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
-}
-
-NIF(names)
-{
-  TENSOR_PARAM(0, t);
-
-  at::DimnameList dimnames = t->names();
-
-  std::vector<ERL_NIF_TERM> names;
-  for (size_t i = 0; i < dimnames.size(); i++ )
-    names.push_back(nx::nif::make(env, dimnames[i].symbol().toUnqualString()));
-  
-  return nx::nif::ok(env, enif_make_list_from_array(env, names.data(), names.size()));
-}
-
-NIF(strides)
-{
-  TENSOR_PARAM(0, t);
-
-  std::vector<ERL_NIF_TERM> strides;
-  for (int dim = 0; dim < t->dim(); dim++ )
-    strides.push_back(nx::nif::make(env, ((long)t->stride(dim))));
-  
-  return nx::nif::ok(env, enif_make_tuple_from_array(env, strides.data(), strides.size()));
-}
-
-NIF(device_of)
-{
-  TENSOR_PARAM(0, t);
-
-  torch::optional<torch::Device> device = torch::device_of(*t);
-
-  if (device.has_value())
-    return nx::nif::ok(env, nx::nif::make(env, device.value().str().c_str()));
-  else
-    return nx::nif::error(env, "Could not determine tensor device.");
 }
 
 NIF(cuda_is_available)
@@ -687,16 +651,11 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 }
 
 #define F(NAME, ARITY)    \
-  {                       \
-#NAME, ARITY, NAME, 0 \
-  }
+  {#NAME, ARITY, NAME, 0}
 
-#define DF(NAME, ARITY)                                  \
-  {                                                      \
-      #NAME, ARITY, NAME, ERL_NIF_DIRTY_JOB_CPU_BOUND},  \
-  {                                                      \
-#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND \
-  }
+#define DF(NAME, ARITY)                                      \
+  {#NAME "_cpu", ARITY, NAME, ERL_NIF_DIRTY_JOB_CPU_BOUND},  \
+  {#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND}     \
 
 static ErlNifFunc nif_functions[] = {
     DF(randint, 5),
@@ -796,15 +755,12 @@ static ErlNifFunc nif_functions[] = {
     DF(qr, 1),
     DF(qr, 2),
 
-    DF(cuda_is_available, 0),
-    DF(cuda_device_count, 0),
+    F(cuda_is_available, 0),
+    F(cuda_device_count, 0),
 
     F(item, 1),
     F(scalar_type, 1),
     F(shape, 1),
-    F(names, 1),
-    F(strides, 1),
-    F(device_of, 1),
     F(nbytes, 1),
     F(to_blob_view, 1),
 };
