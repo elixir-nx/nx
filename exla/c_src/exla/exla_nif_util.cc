@@ -466,26 +466,38 @@ namespace nif {
         terms.push_back(shape_term);
       }
       return enif_make_list_from_array(env, &terms[0], element_count);
+    } else if (shape.IsArray()) {
+
+      xla::PrimitiveType type = shape.element_type();
+      absl::Span<const int64> dims = shape.dimensions();
+      int64 rank = shape.rank();
+
+      std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+      std::vector<ERL_NIF_TERM> dim_arr;
+      dim_arr.reserve(rank);
+      for (int i = 0; i < rank; i++) {
+        int copy;
+        copy = dims.at(i);
+        dim_arr.push_back(make(env, copy));
+      }
+
+      ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);
+      ERL_NIF_TERM type_term = make(env, name);
+
+      return enif_make_tuple(env, 2, dims_term, type_term);
+    } else {
+      // Shape is probably a token or opaque type, with no dims
+      // calling `rank` fails a check in TF
+      xla::PrimitiveType type = shape.element_type();
+
+      std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+      ERL_NIF_TERM empty_tuple = enif_make_tuple(env, 0);
+      ERL_NIF_TERM type_term = make(env, name);
+
+      return enif_make_tuple(env, 2, empty_tuple, type_term);
     }
-
-    xla::PrimitiveType type = shape.element_type();
-    absl::Span<const int64> dims = shape.dimensions();
-    int64 rank = shape.rank();
-
-    std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
-
-    std::vector<ERL_NIF_TERM> dim_arr;
-    dim_arr.reserve(rank);
-    for (int i = 0; i < rank; i++) {
-      int copy;
-      copy = dims.at(i);
-      dim_arr.push_back(make(env, copy));
-    }
-
-    ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);
-    ERL_NIF_TERM type_term = make(env, name);
-
-    return enif_make_tuple(env, 2, dims_term, type_term);
   }
 
 }  // namespace nif
