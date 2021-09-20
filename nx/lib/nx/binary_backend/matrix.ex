@@ -2,7 +2,7 @@ defmodule Nx.BinaryBackend.Matrix do
   @moduledoc false
   import Nx.Shared
 
-  def ts(a_data, a_type, b_data, b_type, shape, output_type, input_opts) do
+  def ts(a_data, a_type, a_shape, b_data, b_type, b_shape, output_type, input_opts) do
     transform_a = input_opts[:transform_a]
     lower_input = input_opts[:lower]
 
@@ -14,12 +14,6 @@ defmodule Nx.BinaryBackend.Matrix do
       left_side: input_opts[:left_side]
     }
 
-    a_shape =
-      case shape do
-        {rows} -> {rows, rows}
-        shape -> shape
-      end
-
     a_matrix =
       a_data
       |> binary_to_matrix(a_type, a_shape)
@@ -27,9 +21,9 @@ defmodule Nx.BinaryBackend.Matrix do
       |> ts_handle_opts(opts, :a)
 
     b_matrix_or_vec =
-      case shape do
-        {rows, rows} ->
-          b_data |> binary_to_matrix(b_type, shape) |> ts_handle_opts(opts, :b)
+      case b_shape do
+        {_rows, _cols} ->
+          b_data |> binary_to_matrix(b_type, b_shape) |> ts_handle_opts(opts, :b)
 
         {_rows} ->
           b_data |> binary_to_vector(b_type) |> ts_handle_opts(opts, :b)
@@ -37,7 +31,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
     result =
       a_matrix
-      |> do_ts(b_matrix_or_vec, shape)
+      |> do_ts(b_matrix_or_vec, b_shape)
       |> ts_handle_opts(opts, :result)
 
     matrix_to_binary(result, output_type)
@@ -152,8 +146,8 @@ defmodule Nx.BinaryBackend.Matrix do
   defp ts_transform_a(matrix, :transpose), do: transpose_matrix(matrix)
   defp ts_transform_a(matrix, _), do: matrix
 
-  defp do_ts(a_matrix, b_matrix, {rows, rows}) do
-    Enum.uniq(1..rows)
+  defp do_ts(a_matrix, b_matrix, {rows, cols}) do
+    1..min(rows, cols)//1
     |> Enum.map(fn b_col ->
       b_vector = get_matrix_column(b_matrix, b_col - 1)
 

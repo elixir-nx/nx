@@ -358,6 +358,29 @@ defmodule Nx.LinAlg do
         [1.0, 1.0, -1.0]
       >
 
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+      iex> b = Nx.tensor([[0, 1, 3], [2, 1, 3]])
+      iex> Nx.LinAlg.triangular_solve(a, b, left_side: false)
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [2.0, -5.0, 3.0],
+          [4.0, -5.0, 3.0]
+        ]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+      iex> b = Nx.tensor([[0, 2], [3, 0], [0, 0]])
+      iex> Nx.LinAlg.triangular_solve(a, b, left_side: true)
+      #Nx.Tensor<
+        f32[3][2]
+        [
+          [0.0, 2.0],
+          [3.0, -2.0],
+          [-6.0, 2.0]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -405,8 +428,13 @@ defmodule Nx.LinAlg do
         raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
     end
 
+    left_side = opts[:left_side]
+
     case b_shape do
-      {^m, ^m} ->
+      {^m, _} when left_side ->
+        nil
+
+      {_, ^m} when not left_side ->
         nil
 
       {^m} ->
