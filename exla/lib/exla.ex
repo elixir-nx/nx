@@ -90,6 +90,20 @@ defmodule EXLA do
     * `:memory_fraction` - how much memory of a GPU device to
       allocate. Defaults to `0.9.`
 
+  ### GPU Runtime Issues
+
+  Some versions of CUDA and cuDNN may interact poorly with the Erlang
+  VM leading to strange Segmentation Faults. GPU Executions run in dirty
+  IO threads, which have a considerable smaller stack size than regular
+  scheduler threads. This may lead to problems with certain CUDA or cuDNN
+  programs. In a development environment, it is suggested to set:
+
+  `ELIXIR_ERL_OPTIONS=+sssdio 128`
+
+  To increase the stack size of dirty IO threads from 40 kilowords to
+  128 kilowords in order to avoid poor interactions between CUDA, cuDNN,
+  and the dirty IO scheduler. In a release, you can set this flag in `vm.args`.
+
   ## Device allocation
 
   EXLA also ships with a `EXLA.DeviceBackend` that allows data
