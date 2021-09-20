@@ -508,23 +508,6 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:take, [t, i, axis], _ans, g, cache) do
-    # 1. reshape indices into 1 |> List.duplicate(Nx.rank(g)) |> List.replace_at(axis, Tuple.to_list(idx_shape)) |> List.flatten() |> List.to_tuple()
-    # 2. tile indices into
-    # g.shape
-    # |> Tuple.to_list()
-    # |> List.replace_at(axis, indices.shape)
-    # |> Tuple.to_list()
-    # |> Enum.map(fn _ -> 1 end)
-    # |> List.flatten()
-    # |> List.to_tuple()
-    # 3. reshape indices into {num_elements, 1}
-    # 4. build iotas from Nx.iota(g, axis: axis) |> Nx.reshape({num_elements, 1}), for ^axis, add indices
-    # 5. concatenate iota-indices with axis 1
-    # 6. reshape g into {num_elements, 1}
-    # 7. scatter-add onto broadcast(0, g)
-
-    # iex(60)> scatter_add_idx = Nx.concatenate([Nx.reshape(i, {2, 5, 1}) |> Nx.tile([1, 1, 4]) |> Nx.reshape({40, 1}), Nx.iota(res, axis: 2) |> Nx.reshape({40, 1})], axis: 1)
-
     axes_range = 0..(tuple_size(t.shape) - 1)//1
 
     indices_shape =
@@ -546,28 +529,31 @@ defmodule Nx.Defn.Grad do
 
     indices_for_axis =
       i
-      |> Nx.reshape(indices_shape |> IO.inspect(label: "idx shape"))
-      |> Nx.tile(idx_tiling |> IO.inspect(label: "tiling"))
+      |> Nx.reshape(indices_shape)
+      |> Nx.tile(idx_tiling)
 
-    IO.inspect(indices_for_axis, label: "indices_for_axis")
+    axis_offset = tuple_size(i.shape) - 1
 
     indices =
-      0..1
+      axes_range
       |> Enum.map(fn
-        0 ->
+        ^axis ->
           indices_for_axis
           |> Nx.reshape({num_elements, 1})
 
-        1 ->
+        current when current < axis ->
           indices_for_axis
-          |> Nx.iota(axis: 2)
+          |> Nx.iota(axis: current, backend: Nx.Defn.Expr)
+          |> Nx.reshape({num_elements, 1})
+
+        current when current > axis ->
+          indices_for_axis
+          |> Nx.iota(axis: current + axis_offset, backend: Nx.Defn.Expr)
           |> Nx.reshape({num_elements, 1})
       end)
       |> Nx.concatenate(axis: 1)
 
     updates = Nx.reshape(g, {num_elements})
-
-    # updates = Nx.broadcast(1, {num_elements})
 
     g =
       t
