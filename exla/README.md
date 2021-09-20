@@ -29,8 +29,8 @@ EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to provide th
 
   * Missing Dependencies
     * Some Erlang installs do not include some of the dependencies needed to compile the EXLA NIF. You may need to install `erlang-dev` separately.
-  * EXLA
-    * Make sure you use `:exla` as a `:github` dependency and not as a `:path` dependency to avoid rebuilds
+  * Incompatible protocol buffer versions
+    * If you have `protoc` installed on your machine, it may conflict with the `protoc` precompiled inside XLA. Uninstall, unlink, or remove `protoc` from your path to continue.
 
 ## Usage
 
