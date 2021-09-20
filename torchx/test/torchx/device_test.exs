@@ -35,6 +35,7 @@ defmodule Torchx.DeviceTest do
 
     test "from" do
       t = Nx.tensor([1, 2, 3], backend: {TB, device: @device})
+      Nx.backend_transfer(t)
       assert Nx.backend_transfer(t) == Nx.tensor([1, 2, 3], backend: Nx.BinaryBackend)
 
       # TODO: we need to raise once the data has been transfered once

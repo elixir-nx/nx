@@ -140,6 +140,7 @@ defmodule Nx.Backend do
 
   defp chunk([], data, {kind, size}, limit, _docs) do
     # TODO: Simplify inspection once nonfinite are officially supported in the VM
+
     {doc, tail} =
       case kind do
         :s ->

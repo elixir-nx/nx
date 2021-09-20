@@ -16,6 +16,8 @@ defmodule Torchx.NxDoctestTest do
   ## Result mismatch in less significant digits (precision issue)
 
     * logistic/1
+    * cos/1
+    * erfc/1
 
   ## Callback or test requires explicit backend transfer to BinaryBackend
 
@@ -29,6 +31,7 @@ defmodule Torchx.NxDoctestTest do
 
     * argmax/2
     * argmin/2
+    * to_batched_list/3
 
   ## Unsigned ints not supported by Torch
 
@@ -66,6 +69,7 @@ defmodule Torchx.NxDoctestTest do
       |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
       |> Kernel.++(
         to_binary: 2,
+        to_batched_list: 3,
         default_backend: 1,
         round: 1,
         argmax: 2,
@@ -86,7 +90,10 @@ defmodule Torchx.NxDoctestTest do
         norm: 2,
         all_close?: 3,
         atan2: 2,
-        bitcast: 2
+        bitcast: 2,
+        cbrt: 1,
+        cos: 1,
+        erfc: 1
       )
       |> Kernel.++([:moduledoc])
 end
