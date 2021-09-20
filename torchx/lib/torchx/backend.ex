@@ -55,7 +55,7 @@ defmodule Torchx.Backend do
 
   defp to_torch_type({:u, size}, hint) when size in [16, 32, 64] do
     raise ArgumentError,
-          String.trim("Torchx does not support unsigned #{size} bit integer #{hint}")
+          String.trim("Torchx does not support unsigned #{size} bit integer#{hint}")
   end
 
   defp device_option(nil), do: {:cpu, -1}

@@ -3,11 +3,11 @@ defmodule TorchxTest do
 
   describe "creation" do
     test "arange" do
-      {device, ref} = Torchx.arange(0, 26, 2, :short, :cpu)
+      {:cpu, ref} = tensor = Torchx.arange(0, 26, 2, :short, :cpu)
 
-      assert Torchx.device_of(ref) == device
-      assert Torchx.type_of(ref) == :short
-      assert Torchx.shape_of(ref) == {13}
+      assert is_reference(ref)
+      assert Torchx.type_of(tensor) == :short
+      assert Torchx.shape_of(tensor) == {13}
     end
   end
 
@@ -17,7 +17,6 @@ defmodule TorchxTest do
       b = Torchx.arange(4, 7, 1, :float, :cpu)
 
       {:cpu, ref} = Torchx.tensordot(a, b, [0], [0])
-
       assert is_reference(ref)
     end
   end

@@ -18,9 +18,16 @@ defmodule Torchx.Macro do
       raise("At least one argument of defcreate function should be named 'device'.")
     end
 
+    tensors =
+      case tensors(args) do
+        [] -> :ok
+        tensors -> quote do: {unquote(tensors), _} = prepare_tensors!(unquote(tensors))
+      end
+
     quote do
       @torch_function {unquote(name), unquote(length(args))}
       def unquote(name)(unquote_splicing(args)) do
+        unquote(tensors)
         {user_device, index} = normalize_device!(var!(device))
         var!(device) = torch_device!(user_device, index)
 
@@ -53,10 +60,11 @@ defmodule Torchx.Macro do
 
   defp defcall(call, unwrapper, extra) do
     {name, args} = Macro.decompose_call(call)
+    tensors = tensors(args)
 
-    tensors = Enum.filter(args, fn {name, _, _} ->
-      match?("tensor", Atom.to_string(name))
-    end)
+    if tensors == [] do
+      raise ArgumentError, "at least one tensor required in #{name}/#{length(args)}"
+    end
 
     quote do
       @torch_function {unquote(name), unquote(length(args))}
@@ -74,6 +82,10 @@ defmodule Torchx.Macro do
 
   defp has_device?(args) do
     Enum.any?(args, &match?({:device, _, nil}, &1))
+  end
+
+  defp tensors(args) do
+    Enum.filter(args, fn {name, _, _} -> match?("tensor" <> _, Atom.to_string(name)) end)
   end
 end
 
@@ -287,7 +299,7 @@ defmodule Torchx do
     do: {device, -1}
 
   defp normalize_device!(device),
-    do: raise ArgumentError, "expected device to be {atom, index} or atom, got: #{device}"
+    do: raise(ArgumentError, "expected device to be {atom, index} or atom, got: #{device}")
 
   defp torch_device!(device, index) do
     id = @devices[device] || raise ArgumentError, "unknown device #{inspect(device)}"
@@ -318,7 +330,7 @@ defmodule Torchx do
       {dev, ref}, dev when is_atom(dev) and is_reference(ref) ->
         {ref, dev}
 
-      {dev, ref}, other_dev  when is_atom(dev) and is_reference(ref) ->
+      {dev, ref}, other_dev when is_atom(dev) and is_reference(ref) ->
         raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
 
       bad_tensor, _dev ->
