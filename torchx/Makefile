@@ -1,6 +1,3 @@
-LIBTORCH_VERSION := $(shell head -c 3 $(LIBTORCH_DIR)/build-version)
-EXPECTED_LIBTORCH_VERSION := 1.8
-
 LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
@@ -17,17 +14,11 @@ endif
 
 .DEFAULT_GLOBAL := build
 
-build: check_version $(MIX_APP_PATH)/priv/torchx.so
+build: check_libtorch $(MIX_APP_PATH)/priv/torchx.so
 
-check_version:
+check_libtorch:
 	@ if [ -z "$(LIBTORCH_DIR)" ]; then \
 		echo "LIBTORCH_DIR env var is not set. It should point to the directory, where LibTorch is installed."; \
-		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
-		exit 1; \
-	fi
-
-	@ if [ $(LIBTORCH_VERSION) != $(EXPECTED_LIBTORCH_VERSION) ]; then \
-		echo "LibTorch version should be $(EXPECTED_LIBTORCH_VERSION). Got: $(LIBTORCH_VERSION)."; \
 		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
 		exit 1; \
 	fi
