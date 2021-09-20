@@ -1800,6 +1800,7 @@ defmodule Nx.BinaryBackend do
 
     concat_shape = put_elem(tensor.shape, axis, length(slices))
     result_data = bin_concatenate(slices, size, axis, concat_shape)
+
     from_binary(out, result_data)
   end
 
