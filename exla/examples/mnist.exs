@@ -159,13 +159,5 @@ IO.puts("Bring the parameters back from the device and print them")
 final_params = Nx.backend_transfer(final_params)
 IO.inspect(final_params)
 
-IO.puts("AOT-compiling a trained neural network that predicts a batch")
-
-Nx.Defn.aot(
-  MNIST.Trained,
-  [{:predict, &MNIST.predict(final_params, &1), [Nx.template({30, 784}, {:f, 32})]}],
-  compiler: EXLA
-)
-
-IO.puts("The result of the first batch against the AOT-compiled one")
-IO.inspect(MNIST.Trained.predict(hd(train_images)))
+IO.puts("The result of the first batch against the trained network")
+IO.inspect(MNIST.predict(hd(train_images)))

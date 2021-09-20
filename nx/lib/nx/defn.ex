@@ -305,7 +305,7 @@ defmodule Nx.Defn do
         {:normalize, &Nx.divide(&1, 255), [Nx.template({100, 100}, {:f, 32})]}
       ]
 
-      :ok = Nx.Defn.export_aot("priv", MyModule, functions, compiler: EXLA)
+      :ok = Nx.Defn.export_aot("priv", MyModule, functions, compiler: MyCompiler)
 
   The above will export a module definition called `MyModule`
   to the given directory with `softmax/1` and `normalize/1` as
@@ -325,10 +325,10 @@ defmodule Nx.Defn do
   ## AOT export with Mix
 
   Ahead-of-time exports with Mix are useful because you only need
-  the compilation environment, such as EXLA, when exporting.
+  the compilation environment when exporting.
   In practice, you can do this:
 
-    1. Add `{:exla, ..., only: :export_aot}` as a dependency
+    1. Add `{:my_compiler, ..., only: :export_aot}` as a dependency
 
     2. Define an exporting script at `script/export_my_module.exs`
 

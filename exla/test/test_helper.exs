@@ -44,7 +44,7 @@ multi_device =
 
 skip_tpu_tests =
   if client.platform == :tpu,
-    do: [:unsupported_dilated_reduce_window, :unsupported_64_bit_op, :aot],
+    do: [:unsupported_dilated_reduce_window, :unsupported_64_bit_op],
     else: []
 
 if client.platform == :host and client.device_count == 1 do
