@@ -1620,8 +1620,12 @@ defmodule Nx.BinaryBackend do
 
           # this can be a list of binaries because we are accumulation an iodata list
           before_offset =
-            match_types [target.type] do
-              for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+            if target.type == out.type do
+              before_offset
+            else
+              match_types [target.type] do
+                for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+              end
             end
 
           element = binary_part(to_traverse, before_slice_size, target_byte_size)
@@ -1639,6 +1643,16 @@ defmodule Nx.BinaryBackend do
             scalar_to_binary(binary_to_number(element, target.type) + update, out.type)
 
           {[traversed | [before_offset, updated_element]], to_traverse}
+      end
+
+    # apply type promotion to the remaining tail as well
+    tail =
+      if target.type == out.type do
+        tail
+      else
+        match_types [target.type] do
+          for <<match!(x, 0) <- tail>>, do: scalar_to_binary(read!(x, 0), out.type)
+        end
       end
 
     from_binary(out, IO.iodata_to_binary([result, tail]))
@@ -1798,6 +1812,7 @@ defmodule Nx.BinaryBackend do
 
     concat_shape = put_elem(tensor.shape, axis, length(slices))
     result_data = bin_concatenate(slices, size, axis, concat_shape)
+
     from_binary(out, result_data)
   end
 
