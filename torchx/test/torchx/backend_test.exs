@@ -154,7 +154,7 @@ defmodule Torchx.BackendTest do
       zero = Nx.tensor(0)
 
       for i <- 0..8, j <- 0..8 do
-        assert (i == j && t[i][j] == one) || t[i][j] == zero
+        assert (i == j and t[i][j] == one) or t[i][j] == zero
       end
     end
 
