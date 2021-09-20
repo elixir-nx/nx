@@ -1,5 +1,6 @@
 #include "exla_client.h"
 #include "exla_nif_util.h"
+#include "tensorflow/compiler/xla/layout_util.h"
 #include "tensorflow/compiler/xla/pjrt/gpu_device.h"
 #include "tensorflow/compiler/xla/pjrt/cpu_device.h"
 #include "tensorflow/compiler/xla/pjrt/tpu_client.h"
@@ -11,18 +12,25 @@ ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
                        bool can_be_released_after_run): buffer_(std::move(buffer)),
                                                         can_be_released_after_run_(can_be_released_after_run) {}
 
+void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary) {
+  enif_alloc_binary(literal->size_bytes(), binary);
+  std::memcpy(binary->data, literal->untyped_data(), literal->size_bytes());
+}
+
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
   buffer_->BlockHostUntilReady();
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
 
-  // TODO(seanmor5): Investigate ways around this, it should not be necessary
-  // on CPU and GPU
-  xla::Shape host_shape = xla::ShapeUtil::MakeShape(buffer_->on_device_shape().element_type(), buffer_->on_device_shape().dimensions());
-  xla::Literal new_literal = literal->Relayout(host_shape);
-
   ErlNifBinary binary;
-  enif_alloc_binary(new_literal.size_bytes(), &binary);
-  std::memcpy(binary.data, new_literal.untyped_data(), new_literal.size_bytes());
+
+  xla::Shape host_shape = xla::ShapeUtil::MakeShape(buffer_->on_device_shape().element_type(), buffer_->on_device_shape().dimensions());
+
+  if (xla::LayoutUtil::LayoutsInShapesEqual(host_shape, literal->shape())) {
+    CopyLiteralToBinary(literal.get(), &binary);
+  } else {
+    xla::Literal new_literal = literal->Relayout(host_shape);
+    CopyLiteralToBinary(&new_literal, &binary);
+  }
 
   return nif::make(env, binary);
 }
