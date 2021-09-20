@@ -605,6 +605,18 @@ defmodule Nx.Defn.Grad do
     to_grad(t, g, cache)
   end
 
+  defp grad(:gather, [t, i], _ans, g, cache) do
+    rank = Nx.rank(t)
+    num_elements = i.shape |> Tuple.product() |> div(rank)
+
+    indices = Nx.reshape(i, {num_elements, rank})
+    updates = Nx.reshape(g, {num_elements})
+
+    g = t |> Expr.broadcast(0, t.shape, Nx.axes(t)) |> Nx.scatter_add(indices, updates)
+
+    to_grad(t, g, cache)
+  end
+
   defp grad(_op, _args, _ans, _g, _cache) do
     :none
   end
