@@ -7,6 +7,8 @@ defmodule EXLA.DefnAPITest do
     @defn_compiler {EXLA, run_options: [keep_on_device: true]}
     defn add_two_keep_on_device(a, b), do: a + b
 
+    # Ignored logged errors, since they are expected
+    @tag capture_log: true
     test "keeps data on device" do
       tensor = add_two_keep_on_device(1, 2)
       assert %EXLA.DeviceBackend{state: {ref, :default}} = tensor.data

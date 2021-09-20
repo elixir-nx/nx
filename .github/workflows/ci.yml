@@ -10,9 +10,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        working_directory: ["nx", "exla"]
         elixir: ["1.12.0"]
         otp: ["24.0"]
-        working_directory: ["nx", "exla"]
     defaults:
       run:
         working-directory: ${{ matrix.working_directory }}
