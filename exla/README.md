@@ -103,12 +103,14 @@ docker run -it \
 
 With CUDA enabled:
 
+*Note: XLA_TARGET should match your CUDA version. See: https://github.com/elixir-nx/xla#xla_target*
+ 
 ```shell
 docker run -it \
   -v $PWD:$PWD \
   -e TEST_TMPDIR=$PWD/tmp/bazel_cache \
   -e BUILD_CACHE=$PWD/tmp/xla_extension_cache \
-  -e XLA_TARGET=cuda \
+  -e XLA_TARGET=cuda102 \
   -e EXLA_TARGET=cuda \
   -w $PWD \
   --gpus=all \
