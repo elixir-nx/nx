@@ -1621,12 +1621,26 @@ defmodule Nx.BinaryBackend do
 
             # this can be a list of binaries because we are accumulation an iodata list
             before_offset =
-              for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+              if target.type == out.type do
+                before_offset
+              else
+                for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+              end
 
             updated_element = <<write!(read!(element, 0) + update, 1)>>
 
             {[traversed | [before_offset, updated_element]], to_traverse}
           end
+      end
+
+    # this can be a list of binaries because we are accumulation an iodata list
+    tail =
+      match_types [target.type] do
+        if target.type == out.type do
+          tail
+        else
+          for <<match!(x, 0) <- tail>>, do: scalar_to_binary(read!(x, 0), out.type)
+        end
       end
 
     from_binary(out, IO.iodata_to_binary([result, tail]))
