@@ -31,7 +31,7 @@ check_libtorch:
 	fi
 
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
-	@mkdir -p $(PRIV_DIR)
-	@ln -sf $(abspath $(LIBTORCH_LINK_PATH)) $(LIBTORCH_LIB_DIR)
-	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(TORCHX_SO) $(LDFLAGS)
-	@$(POST_INSTALL)
+	mkdir -p $(PRIV_DIR)
+	ln -sf $(abspath $(LIBTORCH_LINK_PATH)) $(LIBTORCH_LIB_DIR)
+	$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(TORCHX_SO) $(LDFLAGS)
+	$(POST_INSTALL)
