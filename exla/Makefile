@@ -15,8 +15,8 @@ EXLA_LIB_DIR = $(PRIV_DIR)/lib
 
 # Build Flags
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -isystem $(XLA_INCLUDE_PATH) -O3 -Wall -Wextra \
-				 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-				 -shared -std=c++14
+	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
+	 -shared -std=c++14
 
 LDFLAGS = -L$(EXLA_LIB_DIR) -lxla_extension
 
