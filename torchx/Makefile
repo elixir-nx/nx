@@ -3,7 +3,10 @@ LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(LIBTORCH_INCLUDE_PATH) -I$(LIBTORCH_API_INCLUDE_PATH) -O3 -Wall -Wextra \
 				 -Wno-unused-parameter -Wno-missing-field-initializers -shared -std=c++14
-LDFLAGS = -L$(LIBTORCH_LINK_PATH) -Wl,-rpath,$(LIBTORCH_LINK_PATH) -ltorch -lc10
+LDFLAGS = -L$(LIBTORCH_LINK_PATH)  -Wl,-rpath,'$$ORIGIN/lib' -ltorch -lc10 -D_GLIBCXX_USE_CXX11_ABI=0
+PRIV_DIR = $(MIX_APP_PATH)/priv
+LIBTORCH_LIB_DIR = $(PRIV_DIR)/lib
+TORCHX_SO = $(PRIV_DIR)/torchx.so
 
 # MacOS needs extra flags to link successfully
 ifeq ($(shell uname -s), Darwin)
@@ -14,7 +17,7 @@ endif
 
 .DEFAULT_GLOBAL := build
 
-build: check_libtorch $(MIX_APP_PATH)/priv/torchx.so
+build: check_libtorch $(TORCHX_SO)
 
 check_libtorch:
 	@ if [ -z "$(LIBTORCH_DIR)" ]; then \
@@ -23,7 +26,8 @@ check_libtorch:
 		exit 1; \
 	fi
 
-$(MIX_APP_PATH)/priv/torchx.so: c_src/torchx.cpp c_src/nx_nif_utils.hpp
+$(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	@echo 'Compiling: '$<
-	@mkdir -p $(MIX_APP_PATH)/priv
-	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(MIX_APP_PATH)/priv/torchx.so $(LDFLAGS)
+	@mkdir -p $(PRIV_DIR)
+	@ln -sf $(abspath $(LIBTORCH_LINK_PATH)) $(LIBTORCH_LIB_DIR)
+	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(TORCHX_SO) $(LDFLAGS)
