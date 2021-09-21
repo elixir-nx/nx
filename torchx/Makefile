@@ -15,7 +15,7 @@ ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 	POST_INSTALL = install_name_tool -add_rpath @loader_path/lib $(TORCHX_SO)
 else  # Linux
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib' -lm -lc10
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib'
 	POST_INSTALL = $(NOOP)
 endif
 
@@ -31,7 +31,7 @@ check_libtorch:
 	fi
 
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
-	mkdir -p $(PRIV_DIR)
-	ln -sf $(abspath $(LIBTORCH_LINK_PATH)) $(LIBTORCH_LIB_DIR)
-	$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(TORCHX_SO) $(LDFLAGS)
-	$(POST_INSTALL)
+	@mkdir -p $(PRIV_DIR)
+	@ln -sf $(abspath $(LIBTORCH_LINK_PATH)) $(LIBTORCH_LIB_DIR)
+	@$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(TORCHX_SO) $(LDFLAGS)
+	@$(POST_INSTALL)
