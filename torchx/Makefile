@@ -15,7 +15,7 @@ ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 	POST_INSTALL = install_name_tool -add_rpath @loader_path/lib $(TORCHX_SO)
 else  # Linux
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib' -lm -lc10
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib'
 	POST_INSTALL = $(NOOP)
 endif
 
