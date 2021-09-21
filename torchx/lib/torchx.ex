@@ -11,11 +11,11 @@ defmodule Torchx.Macro do
   @doc """
   Function that receives a device and allocates a tensor.
   """
-  defmacro defcreate(call) do
+  defmacro defdevice(call) do
     {name, args} = Macro.decompose_call(call)
 
     unless has_device?(args) do
-      raise("At least one argument of defcreate function should be named 'device'.")
+      raise("At least one argument of defdevice function should be named 'device'.")
     end
 
     tensors =
@@ -135,18 +135,18 @@ defmodule Torchx do
 
   ## Creation / conversion
 
-  defcreate randint(min, max, shape, type, device)
-  defcreate rand(min, max, shape, type, device)
-  defcreate normal(mu, sigma, shape, type, device)
+  defdevice randint(min, max, shape, type, device)
+  defdevice rand(min, max, shape, type, device)
+  defdevice normal(mu, sigma, shape, type, device)
 
-  defcreate arange(from, to, step, type, device)
-  defcreate arange(from, to, step, type, device, shape)
-  defcreate full(shape, scalar, type, device)
-  defcreate scalar_tensor(scalar, type, device)
-  defcreate ones(shape, type, device)
-  defcreate eye(size, type, device)
-  defcreate from_blob(blob, shape, type, device)
-  defcreate to_device(tensor, device)
+  defdevice arange(from, to, step, type, device)
+  defdevice arange(from, to, step, type, device, shape)
+  defdevice full(shape, scalar, type, device)
+  defdevice scalar_tensor(scalar, type, device)
+  defdevice ones(shape, type, device)
+  defdevice eye(size, type, device)
+  defdevice from_blob(blob, shape, type, device)
+  defdevice to_device(tensor, device)
 
   ## Manipulation
 
@@ -243,14 +243,14 @@ defmodule Torchx do
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
 
-  ## Non-tensor return values
+  ## Dirty non-tensor return values
 
   defvalue to_blob(tensor)
   defvalue to_blob(tensor, limit)
   defvalue delete_tensor(tensor)
   defvalue item(tensor)
 
-  ## Reflection
+  ## Non-dirty non-tensor return values
 
   def scalar_type({dev, ref}) when is_tensor(dev, ref), do: NIF.scalar_type(ref) |> unwrap!()
   def shape({dev, ref}) when is_tensor(dev, ref), do: NIF.shape(ref) |> unwrap!()

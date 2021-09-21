@@ -54,6 +54,7 @@ defmodule Torchx.NxDoctestTest do
 
   """
 
+  # TODO: Move these explanations alongside the functions below
   # TODO: Add backend tests for the doctests that are excluded
 
   use ExUnit.Case, async: true

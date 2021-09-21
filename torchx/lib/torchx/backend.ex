@@ -370,6 +370,8 @@ defmodule Torchx.Backend do
     maybe_add_signature(result, tensor)
   end
 
+  # TODO: Elixir v1.13 has a default_inspect_fun which
+  # we can use to customize this behaviour for tests.
   if Application.compile_env(:torchx, :add_backend_on_inspect, true) do
     defp maybe_add_signature(result, %T{data: %TB{ref: {device, _}}}) do
       Inspect.Algebra.concat([
