@@ -39,50 +39,28 @@ defmodule Torchx.Backend do
   alias Nx.Tensor, as: T
   alias Torchx.Backend, as: TB
 
-  ## Type conversion
-
-  defp to_torch_type(nx_type, hint \\ "")
-
-  defp to_torch_type({:u, 8}, _), do: :byte
-  defp to_torch_type({:s, 8}, _), do: :char
-  defp to_torch_type({:s, 16}, _), do: :short
-  defp to_torch_type({:s, 32}, _), do: :int
-  defp to_torch_type({:s, 64}, _), do: :long
-  defp to_torch_type({:bf, 16}, _), do: :brain
-  defp to_torch_type({:f, 16}, _), do: :half
-  defp to_torch_type({:f, 32}, _), do: :float
-  defp to_torch_type({:f, 64}, _), do: :double
-
-  defp to_torch_type({:u, size}, hint) when size in [16, 32, 64] do
-    raise ArgumentError,
-          String.trim("Torchx does not support unsigned #{size} bit integer#{hint}")
-  end
-
-  defp device_option(nil), do: {:cpu, -1}
-  defp device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
-
   ## Creation
 
   @impl true
   def scalar(%T{shape: {}, type: type} = out, scalar, backend_options) do
     Torchx.scalar_tensor(scalar, to_torch_type(type), device_option(backend_options))
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   def scalar(%T{shape: shape, type: type} = out, scalar, backend_options) do
     Torchx.full(shape, scalar, to_torch_type(type), device_option(backend_options))
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   @impl true
   def eye(%T{shape: {n, n}, type: type} = out, backend_options) do
-    Torchx.eye(n, to_torch_type(type), device_option(backend_options)) |> from_ref(out)
+    Torchx.eye(n, to_torch_type(type), device_option(backend_options)) |> to_nx(out)
   end
 
   @impl true
   def iota(%T{shape: {}, type: type} = out, nil, backend_options) do
     Torchx.scalar_tensor(0.0, to_torch_type(type), device_option(backend_options))
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, nil, backend_options) do
@@ -94,12 +72,12 @@ defmodule Torchx.Backend do
       device_option(backend_options),
       shape
     )
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   @impl true
   def iota(%T{shape: {n}, type: type} = out, 0, backend_options) do
-    Torchx.arange(0, n, 1, to_torch_type(type), device_option(backend_options)) |> from_ref(out)
+    Torchx.arange(0, n, 1, to_torch_type(type), device_option(backend_options)) |> to_nx(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, axis, backend_options) do
@@ -114,7 +92,7 @@ defmodule Torchx.Backend do
     aten = Torchx.reshape(aten, reshape)
 
     # Now broadcast the tensor using the original shape
-    Torchx.broadcast_to(aten, shape) |> from_ref(out)
+    Torchx.broadcast_to(aten, shape) |> to_nx(out)
   end
 
   @impl true
@@ -124,7 +102,7 @@ defmodule Torchx.Backend do
     max = to_scalar(max)
 
     Torchx.randint(min, max, shape, to_torch_type(type), device_option(backend_options))
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
@@ -133,7 +111,7 @@ defmodule Torchx.Backend do
     max = to_scalar(max)
 
     Torchx.rand(min, max, shape, to_torch_type(type), device_option(backend_options))
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   @impl true
@@ -142,7 +120,7 @@ defmodule Torchx.Backend do
     sigma = to_scalar(sigma)
 
     Torchx.normal(mu, sigma, shape, to_torch_type(type), device_option(backend_options))
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   ## Transfer
@@ -150,8 +128,8 @@ defmodule Torchx.Backend do
   # TODO: Handle backend_options
   @impl true
   def to_batched_list(%T{shape: shape} = out, %T{} = t, _backend_options) do
-    Torchx.split(to_ref(t), elem(shape, 0))
-    |> Enum.map(&from_ref(&1, out))
+    Torchx.split(from_nx(t), elem(shape, 0))
+    |> Enum.map(&to_nx(&1, out))
   end
 
   @impl true
@@ -161,7 +139,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def backend_deallocate(%T{} = t), do: Torchx.delete_tensor(to_ref(t))
+  def backend_deallocate(%T{} = t), do: Torchx.delete_tensor(from_nx(t))
 
   @impl true
   def backend_transfer(tensor, Nx.Tensor, opts) do
@@ -169,11 +147,11 @@ defmodule Torchx.Backend do
   end
 
   def backend_transfer(tensor, Torchx.Backend, opts) do
-    Torchx.to_device(to_ref(tensor), device_option(opts)) |> from_ref(tensor)
+    Torchx.to_device(from_nx(tensor), device_option(opts)) |> to_nx(tensor)
   end
 
   def backend_transfer(tensor, backend, opts) do
-    backend.from_binary(tensor, Torchx.to_blob(to_ref(tensor)), opts)
+    backend.from_binary(tensor, Torchx.to_blob(from_nx(tensor)), opts)
   end
 
   @impl true
@@ -184,29 +162,29 @@ defmodule Torchx.Backend do
       to_torch_type(type),
       device_option(backend_options)
     )
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   ## Shape
 
   @impl true
   def reshape(out, %T{} = t, shape),
-    do: Torchx.reshape(to_ref(t), shape) |> from_ref(out)
+    do: Torchx.reshape(from_nx(t), shape) |> to_nx(out)
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t),
-    do: Torchx.to_type(to_ref(t), to_torch_type(type)) |> from_ref(out)
+    do: Torchx.to_type(from_nx(t), to_torch_type(type)) |> to_nx(out)
 
   @impl true
   def squeeze(out, %T{} = t, _axes) do
-    Torchx.squeeze(to_ref(t)) |> from_ref(out)
+    Torchx.squeeze(from_nx(t)) |> to_nx(out)
   end
 
   # TODO: Handle axes properly
   @impl true
   def broadcast(out, %T{} = t, shape, axes) do
-    Torchx.broadcast_to(maybe_reshape(t, shape, axes) |> to_ref(), shape)
-    |> from_ref(out)
+    Torchx.broadcast_to(maybe_reshape(t, shape, axes) |> from_nx(), shape)
+    |> to_nx(out)
   end
 
   defp maybe_reshape(%T{shape: {n}} = t, {n, _}, [0]), do: Nx.reshape(t, {n, 1})
@@ -214,16 +192,16 @@ defmodule Torchx.Backend do
 
   @impl true
   def transpose(out, %T{} = t, axes) do
-    Torchx.permute(to_ref(t), axes) |> from_ref(out)
+    Torchx.permute(from_nx(t), axes) |> to_nx(out)
   end
 
   @impl true
   def slice(%T{shape: shape} = out, %T{} = t, start_indices, lengths, strides) do
     t
-    |> to_ref()
+    |> from_nx()
     |> narrow(start_indices, lengths, 0, shape)
     |> stride(shape, lengths, strides)
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
@@ -266,7 +244,7 @@ defmodule Torchx.Backend do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
-    Torchx.sum(to_ref(t), axes, keep_axes) |> from_ref(out)
+    Torchx.sum(from_nx(t), axes, keep_axes) |> to_nx(out)
   end
 
   @impl true
@@ -276,7 +254,7 @@ defmodule Torchx.Backend do
     axis = opts[:axis] || -1
     keep_axes = opts[:keep_axes] || false
 
-    Torchx.argmax(to_ref(t), axis, keep_axes) |> from_ref(out)
+    Torchx.argmax(from_nx(t), axis, keep_axes) |> to_nx(out)
   end
 
   @impl true
@@ -286,27 +264,7 @@ defmodule Torchx.Backend do
     axis = opts[:axis] || -1
     keep_axes = opts[:keep_axes] || false
 
-    Torchx.argmin(to_ref(t), axis, keep_axes) |> from_ref(out)
-  end
-
-  defp unsupported_option!(opts, key, acceptable_default) do
-    if opts[key] != acceptable_default do
-      raise "#{inspect(key)} option is not supported in #{caller()}"
-    end
-  end
-
-  defp caller(depth \\ 3) do
-    {module, func, arity, [file: _file, line: _line]} =
-      Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(depth)
-
-    "#{inspect(module)}.#{func}/#{arity - 1}"
-  end
-
-  defp check_type!(type) do
-    to_torch_type(
-      type,
-      " (explicitly cast the input tensor to a signed integer before taking sum)"
-    )
+    Torchx.argmin(from_nx(t), axis, keep_axes) |> to_nx(out)
   end
 
   ## Ops
@@ -323,8 +281,8 @@ defmodule Torchx.Backend do
     def unquote(op)(out, l, r) do
       {left, right} = maybe_cast_u8(l, r)
 
-      Torchx.unquote(op)(to_ref(left), to_ref(right))
-      |> from_ref(out)
+      Torchx.unquote(op)(from_nx(left), from_nx(right))
+      |> to_nx(out)
     end
   end
 
@@ -349,11 +307,11 @@ defmodule Torchx.Backend do
       %T{type: {_, size_right}} = right
 
       if size_left >= size_right do
-        Torchx.unquote(op)(to_ref(left), to_ref(right))
+        Torchx.unquote(op)(from_nx(left), from_nx(right))
       else
-        Torchx.unquote(op)(to_ref(right), to_ref(left))
+        Torchx.unquote(op)(from_nx(right), from_nx(left))
       end
-      |> from_ref(out)
+      |> to_nx(out)
     end
   end
 
@@ -365,7 +323,7 @@ defmodule Torchx.Backend do
   for op <- unary_ops do
     @impl true
     def unquote(op)(out, tensor) do
-      Torchx.unquote(op)(to_ref(tensor)) |> from_ref(out)
+      Torchx.unquote(op)(from_nx(tensor)) |> to_nx(out)
     end
   end
 
@@ -385,25 +343,25 @@ defmodule Torchx.Backend do
       left_axes,
       right_axes
     )
-    |> from_ref(out)
+    |> to_nx(out)
   end
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
-    Torchx.cholesky(to_ref(t)) |> from_ref(out)
+    Torchx.cholesky(from_nx(t)) |> to_nx(out)
   end
 
   @impl true
   def qr({q_holder, r_holder}, tensor, opts) do
-    {q, r} = Torchx.qr(to_ref(tensor), opts[:mode] == :reduced)
-    {from_ref(q, q_holder), from_ref(r, r_holder)}
+    {q, r} = Torchx.qr(from_nx(tensor), opts[:mode] == :reduced)
+    {to_nx(q, q_holder), to_nx(r, r_holder)}
   end
 
   @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do
-        binary = Torchx.to_blob_view(to_ref(tensor))
+        binary = Torchx.to_blob(from_nx(tensor))
         Nx.Backend.inspect(tensor, binary, inspect_opts)
       else
         "Tensors on the GPU cannot be inspected. Explicitly transfer the tensor by calling Nx.backend_transfer/1"
@@ -426,35 +384,56 @@ defmodule Torchx.Backend do
     end
   end
 
-  ## Helpers
+  ## Conversions
 
-  defp to_scalar(n) when is_number(n), do: n
-  defp to_scalar(%T{} = t), do: t |> to_ref() |> Torchx.item()
+  @doc false
+  def from_nx(%T{data: %TB{ref: device_ref}}), do: device_ref
+  def from_nx(%T{} = tensor), do: Nx.backend_transfer(tensor, TB) |> from_nx()
 
-  defp to_ref(%T{data: %TB{ref: device_ref}}), do: device_ref
-  defp to_ref(%T{} = tensor), do: Nx.backend_transfer(tensor, TB) |> to_ref()
-
-  defp to_typed_ref(tensor, expected_type, expected_type),
-    do: tensor
-
-  defp to_typed_ref(tensor, _ref_type, expected_type),
-    do: Torchx.to_type(tensor, to_torch_type(expected_type))
-
-  defp from_ref({device, ref} = device_ref, %T{type: type, shape: shape} = t)
+  @doc false
+  def to_nx({device, ref} = device_ref, %T{type: type, shape: shape} = t)
        when is_atom(device) and is_reference(ref) do
     %{t | data: %__MODULE__{ref: check_shape_and_type!(device_ref, shape, type)}}
   end
 
+  @doc false
+  def from_torch_type(:char), do: {:s, 8}
+  def from_torch_type(:byte), do: {:u, 8}
+  def from_torch_type(:bool), do: {:u, 8}
+  def from_torch_type(:short), do: {:s, 16}
+  def from_torch_type(:int), do: {:s, 32}
+  def from_torch_type(:long), do: {:s, 64}
+  def from_torch_type(:brain), do: {:bf, 16}
+  def from_torch_type(:half), do: {:f, 16}
+  def from_torch_type(:float), do: {:f, 32}
+  def from_torch_type(:double), do: {:f, 64}
+
+  defp to_torch_type(nx_type, hint \\ "")
+  defp to_torch_type({:u, 8}, _), do: :byte
+  defp to_torch_type({:s, 8}, _), do: :char
+  defp to_torch_type({:s, 16}, _), do: :short
+  defp to_torch_type({:s, 32}, _), do: :int
+  defp to_torch_type({:s, 64}, _), do: :long
+  defp to_torch_type({:bf, 16}, _), do: :brain
+  defp to_torch_type({:f, 16}, _), do: :half
+  defp to_torch_type({:f, 32}, _), do: :float
+  defp to_torch_type({:f, 64}, _), do: :double
+
+  defp to_torch_type({:u, size}, hint) when size in [16, 32, 64] do
+    raise ArgumentError,
+          String.trim("Torchx does not support unsigned #{size} bit integer#{hint}")
+  end
+
   if Application.compile_env(:torchx, :check_shape_and_type, false) do
     defp check_shape_and_type!(device_ref, shape, type) do
-      current_type = Torchx.type_of(device_ref) |> from_torch_type()
+      current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
       if current_type != type do
         raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
                 "Please report this bug"
       end
 
-      current_shape = Torchx.shape_of(device_ref)
+      current_shape = Torchx.shape(device_ref)
 
       if current_shape != shape do
         raise "shape mismatch in Torchx: expected #{inspect(shape)}, got: #{inspect(current_shape)}. " <>
@@ -463,22 +442,45 @@ defmodule Torchx.Backend do
 
       device_ref
     end
-
-    defp from_torch_type(:char), do: {:s, 8}
-    defp from_torch_type(:byte), do: {:u, 8}
-    defp from_torch_type(:bool), do: {:u, 8}
-    defp from_torch_type(:short), do: {:s, 16}
-    defp from_torch_type(:int), do: {:s, 32}
-    defp from_torch_type(:long), do: {:s, 64}
-    defp from_torch_type(:brain), do: {:bf, 16}
-    defp from_torch_type(:half), do: {:f, 16}
-    defp from_torch_type(:float), do: {:f, 32}
-    defp from_torch_type(:double), do: {:f, 64}
   else
     defp check_shape_and_type!(device_ref, _, _), do: device_ref
   end
 
+  ## Helpers
+
+  defp to_scalar(n) when is_number(n), do: n
+  defp to_scalar(%T{} = t), do: t |> from_nx() |> Torchx.item()
+
+  defp to_typed_ref(tensor, expected_type, expected_type),
+    do: tensor
+
+  defp to_typed_ref(tensor, _ref_type, expected_type),
+    do: Torchx.to_type(tensor, to_torch_type(expected_type))
+
   defp device?(%T{data: %TB{ref: {actual, _}}}, expected), do: expected == actual
+
+  defp device_option(nil), do: {:cpu, -1}
+  defp device_option(backend_opts), do: backend_opts[:device] || {:cpu, -1}
+
+  defp unsupported_option!(opts, key, acceptable_default) do
+    if opts[key] != acceptable_default do
+      raise "#{inspect(key)} option is not supported in #{caller()}"
+    end
+  end
+
+  defp caller(depth \\ 3) do
+    {module, func, arity, [file: _file, line: _line]} =
+      Process.info(self(), :current_stacktrace) |> elem(1) |> Enum.fetch!(depth)
+
+    "#{inspect(module)}.#{func}/#{arity - 1}"
+  end
+
+  defp check_type!(type) do
+    to_torch_type(
+      type,
+      " (explicitly cast the input tensor to a signed integer before taking sum)"
+    )
+  end
 
   ## All remaining callbacks
 

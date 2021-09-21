@@ -99,6 +99,8 @@ defmodule Torchx do
   use Torchx.Macro
   alias Torchx.NIF
 
+  defguard is_tensor(dev, ref) when is_atom(dev) and is_reference(ref)
+
   @doc """
   Check if device of the given type is available for Torchx.
   Device atom can be any of:
@@ -165,9 +167,7 @@ defmodule Torchx do
   deftensor argmax(tensor, axis, keep_axes)
   deftensor argmin(tensor, axis, keep_axes)
 
-  ## Operations
-
-  ### Binary
+  ## Binary ops
 
   deftensor add(tensorA, tensorB)
   deftensor subtract(tensorA, tensorB)
@@ -202,7 +202,7 @@ defmodule Torchx do
   deftensor tensordot(tensorA, tensorB, axesA, axesB)
   deftensor matmul(tensorA, tensorB)
 
-  ### Unary
+  ## Unary ops
 
   deftensor exp(tensor)
   deftensor expm1(tensor)
@@ -236,40 +236,43 @@ defmodule Torchx do
   deftensor round(tensor)
   deftensor sign(tensor)
 
-  ## Transformations
+  ## LinAlg
 
   deftensor cholesky(tensor)
   deftensor cholesky(tensor, upper)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
 
-  ## Return values
+  ## Non-tensor return values
 
   defvalue to_blob(tensor)
   defvalue to_blob(tensor, limit)
   defvalue delete_tensor(tensor)
-
-  ## Utils
-
-  # TODO: make them public
-  # TODO: confirm they are all CPU based (if not, move to defvalue)
-
-  @doc false
-  def type_of({_device, ref}), do: NIF.scalar_type(ref) |> unwrap!()
-
-  @doc false
-  def shape_of({_device, ref}), do: NIF.shape(ref) |> unwrap!()
-
-  @doc false
-  def item({_device, ref}), do: NIF.item(ref) |> unwrap!()
-
-  @doc false
-  def nbytes({_device, ref}), do: NIF.nbytes(ref) |> unwrap!()
-
-  @doc false
-  def to_blob_view({_device, ref}), do: NIF.to_blob_view(ref) |> unwrap!()
+  defvalue item(tensor)
 
   ## Reflection
+
+  def scalar_type({dev, ref}) when is_tensor(dev, ref), do: NIF.scalar_type(ref) |> unwrap!()
+  def shape({dev, ref}) when is_tensor(dev, ref), do: NIF.shape(ref) |> unwrap!()
+  def nbytes({dev, ref}) when is_tensor(dev, ref), do: NIF.nbytes(ref) |> unwrap!()
+
+  ## Nx
+
+  @doc """
+  Gets a Torchx tensor from a Nx tensor.
+  """
+  def from_nx(tensor) do
+    Torchx.Backend.from_nx(tensor)
+  end
+
+  @doc """
+  Converts a Torchx tensor to a Nx tensor.
+  """
+  def to_nx(torchx) do
+    type = torchx |> scalar_type() |> Torchx.Backend.from_torch_type()
+    tensor = Nx.template(shape(torchx), type)
+    Torchx.Backend.to_nx(torchx, tensor)
+  end
 
   @doc false
   def __torch__, do: @torch_function
@@ -324,13 +327,13 @@ defmodule Torchx do
 
   defp prepare_tensors!(tensors) do
     Enum.map_reduce(tensors, nil, fn
-      {dev, ref}, nil when is_atom(dev) and is_reference(ref) ->
+      {dev, ref}, nil when is_tensor(dev, ref) ->
         {ref, dev}
 
-      {dev, ref}, dev when is_atom(dev) and is_reference(ref) ->
+      {dev, ref}, dev when is_tensor(dev, ref) ->
         {ref, dev}
 
-      {dev, ref}, other_dev when is_atom(dev) and is_reference(ref) ->
+      {dev, ref}, other_dev when is_tensor(dev, ref) ->
         raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
 
       bad_tensor, _dev ->

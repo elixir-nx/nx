@@ -18,9 +18,7 @@ defmodule Torchx.NIF do
   def cuda_is_available(), do: :erlang.nif_error(:undef)
   def cuda_device_count(), do: :erlang.nif_error(:undef)
 
-  def item(_tensor), do: :erlang.nif_error(:undef)
   def scalar_type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
-  def to_blob_view(_tensor), do: :erlang.nif_error(:undef)
 end

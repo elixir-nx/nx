@@ -6,8 +6,8 @@ defmodule TorchxTest do
       {:cpu, ref} = tensor = Torchx.arange(0, 26, 2, :short, :cpu)
 
       assert is_reference(ref)
-      assert Torchx.type_of(tensor) == :short
-      assert Torchx.shape_of(tensor) == {13}
+      assert Torchx.scalar_type(tensor) == :short
+      assert Torchx.shape(tensor) == {13}
     end
   end
 
@@ -18,6 +18,19 @@ defmodule TorchxTest do
 
       {:cpu, ref} = Torchx.tensordot(a, b, [0], [0])
       assert is_reference(ref)
+    end
+  end
+
+  describe "torchx<->nx" do
+    test "to_nx" do
+      assert Torchx.arange(0, 26, 1, :short, :cpu)
+             |> Torchx.to_nx()
+             |> Nx.backend_transfer() == Nx.iota({26}, type: {:s, 16})
+    end
+
+    test "from_nx" do
+      tensor = Nx.iota({26}, type: {:s, 16})
+      assert Nx.to_binary(tensor) == tensor |> Torchx.from_nx() |> Torchx.to_blob()
     end
   end
 end

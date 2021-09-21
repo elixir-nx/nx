@@ -5,24 +5,6 @@
 
 ErlNifResourceType *TENSOR_TYPE;
 
-std::map<const std::string, const torch::DeviceType> devices = {{"cpu", torch::kCPU}, {"cuda", torch::kCUDA}, {"hip", torch::kHIP}, {"fpga", torch::kFPGA}, {"msnpu", torch::kMSNPU}, {"xla", torch::kXLA}, {"vulkan", torch::kVulkan}, {"metal", torch::kMetal}, {"xpu", torch::kXPU}};
-
-inline torch::DeviceType string2device(const std::string atom)
-{
-  return devices[atom];
-}
-
-inline std::string device2string(const torch::DeviceType device)
-{
-  for (std::map<const std::string, const torch::DeviceType>::iterator i = devices.begin(); i != devices.end(); ++i)
-  {
-    if (i->second == device)
-      return i->first;
-  }
-  return "";
-}
-
-
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
@@ -182,17 +164,15 @@ NIF(to_blob)
     byte_size = limit * t->itemsize();
   }
 
-  void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-  memcpy(result_data, t->data_ptr(), byte_size);
+  torch::optional<torch::Device> device = torch::device_of(*t);
 
-  return nx::nif::ok(env, result);
-}
-
-NIF(to_blob_view)
-{
-  TENSOR_PARAM(0, t);
-
-  return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), t->nbytes()));
+  if(device.has_value() && device.value().type() == torch::kCPU) {
+    return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), byte_size));
+  } else {
+    void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
+    memcpy(result_data, t->data_ptr(), byte_size);
+    return nx::nif::ok(env, result);
+  }
 }
 
 NIF(item)
@@ -668,6 +648,7 @@ static ErlNifFunc nif_functions[] = {
     DF(eye, 3),
     DF(full, 4),
 
+    DF(item, 1),
     DF(from_blob, 4),
     DF(to_blob, 1),
     DF(to_blob, 2),
@@ -757,12 +738,9 @@ static ErlNifFunc nif_functions[] = {
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),
-
-    F(item, 1),
     F(scalar_type, 1),
     F(shape, 1),
-    F(nbytes, 1),
-    F(to_blob_view, 1),
+    F(nbytes, 1)
 };
 
 ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
