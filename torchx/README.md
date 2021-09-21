@@ -25,14 +25,18 @@ end
 
 To compile `Torchx`, you will need to download a precompiled version of `LibTorch` and tell `Torchx` how to use it:
 
-  1. [Download `LibTorch` from PyTorch's official website](https://pytorch.org/get-started/locally/) - make sure you select "LibTorch" as the package option alongside your Operating System
-  2. Unpackage LibTorch to a directory of your choice
-  3. Set the `LIBTORCH_DIR` [environment variable](https://en.wikipedia.org/wiki/Environment_variable) to point to the `LibTorch` directory
+1. [Download `LibTorch` from PyTorch's official website](https://pytorch.org/get-started/locally/)
+
+   - Make sure you select "LibTorch" as the package option alongside your Operating System.
+   - Also ensure that you download the "pre-CXX11" variant
+
+2. Unpackage LibTorch to a directory of your choice
+3. Set the `LIBTORCH_DIR` [environment variable](https://en.wikipedia.org/wiki/Environment_variable) to point to the `LibTorch` directory
 
 If running on Windows, you will also need `make` and a `C++` compiler:
 
-  * [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
-  * [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
+- [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
+- [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
 
 ## Usage
 
