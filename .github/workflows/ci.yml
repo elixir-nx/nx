@@ -32,12 +32,12 @@ jobs:
           key: ${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: Download libtorch
         if: ${{ matrix.working_directory == 'torchx' }}
-        run: wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O libtorch.zip
+        run: wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O /tmp/libtorch.zip
       - name: Install libtorch
         if: ${{ matrix.working_directory == 'torchx' }}
         uses: TonyBogdanov/zip@1.0
         with:
-          args: unzip -qq libtorch.zip -d . && export LIBTORCH_DIR=./libtorch
+          args: unzip -qq /tmp/libtorch.zip -d . && export LIBTORCH_DIR=/tmp/libtorch
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
