@@ -20,7 +20,7 @@ defmodule Torchx.Backend do
         iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Torchx.Backend) |> Nx.round()
         #Nx.Tensor<
           f32[4]
-          [-2.0, 0.0, 0.0, 2.0]
+          [-2.0, -0.0, 0.0, 2.0]
         >
 
     While binary backend will do:
