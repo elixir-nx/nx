@@ -57,8 +57,6 @@ defmodule Torchx.NxDoctestTest do
     default_backend: 1,
     # erf_inv - removed due to rounding error
     erf_inv: 1,
-    # map - depends on anonymous functions, which are not supported
-    map: 3,
     # round - rounds to different direction
     round: 1,
     # to_binary - not supported, must call backend_transfer before
