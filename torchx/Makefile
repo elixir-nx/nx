@@ -3,7 +3,7 @@ LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(LIBTORCH_INCLUDE_PATH) -I$(LIBTORCH_API_INCLUDE_PATH) \
 	 -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -shared \
-	 -std=c++14 -D_GLIBCXX_USE_CXX11_ABI=0
+	 -std=c++14 -D_GLIBCXX_USE_CXX11_ABI=0 -fopenmp
 LDFLAGS = -L$(LIBTORCH_LINK_PATH) -ltorch
 
 PRIV_DIR = $(MIX_APP_PATH)/priv

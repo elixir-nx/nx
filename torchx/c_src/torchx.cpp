@@ -58,7 +58,7 @@ inline std::string type2string(const torch::ScalarType type)
   }
 
 #define CATCH()                                              \
-  catch (c10::Error error)                                   \
+  catch (c10::Error &error)                                   \
   {                                                          \
     std::ostringstream msg;                                  \
     msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
