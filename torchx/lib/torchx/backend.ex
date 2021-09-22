@@ -394,7 +394,7 @@ defmodule Torchx.Backend do
 
   @doc false
   def to_nx({device, ref} = device_ref, %T{type: type, shape: shape} = t)
-       when is_atom(device) and is_reference(ref) do
+      when is_atom(device) and is_reference(ref) do
     %{t | data: %__MODULE__{ref: check_shape_and_type!(device_ref, shape, type)}}
   end
 
