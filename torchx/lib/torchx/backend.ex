@@ -487,10 +487,10 @@ defmodule Torchx.Backend do
   ## All remaining callbacks
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
-  # funs = []
+  unimplemented = [all_close?: 4, bitcast: 3, cbrt: 2, map: 4, window_mean: 4] ++ funs
 
   @doc false
-  def __unimplemented__, do: unquote(funs)
+  def __unimplemented__, do: unquote(unimplemented)
 
   for {fun, arity} <- funs do
     args = Macro.generate_arguments(arity, __MODULE__)

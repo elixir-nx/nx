@@ -16,25 +16,17 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @temporarily_broken_doctests [
-    # all_close? - Depends on all? which is not supported
-    all_close?: 3,
     # argmax - tie_break option not supported
     argmax: 2,
     # argmin - tie_break option not supported
     argmin: 2,
-    # broadcast - shape mismatch
+    # broadcast - shape mismatch in one test
     broadcast: 3,
-    # concatenate - unsupported on torchx
-    concatenate: 3,
-    # cbrt - not supported
-    cbrt: 1,
     # dot - Batching not supported
     dot: 6,
-    # map - operation not supported
-    map: 3,
     # mean - Torchx expects a input tensor but receives a number as input
     mean: 2,
-    # outer - shape mismatch
+    # outer - shape mismatch in some tests
     outer: 2,
     # quotient - Torchx expects a input tensor but receives a number as input
     quotient: 2,
@@ -42,12 +34,10 @@ defmodule Torchx.NxDoctestTest do
     slice: 4,
     # slice_axis - expects scalar starts and receives tensors
     slice_axis: 5,
-    # stack - also uses concatenate internally
+    # stack - fails in some tests
     stack: 2,
     # to_batched_list - Shape mismatch due to unsupported options in some tests
     to_batched_list: 3,
-    # window_mean - depends on window_sum
-    window_mean: 3,
   ]
 
   @inherently_unsupported_doctests [
@@ -55,8 +45,6 @@ defmodule Torchx.NxDoctestTest do
     atanh: 1,
     # atan2 - depends on to_binary
     atan2: 2,
-    # bitcast - not supported
-    bitcast: 2,
     # ceil - sign error -0.0 vs 0.0
     ceil: 1,
     # cos - removed due to rounding error
