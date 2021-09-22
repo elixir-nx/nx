@@ -36,7 +36,7 @@ jobs:
         with:
           args:
             wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -O libtorch.zip &&\
-            unzip libtorch.zip &&\
+            unzip -qq libtorch.zip -d . &&\
             export LIBTORCH_DIR=$(pwd)/libtorch
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
