@@ -41,10 +41,8 @@ jobs:
       - name: Download and install libtorch
         if: ${{ matrix.working_directory == 'torchx' && steps.libtorch-cache.outputs.cache-hit != 'true' }}
         run: |
-          if [ ! -d libtorch ]; then
-            wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O libtorch.zip
-            unzip -qq libtorch.zip
-          fi
+          wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O libtorch.zip
+          unzip -qq libtorch.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
