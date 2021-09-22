@@ -25,7 +25,14 @@ defmodule EXLA.MixProject do
     [
       extra_applications: [:logger],
       mod: {EXLA.Application, []},
-      env: [clients: [default: []]]
+      env: [
+        clients: [
+          default: [],
+          cuda: [platform: :cuda],
+          rocm: [platform: :rocm],
+          tpu: [platform: :tpu]
+        ]
+      ]
     ]
   end
 

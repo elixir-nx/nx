@@ -47,11 +47,7 @@ You can also pass `EXLA` as a compiler to `Nx.Defn.jit/4/` and friends:
 
 ```elixir
 # JIT
-Nx.Defn.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], EXLA)
-
-# Async/await
-async = Nx.Defn.async(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], EXLA)
-Nx.Async.await(async)
+Nx.Defn.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], compiler: EXLA)
 ```
 
 Those functions are also aliased in the `EXLA` module for your convenience:
@@ -59,10 +55,13 @@ Those functions are also aliased in the `EXLA` module for your convenience:
 ```elixir
 # JIT
 EXLA.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)])
+```
 
-# Async/await
-async = EXLA.async(&some_function/2, [Nx.tensor(1), Nx.tensor(2)])
-Nx.Async.await(async)
+You can also specify the client you want to execute the operation on:
+
+```elixir
+# JIT
+EXLA.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], client: :cuda)
 ```
 
 ## Contributing
