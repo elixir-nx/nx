@@ -6346,7 +6346,7 @@ defmodule Nx do
     opts = keyword!(opts, type: type)
     output_type = opts[:type]
     out = %{tensor | type: output_type}
-    impl!(tensor).map(out, tensor, fun)
+    impl!(tensor).map(out, tensor, opts, fun)
   end
 
   ## Matrix ops

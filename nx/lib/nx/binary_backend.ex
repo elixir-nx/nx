@@ -1412,7 +1412,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, fun) do
+  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, _opts, fun) do
     data = to_binary(tensor)
     template = %{tensor | shape: {}}
 
