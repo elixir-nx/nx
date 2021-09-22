@@ -69,32 +69,48 @@ defmodule Torchx.NxDoctestTest do
       Torchx.Backend.__unimplemented__()
       |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
       |> Kernel.++(
+        # to_binary - not supported, must call backend_transfer before
         to_binary: 2,
+        # to_batched_list - Shape mismatch
         to_batched_list: 3,
+        # default_backend - Test expectes BinaryBackend, but we return Torchx.Backend
         default_backend: 1,
+        # round - rounds to different direction
         round: 1,
+        # argmax - tie_break option not supported
         argmax: 2,
+        # argmin - tie_break option not supported
         argmin: 2,
+        # logistic - rounding error
         logistic: 1,
+        # random_uniform - depends on to_binary
         random_uniform: 4,
-        random_normal: 4,
+        # broadcast - shape mismatch
         broadcast: 3,
+        # slice_axis - expects scalar starts and receives tensors
         slice_axis: 5,
+        # outer - shape mismatch
         outer: 2,
-        qr: 2,
+        # quotient - Torchx expects a input tensor but receives a number as input
         quotient: 2,
+        # window_mean - depends on window_sum
         window_mean: 3,
+        # mean - Torchx expects a input tensor but receives a number as input
         mean: 2,
+        # map - operation not supported
         map: 3,
+        # to_flat_list - depends on to_binary
         to_flat_list: 2,
-        cholesky: 1,
-        norm: 2,
+        # all_close? - Depends on all? which is not supported
         all_close?: 3,
+        # atan2 - depends on to_binary
         atan2: 2,
+        # bitcast - not supported
         bitcast: 2,
+        # cbrt - not supported
         cbrt: 1,
+        # cos - removed due to rounding error
         cos: 1,
-        erfc: 1,
         # atanh - removed due to rounding error
         atanh: 1,
         # concatenate - unsupported on torchx
