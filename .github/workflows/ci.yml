@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        working_directory: ["nx", "exla"]
+        working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.12.0"]
         otp: ["24.0"]
     defaults:
@@ -30,6 +30,12 @@ jobs:
         with:
           path: deps
           key: ${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - name: Install libtorch
+        if: ${{ matrix.working_directory == 'torchx' }}
+        run:
+          wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -O libtorch.zip &&\
+          unzip libtorch.zip &&\
+          export LIBTORCH_DIR=$(pwd)/libtorch
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
