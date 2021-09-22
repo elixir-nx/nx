@@ -317,7 +317,7 @@ defmodule Torchx.Backend do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
-      [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt] ++
+      [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
 
   for op <- unary_ops do
@@ -487,7 +487,7 @@ defmodule Torchx.Backend do
   ## All remaining callbacks
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
-  unimplemented = [all_close?: 4, bitcast: 3, cbrt: 2, map: 4, window_mean: 4] ++ funs
+  unimplemented = [bitcast: 3] ++ funs
 
   @doc false
   def __unimplemented__, do: unquote(unimplemented)

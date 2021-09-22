@@ -16,6 +16,7 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @temporarily_broken_doctests [
+    all_close?: 3,
     # argmax - tie_break option not supported
     argmax: 2,
     # argmin - tie_break option not supported
@@ -38,6 +39,7 @@ defmodule Torchx.NxDoctestTest do
     stack: 2,
     # to_batched_list - Shape mismatch due to unsupported options in some tests
     to_batched_list: 3,
+    window_mean: 3
   ]
 
   @inherently_unsupported_doctests [
@@ -55,6 +57,8 @@ defmodule Torchx.NxDoctestTest do
     default_backend: 1,
     # erf_inv - removed due to rounding error
     erf_inv: 1,
+    # map - depends on anonymous functions, which are not supported
+    map: 3,
     # round - rounds to different direction
     round: 1,
     # to_binary - not supported, must call backend_transfer before

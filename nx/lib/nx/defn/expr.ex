@@ -276,7 +276,7 @@ defmodule Nx.Defn.Expr do
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
       [:population_count, :count_leading_zeros, :floor, :ceil, :round] ++
-      [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast]
+      [:erf, :erfc, :erf_inv, :acos, :asin, :atan]
 
   for op <- unary_ops do
     @impl true
@@ -284,6 +284,12 @@ defmodule Nx.Defn.Expr do
       tensor = to_expr(tensor)
       expr(out, tensor.data.context, unquote(op), [tensor])
     end
+  end
+
+  @impl true
+  def bitcast(out, tensor, type) do
+    tensor = to_expr(tensor)
+    expr(out, tensor.data.context, :bitcast, [tensor, type])
   end
 
   @impl true
@@ -454,10 +460,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def map(%{type: type} = out, tensor, fun) do
+  def map(%{type: type} = out, tensor, opts, fun) do
     args = [parameter(:map, type, {}, 0)]
     %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :map, [tensor, fun(context, fun, args)])
+    expr(out, context, :map, [tensor, opts, fun(context, fun, args)])
   end
 
   @impl true

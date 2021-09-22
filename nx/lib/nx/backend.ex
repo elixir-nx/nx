@@ -36,6 +36,7 @@ defmodule Nx.Backend do
   @type shape :: Nx.Tensor.shape()
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
+  @type type :: Nx.Tensor.type()
   @type backend_options :: term()
 
   @callback scalar(out :: tensor, binary, backend_options) :: tensor
@@ -53,7 +54,7 @@ defmodule Nx.Backend do
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
 
   @callback as_type(out :: tensor, tensor) :: tensor
-  @callback bitcast(out :: tensor, tensor) :: tensor
+  @callback bitcast(out :: tensor, tensor, type) :: tensor
   @callback reshape(out :: tensor, tensor, shape) :: tensor
   @callback squeeze(out :: tensor, tensor, axes) :: tensor
   @callback broadcast(out :: tensor, tensor, shape, axes) :: tensor
@@ -86,7 +87,7 @@ defmodule Nx.Backend do
   @callback window_product(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_max(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_min(out :: tensor, tensor, shape, keyword) :: tensor
-  @callback map(out :: tensor, tensor, fun) :: tensor
+  @callback map(out :: tensor, tensor, keyword, fun) :: tensor
   @callback sort(out :: tensor, tensor, keyword) :: tensor
   @callback argsort(out :: tensor, tensor, keyword) :: tensor
   @callback scatter_window_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor

@@ -1529,7 +1529,7 @@ defmodule Nx do
               " output type #{inspect(type)}"
     end
 
-    impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
+    impl!(tensor).bitcast(%{tensor | type: new_type}, tensor, new_type)
   end
 
   @doc """
@@ -6346,7 +6346,7 @@ defmodule Nx do
     opts = keyword!(opts, type: type)
     output_type = opts[:type]
     out = %{tensor | type: output_type}
-    impl!(tensor).map(out, tensor, fun)
+    impl!(tensor).map(out, tensor, opts, fun)
   end
 
   ## Matrix ops

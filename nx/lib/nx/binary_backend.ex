@@ -1412,7 +1412,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, fun) do
+  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, _opts, fun) do
     data = to_binary(tensor)
     template = %{tensor | shape: {}}
 
@@ -1954,7 +1954,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def bitcast(out, tensor), do: from_binary(out, to_binary(tensor))
+  def bitcast(out, tensor, _new_type), do: from_binary(out, to_binary(tensor))
 
   @impl true
   def sort(output, t, opts), do: do_sort(output, t, opts, false)
