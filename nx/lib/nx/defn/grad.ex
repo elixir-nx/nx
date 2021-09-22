@@ -698,7 +698,7 @@ defmodule Nx.Defn.Grad do
     [{x, Expr.tensor(1.0)}]
   end
 
-  defp no_g_grad(:bitcast, [x, _type], _ans) do
+  defp no_g_grad(:bitcast, [x], _ans) do
     [{x, Expr.tensor(1.0)}]
   end
 

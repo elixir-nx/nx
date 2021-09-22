@@ -22,6 +22,8 @@ defmodule Torchx.NxDoctestTest do
     argmax: 2,
     # argmin - tie_break option not supported
     argmin: 2,
+    # bitcast - not supported yet, but perhaps can be implemented
+    bitcast: 2,
     # broadcast - shape mismatch in one test
     broadcast: 3,
     # dot - Batching not supported

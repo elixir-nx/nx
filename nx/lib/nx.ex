@@ -1529,7 +1529,7 @@ defmodule Nx do
               " output type #{inspect(type)}"
     end
 
-    impl!(tensor).bitcast(%{tensor | type: new_type}, tensor, new_type)
+    impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
   end
 
   @doc """

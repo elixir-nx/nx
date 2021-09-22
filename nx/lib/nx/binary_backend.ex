@@ -1954,7 +1954,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def bitcast(out, tensor, _new_type), do: from_binary(out, to_binary(tensor))
+  def bitcast(out, tensor), do: from_binary(out, to_binary(tensor))
 
   @impl true
   def sort(output, t, opts), do: do_sort(output, t, opts, false)

@@ -287,9 +287,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def bitcast(out, tensor, type) do
+  def bitcast(out, tensor) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :bitcast, [tensor, type])
+    expr(out, tensor.data.context, :bitcast, [tensor])
   end
 
   @impl true

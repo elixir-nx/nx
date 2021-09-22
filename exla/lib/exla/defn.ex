@@ -465,7 +465,7 @@ defmodule EXLA.Defn do
     to_type(arg, type)
   end
 
-  defp to_operator(:bitcast, [arg, _type], %{type: type}, _state) do
+  defp to_operator(:bitcast, [arg], %{type: type}, _state) do
     if op_type(arg) == type do
       arg
     else
