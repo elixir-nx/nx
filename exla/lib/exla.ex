@@ -61,17 +61,20 @@ defmodule EXLA do
       config :exla, :clients,
         default: [platform: :cuda]
 
-  You can also specify multiple clients for different platforms:
+  For convenience, EXLA ships with the client configuration for each
+  additional platform, which would be the equivalent to this:
 
       config :exla, :clients,
-        default: [platform: :host],
-        cuda: [platform: :cuda]
+        default: [],
+        cuda: [platform: :cuda],
+        rocm: [platform: :rocm],
+        tpu: [platform: :tpu]
 
-  While specifying multiple clients is possible, keep in mind you
-  want a single client per platform. If you have multiple clients
-  per platform, they can race each other and fight for resources,
-  such as memory. Therefore, we recommend developers to use the
-  `:default` client as much as possible.
+  However, you should avoid using multiple clients for the same platform.
+  If you have multiple clients per platform, they can race each other
+  and fight for resources, such as memory. Therefore, we recommend developers
+  to stick with the `:default` client as much as possible and configure it
+  accordingly. Use the other clients only during scripting for convenience.
 
   ### Client options
 
