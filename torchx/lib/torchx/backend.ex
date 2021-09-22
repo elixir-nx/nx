@@ -484,19 +484,32 @@ defmodule Torchx.Backend do
     )
   end
 
+  ## Functionality we can't provide
+
+  not_possible = [bitcast: 2, map: 4, reduce: 5, reduce_window: 6]
+
+  for {fun, arity} <- not_possible do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    @impl true
+    def unquote(fun)(unquote_splicing(args)) do
+      raise "operation #{unquote(fun)} is not supported on Torchx.Backend"
+    end
+  end
+
   ## All remaining callbacks
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
 
   @doc false
-  def __unimplemented__, do: unquote(funs)
+  def __unimplemented__, do: unquote(funs ++ not_possible)
 
   for {fun, arity} <- funs do
     args = Macro.generate_arguments(arity, __MODULE__)
 
     @impl true
     def unquote(fun)(unquote_splicing(args)) do
-      raise "operation #{unquote(fun)} is not supported on Torchx.Backend"
+      raise "operation #{unquote(fun)} is not yet supported on Torchx.Backend"
     end
   end
 end
