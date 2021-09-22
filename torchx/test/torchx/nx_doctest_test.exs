@@ -22,7 +22,7 @@ defmodule Torchx.NxDoctestTest do
       |> Kernel.++(
         # to_binary - not supported, must call backend_transfer before
         to_binary: 2,
-        # to_batched_list - Shape mismatch
+        # to_batched_list - Shape mismatch due to unsupported options in some tests
         to_batched_list: 3,
         # default_backend - Test expectes BinaryBackend, but we return Torchx.Backend
         default_backend: 1,
