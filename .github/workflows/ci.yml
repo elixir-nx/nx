@@ -32,8 +32,17 @@ jobs:
           path: deps
           key: ${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: Download libtorch
+        uses: actions/cache@v1
+        id: libtorch-cache
         if: ${{ matrix.working_directory == 'torchx' }}
-        run: wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O libtorch.zip && unzip -qq libtorch.zip
+        with:
+          path: libtorch
+          key: libtorch.zip
+          run: |
+            if [! -d libtorch ]; then
+              wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O libtorch.zip
+              unzip -qq libtorch.zip
+            fi
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
