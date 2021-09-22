@@ -20,7 +20,7 @@ defmodule Torchx.Backend do
         iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Torchx.Backend) |> Nx.round()
         #Nx.Tensor<
           f32[4]
-          [-2.0, 0.0, 0.0, 2.0]
+          [-2.0, -0.0, 0.0, 2.0]
         >
 
     While binary backend will do:
@@ -317,7 +317,7 @@ defmodule Torchx.Backend do
 
   unary_ops =
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh] ++
-      [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt] ++
+      [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
 
   for op <- unary_ops do

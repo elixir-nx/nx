@@ -667,7 +667,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:map, [arg, fun], %{shape: shape, type: type}, state) do
+  defp to_operator(:map, [arg, _opts, fun], %{shape: shape, type: type}, state) do
     arg = to_type(arg, type)
     comp = recur_computation(fun, type, state)
     EXLA.Op.map(arg, comp, Nx.axes(shape))

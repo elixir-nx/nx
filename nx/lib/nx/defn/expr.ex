@@ -454,10 +454,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def map(%{type: type} = out, tensor, fun) do
+  def map(%{type: type} = out, tensor, opts, fun) do
     args = [parameter(:map, type, {}, 0)]
     %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :map, [tensor, fun(context, fun, args)])
+    expr(out, context, :map, [tensor, opts, fun(context, fun, args)])
   end
 
   @impl true

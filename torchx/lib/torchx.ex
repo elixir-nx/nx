@@ -223,7 +223,6 @@ defmodule Torchx do
   deftensor atanh(tensor)
   deftensor sqrt(tensor)
   deftensor rsqrt(tensor)
-  deftensor cbrt(tensor)
   deftensor erf(tensor)
   deftensor erfc(tensor)
   deftensor erf_inv(tensor)
