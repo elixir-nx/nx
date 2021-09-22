@@ -276,7 +276,7 @@ defmodule Nx.Defn.Expr do
     [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tan, :cosh, :sinh, :tanh] ++
       [:acosh, :asinh, :atanh, :sqrt, :rsqrt, :cbrt, :negate, :sign, :abs, :bitwise_not] ++
       [:population_count, :count_leading_zeros, :floor, :ceil, :round] ++
-      [:erf, :erfc, :erf_inv, :acos, :asin, :atan]
+      [:erf, :erfc, :erf_inv, :acos, :asin, :atan, :bitcast]
 
   for op <- unary_ops do
     @impl true
@@ -284,12 +284,6 @@ defmodule Nx.Defn.Expr do
       tensor = to_expr(tensor)
       expr(out, tensor.data.context, unquote(op), [tensor])
     end
-  end
-
-  @impl true
-  def bitcast(out, tensor) do
-    tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :bitcast, [tensor])
   end
 
   @impl true
