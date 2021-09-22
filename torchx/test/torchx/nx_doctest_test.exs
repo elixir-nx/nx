@@ -107,7 +107,10 @@ defmodule Torchx.NxDoctestTest do
         cosh: 1,
         # erf_inv - removed due to rounding error
         erf_inv: 1,
-
+        # dot - Batching not supported
+        dot: 6,
+        # slice - expects numerical start indices, but now receives tensors,
+        slice: 4
       )
       |> Kernel.++([:moduledoc])
 end
