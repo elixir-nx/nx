@@ -16,6 +16,7 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @temporarily_broken_doctests [
+    # all_close? - depends on all? which is not implemented
     all_close?: 3,
     # argmax - tie_break option not supported
     argmax: 2,
@@ -39,6 +40,7 @@ defmodule Torchx.NxDoctestTest do
     stack: 2,
     # to_batched_list - Shape mismatch due to unsupported options in some tests
     to_batched_list: 3,
+    # window_mean - depends on window_sum which is not implemented
     window_mean: 3
   ]
 
