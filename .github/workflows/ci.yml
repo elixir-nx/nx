@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        working_directory: ["nx", "exla"]
+        working_directory: ["nx", "exla", "torchx"]
         elixir: ["1.12.0"]
         otp: ["24.0"]
     defaults:
@@ -18,6 +18,7 @@ jobs:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
+      LIBTORCH_DIR: libtorch
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -30,10 +31,22 @@ jobs:
         with:
           path: deps
           key: ${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - name: Retrieve libtorch cache
+        if: ${{ matrix.working_directory == 'torchx' }}
+        uses: actions/cache@v1
+        id: libtorch-cache
+        with:
+          path: libtorch
+          key: libtorch.zip
+      - name: Download and install libtorch
+        if: ${{ matrix.working_directory == 'torchx' && steps.libtorch-cache.outputs.cache-hit != 'true' }}
+        run: |
+          wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O libtorch.zip
+          unzip -qq libtorch.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
-      - name: Check warnings
+      - name: Compile and check warnings
         run: mix compile --warnings-as-errors
       - name: Check formatting
         run: mix format --check-formatted

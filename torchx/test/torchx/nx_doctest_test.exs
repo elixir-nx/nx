@@ -72,7 +72,7 @@ defmodule Torchx.NxDoctestTest do
     # logistic - rounding error
     logistic: 1,
     # random_uniform - depends on to_binary
-    random_uniform: 4,
+    random_uniform: 4
   ]
 
   doctest Nx,
