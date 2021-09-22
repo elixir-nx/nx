@@ -146,17 +146,12 @@ defmodule EXLA.Defn do
       end
 
     output_shape = EXLA.Op.get_shape(output)
+    %EXLA.Shape{dims: {size}, dtype: {:tuple, _}} = output_shape
 
     token =
-      if platform == :host do
-        %EXLA.Shape{dims: {size}, dtype: {:tuple, _}} = output_shape
-
-        Enum.reduce(1..size//1, token, fn pos, token ->
-          EXLA.Op.outfeed(EXLA.Op.get_tuple_element(output, pos - 1), token)
-        end)
-      else
-        EXLA.Op.outfeed(output, token)
-      end
+      Enum.reduce(1..size//1, token, fn pos, token ->
+        EXLA.Op.outfeed(EXLA.Op.get_tuple_element(output, pos - 1), token)
+      end)
 
     body_tuple = EXLA.Op.tuple(body_b, [EXLA.Op.infeed(token, flag_shape), acc, constant])
     body = EXLA.Builder.build(body_tuple)

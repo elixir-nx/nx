@@ -88,14 +88,10 @@ defmodule EXLA.Defn.Stream do
       do: [other |> Nx.to_tensor() |> Nx.to_binary()]
 
     def recv(%{client: client, device_id: device_id, recv_shape: recv_shape}) do
-      if client.platform == :host do
-        %EXLA.Shape{dtype: {:tuple, shapes}} = recv_shape
+      %EXLA.Shape{dtype: {:tuple, shapes}} = recv_shape
 
-        for shape <- shapes do
-          EXLA.Client.from_outfeed(client, device_id, shape)
-        end
-      else
-        EXLA.Client.from_outfeed(client, device_id, recv_shape)
+      for shape <- shapes do
+        EXLA.Client.from_outfeed(client, device_id, shape)
       end
     end
 

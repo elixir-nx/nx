@@ -66,27 +66,13 @@ defmodule EXLA.Client do
 
   If you want to receive a tuple shape, consider using `from_tuple_outfeed/2`,
   as it will return a separate binary for each individual tuple element.
+
+  > Note: XLA does not support tuple outfeed shapes. Passing one will simply
+  > block the operation indefinitely. Instead, convert the tuple into multiple
+  > outfeed operations.
   """
   def from_outfeed(%EXLA.Client{ref: client}, device_id, %EXLA.Shape{ref: shape_ref}) do
     EXLA.NIF.transfer_from_outfeed(client, device_id, shape_ref) |> unwrap!()
-  end
-
-  @doc """
-  Retrieves buffer from device outfeed with a tuple shape.
-
-  It returns a list of binaries mapping to the tuple.
-
-  > Note: XLA does not support tuple outfeed shapes when running on
-  > host. Passing one will simply block the operation indefinitely.
-  > Instead, convert the tuple into multiple outfeed operations.
-  """
-  def from_tuple_outfeed(
-        %EXLA.Client{ref: client},
-        device_id,
-        %EXLA.Shape{ref: shape_ref, dtype: {:tuple, shapes}}
-      ) do
-    sizes = Enum.map(shapes, &EXLA.Shape.byte_size/1)
-    EXLA.NIF.transfer_from_outfeed_list(client, device_id, shape_ref, sizes) |> unwrap!()
   end
 
   ## Callbacks

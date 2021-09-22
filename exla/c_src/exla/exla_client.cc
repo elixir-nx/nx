@@ -236,6 +236,7 @@ xla::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
 
       const char * data_ptr = const_cast<char *>(reinterpret_cast<char *>(tmp_bin.data));
       buf_ptrs.push_back(data_ptr);
+      data = tail;
     }
 
     xla::BorrowingLiteral literal(buf_ptrs, shape);
