@@ -487,6 +487,7 @@ defmodule Torchx.Backend do
   ## All remaining callbacks
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
+  # funs = []
 
   @doc false
   def __unimplemented__, do: unquote(funs)
