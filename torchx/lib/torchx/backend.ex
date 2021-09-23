@@ -133,9 +133,8 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def to_binary(_tensor, _limit \\ nil) do
-    raise "operation to_binary is not supported on Torchx.Backend. " <>
-            "You must first transfer the tensor to Elixir by calling Nx.backend_transfer/1"
+  def to_binary(tensor, limit) do
+    Torchx.to_blob(from_nx(tensor), limit)
   end
 
   @impl true

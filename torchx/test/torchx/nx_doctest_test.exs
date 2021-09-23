@@ -54,18 +54,10 @@ defmodule Torchx.NxDoctestTest do
   ]
 
   @inherently_unsupported_doctests [
-    # atan2 - depends on to_binary
-    atan2: 2,
     # bitcast - no API available
     bitcast: 2,
     # default_backend - specific to BinaryBackend
-    default_backend: 1,
-    # to_binary - not supported, must call backend_transfer before
-    to_binary: 2,
-    # to_flat_list - depends on to_binary
-    to_flat_list: 2,
-    # random_uniform - depends on to_binary
-    random_uniform: 4
+    default_backend: 1
   ]
 
   doctest Nx,

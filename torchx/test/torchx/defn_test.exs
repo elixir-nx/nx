@@ -41,4 +41,25 @@ defmodule Torchx.DefnTest do
                Nx.broadcast(Nx.tensor(1, backend: Nx.BinaryBackend), {2, 2})
     end
   end
+
+  describe "while" do
+    defn factorial_tuple(x) do
+      factorial = Nx.tensor(1, type: Nx.type(x))
+
+      {factorial, _} =
+        while {factorial, x}, Nx.greater(x, 1) do
+          {factorial * x, x - 1}
+        end
+
+      factorial
+    end
+
+    test "factorial tuple" do
+      assert factorial_tuple(5) |> Nx.backend_transfer() ==
+               Nx.tensor(120, backend: Nx.BinaryBackend)
+
+      assert factorial_tuple(10.0) |> Nx.backend_transfer() ==
+               Nx.tensor(3_628_800.0, backend: Nx.BinaryBackend)
+    end
+  end
 end

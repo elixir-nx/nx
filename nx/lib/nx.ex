@@ -684,14 +684,14 @@ defmodule Nx do
 
   ### Generating Integers
 
-      iex> t = Nx.random_uniform({10}, 5, 10, type: {:u, 32})
-      iex> for <<x::32-unsigned-native <- Nx.to_binary(t)>> do
+      iex> t = Nx.random_uniform({10}, 5, 10, type: {:u, 8})
+      iex> for <<x::8-unsigned-native <- Nx.to_binary(t)>> do
       ...>   true = x >= 5 and x < 10
       ...> end
       iex> Nx.shape(t)
       {10}
       iex> Nx.type(t)
-      {:u, 32}
+      {:u, 8}
 
       iex> t = Nx.random_uniform({5, 5}, -5, 5, type: {:s, 64})
       iex> for <<x::64-signed-native <- Nx.to_binary(t)>> do
@@ -1164,6 +1164,10 @@ defmodule Nx do
 
   @doc """
   Returns the underlying tensor as a binary.
+
+  **Warning**: converting a tensor to a binary can
+  potentially be a very expensive operation, as it
+  may copy a GPU tensor fully to the machine memory.
 
   It returns the in-memory binary representation of
   the tensor in a row-major fashion. The binary is
@@ -3182,16 +3186,16 @@ defmodule Nx do
 
   ### Arc tangent between tensors
 
-      # Note there is a bug in Erlang/OTP 23.0 and earlier where the compiler
-      # optimizes -0.0 away as 0.0. So we do: -1.0*(Integer.parse("0")|>elem(0))
-      iex> pos_and_neg_zero_x = Nx.multiply(Nx.tensor([[-1.0], [1.0]]), 0.0)
-      iex> pos_and_neg_zero_y = Nx.multiply(Nx.tensor([-1.0, 1.0]), 0.0)
-      iex> t = Nx.atan2(pos_and_neg_zero_x, pos_and_neg_zero_y)
-      iex> Nx.to_binary(t)
-      <<-3.141592653589793::float-32-native, (-1.0*(Integer.parse("0")|>elem(0)))::float-32-native,
-        3.141592653589793::float-32-native, 0.0::float-32-native>>
-      iex> Nx.shape(t)
-      {2, 2}
+      iex> neg_and_pos_zero_columns = Nx.tensor([[-0.0], [0.0]], type: {:f, 64})
+      iex> neg_and_pos_zero_rows = Nx.tensor([-0.0, 0.0], type: {:f, 64})
+      iex> Nx.atan2(neg_and_pos_zero_columns, neg_and_pos_zero_rows)
+      #Nx.Tensor<
+        f64[2][2]
+        [
+          [-3.141592653589793, -0.0],
+          [3.141592653589793, 0.0]
+        ]
+      >
 
   """
   @doc type: :element
