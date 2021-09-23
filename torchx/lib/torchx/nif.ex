@@ -2,8 +2,11 @@ defmodule Torchx.NIF do
   @moduledoc false
   @on_load :__on_load__
 
+  @nif_path Path.join([:code.priv_dir(:torchx), "torchx"])
+  @external_resource @nif_path
+
   def __on_load__ do
-    path = :filename.join(:code.priv_dir(:torchx), 'torchx')
+    path = String.to_charlist(@nif_path)
     :erlang.load_nif(path, 0)
   end
 

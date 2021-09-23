@@ -267,6 +267,11 @@ defmodule Torchx.Backend do
     Torchx.argmin(from_nx(t), axis, keep_axes) |> to_nx(out)
   end
 
+  @impl true
+  def all?(%T{} = out, %T{} = t, _opts) do
+    Torchx.all(from_nx(t))
+  end
+
   ## Ops
 
   binary_ops =

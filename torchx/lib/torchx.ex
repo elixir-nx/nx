@@ -189,6 +189,7 @@ defmodule Torchx do
   deftensor less(tensorA, tensorB)
   deftensor greater_equal(tensorA, tensorB)
   deftensor less_equal(tensorA, tensorB)
+  deftensor all(tensor)
 
   deftensor logical_and(tensorA, tensorB)
   deftensor logical_or(tensorA, tensorB)

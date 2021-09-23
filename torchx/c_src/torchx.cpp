@@ -557,6 +557,13 @@ NIF(argmin)
   }
 }
 
+NIF(all)
+{
+  TENSOR_PARAM(0, t);
+
+  TENSOR(torch::all(*t));
+}
+
 NIF(cholesky)
 {
   TENSOR_PARAM(0, t);
@@ -635,7 +642,7 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 
 #define DF(NAME, ARITY)                                      \
   {#NAME "_cpu", ARITY, NAME, ERL_NIF_DIRTY_JOB_CPU_BOUND},  \
-  {#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND}     \
+  {#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND}
 
 static ErlNifFunc nif_functions[] = {
     DF(randint, 5),
@@ -697,6 +704,7 @@ static ErlNifFunc nif_functions[] = {
     DF(sum, 3),
     DF(argmax, 3),
     DF(argmin, 3),
+    DF(all, 1),
 
     DF(abs, 1),
     DF(ceil, 1),
@@ -740,7 +748,6 @@ static ErlNifFunc nif_functions[] = {
     F(cuda_device_count, 0),
     F(scalar_type, 1),
     F(shape, 1),
-    F(nbytes, 1)
-};
+    F(nbytes, 1)};
 
 ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
