@@ -12,7 +12,8 @@ defmodule Torchx.MixProject do
       elixir: "~> 1.12-dev",
       deps: deps(),
       docs: docs(),
-      compilers: [:elixir_make] ++ Mix.compilers()
+      compilers: [:elixir_make] ++ Mix.compilers(),
+      elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
 
@@ -22,6 +23,9 @@ defmodule Torchx.MixProject do
       extra_applications: [:logger]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
