@@ -278,7 +278,7 @@ defmodule Torchx.Backend do
           []
 
         _axes ->
-          raise ":axes option only accepts a single axis per call"
+          raise ArgumentError, ":axes option only accepts a single axis per call"
       end
 
     keep_axes = opts[:keep_axes] || false

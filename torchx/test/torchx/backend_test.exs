@@ -95,6 +95,13 @@ defmodule Torchx.BackendTest do
         test_unary_op(:bitwise_not, unquote(type))
       end
     end
+
+    test "all? fails with more than one axis passed" do
+      assert_raise ArgumentError, ":axes option only accepts a single axis per call", fn ->
+        t = Nx.tensor([[[1]]])
+        Torchx.Backend.all?(t, t, axes: [0, 1])
+      end
+    end
   end
 
   # Division and power with bfloat16 are special cases in PyTorch,
