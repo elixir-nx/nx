@@ -268,8 +268,25 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def all?(%T{} = out, %T{} = t, _opts) do
-    Torchx.all(from_nx(t))
+  def all?(%T{} = out, %T{} = t, opts) do
+    axes =
+      case opts[:axes] do
+        axes when length(axes) in 0..1 ->
+          axes
+
+        nil ->
+          []
+
+        _axes ->
+          raise ":axes option only accepts a single axis per call"
+      end
+
+    keep_axes = opts[:keep_axes] || false
+
+    t
+    |> from_nx()
+    |> Torchx.all(axes, keep_axes)
+    |> to_nx(out)
   end
 
   ## Ops

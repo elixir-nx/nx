@@ -58,7 +58,7 @@ inline std::string type2string(const torch::ScalarType type)
   }
 
 #define CATCH()                                              \
-  catch (c10::Error error)                                   \
+  catch (c10::Error &error)                                   \
   {                                                          \
     std::ostringstream msg;                                  \
     msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
@@ -560,8 +560,14 @@ NIF(argmin)
 NIF(all)
 {
   TENSOR_PARAM(0, t);
+  LIST_PARAM(1, std::vector<int64_t>, axes);
+  PARAM(2, bool, keep_dim);
 
-  TENSOR(torch::all(*t));
+  if (axes.size() == 0) {
+    TENSOR(torch::all(*t))
+  } else {
+    TENSOR(torch::all(*t, axes[0], keep_dim))
+  }
 }
 
 NIF(cholesky)
@@ -704,7 +710,7 @@ static ErlNifFunc nif_functions[] = {
     DF(sum, 3),
     DF(argmax, 3),
     DF(argmin, 3),
-    DF(all, 1),
+    DF(all, 3),
 
     DF(abs, 1),
     DF(ceil, 1),
