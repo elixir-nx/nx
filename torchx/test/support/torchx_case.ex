@@ -11,10 +11,13 @@ defmodule Torchx.Case do
     end
   end
 
-  defmacro assert_tensor({:==, _, [left, right]}) do
-    quote do
-      assert Nx.backend_transfer(unquote(left), Nx.BinaryBackend) ==
-               Nx.backend_transfer(unquote(right), Nx.BinaryBackend)
-    end
+  def assert_all_close(left, right, opts \\ []) do
+    atol = opts[:atol] || 1.0e-4
+    rtol = opts[:rtol] || 1.0e-4
+
+    assert left
+           |> Nx.all_close?(right, atol: atol, rtol: rtol)
+           |> Nx.backend_transfer(Nx.BinaryBackend) ==
+             Nx.tensor(1, type: {:u, 8}, backend: Nx.BinaryBackend)
   end
 end

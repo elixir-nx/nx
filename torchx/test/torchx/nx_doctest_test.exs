@@ -8,7 +8,7 @@ defmodule Torchx.NxDoctestTest do
 
   # TODO: Add backend tests for the doctests that are excluded
 
-  use Torchx.Case, async: true
+  use ExUnit.Case, async: true
 
   setup do
     Nx.default_backend(Torchx.Backend)
@@ -76,54 +76,4 @@ defmodule Torchx.NxDoctestTest do
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)
       |> Kernel.++([:moduledoc])
-
-  describe "rounding error tests" do
-    test "atanh/1" do
-      assert_tensor(Nx.tensor(0.5493061542510986) == Nx.atanh(Nx.tensor(0.5)))
-    end
-
-    test "ceil/1" do
-      assert_tensor(Nx.tensor(-0.0) == Nx.ceil(Nx.tensor(-0.5)))
-      assert_tensor(Nx.tensor(1.0) == Nx.ceil(Nx.tensor(0.5)))
-    end
-
-    test "cos/1" do
-      assert_tensor(
-        Nx.tensor([-1.0, 0.4999999701976776, -1.0]) ==
-          Nx.cos(Nx.tensor([-:math.pi(), :math.pi() / 3, :math.pi()]))
-      )
-    end
-
-    test "cosh/1" do
-      assert_tensor(
-        Nx.tensor([11.591955184936523, 1.600286841392517, 11.591955184936523]) ==
-          Nx.cosh(Nx.tensor([-:math.pi(), :math.pi() / 3, :math.pi()]))
-      )
-    end
-
-    test "erfc/1" do
-      assert_tensor(
-        Nx.tensor([1.0, 0.4795001149177551, 0.0]) == Nx.erfc(Nx.tensor([0, 0.5, 10_000]))
-      )
-    end
-
-    test "erf_inv/1" do
-      assert_tensor(
-        Nx.tensor([0.0, 0.4769362807273865, 0.8134198188781738]) ==
-          Nx.erf_inv(Nx.tensor([0, 0.5, 0.75]))
-      )
-    end
-
-    test "round/1" do
-      assert_tensor(
-        Nx.tensor([-2.0, -0.0, 0.0, 2.0]) == Nx.round(Nx.tensor([-1.5, -0.5, 0.5, 1.5]))
-      )
-    end
-
-    test "logistic/1" do
-      assert_tensor(
-        Nx.tensor([0.18242552876472473, 0.622459352016449]) == Nx.logistic(Nx.tensor([-1.5, 0.5]))
-      )
-    end
-  end
 end

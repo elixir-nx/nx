@@ -1,11 +1,12 @@
 defmodule Torchx.BackendTest do
-  use ExUnit.Case, async: true
+  use Torchx.Case, async: true
 
   alias Torchx.Backend, as: TB
 
   doctest TB
 
   # Torch Tensor creation shortcut
+  defp tt(data), do: Nx.tensor(data, backend: TB)
   defp tt(data, type), do: Nx.tensor(data, type: type, backend: TB)
 
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
@@ -204,6 +205,59 @@ defmodule Torchx.BackendTest do
       |> Nx.backend_transfer()
       |> Nx.to_flat_list()
       |> Enum.all?(&(&1 > 7.0 - 3.0 and &1 < 7.0 + 3.0))
+    end
+  end
+
+  describe "rounding error tests" do
+    test "atanh/1" do
+      assert_all_close(tt(0.5493), Nx.atanh(tt(0.5)))
+    end
+
+    test "ceil/1" do
+      assert_all_close(tt(-0.0), Nx.ceil(tt(-0.5)))
+      assert_all_close(tt(1.0), Nx.ceil(tt(0.5)))
+    end
+
+    test "cos/1" do
+      assert_all_close(
+        tt([-1.0, 0.4999, -1.0]),
+        Nx.cos(tt([-:math.pi(), :math.pi() / 3, :math.pi()]))
+      )
+    end
+
+    test "cosh/1" do
+      assert_all_close(
+        tt([11.5919, 1.6002, 11.5919]),
+        Nx.cosh(tt([-:math.pi(), :math.pi() / 3, :math.pi()]))
+      )
+    end
+
+    test "erfc/1" do
+      assert_all_close(
+        tt([1.0, 0.4795, 0.0]),
+        Nx.erfc(tt([0, 0.5, 10_000]))
+      )
+    end
+
+    test "erf_inv/1" do
+      assert_all_close(
+        tt([0.0, 0.4769, 0.8134]),
+        Nx.erf_inv(tt([0, 0.5, 0.75]))
+      )
+    end
+
+    test "round/1" do
+      assert_all_close(
+        tt([-2.0, -0.0, 0.0, 2.0]),
+        Nx.round(tt([-1.5, -0.5, 0.5, 1.5]))
+      )
+    end
+
+    test "logistic/1" do
+      assert_all_close(
+        tt([0.1824, 0.6224]),
+        Nx.logistic(tt([-1.5, 0.5]))
+      )
     end
   end
 end
