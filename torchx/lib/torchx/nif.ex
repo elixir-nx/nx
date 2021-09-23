@@ -3,7 +3,7 @@ defmodule Torchx.NIF do
   @on_load :__on_load__
 
   def __on_load__ do
-    path = Path.join([:code.priv_dir(:torchx), 'torchx'])
+    path = :filename.join(:code.priv_dir(:torchx), 'torchx')
     :erlang.load_nif(path, 0)
   end
 
