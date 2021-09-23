@@ -16,8 +16,6 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @temporarily_broken_doctests [
-    # all_close? - depends on all? which is not implemented
-    all_close?: 3,
     # argmax - tie_break option not supported
     argmax: 2,
     # argmin - tie_break option not supported
