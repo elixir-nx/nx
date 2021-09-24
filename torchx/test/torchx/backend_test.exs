@@ -105,6 +105,17 @@ defmodule Torchx.BackendTest do
     end
   end
 
+  describe "bitcast" do
+    test "raises" do
+      assert_raise ArgumentError,
+                   "bitcast cannot be called from Torchx. Use the BinaryBackend instead",
+                   fn ->
+                     t = Nx.tensor([[[1]]])
+                     Torchx.Backend.bitcast(t, t)
+                   end
+    end
+  end
+
   # Division and power with bfloat16 are special cases in PyTorch,
   # because it upcasts bfloat16 args to float for numerical accuracy purposes.
   # So, e.g., the result of division is different from what direct bf16 by bf16 division gives us.

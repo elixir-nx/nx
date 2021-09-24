@@ -175,19 +175,8 @@ defmodule Torchx.Backend do
     do: Torchx.to_type(from_nx(t), to_torch_type(type)) |> to_nx(out)
 
   @impl true
-  def bitcast(%T{} = out, %T{} = t) do
-    case {out.type, t.type} do
-      {{_, s}, {_, s}} ->
-        :ok
-
-      {out_type, in_type} ->
-        raise ArgumentError,
-              "input type width must match new type width," <>
-                " got input type #{inspect(in_type)} and" <>
-                " output type #{inspect(out_type)}"
-    end
-
-    as_type(out, t)
+  def bitcast(_, _) do
+    raise ArgumentError, "bitcast cannot be called from Torchx. Use the BinaryBackend instead"
   end
 
   @impl true

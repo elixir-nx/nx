@@ -54,6 +54,8 @@ defmodule Torchx.NxDoctestTest do
   ]
 
   @inherently_unsupported_doctests [
+    # bitcast - cannot be implemented in libtorch
+    bitcast: 2,
     # default_backend - specific to BinaryBackend
     default_backend: 1
   ]
