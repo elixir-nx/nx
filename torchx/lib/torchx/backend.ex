@@ -175,6 +175,25 @@ defmodule Torchx.Backend do
     do: Torchx.to_type(from_nx(t), to_torch_type(type)) |> to_nx(out)
 
   @impl true
+  def bitcast(%T{} = out, %T{} = t) do
+    out_type = to_torch_type(out.type)
+
+    case {out.type, t.type} do
+      {{_, s}, {_, s}} -> :ok
+      {out_type, in_type} ->
+        raise ArgumentError,
+            "input type width must match new type width," <>
+              " got input type #{inspect(in_type)} and" <>
+              " output type #{inspect(out_type)}"
+    end
+
+    t
+    |> from_nx()
+    |> Torchx.to_type(out_type)
+    |> to_nx(out)
+  end
+
+  @impl true
   def squeeze(out, %T{} = t, _axes) do
     Torchx.squeeze(from_nx(t)) |> to_nx(out)
   end
