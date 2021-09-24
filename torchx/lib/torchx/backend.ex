@@ -177,12 +177,14 @@ defmodule Torchx.Backend do
   @impl true
   def bitcast(%T{} = out, %T{} = t) do
     case {out.type, t.type} do
-      {{_, s}, {_, s}} -> :ok
+      {{_, s}, {_, s}} ->
+        :ok
+
       {out_type, in_type} ->
         raise ArgumentError,
-            "input type width must match new type width," <>
-              " got input type #{inspect(in_type)} and" <>
-              " output type #{inspect(out_type)}"
+              "input type width must match new type width," <>
+                " got input type #{inspect(in_type)} and" <>
+                " output type #{inspect(out_type)}"
     end
 
     as_type(out, t)
