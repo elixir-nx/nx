@@ -176,8 +176,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def bitcast(%T{} = out, %T{} = t) do
-    out_type = to_torch_type(out.type)
-
     case {out.type, t.type} do
       {{_, s}, {_, s}} -> :ok
       {out_type, in_type} ->
@@ -187,10 +185,7 @@ defmodule Torchx.Backend do
               " output type #{inspect(out_type)}"
     end
 
-    t
-    |> from_nx()
-    |> Torchx.to_type(out_type)
-    |> to_nx(out)
+    as_type(out, t)
   end
 
   @impl true
