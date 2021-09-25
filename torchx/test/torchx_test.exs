@@ -25,7 +25,7 @@ defmodule TorchxTest do
     test "to_nx" do
       assert Torchx.arange(0, 26, 1, :short, :cpu)
              |> Torchx.to_nx()
-             |> Nx.backend_transfer() == Nx.iota({26}, type: {:s, 16})
+             |> Nx.backend_transfer() == Nx.iota({26}, type: {:s, 16}, backend: Nx.BinaryBackend)
     end
 
     test "from_nx" do

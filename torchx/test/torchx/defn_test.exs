@@ -5,11 +5,6 @@ defmodule Torchx.DefnTest do
   alias Nx.Tensor, as: T
   alias Torchx.Backend, as: TB
 
-  setup do
-    Nx.default_backend(Torchx.Backend)
-    :ok
-  end
-
   describe "creation" do
     defn iota, do: Nx.iota({10, 10})
 

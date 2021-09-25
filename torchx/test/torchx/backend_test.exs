@@ -2,12 +2,7 @@ defmodule Torchx.BackendTest do
   use Torchx.Case, async: true
 
   alias Torchx.Backend, as: TB
-
   doctest TB
-
-  # Torch Tensor creation shortcut
-  defp tt(data), do: Nx.tensor(data, backend: TB)
-  defp tt(data, type), do: Nx.tensor(data, type: type, backend: TB)
 
   @types [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}, {:f, 32}, {:f, 64}]
   @bf16_and_ints [{:s, 8}, {:u, 8}, {:s, 16}, {:s, 32}, {:s, 64}, {:bf, 16}]
@@ -30,8 +25,8 @@ defmodule Torchx.BackendTest do
   @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign]
 
   defp test_binary_op(op, data_a \\ [[5, 6], [7, 8]], data_b \\ [[1, 2], [3, 4]], type_a, type_b) do
-    a = tt(data_a, type_a)
-    b = tt(data_b, type_b)
+    a = Nx.tensor(data_a, type: type_a)
+    b = Nx.tensor(data_b, type: type_b)
     c = Kernel.apply(Nx, op, [a, b])
 
     binary_a = Nx.backend_transfer(a, Nx.BinaryBackend)
@@ -44,7 +39,7 @@ defmodule Torchx.BackendTest do
   end
 
   defp test_unary_op(op, data \\ [[1, 2], [3, 4]], type) do
-    t = tt(data, type)
+    t = Nx.tensor(data, type: type)
     r = Kernel.apply(Nx, op, [t])
 
     binary_t = Nx.backend_transfer(t, Nx.BinaryBackend)
@@ -118,14 +113,15 @@ defmodule Torchx.BackendTest do
         type_a = unquote(type_a)
         type_b = unquote(type_b)
 
-        a = tt([[1, 2], [3, 4]], type_a)
-        b = tt([[5, 6], [7, 8]], type_b)
+        a = Nx.tensor([[1, 2], [3, 4]], type: type_a)
+        b = Nx.tensor([[5, 6], [7, 8]], type: type_b)
 
         c = Nx.divide(a, b)
 
         assert Nx.backend_transfer(c) ==
                  Nx.tensor([[0.2001953125, 0.333984375], [0.427734375, 0.5]],
-                   type: {:bf, 16}
+                   type: {:bf, 16},
+                   backend: Nx.BinaryBackend
                  )
       end
     end
@@ -145,7 +141,7 @@ defmodule Torchx.BackendTest do
 
   describe "aggregates" do
     test "sum throws on type mismatch" do
-      t = tt([[101, 102], [103, 104]], {:u, 8})
+      t = Nx.tensor([[101, 102], [103, 104]], type: {:u, 8})
 
       assert_raise(
         ArgumentError,
@@ -157,9 +153,9 @@ defmodule Torchx.BackendTest do
 
   describe "creation" do
     test "eye" do
-      t = Nx.eye({9, 9}, backend: TB) |> Nx.backend_transfer()
-      one = Nx.tensor(1)
-      zero = Nx.tensor(0)
+      t = Nx.eye({9, 9}) |> Nx.backend_transfer()
+      one = Nx.tensor(1, backend: Nx.BinaryBackend)
+      zero = Nx.tensor(0, backend: Nx.BinaryBackend)
 
       for i <- 0..8, j <- 0..8 do
         assert (i == j and t[i][j] == one) or t[i][j] == zero
@@ -167,12 +163,12 @@ defmodule Torchx.BackendTest do
     end
 
     test "iota" do
-      t = Nx.iota({2, 3}, backend: {TB, device: :cpu})
-      assert Nx.backend_transfer(t) == Nx.tensor([[0, 1, 2], [3, 4, 5]])
+      t = Nx.iota({2, 3})
+      assert Nx.backend_transfer(t) == Nx.tensor([[0, 1, 2], [3, 4, 5]], backend: Nx.BinaryBackend)
     end
 
     test "random_uniform" do
-      t = Nx.random_uniform({30, 50}, backend: TB)
+      t = Nx.random_uniform({30, 50})
 
       t
       |> Nx.backend_transfer()
@@ -181,7 +177,7 @@ defmodule Torchx.BackendTest do
     end
 
     test "random_uniform with range" do
-      t = Nx.random_uniform({30, 50}, 7, 12, backend: TB)
+      t = Nx.random_uniform({30, 50}, 7, 12)
 
       t
       |> Nx.backend_transfer()
@@ -190,7 +186,7 @@ defmodule Torchx.BackendTest do
     end
 
     test "random_normal" do
-      t = Nx.random_normal({30, 50}, backend: TB)
+      t = Nx.random_normal({30, 50})
 
       t
       |> Nx.backend_transfer()
@@ -199,7 +195,7 @@ defmodule Torchx.BackendTest do
     end
 
     test "random_normal with range" do
-      t = Nx.random_normal({30, 50}, 7.0, 3.0, backend: TB)
+      t = Nx.random_normal({30, 50}, 7.0, 3.0)
 
       t
       |> Nx.backend_transfer()
@@ -210,53 +206,53 @@ defmodule Torchx.BackendTest do
 
   describe "rounding error tests" do
     test "atanh/1" do
-      assert_all_close(tt(0.5493), Nx.atanh(tt(0.5)))
+      assert_all_close(Nx.tensor(0.5493), Nx.atanh(Nx.tensor(0.5)))
     end
 
     test "ceil/1" do
-      assert_all_close(tt(-0.0), Nx.ceil(tt(-0.5)))
-      assert_all_close(tt(1.0), Nx.ceil(tt(0.5)))
+      assert_all_close(Nx.tensor(-0.0), Nx.ceil(Nx.tensor(-0.5)))
+      assert_all_close(Nx.tensor(1.0), Nx.ceil(Nx.tensor(0.5)))
     end
 
     test "cos/1" do
       assert_all_close(
-        tt([-1.0, 0.4999, -1.0]),
-        Nx.cos(tt([-:math.pi(), :math.pi() / 3, :math.pi()]))
+        Nx.tensor([-1.0, 0.4999, -1.0]),
+        Nx.cos(Nx.tensor([-:math.pi(), :math.pi() / 3, :math.pi()]))
       )
     end
 
     test "cosh/1" do
       assert_all_close(
-        tt([11.5919, 1.6002, 11.5919]),
-        Nx.cosh(tt([-:math.pi(), :math.pi() / 3, :math.pi()]))
+        Nx.tensor([11.5919, 1.6002, 11.5919]),
+        Nx.cosh(Nx.tensor([-:math.pi(), :math.pi() / 3, :math.pi()]))
       )
     end
 
     test "erfc/1" do
       assert_all_close(
-        tt([1.0, 0.4795, 0.0]),
-        Nx.erfc(tt([0, 0.5, 10_000]))
+        Nx.tensor([1.0, 0.4795, 0.0]),
+        Nx.erfc(Nx.tensor([0, 0.5, 10_000]))
       )
     end
 
     test "erf_inv/1" do
       assert_all_close(
-        tt([0.0, 0.4769, 0.8134]),
-        Nx.erf_inv(tt([0, 0.5, 0.75]))
+        Nx.tensor([0.0, 0.4769, 0.8134]),
+        Nx.erf_inv(Nx.tensor([0, 0.5, 0.75]))
       )
     end
 
     test "round/1" do
       assert_all_close(
-        tt([-2.0, -0.0, 0.0, 2.0]),
-        Nx.round(tt([-1.5, -0.5, 0.5, 1.5]))
+        Nx.tensor([-2.0, -0.0, 0.0, 2.0]),
+        Nx.round(Nx.tensor([-1.5, -0.5, 0.5, 1.5]))
       )
     end
 
     test "logistic/1" do
       assert_all_close(
-        tt([0.1824, 0.6224]),
-        Nx.logistic(tt([-1.5, 0.5]))
+        Nx.tensor([0.1824, 0.6224]),
+        Nx.logistic(Nx.tensor([-1.5, 0.5]))
       )
     end
   end

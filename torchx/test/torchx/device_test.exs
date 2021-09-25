@@ -3,11 +3,6 @@ defmodule Torchx.DeviceTest do
 
   alias Torchx.Backend, as: TB
 
-  setup do
-    Nx.default_backend(Torchx.Backend)
-    :ok
-  end
-
   if Torchx.device_available?(:cuda) do
     @device {:cuda, 0}
   else
