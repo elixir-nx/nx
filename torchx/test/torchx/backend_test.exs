@@ -164,7 +164,9 @@ defmodule Torchx.BackendTest do
 
     test "iota" do
       t = Nx.iota({2, 3})
-      assert Nx.backend_transfer(t) == Nx.tensor([[0, 1, 2], [3, 4, 5]], backend: Nx.BinaryBackend)
+
+      assert Nx.backend_transfer(t) ==
+               Nx.tensor([[0, 1, 2], [3, 4, 5]], backend: Nx.BinaryBackend)
     end
 
     test "random_uniform" do
