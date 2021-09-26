@@ -581,8 +581,12 @@ defmodule Nx.Defn do
     assert_no_guards!(kind, call, env)
     # Note name here is not necessarily an atom due to unquote(name) support
     {name, args} = decompose_call!(kind, call, env)
-    defaults = for {{:\\, _, [_, _]}, i} <- Enum.with_index(args), do: i
     arity = length(args)
+
+    defaults =
+      for {{:\\, meta, [_, default]}, i} <- Enum.with_index(args),
+          do: {i, {meta, default}},
+          into: []
 
     quote do
       unquote(__MODULE__).__define__(
@@ -590,7 +594,7 @@ defmodule Nx.Defn do
         unquote(kind),
         unquote(name),
         unquote(arity),
-        unquote(defaults)
+        %{unquote_splicing(defaults)}
       )
 
       unquote(kind)(unquote(call)) do

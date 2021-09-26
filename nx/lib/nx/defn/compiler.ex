@@ -345,12 +345,17 @@ defmodule Nx.Defn.Compiler do
 
   @doc false
   def __compile__(%Macro.Env{module: module, file: file, line: line}, exports) do
+    defns =
+      for {{name, arity}, %{defaults: defaults}} <- exports,
+          arity <- (arity - map_size(defaults))..arity,
+          do: {name, arity}
+
     state = %{
       module: module,
       file: file,
       line: line,
       function: nil,
-      exports: exports,
+      defns: MapSet.new(defns),
       rewrite_underscore?: false
     }
 
@@ -359,15 +364,27 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp compile_each({{name, arity} = def, def_meta}, state) do
-    %{compiler: {def_module, def_opts}, defaults: def_defaults} = def_meta
+    %{compiler: {def_module, def_opts}, defaults: defaults} = def_meta
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
+
     defn_name = defn_name(name)
 
+    defn_args = Enum.with_index(args, fn arg, i ->
+      case defaults do
+        %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
+        %{} -> arg
+      end
+    end)
+
     all_args = Macro.generate_arguments(arity, __MODULE__)
-    fn_args = for {arg, i} <- Enum.with_index(all_args), i not in def_defaults, do: arg
+
+    fn_args =
+      for {arg, i} <- Enum.with_index(all_args),
+          not Map.has_key?(defaults, i),
+          do: arg
 
     fun =
-      if def_defaults == [] do
+      if defaults == [] do
         quote do
           &(unquote(Macro.var(defn_name, __MODULE__)) / unquote(arity))
         end
@@ -409,7 +426,7 @@ defmodule Nx.Defn.Compiler do
         end
       end
 
-      Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(args)), do: unquote(ast))
+      Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)), do: unquote(ast))
     end
   end
 
@@ -503,13 +520,11 @@ defmodule Nx.Defn.Compiler do
   defp normalize({name, meta, args} = expr, state) when is_atom(name) and is_list(args) do
     pair = {name, length(args)}
 
-    case state.exports do
-      %{^pair => _} ->
-        {args, state} = normalize_list(args, state)
-        {{defn_name(name), meta, args}, state}
-
-      %{} ->
-        invalid_numerical_expression!(expr, state)
+    if pair in state.defns do
+      {args, state} = normalize_list(args, state)
+      {{defn_name(name), meta, args}, state}
+    else
+      invalid_numerical_expression!(expr, state)
     end
   end
 

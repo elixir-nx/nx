@@ -1333,11 +1333,18 @@ defmodule Nx.DefnTest do
 
   describe "default arguments" do
     defn sum_axis_opts(a, opts \\ []), do: Nx.sum(a, opts)
+    defn local_calls_sum_axis_opts(a), do: sum_axis_opts(a)
+    defn remote_calls_sum_axis_opts(a), do: __MODULE__.sum_axis_opts(a)
 
     test "are supported" do
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [0]) == Nx.tensor([4, 6])
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [1]) == Nx.tensor([3, 7])
+    end
+
+    test "can be called within defn" do
+      assert local_calls_sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
+      assert remote_calls_sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
     end
 
     defn random_opts(opts \\ []), do: Nx.random_uniform({}, 0, 1, opts)
