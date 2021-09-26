@@ -125,11 +125,35 @@ defmodule Torchx.Backend do
 
   ## Transfer
 
-  # TODO: Handle backend_options
   @impl true
-  def to_batched_list(%T{shape: shape} = out, %T{} = t, _backend_options) do
-    Torchx.split(from_nx(t), elem(shape, 0))
-    |> Enum.map(&to_nx(&1, out))
+  def to_batched_list(%T{shape: shape} = out, %T{} = t, opts) do
+    leftover = opts[:leftover]
+
+    batch_size = elem(shape, 0)
+    t_axis_0 = elem(t.shape, 0)
+
+    num_batches = div(t_axis_0, batch_size)
+    remainder = rem(t_axis_0, batch_size)
+
+    last_batch_idx = batch_size - 1
+
+    batched_list =
+      t
+      |> from_nx()
+      |> Torchx.split(batch_size)
+
+
+      Enum.with_index(batched_list, fn
+        tensor, ^last_batch_idx when remainder != 0 and leftover == :discard ->
+          to_nx(tensor, %{out | shape: t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)})
+
+        tensor, ^last_batch_idx when remainder != 0 and leftover == :repeat ->
+          # requires Torchx.Backend.concatenate
+          raise "not implemented"
+
+        tensor, index ->
+          to_nx(tensor, out)
+      end)
   end
 
   @impl true
@@ -232,6 +256,14 @@ defmodule Torchx.Backend do
       {offset, strides} -> {offset * dim, [offset * step | strides]}
     end
     |> elem(1)
+  end
+
+  @impl true
+  def concatenate(out, tensors, axis) do
+    tensors
+    |> Enum.map(&from_nx/1)
+    |> Torchx.concatenate(axis)
+    |> to_nx(out)
   end
 
   ## Aggregators

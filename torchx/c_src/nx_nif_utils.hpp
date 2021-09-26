@@ -33,6 +33,14 @@
   if (!enif_inspect_binary(env, argv[ARGN], &VAR)) \
     return nx::nif::error(env, "Unable to get " #VAR " binary param.");
 
+template <typename T>
+struct resource_object
+{
+  static ErlNifResourceType *type;
+};
+template <typename T>
+ErlNifResourceType *resource_object<T>::type = 0;
+
 namespace nx
 {
   namespace nif
@@ -57,6 +65,15 @@ namespace nx
     ERL_NIF_TERM ok(ErlNifEnv *env, ERL_NIF_TERM term)
     {
       return enif_make_tuple2(env, ok(env), term);
+    }
+
+    // Returns a resource of the given template type T.
+    template <typename T>
+    ERL_NIF_TERM get(ErlNifEnv *env, ERL_NIF_TERM term, T *&var)
+    {
+      return enif_get_resource(env, term,
+                               resource_object<T>::type,
+                               reinterpret_cast<void **>(&var));
     }
 
     // Numeric types
@@ -119,7 +136,7 @@ namespace nx
     {
       if (var)
         return enif_make_atom(env, "true");
-      
+
       return enif_make_atom(env, "false");
     }
 
@@ -189,9 +206,7 @@ namespace nx
       return 1;
     }
 
-    // Containers
-
-    int get_tuple(ErlNifEnv *env, ERL_NIF_TERM tuple, std::vector<int64_t> &var)
+    int get_tuple(ErlNifEnv * env, ERL_NIF_TERM tuple, std::vector<int64_t> &var)
     {
       const ERL_NIF_TERM *terms;
       int length;
@@ -251,20 +266,21 @@ namespace nx
       return 1;
     }
 
-    int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<int64_t> &var)
+    template <typename T>
+    int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<T> &var)
     {
       unsigned int length;
-      if (!enif_get_list_length(env, list, &length))
-        return 0;
+      if (!enif_get_list_length(env, list, &length)) return 0;
       var.reserve(length);
       ERL_NIF_TERM head, tail;
 
+      std::cout << "list length" << length << std::endl;
+
       while (enif_get_list_cell(env, list, &head, &tail))
       {
-        int64_t elem;
-        if (!get(env, head, &elem))
-          return 0;
-        var.push_back(elem);
+        T* elem;
+        if (!get<T>(env, head, elem)) return 0;
+        var.push_back(*elem);
         list = tail;
       }
       return 1;

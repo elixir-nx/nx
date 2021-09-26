@@ -69,7 +69,7 @@ defmodule Torchx.Macro do
     quote do
       @torch_function {unquote(name), unquote(length(args))}
       def unquote(name)(unquote_splicing(args)) do
-        {unquote(tensors), device} = prepare_tensors!(unquote(tensors))
+        prepared = {unquote(tensors), device} = prepare_tensors!(unquote(tensors))
 
         case device do
           :cpu -> Torchx.NIF.unquote(:"#{name}_cpu")(unquote_splicing(args))
@@ -160,6 +160,7 @@ defmodule Torchx do
   deftensor split(tensor, split_size)
   deftensor narrow(tensor, dim, start, length)
   deftensor as_strided(tensor, size, strides, offset)
+  deftensor concatenate(tensors, axis)
 
   ## Aggregation
 
@@ -334,6 +335,17 @@ defmodule Torchx do
         {ref, dev}
 
       {dev, ref}, other_dev when is_tensor(dev, ref) ->
+        raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+
+      [{dev, ref} | _] = tensors, nil when is_tensor(dev, ref) ->
+        {prepare_tensors!(tensors), dev}
+
+      [{dev, ref} | _] = tensors, dev when is_tensor(dev, ref) ->
+        {prepare_tensors!(tensors), dev}
+
+
+      [{dev, ref} | _] , other_dev when is_tensor(dev, ref) ->
+        IO.inspect({dev, ref, other_dev})
         raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
 
       bad_tensor, _dev ->
