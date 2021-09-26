@@ -162,7 +162,7 @@ defmodule Nx.Defn.Kernel do
   to `defn`. For example, if you do this:
 
       transform(tensor, fn tensor ->
-        if Nx.shape(tensor) != {2, 2} do
+        if Nx.type(tensor) != {:f, 32} do
           raise "bad"
         end
       end)
@@ -1013,4 +1013,83 @@ defmodule Nx.Defn.Kernel do
   defmacro @expr do
     quote do: Kernel.@(unquote(expr))
   end
+
+  @doc """
+  Asserts the `tensor` has a certain `shape` pattern.
+
+  If it succeeds, it returns the given tensor. Raises
+  an error otherwise.
+
+  ## Examples
+
+  To assert the tensor is a scalar, you can pass the empty tuple `shape`:
+
+      iex> assert_shape Nx.tensor(13), {}
+      #Nx.Tensor<
+        s64
+        13
+      >
+
+  If the shapes do not match, an error is raised:
+
+      iex> assert_shape Nx.tensor([1, 2, 3]), {}
+      ** (ArgumentError) expected tensor to be a scalar, got tensor with shape {3}
+
+  Shape is a pattern, which means you can express properties
+  such as a square matrix:
+
+      iex> assert_shape Nx.tensor([[1, 2], [3, 4]]), {x, x}
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
+      iex> assert_shape Nx.tensor([1, 2, 3]), {x, x}
+      ** (ArgumentError) expected tensor to match shape {x, x}, got tensor with shape {3}
+
+  You can even used guards to specify tall matrices and so on:
+
+      iex> assert_shape Nx.tensor([[1], [2]]), {x, y} when x > y
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [1],
+          [2]
+        ]
+      >
+
+      iex> assert_shape Nx.tensor([1, 2]), {x, y} when x > y
+      ** (ArgumentError) expected tensor to match shape {x, y} when x > y, got tensor with shape {2}
+
+  """
+  defmacro assert_shape(tensor, shape) do
+    shape_pattern_to_string = shape_pattern_to_string(shape)
+
+    quote do
+      tensor = unquote(tensor)
+
+      (fn ->
+         # Revert scoping so guards work
+         import unquote(__MODULE__), only: []
+         import Kernel
+
+         case Nx.shape(tensor) do
+           unquote(shape) -> tensor
+           shape -> unquote(__MODULE__).__assert_shape__!(unquote(shape_pattern_to_string), shape)
+         end
+       end).()
+    end
+  end
+
+  @doc false
+  def __assert_shape__!(shape_pattern_to_string, shape) do
+    raise ArgumentError,
+          "expected tensor to #{shape_pattern_to_string}, got tensor with shape #{inspect(shape)}"
+  end
+
+  defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
+  defp shape_pattern_to_string(pattern), do: "match shape " <> Macro.to_string(pattern)
 end
