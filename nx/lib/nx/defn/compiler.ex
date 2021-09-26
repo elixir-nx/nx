@@ -369,12 +369,13 @@ defmodule Nx.Defn.Compiler do
 
     defn_name = defn_name(name)
 
-    defn_args = Enum.with_index(args, fn arg, i ->
-      case defaults do
-        %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
-        %{} -> arg
-      end
-    end)
+    defn_args =
+      Enum.with_index(args, fn arg, i ->
+        case defaults do
+          %{^i => {meta, default}} -> {:\\, meta, [arg, default]}
+          %{} -> arg
+        end
+      end)
 
     all_args = Macro.generate_arguments(arity, __MODULE__)
 
