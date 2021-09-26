@@ -1015,7 +1015,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Asserts the `tensor` has a certain `shape` pattern.
+  Asserts the `tensor` has a certain `shape`.
 
   If it succeeds, it returns the given tensor. Raises
   an error otherwise.
@@ -1035,10 +1035,39 @@ defmodule Nx.Defn.Kernel do
       iex> assert_shape Nx.tensor([1, 2, 3]), {}
       ** (ArgumentError) expected tensor to be a scalar, got tensor with shape {3}
 
-  Shape is a pattern, which means you can express properties
-  such as a square matrix:
+      iex> assert_shape Nx.tensor([1, 2, 3]), {4}
+      ** (ArgumentError) expected tensor to have shape {4}, got tensor with shape {3}
 
-      iex> assert_shape Nx.tensor([[1, 2], [3, 4]]), {x, x}
+  If you want to assert on the rank or shape patterns, use
+  `assert_shape_pattern/2` instead.
+  """
+  def assert_shape(tensor, shape) when is_tuple(shape) do
+    case Nx.shape(tensor) do
+      ^shape ->
+        tensor
+
+      other ->
+        raise ArgumentError,
+              "expected tensor to #{shape_to_string(shape)}, got tensor with shape #{inspect(other)}"
+    end
+  end
+
+  defp shape_to_string({}), do: "be a scalar"
+  defp shape_to_string(shape), do: "have shape " <> inspect(shape)
+
+  @doc """
+  Asserts the `tensor` has a certain `shape` pattern.
+
+  If it succeeds, it returns the given tensor. Raises
+  an error otherwise.
+
+  ## Examples
+
+  Opposite to `assert_shape/2`, where the given shape is a value,
+  `assert_shape_pattern` allows the shape to be any Elixir pattern.
+  We can use this to match on ranks:
+
+      iex> assert_shape_pattern Nx.tensor([[1, 2], [3, 4]]), {_, _}
       #Nx.Tensor<
         s64[2][2]
         [
@@ -1047,12 +1076,26 @@ defmodule Nx.Defn.Kernel do
         ]
       >
 
-      iex> assert_shape Nx.tensor([1, 2, 3]), {x, x}
+      iex> assert_shape_pattern Nx.tensor([1, 2, 3]), {_, _}
+      ** (ArgumentError) expected tensor to match shape {_, _}, got tensor with shape {3}
+
+  Or even use variables to assert on properties such as square matrices:
+
+      iex> assert_shape_pattern Nx.tensor([[1, 2], [3, 4]]), {x, x}
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [3, 4]
+        ]
+      >
+
+      iex> assert_shape_pattern Nx.tensor([1, 2, 3]), {x, x}
       ** (ArgumentError) expected tensor to match shape {x, x}, got tensor with shape {3}
 
-  You can even used guards to specify tall matrices and so on:
+  You can also use guards to specify tall matrices and so forth:
 
-      iex> assert_shape Nx.tensor([[1], [2]]), {x, y} when x > y
+      iex> assert_shape_pattern Nx.tensor([[1], [2]]), {x, y} when x > y
       #Nx.Tensor<
         s64[2][1]
         [
@@ -1061,12 +1104,12 @@ defmodule Nx.Defn.Kernel do
         ]
       >
 
-      iex> assert_shape Nx.tensor([1, 2]), {x, y} when x > y
+      iex> assert_shape_pattern Nx.tensor([1, 2]), {x, y} when x > y
       ** (ArgumentError) expected tensor to match shape {x, y} when x > y, got tensor with shape {2}
 
   """
-  defmacro assert_shape(tensor, shape) do
-    shape_pattern_to_string = shape_pattern_to_string(shape)
+  defmacro assert_shape_pattern(tensor, shape) do
+    shape_pattern_string = shape_pattern_to_string(shape)
 
     quote do
       tensor = unquote(tensor)
@@ -1077,17 +1120,20 @@ defmodule Nx.Defn.Kernel do
          import Kernel
 
          case Nx.shape(tensor) do
-           unquote(shape) -> tensor
-           shape -> unquote(__MODULE__).__assert_shape__!(unquote(shape_pattern_to_string), shape)
+           unquote(shape) ->
+             tensor
+
+           shape ->
+             unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
          end
        end).()
     end
   end
 
   @doc false
-  def __assert_shape__!(shape_pattern_to_string, shape) do
+  def __assert_shape_pattern__!(shape_pattern_string, shape) do
     raise ArgumentError,
-          "expected tensor to #{shape_pattern_to_string}, got tensor with shape #{inspect(shape)}"
+          "expected tensor to #{shape_pattern_string}, got tensor with shape #{inspect(shape)}"
   end
 
   defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
