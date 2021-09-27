@@ -132,10 +132,8 @@ defmodule Torchx.Backend do
     batch_size = elem(shape, 0)
     t_axis_0 = elem(t.shape, 0)
 
-    num_batches = div(t_axis_0, batch_size)
     remainder = rem(t_axis_0, batch_size)
-
-    last_batch_idx = batch_size - 1
+    num_batches = if remainder == 0, do: div(t_axis_0, batch_size), else: div(t_axis_0, batch_size) + 1
 
     to_batch =
       cond do
@@ -144,32 +142,22 @@ defmodule Torchx.Backend do
 
         remainder != 0 and leftover == :repeat ->
           concat_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, num_batches * batch_size)
-          slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, t_axis_0 - remainder) |> IO.inspect(label: "slice shape")
+          slice_length = t_axis_0 - remainder
+          slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, slice_length)
 
-          IO.inspect(t_axis_0, label: "t_axis_0")
-          IO.inspect(remainder, label: "remainder")
-          IO.inspect(num_batches, label: "num_batches")
-          IO.inspect(concat_shape, label: "concat_shape")
+          slice = slice(%{t | shape: slice_shape}, t, [0], [slice_length], [1])
 
-          concatenate(%{t | shape: concat_shape}, [t, slice(%{t | shape: slice_shape}, t, [0], [1], [1])], 0)
+          concatenate(%{t | shape: concat_shape}, [t, slice], 0)
 
         true ->
           t
       end
 
-    batched_list =
       to_batch
       |> from_nx()
       |> Torchx.split(batch_size)
-
-
-      Enum.with_index(batched_list, fn
-        tensor, ^last_batch_idx when remainder != 0 and leftover == :discard ->
-          to_nx(tensor, %{out | shape: t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)})
-
-        tensor, index ->
-          to_nx(tensor, out)
-      end)
+      |> Enum.take(num_batches)
+      |> Enum.map(&to_nx(&1, out))
   end
 
   @impl true

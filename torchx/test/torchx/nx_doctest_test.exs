@@ -23,6 +23,8 @@ defmodule Torchx.NxDoctestTest do
     # broadcast - shape mismatch in one test
     broadcast: 3,
     # dot - Batching not supported
+    dot: 2,
+    dot: 4,
     dot: 6,
     # mean - Torchx expects a input tensor but receives a number as input
     mean: 2,
@@ -36,8 +38,6 @@ defmodule Torchx.NxDoctestTest do
     slice_axis: 5,
     # stack - fails in some tests
     stack: 2,
-    # to_batched_list - Shape mismatch due to unsupported options in some tests
-    to_batched_list: 3,
     # window_mean - depends on window_sum which is not implemented
     window_mean: 3
   ]
