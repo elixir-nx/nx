@@ -193,7 +193,7 @@ namespace nx
 
     // Containers
 
-    int get_tuple(ErlNifEnv * env, ERL_NIF_TERM tuple, std::vector<int64_t> &var)
+    int get_tuple(ErlNifEnv *env, ERL_NIF_TERM tuple, std::vector<int64_t> &var)
     {
       const ERL_NIF_TERM *terms;
       int length;
