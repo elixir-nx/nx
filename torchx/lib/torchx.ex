@@ -327,13 +327,14 @@ defmodule Torchx do
   end
 
   defp prepare_tensors_list!(tensors_list, dev) do
-    tensors = Enum.map(tensors_list, fn
-      {^dev, ref} ->
-        ref
+    tensors =
+      Enum.map(tensors_list, fn
+        {^dev, ref} ->
+          ref
 
-      {other_dev, _ref} ->
-        raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
-    end)
+        {other_dev, _ref} ->
+          raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+      end)
 
     {tensors, dev}
   end
