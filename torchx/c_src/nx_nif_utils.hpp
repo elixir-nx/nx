@@ -69,15 +69,6 @@ namespace nx
       return enif_make_tuple2(env, ok(env), term);
     }
 
-    // Returns a resource of the given template type T.
-    template <typename T>
-    ERL_NIF_TERM get(ErlNifEnv *env, ERL_NIF_TERM term, T *&var)
-    {
-      return enif_get_resource(env, term,
-                               resource_object<T>::type,
-                               reinterpret_cast<void **>(&var));
-    }
-
     // Numeric types
 
     int get(ErlNifEnv *env, ERL_NIF_TERM term, int *var)
