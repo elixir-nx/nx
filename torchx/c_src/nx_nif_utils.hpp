@@ -2,6 +2,8 @@
 
 #include "erl_nif.h"
 
+ErlNifResourceType *TENSOR_TYPE;
+
 #define GET(ARGN, VAR)                      \
   if (!nx::nif::get(env, argv[ARGN], &VAR)) \
     return nx::nif::error(env, "Unable to get " #VAR " param.");
@@ -266,6 +268,27 @@ namespace nx
       return 1;
     }
 
+    int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<torch::Tensor> &var)
+    {
+      unsigned int length;
+      if (!enif_get_list_length(env, list, &length))
+        return 0;
+      var.reserve(length);
+      ERL_NIF_TERM head, tail;
+
+      while (enif_get_list_cell(env, list, &head, &tail))
+      {
+        torch::Tensor *elem;
+        if (!enif_get_resource(env, head, TENSOR_TYPE, reinterpret_cast<void **>(&elem)))
+        {
+          return 0;
+        }
+        var.push_back(*elem);
+        list = tail;
+      }
+      return 1;
+    }
+
     template <typename T>
     int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<T> &var)
     {
@@ -273,8 +296,6 @@ namespace nx
       if (!enif_get_list_length(env, list, &length)) return 0;
       var.reserve(length);
       ERL_NIF_TERM head, tail;
-
-      std::cout << "list length" << length << std::endl;
 
       while (enif_get_list_cell(env, list, &head, &tail))
       {

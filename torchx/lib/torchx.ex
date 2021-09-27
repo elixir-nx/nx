@@ -326,6 +326,18 @@ defmodule Torchx do
     end
   end
 
+  defp prepare_tensors_list!(tensors_list, dev) do
+    tensors = Enum.map(tensors_list, fn
+      {^dev, ref} ->
+        ref
+
+      {other_dev, _ref} ->
+        raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+    end)
+
+    {tensors, dev}
+  end
+
   defp prepare_tensors!(tensors) do
     Enum.map_reduce(tensors, nil, fn
       {dev, ref}, nil when is_tensor(dev, ref) ->
@@ -338,15 +350,10 @@ defmodule Torchx do
         raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
 
       [{dev, ref} | _] = tensors, nil when is_tensor(dev, ref) ->
-        {prepare_tensors!(tensors), dev}
+        prepare_tensors_list!(tensors, dev)
 
       [{dev, ref} | _] = tensors, dev when is_tensor(dev, ref) ->
-        {prepare_tensors!(tensors), dev}
-
-
-      [{dev, ref} | _] , other_dev when is_tensor(dev, ref) ->
-        IO.inspect({dev, ref, other_dev})
-        raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+        prepare_tensors_list!(tensors, dev)
 
       bad_tensor, _dev ->
         raise ArgumentError, "expected a Torchx tensor, got: #{inspect(bad_tensor)}"
