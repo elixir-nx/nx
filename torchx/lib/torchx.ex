@@ -69,7 +69,7 @@ defmodule Torchx.Macro do
     quote do
       @torch_function {unquote(name), unquote(length(args))}
       def unquote(name)(unquote_splicing(args)) do
-        prepared = {unquote(tensors), device} = prepare_tensors!(unquote(tensors))
+        {unquote(tensors), device} = prepare_tensors!(unquote(tensors))
 
         case device do
           :cpu -> Torchx.NIF.unquote(:"#{name}_cpu")(unquote_splicing(args))
