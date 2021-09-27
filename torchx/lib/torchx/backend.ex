@@ -142,8 +142,6 @@ defmodule Torchx.Backend do
         num_full_batches
       end
 
-    last_batch_index = num_batches - 1
-
     to_batch =
       cond do
         remainder != 0 and leftover == :discard ->

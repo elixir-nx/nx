@@ -35,14 +35,6 @@ ErlNifResourceType *TENSOR_TYPE;
   if (!enif_inspect_binary(env, argv[ARGN], &VAR)) \
     return nx::nif::error(env, "Unable to get " #VAR " binary param.");
 
-template <typename T>
-struct resource_object
-{
-  static ErlNifResourceType *type;
-};
-template <typename T>
-ErlNifResourceType *resource_object<T>::type = 0;
-
 namespace nx
 {
   namespace nif
