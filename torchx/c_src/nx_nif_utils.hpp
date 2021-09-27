@@ -289,8 +289,7 @@ namespace nx
       return 1;
     }
 
-    template <typename T>
-    int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<T> &var)
+    int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<int64_t> &var)
     {
       unsigned int length;
       if (!enif_get_list_length(env, list, &length)) return 0;
@@ -299,9 +298,9 @@ namespace nx
 
       while (enif_get_list_cell(env, list, &head, &tail))
       {
-        T* elem;
-        if (!get<T>(env, head, elem)) return 0;
-        var.push_back(*elem);
+        int64_t elem;
+        if (!get(env, head, &elem)) return 0;
+        var.push_back(elem);
         list = tail;
       }
       return 1;

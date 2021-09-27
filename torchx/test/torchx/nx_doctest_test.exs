@@ -23,8 +23,6 @@ defmodule Torchx.NxDoctestTest do
     # broadcast - shape mismatch in one test
     broadcast: 3,
     # dot - Batching not supported
-    dot: 2,
-    dot: 4,
     dot: 6,
     # mean - Torchx expects a input tensor but receives a number as input
     mean: 2,
