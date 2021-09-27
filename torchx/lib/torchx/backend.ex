@@ -132,8 +132,11 @@ defmodule Torchx.Backend do
     batch_size = elem(shape, 0)
     t_axis_0 = elem(t.shape, 0)
 
+
     remainder = rem(t_axis_0, batch_size)
     num_batches = if remainder == 0, do: div(t_axis_0, batch_size), else: div(t_axis_0, batch_size) + 1
+
+    last_batch_index = num_batches - 1
 
     to_batch =
       cond do
@@ -157,7 +160,14 @@ defmodule Torchx.Backend do
       |> from_nx()
       |> Torchx.split(batch_size)
       |> Enum.take(num_batches)
-      |> Enum.map(&to_nx(&1, out))
+      |> Enum.with_index(fn
+        batch, ^last_batch_index when leftover == :discard ->
+          shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)
+          to_nx(batch, %{t | shape: shape})
+
+        batch, _ ->
+          to_nx(batch, out)
+      end)
   end
 
   @impl true
