@@ -148,18 +148,24 @@ defmodule Torchx.Backend do
 
         t_torchx = from_nx(t)
 
-        slice = do_slice(t_torchx, t.shape, slice_shape, [0], [remainder], [1])
+        slice = torchx_slice(t_torchx, t.shape, slice_shape, [0], [remainder], [1])
 
         Torchx.concatenate([t_torchx, slice], 0)
       else
         from_nx(t)
       end
 
+    # torch::split returns a chunk with smaller size if the
+    # tensor is not fully divisible by the batch_size.
+    # We need to drop the last chunk in this case
     batched =
-      to_batch
-      |> Torchx.split(batch_size)
-      |> Enum.take(num_batches)
-      |> Enum.map(&to_nx(&1, out))
+      case Torchx.split(to_batch, batch_size) do
+        batches when remainder != 0 ->
+          batches |> Enum.take(num_batches) |> Enum.map(&to_nx(&1, out))
+
+        batches ->
+          Enum.map(batches, &to_nx(&1, out))
+      end
 
     if leftover == :repeat and remainder != 0 do
       {h, [t]} = Enum.split(batched, num_batches - 1)
@@ -241,11 +247,11 @@ defmodule Torchx.Backend do
       ) do
     t
     |> from_nx()
-    |> do_slice(input_shape, output_shape, start_indices, lengths, strides)
+    |> torchx_slice(input_shape, output_shape, start_indices, lengths, strides)
     |> to_nx(out)
   end
 
-  defp do_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
+  defp torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
     t
     |> narrow(start_indices, lengths, 0, input_shape)
     |> stride(output_shape, lengths, strides)
