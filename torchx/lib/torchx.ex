@@ -335,7 +335,7 @@ defmodule Torchx do
         {other_dev, ref} when is_tensor(other_dev, ref) ->
           raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
 
-        bad_tensor, _dev ->
+        bad_tensor ->
           raise ArgumentError, "expected a Torchx tensor, got: #{inspect(bad_tensor)}"
       end)
 

@@ -151,10 +151,9 @@ defmodule Torchx.Backend do
           concat_shape =
             t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, num_batches * batch_size)
 
-          slice_length = t_axis_0 - remainder
-          slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, slice_length)
+          slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)
 
-          slice = slice(%{t | shape: slice_shape}, t, [0], [slice_length], [1])
+          slice = slice(%{t | shape: slice_shape}, t, [0], [remainder], [1])
 
           concatenate(%{t | shape: concat_shape}, [t, slice], 0)
 
@@ -243,7 +242,7 @@ defmodule Torchx.Backend do
   def slice(%T{shape: shape} = out, %T{} = t, start_indices, lengths, strides) do
     t
     |> from_nx()
-    |> narrow(start_indices, lengths, 0, shape)
+    |> narrow(start_indices, lengths, 0, t.shape)
     |> stride(shape, lengths, strides)
     |> to_nx(out)
   end
