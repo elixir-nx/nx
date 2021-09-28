@@ -1687,7 +1687,7 @@ defmodule Nx.BinaryBackend do
   defp bin_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
     start_indices = clamp_indices(start_indices, shape, lengths)
 
-    if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
+    if hd(strides) == 1 and top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
       offset = div(length, elem(output_shape, 0)) * hd(start_indices)
       binary_part(data, offset, length)
