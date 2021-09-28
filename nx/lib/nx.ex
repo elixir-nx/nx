@@ -7385,43 +7385,10 @@ defmodule Nx do
 
   ### Examples
 
-      iex> t = Nx.iota({900})
-      iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [0, 6, 2], [2, 1, 3])
+      iex> Nx.slice(Nx.tensor([1, 2, 3, 4, 5, 6]), [0], [3])
       #Nx.Tensor<
-        s64[2][1][3]
-        [
-          [
-            [182, 183, 184]
-          ],
-          [
-            [632, 633, 634]
-          ]
-        ]
-      >
-
-      iex> t = Nx.iota({900})
-      iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: 2)
-      #Nx.Tensor<
-        s64[1][1][5]
-        [
-          [
-            [580, 582, 584, 586, 588]
-          ]
-        ]
-      >
-
-      iex> t = Nx.iota({900})
-      iex> t = Nx.reshape(t, {2, 15, 30})
-      iex> Nx.slice(t, [1, 4, 10], [1, 1, 10], strides: [1, 2, 3])
-      #Nx.Tensor<
-        s64[1][1][4]
-        [
-          [
-            [580, 583, 586, 589]
-          ]
-        ]
+        s64[3]
+        [1, 2, 3]
       >
 
       iex> Nx.slice(Nx.tensor([1, 2, 3, 4, 5, 6]), [0], [6], strides: [2])
@@ -7439,6 +7406,19 @@ defmodule Nx do
         ]
       >
 
+  Strides can also be a number that applies to all dimensions:
+
+      iex> Nx.slice(Nx.tensor([[1, 2], [3, 4], [5, 6]]), [0, 0], [3, 2], strides: 2)
+      #Nx.Tensor<
+        s64[2][1]
+        [
+          [1],
+          [5]
+        ]
+      >
+
+  A more complex example:
+
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
       iex> Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
@@ -7450,6 +7430,16 @@ defmodule Nx do
             [161, 164, 167],
             [191, 194, 197]
           ]
+        ]
+      >
+
+  The `start_indices` list can be made of scalar tensors:
+
+      iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1), Nx.tensor(2)], [1, 1])
+      #Nx.Tensor<
+        s64[1][1]
+        [
+          [6]
         ]
       >
 
@@ -7467,14 +7457,6 @@ defmodule Nx do
         [
           [0.0, 0.0, 0.0],
           [1.0, 1.0, 1.0]
-        ]
-      >
-
-      iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1), Nx.tensor(2)], [1, 1])
-      #Nx.Tensor<
-        s64[1][1]
-        [
-          [6]
         ]
       >
 
