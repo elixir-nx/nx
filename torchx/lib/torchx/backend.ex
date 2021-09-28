@@ -125,11 +125,54 @@ defmodule Torchx.Backend do
 
   ## Transfer
 
-  # TODO: Handle backend_options
   @impl true
-  def to_batched_list(%T{shape: shape} = out, %T{} = t, _backend_options) do
-    Torchx.split(from_nx(t), elem(shape, 0))
-    |> Enum.map(&to_nx(&1, out))
+  def to_batched_list(%T{shape: shape} = out, %T{} = t, opts) do
+    leftover = opts[:leftover]
+
+    batch_size = elem(shape, 0)
+    t_axis_0 = elem(t.shape, 0)
+
+    remainder = rem(t_axis_0, batch_size)
+    num_full_batches = div(t_axis_0, batch_size)
+
+    num_batches =
+      if leftover == :repeat and remainder != 0 do
+        num_full_batches + 1
+      else
+        num_full_batches
+      end
+
+    to_batch =
+      if remainder != 0 and leftover == :repeat do
+        slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)
+
+        t_torchx = from_nx(t)
+
+        slice = torchx_slice(t_torchx, t.shape, slice_shape, [0], [remainder], [1])
+
+        Torchx.concatenate([t_torchx, slice], 0)
+      else
+        from_nx(t)
+      end
+
+    # torch::split returns a chunk with smaller size if the
+    # tensor is not fully divisible by the batch_size.
+    # We need to drop the last chunk in this case
+    batched =
+      case Torchx.split(to_batch, batch_size) do
+        batches when remainder != 0 ->
+          batches |> Enum.take(num_batches) |> Enum.map(&to_nx(&1, out))
+
+        batches ->
+          Enum.map(batches, &to_nx(&1, out))
+      end
+
+    if leftover == :repeat and remainder != 0 do
+      {h, [t]} = Enum.split(batched, num_batches - 1)
+      [t | h]
+    else
+      batched
+    end
   end
 
   @impl true
@@ -195,12 +238,23 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def slice(%T{shape: shape} = out, %T{} = t, start_indices, lengths, strides) do
+  def slice(
+        %T{shape: output_shape} = out,
+        %T{shape: input_shape} = t,
+        start_indices,
+        lengths,
+        strides
+      ) do
     t
     |> from_nx()
-    |> narrow(start_indices, lengths, 0, shape)
-    |> stride(shape, lengths, strides)
+    |> torchx_slice(input_shape, output_shape, start_indices, lengths, strides)
     |> to_nx(out)
+  end
+
+  defp torchx_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
+    t
+    |> narrow(start_indices, lengths, 0, input_shape)
+    |> stride(output_shape, lengths, strides)
   end
 
   defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
@@ -232,6 +286,14 @@ defmodule Torchx.Backend do
       {offset, strides} -> {offset * dim, [offset * step | strides]}
     end
     |> elem(1)
+  end
+
+  @impl true
+  def concatenate(out, tensors, axis) do
+    tensors
+    |> Enum.map(&from_nx/1)
+    |> Torchx.concatenate(axis)
+    |> to_nx(out)
   end
 
   ## Aggregators

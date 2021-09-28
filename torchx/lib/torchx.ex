@@ -160,6 +160,7 @@ defmodule Torchx do
   deftensor split(tensor, split_size)
   deftensor narrow(tensor, dim, start, length)
   deftensor as_strided(tensor, size, strides, offset)
+  deftensor concatenate(tensors, axis)
 
   ## Aggregation
 
@@ -325,6 +326,22 @@ defmodule Torchx do
     end
   end
 
+  defp prepare_tensors_list!(tensors_list, dev) do
+    tensors =
+      Enum.map(tensors_list, fn
+        {^dev, ref} when is_tensor(dev, ref) ->
+          ref
+
+        {other_dev, ref} when is_tensor(other_dev, ref) ->
+          raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+
+        bad_tensor ->
+          raise ArgumentError, "expected a Torchx tensor, got: #{inspect(bad_tensor)}"
+      end)
+
+    {tensors, dev}
+  end
+
   defp prepare_tensors!(tensors) do
     Enum.map_reduce(tensors, nil, fn
       {dev, ref}, nil when is_tensor(dev, ref) ->
@@ -335,6 +352,12 @@ defmodule Torchx do
 
       {dev, ref}, other_dev when is_tensor(dev, ref) ->
         raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+
+      [{dev, ref} | _] = tensors, nil when is_tensor(dev, ref) ->
+        prepare_tensors_list!(tensors, dev)
+
+      tensors, dev when is_list(tensors) ->
+        prepare_tensors_list!(tensors, dev)
 
       bad_tensor, _dev ->
         raise ArgumentError, "expected a Torchx tensor, got: #{inspect(bad_tensor)}"

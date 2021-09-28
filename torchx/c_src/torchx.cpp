@@ -3,8 +3,6 @@
 
 #include "nx_nif_utils.hpp"
 
-ErlNifResourceType *TENSOR_TYPE;
-
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
@@ -303,6 +301,15 @@ NIF(as_strided)
   PARAM(3, int64_t, offset);
 
   TENSOR(torch::as_strided(*t, size, strides, offset).clone());
+}
+
+NIF(concatenate)
+{
+  LIST_PARAM(0, std::vector<torch::Tensor>, tensors);
+
+  PARAM(1, int64_t, axis);
+
+  TENSOR(torch::cat(tensors, axis));
 }
 
 NIF(permute)
@@ -677,6 +684,7 @@ static ErlNifFunc nif_functions[] = {
     DF(permute, 2),
     DF(narrow, 4),
     DF(as_strided, 4),
+    DF(concatenate, 2),
 
     DF(add, 2),
     DF(subtract, 2),
