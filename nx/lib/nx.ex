@@ -7388,7 +7388,7 @@ defmodule Nx do
       iex> Nx.slice(Nx.tensor([1, 2, 3, 4, 5, 6]), [0], [3])
       #Nx.Tensor<
         s64[3]
-        [0, 1, 2]
+        [1, 2, 3]
       >
 
       iex> Nx.slice(Nx.tensor([1, 2, 3, 4, 5, 6]), [0], [6], strides: [2])
