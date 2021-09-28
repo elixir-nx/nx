@@ -164,13 +164,13 @@ NIF(to_blob)
 
   torch::optional<torch::Device> device = torch::device_of(*t);
 
-  // if(device.has_value() && device.value().type() == torch::kCPU) {
-  //   return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), byte_size));
-  // } else {
+  if(device.has_value() && device.value().type() == torch::kCPU) {
+    return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), byte_size));
+  } else {
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
     memcpy(result_data, t->data_ptr(), byte_size);
     return nx::nif::ok(env, result);
-  // }
+  }
 }
 
 NIF(item)

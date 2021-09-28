@@ -143,27 +143,20 @@ defmodule Torchx.Backend do
       end
 
     to_batch =
-      cond do
-        remainder != 0 and leftover == :discard ->
-          t
+      if remainder != 0 and leftover == :repeat do
+        slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)
 
-        remainder != 0 and leftover == :repeat ->
-          concat_shape =
-            t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, num_batches * batch_size)
+        t_torchx = from_nx(t)
 
-          slice_shape = t.shape |> Tuple.delete_at(0) |> Tuple.insert_at(0, remainder)
+        slice = do_slice(t_torchx, t.shape, slice_shape, [0], [remainder], [1])
 
-          slice = slice(%{t | shape: slice_shape}, t, [0], [remainder], [1])
-
-          concatenate(%{t | shape: concat_shape}, [t, slice], 0)
-
-        true ->
-          t
+        Torchx.concatenate([t_torchx, slice], 0)
+      else
+        from_nx(t)
       end
 
     batched =
       to_batch
-      |> from_nx()
       |> Torchx.split(batch_size)
       |> Enum.take(num_batches)
       |> Enum.map(&to_nx(&1, out))
@@ -239,12 +232,23 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def slice(%T{shape: shape} = out, %T{} = t, start_indices, lengths, strides) do
+  def slice(
+        %T{shape: output_shape} = out,
+        %T{shape: input_shape} = t,
+        start_indices,
+        lengths,
+        strides
+      ) do
     t
     |> from_nx()
-    |> narrow(start_indices, lengths, 0, t.shape)
-    |> stride(shape, lengths, strides)
+    |> do_slice(input_shape, output_shape, start_indices, lengths, strides)
     |> to_nx(out)
+  end
+
+  defp do_slice(t, input_shape, output_shape, start_indices, lengths, strides) do
+    t
+    |> narrow(start_indices, lengths, 0, input_shape)
+    |> stride(output_shape, lengths, strides)
   end
 
   defp narrow(ref, [start | starts], [length | lengths], axis, shape) do
