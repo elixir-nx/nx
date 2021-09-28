@@ -1687,23 +1687,56 @@ defmodule Nx.BinaryBackend do
   defp bin_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
     start_indices = clamp_indices(start_indices, shape, lengths)
 
-    if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
-      length = Nx.size(output_shape) * div(size, 8)
-      offset = div(length, elem(output_shape, 0)) * hd(start_indices)
-      binary_part(data, offset, length)
-    else
-      # Anchored around the start indices
-      weighted_shape = weighted_shape(shape, size, output_shape)
-      offset = weighted_offset(weighted_shape, start_indices)
+    is_top_dim_slice = top_dimension_slice?(tuple_size(shape), shape, output_shape)
 
-      # The weighted shape is altered such that we traverse
-      # with respect to the stride for each dimension
-      weighted_shape =
-        Enum.zip_with(weighted_shape, strides, fn {d, dim_size}, s ->
-          {d, dim_size + (s - 1) * dim_size}
-        end)
+    cond do
+      is_top_dim_slice and hd(strides) == 1 ->
+        length = Nx.size(output_shape) * div(size, 8)
+        offset = div(length, elem(output_shape, 0)) * hd(start_indices)
+        binary_part(data, offset, length)
 
-      IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
+      is_top_dim_slice ->
+        [_dim_0 | other_dims] = Tuple.to_list(shape)
+
+        stride_bit_length = Enum.product(other_dims) * size
+
+        start_index = hd(start_indices)
+        stride = hd(strides)
+
+        offset = start_index * stride_bit_length
+
+        <<_::size(offset), to_stride::bitstring>> = data
+
+        max_len = elem(output_shape, 0)
+
+        {_, _, strided} =
+          for <<x::size(stride_bit_length) <- to_stride>>, reduce: {start_index, 0, []} do
+            {idx, ^max_len, acc} ->
+              {idx, max_len, acc}
+
+            {idx, len, acc} ->
+              if rem(idx, stride) == 0 do
+                {idx + 1, len + 1, [acc | [<<x::size(stride_bit_length)>>]]}
+              else
+                {idx + 1, len, acc}
+              end
+          end
+
+        IO.iodata_to_binary(strided)
+
+      true ->
+        # Anchored around the start indices
+        weighted_shape = weighted_shape(shape, size, output_shape)
+        offset = weighted_offset(weighted_shape, start_indices)
+
+        # The weighted shape is altered such that we traverse
+        # with respect to the stride for each dimension
+        weighted_shape =
+          Enum.zip_with(weighted_shape, strides, fn {d, dim_size}, s ->
+            {d, dim_size + (s - 1) * dim_size}
+          end)
+
+        IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
     end
   end
 

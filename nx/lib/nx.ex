@@ -7424,6 +7424,21 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.slice(Nx.tensor([1, 2, 3, 4, 5, 6]), [0], [6], strides: [2])
+      #Nx.Tensor<
+        s64[3]
+        [1, 3, 5]
+      >
+
+      iex> Nx.slice(Nx.tensor([[1, 2], [3, 4], [5, 6]]), [0, 0], [3, 2], strides: [2, 1])
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 2],
+          [5, 6]
+        ]
+      >
+
       iex> t = Nx.iota({900})
       iex> t = Nx.reshape(t, {2, 15, 30})
       iex> Nx.slice(t, [0, 4, 11], [2, 3, 9], strides: [2, 1, 3])
