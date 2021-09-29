@@ -20,16 +20,16 @@ else  # Linux
 	POST_INSTALL = $(NOOP)
 endif
 
+ifndef MIX_APP_PATH
+$(error Ensure MIX_APP_PATH is set correctly)
+endif
+
 .DEFAULT_GLOBAL := build
 
-build: check_libtorch $(TORCHX_SO)
+build: libtorch
 
-check_libtorch:
-	@ if [ -z "$(LIBTORCH_DIR)" ]; then \
-		echo "LIBTORCH_DIR env var is not set. It should point to the directory, where LibTorch is installed."; \
-		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
-		exit 1; \
-	fi
+libtorch:
+	@bash scripts/download_libtorch.sh
 
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	mkdir -p $(PRIV_DIR)
