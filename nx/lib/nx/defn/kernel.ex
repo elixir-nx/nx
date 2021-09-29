@@ -1113,17 +1113,17 @@ defmodule Nx.Defn.Kernel do
 
     quote do
       Nx.Defn.Kernel.transform(unquote(tensor), fn tensor ->
-       # Revert scoping so guards work
-       import unquote(__MODULE__), only: []
-       import Kernel
+        # Revert scoping so guards work
+        import unquote(__MODULE__), only: []
+        import Kernel
 
-       case Nx.shape(tensor) do
-         unquote(shape) ->
-           tensor
+        case Nx.shape(tensor) do
+          unquote(shape) ->
+            tensor
 
-         shape ->
-           unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
-       end
+          shape ->
+            unquote(__MODULE__).__assert_shape_pattern__!(unquote(shape_pattern_string), shape)
+        end
       end)
     end
   end
