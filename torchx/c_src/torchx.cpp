@@ -417,12 +417,13 @@ NIF(full)
 
 #define BINARY_OP(OP)   BINARY_OP2(OP, OP)
 
-#define BINARY_OP2(OP, NATIVE_OP)   \
-  NIF(OP)               \
-  {                     \
-    TENSOR_PARAM(0, a); \
-    TENSOR_PARAM(1, b); \
-                        \
+#define BINARY_OP2(OP, NATIVE_OP) \
+  NIF(OP)                         \
+  {                               \
+    TENSOR_PARAM(0, a);           \
+    TENSOR_PARAM(1, b);           \
+                                  \
+    std::cout << "PyTorch version: " << TORCH_VERSION_MAJOR << "." << TORCH_VERSION_MINOR << "." << TORCH_VERSION_PATCH << std::endl; \
     TENSOR(torch::NATIVE_OP(*a, *b)); \
   }
 
