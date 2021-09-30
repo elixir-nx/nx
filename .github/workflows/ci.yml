@@ -39,9 +39,6 @@ jobs:
         with:
           path: libtorch
           key: libtorch.zip
-      - name: Download and install libtorch
-        if: ${{ matrix.working_directory == 'torchx' && steps.libtorch-cache.outputs.cache-hit != 'true' }}
-        run: make libtorch
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
