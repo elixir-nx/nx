@@ -18,6 +18,8 @@ jobs:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
+      LIBTORCH_DIR: libtorch
+      LIBTORCH_ZIP: libtorch.zip
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -35,8 +37,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: cache/libtorch
-          key: cache/libtorch.zip
+          path: libtorch
+          key: libtorch.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
