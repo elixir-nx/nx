@@ -133,13 +133,12 @@ defmodule Torchx.MixProject do
 
     # Unpack libtorch to libtorch_dir
 
-    {_, 0} =
-      System.cmd("unzip", ~w(-d #{cache_dir} #{libtorch_zip})) |> IO.inspect(label: "unzip")
+    {:ok, _} = :zip.unzip(libtorch_zip, [cwd: cache_dir])
 
-    unpack_dir = Path.join(cache_dir, "libtorch") |> IO.inspect(label: "unpack dir")
+    unpack_dir = Path.join(cache_dir, "libtorch")
 
     unless unpack_dir == libtorch_dir do
-      {_, 0} = System.cmd("mv", ~w(#{unpack_dir} #{libtorch_dir}))
+      File.rename!(unpack_dir, libtorch_dir)
     end
 
     :ok
