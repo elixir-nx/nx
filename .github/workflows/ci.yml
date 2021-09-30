@@ -35,8 +35,10 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: libtorch
-          key: libtorch.zip
+          path: cache/libtorch
+          key: cache/libtorch.zip
+      - name: "List dirs"
+        run: ls
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
