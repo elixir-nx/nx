@@ -21,9 +21,3 @@ erl_crash.dump
 
 # Ignore package tarball (built via "mix hex.build").
 torchx-*.tar
-
-/priv/libtorch
-/priv/libtorch.zip
-/priv/lib
-/priv/torchx.so
-/cmake

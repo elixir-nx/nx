@@ -33,6 +33,7 @@ SOURCES_HPP = $(wildcard $(C_SRC)/*.hpp)
 
 $(TORCHX_SO): $(SOURCES_CPP) $(SOURCES_HPP)
 	mkdir -p $(CMAKE_BUILD_DIR)
+	mkdir -p $(PRIV_DIR)
 	cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) -S $(shell pwd) && \
 		cmake --build .
