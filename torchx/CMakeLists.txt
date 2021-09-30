@@ -1,9 +1,11 @@
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(torchx)
 
 find_package(Torch REQUIRED)
 
-add_executable(torchx.so ../c_src/torchx.cpp ../c_src/nx_nif_utils.hpp)
+file(GLOB torchx_sources CONFIGURE_DEPENDS "${C_SRC}/*.cpp" "${C_SRC}/*.hpp")
+
+add_executable(torchx.so ${torchx_sources})
 target_link_libraries(torchx.so "${TORCH_LIBRARIES}")
 set_property(TARGET torchx.so PROPERTY CXX_STANDARD 14)
 

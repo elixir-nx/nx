@@ -1,7 +1,11 @@
-LIBTORCH_DIR ?= "./_build/libtorch"
+LIBTORCH_DIR ?= "$(shell pwd)/_build/libtorch"
+LIBTORCH_ZIP ?= "$(LIBTORCH_DIR).zip"
+CMAKE_BUILD_DIR ?= $(shell pwd)/_build/cmake
 
 PRIV_DIR = $(MIX_APP_PATH)/priv
 TORCHX_SO = $(PRIV_DIR)/torchx.so
+
+C_SRC = $(shell pwd)/c_src
 
 OS=$(shell uname -s)
 
@@ -17,17 +21,19 @@ endif
 
 build: libtorch $(TORCHX_SO)
 
-
 libtorch:
 	@ if [ ! -d "$(LIBTORCH_DIR)" ]; then \
-		wget $(LIBTORCH_DOWNLOAD_URL) --no-check-certificate -O _build/libtorch.zip && \
-		unzip _build/libtorch.zip -d $(LIBTORCH_DIR); \
-	else \
-		echo "libtorch found at $(LIBTORCH_DIR)"; \
+		wget $(LIBTORCH_DOWNLOAD_URL) --no-check-certificate -O $(LIBTORCH_ZIP) && \
+		unzip $(LIBTORCH_ZIP) -d /tmp/torchx && \
+		mv -T /tmp/torchx/libtorch $(LIBTORCH_DIR); \
 	fi
 
-$(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
-	mkdir -p $(PRIV_DIR)
-	cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -B ./cmake ./cmake
-	cmake --build ./cmake --config Release
-	mv ./cmake/torchx.so $(TORCHX_SO)
+SOURCES_CPP = $(wildcard $(C_SRC)/*.cpp)
+SOURCES_HPP = $(wildcard $(C_SRC)/*.hpp)
+
+$(TORCHX_SO): $(SOURCES_CPP) $(SOURCES_HPP)
+	mkdir -p $(CMAKE_BUILD_DIR)
+	cd $(CMAKE_BUILD_DIR) && \
+		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) -S $(shell pwd) && \
+		cmake --build .
+	mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
