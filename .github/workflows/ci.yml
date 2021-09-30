@@ -18,8 +18,6 @@ jobs:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
-      LIBTORCH_DIR: libtorch
-      LIBTORCH_ZIP: libtorch.zip
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
