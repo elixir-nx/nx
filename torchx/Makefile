@@ -1,24 +1,33 @@
-LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
-LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
-LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
+LIBTORCH_DIR ?= "./_build/libtorch"
 
 PRIV_DIR = $(MIX_APP_PATH)/priv
-LIBTORCH_LIB_DIR = $(PRIV_DIR)/lib
 TORCHX_SO = $(PRIV_DIR)/torchx.so
+
+OS=$(shell uname -s)
+
+ifeq ($(OS), Linux)
+	LIBTORCH_DOWNLOAD_URL ?= https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip
+endif
+
+ifeq ($(OS), Darwin)
+	LIBTORCH_DOWNLOAD_URL ?= https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip
+endif
 
 .DEFAULT_GLOBAL := build
 
-build: check_libtorch $(TORCHX_SO)
+build: libtorch $(TORCHX_SO)
 
-check_libtorch:
-	@ if [ -z "$(LIBTORCH_DIR)" ]; then \
-		echo "LIBTORCH_DIR env var is not set. It should point to the directory, where LibTorch is installed."; \
-		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
-		exit 1; \
+
+libtorch:
+	@ if [ ! -d "$(LIBTORCH_DIR)" ]; then \
+		wget $(LIBTORCH_DOWNLOAD_URL) --no-check-certificate -O _build/libtorch.zip && \
+		unzip _build/libtorch.zip -d $(LIBTORCH_DIR); \
+	else \
+		echo "libtorch found at $(LIBTORCH_DIR)"; \
 	fi
 
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	mkdir -p $(PRIV_DIR)
-	cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) ./cmake -B ./cmake
+	cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -B ./cmake ./cmake
 	cmake --build ./cmake --config Release
 	mv ./cmake/torchx.so $(TORCHX_SO)
