@@ -35,8 +35,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: cache/libtorch
-          key: cache/libtorch.zip
+          path: ./cache/libtorch
+          key: ./cache/libtorch.zip
       - name: "List dirs"
         run: ls
       - name: Install dependencies
