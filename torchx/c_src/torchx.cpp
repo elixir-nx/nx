@@ -423,7 +423,6 @@ NIF(full)
     TENSOR_PARAM(0, a);           \
     TENSOR_PARAM(1, b);           \
                                   \
-    std::cout << "PyTorch version: " << TORCH_VERSION_MAJOR << "." << TORCH_VERSION_MINOR << "." << TORCH_VERSION_PATCH << std::endl; \
     TENSOR(torch::NATIVE_OP(*a, *b)); \
   }
 
