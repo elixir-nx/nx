@@ -1,3 +1,4 @@
+LIBTORCH_DIR ?= cache/libtorch
 LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
