@@ -305,7 +305,6 @@ defmodule Torchx.Backend do
 
     linear_indices_offsets = linear_indices_offsets(tensor.shape)
 
-
     tensor
     |> from_nx()
     |> Torchx.gather(from_nx(idx), from_nx(linear_indices_offsets), out.shape)
