@@ -298,11 +298,24 @@ defmodule Torchx.Backend do
 
   @impl true
   def gather(out, tensor, idx) do
+    linear_indices_offsets = linear_indices_offsets(tensor.shape)
+
     tensor
     |> from_nx()
-    |> IO.inspect()
-    |> Torchx.gather(from_nx(idx) |> IO.inspect())
+    |> Torchx.gather(from_nx(idx), from_nx(linear_indices_offsets), out.shape)
     |> to_nx(out)
+  end
+
+  defp linear_indices_offsets(shape) do
+    {offsets_list, _} =
+      shape
+      |> Tuple.to_list()
+      |> Enum.reverse()
+      |> Enum.reduce({[], 1}, fn x, {acc, multiplier} ->
+        {[[multiplier] | acc], multiplier * x}
+      end)
+
+    Nx.tensor(offsets_list, backend: __MODULE__)
   end
 
   ## Aggregators
