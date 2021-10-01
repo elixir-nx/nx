@@ -161,6 +161,7 @@ defmodule Torchx do
   deftensor narrow(tensor, dim, start, length)
   deftensor as_strided(tensor, size, strides, offset)
   deftensor concatenate(tensors, axis)
+  deftensor gather(tensor_input, tensor_indices)
 
   ## Aggregation
 

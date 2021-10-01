@@ -312,6 +312,14 @@ NIF(concatenate)
   TENSOR(torch::cat(tensors, axis));
 }
 
+NIF(gather)
+{
+  TENSOR_PARAM(0, input);
+  TENSOR_PARAM(1, indices);
+
+  TENSOR(torch::gather(*input, 0, indices->reshape()));
+}
+
 NIF(permute)
 {
   TENSOR_PARAM(0, t);
@@ -685,6 +693,7 @@ static ErlNifFunc nif_functions[] = {
     DF(narrow, 4),
     DF(as_strided, 4),
     DF(concatenate, 2),
+    DF(gather, 2),
 
     DF(add, 2),
     DF(subtract, 2),

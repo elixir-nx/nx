@@ -296,6 +296,15 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def gather(out, tensor, idx) do
+    tensor
+    |> from_nx()
+    |> IO.inspect()
+    |> Torchx.gather(from_nx(idx) |> IO.inspect())
+    |> to_nx(out)
+  end
+
   ## Aggregators
 
   @impl true
