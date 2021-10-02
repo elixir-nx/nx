@@ -311,25 +311,6 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
-  def take_along_axis(out, tensor, idx, axis) do
-    tensor
-    |> from_nx()
-    |> Torchx.take_along_axis(from_nx(idx), axis)
-    |> to_nx(out)
-  end
-
-  @impl true
-  def argsort(out, tensor, opts) do
-    axis = opts[:axis]
-    is_descending = opts[:direction] == :desc
-
-    tensor
-    |> from_nx()
-    |> Torchx.argsort(axis, is_descending)
-    |> to_nx(out)
-  end
-
   defp linear_indices_offsets(shape) do
     # The offsets tensor calculated below follows a formula in which we
     # multiply the index along each axis by the number of elements contained in all following axes
@@ -354,6 +335,25 @@ defmodule Torchx.Backend do
       end)
 
     Nx.tensor(offsets_list, backend: __MODULE__)
+  end
+
+  @impl true
+  def take_along_axis(out, tensor, idx, axis) do
+    tensor
+    |> from_nx()
+    |> Torchx.take_along_axis(from_nx(idx), axis)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def argsort(out, tensor, opts) do
+    axis = opts[:axis]
+    is_descending = opts[:direction] == :desc
+
+    tensor
+    |> from_nx()
+    |> Torchx.argsort(axis, is_descending)
+    |> to_nx(out)
   end
 
   ## Aggregators
