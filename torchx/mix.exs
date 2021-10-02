@@ -46,7 +46,6 @@ defmodule Torchx.MixProject do
     ]
   end
 
-
   defp compilers do
     if System.get_env("LIBTORCH_DIR"), do: [:elixir_make], else: [:torchx, :elixir_make]
   end
@@ -78,13 +77,18 @@ defmodule Torchx.MixProject do
   defp install_libtorch(cache_dir, libtorch_dir) do
     File.mkdir_p!(cache_dir)
 
-    libtorch_zip = System.get_env("LIBTORCH_ZIP", Path.join(cache_dir, "libtorch_#{@default_libtorch_version}.zip"))
+    libtorch_zip =
+      System.get_env(
+        "LIBTORCH_ZIP",
+        Path.join(cache_dir, "libtorch_#{@default_libtorch_version}.zip")
+      )
 
     unless File.exists?(libtorch_zip) do
       # Download libtorch
 
       # Sanity check for future changes or updates on the default libtorch version
-      if @default_libtorch_version != "1_9_1_cpu", do: raise "ensure the download URLs match the default libtorch version"
+      if @default_libtorch_version != "1_9_1_cpu",
+        do: raise("ensure the download URLs match the default libtorch version")
 
       url =
         case :os.type() do
@@ -95,8 +99,8 @@ defmodule Torchx.MixProject do
             # MacOS
             "https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip"
 
-        os ->
-          raise "OS #{os} is not supported"
+          os ->
+            raise "OS #{os} is not supported"
         end
 
       download!(url, libtorch_zip)
