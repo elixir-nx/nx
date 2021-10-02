@@ -3,6 +3,7 @@ defmodule Torchx.MixProject do
 
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.1.0-dev"
+  @default_libtorch_version File.read!(".default_libtorch_version")
 
   def project do
     [
@@ -12,7 +13,7 @@ defmodule Torchx.MixProject do
       elixir: "~> 1.12-dev",
       deps: deps(),
       docs: docs(),
-      compilers: [:torchx, :elixir_make] ++ Mix.compilers(),
+      compilers: compilers() ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases()
     ]
@@ -45,6 +46,11 @@ defmodule Torchx.MixProject do
     ]
   end
 
+
+  defp compilers do
+    if System.get_env("LIBTORCH_DIR"), do: [:elixir_make], else: [:torchx, :elixir_make]
+  end
+
   defp aliases do
     [
       "compile.torchx": &compile/1
@@ -53,79 +59,44 @@ defmodule Torchx.MixProject do
 
   defp compile(args) do
     cache_dir = Path.join(__DIR__, "cache")
+    # TODO: This directory name must also include the libtorch version.
+    # Otherwise if someone depends on torchx as a git dependency, they
+    # can upgrade the version and we will think it is cached but it is actually old.
+    libtorch_dir = Path.join(cache_dir, "libtorch_#{@default_libtorch_version}")
 
-    force_download = "--force" in args
+    if "--force" in args do
+      File.rm_rf!(cache_dir)
+    end
 
-    libtorch_dir =
-      case System.get_env("LIBTORCH_DIR") do
-        nil ->
-          Path.join(cache_dir, "libtorch")
-
-        val ->
-          val
-      end
-
-    with {:force_download, false} <- {:force_download, force_download},
-         {:libtorch_dir_exists, true} <- {:libtorch_dir_exists, File.dir?(libtorch_dir)},
-         {:ok, content} <- File.read(Path.join(libtorch_dir, "build-hash")),
-         true <- String.contains?(content, "pytorch") do
-      :noop
+    if File.dir?(libtorch_dir) do
+      {:ok, []}
     else
-      {:force_download, true} ->
-        File.rm_rf!(cache_dir)
-        install_libtorch(cache_dir, libtorch_dir)
-
-      {:libtorch_dir_exists, false} ->
-        install_libtorch(cache_dir, libtorch_dir)
-
-      _ ->
-        msg = "directory #{libtorch_dir} set in LIBTORCH_DIR does not contain libtorch"
-        IO.puts(msg)
-
-        {:error,
-         [
-           %Mix.Task.Compiler.Diagnostic{
-             compiler_name: "torchx",
-             details: msg,
-             file: "mix.exs",
-             message: msg,
-             position: nil,
-             severity: :error
-           }
-         ]}
+      install_libtorch(cache_dir, libtorch_dir)
     end
   end
 
   defp install_libtorch(cache_dir, libtorch_dir) do
     File.mkdir_p!(cache_dir)
 
-    libtorch_zip = System.get_env("LIBTORCH_ZIP", Path.join(cache_dir, "libtorch.zip"))
-
-    os =
-      case System.cmd("uname", ~w(-s)) do
-        {"Linux" <> _, 0} ->
-          :linux
-
-        {"Darwin" <> _, 0} ->
-          :mac
-
-        {os, 0} ->
-          raise "OS #{os} is not supported"
-
-        _ ->
-          raise "unable to fetch current OS"
-      end
+    libtorch_zip = System.get_env("LIBTORCH_ZIP", Path.join(cache_dir, "libtorch_#{@default_libtorch_version}.zip"))
 
     unless File.exists?(libtorch_zip) do
       # Download libtorch
 
+      # Sanity check for future changes or updates on the default libtorch version
+      if @default_libtorch_version != "1_9_1_cpu", do: raise "ensure the download URLs match the default libtorch version"
+
       url =
-        case os do
-          :linux ->
+        case :os.type() do
+          {:unix, :linux} ->
             "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
 
-          :mac ->
+          {:unix, :darwin} ->
+            # MacOS
             "https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip"
+
+        os ->
+          raise "OS #{os} is not supported"
         end
 
       download!(url, libtorch_zip)

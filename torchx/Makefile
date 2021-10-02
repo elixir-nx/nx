@@ -1,10 +1,9 @@
-LIBTORCH_DIR ?= cache/libtorch
+LIBTORCH_DIR ?= cache/libtorch_$(shell cat .default_libtorch_version)
 LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(LIBTORCH_INCLUDE_PATH) -I$(LIBTORCH_API_INCLUDE_PATH) \
-	 -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -shared \
-	 -std=c++14 -D_GLIBCXX_USE_CXX11_ABI=1
+	 -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -shared -std=c++14
 LDFLAGS = -L$(LIBTORCH_LINK_PATH) -ltorch
 
 PRIV_DIR = $(MIX_APP_PATH)/priv
@@ -16,7 +15,7 @@ ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 	POST_INSTALL = install_name_tool -add_rpath @loader_path/lib $(TORCHX_SO)
 else  # Linux
-    CFLAGS += -fopenmp
+    CFLAGS += -fopenmp -D_GLIBCXX_USE_CXX11_ABI=1
 	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib' -lpthread -lc10 -ltorch_cpu -lkineto
 	POST_INSTALL = $(NOOP)
 endif
