@@ -3,7 +3,10 @@ defmodule Torchx.MixProject do
 
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.1.0-dev"
-  @default_libtorch_version File.read!(".default_libtorch_version")
+
+  @libtorch_version "1.9.1"
+  @libtorch_target "cpu"
+  @libtorch_cache Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
 
   def project do
     [
@@ -15,7 +18,8 @@ defmodule Torchx.MixProject do
       docs: docs(),
       compilers: compilers() ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      aliases: aliases()
+      aliases: aliases(),
+      make_env: %{"LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache)}
     ]
   end
 
@@ -57,38 +61,35 @@ defmodule Torchx.MixProject do
   end
 
   defp compile(args) do
-    cache_dir = Path.join(__DIR__, "cache")
-    # TODO: This directory name must also include the libtorch version.
-    # Otherwise if someone depends on torchx as a git dependency, they
-    # can upgrade the version and we will think it is cached but it is actually old.
-    libtorch_dir = Path.join(cache_dir, "libtorch_#{@default_libtorch_version}")
+    cache_dir = Path.dirname(@libtorch_cache)
 
     if "--force" in args do
       File.rm_rf!(cache_dir)
     end
 
-    if File.dir?(libtorch_dir) do
+    if File.dir?(@libtorch_cache) do
       {:ok, []}
     else
-      install_libtorch(cache_dir, libtorch_dir)
+      install_libtorch(cache_dir)
     end
   end
 
-  defp install_libtorch(cache_dir, libtorch_dir) do
+  defp install_libtorch(cache_dir) do
     File.mkdir_p!(cache_dir)
 
     libtorch_zip =
       System.get_env(
         "LIBTORCH_ZIP",
-        Path.join(cache_dir, "libtorch_#{@default_libtorch_version}.zip")
+        Path.join(cache_dir, "libtorch-#{@libtorch_version}-#{@libtorch_target}.zip")
       )
 
     unless File.exists?(libtorch_zip) do
       # Download libtorch
 
-      # Sanity check for future changes or updates on the default libtorch version
-      if @default_libtorch_version != "1_9_1_cpu",
-        do: raise("ensure the download URLs match the default libtorch version")
+      # This is so we don't forget to update the URLs below when we want to update libtorch
+      unless @libtorch_version == "1.9.1" and @libtorch_target == "cpu" do
+        raise "ensure the download URLs match the default libtorch version"
+      end
 
       url =
         case :os.type() do
@@ -106,16 +107,13 @@ defmodule Torchx.MixProject do
       download!(url, libtorch_zip)
     end
 
-    # Unpack libtorch to libtorch_dir
+    # Unpack libtorch and move to the target cache dir
 
     {:ok, _} =
       libtorch_zip |> String.to_charlist() |> :zip.unzip(cwd: String.to_charlist(cache_dir))
 
-    unpack_dir = Path.join(cache_dir, "libtorch")
-
-    unless unpack_dir == libtorch_dir do
-      File.rename!(unpack_dir, libtorch_dir)
-    end
+    # Keep libtorch cache scoped by version and target
+    File.rename!(Path.join(cache_dir, "libtorch"), @libtorch_cache)
 
     :ok
   end
