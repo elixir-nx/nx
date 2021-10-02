@@ -133,7 +133,8 @@ defmodule Torchx.MixProject do
 
     # Unpack libtorch to libtorch_dir
 
-    {:ok, _} = libtorch_zip |> String.to_charlist() |> :zip.unzip(cwd: String.to_charlist(cache_dir))
+    {:ok, _} =
+      libtorch_zip |> String.to_charlist() |> :zip.unzip(cwd: String.to_charlist(cache_dir))
 
     unpack_dir = Path.join(cache_dir, "libtorch")
 
