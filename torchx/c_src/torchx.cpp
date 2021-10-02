@@ -325,6 +325,24 @@ NIF(gather)
   TENSOR(gathered_tensor.reshape(output_shape));
 }
 
+NIF(take_along_axis)
+{
+  TENSOR_PARAM(0, input);
+  TENSOR_PARAM(1, indices);
+  PARAM(2, int64_t, axis);
+
+  TENSOR(torch::gather(*input, axis, *indices));
+}
+
+NIF(argsort)
+{
+  TENSOR_PARAM(0, input);
+  PARAM(1, int64_t, axis);
+  PARAM(2, bool, is_descending);
+
+  TENSOR(torch::argsort(*input, axis, is_descending));
+}
+
 NIF(permute)
 {
   TENSOR_PARAM(0, t);
@@ -699,6 +717,8 @@ static ErlNifFunc nif_functions[] = {
     DF(as_strided, 4),
     DF(concatenate, 2),
     DF(gather, 4),
+    DF(take_along_axis, 3),
+    DF(argsort, 3),
 
     DF(add, 2),
     DF(subtract, 2),
