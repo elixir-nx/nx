@@ -1629,23 +1629,27 @@ defmodule NxTest do
     end
   end
 
-  describe "sigil" do
+  describe "sigils" do
     test "evaluates to tensor" do
       import Nx
 
-      assert ~M[-1 2 3 4] == Nx.tensor([-1, 2, 3, 4])
+      assert ~M[-1 2 3 4] == Nx.tensor([[-1, 2, 3, 4]])
       assert ~M[1
                 2
                 3
                 4] == Nx.tensor([[1], [2], [3], [4]])
       assert ~M[1.0 2  3
                 11  12 13] == Nx.tensor([[1.0, 2, 3], [11, 12, 13]])
+
+      assert ~V[4 3 2 1] == Nx.tensor([4, 3, 2, 1])
     end
 
     if Version.match?(System.version(), ">= 1.13.0-dev") do
       test "evaluates with proper type" do
-        assert eval("~M[1 2 3 4]f32") == Nx.tensor([1, 2, 3, 4], type: {:f, 32})
-        assert eval("~M[4 3 2 1]u8") == Nx.tensor([4, 3, 2, 1], type: {:u, 8})
+        assert eval("~M[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
+        assert eval("~M[4 3 2 1]u8") == Nx.tensor([[4, 3, 2, 1]], type: {:u, 8})
+
+        assert eval("~V[0 1 0 1]u8") == Nx.tensor([0, 1, 0, 1], type: {:u, 8})
       end
 
       test "raises on invalid type" do
@@ -1663,7 +1667,7 @@ defmodule NxTest do
           ArgumentError,
           "expected a numerical value for tensor, got x",
           fn ->
-            eval("~M[1 2 x 4]u8")
+            eval("~V[1 2 x 4]u8")
           end
         )
       end

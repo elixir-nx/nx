@@ -8491,18 +8491,52 @@ defmodule Nx do
       iex> import Nx
       iex> ~M[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
+        f16[1][4]
+        [
+          [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
+        ]
+      >
+
+  """
+  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
+    string
+    |> binary_to_numbers
+    |> numbers_to_tensor(modifiers)
+  end
+
+  @doc """
+  Provides `~V` sigil to build a vector (one-dimensional tensor).
+
+  > Note: `~V` requires Elixir >= `1.13.0` in order to suppport type specifiers like `u8`
+
+  ## Examples
+
+      import Nx
+
+      ~V[-1 0 0 1]
+
+  Is equivalent to:
+
+      Nx.tensor([-1, 0, 0, 1])
+
+  You can specify the vector type:
+
+      iex> import Nx
+      iex> ~V[0.1 0.2 0.3 0.4]f16
+      #Nx.Tensor<
         f16[4]
         [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
       >
 
   """
-  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
-    numbers =
-      case binary_to_numbers(string) do
-        [vector] -> vector
-        matrix -> matrix
-      end
+  defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
+    string
+    |> binary_to_numbers
+    |> hd()
+    |> numbers_to_tensor(modifiers)
+  end
 
+  defp numbers_to_tensor(numbers, modifiers) do
     type =
       case modifiers do
         [unit | size] ->
