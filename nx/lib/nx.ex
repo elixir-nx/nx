@@ -8454,18 +8454,18 @@ defmodule Nx do
   ## Sigils
 
   @doc """
-  Provides `~M` sigil to build a tensor.
-
-  > Note: `~M` requires Elixir >= `1.13.0` in order to suppport type specifiers like `u8`
+  A convenient `~M` sigil for building matrices.
 
   ## Examples
 
       import Nx
 
-      ~M[-1 0 0 1
-          0 2 0 0
-          0 0 3 0
-          0 0 0 4]
+      ~M<
+        -1 0 0 1
+        0 2 0 0
+        0 0 3 0
+        0 0 0 4
+      >
 
   Is equivalent to:
 
@@ -8476,7 +8476,9 @@ defmodule Nx do
         [0, 0, 0, 4]
       ])
 
-  You can specify the tensor type:
+  If the tensor has any float type, it defaults to f32.
+  Otherwise, it is s64. If you are using Elixir 1.13+,
+  you can specify the tensor type as a sigil modifier:
 
       iex> import Nx
       iex> ~M[0.1 0.2 0.3 0.4]f16
