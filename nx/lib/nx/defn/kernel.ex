@@ -417,7 +417,6 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-
   def rem(left, right) when Kernel.and(is_number(left), is_number(right)),
     do: Kernel.rem(left, right)
 
