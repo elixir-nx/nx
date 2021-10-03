@@ -109,7 +109,7 @@ defmodule Torchx.MixProject do
       libtorch_zip |> String.to_charlist() |> :zip.unzip(cwd: String.to_charlist(cache_dir))
 
     # Keep libtorch cache scoped by version and target
-    File.rename!(Path.join(cache_dir, "libtorch"), @libtorch_cache)
+    File.rename!(Path.join(cache_dir, "libtorch"), libtorch_cache)
 
     :ok
   end
