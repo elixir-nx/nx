@@ -87,6 +87,10 @@ defmodule Nx.Defn.KernelTest do
       assert Nx.Defn.Kernel.max(0, 1) == 1
     end
 
+    test "rem" do
+      assert Nx.Defn.Kernel.rem(1, 5) == 1
+    end
+
     test ".." do
       assert Nx.Defn.Kernel.".."(1, 2) == 1..2
     end
