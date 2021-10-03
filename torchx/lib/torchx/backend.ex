@@ -296,6 +296,66 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def gather(out, tensor, idx) do
+    # Nx provides indices as a tensor of shape {*, input_dims}
+    # However, torch expects indices to be a 1-dim tensor of indices along a given axis.
+    # As such, we need to convert the indices tensor to linear indices.
+    # See the function below for an explanation on the offsets calculation
+
+    linear_indices_offsets = linear_indices_offsets(tensor.shape)
+
+    tensor
+    |> from_nx()
+    |> Torchx.gather(from_nx(idx), from_nx(linear_indices_offsets), out.shape)
+    |> to_nx(out)
+  end
+
+  defp linear_indices_offsets(shape) do
+    # The offsets tensor calculated below follows a formula in which we
+    # multiply the index along each axis by the number of elements contained in all following axes
+    # For example, for a {3, 5, 7, 2} tensor, the offsets tensor is [70, 14, 2, 1]
+
+    # This offsets tensor is then applied to the indices tensor through matrix multiplication:
+    # indices = [[0, 2, 1, 0], [0, 0, 0, 1], [1, 4, 3, 2]]
+    # offsets = [70, 14, 2, 1]
+    # linear_indices = [14 * 2 + 2 * 1, 1 * 1, 70 * 1 + 14 * 4 + 2 * 3 + 1 * 2] = [30, 1, 134]
+
+    # By linear indices, we refer to the indices of a row-major representation of a tensor
+    # it's easy to see the expected values using Nx.iota(tensor), which will output a tensor
+    # which counts in exactly the same way, when provided no arguments. In effect, Nx.iota outputs
+    # the corresponding linear indices for a given tensor shape.
+
+    {offsets_list, _} =
+      shape
+      |> Tuple.to_list()
+      |> Enum.reverse()
+      |> Enum.reduce({[], 1}, fn x, {acc, multiplier} ->
+        {[[multiplier] | acc], multiplier * x}
+      end)
+
+    Nx.tensor(offsets_list, backend: __MODULE__)
+  end
+
+  @impl true
+  def take_along_axis(out, tensor, idx, axis) do
+    tensor
+    |> from_nx()
+    |> Torchx.take_along_axis(from_nx(idx), axis)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def argsort(out, tensor, opts) do
+    axis = opts[:axis]
+    is_descending = opts[:direction] == :desc
+
+    tensor
+    |> from_nx()
+    |> Torchx.argsort(axis, is_descending)
+    |> to_nx(out)
+  end
+
   ## Aggregators
 
   @impl true
