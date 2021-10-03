@@ -1629,20 +1629,20 @@ defmodule NxTest do
     end
   end
 
-  if Version.match?(System.version(), ">= 1.13.0-dev") do
-    describe "sigil" do
-      test "evaluates to tensor" do
-        import Nx
+  describe "sigil" do
+    test "evaluates to tensor" do
+      import Nx
 
-        assert ~M[-1 2 3 4] == Nx.tensor([-1, 2, 3, 4])
-        assert ~M[1
-                  2
-                  3
-                  4] == Nx.tensor([[1], [2], [3], [4]])
-        assert ~M[1.0 2  3
-                  11  12 13] == Nx.tensor([[1.0, 2, 3], [11, 12, 13]])
-      end
+      assert ~M[-1 2 3 4] == Nx.tensor([-1, 2, 3, 4])
+      assert ~M[1
+                2
+                3
+                4] == Nx.tensor([[1], [2], [3], [4]])
+      assert ~M[1.0 2  3
+                11  12 13] == Nx.tensor([[1.0, 2, 3], [11, 12, 13]])
+    end
 
+    if Version.match?(System.version(), ">= 1.13.0-dev") do
       test "evaluates with proper type" do
         assert eval("~M[1 2 3 4]f32") == Nx.tensor([1, 2, 3, 4], type: {:f, 32})
         assert eval("~M[4 3 2 1]u8") == Nx.tensor([4, 3, 2, 1], type: {:u, 8})
