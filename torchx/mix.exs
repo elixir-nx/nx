@@ -61,27 +61,23 @@ defmodule Torchx.MixProject do
   end
 
   defp compile(args) do
-    cache_dir = Path.dirname(@libtorch_cache)
+    libtorch_cache = @libtorch_cache
+    cache_dir = Path.dirname(libtorch_cache)
 
     if "--force" in args do
       File.rm_rf!(cache_dir)
     end
 
-    if File.dir?(@libtorch_cache) do
+    if File.dir?(libtorch_cache) do
       {:ok, []}
     else
-      install_libtorch(cache_dir)
+      install_libtorch(cache_dir, libtorch_cache)
     end
   end
 
-  defp install_libtorch(cache_dir) do
+  defp install_libtorch(cache_dir, libtorch_cache) do
     File.mkdir_p!(cache_dir)
-
-    libtorch_zip =
-      System.get_env(
-        "LIBTORCH_ZIP",
-        Path.join(cache_dir, "libtorch-#{@libtorch_version}-#{@libtorch_target}.zip")
-      )
+    libtorch_zip = libtorch_cache <> ".zip"
 
     unless File.exists?(libtorch_zip) do
       # Download libtorch
