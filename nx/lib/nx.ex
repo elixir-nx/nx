@@ -8453,6 +8453,39 @@ defmodule Nx do
 
   ## Sigils
 
+  @doc """
+  Provides `~M` sigil to build a tensor.
+
+  > Note: `~M` requires Elixir >= `1.13.0` in order to suppport type specifiers like `u8`
+
+  ## Examples
+
+      import Nx
+
+      ~M[-1 0 0 1
+          0 2 0 0
+          0 0 3 0
+          0 0 0 4]
+
+  Is equivalent to:
+
+      Nx.tensor([
+        [-1, 0, 0, 1],
+        [0, 2, 0, 0],
+        [0, 0, 3, 0],
+        [0, 0, 0, 4]
+      ])
+
+  You can specify the tensor type:
+
+      iex> import Nx
+      iex> ~M[0.1 0.2 0.3 0.4]f16
+      #Nx.Tensor<
+        f16[4]
+        [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
+      >
+
+  """
   defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
     numbers =
       case binary_to_numbers(string) do
