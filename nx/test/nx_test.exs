@@ -1644,20 +1644,8 @@ defmodule NxTest do
       end
 
       test "evaluates with proper type" do
-        defmodule Test do
-          import Nx
-
-          def case1 do
-            unquote(Code.string_to_quoted!("~M[1 2 3 4]f32"))
-          end
-
-          def case2 do
-            unquote(Code.string_to_quoted!("~M[4 3 2 1]u8"))
-          end
-        end
-
-        assert Test.case1() == Nx.tensor([1, 2, 3, 4], type: {:f, 32})
-        assert Test.case2() == Nx.tensor([4, 3, 2, 1], type: {:u, 8})
+        assert eval("~M[1 2 3 4]f32") == Nx.tensor([1, 2, 3, 4], type: {:f, 32})
+        assert eval("~M[4 3 2 1]u8") == Nx.tensor([4, 3, 2, 1], type: {:u, 8})
       end
 
       test "raises on invalid type" do
@@ -1665,13 +1653,7 @@ defmodule NxTest do
           ArgumentError,
           "invalid numerical type: {:f, 8} (see Nx.Type docs for all supported types)",
           fn ->
-            defmodule Test2 do
-              import Nx
-
-              def case do
-                unquote(Code.string_to_quoted!("~M[1 2 3 4]f8"))
-              end
-            end
+            eval("~M[1 2 3 4]f8")
           end
         )
       end
@@ -1681,15 +1663,15 @@ defmodule NxTest do
           ArgumentError,
           "expected a numerical value for tensor, got x",
           fn ->
-            defmodule Test3 do
-              import Nx
-
-              def case do
-                unquote(Code.string_to_quoted!("~M[1 2 x 4]u8"))
-              end
-            end
+            eval("~M[1 2 x 4]u8")
           end
         )
+      end
+
+      defp eval(expresion) do
+        "import Nx; #{expresion}"
+        |> Code.eval_string()
+        |> elem(0)
       end
     end
   end
