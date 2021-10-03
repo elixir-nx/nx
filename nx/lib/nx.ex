@@ -8454,7 +8454,7 @@ defmodule Nx do
   ## Sigils
 
   @doc """
-  A convenient `~M` sigil for building matrices.
+  A convenient `~M` sigil for building matrices (two-dimensional tensors).
 
   ## Examples
 
