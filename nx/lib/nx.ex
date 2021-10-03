@@ -8534,10 +8534,13 @@ defmodule Nx do
 
   """
   defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
-    string
-    |> binary_to_numbers
-    |> hd()
-    |> numbers_to_tensor(modifiers)
+    case binary_to_numbers(string) do
+      [numbers] ->
+        numbers_to_tensor(numbers, modifiers)
+
+      _ ->
+        raise ArgumentError, "must be one-dimensional"
+    end
   end
 
   defp numbers_to_tensor(numbers, modifiers) do

@@ -1644,6 +1644,17 @@ defmodule NxTest do
       assert ~V[4 3 2 1] == Nx.tensor([4, 3, 2, 1])
     end
 
+    test "raises when vector has more than one dimension" do
+      assert_raise(
+        ArgumentError,
+        "must be one-dimensional",
+        fn ->
+          eval(~S[~V<0 0 0 1
+                     1 0 0 0>])
+        end
+      )
+    end
+
     if Version.match?(System.version(), ">= 1.13.0-dev") do
       test "evaluates with proper type" do
         assert eval("~M[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
@@ -1671,12 +1682,12 @@ defmodule NxTest do
           end
         )
       end
+    end
 
-      defp eval(expresion) do
-        "import Nx; #{expresion}"
-        |> Code.eval_string()
-        |> elem(0)
-      end
+    defp eval(expresion) do
+      "import Nx; #{expresion}"
+      |> Code.eval_string()
+      |> elem(0)
     end
   end
 end
