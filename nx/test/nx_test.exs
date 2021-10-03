@@ -1,7 +1,7 @@
 defmodule NxTest do
   use ExUnit.Case, async: true
 
-  doctest Nx
+  doctest Nx, except: [sigil_M: 2, sigil_V: 2]
 
   defp commute(a, b, fun) do
     fun.(a, b)
@@ -1626,6 +1626,68 @@ defmodule NxTest do
                  indices,
                  Nx.reshape(t, {num_elements})
                )
+    end
+  end
+
+  describe "sigils" do
+    test "evaluates to tensor" do
+      import Nx
+
+      assert ~M[-1 2 3 4] == Nx.tensor([[-1, 2, 3, 4]])
+      assert ~M[1
+                2
+                3
+                4] == Nx.tensor([[1], [2], [3], [4]])
+      assert ~M[1.0 2  3
+                11  12 13] == Nx.tensor([[1.0, 2, 3], [11, 12, 13]])
+
+      assert ~V[4 3 2 1] == Nx.tensor([4, 3, 2, 1])
+    end
+
+    test "raises when vector has more than one dimension" do
+      assert_raise(
+        ArgumentError,
+        "must be one-dimensional",
+        fn ->
+          eval(~S[~V<0 0 0 1
+                     1 0 0 0>])
+        end
+      )
+    end
+
+    if Version.match?(System.version(), ">= 1.13.0-dev") do
+      test "evaluates with proper type" do
+        assert eval("~M[1 2 3 4]f32") == Nx.tensor([[1, 2, 3, 4]], type: {:f, 32})
+        assert eval("~M[4 3 2 1]u8") == Nx.tensor([[4, 3, 2, 1]], type: {:u, 8})
+
+        assert eval("~V[0 1 0 1]u8") == Nx.tensor([0, 1, 0, 1], type: {:u, 8})
+      end
+
+      test "raises on invalid type" do
+        assert_raise(
+          ArgumentError,
+          "invalid numerical type: {:f, 8} (see Nx.Type docs for all supported types)",
+          fn ->
+            eval("~M[1 2 3 4]f8")
+          end
+        )
+      end
+
+      test "raises on non-numerical values" do
+        assert_raise(
+          ArgumentError,
+          "expected a numerical value for tensor, got x",
+          fn ->
+            eval("~V[1 2 x 4]u8")
+          end
+        )
+      end
+    end
+
+    defp eval(expresion) do
+      "import Nx; #{expresion}"
+      |> Code.eval_string()
+      |> elem(0)
     end
   end
 end

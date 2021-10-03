@@ -37,7 +37,10 @@ defmodule Torchx.NxDoctestTest do
     # stack - fails in some tests
     stack: 2,
     # window_mean - depends on window_sum which is not implemented
-    window_mean: 3
+    window_mean: 3,
+    # require Elixir 1.13+
+    sigil_M: 2,
+    sigil_V: 2
   ]
 
   @rounding_error_doctests [
