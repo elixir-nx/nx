@@ -403,7 +403,6 @@ defmodule Nx.Defn.Kernel do
   def left / right when Kernel.and(is_number(left), is_number(right)), do: Kernel./(left, right)
   def left / right, do: Nx.divide(left, right)
 
-
   @doc """
   Element-wise remainder operation.
 
