@@ -8483,7 +8483,17 @@ defmodule Nx do
       for row <- String.split(string, "\n", trim: true) do
         row
         |> String.split(" ", trim: true)
-        |> Enum.map(&elem(Code.eval_string(&1), 0))
+        |> Enum.map(fn str ->
+          module = if String.contains?(str, "."), do: Float, else: Integer
+
+          case module.parse(str) do
+            {number, ""} ->
+              number
+
+            _ ->
+              raise ArgumentError, "expected a numerical value for tensor, got #{str}"
+          end
+        end)
       end
     end
   end

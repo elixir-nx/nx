@@ -1675,6 +1675,22 @@ defmodule NxTest do
           end
         )
       end
+
+      test "raises on non-numerical values" do
+        assert_raise(
+          ArgumentError,
+          "expected a numerical value for tensor, got x",
+          fn ->
+            defmodule Test3 do
+              import Nx
+
+              def case do
+                unquote(Code.string_to_quoted!("~M[1 2 x 4]u8"))
+              end
+            end
+          end
+        )
+      end
     end
   end
 end
