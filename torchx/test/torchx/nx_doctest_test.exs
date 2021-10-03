@@ -39,7 +39,10 @@ defmodule Torchx.NxDoctestTest do
     # to_batched_list - Shape mismatch due to unsupported options in some tests
     to_batched_list: 3,
     # window_mean - depends on window_sum which is not implemented
-    window_mean: 3
+    window_mean: 3,
+    # require Elixir 1.13+
+    sigil_M: 2,
+    sigil_V: 2
   ]
 
   @rounding_error_doctests [
