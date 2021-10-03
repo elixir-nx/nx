@@ -18,7 +18,6 @@ jobs:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
-      LIBTORCH_DIR: libtorch
     steps:
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
@@ -36,13 +35,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: libtorch
-          key: libtorch.zip
-      - name: Download and install libtorch
-        if: ${{ matrix.working_directory == 'torchx' && steps.libtorch-cache.outputs.cache-hit != 'true' }}
-        run: |
-          wget https://download.pytorch.org/libtorch/lts/1.8/cpu/libtorch-shared-with-deps-1.8.2%2Bcpu.zip -q -O libtorch.zip
-          unzip -qq libtorch.zip
+          path: ./torchx/cache/libtorch-1.9.1-cpu
+          key: ./torchx/cache/libtorch-1.9.1-cpu.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get

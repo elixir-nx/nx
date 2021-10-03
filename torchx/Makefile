@@ -2,8 +2,7 @@ LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
 CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(LIBTORCH_INCLUDE_PATH) -I$(LIBTORCH_API_INCLUDE_PATH) \
-	 -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -shared \
-	 -std=c++14 -D_GLIBCXX_USE_CXX11_ABI=0
+	 -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -shared -std=c++14
 LDFLAGS = -L$(LIBTORCH_LINK_PATH) -ltorch
 
 PRIV_DIR = $(MIX_APP_PATH)/priv
@@ -15,8 +14,8 @@ ifeq ($(shell uname -s), Darwin)
 	LDFLAGS += -flat_namespace -undefined suppress
 	POST_INSTALL = install_name_tool -add_rpath @loader_path/lib $(TORCHX_SO)
 else  # Linux
-    CFLAGS += -fopenmp
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib'
+	CFLAGS += -fopenmp
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib' -lpthread -lc10 -ltorch_cpu -lkineto
 	POST_INSTALL = $(NOOP)
 endif
 
@@ -25,8 +24,10 @@ endif
 build: check_libtorch $(TORCHX_SO)
 
 check_libtorch:
-	@ if [ -z "$(LIBTORCH_DIR)" ]; then \
-		echo "LIBTORCH_DIR env var is not set. It should point to the directory, where LibTorch is installed."; \
+	@ if [ ! -d "$(LIBTORCH_DIR)" ]; then \
+		echo "LIBTORCH_DIR is not a valid directory. \
+		It should either point to the directory, where LibTorch is installed, \
+		or it should be unset so we download it automatically."; \
 		echo "You can download LibTorch here: https://pytorch.org/get-started/locally/"; \
 		exit 1; \
 	fi
