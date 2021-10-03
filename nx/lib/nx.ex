@@ -8455,6 +8455,135 @@ defmodule Nx do
     )
   end
 
+  ## Sigils
+
+  @doc """
+  A convenient `~M` sigil for building matrices (two-dimensional tensors).
+
+  ## Examples
+
+  Before using sigils, you must first import them:
+
+      import Nx, only: [sigil_M: 2]
+
+  If you are using Elixir v1.13+, then you can write instead:
+
+      import Nx, only: :sigils
+
+  Then you use the sigil to create matrices. The sigil:
+
+      ~M<
+        -1 0 0 1
+        0 2 0 0
+        0 0 3 0
+        0 0 0 4
+      >
+
+  Is equivalent to:
+
+      Nx.tensor([
+        [-1, 0, 0, 1],
+        [0, 2, 0, 0],
+        [0, 0, 3, 0],
+        [0, 0, 0, 4]
+      ])
+
+  If the tensor has any float type, it defaults to f32.
+  Otherwise, it is s64. If you are using Elixir 1.13+,
+  you can specify the tensor type as a sigil modifier:
+
+      iex> import Nx
+      iex> ~M[0.1 0.2 0.3 0.4]f16
+      #Nx.Tensor<
+        f16[1][4]
+        [
+          [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
+        ]
+      >
+
+  """
+  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
+    string
+    |> binary_to_numbers
+    |> numbers_to_tensor(modifiers)
+  end
+
+  @doc """
+  A convenient `~V` sigil for building vectors (one-dimensional tensors).
+
+  ## Examples
+
+  Before using sigils, you must first import them:
+
+      import Nx, only: [sigil_V: 2]
+
+  Then you use the sigil to create vectors. The sigil:
+
+      ~V[-1 0 0 1]
+
+  Is equivalent to:
+
+      Nx.tensor([-1, 0, 0, 1])
+
+  If the tensor has any float type, it defaults to f32.
+  Otherwise, it is s64. If you are using Elixir 1.13+,
+  you can specify the tensor type as a sigil modifier:
+
+      iex> import Nx
+      iex> ~V[0.1 0.2 0.3 0.4]f16
+      #Nx.Tensor<
+        f16[4]
+        [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
+      >
+
+  """
+  defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
+    case binary_to_numbers(string) do
+      [numbers] ->
+        numbers_to_tensor(numbers, modifiers)
+
+      _ ->
+        raise ArgumentError, "must be one-dimensional"
+    end
+  end
+
+  defp numbers_to_tensor(numbers, modifiers) do
+    type =
+      case modifiers do
+        [unit | size] ->
+          Nx.Type.normalize!({List.to_atom([unit]), List.to_integer(size)})
+
+        [] ->
+          Nx.Type.infer(numbers)
+      end
+
+    {shape, binary} = flatten(numbers, type)
+
+    quote do
+      unquote(binary)
+      |> Nx.from_binary(unquote(type))
+      |> Nx.reshape(unquote(Macro.escape(shape)))
+    end
+  end
+
+  defp binary_to_numbers(string) do
+    for row <- String.split(string, "\n", trim: true) do
+      row
+      |> String.split(" ", trim: true)
+      |> Enum.map(fn str ->
+        module = if String.contains?(str, "."), do: Float, else: Integer
+
+        case module.parse(str) do
+          {number, ""} ->
+            number
+
+          _ ->
+            raise ArgumentError, "expected a numerical value for tensor, got #{str}"
+        end
+      end)
+    end
+  end
+
   ## Helpers
 
   defp backend!(backend) when is_atom(backend),

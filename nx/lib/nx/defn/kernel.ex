@@ -404,6 +404,25 @@ defmodule Nx.Defn.Kernel do
   def left / right, do: Nx.divide(left, right)
 
   @doc """
+  Element-wise remainder operation.
+
+  It delegates to `Nx.remainder/2` (supports broadcasting).
+
+  ## Examples
+
+      defn divides_by_5?(a) do
+        rem(a, 5)
+        |> Nx.any?
+        |> Nx.equal(Nx.tensor(1))
+      end
+
+  """
+  def rem(left, right) when Kernel.and(is_number(left), is_number(right)),
+    do: Kernel.rem(left, right)
+
+  def rem(left, right), do: Nx.remainder(left, right)
+
+  @doc """
   Element-wise maximum operation.
 
   It delegates to `Nx.max/2` (supports broadcasting).
@@ -896,7 +915,7 @@ defmodule Nx.Defn.Kernel do
 
   A simple loop that increments `x` until it is `10` can be written as:
 
-        while x = 0, Nx.less_than(x, 10) do
+        while x = 0, Nx.less(x, 10) do
           x + 1
         end
 

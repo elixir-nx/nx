@@ -4,6 +4,10 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.1.0-dev"
 
+  @libtorch_version "1.9.1"
+  @libtorch_target "cpu"
+  @libtorch_cache Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
+
   def project do
     [
       app: :torchx,
@@ -12,9 +16,10 @@ defmodule Torchx.MixProject do
       elixir: "~> 1.12-dev",
       deps: deps(),
       docs: docs(),
-      compilers: [:torchx, :elixir_make] ++ Mix.compilers(),
+      compilers: compilers() ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      aliases: aliases()
+      aliases: aliases(),
+      make_env: %{"LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache)}
     ]
   end
 
@@ -45,6 +50,10 @@ defmodule Torchx.MixProject do
     ]
   end
 
+  defp compilers do
+    if System.get_env("LIBTORCH_DIR"), do: [:elixir_make], else: [:torchx, :elixir_make]
+  end
+
   defp aliases do
     [
       "compile.torchx": &compile/1
@@ -52,95 +61,55 @@ defmodule Torchx.MixProject do
   end
 
   defp compile(args) do
-    cache_dir = Path.join(__DIR__, "cache")
+    libtorch_cache = @libtorch_cache
+    cache_dir = Path.dirname(libtorch_cache)
 
-    force_download = "--force" in args
+    if "--force" in args do
+      File.rm_rf!(cache_dir)
+    end
 
-    libtorch_dir =
-      case System.get_env("LIBTORCH_DIR") do
-        nil ->
-          Path.join(cache_dir, "libtorch")
-
-        val ->
-          val
-      end
-
-    with {:force_download, false} <- {:force_download, force_download},
-         {:libtorch_dir_exists, true} <- {:libtorch_dir_exists, File.dir?(libtorch_dir)},
-         {:ok, content} <- File.read(Path.join(libtorch_dir, "build-hash")),
-         true <- String.contains?(content, "pytorch") do
-      :noop
+    if File.dir?(libtorch_cache) do
+      {:ok, []}
     else
-      {:force_download, true} ->
-        File.rm_rf!(cache_dir)
-        install_libtorch(cache_dir, libtorch_dir)
-
-      {:libtorch_dir_exists, false} ->
-        install_libtorch(cache_dir, libtorch_dir)
-
-      _ ->
-        msg = "directory #{libtorch_dir} set in LIBTORCH_DIR does not contain libtorch"
-        IO.puts(msg)
-
-        {:error,
-         [
-           %Mix.Task.Compiler.Diagnostic{
-             compiler_name: "torchx",
-             details: msg,
-             file: "mix.exs",
-             message: msg,
-             position: nil,
-             severity: :error
-           }
-         ]}
+      install_libtorch(cache_dir, libtorch_cache)
     end
   end
 
-  defp install_libtorch(cache_dir, libtorch_dir) do
+  defp install_libtorch(cache_dir, libtorch_cache) do
     File.mkdir_p!(cache_dir)
-
-    libtorch_zip = System.get_env("LIBTORCH_ZIP", Path.join(cache_dir, "libtorch.zip"))
-
-    os =
-      case System.cmd("uname", ~w(-s)) do
-        {"Linux" <> _, 0} ->
-          :linux
-
-        {"Darwin" <> _, 0} ->
-          :mac
-
-        {os, 0} ->
-          raise "OS #{os} is not supported"
-
-        _ ->
-          raise "unable to fetch current OS"
-      end
+    libtorch_zip = libtorch_cache <> ".zip"
 
     unless File.exists?(libtorch_zip) do
       # Download libtorch
 
+      # This is so we don't forget to update the URLs below when we want to update libtorch
+      unless @libtorch_version == "1.9.1" and @libtorch_target == "cpu" do
+        raise "ensure the download URLs match the default libtorch version"
+      end
+
       url =
-        case os do
-          :linux ->
+        case :os.type() do
+          {:unix, :linux} ->
             "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
 
-          :mac ->
+          {:unix, :darwin} ->
+            # MacOS
             "https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip"
+
+          os ->
+            raise "OS #{os} is not supported"
         end
 
       download!(url, libtorch_zip)
     end
 
-    # Unpack libtorch to libtorch_dir
+    # Unpack libtorch and move to the target cache dir
 
     {:ok, _} =
       libtorch_zip |> String.to_charlist() |> :zip.unzip(cwd: String.to_charlist(cache_dir))
 
-    unpack_dir = Path.join(cache_dir, "libtorch")
-
-    unless unpack_dir == libtorch_dir do
-      File.rename!(unpack_dir, libtorch_dir)
-    end
+    # Keep libtorch cache scoped by version and target
+    File.rename!(Path.join(cache_dir, "libtorch"), libtorch_cache)
 
     :ok
   end
