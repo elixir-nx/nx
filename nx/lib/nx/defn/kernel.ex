@@ -915,7 +915,7 @@ defmodule Nx.Defn.Kernel do
 
   A simple loop that increments `x` until it is `10` can be written as:
 
-        while x = 0, Nx.less_than(x, 10) do
+        while x = 0, Nx.less(x, 10) do
           x + 1
         end
 
