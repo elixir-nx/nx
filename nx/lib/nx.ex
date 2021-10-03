@@ -8458,7 +8458,15 @@ defmodule Nx do
 
   ## Examples
 
-      import Nx
+  Before using sigils, you must first import them:
+
+      import Nx, only: [sigil_M: 2]
+
+  If you are using Elixir v1.13+, then you can write instead:
+
+      import Nx, only: :sigils
+
+  Then you use the sigil to create matrices. The sigil:
 
       ~M<
         -1 0 0 1
