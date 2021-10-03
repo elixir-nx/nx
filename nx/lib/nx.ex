@@ -8505,13 +8505,15 @@ defmodule Nx do
   end
 
   @doc """
-  Provides `~V` sigil to build a vector (one-dimensional tensor).
-
-  > Note: `~V` requires Elixir >= `1.13.0` in order to suppport type specifiers like `u8`
+  A convenient `~V` sigil for building vectors (one-dimensional tensors).
 
   ## Examples
 
-      import Nx
+  Before using sigils, you must first import them:
+
+      import Nx, only: [sigil_V: 2]
+
+  Then you use the sigil to create vectors. The sigil:
 
       ~V[-1 0 0 1]
 
@@ -8519,7 +8521,9 @@ defmodule Nx do
 
       Nx.tensor([-1, 0, 0, 1])
 
-  You can specify the vector type:
+  If the tensor has any float type, it defaults to f32.
+  Otherwise, it is s64. If you are using Elixir 1.13+,
+  you can specify the tensor type as a sigil modifier:
 
       iex> import Nx
       iex> ~V[0.1 0.2 0.3 0.4]f16
