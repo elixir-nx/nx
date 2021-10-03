@@ -8451,6 +8451,43 @@ defmodule Nx do
     )
   end
 
+  ## Sigils
+
+  if Version.match?(System.version(), ">= 1.13.0-dev") do
+    defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
+      numbers =
+        case binary_to_numbers(string) do
+          [vector] -> vector
+          matrix -> matrix
+        end
+
+      type =
+        case modifiers do
+          [unit | size] ->
+            Nx.Type.normalize!({List.to_atom([unit]), List.to_integer(size)})
+
+          [] ->
+            Nx.Type.infer(numbers)
+        end
+
+      {shape, binary} = flatten(numbers, type)
+
+      quote do
+        unquote(binary)
+        |> Nx.from_binary(unquote(type))
+        |> Nx.reshape(unquote(Macro.escape(shape)))
+      end
+    end
+
+    defp binary_to_numbers(string) do
+      for row <- String.split(string, "\n", trim: true) do
+        row
+        |> String.split(" ", trim: true)
+        |> Enum.map(&elem(Code.eval_string(&1), 0))
+      end
+    end
+  end
+
   ## Helpers
 
   defp backend!(backend) when is_atom(backend),
