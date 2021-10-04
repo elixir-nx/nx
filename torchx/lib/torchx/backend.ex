@@ -348,13 +348,8 @@ defmodule Torchx.Backend do
       end)
       |> Nx.concatenate(axis: 1)
 
-    linear_indices_offsets = linear_indices_offsets(t.shape)
-
-
-    t
-    |> from_nx()
-    |> Torchx.gather(from_nx(indices), from_nx(linear_indices_offsets), out.shape)
-    |> to_nx(out)
+    gather(out, t, indices)
+  end
 
   @impl true
   def gather(out, tensor, idx) do
@@ -367,7 +362,7 @@ defmodule Torchx.Backend do
 
     tensor
     |> from_nx()
-    |> Torchx.gather(from_nx(idx), from_nx(linear_indices_offsets), out.shape)
+    |> Torchx.gather(from_nx(idx), linear_indices_offsets, out.shape)
     |> to_nx(out)
   end
 
@@ -394,7 +389,9 @@ defmodule Torchx.Backend do
         {[[multiplier] | acc], multiplier * x}
       end)
 
-    Nx.tensor(offsets_list, backend: __MODULE__)
+    offsets_list
+    |> Nx.tensor(backend: __MODULE__)
+    |> from_nx()
   end
 
   @impl true
