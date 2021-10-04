@@ -1223,7 +1223,7 @@ defmodule Nx.Shape do
 
   ## Examples
 
-      iex> Nx.Shape.take_fully_qualified_indices(Nx.iota({2, 3, 2}), Nx.tensor([[1, 2], [11, 12]]), Nx.tensor([[0, 0], [1, 1], [0, 0]]), 1)
+      iex> Nx.Shape.take_fully_qualified_indices(Nx.iota({2, 3}), Nx.tensor([[0, 0], [1, 1], [1, 0]]), 1)
       #Nx.Tensor<
         s64[12][2]
         [
@@ -1231,24 +1231,23 @@ defmodule Nx.Shape do
           [0, 0],
           [0, 1],
           [0, 1],
-          [0, 0],
+          [0, 1],
           [0, 0],
           [1, 0],
           [1, 0],
           [1, 1],
           [1, 1],
-          [1, 0],
+          [1, 1],
           [1, 0]
         ]
       >
   """
   def take_fully_qualified_indices(
         %Nx.Tensor{data: %backend{}} = target_tensor,
-        source_tensor,
         indices,
         axis
       ) do
-    axes_range = 0..(Nx.rank(source_tensor) - 1)//1
+    axes_range = 0..(Nx.rank(target_tensor) - 1)//1
 
     indices_shape =
       axes_range
@@ -1259,7 +1258,7 @@ defmodule Nx.Shape do
       |> List.to_tuple()
 
     idx_tiling =
-      source_tensor.shape
+      target_tensor.shape
       |> Tuple.to_list()
       |> Enum.with_index(fn
         _x, ^axis ->
@@ -1270,19 +1269,20 @@ defmodule Nx.Shape do
       end)
       |> List.flatten()
 
-    num_elements = Tuple.product(target_tensor.shape)
-
     indices_for_axis =
       indices
       |> Nx.reshape(indices_shape)
       |> Nx.tile(idx_tiling)
+
+    num_elements = Tuple.product(indices_for_axis.shape)
 
     axis_offset = Nx.rank(indices) - 1
 
     axes_range
     |> Enum.map(fn
       ^axis ->
-        Nx.reshape(indices_for_axis, {num_elements, 1})
+        indices_for_axis
+        |> Nx.reshape({num_elements, 1})
 
       current when current < axis ->
         indices_for_axis

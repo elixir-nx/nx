@@ -298,7 +298,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def take(out, t, i, axis) do
-    gather(out, t, Nx.Shape.take_fully_qualified_indices(out, t, i, axis))
+    gather(out, t, Nx.Shape.take_fully_qualified_indices(t, i, axis))
   end
 
   @impl true

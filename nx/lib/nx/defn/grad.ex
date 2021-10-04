@@ -545,9 +545,9 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:take, [t, i, axis], _ans, g, cache) do
-    indices = Nx.Shape.take_fully_qualified_indices(t, g, i, axis)
+    indices = Nx.Shape.take_fully_qualified_indices(t, i, axis)
 
-    num_elements = g |> Nx.shape() |> Tuple.product()
+    num_elements = Tuple.product(g.shape)
 
     updates = Nx.reshape(g, {num_elements})
 
