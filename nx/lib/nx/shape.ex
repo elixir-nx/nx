@@ -1219,6 +1219,85 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Converts take indices to fully qualified indices to be used with `Nx.gather` and `Nx.scatter_add`
+
+  ## Examples
+
+      iex> Nx.Shape.take_fully_qualified_indices(Nx.iota({2, 3, 2}), Nx.tensor([[1, 2], [11, 12]]), Nx.tensor([[0, 0], [1, 1], [0, 0]]), 1)
+      #Nx.Tensor<
+        s64[12][2]
+        [
+          [0, 0],
+          [0, 0],
+          [0, 1],
+          [0, 1],
+          [0, 0],
+          [0, 0],
+          [1, 0],
+          [1, 0],
+          [1, 1],
+          [1, 1],
+          [1, 0],
+          [1, 0]
+        ]
+      >
+  """
+  def take_fully_qualified_indices(
+        %Nx.Tensor{data: %backend{}} = target_tensor,
+        source_tensor,
+        indices,
+        axis
+      ) do
+    axes_range = 0..(Nx.rank(source_tensor) - 1)//1
+
+    indices_shape =
+      axes_range
+      |> Enum.flat_map(fn
+        ^axis -> Tuple.to_list(indices.shape)
+        _ -> [1]
+      end)
+      |> List.to_tuple()
+
+    idx_tiling =
+      source_tensor.shape
+      |> Tuple.to_list()
+      |> Enum.with_index(fn
+        _x, ^axis ->
+          List.duplicate(1, Nx.rank(indices))
+
+        x, _ ->
+          x
+      end)
+      |> List.flatten()
+
+    num_elements = Tuple.product(target_tensor.shape)
+
+    indices_for_axis =
+      indices
+      |> Nx.reshape(indices_shape)
+      |> Nx.tile(idx_tiling)
+
+    axis_offset = Nx.rank(indices) - 1
+
+    axes_range
+    |> Enum.map(fn
+      ^axis ->
+        Nx.reshape(indices_for_axis, {num_elements, 1})
+
+      current when current < axis ->
+        indices_for_axis
+        |> Nx.iota(axis: current, backend: backend)
+        |> Nx.reshape({num_elements, 1})
+
+      current when current > axis ->
+        indices_for_axis
+        |> Nx.iota(axis: current + axis_offset, backend: backend)
+        |> Nx.reshape({num_elements, 1})
+    end)
+    |> Nx.concatenate(axis: 1)
+  end
+
+  @doc """
   Returns the shape and names after a `take_along_axis` operation is performed.
 
   In practice, `axis` in `shape` gets replaced by `indices_shape`.

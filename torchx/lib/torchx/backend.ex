@@ -298,57 +298,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def take(out, t, i, axis) do
-    axes_range = 0..(Nx.rank(t) - 1)//1
-
-    indices_shape =
-      axes_range
-      |> Enum.flat_map(fn
-        ^axis -> Tuple.to_list(i.shape)
-        _ -> [1]
-      end)
-      |> List.to_tuple()
-
-    idx_tiling =
-      t.shape
-      |> Tuple.to_list()
-      |> Enum.with_index(fn
-        _x, ^axis ->
-          List.duplicate(1, Nx.rank(i))
-
-        x, _ ->
-          x
-      end)
-      |> List.flatten()
-
-    num_elements = Tuple.product(out.shape)
-
-    indices_for_axis =
-      i
-      |> Nx.reshape(indices_shape)
-      |> Nx.tile(idx_tiling)
-
-    axis_offset = Nx.rank(i) - 1
-
-    indices =
-      axes_range
-      |> Enum.map(fn
-        ^axis ->
-          indices_for_axis
-          |> Nx.reshape({num_elements, 1})
-
-        current when current < axis ->
-          indices_for_axis
-          |> Nx.iota(axis: current)
-          |> Nx.reshape({num_elements, 1})
-
-        current when current > axis ->
-          indices_for_axis
-          |> Nx.iota(axis: current + axis_offset)
-          |> Nx.reshape({num_elements, 1})
-      end)
-      |> Nx.concatenate(axis: 1)
-
-    gather(out, t, indices)
+    gather(out, t, Nx.Shape.take_fully_qualified_indices(out, t, i, axis))
   end
 
   @impl true
@@ -362,7 +312,7 @@ defmodule Torchx.Backend do
 
     tensor
     |> from_nx()
-    |> Torchx.gather(from_nx(idx), linear_indices_offsets, out.shape)
+    |> Torchx.gather(from_nx(idx), from_nx(linear_indices_offsets), out.shape)
     |> to_nx(out)
   end
 
@@ -389,9 +339,7 @@ defmodule Torchx.Backend do
         {[[multiplier] | acc], multiplier * x}
       end)
 
-    offsets_list
-    |> Nx.tensor(backend: __MODULE__)
-    |> from_nx()
+    Nx.tensor(offsets_list, backend: __MODULE__)
   end
 
   @impl true

@@ -545,55 +545,9 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:take, [t, i, axis], _ans, g, cache) do
-    axes_range = 0..(Nx.rank(t) - 1)//1
+    indices = Nx.Shape.take_fully_qualified_indices(t, g, i, axis)
 
-    indices_shape =
-      axes_range
-      |> Enum.flat_map(fn
-        ^axis -> Tuple.to_list(i.shape)
-        _ -> [1]
-      end)
-      |> List.to_tuple()
-
-    idx_tiling =
-      t.shape
-      |> Tuple.to_list()
-      |> Enum.with_index(fn
-        _x, ^axis ->
-          List.duplicate(1, Nx.rank(i))
-
-        x, _ ->
-          x
-      end)
-      |> List.flatten()
-
-    num_elements = Tuple.product(g.shape)
-
-    indices_for_axis =
-      i
-      |> Nx.reshape(indices_shape)
-      |> Nx.tile(idx_tiling)
-
-    axis_offset = Nx.rank(i) - 1
-
-    indices =
-      axes_range
-      |> Enum.map(fn
-        ^axis ->
-          indices_for_axis
-          |> Nx.reshape({num_elements, 1})
-
-        current when current < axis ->
-          indices_for_axis
-          |> Nx.iota(axis: current, backend: Nx.Defn.Expr)
-          |> Nx.reshape({num_elements, 1})
-
-        current when current > axis ->
-          indices_for_axis
-          |> Nx.iota(axis: current + axis_offset, backend: Nx.Defn.Expr)
-          |> Nx.reshape({num_elements, 1})
-      end)
-      |> Nx.concatenate(axis: 1)
+    num_elements = g |> Nx.shape() |> Tuple.product()
 
     updates = Nx.reshape(g, {num_elements})
 
