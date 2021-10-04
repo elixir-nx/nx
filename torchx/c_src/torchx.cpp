@@ -351,6 +351,19 @@ NIF(permute)
   TENSOR(t->permute(dims).contiguous());
 }
 
+NIF(take)
+{
+  TENSOR_PARAM(0, t);
+  TENSOR_PARAM(1, i);
+  PARAM(2, int64_t, axis);
+
+  if (axis == 0)
+  {
+    TENSOR(t->index({*i}));
+  } else {
+    TENSOR(t->transpose(0, axis).index({*i}).transpose(0, axis));
+  }
+}
 
 /* Creation */
 
@@ -719,6 +732,7 @@ static ErlNifFunc nif_functions[] = {
     DF(gather, 4),
     DF(take_along_axis, 3),
     DF(argsort, 3),
+    DF(take, 3),
 
     DF(add, 2),
     DF(subtract, 2),
