@@ -297,17 +297,85 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def take(out, t, i, axis) do
+    axes_range = 0..(Nx.rank(t) - 1)//1
+
+    indices_shape =
+      axes_range
+      |> Enum.flat_map(fn
+        ^axis -> Tuple.to_list(i.shape)
+        _ -> [1]
+      end)
+      |> List.to_tuple()
+
+    idx_tiling =
+      t.shape
+      |> Tuple.to_list()
+      |> Enum.with_index(fn
+        _x, ^axis ->
+          List.duplicate(1, Nx.rank(i))
+
+        x, _ ->
+          x
+      end)
+      |> List.flatten()
+
+    indices_for_axis =
+      i
+      |> Nx.reshape(indices_shape)
+      |> Nx.tile(idx_tiling)
+
+    num_elements = Tuple.product(indices_for_axis.shape)
+
+    axis_offset = Nx.rank(i) - 1
+
+    indices =
+      axes_range
+      |> Enum.map(fn
+        ^axis ->
+          Nx.reshape(indices_for_axis, {num_elements, 1})
+
+        current when current < axis ->
+          indices_for_axis
+          |> Nx.iota(axis: current, backend: __MODULE__)
+          |> Nx.reshape({num_elements, 1})
+
+        current when current > axis ->
+          indices_for_axis
+          |> Nx.iota(axis: current + axis_offset, backend: __MODULE__)
+          |> Nx.reshape({num_elements, 1})
+      end)
+      |> Nx.concatenate(axis: 1)
+
+    gather(out, t, indices)
+  end
+
+  @impl true
   def gather(out, tensor, idx) do
     # Nx provides indices as a tensor of shape {*, input_dims}
-    # However, torch expects indices to be a 1-dim tensor of indices along a given axis.
+    # However, torch expects indices to be a tensor of indices along a given axis.
     # As such, we need to convert the indices tensor to linear indices.
     # See the function below for an explanation on the offsets calculation
 
-    linear_indices_offsets = linear_indices_offsets(tensor.shape)
+    linear_indices_offsets =
+      tensor.shape
+      |> linear_indices_offsets()
+      |> from_nx()
+
+    lin_idx_num_elements =
+      idx.shape |> Tuple.delete_at(tuple_size(idx.shape) - 1) |> Tuple.product()
+
+    linear_indices =
+      idx
+      |> from_nx()
+      |> Torchx.tensordot(linear_indices_offsets, [tuple_size(idx.shape) - 1], [0])
+      |> Torchx.reshape({lin_idx_num_elements})
 
     tensor
     |> from_nx()
-    |> Torchx.gather(from_nx(idx), from_nx(linear_indices_offsets), out.shape)
+    |> Torchx.reshape({Tuple.product(tensor.shape)})
+    |> Torchx.gather(linear_indices, 0)
+    |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end
 
@@ -331,7 +399,7 @@ defmodule Torchx.Backend do
       |> Tuple.to_list()
       |> Enum.reverse()
       |> Enum.reduce({[], 1}, fn x, {acc, multiplier} ->
-        {[[multiplier] | acc], multiplier * x}
+        {[multiplier | acc], multiplier * x}
       end)
 
     Nx.tensor(offsets_list, backend: __MODULE__)
@@ -341,7 +409,7 @@ defmodule Torchx.Backend do
   def take_along_axis(out, tensor, idx, axis) do
     tensor
     |> from_nx()
-    |> Torchx.take_along_axis(from_nx(idx), axis)
+    |> Torchx.gather(from_nx(idx), axis)
     |> to_nx(out)
   end
 
