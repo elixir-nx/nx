@@ -333,8 +333,7 @@ defmodule Torchx.Backend do
       axes_range
       |> Enum.map(fn
         ^axis ->
-          indices_for_axis
-          |> Nx.reshape({num_elements, 1})
+          Nx.reshape(indices_for_axis, {num_elements, 1})
 
         current when current < axis ->
           indices_for_axis
