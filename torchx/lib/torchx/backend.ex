@@ -357,11 +357,25 @@ defmodule Torchx.Backend do
     # As such, we need to convert the indices tensor to linear indices.
     # See the function below for an explanation on the offsets calculation
 
-    linear_indices_offsets = linear_indices_offsets(tensor.shape)
+    linear_indices_offsets =
+      tensor.shape
+      |> linear_indices_offsets()
+      |> from_nx()
+
+    lin_idx_num_elements =
+      idx.shape |> Tuple.delete_at(tuple_size(idx.shape) - 1) |> Tuple.product()
+
+    linear_indices =
+      idx
+      |> from_nx()
+      |> Torchx.tensordot(linear_indices_offsets, [tuple_size(idx.shape) - 1], [0])
+      |> Torchx.reshape({lin_idx_num_elements})
 
     tensor
     |> from_nx()
-    |> Torchx.gather(from_nx(idx), from_nx(linear_indices_offsets), out.shape)
+    |> Torchx.reshape({Tuple.product(tensor.shape)})
+    |> Torchx.gather(linear_indices, 0)
+    |> Torchx.reshape(out.shape)
     |> to_nx(out)
   end
 
@@ -385,7 +399,7 @@ defmodule Torchx.Backend do
       |> Tuple.to_list()
       |> Enum.reverse()
       |> Enum.reduce({[], 1}, fn x, {acc, multiplier} ->
-        {[[multiplier] | acc], multiplier * x}
+        {[multiplier | acc], multiplier * x}
       end)
 
     Nx.tensor(offsets_list, backend: __MODULE__)
@@ -395,7 +409,7 @@ defmodule Torchx.Backend do
   def take_along_axis(out, tensor, idx, axis) do
     tensor
     |> from_nx()
-    |> Torchx.take_along_axis(from_nx(idx), axis)
+    |> Torchx.gather(from_nx(idx), axis)
     |> to_nx(out)
   end
 

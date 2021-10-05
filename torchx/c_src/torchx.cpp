@@ -316,19 +316,6 @@ NIF(gather)
 {
   TENSOR_PARAM(0, input);
   TENSOR_PARAM(1, indices);
-  TENSOR_PARAM(2, linear_indices_offsets);
-  SHAPE_PARAM(3, output_shape);
-
-  auto linear_indices = torch::matmul(*indices, *linear_indices_offsets);
-
-  auto gathered_tensor = torch::gather(input->reshape({input->numel()}), 0, linear_indices.reshape({linear_indices.numel()}));
-  TENSOR(gathered_tensor.reshape(output_shape));
-}
-
-NIF(take_along_axis)
-{
-  TENSOR_PARAM(0, input);
-  TENSOR_PARAM(1, indices);
   PARAM(2, int64_t, axis);
 
   TENSOR(torch::gather(*input, axis, *indices));
@@ -716,8 +703,7 @@ static ErlNifFunc nif_functions[] = {
     DF(narrow, 4),
     DF(as_strided, 4),
     DF(concatenate, 2),
-    DF(gather, 4),
-    DF(take_along_axis, 3),
+    DF(gather, 3),
     DF(argsort, 3),
 
     DF(add, 2),
