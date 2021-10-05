@@ -353,7 +353,7 @@ defmodule Torchx.Backend do
   @impl true
   def gather(out, tensor, idx) do
     # Nx provides indices as a tensor of shape {*, input_dims}
-    # However, torch expects indices to be a 1-dim tensor of indices along a given axis.
+    # However, torch expects indices to be a tensor of indices along a given axis.
     # As such, we need to convert the indices tensor to linear indices.
     # See the function below for an explanation on the offsets calculation
 
