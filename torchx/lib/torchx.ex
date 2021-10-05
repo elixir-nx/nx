@@ -164,7 +164,6 @@ defmodule Torchx do
   deftensor gather(tensor_input, tensor_indices, tensor_linear_indices_offsets, output_shape)
   deftensor take_along_axis(tensor_input, tensor_indices, axis)
   deftensor argsort(tensor, axis, is_descending)
-  deftensor take(tensor, tensor_indices, axis)
 
   ## Aggregation
 
