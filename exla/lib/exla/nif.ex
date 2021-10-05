@@ -284,6 +284,9 @@ defmodule EXLA.NIF do
   def transfer_to_infeed(_client, _device, _data, _shape),
     do: :erlang.nif_error(:undef)
 
+  def transfer_multiple_to_infeed(_client, _device, _data, _shape),
+    do: :erlang.nif_error(:undef)
+
   def transfer_from_outfeed(_client, _device, _shape),
     do: :erlang.nif_error(:undef)
 

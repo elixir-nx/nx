@@ -129,47 +129,53 @@ defmodule EXLA.ExecutableTest do
     test "successfully sends to/from device asynchronously" do
       t = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
 
-      assert [a = %Buffer{}] =
-               run([], [keep_on_device: true], fn b ->
-                 token = Op.create_token(b)
-                 val_and_token = Op.infeed(token, t.shape)
-                 val = Op.get_tuple_element(val_and_token, 0)
-                 new_token = Op.get_tuple_element(val_and_token, 1)
-                 outfeed_val = Op.add(val, val)
-                 _outfeed_token = Op.outfeed(outfeed_val, new_token)
-                 Op.tuple(b, [Op.add(outfeed_val, val)])
+      assert res =
+               Task.async(fn ->
+                 run([], [keep_on_device: true], fn b ->
+                   token = Op.create_token(b)
+                   val_and_token = Op.infeed(token, t.shape)
+                   val = Op.get_tuple_element(val_and_token, 0)
+                   new_token = Op.get_tuple_element(val_and_token, 1)
+                   outfeed_val = Op.add(val, val)
+                   _outfeed_token = Op.outfeed(outfeed_val, new_token)
+                   Op.tuple(b, [Op.add(outfeed_val, val)])
+                 end)
                end)
 
       assert :ok = Client.to_infeed(client(), 0, t.data, t.shape)
 
       assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<2::32-native>>
+
+      assert [a = %Buffer{}] = Task.await(res)
       assert Buffer.read(a.ref) == <<3::32-native>>
     end
 
     test "successfully sends to/from device asynchronously in a loop" do
       t = %Buffer{data: <<1::32-native>>, shape: Shape.make_shape({:s, 32}, {})}
 
-      assert [a = %Buffer{}] =
-               run([], [keep_on_device: true], fn b ->
-                 token_shape = Shape.make_token_shape()
-                 tuple_shape = Shape.make_tuple_shape([t.shape, token_shape])
+      assert res =
+               Task.async(fn ->
+                 run([], [keep_on_device: true], fn b ->
+                   token_shape = Shape.make_token_shape()
+                   tuple_shape = Shape.make_tuple_shape([t.shape, token_shape])
 
-                 condition_b = EXLA.Builder.new(b, "condition")
-                 param = EXLA.Op.parameter(condition_b, 0, tuple_shape, "arg")
-                 zero = Op.constant_r0(condition_b, 0, {:s, 32})
-                 val = Op.get_tuple_element(param, 0)
-                 condition = EXLA.Builder.build(Op.not_equal(val, zero))
+                   condition_b = EXLA.Builder.new(b, "condition")
+                   param = EXLA.Op.parameter(condition_b, 0, tuple_shape, "arg")
+                   zero = Op.constant_r0(condition_b, 0, {:s, 32})
+                   val = Op.get_tuple_element(param, 0)
+                   condition = EXLA.Builder.build(Op.not_equal(val, zero))
 
-                 while_b = EXLA.Builder.new(b, "while")
-                 param = EXLA.Op.parameter(while_b, 0, tuple_shape, "arg")
-                 val = Op.get_tuple_element(param, 0)
-                 token = Op.get_tuple_element(param, 1)
-                 token = Op.outfeed(Op.add(val, val), token)
-                 while = EXLA.Builder.build(Op.infeed(token, t.shape))
+                   while_b = EXLA.Builder.new(b, "while")
+                   param = EXLA.Op.parameter(while_b, 0, tuple_shape, "arg")
+                   val = Op.get_tuple_element(param, 0)
+                   token = Op.get_tuple_element(param, 1)
+                   token = Op.outfeed(Op.add(val, val), token)
+                   while = EXLA.Builder.build(Op.infeed(token, t.shape))
 
-                 token = Op.create_token(b)
-                 while = Op.while(condition, while, Op.infeed(token, t.shape))
-                 Op.tuple(b, [Op.get_tuple_element(while, 0)])
+                   token = Op.create_token(b)
+                   while = Op.while(condition, while, Op.infeed(token, t.shape))
+                   Op.tuple(b, [Op.get_tuple_element(while, 0)])
+                 end)
                end)
 
       assert :ok = Client.to_infeed(client(), 0, <<1::32-native>>, t.shape)
@@ -179,6 +185,8 @@ defmodule EXLA.ExecutableTest do
       assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<4::32-native>>
 
       assert :ok = Client.to_infeed(client(), 0, <<0::32-native>>, t.shape)
+
+      assert [a = %Buffer{}] = Task.await(res)
       assert Buffer.read(a.ref) == <<0::32-native>>
     end
   end
