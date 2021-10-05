@@ -49,7 +49,8 @@ defmodule Nx.Defn do
   `defn`, `0 and 1` as well as `0 and 2` return `0`, while
   `1 and 1` or `1 and -1` will return `1`.
 
-  The same semantics apply to conditional expressions inside `defn`.
+  The same semantics apply to conditional expressions inside `defn`,
+  such as `if`, `while`, etc.
 
   ## JIT compilers
 
@@ -93,16 +94,54 @@ defmodule Nx.Defn do
 
   For those interested in writing custom compilers, see `Nx.Defn.Compiler`.
 
+  ## Invoking custom Elixir code
+
+  Inside `defn` you can only call other `defn` functions and
+  the functions in the `Nx` module. However, it is possible
+  to use transforms to invoke any Elixir code:
+
+      defn add_and_mult(a, b, c) do
+        res = a * b + c
+        transform(res, &IO.inspect/1)
+      end
+
+  For example, the code above invokes `&IO.inspect/1`, which is
+  not a `defn` function, with the value of `res`. This is useful
+  as it allows developers to transform `defn` code to optimize,
+  add new properties, and so on.
+
+  Transforms can also be used to manipulate Elixir data structures,
+  such as options. `defn` expects all inputs to be tensors, with the
+  exception of a default argument (declared with `\\`) which will be
+  treated as options.
+
+  For example, imagine you want to support options where the :axis
+  key is required. While you can't invoke `Keyword` directly, you
+  can do it via a transform:
+
+      defn sum_axis(t, opts \\ []) do
+        opts = keyword!(opts, [:axis])
+        axis = transform(opts, &Keyword.fetch!(opts, :axis))
+        Nx.sum(t, axes: [axis])
+      end
+
   ## Inputs and outputs types
 
   The arguments to `defn` functions must be either tensors, numbers,
-  or anonymous functions. It may also be a map with numbers/tensors as
-  values, a tuple of numbers/tensors or a tuple of functions.
+  or anonymous functions. `defn` also supports two composite data
+  types as arguments:
 
-  To pass any other values to numerical definitions, they must be
-  declared as default arguments (see next subsection).
+    1. tuples of number/tensors or tuples of anonymous functions
+    2. maps of any ley with number/tensors as values
 
-  `defn` functions can only return tensors or tuples of tensors.
+  When numbers are given as arguments, they are always immediately
+  converted to tensors on invocation. If you want to keep numbers
+  as is or if you want to pass any other values to numerical
+  definitions, they must be given as default arguments (see next
+  subsection).
+
+  `defn` functions can only return tensors, tuples of tensors, or
+  maps of tensors.
 
   ### Default arguments
 
@@ -134,9 +173,9 @@ defmodule Nx.Defn do
 
   ### Working with maps
 
-  While `Nx` works supports maps in `defn`, you must be careful
-  if your numerical definitions are receiving maps and returning
-  maps. For example, imagine this code:
+  While `Nx` supports maps in `defn`, you must be careful if your numerical
+  definitions are receiving maps and returning maps. For example, imagine
+  this code:
 
       defn update_a(map) do
         %{map | a: Nx.add(map.a, 1)}
@@ -153,39 +192,11 @@ defmodule Nx.Defn do
         Nx.add(map.a, 1)
       end
 
-  And then update the map on Elixir:
+  And then update the map on Elixir, outside of `defn`:
 
       %{map | a: update_a(map)}
 
   `Nx` will only send the parts of the map that matters.
-
-  ## Invoking custom Elixir code
-
-  Inside `defn` you can only call other `defn` functions and
-  the functions in the `Nx` module. However, it is possible
-  to use transforms to invoke any Elixir code:
-
-      defn add_and_mult(a, b, c) do
-        res = a * b + c
-        transform(res, &IO.inspect/1)
-      end
-
-  For example, the code above invokes `&IO.inspect/1`, which is
-  not a `defn` function, with the value of `res`. This is useful
-  as it allows developers to transform `defn` code at runtime,
-  in order to optimize, add new properties, and so on.
-
-  Transforms can also be used to manipulate Elixir data structures,
-  such as options. For example, imagine you want to support options
-  where the :axis key is required. While you can't invoke `Keyword`
-  directly, you can do it via a transform:
-
-      defn sum_axis(t, opts \\ []) do
-        opts = keyword!(opts, [:axis])
-        axis = transform(opts, &Keyword.fetch!(opts, :axis))
-        Nx.sum(t, axes: [axis])
-      end
-
   """
 
   @doc """
