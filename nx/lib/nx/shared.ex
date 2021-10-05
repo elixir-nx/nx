@@ -134,14 +134,6 @@ defmodule Nx.Shared do
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
-  @doc """
-  Converts an Erlang float (float64) to float32 precision.
-  """
-  def to_float32(float64) when is_float(float64) do
-    <<float32::float-32>> = <<float64::float-32>>
-    float32
-  end
-
   ## Reflection
 
   @doc """
@@ -338,6 +330,14 @@ defmodule Nx.Shared do
   ## Helpers
 
   @doc """
+  Converts an Erlang float (float64) to float32 precision.
+  """
+  def to_float32(float64) when is_float(float64) do
+    <<float32::float-32>> = <<float64::float-32>>
+    float32
+  end
+
+  @doc """
   Asserts on the given keys.
   """
   def assert_keys!(keyword, valid) do
@@ -371,7 +371,7 @@ defmodule Nx.Shared do
   @doc """
   Gets the implementation of a list of maybe tensors.
   """
-  def find_impl!(list) do
+  def list_impl!(list) do
     Enum.reduce(list, Nx.BinaryBackend, fn
       %T{data: %struct{}}, acc -> pick_struct(struct, acc)
       _, acc -> acc

@@ -90,13 +90,13 @@ defmodule Nx.Defn.Evaluator do
 
         op in @random_ops ->
           {_, backend_options} = Nx.default_backend()
-          {Nx.Shared.find_impl!(args), [ans | args] ++ [backend_options]}
+          {Nx.Shared.list_impl!(args), [ans | args] ++ [backend_options]}
 
         match?({:tuple, _}, ans.type) ->
-          {Nx.Shared.find_impl!(args), args}
+          {Nx.Shared.list_impl!(args), args}
 
         true ->
-          {Nx.Shared.find_impl!(args), [ans | args]}
+          {Nx.Shared.list_impl!(args), [ans | args]}
       end
 
     res = apply(mod, op, args)
