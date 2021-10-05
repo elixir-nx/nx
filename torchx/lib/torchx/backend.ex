@@ -471,6 +471,27 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def population_count(out, %{type: {_, num_bits}, shape: shape} = tensor) do
+    num_elements = Tuple.product(shape)
+    powers = Nx.power(2, Nx.iota({num_elements, num_bits}, axis: 1))
+    zero = Nx.tensor(0, type: out.type)
+    one = Nx.tensor(1, type: out.type)
+    ones = Nx.broadcast(one, {num_bits})
+
+    result =
+      tensor
+      |> Nx.reshape({num_elements, 1})
+      |> Nx.tile([1, num_bits])
+      |> Nx.bitwise_and(powers)
+      |> Nx.not_equal(zero)
+      |> Nx.dot(ones)
+      |> Nx.reshape(out.shape)
+      |> Nx.as_type(out.type)
+
+    %{result | names: out.names}
+  end
+
+  @impl true
   def dot(
         %T{type: out_type} = out,
         %T{type: left_type, data: %TB{ref: left_ref}},
