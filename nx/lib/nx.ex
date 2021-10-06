@@ -1325,24 +1325,24 @@ defmodule Nx do
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [8, 9],
-          [0, 1]
+          [0, 1],
+          [2, 3]
         ]
       >
       iex> second
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [0, 1],
-          [2, 3]
+          [4, 5],
+          [6, 7]
         ]
       >
       iex> third
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [4, 5],
-          [6, 7]
+          [8, 9],
+          [0, 1]
         ]
       >
 
@@ -1373,6 +1373,10 @@ defmodule Nx do
 
     if shape == {} do
       raise ArgumentError, "cannot batch scalar tensor #{inspect(tensor)}"
+    end
+
+    if elem(shape, 0) < batch_size do
+      raise ArgumentError, "cannot batch beyond original tensor"
     end
 
     impl!(tensor).to_batched_list(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor, opts)
