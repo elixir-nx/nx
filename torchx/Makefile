@@ -41,5 +41,6 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
       	-DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) && \
-		cmake --build . --verbose
+		# add --verbose to show compilation commands. Useful for debugging \
+		cmake --build .
 	mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
