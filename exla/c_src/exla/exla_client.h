@@ -39,7 +39,7 @@ class ExlaBuffer {
 
   bool release_after_run() { return can_be_released_after_run_; }
 
-  xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env);
+  xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
 
   xla::Status Deallocate();
 

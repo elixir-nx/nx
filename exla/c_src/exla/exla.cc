@@ -213,12 +213,13 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 }
 
 ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   exla::ExlaBuffer** buffer;
+  exla::int64 size;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
@@ -226,8 +227,11 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
     return exla::nif::error(env, "Unable to get buffer.");
   }
+  if (!exla::nif::get(env, argv[2], &size)) {
+    return exla::nif::error(env, "Unable to get size.");
+  }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM binary, (*buffer)->ToBinary(env), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM binary, (*buffer)->ToBinary(env, size), env);
 
   return exla::nif::ok(env, binary);
 }
@@ -2255,7 +2259,7 @@ static ErlNifFunc exla_funcs[] = {
   {"compile", 7, compile},
   // ExlaBuffer
   {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"read_device_mem", 3, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"transfer_to_infeed", 3, transfer_to_infeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"transfer_from_outfeed", 3, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},

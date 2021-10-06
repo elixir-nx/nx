@@ -36,13 +36,15 @@ defmodule EXLA.Buffer do
   end
 
   @doc """
-  Reads the underlying buffer ref.
+  Reads `size` from the underlying buffer ref.
 
-  This copies the underlying device memory into a binary without destroying it.
+  This copies the underlying device memory into a binary
+  without destroying it. If `size` is negative, then it
+  reads the whole buffer.
   """
-  def read({ref, client_name}) do
+  def read({ref, client_name}, size \\ -1) do
     client = EXLA.Client.fetch!(client_name)
-    binary = EXLA.NIF.read_device_mem(client.ref, ref) |> unwrap!()
+    binary = EXLA.NIF.read_device_mem(client.ref, ref, size) |> unwrap!()
     binary
   end
 

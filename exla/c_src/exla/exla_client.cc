@@ -12,12 +12,14 @@ ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
                        bool can_be_released_after_run): buffer_(std::move(buffer)),
                                                         can_be_released_after_run_(can_be_released_after_run) {}
 
-void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary) {
-  enif_alloc_binary(literal->size_bytes(), binary);
-  std::memcpy(binary->data, literal->untyped_data(), literal->size_bytes());
+void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int64 size) {
+  exla::int64 actual_size = literal->size_bytes();
+  if(size < 0 or size > actual_size) size = actual_size;
+  enif_alloc_binary(size, binary);
+  std::memcpy(binary->data, literal->untyped_data(), size);
 }
 
-xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
+xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 size) {
   buffer_->BlockHostUntilReady();
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
 
@@ -26,10 +28,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env) {
   xla::Shape host_shape = xla::ShapeUtil::MakeShape(buffer_->on_device_shape().element_type(), buffer_->on_device_shape().dimensions());
 
   if (xla::LayoutUtil::LayoutsInShapesEqual(host_shape, literal->shape())) {
-    CopyLiteralToBinary(literal.get(), &binary);
+    CopyLiteralToBinary(literal.get(), &binary, size);
   } else {
     xla::Literal new_literal = literal->Relayout(host_shape);
-    CopyLiteralToBinary(&new_literal, &binary);
+    CopyLiteralToBinary(&new_literal, &binary, size);
   }
 
   return nif::make(env, binary);
@@ -98,7 +100,7 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique
     if (keep_on_device) {
       term = nif::make<ExlaBuffer*>(env, buf);
     } else {
-      EXLA_ASSIGN_OR_RETURN_NIF(term, buf->ToBinary(env), env);
+      EXLA_ASSIGN_OR_RETURN_NIF(term, buf->ToBinary(env, -1), env);
       delete buf;
     }
     terms.push_back(term);
