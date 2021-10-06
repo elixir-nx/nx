@@ -17,16 +17,10 @@ defmodule EXLA.LockedCacheTest do
     %Task{pid: second_pid, ref: second_ref} = task_run(config.test, fn -> flunk() end)
     send(first_pid, :run)
 
+    assert_receive {^first_ref, {:inner, :this_is_cached}}
+    assert_receive {^second_ref, {nil, :this_is_cached}}
     assert_receive {:DOWN, ^first_ref, _, _, _}
     assert_receive {:DOWN, ^second_ref, _, _, _}
-
-    assert Process.info(self(), :messages) ==
-             {:messages,
-              [
-                {first_ref, {:inner, :this_is_cached}},
-                {second_ref, {nil, :this_is_cached}}
-              ]}
-
     refute_received {:running, ^second_pid}
   end
 

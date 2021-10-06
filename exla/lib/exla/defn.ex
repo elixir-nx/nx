@@ -1360,7 +1360,6 @@ defmodule EXLA.Defn do
 
       case data do
         %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.buffer(ref, nx_to_shape!(tensor))
-        # TODO: Call Nx.backend_transfer on the tensor instead
         _ -> EXLA.Buffer.buffer(Nx.to_binary(tensor), nx_to_shape!(tensor))
       end
     end

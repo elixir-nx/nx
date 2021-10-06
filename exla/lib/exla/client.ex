@@ -39,26 +39,24 @@ defmodule EXLA.Client do
   end
 
   @doc """
-  Sends data to device infeed.
+  Sends `data_and_shapes` to device infeed.
 
-  Data must be a VM binary or a flat list of VM binaries.
+  `data_and_shapes` must be a list of two element tuples where the
+  first element is a binary or a flat list of binaries and the second
+  element is a `EXLA.Shape`.
 
   > Note: XLA does not support tuple infeed shapes when running on
   > host. Passing one will simply block the operation indefinitely.
   > Instead, convert the tuple into multiple infeed operations.
   """
-  def to_infeed(%EXLA.Client{ref: client}, device_id, data, %EXLA.Shape{ref: shape})
-      when is_binary(data) do
-    EXLA.NIF.transfer_to_infeed(client, device_id, [data], shape) |> unwrap!()
-  end
+  def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_shapes)
+      when is_list(data_and_shapes) do
+    data_and_shapes = Enum.map(data_and_shapes, fn
+      {binary, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {[binary], shape}
+      {[binary | _] = data, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {data, shape}
+    end)
 
-  def to_infeed(%EXLA.Client{}, _device_id, [], %EXLA.Shape{}) do
-    :ok
-  end
-
-  def to_infeed(%EXLA.Client{ref: client}, device_id, [data | _] = list, %EXLA.Shape{ref: shape})
-      when is_binary(data) do
-    EXLA.NIF.transfer_to_infeed(client, device_id, list, shape) |> unwrap!()
+    EXLA.NIF.transfer_to_infeed(client, device_id, data_and_shapes) |> unwrap!()
   end
 
   @doc """

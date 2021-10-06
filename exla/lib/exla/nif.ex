@@ -281,10 +281,7 @@ defmodule EXLA.NIF do
   def deallocate_device_mem(_buffer),
     do: :erlang.nif_error(:undef)
 
-  def transfer_to_infeed(_client, _device, _data, _shape),
-    do: :erlang.nif_error(:undef)
-
-  def transfer_multiple_to_infeed(_client, _device, _data, _shape),
+  def transfer_to_infeed(_client, _device, _data_shapes),
     do: :erlang.nif_error(:undef)
 
   def transfer_from_outfeed(_client, _device, _shape),

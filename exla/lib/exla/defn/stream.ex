@@ -59,24 +59,20 @@ defmodule EXLA.Defn.Stream do
         """
       end
 
+      data_and_shapes =
+        if client.platform == :host do
+          %EXLA.Shape{dtype: {:tuple, shapes}} = send_shape
+          Enum.zip(nx_to_io(data), shapes)
+        else
+          [{nx_to_io(data), send_shape}]
+        end
+
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
-      :ok = EXLA.Client.to_infeed(client, device_id, <<1::8-native>>, pred)
-
-      if client.platform == :host do
-        %EXLA.Shape{dtype: {:tuple, shapes}} = send_shape
-
-        Enum.zip_with(shapes, nx_to_io(data), fn shape, binary ->
-          :ok = EXLA.Client.to_infeed(client, device_id, binary, shape)
-        end)
-      else
-        :ok = EXLA.Client.to_infeed(client, device_id, nx_to_io(data), send_shape)
-      end
-
-      :ok
+      :ok = EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred} | data_and_shapes])
     end
 
     defp nx_to_io(%Nx.Tensor{} = tensor),
-      do: [tensor |> Nx.backend_transfer() |> Nx.to_binary()]
+      do: [Nx.to_binary(tensor)]
 
     defp nx_to_io(map) when is_map(map),
       do: map |> Enum.sort() |> Enum.flat_map(fn {_, v} -> nx_to_io(v) end)
@@ -97,7 +93,7 @@ defmodule EXLA.Defn.Stream do
 
     def done(%{client: client, device_id: device_id, keep_on_device: keep_on_device, done: done}) do
       pred = EXLA.Shape.make_shape({:pred, 8}, {})
-      :ok = EXLA.Client.to_infeed(client, device_id, <<0::8-native>>, pred)
+      :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
       if keep_on_device, do: done.(), else: Nx.backend_transfer(done.())
     end
   end
