@@ -1,3 +1,10 @@
+CUDA_DIR ?= /usr/local/cuda
+CUDA_VERSION_DIR ?= /usr/local/cuda-11.4
+CUDA_INCLUDE_PATH = $(CUDA_DIR)/include/
+CUDA_LIB64 = $(CUDA_DIR)/lib64
+CUDA_VERSION_INCLUDE_PATH = $(CUDA_VERSION_DIR)/include/
+CUDA_VERSION_LIB64 = $(CUDA_VERSION_DIR)/lib64
+
 LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
 LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
 LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
@@ -25,10 +32,12 @@ ifeq ($(shell uname -s), Darwin)
 else  # Linux
 	CFLAGS += -fopenmp
 	ifeq ($(TORCHX_TARGET), cuda)
-		LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib:$$ORIGIN/libcuda64:$$ORIGIN/libcuda64/stubs:$$ORIGIN/libcuda64_extra' -lpthread -lc10 -ltorch_cpu -lkineto\
-		-lcuda -lnvrtc -lnvToolsExt -lcudart\
-		-lc10_cuda -ltorch_cuda -ltorch_cuda_cpp\
-		-lcufft -lcurand -lcublas -ltorch_cuda_cu -lcudnn
+		CFLAGS += -I$(CUDA_VERSION_INCLUDE_PATH) -I$(CUDA_INCLUDE_PATH)
+		LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib:$(CUDA_VERSION_LIB64):$(CUDA_VERSION_LIB64)/stubs:$(CUDA_LIB64)' -ltorch\
+		-lc10 -lkineto -lcuda -lnvrtc -lnvToolsExt -lcudart\
+		-lc10_cuda -ltorch_cuda -ltorch_cuda_cpp -ltorch_cpu\
+		-lpthread -lc10_cuda -lc10 -lcufft -lcurand -lcublas\
+		$(CUDA_VERSION_LIB64)/libcudnn.so -ltorch_cuda_cu
 	else
 		LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib' -lpthread -lc10 -ltorch_cpu -lkineto
 	endif
@@ -51,9 +60,6 @@ check_libtorch:
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	mkdir -p $(PRIV_DIR)
 	ln -sf $(abspath $(LIBTORCH_LINK_PATH)) $(LIBTORCH_LIB_DIR)
-	ln -sf /usr/local/cuda/lib64 $(CUDA64_LIB_DIR)
-	ln -sf /usr/local/cuda-11.4/lib64 $(CUDA64_EXTRA_LIB_DIR)
-
 	$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(TORCHX_SO) $(LDFLAGS)
 	$(POST_INSTALL)
 
@@ -64,6 +70,7 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 # 	mkdir -p $(CMAKE_BUILD_DIR)
 # 	cd $(CMAKE_BUILD_DIR) && \
 # 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
-# 		-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc -DCUDNN_ROOT=/usr/local/cuda-11.4/ -S $(shell pwd) && \
+# 		-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc -DCUDNN_ROOT=/usr/local/cuda-11.4/ \
+#       -DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) && \
 # 		cmake --build . --verbose
 # 	mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
