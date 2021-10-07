@@ -435,9 +435,9 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp householder_reflector([a_0 | tail] = a, target_k) do
-    # This is a trick so we can both calculate the norm of a and extract the
-    # head a the same time we reverse the array
-    # receives a_reverse as a list of numbers and returns the reflector as a
+    # This is a trick so we can both calculate the norm of 'a' and extract its
+    # head at the same time we reverse the array.
+    # Receives 'a' as a list of numbers and returns the reflector as a
     # k x k matrix
 
     norm_a_squared = Enum.reduce(a, 0, fn x, acc -> x * x + acc end)
