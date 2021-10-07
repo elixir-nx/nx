@@ -37,6 +37,7 @@ compiler. If running on Windows, you will need:
 
 - [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
 - [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
+- [CMake](https://cmake.org/)
 
 ## Usage
 
