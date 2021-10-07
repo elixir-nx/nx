@@ -1,6 +1,8 @@
 PRIV_DIR = $(MIX_APP_PATH)/priv
 TORCHX_SO = $(PRIV_DIR)/torchx.so
 
+# If you want verbose output for debugging
+# CMAKE_BUILD_FLAGS = --verbose
 CMAKE_BUILD_DIR ?= $(shell pwd)/_build/cmake
 C_SRC = $(shell pwd)/c_src
 
@@ -23,6 +25,5 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
       	-DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) && \
-		# add --verbose to show compilation commands. Useful for debugging \
-		cmake --build .
+		cmake --build . $(CMAKE_BUILD_FLAGS)
 	mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
