@@ -20,10 +20,10 @@ check_libtorch:
 	fi
 
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
-	mkdir -p $(PRIV_DIR)
-	mkdir -p $(CMAKE_BUILD_DIR)
-	cd $(CMAKE_BUILD_DIR) && \
+	@ mkdir -p $(PRIV_DIR)
+	@ mkdir -p $(CMAKE_BUILD_DIR)
+	@ cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
       	-DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) && \
 		cmake --build . $(CMAKE_BUILD_FLAGS)
-	mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
+	@ mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
