@@ -764,7 +764,7 @@ defmodule Nx.LinAlg do
   @doc """
   Calculates the Eigenvalues and Eigenvectors of square 2-D tensors.
 
-  It returns `{eigenval, eigenvec}` where the elemens of `eigenval` are sorted
+  It returns `{eigenval, eigenvec}` where the elements of `eigenval` are sorted
   from highest to lowest.
 
   ## Options
