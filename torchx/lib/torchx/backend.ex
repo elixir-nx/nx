@@ -158,20 +158,12 @@ defmodule Torchx.Backend do
     # torch::split returns a chunk with smaller size if the
     # tensor is not fully divisible by the batch_size.
     # We need to drop the last chunk in this case
-    batched =
-      case Torchx.split(to_batch, batch_size) do
-        batches when remainder != 0 ->
-          batches |> Enum.take(num_batches) |> Enum.map(&to_nx(&1, out))
+    case Torchx.split(to_batch, batch_size) do
+      batches when remainder != 0 ->
+        batches |> Enum.take(num_batches) |> Enum.map(&to_nx(&1, out))
 
-        batches ->
-          Enum.map(batches, &to_nx(&1, out))
-      end
-
-    if leftover == :repeat and remainder != 0 do
-      {h, [t]} = Enum.split(batched, num_batches - 1)
-      [t | h]
-    else
-      batched
+      batches ->
+        Enum.map(batches, &to_nx(&1, out))
     end
   end
 

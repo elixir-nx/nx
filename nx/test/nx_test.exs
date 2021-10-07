@@ -807,6 +807,23 @@ defmodule NxTest do
   end
 
   describe "to_batched_list/2" do
+    test "works for all batch sizes less than or equal to {n, ...}" do
+      for rows <- 1..10, cols <- 1..10, batch_size <- 1..rows do
+        t = Nx.iota({rows, cols})
+
+        batches = Nx.to_batched_list(t, batch_size, leftover: :discard)
+        assert length(batches) == div(rows, batch_size)
+
+        batches = Nx.to_batched_list(t, batch_size, leftover: :repeat)
+
+        if rem(rows, batch_size) == 0 do
+          assert length(batches) == div(rows, batch_size)
+        else
+          assert length(batches) == div(rows, batch_size) + 1
+        end
+      end
+    end
+
     test "raises for scalars" do
       t = Nx.tensor(1)
 
