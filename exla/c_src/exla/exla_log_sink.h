@@ -67,6 +67,8 @@ class ExlaLogSink : public tensorflow::TFLogSink {
         // crashes
         std::cerr << "[FATAL] " << fname << ":"
                   << line << " " << msg_str << "\n";
+        // In case there is a race, set msg just to be safe
+        msg = error(msg_str, fname, line);
         break;
       default:
         msg = info(msg_str, fname, line);
