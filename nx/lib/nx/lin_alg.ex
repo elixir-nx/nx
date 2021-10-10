@@ -703,6 +703,95 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
+  Calculates the Eigenvalues and Eigenvectors of symmetric 2-D tensors.
+
+  It returns `{eigenvals, eigenvecs}`.
+  The first element of eigenvector in the `eigenvecs` is positive.
+
+  ## Options
+
+    * `:max_iter` - `integer`. Defaults to `1000`
+      Number of maximum iterations before stopping the decomposition
+
+    * `:eps` - `float`. Defaults to 1.0e-12
+      Tolerance applied during the decomposition
+
+  Note not all options apply to all backends, as backends may have
+  specific optimizations that render these mechanisms unnecessary.
+
+  ## Examples
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[1, 0], [0, 2]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 2.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [1.0, 0.0],
+          [0.0, 1.0]
+        ]
+      >
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[0, 1, 2], [1, 0, 2], [2, 2, 3]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[3]
+        [5.0, -1.0, -1.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [0.4082472324371338, 0.9128734469413757, 0.0],
+          [0.40824851393699646, -0.18257413804531097, 0.8944271802902222],
+          [0.8164970278739929, -0.36514827609062195, -0.4472135901451111]
+        ]
+      >
+
+      iex> row_1 = [ 5, -1,  0,  1,  2]
+      iex> row_2 = [-1,  5,  0,  5,  3]
+      iex> row_3 = [ 0,  0,  4,  7,  2]
+      iex> row_4 = [ 1,  5,  7,  0,  9]
+      iex> row_5 = [ 2,  3,  2,  9,  2]
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([row_1, row_2, row_3, row_4, row_5]))
+      iex> eigenvals
+      #Nx.Tensor<
+        f32[5]
+        [16.39409828186035, -9.739278793334961, 5.901498794555664, 4.333935260772705, -0.891651451587677]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[5][5]
+        [
+          [0.11199211329221725, -0.004226081073284149, -0.8283799886703491, 0.44038262963294983, 0.3275383710861206],
+          [0.3954266905784607, 0.16280314326286316, 0.5332855582237244, 0.5342091917991638, 0.49734073877334595],
+          [0.42674732208251953, 0.325676828622818, -0.1369551718235016, -0.6991531848907471, 0.4519360661506653],
+          [0.60294508934021, -0.7831991910934448, -0.007822268642485142, -0.07907348871231079, -0.1297196000814438],
+          [0.5342653393745422, 0.5041332840919495, -0.10283589363098145, 0.15999309718608856, -0.6513472199440002]
+        ]
+      >
+
+  """
+  def eigh(tensor, opts \\ []) do
+    opts = keyword!(opts, max_iter: 1000, eps: @default_eps)
+    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+
+    impl!(tensor).eigh(
+      {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
+       %{tensor | names: [nil, nil], type: output_type, shape: eigenvecs_shape}},
+      tensor,
+      opts
+    )
+  end
+
+  @doc """
   Calculates the Singular Value Decomposition of 2-D tensors.
 
   It returns `{u, s, vt}` where the elemens of `s` are sorted

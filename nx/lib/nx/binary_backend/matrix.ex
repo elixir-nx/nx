@@ -192,13 +192,20 @@ defmodule Nx.BinaryBackend.Matrix do
         binary_to_matrix(input_data, input_type, input_shape)
       end
 
+    {q_matrix, r_matrix} = qr_decomposition(r_matrix, m, k, n, eps)
+
+    {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
+  end
+
+  defp qr_decomposition(matrix, m, k, n, eps) do
+    # QR decomposition is performed by using Householder transform
     {q_matrix, r_matrix} =
-      for i <- 0..(n - 1), reduce: {nil, r_matrix} do
+      for i <- 0..(n - 1), reduce: {nil, matrix} do
         {q, r} ->
-          a = slice_matrix(r, [i, i], [k - i, 1])
-
-          h = householder_reflector(a, k, eps)
-
+          h =
+            r
+            |> slice_matrix([i, i], [k - i, 1])
+            |> householder_reflector(k, eps)
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
@@ -207,14 +214,95 @@ defmodule Nx.BinaryBackend.Matrix do
             else
               dot_matrix(q, h)
             end
-
           r = dot_matrix(h, r)
-
           {q, r}
       end
 
-    {q_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type),
-     r_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
+    {approximate_zeros(q_matrix, eps), approximate_zeros(r_matrix, eps)}
+  end
+
+  def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
+    # # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
+    # # Then, by using QR iteration it converges to AQ = QΛ,
+    # # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
+
+    eps = opts[:eps]
+    max_iter = opts[:max_iter]
+
+    # Hessenberg decomposition
+    {h, q_h} =
+      input_data
+      |> binary_to_matrix(input_type, input_shape)
+      |> hessenberg_decomposition(n, n, n, eps)
+
+    # QR iteration for eigenvalues and eigenvectors
+    {eigenvals_diag, eigenvecs} =
+      Enum.reduce_while(1..max_iter, {h, q_h}, fn _, {a_old, q_old} ->
+        # QR decomposition
+        {q_now, r_now} = qr_decomposition(a_old, n, n, n, eps)
+
+        # Update matrix A, Q
+        a_new = dot_matrix(r_now, q_now)
+        q_new = dot_matrix(q_old, q_now)
+
+        if is_approximately_same?(q_old, q_new, eps) do
+          {:halt, {a_new, q_new}}
+        else
+          {:cont, {a_new, q_new}}
+        end
+      end)
+
+    # Obtain the eigenvalues, which are the diagonal elements
+    indices_diag = for idx <- 0..(n - 1), do: [idx, idx]
+    eigenvals = get_matrix_elements(eigenvals_diag, indices_diag)
+
+    # Reduce the elements smaller than eps to zero
+    {eigenvals |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     eigenvecs |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
+  end
+
+  defp hessenberg_decomposition(matrix, m, k, n, eps) do
+    # Hessenberg decomposition is performed by using Householder transform
+    {hess_matrix, q_matrix} =
+      for i <- 0..(n - 2), reduce: {matrix, nil} do
+        {hess, q} ->
+          h =
+            hess
+            |> slice_matrix([i + 1, i], [k - i - 1, 1])
+            |> householder_reflector(k, eps)
+          # If we haven't allocated Q yet, let Q = H1
+          q =
+            if is_nil(q) do
+              zero_padding = 0 |> List.duplicate(k) |> List.duplicate(m - k)
+              h ++ zero_padding
+            else
+              dot_matrix(q, h)
+            end
+          # Hessenberg matrix H updating
+          h_t = transpose_matrix(h)
+          hess =
+            h
+            |> dot_matrix(hess)
+            |> dot_matrix(h_t)
+          {hess, q}
+      end
+
+    {approximate_zeros(hess_matrix, eps), approximate_zeros(q_matrix, eps)}
+  end
+
+  defp is_approximately_same?(a, b, eps) do
+    # Determine if matrices `a` and `b` are equal in the range of eps
+    Enum.zip(a, b)
+    |> Enum.all?(fn {a_row, b_row} ->
+        Enum.zip(a_row, b_row)
+        |> Enum.map(&Tuple.to_list(&1))
+        |> Enum.all?(
+          &Enum.reduce(
+            &1,
+            fn a_elem, b_elem -> abs(a_elem - b_elem) <= eps end
+          )
+        )
+      end)
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
@@ -738,4 +826,5 @@ defmodule Nx.BinaryBackend.Matrix do
       e -> do_round.(e)
     end)
   end
+
 end

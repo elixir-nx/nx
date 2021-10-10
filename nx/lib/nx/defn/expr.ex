@@ -718,6 +718,14 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
+  def eigh({evals, evecs}, tensor, opts) do
+    tensor = to_expr(tensor)
+    context = tensor.data.context
+    out = %T{names: [], shape: {}, type: {:tuple, 2}}
+    tuple({evals, evecs}, expr(out, context, :eigh, [{evals, evecs}, tensor, opts]))
+  end
+
+  @impl true
   def svd({u, s, vt}, tensor, opts) do
     tensor = to_expr(tensor)
     context = tensor.data.context
