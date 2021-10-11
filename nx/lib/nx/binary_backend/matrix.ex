@@ -290,6 +290,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {approximate_zeros(hess_matrix, eps), approximate_zeros(q_matrix, eps)}
   end
 
+  # TODO: Eliminate this function and use the binary implementation
   defp is_approximately_same?(a, b, eps) do
     # Determine if matrices `a` and `b` are equal in the range of eps
     Enum.zip(a, b)
