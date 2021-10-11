@@ -245,7 +245,11 @@ defmodule Nx.BinaryBackend.Matrix do
         a_new = dot_matrix(r_now, q_now)
         q_new = dot_matrix(q_old, q_now)
 
-        if is_approximately_same?(q_old, q_new, eps) do
+        # Convergence condition
+        q_old_tnsr = Nx.tensor(q_old)
+        q_new_tnsr = Nx.tensor(q_new)
+        cc_int = Nx.all_close?(q_old_tnsr, q_new_tnsr) |> Nx.to_scalar()
+        if cc_int == 1 do
           {:halt, {a_new, q_new}}
         else
           {:cont, {a_new, q_new}}
@@ -288,21 +292,6 @@ defmodule Nx.BinaryBackend.Matrix do
       end
 
     {approximate_zeros(hess_matrix, eps), approximate_zeros(q_matrix, eps)}
-  end
-
-  defp is_approximately_same?(a, b, eps) do
-    # Determine if matrices `a` and `b` are equal in the range of eps
-    Enum.zip(a, b)
-    |> Enum.all?(fn {a_row, b_row} ->
-        Enum.zip(a_row, b_row)
-        |> Enum.map(&Tuple.to_list(&1))
-        |> Enum.all?(
-          &Enum.reduce(
-            &1,
-            fn a_elem, b_elem -> abs(a_elem - b_elem) <= eps end
-          )
-        )
-      end)
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
