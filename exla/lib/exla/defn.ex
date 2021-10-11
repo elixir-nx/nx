@@ -63,6 +63,16 @@ defmodule EXLA.Defn do
   defp outputs(tuple) when is_tuple(tuple),
     do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&outputs/1)}
 
+  defp outputs(map) when is_struct(map) do
+    out =
+      map
+      |> Map.from_struct()
+      |> Enum.sort()
+      |> Enum.map(fn {k, v} -> {k, outputs(v)} end)
+
+    {:struct, out, map.__struct__}
+  end
+
   defp outputs(map) when is_map(map),
     do: {:map, map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, outputs(v)} end)}
 
@@ -99,6 +109,15 @@ defmodule EXLA.Defn do
     list = Tuple.to_list(tuple)
 
     Enum.reduce(list, {acc, cache}, fn expr, {acc, cache} ->
+      to_root_result(expr, acc, state, cache)
+    end)
+  end
+
+  defp to_root_result(map, acc, state, cache) when is_struct(map) do
+    map
+    |> Map.from_struct()
+    |> Enum.sort()
+    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
       to_root_result(expr, acc, state, cache)
     end)
   end
@@ -1127,6 +1146,16 @@ defmodule EXLA.Defn do
   defp each_buffer_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
     {exprs, acc} = Enum.map_reduce(outputs, acc, &each_buffer_to_nx/2)
     {List.to_tuple(exprs), acc}
+  end
+
+  defp each_buffer_to_nx({:struct, outputs, mod}, acc) when is_list(outputs) do
+    {exprs, acc} =
+      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
+        {v, acc} = each_buffer_to_nx(v, acc)
+        {{k, v}, acc}
+      end)
+
+    {struct(mod, exprs), acc}
   end
 
   defp each_buffer_to_nx({:map, outputs}, acc) when is_list(outputs) do
