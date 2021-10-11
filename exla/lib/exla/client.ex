@@ -64,12 +64,15 @@ defmodule EXLA.Client do
     preallocate_int = if preallocate, do: 1, else: 0
     
     platforms = Map.keys(EXLA.Client.get_supported_platforms())
-    Logger.debug("Available platforms are: #{inspect(platforms)}")
 
     ref =
       case platform do
         nil ->
-          Logger.debug("No platform configuration specified, falling back to host platform")
+          Logger.debug("""
+            No platform configuration specified, falling back to host platform
+            Available platforms are: #{inspect(platforms)}
+            """
+          )
           EXLA.NIF.get_host_client()
         :host -> EXLA.NIF.get_host_client()
         :cuda -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
