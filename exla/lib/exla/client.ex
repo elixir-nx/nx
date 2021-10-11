@@ -62,13 +62,13 @@ defmodule EXLA.Client do
 
     preallocate = Keyword.get(options, :preallocate, true)
     preallocate_int = if preallocate, do: 1, else: 0
-
+    
+    platforms = Map.keys(EXLA.Client.get_supported_platforms())
     Logger.debug("Available platforms are: #{inspect(platforms)}")
 
     ref =
       case platform do
         nil ->
-          platforms = Map.keys(EXLA.Client.get_supported_platforms())
           Logger.debug("No platform configuration specified, falling back to host platform")
           EXLA.NIF.get_host_client()
         :host -> EXLA.NIF.get_host_client()
