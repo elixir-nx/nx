@@ -451,6 +451,17 @@ defmodule Nx.Defn.Compiler do
 
   ## Normalization
 
+  defp normalize({:%, meta, [aliases, {:%{}, map_meta, [{:|, update_meta, [map, args]}]}]}, state) do
+    {map, state} = normalize(map, state)
+    {args, state} = normalize(args, state)
+    {{:%, meta, [aliases, {:%{}, map_meta, [{:|, update_meta, [map, args]}]}]}, state}
+  end
+
+  defp normalize({:%, meta, [aliases, {:%{}, map_meta, args}]}, state) do
+    {args, state} = normalize(args, state)
+    {{:%, meta, [aliases, {:%{}, map_meta, args}]}, state}
+  end
+
   defp normalize({:%{}, meta, [{:|, update_meta, [map, args]}]}, state) do
     {map, state} = normalize(map, state)
     {args, state} = normalize(args, state)
@@ -458,7 +469,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize({special_form, meta, args}, state)
-       when special_form in [:{}, :%{}, :__block__] do
+       when special_form in [:{}, :%{}, :%, :__block__] do
     {args, state} = normalize_list(args, state)
     {{special_form, meta, args}, state}
   end
@@ -670,6 +681,16 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
+  defp normalize_arg({:%, meta, [aliases, {:%{}, meta, args}]}, _meta, state) do
+    {args, state} =
+      Enum.map_reduce(args, state, fn {k, v}, acc ->
+        {v, acc} = normalize_arg(v, meta, acc)
+        {{k, v}, acc}
+      end)
+
+    {{:%, meta, [aliases, {:%{}, meta, args}]}, state}
+  end
+
   defp normalize_arg({:%{}, meta, args}, _meta, state) do
     {args, state} =
       Enum.map_reduce(args, state, fn {k, v}, acc ->
@@ -695,7 +716,7 @@ defmodule Nx.Defn.Compiler do
     compile_error!(
       meta,
       state,
-      "only variables, tuples, and maps are allowed as patterns in defn, got: #{Macro.to_string(expr)}"
+      "only variables, tuples, maps, and structs are allowed as patterns in defn, got: #{Macro.to_string(expr)}"
     )
   end
 
