@@ -125,7 +125,7 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "eigh" do
-    test "correctly a eigenvalue equation" do
+    test "correctly a eigenvalues and eigenvectors" do
       t = Nx.tensor([
             [ 5, -1,  0,  1,  2],
             [-1,  5,  0,  5,  3],
@@ -148,19 +148,38 @@ defmodule Nx.LinAlgTest do
                   [0.603, -0.783, -0.008, -0.079, -0.130],
                   [0.534,  0.504, -0.103,  0.160, -0.651]
                 ])
+    end
 
-      # Eigenvalue equation
+    test "property" do
+      for _ <- 1..10 do
+        # Random symmetric matrix
+        rm = Nx.random_uniform({3, 3})
+        t =
+          rm
+          |> Nx.transpose()
+          |> Nx.add(rm)
+          |> Nx.divide(2)
 
-      evals_diag = Nx.tensor([
-                    [ 16.39409828186035, 0 , 0, 0, 0],
-                    [0, -9.739278793334961 , 0, 0, 0],
-                    [0, 0 ,  5.901498794555664, 0, 0],
-                    [0, 0 , 0,  4.333935260772705, 0],
-                    [0, 0 , 0, 0, -0.891651451587677]
-                  ])
-      evecs_evals = eigenvecs |> Nx.dot(evals_diag) |> round(1)
-      t_evecs = t |> Nx.dot(eigenvecs) |> round(1)
-      assert evecs_evals == t_evecs
+        # Eigenvalues and eigenvectors
+        assert {eigenvals, eigenvecs} =
+          Nx.LinAlg.eigh(t, max_iter: 100000, eps: 1.0e-12)
+        # TODO: Develop and use function in Nx that correspond to np.diag
+        evals_diag =
+          eigenvals
+          |> Nx.to_flat_list()
+          |> Enum.with_index()
+          |> Enum.map(fn {eval, idx} ->
+            List.duplicate(0, 2)
+            |> List.insert_at(idx, eval)
+            end)
+          |> Nx.tensor()
+
+        # Eigenvalue equation
+        evecs_evals = eigenvecs |> Nx.dot(evals_diag)
+        t_evecs = t |> Nx.dot(eigenvecs)
+        al = Nx.all_close?(evecs_evals, t_evecs, atol: 1.0e-1)
+        assert al == Nx.tensor(1, type: {:u, 8})
+      end
     end
   end
 
