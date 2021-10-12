@@ -126,13 +126,14 @@ defmodule Nx.LinAlgTest do
 
   describe "eigh" do
     test "correctly a eigenvalue equation" do
-      row_1 = [ 5, -1,  0,  1,  2]
-      row_2 = [-1,  5,  0,  5,  3]
-      row_3 = [ 0,  0,  4,  7,  2]
-      row_4 = [ 1,  5,  7,  0,  9]
-      row_5 = [ 2,  3,  2,  9,  2]
-      a = Nx.tensor([row_1, row_2, row_3, row_4, row_5])
-      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(a)
+      t = Nx.tensor([
+            [ 5, -1,  0,  1,  2],
+            [-1,  5,  0,  5,  3],
+            [ 0,  0,  4,  7,  2],
+            [ 1,  5,  7,  0,  9],
+            [ 2,  3,  2,  9,  2]
+          ])
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
 
       # Eigenvalues
       assert round(eigenvals, 3) ==
@@ -149,15 +150,17 @@ defmodule Nx.LinAlgTest do
                 ])
 
       # Eigenvalue equation
-      eval_row_1 = [16.39409828186035, 0 , 0, 0, 0]
-      eval_row_2 = [0, -9.739278793334961 , 0, 0, 0]
-      eval_row_3 = [0, 0 , 5.901498794555664, 0, 0]
-      eval_row_4 = [0, 0 , 0, 4.333935260772705, 0]
-      eval_row_5 = [0, 0 , 0, 0, -0.891651451587677]
-      evals_diag = Nx.tensor([eval_row_1, eval_row_2, eval_row_3, eval_row_4, eval_row_5])
+
+      evals_diag = Nx.tensor([
+                    [ 16.39409828186035, 0 , 0, 0, 0],
+                    [0, -9.739278793334961 , 0, 0, 0],
+                    [0, 0 ,  5.901498794555664, 0, 0],
+                    [0, 0 , 0,  4.333935260772705, 0],
+                    [0, 0 , 0, 0, -0.891651451587677]
+                  ])
       evecs_evals = eigenvecs |> Nx.dot(evals_diag) |> round(1)
-      a_evecs = a |> Nx.dot(eigenvecs) |> round(1)
-      assert evecs_evals == a_evecs
+      t_evecs = t |> Nx.dot(eigenvecs) |> round(1)
+      assert evecs_evals == t_evecs
     end
   end
 
