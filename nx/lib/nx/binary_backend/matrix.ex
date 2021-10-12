@@ -222,18 +222,29 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
-    # # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
-    # # Then, by using QR iteration it converges to AQ = QΛ,
-    # # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
+    # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
+    # Then, by using QR iteration it converges to AQ = QΛ,
+    # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
 
     eps = opts[:eps]
     max_iter = opts[:max_iter]
 
+    # Validate that the input is a symmetric matrix using the relation [A + A^t]/2 = A.
+    a = binary_to_matrix(input_data, input_type, input_shape)
+    is_sym =
+      a
+      |> transpose_matrix()
+      |> add_matrix(a)
+      |> Enum.map(
+          &Enum.map(&1, fn elem -> 0.5 * elem end)
+        )
+      |> is_approximately_same?(a, eps)
+    if !is_sym do
+      raise ArgumentError, "input tensor is limited to symmetric 2-D tensor"
+    end
+
     # Hessenberg decomposition
-    {h, q_h} =
-      input_data
-      |> binary_to_matrix(input_type, input_shape)
-      |> hessenberg_decomposition(n, n, n, eps)
+    {h, q_h} = hessenberg_decomposition(a, n, n, n, eps)
 
     # QR iteration for eigenvalues and eigenvectors
     {eigenvals_diag, eigenvecs} =
@@ -710,6 +721,19 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   ## Matrix (2-D array) manipulation
+
+  defp add_matrix([], _), do: 0
+  defp add_matrix(_, []), do: 0
+
+  defp add_matrix([h1 | _] = v1, [h2 | _] = v2) when not is_list(h1) and not is_list(h2) do
+    Enum.zip(v1, v2)
+    |> Enum.map(fn {e1, e2} -> e1 + e2 end)
+  end
+
+  defp add_matrix(m1, m2) do
+    Enum.zip(m1, m2)
+    |> Enum.map(fn {row1, row2} -> add_matrix(row1, row2) end)
+  end
 
   defp dot_matrix([], _), do: 0
   defp dot_matrix(_, []), do: 0
