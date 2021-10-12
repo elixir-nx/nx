@@ -752,12 +752,14 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> row_1 = [ 5, -1,  0,  1,  2]
-      iex> row_2 = [-1,  5,  0,  5,  3]
-      iex> row_3 = [ 0,  0,  4,  7,  2]
-      iex> row_4 = [ 1,  5,  7,  0,  9]
-      iex> row_5 = [ 2,  3,  2,  9,  2]
-      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([row_1, row_2, row_3, row_4, row_5]))
+      iex> t = Nx.tensor([
+      ...>  [ 5, -1,  0,  1,  2],
+      ...>  [-1,  5,  0,  5,  3],
+      ...>  [ 0,  0,  4,  7,  2],
+      ...>  [ 1,  5,  7,  0,  9],
+      ...>  [ 2,  3,  2,  9,  2]
+      ...> ])
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
       iex> eigenvals
       #Nx.Tensor<
         f32[5]
