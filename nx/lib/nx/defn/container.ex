@@ -3,7 +3,6 @@ defprotocol Nx.Defn.Container do
 end
 
 defimpl Nx.Defn.Container, for: Tuple do
-
   def decompose(tuple) do
     decompose_impl(Tuple.to_list(tuple), {[], fn _ -> {} end})
   end
@@ -33,7 +32,6 @@ defimpl Nx.Defn.Container, for: Tuple do
 end
 
 defimpl Nx.Defn.Container, for: Map do
-
   def decompose(map) do
     {leaves, fun} =
       map
