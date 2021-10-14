@@ -777,10 +777,6 @@ defmodule Nx.LinAlg do
         ]
       >
 
-  ## Error cases
-
-      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
-      ** (ArgumentError) input tensor is limited to symmetric 2-D tensor
   """
   def eigh(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 1000, eps: @default_eps)
