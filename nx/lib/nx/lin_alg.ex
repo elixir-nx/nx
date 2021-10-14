@@ -753,6 +753,9 @@ defmodule Nx.LinAlg do
 
   ## Error cases
 
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      ** (ArgumentError) tensor must be a square matrix (a tensor with two equal axes), got shape: {2, 3}
+
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
       ** (ArgumentError) input tensor must be symmetric
   """

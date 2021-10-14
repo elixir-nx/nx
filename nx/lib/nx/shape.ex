@@ -1585,7 +1585,7 @@ defmodule Nx.Shape do
     do:
       raise(
         ArgumentError,
-        "tensor must have rank 2, got rank #{tuple_size(shape)} with shape #{inspect(shape)}"
+        "tensor must be a square matrix (a tensor with two equal axes), got shape: #{inspect(shape)}"
       )
 
   def svd({m, n}) do
