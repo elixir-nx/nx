@@ -706,7 +706,6 @@ defmodule Nx.LinAlg do
   Calculates the Eigenvalues and Eigenvectors of symmetric 2-D tensors.
 
   It returns `{eigenvals, eigenvecs}`.
-  The first element of eigenvector in the `eigenvecs` is positive.
 
   ## Options
 
@@ -752,31 +751,10 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> t = Nx.tensor([
-      ...>  [ 5, -1,  0,  1,  2],
-      ...>  [-1,  5,  0,  5,  3],
-      ...>  [ 0,  0,  4,  7,  2],
-      ...>  [ 1,  5,  7,  0,  9],
-      ...>  [ 2,  3,  2,  9,  2]
-      ...> ])
-      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
-      iex> eigenvals
-      #Nx.Tensor<
-        f32[5]
-        [16.39409828186035, -9.739278793334961, 5.901498794555664, 4.333935260772705, -0.891651451587677]
-      >
-      iex> eigenvecs
-      #Nx.Tensor<
-        f32[5][5]
-        [
-          [0.11199211329221725, -0.004226081073284149, -0.8283799886703491, 0.44038262963294983, 0.3275383710861206],
-          [0.3954266905784607, 0.16280314326286316, 0.5332855582237244, 0.5342091917991638, 0.49734073877334595],
-          [0.42674732208251953, 0.325676828622818, -0.1369551718235016, -0.6991531848907471, 0.4519360661506653],
-          [0.60294508934021, -0.7831991910934448, -0.007822268642485142, -0.07907348871231079, -0.1297196000814438],
-          [0.5342653393745422, 0.5041332840919495, -0.10283589363098145, 0.15999309718608856, -0.6513472199440002]
-        ]
-      >
+  ## Error cases
 
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
+      ** (ArgumentError) input tensor must be symmetric
   """
   def eigh(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 1000, eps: @default_eps)
