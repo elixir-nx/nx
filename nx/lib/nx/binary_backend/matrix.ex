@@ -206,6 +206,7 @@ defmodule Nx.BinaryBackend.Matrix do
             r
             |> slice_matrix([i, i], [k - i, 1])
             |> householder_reflector(k, eps)
+
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
@@ -214,6 +215,7 @@ defmodule Nx.BinaryBackend.Matrix do
             else
               dot_matrix(q, h)
             end
+
           r = dot_matrix(h, r)
           {q, r}
       end
@@ -231,10 +233,12 @@ defmodule Nx.BinaryBackend.Matrix do
 
     # Validate that the input is a symmetric matrix using the relation A^t = A.
     a = binary_to_matrix(input_data, input_type, input_shape)
+
     is_sym =
       a
       |> transpose_matrix()
       |> is_approximately_same?(a, eps)
+
     unless is_sym do
       raise ArgumentError, "input tensor must be symmetric"
     end
@@ -277,6 +281,7 @@ defmodule Nx.BinaryBackend.Matrix do
             hess
             |> slice_matrix([i + 1, i], [k - i - 1, 1])
             |> householder_reflector(k, eps)
+
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
@@ -285,12 +290,15 @@ defmodule Nx.BinaryBackend.Matrix do
             else
               dot_matrix(q, h)
             end
+
           # Hessenberg matrix H updating
           h_t = transpose_matrix(h)
+
           hess =
             h
             |> dot_matrix(hess)
             |> dot_matrix(h_t)
+
           {hess, q}
       end
 
@@ -302,15 +310,15 @@ defmodule Nx.BinaryBackend.Matrix do
     # Determine if matrices `a` and `b` are equal in the range of eps
     Enum.zip(a, b)
     |> Enum.all?(fn {a_row, b_row} ->
-        Enum.zip(a_row, b_row)
-        |> Enum.map(&Tuple.to_list(&1))
-        |> Enum.all?(
-          &Enum.reduce(
-            &1,
-            fn a_elem, b_elem -> abs(a_elem - b_elem) <= eps end
-          )
+      Enum.zip(a_row, b_row)
+      |> Enum.map(&Tuple.to_list(&1))
+      |> Enum.all?(
+        &Enum.reduce(
+          &1,
+          fn a_elem, b_elem -> abs(a_elem - b_elem) <= eps end
         )
-      end)
+      )
+    end)
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do
@@ -834,5 +842,4 @@ defmodule Nx.BinaryBackend.Matrix do
       e -> do_round.(e)
     end)
   end
-
 end
