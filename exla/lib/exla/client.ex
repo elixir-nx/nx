@@ -62,23 +62,33 @@ defmodule EXLA.Client do
 
     preallocate = Keyword.get(options, :preallocate, true)
     preallocate_int = if preallocate, do: 1, else: 0
-    
+
     platforms = Map.keys(EXLA.Client.get_supported_platforms())
 
     ref =
       case platform do
         nil ->
           Logger.debug("""
-            No platform configuration specified, falling back to host platform
-            Available platforms are: #{inspect(platforms)}
-            """
-          )
+          No platform configuration specified, falling back to host platform
+          Available platforms are: #{inspect(platforms)}
+          """)
+
           EXLA.NIF.get_host_client()
-        :host -> EXLA.NIF.get_host_client()
-        :cuda -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
-        :rocm -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
-        :tpu -> EXLA.NIF.get_tpu_client()
-        _ -> raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
+
+        :host ->
+          EXLA.NIF.get_host_client()
+
+        :cuda ->
+          EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+
+        :rocm ->
+          EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+
+        :tpu ->
+          EXLA.NIF.get_tpu_client()
+
+        _ ->
+          raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
       end
       |> unwrap!()
 
