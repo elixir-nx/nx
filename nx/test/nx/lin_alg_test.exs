@@ -124,6 +124,56 @@ defmodule Nx.LinAlgTest do
     end
   end
 
+  describe "eigh" do
+    test "correctly a eigenvalues and eigenvectors" do
+      t =
+        Nx.tensor([
+          [5, -1, 0, 1, 2],
+          [-1, 5, 0, 5, 3],
+          [0, 0, 4, 7, 2],
+          [1, 5, 7, 0, 9],
+          [2, 3, 2, 9, 2]
+        ])
+
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+
+      # Eigenvalues
+      assert round(eigenvals, 3) ==
+               Nx.tensor([16.394, -9.739, 5.901, 4.334, -0.892])
+
+      # Eigenvectors
+      assert round(eigenvecs, 3) ==
+               Nx.tensor([
+                 [0.112, -0.004, -0.828, 0.440, 0.328],
+                 [0.395, 0.163, 0.533, 0.534, 0.497],
+                 [0.427, 0.326, -0.137, -0.699, 0.452],
+                 [0.603, -0.783, -0.008, -0.079, -0.130],
+                 [0.534, 0.504, -0.103, 0.160, -0.651]
+               ])
+    end
+
+    test "property" do
+      for _ <- 1..10 do
+        # Random symmetric matrix
+        rm = Nx.random_uniform({3, 3})
+
+        t =
+          rm
+          |> Nx.transpose()
+          |> Nx.add(rm)
+
+        # Eigenvalues and eigenvectors
+        assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+
+        # Eigenvalue equation
+        evecs_evals = Nx.multiply(eigenvecs, eigenvals)
+        t_evecs = Nx.dot(t, eigenvecs)
+        al = Nx.all_close?(evecs_evals, t_evecs, atol: 1.0e-2)
+        assert al == Nx.tensor(1, type: {:u, 8})
+      end
+    end
+  end
+
   describe "svd" do
     test "correctly finds the singular values of full matrices" do
       t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0], [10.0, 11.0, 12.0]])

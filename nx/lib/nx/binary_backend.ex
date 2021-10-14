@@ -1167,6 +1167,18 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def eigh(
+        {%{type: output_type} = eigenvals_holder, eigenvecs_holder},
+        %{type: input_type, shape: input_shape} = tensor,
+        opts
+      ) do
+    bin = to_binary(tensor)
+    {eigenvals, eigenvecs} = B.Matrix.eigh(bin, input_type, input_shape, output_type, opts)
+
+    {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
+  end
+
+  @impl true
   def svd(
         {%{shape: {m, _}} = u_holder, s_holder, %{shape: {_, n}} = v_holder} = outputs,
         %{type: input_type, shape: input_shape} = tensor,

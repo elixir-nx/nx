@@ -703,6 +703,78 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
+  Calculates the Eigenvalues and Eigenvectors of symmetric 2-D tensors.
+
+  It returns `{eigenvals, eigenvecs}`.
+
+  ## Options
+
+    * `:max_iter` - `integer`. Defaults to `1000`
+      Number of maximum iterations before stopping the decomposition
+
+    * `:eps` - `float`. Defaults to 1.0e-12
+      Tolerance applied during the decomposition
+
+  Note not all options apply to all backends, as backends may have
+  specific optimizations that render these mechanisms unnecessary.
+
+  ## Examples
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[1, 0], [0, 2]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 2.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [1.0, 0.0],
+          [0.0, 1.0]
+        ]
+      >
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[0, 1, 2], [1, 0, 2], [2, 2, 3]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[3]
+        [5.0, -1.0, -1.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [0.4082472324371338, 0.9128734469413757, 0.0],
+          [0.40824851393699646, -0.18257413804531097, 0.8944271802902222],
+          [0.8164970278739929, -0.36514827609062195, -0.4472135901451111]
+        ]
+      >
+
+  ## Error cases
+
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      ** (ArgumentError) tensor must be a square matrix (a tensor with two equal axes), got shape: {2, 3}
+
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
+      ** (ArgumentError) input tensor must be symmetric
+  """
+  def eigh(tensor, opts \\ []) do
+    opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
+    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+
+    impl!(tensor).eigh(
+      {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
+       %{tensor | names: [nil, nil], type: output_type, shape: eigenvecs_shape}},
+      tensor,
+      opts
+    )
+  end
+
+  @doc """
   Calculates the Singular Value Decomposition of 2-D tensors.
 
   It returns `{u, s, vt}` where the elemens of `s` are sorted
