@@ -34,6 +34,83 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "structs" do
+    defmodule MyStruct do
+      import Nx.Defn
+
+      @default_defn_compiler EXLA
+
+      defstruct [:foo, :bar]
+
+      defn foo_bar_as_input(%__MODULE__{foo: foo, bar: bar}) do
+        foo * bar
+      end
+
+      defn create_foo_bar(x, y) do
+        %__MODULE__{foo: x, bar: y}
+      end
+
+      defn update_foo_bar_struct(var, x) do
+        %__MODULE__{var | bar: x}
+      end
+
+      defn update_foo_bar_map(var, x) do
+        %{var | bar: x}
+      end
+
+      defn dot_foo_bar(var) do
+        var.foo * var.bar
+      end
+
+      defn foo_bar_with_map_tuple(%__MODULE__{foo: {x, y}, bar: %{} = bar}) do
+        %{a: a, b: b} = bar
+        x * y * a * b
+      end
+    end
+
+    test "can be used and matched as input" do
+      inp = %MyStruct{foo: Nx.tensor(5), bar: Nx.tensor(3)}
+
+      assert MyStruct.foo_bar_as_input(inp) == Nx.tensor(15)
+    end
+
+    test "can be returned from defn" do
+      assert %MyStruct{foo: foo, bar: bar} =
+               MyStruct.create_foo_bar(Nx.tensor([1]), Nx.tensor([2]))
+
+      assert foo == Nx.tensor([1])
+      assert bar == Nx.tensor([2])
+    end
+
+    test "can be updated from struct" do
+      inp = %MyStruct{foo: Nx.tensor(1), bar: 2}
+
+      assert %MyStruct{foo: foo, bar: bar} = MyStruct.update_foo_bar_struct(inp, Nx.tensor(8))
+      assert foo == Nx.tensor(1)
+      assert bar == Nx.tensor(8)
+    end
+
+    test "can be updated from map" do
+      inp = %MyStruct{foo: Nx.tensor(1), bar: 2}
+
+      assert %MyStruct{foo: foo, bar: bar} = MyStruct.update_foo_bar_map(inp, Nx.tensor(8))
+      assert foo == Nx.tensor(1)
+      assert bar == Nx.tensor(8)
+    end
+
+    test "can be used with dot syntax" do
+      inp = %MyStruct{foo: Nx.tensor(1), bar: 2}
+
+      assert MyStruct.dot_foo_bar(inp) == Nx.tensor(2)
+    end
+
+    test "can be used with nested collections" do
+      inp = %MyStruct{foo: {Nx.tensor(1), Nx.tensor(2)}, bar: %{a: Nx.tensor(3), b: Nx.tensor(4)}}
+
+      assert MyStruct.foo_bar_with_map_tuple(inp) == Nx.tensor(24)
+    end
+  end
+
   describe "tensor constants" do
     @two 2
     defn add_two_attribute(t), do: t + @two

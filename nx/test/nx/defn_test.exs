@@ -182,6 +182,109 @@ defmodule Nx.DefnTest do
     end
   end
 
+  describe "structs" do
+    defmodule StructTest do
+      import Nx.Defn
+      alias __MODULE__, as: S
+
+      defstruct [:a, :b]
+
+      @default_defn_compiler Identity
+
+      defn struct_match_signature(%S{a: a, b: b}) do
+        a + b
+      end
+
+      defn struct_match_alias(%S{} = var) do
+        %S{a: a, b: b} = var
+        a + b
+      end
+
+      defn struct_match_in_body(var) do
+        %S{a: a, b: b} = var
+        a + b
+      end
+
+      defn struct_dot(var) do
+        var.a + var.b
+      end
+
+      defn return_struct(x, y) do
+        %S{a: x + y, b: x - y}
+      end
+
+      defn struct_update_struct(var, x) do
+        %S{var | b: x}
+      end
+
+      defn struct_update_map(var, x) do
+        %{var | b: x}
+      end
+    end
+
+    test "struct can match in signature" do
+      inp = %StructTest{a: Nx.tensor(1), b: Nx.tensor(2)}
+
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+               StructTest.struct_match_signature(inp)
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+    end
+
+    test "struct can match alias" do
+      inp = %StructTest{a: 1, b: 2}
+
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+               StructTest.struct_match_alias(inp)
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+    end
+
+    test "struct can match in body" do
+      inp = %StructTest{a: 1, b: 2}
+
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+               StructTest.struct_match_in_body(inp)
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+    end
+
+    test "struct can use dot" do
+      inp = %StructTest{a: 1, b: 2}
+
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
+               StructTest.struct_dot(inp)
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
+      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+    end
+
+    test "struct can be returned" do
+      assert %StructTest{a: a, b: b} = StructTest.return_struct(1, 2.0)
+
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} = a
+
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [^left, ^right]}} = b
+    end
+
+    test "struct can be updated" do
+      inp = %StructTest{a: 1, b: 2.0}
+
+      assert %StructTest{a: a, b: b} = StructTest.struct_update_struct(inp, 8)
+
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [0]}} = a
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [2]}} = b
+
+      assert %StructTest{a: a, b: b} = StructTest.struct_update_map(inp, 8)
+
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [0]}} = a
+      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [2]}} = b
+    end
+  end
+
   describe "anonymous functions args" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
@@ -1273,7 +1376,7 @@ defmodule Nx.DefnTest do
 
     test "non-variables used as arguments" do
       assert_raise CompileError,
-                   ~r"#{location(+4)}: only variables, tuples, and maps are allowed as patterns in defn",
+                   ~r"#{location(+4)}: only variables, tuples, maps, and structs are allowed as patterns in defn",
                    fn ->
                      defmodule Sample do
                        import Nx.Defn

@@ -4,7 +4,7 @@ defmodule EXLA.Client do
 
   See `EXLA` module docs for a general introduction.
   """
-
+  require Logger
   use GenServer
   @name __MODULE__
 
@@ -56,20 +56,39 @@ defmodule EXLA.Client do
   end
 
   defp build_client(name, options) do
-    platform = Keyword.get(options, :platform, :host)
+    platform = Keyword.get(options, :platform)
     default_device_id = Keyword.get(options, :default_device_id, 0)
     memory_fraction = Keyword.get(options, :memory_fraction, 0.9)
 
     preallocate = Keyword.get(options, :preallocate, true)
     preallocate_int = if preallocate, do: 1, else: 0
 
+    platforms = Map.keys(EXLA.Client.get_supported_platforms())
+
     ref =
       case platform do
-        :host -> EXLA.NIF.get_host_client()
-        :cuda -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
-        :rocm -> EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
-        :tpu -> EXLA.NIF.get_tpu_client()
-        _ -> raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
+        nil ->
+          Logger.debug("""
+          No platform configuration specified, falling back to host platform
+          Available platforms are: #{inspect(platforms)}
+          """)
+
+          EXLA.NIF.get_host_client()
+
+        :host ->
+          EXLA.NIF.get_host_client()
+
+        :cuda ->
+          EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+
+        :rocm ->
+          EXLA.NIF.get_gpu_client(memory_fraction, preallocate_int)
+
+        :tpu ->
+          EXLA.NIF.get_tpu_client()
+
+        _ ->
+          raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
       end
       |> unwrap!()
 
