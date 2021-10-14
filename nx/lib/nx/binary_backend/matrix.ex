@@ -222,18 +222,25 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
-    # # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
-    # # Then, by using QR iteration it converges to AQ = QΛ,
-    # # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
+    # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
+    # Then, by using QR iteration it converges to AQ = QΛ,
+    # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
 
     eps = opts[:eps]
     max_iter = opts[:max_iter]
 
+    # Validate that the input is a symmetric matrix using the relation A^t = A.
+    a = binary_to_matrix(input_data, input_type, input_shape)
+    is_sym =
+      a
+      |> transpose_matrix()
+      |> is_approximately_same?(a, eps)
+    unless is_sym do
+      raise ArgumentError, "input tensor must be symmetric"
+    end
+
     # Hessenberg decomposition
-    {h, q_h} =
-      input_data
-      |> binary_to_matrix(input_type, input_shape)
-      |> hessenberg_decomposition(n, n, n, eps)
+    {h, q_h} = hessenberg_decomposition(a, n, n, n, eps)
 
     # QR iteration for eigenvalues and eigenvectors
     {eigenvals_diag, eigenvecs} =
