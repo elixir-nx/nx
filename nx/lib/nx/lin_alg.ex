@@ -760,7 +760,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) input tensor must be symmetric
   """
   def eigh(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
+    opts = keyword!(opts, max_iter: 250_000, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
