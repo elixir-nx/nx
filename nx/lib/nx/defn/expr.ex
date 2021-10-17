@@ -763,7 +763,7 @@ defmodule Nx.Defn.Expr do
       cannot invoke #{unquote(op)}/#{unquote(arity)} on Nx.Defn.Expr.
 
       This typically means you are invoking an unsupported Nx function
-      by code inside `defn` or JIT/AOT compiled code
+      inside `defn` or inside JIT compiled code
       """
     end
   end

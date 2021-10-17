@@ -35,9 +35,8 @@ defmodule Nx do
       end
 
   Code inside `defn` functions can also be given to custom compilers,
-  which can compile said functions to use either just-in-time (JIT)
-  or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
-  See `Nx.Defn` for more information.
+  which can compile said functions just-in-time (JIT) to run on the
+  CPU or on the GPU. See `Nx.Defn` for more information.
 
   ## Creating tensors
 
