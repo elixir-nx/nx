@@ -33,7 +33,30 @@ defmodule EXLA.Client do
   Returns a map of supported platforms with device information.
   """
   def get_supported_platforms do
-    EXLA.NIF.get_supported_platforms() |> unwrap!()
+    EXLA.NIF.get_supported_platforms()
+    |> unwrap!()
+    |> Map.new(fn {k, v} ->
+      k = k |> List.to_string() |> String.downcase() |> String.to_atom()
+      {k, v}
+    end)
+  end
+
+  @doc """
+  Automatically sets platform of given client based on available platforms
+  and given platform precedence.
+  """
+  def set_preferred_platforms(client_name, order) do
+    supported_platforms = get_supported_platforms()
+
+    order
+    |> Enum.reduce_while(:ok, fn platform, :ok ->
+      if Map.has_key?(supported_platforms, platform) do
+        Application.put_env(:exla, :clients, {client_name, [platform: platform]})
+        {:halt, :ok}
+      else
+        {:cont, :ok}
+      end
+    end)
   end
 
   ## Callbacks
