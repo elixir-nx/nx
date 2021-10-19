@@ -77,7 +77,7 @@ defmodule EXLA.Client do
     order
     |> Enum.reduce_while(:ok, fn platform, :ok ->
       if Map.has_key?(supported_platforms, platform) do
-        Application.put_env(:exla, :clients, {client_name, [platform: platform]})
+        Application.put_env(:exla, :clients, [{client_name, [platform: platform]}])
         {:halt, :ok}
       else
         {:cont, :ok}
