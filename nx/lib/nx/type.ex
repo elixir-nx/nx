@@ -301,10 +301,11 @@ defmodule Nx.Type do
     end
   end
 
-  defp type_to_int(:f), do: 3
-  defp type_to_int(:bf), do: 2
-  defp type_to_int(:s), do: 1
-  defp type_to_int(:u), do: 0
+  defp type_to_int(:f), do: 4
+  defp type_to_int(:bf), do: 3
+  defp type_to_int(:s), do: 2
+  defp type_to_int(:u), do: 1
+  defp type_to_int(:pred), do: 0
 
   defp sort({left_type, _} = left, {right_type, _} = right) do
     if type_to_int(left_type) < type_to_int(right_type) do
