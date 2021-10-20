@@ -14,10 +14,12 @@ set_target_properties(torchx.so PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 
-set_target_properties(torchx.so PROPERTIES INSTALL_RPATH "\$ORIGIN/libtorch")
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -I${ERTS_INCLUDE_DIR} -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers")
-
 if(UNIX AND NOT APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -shared")
+    set_target_properties(torchx.so PROPERTIES INSTALL_RPATH "\$ORIGIN/libtorch")
+else()
+    set_target_properties(torchx.so PROPERTIES INSTALL_RPATH "@loader_path/libtorch")
+    set(CMAKE_SHARED_LINKER_FLAGS "-flat_namespace -undefined suppress")
 endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -I${ERTS_INCLUDE_DIR} -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers")
