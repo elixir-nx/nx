@@ -3,7 +3,7 @@ TORCHX_SO = $(PRIV_DIR)/torchx.so
 
 # If you want verbose output for debugging
 # CMAKE_BUILD_FLAGS = --verbose
-CMAKE_BUILD_DIR ?= $(shell pwd)/_build/cmake
+CMAKE_BUILD_DIR ?= $(MIX_BUILD_PATH)/cmake
 C_SRC = $(shell pwd)/c_src
 
 .DEFAULT_GLOBAL := build
