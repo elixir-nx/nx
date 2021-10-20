@@ -18,8 +18,11 @@ if(UNIX AND NOT APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -shared")
     set_target_properties(torchx.so PROPERTIES INSTALL_RPATH "\$ORIGIN/libtorch")
 else()
+    # Although the compiler complains about not using these, things only work
+    # with them set
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -undefined dynamic_lookup -dynamiclib")
+    set(CMAKE_SHARED_LINKER_FLAGS "-bundle -flat_namespace -undefined suppress")
     set_target_properties(torchx.so PROPERTIES INSTALL_RPATH "@loader_path/libtorch")
-    set(CMAKE_SHARED_LINKER_FLAGS "-flat_namespace -undefined suppress")
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -I${ERTS_INCLUDE_DIR} -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers")
