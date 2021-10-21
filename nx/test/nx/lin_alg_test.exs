@@ -168,7 +168,7 @@ defmodule Nx.LinAlgTest do
             if :rand.uniform() - 0.5 > 0 do
               {low, up}
             else
-              {-low, -up}
+              {-up, -low}
             end
           end)
           |> Enum.map(fn {low, up} ->
