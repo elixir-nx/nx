@@ -152,15 +152,36 @@ defmodule Nx.LinAlgTest do
                ])
     end
 
-    test "property" do
-      for _ <- 1..10 do
-        # Random symmetric matrix
-        rm = Nx.random_uniform({3, 3})
+    test "property for matrices with different eigenvalues" do
+      # Generate real symmetric matrices with different eigenvalues
+      # from random matrices based on the relation A = A^t = Q^tΛQ
+      # where Λ is the diagonal matrix of eigenvalues and Q is orthogonal matrix.
 
+      for _ <- 1..10 do
+        # Orthogonal matrix from a random matrix
+        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+
+        # Different eigenvalues from random values
+        eigenvals =
+          [{1, 3}, {4, 6}, {7, 9}]
+          |> Enum.map(fn {low, up} ->
+            if :rand.uniform() - 0.5 > 0 do
+              {low, up}
+            else
+              {-low, -up}
+            end
+          end)
+          |> Enum.map(fn {low, up} ->
+            Nx.random_uniform({1}, low, up, type: {:f, 64})
+          end)
+          |> Nx.concatenate()
+
+        # Symmetric matrix with different eigenvalues
         t =
-          rm
+          q
           |> Nx.transpose()
-          |> Nx.add(rm)
+          |> Nx.multiply(eigenvals)
+          |> Nx.dot(q)
 
         # Eigenvalues and eigenvectors
         assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
@@ -168,8 +189,43 @@ defmodule Nx.LinAlgTest do
         # Eigenvalue equation
         evecs_evals = Nx.multiply(eigenvecs, eigenvals)
         t_evecs = Nx.dot(t, eigenvecs)
-        al = Nx.all_close?(evecs_evals, t_evecs, atol: 1.0e-2)
-        assert al == Nx.tensor(1, type: {:u, 8})
+        ac = Nx.all_close?(evecs_evals, t_evecs, atol: 1.0e-2)
+        assert ac == Nx.tensor(1, type: {:u, 8})
+      end
+    end
+
+    test "properties for matrices with close eigenvalues" do
+      # Generate real symmetric matrices with close eigenvalues
+      # from random matrices based on the relation A = A^t = Q^tΛQ
+      # where Λ is the diagonal matrix of eigenvalues and Q is orthogonal matrix.
+      # The condition that "close eigenvalues" is hard to converge.
+
+      for _ <- 1..10 do
+        # Orthogonal matrix from a random matrix
+        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+
+        # Close eigenvalues from random values
+        eval1 = :rand.uniform() * 10
+        eval2 = :rand.uniform() * 10
+        eval3 = eval2 + 1.0e-5
+        eigenvals = Nx.tensor([eval1, eval2, eval3])
+
+        # Symmetric matrix with different eigenvalues
+        t =
+          q
+          |> Nx.transpose()
+          |> Nx.multiply(eigenvals)
+          |> Nx.dot(q)
+          |> round(3)   # To make it symmetric
+
+        # Eigenvalues and eigenvectors
+        assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 1000)
+
+        # Eigenvalue equation
+        evecs_evals = Nx.multiply(eigenvecs, eigenvals)
+        t_evecs = Nx.dot(t, eigenvecs)
+        ac = Nx.all_close?(evecs_evals, t_evecs, atol: 1.0e-2)
+        assert ac == Nx.tensor(1, type: {:u, 8})
       end
     end
   end
