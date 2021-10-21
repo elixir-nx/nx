@@ -4776,13 +4776,13 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.all_close?(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+      iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
       #Nx.Tensor<
         u8
         0
       >
 
-      iex> Nx.all_close?(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+      iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
       #Nx.Tensor<
         u8
         1
@@ -4790,7 +4790,7 @@ defmodule Nx do
 
   """
   @doc type: :aggregation
-  def all_close?(a, b, opts \\ []) do
+  def all_close(a, b, opts \\ []) do
     opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
