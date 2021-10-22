@@ -8453,6 +8453,156 @@ defmodule Nx do
     )
   end
 
+  ## Utilities
+
+  @doc """
+  Loads a `.npy` file into a tensor.
+
+  An `.npy` file stores a single array created from Python's
+  NumPy library. This function can be useful for loading data
+  originally created or intended to be loaded from NumPy into
+  Elixir.
+  """
+  def from_numpy(file) do
+    file
+    |> File.read!()
+    |> parse_numpy()
+  end
+
+  @doc """
+  Loads a `.npz` archive into a list of tensors.
+
+  An `.npz` file is a zipped, possibly compressed archive containing
+  multiple `.npy` files.
+  """
+  def from_numpy_archive(archive) do
+    archive = File.read!(archive)
+
+    case :zip.unzip(archive) do
+      {:ok, files} ->
+        files
+        |> Enum.map(&from_numpy/1)
+
+      _ ->
+        raise ArgumentError,
+              "unable to parse NumPy archive, it may be corrupted" <>
+                " or invalid"
+    end
+  end
+
+  defp parse_numpy(<<"\x93NUMPY"::binary, major::size(8), minor::size(8), rest::binary>>) do
+    parse_numpy(rest, major, minor)
+  end
+
+  defp parse_numpy(invalid) do
+    raise ArgumentError,
+          "unable to parse NumPy file, it may be corrupted" <>
+            " or invalid"
+  end
+
+  defp parse_numpy(<<header_size::size(16)-little-unsigned, rest::binary>>, 1, 0) do
+    do_numpy_to_tensor(rest, header_size)
+  end
+
+  defp parse_numpy(<<header_size::size(32)-little-unsigned, rest::binary>>, _, _) do
+    do_numpy_to_tensor(rest, header_size)
+  end
+
+  defp do_numpy_to_tensor(rest, header_size) when is_binary(rest) do
+    <<header::size(header_size)-binary, array::binary>> = rest
+    {byte_order, {_, size} = type, shape} = parse_header(header)
+    byte_size_of_array = div(size, 8) * Nx.size(shape)
+
+    <<data::size(byte_size_of_array)-binary>> = array
+
+    tensor =
+      data
+      |> new_byte_order(size, byte_order)
+      |> Nx.from_binary(type)
+      |> Nx.reshape(shape)
+
+    tensor
+  end
+
+  defp parse_header(header) do
+    header = header |> String.trim("{") |> String.trim("}") |> String.trim(", ")
+
+    case header do
+      "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': False, 'shape': " <> shape ->
+        {byte_order, type} = parse_type(dtype)
+        {byte_order, type, parse_shape(shape)}
+
+      "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': True, 'shape': " <> shape ->
+        {byte_order, type} = parse_type(dtype)
+        {byte_order, type, parse_shape(shape)}
+    end
+  end
+
+  defp parse_type(dtype) do
+    [byte_order, type, size] =
+      dtype
+      |> String.trim("'")
+      |> String.split("", trim: true)
+
+    byte_order =
+      case byte_order do
+        ">" ->
+          :big
+
+        "<" ->
+          :little
+
+        # We can't just infer native endianness matches our native
+        # endianness
+        endianness ->
+          raise "unsupported endianness #{inspect(endianness)}"
+      end
+
+    type =
+      case type do
+        "u" ->
+          :u
+
+        "i" ->
+          :s
+
+        "f" ->
+          :f
+
+        _ ->
+          raise "unsupported type"
+      end
+
+    size = size |> String.to_integer() |> Kernel.*(8)
+
+    {byte_order, {type, size}}
+  end
+
+  defp parse_shape(shape) do
+    shape
+    |> String.trim()
+    |> String.trim("), }")
+    |> String.trim("(")
+    |> String.split(",", trim: true)
+    |> Enum.map(&(String.trim(&1) |> String.to_integer()))
+    |> List.to_tuple()
+  end
+
+  defp new_byte_order(binary, size, endianness) do
+    if System.endianness() == endianness do
+      binary
+    else
+      data =
+        for <<data::size(size)-binary <- binary>> do
+          data
+          |> :binary.decode_unsigned()
+          |> :binary.encode_unsigned(endianness)
+        end
+
+      IO.iodata_to_binary(data)
+    end
+  end
+
   ## Sigils
 
   @doc """
