@@ -8552,7 +8552,7 @@ defmodule Nx do
         # We can't just infer native endianness matches our native
         # endianness
         endianness ->
-          raise "unsupported endianness #{inspect(endianness)}"
+          raise ArgumentError, "Numpy tensor has unsupported endianness: #{endianness}"
       end
 
     type =
