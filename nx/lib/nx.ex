@@ -8615,7 +8615,7 @@ defmodule Nx do
           Nx.Type.infer(numbers)
       end
 
-    {shape, binary} = flatten(numbers, type)
+    {shape, binary} = flatten_t(numbers, type)
 
     quote do
       unquote(binary)
