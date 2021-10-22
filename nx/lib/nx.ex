@@ -8494,7 +8494,7 @@ defmodule Nx do
     parse_numpy(rest, major, minor)
   end
 
-  defp parse_numpy(invalid) do
+  defp parse_numpy(_) do
     raise ArgumentError,
           "unable to parse NumPy file, it may be corrupted" <>
             " or invalid"
