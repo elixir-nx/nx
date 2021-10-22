@@ -2863,7 +2863,7 @@ defmodule Nx.Defn.GradTest do
     rtol = 1.0e-4
 
     try do
-      assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
+      assert Nx.all_close(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
     rescue
       # So we can see the diff
       _ -> assert left == right

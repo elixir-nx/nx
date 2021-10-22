@@ -450,7 +450,7 @@ defmodule EXLA.Defn do
     # to the same type which is not necessarily the answer type.
     left_shape = EXLA.Op.get_shape(left)
     right_shape = EXLA.Op.get_shape(right)
-    type = Nx.Type.merge(left_shape.dtype, right_shape.dtype)
+    type = merge_type(left_shape.dtype, right_shape.dtype)
     dims = broadcast_axes(left_shape.dims, right_shape.dims)
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
@@ -1126,6 +1126,9 @@ defmodule EXLA.Defn do
   defp to_type(op, type) do
     if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
   end
+
+  defp merge_type({:pred, 8}, {:pred, 8}), do: {:pred, 8}
+  defp merge_type(left, right), do: Nx.Type.merge(to_nx_type(left), to_nx_type(right))
 
   defp to_constant(builder, constant, type) do
     EXLA.Op.constant_r0(builder, constant, type)

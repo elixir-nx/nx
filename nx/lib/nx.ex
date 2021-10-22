@@ -35,9 +35,8 @@ defmodule Nx do
       end
 
   Code inside `defn` functions can also be given to custom compilers,
-  which can compile said functions to use either just-in-time (JIT)
-  or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
-  See `Nx.Defn` for more information.
+  which can compile said functions just-in-time (JIT) to run on the
+  CPU or on the GPU. See `Nx.Defn` for more information.
 
   ## Creating tensors
 
@@ -1387,7 +1386,7 @@ defmodule Nx do
 
   If the tensor has a dimension, it raises.
 
-    ## Examples
+  ## Examples
 
       iex> Nx.to_scalar(1)
       1
@@ -4777,13 +4776,13 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.all_close?(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+      iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
       #Nx.Tensor<
         u8
         0
       >
 
-      iex> Nx.all_close?(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+      iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
       #Nx.Tensor<
         u8
         1
@@ -4791,7 +4790,7 @@ defmodule Nx do
 
   """
   @doc type: :aggregation
-  def all_close?(a, b, opts \\ []) do
+  def all_close(a, b, opts \\ []) do
     opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]

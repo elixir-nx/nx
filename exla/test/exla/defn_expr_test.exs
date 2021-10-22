@@ -499,6 +499,16 @@ defmodule EXLA.DefnExprTest do
       assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
                Nx.tensor([1, 1, 1], type: {:u, 8})
     end
+
+    defn successive_compare(y_true, y_pred) do
+      y_pred
+      |> Nx.equal(y_pred)
+      |> Nx.equal(y_true)
+    end
+
+    test "computes successive comparisons" do
+      assert successive_compare(Nx.tensor(1), Nx.tensor(1)) == Nx.tensor(1, type: {:u, 8})
+    end
   end
 
   describe "not equal" do
@@ -3290,7 +3300,7 @@ defmodule EXLA.DefnExprTest do
     rtol = opts[:rtol] || 1.0e-4
 
     try do
-      assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
+      assert Nx.all_close(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
     rescue
       # So we can see the diff
       _ -> assert left == right
