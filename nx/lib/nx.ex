@@ -1386,7 +1386,7 @@ defmodule Nx do
 
   If the tensor has a dimension, it raises.
 
-    ## Examples
+  ## Examples
 
       iex> Nx.to_scalar(1)
       1
