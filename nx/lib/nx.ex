@@ -8515,13 +8515,10 @@ defmodule Nx do
 
     <<data::size(byte_size_of_array)-binary>> = array
 
-    tensor =
-      data
-      |> new_byte_order(size, byte_order)
-      |> Nx.from_binary(type)
-      |> Nx.reshape(shape)
-
-    tensor
+    data
+    |> new_byte_order(size, byte_order)
+    |> Nx.from_binary(type)
+    |> Nx.reshape(shape)
   end
 
   defp parse_header(header) do
