@@ -1635,7 +1635,7 @@ defmodule Nx do
   end
 
   @doc """
-  Flattens a N-Dimensional tensor to a 1 Dimensional tensor.
+  Flattens a n-dimensional tensor to a 1-dimensional tensor.
 
   Flattening only changes the tensor metadata, it doesn't
   copy the underlying structure.
@@ -1676,7 +1676,7 @@ defmodule Nx do
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
       >
 
-  And if the tensor is already 1 Dimensional:
+  And if the tensor is already 1-dimensional:
 
       iex> t = Nx.iota({16})
       #Nx.Tensor<
