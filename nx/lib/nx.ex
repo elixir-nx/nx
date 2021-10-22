@@ -8478,10 +8478,10 @@ defmodule Nx do
   def from_numpy_archive(archive) do
     archive = File.read!(archive)
 
-    case :zip.unzip(archive) do
+    case :zip.unzip(archive, [:memory]) do
       {:ok, files} ->
         files
-        |> Enum.map(&from_numpy/1)
+        |> Enum.map(fn {_, data} -> parse_numpy(data) end)
 
       _ ->
         raise ArgumentError,
