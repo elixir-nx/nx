@@ -230,6 +230,7 @@ defmodule Nx.BinaryBackend.Matrix do
 
     eps = opts[:eps]
     max_iter = opts[:max_iter]
+    do_valid = opts[:do_valid]
 
     # Validate that the input is a symmetric matrix using the relation A^t = A.
     a = binary_to_matrix(input_data, input_type, input_shape)
@@ -247,8 +248,8 @@ defmodule Nx.BinaryBackend.Matrix do
     {h, q_h} = hessenberg_decomposition(a, n, n, n, eps)
 
     # QR iteration for eigenvalues and eigenvectors
-    {eigenvals_diag, eigenvecs} =
-      Enum.reduce_while(1..max_iter, {h, q_h}, fn _, {a_old, q_old} ->
+    {eigenvals_diag, eigenvecs, is_converged} =
+      Enum.reduce_while(1..max_iter, {h, q_h, false}, fn _, {a_old, q_old, _} ->
         # QR decomposition
         {q_now, r_now} = qr_decomposition(a_old, n, n, n, eps)
 
@@ -257,11 +258,16 @@ defmodule Nx.BinaryBackend.Matrix do
         q_new = dot_matrix(q_old, q_now)
 
         if is_approximately_same?(q_old, q_new, eps) do
-          {:halt, {a_new, q_new}}
+          {:halt, {a_new, q_new, true}}
         else
-          {:cont, {a_new, q_new}}
+          {:cont, {a_new, q_new, false}}
         end
       end)
+
+    # Validate that the convergence of the eigenvectors
+    if do_valid and !is_converged do
+      raise ArgumentError, "max_iter must be a value sufficient for eigenvectors to converge"
+    end
 
     # Obtain the eigenvalues, which are the diagonal elements
     indices_diag = for idx <- 0..(n - 1), do: [idx, idx]

@@ -709,10 +709,10 @@ defmodule Nx.LinAlg do
 
   ## Options
 
-    * `:max_iter` - `integer`. Defaults to `1000`
+    * `:max_iter` - `integer`. Defaults to `50_000`
       Number of maximum iterations before stopping the decomposition
 
-    * `:eps` - `float`. Defaults to 1.0e-12
+    * `:eps` - `float`. Defaults to 1.0e-10
       Tolerance applied during the decomposition
 
   Note not all options apply to all backends, as backends may have
@@ -758,9 +758,12 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
       ** (ArgumentError) input tensor must be symmetric
+
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [2, 5, 6], [3, 6, 9]]), max_iter: 2)
+      ** (ArgumentError) max_iter must be a value sufficient for eigenvectors to converge
   """
   def eigh(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 250_000, eps: @default_eps)
+    opts = keyword!(opts, max_iter: 50_000, eps: @default_eps, do_valid: true)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
