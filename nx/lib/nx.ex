@@ -496,7 +496,7 @@ defmodule Nx do
   def tensor(arg, opts \\ []) when is_number(arg) or is_list(arg) do
     opts = keyword!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
-    {shape, data} = flatten(arg, type)
+    {shape, data} = flatten_type(arg, type)
 
     if data == "" do
       raise "cannot build empty tensor"
@@ -507,14 +507,14 @@ defmodule Nx do
     backend.from_binary(%T{shape: shape, type: type, names: names}, data, backend_options)
   end
 
-  defp flatten(list, type) when is_list(list) do
+  defp flatten_type(list, type) when is_list(list) do
     {dimensions, acc} = flatten_list(list, type, [], [])
 
     {dimensions |> Enum.reverse() |> List.to_tuple(),
      acc |> Enum.reverse() |> :erlang.list_to_binary()}
   end
 
-  defp flatten(other, type), do: {{}, number_to_binary(other, type)}
+  defp flatten_type(other, type), do: {{}, number_to_binary(other, type)}
 
   defp flatten_list([], _type, dimensions, acc) do
     {[0 | dimensions], acc}
@@ -1632,6 +1632,66 @@ defmodule Nx do
     else
       impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor, new_shape)
     end
+  end
+
+  @doc """
+  Flattens a n-dimensional tensor to a 1-dimensional tensor.
+
+  Flattening only changes the tensor metadata, it doesn't
+  copy the underlying structure.
+
+  Flatten is a destructive operation with respect to names.
+
+  ## Examples
+
+      iex> t = Nx.iota({2, 2, 2, 2})
+      #Nx.Tensor<
+        s64[2][2][2][2]
+        [
+          [
+            [
+              [0, 1],
+              [2, 3]
+            ],
+            [
+              [4, 5],
+              [6, 7]
+            ]
+          ],
+          [
+            [
+              [8, 9],
+              [10, 11]
+            ],
+            [
+              [12, 13],
+              [14, 15]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.flatten(t)
+      #Nx.Tensor<
+        s64[16]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      >
+
+  And if the tensor is already 1-dimensional:
+
+      iex> t = Nx.iota({16})
+      #Nx.Tensor<
+        s64[16]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      >
+      iex> Nx.flatten(t)
+      #Nx.Tensor<
+        s64[16]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      >
+  """
+  @doc type: :shape
+  def flatten(tensor) do
+    reshape(tensor, {size(tensor)})
   end
 
   @doc """
@@ -8555,7 +8615,7 @@ defmodule Nx do
           Nx.Type.infer(numbers)
       end
 
-    {shape, binary} = flatten(numbers, type)
+    {shape, binary} = flatten_type(numbers, type)
 
     quote do
       unquote(binary)
