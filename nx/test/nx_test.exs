@@ -760,6 +760,20 @@ defmodule NxTest do
     end
   end
 
+  describe "flatten" do
+    test "returns a flattened tensor given a N-Dimensional tensor" do
+      t = Nx.iota({3, 3, 3})
+
+      assert Nx.flatten(t) |> Nx.shape() == {Nx.size(t)}
+    end
+
+    test "returns tensor unchanged given a 1 Dimensional tensor" do
+      t = Nx.iota({10})
+
+      assert Nx.flatten(t) == t
+    end
+  end
+
   describe "broadcast" do
     test "correctly adds names with same shape" do
       t = Nx.tensor([[1, 2], [3, 4]])
