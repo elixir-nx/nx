@@ -496,7 +496,7 @@ defmodule Nx do
   def tensor(arg, opts \\ []) when is_number(arg) or is_list(arg) do
     opts = keyword!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
-    {shape, data} = flatten_t(arg, type)
+    {shape, data} = flatten_type(arg, type)
 
     if data == "" do
       raise "cannot build empty tensor"
@@ -507,14 +507,14 @@ defmodule Nx do
     backend.from_binary(%T{shape: shape, type: type, names: names}, data, backend_options)
   end
 
-  defp flatten_t(list, type) when is_list(list) do
+  defp flatten_type(list, type) when is_list(list) do
     {dimensions, acc} = flatten_list(list, type, [], [])
 
     {dimensions |> Enum.reverse() |> List.to_tuple(),
      acc |> Enum.reverse() |> :erlang.list_to_binary()}
   end
 
-  defp flatten_t(other, type), do: {{}, number_to_binary(other, type)}
+  defp flatten_type(other, type), do: {{}, number_to_binary(other, type)}
 
   defp flatten_list([], _type, dimensions, acc) do
     {[0 | dimensions], acc}
@@ -8615,7 +8615,7 @@ defmodule Nx do
           Nx.Type.infer(numbers)
       end
 
-    {shape, binary} = flatten_t(numbers, type)
+    {shape, binary} = flatten_type(numbers, type)
 
     quote do
       unquote(binary)
