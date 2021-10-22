@@ -551,13 +551,34 @@ defmodule Torchx.Backend do
 
   @impl true
   def cholesky(%T{} = out, %T{} = t) do
-    Torchx.cholesky(from_nx(t)) |> to_nx(out)
+    t
+    |> from_nx()
+    |> Torchx.cholesky()
+    |> to_nx(out)
   end
 
   @impl true
   def qr({q_holder, r_holder}, tensor, opts) do
     {q, r} = Torchx.qr(from_nx(tensor), opts[:mode] == :reduced)
     {to_nx(q, q_holder), to_nx(r, r_holder)}
+  end
+
+  # @impl true
+  def triangular_solve(%T{} = out, %T{} = a, %T{} = b, opts) do
+    transform = opts[:transform]
+    lower = opts[:lower]
+    left_side = opts[:left_side]
+
+    unless left_side do
+      raise ArgumentError, "left_side: false option not supported in Torchx"
+    end
+
+    a_tx = from_nx(a)
+    b_tx = from_nx(b)
+
+    a_tx
+    |> Torchx.triangular_solve(b_tx, transform == :transpose, lower == false)
+    |> to_nx(out)
   end
 
   @impl true

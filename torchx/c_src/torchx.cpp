@@ -23,16 +23,19 @@ inline std::string type2string(const torch::ScalarType type)
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 
-#define SCALAR_PARAM(ARGN, VAR) \
-  torch::Scalar VAR;            \
-  VAR.~Scalar();                \
-  double double_##VAR;          \
-  if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0) { \
-    long long_##VAR;                                  \
-    enif_get_int64(env, argv[ARGN], (ErlNifSInt64*)&long_##VAR);     \
-    new (&VAR) torch::Scalar((int64_t)long_##VAR);             \
-  } else {                                            \
-    new (&VAR) torch::Scalar(double_##VAR);           \
+#define SCALAR_PARAM(ARGN, VAR)                                   \
+  torch::Scalar VAR;                                              \
+  VAR.~Scalar();                                                  \
+  double double_##VAR;                                            \
+  if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0)       \
+  {                                                               \
+    long long_##VAR;                                              \
+    enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&long_##VAR); \
+    new (&VAR) torch::Scalar((int64_t)long_##VAR);                \
+  }                                                               \
+  else                                                            \
+  {                                                               \
+    new (&VAR) torch::Scalar(double_##VAR);                       \
   }
 
 #define SHAPE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
@@ -47,32 +50,32 @@ inline std::string type2string(const torch::ScalarType type)
 
 #define OPTS(TYPE, DEV_VEC) DEVICE(DEV_VEC).dtype(TYPE)
 
-#define TENSOR_PARAM(ARGN, VAR)                                           \
-  torch::Tensor *VAR;                                                     \
-  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))  { \
-    std::ostringstream msg;                                               \
-    msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc;  \
-    return nx::nif::error(env, msg.str().c_str());                        \
+#define TENSOR_PARAM(ARGN, VAR)                                                      \
+  torch::Tensor *VAR;                                                                \
+  if (!enif_get_resource(env, argv[ARGN], TENSOR_TYPE, (void **)&VAR))               \
+  {                                                                                  \
+    std::ostringstream msg;                                                          \
+    msg << "Unable to get " #VAR " tensor param in NIF." << __func__ << "/" << argc; \
+    return nx::nif::error(env, msg.str().c_str());                                   \
   }
 
-#define CATCH()                                              \
-  catch (c10::Error &error)                                   \
-  {                                                          \
-    std::ostringstream msg;                                  \
+#define CATCH()                                                  \
+  catch (c10::Error & error)                                     \
+  {                                                              \
+    std::ostringstream msg;                                      \
     msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
-    return nx::nif::error(env, msg.str().c_str());           \
+    return nx::nif::error(env, msg.str().c_str());               \
   }
 
-#define SCALAR(S)                                            \
-  try                                                        \
-  {                                                          \
-    if (c10::isFloatingType(S.type()))                       \
-      return nx::nif::ok(env, nx::nif::make(env, S.toDouble())); \
-    else                                                     \
+#define SCALAR(S)                                                    \
+  try                                                                \
+  {                                                                  \
+    if (c10::isFloatingType(S.type()))                               \
+      return nx::nif::ok(env, nx::nif::make(env, S.toDouble()));     \
+    else                                                             \
       return nx::nif::ok(env, nx::nif::make(env, (long)S.toLong())); \
-  }                                                          \
+  }                                                                  \
   CATCH()
-
 
 #define TENSOR(T)                                            \
   try                                                        \
@@ -164,9 +167,12 @@ NIF(to_blob)
 
   torch::optional<torch::Device> device = torch::device_of(*t);
 
-  if(device.has_value() && device.value().type() == torch::kCPU) {
+  if (device.has_value() && device.value().type() == torch::kCPU)
+  {
     return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), byte_size));
-  } else {
+  }
+  else
+  {
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
     memcpy(result_data, t->data_ptr(), byte_size);
     return nx::nif::ok(env, result);
@@ -197,7 +203,7 @@ NIF(shape)
   TENSOR_PARAM(0, t);
 
   std::vector<ERL_NIF_TERM> sizes;
-  for (int dim = 0; dim < t->dim(); dim++ )
+  for (int dim = 0; dim < t->dim(); dim++)
     sizes.push_back(nx::nif::make(env, ((long)t->size(dim))));
 
   return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
@@ -227,7 +233,6 @@ NIF(split)
 
   TENSOR_LIST(torch::split(*t, batch_size));
 }
-
 
 NIF(reshape)
 {
@@ -338,7 +343,6 @@ NIF(permute)
   TENSOR(t->permute(dims).contiguous());
 }
 
-
 /* Creation */
 
 NIF(scalar_tensor)
@@ -430,29 +434,27 @@ NIF(full)
   TENSOR(torch::full(shape, scalar, OPTS(type, device)));
 }
 
-
 /* Binary Ops */
 
-#define BINARY_OP(OP)   BINARY_OP2(OP, OP)
+#define BINARY_OP(OP) BINARY_OP2(OP, OP)
 
-#define BINARY_OP2(OP, NATIVE_OP)   \
-  NIF(OP)               \
-  {                     \
-    TENSOR_PARAM(0, a); \
-    TENSOR_PARAM(1, b); \
-                        \
+#define BINARY_OP2(OP, NATIVE_OP)     \
+  NIF(OP)                             \
+  {                                   \
+    TENSOR_PARAM(0, a);               \
+    TENSOR_PARAM(1, b);               \
+                                      \
     TENSOR(torch::NATIVE_OP(*a, *b)); \
   }
 
-#define BINARY_OPB(OP)   \
-  NIF(OP)               \
-  {                     \
-    TENSOR_PARAM(0, a); \
-    TENSOR_PARAM(1, b); \
-                        \
+#define BINARY_OPB(OP)                                       \
+  NIF(OP)                                                    \
+  {                                                          \
+    TENSOR_PARAM(0, a);                                      \
+    TENSOR_PARAM(1, b);                                      \
+                                                             \
     nx::nif::ok(env, nx::nif::make(env, torch::OP(*a, *b))); \
   }
-
 
 #define UNARY_OP(OP) UNARY_OP2(OP, OP)
 
@@ -510,7 +512,6 @@ NIF(tensordot)
   TENSOR(torch::tensordot(*t1, *t2, axes1, axes2));
 }
 
-
 /* Unary Ops */
 
 UNARY_OP(abs)
@@ -544,7 +545,6 @@ UNARY_OP(erf)
 UNARY_OP(erfc)
 UNARY_OP2(erf_inv, erfinv)
 
-
 /* Aggregates */
 
 NIF(sum)
@@ -562,9 +562,12 @@ NIF(argmax)
   PARAM(1, int64_t, dim);
   PARAM(2, bool, keep_dim);
 
-  if (dim == -1) {
+  if (dim == -1)
+  {
     TENSOR(torch::argmax(*t));
-  } else {
+  }
+  else
+  {
     TENSOR(torch::argmax(*t, dim, keep_dim));
   }
 }
@@ -575,9 +578,12 @@ NIF(argmin)
   PARAM(1, int64_t, dim);
   PARAM(2, bool, keep_dim);
 
-  if (dim == -1) {
+  if (dim == -1)
+  {
     TENSOR(torch::argmin(*t));
-  } else {
+  }
+  else
+  {
     TENSOR(torch::argmin(*t, dim, keep_dim));
   }
 }
@@ -588,9 +594,12 @@ NIF(all)
   LIST_PARAM(1, std::vector<int64_t>, axes);
   PARAM(2, bool, keep_dim);
 
-  if (axes.size() == 0) {
+  if (axes.size() == 0)
+  {
     TENSOR(torch::all(*t))
-  } else {
+  }
+  else
+  {
     TENSOR(torch::all(*t, axes[0], keep_dim))
   }
 }
@@ -608,7 +617,6 @@ NIF(cholesky)
   TENSOR(torch::cholesky(*t, upper));
 }
 
-
 /* Transformations */
 
 NIF(qr)
@@ -624,10 +632,23 @@ NIF(qr)
   TENSOR_TUPLE(torch::qr(*t, reduced));
 }
 
+NIF(triangular_solve)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+  PARAM(2, bool, transpose);
+  PARAM(3, bool, upper);
+
+  auto result = torch::triangular_solve(*b, *a, transpose, upper);
+
+  TENSOR(std::get<0>(result));
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
-  torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
-  if (tensor != nullptr) {
+  torch::Tensor *tensor = reinterpret_cast<torch::Tensor *>(obj);
+  if (tensor != nullptr)
+  {
     tensor->~Tensor();
     tensor = nullptr;
   }
@@ -669,11 +690,15 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 }
 
 #define F(NAME, ARITY)    \
-  {#NAME, ARITY, NAME, 0}
+  {                       \
+#NAME, ARITY, NAME, 0 \
+  }
 
-#define DF(NAME, ARITY)                                      \
-  {#NAME "_cpu", ARITY, NAME, ERL_NIF_DIRTY_JOB_CPU_BOUND},  \
-  {#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND}
+#define DF(NAME, ARITY)                                     \
+  {#NAME "_cpu", ARITY, NAME, ERL_NIF_DIRTY_JOB_CPU_BOUND}, \
+  {                                                         \
+#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND    \
+  }
 
 static ErlNifFunc nif_functions[] = {
     DF(randint, 5),
@@ -777,6 +802,7 @@ static ErlNifFunc nif_functions[] = {
     DF(cholesky, 2),
     DF(qr, 1),
     DF(qr, 2),
+    DF(triangular_solve, 4),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),
