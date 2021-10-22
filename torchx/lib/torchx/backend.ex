@@ -563,22 +563,32 @@ defmodule Torchx.Backend do
     {to_nx(q, q_holder), to_nx(r, r_holder)}
   end
 
-  # @impl true
+  @impl true
   def triangular_solve(%T{} = out, %T{} = a, %T{} = b, opts) do
     transform = opts[:transform]
-    lower = opts[:lower]
+    upper = !opts[:lower]
     left_side = opts[:left_side]
 
     unless left_side do
       raise ArgumentError, "left_side: false option not supported in Torchx"
     end
 
-    a_tx = from_nx(a)
-    b_tx = from_nx(b)
+    batched_a_shape = Tuple.insert_at(a.shape, 0, 1)
+
+    batched_b_shape =
+      case b.shape do
+        {n} -> {1, n, 1}
+        {m, n} -> {1, m, n}
+      end
+
+    a_tx = a |> from_nx() |> Torchx.reshape(batched_a_shape) |> Torchx.to_type(:double)
+
+    b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(:double)
 
     a_tx
-    |> Torchx.triangular_solve(b_tx, transform == :transpose, lower == false)
-    |> to_nx(out)
+    |> Torchx.triangular_solve(b_tx, transform == :transpose, upper)
+    |> Torchx.reshape(out.shape)
+    |> Torchx.to_nx()
   end
 
   @impl true

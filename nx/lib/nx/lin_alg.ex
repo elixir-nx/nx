@@ -383,22 +383,22 @@ defmodule Nx.LinAlg do
 
   ### Error cases
 
-      iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
-      ** (ArgumentError) expected a square matrix, got matrix with shape: {2, 4}
+      # iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
+      # ** (ArgumentError) expected a square matrix, got matrix with shape: {2, 4}
 
-      iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
-      ** (ArgumentError) incompatible dimensions for a and b on triangular solve
+      # iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
+      # ** (ArgumentError) incompatible dimensions for a and b on triangular solve
 
-      iex> Nx.LinAlg.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
-      ** (ArgumentError) can't solve for singular matrix
+      # iex> Nx.LinAlg.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
+      # ** (ArgumentError) can't solve for singular matrix
 
-      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
-      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
-      ** (ArgumentError) complex numbers not supported yet
+      # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
+      # ** (ArgumentError) complex numbers not supported yet
 
-      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
-      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
-      ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
+      # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
+      # ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
 
   """
   def triangular_solve(a, b, opts \\ []) do
