@@ -736,6 +736,34 @@ defmodule NxTest do
     end
   end
 
+  describe "scatter_add" do
+    test "property" do
+      n = 5
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [row, col]
+          end
+        )
+
+      updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
+
+      assert Nx.broadcast(1, {5, 5}) ==
+               0 |> Nx.broadcast({5, 5}) |> Nx.scatter_add(indices, updates)
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [0, row, col]
+          end
+        )
+
+      assert Nx.broadcast(1, {1, 5, 5}) ==
+               0 |> Nx.broadcast({1, 5, 5}) |> Nx.scatter_add(indices, updates)
+    end
+  end
+
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg =
