@@ -179,7 +179,7 @@ defmodule Nx.LinAlgTest do
           |> Nx.concatenate()
 
         # Symmetric matrix with different eigenvalues
-        # using A = A^t = Q^tΛQ.
+        # using A = A^t = Q^t.Λ.Q.
         a =
           q
           |> Nx.transpose()
