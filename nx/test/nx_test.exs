@@ -736,6 +736,66 @@ defmodule NxTest do
     end
   end
 
+  describe "scatter_add" do
+    test "property" do
+      n = 5
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [row, col]
+          end
+        )
+
+      updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
+
+      assert Nx.broadcast(1, {5, 5}) ==
+               0 |> Nx.broadcast({5, 5}) |> Nx.scatter_add(indices, updates)
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [0, row, col]
+          end
+        )
+
+      assert Nx.broadcast(1, {1, 5, 5}) ==
+               0 |> Nx.broadcast({1, 5, 5}) |> Nx.scatter_add(indices, updates)
+    end
+
+    test "single-index regression" do
+      n = 5
+
+      # 1D case
+      zeros = List.duplicate(0, n)
+      upd = Nx.tensor([1])
+
+      for i <- 0..(n - 1) do
+        result = Nx.tensor(List.update_at(zeros, i, fn _ -> 1 end))
+
+        assert result == Nx.scatter_add(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
+      end
+
+      # 2D case
+      zeros = List.duplicate(zeros, n)
+
+      for i <- 0..(n - 1) do
+        result =
+          Nx.tensor(
+            List.update_at(
+              zeros,
+              i,
+              fn row ->
+                List.update_at(row, i, fn _ -> 1 end)
+              end
+            )
+          )
+
+        assert result == Nx.scatter_add(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
+      end
+    end
+  end
+
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg =

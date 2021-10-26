@@ -1618,10 +1618,15 @@ defmodule Nx.BinaryBackend do
 
     target_binary = to_binary(target)
 
+    offsets_with_updates =
+      List.update_at(offsets_with_updates, 0, fn {_prev, current, update} ->
+        {0, current, update}
+      end)
+
     {result, tail} =
       for {previous, current, update} <- offsets_with_updates, reduce: {<<>>, target_binary} do
         {traversed, to_traverse} ->
-          before_slice_size = max(current - previous, 0)
+          before_slice_size = current - previous
 
           match_types [target.type, out.type] do
             <<before_offset::bitstring-size(before_slice_size), match!(element, 0),
