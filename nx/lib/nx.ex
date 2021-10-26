@@ -4365,6 +4365,7 @@ defmodule Nx do
   being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
 
   ### Examples
+
       iex> t = Nx.iota({1, 2, 3})
       #Nx.Tensor<
         s64[1][2][3]
