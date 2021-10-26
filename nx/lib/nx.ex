@@ -4365,22 +4365,6 @@ defmodule Nx do
   being an arbitrary number of indices, while `updates` must have a compatible `{n}` shape.
 
   ### Examples
-      iex> t = Nx.tensor([0, 0, 0])
-      iex> idx = Nx.tensor([[0]])
-      iex> upd = Nx.tensor([1])
-      iex> Nx.scatter_add(t, idx, upd)
-      #Nx.Tensor<
-        s64[3]
-        [1, 0, 0]
-      >
-      iex> idx = Nx.tensor([[1]])
-      iex> upd = Nx.tensor([1])
-      iex> Nx.scatter_add(t, idx, upd)
-      #Nx.Tensor<
-        s64[3]
-        [0, 1, 0]
-      >
-
       iex> t = Nx.iota({1, 2, 3})
       #Nx.Tensor<
         s64[1][2][3]
