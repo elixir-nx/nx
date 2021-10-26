@@ -156,7 +156,7 @@ defmodule Nx.LinAlgTest do
 
     test "property for matrices with different eigenvalues" do
       # Generate real symmetric matrices with different eigenvalues
-      # from random matrices based on the relation A = QΛQ^t
+      # from random matrices based on the relation A = Q.Λ.Q^t
       # where Λ is the diagonal matrix of eigenvalues and Q is orthogonal matrix.
 
       for _ <- 1..10 do
