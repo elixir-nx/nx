@@ -200,7 +200,7 @@ defmodule Nx.LinAlgTest do
 
     test "properties for matrices with close eigenvalues" do
       # Generate real symmetric matrices with close eigenvalues
-      # from random matrices based on the relation A = QΛQ^t
+      # from random matrices based on the relation A = Q.Λ.Q^t
 
       for _ <- 1..10 do
         # Orthogonal matrix from a random matrix
