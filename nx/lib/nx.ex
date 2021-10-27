@@ -7438,7 +7438,7 @@ defmodule Nx do
   `:strides` are given.
 
   It is not possible to slice in reverse. See `gather/2`,
-  `slice_axis/3`, `take/3`, and `take_along_axis/3` for other ways
+  `slice_axis/5`, `take/3`, and `take_along_axis/3` for other ways
   to retrieve values from a tensor.
 
   ### Examples
@@ -7684,7 +7684,7 @@ defmodule Nx do
   resulting shape. Specifically, the given axis in the input shape
   gets replaced with the indices shape.
 
-  See `gather/2`, `slice/3`, `slice_axis/3`, and `take_along_axis/3`
+  See `gather/2`, `slice/3`, `slice_axis/5`, and `take_along_axis/3`
   for other ways to retrieve values from a tensor.
 
   ## Options
@@ -7827,7 +7827,7 @@ defmodule Nx do
   the `axis` dimension, which can have arbitrary size. The returned tensor will have the
   same shape as the `indices` tensor.
 
-  See `gather/2`, `slice/3`, `slice_axis/3`, and `take/3` for other ways to retrieve
+  See `gather/2`, `slice/3`, `slice_axis/5`, and `take/3` for other ways to retrieve
   values from a tensor.
 
   ## Options
