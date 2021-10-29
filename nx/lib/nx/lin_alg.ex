@@ -294,7 +294,7 @@ defmodule Nx.LinAlg do
     * `:transpose` -> `op(a) = transpose(a)`
     Defaults to `:none`
   * `:lower` - When `true`, defines the `a` matrix as lower triangular. If false, a is upper triangular.
-               Defaults to `true`
+    Defaults to `true`
   * `:left_side` - When `true`, solves the system as `op(A).X = B`. Otherwise, solves `X.op(A) = B`. Defaults to `true`.
 
   ## Examples
@@ -481,7 +481,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-    ### Error cases
+  ### Error cases
 
       iex> Nx.LinAlg.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
