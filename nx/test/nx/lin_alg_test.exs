@@ -70,7 +70,7 @@ defmodule Nx.LinAlgTest do
           [1 / 3, -2 / 3, 2 / 3]
         ])
 
-      assert_all_close(q, expected_q, rtol: 0, atol: 0)
+      assert_all_close(q, expected_q, atol: 1.0e-10)
 
       expected_r =
         Nx.tensor([
@@ -79,9 +79,9 @@ defmodule Nx.LinAlgTest do
           [0.0, 0.0, 6.0]
         ])
 
-      assert_all_close(r, expected_r, rtol: 0, atol: 0)
+      assert_all_close(r, expected_r, atol: 1.0e-10)
 
-      assert_all_close(Nx.dot(q, r), t, rtol: 0, atol: 0)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
     end
 
     test "factors rectangular matrix" do
@@ -98,7 +98,7 @@ defmodule Nx.LinAlgTest do
           [0.5, -0.5, -0.5]
         ])
 
-      assert_all_close(q, expected_q, rtol: 0, atol: 0)
+      assert_all_close(q, expected_q, atol: 1.0e-10)
 
       expected_r =
         Nx.tensor([
@@ -107,9 +107,9 @@ defmodule Nx.LinAlgTest do
           [0.0, 0.0, 4.0]
         ])
 
-      assert_all_close(r, expected_r, rtol: 0, atol: 0)
+      assert_all_close(r, expected_r, atol: 1.0e-10)
 
-      assert_all_close(Nx.dot(q, r), t, rtol: 0, atol: 0)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
 
       # Complete mode
       {q, r} = Nx.LinAlg.qr(t, mode: :complete)
@@ -122,7 +122,7 @@ defmodule Nx.LinAlgTest do
           [0.5, -0.5, -0.5, 0.5]
         ])
 
-      assert_all_close(q, expected_q, rtol: 0, atol: 0)
+      assert_all_close(q, expected_q, atol: 1.0e-10)
 
       expected_r =
         Nx.tensor([
@@ -132,9 +132,9 @@ defmodule Nx.LinAlgTest do
           [0.0, 0.0, 0.0]
         ])
 
-      assert_all_close(r, expected_r, rtol: 0, atol: 0)
+      assert_all_close(r, expected_r, atol: 1.0e-10)
 
-      assert_all_close(Nx.dot(q, r), t, rtol: 0, atol: 0)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
     end
 
     test "property" do
