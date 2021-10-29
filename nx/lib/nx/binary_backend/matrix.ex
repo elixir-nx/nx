@@ -174,7 +174,6 @@ defmodule Nx.BinaryBackend.Matrix do
   defp do_ts([], [], _idx, acc), do: acc
 
   def qr(input_data, input_type, input_shape, output_type, m, k, n, opts) do
-
     mode = opts[:mode]
     eps = opts[:eps]
 
@@ -187,11 +186,13 @@ defmodule Nx.BinaryBackend.Matrix do
       if mode == :reduced and m - k > 0 do
         # Remove unnecessary columns (rows) from the matrix Q (R)
         q_matrix_t = transpose_matrix(q_matrix)
+
         {q_matrix_t, r_matrix} =
           for _ <- 1..(m - k), reduce: {q_matrix_t, r_matrix} do
             {q_t, r} ->
               {List.delete_at(q_t, -1), List.delete_at(r, -1)}
           end
+
         q_matrix = transpose_matrix(q_matrix_t)
         {q_matrix, r_matrix}
       else
