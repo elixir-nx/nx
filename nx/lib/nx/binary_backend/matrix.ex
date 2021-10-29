@@ -204,28 +204,27 @@ defmodule Nx.BinaryBackend.Matrix do
 
   defp qr_decomposition(matrix, m, n, eps) when m >= n do
     # QR decomposition is performed by using Householder transform
-    {q_matrix_t, r_matrix} =
+    {q_matrix, r_matrix} =
       for i <- 0..(n - 1), reduce: {nil, matrix} do
-        {q_t, r} ->
+        {q, r} ->
           h =
             r
             |> slice_matrix([i, i], [m - i, 1])
             |> householder_reflector(m, eps)
 
           # If we haven't allocated Q yet, let Q = H1
-          q_t =
-            if is_nil(q_t) do
+          q =
+            if is_nil(q) do
               h
             else
-              dot_matrix(h, q_t)
+              dot_matrix(q, h)
             end
 
           r = dot_matrix(h, r)
-          {q_t, r}
+          {q, r}
       end
 
-    {q_matrix_t |> transpose_matrix() |> approximate_zeros(eps),
-     r_matrix |> approximate_zeros(eps)}
+    {approximate_zeros(q_matrix, eps), approximate_zeros(r_matrix, eps)}
   end
 
   defp qr_decomposition(_, _, _, _) do
