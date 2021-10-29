@@ -59,30 +59,29 @@ defmodule Nx.LinAlgTest do
 
   describe "qr" do
     test "correctly factors a square matrix" do
-      t = Nx.tensor([[2.0, -2.0, 18.0], [2.0, 1.0, 0.0], [1.0, 2.0, 0.0]])
+      t = Nx.tensor([[2, -2, 18], [2, 1, 0], [1, 2, 0]])
       assert {q, %{type: output_type} = r} = Nx.LinAlg.qr(t)
       assert t |> Nx.round() |> Nx.as_type(output_type) == q |> Nx.dot(r) |> Nx.round()
 
-      assert q ==
-               Nx.tensor([
-                 [2 / 3, 2 / 3, 1 / 3],
-                 [2 / 3, -1 / 3, -2 / 3],
-                 [1 / 3, -2 / 3, 2 / 3]
-               ])
+      expected_q =
+        Nx.tensor([
+          [2 / 3, 2 / 3, 1 / 3],
+          [2 / 3, -1 / 3, -2 / 3],
+          [1 / 3, -2 / 3, 2 / 3]
+        ])
 
-      assert r ==
-               Nx.tensor([
-                 [3.0, 0.0, 12.0],
-                 [0.0, -3.0, 12.0],
-                 [0.0, 0.0, 6.0]
-               ])
+      assert_all_close(q, expected_q, rtol: 0, atol: 0)
 
-      assert Nx.dot(q, r) ==
-               Nx.tensor([
-                 [2.0, -2.0, 18.0],
-                 [2.0, 1.0, 0.0],
-                 [1.0, 2.0, 0.0]
-               ])
+      expected_r =
+        Nx.tensor([
+          [3.0, 0.0, 12.0],
+          [0.0, -3.0, 12.0],
+          [0.0, 0.0, 6.0]
+        ])
+
+      assert_all_close(r, expected_r, rtol: 0, atol: 0)
+
+      assert_all_close(Nx.dot(q, r), t, rtol: 0, atol: 0)
     end
 
     test "factors rectangular matrix" do
@@ -91,55 +90,51 @@ defmodule Nx.LinAlgTest do
       # Reduced mode
       {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
 
-      assert q ==
-               Nx.tensor([
-                 [0.5, -0.5, 0.5],
-                 [0.5, 0.5, -0.5],
-                 [0.5, 0.5, 0.5],
-                 [0.5, -0.5, -0.5]
-               ])
+      expected_q =
+        Nx.tensor([
+          [0.5, -0.5, 0.5],
+          [0.5, 0.5, -0.5],
+          [0.5, 0.5, 0.5],
+          [0.5, -0.5, -0.5]
+        ])
 
-      assert r ==
-               Nx.tensor([
-                 [2.0, 3.0, 2.0],
-                 [0.0, 5.0, -2.0],
-                 [0.0, 0.0, 4.0]
-               ])
+      assert_all_close(q, expected_q, rtol: 0, atol: 0)
 
-      assert Nx.dot(q, r) ==
-               Nx.tensor([
-                 [1.0, -1.0, 4.0],
-                 [1.0, 4.0, -2.0],
-                 [1.0, 4.0, 2.0],
-                 [1.0, -1.0, 0.0]
-               ])
+      expected_r =
+        Nx.tensor([
+          [2.0, 3.0, 2.0],
+          [0.0, 5.0, -2.0],
+          [0.0, 0.0, 4.0]
+        ])
+
+      assert_all_close(r, expected_r, rtol: 0, atol: 0)
+
+      assert_all_close(Nx.dot(q, r), t, rtol: 0, atol: 0)
 
       # Complete mode
       {q, r} = Nx.LinAlg.qr(t, mode: :complete)
 
-      assert q ==
-               Nx.tensor([
-                 [0.5, -0.5, 0.5, -0.5],
-                 [0.5, 0.5, -0.5, -0.5],
-                 [0.5, 0.5, 0.5, 0.5],
-                 [0.5, -0.5, -0.5, 0.5]
-               ])
+      expected_q =
+        Nx.tensor([
+          [0.5, -0.5, 0.5, -0.5],
+          [0.5, 0.5, -0.5, -0.5],
+          [0.5, 0.5, 0.5, 0.5],
+          [0.5, -0.5, -0.5, 0.5]
+        ])
 
-      assert r ==
-               Nx.tensor([
-                 [2.0, 3.0, 2.0],
-                 [0.0, 5.0, -2.0],
-                 [0.0, 0.0, 4.0],
-                 [0.0, 0.0, 0.0]
-               ])
+      assert_all_close(q, expected_q, rtol: 0, atol: 0)
 
-      assert Nx.dot(q, r) ==
-               Nx.tensor([
-                 [1.0, -1.0, 4.0],
-                 [1.0, 4.0, -2.0],
-                 [1.0, 4.0, 2.0],
-                 [1.0, -1.0, 0.0]
-               ])
+      expected_r =
+        Nx.tensor([
+          [2.0, 3.0, 2.0],
+          [0.0, 5.0, -2.0],
+          [0.0, 0.0, 4.0],
+          [0.0, 0.0, 0.0]
+        ])
+
+      assert_all_close(r, expected_r, rtol: 0, atol: 0)
+
+      assert_all_close(Nx.dot(q, r), t, rtol: 0, atol: 0)
     end
 
     test "property" do
@@ -149,10 +144,10 @@ defmodule Nx.LinAlgTest do
         tall = Nx.random_uniform({4, 3})
 
         assert {q, r} = Nx.LinAlg.qr(square)
-        assert_all_close(Nx.dot(q, r), square, atol: 1.0e-3)
+        assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)
 
         assert {q, r} = Nx.LinAlg.qr(tall)
-        assert_all_close(Nx.dot(q, r), tall, atol: 1.0e-3)
+        assert_all_close(Nx.dot(q, r), tall, atol: 1.0e-6)
       end
     end
   end
