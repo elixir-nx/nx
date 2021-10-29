@@ -228,7 +228,7 @@ defmodule Nx.BinaryBackend.Matrix do
   end
 
   defp qr_decomposition(_, _, _, _) do
-    {[], []}
+    raise ArgumentError, "tensor must have at least as many rows as columns"
   end
 
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
