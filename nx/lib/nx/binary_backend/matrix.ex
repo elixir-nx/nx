@@ -174,53 +174,61 @@ defmodule Nx.BinaryBackend.Matrix do
   defp do_ts([], [], _idx, acc), do: acc
 
   def qr(input_data, input_type, input_shape, output_type, m, k, n, opts) do
-    {_, input_num_bits} = input_type
 
     mode = opts[:mode]
     eps = opts[:eps]
 
-    r_matrix =
-      if mode == :reduced do
-        # Since we want the first k rows of r, we can
-        # just slice the binary by taking the first
-        # n * k * output_type_num_bits bits from the binary.
-        # Trick for r = tensor[[0..(k - 1), 0..(n - 1)]]
-        slice_size = n * k * input_num_bits
-        <<r_bin::bitstring-size(slice_size), _::bitstring>> = input_data
-        binary_to_matrix(r_bin, input_type, {k, n})
-      else
-        binary_to_matrix(input_data, input_type, input_shape)
-      end
+    {q_matrix, r_matrix} =
+      input_data
+      |> binary_to_matrix(input_type, input_shape)
+      |> qr_decomposition(m, n, eps)
 
-    {q_matrix, r_matrix} = qr_decomposition(r_matrix, m, k, n, eps)
+    {q_matrix, r_matrix} =
+      if mode == :reduced and m - k > 0 do
+        # Remove unnecessary columns (rows) from the matrix Q (R)
+        q_matrix_t = transpose_matrix(q_matrix)
+        {q_matrix_t, r_matrix} =
+          for _ <- 1..(m - k), reduce: {q_matrix_t, r_matrix} do
+            {q_t, r} ->
+              {List.delete_at(q_t, -1), List.delete_at(r, -1)}
+          end
+        q_matrix = transpose_matrix(q_matrix_t)
+        {q_matrix, r_matrix}
+      else
+        {q_matrix, r_matrix}
+      end
 
     {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
   end
 
-  defp qr_decomposition(matrix, m, k, n, eps) do
+  defp qr_decomposition(matrix, m, n, eps) when m >= n do
     # QR decomposition is performed by using Householder transform
-    {q_matrix, r_matrix} =
+    {q_matrix_t, r_matrix} =
       for i <- 0..(n - 1), reduce: {nil, matrix} do
-        {q, r} ->
+        {q_t, r} ->
           h =
             r
-            |> slice_matrix([i, i], [k - i, 1])
-            |> householder_reflector(k, eps)
+            |> slice_matrix([i, i], [m - i, 1])
+            |> householder_reflector(m, eps)
 
           # If we haven't allocated Q yet, let Q = H1
-          q =
-            if is_nil(q) do
-              zero_padding = 0 |> List.duplicate(k) |> List.duplicate(m - k)
-              h ++ zero_padding
+          q_t =
+            if is_nil(q_t) do
+              h
             else
-              dot_matrix(q, h)
+              dot_matrix(h, q_t)
             end
 
           r = dot_matrix(h, r)
-          {q, r}
+          {q_t, r}
       end
 
-    {approximate_zeros(q_matrix, eps), approximate_zeros(r_matrix, eps)}
+    {q_matrix_t |> transpose_matrix() |> approximate_zeros(eps),
+     r_matrix |> approximate_zeros(eps)}
+  end
+
+  defp qr_decomposition(_, _, _, _) do
+    {[], []}
   end
 
   def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
@@ -250,7 +258,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {eigenvals_diag, eigenvecs} =
       Enum.reduce_while(1..max_iter, {h, q_h}, fn _, {a_old, q_old} ->
         # QR decomposition
-        {q_now, r_now} = qr_decomposition(a_old, n, n, n, eps)
+        {q_now, r_now} = qr_decomposition(a_old, n, n, eps)
 
         # Update matrix A, Q
         a_new = dot_matrix(r_now, q_now)
