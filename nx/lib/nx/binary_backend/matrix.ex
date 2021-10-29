@@ -185,11 +185,7 @@ defmodule Nx.BinaryBackend.Matrix do
     {q_matrix, r_matrix} =
       if mode == :reduced and m - k > 0 do
         # Remove unnecessary columns (rows) from the matrix Q (R)
-        q_matrix =
-          q_matrix
-          |> transpose_matrix()
-          |> Enum.drop(k - m)
-          |> transpose_matrix()
+        q_matrix = get_matrix_columns(q_matrix, 0..(k - 1))
 
         r_matrix = Enum.drop(r_matrix, k - m)
 
