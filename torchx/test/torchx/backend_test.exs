@@ -258,4 +258,110 @@ defmodule Torchx.BackendTest do
       )
     end
   end
+
+  describe "Nx.LinAlg.triangular_solve" do
+    test "base case 1D (s64)" do
+      a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+
+      result = Nx.LinAlg.triangular_solve(a, Nx.tensor([4, 2, 4, 2]))
+
+      assert_all_close(result, Nx.tensor([1.33333337, -0.6666666, 2.6666667, -1.33333]))
+    end
+
+    test "base case 1D (f64)" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      %{type: {:f, 64}} = result = Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]))
+      assert_all_close(result, Nx.tensor([1.0, 1.0, -1.0]))
+    end
+
+    test "base case 2D" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([[1, 2, 3], [2, 2, 4], [2, 0, 1]])
+      result = Nx.LinAlg.triangular_solve(a, b) |> IO.inspect()
+
+      assert_all_close(
+        result,
+        Nx.tensor([
+          [1.0, 2.0, 3.0],
+          [1.0, 0.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ])
+      )
+    end
+
+    # iex> a = Nx.tensor([[1, 1, 1, 1], [0, 1, 0, 1], [0, 0, 1, 2], [0, 0, 0, 3]])
+    # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([2, 4, 2, 4]), lower: false)
+    # #Nx.Tensor<
+    #   f32[4]
+    #   [-1.3333333730697632, 2.6666667461395264, -0.6666666865348816, 1.3333333730697632]
+    # >
+
+    # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+    # iex> b = Nx.tensor([[0, 2, 1], [1, 1, 0], [3, 3, 1]])
+    # iex> Nx.LinAlg.triangular_solve(a, b, left_side: false)
+    # #Nx.Tensor<
+    #   f32[3][3]
+    #   [
+    #     [-1.0, 0.0, 1.0],
+    #     [0.0, 1.0, 0.0],
+    #     [1.0, 1.0, 1.0]
+    #   ]
+    # >
+
+    # iex> a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: {:f, 64})
+    # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :transpose, lower: false)
+    # #Nx.Tensor<
+    #   f64[3]
+    #   [1.0, 1.0, -1.0]
+    # >
+
+    # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+    # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :none)
+    # #Nx.Tensor<
+    #   f64[3]
+    #   [1.0, 1.0, -1.0]
+    # >
+
+    # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+    # iex> b = Nx.tensor([[0, 1, 3], [2, 1, 3]])
+    # iex> Nx.LinAlg.triangular_solve(a, b, left_side: false)
+    # #Nx.Tensor<
+    #   f32[2][3]
+    #   [
+    #     [2.0, -5.0, 3.0],
+    #     [4.0, -5.0, 3.0]
+    #   ]
+    # >
+
+    # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+    # iex> b = Nx.tensor([[0, 2], [3, 0], [0, 0]])
+    # iex> Nx.LinAlg.triangular_solve(a, b, left_side: true)
+    # #Nx.Tensor<
+    #   f32[3][2]
+    #   [
+    #     [0.0, 2.0],
+    #     [3.0, -2.0],
+    #     [-6.0, 2.0]
+    #   ]
+    # >
+
+    ### Error cases
+
+    # iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
+    # ** (ArgumentError) expected a square matrix, got matrix with shape: {2, 4}
+
+    # iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]), Nx.tensor([4]))
+    # ** (ArgumentError) incompatible dimensions for a and b on triangular solve
+
+    # iex> Nx.LinAlg.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
+    # ** (ArgumentError) can't solve for singular matrix
+
+    # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+    # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
+    # ** (ArgumentError) complex numbers not supported yet
+
+    # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+    # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
+    # ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
+  end
 end

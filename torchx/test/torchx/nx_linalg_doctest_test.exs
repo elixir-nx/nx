@@ -10,6 +10,9 @@ defmodule Torchx.NxLinAlgDoctestTest do
 
   use ExUnit.Case, async: true
 
+  @rounding_error_doctests [
+    triangular_solve: 3
+  ]
   @temporarily_broken_doctests [
     # norm - reduce_max not implemented
     norm: 2,
@@ -33,4 +36,5 @@ defmodule Torchx.NxLinAlgDoctestTest do
       Torchx.Backend.__unimplemented__()
       |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
       |> Kernel.++(@temporarily_broken_doctests)
+      |> Kernel.++(@rounding_error_doctests)
 end

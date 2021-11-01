@@ -581,9 +581,15 @@ defmodule Torchx.Backend do
         {m, n} -> {1, m, n}
       end
 
-    a_tx = a |> from_nx() |> Torchx.reshape(batched_a_shape) |> Torchx.to_type(:double)
+    out_type = to_torch_type(out.type)
 
-    b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(:double)
+    a_tx =
+      a
+      |> from_nx()
+      |> Torchx.reshape(batched_a_shape)
+      |> Torchx.to_type(out_type)
+
+    b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(out_type)
 
     a_tx
     |> Torchx.triangular_solve(b_tx, transform == :transpose, upper)
