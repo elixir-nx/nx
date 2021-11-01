@@ -1129,14 +1129,14 @@ defmodule Nx do
 
   When given a 1d tensor:
 
-      iex> Nx.iota({4}) |> Nx.diag
+      iex> Nx.diag(Nx.tensor([1, 2, 3, 4]))
       #Nx.Tensor<
         s64[4][4]
         [
-          [0, 0, 0, 0],
-          [0, 1, 0, 0],
-          [0, 0, 2, 0],
-          [0, 0, 0, 3]
+          [1, 0, 0, 0],
+          [0, 2, 0, 0],
+          [0, 0, 3, 0],
+          [0, 0, 0, 4]
         ]
       >
 
