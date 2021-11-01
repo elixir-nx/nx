@@ -1140,7 +1140,7 @@ defmodule Nx do
         ]
       >
 
-  Given a 2d tensor:
+  Given a 2D tensor:
 
       iex> Nx.iota({3, 3}) |> Nx.diag()
       #Nx.Tensor<
