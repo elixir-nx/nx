@@ -1127,7 +1127,7 @@ defmodule Nx do
 
   ## Examples
 
-  When given a 1d tensor:
+  When given a 1D tensor:
 
       iex> Nx.diag(Nx.tensor([1, 2, 3, 4]))
       #Nx.Tensor<
