@@ -1123,7 +1123,7 @@ defmodule Nx do
   @doc """
   Extract a diagonal or create a diagonal tensor.
 
-  Extracts a diagonal if given a 2d tensor, or constructs a tensor given a 1d one.
+  Extracts a diagonal if given a 2D tensor, or constructs a tensor given a 1D one.
 
   ## Examples
 
