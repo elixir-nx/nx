@@ -247,7 +247,7 @@ defmodule Nx.BinaryBackend.Matrix do
     end
 
     # Hessenberg decomposition
-    {h, q_h} = hessenberg_decomposition(a, n, n, n, eps)
+    {h, q_h} = hessenberg_decomposition(a, n, eps)
 
     # QR iteration for eigenvalues and eigenvectors
     {eigenvals_diag, eigenvecs} =
@@ -275,21 +275,20 @@ defmodule Nx.BinaryBackend.Matrix do
      eigenvecs |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
   end
 
-  defp hessenberg_decomposition(matrix, m, k, n, eps) do
+  defp hessenberg_decomposition(matrix, n, eps) do
     # Hessenberg decomposition is performed by using Householder transform
     {hess_matrix, q_matrix} =
       for i <- 0..(n - 2), reduce: {matrix, nil} do
         {hess, q} ->
           h =
             hess
-            |> slice_matrix([i + 1, i], [k - i - 1, 1])
-            |> householder_reflector(k, eps)
+            |> slice_matrix([i + 1, i], [n - i - 1, 1])
+            |> householder_reflector(n, eps)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
-              zero_padding = 0 |> List.duplicate(k) |> List.duplicate(m - k)
-              h ++ zero_padding
+              h
             else
               dot_matrix(q, h)
             end
