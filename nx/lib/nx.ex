@@ -1121,6 +1121,90 @@ defmodule Nx do
   end
 
   @doc """
+  Extract a diagonal or create a diagonal tensor.
+
+  Extracts a diagonal if given a 2d tensor, or constructs a tensor given a 1d one.
+
+  ## Examples
+
+  When given a 1d tensor:
+
+      iex> Nx.iota({4}) |> Nx.diag
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 0, 0, 0],
+          [0, 1, 0, 0],
+          [0, 0, 2, 0],
+          [0, 0, 0, 3]
+        ]
+      >
+
+  Given a 2d tensor:
+
+      iex> Nx.iota({3, 3}) |> Nx.diag()
+      #Nx.Tensor<
+        s64[3]
+        [0, 4, 8]
+      >
+
+  And if given a 2d tensor along with an offset:
+
+      iex> Nx.iota({3, 3}) |> Nx.diag(offset: 1)
+      #Nx.Tensor<
+        s64[2]
+        [1, 5]
+      >
+
+      iex> Nx.iota({3, 3}) |> Nx.diag(offset: -1)
+      #Nx.Tensor<
+        s64[2]
+        [3, 7]
+      >
+
+  ## Options
+
+    * `:offset` - offset used for extracting the diagonal.
+      Use offset > 0 for diagonals above the main diagonal,
+      and offset < 0 for diagonals below the main diagonal.
+
+  """
+  @doc type: :creation
+  def diag(tensor, opts \\ []) do
+    opts = keyword!(opts, [:offset])
+
+    case shape(tensor) do
+      {len, breadth} ->
+        offset = opts[:offset] || 0
+
+        indices =
+          case offset do
+            i when i >= 0 ->
+              Enum.zip_with(0..(len - 1), i..(breadth - 1), fn x, y -> [x, y] end)
+
+            i when i < 0 ->
+              Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
+          end
+
+        indices =
+          indices
+          |> Nx.tensor()
+
+        Nx.gather(tensor, indices)
+
+      {len} ->
+        identity =
+          {len, len}
+          |> Nx.eye()
+
+        Nx.multiply(tensor, identity)
+
+      _bad_rank ->
+        raise ArgumentError, "diag/2 expects tensor of rank 1 or 2, got: #{inspect(tensor)}"
+    end
+  end
+
+  @doc """
   Creates a one-dimensional tensor from a `binary` with the given `type`.
 
   If the binary size does not match its type, an error is raised.

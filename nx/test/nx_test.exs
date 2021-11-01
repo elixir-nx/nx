@@ -1684,6 +1684,42 @@ defmodule NxTest do
     end
   end
 
+  describe "diag/2" do
+    test "extracts valid diagonal given no offset" do
+      diag =
+        Nx.iota({3, 3})
+        |> Nx.diag()
+
+      assert diag == Nx.tensor([0, 4, 8])
+    end
+
+    test "extracts valid diagonal given offset" do
+      diag =
+        Nx.iota({3, 3})
+        |> Nx.diag(offset: 1)
+
+      assert diag == Nx.tensor([1, 5])
+    end
+
+    test "constructs diagonal given 1-d tensor" do
+      diag =
+        Nx.iota({3})
+        |> Nx.diag()
+
+      assert diag == Nx.tensor([[0, 0, 0], [0, 1, 0], [0, 0, 2]])
+    end
+
+    test "raises an error when given tensor with invalid rank" do
+      t = Nx.iota({3, 3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "diag/2 expects tensor of rank 1 or 2, got: #{inspect(t)}",
+        fn -> Nx.diag(t) end
+      )
+    end
+  end
+
   describe "scatter_add/3" do
     test "can emulate take_along_axis" do
       # One can also convert the indices produced by argsort into suitable
