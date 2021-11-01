@@ -1170,38 +1170,39 @@ defmodule Nx do
 
   """
   @doc type: :creation
-  def diag(tensor, opts \\ []) do
+  def diag(tensor, opts \\ [])
+
+  def diag(tensor = %Nx.Tensor{shape: {len, breadth}}, opts) do
     opts = keyword!(opts, [:offset])
 
-    case shape(tensor) do
-      {len, breadth} ->
-        offset = opts[:offset] || 0
+    offset = opts[:offset] || 0
 
-        indices =
-          case offset do
-            i when i >= 0 ->
-              Enum.zip_with(0..(len - 1), i..(breadth - 1), fn x, y -> [x, y] end)
+    indices =
+      case offset do
+        i when i >= 0 ->
+          Enum.zip_with(0..(len - 1), i..(breadth - 1), fn x, y -> [x, y] end)
 
-            i when i < 0 ->
-              Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
-          end
+        i when i < 0 ->
+          Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
+      end
 
-        indices =
-          indices
-          |> Nx.tensor()
+    indices =
+      indices
+      |> Nx.tensor()
 
-        Nx.gather(tensor, indices)
+    Nx.gather(tensor, indices)
+  end
 
-      {len} ->
-        identity =
-          {len, len}
-          |> Nx.eye()
+  def diag(tensor = %Nx.Tensor{shape: {len}}, _opts) do
+    identity =
+      {len, len}
+      |> Nx.eye()
 
-        Nx.multiply(tensor, identity)
+    Nx.multiply(tensor, identity)
+  end
 
-      _bad_rank ->
-        raise ArgumentError, "diag/2 expects tensor of rank 1 or 2, got: #{inspect(tensor)}"
-    end
+  def diag(tensor, _opts) do
+    raise ArgumentError, "diag/2 expects tensor of rank 1 or 2, got: #{inspect(tensor)}"
   end
 
   @doc """
