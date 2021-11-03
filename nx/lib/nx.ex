@@ -915,6 +915,29 @@ defmodule Nx do
   end
 
   @doc """
+  Shuffles tensor elements.
+
+  ## Options
+
+    * `:axis` - the axis to shuffle along. If no axis is given,
+      elements are shuffled within the whole tensor
+  """
+  @doc type: :random
+  def shuffle(tensor, opts \\ []) do
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+
+    if axis = opts[:axis] do
+      axis = Nx.Shape.normalize_axis(shape, axis, names)
+      indices = tensor |> Nx.random_uniform() |> Nx.argsort(axis: axis)
+      Nx.take_along_axis(tensor, indices, axis: axis)
+    else
+      flattened = Nx.flatten(tensor)
+      indices = flattened |> Nx.random_uniform() |> Nx.argsort()
+      flattened |> Nx.take(indices) |> Nx.reshape(tensor)
+    end
+  end
+
+  @doc """
   Creates a tensor with the given shape which increments
   along the provided axis. You may optionally provide dimension
   names.
