@@ -1666,6 +1666,29 @@ defmodule NxTest do
     end
   end
 
+  describe "shuffle/2" do
+    test "returns tensor with the same elements" do
+      t = Nx.iota({4, 4})
+      shuffled = Nx.shuffle(t)
+
+      assert t |> Nx.flatten() |> Nx.sort() == shuffled |> Nx.flatten() |> Nx.sort()
+    end
+
+    test "given an axis swaps elements along that axis only" do
+      t = Nx.iota({4, 4})
+      shuffled = Nx.shuffle(t, axis: 1)
+
+      assert Nx.sort(t, axis: 1) == Nx.sort(shuffled, axis: 1)
+    end
+
+    test "deterministic shuffle along axis of size 1" do
+      t = Nx.iota({4, 1})
+      shuffled = Nx.shuffle(t, axis: 1)
+
+      assert t == shuffled
+    end
+  end
+
   describe "eye/2" do
     test "raises for non-square rank 2 tensor" do
       t = Nx.iota({2, 3})
