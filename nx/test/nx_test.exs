@@ -1694,6 +1694,24 @@ defmodule NxTest do
       assert diag == Nx.tensor([0, 4, 8])
     end
 
+    test "extracts valid diagonal when breadth is greater than length" do
+      diag =
+        {3, 4}
+        |> Nx.iota()
+        |> Nx.diag()
+
+      assert diag == Nx.tensor([0, 5, 10])
+    end
+
+    test "extracts valid diagonal when length is greater than breadth" do
+      diag =
+        {4, 3}
+        |> Nx.iota()
+        |> Nx.diag()
+
+      assert diag == Nx.tensor([0, 4, 8])
+    end
+
     test "extracts valid diagonal given offset" do
       diag =
         {3, 3}
