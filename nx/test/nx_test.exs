@@ -1687,7 +1687,8 @@ defmodule NxTest do
   describe "diag/2" do
     test "extracts valid diagonal given no offset" do
       diag =
-        Nx.iota({3, 3})
+        {3, 3}
+        |> Nx.iota()
         |> Nx.diag()
 
       assert diag == Nx.tensor([0, 4, 8])
@@ -1695,7 +1696,8 @@ defmodule NxTest do
 
     test "extracts valid diagonal given offset" do
       diag =
-        Nx.iota({3, 3})
+        {3, 3}
+        |> Nx.iota()
         |> Nx.diag(offset: 1)
 
       assert diag == Nx.tensor([1, 5])
@@ -1703,7 +1705,8 @@ defmodule NxTest do
 
     test "constructs diagonal given 1-d tensor" do
       diag =
-        Nx.iota({3})
+        {3}
+        |> Nx.iota()
         |> Nx.diag()
 
       assert diag == Nx.tensor([[0, 0, 0], [0, 1, 0], [0, 0, 2]])
