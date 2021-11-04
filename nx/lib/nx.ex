@@ -1190,17 +1190,13 @@ defmodule Nx do
           Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
       end
 
-    indices =
-      indices
-      |> Nx.tensor()
+    indices_tensor = Nx.tensor(indices)
 
-    Nx.gather(tensor, indices)
+    Nx.gather(tensor, indices_tensor)
   end
 
   def diag(tensor = %Nx.Tensor{shape: {len}}, _opts) do
-    identity =
-      {len, len}
-      |> Nx.eye()
+    identity = Nx.eye({len, len})
 
     Nx.multiply(tensor, identity)
   end
