@@ -1142,21 +1142,25 @@ defmodule Nx do
 
   Given a 2D tensor:
 
-      iex> Nx.iota({3, 3}) |> Nx.diag()
+      iex> Nx.diag(Nx.tensor([
+      ...> [0, 1, 2],
+      ...> [3, 4, 5],
+      ...> [6, 7, 8]
+      ...> ]))
       #Nx.Tensor<
         s64[3]
         [0, 4, 8]
       >
 
-  And if given a 2d tensor along with an offset:
+  And if given a 2D tensor along with an offset:
 
-      iex> Nx.iota({3, 3}) |> Nx.diag(offset: 1)
+      iex> Nx.diag(Nx.iota({3, 3}), offset: 1)
       #Nx.Tensor<
         s64[2]
         [1, 5]
       >
 
-      iex> Nx.iota({3, 3}) |> Nx.diag(offset: -1)
+      iex> Nx.diag(Nx.iota({3, 3}), offset: -1)
       #Nx.Tensor<
         s64[2]
         [3, 7]
