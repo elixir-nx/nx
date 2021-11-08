@@ -1269,6 +1269,7 @@ defmodule Nx do
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -4)
       ** (ArgumentError) absolute value of offset must be less than breadth when negative, got: -4
   """
+  @doc type: :creation
   def take_diagonal(tensor, opts \\ []) do
     opts = keyword!(opts, [:offset])
 

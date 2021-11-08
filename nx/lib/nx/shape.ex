@@ -1219,7 +1219,7 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Checks the shape of a tensor of ap
+  Returns shape if valid and raises error if not.
   """
   def take_diagonal(tensor) do
     case tensor.shape do
