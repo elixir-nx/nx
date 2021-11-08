@@ -1276,7 +1276,7 @@ defmodule Nx do
     shape = Nx.Shape.take_diagonal(tensor)
     offset = opts[:offset] || 0
 
-    Nx.Shape.validate_offset!(shape, offset)
+    Nx.Shape.validate_diag_offset!(shape, offset)
 
     Nx.gather(tensor, diag_indices(shape, offset))
   end

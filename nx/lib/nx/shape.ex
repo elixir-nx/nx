@@ -1232,25 +1232,25 @@ defmodule Nx.Shape do
   end
 
   @doc """
-  Validates an offset for given shape
+  Validates an offset to extract or create a diagonal (tensor) for given shape
 
   ## Examples
 
-      iex> Nx.Shape.validate_offset!({3, 4}, 1)
+      iex> Nx.Shape.validate_diag_offset!({3, 4}, 1)
       :ok
 
-      iex> Nx.Shape.validate_offset!({3, 4}, -1)
+      iex> Nx.Shape.validate_diag_offset!({3, 4}, -1)
       :ok
 
   ## Error cases
 
-    iex> Nx.Shape.validate_offset!({3, 4}, 4)
+    iex> Nx.Shape.validate_diag_offset!({3, 4}, 4)
     ** (ArgumentError) offset must be less than breadth when positive, got: 4
 
-    iex> Nx.Shape.validate_offset!({3, 4}, -3)
+    iex> Nx.Shape.validate_diag_offset!({3, 4}, -3)
     ** (ArgumentError) absolute value of offset must be less than length when negative, got: -3
   """
-  def validate_offset!(shape, offset) do
+  def validate_diag_offset!(shape, offset) do
     {len, breadth} = shape
 
     case offset do
