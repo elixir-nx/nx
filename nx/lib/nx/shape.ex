@@ -1244,28 +1244,28 @@ defmodule Nx.Shape do
 
   ## Error cases
 
-    iex> Nx.Shape.validate_offset!({3, 4}, 3)
-    ** (ArgumentError) offset must be less than length when positive, got: 3
+    iex> Nx.Shape.validate_offset!({3, 4}, 4)
+    ** (ArgumentError) offset must be less than breadth when positive, got: 4
 
-    iex> Nx.Shape.validate_offset!({3, 4}, -4)
-    ** (ArgumentError) absolute value of offset must be less than breadth when negative, got: -4
+    iex> Nx.Shape.validate_offset!({3, 4}, -3)
+    ** (ArgumentError) absolute value of offset must be less than length when negative, got: -3
   """
   def validate_offset!(shape, offset) do
     {len, breadth} = shape
 
     case offset do
-      i when i >= 0 and i < len ->
+      i when i >= 0 and i < breadth ->
         :ok
 
       i when i >= 0 ->
-        raise ArgumentError, "offset must be less than length when positive, got: #{inspect(i)}"
+        raise ArgumentError, "offset must be less than breadth when positive, got: #{inspect(i)}"
 
-      i when i < 0 and -i < breadth ->
+      i when i < 0 and -i < len ->
         :ok
 
       i when i < 0 ->
         raise ArgumentError,
-              "absolute value of offset must be less than breadth when negative, got: #{inspect(i)}"
+              "absolute value of offset must be less than length when negative, got: #{inspect(i)}"
     end
   end
 

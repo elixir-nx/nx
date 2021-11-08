@@ -1264,10 +1264,10 @@ defmodule Nx do
       >
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
-      ** (ArgumentError) offset must be less than length when positive, got: 3
+      ** (ArgumentError) offset must be less than breadth when positive, got: 3
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -4)
-      ** (ArgumentError) absolute value of offset must be less than breadth when negative, got: -4
+      ** (ArgumentError) absolute value of offset must be less than length when negative, got: -4
   """
   @doc type: :creation
   def take_diagonal(tensor, opts \\ []) do

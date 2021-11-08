@@ -1825,7 +1825,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "offset must be less than length when positive, got: 4",
+        "offset must be less than breadth when positive, got: 4",
         fn -> Nx.take_diagonal(t, offset: 4) end
       )
     end
@@ -1835,7 +1835,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "absolute value of offset must be less than breadth when negative, got: -3",
+        "absolute value of offset must be less than length when negative, got: -3",
         fn -> Nx.take_diagonal(t, offset: -3) end
       )
     end
