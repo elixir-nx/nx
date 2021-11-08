@@ -1218,7 +1218,7 @@ defmodule Nx do
   end
 
   @doc """
-  Extract a diagonal from a 2D tensor.
+  Extracts the diagonal of a 2D tensor.
 
   ## Examples
 
