@@ -1809,6 +1809,36 @@ defmodule NxTest do
 
       assert diag == Nx.tensor([3, 7])
     end
+
+    test "raises error given tensor with invalid rank" do
+      t = Nx.iota({3, 3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "take_diagonal/2 expects tensor of rank 2, got:\n#{inspect(t)}",
+        fn -> Nx.take_diagonal(t) end
+      )
+    end
+
+    test "raises error given invalid positive offset" do
+      t = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "offset must be less than length when positive, got: 4",
+        fn -> Nx.take_diagonal(t, offset: 4) end
+      )
+    end
+
+    test "raisese error given invalid negative offset" do
+      t = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "absolute value of offset must be less than breadth when negative, got: -3",
+        fn -> Nx.take_diagonal(t, offset: -3) end
+      )
+    end
   end
 
   describe "scatter_add/3" do
