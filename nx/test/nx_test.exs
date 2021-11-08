@@ -1764,6 +1764,53 @@ defmodule NxTest do
     end
   end
 
+  describe "take_diagonal/2" do
+    test "extracts valid diagonal given no offset" do
+      diag =
+        {3, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal()
+
+      assert diag == Nx.tensor([0, 4, 8])
+    end
+
+    test "extracts valid diagonal when breadth is greater than length" do
+      diag =
+        {3, 4}
+        |> Nx.iota()
+        |> Nx.take_diagonal()
+
+      assert diag == Nx.tensor([0, 5, 10])
+    end
+
+    test "extracts valid diagonal when length is greater than breadth" do
+      diag =
+        {4, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal()
+
+      assert diag == Nx.tensor([0, 4, 8])
+    end
+
+    test "extracts valid diagonal given positive offset" do
+      diag =
+        {3, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal(offset: 1)
+
+      assert diag == Nx.tensor([1, 5])
+    end
+
+    test "extracts valid diagonal given negative offset" do
+      diag =
+        {3, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal(offset: -1)
+
+      assert diag == Nx.tensor([3, 7])
+    end
+  end
+
   describe "scatter_add/3" do
     test "can emulate take_along_axis" do
       # One can also convert the indices produced by argsort into suitable

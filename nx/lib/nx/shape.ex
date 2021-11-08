@@ -1219,6 +1219,57 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Checks the shape of a tensor of ap
+  """
+  def take_diagonal(tensor) do
+    case tensor.shape do
+      {len, breadth} ->
+        {len, breadth}
+
+      _bad_shape ->
+        raise ArgumentError, "take_diagonal/2 expects tensor of rank 2, got:\n#{inspect(tensor)}"
+    end
+  end
+
+  @doc """
+  Validates an offset for given shape
+
+  ## Examples
+
+      iex> Nx.Shape.validate_offset!({3, 4}, 1)
+      :ok
+
+      iex> Nx.Shape.validate_offset!({3, 4}, -1)
+      :ok
+
+  ## Error cases
+
+    iex> Nx.Shape.validate_offset!({3, 4}, 3)
+    ** (ArgumentError) offset must be less than length when positive, got: 3
+
+    iex> Nx.Shape.validate_offset!({3, 4}, -4)
+    ** (ArgumentError) absolute value of offset must be less than breadth when negative, got: -4
+  """
+  def validate_offset!(shape, offset) do
+    {len, breadth} = shape
+
+    case offset do
+      i when i >= 0 and i < len ->
+        :ok
+
+      i when i >= 0 ->
+        raise ArgumentError, "offset must be less than length when positive, got: #{inspect(i)}"
+
+      i when i < 0 and -i < breadth ->
+        :ok
+
+      i when i < 0 ->
+        raise ArgumentError,
+              "absolute value of offset must be less than breadth when negative, got: #{inspect(i)}"
+    end
+  end
+
+  @doc """
   Returns the shape and names after a `take_along_axis` operation is performed.
 
   In practice, `axis` in `shape` gets replaced by `indices_shape`.

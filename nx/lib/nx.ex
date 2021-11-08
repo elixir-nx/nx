@@ -1204,18 +1204,7 @@ defmodule Nx do
 
     offset = opts[:offset] || 0
 
-    indices =
-      case offset do
-        i when i >= 0 ->
-          Enum.zip_with(0..(len - 1), i..(breadth - 1), fn x, y -> [x, y] end)
-
-        i when i < 0 ->
-          Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
-      end
-
-    indices_tensor = Nx.tensor(indices)
-
-    Nx.gather(tensor, indices_tensor)
+    Nx.gather(tensor, diag_indices({len, breadth}, offset))
   end
 
   def diag(tensor = %Nx.Tensor{shape: {len}}, _opts) do
@@ -1226,6 +1215,85 @@ defmodule Nx do
 
   def diag(tensor, _opts) do
     raise ArgumentError, "diag/2 expects tensor of rank 1 or 2, got: #{inspect(tensor)}"
+  end
+
+  @doc """
+  Extract a diagonal from a 2D tensor.
+
+  ## Examples
+
+  Given a 2D tensor without offset:
+
+      iex> Nx.take_diagonal(Nx.tensor([
+      ...> [0, 1, 2],
+      ...> [3, 4, 5],
+      ...> [6, 7, 8]
+      ...> ]))
+      #Nx.Tensor<
+        s64[3]
+        [0, 4, 8]
+      >
+
+  And if given a 2D tensor along with an offset:
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 1)
+      #Nx.Tensor<
+        s64[2]
+        [1, 5]
+      >
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -1)
+      #Nx.Tensor<
+        s64[2]
+        [3, 7]
+      >
+
+  ## Options
+
+    * `:offset` - offset used for extracting the diagonal.
+      Use offset > 0 for diagonals above the main diagonal,
+      and offset < 0 for diagonals below the main diagonal.
+
+  ## Error cases
+
+      iex> Nx.take_diagonal(Nx.tensor([0, 1, 2]))
+      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got:
+      #Nx.Tensor<
+        s64[3]
+        [0, 1, 2]
+      >
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
+      ** (ArgumentError) offset must be less than length when positive, got: 3
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -4)
+      ** (ArgumentError) absolute value of offset must be less than breadth when negative, got: -4
+  """
+  def take_diagonal(tensor, opts \\ []) do
+    opts = keyword!(opts, [:offset])
+
+    shape = Nx.Shape.take_diagonal(tensor)
+    offset = opts[:offset] || 0
+
+    Nx.Shape.validate_offset!(shape, offset)
+
+    Nx.gather(tensor, diag_indices(shape, offset))
+  end
+
+  # Returns the indices of the diagonal of a tensor of the given shape
+  defp diag_indices(shape, offset) do
+    {len, breadth} = shape
+
+    indices =
+      case offset do
+        i when i >= 0 ->
+          Enum.zip_with(0..(len - 1), i..(breadth - 1), fn x, y -> [x, y] end)
+
+        i when i < 0 ->
+          Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
+      end
+
+    Nx.tensor(indices)
   end
 
   @doc """
