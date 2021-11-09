@@ -1250,9 +1250,7 @@ defmodule Nx.Shape do
     iex> Nx.Shape.validate_diag_offset!({3, 4}, -3)
     ** (ArgumentError) absolute value of offset must be less than length when negative, got: -3
   """
-  def validate_diag_offset!(shape, offset) do
-    {len, breadth} = shape
-
+  def validate_diag_offset!({len, breadth}, offset) do
     case offset do
       i when i >= 0 and i < breadth ->
         :ok
