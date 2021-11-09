@@ -1264,19 +1264,20 @@ defmodule Nx.Shape do
     ** (ArgumentError) absolute value of offset must be less than length when negative, got: -3
   """
   def validate_diag_offset!({len, breadth}, offset) do
-    case offset do
-      i when i >= 0 and i < breadth ->
+    cond do
+      offset >= 0 and offset < breadth ->
         :ok
 
-      i when i >= 0 ->
-        raise ArgumentError, "offset must be less than breadth when positive, got: #{inspect(i)}"
-
-      i when i < 0 and -i < len ->
-        :ok
-
-      i when i < 0 ->
+      offset >= 0 ->
         raise ArgumentError,
-              "absolute value of offset must be less than length when negative, got: #{inspect(i)}"
+              "offset must be less than breadth when positive, got: #{inspect(offset)}"
+
+      offset < 0 and -offset < len ->
+        :ok
+
+      offset < 0 ->
+        raise ArgumentError,
+              "absolute value of offset must be less than length when negative, got: #{inspect(offset)}"
     end
   end
 
