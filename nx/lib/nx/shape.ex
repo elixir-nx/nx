@@ -1260,10 +1260,10 @@ defmodule Nx.Shape do
   ## Error cases
 
     iex> Nx.Shape.validate_diag_offset!({3, 4}, 4)
-    ** (ArgumentError) offset must be less than breadth when positive, got: 4
+    ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 4
 
     iex> Nx.Shape.validate_diag_offset!({3, 4}, -3)
-    ** (ArgumentError) absolute value of offset must be less than length when negative, got: -3
+    ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -3
 
     iex> Nx.Shape.validate_diag_offset!({3, 3, 3}, 0)
     ** (ArgumentError) expected shape of rank 2 to be given, got shape of rank: 3
@@ -1277,14 +1277,14 @@ defmodule Nx.Shape do
 
       offset >= 0 ->
         raise ArgumentError,
-              "offset must be less than breadth when positive, got: #{inspect(offset)}"
+              "offset must be less than length of axis 1 when positive, got: #{inspect(offset)}"
 
       offset < 0 and -offset < len ->
         :ok
 
       offset < 0 ->
         raise ArgumentError,
-              "absolute value of offset must be less than length when negative, got: #{inspect(offset)}"
+              "absolute value of offset must be less than length of axis 0 when negative, got: #{inspect(offset)}"
     end
   end
 

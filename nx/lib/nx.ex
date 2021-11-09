@@ -1188,10 +1188,10 @@ defmodule Nx do
       ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got tensor of rank: 1
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
-      ** (ArgumentError) offset must be less than breadth when positive, got: 3
+      ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 3
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -4)
-      ** (ArgumentError) absolute value of offset must be less than length when negative, got: -4
+      ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -4
   """
   @doc type: :creation
   def take_diagonal(tensor, opts \\ []) do
