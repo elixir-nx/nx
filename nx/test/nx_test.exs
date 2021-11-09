@@ -1758,7 +1758,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "take_diagonal/2 expects tensor of rank 2, got:\n#{inspect(t)}",
+        "take_diagonal/2 expects tensor of rank 2, got tensor of rank: 3",
         fn -> Nx.take_diagonal(t) end
       )
     end
@@ -1817,7 +1817,7 @@ defmodule NxTest do
 
       assert_raise(
         ArgumentError,
-        "make_diagonal/2 expects tensor of rank 1, got:\n#{inspect(t)}",
+        "make_diagonal/2 expects tensor of rank 1, got tensor of rank: 3",
         fn -> Nx.make_diagonal(t) end
       )
     end

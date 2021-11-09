@@ -1185,11 +1185,7 @@ defmodule Nx do
   ## Error cases
 
       iex> Nx.take_diagonal(Nx.tensor([0, 1, 2]))
-      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got:
-      #Nx.Tensor<
-        s64[3]
-        [0, 1, 2]
-      >
+      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got tensor of rank: 1
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
       ** (ArgumentError) offset must be less than breadth when positive, got: 3
@@ -1199,9 +1195,11 @@ defmodule Nx do
   """
   @doc type: :creation
   def take_diagonal(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
     opts = keyword!(opts, [:offset])
 
-    shape = Nx.Shape.take_diagonal(tensor)
+    shape = Nx.Shape.take_diagonal(tensor.shape)
     offset = opts[:offset] || 0
 
     Nx.Shape.validate_diag_offset!(shape, offset)
@@ -1296,20 +1294,15 @@ defmodule Nx do
   ## Error cases
 
       iex> Nx.make_diagonal(Nx.tensor([[0, 0], [0, 1]]))
-      ** (ArgumentError) make_diagonal/2 expects tensor of rank 1, got:
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [0, 0],
-          [0, 1]
-        ]
-      >
+      ** (ArgumentError) make_diagonal/2 expects tensor of rank 1, got tensor of rank: 2
   """
   @doc type: :creation
   def make_diagonal(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
     opts = keyword!(opts, [:offset])
 
-    {len} = Nx.Shape.make_diagonal(tensor)
+    {len} = Nx.Shape.make_diagonal(tensor.shape)
     offset = opts[:offset] || 0
 
     diag_len = len + Kernel.abs(offset)

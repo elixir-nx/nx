@@ -1221,27 +1221,29 @@ defmodule Nx.Shape do
   @doc """
   Returns shape if valid and raises error if not.
   """
-  def take_diagonal(tensor) do
-    case tensor.shape do
-      {len, breadth} ->
-        {len, breadth}
+  def take_diagonal(shape)
 
-      _bad_shape ->
-        raise ArgumentError, "take_diagonal/2 expects tensor of rank 2, got:\n#{inspect(tensor)}"
-    end
+  def take_diagonal({len, breadth}) do
+    {len, breadth}
+  end
+
+  def take_diagonal(invalid_shape) do
+    raise ArgumentError,
+          "take_diagonal/2 expects tensor of rank 2, got tensor of rank: #{tuple_size(invalid_shape)}"
   end
 
   @doc """
   Returns shape if valid and raises error if not.
   """
-  def make_diagonal(tensor) do
-    case tensor.shape do
-      {len} ->
-        {len}
+  def make_diagonal(shape)
 
-      _bad_shape ->
-        raise ArgumentError, "make_diagonal/2 expects tensor of rank 1, got:\n#{inspect(tensor)}"
-    end
+  def make_diagonal({len}) do
+    {len}
+  end
+
+  def make_diagonal(invalid_shape) do
+    raise ArgumentError,
+          "make_diagonal/2 expects tensor of rank 1, got tensor of rank: #{tuple_size(invalid_shape)}"
   end
 
   @doc """
