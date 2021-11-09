@@ -277,7 +277,17 @@ defmodule Torchx.BackendTest do
     test "base case 2D" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
       b = Nx.tensor([[1, 2, 3], [2, 2, 4], [2, 0, 1]])
-      result = Nx.LinAlg.triangular_solve(a, b) |> IO.inspect()
+      result = Nx.LinAlg.triangular_solve(a, b)
+
+      expected =
+        Nx.tensor([
+          [1.0, 2.0, 3.0],
+          [1.0, 0.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ])
+
+      require IEx
+      IEx.pry()
 
       assert_all_close(
         result,

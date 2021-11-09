@@ -167,14 +167,17 @@ NIF(to_blob)
 
   torch::optional<torch::Device> device = torch::device_of(*t);
 
+  auto reshaped = t->flatten();
+  auto data_ptr = reshaped.data_ptr();
+
   if (device.has_value() && device.value().type() == torch::kCPU)
   {
-    return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), byte_size));
+    return nx::nif::ok(env, enif_make_resource_binary(env, t, data_ptr, byte_size));
   }
   else
   {
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-    memcpy(result_data, t->data_ptr(), byte_size);
+    memcpy(result_data, data_ptr, byte_size);
     return nx::nif::ok(env, result);
   }
 }
@@ -483,7 +486,20 @@ BINARY_OP(logical_or)
 BINARY_OP(logical_xor)
 
 BINARY_OP(add)
-BINARY_OP(subtract)
+NIF(subtract)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+
+  auto result = torch::subtract(*a, *b);
+  std::cout << a << std::endl;
+  std::cout << *a << std::endl;
+  std::cout << b << std::endl;
+  std::cout << *b << std::endl;
+  std::cout << result << std::endl;
+  TENSOR(result);
+}
+
 BINARY_OP(divide)
 BINARY_OP(remainder)
 BINARY_OP(multiply)
