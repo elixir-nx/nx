@@ -4368,7 +4368,7 @@ defmodule Nx do
 
     output_type = Nx.Type.merge(source_type, value_type)
 
-    impl!(tensor).scatter_window_max(
+    impl!(tensor, source).scatter_window_max(
       %{tensor | type: output_type},
       tensor,
       source,
@@ -4452,7 +4452,7 @@ defmodule Nx do
 
     output_type = Nx.Type.merge(source_type, value_type)
 
-    impl!(tensor).scatter_window_min(
+    impl!(tensor, source).scatter_window_min(
       %{tensor | type: output_type},
       tensor,
       source,
@@ -4540,7 +4540,7 @@ defmodule Nx do
 
     Nx.Shape.scatter_add(target, indices, updates)
 
-    impl!(target).scatter_add(%{target | type: type}, target, indices, updates)
+    impl!(target, indices, updates).scatter_add(%{target | type: type}, target, indices, updates)
   end
 
   ## Unary ops
