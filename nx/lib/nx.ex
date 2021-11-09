@@ -1181,6 +1181,7 @@ defmodule Nx do
     * `:offset` - offset used for extracting the diagonal.
       Use offset > 0 for diagonals above the main diagonal,
       and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
 
   ## Error cases
 
@@ -1287,9 +1288,10 @@ defmodule Nx do
 
   ## Options
 
-    * `:offset` - offset used for extracting the diagonal.
+    * `:offset` - offset used for making the diagonal.
       Use offset > 0 for diagonals above the main diagonal,
       and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
 
   ## Error cases
 
