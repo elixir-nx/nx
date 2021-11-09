@@ -1264,7 +1264,12 @@ defmodule Nx.Shape do
 
     iex> Nx.Shape.validate_diag_offset!({3, 4}, -3)
     ** (ArgumentError) absolute value of offset must be less than length when negative, got: -3
+
+    iex> Nx.Shape.validate_diag_offset!({3, 3, 3}, 0)
+    ** (ArgumentError) expected shape of rank 2 to be given, got shape of rank: 3
   """
+  def validate_diag_offset!(shape, offset)
+
   def validate_diag_offset!({len, breadth}, offset) do
     cond do
       offset >= 0 and offset < breadth ->
@@ -1281,6 +1286,11 @@ defmodule Nx.Shape do
         raise ArgumentError,
               "absolute value of offset must be less than length when negative, got: #{inspect(offset)}"
     end
+  end
+
+  def validate_diag_offset!(shape, _offset) when is_tuple(shape) do
+    raise ArgumentError,
+          "expected shape of rank 2 to be given, got shape of rank: #{tuple_size(shape)}"
   end
 
   @doc """
