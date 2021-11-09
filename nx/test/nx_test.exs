@@ -1707,12 +1707,12 @@ defmodule NxTest do
     end
   end
 
-  describe "diag/2" do
+  describe "take_diagonal/2" do
     test "extracts valid diagonal given no offset" do
       diag =
         {3, 3}
         |> Nx.iota()
-        |> Nx.diag()
+        |> Nx.take_diagonal()
 
       assert diag == Nx.tensor([0, 4, 8])
     end
@@ -1721,7 +1721,7 @@ defmodule NxTest do
       diag =
         {3, 4}
         |> Nx.iota()
-        |> Nx.diag()
+        |> Nx.take_diagonal()
 
       assert diag == Nx.tensor([0, 5, 10])
     end
@@ -1730,36 +1730,95 @@ defmodule NxTest do
       diag =
         {4, 3}
         |> Nx.iota()
-        |> Nx.diag()
+        |> Nx.take_diagonal()
 
       assert diag == Nx.tensor([0, 4, 8])
     end
 
-    test "extracts valid diagonal given offset" do
+    test "extracts valid diagonal given positive offset" do
       diag =
         {3, 3}
         |> Nx.iota()
-        |> Nx.diag(offset: 1)
+        |> Nx.take_diagonal(offset: 1)
 
       assert diag == Nx.tensor([1, 5])
     end
 
-    test "constructs diagonal given 1-d tensor" do
+    test "extracts valid diagonal given negative offset" do
       diag =
-        {3}
+        {3, 3}
         |> Nx.iota()
-        |> Nx.diag()
+        |> Nx.take_diagonal(offset: -1)
 
-      assert diag == Nx.tensor([[0, 0, 0], [0, 1, 0], [0, 0, 2]])
+      assert diag == Nx.tensor([3, 7])
     end
 
-    test "raises an error when given tensor with invalid rank" do
+    test "raises error given tensor with invalid rank" do
       t = Nx.iota({3, 3, 3})
 
       assert_raise(
         ArgumentError,
-        "diag/2 expects tensor of rank 1 or 2, got: #{inspect(t)}",
-        fn -> Nx.diag(t) end
+        "take_diagonal/2 expects tensor of rank 2, got tensor of rank: 3",
+        fn -> Nx.take_diagonal(t) end
+      )
+    end
+
+    test "raises error given invalid positive offset" do
+      t = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "offset must be less than length of axis 1 when positive, got: 4",
+        fn -> Nx.take_diagonal(t, offset: 4) end
+      )
+    end
+
+    test "raisese error given invalid negative offset" do
+      t = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "absolute value of offset must be less than length of axis 0 when negative, got: -3",
+        fn -> Nx.take_diagonal(t, offset: -3) end
+      )
+    end
+  end
+
+  describe "make_diagonal/2" do
+    test "constructs valid diagonal given no offset" do
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> Nx.make_diagonal()
+
+      assert diag == Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]])
+    end
+
+    test "constructs valid diagonal given positive offset" do
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> Nx.make_diagonal(offset: 1)
+
+      assert diag == Nx.tensor([[0, 1, 0, 0], [0, 0, 2, 0], [0, 0, 0, 3], [0, 0, 0, 0]])
+    end
+
+    test "constructs valid diagonal given negative offset" do
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> Nx.make_diagonal(offset: -1)
+
+      assert diag == Nx.tensor([[0, 0, 0, 0], [1, 0, 0, 0], [0, 2, 0, 0], [0, 0, 3, 0]])
+    end
+
+    test "raises error given tensor with invalid rank" do
+      t = Nx.iota({3, 3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "make_diagonal/2 expects tensor of rank 1, got tensor of rank: 3",
+        fn -> Nx.make_diagonal(t) end
       )
     end
   end

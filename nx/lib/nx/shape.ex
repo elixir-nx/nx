@@ -1219,6 +1219,81 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Returns shape if valid and raises error if not.
+  """
+  def take_diagonal(shape)
+
+  def take_diagonal({len, breadth}) do
+    {len, breadth}
+  end
+
+  def take_diagonal(invalid_shape) do
+    raise ArgumentError,
+          "take_diagonal/2 expects tensor of rank 2, got tensor of rank: #{tuple_size(invalid_shape)}"
+  end
+
+  @doc """
+  Returns shape if valid and raises error if not.
+  """
+  def make_diagonal(shape)
+
+  def make_diagonal({len}) do
+    {len}
+  end
+
+  def make_diagonal(invalid_shape) do
+    raise ArgumentError,
+          "make_diagonal/2 expects tensor of rank 1, got tensor of rank: #{tuple_size(invalid_shape)}"
+  end
+
+  @doc """
+  Validates an offset to extract or create a diagonal (tensor) for given shape
+
+  ## Examples
+
+      iex> Nx.Shape.validate_diag_offset!({3, 4}, 1)
+      :ok
+
+      iex> Nx.Shape.validate_diag_offset!({3, 4}, -1)
+      :ok
+
+  ## Error cases
+
+    iex> Nx.Shape.validate_diag_offset!({3, 4}, 4)
+    ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 4
+
+    iex> Nx.Shape.validate_diag_offset!({3, 4}, -3)
+    ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -3
+
+    iex> Nx.Shape.validate_diag_offset!({3, 3, 3}, 0)
+    ** (ArgumentError) expected shape of rank 2 to be given, got shape of rank: 3
+  """
+  def validate_diag_offset!(shape, offset)
+
+  def validate_diag_offset!({len, breadth}, offset) do
+    cond do
+      offset >= 0 and offset < breadth ->
+        :ok
+
+      offset >= 0 ->
+        raise ArgumentError,
+              "offset must be less than length of axis 1 when positive, got: #{inspect(offset)}"
+
+      offset < 0 and -offset < len ->
+        :ok
+
+      offset < 0 ->
+        raise ArgumentError,
+              "absolute value of offset must be less than length of axis 0 when negative, got: #{inspect(offset)}"
+    end
+  end
+
+  def validate_diag_offset!(shape, _offset) when is_tuple(shape) do
+    raise ArgumentError,
+          "expected shape of rank 2 to be given, got shape of rank: #{tuple_size(shape)}"
+  end
+
+  @doc """
   Returns the shape and names after a `take_along_axis` operation is performed.
 
   In practice, `axis` in `shape` gets replaced by `indices_shape`.

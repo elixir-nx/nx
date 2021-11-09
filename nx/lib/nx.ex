@@ -1144,28 +1144,15 @@ defmodule Nx do
   end
 
   @doc """
-  Extract a diagonal or create a diagonal tensor.
+  Extracts the diagonal of a 2D tensor.
 
-  Extracts a diagonal if given a 2D tensor, or constructs a tensor given a 1D one.
+  Converse of `make_diagonal/2`.
 
   ## Examples
 
-  When given a 1D tensor:
+  Given a 2D tensor without offset:
 
-      iex> Nx.diag(Nx.tensor([1, 2, 3, 4]))
-      #Nx.Tensor<
-        s64[4][4]
-        [
-          [1, 0, 0, 0],
-          [0, 2, 0, 0],
-          [0, 0, 3, 0],
-          [0, 0, 0, 4]
-        ]
-      >
-
-  Given a 2D tensor:
-
-      iex> Nx.diag(Nx.tensor([
+      iex> Nx.take_diagonal(Nx.tensor([
       ...> [0, 1, 2],
       ...> [3, 4, 5],
       ...> [6, 7, 8]
@@ -1177,13 +1164,13 @@ defmodule Nx do
 
   And if given a 2D tensor along with an offset:
 
-      iex> Nx.diag(Nx.iota({3, 3}), offset: 1)
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 1)
       #Nx.Tensor<
         s64[2]
         [1, 5]
       >
 
-      iex> Nx.diag(Nx.iota({3, 3}), offset: -1)
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -1)
       #Nx.Tensor<
         s64[2]
         [3, 7]
@@ -1194,15 +1181,143 @@ defmodule Nx do
     * `:offset` - offset used for extracting the diagonal.
       Use offset > 0 for diagonals above the main diagonal,
       and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
 
+  ## Error cases
+
+      iex> Nx.take_diagonal(Nx.tensor([0, 1, 2]))
+      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got tensor of rank: 1
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
+      ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 3
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -4)
+      ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -4
   """
   @doc type: :creation
-  def diag(tensor, opts \\ [])
+  def take_diagonal(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
 
-  def diag(tensor = %Nx.Tensor{shape: {len, breadth}}, opts) do
-    opts = keyword!(opts, [:offset])
+    opts = keyword!(opts, offset: 0)
 
-    offset = opts[:offset] || 0
+    shape = Nx.Shape.take_diagonal(tensor.shape)
+    offset = opts[:offset]
+
+    Nx.Shape.validate_diag_offset!(shape, offset)
+
+    Nx.gather(tensor, diag_indices(shape, offset))
+  end
+
+  @doc """
+  Creates a diagonal tensor from a 1D tensor.
+
+  Converse of `take_diagonal/2`.
+
+  The returned tensor will be a square matrix of dimensions equal
+  to the size of the tensor. If an offset is given, the absolute value
+  of the offset is added to the matrix dimensions sizes.
+
+  ## Examples
+
+    Given a 1D tensor:
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3, 4]))
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [1, 0, 0, 0],
+          [0, 2, 0, 0],
+          [0, 0, 3, 0],
+          [0, 0, 0, 4]
+        ]
+      >
+
+    Given a 1D tensor with an offset:
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: 1)
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 1, 0, 0],
+          [0, 0, 2, 0],
+          [0, 0, 0, 3],
+          [0, 0, 0, 0]
+        ]
+      >
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: -1)
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 0, 0, 0],
+          [1, 0, 0, 0],
+          [0, 2, 0, 0],
+          [0, 0, 3, 0]
+        ]
+      >
+
+    You can also have offsets with an abs greater than the tensor length:
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: -4)
+      #Nx.Tensor<
+        s64[7][7]
+        [
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0, 0, 0],
+          [0, 2, 0, 0, 0, 0, 0],
+          [0, 0, 3, 0, 0, 0, 0]
+        ]
+      >
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: 4)
+      #Nx.Tensor<
+        s64[7][7]
+        [
+          [0, 0, 0, 0, 1, 0, 0],
+          [0, 0, 0, 0, 0, 2, 0],
+          [0, 0, 0, 0, 0, 0, 3],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0]
+        ]
+      >
+
+  ## Options
+
+    * `:offset` - offset used for making the diagonal.
+      Use offset > 0 for diagonals above the main diagonal,
+      and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
+
+  ## Error cases
+
+      iex> Nx.make_diagonal(Nx.tensor([[0, 0], [0, 1]]))
+      ** (ArgumentError) make_diagonal/2 expects tensor of rank 1, got tensor of rank: 2
+  """
+  @doc type: :creation
+  def make_diagonal(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
+    opts = keyword!(opts, offset: 0)
+
+    {len} = Nx.Shape.make_diagonal(tensor.shape)
+    offset = opts[:offset]
+
+    diag_len = len + Kernel.abs(offset)
+    diag_shape = {diag_len, diag_len}
+
+    0
+    |> Nx.broadcast(diag_shape)
+    |> Nx.scatter_add(diag_indices(diag_shape, offset), tensor)
+  end
+
+  # Returns the indices of the diagonal of a tensor of the given shape
+  defp diag_indices(shape, offset) do
+    {len, breadth} = shape
 
     indices =
       case offset do
@@ -1213,19 +1328,7 @@ defmodule Nx do
           Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
       end
 
-    indices_tensor = Nx.tensor(indices)
-
-    Nx.gather(tensor, indices_tensor)
-  end
-
-  def diag(tensor = %Nx.Tensor{shape: {len}}, _opts) do
-    identity = Nx.eye({len, len})
-
-    Nx.multiply(tensor, identity)
-  end
-
-  def diag(tensor, _opts) do
-    raise ArgumentError, "diag/2 expects tensor of rank 1 or 2, got: #{inspect(tensor)}"
+    Nx.tensor(indices)
   end
 
   @doc """
