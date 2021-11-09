@@ -1232,6 +1232,19 @@ defmodule Nx.Shape do
   end
 
   @doc """
+  Returns shape if valid and raises error if not.
+  """
+  def make_diagonal(tensor) do
+    case tensor.shape do
+      {len} ->
+        {len}
+
+      _bad_shape ->
+        raise ArgumentError, "make_diagonal/2 expects tensor of rank 1, got:\n#{inspect(tensor)}"
+    end
+  end
+
+  @doc """
   Validates an offset to extract or create a diagonal (tensor) for given shape
 
   ## Examples
