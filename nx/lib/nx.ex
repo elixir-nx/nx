@@ -1197,10 +1197,10 @@ defmodule Nx do
   def take_diagonal(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
 
-    opts = keyword!(opts, [:offset])
+    opts = keyword!(opts, offset: 0)
 
     shape = Nx.Shape.take_diagonal(tensor.shape)
-    offset = opts[:offset] || 0
+    offset = opts[:offset]
 
     Nx.Shape.validate_diag_offset!(shape, offset)
 
@@ -1300,10 +1300,10 @@ defmodule Nx do
   def make_diagonal(tensor, opts \\ []) do
     tensor = to_tensor(tensor)
 
-    opts = keyword!(opts, [:offset])
+    opts = keyword!(opts, offset: 0)
 
     {len} = Nx.Shape.make_diagonal(tensor.shape)
-    offset = opts[:offset] || 0
+    offset = opts[:offset]
 
     diag_len = len + Kernel.abs(offset)
     diag_shape = {diag_len, diag_len}
