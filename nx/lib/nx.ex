@@ -1213,9 +1213,9 @@ defmodule Nx do
 
   Converse of `take_diagonal/2`.
 
-  If given an offset, the diagonal tensor will be a square matrix
-  with length `size(tensor)` + `Kernel.abs(:offset)`, with the 1D
-  tensor as the diagonal of offset `:offset`.
+  The returned tensor will be a square matrix of dimensions equal
+  to the size of the tensor. If an offset is given, the absolute value
+  of the offset is added to the matrix dimensions sizes.
 
   ## Examples
 
