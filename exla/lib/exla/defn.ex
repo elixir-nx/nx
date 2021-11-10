@@ -186,8 +186,8 @@ defmodule EXLA.Defn do
 
   ## to_operator creation
 
-  defp to_operator(:scalar, [scalar], ans, state) do
-    op = to_constant(state.builder, scalar, ans.type)
+  defp to_operator(:constant, [constant], ans, state) do
+    op = to_constant(state.builder, constant, ans.type)
 
     if ans.shape == {} do
       op

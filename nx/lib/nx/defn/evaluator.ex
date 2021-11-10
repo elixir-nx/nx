@@ -8,7 +8,7 @@ defmodule Nx.Defn.Evaluator do
   @behaviour Nx.Defn.Compiler
   alias Nx.Defn.{Expr, Tree}
 
-  @creation_ops [:scalar, :eye, :iota, :from_binary]
+  @creation_ops [:constant, :eye, :iota, :from_binary]
   @random_ops [:random_uniform, :random_normal]
 
   @impl true

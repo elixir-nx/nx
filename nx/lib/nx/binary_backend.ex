@@ -22,8 +22,8 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
-  def scalar(%{type: type, shape: shape} = out, scalar, _backend_options) do
-    data = :binary.copy(number_to_binary(scalar, type), Nx.size(shape))
+  def constant(%{type: type, shape: shape} = out, constant, _backend_options) do
+    data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
     from_binary(out, data)
   end
 
