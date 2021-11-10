@@ -317,8 +317,13 @@ defmodule Nx.Defn.Expr do
 
       true ->
         case t2 do
-          %T{data: %Expr{op: :subtract, args: [%T{data: %Expr{op: :constant, args: [scalar]}}, t2]}}
-          when scalar == 0 ->
+          %T{
+            data: %Expr{
+              op: :subtract,
+              args: [%T{data: %Expr{op: :constant, args: [constant]}}, t2]
+            }
+          }
+          when constant == 0 ->
             binary_expr(out, context, :subtract, t1, t2)
 
           %T{} ->
@@ -361,8 +366,10 @@ defmodule Nx.Defn.Expr do
 
       true ->
         case t2 do
-          %T{data: %Expr{op: :divide, args: [%T{data: %Expr{op: :constant, args: [scalar]}}, t2]}}
-          when scalar == 1 ->
+          %T{
+            data: %Expr{op: :divide, args: [%T{data: %Expr{op: :constant, args: [constant]}}, t2]}
+          }
+          when constant == 1 ->
             binary_expr(out, context, :divide, t1, t2)
 
           %T{} ->
