@@ -651,7 +651,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def left == right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.==(left, right)
+    do: to_int(Kernel.==(left, right))
 
   def left == right, do: Nx.equal(left, right)
 
@@ -665,7 +665,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left != right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.!=(left, right)
+    do: to_int(Kernel.!=(left, right))
 
   def left != right, do: Nx.not_equal(left, right)
 
@@ -679,7 +679,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left < right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.<(left, right)
+    do: to_int(Kernel.<(left, right))
 
   def left < right, do: Nx.less(left, right)
 
@@ -693,7 +693,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left > right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.>(left, right)
+    do: to_int(Kernel.>(left, right))
 
   def left > right, do: Nx.greater(left, right)
 
@@ -707,7 +707,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left <= right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.<=(left, right)
+    do: to_int(Kernel.<=(left, right))
 
   def left <= right, do: Nx.less_equal(left, right)
 
@@ -721,9 +721,12 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left >= right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.>=(left, right)
+    do: to_int(Kernel.>=(left, right))
 
   def left >= right, do: Nx.greater_equal(left, right)
+
+  defp to_int(true), do: 1
+  defp to_int(false), do: 0
 
   @doc """
   Ensures the first argument is a `keyword` with the given

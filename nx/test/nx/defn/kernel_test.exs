@@ -23,6 +23,15 @@ defmodule Nx.Defn.KernelTest do
       assert Nx.Defn.Kernel./(1, 2) == 0.5
     end
 
+    test "comparison" do
+      assert Nx.Defn.Kernel.==(0, 0) == 1
+      assert Nx.Defn.Kernel.!=(0, 0) == 0
+      assert Nx.Defn.Kernel.>(0, 0) == 0
+      assert Nx.Defn.Kernel.>=(0, 0) == 1
+      assert Nx.Defn.Kernel.<(0, 0) == 0
+      assert Nx.Defn.Kernel.<=(0, 0) == 1
+    end
+
     test "and" do
       assert Nx.Defn.Kernel.and(0, 0) == 0
       assert Nx.Defn.Kernel.and(1, 0) == 0
