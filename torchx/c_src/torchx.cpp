@@ -167,8 +167,8 @@ NIF(to_blob)
   // a column-major tensor. t->flatten() is a no-op if the tensor
   // is already row-major, which was verified by printing t->data_ptr
   // and reshaped.data_ptr and confirming they had the same value.
-  auto reshaped = t->flatten();
-  auto data_ptr = reshaped.data_ptr();
+  torch::Tensor reshaped = t->flatten();
+  void * data_ptr = reshaped.data_ptr();
 
   if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr())
   {
@@ -553,6 +553,17 @@ UNARY_OP(erf)
 UNARY_OP(erfc)
 UNARY_OP2(erf_inv, erfinv)
 
+NIF(triangular_solve)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+  PARAM(2, bool, transpose);
+  PARAM(3, bool, upper);
+
+  auto result = torch::triangular_solve(*b, *a, transpose, upper);
+
+  TENSOR(std::get<0>(result));
+}
 
 /* Aggregates */
 
@@ -786,6 +797,7 @@ static ErlNifFunc nif_functions[] = {
     DF(cholesky, 2),
     DF(qr, 1),
     DF(qr, 2),
+    DF(triangular_solve, 4),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

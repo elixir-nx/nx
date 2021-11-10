@@ -286,23 +286,21 @@ defmodule Torchx.BackendTest do
           [1.0, 0.0, 0.0]
         ])
 
-
-      assert_all_close(
-        result,
-        Nx.tensor([
-          [1.0, 2.0, 3.0],
-          [1.0, 0.0, 1.0],
-          [1.0, 0.0, 0.0]
-        ])
-      )
+      assert_all_close(result, expected)
     end
 
-    # iex> a = Nx.tensor([[1, 1, 1, 1], [0, 1, 0, 1], [0, 0, 1, 2], [0, 0, 0, 3]])
-    # iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([2, 4, 2, 4]), lower: false)
-    # #Nx.Tensor<
-    #   f32[4]
-    #   [-1.3333333730697632, 2.6666667461395264, -0.6666666865348816, 1.3333333730697632]
-    # >
+    test "lower: false" do
+      a = Nx.tensor([[1, 1, 1, 1], [0, 1, 0, 1], [0, 0, 1, 2], [0, 0, 0, 3]])
+      b = Nx.tensor([2, 4, 2, 4])
+      result = Nx.LinAlg.triangular_solve(a, b, lower: false)
+
+      expected =
+        Nx.tensor([-1.3333333730697632, 2.6666667461395264, -0.6666666865348816, 1.3333333730697632])
+
+      assert_all_close(result, expected)
+    end
+
+
 
     # iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
     # iex> b = Nx.tensor([[0, 2, 1], [1, 1, 0], [3, 3, 1]])

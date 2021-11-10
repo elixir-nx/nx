@@ -591,6 +591,8 @@ defmodule Torchx.Backend do
 
     b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(out_type)
 
+    IO.inspect(upper, label: "upper")
+
     a_tx
     |> Torchx.triangular_solve(b_tx, transform == :transpose, upper)
     |> Torchx.reshape(out.shape)
