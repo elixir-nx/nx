@@ -878,7 +878,7 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  @constants [:scalar, :tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
+  @constants [:constant, :tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
                [:all?, :any?, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
@@ -1135,7 +1135,7 @@ defmodule Nx.Defn.Grad do
 
   defp surface_nuldim_scalar(expr) do
     case expr do
-      %T{data: %Expr{op: :scalar, args: [scalar]}, shape: {}} -> scalar
+      %T{data: %Expr{op: :constant, args: [scalar]}, shape: {}} -> scalar
       %T{} -> expr
     end
   end

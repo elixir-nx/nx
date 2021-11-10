@@ -1166,7 +1166,7 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = initial
       assert %T{data: %Expr{op: :parameter}, shape: {}, type: {:s, 64}} = arg
       assert %T{data: %Expr{op: :less}, shape: {}, type: {:u, 8}} = condition
-      assert %T{data: %Expr{op: :scalar, args: [1]}, shape: {}, type: {:s, 64}} = body
+      assert %T{data: %Expr{op: :constant, args: [1]}, shape: {}, type: {:s, 64}} = body
     end
 
     defn factorial(x) do

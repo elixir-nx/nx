@@ -22,7 +22,7 @@ defmodule Nx.Defn.Expr do
 
     * `parameter(integer)`
 
-    * `scalar(number)`
+    * `constant(number)`
 
     * `tensor(tensor)`
 
@@ -86,6 +86,16 @@ defmodule Nx.Defn.Expr do
   def metadata(expr, metadata) when is_map(metadata) do
     expr = to_expr(expr)
     expr(expr, expr.data.context, :metadata, [expr, metadata])
+  end
+
+  @doc """
+  Creates a constant tensor.
+  """
+  # For constants, make the ID be deterministic to improve cache reuse.
+  def constant(number, %{type: type, shape: shape} = tensor) when is_number(number) do
+    id = {number, type, shape}
+    number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
+    %{tensor | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
   end
 
   @doc """
@@ -289,8 +299,8 @@ defmodule Nx.Defn.Expr do
   @impl true
   def add(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    s1 = maybe_constant(t1)
+    s2 = maybe_constant(t2)
 
     cond do
       s1 == 0 ->
@@ -300,14 +310,14 @@ defmodule Nx.Defn.Expr do
         ensure_compatible(t1, out)
 
       s1 && s2 ->
-        to_scalar(s1 + s2, out)
+        constant(s1 + s2, out)
 
       s2 ->
         commute(out, context, :add, &+/2, s2, t2, t1)
 
       true ->
         case t2 do
-          %T{data: %Expr{op: :subtract, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
+          %T{data: %Expr{op: :subtract, args: [%T{data: %Expr{op: :constant, args: [scalar]}}, t2]}}
           when scalar == 0 ->
             binary_expr(out, context, :subtract, t1, t2)
 
@@ -320,12 +330,12 @@ defmodule Nx.Defn.Expr do
   @impl true
   def subtract(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    s1 = maybe_constant(t1)
+    s2 = maybe_constant(t2)
 
     cond do
       s2 == 0 -> ensure_compatible(t1, out)
-      s1 && s2 -> to_scalar(s1 - s2, out)
+      s1 && s2 -> constant(s1 - s2, out)
       true -> binary_expr(out, context, :subtract, t1, t2)
     end
   end
@@ -333,8 +343,8 @@ defmodule Nx.Defn.Expr do
   @impl true
   def multiply(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    s1 = maybe_constant(t1)
+    s2 = maybe_constant(t2)
 
     cond do
       s1 == 1 ->
@@ -344,14 +354,14 @@ defmodule Nx.Defn.Expr do
         ensure_compatible(t1, out)
 
       s1 && s2 ->
-        to_scalar(s1 * s2, out)
+        constant(s1 * s2, out)
 
       s2 ->
         commute(out, context, :multiply, &*/2, s2, t2, t1)
 
       true ->
         case t2 do
-          %T{data: %Expr{op: :divide, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
+          %T{data: %Expr{op: :divide, args: [%T{data: %Expr{op: :constant, args: [scalar]}}, t2]}}
           when scalar == 1 ->
             binary_expr(out, context, :divide, t1, t2)
 
@@ -364,12 +374,12 @@ defmodule Nx.Defn.Expr do
   @impl true
   def divide(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    s1 = maybe_constant(t1)
+    s2 = maybe_constant(t2)
 
     cond do
       s2 == 1 -> ensure_compatible(t1, out)
-      s1 && s2 -> to_scalar(s1 / s2, out)
+      s1 && s2 -> constant(s1 / s2, out)
       true -> binary_expr(out, context, :divide, t1, t2)
     end
   end
@@ -377,7 +387,7 @@ defmodule Nx.Defn.Expr do
   @impl true
   def power(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s2 = maybe_scalar(t2)
+    s2 = maybe_constant(t2)
 
     cond do
       s2 == 1 -> ensure_compatible(t1, out)
@@ -533,8 +543,8 @@ defmodule Nx.Defn.Expr do
   def as_type(out, tensor) do
     tensor = to_expr(tensor)
 
-    if s = maybe_scalar(tensor) do
-      to_scalar(s, out)
+    if s = maybe_constant(tensor) do
+      constant(s, out)
     else
       expr(out, tensor.data.context, :as_type, [tensor])
     end
@@ -552,8 +562,8 @@ defmodule Nx.Defn.Expr do
       expr(out, tensor.data.context, :broadcast, [inner_tensor, shape, inner_axes])
     else
       _ ->
-        if scalar = maybe_scalar(tensor) do
-          to_scalar(scalar, out)
+        if scalar = maybe_constant(tensor) do
+          constant(scalar, out)
         else
           expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
         end
@@ -752,7 +762,7 @@ defmodule Nx.Defn.Expr do
 
   ops =
     [backend_copy: 3, backend_deallocate: 1, backend_transfer: 3] ++
-      [to_binary: 2, to_batched_list: 3, scalar: 3]
+      [to_binary: 2, to_batched_list: 3, constant: 3]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)
@@ -778,13 +788,13 @@ defmodule Nx.Defn.Expr do
     do: t
 
   defp to_expr(%T{data: %Nx.BinaryBackend{}, shape: {}} = t),
-    do: to_scalar(Nx.to_scalar(t), t)
+    do: constant(Nx.to_scalar(t), t)
 
   defp to_expr(%T{} = t),
     do: expr(t, nil, :tensor, [t])
 
   defp to_expr(number) when is_number(number),
-    do: to_scalar(number, %T{shape: {}, names: [], type: Nx.Type.infer(number)})
+    do: constant(number, %T{shape: {}, names: [], type: Nx.Type.infer(number)})
 
   defp to_expr(other) do
     raise ArgumentError,
@@ -949,18 +959,11 @@ defmodule Nx.Defn.Expr do
 
   ## Scalar helpers and related optimizations
 
-  defp maybe_scalar(expr) do
+  defp maybe_constant(expr) do
     case expr do
-      %T{data: %Expr{op: :scalar, args: [number]}} -> number
+      %T{data: %Expr{op: :constant, args: [number]}} -> number
       _ -> nil
     end
-  end
-
-  # For scalars, make the ID be deterministic to improve cache reuse
-  defp to_scalar(number, %{type: type, shape: shape} = tensor) when is_number(number) do
-    id = {number, type, shape}
-    number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
-    %{tensor | data: %Expr{id: id, op: :scalar, args: [number], context: nil}}
   end
 
   defp ensure_compatible(t, out) do
@@ -971,20 +974,20 @@ defmodule Nx.Defn.Expr do
   defp commute(out, context, op, fun, s1, t1, t2) do
     {a1, a2} =
       case t2 do
-        %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :scalar, args: [s2]}}, t3]}} ->
+        %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :constant, args: [s2]}}, t3]}} ->
           nullary_out = %{out | shape: {}, names: []}
 
           if s1 do
-            {to_scalar(fun.(s1, s2), nullary_out), t3 |> Nx.broadcast(out.shape)}
+            {constant(fun.(s1, s2), nullary_out), t3 |> Nx.broadcast(out.shape)}
           else
-            {to_scalar(s2, nullary_out), apply(Nx, op, [t1, t3]) |> Nx.broadcast(out.shape)}
+            {constant(s2, nullary_out), apply(Nx, op, [t1, t3]) |> Nx.broadcast(out.shape)}
           end
 
         %T{} ->
           case t1 do
-            %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :scalar, args: [s1]}}, t3]}} ->
+            %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :constant, args: [s1]}}, t3]}} ->
               nullary_out = %{out | shape: {}, names: []}
-              {to_scalar(s1, nullary_out), apply(Nx, op, [t2, t3]) |> Nx.broadcast(out.shape)}
+              {constant(s1, nullary_out), apply(Nx, op, [t2, t3]) |> Nx.broadcast(out.shape)}
 
             %T{} ->
               {t1, t2}
@@ -997,11 +1000,11 @@ defmodule Nx.Defn.Expr do
   defp binary_expr(tensor, context, op, arg1, arg2) do
     {arg1, arg2} =
       case {arg1, arg2} do
-        {%T{data: %Expr{op: :scalar, args: [s]}, shape: shape}, %T{shape: shape}} ->
-          {to_scalar(s, %{arg1 | shape: {}, names: []}), arg2}
+        {%T{data: %Expr{op: :constant, args: [s]}, shape: shape}, %T{shape: shape}} ->
+          {constant(s, %{arg1 | shape: {}, names: []}), arg2}
 
-        {%T{shape: shape}, %T{data: %Expr{op: :scalar, args: [s]}, shape: shape}} ->
-          {arg1, to_scalar(s, %{arg2 | shape: {}, names: []})}
+        {%T{shape: shape}, %T{data: %Expr{op: :constant, args: [s]}, shape: shape}} ->
+          {arg1, constant(s, %{arg2 | shape: {}, names: []})}
 
         {_, _} ->
           {arg1, arg2}
@@ -1032,7 +1035,7 @@ defmodule Nx.Defn.Expr do
   end
 
   # Scalars and funs are shown as is
-  defp inspect_expr(%T{data: %Expr{op: :scalar}} = t, acc), do: {t, acc}
+  defp inspect_expr(%T{data: %Expr{op: :constant}} = t, acc), do: {t, acc}
   defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
 
   defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
@@ -1098,7 +1101,7 @@ defmodule Nx.Defn.Expr do
       %T{data: %Expr{op: :fun, args: [_, _, {m, f, a}]}} ->
         [?&, Exception.format_mfa(m, f, a)]
 
-      %T{data: %Expr{op: :scalar, args: [number]}} ->
+      %T{data: %Expr{op: :constant, args: [number]}} ->
         to_string(number)
 
       %T{data: %Expr{id: id}} ->

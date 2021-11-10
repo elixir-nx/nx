@@ -8,9 +8,9 @@ defmodule Nx.Defn.ExprTest do
   import Nx.Defn
   @default_defn_compiler Nx.Defn.Identity
 
-  describe "scalar optimizations" do
+  describe "constant optimizations" do
     test "broadcast" do
-      assert %T{data: %Expr{op: :scalar, args: [1.0]}, type: {:f, 32}, shape: {1, 2, 3}} =
+      assert %T{data: %Expr{op: :constant, args: [1.0]}, type: {:f, 32}, shape: {1, 2, 3}} =
                Nx.broadcast(Expr.tensor(1.0), {1, 2, 3})
 
       param = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
@@ -19,7 +19,7 @@ defmodule Nx.Defn.ExprTest do
                data: %Expr{
                  op: :add,
                  args: [
-                   %T{shape: {}, data: %Expr{op: :scalar, args: [1.0]}},
+                   %T{shape: {}, data: %Expr{op: :constant, args: [1.0]}},
                    %T{shape: {2, 2}, data: %Expr{op: :parameter}}
                  ]
                },
@@ -29,12 +29,12 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "as_type" do
-      assert %T{data: %Expr{op: :scalar, args: [1.0]}, type: {:f, 32}, shape: {}} =
+      assert %T{data: %Expr{op: :constant, args: [1.0]}, type: {:f, 32}, shape: {}} =
                Nx.as_type(Expr.tensor(1), {:f, 32})
     end
 
     test "add" do
-      assert %T{data: %Expr{op: :scalar, args: [3.0]}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :constant, args: [3.0]}, type: {:f, 32}} =
                Nx.add(Expr.tensor(1.0), Expr.tensor(2))
 
       param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
@@ -66,7 +66,7 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "multiply" do
-      assert %T{data: %Expr{op: :scalar, args: [4.0]}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :constant, args: [4.0]}, type: {:f, 32}} =
                Nx.multiply(Expr.tensor(2.0), Expr.tensor(2))
 
       param1 = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
@@ -116,7 +116,7 @@ defmodule Nx.Defn.ExprTest do
                data: %Expr{
                  op: :add,
                  args: [
-                   %T{data: %Expr{op: :scalar, args: [3.0]}, shape: {}, type: {:f, 32}},
+                   %T{data: %Expr{op: :constant, args: [3.0]}, shape: {}, type: {:f, 32}},
                    %T{data: %Expr{op: :add, args: [^param2, ^param1]}, shape: {2, 2}}
                  ]
                },
@@ -128,7 +128,7 @@ defmodule Nx.Defn.ExprTest do
                data: %Expr{
                  op: :add,
                  args: [
-                   %T{data: %Expr{op: :scalar, args: [3.0]}, shape: {}, type: {:f, 32}},
+                   %T{data: %Expr{op: :constant, args: [3.0]}, shape: {}, type: {:f, 32}},
                    %T{
                      data: %Expr{
                        op: :broadcast,
@@ -154,7 +154,7 @@ defmodule Nx.Defn.ExprTest do
                data: %Expr{
                  op: :add,
                  args: [
-                   %T{data: %Expr{op: :scalar, args: [3.0]}, shape: {}, type: {:f, 32}},
+                   %T{data: %Expr{op: :constant, args: [3.0]}, shape: {}, type: {:f, 32}},
                    %T{
                      data: %Expr{
                        op: :broadcast,
