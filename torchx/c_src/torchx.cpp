@@ -167,10 +167,14 @@ NIF(to_blob)
 
   torch::optional<torch::Device> device = torch::device_of(*t);
 
+  // flatten the tensor to compensate for operations which return
+  // a column-major tensor. t->flatten() is a no-op if the tensor
+  // is already row-major, which was verified by printing t->data_ptr
+  // and reshaped.data_ptr and confirming they had the same value.
   auto reshaped = t->flatten();
   auto data_ptr = reshaped.data_ptr();
 
-  if (device.has_value() && device.value().type() == torch::kCPU)
+  if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr())
   {
     return nx::nif::ok(env, enif_make_resource_binary(env, t, data_ptr, byte_size));
   }

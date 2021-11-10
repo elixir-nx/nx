@@ -286,8 +286,6 @@ defmodule Torchx.BackendTest do
           [1.0, 0.0, 0.0]
         ])
 
-      require IEx
-      IEx.pry()
 
       assert_all_close(
         result,
