@@ -299,21 +299,21 @@ defmodule Nx.Defn.Expr do
   @impl true
   def add(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_constant(t1)
-    s2 = maybe_constant(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s1 == 0 ->
+      c1 == 0 ->
         ensure_compatible(t2, out)
 
-      s2 == 0 ->
+      c2 == 0 ->
         ensure_compatible(t1, out)
 
-      s1 && s2 ->
-        constant(s1 + s2, out)
+      c1 && c2 ->
+        constant(c1 + c2, out)
 
-      s2 ->
-        commute(out, context, :add, &+/2, s2, t2, t1)
+      c2 ->
+        commute(out, context, :add, &+/2, c2, t2, t1)
 
       true ->
         case t2 do
@@ -327,7 +327,7 @@ defmodule Nx.Defn.Expr do
             binary_expr(out, context, :subtract, t1, t2)
 
           %T{} ->
-            commute(out, context, :add, &+/2, s1, t1, t2)
+            commute(out, context, :add, &+/2, c1, t1, t2)
         end
     end
   end
@@ -335,12 +335,12 @@ defmodule Nx.Defn.Expr do
   @impl true
   def subtract(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_constant(t1)
-    s2 = maybe_constant(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s2 == 0 -> ensure_compatible(t1, out)
-      s1 && s2 -> constant(s1 - s2, out)
+      c2 == 0 -> ensure_compatible(t1, out)
+      c1 && c2 -> constant(c1 - c2, out)
       true -> binary_expr(out, context, :subtract, t1, t2)
     end
   end
@@ -348,21 +348,21 @@ defmodule Nx.Defn.Expr do
   @impl true
   def multiply(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_constant(t1)
-    s2 = maybe_constant(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s1 == 1 ->
+      c1 == 1 ->
         ensure_compatible(t2, out)
 
-      s2 == 1 ->
+      c2 == 1 ->
         ensure_compatible(t1, out)
 
-      s1 && s2 ->
-        constant(s1 * s2, out)
+      c1 && c2 ->
+        constant(c1 * c2, out)
 
-      s2 ->
-        commute(out, context, :multiply, &*/2, s2, t2, t1)
+      c2 ->
+        commute(out, context, :multiply, &*/2, c2, t2, t1)
 
       true ->
         case t2 do
@@ -373,7 +373,7 @@ defmodule Nx.Defn.Expr do
             binary_expr(out, context, :divide, t1, t2)
 
           %T{} ->
-            commute(out, context, :multiply, &*/2, s1, t1, t2)
+            commute(out, context, :multiply, &*/2, c1, t1, t2)
         end
     end
   end
@@ -381,12 +381,12 @@ defmodule Nx.Defn.Expr do
   @impl true
   def divide(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_constant(t1)
-    s2 = maybe_constant(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s2 == 1 -> ensure_compatible(t1, out)
-      s1 && s2 -> constant(s1 / s2, out)
+      c2 == 1 -> ensure_compatible(t1, out)
+      c1 && c2 -> constant(c1 / c2, out)
       true -> binary_expr(out, context, :divide, t1, t2)
     end
   end
@@ -394,10 +394,10 @@ defmodule Nx.Defn.Expr do
   @impl true
   def power(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s2 = maybe_constant(t2)
+    c2 = maybe_constant(t2)
 
     cond do
-      s2 == 1 -> ensure_compatible(t1, out)
+      c2 == 1 -> ensure_compatible(t1, out)
       true -> binary_expr(out, context, :power, t1, t2)
     end
   end
@@ -550,8 +550,8 @@ defmodule Nx.Defn.Expr do
   def as_type(out, tensor) do
     tensor = to_expr(tensor)
 
-    if s = maybe_constant(tensor) do
-      constant(s, out)
+    if c = maybe_constant(tensor) do
+      constant(c, out)
     else
       expr(out, tensor.data.context, :as_type, [tensor])
     end
@@ -569,8 +569,8 @@ defmodule Nx.Defn.Expr do
       expr(out, tensor.data.context, :broadcast, [inner_tensor, shape, inner_axes])
     else
       _ ->
-        if constant = maybe_constant(tensor) do
-          constant(constant, out)
+        if c = maybe_constant(tensor) do
+          constant(c, out)
         else
           expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
         end
