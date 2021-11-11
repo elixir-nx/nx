@@ -1016,8 +1016,8 @@ defmodule EXLA.Defn do
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
-    {true_args, true_comp} = to_if_branch(true, on_true, pred_ids, state, cache)
-    {false_args, false_comp} = to_if_branch(false, on_false, pred_ids, state, cache)
+    {true_args, true_comp, cache} = to_if_branch(true, on_true, pred_ids, state, cache)
+    {false_args, false_comp, cache} = to_if_branch(false, on_false, pred_ids, state, cache)
     {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
   end
 
@@ -1030,6 +1030,9 @@ defmodule EXLA.Defn do
 
   defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, {cache, ids}, pred_ids) do
     cond do
+      op == :constant ->
+        {expr, {cache, ids}}
+
       Map.has_key?(pred_ids, id) or op == :parameter ->
         case ids do
           %{^id => {_, _, new}} ->
@@ -1038,7 +1041,7 @@ defmodule EXLA.Defn do
           %{} ->
             i = map_size(ids)
             param = Expr.parameter(expr, i)
-            {param, {cache, Map.put(ids, id, {i, expr, param})}}
+            {param, {Map.put(cache, id, param), Map.put(ids, id, {i, expr, param})}}
         end
 
       expr = Map.get(cache, id) ->
@@ -1056,6 +1059,12 @@ defmodule EXLA.Defn do
   defp to_if_branch(bool, expr, ids, state, cache) do
     {expr, {_cache, ids_args}} = Tree.composite(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
+
+    {args, cache} =
+      Enum.map_reduce(sorted_ids_args, cache, fn {_, {_, old, _}}, cache ->
+        recur_operator(old, state, cache)
+      end)
+
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
     shapes =
@@ -1077,13 +1086,7 @@ defmodule EXLA.Defn do
       |> elem(0)
       |> EXLA.Builder.build()
 
-    args =
-      Enum.map(sorted_ids_args, fn
-        {_, {_, %T{data: %Expr{op: :parameter, args: [i]}}, _}} -> Map.fetch!(state.params, i)
-        {id, {_, _, _}} -> Map.fetch!(cache, id)
-      end)
-
-    {EXLA.Op.tuple(state.builder, args), comp}
+    {EXLA.Op.tuple(state.builder, args), comp, cache}
   end
 
   ## Axes helpers

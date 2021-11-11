@@ -569,8 +569,8 @@ defmodule Nx.Defn.Expr do
       expr(out, tensor.data.context, :broadcast, [inner_tensor, shape, inner_axes])
     else
       _ ->
-        if scalar = maybe_constant(tensor) do
-          constant(scalar, out)
+        if constant = maybe_constant(tensor) do
+          constant(constant, out)
         else
           expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
         end
@@ -964,7 +964,7 @@ defmodule Nx.Defn.Expr do
   defp unzip_cons([], heads, tails),
     do: {heads |> Enum.reverse() |> List.to_tuple(), Enum.reverse(tails)}
 
-  ## Scalar helpers and related optimizations
+  ## Constant helpers and related optimizations
 
   defp maybe_constant(expr) do
     case expr do
@@ -977,7 +977,7 @@ defmodule Nx.Defn.Expr do
     t |> Nx.as_type(out.type) |> Nx.broadcast(out.shape)
   end
 
-  # Rewrite commutative operations so the scalar always come on the left
+  # Rewrite commutative operations so the constant always come on the left
   defp commute(out, context, op, fun, s1, t1, t2) do
     {a1, a2} =
       case t2 do
@@ -1041,7 +1041,7 @@ defmodule Nx.Defn.Expr do
     |> Enum.reduce(header, &concat(&2, concat(line(), &1)))
   end
 
-  # Scalars and funs are shown as is
+  # Constants and funs are shown as is
   defp inspect_expr(%T{data: %Expr{op: :constant}} = t, acc), do: {t, acc}
   defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
 
