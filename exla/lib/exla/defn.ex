@@ -247,8 +247,8 @@ defmodule EXLA.Defn do
     EXLA.Op.reshape(op, shape)
   end
 
-  defp to_operator(:pad, [op, value, padding_config], _ans, _state) do
-    EXLA.Op.pad(op, value, padding_config)
+  defp to_operator(:pad, [op, value, padding_config], %{type: type}, _state) do
+    EXLA.Op.pad(to_type(op, type), to_type(value, type), padding_config)
   end
 
   defp to_operator(:broadcast, [op, _shape, axes], ans, _state) do

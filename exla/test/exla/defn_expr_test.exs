@@ -2353,8 +2353,7 @@ defmodule EXLA.DefnExprTest do
     end
 
     test "with tensor" do
-      assert pad_tensor(Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])) ==
-               Nx.tensor([
+      result = Nx.tensor([
                  [
                    [0.0, 0.0, 0.0],
                    [0.0, 0.0, 0.0],
@@ -2381,6 +2380,9 @@ defmodule EXLA.DefnExprTest do
                    [0.0, 0.0, 0.0]
                  ]
                ])
+
+      assert pad_tensor(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])) == result
+      assert pad_tensor(Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])) == result
     end
 
     test "with negative value" do
