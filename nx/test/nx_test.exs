@@ -736,6 +736,66 @@ defmodule NxTest do
     end
   end
 
+  describe "scatter_add" do
+    test "property" do
+      n = 5
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [row, col]
+          end
+        )
+
+      updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
+
+      assert Nx.broadcast(1, {5, 5}) ==
+               0 |> Nx.broadcast({5, 5}) |> Nx.scatter_add(indices, updates)
+
+      indices =
+        Nx.tensor(
+          for row <- 0..(n - 1), col <- 0..(n - 1) do
+            [0, row, col]
+          end
+        )
+
+      assert Nx.broadcast(1, {1, 5, 5}) ==
+               0 |> Nx.broadcast({1, 5, 5}) |> Nx.scatter_add(indices, updates)
+    end
+
+    test "single-index regression" do
+      n = 5
+
+      # 1D case
+      zeros = List.duplicate(0, n)
+      upd = Nx.tensor([1])
+
+      for i <- 0..(n - 1) do
+        result = Nx.tensor(List.update_at(zeros, i, fn _ -> 1 end))
+
+        assert result == Nx.scatter_add(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
+      end
+
+      # 2D case
+      zeros = List.duplicate(zeros, n)
+
+      for i <- 0..(n - 1) do
+        result =
+          Nx.tensor(
+            List.update_at(
+              zeros,
+              i,
+              fn row ->
+                List.update_at(row, i, fn _ -> 1 end)
+              end
+            )
+          )
+
+        assert result == Nx.scatter_add(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
+      end
+    end
+  end
+
   describe "quotient/2" do
     test "raises for non-integer values" do
       msg =
@@ -757,6 +817,20 @@ defmodule NxTest do
 
       assert Nx.reshape(t, {2, 2}, names: [:x, :y]) ==
                Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+    end
+  end
+
+  describe "flatten" do
+    test "returns a flattened tensor given a N-Dimensional tensor" do
+      t = Nx.iota({3, 3, 3})
+
+      assert Nx.flatten(t) |> Nx.shape() == {Nx.size(t)}
+    end
+
+    test "returns tensor unchanged given a 1 Dimensional tensor" do
+      t = Nx.iota({10})
+
+      assert Nx.flatten(t) == t
     end
   end
 
@@ -807,6 +881,23 @@ defmodule NxTest do
   end
 
   describe "to_batched_list/2" do
+    test "works for all batch sizes less than or equal to {n, ...}" do
+      for rows <- 1..10, cols <- 1..10, batch_size <- 1..rows do
+        t = Nx.iota({rows, cols})
+
+        batches = Nx.to_batched_list(t, batch_size, leftover: :discard)
+        assert length(batches) == div(rows, batch_size)
+
+        batches = Nx.to_batched_list(t, batch_size, leftover: :repeat)
+
+        if rem(rows, batch_size) == 0 do
+          assert length(batches) == div(rows, batch_size)
+        else
+          assert length(batches) == div(rows, batch_size) + 1
+        end
+      end
+    end
+
     test "raises for scalars" do
       t = Nx.tensor(1)
 
@@ -1575,6 +1666,29 @@ defmodule NxTest do
     end
   end
 
+  describe "shuffle/2" do
+    test "returns tensor with the same elements" do
+      t = Nx.iota({4, 4})
+      shuffled = Nx.shuffle(t)
+
+      assert t |> Nx.flatten() |> Nx.sort() == shuffled |> Nx.flatten() |> Nx.sort()
+    end
+
+    test "given an axis swaps elements along that axis only" do
+      t = Nx.iota({4, 4})
+      shuffled = Nx.shuffle(t, axis: 1)
+
+      assert Nx.sort(t, axis: 1) == Nx.sort(shuffled, axis: 1)
+    end
+
+    test "deterministic shuffle along axis of size 1" do
+      t = Nx.iota({4, 1})
+      shuffled = Nx.shuffle(t, axis: 1)
+
+      assert t == shuffled
+    end
+  end
+
   describe "eye/2" do
     test "raises for non-square rank 2 tensor" do
       t = Nx.iota({2, 3})
@@ -1590,6 +1704,122 @@ defmodule NxTest do
       assert_raise(ArgumentError, "eye/2 expects a square matrix, got: {2, 3, 2}", fn ->
         Nx.eye(t)
       end)
+    end
+  end
+
+  describe "take_diagonal/2" do
+    test "extracts valid diagonal given no offset" do
+      diag =
+        {3, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal()
+
+      assert diag == Nx.tensor([0, 4, 8])
+    end
+
+    test "extracts valid diagonal when breadth is greater than length" do
+      diag =
+        {3, 4}
+        |> Nx.iota()
+        |> Nx.take_diagonal()
+
+      assert diag == Nx.tensor([0, 5, 10])
+    end
+
+    test "extracts valid diagonal when length is greater than breadth" do
+      diag =
+        {4, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal()
+
+      assert diag == Nx.tensor([0, 4, 8])
+    end
+
+    test "extracts valid diagonal given positive offset" do
+      diag =
+        {3, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal(offset: 1)
+
+      assert diag == Nx.tensor([1, 5])
+    end
+
+    test "extracts valid diagonal given negative offset" do
+      diag =
+        {3, 3}
+        |> Nx.iota()
+        |> Nx.take_diagonal(offset: -1)
+
+      assert diag == Nx.tensor([3, 7])
+    end
+
+    test "raises error given tensor with invalid rank" do
+      t = Nx.iota({3, 3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "take_diagonal/2 expects tensor of rank 2, got tensor of rank: 3",
+        fn -> Nx.take_diagonal(t) end
+      )
+    end
+
+    test "raises error given invalid positive offset" do
+      t = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "offset must be less than length of axis 1 when positive, got: 4",
+        fn -> Nx.take_diagonal(t, offset: 4) end
+      )
+    end
+
+    test "raisese error given invalid negative offset" do
+      t = Nx.iota({3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "absolute value of offset must be less than length of axis 0 when negative, got: -3",
+        fn -> Nx.take_diagonal(t, offset: -3) end
+      )
+    end
+  end
+
+  describe "make_diagonal/2" do
+    test "constructs valid diagonal given no offset" do
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> Nx.make_diagonal()
+
+      assert diag == Nx.tensor([[1, 0, 0], [0, 2, 0], [0, 0, 3]])
+    end
+
+    test "constructs valid diagonal given positive offset" do
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> Nx.make_diagonal(offset: 1)
+
+      assert diag == Nx.tensor([[0, 1, 0, 0], [0, 0, 2, 0], [0, 0, 0, 3], [0, 0, 0, 0]])
+    end
+
+    test "constructs valid diagonal given negative offset" do
+      diag =
+        [1, 2, 3]
+        |> Nx.tensor()
+        |> Nx.make_diagonal(offset: -1)
+
+      assert diag == Nx.tensor([[0, 0, 0, 0], [1, 0, 0, 0], [0, 2, 0, 0], [0, 0, 3, 0]])
+    end
+
+    test "raises error given tensor with invalid rank" do
+      t = Nx.iota({3, 3, 3})
+
+      assert_raise(
+        ArgumentError,
+        "make_diagonal/2 expects tensor of rank 1, got tensor of rank: 3",
+        fn -> Nx.make_diagonal(t) end
+      )
     end
   end
 

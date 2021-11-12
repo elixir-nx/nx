@@ -22,8 +22,8 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
-  def scalar(%{type: type, shape: shape} = out, scalar, _backend_options) do
-    data = :binary.copy(number_to_binary(scalar, type), Nx.size(shape))
+  def constant(%{type: type, shape: shape} = out, constant, _backend_options) do
+    data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
     from_binary(out, data)
   end
 
@@ -156,35 +156,31 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def to_batched_list(
-        %{shape: output_shape} = out,
-        %{type: {_, size}, shape: input_shape} = tensor,
-        opts
-      ) do
-    bitsize = Nx.size(out) * size
-    excess = rem(elem(input_shape, 0), elem(output_shape, 0))
-    excess_size = elem(output_shape, 0) * excess * size
-    even_size = Nx.size(input_shape) * size - excess_size
+  def to_batched_list(out, %{type: {_, size}} = tensor, opts) do
+    leftover = opts[:leftover]
 
-    <<even_batches::bitstring-size(even_size), leftover::bitstring>> = to_binary(tensor)
+    input_size = Nx.size(tensor)
 
-    tensors =
-      for <<data::bitstring-size(bitsize) <- even_batches>> do
-        from_binary(out, data)
+    batch_size = Nx.size(out)
+    batch_bitsize = batch_size * size
+
+    remainder = rem(input_size, batch_size)
+
+    to_add = if remainder != 0, do: batch_size - remainder, else: 0
+
+    tensor_bin =
+      case to_binary(tensor) do
+        bin when leftover == :repeat and to_add != 0 ->
+          diff = to_add * size
+          <<wrapped::size(diff)-bitstring, _::bitstring>> = bin
+          bin <> wrapped
+
+        bin ->
+          bin
       end
 
-    case opts[:leftover] do
-      _ when excess == 0 ->
-        tensors
-
-      :repeat ->
-        size_needed = (elem(output_shape, 0) - excess) * bitsize
-        <<wrapped::bitstring-size(size_needed), _::bitstring>> = even_batches
-        last_batch = from_binary(out, IO.iodata_to_binary([leftover, wrapped]))
-        [last_batch | tensors]
-
-      :discard ->
-        tensors
+    for <<batch::size(batch_bitsize)-bitstring <- tensor_bin>> do
+      from_binary(out, batch)
     end
   end
 
@@ -1171,6 +1167,18 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def eigh(
+        {%{type: output_type} = eigenvals_holder, eigenvecs_holder},
+        %{type: input_type, shape: input_shape} = tensor,
+        opts
+      ) do
+    bin = to_binary(tensor)
+    {eigenvals, eigenvecs} = B.Matrix.eigh(bin, input_type, input_shape, output_type, opts)
+
+    {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
+  end
+
+  @impl true
   def svd(
         {%{shape: {m, _}} = u_holder, s_holder, %{shape: {_, n}} = v_holder} = outputs,
         %{type: input_type, shape: input_shape} = tensor,
@@ -1610,10 +1618,15 @@ defmodule Nx.BinaryBackend do
 
     target_binary = to_binary(target)
 
+    offsets_with_updates =
+      List.update_at(offsets_with_updates, 0, fn {_prev, current, update} ->
+        {0, current, update}
+      end)
+
     {result, tail} =
       for {previous, current, update} <- offsets_with_updates, reduce: {<<>>, target_binary} do
         {traversed, to_traverse} ->
-          before_slice_size = max(current - previous, 0)
+          before_slice_size = current - previous
 
           match_types [target.type, out.type] do
             <<before_offset::bitstring-size(before_slice_size), match!(element, 0),

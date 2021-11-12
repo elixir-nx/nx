@@ -1,23 +1,10 @@
-LIBTORCH_INCLUDE_PATH = $(LIBTORCH_DIR)/include/
-LIBTORCH_API_INCLUDE_PATH = $(LIBTORCH_DIR)/include/torch/csrc/api/include
-LIBTORCH_LINK_PATH = $(LIBTORCH_DIR)/lib/
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(LIBTORCH_INCLUDE_PATH) -I$(LIBTORCH_API_INCLUDE_PATH) \
-	 -O3 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -shared -std=c++14
-LDFLAGS = -L$(LIBTORCH_LINK_PATH) -ltorch
-
 PRIV_DIR = $(MIX_APP_PATH)/priv
-LIBTORCH_LIB_DIR = $(PRIV_DIR)/lib
 TORCHX_SO = $(PRIV_DIR)/torchx.so
 
-# MacOS needs extra flags to link successfully
-ifeq ($(shell uname -s), Darwin)
-	LDFLAGS += -flat_namespace -undefined suppress
-	POST_INSTALL = install_name_tool -add_rpath @loader_path/lib $(TORCHX_SO)
-else  # Linux
-	CFLAGS += -fopenmp
-	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib' -lpthread -lc10 -ltorch_cpu -lkineto
-	POST_INSTALL = $(NOOP)
-endif
+# If you want verbose output for debugging
+# CMAKE_BUILD_FLAGS = --verbose
+CMAKE_BUILD_DIR ?= $(MIX_APP_PATH)/cmake
+C_SRC = $(shell pwd)/c_src
 
 .DEFAULT_GLOBAL := build
 
@@ -33,7 +20,11 @@ check_libtorch:
 	fi
 
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
-	mkdir -p $(PRIV_DIR)
-	ln -sf $(abspath $(LIBTORCH_LINK_PATH)) $(LIBTORCH_LIB_DIR)
-	$(CXX) $(CFLAGS) c_src/torchx.cpp -o $(TORCHX_SO) $(LDFLAGS)
-	$(POST_INSTALL)
+	@ mkdir -p $(PRIV_DIR)
+	@ mkdir -p $(CMAKE_BUILD_DIR)
+	@ ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch
+	@ cd $(CMAKE_BUILD_DIR) && \
+		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
+      	-DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) && \
+		cmake --build . $(CMAKE_BUILD_FLAGS)
+	@ mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)

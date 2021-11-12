@@ -42,12 +42,12 @@ defmodule Torchx.Backend do
   ## Creation
 
   @impl true
-  def scalar(%T{shape: {}, type: type} = out, scalar, backend_options) do
+  def constant(%T{shape: {}, type: type} = out, scalar, backend_options) do
     Torchx.scalar_tensor(scalar, to_torch_type(type), device_option(backend_options))
     |> to_nx(out)
   end
 
-  def scalar(%T{shape: shape, type: type} = out, scalar, backend_options) do
+  def constant(%T{shape: shape, type: type} = out, scalar, backend_options) do
     Torchx.full(shape, scalar, to_torch_type(type), device_option(backend_options))
     |> to_nx(out)
   end
@@ -158,20 +158,12 @@ defmodule Torchx.Backend do
     # torch::split returns a chunk with smaller size if the
     # tensor is not fully divisible by the batch_size.
     # We need to drop the last chunk in this case
-    batched =
-      case Torchx.split(to_batch, batch_size) do
-        batches when remainder != 0 ->
-          batches |> Enum.take(num_batches) |> Enum.map(&to_nx(&1, out))
+    case Torchx.split(to_batch, batch_size) do
+      batches when remainder != 0 ->
+        batches |> Enum.take(num_batches) |> Enum.map(&to_nx(&1, out))
 
-        batches ->
-          Enum.map(batches, &to_nx(&1, out))
-      end
-
-    if leftover == :repeat and remainder != 0 do
-      {h, [t]} = Enum.split(batched, num_batches - 1)
-      [t | h]
-    else
-      batched
+      batches ->
+        Enum.map(batches, &to_nx(&1, out))
     end
   end
 
@@ -697,7 +689,7 @@ defmodule Torchx.Backend do
 
   ## Functionality we can't provide
 
-  not_possible = [bitcast: 2, map: 4, reduce: 5, reduce_window: 6]
+  not_possible = [bitcast: 2, map: 4, population_count: 2, reduce: 5, reduce_window: 6]
 
   for {fun, arity} <- not_possible do
     args = Macro.generate_arguments(arity, __MODULE__)

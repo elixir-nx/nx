@@ -63,8 +63,8 @@ class ExlaExecutable {
 
  private:
   std::unique_ptr<xla::PjRtExecutable> executable_;
-  ExlaClient* client_;
   absl::optional<std::string> fingerprint_;
+  ExlaClient* client_;
 };
 
 class ExlaClient {

@@ -38,7 +38,7 @@ defmodule Nx.Backend do
   @type axes :: Nx.Tensor.axes()
   @type backend_options :: term()
 
-  @callback scalar(out :: tensor, binary, backend_options) :: tensor
+  @callback constant(out :: tensor, binary, backend_options) :: tensor
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
   @callback eye(tensor, backend_options) :: tensor
   @callback iota(tensor, axis | nil, backend_options) :: tensor
@@ -97,6 +97,7 @@ defmodule Nx.Backend do
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor, keyword) :: tensor
+  @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
   @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
   binary_ops =

@@ -130,10 +130,21 @@ defmodule Nx.Defn.Tree do
     {List.to_tuple(list), acc}
   end
 
+  def composite(map, acc, fun) when is_struct(map) and is_function(fun, 2) do
+    {list, acc} =
+      map
+      |> Map.from_struct()
+      |> Enum.map_reduce(acc, fn {k, v}, acc ->
+        {v, acc} = composite(v, acc, fun)
+        {{k, v}, acc}
+      end)
+
+    {struct(map.__struct__, list), acc}
+  end
+
   def composite(map, acc, fun) when is_map(map) and is_function(fun, 2) do
     {list, acc} =
       map
-      |> assert_no_struct!()
       |> Enum.map_reduce(acc, fn {k, v}, acc ->
         {v, acc} = composite(v, acc, fun)
         {{k, v}, acc}
@@ -209,7 +220,7 @@ defmodule Nx.Defn.Tree do
     rewrite_type_args(t, type, [Nx.as_type(arg, type)])
   end
 
-  defp rewrite_type(:scalar, [arg], t, type_fun) do
+  defp rewrite_type(:constant, [arg], t, type_fun) do
     type = type_fun.(t.type)
     rewrite_type_args(t, type, [arg])
   end
@@ -254,10 +265,16 @@ defmodule Nx.Defn.Tree do
   defp flatten_each(tuple, acc, fun) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &flatten_each(&1, &2, fun))
 
+  defp flatten_each(map, acc, fun) when is_struct(map),
+    do:
+      map
+      |> Map.from_struct()
+      |> Enum.sort()
+      |> Enum.reduce(acc, &flatten_each(elem(&1, 1), &2, fun))
+
   defp flatten_each(map, acc, fun) when is_map(map),
     do:
       map
-      |> assert_no_struct!()
       |> Enum.sort()
       |> Enum.reduce(acc, &flatten_each(elem(&1, 1), &2, fun))
 
@@ -336,8 +353,15 @@ defmodule Nx.Defn.Tree do
   def to_result(%T{data: %Expr{}} = t),
     do: t
 
+  def to_result(map) when is_struct(map),
+    do:
+      map
+      |> Map.from_struct()
+      |> Enum.map(fn {k, v} -> {k, to_result(v)} end)
+      |> then(&struct(map.__struct__, &1))
+
   def to_result(map) when is_map(map),
-    do: map |> assert_no_struct!() |> Enum.map(fn {k, v} -> {k, to_result(v)} end) |> Map.new()
+    do: map |> Enum.map(fn {k, v} -> {k, to_result(v)} end) |> Map.new()
 
   def to_result(tuple) when is_tuple(tuple),
     do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
@@ -372,10 +396,22 @@ defmodule Nx.Defn.Tree do
     {List.to_tuple(list), acc}
   end
 
+  defp args_to_each(map, acc, fun) when is_struct(map) do
+    {list, acc} =
+      map
+      |> Map.from_struct()
+      |> Enum.sort()
+      |> Enum.map_reduce(acc, fn {k, v}, acc ->
+        {v, acc} = args_to_each(v, acc, fun)
+        {{k, v}, acc}
+      end)
+
+    {struct(map.__struct__, list), acc}
+  end
+
   defp args_to_each(map, acc, fun) when is_map(map) do
     {list, acc} =
       map
-      |> assert_no_struct!()
       |> Enum.sort()
       |> Enum.map_reduce(acc, fn {k, v}, acc ->
         {v, acc} = args_to_each(v, acc, fun)
@@ -388,10 +424,4 @@ defmodule Nx.Defn.Tree do
   defp args_to_each(arg, acc, fun) do
     fun.(arg, acc)
   end
-
-  defp assert_no_struct!(%_{} = struct),
-    do: raise("unexpected struct inside defn: #{inspect(struct)}")
-
-  defp assert_no_struct!(map),
-    do: map
 end

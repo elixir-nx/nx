@@ -3,8 +3,6 @@ defmodule Nx.Defn.Compiler do
   The specification and helper functions for custom `defn` compilers.
   """
 
-  @aot_version 1
-
   @type expr :: Nx.t() | tuple() | %{optional(term()) => expr()}
 
   @doc """
@@ -48,38 +46,6 @@ defmodule Nx.Defn.Compiler do
             ) :: Nx.Stream.t()
             when stream: expr(), acc: expr()
 
-  @doc """
-  Callback for AOT compilation.
-
-  It compiles the given functions to NIFs.
-
-  It receives the output directory for compiled artifacts, the module
-  the NIFs belong to, the function definitions, alongside the options
-  to customize the AOT compilation.
-
-  The function definitions are four element tuples containing the function
-  name, a function that builds the tensor expression, the tensor expression
-  arguments as a list, and the definition options. The compilation of the
-  tensor expression should behave as close to the JIT compilation as possible,
-  except that each tuple is compiled to a NIF. The NIF will receive the
-  binaries equivalent to each tensor expression argument and it must return
-  `{:ok, list_of_binaries}`, where `list_of_binaries` represents each tensor
-  on the output, where composite types are flattened. Or it may return
-  `{:error, charlist}`.
-
-  It must return `{:ok, results, nif_path}`, where results is the result
-  of each anonymous function call, and `nif_path` is the path the compiled
-  NIF artifact was written to. It may also return `{:error, Exception.t}`
-  in case of errors.
-
-  This callback is optional.
-  """
-  @callback __aot__(output_dir :: binary, module :: atom, [def], aot_opts :: keyword) ::
-              {:ok, [Nx.t()], nif_path :: binary} | {:error, Exception.t()}
-            when def: {function_name :: atom, ([Nx.t()] -> Nx.t()), [Nx.t()], opts :: keyword}
-
-  @optional_callbacks __aot__: 4
-
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
                    [:to_binary, :to_scalar, :to_flat_list, :to_heatmap, :to_batched_list]
@@ -99,181 +65,6 @@ defmodule Nx.Defn.Compiler do
   """
   def current() do
     Process.get(Nx.Defn.Compiler)
-  end
-
-  ## AOT
-
-  @doc false
-  def __export_aot__(output_dir, module, tuples, aot_opts) do
-    {compiler, aot_opts} =
-      Keyword.pop_lazy(aot_opts, :compiler, fn ->
-        raise ArgumentError,
-              "Nx.Defn.export_aot/3 and Nx.Defn.export_aot/4 require the :compiler option to be given"
-      end)
-
-    {export_tuples, compiler_tuples} =
-      tuples
-      |> Enum.map(fn {name, fun, args, opts} ->
-        tensors = Nx.Defn.Tree.from_runtime_args(args)
-        templates = Nx.Defn.Tree.args_to_templates(args, tensors)
-
-        export_tuple = {name, templates}
-        runtime_fun = &runtime_fun(&1, fun, args, compiler)
-        compiler_tuple = {aot_name(name, args), runtime_fun, tensors, opts}
-        {export_tuple, compiler_tuple}
-      end)
-      |> Enum.unzip()
-
-    _ = Code.ensure_compiled(compiler)
-
-    unless function_exported?(compiler, :__aot__, 4) do
-      raise ArgumentError, "AOT compilation is not available to the #{inspect(compiler)} compiler"
-    end
-
-    File.mkdir_p!(output_dir)
-
-    case compiler.__aot__(output_dir, module, compiler_tuples, aot_opts) do
-      {:ok, results, nif} ->
-        tensors = Nx.Defn.Tree.from_runtime_args(results)
-        results = Nx.Defn.Tree.args_to_templates(results, tensors)
-
-        export_tuples =
-          Enum.zip_with(export_tuples, results, fn {name, arity}, result ->
-            {name, arity, result}
-          end)
-
-        path = Path.join(output_dir, "#{module}.nx.aot")
-        export = {Path.extname(nif), export_tuples}
-        File.write!(path, :erlang.term_to_binary({@aot_version, export}))
-        :ok
-
-      {:error, exception} ->
-        {:error, exception}
-    end
-  end
-
-  @doc false
-  def __import_aot__(output_dir, module, external_resources?) do
-    export_path = Path.join(output_dir, "#{module}.nx.aot")
-
-    {nif_extension, export_tuples} =
-      case File.read(export_path) do
-        {:ok, binary} ->
-          try do
-            :erlang.binary_to_term(binary)
-          rescue
-            _ ->
-              raise ArgumentError,
-                    "could not decode AOT export for #{inspect(module)} at #{output_dir}"
-          else
-            {@aot_version, export_tuples} ->
-              export_tuples
-
-            other ->
-              raise ArgumentError,
-                    "incompatible version #{elem(other, 0)} for AOT export for #{inspect(module)} " <>
-                      "at #{output_dir}, expected v#{@aot_version}. Please make sure the Nx version" <>
-                      "used for the export matches the one in the import"
-          end
-
-        {:error, _} ->
-          raise ArgumentError, "could not find AOT export for #{inspect(module)} at #{output_dir}"
-      end
-
-    nif_path = output_dir |> Path.join(Atom.to_string(module)) |> String.to_charlist()
-    nif_ext_path = Path.join(output_dir, "#{module}.#{nif_extension}")
-
-    funs =
-      for {name, args, result} <- export_tuples do
-        aot_name = aot_name(name, args)
-        {args, vars_and_templates} = aot_args(args)
-        vars = Enum.map(vars_and_templates, &elem(&1, 0))
-        templates = Enum.map(vars_and_templates, fn {v, t} -> {v, Macro.escape(t)} end)
-
-        quote do
-          def unquote(name)(unquote_splicing(args)) do
-            unquote(vars) = __nx_input__(unquote(templates))
-
-            __nx_output__(
-              unquote(Macro.escape(result)),
-              unquote(aot_name)(unquote_splicing(vars))
-            )
-          end
-
-          defp unquote(aot_name)(unquote_splicing(vars)) do
-            :erlang.nif_error(:undef)
-          end
-        end
-      end
-
-    body =
-      quote do
-        if unquote(external_resources?) do
-          @external_resource unquote(export_path)
-          @external_resource unquote(nif_ext_path)
-        end
-
-        @on_load :__on_load__
-        def __on_load__, do: :erlang.load_nif(unquote(nif_path), 0)
-
-        @compile {:inline, __nx_input__: 1, __nx_output__: 2}
-
-        defp __nx_input__(vars_and_templates) do
-          for {var, template} <- vars_and_templates do
-            tensor = Nx.Defn.Tree.from_arg(var)
-
-            unless Nx.compatible?(tensor, template) do
-              raise ArgumentError, """
-              Nx AOT-compiled function expected a tensor of type, shape, and names:
-
-              #{inspect(template)}
-
-              But got tensor:
-
-              #{inspect(tensor)}
-              """
-            end
-
-            Nx.to_binary(tensor)
-          end
-        end
-
-        defp __nx_output__(result, {:ok, list}) do
-          {result, []} =
-            Nx.Defn.Tree.composite(result, list, fn
-              %Nx.Tensor{} = t, [binary | list] when is_binary(binary) ->
-                {%{t | data: %Nx.BinaryBackend{state: binary}}, list}
-            end)
-
-          result
-        end
-
-        defp __nx_output__(_result, {:error, reason}) do
-          raise "Nx AOT-compiled function failed with reason: #{inspect(reason)}"
-        end
-
-        unquote(funs)
-      end
-
-    Module.eval_quoted(module, body, [], line: __ENV__.line, file: __ENV__.file)
-    :ok
-  end
-
-  # We need to include the actual arity in the name because
-  # defn foo({a, b}) and defn foo(a, b) compile to the same
-  # name+arity at the AOT level.
-  defp aot_name(name, args), do: :"__aot_#{name}_#{length(args)}"
-
-  defp aot_args(args) do
-    {args, {vars, _}} =
-      Enum.map_reduce(args, {[], 0}, fn arg, {acc, i} ->
-        Nx.Defn.Tree.composite(arg, {acc, i}, fn template, {acc, i} ->
-          var = Macro.var(:"arg#{i}", __MODULE__)
-          {var, {[{var, template} | acc], i + 1}}
-        end)
-      end)
-
-    {args, Enum.reverse(vars)}
   end
 
   ## JIT/Stream
@@ -451,6 +242,17 @@ defmodule Nx.Defn.Compiler do
 
   ## Normalization
 
+  defp normalize({:%, meta, [aliases, {:%{}, map_meta, [{:|, update_meta, [map, args]}]}]}, state) do
+    {map, state} = normalize(map, state)
+    {args, state} = normalize(args, state)
+    {{:%, meta, [aliases, {:%{}, map_meta, [{:|, update_meta, [map, args]}]}]}, state}
+  end
+
+  defp normalize({:%, meta, [aliases, {:%{}, map_meta, args}]}, state) do
+    {args, state} = normalize(args, state)
+    {{:%, meta, [aliases, {:%{}, map_meta, args}]}, state}
+  end
+
   defp normalize({:%{}, meta, [{:|, update_meta, [map, args]}]}, state) do
     {map, state} = normalize(map, state)
     {args, state} = normalize(args, state)
@@ -458,7 +260,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp normalize({special_form, meta, args}, state)
-       when special_form in [:{}, :%{}, :__block__] do
+       when special_form in [:{}, :%{}, :%, :__block__] do
     {args, state} = normalize_list(args, state)
     {{special_form, meta, args}, state}
   end
@@ -670,6 +472,16 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
+  defp normalize_arg({:%, meta, [aliases, {:%{}, meta, args}]}, _meta, state) do
+    {args, state} =
+      Enum.map_reduce(args, state, fn {k, v}, acc ->
+        {v, acc} = normalize_arg(v, meta, acc)
+        {{k, v}, acc}
+      end)
+
+    {{:%, meta, [aliases, {:%{}, meta, args}]}, state}
+  end
+
   defp normalize_arg({:%{}, meta, args}, _meta, state) do
     {args, state} =
       Enum.map_reduce(args, state, fn {k, v}, acc ->
@@ -695,7 +507,7 @@ defmodule Nx.Defn.Compiler do
     compile_error!(
       meta,
       state,
-      "only variables, tuples, and maps are allowed as patterns in defn, got: #{Macro.to_string(expr)}"
+      "only variables, tuples, maps, and structs are allowed as patterns in defn, got: #{Macro.to_string(expr)}"
     )
   end
 

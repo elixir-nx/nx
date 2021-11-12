@@ -34,6 +34,83 @@ defmodule EXLA.DefnExprTest do
     end
   end
 
+  describe "structs" do
+    defmodule MyStruct do
+      import Nx.Defn
+
+      @default_defn_compiler EXLA
+
+      defstruct [:foo, :bar]
+
+      defn foo_bar_as_input(%__MODULE__{foo: foo, bar: bar}) do
+        foo * bar
+      end
+
+      defn create_foo_bar(x, y) do
+        %__MODULE__{foo: x, bar: y}
+      end
+
+      defn update_foo_bar_struct(var, x) do
+        %__MODULE__{var | bar: x}
+      end
+
+      defn update_foo_bar_map(var, x) do
+        %{var | bar: x}
+      end
+
+      defn dot_foo_bar(var) do
+        var.foo * var.bar
+      end
+
+      defn foo_bar_with_map_tuple(%__MODULE__{foo: {x, y}, bar: %{} = bar}) do
+        %{a: a, b: b} = bar
+        x * y * a * b
+      end
+    end
+
+    test "can be used and matched as input" do
+      inp = %MyStruct{foo: Nx.tensor(5), bar: Nx.tensor(3)}
+
+      assert MyStruct.foo_bar_as_input(inp) == Nx.tensor(15)
+    end
+
+    test "can be returned from defn" do
+      assert %MyStruct{foo: foo, bar: bar} =
+               MyStruct.create_foo_bar(Nx.tensor([1]), Nx.tensor([2]))
+
+      assert foo == Nx.tensor([1])
+      assert bar == Nx.tensor([2])
+    end
+
+    test "can be updated from struct" do
+      inp = %MyStruct{foo: Nx.tensor(1), bar: 2}
+
+      assert %MyStruct{foo: foo, bar: bar} = MyStruct.update_foo_bar_struct(inp, Nx.tensor(8))
+      assert foo == Nx.tensor(1)
+      assert bar == Nx.tensor(8)
+    end
+
+    test "can be updated from map" do
+      inp = %MyStruct{foo: Nx.tensor(1), bar: 2}
+
+      assert %MyStruct{foo: foo, bar: bar} = MyStruct.update_foo_bar_map(inp, Nx.tensor(8))
+      assert foo == Nx.tensor(1)
+      assert bar == Nx.tensor(8)
+    end
+
+    test "can be used with dot syntax" do
+      inp = %MyStruct{foo: Nx.tensor(1), bar: 2}
+
+      assert MyStruct.dot_foo_bar(inp) == Nx.tensor(2)
+    end
+
+    test "can be used with nested collections" do
+      inp = %MyStruct{foo: {Nx.tensor(1), Nx.tensor(2)}, bar: %{a: Nx.tensor(3), b: Nx.tensor(4)}}
+
+      assert MyStruct.foo_bar_with_map_tuple(inp) == Nx.tensor(24)
+    end
+  end
+
   describe "tensor constants" do
     @two 2
     defn add_two_attribute(t), do: t + @two
@@ -421,6 +498,16 @@ defmodule EXLA.DefnExprTest do
     test "computes equality with mixed types" do
       assert equal(Nx.tensor([1, 2, 3]), Nx.tensor([1.0, 2.0, 3.0])) ==
                Nx.tensor([1, 1, 1], type: {:u, 8})
+    end
+
+    defn successive_compare(y_true, y_pred) do
+      y_pred
+      |> Nx.equal(y_pred)
+      |> Nx.equal(y_true)
+    end
+
+    test "computes successive comparisons" do
+      assert successive_compare(Nx.tensor(1), Nx.tensor(1)) == Nx.tensor(1, type: {:u, 8})
     end
   end
 
@@ -833,6 +920,26 @@ defmodule EXLA.DefnExprTest do
       assert cond_unused_and_slice(Nx.tensor(1), Nx.iota({5})) == Nx.tensor(2)
       assert cond_unused_and_slice(Nx.tensor(1), Nx.tensor([-1, 1, 0, 1, 2])) == Nx.tensor(-1)
       assert cond_unused_and_slice(Nx.tensor(1), Nx.tensor([2, 1, 0, -1, 1])) == Nx.tensor(1)
+    end
+
+    defn nested_cond(i) do
+      new_i =
+        if i > 0 do
+          i + 1
+        else
+          i - 1
+        end
+
+      if new_i > 0 do
+        1
+      else
+        0
+      end
+    end
+
+    test "computes cond with cond as parameter" do
+      assert nested_cond(Nx.tensor(10)) == Nx.tensor(1)
+      assert nested_cond(Nx.tensor(-10)) == Nx.tensor(0)
     end
   end
 
@@ -2246,34 +2353,37 @@ defmodule EXLA.DefnExprTest do
     end
 
     test "with tensor" do
-      assert pad_tensor(Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])) ==
-               Nx.tensor([
-                 [
-                   [0.0, 0.0, 0.0],
-                   [0.0, 0.0, 0.0],
-                   [0.0, 0.0, 0.0]
-                 ],
-                 [
-                   [0.0, 0.0, 0.0],
-                   [1.0, 2.0, 0.0],
-                   [3.0, 4.0, 0.0]
-                 ],
-                 [
-                   [0.0, 0.0, 0.0],
-                   [5.0, 6.0, 0.0],
-                   [7.0, 8.0, 0.0]
-                 ],
-                 [
-                   [0.0, 0.0, 0.0],
-                   [0.0, 0.0, 0.0],
-                   [0.0, 0.0, 0.0]
-                 ],
-                 [
-                   [0.0, 0.0, 0.0],
-                   [0.0, 0.0, 0.0],
-                   [0.0, 0.0, 0.0]
-                 ]
-               ])
+      result =
+        Nx.tensor([
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [1.0, 2.0, 0.0],
+            [3.0, 4.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [5.0, 6.0, 0.0],
+            [7.0, 8.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ],
+          [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
+          ]
+        ])
+
+      assert pad_tensor(Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])) == result
+      assert pad_tensor(Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])) == result
     end
 
     test "with negative value" do
@@ -3213,7 +3323,7 @@ defmodule EXLA.DefnExprTest do
     rtol = opts[:rtol] || 1.0e-4
 
     try do
-      assert Nx.all_close?(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
+      assert Nx.all_close(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
     rescue
       # So we can see the diff
       _ -> assert left == right

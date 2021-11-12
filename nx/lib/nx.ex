@@ -35,9 +35,8 @@ defmodule Nx do
       end
 
   Code inside `defn` functions can also be given to custom compilers,
-  which can compile said functions to use either just-in-time (JIT)
-  or ahead-of-time (AOT) compilers, and run on the CPU or in the GPU.
-  See `Nx.Defn` for more information.
+  which can compile said functions just-in-time (JIT) to run on the
+  CPU or on the GPU. See `Nx.Defn` for more information.
 
   ## Creating tensors
 
@@ -497,7 +496,7 @@ defmodule Nx do
   def tensor(arg, opts \\ []) when is_number(arg) or is_list(arg) do
     opts = keyword!(opts, [:type, :names, :backend])
     type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
-    {shape, data} = flatten(arg, type)
+    {shape, data} = flatten_type(arg, type)
 
     if data == "" do
       raise "cannot build empty tensor"
@@ -508,14 +507,14 @@ defmodule Nx do
     backend.from_binary(%T{shape: shape, type: type, names: names}, data, backend_options)
   end
 
-  defp flatten(list, type) when is_list(list) do
+  defp flatten_type(list, type) when is_list(list) do
     {dimensions, acc} = flatten_list(list, type, [], [])
 
     {dimensions |> Enum.reverse() |> List.to_tuple(),
      acc |> Enum.reverse() |> :erlang.list_to_binary()}
   end
 
-  defp flatten(other, type), do: {{}, number_to_binary(other, type)}
+  defp flatten_type(other, type), do: {{}, number_to_binary(other, type)}
 
   defp flatten_list([], _type, dimensions, acc) do
     {[0 | dimensions], acc}
@@ -899,6 +898,29 @@ defmodule Nx do
   end
 
   @doc """
+  Shuffles tensor elements.
+
+  ## Options
+
+    * `:axis` - the axis to shuffle along. If no axis is given,
+      elements are shuffled within the whole tensor
+  """
+  @doc type: :random
+  def shuffle(tensor, opts \\ []) do
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+
+    if axis = opts[:axis] do
+      axis = Nx.Shape.normalize_axis(shape, axis, names)
+      indices = tensor |> Nx.random_uniform() |> Nx.argsort(axis: axis)
+      Nx.take_along_axis(tensor, indices, axis: axis)
+    else
+      flattened = Nx.flatten(tensor)
+      indices = flattened |> Nx.random_uniform() |> Nx.argsort()
+      flattened |> Nx.take(indices) |> Nx.reshape(tensor)
+    end
+  end
+
+  @doc """
   Creates a tensor with the given shape which increments
   along the provided axis. You may optionally provide dimension
   names.
@@ -1102,6 +1124,194 @@ defmodule Nx do
 
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
     backend.eye(%T{type: type, shape: shape, names: names}, backend_options)
+  end
+
+  @doc """
+  Extracts the diagonal of a 2D tensor.
+
+  Converse of `make_diagonal/2`.
+
+  ## Examples
+
+  Given a 2D tensor without offset:
+
+      iex> Nx.take_diagonal(Nx.tensor([
+      ...> [0, 1, 2],
+      ...> [3, 4, 5],
+      ...> [6, 7, 8]
+      ...> ]))
+      #Nx.Tensor<
+        s64[3]
+        [0, 4, 8]
+      >
+
+  And if given a 2D tensor along with an offset:
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 1)
+      #Nx.Tensor<
+        s64[2]
+        [1, 5]
+      >
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -1)
+      #Nx.Tensor<
+        s64[2]
+        [3, 7]
+      >
+
+  ## Options
+
+    * `:offset` - offset used for extracting the diagonal.
+      Use offset > 0 for diagonals above the main diagonal,
+      and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
+
+  ## Error cases
+
+      iex> Nx.take_diagonal(Nx.tensor([0, 1, 2]))
+      ** (ArgumentError) take_diagonal/2 expects tensor of rank 2, got tensor of rank: 1
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: 3)
+      ** (ArgumentError) offset must be less than length of axis 1 when positive, got: 3
+
+      iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -4)
+      ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -4
+  """
+  @doc type: :creation
+  def take_diagonal(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
+    opts = keyword!(opts, offset: 0)
+
+    shape = Nx.Shape.take_diagonal(tensor.shape)
+    offset = opts[:offset]
+
+    Nx.Shape.validate_diag_offset!(shape, offset)
+
+    Nx.gather(tensor, diag_indices(shape, offset))
+  end
+
+  @doc """
+  Creates a diagonal tensor from a 1D tensor.
+
+  Converse of `take_diagonal/2`.
+
+  The returned tensor will be a square matrix of dimensions equal
+  to the size of the tensor. If an offset is given, the absolute value
+  of the offset is added to the matrix dimensions sizes.
+
+  ## Examples
+
+    Given a 1D tensor:
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3, 4]))
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [1, 0, 0, 0],
+          [0, 2, 0, 0],
+          [0, 0, 3, 0],
+          [0, 0, 0, 4]
+        ]
+      >
+
+    Given a 1D tensor with an offset:
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: 1)
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 1, 0, 0],
+          [0, 0, 2, 0],
+          [0, 0, 0, 3],
+          [0, 0, 0, 0]
+        ]
+      >
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: -1)
+      #Nx.Tensor<
+        s64[4][4]
+        [
+          [0, 0, 0, 0],
+          [1, 0, 0, 0],
+          [0, 2, 0, 0],
+          [0, 0, 3, 0]
+        ]
+      >
+
+    You can also have offsets with an abs greater than the tensor length:
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: -4)
+      #Nx.Tensor<
+        s64[7][7]
+        [
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0, 0, 0],
+          [0, 2, 0, 0, 0, 0, 0],
+          [0, 0, 3, 0, 0, 0, 0]
+        ]
+      >
+
+      iex> Nx.make_diagonal(Nx.tensor([1, 2, 3]), offset: 4)
+      #Nx.Tensor<
+        s64[7][7]
+        [
+          [0, 0, 0, 0, 1, 0, 0],
+          [0, 0, 0, 0, 0, 2, 0],
+          [0, 0, 0, 0, 0, 0, 3],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0]
+        ]
+      >
+
+  ## Options
+
+    * `:offset` - offset used for making the diagonal.
+      Use offset > 0 for diagonals above the main diagonal,
+      and offset < 0 for diagonals below the main diagonal.
+      Defaults to 0.
+
+  ## Error cases
+
+      iex> Nx.make_diagonal(Nx.tensor([[0, 0], [0, 1]]))
+      ** (ArgumentError) make_diagonal/2 expects tensor of rank 1, got tensor of rank: 2
+  """
+  @doc type: :creation
+  def make_diagonal(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
+    opts = keyword!(opts, offset: 0)
+
+    {len} = Nx.Shape.make_diagonal(tensor.shape)
+    offset = opts[:offset]
+
+    diag_len = len + Kernel.abs(offset)
+    diag_shape = {diag_len, diag_len}
+
+    0
+    |> Nx.broadcast(diag_shape)
+    |> Nx.scatter_add(diag_indices(diag_shape, offset), tensor)
+  end
+
+  # Returns the indices of the diagonal of a tensor of the given shape
+  defp diag_indices(shape, offset) do
+    {len, breadth} = shape
+
+    indices =
+      case offset do
+        i when i >= 0 ->
+          Enum.zip_with(0..(len - 1), i..(breadth - 1), fn x, y -> [x, y] end)
+
+        i when i < 0 ->
+          Enum.zip_with(-i..(len - 1), 0..(breadth - 1), fn x, y -> [x, y] end)
+      end
+
+    Nx.tensor(indices)
   end
 
   @doc """
@@ -1327,24 +1537,24 @@ defmodule Nx do
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [8, 9],
-          [0, 1]
+          [0, 1],
+          [2, 3]
         ]
       >
       iex> second
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [0, 1],
-          [2, 3]
+          [4, 5],
+          [6, 7]
         ]
       >
       iex> third
       #Nx.Tensor<
         s64[x: 2][y: 2]
         [
-          [4, 5],
-          [6, 7]
+          [8, 9],
+          [0, 1]
         ]
       >
 
@@ -1377,6 +1587,10 @@ defmodule Nx do
       raise ArgumentError, "cannot batch scalar tensor #{inspect(tensor)}"
     end
 
+    if elem(shape, 0) < batch_size do
+      raise ArgumentError, "cannot batch beyond original tensor"
+    end
+
     impl!(tensor).to_batched_list(%{tensor | shape: put_elem(shape, 0, batch_size)}, tensor, opts)
   end
 
@@ -1385,7 +1599,7 @@ defmodule Nx do
 
   If the tensor has a dimension, it raises.
 
-    ## Examples
+  ## Examples
 
       iex> Nx.to_scalar(1)
       1
@@ -1631,6 +1845,66 @@ defmodule Nx do
     else
       impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor, new_shape)
     end
+  end
+
+  @doc """
+  Flattens a n-dimensional tensor to a 1-dimensional tensor.
+
+  Flattening only changes the tensor metadata, it doesn't
+  copy the underlying structure.
+
+  Flatten is a destructive operation with respect to names.
+
+  ## Examples
+
+      iex> t = Nx.iota({2, 2, 2, 2})
+      #Nx.Tensor<
+        s64[2][2][2][2]
+        [
+          [
+            [
+              [0, 1],
+              [2, 3]
+            ],
+            [
+              [4, 5],
+              [6, 7]
+            ]
+          ],
+          [
+            [
+              [8, 9],
+              [10, 11]
+            ],
+            [
+              [12, 13],
+              [14, 15]
+            ]
+          ]
+        ]
+      >
+      iex> Nx.flatten(t)
+      #Nx.Tensor<
+        s64[16]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      >
+
+  And if the tensor is already 1-dimensional:
+
+      iex> t = Nx.iota({16})
+      #Nx.Tensor<
+        s64[16]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      >
+      iex> Nx.flatten(t)
+      #Nx.Tensor<
+        s64[16]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      >
+  """
+  @doc type: :shape
+  def flatten(tensor) do
+    reshape(tensor, {size(tensor)})
   end
 
   @doc """
@@ -4235,7 +4509,7 @@ defmodule Nx do
 
     output_type = Nx.Type.merge(source_type, value_type)
 
-    impl!(tensor).scatter_window_max(
+    impl!(tensor, source).scatter_window_max(
       %{tensor | type: output_type},
       tensor,
       source,
@@ -4319,7 +4593,7 @@ defmodule Nx do
 
     output_type = Nx.Type.merge(source_type, value_type)
 
-    impl!(tensor).scatter_window_min(
+    impl!(tensor, source).scatter_window_min(
       %{tensor | type: output_type},
       tensor,
       source,
@@ -4407,7 +4681,7 @@ defmodule Nx do
 
     Nx.Shape.scatter_add(target, indices, updates)
 
-    impl!(target).scatter_add(%{target | type: type}, target, indices, updates)
+    impl!(target, indices, updates).scatter_add(%{target | type: type}, target, indices, updates)
   end
 
   ## Unary ops
@@ -4811,13 +5085,13 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.all_close?(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
+      iex> Nx.all_close(Nx.tensor([1.0e10, 1.0e-7]), Nx.tensor([1.00001e10, 1.0e-8]))
       #Nx.Tensor<
         u8
         0
       >
 
-      iex> Nx.all_close?(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
+      iex> Nx.all_close(Nx.tensor([1.0e-8, 1.0e-8]), Nx.tensor([1.0e-8, 1.0e-9]))
       #Nx.Tensor<
         u8
         1
@@ -4825,7 +5099,7 @@ defmodule Nx do
 
   """
   @doc type: :aggregation
-  def all_close?(a, b, opts \\ []) do
+  def all_close(a, b, opts \\ []) do
     opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
@@ -7413,7 +7687,7 @@ defmodule Nx do
   `:strides` are given.
 
   It is not possible to slice in reverse. See `gather/2`,
-  `slice_axis/3`, `take/3`, and `take_along_axis/3` for other ways
+  `slice_axis/5`, `take/3`, and `take_along_axis/3` for other ways
   to retrieve values from a tensor.
 
   ### Examples
@@ -7659,7 +7933,7 @@ defmodule Nx do
   resulting shape. Specifically, the given axis in the input shape
   gets replaced with the indices shape.
 
-  See `gather/2`, `slice/3`, `slice_axis/3`, and `take_along_axis/3`
+  See `gather/2`, `slice/3`, `slice_axis/5`, and `take_along_axis/3`
   for other ways to retrieve values from a tensor.
 
   ## Options
@@ -7802,7 +8076,7 @@ defmodule Nx do
   the `axis` dimension, which can have arbitrary size. The returned tensor will have the
   same shape as the `indices` tensor.
 
-  See `gather/2`, `slice/3`, `slice_axis/3`, and `take/3` for other ways to retrieve
+  See `gather/2`, `slice/3`, `slice_axis/5`, and `take/3` for other ways to retrieve
   values from a tensor.
 
   ## Options
@@ -8488,6 +8762,153 @@ defmodule Nx do
     )
   end
 
+  ## Utilities
+
+  @doc """
+  Loads a `.npy` file into a tensor.
+
+  An `.npy` file stores a single array created from Python's
+  NumPy library. This function can be useful for loading data
+  originally created or intended to be loaded from NumPy into
+  Elixir.
+  """
+  def from_numpy(file) do
+    file
+    |> File.read!()
+    |> parse_numpy()
+  end
+
+  @doc """
+  Loads a `.npz` archive into a list of tensors.
+
+  An `.npz` file is a zipped, possibly compressed archive containing
+  multiple `.npy` files.
+  """
+  def from_numpy_archive(archive) do
+    archive = File.read!(archive)
+
+    case :zip.unzip(archive, [:memory]) do
+      {:ok, files} ->
+        files
+        |> Enum.map(fn {_, data} -> parse_numpy(data) end)
+
+      _ ->
+        raise ArgumentError,
+              "unable to parse NumPy archive, it may be corrupted" <>
+                " or invalid"
+    end
+  end
+
+  defp parse_numpy(<<"\x93NUMPY"::binary, major::size(8), minor::size(8), rest::binary>>) do
+    parse_numpy(rest, major, minor)
+  end
+
+  defp parse_numpy(_) do
+    raise ArgumentError,
+          "unable to parse NumPy file, it may be corrupted" <>
+            " or invalid"
+  end
+
+  defp parse_numpy(<<header_size::size(16)-little-unsigned, rest::binary>>, 1, 0) do
+    do_numpy_to_tensor(rest, header_size)
+  end
+
+  defp parse_numpy(<<header_size::size(32)-little-unsigned, rest::binary>>, _, _) do
+    do_numpy_to_tensor(rest, header_size)
+  end
+
+  defp do_numpy_to_tensor(rest, header_size) when is_binary(rest) do
+    <<header::size(header_size)-binary, array::binary>> = rest
+    {byte_order, {_, size} = type, shape} = parse_header(header)
+    byte_size_of_array = div(size, 8) * Nx.size(shape)
+
+    <<data::size(byte_size_of_array)-binary>> = array
+
+    data
+    |> new_byte_order(size, byte_order)
+    |> Nx.from_binary(type)
+    |> Nx.reshape(shape)
+  end
+
+  defp parse_header(header) do
+    header = header |> String.trim("{") |> String.trim("}") |> String.trim(", ")
+
+    case header do
+      "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': False, 'shape': " <> shape ->
+        {byte_order, type} = parse_type(dtype)
+        {byte_order, type, parse_shape(shape)}
+
+      "'descr': " <> <<dtype::size(5)-binary>> <> ", 'fortran_order': True, 'shape': " <> shape ->
+        {byte_order, type} = parse_type(dtype)
+        {byte_order, type, parse_shape(shape)}
+    end
+  end
+
+  defp parse_type(dtype) do
+    [byte_order, type, size] =
+      dtype
+      |> String.trim("'")
+      |> String.split("", trim: true)
+
+    byte_order =
+      case byte_order do
+        ">" ->
+          :big
+
+        "<" ->
+          :little
+
+        # We can't just infer native endianness matches our native
+        # endianness
+        endianness ->
+          raise ArgumentError, "Numpy tensor has unsupported endianness: #{endianness}"
+      end
+
+    type =
+      case type do
+        "u" ->
+          :u
+
+        "i" ->
+          :s
+
+        "f" ->
+          :f
+
+        _ ->
+          raise "unsupported type"
+      end
+
+    size = size |> String.to_integer() |> Kernel.*(8)
+
+    {byte_order, {type, size}}
+  end
+
+  defp parse_shape(shape) do
+    shape
+    |> String.trim()
+    |> String.trim("), }")
+    |> String.trim("(")
+    |> String.split(",", trim: true)
+    |> Enum.map(&(String.trim(&1) |> String.to_integer()))
+    |> List.to_tuple()
+  end
+
+  defp new_byte_order(binary, size, endianness) do
+    if System.endianness() == endianness do
+      binary
+    else
+      data =
+        for <<data::size(size)-binary <- binary>> do
+          data
+          |> :binary.decode_unsigned()
+          |> :binary.encode_unsigned(endianness)
+        end
+
+      IO.iodata_to_binary(data)
+    end
+  end
+
   ## Sigils
 
   @doc """
@@ -8590,7 +9011,7 @@ defmodule Nx do
           Nx.Type.infer(numbers)
       end
 
-    {shape, binary} = flatten(numbers, type)
+    {shape, binary} = flatten_type(numbers, type)
 
     quote do
       unquote(binary)

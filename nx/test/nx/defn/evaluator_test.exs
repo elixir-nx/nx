@@ -65,8 +65,19 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "qr" do
       assert {q, r} = qr(Nx.iota({3, 2}))
-      assert q == Nx.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
-      assert r == Nx.tensor([[2.0, 3.0], [0.0, 1.0]])
+
+      assert q ==
+               Nx.tensor([
+                 [0.0, 0.9128709435462952],
+                 [0.4472135901451111, 0.3651483654975891],
+                 [0.8944271802902222, -0.18257418274879456]
+               ])
+
+      assert r ==
+               Nx.tensor([
+                 [4.4721360206604, 5.813776969909668],
+                 [0.0, 1.095445156097412]
+               ])
     end
 
     defn svd(t), do: Nx.LinAlg.svd(t)

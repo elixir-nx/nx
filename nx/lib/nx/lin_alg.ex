@@ -294,7 +294,7 @@ defmodule Nx.LinAlg do
     * `:transpose` -> `op(a) = transpose(a)`
     Defaults to `:none`
   * `:lower` - When `true`, defines the `a` matrix as lower triangular. If false, a is upper triangular.
-               Defaults to `true`
+    Defaults to `true`
   * `:left_side` - When `true`, solves the system as `op(A).X = B`. Otherwise, solves `X.op(A) = B`. Defaults to `true`.
 
   ## Examples
@@ -481,7 +481,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-    ### Error cases
+  ### Error cases
 
       iex> Nx.LinAlg.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
@@ -637,8 +637,8 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0.0, 1.0],
-          [0.0, 0.0, 0.0]
+          [0.0, 0.0, 0.7071067690849304],
+          [0.0, 0.0, 0.7071067690849304]
         ]
       >
       iex> r
@@ -647,7 +647,7 @@ defmodule Nx.LinAlg do
         [
           [3.0, 2.0, 1.0],
           [0.0, 1.0, 1.0],
-          [0.0, 0.0, 1.0]
+          [0.0, 0.0, 1.4142135381698608]
         ]
       >
 
@@ -697,6 +697,78 @@ defmodule Nx.LinAlg do
     impl!(tensor).qr(
       {%{tensor | type: output_type, shape: q_shape, names: [nil, nil]},
        %{tensor | type: output_type, shape: r_shape, names: [nil, nil]}},
+      tensor,
+      opts
+    )
+  end
+
+  @doc """
+  Calculates the Eigenvalues and Eigenvectors of symmetric 2-D tensors.
+
+  It returns `{eigenvals, eigenvecs}`.
+
+  ## Options
+
+    * `:max_iter` - `integer`. Defaults to `50_000`
+      Number of maximum iterations before stopping the decomposition
+
+    * `:eps` - `float`. Defaults to 1.0e-10
+      Tolerance applied during the decomposition
+
+  Note not all options apply to all backends, as backends may have
+  specific optimizations that render these mechanisms unnecessary.
+
+  ## Examples
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[1, 0], [0, 2]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 2.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [1.0, 0.0],
+          [0.0, 1.0]
+        ]
+      >
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[0, 1, 2], [1, 0, 2], [2, 2, 3]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[3]
+        [5.0, -1.0, -1.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [0.4082472324371338, 0.9128734469413757, 0.0],
+          [0.40824851393699646, -0.18257413804531097, 0.8944271802902222],
+          [0.8164970278739929, -0.36514827609062195, -0.4472135901451111]
+        ]
+      >
+
+  ## Error cases
+
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      ** (ArgumentError) tensor must be a square matrix (a tensor with two equal axes), got shape: {2, 3}
+
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
+      ** (ArgumentError) input tensor must be symmetric
+  """
+  def eigh(tensor, opts \\ []) do
+    opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
+    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+
+    impl!(tensor).eigh(
+      {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
+       %{tensor | names: [nil, nil], type: output_type, shape: eigenvecs_shape}},
       tensor,
       opts
     )

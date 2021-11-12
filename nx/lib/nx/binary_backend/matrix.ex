@@ -174,47 +174,153 @@ defmodule Nx.BinaryBackend.Matrix do
   defp do_ts([], [], _idx, acc), do: acc
 
   def qr(input_data, input_type, input_shape, output_type, m, k, n, opts) do
-    {_, input_num_bits} = input_type
-
     mode = opts[:mode]
     eps = opts[:eps]
 
-    r_matrix =
-      if mode == :reduced do
-        # Since we want the first k rows of r, we can
-        # just slice the binary by taking the first
-        # n * k * output_type_num_bits bits from the binary.
-        # Trick for r = tensor[[0..(k - 1), 0..(n - 1)]]
-        slice_size = n * k * input_num_bits
-        <<r_bin::bitstring-size(slice_size), _::bitstring>> = input_data
-        binary_to_matrix(r_bin, input_type, {k, n})
-      else
-        binary_to_matrix(input_data, input_type, input_shape)
-      end
+    {q_matrix, r_matrix} =
+      input_data
+      |> binary_to_matrix(input_type, input_shape)
+      |> qr_decomposition(m, n, eps)
 
     {q_matrix, r_matrix} =
-      for i <- 0..(n - 1), reduce: {nil, r_matrix} do
-        {q, r} ->
-          a = slice_matrix(r, [i, i], [k - i, 1])
+      if mode == :reduced and m - k > 0 do
+        # Remove unnecessary columns (rows) from the matrix Q (R)
+        q_matrix = get_matrix_columns(q_matrix, 0..(k - 1))
 
-          h = householder_reflector(a, k, eps)
+        r_matrix = Enum.drop(r_matrix, k - m)
+
+        {q_matrix, r_matrix}
+      else
+        {q_matrix, r_matrix}
+      end
+
+    {matrix_to_binary(q_matrix, output_type), matrix_to_binary(r_matrix, output_type)}
+  end
+
+  defp qr_decomposition(matrix, m, n, eps) when m >= n do
+    # QR decomposition is performed by using Householder transform
+    {q_matrix, r_matrix} =
+      for i <- 0..(n - 1), reduce: {nil, matrix} do
+        {q, r} ->
+          h =
+            r
+            |> slice_matrix([i, i], [m - i, 1])
+            |> householder_reflector(m, eps)
 
           # If we haven't allocated Q yet, let Q = H1
           q =
             if is_nil(q) do
-              zero_padding = 0 |> List.duplicate(k) |> List.duplicate(m - k)
-              h ++ zero_padding
+              h
             else
               dot_matrix(q, h)
             end
 
           r = dot_matrix(h, r)
-
           {q, r}
       end
 
-    {q_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type),
-     r_matrix |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
+    {approximate_zeros(q_matrix, eps), approximate_zeros(r_matrix, eps)}
+  end
+
+  defp qr_decomposition(_, _, _, _) do
+    raise ArgumentError, "tensor must have at least as many rows as columns"
+  end
+
+  def eigh(input_data, input_type, {n, n} = input_shape, output_type, opts) do
+    # The input symmetric matrix A reduced to Hessenberg matrix H by Householder transform.
+    # Then, by using QR iteration it converges to AQ = QΛ,
+    # where Λ is the diagonal matrix of eigenvalues and the columns of Q are the eigenvectors.
+
+    eps = opts[:eps]
+    max_iter = opts[:max_iter]
+
+    # Validate that the input is a symmetric matrix using the relation A^t = A.
+    a = binary_to_matrix(input_data, input_type, input_shape)
+
+    is_sym =
+      a
+      |> transpose_matrix()
+      |> is_approximately_same?(a, eps)
+
+    unless is_sym do
+      raise ArgumentError, "input tensor must be symmetric"
+    end
+
+    # Hessenberg decomposition
+    {h, q_h} = hessenberg_decomposition(a, n, eps)
+
+    # QR iteration for eigenvalues and eigenvectors
+    {eigenvals_diag, eigenvecs} =
+      Enum.reduce_while(1..max_iter, {h, q_h}, fn _, {a_old, q_old} ->
+        # QR decomposition
+        {q_now, r_now} = qr_decomposition(a_old, n, n, eps)
+
+        # Update matrix A, Q
+        a_new = dot_matrix(r_now, q_now)
+        q_new = dot_matrix(q_old, q_now)
+
+        if is_approximately_same?(q_old, q_new, eps) do
+          {:halt, {a_new, q_new}}
+        else
+          {:cont, {a_new, q_new}}
+        end
+      end)
+
+    # Obtain the eigenvalues, which are the diagonal elements
+    indices_diag = for idx <- 0..(n - 1), do: [idx, idx]
+    eigenvals = get_matrix_elements(eigenvals_diag, indices_diag)
+
+    # Reduce the elements smaller than eps to zero
+    {eigenvals |> approximate_zeros(eps) |> matrix_to_binary(output_type),
+     eigenvecs |> approximate_zeros(eps) |> matrix_to_binary(output_type)}
+  end
+
+  defp hessenberg_decomposition(matrix, n, eps) do
+    # Hessenberg decomposition is performed by using Householder transform
+    {hess_matrix, q_matrix} =
+      for i <- 0..(n - 2), reduce: {matrix, nil} do
+        {hess, q} ->
+          h =
+            hess
+            |> slice_matrix([i + 1, i], [n - i - 1, 1])
+            |> householder_reflector(n, eps)
+
+          # If we haven't allocated Q yet, let Q = H1
+          q =
+            if is_nil(q) do
+              h
+            else
+              dot_matrix(q, h)
+            end
+
+          # Hessenberg matrix H updating
+          h_t = transpose_matrix(h)
+
+          hess =
+            h
+            |> dot_matrix(hess)
+            |> dot_matrix(h_t)
+
+          {hess, q}
+      end
+
+    {approximate_zeros(hess_matrix, eps), approximate_zeros(q_matrix, eps)}
+  end
+
+  # TODO: Eliminate this function and use the binary implementation
+  defp is_approximately_same?(a, b, eps) do
+    # Determine if matrices `a` and `b` are equal in the range of eps
+    Enum.zip(a, b)
+    |> Enum.all?(fn {a_row, b_row} ->
+      Enum.zip(a_row, b_row)
+      |> Enum.map(&Tuple.to_list(&1))
+      |> Enum.all?(
+        &Enum.reduce(
+          &1,
+          fn a_elem, b_elem -> abs(a_elem - b_elem) <= eps end
+        )
+      )
+    end)
   end
 
   def lu(input_data, input_type, {n, n} = input_shape, p_type, l_type, u_type, opts) do

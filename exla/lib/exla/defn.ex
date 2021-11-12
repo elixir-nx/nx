@@ -246,6 +246,16 @@ defmodule EXLA.Defn do
   defp outputs(tuple) when is_tuple(tuple),
     do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&outputs/1)}
 
+  defp outputs(map) when is_struct(map) do
+    out =
+      map
+      |> Map.from_struct()
+      |> Enum.sort()
+      |> Enum.map(fn {k, v} -> {k, outputs(v)} end)
+
+    {:struct, out, map.__struct__}
+  end
+
   defp outputs(map) when is_map(map),
     do: {:map, map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, outputs(v)} end)}
 
@@ -286,6 +296,15 @@ defmodule EXLA.Defn do
     list = Tuple.to_list(tuple)
 
     Enum.reduce(list, {acc, cache}, fn expr, {acc, cache} ->
+      recur_flatten(expr, acc, state, cache)
+    end)
+  end
+
+  defp recur_flatten(map, acc, state, cache) when is_struct(map) do
+    map
+    |> Map.from_struct()
+    |> Enum.sort()
+    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
       recur_flatten(expr, acc, state, cache)
     end)
   end
@@ -354,8 +373,8 @@ defmodule EXLA.Defn do
 
   ## to_operator creation
 
-  defp to_operator(:scalar, [scalar], ans, state) do
-    op = to_constant(state.builder, scalar, ans.type)
+  defp to_operator(:constant, [constant], ans, state) do
+    op = to_constant(state.builder, constant, ans.type)
 
     if ans.shape == {} do
       op
@@ -415,8 +434,8 @@ defmodule EXLA.Defn do
     EXLA.Op.reshape(op, shape)
   end
 
-  defp to_operator(:pad, [op, value, padding_config], _ans, _state) do
-    EXLA.Op.pad(op, value, padding_config)
+  defp to_operator(:pad, [op, value, padding_config], %{type: type}, _state) do
+    EXLA.Op.pad(to_type(op, type), to_type(value, type), padding_config)
   end
 
   defp to_operator(:broadcast, [op, _shape, axes], ans, _state) do
@@ -618,7 +637,7 @@ defmodule EXLA.Defn do
     # to the same type which is not necessarily the answer type.
     left_shape = EXLA.Op.get_shape(left)
     right_shape = EXLA.Op.get_shape(right)
-    type = Nx.Type.merge(left_shape.dtype, right_shape.dtype)
+    type = merge_type(left_shape.dtype, right_shape.dtype)
     dims = broadcast_axes(left_shape.dims, right_shape.dims)
     apply(EXLA.Op, op, [to_type(left, type), to_type(right, type), dims])
   end
@@ -1184,8 +1203,8 @@ defmodule EXLA.Defn do
     {pred_op, cache} = recur_operator(pred, state, cache)
     pred_op = to_type(pred_op, {:pred, 8})
 
-    {true_args, true_comp} = to_if_branch(true, on_true, pred_ids, state, cache)
-    {false_args, false_comp} = to_if_branch(false, on_false, pred_ids, state, cache)
+    {true_args, true_comp, cache} = to_if_branch(true, on_true, pred_ids, state, cache)
+    {false_args, false_comp, cache} = to_if_branch(false, on_false, pred_ids, state, cache)
     {EXLA.Op.conditional(pred_op, true_args, true_comp, false_args, false_comp), cache}
   end
 
@@ -1198,6 +1217,9 @@ defmodule EXLA.Defn do
 
   defp collect_args(%T{data: %Expr{id: id, op: op}} = expr, {cache, ids}, pred_ids) do
     cond do
+      op == :constant ->
+        {expr, {cache, ids}}
+
       Map.has_key?(pred_ids, id) or op == :parameter ->
         case ids do
           %{^id => {_, _, new}} ->
@@ -1206,7 +1228,7 @@ defmodule EXLA.Defn do
           %{} ->
             i = map_size(ids)
             param = Expr.parameter(expr, i)
-            {param, {cache, Map.put(ids, id, {i, expr, param})}}
+            {param, {Map.put(cache, id, param), Map.put(ids, id, {i, expr, param})}}
         end
 
       expr = Map.get(cache, id) ->
@@ -1224,6 +1246,12 @@ defmodule EXLA.Defn do
   defp to_if_branch(bool, expr, ids, state, cache) do
     {expr, {_cache, ids_args}} = Tree.composite(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
+
+    {args, cache} =
+      Enum.map_reduce(sorted_ids_args, cache, fn {_, {_, old, _}}, cache ->
+        recur_operator(old, state, cache)
+      end)
+
     subbuilder = subbuilder(state.builder, "if-#{Atom.to_string(bool)}")
 
     shapes =
@@ -1245,13 +1273,7 @@ defmodule EXLA.Defn do
       |> elem(0)
       |> EXLA.Builder.build()
 
-    args =
-      Enum.map(sorted_ids_args, fn
-        {_, {_, %T{data: %Expr{op: :parameter, args: [i]}}, _}} -> Map.fetch!(state.params, i)
-        {id, {_, _, _}} -> Map.fetch!(cache, id)
-      end)
-
-    {EXLA.Op.tuple(state.builder, args), comp}
+    {EXLA.Op.tuple(state.builder, args), comp, cache}
   end
 
   ## Axes helpers
@@ -1295,6 +1317,9 @@ defmodule EXLA.Defn do
     if op_type(op) == type, do: op, else: EXLA.Op.convert_element_type(op, type)
   end
 
+  defp merge_type({:pred, 8}, {:pred, 8}), do: {:pred, 8}
+  defp merge_type(left, right), do: Nx.Type.merge(to_nx_type(left), to_nx_type(right))
+
   defp to_constant(builder, constant, type) do
     EXLA.Op.constant_r0(builder, constant, type)
   end
@@ -1314,6 +1339,16 @@ defmodule EXLA.Defn do
   defp each_buffer_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
     {exprs, acc} = Enum.map_reduce(outputs, acc, &each_buffer_to_nx/2)
     {List.to_tuple(exprs), acc}
+  end
+
+  defp each_buffer_to_nx({:struct, outputs, mod}, acc) when is_list(outputs) do
+    {exprs, acc} =
+      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
+        {v, acc} = each_buffer_to_nx(v, acc)
+        {{k, v}, acc}
+      end)
+
+    {struct(mod, exprs), acc}
   end
 
   defp each_buffer_to_nx({:map, outputs}, acc) when is_list(outputs) do

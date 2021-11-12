@@ -536,23 +536,19 @@ defmodule Nx.Defn.Kernel do
   def not tensor when is_number(tensor), do: logical_not(tensor)
   def not tensor, do: Nx.logical_not(tensor)
 
-  defp logical_and(l, r) when Kernel.==(l, 0), do: zero(l, r)
-  defp logical_and(l, r) when Kernel.==(r, 0), do: zero(l, r)
-  defp logical_and(l, r), do: one(l, r)
+  defp logical_and(l, _) when Kernel.==(l, 0), do: zero()
+  defp logical_and(_, r) when Kernel.==(r, 0), do: zero()
+  defp logical_and(_, _), do: one()
 
-  defp logical_or(l, r) when Kernel.and(Kernel.==(l, 0), Kernel.==(r, 0)), do: zero(l, r)
-  defp logical_or(l, r), do: one(l, r)
+  defp logical_or(l, r) when Kernel.and(Kernel.==(l, 0), Kernel.==(r, 0)), do: zero()
+  defp logical_or(_, _), do: one()
 
-  defp logical_not(0), do: 1
-  defp logical_not(0.0), do: 1.0
-  defp logical_not(n) when is_float(n), do: 0.0
-  defp logical_not(n) when is_integer(n), do: 0
+  defp logical_not(0), do: one()
+  defp logical_not(0.0), do: one()
+  defp logical_not(_), do: zero()
 
-  defp zero(l, r) when Kernel.or(is_float(l), is_float(r)), do: 0.0
-  defp zero(_, _), do: 0
-
-  defp one(l, r) when Kernel.or(is_float(l), is_float(r)), do: 1.0
-  defp one(_, _), do: 1
+  defp zero(), do: Nx.Defn.Expr.constant(0, %Nx.Tensor{type: {:u, 8}, shape: {}, names: []})
+  defp one(), do: Nx.Defn.Expr.constant(1, %Nx.Tensor{type: {:u, 8}, shape: {}, names: []})
 
   @doc """
   Element-wise bitwise AND operation.
@@ -651,7 +647,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def left == right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.==(left, right)
+    do: to_constant(Kernel.==(left, right))
 
   def left == right, do: Nx.equal(left, right)
 
@@ -665,7 +661,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left != right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.!=(left, right)
+    do: to_constant(Kernel.!=(left, right))
 
   def left != right, do: Nx.not_equal(left, right)
 
@@ -679,7 +675,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left < right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.<(left, right)
+    do: to_constant(Kernel.<(left, right))
 
   def left < right, do: Nx.less(left, right)
 
@@ -693,7 +689,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left > right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.>(left, right)
+    do: to_constant(Kernel.>(left, right))
 
   def left > right, do: Nx.greater(left, right)
 
@@ -707,7 +703,7 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left <= right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.<=(left, right)
+    do: to_constant(Kernel.<=(left, right))
 
   def left <= right, do: Nx.less_equal(left, right)
 
@@ -721,9 +717,12 @@ defmodule Nx.Defn.Kernel do
       end
   """
   def left >= right when Kernel.and(is_number(left), is_number(right)),
-    do: Kernel.>=(left, right)
+    do: to_constant(Kernel.>=(left, right))
 
   def left >= right, do: Nx.greater_equal(left, right)
+
+  defp to_constant(true), do: one()
+  defp to_constant(false), do: zero()
 
   @doc """
   Ensures the first argument is a `keyword` with the given

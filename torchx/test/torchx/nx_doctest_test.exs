@@ -24,6 +24,8 @@ defmodule Torchx.NxDoctestTest do
     broadcast: 3,
     # dot - Batching not supported
     dot: 6,
+    # make_diagonal - depends on scatter_add
+    make_diagonal: 2,
     # mean - Torchx expects a input tensor but receives a number as input
     mean: 2,
     # outer - shape mismatch in some tests
