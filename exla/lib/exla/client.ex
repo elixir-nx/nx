@@ -109,17 +109,15 @@ defmodule EXLA.Client do
   end
 
   @doc """
-  Retrieves buffer from device outfeed.
-
-  If you want to receive a tuple shape, consider using `from_tuple_outfeed/2`,
-  as it will return a separate binary for each individual tuple element.
+  Sends buffer from device outfeed to the given process tagged by `ref``.
 
   > Note: XLA does not support tuple outfeed shapes. Passing one will simply
   > block the operation indefinitely. Instead, convert the tuple into multiple
   > outfeed operations.
   """
-  def from_outfeed(%EXLA.Client{ref: client}, device_id, %EXLA.Shape{ref: shape_ref}) do
-    EXLA.NIF.transfer_from_outfeed(client, device_id, shape_ref) |> unwrap!()
+  def from_outfeed(%EXLA.Client{ref: client}, device_id, shapes, pid, ref) when is_list(shapes) do
+    shape_refs = Enum.map(shapes, fn %EXLA.Shape{ref: shape_ref} -> shape_ref end)
+    EXLA.NIF.transfer_from_outfeed(client, device_id, shape_refs, pid, ref) |> unwrap!()
   end
 
   ## Callbacks

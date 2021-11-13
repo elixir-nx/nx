@@ -85,9 +85,13 @@ defmodule EXLA.Defn.Stream do
 
     def recv(%{client: client, device_id: device_id, recv_shape: recv_shape}) do
       %EXLA.Shape{dtype: {:tuple, shapes}} = recv_shape
+      ref = make_ref()
+      :ok = EXLA.Client.from_outfeed(client, device_id, shapes, self(), ref)
 
-      for shape <- shapes do
-        EXLA.Client.from_outfeed(client, device_id, shape)
+      for _ <- shapes do
+        receive do
+          {^ref, binary} -> binary
+        end
       end
     end
 

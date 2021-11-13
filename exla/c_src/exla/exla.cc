@@ -2006,13 +2006,13 @@ ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
 }
 
 ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+  if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   int device_id;
-  xla::Shape* shape;
+  ErlNifPid pid;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
@@ -2020,13 +2020,38 @@ ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   if (!exla::nif::get(env, argv[1], &device_id)) {
     return exla::nif::error(env, "Unable to get device ID.");
   }
-  if (!exla::nif::get<xla::Shape>(env, argv[2], shape)) {
-    return exla::nif::error(env, "Unable to get shape.");
+  if (!enif_get_local_pid(env, argv[3], &pid)) {
+    return exla::nif::error(env, "Unable to get pid.");
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM ret_term, (*client)->TransferFromOutfeed(env, device_id, *shape), env);
+  ERL_NIF_TERM data = argv[2];
+  ERL_NIF_TERM head, tail;
+  while (enif_get_list_cell(env, data, &head, &tail)) {
+    xla::Shape* shape;
 
-  return exla::nif::ok(env, ret_term);
+    if (!exla::nif::get<xla::Shape>(env, head, shape)) {
+      return exla::nif::error(env, "Unable to get shape.");
+    }
+
+    ErlNifEnv* penv = enif_alloc_env();
+    ERL_NIF_TERM ref = enif_make_copy(penv, argv[4]);
+    auto statusor = (*client)->TransferFromOutfeed(penv, device_id, *shape);
+
+    if (!statusor.ok()) {
+      enif_clear_env(penv);
+      return exla::nif::error(env, statusor.status().error_message().c_str());
+    }
+
+    ERL_NIF_TERM msg = std::move(statusor.ValueOrDie());
+
+    if(!enif_send(env, &pid, penv, enif_make_tuple(penv, 2, ref, msg))) {
+      enif_clear_env(penv);
+    }
+
+    data = tail;
+  }
+
+  return exla::nif::ok(env);
 }
 
 // ExlaClient Functions
@@ -2262,7 +2287,7 @@ static ErlNifFunc exla_funcs[] = {
   {"read_device_mem", 3, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"transfer_to_infeed", 3, transfer_to_infeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"transfer_from_outfeed", 3, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"transfer_from_outfeed", 5, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
   {"run_io", 5, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},

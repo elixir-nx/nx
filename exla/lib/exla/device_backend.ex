@@ -62,8 +62,6 @@ defmodule EXLA.DeviceBackend do
     "EXLA.DeviceBackend<#{inspect(state)}>"
   end
 
-  # TODO: Implement to_binary
-
   ## All remaining callbacks
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)

@@ -143,8 +143,7 @@ defmodule EXLA.ExecutableTest do
                end)
 
       assert :ok = Client.to_infeed(client(), 0, [{t.data, t.shape}])
-
-      assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<2::32-native>>
+      assert from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<2::32-native>>
 
       assert [a = %Buffer{}] = Task.await(res)
       assert Buffer.read(a.ref) == <<3::32-native>>
@@ -179,15 +178,24 @@ defmodule EXLA.ExecutableTest do
                end)
 
       assert :ok = Client.to_infeed(client(), 0, [{<<1::32-native>>, t.shape}])
-      assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<2::32-native>>
+      assert from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<2::32-native>>
 
       assert :ok = Client.to_infeed(client(), 0, [{<<2::32-native>>, t.shape}])
-      assert Client.from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<4::32-native>>
+      assert from_outfeed(client(), 0, Shape.make_shape({:s, 32}, {})) == <<4::32-native>>
 
       assert :ok = Client.to_infeed(client(), 0, [{<<0::32-native>>, t.shape}])
 
       assert [a = %Buffer{}] = Task.await(res)
       assert Buffer.read(a.ref) == <<0::32-native>>
+    end
+  end
+
+  defp from_outfeed(client, device_id, shape) do
+    ref = make_ref()
+    EXLA.Client.from_outfeed(client, device_id, [shape], self(), ref)
+
+    receive do
+      {^ref, msg} -> msg
     end
   end
 end
