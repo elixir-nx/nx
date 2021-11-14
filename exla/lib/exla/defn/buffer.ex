@@ -60,16 +60,18 @@ defmodule EXLA.Defn.Buffer do
   defp to_nx_type({:pred, 8}), do: {:u, 8}
   defp to_nx_type(type), do: type
 
+  defp to_exla_shape(%Nx.Tensor{type: type, shape: shape}), do: EXLA.Shape.make_shape(type, shape)
+
   @doc """
   Nx -> EXLA.Buffer.
   """
   def from_nx!(tensors) do
     for tensor <- tensors do
-      %T{data: data} = tensor
+      %Nx.Tensor{data: data} = tensor
 
       case data do
-        %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.buffer(ref, nx_to_shape!(tensor))
-        _ -> EXLA.Buffer.buffer(Nx.to_binary(tensor), nx_to_shape!(tensor))
+        %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.buffer(ref, to_exla_shape(tensor))
+        _ -> EXLA.Buffer.buffer(Nx.to_binary(tensor), to_exla_shape(tensor))
       end
     end
   end

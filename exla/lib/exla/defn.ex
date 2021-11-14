@@ -1384,6 +1384,9 @@ defmodule EXLA.Defn do
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
+  defp to_nx_type({:pred, 8}), do: {:u, 8}
+  defp to_nx_type(type), do: type
+
   # Helpers
 
   defp filter_inputs(vars, inputs), do: filter_inputs(vars, 0, inputs, [], [])
