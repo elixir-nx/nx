@@ -6,6 +6,7 @@ defmodule EXLA.Defn.Stream do
 
   @derive {Inspect, only: [:client, :device_id, :keep_on_device, :send, :recv]}
   @enforce_keys [
+    :lock,
     :send,
     :send_shape,
     :recv,
@@ -15,7 +16,7 @@ defmodule EXLA.Defn.Stream do
     :device_id,
     :keep_on_device
   ]
-  defstruct [:send, :send_shape, :recv, :recv_shape, :done, :client, :device_id, :keep_on_device]
+  defstruct [:lock, :send, :send_shape, :recv, :recv_shape, :done, :client, :device_id, :keep_on_device]
 
   @registry EXLA.Registry
   @supervisor EXLA.DynamicSupervisor
@@ -84,6 +85,9 @@ defmodule EXLA.Defn.Stream do
       do: [other |> Nx.to_tensor() |> Nx.to_binary()]
 
     def recv(%{client: client, device_id: device_id, recv_shape: recv_shape}) do
+      # TODO: Move this to a separate process
+      true = get_flag(client, device_id) == 1
+
       %EXLA.Shape{dtype: {:tuple, shapes}} = recv_shape
       ref = make_ref()
       :ok = EXLA.Client.from_outfeed(client, device_id, shapes, self(), ref)
@@ -95,10 +99,21 @@ defmodule EXLA.Defn.Stream do
       end
     end
 
-    def done(%{client: client, device_id: device_id, keep_on_device: keep_on_device, done: done}) do
-      pred = EXLA.Shape.make_shape({:pred, 8}, {})
-      :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
+    def done(%{lock: lock, client: client, device_id: device_id, keep_on_device: keep_on_device, done: done}) do
+      EXLA.Lock.unlock(lock)
+      # TODO: Move this to a separate process
+      true = get_flag(client, device_id) == 0
       if keep_on_device, do: done.(), else: Nx.backend_transfer(done.())
+    end
+
+    defp get_flag(client, device_id) do
+      ref = make_ref()
+      flag_shape = EXLA.Shape.make_shape({:u, 16}, {})
+      :ok = EXLA.Client.from_outfeed(client, device_id, [flag_shape], self(), ref)
+
+      receive do
+        {^ref, <<flag::native-unsigned-16>>} -> flag
+      end
     end
   end
 end

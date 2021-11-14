@@ -11,9 +11,9 @@ defmodule EXLA.Application do
     end
 
     children = [
-      {Registry, name: EXLA.Registry, keys: :unique},
       {DynamicSupervisor, name: EXLA.DynamicSupervisor, strategy: :one_for_one},
       EXLA.Client,
+      EXLA.Lock,
       EXLA.LockedCache,
       EXLA.Logger
     ]

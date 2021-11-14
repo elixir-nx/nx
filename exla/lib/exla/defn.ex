@@ -23,16 +23,37 @@ defmodule EXLA.Defn do
     {inputs, {:tuple, [output, acc_outputs]}, {executable, output_shape}} =
       compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
 
-    # TODO: Add synchronization before transferring buffers
+    # Execution of streams requires the coordination of
+    # multiple processes which is outlined below.
+
+    # First, we get a lock on the executable, because we want
+    # to avoid transfer to the device unless we know we are
+    # ready to use the device.
+    ref = EXLA.Lock.lock(run_key(executable))
     buffers = nx_to_buffer!(inputs)
 
-    # TODO: Use a task supervisor?
+    # Now that we have transferred to device, we spawn a task
+    # to execute the stream. However, the task cannot start
+    # immediately, we need to setup the new unlock instruction.
     task =
       Task.async(fn ->
-        EXLA.Executable.run(executable, buffers, run_options)
+        receive do
+          ^ref -> EXLA.Executable.run(executable, buffers, run_options)
+        end
       end)
 
+    # In a single step, we release the task and setup a new unlock
+    # callback that terminates the stream.
+    device_id = executable.device_id
+
+    EXLA.Lock.relock(
+      ref,
+      fn -> send(task.pid, ref) end,
+      fn -> halt_stream(client, device_id) end
+    )
+
     %EXLA.Defn.Stream{
+      lock: ref,
       send: input,
       send_shape: input_shape,
       recv: output,
@@ -42,6 +63,15 @@ defmodule EXLA.Defn do
       done: fn -> task |> Task.await(:infinity) |> buffer_to_nx!(acc_outputs) end,
       keep_on_device: keep_on_device?
     }
+  end
+
+  # It is time to halt the stream, we do it by sending 0 for the loop infeed.
+  # Then we wait for the outfeed process to read all.
+  defp halt_stream(client, device_id) do
+    pred = EXLA.Shape.make_shape({:pred, 8}, {})
+    :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
+    # TODO: This should return {:lock, reader_pid, fn -> :unlocked end}
+    :unlocked
   end
 
   defp split_stream(vars, used, input_length, acc_length) do
@@ -145,6 +175,9 @@ defmodule EXLA.Defn do
                   inspect(expr)
       end
 
+    # Emit the output flag of 1
+    token = EXLA.Op.outfeed(EXLA.Op.constant_r0(body_b, 1, {:u, 16}), token)
+
     output_shape = EXLA.Op.get_shape(output)
     %EXLA.Shape{dims: {size}, dtype: {:tuple, _}} = output_shape
 
@@ -176,12 +209,15 @@ defmodule EXLA.Defn do
         EXLA.Op.tuple(builder, constant_params)
       ])
 
-    computation =
-      EXLA.Op.while(pred, body, init)
-      |> EXLA.Op.get_tuple_element(1)
-      |> EXLA.Builder.build()
+    while = EXLA.Op.while(pred, body, init)
+    infeed = EXLA.Op.get_tuple_element(while, 0)
+    acc = EXLA.Op.get_tuple_element(while, 1)
 
-    {computation, output_shape}
+    # Emit the output flag of 0
+    token = EXLA.Op.get_tuple_element(infeed, 1)
+    _ = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, 0, {:u, 16}), token)
+
+    {EXLA.Builder.build(acc), output_shape}
   end
 
   @doc false
@@ -194,10 +230,18 @@ defmodule EXLA.Defn do
     {inputs, outputs, {executable, :ok}} =
       compile(client, key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
 
-    executable
-    |> EXLA.Executable.run(nx_to_buffer!(inputs), run_options)
-    |> buffer_to_nx!(outputs)
+    ref = EXLA.Lock.lock(run_key(executable))
+
+    try do
+      EXLA.Executable.run(executable, nx_to_buffer!(inputs), run_options)
+    else
+      result -> buffer_to_nx!(result, outputs)
+    after
+      EXLA.Lock.unlock(ref)
+    end
   end
+
+  defp run_key(%{client: %{ref: ref}, device_id: device_id}), do: [ref | device_id]
 
   defp compile(client, key, vars, fun, options, to_split, to_computation) do
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
