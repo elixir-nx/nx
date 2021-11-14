@@ -20,7 +20,7 @@ defmodule EXLA.Defn do
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
     comp_fun = &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, compile_options)
 
-    {inputs, {:tuple, [_output, acc_outputs]}, {executable, output_shape}} =
+    {inputs, {:tuple, [output, acc_output]}, {executable, output_shape}} =
       compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
 
     # Execution of streams requires the coordination of
@@ -60,8 +60,9 @@ defmodule EXLA.Defn do
       outfeed,
       input,
       input_shape,
+      output,
       output_shapes,
-      acc_outputs,
+      acc_output,
       keep_on_device?
     )
   end
@@ -242,7 +243,7 @@ defmodule EXLA.Defn do
     {expr, {used_inputs, outputs}} =
       EXLA.Defn.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
-        {expr, {used_inputs(expr), outputs(expr)}}
+        {expr, {used_inputs(expr), EXLA.Defn.Buffer.to_template(expr)}}
       end)
 
     {non_buffers, used_inputs} = to_split.(vars, used_inputs)
@@ -275,25 +276,6 @@ defmodule EXLA.Defn do
       %{} -> Tree.traverse_args(t, {Map.put(seen, id, true), used}, &used_inputs/2)
     end
   end
-
-  defp outputs(%T{} = t),
-    do: Nx.to_template(t)
-
-  defp outputs(tuple) when is_tuple(tuple),
-    do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&outputs/1)}
-
-  defp outputs(map) when is_struct(map) do
-    out =
-      map
-      |> Map.from_struct()
-      |> Enum.sort()
-      |> Enum.map(fn {k, v} -> {k, outputs(v)} end)
-
-    {:struct, out, map.__struct__}
-  end
-
-  defp outputs(map) when is_map(map),
-    do: {:map, map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, outputs(v)} end)}
 
   defp to_root_computation(key, expr, used_shapes, options) do
     builder = EXLA.Builder.new(inspect(key))
@@ -1356,6 +1338,9 @@ defmodule EXLA.Defn do
   defp merge_type({:pred, 8}, {:pred, 8}), do: {:pred, 8}
   defp merge_type(left, right), do: Nx.Type.merge(to_nx_type(left), to_nx_type(right))
 
+  defp to_nx_type({:pred, 8}), do: {:u, 8}
+  defp to_nx_type(type), do: type
+
   defp to_constant(builder, constant, type) do
     EXLA.Op.constant_r0(builder, constant, type)
   end
@@ -1364,9 +1349,6 @@ defmodule EXLA.Defn do
     suffix = System.unique_integer([:positive])
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
-
-  defp to_nx_type({:pred, 8}), do: {:u, 8}
-  defp to_nx_type(type), do: type
 
   # Helpers
 

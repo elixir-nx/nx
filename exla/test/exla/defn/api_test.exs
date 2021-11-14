@@ -57,13 +57,12 @@ defmodule EXLA.Defn.APITest do
     end
 
     test "send/recv" do
-      # TODO: Build outfeed
       %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert Nx.Stream.send(stream, 1) == :ok
-      assert Nx.Stream.recv(stream) == [<<0::64-native>>]
+      assert Nx.Stream.recv(stream) == Nx.tensor(0)
 
       assert Nx.Stream.send(stream, 2) == :ok
-      assert Nx.Stream.recv(stream) == [<<1::64-native>>]
+      assert Nx.Stream.recv(stream) == Nx.tensor(1)
 
       assert Nx.Stream.done(stream) == Nx.tensor(3)
     end
@@ -73,8 +72,8 @@ defmodule EXLA.Defn.APITest do
       assert Nx.Stream.send(stream, 1) == :ok
       assert Nx.Stream.send(stream, 2) == :ok
 
-      assert Nx.Stream.recv(stream) == [<<0::64-native>>]
-      assert Nx.Stream.recv(stream) == [<<1::64-native>>]
+      assert Nx.Stream.recv(stream) == Nx.tensor(0)
+      assert Nx.Stream.recv(stream) == Nx.tensor(1)
 
       assert Nx.Stream.done(stream) == Nx.tensor(3)
     end

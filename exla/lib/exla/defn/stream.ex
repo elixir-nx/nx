@@ -2,10 +2,10 @@ defmodule EXLA.Defn.Stream do
   @moduledoc false
 
   keys =
-    [:lock, :outfeed, :pid, :ref, :send, :send_shape] ++
+    [:lock, :outfeed, :pid, :ref, :send, :recv, :send_shape] ++
       [:recv_shapes, :done, :client, :device_id, :keep_on_device]
 
-  @derive {Inspect, only: [:pid, :client, :device_id, :keep_on_device, :send]}
+  @derive {Inspect, only: [:pid, :client, :device_id, :keep_on_device, :send, :recv]}
   @enforce_keys keys
   defstruct keys
 
@@ -16,6 +16,7 @@ defmodule EXLA.Defn.Stream do
         outfeed,
         send,
         send_shape,
+        recv,
         recv_shapes,
         done,
         keep_on_device?
@@ -39,6 +40,7 @@ defmodule EXLA.Defn.Stream do
       lock: lock,
       send: send,
       send_shape: send_shape,
+      recv: recv,
       recv_shapes: recv_shapes,
       client: client,
       device_id: device_id,
@@ -93,7 +95,7 @@ defmodule EXLA.Defn.Stream do
     defp nx_to_io(other),
       do: [other |> Nx.to_tensor() |> Nx.to_binary()]
 
-    def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv_shapes: shapes}) do
+    def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv: recv, recv_shapes: shapes}) do
       if pid != self() do
         raise "EXLA streams require recv to be called from the process that started the stream"
       end
@@ -102,11 +104,14 @@ defmodule EXLA.Defn.Stream do
         raise "cannot recv from stream because it has been terminated"
       end
 
-      for _ <- shapes do
-        receive do
-          {^lock, binary} -> binary
+      buffers =
+        for shape <- shapes do
+          receive do
+            {^lock, binary} -> %EXLA.Buffer{data: binary, shape: shape}
+          end
         end
-      end
+
+      EXLA.Defn.Buffer.to_nx!(buffers, recv)
     end
 
     def done(%{lock: lock, pid: pid, ref: ref, keep_on_device: keep_on_device, done: done}) do
