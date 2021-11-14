@@ -1,7 +1,7 @@
-defmodule EXLA.LockedCacheTest do
+defmodule EXLA.Defn.LockedCacheTest do
   use ExUnit.Case, async: true
 
-  alias EXLA.LockedCache, as: LC
+  alias EXLA.Defn.LockedCache, as: LC
 
   test "caches keys", config do
     assert LC.run(config.test, fn -> {:inner, :this_is_cached} end) == {:inner, :this_is_cached}

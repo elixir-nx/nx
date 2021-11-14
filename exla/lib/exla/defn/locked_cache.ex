@@ -1,4 +1,4 @@
-defmodule EXLA.LockedCache do
+defmodule EXLA.Defn.LockedCache do
   @moduledoc false
 
   # EXLA has many expensive singleton resources such as

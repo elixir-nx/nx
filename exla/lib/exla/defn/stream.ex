@@ -1,60 +1,13 @@
 defmodule EXLA.Defn.Stream do
   @moduledoc false
 
-  # If it terminates, another one will be started dynamically
-  use GenServer, restart: :transient
+  keys =
+    [:lock, :outfeed, :pid, :ref, :send, :send_shape] ++
+      [:recv_shapes, :done, :client, :device_id, :keep_on_device]
 
-  @derive {Inspect, only: [:client, :device_id, :keep_on_device, :send, :recv]}
-  @enforce_keys [
-    :lock,
-    :send,
-    :send_shape,
-    :recv,
-    :recv_shape,
-    :done,
-    :client,
-    :device_id,
-    :keep_on_device
-  ]
-  defstruct [
-    :lock,
-    :send,
-    :send_shape,
-    :recv,
-    :recv_shape,
-    :done,
-    :client,
-    :device_id,
-    :keep_on_device
-  ]
-
-  @registry EXLA.Registry
-  @supervisor EXLA.DynamicSupervisor
-
-  @doc false
-  def handler(client, device_id) do
-    case Registry.lookup(@registry, {client.name, device_id}) do
-      [{pid, _}] ->
-        pid
-
-      [] ->
-        case DynamicSupervisor.start_child(@supervisor, {__MODULE__, {client, device_id}}) do
-          {:ok, pid} -> pid
-          {:error, {:already_started, pid}} -> pid
-        end
-    end
-  end
-
-  @doc false
-  def start_link({client, device_id}) do
-    name = {:via, Registry, {@registry, {client.name, device_id}}}
-    GenServer.start_link(__MODULE__, {client, device_id}, name: name)
-  end
-
-  @impl true
-  def init({client, device_id}) do
-    {:ok, %{client: client, device_id: device_id}}
-  end
+  @derive {Inspect, only: [:pid, :client, :device_id, :keep_on_device, :send]}
+  @enforce_keys keys
+  defstruct keys
 
   defimpl Nx.Stream do
     def send(%{client: client, device_id: device_id, send: send, send_shape: send_shape}, data) do
@@ -94,41 +47,38 @@ defmodule EXLA.Defn.Stream do
     defp nx_to_io(other),
       do: [other |> Nx.to_tensor() |> Nx.to_binary()]
 
-    def recv(%{client: client, device_id: device_id, recv_shape: recv_shape}) do
-      # TODO: Move this to a separate process
-      true = get_flag(client, device_id) == 1
+    def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv_shapes: shapes}) do
+      if pid != self() do
+        raise "EXLA streams require recv to be called from the process that started the stream"
+      end
 
-      %EXLA.Shape{dtype: {:tuple, shapes}} = recv_shape
-      ref = make_ref()
-      :ok = EXLA.Client.from_outfeed(client, device_id, shapes, self(), ref)
+      unless Process.alive?(outfeed) do
+        raise "cannot recv from stream because it has been terminated"
+      end
 
       for _ <- shapes do
         receive do
-          {^ref, binary} -> binary
+          {^lock, binary} -> binary
         end
       end
     end
 
-    def done(%{
-          lock: lock,
-          client: client,
-          device_id: device_id,
-          keep_on_device: keep_on_device,
-          done: done
-        }) do
-      EXLA.Lock.unlock(lock)
-      # TODO: Move this to a separate process
-      true = get_flag(client, device_id) == 0
-      if keep_on_device, do: done.(), else: Nx.backend_transfer(done.())
-    end
+    def done(%{lock: lock, pid: pid, ref: ref, keep_on_device: keep_on_device, done: done}) do
+      if pid != self() do
+        raise "EXLA streams require recv to be called from the process that started the stream"
+      end
 
-    defp get_flag(client, device_id) do
-      ref = make_ref()
-      flag_shape = EXLA.Shape.make_shape({:u, 16}, {})
-      :ok = EXLA.Client.from_outfeed(client, device_id, [flag_shape], self(), ref)
+      # This will send message to stop the loop
+      # and set the lock to the output process.
+      EXLA.Defn.Lock.unlock(lock)
 
       receive do
-        {^ref, <<flag::native-unsigned-16>>} -> flag
+        {^lock, _} ->
+          raise "cannot mark stream as done when there are recv messages pending"
+
+        {^ref, result} ->
+          tensors = EXLA.Defn.Buffer.to_nx!(result, done)
+          if keep_on_device, do: tensors, else: Nx.backend_transfer(tensors)
       end
     end
   end

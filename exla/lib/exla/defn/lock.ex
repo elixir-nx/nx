@@ -1,4 +1,4 @@
-defmodule EXLA.Lock do
+defmodule EXLA.Defn.Lock do
   @moduledoc false
 
   use GenServer

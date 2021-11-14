@@ -1,4 +1,4 @@
-defmodule EXLA.DefnAPITest do
+defmodule EXLA.Defn.APITest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
@@ -35,7 +35,6 @@ defmodule EXLA.DefnAPITest do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
     # TODO: Test returning an empty map/tuple
-    # TODO: Make infeed/outfeed dirty NIFs (cpu for host, io for others)
 
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])

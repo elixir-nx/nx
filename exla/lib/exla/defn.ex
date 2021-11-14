@@ -20,7 +20,7 @@ defmodule EXLA.Defn do
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
     comp_fun = &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, compile_options)
 
-    {inputs, {:tuple, [output, acc_outputs]}, {executable, output_shape}} =
+    {inputs, {:tuple, [_output, acc_outputs]}, {executable, output_shape}} =
       compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
 
     # Execution of streams requires the coordination of
@@ -29,49 +29,60 @@ defmodule EXLA.Defn do
     # First, we get a lock on the executable, because we want
     # to avoid transfer to the device unless we know we are
     # ready to use the device.
-    ref = EXLA.Lock.lock(run_key(executable))
-    buffers = nx_to_buffer!(inputs)
+    ref = EXLA.Defn.Lock.lock(run_key(executable))
+    buffers = EXLA.Defn.Buffer.from_nx!(inputs)
+    device_id = executable.device_id
 
-    # Now that we have transferred to device, we spawn a task
-    # to execute the stream. However, the task cannot start
-    # immediately, we need to setup the new unlock instruction.
-    task =
+    # Now that we have transferred to device, we spawn a task to
+    # execute the stream. We keep this with regular async/await
+    # because this task will never really exist beyond the scope
+    # of the current process.
+    #
+    # Finally, note the task cannot start immediately, we need to
+    # setup the outfeed reader and the relock the client/device_id.
+    %{pid: task_pid, ref: task_ref} =
       Task.async(fn ->
         receive do
           ^ref -> EXLA.Executable.run(executable, buffers, run_options)
         end
       end)
 
-    # In a single step, we release the task and setup a new unlock
-    # callback that terminates the stream.
-    device_id = executable.device_id
+    # The outfeed reader will redirect all outputs with flag 1 to the current
+    # process. Once flag 0 is emitted, we know the stream is done.
+    %EXLA.Shape{dtype: {:tuple, recv_shapes}} = output_shape
+    mappings = %{1 => {recv_shapes, {self(), ref}}}
+    {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(client, device_id, mappings)
 
-    EXLA.Lock.relock(
-      ref,
-      fn -> send(task.pid, ref) end,
-      fn -> halt_stream(client, device_id) end
-    )
+    # With the task and outfeed in place, we now relock the client/device_id.
+    # If the current process shuts down, we send a terminate message
+    ^ref =
+      EXLA.Defn.Lock.relock(
+        ref,
+        fn -> send(task_pid, ref) end,
+        fn -> halt_stream(client, device_id, outfeed) end
+      )
 
     %EXLA.Defn.Stream{
+      pid: self(),
+      ref: task_ref,
+      outfeed: outfeed,
       lock: ref,
       send: input,
       send_shape: input_shape,
-      recv: output,
-      recv_shape: output_shape,
+      recv_shapes: recv_shapes,
       client: client,
       device_id: executable.device_id,
-      done: fn -> task |> Task.await(:infinity) |> buffer_to_nx!(acc_outputs) end,
+      done: acc_outputs,
       keep_on_device: keep_on_device?
     }
   end
 
   # It is time to halt the stream, we do it by sending 0 for the loop infeed.
   # Then we wait for the outfeed process to read all.
-  defp halt_stream(client, device_id) do
+  defp halt_stream(client, device_id, outfeed) do
     pred = EXLA.Shape.make_shape({:pred, 8}, {})
     :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
-    # TODO: This should return {:lock, reader_pid, fn -> :unlocked end}
-    :unlocked
+    {:lock, outfeed, fn -> :unlocked end}
   end
 
   defp split_stream(vars, used, input_length, acc_length) do
@@ -230,14 +241,14 @@ defmodule EXLA.Defn do
     {inputs, outputs, {executable, :ok}} =
       compile(client, key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
 
-    ref = EXLA.Lock.lock(run_key(executable))
+    ref = EXLA.Defn.Lock.lock(run_key(executable))
 
     try do
-      EXLA.Executable.run(executable, nx_to_buffer!(inputs), run_options)
+      EXLA.Executable.run(executable, EXLA.Defn.Buffer.from_nx!(inputs), run_options)
     else
-      result -> buffer_to_nx!(result, outputs)
+      result -> EXLA.Defn.Buffer.to_nx!(result, outputs)
     after
-      EXLA.Lock.unlock(ref)
+      EXLA.Defn.Lock.unlock(ref)
     end
   end
 
@@ -248,7 +259,7 @@ defmodule EXLA.Defn do
     expr_key = {key, expr_args}
 
     {expr, {used_inputs, outputs}} =
-      EXLA.LockedCache.run(expr_key, fn ->
+      EXLA.Defn.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
         {expr, {used_inputs(expr), outputs(expr)}}
       end)
@@ -259,7 +270,7 @@ defmodule EXLA.Defn do
     cache_key = {key, cache_args, client.name, options}
 
     {_, executable_extra} =
-      EXLA.LockedCache.run(cache_key, fn ->
+      EXLA.Defn.LockedCache.run(cache_key, fn ->
         shapes = Enum.map(inputs, &nx_to_shape!/1)
         {computation, extra} = to_computation.(expr || fun.(vars), Enum.zip(used_inputs, shapes))
         executable = EXLA.Computation.compile(computation, client, shapes)
@@ -1371,77 +1382,6 @@ defmodule EXLA.Defn do
   defp subbuilder(%EXLA.Builder{name: name} = builder, desc) do
     suffix = System.unique_integer([:positive])
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
-  end
-
-  ## EXLA.Buffer -> Nx
-
-  defp buffer_to_nx!(buffers, outputs) do
-    {result, []} = each_buffer_to_nx(outputs, buffers)
-    result
-  end
-
-  defp each_buffer_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
-    {exprs, acc} = Enum.map_reduce(outputs, acc, &each_buffer_to_nx/2)
-    {List.to_tuple(exprs), acc}
-  end
-
-  defp each_buffer_to_nx({:struct, outputs, mod}, acc) when is_list(outputs) do
-    {exprs, acc} =
-      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
-        {v, acc} = each_buffer_to_nx(v, acc)
-        {{k, v}, acc}
-      end)
-
-    {struct(mod, exprs), acc}
-  end
-
-  defp each_buffer_to_nx({:map, outputs}, acc) when is_list(outputs) do
-    {exprs, acc} =
-      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
-        {v, acc} = each_buffer_to_nx(v, acc)
-        {{k, v}, acc}
-      end)
-
-    {Map.new(exprs), acc}
-  end
-
-  defp each_buffer_to_nx(hole, [%EXLA.Buffer{shape: shape} = buffer | acc]) do
-    nx_type = to_nx_type(shape.dtype)
-    nx_shape = shape.dims
-
-    if hole.type != nx_type do
-      raise "internal bug! Nx.Defn expected a tensor with type #{inspect(hole.type)} " <>
-              "but got #{inspect(nx_type)}"
-    end
-
-    if hole.shape != nx_shape do
-      raise "internal bug! Nx.Defn expected a tensor with shape #{inspect(hole.shape)} " <>
-              "but got #{inspect(nx_shape)}"
-    end
-
-    {%{hole | data: buffer_to_data(buffer)}, acc}
-  end
-
-  defp buffer_to_data(%EXLA.Buffer{ref: ref, data: nil}),
-    do: %EXLA.DeviceBackend{state: ref}
-
-  defp buffer_to_data(%EXLA.Buffer{ref: nil, data: data}),
-    do: %Nx.BinaryBackend{state: data}
-
-  defp to_nx_type({:pred, 8}), do: {:u, 8}
-  defp to_nx_type(type), do: type
-
-  ## Nx -> EXLA.Buffer
-
-  defp nx_to_buffer!(tensors) do
-    for tensor <- tensors do
-      %T{data: data} = tensor
-
-      case data do
-        %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.buffer(ref, nx_to_shape!(tensor))
-        _ -> EXLA.Buffer.buffer(Nx.to_binary(tensor), nx_to_shape!(tensor))
-      end
-    end
   end
 
   # Helpers
