@@ -114,7 +114,14 @@ defmodule EXLA.Defn.Stream do
       EXLA.Defn.Buffer.to_nx!(buffers, recv)
     end
 
-    def done(%{lock: lock, pid: pid, ref: ref, keep_on_device: keep_on_device, done: done}) do
+    def done(%{
+          lock: lock,
+          outfeed: outfeed,
+          pid: pid,
+          ref: ref,
+          keep_on_device: keep_on_device,
+          done: done
+        }) do
       if pid != self() do
         raise "EXLA streams require recv to be called from the process that started the stream"
       end
@@ -123,13 +130,22 @@ defmodule EXLA.Defn.Stream do
       # and set the lock to the output process.
       EXLA.Defn.Lock.unlock(lock)
 
+      # Now we wait until the outfeed completes, before
+      # we return. This is necessary to ensure all output
+      # has been consumed before we return.
+      outfeed_ref = Process.monitor(outfeed)
+
       receive do
         {^lock, _} ->
           raise "cannot mark stream as done when there are recv messages pending"
 
-        {^ref, result} ->
-          tensors = EXLA.Defn.Buffer.to_nx!(result, done)
-          if keep_on_device, do: tensors, else: Nx.backend_transfer(tensors)
+        {:DOWN, ^outfeed_ref, _, _, _} ->
+          receive do
+            {^ref, result} ->
+              Process.demonitor(ref, [:flush])
+              tensors = EXLA.Defn.Buffer.to_nx!(result, done)
+              if keep_on_device, do: tensors, else: Nx.backend_transfer(tensors)
+          end
       end
     end
   end

@@ -35,7 +35,6 @@ defmodule EXLA.Defn.APITest do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
     # TODO: Test EXLA.Defn.Lock
-    # TODO: Test errors and corner cases
 
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])
@@ -119,6 +118,49 @@ defmodule EXLA.Defn.APITest do
       assert Nx.Stream.recv(stream) == Nx.tensor(4)
 
       assert Nx.Stream.done(stream) == {}
+    end
+
+    test "handles failure before writing" do
+      {_, ref} = spawn_monitor(fn -> EXLA.stream(&defn_sum/2, [0, 0]) end)
+      assert_receive {:DOWN, ^ref, _, _, _}
+
+      %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
+      assert Nx.Stream.send(stream, 1) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(0)
+      assert Nx.Stream.done(stream) == Nx.tensor(1)
+    end
+
+    test "handles failure after writing" do
+      {_, ref} =
+        spawn_monitor(fn ->
+          stream = EXLA.stream(&defn_sum/2, [0, 0])
+          assert Nx.Stream.send(stream, 1) == :ok
+        end)
+
+      assert_receive {:DOWN, ^ref, _, _, _}
+
+      %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
+      assert Nx.Stream.send(stream, 1) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(0)
+      assert Nx.Stream.done(stream) == Nx.tensor(1)
+    end
+
+    test "raises if recv is pending on done" do
+      %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
+      assert Nx.Stream.send(stream, 1) == :ok
+
+      assert_raise RuntimeError,
+                   "cannot mark stream as done when there are recv messages pending",
+                   fn -> Nx.Stream.done(stream) end
+    end
+
+    test "raises if stream is done when recving" do
+      %_{} = stream = EXLA.stream(&defn_sum/2, [0, 0])
+      assert Nx.Stream.done(stream) == Nx.tensor(0)
+
+      assert_raise RuntimeError,
+                   "cannot recv from stream because it has been terminated",
+                   fn -> Nx.Stream.recv(stream) end
     end
   end
 end
