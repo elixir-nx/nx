@@ -34,7 +34,6 @@ defmodule EXLA.Defn.APITest do
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
-    # TODO: Test returning an empty map/tuple
     # TODO: Test EXLA.Defn.Lock
     # TODO: Test errors and corner cases
 
@@ -76,6 +75,50 @@ defmodule EXLA.Defn.APITest do
       assert Nx.Stream.recv(stream) == Nx.tensor(1)
 
       assert Nx.Stream.done(stream) == Nx.tensor(3)
+    end
+
+    defn stream_composite(i, {a, {b, c}}) do
+      a = a + i
+      b = b * i
+      c = Nx.power(c, i)
+      {{{a, b}, c}, {a, {b, c}}}
+    end
+
+    test "send/recv with composite types" do
+      %_{} = stream = EXLA.stream(&stream_composite/2, [0, {0, {1, 2}}])
+      assert Nx.Stream.send(stream, 1) == :ok
+      assert Nx.Stream.recv(stream) == {{Nx.tensor(1), Nx.tensor(1)}, Nx.tensor(2)}
+
+      assert Nx.Stream.send(stream, 2) == :ok
+      assert Nx.Stream.recv(stream) == {{Nx.tensor(3), Nx.tensor(2)}, Nx.tensor(4)}
+
+      assert Nx.Stream.done(stream) == {Nx.tensor(3), {Nx.tensor(2), Nx.tensor(4)}}
+    end
+
+    defn stream_empty_outfeed(i, t), do: {{}, i + t}
+
+    test "send/recv with empty outfeed" do
+      %_{} = stream = EXLA.stream(&stream_empty_outfeed/2, [0, 0])
+      assert Nx.Stream.send(stream, 1) == :ok
+      assert Nx.Stream.recv(stream) == {}
+
+      assert Nx.Stream.send(stream, 2) == :ok
+      assert Nx.Stream.recv(stream) == {}
+
+      assert Nx.Stream.done(stream) == Nx.tensor(3)
+    end
+
+    defn stream_empty_acc(i, {}), do: {i * i, {}}
+
+    test "send/recv with empty acc" do
+      %_{} = stream = EXLA.stream(&stream_empty_acc/2, [0, {}])
+      assert Nx.Stream.send(stream, 1) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(1)
+
+      assert Nx.Stream.send(stream, 2) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(4)
+
+      assert Nx.Stream.done(stream) == {}
     end
   end
 end

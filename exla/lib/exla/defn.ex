@@ -72,7 +72,7 @@ defmodule EXLA.Defn do
     total = input_length + acc_length
 
     used =
-      Enum.to_list(input_length..(input_length + acc_length - 1)) ++
+      Enum.to_list(input_length..(input_length + acc_length - 1)//1) ++
         Enum.drop_while(used, &(&1 < total))
 
     {Enum.take(vars, input_length), used}
