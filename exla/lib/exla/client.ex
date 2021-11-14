@@ -100,10 +100,11 @@ defmodule EXLA.Client do
   """
   def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_shapes)
       when is_list(data_and_shapes) do
-    data_and_shapes = Enum.map(data_and_shapes, fn
-      {binary, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {[binary], shape}
-      {[binary | _] = data, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {data, shape}
-    end)
+    data_and_shapes =
+      Enum.map(data_and_shapes, fn
+        {binary, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {[binary], shape}
+        {[binary | _] = data, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {data, shape}
+      end)
 
     EXLA.NIF.transfer_to_infeed(client, device_id, data_and_shapes) |> unwrap!()
   end

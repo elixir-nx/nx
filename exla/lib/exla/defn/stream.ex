@@ -16,7 +16,17 @@ defmodule EXLA.Defn.Stream do
     :device_id,
     :keep_on_device
   ]
-  defstruct [:lock, :send, :send_shape, :recv, :recv_shape, :done, :client, :device_id, :keep_on_device]
+  defstruct [
+    :lock,
+    :send,
+    :send_shape,
+    :recv,
+    :recv_shape,
+    :done,
+    :client,
+    :device_id,
+    :keep_on_device
+  ]
 
   @registry EXLA.Registry
   @supervisor EXLA.DynamicSupervisor
@@ -99,7 +109,13 @@ defmodule EXLA.Defn.Stream do
       end
     end
 
-    def done(%{lock: lock, client: client, device_id: device_id, keep_on_device: keep_on_device, done: done}) do
+    def done(%{
+          lock: lock,
+          client: client,
+          device_id: device_id,
+          keep_on_device: keep_on_device,
+          done: done
+        }) do
       EXLA.Lock.unlock(lock)
       # TODO: Move this to a separate process
       true = get_flag(client, device_id) == 0
