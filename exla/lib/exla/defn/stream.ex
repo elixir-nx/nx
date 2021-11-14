@@ -9,6 +9,52 @@ defmodule EXLA.Defn.Stream do
   @enforce_keys keys
   defstruct keys
 
+  def run(
+        executable,
+        lock,
+        task,
+        outfeed,
+        send,
+        send_shape,
+        recv_shapes,
+        done,
+        keep_on_device?
+      ) do
+    %{client: client, device_id: device_id} = executable
+    %{pid: task_pid, ref: task_ref} = task
+
+    # With the task and outfeed in place, we now relock the client/device_id.
+    # If the current process shuts down, we send an infeed to stop the loop.
+    ^lock =
+      EXLA.Defn.Lock.relock(
+        lock,
+        fn -> send(task_pid, lock) end,
+        fn -> halt_stream(client, device_id, outfeed) end
+      )
+
+    %EXLA.Defn.Stream{
+      pid: self(),
+      ref: task_ref,
+      outfeed: outfeed,
+      lock: lock,
+      send: send,
+      send_shape: send_shape,
+      recv_shapes: recv_shapes,
+      client: client,
+      device_id: device_id,
+      done: done,
+      keep_on_device: keep_on_device?
+    }
+  end
+
+  # It is time to halt the stream, we do it by sending 0 for the loop infeed.
+  # Then we wait for the outfeed process to read all.
+  defp halt_stream(client, device_id, outfeed) do
+    pred = EXLA.Shape.make_shape({:pred, 8}, {})
+    :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
+    {:lock, outfeed, fn -> :unlocked end}
+  end
+
   defimpl Nx.Stream do
     def send(%{client: client, device_id: device_id, send: send, send_shape: send_shape}, data) do
       unless Nx.compatible?(send, data) do

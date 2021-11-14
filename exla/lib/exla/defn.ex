@@ -29,7 +29,7 @@ defmodule EXLA.Defn do
     # First, we get a lock on the executable, because we want
     # to avoid transfer to the device unless we know we are
     # ready to use the device.
-    ref = EXLA.Defn.Lock.lock(run_key(executable))
+    lock = EXLA.Defn.Lock.lock(run_key(executable))
     buffers = EXLA.Defn.Buffer.from_nx!(inputs)
     device_id = executable.device_id
 
@@ -40,49 +40,30 @@ defmodule EXLA.Defn do
     #
     # Finally, note the task cannot start immediately, we need to
     # setup the outfeed reader and the relock the client/device_id.
-    %{pid: task_pid, ref: task_ref} =
+    task =
       Task.async(fn ->
         receive do
-          ^ref -> EXLA.Executable.run(executable, buffers, run_options)
+          ^lock -> EXLA.Executable.run(executable, buffers, run_options)
         end
       end)
 
     # The outfeed reader will redirect all outputs with flag 1 to the current
     # process. Once flag 0 is emitted, we know the stream is done.
-    %EXLA.Shape{dtype: {:tuple, recv_shapes}} = output_shape
-    mappings = %{1 => {recv_shapes, {self(), ref}}}
+    %EXLA.Shape{dtype: {:tuple, output_shapes}} = output_shape
+    mappings = %{1 => {output_shapes, {self(), lock}}}
     {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(client, device_id, mappings)
 
-    # With the task and outfeed in place, we now relock the client/device_id.
-    # If the current process shuts down, we send a terminate message
-    ^ref =
-      EXLA.Defn.Lock.relock(
-        ref,
-        fn -> send(task_pid, ref) end,
-        fn -> halt_stream(client, device_id, outfeed) end
-      )
-
-    %EXLA.Defn.Stream{
-      pid: self(),
-      ref: task_ref,
-      outfeed: outfeed,
-      lock: ref,
-      send: input,
-      send_shape: input_shape,
-      recv_shapes: recv_shapes,
-      client: client,
-      device_id: executable.device_id,
-      done: acc_outputs,
-      keep_on_device: keep_on_device?
-    }
-  end
-
-  # It is time to halt the stream, we do it by sending 0 for the loop infeed.
-  # Then we wait for the outfeed process to read all.
-  defp halt_stream(client, device_id, outfeed) do
-    pred = EXLA.Shape.make_shape({:pred, 8}, {})
-    :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
-    {:lock, outfeed, fn -> :unlocked end}
+    EXLA.Defn.Stream.run(
+      executable,
+      lock,
+      task,
+      outfeed,
+      input,
+      input_shape,
+      output_shapes,
+      acc_outputs,
+      keep_on_device?
+    )
   end
 
   defp split_stream(vars, used, input_length, acc_length) do
