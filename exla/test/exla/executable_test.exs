@@ -1,8 +1,7 @@
 defmodule EXLA.ExecutableTest do
   use ExUnit.Case, async: true
 
-  alias EXLA.{Buffer, Client, Executable, Op, Shape}
-
+  alias EXLA.{Buffer, Executable, Op, Shape}
   import EXLAHelpers
 
   test "raises on invalid tuples" do
@@ -124,6 +123,15 @@ defmodule EXLA.ExecutableTest do
       assert <<3::32-native>> == Buffer.read(c.ref)
     end
   end
+end
+
+defmodule EXLA.ExecutableFeedTest do
+  # infeed/outfeed are global resources, so they either
+  # need to be locked or we cannot run them concurrently.
+  use ExUnit.Case, async: false
+
+  alias EXLA.{Buffer, Client, Op, Shape}
+  import EXLAHelpers
 
   describe "infeed/outfeed" do
     test "successfully sends to/from device asynchronously" do
@@ -192,7 +200,7 @@ defmodule EXLA.ExecutableTest do
 
   defp from_outfeed(client, device_id, shape) do
     ref = make_ref()
-    EXLA.Client.from_outfeed(client, device_id, [shape], self(), ref)
+    Client.from_outfeed(client, device_id, [shape], self(), ref)
 
     receive do
       {^ref, msg} -> msg
