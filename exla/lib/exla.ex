@@ -199,7 +199,59 @@ defmodule EXLA do
     Nx.Defn.jit(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
-  # TODO: docs
+  @doc """
+  Starts streaming the given anonymous function with just-in-time
+  compilation.
+
+  At least two arguments are expected:
+
+    1. The first argument is a tensor template of the data to
+       be streamed in
+
+    2. The second argument is a tensor with the stream initial state
+
+  The streaming function must return a two element tuple, the
+  first element is the data to be sent and the second is the
+  accumulator.
+
+  For each streamed chunk, you must call `Nx.Stream.send/2` and
+  `Nx.Stream.recv/1`. You don't need to call `recv` immediately
+  after `send`, but doing so can be a useful mechanism to provide
+  backpressure. Once all chunks are sent, you must use `Nx.Stream.done/1`
+  to receive the accumulated result. Let's see an example:
+
+      defmodule Streamed do
+        import Nx.Defn
+
+        defn sum(tensor, acc) do
+          {acc, tensor + acc}
+        end
+      end
+
+  Now let's invoke it:
+
+      stream = EXLA.stream(&Streamed.sum/2, [Nx.template({}, {:s, 64}), 0])
+
+      for i <- 1..5 do
+        Nx.Stream.send(stream, i)
+        IO.inspect {:chunk, Nx.Stream.recv(stream)}
+      end
+
+      IO.inspect {:result, Nx.Stream.done(stream)}
+
+  It will print:
+
+      {:chunk, 0}
+      {:chunk, 1}
+      {:chunk, 2}
+      {:chunk, 3}
+      {:chunk, 4}
+      {:result, 5}
+
+  **Note:** While any process can call `Nx.Stream.send/2`, EXLA
+  expects the process that starts the streaming to be the one
+  calling `Nx.Stream.recv/1` and `Nx.Stream.done/1`.
+  """
   def stream(function, args, options \\ []) do
     Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
   end

@@ -34,8 +34,6 @@ defmodule EXLA.Defn.APITest do
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
-    # TODO: Test EXLA.Defn.Lock
-
     test "immediately done" do
       stream = EXLA.stream(&defn_sum/2, [0, 0])
       assert Nx.Stream.done(stream) == Nx.tensor(0)
