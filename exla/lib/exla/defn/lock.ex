@@ -93,7 +93,7 @@ defmodule EXLA.Defn.Lock do
               ref = Process.monitor(to_watch)
               {Map.put(refs, ref, key), {to_unlock, queue}}
 
-            :unlocked ->
+            :unlock ->
               dequeue_if_possible({:unlocked, queue}, key, refs)
           end
         end)
@@ -109,7 +109,7 @@ defmodule EXLA.Defn.Lock do
           Exception.format(:error, exception, __STACKTRACE__)
       )
 
-      :unlocked
+      :unlock
   end
 
   defp dequeue_if_possible({:unlocked, queue}, key, refs) do
@@ -117,7 +117,7 @@ defmodule EXLA.Defn.Lock do
       {{:value, {pid, _} = from}, queue} ->
         ref = Process.monitor(pid)
         GenServer.reply(from, ref)
-        {Map.put(refs, ref, key), {fn -> :unlocked end, queue}}
+        {Map.put(refs, ref, key), {fn -> :unlock end, queue}}
 
       {:empty, queue} ->
         {refs, {:unlocked, queue}}

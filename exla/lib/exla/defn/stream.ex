@@ -54,7 +54,7 @@ defmodule EXLA.Defn.Stream do
   defp halt_stream(client, device_id, outfeed) do
     pred = EXLA.Shape.make_shape({:pred, 8}, {})
     :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
-    {:lock, outfeed, fn -> :unlocked end}
+    {:lock, outfeed, fn -> :unlock end}
   end
 
   defimpl Nx.Stream do
