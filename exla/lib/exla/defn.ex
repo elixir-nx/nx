@@ -223,6 +223,17 @@ defmodule EXLA.Defn do
     {inputs, outputs, {executable, :ok}} =
       compile(client, key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
 
+    maybe_lock(executable, inputs, outputs, run_options)
+  end
+
+  defp maybe_lock(%{client: client} = executable, inputs, outputs, run_options)
+       when client.platform == :host do
+    executable
+    |> EXLA.Executable.run(EXLA.Defn.Buffer.from_nx!(inputs), run_options)
+    |> EXLA.Defn.Buffer.to_nx!(outputs)
+  end
+
+  defp maybe_lock(executable, inputs, outputs, run_options) do
     ref = EXLA.Defn.Lock.lock(run_key(executable))
 
     try do
