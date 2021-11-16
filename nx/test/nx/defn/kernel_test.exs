@@ -131,7 +131,7 @@ defmodule Nx.Defn.KernelTest do
     end
 
     defp send_up(expr) do
-      send self(), {:expr, expr}
+      send(self(), {:expr, expr})
     end
 
     test "tap and then" do
