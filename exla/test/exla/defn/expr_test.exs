@@ -1,4 +1,4 @@
-defmodule EXLA.DefnExprTest do
+defmodule EXLA.Defn.ExprTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn

@@ -11,10 +11,11 @@ defmodule EXLA.Application do
     end
 
     children = [
-      {Registry, name: EXLA.Registry, keys: :unique},
+      EXLA.Logger,
       EXLA.Client,
-      EXLA.LockedCache,
-      EXLA.Logger
+      EXLA.Defn.Lock,
+      EXLA.Defn.LockedCache,
+      {Task.Supervisor, name: EXLA.Defn.TaskSupervisor}
     ]
 
     Supervisor.start_link(children, name: __MODULE__, strategy: :one_for_one)

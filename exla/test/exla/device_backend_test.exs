@@ -1,7 +1,14 @@
 defmodule EXLA.DeviceBackendTest do
   use ExUnit.Case, async: true
 
-  test "transfers data" do
+  test "Nx.to_binary/1" do
+    t = Nx.tensor([1, 2, 3, 4], backend: EXLA.DeviceBackend)
+    assert Nx.to_binary(t) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+    assert Nx.to_binary(t, limit: 2) == <<1::64-native, 2::64-native>>
+    assert Nx.to_binary(t, limit: 6) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
+  end
+
+  test "Nx.backend_transfer/1" do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, EXLA.DeviceBackend)
@@ -16,7 +23,7 @@ defmodule EXLA.DeviceBackendTest do
     end
   end
 
-  test "transfers data to a specific device" do
+  test "Nx.backend_transfer/2" do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, {EXLA.DeviceBackend, device_id: 0})
@@ -31,7 +38,7 @@ defmodule EXLA.DeviceBackendTest do
     end
   end
 
-  test "copies data" do
+  test "Nx.backend_copy/1" do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, EXLA.DeviceBackend)
@@ -45,7 +52,7 @@ defmodule EXLA.DeviceBackendTest do
     assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
   end
 
-  test "can be inspected" do
+  test "Kernel.inspect/2" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.DeviceBackend)
 
     assert inspect(t) =~ ~r"""

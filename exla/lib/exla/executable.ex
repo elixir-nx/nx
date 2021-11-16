@@ -6,7 +6,7 @@ defmodule EXLA.Executable do
   alias __MODULE__
   alias EXLA.{Buffer, Shape}
 
-  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions]
+  @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
   defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
 
   @doc """
@@ -16,8 +16,6 @@ defmodule EXLA.Executable do
 
     * `:keep_on_device` - if the data should be kept on the device
       after the computation (defaults to `false`).
-
-    * `:device_id` - the device ID to run on
 
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
@@ -44,29 +42,17 @@ defmodule EXLA.Executable do
     data =
       case client.platform do
         :host ->
-          EXLA.NIF.run_cpu(
-            client.ref,
-            exec,
-            inputs,
-            keep_on_device_int,
-            executable.device_id
-          )
+          EXLA.NIF.run_cpu(client.ref, exec, inputs, keep_on_device_int, executable.device_id)
 
         _ ->
-          EXLA.NIF.run_io(
-            client.ref,
-            exec,
-            inputs,
-            keep_on_device_int,
-            executable.device_id
-          )
+          EXLA.NIF.run_io(client.ref, exec, inputs, keep_on_device_int, executable.device_id)
       end
 
     unwrap!(data)
   end
 
   defp decompose_output(data, shape, client) do
-    %Shape{dtype: {:t, shapes}} = shape
+    %Shape{dtype: {:tuple, shapes}} = shape
 
     Enum.zip_with(data, shapes, fn
       buf, subshape when is_reference(buf) ->

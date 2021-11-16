@@ -36,13 +36,15 @@ defmodule EXLA.Buffer do
   end
 
   @doc """
-  Reads the underlying buffer ref.
+  Reads `size` from the underlying buffer ref.
 
-  This copies the underlying device memory into a binary without destroying it.
+  This copies the underlying device memory into a binary
+  without destroying it. If `size` is negative, then it
+  reads the whole buffer.
   """
-  def read({ref, client_name}) do
+  def read({ref, client_name}, size \\ -1) do
     client = EXLA.Client.fetch!(client_name)
-    binary = EXLA.NIF.read_device_mem(client.ref, ref) |> unwrap!()
+    binary = EXLA.NIF.read_device_mem(client.ref, ref, size) |> unwrap!()
     binary
   end
 
@@ -53,21 +55,6 @@ defmodule EXLA.Buffer do
   """
   def deallocate({ref, _}) do
     EXLA.NIF.deallocate_device_mem(ref) |> unwrap!()
-  end
-
-  @doc """
-  Sends buffer to device infeed. Buffer must be VM binary.
-  """
-  def to_infeed(%Buffer{data: data, shape: %Shape{ref: shape}}, %Client{ref: client}, device_id) do
-    EXLA.NIF.transfer_to_infeed(client, device_id, data, shape) |> unwrap!()
-  end
-
-  @doc """
-  Retrieves buffer from device outfeed.
-  """
-  def from_outfeed(%Client{ref: client}, device_id, %Shape{ref: shape_ref} = shape) do
-    data = EXLA.NIF.transfer_from_outfeed(client, device_id, shape_ref) |> unwrap!()
-    buffer(data, shape)
   end
 
   defp unwrap!({:ok, ref}), do: ref

@@ -275,16 +275,16 @@ defmodule EXLA.NIF do
   def binary_to_device_mem(_client, _binary, _shape, _device_ordinal),
     do: :erlang.nif_error(:undef)
 
-  def read_device_mem(_client, _buffer),
+  def read_device_mem(_client, _buffer, _size),
     do: :erlang.nif_error(:undef)
 
   def deallocate_device_mem(_buffer),
     do: :erlang.nif_error(:undef)
 
-  def transfer_to_infeed(_client, _device, _data, _shape),
+  def transfer_to_infeed(_client, _device, _data_shapes),
     do: :erlang.nif_error(:undef)
 
-  def transfer_from_outfeed(_client, _device, _shape),
+  def transfer_from_outfeed(_client, _device, _shapes, _pid, _ref),
     do: :erlang.nif_error(:undef)
 
   def start_log_sink(_sink_pid),

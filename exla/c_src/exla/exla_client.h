@@ -39,7 +39,7 @@ class ExlaBuffer {
 
   bool release_after_run() { return can_be_released_after_run_; }
 
-  xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env);
+  xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
 
   xla::Status Deallocate();
 
@@ -90,7 +90,10 @@ class ExlaClient {
   std::vector<ExlaDevice*> GetDevices();
 
   // TODO(seanmor5): This is device logic and should be refactored
-  xla::Status TransferToInfeed(int device_id, ErlNifBinary binary, const xla::Shape& shape);
+  xla::Status TransferToInfeed(ErlNifEnv* env,
+                               ERL_NIF_TERM data,
+                               const xla::Shape& shape,
+                               int device_id);
 
   xla::StatusOr<ERL_NIF_TERM> TransferFromOutfeed(ErlNifEnv* env, int device_id, xla::Shape& shape);
 

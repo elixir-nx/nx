@@ -5,41 +5,272 @@ defmodule EXLA.Defn do
   alias Nx.Tensor, as: T
 
   @doc false
-  def __jit__(key, vars, fun, options) do
+  def __stream__(key, input, acc, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-    {buffers, outputs, executable} = compile(key, vars, fun, compile_options)
+    keep_on_device? = Keyword.get(run_options, :keep_on_device, false)
+    run_options = Keyword.put(run_options, :keep_on_device, true)
 
-    executable
-    |> EXLA.Executable.run(buffers, run_options)
-    |> buffer_to_nx(outputs)
+    {client_name, compile_options} = Keyword.pop(compile_options, :client, :default)
+    client = EXLA.Client.fetch!(client_name)
+
+    # The input vars should not be converted to buffers as they come from infeed
+    input_vars = Nx.Defn.Tree.flatten_list([input])
+    input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_vars, &nx_to_shape!/1))
+    acc_vars = Nx.Defn.Tree.flatten_list([acc])
+    split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
+    comp_fun = &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, compile_options)
+
+    {inputs, {:tuple, [output, acc_output]}, {executable, output_shape}} =
+      compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
+
+    # Execution of streams requires the coordination of
+    # multiple processes which is outlined below.
+
+    # First, we get a lock on the executable, because we want
+    # to avoid transfer to the device unless we know we are
+    # ready to use the device.
+    lock = EXLA.Defn.Lock.lock(run_key(executable))
+    buffers = EXLA.Defn.Buffer.from_nx!(inputs)
+    device_id = executable.device_id
+
+    # Now that we have transferred to device, we spawn a task to
+    # execute the stream. We keep this with regular async/await
+    # because this task will never really exist beyond the scope
+    # of the current process.
+    #
+    # Finally, note the task cannot start immediately, we need to
+    # setup the outfeed reader and the relock the client/device_id.
+    task =
+      Task.async(fn ->
+        receive do
+          ^lock -> EXLA.Executable.run(executable, buffers, run_options)
+        end
+      end)
+
+    # The outfeed reader will redirect all outputs with flag 1 to the current
+    # process. Once flag 0 is emitted, we know the stream is done.
+    %EXLA.Shape{dtype: {:tuple, output_shapes}} = output_shape
+    mappings = %{1 => {output_shapes, {self(), lock}}}
+    {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(client, device_id, mappings)
+
+    EXLA.Defn.Stream.run(
+      executable,
+      lock,
+      task,
+      outfeed,
+      input,
+      input_shape,
+      output,
+      output_shapes,
+      acc_output,
+      keep_on_device?
+    )
   end
 
-  defp compile(key, vars, fun, options) do
+  defp split_stream(vars, used, input_length, acc_length) do
+    # Remove inputs from used buffers and include all accumulator entries.
+    total = input_length + acc_length
+
+    used =
+      Enum.to_list(input_length..(input_length + acc_length - 1)//1) ++
+        Enum.drop_while(used, &(&1 < total))
+
+    {Enum.take(vars, input_length), used}
+  end
+
+  defp to_stream_computation(client, key, input_shape, acc_vars, expr, used_shapes, options) do
+    %{platform: platform} = client
+    inspected_key = inspect(key)
+    builder = EXLA.Builder.new(inspected_key)
+
+    # Drop all accumulator entries from used_shapes as we will handle it separately.
+    used_shapes = Enum.drop(used_shapes, length(acc_vars))
+
+    # The stream loop will be a three element tuple:
+    #
+    #   The result of calling infeed.
+    #   The looping accumulator.
+    #   The looping constants.
+    #
+    # The input will be read as part of the infeed.
+    acc_shapes = Enum.map(acc_vars, &nx_to_shape!/1)
+    acc_shape = EXLA.Shape.make_tuple_shape(acc_shapes)
+    constant_shape = EXLA.Shape.make_tuple_shape(Enum.map(used_shapes, &elem(&1, 1)))
+
+    flag_shape = EXLA.Shape.make_shape({:pred, 8}, {})
+    token_shape = EXLA.Shape.make_token_shape()
+    infeed_shape = EXLA.Shape.make_tuple_shape([flag_shape, token_shape])
+
+    arg_shape = EXLA.Shape.make_tuple_shape([infeed_shape, acc_shape, constant_shape])
+
+    pred_b = EXLA.Builder.new(builder, "while-pred-" <> inspected_key)
+    param = EXLA.Op.parameter(pred_b, 0, arg_shape, "arg")
+    infeed = EXLA.Op.get_tuple_element(param, 0)
+    flag = EXLA.Op.get_tuple_element(infeed, 0)
+    pred_op = EXLA.Op.equal(flag, EXLA.Op.constant_r0(pred_b, 1, {:pred, 8}))
+    pred = EXLA.Builder.build(pred_op)
+
+    body_b = EXLA.Builder.new(builder, "while-body-" <> inspected_key)
+    param = EXLA.Op.parameter(body_b, 0, arg_shape, "arg")
+    infeed = EXLA.Op.get_tuple_element(param, 0)
+    acc = EXLA.Op.get_tuple_element(param, 1)
+    constant = EXLA.Op.get_tuple_element(param, 2)
+
+    # The first infeed call is a flag.
+    # Call infeed again to get the actual input.
+    token = EXLA.Op.get_tuple_element(infeed, 1)
+    %EXLA.Shape{dtype: {:tuple, shapes}} = input_shape
+
+    # EXLA on host does not support tuples, so we emit multiple infeed operations.
+    {infeeds, token} =
+      if platform == :host do
+        Enum.map_reduce(shapes, token, fn shape, token ->
+          infeed = EXLA.Op.infeed(token, shape)
+          {EXLA.Op.get_tuple_element(infeed, 0), EXLA.Op.get_tuple_element(infeed, 1)}
+        end)
+      else
+        infeed = EXLA.Op.infeed(token, input_shape)
+        input = EXLA.Op.get_tuple_element(infeed, 0)
+        token = EXLA.Op.get_tuple_element(infeed, 1)
+        {Enum.with_index(shapes, fn _shape, i -> EXLA.Op.get_tuple_element(input, i) end), token}
+      end
+
+    {output, acc} =
+      case expr do
+        {output_expr, acc_expr} ->
+          {input_params, counter} =
+            Enum.map_reduce(infeeds, 0, fn infeed, i ->
+              {{i, infeed}, i + 1}
+            end)
+
+          {acc_params, _counter} =
+            Enum.map_reduce(acc_vars, counter, fn _shape, i ->
+              {{i, EXLA.Op.get_tuple_element(acc, i - counter)}, i + 1}
+            end)
+
+          constant_params =
+            Enum.with_index(used_shapes, fn {pos, _shape}, index ->
+              {pos, EXLA.Op.get_tuple_element(constant, index)}
+            end)
+
+          state = %{
+            precision: Keyword.get(options, :precision, :highest),
+            builder: body_b,
+            params: Map.new(input_params ++ acc_params ++ constant_params)
+          }
+
+          {output, cache} = recur_flatten(output_expr, state, %{})
+          {acc, _cache} = recur_flatten(acc_expr, state, cache)
+          {output, acc}
+
+        _ ->
+          raise "expected the function given to Nx.stream/3 to return a two-element tuple, got: " <>
+                  inspect(expr)
+      end
+
+    # Emit the output flag of 1
+    token = EXLA.Op.outfeed(EXLA.Op.constant_r0(body_b, 1, {:u, 16}), token)
+
+    output_shape = EXLA.Op.get_shape(output)
+    %EXLA.Shape{dims: {size}, dtype: {:tuple, _}} = output_shape
+
+    token =
+      Enum.reduce(1..size//1, token, fn pos, token ->
+        EXLA.Op.outfeed(EXLA.Op.get_tuple_element(output, pos - 1), token)
+      end)
+
+    body_tuple = EXLA.Op.tuple(body_b, [EXLA.Op.infeed(token, flag_shape), acc, constant])
+    body = EXLA.Builder.build(body_tuple)
+
+    # Now we build the call to while, converting parameters to tuples.
+    {acc_params, counter} =
+      Enum.map_reduce(acc_shapes, 0, fn shape, i ->
+        {EXLA.Op.parameter(builder, i, shape, "p#{i}"), i + 1}
+      end)
+
+    {constant_params, _} =
+      Enum.map_reduce(used_shapes, counter, fn {_pos, shape}, i ->
+        {EXLA.Op.parameter(builder, i, shape, "p#{i}"), i + 1}
+      end)
+
+    token = EXLA.Op.create_token(builder)
+
+    init =
+      EXLA.Op.tuple(builder, [
+        EXLA.Op.infeed(token, flag_shape),
+        EXLA.Op.tuple(builder, acc_params),
+        EXLA.Op.tuple(builder, constant_params)
+      ])
+
+    while = EXLA.Op.while(pred, body, init)
+    infeed = EXLA.Op.get_tuple_element(while, 0)
+    acc = EXLA.Op.get_tuple_element(while, 1)
+
+    # Emit the output flag of 0
+    token = EXLA.Op.get_tuple_element(infeed, 1)
+    _ = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, 0, {:u, 16}), token)
+
+    {EXLA.Builder.build(acc), output_shape}
+  end
+
+  @doc false
+  def __jit__(key, vars, fun, options) do
+    {run_options, compile_options} = Keyword.pop(options, :run_options, [])
+    {client_name, compile_options} = Keyword.pop(compile_options, :client, :default)
+    client = EXLA.Client.fetch!(client_name)
+    callback = &to_root_computation(key, &1, &2, compile_options)
+
+    {inputs, outputs, {executable, :ok}} =
+      compile(client, key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
+
+    maybe_lock(executable, inputs, outputs, run_options)
+  end
+
+  defp maybe_lock(%{client: client} = executable, inputs, outputs, run_options)
+       when client.platform == :host do
+    executable
+    |> EXLA.Executable.run(EXLA.Defn.Buffer.from_nx!(inputs), run_options)
+    |> EXLA.Defn.Buffer.to_nx!(outputs)
+  end
+
+  defp maybe_lock(executable, inputs, outputs, run_options) do
+    ref = EXLA.Defn.Lock.lock(run_key(executable))
+
+    try do
+      EXLA.Executable.run(executable, EXLA.Defn.Buffer.from_nx!(inputs), run_options)
+    else
+      result -> EXLA.Defn.Buffer.to_nx!(result, outputs)
+    after
+      EXLA.Defn.Lock.unlock(ref)
+    end
+  end
+
+  defp run_key(%{client: %{ref: ref}, device_id: device_id}), do: [ref | device_id]
+
+  defp compile(client, key, vars, fun, options, to_split, to_computation) do
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args}
 
-    {expr, {inputs, outputs}} =
-      EXLA.LockedCache.run(expr_key, fn ->
+    {expr, {used_inputs, outputs}} =
+      EXLA.Defn.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
-        {expr, {used_inputs(expr), outputs(expr)}}
+        {expr, {used_inputs(expr), EXLA.Defn.Buffer.to_template(expr)}}
       end)
 
-    {client_name, options} = Keyword.pop(options, :client, :default)
-    {buffers, cache_args} = nx_to_buffer(vars, inputs)
-    cache_key = {key, cache_args, client_name, options}
+    {non_buffers, used_inputs} = to_split.(vars, used_inputs)
+    {inputs, cache_args} = filter_inputs(vars, used_inputs)
+    cache_args = Enum.map(non_buffers, &nx_to_cache_key!/1) ++ cache_args
+    cache_key = {key, cache_args, client.name, options}
 
-    {_, executable} =
-      EXLA.LockedCache.run(cache_key, fn ->
-        shapes = Enum.map(buffers, & &1.shape)
-        inputs_and_shapes = Enum.zip(inputs, shapes)
-        computation = to_root_computation(key, expr || fun.(vars), inputs_and_shapes, options)
-        client = EXLA.Client.fetch!(client_name)
+    {_, executable_extra} =
+      EXLA.Defn.LockedCache.run(cache_key, fn ->
+        shapes = Enum.map(inputs, &nx_to_shape!/1)
+        {computation, extra} = to_computation.(expr || fun.(vars), Enum.zip(used_inputs, shapes))
         executable = EXLA.Computation.compile(computation, client, shapes)
-        :persistent_term.put(cache_key, executable)
-        {nil, executable}
+        {nil, {executable, extra}}
       end)
 
-    {buffers, outputs, executable}
+    {inputs, outputs, executable_extra}
   end
 
   defp used_inputs(expr) do
@@ -57,30 +288,11 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp outputs(%T{} = t),
-    do: %{t | data: nil}
-
-  defp outputs(tuple) when is_tuple(tuple),
-    do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&outputs/1)}
-
-  defp outputs(map) when is_struct(map) do
-    out =
-      map
-      |> Map.from_struct()
-      |> Enum.sort()
-      |> Enum.map(fn {k, v} -> {k, outputs(v)} end)
-
-    {:struct, out, map.__struct__}
-  end
-
-  defp outputs(map) when is_map(map),
-    do: {:map, map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, outputs(v)} end)}
-
-  defp to_root_computation(key, expr, pos_shapes, options) do
+  defp to_root_computation(key, expr, used_shapes, options) do
     builder = EXLA.Builder.new(inspect(key))
 
     params =
-      Enum.with_index(pos_shapes, fn {pos, shape}, i ->
+      Enum.with_index(used_shapes, fn {pos, shape}, i ->
         {pos, EXLA.Op.parameter(builder, i, shape, "p#{i}")}
       end)
 
@@ -90,43 +302,47 @@ defmodule EXLA.Defn do
       params: Map.new(params)
     }
 
-    expr
-    |> to_root_result(state, %{})
-    |> EXLA.Builder.build()
+    computation =
+      expr
+      |> recur_flatten(state, %{})
+      |> elem(0)
+      |> EXLA.Builder.build()
+
+    {computation, :ok}
   end
 
-  defp to_root_result(composite, state, cache) do
-    {acc, _cache} = to_root_result(composite, [], state, cache)
-    EXLA.Op.tuple(state.builder, Enum.reverse(acc))
+  defp recur_flatten(composite, state, cache) do
+    {acc, cache} = recur_flatten(composite, [], state, cache)
+    {EXLA.Op.tuple(state.builder, Enum.reverse(acc)), cache}
   end
 
-  defp to_root_result(%T{} = expr, acc, state, cache) do
+  defp recur_flatten(%T{} = expr, acc, state, cache) do
     {expr, cache} = recur_operator(expr, state, cache)
     {[expr | acc], cache}
   end
 
-  defp to_root_result(tuple, acc, state, cache) when is_tuple(tuple) do
+  defp recur_flatten(tuple, acc, state, cache) when is_tuple(tuple) do
     list = Tuple.to_list(tuple)
 
     Enum.reduce(list, {acc, cache}, fn expr, {acc, cache} ->
-      to_root_result(expr, acc, state, cache)
+      recur_flatten(expr, acc, state, cache)
     end)
   end
 
-  defp to_root_result(map, acc, state, cache) when is_struct(map) do
+  defp recur_flatten(map, acc, state, cache) when is_struct(map) do
     map
     |> Map.from_struct()
     |> Enum.sort()
     |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
-      to_root_result(expr, acc, state, cache)
+      recur_flatten(expr, acc, state, cache)
     end)
   end
 
-  defp to_root_result(map, acc, state, cache) when is_map(map) do
+  defp recur_flatten(map, acc, state, cache) when is_map(map) do
     map
     |> Enum.sort()
     |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
-      to_root_result(expr, acc, state, cache)
+      recur_flatten(expr, acc, state, cache)
     end)
   end
 
@@ -144,11 +360,11 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
-    [initial, arg, condition, body] = args
+    [initial, arg, pred, body] = args
     {initial, cache} = recur_composite(initial, state, cache)
-    condition = recur_computation(:while_condition, [arg], condition, {:pred, 8}, state)
+    pred = recur_computation(:while_pred, [arg], pred, {:pred, 8}, state)
     body = recur_computation(:while_body, [arg], body, :any, state)
-    {EXLA.Op.while(condition, body, initial), cache}
+    {EXLA.Op.while(pred, body, initial), cache}
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
@@ -1133,6 +1349,9 @@ defmodule EXLA.Defn do
   defp merge_type({:pred, 8}, {:pred, 8}), do: {:pred, 8}
   defp merge_type(left, right), do: Nx.Type.merge(to_nx_type(left), to_nx_type(right))
 
+  defp to_nx_type({:pred, 8}), do: {:u, 8}
+  defp to_nx_type(type), do: type
+
   defp to_constant(builder, constant, type) do
     EXLA.Op.constant_r0(builder, constant, type)
   end
@@ -1142,96 +1361,26 @@ defmodule EXLA.Defn do
     EXLA.Builder.new(builder, name <> "-" <> desc <> "-" <> Integer.to_string(suffix))
   end
 
-  ## EXLA.Buffer -> Nx
+  # Helpers
 
-  defp buffer_to_nx(buffers, outputs) do
-    {result, []} = each_buffer_to_nx(outputs, buffers)
-    result
-  end
+  defp filter_inputs(vars, inputs), do: filter_inputs(vars, 0, inputs, [], [])
 
-  defp each_buffer_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
-    {exprs, acc} = Enum.map_reduce(outputs, acc, &each_buffer_to_nx/2)
-    {List.to_tuple(exprs), acc}
-  end
-
-  defp each_buffer_to_nx({:struct, outputs, mod}, acc) when is_list(outputs) do
-    {exprs, acc} =
-      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
-        {v, acc} = each_buffer_to_nx(v, acc)
-        {{k, v}, acc}
-      end)
-
-    {struct(mod, exprs), acc}
-  end
-
-  defp each_buffer_to_nx({:map, outputs}, acc) when is_list(outputs) do
-    {exprs, acc} =
-      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
-        {v, acc} = each_buffer_to_nx(v, acc)
-        {{k, v}, acc}
-      end)
-
-    {Map.new(exprs), acc}
-  end
-
-  defp each_buffer_to_nx(hole, [%EXLA.Buffer{shape: shape} = buffer | acc]) do
-    nx_type = to_nx_type(shape.dtype)
-    nx_shape = shape.dims
-
-    if hole.type != nx_type do
-      raise "internal bug! Nx.Defn expected a tensor with type #{inspect(hole.type)} " <>
-              "but got #{inspect(nx_type)}"
-    end
-
-    if hole.shape != nx_shape do
-      raise "internal bug! Nx.Defn expected a tensor with shape #{inspect(hole.shape)} " <>
-              "but got #{inspect(nx_shape)}"
-    end
-
-    {%{hole | data: buffer_to_data(buffer)}, acc}
-  end
-
-  defp buffer_to_data(%EXLA.Buffer{ref: ref, data: nil}),
-    do: %EXLA.DeviceBackend{state: ref}
-
-  defp buffer_to_data(%EXLA.Buffer{ref: nil, data: data}),
-    do: %Nx.BinaryBackend{state: data}
-
-  defp to_nx_type({:pred, 8}), do: {:u, 8}
-  defp to_nx_type(type), do: type
-
-  ## Nx -> EXLA.Buffer
-
-  defp nx_to_buffer(vars, inputs), do: nx_to_buffer(vars, 0, inputs, [], [])
-
-  defp nx_to_buffer([var | vars], i, [i | inputs], buffers, cache) do
+  defp filter_inputs([var | vars], i, [i | inputs], buffers, cache) do
     i = i + 1
-    nx_to_buffer(vars, i, inputs, [nx_to_buffer!(var) | buffers], [nx_to_cache_key!(var) | cache])
+    filter_inputs(vars, i, inputs, [var | buffers], [nx_to_cache_key!(var) | cache])
   end
 
-  defp nx_to_buffer([var | vars], i, inputs, buffers, cache) do
-    nx_to_buffer(vars, i + 1, inputs, buffers, [nx_to_cache_key!(var) | cache])
+  defp filter_inputs([var | vars], i, inputs, buffers, cache) do
+    filter_inputs(vars, i + 1, inputs, buffers, [nx_to_cache_key!(var) | cache])
   end
 
-  defp nx_to_buffer([], _i, [], buffers, cache) do
+  defp filter_inputs([], _i, [], buffers, cache) do
     {Enum.reverse(buffers), cache}
   end
 
-  defp nx_to_buffer!(%T{data: data, type: type, shape: shape} = tensor) do
-    case data do
-      %EXLA.DeviceBackend{state: ref} ->
-        EXLA.Buffer.buffer(ref, EXLA.Shape.make_shape(type, shape))
-
-      _ ->
-        # TODO: Call Nx.backend_transfer on the tensor instead
-        EXLA.Buffer.buffer(Nx.to_binary(tensor), EXLA.Shape.make_shape(type, shape))
-    end
-  end
-
+  defp nx_to_shape!(%T{type: type, shape: shape}), do: EXLA.Shape.make_shape(type, shape)
   defp nx_to_cache_key!(%T{type: type, shape: shape}), do: {type, shape}
   defp nx_to_expr_key!(%T{type: type, shape: shape, names: names}), do: {type, shape, names}
-
-  # Helpers
 
   defp delete_slice(enumerable, index, length) do
     {left, right} = Enum.split(enumerable, index)

@@ -15,6 +15,8 @@ defmodule EXLA.Client do
   Fetches a client with the given `name` from configuration.
   """
   def fetch!(name) when is_atom(name) do
+    # We could use the LockedCache but that is ETS based and the clients
+    # are static enough that we can keep them on `persistent_term`.
     :persistent_term.get({__MODULE__, name}, nil) ||
       (
         clients = Application.fetch_env!(:exla, :clients)
@@ -85,6 +87,40 @@ defmodule EXLA.Client do
     end)
   end
 
+  @doc """
+  Sends `data_and_shapes` to device infeed.
+
+  `data_and_shapes` must be a list of two element tuples where the
+  first element is a binary or a flat list of binaries and the second
+  element is a `EXLA.Shape`.
+
+  > Note: XLA does not support tuple infeed shapes when running on
+  > host. Passing one will simply block the operation indefinitely.
+  > Instead, convert the tuple into multiple infeed operations.
+  """
+  def to_infeed(%EXLA.Client{ref: client}, device_id, data_and_shapes)
+      when is_list(data_and_shapes) do
+    data_and_shapes =
+      Enum.map(data_and_shapes, fn
+        {binary, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {[binary], shape}
+        {[binary | _] = data, %EXLA.Shape{ref: shape}} when is_binary(binary) -> {data, shape}
+      end)
+
+    EXLA.NIF.transfer_to_infeed(client, device_id, data_and_shapes) |> unwrap!()
+  end
+
+  @doc """
+  Sends buffer from device outfeed to the given process tagged by `ref``.
+
+  > Note: XLA does not support tuple outfeed shapes. Passing one will simply
+  > block the operation indefinitely. Instead, convert the tuple into multiple
+  > outfeed operations.
+  """
+  def from_outfeed(%EXLA.Client{ref: client}, device_id, shapes, pid, ref) when is_list(shapes) do
+    shape_refs = Enum.map(shapes, fn %EXLA.Shape{ref: shape_ref} -> shape_ref end)
+    EXLA.NIF.transfer_from_outfeed(client, device_id, shape_refs, pid, ref) |> unwrap!()
+  end
+
   ## Callbacks
 
   @doc false
@@ -92,12 +128,12 @@ defmodule EXLA.Client do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  @doc false
+  @impl true
   def init(:ok) do
     {:ok, :unused_state}
   end
 
-  @doc false
+  @impl true
   def handle_call({:client, name, options}, _from, state) do
     client = :persistent_term.get({__MODULE__, name}, nil) || build_client(name, options)
     :persistent_term.put({__MODULE__, name}, client)
@@ -158,6 +194,7 @@ defmodule EXLA.Client do
     }
   end
 
+  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, ref}), do: ref
   defp unwrap!({:error, error}), do: raise(List.to_string(error))
 end

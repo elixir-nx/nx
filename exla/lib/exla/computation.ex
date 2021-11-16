@@ -70,7 +70,7 @@ defmodule EXLA.Computation do
 
   defp root_tuple_only?(shape) do
     case shape do
-      %{dtype: {:t, inner}} -> Enum.all?(inner, &(not match?({:t, _}, &1.dtype)))
+      %{dtype: {:tuple, inner}} -> Enum.all?(inner, &(not match?({:tuple, _}, &1.dtype)))
       %{} -> false
     end
   end

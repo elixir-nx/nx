@@ -53,6 +53,11 @@ defmodule EXLA.DeviceBackend do
   end
 
   @impl true
+  def to_binary(%T{data: %DB{state: state}, type: {_, size}}, limit) do
+    EXLA.Buffer.read(state, limit * div(size, 8))
+  end
+
+  @impl true
   def inspect(%T{data: %DB{state: state}}, _opts) do
     "EXLA.DeviceBackend<#{inspect(state)}>"
   end
