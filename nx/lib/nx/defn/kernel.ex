@@ -1002,6 +1002,49 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Pipes `value` to the given `fun` and returns the `value` itself.
+
+  Useful for running synchronous side effects in a pipeline.
+
+  ## Examples
+
+  Let's suppose you want to inspect an expression in the middle of
+  a pipeline. You could write:
+
+      a
+      |> Nx.add(b)
+      |> tap(&inspect_expr/1)
+      |> Nx.multiply(c)
+
+  """
+  defmacro tap(value, fun) do
+    quote bind_quoted: [fun: fun, value: value] do
+      _ = fun.(value)
+      value
+    end
+  end
+
+  @doc """
+  Pipes `value` into the given `fun`.
+
+  In other words, it invokes `fun` with `value` as argument.
+  This is most commonly used in pipelines, allowing you
+  to pipe a value to a function outside of its first argument.
+
+  ### Examples
+
+      a
+      |> Nx.add(b)
+      |> then(&Nx.subtract(c, &1))
+
+  """
+  defmacro then(value, fun) do
+    quote do
+      unquote(fun).(unquote(value))
+    end
+  end
+
+  @doc """
   Gets the element at the zero-based index in tuple.
 
   It raises ArgumentError when index is negative or it

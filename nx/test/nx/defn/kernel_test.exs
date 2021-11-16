@@ -122,5 +122,21 @@ defmodule Nx.Defn.KernelTest do
                    "expected tensor to match shape {x, x}, got tensor with shape {1, 2}",
                    fn -> assert_square_matrix(Nx.tensor([[1, 2]])) end
     end
+
+    defn tap_and_then(a, b, c) do
+      a
+      |> Nx.add(b)
+      |> tap(&send_up/1)
+      |> then(&Nx.subtract(c, &1))
+    end
+
+    defp send_up(expr) do
+      send self(), {:expr, expr}
+    end
+
+    test "tap and then" do
+      assert tap_and_then(1, 2, 3) == Nx.tensor(0)
+      assert_received {:expr, %Nx.Tensor{data: %Nx.Defn.Expr{}}}
+    end
   end
 end
