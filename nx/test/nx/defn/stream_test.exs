@@ -114,4 +114,21 @@ defmodule Nx.Defn.StreamTest do
     assert Nx.Stream.send(stream, hd(args))
     assert_receive {:EXIT, _, {:undef, _}}, 500
   end
+
+  defn container_stream(%Container{a: a} = elem, %Container{b: b} = acc) do
+    {%{elem | a: a + b}, %{acc | b: a + b}}
+  end
+
+  test "container in and out" do
+    args = [%Container{a: 0, b: 0, c: :reset, d: :elem}, %Container{a: 0, b: 0, d: :acc}]
+    %_{} = stream = Nx.Defn.stream(&container_stream/2, args)
+
+    assert Nx.Stream.send(stream, %Container{a: 1, b: -1}) == :ok
+    assert Nx.Stream.recv(stream) == %Container{a: Nx.tensor(1), b: Nx.tensor(-1), d: :elem}
+
+    assert Nx.Stream.send(stream, %Container{a: 2, b: -2}) == :ok
+    assert Nx.Stream.recv(stream) == %Container{a: Nx.tensor(3), b: Nx.tensor(-2), d: :elem}
+
+    assert Nx.Stream.done(stream) == %Container{a: Nx.tensor(0), b: Nx.tensor(3), d: :acc}
+  end
 end
