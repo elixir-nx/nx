@@ -124,9 +124,6 @@ defmodule Nx.Defn.Tree do
   def composite(%T{} = expr, acc, fun) when is_function(fun, 2),
     do: fun.(expr, acc)
 
-  def composite(number, acc, fun) when is_number(number) and is_function(fun, 2),
-    do: fun.(number, acc)
-
   def composite(container, acc, fun),
     do: Nx.Container.traverse(container, acc, &composite(&1, &2, fun))
 
@@ -231,9 +228,6 @@ defmodule Nx.Defn.Tree do
   defp flatten_each(%T{} = tensor, acc),
     do: {tensor, [tensor | acc]}
 
-  defp flatten_each(number, acc) when is_number(number),
-    do: {number, [Nx.to_tensor(number) | acc]}
-
   defp flatten_each(container, acc),
     do: Nx.Container.traverse(container, acc, &flatten_each/2)
 
@@ -257,9 +251,6 @@ defmodule Nx.Defn.Tree do
   @doc false
   def to_result(%T{data: %Expr{}} = t),
     do: t
-
-  def to_result(number) when is_number(number),
-    do: "defn must return a tensor expression or a tuple, got: #{inspect(number)}"
 
   def to_result(other),
     do: other |> Nx.Container.traverse(:ok, &{to_result(&1), &2}) |> elem(0)

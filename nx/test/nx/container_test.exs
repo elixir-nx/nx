@@ -21,7 +21,10 @@ defmodule Nx.ContainerTest do
     refute Nx.compatible?(%Container{a: 1, b: 2, c: 3}, %URI{})
   end
 
-  describe "containers" do
+  describe "inside defn" do
+    # TODO: stream
+    # TODO: if
+
     import Nx.Defn
 
     alias Nx.Defn.Expr

@@ -66,9 +66,15 @@ defimpl Nx.Container, for: Map do
   end
 end
 
-defimpl Nx.Container, for: [Nx.Tensor, Integer, Float] do
+defimpl Nx.Container, for: Nx.Tensor do
   def traverse(tensor, acc, fun) do
     fun.(tensor, acc)
+  end
+end
+
+defimpl Nx.Container, for: [Integer, Float] do
+  def traverse(number, acc, fun) do
+    fun.(Nx.to_tensor(number), acc)
   end
 end
 

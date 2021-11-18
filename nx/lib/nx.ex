@@ -624,7 +624,6 @@ defmodule Nx do
   end
 
   defp to_template(%T{} = tensor, :ok), do: {%{tensor | data: %Nx.TemplateBackend{}}, :ok}
-  defp to_template(number, :ok) when is_number(number), do: to_template(to_tensor(number), :ok)
   defp to_template(container, :ok), do: Nx.Container.traverse(container, :ok, &to_template/2)
 
   @doc """
