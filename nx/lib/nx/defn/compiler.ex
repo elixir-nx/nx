@@ -83,7 +83,7 @@ defmodule Nx.Defn.Compiler do
 
   defp runtime(fun, args, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-    tensors = Nx.Defn.Tree.from_runtime_args(args)
+    tensors = Nx.Defn.Tree.flatten_list(args)
     runtime_fun = &runtime_fun(&1, fun, args, compiler)
     {compiler, [tensors, runtime_fun, opts]}
   end
@@ -199,7 +199,7 @@ defmodule Nx.Defn.Compiler do
 
           unquote(def_module).__jit__(
             cache,
-            Nx.Defn.Tree.from_runtime_args(tensors),
+            Nx.Defn.Tree.flatten_list(tensors),
             fn tensors ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
 

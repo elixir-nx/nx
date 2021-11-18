@@ -121,41 +121,14 @@ defmodule Nx.Defn.Tree do
   is invoked for it but not for its arguments (see `traverse_args/3`
   for that).
   """
-  def composite(%T{} = expr, acc, fun) when is_function(fun, 2) do
-    fun.(expr, acc)
-  end
+  def composite(%T{} = expr, acc, fun) when is_function(fun, 2),
+    do: fun.(expr, acc)
 
-  def composite(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
-    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &composite(&1, &2, fun))
-    {List.to_tuple(list), acc}
-  end
+  def composite(number, acc, fun) when is_number(number) and is_function(fun, 2),
+    do: fun.(number, acc)
 
-  def composite(map, acc, fun) when is_struct(map) and is_function(fun, 2) do
-    {list, acc} =
-      map
-      |> Map.from_struct()
-      |> Enum.map_reduce(acc, fn {k, v}, acc ->
-        {v, acc} = composite(v, acc, fun)
-        {{k, v}, acc}
-      end)
-
-    {struct(map.__struct__, list), acc}
-  end
-
-  def composite(map, acc, fun) when is_map(map) and is_function(fun, 2) do
-    {list, acc} =
-      map
-      |> Enum.map_reduce(acc, fn {k, v}, acc ->
-        {v, acc} = composite(v, acc, fun)
-        {{k, v}, acc}
-      end)
-
-    {Map.new(list), acc}
-  end
-
-  def composite(expr, acc, fun) when is_function(fun, 2) do
-    fun.(expr, acc)
-  end
+  def composite(container, acc, fun),
+    do: Nx.Container.traverse(container, acc, &composite(&1, &2, fun))
 
   ## Type helpers
 
@@ -235,7 +208,7 @@ defmodule Nx.Defn.Tree do
 
   @doc """
   Flattens the given list of tensor expressions, flattening maps,
-  tuples, into a list.
+  tuples, containers, into a list.
 
   Elements that are not tensors are converted to tensors via
   `Nx.tensor/1`.
@@ -250,36 +223,19 @@ defmodule Nx.Defn.Tree do
 
   """
   def flatten_list(args, tail \\ []) when is_list(args) do
-    flatten_list(args, tail, &Nx.tensor/1)
-  end
-
-  defp flatten_list(args, tail, fun) do
     args
-    |> Enum.reduce([], &flatten_each(&1, &2, fun))
+    |> Enum.reduce([], &elem(flatten_each(&1, &2), 1))
     |> Enum.reverse(tail)
   end
 
-  defp flatten_each(%T{} = tensor, acc, _fun),
-    do: [tensor | acc]
+  defp flatten_each(%T{} = tensor, acc),
+    do: {tensor, [tensor | acc]}
 
-  defp flatten_each(tuple, acc, fun) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &flatten_each(&1, &2, fun))
+  defp flatten_each(number, acc) when is_number(number),
+    do: {number, [Nx.to_tensor(number) | acc]}
 
-  defp flatten_each(map, acc, fun) when is_struct(map),
-    do:
-      map
-      |> Map.from_struct()
-      |> Enum.sort()
-      |> Enum.reduce(acc, &flatten_each(elem(&1, 1), &2, fun))
-
-  defp flatten_each(map, acc, fun) when is_map(map),
-    do:
-      map
-      |> Enum.sort()
-      |> Enum.reduce(acc, &flatten_each(elem(&1, 1), &2, fun))
-
-  defp flatten_each(other, acc, fun),
-    do: [fun.(other) | acc]
+  defp flatten_each(container, acc),
+    do: Nx.Container.traverse(container, acc, &flatten_each/2)
 
   ## Nx.Defn callbacks
 
@@ -292,14 +248,6 @@ defmodule Nx.Defn.Tree do
     from_compile_args(args, [arg | cache], vars)
   end
 
-  defp from_compile_args([arg | args], cache, vars) when is_tuple(arg) do
-    if arg |> Tuple.to_list() |> Enum.all?(&is_function/1) do
-      from_compile_args(args, [arg | cache], vars)
-    else
-      from_compile_args(args, cache, [arg | vars])
-    end
-  end
-
   defp from_compile_args([arg | args], cache, vars) do
     from_compile_args(args, cache, [arg | vars])
   end
@@ -307,27 +255,14 @@ defmodule Nx.Defn.Tree do
   defp from_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
 
   @doc false
-  def from_runtime_args(args) do
-    flatten_list(args, [], &from_arg/1)
-  end
+  def to_result(%T{data: %Expr{}} = t),
+    do: t
 
-  @valid "defn arguments must be numbers, tensors, and functions. " <>
-           "It may also be a maps with numbers/tensors as values, " <>
-           "a tuple of numbers/tensors or a tuple of functions. "
+  def to_result(number) when is_number(number),
+    do: "defn must return a tensor expression or a tuple, got: #{inspect(number)}"
 
-  @doc false
-  def from_arg(%T{} = tensor), do: tensor
-  def from_arg(number) when is_number(number), do: Nx.tensor(number)
-
-  def from_arg(other) when is_function(other) do
-    raise ArgumentError,
-          @valid <>
-            "Anonymous functions are only allowed as direct arguments to defn: " <> inspect(other)
-  end
-
-  def from_arg(other) do
-    raise ArgumentError, @valid <> "Got: #{inspect(other)}"
-  end
+  def to_result(other),
+    do: other |> Nx.Container.traverse(:ok, &{to_result(&1), &2}) |> elem(0)
 
   @doc false
   def args_to_params(args, params) do
@@ -349,79 +284,10 @@ defmodule Nx.Defn.Tree do
     args
   end
 
-  @doc false
-  def to_result(%T{data: %Expr{}} = t),
-    do: t
-
-  def to_result(map) when is_struct(map),
-    do:
-      map
-      |> Map.from_struct()
-      |> Enum.map(fn {k, v} -> {k, to_result(v)} end)
-      |> then(&struct(map.__struct__, &1))
-
-  def to_result(map) when is_map(map),
-    do: map |> Enum.map(fn {k, v} -> {k, to_result(v)} end) |> Map.new()
-
-  def to_result(tuple) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
-
-  def to_result(other) do
-    raise ArgumentError,
-          "defn must return a tensor expression or a tuple, got: #{inspect(other)}"
-  end
-
   defp args_to(args, acc, fun) when is_list(args) do
     Enum.map_reduce(args, acc, fn
-      arg, acc
-      when is_function(arg)
-      when is_tuple(arg) and is_function(elem(arg, 0)) ->
-        {arg, acc}
-
-      arg, acc ->
-        args_to_each(arg, acc, fun)
+      arg, acc when is_function(arg) -> {arg, acc}
+      arg, acc -> Nx.Container.traverse(arg, acc, fun)
     end)
-  end
-
-  defp args_to_each(%T{} = arg, acc, fun) do
-    fun.(arg, acc)
-  end
-
-  defp args_to_each(tuple, acc, fun) when is_tuple(tuple) do
-    {list, acc} =
-      tuple
-      |> Tuple.to_list()
-      |> Enum.map_reduce(acc, &args_to_each(&1, &2, fun))
-
-    {List.to_tuple(list), acc}
-  end
-
-  defp args_to_each(map, acc, fun) when is_struct(map) do
-    {list, acc} =
-      map
-      |> Map.from_struct()
-      |> Enum.sort()
-      |> Enum.map_reduce(acc, fn {k, v}, acc ->
-        {v, acc} = args_to_each(v, acc, fun)
-        {{k, v}, acc}
-      end)
-
-    {struct(map.__struct__, list), acc}
-  end
-
-  defp args_to_each(map, acc, fun) when is_map(map) do
-    {list, acc} =
-      map
-      |> Enum.sort()
-      |> Enum.map_reduce(acc, fn {k, v}, acc ->
-        {v, acc} = args_to_each(v, acc, fun)
-        {{k, v}, acc}
-      end)
-
-    {Map.new(list), acc}
-  end
-
-  defp args_to_each(arg, acc, fun) do
-    fun.(arg, acc)
   end
 end

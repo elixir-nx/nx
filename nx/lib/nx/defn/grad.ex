@@ -7,7 +7,6 @@ defmodule Nx.Defn.Grad do
   def transform(to_grad, fun, transform) do
     {to_grad, ids} =
       Tree.composite(to_grad, %{}, fn to_grad, ids ->
-        validate_grad!(to_grad)
         to_grad = Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
         {to_grad, Map.put(ids, to_grad.data.id, :to_grad)}
       end)
@@ -43,14 +42,6 @@ defmodule Nx.Defn.Grad do
     {expr, graded}
   end
 
-  defp validate_grad!(%T{data: %Expr{}} = t), do: t
-
-  defp validate_grad!(other) do
-    raise ArgumentError,
-          "the first argument of grad must be a tensor expression or a tuple of tensor expressions, " <>
-            "got: #{inspect(other)}"
-  end
-
   defp validate_expr!(%T{data: %Expr{}} = expr) do
     expr
   end
@@ -73,7 +64,7 @@ defmodule Nx.Defn.Grad do
   defp stop_grads(%T{data: %Expr{id: id}}, ids),
     do: Map.put(ids, id, :stop)
 
-  defp stop_grads(%_{}, ids),
+  defp stop_grads(%T{}, ids),
     do: ids
 
   defp stop_grads(map, ids) when is_map(map),
