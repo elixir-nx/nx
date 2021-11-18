@@ -48,6 +48,22 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
+  Counts the number of elements in the tree.
+
+  ## Examples
+
+      iex> Nx.Defn.Tree.count(123)
+      1
+      iex> Nx.Defn.Tree.count({1, {2, 3}})
+      3
+
+  """
+  def count(tree), do: count(tree, 0)
+  defp count(%T{}, acc), do: acc + 1
+  defp count(number, acc) when is_number(number), do: acc + 1
+  defp count(container, acc), do: Nx.Container.reduce(container, acc, &count/2)
+
+  @doc """
   Traverses the arguments of a tensor expression.
 
   Warning: be very careful when using this function to traverse the expression
@@ -244,26 +260,29 @@ defmodule Nx.Defn.Tree do
   Flattens the given list of tensor expressions, flattening maps,
   tuples, containers, into a list.
 
-  Elements that are not tensors are converted to tensors via
-  `Nx.tensor/1`.
+  Elements that are not tensors (i.e. numbers) are kept as is
+  unless a custom function is given.
 
   ## Examples
 
       iex> Nx.Defn.Tree.flatten_list([1, {2, 3}])
-      [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3)]
+      [1, 2, 3]
 
       iex> Nx.Defn.Tree.flatten_list([1, {2, 3}], [Nx.tensor(4)])
+      [1, 2, 3, Nx.tensor(4)]
+
+      iex> Nx.Defn.Tree.flatten_list([1, {2, 3}], [Nx.tensor(4)], &Nx.tensor/1)
       [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3), Nx.tensor(4)]
 
   """
-  def flatten_list(args, tail \\ [], fun \\ &Nx.to_tensor/1) when is_list(args) do
+  def flatten_list(args, tail \\ [], fun \\ & &1) when is_list(args) do
     args
     |> Enum.reduce([], &flatten_each(&1, &2, fun))
     |> Enum.reverse(tail)
   end
 
-  defp flatten_each(%T{} = tensor, acc, fun),
-    do: [fun.(tensor) | acc]
+  defp flatten_each(%T{} = tensor, acc, _fun),
+    do: [tensor | acc]
 
   defp flatten_each(number, acc, fun) when is_number(number),
     do: [fun.(number) | acc]
@@ -287,6 +306,12 @@ defmodule Nx.Defn.Tree do
   end
 
   defp from_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
+
+  @doc false
+  def from_runtime_args(args, tail) do
+    # We want to allocate all inputs on the backend, so we use Nx.tensor/1
+    flatten_list(args, tail, &Nx.tensor/1)
+  end
 
   @doc false
   def to_result(%T{data: %Expr{}} = t),

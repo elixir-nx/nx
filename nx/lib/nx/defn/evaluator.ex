@@ -13,11 +13,11 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __stream__(key, input, acc, vars, fun, opts) do
-    dynamic = Nx.Defn.Tree.flatten_list([input, acc])
-    vars = Enum.drop(vars, length(dynamic))
+    count = Nx.Defn.Tree.count(input) + Nx.Defn.Tree.count(acc)
+    vars = Enum.drop(vars, count)
 
     Nx.Defn.Stream.start_link(input, acc, fn input, acc ->
-      vars = Nx.Defn.Tree.flatten_list([input, acc], vars)
+      vars = Nx.Defn.Tree.from_runtime_args([input, acc], vars)
       __jit__(key, vars, fun, opts)
     end)
   end

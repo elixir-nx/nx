@@ -153,7 +153,7 @@ defmodule Nx.Defn.Expr do
 
     [last | exprs] =
       [last | exprs]
-      |> Enum.map(fn clause -> Tree.flatten_list([clause], [], & &1) end)
+      |> Enum.map(&Tree.flatten_list([&1]))
       |> Enum.zip_with(&broadcast_clause/1)
       |> unzip_clauses()
 
