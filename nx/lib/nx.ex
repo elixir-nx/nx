@@ -618,9 +618,14 @@ defmodule Nx do
   To build a template from scratch, use `template/3`.
   """
   @doc type: :conversion
-  def to_template(tensor_or_tuple_or_map) do
-    to_tensor(tensor_or_tuple_or_map, &%T{to_tensor(&1) | data: %Nx.TemplateBackend{}})
+  def to_template(tensor_or_container) do
+    {template, :ok} = to_template(tensor_or_container, :ok)
+    template
   end
+
+  defp to_template(%T{} = tensor, :ok), do: {%{tensor | data: %Nx.TemplateBackend{}}, :ok}
+  defp to_template(number, :ok) when is_number(number), do: to_template(to_tensor(number), :ok)
+  defp to_template(container, :ok), do: Nx.Container.traverse(container, :ok, &to_template/2)
 
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.
@@ -1419,25 +1424,6 @@ defmodule Nx do
 
   def to_tensor(t) do
     raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
-  end
-
-  defp to_tensor(%T{} = tensor, fun) do
-    fun.(tensor)
-  end
-
-  defp to_tensor(map, fun) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, to_tensor(v, fun)} end)
-  end
-
-  defp to_tensor(tuple, fun) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&to_tensor(&1, fun))
-    |> List.to_tuple()
-  end
-
-  defp to_tensor(other, fun) do
-    fun.(other)
   end
 
   @doc """
@@ -2599,11 +2585,9 @@ defmodule Nx do
       false
 
   """
-  def compatible?(left, right) do
-    tensor_compatible?(to_tensor(left, &to_tensor/1), to_tensor(right, &to_tensor/1))
-  end
+  def compatible?(left, right)
 
-  defp tensor_compatible?(%T{} = left, %T{} = right) do
+  def compatible?(%T{} = left, %T{} = right) do
     %{type: type, shape: shape, names: left_names} = left
 
     case to_tensor(right) do
@@ -2615,22 +2599,32 @@ defmodule Nx do
     end
   end
 
-  defp tensor_compatible?(left, right) when tuple_size(left) == tuple_size(right) do
+  def compatible?(left, right) when tuple_size(left) == tuple_size(right) do
     Tuple.to_list(left)
     |> Enum.zip(Tuple.to_list(right))
-    |> Enum.all?(fn {l, r} -> tensor_compatible?(l, r) end)
+    |> Enum.all?(fn {l, r} -> compatible?(l, r) end)
   end
 
-  defp tensor_compatible?(left, right) when map_size(left) == map_size(right) do
+  def compatible?(%mod{} = left, %mod{} = right) do
+    {_, left} = Nx.Container.traverse(left, [], &{&1, [&1 | &2]})
+    {_, right} = Nx.Container.traverse(right, [], &{&1, [&1 | &2]})
+    Enum.zip(left, right) |> Enum.all?(fn {l, r} -> compatible?(l, r) end)
+  end
+
+  def compatible?(%_{}, %_{}), do: false
+
+  def compatible?(left, right) when map_size(left) == map_size(right) do
     Enum.all?(left, fn {k, v1} ->
       case right do
-        %{^k => v2} -> tensor_compatible?(v1, v2)
+        %{^k => v2} -> compatible?(v1, v2)
         %{} -> false
       end
     end)
   end
 
-  defp tensor_compatible?(_, _), do: false
+  def compatible?(left, right) when is_number(left), do: compatible?(to_tensor(left), right)
+  def compatible?(left, right) when is_number(right), do: compatible?(left, to_tensor(right))
+  def compatible?(_, _), do: false
 
   defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
   defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)

@@ -14,6 +14,7 @@ defmodule Nx.MixProject do
       name: "Nx",
       version: @version,
       elixir: "~> 1.12-dev",
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs()
     ]
@@ -25,6 +26,9 @@ defmodule Nx.MixProject do
       env: [default_backend: {Nx.BinaryBackend, []}]
     ]
   end
+
+  defp elixirc_paths(:test), do: ~w(lib test/support)
+  defp elixirc_paths(_), do: ~w(lib)
 
   defp deps do
     [
@@ -52,7 +56,6 @@ defmodule Nx.MixProject do
         # Nx.Defn,
         # Nx.Defn.Kernel,
         # Nx.LinAlg,
-        # Nx.Stream,
 
         Backends: [
           Nx.Backend,
@@ -60,15 +63,19 @@ defmodule Nx.MixProject do
           Nx.TemplateBackend,
           Nx.Type
         ],
+        Protocols: [
+          Nx.Container,
+          Nx.Stream
+        ],
+        Structs: [
+          Nx.Heatmap,
+          Nx.Tensor
+        ],
         Compilers: [
           Nx.Defn.Compiler,
           Nx.Defn.Evaluator,
           Nx.Defn.Expr,
           Nx.Defn.Tree
-        ],
-        Structs: [
-          Nx.Heatmap,
-          Nx.Tensor
         ]
       ]
     ]
