@@ -144,7 +144,7 @@ defmodule EXLA.Defn.Stream do
           receive do
             {^ref, result} ->
               Process.demonitor(ref, [:flush])
-              fun = if keep_on_device, do: &(&1), else: &Nx.backend_transfer/1
+              fun = if keep_on_device, do: & &1, else: &Nx.backend_transfer/1
               EXLA.Defn.Buffer.to_nx!(result, done, fun)
           end
       end

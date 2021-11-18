@@ -302,14 +302,15 @@ defmodule Nx.Defn.Tree do
   def args_to_params(args, params) do
     {args, {[], _}} =
       Enum.map_reduce(args, {params, 0}, fn
-      arg, acc when is_function(arg) -> {arg, acc}
-      arg, acc -> args_to_param(arg, acc)
-    end)
+        arg, acc when is_function(arg) -> {arg, acc}
+        arg, acc -> args_to_param(arg, acc)
+      end)
 
     args
   end
 
-  defp args_to_param(tensor, {[param | params], i}) when is_struct(tensor, T) or is_number(tensor) do
+  defp args_to_param(tensor, {[param | params], i})
+       when is_struct(tensor, T) or is_number(tensor) do
     {Expr.parameter(param, :root, i), {params, i + 1}}
   end
 
