@@ -69,6 +69,15 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
+
+    defn nested_tuple_shape_match_signature({a, {b, c}}) do
+      a + b + c
+    end
+
+    test "allows nested pattern matching on the tuple shape on signature" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [_, _]}} =
+               nested_tuple_shape_match_signature({1, {2.0, 3.0}})
+    end
   end
 
   describe "map" do

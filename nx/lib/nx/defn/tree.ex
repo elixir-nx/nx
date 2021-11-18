@@ -7,6 +7,40 @@ defmodule Nx.Defn.Tree do
   alias Nx.Tensor, as: T
 
   @doc """
+  Traverses two trees to see if they are compatible.
+  """
+  def compatible?(left, right, fun)
+      when (is_number(left) or is_struct(left, T)) and (is_number(right) or is_struct(right, T)),
+      do: fun.(left, right)
+
+  def compatible?(left, right, fun) when tuple_size(left) == tuple_size(right) do
+    Tuple.to_list(left)
+    |> Enum.zip(Tuple.to_list(right))
+    |> Enum.all?(fn {l, r} -> compatible?(l, r, fun) end)
+  end
+
+  def compatible?(%mod{} = left, %mod{} = right, fun) do
+    left = Nx.Container.reduce(left, [], &[&1 | &2])
+    right = Nx.Container.reduce(right, [], &[&1 | &2])
+    Enum.zip(left, right) |> Enum.all?(fn {l, r} -> compatible?(l, r, fun) end)
+  end
+
+  def compatible?(%_{}, %_{}, _fun),
+    do: false
+
+  def compatible?(left, right, fun) when map_size(left) == map_size(right) do
+    Enum.all?(left, fn {k, v1} ->
+      case right do
+        %{^k => v2} -> compatible?(v1, v2, fun)
+        %{} -> false
+      end
+    end)
+  end
+
+  def compatible?(_, _, _),
+    do: false
+
+  @doc """
   Puts new args in the given expression and gives it a new id.
   """
   def put_args(%T{data: %Expr{} = expr} = t, args) do
@@ -124,6 +158,9 @@ defmodule Nx.Defn.Tree do
   def composite(%T{} = expr, acc, fun) when is_function(fun, 2),
     do: fun.(expr, acc)
 
+  def composite(number, acc, fun) when is_number(number) and is_function(fun, 2),
+    do: fun.(number, acc)
+
   def composite(container, acc, fun),
     do: Nx.Container.traverse(container, acc, &composite(&1, &2, fun))
 
@@ -219,17 +256,20 @@ defmodule Nx.Defn.Tree do
       [Nx.tensor(1), Nx.tensor(2), Nx.tensor(3), Nx.tensor(4)]
 
   """
-  def flatten_list(args, tail \\ []) when is_list(args) do
+  def flatten_list(args, tail \\ [], fun \\ &Nx.to_tensor/1) when is_list(args) do
     args
-    |> Enum.reduce([], &elem(flatten_each(&1, &2), 1))
+    |> Enum.reduce([], &flatten_each(&1, &2, fun))
     |> Enum.reverse(tail)
   end
 
-  defp flatten_each(%T{} = tensor, acc),
-    do: {tensor, [tensor | acc]}
+  defp flatten_each(%T{} = tensor, acc, fun),
+    do: [fun.(tensor) | acc]
 
-  defp flatten_each(container, acc),
-    do: Nx.Container.traverse(container, acc, &flatten_each/2)
+  defp flatten_each(number, acc, fun) when is_number(number),
+    do: [fun.(number) | acc]
+
+  defp flatten_each(container, acc, fun),
+    do: Nx.Container.reduce(container, acc, &flatten_each(&1, &2, fun))
 
   ## Nx.Defn callbacks
 
@@ -251,6 +291,9 @@ defmodule Nx.Defn.Tree do
   @doc false
   def to_result(%T{data: %Expr{}} = t),
     do: t
+
+  def to_result(number) when is_number(number),
+    do: Expr.tensor(number)
 
   def to_result(other),
     do: other |> Nx.Container.traverse(:ok, &{to_result(&1), &2}) |> elem(0)
@@ -278,7 +321,16 @@ defmodule Nx.Defn.Tree do
   defp args_to(args, acc, fun) when is_list(args) do
     Enum.map_reduce(args, acc, fn
       arg, acc when is_function(arg) -> {arg, acc}
-      arg, acc -> Nx.Container.traverse(arg, acc, fun)
+      arg, acc -> args_to_each(arg, acc, fun)
     end)
   end
+
+  defp args_to_each(%T{} = tensor, acc, fun),
+    do: fun.(tensor, acc)
+
+  defp args_to_each(number, acc, fun) when is_number(number),
+    do: fun.(number, acc)
+
+  defp args_to_each(container, acc, fun),
+    do: Nx.Container.traverse(container, acc, &args_to_each(&1, &2, fun))
 end

@@ -624,6 +624,7 @@ defmodule Nx do
   end
 
   defp to_template(%T{} = tensor, :ok), do: {%{tensor | data: %Nx.TemplateBackend{}}, :ok}
+  defp to_template(number, :ok) when is_number(number), do: to_template(to_tensor(number), :ok)
   defp to_template(container, :ok), do: Nx.Container.traverse(container, :ok, &to_template/2)
 
   @doc """
@@ -2598,32 +2599,9 @@ defmodule Nx do
     end
   end
 
-  def compatible?(left, right) when tuple_size(left) == tuple_size(right) do
-    Tuple.to_list(left)
-    |> Enum.zip(Tuple.to_list(right))
-    |> Enum.all?(fn {l, r} -> compatible?(l, r) end)
-  end
-
-  def compatible?(%mod{} = left, %mod{} = right) do
-    {_, left} = Nx.Container.traverse(left, [], &{&1, [&1 | &2]})
-    {_, right} = Nx.Container.traverse(right, [], &{&1, [&1 | &2]})
-    Enum.zip(left, right) |> Enum.all?(fn {l, r} -> compatible?(l, r) end)
-  end
-
-  def compatible?(%_{}, %_{}), do: false
-
-  def compatible?(left, right) when map_size(left) == map_size(right) do
-    Enum.all?(left, fn {k, v1} ->
-      case right do
-        %{^k => v2} -> compatible?(v1, v2)
-        %{} -> false
-      end
-    end)
-  end
-
   def compatible?(left, right) when is_number(left), do: compatible?(to_tensor(left), right)
   def compatible?(left, right) when is_number(right), do: compatible?(left, to_tensor(right))
-  def compatible?(_, _), do: false
+  def compatible?(left, right), do: Nx.Defn.Tree.compatible?(left, right, &compatible?/2)
 
   defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
   defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)

@@ -284,4 +284,24 @@ defmodule Nx.Defn.EvaluatorTest do
       assert slice1(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])) == Nx.tensor(4)
     end
   end
+
+  defn with_cond(var, cond) do
+    if cond do
+      %{var | a: var.a + 1}
+    else
+      %{var | b: var.b - 1}
+    end
+  end
+
+  describe "containers" do
+    test "input, output, and cond" do
+      container = %Container{a: 1, b: -1, c: :reset, d: :kept}
+
+      assert with_cond(container, 1) ==
+               %Container{a: Nx.tensor(2), b: Nx.tensor(-1), c: nil, d: :kept}
+
+      assert with_cond(container, 0) ==
+               %Container{a: Nx.tensor(1), b: Nx.tensor(-2), c: nil, d: :kept}
+    end
+  end
 end

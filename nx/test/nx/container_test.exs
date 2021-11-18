@@ -22,9 +22,6 @@ defmodule Nx.ContainerTest do
   end
 
   describe "inside defn" do
-    # TODO: stream
-    # TODO: if
-
     import Nx.Defn
 
     alias Nx.Defn.Expr
@@ -36,38 +33,6 @@ defmodule Nx.ContainerTest do
       a + b
     end
 
-    defn match_alias(%C{a: a, b: b}) do
-      a + b
-    end
-
-    defn match_in_body(var) do
-      %C{a: a, b: b} = var
-      a + b
-    end
-
-    defn dot(var) do
-      var.a + var.b
-    end
-
-    defn return_struct(x, y) do
-      %C{a: x + y, b: x - y}
-    end
-
-    defn update_struct(var, x) do
-      %C{var | b: x}
-    end
-
-    defn update_map(var, x) do
-      %{var | b: x}
-    end
-
-    defn dot_assert_fields(var) do
-      transform(var, &assert_fields!/1)
-      var.a + var.b
-    end
-
-    defp assert_fields!(%C{c: nil, d: :keep}), do: 1
-
     test "matches in signature" do
       inp = %Container{a: Nx.tensor(1), b: Nx.tensor(2)}
 
@@ -76,6 +41,10 @@ defmodule Nx.ContainerTest do
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
+    end
+
+    defn match_alias(%C{a: a, b: b}) do
+      a + b
     end
 
     test "matches alias" do
@@ -88,6 +57,11 @@ defmodule Nx.ContainerTest do
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
     end
 
+    defn match_in_body(var) do
+      %C{a: a, b: b} = var
+      a + b
+    end
+
     test "matches in body" do
       inp = %Container{a: 1, b: 2}
 
@@ -98,6 +72,10 @@ defmodule Nx.ContainerTest do
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
     end
 
+    defn dot(var) do
+      var.a + var.b
+    end
+
     test "uses dot" do
       inp = %Container{a: 1, b: 2}
 
@@ -106,10 +84,22 @@ defmodule Nx.ContainerTest do
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
     end
 
+    defn return_struct(x, y) do
+      %C{a: x + y, b: x - y}
+    end
+
     test "can be returned" do
       assert %Container{a: a, b: b} = return_struct(1, 2.0)
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} = a
       assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [^left, ^right]}} = b
+    end
+
+    defn update_struct(var, x) do
+      %C{var | b: x}
+    end
+
+    defn update_map(var, x) do
+      %{var | b: x}
     end
 
     test "can be updated" do
@@ -123,6 +113,13 @@ defmodule Nx.ContainerTest do
       assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [0]}} = a
       assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [2]}} = b
     end
+
+    defn dot_assert_fields(var) do
+      transform(var, &assert_fields!/1)
+      var.a + var.b
+    end
+
+    defp assert_fields!(%C{c: nil, d: :keep}), do: 1
 
     test "keeps fields" do
       inp = %Container{a: 1, b: 2, c: :reset, d: :keep}
