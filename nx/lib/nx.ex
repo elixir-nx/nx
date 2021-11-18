@@ -589,6 +589,10 @@ defmodule Nx do
   Templates are useful when you need to pass types and shapes to
   operations and the data is not yet available.
 
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
+  and recursively converts all tensors to templates.
+
   ## Examples
 
       iex> Nx.iota({2, 3}) |> Nx.to_template()
@@ -2543,9 +2547,10 @@ defmodule Nx do
 
   The data in the tensor is ignored.
 
-  A collection of tensors, wrapped in tuples or maps, can also be given
-  as arguments and they will match as long they have the same shape and
-  keys.
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
+  and recursively compares them, observing their container data
+  structures are also the same.
 
   ## Examples
 
@@ -2775,37 +2780,33 @@ defmodule Nx do
   you may want to use `backend_transfer/2`, unless you explicitly
   want to copy the data.
 
-  For convenience, this function accepts tuples and maps as arguments
-  and copies all tensors in them. This behaviour exists as it is
-  common to transfer data from tuples before and after `defn` functions.
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
+  and recursively copies all tensors in them. This behaviour exists
+  as it is common to transfer data before and after `defn` functions.
 
   *Note: `Nx.default_backend/1` does not affect the behaviour of
   this function.
   """
   @doc type: :backend
-  def backend_copy(tensor_or_tuple_or_map, backend \\ Nx.Tensor) do
+  def backend_copy(tensor_or_container, backend \\ Nx.Tensor) do
     {backend, options} = backend!(backend)
-    backend_copy(tensor_or_tuple_or_map, backend, options)
-  end
-
-  defp backend_copy(tuple, backend, opts) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&backend_copy(&1, backend, opts))
-    |> List.to_tuple()
+    backend_copy(tensor_or_container, backend, options)
   end
 
   defp backend_copy(%T{} = tensor, backend, opts) do
     impl!(tensor).backend_copy(tensor, backend, opts)
   end
 
-  defp backend_copy(map, backend, opts) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, backend_copy(v, backend, opts)} end)
+  defp backend_copy(number, backend, opts) when is_number(number) do
+    tensor = to_tensor(number)
+    impl!(tensor).backend_copy(tensor, backend, opts)
   end
 
-  defp backend_copy(tensor, backend, opts) do
-    tensor = to_tensor(tensor)
-    impl!(tensor).backend_copy(tensor, backend, opts)
+  defp backend_copy(container, backend, opts) do
+    container
+    |> Nx.Container.traverse(:ok, fn t, :ok -> {backend_copy(t, backend, opts), :ok} end)
+    |> elem(0)
   end
 
   @doc """
@@ -2827,7 +2828,8 @@ defmodule Nx do
   implies the data is copied from the GPU to the Erlang VM
   and then deallocated from the device.
 
-  For convenience, this function accepts maps and tuples as arguments
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
   and transfers all tensors in them. This behaviour exists as it is
   common to transfer data from tuples and maps before and after `defn`
   functions.
@@ -2847,29 +2849,24 @@ defmodule Nx do
 
   """
   @doc type: :backend
-  def backend_transfer(tensor_or_tuple_or_map, backend \\ Nx.Tensor) do
+  def backend_transfer(tensor_or_container, backend \\ Nx.Tensor) do
     {backend, opts} = backend!(backend)
-    backend_transfer(tensor_or_tuple_or_map, backend, opts)
-  end
-
-  defp backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&backend_transfer(&1, backend, opts))
-    |> List.to_tuple()
+    backend_transfer(tensor_or_container, backend, opts)
   end
 
   defp backend_transfer(%T{} = tensor, backend, opts) do
     impl!(tensor).backend_transfer(tensor, backend, opts)
   end
 
-  defp backend_transfer(map, backend, opts) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, backend_transfer(v, backend, opts)} end)
+  defp backend_transfer(number, backend, opts) when is_number(number) do
+    tensor = to_tensor(number)
+    impl!(tensor).backend_transfer(tensor, backend, opts)
   end
 
-  defp backend_transfer(tensor, backend, opts) do
-    tensor = to_tensor(tensor)
-    impl!(tensor).backend_transfer(tensor, backend, opts)
+  defp backend_transfer(container, backend, opts) do
+    container
+    |> Nx.Container.traverse(:ok, fn t, :ok -> {backend_transfer(t, backend, opts), :ok} end)
+    |> elem(0)
   end
 
   @doc """
@@ -2877,33 +2874,26 @@ defmodule Nx do
 
   It returns either `:ok` or `:already_deallocated`.
 
-  For convenience, this function accepts tuples and maps as arguments
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
   and deallocates all devices in them. This behaviour exists as it is
-  common to deallocate data from tuples and maps after `defn` functions.
+  common to deallocate data after `defn` functions.
   """
   @doc type: :backend
-  def backend_deallocate(tensor_or_tuple_or_map)
-
-  def backend_deallocate(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&backend_deallocate/1)
-
-    :ok
+  def backend_deallocate(tensor_or_container) do
+    backend_deallocate(tensor_or_container, :ok)
   end
 
-  def backend_deallocate(%T{} = tensor) do
+  defp backend_deallocate(%T{} = tensor, :ok) do
     impl!(tensor).backend_deallocate(tensor)
   end
 
-  def backend_deallocate(map) when is_map(map) do
-    Enum.map(map, fn {_, v} -> backend_deallocate(v) end)
+  defp backend_deallocate(number, :ok) when is_number(number) do
     :ok
   end
 
-  def backend_deallocate(tensor) do
-    tensor = to_tensor(tensor)
-    impl!(tensor).backend_deallocate(tensor)
+  defp backend_deallocate(container, :ok) do
+    Nx.Container.reduce(container, :ok, &backend_deallocate/2)
   end
 
   ## Element-wise binary ops

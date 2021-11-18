@@ -21,6 +21,20 @@ defmodule Nx.ContainerTest do
     refute Nx.compatible?(%Container{a: 1, b: 2, c: 3}, %URI{})
   end
 
+  test "backend_transfer" do
+    assert Nx.backend_transfer(%Container{a: Nx.tensor(1), b: 2}) ==
+             %Container{a: Nx.tensor(1), b: Nx.tensor(2)}
+  end
+
+  test "backend_copy" do
+    assert Nx.backend_copy(%Container{a: Nx.tensor(1), b: 2}) ==
+             %Container{a: Nx.tensor(1), b: Nx.tensor(2)}
+  end
+
+  test "backend_deallocate" do
+    assert Nx.backend_deallocate(%Container{a: Nx.tensor(1), b: 2}) == :ok
+  end
+
   describe "inside defn" do
     import Nx.Defn
 
