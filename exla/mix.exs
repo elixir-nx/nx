@@ -10,6 +10,7 @@ defmodule EXLA.MixProject do
       name: "EXLA",
       version: @version,
       elixir: "~> 1.12-dev",
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
       # We want to always trigger XLA compilation when XLA_BUILD is set,
@@ -35,6 +36,9 @@ defmodule EXLA.MixProject do
       ]
     ]
   end
+
+  defp elixirc_paths(:test), do: ~w(lib test/support)
+  defp elixirc_paths(_), do: ~w(lib)
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do

@@ -2,61 +2,14 @@ defmodule EXLA.Defn.Buffer do
   @moduledoc false
 
   @doc """
-  Nx -> template.
-  """
-  def to_template(%Nx.Tensor{} = t),
-    do: Nx.to_template(t)
-
-  def to_template(tuple) when is_tuple(tuple),
-    do: {:tuple, tuple |> Tuple.to_list() |> Enum.map(&to_template/1)}
-
-  def to_template(map) when is_struct(map) do
-    out =
-      map
-      |> Map.from_struct()
-      |> Enum.sort()
-      |> Enum.map(fn {k, v} -> {k, to_template(v)} end)
-
-    {:struct, out, map.__struct__}
-  end
-
-  def to_template(map) when is_map(map),
-    do: {:map, map |> Enum.sort() |> Enum.map(fn {k, v} -> {k, to_template(v)} end)}
-
-  @doc """
   EXLA.Buffer -> Nx.
   """
-  def to_nx!(buffers, outputs) do
-    {result, []} = each_to_nx(outputs, buffers)
-    result
+  def to_nx!(buffers, outputs, fun \\ & &1) do
+    {res, []} = each_to_nx!(outputs, buffers, fun)
+    res
   end
 
-  defp each_to_nx({:tuple, outputs}, acc) when is_list(outputs) do
-    {exprs, acc} = Enum.map_reduce(outputs, acc, &each_to_nx/2)
-    {List.to_tuple(exprs), acc}
-  end
-
-  defp each_to_nx({:struct, outputs, mod}, acc) when is_list(outputs) do
-    {exprs, acc} =
-      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
-        {v, acc} = each_to_nx(v, acc)
-        {{k, v}, acc}
-      end)
-
-    {struct(mod, exprs), acc}
-  end
-
-  defp each_to_nx({:map, outputs}, acc) when is_list(outputs) do
-    {exprs, acc} =
-      Enum.map_reduce(outputs, acc, fn {k, v}, acc ->
-        {v, acc} = each_to_nx(v, acc)
-        {{k, v}, acc}
-      end)
-
-    {Map.new(exprs), acc}
-  end
-
-  defp each_to_nx(hole, [%EXLA.Buffer{shape: shape} = buffer | acc]) do
+  defp each_to_nx!(%Nx.Tensor{} = hole, [%EXLA.Buffer{shape: shape} = buffer | acc], fun) do
     nx_type = to_nx_type(shape.dtype)
     nx_shape = shape.dims
 
@@ -70,7 +23,11 @@ defmodule EXLA.Defn.Buffer do
               "but got #{inspect(nx_shape)}"
     end
 
-    {%{hole | data: buffer_to_data(buffer)}, acc}
+    {fun.(%{hole | data: buffer_to_data(buffer)}), acc}
+  end
+
+  defp each_to_nx!(container, acc, fun) do
+    Nx.Container.traverse(container, acc, &each_to_nx!(&1, &2, fun))
   end
 
   defp buffer_to_data(%EXLA.Buffer{ref: ref, data: nil}),

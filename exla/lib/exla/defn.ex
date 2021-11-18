@@ -20,7 +20,7 @@ defmodule EXLA.Defn do
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
     comp_fun = &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, compile_options)
 
-    {inputs, {:tuple, [output, acc_output]}, {executable, output_shape}} =
+    {inputs, {output, acc_output}, {executable, output_shape}} =
       compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
 
     # Execution of streams requires the coordination of
@@ -254,7 +254,7 @@ defmodule EXLA.Defn do
     {expr, {used_inputs, outputs}} =
       EXLA.Defn.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
-        {expr, {used_inputs(expr), EXLA.Defn.Buffer.to_template(expr)}}
+        {expr, {used_inputs(expr), Nx.to_template(expr)}}
       end)
 
     {non_buffers, used_inputs} = to_split.(vars, used_inputs)
@@ -312,38 +312,17 @@ defmodule EXLA.Defn do
   end
 
   defp recur_flatten(composite, state, cache) do
-    {acc, cache} = recur_flatten(composite, [], state, cache)
+    {acc, cache} = do_recur_flatten(composite, {[], cache}, state)
     {EXLA.Op.tuple(state.builder, Enum.reverse(acc)), cache}
   end
 
-  defp recur_flatten(%T{} = expr, acc, state, cache) do
+  defp do_recur_flatten(%T{} = expr, {acc, cache}, state) do
     {expr, cache} = recur_operator(expr, state, cache)
     {[expr | acc], cache}
   end
 
-  defp recur_flatten(tuple, acc, state, cache) when is_tuple(tuple) do
-    list = Tuple.to_list(tuple)
-
-    Enum.reduce(list, {acc, cache}, fn expr, {acc, cache} ->
-      recur_flatten(expr, acc, state, cache)
-    end)
-  end
-
-  defp recur_flatten(map, acc, state, cache) when is_struct(map) do
-    map
-    |> Map.from_struct()
-    |> Enum.sort()
-    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
-      recur_flatten(expr, acc, state, cache)
-    end)
-  end
-
-  defp recur_flatten(map, acc, state, cache) when is_map(map) do
-    map
-    |> Enum.sort()
-    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
-      recur_flatten(expr, acc, state, cache)
-    end)
+  defp do_recur_flatten(container, acc_cache, state) do
+    Nx.Container.reduce(container, acc_cache, &do_recur_flatten(&1, &2, state))
   end
 
   ## Operator handling

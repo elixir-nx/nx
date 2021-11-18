@@ -301,36 +301,19 @@ defmodule Nx.Defn.Tree do
   @doc false
   def args_to_params(args, params) do
     {args, {[], _}} =
-      args_to(args, {params, 0}, fn _arg, {[param | params], i} ->
-        {Expr.parameter(param, :root, i), {params, i + 1}}
-      end)
-
-    args
-  end
-
-  @doc false
-  def args_to_templates(args, params) do
-    {args, []} =
-      args_to(args, params, fn _arg, [param | params] ->
-        {Nx.to_template(param), params}
-      end)
-
-    args
-  end
-
-  defp args_to(args, acc, fun) when is_list(args) do
-    Enum.map_reduce(args, acc, fn
+      Enum.map_reduce(args, {params, 0}, fn
       arg, acc when is_function(arg) -> {arg, acc}
-      arg, acc -> args_to_each(arg, acc, fun)
+      arg, acc -> args_to_param(arg, acc)
     end)
+
+    args
   end
 
-  defp args_to_each(%T{} = tensor, acc, fun),
-    do: fun.(tensor, acc)
+  defp args_to_param(tensor, {[param | params], i}) when is_struct(tensor, T) or is_number(tensor) do
+    {Expr.parameter(param, :root, i), {params, i + 1}}
+  end
 
-  defp args_to_each(number, acc, fun) when is_number(number),
-    do: fun.(number, acc)
-
-  defp args_to_each(container, acc, fun),
-    do: Nx.Container.traverse(container, acc, &args_to_each(&1, &2, fun))
+  defp args_to_param(container, acc) do
+    Nx.Container.traverse(container, acc, &args_to_param/2)
+  end
 end

@@ -31,6 +31,51 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
+  describe "containers" do
+    defn container_as_input(%Container{a: a, b: b}) do
+      a * b
+    end
+
+    defn update_container(var, x) do
+      %{var | b: x}
+    end
+
+    defn dot_container(container) do
+      container.a * container.b
+    end
+
+    defn container_with_map_tuple(%Container{a: {x, y}, b: %{} = b}) do
+      %{a: a, b: b} = b
+      x * y * a * b
+    end
+
+    test "matched as input" do
+      inp = %Container{a: Nx.tensor(5), b: Nx.tensor(3)}
+
+      assert container_as_input(inp) == Nx.tensor(15)
+    end
+
+    test "updated" do
+      inp = %Container{a: Nx.tensor(1), b: 2, c: :reset, d: :keep}
+
+      assert %Container{a: a, b: b, c: c, d: d} = update_container(inp, Nx.tensor(8))
+      assert a == Nx.tensor(1)
+      assert b == Nx.tensor(8)
+      assert c == nil
+      assert d == :keep
+    end
+
+    test "can be used with dot syntax" do
+      inp = %Container{a: Nx.tensor(1), b: 2}
+      assert dot_container(inp) == Nx.tensor(2)
+    end
+
+    test "can be used with nested collections" do
+      inp = %Container{a: {Nx.tensor(1), Nx.tensor(2)}, b: %{a: Nx.tensor(3), b: Nx.tensor(4)}}
+      assert container_with_map_tuple(inp) == Nx.tensor(24)
+    end
+  end
+
   describe "stream" do
     defn defn_sum(entry, acc), do: {acc, entry + acc}
 
@@ -159,6 +204,23 @@ defmodule EXLA.Defn.APITest do
       assert_raise RuntimeError,
                    "cannot recv from stream because it has been terminated",
                    fn -> Nx.Stream.recv(stream) end
+    end
+
+    defn container_stream(%Container{a: a} = elem, %Container{b: b} = acc) do
+      {%{elem | a: a + b}, %{acc | b: a + b}}
+    end
+
+    test "container in and out" do
+      args = [%Container{a: 0, b: 0, c: :reset, d: :elem}, %Container{a: 0, b: 0, d: :acc}]
+      %_{} = stream = EXLA.stream(&container_stream/2, args)
+
+      assert Nx.Stream.send(stream, %Container{a: 1, b: -1}) == :ok
+      assert Nx.Stream.recv(stream) == %Container{a: Nx.tensor(1), b: Nx.tensor(-1), d: :elem}
+
+      assert Nx.Stream.send(stream, %Container{a: 2, b: -2}) == :ok
+      assert Nx.Stream.recv(stream) == %Container{a: Nx.tensor(3), b: Nx.tensor(-2), d: :elem}
+
+      assert Nx.Stream.done(stream) == %Container{a: Nx.tensor(0), b: Nx.tensor(3), d: :acc}
     end
   end
 end
