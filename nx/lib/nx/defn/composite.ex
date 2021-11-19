@@ -155,6 +155,15 @@ defmodule Nx.Defn.Composite do
     from_compile_args(args, [arg | cache], vars)
   end
 
+  defp from_compile_args([arg | args], cache, vars) when is_tuple(arg) do
+    if arg |> Tuple.to_list() |> Enum.all?(&is_function/1) do
+      IO.warn("passing a tuple of anonymous functions to defn is deprecated")
+      from_compile_args(args, [arg | cache], vars)
+    else
+      from_compile_args(args, cache, [arg | vars])
+    end
+  end
+
   defp from_compile_args([arg | args], cache, vars) do
     from_compile_args(args, cache, [arg | vars])
   end
@@ -175,7 +184,9 @@ defmodule Nx.Defn.Composite do
   def args_to_params(args, params) do
     {args, {[], _}} =
       Enum.map_reduce(args, {params, 0}, fn
-        arg, acc when is_function(arg) ->
+        arg, acc
+        when is_function(arg)
+        when is_tuple(arg) and is_function(elem(arg, 0)) ->
           {arg, acc}
 
         arg, acc ->

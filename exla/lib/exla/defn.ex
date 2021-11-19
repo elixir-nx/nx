@@ -283,7 +283,9 @@ defmodule EXLA.Defn do
 
   defp used_inputs(%T{data: %Expr{id: id}} = t, {seen, used}) do
     case seen do
-      %{^id => true} -> {seen, used}
+      %{^id => true} ->
+        {seen, used}
+
       %{} ->
         acc = {Map.put(seen, id, true), used}
 
