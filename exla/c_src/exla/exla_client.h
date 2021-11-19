@@ -32,20 +32,15 @@ class ExlaDevice {
 
 class ExlaBuffer {
  public:
-  ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
-             bool can_be_released_after_run_ = false);
+  ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer);
 
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
-
-  bool release_after_run() { return can_be_released_after_run_; }
-
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
-
+  xla::Status BlockHostUntilReady();
   xla::Status Deallocate();
 
  private:
   std::unique_ptr<xla::PjRtBuffer> buffer_;
-  bool can_be_released_after_run_;
 };
 
 class ExlaExecutable {
@@ -75,8 +70,7 @@ class ExlaClient {
 
   xla::PjRtClient* client() { return client_.get(); }
 
-  // Compiles the given computation with the given compile
-  // options
+  // Compiles the given computation with the given compile options
   xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation&,
                                          std::vector<xla::Shape*> argument_layouts,
                                          xla::ExecutableBuildOptions& options,
@@ -84,8 +78,7 @@ class ExlaClient {
 
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(const ErlNifBinary& binary,
                                               xla::Shape& shape,
-                                              int device_id,
-                                              bool can_be_released_after_run);
+                                              int device_id);
 
   std::vector<ExlaDevice*> GetDevices();
 
