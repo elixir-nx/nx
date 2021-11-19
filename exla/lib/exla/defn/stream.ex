@@ -83,17 +83,13 @@ defmodule EXLA.Defn.Stream do
       :ok = EXLA.Client.to_infeed(client, device_id, [{<<1::8-native>>, pred} | data_and_shapes])
     end
 
-    defp nx_to_io(%Nx.Tensor{} = tensor),
-      do: [Nx.to_binary(tensor)]
-
-    defp nx_to_io(map) when is_map(map),
-      do: map |> Enum.sort() |> Enum.flat_map(fn {_, v} -> nx_to_io(v) end)
-
-    defp nx_to_io(tuple) when is_tuple(tuple),
-      do: tuple |> Tuple.to_list() |> Enum.flat_map(&nx_to_io/1)
-
-    defp nx_to_io(other),
-      do: [other |> Nx.to_tensor() |> Nx.to_binary()]
+    defp nx_to_io(container) do
+      container
+      |> Nx.Defn.Composite.reduce([], fn tensor, acc ->
+        [tensor |> Nx.to_tensor() |> Nx.to_binary() | acc]
+      end)
+      |> Enum.reverse()
+    end
 
     def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv: recv, recv_shapes: shapes}) do
       if pid != self() do
@@ -143,8 +139,8 @@ defmodule EXLA.Defn.Stream do
           receive do
             {^ref, result} ->
               Process.demonitor(ref, [:flush])
-              tensors = EXLA.Defn.Buffer.to_nx!(result, done)
-              if keep_on_device, do: tensors, else: Nx.backend_transfer(tensors)
+              fun = if keep_on_device, do: & &1, else: &Nx.backend_transfer/1
+              EXLA.Defn.Buffer.to_nx!(result, done, fun)
           end
       end
     end

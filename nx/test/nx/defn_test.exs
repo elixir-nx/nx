@@ -69,6 +69,15 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
     end
+
+    defn nested_tuple_shape_match_signature({a, {b, c}}) do
+      a + b + c
+    end
+
+    test "allows nested pattern matching on the tuple shape on signature" do
+      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [_, _]}} =
+               nested_tuple_shape_match_signature({1, {2.0, 3.0}})
+    end
   end
 
   describe "map" do
@@ -182,109 +191,6 @@ defmodule Nx.DefnTest do
     end
   end
 
-  describe "structs" do
-    defmodule StructTest do
-      import Nx.Defn
-      alias __MODULE__, as: S
-
-      defstruct [:a, :b]
-
-      @default_defn_compiler Identity
-
-      defn struct_match_signature(%S{a: a, b: b}) do
-        a + b
-      end
-
-      defn struct_match_alias(%S{} = var) do
-        %S{a: a, b: b} = var
-        a + b
-      end
-
-      defn struct_match_in_body(var) do
-        %S{a: a, b: b} = var
-        a + b
-      end
-
-      defn struct_dot(var) do
-        var.a + var.b
-      end
-
-      defn return_struct(x, y) do
-        %S{a: x + y, b: x - y}
-      end
-
-      defn struct_update_struct(var, x) do
-        %S{var | b: x}
-      end
-
-      defn struct_update_map(var, x) do
-        %{var | b: x}
-      end
-    end
-
-    test "struct can match in signature" do
-      inp = %StructTest{a: Nx.tensor(1), b: Nx.tensor(2)}
-
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
-               StructTest.struct_match_signature(inp)
-
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
-    end
-
-    test "struct can match alias" do
-      inp = %StructTest{a: 1, b: 2}
-
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
-               StructTest.struct_match_alias(inp)
-
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
-    end
-
-    test "struct can match in body" do
-      inp = %StructTest{a: 1, b: 2}
-
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
-               StructTest.struct_match_in_body(inp)
-
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
-    end
-
-    test "struct can use dot" do
-      inp = %StructTest{a: 1, b: 2}
-
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :add, args: [left, right]}} =
-               StructTest.struct_dot(inp)
-
-      assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
-      assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:s, 64}} = right
-    end
-
-    test "struct can be returned" do
-      assert %StructTest{a: a, b: b} = StructTest.return_struct(1, 2.0)
-
-      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :add, args: [left, right]}} = a
-
-      assert %T{shape: {}, type: {:f, 32}, data: %Expr{op: :subtract, args: [^left, ^right]}} = b
-    end
-
-    test "struct can be updated" do
-      inp = %StructTest{a: 1, b: 2.0}
-
-      assert %StructTest{a: a, b: b} = StructTest.struct_update_struct(inp, 8)
-
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [0]}} = a
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [2]}} = b
-
-      assert %StructTest{a: a, b: b} = StructTest.struct_update_map(inp, 8)
-
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [0]}} = a
-      assert %T{shape: {}, type: {:s, 64}, data: %Expr{op: :parameter, args: [2]}} = b
-    end
-  end
-
   describe "anonymous functions args" do
     defn calls_binary_fun(fun, a, b), do: fun.(a, b)
 
@@ -312,10 +218,6 @@ defmodule Nx.DefnTest do
 
       assert %T{data: %Expr{op: :parameter, args: [0]}, type: {:s, 64}} = left
       assert %T{data: %Expr{op: :parameter, args: [1]}, type: {:f, 32}} = right
-
-      assert_raise ArgumentError,
-                   ~r"Anonymous functions are only allowed as direct arguments to defn",
-                   fn -> calls_tuple_fun({&Nx.add/2, 0}, 1, 2.0) end
     end
   end
 
@@ -1342,11 +1244,8 @@ defmodule Nx.DefnTest do
     end
 
     test "raises if it doesn't return an expression" do
-      assert_raise ArgumentError,
-                   "defn must return a tensor expression or a tuple, got: :ok",
-                   fn ->
-                     Nx.Defn.jit(fn -> :ok end, [], compiler: Evaluator).()
-                   end
+      assert_raise Protocol.UndefinedError,
+                   fn -> Nx.Defn.jit(fn -> :ok end, [], compiler: Evaluator).() end
     end
 
     defn jit_iota(), do: Nx.iota({3, 3})

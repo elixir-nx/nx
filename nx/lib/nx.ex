@@ -589,6 +589,10 @@ defmodule Nx do
   Templates are useful when you need to pass types and shapes to
   operations and the data is not yet available.
 
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
+  and recursively converts all tensors to templates.
+
   ## Examples
 
       iex> Nx.iota({2, 3}) |> Nx.to_template()
@@ -618,8 +622,10 @@ defmodule Nx do
   To build a template from scratch, use `template/3`.
   """
   @doc type: :conversion
-  def to_template(tensor_or_tuple_or_map) do
-    to_tensor(tensor_or_tuple_or_map, &%T{to_tensor(&1) | data: %Nx.TemplateBackend{}})
+  def to_template(tensor_or_container) do
+    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
+      %{to_tensor(tensor) | data: %Nx.TemplateBackend{}}
+    end)
   end
 
   @doc """
@@ -1419,25 +1425,6 @@ defmodule Nx do
 
   def to_tensor(t) do
     raise ArgumentError, "expected a %Nx.Tensor{} or a number, got: #{inspect(t)}"
-  end
-
-  defp to_tensor(%T{} = tensor, fun) do
-    fun.(tensor)
-  end
-
-  defp to_tensor(map, fun) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, to_tensor(v, fun)} end)
-  end
-
-  defp to_tensor(tuple, fun) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&to_tensor(&1, fun))
-    |> List.to_tuple()
-  end
-
-  defp to_tensor(other, fun) do
-    fun.(other)
   end
 
   @doc """
@@ -2557,9 +2544,10 @@ defmodule Nx do
 
   The data in the tensor is ignored.
 
-  A collection of tensors, wrapped in tuples or maps, can also be given
-  as arguments and they will match as long they have the same shape and
-  keys.
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
+  and recursively compares them, observing their container data
+  structures are also the same.
 
   ## Examples
 
@@ -2599,11 +2587,9 @@ defmodule Nx do
       false
 
   """
-  def compatible?(left, right) do
-    tensor_compatible?(to_tensor(left, &to_tensor/1), to_tensor(right, &to_tensor/1))
-  end
+  def compatible?(left, right)
 
-  defp tensor_compatible?(%T{} = left, %T{} = right) do
+  def compatible?(%T{} = left, %T{} = right) do
     %{type: type, shape: shape, names: left_names} = left
 
     case to_tensor(right) do
@@ -2615,22 +2601,9 @@ defmodule Nx do
     end
   end
 
-  defp tensor_compatible?(left, right) when tuple_size(left) == tuple_size(right) do
-    Tuple.to_list(left)
-    |> Enum.zip(Tuple.to_list(right))
-    |> Enum.all?(fn {l, r} -> tensor_compatible?(l, r) end)
-  end
-
-  defp tensor_compatible?(left, right) when map_size(left) == map_size(right) do
-    Enum.all?(left, fn {k, v1} ->
-      case right do
-        %{^k => v2} -> tensor_compatible?(v1, v2)
-        %{} -> false
-      end
-    end)
-  end
-
-  defp tensor_compatible?(_, _), do: false
+  def compatible?(left, right) when is_number(left), do: compatible?(to_tensor(left), right)
+  def compatible?(left, right) when is_number(right), do: compatible?(left, to_tensor(right))
+  def compatible?(left, right), do: Nx.Defn.Composite.compatible?(left, right, &compatible?/2)
 
   defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
   defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)
@@ -2804,37 +2777,22 @@ defmodule Nx do
   you may want to use `backend_transfer/2`, unless you explicitly
   want to copy the data.
 
-  For convenience, this function accepts tuples and maps as arguments
-  and copies all tensors in them. This behaviour exists as it is
-  common to transfer data from tuples before and after `defn` functions.
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
+  and recursively copies all tensors in them. This behaviour exists
+  as it is common to transfer data before and after `defn` functions.
 
   *Note: `Nx.default_backend/1` does not affect the behaviour of
   this function.
   """
   @doc type: :backend
-  def backend_copy(tensor_or_tuple_or_map, backend \\ Nx.Tensor) do
-    {backend, options} = backend!(backend)
-    backend_copy(tensor_or_tuple_or_map, backend, options)
-  end
+  def backend_copy(tensor_or_container, backend \\ Nx.Tensor) do
+    {backend, opts} = backend!(backend)
 
-  defp backend_copy(tuple, backend, opts) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&backend_copy(&1, backend, opts))
-    |> List.to_tuple()
-  end
-
-  defp backend_copy(%T{} = tensor, backend, opts) do
-    impl!(tensor).backend_copy(tensor, backend, opts)
-  end
-
-  defp backend_copy(map, backend, opts) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, backend_copy(v, backend, opts)} end)
-  end
-
-  defp backend_copy(tensor, backend, opts) do
-    tensor = to_tensor(tensor)
-    impl!(tensor).backend_copy(tensor, backend, opts)
+    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
+      tensor = to_tensor(tensor)
+      impl!(tensor).backend_copy(tensor, backend, opts)
+    end)
   end
 
   @doc """
@@ -2856,7 +2814,8 @@ defmodule Nx do
   implies the data is copied from the GPU to the Erlang VM
   and then deallocated from the device.
 
-  For convenience, this function accepts maps and tuples as arguments
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
   and transfers all tensors in them. This behaviour exists as it is
   common to transfer data from tuples and maps before and after `defn`
   functions.
@@ -2876,29 +2835,13 @@ defmodule Nx do
 
   """
   @doc type: :backend
-  def backend_transfer(tensor_or_tuple_or_map, backend \\ Nx.Tensor) do
+  def backend_transfer(tensor_or_container, backend \\ Nx.Tensor) do
     {backend, opts} = backend!(backend)
-    backend_transfer(tensor_or_tuple_or_map, backend, opts)
-  end
 
-  defp backend_transfer(tuple, backend, opts) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&backend_transfer(&1, backend, opts))
-    |> List.to_tuple()
-  end
-
-  defp backend_transfer(%T{} = tensor, backend, opts) do
-    impl!(tensor).backend_transfer(tensor, backend, opts)
-  end
-
-  defp backend_transfer(map, backend, opts) when is_map(map) do
-    Map.new(map, fn {k, v} -> {k, backend_transfer(v, backend, opts)} end)
-  end
-
-  defp backend_transfer(tensor, backend, opts) do
-    tensor = to_tensor(tensor)
-    impl!(tensor).backend_transfer(tensor, backend, opts)
+    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
+      tensor = to_tensor(tensor)
+      impl!(tensor).backend_transfer(tensor, backend, opts)
+    end)
   end
 
   @doc """
@@ -2906,33 +2849,20 @@ defmodule Nx do
 
   It returns either `:ok` or `:already_deallocated`.
 
-  For convenience, this function accepts tuples and maps as arguments
+  For convenience, this function accepts tensors and any container
+  (such as maps and tuples as defined by the `Nx.Container` protocol)
   and deallocates all devices in them. This behaviour exists as it is
-  common to deallocate data from tuples and maps after `defn` functions.
+  common to deallocate data after `defn` functions.
   """
   @doc type: :backend
-  def backend_deallocate(tensor_or_tuple_or_map)
-
-  def backend_deallocate(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.map(&backend_deallocate/1)
-
-    :ok
-  end
-
-  def backend_deallocate(%T{} = tensor) do
-    impl!(tensor).backend_deallocate(tensor)
-  end
-
-  def backend_deallocate(map) when is_map(map) do
-    Enum.map(map, fn {_, v} -> backend_deallocate(v) end)
-    :ok
-  end
-
-  def backend_deallocate(tensor) do
-    tensor = to_tensor(tensor)
-    impl!(tensor).backend_deallocate(tensor)
+  def backend_deallocate(tensor_or_container) do
+    Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn tensor, :ok ->
+      if is_number(tensor) do
+        :ok
+      else
+        impl!(tensor).backend_deallocate(tensor)
+      end
+    end)
   end
 
   ## Element-wise binary ops

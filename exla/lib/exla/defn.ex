@@ -1,7 +1,7 @@
 defmodule EXLA.Defn do
   @moduledoc false
 
-  alias Nx.Defn.{Expr, Tree}
+  alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
   @doc false
@@ -14,13 +14,13 @@ defmodule EXLA.Defn do
     client = EXLA.Client.fetch!(client_name)
 
     # The input vars should not be converted to buffers as they come from infeed
-    input_vars = Nx.Defn.Tree.flatten_list([input])
+    input_vars = Nx.Defn.Composite.flatten_list([input])
     input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_vars, &nx_to_shape!/1))
-    acc_vars = Nx.Defn.Tree.flatten_list([acc])
+    acc_vars = Nx.Defn.Composite.flatten_list([acc])
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
     comp_fun = &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, compile_options)
 
-    {inputs, {:tuple, [output, acc_output]}, {executable, output_shape}} =
+    {inputs, {output, acc_output}, {executable, output_shape}} =
       compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
 
     # Execution of streams requires the coordination of
@@ -254,7 +254,7 @@ defmodule EXLA.Defn do
     {expr, {used_inputs, outputs}} =
       EXLA.Defn.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
-        {expr, {used_inputs(expr), EXLA.Defn.Buffer.to_template(expr)}}
+        {expr, {used_inputs(expr), Nx.to_template(expr)}}
       end)
 
     {non_buffers, used_inputs} = to_split.(vars, used_inputs)
@@ -274,17 +274,24 @@ defmodule EXLA.Defn do
   end
 
   defp used_inputs(expr) do
-    {_, {_, used_inputs}} = Tree.composite(expr, {%{}, %{}}, &used_inputs/2)
+    {_, used_inputs} = Composite.reduce(expr, {%{}, %{}}, &used_inputs/2)
     used_inputs |> Map.keys() |> Enum.sort()
   end
 
-  defp used_inputs(%T{data: %Expr{op: :parameter, args: [i], context: :root}} = t, {seen, used}),
-    do: {t, {seen, Map.put(used, i, true)}}
+  defp used_inputs(%T{data: %Expr{op: :parameter, args: [i], context: :root}}, {seen, used}),
+    do: {seen, Map.put(used, i, true)}
 
   defp used_inputs(%T{data: %Expr{id: id}} = t, {seen, used}) do
     case seen do
-      %{^id => true} -> {t, {seen, used}}
-      %{} -> Tree.traverse_args(t, {Map.put(seen, id, true), used}, &used_inputs/2)
+      %{^id => true} ->
+        {seen, used}
+
+      %{} ->
+        acc = {Map.put(seen, id, true), used}
+
+        t
+        |> Tree.apply_args(acc, &{&1, used_inputs(&1, &2)})
+        |> elem(1)
     end
   end
 
@@ -312,38 +319,13 @@ defmodule EXLA.Defn do
   end
 
   defp recur_flatten(composite, state, cache) do
-    {acc, cache} = recur_flatten(composite, [], state, cache)
+    {acc, cache} =
+      Composite.reduce(composite, {[], cache}, fn %T{} = expr, {acc, cache} ->
+        {expr, cache} = recur_operator(expr, state, cache)
+        {[expr | acc], cache}
+      end)
+
     {EXLA.Op.tuple(state.builder, Enum.reverse(acc)), cache}
-  end
-
-  defp recur_flatten(%T{} = expr, acc, state, cache) do
-    {expr, cache} = recur_operator(expr, state, cache)
-    {[expr | acc], cache}
-  end
-
-  defp recur_flatten(tuple, acc, state, cache) when is_tuple(tuple) do
-    list = Tuple.to_list(tuple)
-
-    Enum.reduce(list, {acc, cache}, fn expr, {acc, cache} ->
-      recur_flatten(expr, acc, state, cache)
-    end)
-  end
-
-  defp recur_flatten(map, acc, state, cache) when is_struct(map) do
-    map
-    |> Map.from_struct()
-    |> Enum.sort()
-    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
-      recur_flatten(expr, acc, state, cache)
-    end)
-  end
-
-  defp recur_flatten(map, acc, state, cache) when is_map(map) do
-    map
-    |> Enum.sort()
-    |> Enum.reduce({acc, cache}, fn {_, expr}, {acc, cache} ->
-      recur_flatten(expr, acc, state, cache)
-    end)
   end
 
   ## Operator handling
@@ -396,7 +378,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
-    {args, cache} = Tree.traverse_args(expr, cache, &recur_operator(&1, state, &2))
+    {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
   end
 
@@ -1240,7 +1222,7 @@ defmodule EXLA.Defn do
   defp collect_ids(%T{data: %Expr{id: id}} = t, ids) do
     case ids do
       %{^id => true} -> {t, ids}
-      %{} -> Tree.traverse_args(t, Map.put(ids, id, true), &collect_ids/2)
+      %{} -> Tree.apply_args(t, Map.put(ids, id, true), &collect_ids/2)
     end
   end
 
@@ -1265,7 +1247,7 @@ defmodule EXLA.Defn do
 
       true ->
         {args, {cache, ids}} =
-          Tree.traverse_args(expr, {cache, ids}, &collect_args(&1, &2, pred_ids))
+          Tree.apply_args(expr, {cache, ids}, &collect_args(&1, &2, pred_ids))
 
         expr = put_in(expr.data.args, args)
         {expr, {Map.put(cache, id, expr), ids}}
@@ -1273,7 +1255,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, {_cache, ids_args}} = Tree.composite(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
+    {expr, {_cache, ids_args}} = Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
 
     {args, cache} =

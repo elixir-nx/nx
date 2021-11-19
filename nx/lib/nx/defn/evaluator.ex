@@ -6,18 +6,18 @@ defmodule Nx.Defn.Evaluator do
   """
 
   @behaviour Nx.Defn.Compiler
-  alias Nx.Defn.{Expr, Tree}
+  alias Nx.Defn.{Composite, Expr, Tree}
 
   @creation_ops [:constant, :eye, :iota, :from_binary]
   @random_ops [:random_uniform, :random_normal]
 
   @impl true
   def __stream__(key, input, acc, vars, fun, opts) do
-    dynamic = Nx.Defn.Tree.flatten_list([input, acc])
-    vars = Enum.drop(vars, length(dynamic))
+    count = Nx.Defn.Composite.count(input) + Nx.Defn.Composite.count(acc)
+    vars = Enum.drop(vars, count)
 
     Nx.Defn.Stream.start_link(input, acc, fn input, acc ->
-      vars = Nx.Defn.Tree.flatten_list([input, acc], vars)
+      vars = Nx.Defn.Composite.from_runtime_args([input, acc], vars)
       __jit__(key, vars, fun, opts)
     end)
   end
@@ -80,7 +80,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(id, op, ans, vars, cache) do
-    {args, cache} = Tree.traverse_args(ans, cache, &eval(&1, vars, &2))
+    {args, cache} = Tree.apply_args(ans, cache, &eval(&1, vars, &2))
 
     {mod, args} =
       cond do
@@ -116,7 +116,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp composite_eval(composite, vars, cache) do
-    Tree.composite(composite, cache, &eval(&1, vars, &2))
+    Composite.traverse(composite, cache, &eval(&1, vars, &2))
   end
 
   defp composite_to_vars(composite) do

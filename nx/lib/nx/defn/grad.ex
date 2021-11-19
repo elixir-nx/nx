@@ -1,13 +1,12 @@
 defmodule Nx.Defn.Grad do
   @moduledoc false
 
-  alias Nx.Defn.{Expr, Tree}
+  alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
   def transform(to_grad, fun, transform) do
     {to_grad, ids} =
-      Tree.composite(to_grad, %{}, fn to_grad, ids ->
-        validate_grad!(to_grad)
+      Composite.traverse(to_grad, %{}, fn to_grad, ids ->
         to_grad = Expr.metadata(to_grad, %{__MODULE__ => :to_grad})
         {to_grad, Map.put(ids, to_grad.data.id, :to_grad)}
       end)
@@ -29,7 +28,7 @@ defmodule Nx.Defn.Grad do
     # We do so by encoding special nodes in the Expr
     # AST and unpack them as we verify.
     graded =
-      Tree.composite(to_grad, fn to_grad ->
+      Composite.traverse(to_grad, fn to_grad ->
         id = to_grad.data.id
         {graded, _, _} = zerofy_ids(graded, %{}, Map.delete(ids, id))
 
@@ -41,14 +40,6 @@ defmodule Nx.Defn.Grad do
       end)
 
     {expr, graded}
-  end
-
-  defp validate_grad!(%T{data: %Expr{}} = t), do: t
-
-  defp validate_grad!(other) do
-    raise ArgumentError,
-          "the first argument of grad must be a tensor expression or a tuple of tensor expressions, " <>
-            "got: #{inspect(other)}"
   end
 
   defp validate_expr!(%T{data: %Expr{}} = expr) do
@@ -73,7 +64,7 @@ defmodule Nx.Defn.Grad do
   defp stop_grads(%T{data: %Expr{id: id}}, ids),
     do: Map.put(ids, id, :stop)
 
-  defp stop_grads(%_{}, ids),
+  defp stop_grads(%T{}, ids),
     do: ids
 
   defp stop_grads(map, ids) when is_map(map),
@@ -120,7 +111,7 @@ defmodule Nx.Defn.Grad do
 
   defp zerofy_each(t, cache, ids) do
     {args, {cache, tainted?}} =
-      Tree.traverse_args(t, {cache, false}, fn arg, {cache, acc_tainted?} ->
+      Tree.apply_args(t, {cache, false}, fn arg, {cache, acc_tainted?} ->
         {arg, cache, tainted?} = zerofy_ids(arg, cache, ids)
         {arg, {cache, tainted? or acc_tainted?}}
       end)
@@ -143,7 +134,7 @@ defmodule Nx.Defn.Grad do
   # computation. Both are important to reduce the amount of nodes
   # in the AST.
   defp to_grad(expr, res, cache) do
-    Tree.composite(expr, cache, fn
+    Composite.traverse(expr, cache, fn
       %T{data: %Expr{id: id, op: op, args: args}} = ans, {result_cache, no_g_cache} = cache ->
         key = [id | res.data.id]
 

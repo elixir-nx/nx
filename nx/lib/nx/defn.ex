@@ -127,21 +127,17 @@ defmodule Nx.Defn do
 
   ## Inputs and outputs types
 
-  The arguments to `defn` functions must be either tensors, numbers,
-  or anonymous functions. `defn` also supports two composite data
-  types as arguments:
+  `Nx` and `defn` expect the arguments to be numbers, tensors,
+  or one of the following composite data types:
 
-    1. tuples of number/tensors or tuples of anonymous functions
-    2. maps of any ley with number/tensors as values
+    1. tuples of numbers/tensors
+    2. maps of any key with numbers/tensors as values
+    3. any struct that implements `Nx.Container`
 
   When numbers are given as arguments, they are always immediately
   converted to tensors on invocation. If you want to keep numbers
-  as is or if you want to pass any other values to numerical
-  definitions, they must be given as default arguments (see next
-  subsection).
-
-  `defn` functions can only return tensors, tuples of tensors, or
-  maps of tensors.
+  as is or if you want to pass any other value to numerical definitions,
+  they must be given as default arguments (see next subsection).
 
   ### Default arguments
 
@@ -163,15 +159,21 @@ defmodule Nx.Defn do
   you have to use transforms, as described in the "Invoking custom Elixir
   code" section.
 
-  When it comes to JIT compilation, it is important to notice that each
-  different set of options will lead to a different compilation of the
-  numerical function. Also note that, if tensors are given as default
-  arguments, the whole tensor will be used as the compilation key. So
-  even if you pass different tensors with the same type and shape, it
-  will lead to different compilation artifacts. For this reason, it
-  is **extremely discouraged to pass tensors through default arguments**.
+  Additionally, `defn` supports anonymous as a direct input, without wrapping
+  in a default argument.
 
-  ### Working with maps
+  > **Important!** When it comes to JIT compilation, each different set of
+  > options and anonymous functions will lead to a different compilation of
+  > the numerical function.
+  >
+  > Furthermore, if tensors are given through default arguments, they won't
+  > be cached effectively. Tensors in `defn` are cached based on their shape
+  > and type, not their value, but this is not true if the tensor is given
+  > via a default argument or captured by an anonymous function. For this
+  > reason, it is **extremely discouraged to pass tensors through anonymous
+  > functions and default arguments**.
+
+  ### Working with maps and structs
 
   While `Nx` supports maps in `defn`, you must be careful if your numerical
   definitions are receiving maps and returning maps. For example, imagine
@@ -299,7 +301,7 @@ defmodule Nx.Defn do
       when is_function(fun) and is_list(args) and is_list(opts) do
     case args do
       [input, acc | args] ->
-        acc = Nx.Defn.Tree.composite(acc, &Nx.to_tensor/1)
+        acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
         Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, opts)
 
       _ ->
