@@ -9,11 +9,9 @@ skip_tpu_tests =
     do: [:unsupported_dilated_reduce_window, :unsupported_64_bit_op],
     else: []
 
-if client.platform == :host and client.device_count == 1 do
-  cores = System.schedulers_online()
-
+if client.platform == :host and client.device_count == 1 and System.schedulers_online() > 1 do
   IO.puts(
-    "To run multi-device tests, set XLA_FLAGS=--xla_force_host_platform_device_count=#{cores}"
+    "To run multi-device tests: XLA_FLAGS=--xla_force_host_platform_device_count=#{System.schedulers_online()} mix test"
   )
 end
 

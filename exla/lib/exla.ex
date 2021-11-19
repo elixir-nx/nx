@@ -84,9 +84,8 @@ defmodule EXLA do
       `:host` (CPU), `:cuda`, `:rocm`, or `:tpu`.
 
     * `:default_device_id` - the default device ID to run on.
-      For example, if you have two GPUs, you can choose one as
-      the default. The default is zero, which means one of the
-      existing devices will be picked.
+      For example, if you have two GPUs, you can choose a different
+      one as the default. Defaults to device 0 (the first device).
 
     * `:preallocate`- if the memory should be preallocated on
       GPU devices. Defaults to `true`.
