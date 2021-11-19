@@ -237,9 +237,6 @@ defmodule EXLA.NIF do
   def get_device_count(_client),
     do: :erlang.nif_error(:undef)
 
-  def get_devices(_client),
-    do: :erlang.nif_error(:undef)
-
   def build(_builder, _root),
     do: :erlang.nif_error(:undef)
 

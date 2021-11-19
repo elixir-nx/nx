@@ -201,19 +201,6 @@ xla::StatusOr<ExlaExecutable*> ExlaClient::Compile(const xla::XlaComputation& co
   return new ExlaExecutable(std::move(executable), std::move(fingerprint), this);
 }
 
-std::vector<ExlaDevice*> ExlaClient::GetDevices() {
- absl::Span<xla::PjRtDevice* const> pjrt_devices = client_->devices();
-
-  std::vector<ExlaDevice*> devices;
-  devices.reserve(pjrt_devices.size());
-  for (auto pjrt_device : pjrt_devices) {
-    ExlaDevice* device = new ExlaDevice(pjrt_device, this);
-    devices.push_back(device);
-  }
-
-  return devices;
-}
-
 xla::Status ExlaClient::TransferToInfeed(ErlNifEnv* env,
                                          ERL_NIF_TERM data,
                                          const xla::Shape& shape,

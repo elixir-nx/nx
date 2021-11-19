@@ -8,8 +8,8 @@ defmodule EXLA.Client do
   use GenServer
   @name __MODULE__
 
-  @enforce_keys [:ref, :platform, :name, :device_count, :devices, :default_device_id]
-  defstruct [:ref, :platform, :name, :device_count, :devices, :default_device_id]
+  @enforce_keys [:ref, :platform, :name, :device_count, :default_device_id]
+  defstruct [:ref, :platform, :name, :device_count, :default_device_id]
 
   @doc """
   Fetches a client with the given `name` from configuration.
@@ -178,7 +178,6 @@ defmodule EXLA.Client do
       |> unwrap!()
 
     device_count = EXLA.NIF.get_device_count(ref) |> unwrap!()
-    devices = EXLA.NIF.get_devices(ref) |> unwrap!()
 
     if default_device_id not in 0..(device_count - 1) do
       raise ArgumentError, ":default_device_id must be a number between 0 and #{device_count - 1}"
@@ -189,7 +188,6 @@ defmodule EXLA.Client do
       platform: platform,
       name: name,
       device_count: device_count,
-      devices: devices,
       default_device_id: default_device_id
     }
   end

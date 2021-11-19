@@ -43,14 +43,6 @@ void free_exla_client(ErlNifEnv* env, void * obj) {
   }
 }
 
-void free_exla_device(ErlNifEnv* env, void * obj) {
-  exla::ExlaDevice** device = reinterpret_cast<exla::ExlaDevice**>(obj);
-  if (*device != nullptr) {
-    delete *device;
-    *device = nullptr;
-  }
-}
-
 void free_exla_buffer(ErlNifEnv* env, void * obj) {
   exla::ExlaBuffer** buffer = reinterpret_cast<exla::ExlaBuffer**>(obj);
   if (*buffer != nullptr) {
@@ -81,9 +73,6 @@ static int open_resources(ErlNifEnv* env) {
     return -1;
   }
   if (!exla::nif::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
-    return -1;
-  }
-  if (!exla::nif::open_resource<exla::ExlaDevice*>(env, mod, "ExlaDevice", free_exla_device)) {
     return -1;
   }
   return 1;
@@ -2112,30 +2101,6 @@ ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return exla::nif::ok(env, exla::nif::make(env, device_count));
 }
 
-ERL_NIF_TERM get_devices(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::ExlaClient** client;
-
-  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
-    return exla::nif::error(env, "Unable to get client.");
-  }
-
-  std::vector<exla::ExlaDevice*> devices = (*client)->GetDevices();
-  int num_devices = devices.size();
-
-  std::vector<ERL_NIF_TERM> terms;
-  terms.reserve(num_devices);
-  for (auto device : devices) {
-    ERL_NIF_TERM term = exla::nif::make<exla::ExlaDevice*>(env, device);
-    terms.push_back(term);
-  }
-
-  return exla::nif::ok(env, enif_make_list_from_array(env, &terms[0], num_devices));
-}
-
 ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 0) {
     return exla::nif::error(env, "Bad argument count.");
@@ -2279,7 +2244,6 @@ static ErlNifFunc exla_funcs[] = {
   {"get_gpu_client", 2, get_gpu_client},
   {"get_tpu_client", 0, get_tpu_client},
   {"get_device_count", 1, get_device_count},
-  {"get_devices", 1, get_devices},
   {"get_supported_platforms", 0, get_supported_platforms},
   {"compile", 7, compile},
   // ExlaBuffer
