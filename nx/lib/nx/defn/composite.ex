@@ -163,37 +163,27 @@ defmodule Nx.Defn.Composite do
 
   @doc false
   def from_runtime_args(args, tail) do
-    # We want to allocate all inputs on the backend, so we use Nx.tensor/1
     flatten_list(args, tail, &Nx.tensor/1)
   end
 
   @doc false
-  def to_result(%T{data: %Expr{}} = t),
-    do: t
-
-  def to_result(number) when is_number(number),
-    do: Expr.tensor(number)
-
-  def to_result(other),
-    do: other |> Nx.Container.traverse(:ok, &{to_result(&1), &2}) |> elem(0)
+  def to_result(container) do
+    traverse(container, &Expr.tensor/1)
+  end
 
   @doc false
   def args_to_params(args, params) do
     {args, {[], _}} =
       Enum.map_reduce(args, {params, 0}, fn
-        arg, acc when is_function(arg) -> {arg, acc}
-        arg, acc -> args_to_param(arg, acc)
+        arg, acc when is_function(arg) ->
+          {arg, acc}
+
+        arg, acc ->
+          traverse(arg, acc, fn _, {[param | params], i} ->
+            {Expr.parameter(param, :root, i), {params, i + 1}}
+          end)
       end)
 
     args
-  end
-
-  defp args_to_param(tensor, {[param | params], i})
-       when is_struct(tensor, T) or is_number(tensor) do
-    {Expr.parameter(param, :root, i), {params, i + 1}}
-  end
-
-  defp args_to_param(container, acc) do
-    Nx.Container.traverse(container, acc, &args_to_param/2)
   end
 end

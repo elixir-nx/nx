@@ -84,17 +84,12 @@ defmodule EXLA.Defn.Stream do
     end
 
     defp nx_to_io(container) do
-      container |> nx_to_io([]) |> Enum.reverse()
+      container
+      |> Nx.Defn.Composite.reduce([], fn tensor, acc ->
+        [tensor |> Nx.to_tensor() |> Nx.to_binary() | acc]
+      end)
+      |> Enum.reverse()
     end
-
-    defp nx_to_io(%Nx.Tensor{} = tensor, acc),
-      do: [Nx.to_binary(tensor) | acc]
-
-    defp nx_to_io(number, acc) when is_number(number),
-      do: [number |> Nx.to_tensor() |> Nx.to_binary() | acc]
-
-    defp nx_to_io(container, acc),
-      do: Nx.Container.reduce(container, acc, &nx_to_io/2)
 
     def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv: recv, recv_shapes: shapes}) do
       if pid != self() do

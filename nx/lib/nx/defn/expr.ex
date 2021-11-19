@@ -264,25 +264,17 @@ defmodule Nx.Defn.Expr do
   defp flatten_to_composite(out, context, [head | _], fun) when is_tuple(head) do
     size = tuple_size(head)
     expr = fun.(tuple_out(size))
-    {out, {[], ^size}} = flatten_to_composite(out, {Tuple.to_list(head), 0}, context, size, expr)
+
+    {out, {[], ^size}} =
+      Composite.traverse(out, {Tuple.to_list(head), 0}, fn _, {[head | tail], i} ->
+        {expr(head, context, :elem, [expr, i, size]), {tail, i + 1}}
+      end)
+
     out
   end
 
   defp flatten_to_composite(_out, _context, [head | _], fun) do
     fun.(head)
-  end
-
-  defp flatten_to_composite(%T{}, {[head | tail], i}, context, size, expr) do
-    {expr(head, context, :elem, [expr, i, size]), {tail, i + 1}}
-  end
-
-  defp flatten_to_composite(number, {[head | tail], i}, context, size, expr)
-       when is_number(number) do
-    {expr(head, context, :elem, [expr, i, size]), {tail, i + 1}}
-  end
-
-  defp flatten_to_composite(out, acc, context, size, expr) do
-    Nx.Container.traverse(out, acc, &flatten_to_composite(&1, &2, context, size, expr))
   end
 
   ## Nx.Backend Callbacks
@@ -291,7 +283,7 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def from_binary(binary, type, _options) do
-    tensor(Nx.BinaryBackend.from_binary(binary, type, []))
+    to_expr(Nx.BinaryBackend.from_binary(binary, type, []))
   end
 
   @impl true

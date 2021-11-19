@@ -623,13 +623,10 @@ defmodule Nx do
   """
   @doc type: :conversion
   def to_template(tensor_or_container) do
-    {template, :ok} = to_template(tensor_or_container, :ok)
-    template
+    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
+      %{to_tensor(tensor) | data: %Nx.TemplateBackend{}}
+    end)
   end
-
-  defp to_template(%T{} = tensor, :ok), do: {%{tensor | data: %Nx.TemplateBackend{}}, :ok}
-  defp to_template(number, :ok) when is_number(number), do: to_template(to_tensor(number), :ok)
-  defp to_template(container, :ok), do: Nx.Container.traverse(container, :ok, &to_template/2)
 
   @doc """
   Shortcut for `random_uniform(shape, 0.0, 1.0, opts)`.

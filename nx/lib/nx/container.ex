@@ -90,16 +90,6 @@ defimpl Nx.Container, for: Map do
   end
 end
 
-defimpl Nx.Container, for: [Nx.Tensor, Integer, Float] do
-  def traverse(tensor, acc, fun) do
-    fun.(tensor, acc)
-  end
-
-  def reduce(tensor, acc, fun) do
-    fun.(tensor, acc)
-  end
-end
-
 defimpl Nx.Container, for: Any do
   defmacro __deriving__(module, struct, options) do
     containers = Keyword.fetch!(options, :containers)

@@ -317,17 +317,13 @@ defmodule EXLA.Defn do
   end
 
   defp recur_flatten(composite, state, cache) do
-    {acc, cache} = do_recur_flatten(composite, {[], cache}, state)
+    {acc, cache} =
+      Composite.reduce(composite, {[], cache}, fn %T{} = expr, {acc, cache} ->
+        {expr, cache} = recur_operator(expr, state, cache)
+        {[expr | acc], cache}
+      end)
+
     {EXLA.Op.tuple(state.builder, Enum.reverse(acc)), cache}
-  end
-
-  defp do_recur_flatten(%T{} = expr, {acc, cache}, state) do
-    {expr, cache} = recur_operator(expr, state, cache)
-    {[expr | acc], cache}
-  end
-
-  defp do_recur_flatten(container, acc_cache, state) do
-    Nx.Container.reduce(container, acc_cache, &do_recur_flatten(&1, &2, state))
   end
 
   ## Operator handling

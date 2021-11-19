@@ -5,29 +5,26 @@ defmodule EXLA.Defn.Buffer do
   EXLA.Buffer -> Nx.
   """
   def to_nx!(buffers, outputs, fun \\ & &1) do
-    {res, []} = each_to_nx!(outputs, buffers, fun)
+    {res, []} =
+      Nx.Defn.Composite.traverse(outputs, buffers, fn
+        %Nx.Tensor{} = hole, [%EXLA.Buffer{shape: shape} = buffer | acc] ->
+          nx_type = to_nx_type(shape.dtype)
+          nx_shape = shape.dims
+
+          if hole.type != nx_type do
+            raise "internal bug! Nx.Defn expected a tensor with type #{inspect(hole.type)} " <>
+                    "but got #{inspect(nx_type)}"
+          end
+
+          if hole.shape != nx_shape do
+            raise "internal bug! Nx.Defn expected a tensor with shape #{inspect(hole.shape)} " <>
+                    "but got #{inspect(nx_shape)}"
+          end
+
+          {fun.(%{hole | data: buffer_to_data(buffer)}), acc}
+      end)
+
     res
-  end
-
-  defp each_to_nx!(%Nx.Tensor{} = hole, [%EXLA.Buffer{shape: shape} = buffer | acc], fun) do
-    nx_type = to_nx_type(shape.dtype)
-    nx_shape = shape.dims
-
-    if hole.type != nx_type do
-      raise "internal bug! Nx.Defn expected a tensor with type #{inspect(hole.type)} " <>
-              "but got #{inspect(nx_type)}"
-    end
-
-    if hole.shape != nx_shape do
-      raise "internal bug! Nx.Defn expected a tensor with shape #{inspect(hole.shape)} " <>
-              "but got #{inspect(nx_shape)}"
-    end
-
-    {fun.(%{hole | data: buffer_to_data(buffer)}), acc}
-  end
-
-  defp each_to_nx!(container, acc, fun) do
-    Nx.Container.traverse(container, acc, &each_to_nx!(&1, &2, fun))
   end
 
   defp buffer_to_data(%EXLA.Buffer{ref: ref, data: nil}),
