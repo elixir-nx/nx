@@ -195,16 +195,16 @@ defmodule Nx.Defn.TreeTest do
     end
   end
 
-  describe "traverse_args" do
+  describe "apply_args" do
     test "handles regular operations" do
       expr = Expr.add(Nx.tensor([0, 1]), Nx.tensor([1, 2]), Nx.tensor([2, 3]))
-      {[arg1, arg2], acc} = Tree.traverse_args(expr, [], &{&1, [&1.data.id | &2]})
+      {[arg1, arg2], acc} = Tree.apply_args(expr, [], &{&1, [&1.data.id | &2]})
       assert acc == [arg2.data.id, arg1.data.id]
     end
 
     test "handles concatenate" do
       expr = Expr.concatenate(Nx.tensor(1), [Nx.tensor(2), Nx.tensor(3)], 0)
-      {[[arg1, arg2], 0], acc} = Tree.traverse_args(expr, [], &{&1, [&1.data.id | &2]})
+      {[[arg1, arg2], 0], acc} = Tree.apply_args(expr, [], &{&1, [&1.data.id | &2]})
       assert acc == [arg2.data.id, arg1.data.id]
     end
   end

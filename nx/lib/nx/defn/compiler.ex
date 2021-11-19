@@ -83,7 +83,7 @@ defmodule Nx.Defn.Compiler do
 
   defp runtime(fun, args, opts) do
     {compiler, opts} = Keyword.pop(opts, :compiler, Nx.Defn.Evaluator)
-    tensors = Nx.Defn.Tree.from_runtime_args(args, [])
+    tensors = Nx.Defn.Composite.from_runtime_args(args, [])
     runtime_fun = &runtime_fun(&1, fun, args, compiler)
     {compiler, [tensors, runtime_fun, opts]}
   end
@@ -96,11 +96,11 @@ defmodule Nx.Defn.Compiler do
     Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      args = Nx.Defn.Tree.args_to_params(args, tensors)
+      args = Nx.Defn.Composite.args_to_params(args, tensors)
 
       fun
       |> apply(args)
-      |> Nx.Defn.Tree.to_result()
+      |> Nx.Defn.Composite.to_result()
     after
       Process.delete(Nx.Defn.Compiler)
     end
@@ -195,20 +195,20 @@ defmodule Nx.Defn.Compiler do
         else
           fun = unquote(fun)
           args = unquote(fn_args)
-          {cache, tensors} = Nx.Defn.Tree.from_compile_args(args, fun)
+          {cache, tensors} = Nx.Defn.Composite.from_compile_args(args, fun)
 
           unquote(def_module).__jit__(
             cache,
-            Nx.Defn.Tree.from_runtime_args(tensors, []),
+            Nx.Defn.Composite.from_runtime_args(tensors, []),
             fn tensors ->
               Process.put(Nx.Defn.Compiler, unquote(def_module))
 
               try do
-                args = Nx.Defn.Tree.args_to_params(args, tensors)
+                args = Nx.Defn.Composite.args_to_params(args, tensors)
 
                 fun
                 |> apply(args)
-                |> Nx.Defn.Tree.to_result()
+                |> Nx.Defn.Composite.to_result()
               after
                 Process.delete(Nx.Defn.Compiler)
               end

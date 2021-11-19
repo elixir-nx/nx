@@ -73,6 +73,7 @@ defmodule Nx.MixProject do
         ],
         Compilers: [
           Nx.Defn.Compiler,
+          Nx.Defn.Composite,
           Nx.Defn.Evaluator,
           Nx.Defn.Expr,
           Nx.Defn.Tree

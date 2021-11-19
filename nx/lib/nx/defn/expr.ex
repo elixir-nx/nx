@@ -11,8 +11,8 @@ defmodule Nx.Defn.Expr do
     * `:context` - the context of the expression.
       The default context is `:root`.
 
-  Convenience functions for traversing expressions can be found
-  in `Nx.Defn.Tree`.
+  Convenience functions for traversing expressions and composite types
+  can be found in `Nx.Defn.Composite` and `Nx.Defn.Tree`.
 
   ## Syntax nodes
 
@@ -39,10 +39,10 @@ defmodule Nx.Defn.Expr do
 
     * `while(initial, condition, body)`
 
-  Custom compilers must handle said nodes accordingly.
+  `defn` compilers must handle said nodes accordingly.
   """
 
-  alias Nx.Defn.{Expr, Tree}
+  alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
   import Nx.Shared
@@ -105,7 +105,7 @@ defmodule Nx.Defn.Expr do
   args must be a list of parameter nodes.
   """
   def fun(context, args, body, {_, _, _} = mfa) do
-    case Tree.composite(body, &to_expr/1) do
+    case Composite.traverse(body, &to_expr/1) do
       %T{} = tensor ->
         expr(tensor, context, :fun, [args, tensor, mfa])
 
@@ -129,6 +129,8 @@ defmodule Nx.Defn.Expr do
 
   @doc """
   Creates a tuple given by the shapes in `tuple` that point to `expr`.
+
+  Each element of the tuple is expected to be a tensor expression.
   """
   def tuple(tuple, %T{type: {:tuple, size}, data: %{context: context}} = expr)
       when is_tuple(tuple) and tuple_size(tuple) == size do
@@ -153,7 +155,7 @@ defmodule Nx.Defn.Expr do
 
     [last | exprs] =
       [last | exprs]
-      |> Enum.map(&Tree.flatten_list([&1]))
+      |> Enum.map(&Composite.flatten_list([&1]))
       |> Enum.zip_with(&broadcast_clause/1)
       |> unzip_clauses()
 
@@ -209,7 +211,7 @@ defmodule Nx.Defn.Expr do
       for {meta, {pred, expr}} <- clauses do
         pred = to_pred(pred, meta[:line], file, :cond)
 
-        if not Tree.compatible?(last, expr, fn _, _ -> true end) do
+        if not Composite.compatible?(last, expr, fn _, _ -> true end) do
           raise CompileError,
             line: meta[:line],
             file: file,
@@ -226,17 +228,17 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def while(file, line, initial, condition, body) do
-    initial = Tree.composite(initial, &to_expr/1)
+    initial = Composite.traverse(initial, &to_expr/1)
 
     {arg, {_counter, context}} =
-      Tree.composite(initial, {0, nil}, fn expr, {counter, acc} ->
+      Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
         {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
 
     condition = to_pred(condition.(arg), line, file, :while)
-    body = arg |> body.() |> Tree.composite(&to_expr/1)
+    body = arg |> body.() |> Composite.traverse(&to_expr/1)
 
-    if not Tree.compatible?(initial, body, &Nx.compatible?/2) do
+    if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
       raise CompileError,
         line: line,
         file: file,
@@ -252,7 +254,7 @@ defmodule Nx.Defn.Expr do
 
   defp flatten_clauses(clauses) do
     Enum.map(clauses, fn expr ->
-      case Tree.flatten_list([expr]) do
+      case Composite.flatten_list([expr]) do
         [single] -> single
         list -> List.to_tuple(list)
       end
@@ -981,7 +983,7 @@ defmodule Nx.Defn.Expr do
   @impl true
   def inspect(tensor, opts) do
     {_, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
-    {_, {exprs, params, _var_map, _cache}} = Tree.traverse_args(tensor, acc, &inspect_expr/2)
+    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(tensor, acc, &inspect_expr/2)
 
     all = Enum.reverse(params, Enum.reverse(exprs))
     header = concat(line(), color("Nx.Defn.Expr", :map, opts))
@@ -1023,12 +1025,12 @@ defmodule Nx.Defn.Expr do
   end
 
   defp traverse_args(:while, %T{data: %{args: [initial, _, _, _]}}, acc) do
-    {initial, acc} = Tree.composite(initial, acc, &inspect_expr/2)
+    {initial, acc} = Composite.traverse(initial, acc, &inspect_expr/2)
     {[initial], acc}
   end
 
   defp traverse_args(_op, t, acc) do
-    Tree.traverse_args(t, acc, &inspect_expr/2)
+    Tree.apply_args(t, acc, &inspect_expr/2)
   end
 
   defp inspect_args(:while, [initial], var_map) do

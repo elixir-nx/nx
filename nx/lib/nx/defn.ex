@@ -301,7 +301,7 @@ defmodule Nx.Defn do
       when is_function(fun) and is_list(args) and is_list(opts) do
     case args do
       [input, acc | args] ->
-        acc = Nx.Defn.Tree.composite(acc, &Nx.to_tensor/1)
+        acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)
         Nx.Defn.Compiler.__stream__(fun, Nx.to_template(input), acc, args, opts)
 
       _ ->

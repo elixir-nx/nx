@@ -2606,7 +2606,7 @@ defmodule Nx do
 
   def compatible?(left, right) when is_number(left), do: compatible?(to_tensor(left), right)
   def compatible?(left, right) when is_number(right), do: compatible?(left, to_tensor(right))
-  def compatible?(left, right), do: Nx.Defn.Tree.compatible?(left, right, &compatible?/2)
+  def compatible?(left, right), do: Nx.Defn.Composite.compatible?(left, right, &compatible?/2)
 
   defp compatible_names?([name | lnames], [name | rnames]), do: compatible_names?(lnames, rnames)
   defp compatible_names?([nil | lnames], [_ | rnames]), do: compatible_names?(lnames, rnames)
@@ -2790,23 +2790,12 @@ defmodule Nx do
   """
   @doc type: :backend
   def backend_copy(tensor_or_container, backend \\ Nx.Tensor) do
-    {backend, options} = backend!(backend)
-    backend_copy(tensor_or_container, backend, options)
-  end
+    {backend, opts} = backend!(backend)
 
-  defp backend_copy(%T{} = tensor, backend, opts) do
-    impl!(tensor).backend_copy(tensor, backend, opts)
-  end
-
-  defp backend_copy(number, backend, opts) when is_number(number) do
-    tensor = to_tensor(number)
-    impl!(tensor).backend_copy(tensor, backend, opts)
-  end
-
-  defp backend_copy(container, backend, opts) do
-    container
-    |> Nx.Container.traverse(:ok, fn t, :ok -> {backend_copy(t, backend, opts), :ok} end)
-    |> elem(0)
+    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
+      tensor = to_tensor(tensor)
+      impl!(tensor).backend_copy(tensor, backend, opts)
+    end)
   end
 
   @doc """
@@ -2851,22 +2840,11 @@ defmodule Nx do
   @doc type: :backend
   def backend_transfer(tensor_or_container, backend \\ Nx.Tensor) do
     {backend, opts} = backend!(backend)
-    backend_transfer(tensor_or_container, backend, opts)
-  end
 
-  defp backend_transfer(%T{} = tensor, backend, opts) do
-    impl!(tensor).backend_transfer(tensor, backend, opts)
-  end
-
-  defp backend_transfer(number, backend, opts) when is_number(number) do
-    tensor = to_tensor(number)
-    impl!(tensor).backend_transfer(tensor, backend, opts)
-  end
-
-  defp backend_transfer(container, backend, opts) do
-    container
-    |> Nx.Container.traverse(:ok, fn t, :ok -> {backend_transfer(t, backend, opts), :ok} end)
-    |> elem(0)
+    Nx.Defn.Composite.traverse(tensor_or_container, fn tensor ->
+      tensor = to_tensor(tensor)
+      impl!(tensor).backend_transfer(tensor, backend, opts)
+    end)
   end
 
   @doc """
@@ -2881,19 +2859,13 @@ defmodule Nx do
   """
   @doc type: :backend
   def backend_deallocate(tensor_or_container) do
-    backend_deallocate(tensor_or_container, :ok)
-  end
-
-  defp backend_deallocate(%T{} = tensor, :ok) do
-    impl!(tensor).backend_deallocate(tensor)
-  end
-
-  defp backend_deallocate(number, :ok) when is_number(number) do
-    :ok
-  end
-
-  defp backend_deallocate(container, :ok) do
-    Nx.Container.reduce(container, :ok, &backend_deallocate/2)
+    Nx.Defn.Composite.reduce(tensor_or_container, :ok, fn tensor, :ok ->
+      if is_number(tensor) do
+        :ok
+      else
+        impl!(tensor).backend_deallocate(tensor)
+      end
+    end)
   end
 
   ## Element-wise binary ops
