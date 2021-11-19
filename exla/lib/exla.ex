@@ -81,17 +81,18 @@ defmodule EXLA do
   Each client configuration accepts the following options:
 
     * `:platform` - the platform the client runs on. It can be
-      `:host` (CPU), `:cuda`, `:rocm`, or `:tpu`
+      `:host` (CPU), `:cuda`, `:rocm`, or `:tpu`.
 
     * `:default_device_id` - the default device ID to run on.
       For example, if you have two GPUs, you can choose one as
-      the default
+      the default. The default is zero, which means one of the
+      existing devices will be picked.
 
     * `:preallocate`- if the memory should be preallocated on
-      GPU devices. Defaults to `true`
+      GPU devices. Defaults to `true`.
 
     * `:memory_fraction` - how much memory of a GPU device to
-      allocate. Defaults to `0.9.`
+      allocate. Defaults to `0.9`.
 
   ### GPU Runtime Issues
 
