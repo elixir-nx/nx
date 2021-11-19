@@ -46,8 +46,8 @@ defmodule EXLA.Defn.Buffer do
       %Nx.Tensor{data: data} = tensor
 
       case data do
-        %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.buffer(ref, to_exla_shape(tensor))
-        _ -> EXLA.Buffer.buffer(Nx.to_binary(tensor), to_exla_shape(tensor))
+        %EXLA.DeviceBackend{state: ref} -> EXLA.Buffer.from_ref(ref, to_exla_shape(tensor))
+        _ -> EXLA.Buffer.from_binary(Nx.to_binary(tensor), to_exla_shape(tensor))
       end
     end
   end

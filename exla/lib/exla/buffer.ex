@@ -13,21 +13,22 @@ defmodule EXLA.Buffer do
   defstruct [:data, :ref, :shape]
 
   @doc false
-  def buffer(binary_or_reference_pair, shape)
-
-  def buffer({reference, client_name}, shape = %Shape{}) when is_reference(reference) do
+  def from_ref({reference, client_name}, shape = %Shape{}) when is_reference(reference) do
     %Buffer{data: nil, ref: {reference, client_name}, shape: shape}
   end
 
-  def buffer(binary, shape = %Shape{}) when is_binary(binary) do
+  @doc """
+  Creates a buffer from binary.
+  """
+  def from_binary(binary, shape = %Shape{}) when is_binary(binary) do
     %Buffer{data: binary, ref: nil, shape: shape}
   end
 
   @doc """
   Places the given `buffer` on the given `device` using `client`.
   """
-  def place_on_device(buffer = %Buffer{}, client = %Client{}, device_id)
-      when is_integer(device_id) do
+  def place_on_device(buffer = %Buffer{data: data}, client = %Client{}, device_id)
+      when is_integer(device_id) when is_binary(data) do
     ref =
       EXLA.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, device_id)
       |> unwrap!()

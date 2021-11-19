@@ -56,10 +56,10 @@ defmodule EXLA.Executable do
 
     Enum.zip_with(data, shapes, fn
       buf, subshape when is_reference(buf) ->
-        Buffer.buffer({buf, client.name}, subshape)
+        Buffer.from_ref({buf, client.name}, subshape)
 
       buf, subshape ->
-        Buffer.buffer(buf, subshape)
+        Buffer.from_binary(buf, subshape)
     end)
   end
 

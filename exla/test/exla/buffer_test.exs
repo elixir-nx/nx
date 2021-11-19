@@ -7,13 +7,13 @@ defmodule EXLA.BufferTest do
 
   describe "buffer" do
     test "place_on_device/3" do
-      b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
+      b1 = Buffer.from_binary(<<1::32>>, Shape.make_shape({:s, 32}, {}))
       assert %Buffer{ref: {ref, :default}} = Buffer.place_on_device(b1, client(), 0)
       assert is_reference(ref)
     end
 
     test "read/2" do
-      b1 = Buffer.buffer(<<1::32, 2::32, 3::32, 4::32>>, Shape.make_shape({:s, 32}, {4}))
+      b1 = Buffer.from_binary(<<1::32, 2::32, 3::32, 4::32>>, Shape.make_shape({:s, 32}, {4}))
       b1 = Buffer.place_on_device(b1, client(), 0)
 
       # non-destructive
@@ -31,7 +31,7 @@ defmodule EXLA.BufferTest do
     end
 
     test "deallocate/1" do
-      b1 = Buffer.buffer(<<1::32>>, Shape.make_shape({:s, 32}, {}))
+      b1 = Buffer.from_binary(<<1::32>>, Shape.make_shape({:s, 32}, {}))
       b1 = Buffer.place_on_device(b1, client(), 0)
 
       assert :ok = Buffer.deallocate(b1.ref)

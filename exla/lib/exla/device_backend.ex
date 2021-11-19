@@ -25,7 +25,7 @@ defmodule EXLA.DeviceBackend do
   def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
     client = EXLA.Client.fetch!(opts[:client] || :default)
     device_id = opts[:device_id] || client.default_device_id
-    buffer = EXLA.Buffer.buffer(binary, EXLA.Shape.make_shape(type, shape))
+    buffer = EXLA.Buffer.from_binary(binary, EXLA.Shape.make_shape(type, shape))
     buffer = EXLA.Buffer.place_on_device(buffer, client, device_id)
     put_in(tensor.data, %DB{state: buffer.ref})
   end
