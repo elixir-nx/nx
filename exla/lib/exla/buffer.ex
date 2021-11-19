@@ -28,7 +28,7 @@ defmodule EXLA.Buffer do
   Places the given `buffer` on the given `device` using `client`.
   """
   def place_on_device(buffer = %Buffer{data: data}, client = %Client{}, device_id)
-      when is_integer(device_id) when is_binary(data) do
+      when is_integer(device_id) and is_binary(data) do
     ref =
       EXLA.NIF.binary_to_device_mem(client.ref, buffer.data, buffer.shape.ref, device_id)
       |> unwrap!()
