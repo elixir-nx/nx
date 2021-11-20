@@ -20,16 +20,6 @@ namespace exla {
 
 class ExlaClient;
 
-class ExlaDevice {
- public:
-  ExlaDevice(xla::PjRtDevice* device, ExlaClient* client) : device_(device),
-                                                            client_(client) {}
-
- private:
-  xla::PjRtDevice* device_;
-  ExlaClient* client_;
-};
-
 class ExlaBuffer {
  public:
   ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
@@ -86,8 +76,6 @@ class ExlaClient {
                                               xla::Shape& shape,
                                               int device_id,
                                               bool can_be_released_after_run);
-
-  std::vector<ExlaDevice*> GetDevices();
 
   // TODO(seanmor5): This is device logic and should be refactored
   xla::Status TransferToInfeed(ErlNifEnv* env,
