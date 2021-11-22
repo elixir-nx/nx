@@ -1826,7 +1826,7 @@ defmodule NxTest do
   describe "indexed_add/3" do
     test "can emulate take_along_axis" do
       # One can also convert the indices produced by argsort into suitable
-      # indices for scatter-add as below.
+      # indices for indexed_add as below.
       # The following example emulates `take_along_axis/3` with `indexed_add/3`
 
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
