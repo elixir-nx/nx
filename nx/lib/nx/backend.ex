@@ -89,8 +89,8 @@ defmodule Nx.Backend do
   @callback map(out :: tensor, tensor, keyword, fun) :: tensor
   @callback sort(out :: tensor, tensor, keyword) :: tensor
   @callback argsort(out :: tensor, tensor, keyword) :: tensor
-  @callback window_scatter_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
-  @callback window_scatter_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
+  @callback window_scatter_max(out :: tensor, tensor, tensor, tensor, shape, keyword) :: tensor
+  @callback window_scatter_min(out :: tensor, tensor, tensor, tensor, shape, keyword) :: tensor
   @callback indexed_add(out :: tensor, tensor, tensor, tensor) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor

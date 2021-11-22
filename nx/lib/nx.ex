@@ -4388,7 +4388,7 @@ defmodule Nx do
       ...>  [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]
       ...> ])
       iex> Nx.window_scatter_max(t, Nx.tensor([[2, 6], [3, 1]]),
-      ...>  {2, 3}, [strides: [2, 3], padding: :valid], 0)
+      ...>  0, {2, 3}, strides: [2, 3], padding: :valid)
       #Nx.Tensor<
         s64[4][6]
         [
@@ -4404,7 +4404,7 @@ defmodule Nx do
       ...>  [1, 5, 7, 5, 6], [0, 6, 2, 10, 2]
       ...> ])
       iex> Nx.window_scatter_max(t, Nx.tensor([[2, 6], [3, 1]]),
-      ...>  {2, 3}, [strides: [2, 2], padding: :valid], 0)
+      ...>  0, {2, 3}, strides: [2, 2], padding: :valid)
       #Nx.Tensor<
         s64[4][5]
         [
@@ -4416,7 +4416,7 @@ defmodule Nx do
       >
   """
   @doc type: :window
-  def window_scatter_max(tensor, source, window_dimensions, opts \\ [], init_value) do
+  def window_scatter_max(tensor, source, init_value, window_dimensions, opts \\ []) do
     opts = keyword!(opts, padding: :valid, strides: 1)
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
 
@@ -4447,9 +4447,9 @@ defmodule Nx do
       %{tensor | type: output_type},
       tensor,
       source,
+      init_value,
       window_dimensions,
-      [padding: padding_config, strides: strides],
-      init_value
+      padding: padding_config, strides: strides
     )
   end
 
@@ -4474,7 +4474,7 @@ defmodule Nx do
       ...>  [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]
       ...> ])
       iex> Nx.window_scatter_min(t, Nx.tensor([[2, 6], [3, 1]]),
-      ...>  {2, 3}, [strides: [2, 3], padding: :valid], 0)
+      ...>  0, {2, 3}, strides: [2, 3], padding: :valid)
       #Nx.Tensor<
         s64[4][6]
         [
@@ -4490,7 +4490,7 @@ defmodule Nx do
       ...>  [1, 5, 7, 5, 6], [0, 6, 2, 10, 2]
       ...> ])
       iex> Nx.window_scatter_min(t, Nx.tensor([[2, 6], [3, 1]]),
-      ...>  {2, 3}, [strides: [2, 2], padding: :valid], 0)
+      ...>  0, {2, 3}, strides: [2, 2], padding: :valid)
       #Nx.Tensor<
         s64[4][5]
         [
@@ -4502,7 +4502,7 @@ defmodule Nx do
       >
   """
   @doc type: :window
-  def window_scatter_min(tensor, source, window_dimensions, opts \\ [], init_value) do
+  def window_scatter_min(tensor, source, init_value, window_dimensions, opts \\ []) do
     opts = keyword!(opts, padding: :valid, strides: 1)
 
     %T{shape: input_shape} = tensor = to_tensor(tensor)
@@ -4532,9 +4532,9 @@ defmodule Nx do
       %{tensor | type: output_type},
       tensor,
       source,
+      init_value,
       window_dimensions,
-      [padding: padding_config, strides: strides],
-      init_value
+      padding: padding_config, strides: strides
     )
   end
 

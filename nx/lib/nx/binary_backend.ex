@@ -1436,7 +1436,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def window_scatter_max(out, tensor, source, window_dimensions, opts, init_value) do
+  def window_scatter_max(out, tensor, source, init_value, window_dimensions, opts) do
     select_and_scatter(
       out,
       tensor,
@@ -1450,7 +1450,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def window_scatter_min(out, tensor, source, window_dimensions, opts, init_value) do
+  def window_scatter_min(out, tensor, source, init_value, window_dimensions, opts) do
     select_and_scatter(
       out,
       tensor,

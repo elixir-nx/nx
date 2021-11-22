@@ -504,29 +504,19 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def window_scatter_max(out, tensor, source, window_dims, opts, init_value) do
+  def window_scatter_max(out, tensor, source, init_value, window_dims, opts) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
-    expr(out, context, :window_scatter_max, [
-      tensor,
-      source,
-      window_dims,
-      opts,
-      init_value
-    ])
+    args = [tensor, source, init_value, window_dims, opts]
+    expr(out, context, :window_scatter_max, args)
   end
 
   @impl true
-  def window_scatter_min(out, tensor, source, window_dims, opts, init_value) do
+  def window_scatter_min(out, tensor, source, init_value, window_dims, opts) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
-    expr(out, context, :window_scatter_min, [
-      tensor,
-      source,
-      window_dims,
-      opts,
-      init_value
-    ])
+    args = [tensor, source, init_value, window_dims, opts]
+    expr(out, context, :window_scatter_min, args)
   end
 
   @impl true

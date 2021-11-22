@@ -424,7 +424,7 @@ defmodule Nx.Defn.Grad do
         do: &Nx.window_scatter_min/5,
         else: &Nx.window_scatter_max/5
 
-    g = fun.(x, g, window_dimensions, [padding: padding, strides: strides], 0)
+    g = fun.(x, g, 0, window_dimensions, padding: padding, strides: strides)
     to_grad(x, g, cache)
   end
 

@@ -778,7 +778,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :window_scatter_max,
-         [arg, source, window_dimensions, opts, init_value],
+         [arg, source, init_value, window_dimensions, opts],
          %{type: type},
          state
        ) do
@@ -808,7 +808,7 @@ defmodule EXLA.Defn do
 
   defp to_operator(
          :window_scatter_min,
-         [arg, source, window_dimensions, opts, init_value],
+         [arg, source, init_value, window_dimensions, opts],
          %{type: type},
          state
        ) do
