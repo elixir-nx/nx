@@ -1106,7 +1106,8 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([[2, 6], [3, 1]]),
         0,
         {2, 3},
-        padding: :valid, strides: [2, 3]
+        padding: :valid,
+        strides: [2, 3]
       )
     end
 
@@ -1128,7 +1129,8 @@ defmodule EXLA.Defn.ExprTest do
           Nx.tensor([[2, 6], [3, 1]]),
           0,
           {2, 3},
-          padding: :valid, strides: [2, 3]
+          padding: :valid,
+          strides: [2, 3]
         )
 
       compare_tensors!(lhs, rhs)
@@ -1140,7 +1142,8 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([[2, 6], [3, 1]]),
         0,
         {2, 3},
-        padding: :valid, strides: [2, 3]
+        padding: :valid,
+        strides: [2, 3]
       )
     end
 
@@ -1162,7 +1165,8 @@ defmodule EXLA.Defn.ExprTest do
           Nx.tensor([[2, 6], [3, 1]]),
           0,
           {2, 3},
-          padding: :valid, strides: [2, 3]
+          padding: :valid,
+          strides: [2, 3]
         )
 
       compare_tensors!(lhs, rhs)

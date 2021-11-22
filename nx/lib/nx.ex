@@ -4449,7 +4449,8 @@ defmodule Nx do
       source,
       init_value,
       window_dimensions,
-      padding: padding_config, strides: strides
+      padding: padding_config,
+      strides: strides
     )
   end
 
@@ -4534,7 +4535,8 @@ defmodule Nx do
       source,
       init_value,
       window_dimensions,
-      padding: padding_config, strides: strides
+      padding: padding_config,
+      strides: strides
     )
   end
 
