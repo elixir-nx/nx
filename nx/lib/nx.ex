@@ -267,27 +267,10 @@ defmodule Nx do
   being `Nx.BinaryBackend`, which means the tensor is allocated
   as a binary within the Erlang VM.
 
-  Backends have multiple purposes, one of them is to keep the
-  tensor allocated elsewhere, such as the GPU. For example,
-  with EXLA, one might want to do:
-
-      @defn_compiler {EXLA, platform: :host, run_options: [keep_on_device: true]}
-      defn softmax(t) do
-        Nx.exp(t) / Nx.sum(Nx.exp(t))
-      end
-
-  The `keep_on_device: true` run option will keep the tensor
-  allocated elsewhere and not as an Elixir binary. You can transfer
-  it back to a binary tensor by calling `backend_transfer/2` or
-  `backend_copy/2`. If you don't intend to use the data for some
-  reason, you can explicitly call `backend_deallocate/1` to
-  deallocate it.
-
-  However, most often backends are used to provide a completely
-  different implementation of tensor operations, often accelerated
-  to the GPU. In such cases, you want to guarantee all tensors
-  are allocated in the new backend. This can be done by configuring
-  your runtime:
+  Most often backends are used to provide a completely different
+  implementation of tensor operations, often accelerated to the GPU.
+  In such cases, you want to guarantee all tensors are allocated in
+  the new backend. This can be done by configuring your runtime:
 
       # config/runtime.exs
       import Config
@@ -2745,6 +2728,11 @@ defmodule Nx do
   This means if you start a separate process, such as `Task`,
   the default backend must be set on the new process too.
 
+  This function is mostly used for scripting and testing. In your
+  applications, you typically set the backend in your config files:
+
+        config :nx, :default_backend, {Lib.CustomBackend, device: :cuda}
+
   ## Examples
 
       iex> Nx.default_backend({Lib.CustomBackend, device: :cuda})
@@ -2757,6 +2745,24 @@ defmodule Nx do
   def default_backend(backend) do
     Process.put(@backend_key, backend!(backend)) ||
       backend!(Application.fetch_env!(:nx, :default_backend))
+  end
+
+  @doc """
+  Sets the default backend globally.
+
+  You must avoid calling this function at runtime. It is mostly
+  useful during scripts or code notebooks to set a default.
+  If you need to configure a global default backend in your
+  applications, you can do so in your `config/*.exs` files:
+
+      config :nx, default_backend: {Lib.CustomBackend, []}
+
+  """
+  @doc type: :backend
+  def global_default_backend(backend) do
+    current = backend!(Application.fetch_env!(:nx, :default_backend))
+    Application.put_env(:nx, :default_backend, backend!(backend))
+    current
   end
 
   @doc """

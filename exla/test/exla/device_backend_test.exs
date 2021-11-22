@@ -12,7 +12,7 @@ defmodule EXLA.DeviceBackendTest do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, EXLA.DeviceBackend)
-    assert %EXLA.DeviceBackend{state: {ref, :default}} = et.data
+    assert %EXLA.DeviceBackend{state: {ref, _}} = et.data
     assert is_reference(ref)
 
     nt = Nx.backend_transfer(et)
@@ -27,7 +27,7 @@ defmodule EXLA.DeviceBackendTest do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, {EXLA.DeviceBackend, device_id: 0})
-    assert %EXLA.DeviceBackend{state: {ref, :default}} = et.data
+    assert %EXLA.DeviceBackend{state: {ref, _}} = et.data
     assert is_reference(ref)
 
     nt = Nx.backend_transfer(et)
@@ -42,7 +42,7 @@ defmodule EXLA.DeviceBackendTest do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, EXLA.DeviceBackend)
-    assert %EXLA.DeviceBackend{state: {ref, :default}} = et.data
+    assert %EXLA.DeviceBackend{state: {ref, _}} = et.data
     assert is_reference(ref)
 
     nt = Nx.backend_copy(et)
@@ -58,7 +58,7 @@ defmodule EXLA.DeviceBackendTest do
     assert inspect(t) =~ ~r"""
            #Nx.Tensor<
              s64\[4\]
-             EXLA.DeviceBackend<\{#Reference<[\d\.]+>, :default}>
+             EXLA.DeviceBackend<\{#Reference<[\d\.]+>, :\w+}>
            >\
            """
   end

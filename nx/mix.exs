@@ -23,7 +23,7 @@ defmodule Nx.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      env: [default_backend: {Nx.BinaryBackend, []}]
+      env: [default_backend: {Nx.BinaryBackend, []}, default_defn_options: []]
     ]
   end
 

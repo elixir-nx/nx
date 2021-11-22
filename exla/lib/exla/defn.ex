@@ -10,7 +10,7 @@ defmodule EXLA.Defn do
     keep_on_device? = Keyword.get(run_options, :keep_on_device, false)
     run_options = Keyword.put(run_options, :keep_on_device, true)
 
-    {client_name, compile_options} = Keyword.pop(compile_options, :client, :default)
+    {client_name, compile_options} = Keyword.pop(compile_options, :client, :host)
     client = EXLA.Client.fetch!(client_name)
 
     # The input vars should not be converted to buffers as they come from infeed
@@ -216,7 +216,7 @@ defmodule EXLA.Defn do
   @doc false
   def __jit__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
-    {client_name, compile_options} = Keyword.pop(compile_options, :client, :default)
+    {client_name, compile_options} = Keyword.pop(compile_options, :client, :host)
     client = EXLA.Client.fetch!(client_name)
     callback = &to_root_computation(key, &1, &2, compile_options)
 

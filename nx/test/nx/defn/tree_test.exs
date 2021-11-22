@@ -6,7 +6,11 @@ defmodule Nx.Defn.TreeTest do
   doctest Nx.Defn.Tree
 
   import Nx.Defn
-  @default_defn_compiler Nx.Defn.Identity
+
+  setup do
+    Nx.Defn.default_options(compiler: Nx.Defn.Identity)
+    :ok
+  end
 
   describe "rewrite_types" do
     test "wraps root parameters" do

@@ -1,8 +1,6 @@
 defmodule MNIST do
   import Nx.Defn
 
-  @default_defn_compiler EXLA
-
   defn init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
     b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
@@ -145,6 +143,8 @@ defmodule MNIST do
     end
   end
 end
+
+EXLA.set_preferred_defn_options([:tpu, :cuda, :rocm, :host])
 
 {train_images, train_labels} =
   MNIST.download('train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz')

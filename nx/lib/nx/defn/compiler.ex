@@ -156,7 +156,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp compile_each({{name, arity} = def, def_meta}, state) do
-    %{compiler: {def_module, def_opts}, defaults: defaults} = def_meta
+    %{defaults: defaults} = def_meta
     {{kind, _meta, args, ast}, state} = get_and_normalize_definition(def, state)
 
     defn_name = defn_name(name)
@@ -194,33 +194,39 @@ defmodule Nx.Defn.Compiler do
         if Process.get(Nx.Defn.Compiler) do
           unquote(defn_name)(unquote_splicing(all_args))
         else
-          fun = unquote(fun)
-          args = unquote(fn_args)
-          {cache, tensors} = Nx.Defn.Composite.from_compile_args(args, fun)
-
-          unquote(def_module).__jit__(
-            cache,
-            Nx.Defn.Composite.from_runtime_args(tensors, []),
-            fn tensors ->
-              Process.put(Nx.Defn.Compiler, unquote(def_module))
-
-              try do
-                args = Nx.Defn.Composite.args_to_params(args, tensors)
-
-                fun
-                |> apply(args)
-                |> Nx.Defn.Composite.to_result()
-              after
-                Process.delete(Nx.Defn.Compiler)
-              end
-            end,
-            unquote(Macro.escape(def_opts))
-          )
+          Nx.Defn.Compiler.__runtime__(unquote(fun), unquote(fn_args))
         end
       end
 
       Kernel.unquote(kind)(unquote(defn_name)(unquote_splicing(defn_args)), do: unquote(ast))
     end
+  end
+
+  @doc false
+  def __runtime__(fun, args) do
+    {compiler, compiler_opts} =
+      Keyword.pop(Nx.Defn.default_options(), :compiler, Nx.Defn.Evaluator)
+
+    {cache, tensors} = Nx.Defn.Composite.from_compile_args(args, fun)
+
+    compiler.__jit__(
+      cache,
+      Nx.Defn.Composite.from_runtime_args(tensors, []),
+      fn tensors ->
+        Process.put(Nx.Defn.Compiler, compiler)
+
+        try do
+          args = Nx.Defn.Composite.args_to_params(args, tensors)
+
+          fun
+          |> apply(args)
+          |> Nx.Defn.Composite.to_result()
+        after
+          Process.delete(Nx.Defn.Compiler)
+        end
+      end,
+      compiler_opts
+    )
   end
 
   defp get_and_normalize_definition(def, state) do

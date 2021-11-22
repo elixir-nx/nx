@@ -6,7 +6,11 @@ defmodule Nx.Defn.ExprTest do
   doctest Nx.Defn.Expr
 
   import Nx.Defn
-  @default_defn_compiler Nx.Defn.Identity
+
+  setup do
+    Nx.Defn.default_options(compiler: Nx.Defn.Identity)
+    :ok
+  end
 
   describe "constant optimizations" do
     test "broadcast" do

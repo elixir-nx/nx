@@ -6,7 +6,10 @@ defmodule EXLA.DeviceBackend do
   `Nx.backend_transfer/2` or `Nx.backend_copy/2`. It
   allows the following options:
 
-    * `:client` - the client to store the data on
+    * `:client` - the client to store the data on.
+      Defaults to the client configured in `Nx.Defn`,
+      otherwise uses `:host`.
+
     * `:device_id` - which device to store it on
 
   To get the data out of the device backend into a regular
@@ -21,9 +24,19 @@ defmodule EXLA.DeviceBackend do
   alias Nx.Tensor, as: T
   alias EXLA.DeviceBackend, as: DB
 
+  defp default_defn_client do
+    opts = Nx.Defn.default_options()
+
+    if opts[:compiler] == EXLA do
+      opts[:client] || :host
+    else
+      :host
+    end
+  end
+
   @impl true
   def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
-    client = EXLA.Client.fetch!(opts[:client] || :default)
+    client = EXLA.Client.fetch!(opts[:client] || default_defn_client())
     device_id = opts[:device_id] || client.default_device_id
     buffer = EXLA.Buffer.from_binary(binary, EXLA.Shape.make_shape(type, shape))
     buffer = EXLA.Buffer.place_on_device(buffer, client, device_id)
