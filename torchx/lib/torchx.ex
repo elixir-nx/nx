@@ -245,6 +245,8 @@ defmodule Torchx do
   deftensor cholesky(tensor, upper)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
+  deftensor triangular_solve(tensor_a, tensor_b, transpose, upper)
+  deftensor determinant(tensor)
 
   ## Dirty non-tensor return values
 

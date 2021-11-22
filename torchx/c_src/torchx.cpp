@@ -163,12 +163,21 @@ NIF(to_blob)
   }
 
   torch::optional<torch::Device> device = torch::device_of(*t);
+  // flatten the tensor to compensate for operations which return
+  // a column-major tensor. t->flatten() is a no-op if the tensor
+  // is already row-major, which was verified by printing t->data_ptr
+  // and reshaped.data_ptr and confirming they had the same value.
+  torch::Tensor reshaped = t->flatten();
+  void * data_ptr = reshaped.data_ptr();
 
-  if(device.has_value() && device.value().type() == torch::kCPU) {
-    return nx::nif::ok(env, enif_make_resource_binary(env, t, t->data_ptr(), byte_size));
-  } else {
+  if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr())
+  {
+    return nx::nif::ok(env, enif_make_resource_binary(env, t, data_ptr, byte_size));
+  }
+  else
+  {
     void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-    memcpy(result_data, t->data_ptr(), byte_size);
+    memcpy(result_data, data_ptr, byte_size);
     return nx::nif::ok(env, result);
   }
 }
@@ -544,6 +553,24 @@ UNARY_OP(erf)
 UNARY_OP(erfc)
 UNARY_OP2(erf_inv, erfinv)
 
+NIF(triangular_solve)
+{
+  TENSOR_PARAM(0, a);
+  TENSOR_PARAM(1, b);
+  PARAM(2, bool, transpose);
+  PARAM(3, bool, upper);
+
+  std::tuple<torch::Tensor, torch::Tensor> result = torch::triangular_solve(*b, *a, upper, transpose);
+
+  TENSOR(std::get<0>(result));
+}
+
+NIF(determinant)
+{
+  TENSOR_PARAM(0, t);
+
+  TENSOR(t->det());
+}
 
 /* Aggregates */
 
@@ -777,6 +804,8 @@ static ErlNifFunc nif_functions[] = {
     DF(cholesky, 2),
     DF(qr, 1),
     DF(qr, 2),
+    DF(triangular_solve, 4),
+    DF(determinant, 1),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),
