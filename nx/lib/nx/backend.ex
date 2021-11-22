@@ -81,7 +81,7 @@ defmodule Nx.Backend do
   @callback argmax(out :: tensor, tensor, keyword) :: tensor
   @callback argmin(out :: tensor, tensor, keyword) :: tensor
   @callback reduce(out :: tensor, tensor, acc :: tensor, keyword, fun) :: tensor
-  @callback reduce_window(out :: tensor, tensor, acc :: tensor, shape, keyword, fun) :: tensor
+  @callback window_reduce(out :: tensor, tensor, acc :: tensor, shape, keyword, fun) :: tensor
   @callback window_sum(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_product(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_max(out :: tensor, tensor, shape, keyword) :: tensor
@@ -89,9 +89,9 @@ defmodule Nx.Backend do
   @callback map(out :: tensor, tensor, keyword, fun) :: tensor
   @callback sort(out :: tensor, tensor, keyword) :: tensor
   @callback argsort(out :: tensor, tensor, keyword) :: tensor
-  @callback scatter_window_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
-  @callback scatter_window_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
-  @callback scatter_add(out :: tensor, tensor, tensor, tensor) :: tensor
+  @callback window_scatter_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
+  @callback window_scatter_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
+  @callback indexed_add(out :: tensor, tensor, tensor, tensor) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor

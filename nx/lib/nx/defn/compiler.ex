@@ -48,7 +48,8 @@ defmodule Nx.Defn.Compiler do
 
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
-                   [:to_binary, :to_scalar, :to_flat_list, :to_heatmap, :to_batched_list]
+                   [:to_binary, :to_scalar, :to_flat_list, :to_heatmap, :to_batched_list] ++
+                   [:from_numpy, :from_numpy_archive, :compatible?, :default_backend]
 
   defguardp is_var(var)
             when is_tuple(var) and tuple_size(var) == 3 and is_atom(elem(var, 0)) and

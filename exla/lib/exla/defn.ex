@@ -753,7 +753,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(
-         :reduce_window,
+         :window_reduce,
          [arg, acc, window_dimensions, opts, fun],
          %{type: type},
          state
@@ -765,7 +765,7 @@ defmodule EXLA.Defn do
     arg = to_type(arg, type)
     comp = recur_computation(fun, type, state)
 
-    EXLA.Op.reduce_window(
+    EXLA.Op.window_reduce(
       arg,
       to_type(acc, type),
       comp,
@@ -777,7 +777,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(
-         :scatter_window_max,
+         :window_scatter_max,
          [arg, source, window_dimensions, opts, init_value],
          %{type: type},
          state
@@ -791,8 +791,8 @@ defmodule EXLA.Defn do
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
 
-    select_fn = to_computation(:scatter_window_max_select, args, state, binary_op_fun(:greater))
-    scatter_fn = to_computation(:scatter_window_max_scatter, args, state, binary_op_fun(:add))
+    select_fn = to_computation(:window_scatter_max_select, args, state, binary_op_fun(:greater))
+    scatter_fn = to_computation(:window_scatter_max_scatter, args, state, binary_op_fun(:add))
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -807,7 +807,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(
-         :scatter_window_min,
+         :window_scatter_min,
          [arg, source, window_dimensions, opts, init_value],
          %{type: type},
          state
@@ -821,8 +821,8 @@ defmodule EXLA.Defn do
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
 
-    select_fn = to_computation(:scatter_window_min_select, args, state, binary_op_fun(:less))
-    scatter_fn = to_computation(:scatter_window_min_scatter, args, state, binary_op_fun(:add))
+    select_fn = to_computation(:window_scatter_min_select, args, state, binary_op_fun(:less))
+    scatter_fn = to_computation(:window_scatter_min_scatter, args, state, binary_op_fun(:add))
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -837,7 +837,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(
-         :scatter_add,
+         :indexed_add,
          [target, indices, updates],
          %{type: type},
          state
@@ -846,7 +846,7 @@ defmodule EXLA.Defn do
     updates = to_type(updates, type)
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    scatter_fn = to_computation(:scatter_add_addition, args, state, binary_op_fun(:add))
+    scatter_fn = to_computation(:indexed_add_addition, args, state, binary_op_fun(:add))
 
     rank = target |> op_shape() |> tuple_size()
     # indices_rank is guaranteed to be 2 by Nx.Shape
@@ -1200,7 +1200,7 @@ defmodule EXLA.Defn do
     padding = opts[:padding]
     window_dilations = opts[:window_dilations]
 
-    EXLA.Op.reduce_window(arg, acc, comp, window_dimensions, strides, window_dilations, padding)
+    EXLA.Op.window_reduce(arg, acc, comp, window_dimensions, strides, window_dilations, padding)
   end
 
   ## Cond

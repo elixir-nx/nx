@@ -477,7 +477,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def reduce_window(
+  def window_reduce(
         %{type: type} = out,
         tensor,
         acc,
@@ -485,15 +485,15 @@ defmodule Nx.Defn.Expr do
         opts,
         fun
       ) do
-    args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
+    args = [parameter(:window_reduce, type, {}, 0), parameter(:window_reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
     fun = fun(context, fun, args)
 
     if fun.shape != {} do
-      raise "reduce_window function must return a scalar tensor, got: #{inspect(fun.shape)}"
+      raise "window_reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
     end
 
-    expr(out, context, :reduce_window, [tensor, acc, window_dims, opts, fun])
+    expr(out, context, :window_reduce, [tensor, acc, window_dims, opts, fun])
   end
 
   @impl true
@@ -504,10 +504,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def scatter_window_max(out, tensor, source, window_dims, opts, init_value) do
+  def window_scatter_max(out, tensor, source, window_dims, opts, init_value) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
-    expr(out, context, :scatter_window_max, [
+    expr(out, context, :window_scatter_max, [
       tensor,
       source,
       window_dims,
@@ -517,10 +517,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def scatter_window_min(out, tensor, source, window_dims, opts, init_value) do
+  def window_scatter_min(out, tensor, source, window_dims, opts, init_value) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
-    expr(out, context, :scatter_window_min, [
+    expr(out, context, :window_scatter_min, [
       tensor,
       source,
       window_dims,
@@ -530,10 +530,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def scatter_add(out, target, indices, updates) do
+  def indexed_add(out, target, indices, updates) do
     {[target, indices, updates], context} = to_exprs([target, indices, updates])
 
-    expr(out, context, :scatter_add, [target, indices, updates])
+    expr(out, context, :indexed_add, [target, indices, updates])
   end
 
   @impl true

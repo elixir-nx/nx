@@ -6,7 +6,7 @@ multi_device =
 
 skip_tpu_tests =
   if client.platform == :tpu,
-    do: [:unsupported_dilated_reduce_window, :unsupported_64_bit_op],
+    do: [:unsupported_dilated_window_reduce, :unsupported_64_bit_op],
     else: []
 
 if client.platform == :host and client.device_count == 1 and System.schedulers_online() > 1 do

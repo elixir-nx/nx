@@ -421,8 +421,8 @@ defmodule Nx.Defn.Grad do
 
     fun =
       if op == :window_min,
-        do: &Nx.scatter_window_min/5,
-        else: &Nx.scatter_window_max/5
+        do: &Nx.window_scatter_min/5,
+        else: &Nx.window_scatter_max/5
 
     g = fun.(x, g, window_dimensions, [padding: padding, strides: strides], 0)
     to_grad(x, g, cache)
@@ -530,7 +530,7 @@ defmodule Nx.Defn.Grad do
     g =
       t
       |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
-      |> Nx.scatter_add(indices, updates)
+      |> Nx.indexed_add(indices, updates)
 
     to_grad(t, g, cache)
   end
@@ -591,7 +591,7 @@ defmodule Nx.Defn.Grad do
     g =
       t
       |> Expr.broadcast(0, Nx.shape(t), Nx.axes(t))
-      |> Nx.scatter_add(indices, updates)
+      |> Nx.indexed_add(indices, updates)
 
     to_grad(t, g, cache)
   end
@@ -603,7 +603,7 @@ defmodule Nx.Defn.Grad do
     indices = Nx.reshape(i, {num_elements, rank})
     updates = Nx.reshape(g, {num_elements})
 
-    g = t |> Expr.broadcast(0, t.shape, Nx.axes(t)) |> Nx.scatter_add(indices, updates)
+    g = t |> Expr.broadcast(0, t.shape, Nx.axes(t)) |> Nx.indexed_add(indices, updates)
 
     to_grad(t, g, cache)
   end
@@ -845,13 +845,13 @@ defmodule Nx.Defn.Grad do
     """
   end
 
-  defp no_g_grad(:reduce_window, _, _) do
+  defp no_g_grad(:window_reduce, _, _) do
     raise ArgumentError, """
-    cannot compute gradient for Nx.reduce_window/5.
+    cannot compute gradient for Nx.window_reduce/5.
 
     If you are computing the sum, max, or similar of a window, use \
     the appropriate Nx functions instead. If you have a custom usage \
-    of reduce_window, consider using stop_grad/1 (making it equivalent \
+    of window_reduce, consider using stop_grad/1 (making it equivalent \
     to the identify function) or using custom_grad/2 (giving it \
     a proper gradient implementation).
     """

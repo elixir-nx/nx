@@ -39,6 +39,7 @@ defmodule Nx.MixProject do
   defp docs do
     [
       main: "Nx",
+      logo: "numbat.png",
       source_ref: "v#{@version}",
       source_url: @source_url,
       groups_for_functions: [
@@ -47,9 +48,11 @@ defmodule Nx.MixProject do
         "Functions: Conversion": &(&1[:type] == :conversion),
         "Functions: Creation": &(&1[:type] in [:creation, :random]),
         "Functions: Element-wise": &(&1[:type] == :element),
+        "Functions: Indexed": &(&1[:type] == :indexed),
         "Functions: N-dim": &(&1[:type] == :ndim),
         "Functions: Shape": &(&1[:type] == :shape),
-        "Functions: Type": &(&1[:type] == :type)
+        "Functions: Type": &(&1[:type] == :type),
+        "Functions: Window": &(&1[:type] == :window)
       ],
       groups_for_modules: [
         # Nx,
@@ -57,12 +60,6 @@ defmodule Nx.MixProject do
         # Nx.Defn.Kernel,
         # Nx.LinAlg,
 
-        Backends: [
-          Nx.Backend,
-          Nx.BinaryBackend,
-          Nx.TemplateBackend,
-          Nx.Type
-        ],
         Protocols: [
           Nx.Container,
           Nx.Stream
@@ -70,6 +67,12 @@ defmodule Nx.MixProject do
         Structs: [
           Nx.Heatmap,
           Nx.Tensor
+        ],
+        Backends: [
+          Nx.Backend,
+          Nx.BinaryBackend,
+          Nx.TemplateBackend,
+          Nx.Type
         ],
         Compilers: [
           Nx.Defn.Compiler,

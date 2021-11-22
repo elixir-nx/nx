@@ -980,29 +980,29 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "reduce window" do
-    defn reduce_window_valid_no_stride(t),
-      do: Nx.reduce_window(t, 0, {2, 2}, fn a, b -> a + b end)
+    defn window_reduce_valid_no_stride(t),
+      do: Nx.window_reduce(t, 0, {2, 2}, fn a, b -> a + b end)
 
-    defn reduce_window_valid_stride(t),
-      do: Nx.reduce_window(t, 0, {2, 2}, [strides: [2, 2]], fn a, b -> a + b end)
+    defn window_reduce_valid_stride(t),
+      do: Nx.window_reduce(t, 0, {2, 2}, [strides: [2, 2]], fn a, b -> a + b end)
 
-    defn reduce_window_same_no_stride(t),
-      do: Nx.reduce_window(t, 0, {2, 2}, [padding: :same], fn a, b -> a + b end)
+    defn window_reduce_same_no_stride(t),
+      do: Nx.window_reduce(t, 0, {2, 2}, [padding: :same], fn a, b -> a + b end)
 
-    defn reduce_window_same_stride(t),
-      do: Nx.reduce_window(t, 0, {2, 2}, [padding: :same, strides: [2, 1]], fn a, b -> a + b end)
+    defn window_reduce_same_stride(t),
+      do: Nx.window_reduce(t, 0, {2, 2}, [padding: :same, strides: [2, 1]], fn a, b -> a + b end)
 
-    defn reduce_window_general_no_stride(t),
-      do: Nx.reduce_window(t, 0, {2, 2}, [padding: [{2, 1}, {1, 2}]], fn a, b -> a + b end)
+    defn window_reduce_general_no_stride(t),
+      do: Nx.window_reduce(t, 0, {2, 2}, [padding: [{2, 1}, {1, 2}]], fn a, b -> a + b end)
 
-    defn reduce_window_general_stride(t) do
-      Nx.reduce_window(t, 0, {2, 2}, [padding: [{1, 2}, {2, 1}], strides: [2, 1]], fn a, b ->
+    defn window_reduce_general_stride(t) do
+      Nx.window_reduce(t, 0, {2, 2}, [padding: [{1, 2}, {2, 1}], strides: [2, 1]], fn a, b ->
         a + b
       end)
     end
 
-    defn reduce_window_nd(t) do
-      Nx.reduce_window(
+    defn window_reduce_nd(t) do
+      Nx.window_reduce(
         t,
         0,
         {1, 2, 1, 2, 1, 2},
@@ -1011,8 +1011,8 @@ defmodule EXLA.Defn.ExprTest do
       )
     end
 
-    defn dilated_reduce_window(t) do
-      Nx.reduce_window(
+    defn dilated_window_reduce(t) do
+      Nx.window_reduce(
         t,
         0,
         {2, 1, 2},
@@ -1024,29 +1024,29 @@ defmodule EXLA.Defn.ExprTest do
     test "valid padding, no stride" do
       t = Nx.iota({6, 7})
 
-      assert reduce_window_valid_no_stride(t) ==
-               Nx.reduce_window(t, 0, {2, 2}, fn a, b -> a + b end)
+      assert window_reduce_valid_no_stride(t) ==
+               Nx.window_reduce(t, 0, {2, 2}, fn a, b -> a + b end)
     end
 
     test "valid padding, stride" do
       t = Nx.iota({11, 10})
 
-      assert reduce_window_valid_stride(t) ==
-               Nx.reduce_window(t, 0, {2, 2}, [strides: [2, 2]], fn a, b -> a + b end)
+      assert window_reduce_valid_stride(t) ==
+               Nx.window_reduce(t, 0, {2, 2}, [strides: [2, 2]], fn a, b -> a + b end)
     end
 
     test "same padding, no stride" do
       t = Nx.iota({3, 3})
 
-      assert reduce_window_same_no_stride(t) ==
-               Nx.reduce_window(t, 0, {2, 2}, [padding: :same], fn a, b -> a + b end)
+      assert window_reduce_same_no_stride(t) ==
+               Nx.window_reduce(t, 0, {2, 2}, [padding: :same], fn a, b -> a + b end)
     end
 
     test "same padding, stride" do
       t = Nx.iota({8, 8})
 
-      assert reduce_window_same_stride(t) ==
-               Nx.reduce_window(t, 0, {2, 2}, [padding: :same, strides: [2, 1]], fn a, b ->
+      assert window_reduce_same_stride(t) ==
+               Nx.window_reduce(t, 0, {2, 2}, [padding: :same, strides: [2, 1]], fn a, b ->
                  a + b
                end)
     end
@@ -1054,15 +1054,15 @@ defmodule EXLA.Defn.ExprTest do
     test "general padding, no stride" do
       t = Nx.iota({3, 3})
 
-      assert reduce_window_general_no_stride(t) ==
-               Nx.reduce_window(t, 0, {2, 2}, [padding: [{2, 1}, {1, 2}]], fn a, b -> a + b end)
+      assert window_reduce_general_no_stride(t) ==
+               Nx.window_reduce(t, 0, {2, 2}, [padding: [{2, 1}, {1, 2}]], fn a, b -> a + b end)
     end
 
     test "general padding, stride" do
       t = Nx.iota({7, 7})
 
-      assert reduce_window_general_stride(t) ==
-               Nx.reduce_window(
+      assert window_reduce_general_stride(t) ==
+               Nx.window_reduce(
                  t,
                  0,
                  {2, 2},
@@ -1074,8 +1074,8 @@ defmodule EXLA.Defn.ExprTest do
     test "n-d reduce window" do
       t = Nx.iota({4, 2, 4, 3, 1, 3})
 
-      assert reduce_window_nd(t) ==
-               Nx.reduce_window(
+      assert window_reduce_nd(t) ==
+               Nx.window_reduce(
                  t,
                  0,
                  {1, 2, 1, 2, 1, 2},
@@ -1084,12 +1084,12 @@ defmodule EXLA.Defn.ExprTest do
                )
     end
 
-    @tag :unsupported_dilated_reduce_window
+    @tag :unsupported_dilated_window_reduce
     test "computes a dilated reduce window" do
       t = Nx.iota({6, 4, 3})
 
-      assert dilated_reduce_window(t) ==
-               Nx.reduce_window(
+      assert dilated_window_reduce(t) ==
+               Nx.window_reduce(
                  t,
                  0,
                  {2, 1, 2},
@@ -1099,9 +1099,9 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "scatter_window_min/max" do
-    defn scatter_window_max_no_padding(t) do
-      Nx.scatter_window_max(
+  describe "window_scatter_min/max" do
+    defn window_scatter_max_no_padding(t) do
+      Nx.window_scatter_max(
         t,
         Nx.tensor([[2, 6], [3, 1]]),
         {2, 3},
@@ -1111,7 +1111,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
-    test "scatter_window_max produces the same result as Nx with no padding" do
+    test "window_scatter_max produces the same result as Nx with no padding" do
       x =
         Nx.tensor([
           [7, 2, 5, 3, 10, 2],
@@ -1120,10 +1120,10 @@ defmodule EXLA.Defn.ExprTest do
           [0, 6, 2, 7, 2, 8]
         ])
 
-      lhs = scatter_window_max_no_padding(x)
+      lhs = window_scatter_max_no_padding(x)
 
       rhs =
-        Nx.scatter_window_max(
+        Nx.window_scatter_max(
           x,
           Nx.tensor([[2, 6], [3, 1]]),
           {2, 3},
@@ -1134,8 +1134,8 @@ defmodule EXLA.Defn.ExprTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn scatter_window_min_no_padding(t) do
-      Nx.scatter_window_min(
+    defn window_scatter_min_no_padding(t) do
+      Nx.window_scatter_min(
         t,
         Nx.tensor([[2, 6], [3, 1]]),
         {2, 3},
@@ -1145,7 +1145,7 @@ defmodule EXLA.Defn.ExprTest do
     end
 
     @tag :unsupported_64_bit_op
-    test "scatter_window_min produces the same result as Nx with no padding" do
+    test "window_scatter_min produces the same result as Nx with no padding" do
       x =
         Nx.tensor([
           [7, 2, 5, 3, 10, 2],
@@ -1154,10 +1154,10 @@ defmodule EXLA.Defn.ExprTest do
           [0, 6, 2, 7, 2, 8]
         ])
 
-      lhs = scatter_window_min_no_padding(x)
+      lhs = window_scatter_min_no_padding(x)
 
       rhs =
-        Nx.scatter_window_min(
+        Nx.window_scatter_min(
           x,
           Nx.tensor([[2, 6], [3, 1]]),
           {2, 3},
@@ -1169,12 +1169,12 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "scatter_add" do
-    defn scatter_add(t, i, u) do
-      Nx.scatter_add(t, i, u)
+  describe "indexed_add" do
+    defn indexed_add(t, i, u) do
+      Nx.indexed_add(t, i, u)
     end
 
-    test "scatter_add works for multi-dim tensor" do
+    test "indexed_add works for multi-dim tensor" do
       target = Nx.broadcast(0, {2, 3, 4})
 
       indices =
@@ -1210,33 +1210,33 @@ defmodule EXLA.Defn.ExprTest do
                  [0, 0, 0, 0],
                  [0, 0, -1, 3]
                ]
-             ]) == scatter_add(target, indices, updates)
+             ]) == indexed_add(target, indices, updates)
     end
 
-    test "scatter_add handles different input types" do
+    test "indexed_add handles different input types" do
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1])
 
-      assert Nx.tensor([1], type: {:s, 64}) == scatter_add(target, indices, updates)
+      assert Nx.tensor([1], type: {:s, 64}) == indexed_add(target, indices, updates)
 
       target = Nx.tensor([0])
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1.0])
 
-      assert Nx.tensor([1.0], type: {:f, 32}) == scatter_add(target, indices, updates)
+      assert Nx.tensor([1.0], type: {:f, 32}) == indexed_add(target, indices, updates)
 
       target = Nx.tensor([0.0])
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1])
 
-      assert Nx.tensor([1.0], type: {:f, 32}) == scatter_add(target, indices, updates)
+      assert Nx.tensor([1.0], type: {:f, 32}) == indexed_add(target, indices, updates)
 
       target = Nx.tensor([0.0], type: {:f, 64})
       indices = Nx.tensor([[0]])
       updates = Nx.tensor([1.0], type: {:f, 32})
 
-      assert Nx.tensor([1.0], type: {:f, 64}) == scatter_add(target, indices, updates)
+      assert Nx.tensor([1.0], type: {:f, 64}) == indexed_add(target, indices, updates)
     end
   end
 
@@ -1564,7 +1564,7 @@ defmodule EXLA.Defn.ExprTest do
                ])
     end
 
-    @tag :unsupported_dilated_reduce_window
+    @tag :unsupported_dilated_window_reduce
     test "computes the sum of a dilated window" do
       t = Nx.iota({8, 10, 12})
 
@@ -1606,7 +1606,7 @@ defmodule EXLA.Defn.ExprTest do
                ])
     end
 
-    @tag :unsupported_dilated_reduce_window
+    @tag :unsupported_dilated_window_reduce
     test "computes the mean of a dilated window" do
       t = Nx.iota({8, 10, 12})
       lhs = dilated_window_mean(t)
@@ -1666,7 +1666,7 @@ defmodule EXLA.Defn.ExprTest do
                ])
     end
 
-    @tag :unsupported_dilated_reduce_window
+    @tag :unsupported_dilated_window_reduce
     test "computes the max of a dilated window" do
       t = Nx.iota({8, 10, 12}, type: {:f, 64})
 
@@ -1723,7 +1723,7 @@ defmodule EXLA.Defn.ExprTest do
                ])
     end
 
-    @tag :unsupported_dilated_reduce_window
+    @tag :unsupported_dilated_window_reduce
     test "computes the min of a dilated window" do
       t = Nx.iota({8, 10, 12})
 
@@ -1769,7 +1769,7 @@ defmodule EXLA.Defn.ExprTest do
                ])
     end
 
-    @tag :unsupported_dilated_reduce_window
+    @tag :unsupported_dilated_window_reduce
     test "computes the product of a dilated window" do
       t = Nx.iota({8, 10, 12})
 

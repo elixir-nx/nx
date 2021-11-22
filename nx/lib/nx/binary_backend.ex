@@ -946,7 +946,7 @@ defmodule Nx.BinaryBackend do
     batch_size = Nx.size(single_data_dims) * input_size
 
     # We will traverse the input tensor exactly the same as we traversed
-    # the binary in reduce_window, but the window is equal to the filter
+    # the binary in window_reduce, but the window is equal to the filter
     # size of the kernel plus the channel size of the input tensor
     window_shape = Tuple.insert_at(filter_shape, 0, num_input_channels)
 
@@ -1343,7 +1343,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def reduce_window(out, tensor, acc, window_dimensions, opts, fun) do
+  def window_reduce(out, tensor, acc, window_dimensions, opts, fun) do
     padding_config = opts[:padding]
     strides = opts[:strides]
     dilations = opts[:window_dilations]
@@ -1383,7 +1383,7 @@ defmodule Nx.BinaryBackend do
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> a + b end
-    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
@@ -1394,7 +1394,7 @@ defmodule Nx.BinaryBackend do
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> max(a, b) end
-    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
@@ -1405,7 +1405,7 @@ defmodule Nx.BinaryBackend do
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> min(a, b) end
-    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
@@ -1416,7 +1416,7 @@ defmodule Nx.BinaryBackend do
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> a * b end
-    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
@@ -1436,7 +1436,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def scatter_window_max(out, tensor, source, window_dimensions, opts, init_value) do
+  def window_scatter_max(out, tensor, source, window_dimensions, opts, init_value) do
     select_and_scatter(
       out,
       tensor,
@@ -1450,7 +1450,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def scatter_window_min(out, tensor, source, window_dimensions, opts, init_value) do
+  def window_scatter_min(out, tensor, source, window_dimensions, opts, init_value) do
     select_and_scatter(
       out,
       tensor,
@@ -1580,7 +1580,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def scatter_add(
+  def indexed_add(
         %T{} = out,
         %T{shape: shape, type: {_, target_size}} = target,
         %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,

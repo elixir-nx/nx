@@ -736,7 +736,7 @@ defmodule NxTest do
     end
   end
 
-  describe "scatter_add" do
+  describe "indexed_add" do
     test "property" do
       n = 5
 
@@ -750,7 +750,7 @@ defmodule NxTest do
       updates = 0..(n * n - 1) |> Enum.map(fn _ -> 1 end) |> Nx.tensor()
 
       assert Nx.broadcast(1, {5, 5}) ==
-               0 |> Nx.broadcast({5, 5}) |> Nx.scatter_add(indices, updates)
+               0 |> Nx.broadcast({5, 5}) |> Nx.indexed_add(indices, updates)
 
       indices =
         Nx.tensor(
@@ -760,7 +760,7 @@ defmodule NxTest do
         )
 
       assert Nx.broadcast(1, {1, 5, 5}) ==
-               0 |> Nx.broadcast({1, 5, 5}) |> Nx.scatter_add(indices, updates)
+               0 |> Nx.broadcast({1, 5, 5}) |> Nx.indexed_add(indices, updates)
     end
 
     test "single-index regression" do
@@ -773,7 +773,7 @@ defmodule NxTest do
       for i <- 0..(n - 1) do
         result = Nx.tensor(List.update_at(zeros, i, fn _ -> 1 end))
 
-        assert result == Nx.scatter_add(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
+        assert result == Nx.indexed_add(Nx.tensor(zeros), Nx.tensor([[i]]), upd)
       end
 
       # 2D case
@@ -791,7 +791,7 @@ defmodule NxTest do
             )
           )
 
-        assert result == Nx.scatter_add(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
+        assert result == Nx.indexed_add(Nx.tensor(zeros), Nx.tensor([[i, i]]), upd)
       end
     end
   end
@@ -1051,25 +1051,25 @@ defmodule NxTest do
     end
   end
 
-  describe "reduce_window/5" do
+  describe "window_reduce/5" do
     test "works with :window_dilations option as an integer" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       opts = [window_dilations: 2]
-      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      out = Nx.window_reduce(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
       assert out == Nx.tensor([[9]])
     end
 
     test "works with :strides option as an integer" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       opts = [strides: 1]
-      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      out = Nx.window_reduce(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
       assert out == Nx.tensor([[5, 6], [8, 9]])
     end
 
     test "works with :padding option as a list of shape-matching integer tuples" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       opts = [padding: [{0, 0}, {0, 1}]]
-      out = Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+      out = Nx.window_reduce(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
       assert Nx.shape(out) == {2, 3}
 
       assert out ==
@@ -1087,7 +1087,7 @@ defmodule NxTest do
         ArgumentError,
         ~r/invalid padding mode specified/,
         fn ->
-          Nx.reduce_window(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
+          Nx.window_reduce(t, 0, {2, 2}, opts, fn x, acc -> max(x, acc) end)
         end
       )
     end
@@ -1823,11 +1823,11 @@ defmodule NxTest do
     end
   end
 
-  describe "scatter_add/3" do
+  describe "indexed_add/3" do
     test "can emulate take_along_axis" do
       # One can also convert the indices produced by argsort into suitable
       # indices for scatter-add as below.
-      # The following example emulates `take_along_axis/3` with `scatter_add/3`
+      # The following example emulates `take_along_axis/3` with `indexed_add/3`
 
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
       axis = 1
@@ -1851,7 +1851,7 @@ defmodule NxTest do
       indices = Nx.concatenate(iotas, axis: 1)
 
       assert Nx.tensor([[5, 4], [3, 2], [1, 0]]) ==
-               Nx.scatter_add(
+               Nx.indexed_add(
                  Nx.broadcast(0, Nx.shape(t)),
                  indices,
                  Nx.reshape(t, {num_elements})

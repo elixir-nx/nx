@@ -509,7 +509,7 @@ defmodule EXLA.Op do
     %Op{builder: builder, ref: ref}
   end
 
-  def reduce_window(
+  def window_reduce(
         %Op{builder: builder, ref: operand},
         %Op{builder: builder, ref: init_value},
         %Computation{ref: reduction},
@@ -520,7 +520,7 @@ defmodule EXLA.Op do
       )
       when is_tuple(window_dimensions) and is_list(window_strides) and is_list(window_dilations) do
     ref =
-      EXLA.NIF.reduce_window(
+      EXLA.NIF.window_reduce(
         operand,
         init_value,
         reduction,

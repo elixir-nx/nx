@@ -118,7 +118,7 @@ defmodule EXLA.NIF do
   def variadic_reduce(_builder, _operands, _init_value, _computation, _dimensions),
     do: :erlang.nif_error(:undef)
 
-  def reduce_window(
+  def window_reduce(
         _operand,
         _init_value,
         _computation,

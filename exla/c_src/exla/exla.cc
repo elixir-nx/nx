@@ -1096,7 +1096,7 @@ ERL_NIF_TERM variadic_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM window_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 7) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -2342,7 +2342,7 @@ static ErlNifFunc exla_funcs[] = {
   // Functional Ops
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},
-  {"reduce_window", 7, reduce_window},
+  {"window_reduce", 7, window_reduce},
   {"select_and_scatter", 8, select_and_scatter},
   {"scatter", 8, scatter},
   {"map", 4, map},

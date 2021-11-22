@@ -1301,7 +1301,7 @@ defmodule Nx do
 
     0
     |> Nx.broadcast(diag_shape)
-    |> Nx.scatter_add(diag_indices(diag_shape, offset), tensor)
+    |> Nx.indexed_add(diag_indices(diag_shape, offset), tensor)
   end
 
   # Returns the indices of the diagonal of a tensor of the given shape
@@ -2587,6 +2587,7 @@ defmodule Nx do
       false
 
   """
+  @doc type: :shape
   def compatible?(left, right)
 
   def compatible?(%T{} = left, %T{} = right) do
@@ -2752,6 +2753,7 @@ defmodule Nx do
       {Lib.CustomBackend, device: :cuda}
 
   """
+  @doc type: :backend
   def default_backend(backend) do
     Process.put(@backend_key, backend!(backend)) ||
       backend!(Application.fetch_env!(:nx, :default_backend))
@@ -2760,6 +2762,7 @@ defmodule Nx do
   @doc """
   Gets the default backend for the current process.
   """
+  @doc type: :backend
   def default_backend() do
     Process.get(@backend_key) || backend!(Application.fetch_env!(:nx, :default_backend))
   end
@@ -4365,7 +4368,7 @@ defmodule Nx do
   end
 
   @doc """
-  Performs a `reduce_window` to select the maximum index in each
+  Performs a `window_reduce` to select the maximum index in each
   window of the input tensor according to and scatters source tensor
   to corresponding maximum indices in the output tensor.
 
@@ -4373,7 +4376,7 @@ defmodule Nx do
   `init_value`. If indices overlap, adds overlapping source values.
   The shape of the source tensor must match the valid windows in the
   input tensor. This means the shape of the source tensor must match
-  the shape of the input tensor after a `reduce_window` op with padding
+  the shape of the input tensor after a `window_reduce` op with padding
   `padding` and strides `strides`.
 
   This function is the gradient of `window_max`.
@@ -4384,7 +4387,7 @@ defmodule Nx do
       ...>  [7, 2, 5, 3, 10, 2], [3, 8, 9, 3, 4, 2],
       ...>  [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]
       ...> ])
-      iex> Nx.scatter_window_max(t, Nx.tensor([[2, 6], [3, 1]]),
+      iex> Nx.window_scatter_max(t, Nx.tensor([[2, 6], [3, 1]]),
       ...>  {2, 3}, [strides: [2, 3], padding: :valid], 0)
       #Nx.Tensor<
         s64[4][6]
@@ -4400,7 +4403,7 @@ defmodule Nx do
       ...>  [7, 2, 5, 3, 8], [3, 8, 9, 3, 4],
       ...>  [1, 5, 7, 5, 6], [0, 6, 2, 10, 2]
       ...> ])
-      iex> Nx.scatter_window_max(t, Nx.tensor([[2, 6], [3, 1]]),
+      iex> Nx.window_scatter_max(t, Nx.tensor([[2, 6], [3, 1]]),
       ...>  {2, 3}, [strides: [2, 2], padding: :valid], 0)
       #Nx.Tensor<
         s64[4][5]
@@ -4412,7 +4415,8 @@ defmodule Nx do
         ]
       >
   """
-  def scatter_window_max(tensor, source, window_dimensions, opts \\ [], init_value) do
+  @doc type: :window
+  def window_scatter_max(tensor, source, window_dimensions, opts \\ [], init_value) do
     opts = keyword!(opts, padding: :valid, strides: 1)
     Nx.Shape.validate!(window_dimensions, :window_dimensions)
 
@@ -4439,7 +4443,7 @@ defmodule Nx do
 
     output_type = Nx.Type.merge(source_type, value_type)
 
-    impl!(tensor, source).scatter_window_max(
+    impl!(tensor, source).window_scatter_max(
       %{tensor | type: output_type},
       tensor,
       source,
@@ -4450,7 +4454,7 @@ defmodule Nx do
   end
 
   @doc """
-  Performs a `reduce_window` to select the minimum index in each
+  Performs a `window_reduce` to select the minimum index in each
   window of the input tensor according to and scatters source tensor
   to corresponding minimum indices in the output tensor.
 
@@ -4458,7 +4462,7 @@ defmodule Nx do
   `init_value`. If indices overlap, adds overlapping source values.
   The shape of the source tensor must match the valid windows in the
   input tensor. This means the shape of the source tensor must match
-  the shape of the input tensor after a `reduce_window` op with padding
+  the shape of the input tensor after a `window_reduce` op with padding
   `padding` and strides `strides`.
 
   This function is the gradient of `window_min`.
@@ -4469,7 +4473,7 @@ defmodule Nx do
       ...>  [7, 2, 5, 3, 10, 2], [3, 8, 9, 3, 4, 2],
       ...>  [1, 5, 7, 5, 6, 1], [0, 6, 2, 7, 2, 8]
       ...> ])
-      iex> Nx.scatter_window_min(t, Nx.tensor([[2, 6], [3, 1]]),
+      iex> Nx.window_scatter_min(t, Nx.tensor([[2, 6], [3, 1]]),
       ...>  {2, 3}, [strides: [2, 3], padding: :valid], 0)
       #Nx.Tensor<
         s64[4][6]
@@ -4485,7 +4489,7 @@ defmodule Nx do
       ...>  [7, 2, 5, 3, 8], [3, 8, 9, 3, 4],
       ...>  [1, 5, 7, 5, 6], [0, 6, 2, 10, 2]
       ...> ])
-      iex> Nx.scatter_window_min(t, Nx.tensor([[2, 6], [3, 1]]),
+      iex> Nx.window_scatter_min(t, Nx.tensor([[2, 6], [3, 1]]),
       ...>  {2, 3}, [strides: [2, 2], padding: :valid], 0)
       #Nx.Tensor<
         s64[4][5]
@@ -4497,7 +4501,8 @@ defmodule Nx do
         ]
       >
   """
-  def scatter_window_min(tensor, source, window_dimensions, opts \\ [], init_value) do
+  @doc type: :window
+  def window_scatter_min(tensor, source, window_dimensions, opts \\ [], init_value) do
     opts = keyword!(opts, padding: :valid, strides: 1)
 
     %T{shape: input_shape} = tensor = to_tensor(tensor)
@@ -4523,7 +4528,7 @@ defmodule Nx do
 
     output_type = Nx.Type.merge(source_type, value_type)
 
-    impl!(tensor, source).scatter_window_min(
+    impl!(tensor, source).window_scatter_min(
       %{tensor | type: output_type},
       tensor,
       source,
@@ -4557,7 +4562,7 @@ defmodule Nx do
       >
       iex> indices = Nx.tensor([[0, 0, 0], [0, 1, 1], [0, 0, 0], [0, 0, 2], [0, 1, 2]])
       iex> updates = Nx.tensor([1, 3, 1, -2, 5])
-      iex> Nx.scatter_add(t, indices, updates)
+      iex> Nx.indexed_add(t, indices, updates)
       #Nx.Tensor<
         s64[1][2][3]
         [
@@ -4570,19 +4575,19 @@ defmodule Nx do
 
   Type promotions should happen automatically.
 
-      iex> Nx.scatter_add(Nx.tensor([1.0]), Nx.tensor([[0], [0]]), Nx.tensor([1, 1]))
+      iex> Nx.indexed_add(Nx.tensor([1.0]), Nx.tensor([[0], [0]]), Nx.tensor([1, 1]))
       #Nx.Tensor<
         f32[1]
         [3.0]
       >
 
-      iex> Nx.scatter_add(Nx.tensor([1]), Nx.tensor([[0], [0]]), Nx.tensor([1.0, 1.0]))
+      iex> Nx.indexed_add(Nx.tensor([1]), Nx.tensor([[0], [0]]), Nx.tensor([1.0, 1.0]))
       #Nx.Tensor<
         f32[1]
         [3.0]
       >
 
-      iex> Nx.scatter_add(Nx.tensor([1], type: {:u, 32}), Nx.tensor([[0], [0]]), Nx.tensor([1, 1], type: {:u, 64}))
+      iex> Nx.indexed_add(Nx.tensor([1], type: {:u, 32}), Nx.tensor([[0], [0]]), Nx.tensor([1, 1], type: {:u, 64}))
       #Nx.Tensor<
         u64[1]
         [3]
@@ -4590,28 +4595,29 @@ defmodule Nx do
 
   ### Error cases
 
-      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
+      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[[1, 2, 3]]]), Nx.tensor([0]))
       ** (ArgumentError) indices must be a rank 2 tensor, got: 3
 
-      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
+      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([[0]]))
       ** (ArgumentError) updates must be a rank 1 tensor, got: 2
 
-      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
+      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2, 3]]), Nx.tensor([0]))
       ** (ArgumentError) expected indices to have shape {*, 2}, got: {1, 3}
 
-      iex> Nx.scatter_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
+      iex> Nx.indexed_add(Nx.tensor([[1], [2]]), Nx.tensor([[1, 2]]), Nx.tensor([0, 1]))
       ** (ArgumentError) expected updates tensor to match the first axis of indices tensor with shape {1, 2}, got {2}
   """
-  def scatter_add(target, indices, updates) do
+  @doc type: :indexed
+  def indexed_add(target, indices, updates) do
     target = to_tensor(target)
     indices = to_tensor(indices)
     updates = to_tensor(updates)
 
     type = binary_type(target, updates)
 
-    Nx.Shape.scatter_add(target, indices, updates)
+    Nx.Shape.indexed_add(target, indices, updates)
 
-    impl!(target, indices, updates).scatter_add(%{target | type: type}, target, indices, updates)
+    impl!(target, indices, updates).indexed_add(%{target | type: type}, target, indices, updates)
   end
 
   ## Unary ops
@@ -5925,7 +5931,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :aggregation
+  @doc type: :window
   def window_sum(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_sum)
 
@@ -6017,7 +6023,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :aggregation
+  @doc type: :window
   def window_mean(tensor, window_dimensions, opts \\ []) do
     divide(window_sum(tensor, window_dimensions, opts), size(window_dimensions))
   end
@@ -6098,7 +6104,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :aggregation
+  @doc type: :window
   def window_max(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_max)
 
@@ -6178,7 +6184,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :aggregation
+  @doc type: :window
   def window_min(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_min)
 
@@ -6261,7 +6267,7 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :aggregation
+  @doc type: :window
   def window_product(tensor, window_dimensions, opts \\ []),
     do: aggregate_window_op(tensor, window_dimensions, opts, :window_product)
 
@@ -6446,7 +6452,7 @@ defmodule Nx do
   ### Examples
 
       iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
-      iex> Nx.reduce_window(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
+      iex> Nx.window_reduce(Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]]),
       ...>  init_value, {2, 2},
       ...>  fn x, acc -> max(x, acc) end
       ...> )
@@ -6460,7 +6466,7 @@ defmodule Nx do
       >
 
       iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
-      iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+      iex> Nx.window_reduce(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
       ...>  init_value, {2, 2},
       ...>  [padding: :same, strides: [1, 1]],
       ...>  fn x, acc -> max(x, acc) end
@@ -6474,7 +6480,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.reduce_window(Nx.tensor([[1, 2, 3], [4, 5, 6]]),
+      iex> Nx.window_reduce(Nx.tensor([[1, 2, 3], [4, 5, 6]]),
       ...>  0, {1, 2},
       ...>  [padding: :same, strides: [1, 1]],
       ...>  fn x, acc -> x + acc end
@@ -6487,7 +6493,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.reduce_window(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
+      iex> Nx.window_reduce(Nx.tensor([[[4, 2, 1, 3], [4, 2, 1, 7]], [[1, 2, 5, 7], [1, 8, 9, 2]]]),
       ...>  0, {1, 1, 2}, [padding: :valid, strides: [2, 1, 1], window_dilations: [1, 1, 2]],
       ...>  fn x, acc -> x + acc end)
       #Nx.Tensor<
@@ -6500,8 +6506,8 @@ defmodule Nx do
         ]
       >
   """
-  @doc type: :aggregation
-  def reduce_window(tensor, acc, window_dimensions, opts \\ [], fun)
+  @doc type: :window
+  def window_reduce(tensor, acc, window_dimensions, opts \\ [], fun)
       when is_tuple(window_dimensions) do
     opts = keyword!(opts, [:window_dilations, :strides, padding: :valid])
     %T{shape: shape} = tensor = to_tensor(tensor)
@@ -6526,7 +6532,7 @@ defmodule Nx do
 
     out = %{tensor | shape: output_shape}
     opts = [padding: padding_config, strides: strides, window_dilations: dilations]
-    impl!(tensor).reduce_window(out, tensor, acc, window_dimensions, opts, fun)
+    impl!(tensor).window_reduce(out, tensor, acc, window_dimensions, opts, fun)
   end
 
   @doc """
@@ -7705,7 +7711,7 @@ defmodule Nx do
       iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1.0), Nx.tensor(0)], [1, 1])
       ** (ArgumentError) index must be integer type, got {:f, 32} for axis 0
   """
-  @doc type: :shape
+  @doc type: :indexed
   def slice(tensor, start_indices, lengths, opts \\ [])
       when is_list(start_indices) and is_list(lengths) and is_list(opts) do
     opts = keyword!(opts, strides: 1)
@@ -7781,7 +7787,7 @@ defmodule Nx do
       >
 
   """
-  @doc type: :shape, from_backend: false
+  @doc type: :indexed, from_backend: false
   def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
     opts = keyword!(opts, [:strides])
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
@@ -7834,6 +7840,7 @@ defmodule Nx do
         ]
       >
   """
+  @doc type: :indexed
   def put_slice(tensor, start_indices, slice) when is_list(start_indices) do
     %T{shape: shape, names: names, type: type} = tensor = to_tensor(tensor)
     %T{shape: slice_shape, names: slice_names, type: slice_type} = slice = to_tensor(slice)
@@ -7982,7 +7989,7 @@ defmodule Nx do
       iex> Nx.take(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([1, 0, 1], type: {:f, 32}))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
-  @doc type: :shape
+  @doc type: :indexed
   def take(tensor, indices, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
@@ -8100,7 +8107,7 @@ defmodule Nx do
       iex> Nx.take_along_axis(tensor, idx, axis: 1)
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
-  @doc type: :shape
+  @doc type: :indexed
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
@@ -8152,7 +8159,7 @@ defmodule Nx do
       iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: {:f, 32}))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
   """
-  @doc type: :shape
+  @doc type: :indexed
   def gather(tensor, indices) do
     tensor = to_tensor(tensor)
     indices = to_tensor(indices)
@@ -8702,6 +8709,7 @@ defmodule Nx do
   originally created or intended to be loaded from NumPy into
   Elixir.
   """
+  @doc type: :creation
   def from_numpy(file) do
     file
     |> File.read!()
@@ -8714,6 +8722,7 @@ defmodule Nx do
   An `.npz` file is a zipped, possibly compressed archive containing
   multiple `.npy` files.
   """
+  @doc type: :creation
   def from_numpy_archive(archive) do
     archive = File.read!(archive)
 
@@ -8886,6 +8895,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :creation
   defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
     string
     |> binary_to_numbers
@@ -8921,6 +8931,7 @@ defmodule Nx do
       >
 
   """
+  @doc type: :creation
   defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
     case binary_to_numbers(string) do
       [numbers] ->
