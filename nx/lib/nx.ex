@@ -4541,7 +4541,7 @@ defmodule Nx do
   end
 
   @doc """
-  Performs a scatter-add operation on the `target` tensor,
+  Performs an indexed `add` operation on the `target` tensor,
   adding the `updates` into the corresponding `indices` positions.
 
   This operation is the grad for `gather/2` and gather-like operations such as
