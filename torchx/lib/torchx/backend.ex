@@ -622,6 +622,17 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def sort(%T{} = out, %T{} = t, opts) do
+    axis = opts[:axis]
+    descending = opts[:direction] == :desc
+
+    t
+    |> from_nx()
+    |> Torchx.sort(axis, descending)
+    |> to_nx(out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do

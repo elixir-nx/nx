@@ -247,6 +247,7 @@ defmodule Torchx do
   deftensor qr(tensor, reduced)
   deftensor triangular_solve(tensor_a, tensor_b, transpose, upper)
   deftensor determinant(tensor)
+  deftensor sort(tensor, axis, descending)
 
   ## Dirty non-tensor return values
 

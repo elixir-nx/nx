@@ -572,6 +572,16 @@ NIF(determinant)
   TENSOR(t->det());
 }
 
+NIF(sort)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, int64_t, axis);
+  PARAM(2, bool, descending);
+
+  std::tuple<torch::Tensor, torch::Tensor> result = t->sort(axis, descending);
+  TENSOR(std::get<0>(result));
+}
+
 /* Aggregates */
 
 NIF(sum)
@@ -806,6 +816,7 @@ static ErlNifFunc nif_functions[] = {
     DF(qr, 2),
     DF(triangular_solve, 4),
     DF(determinant, 1),
+    DF(sort, 3),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),
