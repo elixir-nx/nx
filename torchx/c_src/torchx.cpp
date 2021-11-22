@@ -560,9 +560,16 @@ NIF(triangular_solve)
   PARAM(2, bool, transpose);
   PARAM(3, bool, upper);
 
-  auto result = torch::triangular_solve(*b, *a, transpose, upper);
+  std::tuple<torch::Tensor, torch::Tensor> result = torch::triangular_solve(*b, *a, upper, transpose);
 
   TENSOR(std::get<0>(result));
+}
+
+NIF(determinant)
+{
+  TENSOR_PARAM(0, t);
+
+  TENSOR(t->det());
 }
 
 /* Aggregates */
@@ -798,6 +805,7 @@ static ErlNifFunc nif_functions[] = {
     DF(qr, 1),
     DF(qr, 2),
     DF(triangular_solve, 4),
+    DF(determinant, 1),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

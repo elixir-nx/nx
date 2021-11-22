@@ -565,10 +565,13 @@ defmodule Torchx.Backend do
 
   @impl true
   def triangular_solve(%T{} = out, %T{} = a, %T{} = b, opts) do
-    transform = opts[:transform]
+    transform = opts[:transform_a]
     upper = !opts[:lower]
     left_side = opts[:left_side]
 
+    # We can support this eventually, but we'd need
+    # to apply the same permutations BinaryBackend applies,
+    # because this is not natively supported by libtorch
     unless left_side do
       raise ArgumentError, "left_side: false option not supported in Torchx"
     end
@@ -589,9 +592,28 @@ defmodule Torchx.Backend do
       |> Torchx.reshape(batched_a_shape)
       |> Torchx.to_type(out_type)
 
-    b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(out_type)
+    eps = 1.0e-10 |> Nx.tensor() |> Torchx.from_nx()
 
-    IO.inspect(upper, label: "upper")
+    # We need to manually validate if the A tensor is singular
+    # (i.e. the tensor has its determinant equal to 0)
+    # Otherwise, an exception will be thrown by libtorch.
+    #
+    # a non-zero eps value is chosen so we can account for possible rounding errors
+    # in the determinant calculation
+    is_singular =
+      a_tx
+      |> Torchx.determinant()
+      |> Torchx.abs()
+      |> Torchx.reshape({})
+      |> Torchx.less_equal(eps)
+      |> Torchx.to_nx()
+      |> Nx.backend_transfer(Nx.BinaryBackend)
+
+    if Nx.tensor(1, type: {:u, 8}, backend: Nx.BinaryBackend) == is_singular do
+      raise ArgumentError, "can't solve for singular matrix"
+    end
+
+    b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(out_type)
 
     a_tx
     |> Torchx.triangular_solve(b_tx, transform == :transpose, upper)
