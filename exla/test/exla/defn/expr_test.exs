@@ -3159,7 +3159,7 @@ defmodule EXLA.Defn.ExprTest do
       tensor = Nx.dot(tensor, Nx.transpose(tensor))
       lhs = cholesky(tensor)
       rhs = Nx.LinAlg.cholesky(tensor)
-      compare_tensors!(lhs, rhs, atol: 1.0e-5, rtol: 1.0e-2)
+      compare_tensors!(lhs, rhs, atol: 1.0e-4, rtol: 1.0e-2)
     end
   end
 
