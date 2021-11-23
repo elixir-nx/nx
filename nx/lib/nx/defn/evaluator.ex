@@ -98,12 +98,18 @@ defmodule Nx.Defn.Evaluator do
 
     cache =
       Enum.reduce(token.hooks, cache, fn %{callback: callback, expr: expr, name: name}, cache ->
-        if callback = hooks[name] || callback do
-          {expr, cache} = eval(expr, state, cache)
-          callback.(expr)
-          cache
-        else
-          cache
+        cond do
+          callback = hooks[name] || callback ->
+            {expr, cache} = eval(expr, state, cache)
+            callback.(expr)
+            cache
+
+          Tree.has_hooks?(expr, hooks) ->
+            {_expr, cache} = eval(expr, state, cache)
+            cache
+
+          true ->
+            cache
         end
       end)
 
