@@ -209,6 +209,11 @@ defmodule Nx.Defn.Grad do
     grad_pairs(args, g, cache)
   end
 
+  defp grad(:attach_token, [token, expr], _ans, g, cache) do
+    {expr, cache} = to_grad(expr, g, cache)
+    {Expr.attach_token(token, expr), cache}
+  end
+
   defp grad(:cond, [clauses, last], _ans, g, cache) do
     {clauses, cache} =
       Enum.map_reduce(clauses, cache, fn {head, body}, cache ->

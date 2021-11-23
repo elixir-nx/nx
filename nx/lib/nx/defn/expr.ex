@@ -149,6 +149,26 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
+  Attaches the token to the given token or token expression.
+  """
+  def attach_token(%T{data: %{op: :token}} = token, expr) do
+    Composite.traverse(expr, fn tensor ->
+      expr = to_expr(tensor)
+      expr(expr, expr.data.context, :attach_token, [token, expr])
+    end)
+  end
+
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    # We first create an expression to store the token
+    # so we have a shared ID to avoid multiple traversals.
+    # The size of the tuple is not used, but the amount of
+    # hooks is a good indicator.
+    size = length(token.hooks)
+    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
+    attach_token(token, expr)
+  end
+
+  @doc """
   Creates a `cond` tensor expression.
   """
   def cond(clauses, last = out) do
@@ -209,21 +229,6 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def normalize(container_or_tensor), do: Composite.traverse(container_or_tensor, &to_expr/1)
-
-  @doc false
-  def attach_token(token, expr) do
-    # We first create an expression to store the token
-    # so we have a shared ID to avoid multiple traversals.
-    # The size of the tuple is not used, but the amount of
-    # hooks is a good indicator.
-    size = length(token.hooks)
-    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
-
-    Composite.traverse(expr, fn tensor ->
-      expr = to_expr(tensor)
-      expr(expr, expr.data.context, :attach_token, [token, expr])
-    end)
-  end
 
   @doc false
   def cond(file, clauses, last) do
