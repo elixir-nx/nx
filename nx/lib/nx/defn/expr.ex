@@ -157,7 +157,11 @@ defmodule Nx.Defn.Expr do
       [last | exprs]
       |> Enum.map(&Composite.flatten_list([&1]))
       |> Enum.zip_with(&broadcast_clause/1)
-      |> unzip_clauses()
+      |> case do
+        # Handle the case where branches don't return anything
+        [] -> Enum.map([last | exprs], fn _ -> {} end)
+        clauses -> unzip_clauses(clauses)
+      end
 
     clauses = Enum.zip(preds, exprs)
     flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))

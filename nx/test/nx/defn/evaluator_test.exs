@@ -266,7 +266,7 @@ defmodule Nx.Defn.EvaluatorTest do
     end
   end
 
-  defn with_cond(var, cond) do
+  defn container_cond(var, cond) do
     if cond do
       %{var | a: var.a + 1}
     else
@@ -278,10 +278,10 @@ defmodule Nx.Defn.EvaluatorTest do
     test "input, output, and cond" do
       container = %Container{a: 1, b: -1, c: :reset, d: :kept}
 
-      assert with_cond(container, 1) ==
+      assert container_cond(container, 1) ==
                %Container{a: Nx.tensor(2), b: Nx.tensor(-1), c: nil, d: :kept}
 
-      assert with_cond(container, 0) ==
+      assert container_cond(container, 0) ==
                %Container{a: Nx.tensor(1), b: Nx.tensor(-2), c: nil, d: :kept}
     end
   end

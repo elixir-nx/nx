@@ -1013,9 +1013,19 @@ defmodule Nx.DefnTest do
       if Nx.any?(a), do: 1, else: -1
     end
 
+    @tag compiler: Evaluator
     test "supports literals" do
-      assert cond_lit(Nx.tensor(0)), do: Nx.tensor(-1)
-      assert cond_lit(Nx.tensor(1)), do: Nx.tensor(1)
+      assert cond_lit(Nx.tensor(0)) == Nx.tensor(-1)
+      assert cond_lit(Nx.tensor(1)) == Nx.tensor(1)
+    end
+
+    defn cond_empty_map(a) do
+      if Nx.any?(a), do: %{}, else: %{}
+    end
+
+    test "handles empty maps in branches" do
+      assert cond_empty_map(Nx.tensor(0)) == %{}
+      assert cond_empty_map(Nx.tensor(0)) == %{}
     end
 
     test "raises if cond is missing last atom clause" do
