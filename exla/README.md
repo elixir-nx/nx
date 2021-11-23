@@ -35,20 +35,23 @@ EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to provide th
 
 ## Usage
 
-The main mechanism to use EXLA is by setting it as the `@defn_compiler` for your numerical definitions:
+The main mechanism to use EXLA is by setting it as a compiler for your numerical definitions (`defn` ). To set it globally, add a `config/config.exs` (or `config/ENV.exs`) with the following:
 
 ```elixir
-@defn_compiler EXLA
-defn softmax(tensor) do
-  Nx.exp(tensor) / Nx.sum(Nx.exp(tensor))
-end
+import Config
+
+config :nx, :default_defn_options, [compiler: EXLA]
+
+# To use cuda/rocm/tpu, set the client too
+# config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
 ```
 
-You can also pass `EXLA` as a compiler to `Nx.Defn.jit/4/` and friends:
+You can also pass `EXLA` as a compiler to `Nx.Defn.jit/3` and friends:
 
 ```elixir
 # JIT
-Nx.Defn.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], compiler: EXLA)
+Nx.Defn.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], [compiler: EXLA])
+Nx.Defn.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], [compiler: EXLA, client: :cuda])
 ```
 
 Those functions are also aliased in the `EXLA` module for your convenience:
@@ -56,13 +59,7 @@ Those functions are also aliased in the `EXLA` module for your convenience:
 ```elixir
 # JIT
 EXLA.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)])
-```
-
-You can also specify the client you want to execute the operation on:
-
-```elixir
-# JIT
-EXLA.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], client: :cuda)
+EXLA.jit(&some_function/2, [Nx.tensor(1), Nx.tensor(2)], [client: :cuda])
 ```
 
 ## Contributing

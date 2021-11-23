@@ -4,18 +4,19 @@ defmodule EXLA.Defn.APITest do
   import Nx.Defn
 
   describe "options" do
-    @defn_compiler {EXLA, run_options: [keep_on_device: true]}
     defn add_two_keep_on_device(a, b), do: a + b
 
     # Ignored logged errors, since they are expected
     @tag capture_log: true
     test "keeps data on device" do
+      Nx.Defn.default_options(compiler: EXLA, run_options: [keep_on_device: true])
+
       tensor = add_two_keep_on_device(1, 2)
-      assert %EXLA.DeviceBackend{state: {ref, :default}} = tensor.data
+      assert %EXLA.DeviceBackend{state: {ref, _}} = tensor.data
       assert is_reference(ref)
 
       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
-      assert %EXLA.DeviceBackend{state: {ref, :default}} = tensor.data
+      assert %EXLA.DeviceBackend{state: {ref, _}} = tensor.data
       assert is_reference(ref)
 
       assert tensor |> Nx.backend_transfer() |> Nx.to_binary() ==

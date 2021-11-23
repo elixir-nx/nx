@@ -1,8 +1,3 @@
-Application.put_env(:exla, :clients,
-  default: [platform: :host],
-  cuda: [platform: :cuda]
-)
-
 size = 1_000_000
 rand = for(_ <- 1..size, do: :rand.uniform())
 t64 = Nx.tensor(rand, type: {:f, 64})
@@ -11,30 +6,14 @@ t32 = Nx.tensor(rand, type: {:f, 32})
 defmodule Softmax do
   import Nx.Defn
 
-  # This runs on Elixir
   defn softmax(n), do: Nx.exp(n) / Nx.sum(Nx.exp(n))
-
-  # This is JIT+host compiled.
-  @defn_compiler EXLA
-  defn host(n), do: softmax(n)
-
-  # This is JIT+cuda compiled
-  @defn_compiler {EXLA, client: :cuda}
-  defn cuda(n), do: softmax(n)
-
-  # This is JIT+cuda+keep_on_device compiled
-  @defn_compiler {EXLA, client: :cuda, run_options: [keep_on_device: true]}
-  defn cuda_keep(n), do: softmax(n)
 end
-
-IO.inspect(Softmax.softmax(t32))
-IO.inspect(Softmax.host(t32))
 
 benches = %{
   "elixir f32" => fn -> Softmax.softmax(t32) end,
   "elixir f64" => fn -> Softmax.softmax(t64) end,
-  "xla jit-cpu f32" => fn -> Softmax.host(t32) end,
-  "xla jit-cpu f64" => fn -> Softmax.host(t64) end
+  "xla jit-cpu f32" => fn -> EXLA.jit(&Softmax.softmax/1, [t32]) end,
+  "xla jit-cpu f64" => fn -> EXLA.jit(&Softmax.softmax/1, [t64]) end
 }
 
 benches =
@@ -42,13 +21,18 @@ benches =
     dt32 = Nx.backend_transfer(t32, {EXLA.DeviceBackend, client: :cuda})
     dt64 = Nx.backend_transfer(t64, {EXLA.DeviceBackend, client: :cuda})
 
+    cuda = [client: :cuda]
+    cuda_keep = [client: :cuda, run_options: [keep_on_device: true]]
+
     Map.merge(benches, %{
-      "xla jit-gpu f32" => fn -> Softmax.cuda(t32) end,
-      "xla jit-gpu f64" => fn -> Softmax.cuda(t64) end,
+      "xla jit-gpu f32" => fn -> EXLA.jit(&Softmax.softmax/1, [t32], cuda) end,
+      "xla jit-gpu f64" => fn -> EXLA.jit(&Softmax.softmax/1, [t64], cuda) end,
       "xla jit-gpu f32 keep" =>
-        {fn -> Softmax.cuda_keep(dt32) end, after_each: &Nx.backend_deallocate/1},
+        {fn -> EXLA.jit(&Softmax.softmax/1, [dt32], cuda_keep) end,
+         after_each: &Nx.backend_deallocate/1},
       "xla jit-gpu f64 keep" =>
-        {fn -> Softmax.cuda_keep(dt64) end, after_each: &Nx.backend_deallocate/1}
+        {fn -> EXLA.jit(&Softmax.softmax/1, [dt64], cuda_keep) end,
+         after_each: &Nx.backend_deallocate/1}
     })
   else
     benches

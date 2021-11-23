@@ -41,7 +41,11 @@ defmodule Nx.ContainerTest do
     alias Nx.Defn.Expr
     alias Nx.Tensor, as: T
     alias Container, as: C
-    @default_defn_compiler Nx.Defn.Identity
+
+    setup do
+      Nx.Defn.default_options(compiler: Nx.Defn.Identity)
+      :ok
+    end
 
     defn match_signature(%Container{a: a, b: b}) do
       a + b

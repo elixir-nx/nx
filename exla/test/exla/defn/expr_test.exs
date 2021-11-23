@@ -3,7 +3,14 @@ defmodule EXLA.Defn.ExprTest do
 
   import Nx.Defn
 
-  @default_defn_compiler EXLA
+  setup do
+    Nx.Defn.default_options(compiler: EXLA)
+    :ok
+  end
+
+  defp evaluate(fun, args) do
+    Nx.Defn.jit(fun, args, compiler: Nx.Defn.Evaluator)
+  end
 
   describe "tuples" do
     defn add_subtract_tuple(a, b), do: {a + b, a - b}
@@ -67,8 +74,6 @@ defmodule EXLA.Defn.ExprTest do
 
   describe "+/2" do
     defn add_two(a, b), do: a + b
-    @defn_compiler Nx.Defn.Evaluator
-    defn add_two_nx(a, b), do: a + b
 
     test "same shape and type" do
       assert add_two(1.0, 2.0) == Nx.tensor(3.0)
@@ -101,8 +106,8 @@ defmodule EXLA.Defn.ExprTest do
       ]
 
       for {left, right} <- tensors do
-        compare_tensors!(add_two(left, right), add_two_nx(left, right))
-        compare_tensors!(add_two(right, left), add_two_nx(right, left))
+        compare_tensors!(add_two(left, right), evaluate(&add_two/2, [left, right]))
+        compare_tensors!(add_two(right, left), evaluate(&add_two/2, [right, left]))
       end
     end
 
@@ -144,8 +149,8 @@ defmodule EXLA.Defn.ExprTest do
       ]
 
       for {left, right} <- tensors do
-        compare_tensors!(add_two(left, right), add_two_nx(left, right))
-        compare_tensors!(add_two(right, left), add_two_nx(right, left))
+        compare_tensors!(add_two(left, right), evaluate(&add_two/2, [left, right]))
+        compare_tensors!(add_two(right, left), evaluate(&add_two/2, [right, left]))
       end
     end
 
@@ -639,15 +644,20 @@ defmodule EXLA.Defn.ExprTest do
     for fun <-
           [:exp, :expm1, :log, :log1p, :logistic, :cos, :sin, :tanh, :sqrt, :rsqrt, :cbrt] ++
             [:tan, :acosh, :asinh, :cosh, :sinh, :erf, :erfc] do
-      exla_fun = :"unary_#{fun}"
-      nx_fun = :"unary_#{fun}_nx"
-      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
-      @defn_compiler Nx.Defn.Evaluator
-      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+      defn_fun = :"unary_#{fun}"
+      defn_var = Macro.var(defn_fun, __MODULE__)
+      defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
       test "#{fun}" do
-        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
-        compare_tensors!(unquote(exla_fun)(@int_tensor), unquote(nx_fun)(@int_tensor))
+        compare_tensors!(
+          unquote(defn_fun)(@float_tensor),
+          evaluate(&(unquote(defn_var) / 1), [@float_tensor])
+        )
+
+        compare_tensors!(
+          unquote(defn_fun)(@int_tensor),
+          evaluate(&(unquote(defn_var) / 1), [@int_tensor])
+        )
       end
     end
   end
@@ -657,15 +667,20 @@ defmodule EXLA.Defn.ExprTest do
     @float_tensor Nx.tensor([0.1, 0.5, 0.9])
 
     for fun <- [:atanh, :acos, :asin, :atan, :erf_inv] do
-      exla_fun = :"unary_#{fun}"
-      nx_fun = :"unary_#{fun}_nx"
-      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
-      @defn_compiler Nx.Defn.Evaluator
-      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+      defn_fun = :"unary_#{fun}"
+      defn_var = Macro.var(defn_fun, __MODULE__)
+      defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
       test "#{fun}" do
-        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
-        compare_tensors!(unquote(exla_fun)(@int_tensor), unquote(nx_fun)(@int_tensor))
+        compare_tensors!(
+          unquote(defn_fun)(@float_tensor),
+          evaluate(&(unquote(defn_var) / 1), [@float_tensor])
+        )
+
+        compare_tensors!(
+          unquote(defn_fun)(@int_tensor),
+          evaluate(&(unquote(defn_var) / 1), [@int_tensor])
+        )
       end
     end
   end
@@ -678,16 +693,25 @@ defmodule EXLA.Defn.ExprTest do
     funs = [:abs, :sign, :floor, :ceil, :round]
 
     for fun <- funs do
-      exla_fun = :"unary_#{fun}"
-      nx_fun = :"unary_#{fun}_nx"
-      defn unquote(exla_fun)(t), do: Nx.unquote(fun)(t)
-      @defn_compiler Nx.Defn.Evaluator
-      defn unquote(nx_fun)(t), do: Nx.unquote(fun)(t)
+      defn_fun = :"unary_#{fun}"
+      defn_var = Macro.var(defn_fun, __MODULE__)
+      defn unquote(defn_fun)(t), do: Nx.unquote(fun)(t)
 
       test "#{fun}" do
-        compare_tensors!(unquote(exla_fun)(@uint_tensor), unquote(nx_fun)(@uint_tensor))
-        compare_tensors!(unquote(exla_fun)(@sint_tensor), unquote(nx_fun)(@sint_tensor))
-        compare_tensors!(unquote(exla_fun)(@float_tensor), unquote(nx_fun)(@float_tensor))
+        compare_tensors!(
+          unquote(defn_fun)(@uint_tensor),
+          evaluate(&(unquote(defn_var) / 1), [@uint_tensor])
+        )
+
+        compare_tensors!(
+          unquote(defn_fun)(@sint_tensor),
+          evaluate(&(unquote(defn_var) / 1), [@sint_tensor])
+        )
+
+        compare_tensors!(
+          unquote(defn_fun)(@float_tensor),
+          evaluate(&(unquote(defn_var) / 1), [@float_tensor])
+        )
       end
     end
   end
@@ -3150,28 +3174,29 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "precision" do
-    @defn_compiler {EXLA, precision: :bad}
-    defn bad_precision(t1, t2), do: Nx.dot(t1, t2)
-
-    @defn_compiler {EXLA, precision: :high}
-    defn good_precision(t1, t2), do: Nx.dot(t1, t2)
+    defn precision(t1, t2), do: Nx.dot(t1, t2)
 
     test "raises on bad precision" do
       assert_raise ArgumentError,
                    "expected precision configuration to be one of" <>
                      " :default, :high, or :highest, got: :bad",
                    fn ->
-                     bad_precision(
-                       Nx.tensor([1, 2, 3], type: {:bf, 16}),
-                       Nx.tensor([1, 2, 3], type: {:bf, 16})
+                     EXLA.jit(
+                       &precision/2,
+                       [
+                         Nx.tensor([1, 2, 3], type: {:bf, 16}),
+                         Nx.tensor([1, 2, 3], type: {:bf, 16})
+                       ],
+                       precision: :bad
                      )
                    end
     end
 
     test "succeeds on good precision" do
-      assert good_precision(
-               Nx.tensor([1, 2, 3], type: {:bf, 16}),
-               Nx.tensor([1, 2, 3], type: {:bf, 16})
+      assert EXLA.jit(
+               &precision/2,
+               [Nx.tensor([1, 2, 3], type: {:bf, 16}), Nx.tensor([1, 2, 3], type: {:bf, 16})],
+               precision: :high
              ) == Nx.tensor(14, type: {:bf, 16})
     end
   end

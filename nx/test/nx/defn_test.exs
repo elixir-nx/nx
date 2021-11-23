@@ -4,16 +4,22 @@ defmodule Nx.DefnTest do
   alias Nx.Tensor, as: T
   alias Nx.Defn.{Expr, Identity, Evaluator}
   alias Nx.DefnTest.Sample
-
   import Nx.Defn
-  doctest Nx.Defn
 
   defmacrop location(plus) do
     file = Path.relative_to_cwd(__CALLER__.file)
     quote do: "#{unquote(file)}:#{unquote(__CALLER__.line) + unquote(plus)}"
   end
 
-  @default_defn_compiler Identity
+  setup context do
+    Nx.Defn.default_options(compiler: context[:compiler] || Identity)
+    :ok
+  end
+
+  describe "doctest" do
+    @describetag compiler: Evaluator
+    doctest Nx.Defn
+  end
 
   describe "constants" do
     @tensor [1, 2, 3]
@@ -1182,7 +1188,6 @@ defmodule Nx.DefnTest do
              """
     end
 
-    @defn_compiler Evaluator
     defn transform_back_and_forth(a) do
       Nx.exp(transform(Nx.negate(a), &private_back_and_forth/1))
     end
@@ -1194,16 +1199,17 @@ defmodule Nx.DefnTest do
 
     defn final_back_and_forth(a), do: Nx.tanh(a)
 
+    @tag compiler: Evaluator
     test "back and forth between Elixir and defn" do
       assert transform_back_and_forth(Nx.tensor(1)) ==
                Nx.tensor(1) |> Nx.negate() |> Nx.tanh() |> Nx.exp()
     end
 
-    @defn_compiler Evaluator
     defn transform_variable_access(a, b) do
       transform(:ok, fn :ok -> a + b end)
     end
 
+    @tag compiler: Evaluator
     test "supports variable access" do
       assert transform_variable_access(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor(3)
     end
@@ -1213,18 +1219,22 @@ defmodule Nx.DefnTest do
     defn defn_jit({a, b}, c), do: a + b - c
 
     test "compiles defn function" do
+      assert %T{data: %Expr{op: :subtract}} =
+               Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
+
+      Nx.Defn.default_options(compiler: Evaluator)
       assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
       assert Nx.Defn.jit(&defn_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&defn_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
-
-      assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&defn_jit/2, [{1, 2}, 3], compiler: Identity)
     end
 
-    @defn_compiler Evaluator
     defn defn_jit_or_apply(ab, c), do: Nx.Defn.jit_or_apply(&defn_jit/2, [ab, c])
 
     test "jits or applies" do
+      assert %T{data: %Expr{op: :subtract}} =
+               Nx.Defn.jit_or_apply(&defn_jit_or_apply/2, [{1, 2}, 3], compiler: Identity)
+
+      Nx.Defn.default_options(compiler: Evaluator)
       assert Nx.Defn.jit_or_apply(&defn_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
       assert defn_jit_or_apply({4, 5}, 3) == Nx.tensor(6)
     end
@@ -1235,12 +1245,13 @@ defmodule Nx.DefnTest do
     end
 
     test "compiles elixir function" do
+      assert %T{data: %Expr{op: :subtract}} =
+               Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], compiler: Identity)
+
+      Nx.Defn.default_options(compiler: Evaluator)
       assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3]) == Nx.tensor(6)
       assert Nx.Defn.jit(&elixir_jit/2, [{4, 5}, Nx.tensor(3)]) == Nx.tensor(6)
       assert Nx.Defn.jit(&elixir_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
-
-      assert %T{data: %Expr{op: :subtract}} =
-               Nx.Defn.jit(&elixir_jit/2, [{4, 5}, 3], compiler: Identity)
     end
 
     test "raises if it doesn't return an expression" do
@@ -1251,6 +1262,7 @@ defmodule Nx.DefnTest do
     defn jit_iota(), do: Nx.iota({3, 3})
 
     @tag :capture_log
+    @tag compiler: Evaluator
     test "uses the default backend on iota" do
       Nx.default_backend(UnknownBackend)
       assert_raise UndefinedFunctionError, fn -> Nx.Defn.jit(&jit_iota/0, []) end
@@ -1305,45 +1317,21 @@ defmodule Nx.DefnTest do
                      end
                    end
     end
-
-    test "invalid defn compiler" do
-      assert_raise ArgumentError,
-                   ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
-                   fn ->
-                     defmodule Sample do
-                       @defn_compiler "unknown"
-                       import Nx.Defn
-                       defn add(a, b), do: a + b
-                     end
-                   end
-    end
-
-    test "invalid default defn compiler" do
-      assert_raise ArgumentError,
-                   ~r"expected @defn_compiler/@default_defn_compiler to be an atom or",
-                   fn ->
-                     defmodule Sample do
-                       @default_defn_compiler "unknown"
-                       import Nx.Defn
-                       defn add(a, b), do: a + b
-                     end
-                   end
-    end
   end
-
-  @default_defn_compiler Evaluator
 
   describe "default arguments" do
     defn sum_axis_opts(a, opts \\ []), do: Nx.sum(a, opts)
     defn local_calls_sum_axis_opts(a), do: sum_axis_opts(a)
     defn remote_calls_sum_axis_opts(a), do: __MODULE__.sum_axis_opts(a)
 
+    @tag compiler: Evaluator
     test "are supported" do
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [0]) == Nx.tensor([4, 6])
       assert sum_axis_opts(Nx.tensor([[1, 2], [3, 4]]), axes: [1]) == Nx.tensor([3, 7])
     end
 
+    @tag compiler: Evaluator
     test "can be called within defn" do
       assert local_calls_sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
       assert remote_calls_sum_axis_opts(Nx.tensor([[1, 2], [3, 4]])) == Nx.tensor(10)
@@ -1351,12 +1339,12 @@ defmodule Nx.DefnTest do
 
     defn random_opts(opts \\ []), do: Nx.random_uniform({}, 0, 1, opts)
 
+    @tag compiler: Evaluator
     test "exclusively" do
       assert random_opts([]).type == {:s, 64}
       assert random_opts(type: {:f, 64}).type == {:f, 64}
     end
 
-    @defn_compiler Identity
     defn sum_axis_expr(a, opts \\ []), do: Nx.sum(a, opts)
 
     test "have their own cache key" do
@@ -1377,14 +1365,17 @@ defmodule Nx.DefnTest do
     defnp private(a, b), do: a + b
     defn calls_private(a, b), do: private(a, b)
 
+    @tag compiler: Evaluator
     test "are supported" do
       assert private(1, 2) == Nx.tensor(3)
     end
 
+    @tag compiler: Evaluator
     test "are not exported" do
       refute function_exported?(__MODULE__, :private, 2)
     end
 
+    @tag compiler: Evaluator
     test "are callable from defn" do
       assert calls_private(1, 2) == Nx.tensor(3)
     end

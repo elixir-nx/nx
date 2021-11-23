@@ -109,13 +109,17 @@ defmodule MyModule do
 end
 ```
 
-`defn` supports multiple compiler backends, which can compile said functions to run on the CPU or in the GPU. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
+You can now invoke it as:
 
 ```elixir
-@defn_compiler {EXLA, client: :host}
-defn softmax(t) do
-  Nx.exp(t) / Nx.sum(Nx.exp(t))
-end
+MyModule.softmax(Nx.tensor([1, 2, 3]))
+```
+
+`defn` supports custom compilers, which can compile said functions to run on the CPU or in the GPU on the fly. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
+
+```elixir
+Nx.Defn.default_options(compiler: EXLA)
+MyModule.softmax(some_tensor)
 ```
 
 Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the input tensors type and shape. By passing `client: :cuda` or `client: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:

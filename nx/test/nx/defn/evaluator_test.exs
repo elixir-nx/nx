@@ -4,25 +4,6 @@ defmodule Nx.Defn.EvaluatorTest do
   alias Nx.Tensor, as: T
   import Nx.Defn
 
-  @defn_compiler Nx.Defn.Evaluator
-  defn add(a, b), do: {a + b, a - b}
-
-  # Check the attribute has been reset
-  nil = Module.get_attribute(__MODULE__, :defn_compiler)
-
-  test "can be set explicitly set" do
-    assert add(1, 2) == {Nx.tensor(3), Nx.tensor(-1)}
-  end
-
-  test "is the default compiler" do
-    defmodule DefaultCompiler do
-      import Nx.Defn
-      defn add(a, b), do: a + b
-    end
-
-    assert DefaultCompiler.add(1, 2) == Nx.tensor(3)
-  end
-
   defn add_two_int(t), do: Nx.add(t, 2)
   defn add_two_float(t), do: Nx.add(t, 2)
 
