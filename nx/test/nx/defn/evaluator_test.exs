@@ -285,4 +285,16 @@ defmodule Nx.Defn.EvaluatorTest do
                %Container{a: Nx.tensor(1), b: Nx.tensor(-2), c: nil, d: :kept}
     end
   end
+
+  defn labelled_inspect(a, b), do: inspect_value(a + b, label: "add")
+
+  test "inspect_value/2" do
+    assert ExUnit.CaptureIO.capture_io(fn -> labelled_inspect(1, 2) end) ==
+             """
+             add: #Nx.Tensor<
+               s64
+               3
+             >
+             """
+  end
 end

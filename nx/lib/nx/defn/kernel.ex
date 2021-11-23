@@ -216,6 +216,36 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Inspects the value at runtime to the terminal.
+
+  This function has implemented on top of `hook/3` and therefore
+  has the following restrictions:
+
+    * It can only inspect tensors and `Nx.Container`
+    * The return value of this function must be part of the output
+
+  ## Examples
+
+      defn tanh_grad(t) do
+        grad(t, fn t ->
+          Nx.tanh(t)
+          |> inspect_value()
+        end)
+      end
+
+      defn tanh_grad(t) do
+        grad(t, fn t ->
+          Nx.tanh(t)
+          |> inspect_value(label: "tanh")
+        end)
+      end
+
+  """
+  def inspect_value(expr, opts \\ []) do
+    hook(expr, &IO.inspect(&1, opts))
+  end
+
+  @doc """
   Rewrites the types of `expr` recursively according to `opts`
 
   ## Options
@@ -1119,7 +1149,8 @@ defmodule Nx.Defn.Kernel do
   In other words, the `hook` function accepts a tensor
   expression as argument and it will invoke a custom
   function with a tensor value at runtime. `hook` returns
-  the result of the given expression.
+  the result of the given expression. The expression can
+  be any tensor or a `Nx.Container`.
 
   Note **you must return the result of the `hook` call**.
   For example, the code below won't inspect the `:add`
