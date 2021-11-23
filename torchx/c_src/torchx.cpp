@@ -103,6 +103,17 @@ inline std::string type2string(const torch::ScalarType type)
   }                                                                                             \
   CATCH()
 
+#define TENSOR_TUPLE_3(TT)                                                                      \
+  try                                                                                           \
+  {                                                                                             \
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> tt = TT;                            \
+    std::vector<ERL_NIF_TERM> res_list;                                                         \
+    for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt), std::get<2>(tt)})                 \
+      res_list.push_back(create_tensor_resource(env, t));                                       \
+    return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
+  }                                                                                             \
+  CATCH()
+
 ERL_NIF_TERM
 create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor)
 {
@@ -661,6 +672,16 @@ NIF(qr)
   TENSOR_TUPLE(torch::qr(*t, reduced));
 }
 
+NIF(lu)
+{
+  TENSOR_PARAM(0, t);
+
+  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> lu_result = torch::_lu_with_info(*t);
+  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu = torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
+
+  TENSOR_TUPLE_3(plu);
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
@@ -814,6 +835,7 @@ static ErlNifFunc nif_functions[] = {
     DF(cholesky, 2),
     DF(qr, 1),
     DF(qr, 2),
+    DF(lu, 1),
     DF(triangular_solve, 4),
     DF(determinant, 1),
     DF(sort, 3),

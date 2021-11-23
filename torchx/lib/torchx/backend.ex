@@ -564,6 +564,38 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def lu(
+        {p_holder, %{type: output_type} = l_holder, %{type: output_type} = u_holder},
+        tensor,
+        _opts
+      ) do
+    out_type = to_torch_type(output_type)
+
+    {p_tx, l_tx, u_tx} =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(out_type)
+      |> Torchx.lu()
+
+    p_type = to_torch_type(p_holder.type)
+
+    # p_type can be an integer type, but we can
+    # demote the floating-point torch tensor
+    # without any loss because p_tx is a tensor
+    # of zeros or ones only
+
+    p =
+      p_tx
+      |> Torchx.to_type(p_type)
+      |> to_nx(p_holder)
+
+    l = to_nx(l_tx, l_holder)
+    u = to_nx(u_tx, u_holder)
+
+    {p, l, u}
+  end
+
+  @impl true
   def triangular_solve(%T{} = out, %T{} = a, %T{} = b, opts) do
     transform = opts[:transform_a]
     upper = !opts[:lower]

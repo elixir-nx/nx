@@ -388,4 +388,25 @@ defmodule Torchx.BackendTest do
                    end
     end
   end
+
+  describe "Nx.LinAlg.lu" do
+    test "property" do
+      for _ <- 1..20 do
+        a = Nx.random_uniform({3, 3})
+        {p, l, u} = Nx.LinAlg.lu(a)
+
+        a_reconstructed = p |> Nx.dot(l) |> Nx.dot(u)
+
+        assert_all_close(a, a_reconstructed)
+      end
+    end
+
+    test "invalid a shape" do
+      assert_raise ArgumentError,
+                   "tensor must have as many rows as columns, got shape: {3, 4}",
+                   fn ->
+                     Nx.LinAlg.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
+                   end
+    end
+  end
 end
