@@ -36,12 +36,14 @@ defmodule Nx.Defn.Evaluator do
       case length(args) do
         1 ->
           fn arg1 ->
-            expr |> composite_eval(%{state | vars: [arg1]}, %{}) |> elem(0)
+            {result, _cache} = composite_eval(expr, %{state | vars: [arg1]}, %{})
+            result
           end
 
         2 ->
           fn arg1, arg2 ->
-            expr |> composite_eval(%{state | vars: [arg1, arg2]}, %{}) |> elem(0)
+            {result, _cache} = composite_eval(expr, %{state | vars: [arg1, arg2]}, %{})
+            result
           end
       end
 
@@ -98,10 +100,12 @@ defmodule Nx.Defn.Evaluator do
 
     cache =
       Enum.reduce(token.hooks, cache, fn %{callback: callback, expr: expr, name: name}, cache ->
+        hook_fun = hooks[name] || callback
+
         cond do
-          callback = hooks[name] || callback ->
+          hook_fun ->
             {expr, cache} = eval(expr, state, cache)
-            callback.(expr)
+            hook_fun.(expr)
             cache
 
           Tree.has_hooks?(expr, hooks) ->

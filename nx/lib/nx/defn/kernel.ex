@@ -228,14 +228,16 @@ defmodule Nx.Defn.Kernel do
 
       defn tanh_grad(t) do
         grad(t, fn t ->
-          Nx.tanh(t)
+          t
+          |> Nx.tanh()
           |> inspect_value()
         end)
       end
 
       defn tanh_grad(t) do
         grad(t, fn t ->
-          Nx.tanh(t)
+          t
+          |> Nx.tanh()
           |> inspect_value(label: "tanh")
         end)
       end
@@ -1193,7 +1195,7 @@ defmodule Nx.Defn.Kernel do
       Nx.Defn.jit(&Hooks.add_and_mult/2, args, hooks: hooks)
 
   > **Important!** We recommend to prefix your hook names
-  > by the name of your library to avoid conflicts.
+  > by the name of your project to avoid conflicts.
 
   If a named hook is not given, compilers can optimize
   that away and not transfer the tensor from the device
@@ -1213,7 +1215,7 @@ defmodule Nx.Defn.Kernel do
 
   ## Hooks and tokens
 
-  So far, we have always return the result of the `hook`
+  So far, we have always returned the result of the `hook`
   call. However, what happens if the values we want to
   hook are not part of the return value, such as below?
 
@@ -1225,7 +1227,7 @@ defmodule Nx.Defn.Kernel do
 
   In such cases, you must use tokens. Tokens are used to
   create an ordering over hooks, ensuring hooks execute
-  in a certain order:
+  in a certain sequence:
 
       defn add_and_mult(a, b) do
         token = create_token()
@@ -1235,14 +1237,14 @@ defmodule Nx.Defn.Kernel do
       end    
 
   The example above creates a token and uses `hook_token/4`
-  to create hooks attached to said token. By using a token,
-  we guarantee that those hooks will be invoked in the given
-  order. Then, at the end of the function, we attach the token
-  (and the hooks associated with it) to the result `mult`.
+  to create hooks attached to their respective tokens. By using a token,
+  we guarantee that those hooks will be invoked in the order
+  in which they were defined. Then, at the end of the function, 
+  we attach the token (and its associated hooks) to the result `mult`.
 
   Note you must attach the token at the end, otherwise the hooks
-  will be lost. In fact, the `hook/3` function is implemented
-  roughly like this:
+  will be "lost", as if they were not defined. In fact, the `hook/3`
+  function is implemented roughly like this:
 
       def hook(tensor_expr, name, function) do
         {token, result} = hook_token(create_token(), tensor_expr, name, function)
