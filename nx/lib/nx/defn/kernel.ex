@@ -218,11 +218,13 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Inspects the value at runtime to the terminal.
 
-  This function has implemented on top of `hook/3` and therefore
+  This function is implemented on top of `hook/3` and therefore
   has the following restrictions:
 
     * It can only inspect tensors and `Nx.Container`
     * The return value of this function must be part of the output
+
+  All options are passed to `IO.inspect/2`.
 
   ## Examples
 
@@ -1110,6 +1112,8 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Shortcut for `hook/3`.
   """
+  def hook(expr, name_or_function)
+
   def hook(expr, name) when is_atom(name),
     do: unguarded_hook(expr, name, nil)
 
@@ -1263,6 +1267,8 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Shortcut for `hook_token/4`.
   """
+  def hook_token(token, expr, name_or_function)
+
   def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
     do: add_hook(token, expr, name, nil)
 

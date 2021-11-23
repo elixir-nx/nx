@@ -15,6 +15,8 @@ defmodule Nx.Defn.Token do
   The `hooks` field must only be accessed by `defn` compilers.
   """
 
+  # Hooks are stored with the hooks declared first
+  # at the end of the list.
   defstruct hooks: []
 
   @doc false
