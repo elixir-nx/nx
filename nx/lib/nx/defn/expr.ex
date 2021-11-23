@@ -39,6 +39,8 @@ defmodule Nx.Defn.Expr do
 
     * `while(initial, condition, body)`
 
+    * `attach_token(token(%Nx.Defn.Token{}), expr)`
+
   `defn` compilers must handle said nodes accordingly.
   """
 
@@ -105,7 +107,7 @@ defmodule Nx.Defn.Expr do
   args must be a list of parameter nodes.
   """
   def fun(context, args, body, {_, _, _} = mfa) do
-    case Composite.traverse(body, &to_expr/1) do
+    case normalize(body) do
       %T{} = tensor ->
         expr(tensor, context, :fun, [args, tensor, mfa])
 
@@ -144,6 +146,26 @@ defmodule Nx.Defn.Expr do
 
   defp tuple_out(size) do
     %T{shape: {}, names: [], type: {:tuple, size}}
+  end
+
+  @doc """
+  Attaches the token to the given token or token expression.
+  """
+  def attach_token(%T{data: %{op: :token}} = token, expr) do
+    Composite.traverse(expr, fn tensor ->
+      expr = to_expr(tensor)
+      expr(expr, expr.data.context, :attach_token, [token, expr])
+    end)
+  end
+
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    # We first create an expression to store the token
+    # so we have a shared ID to avoid multiple traversals.
+    # The size of the tuple is not used, but the amount of
+    # hooks is a good indicator.
+    size = length(token.hooks)
+    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
+    attach_token(token, expr)
   end
 
   @doc """
@@ -210,6 +232,9 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
+  def normalize(container_or_tensor), do: Composite.traverse(container_or_tensor, &to_expr/1)
+
+  @doc false
   def cond(file, clauses, last) do
     clauses =
       for {meta, {pred, expr}} <- clauses do
@@ -232,7 +257,7 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def while(file, line, initial, condition, body) do
-    initial = Composite.traverse(initial, &to_expr/1)
+    initial = normalize(initial)
 
     {arg, {_counter, context}} =
       Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
@@ -240,7 +265,7 @@ defmodule Nx.Defn.Expr do
       end)
 
     condition = to_pred(condition.(arg), line, file, :while)
-    body = arg |> body.() |> Composite.traverse(&to_expr/1)
+    body = arg |> body.() |> normalize()
 
     if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
       raise CompileError,
@@ -1015,8 +1040,26 @@ defmodule Nx.Defn.Expr do
     {[initial], acc}
   end
 
+  defp traverse_args(:token, %T{data: %{args: [token]}}, acc) do
+    {hooks, acc} =
+      Enum.map_reduce(token.hooks, acc, fn %{name: name, expr: expr}, acc ->
+        {expr, acc} = Composite.traverse(expr, acc, &inspect_expr/2)
+        {{name, expr}, acc}
+      end)
+
+    {hooks, acc}
+  end
+
   defp traverse_args(_op, t, acc) do
     Tree.apply_args(t, acc, &inspect_expr/2)
+  end
+
+  defp inspect_args(:token, hooks, var_map) do
+    IO.iodata_to_binary(
+      Enum.map_intersperse(hooks, ", ", fn {key, val} ->
+        "#{key}: " <> inspect_arg(val, var_map)
+      end)
+    )
   end
 
   defp inspect_args(:while, [initial], var_map) do

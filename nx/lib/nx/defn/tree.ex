@@ -7,6 +7,37 @@ defmodule Nx.Defn.Tree do
   alias Nx.Tensor, as: T
 
   @doc """
+  Check if the given tree has any of the given hooks in it.
+  """
+  def has_hooks?(tree, hooks) do
+    Composite.reduce(tree, %{}, &detect_hook(&1, &2, hooks))
+    false
+  catch
+    :side_effect -> true
+  end
+
+  defp detect_hook(%T{data: %Expr{op: :token, args: [token]}} = t, cache, hooks) do
+    if Enum.any?(token.hooks, &(hooks[&1.name] || &1.callback)) do
+      throw(:side_effect)
+    else
+      fallback_detect_hook(t, cache, hooks)
+    end
+  end
+
+  defp detect_hook(t, cache, hooks), do: fallback_detect_hook(t, cache, hooks)
+
+  defp fallback_detect_hook(%T{data: %Expr{id: id}} = t, cache, hooks) do
+    case cache do
+      %{^id => _} ->
+        cache
+
+      %{} ->
+        {_, cache} = apply_args(t, cache, &{&1, detect_hook(&1, &2, hooks)})
+        Map.put(cache, id, true)
+    end
+  end
+
+  @doc """
   Puts new args in the given tensor expression and gives it a new id.
   """
   def put_args(%T{data: %Expr{} = expr} = t, args) do
@@ -21,6 +52,16 @@ defmodule Nx.Defn.Tree do
   nodes to avoid multiple traversals.
   """
   def apply_args(expr, acc, fun)
+
+  def apply_args(%T{data: %Expr{op: :token, args: [token]}}, acc, fun) do
+    {hooks, acc} =
+      Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->
+        {expr, acc} = Composite.traverse(expr, acc, fun)
+        {%{token | expr: expr}, acc}
+      end)
+
+    {[%{token | hooks: hooks}], acc}
+  end
 
   def apply_args(%T{data: %Expr{op: :fun, args: [args, expr, mfa]}}, acc, fun) do
     {args, acc} = Enum.map_reduce(args, acc, &Composite.traverse(&1, &2, fun))
@@ -126,22 +167,20 @@ defmodule Nx.Defn.Tree do
   end
 
   defp rewrite_type(expr, fun) do
-    {res, _} = rewrite_type(expr, %{}, fun)
+    {res, _} = Composite.traverse(expr, %{}, &rewrite_type(&1, &2, fun))
     res
   end
 
-  defp rewrite_type(expr, cache, fun) do
-    Composite.traverse(expr, cache, fn %T{data: %Expr{id: id, op: op}} = t, cache ->
-      case cache do
-        %{^id => res} ->
-          {res, cache}
+  defp rewrite_type(%T{data: %Expr{id: id, op: op}} = t, cache, fun) do
+    case cache do
+      %{^id => res} ->
+        {res, cache}
 
-        %{} ->
-          {args, cache} = apply_args(t, cache, &rewrite_type(&1, &2, fun))
-          res = rewrite_type(op, args, t, fun)
-          {res, Map.put(cache, id, res)}
-      end
-    end)
+      %{} ->
+        {args, cache} = apply_args(t, cache, &rewrite_type(&1, &2, fun))
+        res = rewrite_type(op, args, t, fun)
+        {res, Map.put(cache, id, res)}
+    end
   end
 
   defp rewrite_type(:parameter, _args, %{data: %{context: :root}} = t, type_fun) do

@@ -128,10 +128,8 @@ defmodule Nx.Defn.Kernel do
         Nx.tanh(a) + Nx.power(b, 2)
       end
 
-  Let's see a trivial example, which is `inspect_expr/1`. `inspect_expr/1`
-  can be used to debug the current expression during compilation.
-  It is implemented by using `transform/2` to invoke `IO.inspect/1` at
-  definition time:
+  Let's see a trivial example, which is to use `IO.inspect/1` to
+  print a tensor expression at definition time:
 
       defn tanh_power(a, b) do
         Nx.tanh(a) + Nx.power(b, 2) |> transform(&IO.inspect/1)
@@ -155,6 +153,8 @@ defmodule Nx.Defn.Kernel do
         d = power [ c, 2 ] ()
         e = add [ b, d ] ()
       >
+
+  Although, for convenience, you might use `inspect_expr/2` instead.
 
   ## Pitfalls
 
@@ -213,6 +213,40 @@ defmodule Nx.Defn.Kernel do
   """
   def inspect_expr(expr, opts \\ []) do
     IO.inspect(expr, opts)
+  end
+
+  @doc """
+  Inspects the value at runtime to the terminal.
+
+  This function is implemented on top of `hook/3` and therefore
+  has the following restrictions:
+
+    * It can only inspect tensors and `Nx.Container`
+    * The return value of this function must be part of the output
+
+  All options are passed to `IO.inspect/2`.
+
+  ## Examples
+
+      defn tanh_grad(t) do
+        grad(t, fn t ->
+          t
+          |> Nx.tanh()
+          |> inspect_value()
+        end)
+      end
+
+      defn tanh_grad(t) do
+        grad(t, fn t ->
+          t
+          |> Nx.tanh()
+          |> inspect_value(label: "tanh")
+        end)
+      end
+
+  """
+  def inspect_value(expr, opts \\ []) do
+    hook(expr, &IO.inspect(&1, opts))
   end
 
   @doc """
@@ -1073,6 +1107,201 @@ defmodule Nx.Defn.Kernel do
   """
   defmacro @expr do
     quote do: Kernel.@(unquote(expr))
+  end
+
+  @doc """
+  Shortcut for `hook/3`.
+  """
+  def hook(expr, name_or_function)
+
+  def hook(expr, name) when is_atom(name),
+    do: unguarded_hook(expr, name, nil)
+
+  def hook(expr, function) when is_function(function, 1),
+    do: unguarded_hook(expr, random_hook_name(), function)
+
+  @doc """
+  Defines a hook.
+
+  Hooks are a mechanism to execute an anonymous function for
+  side-effects with runtime tensor values.
+
+  Let's see an example:
+
+      defmodule Hooks do
+        import Nx.Defn
+
+        defn add_and_mult(a, b) do
+          add = hook(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
+          mult = hook(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
+          {add, mult}
+        end
+      end
+
+  The `defn` above defines two hooks, one is called with the
+  value of `a + b` and another with `a * b`. Once you invoke
+  the function above, you should see this printed:
+
+      Hooks.add_and_mult(2, 3)
+      {:add, #Nx.Tensor<
+         s64
+         5
+      >}
+      {:mult, #Nx.Tensor<
+         s64
+         6
+      >}
+
+  In other words, the `hook` function accepts a tensor
+  expression as argument and it will invoke a custom
+  function with a tensor value at runtime. `hook` returns
+  the result of the given expression. The expression can
+  be any tensor or a `Nx.Container`.
+
+  Note **you must return the result of the `hook` call**.
+  For example, the code below won't inspect the `:add`
+  tuple, because the hook is not returned from `defn`:
+
+      defn add_and_mult(a, b) do
+        _add = hook(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
+        mult = hook(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
+        mult
+      end
+
+  We will learn how to hook into a value that is not part
+  of the result in the "Hooks and tokens" section.
+
+  ## Named hooks
+
+  It is possible to give names to the hooks. This allows them
+  to be defined or overridden by calling `Nx.Defn.jit/3` or
+  `Nx.Defn.stream/3`. Let's see an example:
+
+      defmodule Hooks do
+        import Nx.Defn
+
+        defn add_and_mult(a, b) do
+          add = hook(a + b, :hooks_add)
+          mult = hook(a * b, :hooks_mult)
+          {add, mult}
+        end
+      end
+
+  Now you can pass the hook as argument as follows:
+      
+      hooks = %{
+        hooks_add: fn tensor ->
+          IO.inspect {:add, tensor}
+        end
+      }
+
+      args = [Nx.tensor(2), Nx.tensor(3)]
+      Nx.Defn.jit(&Hooks.add_and_mult/2, args, hooks: hooks)
+
+  > **Important!** We recommend to prefix your hook names
+  > by the name of your project to avoid conflicts.
+
+  If a named hook is not given, compilers can optimize
+  that away and not transfer the tensor from the device
+  in the first place.
+
+  You can also mix named hooks with callbacks:
+
+      defn add_and_mult(a, b) do
+        add = hook(a + b, :hooks_add, fn tensor -> IO.inspect({:add, tensor}) end)
+        mult = hook(a * b, :hooks_mult, fn tensor -> IO.inspect({:mult, tensor}) end)
+        {add, mult}
+      end
+
+  If a hook with the same name is given to `Nx.Defn.jit/3`
+  or `Nx.Defn.stream/3`, then it will override the default
+  callback.
+
+  ## Hooks and tokens
+
+  So far, we have always returned the result of the `hook`
+  call. However, what happens if the values we want to
+  hook are not part of the return value, such as below?
+
+      defn add_and_mult(a, b) do
+        _add = hook(a + b, :hooks_add, &IO.inspect({:add, &1}))
+        mult = hook(a * b, :hooks_mult, &IO.inspect({:mult, &1}))
+        mult
+      end
+
+  In such cases, you must use tokens. Tokens are used to
+  create an ordering over hooks, ensuring hooks execute
+  in a certain sequence:
+
+      defn add_and_mult(a, b) do
+        token = create_token()
+        {token, _add} = hook_token(token, a + b, :hooks_add, &IO.inspect({:add, &1}))
+        {token, mult} = hook_token(token, a * b, :hooks_mult, &IO.inspect({:mult, &1}))
+        attach_token(token, mult)
+      end    
+
+  The example above creates a token and uses `hook_token/4`
+  to create hooks attached to their respective tokens. By using a token,
+  we guarantee that those hooks will be invoked in the order
+  in which they were defined. Then, at the end of the function, 
+  we attach the token (and its associated hooks) to the result `mult`.
+
+  Note you must attach the token at the end, otherwise the hooks
+  will be "lost", as if they were not defined. In fact, the `hook/3`
+  function is implemented roughly like this:
+
+      def hook(tensor_expr, name, function) do
+        {token, result} = hook_token(create_token(), tensor_expr, name, function)
+        attach_token(token, result)
+      end
+
+  """
+  def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
+    do: unguarded_hook(expr, name, function)
+
+  defp unguarded_hook(expr, name, function) do
+    {token, result} = add_hook(create_token(), expr, name, function)
+    attach_token(token, result)
+  end
+
+  @doc """
+  Shortcut for `hook_token/4`.
+  """
+  def hook_token(token, expr, name_or_function)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
+    do: add_hook(token, expr, name, nil)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
+    do: add_hook(token, expr, random_hook_name(), function)
+
+  @doc """
+  Defines a hook with an existing token. See `hook/3`.
+  """
+  def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
+      when Kernel.and(is_atom(name), is_function(function, 1)),
+      do: add_hook(token, expr, name, function)
+
+  defp add_hook(token, expr, name, function) do
+    expr = Nx.Defn.Expr.normalize(expr)
+    token = Nx.Defn.Token.add_hook(token, expr, name, function)
+    {token, expr}
+  end
+
+  defp random_hook_name(), do: :"hook_#{System.unique_integer([:positive])}"
+
+  @doc """
+  Creates a token for hooks. See `hook/3`.
+  """
+  def create_token do
+    Nx.Defn.Token.new()
+  end
+
+  @doc """
+  Attaches a token to an expression. See `hook/3`.
+  """
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    Nx.Defn.Expr.attach_token(token, expr)
   end
 
   @doc """

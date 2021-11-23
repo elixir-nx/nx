@@ -344,5 +344,33 @@ defmodule Nx.Defn.ExprTest do
              >\
              """
     end
+
+    defn sub_add_mult(a, b) do
+      token = create_token()
+      {token, add} = hook_token(token, a + b, :add, &IO.inspect({:add, &1}))
+      {token, mult} = hook_token(token, a * b, :mult, &IO.inspect({:mult, &1}))
+      {add, mult} = attach_token(token, {add, mult})
+      add - mult
+    end
+
+    test "with tokens" do
+      result = sub_add_mult(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
+
+      assert inspect(result, safe: false) == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a                    f32
+               parameter b                    f32
+               c = multiply [ a, b ]          f32
+               d = add [ a, b ]               f32
+               e = token [ mult: c, add: d ]  tuple2
+               f = attach_token [ e, d ]      f32
+               g = attach_token [ e, c ]      f32
+               h = subtract [ f, g ]          f32
+             >\
+             """
+    end
   end
 end

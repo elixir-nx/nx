@@ -348,6 +348,20 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [ast, fun]}, state}
   end
 
+  defp normalize({{:., _, [Nx.Defn.Kernel, :hook]} = call, meta, [ast | rest]}, state) do
+    {ast, state} = normalize(ast, state)
+    {{call, meta, [ast | rest]}, state}
+  end
+
+  defp normalize(
+         {{:., _, [Nx.Defn.Kernel, :hook_token]} = call, meta, [token, ast | rest]},
+         state
+       ) do
+    {token, state} = normalize(token, state)
+    {ast, state} = normalize(ast, state)
+    {{call, meta, [token, ast | rest]}, state}
+  end
+
   defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state)
        when mod in [Nx, Nx.LinAlg, Nx.Defn, Nx.Defn.Kernel] do
     if name in @forbidden_ops do
