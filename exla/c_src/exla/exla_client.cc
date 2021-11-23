@@ -20,7 +20,7 @@ void CopyLiteralToBinary(xla::Literal* literal, ErlNifBinary* binary, exla::int6
 }
 
 xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 size) {
-  buffer_->BlockHostUntilReady();
+  EXLA_EFFECT_OR_RETURN(buffer_->BlockHostUntilReady());
   EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal, buffer_->ToLiteral());
 
   ErlNifBinary binary;
@@ -35,6 +35,10 @@ xla::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv* env, exla::int64 siz
   }
 
   return nif::make(env, binary);
+}
+
+xla::Status ExlaBuffer::BlockHostUntilReady() {
+  return buffer_->BlockHostUntilReady();
 }
 
 xla::Status ExlaBuffer::Deallocate() {
@@ -137,11 +141,14 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
 
   for (auto buf : input_buffers) {
     pjrt_buffers.push_back(buf->buffer());
+
     // If the buffer was not received as a resource (e.g. we converted
-    // it from a binary to a buffer), we need to make it a resource so
-    // it's tracked and GC'ed along with other buffers that are no longer
-    // in use
+    // it from a binary to a buffer), we need to make sure it has been
+    // fully transferred before we exit the NIF and make it a resource
+    // so it's tracked and GC'ed along with other buffers that are no
+    // longer in use
     if (buf->release_after_run()) {
+      EXLA_EFFECT_OR_RETURN_NIF(buf->BlockHostUntilReady(), env);
       terms.push_back(nif::make<ExlaBuffer*>(env, buf));
     }
   }
@@ -167,7 +174,7 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& bina
                                                         xla::Shape& shape,
                                                         int device_id,
                                                         bool can_be_released_after_run) {
-  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kZeroCopy;
+  xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kImmutableUntilTransferCompletes;
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
   EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(binary.data, shape, semantics, nullptr, device));

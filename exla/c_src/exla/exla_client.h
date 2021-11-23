@@ -25,12 +25,10 @@ class ExlaBuffer {
   ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
              bool can_be_released_after_run_ = false);
 
-  xla::PjRtBuffer* buffer() { return buffer_.get(); }
-
   bool release_after_run() { return can_be_released_after_run_; }
-
+  xla::PjRtBuffer* buffer() { return buffer_.get(); }
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
-
+  xla::Status BlockHostUntilReady();
   xla::Status Deallocate();
 
  private:
@@ -65,8 +63,7 @@ class ExlaClient {
 
   xla::PjRtClient* client() { return client_.get(); }
 
-  // Compiles the given computation with the given compile
-  // options
+  // Compiles the given computation with the given compile options
   xla::StatusOr<ExlaExecutable*> Compile(const xla::XlaComputation&,
                                          std::vector<xla::Shape*> argument_layouts,
                                          xla::ExecutableBuildOptions& options,

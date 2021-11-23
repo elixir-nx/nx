@@ -22,11 +22,11 @@ defmodule EXLA.Defn.APITest do
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>
 
       assert_raise RuntimeError,
-                   "Invalid buffer passed to Execute() as argument 1 to replica 0: Invalid argument: Buffer has been deleted or donated.",
+                   ~r"Buffer has been deleted or donated",
                    fn -> add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor) end
 
       assert_raise RuntimeError,
-                   "CopyToHostAsync() called on deleted or donated buffer",
+                   ~r"called on deleted or donated buffer",
                    fn -> Nx.backend_transfer(tensor) end
     end
   end
