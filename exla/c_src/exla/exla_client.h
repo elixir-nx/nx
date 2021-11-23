@@ -32,8 +32,10 @@ class ExlaDevice {
 
 class ExlaBuffer {
  public:
-  ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer);
+  ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer,
+             bool can_be_released_after_run_ = false);
 
+  bool release_after_run() { return can_be_released_after_run_; }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
   xla::Status BlockHostUntilReady();
@@ -41,6 +43,7 @@ class ExlaBuffer {
 
  private:
   std::unique_ptr<xla::PjRtBuffer> buffer_;
+  bool can_be_released_after_run_;
 };
 
 class ExlaExecutable {
@@ -78,7 +81,8 @@ class ExlaClient {
 
   xla::StatusOr<ExlaBuffer*> BufferFromBinary(const ErlNifBinary& binary,
                                               xla::Shape& shape,
-                                              int device_id);
+                                              int device_id,
+                                              bool can_be_released_after_run);
 
   std::vector<ExlaDevice*> GetDevices();
 
