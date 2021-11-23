@@ -22,7 +22,7 @@ defmodule Nx.Defn.TokenTest do
 
   test "Nx.Container" do
     assert token(1, 2) == %Nx.Defn.Token{
-      hooks: [%{name: :example, callback: &Function.identity/1, expr: Nx.tensor(3)}]
-    }
+             hooks: [%{name: :example, callback: &Function.identity/1, expr: Nx.tensor(3)}]
+           }
   end
 end

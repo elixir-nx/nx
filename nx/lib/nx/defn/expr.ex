@@ -1051,9 +1051,11 @@ defmodule Nx.Defn.Expr do
   end
 
   defp inspect_args(:token, hooks, var_map) do
-    IO.iodata_to_binary(Enum.map_intersperse(hooks, ", ", fn {key, val} ->
-      "#{key}: " <> inspect_arg(val, var_map)
-    end))
+    IO.iodata_to_binary(
+      Enum.map_intersperse(hooks, ", ", fn {key, val} ->
+        "#{key}: " <> inspect_arg(val, var_map)
+      end)
+    )
   end
 
   defp inspect_args(:while, [initial], var_map) do
