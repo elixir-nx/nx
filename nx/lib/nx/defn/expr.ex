@@ -107,7 +107,7 @@ defmodule Nx.Defn.Expr do
   args must be a list of parameter nodes.
   """
   def fun(context, args, body, {_, _, _} = mfa) do
-    case Composite.traverse(body, &to_expr/1) do
+    case normalize(body) do
       %T{} = tensor ->
         expr(tensor, context, :fun, [args, tensor, mfa])
 
@@ -208,11 +208,7 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
-  def hook(token, expr, name, function) do
-    expr = Composite.traverse(expr, &to_expr/1)
-    token = Nx.Defn.Token.add_hook(token, expr, name, function)
-    {token, expr}
-  end
+  def normalize(container_or_tensor), do: Composite.traverse(container_or_tensor, &to_expr/1)
 
   @doc false
   def attach_token(token, expr) do
@@ -252,7 +248,7 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def while(file, line, initial, condition, body) do
-    initial = Composite.traverse(initial, &to_expr/1)
+    initial = normalize(initial)
 
     {arg, {_counter, context}} =
       Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
@@ -260,7 +256,7 @@ defmodule Nx.Defn.Expr do
       end)
 
     condition = to_pred(condition.(arg), line, file, :while)
-    body = arg |> body.() |> Composite.traverse(&to_expr/1)
+    body = arg |> body.() |> normalize()
 
     if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
       raise CompileError,
