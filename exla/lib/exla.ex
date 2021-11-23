@@ -177,7 +177,7 @@ defmodule EXLA do
 
   @doc """
   Sets the global defn options to the EXLA compiler with the preferred
-  client based on the available platforms.
+  client based on their availability.
 
   This function is typically invoked at the top of scripts and code
   notebooks which might be potentially executed from multiple platforms.

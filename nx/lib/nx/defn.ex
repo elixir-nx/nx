@@ -232,7 +232,7 @@ defmodule Nx.Defn do
 
   You must avoid calling this function at runtime. It is mostly
   useful during scripts or code notebooks to set a default.
-  If you need to configure a global default compiler in your
+  If you need to configure a global default options in your
   applications, you can do so in your `config/*.exs` files:
 
       config :nx, :#{@app_key}, [compiler: EXLA, client: :cuda]

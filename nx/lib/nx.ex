@@ -2731,7 +2731,7 @@ defmodule Nx do
   This function is mostly used for scripting and testing. In your
   applications, you typically set the backend in your config files:
 
-        config :nx, :default_backend, {Lib.CustomBackend, device: :cuda}
+      config :nx, :default_backend, {Lib.CustomBackend, device: :cuda}
 
   ## Examples
 
@@ -2755,7 +2755,7 @@ defmodule Nx do
   If you need to configure a global default backend in your
   applications, you can do so in your `config/*.exs` files:
 
-      config :nx, default_backend: {Lib.CustomBackend, []}
+      config :nx, :default_backend, {Lib.CustomBackend, []}
 
   """
   @doc type: :backend
