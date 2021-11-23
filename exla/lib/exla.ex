@@ -15,8 +15,7 @@ defmodule EXLA do
   (JIT) compile a native implementation of the function above, tailored for
   the type and shape of the given tensor.
 
-  EXLA is able to compile to the CPU or GPU, by customizing the default
-  client or specifying your own client:
+  EXLA is able to compile to the CPU or GPU, by specifying another client:
 
       import Config
       config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
@@ -177,15 +176,14 @@ defmodule EXLA do
   @behaviour Nx.Defn.Compiler
 
   @doc """
-  Sets the global defn options to the EXLA compiler with the
-  preferred client based on the available platforms.
+  Sets the global defn options to the EXLA compiler with the preferred
+  client based on the available platforms.
 
-  This function is typically invoked at the top of scripts
-  and code notebooks which might be potentially executed from
-  multiple platforms. Do not invoke this function during runtime,
-  as it changes the `Nx.Defn` options globally. If you have a
-  specific client that you want to use throughout your project,
-  use configuration files instead:
+  This function is typically invoked at the top of scripts and code
+  notebooks which might be potentially executed from multiple platforms.
+  Do not invoke this function during runtime, as it changes `Nx.Defn`
+  options globally. If you have a specific client that you want to use
+  throughout your project, use configuration files instead:
 
       config :nx, :default_defn_options, [compiler: EXLA, client: :cuda]
 
