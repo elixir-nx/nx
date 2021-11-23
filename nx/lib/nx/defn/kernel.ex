@@ -128,10 +128,8 @@ defmodule Nx.Defn.Kernel do
         Nx.tanh(a) + Nx.power(b, 2)
       end
 
-  Let's see a trivial example, which is `inspect_expr/1`. `inspect_expr/1`
-  can be used to debug the current expression during compilation.
-  It is implemented by using `transform/2` to invoke `IO.inspect/1` at
-  definition time:
+  Let's see a trivial example, which is to use `IO.inspect/1` to
+  print a tensor expression at definition time:
 
       defn tanh_power(a, b) do
         Nx.tanh(a) + Nx.power(b, 2) |> transform(&IO.inspect/1)
@@ -155,6 +153,8 @@ defmodule Nx.Defn.Kernel do
         d = power [ c, 2 ] ()
         e = add [ b, d ] ()
       >
+
+  Although, for convenience, you might use `inspect_expr/2` instead.
 
   ## Pitfalls
 
@@ -1073,6 +1073,58 @@ defmodule Nx.Defn.Kernel do
   """
   defmacro @expr do
     quote do: Kernel.@(unquote(expr))
+  end
+
+  @doc """
+  Shortcut for `hook/3`.
+  """
+  def hook(expr, name) when is_atom(name),
+    do: unguarded_hook(expr, name, nil)
+
+  def hook(expr, function) when is_function(function, 1),
+    do: unguarded_hook(expr, random_hook_name(), function)
+
+  @doc """
+  ...
+  """
+  def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
+    do: unguarded_hook(expr, name, function)
+
+  defp unguarded_hook(expr, name, function) do
+    {token, result} = Nx.Defn.Expr.hook(create_token(), expr, name, function)
+    attach_token(token, result)
+  end
+
+  @doc """
+  Shortcut for `hook_token/4`.
+  """
+  def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
+    do: Nx.Defn.Expr.hook(token, expr, name, nil)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
+    do: Nx.Defn.Expr.hook(token, expr, random_hook_name(), function)
+
+  @doc """
+  Defines a hook with an existing token. See `hook/3`.
+  """
+  def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
+      when Kernel.and(is_atom(name), is_function(function, 1)),
+      do: Nx.Defn.Expr.hook(token, expr, name, function)
+
+  defp random_hook_name(), do: :"hook_#{System.unique_integer([:positive])}"
+
+  @doc """
+  Creates a token for hooks. See `hook/3`.
+  """
+  def create_token do
+    Nx.Defn.Token.new()
+  end
+
+  @doc """
+  Attaches a token to an expression. See `hook/3`.
+  """
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    Nx.Defn.Expr.attach_token(token, expr)
   end
 
   @doc """

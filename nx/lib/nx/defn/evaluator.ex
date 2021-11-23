@@ -64,6 +64,11 @@ defmodule Nx.Defn.Evaluator do
     {elem(tuple, i), cache}
   end
 
+  defp eval(%Nx.Tensor{data: %Expr{op: :attach_token, args: [token, expr]}}, vars, cache) do
+    {_, cache} = eval(token, vars, cache)
+    eval(expr, vars, cache)
+  end
+
   defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, vars, cache) do
     eval(expr, vars, cache)
   end
@@ -77,6 +82,17 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(other, _vars, cache) do
     {other, cache}
+  end
+
+  defp eval_apply(_id, :token, %{data: %Expr{args: [token]}}, vars, cache) do
+    cache =
+      Enum.reduce(token.hooks, cache, fn %{callback: callback, expr: expr}, cache ->
+        {expr, cache} = eval(expr, vars, cache)
+        callback.(expr)
+        cache
+      end)
+
+    {{}, cache}
   end
 
   defp eval_apply(id, op, ans, vars, cache) do

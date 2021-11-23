@@ -39,6 +39,8 @@ defmodule Nx.Defn.Expr do
 
     * `while(initial, condition, body)`
 
+    * `attach_token(token(%Nx.Defn.Token{}), expr)`
+
   `defn` compilers must handle said nodes accordingly.
   """
 
@@ -204,6 +206,28 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def id(), do: make_ref()
+
+  @doc false
+  def hook(token, expr, name, function) do
+    expr = Composite.traverse(expr, &to_expr/1)
+    token = Nx.Defn.Token.add_hook(token, expr, name, function)
+    {token, expr}
+  end
+
+  @doc false
+  def attach_token(token, expr) do
+    # We first create an expression to store the token
+    # so we have a shared ID to avoid multiple traversals.
+    # The size of the tuple is not used, but the amount of
+    # hooks is a good indicator.
+    size = length(token.hooks)
+    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
+
+    Composite.traverse(expr, fn tensor ->
+      expr = to_expr(tensor)
+      expr(expr, expr.data.context, :attach_token, [token, expr])
+    end)
+  end
 
   @doc false
   def cond(file, clauses, last) do
@@ -1011,8 +1035,24 @@ defmodule Nx.Defn.Expr do
     {[initial], acc}
   end
 
+  defp traverse_args(:token, %T{data: %{args: [token]}}, acc) do
+    {hooks, acc} =
+      Enum.map_reduce(token.hooks, acc, fn %{name: name, expr: expr}, acc ->
+        {expr, acc} = Composite.traverse(expr, acc, &inspect_expr/2)
+        {{name, expr}, acc}
+      end)
+
+    {hooks, acc}
+  end
+
   defp traverse_args(_op, t, acc) do
     Tree.apply_args(t, acc, &inspect_expr/2)
+  end
+
+  defp inspect_args(:token, hooks, var_map) do
+    IO.iodata_to_binary(Enum.map_intersperse(hooks, ", ", fn {key, val} ->
+      "#{key}: " <> inspect_arg(val, var_map)
+    end))
   end
 
   defp inspect_args(:while, [initial], var_map) do
