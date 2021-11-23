@@ -245,6 +245,7 @@ defmodule Torchx do
   deftensor cholesky(tensor, upper)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
+  deftensor lu(tensor)
   deftensor triangular_solve(tensor_a, tensor_b, transpose, upper)
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)

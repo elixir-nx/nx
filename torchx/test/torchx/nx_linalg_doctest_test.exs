@@ -11,8 +11,12 @@ defmodule Torchx.NxLinAlgDoctestTest do
   use ExUnit.Case, async: true
 
   @rounding_error_doctests [
-    triangular_solve: 3
+    triangular_solve: 3,
+    # The expected result for some tests isn't the same
+    # even though the A = P.L.U property is maintained for lu/2
+    lu: 2
   ]
+
   @temporarily_broken_doctests [
     # norm - reduce_max not implemented
     norm: 2,
