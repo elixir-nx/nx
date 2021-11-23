@@ -86,8 +86,12 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do
     case cache do
-      %{^id => res} -> {res, cache}
-      %{} -> eval_apply(id, op, ans, state, cache)
+      %{^id => res} ->
+        {res, cache}
+
+      %{} ->
+        {res, cache} = eval_apply(op, ans, state, cache)
+        {res, Map.put(cache, id, res)}
     end
   end
 
@@ -95,11 +99,11 @@ defmodule Nx.Defn.Evaluator do
     {other, cache}
   end
 
-  defp eval_apply(_id, :token, %{data: %Expr{args: [token]}}, state, cache) do
+  defp eval_apply(:token, %{data: %Expr{args: [token]}}, state, cache) do
     hooks = state.hooks
 
     cache =
-      Enum.reduce(token.hooks, cache, fn %{callback: callback, expr: expr, name: name}, cache ->
+      List.foldr(token.hooks, cache, fn %{callback: callback, expr: expr, name: name}, cache ->
         hook_fun = hooks[name] || callback
 
         cond do
@@ -120,7 +124,7 @@ defmodule Nx.Defn.Evaluator do
     {{}, cache}
   end
 
-  defp eval_apply(id, op, ans, state, cache) do
+  defp eval_apply(op, ans, state, cache) do
     {args, cache} = Tree.apply_args(ans, cache, &eval(&1, state, &2))
 
     {mod, args} =
@@ -140,8 +144,7 @@ defmodule Nx.Defn.Evaluator do
           {Nx.Shared.list_impl!(args), [ans | args]}
       end
 
-    res = apply(mod, op, args)
-    {res, Map.put(cache, id, res)}
+    {apply(mod, op, args), cache}
   end
 
   defp while(acc, condition, block, state, cache) do
