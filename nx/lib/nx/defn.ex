@@ -263,6 +263,10 @@ defmodule Nx.Defn do
   """
   def jit(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
+    if Nx.Defn.Compiler.current() do
+      raise "cannot call Nx.Defn.jit/3 when there is already a JIT compilation happening"
+    end
+
     opts = Keyword.merge(default_options(), opts)
     Nx.Defn.Compiler.__jit__(fun, args, opts)
   end
@@ -340,6 +344,10 @@ defmodule Nx.Defn do
   """
   def stream(fun, args, opts \\ [])
       when is_function(fun) and is_list(args) and is_list(opts) do
+    if Nx.Defn.Compiler.current() do
+      raise "cannot call Nx.Defn.stream/3 when there is already a JIT compilation happening"
+    end
+
     case args do
       [input, acc | args] ->
         acc = Nx.Defn.Composite.traverse(acc, &Nx.to_tensor/1)

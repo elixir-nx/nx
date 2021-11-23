@@ -90,10 +90,6 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp runtime_fun(tensors, fun, args, compiler) do
-    if Process.get(Nx.Defn.Compiler) do
-      raise "cannot trigger JIT compilation when there is already a JIT compilation happening"
-    end
-
     Process.put(Nx.Defn.Compiler, compiler)
 
     try do
@@ -212,19 +208,7 @@ defmodule Nx.Defn.Compiler do
     compiler.__jit__(
       cache,
       Nx.Defn.Composite.from_runtime_args(tensors, []),
-      fn tensors ->
-        Process.put(Nx.Defn.Compiler, compiler)
-
-        try do
-          args = Nx.Defn.Composite.args_to_params(args, tensors)
-
-          fun
-          |> apply(args)
-          |> Nx.Defn.Composite.to_result()
-        after
-          Process.delete(Nx.Defn.Compiler)
-        end
-      end,
+      &runtime_fun(&1, fun, args, compiler),
       compiler_opts
     )
   end
