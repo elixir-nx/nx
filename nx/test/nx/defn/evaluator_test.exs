@@ -410,5 +410,31 @@ defmodule Nx.Defn.EvaluatorTest do
 
       refute_received _
     end
+
+    defn hook_upto10(x) do
+      while x, Nx.less(x, 10) do
+        hook(x + 1, :while)
+      end
+    end
+
+    test "inside loops" do
+      assert hook_upto10(5) == Nx.tensor(10)
+      refute_received _
+
+      assert Nx.Defn.jit(&hook_upto10/1, [5], hooks: %{while: &send_to_self({:while, &1})}) ==
+               Nx.tensor(10)
+
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(6)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(7)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(8)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(9)
+      assert_received {:while, tensor}
+      assert tensor == Nx.tensor(10)
+      refute_received _
+    end
   end
 end
