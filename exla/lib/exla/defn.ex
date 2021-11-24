@@ -18,9 +18,11 @@ defmodule EXLA.Defn do
     input_shape = EXLA.Shape.make_tuple_shape(Enum.map(input_vars, &nx_to_shape!/1))
     acc_vars = Nx.Defn.Composite.flatten_list([acc])
     split_fun = &split_stream(&1, &2, length(input_vars), length(acc_vars))
-    comp_fun = &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, compile_options)
 
-    {inputs, {output, acc_output}, {executable, output_shape}} =
+    comp_fun =
+      &to_stream_computation(client, key, input_shape, acc_vars, &1, &2, &3, compile_options)
+
+    {executable, inputs, {output, acc_output}, _hooks, output_shape} =
       compile(client, {:stream, key}, vars, fun, compile_options, split_fun, comp_fun)
 
     # Execution of streams requires the coordination of
@@ -78,7 +80,16 @@ defmodule EXLA.Defn do
     {Enum.take(vars, input_length), used}
   end
 
-  defp to_stream_computation(client, key, input_shape, acc_vars, expr, used_shapes, options) do
+  defp to_stream_computation(
+         client,
+         key,
+         input_shape,
+         acc_vars,
+         expr,
+         used_shapes,
+         used_hooks,
+         options
+       ) do
     %{platform: platform} = client
     inspected_key = inspect(key)
     builder = EXLA.Builder.new(inspected_key)
@@ -135,7 +146,7 @@ defmodule EXLA.Defn do
         {Enum.with_index(shapes, fn _shape, i -> EXLA.Op.get_tuple_element(input, i) end), token}
       end
 
-    {output, acc} =
+    {output, acc, cache} =
       case expr do
         {output_expr, acc_expr} ->
           {input_params, counter} =
@@ -156,12 +167,13 @@ defmodule EXLA.Defn do
           state = %{
             precision: Keyword.get(options, :precision, :highest),
             builder: body_b,
+            used_hooks: used_hooks,
             params: Map.new(input_params ++ acc_params ++ constant_params)
           }
 
           {output, cache} = recur_flatten(output_expr, state, new_cache())
-          {acc, _cache} = recur_flatten(acc_expr, state, cache)
-          {output, acc}
+          {acc, cache} = recur_flatten(acc_expr, state, cache)
+          {output, acc, cache}
 
         _ ->
           raise "expected the function given to Nx.stream/3 to return a two-element tuple, got: " <>
@@ -210,7 +222,7 @@ defmodule EXLA.Defn do
     token = EXLA.Op.get_tuple_element(infeed, 1)
     _ = EXLA.Op.outfeed(EXLA.Op.constant_r0(builder, 0, {:u, 16}), token)
 
-    {EXLA.Builder.build(acc), output_shape}
+    {EXLA.Builder.build(acc), output_shape, cache}
   end
 
   @doc false
@@ -218,9 +230,9 @@ defmodule EXLA.Defn do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     {client_name, compile_options} = Keyword.pop(compile_options, :client, :host)
     client = EXLA.Client.fetch!(client_name)
-    callback = &to_root_computation(key, &1, &2, compile_options)
+    callback = &to_root_computation(key, &1, &2, &3, compile_options)
 
-    {inputs, outputs, {executable, :ok}} =
+    {executable, inputs, outputs, _, :ok} =
       compile(client, key, vars, fun, compile_options, fn _, used -> {[], used} end, callback)
 
     maybe_lock(executable, inputs, outputs, run_options)
@@ -251,51 +263,76 @@ defmodule EXLA.Defn do
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args}
 
-    {expr, {used_inputs, outputs}} =
+    {expr, {used_inputs, defined_hooks, outputs}} =
       EXLA.Defn.LockedCache.run(expr_key, fn ->
         expr = fun.(vars)
-        {expr, {used_inputs(expr), Nx.to_template(expr)}}
+        {expr, used_inputs_and_hooks(expr)}
       end)
+
+    # Hooks with default callbacks or user callbacks are part of the cache key
+    {hooks, options} = Keyword.pop(options, :hooks, %{})
+    used_hooks = Enum.sort(for {k, v} <- defined_hooks, v != nil or Map.has_key?(hooks, k), do: k)
 
     {non_buffers, used_inputs} = to_split.(vars, used_inputs)
     {inputs, cache_args} = filter_inputs(vars, used_inputs)
     cache_args = Enum.map(non_buffers, &nx_to_cache_key!/1) ++ cache_args
-    cache_key = {key, cache_args, client.name, options}
+    cache_key = {key, cache_args, client.name, used_hooks, options}
 
-    {_, executable_extra} =
+    {_, {executable, extra, compiled_hooks}} =
       EXLA.Defn.LockedCache.run(cache_key, fn ->
         shapes = Enum.map(inputs, &nx_to_shape!/1)
-        {computation, extra} = to_computation.(expr || fun.(vars), Enum.zip(used_inputs, shapes))
+        inputs_and_shapes = Enum.zip(used_inputs, shapes)
+
+        {computation, extra, cache} =
+          to_computation.(expr || fun.(vars), inputs_and_shapes, used_hooks)
+
         executable = EXLA.Computation.compile(computation, client, shapes)
-        {nil, {executable, extra}}
+        {nil, {executable, extra, cache.hooks}}
       end)
 
-    {inputs, outputs, executable_extra}
+    # Now finally compute the hooks to be given to outfeed
+    hooks =
+      for k <- used_hooks,
+          do: {Map.fetch!(compiled_hooks, k), hooks[k] || Map.fetch!(defined_hooks, k)},
+          into: %{}
+
+    {executable, inputs, outputs, hooks, extra}
   end
 
-  defp used_inputs(expr) do
-    {_, used_inputs} = Composite.reduce(expr, {%{}, %{}}, &used_inputs/2)
-    used_inputs |> Map.keys() |> Enum.sort()
+  defp used_inputs_and_hooks(expr) do
+    {_, used_inputs, used_hooks} =
+      Composite.reduce(expr, {%{}, %{}, %{}}, &used_inputs_and_hooks/2)
+
+    {used_inputs |> Map.keys() |> Enum.sort(), used_hooks, Nx.to_template(expr)}
   end
 
-  defp used_inputs(%T{data: %Expr{op: :parameter, args: [i], context: :root}}, {seen, used}),
-    do: {seen, Map.put(used, i, true)}
-
-  defp used_inputs(%T{data: %Expr{id: id}} = t, {seen, used}) do
+  defp used_inputs_and_hooks(%T{data: %Expr{id: id} = expr} = t, {seen, inputs, hooks}) do
     case seen do
       %{^id => true} ->
-        {seen, used}
+        {seen, inputs, hooks}
 
       %{} ->
-        acc = {Map.put(seen, id, true), used}
+        acc = {Map.put(seen, id, true), used_inputs(expr, inputs), used_hooks(expr, hooks)}
 
         t
-        |> Tree.apply_args(acc, &{&1, used_inputs(&1, &2)})
+        |> Tree.apply_args(acc, &{&1, used_inputs_and_hooks(&1, &2)})
         |> elem(1)
     end
   end
 
-  defp to_root_computation(key, expr, used_shapes, options) do
+  defp used_inputs(%Expr{op: :parameter, args: [i], context: :root}, inputs),
+    do: Map.put(inputs, i, true)
+
+  defp used_inputs(_, inputs),
+    do: inputs
+
+  defp used_hooks(%Expr{op: :token, args: [token]}, hooks),
+    do: Enum.reduce(token.hooks, hooks, &Map.put(&2, &1.name, &1.callback))
+
+  defp used_hooks(_, hooks),
+    do: hooks
+
+  defp to_root_computation(key, expr, used_shapes, used_hooks, options) do
     builder = EXLA.Builder.new(inspect(key))
 
     params =
@@ -306,16 +343,14 @@ defmodule EXLA.Defn do
     state = %{
       precision: Keyword.get(options, :precision, :highest),
       builder: builder,
+      used_hooks: used_hooks,
       params: Map.new(params)
     }
 
-    computation =
-      expr
-      |> recur_flatten(state, new_cache())
-      |> elem(0)
-      |> EXLA.Builder.build()
+    {res, cache} = recur_flatten(expr, state, new_cache())
 
-    {computation, :ok}
+    # TODO: Add outfeed before building if there are any used hooks
+    {EXLA.Builder.build(res), :ok, cache}
   end
 
   defp recur_flatten(composite, state, cache) do
