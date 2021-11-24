@@ -1246,12 +1246,38 @@ defmodule Nx.Defn.Kernel do
   in which they were defined. Then, at the end of the function, 
   we attach the token (and its associated hooks) to the result `mult`.
 
-  Note you must attach the token at the end, otherwise the hooks
-  will be "lost", as if they were not defined. In fact, the `hook/3`
-  function is implemented roughly like this:
+  In fact, the `hook/3` function is implemented roughly like this:
 
       def hook(tensor_expr, name, function) do
         {token, result} = hook_token(create_token(), tensor_expr, name, function)
+        attach_token(token, result)
+      end
+
+  Note you must attach the token at the end, otherwise the hooks
+  will be "lost", as if they were not defined. This also applies
+  to conditionals and loops. The token must be attached within
+  the branch they are used. For example, this won't work:
+
+      token = create_token()
+
+      {token, result} =
+        if Nx.any?(value) do
+          hook_token(token, some_value)
+        else
+          hook_token(token, another_value)
+        end
+
+      attach_token(result)
+
+  Instead, you must write:
+
+      token = create_token()
+
+      if Nx.any?(value) do
+        {token, result} = hook_token(token, some_value)
+        attach_token(token, result)
+      else
+        {token, result} = hook_token(token, another_value)
         attach_token(token, result)
       end
 

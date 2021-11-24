@@ -31,22 +31,6 @@ defmodule Nx.Defn.Token do
     update_in(token.hooks, &[hook | &1])
   end
 
-  defimpl Nx.Container do
-    def traverse(%{hooks: hooks} = token, acc, fun) do
-      {hooks, acc} =
-        Enum.map_reduce(hooks, acc, fn %{expr: expr} = hook, acc ->
-          {expr, acc} = fun.(expr, acc)
-          {%{hook | expr: expr}, acc}
-        end)
-
-      {%{token | hooks: hooks}, acc}
-    end
-
-    def reduce(%{hooks: hooks}, acc, fun) do
-      Enum.reduce(hooks, acc, fn %{expr: expr}, acc -> fun.(expr, acc) end)
-    end
-  end
-
   defimpl Inspect do
     import Inspect.Algebra
 

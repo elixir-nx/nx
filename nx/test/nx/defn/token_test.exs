@@ -11,18 +11,4 @@ defmodule Nx.Defn.TokenTest do
     token = Nx.Defn.Token.add_hook(token, Nx.tensor(1), :later, nil)
     assert inspect(token) == "#Nx.Defn.Token<[:later, :example]>"
   end
-
-  import Nx.Defn
-
-  defn token(a, b) do
-    token = create_token()
-    {token, _expr} = hook_token(token, a + b, :example, &Function.identity/1)
-    token
-  end
-
-  test "Nx.Container" do
-    assert token(1, 2) == %Nx.Defn.Token{
-             hooks: [%{name: :example, callback: &Function.identity/1, expr: Nx.tensor(3)}]
-           }
-  end
 end
