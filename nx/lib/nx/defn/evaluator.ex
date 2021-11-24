@@ -31,42 +31,12 @@ defmodule Nx.Defn.Evaluator do
     |> elem(0)
   end
 
-  defp eval(%Nx.Tensor{data: %Expr{op: :fun, args: [args, expr, _mfa]}}, state, cache) do
-    fun =
-      case length(args) do
-        1 ->
-          fn arg1 ->
-            {result, _cache} = composite_eval(expr, %{state | vars: [arg1]}, %{})
-            result
-          end
-
-        2 ->
-          fn arg1, arg2 ->
-            {result, _cache} = composite_eval(expr, %{state | vars: [arg1, arg2]}, %{})
-            result
-          end
-      end
-
-    {fun, cache}
-  end
-
   defp eval(%Nx.Tensor{data: %Expr{op: :parameter, args: [i]}}, state, cache) do
     {Enum.fetch!(state.vars, i), cache}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, cache) do
     {t, cache}
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :cond, args: [clauses, last]}}, state, cache) do
-    {res, cache} = cond_clause(clauses, last, state, cache)
-    composite_eval(res, state, cache)
-  end
-
-  defp eval(%Nx.Tensor{data: %Expr{op: :while, args: args}}, state, cache) do
-    [initial, _arg, condition, block] = args
-    {initial, cache} = composite_eval(initial, state, cache)
-    {while(initial, condition, block, state, cache), cache}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, state, cache) do
@@ -97,6 +67,36 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(other, _state, cache) do
     {other, cache}
+  end
+
+  defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa]}}, state, cache) do
+    fun =
+      case length(args) do
+        1 ->
+          fn arg1 ->
+            {result, _cache} = composite_eval(expr, %{state | vars: [arg1]}, %{})
+            result
+          end
+
+        2 ->
+          fn arg1, arg2 ->
+            {result, _cache} = composite_eval(expr, %{state | vars: [arg1, arg2]}, %{})
+            result
+          end
+      end
+
+    {fun, cache}
+  end
+
+  defp eval_apply(:cond, %{data: %Expr{args: [clauses, last]}}, state, cache) do
+    {res, cache} = cond_clause(clauses, last, state, cache)
+    composite_eval(res, state, cache)
+  end
+
+  defp eval_apply(:while, %{data: %Expr{args: args}}, state, cache) do
+    [initial, _arg, condition, block] = args
+    {initial, cache} = composite_eval(initial, state, cache)
+    {while(initial, condition, block, state, cache), cache}
   end
 
   defp eval_apply(:token, %{data: %Expr{args: [token]}}, state, cache) do
