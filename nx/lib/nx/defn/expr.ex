@@ -117,19 +117,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tensor expression function node with the given context,
-  the anonymous function and args.
-
-  args must be a list of parameter nodes.
-  """
-  def fun(context, fun, args) when is_function(fun, length(args)) do
-    {:module, mod} = Function.info(fun, :module)
-    {:name, name} = Function.info(fun, :name)
-    {:arity, arity} = Function.info(fun, :arity)
-    fun(context, args, apply(fun, args), {mod, name, arity})
-  end
-
-  @doc """
   Creates a tuple given by the shapes in `tuple` that point to `expr`.
 
   Each element of the tuple is expected to be a tensor expression.
@@ -496,7 +483,7 @@ defmodule Nx.Defn.Expr do
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(context, fun, args)
+    fun = apply_fun(context, fun, args, type)
 
     if fun.shape != {} do
       raise "reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -516,7 +503,7 @@ defmodule Nx.Defn.Expr do
       ) do
     args = [parameter(:window_reduce, type, {}, 0), parameter(:window_reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(context, fun, args)
+    fun = apply_fun(context, fun, args, type)
 
     if fun.shape != {} do
       raise "window_reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -529,7 +516,7 @@ defmodule Nx.Defn.Expr do
   def map(%{type: type} = out, tensor, opts, fun) do
     args = [parameter(:map, type, {}, 0)]
     %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :map, [tensor, opts, fun(context, fun, args)])
+    expr(out, context, :map, [tensor, opts, apply_fun(context, fun, args, type)])
   end
 
   @impl true
@@ -859,6 +846,16 @@ defmodule Nx.Defn.Expr do
       expr = to_expr(tensor)
       {expr, merge_context!(expr, acc)}
     end)
+  end
+
+  defp apply_fun(context, fun, args, type) when is_function(fun, length(args)) do
+    {:module, mod} = Function.info(fun, :module)
+    {:name, name} = Function.info(fun, :name)
+    {:arity, arity} = Function.info(fun, :arity)
+
+    # We modify the type after applying because the best form
+    # to perform type conversions is always left to the compiler.
+    %{fun(context, args, apply(fun, args), {mod, name, arity}) | type: type}
   end
 
   defp to_pred(pred, line, file, op) do

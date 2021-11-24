@@ -159,7 +159,7 @@ defmodule EXLA.Defn do
             params: Map.new(input_params ++ acc_params ++ constant_params)
           }
 
-          {output, cache} = recur_flatten(output_expr, state, %{})
+          {output, cache} = recur_flatten(output_expr, state, new_cache())
           {acc, _cache} = recur_flatten(acc_expr, state, cache)
           {output, acc}
 
@@ -311,7 +311,7 @@ defmodule EXLA.Defn do
 
     computation =
       expr
-      |> recur_flatten(state, %{})
+      |> recur_flatten(state, new_cache())
       |> elem(0)
       |> EXLA.Builder.build()
 
@@ -344,8 +344,8 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(:while, %T{data: %Expr{args: args}}, state, cache) do
     [initial, arg, pred, body] = args
     {initial, cache} = recur_composite(initial, state, cache)
-    pred = recur_computation(:while_pred, [arg], pred, {:pred, 8}, state)
-    body = recur_computation(:while_body, [arg], body, :any, state)
+    {pred, cache} = recur_computation(:while_pred, [arg], pred, {:pred, 8}, state, cache)
+    {body, cache} = recur_computation(:while_body, [arg], body, :any, state, cache)
     {EXLA.Op.while(pred, body, initial), cache}
   end
 
@@ -373,8 +373,9 @@ defmodule EXLA.Defn do
     {Map.fetch!(state.params, i), cache}
   end
 
-  defp cached_recur_operator(:fun, expr, _state, cache) do
-    {expr, cache}
+  defp cached_recur_operator(:fun, %T{data: %Expr{args: args}, type: type}, state, cache) do
+    [args, expr, {_, name, _}] = args
+    recur_computation(name, args, expr, type, state, cache)
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
@@ -693,36 +694,35 @@ defmodule EXLA.Defn do
   ## to_operator reduction
 
   defp to_operator(:all?, [arg, opts], _ans, state) do
-    to_aggregate(:all?, {:pred, 8}, {}, arg, 1, opts, state, binary_op_fun(:bitwise_and))
+    to_aggregate(:bitwise_and, {:pred, 8}, {}, arg, 1, opts, state)
   end
 
   defp to_operator(:any?, [arg, opts], _ans, state) do
-    to_aggregate(:any?, {:pred, 8}, {}, arg, 0, opts, state, binary_op_fun(:bitwise_or))
+    to_aggregate(:bitwise_or, {:pred, 8}, {}, arg, 0, opts, state)
   end
 
   defp to_operator(:sum, [arg, opts], %{type: type, shape: shape}, state) do
-    to_aggregate(:sum, type, shape, arg, 0, opts, state, binary_op_fun(:add))
+    to_aggregate(:add, type, shape, arg, 0, opts, state)
   end
 
   defp to_operator(:product, [arg, opts], %{type: type, shape: shape}, state) do
-    to_aggregate(:product, type, shape, arg, 1, opts, state, binary_op_fun(:multiply))
+    to_aggregate(:multiply, type, shape, arg, 1, opts, state)
   end
 
   defp to_operator(:reduce_max, [arg, opts], %{type: type, shape: shape}, state) do
     min_value = EXLA.Lib.min_value(state.builder, type)
-    to_aggregate(:reduce_max, type, shape, arg, min_value, opts, state, binary_op_fun(:max))
+    to_aggregate(:max, type, shape, arg, min_value, opts, state)
   end
 
   defp to_operator(:reduce_min, [arg, opts], %{type: type, shape: shape}, state) do
     max_value = EXLA.Lib.max_value(state.builder, type)
-    to_aggregate(:reduce_max, type, shape, arg, max_value, opts, state, binary_op_fun(:min))
+    to_aggregate(:min, type, shape, arg, max_value, opts, state)
   end
 
-  defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, state) do
+  defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, _state) do
     arg = to_type(arg, type)
-    comp = recur_computation(fun, type, state)
     keep_axes = opts[:keep_axes]
-    result = EXLA.Op.reduce(arg, to_type(acc, type), comp, reduce_axes(arg, opts[:axes]))
+    result = EXLA.Op.reduce(arg, to_type(acc, type), fun, reduce_axes(arg, opts[:axes]))
 
     if keep_axes do
       EXLA.Op.reshape(result, shape)
@@ -732,43 +732,38 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:window_sum, [arg, window_dims, opts], %{type: type}, state) do
-    to_window_aggregate(:window_sum, type, arg, 0, window_dims, opts, state, binary_op_fun(:add))
+    to_window_aggregate(:add, type, arg, 0, window_dims, opts, state)
   end
 
   defp to_operator(:window_max, [arg, window_dims, opts], %{type: type}, state) do
     min_value = EXLA.Lib.min_value(state.builder, type)
-    fun = binary_op_fun(:max)
-    to_window_aggregate(:window_max, type, arg, min_value, window_dims, opts, state, fun)
+    to_window_aggregate(:max, type, arg, min_value, window_dims, opts, state)
   end
 
   defp to_operator(:window_min, [arg, window_dims, opts], %{type: type}, state) do
     max_value = EXLA.Lib.max_value(state.builder, type)
-    fun = binary_op_fun(:min)
-    to_window_aggregate(:window_min, type, arg, max_value, window_dims, opts, state, fun)
+    to_window_aggregate(:min, type, arg, max_value, window_dims, opts, state)
   end
 
   defp to_operator(:window_product, [arg, window_dims, opts], %{type: type}, state) do
-    fun = binary_op_fun(:multiply)
-    to_window_aggregate(:window_product, type, arg, 1, window_dims, opts, state, fun)
+    to_window_aggregate(:multiply, type, arg, 1, window_dims, opts, state)
   end
 
   defp to_operator(
          :window_reduce,
          [arg, acc, window_dimensions, opts, fun],
          %{type: type},
-         state
+         _state
        ) do
     padding_config = opts[:padding]
     strides = opts[:strides]
     window_dilations = opts[:window_dilations]
-
     arg = to_type(arg, type)
-    comp = recur_computation(fun, type, state)
 
     EXLA.Op.window_reduce(
       arg,
       to_type(acc, type),
-      comp,
+      fun,
       window_dimensions,
       strides,
       window_dilations,
@@ -790,9 +785,8 @@ defmodule EXLA.Defn do
     init_value = to_type(init_value, type)
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-
-    select_fn = to_computation(:window_scatter_max_select, args, state, binary_op_fun(:greater))
-    scatter_fn = to_computation(:window_scatter_max_scatter, args, state, binary_op_fun(:add))
+    select_fn = op_to_computation(:greater, args, state)
+    scatter_fn = op_to_computation(:add, args, state)
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -821,8 +815,8 @@ defmodule EXLA.Defn do
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
 
-    select_fn = to_computation(:window_scatter_min_select, args, state, binary_op_fun(:less))
-    scatter_fn = to_computation(:window_scatter_min_scatter, args, state, binary_op_fun(:add))
+    select_fn = op_to_computation(:less, args, state)
+    scatter_fn = op_to_computation(:add, args, state)
 
     EXLA.Op.select_and_scatter(
       arg,
@@ -846,7 +840,7 @@ defmodule EXLA.Defn do
     updates = to_type(updates, type)
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    scatter_fn = to_computation(:indexed_add_addition, args, state, binary_op_fun(:add))
+    scatter_fn = op_to_computation(:add, args, state)
 
     rank = target |> op_shape() |> tuple_size()
     # indices_rank is guaranteed to be 2 by Nx.Shape
@@ -884,10 +878,9 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:map, [arg, _opts, fun], %{shape: shape, type: type}, state) do
+  defp to_operator(:map, [arg, _opts, fun], %{shape: shape, type: type}, _state) do
     arg = to_type(arg, type)
-    comp = recur_computation(fun, type, state)
-    EXLA.Op.map(arg, comp, Nx.axes(shape))
+    EXLA.Op.map(arg, fun, Nx.axes(shape))
   end
 
   @reduction_op [:argmax, :argmin, :reduce_max, :reduce_min]
@@ -1036,25 +1029,24 @@ defmodule EXLA.Defn do
   defp to_operator(:sort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
 
-    fun =
+    op =
       case opts[:direction] do
-        :asc -> binary_op_fun(:less)
-        :desc -> binary_op_fun(:greater)
+        :asc -> :less
+        :desc -> :greater
       end
 
     args = [%{type: ans.type, shape: {}}, %{type: ans.type, shape: {}}]
-    comp = to_computation(:comparator, args, state, fun)
-
+    comp = op_to_computation(op, args, state)
     EXLA.Op.sort(tensor, comp, dimension)
   end
 
   defp to_operator(:argsort, [tensor, opts], ans, state) do
     dimension = opts[:axis]
 
-    fun =
+    op =
       case opts[:direction] do
-        :asc -> binary_op_fun(:less)
-        :desc -> binary_op_fun(:greater)
+        :asc -> :less
+        :desc -> :greater
       end
 
     args = [
@@ -1064,27 +1056,26 @@ defmodule EXLA.Defn do
       %{type: ans.type, shape: {}}
     ]
 
-    comp = to_computation(:comparator, args, state, fun)
+    comp = op_to_computation(op, args, state, fn [arg1, arg2 | _] -> [arg1, arg2] end)
     EXLA.Lib.argsort(state.builder, tensor, dimension, comp, ans.type)
   end
 
+  ## Cache helpers
+
+  defp new_cache(), do: %{hooks: %{}}
+  defp new_cache(%{hooks: hooks}), do: %{hooks: hooks}
+  defp update_cache(cache, %{hooks: hooks}), do: %{cache | hooks: hooks}
+
   ## Computation helpers
 
-  defp recur_computation(name, args, expr, type, state) do
-    to_computation(name, args, state, fn state ->
-      expr
-      |> recur_composite(state, %{})
-      |> elem(0)
-      |> to_type(type)
-    end)
+  defp recur_computation(name, args, expr, type, state, cache) do
+    {res, comp_cache} =
+      recur_composite(expr, computation_state(name, args, state), new_cache(cache))
+
+    {EXLA.Builder.build(to_type(res, type)), update_cache(cache, comp_cache)}
   end
 
-  defp recur_computation(%T{data: %Expr{op: :fun, args: args}}, type, state) do
-    [args, expr, {_, name, _}] = args
-    recur_computation(name, args, expr, type, state)
-  end
-
-  defp to_computation(name, args, state, fun) do
+  defp computation_state(name, args, state) do
     subbuilder = subbuilder(state.builder, Atom.to_string(name))
 
     arg_params =
@@ -1094,8 +1085,7 @@ defmodule EXLA.Defn do
       end)
 
     {_, params} = Enum.reduce(arg_params, {0, []}, &computation_arg_param(&1, &2))
-    state = %{state | builder: subbuilder, params: Map.new(params)}
-    EXLA.Builder.build(fun.(state))
+    %{state | builder: subbuilder, params: Map.new(params)}
   end
 
   defp computation_arg_shape(%{type: type, shape: shape}) do
@@ -1153,11 +1143,19 @@ defmodule EXLA.Defn do
 
   ## Aggregation
 
-  defp binary_op_fun(op) do
-    fn %{params: %{0 => arg0, 1 => arg1}} -> apply(EXLA.Op, op, [arg0, arg1]) end
+  defp op_to_computation(op, args, state, prepare_args \\ & &1) do
+    subbuilder = subbuilder(state.builder, Atom.to_string(op))
+
+    args =
+      Enum.with_index(args, fn arg, i ->
+        fun_shape = computation_arg_shape(arg)
+        EXLA.Op.parameter(subbuilder, i, fun_shape, "p#{i}")
+      end)
+
+    EXLA.Builder.build(apply(EXLA.Op, op, prepare_args.(args)))
   end
 
-  defp to_aggregate(name, type, shape, arg, initial, opts, state, fun) do
+  defp to_aggregate(op, type, shape, arg, initial, opts, state) do
     arg = to_type(arg, type)
 
     acc =
@@ -1170,7 +1168,7 @@ defmodule EXLA.Defn do
       end
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    comp = to_computation(name, args, state, fun)
+    comp = op_to_computation(op, args, state)
     keep_axes = opts[:keep_axes]
     result = EXLA.Op.reduce(arg, acc, comp, reduce_axes(arg, opts[:axes]))
 
@@ -1181,7 +1179,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_window_aggregate(name, type, arg, initial, window_dimensions, opts, state, fun) do
+  defp to_window_aggregate(op, type, arg, initial, window_dimensions, opts, state) do
     arg = to_type(arg, type)
 
     acc =
@@ -1194,7 +1192,7 @@ defmodule EXLA.Defn do
       end
 
     args = [%{type: type, shape: {}}, %{type: type, shape: {}}]
-    comp = to_computation(name, args, state, fun)
+    comp = op_to_computation(op, args, state)
 
     strides = opts[:strides]
     padding = opts[:padding]
@@ -1255,7 +1253,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_if_branch(bool, expr, ids, state, cache) do
-    {expr, {_cache, ids_args}} = Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
+    {expr, {_, ids_args}} = Composite.traverse(expr, {%{}, %{}}, &collect_args(&1, &2, ids))
     sorted_ids_args = Enum.sort_by(ids_args, fn {_id, {i, _old, _new}} -> i end)
 
     {args, cache} =
@@ -1278,13 +1276,9 @@ defmodule EXLA.Defn do
         {i, EXLA.Op.get_tuple_element(param, i)}
       end
 
-    comp =
-      expr
-      |> recur_composite(%{state | builder: subbuilder, params: Map.new(params)}, %{})
-      |> elem(0)
-      |> EXLA.Builder.build()
-
-    {EXLA.Op.tuple(state.builder, args), comp, cache}
+    comp_state = %{state | builder: subbuilder, params: Map.new(params)}
+    {res, comp_cache} = recur_composite(expr, comp_state, new_cache(cache))
+    {EXLA.Op.tuple(state.builder, args), EXLA.Builder.build(res), update_cache(cache, comp_cache)}
   end
 
   ## Axes helpers
