@@ -3,7 +3,7 @@ defmodule EXLA.Defn.Stream do
 
   keys =
     [:lock, :outfeed, :pid, :ref, :send, :recv, :send_shape] ++
-      [:recv_shapes, :done, :client, :device_id, :keep_on_device]
+      [:recv_length, :done, :client, :device_id, :keep_on_device]
 
   @derive {Inspect, only: [:pid, :client, :device_id, :keep_on_device, :send, :recv]}
   @enforce_keys keys
@@ -41,7 +41,7 @@ defmodule EXLA.Defn.Stream do
       send: send,
       send_shape: send_shape,
       recv: recv,
-      recv_shapes: recv_shapes,
+      recv_length: length(recv_shapes),
       client: client,
       device_id: device_id,
       done: done,
@@ -91,7 +91,7 @@ defmodule EXLA.Defn.Stream do
       |> Enum.reverse()
     end
 
-    def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv: recv, recv_shapes: shapes}) do
+    def recv(%{pid: pid, outfeed: outfeed, lock: lock, recv: recv, recv_length: length}) do
       if pid != self() do
         raise "EXLA streams require recv to be called from the process that started the stream"
       end
@@ -101,9 +101,9 @@ defmodule EXLA.Defn.Stream do
       end
 
       buffers =
-        for shape <- shapes do
+        for _ <- 1..length//1 do
           receive do
-            {^lock, binary} -> %EXLA.Buffer{data: binary, shape: shape}
+            {^lock, binary} -> binary
           end
         end
 
