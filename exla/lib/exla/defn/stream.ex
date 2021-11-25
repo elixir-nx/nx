@@ -2,7 +2,7 @@ defmodule EXLA.Defn.Stream do
   @moduledoc false
 
   keys =
-    [:lock, :outfeed, :pid, :ref, :send, :recv, :send_shape] ++
+    [:lock, :outfeed, :pid, :runner, :send, :recv, :send_shape] ++
       [:recv_length, :done, :client, :device_id, :keep_on_device]
 
   @derive {Inspect, only: [:pid, :client, :device_id, :keep_on_device, :send, :recv]}
@@ -12,7 +12,7 @@ defmodule EXLA.Defn.Stream do
   def run(
         executable,
         lock,
-        task,
+        runner,
         outfeed,
         send,
         send_shape,
@@ -22,7 +22,6 @@ defmodule EXLA.Defn.Stream do
         keep_on_device?
       ) do
     %{client: client, device_id: device_id} = executable
-    %{pid: task_pid, ref: task_ref} = task
 
     # With the task and outfeed in place, we now register the unlock callback:
     # if the current process shuts down, we send an infeed to stop the loop,
@@ -30,13 +29,13 @@ defmodule EXLA.Defn.Stream do
     ^lock =
       EXLA.Defn.Lock.on_unlock(
         lock,
-        fn -> send(task_pid, lock) end,
+        fn -> send(runner, lock) end,
         fn -> halt_stream(client, device_id, outfeed) end
       )
 
     %EXLA.Defn.Stream{
       pid: self(),
-      ref: task_ref,
+      runner: runner,
       outfeed: outfeed,
       lock: lock,
       send: send,
@@ -122,7 +121,7 @@ defmodule EXLA.Defn.Stream do
           lock: lock,
           outfeed: outfeed,
           pid: pid,
-          ref: ref,
+          runner: runner,
           keep_on_device: keep_on_device,
           done: done
         }) do
@@ -147,12 +146,8 @@ defmodule EXLA.Defn.Stream do
           raise "cannot mark stream as done when there are recv messages pending"
 
         {:DOWN, ^outfeed_ref, _, _, _} ->
-          receive do
-            {^ref, result} ->
-              Process.demonitor(ref, [:flush])
-              fun = if keep_on_device, do: & &1, else: &Nx.backend_transfer/1
-              EXLA.Defn.Buffer.to_nx!(result, done, fun)
-          end
+          fun = if keep_on_device, do: & &1, else: &Nx.backend_transfer/1
+          EXLA.Defn.Buffer.to_nx!(EXLA.Defn.Runner.read(runner), done, fun)
       end
     end
   end

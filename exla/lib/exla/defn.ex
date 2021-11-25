@@ -34,20 +34,19 @@ defmodule EXLA.Defn do
     lock = EXLA.Defn.Lock.lock(run_key(executable))
     buffers = EXLA.Defn.Buffer.from_nx!(inputs)
 
-    # Now that we have transferred to device, we spawn a task to
-    # execute the stream. We keep this with regular async/await
-    # because this task will never really exist beyond the scope
-    # of the current process.
+    # Now that we have transferred to device, we spawn a runner process
+    # to execute the stream. We use a runner instead of a task to avoid
+    # leaking messages in the inbox. We also don't use a supervisor
+    # to keep them linked, which is safe because the agent is not used
+    # outside the scope of the current process.
     #
-    # Finally, note the task cannot start immediately, we need to
+    # Finally, note the runner cannot start immediately, we need to
     # setup the outfeed reader and register the on_unlock callback
     # that cancels the stream atomically. This is done inside
     # EXLA.Defn.Stream.run.
-    task =
-      Task.async(fn ->
-        receive do
-          ^lock -> EXLA.Executable.run(executable, buffers, run_options)
-        end
+    {:ok, runner} =
+      EXLA.Defn.Runner.start_link(lock, fn ->
+        EXLA.Executable.run(executable, buffers, run_options)
       end)
 
     # The outfeed reader will redirect all outputs with flag 1 to the current
@@ -58,7 +57,7 @@ defmodule EXLA.Defn do
     EXLA.Defn.Stream.run(
       executable,
       lock,
-      task,
+      runner,
       outfeed,
       input,
       input_shape,

@@ -347,12 +347,14 @@ defmodule EXLA.Defn.APITest do
       assert_receive {:tag, {previous_acc, new_acc}}
       assert previous_acc == Nx.tensor(0)
       assert new_acc == Nx.tensor(1)
+      refute_received _
 
       assert Nx.Stream.send(stream, 2) == :ok
       assert Nx.Stream.recv(stream) == Nx.tensor(1)
       assert_receive {:tag, {previous_acc, new_acc}}
       assert previous_acc == Nx.tensor(1)
       assert new_acc == Nx.tensor(3)
+      refute_received _
 
       assert Nx.Stream.done(stream) == Nx.tensor(3)
       refute_received _
