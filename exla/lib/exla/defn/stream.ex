@@ -24,10 +24,11 @@ defmodule EXLA.Defn.Stream do
     %{client: client, device_id: device_id} = executable
     %{pid: task_pid, ref: task_ref} = task
 
-    # With the task and outfeed in place, we now relock the client/device_id.
-    # If the current process shuts down, we send an infeed to stop the loop.
+    # With the task and outfeed in place, we now register the unlock callback:
+    # if the current process shuts down, we send an infeed to stop the loop,
+    # and then we block until the outfeed completes.
     ^lock =
-      EXLA.Defn.Lock.relock(
+      EXLA.Defn.Lock.on_unlock(
         lock,
         fn -> send(task_pid, lock) end,
         fn -> halt_stream(client, device_id, outfeed) end
@@ -54,11 +55,15 @@ defmodule EXLA.Defn.Stream do
   defp halt_stream(client, device_id, outfeed) do
     pred = EXLA.Shape.make_shape({:pred, 8}, {})
     :ok = EXLA.Client.to_infeed(client, device_id, [{<<0::8-native>>, pred}])
-    {:lock, outfeed, fn -> :unlock end}
+    {:transfer, outfeed}
   end
 
   defimpl Nx.Stream do
-    def send(%{client: client, device_id: device_id, send: send, send_shape: send_shape}, data) do
+    def send(%{pid: pid, client: client, device_id: device_id, send: send, send_shape: send_shape}, data) do
+      if pid != self() do
+        raise "EXLA streams require recv to be called from the process that started the stream"
+      end
+
       unless Nx.compatible?(send, data) do
         raise ArgumentError, """
         Nx stream expected a tensor of type, shape, and names on send:
@@ -122,13 +127,16 @@ defmodule EXLA.Defn.Stream do
         raise "EXLA streams require recv to be called from the process that started the stream"
       end
 
-      # This will send message to stop the loop
-      # and set the lock to the output process.
+      # This will write to infeed to stop the loop. We know unlocking
+      # is race free because we can only write to infeed from this process
+      # (or it is automatically written if this process is dead).
+      #
+      # Once we unlock, the lock process will now wait until the outfeed
+      # terminates.
       EXLA.Defn.Lock.unlock(lock)
 
-      # Now we wait until the outfeed completes, before
-      # we return. This is necessary to ensure all output
-      # has been consumed before we return.
+      # We also wait until the outfeed completes to ensure
+      # all output has been consumed before we return.
       outfeed_ref = Process.monitor(outfeed)
 
       receive do

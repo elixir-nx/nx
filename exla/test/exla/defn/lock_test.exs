@@ -43,7 +43,7 @@ defmodule EXLA.Defn.LockeTest do
     assert Task.await(task)
   end
 
-  test "relocks a given key", config do
+  test "registers on unlock callback", config do
     parent = self()
 
     task1 =
@@ -56,14 +56,14 @@ defmodule EXLA.Defn.LockeTest do
         ref = L.lock(config.test)
         send(parent, :locked)
 
-        L.relock(
+        L.on_unlock(
           ref,
           fn ->
             send(parent, :relocked)
           end,
           fn ->
             send(parent, :unlocked)
-            {:lock, task1.pid, fn -> :unlock end}
+            {:transfer, task1.pid}
           end
         )
 

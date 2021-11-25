@@ -3,6 +3,11 @@ defmodule EXLA.Defn.APITest do
 
   import Nx.Defn
 
+  setup do
+    Nx.Defn.default_options(compiler: EXLA)
+    :ok
+  end
+
   describe "options" do
     defn add_two_keep_on_device(a, b), do: a + b
 
@@ -222,6 +227,75 @@ defmodule EXLA.Defn.APITest do
       assert Nx.Stream.recv(stream) == %Container{a: Nx.tensor(3), b: Nx.tensor(-2), d: :elem}
 
       assert Nx.Stream.done(stream) == %Container{a: Nx.tensor(0), b: Nx.tensor(3), d: :acc}
+    end
+  end
+
+  describe "hooks" do
+    require Logger
+
+    defp send_to_self(tag) do
+      parent = self()
+      fn value -> send(parent, {tag, value}) end
+    end
+
+    defn hook_default(a, b) do
+      hook(a + b, :default, &Logger.error("add: #{inspect(&1)}"))
+    end
+
+    test "executes hook with default" do
+      assert ExUnit.CaptureLog.capture_log(fn -> hook_default(2, 3) end) =~
+               """
+               add: #Nx.Tensor<
+                 s64
+                 5
+               >
+               """
+    end
+
+    test "executes hook with callback" do
+      assert EXLA.jit(&hook_default/2, [2, 3], hooks: %{default: send_to_self(:tag)}) ==
+               Nx.tensor(5)
+
+      assert_receive {:tag, tensor}
+      assert tensor == Nx.tensor(5)
+    end
+
+    defn hook_optional(a, b) do
+      hook(a + b, :optional)
+    end
+
+    test "executes optional hook" do
+      assert hook_optional(2, 3) == Nx.tensor(5)
+
+      assert EXLA.jit(&hook_optional/2, [2, 3], hooks: %{optional: send_to_self(:tag)}) ==
+               Nx.tensor(5)
+
+      assert_receive {:tag, tensor}
+      assert tensor == Nx.tensor(5)
+    end
+
+    defn hook_factorial(x) do
+      {factorial, _} =
+        while {factorial = 1.0, x}, Nx.greater(x, 1) do
+          hook({factorial * x, x - 1}, :factorial)
+        end
+
+      factorial
+    end
+
+    # TODO: test conds and containers
+
+    test "executes hook within while" do
+      assert EXLA.jit(&hook_factorial/1, [5], hooks: %{factorial: send_to_self(:tag)}) ==
+               Nx.tensor(120.0)
+      assert_received {:tag, tuple}
+      assert tuple == {Nx.tensor(5.0), Nx.tensor(4)}
+      assert_received {:tag, tuple}
+      assert tuple == {Nx.tensor(20.0), Nx.tensor(3)}
+      assert_received {:tag, tuple}
+      assert tuple == {Nx.tensor(60.0), Nx.tensor(2)}
+      assert_received {:tag, tuple}
+      assert tuple == {Nx.tensor(120.0), Nx.tensor(1)}
     end
   end
 end
