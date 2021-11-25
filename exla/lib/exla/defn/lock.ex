@@ -17,14 +17,21 @@ defmodule EXLA.Defn.Lock do
   end
 
   @doc """
-  Relocks the given `ref`.
-
-  The `to_lock` is executed and then the new `to_unlock` is registered.
+  Transfers the lock to a new process.
   """
-  def relock(ref, to_lock, to_unlock)
+  def transfer(ref, pid) when is_reference(ref) and is_pid(pid) do
+    GenServer.call(@name, {:transfer, ref, pid}, @timeout)
+  end
+
+  @doc """
+  Registers what happens when the current lock is unlocked.
+
+  The `prepare` is executed and then the new `to_unlock` is registered.
+  """
+  def on_unlock(ref, prepare, to_unlock)
       when is_reference(ref) and
-             is_function(to_lock, 0) and is_function(to_unlock, 0) do
-    GenServer.call(@name, {:relock, ref, to_lock, to_unlock}, @timeout)
+             is_function(prepare, 0) and is_function(to_unlock, 0) do
+    GenServer.call(@name, {:on_unlock, ref, prepare, to_unlock}, @timeout)
   end
 
   @doc """
@@ -66,9 +73,16 @@ defmodule EXLA.Defn.Lock do
     {:reply, :ok, unlock(ref, refs, devices)}
   end
 
-  def handle_call({:relock, ref, to_lock, to_unlock}, _from, {refs, devices}) do
+  def handle_call({:transfer, ref, pid}, _from, {refs, devices}) do
+    {key, refs} = Map.pop!(refs, ref)
+    _ = Process.demonitor(ref, [:flush])
+    ref = Process.monitor(pid)
+    {:reply, ref, {Map.put(refs, ref, key), devices}}
+  end
+
+  def handle_call({:on_unlock, ref, prepare, to_unlock}, _from, {refs, devices}) do
     key = Map.fetch!(refs, ref)
-    res = to_lock.()
+    res = prepare.()
     devices = update_in(devices[key], fn {_to_unlock, queue} -> {to_unlock, queue} end)
     {:reply, res, {refs, devices}}
   end
@@ -89,9 +103,9 @@ defmodule EXLA.Defn.Lock do
       {key, refs} ->
         get_and_update_in(devices[key], fn {to_unlock, queue} ->
           case run_to_unlock(key, to_unlock) do
-            {:lock, to_watch, to_unlock} ->
-              ref = Process.monitor(to_watch)
-              {Map.put(refs, ref, key), {to_unlock, queue}}
+            {:transfer, new} ->
+              ref = Process.monitor(new)
+              {Map.put(refs, ref, key), {fn -> :unlock end, queue}}
 
             :unlock ->
               dequeue_if_possible({:unlocked, queue}, key, refs)

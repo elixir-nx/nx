@@ -43,7 +43,7 @@ defmodule EXLA.Defn.LockeTest do
     assert Task.await(task)
   end
 
-  test "relocks a given key", config do
+  test "registers on unlock callback", config do
     parent = self()
 
     task1 =
@@ -56,14 +56,14 @@ defmodule EXLA.Defn.LockeTest do
         ref = L.lock(config.test)
         send(parent, :locked)
 
-        L.relock(
+        L.on_unlock(
           ref,
           fn ->
             send(parent, :relocked)
           end,
           fn ->
             send(parent, :unlocked)
-            {:lock, task1.pid, fn -> :unlock end}
+            {:transfer, task1.pid}
           end
         )
 
@@ -84,6 +84,46 @@ defmodule EXLA.Defn.LockeTest do
     assert Process.alive?(task3.pid)
     send(task1.pid, :done)
     assert Task.await(task1)
+    assert Task.await(task3)
+  end
+
+  test "transfers", config do
+    parent = self()
+
+    task1 =
+      Task.async(fn ->
+        assert_receive :done
+      end)
+
+    ref = L.lock(config.test)
+    ref = L.transfer(ref, task1.pid)
+
+    task2 =
+      Task.async(fn ->
+        L.lock(config.test)
+        send(parent, :locked)
+        assert_receive :done
+      end)
+
+    send(task1.pid, :done)
+    assert Task.await(task1)
+
+    assert_receive :locked
+    send(task2.pid, :done)
+
+    task3 =
+      Task.async(fn ->
+        L.lock(config.test)
+        send(parent, :locked)
+        assert_receive :done
+      end)
+
+    assert L.unlock(ref)
+    send(task2.pid, :done)
+    assert Task.await(task2)
+
+    assert_receive :locked
+    send(task3.pid, :done)
     assert Task.await(task3)
   end
 end
