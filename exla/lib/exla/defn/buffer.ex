@@ -7,7 +7,7 @@ defmodule EXLA.Defn.Buffer do
   def to_nx!(buffers, outputs, fun \\ & &1) do
     {res, []} =
       Nx.Defn.Composite.traverse(outputs, buffers, fn %Nx.Tensor{} = hole, [buffer | acc] ->
-          {fun.(%{hole | data: buffer_to_data(hole, buffer)}), acc}
+        {fun.(%{hole | data: buffer_to_data(hole, buffer)}), acc}
       end)
 
     res

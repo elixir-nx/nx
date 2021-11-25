@@ -59,7 +59,10 @@ defmodule EXLA.Defn.Stream do
   end
 
   defimpl Nx.Stream do
-    def send(%{pid: pid, client: client, device_id: device_id, send: send, send_shape: send_shape}, data) do
+    def send(
+          %{pid: pid, client: client, device_id: device_id, send: send, send_shape: send_shape},
+          data
+        ) do
       if pid != self() do
         raise "EXLA streams require recv to be called from the process that started the stream"
       end

@@ -86,4 +86,44 @@ defmodule EXLA.Defn.LockeTest do
     assert Task.await(task1)
     assert Task.await(task3)
   end
+
+  test "transfers", config do
+    parent = self()
+
+    task1 =
+      Task.async(fn ->
+        assert_receive :done
+      end)
+
+    ref = L.lock(config.test)
+    ref = L.transfer(ref, task1.pid)
+
+    task2 =
+      Task.async(fn ->
+        L.lock(config.test)
+        send(parent, :locked)
+        assert_receive :done
+      end)
+
+    send(task1.pid, :done)
+    assert Task.await(task1)
+
+    assert_receive :locked
+    send(task2.pid, :done)
+
+    task3 =
+      Task.async(fn ->
+        L.lock(config.test)
+        send(parent, :locked)
+        assert_receive :done
+      end)
+
+    assert L.unlock(ref)
+    send(task2.pid, :done)
+    assert Task.await(task2)
+
+    assert_receive :locked
+    send(task3.pid, :done)
+    assert Task.await(task3)
+  end
 end

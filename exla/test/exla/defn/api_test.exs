@@ -283,11 +283,10 @@ defmodule EXLA.Defn.APITest do
       factorial
     end
 
-    # TODO: test conds and containers
-
     test "executes hook within while" do
       assert EXLA.jit(&hook_factorial/1, [5], hooks: %{factorial: send_to_self(:tag)}) ==
                Nx.tensor(120.0)
+
       assert_received {:tag, tuple}
       assert tuple == {Nx.tensor(5.0), Nx.tensor(4)}
       assert_received {:tag, tuple}
@@ -296,6 +295,67 @@ defmodule EXLA.Defn.APITest do
       assert tuple == {Nx.tensor(60.0), Nx.tensor(2)}
       assert_received {:tag, tuple}
       assert tuple == {Nx.tensor(120.0), Nx.tensor(1)}
+    end
+
+    defn hook_cond(a, b) do
+      cond do
+        a == -1 -> hook(b * 2, :cond)
+        a == 1 -> hook(b / 2, :cond)
+        true -> hook(Nx.power(b, 2), :cond)
+      end
+    end
+
+    test "executes hook within cond" do
+      assert EXLA.jit(&hook_cond/2, [1, 4], hooks: %{cond: send_to_self(:tag)}) ==
+               Nx.tensor(2.0)
+
+      assert_received {:tag, tensor}
+      assert tensor == Nx.tensor(2.0)
+
+      assert EXLA.jit(&hook_cond/2, [-1, 4], hooks: %{cond: send_to_self(:tag)}) ==
+               Nx.tensor(8.0)
+
+      assert_received {:tag, tensor}
+      assert tensor == Nx.tensor(8)
+
+      assert EXLA.jit(&hook_cond/2, [0, 4], hooks: %{cond: send_to_self(:tag)}) ==
+               Nx.tensor(16.0)
+
+      assert_received {:tag, tensor}
+      assert tensor == Nx.tensor(16)
+    end
+
+    defn hook_container(container) do
+      hook(container, :container)
+    end
+
+    test "executes hook with container" do
+      container = %Container{a: 1, b: 2, c: :reset, d: :elem}
+      EXLA.jit(&hook_container/1, [container], hooks: %{container: send_to_self(:tag)})
+
+      assert_receive {:tag, %Container{a: a, b: b, c: nil, d: :elem}}
+      assert a == Nx.tensor(1)
+      assert b == Nx.tensor(2)
+    end
+
+    defn hook_stream(entry, acc), do: hook({acc, entry + acc}, :stream)
+
+    test "executes hook with stream" do
+      %_{} = stream = EXLA.stream(&hook_stream/2, [0, 0], hooks: %{stream: send_to_self(:tag)})
+      assert Nx.Stream.send(stream, 1) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(0)
+      assert_receive {:tag, {previous_acc, new_acc}}
+      assert previous_acc == Nx.tensor(0)
+      assert new_acc == Nx.tensor(1)
+
+      assert Nx.Stream.send(stream, 2) == :ok
+      assert Nx.Stream.recv(stream) == Nx.tensor(1)
+      assert_receive {:tag, {previous_acc, new_acc}}
+      assert previous_acc == Nx.tensor(1)
+      assert new_acc == Nx.tensor(3)
+
+      assert Nx.Stream.done(stream) == Nx.tensor(3)
+      refute_received _
     end
   end
 end
