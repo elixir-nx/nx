@@ -32,7 +32,7 @@ defmodule EXLA.Defn do
     # to avoid transfer to the device unless we know we are
     # ready to use the device.
     lock = EXLA.Defn.Lock.lock(run_key(executable))
-    buffers = EXLA.Defn.Buffer.from_nx!(inputs)
+    buffers = EXLA.Defn.Buffers.from_nx!(inputs)
 
     # Now that we have transferred to device, we spawn a runner process
     # to execute the stream. We use a runner instead of a task to avoid
@@ -252,9 +252,9 @@ defmodule EXLA.Defn do
     lock = EXLA.Defn.Lock.lock(run_key(executable))
 
     try do
-      EXLA.Executable.run(executable, EXLA.Defn.Buffer.from_nx!(inputs), run_options)
+      EXLA.Executable.run(executable, EXLA.Defn.Buffers.from_nx!(inputs), run_options)
     else
-      result -> EXLA.Defn.Buffer.to_nx!(result, outputs)
+      result -> EXLA.Defn.Buffers.to_nx!(result, outputs)
     after
       EXLA.Defn.Lock.unlock(lock)
     end
@@ -262,7 +262,7 @@ defmodule EXLA.Defn do
 
   defp maybe_outfeed(executable, inputs, outputs, hooks, run_options) do
     lock = EXLA.Defn.Lock.lock(run_key(executable))
-    buffers = EXLA.Defn.Buffer.from_nx!(inputs)
+    buffers = EXLA.Defn.Buffers.from_nx!(inputs)
 
     {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
     _ = EXLA.Defn.Lock.transfer(lock, outfeed)
@@ -274,7 +274,7 @@ defmodule EXLA.Defn do
     result = EXLA.Executable.run(executable, buffers, run_options)
 
     receive do
-      {:DOWN, ^ref, _, _, _} -> EXLA.Defn.Buffer.to_nx!(result, outputs, fun)
+      {:DOWN, ^ref, _, _, _} -> EXLA.Defn.Buffers.to_nx!(result, outputs, fun)
     end
   end
 

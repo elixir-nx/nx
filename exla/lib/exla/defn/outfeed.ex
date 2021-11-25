@@ -57,6 +57,6 @@ defmodule EXLA.Defn.Outfeed do
         end
       end
 
-    fun.(EXLA.Defn.Buffer.to_nx!(buffers, template))
+    fun.(EXLA.Defn.Buffers.to_nx!(buffers, template))
   end
 end

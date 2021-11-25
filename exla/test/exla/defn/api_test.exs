@@ -17,12 +17,10 @@ defmodule EXLA.Defn.APITest do
       Nx.Defn.default_options(compiler: EXLA, run_options: [keep_on_device: true])
 
       tensor = add_two_keep_on_device(1, 2)
-      assert %EXLA.DeviceBackend{state: {ref, _}} = tensor.data
-      assert is_reference(ref)
+      assert %EXLA.DeviceBackend{buffer: %EXLA.Buffer{}} = tensor.data
 
       tensor = add_two_keep_on_device(Nx.tensor([[1, 2], [3, 4]]), tensor)
-      assert %EXLA.DeviceBackend{state: {ref, _}} = tensor.data
-      assert is_reference(ref)
+      assert %EXLA.DeviceBackend{buffer: %EXLA.Buffer{}} = tensor.data
 
       assert tensor |> Nx.backend_transfer() |> Nx.to_binary() ==
                <<4::64-native, 5::64-native, 6::64-native, 7::64-native>>

@@ -4,7 +4,7 @@ defmodule EXLA.Executable do
   """
 
   alias __MODULE__
-  alias EXLA.{Buffer, Shape}
+  alias EXLA.{BinaryBuffer, Buffer, Shape}
 
   @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
   defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
@@ -19,9 +19,9 @@ defmodule EXLA.Executable do
 
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
-    %{client: client, output_shape: output_shape} = executable
+    %{client: client, device_id: device_id, output_shape: output_shape} = executable
     {data, _} = run(client, executable, arguments, options)
-    decompose_output(data, output_shape, client)
+    decompose_output(data, output_shape, client, device_id)
   end
 
   defp run(client, executable, arguments, options) do
@@ -32,11 +32,8 @@ defmodule EXLA.Executable do
 
     inputs =
       Enum.map(arguments, fn
-        %Buffer{ref: {ref, _}, data: nil} ->
-          ref
-
-        %Buffer{data: data, shape: shape, ref: nil} ->
-          {data, shape.ref}
+        %Buffer{ref: ref} -> ref
+        %BinaryBuffer{data: data, shape: shape} -> {data, shape.ref}
       end)
 
     data =
@@ -51,15 +48,15 @@ defmodule EXLA.Executable do
     unwrap!(data)
   end
 
-  defp decompose_output(data, shape, client) do
+  defp decompose_output(data, shape, client, device_id) do
     %Shape{dtype: {:tuple, shapes}} = shape
 
     Enum.zip_with(data, shapes, fn
       buf, subshape when is_reference(buf) ->
-        Buffer.from_ref({buf, client.name}, subshape)
+        Buffer.from_ref(buf, client, device_id, subshape)
 
-      buf, subshape ->
-        Buffer.from_binary(buf, subshape)
+      buf, subshape when is_binary(buf) ->
+        BinaryBuffer.from_binary(buf, subshape)
     end)
   end
 

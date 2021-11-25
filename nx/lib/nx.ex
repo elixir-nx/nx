@@ -2677,6 +2677,28 @@ defmodule Nx do
   def size(tensor), do: size(shape(tensor))
 
   @doc """
+  Returns the byte size of the data in the tensor
+  computed from its shape and type.
+
+  ### Examples
+
+      iex> Nx.byte_size(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      48
+      iex> Nx.byte_size(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
+      24
+      iex> Nx.byte_size(Nx.tensor([[1, 2, 3], [4, 5, 6]], type: {:u, 8}))
+      6
+      iex> Nx.byte_size(1)
+      8
+
+  """
+  @doc type: :shape
+  def byte_size(tensor) do
+    %{type: {_, bit_size}, shape: shape} = to_tensor(tensor)
+    size(shape) * div(bit_size, 8)
+  end
+
+  @doc """
   Returns all of the axes in a tensor.
 
   If a shape is given, it returns the axes for the given shape.

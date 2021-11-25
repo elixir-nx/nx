@@ -18,13 +18,63 @@ defmodule EXLA.DeviceBackend do
   """
 
   @behaviour Nx.Backend
-  @enforce_keys [:state]
-  defstruct [:state]
+  @enforce_keys [:buffer]
+  defstruct [:buffer]
 
   alias Nx.Tensor, as: T
   alias EXLA.DeviceBackend, as: DB
 
-  defp default_defn_client do
+  @impl true
+  def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
+    {client, device_id} = client_and_device_id(opts)
+    shape = EXLA.Shape.make_shape(type, shape)
+    buffer = EXLA.Buffer.place_on_device(binary, shape, client, device_id)
+    put_in(tensor.data, %DB{buffer: buffer})
+  end
+
+  @impl true
+  def backend_copy(tensor, Nx.Tensor, opts) do
+    backend_copy(tensor, Nx.BinaryBackend, opts)
+  end
+
+  # TODO: Support direct transfers without going through Elixir
+  def backend_copy(%T{data: %DB{buffer: buffer}} = tensor, backend, opts) do
+    backend.from_binary(tensor, EXLA.Buffer.read(buffer), opts)
+  end
+
+  @impl true
+  def backend_transfer(%T{data: %DB{buffer: buffer}} = tensor, backend, opts) do
+    if backend == __MODULE__ and same_client_device?(buffer, opts) do
+      tensor
+    else
+      try do
+        backend_copy(tensor, backend, opts)
+      after
+        EXLA.Buffer.deallocate(buffer)
+      end
+    end
+  end
+
+  @impl true
+  def backend_deallocate(%T{data: %DB{buffer: buffer}}) do
+    EXLA.Buffer.deallocate(buffer)
+  end
+
+  @impl true
+  def to_binary(%T{data: %DB{buffer: buffer}, type: {_, size}}, limit) do
+    EXLA.Buffer.read(buffer, limit * div(size, 8))
+  end
+
+  @impl true
+  def inspect(%T{data: %DB{buffer: buffer}}, _opts) do
+    %EXLA.Buffer{client_name: client_name, device_id: device_id, ref: ref} = buffer
+    '#Ref<' ++ rest = :erlang.ref_to_list(ref)
+    "EXLA.DeviceBackend<#{client_name}:#{device_id}, " <> List.to_string(rest)
+  end
+
+  ## Helpers
+
+  defp default_client_name do
     opts = Nx.Defn.default_options()
 
     if opts[:compiler] == EXLA do
@@ -34,45 +84,15 @@ defmodule EXLA.DeviceBackend do
     end
   end
 
-  @impl true
-  def from_binary(%T{shape: shape, type: type} = tensor, binary, opts) do
-    client = EXLA.Client.fetch!(opts[:client] || default_defn_client())
+  defp client_and_device_id(opts) do
+    client = EXLA.Client.fetch!(opts[:client] || default_client_name())
     device_id = opts[:device_id] || client.default_device_id
-    buffer = EXLA.Buffer.from_binary(binary, EXLA.Shape.make_shape(type, shape))
-    buffer = EXLA.Buffer.place_on_device(buffer, client, device_id)
-    put_in(tensor.data, %DB{state: buffer.ref})
+    {client, device_id}
   end
 
-  @impl true
-  def backend_copy(tensor, Nx.Tensor, opts) do
-    backend_copy(tensor, Nx.BinaryBackend, opts)
-  end
-
-  # TODO: Support direct transfers without going through Elixir
-  def backend_copy(%T{data: %DB{state: state}} = tensor, backend, opts) do
-    backend.from_binary(tensor, EXLA.Buffer.read(state), opts)
-  end
-
-  @impl true
-  def backend_transfer(%T{data: %DB{state: state}} = tensor, backend, opts) do
-    backend_copy(tensor, backend, opts)
-  after
-    EXLA.Buffer.deallocate(state)
-  end
-
-  @impl true
-  def backend_deallocate(%T{data: %DB{state: state}}) do
-    EXLA.Buffer.deallocate(state)
-  end
-
-  @impl true
-  def to_binary(%T{data: %DB{state: state}, type: {_, size}}, limit) do
-    EXLA.Buffer.read(state, limit * div(size, 8))
-  end
-
-  @impl true
-  def inspect(%T{data: %DB{state: state}}, _opts) do
-    "EXLA.DeviceBackend<#{inspect(state)}>"
+  defp same_client_device?(buffer, opts) do
+    {client, device_id} = client_and_device_id(opts)
+    buffer.client_name == client.name and buffer.device_id == device_id
   end
 
   ## All remaining callbacks
