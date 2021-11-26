@@ -60,7 +60,9 @@ defmodule Torchx.NxDoctestTest do
     # bitcast - no API available
     bitcast: 2,
     # default_backend - specific to BinaryBackend
-    default_backend: 1
+    default_backend: 1,
+    # product - some output/input types are unsupported by libtorch
+    product: 2
   ]
 
   doctest Nx,

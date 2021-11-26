@@ -429,6 +429,62 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def product(%T{type: out_type} = out, %T{} = t, opts) do
+    check_type!(out_type)
+
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    result =
+      if axes == [] do
+        product_whole_tensor(t, keep_axes)
+      else
+        product_over_axes(t, axes, keep_axes)
+      end
+
+    to_nx(result, out)
+  end
+
+  defp product_whole_tensor(t, keep_axes) do
+    prod =
+      t
+      |> from_nx()
+      |> Torchx.product()
+
+    if keep_axes do
+      shape = t.shape |> Tuple.delete_at(-1) |> Tuple.append(1)
+      Torchx.reshape(prod, shape)
+    else
+      prod
+    end
+  end
+
+  defp product_over_axes(t, axes, keep_axes) do
+    {_, result_tx} =
+      for _ <- 1..length(axes), reduce: {axes, from_nx(t)} do
+        {[], t_tx} ->
+          {[], t_tx}
+
+        {[axis | axes], t_tx} ->
+          # We need to offset all subsequent axes if keep_axes == false.
+          # If keep_axes == true, we can use the same axis numbers as the
+          # incoming tensor.
+          axes =
+            if keep_axes do
+              axes
+            else
+              for x <- axes do
+                if x > axis, do: x - 1, else: x
+              end
+            end
+
+          {axes, Torchx.product(t_tx, axis, keep_axes)}
+      end
+
+    result_tx
+  end
+
+  @impl true
   def argmax(%T{} = out, %T{} = t, opts) do
     unsupported_option!(opts, :tie_break, :low)
 

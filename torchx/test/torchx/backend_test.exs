@@ -389,6 +389,105 @@ defmodule Torchx.BackendTest do
     end
   end
 
+  describe "Nx.product" do
+    test "full tensor products" do
+      Nx.tensor(42)
+      |> Nx.product()
+      |> assert_all_close(Nx.tensor(42))
+
+      Nx.tensor([1, 2, 3], names: [:x])
+      |> Nx.product()
+      |> assert_all_close(Nx.tensor(6))
+
+      Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:x, :y])
+      |> Nx.product()
+      |> assert_all_close(Nx.tensor(24))
+
+      Nx.tensor([[1.0, 2.0], [3.0, 4.0]], names: [:x, :y])
+      |> Nx.product(axes: [:x, :y])
+      |> assert_all_close(Nx.tensor(24))
+    end
+
+    test "aggregating over single axis" do
+      Nx.tensor([1, 2, 3], names: [:x])
+      |> Nx.product(axes: [0])
+      |> assert_all_close(Nx.tensor(6))
+
+      Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      |> Nx.product(axes: [:x])
+      |> assert_all_close(
+        Nx.tensor([
+          [7, 16, 27],
+          [40, 55, 72]
+        ])
+      )
+
+      Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      |> Nx.product(axes: [:y])
+      |> assert_all_close(
+        Nx.tensor([
+          [4, 10, 18],
+          [70, 88, 108]
+        ])
+      )
+
+      Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      |> Nx.product(axes: [:x, :z])
+      |> assert_all_close(Nx.tensor([3024, 158_400]))
+
+      Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      |> Nx.product(axes: [:z])
+      |> assert_all_close(
+        Nx.tensor([
+          [6, 120],
+          [504, 1320]
+        ])
+      )
+
+      Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      |> Nx.product(axes: [-3])
+      |> assert_all_close(
+        Nx.tensor([
+          [7, 16, 27],
+          [40, 55, 72]
+        ])
+      )
+    end
+
+    test "keep_axes: true" do
+      Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      |> Nx.product(axes: [:z], keep_axes: true)
+      |> assert_all_close(
+        Nx.tensor([
+          [
+            [6],
+            [120]
+          ],
+          [
+            [504],
+            [1320]
+          ]
+        ])
+      )
+
+      Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+      |> Nx.product(axes: [:x, :y, :z], keep_axes: true)
+      |> assert_all_close(
+        Nx.tensor([
+          [
+            [479_001_600]
+          ]
+        ])
+      )
+    end
+
+    test "validates axis" do
+      assert_raise ArgumentError, "given axis (2) invalid for shape with rank 2", fn ->
+        Nx.product(Nx.tensor([[1, 2]]), axes: [2])
+      end
+    end
+  end
+
   describe "Nx.LinAlg.lu" do
     test "property" do
       for _ <- 1..20 do

@@ -604,6 +604,21 @@ NIF(sum)
   TENSOR(torch::sum(*t, dims, keep_dim));
 }
 
+NIF(product)
+{
+  TENSOR_PARAM(0, t);
+
+  if (argc == 1)
+  {
+    TENSOR(torch::prod(*t));
+  }
+
+  PARAM(1, int64_t, dim);
+  PARAM(2, bool, keep_dim);
+
+  TENSOR(torch::prod(*t, dim, keep_dim));
+}
+
 NIF(argmax)
 {
   TENSOR_PARAM(0, t);
@@ -794,6 +809,8 @@ static ErlNifFunc nif_functions[] = {
 
     DF(outer, 2),
     DF(sum, 3),
+    DF(product, 1),
+    DF(product, 3),
     DF(argmax, 3),
     DF(argmin, 3),
     DF(all, 3),

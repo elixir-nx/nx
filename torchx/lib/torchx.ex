@@ -167,6 +167,8 @@ defmodule Torchx do
   ## Aggregation
 
   deftensor sum(tensor, axes, keep_axes)
+  deftensor product(tensor)
+  deftensor product(tensor, axes, keep_axes)
   deftensor argmax(tensor, axis, keep_axes)
   deftensor argmin(tensor, axis, keep_axes)
   deftensor all(tensor, axes, keep_axes)
