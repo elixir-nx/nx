@@ -15,6 +15,17 @@ defmodule EXLA.Defn.LockedCache do
   @timeout :infinity
 
   @doc """
+  Reads the cache key.
+  """
+  def fetch(key) do
+    try do
+      {:ok, :ets.lookup_element(@name, key, 2)}
+    catch
+      :error, :badarg -> :error
+    end
+  end
+
+  @doc """
   Reads cache key or executes the given function if not
   cached yet.
   """

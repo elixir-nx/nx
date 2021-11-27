@@ -285,6 +285,72 @@ defmodule EXLA do
     Nx.Defn.stream(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
+  @doc """
+  Checks if the JIT compilation of function with
+  args is cached.
+
+  Note that hooks are part of the cache, and
+  therefore they must be included in the options.
+
+  ## Examples
+
+      iex> left = Nx.tensor(1, type: {:u, 8})
+      iex> right = Nx.tensor([1, 2, 3], type: {:u, 16})
+      iex> EXLA.jit(&Nx.add/2, [left, right])
+      iex> EXLA.jit_cached?(&Nx.add/2, [left, right])
+      true
+      iex> EXLA.jit_cached?(&Nx.add/2, [left, Nx.tensor([1, 2, 3, 4], type: {:u, 16})])
+      false
+
+  """
+  def jit_cached?(function, args, options \\ []) do
+    jit(function, args, [{EXLA, cached_check()} | options])
+  catch
+    {:cached?, bool} -> bool
+  end
+
+  @doc """
+  Checks if the JIT compilation of stream with
+  args is cached.
+
+  Note that hooks are part of the cache, and
+  therefore they must be included in the options.
+
+  ## Examples
+
+      iex> left = Nx.tensor(1, type: {:u, 8})
+      iex> right = Nx.tensor([1, 2, 3], type: {:u, 16})
+      iex> fun = fn x, acc -> {acc, Nx.add(x, acc)} end
+      iex> stream = EXLA.stream(fun, [left, right])
+      iex> Nx.Stream.done(stream)
+      iex> EXLA.stream_cached?(fun, [left, right])
+      true
+      iex> EXLA.stream_cached?(fun, [left, Nx.tensor([1, 2, 3, 4], type: {:u, 16})])
+      false
+  """
+  def stream_cached?(function, args, options \\ []) do
+    stream(function, args, [{EXLA, cached_check()} | options])
+  catch
+    {:cached?, bool} -> bool
+  end
+
+  defp cached_check do
+    expr_cache_fun =
+      fn key, _callback ->
+        case EXLA.Defn.LockedCache.fetch(key) do
+          {:ok, res} -> {nil, res}
+          :error -> throw({:cached?, false})
+        end
+      end
+
+    comp_cache_fun =
+      fn key, _callback ->
+        throw({:cached?, EXLA.Defn.LockedCache.fetch(key) != :error})
+      end
+
+    {expr_cache_fun, comp_cache_fun}
+  end
+
   @impl true
   defdelegate __jit__(key, vars, fun, opts), to: EXLA.Defn
 

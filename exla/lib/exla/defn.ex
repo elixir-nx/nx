@@ -289,11 +289,14 @@ defmodule EXLA.Defn do
   ## Compile
 
   defp compile(client, key, vars, fun, options, to_split, to_computation) do
+    {{expr_cache_fun, comp_cache_fun}, options} =
+      Keyword.pop(options, EXLA, {&EXLA.Defn.LockedCache.run/2, &EXLA.Defn.LockedCache.run/2})
+
     expr_args = for var <- vars, do: nx_to_expr_key!(var)
     expr_key = {key, expr_args}
 
     {expr, {used_inputs, defined_hooks, outputs}} =
-      EXLA.Defn.LockedCache.run(expr_key, fn ->
+      expr_cache_fun.(expr_key, fn ->
         expr = fun.(vars)
         {expr, used_inputs_and_hooks(expr)}
       end)
@@ -308,7 +311,7 @@ defmodule EXLA.Defn do
     cache_key = {key, cache_args, client.name, used_hooks, options}
 
     {_, {executable, extra, outfeed_hooks}} =
-      EXLA.Defn.LockedCache.run(cache_key, fn ->
+      comp_cache_fun.(cache_key, fn ->
         shapes = Enum.map(inputs, &nx_to_shape!/1)
         inputs_and_shapes = Enum.zip(used_inputs, shapes)
 
