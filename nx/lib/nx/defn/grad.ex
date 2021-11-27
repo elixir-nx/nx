@@ -197,7 +197,7 @@ defmodule Nx.Defn.Grad do
     {Expr.tensor(0.0), cache}
   end
 
-  defp grad(:metadata, [expr, %{custom_grad: fun}], _ans, g, cache) do
+  defp grad(:metadata, [expr, %{custom_grad_2: fun}], _ans, g, cache) do
     args = fun.(expr, g)
 
     unless is_list(args) and Enum.all?(args, &match?({_, _}, &1)) do
@@ -209,7 +209,7 @@ defmodule Nx.Defn.Grad do
     grad_pairs(args, g, cache)
   end
 
-  defp grad(:metadata, [_expr, %{transform_grad: {to_grad, fun}}], _ans, g, cache) do
+  defp grad(:metadata, [_expr, %{custom_grad_3: {to_grad, fun}}], _ans, g, cache) do
     {to_grad, cache} = to_grad(to_grad, g, cache)
     {fun.(to_grad), cache}
   end

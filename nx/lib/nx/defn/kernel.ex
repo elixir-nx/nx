@@ -288,7 +288,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Defines a custom gradient for the given expression.
+  Defines a custom gradient for `expr`.
 
   It expects a `fun` to compute the gradient. The function
   will be called with the expression itself and the current
@@ -308,15 +308,11 @@ defmodule Nx.Defn.Kernel do
 
   """
   def custom_grad(expr, fun) when is_function(fun, 2) do
-    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
+    Nx.Defn.Expr.metadata(expr, %{custom_grad_2: fun, inspect: :custom_grad_2})
   end
 
   @doc """
-  Defines a gradient transformation for the given expression.
-
-  This function states that the gradient of `expr` should be
-  computed by transformation `fun` that receives the gradients
-  of the expressions given in `to_grad`.
+  Defines a custom gradient for `expr` as a transformation of `to_grads`.
 
   In other words, `fun` is going to be invoked with the gradients
   of all elements in `to_grad`. This is mainly used for defining
@@ -334,7 +330,7 @@ defmodule Nx.Defn.Kernel do
             :otherwise -> on_false
           end
 
-        transform_grad(expr, {on_true, on_false}, fn {true_grad, false_grad} ->
+        custom_grad(expr, {on_true, on_false}, fn {true_grad, false_grad} ->
           cond do
             condition -> true_grad
             :otherwise -> false_grad
@@ -343,10 +339,10 @@ defmodule Nx.Defn.Kernel do
       end
 
   In other words, the gradient of a conditional is the gradient
-  of its branches, rebuild as a conditional.
+  of its branches, rebuilt as a conditional.
   """
-  def transform_grad(expr, to_grad, fun) when is_function(fun, 1) do
-    Nx.Defn.Expr.metadata(expr, %{transform_grad: {to_grad, fun}, inspect: :transform_grad})
+  def custom_grad(expr, to_grad, fun) when is_function(fun, 1) do
+    Nx.Defn.Expr.metadata(expr, %{custom_grad_3: {to_grad, fun}, inspect: :custom_grad_3})
   end
 
   @doc """

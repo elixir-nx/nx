@@ -117,7 +117,7 @@ defmodule Nx.Defn.GradTest do
           :otherwise -> on_false
         end
 
-      transform_grad(expr, {on_true, on_false}, fn {true_grad, false_grad} ->
+      custom_grad(expr, {on_true, on_false}, fn {true_grad, false_grad} ->
         cond do
           condition -> true_grad
           :otherwise -> false_grad
@@ -125,13 +125,13 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
-    defn grad_transform_if(t) do
+    defn custom_grad_if(t) do
       grad(t, fn t -> my_if(t + 1, Nx.power(t, 2), Nx.power(t, 3)) end)
     end
 
     test "computes transform grad" do
-      assert grad_transform_if(Nx.tensor(1)) == Nx.tensor(2.0)
-      assert grad_transform_if(Nx.tensor(-1)) == Nx.tensor(3.0)
+      assert custom_grad_if(Nx.tensor(1)) == Nx.tensor(2.0)
+      assert custom_grad_if(Nx.tensor(-1)) == Nx.tensor(3.0)
     end
 
     defn random_meta(t),
