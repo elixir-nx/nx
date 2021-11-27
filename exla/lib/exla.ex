@@ -335,18 +335,16 @@ defmodule EXLA do
   end
 
   defp cached_check do
-    expr_cache_fun =
-      fn key, _callback ->
-        case EXLA.Defn.LockedCache.fetch(key) do
-          {:ok, res} -> {nil, res}
-          :error -> throw({:cached?, false})
-        end
+    expr_cache_fun = fn key, _callback ->
+      case EXLA.Defn.LockedCache.fetch(key) do
+        {:ok, res} -> {nil, res}
+        :error -> throw({:cached?, false})
       end
+    end
 
-    comp_cache_fun =
-      fn key, _callback ->
-        throw({:cached?, EXLA.Defn.LockedCache.fetch(key) != :error})
-      end
+    comp_cache_fun = fn key, _callback ->
+      throw({:cached?, EXLA.Defn.LockedCache.fetch(key) != :error})
+    end
 
     {expr_cache_fun, comp_cache_fun}
   end
