@@ -83,7 +83,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tensor expression metadata node wrapping the given tensor expression.
+  Creates a tensor expression metadata node wrapping the
+  given tensor expression.
+
+  The metadata is map. If the `inspect` key is present,
+  it will be used to annotate the metadata when inspected.
+  Otherwise the metadata node does not appear during
+  inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
     expr = to_expr(expr)
@@ -1009,6 +1015,10 @@ defmodule Nx.Defn.Expr do
   defp inspect_expr(%T{data: %Expr{op: :constant}} = t, acc), do: {t, acc}
   defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
 
+  defp inspect_expr(%T{data: %Expr{op: :metadata, args: [expr, metadata]}}, acc)
+       when not is_map_key(metadata, :inspect),
+       do: inspect_expr(expr, acc)
+
   defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
     case cache do
       %{^id => _} -> {t, acc}
@@ -1072,8 +1082,8 @@ defmodule Nx.Defn.Expr do
     IO.iodata_to_binary([clauses, ":otherwise -> ", inspect_arg(last, var_map)])
   end
 
-  defp inspect_args(:metadata, [expr, metadata], var_map) do
-    IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(Map.keys(metadata))])
+  defp inspect_args(:metadata, [expr, %{inspect: inspect}], var_map) do
+    IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(inspect)])
   end
 
   defp inspect_args(_op, [tuple | args], var_map) when is_tuple(tuple),

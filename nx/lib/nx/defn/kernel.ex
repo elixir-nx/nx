@@ -284,7 +284,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def stop_grad(expr) do
-    Nx.Defn.Expr.metadata(expr, %{stop_grad: true})
+    Nx.Defn.Expr.metadata(expr, %{stop_grad: true, inspect: :stop_grad})
   end
 
   @doc """
@@ -308,7 +308,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def custom_grad(expr, fun) when is_function(fun, 2) do
-    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun})
+    Nx.Defn.Expr.metadata(expr, %{custom_grad: fun, inspect: :custom_grad})
   end
 
   @doc """
