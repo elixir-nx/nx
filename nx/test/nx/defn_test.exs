@@ -1253,6 +1253,14 @@ defmodule Nx.DefnTest do
       assert Nx.Defn.jit(&elixir_jit(&1, 3), [{4, 5}]) == Nx.tensor(6)
     end
 
+    defp elixir_constant_jit() do
+      %Nx.Tensor{data: %Nx.Defn.Expr{}} = Nx.to_tensor(0)
+    end
+
+    test "compiles elixir function with default backend for constants" do
+      assert Nx.Defn.jit(&elixir_constant_jit/0, [], compiler: Evaluator) == Nx.tensor(0)
+    end
+
     test "raises if it doesn't return an expression" do
       assert_raise Protocol.UndefinedError,
                    fn -> Nx.Defn.jit(fn -> :ok end, [], compiler: Evaluator).() end

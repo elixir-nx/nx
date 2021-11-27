@@ -90,6 +90,8 @@ defmodule Nx.Defn.Compiler do
   end
 
   defp runtime_fun(tensors, fun, args, compiler) do
+    tuple = Nx.default_backend()
+    Nx.default_backend(Nx.Defn.Expr)
     Process.put(Nx.Defn.Compiler, compiler)
 
     try do
@@ -99,6 +101,7 @@ defmodule Nx.Defn.Compiler do
       |> apply(args)
       |> Nx.Defn.Composite.to_result()
     after
+      Nx.default_backend(tuple)
       Process.delete(Nx.Defn.Compiler)
     end
   end
@@ -370,7 +373,6 @@ defmodule Nx.Defn.Compiler do
     end
 
     {args, state} = normalize_list(args, state)
-    args = rewrite_args(name, args)
     {{{:., dot_meta, [mod, name]}, meta, args}, state}
   end
 
@@ -431,35 +433,6 @@ defmodule Nx.Defn.Compiler do
       "invalid numerical expression:\n\n    #{string}\n"
     )
   end
-
-  ## Rewrite args
-
-  defp rewrite_args(:tensor, [t]), do: [t, add_backend([])]
-  defp rewrite_args(:tensor, [t, opts]), do: [t, add_backend(opts)]
-
-  defp rewrite_args(:from_binary, [bin, type]), do: [bin, type, add_backend([])]
-  defp rewrite_args(:from_binary, [bin, type, opts]), do: [bin, type, add_backend(opts)]
-
-  defp rewrite_args(:iota, [t]), do: [t, add_backend([])]
-  defp rewrite_args(:iota, [t, opts]), do: [t, add_backend(opts)]
-
-  defp rewrite_args(:eye, [n]), do: [n, add_backend([])]
-  defp rewrite_args(:eye, [n, opts]), do: [n, add_backend(opts)]
-
-  defp rewrite_args(:random_uniform, [t]), do: [t, add_backend([])]
-  defp rewrite_args(:random_uniform, [t, opts]), do: [t, add_backend(opts)]
-  defp rewrite_args(:random_uniform, [t, min, max]), do: [t, min, max, add_backend([])]
-  defp rewrite_args(:random_uniform, [t, min, max, opts]), do: [t, min, max, add_backend(opts)]
-
-  defp rewrite_args(:random_normal, [t]), do: [t, add_backend([])]
-  defp rewrite_args(:random_normal, [t, opts]), do: [t, add_backend(opts)]
-  defp rewrite_args(:random_normal, [t, mu, sigma]), do: [t, mu, sigma, add_backend([])]
-  defp rewrite_args(:random_normal, [t, mu, sigma, opts]), do: [t, mu, sigma, add_backend(opts)]
-
-  defp rewrite_args(_name, args), do: args
-
-  defp add_backend(list) when is_list(list), do: [backend: Nx.Defn.Expr] ++ list
-  defp add_backend(expr), do: quote(do: Keyword.put(unquote(expr), :backend, Nx.Defn.Expr))
 
   ## Normalize args
 

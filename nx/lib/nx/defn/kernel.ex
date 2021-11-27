@@ -581,8 +581,8 @@ defmodule Nx.Defn.Kernel do
   defp logical_not(0.0), do: one()
   defp logical_not(_), do: zero()
 
-  defp zero(), do: Nx.Defn.Expr.constant(0, %Nx.Tensor{type: {:u, 8}, shape: {}, names: []})
-  defp one(), do: Nx.Defn.Expr.constant(1, %Nx.Tensor{type: {:u, 8}, shape: {}, names: []})
+  defp zero(), do: Nx.tensor(0, type: {:u, 8})
+  defp one(), do: Nx.tensor(1, type: {:u, 8})
 
   @doc """
   Element-wise bitwise AND operation.

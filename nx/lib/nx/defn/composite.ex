@@ -163,7 +163,7 @@ defmodule Nx.Defn.Composite do
 
   @doc false
   def from_runtime_args(args, tail) do
-    flatten_list(args, tail, &Nx.tensor/1)
+    flatten_list(args, tail, &Nx.to_tensor/1)
   end
 
   @doc false
