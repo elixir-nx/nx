@@ -19,8 +19,9 @@ defmodule EXLA.Defn.Lock do
   @doc """
   Transfers the lock to a new process.
   """
-  def transfer(ref, pid) when is_reference(ref) and is_pid(pid) do
-    GenServer.call(@name, {:transfer, ref, pid}, @timeout)
+  def transfer(ref, prepare, pid)
+      when is_reference(ref) and is_function(prepare, 0) and is_pid(pid) do
+    GenServer.call(@name, {:transfer, ref, prepare, pid}, @timeout)
   end
 
   @doc """
@@ -73,18 +74,19 @@ defmodule EXLA.Defn.Lock do
     {:reply, :ok, unlock(ref, refs, devices)}
   end
 
-  def handle_call({:transfer, ref, pid}, _from, {refs, devices}) do
+  def handle_call({:transfer, ref, prepare, pid}, _from, {refs, devices}) do
     {key, refs} = Map.pop!(refs, ref)
     _ = Process.demonitor(ref, [:flush])
+    _ = prepare.()
     ref = Process.monitor(pid)
     {:reply, ref, {Map.put(refs, ref, key), devices}}
   end
 
   def handle_call({:on_unlock, ref, prepare, to_unlock}, _from, {refs, devices}) do
     key = Map.fetch!(refs, ref)
-    res = prepare.()
+    _ = prepare.()
     devices = update_in(devices[key], fn {_to_unlock, queue} -> {to_unlock, queue} end)
-    {:reply, res, {refs, devices}}
+    {:reply, ref, {refs, devices}}
   end
 
   @impl true

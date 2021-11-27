@@ -59,7 +59,7 @@ defmodule EXLA.Defn.LockeTest do
         L.on_unlock(
           ref,
           fn ->
-            send(parent, :relocked)
+            send(parent, {:on_unlock, self()})
           end,
           fn ->
             send(parent, :unlocked)
@@ -71,6 +71,8 @@ defmodule EXLA.Defn.LockeTest do
       end)
 
     assert_receive :locked
+    assert_receive {:on_unlock, lock_pid}
+    assert lock_pid == Process.whereis(EXLA.Defn.Lock)
 
     task3 =
       Task.async(fn ->
@@ -96,7 +98,10 @@ defmodule EXLA.Defn.LockeTest do
       end)
 
     ref = L.lock(config.test)
-    ref = L.transfer(ref, task1.pid)
+    ref = L.transfer(ref, fn -> send(parent, {:transfer, self()}) end, task1.pid)
+
+    assert_receive {:transfer, lock_pid}
+    assert lock_pid == Process.whereis(EXLA.Defn.Lock)
 
     task2 =
       Task.async(fn ->
