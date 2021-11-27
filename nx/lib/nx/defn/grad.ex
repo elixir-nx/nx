@@ -169,10 +169,23 @@ defmodule Nx.Defn.Grad do
 
   defp grad_no_gs([], _ans, _g, cache), do: {Expr.tensor(0.0), cache}
 
+  defp grad_no_gs([{expr, g}], ans, subg, cache) do
+    to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
+  end
+
   defp grad_no_gs(no_gs, ans, g, cache) do
-    {exprs, cache} =
-      Enum.map_reduce(no_gs, cache, fn {expr, subg}, cache ->
-        to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
+    {exprs, {_, cache}} =
+      Enum.map_reduce(no_gs, {%{}, cache}, fn {expr, subg}, {temp_cache, cache} ->
+        key = [expr.data.id | subg.data.id]
+
+        case temp_cache do
+          %{^key => res} ->
+            {res, {temp_cache, cache}}
+
+          %{} ->
+            {res, cache} = to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
+            {res, {Map.put(temp_cache, key, res), cache}}
+        end
       end)
 
     template = Expr.tensor(Nx.template(g.shape, g.type))
