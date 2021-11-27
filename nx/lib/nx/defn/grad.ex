@@ -169,23 +169,10 @@ defmodule Nx.Defn.Grad do
 
   defp grad_no_gs([], _ans, _g, cache), do: {Expr.tensor(0.0), cache}
 
-  defp grad_no_gs([{expr, g}], ans, subg, cache) do
-    to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
-  end
-
   defp grad_no_gs(no_gs, ans, g, cache) do
-    {exprs, {_, cache}} =
-      Enum.map_reduce(no_gs, {%{}, cache}, fn {expr, subg}, {temp_cache, cache} ->
-        key = [expr.data.id | subg.data.id]
-
-        case temp_cache do
-          %{^key => res} ->
-            {res, {temp_cache, cache}}
-
-          %{} ->
-            {res, cache} = to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
-            {res, {Map.put(temp_cache, key, res), cache}}
-        end
+    {exprs, cache} =
+      Enum.map_reduce(no_gs, cache, fn {expr, subg}, cache ->
+        to_grad(Nx.broadcast(expr, ans), Nx.multiply(g, subg), cache)
       end)
 
     template = Expr.tensor(Nx.template(g.shape, g.type))
@@ -633,7 +620,11 @@ defmodule Nx.Defn.Grad do
   ## Gradients that don't rely on g and can be cached more often
 
   defp no_g_grad(:add, [x, y], _ans) do
-    [{x, Expr.tensor(1.0)}, {y, Expr.tensor(1.0)}]
+    if x.data.id == y.data.id do
+      [{x, Expr.tensor(2.0)}]
+    else
+      [{x, Expr.tensor(1.0)}, {y, Expr.tensor(1.0)}]
+    end
   end
 
   defp no_g_grad(:subtract, [x, y], _ans) do
@@ -641,7 +632,11 @@ defmodule Nx.Defn.Grad do
   end
 
   defp no_g_grad(:multiply, [x, y], _ans) do
-    [{x, y}, {y, x}]
+    if x.data.id == y.data.id do
+      [{x, Nx.multiply(y, 2.0)}]
+    else
+      [{x, y}, {y, x}]
+    end
   end
 
   defp no_g_grad(:divide, [x, y], ans) do
