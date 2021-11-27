@@ -298,7 +298,7 @@ defmodule Nx.Defn.Grad do
     to_grad(x, g, cache)
   end
 
-  defp grad(:reshape, [x, _new_shape], _ans, g, cache) do
+  defp grad(:reshape, [x], _ans, g, cache) do
     to_grad(x, Nx.reshape(g, x), cache)
   end
 

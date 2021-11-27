@@ -1822,7 +1822,7 @@ defmodule Nx do
     if old_shape == new_shape do
       %{tensor | names: names}
     else
-      impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor, new_shape)
+      impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
     end
   end
 
@@ -2096,7 +2096,7 @@ defmodule Nx do
 
     new_shape = Tuple.insert_at(shape, norm, 1)
     new_names = List.insert_at(names, norm, name)
-    impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor, new_shape)
+    impl!(tensor).reshape(%{tensor | shape: new_shape, names: new_names}, tensor)
   end
 
   @doc """

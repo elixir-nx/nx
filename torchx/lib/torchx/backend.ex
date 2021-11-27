@@ -202,7 +202,7 @@ defmodule Torchx.Backend do
   ## Shape
 
   @impl true
-  def reshape(out, %T{} = t, shape),
+  def reshape(%T{shape: shape} = out, %T{} = t),
     do: Torchx.reshape(from_nx(t), shape) |> to_nx(out)
 
   @impl true

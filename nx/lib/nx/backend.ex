@@ -54,7 +54,7 @@ defmodule Nx.Backend do
 
   @callback as_type(out :: tensor, tensor) :: tensor
   @callback bitcast(out :: tensor, tensor) :: tensor
-  @callback reshape(out :: tensor, tensor, shape) :: tensor
+  @callback reshape(out :: tensor, tensor) :: tensor
   @callback squeeze(out :: tensor, tensor, axes) :: tensor
   @callback broadcast(out :: tensor, tensor, shape, axes) :: tensor
   @callback transpose(out :: tensor, tensor, axes) :: tensor

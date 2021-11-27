@@ -544,9 +544,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def reshape(out, tensor, shape) do
+  def reshape(out, tensor) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :reshape, [tensor, shape])
+    expr(out, tensor.data.context, :reshape, [tensor])
   end
 
   @impl true

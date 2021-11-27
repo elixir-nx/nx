@@ -367,7 +367,7 @@ defmodule Nx.DefnTest do
     end
 
     test "reshape" do
-      assert %T{data: %Expr{op: :reshape, args: [_, _]}, shape: {2, 3}} =
+      assert %T{data: %Expr{op: :reshape, args: [_]}, shape: {2, 3}} =
                reshape(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
     end
   end

@@ -190,7 +190,7 @@ defmodule Nx.BinaryBackend do
   ## Shape
 
   @impl true
-  def reshape(out, tensor, _shape), do: from_binary(out, to_binary(tensor))
+  def reshape(out, tensor), do: from_binary(out, to_binary(tensor))
 
   @impl true
   def squeeze(out, tensor, _axes), do: from_binary(out, to_binary(tensor))
