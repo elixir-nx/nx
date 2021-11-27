@@ -27,10 +27,12 @@ defprotocol Nx.Container do
                keep: [:another_field]}
       defstruct [:field_name, :other_fields, ...]
 
-  If you keep a field, its value will be part of the `Nx.Defn`
-  compiler cache key (i.e. therefore if you give a struct with
-  two different values for a kept field, `Nx.Defn` will have
-  to compile and cache it twice).
+  > **Careful!**: If you keep a field, its value will be part
+  > of the `Nx.Defn` compiler cache key (i.e. therefore if you
+  > give a struct with two different values for a kept field,
+  > `Nx.Defn` will have to compile and cache it twice). You
+  > must only keep fields that you are certain to be used inside
+  > `defn` during compilation time.
   """
 
   @fallback_to_any true
