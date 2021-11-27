@@ -127,12 +127,12 @@ defmodule Nx.Defn.Grad do
 
   # The gradient recursion.
   #
-  # We keep two caches. One is the result cache, which is used for
+  # We keep two caches. One is the result cache, which is used
   # when visiting the same nodes in the AST.
   #
-  # The other cache is the JVP cache, that shares parts of the JVP
-  # computation. Both are important to reduce the amount of nodes
-  # in the AST.
+  # The other cache is the JVP cache, that shares parts of the
+  # JVP computation. Both are important to reduce the amount of
+  # nodes in the AST.
   defp to_grad(expr, res, cache) do
     Composite.traverse(expr, cache, fn
       %T{data: %Expr{id: id, op: op, args: args}} = ans, {result_cache, no_g_cache} = cache ->
@@ -207,6 +207,11 @@ defmodule Nx.Defn.Grad do
     end
 
     grad_pairs(args, g, cache)
+  end
+
+  defp grad(:metadata, [_expr, %{transform_grad: {to_grad, fun}}], _ans, g, cache) do
+    {to_grad, cache} = to_grad(to_grad, g, cache)
+    {fun.(to_grad), cache}
   end
 
   defp grad(:attach_token, [token, expr], _ans, g, cache) do

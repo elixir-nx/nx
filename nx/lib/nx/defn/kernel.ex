@@ -312,6 +312,44 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Defines a gradient transformation for the given expression.
+
+  This function states that the gradient of `expr` should be
+  computed by transformation `fun` that receives the gradients
+  of the expressions given in `to_grad`.
+
+  In other words, `fun` is going to be invoked with the gradients
+  of all elements in `to_grad`. This is mainly used for defining
+  the gradient of control flow expressions.
+
+  ## Examples
+
+  For example, if you were to manually define a conditional,
+  you could define its gradient as follows:
+
+      defn my_if(condition, on_true, on_false) do
+        expr =
+          cond do
+            condition -> on_true
+            :otherwise -> on_false
+          end
+
+        transform_grad(expr, {on_true, on_false}, fn {true_grad, false_grad} ->
+          cond do
+            condition -> true_grad
+            :otherwise -> false_grad
+          end
+        end)
+      end
+
+  In other words, the gradient of a conditional is the gradient
+  of its branches, rebuild as a conditional.
+  """
+  def transform_grad(expr, to_grad, fun) when is_function(fun, 1) do
+    Nx.Defn.Expr.metadata(expr, %{transform_grad: {to_grad, fun}, inspect: :transform_grad})
+  end
+
+  @doc """
   Element-wise unary plus operator.
 
   Simply returns the given argument.
