@@ -56,6 +56,11 @@ defmodule Torchx.NxDoctestTest do
     logistic: 1
   ]
 
+  @unrelated_doctests [
+    to_template: 1,
+    template: 3
+  ]
+
   @inherently_unsupported_doctests [
     # bitcast - no API available
     bitcast: 2,
@@ -72,5 +77,6 @@ defmodule Torchx.NxDoctestTest do
       |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)
+      |> Kernel.++(@unrelated_doctests)
       |> Kernel.++([:moduledoc])
 end
