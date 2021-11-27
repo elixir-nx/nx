@@ -182,6 +182,14 @@ defmodule Nx.Defn.ExprTest do
     end
   end
 
+  describe "common subexpression elimination" do
+    defn cse(x), do: {x * x, x * x}
+
+    test "performs common subexpression elimination" do
+      assert {res, res} = cse(123.0)
+    end
+  end
+
   describe "inspect" do
     test "with scalar" do
       assert inspect(Expr.tensor(Nx.tensor(0)), safe: false) == """

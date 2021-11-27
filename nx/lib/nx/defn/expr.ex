@@ -304,13 +304,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def eye(out, _backend_options) do
-    expr(out, nil, :eye, [])
+  def eye(%{type: type, shape: shape} = out, _backend_options) do
+    expr(out, nil, {:eye, type, shape}, :eye, [])
   end
 
   @impl true
-  def iota(out, axis, _backend_options) do
-    expr(out, nil, :iota, [axis])
+  def iota(%{type: type, shape: shape} = out, axis, _backend_options) do
+    expr(out, nil, {:iota, axis, type, shape}, :iota, [axis])
   end
 
   @impl true
@@ -334,8 +334,8 @@ defmodule Nx.Defn.Expr do
   for op <- unary_ops do
     @impl true
     def unquote(op)(out, tensor) do
-      tensor = to_expr(tensor)
-      expr(out, tensor.data.context, unquote(op), [tensor])
+      %{data: %{context: context, id: id}} = tensor = to_expr(tensor)
+      expr(out, context, [unquote(op) | id], unquote(op), [tensor])
     end
   end
 
@@ -466,7 +466,8 @@ defmodule Nx.Defn.Expr do
     @impl true
     def unquote(op)(out, tensor, opts) do
       tensor = to_expr(tensor)
-      expr(out, tensor.data.context, unquote(op), [tensor, opts])
+      id = {unquote(op), tensor.data.id, opts}
+      expr(out, tensor.data.context, id, unquote(op), [tensor, opts])
     end
   end
 
@@ -546,21 +547,23 @@ defmodule Nx.Defn.Expr do
   @impl true
   def reshape(out, tensor, shape) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :reshape, [tensor, shape])
+    expr(out, tensor.data.context, {:reshape, tensor.data.id, shape}, :reshape, [tensor, shape])
   end
 
   @impl true
   def squeeze(out, tensor, axes) do
-    tensor = to_expr(tensor)
-
     # If we are in a sequence of squeezes, we collapse them.
     # This helps us fuse the access syntax.
-    with %T{data: %Expr{op: :squeeze, args: [tensor, inner_axes]}} <- tensor do
-      axes = merge_squeeze(Enum.sort(inner_axes), Enum.sort(axes), 0)
-      expr(out, tensor.data.context, :squeeze, [tensor, axes])
-    else
-      _ -> expr(out, tensor.data.context, :squeeze, [tensor, axes])
-    end
+    {tensor, axes} =
+      case to_expr(tensor) do
+        %T{data: %Expr{op: :squeeze, args: [tensor, inner_axes]}} ->
+          {tensor, merge_squeeze(Enum.sort(inner_axes), Enum.sort(axes), 0)}
+
+        %T{} = tensor ->
+          {tensor, axes}
+      end
+
+    expr(out, tensor.data.context, {:squeeze, tensor.data.id, axes}, :squeeze, [tensor, axes])
   end
 
   defp merge_squeeze([inner_axis | inner_axes], [axis | axes], extra)
@@ -576,7 +579,7 @@ defmodule Nx.Defn.Expr do
   @impl true
   def transpose(out, tensor, axes) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :transpose, [tensor, axes])
+    expr(out, tensor.data.context, {:transpose, tensor.data.id, axes}, :transpose, [tensor, axes])
   end
 
   @impl true
@@ -586,7 +589,7 @@ defmodule Nx.Defn.Expr do
     if c = maybe_constant(tensor) do
       constant(out, c)
     else
-      expr(out, tensor.data.context, :as_type, [tensor])
+      expr(out, tensor.data.context, {:as_type, tensor.data.id, out.type}, :as_type, [tensor])
     end
   end
 
@@ -599,13 +602,15 @@ defmodule Nx.Defn.Expr do
            (contiguous?(inner_axes, 0) and contiguous?(axes, 0)) or
              (contiguous_last?(inner_axes, inner_shape, inner_tensor) and
                 contiguous_last?(axes, shape, tensor)) do
-      expr(out, tensor.data.context, :broadcast, [inner_tensor, shape, inner_axes])
+      id = {:broadcast, inner_tensor.data.id, shape, inner_axes}
+      expr(out, tensor.data.context, id, :broadcast, [inner_tensor, shape, inner_axes])
     else
       _ ->
         if c = maybe_constant(tensor) do
           constant(out, c)
         else
-          expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
+          id = {:broadcast, tensor.data.id, shape, axes}
+          expr(out, tensor.data.context, id, :broadcast, [tensor, shape, axes])
         end
     end
   end
@@ -620,43 +625,49 @@ defmodule Nx.Defn.Expr do
   @impl true
   def dot(out, t1, c1, b1, t2, c2, b2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    expr(out, context, :dot, [t1, c1, b1, t2, c2, b2])
+    id = {:dot, t1.data.id, t2.data.id, c1, b1, c2, b2}
+    expr(out, context, id, :dot, [t1, c1, b1, t2, c2, b2])
   end
 
   @impl true
   def conv(out, inp, kernel, opts) do
     {[inp, kernel], context} = to_exprs([inp, kernel])
-    expr(out, context, :conv, [inp, kernel, opts])
+    id = {:conv, inp.data.id, kernel.data.id, opts}
+    expr(out, context, id, :conv, [inp, kernel, opts])
   end
 
   @impl true
   def pad(out, expr, value, config) do
     {[expr, value], context} = to_exprs([expr, value])
-    expr(out, context, :pad, [expr, value, config])
+    id = {:pad, expr.data.id, value.data.id, config}
+    expr(out, context, id, :pad, [expr, value, config])
   end
 
   @impl true
   def select(out, pred, on_true, on_false) do
     {[pred, on_true, on_false], context} = to_exprs([pred, on_true, on_false])
-    expr(out, context, :select, [pred, on_true, on_false])
+    id = {:select, pred.data.id, on_true.data.id, on_false.data.id}
+    expr(out, context, id, :select, [pred, on_true, on_false])
   end
 
   @impl true
   def clip(out, operand, min, max) do
     {[operand, min, max], context} = to_exprs([operand, min, max])
-    expr(out, context, :clip, [operand, min, max])
+    id = {:clip, operand.data.id, min.data.id, max.data.id}
+    expr(out, context, id, :clip, [operand, min, max])
   end
 
   @impl true
   def slice(out, tensor, start, lengths, strides) do
     all_static? = Enum.all?(start, &is_integer/1)
 
-    {[tensor | start], context} =
+    {[tensor | start], ids, context} =
       if all_static? do
         tensor = to_expr(tensor)
-        {[tensor | start], tensor.data.context}
+        {[tensor | start], [tensor.data.id | start], tensor.data.context}
       else
-        to_exprs([tensor | start])
+        {exprs, context} = to_exprs([tensor | start])
+        {exprs, Enum.map(exprs, & &1.data.id), context}
       end
 
     # If we are in a sequence of slices, it is the access syntax,
@@ -676,7 +687,8 @@ defmodule Nx.Defn.Expr do
       |> Nx.squeeze(axes: axes)
     else
       _ ->
-        expr(out, context, :slice, [tensor, start, lengths, strides])
+        id = {:slice, ids, lengths, strides}
+        expr(out, context, id, :slice, [tensor, start, lengths, strides])
     end
   end
 
@@ -705,50 +717,56 @@ defmodule Nx.Defn.Expr do
   @impl true
   def put_slice(out, tensor, start, slice) do
     {[tensor, slice | start], context} = to_exprs([tensor, slice | start])
-
-    expr(out, context, :put_slice, [tensor, start, slice])
+    id = {:put_slice, tensor.data.id, slice.data.id, Enum.map(start, & &1.data.id)}
+    expr(out, context, id, :put_slice, [tensor, start, slice])
   end
 
   @impl true
   def take(out, tensor, indices, axis) do
     {[tensor, indices], context} = to_exprs([tensor, indices])
-    expr(out, context, :take, [tensor, indices, axis])
+    id = {:take, tensor.data.id, indices.data.id, axis}
+    expr(out, context, id, :take, [tensor, indices, axis])
   end
 
   @impl true
   def take_along_axis(out, tensor, indices, axis) do
     {[tensor, indices], context} = to_exprs([tensor, indices])
-    expr(out, context, :take_along_axis, [tensor, indices, axis])
+    id = {:take_along_axis, tensor.data.id, indices.data.id}
+    expr(out, context, id, :take_along_axis, [tensor, indices, axis])
   end
 
   @impl true
   def gather(out, tensor, indices) do
     {[tensor, indices], context} = to_exprs([tensor, indices])
-    expr(out, context, :gather, [tensor, indices])
+    id = {:gather, tensor.data.id, indices.data.id}
+    expr(out, context, id, :gather, [tensor, indices])
   end
 
   @impl true
   def reverse(out, tensor, axes) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :reverse, [tensor, axes])
+    id = {:reverse, tensor.data.id, axes}
+    expr(out, tensor.data.context, id, :reverse, [tensor, axes])
   end
 
   @impl true
   def concatenate(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
-    expr(out, context, :concatenate, [tensors, axis])
+    id = {:concatenate, Enum.map(tensors, & &1.data.id), axis}
+    expr(out, context, id, :concatenate, [tensors, axis])
   end
 
   @impl true
   def cholesky(out, tensor) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :cholesky, [tensor])
+    expr(out, tensor.data.context, {:cholesky, tensor.data.id}, :cholesky, [tensor])
   end
 
   @impl true
   def triangular_solve(out, a, b, opts) do
     {[a, b], context} = to_exprs([a, b])
-    expr(out, context, :triangular_solve, [a, b, opts])
+    id = {:triangular_solve, a.data.id, b.data.id, opts}
+    expr(out, context, id, :triangular_solve, [a, b, opts])
   end
 
   @impl true
@@ -756,7 +774,8 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple({p, l, u}, expr(out, context, :lu, [{p, l, u}, tensor, opts]))
+    id = {:lu, tensor.data.id, opts}
+    tuple({p, l, u}, expr(out, context, id, :lu, [{p, l, u}, tensor, opts]))
   end
 
   @impl true
@@ -764,7 +783,8 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
-    tuple({q, r}, expr(out, context, :qr, [{q, r}, tensor, opts]))
+    id = {:qr, tensor.data.id, opts}
+    tuple({q, r}, expr(out, context, id, :qr, [{q, r}, tensor, opts]))
   end
 
   @impl true
@@ -772,7 +792,8 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
-    tuple({evals, evecs}, expr(out, context, :eigh, [{evals, evecs}, tensor, opts]))
+    id = {:eigh, tensor.data.id, opts}
+    tuple({evals, evecs}, expr(out, context, id, :eigh, [{evals, evecs}, tensor, opts]))
   end
 
   @impl true
@@ -780,19 +801,22 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple({u, s, vt}, expr(out, context, :svd, [{u, s, vt}, tensor, opts]))
+    id = {:svd, tensor.data.id, opts}
+    tuple({u, s, vt}, expr(out, context, id, :svd, [{u, s, vt}, tensor, opts]))
   end
 
   @impl true
   def sort(out, tensor, opts) do
-    %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :sort, [tensor, opts])
+    %{data: %{context: context, id: id}} = tensor = to_expr(tensor)
+    id = {:sort, id, opts}
+    expr(out, context, id, :sort, [tensor, opts])
   end
 
   @impl true
   def argsort(out, tensor, opts) do
-    %{data: %{context: context}} = tensor = to_expr(tensor)
-    expr(out, context, :argsort, [tensor, opts])
+    %{data: %{context: context, id: id}} = tensor = to_expr(tensor)
+    id = {:argsort, id, opts}
+    expr(out, context, id, :argsort, [tensor, opts])
   end
 
   ## Undefined
@@ -824,8 +848,10 @@ defmodule Nx.Defn.Expr do
 
   ## Helpers
 
-  defp expr(tensor, context, op, args) do
-    %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}}
+  defp expr(tensor, context, op, args), do: expr(tensor, context, id(), op, args)
+
+  defp expr(tensor, context, id, op, args) when is_atom(context) and is_atom(op) do
+    %{tensor | data: %Expr{id: id, op: op, args: args, context: context}}
   end
 
   defp to_expr(%T{data: %Expr{}} = t),
@@ -936,8 +962,8 @@ defmodule Nx.Defn.Expr do
   ## Constant helpers and related optimizations
 
   defp constant(%{type: type, shape: shape} = out, number) do
-    id = {number, type, shape}
     number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
+    id = {number, type, shape}
     %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
   end
 
@@ -992,7 +1018,7 @@ defmodule Nx.Defn.Expr do
           {arg1, arg2}
       end
 
-    expr(tensor, context, op, [arg1, arg2])
+    expr(tensor, context, {op, arg1.data.id, arg2.data.id}, op, [arg1, arg2])
   end
 
   ## Inspect
