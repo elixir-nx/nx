@@ -185,7 +185,9 @@ defmodule Nx.Defn.KernelTest do
       assert expr == zero_expr()
       assert "hook_" <> _ = Atom.to_string(name)
 
-      {token, expr} = Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a, &Function.identity/1)
+      {token, expr} =
+        Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a, &Function.identity/1)
+
       assert [%{name: :a, callback: callback, expr: ^expr}] = token.hooks
       assert callback == (&Function.identity/1)
       assert expr == zero_expr()
