@@ -151,7 +151,6 @@ defmodule Nx.Defn.Grad do
   end
 
   defp linear_grad(:metadata, [expr, %{custom_grad: fun}], _ans, g) do
-    # TODO: convert custom_grad to no_g_grad
     args = fun.(expr, g)
 
     unless is_list(args) and Enum.all?(args, &match?({_, _}, &1)) do
@@ -164,7 +163,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp linear_grad(:select, [pred, on_true, on_false], ans, g) do
-    # TODO: can this be no_g?
+    # TODO: can this be no_g? and if so, are there others?
     gs = Nx.broadcast(g, ans)
     zeros = Nx.broadcast(Expr.tensor(0.0), ans)
 
@@ -1110,7 +1109,7 @@ defmodule Nx.Defn.Grad do
     keep_axes = opts[:keep_axes]
 
     if keep_axes || !axes do
-      Nx.broadcast(g, x, axes: [])
+      Nx.broadcast(g, x)
     else
       axes = Nx.axes(x.shape) -- axes
       Nx.broadcast(g, x, axes: axes)
