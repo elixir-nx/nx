@@ -122,6 +122,19 @@ defmodule Nx.Defn.Grad do
     end
   end
 
+  defp cached_sum({[head], cache}) do
+    {head, cache}
+  end
+
+  defp cached_sum({[head | tail], {shared, local}}) do
+    {result, shared} =
+      Enum.reduce(tail, {head, shared}, fn right, {left, shared} ->
+        cached_op(:add, left, right, shared)
+      end)
+
+    {result, {shared, local}}
+  end
+
   ## Linear gradients rely on g but are not recursive.
   # They are shared cached in function of ans and g.
 
@@ -141,13 +154,11 @@ defmodule Nx.Defn.Grad do
   end
 
   defp apply_linear(pairs, cache) do
-    {result, cache} =
-      Enum.map_reduce(pairs, cache, fn {expr, g}, cache ->
-        to_grad(expr, g, cache)
-      end)
-
-    # TODO: Investigate if caching this op is beneficial
-    {Enum.reduce(result, &Nx.add/2), cache}
+    pairs
+    |> Enum.map_reduce(cache, fn {expr, g}, cache ->
+      to_grad(expr, g, cache)
+    end)
+    |> cached_sum()
   end
 
   # TODO: investigate if it is possible to move to no_g:
@@ -567,19 +578,13 @@ defmodule Nx.Defn.Grad do
   end
 
   defp apply_no_g(pairs, ans, res, shared_cache, local_cache) do
-    {[head | tail], {shared, local}} =
-      Enum.map_reduce(pairs, {shared_cache, local_cache}, fn {expr, g}, {shared, local} ->
-        {expr, shared} = cached_op(:broadcast, expr, ans, shared)
-        {g, shared} = cached_op(:multiply, res, g, shared)
-        to_grad(expr, g, {shared, local})
-      end)
-
-    {result, shared} =
-      Enum.reduce(tail, {head, shared}, fn right, {left, shared} ->
-        cached_op(:add, left, right, shared)
-      end)
-
-    {result, {shared, local}}
+    pairs
+    |> Enum.map_reduce({shared_cache, local_cache}, fn {expr, g}, {shared, local} ->
+      {expr, shared} = cached_op(:broadcast, expr, ans, shared)
+      {g, shared} = cached_op(:multiply, res, g, shared)
+      to_grad(expr, g, {shared, local})
+    end)
+    |> cached_sum()
   end
 
   defp no_g_grad(:add, [x, y], _ans) do
