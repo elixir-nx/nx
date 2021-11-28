@@ -150,6 +150,9 @@ defmodule Nx.Defn.Grad do
     {Enum.reduce(result, &Nx.add/2), cache}
   end
 
+  # TODO: investigate if it is possible to move to no_g:
+  # select, clip
+
   defp linear_grad(:metadata, [expr, %{custom_grad: fun}], _ans, g) do
     args = fun.(expr, g)
 
@@ -163,7 +166,6 @@ defmodule Nx.Defn.Grad do
   end
 
   defp linear_grad(:select, [pred, on_true, on_false], ans, g) do
-    # TODO: can this be no_g? and if so, are there others?
     gs = Nx.broadcast(g, ans)
     zeros = Nx.broadcast(Expr.tensor(0.0), ans)
 
@@ -412,7 +414,7 @@ defmodule Nx.Defn.Grad do
 
   defp linear_grad(:cholesky, [input], l, g) do
     num = g |> tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
-    den = l |> Nx.eye(backend: Nx.Defn.Expr) |> Nx.add(1)
+    den = l |> Nx.eye() |> Nx.add(1)
     phi_tril = num |> Nx.divide(den) |> tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
@@ -443,7 +445,7 @@ defmodule Nx.Defn.Grad do
 
         axis ->
           i
-          |> Nx.iota(axis: axis, backend: Nx.Defn.Expr)
+          |> Nx.iota(axis: axis)
           |> Nx.reshape({num_elements, 1})
       end)
       |> Nx.concatenate(axis: 1)
@@ -505,12 +507,12 @@ defmodule Nx.Defn.Grad do
 
         current when current < axis ->
           indices_for_axis
-          |> Nx.iota(axis: current, backend: Nx.Defn.Expr)
+          |> Nx.iota(axis: current)
           |> Nx.reshape({num_elements, 1})
 
         current when current > axis ->
           indices_for_axis
-          |> Nx.iota(axis: current + axis_offset, backend: Nx.Defn.Expr)
+          |> Nx.iota(axis: current + axis_offset)
           |> Nx.reshape({num_elements, 1})
       end)
       |> Nx.concatenate(axis: 1)
@@ -1131,9 +1133,9 @@ defmodule Nx.Defn.Grad do
   defp tril(t) do
     lower_selector =
       t
-      |> Nx.iota(axis: 0, backend: Nx.Defn.Expr)
-      |> Nx.greater_equal(Nx.iota(t, axis: 1, backend: Nx.Defn.Expr))
+      |> Nx.iota(axis: 0)
+      |> Nx.greater_equal(Nx.iota(t, axis: 1))
 
-    Nx.select(lower_selector, t, Nx.tensor(0, backend: Nx.Defn.Expr, type: t.type))
+    Nx.select(lower_selector, t, Nx.tensor(0, type: t.type))
   end
 end
