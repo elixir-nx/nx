@@ -869,7 +869,8 @@ defmodule Nx.Defn.Grad do
     cannot compute gradient for Nx.#{op}/#{length(args)}.
 
     Consider using stop_grad/1 to make the gradient equivalent to \
-    the identify function or use custom_grad/2 to define a proper \
+    the identity function or use custom_grad/2 to define a proper \
+``
     gradient implementation
     """
   end
