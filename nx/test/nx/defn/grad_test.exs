@@ -1771,7 +1771,7 @@ defmodule Nx.Defn.GradTest do
       )
     end
   end
-
+  
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))
