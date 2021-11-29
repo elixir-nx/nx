@@ -350,6 +350,14 @@ NIF(argsort)
   TENSOR(torch::argsort(*input, axis, is_descending));
 }
 
+NIF(flip)
+{
+  TENSOR_PARAM(0, input);
+  LIST_PARAM(1, std::vector<int64_t>, dims);
+
+  TENSOR(torch::flip(*input, dims));
+}
+
 NIF(permute)
 {
   TENSOR_PARAM(0, t);
@@ -776,6 +784,7 @@ static ErlNifFunc nif_functions[] = {
     DF(concatenate, 2),
     DF(gather, 3),
     DF(argsort, 3),
+    DF(flip, 2),
 
     DF(add, 2),
     DF(subtract, 2),

@@ -182,15 +182,18 @@ defmodule Nx.Defn.Grad do
     grads
   end
 
-  defp update_grads(:elem, [tuple, pos, _size], _ans, gs, _to_grad_ids, grads) do
-    g = Enum.reduce(gs, &Nx.add/2)
-    Map.update(grads, tuple.data.id, [{pos, g}], &[{pos, g} | &1])
+  defp update_grads(:elem, [tuple, pos, size], _ans, gs, _to_grad_ids, grads) do
+    update_in(grads[tuple.data.id], fn tuple ->
+      tuple = tuple || Tuple.duplicate([], size)
+      g = Enum.reduce(gs, &Nx.add/2)
+      put_elem(tuple, pos, [g | elem(tuple, pos)])
+    end)
   end
 
   defp update_grads(:cond, [clauses, last], _ans, gs, {to_grad, ids} = to_grad_ids, grads) do
     gs =
-      if is_tuple(last) do
-        gs |> Enum.sort() |> Enum.map(&elem(&1, 1))
+      if is_tuple(gs) do
+        gs |> Tuple.to_list() |> Enum.map(fn gs -> Enum.reduce(gs, &Nx.add/2) end)
       else
         gs
       end
