@@ -191,7 +191,7 @@ defmodule Nx.Defn.Grad do
 
     to_grad = Composite.flatten_list([to_grad])
 
-    [{true, last} | clauses] =
+    clauses =
       Enum.map([{true, last} | clauses], fn {head, body} ->
         {parents, nodes} = parents_tree(body, ids)
 
@@ -203,7 +203,23 @@ defmodule Nx.Defn.Grad do
         {graded, _} =
           Enum.map_reduce(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
 
-        {head, List.to_tuple(graded)}
+        {head, graded}
+      end)
+
+    # Check with grads are non-zero and keep only the ones that are
+    used = Enum.map(to_grad, fn _ -> false end)
+
+    used =
+      Enum.reduce(clauses, used, fn {_, body}, used ->
+        Enum.zip_with(body, used, fn
+          %T{data: %{op: :constant, args: [0.0]}}, false -> false
+          _, _ -> true
+        end)
+      end)
+
+    [{true, last} | clauses] =
+      Enum.map(clauses, fn {head, body} ->
+        {head, body |> zip_filter(used) |> List.to_tuple()}
       end)
 
     # Build a new cond expression and assign each derivative to the new grads.
@@ -214,7 +230,9 @@ defmodule Nx.Defn.Grad do
       end
 
     {grads, []} =
-      Enum.reduce(to_grad, {grads, res}, fn to_grad, {grads, [elem | rest]} ->
+      to_grad
+      |> zip_filter(used)
+      |> Enum.reduce({grads, res}, fn to_grad, {grads, [elem | rest]} ->
         {Map.update(grads, to_grad.data.id, [elem], &[elem | &1]), rest}
       end)
 
@@ -1124,6 +1142,10 @@ defmodule Nx.Defn.Grad do
       Nx.broadcast(g, x, axes: axes)
     end
   end
+
+  defp zip_filter([head | tail], [true | mask]), do: [head | zip_filter(tail, mask)]
+  defp zip_filter([_ | tail], [false | mask]), do: zip_filter(tail, mask)
+  defp zip_filter([], []), do: []
 
   defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
   defp up_to(_, _), do: []

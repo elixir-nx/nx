@@ -2048,7 +2048,10 @@ defmodule Nx.Defn.GradTest do
             {{Nx.power(t, 4), Nx.power(t, 3)}, Nx.power(t, 2)}
           end
 
-        a * b + c
+        d =
+          if t > 0, do: 123, else: 456
+
+        a * b + c - d
       end)
     end
 
