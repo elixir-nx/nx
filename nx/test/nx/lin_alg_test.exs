@@ -1,6 +1,7 @@
 defmodule Nx.LinAlgTest do
   use ExUnit.Case, async: true
 
+  import Nx.Helpers
   doctest Nx.LinAlg
 
   describe "triangular_solve" do
@@ -450,10 +451,5 @@ defmodule Nx.LinAlgTest do
     else
       base_result
     end
-  end
-
-  defp assert_all_close(left, right, opts \\ []) do
-    opts = Keyword.merge([atol: 1.0e-5], opts)
-    assert Nx.all_close(left, right, opts) == Nx.tensor(1, type: {:u, 8})
   end
 end

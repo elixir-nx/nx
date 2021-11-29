@@ -1,4 +1,4 @@
-defmodule Nx.GradHelpers do
+defmodule Nx.Helpers do
   import ExUnit.Assertions
 
   @doc """
@@ -13,10 +13,13 @@ defmodule Nx.GradHelpers do
     step = opts[:step] || 1.0e-4
     est_grad = finite_differences(func, x, step)
     comp_grad = grad_func.(x)
-    approx_equal?(comp_grad, est_grad, x, atol, rtol)
+    assert_all_close(comp_grad, est_grad, x, atol, rtol)
   end
 
-  def approx_equal?(lhs, rhs, opts \\ []) do
+  @doc """
+  Asserts `lhs` is close to `rhs`.
+  """
+  def assert_all_close(lhs, rhs, opts \\ []) do
     atol = opts[:atol] || 1.0e-4
     rtol = opts[:rtol] || 1.0e-4
 
@@ -33,7 +36,7 @@ defmodule Nx.GradHelpers do
     end
   end
 
-  defp approx_equal?(lhs, rhs, x, atol, rtol) do
+  defp assert_all_close(lhs, rhs, x, atol, rtol) do
     unless Nx.all_close(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
       flunk("""
       expected

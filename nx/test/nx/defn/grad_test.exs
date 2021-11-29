@@ -2,7 +2,7 @@ defmodule Nx.Defn.GradTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  import Nx.GradHelpers
+  import Nx.Helpers
 
   @iters 1..25
 
@@ -492,7 +492,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_conv_y_cos_x_sin_y(x, y)
 
@@ -530,7 +530,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_conv_x_same_padding(x, y), do: grad(x, &Nx.sum(Nx.conv(&1, y, padding: :same)))
@@ -564,7 +564,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_conv_y_same_padding(x, y)
 
@@ -580,7 +580,7 @@ defmodule Nx.Defn.GradTest do
           [[[1225.0, 1000.0], [1080.0, 880.0]]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_conv_x_general_stride_lhs_dilated(x, y) do
@@ -623,12 +623,12 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_conv_y_general_stride_lhs_dilated(x, y)
       rhs = Nx.tensor([[[[312.0, 328.0], [312.0, 328.0]]], [[[312.0, 328.0], [312.0, 328.0]]]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_mean_conv_x_general_stride_rhs_dilated(x, y) do
@@ -671,14 +671,14 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_mean_conv_y_general_stride_rhs_dilated(x, y)
 
       rhs =
         Nx.tensor([[[[7.4000006, 8.2], [7.4000006, 8.2]]], [[[7.4000006, 8.2], [7.4000006, 8.2]]]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_conv_x_channels_last(x, y) do
@@ -723,7 +723,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_conv_y_channels_last(x, y)
 
@@ -735,7 +735,7 @@ defmodule Nx.Defn.GradTest do
           [[[1134.0, 1188.0], [1350.0, 1404.0]], [[1161.0, 1215.0], [1377.0, 1431.0]]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_conv_x_feature_groups(x, y),
@@ -780,7 +780,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_conv_y_feature_groups(x, y)
 
@@ -790,7 +790,7 @@ defmodule Nx.Defn.GradTest do
           [[[333.0, 342.0], [369.0, 378.0]], [[477.0, 486.0], [513.0, 522.0]]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_conv_x_batch_groups(x, y) do
@@ -823,7 +823,7 @@ defmodule Nx.Defn.GradTest do
           [[[8.0, 17.0, 17.0], [18.0, 38.0, 38.0], [10.0, 21.0, 21.0]]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_conv_y_batch_groups(x, y)
 
@@ -834,7 +834,7 @@ defmodule Nx.Defn.GradTest do
           [[[516.0, 348.0], [552.0, 372.0]]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_conv_x_arbitrary_permutation(x, y) do
@@ -975,7 +975,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_conv_y_arbitrary_permutation(x, y)
 
@@ -1037,7 +1037,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
   end
 
@@ -1055,7 +1055,7 @@ defmodule Nx.Defn.GradTest do
           [[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_sum_cos(t), do: grad(t, &Nx.sum(Nx.window_sum(Nx.cos(&1), {2, 1, 2, 1})))
@@ -1083,7 +1083,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_sum_dilated(x),
@@ -1114,7 +1114,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_sum_padding(x) do
@@ -1133,7 +1133,7 @@ defmodule Nx.Defn.GradTest do
           [[[2.0, 2.0]], [[2.0, 2.0]]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_sum_stride_padding_dilated(x) do
@@ -1170,7 +1170,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_nested_window_sum(x) do
@@ -1266,7 +1266,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
   end
 
@@ -1291,7 +1291,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_min(t), do: grad(t, &Nx.sum(Nx.window_min(&1, {1, 2, 1, 2})))
@@ -1314,7 +1314,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_max_cos(t) do
@@ -1338,7 +1338,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_min_cos(t) do
@@ -1362,7 +1362,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
   end
 
@@ -1711,7 +1711,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes grad for tensor" do
-      approx_equal?(
+      assert_all_close(
         qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
         Nx.tensor([
           [0.70709, 1.4142],
@@ -1721,7 +1721,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes qr_megapower_grad for tensor" do
-      approx_equal?(
+      assert_all_close(
         qr_megapower_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
         Nx.tensor([
           [0.1112, -4.0914],
@@ -1837,11 +1837,11 @@ defmodule Nx.Defn.GradTest do
           [-1.1983466382499552, 1.520047340015915, 1.7603121921923377]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_sum_pad_dynamic_slice(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_of_index(t, index), do: grad(index, &Nx.mean(Nx.slice(t, [&1], [2])))
@@ -1887,7 +1887,7 @@ defmodule Nx.Defn.GradTest do
 
       rhs = Nx.tensor([[0.16666667, 0.0, 0.0], [0.16666667, 0.16666667, 0.16666667]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs =
         grad_sum_pad_put_slice_cos_operand(
@@ -1902,7 +1902,7 @@ defmodule Nx.Defn.GradTest do
           [2.5758327, -1.48648336, -3.11302839, -2.86682772]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes gradient of update" do
@@ -1914,7 +1914,7 @@ defmodule Nx.Defn.GradTest do
 
       rhs = Nx.tensor([[0.16666667, 0.16666667]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs =
         grad_sum_pad_put_slice_sin_update(
@@ -1924,7 +1924,7 @@ defmodule Nx.Defn.GradTest do
 
       rhs = Nx.tensor([[-0.83907153, 0.0044257], [0.84385396, 0.90744678]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
   end
 
@@ -2027,14 +2027,14 @@ defmodule Nx.Defn.GradTest do
           [2.718281828459045, 7.38905609893065, 0.0, 148.4131591025766, 0.8414709848078965]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes the gradient with max+select" do
       lhs = grad_max_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
       rhs = Nx.tensor([[0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 148.4131591025766, 0.0]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes the gradient with sum+select+sum" do
@@ -2043,13 +2043,13 @@ defmodule Nx.Defn.GradTest do
 
       rhs = Nx.tensor([[0.0, 1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0, 0.0]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes the gradient with sum+select+select" do
       lhs = grad_nested_select(Nx.tensor([-2.0, -1.0, 0.0, 1.0, 2.0]))
       rhs = Nx.tensor([0.01, 0.01, 0.01, 1.0, 1.0])
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "is zero when part of pred only" do
@@ -2145,7 +2145,7 @@ defmodule Nx.Defn.GradTest do
           [0.04586424368582543, -0.13364030203806254, -0.16143494087225754]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
 
       lhs = grad_log_sum_1_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
 
@@ -2155,7 +2155,7 @@ defmodule Nx.Defn.GradTest do
           [0.01875804509762369, 0.015006436078098952, 0.012505363398415794]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_log_sum_keep_sin_sum(t),
@@ -2170,7 +2170,7 @@ defmodule Nx.Defn.GradTest do
           [0.01875804509762369, 0.015006436078098952, 0.012505363398415794]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_0_mean(t), do: grad(t, &(&1 |> Nx.sum(axes: [0]) |> Nx.mean()))
@@ -2268,13 +2268,13 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient" do
       lhs = grad_reduce_max(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
       rhs = Nx.tensor([[0.0, -3.302372203078941, 0.0, 0.0], [-3.302372203078941, 0.0, 0.0, 0.0]])
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes gradient with sum" do
       lhs = grad_sum_reduce_max(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
       rhs = Nx.tensor([[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 0.0]])
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes gradient with sum+cos" do
@@ -2286,7 +2286,7 @@ defmodule Nx.Defn.GradTest do
           [0.0, -0.42073549240394825, 0.0, -0.42073549240394825]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes gradient with max+sum" do
@@ -2311,7 +2311,7 @@ defmodule Nx.Defn.GradTest do
           [[0.0, 0.16666667, 0.16666667], [0.0, 0.16666667, 0.16666667]]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
   end
 
@@ -2334,13 +2334,13 @@ defmodule Nx.Defn.GradTest do
           [0.0, -0.37220643914833773, 0.0, -0.37220643914833773]
         ])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes gradient with sum" do
       lhs = grad_sum_reduce_min(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
       rhs = Nx.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 0.5, 0.0, 0.5]])
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes gradient with sum+cos" do
@@ -2349,7 +2349,7 @@ defmodule Nx.Defn.GradTest do
       rhs =
         Nx.tensor([[0.0, 0.0, -0.1411200080598672, 0.0], [0.0, 0.0, -0.1411200080598672, 0.0]])
 
-      compare_tensors!(lhs, rhs)
+      assert_all_close(lhs, rhs)
     end
 
     test "computes gradient with min+sum" do
@@ -2798,18 +2798,6 @@ defmodule Nx.Defn.GradTest do
       assert_raise ArgumentError, ~r"cannot compute gradient for Nx.window_product/3", fn ->
         grad_window_prod(2)
       end
-    end
-  end
-
-  defp compare_tensors!(left, right) do
-    atol = 1.0e-7
-    rtol = 1.0e-4
-
-    try do
-      assert Nx.all_close(left, right, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8})
-    rescue
-      # So we can see the diff
-      _ -> assert left == right
     end
   end
 end
