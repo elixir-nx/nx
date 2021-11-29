@@ -248,28 +248,17 @@ defmodule Nx.Defn.Grad do
     grads
   end
 
-  defp update_grads(:qr, [{q, r}, input, _opts], _ans, gs, {to_grad, ids} = to_grad_ids, grads) do
-    gs = gs |> Enum.sort() |> Enum.map(&elem(&1, 1))
-
-    m = Nx.dot(r, dr) |> Nx.subtract(Nx.transpose(dq), q)
-
-    # copyltu
-    m_ltu =
-      m
-      |> Nx.iota(axis: 0)
-      |> Nx.greater(Nx.iota(m, axis: 1))
-      |> Nx.add(Nx.eye(m) |> Nx.divide(2))
-      |> Nx.multiply(m)
-      |> then(fn m_ltu -> Nx.add(m_ltu, Nx.transpose(m_ltu)) end)
-
-    dq = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.transpose(Nx.LinAlg.invert(r)))
-  end
-
   @reduced_grads [:add, :multiply, :power, :qr]
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, gs, _to_grad_ids, grads) do
-    g = Enum.reduce(gs, &Nx.add/2)
+    g =
+      if is_tuple(gs) do
+        gs
+      else
+        Enum.reduce(gs, &Nx.add/2)
+      end
+
     pairs = grad(op, args, ans, g)
 
     if @verify_grad do
@@ -518,58 +507,28 @@ defmodule Nx.Defn.Grad do
     [{input, dl}]
   end
 
-  # defp grad(:qr, [{q, r}, input, _opts], ans, [{0, dq}, {1, dr}]) do
-  #   # g = Nx.add(g1, g2)
-  #   {q, r} = Nx.Defn.Expr.tuple(ans, [q, r]) |> IO.inspect(label: "qr")
-  #   r_inv = Nx.LinAlg.invert(r) |> IO.inspect(label: "rinv")
+  defp grad(:qr, [{q, r}, input, _opts], ans, {dqs, drs}) do
+    dq = Enum.reduce(dqs, Nx.Defn.Expr.tensor(0.0), &Nx.add/2)
+    dr = Enum.reduce(drs, Nx.Defn.Expr.tensor(0.0), &Nx.add/2)
 
-  #   IO.inspect(g, label: "g")
-  #   c = Nx.transpose(q) |> Nx.dot(g) |> Nx.dot(r_inv)
+    {q, r} = Nx.Defn.Expr.tuple(ans, [q, r])
+    r_inv = Nx.LinAlg.invert(r)
 
-  #   IO.inspect(c, label: "c")
-  #   # matrix where every element above the main diagonal is 2
-  #   # and every element on the main diagonal is 1
-  #   e =
-  #     Nx.less_equal(Nx.iota(c, axis: 0), Nx.iota(c, axis: 1))
-  #     |> Nx.multiply(2)
-  #     |> Nx.subtract(Nx.eye(c))
+    m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
 
-  #   dr =
-  #     c
-  #     |> Nx.add(Nx.transpose(c))
-  #     |> Nx.divide(2)
-  #     |> Nx.multiply(e)
-  #     |> Nx.dot(r)
-  #     |> IO.inspect(label: "dr")
+    # copyltu
+    m_ltu =
+      m
+      |> Nx.iota(axis: 0)
+      |> Nx.greater(Nx.iota(m, axis: 1))
+      |> Nx.add(Nx.eye(m) |> Nx.divide(2))
+      |> Nx.multiply(m)
+      |> then(fn m_ltu -> Nx.add(m_ltu, Nx.transpose(m_ltu)) end)
 
-  #   dq = g |> Nx.subtract(Nx.dot(q, dr)) |> Nx.dot(r_inv) |> IO.inspect(label: "dq")
+    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.transpose(r_inv))
 
-  #   # # A = QR
-  #   # # dA = dQ * R + Q * dR
-
-  #   # da = Nx.dot(dq, r) |> Nx.add(Nx.dot(q, dr))
-
-  #   # The code below was translated from jax, while the code above was translated from
-  #   # https://arxiv.org/pdf/2009.10071.pdf, page 5
-
-  #   # r = Nx.multiply(r, -1)
-  #   # q = Nx.multiply(q, -1)
-  #   # # ok
-  #   # r_inv = Nx.LinAlg.invert(r |> Nx.transpose())
-  #   # # ok
-  #   # g_rinv = Nx.dot(g, r_inv)
-
-  #   # qt_g_rinv = Nx.dot(Nx.transpose(q), g_rinv)
-  #   # qt_g_rinv_lower = tril(qt_g_rinv)
-  #   # doff = Nx.subtract(qt_g_rinv_lower, Nx.transpose(qt_g_rinv_lower))
-  #   # dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
-  #   # dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
-
-  #   da = Nx.dot(0, r) |> Nx.add(Nx.dot(q, dr))
-
-  #   # [{input, dq}, {input, dr}]
-  #   [{input, da}]
-  # end
+    [{input, da}]
+  end
 
   defp grad(:sort, [t, opts], _ans, g) do
     idx = Nx.argsort(t, opts)

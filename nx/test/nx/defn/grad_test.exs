@@ -1,5 +1,5 @@
 defmodule Nx.Defn.GradTest do
-  use ExUnit.Case, async: true
+  use Nx.Case, async: true
 
   import Nx.Defn
   import Nx.GradHelpers
@@ -1670,13 +1670,41 @@ defmodule Nx.Defn.GradTest do
       grad(t, fn tensor ->
         {q, r} = Nx.LinAlg.qr(tensor)
 
-        Nx.sum(r)
+        q
+        |> Nx.add(r)
+        |> Nx.sum()
+      end)
+    end
+
+    defn qr_megapower_grad(t) do
+      grad(t, fn tensor ->
+        {q, r} = Nx.LinAlg.qr(Nx.power(tensor, 2))
+
+        q
+        |> Nx.cos()
+        |> Nx.add(Nx.sin(r))
+        |> Nx.sum()
       end)
     end
 
     test "computes grad for tensor" do
-      assert qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])) ==
-               Nx.tensor([[-0.7071, -1.4142], [-0.7071, 5.62e-8]])
+      assert_all_close(
+        qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
+        Nx.tensor([
+          [0.70709, 1.4142],
+          [0.70709, 0.0]
+        ])
+      )
+    end
+
+    test "computes qr_megapower_grad for tensor" do
+      assert_all_close(
+        qr_megapower_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
+        Nx.tensor([
+          [0.1112, -4.0914],
+          [0.3298, 0.5660]
+        ])
+      )
     end
   end
 
