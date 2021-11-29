@@ -74,7 +74,7 @@ defmodule Nx.Defn.Grad do
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
-               [:floor, :round, :ceil, :sign, :token] ++
+               [:floor, :round, :ceil, :sign, :token, :fun] ++
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp parents_tree(expr, nodes) do
@@ -100,7 +100,7 @@ defmodule Nx.Defn.Grad do
         nodes = Map.put(nodes, id, t)
 
         {_, acc} =
-          Tree.apply_args(t, {parents, nodes}, fn arg, {parents, nodes} ->
+          traverse_args(op, t, {parents, nodes}, fn arg, {parents, nodes} ->
             parents = Map.update(parents, arg.data.id, [id], &[id | &1])
             {arg, recur_parents_tree(arg, {parents, nodes})}
           end)
@@ -108,6 +108,27 @@ defmodule Nx.Defn.Grad do
         acc
     end
   end
+
+  # For some functions, only a subset of the args participate in the grad,
+  # so we handle them accordingly here.
+
+  defp traverse_args(:select, %{data: %{args: [_, on_true, on_false | _]}}, cache, fun),
+    do: Enum.map_reduce([on_true, on_false], cache, fun)
+
+  defp traverse_args(:slice, %{data: %{args: [arg | _]}}, cache, fun),
+    do: fun.(arg, cache)
+
+  defp traverse_args(:put_slice, %{data: %{args: [arg, _, update | _]}}, cache, fun),
+    do: Enum.map_reduce([arg, update], cache, fun)
+
+  defp traverse_args(:take_along_axis, %{data: %{args: [arg | _]}}, cache, fun),
+    do: fun.(arg, cache)
+
+  defp traverse_args(:take, %{data: %{args: [arg | _]}}, cache, fun),
+    do: fun.(arg, cache)
+
+  defp traverse_args(_op, t, cache, fun),
+    do: Tree.apply_args(t, cache, fun)
 
   ## Recursion
 

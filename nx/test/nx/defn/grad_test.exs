@@ -1966,6 +1966,9 @@ defmodule Nx.Defn.GradTest do
     defn leaky_relu(t), do: Nx.select(t > 0, t, t * 0.1)
     defn grad_nested_select(t), do: grad(t, &Nx.sum(leaky_relu(leaky_relu(&1))))
 
+    # pred is not part of grad
+    defn grad_pred_select(t), do: grad(t, &Nx.sum(Nx.select(&1 * &1, 1.0, -1.0)))
+
     test "computes gradient with sum+select" do
       lhs = grad_sum_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
 
@@ -2000,10 +2003,15 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    test "computes the gradient with nested selects" do
+    test "computes the gradient with sum+select+select" do
       lhs = grad_nested_select(Nx.tensor([-2.0, -1.0, 0.0, 1.0, 2.0]))
       rhs = Nx.tensor([0.01, 0.01, 0.01, 1.0, 1.0])
       compare_tensors!(lhs, rhs)
+    end
+
+    test "is zero when part of pred only" do
+      assert grad_pred_select(Nx.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])) ==
+               Nx.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
     end
   end
 
