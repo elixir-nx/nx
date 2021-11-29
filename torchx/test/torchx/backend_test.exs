@@ -127,18 +127,6 @@ defmodule Torchx.BackendTest do
     end
   end
 
-  describe "vectors" do
-    for type_a <- @types,
-        type_b <- @types do
-      test "outer(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
-        type_a = unquote(type_a)
-        type_b = unquote(type_b)
-
-        test_binary_op(:outer, [1, 2, 3, 4], [5, 6, 7, 8], type_a, type_b)
-      end
-    end
-  end
-
   describe "aggregates" do
     test "sum throws on type mismatch" do
       t = Nx.tensor([[101, 102], [103, 104]], type: {:u, 8})

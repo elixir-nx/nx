@@ -449,8 +449,7 @@ defmodule Nx.Defn.Expr do
     [:remainder, :atan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
+      [:logical_and, :logical_or, :logical_xor]
 
   for op <- binary_ops do
     @impl true

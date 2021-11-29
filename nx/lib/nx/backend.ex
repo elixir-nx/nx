@@ -104,8 +104,7 @@ defmodule Nx.Backend do
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
+      [:logical_and, :logical_or, :logical_xor]
 
   for binary_op <- binary_ops do
     @callback unquote(binary_op)(out :: t, t, t) :: t

@@ -451,22 +451,6 @@ defmodule Nx.BinaryBackend do
   ## Two-element
 
   @impl true
-  def outer(out, %{type: left_type} = t1, %{type: right_type} = t2) do
-    b1 = to_binary(t1)
-    b2 = to_binary(t2)
-
-    data =
-      match_types [left_type, right_type] do
-        for <<match!(left, 0) <- b1>>,
-            <<match!(right, 1) <- b2>>,
-            into: <<>>,
-            do: number_to_binary(read!(left, 0) * read!(right, 1), out.type)
-      end
-
-    from_binary(out, data)
-  end
-
-  @impl true
   def dot(out, left, contract_axes1, [], right, contract_axes2, []) do
     # dot/4 is directed to this specific clause so we can keep a more efficient implementation
     # for non-batched dot products. See the clause below for batched dot products

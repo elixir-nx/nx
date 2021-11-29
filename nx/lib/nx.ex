@@ -7077,10 +7077,8 @@ defmodule Nx do
   """
   @doc type: :ndim
   def outer(t1, t2) do
-    type = binary_type(t1, t2)
-    %T{shape: s1, names: n1} = t1 = to_tensor(t1)
-    %T{shape: s2, names: n2} = t2 = to_tensor(t2)
-    new_shape = {size(s1), size(s2)}
+    %{names: n1} = t1 = to_tensor(t1)
+    %{names: n2} = t2 = to_tensor(t2)
 
     names =
       case {n1, n2} do
@@ -7088,7 +7086,7 @@ defmodule Nx do
         {lhs, rhs} -> [hd(lhs), List.last(rhs)]
       end
 
-    impl!(t1, t2).outer(%{t1 | type: type, shape: new_shape, names: names}, t1, t2)
+    %{multiply(reshape(t1, {size(t1), 1}), reshape(t2, {1, size(t2)})) | names: names}
   end
 
   @doc """

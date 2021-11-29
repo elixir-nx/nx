@@ -176,37 +176,13 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:select, [pred, on_true, on_false], ans, g) do
-    gs = Nx.broadcast(g, ans)
-    zeros = Nx.broadcast(Expr.tensor(0.0), ans)
-
-    d_on_true = Nx.select(pred, gs, zeros)
-    d_on_false = Nx.select(pred, zeros, gs)
-
-    [{on_true, d_on_true}, {on_false, d_on_false}]
+    d_on_true = Nx.select(pred, g, Expr.tensor(0.0))
+    d_on_false = Nx.select(pred, Expr.tensor(0.0), g)
+    [unbroadcast(on_true, d_on_true, ans), unbroadcast(on_false, d_on_false, ans)]
   end
 
   defp grad(:broadcast, [x, shape, axes], _ans, g) do
-    implicit_axes =
-      for {a, i} <- Enum.with_index(axes),
-          elem(shape, a) != 1 and elem(x.shape, i) == 1,
-          do: {a, i}
-
-    {implicit_axes, broadcast_axes} = Enum.unzip(implicit_axes)
-    explicit_axes = Nx.axes(shape) -- axes
-
-    g =
-      case explicit_axes ++ implicit_axes do
-        [] -> g
-        sum_axes -> Nx.sum(g, axes: sum_axes)
-      end
-
-    g =
-      case broadcast_axes do
-        [] -> g
-        _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- broadcast_axes)
-      end
-
-    [{x, g}]
+    [{x, grad_broadcast(x, shape, axes, g)}]
   end
 
   defp grad(:clip, [operand, min, max], _ans, g) do
@@ -549,8 +525,11 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:add, [x, y], ans, g) do
-    # TODO: handle case x and y are the same?
-    [unbroadcast(x, g, ans), unbroadcast(y, g, ans)]
+    if x.data.id == y.data.id do
+      [{x, Nx.multiply(g, 2.0)}]
+    else
+      [unbroadcast(x, g, ans), unbroadcast(y, g, ans)]
+    end
   end
 
   defp grad(:subtract, [x, y], ans, g) do
@@ -558,8 +537,11 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:multiply, [x, y], ans, g) do
-    # TODO: handle case x and y are the same?
-    [unbroadcast(x, Nx.multiply(g, y), ans), unbroadcast(y, Nx.multiply(g, x), ans)]
+    if x.data.id == y.data.id do
+      [{x, Nx.multiply(g, Nx.multiply(2.0, x))}]
+    else
+      [unbroadcast(x, Nx.multiply(g, y), ans), unbroadcast(y, Nx.multiply(g, x), ans)]
+    end
   end
 
   defp grad(:divide, [x, y], ans, g) do
@@ -608,12 +590,6 @@ defmodule Nx.Defn.Grad do
       )
 
     [unbroadcast(x, Nx.multiply(g, lhs), ans), unbroadcast(y, Nx.multiply(g, rhs), ans)]
-  end
-
-  defp grad(:outer, [x, y], _ans, g) do
-    x = Nx.reshape(x, {Nx.size(x.shape), 1})
-    y = Nx.reshape(y, {1, Nx.size(y.shape)})
-    [{x, Nx.multiply(g, y)}, {y, Nx.multiply(g, x)}]
   end
 
   defp grad(:as_type, [x], _ans, g) do
@@ -1028,12 +1004,32 @@ defmodule Nx.Defn.Grad do
 
   ## General helpers
 
-  # TODO: Optimize me
   defp unbroadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
 
   defp unbroadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
     axes = Nx.Shape.broadcast_axes(shape, new_shape)
-    hd(grad(:broadcast, [x, new_shape, axes], :unused, res))
+    {x, grad_broadcast(x, new_shape, axes, res)}
+  end
+
+  defp grad_broadcast(x, shape, axes, g) do
+    implicit_axes =
+      for {a, i} <- Enum.with_index(axes),
+          elem(shape, a) != 1 and elem(x.shape, i) == 1,
+          do: {a, i}
+
+    {implicit_axes, broadcast_axes} = Enum.unzip(implicit_axes)
+    explicit_axes = Nx.axes(shape) -- axes
+
+    g =
+      case explicit_axes ++ implicit_axes do
+        [] -> g
+        sum_axes -> Nx.sum(g, axes: sum_axes)
+      end
+
+    case broadcast_axes do
+      [] -> g
+      _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- broadcast_axes)
+    end
   end
 
   defp reduce_g(x, opts, g) do

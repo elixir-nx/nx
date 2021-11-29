@@ -334,7 +334,6 @@ defmodule Nx.DefnTest do
   describe "tensor ops" do
     defn dot2(t1, t2), do: Nx.dot(t1, t2)
     defn dot6(t1, t2), do: Nx.dot(t1, [-2], [], t2, [-1], [])
-    defn outer(t1, t2), do: Nx.outer(t1, t2)
     defn transpose_1(t), do: Nx.transpose(t)
     defn transpose_2(t), do: Nx.transpose(t, axes: [-1, -2])
     defn reshape(t), do: Nx.reshape(t, {2, 3})
@@ -351,11 +350,6 @@ defmodule Nx.DefnTest do
 
       assert %T{data: %Expr{op: :dot, args: [_, [0], [], _, [1], []]}, shape: {3, 3}} =
                dot6(Nx.tensor([[1, 2, 3], [1, 2, 3]]), Nx.tensor([[1, 2], [3, 4], [5, 6]]))
-    end
-
-    test "outer product" do
-      assert %T{data: %Expr{op: :outer, args: [_, _]}, shape: {3, 3}} =
-               outer(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 3]))
     end
 
     test "transpose" do
