@@ -738,13 +738,6 @@ defmodule Nx.Defn.Grad do
     [{x, Nx.divide(Nx.multiply(g, 0.5), ans)}]
   end
 
-  # g(x) = (f(x))^2 -> 2f(x) * f'(x)
-  # g(x) = (x^3 + 1)^2 -> 2(x^3 + 1) * 3x
-
-  # ans = f(x)^1/2 -> 1/2 * f'(x) / (f(x)^(1/2))
-
-  # qr(f(x)) -> qr'(f(x)) * f'(x)
-
   defp grad(:cbrt, [x], ans, g) do
     [{x, Nx.divide(g, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))}]
   end
