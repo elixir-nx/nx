@@ -1029,7 +1029,7 @@ defmodule Nx.Defn.Expr do
 
     all
     |> Enum.map(fn {str, tensor} ->
-      String.pad_trailing(str, length, " ") <> "  " <> to_type_shape(tensor)
+      String.pad_trailing(str, length, " ") <> "   " <> to_type_shape(tensor)
     end)
     |> Enum.uniq()
     |> Enum.reduce(header, &concat(&2, concat(line(), &1)))
@@ -1050,10 +1050,17 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  defp cached_inspect_expr(%T{data: %Expr{op: op, id: id}} = t, {exprs, params, var_map, cache})
-       when op in [:tensor, :parameter] do
+  defp cached_inspect_expr(%T{data: %Expr{op: :parameter, id: id, args: [i]}} = t, acc) do
+      {exprs, params, var_map, cache} = acc
+      {var, var_map} = var_for_id(var_map, id)
+      param = "parameter " <> var <> ":" <> Integer.to_string(i)
+      {t, {exprs, [{param, t} | params], var_map, cache}}
+    end
+
+  defp cached_inspect_expr(%T{data: %Expr{op: :tensor, id: id}} = t, acc) do
+    {exprs, params, var_map, cache} = acc
     {var, var_map} = var_for_id(var_map, id)
-    param = Atom.to_string(op) <> " " <> var
+    param = "tensor " <> var
     {t, {exprs, [{param, t} | params], var_map, cache}}
   end
 
@@ -1062,7 +1069,7 @@ defmodule Nx.Defn.Expr do
     {args, {exprs, params, var_map, cache}} = traverse_args(op, t, acc)
     {var, var_map} = var_for_id(var_map, id)
     args_str = inspect_args(op, args, var_map)
-    expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> args_str <> " ]"
+    expr_str = var <> " = " <> Atom.to_string(op) <> " " <> args_str
     {t, {[{expr_str, t} | exprs], params, var_map, cache}}
   end
 

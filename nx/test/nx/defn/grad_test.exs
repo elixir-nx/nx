@@ -2206,16 +2206,16 @@ defmodule Nx.Defn.GradTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a                f32
-               b = power [ a, 2.0 ]       f32
-               c = power [ a, 3 ]         f32
-               d = while [ {0, c, 1.0} ]  tuple3
-               e = elem [ d, 2 ]          f32
-               f = elem [ d, 1 ]          f32
-               g = multiply [ e, f ]      f32
-               h = multiply [ b, g ]      f32
-               i = multiply [ 2.0, h ]    f32
-               j = multiply [ 3.0, i ]    f32
+               parameter a:0           f32
+               b = power a, 2.0        f32
+               c = power a, 3          f32
+               d = while {0, c, 1.0}   tuple3
+               e = elem d, 2           f32
+               f = elem d, 1           f32
+               g = multiply e, f       f32
+               h = multiply b, g       f32
+               i = multiply 2.0, h     f32
+               j = multiply 3.0, i     f32
              >\
              """
     end

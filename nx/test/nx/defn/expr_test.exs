@@ -203,13 +203,13 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a                                 s64[2][2]
-               parameter c                                 s64[2][2]
-               b = dot [ a, [1], [], a, [0], [] ]          s64[2][2]
-               d = tanh [ c ]                              f32[2][2]
-               e = add [ b, d ]                            f32[2][2]
-               f = add [ 2, e ]                            f32[2][2]
-               g = sum [ f, axes: nil, keep_axes: false ]  f32
+               parameter a:0                            s64[2][2]
+               parameter c:1                            s64[2][2]
+               b = dot a, [1], [], a, [0], []           s64[2][2]
+               d = tanh c                               f32[2][2]
+               e = add b, d                             f32[2][2]
+               f = add 2, e                             f32[2][2]
+               g = sum f, axes: nil, keep_axes: false   f32
              >\
              """
     end
@@ -225,13 +225,13 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
-               tensor b                                       s64[2][2]
-               parameter e                                    s64[2][2]
-               a = iota [ nil ]                               s64[2][2]
-               c = dot [ a, [1], [], b, [0], [] ]             s64[2][2]
-               d = tanh [ c ]                                 f32[2][2]
-               f = add [ d, e ]                               f32[2][2]
-               g = argmin [ f, tie_break: :high, axis: nil ]  s64
+               tensor b                                    s64[2][2]
+               parameter e:2                               s64[2][2]
+               a = iota nil                                s64[2][2]
+               c = dot a, [1], [], b, [0], []              s64[2][2]
+               d = tanh c                                  f32[2][2]
+               f = add d, e                                f32[2][2]
+               g = argmin f, tie_break: :high, axis: nil   s64
              >\
              """
     end
@@ -244,8 +244,8 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
-               parameter a                                                  s64[2][2]
-               b = reduce [ a, 0, axes: nil, keep_axes: false, &Nx.add/2 ]  s64
+               parameter a:0                                             s64[2][2]
+               b = reduce a, 0, axes: nil, keep_axes: false, &Nx.add/2   s64
              >\
              """
     end
@@ -258,8 +258,8 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
-               parameter a       s64
-               b = add [ 1, a ]  s64
+               parameter a:0   s64
+               b = add 1, a    s64
              >\
              """
 
@@ -268,9 +268,9 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
-               parameter a               s64
-               b = metadata [ a, :foo ]  s64
-               c = add [ 1, b ]          s64
+               parameter a:0          s64
+               b = metadata a, :foo   s64
+               c = add 1, b           s64
              >\
              """
     end
@@ -284,9 +284,9 @@ defmodule Nx.Defn.ExprTest do
                f32[2][2]
              \s\s
                Nx.Defn.Expr
-               parameter a                                 s64[2][2]
-               b = qr [ a, eps: 1.0e-10, mode: :reduced ]  tuple2
-               c = elem [ b, 0 ]                           f32[2][2]
+               parameter a:0                            s64[2][2]
+               b = qr a, eps: 1.0e-10, mode: :reduced   tuple2
+               c = elem b, 0                            f32[2][2]
              >\
              """
 
@@ -295,9 +295,9 @@ defmodule Nx.Defn.ExprTest do
                f32[2][2]
              \s\s
                Nx.Defn.Expr
-               parameter a                                 s64[2][2]
-               b = qr [ a, eps: 1.0e-10, mode: :reduced ]  tuple2
-               c = elem [ b, 1 ]                           f32[2][2]
+               parameter a:0                            s64[2][2]
+               b = qr a, eps: 1.0e-10, mode: :reduced   tuple2
+               c = elem b, 1                            f32[2][2]
              >\
              """
     end
@@ -312,11 +312,11 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
-               parameter a                                     s64
-               parameter c                                     s64
-               b = any? [ a, axes: nil, keep_axes: false ]     u8
-               d = cond [ b -> {a, c}, :otherwise -> {c, a} ]  tuple2
-               e = elem [ d, 0 ]                               s64
+               parameter a:0                                s64
+               parameter c:1                                s64
+               b = any? a, axes: nil, keep_axes: false      u8
+               d = cond b -> {a, c}, :otherwise -> {c, a}   tuple2
+               e = elem d, 0                                s64
              >\
              """
 
@@ -325,11 +325,11 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
-               parameter a                                     s64
-               parameter c                                     s64
-               b = any? [ a, axes: nil, keep_axes: false ]     u8
-               d = cond [ b -> {a, c}, :otherwise -> {c, a} ]  tuple2
-               e = elem [ d, 1 ]                               s64
+               parameter a:0                                s64
+               parameter c:1                                s64
+               b = any? a, axes: nil, keep_axes: false      u8
+               d = cond b -> {a, c}, :otherwise -> {c, a}   tuple2
+               e = elem d, 1                                s64
              >\
              """
     end
@@ -349,9 +349,9 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a             f32
-               b = while [ {1.0, a} ]  tuple2
-               c = elem [ b, 0 ]       f32
+               parameter a:0        f32
+               b = while {1.0, a}   tuple2
+               c = elem b, 0        f32
              >\
              """
     end
@@ -372,14 +372,14 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a                    f32
-               parameter b                    f32
-               c = multiply [ a, b ]          f32
-               d = add [ a, b ]               f32
-               e = token [ mult: c, add: d ]  tuple2
-               f = attach_token [ e, d ]      f32
-               g = attach_token [ e, c ]      f32
-               h = subtract [ f, g ]          f32
+               parameter a:0               f32
+               parameter b:1               f32
+               c = multiply a, b           f32
+               d = add a, b                f32
+               e = token mult: c, add: d   tuple2
+               f = attach_token e, d       f32
+               g = attach_token e, c       f32
+               h = subtract f, g           f32
              >\
              """
     end
