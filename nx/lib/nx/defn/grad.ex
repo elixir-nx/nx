@@ -22,11 +22,7 @@ defmodule Nx.Defn.Grad do
     {parents, nodes} = parents_tree(transformed_expr, ids)
     grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
 
-    {graded, _} =
-      Composite.traverse(to_grad, {%{}, grads}, fn to_grad, acc ->
-        to_grad(to_grad, parents, nodes, acc)
-      end)
-
+    {graded, _} = Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, parents, &2))
     {expr, graded}
   end
 
@@ -132,9 +128,9 @@ defmodule Nx.Defn.Grad do
 
   ## Recursion
 
-  defp to_grad(arg, parents, nodes, acc) do
+  defp to_grad(arg, parents, acc) do
     id = arg.data.id
-    {seen, grads} = traverse_parents(id, parents, nodes, acc)
+    {nodes, grads} = traverse_parents(id, parents, acc)
 
     res =
       case Map.get(grads, id, []) do
@@ -142,22 +138,19 @@ defmodule Nx.Defn.Grad do
         gs -> Enum.reduce(gs, &Nx.add/2)
       end
 
-    {Nx.broadcast(res, arg), {seen, grads}}
+    {Nx.broadcast(res, arg), {nodes, grads}}
   end
 
-  defp traverse_parents(id, parents, nodes, acc) do
+  defp traverse_parents(id, parents, acc) do
     parents
     |> Map.get(id, [])
-    |> Enum.reduce(acc, &recur_to_grad(&1, parents, nodes, &2))
+    |> Enum.reduce(acc, &recur_to_grad(&1, parents, &2))
   end
 
-  defp recur_to_grad(id, parents, nodes, {seen, grads}) do
-    case seen do
+  defp recur_to_grad(id, parents, {nodes, grads}) do
+    case nodes do
       %{^id => _} ->
-        {seen, grads}
-
-      %{} ->
-        {seen, grads} = traverse_parents(id, parents, nodes, {seen, grads})
+        {nodes, grads} = traverse_parents(id, parents, {nodes, grads})
 
         grads =
           case Map.get(grads, id, []) do
@@ -174,7 +167,10 @@ defmodule Nx.Defn.Grad do
               end)
           end
 
-        {Map.put(seen, id, true), grads}
+        {Map.delete(nodes, id), grads}
+
+      %{} ->
+        {nodes, grads}
     end
   end
 
