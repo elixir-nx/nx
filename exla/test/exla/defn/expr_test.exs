@@ -2178,24 +2178,6 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
-  describe "outer product" do
-    defn outer(t1, t2), do: Nx.outer(t1, t2)
-
-    test "computes the outer product of scalars" do
-      assert outer(Nx.tensor(1), Nx.tensor(2)) == Nx.tensor([[2]])
-      assert outer(Nx.tensor([1, 2, 3]), Nx.tensor(10)) == Nx.tensor([[10], [20], [30]])
-      assert outer(Nx.tensor(10), Nx.tensor([1, 2, 3])) == Nx.tensor([[10, 20, 30]])
-    end
-
-    test "computes the outer product of tensors" do
-      assert outer(Nx.tensor([1, 2, 3]), Nx.tensor([10, 20])) ==
-               Nx.tensor([[10, 20], [20, 40], [30, 60]])
-
-      assert outer(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([10, 20, 30])) ==
-               Nx.tensor([[10, 20, 30], [20, 40, 60], [30, 60, 90], [40, 80, 120]])
-    end
-  end
-
   describe "transpose" do
     defn transpose(t), do: Nx.transpose(t)
     defn transpose_scalar(t), do: Nx.transpose(t, axes: [])

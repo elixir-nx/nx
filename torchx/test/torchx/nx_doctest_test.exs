@@ -28,8 +28,6 @@ defmodule Torchx.NxDoctestTest do
     make_diagonal: 2,
     # mean - Torchx expects a input tensor but receives a number as input
     mean: 2,
-    # outer - shape mismatch in some tests
-    outer: 2,
     # quotient - Torchx expects a input tensor but receives a number as input
     quotient: 2,
     # slice - expects numerical start indices, but now receives tensors,

@@ -626,22 +626,6 @@ defmodule EXLA.Defn do
     )
   end
 
-  defp to_operator(:outer, [left, right], %{type: type, shape: shape}, _state) do
-    left =
-      left
-      |> to_type(type)
-      |> EXLA.Op.reshape({Nx.size(op_shape(left))})
-      |> EXLA.Op.broadcast_in_dim(shape, {0})
-
-    right =
-      right
-      |> to_type(type)
-      |> EXLA.Op.reshape({Nx.size(op_shape(right))})
-      |> EXLA.Op.broadcast_in_dim(shape, {1})
-
-    EXLA.Op.multiply(left, right)
-  end
-
   defp to_operator(:select, [pred, on_true, on_false], %{type: type, shape: shape}, _state) do
     pred = to_type(pred, {:pred, 8})
 

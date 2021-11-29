@@ -511,8 +511,6 @@ BINARY_OP(atan2)
 BINARY_OP(min)
 BINARY_OP(max)
 
-BINARY_OP(outer)
-
 NIF(quotient)
 {
   TENSOR_PARAM(0, a);
@@ -807,7 +805,6 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_or, 2),
     DF(logical_xor, 2),
 
-    DF(outer, 2),
     DF(sum, 3),
     DF(product, 1),
     DF(product, 3),

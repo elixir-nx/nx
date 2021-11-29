@@ -97,61 +97,6 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tensor expression function node with the given context,
-  args, body, context and mfa for metadata.
-
-  args must be a list of parameter nodes.
-  """
-  def fun(context, args, body, {_, _, _} = mfa) do
-    case normalize(body) do
-      %T{} = tensor ->
-        expr(tensor, context, :fun, [args, tensor, mfa])
-
-      tuple when is_tuple(tuple) ->
-        expr(tuple_out(tuple_size(tuple)), context, :fun, [args, tuple, mfa])
-    end
-  end
-
-  @doc """
-  Creates a tuple given by the shapes in `tuple` that point to `expr`.
-
-  Each element of the tuple is expected to be a tensor expression.
-  """
-  def tuple(tuple, %T{type: {:tuple, size}, data: %{context: context}} = expr)
-      when is_tuple(tuple) and tuple_size(tuple) == size do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.with_index(fn %T{} = tensor, i ->
-      expr(tensor, context, :elem, [expr, i, size])
-    end)
-    |> List.to_tuple()
-  end
-
-  defp tuple_out(size) do
-    %T{shape: {}, names: [], type: {:tuple, size}}
-  end
-
-  @doc """
-  Attaches the token to the given token or token expression.
-  """
-  def attach_token(%T{data: %{op: :token}} = token, expr) do
-    Composite.traverse(expr, fn tensor ->
-      expr = to_expr(tensor)
-      expr(expr, expr.data.context, :attach_token, [token, expr])
-    end)
-  end
-
-  def attach_token(%Nx.Defn.Token{} = token, expr) do
-    # We first create an expression to store the token
-    # so we have a shared ID to avoid multiple traversals.
-    # The size of the tuple is not used, but the amount of
-    # hooks is a good indicator.
-    size = length(token.hooks)
-    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
-    attach_token(token, expr)
-  end
-
-  @doc """
   Creates a `cond` tensor expression.
   """
   def cond(clauses, last = out) do
@@ -216,6 +161,24 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def normalize(container_or_tensor), do: Composite.traverse(container_or_tensor, &to_expr/1)
+
+  @doc false
+  def attach_token(%T{data: %{op: :token}} = token, expr) do
+    Composite.traverse(expr, fn tensor ->
+      expr = to_expr(tensor)
+      expr(expr, expr.data.context, :attach_token, [token, expr])
+    end)
+  end
+
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    # We first create an expression to store the token
+    # so we have a shared ID to avoid multiple traversals.
+    # The size of the tuple is not used, but the amount of
+    # hooks is a good indicator.
+    size = length(token.hooks)
+    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
+    attach_token(token, expr)
+  end
 
   @doc false
   def cond(file, clauses, last) do
@@ -450,8 +413,7 @@ defmodule Nx.Defn.Expr do
     [:remainder, :atan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
+      [:logical_and, :logical_or, :logical_xor]
 
   for op <- binary_ops do
     @impl true
@@ -757,7 +719,7 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple({p, l, u}, expr(out, context, :lu, [{p, l, u}, tensor, opts]))
+    tuple(expr(out, context, :lu, [{p, l, u}, tensor, opts]), [p, l, u])
   end
 
   @impl true
@@ -765,7 +727,7 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
-    tuple({q, r}, expr(out, context, :qr, [{q, r}, tensor, opts]))
+    tuple(expr(out, context, :qr, [{q, r}, tensor, opts]), [q, r])
   end
 
   @impl true
@@ -773,7 +735,7 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
-    tuple({evals, evecs}, expr(out, context, :eigh, [{evals, evecs}, tensor, opts]))
+    tuple(expr(out, context, :eigh, [{evals, evecs}, tensor, opts]), [evals, evecs])
   end
 
   @impl true
@@ -781,7 +743,7 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple({u, s, vt}, expr(out, context, :svd, [{u, s, vt}, tensor, opts]))
+    tuple(expr(out, context, :svd, [{u, s, vt}, tensor, opts]), [u, s, vt])
   end
 
   @impl true
@@ -852,6 +814,33 @@ defmodule Nx.Defn.Expr do
       expr = to_expr(tensor)
       {expr, merge_context!(expr, acc)}
     end)
+  end
+
+  defp tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
+       when is_list(list) do
+    tuple =
+      list
+      |> Enum.with_index(fn %T{} = tensor, i ->
+        expr(tensor, context, :elem, [expr, i, size])
+      end)
+      |> List.to_tuple()
+
+    ^size = tuple_size(tuple)
+    tuple
+  end
+
+  defp tuple_out(size) do
+    %T{shape: {}, names: [], type: {:tuple, size}}
+  end
+
+  defp fun(context, args, body, {_, _, _} = mfa) do
+    case normalize(body) do
+      %T{} = tensor ->
+        expr(tensor, context, :fun, [args, tensor, mfa])
+
+      tuple when is_tuple(tuple) ->
+        expr(tuple_out(tuple_size(tuple)), context, :fun, [args, tuple, mfa])
+    end
   end
 
   defp apply_fun(context, fun, args, type) when is_function(fun, length(args)) do
@@ -944,8 +933,8 @@ defmodule Nx.Defn.Expr do
   ## Constant helpers and related optimizations
 
   defp constant(%{type: type, shape: shape} = out, number) do
-    id = {number, type, shape}
     number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
+    id = {number, type, shape}
     %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
   end
 
