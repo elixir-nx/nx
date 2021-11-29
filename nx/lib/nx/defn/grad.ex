@@ -498,7 +498,7 @@ defmodule Nx.Defn.Grad do
     [{input, dl}]
   end
 
-  defp grad(:qr, [{q, r}, input, _opts], ans, g, cache) do
+  defp grad(:qr, [{q, r}, input, _opts], ans, g) do
     {q, r} = Nx.Defn.Expr.tuple({q, r}, ans)
     # r_inv = Nx.LinAlg.invert(r)
     # c = Nx.transpose(q) |> Nx.dot(g) |> Nx.dot(r_inv)
@@ -533,7 +533,7 @@ defmodule Nx.Defn.Grad do
     dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
     dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
 
-    {{qt_g_rinv, qt_g_rinv}, cache}
+    [{dq, g}, {dr, g}]
   end
 
   defp grad(:sort, [t, opts], _ans, g) do

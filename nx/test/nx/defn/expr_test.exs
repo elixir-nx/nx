@@ -302,33 +302,6 @@ defmodule Nx.Defn.ExprTest do
              """
     end
 
-    test "with tuple output" do
-      a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
-      {q, r} = Nx.LinAlg.qr(a)
-
-      assert inspect(q, safe: false) == """
-             #Nx.Tensor<
-               f32[2][2]
-             \s\s
-               Nx.Defn.Expr
-               parameter a                   s64[2][2]
-               b = qr [ a, mode: :reduced ]  tuple2
-               c = elem [ b, 0, 2 ]          f32[2][2]
-             >\
-             """
-
-      assert inspect(r, safe: false) == """
-             #Nx.Tensor<
-               f32[2][2]
-             \s\s
-               Nx.Defn.Expr
-               parameter a                   s64[2][2]
-               b = qr [ a, mode: :reduced ]  tuple2
-               c = elem [ b, 1, 2 ]          f32[2][2]
-             >\
-             """
-    end
-
     test "with tuple and cond" do
       a = Expr.parameter(nil, {:s, 64}, {}, 0)
       b = Expr.parameter(nil, {:s, 64}, {}, 1)
