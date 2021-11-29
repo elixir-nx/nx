@@ -117,6 +117,20 @@ defmodule Nx.Defn.Expr do
     flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
   end
 
+  @doc false
+  def tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
+      when is_list(list) do
+    tuple =
+      list
+      |> Enum.with_index(fn %T{} = tensor, i ->
+        expr(tensor, context, :elem, [expr, i, size])
+      end)
+      |> List.to_tuple()
+
+    ^size = tuple_size(tuple)
+    tuple
+  end
+
   defp broadcast_clause([type = last | exprs]) do
     %{shape: shape, names: names} = last = to_expr(last)
 
@@ -814,20 +828,6 @@ defmodule Nx.Defn.Expr do
       expr = to_expr(tensor)
       {expr, merge_context!(expr, acc)}
     end)
-  end
-
-  @doc false
-  def tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
-       when is_list(list) do
-    tuple =
-      list
-      |> Enum.with_index(fn %T{} = tensor, i ->
-        expr(tensor, context, :elem, [expr, i, size])
-      end)
-      |> List.to_tuple()
-
-    ^size = tuple_size(tuple)
-    tuple
   end
 
   defp tuple_out(size) do
