@@ -20,9 +20,13 @@ defmodule Nx.Defn.Grad do
     expr = to_grad |> fun.()
     transformed_expr = transform.(expr) |> validate_expr!()
     {parents, nodes} = parents_tree(transformed_expr, ids)
+
+    to_grad_ids = {to_grad, ids}
     grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
 
-    {graded, _} = Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, parents, &2))
+    {graded, _} =
+      Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
+
     {expr, graded}
   end
 
@@ -65,6 +69,8 @@ defmodule Nx.Defn.Grad do
 
   ## Build the parents tree
 
+  @syntax [:cond]
+
   @constants [:constant, :tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
                [:all?, :any?, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
@@ -77,60 +83,65 @@ defmodule Nx.Defn.Grad do
     Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree/2)
   end
 
-  defp recur_parents_tree(
-         %T{data: %Expr{op: :metadata, args: [_, %{stop_grad: true}]}},
-         {parents, nodes}
-       ) do
-    {parents, nodes}
-  end
-
   defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}) do
     case nodes do
-      _ when op in @constants ->
-        {parents, nodes}
-
-      %{^id => _} ->
-        {parents, nodes}
-
-      %{} ->
-        nodes = Map.put(nodes, id, t)
-
-        {_, acc} =
-          traverse_args(op, t, {parents, nodes}, fn arg, {parents, nodes} ->
-            parents = Map.update(parents, arg.data.id, [id], &[id | &1])
-            {arg, recur_parents_tree(arg, {parents, nodes})}
-          end)
-
-        acc
+      %{^id => _} -> {parents, nodes}
+      %{} -> parents_args(op, t, id, {parents, Map.put(nodes, id, t)})
     end
+  end
+
+  defp parents_args(:metadata, %{data: %{args: [_, %{stop_grad: true}]}}, _id, acc) do
+    acc
+  end
+
+  # We register syntax nodes in a special slot and make sure they are traversed
+  # early on. We could track the nodes themselves, but this is conceptually simpler.
+  defp parents_args(op, _, id, {parents, nodes}) when op in @syntax do
+    {Map.update(parents, __MODULE__, [id], &[id | &1]), nodes}
+  end
+
+  defp parents_args(op, t, parent_id, acc) do
+    {_, acc} =
+      traverse_args(op, t, acc, fn %T{data: %{id: id, op: op}} = arg, {parents, nodes} ->
+        if op in @constants do
+          {arg, {parents, nodes}}
+        else
+          parents = Map.update(parents, id, [parent_id], &[parent_id | &1])
+          {arg, recur_parents_tree(arg, {parents, nodes})}
+        end
+      end)
+
+    acc
   end
 
   # For some functions, only a subset of the args participate in the grad,
   # so we handle them accordingly here.
 
-  defp traverse_args(:select, %{data: %{args: [_, on_true, on_false | _]}}, cache, fun),
-    do: Enum.map_reduce([on_true, on_false], cache, fun)
+  defp traverse_args(:select, %{data: %{args: [_, on_true, on_false | _]}}, acc, fun),
+    do: Enum.map_reduce([on_true, on_false], acc, fun)
 
-  defp traverse_args(:slice, %{data: %{args: [arg | _]}}, cache, fun),
-    do: fun.(arg, cache)
+  defp traverse_args(:slice, %{data: %{args: [arg | _]}}, acc, fun),
+    do: fun.(arg, acc)
 
-  defp traverse_args(:put_slice, %{data: %{args: [arg, _, update | _]}}, cache, fun),
-    do: Enum.map_reduce([arg, update], cache, fun)
+  defp traverse_args(:put_slice, %{data: %{args: [arg, _, update | _]}}, acc, fun),
+    do: Enum.map_reduce([arg, update], acc, fun)
 
-  defp traverse_args(:take_along_axis, %{data: %{args: [arg | _]}}, cache, fun),
-    do: fun.(arg, cache)
+  defp traverse_args(:take_along_axis, %{data: %{args: [arg | _]}}, acc, fun),
+    do: fun.(arg, acc)
 
-  defp traverse_args(:take, %{data: %{args: [arg | _]}}, cache, fun),
-    do: fun.(arg, cache)
+  defp traverse_args(:take, %{data: %{args: [arg | _]}}, acc, fun),
+    do: fun.(arg, acc)
 
-  defp traverse_args(_op, t, cache, fun),
-    do: Tree.apply_args(t, cache, fun)
+  defp traverse_args(_op, t, acc, fun),
+    do: Tree.apply_args(t, acc, fun)
 
   ## Recursion
 
-  defp to_grad(arg, parents, acc) do
+  defp to_grad(arg, to_grad_ids, parents, acc) do
     id = arg.data.id
-    {nodes, grads} = traverse_parents(id, parents, acc)
+    acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
+    acc = traverse_parents(id, to_grad_ids, parents, acc)
+    {nodes, grads} = acc
 
     res =
       case Map.get(grads, id, []) do
@@ -141,37 +152,82 @@ defmodule Nx.Defn.Grad do
     {Nx.broadcast(res, arg), {nodes, grads}}
   end
 
-  defp traverse_parents(id, parents, acc) do
+  defp traverse_parents(id, to_grad_ids, parents, acc) do
     parents
     |> Map.get(id, [])
-    |> Enum.reduce(acc, &recur_to_grad(&1, parents, &2))
+    |> Enum.reduce(acc, &recur_to_grad(&1, to_grad_ids, parents, &2))
   end
 
-  defp recur_to_grad(id, parents, {nodes, grads}) do
+  defp recur_to_grad(id, to_grad_ids, parents, {nodes, grads}) do
     case nodes do
       %{^id => _} ->
-        {nodes, grads} = traverse_parents(id, parents, {nodes, grads})
-
-        grads =
-          case Map.get(grads, id, []) do
-            [] ->
-              grads
-
-            gs ->
-              g = Enum.reduce(gs, &Nx.add/2)
-              %T{data: %Expr{op: op, args: args}} = ans = Map.fetch!(nodes, id)
-              pairs = grad(op, args, ans, g)
-
-              Enum.reduce(pairs, grads, fn {child, g}, grads ->
-                Map.update(grads, child.data.id, [g], &[g | &1])
-              end)
-          end
-
-        {Map.delete(nodes, id), grads}
+        {nodes, grads} = traverse_parents(id, to_grad_ids, parents, {nodes, grads})
+        {ans, nodes} = Map.pop!(nodes, id)
+        %T{data: %Expr{op: op, args: args}} = ans
+        {gs, grads} = Map.pop(grads, id, [])
+        {nodes, update_grads(op, args, ans, gs, to_grad_ids, grads)}
 
       %{} ->
         {nodes, grads}
     end
+  end
+
+  defp update_grads(_op, _args, _ans, [], _to_grad_ids, grads) do
+    grads
+  end
+
+  defp update_grads(:elem, [tuple, pos, _size], _ans, gs, _to_grad_ids, grads) do
+    g = Enum.reduce(gs, &Nx.add/2)
+    Map.update(grads, tuple.data.id, [{pos, g}], &[{pos, g} | &1])
+  end
+
+  defp update_grads(:cond, [clauses, last], _ans, gs, {to_grad, ids} = to_grad_ids, grads) do
+    gs =
+      if is_tuple(last) do
+        gs |> Enum.sort() |> Enum.map(&elem(&1, 1))
+      else
+        gs
+      end
+
+    to_grad = Composite.flatten_list([to_grad])
+
+    [{true, last} | clauses] =
+      Enum.map([{true, last} | clauses], fn {head, body} ->
+        {parents, nodes} = parents_tree(body, ids)
+
+        {grads, []} =
+          Composite.reduce(body, {%{}, gs}, fn arg, {grads, [g | gs]} ->
+            {Map.put(grads, arg.data.id, [g]), gs}
+          end)
+
+        {graded, _} =
+          Enum.map_reduce(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
+
+        {head, List.to_tuple(graded)}
+      end)
+
+    # Build a new cond expression and assign each derivative to the new grads.
+    res =
+      case Expr.cond(clauses, last) do
+        res when is_tuple(res) -> Tuple.to_list(res)
+        res -> [res]
+      end
+
+    {grads, []} =
+      Enum.reduce(to_grad, {grads, res}, fn to_grad, {grads, [elem | rest]} ->
+        {Map.update(grads, to_grad.data.id, [elem], &[elem | &1]), rest}
+      end)
+
+    grads
+  end
+
+  defp update_grads(op, args, ans, gs, _to_grad_ids, grads) do
+    g = Enum.reduce(gs, &Nx.add/2)
+    pairs = grad(op, args, ans, g)
+
+    Enum.reduce(pairs, grads, fn {child, g}, grads ->
+      Map.update(grads, child.data.id, [g], &[g | &1])
+    end)
   end
 
   ## Gradients
@@ -576,12 +632,20 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:power, [x, y], ans, g) do
-    exponent = Nx.select(Nx.equal(y, 0.0), 1.0, Nx.subtract(y, 1.0))
-    base = Nx.select(Nx.equal(x, 0.0), 1.0, x)
+    case y do
+      %T{data: %Expr{op: :constant, args: [y]}} ->
+        exponent = if y == 0.0, do: 1.0, else: y - 1.0
+        gx = Nx.multiply(y, Nx.power(x, exponent))
+        [unbroadcast(x, Nx.multiply(g, gx), ans)]
 
-    gx = Nx.multiply(y, Nx.power(x, exponent))
-    gy = Nx.multiply(Nx.log(base), ans)
-    [unbroadcast(x, Nx.multiply(g, gx), ans), unbroadcast(y, Nx.multiply(g, gy), ans)]
+      %{} ->
+        exponent = Nx.select(Nx.equal(y, 0.0), 1.0, Nx.subtract(y, 1.0))
+        base = Nx.select(Nx.equal(x, 0.0), 1.0, x)
+
+        gx = Nx.multiply(y, Nx.power(x, exponent))
+        gy = Nx.multiply(Nx.log(base), ans)
+        [unbroadcast(x, Nx.multiply(g, gx), ans), unbroadcast(y, Nx.multiply(g, gy), ans)]
+    end
   end
 
   defp grad(:atan2, [x, y], ans, g) do
