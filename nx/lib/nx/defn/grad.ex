@@ -245,7 +245,12 @@ defmodule Nx.Defn.Grad do
     grads
   end
 
-  @reduced_grads [:add, :multiply, :power]
+  defp update_grads(:qr, [{q, r}, input, _opts], _ans, gs, {to_grad, ids} = to_grad_ids, grads) do
+      gs = gs |> Enum.sort() |> Enum.map(&elem(&1, 1))
+  end
+
+
+  @reduced_grads [:add, :multiply, :power, :qr]
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, gs, _to_grad_ids, grads) do
@@ -498,7 +503,8 @@ defmodule Nx.Defn.Grad do
     [{input, dl}]
   end
 
-  defp grad(:qr, [{q, r}, input, _opts], ans, g) do
+  defp grad(:qr, [{q, r}, input, _opts], ans, [{0, dq}, {1, dr}]) do
+    # g = Nx.add(g1, g2)
     {q, r} = Nx.Defn.Expr.tuple(ans, [q, r]) |> IO.inspect(label: "qr")
     r_inv = Nx.LinAlg.invert(r) |> IO.inspect(label: "rinv")
 
@@ -523,6 +529,11 @@ defmodule Nx.Defn.Grad do
 
     dq = g |> Nx.subtract(Nx.dot(q, dr)) |> Nx.dot(r_inv) |> IO.inspect(label: "dq")
 
+    # # A = QR
+    # # dA = dQ * R + Q * dR
+
+    # da = Nx.dot(dq, r) |> Nx.add(Nx.dot(q, dr))
+
     # The code below was translated from jax, while the code above was translated from
     # https://arxiv.org/pdf/2009.10071.pdf, page 5
 
@@ -539,7 +550,10 @@ defmodule Nx.Defn.Grad do
     # dq = Nx.dot(q, Nx.subtract(doff, qt_g_rinv)) |> Nx.add(g_rinv)
     # dr = Nx.dot(Nx.subtract(qt_g_rinv, doff), r)
 
-    [{dq, g}, {dr, g}]
+    da = Nx.dot(0, r) |> Nx.add(Nx.dot(q, dr))
+
+    # [{input, dq}, {input, dr}]
+    [{input, da}]
   end
 
   defp grad(:sort, [t, opts], _ans, g) do
@@ -749,6 +763,13 @@ defmodule Nx.Defn.Grad do
   defp grad(:sqrt, [x], ans, g) do
     [{x, Nx.divide(Nx.multiply(g, 0.5), ans)}]
   end
+
+  # g(x) = (f(x))^2 -> 2f(x) * f'(x)
+  # g(x) = (x^3 + 1)^2 -> 2(x^3 + 1) * 3x
+
+  # ans = f(x)^1/2 -> 1/2 * f'(x) / (f(x)^(1/2))
+
+  # qr(f(x)) -> qr'(f(x)) * f'(x)
 
   defp grad(:cbrt, [x], ans, g) do
     [{x, Nx.divide(g, 3 |> Nx.multiply(ans) |> Nx.multiply(ans))}]
