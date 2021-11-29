@@ -1,5 +1,5 @@
 defmodule Nx.Defn.GradTest do
-  use Nx.Case, async: true
+  use ExUnit.Case, async: true
 
   import Nx.Defn
   import Nx.GradHelpers
@@ -7,12 +7,12 @@ defmodule Nx.Defn.GradTest do
   @iters 1..25
 
   describe "simple" do
-    defn(grad_itself(t), do: grad(t, fn t -> t end))
-    defn(grad_tensor(t), do: grad(t, fn _t -> Nx.tensor(1.0) end))
-    defn(grad_constant(t), do: grad(t, fn _t -> 10 end))
-    defn(grad_unrelated(t, a), do: grad(t, fn _t -> a end))
-    defn(grad_invalid(_t), do: grad(:invalid, fn t -> t end))
-    defn(grad_old_node(t), do: grad(t, fn _t -> t end))
+    defn grad_itself(t), do: grad(t, fn t -> t end)
+    defn grad_tensor(t), do: grad(t, fn _t -> Nx.tensor(1.0) end)
+    defn grad_constant(t), do: grad(t, fn _t -> 10 end)
+    defn grad_unrelated(t, a), do: grad(t, fn _t -> a end)
+    defn grad_invalid(_t), do: grad(:invalid, fn t -> t end)
+    defn grad_old_node(t), do: grad(t, fn _t -> t end)
 
     test "computes gradient for scalars" do
       assert grad_itself(Nx.tensor(1.0)) == Nx.tensor(1.0)
@@ -56,19 +56,19 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "tokens" do
-    defn(grad_token(t), do: value_and_grad(t, fn t -> hook(Nx.power(t, 2), :grad) end))
+    defn grad_token(t), do: grad(t, fn t -> hook(Nx.power(t, 2), :grad) end)
 
     test "computes grad with token" do
       parent = self()
 
       assert Nx.Defn.jit(&grad_token/1, [Nx.tensor(3)], hooks: %{grad: &send(parent, {:hook, &1})}) ==
-               {Nx.tensor(9), Nx.tensor(6.0)}
+               Nx.tensor(6.0)
 
       assert_receive {:hook, tensor}
       assert tensor == Nx.tensor(9)
     end
 
-    defn(token_grad(t), do: hook(grad(t, &Nx.power(&1, 2)), :grad))
+    defn token_grad(t), do: hook(grad(t, &Nx.power(&1, 2)), :grad)
 
     test "computes token with grad" do
       parent = self()
@@ -82,13 +82,11 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "metadata" do
-    defn(stop_grad_meta(t),
+    defn stop_grad_meta(t),
       do: grad(t, &stop_grad(Nx.exp(&1)))
-    )
 
-    defn(stop_grad_tuple_meta(a, b),
+    defn stop_grad_tuple_meta(a, b),
       do: grad({a, b}, fn {a, b} -> stop_grad(Nx.exp(a) + Nx.exp(b)) end)
-    )
 
     test "stops computing gradient" do
       assert stop_grad_meta(Nx.tensor(1)) == Nx.tensor(0.0)
@@ -112,9 +110,8 @@ defmodule Nx.Defn.GradTest do
       assert {x, x} = custom_grad_meta(Nx.tensor(1))
     end
 
-    defn(random_meta(t),
+    defn random_meta(t),
       do: grad(t, fn t -> transform(Nx.exp(t), &Nx.Defn.Expr.metadata(&1, %{oops: true})) end)
-    )
 
     test "ignores unknown metadata" do
       assert random_meta(Nx.tensor(1)) == Nx.exp(1)
@@ -127,7 +124,7 @@ defmodule Nx.Defn.GradTest do
       Nx.sum(z - (z |> Nx.exp() |> Nx.sum(axes: [0]) |> Nx.log()))
     end
 
-    defn(grad_subexpressions(x, y), do: grad(x, &subexpressions(&1, y)))
+    defn grad_subexpressions(x, y), do: grad(x, &subexpressions(&1, y))
 
     test "considers current g" do
       assert grad_subexpressions(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2, 3])) ==
@@ -136,8 +133,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "addition rule" do
-    defn(addition_rule(t), do: Nx.tanh(Nx.tanh(Nx.add(Nx.power(t, 2), Nx.power(t, 3)))))
-    defn(grad_addition_rule(t), do: grad(t, &addition_rule/1))
+    defn addition_rule(t), do: Nx.tanh(Nx.tanh(Nx.add(Nx.power(t, 2), Nx.power(t, 3))))
+    defn grad_addition_rule(t), do: grad(t, &addition_rule/1)
 
     test "computes gradient of complex rules" do
       assert grad_addition_rule(Nx.tensor(1.0)) == Nx.tensor(0.15662670135498047)
@@ -153,8 +150,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "product rule" do
-    defn(product_rule(t), do: Nx.tanh(Nx.tanh(Nx.multiply(Nx.power(t, 2), Nx.power(t, 3)))))
-    defn(grad_product_rule(t), do: grad(t, &product_rule/1))
+    defn product_rule(t), do: Nx.tanh(Nx.tanh(Nx.multiply(Nx.power(t, 2), Nx.power(t, 3))))
+    defn grad_product_rule(t), do: grad(t, &product_rule/1)
 
     test "computes gradient for scalars" do
       assert grad_product_rule(Nx.tensor(1.0)) == Nx.tensor(1.2343397629215758)
@@ -168,8 +165,8 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn(sum_product_rule(t), do: Nx.sum(Nx.multiply(Nx.power(t, 2), Nx.power(t, 3))))
-    defn(grad_sum_product_rule(t), do: grad(t, &sum_product_rule/1))
+    defn sum_product_rule(t), do: Nx.sum(Nx.multiply(Nx.power(t, 2), Nx.power(t, 3)))
+    defn grad_sum_product_rule(t), do: grad(t, &sum_product_rule/1)
 
     test "computes gradient for tensors" do
       assert grad_sum_product_rule(Nx.tensor([[1.0, 2.0], [3.0, 4.0]])) ==
@@ -178,8 +175,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "division rule" do
-    defn(division_rule(t), do: Nx.divide(Nx.tanh(t), t))
-    defn(grad_division_rule(t), do: grad(t, &division_rule/1))
+    defn division_rule(t), do: Nx.divide(Nx.tanh(t), t)
+    defn grad_division_rule(t), do: grad(t, &division_rule/1)
 
     test "computes gradient" do
       assert grad_division_rule(Nx.tensor(1.0)) == Nx.tensor(-0.3416198492050171)
@@ -193,8 +190,8 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn(division_num_rule(t), do: Nx.divide(Nx.tanh(t), 2))
-    defn(grad_division_num_rule(t), do: grad(t, &division_num_rule/1))
+    defn division_num_rule(t), do: Nx.divide(Nx.tanh(t), 2)
+    defn grad_division_num_rule(t), do: grad(t, &division_num_rule/1)
 
     test "computes gradient for constant denominator" do
       for _ <- @iters do
@@ -206,8 +203,8 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn(division_den_rule(t), do: Nx.divide(2, Nx.exp(t)))
-    defn(grad_division_den_rule(t), do: grad(t, &division_den_rule/1))
+    defn division_den_rule(t), do: Nx.divide(2, Nx.exp(t))
+    defn grad_division_den_rule(t), do: grad(t, &division_den_rule/1)
 
     test "computes gradient for constant numerator" do
       for _ <- @iters do
@@ -221,8 +218,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "remainder rule" do
-    defn(remainder_rule(t), do: Nx.remainder(Nx.tanh(t), t))
-    defn(grad_remainder_rule(t), do: grad(t, &remainder_rule/1))
+    defn remainder_rule(t), do: Nx.remainder(Nx.tanh(t), t)
+    defn grad_remainder_rule(t), do: grad(t, &remainder_rule/1)
 
     test "computes gradient" do
       assert grad_remainder_rule(Nx.tensor(1.0)) == Nx.tensor(0.41997434161402614)
@@ -236,8 +233,8 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn(remainder_num_rule(t), do: Nx.remainder(Nx.tanh(t), 2))
-    defn(grad_remainder_num_rule(t), do: grad(t, &remainder_num_rule/1))
+    defn remainder_num_rule(t), do: Nx.remainder(Nx.tanh(t), 2)
+    defn grad_remainder_num_rule(t), do: grad(t, &remainder_num_rule/1)
 
     test "computes gradient for constant denominator" do
       for _ <- @iters do
@@ -249,8 +246,8 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn(remainder_den_rule(t), do: Nx.remainder(2, Nx.exp(t)))
-    defn(grad_remainder_den_rule(t), do: grad(t, &remainder_den_rule/1))
+    defn remainder_den_rule(t), do: Nx.remainder(2, Nx.exp(t))
+    defn grad_remainder_den_rule(t), do: grad(t, &remainder_den_rule/1)
 
     test "computes gradient for constant numerator" do
       for _ <- @iters do
@@ -264,8 +261,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "power rule" do
-    defn(power_rule(t), do: Nx.power(t, 3))
-    defn(grad_power_rule(t), do: grad(t, &power_rule/1))
+    defn power_rule(t), do: Nx.power(t, 3)
+    defn grad_power_rule(t), do: grad(t, &power_rule/1)
 
     test "computes gradient" do
       assert grad_power_rule(Nx.tensor(5.0)) == Nx.tensor(75.0)
@@ -281,8 +278,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "exponential rule" do
-    defn(exp_rule(t), do: Nx.add(Nx.power(Nx.tanh(t), 2), Nx.power(Nx.tanh(t), 3)))
-    defn(grad_exp_rule(t), do: grad(t, &exp_rule/1))
+    defn exp_rule(t), do: Nx.add(Nx.power(Nx.tanh(t), 2), Nx.power(Nx.tanh(t), 3))
+    defn grad_exp_rule(t), do: grad(t, &exp_rule/1)
 
     test "computes gradient" do
       assert grad_exp_rule(Nx.tensor(1.0)) == Nx.tensor(1.3704876904488987)
@@ -298,8 +295,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "atan2 rule" do
-    defn(atan2_rule(t), do: Nx.atan2(Nx.tanh(t), t))
-    defn(grad_atan2_rule(t), do: grad(t, &atan2_rule/1))
+    defn atan2_rule(t), do: Nx.atan2(Nx.tanh(t), t)
+    defn grad_atan2_rule(t), do: grad(t, &atan2_rule/1)
 
     test "computes gradient" do
       assert grad_atan2_rule(Nx.tensor(1.0)) == Nx.tensor(-0.21621156120382867)
@@ -315,7 +312,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "dot rule" do
-    defn(grad_dot_lhs_rule(x, y), do: grad(x, &Nx.sum(Nx.dot(&1, y))))
+    defn grad_dot_lhs_rule(x, y), do: grad(x, &Nx.sum(Nx.dot(&1, y)))
 
     test "computes gradient for tensors on lhs" do
       assert grad_dot_lhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
@@ -334,7 +331,7 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([6.0, 15.0])
     end
 
-    defn(grad_dot_rhs_rule(x, y), do: grad(y, &Nx.sum(Nx.dot(x, &1))))
+    defn grad_dot_rhs_rule(x, y), do: grad(y, &Nx.sum(Nx.dot(x, &1)))
 
     test "computes gradient for tensors on rhs" do
       assert grad_dot_rhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
@@ -353,7 +350,7 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
     end
 
-    defn(grad_dot_both_rule(x), do: grad(x, &Nx.sum(Nx.dot(Nx.power(&1, 2), Nx.power(&1, 3)))))
+    defn grad_dot_both_rule(x), do: grad(x, &Nx.sum(Nx.dot(Nx.power(&1, 2), Nx.power(&1, 3))))
 
     test "computes gradient for tensors on both sides" do
       assert grad_dot_both_rule(Nx.iota({3, 3, 3})) ==
@@ -450,8 +447,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "conv rule" do
-    defn(grad_sum_conv_x(x, y), do: grad(x, &Nx.sum(Nx.conv(&1, y))))
-    defn(grad_sum_conv_y(x, y), do: grad(y, &Nx.sum(Nx.conv(x, &1))))
+    defn grad_sum_conv_x(x, y), do: grad(x, &Nx.sum(Nx.conv(&1, y)))
+    defn grad_sum_conv_y(x, y), do: grad(y, &Nx.sum(Nx.conv(x, &1)))
 
     test "computes the gradient of the both sides, no padding, no stride" do
       lhs = Nx.iota({1, 3, 2, 2}, type: {:f, 32})
@@ -477,8 +474,8 @@ defmodule Nx.Defn.GradTest do
                ])
     end
 
-    defn(grad_sum_conv_x_cos_x_sin_y(x, y), do: grad(x, &Nx.sum(Nx.conv(Nx.cos(&1), Nx.sin(y)))))
-    defn(grad_sum_conv_y_cos_x_sin_y(x, y), do: grad(y, &Nx.sum(Nx.conv(Nx.cos(x), Nx.sin(&1)))))
+    defn grad_sum_conv_x_cos_x_sin_y(x, y), do: grad(x, &Nx.sum(Nx.conv(Nx.cos(&1), Nx.sin(y))))
+    defn grad_sum_conv_y_cos_x_sin_y(x, y), do: grad(y, &Nx.sum(Nx.conv(Nx.cos(x), Nx.sin(&1))))
 
     test "computes the gradient of both sides, no padding, no stride, inner function" do
       x = Nx.iota({1, 3, 2, 2}, type: {:f, 32})
@@ -536,8 +533,8 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_sum_conv_x_same_padding(x, y), do: grad(x, &Nx.sum(Nx.conv(&1, y, padding: :same))))
-    defn(grad_sum_conv_y_same_padding(x, y), do: grad(y, &Nx.sum(Nx.conv(x, &1, padding: :same))))
+    defn grad_sum_conv_x_same_padding(x, y), do: grad(x, &Nx.sum(Nx.conv(&1, y, padding: :same)))
+    defn grad_sum_conv_y_same_padding(x, y), do: grad(y, &Nx.sum(Nx.conv(x, &1, padding: :same)))
 
     test "computes the gradient of both sides, padding, no stride" do
       x = Nx.iota({2, 1, 5, 5}, type: {:f, 32})
@@ -741,13 +738,11 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_sum_conv_x_feature_groups(x, y),
+    defn grad_sum_conv_x_feature_groups(x, y),
       do: grad(x, &Nx.sum(Nx.conv(&1, y, feature_group_size: 2)))
-    )
 
-    defn(grad_sum_conv_y_feature_groups(x, y),
+    defn grad_sum_conv_y_feature_groups(x, y),
       do: grad(y, &Nx.sum(Nx.conv(x, &1, feature_group_size: 2)))
-    )
 
     test "computes the gradient for both sides, feature grouped" do
       x = Nx.iota({1, 4, 4, 4})
@@ -1047,7 +1042,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "window sum rule" do
-    defn(grad_sum_window_sum(t), do: grad(t, &Nx.sum(Nx.window_sum(&1, {2, 1, 2, 1}))))
+    defn grad_sum_window_sum(t), do: grad(t, &Nx.sum(Nx.window_sum(&1, {2, 1, 2, 1})))
 
     test "computes the gradient of a basic window sum" do
       x = Nx.iota({2, 1, 3, 3}, type: {:f, 32})
@@ -1063,7 +1058,7 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_sum_window_sum_cos(t), do: grad(t, &Nx.sum(Nx.window_sum(Nx.cos(&1), {2, 1, 2, 1}))))
+    defn grad_sum_window_sum_cos(t), do: grad(t, &Nx.sum(Nx.window_sum(Nx.cos(&1), {2, 1, 2, 1})))
 
     test "computes the gradient with an inner function" do
       x = Nx.iota({2, 1, 3, 3}, type: {:f, 32})
@@ -1091,9 +1086,8 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_sum_window_sum_dilated(x),
+    defn grad_sum_window_sum_dilated(x),
       do: grad(x, &Nx.sum(Nx.window_sum(&1, {1, 1, 3, 2}, window_dilations: [2, 2, 1, 1])))
-    )
 
     test "computes the gradient with dilations" do
       x = Nx.iota({4, 2, 4, 2}, type: {:f, 32})
@@ -1277,7 +1271,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "window_min/max rule" do
-    defn(grad_sum_window_max(t), do: grad(t, &Nx.sum(Nx.window_max(&1, {1, 2, 1, 2}))))
+    defn grad_sum_window_max(t), do: grad(t, &Nx.sum(Nx.window_max(&1, {1, 2, 1, 2})))
 
     test "works with window max, no padding no stride" do
       x = Nx.iota({2, 3, 3, 2}, type: {:f, 32})
@@ -1300,7 +1294,7 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_sum_window_min(t), do: grad(t, &Nx.sum(Nx.window_min(&1, {1, 2, 1, 2}))))
+    defn grad_sum_window_min(t), do: grad(t, &Nx.sum(Nx.window_min(&1, {1, 2, 1, 2})))
 
     test "works with window min, no padding no stride" do
       x = Nx.iota({2, 3, 3, 2}, type: {:f, 32})
@@ -1372,8 +1366,49 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "outer rule" do
+    defn grad_outer_lhs_rule(x, y), do: grad(x, &Nx.sum(Nx.outer(&1, y)))
+
+    test "computes gradient for tensors on lhs" do
+      assert grad_outer_lhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+               Nx.tensor([[15.0], [15.0], [15.0]])
+    end
+
+    defn grad_outer_rhs_rule(x, y), do: grad(y, &Nx.sum(Nx.outer(x, &1)))
+
+    test "computes gradient for tensors on rhs" do
+      assert grad_outer_rhs_rule(Nx.tensor([[1.0], [2.0], [3.0]]), Nx.tensor([[1, 2, 3, 4, 5]])) ==
+               Nx.tensor([[6.0, 6.0, 6.0, 6.0, 6.0]])
+    end
+
+    defn grad_outer_both_rule(x), do: grad(x, &Nx.sum(Nx.outer(Nx.power(&1, 2), Nx.power(&1, 3))))
+
+    test "computes gradient for tensors on both sides" do
+      assert grad_outer_both_rule(Nx.iota({3, 3, 3})) ==
+               Nx.tensor([
+                 [
+                   [0.0, 265_005.0, 567_216.0],
+                   [906_633.0, 1_283_256.0, 1_697_085.0],
+                   [2_148_120.0, 2_636_361.0, 3_161_808.0]
+                 ],
+                 [
+                   [3_724_461.0, 4_324_320.0, 4_961_385.0],
+                   [5_635_656.0, 6_347_133.0, 7_095_816.0],
+                   [7_881_705.0, 8.7048e6, 9_565_101.0]
+                 ],
+                 [
+                   [10_462_608.0, 11_397_321.0, 12_369_240.0],
+                   [13_378_365.0, 14_424_696.0, 15_508_233.0],
+                   [16_628_976.0, 17_786_925.0, 18_982_080.0]
+                 ]
+               ])
+
+      assert grad_outer_both_rule(Nx.tensor([1, 2, 3])) == Nx.tensor([114.0, 312.0, 594.0])
+    end
+  end
+
   describe "chain rule" do
-    defn(grad_tanh_exp(t), do: grad(t, &Nx.tanh(Nx.exp(&1))))
+    defn grad_tanh_exp(t), do: grad(t, &Nx.tanh(Nx.exp(&1)))
 
     test "computes gradient" do
       assert grad_tanh_exp(Nx.tensor(1.0)) == Nx.tensor(0.046936701983213425)
@@ -1386,8 +1421,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "grad grad" do
-    defn(grad_tanh_base(t), do: grad(t, &Nx.tanh(&1)))
-    defn(grad_grad_tanh(t), do: grad(t, &grad(&1, fn t -> Nx.tanh(t) end)))
+    defn grad_tanh_base(t), do: grad(t, &Nx.tanh(&1))
+    defn grad_grad_tanh(t), do: grad(t, &grad(&1, fn t -> Nx.tanh(t) end))
 
     test "computes gradient" do
       assert grad_grad_tanh(Nx.tensor(1.0)) == Nx.tensor(-0.6397000084492246)
@@ -1400,8 +1435,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "tuples" do
-    defnp(tuple_pattern({a, b}), do: Nx.power(a, 2) + b)
-    defn(grad_tuple_pattern(t), do: grad(t, &tuple_pattern({&1, 2.0})))
+    defnp tuple_pattern({a, b}), do: Nx.power(a, 2) + b
+    defn grad_tuple_pattern(t), do: grad(t, &tuple_pattern({&1, 2.0}))
 
     test "as patterns" do
       assert grad_tuple_pattern(Nx.tensor(1.0)) == Nx.tensor(2.0)
@@ -1430,7 +1465,7 @@ defmodule Nx.Defn.GradTest do
                {Nx.tensor(1.0), Nx.tensor(0.0)}
     end
 
-    defn(grad_tuple_output(a), do: grad(a, &{&1 + 1, &1 - 1}))
+    defn grad_tuple_output(a), do: grad(a, &{&1 + 1, &1 - 1})
 
     test "raises on tuple output" do
       assert_raise ArgumentError, ~r"expected a tensor or a number", fn ->
@@ -1444,7 +1479,7 @@ defmodule Nx.Defn.GradTest do
           [:mean, :negate, :rsqrt, :sin, :sqrt, :sum, :tanh] do
     describe "#{fun}" do
       grad_fun = :"grad_#{fun}"
-      defn(unquote(grad_fun)(t), do: grad(t, &(Nx.unquote(fun) / 1)))
+      defn unquote(grad_fun)(t), do: grad(t, &(Nx.unquote(fun) / 1))
 
       test "computes gradient" do
         for _ <- @iters do
@@ -1456,7 +1491,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "tan" do
-    defn(grad_tan(t), do: grad(t, &Nx.tan/1))
+    defn grad_tan(t), do: grad(t, &Nx.tan/1)
 
     test "computes gradient" do
       for _ <- @iters do
@@ -1471,9 +1506,9 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "inverse trig family" do
-    defn(grad_asin(t), do: grad(t, &Nx.asin/1))
-    defn(grad_acos(t), do: grad(t, &Nx.acos/1))
-    defn(grad_atan(t), do: grad(t, &Nx.atan/1))
+    defn grad_asin(t), do: grad(t, &Nx.asin/1)
+    defn grad_acos(t), do: grad(t, &Nx.acos/1)
+    defn grad_atan(t), do: grad(t, &Nx.atan/1)
 
     test "computes gradient of inverse trig functions" do
       for _ <- @iters do
@@ -1487,8 +1522,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "hyperbolics" do
-    defn(grad_sinh(t), do: grad(t, &Nx.sinh/1))
-    defn(grad_cosh(t), do: grad(t, &Nx.cosh/1))
+    defn grad_sinh(t), do: grad(t, &Nx.sinh/1)
+    defn grad_cosh(t), do: grad(t, &Nx.cosh/1)
 
     test "computes gradient" do
       for _ <- @iters do
@@ -1506,9 +1541,9 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "inverse hyperbolic functions" do
-    defn(grad_asinh(t), do: grad(t, &Nx.asinh/1))
-    defn(grad_acosh(t), do: grad(t, &Nx.acosh/1))
-    defn(grad_atanh(t), do: grad(t, &Nx.atanh/1))
+    defn grad_asinh(t), do: grad(t, &Nx.asinh/1)
+    defn grad_acosh(t), do: grad(t, &Nx.acosh/1)
+    defn grad_atanh(t), do: grad(t, &Nx.atanh/1)
 
     test "computes gradient of inverse hyperbolic functions" do
       for _ <- @iters do
@@ -1529,7 +1564,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "erf" do
-    defn(grad_erf(t), do: grad(t, &Nx.erf/1))
+    defn grad_erf(t), do: grad(t, &Nx.erf/1)
 
     test "computes the gradient" do
       for _ <- @iters do
@@ -1540,7 +1575,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "erfc" do
-    defn(grad_erfc(t), do: grad(t, &Nx.erfc/1))
+    defn grad_erfc(t), do: grad(t, &Nx.erfc/1)
 
     test "computes the gradient" do
       for _ <- @iters do
@@ -1551,7 +1586,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "erf_inv" do
-    defn(grad_erf_inv(t), do: grad(t, &Nx.erf_inv/1))
+    defn grad_erf_inv(t), do: grad(t, &Nx.erf_inv/1)
 
     test "computes gradient close to 0.0" do
       for _ <- @iters do
@@ -1595,7 +1630,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "broadcast" do
-    defn(grad_sum_broadcast(t), do: grad(t, &Nx.sum(Nx.broadcast(&1, {3, 2, 2}))))
+    defn grad_sum_broadcast(t), do: grad(t, &Nx.sum(Nx.broadcast(&1, {3, 2, 2})))
 
     test "computes gradient" do
       assert grad_sum_broadcast(Nx.iota({3, 2, 2})) == Nx.broadcast(1.0, {3, 2, 2})
@@ -1665,6 +1700,35 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "cholesky" do
+    defn cholesky_grad(t) do
+      grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.sum() end)
+    end
+
+    defn cholesky_cos_grad(t) do
+      grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.cos() |> Nx.sum() end)
+    end
+
+    defn exp_cholesky_grad(t) do
+      grad(t, fn x -> x |> Nx.exp() |> Nx.LinAlg.cholesky() |> Nx.sum() end)
+    end
+
+    test "computes grad for {2, 2}-tensor" do
+      t = Nx.tensor([[1.0, 2.0], [2.0, 5.0]])
+      assert cholesky_grad(t) == Nx.tensor([[1.5, -1.0], [0.0, 0.5]])
+    end
+
+    test "computes grad for composed {2,2}-tensor" do
+      t = Nx.tensor([[1.0, 2.0], [2.0, 5.0]])
+
+      assert cholesky_cos_grad(t) ==
+               Nx.tensor([[-1.1943799, 0.84147096], [-0.06782645, -0.42073548]])
+
+      assert exp_cholesky_grad(t) ==
+               Nx.tensor([[-0.5299541, -0.88652998], [3.59515929, 6.550619]])
+    end
+  end
+
   describe "qr" do
     defn qr_grad(t) do
       grad(t, fn tensor ->
@@ -1708,39 +1772,9 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  describe "cholesky" do
-    defn cholesky_grad(t) do
-      grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.sum() end)
-    end
-
-    defn cholesky_cos_grad(t) do
-      grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.cos() |> Nx.sum() end)
-    end
-
-    defn exp_cholesky_grad(t) do
-      grad(t, fn x -> x |> Nx.exp() |> Nx.LinAlg.cholesky() |> Nx.sum() end)
-    end
-
-    test "computes grad for {2, 2}-tensor" do
-      t = Nx.tensor([[1.0, 2.0], [2.0, 5.0]])
-      assert cholesky_grad(t) == Nx.tensor([[1.5, -1.0], [0.0, 0.5]])
-    end
-
-    test "computes grad for composed {2,2}-tensor" do
-      t = Nx.tensor([[1.0, 2.0], [2.0, 5.0]])
-
-      assert cholesky_cos_grad(t) ==
-               Nx.tensor([[-1.1943799, 0.84147096], [-0.06782645, -0.42073548]])
-
-      assert exp_cholesky_grad(t) ==
-               Nx.tensor([[-0.5299541, -0.88652998], [3.59515929, 6.550619]])
-    end
-  end
-
   describe "squeeze" do
-    defn(grad_sum_squeeze_broadcast(t),
+    defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))
-    )
 
     test "computes gradient" do
       assert grad_sum_squeeze_broadcast(Nx.iota({3, 2, 2})) == Nx.broadcast(1.0, {3, 2, 2})
@@ -1759,13 +1793,12 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "pad" do
-    defn(grad_sum_pad(t), do: grad(t, &Nx.sum(Nx.pad(&1, 2.0, [{-1, 1, 0}, {1, 1, 0}]))))
-    defn(grad_interior_pad(t), do: grad(t, &Nx.sum(Nx.pad(&1, 2.0, [{0, 0, 1}, {0, 0, 1}]))))
-    defn(grad_lots_of_pad(t), do: grad(t, &Nx.sum(Nx.pad(&1, 2.0, [{-2, 1, 4}, {1, 3, 2}]))))
+    defn grad_sum_pad(t), do: grad(t, &Nx.sum(Nx.pad(&1, 2.0, [{-1, 1, 0}, {1, 1, 0}])))
+    defn grad_interior_pad(t), do: grad(t, &Nx.sum(Nx.pad(&1, 2.0, [{0, 0, 1}, {0, 0, 1}])))
+    defn grad_lots_of_pad(t), do: grad(t, &Nx.sum(Nx.pad(&1, 2.0, [{-2, 1, 4}, {1, 3, 2}])))
 
-    defn(grad_pad_fun(t),
+    defn grad_pad_fun(t),
       do: grad(t, &Nx.mean(Nx.pad(&1, Nx.mean(Nx.cos(&1)), [{-2, 1, 4}, {1, 3, 2}])))
-    )
 
     test "computes gradient" do
       assert grad_sum_pad(Nx.tensor([[1.0, 2.0], [1.0, 2.0]])) ==
@@ -1785,24 +1818,22 @@ defmodule Nx.Defn.GradTest do
     test "computes with pad value from tensor" do
       assert grad_pad_fun(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
                Nx.tensor([
-                 [-0.13259540498256683, -0.14328321814537048, -0.022237088531255722],
-                 [0.13743554055690765, 0.16928502917289734, 0.062210917472839355]
+                 [-0.13259541988372803, -0.14328323304653168, -0.02223709039390087],
+                 [0.13743554055690765, 0.16928502917289734, 0.06221092492341995]
                ])
     end
   end
 
   describe "slice" do
-    defn(grad_mean_slice(t), do: grad(t, &Nx.mean(Nx.slice(&1, [0, 1], [1, 2], strides: [1, 2]))))
+    defn grad_mean_slice(t), do: grad(t, &Nx.mean(Nx.slice(&1, [0, 1], [1, 2], strides: [1, 2])))
 
-    defn(grad_mean_dynamic_slice(t),
+    defn grad_mean_dynamic_slice(t),
       do: grad(t, &Nx.mean(Nx.slice(&1, [Nx.tensor(0), Nx.tensor(1)], [1, 2], strides: [1, 2])))
-    )
 
-    defn(grad_sum_slice(t), do: grad(t, &Nx.sum(Nx.slice(&1, [1, 0], [1, 2], strides: [1, 1]))))
+    defn grad_sum_slice(t), do: grad(t, &Nx.sum(Nx.slice(&1, [1, 0], [1, 2], strides: [1, 1])))
 
-    defn(grad_sum_dynamic_slice(t),
+    defn grad_sum_dynamic_slice(t),
       do: grad(t, &Nx.sum(Nx.slice(&1, [Nx.tensor(1), Nx.tensor(0)], [1, 2], strides: [1, 1])))
-    )
 
     defn grad_sum_pad_slice(t) do
       grad(
@@ -1854,7 +1885,7 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_of_index(t, index), do: grad(index, &Nx.mean(Nx.slice(t, [&1], [2]))))
+    defn grad_of_index(t, index), do: grad(index, &Nx.mean(Nx.slice(t, [&1], [2])))
 
     test "computes gradient of index" do
       assert grad_of_index(
@@ -1865,9 +1896,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "put_slice" do
-    defn(grad_mean_put_slice_operand(t1, t2), do: grad(t1, &Nx.mean(Nx.put_slice(&1, [0, 1], t2))))
-
-    defn(grad_mean_put_slice_update(t1, t2), do: grad(t2, &Nx.mean(Nx.put_slice(t1, [0, 1], &1))))
+    defn grad_mean_put_slice_operand(t1, t2), do: grad(t1, &Nx.mean(Nx.put_slice(&1, [0, 1], t2)))
+    defn grad_mean_put_slice_update(t1, t2), do: grad(t2, &Nx.mean(Nx.put_slice(t1, [0, 1], &1)))
 
     defn grad_sum_pad_put_slice_cos_operand(t1, t2) do
       grad(t1, fn t ->
@@ -1940,8 +1970,8 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "reverse" do
-    defn(grad_sum_reverse_exp(t), do: grad(t, &Nx.sum(Nx.reverse(Nx.exp(&1)))))
-    defn(grad_sum_exp_reverse(t), do: grad(t, &Nx.sum(Nx.exp(Nx.reverse(&1)))))
+    defn grad_sum_reverse_exp(t), do: grad(t, &Nx.sum(Nx.reverse(Nx.exp(&1))))
+    defn grad_sum_exp_reverse(t), do: grad(t, &Nx.sum(Nx.exp(Nx.reverse(&1))))
 
     test "computes gradient" do
       assert grad_sum_exp_reverse(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
@@ -1959,9 +1989,9 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "abs" do
-    defn(abs_scalar(t), do: Nx.abs(t))
-    defn(grad_abs_scalar(t), do: grad(t, &Nx.abs(&1)))
-    defn(grad_abs(t), do: grad(t, &Nx.sum(Nx.abs(&1))))
+    defn abs_scalar(t), do: Nx.abs(t)
+    defn grad_abs_scalar(t), do: grad(t, &Nx.abs(&1))
+    defn grad_abs(t), do: grad(t, &Nx.sum(Nx.abs(&1)))
 
     test "computes gradient with scalars" do
       for _ <- @iters do
@@ -1982,7 +2012,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "max" do
-    defn(grad_max(t), do: grad(t, &Nx.sum(Nx.max(Nx.power(&1, 2), Nx.power(&1, 3)))))
+    defn grad_max(t), do: grad(t, &Nx.sum(Nx.max(Nx.power(&1, 2), Nx.power(&1, 3))))
 
     test "computes gradient with tensors" do
       assert grad_max(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.5], [12.0], [27.0]])
@@ -1993,7 +2023,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "min" do
-    defn(grad_min(t), do: grad(t, &Nx.sum(Nx.min(Nx.power(&1, 2), Nx.power(&1, 3)))))
+    defn grad_min(t), do: grad(t, &Nx.sum(Nx.min(Nx.power(&1, 2), Nx.power(&1, 3))))
 
     test "computes gradient with tensors" do
       assert grad_min(Nx.tensor([[1.0], [2.0], [3.0]])) == Nx.tensor([[2.5], [4.0], [6.0]])
@@ -2004,27 +2034,18 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "select rule" do
-    defn(grad_sum_select(t),
+    defn grad_sum_select(t),
       do: grad(t, &Nx.sum(Nx.select(Nx.greater(&1, 0.0), Nx.exp(&1), Nx.cos(&1))))
-    )
 
-    defn(grad_max_select(t),
+    defn grad_max_select(t),
       do: grad(t, &Nx.reduce_max(Nx.select(Nx.greater(&1, 0.0), Nx.exp(&1), Nx.cos(&1))))
-    )
 
-    defn(grad_sum_select_sum(t),
+    defn grad_sum_select_sum(t),
       do:
         grad(
           t,
           &Nx.sum(Nx.select(Nx.greater(Nx.sum(&1, axes: [0]), 0.0), Nx.sum(&1, axes: [0]), 0.0))
         )
-    )
-
-    defn(leaky_relu(t), do: Nx.select(t > 0, t, t * 0.1))
-    defn(grad_nested_select(t), do: grad(t, &Nx.sum(leaky_relu(leaky_relu(&1)))))
-
-    # pred is not part of grad
-    defn(grad_pred_select(t), do: grad(t, &Nx.sum(Nx.select(&1 * &1, 1.0, -1.0))))
 
     test "computes gradient with sum+select" do
       lhs = grad_sum_select(Nx.tensor([[-2.0, 1.0, 0.0, 3.0, -3.0], [1.0, 2.0, 0.0, 5.0, -1.0]]))
@@ -2059,22 +2080,11 @@ defmodule Nx.Defn.GradTest do
 
       compare_tensors!(lhs, rhs)
     end
-
-    test "computes the gradient with sum+select+select" do
-      lhs = grad_nested_select(Nx.tensor([-2.0, -1.0, 0.0, 1.0, 2.0]))
-      rhs = Nx.tensor([0.01, 0.01, 0.01, 1.0, 1.0])
-      compare_tensors!(lhs, rhs)
-    end
-
-    test "is zero when part of pred only" do
-      assert grad_pred_select(Nx.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])) ==
-               Nx.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
-    end
   end
 
   describe "as_type/bitcast" do
-    defn(grad_as_type(t), do: grad(t, &Nx.sum(Nx.as_type(&1, {:f, 32}))))
-    defn(grad_bitcast(t), do: grad(t, &Nx.sum(Nx.bitcast(&1, {:f, 32}))))
+    defn grad_as_type(t), do: grad(t, &Nx.sum(Nx.as_type(&1, {:f, 32})))
+    defn grad_bitcast(t), do: grad(t, &Nx.sum(Nx.bitcast(&1, {:f, 32})))
 
     test "as_type passes through" do
       assert grad_as_type(Nx.tensor([1, 2, 3])) == Nx.tensor([1.0, 1.0, 1.0])
@@ -2086,7 +2096,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "if" do
-    defn(grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.power(t, 2), else: Nx.power(t, 3)) end))
+    defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.power(t, 2), else: Nx.power(t, 3)) end)
 
     defn grad_sum_if(t) do
       grad(t, fn t -> Nx.sum(if(Nx.all?(t), do: Nx.power(t, 2), else: Nx.power(t, 3))) end)
@@ -2099,15 +2109,13 @@ defmodule Nx.Defn.GradTest do
     defn grad_if_tuple(t) do
       grad(t, fn t ->
         {{a, b}, c} =
-          if t > 0 do
+          if t + 1 do
             {{Nx.power(t, 2), Nx.power(t, 3)}, Nx.power(t, 4)}
           else
             {{Nx.power(t, 4), Nx.power(t, 3)}, Nx.power(t, 2)}
           end
 
-        d = if t > 0, do: 123, else: 456
-
-        a * b + c - d
+        a * b + c
       end)
     end
 
@@ -2126,15 +2134,13 @@ defmodule Nx.Defn.GradTest do
 
     test "computes gradient with tuple" do
       assert grad_if_tuple(Nx.tensor(1)) == Nx.tensor(9.0)
-      assert grad_if_tuple(Nx.tensor(2)) == Nx.tensor(112.0)
       assert grad_if_tuple(Nx.tensor(-1)) == Nx.tensor(5.0)
-      assert grad_if_tuple(Nx.tensor(-2)) == Nx.tensor(444.0)
     end
   end
 
   describe "axes" do
-    defn(grad_sum_full(t), do: grad(t, &Nx.sum/1))
-    defn(grad_mean_full(t), do: grad(t, &Nx.mean/1))
+    defn grad_sum_full(t), do: grad(t, &Nx.sum/1)
+    defn grad_mean_full(t), do: grad(t, &Nx.mean/1)
 
     test "computes gradient in full" do
       assert grad_sum_full(Nx.tensor([[1, 2], [3, 4]])) ==
@@ -2144,13 +2150,11 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[0.25, 0.25], [0.25, 0.25]])
     end
 
-    defn(grad_log_sum_0_sin_sum(t),
+    defn grad_log_sum_0_sin_sum(t),
       do: grad(t, &(&1 |> Nx.log() |> Nx.sum(axes: [0]) |> Nx.sin() |> Nx.sum()))
-    )
 
-    defn(grad_log_sum_1_sin_sum(t),
+    defn grad_log_sum_1_sin_sum(t),
       do: grad(t, &(&1 |> Nx.log() |> Nx.sum(axes: [1]) |> Nx.sin() |> Nx.sum()))
-    )
 
     test "computes log + sum(axis) + sin + sum" do
       lhs = grad_log_sum_0_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
@@ -2174,9 +2178,8 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_log_sum_keep_sin_sum(t),
+    defn grad_log_sum_keep_sin_sum(t),
       do: grad(t, &(&1 |> Nx.log() |> Nx.sum(axes: [1], keep_axes: true) |> Nx.sin() |> Nx.sum()))
-    )
 
     test "computes log + sum(keep_axes) + sin + sum" do
       lhs = grad_log_sum_keep_sin_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
@@ -2190,8 +2193,8 @@ defmodule Nx.Defn.GradTest do
       compare_tensors!(lhs, rhs)
     end
 
-    defn(grad_sum_0_mean(t), do: grad(t, &(&1 |> Nx.sum(axes: [0]) |> Nx.mean())))
-    defn(grad_sum_1_mean(t), do: grad(t, &(&1 |> Nx.sum(axes: [1]) |> Nx.mean())))
+    defn grad_sum_0_mean(t), do: grad(t, &(&1 |> Nx.sum(axes: [0]) |> Nx.mean()))
+    defn grad_sum_1_mean(t), do: grad(t, &(&1 |> Nx.sum(axes: [1]) |> Nx.mean()))
 
     test "computes sum(axis) + mean" do
       assert grad_sum_0_mean(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
@@ -2204,8 +2207,8 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]])
     end
 
-    defn(grad_mean_0_sum(t), do: grad(t, &(&1 |> Nx.mean(axes: [0]) |> Nx.sum())))
-    defn(grad_mean_1_sum(t), do: grad(t, &(&1 |> Nx.mean(axes: [1]) |> Nx.sum())))
+    defn grad_mean_0_sum(t), do: grad(t, &(&1 |> Nx.mean(axes: [0]) |> Nx.sum()))
+    defn grad_mean_1_sum(t), do: grad(t, &(&1 |> Nx.mean(axes: [1]) |> Nx.sum()))
 
     test "computes mean(axis) + sum" do
       assert grad_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
@@ -2218,13 +2221,11 @@ defmodule Nx.Defn.GradTest do
                ])
     end
 
-    defn(grad_reshape_mean_0_sum(t),
+    defn grad_reshape_mean_0_sum(t),
       do: grad(t, &(&1 |> Nx.log() |> Nx.reshape({3, 2}) |> Nx.mean(axes: [0]) |> Nx.sum()))
-    )
 
-    defn(grad_reshape_mean_1_sum(t),
+    defn grad_reshape_mean_1_sum(t),
       do: grad(t, &(&1 |> Nx.log() |> Nx.reshape({3, 2}) |> Nx.mean(axes: [1]) |> Nx.sum()))
-    )
 
     test "computes log + reshape + mean(axis) + sum" do
       assert grad_reshape_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
@@ -2247,13 +2248,11 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[0.5, 0.25, 0.16666666666666666], [0.125, 0.1, 0.08333333333333333]])
     end
 
-    defn(grad_transpose_mean_0_sum(t),
+    defn grad_transpose_mean_0_sum(t),
       do: grad(t, &(&1 |> Nx.log() |> Nx.transpose() |> Nx.mean(axes: [0]) |> Nx.sum()))
-    )
 
-    defn(grad_transpose_mean_1_sum(t),
+    defn grad_transpose_mean_1_sum(t),
       do: grad(t, &(&1 |> Nx.log() |> Nx.transpose() |> Nx.mean(axes: [1]) |> Nx.sum()))
-    )
 
     test "computes log + transpose + mean(axis) + sum" do
       assert grad_transpose_mean_0_sum(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
@@ -2268,7 +2267,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "clip" do
-    defn(grad_sum_clip(t), do: grad(t, &Nx.sum(Nx.clip(&1, Nx.tensor(1.0), Nx.tensor(4.0)))))
+    defn grad_sum_clip(t), do: grad(t, &Nx.sum(Nx.clip(&1, Nx.tensor(1.0), Nx.tensor(4.0))))
 
     test "computes gradient with sum" do
       assert grad_sum_clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
@@ -2277,15 +2276,14 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "reduce_max rule" do
-    defn(grad_reduce_max(t), do: grad(t, &Nx.reduce_max(Nx.cos(Nx.exp(&1)))))
-    defn(grad_sum_reduce_max(t), do: grad(t, &Nx.sum(Nx.reduce_max(&1, axes: [1]))))
-    defn(grad_sum_reduce_max_cos(t), do: grad(t, &Nx.sum(Nx.reduce_max(Nx.cos(&1), axes: [1]))))
-    defn(grad_reduce_max_sum(t), do: grad(t, &Nx.reduce_max(Nx.sum(&1, axes: [1]))))
-    defn(grad_reduce_max_min(t), do: grad(t, &Nx.reduce_max(Nx.reduce_min(&1, axes: [0]))))
+    defn grad_reduce_max(t), do: grad(t, &Nx.reduce_max(Nx.cos(Nx.exp(&1))))
+    defn grad_sum_reduce_max(t), do: grad(t, &Nx.sum(Nx.reduce_max(&1, axes: [1])))
+    defn grad_sum_reduce_max_cos(t), do: grad(t, &Nx.sum(Nx.reduce_max(Nx.cos(&1), axes: [1])))
+    defn grad_reduce_max_sum(t), do: grad(t, &Nx.reduce_max(Nx.sum(&1, axes: [1])))
+    defn grad_reduce_max_min(t), do: grad(t, &Nx.reduce_max(Nx.reduce_min(&1, axes: [0])))
 
-    defn(grad_reduce_max_min_sum(t),
+    defn grad_reduce_max_min_sum(t),
       do: grad(t, &Nx.reduce_max(Nx.reduce_min(Nx.sum(&1, axes: [1]), axes: [0])))
-    )
 
     test "computes gradient" do
       lhs = grad_reduce_max(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
@@ -2338,15 +2336,14 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "reduce_min rule" do
-    defn(grad_reduce_min(t), do: grad(t, &Nx.reduce_min(Nx.cos(Nx.exp(&1)))))
-    defn(grad_sum_reduce_min(t), do: grad(t, &Nx.sum(Nx.reduce_min(&1, axes: [1]))))
-    defn(grad_sum_reduce_min_cos(t), do: grad(t, &Nx.sum(Nx.reduce_min(Nx.cos(&1), axes: [1]))))
-    defn(grad_reduce_min_sum(t), do: grad(t, &Nx.reduce_min(Nx.sum(&1, axes: [1]))))
-    defn(grad_reduce_min_max(t), do: grad(t, &Nx.reduce_min(Nx.reduce_max(&1, axes: [0]))))
+    defn grad_reduce_min(t), do: grad(t, &Nx.reduce_min(Nx.cos(Nx.exp(&1))))
+    defn grad_sum_reduce_min(t), do: grad(t, &Nx.sum(Nx.reduce_min(&1, axes: [1])))
+    defn grad_sum_reduce_min_cos(t), do: grad(t, &Nx.sum(Nx.reduce_min(Nx.cos(&1), axes: [1])))
+    defn grad_reduce_min_sum(t), do: grad(t, &Nx.reduce_min(Nx.sum(&1, axes: [1])))
+    defn grad_reduce_min_max(t), do: grad(t, &Nx.reduce_min(Nx.reduce_max(&1, axes: [0])))
 
-    defn(grad_reduce_min_max_sum(t),
+    defn grad_reduce_min_max_sum(t),
       do: grad(t, &Nx.reduce_min(Nx.reduce_max(Nx.sum(&1, axes: [1]), axes: [0])))
-    )
 
     test "computes gradient" do
       lhs = grad_reduce_min(Nx.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 3.0, 1.0]]))
@@ -2393,6 +2390,110 @@ defmodule Nx.Defn.GradTest do
                  [[0.0, 0.25, 0.25], [0.0, 0.25, 0.25]],
                  [[0.0, 0.25, 0.25], [0.0, 0.25, 0.25]]
                ])
+    end
+  end
+
+  describe "reduce product rule" do
+    defn grad_reduce_product(t), do: grad(t, &Nx.product/1)
+
+    test "computes the gradient with product" do
+      lhs = grad_reduce_product(Nx.tensor([[1.0, 4.0, 2.0], [3.0, 6.0, 6.0]]))
+      rhs = Nx.tensor([[864.0, 216.0, 432.0], [288.0, 144.0, 144.0]])
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_sum_grad_product(t), do: grad(t, fn t -> Nx.product(grad(t, &Nx.product/1)) end)
+
+    test "computes the second order" do
+      lhs = grad_sum_grad_product(Nx.tensor([[0.95, 0.90, 0.95], [0.75, 0.74, 1.0]]))
+
+      rhs =
+        Nx.tensor([[0.09798507, 0.10342869, 0.09798507], [0.12411442, 0.12579165, 0.09308582]])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_reduce_product_cos(t), do: grad(t, &Nx.product(Nx.power(&1, 2)))
+
+    test "computes the gradient with product of inner function" do
+      lhs = grad_reduce_product_cos(Nx.iota({3, 1, 2, 2}))
+      rhs = Nx.broadcast(0.0, {3, 1, 2, 2})
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_reduce_product_sum(t), do: grad(t, &Nx.product(Nx.sum(&1, axes: [1])))
+
+    test "computes the gradient with product of sum" do
+      x = Nx.multiply(0.1, Nx.iota({3, 2, 2, 2}, type: {:f, 32}))
+      lhs = grad_reduce_product_sum(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[3028.823, 2019.2152], [1514.4116, 1211.5292]],
+            [[3028.823, 2019.2152], [1514.4116, 1211.5292]]
+          ],
+          [
+            [[605.76465, 550.6951], [504.8038, 465.97278]],
+            [[605.76465, 550.6951], [504.8038, 465.97278]]
+          ],
+          [
+            [[336.53592, 318.82346], [302.88232, 288.45935]],
+            [[336.53592, 318.82346], [302.88232, 288.45935]]
+          ]
+        ])
+
+      assert Nx.all?(Nx.less_equal(Nx.abs(Nx.subtract(lhs, rhs)), 1.0e-3)) ==
+               Nx.tensor(1, type: {:u, 8})
+    end
+
+    defn grad_reduce_product_product(t), do: grad(t, &Nx.product(Nx.product(&1, axes: [3])))
+
+    test "computes the gradient with product of product" do
+      x = Nx.iota({1, 3, 2, 2}, type: {:f, 32})
+      lhs = grad_reduce_product_product(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[39_916_800.0, 0.0], [0.0, 0.0]],
+            [[0.0, 0.0], [0.0, 0.0]],
+            [[0.0, 0.0], [0.0, 0.0]]
+          ]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_reduce_product_min(t), do: grad(t, &Nx.product(Nx.reduce_min(&1, axes: [1, 2])))
+
+    test "computes the gradient with product of min" do
+      x = Nx.iota({3, 2, 2, 3}, type: {:f, 32})
+      lhs = grad_reduce_product_min(x)
+
+      rhs =
+        Nx.tensor([
+          [[[68_140_800.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]],
+          [[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]],
+          [[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]
+        ])
+
+      compare_tensors!(lhs, rhs)
+    end
+
+    defn grad_reduce_product_multiple_axes(t), do: grad(t, &Nx.sum(Nx.product(&1, axes: [0, 3])))
+
+    test "computes the gradient for product with multiple axes" do
+      x = Nx.multiply(Nx.iota({2, 2, 2, 2}, type: {:f, 32}), 0.5)
+      lhs = grad_reduce_product_multiple_axes(x)
+
+      rhs =
+        Nx.tensor([
+          [[[9.0, 0.0], [41.25, 27.5]], [[97.5, 78.0], [183.75, 157.5]]],
+          [[[0.0, 0.0], [8.25, 7.5]], [[32.5, 30.0], [78.75, 73.5]]]
+        ])
+
+      compare_tensors!(lhs, rhs)
     end
   end
 
@@ -2799,7 +2900,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "not implemented" do
-    defn(grad_reduce(t), do: grad(t, &Nx.reduce(&1, 0, fn x, y -> x + y end)))
+    defn grad_reduce(t), do: grad(t, &Nx.reduce(&1, 0, fn x, y -> x + y end))
 
     test "raises on reduce" do
       assert_raise ArgumentError, ~r"cannot compute gradient for Nx.reduce/4", fn ->
@@ -2807,7 +2908,7 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn(grad_quotient(t), do: grad(t, &Nx.quotient(&1, 2)))
+    defn grad_quotient(t), do: grad(t, &Nx.quotient(&1, 2))
 
     test "raises on quotient" do
       assert_raise ArgumentError, ~r"cannot compute gradient for Nx.quotient/2", fn ->
@@ -2815,7 +2916,7 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
-    defn(grad_window_prod(t), do: grad(t, &Nx.window_product(&1, {})))
+    defn grad_window_prod(t), do: grad(t, &Nx.window_product(&1, {}))
 
     test "raises on window_prod" do
       assert_raise ArgumentError, ~r"cannot compute gradient for Nx.window_product/3", fn ->
