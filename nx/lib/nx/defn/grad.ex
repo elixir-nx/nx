@@ -248,7 +248,7 @@ defmodule Nx.Defn.Grad do
     grads
   end
 
-  @reduced_grads [:add, :multiply, :power, :qr]
+  @reduced_grads [:add, :multiply, :power]
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, gs, _to_grad_ids, grads) do
