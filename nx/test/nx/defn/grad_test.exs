@@ -1688,6 +1688,49 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "qr" do
+    defn qr_grad(t) do
+      grad(t, fn tensor ->
+        {q, r} = Nx.LinAlg.qr(tensor)
+
+        q
+        |> Nx.add(r)
+        |> Nx.sum()
+      end)
+    end
+
+    defn qr_megapower_grad(t) do
+      grad(t, fn tensor ->
+        {q, r} = Nx.LinAlg.qr(Nx.power(tensor, 2))
+
+        q
+        |> Nx.cos()
+        |> Nx.add(Nx.sin(r))
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes grad for tensor" do
+      approx_equal?(
+        qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
+        Nx.tensor([
+          [0.70709, 1.4142],
+          [0.70709, 0.0]
+        ])
+      )
+    end
+
+    test "computes qr_megapower_grad for tensor" do
+      approx_equal?(
+        qr_megapower_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
+        Nx.tensor([
+          [0.1112, -4.0914],
+          [0.3298, 0.5660]
+        ])
+      )
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))

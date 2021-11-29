@@ -97,6 +97,26 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
+  Creates a tuple with elements in `list` that points to tuple
+  expression `expr`.
+
+  `list` must be a list of tensor expressions of the same size
+  as the tuple expression.
+  """
+  def tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
+      when is_list(list) do
+    tuple =
+      list
+      |> Enum.with_index(fn %T{} = tensor, i ->
+        expr(tensor, context, :elem, [expr, i, size])
+      end)
+      |> List.to_tuple()
+
+    ^size = tuple_size(tuple)
+    tuple
+  end
+
+  @doc """
   Creates a `cond` tensor expression.
   """
   def cond(clauses, last = out) do
@@ -814,19 +834,6 @@ defmodule Nx.Defn.Expr do
       expr = to_expr(tensor)
       {expr, merge_context!(expr, acc)}
     end)
-  end
-
-  defp tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
-       when is_list(list) do
-    tuple =
-      list
-      |> Enum.with_index(fn %T{} = tensor, i ->
-        expr(tensor, context, :elem, [expr, i, size])
-      end)
-      |> List.to_tuple()
-
-    ^size = tuple_size(tuple)
-    tuple
   end
 
   defp tuple_out(size) do

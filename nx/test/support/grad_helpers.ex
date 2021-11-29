@@ -1,4 +1,6 @@
 defmodule Nx.GradHelpers do
+  import ExUnit.Assertions
+
   @doc """
   Checks the gradient of numerical function `func`.
 
@@ -14,9 +16,26 @@ defmodule Nx.GradHelpers do
     approx_equal?(comp_grad, est_grad, x, atol, rtol)
   end
 
+  def approx_equal?(lhs, rhs, opts \\ []) do
+    atol = opts[:atol] || 1.0e-4
+    rtol = opts[:rtol] || 1.0e-4
+
+    unless Nx.all_close(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
+      flunk("""
+      expected
+
+      #{inspect(lhs)}
+
+      to be within tolerance of
+
+      #{inspect(rhs)}
+      """)
+    end
+  end
+
   defp approx_equal?(lhs, rhs, x, atol, rtol) do
     unless Nx.all_close(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
-      raise """
+      flunk("""
       expected
 
       #{inspect(lhs)}
@@ -28,7 +47,7 @@ defmodule Nx.GradHelpers do
       for input
 
       #{inspect(x)}
-      """
+      """)
     end
   end
 

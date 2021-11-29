@@ -252,7 +252,13 @@ defmodule Nx.Defn.Grad do
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
   defp update_grads(op, args, ans, gs, _to_grad_ids, grads) do
-    g = Enum.reduce(gs, &Nx.add/2)
+    g =
+      if is_tuple(gs) do
+        gs
+      else
+        Enum.reduce(gs, &Nx.add/2)
+      end
+
     pairs = grad(op, args, ans, g)
 
     if @verify_grad do
@@ -499,6 +505,29 @@ defmodule Nx.Defn.Grad do
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
     dl = Nx.LinAlg.triangular_solve(l, bm, left_side: false)
     [{input, dl}]
+  end
+
+  defp grad(:qr, [{q, r}, input, _opts], ans, {dqs, drs}) do
+    dq = Enum.reduce(dqs, Nx.Defn.Expr.tensor(0.0), &Nx.add/2)
+    dr = Enum.reduce(drs, Nx.Defn.Expr.tensor(0.0), &Nx.add/2)
+
+    {q, r} = Nx.Defn.Expr.tuple(ans, [q, r])
+    r_inv = Nx.LinAlg.invert(r)
+
+    m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
+
+    # copyltu
+    m_ltu =
+      m
+      |> Nx.iota(axis: 0)
+      |> Nx.greater(Nx.iota(m, axis: 1))
+      |> Nx.add(Nx.eye(m) |> Nx.divide(2))
+      |> Nx.multiply(m)
+      |> then(fn m_ltu -> Nx.add(m_ltu, Nx.transpose(m_ltu)) end)
+
+    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.transpose(r_inv))
+
+    [{input, da}]
   end
 
   defp grad(:sort, [t, opts], _ans, g) do
