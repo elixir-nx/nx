@@ -9,14 +9,15 @@ defmodule EXLA.MixProject do
       app: :exla,
       name: "EXLA",
       version: @version,
-      elixir: "~> 1.11",
+      elixir: "~> 1.12-dev",
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
-      compilers: [:elixir_make] ++ Mix.compilers(),
-      make_env: %{
-        "MIX_CURRENT_PATH" => File.cwd!(),
-        "ERTS_VERSION" => List.to_string(:erlang.system_info(:version))
-      }
+      # We want to always trigger XLA compilation when XLA_BUILD is set,
+      # otherwise its Makefile will run only upon the initial compilation
+      compilers:
+        if(xla_build?(), do: [:xla], else: []) ++ [:exla, :elixir_make] ++ Mix.compilers(),
+      aliases: aliases()
     ]
   end
 
@@ -25,15 +26,26 @@ defmodule EXLA.MixProject do
     [
       extra_applications: [:logger],
       mod: {EXLA.Application, []},
-      env: [clients: [default: []]]
+      env: [
+        clients: [
+          host: [platform: :host],
+          cuda: [platform: :cuda],
+          rocm: [platform: :rocm],
+          tpu: [platform: :tpu]
+        ]
+      ]
     ]
   end
+
+  defp elixirc_paths(:test), do: ~w(lib test/support)
+  defp elixirc_paths(_), do: ~w(lib)
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       {:nx, path: "../nx"},
-      {:elixir_make, "~> 0.6"},
+      {:xla, "~> 0.2.0", runtime: false},
+      {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.23", only: :dev}
     ]
@@ -45,5 +57,46 @@ defmodule EXLA.MixProject do
       source_ref: "v#{@version}",
       source_url: @source_url
     ]
+  end
+
+  defp aliases do
+    [
+      "compile.xla": "deps.compile xla",
+      "compile.exla": &compile/1
+    ]
+  end
+
+  # We keep track of the current XLA archive path in xla_snapshot.txt.
+  # Whenever the path changes, we extract it again and Makefile picks
+  # up this change
+  defp compile(_) do
+    xla_archive_path = XLA.archive_path!()
+
+    cache_dir = Path.join(__DIR__, "cache")
+    xla_snapshot_path = Path.join(cache_dir, "xla_snapshot.txt")
+    xla_extension_path = Path.join(cache_dir, "xla_extension")
+
+    case File.read(xla_snapshot_path) do
+      {:ok, ^xla_archive_path} ->
+        :ok
+
+      _ ->
+        File.rm_rf!(xla_extension_path)
+
+        Mix.shell().info("Unpacking #{xla_archive_path} into #{cache_dir}")
+
+        case :erl_tar.extract(xla_archive_path, [:compressed, cwd: cache_dir]) do
+          :ok -> :ok
+          {:error, term} -> Mix.raise("failed to extract xla archive, reason: #{inspect(term)}")
+        end
+
+        File.write!(xla_snapshot_path, xla_archive_path)
+    end
+
+    {:ok, []}
+  end
+
+  defp xla_build?() do
+    System.get_env("XLA_BUILD") == "true"
   end
 end

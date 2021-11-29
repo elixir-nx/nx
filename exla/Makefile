@@ -1,66 +1,45 @@
-# System vars
-TEMP ?= $(HOME)/.cache
-
-# mix.exs vars
+# Environment variables passed via elixir_make
 # ERTS_INCLUDE_DIR
-ERTS_VERSION ?= $(shell erl -eval "io:fwrite(erlang:system_info(version))." -noshell -s erlang halt)
+# MIX_APP_PATH
 
-# Public configuration
-EXLA_MODE ?= opt # can also be dbg
-EXLA_CACHE ?= $(TEMP)/exla
-EXLA_TENSORFLOW_GIT_REPO ?= https://github.com/tensorflow/tensorflow.git
-
-# Replicated public configuration
-# When changing this, also change:
-# * Makefile
-# * Makefile.win
-# * lib/exla/aot/compiler.ex
-EXLA_TENSORFLOW_GIT_REV ?= 6af836f407f546cf2f9ab3b5fcb7a8285bda5c96
+# XLA Extension Installation Location
+XLA_EXTENSION_DIR ?= cache/xla_extension
+XLA_EXTENSION_LIB = $(XLA_EXTENSION_DIR)/lib
+XLA_INCLUDE_PATH = $(XLA_EXTENSION_DIR)/include
 
 # Private configuration
-EXLA_SO = priv/libexla.so
 EXLA_DIR = c_src/exla
-ERTS_SYM_DIR = $(EXLA_DIR)/erts
-BAZEL_FLAGS = --define "framework_shared_object=false" -c $(EXLA_MODE)
+PRIV_DIR = $(MIX_APP_PATH)/priv
+EXLA_SO = $(PRIV_DIR)/libexla.so
+EXLA_LIB_DIR = $(PRIV_DIR)/lib
 
-TENSORFLOW_NS = tf-$(EXLA_TENSORFLOW_GIT_REV)
-TENSORFLOW_DIR = $(EXLA_CACHE)/$(TENSORFLOW_NS)/erts-$(ERTS_VERSION)
-TENSORFLOW_EXLA_NS = tensorflow/compiler/xla/exla
-TENSORFLOW_EXLA_DIR = $(TENSORFLOW_DIR)/$(TENSORFLOW_EXLA_NS)
+# Build Flags
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -isystem $(XLA_INCLUDE_PATH) -O3 -Wall -Wextra \
+	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
+	 -shared -std=c++14
 
-all: symlinks
-	cd $(TENSORFLOW_DIR) && \
-		bazel build $(BAZEL_FLAGS) $(EXLA_FLAGS) //$(TENSORFLOW_EXLA_NS):libexla.so
-	mkdir -p priv
-	cp -f $(TENSORFLOW_DIR)/bazel-bin/$(TENSORFLOW_EXLA_NS)/libexla.so $(EXLA_SO)
+LDFLAGS = -L$(EXLA_LIB_DIR) -lxla_extension
 
-symlinks: $(TENSORFLOW_DIR)
-	@ rm -f $(TENSORFLOW_EXLA_DIR)
-	@ ln -s "$(MIX_CURRENT_PATH)/$(EXLA_DIR)" $(TENSORFLOW_EXLA_DIR)
-	@ rm -f $(ERTS_SYM_DIR)
-	@ ln -s "$(ERTS_INCLUDE_DIR)" $(ERTS_SYM_DIR)
+ifeq ($(shell uname -s), Darwin)
+	LDFLAGS += -flat_namespace -undefined suppress
+	POST_INSTALL = install_name_tool \
+		-change bazel-out/darwin_arm64-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/lib/libxla_extension.so \
+		-change bazel-out/darwin-opt/bin/tensorflow/compiler/xla/extension/libxla_extension.so @loader_path/lib/libxla_extension.so \
+		$(EXLA_SO)
+else
+	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
+	# in ./lib regardless of the absolute location. This way priv can be safely
+	# packed into an Elixir release. Also, we use $$ to escape Makefile variable
+	# and single quotes to escape shell variable
+	LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib'
+	POST_INSTALL = $(NOOP)
+endif
 
-# Print Tensorflow Dir
-PTD:
-	@ echo $(TENSORFLOW_DIR)
-
-# Clones tensorflow
-$(TENSORFLOW_DIR):
-	mkdir -p $(TENSORFLOW_DIR)
-
-	cd $(TENSORFLOW_DIR) && \
-		git init && \
-		git remote add origin $(EXLA_TENSORFLOW_GIT_REPO) && \
-		git fetch --depth 1 origin $(EXLA_TENSORFLOW_GIT_REV) && \
-		git checkout FETCH_HEAD
-
-	cd $(TENSORFLOW_DIR) && \
-		sed -e '/register_toolchains("@local_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup WORKSPACE && \
-		sed -e '/load("\/\/third_party\/py:python_configure.bzl", "python_configure")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
-		sed -e '/native.register_toolchains("@local_execution_config_python\/\/:py_toolchain")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl && \
-		sed -e '/python_configure(name = "local_config_python")/ s/^#*/#/' -i.backup tensorflow/workspace.bzl
+$(EXLA_SO): $(XLA_EXTENSION_DIR) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h
+	mkdir -p $(PRIV_DIR)
+	ln -sf $(abspath $(XLA_EXTENSION_LIB)) $(EXLA_LIB_DIR)
+	$(CXX) $(CFLAGS) $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_nif_util.cc $(EXLA_DIR)/exla_client.cc -o $(EXLA_SO) $(LDFLAGS)
+	$(POST_INSTALL)
 
 clean:
-	cd $(TENSORFLOW_DIR) && bazel clean --expunge
-	rm -f $(ERTS_SYM_DIR) $(TENSORFLOW_EXLA_DIR)
-	rm -rf $(EXLA_SO) $(TENSORFLOW_DIR)
+	rm -rf $(EXLA_SO)

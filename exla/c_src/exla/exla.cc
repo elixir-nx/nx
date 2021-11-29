@@ -1,9 +1,8 @@
 #include <map>
 
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
-#include "tensorflow/compiler/xla/exla/exla_client.h"
-#include "tensorflow/compiler/xla/exla/exla_log_sink.h"
-#include "tensorflow/compiler/xla/exla/exla_aot_compilation.h"
+#include "exla_nif_util.h"
+#include "exla_client.h"
+#include "exla_log_sink.h"
 #include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/client/xla_builder.h"
@@ -74,9 +73,6 @@ static int open_resources(ErlNifEnv* env) {
     return -1;
   }
   if (!exla::nif::open_resource<exla::ExlaBuffer*>(env, mod, "ExlaBuffer", free_exla_buffer)) {
-    return -1;
-  }
-  if (!exla::nif::open_resource<xla::Literal>(env, mod, "Literal")) {
     return -1;
   }
   return 1;
@@ -184,7 +180,7 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   ErlNifBinary bin;
   xla::Shape* shape;
   exla::ExlaClient** client;
-  int device_ordinal;
+  int device_id;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
@@ -195,25 +191,24 @@ ERL_NIF_TERM binary_to_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   if (!exla::nif::get<xla::Shape>(env, argv[2], shape)) {
     return exla::nif::error(env, "Unable to get shape.");
   }
-  if (!exla::nif::get(env, argv[3], &device_ordinal)) {
+  if (!exla::nif::get(env, argv[3], &device_id)) {
     return exla::nif::error(env, "Unable to get device ordinal.");
   }
 
-  exla::ExlaDevice* device = (*client)->device(device_ordinal);
-
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer* buffer,
-    (*client)->BufferFromBinary(bin, *shape, device, false, false), env);
-
+    (*client)->BufferFromBinary(bin, *shape, device_id, false), env);
+  EXLA_EFFECT_OR_RETURN_NIF(buffer->BlockHostUntilReady(), env);
   return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buffer));
 }
 
 ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 2) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   exla::ExlaBuffer** buffer;
+  exla::int64 size;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
@@ -221,12 +216,11 @@ ERL_NIF_TERM read_device_mem(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
     return exla::nif::error(env, "Unable to get buffer.");
   }
-
-  if ((*buffer)->is_tuple()) {
-    return exla::nif::ok(env);
+  if (!exla::nif::get(env, argv[2], &size)) {
+    return exla::nif::error(env, "Unable to get size.");
   }
 
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM binary, (*buffer)->ToBinary(env), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM binary, (*buffer)->ToBinary(env, size), env);
 
   return exla::nif::ok(env, binary);
 }
@@ -286,6 +280,15 @@ ERL_NIF_TERM make_tuple_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
 
   xla::Shape shape = xla::ShapeUtil::MakeTupleShape(shapes);
 
+  return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
+}
+
+ERL_NIF_TERM make_token_shape(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
+  if(argc != 0){
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::Shape shape = xla::ShapeUtil::MakeTokenShape();
   return exla::nif::ok(env, exla::nif::make<xla::Shape>(env, shape));
 }
 
@@ -505,6 +508,60 @@ ERL_NIF_TERM dynamic_update_slice(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
   }
 
   xla::XlaOp op = xla::DynamicUpdateSlice(*operand, *update, start_indices);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM gather(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 7) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp* operand;
+  xla::XlaOp* start_indices;
+  exla::int64 index_vector_dim;
+  std::vector<xla::int64> slice_sizes;
+  std::vector<xla::int64> offset_dims;
+  std::vector<xla::int64> collapsed_slice_dims;
+  std::vector<xla::int64> start_index_map;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], start_indices)) {
+    return exla::nif::error(env, "Unable to get start indices.");
+  }
+  if (!exla::nif::get(env, argv[2], &index_vector_dim)) {
+    return exla::nif::error(env, "Unable to get index vector dim.");
+  }
+  if (!exla::nif::get_list(env, argv[3], slice_sizes)) {
+    return exla::nif::error(env, "Unable to get slice sizes.");
+  }
+  if (!exla::nif::get_list(env, argv[4], offset_dims)) {
+    return exla::nif::error(env, "Unable to get offset dims.");
+  }
+  if (!exla::nif::get_list(env, argv[5], collapsed_slice_dims)) {
+    return exla::nif::error(env, "Unable to get collapsed slice dims.");
+  }
+  if (!exla::nif::get_list(env, argv[6], start_index_map)) {
+    return exla::nif::error(env, "Unable to get start index map.");
+  }
+
+  xla::GatherDimensionNumbers dim_numbers;
+
+  dim_numbers.set_index_vector_dim(index_vector_dim);
+
+  for (auto dim : offset_dims) {
+    dim_numbers.add_offset_dims(dim);
+  }
+  for (auto dim : collapsed_slice_dims) {
+    dim_numbers.add_collapsed_slice_dims(dim);
+  }
+  for (auto dim : start_index_map) {
+    dim_numbers.add_start_index_map(dim);
+  }
+
+  xla::XlaOp op = xla::Gather(*operand, *start_indices, dim_numbers, slice_sizes);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -919,7 +976,14 @@ ERL_NIF_TERM constant_r0(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       op = xla::ConstantR0(*builder, exla::nif::get_value<xla::PrimitiveType::S64>(env, term));
       break;
     case xla::PrimitiveType::F16:
-      return exla::nif::error(env, "Unsupported constant type.");
+    {
+      // Not sure why the pattern breaks here
+      double var;
+      if (!enif_get_double(env, term, &var)) return exla::nif::error(env, "Unable to get constant");
+      exla::float16 val = static_cast<exla::float16>(var);
+      op = xla::ConstantR0(*builder, val);
+      break;
+    }
     case xla::PrimitiveType::BF16:
       op = xla::ConstantR0(*builder, exla::nif::get_value<xla::PrimitiveType::BF16>(env, term));
       break;
@@ -1032,7 +1096,7 @@ ERL_NIF_TERM variadic_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM window_reduce(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 7) {
     return exla::nif::error(env, "Bad argument count.");
   }
@@ -1042,7 +1106,6 @@ ERL_NIF_TERM reduce_window(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   xla::XlaComputation* computation;
   std::vector<exla::int64> window_dimensions;
   std::vector<exla::int64> window_strides;
-  // TODO(seanmor5): Not yet supported in Nx
   // std::vector<exla::int64> base_dilations;
   std::vector<exla::int64> window_dilations;
   std::vector<std::pair<exla::int64, exla::int64>> padding_config;
@@ -1132,6 +1195,87 @@ ERL_NIF_TERM select_and_scatter(ErlNifEnv* env, int argc, const ERL_NIF_TERM arg
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
+ERL_NIF_TERM scatter(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+  if (argc != 8)
+  {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaOp *target;
+  xla::XlaOp *indices;
+  xla::XlaOp *updates;
+  xla::XlaComputation *scatter_fn;
+  exla::int64 index_vector_dim;
+  std::vector<exla::int64> update_window_dims;
+  std::vector<exla::int64> inserted_window_dims;
+  std::vector<exla::int64> scatter_dims_to_operand_dims;
+
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], target))
+  {
+    return exla::nif::error(env, "Unable to get target.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], indices))
+  {
+    return exla::nif::error(env, "Unable to get indices.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[2], updates))
+  {
+    return exla::nif::error(env, "Unable to get updates.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[3], scatter_fn))
+  {
+    return exla::nif::error(env, "Unable to get scatter function.");
+  }
+  if (!exla::nif::get(env, argv[4], &index_vector_dim))
+  {
+    return exla::nif::error(env, "Unable to get index vector dim.");
+  }
+  if (!exla::nif::get_list(env, argv[5], update_window_dims))
+  {
+    return exla::nif::error(env, "Unable to get update window dims.");
+  }
+  if (!exla::nif::get_list(env, argv[6], inserted_window_dims))
+  {
+    return exla::nif::error(env, "Unable to get update window dims.");
+  }
+  if (!exla::nif::get_list(env, argv[7], scatter_dims_to_operand_dims))
+  {
+    return exla::nif::error(env, "Unable to get update window dims.");
+  }
+
+  xla::ScatterDimensionNumbers scatter_dim_numbers;
+
+  scatter_dim_numbers.set_index_vector_dim(index_vector_dim);
+
+
+  for (size_t i = 0; i < update_window_dims.size(); i++)
+  {
+    // scatter_dim_numbers.set_update_window_dims(i, update_window_dims[i]);
+    scatter_dim_numbers.add_update_window_dims(update_window_dims[i]);
+  }
+
+  for (size_t i = 0; i < inserted_window_dims.size(); i++)
+  {
+    scatter_dim_numbers.add_inserted_window_dims(inserted_window_dims[i]);
+  }
+
+  for (size_t i = 0; i < scatter_dims_to_operand_dims.size(); i++)
+  {
+    scatter_dim_numbers.add_scatter_dims_to_operand_dims(scatter_dims_to_operand_dims[i]);
+  }
+
+  xla::XlaOp op = xla::Scatter(
+      *target,
+      *indices,
+      *updates,
+      *scatter_fn,
+      scatter_dim_numbers,
+      false);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
 ERL_NIF_TERM map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 4) {
     return exla::nif::error(env, "Bad argument count.");
@@ -1156,6 +1300,30 @@ ERL_NIF_TERM map(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 
   xla::XlaOp op = xla::Map(*builder, {*operand}, *computation, dimensions);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
+}
+
+ERL_NIF_TERM while_loop(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  xla::XlaComputation* cond_fn;
+  xla::XlaComputation* body_fn;
+  xla::XlaOp* init_value;
+
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[0], cond_fn)) {
+    return exla::nif::error(env, "Unable to get condition computation.");
+  }
+  if (!exla::nif::get<xla::XlaComputation>(env, argv[1], body_fn)) {
+    return exla::nif::error(env, "Unable to get body computation.");
+  }
+  if (!exla::nif::get<xla::XlaOp>(env, argv[2], init_value)) {
+    return exla::nif::error(env, "Unable to get initial value.");
+  }
+
+  xla::XlaOp op = xla::While(*cond_fn, *body_fn, *init_value);
 
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
@@ -1599,13 +1767,12 @@ ERL_NIF_TERM lu(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
+  if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   xla::XlaOp* operand;
   bool full_matrices;
-  int config_int;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");
@@ -1613,33 +1780,15 @@ ERL_NIF_TERM qr(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[1], &full_matrices)) {
     return exla::nif::error(env, "Unable to get full matrices flag.");
   }
-  if (!exla::nif::get(env, argv[2], &config_int)) {
-    return exla::nif::error(env, "Unable to get precision configuration.");
-  }
 
-  xla::PrecisionConfig::Precision precision;
-  switch (config_int) {
-    case 0:
-      precision = xla::PrecisionConfig::DEFAULT;
-      break;
-    case 1:
-      precision = xla::PrecisionConfig::HIGH;
-      break;
-    case 2:
-      precision = xla::PrecisionConfig::HIGHEST;
-      break;
-    default:
-      LOG(ERROR) << "Invalid precision configuration";
-      return exla::nif::error(env, "Invalid precision configuration");
-  }
+  xla::XlaOp q, r;
 
-  EXLA_ASSIGN_OR_RETURN_NIF(xla::QRDecompositionResult qr_result,
-    xla::QRDecomposition(*operand, full_matrices, 128, precision), env);
+  QrExplicit(*operand, full_matrices, q, r);
 
-  ERL_NIF_TERM q = exla::nif::make<xla::XlaOp>(env, qr_result.q);
-  ERL_NIF_TERM r = exla::nif::make<xla::XlaOp>(env, qr_result.r);
+  ERL_NIF_TERM q_term = exla::nif::make<xla::XlaOp>(env, q);
+  ERL_NIF_TERM r_term = exla::nif::make<xla::XlaOp>(env, r);
 
-  return exla::nif::ok(env, enif_make_tuple2(env, q, r));
+  return exla::nif::ok(env, enif_make_tuple2(env, q_term, r_term));
 }
 
 ERL_NIF_TERM svd(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1738,106 +1887,202 @@ ERL_NIF_TERM triangular_solve(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[
   return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-// ExlaClient Functions
+// Infeed/Outfeed
 
-ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  int num_replicas;
-  int intra_op_parallelism_threads;
+  xla::XlaOp* token;
+  xla::Shape* shape;
 
-  if (!exla::nif::get(env, argv[0], &num_replicas)) {
-    return exla::nif::error(env, "Unable to get num_replicas.");
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], token)) {
+    return exla::nif::error(env, "Unable to get token.");
   }
-  if (!exla::nif::get(env, argv[1], &intra_op_parallelism_threads)) {
-    return exla::nif::error(env, "Unable to get intra_op_parallelism_threads.");
+  if (!exla::nif::get<xla::Shape>(env, argv[1], shape)) {
+    return exla::nif::error(env, "Unable to get shape.");
   }
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
-    exla::GetHostClient(num_replicas, intra_op_parallelism_threads), env);
 
-  return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
+  // TODO(seanmor5): Determine if default config is optimal
+  xla::XlaOp op = xla::InfeedWithToken(*token, *shape);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM get_cuda_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
+ERL_NIF_TERM outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
-  int num_replicas;
-  int intra_op_parallelism_threads;
-  double memory_fraction;
-  bool preallocate;
+  xla::XlaOp* operand;
+  xla::XlaOp* token;
+  xla::Shape* shape_with_layout;
 
-  if (!exla::nif::get(env, argv[0], &num_replicas)) {
-    return exla::nif::error(env, "Unable to get number of replicas.");
+  if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
+    return exla::nif::error(env, "Unable to get operand.");
   }
-  if (!exla::nif::get(env, argv[1], &intra_op_parallelism_threads)) {
-    return exla::nif::error(env, "Unable to get number of parallelism threads.");
+  if (!exla::nif::get<xla::XlaOp>(env, argv[1], token)) {
+    return exla::nif::error(env, "Unable to get token.");
   }
-  if (!exla::nif::get(env, argv[2], &memory_fraction)) {
-    return exla::nif::error(env, "Unable to get memory fraction.");
+  if (!exla::nif::get<xla::Shape>(env, argv[2], shape_with_layout)) {
+    return exla::nif::error(env, "Unable to get shape.");
   }
-  if (!exla::nif::get(env, argv[3], &preallocate)) {
-    return exla::nif::error(env, "Unable to get preallocate flag.");
-  }
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
-    exla::GetGpuClient(num_replicas,
-                      intra_op_parallelism_threads,
-                      "CUDA",
-                      memory_fraction,
-                      preallocate), env);
 
-  return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
+  // TODO(seanmor5): Determine if default config is optimal
+  xla::XlaOp op = xla::OutfeedWithToken(*operand, *token, *shape_with_layout, "");
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, op));
 }
 
-ERL_NIF_TERM get_rocm_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 4) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  int num_replicas;
-  int intra_op_parallelism_threads;
-  double memory_fraction;
-  bool preallocate;
-
-  if (!exla::nif::get(env, argv[0], &num_replicas)) {
-    return exla::nif::error(env, "Unable to get number of replicas.");
-  }
-  if (!exla::nif::get(env, argv[1], &intra_op_parallelism_threads)) {
-    return exla::nif::error(env, "Unable to get number of parallelism threads.");
-  }
-  if (!exla::nif::get(env, argv[2], &memory_fraction)) {
-    return exla::nif::error(env, "Unable to get memory fraction.");
-  }
-  if (!exla::nif::get(env, argv[3], &preallocate)) {
-    return exla::nif::error(env, "Unable to get preallocate flag.");
-  }
-  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
-    exla::GetGpuClient(num_replicas,
-                       intra_op_parallelism_threads,
-                       "ROCM",
-                       memory_fraction,
-                       preallocate), env);
-
-  return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
-}
-
-ERL_NIF_TERM get_default_device_ordinal(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+ERL_NIF_TERM create_token(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
+  xla::XlaBuilder** builder;
+
+  if (!exla::nif::get<xla::XlaBuilder*>(env, argv[0], builder)) {
+    return exla::nif::error(env, "Unable to get builder.");
+  }
+
+  xla::XlaOp token = xla::CreateToken(*builder);
+
+  return exla::nif::ok(env, exla::nif::make<xla::XlaOp>(env, token));
+}
+
+ERL_NIF_TERM transfer_to_infeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  // TODO(seanmor5): Maybe this should be a reference to the device?
   exla::ExlaClient** client;
+  int device_id;
+  ERL_NIF_TERM data = argv[2];
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
   }
+  if (!exla::nif::get(env, argv[1], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
 
-  int device_ordinal = (*client)->client()->default_device_ordinal();
+  ERL_NIF_TERM head, tail;
+  while (enif_get_list_cell(env, data, &head, &tail)) {
+    const ERL_NIF_TERM* terms;
+    int count;
+    xla::Shape* shape;
 
-  return exla::nif::ok(env, exla::nif::make(env, device_ordinal));
+    if (!enif_get_tuple(env, head, &count, &terms) && count != 2) {
+      return exla::nif::error(env, "Unable to binary-shape tuple.");
+    }
+
+    if (!exla::nif::get<xla::Shape>(env, terms[1], shape)) {
+      return exla::nif::error(env, "Unable to get shape.");
+    }
+
+    xla::Status transfer_status = (*client)->TransferToInfeed(env, terms[0], *shape, device_id);
+
+    if(!transfer_status.ok()) {
+      return exla::nif::error(env, transfer_status.error_message().c_str());
+    }
+
+    data = tail;
+  }
+
+  return exla::nif::ok(env);
+}
+
+ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 5) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  int device_id;
+  ErlNifPid pid;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get(env, argv[1], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
+  if (!enif_get_local_pid(env, argv[3], &pid)) {
+    return exla::nif::error(env, "Unable to get pid.");
+  }
+
+  ERL_NIF_TERM data = argv[2];
+  ERL_NIF_TERM head, tail;
+  while (enif_get_list_cell(env, data, &head, &tail)) {
+    xla::Shape* shape;
+
+    if (!exla::nif::get<xla::Shape>(env, head, shape)) {
+      return exla::nif::error(env, "Unable to get shape.");
+    }
+
+    ErlNifEnv* penv = enif_alloc_env();
+    ERL_NIF_TERM ref = enif_make_copy(penv, argv[4]);
+    auto statusor = (*client)->TransferFromOutfeed(penv, device_id, *shape);
+
+    if (!statusor.ok()) {
+      enif_clear_env(penv);
+      return exla::nif::error(env, statusor.status().error_message().c_str());
+    }
+
+    ERL_NIF_TERM msg = std::move(statusor.ValueOrDie());
+
+    if(!enif_send(env, &pid, penv, enif_make_tuple(penv, 2, ref, msg))) {
+      enif_clear_env(penv);
+    }
+
+    data = tail;
+  }
+
+  return exla::nif::ok(env);
+}
+
+// ExlaClient Functions
+
+ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetHostClient(), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
+}
+
+ERL_NIF_TERM get_gpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  double memory_fraction;
+  bool preallocate;
+
+  if (!exla::nif::get(env, argv[0], &memory_fraction)) {
+    return exla::nif::error(env, "Unable to get memory fraction.");
+  }
+  if (!exla::nif::get(env, argv[1], &preallocate)) {
+    return exla::nif::error(env, "Unable to get preallocate flag.");
+  }
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client,
+    exla::GetGpuClient(memory_fraction, preallocate, xla::GpuAllocatorConfig::Kind::kBFC), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
+}
+
+ERL_NIF_TERM get_tpu_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 0) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaClient* client, exla::GetTpuClient(), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaClient*>(env, client));
 }
 
 ERL_NIF_TERM get_device_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -1879,7 +2124,7 @@ ERL_NIF_TERM get_supported_platforms(ErlNifEnv* env, int argc, const ERL_NIF_TER
 }
 
 ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 6) {
+  if (argc != 7) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
@@ -1890,6 +2135,7 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   int num_replicas;
   int num_partitions;
   bool use_spmd;
+  int device_id;
 
   if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
     return exla::nif::error(env, "Unable to get client.");
@@ -1909,76 +2155,37 @@ ERL_NIF_TERM compile(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get(env, argv[5], &use_spmd)) {
     return exla::nif::error(env, "Unable to get SPMD Partitioning Flag.");
   }
+  if (!exla::nif::get(env, argv[6], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
 
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
 
+  bool compile_portable_executable = false;
+  if (device_id >= 0) {
+    compile_portable_executable = true;
+    build_options.set_device_ordinal(device_id);
+  }
+
   EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaExecutable* executable,
-    (*client)->Compile(*computation, argument_layouts, build_options, false), env);
+    (*client)->Compile(*computation, argument_layouts, build_options, compile_portable_executable), env);
 
   return exla::nif::ok(env, exla::nif::make<exla::ExlaExecutable*>(env, executable));
-}
-
-ERL_NIF_TERM await_streams(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 3) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  exla::ExlaClient** client;
-  exla::ExlaBuffer** buffer;
-  bool keep_on_device;
-
-  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
-    return exla::nif::error(env, "Unable to get client.");
-  }
-  if (!exla::nif::get(env, argv[1], buffer)) {
-    return exla::nif::error(env, "Unable to get buffer.");
-  }
-  if (!exla::nif::get(env, argv[2], &keep_on_device)) {
-    return exla::nif::error(env, "Unable to get keep on device flag.");
-  }
-
-  exla::ExlaDevice* device = (*buffer)->device();
-
-  xla::Status status = device->SynchronizeAllActivity();
-
-  if (!status.ok()) {
-    return exla::nif::error(env, status.error_message().c_str());
-  }
-
-  EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-                            exla::ExlaBuffer::DecomposeBufferToTerm(env, *buffer, keep_on_device),
-                            env);
-
-  // We've already created a reference to this buffer
-  // but we're creating one again in the above, so
-  // we need to ensure this buffer doesn't get double
-  // freed. This is probably bad design
-  if (keep_on_device) {
-    *buffer = nullptr;
-  }
-
-  return exla::nif::ok(env, term);
 }
 
 // ExlaExecutable Functions
 
 ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 11) {
+  if (argc != 5) {
     return exla::nif::error(env, "Bad argument count.");
   }
 
   exla::ExlaClient** client;
   exla::ExlaExecutable** executable;
-  xla::Shape* output_shape;
-  int run_id;
-  int rng_seed;
-  int launch_id;
-  int replica;
-  int partition;
-  bool async_run;
   bool keep_on_device;
+  int device_id;
 
   ERL_NIF_TERM arguments = argv[2];
 
@@ -1988,36 +2195,15 @@ ERL_NIF_TERM run(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!exla::nif::get<exla::ExlaExecutable*>(env, argv[1], executable)) {
     return exla::nif::error(env, "Unable to get executable.");
   }
-  if (!exla::nif::get<xla::Shape>(env, argv[3], output_shape)) {
-    return exla::nif::error(env, "Unable to get output shape.");
-  }
-  if (!exla::nif::get(env, argv[4], &run_id)) {
-    return exla::nif::error(env, "Unable to get Run ID.");
-  }
-  if (!exla::nif::get(env, argv[5], &rng_seed)) {
-    return exla::nif::error(env, "Unable to get RNG Seed.");
-  }
-  if (!exla::nif::get(env, argv[6], &launch_id)) {
-    return exla::nif::error(env, "Unable to get Launch ID.");
-  }
-  if (!exla::nif::get(env, argv[7], &replica)) {
-    return exla::nif::error(env, "Unable to get replica.");
-  }
-  if (!exla::nif::get(env, argv[8], &partition)) {
-    return exla::nif::error(env, "Unable to get partition.");
-  }
-  if (!exla::nif::get(env, argv[9], &async_run)) {
-    return exla::nif::error(env, "Unable to get async run flag.");
-  }
-  if (!exla::nif::get(env, argv[10], &keep_on_device)) {
+  if (!exla::nif::get(env, argv[3], &keep_on_device)) {
     return exla::nif::error(env, "Unable to get keep on device flag.");
+  }
+  if (!exla::nif::get(env, argv[4], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
   }
 
   EXLA_ASSIGN_OR_RETURN_NIF(ERL_NIF_TERM term,
-    (*executable)->Run(env, arguments, *output_shape,
-                       replica, partition,
-                       run_id, rng_seed,
-                       launch_id, async_run, keep_on_device), env);
+     (*executable)->Run(env, arguments, keep_on_device, device_id), env);
 
   return term;
 }
@@ -2047,56 +2233,6 @@ ERL_NIF_TERM start_log_sink(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
   return exla::nif::ok(env);
 }
 
-ERL_NIF_TERM compile_aot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]){
-  if (argc != 8) {
-    return exla::nif::error(env, "Bad argument count.");
-  }
-
-  xla::XlaComputation* computation;
-  std::string function_name, pbtext_path, header_path, object_path, class_name, target_triple, target_features;
-
-  if (!exla::nif::get<xla::XlaComputation>(env, argv[0], computation)) {
-    return exla::nif::error(env, "Unable to get computation.");
-  }
-  if (!exla::nif::get(env, argv[1], pbtext_path)) {
-    return exla::nif::error(env, "Unable to get Graph Config Path.");
-  }
-  if (!exla::nif::get(env, argv[2], header_path)) {
-    return exla::nif::error(env, "Unable to get header path.");
-  }
-  if (!exla::nif::get(env, argv[3], object_path)) {
-    return exla::nif::error(env, "Unable to get object path.");
-  }
-  if (!exla::nif::get(env, argv[4], function_name)) {
-    return exla::nif::error(env, "Unable to get function name.");
-  }
-  if (!exla::nif::get(env, argv[5], class_name)) {
-    return exla::nif::error(env, "Unable to get class name.");
-  }
-  if (!exla::nif::get(env, argv[6], target_triple)) {
-    return exla::nif::error(env, "Unable to get target triple.");
-  }
-  if (!exla::nif::get(env, argv[7], target_features)) {
-    return exla::nif::error(env, "Unable to get target features.");
-  }
-
-  xla::Status compile_status =
-    exla::CompileComputation(*computation,
-                             pbtext_path,
-                             header_path,
-                             object_path,
-                             function_name,
-                             class_name,
-                             target_triple,
-                             target_features);
-
-  if(!compile_status.ok()) {
-    return exla::nif::error(env, compile_status.error_message().c_str());
-  }
-
-  return exla::nif::ok(env);
-}
-
 static ErlNifFunc exla_funcs[] = {
   // XlaBuilder
   {"new_builder", 1, new_builder},
@@ -2104,24 +2240,24 @@ static ErlNifFunc exla_funcs[] = {
   {"build", 2, build},
   {"parameter", 4, parameter},
   // ExlaClient
-  {"get_host_client", 2, get_host_client},
-  {"get_cuda_client", 4, get_cuda_client},
-  {"get_rocm_client", 4, get_rocm_client},
+  {"get_host_client", 0, get_host_client},
+  {"get_gpu_client", 2, get_gpu_client},
+  {"get_tpu_client", 0, get_tpu_client},
   {"get_device_count", 1, get_device_count},
-  {"get_default_device_ordinal", 1, get_default_device_ordinal},
   {"get_supported_platforms", 0, get_supported_platforms},
-  {"compile", 6, compile, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  {"await_streams_cpu", 3, await_streams, ERL_NIF_DIRTY_JOB_CPU_BOUND},
-  {"await_streams_io", 3, await_streams, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"compile", 7, compile},
   // ExlaBuffer
   {"binary_to_device_mem", 4, binary_to_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"read_device_mem", 2, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"read_device_mem", 3, read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"transfer_to_infeed", 3, transfer_to_infeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"transfer_from_outfeed", 5, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
-  {"run_io", 11, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"run_cpu", 11, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+  {"run_io", 5, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
   // Shape
   {"make_shape", 2, make_shape},
+  {"make_token_shape", 0, make_token_shape},
   {"make_tuple_shape", 1, make_tuple_shape},
   {"get_shape_info", 1, get_shape_info},
   // Element-wise Binary
@@ -2198,6 +2334,7 @@ static ErlNifFunc exla_funcs[] = {
   {"slice", 4, slice},
   {"dynamic_slice", 3, dynamic_slice},
   {"dynamic_update_slice", 3, dynamic_update_slice},
+  {"gather", 7, gather},
   // Tensor Creation
   {"rng_normal", 3, rng_normal},
   {"rng_uniform", 3, rng_uniform},
@@ -2205,9 +2342,11 @@ static ErlNifFunc exla_funcs[] = {
   // Functional Ops
   {"reduce", 4, reduce},
   {"variadic_reduce", 5, variadic_reduce},
-  {"reduce_window", 7, reduce_window},
+  {"window_reduce", 7, window_reduce},
   {"select_and_scatter", 8, select_and_scatter},
+  {"scatter", 8, scatter},
   {"map", 4, map},
+  {"while", 3, while_loop},
   // Shape/Type Manipulation
   {"broadcast_in_dim", 3, broadcast_in_dim},
   {"reshape", 2, reshape},
@@ -2229,13 +2368,15 @@ static ErlNifFunc exla_funcs[] = {
   {"cholesky", 1, cholesky},
   {"eigh", 2, eigh},
   {"lu", 1, lu},
-  {"qr", 3, qr},
+  {"qr", 2, qr},
   {"triangular_solve", 6, triangular_solve},
   {"svd", 2, svd},
+  // Infeed/Outfeed
+  {"infeed", 2, infeed},
+  {"outfeed", 3, outfeed},
+  {"create_token", 1, create_token},
   // Log Sink
-  {"start_log_sink", 1, start_log_sink},
-  // HLO Functions
-  {"compile_aot", 8, compile_aot}
+  {"start_log_sink", 1, start_log_sink}
 };
 
 ERL_NIF_INIT(Elixir.EXLA.NIF, exla_funcs, &load, NULL, NULL, NULL);

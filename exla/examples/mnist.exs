@@ -1,8 +1,6 @@
 defmodule MNIST do
   import Nx.Defn
 
-  @default_defn_compiler {EXLA, run_options: [keep_on_device: true]}
-
   defn init_random_params do
     w1 = Nx.random_normal({784, 128}, 0.0, 0.1, names: [:input, :layer])
     b1 = Nx.random_normal({128}, 0.0, 0.1, names: [:layer])
@@ -71,7 +69,7 @@ defmodule MNIST do
         :inets.start()
         :ssl.start()
 
-        {:ok, {_status, _response, data}} = :httpc.request(:get, {base_url ++ zip, []}, [], [])
+        {:ok, {_status, _response, data}} = :httpc.request(base_url ++ zip)
         File.mkdir_p!("tmp")
         File.write!(path, data)
 
@@ -146,6 +144,8 @@ defmodule MNIST do
   end
 end
 
+EXLA.set_preferred_defn_options([:tpu, :cuda, :rocm, :host])
+
 {train_images, train_labels} =
   MNIST.download('train-images-idx3-ubyte.gz', 'train-labels-idx1-ubyte.gz')
 
@@ -159,12 +159,5 @@ IO.puts("Bring the parameters back from the device and print them")
 final_params = Nx.backend_transfer(final_params)
 IO.inspect(final_params)
 
-IO.puts("AOT-compiling a trained neural network that predicts a batch")
-Nx.Defn.aot(
-  MNIST.Trained,
-  [{:predict, &MNIST.predict(final_params, &1), [Nx.template({30, 784}, {:f, 32})]}],
-  compiler: EXLA
-)
-
-IO.puts("The result of the first batch against the AOT-compiled one")
-IO.inspect MNIST.Trained.predict(hd(train_images))
+IO.puts("The result of the first batch against the trained network")
+IO.inspect(MNIST.predict(hd(train_images)))

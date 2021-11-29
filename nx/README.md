@@ -10,7 +10,11 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Tensors backends, which enables the main `Nx` API to be used to manipulate binary tensors, GPU-backed tensors, sparse matrices, and more;
 
-  * Numerical definitions, known as `defn`, provide multi-stage compilation of tensor operations to multiple targets, such as highly specialized CPU code or the GPU. The compilation can happen either ahead-of-time (AOT) or just-in-time (JIT) with a compiler of your choice;
+  * Numerical definitions, known as `defn`, is a subset of Elixir that is compilable to multiple targets, including GPUs. See [EXLA](https://github.com/elixir-nx/nx/tree/main/exla) for just-in-time (JIT) compilation for CPUs/GPUs/TPUs and [Torchx](https://github.com/elixir-nx/nx/tree/main/torchx) for CPUs/GPUs support;
+
+  * Support for data streaming and hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
+
+  * Support for linear algebra primitives via `Nx.LinAlg`;
 
 You can find planned enhancements and features in the issues tracker. If you need one particular feature to move forward, don't hesitate to let us know and give us feedback.
 
@@ -47,6 +51,8 @@ Here are some introductory resources with more information on Nx as a whole:
   * [The ThinkingElixir podcast where José Valim unveiled Nx](https://thinkingelixir.com/podcast-episodes/034-jose-valim-reveals-project-nx/) (audio - starts around 8 minutes in)
 
   * [A talk by José Valim at Lambda Days 2021 where he builds a neural network from scratch with Nx](https://www.youtube.com/watch?v=fPKMmJpAGWc) (video)
+
+  * [A screencast by José Valim announcing Livebook, where he also showcases Nx and Axon (a neural network library built on top of Nx)](https://www.youtube.com/watch?v=RKvqc-UEe34) (video)
 
 ## Installation
 
@@ -107,13 +113,17 @@ defmodule MyModule do
 end
 ```
 
-`defn` supports multiple compiler backends, which can compile said functions to run on the CPU or in the GPU. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
+You can now invoke it as:
 
 ```elixir
-@defn_compiler {EXLA, client: :host}
-defn softmax(t) do
-  Nx.exp(t) / Nx.sum(Nx.exp(t))
-end
+MyModule.softmax(Nx.tensor([1, 2, 3]))
+```
+
+`defn` supports custom compilers, which can compile said functions to run on the CPU or in the GPU on the fly. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
+
+```elixir
+Nx.Defn.default_options(compiler: EXLA)
+MyModule.softmax(some_tensor)
 ```
 
 Once `softmax` is called, `Nx.Defn` will invoke `EXLA` to emit a just-in-time and high-specialized compiled version of the code, tailored to the input tensors type and shape. By passing `client: :cuda` or `client: :rocm`, the code can be compiled for the GPU. For reference, here are some benchmarks of the function above when called with a tensor of one million random float values:

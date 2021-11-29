@@ -22,8 +22,8 @@ defmodule Nx.BinaryBackend do
   ## Creation
 
   @impl true
-  def scalar(%{type: type, shape: shape} = out, scalar, _backend_options) do
-    data = :binary.copy(number_to_binary(scalar, type), Nx.size(shape))
+  def constant(%{type: type, shape: shape} = out, constant, _backend_options) do
+    data = :binary.copy(number_to_binary(constant, type), Nx.size(shape))
     from_binary(out, data)
   end
 
@@ -156,11 +156,31 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def to_batched_list(out, %{type: {_, size}} = tensor) do
-    bitsize = Nx.size(out) * size
+  def to_batched_list(out, %{type: {_, size}} = tensor, opts) do
+    leftover = opts[:leftover]
 
-    for <<data::bitstring-size(bitsize) <- to_binary(tensor)>> do
-      from_binary(out, data)
+    input_size = Nx.size(tensor)
+
+    batch_size = Nx.size(out)
+    batch_bitsize = batch_size * size
+
+    remainder = rem(input_size, batch_size)
+
+    to_add = if remainder != 0, do: batch_size - remainder, else: 0
+
+    tensor_bin =
+      case to_binary(tensor) do
+        bin when leftover == :repeat and to_add != 0 ->
+          diff = to_add * size
+          <<wrapped::size(diff)-bitstring, _::bitstring>> = bin
+          bin <> wrapped
+
+        bin ->
+          bin
+      end
+
+    for <<batch::size(batch_bitsize)-bitstring <- tensor_bin>> do
+      from_binary(out, batch)
     end
   end
 
@@ -170,7 +190,7 @@ defmodule Nx.BinaryBackend do
   ## Shape
 
   @impl true
-  def reshape(out, tensor, _shape), do: from_binary(out, to_binary(tensor))
+  def reshape(out, tensor), do: from_binary(out, to_binary(tensor))
 
   @impl true
   def squeeze(out, tensor, _axes), do: from_binary(out, to_binary(tensor))
@@ -280,8 +300,8 @@ defmodule Nx.BinaryBackend do
   # We ignore the out because we need to recur over the shape
   # as we transpose and build the rest.
   @impl true
-  def pad(_out, t, pad_value, padding_config) do
-    pad_value = to_scalar(pad_value)
+  def pad(out, t, pad_value, padding_config) do
+    pad_value = to_binary(as_type(out, pad_value))
 
     case t.shape do
       {} ->
@@ -315,25 +335,20 @@ defmodule Nx.BinaryBackend do
     view = aggregate_axes(to_binary(t), [tuple_size(shape) - 1], shape, size)
     new_shape = pad_in_dim(shape, tuple_size(shape) - 1, edge_low, edge_high, interior)
 
-    {edge_low_padding, edge_high_padding, interior_padding} =
-      match_types [type] do
-        edge_high_padding =
-          if edge_high <= 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_high, into: <<>>, do: <<write!(value, 0)>>)
+    edge_high_padding =
+      if edge_high <= 0,
+        do: <<>>,
+        else: for(_ <- 1..edge_high, into: <<>>, do: value)
 
-        edge_low_padding =
-          if edge_low <= 0,
-            do: <<>>,
-            else: for(_ <- 1..edge_low, into: <<>>, do: <<write!(value, 0)>>)
+    edge_low_padding =
+      if edge_low <= 0,
+        do: <<>>,
+        else: for(_ <- 1..edge_low, into: <<>>, do: value)
 
-        interior_padding =
-          if interior == 0,
-            do: <<>>,
-            else: for(_ <- 1..interior, into: <<>>, do: <<write!(value, 0)>>)
-
-        {edge_low_padding, edge_high_padding, interior_padding}
-      end
+    interior_padding =
+      if interior == 0,
+        do: <<>>,
+        else: for(_ <- 1..interior, into: <<>>, do: value)
 
     interior_padding_size = interior * size
 
@@ -436,24 +451,80 @@ defmodule Nx.BinaryBackend do
   ## Two-element
 
   @impl true
-  def outer(out, %{type: left_type} = t1, %{type: right_type} = t2) do
-    b1 = to_binary(t1)
-    b2 = to_binary(t2)
-
-    data =
-      match_types [left_type, right_type] do
-        for <<match!(left, 0) <- b1>>,
-            <<match!(right, 1) <- b2>>,
-            into: <<>>,
-            do: number_to_binary(read!(left, 0) * read!(right, 1), out.type)
-      end
-
+  def dot(out, left, contract_axes1, [], right, contract_axes2, []) do
+    # dot/4 is directed to this specific clause so we can keep a more efficient implementation
+    # for non-batched dot products. See the clause below for batched dot products
+    data = bin_dot(left, contract_axes1, right, contract_axes2, out.type)
     from_binary(out, data)
   end
 
-  @impl true
-  def dot(out, %{type: t1} = left, axes1, %{type: t2} = right, axes2) do
-    bin_zip_reduce(out, left, axes1, right, axes2, 0, fn lhs, rhs, acc ->
+  def dot(
+        out,
+        %{shape: left_shape, type: {_, left_size}, names: left_names} = left,
+        left_contract_axes,
+        left_batch_axes,
+        %{shape: right_shape, type: {_, right_size}, names: right_names} = right,
+        right_contract_axes,
+        right_batch_axes
+      ) do
+    left_binary = to_binary(left)
+    right_binary = to_binary(right)
+
+    left_batch_contract_axes =
+      Enum.map(left_contract_axes, fn axis -> axis - length(left_batch_axes) end)
+
+    right_batch_contract_axes =
+      Enum.map(right_contract_axes, fn axis -> axis - length(right_batch_axes) end)
+
+    {left_batch_shape, _left_batch_names} =
+      Nx.Shape.contract(left_shape, left_batch_axes, left_names, false)
+
+    {right_batch_shape, _right_batch_names} =
+      Nx.Shape.contract(right_shape, right_batch_axes, right_names, false)
+
+    left_batch_item_length = Nx.size(left_batch_shape)
+    right_batch_item_length = Nx.size(right_batch_shape)
+
+    batch_count = Enum.reduce(left_batch_axes, 1, fn x, acc -> elem(left_shape, x) * acc end)
+
+    range = if batch_count == 0, do: [], else: 0..(batch_count - 1)
+
+    left_batch_item_template = %{left | shape: left_batch_shape}
+    right_batch_item_template = %{right | shape: right_batch_shape}
+
+    bin_result =
+      for index <- range do
+        left_offset = index * left_batch_item_length
+        right_offset = index * right_batch_item_length
+
+        left_offset_bits = left_offset * left_size
+        right_offset_bits = right_offset * right_size
+
+        left_batch_item_bits = left_batch_item_length * left_size
+        right_batch_item_bits = right_batch_item_length * right_size
+
+        <<_::bitstring-size(left_offset_bits),
+          left_batch_item_binary::bitstring-size(left_batch_item_bits),
+          _::bitstring>> = left_binary
+
+        <<_::bitstring-size(right_offset_bits),
+          right_batch_item_binary::bitstring-size(right_batch_item_bits),
+          _::bitstring>> = right_binary
+
+        bin_dot(
+          from_binary(left_batch_item_template, left_batch_item_binary),
+          left_batch_contract_axes,
+          from_binary(right_batch_item_template, right_batch_item_binary),
+          right_batch_contract_axes,
+          out.type
+        )
+      end
+
+    from_binary(out, bin_result)
+  end
+
+  defp bin_dot(%{type: t1} = left, contract_axes1, %{type: t2} = right, contract_axes2, type) do
+    bin_zip_reduce(left, contract_axes1, right, contract_axes2, type, 0, fn lhs, rhs, acc ->
       res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
       {res, res}
     end)
@@ -592,19 +663,8 @@ defmodule Nx.BinaryBackend do
   defp element_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
   defp element_remainder(_, a, b), do: :math.fmod(a, b)
 
-  defp element_power({type, _}, a, b) when type in [:s, :u], do: integer_pow(a, b)
+  defp element_power({type, _}, a, b) when type in [:s, :u], do: Integer.pow(a, b)
   defp element_power(_, a, b), do: :math.pow(a, b)
-
-  # TODO: Use Integer.pow on Elixir v1.12
-  defp integer_pow(base, exponent) when is_integer(base) and is_integer(exponent) do
-    if exponent < 0, do: :erlang.error(:badarith, [base, exponent])
-    guarded_pow(base, exponent)
-  end
-
-  defp guarded_pow(_, 0), do: 1
-  defp guarded_pow(b, 1), do: b
-  defp guarded_pow(b, e) when (e &&& 1) == 0, do: guarded_pow(b * b, e >>> 1)
-  defp guarded_pow(b, e), do: b * guarded_pow(b * b, e >>> 1)
 
   defp element_bitwise_and(_, a, b), do: :erlang.band(a, b)
   defp element_bitwise_or(_, a, b), do: :erlang.bor(a, b)
@@ -854,11 +914,10 @@ defmodule Nx.BinaryBackend do
     # as a list because it is handled in the Nx module before
     # lowering to the implementation; however, the padding
     # configuration only accounts for spatial dims
-    # TODO: Use Enum.zip_with on Elixir v1.12
     spatial_padding_config =
-      padding
-      |> Enum.zip(input_dilation)
-      |> Enum.map(fn {{lo, hi}, dilation} -> {lo, hi, dilation - 1} end)
+      Enum.zip_with(padding, input_dilation, fn {lo, hi}, dilation ->
+        {lo, hi, dilation - 1}
+      end)
 
     padding_config = [
       {0, 0, 0},
@@ -871,7 +930,7 @@ defmodule Nx.BinaryBackend do
     batch_size = Nx.size(single_data_dims) * input_size
 
     # We will traverse the input tensor exactly the same as we traversed
-    # the binary in reduce_window, but the window is equal to the filter
+    # the binary in window_reduce, but the window is equal to the filter
     # size of the kernel plus the channel size of the input tensor
     window_shape = Tuple.insert_at(filter_shape, 0, num_input_channels)
 
@@ -1092,13 +1151,30 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def svd(
-        {u_holder, %{type: output_type} = s_holder, v_holder},
+  def eigh(
+        {%{type: output_type} = eigenvals_holder, eigenvecs_holder},
         %{type: input_type, shape: input_shape} = tensor,
         opts
       ) do
     bin = to_binary(tensor)
-    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, output_type, opts)
+    {eigenvals, eigenvecs} = B.Matrix.eigh(bin, input_type, input_shape, output_type, opts)
+
+    {from_binary(eigenvals_holder, eigenvals), from_binary(eigenvecs_holder, eigenvecs)}
+  end
+
+  @impl true
+  def svd(
+        {%{shape: {m, _}} = u_holder, s_holder, %{shape: {_, n}} = v_holder} = outputs,
+        %{type: input_type, shape: input_shape} = tensor,
+        opts
+      ) do
+    if m < n do
+      raise ArgumentError,
+            "SVD not implemented for wide matrices (tensors with shape {m, n} where m < n)"
+    end
+
+    bin = to_binary(tensor)
+    {u, s, v} = B.Matrix.svd(bin, input_type, input_shape, outputs, opts)
     {from_binary(u_holder, u), from_binary(s_holder, s), from_binary(v_holder, v)}
   end
 
@@ -1116,14 +1192,14 @@ defmodule Nx.BinaryBackend do
   @impl true
   def triangular_solve(
         %{type: output_type} = out,
-        %{type: a_type, shape: {rows, rows}} = a,
+        %{type: a_type, shape: {rows, rows} = a_shape} = a,
         %{type: b_type, shape: b_shape} = b,
         opts
       )
-      when b_shape == {rows, rows} or b_shape == {rows} do
+      when tuple_size(b_shape) == 2 or b_shape == {rows} do
     a_data = to_binary(a)
     b_data = to_binary(b)
-    out_bin = B.Matrix.ts(a_data, a_type, b_data, b_type, b_shape, output_type, opts)
+    out_bin = B.Matrix.ts(a_data, a_type, a_shape, b_data, b_type, b_shape, output_type, opts)
     from_binary(out, out_bin)
   end
 
@@ -1131,52 +1207,70 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def all?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: acc, else: 0
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
+        res = if binary_to_number(bin, type) != 0, do: acc, else: 0
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def any?(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = if binary_to_number(bin, type) != 0, do: 1, else: acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
+        res = if binary_to_number(bin, type) != 0, do: 1, else: acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def sum(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 0, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) + acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
+        res = binary_to_number(bin, type) + acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def product(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, 1, opts, fn bin, acc ->
-      res = binary_to_number(bin, type) * acc
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
+        res = binary_to_number(bin, type) * acc
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce_max(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.max(acc, val)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
+        val = binary_to_number(bin, type)
+        res = if acc == :first, do: val, else: Kernel.max(acc, val)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce_min(out, %{type: type} = tensor, opts) do
-    bin_reduce(out, tensor, :first, opts, fn bin, acc ->
-      val = binary_to_number(bin, type)
-      res = if acc == :first, do: val, else: Kernel.min(acc, val)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
+        val = binary_to_number(bin, type)
+        res = if acc == :first, do: val, else: Kernel.min(acc, val)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
@@ -1204,36 +1298,44 @@ defmodule Nx.BinaryBackend do
   defp argmin_or_max(out, %{type: type} = tensor, comparator, axis) do
     opts = if axis, do: [axes: [axis]], else: []
 
-    bin_reduce(out, tensor, {0, :first, -1}, opts, fn bin, {i, cur_extreme_x, cur_extreme_i} ->
-      x = binary_to_number(bin, type)
+    data =
+      bin_reduce(tensor, out.type, {0, :first, -1}, opts, fn bin,
+                                                             {i, cur_extreme_x, cur_extreme_i} ->
+        x = binary_to_number(bin, type)
 
-      if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
-        {i, {i + 1, x, i}}
-      else
-        {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-      end
-    end)
+        if comparator.(x, cur_extreme_x) or cur_extreme_x == :first do
+          {i, {i + 1, x, i}}
+        else
+          {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
+        end
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
   def reduce(out, tensor, acc, opts, fun) do
     each = %{tensor | shape: {}}
 
-    bin_reduce(out, tensor, acc, opts, fn bin, acc ->
-      res = fun.(from_binary(each, bin), acc)
-      {res, res}
-    end)
+    data =
+      bin_reduce(tensor, out.type, acc, opts, fn bin, acc ->
+        res = fun.(from_binary(each, bin), acc)
+        {res, res}
+      end)
+
+    from_binary(out, data)
   end
 
   @impl true
-  def reduce_window(out, tensor, acc, window_dimensions, opts, fun) do
+  def window_reduce(out, tensor, acc, window_dimensions, opts, fun) do
     padding_config = opts[:padding]
     strides = opts[:strides]
     dilations = opts[:window_dilations]
-    acc = to_scalar(acc)
 
     %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
+
+    acc = to_scalar(acc)
 
     data = to_binary(tensor)
     weighted_shape = weighted_shape(padded_shape, size, window_dimensions, dilations)
@@ -1259,52 +1361,58 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def window_sum(out, tensor, window_dimensions, opts) do
+    %{type: type} = out
+
+    init_value = scalar_to_binary(0, type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
+
     fun = fn a, b -> a + b end
-    reduce_window(out, tensor, 0, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
   def window_max(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value =
-      match_types [type] do
-        <<match!(x, 0)>> = Nx.Type.min_value_binary(type)
-        read!(x, 0)
-      end
+    init_value = Nx.Type.min_value_binary(type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> max(a, b) end
-    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
   def window_min(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value =
-      match_types [type] do
-        <<match!(x, 0)>> = Nx.Type.max_value_binary(type)
-        read!(x, 0)
-      end
+    init_value = Nx.Type.max_value_binary(type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> min(a, b) end
-    reduce_window(out, tensor, init_value, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
   def window_product(out, tensor, window_dimensions, opts) do
+    %{type: type} = out
+
+    init_value = scalar_to_binary(1, type)
+    init_value = from_binary(%{out | shape: {}, names: []}, init_value)
+
     fun = fn a, b -> a * b end
-    reduce_window(out, tensor, 1, window_dimensions, opts, fun)
+    window_reduce(out, tensor, init_value, window_dimensions, opts, fun)
   end
 
   @impl true
-  def map(%{type: output_type} = out, %{type: type} = tensor, fun) do
+  def map(%{type: output_type} = out, %{type: {_, size}} = tensor, _opts, fun) do
     data = to_binary(tensor)
+    template = %{tensor | shape: {}}
 
     output_data =
-      match_types [type, output_type] do
-        for <<match!(x, 0) <- data>>, into: <<>> do
-          <<write!(to_scalar(fun.(read!(x, 0))), 1)>>
+      match_types [output_type] do
+        for <<bin::size(size)-bitstring <- data>>, into: <<>> do
+          tensor = put_in(template.data.state, bin)
+          <<write!(to_scalar(fun.(tensor)), 0)>>
         end
       end
 
@@ -1312,7 +1420,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def scatter_window_max(out, tensor, source, window_dimensions, opts, init_value) do
+  def window_scatter_max(out, tensor, source, init_value, window_dimensions, opts) do
     select_and_scatter(
       out,
       tensor,
@@ -1326,7 +1434,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def scatter_window_min(out, tensor, source, window_dimensions, opts, init_value) do
+  def window_scatter_min(out, tensor, source, init_value, window_dimensions, opts) do
     select_and_scatter(
       out,
       tensor,
@@ -1456,6 +1564,86 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
+  def indexed_add(
+        %T{} = out,
+        %T{shape: shape, type: {_, target_size}} = target,
+        %T{shape: {indices_rows, _indices_cols} = indices_shape} = indices,
+        %T{shape: {indices_rows}} = updates
+      ) do
+    indices_bin_list =
+      indices |> to_binary() |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
+
+    offsets_list =
+      match_types [indices.type] do
+        for idx_bin <- indices_bin_list do
+          idx = for <<match!(x, 0) <- idx_bin>>, do: read!(x, 0)
+          offset = index_to_binary_offset(idx, shape)
+          offset * target_size
+        end
+      end
+
+    updates_list =
+      match_types [updates.type] do
+        for <<match!(x, 0) <- to_binary(updates)>>, do: read!(x, 0)
+      end
+
+    {offsets_with_updates, _last_offset} =
+      offsets_list
+      |> Enum.zip(updates_list)
+      |> Enum.group_by(fn {off, _} -> off end, fn {_, upd} -> upd end)
+      |> Enum.sort_by(fn {off, _} -> off end)
+      |> Enum.map_reduce(0, fn {next_offset, upds}, previous_offset ->
+        {{
+           previous_offset + target_size,
+           next_offset,
+           Enum.sum(upds)
+         }, next_offset}
+      end)
+
+    target_binary = to_binary(target)
+
+    offsets_with_updates =
+      List.update_at(offsets_with_updates, 0, fn {_prev, current, update} ->
+        {0, current, update}
+      end)
+
+    {result, tail} =
+      for {previous, current, update} <- offsets_with_updates, reduce: {<<>>, target_binary} do
+        {traversed, to_traverse} ->
+          before_slice_size = current - previous
+
+          match_types [target.type, out.type] do
+            <<before_offset::bitstring-size(before_slice_size), match!(element, 0),
+              to_traverse::bitstring>> = to_traverse
+
+            # this can be a list of binaries because we are accumulation an iodata list
+            before_offset =
+              if target.type == out.type do
+                before_offset
+              else
+                for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+              end
+
+            updated_element = <<write!(read!(element, 0) + update, 1)>>
+
+            {[traversed | [before_offset, updated_element]], to_traverse}
+          end
+      end
+
+    # this can be a list of binaries because we are accumulation an iodata list
+    tail =
+      match_types [target.type] do
+        if target.type == out.type do
+          tail
+        else
+          for <<match!(x, 0) <- tail>>, do: scalar_to_binary(read!(x, 0), out.type)
+        end
+      end
+
+    from_binary(out, IO.iodata_to_binary([result, tail]))
+  end
+
+  @impl true
   def clip(out, tensor, min, max) do
     %{type: out_type} = out
     %T{type: in_type} = tensor
@@ -1480,17 +1668,26 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def slice(out, tensor, start_indices, _lengths, strides) do
+  def slice(out, tensor, start_indices, lengths, strides) do
     # If you think of a slice as drawing a bounding box in the dimensions
     # of the tensor, then it's clear we can simply use a weighted
     # traversal to construct the new tensor
     %T{type: {_, size}, shape: shape} = tensor
     %{shape: output_shape} = out
 
-    if top_dimension_slice?(tuple_size(shape), shape, output_shape) do
+    tensor
+    |> to_binary()
+    |> bin_slice(shape, size, start_indices, lengths, strides, output_shape)
+    |> then(&from_binary(out, &1))
+  end
+
+  defp bin_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
+    start_indices = clamp_indices(start_indices, shape, lengths)
+
+    if hd(strides) == 1 and top_dimension_slice?(tuple_size(shape), shape, output_shape) do
       length = Nx.size(output_shape) * div(size, 8)
       offset = div(length, elem(output_shape, 0)) * hd(start_indices)
-      from_binary(out, binary_part(to_binary(tensor), offset, length))
+      binary_part(data, offset, length)
     else
       # Anchored around the start indices
       weighted_shape = weighted_shape(shape, size, output_shape)
@@ -1498,19 +1695,20 @@ defmodule Nx.BinaryBackend do
 
       # The weighted shape is altered such that we traverse
       # with respect to the stride for each dimension
-      # TODO: Use Enum.zip_with on Elixir v1.12
       weighted_shape =
-        weighted_shape
-        |> Enum.zip(strides)
-        |> Enum.map(fn {{d, dim_size}, s} -> {d, dim_size + (s - 1) * dim_size} end)
+        Enum.zip_with(weighted_shape, strides, fn {d, dim_size}, s ->
+          {d, dim_size + (s - 1) * dim_size}
+        end)
 
-      input_data = to_binary(tensor)
-
-      output_data =
-        IO.iodata_to_binary(weighted_traverse(weighted_shape, input_data, size, offset))
-
-      from_binary(out, output_data)
+      IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
     end
+  end
+
+  defp clamp_indices(start_indices, shape, lengths) do
+    Enum.zip_with([Tuple.to_list(shape), start_indices, lengths], fn [dim_size, idx, len] ->
+      idx = to_scalar(idx)
+      min(max(idx, 0), dim_size - len)
+    end)
   end
 
   defp top_dimension_slice?(1, _, _), do: true
@@ -1522,26 +1720,204 @@ defmodule Nx.BinaryBackend do
   defp top_dimension_slice?(_, _, _), do: false
 
   @impl true
+  def put_slice(out, tensor, start_indices, slice, combine_fn \\ fn _prev, new -> new end) do
+    %T{type: {_, size}, shape: shape} = tensor = as_type(out, tensor)
+    %T{shape: slice_shape} = slice = as_type(out, slice)
+
+    start_indices = clamp_indices(start_indices, shape, Tuple.to_list(slice_shape))
+
+    weighted_shape = weighted_shape(shape, size)
+
+    rank = Nx.rank(shape)
+    ones = List.duplicate(1, rank)
+
+    offsets =
+      slice_shape
+      |> make_anchors(ones, List.to_tuple(ones))
+      |> Enum.map(fn index ->
+        pos =
+          index
+          |> Enum.zip(start_indices)
+          |> Enum.map(fn {x, s} -> x + s end)
+
+        weighted_offset(weighted_shape, pos)
+      end)
+      |> Enum.sort()
+
+    {_, data} =
+      for offset <- offsets, reduce: {to_binary(slice), to_binary(tensor)} do
+        {<<cur_elem::size(size)-bitstring, rest_of_slice::bitstring>>, binary} ->
+          <<before::size(offset)-bitstring, prev_elem::size(size)-bitstring,
+            rest_of_tensor::bitstring>> = binary
+
+          new_elem = combine_fn.(prev_elem, cur_elem)
+
+          {rest_of_slice,
+           <<before::size(offset)-bitstring, new_elem::size(size)-bitstring,
+             rest_of_tensor::bitstring>>}
+      end
+
+    from_binary(out, data)
+  end
+
+  @impl true
+  def take(out, tensor, indices, axis) do
+    # We iterate over the indices in a flat manner,
+    # and take a unit tensor slice along axis given
+    # by each index. Then we concatenate the tensors
+    # along the axis, which gives us the result with
+    # index dimensions flattened and we just reshape.
+
+    %T{type: {_, size}, shape: shape} = tensor
+    %T{type: {_, idx_size}} = indices
+
+    data = to_binary(tensor)
+    tensor_rank = tuple_size(shape)
+    slice_start = List.duplicate(0, tensor_rank)
+    slice_lengths = shape |> Tuple.to_list() |> List.replace_at(axis, 1)
+    slice_shape = List.to_tuple(slice_lengths)
+    strides = List.duplicate(1, tensor_rank)
+
+    slices =
+      for <<bin::size(idx_size)-bitstring <- to_binary(indices)>> do
+        idx = binary_to_number(bin, indices.type)
+
+        if idx < 0 or idx >= elem(shape, axis) do
+          raise ArgumentError,
+                "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+        end
+
+        slice_start = List.replace_at(slice_start, axis, idx)
+
+        slice_data =
+          bin_slice(data, shape, size, slice_start, slice_lengths, strides, slice_shape)
+
+        {slice_data, slice_shape}
+      end
+
+    concat_shape = put_elem(tensor.shape, axis, length(slices))
+    result_data = bin_concatenate(slices, size, axis, concat_shape)
+
+    from_binary(out, result_data)
+  end
+
+  @impl true
+  def take_along_axis(
+        %T{type: output_type} = output,
+        %T{shape: t_shape, type: {_, t_size} = t_type} = tensor,
+        %T{shape: idx_shape, type: {_, idx_size} = idx_type} = indices,
+        axis
+      ) do
+    permutation =
+      tensor
+      |> Nx.axes()
+      |> List.delete(axis)
+      |> List.insert_at(Nx.rank(tensor) - 1, axis)
+
+    inverse_permutation =
+      permutation
+      |> Enum.with_index()
+      |> Enum.sort_by(fn {x, _} -> x end)
+      |> Enum.map(fn {_, i} -> i end)
+
+    shape_list = Tuple.to_list(output.shape)
+    permuted_shape = permutation |> Enum.map(&Enum.at(shape_list, &1)) |> List.to_tuple()
+
+    t_view = tensor |> to_binary() |> aggregate_axes([axis], t_shape, t_size)
+
+    idx_view = indices |> to_binary() |> aggregate_axes([axis], idx_shape, idx_size)
+
+    [t_view, idx_view]
+    |> Enum.zip_with(fn [data_bin, idx_bin] ->
+      match_types [t_type, idx_type, output_type] do
+        data = for <<match!(x, 0) <- data_bin>>, do: x
+
+        for <<match!(x, 1) <- idx_bin>>, into: <<>> do
+          idx = read!(x, 1)
+
+          if idx < 0 or idx >= elem(tensor.shape, axis) do
+            raise ArgumentError,
+                  "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(tensor.shape)}"
+          end
+
+          val = Enum.at(data, idx)
+          <<write!(val, 2)>>
+        end
+      end
+    end)
+    |> then(&from_binary(%{output | shape: permuted_shape}, &1))
+    |> then(&transpose(output, &1, inverse_permutation))
+  end
+
+  @impl true
+  def gather(out, tensor, indices) do
+    %T{type: {_, size}, shape: shape} = tensor
+    %T{type: {_, idx_size}} = indices
+
+    data = to_binary(tensor)
+    rank = tuple_size(shape)
+    byte_size = div(size, 8)
+
+    idx_last_dim_bin_size = rank * idx_size
+
+    new_data =
+      for <<bin::size(idx_last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
+        slice_start =
+          for <<bin::size(idx_size)-bitstring <- bin>>, do: binary_to_number(bin, indices.type)
+
+        offset = index_to_binary_offset(slice_start, shape)
+        binary_part(data, offset * byte_size, byte_size)
+      end
+
+    from_binary(out, new_data)
+  end
+
+  defp index_to_binary_offset(index, shape) when is_list(index) and is_tuple(shape) do
+    {offset, []} =
+      index
+      |> Enum.with_index()
+      |> Enum.reduce(
+        {0, Tuple.to_list(shape)},
+        fn {idx, axis}, {offset, [dim_size | shape]} ->
+          if idx < 0 or idx >= dim_size do
+            raise ArgumentError,
+                  "index #{idx} is out of bounds for axis #{axis} in shape #{inspect(shape)}"
+          end
+
+          {offset + idx * Enum.product(shape), shape}
+        end
+      )
+
+    offset
+  end
+
+  @impl true
   def concatenate(out, tensors, axis) do
     %{shape: output_shape, type: {_, size} = output_type} = out
+
+    tensors
+    |> Enum.map(fn %{shape: shape} = t ->
+      t = as_type(%{t | type: output_type}, t)
+      {to_binary(t), shape}
+    end)
+    |> bin_concatenate(size, axis, output_shape)
+    |> then(&from_binary(out, &1))
+  end
+
+  defp bin_concatenate(binaries_with_shape, size, axis, output_shape) do
     rank = tuple_size(output_shape)
     steps = product_part(output_shape, 0, axis)
 
-    tensors =
-      Enum.map(tensors, fn %{shape: shape} = t ->
-        t = as_type(%{t | type: output_type}, t)
-        {to_binary(t), product_part(shape, axis, rank) * size}
-      end)
-
     data =
       for step <- 1..steps,
-          {binary, product} <- tensors do
+          {binary, shape} <- binaries_with_shape do
+        product = product_part(shape, axis, rank) * size
         before = (step - 1) * product
         <<_::bitstring-size(before), part::bitstring-size(product), _::bitstring>> = binary
         part
       end
 
-    from_binary(out, data)
+    IO.iodata_to_binary(data)
   end
 
   defp product_part(_tuple, n, n), do: 1
@@ -1561,7 +1937,12 @@ defmodule Nx.BinaryBackend do
         output_data =
           match_types [input_type] do
             for <<match!(x, 0) <- data>>, into: <<>> do
-              scalar_to_binary(read!(x, 0), output_type)
+              val =
+                if Nx.Type.integer?(output_type),
+                  do: trunc(read!(x, 0)),
+                  else: read!(x, 0)
+
+              scalar_to_binary(val, output_type)
             end
           end
 
@@ -1585,7 +1966,7 @@ defmodule Nx.BinaryBackend do
     axis = opts[:axis]
 
     comparator =
-      case opts[:comparator] do
+      case opts[:direction] do
         :desc ->
           fn a, b ->
             a = binary_to_number(a, type)
@@ -1598,13 +1979,6 @@ defmodule Nx.BinaryBackend do
             a = binary_to_number(a, type)
             b = binary_to_number(b, type)
             a <= b
-          end
-
-        fun ->
-          fn a, b ->
-            a = binary_to_number(a, type)
-            b = binary_to_number(b, type)
-            to_scalar(fun.(a, b)) != 0
           end
       end
 
@@ -1670,7 +2044,7 @@ defmodule Nx.BinaryBackend do
 
   ## Binary reducers
 
-  defp bin_reduce(out, tensor, acc, opts, fun) do
+  defp bin_reduce(tensor, type, acc, opts, fun) do
     %T{type: {_, size}, shape: shape} = tensor
 
     view =
@@ -1680,50 +2054,41 @@ defmodule Nx.BinaryBackend do
         [to_binary(tensor)]
       end
 
-    data =
-      for axis <- view do
-        {result, _} =
-          for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
-            {_, acc} -> fun.(bin, acc)
-          end
+    for axis <- view, into: <<>> do
+      {result, _} =
+        for <<bin::size(size)-bitstring <- axis>>, reduce: {<<>>, acc} do
+          {_, acc} -> fun.(bin, acc)
+        end
 
-        scalar_to_binary(result, out.type)
-      end
-
-    from_binary(out, data)
+      scalar_to_binary(result, type)
+    end
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [], t2, [], acc, fun) do
+  defp bin_zip_reduce(t1, [], t2, [], type, acc, fun) do
     %{type: {_, s1}} = t1
     %{type: {_, s2}} = t2
     b1 = to_binary(t1)
     b2 = to_binary(t2)
 
-    data =
-      match_types [t1.type, t2.type] do
-        for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
-          {result, _} = fun.(d1, d2, acc)
-          scalar_to_binary(result, type)
-        end
+    match_types [t1.type, t2.type] do
+      for <<d1::size(s1)-bitstring <- b1>>, <<d2::size(s2)-bitstring <- b2>>, into: <<>> do
+        {result, _} = fun.(d1, d2, acc)
+        scalar_to_binary(result, type)
       end
-
-    from_binary(out, data)
+    end
   end
 
-  defp bin_zip_reduce(%{type: type} = out, t1, [_ | _] = axes1, t2, [_ | _] = axes2, acc, fun) do
+  defp bin_zip_reduce(t1, [_ | _] = axes1, t2, [_ | _] = axes2, type, acc, fun) do
     {_, s1} = t1.type
     {_, s2} = t2.type
 
     v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
-    data =
-      for b1 <- v1, b2 <- v2 do
-        {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
-        scalar_to_binary(bin, type)
-      end
-
-    from_binary(out, data)
+    for b1 <- v1, b2 <- v2 do
+      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
+      scalar_to_binary(bin, type)
+    end
   end
 
   # Helper for reducing down a single axis over two tensors,

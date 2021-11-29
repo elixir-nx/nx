@@ -3,97 +3,132 @@ defmodule Nx.Defn.Tree do
   Helper functions to traverse expressions.
   """
 
-  alias Nx.Defn.Expr
+  alias Nx.Defn.{Composite, Expr}
   alias Nx.Tensor, as: T
 
   @doc """
-  Puts new args in the given expression and gives it a new id.
+  Check if the given tree has any of the given hooks in it.
+  """
+  def has_hooks?(tree, hooks) do
+    Composite.reduce(tree, %{}, &detect_hook(&1, &2, hooks))
+    false
+  catch
+    :side_effect -> true
+  end
+
+  defp detect_hook(%T{data: %Expr{op: :token, args: [token]}} = t, cache, hooks) do
+    if Enum.any?(token.hooks, &(hooks[&1.name] || &1.callback)) do
+      throw(:side_effect)
+    else
+      fallback_detect_hook(t, cache, hooks)
+    end
+  end
+
+  defp detect_hook(t, cache, hooks), do: fallback_detect_hook(t, cache, hooks)
+
+  defp fallback_detect_hook(%T{data: %Expr{id: id}} = t, cache, hooks) do
+    case cache do
+      %{^id => _} ->
+        cache
+
+      %{} ->
+        {_, cache} = apply_args(t, cache, &{&1, detect_hook(&1, &2, hooks)})
+        Map.put(cache, id, true)
+    end
+  end
+
+  @doc """
+  Puts new args in the given tensor expression and gives it a new id.
   """
   def put_args(%T{data: %Expr{} = expr} = t, args) do
     %{t | data: %{expr | id: Expr.id(), args: args}}
   end
 
   @doc """
-  Helper to traverse the arguments of a tensor expression.
+  Apples the given function and accumulator to the args of the node.
 
-  Note the arguments of function nodes are never traversed, as it is
-  not always desired to recursively modify them. If you want to modify
-  a function, you will need to build a new function node by wrapping
-  the function node `fun` with the new desired logic.
+  Warning: be very careful when using this function to traverse the expression
+  recursively. If you plan to do so, you should consider also storing the visited
+  nodes to avoid multiple traversals.
   """
-  def traverse_args(expr, acc, fun)
+  def apply_args(expr, acc, fun)
 
-  def traverse_args(%T{data: %Expr{op: :fun, args: args}}, acc, _fun) do
-    {args, acc}
-  end
-
-  def traverse_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
-    {clauses, acc} =
-      Enum.map_reduce(clauses, acc, fn {condition, expr}, acc ->
-        {condition, acc} = fun.(condition, acc)
-        {expr, acc} = composite(expr, acc, fun)
-        {{condition, expr}, acc}
+  def apply_args(%T{data: %Expr{op: :token, args: [token]}}, acc, fun) do
+    {hooks, acc} =
+      Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->
+        {expr, acc} = Composite.traverse(expr, acc, fun)
+        {%{token | expr: expr}, acc}
       end)
 
-    {last, acc} = composite(last, acc, fun)
+    {[%{token | hooks: hooks}], acc}
+  end
+
+  def apply_args(%T{data: %Expr{op: :fun, args: [args, expr, mfa]}}, acc, fun) do
+    {args, acc} = Enum.map_reduce(args, acc, &Composite.traverse(&1, &2, fun))
+    {expr, acc} = Composite.traverse(expr, acc, fun)
+    {[args, expr, mfa], acc}
+  end
+
+  def apply_args(%T{data: %Expr{op: :cond, args: [clauses, last]}}, acc, fun) do
+    {clauses, acc} =
+      Enum.map_reduce(clauses, acc, fn {pred, expr}, acc ->
+        {pred, acc} = fun.(pred, acc)
+        {expr, acc} = Composite.traverse(expr, acc, fun)
+        {{pred, expr}, acc}
+      end)
+
+    {last, acc} = Composite.traverse(last, acc, fun)
     {[clauses, last], acc}
   end
 
-  def traverse_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :while, args: args}}, acc, fun) do
+    [initial, arg, pred, block] = args
+    {initial, acc} = Composite.traverse(initial, acc, fun)
+    {arg, acc} = Composite.traverse(arg, acc, fun)
+    {pred, acc} = fun.(pred, acc)
+    {block, acc} = Composite.traverse(block, acc, fun)
+    {[initial, arg, pred, block], acc}
+  end
+
+  def apply_args(%T{data: %Expr{op: :concatenate, args: [list | args]}}, acc, fun) do
     {list, acc} = Enum.map_reduce(list, acc, fun)
     {[list | args], acc}
   end
 
-  def traverse_args(%T{data: %Expr{args: args}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :slice, args: [tensor, start_indices | args]}}, acc, fun) do
+    {tensor, acc} = fun.(tensor, acc)
+
+    {start_indices, acc} =
+      Enum.map_reduce(start_indices, acc, fn
+        x, acc when is_integer(x) -> {x, acc}
+        x, acc -> fun.(x, acc)
+      end)
+
+    {[tensor, start_indices | args], acc}
+  end
+
+  def apply_args(
+        %T{data: %Expr{op: :put_slice, args: [tensor, start_indices, slice]}},
+        acc,
+        fun
+      ) do
+    {tensor, acc} = fun.(tensor, acc)
+    {slice, acc} = fun.(slice, acc)
+
+    {start_indices, acc} =
+      Enum.map_reduce(start_indices, acc, fn
+        x, acc when is_integer(x) -> {x, acc}
+        x, acc -> fun.(x, acc)
+      end)
+
+    {[tensor, start_indices, slice], acc}
+  end
+
+  def apply_args(%T{data: %Expr{args: args}}, acc, fun) do
     Enum.map_reduce(args, acc, fn
       %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
       arg, acc -> {arg, acc}
     end)
-  end
-
-  @doc """
-  Traverses the given composite type of tensor expressions with `fun`.
-
-  This function exists to handle composite types that may
-  have multiple tensor expressions inside.
-
-  If composite tensor expressions are given, such as a tuple,
-  the composite type is recursively traversed and returned.
-
-  If a non-composite tensor expression is given, the function
-  is invoked for it but not for its arguments (see `traverse_args/3`
-  for that).
-  """
-  def composite(expr, fun) when is_function(fun, 1) do
-    {result, []} = composite(expr, [], fn expr, [] -> {fun.(expr), []} end)
-    result
-  end
-
-  @doc """
-  Traverses the given composite type of tensor expressions with `acc` and `fun`.
-
-  This function exists to handle composite types that may
-  have multiple tensor expressions inside.
-
-  If composite tensor expressions are given, such as a tuple,
-  the composite type is recursively traversed and returned.
-
-  If a non-composite tensor expression is given, the function
-  is invoked for it but not for its arguments (see `traverse_args/3`
-  for that).
-  """
-  def composite(tuple, acc, fun) when is_tuple(tuple) and is_function(fun, 2) do
-    {list, acc} = Enum.map_reduce(Tuple.to_list(tuple), acc, &composite(&1, &2, fun))
-    {List.to_tuple(list), acc}
-  end
-
-  def composite(%T{} = expr, acc, fun) when is_function(fun, 2) do
-    fun.(expr, acc)
-  end
-
-  def composite(other, _acc, _fun) do
-    raise ArgumentError,
-          "expected a tensor expression or a tuple of tensor expressions, got: #{inspect(other)}"
   end
 
   ## Type helpers
@@ -132,32 +167,24 @@ defmodule Nx.Defn.Tree do
   end
 
   defp rewrite_type(expr, fun) do
-    {res, _} = rewrite_type(expr, %{}, fun)
+    {res, _} = Composite.traverse(expr, %{}, &rewrite_type(&1, &2, fun))
     res
   end
 
-  defp rewrite_type(expr, cache, fun) do
-    composite(expr, cache, fn %T{data: %Expr{id: id, op: op}} = t, cache ->
-      case cache do
-        %{^id => res} ->
-          {res, cache}
+  defp rewrite_type(%T{data: %Expr{id: id, op: op}} = t, cache, fun) do
+    case cache do
+      %{^id => res} ->
+        {res, cache}
 
-        %{} ->
-          {args, cache} = traverse_args(t, cache, &rewrite_type(&1, &2, fun))
-          res = rewrite_type(op, args, t, fun)
-          {res, Map.put(cache, id, res)}
-      end
-    end)
+      %{} ->
+        {args, cache} = apply_args(t, cache, &rewrite_type(&1, &2, fun))
+        res = rewrite_type(op, args, t, fun)
+        {res, Map.put(cache, id, res)}
+    end
   end
 
-  defp rewrite_type(:parameter, _args, t, type_fun) do
+  defp rewrite_type(:parameter, _args, %{data: %{context: :root}} = t, type_fun) do
     Nx.as_type(t, type_fun.(t.type))
-  end
-
-  defp rewrite_type(:fun, [params, _expr, fun], _t, type_fun) do
-    {:arity, arity} = Function.info(fun, :arity)
-    params = Enum.map(params, &%{&1 | type: type_fun.(&1.type)})
-    Expr.fun(params, rewrite_type_fun(arity, fun, type_fun))
   end
 
   defp rewrite_type(:tensor, [arg], t, type_fun) do
@@ -165,7 +192,7 @@ defmodule Nx.Defn.Tree do
     rewrite_type_args(t, type, [Nx.as_type(arg, type)])
   end
 
-  defp rewrite_type(:scalar, [arg], t, type_fun) do
+  defp rewrite_type(:constant, [arg], t, type_fun) do
     type = type_fun.(t.type)
     rewrite_type_args(t, type, [arg])
   end
@@ -174,132 +201,7 @@ defmodule Nx.Defn.Tree do
     rewrite_type_args(t, type_fun.(t.type), args)
   end
 
-  for arity <- 0..15 do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    defp rewrite_type_fun(unquote(arity), op_fun, type_fun) do
-      fn unquote_splicing(args) -> rewrite_type(op_fun.(unquote_splicing(args)), type_fun) end
-    end
-  end
-
   defp rewrite_type_args(%{data: data} = t, type, args) do
     %{t | data: %{data | id: Expr.id(), args: args}, type: type}
-  end
-
-  ## Nx.Defn callbacks
-
-  @doc false
-  def from_compile_args(args, cache) do
-    from_compile_args(args, cache, [])
-  end
-
-  defp from_compile_args([arg | args], cache, vars) when is_function(arg) do
-    from_compile_args(args, [arg | cache], vars)
-  end
-
-  defp from_compile_args([arg | args], cache, vars) when is_tuple(arg) do
-    if arg |> Tuple.to_list() |> Enum.all?(&is_function/1) do
-      from_compile_args(args, [arg | cache], vars)
-    else
-      from_compile_args(args, cache, [arg | vars])
-    end
-  end
-
-  defp from_compile_args([arg | args], cache, vars) do
-    from_compile_args(args, cache, [arg | vars])
-  end
-
-  defp from_compile_args([], cache, vars), do: {cache, Enum.reverse(vars)}
-
-  @doc false
-  def from_runtime_args(args) do
-    args
-    |> Enum.reduce([], &from_runtime_args/2)
-    |> Enum.reverse()
-  end
-
-  defp from_runtime_args(tuple, acc) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.reduce(acc, &from_runtime_args/2)
-
-  defp from_runtime_args(other, acc),
-    do: [from_arg(other) | acc]
-
-  @doc false
-  def from_arg(%T{} = t), do: t
-  def from_arg(number) when is_number(number), do: Nx.tensor(number)
-
-  def from_arg(other) when is_function(other) do
-    raise(
-      ArgumentError,
-      "arguments to defn must be numbers, tensors, and functions. " <>
-        "It may also be a tuple with said elements, although the tuple " <>
-        "must contain only functions or only number/tensors, not both. " <>
-        "Got the following function inside a tuple: #{inspect(other)}"
-    )
-  end
-
-  def from_arg(other) do
-    raise(
-      ArgumentError,
-      "arguments to defn must be numbers, tensors, and functions, or a tuple of said elements. " <>
-        "Got: #{inspect(other)}"
-    )
-  end
-
-  @doc false
-  def args_to_params(args, params) do
-    {args, {[], _}} =
-      args_to(args, {params, 0}, fn _arg, {[param | params], i} ->
-        {Expr.parameter(param, :root, i), {params, i + 1}}
-      end)
-
-    args
-  end
-
-  @doc false
-  def args_to_templates(args, params) do
-    {args, []} =
-      args_to(args, params, fn _arg, [param | params] ->
-        {Nx.template(param, param.type), params}
-      end)
-
-    args
-  end
-
-  @doc false
-  def to_result(tuple) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.map(&to_result/1) |> List.to_tuple()
-
-  def to_result(%T{data: %Expr{}} = t),
-    do: t
-
-  def to_result(other) do
-    raise ArgumentError,
-          "defn must return a tensor expression or a tuple, got: #{inspect(other)}"
-  end
-
-  defp args_to(args, acc, fun) when is_list(args) do
-    Enum.map_reduce(args, acc, fn
-      arg, acc
-      when is_function(arg)
-      when is_tuple(arg) and is_function(elem(arg, 0)) ->
-        {arg, acc}
-
-      arg, acc ->
-        args_to_each(arg, acc, fun)
-    end)
-  end
-
-  defp args_to_each(arg, acc, fun) when is_tuple(arg) do
-    {list, acc} =
-      arg
-      |> Tuple.to_list()
-      |> Enum.map_reduce(acc, &args_to_each(&1, &2, fun))
-
-    {List.to_tuple(list), acc}
-  end
-
-  defp args_to_each(arg, acc, fun) do
-    fun.(arg, acc)
   end
 end

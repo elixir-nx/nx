@@ -3,6 +3,30 @@ defmodule Nx.LinAlgTest do
 
   doctest Nx.LinAlg
 
+  describe "triangular_solve" do
+    test "property" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([[1.0, 2.0, 3.0], [2.0, 2.0, 4.0], [2.0, 0.0, 1.0]])
+      assert Nx.dot(a, Nx.LinAlg.triangular_solve(a, b)) == b
+
+      upper = Nx.transpose(a)
+      assert Nx.dot(upper, Nx.LinAlg.triangular_solve(upper, b, lower: false)) == b
+
+      assert Nx.dot(
+               Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false),
+               upper
+             ) == b
+
+      assert Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose) ==
+               Nx.LinAlg.triangular_solve(upper, b, lower: false)
+
+      assert Nx.dot(
+               Nx.transpose(a),
+               Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
+             ) == b
+    end
+  end
+
   describe "norm/2" do
     test "raises for rank 3 or greater tensors" do
       t = Nx.iota({2, 2, 2})
@@ -39,50 +63,201 @@ defmodule Nx.LinAlgTest do
       assert {q, %{type: output_type} = r} = Nx.LinAlg.qr(t)
       assert t |> Nx.round() |> Nx.as_type(output_type) == q |> Nx.dot(r) |> Nx.round()
 
-      assert round(q, 1) ==
-               Nx.tensor([
-                 [2 / 3, 2 / 3, 1 / 3],
-                 [2 / 3, -1 / 3, -2 / 3],
-                 [1 / 3, -2 / 3, 2 / 3]
-               ])
-               |> round(1)
+      expected_q =
+        Nx.tensor([
+          [2 / 3, 2 / 3, 1 / 3],
+          [2 / 3, -1 / 3, -2 / 3],
+          [1 / 3, -2 / 3, 2 / 3]
+        ])
 
-      assert round(r, 1) ==
-               Nx.tensor([
-                 [3.0, 0.0, 12.0],
-                 [0.0, -3.0, 12.0],
-                 [0.0, 0.0, 6.0]
-               ])
-               |> round(1)
+      assert_all_close(q, expected_q, atol: 1.0e-10)
+
+      expected_r =
+        Nx.tensor([
+          [3.0, 0.0, 12.0],
+          [0.0, -3.0, 12.0],
+          [0.0, 0.0, 6.0]
+        ])
+
+      assert_all_close(r, expected_r, atol: 1.0e-10)
+
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
     end
 
     test "factors rectangular matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
+
+      # Reduced mode
       {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
 
-      assert round(q, 1) ==
-               Nx.tensor([
-                 [0.5774, -0.8165, 0.0],
-                 [0.5774, 0.4082, -0.7071],
-                 [0.5774, 0.4082, 0.7071],
-                 [0.0, 0.0, 0.0]
-               ])
-               |> round(1)
+      expected_q =
+        Nx.tensor([
+          [0.5, -0.5, 0.5],
+          [0.5, 0.5, -0.5],
+          [0.5, 0.5, 0.5],
+          [0.5, -0.5, -0.5]
+        ])
 
-      assert round(r, 1) ==
-               Nx.tensor([
-                 [1.7321, 4.0415, 2.3094],
-                 [0.0, 4.0825, -3.266],
-                 [0.0, 0.0, 2.8284]
-               ])
-               |> round(1)
+      assert_all_close(q, expected_q, atol: 1.0e-10)
 
-      assert Nx.tensor([
-               [1.0, -1.0, 4.0],
-               [1.0, 4.0, -2.0],
-               [1.0, 4.0, 2.0],
-               [0.0, 0.0, 0.0]
-             ]) == q |> Nx.dot(r) |> round(1)
+      expected_r =
+        Nx.tensor([
+          [2.0, 3.0, 2.0],
+          [0.0, 5.0, -2.0],
+          [0.0, 0.0, 4.0]
+        ])
+
+      assert_all_close(r, expected_r, atol: 1.0e-10)
+
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
+
+      # Complete mode
+      {q, r} = Nx.LinAlg.qr(t, mode: :complete)
+
+      expected_q =
+        Nx.tensor([
+          [0.5, -0.5, 0.5, -0.5],
+          [0.5, 0.5, -0.5, -0.5],
+          [0.5, 0.5, 0.5, 0.5],
+          [0.5, -0.5, -0.5, 0.5]
+        ])
+
+      assert_all_close(q, expected_q, atol: 1.0e-10)
+
+      expected_r =
+        Nx.tensor([
+          [2.0, 3.0, 2.0],
+          [0.0, 5.0, -2.0],
+          [0.0, 0.0, 4.0],
+          [0.0, 0.0, 0.0]
+        ])
+
+      assert_all_close(r, expected_r, atol: 1.0e-10)
+
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-10)
+    end
+
+    test "property" do
+      for _ <- 1..10 do
+        # TODO: Implement the case of wide-matrix QR
+        square = Nx.random_uniform({4, 4})
+        tall = Nx.random_uniform({4, 3})
+
+        assert {q, r} = Nx.LinAlg.qr(square)
+        assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)
+
+        assert {q, r} = Nx.LinAlg.qr(tall)
+        assert_all_close(Nx.dot(q, r), tall, atol: 1.0e-6)
+      end
+    end
+  end
+
+  describe "eigh" do
+    test "correctly a eigenvalues and eigenvectors" do
+      t =
+        Nx.tensor([
+          [5, -1, 0, 1, 2],
+          [-1, 5, 0, 5, 3],
+          [0, 0, 4, 7, 2],
+          [1, 5, 7, 0, 9],
+          [2, 3, 2, 9, 2]
+        ])
+
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+
+      # Eigenvalues
+      assert round(eigenvals, 3) ==
+               Nx.tensor([16.394, -9.739, 5.901, 4.334, -0.892])
+
+      # Eigenvectors
+      assert round(eigenvecs, 3) ==
+               Nx.tensor([
+                 [0.112, -0.004, -0.828, 0.440, 0.328],
+                 [0.395, 0.163, 0.533, 0.534, 0.497],
+                 [0.427, 0.326, -0.137, -0.699, 0.452],
+                 [0.603, -0.783, -0.008, -0.079, -0.130],
+                 [0.534, 0.504, -0.103, 0.160, -0.651]
+               ])
+    end
+
+    test "property for matrices with different eigenvalues" do
+      # Generate real symmetric matrices with different eigenvalues
+      # from random matrices based on the relation A = Q.Λ.Q^t
+      # where Λ is the diagonal matrix of eigenvalues and Q is orthogonal matrix.
+
+      for _ <- 1..10 do
+        # Orthogonal matrix from a random matrix
+        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+
+        # Different eigenvalues from random values
+        evals_test =
+          [{1, 3}, {0.4, 0.6}, {0.07, 0.09}]
+          |> Enum.map(fn {low, up} ->
+            if :rand.uniform() - 0.5 > 0 do
+              {low, up}
+            else
+              {-up, -low}
+            end
+          end)
+          |> Enum.map(fn {low, up} ->
+            Nx.random_uniform({1}, low, up, type: {:f, 64})
+          end)
+          |> Nx.concatenate()
+
+        # Symmetric matrix with different eigenvalues
+        # using A = A^t = Q^t.Λ.Q.
+        a =
+          q
+          |> Nx.transpose()
+          |> Nx.multiply(evals_test)
+          |> Nx.dot(q)
+
+        # Eigenvalues and eigenvectors
+        assert {evals, evecs} = Nx.LinAlg.eigh(a)
+        assert_all_close(evals_test, evals, atol: 1.0e-3)
+
+        # Eigenvalue equation
+        evecs_evals = Nx.multiply(evecs, evals)
+        a_evecs = Nx.dot(a, evecs)
+
+        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-3)
+      end
+    end
+
+    test "properties for matrices with close eigenvalues" do
+      # Generate real symmetric matrices with close eigenvalues
+      # from random matrices based on the relation A = Q.Λ.Q^t
+
+      for _ <- 1..10 do
+        # Orthogonal matrix from a random matrix
+        {q, _} = Nx.random_uniform({3, 3}) |> Nx.LinAlg.qr()
+
+        # ensure that eval1 is far apart from the other two eigenvals
+        eval1 = :rand.uniform() * 10 + 10
+        # eval2 is in the range 1 < eval2 < 1.01
+        eval2 = :rand.uniform() * 0.01 + 1
+        # eval3 also in the same range as eval2
+        eval3 = :rand.uniform() * 0.01 + 1
+        evals_test = Nx.tensor([eval1, eval2, eval3])
+
+        # Symmetric matrix with different eigenvalues
+        # using A = A^t = Q^tΛQ.
+        a =
+          q
+          |> Nx.transpose()
+          |> Nx.multiply(evals_test)
+          |> Nx.dot(q)
+          |> round(3)
+
+        # Eigenvalues and eigenvectors
+        assert {evals, evecs} = Nx.LinAlg.eigh(a)
+        assert_all_close(evals_test, evals, atol: 1.0e-2)
+
+        # Eigenvalue equation
+        evecs_evals = Nx.multiply(evecs, evals)
+        a_evecs = Nx.dot(a, evecs)
+        assert_all_close(evecs_evals, a_evecs, atol: 1.0e-2)
+      end
     end
   end
 
@@ -162,11 +337,123 @@ defmodule Nx.LinAlgTest do
              ])
              |> round(3) == round(v, 3)
     end
+
+    # TO-DO investigate why the property test fails
+    # even though we have working tests
+    @tag :skip
+    test "property" do
+      for _ <- 1..10 do
+        square = Nx.random_uniform({4, 4})
+
+        assert {u, d, vt} = Nx.LinAlg.svd(square)
+        m = u |> Nx.shape() |> elem(1)
+        n = vt |> Nx.shape() |> elem(0)
+
+        assert_all_close(
+          u
+          |> Nx.dot(diag(d, m, n))
+          |> Nx.dot(vt),
+          square
+        )
+
+        tall = Nx.random_uniform({4, 3})
+
+        assert {u, d, vt} = Nx.LinAlg.svd(tall)
+        m = u |> Nx.shape() |> elem(1)
+        n = vt |> Nx.shape() |> elem(0)
+
+        assert_all_close(
+          u
+          |> Nx.dot(diag(d, m, n))
+          |> Nx.dot(vt),
+          tall
+        )
+
+        # TODO: SVD does not work for wide matrices and
+        # raises a non-semantic error
+
+        #  wide = Nx.random_uniform({3, 4})
+
+        # assert {u, d, vt} = Nx.LinAlg.svd(wide)
+        # m = u |> Nx.shape() |> elem(1)
+        # n = vt |> Nx.shape() |> elem(0)
+
+        # assert u
+        #        |> Nx.dot(diag(d, m, n))
+        #        |> Nx.dot(vt)
+        #        |> Nx.subtract(wide)
+        #        |> Nx.all_close(1.0e-5)
+      end
+    end
+  end
+
+  describe "lu" do
+    test "property" do
+      for _ <- 1..10 do
+        # Generate random L and U matrices so we can construct
+        # a factorizable A matrix:
+        shape = {4, 4}
+        lower_selector = Nx.iota(shape, axis: 0) |> Nx.greater_equal(Nx.iota(shape, axis: 1))
+        upper_selector = Nx.transpose(lower_selector)
+
+        l_prime =
+          shape
+          |> Nx.random_uniform()
+          |> Nx.multiply(lower_selector)
+
+        u_prime = shape |> Nx.random_uniform() |> Nx.multiply(upper_selector)
+
+        a = Nx.dot(l_prime, u_prime)
+
+        assert {p, l, u} = Nx.LinAlg.lu(a)
+        assert_all_close(p |> Nx.dot(l) |> Nx.dot(u), a)
+      end
+    end
+  end
+
+  describe "cholesky" do
+    test "property" do
+      for _ <- 1..10 do
+        # Generate random L matrix so we can construct
+        # a factorizable A matrix:
+        shape = {4, 4}
+        lower_selector = Nx.iota(shape, axis: 0) |> Nx.greater_equal(Nx.iota(shape, axis: 1))
+
+        l_prime =
+          shape
+          |> Nx.random_uniform()
+          |> Nx.multiply(lower_selector)
+
+        a = Nx.dot(l_prime, Nx.transpose(l_prime))
+
+        assert l = Nx.LinAlg.cholesky(a)
+        assert_all_close(Nx.dot(l, Nx.transpose(l)), a)
+      end
+    end
   end
 
   defp round(tensor, places) do
     Nx.map(tensor, fn x ->
-      Float.round(x, places)
+      Float.round(Nx.to_scalar(x), places)
     end)
+  end
+
+  defp diag(%Nx.Tensor{shape: {r}} = t, m, n) do
+    base_result =
+      t
+      |> Nx.reshape({r, 1})
+      |> Nx.tile([1, n])
+      |> Nx.multiply(Nx.eye(n))
+
+    if m > r do
+      Nx.concatenate([base_result, Nx.broadcast(0, {m - r, n})])
+    else
+      base_result
+    end
+  end
+
+  defp assert_all_close(left, right, opts \\ []) do
+    opts = Keyword.merge([atol: 1.0e-5], opts)
+    assert Nx.all_close(left, right, opts) == Nx.tensor(1, type: {:u, 8})
   end
 end

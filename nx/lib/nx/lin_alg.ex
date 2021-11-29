@@ -8,6 +8,8 @@ defmodule Nx.LinAlg do
 
   alias Nx.Tensor, as: T
 
+  @default_eps 1.0e-10
+
   @doc """
   Performs a Cholesky decomposition of a square matrix.
 
@@ -103,46 +105,46 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, -4]), ord: :inf)
       #Nx.Tensor<
-        s64
-        4
+        f32
+        4.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, -4]), ord: :neg_inf)
       #Nx.Tensor<
-        s64
-        3
+        f32
+        3.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([3, -4, 0, 0]), ord: 0)
       #Nx.Tensor<
-        u64
-        2
+        f32
+        2.0
       >
 
   ### Matrix norms
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -1], [2, -4]]), ord: -1)
       #Nx.Tensor<
-        s64
-        5
+        f32
+        5.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -2], [2, -4]]), ord: 1)
       #Nx.Tensor<
-        s64
-        6
+        f32
+        6.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :neg_inf)
       #Nx.Tensor<
-        s64
-        5
+        f32
+        5.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, -2], [2, -4]]), ord: :inf)
       #Nx.Tensor<
-        s64
-        6
+        f32
+        6.0
       >
 
       iex> Nx.LinAlg.norm(Nx.tensor([[3, 0], [0, -4]]), ord: :frobenius)
@@ -180,6 +182,7 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.norm(Nx.tensor([3, 4]), ord: :frobenius)
       ** (ArgumentError) expected a 2-D tensor for ord: :frobenius, got a 1-D tensor
   """
+  @doc from_backend: false
   def norm(tensor, opts \\ []) when is_list(opts) do
     %{shape: s} = t = Nx.to_tensor(tensor)
     opts = keyword!(opts, [:ord, :axes])
@@ -212,7 +215,8 @@ defmodule Nx.LinAlg do
     Nx.sum(s)
   end
 
-  defp norm_inf(%{shape: shape} = t, ord, _opts) when ord in [:inf, :neg_inf] do
+  defp norm_inf(%{shape: shape, type: type} = t, ord, _opts) when ord in [:inf, :neg_inf] do
+    output_type = Nx.Type.to_floating(type)
     aggregate_axes = if tuple_size(shape) == 2, do: &Nx.sum(&1, axes: [1]), else: & &1
     reduce = if ord == :inf, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
@@ -220,21 +224,27 @@ defmodule Nx.LinAlg do
     |> Nx.abs()
     |> aggregate_axes.()
     |> reduce.()
+    |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_}} = t, 0, _opts) do
+  defp norm_integer(%{shape: {_}, type: type} = t, 0, _opts) do
+    output_type = Nx.Type.to_floating(type)
+
     t
     |> Nx.not_equal(0)
     |> Nx.sum()
+    |> Nx.as_type(output_type)
   end
 
-  defp norm_integer(%{shape: {_, _}} = t, ord, _opts) when ord in [1, -1] do
+  defp norm_integer(%{shape: {_, _}, type: type} = t, ord, _opts) when ord in [1, -1] do
+    output_type = Nx.Type.to_floating(type)
     function = if ord == 1, do: &Nx.reduce_max/1, else: &Nx.reduce_min/1
 
     t
     |> Nx.abs()
     |> Nx.sum(axes: [0])
     |> function.()
+    |> Nx.as_type(output_type)
   end
 
   defp norm_integer(%{shape: {_, _}}, ord, _opts) when ord not in [-2, -1, 1, 2] do
@@ -258,7 +268,7 @@ defmodule Nx.LinAlg do
     # The idea is that by dividing the tensor by it, large values of
     # tensor entries and large values of p are reduced, which in turn
     # avoids numerical overflow.
-    numerical_stability_coefficient = Nx.reduce_max(t)
+    numerical_stability_coefficient = Nx.reduce_max(abs_t)
 
     abs_t
     |> Nx.divide(numerical_stability_coefficient)
@@ -269,10 +279,23 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Solve the equation `a x = b` for x, assuming `a` is a lower triangular matrix.
+  Solve the equation `a x = b` for x, assuming `a` is a triangular matrix.
+  Can also solve `x a = b` for x. See the `:left_side` option below.
 
   `b` must either be a square matrix with the same dimensions as `a` or a 1-D tensor
   with as many rows as `a`.
+
+  ## Options
+
+  The following options are defined in order of precedence
+
+  * `:transform_a` - Defines `op(a)`, depending on its value. Can be one of:
+    * `:none` -> `op(a) = a`
+    * `:transpose` -> `op(a) = transpose(a)`
+    Defaults to `:none`
+  * `:lower` - When `true`, defines the `a` matrix as lower triangular. If false, a is upper triangular.
+    Defaults to `true`
+  * `:left_side` - When `true`, solves the system as `op(A).X = B`. Otherwise, solves `X.op(A) = B`. Defaults to `true`.
 
   ## Examples
 
@@ -302,6 +325,62 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> a = Nx.tensor([[1, 1, 1, 1], [0, 1, 0, 1], [0, 0, 1, 2], [0, 0, 0, 3]])
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([2, 4, 2, 4]), lower: false)
+      #Nx.Tensor<
+        f32[4]
+        [-1.3333333730697632, 2.6666667461395264, -0.6666666865348816, 1.3333333730697632]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+      iex> b = Nx.tensor([[0, 2, 1], [1, 1, 0], [3, 3, 1]])
+      iex> Nx.LinAlg.triangular_solve(a, b, left_side: false)
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [-1.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0],
+          [1.0, 1.0, 1.0]
+        ]
+      >
+
+      iex> a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :transpose, lower: false)
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :none)
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+      iex> b = Nx.tensor([[0, 1, 3], [2, 1, 3]])
+      iex> Nx.LinAlg.triangular_solve(a, b, left_side: false)
+      #Nx.Tensor<
+        f32[2][3]
+        [
+          [2.0, -5.0, 3.0],
+          [4.0, -5.0, 3.0]
+        ]
+      >
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 2, 1]])
+      iex> b = Nx.tensor([[0, 2], [3, 0], [0, 0]])
+      iex> Nx.LinAlg.triangular_solve(a, b, left_side: true)
+      #Nx.Tensor<
+        f32[3][2]
+        [
+          [0.0, 2.0],
+          [3.0, -2.0],
+          [-6.0, 2.0]
+        ]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]), Nx.tensor([4, 2, 4, 2]))
@@ -313,20 +392,49 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.triangular_solve(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) can't solve for singular matrix
 
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
+      ** (ArgumentError) complex numbers not supported yet
+
+      iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
+      ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
+
   """
   def triangular_solve(a, b, opts \\ []) do
-    opts = keyword!(opts, [])
+    opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
     output_type = binary_type(a, b) |> Nx.Type.to_floating()
     %T{shape: a_shape = {m, _}} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
-    case a_shape do
-      {n, n} -> nil
-      other -> raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
+    case opts[:transform_a] do
+      t when t in [:none, :transpose] ->
+        nil
+
+      :conjugate ->
+        raise ArgumentError, "complex numbers not supported yet"
+
+      t ->
+        raise ArgumentError,
+              "invalid value for :transform_a option, expected :none, :transpose, or :conjugate, " <>
+                "got: #{inspect(t)}"
     end
 
+    case a_shape do
+      {n, n} ->
+        nil
+
+      other ->
+        raise ArgumentError, "expected a square matrix, got matrix with shape: #{inspect(other)}"
+    end
+
+    left_side = opts[:left_side]
+
     case b_shape do
-      {^m, ^m} ->
+      {^m, _} when left_side ->
+        nil
+
+      {_, ^m} when not left_side ->
         nil
 
       {^m} ->
@@ -338,7 +446,6 @@ defmodule Nx.LinAlg do
 
     impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
   end
-
 
   @doc """
   Solves the system `AX = B`.
@@ -374,7 +481,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-    ### Error cases
+  ### Error cases
 
       iex> Nx.LinAlg.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
       ** (ArgumentError) `b` tensor has incompatible dimensions, expected {2, 2} or {2}, got: {4}
@@ -382,6 +489,7 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
+  @doc from_backend: false
   def solve(a, b) do
     %T{shape: a_shape} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
@@ -405,7 +513,7 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
-  Invert a square 2-D tensor.
+  Inverts a square 2-D tensor.
 
   For non-square tensors, use `svd/2` for pseudo-inverse calculations.
 
@@ -452,6 +560,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) can't solve for singular matrix
 
   """
+  @doc from_backend: false
   def invert(tensor) do
     %T{shape: {m, n}} = tensor = Nx.to_tensor(tensor)
 
@@ -528,8 +637,8 @@ defmodule Nx.LinAlg do
         [
           [1.0, 0.0, 0.0],
           [0.0, 1.0, 0.0],
-          [0.0, 0.0, 1.0],
-          [0.0, 0.0, 0.0]
+          [0.0, 0.0, 0.7071067690849304],
+          [0.0, 0.0, 0.7071067690849304]
         ]
       >
       iex> r
@@ -538,7 +647,7 @@ defmodule Nx.LinAlg do
         [
           [3.0, 2.0, 1.0],
           [0.0, 1.0, 1.0],
-          [0.0, 0.0, 1.0]
+          [0.0, 0.0, 1.4142135381698608]
         ]
       >
 
@@ -571,7 +680,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have at least as many rows as columns, got shape: {3, 4}
   """
   def qr(tensor, opts \\ []) do
-    opts = keyword!(opts, [mode: :reduced])
+    opts = keyword!(opts, mode: :reduced, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     mode = opts[:mode]
@@ -588,6 +697,78 @@ defmodule Nx.LinAlg do
     impl!(tensor).qr(
       {%{tensor | type: output_type, shape: q_shape, names: [nil, nil]},
        %{tensor | type: output_type, shape: r_shape, names: [nil, nil]}},
+      tensor,
+      opts
+    )
+  end
+
+  @doc """
+  Calculates the Eigenvalues and Eigenvectors of symmetric 2-D tensors.
+
+  It returns `{eigenvals, eigenvecs}`.
+
+  ## Options
+
+    * `:max_iter` - `integer`. Defaults to `50_000`
+      Number of maximum iterations before stopping the decomposition
+
+    * `:eps` - `float`. Defaults to 1.0e-10
+      Tolerance applied during the decomposition
+
+  Note not all options apply to all backends, as backends may have
+  specific optimizations that render these mechanisms unnecessary.
+
+  ## Examples
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[1, 0], [0, 2]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 2.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [1.0, 0.0],
+          [0.0, 1.0]
+        ]
+      >
+
+      iex> {eigenvals, eigenvecs} = Nx.LinAlg.eigh(Nx.tensor([[0, 1, 2], [1, 0, 2], [2, 2, 3]]))
+      iex> Nx.round(eigenvals)
+      #Nx.Tensor<
+        f32[3]
+        [5.0, -1.0, -1.0]
+      >
+      iex> eigenvecs
+      #Nx.Tensor<
+        f32[3][3]
+        [
+          [0.4082472324371338, 0.9128734469413757, 0.0],
+          [0.40824851393699646, -0.18257413804531097, 0.8944271802902222],
+          [0.8164970278739929, -0.36514827609062195, -0.4472135901451111]
+        ]
+      >
+
+  ## Error cases
+
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      ** (ArgumentError) tensor must be a square matrix (a tensor with two equal axes), got shape: {2, 3}
+
+      iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2], [3, 4]]))
+      ** (ArgumentError) input tensor must be symmetric
+  """
+  def eigh(tensor, opts \\ []) do
+    opts = keyword!(opts, max_iter: 50_000, eps: @default_eps)
+    %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
+
+    output_type = Nx.Type.to_floating(type)
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eigh(shape)
+
+    impl!(tensor).eigh(
+      {%{tensor | names: [nil], type: output_type, shape: eigenvals_shape},
+       %{tensor | names: [nil, nil], type: output_type, shape: eigenvecs_shape}},
       tensor,
       opts
     )
@@ -665,7 +846,7 @@ defmodule Nx.LinAlg do
 
   """
   def svd(tensor, opts \\ []) do
-    opts = keyword!(opts, [:eps, :max_iter])
+    opts = keyword!(opts, [:max_iter, eps: @default_eps])
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)
@@ -771,7 +952,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must have as many rows as columns, got shape: {3, 4}
   """
   def lu(tensor, opts \\ []) do
-    opts = keyword!(opts, [:eps])
+    opts = keyword!(opts, eps: @default_eps)
     %T{type: type, shape: shape} = tensor = Nx.to_tensor(tensor)
 
     output_type = Nx.Type.to_floating(type)

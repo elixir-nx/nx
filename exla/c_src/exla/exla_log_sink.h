@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "exla_nif_util.h"
 #include "tensorflow/core/platform/logging.h"
 #include "absl/base/log_severity.h"
 
@@ -67,9 +67,11 @@ class ExlaLogSink : public tensorflow::TFLogSink {
         // crashes
         std::cerr << "[FATAL] " << fname << ":"
                   << line << " " << msg_str << "\n";
+        // In case there is a race, set msg just to be safe
+        msg = error(msg_str, fname, line);
+        break;
       default:
         msg = info(msg_str, fname, line);
-        break;
     }
     enif_send(env_, &sink_pid_, NULL, msg);
   }

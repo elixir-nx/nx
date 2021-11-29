@@ -1,25 +1,4 @@
-defmodule Torchx.NIF.Macro do
-  @moduledoc false
-
-  defmacro dnif(call) do
-    {name, args} = Macro.decompose_call(call)
-    name_io = :"#{name}_io"
-    args = underscore_args(args)
-
-    quote do
-      def unquote(name)(unquote_splicing(args)), do: :erlang.nif_error(:undef)
-      def unquote(name_io)(unquote_splicing(args)), do: :erlang.nif_error(:undef)
-    end
-  end
-
-  defp underscore_args(args) do
-    Enum.map(args, fn {name, meta, args_list} -> {:"_#{name}", meta, args_list} end)
-  end
-end
-
 defmodule Torchx.NIF do
-  import Torchx.NIF.Macro
-
   @moduledoc false
   @on_load :__on_load__
 
@@ -28,96 +7,18 @@ defmodule Torchx.NIF do
     :erlang.load_nif(path, 0)
   end
 
-  dnif randint(min, max, shape, type, device)
-  dnif rand(min, max, shape, type, device)
-  dnif normal(mu, sigma, shape, type, device)
-  dnif scalar_tensor(scalar, type, device)
-  dnif arange(from, to, step, type, device)
-  dnif arange(from, to, step, type, device, shape)
-  dnif ones(shape, device)
-  dnif full(shape, scalar, type, device)
-  dnif eye(size, type, device)
+  for {op, arity} <- Torchx.__torch__() do
+    def unquote(:"#{op}_cpu")(unquote_splicing(Macro.generate_arguments(arity, __MODULE__))),
+      do: :erlang.nif_error(:undef)
 
-  dnif reshape(tensor, shape)
-  dnif to_type(tensor, type)
-  dnif to_device(tensor, device)
-  dnif from_blob(blob, shape, type, device)
-  dnif to_blob(tensor)
-  dnif to_blob(tensor, limit)
-
-  dnif delete_tensor(tensor)
-  dnif squeeze(tensor)
-  dnif squeeze(tensor, axis)
-  dnif broadcast_to(tensor, shape)
-  dnif transpose(tensor, dim0, dim1)
-  dnif permute(tensor, dims)
-  dnif split(tensor, split_size)
-  dnif narrow(tensor, dim, start, length)
-  dnif as_strided(tensor, size, strides, offset)
-
-  dnif sum(tensor, axes, keep_axes)
-  dnif argmax(tensor, axe, keep_axes)
-  dnif argmin(tensor, axe, keep_axes)
-
-  dnif add(tensorA, tensorB)
-  dnif subtract(tensorA, tensorB)
-  dnif divide(tensorA, tensorB)
-  dnif remainder(tensorA, tensorB)
-  dnif quotient(tensorA, tensorB)
-  dnif multiply(tensorA, tensorB)
-  dnif power(tensorA, tensorB)
-  dnif atan2(tensorA, tensorB)
-  dnif min(tensorA, tensorB)
-  dnif max(tensorA, tensorB)
-
-  dnif bitwise_and(tensorA, tensorB)
-  dnif bitwise_or(tensorA, tensorB)
-  dnif bitwise_xor(tensorA, tensorB)
-  dnif left_shift(tensorA, tensorB)
-  dnif right_shift(tensorA, tensorB)
-
-  dnif equal(tensorA, tensorB)
-  dnif not_equal(tensorA, tensorB)
-  dnif greater(tensorA, tensorB)
-  dnif less(tensorA, tensorB)
-  dnif greater_equal(tensorA, tensorB)
-  dnif less_equal(tensorA, tensorB)
-
-  dnif logical_and(tensorA, tensorB)
-  dnif logical_or(tensorA, tensorB)
-  dnif logical_xor(tensorA, tensorB)
-
-  dnif outer(tensorA, tensorB)
-
-  @unary_ops [:abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign, :count_leading_zeros] ++
-               [:population_count, :exp, :log, :logistic]
-
-  for op <- @unary_ops do
-    def unquote(op)(_tensor), do: :erlang.nif_error(:undef)
-    def unquote(:"#{op}_io")(_tensor), do: :erlang.nif_error(:undef)
+    def unquote(:"#{op}_io")(unquote_splicing(Macro.generate_arguments(arity, __MODULE__))),
+      do: :erlang.nif_error(:undef)
   end
 
-  dnif tensordot(tensorA, tensorB, axesA, axesB)
-  dnif matmul(tensorA, tensorB)
+  def cuda_is_available(), do: :erlang.nif_error(:undef)
+  def cuda_device_count(), do: :erlang.nif_error(:undef)
 
-  # Transformations
-  dnif cholesky(tensor)
-  dnif cholesky(tensor, upper)
-  dnif qr(tensor)
-  dnif qr(tensor, reduced)
-
-  dnif cuda_is_available()
-  dnif cuda_device_count()
-
-  def item(_tensor), do: :erlang.nif_error(:undef)
   def scalar_type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
-  def names(_tensor), do: :erlang.nif_error(:undef)
-  def strides(_tensor), do: :erlang.nif_error(:undef)
-  def device_of(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
-  def to_blob_view(_tensor), do: :erlang.nif_error(:undef)
-
-  def call(func, :cpu, args), do: apply(__MODULE__, func, args)
-  def call(func, _device, args), do: apply(__MODULE__, :"#{func}_io", args)
 end

@@ -1,4 +1,4 @@
-#include "tensorflow/compiler/xla/exla/exla_nif_util.h"
+#include "exla_nif_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/primitive_util.h"
 
@@ -69,6 +69,13 @@ namespace nif {
   int get(ErlNifEnv* env, ERL_NIF_TERM term, uint64* var) {
     return enif_get_uint64(env, term,
                            reinterpret_cast<nif_uint64_t *>(var));
+  }
+
+  int get(ErlNifEnv* env, ERL_NIF_TERM term, float16* var) {
+    double value;
+    if (!enif_get_double(env, term, &value)) return 0;
+    *var = static_cast<float16>(value);
+    return 1;
   }
 
   int get(ErlNifEnv* env, ERL_NIF_TERM term, bfloat16* var) {
@@ -242,7 +249,7 @@ namespace nif {
       const ERL_NIF_TERM* terms;
       int length;
       if (!enif_get_tuple(env, head, &length, &terms)) return 0;
-      if (!length == 3) return 0;
+      if (length != 3) return 0;
 
       int64 pad_lo, pad_hi, interior;
       if (!get(env, terms[0], &pad_lo)) return 0;
@@ -265,26 +272,46 @@ namespace nif {
     const ERL_NIF_TERM* terms;
     int count;
     if (!enif_get_tuple(env, tuple, &count, &terms)) return 0;
-    if (count != 2) return 0;
+    if (count != 4) return 0;
 
-    ERL_NIF_TERM lhs, lhs_tail;
+    ERL_NIF_TERM lhs_contract, lhs_contract_tail;
     ERL_NIF_TERM list = terms[0];
-    while (enif_get_list_cell(env, list, &lhs, &lhs_tail)) {
+    while (enif_get_list_cell(env, list, &lhs_contract, &lhs_contract_tail)) {
       int64 dim;
-      if (!get(env, lhs, &dim)) return 0;
+      if (!get(env, lhs_contract, &dim)) return 0;
       dims->add_lhs_contracting_dimensions(dim);
 
-      list = lhs_tail;
+      list = lhs_contract_tail;
     }
 
-    ERL_NIF_TERM rhs, rhs_tail;
+    ERL_NIF_TERM lhs_batch, lhs_batch_tail;
     list = terms[1];
-    while (enif_get_list_cell(env, list, &rhs, &rhs_tail)) {
+    while (enif_get_list_cell(env, list, &lhs_batch, &lhs_batch_tail)) {
       int64 dim;
-      if (!get(env, rhs, &dim)) return 0;
+      if (!get(env, lhs_batch, &dim)) return 0;
+      dims->add_lhs_batch_dimensions(dim);
+
+      list = lhs_batch_tail;
+    }
+
+    ERL_NIF_TERM rhs_contract, rhs_contract_tail;
+    list = terms[2];
+    while (enif_get_list_cell(env, list, &rhs_contract, &rhs_contract_tail)) {
+      int64 dim;
+      if (!get(env, rhs_contract, &dim)) return 0;
       dims->add_rhs_contracting_dimensions(dim);
 
-      list = rhs_tail;
+      list = rhs_contract_tail;
+    }
+
+    ERL_NIF_TERM rhs_batch, rhs_batch_tail;
+    list = terms[3];
+    while (enif_get_list_cell(env, list, &rhs_batch, &rhs_batch_tail)) {
+      int64 dim;
+      if (!get(env, rhs_batch, &dim)) return 0;
+      dims->add_rhs_batch_dimensions(dim);
+
+      list = rhs_batch_tail;
     }
 
     return 1;
@@ -439,26 +466,38 @@ namespace nif {
         terms.push_back(shape_term);
       }
       return enif_make_list_from_array(env, &terms[0], element_count);
+    } else if (shape.IsArray()) {
+
+      xla::PrimitiveType type = shape.element_type();
+      absl::Span<const int64> dims = shape.dimensions();
+      int64 rank = shape.rank();
+
+      std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+      std::vector<ERL_NIF_TERM> dim_arr;
+      dim_arr.reserve(rank);
+      for (int i = 0; i < rank; i++) {
+        int copy;
+        copy = dims.at(i);
+        dim_arr.push_back(make(env, copy));
+      }
+
+      ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);
+      ERL_NIF_TERM type_term = make(env, name);
+
+      return enif_make_tuple(env, 2, dims_term, type_term);
+    } else {
+      // Shape is probably a token or opaque type, with no dims
+      // calling `rank` fails a check in TF
+      xla::PrimitiveType type = shape.element_type();
+
+      std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
+
+      ERL_NIF_TERM empty_tuple = enif_make_tuple(env, 0);
+      ERL_NIF_TERM type_term = make(env, name);
+
+      return enif_make_tuple(env, 2, empty_tuple, type_term);
     }
-
-    xla::PrimitiveType type = shape.element_type();
-    absl::Span<const int64> dims = shape.dimensions();
-    int64 rank = shape.rank();
-
-    std::string name = xla::primitive_util::LowercasePrimitiveTypeName(type);
-
-    std::vector<ERL_NIF_TERM> dim_arr;
-    dim_arr.reserve(rank);
-    for (int i = 0; i < rank; i++) {
-      int copy;
-      copy = dims.at(i);
-      dim_arr.push_back(make(env, copy));
-    }
-
-    ERL_NIF_TERM dims_term = enif_make_tuple_from_array(env, &dim_arr[0], rank);
-    ERL_NIF_TERM type_term = make(env, name);
-
-    return enif_make_tuple(env, 2, dims_term, type_term);
   }
 
 }  // namespace nif

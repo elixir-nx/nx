@@ -38,7 +38,7 @@ defmodule Nx.Backend do
   @type axes :: Nx.Tensor.axes()
   @type backend_options :: term()
 
-  @callback scalar(out :: tensor, binary, backend_options) :: tensor
+  @callback constant(out :: tensor, binary, backend_options) :: tensor
   @callback from_binary(out :: tensor, binary, backend_options) :: tensor
   @callback eye(tensor, backend_options) :: tensor
   @callback iota(tensor, axis | nil, backend_options) :: tensor
@@ -48,22 +48,26 @@ defmodule Nx.Backend do
   @callback backend_deallocate(tensor) :: :ok | :already_deallocated
   @callback backend_copy(tensor, module, backend_options) :: tensor
   @callback backend_transfer(tensor, module, backend_options) :: tensor
-  @callback to_batched_list(out :: tensor, tensor) :: [tensor]
+  @callback to_batched_list(out :: tensor, tensor, keyword) :: [tensor]
   @callback to_binary(tensor, limit :: non_neg_integer) :: binary
   @callback inspect(tensor, Inspect.Opts.t()) :: tensor
 
   @callback as_type(out :: tensor, tensor) :: tensor
   @callback bitcast(out :: tensor, tensor) :: tensor
-  @callback reshape(out :: tensor, tensor, shape) :: tensor
+  @callback reshape(out :: tensor, tensor) :: tensor
   @callback squeeze(out :: tensor, tensor, axes) :: tensor
   @callback broadcast(out :: tensor, tensor, shape, axes) :: tensor
   @callback transpose(out :: tensor, tensor, axes) :: tensor
   @callback pad(out :: tensor, tensor, pad_value :: tensor, padding_config :: list()) :: tensor
   @callback reverse(out :: tensor, tensor, axes) :: tensor
 
-  @callback dot(out :: tensor, tensor, axes, tensor, axes) :: tensor
+  @callback dot(out :: tensor, tensor, axes, axes, tensor, axes, axes) :: tensor
   @callback clip(out :: tensor, tensor, min :: tensor, max :: tensor) :: tensor
   @callback slice(out :: tensor, tensor, list, list, list) :: tensor
+  @callback put_slice(out :: tensor, tensor, tensor, list) :: tensor
+  @callback take(out :: tensor, input :: tensor, indices :: tensor, axis) :: tensor
+  @callback take_along_axis(out :: tensor, input :: tensor, indices :: tensor, axis) :: tensor
+  @callback gather(out :: tensor, input :: tensor, indices :: tensor) :: tensor
   @callback concatenate(out :: tensor, tensor, axis) :: tensor
   @callback select(out :: tensor, tensor, tensor, tensor) :: tensor
 
@@ -77,29 +81,30 @@ defmodule Nx.Backend do
   @callback argmax(out :: tensor, tensor, keyword) :: tensor
   @callback argmin(out :: tensor, tensor, keyword) :: tensor
   @callback reduce(out :: tensor, tensor, acc :: tensor, keyword, fun) :: tensor
-  @callback reduce_window(out :: tensor, tensor, acc :: tensor, shape, keyword, fun) :: tensor
+  @callback window_reduce(out :: tensor, tensor, acc :: tensor, shape, keyword, fun) :: tensor
   @callback window_sum(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_product(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_max(out :: tensor, tensor, shape, keyword) :: tensor
   @callback window_min(out :: tensor, tensor, shape, keyword) :: tensor
-  @callback map(out :: tensor, tensor, fun) :: tensor
+  @callback map(out :: tensor, tensor, keyword, fun) :: tensor
   @callback sort(out :: tensor, tensor, keyword) :: tensor
   @callback argsort(out :: tensor, tensor, keyword) :: tensor
-  @callback scatter_window_max(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
-  @callback scatter_window_min(out :: tensor, tensor, tensor, shape, keyword, tensor) :: tensor
+  @callback window_scatter_max(out :: tensor, tensor, tensor, tensor, shape, keyword) :: tensor
+  @callback window_scatter_min(out :: tensor, tensor, tensor, tensor, shape, keyword) :: tensor
+  @callback indexed_add(out :: tensor, tensor, tensor, tensor) :: tensor
 
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor, keyword) :: tensor
+  @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
   @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
   binary_ops =
     [:add, :subtract, :multiply, :power, :remainder, :divide, :atan2, :min, :max, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
+      [:logical_and, :logical_or, :logical_xor]
 
   for binary_op <- binary_ops do
     @callback unquote(binary_op)(out :: t, t, t) :: t
@@ -135,6 +140,7 @@ defmodule Nx.Backend do
 
   defp chunk([], data, {kind, size}, limit, _docs) do
     # TODO: Simplify inspection once nonfinite are officially supported in the VM
+
     {doc, tail} =
       case kind do
         :s ->
@@ -202,46 +208,37 @@ defmodule Nx.Backend do
       <<x::float-little-32>> = <<0::16, bf16::binary>>
       Float.to_string(x)
     end
-
-    defp inspect_float(data, 32) do
-      case data do
-        <<0xFF800000::32-native>> -> "-Inf"
-        <<0x7F800000::32-native>> -> "Inf"
-        <<_::16, 1::1, _::7, _sign::1, 0x7F::7>> -> "NaN"
-        <<x::float-32-native>> -> Float.to_string(x)
-      end
-    end
-
-    defp inspect_float(data, 64) do
-      case data do
-        <<0x7FF0000000000000::64-native>> -> "Inf"
-        <<0xFFF0000000000000::64-native>> -> "-Inf"
-        <<_::48, 0xF::4, _::4, _sign::1, 0x7F::7>> -> "NaN"
-        <<x::float-64-native>> -> Float.to_string(x)
-      end
-    end
   else
     defp inspect_bf16(bf16) do
       <<x::float-big-32>> = <<bf16::binary, 0::16>>
       Float.to_string(x)
     end
+  end
 
-    defp inspect_float(data, 32) do
-      case data do
-        <<0xFF800000::32-native>> -> "-Inf"
-        <<0x7F800000::32-native>> -> "Inf"
-        <<_sign::1, 0x7F::7, 1::1, _::7, _::16>> -> "NaN"
-        <<x::float-32-native>> -> Float.to_string(x)
-      end
+  defp inspect_float(data, 16) do
+    case data do
+      <<0xFC00::16-native>> -> "-Inf"
+      <<0x7C00::16-native>> -> "Inf"
+      <<x::float-16-native>> -> Float.to_string(x)
+      _ -> "NaN"
     end
+  end
 
-    defp inspect_float(data, 64) do
-      case data do
-        <<0x7FF0000000000000::64-native>> -> "Inf"
-        <<0xFFF0000000000000::64-native>> -> "-Inf"
-        <<_sign::1, 0x7F::7, 0xF::4, _::4, _::48>> -> "NaN"
-        <<x::float-64-native>> -> Float.to_string(x)
-      end
+  defp inspect_float(data, 32) do
+    case data do
+      <<0xFF800000::32-native>> -> "-Inf"
+      <<0x7F800000::32-native>> -> "Inf"
+      <<x::float-32-native>> -> Float.to_string(x)
+      _ -> "NaN"
+    end
+  end
+
+  defp inspect_float(data, 64) do
+    case data do
+      <<0x7FF0000000000000::64-native>> -> "Inf"
+      <<0xFFF0000000000000::64-native>> -> "-Inf"
+      <<x::float-64-native>> -> Float.to_string(x)
+      _ -> "NaN"
     end
   end
 end

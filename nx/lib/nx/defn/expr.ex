@@ -11,8 +11,8 @@ defmodule Nx.Defn.Expr do
     * `:context` - the context of the expression.
       The default context is `:root`.
 
-  Convenience functions for traversing expressions can be found
-  in `Nx.Defn.Tree`.
+  Convenience functions for traversing expressions and composite types
+  can be found in `Nx.Defn.Composite` and `Nx.Defn.Tree`.
 
   ## Syntax nodes
 
@@ -22,13 +22,9 @@ defmodule Nx.Defn.Expr do
 
     * `parameter(integer)`
 
-    * `scalar(number)`
+    * `constant(number)`
 
-    * `tensor(Nx.Tensor.t)`
-
-    * `fun(parameters, t, fun)`
-
-    * `cond(clauses, otherwise)`
+    * `tensor(tensor)`
 
     * `metadata(expr, metadata)`
 
@@ -36,10 +32,19 @@ defmodule Nx.Defn.Expr do
       expression that return tuples. Note it may return tuples
       too, which means we have nested tuples
 
-  Custom compilers must handle said nodes accordingly.
+    * `fun(parameters, t, mfa)` - the `mfa` is used only for
+      introspection purposes
+
+    * `cond(clauses, otherwise)`
+
+    * `while(initial, condition, body)`
+
+    * `attach_token(token(%Nx.Defn.Token{}), expr)`
+
+  `defn` compilers must handle said nodes accordingly.
   """
 
-  alias Nx.Defn.{Expr, Tree}
+  alias Nx.Defn.{Composite, Expr, Tree}
   alias Nx.Tensor, as: T
 
   import Nx.Shared
@@ -78,7 +83,13 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tensor expression metadata node wrapping the given tensor expression.
+  Creates a tensor expression metadata node wrapping the
+  given tensor expression.
+
+  The metadata is map. If the `inspect` key is present,
+  it will be used to annotate the metadata when inspected.
+  Otherwise the metadata node does not appear during
+  inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
     expr = to_expr(expr)
@@ -86,79 +97,31 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Creates a tensor expression function node with the given args and anonymous function.
-  """
-  def fun(args, fun) when is_function(fun, length(args)) do
-    out = to_expr(apply(fun, args))
-    expr(out, out.data.context, :fun, [args, out, fun])
-  end
-
-  @doc """
-  Creates a tuple given by the shapes in `tuple` that point to `expr`.
-  """
-  def tuple(tuple, %T{type: {:tuple, size}, data: %{context: context}} = expr)
-      when is_tuple(tuple) and tuple_size(tuple) == size do
-    # TODO: Use Enum.with_index on Elixir v1.12
-    tuple
-    |> Tuple.to_list()
-    |> Enum.with_index()
-    |> Enum.map(fn {tensor, i} ->
-      fun = &expr(&1, context, :elem, [expr, i, size])
-      composite(tensor, fun)
-    end)
-    |> List.to_tuple()
-  end
-
-  # Convert to a composite type recursively - if there is any composite type at all.
-  defp composite(tuple, fun) when is_tuple(tuple) do
-    expr = fun.(%T{shape: {}, names: [], type: {:tuple, tuple_size(tuple)}})
-    tuple(tuple, expr)
-  end
-
-  defp composite(tensor, fun), do: fun.(tensor)
-
-  @doc """
   Creates a `cond` tensor expression.
   """
-  def cond(clauses, last) do
+  def cond(clauses, last = out) do
     {preds, exprs} = Enum.unzip(clauses)
     {preds, context} = to_exprs(preds)
-    [last | exprs] = cond_clauses(last, exprs)
+
+    [last | exprs] =
+      [last | exprs]
+      |> Enum.map(&Composite.flatten_list([&1]))
+      |> Enum.zip_with(&broadcast_clause/1)
+      |> case do
+        # Handle the case where branches don't return anything
+        [] -> Enum.map([last | exprs], fn _ -> {} end)
+        clauses -> unzip_clauses(clauses)
+      end
+
     clauses = Enum.zip(preds, exprs)
-    composite(last, &expr(&1, context, :cond, [clauses, last]))
+    flatten_to_composite(out, context, exprs, &expr(&1, context, :cond, [clauses, last]))
   end
 
-  defp cond_clauses(last, exprs) when is_tuple(last) do
-    size = tuple_size(last)
-
-    for expr <- exprs,
-        not is_tuple(expr) or tuple_size(expr) != size,
-        do: branch_mismatch!(expr, last)
-
-    # TODO: Use Enum.with_index on Elixir v1.12
-    list_of_lists =
-      last
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.map(fn {last, index} ->
-        exprs = Enum.map(exprs, &elem(&1, index))
-        cond_clauses(last, exprs)
-      end)
-
-    {last_and_exprs, _} =
-      Enum.map_reduce([last | exprs], list_of_lists, fn _, list_of_lists ->
-        unzip_cons(list_of_lists, [], [])
-      end)
-
-    last_and_exprs
-  end
-
-  defp cond_clauses(type = last, exprs) do
+  defp broadcast_clause([type = last | exprs]) do
     %{shape: shape, names: names} = last = to_expr(last)
 
     {exprs, {type, shape, names}} =
       Enum.map_reduce(exprs, {type, shape, names}, fn expr, {type, shape, names} ->
-        if is_tuple(expr), do: branch_mismatch!(expr, last)
         type = binary_type(type, expr)
         expr = to_expr(expr)
         {shape, names} = Nx.Shape.binary_broadcast(shape, names, expr.shape, expr.names)
@@ -172,17 +135,24 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  defp unzip_cons([[head | tail] | rest], heads, tails),
-    do: unzip_cons(rest, [head | heads], [tail | tails])
+  defp unzip_clauses([exprs | _] = clauses),
+    do: unzip_clauses(clauses, List.duplicate([], length(exprs)))
 
-  defp unzip_cons([], heads, tails),
-    do: {heads |> Enum.reverse() |> List.to_tuple(), Enum.reverse(tails)}
+  defp unzip_clauses([exprs | tail], acc),
+    do: unzip_clauses(tail, unzip_each(exprs, acc))
 
-  defp branch_mismatch!(left, right) do
-    raise ArgumentError,
-          "cond/if expects all branches to return tensors or tuples of the same size, " <>
-            "got #{inspect(left)} and #{inspect(right)}"
+  defp unzip_clauses([], acc) do
+    Enum.map(acc, fn
+      [entry] -> entry
+      list -> List.to_tuple(Enum.reverse(list))
+    end)
   end
+
+  defp unzip_each([head | tail], [acc_head | acc_tail]),
+    do: [[head | acc_head] | unzip_each(tail, acc_tail)]
+
+  defp unzip_each([], []),
+    do: []
 
   ## Nx.Defn AST callbacks
 
@@ -190,16 +160,39 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
+  def normalize(container_or_tensor), do: Composite.traverse(container_or_tensor, &to_expr/1)
+
+  @doc false
+  def attach_token(%T{data: %{op: :token}} = token, expr) do
+    Composite.traverse(expr, fn tensor ->
+      expr = to_expr(tensor)
+      expr(expr, expr.data.context, :attach_token, [token, expr])
+    end)
+  end
+
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    # We first create an expression to store the token
+    # so we have a shared ID to avoid multiple traversals.
+    # The size of the tuple is not used, but the amount of
+    # hooks is a good indicator.
+    size = length(token.hooks)
+    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
+    attach_token(token, expr)
+  end
+
+  @doc false
   def cond(file, clauses, last) do
     clauses =
       for {meta, {pred, expr}} <- clauses do
-        pred = to_expr(pred)
+        pred = to_pred(pred, meta[:line], file, :cond)
 
-        if pred.shape != {} do
+        if not Composite.compatible?(last, expr, fn _, _ -> true end) do
           raise CompileError,
             line: meta[:line],
             file: file,
-            description: "condition must be a scalar tensor, got: #{inspect(pred.shape)}"
+            description:
+              "cond/if expects all branches to return compatible types. " <>
+                "Got: #{to_type_shape_string(last)} and #{to_type_shape_string(expr)}"
         end
 
         {pred, expr}
@@ -208,13 +201,70 @@ defmodule Nx.Defn.Expr do
     cond(clauses, last)
   end
 
+  @doc false
+  def while(file, line, initial, condition, body) do
+    initial = normalize(initial)
+
+    {arg, {_counter, context}} =
+      Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
+        {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
+      end)
+
+    condition = to_pred(condition.(arg), line, file, :while)
+    body = arg |> body.() |> normalize()
+
+    if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
+      raise CompileError,
+        line: line,
+        file: file,
+        description:
+          "the do-block in while must return the shape, type, and names as the initial arguments. " <>
+            "Got body #{to_type_shape_string(body)} and initial #{to_type_shape_string(initial)}"
+    end
+
+    [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
+    args = [flatten_initial, flatten_arg, condition, flatten_body]
+    flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
+  end
+
+  defp flatten_clauses(clauses) do
+    Enum.map(clauses, fn expr ->
+      case Composite.flatten_list([expr]) do
+        [single] -> single
+        list -> List.to_tuple(list)
+      end
+    end)
+  end
+
+  defp flatten_to_composite(out, context, [head | _], fun) when is_tuple(head) do
+    size = tuple_size(head)
+    expr = fun.(tuple_out(size))
+
+    {out, {[], ^size}} =
+      Composite.traverse(out, {Tuple.to_list(head), 0}, fn _, {[head | tail], i} ->
+        {expr(head, context, :elem, [expr, i, size]), {tail, i + 1}}
+      end)
+
+    out
+  end
+
+  defp flatten_to_composite(out, _context, [head | _], fun) do
+    {out, []} = Composite.traverse(out, [fun.(head)], fn _, [head | tail] -> {head, tail} end)
+    out
+  end
+
   ## Nx.Backend Callbacks
 
   @behaviour Nx.Backend
 
   @impl true
   def from_binary(binary, type, _options) do
-    tensor(Nx.BinaryBackend.from_binary(binary, type, []))
+    to_expr(Nx.BinaryBackend.from_binary(binary, type, []))
+  end
+
+  @impl true
+  def constant(out, number, _options) do
+    constant(out, number)
   end
 
   @impl true
@@ -256,30 +306,35 @@ defmodule Nx.Defn.Expr do
   @impl true
   def add(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s1 == 0 ->
+      c1 == 0 ->
         ensure_compatible(t2, out)
 
-      s2 == 0 ->
+      c2 == 0 ->
         ensure_compatible(t1, out)
 
-      s1 && s2 ->
-        to_scalar(s1 + s2, out)
+      c1 && c2 ->
+        constant(out, c1 + c2)
 
-      s2 ->
-        commute(out, context, :add, &+/2, s2, t2, t1)
+      c2 ->
+        commute(out, context, :add, &+/2, c2, t2, t1)
 
       true ->
         case t2 do
-          %T{data: %Expr{op: :subtract, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
-          when scalar == 0 ->
+          %T{
+            data: %Expr{
+              op: :subtract,
+              args: [%T{data: %Expr{op: :constant, args: [constant]}}, t2]
+            }
+          }
+          when constant == 0 ->
             binary_expr(out, context, :subtract, t1, t2)
 
           %T{} ->
-            commute(out, context, :add, &+/2, s1, t1, t2)
+            commute(out, context, :add, &+/2, c1, t1, t2)
         end
     end
   end
@@ -287,12 +342,12 @@ defmodule Nx.Defn.Expr do
   @impl true
   def subtract(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s2 == 0 -> ensure_compatible(t1, out)
-      s1 && s2 -> to_scalar(s1 - s2, out)
+      c2 == 0 -> ensure_compatible(t1, out)
+      c1 && c2 -> constant(out, c1 - c2)
       true -> binary_expr(out, context, :subtract, t1, t2)
     end
   end
@@ -300,30 +355,32 @@ defmodule Nx.Defn.Expr do
   @impl true
   def multiply(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s1 == 1 ->
+      c1 == 1 ->
         ensure_compatible(t2, out)
 
-      s2 == 1 ->
+      c2 == 1 ->
         ensure_compatible(t1, out)
 
-      s1 && s2 ->
-        to_scalar(s1 * s2, out)
+      c1 && c2 ->
+        constant(out, c1 * c2)
 
-      s2 ->
-        commute(out, context, :multiply, &*/2, s2, t2, t1)
+      c2 ->
+        commute(out, context, :multiply, &*/2, c2, t2, t1)
 
       true ->
         case t2 do
-          %T{data: %Expr{op: :divide, args: [%T{data: %Expr{op: :scalar, args: [scalar]}}, t2]}}
-          when scalar == 1 ->
+          %T{
+            data: %Expr{op: :divide, args: [%T{data: %Expr{op: :constant, args: [constant]}}, t2]}
+          }
+          when constant == 1 ->
             binary_expr(out, context, :divide, t1, t2)
 
           %T{} ->
-            commute(out, context, :multiply, &*/2, s1, t1, t2)
+            commute(out, context, :multiply, &*/2, c1, t1, t2)
         end
     end
   end
@@ -331,12 +388,12 @@ defmodule Nx.Defn.Expr do
   @impl true
   def divide(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s1 = maybe_scalar(t1)
-    s2 = maybe_scalar(t2)
+    c1 = maybe_constant(t1)
+    c2 = maybe_constant(t2)
 
     cond do
-      s2 == 1 -> ensure_compatible(t1, out)
-      s1 && s2 -> to_scalar(s1 / s2, out)
+      c2 == 1 -> ensure_compatible(t1, out)
+      c1 && c2 -> constant(out, c1 / c2)
       true -> binary_expr(out, context, :divide, t1, t2)
     end
   end
@@ -344,10 +401,10 @@ defmodule Nx.Defn.Expr do
   @impl true
   def power(out, t1, t2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    s2 = maybe_scalar(t2)
+    c2 = maybe_constant(t2)
 
     cond do
-      s2 == 1 -> ensure_compatible(t1, out)
+      c2 == 1 -> ensure_compatible(t1, out)
       true -> binary_expr(out, context, :power, t1, t2)
     end
   end
@@ -356,8 +413,7 @@ defmodule Nx.Defn.Expr do
     [:remainder, :atan2, :max, :min, :quotient] ++
       [:bitwise_and, :bitwise_or, :bitwise_xor, :left_shift, :right_shift] ++
       [:equal, :not_equal, :greater, :less, :less_equal, :greater_equal] ++
-      [:logical_and, :logical_or, :logical_xor] ++
-      [:outer]
+      [:logical_and, :logical_or, :logical_xor]
 
   for op <- binary_ops do
     @impl true
@@ -391,7 +447,7 @@ defmodule Nx.Defn.Expr do
   def reduce(%{type: type} = out, tensor, acc, opts, fun) do
     args = [parameter(:reduce, type, {}, 0), parameter(:reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, fun)
+    fun = apply_fun(context, fun, args, type)
 
     if fun.shape != {} do
       raise "reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
@@ -401,7 +457,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def reduce_window(
+  def window_reduce(
         %{type: type} = out,
         tensor,
         acc,
@@ -409,54 +465,51 @@ defmodule Nx.Defn.Expr do
         opts,
         fun
       ) do
-    args = [parameter(:reduce_window, type, {}, 0), parameter(:reduce_window, type, {}, 1)]
+    args = [parameter(:window_reduce, type, {}, 0), parameter(:window_reduce, type, {}, 1)]
     {[tensor, acc], context} = to_exprs([tensor, acc])
-    fun = fun(args, fun)
+    fun = apply_fun(context, fun, args, type)
 
     if fun.shape != {} do
-      raise "reduce_window function must return a scalar tensor, got: #{inspect(fun.shape)}"
+      raise "window_reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
     end
 
-    expr(out, context, :reduce_window, [tensor, acc, window_dims, opts, fun])
+    expr(out, context, :window_reduce, [tensor, acc, window_dims, opts, fun])
   end
 
   @impl true
-  def map(%{type: type} = out, tensor, fun) do
+  def map(%{type: type} = out, tensor, opts, fun) do
     args = [parameter(:map, type, {}, 0)]
-    tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :map, [tensor, fun(args, fun)])
+    %{data: %{context: context}} = tensor = to_expr(tensor)
+    expr(out, context, :map, [tensor, opts, apply_fun(context, fun, args, type)])
   end
 
   @impl true
-  def scatter_window_max(out, tensor, source, window_dims, opts, init_value) do
+  def window_scatter_max(out, tensor, source, init_value, window_dims, opts) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
-    expr(out, context, :scatter_window_max, [
-      tensor,
-      source,
-      window_dims,
-      opts,
-      init_value
-    ])
+    args = [tensor, source, init_value, window_dims, opts]
+    expr(out, context, :window_scatter_max, args)
   end
 
   @impl true
-  def scatter_window_min(out, tensor, source, window_dims, opts, init_value) do
+  def window_scatter_min(out, tensor, source, init_value, window_dims, opts) do
     {[tensor, source, init_value], context} = to_exprs([tensor, source, init_value])
 
-    expr(out, context, :scatter_window_min, [
-      tensor,
-      source,
-      window_dims,
-      opts,
-      init_value
-    ])
+    args = [tensor, source, init_value, window_dims, opts]
+    expr(out, context, :window_scatter_min, args)
   end
 
   @impl true
-  def reshape(out, tensor, shape) do
+  def indexed_add(out, target, indices, updates) do
+    {[target, indices, updates], context} = to_exprs([target, indices, updates])
+
+    expr(out, context, :indexed_add, [target, indices, updates])
+  end
+
+  @impl true
+  def reshape(out, tensor) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :reshape, [tensor, shape])
+    expr(out, tensor.data.context, :reshape, [tensor])
   end
 
   @impl true
@@ -493,8 +546,8 @@ defmodule Nx.Defn.Expr do
   def as_type(out, tensor) do
     tensor = to_expr(tensor)
 
-    if s = maybe_scalar(tensor) do
-      to_scalar(s, out)
+    if c = maybe_constant(tensor) do
+      constant(out, c)
     else
       expr(out, tensor.data.context, :as_type, [tensor])
     end
@@ -512,8 +565,8 @@ defmodule Nx.Defn.Expr do
       expr(out, tensor.data.context, :broadcast, [inner_tensor, shape, inner_axes])
     else
       _ ->
-        if scalar = maybe_scalar(tensor) do
-          to_scalar(scalar, out)
+        if c = maybe_constant(tensor) do
+          constant(out, c)
         else
           expr(out, tensor.data.context, :broadcast, [tensor, shape, axes])
         end
@@ -528,9 +581,9 @@ defmodule Nx.Defn.Expr do
   defp contiguous?(_, _), do: false
 
   @impl true
-  def dot(out, t1, a1, t2, a2) do
+  def dot(out, t1, c1, b1, t2, c2, b2) do
     {[t1, t2], context} = to_exprs([t1, t2])
-    expr(out, context, :dot, [t1, a1, t2, a2])
+    expr(out, context, :dot, [t1, c1, b1, t2, c2, b2])
   end
 
   @impl true
@@ -559,7 +612,15 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def slice(out, tensor, start, lengths, strides) do
-    tensor = to_expr(tensor)
+    all_static? = Enum.all?(start, &is_integer/1)
+
+    {[tensor | start], context} =
+      if all_static? do
+        tensor = to_expr(tensor)
+        {[tensor | start], tensor.data.context}
+      else
+        to_exprs([tensor | start])
+      end
 
     # If we are in a sequence of slices, it is the access syntax,
     # so we compact them into a single slice.
@@ -577,7 +638,8 @@ defmodule Nx.Defn.Expr do
       |> Nx.slice(start, lengths)
       |> Nx.squeeze(axes: axes)
     else
-      _ -> expr(out, tensor.data.context, :slice, [tensor, start, lengths, strides])
+      _ ->
+        expr(out, context, :slice, [tensor, start, lengths, strides])
     end
   end
 
@@ -595,8 +657,37 @@ defmodule Nx.Defn.Expr do
     else
       [s | start] = start
       [l | lengths] = lengths
-      [{is + s, l} | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)]
+
+      [
+        {Nx.Defn.Kernel.+(is, s), l}
+        | merge_slice(axis + 1, axes, inner_start, start, inner_lengths, lengths)
+      ]
     end
+  end
+
+  @impl true
+  def put_slice(out, tensor, start, slice) do
+    {[tensor, slice | start], context} = to_exprs([tensor, slice | start])
+
+    expr(out, context, :put_slice, [tensor, start, slice])
+  end
+
+  @impl true
+  def take(out, tensor, indices, axis) do
+    {[tensor, indices], context} = to_exprs([tensor, indices])
+    expr(out, context, :take, [tensor, indices, axis])
+  end
+
+  @impl true
+  def take_along_axis(out, tensor, indices, axis) do
+    {[tensor, indices], context} = to_exprs([tensor, indices])
+    expr(out, context, :take_along_axis, [tensor, indices, axis])
+  end
+
+  @impl true
+  def gather(out, tensor, indices) do
+    {[tensor, indices], context} = to_exprs([tensor, indices])
+    expr(out, context, :gather, [tensor, indices])
   end
 
   @impl true
@@ -628,7 +719,7 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple({p, l, u}, expr(out, context, :lu, [{p, l, u}, tensor, opts]))
+    tuple(expr(out, context, :lu, [{p, l, u}, tensor, opts]), [p, l, u])
   end
 
   @impl true
@@ -636,7 +727,15 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 2}}
-    tuple({q, r}, expr(out, context, :qr, [{q, r}, tensor, opts]))
+    tuple(expr(out, context, :qr, [{q, r}, tensor, opts]), [q, r])
+  end
+
+  @impl true
+  def eigh({evals, evecs}, tensor, opts) do
+    tensor = to_expr(tensor)
+    context = tensor.data.context
+    out = %T{names: [], shape: {}, type: {:tuple, 2}}
+    tuple(expr(out, context, :eigh, [{evals, evecs}, tensor, opts]), [evals, evecs])
   end
 
   @impl true
@@ -644,67 +743,33 @@ defmodule Nx.Defn.Expr do
     tensor = to_expr(tensor)
     context = tensor.data.context
     out = %T{names: [], shape: {}, type: {:tuple, 3}}
-    tuple({u, s, vt}, expr(out, context, :svd, [{u, s, vt}, tensor, opts]))
+    tuple(expr(out, context, :svd, [{u, s, vt}, tensor, opts]), [u, s, vt])
   end
 
   @impl true
   def sort(out, tensor, opts) do
-    comparator = opts[:comparator]
-
-    %{type: type} = out
-    tensor = to_expr(tensor)
-
-    args = [parameter(:sort, type, {}, 0), parameter(:sort, type, {}, 1)]
-    comparator = to_nx_comparator(comparator)
-    fun = fun(args, comparator)
-
-    if fun.shape != {} do
-      raise "sort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
-    end
-
-    if fun.type != {:u, 8} do
-      raise "sort comparator must return a predicate type, got: #{inspect(fun.type)}"
-    end
-
-    expr(out, tensor.data.context, :sort, [tensor, opts, fun])
+    %{data: %{context: context}} = tensor = to_expr(tensor)
+    expr(out, context, :sort, [tensor, opts])
   end
 
   @impl true
-  def argsort(out, %{type: input_type} = tensor, opts) do
-    comparator = opts[:comparator]
-
-    tensor = to_expr(tensor)
-
-    args = [parameter(:argsort, input_type, {}, 0), parameter(:argsort, input_type, {}, 1)]
-    comparator = to_nx_comparator(comparator)
-    fun = fun(args, comparator)
-
-    if fun.shape != {} do
-      raise "argsort comparator must return a scalar tensor, got: #{inspect(fun.shape)}"
-    end
-
-    if fun.type != {:u, 8} do
-      raise "argsort comparator must return a predicate type, got: #{inspect(fun.type)}"
-    end
-
-    expr(out, tensor.data.context, :argsort, [tensor, opts, fun])
+  def argsort(out, tensor, opts) do
+    %{data: %{context: context}} = tensor = to_expr(tensor)
+    expr(out, context, :argsort, [tensor, opts])
   end
-
-  defp to_nx_comparator(:asc), do: &Nx.less_equal/2
-  defp to_nx_comparator(:desc), do: &Nx.greater_equal/2
-  defp to_nx_comparator(comp) when is_function(comp, 2), do: comp
-
-  defp to_nx_comparator(_),
-    do: "comparator must be either :desc or :asc or a function with arity 2"
 
   ## Undefined
 
   @impl true
   def backend_transfer(out, __MODULE__, _), do: out
 
-  ops =
-    [backend_copy: 3, backend_deallocate: 1, backend_transfer: 3] ++
-      [to_binary: 2, to_batched_list: 2, scalar: 3]
+  ops = [
+    backend_copy: 3,
+    backend_deallocate: 1,
+    backend_transfer: 3,
+    to_binary: 2,
+    to_batched_list: 3
+  ]
 
   for {op, arity} <- ops do
     args = Macro.generate_arguments(arity, __MODULE__)
@@ -715,7 +780,7 @@ defmodule Nx.Defn.Expr do
       cannot invoke #{unquote(op)}/#{unquote(arity)} on Nx.Defn.Expr.
 
       This typically means you are invoking an unsupported Nx function
-      by code inside `defn` or JIT/AOT compiled code
+      inside `defn` or inside JIT compiled code
       """
     end
   end
@@ -730,13 +795,13 @@ defmodule Nx.Defn.Expr do
     do: t
 
   defp to_expr(%T{data: %Nx.BinaryBackend{}, shape: {}} = t),
-    do: to_scalar(Nx.to_scalar(t), t)
+    do: constant(t, Nx.to_scalar(t))
 
   defp to_expr(%T{} = t),
     do: expr(t, nil, :tensor, [t])
 
   defp to_expr(number) when is_number(number),
-    do: to_scalar(number, %T{shape: {}, names: [], type: Nx.Type.infer(number)})
+    do: constant(%T{shape: {}, names: [], type: Nx.Type.infer(number)}, number)
 
   defp to_expr(other) do
     raise ArgumentError,
@@ -746,69 +811,162 @@ defmodule Nx.Defn.Expr do
 
   defp to_exprs(list) do
     Enum.map_reduce(list, nil, fn tensor, acc ->
-      %{data: %{context: context}} = expr = to_expr(tensor)
-
-      if context != acc and context != nil and acc != nil do
-        raise """
-        cannot build defn because expressions come from different contexts: \
-        #{inspect(context)} and #{inspect(acc)}.
-
-        This typically happens on anonymous functions, which do not behave \
-        like closures inside defn. For example, this is not valid:
-
-            defn example(t, amplifier) do
-              Nx.reduce(t, 0, fn val, acc ->
-                val * amplifier + acc
-              end)
-            end
-
-        In the example above, "amplifier" is a variable defined outside of \
-        the anonymous function, which is not allowed in defn.
-        """
-      end
-
-      {expr, context || acc}
+      expr = to_expr(tensor)
+      {expr, merge_context!(expr, acc)}
     end)
   end
 
-  ## Scalar helpers and related optimizations
+  defp tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
+       when is_list(list) do
+    tuple =
+      list
+      |> Enum.with_index(fn %T{} = tensor, i ->
+        expr(tensor, context, :elem, [expr, i, size])
+      end)
+      |> List.to_tuple()
 
-  defp maybe_scalar(expr) do
-    case expr do
-      %T{data: %Expr{op: :scalar, args: [number]}} -> number
-      _ -> nil
+    ^size = tuple_size(tuple)
+    tuple
+  end
+
+  defp tuple_out(size) do
+    %T{shape: {}, names: [], type: {:tuple, size}}
+  end
+
+  defp fun(context, args, body, {_, _, _} = mfa) do
+    case normalize(body) do
+      %T{} = tensor ->
+        expr(tensor, context, :fun, [args, tensor, mfa])
+
+      tuple when is_tuple(tuple) ->
+        expr(tuple_out(tuple_size(tuple)), context, :fun, [args, tuple, mfa])
     end
   end
 
-  # For scalars, make the ID be deterministic to improve cache reuse
-  defp to_scalar(number, %{type: type, shape: shape} = tensor) when is_number(number) do
-    id = {number, type, shape}
+  defp apply_fun(context, fun, args, type) when is_function(fun, length(args)) do
+    {:module, mod} = Function.info(fun, :module)
+    {:name, name} = Function.info(fun, :name)
+    {:arity, arity} = Function.info(fun, :arity)
+
+    # We modify the type after applying because the best form
+    # to perform type conversions is always left to the compiler.
+    %{fun(context, args, apply(fun, args), {mod, name, arity}) | type: type}
+  end
+
+  defp to_pred(pred, line, file, op) do
+    pred =
+      case pred do
+        pred when is_boolean(pred) ->
+          raise CompileError,
+            line: line,
+            file: file,
+            description:
+              "boolean predicate passed to #{Atom.to_string(op)}, expects" <>
+                " scalar tensor predicate, consider using 1 for true" <>
+                " or 0 for false as an alternative"
+
+        pred ->
+          to_expr(pred)
+      end
+
+    if not match?(%T{shape: {}}, pred) do
+      raise CompileError,
+        line: line,
+        file: file,
+        description:
+          "condition must be a scalar tensor, got: #{inspect(pred)}," <>
+            " consider using Nx.all?/1 or Nx.any?/1 to obtain a scalar" <>
+            " predicate from tensor"
+    end
+
+    pred
+  end
+
+  defp merge_context!(%{data: %{context: context}}, acc) do
+    if context != acc and context != nil and acc != nil do
+      raise """
+      cannot build defn because expressions come from different contexts: \
+      #{inspect(context)} and #{inspect(acc)}.
+
+      This typically happens on "while" and inside anonymous functions, which \
+      do not behave like closures inside defn. For example, this is not valid:
+
+          defn example(t, amplifier) do
+            Nx.reduce(t, 0, fn val, acc ->
+              val * amplifier + acc
+            end)
+          end
+
+      In the example above, "amplifier" is a variable defined outside of \
+      the anonymous function, which is not allowed in defn.
+      """
+    end
+
+    context || acc
+  end
+
+  defp to_type_shape_string(%{type: type, shape: shape, names: names}) do
+    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
+  end
+
+  defp to_type_shape_string(tuple) when is_tuple(tuple) do
+    list = Tuple.to_list(tuple)
+    IO.iodata_to_binary(["{", Enum.map_intersperse(list, ", ", &to_type_shape_string/1), "}"])
+  end
+
+  defp to_type_shape_string(map) when is_map(map) do
+    pairs =
+      Enum.map_intersperse(map, ", ", fn {k, v} ->
+        [inspect(k), " => ", to_type_shape_string(v)]
+      end)
+
+    IO.iodata_to_binary(["%{", pairs, "}"])
+  end
+
+  defp to_type_shape_string(scalar) when is_number(scalar) do
+    shape = {}
+    names = []
+    type = Nx.Type.infer(scalar)
+    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
+  end
+
+  ## Constant helpers and related optimizations
+
+  defp constant(%{type: type, shape: shape} = out, number) do
     number = if is_integer(number) and Nx.Type.float?(type), do: 1.0 * number, else: number
-    %{tensor | data: %Expr{id: id, op: :scalar, args: [number], context: nil}}
+    id = {number, type, shape}
+    %{out | data: %Expr{id: id, op: :constant, args: [number], context: nil}}
+  end
+
+  defp maybe_constant(expr) do
+    case expr do
+      %T{data: %Expr{op: :constant, args: [number]}} -> number
+      _ -> nil
+    end
   end
 
   defp ensure_compatible(t, out) do
     t |> Nx.as_type(out.type) |> Nx.broadcast(out.shape)
   end
 
-  # Rewrite commutative operations so the scalar always come on the left
+  # Rewrite commutative operations so the constant always come on the left
   defp commute(out, context, op, fun, s1, t1, t2) do
     {a1, a2} =
       case t2 do
-        %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :scalar, args: [s2]}}, t3]}} ->
+        %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :constant, args: [s2]}}, t3]}} ->
           nullary_out = %{out | shape: {}, names: []}
 
           if s1 do
-            {to_scalar(fun.(s1, s2), nullary_out), t3 |> Nx.broadcast(out.shape)}
+            {constant(nullary_out, fun.(s1, s2)), t3 |> Nx.broadcast(out.shape)}
           else
-            {to_scalar(s2, nullary_out), apply(Nx, op, [t1, t3]) |> Nx.broadcast(out.shape)}
+            {constant(nullary_out, s2), apply(Nx, op, [t1, t3]) |> Nx.broadcast(out.shape)}
           end
 
         %T{} ->
           case t1 do
-            %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :scalar, args: [s1]}}, t3]}} ->
+            %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :constant, args: [s1]}}, t3]}} ->
               nullary_out = %{out | shape: {}, names: []}
-              {to_scalar(s1, nullary_out), apply(Nx, op, [t2, t3]) |> Nx.broadcast(out.shape)}
+              {constant(nullary_out, s1), apply(Nx, op, [t2, t3]) |> Nx.broadcast(out.shape)}
 
             %T{} ->
               {t1, t2}
@@ -821,11 +979,11 @@ defmodule Nx.Defn.Expr do
   defp binary_expr(tensor, context, op, arg1, arg2) do
     {arg1, arg2} =
       case {arg1, arg2} do
-        {%T{data: %Expr{op: :scalar, args: [s]}, shape: shape}, %T{shape: shape}} ->
-          {to_scalar(s, %{arg1 | shape: {}, names: []}), arg2}
+        {%T{data: %Expr{op: :constant, args: [s]}, shape: shape}, %T{shape: shape}} ->
+          {constant(%{arg1 | shape: {}, names: []}, s), arg2}
 
-        {%T{shape: shape}, %T{data: %Expr{op: :scalar, args: [s]}, shape: shape}} ->
-          {arg1, to_scalar(s, %{arg2 | shape: {}, names: []})}
+        {%T{shape: shape}, %T{data: %Expr{op: :constant, args: [s]}, shape: shape}} ->
+          {arg1, constant(%{arg2 | shape: {}, names: []}, s)}
 
         {_, _} ->
           {arg1, arg2}
@@ -841,7 +999,7 @@ defmodule Nx.Defn.Expr do
   @impl true
   def inspect(tensor, opts) do
     {_, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
-    {_, {exprs, params, _var_map, _cache}} = Tree.traverse_args(tensor, acc, &inspect_expr/2)
+    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(tensor, acc, &inspect_expr/2)
 
     all = Enum.reverse(params, Enum.reverse(exprs))
     header = concat(line(), color("Nx.Defn.Expr", :map, opts))
@@ -855,9 +1013,13 @@ defmodule Nx.Defn.Expr do
     |> Enum.reduce(header, &concat(&2, concat(line(), &1)))
   end
 
-  # Scalars and funs are shown as is
-  defp inspect_expr(%T{data: %Expr{op: :scalar}} = t, acc), do: {t, acc}
+  # Constants and funs are shown as is
+  defp inspect_expr(%T{data: %Expr{op: :constant}} = t, acc), do: {t, acc}
   defp inspect_expr(%T{data: %Expr{op: :fun}} = t, acc), do: {t, acc}
+
+  defp inspect_expr(%T{data: %Expr{op: :metadata, args: [expr, metadata]}}, acc)
+       when not is_map_key(metadata, :inspect),
+       do: inspect_expr(expr, acc)
 
   defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
     case cache do
@@ -874,12 +1036,43 @@ defmodule Nx.Defn.Expr do
   end
 
   defp cached_inspect_expr(%T{} = t, acc) do
-    %{data: %Expr{id: id, op: op, args: args}} = t
-    {_, {exprs, params, var_map, cache}} = Tree.traverse_args(t, acc, &inspect_expr/2)
+    %{data: %Expr{id: id, op: op}} = t
+    {args, {exprs, params, var_map, cache}} = traverse_args(op, t, acc)
     {var, var_map} = var_for_id(var_map, id)
     args_str = inspect_args(op, args, var_map)
     expr_str = var <> " = " <> Atom.to_string(op) <> " [ " <> args_str <> " ]"
     {t, {[{expr_str, t} | exprs], params, var_map, cache}}
+  end
+
+  defp traverse_args(:while, %T{data: %{args: [initial, _, _, _]}}, acc) do
+    {initial, acc} = Composite.traverse(initial, acc, &inspect_expr/2)
+    {[initial], acc}
+  end
+
+  defp traverse_args(:token, %T{data: %{args: [token]}}, acc) do
+    {hooks, acc} =
+      Enum.map_reduce(token.hooks, acc, fn %{name: name, expr: expr}, acc ->
+        {expr, acc} = Composite.traverse(expr, acc, &inspect_expr/2)
+        {{name, expr}, acc}
+      end)
+
+    {hooks, acc}
+  end
+
+  defp traverse_args(_op, t, acc) do
+    Tree.apply_args(t, acc, &inspect_expr/2)
+  end
+
+  defp inspect_args(:token, hooks, var_map) do
+    IO.iodata_to_binary(
+      Enum.map_intersperse(hooks, ", ", fn {key, val} ->
+        "#{key}: " <> inspect_arg(val, var_map)
+      end)
+    )
+  end
+
+  defp inspect_args(:while, [initial], var_map) do
+    IO.iodata_to_binary(inspect_arg(initial, var_map))
   end
 
   defp inspect_args(:cond, [clauses, last], var_map) do
@@ -891,8 +1084,8 @@ defmodule Nx.Defn.Expr do
     IO.iodata_to_binary([clauses, ":otherwise -> ", inspect_arg(last, var_map)])
   end
 
-  defp inspect_args(:metadata, [expr, metadata], var_map) do
-    IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(Map.keys(metadata))])
+  defp inspect_args(:metadata, [expr, %{inspect: inspect}], var_map) do
+    IO.iodata_to_binary([inspect_arg(expr, var_map), ", ", inspect(inspect)])
   end
 
   defp inspect_args(_op, [tuple | args], var_map) when is_tuple(tuple),
@@ -901,16 +1094,15 @@ defmodule Nx.Defn.Expr do
   defp inspect_args(_op, args, var_map),
     do: inspect_args(args, var_map)
 
-  defp inspect_args(args, var_map) do
-    Enum.map_join(args, ", ", &inspect_arg(&1, var_map))
-  end
+  defp inspect_args(args, var_map),
+    do: Enum.map_join(args, ", ", &inspect_arg(&1, var_map))
 
   defp inspect_arg(arg, var_map) do
     case arg do
-      %T{data: %Expr{op: :fun, args: [_, _, fun]}} ->
-        inspect(fun)
+      %T{data: %Expr{op: :fun, args: [_, _, {m, f, a}]}} ->
+        [?&, Exception.format_mfa(m, f, a)]
 
-      %T{data: %Expr{op: :scalar, args: [number]}} ->
+      %T{data: %Expr{op: :constant, args: [number]}} ->
         to_string(number)
 
       %T{data: %Expr{id: id}} ->

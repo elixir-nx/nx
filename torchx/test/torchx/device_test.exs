@@ -3,11 +3,6 @@ defmodule Torchx.DeviceTest do
 
   alias Torchx.Backend, as: TB
 
-  setup do
-    Nx.default_backend(Torchx.Backend)
-    :ok
-  end
-
   if Torchx.device_available?(:cuda) do
     @device {:cuda, 0}
   else
@@ -17,20 +12,20 @@ defmodule Torchx.DeviceTest do
   describe "creation" do
     test "from_binary" do
       t = Nx.tensor([1, 2, 3], backend: {TB, device: @device})
-      assert TB.device(t) == @device
+      assert {@device, _} = t.data.ref
     end
 
     test "tensor" do
       t = Nx.tensor(7.77, backend: {TB, device: @device})
-      assert TB.device(t) == @device
+      assert {@device, _} = t.data.ref
     end
   end
 
   describe "backend_transfer" do
     test "to" do
-      t = Nx.tensor([1, 2, 3])
+      t = Nx.tensor([1, 2, 3], backend: Nx.BinaryBackend)
       td = Nx.backend_transfer(t, {TB, device: @device})
-      assert TB.device(td) == @device
+      assert {@device, _} = td.data.ref
     end
 
     test "from" do
