@@ -416,6 +416,14 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def reverse(out, tensor, axes) do
+    tensor
+    |> from_nx()
+    |> Torchx.flip(axes)
+    |> to_nx(out)
+  end
+
   ## Aggregators
 
   @impl true

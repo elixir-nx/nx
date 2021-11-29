@@ -163,6 +163,7 @@ defmodule Torchx do
   deftensor concatenate(tensors, axis)
   deftensor gather(tensor_input, tensor_indices, axis)
   deftensor argsort(tensor, axis, is_descending)
+  deftensor flip(tensor, axis)
 
   ## Aggregation
 
