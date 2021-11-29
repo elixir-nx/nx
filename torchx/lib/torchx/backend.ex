@@ -418,25 +418,10 @@ defmodule Torchx.Backend do
 
   @impl true
   def reverse(out, tensor, axes) do
-    for axis <- axes, reduce: tensor do
-      t ->
-        iota = Nx.iota(t, axis: axis, backend: __MODULE__)
-        # We want to reverse the axis, so this is a trick
-        # to reverse the iota values.
-        # Example:
-        # iota: [0, 1, 2, 3]
-        # axis_size: 4
-        # (axis_size - 1) - iota: [3 - 0, 3 - 1, 3 - 2, 3 - 3] == [3, 2, 1, 0]
-
-        axis_size = elem(tensor.shape, axis)
-
-        idx = (axis_size - 1) |> Nx.subtract(iota) |> from_nx()
-
-        t
-        |> from_nx()
-        |> Torchx.gather(idx, axis)
-        |> to_nx(out)
-    end
+    tensor
+    |> from_nx()
+    |> Torchx.flip(axes)
+    |> to_nx(out)
   end
 
   ## Aggregators
