@@ -1,5 +1,5 @@
 defmodule Nx.Defn.GradTest do
-  use Nx.Case, async: true
+  use ExUnit.Case, async: true
 
   import Nx.Defn
   import Nx.GradHelpers
