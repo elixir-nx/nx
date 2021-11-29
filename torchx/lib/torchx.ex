@@ -204,7 +204,6 @@ defmodule Torchx do
   deftensor bitwise_or(tensorA, tensorB)
   deftensor bitwise_xor(tensorA, tensorB)
 
-  deftensor outer(tensorA, tensorB)
   deftensor tensordot(tensorA, tensorB, axesA, axesB)
   deftensor matmul(tensorA, tensorB)
 
