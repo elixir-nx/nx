@@ -76,7 +76,7 @@ defmodule Nx.Defn.Grad do
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++
-               [:floor, :round, :ceil, :sign, :token, :fun] ++
+               [:floor, :round, :ceil, :sign] ++
                [:equal, :greater, :greater_equal, :less, :less_equal, :not_equal, :argsort]
 
   defp parents_tree(expr, nodes) do
@@ -130,6 +130,12 @@ defmodule Nx.Defn.Grad do
     do: fun.(arg, acc)
 
   defp traverse_args(:take, %{data: %{args: [arg | _]}}, acc, fun),
+    do: fun.(arg, acc)
+
+  defp traverse_args(:gather, %{data: %{args: [arg | _]}}, acc, fun),
+    do: fun.(arg, acc)
+
+  defp traverse_args(:attach_token, %{data: %{args: [_, arg]}}, acc, fun),
     do: fun.(arg, acc)
 
   defp traverse_args(_op, t, acc, fun),
@@ -239,9 +245,20 @@ defmodule Nx.Defn.Grad do
     grads
   end
 
+  @reduced_grads [:add, :multiply, :power]
+  @verify_grad Application.compile_env(:nx, :verify_grad, false)
+
   defp update_grads(op, args, ans, gs, _to_grad_ids, grads) do
     g = Enum.reduce(gs, &Nx.add/2)
     pairs = grad(op, args, ans, g)
+
+    if @verify_grad do
+      {_, count} = traverse_args(op, ans, 0, fn arg, count -> {arg, count + 1} end)
+
+      if op not in @reduced_grads and count != length(pairs) do
+        raise "ERROR! grad for #{op} returned #{length(pairs)} entries but traversed #{count} entries"
+      end
+    end
 
     Enum.reduce(pairs, grads, fn {child, g}, grads ->
       Map.update(grads, child.data.id, [g], &[g | &1])
