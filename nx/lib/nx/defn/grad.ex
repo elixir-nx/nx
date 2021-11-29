@@ -149,14 +149,12 @@ defmodule Nx.Defn.Grad do
     acc = traverse_parents(id, to_grad_ids, parents, acc)
     {nodes, grads} = acc
 
-    res =
-      case Map.get(grads, id, []) do
-        [] -> Expr.tensor(0.0)
-        gs -> Enum.reduce(gs, &Nx.add/2)
-      end
-
+    res = sum_grad(Map.get(grads, id, []))
     {Nx.broadcast(res, arg), {nodes, grads}}
   end
+
+  defp sum_grad([]), do: Expr.tensor(0.0)
+  defp sum_grad(gs), do: Enum.reduce(gs, &Nx.add/2)
 
   defp traverse_parents(id, to_grad_ids, parents, acc) do
     parents
@@ -170,34 +168,35 @@ defmodule Nx.Defn.Grad do
         {nodes, grads} = traverse_parents(id, to_grad_ids, parents, {nodes, grads})
         {ans, nodes} = Map.pop!(nodes, id)
         %T{data: %Expr{op: op, args: args}} = ans
-        {gs, grads} = Map.pop(grads, id, [])
-        {nodes, update_grads(op, args, ans, gs, to_grad_ids, grads)}
+        {gs, grads} = Map.pop(grads, id)
+
+        case gs do
+          nil ->
+            {nodes, grads}
+
+          [_ | _] ->
+            g = Enum.reduce(gs, &Nx.add/2)
+            {nodes, update_grads(op, args, ans, g, to_grad_ids, grads)}
+
+          _ ->
+            g = gs |> Tuple.to_list() |> Enum.map(&sum_grad/1)
+            {nodes, update_grads(op, args, ans, g, to_grad_ids, grads)}
+        end
 
       %{} ->
         {nodes, grads}
     end
   end
 
-  defp update_grads(_op, _args, _ans, [], _to_grad_ids, grads) do
-    grads
-  end
-
-  defp update_grads(:elem, [tuple, pos, size], _ans, gs, _to_grad_ids, grads) do
+  defp update_grads(:elem, [tuple, pos, size], _ans, g, _to_grad_ids, grads) do
     update_in(grads[tuple.data.id], fn tuple ->
       tuple = tuple || Tuple.duplicate([], size)
-      g = Enum.reduce(gs, &Nx.add/2)
       put_elem(tuple, pos, [g | elem(tuple, pos)])
     end)
   end
 
   defp update_grads(:cond, [clauses, last], _ans, gs, {to_grad, ids} = to_grad_ids, grads) do
-    gs =
-      if is_tuple(gs) do
-        gs |> Tuple.to_list() |> Enum.map(fn gs -> Enum.reduce(gs, &Nx.add/2) end)
-      else
-        gs
-      end
-
+    gs = List.wrap(gs)
     to_grad = Composite.flatten_list([to_grad])
 
     clauses =
@@ -251,14 +250,7 @@ defmodule Nx.Defn.Grad do
   @reduced_grads [:add, :multiply, :power]
   @verify_grad Application.compile_env(:nx, :verify_grad, false)
 
-  defp update_grads(op, args, ans, gs, _to_grad_ids, grads) do
-    g =
-      if is_tuple(gs) do
-        gs
-      else
-        Enum.reduce(gs, &Nx.add/2)
-      end
-
+  defp update_grads(op, args, ans, g, _to_grad_ids, grads) do
     pairs = grad(op, args, ans, g)
 
     if @verify_grad do
@@ -507,10 +499,7 @@ defmodule Nx.Defn.Grad do
     [{input, dl}]
   end
 
-  defp grad(:qr, [{q, r}, input, _opts], ans, {dqs, drs}) do
-    dq = Enum.reduce(dqs, Nx.Defn.Expr.tensor(0.0), &Nx.add/2)
-    dr = Enum.reduce(drs, Nx.Defn.Expr.tensor(0.0), &Nx.add/2)
-
+  defp grad(:qr, [{q, r}, input, _opts], ans, [dq, dr]) do
     {q, r} = Nx.Defn.Expr.tuple(ans, [q, r])
     r_inv = Nx.LinAlg.invert(r)
 
