@@ -1,4 +1,6 @@
 defmodule Nx.GradHelpers do
+  import ExUnit.Assertions
+
   @doc """
   Checks the gradient of numerical function `func`.
 
