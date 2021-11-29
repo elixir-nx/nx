@@ -1,12 +1,4 @@
-defmodule Nx.Case do
-  use ExUnit.CaseTemplate
-
-  using do
-    quote do
-      import Nx.Case
-    end
-  end
-
+defmodule Nx.GradHelpers do
   @doc """
   Checks the gradient of numerical function `func`.
 
