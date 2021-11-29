@@ -2052,48 +2052,48 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  describe "if" do
-    defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.power(t, 2), else: Nx.power(t, 3)) end)
+  # describe "if" do
+  #   defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.power(t, 2), else: Nx.power(t, 3)) end)
 
-    defn grad_sum_if(t) do
-      grad(t, fn t -> Nx.sum(if(Nx.all?(t), do: Nx.power(t, 2), else: Nx.power(t, 3))) end)
-    end
+  #   defn grad_sum_if(t) do
+  #     grad(t, fn t -> Nx.sum(if(Nx.all?(t), do: Nx.power(t, 2), else: Nx.power(t, 3))) end)
+  #   end
 
-    defn grad_if_sum(t) do
-      grad(t, fn t -> if(Nx.all?(t), do: Nx.sum(Nx.power(t, 2)), else: Nx.sum(Nx.power(t, 3))) end)
-    end
+  #   defn grad_if_sum(t) do
+  #     grad(t, fn t -> if(Nx.all?(t), do: Nx.sum(Nx.power(t, 2)), else: Nx.sum(Nx.power(t, 3))) end)
+  #   end
 
-    defn grad_if_tuple(t) do
-      grad(t, fn t ->
-        {{a, b}, c} =
-          if t + 1 do
-            {{Nx.power(t, 2), Nx.power(t, 3)}, Nx.power(t, 4)}
-          else
-            {{Nx.power(t, 4), Nx.power(t, 3)}, Nx.power(t, 2)}
-          end
+  #   defn grad_if_tuple(t) do
+  #     grad(t, fn t ->
+  #       {{a, b}, c} =
+  #         if t + 1 do
+  #           {{Nx.power(t, 2), Nx.power(t, 3)}, Nx.power(t, 4)}
+  #         else
+  #           {{Nx.power(t, 4), Nx.power(t, 3)}, Nx.power(t, 2)}
+  #         end
 
-        a * b + c
-      end)
-    end
+  #       a * b + c
+  #     end)
+  #   end
 
-    test "computes gradient" do
-      assert grad_if(Nx.tensor(1)) == Nx.tensor(2.0)
-      assert grad_if(Nx.tensor(-1)) == Nx.tensor(3.0)
-    end
+  #   test "computes gradient" do
+  #     assert grad_if(Nx.tensor(1)) == Nx.tensor(2.0)
+  #     assert grad_if(Nx.tensor(-1)) == Nx.tensor(3.0)
+  #   end
 
-    test "computes gradient with sum" do
-      assert grad_sum_if(Nx.tensor([1, 2, 3])) == Nx.tensor([2.0, 4.0, 6.0])
-      assert grad_sum_if(Nx.tensor([-1, 0, 1])) == Nx.tensor([3.0, 0.0, 3.0])
+  #   test "computes gradient with sum" do
+  #     assert grad_sum_if(Nx.tensor([1, 2, 3])) == Nx.tensor([2.0, 4.0, 6.0])
+  #     assert grad_sum_if(Nx.tensor([-1, 0, 1])) == Nx.tensor([3.0, 0.0, 3.0])
 
-      assert grad_if_sum(Nx.tensor([1, 2, 3])) == Nx.tensor([2.0, 4.0, 6.0])
-      assert grad_if_sum(Nx.tensor([-1, 0, 1])) == Nx.tensor([3.0, 0.0, 3.0])
-    end
+  #     assert grad_if_sum(Nx.tensor([1, 2, 3])) == Nx.tensor([2.0, 4.0, 6.0])
+  #     assert grad_if_sum(Nx.tensor([-1, 0, 1])) == Nx.tensor([3.0, 0.0, 3.0])
+  #   end
 
-    test "computes gradient with tuple" do
-      assert grad_if_tuple(Nx.tensor(1)) == Nx.tensor(9.0)
-      assert grad_if_tuple(Nx.tensor(-1)) == Nx.tensor(5.0)
-    end
-  end
+  #   test "computes gradient with tuple" do
+  #     assert grad_if_tuple(Nx.tensor(1)) == Nx.tensor(9.0)
+  #     assert grad_if_tuple(Nx.tensor(-1)) == Nx.tensor(5.0)
+  #   end
+  # end
 
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, &Nx.sum/1)

@@ -81,6 +81,13 @@ defmodule Nx.Defn.Grad do
     Composite.reduce(expr, {%{}, nodes}, &recur_parents_tree/2)
   end
 
+  defp recur_parents_tree(
+         %T{data: %Expr{op: :metadata, args: [_, %{stop_grad: true}]}},
+         {parents, nodes}
+       ) do
+    {parents, nodes}
+  end
+
   defp recur_parents_tree(%T{data: %Expr{id: id, op: op}} = t, {parents, nodes}) do
     case nodes do
       _ when op in @constants ->
@@ -162,10 +169,6 @@ defmodule Nx.Defn.Grad do
     end
 
     args
-  end
-
-  defp grad(:metadata, [_, %{stop_grad: true}], _ans, _g) do
-    []
   end
 
   defp grad(:metadata, [expr, _], _ans, g) do
@@ -545,44 +548,50 @@ defmodule Nx.Defn.Grad do
     [{t, g}]
   end
 
-  defp grad(:add, [x, y], _ans, g) do
-    [{x, g}, {y, g}]
-  end
-
-  defp grad(:subtract, [x, y], _ans, g) do
-    [{x, g}, {y, Nx.negate(g)}]
-  end
-
-  defp grad(:multiply, [x, y], _ans, g) do
+  defp grad(:add, [x, y], ans, g) do
     # TODO: handle case x and y are the same?
-    [{x, Nx.multiply(g, y)}, {y, Nx.multiply(g, x)}]
+    [unbroadcast(x, g, ans), unbroadcast(y, g, ans)]
+  end
+
+  defp grad(:subtract, [x, y], ans, g) do
+    [unbroadcast(x, g, ans), unbroadcast(y, Nx.negate(g), ans)]
+  end
+
+  defp grad(:multiply, [x, y], ans, g) do
+    # TODO: handle case x and y are the same?
+    [unbroadcast(x, Nx.multiply(g, y), ans), unbroadcast(y, Nx.multiply(g, x), ans)]
   end
 
   defp grad(:divide, [x, y], ans, g) do
-    [{x, Nx.divide(g, y)}, {y, Nx.multiply(g, Nx.negate(Nx.divide(ans, y)))}]
+    [
+      unbroadcast(x, Nx.divide(g, y), ans),
+      unbroadcast(y, Nx.multiply(g, Nx.negate(Nx.divide(ans, y))), ans)
+    ]
   end
 
-  defp grad(:remainder, [x, y], _ans, g) do
-    [{x, g}, {y, Nx.multiply(g, Nx.negate(Nx.floor(Nx.divide(x, y))))}]
+  defp grad(:remainder, [x, y], ans, g) do
+    [
+      unbroadcast(x, g, ans),
+      unbroadcast(y, Nx.multiply(g, Nx.negate(Nx.floor(Nx.divide(x, y)))), ans)
+    ]
   end
 
   defp grad(:power, [x, y], ans, g) do
-    # Since we do many operations against literals,
-    # we try to surface any scalar number.
-    sx = surface_nuldim_scalar(x)
-    sy = surface_nuldim_scalar(y)
+    exponent = Nx.select(Nx.equal(y, 0.0), 1.0, Nx.subtract(y, 1.0))
+    base = Nx.select(Nx.equal(x, 0.0), 1.0, x)
 
-    exponent = Nx.select(Nx.equal(sy, 0.0), 1.0, Nx.subtract(sy, 1.0))
-    base = Nx.select(Nx.equal(sx, 0.0), 1.0, sx)
-
-    gx = Nx.multiply(sy, Nx.power(sx, exponent))
+    gx = Nx.multiply(y, Nx.power(x, exponent))
     gy = Nx.multiply(Nx.log(base), ans)
-    [{x, Nx.multiply(g, gx)}, {y, Nx.multiply(g, gy)}]
+    [unbroadcast(x, Nx.multiply(g, gx), ans), unbroadcast(y, Nx.multiply(g, gy), ans)]
   end
 
-  defp grad(:atan2, [x, y], _ans, g) do
+  defp grad(:atan2, [x, y], ans, g) do
     den = Nx.add(Nx.multiply(x, x), Nx.multiply(y, y))
-    [{x, Nx.multiply(g, Nx.divide(y, den))}, {y, Nx.multiply(g, Nx.negate(Nx.divide(x, den)))}]
+
+    [
+      unbroadcast(x, Nx.multiply(g, Nx.divide(y, den)), ans),
+      unbroadcast(y, Nx.multiply(g, Nx.negate(Nx.divide(x, den))), ans)
+    ]
   end
 
   defp grad(op, [x, y], ans, g) when op in [:min, :max] do
@@ -598,7 +607,7 @@ defmodule Nx.Defn.Grad do
         Nx.select(Nx.equal(x, ans), 2.0, 1.0)
       )
 
-    [{x, Nx.multiply(g, lhs)}, {y, Nx.multiply(g, rhs)}]
+    [unbroadcast(x, Nx.multiply(g, lhs), ans), unbroadcast(y, Nx.multiply(g, rhs), ans)]
   end
 
   defp grad(:outer, [x, y], _ans, g) do
@@ -1019,6 +1028,14 @@ defmodule Nx.Defn.Grad do
 
   ## General helpers
 
+  # TODO: Optimize me
+  defp unbroadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
+
+  defp unbroadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
+    axes = Nx.Shape.broadcast_axes(shape, new_shape)
+    hd(grad(:broadcast, [x, new_shape, axes], :unused, res))
+  end
+
   defp reduce_g(x, opts, g) do
     axes = opts[:axes]
     keep_axes = opts[:keep_axes]
@@ -1028,13 +1045,6 @@ defmodule Nx.Defn.Grad do
     else
       axes = Nx.axes(x.shape) -- axes
       Nx.broadcast(g, x, axes: axes)
-    end
-  end
-
-  defp surface_nuldim_scalar(expr) do
-    case expr do
-      %T{data: %Expr{op: :constant, args: [scalar]}, shape: {}} -> scalar
-      %T{} -> expr
     end
   end
 
