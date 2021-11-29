@@ -99,6 +99,7 @@ defmodule Nx.Defn.Expr do
   @doc """
   Creates a tuple with elements in `list` that points to tuple
   expression `expr`.
+
   `list` must be a list of tensor expressions of the same size
   as the tuple expression.
   """
