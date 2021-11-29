@@ -1,8 +1,7 @@
 defmodule Nx.Defn.GradTest do
-  use ExUnit.Case, async: true
+  use Nx.Case, async: true
 
   import Nx.Defn
-  import Nx.GradHelpers
 
   @iters 1..25
 
@@ -1711,7 +1710,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes grad for tensor" do
-      assert_all_close(
+      approx_equal?(
         qr_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
         Nx.tensor([
           [0.70709, 1.4142],
@@ -1721,7 +1720,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes qr_megapower_grad for tensor" do
-      assert_all_close(
+      approx_equal?(
         qr_megapower_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
         Nx.tensor([
           [0.1112, -4.0914],
