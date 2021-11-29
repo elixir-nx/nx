@@ -932,6 +932,8 @@ defmodule Nx.DefnTest do
   describe "if" do
     defn if3(a, b, c), do: if(a, do: b, else: c)
     defn if2(a, b), do: if(a, do: b)
+    defn if_map(a, b, c), do: if(a, do: %{foo: b}, else: %{foo: c})
+    defn if_scalar_error(a), do: if(a, do: {1, 2}, else: {3})
 
     test "converges types" do
       assert %T{data: %Expr{op: :cond}, shape: {}, type: {:f, 32}} =
@@ -954,6 +956,17 @@ defmodule Nx.DefnTest do
                  Nx.tensor([1, 2], names: [:y]),
                  Nx.tensor([[3], [4]], names: [:x, nil])
                )
+    end
+
+    test "preserves maps" do
+      assert %{foo: %T{data: %Expr{op: :cond}, shape: {}, type: {:s, 64}}} =
+               if_map(Nx.tensor(0), Nx.tensor(1), Nx.tensor(2))
+    end
+
+    test "raises correct error on incompatible shapes" do
+      assert_raise CompileError, ~r/cond\/if expects all branches/, fn ->
+        if_scalar_error(Nx.tensor(0))
+      end
     end
   end
 

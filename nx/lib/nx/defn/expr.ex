@@ -285,8 +285,9 @@ defmodule Nx.Defn.Expr do
     out
   end
 
-  defp flatten_to_composite(_out, _context, [head | _], fun) do
-    fun.(head)
+  defp flatten_to_composite(out, _context, [head | _], fun) do
+    {out, []} = Composite.traverse(out, [fun.(head)], fn _, [head | tail] -> {head, tail} end)
+    out
   end
 
   ## Nx.Backend Callbacks
@@ -931,6 +932,13 @@ defmodule Nx.Defn.Expr do
       end)
 
     IO.iodata_to_binary(["%{", pairs, "}"])
+  end
+
+  defp to_type_shape_string(scalar) when is_number(scalar) do
+    shape = {}
+    names = []
+    type = Nx.Type.infer(scalar)
+    Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
   end
 
   ## Constant helpers and related optimizations
