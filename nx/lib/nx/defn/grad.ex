@@ -870,7 +870,6 @@ defmodule Nx.Defn.Grad do
 
     Consider using stop_grad/1 to make the gradient equivalent to \
     the identity function or use custom_grad/2 to define a proper \
-``
     gradient implementation
     """
   end
