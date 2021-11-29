@@ -816,7 +816,8 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
-  defp tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
+  @doc false
+  def tuple(%T{type: {:tuple, size}, data: %{context: context}} = expr, list)
        when is_list(list) do
     tuple =
       list
