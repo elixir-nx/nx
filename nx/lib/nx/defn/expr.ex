@@ -28,9 +28,9 @@ defmodule Nx.Defn.Expr do
 
     * `metadata(expr, metadata)`
 
-    * `elem(tuple, pos, size)` - created automatically from
-      expression that return tuples. Note it may return tuples
-      too, which means we have nested tuples
+    * `elem(tuple, pos)` - created automatically from
+      expression that return tuples. Note it may return
+      tuples too, which means we have nested tuples
 
     * `fun(parameters, t, mfa)` - the `mfa` is used only for
       introspection purposes
@@ -108,7 +108,7 @@ defmodule Nx.Defn.Expr do
     tuple =
       list
       |> Enum.with_index(fn %T{} = tensor, i ->
-        expr(tensor, context, :elem, [expr, i, size])
+        expr(tensor, context, :elem, [expr, i])
       end)
       |> List.to_tuple()
 
@@ -198,7 +198,7 @@ defmodule Nx.Defn.Expr do
 
     {out, {[], ^size}} =
       Composite.traverse(out, {Tuple.to_list(head), 0}, fn _, {[head | tail], i} ->
-        {expr(head, context, :elem, [expr, i, size]), {tail, i + 1}}
+        {expr(head, context, :elem, [expr, i]), {tail, i + 1}}
       end)
 
     out

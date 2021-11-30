@@ -2135,6 +2135,22 @@ defmodule Nx.Defn.GradTest do
       assert grad_while_constant(tensor) == Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
     end
 
+    defn grad_while_param(t, x) do
+      grad(t, fn t ->
+        x =
+          while x, x < 100 do
+            x * x
+          end
+
+        Nx.sum(t + x)
+      end)
+    end
+
+    test "computes gradient for unrelated param loop" do
+      tensor = Nx.tensor([-2.5, -1.0, 0.0, 1.0, 1.5])
+      assert grad_while_param(tensor, 2) == Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
+    end
+
     defn grad_while_single_var(t) do
       value_and_grad(t, fn t ->
         while t, t < 100 do
@@ -2180,6 +2196,28 @@ defmodule Nx.Defn.GradTest do
       {value_unroll, grad_unroll} = grad_3x_sin(tensor)
       assert value_while == value_unroll
       assert_all_close(grad_while, grad_unroll)
+    end
+
+    test "merges while loops" do
+      {_, grad} = Nx.Defn.jit(&grad_while_3x_sin/1, [:math.pi()], compiler: Nx.Defn.Identity)
+
+      assert inspect(grad) == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a                f32
+               b = power [ a, 2.0 ]       f32
+               c = power [ a, 3 ]         f32
+               d = while [ {0, c, 1.0} ]  tuple3
+               e = elem [ d, 2 ]          f32
+               f = elem [ d, 1 ]          f32
+               g = multiply [ e, f ]      f32
+               h = multiply [ b, g ]      f32
+               i = multiply [ 2.0, h ]    f32
+               j = multiply [ 3.0, i ]    f32
+             >\
+             """
     end
   end
 
