@@ -990,7 +990,7 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc false
-  defdelegate __while__(file, line, pattern, condition, block), to: Nx.Defn.Expr, as: :while
+  defdelegate __while__(file, line, pattern, condition, block), to: Nx.Defn.Expr, as: :defn_while
 
   defp while_arg({left, right}, prelude) do
     {left, prelude} = while_arg(left, prelude)

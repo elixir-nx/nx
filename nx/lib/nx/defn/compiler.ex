@@ -308,7 +308,11 @@ defmodule Nx.Defn.Compiler do
 
     ast =
       quote do
-        Nx.Defn.Expr.cond(unquote(state.file), unquote(Enum.reverse(rest)), unquote(last_expr))
+        Nx.Defn.Expr.defn_cond(
+          unquote(state.file),
+          unquote(Enum.reverse(rest)),
+          unquote(last_expr)
+        )
       end
 
     {ast, state}
