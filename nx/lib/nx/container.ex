@@ -125,7 +125,7 @@ defimpl Nx.Container, for: Any do
       defimpl Nx.Container, for: unquote(module) do
         def traverse(%{unquote_splicing(full_pattern)} = struct, var!(acc), var!(fun)) do
           unquote_splicing(updates)
-          {%{unquote_splicing(return)}, var!(acc)}
+          {%{unquote_splicing(Macro.escape(return))}, var!(acc)}
         end
 
         def reduce(%{unquote_splicing(container_pattern)} = struct, var!(acc), var!(fun)) do
