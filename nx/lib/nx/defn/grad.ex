@@ -69,8 +69,6 @@ defmodule Nx.Defn.Grad do
 
   ## Build the parents tree
 
-  @syntax [:cond]
-
   @constants [:constant, :tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
                [:all?, :any?, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
@@ -94,9 +92,9 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
-  # We register syntax nodes in a special slot and make sure they are traversed
-  # early on. We could track the nodes themselves, but this is conceptually simpler.
-  defp parents_args(op, _, id, {parents, nodes}) when op in @syntax do
+  # We register cond as a special node to avoid pretraversing it.
+  # Instead we traverse it early on on the grad computation.
+  defp parents_args(:cond, _, id, {parents, nodes}) do
     {Map.update(parents, __MODULE__, [id], &[id | &1]), nodes}
   end
 
@@ -136,6 +134,9 @@ defmodule Nx.Defn.Grad do
     do: fun.(arg, acc)
 
   defp traverse_args(:attach_token, %{data: %{args: [_, arg]}}, acc, fun),
+    do: fun.(arg, acc)
+
+  defp traverse_args(:while, %{data: %{args: [_, arg]}}, acc, fun),
     do: fun.(arg, acc)
 
   defp traverse_args(_op, t, acc, fun),

@@ -180,7 +180,11 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
-  def normalize(container_or_tensor), do: Composite.traverse(container_or_tensor, &to_expr/1)
+  def add_hook(token, expr, name, function) do
+    expr = to_container_expr(expr)
+    token = Nx.Defn.Token.add_hook(token, expr, name, function)
+    {token, expr}
+  end
 
   @doc false
   def attach_token(%T{data: %{op: :token}} = token, expr) do
@@ -223,7 +227,7 @@ defmodule Nx.Defn.Expr do
 
   @doc false
   def while(file, line, initial, condition, body) do
-    initial = normalize(initial)
+    initial = to_container_expr(initial)
 
     {arg, {_counter, context}} =
       Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
@@ -231,7 +235,7 @@ defmodule Nx.Defn.Expr do
       end)
 
     condition = to_pred(condition.(arg), line, file, :while)
-    body = arg |> body.() |> normalize()
+    body = arg |> body.() |> to_container_expr()
 
     if not Composite.compatible?(initial, body, &Nx.compatible?/2) do
       raise CompileError,
@@ -836,12 +840,16 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
+  defp to_container_expr(container_or_tensor) do
+    Composite.traverse(container_or_tensor, &to_expr/1)
+  end
+
   defp tuple_out(size) do
     %T{shape: {}, names: [], type: {:tuple, size}}
   end
 
   defp fun(context, args, body, {_, _, _} = mfa) do
-    case normalize(body) do
+    case to_container_expr(body) do
       %T{} = tensor ->
         expr(tensor, context, :fun, [args, tensor, mfa])
 

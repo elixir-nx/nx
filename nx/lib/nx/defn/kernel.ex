@@ -1286,7 +1286,7 @@ defmodule Nx.Defn.Kernel do
     do: unguarded_hook(expr, name, function)
 
   defp unguarded_hook(expr, name, function) do
-    {token, result} = add_hook(create_token(), expr, name, function)
+    {token, result} = Nx.Defn.Expr.add_hook(create_token(), expr, name, function)
     attach_token(token, result)
   end
 
@@ -1296,23 +1296,17 @@ defmodule Nx.Defn.Kernel do
   def hook_token(token, expr, name_or_function)
 
   def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
-    do: add_hook(token, expr, name, nil)
+    do: Nx.Defn.Expr.add_hook(token, expr, name, nil)
 
   def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
-    do: add_hook(token, expr, random_hook_name(), function)
+    do: Nx.Defn.Expr.add_hook(token, expr, random_hook_name(), function)
 
   @doc """
   Defines a hook with an existing token. See `hook/3`.
   """
   def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
       when Kernel.and(is_atom(name), is_function(function, 1)),
-      do: add_hook(token, expr, name, function)
-
-  defp add_hook(token, expr, name, function) do
-    expr = Nx.Defn.Expr.normalize(expr)
-    token = Nx.Defn.Token.add_hook(token, expr, name, function)
-    {token, expr}
-  end
+      do: Nx.Defn.Expr.add_hook(token, expr, name, function)
 
   defp random_hook_name(), do: :"hook_#{System.unique_integer([:positive])}"
 
