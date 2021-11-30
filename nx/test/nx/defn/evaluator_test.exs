@@ -279,10 +279,10 @@ defmodule Nx.Defn.EvaluatorTest do
       container = %Container{a: 1, b: -1, c: :reset, d: :kept}
 
       assert container_cond(container, 1) ==
-               %Container{a: Nx.tensor(2), b: Nx.tensor(-1), c: nil, d: :kept}
+               %Container{a: Nx.tensor(2), b: Nx.tensor(-1), c: %{}, d: :kept}
 
       assert container_cond(container, 0) ==
-               %Container{a: Nx.tensor(1), b: Nx.tensor(-2), c: nil, d: :kept}
+               %Container{a: Nx.tensor(1), b: Nx.tensor(-2), c: %{}, d: :kept}
     end
   end
 

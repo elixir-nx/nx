@@ -119,7 +119,17 @@ defimpl Nx.Container, for: Any do
         end
       end
 
-    return = struct |> Map.to_list() |> Keyword.merge(full_pattern)
+    return =
+      struct
+      |> Map.to_list()
+      |> Keyword.merge(full_pattern)
+      |> Enum.map(fn {k, v} = x ->
+        if k in keep or k in containers do
+          x
+        else
+          {k, Macro.escape(v)}
+        end
+      end)
 
     quote do
       defimpl Nx.Container, for: unquote(module) do
