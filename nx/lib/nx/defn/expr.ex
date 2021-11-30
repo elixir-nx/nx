@@ -28,9 +28,9 @@ defmodule Nx.Defn.Expr do
 
     * `metadata(expr, metadata)`
 
-    * `elem(tuple, pos, size)` - created automatically from
-      expression that return tuples. Note it may return tuples
-      too, which means we have nested tuples
+    * `elem(tuple, pos)` - created automatically from
+      expression that return tuples. Note it may return
+      tuples too, which means we have nested tuples
 
     * `fun(parameters, t, mfa)` - the `mfa` is used only for
       introspection purposes
@@ -108,7 +108,7 @@ defmodule Nx.Defn.Expr do
     tuple =
       list
       |> Enum.with_index(fn %T{} = tensor, i ->
-        expr(tensor, context, :elem, [expr, i, size])
+        expr(tensor, context, :elem, [expr, i])
       end)
       |> List.to_tuple()
 
@@ -174,6 +174,41 @@ defmodule Nx.Defn.Expr do
   defp unzip_each([], []),
     do: []
 
+  @doc """
+  Creates a `while` tensor expression.
+  """
+  def while(initial, context, arg, condition, body) do
+    [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
+    args = [flatten_initial, flatten_arg, condition, flatten_body]
+    flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
+  end
+
+  defp flatten_clauses(clauses) do
+    Enum.map(clauses, fn expr ->
+      case Composite.flatten_list([expr]) do
+        [single] -> single
+        list -> List.to_tuple(list)
+      end
+    end)
+  end
+
+  defp flatten_to_composite(out, context, [head | _], fun) when is_tuple(head) do
+    size = tuple_size(head)
+    expr = fun.(tuple_out(size))
+
+    {out, {[], ^size}} =
+      Composite.traverse(out, {Tuple.to_list(head), 0}, fn _, {[head | tail], i} ->
+        {expr(head, context, :elem, [expr, i]), {tail, i + 1}}
+      end)
+
+    out
+  end
+
+  defp flatten_to_composite(out, _context, [head | _], fun) do
+    {out, []} = Composite.traverse(out, [fun.(head)], fn _, [head | tail] -> {head, tail} end)
+    out
+  end
+
   ## Nx.Defn AST callbacks
 
   @doc false
@@ -205,7 +240,7 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def cond(file, clauses, last) do
+  def defn_cond(file, clauses, last) do
     clauses =
       for {meta, {pred, expr}} <- clauses do
         pred = to_pred(pred, meta[:line], file, :cond)
@@ -226,10 +261,10 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def while(file, line, initial, condition, body) do
+  def defn_while(file, line, initial, condition, body) do
     initial = to_container_expr(initial)
 
-    {arg, {_counter, context}} =
+    {arg, {_, context}} =
       Composite.traverse(initial, {0, nil}, fn expr, {counter, acc} ->
         {parameter(expr, :while, counter), {counter + 1, merge_context!(expr, acc)}}
       end)
@@ -246,35 +281,7 @@ defmodule Nx.Defn.Expr do
             "Got body #{to_type_shape_string(body)} and initial #{to_type_shape_string(initial)}"
     end
 
-    [flatten_initial, flatten_arg, flatten_body] = clauses = flatten_clauses([initial, arg, body])
-    args = [flatten_initial, flatten_arg, condition, flatten_body]
-    flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
-  end
-
-  defp flatten_clauses(clauses) do
-    Enum.map(clauses, fn expr ->
-      case Composite.flatten_list([expr]) do
-        [single] -> single
-        list -> List.to_tuple(list)
-      end
-    end)
-  end
-
-  defp flatten_to_composite(out, context, [head | _], fun) when is_tuple(head) do
-    size = tuple_size(head)
-    expr = fun.(tuple_out(size))
-
-    {out, {[], ^size}} =
-      Composite.traverse(out, {Tuple.to_list(head), 0}, fn _, {[head | tail], i} ->
-        {expr(head, context, :elem, [expr, i, size]), {tail, i + 1}}
-      end)
-
-    out
-  end
-
-  defp flatten_to_composite(out, _context, [head | _], fun) do
-    {out, []} = Composite.traverse(out, [fun.(head)], fn _, [head | tail] -> {head, tail} end)
-    out
+    while(initial, context, arg, condition, body)
   end
 
   ## Nx.Backend Callbacks

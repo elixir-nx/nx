@@ -777,9 +777,9 @@ defmodule Nx.DefnTest do
     test "returns tuples" do
       assert {p, l, u} = lu(Nx.iota({3, 3}))
 
-      assert %T{data: %Expr{op: :elem, args: [lu_expr, 0, 3]}, shape: {3, 3}} = p
-      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 1, 3]}, shape: {3, 3}} = l
-      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 2, 3]}, shape: {3, 3}} = u
+      assert %T{data: %Expr{op: :elem, args: [lu_expr, 0]}, shape: {3, 3}} = p
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 1]}, shape: {3, 3}} = l
+      assert %T{data: %Expr{op: :elem, args: [^lu_expr, 2]}, shape: {3, 3}} = u
     end
   end
 
@@ -789,8 +789,8 @@ defmodule Nx.DefnTest do
     test "returns tuples" do
       assert {left, right} = qr(Nx.iota({3, 2}))
 
-      assert %T{data: %Expr{op: :elem, args: [qr_expr, 0, 2]}, shape: {3, 2}} = left
-      assert %T{data: %Expr{op: :elem, args: [^qr_expr, 1, 2]}, shape: {2, 2}} = right
+      assert %T{data: %Expr{op: :elem, args: [qr_expr, 0]}, shape: {3, 2}} = left
+      assert %T{data: %Expr{op: :elem, args: [^qr_expr, 1]}, shape: {2, 2}} = right
     end
   end
 
@@ -800,9 +800,9 @@ defmodule Nx.DefnTest do
     test "returns tuples" do
       assert {u, s, vt} = svd(Nx.iota({3, 3}))
 
-      assert %T{data: %Expr{op: :elem, args: [svd_expr, 0, 3]}, shape: {3, 3}} = u
-      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 1, 3]}, shape: {3}} = s
-      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 2, 3]}, shape: {3, 3}} = vt
+      assert %T{data: %Expr{op: :elem, args: [svd_expr, 0]}, shape: {3, 3}} = u
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 1]}, shape: {3}} = s
+      assert %T{data: %Expr{op: :elem, args: [^svd_expr, 2]}, shape: {3, 3}} = vt
     end
   end
 

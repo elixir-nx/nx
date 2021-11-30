@@ -196,7 +196,7 @@ defmodule Nx.Defn.TreeTest do
     test "with while" do
       expr = factorial(Nx.template({}, {:s, 64}))
 
-      assert %T{data: %Expr{op: :elem, args: [while, 0, 2]}, type: {:f, 32}} =
+      assert %T{data: %Expr{op: :elem, args: [while, 0]}, type: {:f, 32}} =
                Tree.rewrite_types(expr, max_signed_type: {:s, 32}, max_float_type: {:f, 32})
 
       assert %T{data: %Expr{op: :while, args: [initial, arg, condition, body]}, type: {:tuple, 2}} =

@@ -40,7 +40,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :elem, args: args}}, state, cache) do
-    [tuple, i, _size] = args
+    [tuple, i] = args
     {tuple, cache} = composite_eval(tuple, state, cache)
     {elem(tuple, i), cache}
   end

@@ -45,6 +45,18 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
+  Replces args in the given tensor expression.
+
+  Use this function with extreme care. Changing the args but keeping
+  the same id may mean you have different versions of the same node.
+  Do this change only if you guarante all nodes in the tree have been
+  replaced equally.
+  """
+  def replace_args(%T{data: %Expr{} = expr} = t, args) do
+    %{t | data: %{expr | args: args}}
+  end
+
+  @doc """
   Apples the given function and accumulator to the args of the node.
 
   Warning: be very careful when using this function to traverse the expression

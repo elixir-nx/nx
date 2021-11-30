@@ -562,7 +562,7 @@ defmodule EXLA.Defn do
     op
   end
 
-  defp to_operator(:elem, [op, index, _size], _ans, _state) do
+  defp to_operator(:elem, [op, index], _ans, _state) do
     EXLA.Op.get_tuple_element(op, index)
   end
 
@@ -1263,7 +1263,7 @@ defmodule EXLA.Defn do
   defp recur_composite(tuple, state, cache) when is_tuple(tuple) do
     list = Tuple.to_list(tuple)
 
-    if expr = full_tuple(list, tuple_size(tuple)) do
+    if expr = full_tuple(list) do
       recur_composite(expr, state, cache)
     else
       {elements, cache} = Enum.map_reduce(list, cache, &recur_composite(&1, state, &2))
@@ -1281,18 +1281,18 @@ defmodule EXLA.Defn do
 
   # If each element of the tuple is just a reference to the parent expression,
   # discard the tuple elements and return the parent expression.
-  defp full_tuple(list, size) do
+  defp full_tuple(list) do
     with [%T{data: %Expr{op: :elem, args: args}} | rest] <- list,
-         [%T{data: %Expr{id: id}} = expr, 0, ^size] <- args,
-         true <- rest |> Enum.with_index(1) |> Enum.all?(&full_tuple?(&1, id, size)) do
+         [%T{data: %Expr{id: id}} = expr, 0] <- args,
+         true <- rest |> Enum.with_index(1) |> Enum.all?(&full_tuple?(&1, id)) do
       expr
     else
       _ -> nil
     end
   end
 
-  defp full_tuple?({arg, index}, id, size) do
-    match?(%T{data: %Expr{op: :elem, args: [%T{data: %Expr{id: ^id}}, ^index, ^size]}}, arg)
+  defp full_tuple?({arg, index}, id) do
+    match?(%T{data: %Expr{op: :elem, args: [%T{data: %Expr{id: ^id}}, ^index]}}, arg)
   end
 
   ## Aggregation

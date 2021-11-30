@@ -2118,6 +2118,109 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "while" do
+    defn grad_while_constant(t) do
+      grad(t, fn t ->
+        {_, t} =
+          while {i = 0, t}, i < 3 do
+            {i + 1, t}
+          end
+
+        Nx.sum(t)
+      end)
+    end
+
+    test "computes gradient for constant loop" do
+      tensor = Nx.tensor([-2.5, -1.0, 0.0, 1.0, 1.5])
+      assert grad_while_constant(tensor) == Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
+    end
+
+    defn grad_while_param(t, x) do
+      grad(t, fn t ->
+        x =
+          while x, x < 100 do
+            x * x
+          end
+
+        Nx.sum(t + x)
+      end)
+    end
+
+    test "computes gradient for unrelated param loop" do
+      tensor = Nx.tensor([-2.5, -1.0, 0.0, 1.0, 1.5])
+      assert grad_while_param(tensor, 2) == Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
+    end
+
+    defn grad_while_single_var(t) do
+      value_and_grad(t, fn t ->
+        while t, t < 100 do
+          t * t
+        end
+      end)
+    end
+
+    defn grad_while_single_var_unroll(t) do
+      value_and_grad(t, fn v2 ->
+        v4 = v2 * v2
+        v16 = v4 * v4
+        v16 * v16
+      end)
+    end
+
+    test "computes gradient for single var loop" do
+      assert grad_while_single_var(2.0) == grad_while_single_var_unroll(2.0)
+    end
+
+    defn grad_while_3x_sin(t) do
+      value_and_grad(t, fn t ->
+        {_, t} =
+          while {i = 0, t = Nx.power(t, 3)}, i < 3 do
+            {i + 1, Nx.sin(t)}
+          end
+
+        Nx.sum(Nx.power(t, 2))
+      end)
+    end
+
+    defn grad_3x_sin(t) do
+      value_and_grad(
+        t,
+        &(&1 |> Nx.power(3) |> Nx.sin() |> Nx.sin() |> Nx.sin() |> Nx.power(2) |> Nx.sum())
+      )
+    end
+
+    test "computes gradient for while with additional var" do
+      # Do not align values so we can find bugs in the number of loops
+      tensor = Nx.tensor([-2.5, -1.0, 0.0, 1.0, 1.5])
+      {value_while, grad_while} = grad_while_3x_sin(tensor)
+      {value_unroll, grad_unroll} = grad_3x_sin(tensor)
+      assert value_while == value_unroll
+      assert_all_close(grad_while, grad_unroll)
+    end
+
+    test "merges while loops" do
+      {_, grad} = Nx.Defn.jit(&grad_while_3x_sin/1, [:math.pi()], compiler: Nx.Defn.Identity)
+
+      assert inspect(grad) == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a                f32
+               b = power [ a, 2.0 ]       f32
+               c = power [ a, 3 ]         f32
+               d = while [ {0, c, 1.0} ]  tuple3
+               e = elem [ d, 2 ]          f32
+               f = elem [ d, 1 ]          f32
+               g = multiply [ e, f ]      f32
+               h = multiply [ b, g ]      f32
+               i = multiply [ 2.0, h ]    f32
+               j = multiply [ 3.0, i ]    f32
+             >\
+             """
+    end
+  end
+
   describe "axes" do
     defn grad_sum_full(t), do: grad(t, &Nx.sum/1)
     defn grad_mean_full(t), do: grad(t, &Nx.mean/1)

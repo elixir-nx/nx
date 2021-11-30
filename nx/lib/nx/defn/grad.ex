@@ -24,10 +24,10 @@ defmodule Nx.Defn.Grad do
     to_grad_ids = {to_grad, ids}
     grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
 
-    {graded, _} =
+    {graded, {_, grads}} =
       Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
 
-    {expr, graded}
+    replace_syntax({expr, graded}, ids, grads)
   end
 
   defp constant(float, shape) do
@@ -69,7 +69,7 @@ defmodule Nx.Defn.Grad do
 
   ## Build the parents tree
 
-  @constants [:constant, :tensor, :parameter, :eye, :iota, :random_uniform, :random_normal] ++
+  @constants [:constant, :tensor, :eye, :iota, :random_uniform, :random_normal] ++
                [:all?, :any?, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
@@ -99,48 +99,85 @@ defmodule Nx.Defn.Grad do
   end
 
   defp parents_args(op, t, parent_id, acc) do
-    {_, acc} =
-      traverse_args(op, t, acc, fn %T{data: %{id: id, op: op}} = arg, {parents, nodes} ->
-        if op in @constants do
-          {arg, {parents, nodes}}
-        else
-          parents = Map.update(parents, id, [parent_id], &[parent_id | &1])
-          {arg, recur_parents_tree(arg, {parents, nodes})}
-        end
-      end)
-
-    acc
+    reduce_args(op, t, acc, fn %T{data: %{id: id, op: op}} = arg, {parents, nodes} ->
+      if op in @constants do
+        {parents, nodes}
+      else
+        parents = Map.update(parents, id, [parent_id], &[parent_id | &1])
+        recur_parents_tree(arg, {parents, nodes})
+      end
+    end)
   end
 
   # For some functions, only a subset of the args participate in the grad,
   # so we handle them accordingly here.
 
-  defp traverse_args(:select, %{data: %{args: [_, on_true, on_false | _]}}, acc, fun),
-    do: Enum.map_reduce([on_true, on_false], acc, fun)
+  defp reduce_args(:select, %{data: %{args: [_, on_true, on_false | _]}}, acc, fun),
+    do: fun.(on_true, fun.(on_false, acc))
 
-  defp traverse_args(:slice, %{data: %{args: [arg | _]}}, acc, fun),
+  defp reduce_args(:slice, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp traverse_args(:put_slice, %{data: %{args: [arg, _, update | _]}}, acc, fun),
-    do: Enum.map_reduce([arg, update], acc, fun)
+  defp reduce_args(:put_slice, %{data: %{args: [arg, _, update | _]}}, acc, fun),
+    do: fun.(arg, fun.(update, acc))
 
-  defp traverse_args(:take_along_axis, %{data: %{args: [arg | _]}}, acc, fun),
+  defp reduce_args(:take_along_axis, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp traverse_args(:take, %{data: %{args: [arg | _]}}, acc, fun),
+  defp reduce_args(:take, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp traverse_args(:gather, %{data: %{args: [arg | _]}}, acc, fun),
+  defp reduce_args(:gather, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp traverse_args(:attach_token, %{data: %{args: [_, arg]}}, acc, fun),
+  defp reduce_args(:attach_token, %{data: %{args: [_, arg]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp traverse_args(:while, %{data: %{args: [_, arg]}}, acc, fun),
-    do: fun.(arg, acc)
+  defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
+    do: Composite.reduce(initial, acc, fun)
 
-  defp traverse_args(_op, t, acc, fun),
-    do: Tree.apply_args(t, acc, fun)
+  defp reduce_args(_op, t, acc, fun),
+    do: Tree.apply_args(t, acc, &{&1, fun.(&1, &2)}) |> elem(1)
+
+  ## Replace nodes
+
+  # The goal of this code is to avoid running conds and whiles twice.
+  # So we need to collect those nodes as we modify them and then we do
+  # one pass to replace them on the original expression.
+
+  defp attach_syntax(grads, %{data: %{op: op, id: id}, type: type}, res) do
+    [%{data: %{op: :elem, args: [%{data: %{op: ^op}} = syntax, _]}} = elem | _] =
+      Composite.flatten_list([res])
+
+    new = if match?({:tuple, _}, type), do: syntax, else: elem
+    Map.update(grads, __MODULE__, %{id => new}, &Map.put(&1, id, new))
+  end
+
+  defp replace_syntax(expr, ids, grads) do
+    case grads do
+      %{__MODULE__ => replacements} ->
+        {expr, _} = Composite.traverse(expr, Map.merge(replacements, ids), &replace_syntax/2)
+        expr
+
+      %{} ->
+        expr
+    end
+  end
+
+  defp replace_syntax(%T{data: %{id: id}} = ans, cache) do
+    case cache do
+      %{^id => :stop} ->
+        {ans, cache}
+
+      %{^id => res} ->
+        {res, cache}
+
+      %{} ->
+        {args, cache} = Tree.apply_args(ans, cache, &replace_syntax/2)
+        res = Tree.replace_args(ans, args)
+        {res, Map.put(cache, id, res)}
+    end
+  end
 
   ## Recursion
 
@@ -189,11 +226,72 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  defp update_grads(:elem, [tuple, pos, size], _ans, g, _to_grad_ids, grads) do
+  defp update_grads(:elem, [%{type: {:tuple, size}} = tuple, pos], _ans, g, _to_grad_ids, grads) do
     update_in(grads[tuple.data.id], fn tuple ->
       tuple = tuple || Tuple.duplicate([], size)
       put_elem(tuple, pos, [g | elem(tuple, pos)])
     end)
+  end
+
+  defp update_grads(:while, [initial, arg, condition, body], ans, gs, _to_grad_ids, grads) do
+    # Compute a mask over inputs we don't need to recur.
+    gs = List.wrap(gs)
+    premask_gs_length = length(gs)
+    mask = Enum.map(gs, &(not zero?(&1)))
+    gs = zip_filter(gs, mask)
+
+    flatten_initial = Composite.flatten_list([initial])
+    masked_initial = zip_filter(flatten_initial, mask)
+    context = hd(flatten_initial).data.context
+    arg_context = condition.data.context
+
+    # Fresh initial values for grads at constant 1.0
+    grad_initial = Enum.map(masked_initial, &constant(1.0, &1))
+
+    # Convert all gradients into while parameters.
+    {grad_args, _} =
+      Enum.map_reduce(gs, premask_gs_length, fn g, pos ->
+        {Expr.parameter(g, arg_context, pos), pos + 1}
+      end)
+
+    # Now compute the gradient of the body, first we build the tree as usual.
+    {parents, nodes} = parents_tree(body, %{})
+
+    # The bodies have the grad_arg as their gradient, recursively.
+    {while_grads, []} =
+      [body]
+      |> Composite.flatten_list()
+      |> zip_filter(mask)
+      |> Enum.reduce({%{}, grad_args}, fn arg, {grads, [g | gs]} ->
+        {Map.put(grads, arg.data.id, [g]), gs}
+      end)
+
+    # Now grad over each input.
+    {grad_body, {_, while_grads}} =
+      [arg]
+      |> Composite.flatten_list()
+      |> zip_filter(mask)
+      |> Enum.map_reduce({nodes, while_grads}, &to_grad(&1, {arg, %{}}, parents, &2))
+
+    # And finally build a new while.
+    {ret, while_gs} =
+      Expr.while(
+        {initial, List.to_tuple(grad_initial)},
+        context,
+        {arg, List.to_tuple(grad_args)},
+        condition,
+        replace_syntax({body, List.to_tuple(grad_body)}, %{}, while_grads)
+      )
+
+    gs = Enum.zip_with(gs, Tuple.to_list(while_gs), &Nx.multiply/2)
+
+    # Now set the computed gradients for each input.
+    {grads, []} =
+      Enum.reduce(masked_initial, {grads, gs}, fn arg, {grads, [g | gs]} ->
+        {Map.update(grads, arg.data.id, [g], &[g | &1]), gs}
+      end)
+
+    attach_syntax(grads, ans, ret)
   end
 
   defp update_grads(:cond, [clauses, last], _ans, gs, {to_grad, ids} = to_grad_ids, grads) do
@@ -205,7 +303,7 @@ defmodule Nx.Defn.Grad do
         {parents, nodes} = parents_tree(body, ids)
 
         {grads, []} =
-          Composite.reduce(body, {%{}, gs}, fn arg, {grads, [g | gs]} ->
+          Composite.reduce(body, {grads, gs}, fn arg, {grads, [g | gs]} ->
             {Map.put(grads, arg.data.id, [g]), gs}
           end)
 
@@ -219,33 +317,38 @@ defmodule Nx.Defn.Grad do
     used = Enum.map(to_grad, fn _ -> false end)
 
     used =
-      Enum.reduce(clauses, used, fn {_, body}, used ->
-        Enum.zip_with(body, used, fn
-          %T{data: %{op: :constant, args: [0.0]}}, false -> false
-          _, _ -> true
+      Enum.reduce(clauses, used, fn {_, graded}, used ->
+        Enum.zip_with(graded, used, fn expr, flag -> not zero?(expr) or flag end)
+      end)
+
+    # Cond may be called even if no input contributes to the grad.
+    # So we check it here.
+    if true in used do
+      [{true, last} | clauses] =
+        Enum.map(clauses, fn {head, graded} ->
+          {head, graded |> zip_filter(used) |> List.to_tuple()}
         end)
-      end)
 
-    [{true, last} | clauses] =
-      Enum.map(clauses, fn {head, body} ->
-        {head, body |> zip_filter(used) |> List.to_tuple()}
-      end)
+      # Build a new cond expression and assign each derivative to the new grads.
+      cond_gs =
+        case Expr.cond(clauses, last) do
+          res when is_tuple(res) -> Tuple.to_list(res)
+          res -> [res]
+        end
 
-    # Build a new cond expression and assign each derivative to the new grads.
-    res =
-      case Expr.cond(clauses, last) do
-        res when is_tuple(res) -> Tuple.to_list(res)
-        res -> [res]
-      end
+      {grads, []} =
+        to_grad
+        |> zip_filter(used)
+        |> Enum.reduce({grads, cond_gs}, fn to_grad, {grads, [elem | rest]} ->
+          {Map.update(grads, to_grad.data.id, [elem], &[elem | &1]), rest}
+        end)
 
-    {grads, []} =
-      to_grad
-      |> zip_filter(used)
-      |> Enum.reduce({grads, res}, fn to_grad, {grads, [elem | rest]} ->
-        {Map.update(grads, to_grad.data.id, [elem], &[elem | &1]), rest}
-      end)
-
-    grads
+      # We don't replace nodes for cond because the checks are cheap (scalar values)
+      # and shared between the original cond and the graded cond.
+      grads
+    else
+      grads
+    end
   end
 
   @reduced_grads [:add, :multiply, :power]
@@ -255,7 +358,7 @@ defmodule Nx.Defn.Grad do
     pairs = grad(op, args, ans, g)
 
     if @verify_grad do
-      {_, count} = traverse_args(op, ans, 0, fn arg, count -> {arg, count + 1} end)
+      count = reduce_args(op, ans, 0, fn _arg, count -> count + 1 end)
 
       if op not in @reduced_grads and count != length(pairs) do
         raise "ERROR! grad for #{op} returned #{length(pairs)} entries but traversed #{count} entries"
@@ -1135,6 +1238,9 @@ defmodule Nx.Defn.Grad do
       Nx.broadcast(g, x, axes: axes)
     end
   end
+
+  defp zero?(%T{data: %{op: :constant, args: [0.0]}}), do: true
+  defp zero?(_), do: false
 
   defp zip_filter([head | tail], [true | mask]), do: [head | zip_filter(tail, mask)]
   defp zip_filter([_ | tail], [false | mask]), do: zip_filter(tail, mask)
