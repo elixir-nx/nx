@@ -1,4 +1,4 @@
 defmodule Container do
   @derive {Nx.Container, containers: [:a, :b], keep: [:d]}
-  defstruct [:a, :b, :c, :d, e: %{}]
+  defstruct [:a, :b, :c, d: %{}, e: %{}]
 end

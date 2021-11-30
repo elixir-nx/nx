@@ -119,13 +119,23 @@ defimpl Nx.Container, for: Any do
         end
       end
 
-    return = struct |> Map.to_list() |> Keyword.merge(full_pattern)
+    return =
+      struct
+      |> Map.to_list()
+      |> Keyword.merge(full_pattern)
+      |> Enum.map(fn {k, v} = x ->
+        if k in keep or k in containers do
+          x
+        else
+          {k, Macro.escape(v)}
+        end
+      end)
 
     quote do
       defimpl Nx.Container, for: unquote(module) do
         def traverse(%{unquote_splicing(full_pattern)} = struct, var!(acc), var!(fun)) do
           unquote_splicing(updates)
-          {%{unquote_splicing(Macro.escape(return))}, var!(acc)}
+          {%{unquote_splicing(return)}, var!(acc)}
         end
 
         def reduce(%{unquote_splicing(container_pattern)} = struct, var!(acc), var!(fun)) do
