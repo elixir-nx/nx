@@ -343,6 +343,8 @@ defmodule Nx.Defn.Grad do
           {Map.update(grads, to_grad.data.id, [elem], &[elem | &1]), rest}
         end)
 
+      # We don't replace nodes for cond because the checks are cheap (scalar values)
+      # and shared between the original cond and the graded cond.
       grads
     else
       grads
