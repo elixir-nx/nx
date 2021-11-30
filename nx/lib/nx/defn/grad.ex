@@ -237,7 +237,7 @@ defmodule Nx.Defn.Grad do
     # Compute a mask over inputs we don't need to recur.
     gs = List.wrap(gs)
     premask_gs_length = length(gs)
-    mask = Enum.map(gs, &not zero?(&1))
+    mask = Enum.map(gs, &(not zero?(&1)))
     gs = zip_filter(gs, mask)
 
     flatten_initial = Composite.flatten_list([initial])
