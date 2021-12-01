@@ -2136,19 +2136,18 @@ defmodule Nx.Defn.GradTest do
     end
 
     defn grad_while_param(t, x) do
-      grad(t, fn t ->
-        x =
-          while x, x < 100 do
-            x * x
+      value_and_grad(x, fn x ->
+        {_, t} =
+          while {x, t}, t < 100 do
+            {x, x * t}
           end
 
-        Nx.sum(t + x)
+        Nx.sum(t)
       end)
     end
 
     test "computes gradient for unrelated param loop" do
-      tensor = Nx.tensor([-2.5, -1.0, 0.0, 1.0, 1.5])
-      assert grad_while_param(tensor, 2) == Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
+      assert grad_while_param(1.0, 2.0) == {Nx.tensor(128.0), Nx.tensor(5461.0)}
     end
 
     defn grad_while_single_var(t) do
