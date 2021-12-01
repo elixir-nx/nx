@@ -97,11 +97,11 @@ iex> Nx.divide(Nx.exp(t), Nx.sum(Nx.exp(t)))
 >
 ```
 
+By default, `Nx` uses pure Elixir code. Since Elixir is a functional and immutable language, each operation above makes a copy of the tensor, which is quite innefficient. You can use either [EXLA](https://github.com/elixir-nx/nx/tree/main/exla) or [Torchx](https://github.com/elixir-nx/nx/tree/main/torchx) backends for an improvement in performance, often over 3 orders of magnitude, as well as the ability to work on the data in the GPU. See the README of those projects for more information.
+
 ## Numerical definitions
 
-By default, `Nx` uses pure Elixir code. Since Elixir is a functional and immutable language, each operation above makes a copy of the tensor, which is quite innefficient.
-
-However, `Nx` also comes with numerical definitions, called `defn`, which is a subset of Elixir tailored for numerical computations. For example, it overrides Elixir's default operators so they are tensor-aware:
+`Nx` also comes with numerical definitions, called `defn`, which is a subset of Elixir tailored for numerical computations. For example, it overrides Elixir's default operators so they are tensor-aware:
 
 ```elixir
 defmodule MyModule do
@@ -119,7 +119,13 @@ You can now invoke it as:
 MyModule.softmax(Nx.tensor([1, 2, 3]))
 ```
 
-`defn` supports custom compilers, which can compile said functions to run on the CPU or in the GPU on the fly. For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
+`defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-programming capabilities: we transform Elixir code to build a graph of your numerical definitions. This brings two important capabilities:
+
+  1. We can transform this graph to provide features such as automatic differentiation, type lowering, and more
+
+  2. We support custom compilers, which can compile said definitions to run on the CPU and GPU just-in-time
+
+For example, [using the `EXLA` compiler](https://github.com/elixir-nx/nx/tree/main/exla), which provides bindings to Google's XLA:
 
 ```elixir
 Nx.Defn.default_options(compiler: EXLA)
@@ -152,9 +158,7 @@ elixir f64                3.11 - 4924.56x slower +321.63 ms
 
 See the [`bench`](https://github.com/elixir-nx/nx/tree/main/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/main/exla/examples) directory inside the EXLA project for more information.
 
-`defn` relies on a technique called multi-stage programming, which is built on top of Elixir functional and meta-programming capabilities: we transform Elixir code to emit an AST that is then transformed to run on the CPU/GPU. Ultimately, the `defn` compiler is pluggable, which means developers can implement bindings for different tensor compiler technologies and choose the most appropriate one.
-
-Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. Other features such as loops and in-place updates are on the roadmap. `defn` also support `transforms`, which allows numerical definitions to be transformed at runtime. Automatic differentiation, via the `grad` function, is one example of transforms.
+Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. It also brings exclusive features to numerical definitions, such as `while` loops, automatic differentiation via the `grad` function, hooks to inspect data running on the GPU, and more.
 
 ## License
 
