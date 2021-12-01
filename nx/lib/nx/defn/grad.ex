@@ -24,10 +24,10 @@ defmodule Nx.Defn.Grad do
     to_grad_ids = {to_grad, ids}
     grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
 
-    {graded, {_, grads}} =
+    {graded, _} =
       Composite.traverse(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
 
-    replace_syntax({expr, graded}, ids, grads)
+    {expr, graded}
   end
 
   defp constant(float, shape) do
@@ -139,46 +139,6 @@ defmodule Nx.Defn.Grad do
   defp reduce_args(_op, t, acc, fun),
     do: Tree.apply_args(t, acc, &{&1, fun.(&1, &2)}) |> elem(1)
 
-  ## Replace nodes
-
-  # The goal of this code is to avoid running conds and whiles twice.
-  # So we need to collect those nodes as we modify them and then we do
-  # one pass to replace them on the original expression.
-
-  defp attach_syntax(grads, %{data: %{op: op, id: id}, type: type}, res) do
-    [%{data: %{op: :elem, args: [%{data: %{op: ^op}} = syntax, _]}} = elem | _] =
-      Composite.flatten_list([res])
-
-    new = if match?({:tuple, _}, type), do: syntax, else: elem
-    Map.update(grads, __MODULE__, %{id => new}, &Map.put(&1, id, new))
-  end
-
-  defp replace_syntax(expr, ids, grads) do
-    case grads do
-      %{__MODULE__ => replacements} ->
-        {expr, _} = Composite.traverse(expr, Map.merge(replacements, ids), &replace_syntax/2)
-        expr
-
-      %{} ->
-        expr
-    end
-  end
-
-  defp replace_syntax(%T{data: %{id: id}} = ans, cache) do
-    case cache do
-      %{^id => :stop} ->
-        {ans, cache}
-
-      %{^id => res} ->
-        {res, cache}
-
-      %{} ->
-        {args, cache} = Tree.apply_args(ans, cache, &replace_syntax/2)
-        res = Tree.replace_args(ans, args)
-        {res, Map.put(cache, id, res)}
-    end
-  end
-
   ## Recursion
 
   defp to_grad(arg, to_grad_ids, parents, acc) do
@@ -233,24 +193,16 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp update_grads(:while, [initial, arg, condition, body], ans, gs, _to_grad_ids, grads) do
-    # Compute a mask over inputs we don't need to recur.
+  defp update_grads(:while, [initial, arg, condition, body], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
-    premask_gs_length = length(gs)
-    mask = Enum.map(gs, &(not zero?(&1)))
-    gs = zip_filter(gs, mask)
-
     flatten_initial = Composite.flatten_list([initial])
-    masked_initial = zip_filter(flatten_initial, mask)
     context = hd(flatten_initial).data.context
     arg_context = condition.data.context
-
-    # Fresh initial values for grads at constant 1.0
-    grad_initial = Enum.map(masked_initial, &constant(1.0, &1))
+    gs = Enum.zip_with(gs, flatten_initial, &Nx.broadcast/2)
 
     # Convert all gradients into while parameters.
     {grad_args, _} =
-      Enum.map_reduce(gs, premask_gs_length, fn g, pos ->
+      Enum.map_reduce(gs, length(gs), fn g, pos ->
         {Expr.parameter(g, arg_context, pos), pos + 1}
       end)
 
@@ -259,39 +211,33 @@ defmodule Nx.Defn.Grad do
 
     # The bodies have the grad_arg as their gradient, recursively.
     {while_grads, []} =
-      [body]
-      |> Composite.flatten_list()
-      |> zip_filter(mask)
-      |> Enum.reduce({%{}, grad_args}, fn arg, {grads, [g | gs]} ->
+      Composite.reduce(body, {%{}, grad_args}, fn arg, {grads, [g | gs]} ->
         {Map.put(grads, arg.data.id, [g]), gs}
       end)
 
     # Now grad over each input.
-    {grad_body, {_, while_grads}} =
+    {grad_body, _} =
       [arg]
       |> Composite.flatten_list()
-      |> zip_filter(mask)
       |> Enum.map_reduce({nodes, while_grads}, &to_grad(&1, {arg, %{}}, parents, &2))
 
     # And finally build a new while.
-    {ret, while_gs} =
+    {_, while_gs} =
       Expr.while(
-        {initial, List.to_tuple(grad_initial)},
+        {initial, List.to_tuple(gs)},
         context,
         {arg, List.to_tuple(grad_args)},
         condition,
-        replace_syntax({body, List.to_tuple(grad_body)}, %{}, while_grads)
+        {body, List.to_tuple(grad_body)}
       )
-
-    gs = Enum.zip_with(gs, Tuple.to_list(while_gs), &Nx.multiply/2)
 
     # Now set the computed gradients for each input.
     {grads, []} =
-      Enum.reduce(masked_initial, {grads, gs}, fn arg, {grads, [g | gs]} ->
+      Enum.reduce(flatten_initial, {grads, Tuple.to_list(while_gs)}, fn arg, {grads, [g | gs]} ->
         {Map.update(grads, arg.data.id, [g], &[g | &1]), gs}
       end)
 
-    attach_syntax(grads, ans, ret)
+    grads
   end
 
   defp update_grads(:cond, [clauses, last], _ans, gs, {to_grad, ids} = to_grad_ids, grads) do

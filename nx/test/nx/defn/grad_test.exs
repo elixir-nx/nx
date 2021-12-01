@@ -2197,28 +2197,6 @@ defmodule Nx.Defn.GradTest do
       assert value_while == value_unroll
       assert_all_close(grad_while, grad_unroll)
     end
-
-    test "merges while loops" do
-      {_, grad} = Nx.Defn.jit(&grad_while_3x_sin/1, [:math.pi()], compiler: Nx.Defn.Identity)
-
-      assert inspect(grad) == """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0           f32
-               b = power a, 2.0        f32
-               c = power a, 3          f32
-               d = while {0, c, 1.0}   tuple3
-               e = elem d, 2           f32
-               f = elem d, 1           f32
-               g = multiply e, f       f32
-               h = multiply b, g       f32
-               i = multiply 2.0, h     f32
-               j = multiply 3.0, i     f32
-             >\
-             """
-    end
   end
 
   describe "axes" do
