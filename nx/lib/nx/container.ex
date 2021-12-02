@@ -103,19 +103,20 @@ defimpl Nx.Container, for: Any do
 
     updates =
       for field <- containers do
-        var = Macro.var(field, __MODULE__)
+        # Use nil for the scope so it does not conflict with quoted variables.
+        var = Macro.var(field, nil)
 
         quote do
-          {unquote(var), var!(acc)} = var!(fun).(unquote(var), var!(acc))
+          {unquote(var), acc} = fun.(unquote(var), acc)
         end
       end
 
     reduces =
       for field <- containers do
-        var = Macro.var(field, __MODULE__)
+        var = Macro.var(field, nil)
 
         quote do
-          var!(acc) = var!(fun).(unquote(var), var!(acc))
+          acc = fun.(unquote(var), acc)
         end
       end
 
@@ -128,14 +129,14 @@ defimpl Nx.Container, for: Any do
 
     quote do
       defimpl Nx.Container, for: unquote(module) do
-        def traverse(%{unquote_splicing(full_pattern)} = struct, var!(acc), var!(fun)) do
+        def traverse(%{unquote_splicing(full_pattern)} = struct, acc, fun) do
           unquote_splicing(updates)
-          {%{unquote_splicing(return)}, var!(acc)}
+          {%{unquote_splicing(return)}, acc}
         end
 
-        def reduce(%{unquote_splicing(container_pattern)} = struct, var!(acc), var!(fun)) do
+        def reduce(%{unquote_splicing(container_pattern)} = struct, acc, fun) do
           unquote_splicing(reduces)
-          var!(acc)
+          acc
         end
       end
     end
@@ -148,7 +149,7 @@ defimpl Nx.Container, for: Any do
               "because it does not have field #{inspect(field)}"
     end
 
-    {field, Macro.var(field, __MODULE__)}
+    {field, Macro.var(field, nil)}
   end
 
   def traverse(data, _acc, _fun) do
