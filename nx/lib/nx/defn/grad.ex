@@ -556,15 +556,28 @@ defmodule Nx.Defn.Grad do
     m = Nx.dot(r, Nx.transpose(dr)) |> Nx.subtract(Nx.dot(Nx.transpose(dq), q))
 
     # copyltu
-    m_ltu =
-      m
-      |> Nx.iota(axis: 0)
-      |> Nx.greater(Nx.iota(m, axis: 1))
-      |> Nx.add(Nx.eye(m) |> Nx.divide(2))
-      |> Nx.multiply(m)
-      |> then(fn m_ltu -> Nx.add(m_ltu, Nx.transpose(m_ltu)) end)
+    m_ltu = tril(m) |> Nx.add(m |> tril_strict() |> Nx.transpose())
 
     da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.transpose(r_inv))
+
+    [{input, da}]
+  end
+
+  defp grad(:lu, [{p, l, u}, input, _opts], ans, [dp, dl, du]) do
+    {p, l, u} = Nx.Defn.Expr.tuple(ans, [p, l, u])
+
+    u_t = Nx.transpose(u)
+    l_t = Nx.transpose(l)
+    p_t = Nx.transpose(p)
+
+    lt_dl = Nx.dot(l_t, dl)
+    du_ut = Nx.dot(du, u_t)
+
+    lt_inv = Nx.LinAlg.invert(l_t)
+    ut_inv = Nx.LinAlg.invert(u_t)
+
+    df = lt_dl |> tril_strict() |> Nx.add(triu(du_ut))
+    da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
 
     [{input, da}]
   end
@@ -1198,11 +1211,23 @@ defmodule Nx.Defn.Grad do
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
 
   defp tril(t) do
-    lower_selector =
-      t
-      |> Nx.iota(axis: 0)
-      |> Nx.greater_equal(Nx.iota(t, axis: 1))
+    t
+    |> Nx.iota(axis: 0)
+    |> Nx.greater_equal(Nx.iota(t, axis: 1))
+    |> Nx.select(t, Nx.tensor(0, type: t.type))
+  end
 
-    Nx.select(lower_selector, t, Nx.tensor(0, type: t.type))
+  defp tril_strict(t) do
+    t
+    |> Nx.iota(axis: 0)
+    |> Nx.greater(Nx.iota(t, axis: 1))
+    |> Nx.select(t, Nx.tensor(0, type: t.type))
+  end
+
+  defp triu(t) do
+    t
+    |> Nx.iota(axis: 0)
+    |> Nx.less_equal(Nx.iota(t, axis: 1))
+    |> Nx.select(t, Nx.tensor(0, type: t.type))
   end
 end

@@ -1731,6 +1731,52 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "lu" do
+    defn lu_grad(t) do
+      grad(t, fn tensor ->
+        {p, l, u} = Nx.LinAlg.lu(tensor)
+
+        l
+        |> Nx.add(u)
+        |> Nx.add(p)
+        |> Nx.sum()
+      end)
+    end
+
+    defn lu_megapower_grad(t) do
+      grad(t, fn tensor ->
+        {p, l, u} = Nx.LinAlg.lu(Nx.power(tensor, 2))
+
+        l
+        |> Nx.cos()
+        |> Nx.add(Nx.sin(u))
+        |> Nx.subtract(Nx.exp(p))
+        |> Nx.sum()
+      end)
+      |> inspect_expr()
+    end
+
+    test "computes grad for tensor" do
+      assert_all_close(
+        lu_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
+        Nx.tensor([
+          [2.0, 0.0],
+          [-1.0, 1.0]
+        ])
+      )
+    end
+
+    test "computes lu_megapower_grad for tensor" do
+      assert_all_close(
+        lu_megapower_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
+        Nx.tensor([
+          [-0.5982, 0.5738],
+          [1.1385, -0.9899]
+        ])
+      )
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))
