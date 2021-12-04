@@ -293,6 +293,8 @@ defmodule Nx do
   @type axis :: Nx.Tensor.axis()
   @type axes :: Nx.Tensor.axes()
 
+  @file_version 1
+
   ## Creation API
 
   @doc """
@@ -9181,6 +9183,68 @@ defmodule Nx do
   end
 
   ## Utilities
+
+  @doc """
+  Saves a tensor or container of tensors to the given `path`.
+
+  If `path` does not contain `.nx` file extension, it will be appended
+  to the file path.
+
+  `opts` controls the serialization options. For example, you can choose
+  to compress the given tensor or container of tensors by passing a
+  compression level:
+
+      Nx.save(tensor, "a.nx", compressed: 9)
+
+  Compression level corresponds to compression options in `:erlang.term_to_binary/2`. 
+  """
+  def save(tensor_or_container, path, opts \\ []) do
+    term = {@file_version, System.endianness(), tensor_or_container}
+    term
+    |> :erlang.term_to_binary(opts)
+    |> then(&File.write!(path, &1))
+  end
+
+  @doc """
+  Loads a tensor or container of tensors from the given `path`.
+
+  *NOTE:* This function deserializes values with `:erlang.binary_to_term/2`.
+  Thus, you should only load data from trusted sources.
+  """
+  def load(path, opts \\ []) do
+    sys_endianness = System.endianness()
+    term =
+      path
+      |> File.read!()
+      |> :erlang.binary_to_term(opts ++ [:safe])
+
+    case term do
+      {1, endianness, term} when endianness == sys_endianness ->
+        # endianness matches, so we can just return the term
+        term
+      {1, _, term} ->
+        # endianness does not match, so we need to traverse
+        # and convert byte order of each tensor
+        convert_endianness(term)
+    end
+  end
+
+  defp convert_endianness(value) do
+    case value do
+      %T{shape: shape, type: {_, size} = type} = value ->
+        data =
+          value
+          |> to_binary()
+          |> new_byte_order(size, System.endianness())
+
+        data
+        |> from_binary(type)
+        |> reshape(shape)
+
+      value ->
+        Nx.Container.traverse(value, :ok, fn x, :ok -> {convert_endianness(x), :ok} end)
+    end
+  end
 
   @doc """
   Loads a `.npy` file into a tensor.
