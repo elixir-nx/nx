@@ -2664,6 +2664,28 @@ defmodule Nx do
   def rank(tensor), do: tuple_size(shape(tensor))
 
   @doc """
+  Returns the size of a given axis of a tensor.
+
+  It accepts either an atom as the name or an integer as the axis.
+  It raises if the axis/name does not exist.
+
+  ### Examples
+
+      iex> Nx.axis_size(Nx.iota({100, 10, 20}), 0)
+      100
+
+      iex> Nx.axis_size(Nx.iota({100, 10, 20}, names: [:batch, :x, :y]), :y)
+      20
+
+  """
+  @doc type: :shape
+  def axis_size(tensor, axis) do
+    shape = shape(tensor)
+    index = Nx.Shape.normalize_axis(shape, axis, names(tensor))
+    elem(shape, index)
+  end
+
+  @doc """
   Returns the number of elements in the tensor.
 
   If a tuple is given as a shape, it computes the size
