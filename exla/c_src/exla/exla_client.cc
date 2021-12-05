@@ -92,7 +92,7 @@ xla::StatusOr<std::vector<ExlaBuffer*>> UnpackRunArguments(ErlNifEnv* env,
     arguments = tail;
   }
 
-  return std::move(arg_buffers);
+  return arg_buffers;
 }
 
 xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique_ptr<xla::PjRtBuffer>> result, bool keep_on_device) {
