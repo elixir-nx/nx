@@ -98,8 +98,8 @@ defmodule Torchx.Backend do
   @impl true
   def random_uniform(%T{type: {s, _} = type, shape: shape} = out, min, max, backend_options)
       when s in [:u, :s] do
-    min = to_scalar(min)
-    max = to_scalar(max)
+    min = to_number(min)
+    max = to_number(max)
 
     Torchx.randint(min, max, shape, to_torch_type(type), device_option(backend_options))
     |> to_nx(out)
@@ -107,8 +107,8 @@ defmodule Torchx.Backend do
 
   def random_uniform(%T{type: {f, _} = type, shape: shape} = out, min, max, backend_options)
       when f in [:f, :bf] do
-    min = to_scalar(min)
-    max = to_scalar(max)
+    min = to_number(min)
+    max = to_number(max)
 
     Torchx.rand(min, max, shape, to_torch_type(type), device_option(backend_options))
     |> to_nx(out)
@@ -116,8 +116,8 @@ defmodule Torchx.Backend do
 
   @impl true
   def random_normal(%T{type: type, shape: shape} = out, mu, sigma, backend_options) do
-    mu = to_scalar(mu)
-    sigma = to_scalar(sigma)
+    mu = to_number(mu)
+    sigma = to_number(sigma)
 
     Torchx.normal(mu, sigma, shape, to_torch_type(type), device_option(backend_options))
     |> to_nx(out)
@@ -820,8 +820,8 @@ defmodule Torchx.Backend do
 
   ## Helpers
 
-  defp to_scalar(n) when is_number(n), do: n
-  defp to_scalar(%T{} = t), do: t |> from_nx() |> Torchx.item()
+  defp to_number(n) when is_number(n), do: n
+  defp to_number(%T{} = t), do: t |> from_nx() |> Torchx.item()
 
   defp to_typed_ref(tensor, expected_type, expected_type),
     do: tensor
