@@ -151,7 +151,7 @@ defmodule Nx.Defn.Evaluator do
     state = %{state | vars: composite_to_vars(acc)}
     {pred, temp} = eval(condition, state, cache)
 
-    if Nx.to_scalar(pred) != 0 do
+    if Nx.to_number(pred) != 0 do
       {acc, _} = composite_eval(block, state, temp)
       while(acc, condition, block, state, cache)
     else
@@ -178,7 +178,7 @@ defmodule Nx.Defn.Evaluator do
   defp cond_clause([{pred, clause} | clauses], last, state, cache) do
     {pred, cache} = eval(pred, state, cache)
 
-    if Nx.to_scalar(pred) != 0,
+    if Nx.to_number(pred) != 0,
       do: {clause, cache},
       else: cond_clause(clauses, last, state, cache)
   end
