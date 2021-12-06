@@ -26,7 +26,7 @@ nerves_build_no:
 	@ if [ "$(PRIV_DIR)/libtorch" == "$(abspath $(PRIV_DIR)/libtorch)" ]; then \
 		rm -rf "$(PRIV_DIR)/libtorch" ; \
 		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch ; \
-    fi
+	fi
 
 check_libtorch:
 	@ if [ ! -d "$(LIBTORCH_DIR)" ]; then \
