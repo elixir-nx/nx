@@ -1584,7 +1584,7 @@ defmodule Nx do
       1
 
       iex> Nx.to_number(Nx.tensor([1.0, 2.0, 3.0]))
-      ** (ArgumentError) cannot convert tensor of shape {3} to a number
+      ** (ArgumentError) cannot convert tensor of shape {3} to number
 
   """
   @doc type: :conversion
@@ -1612,11 +1612,11 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.to_scalar(1)
+      iex> Nx.to_number(1)
       1
 
-      iex> Nx.to_scalar(Nx.tensor([1.0, 2.0, 3.0]))
-      ** (ArgumentError) cannot convert tensor of shape {3} to scalar
+      iex> Nx.to_number(Nx.tensor([1.0, 2.0, 3.0]))
+      ** (ArgumentError) cannot convert tensor of shape {3} to number
 
   """
   @doc type: :conversion
