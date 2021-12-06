@@ -1753,7 +1753,6 @@ defmodule Nx.Defn.GradTest do
         |> Nx.subtract(Nx.exp(p))
         |> Nx.sum()
       end)
-      |> inspect_expr()
     end
 
     test "computes grad for tensor" do
@@ -1770,8 +1769,8 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(
         lu_megapower_grad(Nx.tensor([[1.0, 2.0], [1.0, -1.0]])),
         Nx.tensor([
-          [-0.5982, 0.5738],
-          [1.1385, -0.9899]
+          [-5.1563935, 1.3453956],
+          [6.236998, 1.979985]
         ])
       )
     end
