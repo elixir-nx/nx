@@ -23,7 +23,7 @@ nerves_build_yes:
 
 nerves_build_no:
 	@ mkdir -p $(PRIV_DIR)
-	@ if [ "$(PRIV_DIR)/libtorch" == "$(abspath $(PRIV_DIR)/libtorch)" ]; then \
+	@ if [ "$(PRIV_DIR)/libtorch" = "$(abspath $(PRIV_DIR)/libtorch)" ]; then \
 		rm -rf "$(PRIV_DIR)/libtorch" ; \
 		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch ; \
 	fi
