@@ -19,7 +19,7 @@ nerves_build_yes:
 	@ if [ "$(PRIV_DIR)/libtorch" != "$(abspath $(PRIV_DIR)/libtorch)" ]; then \
 		rm -rf "$(PRIV_DIR)/libtorch" ; \
 		cp -a "$(abspath $(LIBTORCH_DIR)/lib)" "$(PRIV_DIR)/libtorch" ; \
-    fi
+	fi
 
 nerves_build_no:
 	@ mkdir -p $(PRIV_DIR)
