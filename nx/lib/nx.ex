@@ -1588,6 +1588,7 @@ defmodule Nx do
 
   """
   @doc type: :conversion
+  @deprecated "Use Nx.to_number/1 instead"
   def to_scalar(tensor)
 
   def to_scalar(number) when is_number(number), do: number
