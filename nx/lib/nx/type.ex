@@ -185,42 +185,42 @@ defmodule Nx.Type do
   def to_aggregate(type), do: type
 
   @doc """
-  Casts the given scalar to type.
+  Casts the given number to type.
 
   It does not handle overflow/underflow,
-  returning the scalar as is, but cast.
+  returning the number as is, but cast.
 
   ## Examples
 
-      iex> Nx.Type.cast_scalar!({:u, 8}, 10)
+      iex> Nx.Type.cast_number!({:u, 8}, 10)
       10
-      iex> Nx.Type.cast_scalar!({:s, 8}, 10)
+      iex> Nx.Type.cast_number!({:s, 8}, 10)
       10
-      iex> Nx.Type.cast_scalar!({:s, 8}, -10)
+      iex> Nx.Type.cast_number!({:s, 8}, -10)
       -10
-      iex> Nx.Type.cast_scalar!({:f, 32}, 10)
+      iex> Nx.Type.cast_number!({:f, 32}, 10)
       10.0
-      iex> Nx.Type.cast_scalar!({:bf, 16}, -10)
+      iex> Nx.Type.cast_number!({:bf, 16}, -10)
       -10.0
 
-      iex> Nx.Type.cast_scalar!({:f, 32}, 10.0)
+      iex> Nx.Type.cast_number!({:f, 32}, 10.0)
       10.0
-      iex> Nx.Type.cast_scalar!({:bf, 16}, -10.0)
+      iex> Nx.Type.cast_number!({:bf, 16}, -10.0)
       -10.0
 
-      iex> Nx.Type.cast_scalar!({:u, 8}, -10)
-      ** (ArgumentError) cannot cast scalar -10 to {:u, 8}
+      iex> Nx.Type.cast_number!({:u, 8}, -10)
+      ** (ArgumentError) cannot cast number -10 to {:u, 8}
 
-      iex> Nx.Type.cast_scalar!({:s, 8}, 10.0)
-      ** (ArgumentError) cannot cast scalar 10.0 to {:s, 8}
+      iex> Nx.Type.cast_number!({:s, 8}, 10.0)
+      ** (ArgumentError) cannot cast number 10.0 to {:s, 8}
   """
-  def cast_scalar!({type, _}, int) when type in [:u] and is_integer(int) and int >= 0, do: int
-  def cast_scalar!({type, _}, int) when type in [:s] and is_integer(int), do: int
-  def cast_scalar!({type, _}, int) when type in [:f, :bf] and is_integer(int), do: int * 1.0
-  def cast_scalar!({type, _}, float) when type in [:f, :bf] and is_float(float), do: float
+  def cast_number!({type, _}, int) when type in [:u] and is_integer(int) and int >= 0, do: int
+  def cast_number!({type, _}, int) when type in [:s] and is_integer(int), do: int
+  def cast_number!({type, _}, int) when type in [:f, :bf] and is_integer(int), do: int * 1.0
+  def cast_number!({type, _}, float) when type in [:f, :bf] and is_float(float), do: float
 
-  def cast_scalar!(type, other) do
-    raise ArgumentError, "cannot cast scalar #{inspect(other)} to #{inspect(type)}"
+  def cast_number!(type, other) do
+    raise ArgumentError, "cannot cast number #{inspect(other)} to #{inspect(type)}"
   end
 
   @doc """
@@ -315,70 +315,70 @@ defmodule Nx.Type do
   end
 
   @doc """
-  Merges the given types with the type of a scalar.
+  Merges the given types with the type of a number.
 
   We attempt to keep the original type and its size as best
   as possible.
 
   ## Examples
 
-      iex> Nx.Type.merge_scalar({:u, 8}, 0)
+      iex> Nx.Type.merge_number({:u, 8}, 0)
       {:u, 8}
-      iex> Nx.Type.merge_scalar({:u, 8}, 255)
+      iex> Nx.Type.merge_number({:u, 8}, 255)
       {:u, 8}
-      iex> Nx.Type.merge_scalar({:u, 8}, 256)
+      iex> Nx.Type.merge_number({:u, 8}, 256)
       {:u, 16}
-      iex> Nx.Type.merge_scalar({:u, 8}, -1)
+      iex> Nx.Type.merge_number({:u, 8}, -1)
       {:s, 16}
-      iex> Nx.Type.merge_scalar({:u, 8}, -32767)
+      iex> Nx.Type.merge_number({:u, 8}, -32767)
       {:s, 16}
-      iex> Nx.Type.merge_scalar({:u, 8}, -32768)
+      iex> Nx.Type.merge_number({:u, 8}, -32768)
       {:s, 16}
-      iex> Nx.Type.merge_scalar({:u, 8}, -32769)
+      iex> Nx.Type.merge_number({:u, 8}, -32769)
       {:s, 32}
 
-      iex> Nx.Type.merge_scalar({:s, 8}, 0)
+      iex> Nx.Type.merge_number({:s, 8}, 0)
       {:s, 8}
-      iex> Nx.Type.merge_scalar({:s, 8}, 127)
+      iex> Nx.Type.merge_number({:s, 8}, 127)
       {:s, 8}
-      iex> Nx.Type.merge_scalar({:s, 8}, -128)
+      iex> Nx.Type.merge_number({:s, 8}, -128)
       {:s, 8}
-      iex> Nx.Type.merge_scalar({:s, 8}, 128)
+      iex> Nx.Type.merge_number({:s, 8}, 128)
       {:s, 16}
-      iex> Nx.Type.merge_scalar({:s, 8}, -129)
+      iex> Nx.Type.merge_number({:s, 8}, -129)
       {:s, 16}
-      iex> Nx.Type.merge_scalar({:s, 8}, 1.0)
+      iex> Nx.Type.merge_number({:s, 8}, 1.0)
       {:f, 32}
 
-      iex> Nx.Type.merge_scalar({:f, 32}, 1)
+      iex> Nx.Type.merge_number({:f, 32}, 1)
       {:f, 32}
-      iex> Nx.Type.merge_scalar({:f, 32}, 1.0)
+      iex> Nx.Type.merge_number({:f, 32}, 1.0)
       {:f, 32}
-      iex> Nx.Type.merge_scalar({:f, 64}, 1.0)
+      iex> Nx.Type.merge_number({:f, 64}, 1.0)
       {:f, 64}
 
   """
-  def merge_scalar({:u, size}, integer) when is_integer(integer) and integer >= 0 do
+  def merge_number({:u, size}, integer) when is_integer(integer) and integer >= 0 do
     {:u, max(unsigned_size(integer), size)}
   end
 
-  def merge_scalar({:u, size}, integer) when is_integer(integer) do
-    merge_scalar({:s, size * 2}, integer)
+  def merge_number({:u, size}, integer) when is_integer(integer) do
+    merge_number({:s, size * 2}, integer)
   end
 
-  def merge_scalar({:s, size}, integer) when is_integer(integer) do
+  def merge_number({:s, size}, integer) when is_integer(integer) do
     {:s, max(signed_size(integer), size)}
   end
 
-  def merge_scalar({:bf, size}, number) when is_number(number) do
+  def merge_number({:bf, size}, number) when is_number(number) do
     {:bf, size}
   end
 
-  def merge_scalar({:f, size}, number) when is_number(number) do
+  def merge_number({:f, size}, number) when is_number(number) do
     {:f, size}
   end
 
-  def merge_scalar(_, number) when is_number(number) do
+  def merge_number(_, number) when is_number(number) do
     {:f, 32}
   end
 
