@@ -64,7 +64,10 @@ defmodule Torchx.MixProject do
   end
 
   defp get_libtorch_cache do
-    Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}-#{libtorch_build_target_name()}")
+    Path.join(
+      __DIR__,
+      "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}-#{libtorch_build_target_name()}"
+    )
   end
 
   defp compile(args) do
@@ -89,7 +92,9 @@ defmodule Torchx.MixProject do
           :host -> :os.type()
           target -> {:nerves, target}
         end
-      _ -> :os.type()
+
+      _ ->
+        :os.type()
     end
   end
 
@@ -119,11 +124,11 @@ defmodule Torchx.MixProject do
         raise "ensure the download URLs match the default libtorch version"
       end
 
+      # allow users to specify their own build of libtorch
+      # export LIBTORCH_DOWNLOAD_URL=https://custom.domain/libtorch-version.zip
       url =
-        # allow users to specify their own build of libtorch
-        # export LIBTORCH_DOWNLOAD_URL=https://custom.domain/libtorch-version.zip
         case System.get_env("LIBTORCH_DOWNLOAD_URL") do
-          :nil ->
+          nil ->
             case libtorch_build_target() do
               {:unix, :linux} ->
                 "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
@@ -136,15 +141,20 @@ defmodule Torchx.MixProject do
                 case target do
                   :rpi4 ->
                     "#{@libtorch_nerves_url_base}/libtorch-1.9.1-aarch64.zip"
+
                   :x86_64 ->
                     "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
+
                   target when target in [:rpi3, :rpi3a, :rpi2, :bbb, :osd32mp1] ->
                     "#{@libtorch_nerves_url_base}/libtorch-1.9.1-armv7.zip"
+
                   target when target in [:rpi0, :rpi] ->
                     "#{@libtorch_nerves_url_base}/libtorch-1.9.1-armv6.zip"
                 end
             end
-          url -> url
+
+          url ->
+            url
         end
 
       # skip download if it is on local filesystem
