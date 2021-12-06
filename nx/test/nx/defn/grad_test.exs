@@ -1583,7 +1583,7 @@ defmodule Nx.Defn.GradTest do
       ]
 
       for {x, y} <- coords do
-        assert_in_delta(Nx.to_scalar(grad_erf_inv(x)), y, 0.01)
+        assert_in_delta(Nx.to_number(grad_erf_inv(x)), y, 0.01)
       end
     end
   end
