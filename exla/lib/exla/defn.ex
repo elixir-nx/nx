@@ -492,7 +492,7 @@ defmodule EXLA.Defn do
   defp to_operator(:tensor, [tensor], _ans, state) do
     case tensor.shape do
       {} ->
-        to_constant(state.builder, Nx.to_scalar(tensor), tensor.type)
+        to_constant(state.builder, Nx.to_number(tensor), tensor.type)
 
       shape ->
         shape = EXLA.Shape.make_shape(tensor.type, shape)
@@ -526,7 +526,7 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:eye, [], %{type: type, shape: {n, n}}, state) do
-    iota_type = Nx.Type.merge_scalar({:u, 8}, n)
+    iota_type = Nx.Type.merge_number({:u, 8}, n)
     iota_shape = EXLA.Shape.make_shape(iota_type, {n, n})
 
     i0 = EXLA.Op.iota(state.builder, iota_shape, 0)
