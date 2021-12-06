@@ -6,7 +6,7 @@ defmodule Torchx.MixProject do
 
   @libtorch_version "1.9.1"
   @libtorch_target "cpu"
-  @libtorch_cache Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
+  @libtorch_nerves_url_base "https://github.com/cocoa-xu/elixir-nx-libtorch/releases/download/v#{@libtorch_version}"
 
   def project do
     [
@@ -19,7 +19,10 @@ defmodule Torchx.MixProject do
       compilers: compilers() ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
-      make_env: %{"LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache)}
+      make_env: %{
+        "LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", get_libtorch_cache()),
+        "NERVES_BUILD" => is_nerves_build()
+      }
     ]
   end
 
@@ -60,8 +63,12 @@ defmodule Torchx.MixProject do
     ]
   end
 
+  defp get_libtorch_cache do
+    Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}-#{libtorch_build_target_name()}")
+  end
+
   defp compile(args) do
-    libtorch_cache = @libtorch_cache
+    libtorch_cache = get_libtorch_cache()
     cache_dir = Path.dirname(libtorch_cache)
 
     if "--force" in args do
@@ -72,6 +79,27 @@ defmodule Torchx.MixProject do
       {:ok, []}
     else
       install_libtorch(cache_dir, libtorch_cache)
+    end
+  end
+
+  defp libtorch_build_target do
+    case Kernel.function_exported?(Mix, :target, 0) do
+      true -> {:nerves, Mix.target()}
+      _ -> :os.type()
+    end
+  end
+
+  defp libtorch_build_target_name do
+    case libtorch_build_target() do
+      {:unix, _} -> "host"
+      {:nerves, target} -> Atom.to_charlist(target)
+    end
+  end
+
+  defp is_nerves_build do
+    case libtorch_build_target() do
+      {:nerves, _} -> "nerves_build_yes"
+      _ -> "nerves_build_no"
     end
   end
 
@@ -88,19 +116,38 @@ defmodule Torchx.MixProject do
       end
 
       url =
-        case :os.type() do
-          {:unix, :linux} ->
-            "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
+        # allow users to specify their own build of libtorch
+        # export LIBTORCH_DOWNLOAD_URL=https://custom.domain/libtorch-version.zip
+        case System.get_env("LIBTORCH_DOWNLOAD_URL") do
+          :nil ->
+            case libtorch_build_target() do
+              {:unix, :linux} ->
+                "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
 
-          {:unix, :darwin} ->
-            # MacOS
-            "https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip"
+              {:unix, :darwin} ->
+                # MacOS
+                "https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip"
 
-          os ->
-            raise "OS #{os} is not supported"
+              {:nerves, target} ->
+                case target do
+                  :rpi4 ->
+                    "#{@libtorch_nerves_url_base}/libtorch-1.9.1-aarch64.zip"
+                  :x86_64 ->
+                    "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
+                  target when target in [:rpi3, :rpi3a, :rpi2, :bbb, :osd32mp1] ->
+                    "#{@libtorch_nerves_url_base}/libtorch-1.9.1-armv7.zip"
+                  target when target in [:rpi0, :rpi] ->
+                    "#{@libtorch_nerves_url_base}/libtorch-1.9.1-armv6.zip"
+                end
+            end
+          url -> url
         end
 
-      download!(url, libtorch_zip)
+      # skip download if it is on local filesystem
+      case File.exists?(url) do
+        true -> File.cp!(url, libtorch_zip)
+        false -> download!(url, libtorch_zip)
+      end
     end
 
     # Unpack libtorch and move to the target cache dir
