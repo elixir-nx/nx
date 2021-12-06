@@ -84,7 +84,11 @@ defmodule Torchx.MixProject do
 
   defp libtorch_build_target do
     case Kernel.function_exported?(Mix, :target, 0) do
-      true -> {:nerves, Mix.target()}
+      true ->
+        case Mix.target() do
+          :host -> :os.type()
+          target -> {:nerves, target}
+        end
       _ -> :os.type()
     end
   end
