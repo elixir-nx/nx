@@ -317,8 +317,8 @@ defmodule Nx.Shared do
   Builds the type of an element-wise binary operation.
   """
   def binary_type(a, b) when is_number(a) and is_number(b), do: Nx.Type.infer(a + b)
-  def binary_type(a, b) when is_number(a), do: Nx.Type.merge_scalar(type(b), a)
-  def binary_type(a, b) when is_number(b), do: Nx.Type.merge_scalar(type(a), b)
+  def binary_type(a, b) when is_number(a), do: Nx.Type.merge_number(type(b), a)
+  def binary_type(a, b) when is_number(b), do: Nx.Type.merge_number(type(a), b)
   def binary_type(a, b), do: Nx.Type.merge(type(a), type(b))
 
   # For unknown types, return {:f, 32} as the caller

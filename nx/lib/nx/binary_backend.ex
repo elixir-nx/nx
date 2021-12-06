@@ -29,8 +29,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
-    min = to_scalar(min)
-    max = to_scalar(max)
+    min = to_number(min)
+    max = to_number(max)
 
     gen =
       case type do
@@ -45,8 +45,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
-    mu = to_scalar(mu)
-    sigma = to_scalar(sigma)
+    mu = to_number(mu)
+    sigma = to_number(sigma)
 
     data =
       for _ <- 1..Nx.size(shape),
@@ -184,8 +184,8 @@ defmodule Nx.BinaryBackend do
     end
   end
 
-  defp to_scalar(n) when is_number(n), do: n
-  defp to_scalar(t), do: binary_to_number(to_binary(t), t.type)
+  defp to_number(n) when is_number(n), do: n
+  defp to_number(t), do: binary_to_number(to_binary(t), t.type)
 
   ## Shape
 
@@ -534,7 +534,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
-    if to_scalar(pred) == 0,
+    if to_number(pred) == 0,
       do: from_binary(out, broadcast_data(on_false, out.shape)),
       else: from_binary(out, broadcast_data(on_true, out.shape))
   end
@@ -594,12 +594,12 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{type: type} = out, %{shape: {}} = left, right, fun) do
-    scalar = to_scalar(left)
+    number = to_number(left)
 
     data =
       match_types [right.type, type] do
         for <<match!(x, 0) <- to_binary(right)>>, into: <<>> do
-          <<write!(fun.(type, scalar, read!(x, 0)), 1)>>
+          <<write!(fun.(type, number, read!(x, 0)), 1)>>
         end
       end
 
@@ -607,12 +607,12 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{type: type} = out, left, %{shape: {}} = right, fun) do
-    scalar = to_scalar(right)
+    number = to_number(right)
 
     data =
       match_types [left.type, type] do
         for <<match!(x, 0) <- to_binary(left)>>, into: <<>> do
-          <<write!(fun.(type, read!(x, 0), scalar), 1)>>
+          <<write!(fun.(type, read!(x, 0), number), 1)>>
         end
       end
 
@@ -1335,7 +1335,7 @@ defmodule Nx.BinaryBackend do
     %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
 
-    acc = to_scalar(acc)
+    acc = to_number(acc)
 
     data = to_binary(tensor)
     weighted_shape = weighted_shape(padded_shape, size, window_dimensions, dilations)
@@ -1412,7 +1412,7 @@ defmodule Nx.BinaryBackend do
       match_types [output_type] do
         for <<bin::size(size)-bitstring <- data>>, into: <<>> do
           tensor = put_in(template.data.state, bin)
-          <<write!(to_scalar(fun.(tensor)), 0)>>
+          <<write!(to_number(fun.(tensor)), 0)>>
         end
       end
 
@@ -1460,7 +1460,7 @@ defmodule Nx.BinaryBackend do
     padding = opts[:padding]
     strides = opts[:strides]
 
-    init_value = to_scalar(init_value)
+    init_value = to_number(init_value)
 
     %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(t, init_value, Enum.map(padding, &Tuple.append(&1, 0)))
@@ -1706,7 +1706,7 @@ defmodule Nx.BinaryBackend do
 
   defp clamp_indices(start_indices, shape, lengths) do
     Enum.zip_with([Tuple.to_list(shape), start_indices, lengths], fn [dim_size, idx, len] ->
-      idx = to_scalar(idx)
+      idx = to_number(idx)
       min(max(idx, 0), dim_size - len)
     end)
   end

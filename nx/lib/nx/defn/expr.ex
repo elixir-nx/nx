@@ -826,7 +826,7 @@ defmodule Nx.Defn.Expr do
     do: t
 
   defp to_expr(%T{data: %Nx.BinaryBackend{}, shape: {}} = t),
-    do: constant(t, Nx.to_scalar(t))
+    do: constant(t, Nx.to_number(t))
 
   defp to_expr(%T{} = t),
     do: expr(t, nil, :tensor, [t])
@@ -945,10 +945,10 @@ defmodule Nx.Defn.Expr do
     IO.iodata_to_binary(["%{", pairs, "}"])
   end
 
-  defp to_type_shape_string(scalar) when is_number(scalar) do
+  defp to_type_shape_string(number) when is_number(number) do
     shape = {}
     names = []
-    type = Nx.Type.infer(scalar)
+    type = Nx.Type.infer(number)
     Nx.Type.to_string(type) <> Nx.Shape.to_string(shape, names)
   end
 
