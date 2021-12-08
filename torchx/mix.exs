@@ -6,8 +6,16 @@ defmodule Torchx.MixProject do
 
   @libtorch_version "1.9.1"
   @libtorch_target "cpu"
-  @libtorch_base "libtorch-#{@libtorch_version}-#{@libtorch_target}"
-  @libtorch_cache Path.join(__DIR__, "cache/#{@libtorch_base}")
+
+  if libtorch_dir = System.get_env("LIBTORCH_DIR") do
+    @libtorch_base "libtorch-custom"
+    @libtorch_dir libtorch_dir
+    @libtorch_compilers [:elixir_make]
+  else
+    @libtorch_base "libtorch-#{@libtorch_version}-#{@libtorch_target}"
+    @libtorch_dir Path.join(__DIR__, "cache/#{@libtorch_base}")
+    @libtorch_compilers [:torchx, :elixir_make]
+  end
 
   def project do
     [
@@ -17,11 +25,11 @@ defmodule Torchx.MixProject do
       elixir: "~> 1.12-dev",
       deps: deps(),
       docs: docs(),
-      compilers: compilers() ++ Mix.compilers(),
+      compilers: @libtorch_compilers ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
       make_env: %{
-        "LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache),
+        "LIBTORCH_DIR" => @libtorch_dir,
         "LIBTORCH_BASE" => @libtorch_base,
         "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}"
       }
@@ -55,18 +63,14 @@ defmodule Torchx.MixProject do
     ]
   end
 
-  defp compilers do
-    if System.get_env("LIBTORCH_DIR"), do: [:elixir_make], else: [:torchx, :elixir_make]
-  end
-
   defp aliases do
     [
-      "compile.torchx": &compile/1
+      "compile.torchx": &download_and_unzip/1
     ]
   end
 
-  defp compile(args) do
-    libtorch_cache = @libtorch_cache
+  defp download_and_unzip(args) do
+    libtorch_cache = @libtorch_dir
     cache_dir = Path.dirname(libtorch_cache)
 
     if "--force" in args do
@@ -76,11 +80,11 @@ defmodule Torchx.MixProject do
     if File.dir?(libtorch_cache) do
       {:ok, []}
     else
-      install_libtorch(cache_dir, libtorch_cache)
+      download_and_unzip(cache_dir, libtorch_cache)
     end
   end
 
-  defp install_libtorch(cache_dir, libtorch_cache) do
+  defp download_and_unzip(cache_dir, libtorch_cache) do
     File.mkdir_p!(cache_dir)
     libtorch_zip = libtorch_cache <> ".zip"
 
