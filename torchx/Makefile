@@ -4,7 +4,7 @@ TORCHX_SO = $(PRIV_DIR)/torchx.so
 # If you want verbose output for debugging
 # CMAKE_BUILD_FLAGS = --verbose
 CMAKE_BUILD_DIR ?= $(MIX_APP_PATH)/cmake
-CMAKE_TOOLCHAIN_FILE ?= $(shell pwd)/toolchain.cmake
+CMAKE_TOOLCHAIN_FILE ?= /dev/null
 C_SRC = $(shell pwd)/c_src
 
 .DEFAULT_GLOBAL := build
@@ -30,7 +30,7 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	fi
 	@ cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
-      	-DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) \
-      	-DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN_FILE) && \
+			-DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) \
+			-DCMAKE_TOOLCHAIN_FILE=$(CMAKE_TOOLCHAIN_FILE) && \
 		cmake --build . $(CMAKE_BUILD_FLAGS)
 	@ mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
