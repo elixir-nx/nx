@@ -6,7 +6,8 @@ defmodule Torchx.MixProject do
 
   @libtorch_version "1.9.1"
   @libtorch_target "cpu"
-  @libtorch_cache Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
+  @libtorch_base "libtorch-#{@libtorch_version}-#{@libtorch_target}"
+  @libtorch_cache Path.join(__DIR__, "cache/#{@libtorch_base}")
 
   def project do
     [
@@ -21,11 +22,8 @@ defmodule Torchx.MixProject do
       aliases: aliases(),
       make_env: %{
         "LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache),
-        "BUILD_EMBEDDED" =>
-          System.get_env(
-            "BUILD_EMBEDDED",
-            "#{Keyword.get(Mix.Project.config(), :build_embedded)}"
-          )
+        "LIBTORCH_BASE" => @libtorch_base,
+        "MIX_BUILD_EMBEDDED" => "#{Mix.Project.config()[:build_embedded]}"
       }
     ]
   end
