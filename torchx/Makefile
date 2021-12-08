@@ -27,7 +27,7 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	else \
 		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/$(LIBTORCH_BASE) ; \
 	fi
-	cd $(CMAKE_BUILD_DIR) && \
+	@ cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
 				-DLIBTORCH_BASE=$(LIBTORCH_BASE) -DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) \
 				-S $(shell pwd) && \
