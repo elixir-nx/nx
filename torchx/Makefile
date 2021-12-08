@@ -22,7 +22,7 @@ check_libtorch:
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	@ mkdir -p $(PRIV_DIR)
 	@ mkdir -p $(CMAKE_BUILD_DIR)
-	@ if [ "${BUILD_EMBEDDED}" = "NO" ]; then \
+	@ if [ "${BUILD_EMBEDDED}" = "false" ]; then \
 		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch ; \
 	else \
 		cp -a $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch ; \

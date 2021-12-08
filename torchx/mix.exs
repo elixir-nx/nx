@@ -21,9 +21,8 @@ defmodule Torchx.MixProject do
       aliases: aliases(),
       make_env: %{
         "LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache),
-        "BUILD_EMBEDDED" => System.get_env("BUILD_EMBEDDED", "#{Keyword.get(project, :build_embedded)}")
-      },
-      build_embedded: false
+        "BUILD_EMBEDDED" => System.get_env("BUILD_EMBEDDED", "#{Keyword.get(Mix.Project.config(), :build_embedded)}")
+      }
     ]
   end
 
