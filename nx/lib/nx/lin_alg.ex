@@ -1006,15 +1006,20 @@ defmodule Nx.LinAlg do
 
   """
   @doc from_backend: false
-  def matrix_power(matrix, power) when is_integer(power) and power >= 0 do
-    Integer.digits(power, 2)
+  def matrix_power(matrix, power) when is_integer(power) and power < 0 do
+    matrix_power(Nx.LinAlg.invert(matrix), -power)
+  end
+  def matrix_power(matrix, power) when is_integer(power) do
+    {result, _exp_matrix} = power
+    |> Integer.digits(2)
     |> Enum.reverse()
-    |> Enum.reduce({Nx.eye(matrix), matrix}, fn bit, {result_matrix, exp_matrix} ->
-      case bit do
-        1 -> {Nx.dot(result_matrix, exp_matrix), Nx.dot(exp_matrix, exp_matrix)}
-        0 -> {result_matrix, Nx.dot(exp_matrix, exp_matrix)}
-      end
+    |> Enum.reduce({Nx.eye(matrix), matrix}, fn
+      1, {result_matrix, exp_matrix} ->
+        {Nx.dot(result_matrix, exp_matrix), Nx.dot(exp_matrix, exp_matrix)}
+      0, {result_matrix, exp_matrix} ->
+        {result_matrix,                     Nx.dot(exp_matrix, exp_matrix)}
     end)
-    |> elem(0)
+
+    result
   end
 end
