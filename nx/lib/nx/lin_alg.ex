@@ -975,7 +975,7 @@ defmodule Nx.LinAlg do
   and the output is a square tensor of the same dimensions as the input tensor.
 
   ## Examples
-  
+
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
       #Nx.Tensor<
         s64[2][2]
@@ -994,7 +994,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.matrix_power(Nx.eye(3), floor(:math.pow(2, 32))-1)
+      iex> Nx.LinAlg.matrix_power(Nx.eye(3), 65535)
       #Nx.Tensor<
         s64[3][3]
         [
