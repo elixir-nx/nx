@@ -19,7 +19,10 @@ defmodule Torchx.MixProject do
       compilers: compilers() ++ Mix.compilers(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
-      make_env: %{"LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache)}
+      make_env: %{
+        "LIBTORCH_DIR" => System.get_env("LIBTORCH_DIR", @libtorch_cache),
+        "BUILD_EMBEDDED" => System.get_env("BUILD_EMBEDDED", "NO")
+      }
     ]
   end
 
