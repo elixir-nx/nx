@@ -967,4 +967,48 @@ defmodule Nx.LinAlg do
       opts
     )
   end
+
+  @doc """
+  Produces the tensor taken to the given power by dot-product.
+
+  The input is always a square tensor and a non-negative integer,
+  and the output is a square tensor of the same dimensions as the input tensor.
+
+  # Examples
+
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 6)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [5743, 8370],
+          [12555, 18298]
+        ]
+      >
+
+      iex> Nx.LinAlg.matrix_power(Nx.eye(3), floor(:math.pow(2, 32))-1)
+      #Nx.Tensor<
+        s64[3][3]
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1]
+        ]
+      >
+
+  """
+  @doc from_backend: false
+  def matrix_power(matrix, 0) do
+    Nx.eye(matrix)
+  end
+  def matrix_power(matrix, power) do
+    Integer.digits(power, 2)
+    |> Enum.reverse()
+    |> Enum.reduce({Nx.eye(matrix), matrix}, fn bit, {result_matrix, exp_matrix} ->
+      case bit do
+        1 -> {Nx.dot(result_matrix, exp_matrix), Nx.dot(exp_matrix, exp_matrix)}
+        0 -> {result_matrix, Nx.dot(exp_matrix, exp_matrix)}
+      end
+    end)
+    |> elem(0)
+  end
 end
