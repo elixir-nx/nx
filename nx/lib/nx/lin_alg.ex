@@ -974,7 +974,8 @@ defmodule Nx.LinAlg do
   The input is always a square tensor and a non-negative integer,
   and the output is a square tensor of the same dimensions as the input tensor.
 
-  # Examples
+  ## Examples
+  
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
       #Nx.Tensor<
         s64[2][2]
