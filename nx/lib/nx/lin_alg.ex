@@ -975,6 +975,14 @@ defmodule Nx.LinAlg do
   and the output is a square tensor of the same dimensions as the input tensor.
 
   # Examples
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 0],
+          [0, 1]
+        ]
+      >
 
       iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 6)
       #Nx.Tensor<
@@ -997,10 +1005,7 @@ defmodule Nx.LinAlg do
 
   """
   @doc from_backend: false
-  def matrix_power(matrix, 0) do
-    Nx.eye(matrix)
-  end
-  def matrix_power(matrix, power) do
+  def matrix_power(matrix, power) when is_integer(power) and power >= 0 do
     Integer.digits(power, 2)
     |> Enum.reverse()
     |> Enum.reduce({Nx.eye(matrix), matrix}, fn bit, {result_matrix, exp_matrix} ->
