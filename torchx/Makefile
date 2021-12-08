@@ -22,7 +22,11 @@ check_libtorch:
 $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	@ mkdir -p $(PRIV_DIR)
 	@ mkdir -p $(CMAKE_BUILD_DIR)
-	@ ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch
+	@ if [ "${BUILD_EMBEDDED}" = "true" ]; then \
+		cp -a $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch ; \
+	else \
+		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch ; \
+	fi
 	@ cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
       	-DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) -S $(shell pwd) && \
