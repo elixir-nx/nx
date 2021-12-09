@@ -1004,22 +1004,51 @@ defmodule Nx.LinAlg do
         ]
       >
 
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [1, 0],
+          [0, 1]
+        ]
+      >
+
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), -1)
+      #Nx.Tensor<
+        f32[2][2]
+        [
+          [-2.0, 1.0],
+          [1.5, -0.5]
+        ]
+      >
   """
   @doc from_backend: false
   def matrix_power(matrix, power) when is_integer(power) and power < 0 do
     matrix_power(Nx.LinAlg.invert(matrix), -power)
   end
-  def matrix_power(matrix, power) when is_integer(power) do
-    {result, _exp_matrix} = power
-    |> Integer.digits(2)
-    |> Enum.reverse()
-    |> Enum.reduce({Nx.eye(matrix), matrix}, fn
-      1, {result_matrix, exp_matrix} ->
-        {Nx.dot(result_matrix, exp_matrix), Nx.dot(exp_matrix, exp_matrix)}
-      0, {result_matrix, exp_matrix} ->
-        {result_matrix,                     Nx.dot(exp_matrix, exp_matrix)}
-    end)
 
-    result
+  def matrix_power(matrix, 0) do
+    # We need a special-case for 0 because Integer.digits(0, 2) returns
+    # [0]. The last function clause assumes:
+    #     [1 | _] = Enum.reverse(Integer.digits(???, 2))
+    # which is the case for all positive integers, but not for 0.
+    Nx.eye(matrix)
+  end
+
+  def matrix_power(matrix, power) when is_integer(power) do
+    {result, exp_matrix} =
+      power
+      |> Integer.digits(2)
+      |> tl()
+      |> Enum.reverse()
+      |> Enum.reduce({Nx.eye(matrix), matrix}, fn
+        1, {result_matrix, exp_matrix} ->
+          {Nx.dot(result_matrix, exp_matrix), Nx.dot(exp_matrix, exp_matrix)}
+
+        0, {result_matrix, exp_matrix} ->
+          {result_matrix, Nx.dot(exp_matrix, exp_matrix)}
+      end)
+
+    Nx.dot(result, exp_matrix)
   end
 end
