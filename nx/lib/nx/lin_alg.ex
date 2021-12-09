@@ -1014,6 +1014,9 @@ defmodule Nx.LinAlg do
           [1.5, -0.5]
         ]
       >
+
+      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4], [5, 6]]), 1)
+      ** (ArgumentError) expected tensor to match shape {x, x}, got tensor with shape {3, 2}
   """
   @doc from_backend: false
   def dot_power(tensor, power) when is_integer(power) and power < 0 do
@@ -1030,14 +1033,18 @@ defmodule Nx.LinAlg do
     # We also need a special case for 1, because the code
     # below is optimized for calculating powers for
     # integers where `length(Integer.digits(n, 2)) > 1`.
+    Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
+
     tensor
   end
 
   def dot_power(tensor, power) when is_integer(power) do
+    Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
+
     {result, exp_tensor} =
       power
       |> Integer.digits(2)
-      |> tl
+      |> tl()
       |> Enum.reverse()
       |> Enum.reduce({nil, tensor}, fn
         1, {nil, exp_tensor} ->
