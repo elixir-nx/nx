@@ -22,10 +22,10 @@ defmodule Torchx.NxLinAlgDoctestTest do
     norm: 2,
     # qr - Torchx: "geqrf_cpu" not implemented for 'Long' in NIF.qr/2
     qr: 2,
-    # invert - Depends on QR
+    # depends on QR
     invert: 1,
-    # solve - Depends on QR
     solve: 2,
+    dot_power: 2,
     # cholesky - returns the transposed result
     cholesky: 1
   ]
