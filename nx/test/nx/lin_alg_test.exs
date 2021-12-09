@@ -428,7 +428,7 @@ defmodule Nx.LinAlgTest do
         a = Nx.dot(l_prime, Nx.transpose(l_prime))
 
         assert l = Nx.LinAlg.cholesky(a)
-        assert_all_close(Nx.dot(l, Nx.transpose(l)), a)
+        assert_all_close(Nx.dot(l, Nx.transpose(l)), a, atol: 1.0e-2)
       end
     end
   end
