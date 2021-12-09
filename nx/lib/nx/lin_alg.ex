@@ -978,7 +978,7 @@ defmodule Nx.LinAlg do
 
   ## Examples
 
-      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4]]), 0)
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
       #Nx.Tensor<
         s64[2][2]
         [
@@ -987,7 +987,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4]]), 6)
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 6)
       #Nx.Tensor<
         s64[2][2]
         [
@@ -996,7 +996,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.dot_power(Nx.eye(3), 65535)
+      iex> Nx.LinAlg.matrix_power(Nx.eye(3), 65535)
       #Nx.Tensor<
         s64[3][3]
         [
@@ -1006,7 +1006,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4]]), -1)
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), -1)
       #Nx.Tensor<
         f32[2][2]
         [
@@ -1015,15 +1015,15 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4], [5, 6]]), 1)
+      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4], [5, 6]]), 1)
       ** (ArgumentError) expected tensor to match shape {x, x}, got tensor with shape {3, 2}
   """
   @doc from_backend: false
-  def dot_power(tensor, power) when is_integer(power) and power < 0 do
-    dot_power(invert(tensor), abs(power))
+  def matrix_power(tensor, power) when is_integer(power) and power < 0 do
+    matrix_power(invert(tensor), abs(power))
   end
 
-  def dot_power(tensor, 0) do
+  def matrix_power(tensor, 0) do
     # We need a special-case for 0 since the code below
     # is optimized to not compute an initial eye.
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
@@ -1031,7 +1031,7 @@ defmodule Nx.LinAlg do
     Nx.eye(tensor)
   end
 
-  def dot_power(tensor, power) when is_integer(power) do
+  def matrix_power(tensor, power) when is_integer(power) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
 
     power

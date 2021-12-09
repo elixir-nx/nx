@@ -25,7 +25,7 @@ defmodule Torchx.NxLinAlgDoctestTest do
     # depends on QR
     invert: 1,
     solve: 2,
-    dot_power: 2,
+    matrix_power: 2,
     # cholesky - returns the transposed result
     cholesky: 1
   ]
