@@ -1020,7 +1020,7 @@ defmodule Nx.LinAlg do
   """
   @doc from_backend: false
   def dot_power(tensor, power) when is_integer(power) and power < 0 do
-    dot_power(Nx.LinAlg.invert(tensor), -power)
+    dot_power(invert(tensor), abs(power))
   end
 
   def dot_power(tensor, 0) do
