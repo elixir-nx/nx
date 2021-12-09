@@ -974,9 +974,11 @@ defmodule Nx.LinAlg do
   The input is always a square tensor and a non-negative integer,
   and the output is a square tensor of the same dimensions as the input tensor.
 
+  The dot-products are unrolled inside `defn`.
+
   ## Examples
 
-      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
+      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4]]), 0)
       #Nx.Tensor<
         s64[2][2]
         [
@@ -985,7 +987,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 6)
+      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4]]), 6)
       #Nx.Tensor<
         s64[2][2]
         [
@@ -994,7 +996,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.matrix_power(Nx.eye(3), 65535)
+      iex> Nx.LinAlg.dot_power(Nx.eye(3), 65535)
       #Nx.Tensor<
         s64[3][3]
         [
@@ -1004,16 +1006,7 @@ defmodule Nx.LinAlg do
         ]
       >
 
-      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0)
-      #Nx.Tensor<
-        s64[2][2]
-        [
-          [1, 0],
-          [0, 1]
-        ]
-      >
-
-      iex> Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), -1)
+      iex> Nx.LinAlg.dot_power(Nx.tensor([[1, 2], [3, 4]]), -1)
       #Nx.Tensor<
         f32[2][2]
         [
@@ -1023,32 +1016,40 @@ defmodule Nx.LinAlg do
       >
   """
   @doc from_backend: false
-  def matrix_power(matrix, power) when is_integer(power) and power < 0 do
-    matrix_power(Nx.LinAlg.invert(matrix), -power)
+  def dot_power(tensor, power) when is_integer(power) and power < 0 do
+    dot_power(Nx.LinAlg.invert(tensor), -power)
   end
 
-  def matrix_power(matrix, 0) do
-    # We need a special-case for 0 because Integer.digits(0, 2) returns
-    # [0]. The last function clause assumes:
-    #     [1 | _] = Enum.reverse(Integer.digits(???, 2))
-    # which is the case for all positive integers, but not for 0.
-    Nx.eye(matrix)
+  def dot_power(tensor, 0) do
+    # We need a special-case for 0 since the code below
+    # is optimized to not compute an initial eye.
+    Nx.eye(tensor)
   end
 
-  def matrix_power(matrix, power) when is_integer(power) do
-    {result, exp_matrix} =
+  def dot_power(tensor, 1) do
+    # We also need a special case for 1, because the code
+    # below is optimized for calculating powers for
+    # integers where `length(Integer.digits(n, 2)) > 1`.
+    tensor
+  end
+
+  def dot_power(tensor, power) when is_integer(power) do
+    {result, exp_tensor} =
       power
       |> Integer.digits(2)
-      |> tl()
+      |> tl
       |> Enum.reverse()
-      |> Enum.reduce({Nx.eye(matrix), matrix}, fn
-        1, {result_matrix, exp_matrix} ->
-          {Nx.dot(result_matrix, exp_matrix), Nx.dot(exp_matrix, exp_matrix)}
+      |> Enum.reduce({nil, tensor}, fn
+        1, {nil, exp_tensor} ->
+          {exp_tensor, Nx.dot(exp_tensor, exp_tensor)}
 
-        0, {result_matrix, exp_matrix} ->
-          {result_matrix, Nx.dot(exp_matrix, exp_matrix)}
+        1, {result_tensor, exp_tensor} ->
+          {Nx.dot(result_tensor, exp_tensor), Nx.dot(exp_tensor, exp_tensor)}
+
+        0, {result_tensor, exp_tensor} ->
+          {result_tensor, Nx.dot(exp_tensor, exp_tensor)}
       end)
 
-    Nx.dot(result, exp_matrix)
+    Nx.dot(result, exp_tensor)
   end
 end
