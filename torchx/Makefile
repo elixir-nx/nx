@@ -5,6 +5,9 @@ TORCHX_SO = $(PRIV_DIR)/torchx.so
 # CMAKE_BUILD_FLAGS = --verbose
 CMAKE_BUILD_DIR ?= $(MIX_APP_PATH)/cmake
 C_SRC = $(shell pwd)/c_src
+ifdef CMAKE_TOOLCHAIN_FILE
+	CMAKE_CONFIGURE_FLAGS=-DCMAKE_TOOLCHAIN_FILE="$(CMAKE_TOOLCHAIN_FILE)"
+endif
 
 .DEFAULT_GLOBAL := build
 
@@ -30,6 +33,6 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	@ cd $(CMAKE_BUILD_DIR) && \
 		cmake -DCMAKE_PREFIX_PATH=$(LIBTORCH_DIR) -DC_SRC=$(C_SRC) \
 				-DLIBTORCH_BASE=$(LIBTORCH_BASE) -DERTS_INCLUDE_DIR=$(ERTS_INCLUDE_DIR) \
-				-S $(shell pwd) && \
+				-S $(shell pwd) $(CMAKE_CONFIGURE_FLAGS) && \
 		cmake --build . $(CMAKE_BUILD_FLAGS)
 	@ mv $(CMAKE_BUILD_DIR)/torchx.so $(TORCHX_SO)
