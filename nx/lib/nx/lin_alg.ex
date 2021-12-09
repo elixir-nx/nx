@@ -1026,37 +1026,31 @@ defmodule Nx.LinAlg do
   def dot_power(tensor, 0) do
     # We need a special-case for 0 since the code below
     # is optimized to not compute an initial eye.
-    Nx.eye(tensor)
-  end
-
-  def dot_power(tensor, 1) do
-    # We also need a special case for 1, because the code
-    # below is optimized for calculating powers for
-    # integers where `length(Integer.digits(n, 2)) > 1`.
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
 
-    tensor
+    Nx.eye(tensor)
   end
 
   def dot_power(tensor, power) when is_integer(power) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {x, x})
 
-    {result, exp_tensor} =
-      power
-      |> Integer.digits(2)
-      |> tl()
-      |> Enum.reverse()
-      |> Enum.reduce({nil, tensor}, fn
-        1, {nil, exp_tensor} ->
-          {exp_tensor, Nx.dot(exp_tensor, exp_tensor)}
+    power
+    |> Integer.digits(2)
+    |> tl()
+    |> Enum.reverse()
+    |> Enum.reduce({nil, tensor}, fn
+      1, {nil, exp_tensor} ->
+        {exp_tensor, Nx.dot(exp_tensor, exp_tensor)}
 
-        1, {result_tensor, exp_tensor} ->
-          {Nx.dot(result_tensor, exp_tensor), Nx.dot(exp_tensor, exp_tensor)}
+      1, {result_tensor, exp_tensor} ->
+        {Nx.dot(result_tensor, exp_tensor), Nx.dot(exp_tensor, exp_tensor)}
 
-        0, {result_tensor, exp_tensor} ->
-          {result_tensor, Nx.dot(exp_tensor, exp_tensor)}
-      end)
-
-    Nx.dot(result, exp_tensor)
+      0, {result_tensor, exp_tensor} ->
+        {result_tensor, Nx.dot(exp_tensor, exp_tensor)}
+    end)
+    |> then(fn
+      {nil, exp_tensor} -> exp_tensor
+      {result, exp_tensor} -> Nx.dot(result, exp_tensor)
+    end)
   end
 end
