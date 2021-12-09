@@ -27,7 +27,6 @@ $(TORCHX_SO): c_src/torchx.cpp c_src/nx_nif_utils.hpp
 	else \
 		ln -sf $(abspath $(LIBTORCH_DIR)/lib) $(PRIV_DIR)/libtorch ; \
 	fi
-	echo "CMAKE_TOOLCHAIN_FILE: ${CMAKE_TOOLCHAIN_FILE}"
 ifneq ($(CMAKE_TOOLCHAIN_FILE),)
 	CMAKE_CONFIGURE_FLAGS=-DCMAKE_TOOLCHAIN_FILE="$(CMAKE_TOOLCHAIN_FILE)"
 endif
