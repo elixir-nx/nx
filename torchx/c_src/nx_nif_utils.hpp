@@ -272,6 +272,25 @@ namespace nx
       return 1;
     }
 
+    int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<double> &var)
+    {
+      unsigned int length;
+      if (!enif_get_list_length(env, list, &length))
+        return 0;
+      var.reserve(length);
+      ERL_NIF_TERM head, tail;
+
+      while (enif_get_list_cell(env, list, &head, &tail))
+      {
+        double elem;
+        if (!get(env, head, &elem))
+          return 0;
+        var.push_back(elem);
+        list = tail;
+      }
+      return 1;
+    }
+
     int get_list(ErlNifEnv *env, ERL_NIF_TERM list, std::vector<torch::Tensor> &var)
     {
       unsigned int length;

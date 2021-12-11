@@ -164,6 +164,9 @@ defmodule Torchx do
   deftensor gather(tensor_input, tensor_indices, axis)
   deftensor argsort(tensor, axis, is_descending)
   deftensor flip(tensor, axis)
+  deftensor interpolate(tensor, size)
+  deftensor interpolate(tensor, size, mode, align_corners)
+  deftensor interpolate(tensor, size, mode, align_corners, scale_factor)
 
   ## Aggregation
 

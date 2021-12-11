@@ -5,10 +5,16 @@
 
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
+std::map<const std::string, const torch::nn::functional::InterpolateFuncOptions::mode_t> mtypes = {{"nearest", torch::kNearest}, {"linear", torch::kLinear}, {"area", torch::kArea}, {"bilinear", torch::kBilinear}, {"trilinear", torch::kTrilinear}, {"bicubic", torch::kBicubic}};
 
 inline torch::ScalarType string2type(const std::string atom)
 {
   return dtypes[atom];
+}
+
+inline torch::nn::functional::InterpolateFuncOptions::mode_t string2mode(const std::string atom)
+{
+  return mtypes[atom];
 }
 
 inline std::string type2string(const torch::ScalarType type)
@@ -40,6 +46,10 @@ inline std::string type2string(const torch::ScalarType type)
 #define TYPE_PARAM(ARGN, VAR)  \
   ATOM_PARAM(ARGN, VAR##_atom) \
   torch::ScalarType VAR = string2type(VAR##_atom)
+
+#define MODE_PARAM(ARGN, VAR) \
+  ATOM_PARAM(ARGN, VAR##_atom) \
+  torch::nn::functional::InterpolateFuncOptions::mode_t VAR = string2mode(VAR##_atom)
 
 #define DEVICE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
 
@@ -248,7 +258,6 @@ NIF(split)
   TENSOR_LIST(torch::split(*t, batch_size));
 }
 
-
 NIF(reshape)
 {
   TENSOR_PARAM(0, t);
@@ -376,6 +385,50 @@ NIF(scalar_tensor)
   DEVICE_PARAM(2, device);
 
   TENSOR(torch::scalar_tensor(scalar, OPTS(type, device)));
+}
+
+NIF(interpolate)
+{
+  TENSOR_PARAM(0,t);
+  
+  namespace F = torch::nn::functional;
+  torch::Tensor result;
+  if (argc == 2) 
+  {
+    // The default mode is kNearest
+    LIST_PARAM(1, std::vector<int64_t>, size);
+    result = F::interpolate(*t, 
+		    F::InterpolateFuncOptions()
+		    .mode(torch::kNearest)
+		    .size(size)
+	     );
+  } else if (argc == 4) {
+    // In case we receive (tensor, size, mode, align_corners) we ignore the second parameter
+    LIST_PARAM(1, std::vector<int64_t>, size);
+    MODE_PARAM(2, mode);
+    PARAM(3, bool, align_corners);
+    result = F::interpolate(*t, 
+		    F::InterpolateFuncOptions()
+		    .mode(mode)
+		    .size(size)
+		    .align_corners(align_corners)
+	     );
+  } else if (argc == 5) {
+    // In case we receive (tensor, size, align_corners, scale_factor, mode) we ignore the second parameter
+    TORCH_WARN("Ignoring size parameter");
+    PARAM(2, bool, align_corners);
+    LIST_PARAM(3, std::vector<double>, scale_factor);
+    MODE_PARAM(4, mode);
+    result = F::interpolate(*t, 
+		    F::InterpolateFuncOptions()
+		    .mode(mode)
+		    .scale_factor(scale_factor)
+		    .align_corners(align_corners)
+	     );
+  }
+
+  TENSOR(result);
+
 }
 
 NIF(randint)
@@ -755,6 +808,9 @@ int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
   {#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND}
 
 static ErlNifFunc nif_functions[] = {
+    DF(interpolate, 5),
+    DF(interpolate, 4),
+    DF(interpolate, 2),
     DF(randint, 5),
     DF(rand, 5),
     DF(normal, 5),
