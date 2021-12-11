@@ -395,7 +395,7 @@ NIF(interpolate)
   torch::Tensor result;
   if (argc == 2) 
   {
-    // The default mode is kNearest
+    // In case we receive (tensor, size) the default mode is kNearest
     LIST_PARAM(1, std::vector<int64_t>, size);
     result = F::interpolate(*t, 
 		    F::InterpolateFuncOptions()
@@ -403,7 +403,7 @@ NIF(interpolate)
 		    .size(size)
 	     );
   } else if (argc == 4) {
-    // In case we receive (tensor, size, mode, align_corners) we ignore the second parameter
+    // In case we receive (tensor, size, mode, align_corners) 
     LIST_PARAM(1, std::vector<int64_t>, size);
     MODE_PARAM(2, mode);
     PARAM(3, bool, align_corners);
@@ -414,11 +414,11 @@ NIF(interpolate)
 		    .align_corners(align_corners)
 	     );
   } else if (argc == 5) {
-    // In case we receive (tensor, size, align_corners, scale_factor, mode) we ignore the second parameter
+    // In case we receive (tensor, size, mode, align_corners, scale_factor) we ignore the size parameter
     TORCH_WARN("Ignoring size parameter");
-    PARAM(2, bool, align_corners);
-    LIST_PARAM(3, std::vector<double>, scale_factor);
-    MODE_PARAM(4, mode);
+    MODE_PARAM(2, mode);
+    PARAM(3, bool, align_corners);
+    LIST_PARAM(4, std::vector<double>, scale_factor);
     result = F::interpolate(*t, 
 		    F::InterpolateFuncOptions()
 		    .mode(mode)
