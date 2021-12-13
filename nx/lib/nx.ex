@@ -1605,39 +1605,6 @@ defmodule Nx do
     end
   end
 
-  @doc """
-  Returns the underlying tensor as a scalar.
-
-  If the tensor has a dimension, it raises.
-
-  ## Examples
-
-      iex> Nx.to_number(1)
-      1
-
-      iex> Nx.to_number(Nx.tensor([1.0, 2.0, 3.0]))
-      ** (ArgumentError) cannot convert tensor of shape {3} to number
-
-  """
-  @doc type: :conversion
-  @deprecated "Use Nx.to_number/1 instead"
-  def to_scalar(tensor)
-
-  def to_scalar(number) when is_number(number), do: number
-
-  def to_scalar(tensor) do
-    tensor = to_tensor(tensor)
-
-    if tensor.shape != {} do
-      raise ArgumentError, "cannot convert tensor of shape #{inspect(tensor.shape)} to scalar"
-    end
-
-    match_types [tensor.type] do
-      <<match!(x, 0)>> = to_binary(tensor)
-      read!(x, 0)
-    end
-  end
-
   @doc ~S"""
   Returns a heatmap struct with the tensor data.
 
