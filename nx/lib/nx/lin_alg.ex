@@ -5,7 +5,7 @@ defmodule Nx.LinAlg do
 
   import Nx.Shared
   import Nx.Defn, only: [defn: 2, defnp: 2]
-  import Nx.Defn.Kernel, only: [keyword!: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
 
   alias Nx.Tensor, as: T
 
@@ -567,7 +567,7 @@ defmodule Nx.LinAlg do
 
     tensor
     |> invert_tensor()
-    |> Nx.Defn.Kernel.custom_grad(fn ans, g ->
+    |> custom_grad(fn ans, g ->
       ans_t = Nx.transpose(ans)
       ans_t |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_t)
     end)
