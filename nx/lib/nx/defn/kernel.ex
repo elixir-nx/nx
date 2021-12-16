@@ -1437,8 +1437,8 @@ defmodule Nx.Defn.Kernel do
   defp shape_pattern_to_string(pattern), do: "match shape " <> Macro.to_string(pattern)
 
   @definitions (Module.definitions_in(__MODULE__, :def) ++
-       Module.definitions_in(__MODULE__, :defmacro)) --
-      [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
+                  Module.definitions_in(__MODULE__, :defmacro)) --
+                 [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
 
   @doc false
   defmacro __using__(_opts) do
