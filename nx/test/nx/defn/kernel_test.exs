@@ -141,6 +141,13 @@ defmodule Nx.Defn.KernelTest do
       assert tap_and_then(1, 2, 3) == Nx.tensor(0)
       assert_received {:expr, %Nx.Tensor{data: %Nx.Defn.Expr{}}}
     end
+
+    import Nx.Defn.Kernel, only: [keyword!: 2]
+    defn defn_after_import(tensor), do: -tensor
+
+    test "defn after import works" do
+      assert defn_after_import(1) == Nx.tensor(-1)
+    end
   end
 
   describe "tokens" do

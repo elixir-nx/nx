@@ -3,17 +3,6 @@ defmodule Nx.Defn.Kernel do
   All imported functionality available inside `defn` blocks.
   """
 
-  @special_forms [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
-
-  @doc false
-  defmacro __using__(_opts) do
-    quote do
-      import Kernel, only: []
-      import Nx.Defn.Kernel, except: unquote(Kernel.@(special_forms))
-      alias Nx.Defn.Kernel, as: Kernel
-    end
-  end
-
   @doc """
   Defines an alias, as in `Kernel.SpecialForms.alias/2`.
 
@@ -1446,4 +1435,17 @@ defmodule Nx.Defn.Kernel do
 
   defp shape_pattern_to_string({:{}, _, []}), do: "be a scalar"
   defp shape_pattern_to_string(pattern), do: "match shape " <> Macro.to_string(pattern)
+
+  @definitions (Module.definitions_in(__MODULE__, :def) ++
+       Module.definitions_in(__MODULE__, :defmacro)) --
+      [alias: 1, alias: 2, import: 1, import: 2, require: 1, require: 2, cond: 1]
+
+  @doc false
+  defmacro __using__(_opts) do
+    quote do
+      import Kernel, only: []
+      import Nx.Defn.Kernel, only: unquote(Kernel.@(definitions))
+      alias Nx.Defn.Kernel, as: Kernel
+    end
+  end
 end
