@@ -4,7 +4,7 @@ defmodule Nx.LinAlg do
   """
 
   import Nx.Shared
-  import Nx.Defn, only: [defn: 2]
+  import Nx.Defn, only: [defn: 2, defnp: 2]
   import Nx.Defn.Kernel, only: [keyword!: 2]
 
   alias Nx.Tensor, as: T
@@ -565,13 +565,17 @@ defmodule Nx.LinAlg do
   defn invert(tensor) do
     assert_shape_pattern(tensor, {n, n})
 
-    identity = Nx.eye(tensor)
-    inverted = Nx.LinAlg.solve(tensor, identity)
-
-    Nx.Defn.Kernel.custom_grad(inverted, fn ans, g ->
+    tensor
+    |> invert_tensor()
+    |> Nx.Defn.Kernel.custom_grad(fn ans, g ->
       ans_t = Nx.transpose(ans)
       ans_t |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_t)
     end)
+  end
+
+  defnp invert_tensor(tensor) do
+    identity = Nx.eye(tensor)
+    Nx.LinAlg.solve(tensor, identity)
   end
 
   @doc """
