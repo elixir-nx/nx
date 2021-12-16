@@ -569,7 +569,7 @@ defmodule Nx.LinAlg do
     |> invert_tensor()
     |> custom_grad(fn ans, g ->
       ans_t = Nx.transpose(ans)
-      ans_t |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_t)
+      [{tensor, ans_t |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_t)}]
     end)
   end
 
