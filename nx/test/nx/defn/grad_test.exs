@@ -1776,6 +1776,50 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "invert" do
+    defn invert_grad(t) do
+      grad(t, fn tensor ->
+        tensor
+        |> Nx.LinAlg.invert()
+        |> Nx.sum()
+      end)
+    end
+
+    defn composed_invert_grad(t) do
+      grad(t, fn tensor ->
+        tensor
+        |> Nx.exp()
+        |> Nx.sin()
+        |> Nx.LinAlg.invert()
+        |> Nx.cos()
+        |> Nx.log()
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes grad for tensor" do
+      assert_all_close(
+        invert_grad(Nx.tensor([[1.0, 2.0, 3.0], [0, 4, 5], [0, 0, -6]])),
+        Nx.tensor([
+          [-0.5833, -0.4583, 0.1667],
+          [0.14583, 0.1146, -0.0417],
+          [-0.0729, -0.0573, 0.0208]
+        ])
+      )
+    end
+
+    test "computes composed function grad for tensor" do
+      assert_all_close(
+        composed_invert_grad(Nx.tensor([[1.0, 2.0, 3.0], [0, 4, 5], [0, 0, -6]])),
+        Nx.tensor([
+          [-8.2713, -21.8449, 72.5134],
+          [0.9508, 69.7985, -524.3346],
+          [-1.2254, 3.1769, -0.0230]
+        ])
+      )
+    end
+  end
+
   describe "squeeze" do
     defn grad_sum_squeeze_broadcast(t),
       do: grad(t, &Nx.sum(Nx.squeeze(Nx.broadcast(&1, {3, 2, 2}))))

@@ -4,7 +4,8 @@ defmodule Nx.LinAlg do
   """
 
   import Nx.Shared
-  import Nx.Defn.Kernel, only: [keyword!: 2]
+  import Nx.Defn, only: [defn: 2, defnp: 2]
+  import Nx.Defn.Kernel, only: [keyword!: 2, custom_grad: 2]
 
   alias Nx.Tensor, as: T
 
@@ -554,23 +555,27 @@ defmodule Nx.LinAlg do
   ### Error cases
 
       iex> Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
-      ** (ArgumentError) can only invert square matrices, got: {2, 4}
+      ** (ArgumentError) expected tensor to match shape {n, n}, got tensor with shape {2, 4}
 
       iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
       ** (ArgumentError) can't solve for singular matrix
 
   """
   @doc from_backend: false
-  def invert(tensor) do
-    %T{shape: {m, n}} = tensor = Nx.to_tensor(tensor)
+  defn invert(tensor) do
+    assert_shape_pattern(tensor, {n, n})
 
-    if m != n do
-      raise ArgumentError,
-            "can only invert square matrices, got: {#{m}, #{n}}"
-    end
+    tensor
+    |> invert_tensor()
+    |> custom_grad(fn ans, g ->
+      ans_t = Nx.transpose(ans)
+      [{tensor, ans_t |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_t)}]
+    end)
+  end
 
+  defnp invert_tensor(tensor) do
     identity = Nx.eye(tensor)
-    solve(tensor, identity)
+    Nx.LinAlg.solve(tensor, identity)
   end
 
   @doc """
