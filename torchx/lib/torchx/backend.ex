@@ -627,8 +627,8 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def svd({u_holder, s_holder, vt_holder}, tensor, opts) do
-    {u, s, vt} = Torchx.svd(from_nx(tensor), true)
+  def svd({u_holder, s_holder, vt_holder}, tensor, _opts) do
+    {u, s, vt} = Torchx.svd(from_nx(tensor))
 
     {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
   end
