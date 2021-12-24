@@ -237,9 +237,20 @@ defmodule Torchx.Backend do
         lengths,
         strides
       ) do
+    starts =
+      [Tuple.to_list(input_shape), start_indices, lengths]
+      |> Enum.zip()
+      |> Enum.map(fn
+        {axis_size, start, len} when start + len >= axis_size ->
+          axis_size - len
+
+        {_, start, _} ->
+          start
+      end)
+
     t
     |> from_nx()
-    |> torchx_slice(input_shape, output_shape, start_indices, lengths, strides)
+    |> torchx_slice(input_shape, output_shape, starts, lengths, strides)
     |> to_nx(out)
   end
 
