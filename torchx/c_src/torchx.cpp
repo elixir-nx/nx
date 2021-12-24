@@ -703,7 +703,7 @@ NIF(svd)
     GET(1, full_matrices);
   }
 
-  TENSOR_TUPLE_3(torch::svd(*t, full_matrices));
+  TENSOR_TUPLE_3(torch::linalg_svd(*t, full_matrices));
 }
 
 NIF(lu)
