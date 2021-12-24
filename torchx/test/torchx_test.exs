@@ -36,26 +36,13 @@ defmodule TorchxTest do
 
   describe "slice/4" do
     test "out of bound indices" do
-      expected =
-        Nx.tensor([
-          [
-            [0, 1, 2, 3],
-            [12, 13, 14, 15]
-          ],
-          [
-            [40, 41, 42, 43],
-            [52, 53, 54, 55]
-          ],
-          [
-            [80, 81, 82, 83],
-            [92, 93, 94, 95]
-          ]
-        ])
+      tensor = Nx.iota({6, 5, 4})
 
-      result =
-        {6, 5, 4}
-        |> Nx.iota()
-        |> Nx.slice([1, 1, 1], [6, 5, 4], strides: [2, 3, 1])
+      slice = fn t -> Nx.slice(t, [1, 1, 1], [6, 5, 4], strides: [2, 3, 1]) end
+
+      expected = tensor |> Nx.backend_transfer(Nx.BinaryBackend) |> then(slice)
+
+      result = slice.(tensor)
 
       assert expected |> Nx.equal(result) |> Nx.all?() |> Nx.to_number() == 1
     end
