@@ -638,6 +638,13 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def svd({u_holder, s_holder, vt_holder}, tensor, _opts) do
+    {u, s, vt} = Torchx.svd(from_nx(tensor))
+
+    {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
+  end
+
+  @impl true
   def lu(
         {p_holder, %{type: output_type} = l_holder, %{type: output_type} = u_holder},
         tensor,

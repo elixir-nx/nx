@@ -693,6 +693,19 @@ NIF(qr)
   TENSOR_TUPLE(torch::qr(*t, reduced));
 }
 
+NIF(svd)
+{
+  TENSOR_PARAM(0, t);
+  bool full_matrices = true;
+
+  if (argc == 2)
+  {
+    GET(1, full_matrices);
+  }
+
+  TENSOR_TUPLE_3(torch::linalg_svd(*t, full_matrices));
+}
+
 NIF(lu)
 {
   TENSOR_PARAM(0, t);
@@ -858,6 +871,8 @@ static ErlNifFunc nif_functions[] = {
     DF(cholesky, 2),
     DF(qr, 1),
     DF(qr, 2),
+    DF(svd, 1),
+    DF(svd, 2),
     DF(lu, 1),
     DF(triangular_solve, 4),
     DF(determinant, 1),

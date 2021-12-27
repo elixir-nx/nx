@@ -496,4 +496,48 @@ defmodule Torchx.BackendTest do
                    end
     end
   end
+
+  describe "Nx.LinAlg.svd" do
+    test "factors square matrix" do
+      t = Nx.tensor([[1.0, 0, 0], [0, 1, 0], [0, 0, -1]])
+      {u, s, vt} = Nx.LinAlg.svd(t)
+
+      assert_all_close(u, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+      assert_all_close(s, Nx.tensor([1, 1, 1]))
+
+      assert_all_close(
+        vt,
+        Nx.tensor([
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ])
+      )
+
+      assert_all_close(t, u |> Nx.multiply(s) |> Nx.dot(vt))
+    end
+
+    test "factors tall matrix" do
+      t = Nx.tensor([[2.0, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]])
+      {u, s, vt} = Nx.LinAlg.svd(t)
+
+      assert_all_close(u, Nx.tensor([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]))
+      assert_all_close(s, Nx.tensor([3, 2, 1]))
+
+      assert_all_close(
+        vt,
+        Nx.tensor([
+          [0.0, 1.0, 0.0],
+          [1.0, 0.0, 0.0],
+          [0.0, 0.0, -1.0]
+        ])
+      )
+
+      eye = {4, 4} |> Nx.eye() |> Nx.slice([0, 0], [4, 3])
+
+      s_full = Nx.multiply(eye, s)
+
+      assert_all_close(t, u |> Nx.dot(s_full) |> Nx.dot(vt))
+    end
+  end
 end
