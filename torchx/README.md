@@ -32,12 +32,16 @@ from the official website](https://pytorch.org/get-started/locally/), unpack it 
 directory of your choice and set the `LIBTORCH_DIR` [environment variable](https://en.wikipedia.org/wiki/Environment_variable)
 to point to the unpacked directory.
 
-Once downloaded, we will compile `Torchx` bindings. You will need `make`, `cmake` (3.12+) and a `C++`
-compiler. If running on Windows, you will need:
+Once downloaded, we will compile `Torchx` bindings. You will need `make`, `cmake` (3.12+)
+and a `C++` compiler. If running on Windows, you will need:
 
 - [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
 - [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
 - [CMake](https://cmake.org/)
+
+Currently there are no precompiled versions available for Apple M1. [See this issue
+for more context](https://github.com/elixir-nx/nx/issues/593). Other platforms may
+also require compiling `libtorch` from scratch.
 
 ## Usage
 
