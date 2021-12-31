@@ -11,6 +11,15 @@ defmodule Nx.HeatmapTest do
   end
 
   describe "without ANSI" do
+    test "equal" do
+      assert Nx.tensor([1, 1, 1]) |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
+             #Nx.Heatmap<
+               s64[3]
+               000
+             >\
+             """
+    end
+
     test "rank 1" do
       assert @tensor1 |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
              #Nx.Heatmap<
@@ -50,6 +59,15 @@ defmodule Nx.HeatmapTest do
   end
 
   describe "with ANSI" do
+    test "equal" do
+      assert Nx.tensor([1, 1, 1]) |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == """
+             #Nx.Heatmap<
+               s64[3]
+               \e[48;5;232m　\e[48;5;232m　\e[48;5;232m　\e[0m
+             >\
+             """
+    end
+
     test "rank 1" do
       assert @tensor1 |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == """
              #Nx.Heatmap<
