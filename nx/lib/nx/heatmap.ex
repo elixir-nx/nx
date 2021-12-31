@@ -75,7 +75,7 @@ defmodule Nx.Heatmap do
     defp render(%{shape: {size}} = tensor, _opts, _doc, entry_fun, line_fun) do
       data = Nx.to_flat_list(tensor)
       {data, [], min, max} = take_min_max(data, size)
-      base = max - min
+      base = if max == min, do: 1, else: max - min
 
       data
       |> Enum.map(fn elem -> entry_fun.((elem - min) / base) end)
@@ -104,7 +104,7 @@ defmodule Nx.Heatmap do
 
     defp chunk([], acc, limit, {rows, cols, entry_fun, line_fun}, _docs) do
       {acc, rest, min, max} = take_min_max(acc, rows * cols)
-      base = max - min
+      base = if max == min, do: 1, else: max - min
 
       {[], doc} =
         Enum.reduce(1..rows, {acc, empty()}, fn _, {acc, doc} ->
