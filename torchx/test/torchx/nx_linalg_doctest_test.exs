@@ -29,7 +29,9 @@ defmodule Torchx.NxLinAlgDoctestTest do
     solve: 2,
     matrix_power: 2,
     # cholesky - returns the transposed result
-    cholesky: 1
+    cholesky: 1,
+    # determinant - depends on any?
+    determinant: 1
   ]
 
   setup do
