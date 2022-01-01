@@ -1058,4 +1058,117 @@ defmodule Nx.LinAlg do
       {result, exp_tensor} -> Nx.dot(result, exp_tensor)
     end)
   end
+
+  @doc """
+  Calculates the determinant of a square 2D tensor.
+
+  ### Examples
+
+      For 2x2 and 3x3, the results are given by the closed formulas:
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        s64
+        -2
+      >
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]]))
+      #Nx.Tensor<
+        f32
+        48.0
+      >
+
+      When there are linearly dependent rows or columns, the determinant is 0:
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 0.0], [3.0, 0.0]]))
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], [4.0, 5.0, 6.0]]))
+      #Nx.Tensor<
+        f32
+        0.0
+      >
+
+      The determinant can also be calculated when the axes are bigger than 3:
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([
+      ...> [1, 0, 0, 0],
+      ...> [0, 1, 2, 3],
+      ...> [0, 1, -2, 3],
+      ...> [0, 7, 8, 9.0]
+      ...> ]))
+      #Nx.Tensor<
+        f32
+        -48.0
+      >
+
+      iex> Nx.LinAlg.determinant(Nx.tensor([
+      ...> [0, 0, 0, 0, -1],
+      ...> [0, 1, 2, 3, 0],
+      ...> [0, 1, -2, 3, 0],
+      ...> [0, 7, 8, 9, 0],
+      ...> [1, 0, 0, 0, 0]
+      ...> ]))
+      #Nx.Tensor<
+        f32
+        48.0
+      >
+  """
+  def determinant(tensor)
+
+  # for 2x2 and 3x3, use the algebraic closed formula
+  def determinant(%{shape: {2, 2}} = t) do
+    t = Nx.tile(t, [1, 2])
+
+    t
+    |> diagonal_product(0)
+    |> Nx.subtract(diagonal_product(t, 1))
+  end
+
+  def determinant(%{shape: {3, 3}} = t) do
+    pos_t = Nx.tile(t, [1, 2])
+
+    neg_t = Nx.reverse(pos_t, axes: [1])
+
+    Enum.reduce(0..2, Nx.tensor(0), fn offset, acc ->
+      acc
+      |> Nx.add(diagonal_product(pos_t, offset))
+      |> Nx.subtract(diagonal_product(neg_t, offset))
+    end)
+  end
+
+  def determinant(%{shape: {n, n}, data: %backend{}, type: type} = t) do
+    # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
+    {p, l, u} = Nx.LinAlg.lu(t)
+
+    diag = l |> Nx.take_diagonal() |> Nx.multiply(Nx.take_diagonal(u))
+
+    is_zero = diag |> Nx.equal(0) |> Nx.any?() |> Nx.to_number() |> Kernel.==(1)
+
+    iota = Nx.iota({n})
+
+    parity = p |> Nx.dot(iota) |> Nx.not_equal(iota) |> Nx.sum()
+
+    parity = diag |> Nx.less(0) |> Nx.sum() |> Nx.add(parity)
+
+    sign =
+      if is_zero do
+        Nx.tensor(0, backend: backend, type: type)
+      else
+        parity |> Nx.remainder(2) |> Nx.multiply(-2) |> Nx.add(1)
+      end
+
+    absdet = if is_zero, do: 0, else: diag |> Nx.product() |> Nx.abs()
+
+    Nx.multiply(sign, absdet)
+  end
+
+  defp diagonal_product(t, offset) do
+    t
+    |> Nx.take_diagonal(offset: offset)
+    |> Nx.product()
+  end
 end
