@@ -1064,7 +1064,7 @@ defmodule Nx.LinAlg do
 
   ### Examples
 
-      For 2x2 and 3x3, the results are given by the closed formulas:
+  For 2x2 and 3x3, the results are given by the closed formulas:
 
       iex> Nx.LinAlg.determinant(Nx.tensor([[1, 2], [3, 4]]))
       #Nx.Tensor<
@@ -1078,7 +1078,7 @@ defmodule Nx.LinAlg do
         48.0
       >
 
-      When there are linearly dependent rows or columns, the determinant is 0:
+  When there are linearly dependent rows or columns, the determinant is 0:
 
       iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 0.0], [3.0, 0.0]]))
       #Nx.Tensor<
@@ -1092,7 +1092,7 @@ defmodule Nx.LinAlg do
         0.0
       >
 
-      The determinant can also be calculated when the axes are bigger than 3:
+  The determinant can also be calculated when the axes are bigger than 3:
 
       iex> Nx.LinAlg.determinant(Nx.tensor([
       ...> [1, 0, 0, 0],
