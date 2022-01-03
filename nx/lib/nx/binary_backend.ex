@@ -593,6 +593,12 @@ defmodule Nx.BinaryBackend do
     end
   end
 
+  defp element_wise_bin_op(out, left, right, fun) when is_number(left) or is_number(right) do
+    left = if is_number(left), do: Nx.to_tensor(left), else: left
+    right = if is_number(right), do: Nx.to_tensor(right), else: right
+    element_wise_bin_op(out, left, right, fun)
+  end
+
   defp element_wise_bin_op(%{type: type} = out, %{shape: {}} = left, right, fun) do
     number = to_number(left)
 
@@ -761,7 +767,9 @@ defmodule Nx.BinaryBackend do
   defp element_popcount(0, count), do: count
   defp element_popcount(n, count), do: element_popcount(n &&& n - 1, count + 1)
 
-  defp element_wise_unary_op(out, tensor, fun) do
+  defp element_wise_unary_op(out, arg, fun) do
+    tensor = if is_number(arg), do: Nx.to_tensor(arg), else: arg
+
     data =
       match_types [tensor.type, out.type] do
         for <<match!(seg, 0) <- to_binary(tensor)>>, into: <<>> do
@@ -1352,7 +1360,7 @@ defmodule Nx.BinaryBackend do
               reduce: acc,
               do: (acc -> fun.(read!(x, 0), acc))
 
-          <<write!(window_val, 0)>>
+          <<write!(to_number(window_val), 0)>>
         end
       end
 
