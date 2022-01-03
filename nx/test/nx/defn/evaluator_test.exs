@@ -32,6 +32,13 @@ defmodule Nx.Defn.EvaluatorTest do
     assert %T{shape: {3, 2}, type: {:s, 64}} = reshape(Nx.iota({2, 3}))
   end
 
+  defn reduce_window(t1, acc),
+    do: Nx.window_reduce(t1, acc, {2}, [padding: :valid], fn x, acc -> x + acc end)
+
+  test "window reduce" do
+    assert reduce_window(Nx.tensor([1, 2, 3]), 0) == Nx.tensor([3, 5])
+  end
+
   describe "decompositions" do
     defn lu(t), do: Nx.LinAlg.lu(t)
 
