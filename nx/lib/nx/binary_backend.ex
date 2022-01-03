@@ -29,8 +29,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_uniform(%{type: type, shape: shape} = out, min, max, _backend_options) do
-    min = to_number(min)
-    max = to_number(max)
+    min = scalar_to_number(min)
+    max = scalar_to_number(max)
 
     gen =
       case type do
@@ -45,8 +45,8 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def random_normal(%{type: type, shape: shape} = out, mu, sigma, _backend_options) do
-    mu = to_number(mu)
-    sigma = to_number(sigma)
+    mu = scalar_to_number(mu)
+    sigma = scalar_to_number(sigma)
 
     data =
       for _ <- 1..Nx.size(shape),
@@ -183,9 +183,6 @@ defmodule Nx.BinaryBackend do
       from_binary(out, batch)
     end
   end
-
-  defp to_number(n) when is_number(n), do: n
-  defp to_number(t), do: binary_to_number(to_binary(t), t.type)
 
   ## Shape
 
@@ -534,7 +531,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def select(out, %{shape: {}} = pred, on_true, on_false) do
-    if to_number(pred) == 0,
+    if scalar_to_number(pred) == 0,
       do: from_binary(out, broadcast_data(on_false, out.shape)),
       else: from_binary(out, broadcast_data(on_true, out.shape))
   end
@@ -600,7 +597,7 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{type: type} = out, %{shape: {}} = left, right, fun) do
-    number = to_number(left)
+    number = scalar_to_number(left)
 
     data =
       match_types [right.type, type] do
@@ -613,7 +610,7 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{type: type} = out, left, %{shape: {}} = right, fun) do
-    number = to_number(right)
+    number = scalar_to_number(right)
 
     data =
       match_types [left.type, type] do
@@ -1343,24 +1340,24 @@ defmodule Nx.BinaryBackend do
     %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(tensor, acc, Enum.map(padding_config, &Tuple.append(&1, 0)))
 
-    acc = to_number(acc)
+    acc = scalar_to_number(acc)
 
     data = to_binary(tensor)
     weighted_shape = weighted_shape(padded_shape, size, window_dimensions, dilations)
     anchors = Enum.sort(make_anchors(padded_shape, strides, window_dimensions, dilations))
 
     data =
-      for anchor <- anchors, into: <<>> do
-        offset = weighted_offset(weighted_shape, anchor, dilations)
-        window = IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
+      match_types [type] do
+        for anchor <- anchors, into: <<>> do
+          offset = weighted_offset(weighted_shape, anchor, dilations)
+          window = IO.iodata_to_binary(weighted_traverse(weighted_shape, data, size, offset))
 
-        match_types [type] do
           window_val =
             for <<match!(x, 0) <- window>>,
               reduce: acc,
               do: (acc -> fun.(read!(x, 0), acc))
 
-          <<write!(to_number(window_val), 0)>>
+          <<write!(scalar_to_number(window_val), 0)>>
         end
       end
 
@@ -1420,7 +1417,7 @@ defmodule Nx.BinaryBackend do
       match_types [output_type] do
         for <<bin::size(size)-bitstring <- data>>, into: <<>> do
           tensor = put_in(template.data.state, bin)
-          <<write!(to_number(fun.(tensor)), 0)>>
+          <<write!(scalar_to_number(fun.(tensor)), 0)>>
         end
       end
 
@@ -1468,7 +1465,7 @@ defmodule Nx.BinaryBackend do
     padding = opts[:padding]
     strides = opts[:strides]
 
-    init_value = to_number(init_value)
+    init_value = scalar_to_number(init_value)
 
     %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(t, init_value, Enum.map(padding, &Tuple.append(&1, 0)))
@@ -1714,7 +1711,7 @@ defmodule Nx.BinaryBackend do
 
   defp clamp_indices(start_indices, shape, lengths) do
     Enum.zip_with([Tuple.to_list(shape), start_indices, lengths], fn [dim_size, idx, len] ->
-      idx = to_number(idx)
+      idx = scalar_to_number(idx)
       min(max(idx, 0), dim_size - len)
     end)
   end
@@ -2114,6 +2111,9 @@ defmodule Nx.BinaryBackend do
   ## Scalar helpers
 
   @compile {:inline, number_to_binary: 2, binary_to_number: 2}
+
+  defp scalar_to_number(n) when is_number(n), do: n
+  defp scalar_to_number(t), do: binary_to_number(to_binary(t), t.type)
 
   defp scalar_to_binary(value, type) when is_number(value),
     do: number_to_binary(value, type)
