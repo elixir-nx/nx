@@ -57,7 +57,7 @@ defmodule Nx.Defn.Tree do
   end
 
   @doc """
-  Applies the given function and accumulator to the args of the node.
+  Applies the given function to the arguments of the node, with the given accumulator as a starting value.
 
   Warning: be very careful when using this function to traverse the expression
   recursively. If you plan to do so, you should consider also storing the visited
