@@ -74,13 +74,15 @@ defmodule Nx.Defn.Evaluator do
       case length(args) do
         1 ->
           fn arg1 ->
-            {result, _cache} = composite_eval(expr, %{state | vars: [arg1]}, %{})
+            vars = [Nx.to_tensor(arg1)]
+            {result, _cache} = composite_eval(expr, %{state | vars: vars}, %{})
             result
           end
 
         2 ->
           fn arg1, arg2 ->
-            {result, _cache} = composite_eval(expr, %{state | vars: [arg1, arg2]}, %{})
+            vars = [Nx.to_tensor(arg1), Nx.to_tensor(arg2)]
+            {result, _cache} = composite_eval(expr, %{state | vars: vars}, %{})
             result
           end
       end
