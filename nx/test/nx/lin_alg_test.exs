@@ -338,54 +338,6 @@ defmodule Nx.LinAlgTest do
              ])
              |> round(3) == round(v, 3)
     end
-
-    # TO-DO investigate why the property test fails
-    # even though we have working tests
-    @tag :skip
-    test "property" do
-      for _ <- 1..10 do
-        square = Nx.random_uniform({4, 4})
-
-        assert {u, d, vt} = Nx.LinAlg.svd(square)
-        m = u |> Nx.shape() |> elem(1)
-        n = vt |> Nx.shape() |> elem(0)
-
-        assert_all_close(
-          u
-          |> Nx.dot(diag(d, m, n))
-          |> Nx.dot(vt),
-          square
-        )
-
-        tall = Nx.random_uniform({4, 3})
-
-        assert {u, d, vt} = Nx.LinAlg.svd(tall)
-        m = u |> Nx.shape() |> elem(1)
-        n = vt |> Nx.shape() |> elem(0)
-
-        assert_all_close(
-          u
-          |> Nx.dot(diag(d, m, n))
-          |> Nx.dot(vt),
-          tall
-        )
-
-        # TODO: SVD does not work for wide matrices and
-        # raises a non-semantic error
-
-        #  wide = Nx.random_uniform({3, 4})
-
-        # assert {u, d, vt} = Nx.LinAlg.svd(wide)
-        # m = u |> Nx.shape() |> elem(1)
-        # n = vt |> Nx.shape() |> elem(0)
-
-        # assert u
-        #        |> Nx.dot(diag(d, m, n))
-        #        |> Nx.dot(vt)
-        #        |> Nx.subtract(wide)
-        #        |> Nx.all_close(1.0e-5)
-      end
-    end
   end
 
   describe "lu" do
