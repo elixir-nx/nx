@@ -318,7 +318,7 @@ defmodule EXLA.Defn do
         {computation, extra, hooks} =
           to_computation.(expr || fun.(vars), inputs_and_shapes, used_hooks)
 
-        executable = EXLA.Computation.compile(computation, client, shapes)
+        executable = EXLA.Computation.compile(computation, client, shapes, options)
         {nil, {executable, extra, hooks}}
       end)
 
