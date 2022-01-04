@@ -92,11 +92,14 @@ defmodule Torchx.BackendTest do
       end
     end
 
-    test "all? fails with more than one axis passed" do
-      assert_raise ArgumentError, ":axes option only accepts a single axis per call", fn ->
-        t = Nx.tensor([[[1]]])
-        Torchx.Backend.all?(t, t, axes: [0, 1])
-      end
+    test "all? does not fail when more than one axis is passed" do
+      assert_all_close(
+        Nx.all?(
+          Nx.tensor([[[[1]]]]),
+          axes: [0, 1]
+        ),
+        Nx.tensor([[1]])
+      )
     end
   end
 
@@ -124,18 +127,6 @@ defmodule Torchx.BackendTest do
                    backend: Nx.BinaryBackend
                  )
       end
-    end
-  end
-
-  describe "aggregates" do
-    test "sum throws on type mismatch" do
-      t = Nx.tensor([[101, 102], [103, 104]], type: {:u, 8})
-
-      assert_raise(
-        ArgumentError,
-        "Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)",
-        fn -> Nx.sum(t) end
-      )
     end
   end
 
@@ -538,6 +529,61 @@ defmodule Torchx.BackendTest do
       s_full = Nx.multiply(eye, s)
 
       assert_all_close(t, u |> Nx.dot(s_full) |> Nx.dot(vt))
+    end
+  end
+
+  describe "Nx.LinAlg.determinant" do
+    test "works for 2x2" do
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1, 2], [3, 4]])),
+        Nx.tensor(-2)
+      )
+    end
+
+    test "works for 3x3" do
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]])),
+        Nx.tensor(48)
+      )
+    end
+
+    test "linearly dependent rows/cols return 0" do
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1.0, 0.0], [3.0, 0.0]])),
+        Nx.tensor(0)
+      )
+
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], [4.0, 5.0, 6.0]])),
+        Nx.tensor(0)
+      )
+    end
+
+    test "works for order bigger than 3" do
+      assert_all_close(
+        Nx.LinAlg.determinant(
+          Nx.tensor([
+            [1, 0, 0, 0],
+            [0, 1, 2, 3],
+            [0, 1, -2, 3],
+            [0, 7, 8, 9.0]
+          ])
+        ),
+        Nx.tensor(-48)
+      )
+
+      assert_all_close(
+        Nx.LinAlg.determinant(
+          Nx.tensor([
+            [0, 0, 0, 0, -1.0],
+            [0, 1, 2, 3, 0],
+            [0, 1, -2, 3, 0],
+            [0, 7, 8, 9, 0],
+            [1, 0, 0, 0, 0]
+          ])
+        ),
+        Nx.tensor(48)
+      )
     end
   end
 end

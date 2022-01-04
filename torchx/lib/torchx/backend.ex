@@ -9,10 +9,13 @@ defmodule Torchx.Backend do
         iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
         ** (ArgumentError) Torchx does not support unsigned 16 bit integer
 
-    2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
+    2. Torchx doesn't support unsigned integers on sums and will convert them to signed integers.
 
         iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
-        ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
+        #Nx.Tensor<
+          s64
+          6
+        >
 
     3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
        So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
@@ -438,13 +441,26 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
+  def sum(%T{} = out, %T{} = t, opts) do
+    out =
+      case out do
+        %{type: {:u, bits}} -> %{out | type: {:s, min(64, bits * 2)}}
+        _ -> out
+      end
+
+    t =
+      case t do
+        %{type: {:u, bits}} -> Nx.as_type(t, {:s, min(64, bits * 2)})
+        _ -> t
+      end
 
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
-    Torchx.sum(from_nx(t), axes, keep_axes) |> to_nx(out)
+    t
+    |> from_nx()
+    |> Torchx.sum(axes, keep_axes)
+    |> to_nx(out)
   end
 
   @impl true
@@ -456,29 +472,59 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        product_whole_tensor(t, keep_axes)
+        aggregate_whole_tensor(t, keep_axes, &Torchx.product/1)
       else
-        product_over_axes(t, axes, keep_axes)
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.product/3)
       end
 
     to_nx(result, out)
   end
 
-  defp product_whole_tensor(t, keep_axes) do
-    prod =
+  @impl true
+  def any?(%T{} = out, %T{} = t, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    result =
+      if axes == [] do
+        aggregate_whole_tensor(t, keep_axes, &Torchx.any/1)
+      else
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.any/3)
+      end
+
+    to_nx(result, out)
+  end
+
+  @impl true
+  def all?(%T{} = out, %T{} = t, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    result =
+      if axes == [] do
+        aggregate_whole_tensor(t, keep_axes, &Torchx.all/1)
+      else
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.all/3)
+      end
+
+    to_nx(result, out)
+  end
+
+  defp aggregate_whole_tensor(t, keep_axes, fun) when is_function(fun, 1) do
+    result =
       t
       |> from_nx()
-      |> Torchx.product()
+      |> then(fun)
 
     if keep_axes do
       shape = t.shape |> Tuple.delete_at(-1) |> Tuple.append(1)
-      Torchx.reshape(prod, shape)
+      Torchx.reshape(result, shape)
     else
-      prod
+      result
     end
   end
 
-  defp product_over_axes(t, axes, keep_axes) do
+  defp aggregate_over_axes(t, axes, keep_axes, fun) when is_function(fun, 3) do
     {_, result_tx} =
       for _ <- 1..length(axes), reduce: {axes, from_nx(t)} do
         {[], t_tx} ->
@@ -497,7 +543,7 @@ defmodule Torchx.Backend do
               end
             end
 
-          {axes, Torchx.product(t_tx, axis, keep_axes)}
+          {axes, fun.(t_tx, axis, keep_axes)}
       end
 
     result_tx
@@ -521,28 +567,6 @@ defmodule Torchx.Backend do
     keep_axes = opts[:keep_axes] || false
 
     Torchx.argmin(from_nx(t), axis, keep_axes) |> to_nx(out)
-  end
-
-  @impl true
-  def all?(%T{} = out, %T{} = t, opts) do
-    axes =
-      case opts[:axes] do
-        axes when length(axes) in 0..1 ->
-          axes
-
-        nil ->
-          []
-
-        _axes ->
-          raise ArgumentError, ":axes option only accepts a single axis per call"
-      end
-
-    keep_axes = opts[:keep_axes] || false
-
-    t
-    |> from_nx()
-    |> Torchx.all(axes, keep_axes)
-    |> to_nx(out)
   end
 
   ## Ops

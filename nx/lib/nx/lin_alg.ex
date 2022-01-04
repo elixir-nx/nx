@@ -1148,9 +1148,13 @@ defmodule Nx.LinAlg do
 
     is_zero = diag |> Nx.equal(0) |> Nx.any?() |> Nx.to_number() |> Kernel.==(1)
 
-    iota = Nx.iota({n})
+    iota = Nx.iota({n}, type: type, backend: backend)
 
-    parity = p |> Nx.dot(iota) |> Nx.not_equal(iota) |> Nx.sum()
+    parity =
+      p
+      |> Nx.dot(iota)
+      |> Nx.not_equal(iota)
+      |> Nx.sum()
 
     parity = diag |> Nx.less(0) |> Nx.sum() |> Nx.add(parity)
 

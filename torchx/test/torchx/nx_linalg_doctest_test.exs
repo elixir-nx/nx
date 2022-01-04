@@ -14,7 +14,8 @@ defmodule Torchx.NxLinAlgDoctestTest do
     triangular_solve: 3,
     # The expected result for some tests isn't the same
     # even though the A = P.L.U property is maintained for lu/2
-    lu: 2
+    lu: 2,
+    determinant: 1
   ]
 
   @temporarily_broken_doctests [
@@ -29,9 +30,7 @@ defmodule Torchx.NxLinAlgDoctestTest do
     solve: 2,
     matrix_power: 2,
     # cholesky - returns the transposed result
-    cholesky: 1,
-    # determinant - depends on any?
-    determinant: 1
+    cholesky: 1
   ]
 
   setup do
