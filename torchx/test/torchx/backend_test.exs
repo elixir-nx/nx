@@ -92,11 +92,14 @@ defmodule Torchx.BackendTest do
       end
     end
 
-    test "all? fails with more than one axis passed" do
-      assert_raise ArgumentError, ":axes option only accepts a single axis per call", fn ->
-        t = Nx.tensor([[[1]]])
-        Torchx.Backend.all?(t, t, axes: [0, 1])
-      end
+    test "all? does not fail when more than one axis is passed" do
+      assert_all_close(
+        Nx.all?(
+          Nx.tensor([[[[1]]]]),
+          axes: [0, 1]
+        ),
+        Nx.tensor([[1]])
+      )
     end
   end
 

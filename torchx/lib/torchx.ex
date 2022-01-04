@@ -174,6 +174,7 @@ defmodule Torchx do
   deftensor any(tensor, axes, keep_axes)
   deftensor argmax(tensor, axis, keep_axes)
   deftensor argmin(tensor, axis, keep_axes)
+  deftensor all(tensor)
   deftensor all(tensor, axes, keep_axes)
 
   ## Binary ops

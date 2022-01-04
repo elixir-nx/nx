@@ -472,85 +472,59 @@ defmodule Torchx.Backend do
 
     result =
       if axes == [] do
-        product_whole_tensor(t, keep_axes)
+        aggregate_whole_tensor(t, keep_axes, &Torchx.product/1)
       else
-        product_over_axes(t, axes, keep_axes)
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.product/3)
       end
 
     to_nx(result, out)
   end
 
-  defp product_whole_tensor(t, keep_axes) do
-    prod =
-      t
-      |> from_nx()
-      |> Torchx.product()
-
-    if keep_axes do
-      shape = t.shape |> Tuple.delete_at(-1) |> Tuple.append(1)
-      Torchx.reshape(prod, shape)
-    else
-      prod
-    end
-  end
-
-  defp product_over_axes(t, axes, keep_axes) do
-    {_, result_tx} =
-      for _ <- 1..length(axes), reduce: {axes, from_nx(t)} do
-        {[], t_tx} ->
-          {[], t_tx}
-
-        {[axis | axes], t_tx} ->
-          # We need to offset all subsequent axes if keep_axes == false.
-          # If keep_axes == true, we can use the same axis numbers as the
-          # incoming tensor.
-          axes =
-            if keep_axes do
-              axes
-            else
-              for x <- axes do
-                if x > axis, do: x - 1, else: x
-              end
-            end
-
-          {axes, Torchx.product(t_tx, axis, keep_axes)}
-      end
-
-    result_tx
-  end
-
   @impl true
   def any?(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
-
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
     result =
       if axes == [] do
-        any_whole_tensor(t, keep_axes)
+        aggregate_whole_tensor(t, keep_axes, &Torchx.any/1)
       else
-        any_over_axes(t, axes, keep_axes)
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.any/3)
       end
 
     to_nx(result, out)
   end
 
-  defp any_whole_tensor(t, keep_axes) do
-    any =
+  @impl true
+  def all?(%T{} = out, %T{} = t, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    result =
+      if axes == [] do
+        aggregate_whole_tensor(t, keep_axes, &Torchx.all/1)
+      else
+        aggregate_over_axes(t, axes, keep_axes, &Torchx.all/3)
+      end
+
+    to_nx(result, out)
+  end
+
+  defp aggregate_whole_tensor(t, keep_axes, fun) when is_function(fun, 1) do
+    result =
       t
       |> from_nx()
-      |> Torchx.any()
+      |> then(fun)
 
     if keep_axes do
       shape = t.shape |> Tuple.delete_at(-1) |> Tuple.append(1)
-      Torchx.reshape(any, shape)
+      Torchx.reshape(result, shape)
     else
-      any
+      result
     end
   end
 
-  defp any_over_axes(t, axes, keep_axes) do
+  defp aggregate_over_axes(t, axes, keep_axes, fun) when is_function(fun, 3) do
     {_, result_tx} =
       for _ <- 1..length(axes), reduce: {axes, from_nx(t)} do
         {[], t_tx} ->
@@ -569,7 +543,7 @@ defmodule Torchx.Backend do
               end
             end
 
-          {axes, Torchx.any(t_tx, axis, keep_axes)}
+          {axes, fun.(t_tx, axis, keep_axes)}
       end
 
     result_tx
@@ -593,28 +567,6 @@ defmodule Torchx.Backend do
     keep_axes = opts[:keep_axes] || false
 
     Torchx.argmin(from_nx(t), axis, keep_axes) |> to_nx(out)
-  end
-
-  @impl true
-  def all?(%T{} = out, %T{} = t, opts) do
-    axes =
-      case opts[:axes] do
-        axes when length(axes) in 0..1 ->
-          axes
-
-        nil ->
-          []
-
-        _axes ->
-          raise ArgumentError, ":axes option only accepts a single axis per call"
-      end
-
-    keep_axes = opts[:keep_axes] || false
-
-    t
-    |> from_nx()
-    |> Torchx.all(axes, keep_axes)
-    |> to_nx(out)
   end
 
   ## Ops

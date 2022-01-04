@@ -654,13 +654,17 @@ NIF(argmin)
 NIF(all)
 {
   TENSOR_PARAM(0, t);
-  LIST_PARAM(1, std::vector<int64_t>, axes);
-  PARAM(2, bool, keep_dim);
 
-  if (axes.size() == 0) {
-    TENSOR(torch::all(*t))
-  } else {
-    TENSOR(torch::all(*t, axes[0], keep_dim))
+  if (argc == 1)
+  {
+    TENSOR(torch::all(*t));
+  }
+  else
+  {
+    PARAM(1, int64_t, axis);
+    PARAM(2, bool, keep_dim);
+
+    TENSOR(torch::all(*t, axis, keep_dim));
   }
 }
 
@@ -848,6 +852,7 @@ static ErlNifFunc nif_functions[] = {
     DF(argmin, 3),
     DF(any, 1),
     DF(any, 3),
+    DF(all, 1),
     DF(all, 3),
 
     DF(abs, 1),
