@@ -33,6 +33,12 @@ defmodule EXLA.Defn.APITest do
                    ~r"called on deleted or donated buffer",
                    fn -> Nx.backend_transfer(tensor) end
     end
+
+    test "raises on invalid device_id" do
+      assert_raise RuntimeError, ~r"Invalid device ordinal value \(1\)", fn ->
+        EXLA.jit(&add_two_keep_on_device/2, [2, 3], device_id: 1)
+      end
+    end
   end
 
   describe "containers" do
