@@ -1161,7 +1161,6 @@ defmodule Nx.LinAlg do
 
   defnp determinant_NbyN(t) do
     {n, _} = Nx.shape(t)
-    type = Nx.type(t)
 
     # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
     {p, l, u} = Nx.LinAlg.lu(t)
@@ -1182,12 +1181,12 @@ defmodule Nx.LinAlg do
 
     sign =
       if is_zero do
-        Nx.tensor(0, type: type)
+        0
       else
         parity |> Nx.remainder(2) |> Nx.multiply(-2) |> Nx.add(1)
       end
 
-    absdet = if is_zero, do: Nx.tensor(0, type: type), else: diag |> Nx.product() |> Nx.abs()
+    absdet = if is_zero, do: 0, else: diag |> Nx.product() |> Nx.abs()
 
     Nx.multiply(sign, absdet)
   end
