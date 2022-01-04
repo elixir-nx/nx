@@ -9,10 +9,13 @@ defmodule Torchx.Backend do
         iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
         ** (ArgumentError) Torchx does not support unsigned 16 bit integer
 
-    2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
+    2. Torchx doesn't support usigned integers on sums and will convert them to signed integers.
 
         iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
-        ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
+        #Nx.Tensor<
+          s64
+          6
+        >
 
     3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
        So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
@@ -439,10 +442,17 @@ defmodule Torchx.Backend do
 
   @impl true
   def sum(%T{} = out, %T{} = t, opts) do
-    %{type: casted_out_type} = casted_out = maybe_cast_u8(out)
-    t = maybe_cast_u8(t)
+    out =
+      case out do
+        %{type: {:u, bits}} -> %{out | type: {:s, min(64, bits * 2)}}
+        _ -> out
+      end
 
-    check_type!(casted_out_type)
+    t =
+      case t do
+        %{type: {:u, bits}} -> Nx.as_type(t, {:s, min(64, bits * 2)})
+        _ -> t
+      end
 
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
@@ -450,7 +460,7 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> Torchx.sum(axes, keep_axes)
-    |> to_nx(casted_out)
+    |> to_nx(out)
   end
 
   @impl true
@@ -625,13 +635,17 @@ defmodule Torchx.Backend do
     end
   end
 
-  defp maybe_cast_u8(%T{type: {:u, 8}} = t), do: Nx.as_type(t, {:s, 16})
-  defp maybe_cast_u8(t), do: t
-
   defp maybe_cast_u8(%T{type: {t, _}} = left, %T{type: {t, _}} = right),
     do: {left, right}
 
-  defp maybe_cast_u8(left, right), do: {maybe_cast_u8(left), maybe_cast_u8(right)}
+  defp maybe_cast_u8(%T{type: {:u, 8}} = left, %T{} = right),
+    do: {Nx.as_type(left, {:s, 16}), right}
+
+  defp maybe_cast_u8(%T{} = left, %T{type: {:u, 8}} = right),
+    do: {left, Nx.as_type(right, {:s, 16})}
+
+  defp maybe_cast_u8(left, right),
+    do: {left, right}
 
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
