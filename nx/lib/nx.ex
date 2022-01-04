@@ -5006,27 +5006,27 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.all?(Nx.tensor([0, 1, 2]))
+      iex> Nx.all(Nx.tensor([0, 1, 2]))
       #Nx.Tensor<
         u8
         0
       >
 
-      iex> Nx.all?(Nx.tensor([[-1, 0, 1], [2, 3, 4]], names: [:x, :y]), axes: [:x])
+      iex> Nx.all(Nx.tensor([[-1, 0, 1], [2, 3, 4]], names: [:x, :y]), axes: [:x])
       #Nx.Tensor<
         u8[y: 3]
         [1, 0, 1]
       >
 
-      iex> Nx.all?(Nx.tensor([[-1, 0, 1], [2, 3, 4]], names: [:x, :y]), axes: [:y])
+      iex> Nx.all(Nx.tensor([[-1, 0, 1], [2, 3, 4]], names: [:x, :y]), axes: [:y])
       #Nx.Tensor<
         u8[x: 2]
         [0, 1]
       >
   """
   @doc type: :aggregation
-  def all?(tensor, opts \\ []) do
-    aggregate_axes_op(to_tensor(tensor), :all?, {:u, 8}, opts)
+  def all(tensor, opts \\ []) do
+    aggregate_axes_op(to_tensor(tensor), :all, {:u, 8}, opts)
   end
 
   @doc """
@@ -5046,27 +5046,27 @@ defmodule Nx do
 
   ## Examples
 
-      iex> Nx.any?(Nx.tensor([0, 1, 2]))
+      iex> Nx.any(Nx.tensor([0, 1, 2]))
       #Nx.Tensor<
         u8
         1
       >
 
-      iex> Nx.any?(Nx.tensor([[0, 1, 0], [0, 1, 2]], names: [:x, :y]), axes: [:x])
+      iex> Nx.any(Nx.tensor([[0, 1, 0], [0, 1, 2]], names: [:x, :y]), axes: [:x])
       #Nx.Tensor<
         u8[y: 3]
         [0, 1, 1]
       >
 
-      iex> Nx.any?(Nx.tensor([[0, 1, 0], [0, 1, 2]], names: [:x, :y]), axes: [:y])
+      iex> Nx.any(Nx.tensor([[0, 1, 0], [0, 1, 2]], names: [:x, :y]), axes: [:y])
       #Nx.Tensor<
         u8[x: 2]
         [1, 1]
       >
   """
   @doc type: :aggregation
-  def any?(tensor, opts \\ []) do
-    aggregate_axes_op(to_tensor(tensor), :any?, {:u, 8}, opts)
+  def any(tensor, opts \\ []) do
+    aggregate_axes_op(to_tensor(tensor), :any, {:u, 8}, opts)
   end
 
   @doc """
@@ -5100,7 +5100,7 @@ defmodule Nx do
     opts = keyword!(opts, rtol: 1.0e-5, atol: 1.0e-8)
     rtol = opts[:rtol]
     atol = opts[:atol]
-    all?(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
+    all(less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b)))))
   end
 
   @doc """
@@ -6370,7 +6370,7 @@ defmodule Nx do
   may not be available or efficient on all Nx backends.
   Therefore, you should avoid using `reduce/4` whenever
   possible. Instead, use functions `sum/2`, `reduce_max/2`,
-  `all?/1`, and so forth.
+  `all/1`, and so forth.
 
   ## Examples
 

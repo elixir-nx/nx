@@ -92,9 +92,9 @@ defmodule Torchx.BackendTest do
       end
     end
 
-    test "all? does not fail when more than one axis is passed" do
+    test "all does not fail when more than one axis is passed" do
       assert_all_close(
-        Nx.all?(
+        Nx.all(
           Nx.tensor([[[[1]]]]),
           axes: [0, 1]
         ),

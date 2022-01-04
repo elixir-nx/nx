@@ -1146,7 +1146,7 @@ defmodule Nx.LinAlg do
 
     diag = l |> Nx.take_diagonal() |> Nx.multiply(Nx.take_diagonal(u))
 
-    is_zero = diag |> Nx.equal(0) |> Nx.any?() |> Nx.to_number() |> Kernel.==(1)
+    is_zero = diag |> Nx.equal(0) |> Nx.any() |> Nx.to_number() |> Kernel.==(1)
 
     iota = Nx.iota({n}, type: type, backend: backend)
 

@@ -1006,7 +1006,7 @@ defmodule Nx.DefnTest do
     end
 
     defn cond_lit(a) do
-      if Nx.any?(a), do: 1, else: -1
+      if Nx.any(a), do: 1, else: -1
     end
 
     @tag compiler: Evaluator
@@ -1016,7 +1016,7 @@ defmodule Nx.DefnTest do
     end
 
     defn cond_empty_map(a) do
-      if Nx.any?(a), do: %{}, else: %{}
+      if Nx.any(a), do: %{}, else: %{}
     end
 
     test "handles empty maps in branches" do
@@ -1029,8 +1029,8 @@ defmodule Nx.DefnTest do
         defmodule InvalidCond do
           defn badcond(a) do
             cond do
-              Nx.any?(a) -> +a
-              Nx.all?(a) -> -a
+              Nx.any(a) -> +a
+              Nx.all(a) -> -a
             end
           end
         end

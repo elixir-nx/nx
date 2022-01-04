@@ -454,7 +454,7 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  aggregate_ops = [:all?, :any?, :argmax, :argmin, :sum, :product, :reduce_min, :reduce_max]
+  aggregate_ops = [:all, :any, :argmax, :argmin, :sum, :product, :reduce_min, :reduce_max]
 
   for op <- aggregate_ops do
     @impl true
@@ -897,7 +897,7 @@ defmodule Nx.Defn.Expr do
         file: file,
         description:
           "condition must be a scalar tensor, got: #{inspect(pred)}," <>
-            " consider using Nx.all?/1 or Nx.any?/1 to obtain a scalar" <>
+            " consider using Nx.all/1 or Nx.any/1 to obtain a scalar" <>
             " predicate from tensor"
     end
 

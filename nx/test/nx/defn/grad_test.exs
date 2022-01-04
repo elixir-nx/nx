@@ -2164,11 +2164,11 @@ defmodule Nx.Defn.GradTest do
     defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.power(t, 2), else: Nx.power(t, 3)) end)
 
     defn grad_sum_if(t) do
-      grad(t, fn t -> Nx.sum(if(Nx.all?(t), do: Nx.power(t, 2), else: Nx.power(t, 3))) end)
+      grad(t, fn t -> Nx.sum(if(Nx.all(t), do: Nx.power(t, 2), else: Nx.power(t, 3))) end)
     end
 
     defn grad_if_sum(t) do
-      grad(t, fn t -> if(Nx.all?(t), do: Nx.sum(Nx.power(t, 2)), else: Nx.sum(Nx.power(t, 3))) end)
+      grad(t, fn t -> if(Nx.all(t), do: Nx.sum(Nx.power(t, 2)), else: Nx.sum(Nx.power(t, 3))) end)
     end
 
     defn grad_if_tuple(t) do

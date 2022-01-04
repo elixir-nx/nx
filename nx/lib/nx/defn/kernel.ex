@@ -94,8 +94,8 @@ defmodule Nx.Defn.Kernel do
   ## Examples
 
       cond do
-        Nx.all?(Nx.greater(a, 0)) -> b *
-        Nx.all?(Nx.less(a, 0)) -> b + c
+        Nx.all(Nx.greater(a, 0)) -> b *
+        Nx.all(Nx.less(a, 0)) -> b + c
         true -> b - c
       end
 
@@ -435,7 +435,7 @@ defmodule Nx.Defn.Kernel do
 
       defn divides_by_5?(a) do
         rem(a, 5)
-        |> Nx.any?
+        |> Nx.any()
         |> Nx.equal(Nx.tensor(1))
       end
 
@@ -878,7 +878,7 @@ defmodule Nx.Defn.Kernel do
 
   ## Examples
 
-      if Nx.any?(Nx.equal(t, 0)) do
+      if Nx.any(Nx.equal(t, 0)) do
         0.0
       else
         1 / t
@@ -1177,7 +1177,7 @@ defmodule Nx.Defn.Kernel do
       end
 
   Now you can pass the hook as argument as follows:
-      
+
       hooks = %{
         hooks_add: fn tensor ->
           IO.inspect {:add, tensor}
@@ -1227,12 +1227,12 @@ defmodule Nx.Defn.Kernel do
         {token, _add} = hook_token(token, a + b, :hooks_add, &IO.inspect({:add, &1}))
         {token, mult} = hook_token(token, a * b, :hooks_mult, &IO.inspect({:mult, &1}))
         attach_token(token, mult)
-      end    
+      end
 
   The example above creates a token and uses `hook_token/4`
   to create hooks attached to their respective tokens. By using a token,
   we guarantee that those hooks will be invoked in the order
-  in which they were defined. Then, at the end of the function, 
+  in which they were defined. Then, at the end of the function,
   we attach the token (and its associated hooks) to the result `mult`.
 
   In fact, the `hook/3` function is implemented roughly like this:
@@ -1250,7 +1250,7 @@ defmodule Nx.Defn.Kernel do
       token = create_token()
 
       {token, result} =
-        if Nx.any?(value) do
+        if Nx.any(value) do
           hook_token(token, some_value)
         else
           hook_token(token, another_value)
@@ -1262,7 +1262,7 @@ defmodule Nx.Defn.Kernel do
 
       token = create_token()
 
-      if Nx.any?(value) do
+      if Nx.any(value) do
         {token, result} = hook_token(token, some_value)
         attach_token(token, result)
       else
