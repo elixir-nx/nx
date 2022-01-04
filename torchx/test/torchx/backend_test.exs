@@ -540,4 +540,59 @@ defmodule Torchx.BackendTest do
       assert_all_close(t, u |> Nx.dot(s_full) |> Nx.dot(vt))
     end
   end
+
+  describe "Nx.LinAlg.determinant" do
+    test "works for 2x2" do
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1, 2], [3, 4]])),
+        Nx.tensor(-2)
+      )
+    end
+
+    test "works for 3x3" do
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]])),
+        Nx.tensor(48)
+      )
+    end
+
+    test "linearly dependent rows/cols return 0" do
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1.0, 0.0], [3.0, 0.0]])),
+        Nx.tensor(0)
+      )
+
+      assert_all_close(
+        Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], [4.0, 5.0, 6.0]])),
+        Nx.tensor(0)
+      )
+    end
+
+    test "works for order bigger than 3" do
+      assert_all_close(
+        Nx.LinAlg.determinant(
+          Nx.tensor([
+            [1, 0, 0, 0],
+            [0, 1, 2, 3],
+            [0, 1, -2, 3],
+            [0, 7, 8, 9.0]
+          ])
+        ),
+        Nx.tensor(-48)
+      )
+
+      assert_all_close(
+        Nx.LinAlg.determinant(
+          Nx.tensor([
+            [0, 0, 0, 0, -1.0],
+            [0, 1, 2, 3, 0],
+            [0, 1, -2, 3, 0],
+            [0, 7, 8, 9, 0],
+            [1, 0, 0, 0, 0]
+          ])
+        ),
+        Nx.tensor(48)
+      )
+    end
+  end
 end

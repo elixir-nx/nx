@@ -438,13 +438,19 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(%T{type: out_type} = out, %T{} = t, opts) do
-    check_type!(out_type)
+  def sum(%T{} = out, %T{} = t, opts) do
+    %{type: casted_out_type} = casted_out = maybe_cast_u8(out)
+    t = maybe_cast_u8(t)
+
+    check_type!(casted_out_type)
 
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
-    Torchx.sum(from_nx(t), axes, keep_axes) |> to_nx(out)
+    t
+    |> from_nx()
+    |> Torchx.sum(axes, keep_axes)
+    |> to_nx(casted_out)
   end
 
   @impl true
@@ -619,17 +625,13 @@ defmodule Torchx.Backend do
     end
   end
 
+  defp maybe_cast_u8(%T{type: {:u, 8}} = t), do: Nx.as_type(t, {:s, 16})
+  defp maybe_cast_u8(t), do: t
+
   defp maybe_cast_u8(%T{type: {t, _}} = left, %T{type: {t, _}} = right),
     do: {left, right}
 
-  defp maybe_cast_u8(%T{type: {:u, 8}} = left, %T{} = right),
-    do: {Nx.as_type(left, {:s, 16}), right}
-
-  defp maybe_cast_u8(%T{} = left, %T{type: {:u, 8}} = right),
-    do: {left, Nx.as_type(right, {:s, 16})}
-
-  defp maybe_cast_u8(left, right),
-    do: {left, right}
+  defp maybe_cast_u8(left, right), do: {maybe_cast_u8(left), maybe_cast_u8(right)}
 
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true

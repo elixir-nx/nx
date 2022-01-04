@@ -1148,11 +1148,18 @@ defmodule Nx.LinAlg do
 
     is_zero = diag |> Nx.equal(0) |> Nx.any?() |> Nx.to_number() |> Kernel.==(1)
 
-    iota = Nx.iota({n})
+    iota = Nx.iota({n}, type: type, backend: backend)
 
-    parity = p |> Nx.dot(iota) |> Nx.not_equal(iota) |> Nx.sum()
+    # as_type {:s, 16} is needed because not all backends support sum over unsigned integers
+    parity =
+      p
+      |> Nx.dot(iota)
+      |> Nx.not_equal(iota)
+      |> Nx.as_type({:s, 16})
+      |> Nx.sum()
 
-    parity = diag |> Nx.less(0) |> Nx.sum() |> Nx.add(parity)
+    # as_type {:s, 16} is needed because not all backends support sum over unsigned integers
+    parity = diag |> Nx.less(0) |> Nx.as_type({:s, 16}) |> Nx.sum() |> Nx.add(parity)
 
     sign =
       if is_zero do
