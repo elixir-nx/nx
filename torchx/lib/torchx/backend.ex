@@ -9,7 +9,7 @@ defmodule Torchx.Backend do
         iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
         ** (ArgumentError) Torchx does not support unsigned 16 bit integer
 
-    2. Torchx doesn't support usigned integers on sums and will convert them to signed integers.
+    2. Torchx doesn't support unsigned integers on sums and will convert them to signed integers.
 
         iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
         #Nx.Tensor<
