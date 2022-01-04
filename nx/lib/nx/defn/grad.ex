@@ -70,7 +70,7 @@ defmodule Nx.Defn.Grad do
   ## Build the parents tree
 
   @constants [:constant, :tensor, :eye, :iota, :random_uniform, :random_normal] ++
-               [:all?, :any?, :argmax, :argmin] ++
+               [:all, :any, :argmax, :argmin] ++
                [:bitwise_and, :bitwise_or, :bitwise_xor, :bitwise_not] ++
                [:logical_and, :logical_or, :logical_xor, :logical_not] ++
                [:left_shift, :right_shift, :count_leading_zeros, :population_count] ++

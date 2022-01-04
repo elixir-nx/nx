@@ -305,7 +305,7 @@ defmodule Nx.Defn.ExprTest do
     test "with tuple and cond" do
       a = Expr.parameter(nil, {:s, 64}, {}, 0)
       b = Expr.parameter(nil, {:s, 64}, {}, 1)
-      {left, right} = Expr.cond([{Nx.any?(a), {a, b}}], {b, a})
+      {left, right} = Expr.cond([{Nx.any(a), {a, b}}], {b, a})
 
       assert inspect(left, safe: false) == """
              #Nx.Tensor<
@@ -314,7 +314,7 @@ defmodule Nx.Defn.ExprTest do
                Nx.Defn.Expr
                parameter a:0                                s64
                parameter c:1                                s64
-               b = any? a, axes: nil, keep_axes: false      u8
+               b = any a, axes: nil, keep_axes: false       u8
                d = cond b -> {a, c}, :otherwise -> {c, a}   tuple2
                e = elem d, 0                                s64
              >\
@@ -327,7 +327,7 @@ defmodule Nx.Defn.ExprTest do
                Nx.Defn.Expr
                parameter a:0                                s64
                parameter c:1                                s64
-               b = any? a, axes: nil, keep_axes: false      u8
+               b = any a, axes: nil, keep_axes: false       u8
                d = cond b -> {a, c}, :otherwise -> {c, a}   tuple2
                e = elem d, 1                                s64
              >\

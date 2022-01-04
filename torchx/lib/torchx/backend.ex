@@ -481,7 +481,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def any?(%T{} = out, %T{} = t, opts) do
+  def any(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 
@@ -496,7 +496,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def all?(%T{} = out, %T{} = t, opts) do
+  def all(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
 

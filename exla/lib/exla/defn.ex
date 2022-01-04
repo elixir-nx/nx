@@ -771,11 +771,11 @@ defmodule EXLA.Defn do
 
   ## to_operator reduction
 
-  defp to_operator(:all?, [arg, opts], _ans, state) do
+  defp to_operator(:all, [arg, opts], _ans, state) do
     to_aggregate(:bitwise_and, {:pred, 8}, {}, arg, 1, opts, state)
   end
 
-  defp to_operator(:any?, [arg, opts], _ans, state) do
+  defp to_operator(:any, [arg, opts], _ans, state) do
     to_aggregate(:bitwise_or, {:pred, 8}, {}, arg, 0, opts, state)
   end
 

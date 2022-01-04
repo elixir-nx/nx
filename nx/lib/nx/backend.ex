@@ -72,8 +72,8 @@ defmodule Nx.Backend do
   @callback select(out :: tensor, tensor, tensor, tensor) :: tensor
 
   @callback conv(out :: tensor, tensor, kernel :: tensor, keyword) :: tensor
-  @callback all?(out :: tensor, tensor, keyword) :: tensor
-  @callback any?(out :: tensor, tensor, keyword) :: tensor
+  @callback all(out :: tensor, tensor, keyword) :: tensor
+  @callback any(out :: tensor, tensor, keyword) :: tensor
   @callback sum(out :: tensor, tensor, keyword) :: tensor
   @callback product(out :: tensor, tensor, keyword) :: tensor
   @callback reduce_max(out :: tensor, tensor, keyword) :: tensor

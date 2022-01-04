@@ -390,18 +390,4 @@ defmodule Nx.LinAlgTest do
       Float.round(Nx.to_number(x), places)
     end)
   end
-
-  defp diag(%Nx.Tensor{shape: {r}} = t, m, n) do
-    base_result =
-      t
-      |> Nx.reshape({r, 1})
-      |> Nx.tile([1, n])
-      |> Nx.multiply(Nx.eye(n))
-
-    if m > r do
-      Nx.concatenate([base_result, Nx.broadcast(0, {m - r, n})])
-    else
-      base_result
-    end
-  end
 end

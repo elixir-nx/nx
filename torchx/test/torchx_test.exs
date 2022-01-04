@@ -44,7 +44,7 @@ defmodule TorchxTest do
 
       result = slice.(tensor)
 
-      assert expected |> Nx.equal(result) |> Nx.all?() |> Nx.to_number() == 1
+      assert expected |> Nx.equal(result) |> Nx.all() |> Nx.to_number() == 1
     end
   end
 end

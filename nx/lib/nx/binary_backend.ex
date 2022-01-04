@@ -1203,7 +1203,7 @@ defmodule Nx.BinaryBackend do
   ## Aggregation
 
   @impl true
-  def all?(out, %{type: type} = tensor, opts) do
+  def all(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
         res = if binary_to_number(bin, type) != 0, do: acc, else: 0
@@ -1214,7 +1214,7 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def any?(out, %{type: type} = tensor, opts) do
+  def any(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
         res = if binary_to_number(bin, type) != 0, do: 1, else: acc
