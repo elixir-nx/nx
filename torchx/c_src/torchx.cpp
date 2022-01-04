@@ -664,6 +664,20 @@ NIF(all)
   }
 }
 
+NIF(any)
+{
+  TENSOR_PARAM(0, t);
+
+  if (argc == 1) {
+    TENSOR(torch::any(*t));
+  } else {
+    PARAM(1, int64_t, axis);
+    PARAM(2, bool, keep_dim);
+
+    TENSOR(torch::any(*t, axis, keep_dim));
+  }
+}
+
 NIF(cholesky)
 {
   TENSOR_PARAM(0, t);
@@ -832,6 +846,8 @@ static ErlNifFunc nif_functions[] = {
     DF(product, 3),
     DF(argmax, 3),
     DF(argmin, 3),
+    DF(any, 1),
+    DF(any, 3),
     DF(all, 3),
 
     DF(abs, 1),
