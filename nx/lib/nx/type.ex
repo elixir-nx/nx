@@ -349,6 +349,8 @@ defmodule Nx.Type do
       {:s, 16}
       iex> Nx.Type.merge_number({:s, 8}, 1.0)
       {:f, 32}
+      iex> Nx.Type.merge_number({:u, 64}, -1337)
+      {:s, 64}
 
       iex> Nx.Type.merge_number({:f, 32}, 1)
       {:f, 32}
@@ -363,7 +365,7 @@ defmodule Nx.Type do
   end
 
   def merge_number({:u, size}, integer) when is_integer(integer) do
-    merge_number({:s, size * 2}, integer)
+    merge_number({:s, min(size * 2, 64)}, integer)
   end
 
   def merge_number({:s, size}, integer) when is_integer(integer) do
