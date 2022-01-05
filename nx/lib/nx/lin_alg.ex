@@ -1149,8 +1149,6 @@ defmodule Nx.LinAlg do
 
     neg_t = Nx.reverse(pos_t, axes: [1])
 
-    # This is an unrwapped Enum.reduce(0..2, Nx.tensor(0), fn offset, acc -> .. end)
-
     result =
       diagonal_product(pos_t, 0) +
         diagonal_product(pos_t, 1) +
