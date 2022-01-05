@@ -559,6 +559,7 @@ defmodule Torchx.BackendTest do
       )
     end
 
+    @tag :skip
     test "works for order bigger than 3" do
       assert_all_close(
         Nx.LinAlg.determinant(

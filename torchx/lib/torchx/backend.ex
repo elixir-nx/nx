@@ -9,13 +9,10 @@ defmodule Torchx.Backend do
         iex> Nx.tensor([1, 2, 3], type: {:u, 16}, backend: Torchx.Backend)
         ** (ArgumentError) Torchx does not support unsigned 16 bit integer
 
-    2. Torchx doesn't support unsigned integers on sums and will convert them to signed integers.
+    2. Torchx doesn't support u8 on sums, you should convert input to signed integer.
 
         iex> Nx.sum(Nx.tensor([1, 2, 3], type: {:u, 8}, backend: Torchx.Backend))
-        #Nx.Tensor<
-          s64
-          6
-        >
+        ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
 
     3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
        So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
@@ -441,18 +438,8 @@ defmodule Torchx.Backend do
   ## Aggregators
 
   @impl true
-  def sum(%T{} = out, %T{} = t, opts) do
-    out =
-      case out do
-        %{type: {:u, bits}} -> %{out | type: {:s, min(64, bits * 2)}}
-        _ -> out
-      end
-
-    t =
-      case t do
-        %{type: {:u, bits}} -> Nx.as_type(t, {:s, min(64, bits * 2)})
-        _ -> t
-      end
+  def sum(%T{type: out_type} = out, %T{} = t, opts) do
+    check_type!(out_type)
 
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false
