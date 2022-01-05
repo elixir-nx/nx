@@ -1140,7 +1140,8 @@ defmodule Nx.LinAlg do
 
     result = diagonal_product(t, 0) - diagonal_product(t, 1)
 
-    transform(result, fn t -> Nx.as_type(t, Nx.Type.to_floating(t.type)) end)
+    # Ensure floating point result
+    result * 1.0
   end
 
   defnp determinant_3by3(t) do
@@ -1158,7 +1159,8 @@ defmodule Nx.LinAlg do
         diagonal_product(neg_t, 1) -
         diagonal_product(neg_t, 2)
 
-    transform(result, fn t -> Nx.as_type(t, Nx.Type.to_floating(t.type)) end)
+    # Ensure floating point result
+    result * 1.0
   end
 
   defnp determinant_NbyN(t) do
