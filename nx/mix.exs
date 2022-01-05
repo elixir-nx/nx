@@ -11,12 +11,14 @@ defmodule Nx.MixProject do
   def project do
     [
       app: :nx,
-      name: "Nx",
       version: @version,
       elixir: "~> 1.12-dev",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
-      docs: docs()
+      docs: docs(),
+      name: "Nx",
+      description: "Multi-dimensional arrays (tensors) and numerical definitions for Elixir",
+      package: package()
     ]
   end
 
@@ -36,12 +38,19 @@ defmodule Nx.MixProject do
     ]
   end
 
+  defp package do
+    [
+      maintainers: ["Sean Moriarity", "José Valim", "Paulo Valente"],
+      licenses: ["Apache-2.0"],
+      links: %{"GitHub" => @source_url}
+    ]
+  end
+
   defp docs do
     [
       main: "Nx",
       logo: "numbat.png",
-      source_ref: "v#{@version}",
-      source_url: @source_url,
+      source_url_pattern: "#{@source_url}/blob/v#{@version}/nx/%{path}#L%{line}",
       groups_for_functions: [
         "Functions: Aggregates": &(&1[:type] == :aggregation),
         "Functions: Backend": &(&1[:type] == :backend),
