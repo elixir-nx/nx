@@ -1122,25 +1122,25 @@ defmodule Nx.LinAlg do
 
     {n, _} = Nx.shape(tensor)
 
-    cond do
-      Nx.equal(n, 2) ->
+    transform(n, fn
+      2 ->
         determinant_2by2(tensor)
 
-      Nx.equal(n, 3) ->
+      3 ->
         determinant_3by3(tensor)
 
-      :otherwise ->
+      _ ->
         determinant_NbyN(tensor)
-    end
+    end)
   end
 
   # for 2x2 and 3x3, use the algebraic closed formula
   defnp determinant_2by2(t) do
     t = Nx.tile(t, [1, 2])
 
-    t
-    |> diagonal_product(0)
-    |> Nx.subtract(diagonal_product(t, 1))
+    result = diagonal_product(t, 0) - diagonal_product(t, 1)
+
+    transform(result, fn t -> Nx.as_type(t, Nx.Type.to_floating(t.type)) end)
   end
 
   defnp determinant_3by3(t) do
@@ -1150,13 +1150,15 @@ defmodule Nx.LinAlg do
 
     # This is an unrwapped Enum.reduce(0..2, Nx.tensor(0), fn offset, acc -> .. end)
 
-    Nx.tensor(0)
-    |> Nx.add(diagonal_product(pos_t, 0))
-    |> Nx.subtract(diagonal_product(neg_t, 0))
-    |> Nx.add(diagonal_product(pos_t, 1))
-    |> Nx.subtract(diagonal_product(neg_t, 1))
-    |> Nx.add(diagonal_product(pos_t, 2))
-    |> Nx.subtract(diagonal_product(neg_t, 2))
+    result =
+      diagonal_product(pos_t, 0) +
+        diagonal_product(pos_t, 1) +
+        diagonal_product(pos_t, 2) -
+        diagonal_product(neg_t, 0) -
+        diagonal_product(neg_t, 1) -
+        diagonal_product(neg_t, 2)
+
+    transform(result, fn t -> Nx.as_type(t, Nx.Type.to_floating(t.type)) end)
   end
 
   defnp determinant_NbyN(t) do
@@ -1165,30 +1167,26 @@ defmodule Nx.LinAlg do
     # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
     {p, l, u} = Nx.LinAlg.lu(t)
 
-    diag = l |> Nx.take_diagonal() |> Nx.multiply(Nx.take_diagonal(u))
+    diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
 
-    is_zero = Nx.any(Nx.equal(diag, 0)) == 1
+    is_zero = Nx.any(diag == 0)
 
     iota = Nx.iota({n})
 
-    parity =
-      p
-      |> Nx.dot(iota)
-      |> Nx.not_equal(iota)
-      |> Nx.sum()
-
-    parity = diag |> Nx.less(0) |> Nx.sum() |> Nx.add(parity)
+    parity = Nx.sum(Nx.dot(p, iota) != iota)
 
     sign =
       if is_zero do
         0
       else
-        parity |> Nx.remainder(2) |> Nx.multiply(-2) |> Nx.add(1)
+        -2 * rem(parity, 2) + 1
       end
 
-    absdet = if is_zero, do: 0, else: diag |> Nx.product() |> Nx.abs()
-
-    Nx.multiply(sign, absdet)
+    if is_zero do
+      0
+    else
+      sign * Nx.product(diag)
+    end
   end
 
   defnp diagonal_product(t, offset) do
