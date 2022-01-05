@@ -1068,8 +1068,8 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.determinant(Nx.tensor([[1, 2], [3, 4]]))
       #Nx.Tensor<
-        s64
-        -2
+        f32
+        -2.0
       >
 
       iex> Nx.LinAlg.determinant(Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]]))
@@ -1117,60 +1117,79 @@ defmodule Nx.LinAlg do
         48.0
       >
   """
-  def determinant(tensor)
+  defn determinant(tensor) do
+    Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
 
-  # for 2x2 and 3x3, use the algebraic closed formula
-  def determinant(%{shape: {2, 2}} = t) do
-    t = Nx.tile(t, [1, 2])
+    {n, _} = Nx.shape(tensor)
 
-    t
-    |> diagonal_product(0)
-    |> Nx.subtract(diagonal_product(t, 1))
+    transform(n, fn
+      2 ->
+        determinant_2by2(tensor)
+
+      3 ->
+        determinant_3by3(tensor)
+
+      _ ->
+        determinant_NbyN(tensor)
+    end)
   end
 
-  def determinant(%{shape: {3, 3}} = t) do
+  # for 2x2 and 3x3, use the algebraic closed formula
+  defnp determinant_2by2(t) do
+    t = Nx.tile(t, [1, 2])
+
+    result = diagonal_product(t, 0) - diagonal_product(t, 1)
+
+    # Ensure floating point result
+    result * 1.0
+  end
+
+  defnp determinant_3by3(t) do
     pos_t = Nx.tile(t, [1, 2])
 
     neg_t = Nx.reverse(pos_t, axes: [1])
 
-    Enum.reduce(0..2, Nx.tensor(0), fn offset, acc ->
-      acc
-      |> Nx.add(diagonal_product(pos_t, offset))
-      |> Nx.subtract(diagonal_product(neg_t, offset))
-    end)
+    result =
+      diagonal_product(pos_t, 0) +
+        diagonal_product(pos_t, 1) +
+        diagonal_product(pos_t, 2) -
+        diagonal_product(neg_t, 0) -
+        diagonal_product(neg_t, 1) -
+        diagonal_product(neg_t, 2)
+
+    # Ensure floating point result
+    result * 1.0
   end
 
-  def determinant(%{shape: {n, n}, data: %backend{}, type: type} = t) do
+  defnp determinant_NbyN(t) do
+    {n, _} = Nx.shape(t)
+
     # Taken from slogdet at https://github.com/google/jax/blob/a3a6afcd5b8bf3d60aba94054bb0001c0fcc50d7/jax/_src/numpy/linalg.py#L134
     {p, l, u} = Nx.LinAlg.lu(t)
 
-    diag = l |> Nx.take_diagonal() |> Nx.multiply(Nx.take_diagonal(u))
+    diag = Nx.take_diagonal(l) * Nx.take_diagonal(u)
 
-    is_zero = diag |> Nx.equal(0) |> Nx.any() |> Nx.to_number() |> Kernel.==(1)
+    is_zero = Nx.any(diag == 0)
 
-    iota = Nx.iota({n}, type: type, backend: backend)
+    iota = Nx.iota({n})
 
-    parity =
-      p
-      |> Nx.dot(iota)
-      |> Nx.not_equal(iota)
-      |> Nx.sum()
-
-    parity = diag |> Nx.less(0) |> Nx.sum() |> Nx.add(parity)
+    parity = Nx.sum(Nx.dot(p, iota) != iota)
 
     sign =
       if is_zero do
-        Nx.tensor(0, backend: backend, type: type)
+        0
       else
-        parity |> Nx.remainder(2) |> Nx.multiply(-2) |> Nx.add(1)
+        -2 * rem(parity, 2) + 1
       end
 
-    absdet = if is_zero, do: 0, else: diag |> Nx.product() |> Nx.abs()
-
-    Nx.multiply(sign, absdet)
+    if is_zero do
+      0
+    else
+      sign * Nx.product(diag)
+    end
   end
 
-  defp diagonal_product(t, offset) do
+  defnp diagonal_product(t, offset) do
     t
     |> Nx.take_diagonal(offset: offset)
     |> Nx.product()
