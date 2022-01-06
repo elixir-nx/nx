@@ -5655,6 +5655,9 @@ defmodule Nx do
     * `:axis` - the axis to aggregate on. If no axis is given,
       returns the index of the absolute maximum value in the tensor.
 
+    * `:keep_axis` - whether or not to keep the reduced axis with
+      a size of 1. Defaults to `false`.
+
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       default behavior is to always return the lower index.
 
@@ -5728,6 +5731,21 @@ defmodule Nx do
           [0, 1, 1]
         ]
       >
+
+  ### Keep axis
+
+      iex> Nx.argmax(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z]), axis: :y, keep_axis: true)
+      #Nx.Tensor<
+        s64[x: 2][y: 1][z: 3]
+        [
+          [
+            [0, 0, 0]
+          ],
+          [
+            [0, 1, 0]
+          ]
+        ]
+      >
   """
   @doc type: :aggregation
   def argmax(tensor, opts \\ []) do
@@ -5741,6 +5759,9 @@ defmodule Nx do
 
     * `:axis` - the axis to aggregate on. If no axis is given,
       returns the index of the absolute minimum value in the tensor.
+
+    * `:keep_axis` - whether or not to keep the reduced axis with
+      a size of 1. Defaults to `false`.
 
     * `:tie_break` - how to break ties. one of `:high`, or `:low`.
       Default behavior is to always return the lower index.
@@ -5815,6 +5836,21 @@ defmodule Nx do
           [1, 0, 1]
         ]
       >
+
+  ### Keep axis
+
+      iex> Nx.argmin(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]], names: [:x, :y, :z]), axis: :y, keep_axis: true)
+      #Nx.Tensor<
+        s64[x: 2][y: 1][z: 3]
+        [
+          [
+            [1, 1, 0]
+          ],
+          [
+            [1, 0, 0]
+          ]
+        ]
+      >
   """
   @doc type: :aggregation
   def argmin(tensor, opts \\ []) do
@@ -5822,7 +5858,7 @@ defmodule Nx do
   end
 
   defp argmin_or_max(tensor, op, opts) do
-    opts = keyword!(opts, [:axis, tie_break: :low])
+    opts = keyword!(opts, [:axis, tie_break: :low, keep_axis: false])
 
     tie_break =
       case opts[:tie_break] do
@@ -5842,14 +5878,14 @@ defmodule Nx do
     {shape, names, axis} =
       if axis = opts[:axis] do
         axis = Nx.Shape.normalize_axis(shape, axis, names)
-        {new_shape, new_names} = Nx.Shape.contract(shape, [axis], names, false)
+        {new_shape, new_names} = Nx.Shape.contract(shape, [axis], names, opts[:keep_axis])
         {new_shape, new_names, axis}
       else
         {{}, [], nil}
       end
 
     out = %{tensor | type: {:s, 64}, shape: shape, names: names}
-    opts = [tie_break: tie_break, axis: axis]
+    opts = [tie_break: tie_break, axis: axis, keep_axis: opts[:keep_axis]]
     apply(impl!(tensor), op, [out, tensor, opts])
   end
 
