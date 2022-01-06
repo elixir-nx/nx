@@ -34,6 +34,7 @@ defmodule EXLA.Lib do
   ## Options
 
     * `:axis` - the axis to reduce on
+    * `:keep_axis` - whether or not to keep reduced axis
     * `:tie_break` - how to break ties
   """
   def argmax(%Builder{} = builder, %Op{} = op, opts \\ []) do
@@ -46,6 +47,7 @@ defmodule EXLA.Lib do
   ## Options
 
     * `:axis` - the axis to reduce on
+    * `:keep_axis` - whether or not to keep reduced axis
     * `:tie_break` - how to break ties
   """
   def argmin(%Builder{} = builder, %Op{} = op, opts \\ []) do
@@ -54,6 +56,7 @@ defmodule EXLA.Lib do
 
   defp argmin_or_max(builder, op, is_min?, opts) do
     tie_break = opts[:tie_break] || :low
+    keep_axis = opts[:keep_axis] || false
     op_shape = Op.get_shape(op)
     type = opts[:type] || op_shape.dtype
 
@@ -68,15 +71,20 @@ defmodule EXLA.Lib do
     reduction = create_min_max_computation(builder, op_shape.dtype, is_min?, tie_break)
 
     result =
-      Op.variadic_reduce(
-        builder,
+      builder
+      |> Op.variadic_reduce(
         [op, iota],
         [init_value, index_init_value],
         reduction,
         if(axis, do: {axis}, else: List.to_tuple(Nx.axes(op_shape.dims)))
       )
+      |> Op.get_tuple_element(1)
 
-    Op.get_tuple_element(result, 1)
+    if keep_axis do
+      Op.reshape(result, put_elem(op_shape.dims, axis, 1))
+    else
+      result
+    end
   end
 
   defp create_min_max_computation(builder, type, is_min?, tie_break) do

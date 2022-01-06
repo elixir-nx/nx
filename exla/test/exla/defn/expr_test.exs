@@ -1526,6 +1526,8 @@ defmodule EXLA.Defn.ExprTest do
     defn argmin_axis(t), do: Nx.argmin(t, axis: 1)
     defn argmax_high(t), do: Nx.argmax(t, axis: 1, tie_break: :high)
     defn argmin_high(t), do: Nx.argmin(t, axis: 1, tie_break: :high)
+    defn argmax_keep_axis(t), do: Nx.argmax(t, axis: 1, keep_axis: true)
+    defn argmin_keep_axis(t), do: Nx.argmin(t, axis: 1, keep_axis: true)
 
     test "computes the argmax across types" do
       assert argmax(Nx.tensor([1, 2, 3])) == Nx.tensor(2)
@@ -1560,6 +1562,22 @@ defmodule EXLA.Defn.ExprTest do
     test "computes argmax with tie_break: :high" do
       assert argmax_axis(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([1, 1])
       assert argmax_high(Nx.tensor([[1, 2, 2], [1, 2, 2]])) == Nx.tensor([2, 2])
+    end
+
+    test "computes argmax with keep_axis: true" do
+      assert argmax_keep_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) ==
+               Nx.tensor([
+                 [[0, 0, 0]],
+                 [[0, 1, 0]]
+               ])
+    end
+
+    test "computes argmin with keep_axis: true" do
+      assert argmin_keep_axis(Nx.tensor([[[4, 2, 3], [1, -5, 3]], [[6, 2, 3], [4, 8, 3]]])) ==
+               Nx.tensor([
+                 [[1, 1, 0]],
+                 [[1, 0, 0]]
+               ])
     end
   end
 
