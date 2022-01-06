@@ -2,7 +2,7 @@
 
 Nx is a multi-dimensional tensors library for Elixir with multi-staged compilation to the CPU/GPU. Its high-level features are:
 
-  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f32`, `f64`) and brain floats (`bf16`);
+  * Typed multi-dimensional tensors, where the tensors can be unsigned integers (`u8`, `u16`, `u32`, `u64`), signed integers (`s8`, `s16`, `s32`, `s64`), floats (`f16`, `f32`, `f64`), and brain floats (`bf16`);
 
   * Named tensors, allowing developers to give names to each dimension, leading to more readable and less error prone codebases;
 
@@ -62,12 +62,12 @@ In order to use `Nx`, you will need Elixir installed. Then create an Elixir proj
 $ mix new my_app
 ```
 
-Then you can add `Nx` as dependency in your `mix.exs`. At the moment you will have to use a Git dependency while we work on our first release:
+Then you can add `Nx` as dependency in your `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", branch: "main", sparse: "nx"}
+    {:nx, "~> 0.1"}
   ]
 end
 ```

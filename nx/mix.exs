@@ -6,13 +6,13 @@ defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.1.0-dev"
+  @version "0.1.0"
 
   def project do
     [
       app: :nx,
       version: @version,
-      elixir: "~> 1.12-dev",
+      elixir: "~> 1.12",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
