@@ -88,6 +88,7 @@ defmodule Nx.MixProject do
           Nx.Defn.Composite,
           Nx.Defn.Evaluator,
           Nx.Defn.Expr,
+          Nx.Defn.Token,
           Nx.Defn.Tree
         ]
       ]
