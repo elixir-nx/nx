@@ -225,13 +225,13 @@ defmodule Nx.Defn.ExprTest do
                s64
              \s\s
                Nx.Defn.Expr
-               tensor b                                    s64[2][2]
-               parameter e:2                               s64[2][2]
-               a = iota nil                                s64[2][2]
-               c = dot a, [1], [], b, [0], []              s64[2][2]
-               d = tanh c                                  f32[2][2]
-               f = add d, e                                f32[2][2]
-               g = argmin f, tie_break: :high, axis: nil   s64
+               tensor b                                                      s64[2][2]
+               parameter e:2                                                 s64[2][2]
+               a = iota nil                                                  s64[2][2]
+               c = dot a, [1], [], b, [0], []                                s64[2][2]
+               d = tanh c                                                    f32[2][2]
+               f = add d, e                                                  f32[2][2]
+               g = argmin f, tie_break: :high, axis: nil, keep_axis: false   s64
              >\
              """
     end
