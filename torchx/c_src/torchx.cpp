@@ -599,6 +599,15 @@ NIF(sort)
   TENSOR(std::get<0>(result));
 }
 
+NIF(clip)
+{
+  TENSOR_PARAM(0, t);
+  PARAM(1, double, min);
+  PARAM(2, double, max);
+
+  TENSOR(torch::clip(*t, min, max));
+}
+
 /* Aggregates */
 
 NIF(sum)
@@ -898,6 +907,7 @@ static ErlNifFunc nif_functions[] = {
     DF(triangular_solve, 4),
     DF(determinant, 1),
     DF(sort, 3),
+    DF(clip, 3),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

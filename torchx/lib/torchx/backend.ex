@@ -757,6 +757,14 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def clip(%T{} = out, %T{} = t, min, max) do
+    t
+    |> from_nx()
+    |> Torchx.clip(min, max)
+    |> to_nx(out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do
