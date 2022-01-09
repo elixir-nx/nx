@@ -759,8 +759,9 @@ defmodule Torchx.Backend do
   @impl true
   def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
     t
+    |> Nx.as_type(out.type)
     |> from_nx()
-    |> Torchx.clip(to_number(min), to_number(max))
+    |> Torchx.clip(from_nx(min), from_nx(max))
     |> to_nx(out)
   end
 
