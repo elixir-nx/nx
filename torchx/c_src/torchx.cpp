@@ -602,8 +602,8 @@ NIF(sort)
 NIF(clip)
 {
   TENSOR_PARAM(0, t);
-  PARAM(1, double, min);
-  PARAM(2, double, max);
+  SCALAR_PARAM(1, min);
+  SCALAR_PARAM(2, max);
 
   TENSOR(torch::clip(*t, min, max));
 }
