@@ -256,7 +256,7 @@ defmodule Torchx do
   deftensor triangular_solve(tensor_a, tensor_b, transpose, upper)
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)
-  deftensor clip(tensor, min, max)
+  deftensor clip(tensor, tensor_min, tensor_max)
 
   ## Dirty non-tensor return values
 
