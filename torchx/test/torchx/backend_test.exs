@@ -588,4 +588,27 @@ defmodule Torchx.BackendTest do
       )
     end
   end
+
+  describe "Nx.clip" do
+    test "works for scalars" do
+      assert_all_close(
+        Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), 2, 4),
+        Nx.tensor([[2, 2, 3], [4, 4, 4]])
+      )
+    end
+
+    test "works for tensors" do
+      assert_all_close(
+        Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), Nx.tensor(2), Nx.tensor(4)),
+        Nx.tensor([[2, 2, 3], [4, 4, 4]])
+      )
+    end
+
+    test "currently fails for floats" do
+      assert_all_close(
+        Nx.clip(Nx.tensor([[1, 2, 3], [4, 5, 6]], names: [:x, :y]), 2.0, 4.0),
+        Nx.tensor([[2.0, 2.0, 3.0], [4.0, 4.0, 4.0]])
+      )
+    end
+  end
 end

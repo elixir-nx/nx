@@ -756,12 +756,6 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  def clip(_, _, %T{type: _, shape: min_shape}, _) when tuple_size(min_shape) > 0,
-    do: raise(ArgumentError, "min tensor should have a scalar shape!")
-
-  def clip(_, _, _, %T{type: _, shape: max_shape}) when tuple_size(max_shape) > 0,
-    do: raise(ArgumentError, "max tensor should have a scalar shape!")
-
   @impl true
   def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
     t
