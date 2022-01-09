@@ -602,10 +602,10 @@ NIF(sort)
 NIF(clip)
 {
   TENSOR_PARAM(0, t);
-  SCALAR_PARAM(1, min);
-  SCALAR_PARAM(2, max);
+  TENSOR_PARAM(1, min);
+  TENSOR_PARAM(2, max);
 
-  TENSOR(torch::clip(*t, min, max));
+  TENSOR(torch::clip(*t, *min, *max));
 }
 
 /* Aggregates */
