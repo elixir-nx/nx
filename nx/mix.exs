@@ -34,7 +34,7 @@ defmodule Nx.MixProject do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.23", only: :docs}
+      {:ex_doc, "~> 0.27", only: :docs}
     ]
   end
 
