@@ -782,7 +782,7 @@ defmodule Nx.LinAlg do
   @doc """
   Calculates the Singular Value Decomposition of 2-D tensors.
 
-  It returns `{u, s, vt}` where the elemens of `s` are sorted
+  It returns `{u, s, vt}` where the elements of `s` are sorted
   from highest to lowest.
 
   ## Options

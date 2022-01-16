@@ -382,7 +382,7 @@ defmodule Nx.Defn.Kernel do
   def left + right, do: Nx.add(left, right)
 
   @doc """
-  Element-wise substraction operator.
+  Element-wise subtraction operator.
 
   It delegates to `Nx.subtract/2` (supports broadcasting).
 
