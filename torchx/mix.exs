@@ -106,7 +106,7 @@ defmodule Torchx.MixProject do
             "https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip"
 
           os ->
-            raise "OS #{os} is not supported"
+            raise "OS #{inspect(os)} is not supported"
         end
 
       download!(url, libtorch_zip)
