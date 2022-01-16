@@ -74,7 +74,7 @@ defmodule EXLA.ExecutableTest do
                run([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
     end
 
-    test "suceeds with tuple return" do
+    test "succeeds with tuple return" do
       t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 

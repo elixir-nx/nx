@@ -927,7 +927,7 @@ defmodule NxTest do
       end)
     end
 
-    test "the new axis can shift the exising axes to the left" do
+    test "the new axis can shift the existing axes to the left" do
       t = Nx.tensor([1, 2, 3], names: [:x])
       t = Nx.new_axis(t, 0, :batch)
       assert t.shape == {1, 3}
@@ -1914,8 +1914,8 @@ defmodule NxTest do
       end
     end
 
-    defp eval(expresion) do
-      "import Nx; #{expresion}"
+    defp eval(expression) do
+      "import Nx; #{expression}"
       |> Code.eval_string()
       |> elem(0)
     end

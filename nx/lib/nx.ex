@@ -7043,7 +7043,7 @@ defmodule Nx do
   end
 
   @doc """
-  Computes the generalized dot product bewteen two tensors, given
+  Computes the generalized dot product between two tensors, given
   the contracting axes.
 
   This is equivalent to calling `Nx.dot/6` with no batching dimensions:

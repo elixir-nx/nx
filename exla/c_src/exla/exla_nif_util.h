@@ -322,7 +322,7 @@ T get_value(ErlNifEnv* env, ERL_NIF_TERM term) {
   return value;
 }
 
-// Extracts information from `GetShape` into a useable term.
+// Extracts information from `GetShape` into a usable term.
 ERL_NIF_TERM make_shape_info(ErlNifEnv* env, xla::Shape shape);
 
 }  // namespace nif

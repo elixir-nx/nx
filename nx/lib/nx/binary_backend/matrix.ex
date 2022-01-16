@@ -42,7 +42,7 @@ defmodule Nx.BinaryBackend.Matrix do
   # When lower: false, we need the following procedure
   # for reusing the lower_triangular engine:
   #
-  # First, we need to reverse both rows and colums
+  # First, we need to reverse both rows and columns
   # so we can turn an upper-triangular matrix
   # into a lower-triangular one.
   # The result will also be reversed in this case.
