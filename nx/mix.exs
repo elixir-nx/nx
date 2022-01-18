@@ -18,7 +18,11 @@ defmodule Nx.MixProject do
       docs: docs(),
       name: "Nx",
       description: "Multi-dimensional arrays (tensors) and numerical definitions for Elixir",
-      package: package()
+      package: package(),
+      preferred_cli_env: [
+        docs: :docs,
+        "hex.publish": :docs
+      ]
     ]
   end
 
