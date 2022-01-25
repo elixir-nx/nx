@@ -330,6 +330,26 @@ defmodule Nx.Shared do
   ## Helpers
 
   @doc """
+  Extracts the backend from the given options.
+  """
+  def backend_from_options!(opts) do
+    case Keyword.fetch(opts, :backend) do
+      {:ok, backend} when is_atom(backend) ->
+        {backend, []}
+
+      {:ok, {backend, options}} when is_atom(backend) and is_list(options) ->
+        {backend, options}
+
+      {:ok, other} ->
+        raise ArgumentError,
+              ":backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
+
+      :error ->
+        nil
+    end
+  end
+
+  @doc """
   Converts an Erlang float (float64) to float32 precision.
   """
   def to_float32(float64) when is_float(float64) do

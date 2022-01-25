@@ -6700,7 +6700,7 @@ defmodule Nx do
 
   ### Examples
 
-      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
+      iex> <<init_value::64-signed-native>> = Nx.Type.min_finite_binary({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]])
       iex> Nx.window_reduce(t, init_value, {2, 2}, fn x, acc -> max(x, acc) end)
       #Nx.Tensor<
@@ -6712,7 +6712,7 @@ defmodule Nx do
         ]
       >
 
-      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
+      iex> <<init_value::64-signed-native>> = Nx.Type.min_finite_binary({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       iex> opts = [padding: :same, strides: [1, 1]]
       iex> Nx.window_reduce(t, init_value, {2, 2}, opts, fn x, acc -> max(x, acc) end)
@@ -9374,23 +9374,6 @@ defmodule Nx do
   defp backend!(other) do
     raise ArgumentError,
           "backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
-  end
-
-  defp backend_from_options!(opts) do
-    case Keyword.fetch(opts, :backend) do
-      {:ok, backend} when is_atom(backend) ->
-        {backend, []}
-
-      {:ok, {backend, options}} when is_atom(backend) and is_list(options) ->
-        {backend, options}
-
-      {:ok, other} ->
-        raise ArgumentError,
-              ":backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
-
-      :error ->
-        nil
-    end
   end
 
   defp number_to_binary(number, type), do: match_types([type], do: <<write!(number, 0)>>)

@@ -46,6 +46,9 @@ defmodule Nx.Defn.Compiler do
             ) :: Nx.Stream.t()
             when stream: expr(), acc: expr()
 
+  # Modules allowed in defn
+  @allowed_modules [Nx, Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg]
+
   # These operations do not have valid meaning for Nx.Defn.Expr
   @forbidden_ops [:backend_copy, :backend_deallocate, :backend_transfer] ++
                    [:to_binary, :to_number, :to_flat_list, :to_heatmap, :to_batched_list] ++
@@ -369,8 +372,7 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [token, ast | rest]}, state}
   end
 
-  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state)
-       when mod in [Nx, Nx.LinAlg, Nx.Defn, Nx.Defn.Kernel] do
+  defp normalize({{:., dot_meta, [mod, name]}, meta, args}, state) when mod in @allowed_modules do
     if name in @forbidden_ops do
       mfa = Exception.format_mfa(mod, name, length(args))
       compile_error!(meta, state, "#{mfa} is not allowed inside defn")
