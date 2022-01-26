@@ -4,8 +4,8 @@
 
 ```elixir
 Mix.install([
-  {:flow, "~> 1.0"},
-  {:pixels, "~> 0.1.0"},
+  {:req, "~> 0.2.0"},
+  {:kino, "~> 0.5.1"},
   {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
   {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true},
   # credits to https://github.com/cocoa-xu
@@ -25,22 +25,23 @@ Preprocessing a binary to the tensor representation and calculating shapes of th
 
 ```elixir
 defmodule Preprocess do
-  def image_to_tensor(path_to_file) do
-    {_, image} = Pixels.read_file(path_to_file)
-    height = image.height
-    width = image.width
-    data = image.data
+  def image_to_tensor(path_to_file, url? \\ false) do
+    case url? do
+      t when t in [true, 1] ->
+        %{body: binary_image} = Req.get!(path_to_file)
+        {_, mat} = OpenCV.imdecode(binary_image, OpenCV.cv_IMREAD_COLOR())
+        OpenCV.Nx.to_nx(mat)
 
-    data
-    |> Nx.from_binary({:u, 8})
-    # 4 because there are 4 channels (3 BGR/RGB + 1 Alpha)
-    |> Nx.reshape({height, width, 4})
+      t when t in [false, 0] ->
+        {_, mat} = OpenCV.imread(path_to_file)
+        OpenCV.Nx.to_nx(mat)
+    end
   end
 
   # there is no pi const in Nx yet.
   @pi 3.14159
 
-  defp calculate_new_side_lenght(side1, side2, angle, radians?) do
+  defp calculate_new_side_length(side1, side2, angle, radians?) do
     angle = if radians? == 0, do: angle |> Nx.divide(180) |> Nx.multiply(@pi), else: angle
     sine = Nx.sin(angle)
     cosine = Nx.cos(angle)
@@ -55,8 +56,8 @@ defmodule Preprocess do
   end
 
   def get_new_height_and_width(height, width, angle, radians? \\ 1) do
-    new_height = calculate_new_side_lenght(height, width, angle, radians?)
-    new_width = calculate_new_side_lenght(width, height, angle, radians?)
+    new_height = calculate_new_side_length(height, width, angle, radians?)
+    new_width = calculate_new_side_length(width, height, angle, radians?)
     {new_height, new_width}
   end
 end
@@ -67,6 +68,7 @@ end
 ```elixir
 defmodule Rotate do
   import Nx.Defn
+  @num_channels 3
   # using three shears to avoid aliasing
   # https://datagenetics.com/blog/august32013/index.html
   defnp calculate_new_positions(
@@ -137,12 +139,12 @@ defmodule Rotate do
   defnp preprocess_position(pos, n) do
     Nx.concatenate(
       [
-        Nx.new_axis(pos, 1) |> Nx.tile([1, 4, 1]),
-        Nx.iota({n, 4, 1}, axis: 1)
+        Nx.new_axis(pos, 1) |> Nx.tile([1, @num_channels, 1]),
+        Nx.iota({n, @num_channels, 1}, axis: 1)
       ],
       axis: 2
     )
-    |> Nx.reshape({n * 4, 3})
+    |> Nx.reshape({n * @num_channels, 3})
   end
 
   # there is no pi const in Nx yet.
@@ -176,31 +178,45 @@ defmodule Rotate do
     {n, 2} = Nx.shape(pos)
 
     preprocessed_pos = preprocess_position(pos, n)
-    image = image |> Nx.reshape({n * 4})
+    image = image |> Nx.reshape({n * @num_channels})
 
     Nx.indexed_add(new_image, preprocessed_pos, image)
   end
 end
 ```
 
-## Example of usage
+## Example of usage with Lena image
 
 ```elixir
+@num_channels 3
+
 {_, dir} = File.cwd()
-path_to_file = "#{dir}/<image>.png"
-path_to_save = "#{dir}/<image_rotated>.png"
 
-image = Preprocess.image_to_tensor(path_to_file)
+path_to_file =
+  "https://www.researchgate.net/profile/Adelrahman-Idries/publication/232815017/figure/fig3/AS:300463506378754@1448647490218/Original-Lena-image.png"
+
+path_to_save = "#{dir}/image_rotated.png"
+
+# set options
+radians? = 0
+angle = 70
+url? = true
+
+# rotate image by 70 degrees to the right
+image = Preprocess.image_to_tensor(path_to_file, url?)
 {height, width, _} = image.shape
-{new_height, new_width} = Preprocess.get_new_height_and_width(height, width, -75, 0)
-# 4 because there are 4 channels (3 BGR/RGB + 1 Alpha)
-new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, 4})
+{new_height, new_width} = Preprocess.get_new_height_and_width(height, width, angle, radians?)
+new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, @num_channels})
+rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
 
-rotated_image = Rotate.rotate_image_by_angle(image, -75, new_image, 0)
 {_, rotated_image_mat} = OpenCV.Nx.to_mat(rotated_image)
-# convert to correct format, default for opencv is BGR
+
 OpenCV.imwrite(
   path_to_save,
-  elem(OpenCV.cvtColor(rotated_image_mat, OpenCV.cv_COLOR_RGB2BGR()), 1)
+  rotated_image_mat
 )
+
+# display the rotated image
+content = File.read!(path_to_save)
+Kino.Image.new(content, "image/png")
 ```
