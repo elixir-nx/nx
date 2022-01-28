@@ -9170,22 +9170,28 @@ defmodule Nx do
   @doc """
   Finds the variance of a tensor.
 
+  The variance is the average of the squared deviations from the mean.
+  The mean is typically calculated as sum(x) / N, where N = total of elements.
+  If, however, ddof is specified, the divisor N - ddof is used instead.
+
   ## Examples
 
-  iex> Nx.var(Nx.tensor([[1, 2], [3, 4]]))
+  iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]))
 
-  #Nx.Tensor<
-  f32
-  1.25
-  >
+  #Nx.Tensor<f32 1.25>
+
+  iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), 1)
+
+  #Nx.Tensor<f32 1.6666666269302368>
   """
-  @doc type: :element
-  @spec var(tensor :: Nx.Tensor.t()) :: Nx.Tensor.t()
-  def var(%Nx.Tensor{shape: shape} = tensor) do
-    total =
-      shape
-      |> Tuple.to_list()
-      |> Enum.reduce(fn val, acc -> acc * val end)
+  @doc type: :aggregation
+  @spec variance(tensor :: Nx.Tensor.t(), ddof :: number()) :: Nx.Tensor.t()
+  def variance(tensor, ddof \\ 0)
+
+  def variance(tensor, ddof) do
+    %T{shape: shape} = tensor = to_tensor(tensor)
+
+    total = Tuple.product(shape)
 
     mean = mean(tensor)
 
@@ -9193,37 +9199,38 @@ defmodule Nx do
     |> subtract(mean)
     |> power(2)
     |> sum()
-    |> divide(total)
+    |> divide(total - ddof)
   end
-
-  def var(_), do: raise(ArgumentError, "must be a tensor")
 
   @doc """
   Finds the standard deviation of a tensor.
 
+  if ddof is specified, the divisor N - ddof is used to calculate the variance.
+
   ## Examples
 
-  iex> Nx.std(Nx.tensor([[1, 2], [3, 4]]))
+  iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]))
 
-  #Nx.Tensor<
-  f32
-  1.1180340051651
-  >
+  #Nx.Tensor<f32 1.1180340051651>
   """
-  @doc type: :element
-  @spec std(tensor :: Nx.Tensor.t()) :: Nx.Tensor.t()
-  def std(%Nx.Tensor{} = tensor) do
-    sqrt(var(tensor))
-  end
+  @doc type: :aggregation
+  @spec standard_deviation(tensor :: Nx.Tensor.t(), ddof :: number()) :: Nx.Tensor.t()
+  def standard_deviation(tensor, ddof \\ 0)
 
-  def std(_), do: raise(ArgumentError, "must be a tensor")
+  def standard_deviation(tensor, ddof) do
+    %T{} = tensor = to_tensor(tensor)
+
+    sqrt(variance(tensor, ddof))
+  end
 
   @doc """
   Normalizes the tensor by using standard scale.
 
+  if ddof is specified, the divisor N - ddof is used to calculate the variance.
+
   ## Examples
 
-  iex> Nx.normalize(Nx.tensor([[1, 2], [3, 4]]))
+  iex> Nx.standard_scale(Nx.tensor([[1, 2], [3, 4]]))
 
   #Nx.Tensor<
   f32[2][2]
@@ -9233,17 +9240,19 @@ defmodule Nx do
   ]
   >
   """
-  @doc type: :element
-  @spec normalize(tensor :: Nx.Tensor.t()) :: Nx.Tensor.t()
-  def normalize(%Nx.Tensor{} = tensor) do
+  @doc type: :aggregation
+  @spec standard_scale(tensor :: Nx.Tensor.t(), ddof :: number()) :: Nx.Tensor.t()
+  def standard_scale(tensor, ddof \\ 0)
+
+  def standard_scale(tensor, ddof) do
+    %T{} = tensor = to_tensor(tensor)
+
     mean = mean(tensor)
 
     tensor
     |> Nx.subtract(mean)
-    |> Nx.divide(std(tensor))
+    |> Nx.divide(standard_deviation(tensor, ddof))
   end
-
-  def normalize(_), do: raise(ArgumentError, "must be a tensor")
 
   ## Sigils
 
