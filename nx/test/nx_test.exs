@@ -1920,4 +1920,31 @@ defmodule NxTest do
       |> elem(0)
     end
   end
+
+  describe "var/1" do
+    test "should calculate the variance of a tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.var(t) == Nx.tensor(2.9166667461395264)
+    end
+  end
+
+  describe "sdt/1" do
+    test "should calculate the standard deviation of a tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.std(t) == Nx.tensor(1.707825127659933)
+    end
+  end
+
+  describe "normalize/1" do
+    test "should normalize a tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+
+      assert Nx.normalize(t) ==
+               Nx.tensor([
+                 [0.8783100247383118, 1.4638500213623047],
+                 [-0.29276999831199646, 0.29276999831199646],
+                 [-0.8783100247383118, -1.4638500213623047]
+               ])
+    end
+  end
 end

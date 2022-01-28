@@ -9167,6 +9167,84 @@ defmodule Nx do
     end
   end
 
+  @doc """
+  Finds the variance of a tensor.
+
+  ## Examples
+
+  iex> Nx.var(Nx.tensor([[1, 2], [3, 4]]))
+
+  #Nx.Tensor<
+  f32
+  1.25
+  >
+  """
+  @doc type: :element
+  @spec var(tensor :: Nx.Tensor.t()) :: Nx.Tensor.t()
+  def var(%Nx.Tensor{shape: shape} = tensor) do
+    total =
+      shape
+      |> Tuple.to_list()
+      |> Enum.reduce(fn val, acc -> acc * val end)
+
+    mean = mean(tensor)
+
+    tensor
+    |> subtract(mean)
+    |> power(2)
+    |> sum()
+    |> divide(total)
+  end
+
+  def var(_), do: raise(ArgumentError, "must be a tensor")
+
+  @doc """
+  Finds the standard deviation of a tensor.
+
+  ## Examples
+
+  iex> Nx.std(Nx.tensor([[1, 2], [3, 4]]))
+
+  #Nx.Tensor<
+  f32
+  1.1180340051651
+  >
+  """
+  @doc type: :element
+  @spec std(tensor :: Nx.Tensor.t()) :: Nx.Tensor.t()
+  def std(%Nx.Tensor{} = tensor) do
+    sqrt(var(tensor))
+  end
+
+  def std(_), do: raise(ArgumentError, "must be a tensor")
+
+  @doc """
+  Normalizes the tensor by using standard scale.
+
+  ## Examples
+
+  iex> Nx.normalize(Nx.tensor([[1, 2], [3, 4]]))
+
+  #Nx.Tensor<
+  f32[2][2]
+  [
+    [-1.3416407108306885, -0.4472135901451111],
+    [0.4472135901451111, 1.3416407108306885]
+  ]
+  >
+  """
+  @doc type: :element
+  @spec normalize(tensor :: Nx.Tensor.t()) :: Nx.Tensor.t()
+  def normalize(%Nx.Tensor{} = tensor) do
+    mean = mean(tensor)
+
+    tensor
+    |> Nx.subtract(mean)
+    |> Nx.divide(std(tensor))
+  end
+
+  def normalize(_), do: raise(ArgumentError, "must be a tensor")
+
   ## Sigils
 
   @doc """
