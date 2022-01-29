@@ -25,15 +25,15 @@ Preprocessing a binary to the tensor representation and calculating shapes of th
 
 ```elixir
 defmodule Preprocess do
-  def image_to_tensor(path_to_file, url? \\ false) do
-    case url? do
-      t when t in [true, 1] ->
-        %{body: binary_image} = Req.get!(path_to_file)
-        {_, mat} = OpenCV.imdecode(binary_image, OpenCV.cv_IMREAD_COLOR())
+  def image_to_tensor(file_or_url) do
+    case URI.parse(file_or_url) do
+      %URI{scheme: nil} ->
+        {:ok, mat} = OpenCV.imread(file_or_url)
         OpenCV.Nx.to_nx(mat)
 
-      t when t in [false, 0] ->
-        {_, mat} = OpenCV.imread(path_to_file)
+      _ ->
+        %{body: binary_image} = Req.get!(file_or_url)
+        {:ok, mat} = OpenCV.imdecode(binary_image, OpenCV.cv_IMREAD_COLOR())
         OpenCV.Nx.to_nx(mat)
     end
   end
@@ -185,31 +185,33 @@ defmodule Rotate do
 end
 ```
 
-## Example of usage with Lena image
+## Example of usage
 
 ```elixir
-@num_channels 3
+num_channels = 3
 
-{_, dir} = File.cwd()
+dir = File.cwd!()
 
-path_to_file =
-  "https://www.researchgate.net/profile/Adelrahman-Idries/publication/232815017/figure/fig3/AS:300463506378754@1448647490218/Original-Lena-image.png"
+default_input =
+  "https://www.researchgate.net/publication/259521525/figure/fig8/AS:268024322195479@1440913386352/Original-standard-test-image-of-Peppers.png"
 
+input = Kino.Input.text("Image to rotate", default: default_input)
+Kino.render(input)
+path_to_file = Kino.Input.read(input)
 path_to_save = "#{dir}/image_rotated.png"
 
 # set options
 radians? = 0
 angle = 70
-url? = true
 
 # rotate image by 70 degrees to the right
-image = Preprocess.image_to_tensor(path_to_file, url?)
+image = Preprocess.image_to_tensor(path_to_file)
 {height, width, _} = image.shape
 {new_height, new_width} = Preprocess.get_new_height_and_width(height, width, angle, radians?)
-new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, @num_channels})
+new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, num_channels})
 rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
 
-{_, rotated_image_mat} = OpenCV.Nx.to_mat(rotated_image)
+{:ok, rotated_image_mat} = OpenCV.Nx.to_mat(rotated_image)
 
 OpenCV.imwrite(
   path_to_save,
