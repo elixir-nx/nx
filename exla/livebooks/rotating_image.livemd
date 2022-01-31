@@ -1,6 +1,6 @@
 # Rotating Image
 
-## Imports
+## Setup
 
 ```elixir
 Mix.install([
@@ -12,8 +12,6 @@ Mix.install([
   {:evision, "~> 0.1.0-dev", github: "cocoa-xu/evision", branch: "main"}
 ])
 ```
-
-## Set EXLA as a default compiler
 
 ```elixir
 Nx.Defn.default_options(compiler: EXLA)
