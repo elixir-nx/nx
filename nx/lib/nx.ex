@@ -9167,6 +9167,72 @@ defmodule Nx do
     end
   end
 
+  @doc """
+  Finds the variance of a tensor.
+
+  The variance is the average of the squared deviations from the mean.
+  The mean is typically calculated as `sum(tensor) / n`, where `n` is the total
+  of elements. If, however, `:ddof` (delta degrees of freedom) is specified, the
+  divisor `n - ddof` is used instead.
+
+  ## Examples
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        f32
+        1.25
+      >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), ddof: 1)
+      #Nx.Tensor<
+        f32
+        1.6666666269302368
+      >
+  """
+  @doc type: :aggregation
+  @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def variance(tensor, opts \\ []) do
+    %T{shape: shape} = tensor = to_tensor(tensor)
+
+    opts = keyword!(opts, ddof: 0)
+    total = Tuple.product(shape)
+    ddof = Keyword.fetch!(opts, :ddof)
+    mean = mean(tensor)
+
+    tensor
+    |> subtract(mean)
+    |> power(2)
+    |> sum()
+    |> divide(total - ddof)
+  end
+
+  @doc """
+  Finds the standard deviation of a tensor.
+
+  The standard deviation is taken as the square root of the variance.
+  If the `:ddof` (delta degrees of freedom) option is given, the divisor
+  `n - ddof` is used to calculate the variance. See `variance/2`.
+
+  ## Examples
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        f32
+        1.1180340051651
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), ddof: 1)
+      #Nx.Tensor<
+        f32
+        1.29099440574646
+      >
+  """
+  @doc type: :aggregation
+  @spec standard_deviation(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def standard_deviation(tensor, opts \\ []) do
+    sqrt(variance(tensor, opts))
+  end
+
   ## Sigils
 
   @doc """

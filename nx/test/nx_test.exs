@@ -1920,4 +1920,28 @@ defmodule NxTest do
       |> elem(0)
     end
   end
+
+  describe "variance/1" do
+    test "should calculate the variance of a tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.variance(t) == Nx.tensor(2.9166667461395264)
+    end
+
+    test "should use the optional ddof" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.variance(t, ddof: 1) == Nx.tensor(3.5)
+    end
+  end
+
+  describe "standard_deviation/1" do
+    test "should calculate the standard deviation of a tensor" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.standard_deviation(t) == Nx.tensor(1.707825127659933)
+    end
+
+    test "should use the optional ddof" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.standard_deviation(t, ddof: 1) == Nx.tensor(1.8708287477493286)
+    end
+  end
 end
