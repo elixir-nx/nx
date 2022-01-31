@@ -196,7 +196,6 @@ default_input =
 input = Kino.Input.text("Image to rotate", default: default_input)
 Kino.render(input)
 path_to_file = Kino.Input.read(input)
-path_to_save = "#{dir}/image_rotated.png"
 
 # set options
 radians? = 0
@@ -210,13 +209,9 @@ new_image = Nx.broadcast(Nx.tensor([0], type: {:u, 8}), {new_height, new_width, 
 rotated_image = Rotate.rotate_image_by_angle(image, angle, new_image, radians?)
 
 {:ok, rotated_image_mat} = OpenCV.Nx.to_mat(rotated_image)
-
-OpenCV.imwrite(
-  path_to_save,
-  rotated_image_mat
-)
+{:ok, content} = OpenCV.imencode(".png", rotated_image_mat)
+content = :binary.list_to_bin(content)
 
 # display the rotated image
-content = File.read!(path_to_save)
 Kino.Image.new(content, "image/png")
 ```
