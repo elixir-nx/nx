@@ -9193,8 +9193,9 @@ defmodule Nx do
   def variance(tensor, opts \\ []) do
     %T{shape: shape} = tensor = to_tensor(tensor)
 
+    opts = keyword!(opts, ddof: 0)
     total = Tuple.product(shape)
-    ddof = Keyword.get(opts, :ddof, 0)
+    ddof = Keyword.fetch!(opts, :ddof)
     mean = mean(tensor)
 
     tensor
@@ -9226,8 +9227,6 @@ defmodule Nx do
   @doc type: :aggregation
   @spec standard_deviation(tensor :: Nx.Tensor.t(), ddof :: Keyword.t()) :: Nx.Tensor.t()
   def standard_deviation(tensor, opts \\ []) do
-    tensor = to_tensor(tensor)
-
     sqrt(variance(tensor, opts))
   end
 
