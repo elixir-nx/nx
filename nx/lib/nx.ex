@@ -9176,23 +9176,25 @@ defmodule Nx do
 
   ## Examples
 
-  iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]))
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        f32
+        1.25
+      >
 
-  #Nx.Tensor<f32 1.25>
-
-  iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), 1)
-
-  #Nx.Tensor<f32 1.6666666269302368>
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), ddof: 1)
+      #Nx.Tensor<
+        f32
+        1.6666666269302368
+      >
   """
   @doc type: :aggregation
-  @spec variance(tensor :: Nx.Tensor.t(), ddof :: number()) :: Nx.Tensor.t()
-  def variance(tensor, ddof \\ 0)
-
-  def variance(tensor, ddof) do
+  @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
+  def variance(tensor, opts \\ []) do
     %T{shape: shape} = tensor = to_tensor(tensor)
 
     total = Tuple.product(shape)
-
+    ddof = Keyword.get(opts, :ddof, 0)
     mean = mean(tensor)
 
     tensor
@@ -9209,49 +9211,24 @@ defmodule Nx do
 
   ## Examples
 
-  iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]))
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]))
+      #Nx.Tensor<
+        f32
+        1.1180340051651
+      >
 
-  #Nx.Tensor<f32 1.1180340051651>
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), ddof: 1)
+      #Nx.Tensor<
+        f32
+        1.29099440574646
+      >
   """
   @doc type: :aggregation
-  @spec standard_deviation(tensor :: Nx.Tensor.t(), ddof :: number()) :: Nx.Tensor.t()
-  def standard_deviation(tensor, ddof \\ 0)
+  @spec standard_deviation(tensor :: Nx.Tensor.t(), ddof :: Keyword.t()) :: Nx.Tensor.t()
+  def standard_deviation(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
 
-  def standard_deviation(tensor, ddof) do
-    %T{} = tensor = to_tensor(tensor)
-
-    sqrt(variance(tensor, ddof))
-  end
-
-  @doc """
-  Normalizes the tensor by using standard scale.
-
-  if ddof is specified, the divisor N - ddof is used to calculate the variance.
-
-  ## Examples
-
-  iex> Nx.standard_scale(Nx.tensor([[1, 2], [3, 4]]))
-
-  #Nx.Tensor<
-  f32[2][2]
-  [
-    [-1.3416407108306885, -0.4472135901451111],
-    [0.4472135901451111, 1.3416407108306885]
-  ]
-  >
-  """
-  @doc type: :aggregation
-  @spec standard_scale(tensor :: Nx.Tensor.t(), ddof :: number()) :: Nx.Tensor.t()
-  def standard_scale(tensor, ddof \\ 0)
-
-  def standard_scale(tensor, ddof) do
-    %T{} = tensor = to_tensor(tensor)
-
-    mean = mean(tensor)
-
-    tensor
-    |> Nx.subtract(mean)
-    |> Nx.divide(standard_deviation(tensor, ddof))
+    sqrt(variance(tensor, opts))
   end
 
   ## Sigils

@@ -1928,9 +1928,8 @@ defmodule NxTest do
     end
 
     test "should use the optional ddof" do
-      ddof = 1
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
-      assert Nx.variance(t, ddof) == Nx.tensor(3.5)
+      assert Nx.variance(t, ddof: 1) == Nx.tensor(3.5)
     end
   end
 
@@ -1939,18 +1938,10 @@ defmodule NxTest do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
       assert Nx.standard_deviation(t) == Nx.tensor(1.707825127659933)
     end
-  end
 
-  describe "standard_scale/1" do
-    test "should normalize a tensor by using standard scale" do
+    test "should use the optional ddof" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
-
-      assert Nx.standard_scale(t) ==
-               Nx.tensor([
-                 [0.8783100247383118, 1.4638500213623047],
-                 [-0.29276999831199646, 0.29276999831199646],
-                 [-0.8783100247383118, -1.4638500213623047]
-               ])
+      assert Nx.standard_deviation(t, ddof: 1) == Nx.tensor(1.8708287477493286)
     end
   end
 end
