@@ -4,6 +4,8 @@ defmodule Nx.Defn.EvaluatorTest do
   alias Nx.Tensor, as: T
   import Nx.Defn
 
+  defp s(str), do: String.replace(str, "\r\n", "\n")
+
   defn add_two_int(t), do: Nx.add(t, 2)
   defn add_two_float(t), do: Nx.add(t, 2)
 
@@ -296,8 +298,7 @@ defmodule Nx.Defn.EvaluatorTest do
   defn labelled_inspect(a, b), do: inspect_value(a + b, label: "add")
 
   test "inspect_value/2" do
-    assert ExUnit.CaptureIO.capture_io(fn -> labelled_inspect(1, 2) end) ==
-             """
+    assert ExUnit.CaptureIO.capture_io(fn -> labelled_inspect(1, 2) end) == s """
              add: #Nx.Tensor<
                s64
                3

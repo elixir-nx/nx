@@ -6,6 +6,8 @@ defmodule Nx.DefnTest do
   alias Nx.DefnTest.Sample
   import Nx.Defn
 
+  defp s(str), do: String.replace(str, "\r\n", "\n")
+
   defmacrop location(plus) do
     file = Path.relative_to_cwd(__CALLER__.file)
     quote do: "#{unquote(file)}:#{unquote(__CALLER__.line) + unquote(plus)}"
@@ -1167,7 +1169,7 @@ defmodule Nx.DefnTest do
     end
 
     test "executes the transformation" do
-      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == """
+      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == s """
              #Nx.Tensor<
                f32
              \s\s
@@ -1180,7 +1182,7 @@ defmodule Nx.DefnTest do
              >
              """
 
-      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect_label(1, 2) end) == """
+      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect_label(1, 2) end) == s """
              HELLO: #Nx.Tensor<
                f32
              \s\s

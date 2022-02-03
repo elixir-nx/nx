@@ -7,6 +7,8 @@ defmodule Nx.Defn.ExprTest do
 
   import Nx.Defn
 
+  defp s(str), do: String.replace(str, "\r\n", "\n")
+
   setup do
     Nx.Defn.default_options(compiler: Nx.Defn.Identity)
     :ok
@@ -184,7 +186,7 @@ defmodule Nx.Defn.ExprTest do
 
   describe "inspect" do
     test "with scalar" do
-      assert inspect(Expr.tensor(Nx.tensor(0)), safe: false) == """
+      assert inspect(Expr.tensor(Nx.tensor(0)), safe: false) == s """
              #Nx.Tensor<
                s64
              \s\s
@@ -198,7 +200,7 @@ defmodule Nx.Defn.ExprTest do
       b = Expr.parameter(nil, {:s, 64}, {2, 2}, 1)
 
       assert Nx.sum(Nx.add(Nx.add(Nx.dot(a, a), Nx.tanh(b)), 2))
-             |> inspect(safe: false) == """
+             |> inspect(safe: false) == s """
              #Nx.Tensor<
                f32
              \s\s
@@ -220,7 +222,7 @@ defmodule Nx.Defn.ExprTest do
       c = Nx.iota({2, 2}, backend: Expr)
 
       assert Nx.argmin(Nx.add(Nx.tanh(Nx.dot(c, b)), a), tie_break: :high)
-             |> inspect(safe: false) == """
+             |> inspect(safe: false) == s """
              #Nx.Tensor<
                s64
              \s\s
@@ -239,7 +241,7 @@ defmodule Nx.Defn.ExprTest do
     test "with fun" do
       a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
 
-      assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect(safe: false) == """
+      assert Nx.reduce(a, 0, [], &Nx.add/2) |> inspect(safe: false) == s """
              #Nx.Tensor<
                s64
              \s\s
@@ -253,7 +255,7 @@ defmodule Nx.Defn.ExprTest do
     test "with metadata" do
       a = Expr.parameter(nil, {:s, 64}, {}, 0)
 
-      assert Expr.metadata(a, %{}) |> Nx.add(1) |> inspect(safe: false) == """
+      assert Expr.metadata(a, %{}) |> Nx.add(1) |> inspect(safe: false) == s """
              #Nx.Tensor<
                s64
              \s\s
@@ -263,7 +265,7 @@ defmodule Nx.Defn.ExprTest do
              >\
              """
 
-      assert Expr.metadata(a, %{inspect: :foo}) |> Nx.add(1) |> inspect(safe: false) == """
+      assert Expr.metadata(a, %{inspect: :foo}) |> Nx.add(1) |> inspect(safe: false) == s """
              #Nx.Tensor<
                s64
              \s\s
@@ -279,7 +281,7 @@ defmodule Nx.Defn.ExprTest do
       a = Expr.parameter(nil, {:s, 64}, {2, 2}, 0)
       {q, r} = Nx.LinAlg.qr(a)
 
-      assert inspect(q, safe: false) == """
+      assert inspect(q, safe: false) == s """
              #Nx.Tensor<
                f32[2][2]
              \s\s
@@ -290,7 +292,7 @@ defmodule Nx.Defn.ExprTest do
              >\
              """
 
-      assert inspect(r, safe: false) == """
+      assert inspect(r, safe: false) == s """
              #Nx.Tensor<
                f32[2][2]
              \s\s
@@ -307,7 +309,7 @@ defmodule Nx.Defn.ExprTest do
       b = Expr.parameter(nil, {:s, 64}, {}, 1)
       {left, right} = Expr.cond([{Nx.any(a), {a, b}}], {b, a})
 
-      assert inspect(left, safe: false) == """
+      assert inspect(left, safe: false) == s """
              #Nx.Tensor<
                s64
              \s\s
@@ -320,7 +322,7 @@ defmodule Nx.Defn.ExprTest do
              >\
              """
 
-      assert inspect(right, safe: false) == """
+      assert inspect(right, safe: false) == s """
              #Nx.Tensor<
                s64
              \s\s
@@ -344,7 +346,7 @@ defmodule Nx.Defn.ExprTest do
     end
 
     test "with while" do
-      assert inspect(factorial(Nx.template({}, {:f, 32})), safe: false) == """
+      assert inspect(factorial(Nx.template({}, {:f, 32})), safe: false) == s """
              #Nx.Tensor<
                f32
              \s\s
@@ -367,7 +369,7 @@ defmodule Nx.Defn.ExprTest do
     test "with tokens" do
       result = sub_add_mult(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
 
-      assert inspect(result, safe: false) == """
+      assert inspect(result, safe: false) == s """
              #Nx.Tensor<
                f32
              \s\s

@@ -6,13 +6,15 @@ defmodule Nx.HeatmapTest do
   @tensor2 Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
   @tensor3 Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
 
+  defp s(str), do: String.replace(str, "\r\n", "\n")
+
   test "rank 0" do
     assert_raise ArgumentError, fn -> Nx.to_heatmap(@tensor0) end
   end
 
   describe "without ANSI" do
     test "equal" do
-      assert Nx.tensor([1, 1, 1]) |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
+      assert Nx.tensor([1, 1, 1]) |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == s """
              #Nx.Heatmap<
                s64[3]
                000
@@ -21,7 +23,7 @@ defmodule Nx.HeatmapTest do
     end
 
     test "rank 1" do
-      assert @tensor1 |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
+      assert @tensor1 |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == s """
              #Nx.Heatmap<
                s64[5]
                02579
@@ -30,7 +32,7 @@ defmodule Nx.HeatmapTest do
     end
 
     test "rank 2" do
-      assert @tensor2 |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
+      assert @tensor2 |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == s """
              #Nx.Heatmap<
                s64[4][3]
              \s\s
@@ -43,7 +45,7 @@ defmodule Nx.HeatmapTest do
     end
 
     test "rank 3" do
-      assert @tensor3 |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == """
+      assert @tensor3 |> Nx.to_heatmap(ansi_enabled: false) |> inspect() == s """
              #Nx.Heatmap<
                s64[2][2][3]
                [
@@ -60,7 +62,7 @@ defmodule Nx.HeatmapTest do
 
   describe "with ANSI" do
     test "equal" do
-      assert Nx.tensor([1, 1, 1]) |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == """
+      assert Nx.tensor([1, 1, 1]) |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == s """
              #Nx.Heatmap<
                s64[3]
                \e[48;5;232m　\e[48;5;232m　\e[48;5;232m　\e[0m
@@ -69,7 +71,7 @@ defmodule Nx.HeatmapTest do
     end
 
     test "rank 1" do
-      assert @tensor1 |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == """
+      assert @tensor1 |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == s """
              #Nx.Heatmap<
                s64[5]
                \e[48;5;232m\u3000\e[48;5;238m\u3000\e[48;5;244m\u3000\e[48;5;249m\u3000\e[48;5;255m\u3000\e[0m
@@ -78,7 +80,7 @@ defmodule Nx.HeatmapTest do
     end
 
     test "rank 2" do
-      assert @tensor2 |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == """
+      assert @tensor2 |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == s """
              #Nx.Heatmap<
                s64[4][3]
              \s\s
@@ -91,7 +93,7 @@ defmodule Nx.HeatmapTest do
     end
 
     test "rank 3" do
-      assert @tensor3 |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == """
+      assert @tensor3 |> Nx.to_heatmap(ansi_enabled: true) |> inspect() == s """
              #Nx.Heatmap<
                s64[2][2][3]
                [
