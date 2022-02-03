@@ -5,6 +5,7 @@ defmodule Torchx.MixProject do
   @version "0.1.0-dev"
 
   @libtorch_version "1.9.1"
+  # Can be cpu, cu102, cu111
   @libtorch_target "cpu"
 
   if libtorch_dir = System.get_env("LIBTORCH_DIR") do
@@ -92,20 +93,24 @@ defmodule Torchx.MixProject do
       # Download libtorch
 
       # This is so we don't forget to update the URLs below when we want to update libtorch
-      unless @libtorch_version == "1.9.1" and @libtorch_target == "cpu" do
-        raise "ensure the download URLs match the default libtorch version"
+      if @libtorch_target != "cpu" and {:unix, :darwin} == :os.type() do
+        raise "No CUDA support on OSX"
       end
 
       url =
         case :os.type() do
           {:unix, :linux} ->
-            "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.9.1%2Bcpu.zip"
+            "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-cxx11-abi-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
 
           {:unix, :darwin} ->
             # MacOS
-            "https://download.pytorch.org/libtorch/cpu/libtorch-macos-1.9.1.zip"
+            "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
 
-          os ->
+          {:win32, :nt} ->
+            #Windows
+            "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-win-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
+
+            os ->
             raise "OS #{inspect(os)} is not supported"
         end
 
