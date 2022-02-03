@@ -1,0 +1,19 @@
+PRIV_DIR = $(MIX_APP_PATH)/priv
+TORCHX_DLL = $(PRIV_DIR)/torchx.dll
+CMAKE_BUILD_DIR = $(MIX_APP_PATH)/cmake
+C_SRC = $(MAKEDIR)/c_src
+
+!MESSAGE LIBTORCH_BASE=$(LIBTORCH_BASE)
+!MESSAGE LIBTORCH_DIR=$(LIBTORCH_DIR)
+!MESSAGE  xcopy /S /Y "$(LIBTORCH_DIR)/lib/*.dll" "$(PRIV_DIR)"
+
+all:
+	@ if not exist "$(PRIV_DIR)" mkdir "$(PRIV_DIR)"
+	@ if not exist "$(CMAKE_BUILD_DIR)" mkdir "$(CMAKE_BUILD_DIR)"
+	@ cd "$(CMAKE_BUILD_DIR)" &&\
+		cmake -DCMAKE_PREFIX_PATH="$(LIBTORCH_DIR)" -DC_SRC="$(C_SRC)" \
+				-DLIBTORCH_BASE="$(LIBTORCH_BASE)" -DERTS_INCLUDE_DIR="$(ERTS_INCLUDE_DIR)" \
+				-S "$(MAKEDIR)" $(CMAKE_CONFIGURE_FLAGS) && \
+		cmake --build . $(CMAKE_BUILD_FLAGS) --config Release
+	@ xcopy /Y "$(CMAKE_BUILD_DIR)/Release"\*.dll "$(PRIV_DIR)"
+	@ xcopy /Y "$(LIBTORCH_DIR)/lib"\*.dll "$(PRIV_DIR)"
