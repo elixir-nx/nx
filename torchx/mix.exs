@@ -107,7 +107,7 @@ defmodule Torchx.MixProject do
             "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
 
           {:win32, :nt} ->
-            #Windows
+            # Windows
             "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-win-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
 
           os ->
