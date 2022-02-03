@@ -110,7 +110,7 @@ defmodule Torchx.MixProject do
             #Windows
             "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-win-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
 
-            os ->
+          os ->
             raise "OS #{inspect(os)} is not supported"
         end
 
