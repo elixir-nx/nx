@@ -9347,8 +9347,7 @@ defmodule Nx do
   end
 
   defp binary_to_numbers(string) do
-    string = String.replace(string, "\r\n", "\n")
-    for row <- String.split(string, "\n", trim: true) do
+    for row <- String.split(string, ["\n", "\r\n"], trim: true) do
       row
       |> String.split(" ", trim: true)
       |> Enum.map(fn str ->
