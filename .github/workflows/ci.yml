@@ -6,6 +6,7 @@ on:
   pull_request:
 jobs:
   main:
+    name: Linux
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -47,6 +48,7 @@ jobs:
       - name: Run tests
         run: mix test
   win:
+    name: Windows
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -60,6 +62,8 @@ jobs:
     env:
       MIX_ENV: test
     steps:
+      - name: Configure Git
+        run: git config --global core.autocrlf input
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
         with:
@@ -76,5 +80,7 @@ jobs:
         run: mix deps.get
       - name: Compile and check warnings
         run: mix compile --warnings-as-errors
+      - name: Check formatting
+        run: mix format --check-formatted
       - name: Run tests
         run: mix test
