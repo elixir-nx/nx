@@ -66,6 +66,7 @@ jobs:
         run: git config --global core.autocrlf input
         working-directory: .
       - uses: actions/checkout@v2
+      - uses: ilammy/msvc-dev-cmd@v1
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ matrix.otp }}
