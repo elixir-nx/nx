@@ -64,6 +64,7 @@ jobs:
     steps:
       - name: Configure Git
         run: git config --global core.autocrlf input
+        working-directory: .
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
         with:
