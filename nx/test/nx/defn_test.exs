@@ -1169,31 +1169,33 @@ defmodule Nx.DefnTest do
     end
 
     test "executes the transformation" do
-      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) == s """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0    s64
-               parameter c:1    s64
-               b = tanh a       f32
-               d = power c, 3   s64
-               e = add b, d     f32
-             >
-             """
+      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect(1, 2) end) ==
+               s("""
+               #Nx.Tensor<
+                 f32
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0    s64
+                 parameter c:1    s64
+                 b = tanh a       f32
+                 d = power c, 3   s64
+                 e = add b, d     f32
+               >
+               """)
 
-      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect_label(1, 2) end) == s """
-             HELLO: #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0    s64
-               parameter c:1    s64
-               b = tanh a       f32
-               d = power c, 3   s64
-               e = add b, d     f32
-             >
-             """
+      assert ExUnit.CaptureIO.capture_io(fn -> transform_inspect_label(1, 2) end) ==
+               s("""
+               HELLO: #Nx.Tensor<
+                 f32
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0    s64
+                 parameter c:1    s64
+                 b = tanh a       f32
+                 d = power c, 3   s64
+                 e = add b, d     f32
+               >
+               """)
     end
 
     defn transform_back_and_forth(a) do
