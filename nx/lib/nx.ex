@@ -5417,7 +5417,7 @@ defmodule Nx do
   @doc """
   Returns the mean for the tensor.
 
-  If the `:axis` option is given, it aggregates over
+  If the `:axes` option is given, it aggregates over
   that dimension, effectively removing it. `axes: [0]`
   implies aggregating over the highest order dimension
   and so forth. If the axis is negative, then counts
@@ -9278,21 +9278,53 @@ defmodule Nx do
         f32
         1.6666666269302368
       >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 1.0]
+      >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
+      #Nx.Tensor<
+        f32[2]
+        [0.25, 0.25]
+      >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [0], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [2.0, 2.0]
+      >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [0.5, 0.5]
+      >
   """
   @doc type: :aggregation
   @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def variance(tensor, opts \\ []) do
-    %T{shape: shape} = tensor = to_tensor(tensor)
-
-    opts = keyword!(opts, ddof: 0)
-    total = size(shape)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    opts = keyword!(opts, [:axes, ddof: 0])
+    axes = opts[:axes]
     ddof = Keyword.fetch!(opts, :ddof)
-    mean = mean(tensor)
+    opts = Keyword.delete(opts, :ddof)
+
+    total =
+      if axes do
+        mean_den(shape, Nx.Shape.normalize_axes(shape, axes, names))
+      else
+        size(shape)
+      end
+
+    mean = mean(tensor, Keyword.put(opts, :keep_axes, true))
 
     tensor
     |> subtract(mean)
     |> power(2)
-    |> sum()
+    |> sum(opts)
     |> divide(total - ddof)
   end
 
@@ -9315,6 +9347,30 @@ defmodule Nx do
       #Nx.Tensor<
         f32
         1.29099440574646
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 1.0]
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
+      #Nx.Tensor<
+        f32[2]
+        [0.5, 0.5]
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [0], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [1.4142135381698608, 1.4142135381698608]
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [1], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [0.7071067690849304, 0.7071067690849304]
       >
   """
   @doc type: :aggregation
