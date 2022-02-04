@@ -468,6 +468,17 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def solve(a, b) do
+    IO.inspect("Called torchx")
+
+    a_bin = a |> Nx.backend_transfer(Nx.BinaryBackend)
+    b_bin = b |> Nx.backend_transfer(Nx.BinaryBackend)
+
+    Nx.LinAlg.solve(a_bin, b_bin)
+    |> Nx.backend_transfer(Torchx.Backend)
+  end
+
+  @impl true
   def any(%T{} = out, %T{} = t, opts) do
     axes = opts[:axes] || []
     keep_axes = opts[:keep_axes] || false

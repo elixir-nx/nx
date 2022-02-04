@@ -387,4 +387,35 @@ defmodule Nx.Shared do
             "#{inspect(struct1)} and #{inspect(struct2)}. You may need to call Nx.backend_transfer/1 " <>
             "(or Nx.backend_copy/1) on one or both of them to transfer them to a common implementation"
   end
+
+  @doc """
+  Used to define an Nx callback with an optional implementation.
+
+  The given body is used as the default implementation otherwise.
+  """
+  defmacro defoptional(function_header, body) do
+    {name, args} = Macro.decompose_call(function_header)
+
+    arity = length(args)
+    private_name = :"#{name}_implementation"
+
+    quote do
+      def(unquote(private_name)(unquote_splicing(args)), unquote(body))
+
+      def unquote(name)(unquote_splicing(args)) do
+        backend = Nx.Shared.impl!(unquote_splicing(args))
+
+        cond do
+          backend == Nx.Defn.Expr ->
+            raise "defn expr unsupported"
+
+          function_exported?(backend, unquote(name), unquote(arity)) ->
+            apply(backend, unquote(name), unquote(args))
+
+          :otherwise ->
+            __MODULE__.unquote({private_name, [], nil})(unquote_splicing(args))
+        end
+      end
+    end
+  end
 end

@@ -491,7 +491,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
   @doc from_backend: false
-  def solve(a, b) do
+  defoptional solve(a, b) do
     %T{shape: a_shape} = a = Nx.to_tensor(a)
     %T{shape: b_shape} = b = Nx.to_tensor(b)
 
