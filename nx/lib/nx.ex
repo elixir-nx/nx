@@ -5442,13 +5442,12 @@ defmodule Nx do
       if axes = opts[:axes] do
         mean_den(shape, Nx.Shape.normalize_axes(shape, axes, names))
       else
-        mean_den(shape, nil)
+        size(shape)
       end
 
     divide(sum(tensor, opts), mean_den)
   end
 
-  defp mean_den(shape, nil), do: size(shape)
   defp mean_den(_shape, []), do: 1
 
   defp mean_den(shape, [axis | axes]) when axis >= 0,
@@ -9195,7 +9194,7 @@ defmodule Nx do
     %T{shape: shape} = tensor = to_tensor(tensor)
 
     opts = keyword!(opts, ddof: 0)
-    total = Tuple.product(shape)
+    total = size(shape)
     ddof = Keyword.fetch!(opts, :ddof)
     mean = mean(tensor)
 
