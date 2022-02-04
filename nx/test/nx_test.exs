@@ -3,8 +3,6 @@ defmodule NxTest do
 
   doctest Nx, except: [sigil_M: 2, sigil_V: 2]
 
-  defp s(str), do: String.replace(str, "\r\n", "\n")
-
   defp commute(a, b, fun) do
     fun.(a, b)
     fun.(b, a)
@@ -464,94 +462,86 @@ defmodule NxTest do
 
   describe "inspect" do
     test "scalar" do
-      assert inspect(Nx.tensor(123)) ==
-               s("""
-               #Nx.Tensor<
-                 s64
-                 123
-               >\
-               """)
+      assert inspect(Nx.tensor(123)) == """
+             #Nx.Tensor<
+               s64
+               123
+             >\
+             """
     end
 
     test "n-dimensional" do
-      assert inspect(Nx.tensor([[1, 2, 3], [4, 5, 6]])) ==
-               s("""
-               #Nx.Tensor<
-                 s64[2][3]
-                 [
-                   [1, 2, 3],
-                   [4, 5, 6]
-                 ]
-               >\
-               """)
+      assert inspect(Nx.tensor([[1, 2, 3], [4, 5, 6]])) == """
+             #Nx.Tensor<
+               s64[2][3]
+               [
+                 [1, 2, 3],
+                 [4, 5, 6]
+               ]
+             >\
+             """
 
-      assert inspect(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
-               s("""
-               #Nx.Tensor<
-                 f32[2][3]
-                 [
-                   [1.0, 2.0, 3.0],
-                   [4.0, 5.0, 6.0]
-                 ]
-               >\
-               """)
+      assert inspect(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) == """
+             #Nx.Tensor<
+               f32[2][3]
+               [
+                 [1.0, 2.0, 3.0],
+                 [4.0, 5.0, 6.0]
+               ]
+             >\
+             """
     end
 
     test "limit" do
-      assert inspect(Nx.tensor([1, 2]), limit: :infinity) ==
-               s("""
-               #Nx.Tensor<
-                 s64[2]
-                 [1, 2]
-               >\
-               """)
+      assert inspect(Nx.tensor([1, 2]), limit: :infinity) == """
+             #Nx.Tensor<
+               s64[2]
+               [1, 2]
+             >\
+             """
 
-      assert inspect(Nx.tensor([[1, 2], [3, 4]]), limit: 3) ==
-               s("""
-               #Nx.Tensor<
-                 s64[2][2]
-                 [
-                   [1, 2],
-                   [3, ...]
-                 ]
-               >\
-               """)
+      assert inspect(Nx.tensor([[1, 2], [3, 4]]), limit: 3) == """
+             #Nx.Tensor<
+               s64[2][2]
+               [
+                 [1, 2],
+                 [3, ...]
+               ]
+             >\
+             """
 
-      assert inspect(Nx.tensor([[1, 2], [3, 4], [5, 6]]), limit: 3) ==
-               s("""
-               #Nx.Tensor<
-                 s64[3][2]
-                 [
-                   [1, 2],
-                   [3, ...],
-                   ...
-                 ]
-               >\
-               """)
+      assert inspect(Nx.tensor([[1, 2], [3, 4], [5, 6]]), limit: 3) == """
+             #Nx.Tensor<
+               s64[3][2]
+               [
+                 [1, 2],
+                 [3, ...],
+                 ...
+               ]
+             >\
+             """
     end
 
     test "infinity and nan for bf16" do
       bin = <<0xFF80::16-native, 0x7F80::16-native, 0xFFC1::16-native, 0xFF81::16-native>>
 
-      assert inspect(Nx.from_binary(bin, {:bf, 16})) ==
-               s("""
-               #Nx.Tensor<
-                 bf16[4]
-                 [-Inf, Inf, NaN, NaN]
-               >\
-               """)
+      assert inspect(Nx.from_binary(bin, {:bf, 16})) == """
+             #Nx.Tensor<
+               bf16[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
     end
 
     test "infinity and nan for f16" do
       bin = <<0xFC00::16-native, 0x7C00::16-native, 0xFC01::16-native, 0xFC0F::16-native>>
 
-      assert inspect(Nx.from_binary(bin, {:f, 16})) ==
-               s("""
-               #Nx.Tensor<
-                 f16[4]
-                 [-Inf, Inf, NaN, NaN]
-               >\
-               """)
+      assert inspect(Nx.from_binary(bin, {:f, 16})) == """
+             #Nx.Tensor<
+               f16[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
     end
 
     test "infinity and nan for f32" do
@@ -562,13 +552,12 @@ defmodule NxTest do
       # Assert that none of them are indeed valid
       assert for(<<x::float-32-native <- bin>>, do: x) == []
 
-      assert inspect(Nx.from_binary(bin, {:f, 32})) ==
-               s("""
-               #Nx.Tensor<
-                 f32[4]
-                 [-Inf, Inf, NaN, NaN]
-               >\
-               """)
+      assert inspect(Nx.from_binary(bin, {:f, 32})) == """
+             #Nx.Tensor<
+               f32[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
     end
 
     test "more nan for f32" do
@@ -579,13 +568,12 @@ defmodule NxTest do
       # Assert that none of them are indeed valid
       assert for(<<x::float-32-native <- bin>>, do: x) == []
 
-      assert inspect(Nx.from_binary(bin, {:f, 32})) ==
-               s("""
-               #Nx.Tensor<
-                 f32[4]
-                 [NaN, NaN, NaN, NaN]
-               >\
-               """)
+      assert inspect(Nx.from_binary(bin, {:f, 32})) == """
+             #Nx.Tensor<
+               f32[4]
+               [NaN, NaN, NaN, NaN]
+             >\
+             """
     end
 
     test "infinity and nan for f64" do
@@ -596,13 +584,12 @@ defmodule NxTest do
       # Assert that none of them are indeed valid
       assert for(<<x::float-64-native <- bin>>, do: x) == []
 
-      assert inspect(Nx.from_binary(bin, {:f, 64})) ==
-               s("""
-               #Nx.Tensor<
-                 f64[4]
-                 [-Inf, Inf, NaN, NaN]
-               >\
-               """)
+      assert inspect(Nx.from_binary(bin, {:f, 64})) == """
+             #Nx.Tensor<
+               f64[4]
+               [-Inf, Inf, NaN, NaN]
+             >\
+             """
     end
 
     test "more nan for f64" do
@@ -613,13 +600,12 @@ defmodule NxTest do
       # Assert that none of them are indeed valid
       assert for(<<x::float-64-native <- bin>>, do: x) == []
 
-      assert inspect(Nx.from_binary(bin, {:f, 64})) ==
-               s("""
-               #Nx.Tensor<
-                 f64[4]
-                 [NaN, NaN, NaN, NaN]
-               >\
-               """)
+      assert inspect(Nx.from_binary(bin, {:f, 64})) == """
+             #Nx.Tensor<
+               f64[4]
+               [NaN, NaN, NaN, NaN]
+             >\
+             """
     end
 
     test "cannot build an empty tensor" do
@@ -630,7 +616,7 @@ defmodule NxTest do
 
     test "all dimensions named" do
       assert inspect(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, :x, :y])) ==
-               s("""
+               """
                #Nx.Tensor<
                  s64[batch: 1][x: 3][y: 3]
                  [
@@ -641,12 +627,12 @@ defmodule NxTest do
                    ]
                  ]
                >\
-               """)
+               """
     end
 
     test "some dimensions named" do
       assert inspect(Nx.tensor([[[1, 2, 3], [4, 5, 6], [7, 8, 9]]], names: [:batch, nil, nil])) ==
-               s("""
+               """
                #Nx.Tensor<
                  s64[batch: 1][3][3]
                  [
@@ -657,7 +643,7 @@ defmodule NxTest do
                    ]
                  ]
                >\
-               """)
+               """
     end
   end
 
