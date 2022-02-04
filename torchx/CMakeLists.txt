@@ -19,6 +19,7 @@ set_target_properties(torchx PROPERTIES
 target_include_directories(torchx PUBLIC ${ERTS_INCLUDE_DIR}) 
 
 if(UNIX)
+set(CMAKE_SHARED_LIBRARY_PREFIX "")
 if(NOT APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -shared")
     set_target_properties(torchx PROPERTIES INSTALL_RPATH "\$ORIGIN/${LIBTORCH_BASE}")
