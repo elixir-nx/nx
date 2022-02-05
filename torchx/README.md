@@ -27,13 +27,22 @@ end
 ```
 
 We will automatically download a precompiled version of `LibTorch` that runs on the CPU.
-If you want to use another version, [download the .zip file of another `LibTorch` version
-from the official website](https://pytorch.org/get-started/locally/), unpack it to a
-directory of your choice and set the `LIBTORCH_DIR` [environment variable](https://en.wikipedia.org/wiki/Environment_variable)
-to point to the unpacked directory.
+If you want to use another version, please use `LIBTORCH_VERSION` to choose the different versions. The current
+supported versions are:
+- 1.9.0
+- 1.9.1
+- 1.10.0
+- 1.10.1
+- 1.10.2
 
-Once downloaded, we will compile `Torchx` bindings. You will need `make`, `cmake` (3.12+)
-and a `C++` compiler. If running on Windows, you will need:
+If you want torch with CUDA support, please use `LIBTORCH_TARGET` to choose CUDA versions. The current
+supported targets are:
+- `cpu` default CPU only version
+- `cu102` CUDA 10.2 and CPU version (no OSX support)
+- `cu102` CUDA 11.1 and CPU version (no OSX support)
+
+Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake` (Windows), `cmake` (3.12+)
+and a `C++` compiler. If building on Windows, you will need:
 
 - [Microsoft Build Tools 2019](https://visualstudio.microsoft.com/downloads/)
 - [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)

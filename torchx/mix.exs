@@ -4,19 +4,14 @@ defmodule Torchx.MixProject do
   @source_url "https://github.com/elixir-nx/nx"
   @version "0.1.0-dev"
 
-  @libtorch_version "1.9.1"
-  # Can be cpu, cu102, cu111
-  @libtorch_target "cpu"
+  @valid_targets ["cpu", "cu102", "cu111"]
 
-  if libtorch_dir = System.get_env("LIBTORCH_DIR") do
-    @libtorch_base "libtorch-custom"
-    @libtorch_dir libtorch_dir
-    @libtorch_compilers [:elixir_make]
-  else
-    @libtorch_base "libtorch-#{@libtorch_version}-#{@libtorch_target}"
-    @libtorch_dir Path.join(__DIR__, "cache/#{@libtorch_base}")
-    @libtorch_compilers [:torchx, :elixir_make]
-  end
+  @libtorch_version System.get_env("LIBTORCH_VERSION", "1.9.1")
+  @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
+
+  @libtorch_base "libtorch"
+  @libtorch_dir Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
+  @libtorch_compilers [:torchx, :elixir_make]
 
   def project do
     [
@@ -94,7 +89,12 @@ defmodule Torchx.MixProject do
 
       # This is so we don't forget to update the URLs below when we want to update libtorch
       if @libtorch_target != "cpu" and {:unix, :darwin} == :os.type() do
-        raise "No CUDA support on OSX"
+        Mix.error("No CUDA support on OSX")
+      end
+
+      # Check if target is valid
+      unless Enum.member?(@valid_targets, @libtorch_target) do
+        Mix.error("Invalid target, please use one of #{inspect(@valid_targets)}")
       end
 
       url =
@@ -111,7 +111,7 @@ defmodule Torchx.MixProject do
             "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-win-shared-with-deps-#{@libtorch_version}%2B#{@libtorch_target}.zip"
 
           os ->
-            raise "OS #{inspect(os)} is not supported"
+            Mix.error("OS #{inspect(os)} is not supported")
         end
 
       download!(url, libtorch_zip)

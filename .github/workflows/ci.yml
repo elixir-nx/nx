@@ -36,8 +36,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: ./torchx/cache/libtorch-1.9.1-cpu
-          key: v1-libtorch-1.9.1-cpu.zip
+          path: ./torchx/cache/libtorch-cpu
+          key: v1-libtorch-cpu.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -82,8 +82,8 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache-win
         with:
-          path: ./torchx/cache/libtorch-1.9.1-cpu
-          key: win-v1-libtorch-1.9.1-cpu.zip
+          path: ./torchx/cache/libtorch-cpu
+          key: win-v1-libtorch-cpu.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
@@ -93,6 +93,6 @@ jobs:
         run: mix format --check-formatted
       - name: Setup GITHUB_PATH for libtorch
         if: ${{ matrix.working_directory == 'torchx' }}
-        run: echo ".\_build\test\lib\torchx\priv\libtorch-1.9.1-cpu" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        run: echo ".\_build\test\lib\torchx\priv\libtorch" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Run tests
         run: mix test
