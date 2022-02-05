@@ -76,14 +76,14 @@ jobs:
         id: mix-cache # id to use in retrieve action
         with:
           path: deps
-          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: v1w-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: Retrieve libtorch cache
         if: ${{ matrix.working_directory == 'torchx' }}
         uses: actions/cache@v1
-        id: libtorch-cache
+        id: libtorch-cache-win
         with:
           path: ./torchx/cache/libtorch-1.9.1-cpu
-          key: v1-libtorch-1.9.1-cpu.zip
+          key: v1w-libtorch-1.9.1-cpu.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get
