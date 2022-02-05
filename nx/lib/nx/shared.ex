@@ -362,6 +362,12 @@ defmodule Nx.Shared do
   """
   def impl!(%T{data: %struct{}}), do: struct
 
+  def impl!([%T{} | _] = tensors) do
+    tensors
+    |> Enum.map(fn %{data: %struct{}} -> struct end)
+    |> Enum.reduce(&pick_struct/2)
+  end
+
   def impl!(%T{data: %struct1{}}, %T{data: %struct2{}}),
     do: pick_struct(struct1, struct2)
 
@@ -393,29 +399,21 @@ defmodule Nx.Shared do
 
   The given body is used as the default implementation otherwise.
   """
-  defmacro defoptional(function_header, body) do
-    {name, args} = Macro.decompose_call(function_header)
-
+  def default_implementation(function_name, args, default_impl)
+      when is_atom(function_name) and is_list(args) and is_function(default_impl) do
     arity = length(args)
-    private_name = :"#{name}_implementation"
 
-    quote do
-      def(unquote(private_name)(unquote_splicing(args)), unquote(body))
+    backend = impl!(args)
 
-      def unquote(name)(unquote_splicing(args)) do
-        backend = Nx.Shared.impl!(unquote_splicing(args))
+    cond do
+      backend == Nx.Defn.Expr ->
+        raise "defn expr unsupported"
 
-        cond do
-          backend == Nx.Defn.Expr ->
-            raise "defn expr unsupported"
+      function_exported?(backend, function_name, arity) ->
+        apply(backend, function_name, args)
 
-          function_exported?(backend, unquote(name), unquote(arity)) ->
-            apply(backend, unquote(name), unquote(args))
-
-          :otherwise ->
-            __MODULE__.unquote({private_name, [], nil})(unquote_splicing(args))
-        end
-      end
+      :otherwise ->
+        apply(default_impl, args)
     end
   end
 end

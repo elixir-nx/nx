@@ -491,26 +491,32 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a 2-D tensor with as many rows as columns, got: {3, 4}
   """
   @doc from_backend: false
-  defoptional solve(a, b) do
-    %T{shape: a_shape} = a = Nx.to_tensor(a)
-    %T{shape: b_shape} = b = Nx.to_tensor(b)
+  def solve(a, b) do
+    %T{shape: a_shape, type: a_type} = a = Nx.to_tensor(a)
+    %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
 
-    Nx.Shape.solve(a_shape, b_shape)
+    output_shape = Nx.Shape.solve(a_shape, b_shape)
 
-    # We need to achieve an LQ decomposition for `a` (henceforth called A)
-    # because triangular_solve only accepts lower_triangular matrices
-    # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
-    # If we set M = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
+    output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
 
-    # Given A = LQ, we can then solve AX = B as shown below
-    # AX = B -> L(QX) = B -> LY = B, where Y = QX -> X = transpose(Q)Y
+    output = %T{b | shape: output_shape, type: output_type, names: nil}
 
-    # Finally, it can be shown that when B is a matrix, X can be
-    # calculated by solving for each corresponding column in B
-    {qt, r_prime} = a |> Nx.transpose() |> qr()
-    l = Nx.transpose(r_prime)
-    y = triangular_solve(l, b)
-    Nx.dot(qt, y)
+    Nx.Shared.default_implementation(:solve, [output, a, b], fn _output, a, b ->
+      # We need to achieve an LQ decomposition for `a` (henceforth called A)
+      # because triangular_solve only accepts lower_triangular matrices
+      # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
+      # If we set M = transpose(A), we can get A = LQ through transpose(qr(transpose(A)))
+
+      # Given A = LQ, we can then solve AX = B as shown below
+      # AX = B -> L(QX) = B -> LY = B, where Y = QX -> X = transpose(Q)Y
+
+      # Finally, it can be shown that when B is a matrix, X can be
+      # calculated by solving for each corresponding column in B
+      {qt, r_prime} = a |> Nx.transpose() |> qr()
+      l = Nx.transpose(r_prime)
+      y = triangular_solve(l, b)
+      Nx.dot(qt, y)
+    end)
   end
 
   @doc """
