@@ -33,7 +33,7 @@ else()
     # Although the compiler complains about not using these,
     # things only work with them set
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -undefined dynamic_lookup")
-    #set(CMAKE_SHARED_LINKER_FLAGS "-flat_namespace -undefined suppress")
+    # set(CMAKE_SHARED_LINKER_FLAGS "-bundle -flat_namespace -undefined suppress")
     set_target_properties(torchx PROPERTIES INSTALL_RPATH "@loader_path/${LIBTORCH_BASE}")
 endif()
 
