@@ -54,6 +54,11 @@ defmodule Torchx.NxDoctestTest do
     logistic: 1
   ]
 
+  case :os.type() do
+    {:win32, _} -> @os_rounding_error_doctests [expm1: 1, erf: 1]
+    _ -> @os_rounding_error_doctests []
+  end
+
   @unrelated_doctests [
     to_template: 1,
     template: 3
@@ -74,6 +79,7 @@ defmodule Torchx.NxDoctestTest do
       |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
       |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
+      |> Kernel.++(@os_rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)
       |> Kernel.++(@unrelated_doctests)
       |> Kernel.++([:moduledoc])
