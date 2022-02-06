@@ -1126,17 +1126,24 @@ defmodule Nx.LinAlg do
   defn determinant(tensor) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
 
-    {n, _} = Nx.shape(tensor)
+    transform(tensor, fn tensor ->
+      output = %{tensor | shape: {}, names: nil}
 
-    transform(n, fn
-      2 ->
-        determinant_2by2(tensor)
+      Nx.Shared.default_implementation(:determinant, [output, tensor], fn
+        _, tensor ->
+          {n, _} = Nx.shape(tensor)
 
-      3 ->
-        determinant_3by3(tensor)
+          case n do
+            2 ->
+              determinant_2by2(tensor)
 
-      _ ->
-        determinant_NbyN(tensor)
+            3 ->
+              determinant_3by3(tensor)
+
+            _ ->
+              determinant_NbyN(tensor)
+          end
+      end)
     end)
   end
 

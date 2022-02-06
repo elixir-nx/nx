@@ -537,6 +537,14 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def determinant(out, tensor) do
+    tensor
+    |> from_nx()
+    |> Torchx.determinant()
+    |> to_nx(out)
+  end
+
+  @impl true
   def argmax(%T{} = out, %T{} = t, opts) do
     unsupported_option!(opts, :tie_break, :low)
 
