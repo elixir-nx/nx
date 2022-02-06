@@ -8062,7 +8062,7 @@ defmodule Nx do
   """
   @doc type: :indexed, from_backend: false
   def slice_along_axis(tensor, start_index, len, opts \\ []) when is_integer(len) do
-    opts = keyword!(opts, [strides: 1, axis: 0])
+    opts = keyword!(opts, strides: 1, axis: 0)
     axis = Keyword.fetch!(opts, :axis)
     strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
