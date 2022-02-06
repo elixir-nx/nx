@@ -91,8 +91,5 @@ jobs:
         run: mix compile --warnings-as-errors
       - name: Check formatting
         run: mix format --check-formatted
-      - name: Setup GITHUB_PATH for libtorch
-        if: ${{ matrix.working_directory == 'torchx' }}
-        run: echo ".\_build\test\lib\torchx\priv\libtorch" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Run tests
         run: mix test
