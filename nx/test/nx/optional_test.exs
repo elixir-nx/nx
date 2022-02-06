@@ -1,11 +1,9 @@
-defmodule Nx.BackendTest do
+defmodule Nx.OptionalTest do
   use ExUnit.Case, async: true
 
   defmodule SolveTestBackend do
     defstruct [:state]
     alias Nx.BinaryBackend
-
-    require Logger
 
     def from_binary(tensor, data, _opts) do
       %{tensor | data: %__MODULE__{state: data}}
@@ -16,7 +14,7 @@ defmodule Nx.BackendTest do
     end
 
     def solve(_out, a, b) do
-      Logger.info("called custom implementation")
+      send(self(), :called_custom_impl)
 
       out =
         Nx.LinAlg.solve(
@@ -31,8 +29,6 @@ defmodule Nx.BackendTest do
   defmodule NonSolveTestBackend do
     defstruct [:state]
     alias Nx.BinaryBackend
-
-    require Logger
 
     def from_binary(tensor, data, _opts) do
       %{tensor | data: %__MODULE__{state: data}}
@@ -64,7 +60,7 @@ defmodule Nx.BackendTest do
     end
 
     def dot(_out, a, _, _, b, _, _) do
-      Logger.info("called default implementation")
+      send(self(), :called_default_impl)
 
       out =
         Nx.dot(
@@ -76,28 +72,23 @@ defmodule Nx.BackendTest do
     end
   end
 
-  setup_all do
-    Process.register(self(), __MODULE__)
-    :ok
-  end
-
   describe "optional callbacks" do
     test "calls the default impl if specific is not present" do
       a = Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], backend: NonSolveTestBackend)
       b = Nx.tensor([1, 2, 3], backend: NonSolveTestBackend)
 
-      assert ExUnit.CaptureLog.capture_log(fn ->
-               Nx.LinAlg.solve(a, b)
-             end) =~ "called default implementation"
+      Nx.LinAlg.solve(a, b)
+
+      assert_receive :called_default_impl
     end
 
     test "calls the custom impl if it is present" do
       a = Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], backend: SolveTestBackend)
       b = Nx.tensor([1, 2, 3], backend: SolveTestBackend)
 
-      assert ExUnit.CaptureLog.capture_log(fn ->
-               Nx.LinAlg.solve(a, b)
-             end) =~ "called custom implementation"
+      Nx.LinAlg.solve(a, b)
+
+      assert_receive :called_custom_impl
     end
   end
 end
