@@ -187,7 +187,14 @@ namespace nx
       std::string bool_atom;
       if (!get_atom(env, term, bool_atom))
         return 0;
-      *var = (bool_atom == "true");
+
+      if (bool_atom == "true")
+        *var = true;
+      else if (bool_atom == "false")
+        *var = false;
+      else
+        return 0; // error
+
       return 1;
     }
 
