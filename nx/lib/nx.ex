@@ -8050,25 +8050,29 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.slice_along_axis(Nx.iota({2, 5}), 0, 2, axis: -1)
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}), 0, 3, axis: -1, strides: 2)
       #Nx.Tensor<
         s64[2][2]
         [
-          [0, 1],
-          [5, 6]
+          [0, 2],
+          [5, 7]
         ]
       >
 
   """
   @doc type: :indexed, from_backend: false
   def slice_along_axis(tensor, start_index, len, opts \\ []) when is_integer(len) do
-    opts = keyword!(opts, [:strides, :axis])
-    {axis, opts} = Keyword.pop(opts, :axis, 0)
+    opts = keyword!(opts, [strides: 1, axis: 0])
+    axis = Keyword.fetch!(opts, :axis)
+    strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
-    start_indices = List.duplicate(0, rank(tensor)) |> List.replace_at(axis, start_index)
+    rank = rank(shape)
+
+    start_indices = List.duplicate(0, rank) |> List.replace_at(axis, start_index)
     lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
-    slice(tensor, start_indices, lengths, opts)
+    strides = List.duplicate(1, rank) |> List.replace_at(axis, strides)
+    slice(tensor, start_indices, lengths, strides: strides)
   end
 
   @deprecated "Use slice_along_axis/4 instead"
