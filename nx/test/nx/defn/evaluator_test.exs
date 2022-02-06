@@ -337,12 +337,13 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:default, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
 
-      assert Nx.Defn.jit(&container_hook/2, [1, 2], hooks: %{example: &send_to_self({:custom, &1})})  == {Nx.tensor(1), Nx.tensor(2)}
+      assert Nx.Defn.jit(&container_hook/2, [1, 2],
+               hooks: %{example: &send_to_self({:custom, &1})}
+             ) == {Nx.tensor(1), Nx.tensor(2)}
 
       assert_received {:custom, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
     end
-
 
     defn side_effect_hooks(a, b) do
       token = create_token()
