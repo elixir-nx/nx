@@ -7881,7 +7881,7 @@ defmodule Nx do
   `:strides` are given.
 
   It is not possible to slice in reverse. See `gather/2`,
-  `slice_axis/5`, `take/3`, and `take_along_axis/3` for other ways
+  `slice_along_axis/4`, `take/3`, and `take_along_axis/3` for other ways
   to retrieve values from a tensor.
 
   ### Examples
@@ -8009,9 +8009,23 @@ defmodule Nx do
   `take/3`, and `take_along_axis/3` for other ways to retrieve values
   from a tensor.
 
+  ## Options
+
+    * `:axis` - The axis along which to take the values from. Defaults to `0`.
+    * `:strides` - The stride to slice the axis along of. Defaults to `1`.
+
   ## Examples
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}), 1, 2, 1)
+      iex> Nx.slice_along_axis(Nx.iota({5, 2}), 1, 2, axis: 0)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [2, 3],
+          [4, 5]
+        ]
+      >
+
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}), 1, 2, axis: 1)
       #Nx.Tensor<
         s64[2][2]
         [
@@ -8020,7 +8034,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}, names: [:x, :y]), 0, 1, :x)
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}, names: [:x, :y]), 0, 1, axis: :x)
       #Nx.Tensor<
         s64[x: 1][y: 5]
         [
@@ -8028,7 +8042,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}, names: [:x, :y]), Nx.tensor(0), 1, :x)
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}, names: [:x, :y]), Nx.tensor(0), 1, axis: :x)
       #Nx.Tensor<
         s64[x: 1][y: 5]
         [
@@ -8036,24 +8050,34 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}), 0, 2, -1)
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}), 0, 3, axis: -1, strides: 2)
       #Nx.Tensor<
         s64[2][2]
         [
-          [0, 1],
-          [5, 6]
+          [0, 2],
+          [5, 7]
         ]
       >
 
   """
   @doc type: :indexed, from_backend: false
-  def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
-    opts = keyword!(opts, [:strides])
+  def slice_along_axis(tensor, start_index, len, opts \\ []) when is_integer(len) do
+    opts = keyword!(opts, strides: 1, axis: 0)
+    axis = Keyword.fetch!(opts, :axis)
+    strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
-    start_indices = List.duplicate(0, rank(tensor)) |> List.replace_at(axis, start_index)
+    rank = rank(shape)
+
+    start_indices = List.duplicate(0, rank) |> List.replace_at(axis, start_index)
     lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
-    slice(tensor, start_indices, lengths, opts)
+    strides = List.duplicate(1, rank) |> List.replace_at(axis, strides)
+    slice(tensor, start_indices, lengths, strides: strides)
+  end
+
+  @deprecated "Use slice_along_axis/4 instead"
+  def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
+    slice_along_axis(tensor, start_index, len, [axis: axis] ++ opts)
   end
 
   @doc """
@@ -8133,7 +8157,7 @@ defmodule Nx do
   resulting shape. Specifically, the given axis in the input shape
   gets replaced with the indices shape.
 
-  See `gather/2`, `slice/3`, `slice_axis/5`, and `take_along_axis/3`
+  See `gather/2`, `slice/3`, `slice_along_axis/4`, and `take_along_axis/3`
   for other ways to retrieve values from a tensor.
 
   ## Options
@@ -8282,7 +8306,7 @@ defmodule Nx do
   the `axis` dimension, which can have arbitrary size. The returned tensor will have the
   same shape as the `indices` tensor.
 
-  See `gather/2`, `slice/3`, `slice_axis/5`, and `take/3` for other ways to retrieve
+  See `gather/2`, `slice/3`, `slice_along_axis/4`, and `take/3` for other ways to retrieve
   values from a tensor.
 
   ## Options
