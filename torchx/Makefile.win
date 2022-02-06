@@ -14,4 +14,3 @@ all: c_src/torchx.cpp c_src/nx_nif_utils.hpp
 				-S "$(MAKEDIR)" $(CMAKE_CONFIGURE_FLAGS) && \
 		cmake --build . $(CMAKE_BUILD_FLAGS) --config Release
 	@ xcopy /Y /Q "$(CMAKE_BUILD_DIR)/Release"\*.dll "$(PRIV_DIR)"
-	@ echo Please add "$(PRIV_DIR)/$(LIBTORCH_BASE)" to your PATH env var.
