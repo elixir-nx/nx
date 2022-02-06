@@ -1685,8 +1685,8 @@ defmodule Nx.Shape do
         "tensor must have as many rows as columns, got shape: #{inspect(shape)}"
       )
 
-  def solve({n, n}, {n}), do: :ok
-  def solve({n, n}, {n, _m}), do: :ok
+  def solve({n, n}, {n}), do: {n}
+  def solve({n, n}, {n, m}), do: {n, m}
 
   def solve({n, n}, b_shape) do
     raise(

@@ -119,6 +119,12 @@ defmodule Nx.Backend do
     @callback unquote(unary_op)(out :: tensor, tensor) :: tensor
   end
 
+  ### Optional Callbacks
+
+  @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
+
+  @optional_callbacks [solve: 3]
+
   alias Inspect.Algebra, as: IA
 
   @doc """

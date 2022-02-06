@@ -362,6 +362,12 @@ defmodule Nx.Shared do
   """
   def impl!(%T{data: %struct{}}), do: struct
 
+  def impl!([%T{} | _] = tensors) do
+    tensors
+    |> Enum.map(fn %{data: %struct{}} -> struct end)
+    |> Enum.reduce(&pick_struct/2)
+  end
+
   def impl!(%T{data: %struct1{}}, %T{data: %struct2{}}),
     do: pick_struct(struct1, struct2)
 
@@ -386,5 +392,28 @@ defmodule Nx.Shared do
     raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
             "#{inspect(struct1)} and #{inspect(struct2)}. You may need to call Nx.backend_transfer/1 " <>
             "(or Nx.backend_copy/1) on one or both of them to transfer them to a common implementation"
+  end
+
+  @doc """
+  Used to define an Nx callback with an optional implementation.
+
+  The given body is used as the default implementation otherwise.
+  """
+  def default_implementation(function_name, args, default_impl)
+      when is_atom(function_name) and is_list(args) and is_function(default_impl) do
+    arity = length(args)
+
+    backend = impl!(args)
+
+    cond do
+      backend == Nx.Defn.Expr ->
+        apply(default_impl, args)
+
+      function_exported?(backend, function_name, arity) ->
+        apply(backend, function_name, args)
+
+      :otherwise ->
+        apply(default_impl, args)
+    end
   end
 end
