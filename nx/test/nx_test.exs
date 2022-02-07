@@ -1950,6 +1950,11 @@ defmodule NxTest do
       assert Nx.variance(t, axes: [0], ddof: 1) ==
                Nx.tensor([2.3333334922790527, 6.333333492279053], names: [:y])
     end
+
+    test "should keep axes" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.variance(t, keep_axes: true) == Nx.tensor([[2.9166667461395264]])
+    end
   end
 
   describe "standard_deviation/1" do
@@ -1975,6 +1980,11 @@ defmodule NxTest do
 
       assert Nx.standard_deviation(t, axes: [1], ddof: 1) ==
                Nx.tensor([0.7071067690849304, 0.7071067690849304, 0.7071067690849304])
+    end
+
+    test "should keep axes" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.standard_deviation(t, keep_axes: true) == Nx.tensor([[1.7078251838684082]])
     end
   end
 end

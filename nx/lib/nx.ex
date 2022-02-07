@@ -9302,15 +9302,25 @@ defmodule Nx do
         f32[2]
         [0.5, 0.5]
       >
+
+      ### Keeping axes
+
+        iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1], keep_axes: true)
+        #Nx.Tensor<
+          f32[2][1]
+          [
+            [0.25],
+            [0.25]
+          ]
+        >
   """
   @doc type: :aggregation
   @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def variance(tensor, opts \\ []) do
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
-    opts = keyword!(opts, [:axes, ddof: 0])
+    opts = keyword!(opts, [:axes, ddof: 0, keep_axes: false])
     axes = opts[:axes]
-    ddof = Keyword.fetch!(opts, :ddof)
-    opts = Keyword.delete(opts, :ddof)
+    {ddof, opts} = Keyword.pop!(opts, :ddof)
 
     total =
       if axes do
@@ -9372,6 +9382,16 @@ defmodule Nx do
         f32[2]
         [0.7071067690849304, 0.7071067690849304]
       >
+
+      ### Keeping axes
+
+        iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), keep_axes: true)
+        #Nx.Tensor<
+          f32[1][1]
+          [
+            [1.1180340051651]
+          ]
+        >
   """
   @doc type: :aggregation
   @spec standard_deviation(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
