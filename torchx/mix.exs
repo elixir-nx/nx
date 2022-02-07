@@ -6,7 +6,7 @@ defmodule Torchx.MixProject do
 
   @valid_targets ["cpu", "cu102", "cu111"]
 
-  @libtorch_version System.get_env("LIBTORCH_VERSION", "1.9.1")
+  @libtorch_version System.get_env("LIBTORCH_VERSION", "1.10.2")
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
 
   @libtorch_base "libtorch"
