@@ -1,6 +1,8 @@
 defmodule TorchxTest do
   use ExUnit.Case, async: true
 
+  doctest Torchx
+
   describe "creation" do
     test "arange" do
       {:cpu, ref} = tensor = Torchx.arange(0, 26, 2, :short, :cpu)
