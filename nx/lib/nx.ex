@@ -389,6 +389,14 @@ defmodule Nx do
         ]
       >
 
+  It is possible to pass scalar tensors as part of a list too:
+
+      iex> Nx.tensor([1, Nx.tensor(2), 3])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
   Besides single-precision (32 bits), floats can also have
   half-precision (16) or double-precision (64):
 
@@ -404,9 +412,7 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
-  Brain-floating points are also supported, although they are
-  emulated in Elixir and therefore perform slower without a
-  native backend:
+  Brain-floating points are also supported:
 
       iex> Nx.tensor([1, 2, 3], type: {:bf, 16})
       #Nx.Tensor<
@@ -461,10 +467,7 @@ defmodule Nx do
   ## Options
 
     * `:type` - sets the type of the tensor. If one is not given,
-      one is automatically inferred based on the input. See `Nx.Type`
-      and `Nx.Type.infer/1` for more information on types. If a
-      tensor is given alongside this option, then it verifies the
-      tensor matches the given `:type`
+      one is automatically inferred based on the input.
 
     * `:names` - dimension names. If you wish to specify dimension
       names you must specify a name for every dimension in the tensor.
@@ -478,8 +481,24 @@ defmodule Nx do
   @doc type: :creation
   def tensor(arg, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
-    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
+    type = Nx.Type.normalize!(opts[:type] || infer_type(arg))
     tensor(arg, type, opts)
+  end
+
+  defp infer_type([head | tail]) when is_list(tail) do
+    Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
+  end
+
+  defp infer_type(number) when is_number(number) do
+    Nx.Type.infer(number)
+  end
+
+  defp infer_type(%Nx.Tensor{type: type, shape: {}}) do
+    type
+  end
+
+  defp infer_type(value) do
+    raise ArgumentError, "invalid value given to Nx.tensor/1, got: #{inspect(value)}"
   end
 
   defp tensor(arg, type, opts) when is_number(arg) do
@@ -533,7 +552,20 @@ defmodule Nx do
   end
 
   defp flatten_list(list, type, dimensions, acc) do
-    {[length(list) | dimensions], Enum.reduce(list, acc, &[number_to_binary(&1, type) | &2])}
+    {[length(list) | dimensions],
+     Enum.reduce(list, acc, &[tensor_or_number_to_binary(&1, type) | &2])}
+  end
+
+  defp tensor_or_number_to_binary(%Nx.Tensor{shape: {}} = tensor, type) do
+    tensor |> as_type(type) |> to_binary()
+  end
+
+  defp tensor_or_number_to_binary(number, type) when is_number(number) do
+    number_to_binary(number, type)
+  end
+
+  defp tensor_or_number_to_binary(value, _type) do
+    raise ArgumentError, "invalid value given to Nx.tensor/1, got: #{inspect(value)}"
   end
 
   @doc """
@@ -1659,6 +1691,13 @@ defmodule Nx do
   or underflow, which is platform and compiler dependent
   behaviour.
 
+  Casting of non-finite types to integer types are handled
+  such as:
+
+    * negative infinity becomes the minimum value for said type
+    * positive infinity becomes the maximum value for said type
+    * nan becomes zero
+
   ## Examples
 
       iex> Nx.as_type(Nx.tensor([0, 1, 2], names: [:data]), {:f, 32})
@@ -1677,6 +1716,35 @@ defmodule Nx do
       #Nx.Tensor<
         s64[data: 3]
         [0, 1, 2]
+      >
+
+  Casting of non-finite values to integer types convert to pre-determined
+  integer values:
+
+      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+      iex> Nx.as_type(non_finite, {:u, 8})
+      #Nx.Tensor<
+        u8[3]
+        [255, 0, 0]
+      >
+      iex> Nx.as_type(non_finite, {:s, 32})
+      #Nx.Tensor<
+        s32[3]
+        [2147483647, 0, -2147483648]
+      >
+
+  Non-finite values between float types are preserved:
+
+      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan()])
+      iex> Nx.as_type(non_finite, {:f, 64})
+      #Nx.Tensor<
+        f64[2]
+        [Inf, NaN]
+      >
+      iex> Nx.as_type(non_finite, {:f, 16})
+      #Nx.Tensor<
+        f16[2]
+        [Inf, NaN]
       >
 
   """
@@ -6700,7 +6768,7 @@ defmodule Nx do
 
   ### Examples
 
-      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
+      iex> init_value = Nx.Constants.min_finite({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]])
       iex> Nx.window_reduce(t, init_value, {2, 2}, fn x, acc -> max(x, acc) end)
       #Nx.Tensor<
@@ -6712,7 +6780,7 @@ defmodule Nx do
         ]
       >
 
-      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
+      iex> init_value = Nx.Constants.min_finite({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       iex> opts = [padding: :same, strides: [1, 1]]
       iex> Nx.window_reduce(t, init_value, {2, 2}, opts, fn x, acc -> max(x, acc) end)
@@ -9139,8 +9207,7 @@ defmodule Nx do
         "<" ->
           :little
 
-        # We can't just infer native endianness matches our native
-        # endianness
+        # We can't just infer native endianness matches our native endianness
         endianness ->
           raise ArgumentError, "Numpy tensor has unsupported endianness: #{endianness}"
       end
@@ -9305,9 +9372,8 @@ defmodule Nx do
   """
   @doc type: :creation
   defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
-    string
-    |> binary_to_numbers
-    |> numbers_to_tensor(modifiers)
+    {numbers, type} = binary_to_numbers(string)
+    numbers_to_tensor(numbers, type, modifiers)
   end
 
   @doc """
@@ -9342,22 +9408,22 @@ defmodule Nx do
   @doc type: :creation
   defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
     case binary_to_numbers(string) do
-      [numbers] ->
-        numbers_to_tensor(numbers, modifiers)
+      {[numbers], type} ->
+        numbers_to_tensor(numbers, type, modifiers)
 
       _ ->
         raise ArgumentError, "must be one-dimensional"
     end
   end
 
-  defp numbers_to_tensor(numbers, modifiers) do
+  defp numbers_to_tensor(numbers, type, modifiers) do
     type =
       case modifiers do
         [unit | size] ->
           Nx.Type.normalize!({List.to_atom([unit]), List.to_integer(size)})
 
         [] ->
-          Nx.Type.infer(numbers)
+          type
       end
 
     {shape, binary} = flatten_list(numbers, type)
@@ -9370,21 +9436,21 @@ defmodule Nx do
   end
 
   defp binary_to_numbers(string) do
-    for row <- String.split(string, ["\n", "\r\n"], trim: true) do
+    string
+    |> String.split(["\n", "\r\n"], trim: true)
+    |> Enum.map_reduce({:s, 64}, fn row, type ->
       row
       |> String.split(" ", trim: true)
-      |> Enum.map(fn str ->
-        module = if String.contains?(str, "."), do: Float, else: Integer
+      |> Enum.map_reduce(type, fn str, type ->
+        {module, type} =
+          if String.contains?(str, "."), do: {Float, {:f, 32}}, else: {Integer, type}
 
         case module.parse(str) do
-          {number, ""} ->
-            number
-
-          _ ->
-            raise ArgumentError, "expected a numerical value for tensor, got #{str}"
+          {number, ""} -> {number, type}
+          _ -> raise ArgumentError, "expected a numerical value for tensor, got #{str}"
         end
       end)
-    end
+    end)
   end
 
   ## Helpers
@@ -9398,23 +9464,6 @@ defmodule Nx do
   defp backend!(other) do
     raise ArgumentError,
           "backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
-  end
-
-  defp backend_from_options!(opts) do
-    case Keyword.fetch(opts, :backend) do
-      {:ok, backend} when is_atom(backend) ->
-        {backend, []}
-
-      {:ok, {backend, options}} when is_atom(backend) and is_list(options) ->
-        {backend, options}
-
-      {:ok, other} ->
-        raise ArgumentError,
-              ":backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
-
-      :error ->
-        nil
-    end
   end
 
   defp number_to_binary(number, type), do: match_types([type], do: <<write!(number, 0)>>)

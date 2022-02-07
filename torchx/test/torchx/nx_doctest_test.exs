@@ -65,6 +65,8 @@ defmodule Torchx.NxDoctestTest do
   ]
 
   @inherently_unsupported_doctests [
+    # as_type - the rules change per type
+    as_type: 2,
     # bitcast - no API available
     bitcast: 2,
     # default_backend - specific to BinaryBackend

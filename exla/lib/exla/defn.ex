@@ -788,13 +788,13 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:reduce_max, [arg, opts], %{type: type, shape: shape}, state) do
-    min_value = EXLA.Lib.min_value(state.builder, type)
-    to_aggregate(:max, type, shape, arg, min_value, opts, state)
+    min_finite = EXLA.Lib.min_finite(state.builder, type)
+    to_aggregate(:max, type, shape, arg, min_finite, opts, state)
   end
 
   defp to_operator(:reduce_min, [arg, opts], %{type: type, shape: shape}, state) do
-    max_value = EXLA.Lib.max_value(state.builder, type)
-    to_aggregate(:min, type, shape, arg, max_value, opts, state)
+    max_finite = EXLA.Lib.max_finite(state.builder, type)
+    to_aggregate(:min, type, shape, arg, max_finite, opts, state)
   end
 
   defp to_operator(:reduce, [arg, acc, opts, fun], %{type: type, shape: shape}, _state) do
@@ -814,13 +814,13 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:window_max, [arg, window_dims, opts], %{type: type}, state) do
-    min_value = EXLA.Lib.min_value(state.builder, type)
-    to_window_aggregate(:max, type, arg, min_value, window_dims, opts, state)
+    min_finite = EXLA.Lib.min_finite(state.builder, type)
+    to_window_aggregate(:max, type, arg, min_finite, window_dims, opts, state)
   end
 
   defp to_operator(:window_min, [arg, window_dims, opts], %{type: type}, state) do
-    max_value = EXLA.Lib.max_value(state.builder, type)
-    to_window_aggregate(:min, type, arg, max_value, window_dims, opts, state)
+    max_finite = EXLA.Lib.max_finite(state.builder, type)
+    to_window_aggregate(:min, type, arg, max_finite, window_dims, opts, state)
   end
 
   defp to_operator(:window_product, [arg, window_dims, opts], %{type: type}, state) do
