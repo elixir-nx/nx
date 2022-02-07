@@ -1718,8 +1718,8 @@ defmodule Nx do
         [0, 1, 2]
       >
 
-  Casting of non-finite values to integer types convert to the minimal value of
-  said type:
+  Casting of non-finite values to integer types convert to pre-determined
+  integer values:
 
       iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
       iex> Nx.as_type(non_finite, {:u, 8})
