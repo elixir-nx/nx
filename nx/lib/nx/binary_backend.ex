@@ -1930,7 +1930,6 @@ defmodule Nx.BinaryBackend do
 
       %T{type: input_type} ->
         float_output? = Nx.Type.float?(output_type)
-        min_finite_binary = Nx.Type.min_finite_binary(output_type)
         data = to_binary(tensor)
 
         output_data =
@@ -1939,9 +1938,18 @@ defmodule Nx.BinaryBackend do
               x = read!(x, 0)
 
               cond do
-                float_output? -> number_to_binary(x, output_type)
-                is_atom(x) -> min_finite_binary
-                true -> number_to_binary(trunc(x), output_type)
+                float_output? ->
+                  number_to_binary(x, output_type)
+
+                is_number(x) ->
+                  number_to_binary(trunc(x), output_type)
+
+                true ->
+                  case x do
+                    :nan -> number_to_binary(0, output_type)
+                    :infinity -> Nx.Type.max_finite_binary(output_type)
+                    :neg_infinity -> Nx.Type.min_finite_binary(output_type)
+                  end
               end
             end
           end

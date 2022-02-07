@@ -1691,8 +1691,12 @@ defmodule Nx do
   or underflow, which is platform and compiler dependent
   behaviour.
 
-  Casting of non-finite types to integer types convert to
-  the minimal value of said type.
+  Casting of non-finite types to integer types are handled
+  such as:
+
+    * negative infinity becomes the minimum value for said type
+    * positive infinity becomes the maximum value for said type
+    * nan becomes zero
 
   ## Examples
 
@@ -1717,16 +1721,16 @@ defmodule Nx do
   Casting of non-finite values to integer types convert to the minimal value of
   said type:
 
-      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan()])
-      iex> Nx.as_type(non_finite, {:u, 32})
+      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+      iex> Nx.as_type(non_finite, {:u, 8})
       #Nx.Tensor<
-        u32[2]
-        [0, 0]
+        u8[3]
+        [255, 0, 0]
       >
-      iex> Nx.as_type(non_finite, {:s, 16})
+      iex> Nx.as_type(non_finite, {:s, 32})
       #Nx.Tensor<
-        s16[2]
-        [-32678, -32678]
+        s32[3]
+        [2147483647, 0, -2147483648]
       >
 
   Non-finite values between float types are preserved:

@@ -722,6 +722,19 @@ defmodule EXLA.Defn.ExprTest do
     test "converts tensor type" do
       assert to_float(Nx.tensor([1, 2, 3])) == Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})
     end
+
+    defn generic_as_type(t, template), do: Nx.as_type(t, template.type)
+
+    test "converts non-finite types" do
+      non_finite =
+        Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+
+      assert generic_as_type(non_finite, Nx.template({}, {:u, 8})) ==
+              Nx.tensor([255, 0, 0], type: {:u, 8})
+
+      assert generic_as_type(non_finite, Nx.template({}, {:s, 16})) ==
+              Nx.tensor([32767, 0, -32768], type: {:s, 16})
+    end
   end
 
   describe "bitcast" do
