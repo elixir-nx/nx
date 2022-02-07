@@ -206,15 +206,17 @@ defmodule Nx.Backend do
 
   defp inspect_bf16(<<0xFF80::16-native>>), do: "-Inf"
   defp inspect_bf16(<<0x7F80::16-native>>), do: "Inf"
-  defp inspect_bf16(<<0xFFC1::16-native>>), do: "NaN"
-  defp inspect_bf16(<<0xFF81::16-native>>), do: "NaN"
 
   if System.endianness() == :little do
+    defp inspect_bf16(<<1::1, _::7, _sign::1, 127::7>>), do: "NaN"
+
     defp inspect_bf16(bf16) do
       <<x::float-little-32>> = <<0::16, bf16::binary>>
       Float.to_string(x)
     end
   else
+    defp inspect_bf16(<<_sign::1, 255::8, _::7>>), do: "NaN"
+
     defp inspect_bf16(bf16) do
       <<x::float-big-32>> = <<bf16::binary, 0::16>>
       Float.to_string(x)
@@ -241,8 +243,8 @@ defmodule Nx.Backend do
 
   defp inspect_float(data, 64) do
     case data do
-      <<0x7FF0000000000000::64-native>> -> "Inf"
       <<0xFFF0000000000000::64-native>> -> "-Inf"
+      <<0x7FF0000000000000::64-native>> -> "Inf"
       <<x::float-64-native>> -> Float.to_string(x)
       _ -> "NaN"
     end

@@ -844,14 +844,22 @@ defmodule NxTest do
   end
 
   describe "tensor/2" do
+    test "with mixed tensor scalars" do
+      assert Nx.tensor([Nx.tensor(1, type: {:u, 8}), Nx.tensor(2, type: {:u, 16})]) ==
+               Nx.tensor([1, 2], type: {:u, 16})
+
+      assert Nx.tensor([Nx.tensor(1, type: {:u, 8}), Nx.tensor(2, type: {:u, 16}), 3.0]) ==
+               Nx.tensor([1.0, 2.0, 3.0], type: {:f, 32})
+    end
+
     test "raises for empty list" do
-      assert_raise(RuntimeError, "cannot build empty tensor", fn ->
+      assert_raise(ArgumentError, "invalid value given to Nx.tensor/1, got: []", fn ->
         Nx.tensor([])
       end)
     end
 
     test "raises for non-numeric list" do
-      assert_raise(ArgumentError, "cannot infer the numerical type of :error", fn ->
+      assert_raise(ArgumentError, "invalid value given to Nx.tensor/1, got: :error", fn ->
         Nx.tensor([:error])
       end)
     end
@@ -862,12 +870,6 @@ defmodule NxTest do
 
       assert_raise(ArgumentError, ~r/lists have different shapes/, fn ->
         Nx.tensor([len3, len2])
-      end)
-    end
-
-    test "raises for improper list" do
-      assert_raise(FunctionClauseError, ~r/reduce\/3/, fn ->
-        Nx.tensor([1 | 1])
       end)
     end
   end

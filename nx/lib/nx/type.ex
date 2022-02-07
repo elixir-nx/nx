@@ -65,49 +65,45 @@ defmodule Nx.Type do
   def max_finite_binary({:f, 64}), do: <<0x7FEFFFFFFFFFFFFF::64-native>>
 
   @doc """
-  Infers the type of the given value.
+  Returns infinity as a binary for the given type.
+  """
+  def nan_binary(type)
+  def nan_binary({:bf, 16}), do: <<0x7F81::16-native>>
+  def nan_binary({:f, 16}), do: <<0x7C01::16-native>>
+  def nan_binary({:f, 32}), do: <<0x7F800001::32-native>>
+  def nan_binary({:f, 64}), do: <<0x7FF0000000000001::64-native>>
 
-  The value may be a number, boolean, or an arbitrary list with
-  any of the above. Integers are by default signed and of size 64.
-  Floats have size of 64. Booleans are unsigned integers of size 1
-  (also known as predicates).
+  @doc """
+  Returns infinity as a binary for the given type.
+  """
+  def infinity_binary(type)
+  def infinity_binary({:bf, 16}), do: <<0x7F80::16-native>>
+  def infinity_binary({:f, 16}), do: <<0x7C00::16-native>>
+  def infinity_binary({:f, 32}), do: <<0x7F800000::32-native>>
+  def infinity_binary({:f, 64}), do: <<0x7FF0000000000000::64-native>>
 
-  In case mixed types are given, the one with highest space
-  requirements is used (i.e. float > brain floating > integer > boolean).
+  @doc """
+  Returns negative infinity as a binary for the given type.
+  """
+  def neg_infinity_binary(type)
+  def neg_infinity_binary({:bf, 16}), do: <<0xFF80::16-native>>
+  def neg_infinity_binary({:f, 16}), do: <<0xFC00::16-native>>
+  def neg_infinity_binary({:f, 32}), do: <<0xFF800000::32-native>>
+  def neg_infinity_binary({:f, 64}), do: <<0xFFF0000000000000::64-native>>
+
+  @doc """
+  Infers the type of the given number.
 
   ## Examples
 
-      iex> Nx.Type.infer([1, 2, 3])
+      iex> Nx.Type.infer(1)
       {:s, 64}
-      iex> Nx.Type.infer([[1, 2], [3, 4]])
-      {:s, 64}
-
-      iex> Nx.Type.infer([1.0, 2.0, 3.0])
+      iex> Nx.Type.infer(1.0)
       {:f, 32}
-      iex> Nx.Type.infer([1, 2.0])
-      {:f, 32}
-
-      iex> Nx.Type.infer([])
-      {:f, 32}
-
-      iex> Nx.Type.infer("string")
-      ** (ArgumentError) cannot infer the numerical type of "string"
 
   """
-  def infer(value) do
-    case infer(value, -1) do
-      -1 -> {:f, 32}
-      0 -> {:s, 64}
-      1 -> {:f, 32}
-    end
-  end
-
-  defp infer(arg, inferred) when is_list(arg), do: Enum.reduce(arg, inferred, &infer/2)
-  defp infer(arg, inferred) when is_integer(arg), do: max(inferred, 0)
-  defp infer(arg, inferred) when is_float(arg), do: max(inferred, 1)
-
-  defp infer(other, _inferred),
-    do: raise(ArgumentError, "cannot infer the numerical type of #{inspect(other)}")
+  def infer(value) when is_integer(value), do: {:s, 64}
+  def infer(value) when is_float(value), do: {:f, 32}
 
   @doc """
   Validates the given type tuple.
