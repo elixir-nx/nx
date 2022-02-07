@@ -1827,7 +1827,7 @@ defmodule Nx.BinaryBackend do
     [t_view, idx_view]
     |> Enum.zip_with(fn [data_bin, idx_bin] ->
       match_types [t_type, idx_type, output_type] do
-        data = for <<match!(x, 0) <- data_bin>>, do: x
+        data = for <<match!(x, 0) <- data_bin>>, do: read!(x, 0)
 
         for <<match!(x, 1) <- idx_bin>>, into: <<>> do
           idx = read!(x, 1)

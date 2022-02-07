@@ -91,22 +91,21 @@ defmodule Nx.Shared do
 
   defp match_types([]), do: [[]]
 
-  defp match_bin_modifier(var, :bf, _),
-    do: quote(do: unquote(var) :: binary - size(2))
+  defp match_bin_modifier(var, type, size) when type in [:f, :bf],
+    do: quote(do: unquote(var) :: bitstring - size(unquote(size)))
 
   defp match_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
 
   defp read_bin_modifier(var, :bf, _) do
-    if System.endianness() == :little do
-      quote do
-        <<x::float-little-32>> = <<0::16, unquote(var)::binary>>
-        x
-      end
-    else
-      quote do
-        <<x::float-big-32>> = <<unquote(var)::binary, 0::16>>
-        x
+    quote do: Nx.Shared.read_bf16(unquote(var))
+  end
+
+  defp read_bin_modifier(var, :f, size) do
+    quote do
+      case unquote(var) do
+        <<var::float-native-size(unquote(size))>> -> var
+        var -> Nx.Shared.read_non_finite(var, unquote(size))
       end
     end
   end
@@ -133,6 +132,55 @@ defmodule Nx.Shared do
 
   defp shared_bin_modifier(var, :f, size),
     do: quote(do: unquote(var) :: float - native - size(unquote(size)))
+
+  @doc """
+  BF16 read callback.
+  """
+  def read_bf16(<<0xFF80::16-native>>), do: :neg_infinity
+  def read_bf16(<<0x7F80::16-native>>), do: :infinity
+
+  if System.endianness() == :little do
+    def read_bf16(<<1::1, _::7, _sign::1, 127::7>>), do: :nan
+
+    def read_bf16(bf16) do
+      <<x::float-little-32>> = <<0::16, bf16::binary>>
+      x
+    end
+  else
+    def read_bf16(<<_sign::1, 255::8, _::7>>), do: :nan
+
+    def read_bf16(bf16) do
+      <<x::float-big-32>> = <<bf16::binary, 0::16>>
+      x
+    end
+  end
+
+  @doc """
+  Non-finite callback.
+  """
+  def read_non_finite(data, 16) do
+    case data do
+      <<0xFC00::16-native>> -> :neg_infinity
+      <<0x7C00::16-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  def read_non_finite(data, 32) do
+    case data do
+      <<0xFF800000::32-native>> -> :neg_infinity
+      <<0x7F800000::32-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  def read_non_finite(data, 64) do
+    case data do
+      <<0xFFF0000000000000::64-native>> -> :neg_infinity
+      <<0x7FF0000000000000::64-native>> -> :infinity
+      _ -> :nan
+    end
+  end
 
   ## Reflection
 
@@ -382,12 +430,6 @@ defmodule Nx.Shared do
   """
   def impl!(%T{data: %struct{}}), do: struct
 
-  def impl!([%T{} | _] = tensors) do
-    tensors
-    |> Enum.map(fn %{data: %struct{}} -> struct end)
-    |> Enum.reduce(&pick_struct/2)
-  end
-
   def impl!(%T{data: %struct1{}}, %T{data: %struct2{}}),
     do: pick_struct(struct1, struct2)
 
@@ -422,8 +464,7 @@ defmodule Nx.Shared do
   def default_implementation(function_name, args, default_impl)
       when is_atom(function_name) and is_list(args) and is_function(default_impl) do
     arity = length(args)
-
-    backend = impl!(args)
+    backend = list_impl!(args)
 
     cond do
       backend == Nx.Defn.Expr ->
