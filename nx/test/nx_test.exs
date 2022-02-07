@@ -1922,26 +1922,53 @@ defmodule NxTest do
   end
 
   describe "variance/1" do
-    test "should calculate the variance of a tensor" do
+    test "calculates variance of a tensor" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
       assert Nx.variance(t) == Nx.tensor(2.9166667461395264)
     end
 
-    test "should use the optional ddof" do
+    test "uses optional ddof" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
       assert Nx.variance(t, ddof: 1) == Nx.tensor(3.5)
+    end
+
+    test "uses optional axes" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]], names: [:x, :y])
+
+      assert Nx.variance(t, axes: [:x]) ==
+               Nx.tensor([1.5555557012557983, 4.222222328186035], names: [:y])
+
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]], names: [:x, :y])
+      assert Nx.variance(t, axes: [:y]) == Nx.tensor([0.25, 0.25, 0.25], names: [:x])
+    end
+
+    test "uses optional keep axes" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.variance(t, keep_axes: true) == Nx.tensor([[2.9166667461395264]])
     end
   end
 
   describe "standard_deviation/1" do
-    test "should calculate the standard deviation of a tensor" do
+    test "calculates the standard deviation of a tensor" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
       assert Nx.standard_deviation(t) == Nx.tensor(1.707825127659933)
     end
 
-    test "should use the optional ddof" do
+    test "uses optional ddof" do
       t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
       assert Nx.standard_deviation(t, ddof: 1) == Nx.tensor(1.8708287477493286)
+    end
+
+    test "uses optional axes" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+
+      assert Nx.standard_deviation(t, axes: [0]) ==
+               Nx.tensor([1.247219204902649, 2.054804801940918])
+    end
+
+    test "uses optional keep axes" do
+      t = Nx.tensor([[4, 5], [2, 3], [1, 0]])
+      assert Nx.standard_deviation(t, keep_axes: true) == Nx.tensor([[1.7078251838684082]])
     end
   end
 end
