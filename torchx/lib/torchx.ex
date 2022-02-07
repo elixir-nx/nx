@@ -94,8 +94,6 @@ defmodule Torchx do
   # Make it clear they are Torchx specific and that Torchx.Backend
   # provides the mapping between Nx to the underlying Torchx types.
 
-  # TODO: Automatically download libtorch like we do for esbuild/xla.
-
   use Torchx.Macro
   alias Torchx.NIF
 

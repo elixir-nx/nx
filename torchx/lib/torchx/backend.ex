@@ -15,21 +15,13 @@ defmodule Torchx.Backend do
         ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
 
     3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
-       So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
+       So in Elixir `round(0.5) == 1.0` while in Torchx `round(0.5) == 0.0`.
 
-        iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Torchx.Backend) |> Nx.round()
-        #Nx.Tensor<
-          f32[4]
-          [-2.0, -0.0, 0.0, 2.0]
-        >
+    4. `Nx.as_type/2` converts non-finite values such as infinity becomes the
+       maximum value for a type, negative infinity becomes the minimum value,
+       and nan becomes zero. `Torchx` behaviour is type dependent with no clear
+       rule across types.
 
-    While binary backend will do:
-
-        iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Nx.BinaryBackend) |> Nx.round()
-        #Nx.Tensor<
-          f32[4]
-          [-2.0, -1.0, 1.0, 2.0]
-        >
   """
 
   @behaviour Nx.Backend
