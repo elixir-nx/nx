@@ -115,9 +115,28 @@ defmodule Nx.Shared do
 
   defp write_bin_modifier(var, :bf, _) do
     if System.endianness() == :little do
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 2, 2) :: binary)
+      quote do
+        case unquote(var) do
+          x when is_number(x) -> binary_part(<<x::float-native-32>>, 2, 2)
+          x -> Nx.Shared.write_bf6(x)
+        end :: binary
+      end
     else
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 0, 2) :: binary)
+      quote do
+        case unquote(var) do
+          x when is_number(x) -> binary_part(<<x::float-native-32>>, 0, 2)
+          x -> Nx.Shared.write_bf6(x)
+        end :: binary
+      end
+    end
+  end
+
+  defp write_bin_modifier(var, :f, size) do
+    quote do
+      case unquote(var) do
+        x when is_number(x) -> <<x::float-native-size(unquote(size))>>
+        x -> Nx.Shared.write_non_finite(x, unquote(size))
+      end :: binary
     end
   end
 
@@ -129,9 +148,6 @@ defmodule Nx.Shared do
 
   defp shared_bin_modifier(var, :u, size),
     do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
-
-  defp shared_bin_modifier(var, :f, size),
-    do: quote(do: unquote(var) :: float - native - size(unquote(size)))
 
   @doc """
   BF16 read callback.
@@ -156,7 +172,18 @@ defmodule Nx.Shared do
   end
 
   @doc """
-  Non-finite callback.
+  BF16 write callback.
+  """
+  def write_bf6(data) do
+    case data do
+      :infinity -> unquote(Nx.Type.infinity_binary({:bf, 16}))
+      :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:bf, 16}))
+      :nan -> unquote(Nx.Type.nan_binary({:bf, 16}))
+    end
+  end
+
+  @doc """
+  Non-finite read callback.
   """
   def read_non_finite(data, 16) do
     case data do
@@ -179,6 +206,19 @@ defmodule Nx.Shared do
       <<0xFFF0000000000000::64-native>> -> :neg_infinity
       <<0x7FF0000000000000::64-native>> -> :infinity
       _ -> :nan
+    end
+  end
+
+  @doc """
+  Non-finite write callback.
+  """
+  for size <- [16, 32, 64] do
+    def write_non_finite(data, unquote(size)) do
+      case data do
+        :infinity -> unquote(Nx.Type.infinity_binary({:f, size}))
+        :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:f, size}))
+        :nan -> unquote(Nx.Type.nan_binary({:f, size}))
+      end
     end
   end
 

@@ -1929,17 +1929,20 @@ defmodule Nx.BinaryBackend do
         tensor
 
       %T{type: input_type} ->
+        float_output? = Nx.Type.float?(output_type)
+        min_finite_binary = Nx.Type.min_finite_binary(output_type)
         data = to_binary(tensor)
 
         output_data =
           match_types [input_type] do
             for <<match!(x, 0) <- data>>, into: <<>> do
-              val =
-                if Nx.Type.integer?(output_type),
-                  do: trunc(read!(x, 0)),
-                  else: read!(x, 0)
+              x = read!(x, 0)
 
-              number_to_binary(val, output_type)
+              cond do
+                float_output? -> number_to_binary(x, output_type)
+                is_atom(x) -> min_finite_binary
+                true -> number_to_binary(trunc(x), output_type)
+              end
             end
           end
 

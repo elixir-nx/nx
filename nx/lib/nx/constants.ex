@@ -7,6 +7,11 @@ defmodule Nx.Constants do
   import Nx.Defn.Kernel, only: [keyword!: 2]
 
   @doc """
+  Returns infinity in f32.
+  """
+  def nan, do: nan({:f, 32}, [])
+
+  @doc """
   Returns NaN (Not a Number).
 
   ## Options
@@ -46,6 +51,11 @@ defmodule Nx.Constants do
   end
 
   @doc """
+  Returns infinity in f32.
+  """
+  def infinity, do: infinity({:f, 32}, [])
+
+  @doc """
   Returns infinity.
 
   ## Options
@@ -83,6 +93,11 @@ defmodule Nx.Constants do
     type = Nx.Type.normalize!(type)
     from_binary(Nx.Type.infinity_binary(type), type, opts)
   end
+
+  @doc """
+  Returns infinity in f32.
+  """
+  def neg_infinity, do: neg_infinity({:f, 32}, [])
 
   @doc """
   Returns negative infinity.
