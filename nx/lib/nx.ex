@@ -9303,16 +9303,16 @@ defmodule Nx do
         [0.5, 0.5]
       >
 
-      ### Keeping axes
+  ### Keeping axes
 
-        iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1], keep_axes: true)
-        #Nx.Tensor<
-          f32[2][1]
-          [
-            [0.25],
-            [0.25]
-          ]
-        >
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1], keep_axes: true)
+      #Nx.Tensor<
+        f32[2][1]
+        [
+          [0.25],
+          [0.25]
+        ]
+      >
   """
   @doc type: :aggregation
   @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
@@ -9383,15 +9383,15 @@ defmodule Nx do
         [0.7071067690849304, 0.7071067690849304]
       >
 
-      ### Keeping axes
+  ### Keeping axes
 
-        iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), keep_axes: true)
-        #Nx.Tensor<
-          f32[1][1]
-          [
-            [1.1180340051651]
-          ]
-        >
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), keep_axes: true)
+      #Nx.Tensor<
+        f32[1][1]
+        [
+          [1.1180340051651]
+        ]
+      >
   """
   @doc type: :aggregation
   @spec standard_deviation(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
