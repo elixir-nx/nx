@@ -261,7 +261,10 @@ defmodule Torchx.BackendTest do
                Nx.tensor([0, 0, 0], type: {:s, 16}, backend: Nx.BinaryBackend)
 
       assert Nx.as_type(non_finite, {:s, 32}) |> Nx.backend_transfer() ==
-               Nx.tensor([-2147483648, -2147483648, -2147483648], type: {:s, 32}, backend: Nx.BinaryBackend)
+               Nx.tensor([-2_147_483_648, -2_147_483_648, -2_147_483_648],
+                 type: {:s, 32},
+                 backend: Nx.BinaryBackend
+               )
     end
 
     test "non-finite to between floats conversions" do

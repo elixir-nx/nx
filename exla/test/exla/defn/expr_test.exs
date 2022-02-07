@@ -730,10 +730,10 @@ defmodule EXLA.Defn.ExprTest do
         Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
 
       assert generic_as_type(non_finite, Nx.template({}, {:u, 8})) ==
-              Nx.tensor([255, 0, 0], type: {:u, 8})
+               Nx.tensor([255, 0, 0], type: {:u, 8})
 
       assert generic_as_type(non_finite, Nx.template({}, {:s, 16})) ==
-              Nx.tensor([32767, 0, -32768], type: {:s, 16})
+               Nx.tensor([32767, 0, -32768], type: {:s, 16})
     end
   end
 
