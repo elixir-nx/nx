@@ -753,34 +753,25 @@ defmodule Torchx.Backend do
   def select(out, %{shape: {}} = pred, on_true, on_false) do
     if to_number(pred) == 0 do
       on_false
-      |> from_nx()
-      |> Torchx.broadcast_to(out.shape)
-      |> to_nx(out)
     else
       on_true
-      |> from_nx()
-      |> Torchx.broadcast_to(out.shape)
-      |> to_nx(out)
     end
+    |> from_nx()
+    |> Torchx.broadcast_to(out.shape)
+    |> to_nx(out)
   end
 
-  def select(%T{type: out_type} = out, pred, on_true, on_false) do
+  def select(out, pred, on_true, on_false) do
     on_true_torch = from_nx(on_true)
     on_false_torch = from_nx(on_false)
 
-    if out_type == {:u, 8} do
-      pred
-      |> from_nx()
-      |> Torchx.where(on_true_torch, on_false_torch)
-      |> to_nx(out)
-    else
-      # swap true/false tensor
-      pred
-      |> from_nx()
-      |> Torchx.logical_not()
-      |> Torchx.where(on_false_torch, on_true_torch)
-      |> to_nx(out)
-    end
+    # Use logical_not to convert any tensor to a boolean tensor
+    # because of that, we have to swap true/false tensor
+    pred
+    |> from_nx()
+    |> Torchx.logical_not()
+    |> Torchx.where(on_false_torch, on_true_torch)
+    |> to_nx(out)
   end
 
   @impl true
