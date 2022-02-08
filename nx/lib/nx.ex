@@ -4502,6 +4502,8 @@ defmodule Nx do
 
   ## Examples
 
+  When the first argument is a scalar:
+
       iex> Nx.select(1, Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6], names: [:x]))
       #Nx.Tensor<
         s64[x: 3]
@@ -4523,16 +4525,12 @@ defmodule Nx do
         ]
       >
 
+  When the first argument is a tensor:
+
       iex> Nx.select(Nx.tensor([0, 1, 0], names: [:x]), Nx.tensor([1, 2, 3], names: [:y]), Nx.tensor([4, 5, 6], names: [:z]))
       #Nx.Tensor<
         s64[x: 3]
         [4, 2, 6]
-      >
-
-      iex> Nx.select(Nx.tensor([0, 1, 2], type: {:u, 8}), Nx.tensor([0, 0, 0]), Nx.tensor([1, 1, 1]))
-      #Nx.Tensor<
-        s64[3]
-        [1, 0, 0]
       >
 
       iex> x = Nx.tensor([2, 4, 6], names: [:x])
@@ -4550,6 +4548,15 @@ defmodule Nx do
         s64[x: 5]
         [2, 3, 2, 7, 2]
       >
+
+  If the tensor has other values, any non-zero value is considered true:
+
+      iex> Nx.select(Nx.tensor([0, 1, 2], type: {:u, 8}), Nx.tensor([0, 0, 0]), Nx.tensor([1, 1, 1]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 0, 0]
+      >
+
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
