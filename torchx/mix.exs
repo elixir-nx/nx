@@ -108,7 +108,7 @@ defmodule Torchx.MixProject do
 
           {:unix, :darwin} ->
             # MacOS
-            # pytorch only provides pre-built binaries for x86_64
+            # pytorch only provides official pre-built binaries for x86_64
             case List.to_string(:erlang.system_info(:system_architecture)) do
               "x86_64" <> _ ->
                 "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
