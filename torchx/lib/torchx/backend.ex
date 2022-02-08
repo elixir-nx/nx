@@ -749,6 +749,20 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def select(out, pred, on_true, on_false) do
+    on_true_torch = from_nx(on_true)
+    on_false_torch = from_nx(on_false)
+
+    # Use logical_not to convert any tensor to a boolean tensor
+    # because of that, we have to swap true/false tensor
+    pred
+    |> from_nx()
+    |> Torchx.logical_not()
+    |> Torchx.where(on_false_torch, on_true_torch)
+    |> to_nx(out)
+  end
+
+  @impl true
   def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
     t
     |> Nx.as_type(out.type)

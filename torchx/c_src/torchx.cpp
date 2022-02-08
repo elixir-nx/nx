@@ -552,6 +552,7 @@ UNARY_OP(rsqrt)
 UNARY_OP(log)
 UNARY_OP(log1p)
 UNARY_OP(bitwise_not)
+UNARY_OP(logical_not)
 UNARY_OP2(logistic, sigmoid)
 
 UNARY_OP(sin)
@@ -606,6 +607,15 @@ NIF(clip)
   TENSOR_PARAM(2, max);
 
   TENSOR(torch::clip(*t, *min, *max));
+}
+
+NIF(where)
+{
+  TENSOR_PARAM(0, pred);
+  TENSOR_PARAM(1, on_true);
+  TENSOR_PARAM(2, on_false);
+
+  TENSOR(torch::where(*pred, *on_true, *on_false));
 }
 
 /* Aggregates */
@@ -853,6 +863,7 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_and, 2),
     DF(logical_or, 2),
     DF(logical_xor, 2),
+    DF(logical_not, 1),
 
     DF(sum, 3),
     DF(product, 1),
@@ -908,6 +919,7 @@ static ErlNifFunc nif_functions[] = {
     DF(determinant, 1),
     DF(sort, 3),
     DF(clip, 3),
+    DF(where, 3),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

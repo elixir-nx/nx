@@ -162,6 +162,7 @@ defmodule Torchx do
   deftensor gather(tensor_input, tensor_indices, axis)
   deftensor argsort(tensor, axis, is_descending)
   deftensor flip(tensor, axis)
+  deftensor where(tensorA, tensorB, tensorC)
 
   ## Aggregation
 
@@ -201,6 +202,7 @@ defmodule Torchx do
   deftensor logical_and(tensorA, tensorB)
   deftensor logical_or(tensorA, tensorB)
   deftensor logical_xor(tensorA, tensorB)
+  deftensor logical_not(tensorA)
 
   deftensor bitwise_and(tensorA, tensorB)
   deftensor bitwise_or(tensorA, tensorB)
