@@ -748,19 +748,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  # shape: shape, type: type
   @impl true
-  def select(out, %{shape: {}} = pred, on_true, on_false) do
-    if to_number(pred) == 0 do
-      on_false
-    else
-      on_true
-    end
-    |> from_nx()
-    |> Torchx.broadcast_to(out.shape)
-    |> to_nx(out)
-  end
-
   def select(out, pred, on_true, on_false) do
     on_true_torch = from_nx(on_true)
     on_false_torch = from_nx(on_false)
