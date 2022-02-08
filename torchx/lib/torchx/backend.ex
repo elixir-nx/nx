@@ -765,28 +765,21 @@ defmodule Torchx.Backend do
   end
 
   def select(%T{type: out_type} = out, pred, on_true, on_false) do
-    on_true_torch =
-      on_true
-      |> from_nx()
-
-    on_false_torch =
-      on_false
-      |> from_nx()
+    on_true_torch = from_nx(on_true)
+    on_false_torch = from_nx(on_false)
 
     if out_type == {:u, 8} do
-      pred_torch =
-        pred
-        |> from_nx()
-
-      to_nx(Torchx.where(pred_torch, on_true_torch, on_false_torch), out)
+      pred
+      |> from_nx()
+      |> Torchx.where(on_true_torch, on_false_torch)
+      |> to_nx(out)
     else
-      invert_pred_torch =
-        pred
-        |> from_nx()
-        |> Torchx.logical_not()
-
       # swap true/false tensor
-      to_nx(Torchx.where(invert_pred_torch, on_false_torch, on_true_torch), out)
+      pred
+      |> from_nx()
+      |> Torchx.logical_not()
+      |> Torchx.where(on_false_torch, on_true_torch)
+      |> to_nx(out)
     end
   end
 

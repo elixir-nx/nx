@@ -611,11 +611,11 @@ NIF(clip)
 
 NIF(where)
 {
-  TENSOR_PARAM(0, cond);
-  TENSOR_PARAM(1, self);
-  TENSOR_PARAM(2, other);
+  TENSOR_PARAM(0, pred);
+  TENSOR_PARAM(1, on_true);
+  TENSOR_PARAM(2, on_false);
 
-  TENSOR(torch::where(*cond, *self, *other));
+  TENSOR(torch::where(*pred, *on_true, *on_false));
 }
 
 /* Aggregates */
