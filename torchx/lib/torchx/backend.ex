@@ -768,18 +768,15 @@ defmodule Torchx.Backend do
     on_true_torch =
       on_true
       |> from_nx()
-      |> Torchx.broadcast_to(out.shape)
 
     on_false_torch =
       on_false
       |> from_nx()
-      |> Torchx.broadcast_to(out.shape)
 
-    if out_type == :bool do
+    if out_type == {:u, 8} do
       pred_torch =
         pred
         |> from_nx()
-        |> Torchx.broadcast_to(out.shape)
 
       to_nx(Torchx.where(pred_torch, on_true_torch, on_false_torch), out)
     else
@@ -787,12 +784,10 @@ defmodule Torchx.Backend do
         pred
         |> from_nx()
         |> Torchx.logical_not()
-        |> Torchx.broadcast_to(out.shape)
 
       # swap true/false tensor
       to_nx(Torchx.where(invert_pred_torch, on_false_torch, on_true_torch), out)
     end
-
   end
 
   @impl true
