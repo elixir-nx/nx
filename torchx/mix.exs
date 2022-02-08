@@ -10,7 +10,7 @@ defmodule Torchx.MixProject do
   @libtorch_target System.get_env("LIBTORCH_TARGET", "cpu")
 
   @libtorch_base "libtorch"
-  @libtorch_dir Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}")
+  @libtorch_dir System.get_env("LIBTORCH_DIR", Path.join(__DIR__, "cache/libtorch-#{@libtorch_version}-#{@libtorch_target}"))
   @libtorch_compilers [:torchx, :elixir_make]
 
   def project do
@@ -105,7 +105,12 @@ defmodule Torchx.MixProject do
 
           {:unix, :darwin} ->
             # MacOS
-            "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
+            # pytorch only provides pre-built binaries for x86_64
+            case List.to_string(:erlang.system_info(:system_architecture)) do
+              "x86_64" <> _ -> "https://download.pytorch.org/libtorch/#{@libtorch_target}/libtorch-macos-#{@libtorch_version}.zip"
+              _ ->
+                Mix.error("Please download pre-built/compile LibTorch and set environment variable LIBTORCH_DIR")
+            end
 
           {:win32, :nt} ->
             # Windows
