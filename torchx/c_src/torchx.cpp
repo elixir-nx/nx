@@ -609,6 +609,15 @@ NIF(clip)
   TENSOR(torch::clip(*t, *min, *max));
 }
 
+NIF(where)
+{
+  TENSOR_PARAM(0, cond);
+  TENSOR_PARAM(1, self);
+  TENSOR_PARAM(2, other);
+
+  TENSOR(torch::where(*cond, *self, *other));
+}
+
 /* Aggregates */
 
 NIF(sum)
@@ -910,6 +919,7 @@ static ErlNifFunc nif_functions[] = {
     DF(determinant, 1),
     DF(sort, 3),
     DF(clip, 3),
+    DF(where, 3),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

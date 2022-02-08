@@ -162,6 +162,7 @@ defmodule Torchx do
   deftensor gather(tensor_input, tensor_indices, axis)
   deftensor argsort(tensor, axis, is_descending)
   deftensor flip(tensor, axis)
+  deftensor where(tensorA, tensorB, tensorC)
 
   ## Aggregation
 

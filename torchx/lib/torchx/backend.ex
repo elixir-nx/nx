@@ -764,18 +764,7 @@ defmodule Torchx.Backend do
     end
   end
 
-  def select(out, pred, on_true, on_false) do
-    pred_torch =
-      pred
-      |> from_nx()
-      |> Torchx.broadcast_to(out.shape)
-
-    invert_pred_torch =
-      pred
-      |> from_nx()
-      |> Torchx.logical_not()
-      |> Torchx.broadcast_to(out.shape)
-
+  def select(%T{type: out_type} = out, pred, on_true, on_false) do
     on_true_torch =
       on_true
       |> from_nx()
@@ -786,13 +775,24 @@ defmodule Torchx.Backend do
       |> from_nx()
       |> Torchx.broadcast_to(out.shape)
 
-    to_nx(
-      Torchx.add(
-        Torchx.multiply(pred_torch, on_true_torch),
-        Torchx.multiply(invert_pred_torch, on_false_torch)
-      ),
-      out
-    )
+    if out_type == :bool do
+      pred_torch =
+        pred
+        |> from_nx()
+        |> Torchx.broadcast_to(out.shape)
+
+      to_nx(Torchx.where(pred_torch, on_true_torch, on_false_torch), out)
+    else
+      invert_pred_torch =
+        pred
+        |> from_nx()
+        |> Torchx.logical_not()
+        |> Torchx.broadcast_to(out.shape)
+
+      # swap true/false tensor
+      to_nx(Torchx.where(invert_pred_torch, on_false_torch, on_true_torch), out)
+    end
+
   end
 
   @impl true
