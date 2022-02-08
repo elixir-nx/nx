@@ -552,6 +552,7 @@ UNARY_OP(rsqrt)
 UNARY_OP(log)
 UNARY_OP(log1p)
 UNARY_OP(bitwise_not)
+UNARY_OP(logical_not)
 UNARY_OP2(logistic, sigmoid)
 
 UNARY_OP(sin)
@@ -853,6 +854,7 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_and, 2),
     DF(logical_or, 2),
     DF(logical_xor, 2),
+    DF(logical_not, 1),
 
     DF(sum, 3),
     DF(product, 1),

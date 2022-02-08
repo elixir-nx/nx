@@ -748,6 +748,53 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  # shape: shape, type: type
+  @impl true
+  def select(out, %{shape: {}} = pred, on_true, on_false) do
+    if to_number(pred) == 0 do
+      on_false
+      |> from_nx()
+      |> Torchx.broadcast_to(out.shape)
+      |> to_nx(out)
+    else
+      on_true
+      |> from_nx()
+      |> Torchx.broadcast_to(out.shape)
+      |> to_nx(out)
+    end
+  end
+
+  def select(out, pred, on_true, on_false) do
+    pred_torch =
+      pred
+      |> from_nx()
+      |> Torchx.broadcast_to(out.shape)
+
+    invert_pred_torch =
+      pred
+      |> from_nx()
+      |> Torchx.logical_not()
+      |> Torchx.broadcast_to(out.shape)
+
+    on_true_torch =
+      on_true
+      |> from_nx()
+      |> Torchx.broadcast_to(out.shape)
+
+    on_false_torch =
+      on_false
+      |> from_nx()
+      |> Torchx.broadcast_to(out.shape)
+
+    to_nx(
+      Torchx.add(
+        Torchx.multiply(pred_torch, on_true_torch),
+        Torchx.multiply(invert_pred_torch, on_false_torch)
+      ),
+      out
+    )
+  end
+
   @impl true
   def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
     t
