@@ -6,6 +6,7 @@ on:
   pull_request:
 jobs:
   main:
+    name: Linux
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -35,8 +36,54 @@ jobs:
         uses: actions/cache@v1
         id: libtorch-cache
         with:
-          path: ./torchx/cache/libtorch-1.9.1-cpu
-          key: v1-libtorch-1.9.1-cpu.zip
+          path: ./torchx/cache/libtorch-cpu
+          key: v1-libtorch-cpu.zip
+      - name: Install dependencies
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
+        run: mix deps.get
+      - name: Compile and check warnings
+        run: mix compile --warnings-as-errors
+      - name: Check formatting
+        run: mix format --check-formatted
+      - name: Run tests
+        run: mix test
+  win:
+    name: Windows
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        working_directory: ["nx", "torchx"]
+        elixir: ["1.12.0"]
+        otp: ["24.0"]
+    defaults:
+      run:
+        working-directory: ${{ matrix.working_directory }}
+    env:
+      MIX_ENV: test
+    steps:
+      - name: Configure Git
+        run: git config --global core.autocrlf input
+        working-directory: .
+      - uses: actions/checkout@v2
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v1
+        id: mix-cache # id to use in retrieve action
+        with:
+          path: deps
+          key: v1-${{ matrix.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - name: Retrieve libtorch cache
+        if: ${{ matrix.working_directory == 'torchx' }}
+        uses: actions/cache@v1
+        id: libtorch-cache-win
+        with:
+          path: ./torchx/cache/libtorch-cpu
+          key: win-v1-libtorch-cpu.zip
       - name: Install dependencies
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' }}
         run: mix deps.get

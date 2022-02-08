@@ -91,22 +91,21 @@ defmodule Nx.Shared do
 
   defp match_types([]), do: [[]]
 
-  defp match_bin_modifier(var, :bf, _),
-    do: quote(do: unquote(var) :: binary - size(2))
+  defp match_bin_modifier(var, type, size) when type in [:f, :bf],
+    do: quote(do: unquote(var) :: bitstring - size(unquote(size)))
 
   defp match_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
 
   defp read_bin_modifier(var, :bf, _) do
-    if System.endianness() == :little do
-      quote do
-        <<x::float-little-32>> = <<0::16, unquote(var)::binary>>
-        x
-      end
-    else
-      quote do
-        <<x::float-big-32>> = <<unquote(var)::binary, 0::16>>
-        x
+    quote do: Nx.Shared.read_bf16(unquote(var))
+  end
+
+  defp read_bin_modifier(var, :f, size) do
+    quote do
+      case unquote(var) do
+        <<var::float-native-size(unquote(size))>> -> var
+        var -> Nx.Shared.read_non_finite(var, unquote(size))
       end
     end
   end
@@ -116,9 +115,28 @@ defmodule Nx.Shared do
 
   defp write_bin_modifier(var, :bf, _) do
     if System.endianness() == :little do
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 2, 2) :: binary)
+      quote do
+        case unquote(var) do
+          x when is_number(x) -> binary_part(<<x::float-native-32>>, 2, 2)
+          x -> Nx.Shared.write_bf6(x)
+        end :: binary
+      end
     else
-      quote(do: binary_part(<<unquote(var)::float-native-32>>, 0, 2) :: binary)
+      quote do
+        case unquote(var) do
+          x when is_number(x) -> binary_part(<<x::float-native-32>>, 0, 2)
+          x -> Nx.Shared.write_bf6(x)
+        end :: binary
+      end
+    end
+  end
+
+  defp write_bin_modifier(var, :f, size) do
+    quote do
+      case unquote(var) do
+        x when is_number(x) -> <<x::float-native-size(unquote(size))>>
+        x -> Nx.Shared.write_non_finite(x, unquote(size))
+      end :: binary
     end
   end
 
@@ -131,8 +149,78 @@ defmodule Nx.Shared do
   defp shared_bin_modifier(var, :u, size),
     do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
 
-  defp shared_bin_modifier(var, :f, size),
-    do: quote(do: unquote(var) :: float - native - size(unquote(size)))
+  @doc """
+  BF16 read callback.
+  """
+  def read_bf16(<<0xFF80::16-native>>), do: :neg_infinity
+  def read_bf16(<<0x7F80::16-native>>), do: :infinity
+
+  if System.endianness() == :little do
+    def read_bf16(<<1::1, _::7, _sign::1, 127::7>>), do: :nan
+
+    def read_bf16(bf16) do
+      <<x::float-little-32>> = <<0::16, bf16::binary>>
+      x
+    end
+  else
+    def read_bf16(<<_sign::1, 255::8, _::7>>), do: :nan
+
+    def read_bf16(bf16) do
+      <<x::float-big-32>> = <<bf16::binary, 0::16>>
+      x
+    end
+  end
+
+  @doc """
+  BF16 write callback.
+  """
+  def write_bf6(data) do
+    case data do
+      :infinity -> unquote(Nx.Type.infinity_binary({:bf, 16}))
+      :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:bf, 16}))
+      :nan -> unquote(Nx.Type.nan_binary({:bf, 16}))
+    end
+  end
+
+  @doc """
+  Non-finite read callback.
+  """
+  def read_non_finite(data, 16) do
+    case data do
+      <<0xFC00::16-native>> -> :neg_infinity
+      <<0x7C00::16-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  def read_non_finite(data, 32) do
+    case data do
+      <<0xFF800000::32-native>> -> :neg_infinity
+      <<0x7F800000::32-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  def read_non_finite(data, 64) do
+    case data do
+      <<0xFFF0000000000000::64-native>> -> :neg_infinity
+      <<0x7FF0000000000000::64-native>> -> :infinity
+      _ -> :nan
+    end
+  end
+
+  @doc """
+  Non-finite write callback.
+  """
+  for size <- [16, 32, 64] do
+    def write_non_finite(data, unquote(size)) do
+      case data do
+        :infinity -> unquote(Nx.Type.infinity_binary({:f, size}))
+        :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:f, size}))
+        :nan -> unquote(Nx.Type.nan_binary({:f, size}))
+      end
+    end
+  end
 
   ## Reflection
 
@@ -330,6 +418,26 @@ defmodule Nx.Shared do
   ## Helpers
 
   @doc """
+  Extracts the backend from the given options.
+  """
+  def backend_from_options!(opts) do
+    case Keyword.fetch(opts, :backend) do
+      {:ok, backend} when is_atom(backend) ->
+        {backend, []}
+
+      {:ok, {backend, options}} when is_atom(backend) and is_list(options) ->
+        {backend, options}
+
+      {:ok, other} ->
+        raise ArgumentError,
+              ":backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
+
+      :error ->
+        nil
+    end
+  end
+
+  @doc """
   Converts an Erlang float (float64) to float32 precision.
   """
   def to_float32(float64) when is_float(float64) do
@@ -386,5 +494,27 @@ defmodule Nx.Shared do
     raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
             "#{inspect(struct1)} and #{inspect(struct2)}. You may need to call Nx.backend_transfer/1 " <>
             "(or Nx.backend_copy/1) on one or both of them to transfer them to a common implementation"
+  end
+
+  @doc """
+  Used to define an Nx callback with an optional implementation.
+
+  The given body is used as the default implementation otherwise.
+  """
+  def default_implementation(function_name, args, default_impl)
+      when is_atom(function_name) and is_list(args) and is_function(default_impl) do
+    arity = length(args)
+    backend = list_impl!(args)
+
+    cond do
+      backend == Nx.Defn.Expr ->
+        apply(default_impl, args)
+
+      function_exported?(backend, function_name, arity) ->
+        apply(backend, function_name, args)
+
+      :otherwise ->
+        apply(default_impl, args)
+    end
   end
 end

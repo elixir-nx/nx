@@ -3,6 +3,11 @@ defmodule Torchx.NIF do
   @on_load :__on_load__
 
   def __on_load__ do
+    case :os.type() do
+      {:win32, _} -> DLLLoaderHelper.addDLLDirectory("#{:code.priv_dir(:torchx)}/libtorch")
+      _ -> :ok
+    end
+
     path = :filename.join(:code.priv_dir(:torchx), 'torchx')
     :erlang.load_nif(path, 0)
   end

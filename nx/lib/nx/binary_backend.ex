@@ -1114,13 +1114,13 @@ defmodule Nx.BinaryBackend do
 
                     if i == j - 1 do
                       value = :math.sqrt(Kernel.max(read!(x, 0) - tmp_sum, 0))
-                      scalar_to_binary(value, output_type)
+                      number_to_binary(value, output_type)
                     else
                       <<_::size(diagonal_element_offset)-bitstring, match!(diag, 0),
                         _::bitstring>> = acc
 
                       value = 1.0 / read!(diag, 0) * (read!(x, 0) - tmp_sum)
-                      scalar_to_binary(value, output_type)
+                      number_to_binary(value, output_type)
                     end
                   end
 
@@ -1360,7 +1360,7 @@ defmodule Nx.BinaryBackend do
   def window_sum(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value = scalar_to_binary(0, type)
+    init_value = number_to_binary(0, type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> a + b end
@@ -1371,7 +1371,7 @@ defmodule Nx.BinaryBackend do
   def window_max(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value = Nx.Type.min_value_binary(type)
+    init_value = Nx.Type.min_finite_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> max(a, b) end
@@ -1382,7 +1382,7 @@ defmodule Nx.BinaryBackend do
   def window_min(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value = Nx.Type.max_value_binary(type)
+    init_value = Nx.Type.max_finite_binary(type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> min(a, b) end
@@ -1393,7 +1393,7 @@ defmodule Nx.BinaryBackend do
   def window_product(out, tensor, window_dimensions, opts) do
     %{type: type} = out
 
-    init_value = scalar_to_binary(1, type)
+    init_value = number_to_binary(1, type)
     init_value = from_binary(%{out | shape: {}, names: []}, init_value)
 
     fun = fn a, b -> a * b end
@@ -1618,7 +1618,7 @@ defmodule Nx.BinaryBackend do
               if target.type == out.type do
                 before_offset
               else
-                for <<match!(x, 0) <- before_offset>>, do: scalar_to_binary(read!(x, 0), out.type)
+                for <<match!(x, 0) <- before_offset>>, do: number_to_binary(read!(x, 0), out.type)
               end
 
             updated_element = <<write!(read!(element, 0) + update, 1)>>
@@ -1633,7 +1633,7 @@ defmodule Nx.BinaryBackend do
         if target.type == out.type do
           tail
         else
-          for <<match!(x, 0) <- tail>>, do: scalar_to_binary(read!(x, 0), out.type)
+          for <<match!(x, 0) <- tail>>, do: number_to_binary(read!(x, 0), out.type)
         end
       end
 
@@ -1827,7 +1827,7 @@ defmodule Nx.BinaryBackend do
     [t_view, idx_view]
     |> Enum.zip_with(fn [data_bin, idx_bin] ->
       match_types [t_type, idx_type, output_type] do
-        data = for <<match!(x, 0) <- data_bin>>, do: x
+        data = for <<match!(x, 0) <- data_bin>>, do: read!(x, 0)
 
         for <<match!(x, 1) <- idx_bin>>, into: <<>> do
           idx = read!(x, 1)
@@ -1929,17 +1929,28 @@ defmodule Nx.BinaryBackend do
         tensor
 
       %T{type: input_type} ->
+        float_output? = Nx.Type.float?(output_type)
         data = to_binary(tensor)
 
         output_data =
           match_types [input_type] do
             for <<match!(x, 0) <- data>>, into: <<>> do
-              val =
-                if Nx.Type.integer?(output_type),
-                  do: trunc(read!(x, 0)),
-                  else: read!(x, 0)
+              x = read!(x, 0)
 
-              scalar_to_binary(val, output_type)
+              cond do
+                float_output? ->
+                  number_to_binary(x, output_type)
+
+                is_number(x) ->
+                  number_to_binary(trunc(x), output_type)
+
+                true ->
+                  case x do
+                    :nan -> number_to_binary(0, output_type)
+                    :infinity -> Nx.Type.max_finite_binary(output_type)
+                    :neg_infinity -> Nx.Type.min_finite_binary(output_type)
+                  end
+              end
             end
           end
 
@@ -2028,7 +2039,7 @@ defmodule Nx.BinaryBackend do
             data
             |> Enum.with_index()
             |> Enum.sort_by(&elem(&1, 0), comparator)
-            |> Enum.map(fn {_, index} -> scalar_to_binary(index, output.type) end)
+            |> Enum.map(fn {_, index} -> number_to_binary(index, output.type) end)
           else
             Enum.sort(data, comparator)
           end

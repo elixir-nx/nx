@@ -6,19 +6,19 @@
 std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}};
 std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}};
 
-inline torch::ScalarType string2type(const std::string atom)
+inline torch::ScalarType string2type(const std::string &atom)
 {
   return dtypes[atom];
 }
 
-inline std::string type2string(const torch::ScalarType type)
+inline const std::string* type2string(const torch::ScalarType type)
 {
   for (std::map<const std::string, const torch::ScalarType>::iterator i = dtypes.begin(); i != dtypes.end(); ++i)
   {
     if (i->second == type)
-      return i->first;
+      return &i->first;
   }
-  return "";
+  return nullptr;
 }
 
 #define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
@@ -84,7 +84,7 @@ inline std::string type2string(const torch::ScalarType type)
 #define TENSOR_LIST(TL)                                                                        \
   try                                                                                          \
   {                                                                                            \
-    std::vector<torch::Tensor> tl = TL;                                                        \
+    const std::vector<torch::Tensor> &tl = TL;                                                 \
     std::vector<ERL_NIF_TERM> res_list;                                                        \
     for (torch::Tensor t : tl)                                                                 \
       res_list.push_back(create_tensor_resource(env, t));                                      \
@@ -95,7 +95,7 @@ inline std::string type2string(const torch::ScalarType type)
 #define TENSOR_TUPLE(TT)                                                                        \
   try                                                                                           \
   {                                                                                             \
-    std::tuple<torch::Tensor, torch::Tensor> tt = TT;                                           \
+    const std::tuple<torch::Tensor, torch::Tensor> &tt = TT;                                    \
     std::vector<ERL_NIF_TERM> res_list;                                                         \
     for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt)})                                  \
       res_list.push_back(create_tensor_resource(env, t));                                       \
@@ -106,7 +106,7 @@ inline std::string type2string(const torch::ScalarType type)
 #define TENSOR_TUPLE_3(TT)                                                                      \
   try                                                                                           \
   {                                                                                             \
-    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> tt = TT;                            \
+    const std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> &tt = TT;                     \
     std::vector<ERL_NIF_TERM> res_list;                                                         \
     for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt), std::get<2>(tt)})                 \
       res_list.push_back(create_tensor_resource(env, t));                                       \
@@ -204,10 +204,10 @@ NIF(scalar_type)
 {
   TENSOR_PARAM(0, t);
 
-  std::string type_name = type2string(t->scalar_type());
+  const std::string *type_name = type2string(t->scalar_type());
 
-  if (!type_name.empty())
-    return nx::nif::ok(env, enif_make_atom(env, type_name.c_str()));
+  if (type_name != nullptr)
+    return nx::nif::ok(env, enif_make_atom(env, type_name->c_str()));
   else
     return nx::nif::error(env, "Could not determine tensor type.");
 }
@@ -552,6 +552,7 @@ UNARY_OP(rsqrt)
 UNARY_OP(log)
 UNARY_OP(log1p)
 UNARY_OP(bitwise_not)
+UNARY_OP(logical_not)
 UNARY_OP2(logistic, sigmoid)
 
 UNARY_OP(sin)
@@ -606,6 +607,15 @@ NIF(clip)
   TENSOR_PARAM(2, max);
 
   TENSOR(torch::clip(*t, *min, *max));
+}
+
+NIF(where)
+{
+  TENSOR_PARAM(0, pred);
+  TENSOR_PARAM(1, on_true);
+  TENSOR_PARAM(2, on_false);
+
+  TENSOR(torch::where(*pred, *on_true, *on_false));
 }
 
 /* Aggregates */
@@ -853,6 +863,7 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_and, 2),
     DF(logical_or, 2),
     DF(logical_xor, 2),
+    DF(logical_not, 1),
 
     DF(sum, 3),
     DF(product, 1),
@@ -908,6 +919,7 @@ static ErlNifFunc nif_functions[] = {
     DF(determinant, 1),
     DF(sort, 3),
     DF(clip, 3),
+    DF(where, 3),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

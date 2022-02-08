@@ -32,8 +32,8 @@ defmodule Torchx.NxDoctestTest do
     quotient: 2,
     # slice - expects numerical start indices, but now receives tensors,
     slice: 4,
-    # slice_axis - expects scalar starts and receives tensors
-    slice_axis: 5,
+    # slice_along_axis - expects scalar starts and receives tensors
+    slice_along_axis: 4,
     # stack - fails in some tests
     stack: 2,
     # window_mean - depends on window_sum which is not implemented
@@ -54,12 +54,19 @@ defmodule Torchx.NxDoctestTest do
     logistic: 1
   ]
 
+  case :os.type() do
+    {:win32, _} -> @os_rounding_error_doctests [expm1: 1, erf: 1]
+    _ -> @os_rounding_error_doctests []
+  end
+
   @unrelated_doctests [
     to_template: 1,
     template: 3
   ]
 
   @inherently_unsupported_doctests [
+    # as_type - the rules change per type
+    as_type: 2,
     # bitcast - no API available
     bitcast: 2,
     # default_backend - specific to BinaryBackend
@@ -74,6 +81,7 @@ defmodule Torchx.NxDoctestTest do
       |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
       |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
+      |> Kernel.++(@os_rounding_error_doctests)
       |> Kernel.++(@inherently_unsupported_doctests)
       |> Kernel.++(@unrelated_doctests)
       |> Kernel.++([:moduledoc])

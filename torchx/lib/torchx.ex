@@ -94,8 +94,6 @@ defmodule Torchx do
   # Make it clear they are Torchx specific and that Torchx.Backend
   # provides the mapping between Nx to the underlying Torchx types.
 
-  # TODO: Automatically download libtorch like we do for esbuild/xla.
-
   use Torchx.Macro
   alias Torchx.NIF
 
@@ -164,6 +162,7 @@ defmodule Torchx do
   deftensor gather(tensor_input, tensor_indices, axis)
   deftensor argsort(tensor, axis, is_descending)
   deftensor flip(tensor, axis)
+  deftensor where(tensorA, tensorB, tensorC)
 
   ## Aggregation
 
@@ -203,6 +202,7 @@ defmodule Torchx do
   deftensor logical_and(tensorA, tensorB)
   deftensor logical_or(tensorA, tensorB)
   deftensor logical_xor(tensorA, tensorB)
+  deftensor logical_not(tensorA)
 
   deftensor bitwise_and(tensorA, tensorB)
   deftensor bitwise_or(tensorA, tensorB)
