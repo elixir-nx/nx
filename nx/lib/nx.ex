@@ -4529,6 +4529,12 @@ defmodule Nx do
         [4, 2, 6]
       >
 
+      iex> Nx.select(Nx.tensor([0, 1, 2], type: {:u, 8}), Nx.tensor([0, 0, 0]), Nx.tensor([1, 1, 1]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 0, 0]
+      >
+
       iex> x = Nx.tensor([2, 4, 6], names: [:x])
       iex> y = Nx.tensor([3, 2, 1])
       iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6], names: [:i]), Nx.tensor([1, 3, 5], names: [:j]))
