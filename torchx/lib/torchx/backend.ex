@@ -168,20 +168,23 @@ defmodule Torchx.Backend do
   def backend_deallocate(%T{} = t), do: Torchx.delete_tensor(from_nx(t))
 
   @impl true
-  def backend_copy(tensor, backend, opts) do
-    backend_transfer(tensor, backend, opts)
+  def backend_transfer(tensor, backend, opts) do
+    backend_copy(tensor, backend, opts)
+    # TODO: implement deallocation after transfer
+    # after
+    #  backend_deallocate(tensor)
   end
 
   @impl true
-  def backend_transfer(tensor, Nx.Tensor, opts) do
-    backend_transfer(tensor, Nx.BinaryBackend, opts)
+  def backend_copy(tensor, Nx.Tensor, opts) do
+    backend_copy(tensor, Nx.BinaryBackend, opts)
   end
 
-  def backend_transfer(tensor, Torchx.Backend, opts) do
+  def backend_copy(tensor, Torchx.Backend, opts) do
     Torchx.to_device(from_nx(tensor), device_option(opts)) |> to_nx(tensor)
   end
 
-  def backend_transfer(tensor, backend, opts) do
+  def backend_copy(tensor, backend, opts) do
     backend.from_binary(tensor, Torchx.to_blob(from_nx(tensor)), opts)
   end
 

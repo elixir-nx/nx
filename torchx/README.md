@@ -59,7 +59,9 @@ Once downloaded, we will compile `Torchx` bindings. You will need `make`/`nmake`
 - [Microsoft Visual C++ 2019 Redistributable](https://visualstudio.microsoft.com/downloads/)
 - [CMake](https://cmake.org/)
 
-For Apple M1-series, you can download precompiled LibTorch binaries if you are using HomeBrew,
+For Apple M1-series, you can download precompiled LibTorch binaries with
+[Homebrew](https://brew.sh/):
+
 ```shell
 brew install libtorch
 export LIBTORCH_DIR="$(brew --cellar libtorch)/$(brew list --versions libtorch | tr ' ' '\n' | tail -1)"
