@@ -168,6 +168,11 @@ defmodule Torchx.Backend do
   def backend_deallocate(%T{} = t), do: Torchx.delete_tensor(from_nx(t))
 
   @impl true
+  def backend_copy(tensor, backend, opts) do
+    backend_transfer(tensor, backend, opts)
+  end
+
+  @impl true
   def backend_transfer(tensor, Nx.Tensor, opts) do
     backend_transfer(tensor, Nx.BinaryBackend, opts)
   end
