@@ -28,9 +28,7 @@ defmodule Torchx.NxLinAlgDoctestTest do
   @pending_doctests [
     # unsigned 64 bit integer support
     determinant: 1,
-    norm: 2,
-    # needs to be implemented
-    solve: 2
+    norm: 2
   ]
 
   setup do

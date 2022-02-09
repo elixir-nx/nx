@@ -766,6 +766,15 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def solve(%T{type: type} = out, a, b) do
+    a_torch = a |> from_nx |> Torchx.to_type(to_torch_type(type))
+    b_torch = b |> from_nx |> Torchx.to_type(to_torch_type(type))
+
+    Torchx.solve(a_torch, b_torch)
+    |> to_nx(out)
+  end
+
+  @impl true
   def sort(%T{} = out, %T{} = t, opts) do
     axis = opts[:axis]
     descending = opts[:direction] == :desc

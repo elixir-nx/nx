@@ -778,6 +778,14 @@ NIF(eigh)
   TENSOR_TUPLE(torch::linalg_eigh(*tensor));
 }
 
+NIF(solve)
+{
+  TENSOR_PARAM(0, tensorA);
+  TENSOR_PARAM(1, tensorB);
+
+  TENSOR(torch::linalg_solve(*tensorA, *tensorB));
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
@@ -871,6 +879,7 @@ static ErlNifFunc nif_functions[] = {
     DF(atan2, 2),
     DF(min, 2),
     DF(max, 2),
+    DF(solve, 2),
 
     DF(bitwise_and, 2),
     DF(bitwise_or, 2),
