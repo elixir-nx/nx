@@ -261,6 +261,7 @@ defmodule Torchx do
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)
   deftensor clip(tensor, tensor_min, tensor_max)
+  deftensor solve(tensora, tensorb)
 
   ## Dirty non-tensor return values
 
