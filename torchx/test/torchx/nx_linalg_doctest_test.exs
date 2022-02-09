@@ -3,36 +3,32 @@ defmodule Torchx.NxLinAlgDoctestTest do
   Import Nx.LinAlg's doctest and run them on the Torchx backend.
 
   Many tests are excluded for the reasons below, coverage
-  for the excluded tests can be found on Torchx.BackendTest.
+  for the excluded tests can be found on Torchx.NxTest.
   """
 
   # TODO: Add backend tests for the doctests that are excluded
 
   use ExUnit.Case, async: true
 
+  # Results match but there are arounding errors
   @rounding_error_doctests [
-    triangular_solve: 3,
-    # The expected result for some tests isn't the same
-    # even though the A = P.L.U property is maintained for lu/2
+    cholesky: 1,
+    matrix_power: 2,
+    qr: 2,
+    triangular_solve: 3
+  ]
+
+  # Results do not match but properties are respected
+  @property_doctests [
+    eigh: 2,
     lu: 2,
-    determinant: 1
+    svd: 2
   ]
 
   @temporarily_broken_doctests [
-    # norm - reduce_max not implemented
+    # unsigned 64 bit integer support
+    determinant: 1,
     norm: 2,
-    # qr - Torchx: "geqrf_cpu" not implemented for 'Long' in NIF.qr/2
-    qr: 2,
-    # svd - Torchx: "svd_cpu" not implemented for 'Long' in NIF.svd/2
-    svd: 2,
-    # depends on QR
-    invert: 1,
-    solve: 2,
-    matrix_power: 2,
-    # cholesky - returns the transposed result
-    cholesky: 1,
-    # eigh - returns the transposed result
-    eigh: 2
   ]
 
   setup do
@@ -46,4 +42,5 @@ defmodule Torchx.NxLinAlgDoctestTest do
       |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
       |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
+      |> Kernel.++(@property_doctests)
 end

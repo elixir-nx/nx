@@ -3,7 +3,7 @@ defmodule Torchx.NxDoctestTest do
   Import Nx' doctest and run them on the Torchx backend.
 
   Many tests are excluded for the reasons below, coverage
-  for the excluded tests can be found on Torchx.BackendTest.
+  for the excluded tests can be found on Torchx.NxTest.
   """
 
   # TODO: Add backend tests for the doctests that are excluded

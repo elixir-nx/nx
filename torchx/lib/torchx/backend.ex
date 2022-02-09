@@ -655,13 +655,22 @@ defmodule Torchx.Backend do
 
   @impl true
   def qr({q_holder, r_holder}, tensor, opts) do
-    {q, r} = Torchx.qr(from_nx(tensor), opts[:mode] == :reduced)
+    {q, r} =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(q_holder.type))
+      |> Torchx.qr(opts[:mode] == :reduced)
+
     {to_nx(q, q_holder), to_nx(r, r_holder)}
   end
 
   @impl true
   def svd({u_holder, s_holder, vt_holder}, tensor, _opts) do
-    {u, s, vt} = Torchx.svd(from_nx(tensor))
+    {u, s, vt} =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(u_holder.type))
+      |> Torchx.svd()
 
     {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
   end

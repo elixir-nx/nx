@@ -1,6 +1,45 @@
 defmodule Torchx.NxLinAlgTest do
   use Torchx.Case, async: true
 
+  describe "matrix_power" do
+    test "integers" do
+      assert_all_close(
+        Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 0),
+        Nx.tensor([
+          [1, 0],
+          [0, 1]
+        ])
+      )
+
+      assert_all_close(
+        Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), 6),
+        Nx.tensor([
+          [5743, 8370],
+          [12555, 18298]
+        ])
+      )
+
+      assert_all_close(
+        Nx.LinAlg.matrix_power(Nx.eye(3), 65535),
+        Nx.tensor([
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1]
+        ])
+      )
+    end
+
+    test "floats" do
+      assert_all_close(
+        Nx.LinAlg.matrix_power(Nx.tensor([[1, 2], [3, 4]]), -1),
+        Nx.tensor([
+          [-2.0, 1.0],
+          [1.5, -0.5]
+        ])
+      )
+    end
+  end
+
   describe "triangular_solve" do
     test "base case 1D (s64)" do
       a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
@@ -128,6 +167,27 @@ defmodule Torchx.NxLinAlgTest do
                      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
                      Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
                    end
+    end
+  end
+
+  describe "qr" do
+    test "property" do
+      for _ <- 1..10 do
+        square = Nx.random_uniform({4, 4})
+        tall = Nx.random_uniform({4, 3})
+
+        assert {q, r} = Nx.LinAlg.qr(square)
+        assert_all_close(Nx.dot(q, r), square, atol: 1.0e-6)
+
+        assert {q, r} = Nx.LinAlg.qr(tall)
+        assert_all_close(Nx.dot(q, r), tall, atol: 1.0e-6)
+      end
+    end
+
+    test "rectangular matrix" do
+      t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
+      {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
+      assert_all_close(Nx.dot(q, r), t, atol: 1.0e-6)
     end
   end
 
@@ -260,11 +320,17 @@ defmodule Torchx.NxLinAlgTest do
           [2, 2, 3]
         ])
 
-      expected = Nx.tensor([-1.0, -1.0, 5.0])
+      {values, vectors} = Nx.LinAlg.eigh(a)
+      assert_all_close(values, Nx.tensor([-1.0, -1.0, 5.0]))
 
-      {result, _} = Nx.LinAlg.eigh(a)
-
-      assert_all_close(result, expected)
+      assert_all_close(
+        vectors,
+        Nx.tensor([
+          [-0.796406, -0.44617220, -0.408248],
+          [0.596439, -0.6910815, -0.408248],
+          [0.099983, 0.568626, -0.816496]
+        ])
+      )
     end
   end
 end
