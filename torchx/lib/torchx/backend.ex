@@ -643,7 +643,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def eigh({eigenvals, eigenvecs}, tensor, opts) do
+  def eigh({eigenvals, eigenvecs}, tensor, _opts) do
     {q, r} = Torchx.eigh(from_nx(tensor))
 
     {to_nx(q, eigenvals), to_nx(r, eigenvecs)}
