@@ -727,7 +727,7 @@ NIF(qr)
     GET(1, reduced);
   }
 
-  TENSOR_TUPLE(torch::qr(*t, reduced));
+  TENSOR_TUPLE(torch::linalg_qr(*t, reduced ? "reduced" : "complete"));
 }
 
 NIF(svd)
