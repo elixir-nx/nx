@@ -771,6 +771,13 @@ NIF(amin)
   TENSOR(at::native::amin(*tensor, axes, keep_axes));
 }
 
+NIF(eigh)
+{
+  TENSOR_PARAM(0, tensor);
+
+  TENSOR_TUPLE(torch::linalg_eigh(*tensor));
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
@@ -928,6 +935,7 @@ static ErlNifFunc nif_functions[] = {
 
     DF(cholesky, 1),
     DF(cholesky, 2),
+    DF(eigh, 1),
     DF(qr, 1),
     DF(qr, 2),
     DF(svd, 1),

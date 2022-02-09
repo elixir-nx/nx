@@ -643,6 +643,17 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def eigh({eigenvals, eigenvecs}, tensor, _opts) do
+    {q, r} =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(eigenvecs.type))
+      |> Torchx.eigh()
+
+    {to_nx(q, eigenvals), to_nx(r, eigenvecs)}
+  end
+
+  @impl true
   def qr({q_holder, r_holder}, tensor, opts) do
     {q, r} = Torchx.qr(from_nx(tensor), opts[:mode] == :reduced)
     {to_nx(q, q_holder), to_nx(r, r_holder)}
