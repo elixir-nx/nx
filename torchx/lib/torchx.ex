@@ -251,6 +251,7 @@ defmodule Torchx do
 
   deftensor cholesky(tensor)
   deftensor cholesky(tensor, upper)
+  deftensor eigh(tensor)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
   deftensor svd(tensor)
