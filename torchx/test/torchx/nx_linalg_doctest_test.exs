@@ -25,10 +25,12 @@ defmodule Torchx.NxLinAlgDoctestTest do
     svd: 2
   ]
 
-  @temporarily_broken_doctests [
+  @pending_doctests [
     # unsigned 64 bit integer support
     determinant: 1,
     norm: 2,
+    # needs to be implemented
+    solve: 2
   ]
 
   setup do
@@ -38,9 +40,7 @@ defmodule Torchx.NxLinAlgDoctestTest do
 
   doctest Nx.LinAlg,
     except:
-      Torchx.Backend.__unimplemented__()
-      |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
-      |> Kernel.++(@temporarily_broken_doctests)
+      @pending_doctests
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@property_doctests)
 end

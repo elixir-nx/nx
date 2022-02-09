@@ -950,7 +950,9 @@ defmodule Torchx.Backend do
 
   ## Functionality we can't provide
 
-  not_possible = [bitcast: 2, map: 4, population_count: 2, reduce: 5, window_reduce: 6]
+  not_possible =
+    [bitcast: 2, count_leading_zeros: 2, population_count: 2] ++
+      [map: 4, reduce: 5, window_reduce: 6]
 
   for {fun, arity} <- not_possible do
     args = Macro.generate_arguments(arity, __MODULE__)
