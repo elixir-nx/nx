@@ -753,6 +753,24 @@ NIF(lu)
   TENSOR_TUPLE_3(plu);
 }
 
+NIF(amax)
+{
+  TENSOR_PARAM(0, tensor);
+  LIST_PARAM(1, std::vector<int64_t>, axes);
+  PARAM(2, bool, keep_axes);
+
+  TENSOR(at::native::amax(*tensor, axes, keep_axes));
+}
+
+NIF(amin)
+{
+  TENSOR_PARAM(0, tensor);
+  LIST_PARAM(1, std::vector<int64_t>, axes);
+  PARAM(2, bool, keep_axes);
+
+  TENSOR(at::native::amin(*tensor, axes, keep_axes));
+}
+
 void free_tensor(ErlNifEnv *env, void *obj)
 {
   torch::Tensor* tensor = reinterpret_cast<torch::Tensor*>(obj);
@@ -920,6 +938,8 @@ static ErlNifFunc nif_functions[] = {
     DF(sort, 3),
     DF(clip, 3),
     DF(where, 3),
+    DF(amax, 3),
+    DF(amin, 3),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

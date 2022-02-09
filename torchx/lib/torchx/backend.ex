@@ -777,6 +777,28 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def reduce_max(out, tensor, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    tensor
+    |> from_nx()
+    |> Torchx.amax(axes, keep_axes)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def reduce_min(out, tensor, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    tensor
+    |> from_nx()
+    |> Torchx.amin(axes, keep_axes)
+    |> to_nx(out)
+  end
+
+  @impl true
   def inspect(%T{} = tensor, inspect_opts) do
     result =
       if device?(tensor, :cpu) do
