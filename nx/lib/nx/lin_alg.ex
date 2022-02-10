@@ -499,7 +499,12 @@ defmodule Nx.LinAlg do
 
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
 
-    output = %T{b | shape: output_shape, type: output_type, names: nil}
+    output = %T{
+      b
+      | shape: output_shape,
+        type: output_type,
+        names: Enum.map(b.names, fn _ -> nil end)
+    }
 
     Nx.Shared.default_implementation(:solve, [output, a, b], fn _output, a, b ->
       # We need to achieve an LQ decomposition for `a` (henceforth called A)
@@ -1127,7 +1132,12 @@ defmodule Nx.LinAlg do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
 
     transform(tensor, fn tensor ->
-      output = %{tensor | shape: {}, names: nil}
+      output = %{
+        tensor
+        | type: Nx.Type.to_floating(tensor.type),
+          shape: {},
+          names: Enum.map(tensor.names, fn _ -> nil end)
+      }
 
       Nx.Shared.default_implementation(:determinant, [output, tensor], fn
         _, tensor ->
