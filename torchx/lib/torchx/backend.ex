@@ -539,8 +539,8 @@ defmodule Torchx.Backend do
   @impl true
   def determinant(out, tensor) do
     tensor
-    |> Nx.multiply(1.0)
     |> from_nx()
+    |> Torchx.to_type(to_torch_type(out.type))
     |> Torchx.determinant()
     |> to_nx(out)
   end
