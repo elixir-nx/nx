@@ -389,6 +389,14 @@ defmodule Nx do
         ]
       >
 
+  It is possible to pass scalar tensors as part of a list too:
+
+      iex> Nx.tensor([1, Nx.tensor(2), 3])
+      #Nx.Tensor<
+        s64[3]
+        [1, 2, 3]
+      >
+
   Besides single-precision (32 bits), floats can also have
   half-precision (16) or double-precision (64):
 
@@ -404,9 +412,7 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
-  Brain-floating points are also supported, although they are
-  emulated in Elixir and therefore perform slower without a
-  native backend:
+  Brain-floating points are also supported:
 
       iex> Nx.tensor([1, 2, 3], type: {:bf, 16})
       #Nx.Tensor<
@@ -461,10 +467,7 @@ defmodule Nx do
   ## Options
 
     * `:type` - sets the type of the tensor. If one is not given,
-      one is automatically inferred based on the input. See `Nx.Type`
-      and `Nx.Type.infer/1` for more information on types. If a
-      tensor is given alongside this option, then it verifies the
-      tensor matches the given `:type`
+      one is automatically inferred based on the input.
 
     * `:names` - dimension names. If you wish to specify dimension
       names you must specify a name for every dimension in the tensor.
@@ -478,8 +481,24 @@ defmodule Nx do
   @doc type: :creation
   def tensor(arg, opts \\ []) do
     opts = keyword!(opts, [:type, :names, :backend])
-    type = Nx.Type.normalize!(opts[:type] || Nx.Type.infer(arg))
+    type = Nx.Type.normalize!(opts[:type] || infer_type(arg))
     tensor(arg, type, opts)
+  end
+
+  defp infer_type([head | tail]) when is_list(tail) do
+    Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
+  end
+
+  defp infer_type(number) when is_number(number) do
+    Nx.Type.infer(number)
+  end
+
+  defp infer_type(%Nx.Tensor{type: type, shape: {}}) do
+    type
+  end
+
+  defp infer_type(value) do
+    raise ArgumentError, "invalid value given to Nx.tensor/1, got: #{inspect(value)}"
   end
 
   defp tensor(arg, type, opts) when is_number(arg) do
@@ -533,7 +552,20 @@ defmodule Nx do
   end
 
   defp flatten_list(list, type, dimensions, acc) do
-    {[length(list) | dimensions], Enum.reduce(list, acc, &[number_to_binary(&1, type) | &2])}
+    {[length(list) | dimensions],
+     Enum.reduce(list, acc, &[tensor_or_number_to_binary(&1, type) | &2])}
+  end
+
+  defp tensor_or_number_to_binary(%Nx.Tensor{shape: {}} = tensor, type) do
+    tensor |> as_type(type) |> to_binary()
+  end
+
+  defp tensor_or_number_to_binary(number, type) when is_number(number) do
+    number_to_binary(number, type)
+  end
+
+  defp tensor_or_number_to_binary(value, _type) do
+    raise ArgumentError, "invalid value given to Nx.tensor/1, got: #{inspect(value)}"
   end
 
   @doc """
@@ -1659,6 +1691,13 @@ defmodule Nx do
   or underflow, which is platform and compiler dependent
   behaviour.
 
+  Casting of non-finite types to integer types are handled
+  such as:
+
+    * negative infinity becomes the minimum value for said type
+    * positive infinity becomes the maximum value for said type
+    * nan becomes zero
+
   ## Examples
 
       iex> Nx.as_type(Nx.tensor([0, 1, 2], names: [:data]), {:f, 32})
@@ -1677,6 +1716,35 @@ defmodule Nx do
       #Nx.Tensor<
         s64[data: 3]
         [0, 1, 2]
+      >
+
+  Casting of non-finite values to integer types convert to pre-determined
+  integer values:
+
+      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan(), Nx.Constants.neg_infinity()])
+      iex> Nx.as_type(non_finite, {:u, 8})
+      #Nx.Tensor<
+        u8[3]
+        [255, 0, 0]
+      >
+      iex> Nx.as_type(non_finite, {:s, 32})
+      #Nx.Tensor<
+        s32[3]
+        [2147483647, 0, -2147483648]
+      >
+
+  Non-finite values between float types are preserved:
+
+      iex> non_finite = Nx.tensor([Nx.Constants.infinity(), Nx.Constants.nan()])
+      iex> Nx.as_type(non_finite, {:f, 64})
+      #Nx.Tensor<
+        f64[2]
+        [Inf, NaN]
+      >
+      iex> Nx.as_type(non_finite, {:f, 16})
+      #Nx.Tensor<
+        f16[2]
+        [Inf, NaN]
       >
 
   """
@@ -2848,6 +2916,17 @@ defmodule Nx do
 
   *Note: `Nx.default_backend/1` does not affect the behaviour of
   this function.
+
+  ### Examples
+
+    iex> Nx.backend_copy(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+    #Nx.Tensor<
+      s64[2][3]
+      [
+        [1, 2, 3],
+        [4, 5, 6]
+      ]
+    >
   """
   @doc type: :backend
   def backend_copy(tensor_or_container, backend \\ Nx.Tensor) do
@@ -4434,6 +4513,8 @@ defmodule Nx do
 
   ## Examples
 
+  When the first argument is a scalar:
+
       iex> Nx.select(1, Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6], names: [:x]))
       #Nx.Tensor<
         s64[x: 3]
@@ -4454,6 +4535,8 @@ defmodule Nx do
           [4, 4]
         ]
       >
+
+  When the first argument is a tensor:
 
       iex> Nx.select(Nx.tensor([0, 1, 0], names: [:x]), Nx.tensor([1, 2, 3], names: [:y]), Nx.tensor([4, 5, 6], names: [:z]))
       #Nx.Tensor<
@@ -4476,6 +4559,15 @@ defmodule Nx do
         s64[x: 5]
         [2, 3, 2, 7, 2]
       >
+
+  If the tensor has other values, any non-zero value is considered true:
+
+      iex> Nx.select(Nx.tensor([0, 1, 2], type: {:u, 8}), Nx.tensor([0, 0, 0]), Nx.tensor([1, 1, 1]))
+      #Nx.Tensor<
+        s64[3]
+        [1, 0, 0]
+      >
+
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
@@ -5349,7 +5441,7 @@ defmodule Nx do
   @doc """
   Returns the mean for the tensor.
 
-  If the `:axis` option is given, it aggregates over
+  If the `:axes` option is given, it aggregates over
   that dimension, effectively removing it. `axes: [0]`
   implies aggregating over the highest order dimension
   and so forth. If the axis is negative, then counts
@@ -6700,7 +6792,7 @@ defmodule Nx do
 
   ### Examples
 
-      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
+      iex> init_value = Nx.Constants.min_finite({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 10], [11, 12, 13, 14]])
       iex> Nx.window_reduce(t, init_value, {2, 2}, fn x, acc -> max(x, acc) end)
       #Nx.Tensor<
@@ -6712,7 +6804,7 @@ defmodule Nx do
         ]
       >
 
-      iex> <<init_value::64-signed-native>> = Nx.Type.min_value_binary({:s, 64})
+      iex> init_value = Nx.Constants.min_finite({:s, 64})
       iex> t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
       iex> opts = [padding: :same, strides: [1, 1]]
       iex> Nx.window_reduce(t, init_value, {2, 2}, opts, fn x, acc -> max(x, acc) end)
@@ -7881,7 +7973,7 @@ defmodule Nx do
   `:strides` are given.
 
   It is not possible to slice in reverse. See `gather/2`,
-  `slice_axis/5`, `take/3`, and `take_along_axis/3` for other ways
+  `slice_along_axis/4`, `take/3`, and `take_along_axis/3` for other ways
   to retrieve values from a tensor.
 
   ### Examples
@@ -8009,9 +8101,23 @@ defmodule Nx do
   `take/3`, and `take_along_axis/3` for other ways to retrieve values
   from a tensor.
 
+  ## Options
+
+    * `:axis` - The axis along which to take the values from. Defaults to `0`.
+    * `:strides` - The stride to slice the axis along of. Defaults to `1`.
+
   ## Examples
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}), 1, 2, 1)
+      iex> Nx.slice_along_axis(Nx.iota({5, 2}), 1, 2, axis: 0)
+      #Nx.Tensor<
+        s64[2][2]
+        [
+          [2, 3],
+          [4, 5]
+        ]
+      >
+
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}), 1, 2, axis: 1)
       #Nx.Tensor<
         s64[2][2]
         [
@@ -8020,7 +8126,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}, names: [:x, :y]), 0, 1, :x)
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}, names: [:x, :y]), 0, 1, axis: :x)
       #Nx.Tensor<
         s64[x: 1][y: 5]
         [
@@ -8028,7 +8134,7 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}, names: [:x, :y]), Nx.tensor(0), 1, :x)
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}, names: [:x, :y]), Nx.tensor(0), 1, axis: :x)
       #Nx.Tensor<
         s64[x: 1][y: 5]
         [
@@ -8036,24 +8142,34 @@ defmodule Nx do
         ]
       >
 
-      iex> Nx.slice_axis(Nx.iota({2, 5}), 0, 2, -1)
+      iex> Nx.slice_along_axis(Nx.iota({2, 5}), 0, 3, axis: -1, strides: 2)
       #Nx.Tensor<
         s64[2][2]
         [
-          [0, 1],
-          [5, 6]
+          [0, 2],
+          [5, 7]
         ]
       >
 
   """
   @doc type: :indexed, from_backend: false
-  def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
-    opts = keyword!(opts, [:strides])
+  def slice_along_axis(tensor, start_index, len, opts \\ []) when is_integer(len) do
+    opts = keyword!(opts, strides: 1, axis: 0)
+    axis = Keyword.fetch!(opts, :axis)
+    strides = Keyword.fetch!(opts, :strides)
     %T{shape: shape, names: names} = tensor = to_tensor(tensor)
     axis = Nx.Shape.normalize_axis(shape, axis, names)
-    start_indices = List.duplicate(0, rank(tensor)) |> List.replace_at(axis, start_index)
+    rank = rank(shape)
+
+    start_indices = List.duplicate(0, rank) |> List.replace_at(axis, start_index)
     lengths = shape |> put_elem(axis, len) |> Tuple.to_list()
-    slice(tensor, start_indices, lengths, opts)
+    strides = List.duplicate(1, rank) |> List.replace_at(axis, strides)
+    slice(tensor, start_indices, lengths, strides: strides)
+  end
+
+  @deprecated "Use slice_along_axis/4 instead"
+  def slice_axis(tensor, start_index, len, axis, opts \\ []) when is_integer(len) do
+    slice_along_axis(tensor, start_index, len, [axis: axis] ++ opts)
   end
 
   @doc """
@@ -8133,7 +8249,7 @@ defmodule Nx do
   resulting shape. Specifically, the given axis in the input shape
   gets replaced with the indices shape.
 
-  See `gather/2`, `slice/3`, `slice_axis/5`, and `take_along_axis/3`
+  See `gather/2`, `slice/3`, `slice_along_axis/4`, and `take_along_axis/3`
   for other ways to retrieve values from a tensor.
 
   ## Options
@@ -8282,7 +8398,7 @@ defmodule Nx do
   the `axis` dimension, which can have arbitrary size. The returned tensor will have the
   same shape as the `indices` tensor.
 
-  See `gather/2`, `slice/3`, `slice_axis/5`, and `take/3` for other ways to retrieve
+  See `gather/2`, `slice/3`, `slice_along_axis/4`, and `take/3` for other ways to retrieve
   values from a tensor.
 
   ## Options
@@ -9115,8 +9231,7 @@ defmodule Nx do
         "<" ->
           :little
 
-        # We can't just infer native endianness matches our native
-        # endianness
+        # We can't just infer native endianness matches our native endianness
         endianness ->
           raise ArgumentError, "Numpy tensor has unsupported endianness: #{endianness}"
       end
@@ -9187,21 +9302,63 @@ defmodule Nx do
         f32
         1.6666666269302368
       >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 1.0]
+      >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
+      #Nx.Tensor<
+        f32[2]
+        [0.25, 0.25]
+      >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [0], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [2.0, 2.0]
+      >
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [0.5, 0.5]
+      >
+
+  ### Keeping axes
+
+      iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [1], keep_axes: true)
+      #Nx.Tensor<
+        f32[2][1]
+        [
+          [0.25],
+          [0.25]
+        ]
+      >
   """
   @doc type: :aggregation
   @spec variance(tensor :: Nx.Tensor.t(), opts :: Keyword.t()) :: Nx.Tensor.t()
   def variance(tensor, opts \\ []) do
-    %T{shape: shape} = tensor = to_tensor(tensor)
+    %T{shape: shape, names: names} = tensor = to_tensor(tensor)
+    opts = keyword!(opts, [:axes, ddof: 0, keep_axes: false])
+    axes = opts[:axes]
+    {ddof, opts} = Keyword.pop!(opts, :ddof)
 
-    opts = keyword!(opts, ddof: 0)
-    total = size(shape)
-    ddof = Keyword.fetch!(opts, :ddof)
-    mean = mean(tensor)
+    total =
+      if axes do
+        mean_den(shape, Nx.Shape.normalize_axes(shape, axes, names))
+      else
+        size(shape)
+      end
+
+    mean = mean(tensor, Keyword.put(opts, :keep_axes, true))
 
     tensor
     |> subtract(mean)
     |> power(2)
-    |> sum()
+    |> sum(opts)
     |> divide(total - ddof)
   end
 
@@ -9224,6 +9381,40 @@ defmodule Nx do
       #Nx.Tensor<
         f32
         1.29099440574646
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
+      #Nx.Tensor<
+        f32[2]
+        [1.0, 1.0]
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [1])
+      #Nx.Tensor<
+        f32[2]
+        [0.5, 0.5]
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [0], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [1.4142135381698608, 1.4142135381698608]
+      >
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), axes: [1], ddof: 1)
+      #Nx.Tensor<
+        f32[2]
+        [0.7071067690849304, 0.7071067690849304]
+      >
+
+  ### Keeping axes
+
+      iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), keep_axes: true)
+      #Nx.Tensor<
+        f32[1][1]
+        [
+          [1.1180340051651]
+        ]
       >
   """
   @doc type: :aggregation
@@ -9281,9 +9472,8 @@ defmodule Nx do
   """
   @doc type: :creation
   defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
-    string
-    |> binary_to_numbers
-    |> numbers_to_tensor(modifiers)
+    {numbers, type} = binary_to_numbers(string)
+    numbers_to_tensor(numbers, type, modifiers)
   end
 
   @doc """
@@ -9318,22 +9508,22 @@ defmodule Nx do
   @doc type: :creation
   defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
     case binary_to_numbers(string) do
-      [numbers] ->
-        numbers_to_tensor(numbers, modifiers)
+      {[numbers], type} ->
+        numbers_to_tensor(numbers, type, modifiers)
 
       _ ->
         raise ArgumentError, "must be one-dimensional"
     end
   end
 
-  defp numbers_to_tensor(numbers, modifiers) do
+  defp numbers_to_tensor(numbers, type, modifiers) do
     type =
       case modifiers do
         [unit | size] ->
           Nx.Type.normalize!({List.to_atom([unit]), List.to_integer(size)})
 
         [] ->
-          Nx.Type.infer(numbers)
+          type
       end
 
     {shape, binary} = flatten_list(numbers, type)
@@ -9346,21 +9536,21 @@ defmodule Nx do
   end
 
   defp binary_to_numbers(string) do
-    for row <- String.split(string, ["\n", "\r\n"], trim: true) do
+    string
+    |> String.split(["\n", "\r\n"], trim: true)
+    |> Enum.map_reduce({:s, 64}, fn row, type ->
       row
       |> String.split(" ", trim: true)
-      |> Enum.map(fn str ->
-        module = if String.contains?(str, "."), do: Float, else: Integer
+      |> Enum.map_reduce(type, fn str, type ->
+        {module, type} =
+          if String.contains?(str, "."), do: {Float, {:f, 32}}, else: {Integer, type}
 
         case module.parse(str) do
-          {number, ""} ->
-            number
-
-          _ ->
-            raise ArgumentError, "expected a numerical value for tensor, got #{str}"
+          {number, ""} -> {number, type}
+          _ -> raise ArgumentError, "expected a numerical value for tensor, got #{str}"
         end
       end)
-    end
+    end)
   end
 
   ## Helpers
@@ -9374,23 +9564,6 @@ defmodule Nx do
   defp backend!(other) do
     raise ArgumentError,
           "backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
-  end
-
-  defp backend_from_options!(opts) do
-    case Keyword.fetch(opts, :backend) do
-      {:ok, backend} when is_atom(backend) ->
-        {backend, []}
-
-      {:ok, {backend, options}} when is_atom(backend) and is_list(options) ->
-        {backend, options}
-
-      {:ok, other} ->
-        raise ArgumentError,
-              ":backend must be an atom or a tuple {backend, options}, got: #{inspect(other)}"
-
-      :error ->
-        nil
-    end
   end
 
   defp number_to_binary(number, type), do: match_types([type], do: <<write!(number, 0)>>)

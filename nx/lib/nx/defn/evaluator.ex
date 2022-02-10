@@ -123,12 +123,12 @@ defmodule Nx.Defn.Evaluator do
 
         cond do
           hook_fun ->
-            {expr, cache} = eval(expr, state, cache)
+            {expr, cache} = composite_eval(expr, state, cache)
             hook_fun.(expr)
             cache
 
           Tree.has_hooks?(expr, hooks) ->
-            {_expr, cache} = eval(expr, state, cache)
+            {_expr, cache} = composite_eval(expr, state, cache)
             cache
 
           true ->

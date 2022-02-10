@@ -15,21 +15,13 @@ defmodule Torchx.Backend do
         ** (ArgumentError) Torchx does not support unsigned 64 bit integer (explicitly cast the input tensor to a signed integer before taking sum)
 
     3. Torchx rounds half-to-even, while Elixir rounds half-away-from-zero.
-       So, in Elixir round(0.5) == 1.0, while in Torchx round(0.5) == 0.0.
+       So in Elixir `round(0.5) == 1.0` while in Torchx `round(0.5) == 0.0`.
 
-        iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Torchx.Backend) |> Nx.round()
-        #Nx.Tensor<
-          f32[4]
-          [-2.0, -0.0, 0.0, 2.0]
-        >
+    4. `Nx.as_type/2` converts non-finite values such as infinity becomes the
+       maximum value for a type, negative infinity becomes the minimum value,
+       and nan becomes zero. `Torchx` behaviour is type dependent with no clear
+       rule across types.
 
-    While binary backend will do:
-
-        iex> Nx.tensor([-1.5, -0.5, 0.5, 1.5], backend: Nx.BinaryBackend) |> Nx.round()
-        #Nx.Tensor<
-          f32[4]
-          [-2.0, -1.0, 1.0, 2.0]
-        >
   """
 
   @behaviour Nx.Backend
@@ -176,15 +168,23 @@ defmodule Torchx.Backend do
   def backend_deallocate(%T{} = t), do: Torchx.delete_tensor(from_nx(t))
 
   @impl true
-  def backend_transfer(tensor, Nx.Tensor, opts) do
-    backend_transfer(tensor, Nx.BinaryBackend, opts)
+  def backend_transfer(tensor, backend, opts) do
+    backend_copy(tensor, backend, opts)
+    # TODO: implement deallocation after transfer
+    # after
+    #  backend_deallocate(tensor)
   end
 
-  def backend_transfer(tensor, Torchx.Backend, opts) do
+  @impl true
+  def backend_copy(tensor, Nx.Tensor, opts) do
+    backend_copy(tensor, Nx.BinaryBackend, opts)
+  end
+
+  def backend_copy(tensor, Torchx.Backend, opts) do
     Torchx.to_device(from_nx(tensor), device_option(opts)) |> to_nx(tensor)
   end
 
-  def backend_transfer(tensor, backend, opts) do
+  def backend_copy(tensor, backend, opts) do
     backend.from_binary(tensor, Torchx.to_blob(from_nx(tensor)), opts)
   end
 
@@ -652,14 +652,34 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def eigh({eigenvals, eigenvecs}, tensor, _opts) do
+    {q, r} =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(eigenvecs.type))
+      |> Torchx.eigh()
+
+    {to_nx(q, eigenvals), to_nx(r, eigenvecs)}
+  end
+
+  @impl true
   def qr({q_holder, r_holder}, tensor, opts) do
-    {q, r} = Torchx.qr(from_nx(tensor), opts[:mode] == :reduced)
+    {q, r} =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(q_holder.type))
+      |> Torchx.qr(opts[:mode] == :reduced)
+
     {to_nx(q, q_holder), to_nx(r, r_holder)}
   end
 
   @impl true
   def svd({u_holder, s_holder, vt_holder}, tensor, _opts) do
-    {u, s, vt} = Torchx.svd(from_nx(tensor))
+    {u, s, vt} =
+      tensor
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(u_holder.type))
+      |> Torchx.svd()
 
     {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
   end
@@ -755,6 +775,15 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def solve(%T{type: type} = out, a, b) do
+    a_torch = a |> from_nx |> Torchx.to_type(to_torch_type(type))
+    b_torch = b |> from_nx |> Torchx.to_type(to_torch_type(type))
+
+    Torchx.solve(a_torch, b_torch)
+    |> to_nx(out)
+  end
+
+  @impl true
   def sort(%T{} = out, %T{} = t, opts) do
     axis = opts[:axis]
     descending = opts[:direction] == :desc
@@ -766,11 +795,47 @@ defmodule Torchx.Backend do
   end
 
   @impl true
+  def select(out, pred, on_true, on_false) do
+    on_true_torch = from_nx(on_true)
+    on_false_torch = from_nx(on_false)
+
+    # Use logical_not to convert any tensor to a boolean tensor
+    # because of that, we have to swap true/false tensor
+    pred
+    |> from_nx()
+    |> Torchx.logical_not()
+    |> Torchx.where(on_false_torch, on_true_torch)
+    |> to_nx(out)
+  end
+
+  @impl true
   def clip(%T{} = out, %T{} = t, %T{} = min, %T{} = max) do
     t
     |> Nx.as_type(out.type)
     |> from_nx()
     |> Torchx.clip(from_nx(min), from_nx(max))
+    |> to_nx(out)
+  end
+
+  @impl true
+  def reduce_max(out, tensor, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    tensor
+    |> from_nx()
+    |> Torchx.amax(axes, keep_axes)
+    |> to_nx(out)
+  end
+
+  @impl true
+  def reduce_min(out, tensor, opts) do
+    axes = opts[:axes] || []
+    keep_axes = opts[:keep_axes] || false
+
+    tensor
+    |> from_nx()
+    |> Torchx.amin(axes, keep_axes)
     |> to_nx(out)
   end
 
@@ -903,7 +968,9 @@ defmodule Torchx.Backend do
 
   ## Functionality we can't provide
 
-  not_possible = [bitcast: 2, map: 4, population_count: 2, reduce: 5, window_reduce: 6]
+  not_possible =
+    [bitcast: 2, count_leading_zeros: 2, population_count: 2] ++
+      [map: 4, reduce: 5, window_reduce: 6]
 
   for {fun, arity} <- not_possible do
     args = Macro.generate_arguments(arity, __MODULE__)
@@ -917,9 +984,6 @@ defmodule Torchx.Backend do
   ## All remaining callbacks
 
   funs = Nx.Backend.behaviour_info(:callbacks) -- Module.definitions_in(__MODULE__, :def)
-
-  @doc false
-  def __unimplemented__, do: unquote(funs ++ not_possible)
 
   for {fun, arity} <- funs do
     args = Macro.generate_arguments(arity, __MODULE__)

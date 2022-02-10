@@ -21,6 +21,15 @@ def deps do
 end
 ```
 
+If you are using Livebook or IEx, you can instead run:
+
+```elixir
+Mix.install([
+    {:exla, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "exla"},
+    {:nx, "~> 0.1.0-dev", github: "elixir-nx/nx", sparse: "nx", override: true}
+])
+```
+
 ### XLA binaries
 
 EXLA relies on the [XLA](https://github.com/elixir-nx/xla) package to provide the necessary XLA binaries. Whenever possible it tries to download precompiled builds, but you may need to build from source if there is no version matching your target environment. For more details, including GPU/TPU support see [the usage section](https://github.com/elixir-nx/xla#usage).

@@ -3,7 +3,7 @@ defmodule Torchx.NxDoctestTest do
   Import Nx' doctest and run them on the Torchx backend.
 
   Many tests are excluded for the reasons below, coverage
-  for the excluded tests can be found on Torchx.BackendTest.
+  for the excluded tests can be found on Torchx.NxTest.
   """
 
   # TODO: Add backend tests for the doctests that are excluded
@@ -32,8 +32,8 @@ defmodule Torchx.NxDoctestTest do
     quotient: 2,
     # slice - expects numerical start indices, but now receives tensors,
     slice: 4,
-    # slice_axis - expects scalar starts and receives tensors
-    slice_axis: 5,
+    # slice_along_axis - expects scalar starts and receives tensors
+    slice_along_axis: 4,
     # stack - fails in some tests
     stack: 2,
     # window_mean - depends on window_sum which is not implemented
@@ -60,23 +60,43 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @unrelated_doctests [
-    to_template: 1,
-    template: 3
+    default_backend: 1,
+    template: 3,
+    to_template: 1
   ]
 
   @inherently_unsupported_doctests [
-    # bitcast - no API available
+    # as_type - the rules change per type
+    as_type: 2,
+    # no API available - bit based
     bitcast: 2,
-    # default_backend - specific to BinaryBackend
-    default_backend: 1,
+    count_leading_zeros: 1,
+    population_count: 1,
+    # no API available - function based
+    map: 3,
+    window_reduce: 5,
+    reduce: 4,
     # product - some output/input types are unsupported by libtorch
     product: 2
   ]
 
+  @pending_doctests [
+    cbrt: 1,
+    conv: 3,
+    indexed_add: 3,
+    pad: 3,
+    put_slice: 3,
+    window_max: 3,
+    window_min: 3,
+    window_product: 3,
+    window_scatter_max: 5,
+    window_scatter_min: 5,
+    window_sum: 3
+  ]
+
   doctest Nx,
     except:
-      Torchx.Backend.__unimplemented__()
-      |> Enum.map(fn {fun, arity} -> {fun, arity - 1} end)
+      @pending_doctests
       |> Kernel.++(@temporarily_broken_doctests)
       |> Kernel.++(@rounding_error_doctests)
       |> Kernel.++(@os_rounding_error_doctests)

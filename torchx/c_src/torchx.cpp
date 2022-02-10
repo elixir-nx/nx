@@ -552,6 +552,7 @@ UNARY_OP(rsqrt)
 UNARY_OP(log)
 UNARY_OP(log1p)
 UNARY_OP(bitwise_not)
+UNARY_OP(logical_not)
 UNARY_OP2(logistic, sigmoid)
 
 UNARY_OP(sin)
@@ -606,6 +607,15 @@ NIF(clip)
   TENSOR_PARAM(2, max);
 
   TENSOR(torch::clip(*t, *min, *max));
+}
+
+NIF(where)
+{
+  TENSOR_PARAM(0, pred);
+  TENSOR_PARAM(1, on_true);
+  TENSOR_PARAM(2, on_false);
+
+  TENSOR(torch::where(*pred, *on_true, *on_false));
 }
 
 /* Aggregates */
@@ -717,7 +727,7 @@ NIF(qr)
     GET(1, reduced);
   }
 
-  TENSOR_TUPLE(torch::qr(*t, reduced));
+  TENSOR_TUPLE(torch::linalg_qr(*t, reduced ? "reduced" : "complete"));
 }
 
 NIF(svd)
@@ -741,6 +751,39 @@ NIF(lu)
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu = torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
 
   TENSOR_TUPLE_3(plu);
+}
+
+NIF(amax)
+{
+  TENSOR_PARAM(0, tensor);
+  LIST_PARAM(1, std::vector<int64_t>, axes);
+  PARAM(2, bool, keep_axes);
+
+  TENSOR(at::native::amax(*tensor, axes, keep_axes));
+}
+
+NIF(amin)
+{
+  TENSOR_PARAM(0, tensor);
+  LIST_PARAM(1, std::vector<int64_t>, axes);
+  PARAM(2, bool, keep_axes);
+
+  TENSOR(at::native::amin(*tensor, axes, keep_axes));
+}
+
+NIF(eigh)
+{
+  TENSOR_PARAM(0, tensor);
+
+  TENSOR_TUPLE(torch::linalg_eigh(*tensor));
+}
+
+NIF(solve)
+{
+  TENSOR_PARAM(0, tensorA);
+  TENSOR_PARAM(1, tensorB);
+
+  TENSOR(torch::linalg_solve(*tensorA, *tensorB));
 }
 
 void free_tensor(ErlNifEnv *env, void *obj)
@@ -836,6 +879,7 @@ static ErlNifFunc nif_functions[] = {
     DF(atan2, 2),
     DF(min, 2),
     DF(max, 2),
+    DF(solve, 2),
 
     DF(bitwise_and, 2),
     DF(bitwise_or, 2),
@@ -853,6 +897,7 @@ static ErlNifFunc nif_functions[] = {
     DF(logical_and, 2),
     DF(logical_or, 2),
     DF(logical_xor, 2),
+    DF(logical_not, 1),
 
     DF(sum, 3),
     DF(product, 1),
@@ -899,6 +944,7 @@ static ErlNifFunc nif_functions[] = {
 
     DF(cholesky, 1),
     DF(cholesky, 2),
+    DF(eigh, 1),
     DF(qr, 1),
     DF(qr, 2),
     DF(svd, 1),
@@ -908,6 +954,9 @@ static ErlNifFunc nif_functions[] = {
     DF(determinant, 1),
     DF(sort, 3),
     DF(clip, 3),
+    DF(where, 3),
+    DF(amax, 3),
+    DF(amin, 3),
 
     F(cuda_is_available, 0),
     F(cuda_device_count, 0),

@@ -326,6 +326,25 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(3)
     end
 
+    defn container_hook(a, b), do: hook({a, b}, :example, &send_to_self({:default, &1}))
+
+    test "container hook with overriddes" do
+      assert container_hook(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
+      assert_received {:default, tuple}
+      assert tuple == {Nx.tensor(1), Nx.tensor(2)}
+
+      assert Nx.Defn.jit(&container_hook/2, [1, 2]) == {Nx.tensor(1), Nx.tensor(2)}
+      assert_received {:default, tuple}
+      assert tuple == {Nx.tensor(1), Nx.tensor(2)}
+
+      assert Nx.Defn.jit(&container_hook/2, [1, 2],
+               hooks: %{example: &send_to_self({:custom, &1})}
+             ) == {Nx.tensor(1), Nx.tensor(2)}
+
+      assert_received {:custom, tuple}
+      assert tuple == {Nx.tensor(1), Nx.tensor(2)}
+    end
+
     defn side_effect_hooks(a, b) do
       token = create_token()
       {token, _} = hook_token(token, b, :b)

@@ -94,8 +94,6 @@ defmodule Torchx do
   # Make it clear they are Torchx specific and that Torchx.Backend
   # provides the mapping between Nx to the underlying Torchx types.
 
-  # TODO: Automatically download libtorch like we do for esbuild/xla.
-
   use Torchx.Macro
   alias Torchx.NIF
 
@@ -164,6 +162,7 @@ defmodule Torchx do
   deftensor gather(tensor_input, tensor_indices, axis)
   deftensor argsort(tensor, axis, is_descending)
   deftensor flip(tensor, axis)
+  deftensor where(tensorA, tensorB, tensorC)
 
   ## Aggregation
 
@@ -203,10 +202,14 @@ defmodule Torchx do
   deftensor logical_and(tensorA, tensorB)
   deftensor logical_or(tensorA, tensorB)
   deftensor logical_xor(tensorA, tensorB)
+  deftensor logical_not(tensorA)
 
   deftensor bitwise_and(tensorA, tensorB)
   deftensor bitwise_or(tensorA, tensorB)
   deftensor bitwise_xor(tensorA, tensorB)
+
+  deftensor amax(tensor, axes, keep_axes)
+  deftensor amin(tensor, axes, keep_axes)
 
   deftensor tensordot(tensorA, tensorB, axesA, axesB)
   deftensor matmul(tensorA, tensorB)
@@ -248,6 +251,7 @@ defmodule Torchx do
 
   deftensor cholesky(tensor)
   deftensor cholesky(tensor, upper)
+  deftensor eigh(tensor)
   deftensor qr(tensor)
   deftensor qr(tensor, reduced)
   deftensor svd(tensor)
@@ -257,6 +261,7 @@ defmodule Torchx do
   deftensor determinant(tensor)
   deftensor sort(tensor, axis, descending)
   deftensor clip(tensor, tensor_min, tensor_max)
+  deftensor solve(tensora, tensorb)
 
   ## Dirty non-tensor return values
 
@@ -324,6 +329,7 @@ defmodule Torchx do
     {id, index}
   end
 
+  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, error}), do: raise("Torchx: " <> List.to_string(error))
 

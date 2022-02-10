@@ -69,6 +69,7 @@ defmodule Nx.MixProject do
       ],
       groups_for_modules: [
         # Nx,
+        # Nx.Constants,
         # Nx.Defn,
         # Nx.Defn.Kernel,
         # Nx.LinAlg,
