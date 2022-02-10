@@ -538,6 +538,11 @@ defmodule Torchx.Backend do
 
   @impl true
   def determinant(out, tensor) do
+    IO.inspect("custom")
+
+    IO.inspect(out, label: "out")
+    IO.inspect(tensor, label: "tensor")
+
     tensor
     |> from_nx()
     |> Torchx.determinant()

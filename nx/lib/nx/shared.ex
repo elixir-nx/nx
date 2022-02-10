@@ -407,7 +407,7 @@ defmodule Nx.Shared do
 
     cond do
       backend == Nx.Defn.Expr ->
-        apply(default_impl, args)
+        Nx.Defn.Expr.optional(apply(default_impl, args), function_name, args)
 
       function_exported?(backend, function_name, arity) ->
         apply(backend, function_name, args)

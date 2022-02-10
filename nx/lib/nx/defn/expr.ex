@@ -816,6 +816,12 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  def optional(expr, name, [out, %{data: %{context: context}} | _] = args) do
+    out = %T{names: [], shape: {}, type: out.type}
+
+    expr(out, context, :default_implementation, [expr, name, args])
+  end
+
   ## Helpers
 
   defp expr(tensor, context, op, args) do

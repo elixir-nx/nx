@@ -54,6 +54,23 @@ defmodule Nx.Defn.Evaluator do
     eval(expr, state, cache)
   end
 
+  defp eval(
+         %Nx.Tensor{
+           data: %Expr{
+             op: :default_implementation,
+             args: [expr, function_name, _args, original_args]
+           }
+         },
+         state,
+         cache
+       ) do
+    IO.inspect(expr, label: "expr")
+    IO.inspect(args, label: "args")
+    eval_apply(function_name, expr, state, cache)
+    {backend, backend_options} = Nx.default_backend()
+    {backend, original_args ++ [backend_options]}
+  end
+
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do
     case cache do
       %{^id => res} ->
