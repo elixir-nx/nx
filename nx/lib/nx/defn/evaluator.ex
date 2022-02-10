@@ -58,13 +58,19 @@ defmodule Nx.Defn.Evaluator do
          %Nx.Tensor{
            data: %Expr{
              op: :optional,
-             args: [expr]
+             args: [expr, default_impl_expr]
            }
          },
          state,
          cache
        ) do
-    eval_apply(expr.data.op, expr, state, cache)
+    {backend, _backend_options} = Nx.default_backend()
+
+    if function_exported?(backend, expr.data.op, length(expr.data.args)) do
+      eval_apply(expr.data.op, expr, state, cache)
+    else
+      eval_apply(default_impl_expr.data.op, default_impl_expr, state, cache)
+    end
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do

@@ -816,13 +816,10 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  def optional(%{data: data} = expr, name, [out | args]) do
-    out = %T{names: [], shape: {}, type: out.type}
-    [%{data: %{context: context}} | _] = args
+  def optional(%{data: %{context: context}} = default_impl_expr, name, [out | args]) do
+    expr = expr(default_impl_expr, context, name, args)
 
-    expr = %{expr | data: %{data | op: name, args: args}}
-
-    expr(out, context, :optional, [expr])
+    expr(out, context, :optional, [expr, default_impl_expr])
   end
 
   ## Helpers
