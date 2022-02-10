@@ -136,7 +136,7 @@ defmodule Nx.Defn.Tree do
     {[tensor, start_indices, slice], acc}
   end
 
-  def apply_args(%T{data: %Expr{op: :default_implementation, args: [expr, name, args]}}, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :optional, args: [%{op: name, args: args} = expr]}}, acc, fun) do
     {[expr | args], acc} =
       Enum.map_reduce([expr | args], acc, fn
         %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)

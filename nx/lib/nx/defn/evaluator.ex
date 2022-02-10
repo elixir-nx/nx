@@ -8,7 +8,6 @@ defmodule Nx.Defn.Evaluator do
   @behaviour Nx.Defn.Compiler
   alias Nx.Defn.{Composite, Expr, Tree}
 
-  @optional_callback_ops [:determinant]
   @creation_ops [:constant, :eye, :iota, :from_binary]
   @random_ops [:random_uniform, :random_normal]
 
@@ -58,19 +57,14 @@ defmodule Nx.Defn.Evaluator do
   defp eval(
          %Nx.Tensor{
            data: %Expr{
-             op: :default_implementation,
-             args: [expr, function_name, [ans | args]]
+             op: :optional,
+             args: [expr]
            }
-         } = t,
+         },
          state,
          cache
        ) do
-    args |> IO.inspect(label: "nx/lib/nx/defn/evaluator.ex:67")
-
-    t = put_in(t.data.op, function_name) |> then(&put_in(&1.data.args, args))
-
-    eval_apply(function_name, t, state, cache)
-    # {apply(backend, function_name, args), cache}
+    eval_apply(expr.data.op, expr, state, cache)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do
@@ -147,11 +141,10 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(op, ans, state, cache) do
     {args, cache} = Tree.apply_args(ans, cache, &eval(&1, state, &2))
-    args |> IO.inspect(label: "nx/lib/nx/defn/evaluator.ex:154")
 
     {mod, args} =
       cond do
-        op in @creation_ops or op in @optional_callback_ops ->
+        op in @creation_ops ->
           {backend, backend_options} = Nx.default_backend()
           {backend, [ans | args] ++ [backend_options]}
 

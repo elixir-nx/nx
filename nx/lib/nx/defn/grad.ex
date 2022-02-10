@@ -136,7 +136,7 @@ defmodule Nx.Defn.Grad do
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
     do: Composite.reduce(initial, acc, fun)
 
-  defp reduce_args(:default_implementation, %{data: %{args: [expr | _]}}, acc, fun) do
+  defp reduce_args(:optional, %{data: %{args: [expr | _]}}, acc, fun) do
     fun.(expr, acc)
   end
 

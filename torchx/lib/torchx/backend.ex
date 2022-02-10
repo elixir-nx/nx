@@ -537,12 +537,7 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def determinant(out, tensor, _opts) do
-    IO.inspect("custom")
-
-    IO.inspect(out, label: "out")
-    IO.inspect(tensor, label: "tensor")
-
+  def determinant(out, tensor) do
     tensor
     |> Nx.multiply(1.0)
     |> from_nx()

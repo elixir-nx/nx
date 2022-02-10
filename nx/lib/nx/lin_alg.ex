@@ -1141,7 +1141,7 @@ defmodule Nx.LinAlg do
 
       Nx.Shared.default_implementation(:determinant, [output, tensor], fn
         _, tensor ->
-          {n, _} = Nx.shape(tensor) |> IO.inspect(label: "default")
+          {n, _} = Nx.shape(tensor)
 
           case n do
             2 ->

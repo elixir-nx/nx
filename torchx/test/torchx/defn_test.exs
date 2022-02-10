@@ -63,8 +63,6 @@ defmodule Torchx.DefnTest do
 
     test "works" do
       t = Nx.tensor([[2, 0], [0, 1]])
-      IO.inspect(det(t), label: "det")
-
       assert_all_close(Nx.tensor(2.0), det(t))
     end
   end
