@@ -499,7 +499,8 @@ defmodule Nx.LinAlg do
 
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
 
-    output = %T{b | shape: output_shape, type: output_type, names: nil}
+    output_names = List.duplicate(nil, tuple_size(output_shape))
+    output = %T{b | shape: output_shape, type: output_type, names: output_names}
 
     Nx.Shared.default_implementation(:solve, [output, a, b], fn _output, a, b ->
       # We need to achieve an LQ decomposition for `a` (henceforth called A)

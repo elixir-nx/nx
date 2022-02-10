@@ -2916,6 +2916,17 @@ defmodule Nx do
 
   *Note: `Nx.default_backend/1` does not affect the behaviour of
   this function.
+
+  ### Examples
+
+    iex> Nx.backend_copy(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+    #Nx.Tensor<
+      s64[2][3]
+      [
+        [1, 2, 3],
+        [4, 5, 6]
+      ]
+    >
   """
   @doc type: :backend
   def backend_copy(tensor_or_container, backend \\ Nx.Tensor) do
