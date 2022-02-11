@@ -127,4 +127,45 @@ defmodule Nx.TensorTest do
       assert_raise RuntimeError, "not supported", fn -> Nx.random_uniform({2, 2}) end
     end
   end
+
+  describe "access with :all" do
+    test "should access the entire tensor" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[:all]] == t
+      assert t[[:all, :all]] == t
+    end
+
+    test "should take all rows of the first column" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[:all, 0]] == Nx.tensor([1, 4, 7])
+    end
+
+    test "should take all rows of the second column" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[:all, 1]] == Nx.tensor([2, 5, 8])
+    end
+
+    test "should take all columns of the first row" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[0, :all]] == Nx.tensor([1, 2, 3])
+    end
+
+    test "should take all columns of the second row" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[1, :all]] == Nx.tensor([4, 5, 6])
+    end
+
+    test "should raise when out of bounds" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert_raise ArgumentError, fn ->
+        t[[3, :all]]
+      end
+    end
+  end
 end

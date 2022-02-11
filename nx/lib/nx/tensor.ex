@@ -71,6 +71,7 @@ defmodule Nx.Tensor do
     """
   end
 
+  defp with_index([:all | t], i, acc), do: with_index(t, i + 1, [{i, 0..-1//1} | acc])
   defp with_index([h | t], i, acc), do: with_index(t, i + 1, [{i, h} | acc])
   defp with_index([], _i, acc), do: acc
 
