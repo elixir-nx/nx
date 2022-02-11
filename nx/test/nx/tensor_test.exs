@@ -136,28 +136,52 @@ defmodule Nx.TensorTest do
       assert t[[:all, :all]] == t
     end
 
-    test "should take all rows of the first column" do
+    test "should take the first column" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
       assert t[[:all, 0]] == Nx.tensor([1, 4, 7])
     end
 
-    test "should take all rows of the second column" do
+    test "should take the second column" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
       assert t[[:all, 1]] == Nx.tensor([2, 5, 8])
     end
 
-    test "should take all columns of the first row" do
+    test "should take the first 2 columns" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[:all, 0..1]] == Nx.tensor([[1, 2], [4, 5], [7, 8]])
+    end
+
+    test "should take the last 2 columns" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[:all, 1..2]] == Nx.tensor([[2, 3], [5, 6], [8, 9]])
+    end
+
+    test "should take the first row" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
       assert t[[0, :all]] == Nx.tensor([1, 2, 3])
     end
 
-    test "should take all columns of the second row" do
+    test "should take the second row" do
       t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
       assert t[[1, :all]] == Nx.tensor([4, 5, 6])
+    end
+
+    test "should take the first two rows" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[0..1, :all]] == Nx.tensor([[1, 2, 3], [4, 5, 6]])
+    end
+
+    test "should take the last two rows" do
+      t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+
+      assert t[[1..2, :all]] == Nx.tensor([[4, 5, 6], [7, 8, 9]])
     end
 
     test "should raise when out of bounds" do
