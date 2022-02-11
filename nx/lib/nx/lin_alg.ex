@@ -502,7 +502,7 @@ defmodule Nx.LinAlg do
     output_names = List.duplicate(nil, tuple_size(output_shape))
     output = %T{b | shape: output_shape, type: output_type, names: output_names}
 
-    Nx.Shared.default_implementation(:solve, [output, a, b], fn _output, a, b ->
+    Nx.Shared.optional(:solve, [output, a, b], fn _output, a, b ->
       # We need to achieve an LQ decomposition for `a` (henceforth called A)
       # because triangular_solve only accepts lower_triangular matrices
       # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
@@ -1135,7 +1135,7 @@ defmodule Nx.LinAlg do
           names: Enum.map(tensor.names, fn _ -> nil end)
       }
 
-      Nx.Shared.default_implementation(:determinant, [output, tensor], fn
+      Nx.Shared.optional(:determinant, [output, tensor], fn
         _, tensor ->
           {n, _} = Nx.shape(tensor)
 

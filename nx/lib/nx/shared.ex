@@ -501,7 +501,7 @@ defmodule Nx.Shared do
 
   The given body is used as the default implementation otherwise.
   """
-  def default_implementation(function_name, args, default_impl)
+  def optional(function_name, args, default_impl)
       when is_atom(function_name) and is_list(args) and is_function(default_impl) do
     arity = length(args)
     backend = list_impl!(args)

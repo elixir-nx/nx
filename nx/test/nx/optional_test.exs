@@ -67,6 +67,12 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
+    def reshape(%{data: %Nx.Defn.Expr{}} = tensor, opts) do
+      send(self(), {:called_default_impl, :reshape})
+
+      Nx.Defn.Expr.reshape(tensor, opts)
+    end
+
     def dot(_out, a, _, _, b, _, _) do
       send(self(), :called_default_impl)
 
@@ -107,6 +113,14 @@ defmodule Nx.OptionalTest do
       Nx.LinAlg.determinant(a)
 
       assert_receive :called_custom_impl
+    end
+
+    test "calls the default impl if custom does not exist" do
+      a = Nx.tensor([[1, 1], [2, 1]], backend: NonCustomImplTestBackend)
+
+      Nx.LinAlg.determinant(a)
+
+      assert_receive {:called_default_impl, :reshape}
     end
   end
 end

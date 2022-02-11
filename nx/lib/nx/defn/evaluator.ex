@@ -54,27 +54,6 @@ defmodule Nx.Defn.Evaluator do
     eval(expr, state, cache)
   end
 
-  defp eval(
-         %Nx.Tensor{
-           data: %Expr{
-             op: :optional,
-             args: [expr, default_impl_expr]
-           }
-         },
-         state,
-         cache
-       ) do
-    %{data: %{op: op, args: args}} = expr
-
-    backend = Nx.Shared.list_impl!(args)
-
-    if function_exported?(backend, op, length(args)) do
-      eval(expr, state, cache)
-    else
-      eval(default_impl_expr, state, cache)
-    end
-  end
-
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, cache) do
     case cache do
       %{^id => res} ->
@@ -145,6 +124,27 @@ defmodule Nx.Defn.Evaluator do
       end)
 
     {{}, cache}
+  end
+
+  defp eval_apply(
+         :optional,
+         %Nx.Tensor{
+           data: %Expr{
+             op: :optional,
+             args: [expr, default_impl_expr]
+           }
+         },
+         state,
+         cache
+       ) do
+    {args, cache} = Tree.apply_args(expr, cache, &eval(&1, state, &2))
+    backend = Nx.Shared.list_impl!(args)
+
+    if function_exported?(backend, expr.data.op, length(args) + 1) do
+      {apply(backend, expr.data.op, [expr | args]), cache}
+    else
+      eval(default_impl_expr, state, cache)
+    end
   end
 
   defp eval_apply(op, ans, state, cache) do
