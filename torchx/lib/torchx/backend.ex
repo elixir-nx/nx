@@ -745,26 +745,7 @@ defmodule Torchx.Backend do
       |> Torchx.reshape(batched_a_shape)
       |> Torchx.to_type(out_type)
 
-    eps = 1.0e-10 |> Nx.tensor() |> Torchx.from_nx()
-
-    # We need to manually validate if the A tensor is singular
-    # (i.e. the tensor has its determinant equal to 0)
-    # Otherwise, an exception will be thrown by libtorch.
-    #
-    # a non-zero eps value is chosen so we can account for possible rounding errors
-    # in the determinant calculation
-    is_singular =
-      a_tx
-      |> Torchx.determinant()
-      |> Torchx.abs()
-      |> Torchx.reshape({})
-      |> Torchx.less_equal(eps)
-      |> Torchx.to_nx()
-      |> Nx.backend_transfer(Nx.BinaryBackend)
-
-    if Nx.tensor(1, type: {:u, 8}, backend: Nx.BinaryBackend) == is_singular do
-      raise ArgumentError, "can't solve for singular matrix"
-    end
+    check_singular_matrix(a_tx)
 
     b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(out_type)
 
@@ -776,11 +757,38 @@ defmodule Torchx.Backend do
 
   @impl true
   def solve(%T{type: type} = out, a, b) do
-    a_torch = a |> from_nx |> Torchx.to_type(to_torch_type(type))
-    b_torch = b |> from_nx |> Torchx.to_type(to_torch_type(type))
+    a_tx = a |> from_nx |> Torchx.to_type(to_torch_type(type))
+    b_tx = b |> from_nx |> Torchx.to_type(to_torch_type(type))
 
-    Torchx.solve(a_torch, b_torch)
+    check_singular_matrix(a_tx)
+
+    a_tx
+    |> Torchx.solve(b_tx)
     |> to_nx(out)
+  end
+
+  defp check_singular_matrix(tensor) do
+    eps = 1.0e-10 |> Nx.tensor() |> Torchx.from_nx()
+
+    # We need to manually validate if the A tensor is singular
+    # (i.e. the tensor has its determinant equal to 0)
+    # Otherwise, an exception will be thrown by libtorch.
+    #
+    # a non-zero eps value is chosen so we can account for possible rounding errors
+    # in the determinant calculation
+    is_singular =
+      tensor
+      |> Torchx.determinant()
+      |> Torchx.abs()
+      |> Torchx.reshape({})
+      |> Torchx.less_equal(eps)
+      |> Torchx.to_nx()
+      |> Nx.to_number()
+      |> Kernel.==(1)
+
+    if is_singular do
+      raise ArgumentError, "can't solve for singular matrix"
+    end
   end
 
   @impl true
