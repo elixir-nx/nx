@@ -6,7 +6,7 @@ defmodule Torchx.DefnTest do
   alias Torchx.Backend, as: TB
 
   describe "creation" do
-    defn(iota, do: Nx.iota({10, 10}))
+    defn iota, do: Nx.iota({10, 10})
 
     test "iota" do
       %T{data: %TB{}} = tensor = iota()
@@ -15,9 +15,9 @@ defmodule Torchx.DefnTest do
   end
 
   describe "scalar" do
-    defn(float_scalar(x), do: Nx.add(1.0, x))
-    defn(integer_scalar(x), do: Nx.add(1, x))
-    defn(broadcast_scalar(x), do: Nx.add(Nx.broadcast(1, {2, 2}), x))
+    defn float_scalar(x), do: Nx.add(1.0, x)
+    defn integer_scalar(x), do: Nx.add(1, x)
+    defn broadcast_scalar(x), do: Nx.add(Nx.broadcast(1, {2, 2}), x)
 
     test "float" do
       %T{data: %TB{}} = tensor = float_scalar(0.0)
@@ -59,7 +59,7 @@ defmodule Torchx.DefnTest do
   end
 
   describe "determinant" do
-    defn(det(t), do: Nx.LinAlg.determinant(t))
+    defn det(t), do: Nx.LinAlg.determinant(t)
 
     test "works" do
       t = Nx.tensor([[2, 0], [0, 1]])

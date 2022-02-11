@@ -64,12 +64,14 @@ defmodule Nx.Defn.Evaluator do
          state,
          cache
        ) do
-    {backend, _backend_options} = Nx.default_backend()
+    %{data: %{op: op, args: args}} = expr
 
-    if function_exported?(backend, expr.data.op, length(expr.data.args)) do
-      eval_apply(expr.data.op, expr, state, cache)
+    backend = Nx.Shared.list_impl!(args)
+
+    if function_exported?(backend, op, length(args)) do
+      eval(expr, state, cache)
     else
-      eval_apply(default_impl_expr.data.op, default_impl_expr, state, cache)
+      eval(default_impl_expr, state, cache)
     end
   end
 
