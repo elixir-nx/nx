@@ -1,5 +1,5 @@
 defmodule Nx.OptionalTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   defmodule CustomImplTestBackend do
     defstruct [:state]
@@ -86,6 +86,17 @@ defmodule Nx.OptionalTest do
     end
   end
 
+  defmodule DefnInspect do
+    import Nx.Defn, only: [defn: 2]
+
+    defn det(t) do
+      t
+      |> Nx.LinAlg.determinant()
+      |> Nx.sum()
+      |> inspect_expr()
+    end
+  end
+
   describe "optional callbacks (def)" do
     test "calls the default impl if specific is not present" do
       a = Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], backend: NonCustomImplTestBackend)
@@ -121,6 +132,40 @@ defmodule Nx.OptionalTest do
       Nx.LinAlg.determinant(a)
 
       assert_receive {:called_default_impl, :reshape}
+    end
+  end
+
+  describe "inspect" do
+    test "works with defn call" do
+      assert ExUnit.CaptureIO.capture_io(fn ->
+               DefnInspect.det(Nx.iota({3, 3}))
+             end) == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                            s64[3][3]
+               b = determinant a                        f32
+               c = sum b, axes: nil, keep_axes: false   f32
+             >
+             """
+    end
+
+    test "works with direct call" do
+      assert {3, 3}
+             |> Nx.iota(backend: Nx.Defn.Expr)
+             |> Nx.LinAlg.determinant()
+             |> Nx.sum()
+             |> inspect() == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                            s64[3][3]
+               b = determinant a                        f32
+               c = sum b, axes: nil, keep_axes: false   f32
+             >
+             """
     end
   end
 end

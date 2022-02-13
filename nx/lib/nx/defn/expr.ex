@@ -1049,6 +1049,10 @@ defmodule Nx.Defn.Expr do
        when not is_map_key(metadata, :inspect),
        do: inspect_expr(expr, acc)
 
+  defp inspect_expr(%T{data: %Expr{op: :optional, args: [expr, _default]}}, acc) do
+    inspect_expr(expr, acc)
+  end
+
   defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
     case cache do
       %{^id => _} -> {t, acc}
