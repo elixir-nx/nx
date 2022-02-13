@@ -1083,6 +1083,11 @@ defmodule Nx.Defn.Expr do
     {t, {[{expr_str, t} | exprs], params, var_map, cache}}
   end
 
+  defp traverse_args(:optional, %T{data: %{args: [expr, _]}}, acc) do
+    {expr, acc} = Composite.traverse(expr, acc, &inspect_expr/2)
+    {[expr], acc}
+  end
+
   defp traverse_args(:while, %T{data: %{args: [initial, _, _, _]}}, acc) do
     {initial, acc} = Composite.traverse(initial, acc, &inspect_expr/2)
     {[initial], acc}
@@ -1108,6 +1113,10 @@ defmodule Nx.Defn.Expr do
         "#{key}: " <> inspect_arg(val, var_map)
       end)
     )
+  end
+
+  defp inspect_args(:optional, [expr], var_map) do
+    IO.iodata_to_binary(inspect_arg(expr, var_map))
   end
 
   defp inspect_args(:while, [initial], var_map) do

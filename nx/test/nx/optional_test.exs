@@ -13,6 +13,16 @@ defmodule Nx.OptionalTest do
       %{tensor | data: struct(backend, state: data)}
     end
 
+    def iota(t, axis, opts) do
+      t
+      |> Nx.BinaryBackend.iota(axis, opts)
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def sum(out, t, opts) do
+      out |> Nx.BinaryBackend.sum(t, opts) |> Nx.backend_transfer(__MODULE__)
+    end
+
     def solve(_out, a, b) do
       send(self(), :called_custom_impl)
 
@@ -44,6 +54,16 @@ defmodule Nx.OptionalTest do
 
     def backend_transfer(%{data: %{state: data}} = tensor, backend, _opts) do
       %{tensor | data: struct(backend, state: data)}
+    end
+
+    def iota(t, axis, opts) do
+      t
+      |> Nx.BinaryBackend.iota(axis, opts)
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def sum(out, t, opts) do
+      out |> Nx.BinaryBackend.sum(t, opts) |> Nx.backend_transfer(__MODULE__)
     end
 
     def transpose(_, t, _) do
@@ -136,19 +156,26 @@ defmodule Nx.OptionalTest do
   end
 
   describe "inspect" do
-    test "works with defn call" do
-      assert ExUnit.CaptureIO.capture_io(fn ->
-               DefnInspect.det(Nx.iota({3, 3}))
-             end) == """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0                            s64[3][3]
-               b = determinant a                        f32
-               c = sum b, axes: nil, keep_axes: false   f32
-             >
-             """
+    for backend <- [NonCustomImplTestBackend, CustomImplTestBackend] do
+      test "works with defn call for backend #{backend}" do
+        assert ExUnit.CaptureIO.capture_io(fn ->
+                 assert 0 ==
+                          {3, 3}
+                          |> Nx.iota(backend: unquote(backend))
+                          |> DefnInspect.det()
+                          |> Nx.backend_transfer(Nx.BinaryBackend)
+                          |> Nx.to_number()
+               end) == """
+               #Nx.Tensor<
+                 f32
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                            s64[3][3]
+                 b = determinant a                        f32
+                 c = sum b, axes: nil, keep_axes: false   f32
+               >
+               """
+      end
     end
 
     test "works with direct call" do
