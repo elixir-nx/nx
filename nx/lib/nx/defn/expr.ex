@@ -1025,8 +1025,8 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def inspect(tensor, opts) do
-    {_, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
-    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(tensor, acc, &inspect_expr/2)
+    {t, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
+    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(t, acc, &inspect_expr/2)
 
     all = Enum.reverse(params, Enum.reverse(exprs))
     header = concat(line(), color("Nx.Defn.Expr", :map, opts))

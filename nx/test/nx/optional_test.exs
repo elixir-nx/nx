@@ -1,5 +1,5 @@
 defmodule Nx.OptionalTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   import Nx.Defn, only: [defn: 2]
 
@@ -216,34 +216,33 @@ defmodule Nx.OptionalTest do
                           |> Nx.backend_transfer(Nx.BinaryBackend)
                           |> Nx.sum()
                           |> Nx.to_number()
-               end) == """
+               end) =~ """
                #Nx.Tensor<
                  f32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                            s64[3][3]
-                 b = determinant a                        f32
-                 c = sum b, axes: nil, keep_axes: false   f32
+                 parameter a:0       s64[3][3]
+                 b = determinant a   f32
                >
                """
       end
     end
 
     test "works with direct call" do
-      assert {3, 3}
-             |> Nx.iota(backend: Nx.Defn.Expr)
-             |> Nx.LinAlg.determinant()
-             |> Nx.sum()
-             |> inspect() == """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0                            s64[3][3]
-               b = determinant a                        f32
-               c = sum b, axes: nil, keep_axes: false   f32
-             >
-             """
+      assert ExUnit.CaptureIO.capture_io(fn ->
+               {3, 3}
+               |> Nx.iota(backend: Nx.Defn.Expr)
+               |> det_inspect()
+             end) =~
+               """
+               #Nx.Tensor<
+                 f32
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0       s64[3][3]
+                 b = determinant a   f32
+               >
+               """
     end
   end
 end
