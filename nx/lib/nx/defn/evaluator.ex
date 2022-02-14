@@ -126,17 +126,9 @@ defmodule Nx.Defn.Evaluator do
     {{}, cache}
   end
 
-  defp eval_apply(
-         :optional,
-         %Nx.Tensor{
-           data: %Expr{
-             op: :optional,
-             args: [expr, default_impl_expr]
-           }
-         },
-         state,
-         cache
-       ) do
+  defp eval_apply(:optional, %{data: %Expr{args: [expr, default_impl_expr]}}, state, cache) do
+    # The arguments are shared between expr and default_impl_expr nodes,
+    # so we don't do extra work regardless of the branch we choose.
     {args, cache} = Tree.apply_args(expr, cache, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
 

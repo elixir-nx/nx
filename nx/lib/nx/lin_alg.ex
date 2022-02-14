@@ -1140,14 +1140,9 @@ defmodule Nx.LinAlg do
           {n, _} = Nx.shape(tensor)
 
           case n do
-            2 ->
-              determinant_2by2(tensor)
-
-            3 ->
-              determinant_3by3(tensor)
-
-            _ ->
-              determinant_NbyN(tensor)
+            2 -> determinant_2by2(tensor)
+            3 -> determinant_3by3(tensor)
+            _ -> determinant_NbyN(tensor)
           end
       end)
     end)

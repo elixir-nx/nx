@@ -1,5 +1,7 @@
 defmodule Nx.OptionalTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
+
+  import Nx.Defn, only: [defn: 2]
 
   defmodule CustomImplTestBackend do
     defstruct [:state]
@@ -7,6 +9,10 @@ defmodule Nx.OptionalTest do
 
     def from_binary(tensor, data, _opts) do
       %{tensor | data: %__MODULE__{state: data}}
+    end
+
+    def backend_transfer(tensor, Nx.Tensor, opts) do
+      backend_transfer(tensor, Nx.BinaryBackend, opts)
     end
 
     def backend_transfer(%{data: %{state: data}} = tensor, backend, _opts) do
@@ -19,8 +25,11 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
-    def sum(out, t, opts) do
-      out |> Nx.BinaryBackend.sum(t, opts) |> Nx.backend_transfer(__MODULE__)
+    def sum(_out, t, opts) do
+      t
+      |> Nx.backend_transfer()
+      |> Nx.sum(opts)
+      |> Nx.backend_transfer(__MODULE__)
     end
 
     def solve(_out, a, b) do
@@ -35,12 +44,13 @@ defmodule Nx.OptionalTest do
       Nx.backend_transfer(out, __MODULE__)
     end
 
-    def determinant(_out, tensor) do
+    def determinant(_out, t) do
       send(self(), :called_custom_impl)
 
-      out = Nx.LinAlg.determinant(Nx.backend_transfer(tensor, BinaryBackend))
-
-      Nx.backend_transfer(out, __MODULE__)
+      t
+      |> Nx.backend_transfer()
+      |> Nx.LinAlg.determinant()
+      |> Nx.backend_transfer(__MODULE__)
     end
   end
 
@@ -50,6 +60,10 @@ defmodule Nx.OptionalTest do
 
     def from_binary(tensor, data, _opts) do
       %{tensor | data: %__MODULE__{state: data}}
+    end
+
+    def backend_transfer(tensor, Nx.Tensor, opts) do
+      backend_transfer(tensor, Nx.BinaryBackend, opts)
     end
 
     def backend_transfer(%{data: %{state: data}} = tensor, backend, _opts) do
@@ -62,8 +76,42 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
-    def sum(out, t, opts) do
-      out |> Nx.BinaryBackend.sum(t, opts) |> Nx.backend_transfer(__MODULE__)
+    def as_type(out, t) do
+      t
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.as_type(out.type)
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def add(_, a, b) do
+      Nx.add(Nx.backend_transfer(a, BinaryBackend), Nx.backend_transfer(b, BinaryBackend))
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def subtract(_, a, b) do
+      Nx.subtract(Nx.backend_transfer(a, BinaryBackend), Nx.backend_transfer(b, BinaryBackend))
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def sum(_, t, opts) do
+      t
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.sum(opts)
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def reverse(_, t, axes) do
+      t
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.reverse(axes: axes)
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def product(_, t, opts) do
+      t
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.product(opts)
+      |> Nx.backend_transfer(__MODULE__)
     end
 
     def transpose(_, t, _) do
@@ -87,14 +135,35 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
-    def reshape(%{data: %Nx.Defn.Expr{}} = tensor, opts) do
-      send(self(), {:called_default_impl, :reshape})
+    def gather(_, t, indices) do
+      send(self(), {:called_default_impl, :gather})
 
-      Nx.Defn.Expr.reshape(tensor, opts)
+      t
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.gather(indices)
+      |> Nx.backend_transfer(__MODULE__)
     end
 
-    def dot(_out, a, _, _, b, _, _) do
-      send(self(), :called_default_impl)
+    def broadcast(_, t, shape, axes) do
+      send(self(), {:called_default_impl, :reshape})
+
+      t
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.broadcast(shape, axes: axes)
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def reshape(out, t) do
+      send(self(), {:called_default_impl, :reshape})
+
+      t
+      |> Nx.backend_transfer(BinaryBackend)
+      |> Nx.reshape(out.shape)
+      |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def dot(_, a, _, _, b, _, _) do
+      send(self(), {:called_default_impl, :dot})
 
       out =
         Nx.dot(
@@ -106,15 +175,10 @@ defmodule Nx.OptionalTest do
     end
   end
 
-  defmodule DefnInspect do
-    import Nx.Defn, only: [defn: 2]
-
-    defn det(t) do
-      t
-      |> Nx.LinAlg.determinant()
-      |> Nx.sum()
-      |> inspect_expr()
-    end
+  defn det_inspect(t) do
+    t
+    |> Nx.LinAlg.determinant()
+    |> inspect_expr()
   end
 
   describe "optional callbacks (def)" do
@@ -124,7 +188,7 @@ defmodule Nx.OptionalTest do
 
       Nx.LinAlg.solve(a, b)
 
-      assert_receive :called_default_impl
+      assert_receive {:called_default_impl, :dot}
     end
 
     test "calls the custom impl if it is present" do
@@ -162,8 +226,9 @@ defmodule Nx.OptionalTest do
                  assert 0 ==
                           {3, 3}
                           |> Nx.iota(backend: unquote(backend))
-                          |> DefnInspect.det()
+                          |> det_inspect()
                           |> Nx.backend_transfer(Nx.BinaryBackend)
+                          |> Nx.sum()
                           |> Nx.to_number()
                end) == """
                #Nx.Tensor<
