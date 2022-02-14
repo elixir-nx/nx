@@ -508,13 +508,25 @@ defmodule Nx.Shared do
 
     cond do
       backend == Nx.Defn.Expr ->
-        Nx.Defn.Expr.optional(apply(default_impl, args), function_name, args)
+        default_impl
+        |> apply(args)
+        |> tap(&optional_ensure_same_shape(&1, hd(args)))
+        |> Nx.Defn.Expr.optional(function_name, args)
 
       function_exported?(backend, function_name, arity) ->
         apply(backend, function_name, args)
 
       :otherwise ->
-        apply(default_impl, args)
+        default_impl
+        |> apply(args)
+        |> tap(&optional_ensure_same_shape(&1, hd(args)))
     end
+  end
+
+  defp optional_ensure_same_shape(%{shape: shape}, %{shape: shape}), do: nil
+
+  defp optional_ensure_same_shape(%{shape: left}, %{shape: right}) do
+    raise ArgumentError,
+          "expected default implementation to have output shape #{inspect(right)}, got: #{inspect(left)}"
   end
 end
