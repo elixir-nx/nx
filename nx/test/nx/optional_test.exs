@@ -25,13 +25,6 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
-    def sum(_out, t, opts) do
-      t
-      |> Nx.backend_transfer()
-      |> Nx.sum(opts)
-      |> Nx.backend_transfer(__MODULE__)
-    end
-
     def solve(_out, a, b) do
       send(self(), :called_custom_impl)
 
@@ -90,13 +83,6 @@ defmodule Nx.OptionalTest do
 
     def subtract(_, a, b) do
       Nx.subtract(Nx.backend_transfer(a, BinaryBackend), Nx.backend_transfer(b, BinaryBackend))
-      |> Nx.backend_transfer(__MODULE__)
-    end
-
-    def sum(_, t, opts) do
-      t
-      |> Nx.backend_transfer(BinaryBackend)
-      |> Nx.sum(opts)
       |> Nx.backend_transfer(__MODULE__)
     end
 
