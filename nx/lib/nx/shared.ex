@@ -501,32 +501,33 @@ defmodule Nx.Shared do
 
   The given body is used as the default implementation otherwise.
   """
-  def optional(function_name, args, default_impl)
+  def optional(function_name, args, output, default_impl)
       when is_atom(function_name) and is_list(args) and is_function(default_impl) do
-    arity = length(args)
+    arity = length(args) + 1
     backend = list_impl!(args)
 
     cond do
       backend == Nx.Defn.Expr ->
         default_impl
         |> apply(args)
-        |> tap(&optional_ensure_same_shape(&1, hd(args)))
-        |> Nx.Defn.Expr.optional(function_name, args)
+        |> ensure_optional_compatible!(output)
+        |> Nx.Defn.Expr.optional(function_name, args, output)
 
       function_exported?(backend, function_name, arity) ->
-        apply(backend, function_name, args)
+        apply(backend, function_name, [output | args])
 
       :otherwise ->
         default_impl
         |> apply(args)
-        |> tap(&optional_ensure_same_shape(&1, hd(args)))
+        |> ensure_optional_compatible!(output)
     end
   end
 
-  defp optional_ensure_same_shape(%{shape: shape}, %{shape: shape}), do: nil
+  defp ensure_optional_compatible!(%{shape: shape, type: type} = left, %{shape: shape, type: type}),
+       do: left
 
-  defp optional_ensure_same_shape(%{shape: left}, %{shape: right}) do
+  defp ensure_optional_compatible!(left, right) do
     raise ArgumentError,
-          "expected default implementation to have output shape #{inspect(right)}, got: #{inspect(left)}"
+          "expected default implementation to match template #{inspect(right)}, got: #{inspect(left)}"
   end
 end

@@ -496,13 +496,10 @@ defmodule Nx.LinAlg do
     %T{shape: b_shape, type: b_type} = b = Nx.to_tensor(b)
 
     output_shape = Nx.Shape.solve(a_shape, b_shape)
-
     output_type = a_type |> Nx.Type.merge(b_type) |> Nx.Type.to_floating()
+    output = Nx.template(output_shape, output_type)
 
-    output_names = List.duplicate(nil, tuple_size(output_shape))
-    output = %T{b | shape: output_shape, type: output_type, names: output_names}
-
-    Nx.Shared.optional(:solve, [output, a, b], fn _output, a, b ->
+    Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
       # We need to achieve an LQ decomposition for `a` (henceforth called A)
       # because triangular_solve only accepts lower_triangular matrices
       # Therefore, we can use the fact that if we have M = Q'R' -> transpose(M) = LQ.
@@ -1128,22 +1125,16 @@ defmodule Nx.LinAlg do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})
 
     transform(tensor, fn tensor ->
-      output = %{
-        tensor
-        | type: Nx.Type.to_floating(tensor.type),
-          shape: {},
-          names: Enum.map(tensor.names, fn _ -> nil end)
-      }
+      output = Nx.template({}, Nx.Type.to_floating(tensor.type))
 
-      Nx.Shared.optional(:determinant, [output, tensor], fn
-        _, tensor ->
-          {n, _} = Nx.shape(tensor)
+      Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
+        {n, _} = Nx.shape(tensor)
 
-          case n do
-            2 -> determinant_2by2(tensor)
-            3 -> determinant_3by3(tensor)
-            _ -> determinant_NbyN(tensor)
-          end
+        case n do
+          2 -> determinant_2by2(tensor)
+          3 -> determinant_3by3(tensor)
+          _ -> determinant_NbyN(tensor)
+        end
       end)
     end)
   end

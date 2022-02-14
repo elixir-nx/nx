@@ -816,9 +816,8 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  def optional(%{data: %{context: context}} = default_impl_expr, name, [out | args]) do
+  def optional(%{data: %{context: context}} = default_impl_expr, name, args, out) do
     expr = expr(default_impl_expr, context, name, args)
-
     expr(out, context, :optional, [expr, default_impl_expr])
   end
 
