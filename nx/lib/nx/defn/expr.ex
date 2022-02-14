@@ -816,6 +816,11 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  def optional(%{data: %{context: context}} = default_impl_expr, name, args, out) do
+    expr = expr(default_impl_expr, context, name, args)
+    expr(out, context, :optional, [expr, default_impl_expr])
+  end
+
   ## Helpers
 
   defp expr(tensor, context, op, args) do
@@ -1020,8 +1025,8 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def inspect(tensor, opts) do
-    {_, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
-    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(tensor, acc, &inspect_expr/2)
+    {t, acc} = inspect_expr(tensor, {[], [], %{}, %{}})
+    {_, {exprs, params, _var_map, _cache}} = Tree.apply_args(t, acc, &inspect_expr/2)
 
     all = Enum.reverse(params, Enum.reverse(exprs))
     header = concat(line(), color("Nx.Defn.Expr", :map, opts))
@@ -1042,6 +1047,10 @@ defmodule Nx.Defn.Expr do
   defp inspect_expr(%T{data: %Expr{op: :metadata, args: [expr, metadata]}}, acc)
        when not is_map_key(metadata, :inspect),
        do: inspect_expr(expr, acc)
+
+  defp inspect_expr(%T{data: %Expr{op: :optional, args: [expr, _default]}}, acc) do
+    inspect_expr(expr, acc)
+  end
 
   defp inspect_expr(%T{data: %Expr{id: id}} = t, {exprs, params, var_map, cache} = acc) do
     case cache do

@@ -1,5 +1,5 @@
 defmodule Torchx.DefnTest do
-  use ExUnit.Case, async: true
+  use Torchx.Case, async: true
 
   import Nx.Defn
   alias Nx.Tensor, as: T
@@ -55,6 +55,15 @@ defmodule Torchx.DefnTest do
 
       assert factorial_tuple(10.0) |> Nx.backend_transfer() ==
                Nx.tensor(3_628_800.0, backend: Nx.BinaryBackend)
+    end
+  end
+
+  describe "determinant" do
+    defn det(t), do: Nx.LinAlg.determinant(t)
+
+    test "works" do
+      t = Nx.tensor([[2, 0], [0, 1]])
+      assert_all_close(Nx.tensor(2.0), det(t))
     end
   end
 end

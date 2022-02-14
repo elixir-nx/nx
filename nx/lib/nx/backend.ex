@@ -122,8 +122,9 @@ defmodule Nx.Backend do
   ## Optional Callbacks
 
   @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
+  @callback determinant(out :: tensor, t :: tensor) :: tensor
 
-  @optional_callbacks [solve: 3]
+  @optional_callbacks [solve: 3, determinant: 2]
 
   ## Inspect implementation
 

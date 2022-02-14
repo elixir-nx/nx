@@ -170,6 +170,94 @@ defmodule Torchx.NxLinAlgTest do
     end
   end
 
+  describe "solve" do
+    test "base case 1D (s64)" do
+      a = Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+
+      result = Nx.LinAlg.solve(a, Nx.tensor([4, 2, 4, 2]))
+
+      assert_all_close(result, Nx.tensor([1.33333337, -0.6666666, 2.6666667, -1.33333]))
+    end
+
+    test "base case 1D (f64)" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      %{type: {:f, 64}} = result = Nx.LinAlg.solve(a, Nx.tensor([1, 2, 1]))
+      assert_all_close(result, Nx.tensor([1.0, 1.0, -1.0]))
+    end
+
+    test "base case 2D" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([[1, 2, 3], [2, 2, 4], [2, 0, 1]])
+      result = Nx.LinAlg.solve(a, b)
+
+      expected =
+        Nx.tensor([
+          [1.0, 2.0, 3.0],
+          [1.0, 0.0, 1.0],
+          [1.0, 0.0, 0.0]
+        ])
+
+      assert_all_close(result, expected)
+    end
+
+    test "invalid a shape" do
+      assert_raise ArgumentError, "expected a square matrix, got matrix with shape: {2, 4}", fn ->
+        Nx.LinAlg.triangular_solve(
+          Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]),
+          Nx.tensor([4, 2, 4, 2])
+        )
+      end
+    end
+
+    test "incompatible dims" do
+      assert_raise ArgumentError, "incompatible dimensions for a and b on triangular solve", fn ->
+        Nx.LinAlg.triangular_solve(
+          Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]),
+          Nx.tensor([4])
+        )
+      end
+    end
+
+    test "singular matrix" do
+      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
+        Nx.LinAlg.triangular_solve(
+          Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]),
+          Nx.tensor([4, 2, 4, 2])
+        )
+      end
+    end
+  end
+
+  describe "invert" do
+    test "works for matrix" do
+      a = Nx.tensor([[1, 0, 0, 0], [2, 1, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1]])
+      a_inv = Nx.LinAlg.invert(a)
+
+      assert_all_close(Nx.dot(a, a_inv), Nx.eye(a))
+      assert_all_close(Nx.dot(a_inv, a), Nx.eye(a))
+    end
+
+    test "fails for singular matrix" do
+      assert_raise ArgumentError, "can't solve for singular matrix", fn ->
+        Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
+      end
+    end
+
+    test "validates shape" do
+      assert_raise ArgumentError,
+                   "expected tensor to match shape {n, n}, got tensor with shape {2, 4}",
+                   fn ->
+                     Nx.LinAlg.invert(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0]]))
+                   end
+
+      assert_raise ArgumentError,
+                   "expected tensor to match shape {n, n}, got tensor with shape {1, 3, 3}",
+                   fn ->
+                     Nx.LinAlg.invert(Nx.iota({1, 3, 3}))
+                   end
+    end
+  end
+
   describe "qr" do
     test "property" do
       for _ <- 1..10 do
