@@ -110,6 +110,35 @@ defmodule EXLA.ExecutableTest do
       assert <<2::32-native>> == Buffer.read(b)
       assert <<3::32-native>> == Buffer.read(c)
     end
+
+    @tag :multi_device
+    test "succeeds with num replicas" do
+      t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
+      t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
+
+      executable =
+        compile([t1.shape, t2.shape], [num_replicas: 2, device_id: -1], fn b, x, y ->
+          Op.tuple(b, [x, y, Op.add(x, y)])
+        end)
+
+      # assert executable.device_id == -1
+
+      assert_raise ArgumentError,
+                   ":device_id is expected on run for single-program multiple-data",
+                   fn -> EXLA.Executable.run(executable, [t1, t2], []) end
+
+      [a, b, c] = EXLA.Executable.run(executable, [t1, t2], device_id: 0)
+      assert c.device_id == 0
+      assert <<1::32-native>> == Buffer.read(a)
+      assert <<2::32-native>> == Buffer.read(b)
+      assert <<3::32-native>> == Buffer.read(c)
+
+      [a, b, c] = EXLA.Executable.run(executable, [t1, t2], device_id: 1)
+      assert c.device_id == 1
+      assert <<1::32-native>> == Buffer.read(a)
+      assert <<2::32-native>> == Buffer.read(b)
+      assert <<3::32-native>> == Buffer.read(c)
+    end
   end
 end
 

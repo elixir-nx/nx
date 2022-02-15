@@ -35,8 +35,8 @@ defmodule EXLA.Defn.APITest do
     end
 
     test "raises on invalid device_id" do
-      assert_raise RuntimeError, ~r"Invalid device ordinal value \(1\)", fn ->
-        EXLA.jit(&add_two_keep_on_device/2, [2, 3], device_id: 1)
+      assert_raise RuntimeError, ~r"Invalid device ordinal value \(1024\)", fn ->
+        EXLA.jit(&add_two_keep_on_device/2, [2, 3], device_id: 1024)
       end
     end
   end

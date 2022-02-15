@@ -9,7 +9,7 @@ defmodule EXLAHelpers do
 
   It expects a list of shapes which will be given as parameters.
   """
-  def compile(shapes, fun, opts \\ []) do
+  def compile(shapes, opts \\ [], fun) do
     builder = EXLA.Builder.new("test")
 
     {params, _} =
@@ -30,7 +30,7 @@ defmodule EXLAHelpers do
   used for compilation and then given on execution.
   """
   def run(args, opts \\ [], fun) do
-    exec = compile(Enum.map(args, & &1.shape), fun, opts)
+    exec = compile(Enum.map(args, & &1.shape), opts, fun)
     EXLA.Executable.run(exec, args, opts)
   end
 end

@@ -19,14 +19,25 @@ defmodule EXLA.Executable do
 
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
-    %{client: client, device_id: device_id, output_shape: output_shape} = executable
-    {data, _} = run(client, executable, arguments, options)
+    %{client: client, device_id: device_id, output_shape: output_shape, ref: ref} = executable
+
+    device_id =
+      cond do
+        opt_device_id = options[:device_id] ->
+          opt_device_id
+
+        device_id >= 0 ->
+          device_id
+
+        true ->
+          raise ArgumentError, ":device_id is expected on run for single-program multiple-data"
+      end
+
+    {data, _} = run(client, ref, device_id, arguments, options)
     decompose_output(data, output_shape, client, device_id)
   end
 
-  defp run(client, executable, arguments, options) do
-    %{ref: exec} = executable
-
+  defp run(client, ref, device_id, arguments, options) do
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
@@ -38,11 +49,8 @@ defmodule EXLA.Executable do
 
     data =
       case client.platform do
-        :host ->
-          EXLA.NIF.run_cpu(client.ref, exec, inputs, keep_on_device_int, executable.device_id)
-
-        _ ->
-          EXLA.NIF.run_io(client.ref, exec, inputs, keep_on_device_int, executable.device_id)
+        :host -> EXLA.NIF.run_cpu(client.ref, ref, inputs, keep_on_device_int, device_id)
+        _ -> EXLA.NIF.run_io(client.ref, ref, inputs, keep_on_device_int, device_id)
       end
 
     unwrap!(data)
