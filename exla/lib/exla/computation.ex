@@ -18,7 +18,10 @@ defmodule EXLA.Computation do
 
     * `:num_replicas` - the number of replicas this computation will run on.
       It defaults to 1 but you can set it if you want to enable single-program
-      multiple data
+      multiple data.
+
+    * `:use_spmd` - enables Single-Program Multiple-Data partioning.
+      This is set to true if `:num_partitions` is more than one, otherwise is `false`.
 
   Currently those options do not have an effect as they related to running the
   same compiled executable on multiple replicas.
@@ -33,7 +36,7 @@ defmodule EXLA.Computation do
     num_partitions = Keyword.get(options, :num_partitions, 1)
     device_id = Keyword.get(options, :device_id, client.default_device_id)
 
-    use_spmd = if num_replicas >= 1 or num_partitions >= 1, do: 1, else: 0
+    use_spmd = if Keyword.get(options, :use_spmd, true) or num_partitions >= 1, do: 1, else: 0
     output_shape = assert_output_shape!(computation)
 
     ref =

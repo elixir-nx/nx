@@ -20,19 +20,6 @@ defmodule EXLA.Executable do
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
     %{client: client, device_id: device_id, output_shape: output_shape, ref: ref} = executable
-
-    device_id =
-      cond do
-        opt_device_id = options[:device_id] ->
-          opt_device_id
-
-        device_id >= 0 ->
-          device_id
-
-        true ->
-          raise ArgumentError, ":device_id is expected on run for single-program multiple-data"
-      end
-
     {data, _} = run(client, ref, device_id, arguments, options)
     decompose_output(data, output_shape, client, device_id)
   end
