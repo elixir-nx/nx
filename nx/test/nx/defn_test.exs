@@ -585,7 +585,8 @@ defmodule Nx.DefnTest do
     defn lnot_true(), do: not transform({}, fn _ -> true end)
 
     test "not" do
-      assert %T{data: %Expr{op: :equal, args: [_, _]}} = lnot(1)
+      assert %T{data: %Expr{op: :optional, args: [%T{data: %Expr{op: :logical_not}}, _]}} =
+               lnot(1)
 
       assert_raise ArgumentError, ~r/boolean value passed to Nx.Defn.Kernel.not\/1/, fn ->
         lnot_true()
