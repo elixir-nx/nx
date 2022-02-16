@@ -36,7 +36,7 @@ defmodule EXLA.Executable do
 
     data =
       case client.platform do
-        :host -> EXLA.NIF.run_cpu(client.ref, ref, inputs, keep_on_device_int, device_id)
+        :host -> EXLA.NIF.run_cpu(client.ref, ref, [inputs], keep_on_device_int, device_id)
         _ -> EXLA.NIF.run_io(client.ref, ref, inputs, keep_on_device_int, device_id)
       end
 
