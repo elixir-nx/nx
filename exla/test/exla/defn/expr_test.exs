@@ -602,6 +602,13 @@ defmodule EXLA.Defn.ExprTest do
                  type: {:u, 8}
                )
     end
+
+    defn logical_not(a), do: Nx.logical_not(a)
+
+    test "not" do
+      assert logical_not(Nx.tensor([-2, -1, 0, 1, 2])) ==
+               Nx.tensor([0, 0, 1, 0, 0], type: {:u, 8})
+    end
   end
 
   describe "select" do
@@ -3129,6 +3136,15 @@ defmodule EXLA.Defn.ExprTest do
     test "sorts a floating-point tensor and returns its indices" do
       assert argsort0(Nx.tensor([42.0, 23.0, 16.0, 15.0, 8.0, 4.0])) ==
                Nx.tensor([5, 4, 3, 2, 1, 0])
+    end
+  end
+
+  describe "optional" do
+    defn determinant(t), do: Nx.LinAlg.determinant(t)
+
+    test "determinant" do
+      two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      assert determinant(two_by_two) == Nx.tensor(-2.0)
     end
   end
 

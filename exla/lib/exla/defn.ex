@@ -436,6 +436,10 @@ defmodule EXLA.Defn do
     {no_token_computation(name, args, expr, type, state), cache}
   end
 
+  defp cached_recur_operator(:optional, %T{data: %Expr{args: [_, default]}}, state, cache) do
+    recur_operator(default, state, cache)
+  end
+
   defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
     {op, cache} = recur_operator(expr, state, cache)
     {_, cache} = recur_operator(token, state, cache)
