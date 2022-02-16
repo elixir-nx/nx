@@ -4246,10 +4246,20 @@ defmodule Nx do
   @doc type: :element
   def logical_not(tensor) do
     tensor = to_tensor(tensor)
-    type = tensor.type
-    out = %T{shape: {}, type: type, names: []}
-    zero = Nx.BinaryBackend.from_binary(out, number_to_binary(0, type), [])
-    element_wise_pred_op(tensor, zero, :equal)
+    output = Nx.template(tensor.shape, {:u, 8}, names: tensor.names)
+
+    Nx.Shared.optional(:logical_not, [tensor], output, fn tensor ->
+      type = tensor.type
+
+      zero =
+        Nx.BinaryBackend.from_binary(
+          %T{shape: {}, type: type, names: []},
+          number_to_binary(0, type),
+          []
+        )
+
+      element_wise_pred_op(tensor, zero, :equal)
+    end)
   end
 
   @doc """
