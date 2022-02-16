@@ -482,6 +482,15 @@ defmodule Nx.LinAlg do
         ]
       >
 
+  If the axes are named, their names are not preserved in the output:
+
+      iex> a = Nx.tensor([[1, 0, 1], [1, 1, 0], [1, 1, 1]], names: [:x, :y])
+      iex> Nx.LinAlg.solve(a, Nx.tensor([0, 2, 1], names: [:z])) |> Nx.round()
+      #Nx.Tensor<
+        f32[3]
+        [1.0, 1.0, -1.0]
+      >
+
   ### Error cases
 
       iex> Nx.LinAlg.solve(Nx.tensor([[1, 0], [0, 1]]), Nx.tensor([4, 2, 4, 2]))
@@ -1120,6 +1129,23 @@ defmodule Nx.LinAlg do
         f32
         48.0
       >
+
+  If the axes are named, their names are not preserved in the output:
+
+      iex> two_by_two = Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+      iex> Nx.LinAlg.determinant(two_by_two)
+      #Nx.Tensor<
+        f32
+        -2.0
+      >
+
+      iex> three_by_three = Nx.tensor([[1.0, 2.0, 3.0], [1.0, -2.0, 3.0], [7.0, 8.0, 9.0]], names: [:x, :y])
+      iex> Nx.LinAlg.determinant(three_by_three)
+      #Nx.Tensor<
+        f32
+        48.0
+      >
+
   """
   defn determinant(tensor) do
     Nx.Defn.Kernel.assert_shape_pattern(tensor, {n, n})

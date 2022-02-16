@@ -523,7 +523,10 @@ defmodule Nx.Shared do
     end
   end
 
-  defp ensure_optional_compatible!(%{shape: shape, type: type} = left, %{shape: shape, type: type}),
+  defp ensure_optional_compatible!(
+         %{shape: shape, type: type, names: names} = left,
+         %{shape: shape, type: type, names: names}
+       ),
        do: left
 
   defp ensure_optional_compatible!(left, right) do
