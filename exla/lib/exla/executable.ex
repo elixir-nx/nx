@@ -4,7 +4,7 @@ defmodule EXLA.Executable do
   """
 
   alias __MODULE__
-  alias EXLA.{BinaryBuffer, Buffer, Shape}
+  alias EXLA.{BinaryBuffer, DeviceBuffer, Shape}
 
   @enforce_keys [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
   defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
@@ -34,7 +34,7 @@ defmodule EXLA.Executable do
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
-          %Buffer{ref: ref} -> ref
+          %DeviceBuffer{ref: ref} -> ref
           %BinaryBuffer{data: data, shape: shape} -> {data, shape.ref}
         end)
       end
@@ -53,7 +53,7 @@ defmodule EXLA.Executable do
 
     Enum.zip_with(data, shapes, fn
       buf, subshape when is_reference(buf) ->
-        Buffer.from_ref(buf, client, device_id, subshape)
+        DeviceBuffer.from_ref(buf, client, device_id, subshape)
 
       buf, subshape when is_binary(buf) ->
         BinaryBuffer.from_binary(buf, subshape)
