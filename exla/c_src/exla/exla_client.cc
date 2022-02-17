@@ -149,7 +149,7 @@ xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
 
   ERL_NIF_TERM per_replica_term = enif_make_list_from_array(env, per_replica_results.data(), per_replica_results.size());
 
-  return nif::ok(env, enif_make_tuple2(env, per_replica_term, enif_make_int(env, 0)));
+  return nif::ok(env, per_replica_term);
 }
 
 ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
@@ -173,7 +173,6 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
     client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
 
   if (device_id >= 0) {
-    // TODO: These should not segfault if they fail, but they do :(
     EXLA_ASSIGN_OR_RETURN(input_buffers, UnpackRunArguments(env, arguments, client_, device_assignment, device_id));
   } else {
     EXLA_ASSIGN_OR_RETURN(input_buffers, UnpackRunArguments(env, arguments, client_, device_assignment, -1));

@@ -10,7 +10,7 @@ defmodule EXLA.Executable do
   defstruct [:client, :ref, :output_shape, :num_replicas, :num_partitions, :device_id]
 
   @doc """
-  Runs the given executable with arguments.
+  Runs the given executable with a list of lists as inputs and the given options.
 
   ## Options
 
@@ -18,33 +18,37 @@ defmodule EXLA.Executable do
       after the computation (defaults to `false`).
 
   """
-  def run(%Executable{} = executable, arguments, options \\ []) do
+  def run(%Executable{} = executable, [subinputs | _] = inputs, options \\ [])
+      when is_list(subinputs) do
     %{client: client, device_id: device_id, output_shape: output_shape, ref: ref} = executable
-    # TODO: Data is a list of tuples: [{replica 1 terms, replica 1 device id}, ...]
-    {[{data, _}], _} = run(client, ref, device_id, arguments, options)
-    decompose_output(data, output_shape, client, device_id)
+
+    for data_and_device_id <- run(client, ref, device_id, inputs, options) do
+      decompose_output(data_and_device_id, output_shape, client)
+    end
   end
 
-  defp run(client, ref, device_id, arguments, options) do
+  defp run(client, ref, device_id, inputs, options) do
     keep_on_device = Keyword.get(options, :keep_on_device, false)
     keep_on_device_int = if keep_on_device, do: 1, else: 0
 
     inputs =
-      Enum.map(arguments, fn
-        %Buffer{ref: ref} -> ref
-        %BinaryBuffer{data: data, shape: shape} -> {data, shape.ref}
-      end)
+      for subinputs <- inputs do
+        Enum.map(subinputs, fn
+          %Buffer{ref: ref} -> ref
+          %BinaryBuffer{data: data, shape: shape} -> {data, shape.ref}
+        end)
+      end
 
     data =
       case client.platform do
-        :host -> EXLA.NIF.run_cpu(client.ref, ref, [inputs], keep_on_device_int, device_id)
+        :host -> EXLA.NIF.run_cpu(client.ref, ref, inputs, keep_on_device_int, device_id)
         _ -> EXLA.NIF.run_io(client.ref, ref, inputs, keep_on_device_int, device_id)
       end
 
     unwrap!(data)
   end
 
-  defp decompose_output(data, shape, client, device_id) do
+  defp decompose_output({data, device_id}, shape, client) do
     %Shape{dtype: {:tuple, shapes}} = shape
 
     Enum.zip_with(data, shapes, fn

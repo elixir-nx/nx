@@ -9,20 +9,20 @@ defmodule EXLA.ExecutableTest do
     t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
     assert_raise ArgumentError, ~r"can only compile computations with a tuple at the root", fn ->
-      run([t1, t2], [], fn b, x, y ->
+      run_one([t1, t2], [], fn b, x, y ->
         Op.tuple(b, [Op.tuple(b, [x]), Op.tuple(b, [y])])
       end)
     end
 
     assert_raise ArgumentError, ~r"can only compile computations with a tuple at the root", fn ->
-      run([t1, t2], [], fn _b, x, y -> Op.add(x, y) end)
+      run_one([t1, t2], [], fn _b, x, y -> Op.add(x, y) end)
     end
   end
 
   describe "run" do
     test "succeeds with no inputs and default options" do
       assert [%BinaryBuffer{data: <<1::32-native>>}] =
-               run([], fn b ->
+               run_one([], fn b ->
                  Op.tuple(b, [Op.constant_r0(b, 1, {:s, 32})])
                end)
     end
@@ -32,7 +32,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [%BinaryBuffer{data: <<2::32-native>>}] =
-               run([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+               run_one([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
     end
 
     test "succeeds when data is preloaded" do
@@ -40,10 +40,14 @@ defmodule EXLA.ExecutableTest do
       t2 = Buffer.place_on_device(<<1::32-native>>, Shape.make_shape({:s, 32}, {}), client(), 0)
 
       assert [%Buffer{}] =
-               run([t1, t2], [keep_on_device: true], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+               run_one([t1, t2], [keep_on_device: true], fn b, x, y ->
+                 Op.tuple(b, [Op.add(x, y)])
+               end)
 
       assert [%Buffer{}] =
-               run([t1, t2], [keep_on_device: true], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+               run_one([t1, t2], [keep_on_device: true], fn b, x, y ->
+                 Op.tuple(b, [Op.add(x, y)])
+               end)
 
       assert Buffer.read(t1) == <<1::32-native>>
       assert Buffer.read(t2) == <<1::32-native>>
@@ -54,7 +58,9 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [%Buffer{}] =
-               run([t1, t2], [keep_on_device: true], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+               run_one([t1, t2], [keep_on_device: true], fn b, x, y ->
+                 Op.tuple(b, [Op.add(x, y)])
+               end)
     end
 
     test "succeeds with data from a previous run" do
@@ -62,8 +68,8 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       exec = compile([t1.shape, t2.shape], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
-      assert [t3 = %Buffer{}] = Executable.run(exec, [t1, t2], keep_on_device: true)
-      assert [%BinaryBuffer{data: <<4::32-native>>}] = Executable.run(exec, [t3, t3])
+      assert [[t3 = %Buffer{}]] = Executable.run(exec, [[t1, t2]], keep_on_device: true)
+      assert [[%BinaryBuffer{data: <<4::32-native>>}]] = Executable.run(exec, [[t3, t3]])
     end
 
     test "succeeds with mixed data" do
@@ -71,7 +77,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [%BinaryBuffer{data: <<3::32-native>>}] =
-               run([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
+               run_one([t1, t2], fn b, x, y -> Op.tuple(b, [Op.add(x, y)]) end)
     end
 
     test "succeeds with tuple return" do
@@ -79,7 +85,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [%BinaryBuffer{data: <<1::32-native>>}, %BinaryBuffer{data: <<2::32-native>>}] =
-               run([t1, t2], fn b, x, y -> Op.tuple(b, [x, y]) end)
+               run_one([t1, t2], fn b, x, y -> Op.tuple(b, [x, y]) end)
     end
 
     test "succeeds with tuple return and keep_on_device true" do
@@ -87,7 +93,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %Buffer{}, b = %Buffer{}, c = %Buffer{}] =
-               run([t1, t2], [keep_on_device: true], fn b, x, y ->
+               run_one([t1, t2], [keep_on_device: true], fn b, x, y ->
                  Op.tuple(b, [x, y, Op.add(x, y)])
                end)
 
@@ -102,7 +108,7 @@ defmodule EXLA.ExecutableTest do
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [a = %Buffer{}, b = %Buffer{}, c = %Buffer{}] =
-               run([t1, t2], [keep_on_device: true, device_id: 1], fn b, x, y ->
+               run_one([t1, t2], [keep_on_device: true, device_id: 1], fn b, x, y ->
                  Op.tuple(b, [x, y, Op.add(x, y)])
                end)
 
@@ -115,19 +121,32 @@ defmodule EXLA.ExecutableTest do
     test "succeeds with num replicas" do
       t1 = BinaryBuffer.from_binary(<<1::32-native>>, Shape.make_shape({:s, 32}, {}))
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
+      t3 = BinaryBuffer.from_binary(<<3::32-native>>, Shape.make_shape({:s, 32}, {}))
+      t4 = BinaryBuffer.from_binary(<<4::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       executable =
-        compile([t1.shape, t2.shape], [num_replicas: 2, device_id: -1], fn b, x, y ->
+        compile([t1.shape, t2.shape], [num_replicas: 2], fn b, x, y ->
           Op.tuple(b, [x, y, Op.add(x, y)])
         end)
 
       assert executable.device_id == -1
 
-      [a, b, c] = EXLA.Executable.run(executable, [t1, t2], keep_on_device: true)
-      # assert c.device_id == ?
-      assert <<1::32-native>> == Buffer.read(a)
-      assert <<2::32-native>> == Buffer.read(b)
-      assert <<3::32-native>> == Buffer.read(c)
+      [[a1, a2, a3], [b1, b2, b3]] =
+        EXLA.Executable.run(executable, [[t1, t2], [t3, t4]], keep_on_device: true)
+
+      assert <<1::32-native>> == Buffer.read(a1)
+      assert <<2::32-native>> == Buffer.read(a2)
+      assert <<3::32-native>> == Buffer.read(a3)
+      assert a1.device_id == a2.device_id
+      assert a2.device_id == a3.device_id
+
+      assert <<3::32-native>> == Buffer.read(b1)
+      assert <<4::32-native>> == Buffer.read(b2)
+      assert <<7::32-native>> == Buffer.read(b3)
+      assert b1.device_id == b2.device_id
+      assert b2.device_id == b3.device_id
+
+      assert a1.device_id != b1.device_id
     end
   end
 end
@@ -146,7 +165,7 @@ defmodule EXLA.ExecutableFeedTest do
 
       assert res =
                Task.async(fn ->
-                 run([], [keep_on_device: true], fn b ->
+                 run_one([], [keep_on_device: true], fn b ->
                    token = Op.create_token(b)
                    val_and_token = Op.infeed(token, t.shape)
                    val = Op.get_tuple_element(val_and_token, 0)
@@ -169,7 +188,7 @@ defmodule EXLA.ExecutableFeedTest do
 
       assert res =
                Task.async(fn ->
-                 run([], [keep_on_device: true], fn b ->
+                 run_one([], [keep_on_device: true], fn b ->
                    token_shape = Shape.make_token_shape()
                    tuple_shape = Shape.make_tuple_shape([t.shape, token_shape])
 
