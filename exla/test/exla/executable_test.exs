@@ -36,8 +36,21 @@ defmodule EXLA.ExecutableTest do
     end
 
     test "succeeds when data is preloaded" do
-      t1 = DeviceBuffer.place_on_device(<<1::32-native>>, Shape.make_shape({:s, 32}, {}), client(), 0)
-      t2 = DeviceBuffer.place_on_device(<<1::32-native>>, Shape.make_shape({:s, 32}, {}), client(), 0)
+      t1 =
+        DeviceBuffer.place_on_device(
+          <<1::32-native>>,
+          Shape.make_shape({:s, 32}, {}),
+          client(),
+          0
+        )
+
+      t2 =
+        DeviceBuffer.place_on_device(
+          <<1::32-native>>,
+          Shape.make_shape({:s, 32}, {}),
+          client(),
+          0
+        )
 
       assert [%DeviceBuffer{}] =
                run_one([t1, t2], [keep_on_device: true], fn b, x, y ->
@@ -73,7 +86,14 @@ defmodule EXLA.ExecutableTest do
     end
 
     test "succeeds with mixed data" do
-      t1 = DeviceBuffer.place_on_device(<<1::32-native>>, Shape.make_shape({:s, 32}, {}), client(), 0)
+      t1 =
+        DeviceBuffer.place_on_device(
+          <<1::32-native>>,
+          Shape.make_shape({:s, 32}, {}),
+          client(),
+          0
+        )
+
       t2 = BinaryBuffer.from_binary(<<2::32-native>>, Shape.make_shape({:s, 32}, {}))
 
       assert [%BinaryBuffer{data: <<3::32-native>>}] =
