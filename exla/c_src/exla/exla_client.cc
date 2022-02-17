@@ -117,21 +117,39 @@ UnpackRunArguments(ErlNifEnv* env,
   return arg_buffers;
 }
 
-xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env, std::vector<std::unique_ptr<xla::PjRtBuffer>> result, bool keep_on_device) {
-  std::vector<ERL_NIF_TERM> terms;
-  terms.reserve(result.size());
-  for (auto& pjrt_buf : result) {
-    ExlaBuffer* buf = new ExlaBuffer(std::move(pjrt_buf));
-    ERL_NIF_TERM term;
-    if (keep_on_device) {
-      term = nif::make<ExlaBuffer*>(env, buf);
-    } else {
-      EXLA_ASSIGN_OR_RETURN(term, buf->ToBinary(env, -1));
-      delete buf;
+xla::StatusOr<ERL_NIF_TERM> UnpackResult(ErlNifEnv* env,
+                                         std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> result,
+                                         bool keep_on_device,
+                                         xla::DeviceAssignment device_assignment,
+                                         int device_id) {
+  std::vector<ERL_NIF_TERM> per_replica_results;
+
+  for (int i = 0; i < result.size(); i++) {
+    std::vector<ERL_NIF_TERM> terms;
+    terms.reserve(result.size());
+    int device = device_id >= 0 ? device_id : device_assignment(i, 0);
+
+    for (auto& pjrt_buf : result.at(i)) {
+      ExlaBuffer* buf = new ExlaBuffer(std::move(pjrt_buf));
+      ERL_NIF_TERM term;
+      if (keep_on_device) {
+        term = nif::make<ExlaBuffer*>(env, buf);
+      } else {
+        EXLA_ASSIGN_OR_RETURN(term, buf->ToBinary(env, -1));
+        delete buf;
+      }
+
+      terms.push_back(term);
     }
-    terms.push_back(term);
+
+    ERL_NIF_TERM replica_term = enif_make_int(env, device);
+    ERL_NIF_TERM replica_results = enif_make_list_from_array(env, terms.data(), terms.size());
+    per_replica_results.push_back(enif_make_tuple2(env, replica_results, replica_term));
   }
-  return nif::ok(env, enif_make_tuple2(env, enif_make_list_from_array(env, &terms[0], terms.size()), enif_make_int(env, 0)));
+
+  ERL_NIF_TERM per_replica_term = enif_make_list_from_array(env, per_replica_results.data(), per_replica_results.size());
+
+  return nif::ok(env, enif_make_tuple2(env, per_replica_term, enif_make_int(env, 0)));
 }
 
 ExlaExecutable::ExlaExecutable(std::unique_ptr<xla::PjRtExecutable> executable,
@@ -191,10 +209,12 @@ xla::StatusOr<ERL_NIF_TERM> ExlaExecutable::Run(ErlNifEnv* env,
   if (device_id >= 0) {
     EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->client()->LookupDevice(device_id));
     EXLA_ASSIGN_OR_RETURN(auto result, executable_->ExecutePortable(pjrt_buffers.at(0), device, options));
-    EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(result), keep_on_device));
+    std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>> per_replica_results;
+    per_replica_results.push_back(std::move(result));
+    EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(per_replica_results), keep_on_device, device_assignment, device_id));
   } else {
     EXLA_ASSIGN_OR_RETURN(auto result, executable_->Execute(pjrt_buffers, options));
-    EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(result.at(0)), keep_on_device));
+    EXLA_ASSIGN_OR_RETURN(ret, UnpackResult(env, std::move(result), keep_on_device, device_assignment, device_id));
   }
 
   return ret;

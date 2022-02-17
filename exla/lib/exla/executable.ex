@@ -20,7 +20,8 @@ defmodule EXLA.Executable do
   """
   def run(%Executable{} = executable, arguments, options \\ []) do
     %{client: client, device_id: device_id, output_shape: output_shape, ref: ref} = executable
-    {data, _} = run(client, ref, device_id, arguments, options)
+    # TODO: Data is a list of tuples: [{replica 1 terms, replica 1 device id}, ...]
+    {[{data, _}], _} = run(client, ref, device_id, arguments, options)
     decompose_output(data, output_shape, client, device_id)
   end
 
