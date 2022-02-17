@@ -1454,6 +1454,9 @@ defmodule Nx do
   @doc """
   Returns the underlying tensor as a flat list.
 
+  Negative infinity, infinity, and NaN will be respectively returned
+  as the atoms `:neg_infinity`, `:infinity`, and `:nan`.
+
   ## Examples
 
       iex> Nx.to_flat_list(1)
@@ -1465,13 +1468,18 @@ defmodule Nx do
       iex> Nx.to_flat_list(Nx.tensor([1.0, 2.0, 3.0]), limit: 2)
       [1.0, 2.0]
 
+  Non-finite numbers are returned as atoms:
+
+      iex> t = Nx.tensor([Nx.Constants.neg_infinity(), Nx.Constants.nan(), Nx.Constants.infinity()])
+      iex> Nx.to_flat_list(t)
+      [:neg_infinity, :nan, :infinity]
+
   """
   @doc type: :conversion
   def to_flat_list(tensor, opts \\ []) do
     opts = keyword!(opts, [:limit])
     %{type: {_, size} = type} = tensor = to_tensor(tensor)
 
-    # TODO: Simplify loop once nonfinite are officially supported in the VM
     for <<part::size(size)-bitstring <- to_binary(tensor, Keyword.take(opts, [:limit]))>> do
       match_types [type] do
         <<match!(var, 0)>> = part
