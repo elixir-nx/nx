@@ -46,7 +46,7 @@ defmodule EXLA.Defn do
     # EXLA.Defn.Stream.run.
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
-        EXLA.Executable.run(executable, buffers, run_options)
+        EXLA.Executable.run(executable, [buffers], run_options)
       end)
 
     # The outfeed reader will redirect all outputs with flag 1 to the current
@@ -252,9 +252,9 @@ defmodule EXLA.Defn do
     lock = EXLA.Defn.Lock.lock(run_key(executable))
 
     try do
-      EXLA.Executable.run(executable, EXLA.Defn.Buffers.from_nx!(inputs), run_options)
+      EXLA.Executable.run(executable, [EXLA.Defn.Buffers.from_nx!(inputs)], run_options)
     else
-      result -> EXLA.Defn.Buffers.to_nx!(result, outputs)
+      [result] -> EXLA.Defn.Buffers.to_nx!(result, outputs)
     after
       EXLA.Defn.Lock.unlock(lock)
     end
@@ -267,7 +267,7 @@ defmodule EXLA.Defn do
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
         run_options = Keyword.put(run_options, :keep_on_device, true)
-        EXLA.Executable.run(executable, buffers, run_options)
+        EXLA.Executable.run(executable, [buffers], run_options)
       end)
 
     {:ok, outfeed} = EXLA.Defn.Outfeed.start_child(executable, hooks)
@@ -278,9 +278,8 @@ defmodule EXLA.Defn do
 
     receive do
       {:DOWN, ^ref, _, _, _} ->
-        runner
-        |> EXLA.Defn.Runner.read()
-        |> EXLA.Defn.Buffers.to_nx!(outputs, fun)
+        [result] = EXLA.Defn.Runner.read(runner)
+        EXLA.Defn.Buffers.to_nx!(result, outputs, fun)
     end
   end
 

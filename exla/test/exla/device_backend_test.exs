@@ -12,7 +12,7 @@ defmodule EXLA.DeviceBackendTest do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, {EXLA.DeviceBackend, device_id: 0})
-    assert %EXLA.DeviceBackend{buffer: %EXLA.Buffer{}} = et.data
+    assert %EXLA.DeviceBackend{buffer: %EXLA.DeviceBuffer{}} = et.data
 
     nt = Nx.backend_transfer(et)
     assert Nx.to_binary(nt) == <<1::64-native, 2::64-native, 3::64-native, 4::64-native>>
@@ -26,7 +26,7 @@ defmodule EXLA.DeviceBackendTest do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, EXLA.DeviceBackend)
-    assert %EXLA.DeviceBackend{buffer: %EXLA.Buffer{} = old_buffer} = et.data
+    assert %EXLA.DeviceBackend{buffer: %EXLA.DeviceBuffer{} = old_buffer} = et.data
 
     # Transferring to the same device is a no-op
     et = Nx.backend_transfer(et, EXLA.DeviceBackend)
@@ -45,11 +45,11 @@ defmodule EXLA.DeviceBackendTest do
     t = Nx.tensor([1, 2, 3, 4])
 
     et = Nx.backend_transfer(t, EXLA.DeviceBackend)
-    assert %EXLA.DeviceBackend{buffer: %EXLA.Buffer{} = old_buffer} = et.data
+    assert %EXLA.DeviceBackend{buffer: %EXLA.DeviceBuffer{} = old_buffer} = et.data
 
     # Copy to the same client/device_id still makes a copy
     et = Nx.backend_copy(t, EXLA.DeviceBackend)
-    assert %EXLA.DeviceBackend{buffer: %EXLA.Buffer{} = new_buffer} = et.data
+    assert %EXLA.DeviceBackend{buffer: %EXLA.DeviceBuffer{} = new_buffer} = et.data
     assert old_buffer != new_buffer
 
     nt = Nx.backend_copy(et)

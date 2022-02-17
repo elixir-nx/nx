@@ -2,7 +2,7 @@ defmodule EXLA.Defn.Buffers do
   @moduledoc false
 
   @doc """
-  binary + EXLA.Buffer + EXLA.BinaryBuffer -> Nx.
+  binary + EXLA.DeviceBuffer + EXLA.BinaryBuffer -> Nx.
   """
   def to_nx!(buffers, outputs, fun \\ & &1) do
     {res, []} =
@@ -22,7 +22,7 @@ defmodule EXLA.Defn.Buffers do
     %Nx.BinaryBackend{state: buffer}
   end
 
-  defp buffer_to_data(tensor, %EXLA.Buffer{shape: exla_shape} = buffer) do
+  defp buffer_to_data(tensor, %EXLA.DeviceBuffer{shape: exla_shape} = buffer) do
     validate_shape!(tensor, exla_shape)
     %EXLA.DeviceBackend{buffer: buffer}
   end
@@ -51,7 +51,7 @@ defmodule EXLA.Defn.Buffers do
   defp to_nx_type(type), do: type
 
   @doc """
-  Nx -> EXLA.Buffer + EXLA.BinaryBuffer.
+  Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
   """
   def from_nx!(tensors) do
     for tensor <- tensors do

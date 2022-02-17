@@ -14,7 +14,7 @@ EXLA_SO = $(PRIV_DIR)/libexla.so
 EXLA_LIB_DIR = $(PRIV_DIR)/lib
 
 # Build Flags
-CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wextra \
+CFLAGS = -fPIC -I$(ERTS_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -O3 -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
 	 -shared -std=c++14
 
