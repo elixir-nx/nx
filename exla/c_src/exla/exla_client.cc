@@ -101,7 +101,7 @@ UnpackRunArguments(ErlNifEnv* env,
         device_buffers.push_back(buf);
 
       } else if (nif::get<ExlaBuffer*>(env, inner_head, buffer)) {
-        // TODO: What if this is not on the correct device?
+        // XLA already raises if the device_ids do not match, so we don't need to check it.
         device_buffers.push_back(*buffer);
       } else {
         return xla::InvalidArgument("Expected argument to be buffer reference.");
