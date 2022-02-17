@@ -520,10 +520,10 @@ ERL_NIF_TERM gather(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   xla::XlaOp* operand;
   xla::XlaOp* start_indices;
   exla::int64 index_vector_dim;
-  std::vector<xla::int64> slice_sizes;
-  std::vector<xla::int64> offset_dims;
-  std::vector<xla::int64> collapsed_slice_dims;
-  std::vector<xla::int64> start_index_map;
+  std::vector<exla::int64> slice_sizes;
+  std::vector<exla::int64> offset_dims;
+  std::vector<exla::int64> collapsed_slice_dims;
+  std::vector<exla::int64> start_index_map;
 
   if (!exla::nif::get<xla::XlaOp>(env, argv[0], operand)) {
     return exla::nif::error(env, "Unable to get operand.");

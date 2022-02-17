@@ -177,7 +177,8 @@ xla::StatusOr<ExlaBuffer*> ExlaClient::BufferFromBinary(const ErlNifBinary& bina
   xla::PjRtClient::HostBufferSemantics semantics = xla::PjRtClient::HostBufferSemantics::kImmutableUntilTransferCompletes;
 
   EXLA_ASSIGN_OR_RETURN(xla::PjRtDevice* device, client_->LookupDevice(device_id));
-  EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(binary.data, shape, semantics, nullptr, device));
+  EXLA_ASSIGN_OR_RETURN(auto buffer, client_->BufferFromHostBuffer(
+    binary.data, shape.element_type(), shape.dimensions(), absl::nullopt, semantics, nullptr, device));
 
   return new ExlaBuffer(std::move(buffer), can_be_released_after_run);
 }
