@@ -27,6 +27,7 @@ class ExlaBuffer {
 
   bool release_after_run() { return can_be_released_after_run_; }
   xla::PjRtBuffer* buffer() { return buffer_.get(); }
+  xla::StatusOr<ExlaBuffer*> CopyToDevice(xla::PjRtDevice * dst_device);
   xla::StatusOr<ERL_NIF_TERM> ToBinary(ErlNifEnv* env, exla::int64 size);
   xla::Status BlockHostUntilReady();
   xla::Status Deallocate();

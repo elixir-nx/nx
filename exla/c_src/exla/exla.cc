@@ -2043,6 +2043,33 @@ ERL_NIF_TERM transfer_from_outfeed(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
   return exla::nif::ok(env);
 }
 
+ERL_NIF_TERM copy_buffer_to_device(ErlNifEnv * env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 3) {
+    return exla::nif::error(env, "Bad argument count.");
+  }
+
+  exla::ExlaClient** client;
+  exla::ExlaBuffer** buffer;
+  int device_id;
+
+  if (!exla::nif::get<exla::ExlaClient*>(env, argv[0], client)) {
+    return exla::nif::error(env, "Unable to get client.");
+  }
+  if (!exla::nif::get<exla::ExlaBuffer*>(env, argv[1], buffer)) {
+    return exla::nif::error(env, "Unable to get buffer.");
+  }
+  if (!exla::nif::get(env, argv[2], &device_id)) {
+    return exla::nif::error(env, "Unable to get device ID.");
+  }
+
+  EXLA_ASSIGN_OR_RETURN_NIF(xla::PjRtDevice * device,
+    (*client)->client()->LookupDevice(device_id), env);
+  EXLA_ASSIGN_OR_RETURN_NIF(exla::ExlaBuffer * buf,
+    (*buffer)->CopyToDevice(device), env);
+
+  return exla::nif::ok(env, exla::nif::make<exla::ExlaBuffer*>(env, buf));
+}
+
 // ExlaClient Functions
 
 ERL_NIF_TERM get_host_client(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -2252,6 +2279,7 @@ static ErlNifFunc exla_funcs[] = {
   {"deallocate_device_mem", 1, deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"transfer_to_infeed", 3, transfer_to_infeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"transfer_from_outfeed", 5, transfer_from_outfeed, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"copy_buffer_to_device", 3, copy_buffer_to_device, ERL_NIF_DIRTY_JOB_IO_BOUND},
   // ExlaExecutable
   {"run_io", 5, run, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"run_cpu", 5, run, ERL_NIF_DIRTY_JOB_CPU_BOUND},
